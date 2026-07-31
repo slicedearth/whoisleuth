@@ -463,9 +463,6 @@ details.evidence-card > summary.evidence-summary { font: inherit; }
 .brand { display: flex; gap: 11px; align-items: center; margin: 20px 16px 0; }
 .brand span span, .brand strong, .brand small, nav a strong, nav a small { display: block; }
 .brand strong { font: 700 1.13rem var(--mono); letter-spacing: -.02em; }
-.brand strong::after, .shell > header > a > strong::after, .public-brand strong::after { content: ""; display: inline-block; width: .42em; height: .76em; margin-left: .16em; background: var(--accent2); box-shadow: 0 0 7px rgb(var(--accent2-rgb) / calc(var(--cursor-glow-alpha) * .82)); vertical-align: -.02em; }
-/* The terminal cursor is a static brand mark rather than a status indicator.
-   Motion is reserved for real loading and collection activity. */
 @media (prefers-reduced-motion: reduce) {
   .skip-link { transition: none; }
 }

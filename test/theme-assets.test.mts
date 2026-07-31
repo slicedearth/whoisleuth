@@ -1,28 +1,30 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-test('the shared Signal Lens logo keeps its lens transparent and readable at favicon sizes', async () => {
+const APPROVED_MARK_SHA256 = '4510a0e616d436a95968399e1d3a53dbfab59c72a1087df30c117b31dee757bf';
+
+test('the shared WHOISleuth mark preserves the approved vector source', async () => {
   const svg = await readFile(new URL('../frontend/static/favicon.svg', import.meta.url), 'utf8');
-  assert.match(svg, /<circle class="primary lens" cx="26" cy="26" r="17" fill="none"/);
-  assert.doesNotMatch(svg, /<circle class="primary lens"[^>]+fill="#[0-9a-f]+"/i);
-  assert.match(svg, /class="full"/);
-  assert.match(svg, /d="m18 20 14-2-7 16-7-14Z"/);
-  assert.match(svg, /class="compact"/);
-  assert.match(svg, /@media\(max-width:20px\)/);
-  assert.match(svg, /@media\(prefers-color-scheme:light\)/);
-  assert.match(svg, /\.primary\{stroke:#075f9f\}/);
-  assert.match(svg, /\.secondary-fill\{fill:#0b6e47\}/);
+  const paths = svg.match(/<path\b/g) ?? [];
+
+  assert.match(svg, /<svg[^>]+viewBox="34 38 448 448"/);
+  assert.equal(paths.length, 8);
+  assert.doesNotMatch(svg, /<(?:image|script|foreignObject)\b/i);
+  assert.doesNotMatch(svg, /data:image|(?:xlink:)?href=/i);
+  assert.doesNotMatch(svg, /<!DOCTYPE|<!ENTITY/i);
+  assert.equal(createHash('sha256').update(svg).digest('hex'), APPROVED_MARK_SHA256);
 });
 
-test('the website mark follows the selected theme and the README keeps it beside the wordmark', async () => {
+test('the website, browser favicon, and README use the same approved vector', async () => {
   const component = await readFile(new URL('../frontend/src/lib/components/BrandMark.svelte', import.meta.url), 'utf8');
+  const appHtml = await readFile(new URL('../frontend/src/app.html', import.meta.url), 'utf8');
   const readme = await readFile(new URL('../README.md', import.meta.url), 'utf8');
 
-  assert.match(component, /class="primary"/);
-  assert.match(component, /\.primary\{stroke:var\(--accent\)\}/);
-  assert.match(component, /\.secondary\{stroke:var\(--accent2\)\}/);
-  assert.match(component, /\.secondary-fill\{fill:var\(--accent2\)\}/);
+  assert.match(component, /src="\/favicon\.svg"/);
+  assert.match(component, /alt=""/);
+  assert.match(appHtml, /<link rel="icon" type="image\/svg\+xml" href="\/favicon\.svg">/);
   assert.match(
     readme,
     /^<h1 align="center"><img src="frontend\/static\/favicon\.svg" width="48" height="48" alt="" \/> WHOISleuth<\/h1>/,

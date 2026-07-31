@@ -119,11 +119,13 @@
     .map-frame{display:none}
     .map-mobile{display:grid;gap:7px;margin-top:11px}
     .map-mobile ul{display:grid;gap:7px;margin:0;padding:0;list-style:none}
-    .map-mobile li{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:6px;align-items:center;min-width:0;padding:9px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
+    .map-mobile li{display:grid;grid-template-columns:14px minmax(0,1fr);gap:3px 8px;align-items:center;min-width:0;padding:9px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
     .map-mobile li.derived{border-style:dashed}
-    .map-mobile li span{min-width:0;font:650 var(--text-2xs) var(--mono);overflow-wrap:anywhere}
-    .map-mobile li b{color:var(--accent);font-size:var(--text-xs)}
-    .map-mobile li small{grid-column:1/-1;color:var(--muted);font-size:var(--text-2xs);overflow-wrap:anywhere}
+    .map-mobile li span{min-width:0;color:var(--text);font:650 var(--text-2xs) var(--mono);line-height:1.35;overflow-wrap:anywhere;white-space:normal}
+    .map-mobile li span:first-child{grid-column:2;grid-row:1}
+    .map-mobile li span:nth-of-type(2){grid-column:2;grid-row:2}
+    .map-mobile li b{grid-column:1;grid-row:1/3;align-self:center;color:var(--accent);font-size:var(--text-xs);transform:rotate(90deg)}
+    .map-mobile li small{grid-column:2;grid-row:3;color:var(--muted);font-size:var(--text-2xs);overflow-wrap:anywhere}
     .map-mobile>p{margin:0;color:var(--muted);font-size:var(--text-2xs)}
   }
 </style>

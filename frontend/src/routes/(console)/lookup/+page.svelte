@@ -130,6 +130,14 @@
   type ScoreExplanation = { modelVersion?:number; score:number; factors:Array<{label:string;delta:number}> }|null;
   type LookupMode = 'fast' | 'deep';
 
+  function latestIsoTimestamp(...values: unknown[]): string | null {
+    const timestamps = values
+      .flatMap((value) => Array.isArray(value) ? value : [value])
+      .map((value) => typeof value === 'string' ? Date.parse(value) : Number.NaN)
+      .filter(Number.isFinite);
+    return timestamps.length ? new Date(Math.max(...timestamps)).toISOString() : null;
+  }
+
   let query=$state('');
   let lookupMode=$state<LookupMode>('deep');
   let loading=$state(false);
@@ -231,6 +239,54 @@
   const whoisContactsByRole=$derived(rec(whoisParsed.contactsByRole));
   const rdapDiagnostic=$derived(rec(diagnostics.rdap));
   const whoisDiagnostic=$derived(rec(diagnostics.whois));
+  const lookupObservedAt=$derived(latestIsoTimestamp(
+    result?.observedAt,
+    result?.fetchedAt,
+    rdapDiagnostic.fetchedAt,
+    whoisDiagnostic.queriedAt,
+    registrarRdap.fetchedAt,
+    reverseDns.observedAt,
+    observedNetworkContext.observedAt,
+    observedNetworkRdap.fetchedAt,
+    dnsEvidence.observedAt,
+    httpEvidence.observedAt,
+    tlsEvidence.observedAt,
+    pageIdentity.observedAt,
+    technologyProfile.observedAt,
+    pageRoleProfile.observedAt,
+    clientBehaviorProfile.observedAt,
+    securityPosture.observedAt,
+    securityTxt.observedAt,
+    sslbl.observedAt,
+    threatIntelligenceProviders.map((provider)=>rec(provider).observedAt),
+  ));
+  const evidenceObservedAtById=$derived.by(()=>{
+    const output:Record<string,unknown>={
+      rdap:rdapDiagnostic.fetchedAt,
+      whois:whoisDiagnostic.queriedAt,
+      availability:latestIsoTimestamp(dnsEvidence.observedAt,httpEvidence.observedAt,tlsEvidence.observedAt),
+      'registrar-rdap':registrarRdap.fetchedAt,
+      'reverse-dns':reverseDns.observedAt,
+      'network-context':latestIsoTimestamp(observedNetworkContext.observedAt,observedNetworkRdap.fetchedAt),
+      dns:dnsEvidence.observedAt,
+      http:httpEvidence.observedAt,
+      tls:tlsEvidence.observedAt,
+      'page-identity':latestIsoTimestamp(pageIdentity.observedAt,httpEvidence.observedAt),
+      technology:latestIsoTimestamp(technologyProfile.observedAt,httpEvidence.observedAt),
+      'page-role':latestIsoTimestamp(pageRoleProfile.observedAt,httpEvidence.observedAt),
+      'client-behavior':latestIsoTimestamp(clientBehaviorProfile.observedAt,httpEvidence.observedAt),
+      'security-posture':latestIsoTimestamp(securityPosture.observedAt,httpEvidence.observedAt,tlsEvidence.observedAt),
+      'security-txt':securityTxt.observedAt,
+      'sslbl-certificate':sslbl.observedAt,
+    };
+    for(const providerValue of threatIntelligenceProviders){
+      const provider=rec(providerValue);
+      const identity=rec(provider.provider);
+      const id=String(identity.id||'').trim();
+      if(id)output[`external-${id}`]=provider.observedAt;
+    }
+    return output;
+  });
   const populatedWhoisRoles=$derived(whoisRoleOrder.filter((role)=>records(whoisContactsByRole[role]).length>0));
   const comparison=$derived(result?.type==='domain'?compareRegistrySources(rdapParsed,whoisParsed,{rdapStatus:typeof rdapDiagnostic.status==='string'?rdapDiagnostic.status:undefined,whoisStatus:typeof whoisDiagnostic.status==='string'?whoisDiagnostic.status:undefined}):{fields:[],counts:{equivalent:0,conflict:0,rdap_only:0,whois_only:0,rdap_redacted:0,whois_redacted:0,rdap_unavailable:0,whois_unavailable:0,rdap_incomplete:0,whois_incomplete:0}});
   const registrarPublicationComparison=$derived(result?.type==='domain'?compareRdapPublications(rdapParsed,registrarRdapParsed,{registryStatus:typeof rdapDiagnostic.status==='string'?rdapDiagnostic.status:undefined,registrarStatus:typeof registrarRdap.status==='string'?registrarRdap.status:undefined}):{fields:[],counts:{equivalent:0,conflict:0,registry_only:0,registrar_only:0,registry_redacted:0,registrar_redacted:0,registry_unavailable:0,registrar_unavailable:0,registry_incomplete:0,registrar_incomplete:0}});
@@ -360,7 +416,7 @@
     profile?.desiredPostureBaselines.find((item)=>item.domain===caseDomain)??null,
   );
   const certificatePolicyReview=$derived(buildCertificatePolicyReview({
-    observedAt:result?.fetchedAt,
+    observedAt:lookupObservedAt,
     dnsEvidence,
     dnsRecords,
     tlsEvidence,
@@ -371,7 +427,7 @@
   }));
   const lookupAssetGraph=$derived(buildLookupAssetGraph({
     target:caseDomain,
-    observedAt:result?.fetchedAt,
+    observedAt:lookupObservedAt,
     rdapEvidence:rdap,
     rdapParsed,
     dnsEvidence,
@@ -415,7 +471,7 @@
     registryExpires:lifecycleDates.expires,
     tlsValidFrom:tlsCertificate.validFrom,
     tlsValidTo:tlsCertificate.validTo,
-    observedAt:typeof result?.fetchedAt==='string'?result.fetchedAt:typeof rdapDiagnostic.fetchedAt==='string'?rdapDiagnostic.fetchedAt:typeof whoisDiagnostic.queriedAt==='string'?whoisDiagnostic.queriedAt:null,
+    observedAt:lookupObservedAt,
     dnsStatus:dnsEvidence.status,
     dnsComplete:dnsEvidence.complete,
     hasMx:availability.hasMx,
@@ -441,7 +497,7 @@
     authorizedScope:serviceDependencyScope,
     falsePositiveTargets:serviceDependencyFalsePositives,
     pageTitle:pageIdentity.title,
-    observedAt:result?.fetchedAt,
+    observedAt:lookupObservedAt,
   }));
   const evidenceCoverage=$derived(buildLookupEvidenceCoverageLedger({
     targetType:result?.type,
@@ -467,7 +523,7 @@
   }));
   const lookupSourceRefreshPlan=$derived(buildLookupSourceRefreshPlan(
     evidenceCoverage,
-    result?.fetchedAt,
+    lookupObservedAt,
   ));
   const lookupDecisionSupport=$derived(buildLookupDecisionSupport({
     task:taskView,
@@ -488,7 +544,8 @@
     coverage:evidenceCoverage,
     refreshPlan:lookupSourceRefreshPlan,
     timing:lookupTiming,
-    observedAt:result?.fetchedAt,
+    observedAt:lookupObservedAt,
+    observedAtByEvidence:evidenceObservedAtById,
   }));
   const lookupSummary=$derived(buildLookupSummaryModel({
     availability,
@@ -500,7 +557,7 @@
     diagnostics,
     profileSignals,
     idnAnalysis,
-    resultObservedAt:result?.fetchedAt,
+    resultObservedAt:lookupObservedAt,
     createdDate:lifecycleDates.created,
     expiresDate:lifecycleDates.expires,
     updatedDate:lifecycleDates.updated,
@@ -626,7 +683,7 @@
     return buildLookupWebsiteSnapshot({
       id:crypto.randomUUID?crypto.randomUUID():`website-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       domain:caseDomain,
-      observedAt:typeof result?.fetchedAt==='string'?result.fetchedAt:now,
+      observedAt:lookupObservedAt||now,
       savedAt:now,
       lookupEvidenceDepth,
       technologyProfile,
@@ -776,7 +833,7 @@
         <LookupAcquisitionDueDiligence
           review={acquisitionDueDiligence}
           target={caseDomain}
-          observedAt={typeof result?.fetchedAt==='string'?result.fetchedAt:null}
+          observedAt={lookupObservedAt}
         />
       {/if}
 
@@ -854,7 +911,7 @@
       {/if}
 
       {#if tlsEvidence.source==='tls'}
-        <div class="evidence-component" id="evidence-tls"><LookupTlsEvidence status={statusLabel(show(tlsEvidence.status))} complete={tlsEvidence.complete!==false} rows={networkDisplay.tlsRows} findings={networkDisplay.tlsFindings} leafCertificate={networkDisplay.leafCertificate} alternativeNames={networkDisplay.alternativeNames} alternativeNamesTruncated={Boolean(tlsAltNames.truncated)} chain={networkDisplay.tlsChain} chainTruncated={Boolean(tlsEvidence.chainTruncated)} validationDetails={networkDisplay.tlsValidation} limitations={Array.isArray(tlsEvidence.limitations)?tlsEvidence.limitations.map(String):[]} validFrom={typeof tlsCertificate.validFrom==='string'?tlsCertificate.validFrom:null} validTo={typeof tlsCertificate.validTo==='string'?tlsCertificate.validTo:null} observedAt={typeof result.fetchedAt==='string'?result.fetchedAt:null} initiallyExpanded={lookupTaskInitiallyExpands(taskView,'tls')} /></div>
+        <div class="evidence-component" id="evidence-tls"><LookupTlsEvidence status={statusLabel(show(tlsEvidence.status))} complete={tlsEvidence.complete!==false} rows={networkDisplay.tlsRows} findings={networkDisplay.tlsFindings} leafCertificate={networkDisplay.leafCertificate} alternativeNames={networkDisplay.alternativeNames} alternativeNamesTruncated={Boolean(tlsAltNames.truncated)} chain={networkDisplay.tlsChain} chainTruncated={Boolean(tlsEvidence.chainTruncated)} validationDetails={networkDisplay.tlsValidation} limitations={Array.isArray(tlsEvidence.limitations)?tlsEvidence.limitations.map(String):[]} validFrom={typeof tlsCertificate.validFrom==='string'?tlsCertificate.validFrom:null} validTo={typeof tlsCertificate.validTo==='string'?tlsCertificate.validTo:null} observedAt={lookupObservedAt} initiallyExpanded={lookupTaskInitiallyExpands(taskView,'tls')} /></div>
         <div class="evidence-component"><LookupCertificatePolicyReview review={certificatePolicyReview} /></div>
       {/if}
 

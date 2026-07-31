@@ -158,7 +158,7 @@
     .theme-selector{--theme-trigger-width:88px}
     .theme-selector .theme-trigger{gap:5px;padding-inline:6px}
   }
-  @media(max-width:400px){
+  @media(max-width:440px){
     .theme-selector{--theme-trigger-width:70px}
     .theme-selector .theme-trigger{gap:3px;padding-inline:3px}
     .theme-symbol{width:16px;height:16px}

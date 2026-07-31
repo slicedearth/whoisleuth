@@ -174,12 +174,22 @@
   );
   const comparisonGlyph = (state: string): string => {
     if (state === 'equal') return '=';
-    if (state === 'different' || state === 'partial') return '≠';
+    if (state === 'different') return '≠';
+    if (state === 'partial') return '~';
     if (state === 'conflict') return '!';
     if (state === 'observed') return '•';
     if (state === 'unavailable') return '×';
     return '?';
   };
+  const comparisonStateLabel = (state: string): string => ({
+    equal: 'Equivalent',
+    conflict: 'Source conflict',
+    observed: 'Source-only value',
+    partial: 'Incomplete / redacted',
+    unavailable: 'Unavailable',
+    not_collected: 'Not collected',
+    different: 'Different value',
+  } as Record<string, string>)[state] ?? 'Unknown';
 </script>
 
 {#if resultType === 'domain'}
@@ -218,7 +228,7 @@
       <div>
         <p class="eyebrow">Publication comparison</p>
         <h4 id="registration-agreement-title">Registration source agreement</h4>
-        <p>Connected markers compare each field across separately attributed publications. Shape, glyph, and state colour reinforce the assessment; exact source values remain in the tables below.</p>
+        <p>Connected markers compare each field across separately attributed publications. A conflict means two collected sources publish materially different normalized values. A source-only value was usable in just one publication. Incomplete / redacted means a publication could not provide a complete comparable value. Exact values remain in the tables below.</p>
       </div>
       {#if comparisonMatrix.truncated}<span class="partial">Partial visual</span>{/if}
     </header>
@@ -237,7 +247,7 @@
           <text x="8" y={row.y + row.height / 2 + 3} class="row-label">{row.label}</text>
           {#each row.cells as cell}
             <g class={`agreement-node state-${cell.state}`}>
-              <title>{row.label}, {cell.column}: {cell.state.replaceAll('_', ' ')}{cell.detail ? ` — ${cell.detail}` : ''}</title>
+              <title>{row.label}, {cell.column}: {comparisonStateLabel(cell.state)}{cell.detail ? `: ${cell.detail}` : ''}</title>
               {#if cell.state === 'different' || cell.state === 'partial'}
                 <polygon points={diamondPoints(markerX(cell), row.y + row.height / 2)} class="agreement-marker" />
               {:else if cell.state === 'conflict'}
@@ -262,7 +272,7 @@
               <li class={`state-${cell.state}`} style={`--publication-color:${publicationColour(cell.column)}`}>
                 <span class="mobile-publication">{cell.column}</span>
                 <span class="mobile-agreement-marker" aria-hidden="true">{comparisonGlyph(cell.state)}</span>
-                <span class="mobile-agreement-state">{cell.state.replaceAll('_', ' ')}</span>
+                <span class="mobile-agreement-state">{comparisonStateLabel(cell.state)}</span>
                 {#if cell.detail}<small>{cell.detail}</small>{/if}
               </li>
             {/each}
@@ -272,9 +282,9 @@
     </div>
     <ul class="matrix-legend" aria-label="Registration source comparison states">
       <li class="state-equal"><span>=</span>Equivalent</li>
-      <li class="state-different"><span>≠</span>Different</li>
-      <li class="state-conflict"><span>!</span>Conflict</li>
-      <li class="state-observed"><span>•</span>Observed</li>
+      <li class="state-conflict"><span>!</span>Source conflict</li>
+      <li class="state-observed"><span>•</span>Source-only value</li>
+      <li class="state-partial"><span>~</span>Incomplete / redacted</li>
       <li class="state-unavailable"><span>×</span>Unavailable</li>
       <li class="state-not_collected"><span>?</span>Not collected</li>
     </ul>
@@ -455,7 +465,7 @@
   .matrix-legend{display:flex;flex-wrap:wrap;gap:7px 14px;margin:9px 0 0;padding:0;color:var(--muted);font:650 var(--text-2xs) var(--mono);list-style:none}
   .matrix-legend li{display:flex;align-items:center;gap:6px}.matrix-legend span{display:grid;width:16px;height:16px;place-items:center;border:1px solid var(--border);border-radius:50%;background:var(--panel);font:750 9px var(--mono)}
   .matrix-legend .state-equal span{border-color:var(--success);background:color-mix(in srgb,var(--success) 16%,var(--panel));color:var(--success)}
-  .matrix-legend .state-different span{border-color:var(--amber);border-radius:0;background:rgb(var(--amber-rgb) / .15);color:var(--amber);clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%)}
+  .matrix-legend .state-partial span{border-color:var(--amber);border-radius:0;background:rgb(var(--amber-rgb) / .15);color:var(--amber);clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%)}
   .matrix-legend .state-conflict span{border-color:var(--danger);background:rgb(var(--danger-rgb) / .13);color:var(--danger);clip-path:polygon(25% 0,75% 0,100% 25%,100% 75%,75% 100%,25% 100%,0 75%,0 25%)}
   .matrix-legend .state-not_collected span{border-color:var(--muted);border-style:dashed}
   .authority-trace>header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}

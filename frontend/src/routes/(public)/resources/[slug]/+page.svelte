@@ -84,7 +84,7 @@
 </section>
 
 <style>
-  .resource-page{display:grid;gap:0}.breadcrumbs{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:26px;color:var(--muted);font:650 var(--text-2xs) var(--mono)}.breadcrumbs a{color:var(--accent)}
+  .resource-page{display:grid;gap:0}.breadcrumbs{display:flex;align-items:baseline;flex-wrap:wrap;gap:8px;margin:0 0 26px;color:var(--muted);font:650 var(--text-2xs) var(--mono);line-height:1.4}.breadcrumbs a{position:static;display:inline;margin:0;padding:0;border:0;border-radius:0;color:var(--accent);line-height:inherit}.breadcrumbs a::before{content:none}.breadcrumbs a:hover{border:0;background:none}
   article>header{max-width:900px;padding-bottom:62px}article>header h1{max-width:850px;margin:.35rem 0 1.2rem;font:750 clamp(2.25rem,5vw,3.75rem)/1.02 var(--mono);letter-spacing:-.06em}article>header>p:not(.eyebrow){max-width:73ch;color:var(--muted);font-size:clamp(1rem,1.5vw,1.1rem);line-height:1.75}.actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:26px}
   article section,.related{padding:60px 0;border-top:1px solid var(--border)}.section-intro{max-width:780px;margin-bottom:25px}.section-intro h2,.repository h2{margin:.3rem 0 .65rem;font:700 clamp(1.65rem,3.4vw,2.45rem) var(--mono);letter-spacing:-.04em}
   .steps{display:grid;margin:0;padding:0;list-style:none}.steps li{display:grid;grid-template-columns:54px minmax(0,1fr);gap:18px;padding:20px 0;border-top:1px solid var(--border)}.steps li:last-child{border-bottom:1px solid var(--border)}.steps>li>span{color:var(--accent);font:700 var(--text-xs) var(--mono)}.steps h3{margin:0;font:700 1.02rem var(--mono)}.steps p{max-width:78ch;margin:7px 0 0;color:var(--muted);font-size:var(--text-sm);line-height:1.65}

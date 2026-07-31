@@ -61,6 +61,13 @@ test('the sitemap and social preview remain aligned with the public resource con
     assert.match(sitemap, new RegExp(`<loc>https://whoisleuth\\.com${route}</loc>`, 'u'));
   }
 
+  const previewSource = readFileSync(join(repositoryRoot, 'frontend', 'static', 'social-preview.svg'), 'utf8');
+  assert.match(previewSource, /<svg[^>]+width="1280" height="640"[^>]+viewBox="0 0 1280 640"/u);
+  assert.match(previewSource, /<image href="favicon\.svg"/u);
+  assert.match(previewSource, />EVIDENCE TOPOLOGY</u);
+  assert.match(previewSource, />LOOKUP TARGET</u);
+  assert.doesNotMatch(previewSource, /<(?:script|foreignObject)\b|(?:href|xlink:href)="https?:\/\//iu);
+
   const preview = readFileSync(join(repositoryRoot, 'frontend', 'static', 'social-preview.png'));
   assert.deepEqual([...preview.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);
   assert.equal(preview.readUInt32BE(16), 1280);

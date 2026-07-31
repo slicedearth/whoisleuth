@@ -178,6 +178,9 @@ test('quality matrix joins coverage, timing, freshness, refresh, and downstream 
       ],
     },
     observedAt: '2026-07-30T00:00:00.000Z',
+    observedAtByEvidence: {
+      whois: '2026-07-31T00:00:00.000Z',
+    },
     now: '2026-07-31T00:00:00.000Z',
   });
 
@@ -185,6 +188,9 @@ test('quality matrix joins coverage, timing, freshness, refresh, and downstream 
   assert.equal(matrix.ageDays, 1);
   assert.equal(matrix.entries.find((entry) => entry.id === 'whois')?.durationMs, 900);
   assert.equal(matrix.entries.find((entry) => entry.id === 'whois')?.timingOutcome, 'rejected');
+  assert.equal(matrix.entries.find((entry) => entry.id === 'whois')?.observedAt, '2026-07-31T00:00:00.000Z');
+  assert.equal(matrix.entries.find((entry) => entry.id === 'whois')?.ageDays, 0);
+  assert.equal(matrix.entries.find((entry) => entry.id === 'rdap')?.observedAt, '2026-07-30T00:00:00.000Z');
   assert.equal(matrix.entries.find((entry) => entry.id === 'whois')?.refreshAvailable, true);
   assert.equal(matrix.entries.find((entry) => entry.id === 'rdap')?.endpointClass, 'Authoritative registry endpoint');
   assert.equal(matrix.entries.find((entry) => entry.id === 'rdap')?.truncated, false);

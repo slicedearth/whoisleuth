@@ -531,6 +531,7 @@ export function buildLookupEvidenceQualityMatrix(input: Readonly<{
   refreshPlan: LookupSourceRefreshPlan;
   timing: LookupTiming | null;
   observedAt?: unknown;
+  observedAtByEvidence?: Readonly<Record<string, unknown>>;
   now?: unknown;
 }>): LookupEvidenceQualityMatrix {
   const observedAt = isoDate(input.observedAt);
@@ -539,6 +540,7 @@ export function buildLookupEvidenceQualityMatrix(input: Readonly<{
   const refreshIds = new Set(input.refreshPlan.items.flatMap((item) => item.evidenceIds));
   const entries = input.coverage.entries.slice(0, MAX_ENTRIES).map((entry) => {
     const timing = timings.get(entry.id);
+    const entryObservedAt = isoDate(input.observedAtByEvidence?.[entry.id]) ?? observedAt;
     return {
       id: entry.id,
       label: entry.label,
@@ -547,8 +549,8 @@ export function buildLookupEvidenceQualityMatrix(input: Readonly<{
       state: entry.state,
       statusLabel: entry.statusLabel,
       truncated: entry.truncated,
-      observedAt,
-      ageDays: currentAgeDays,
+      observedAt: entryObservedAt,
+      ageDays: ageDays(entryObservedAt, input.now ?? new Date().toISOString()),
       durationMs: timing?.durationMs ?? null,
       timingOutcome: timing?.outcome ?? null,
       refreshAvailable: refreshIds.has(entry.id),

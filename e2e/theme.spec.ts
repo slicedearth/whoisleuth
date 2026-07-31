@@ -124,13 +124,15 @@ test('theme controls fit beside authenticated public navigation across common ph
 
     const publicNavigation = page.getByRole('navigation', { name: 'Public navigation' });
     const publicBrand = page.locator('.public-brand');
+    const demoLink = publicNavigation.locator('a[href="/demo"]');
     const theme = publicNavigation.locator('.theme-selector');
     const trigger = publicNavigation.getByRole('button', { name: /^Colour theme,/ });
     const consoleLink = publicNavigation.getByRole('link', { name: 'Open console' });
     const signOut = publicNavigation.getByRole('button', { name: 'Sign out' });
-    const [brandBox, navigationBox, themeBox, triggerBox, consoleBox, signOutBox] = await Promise.all([
+    const [brandBox, navigationBox, demoBox, themeBox, triggerBox, consoleBox, signOutBox] = await Promise.all([
       publicBrand.boundingBox(),
       publicNavigation.boundingBox(),
+      demoLink.boundingBox(),
       theme.boundingBox(),
       trigger.boundingBox(),
       consoleLink.boundingBox(),
@@ -139,11 +141,14 @@ test('theme controls fit beside authenticated public navigation across common ph
 
     expect(brandBox).not.toBeNull();
     expect(navigationBox).not.toBeNull();
+    if (width > 330) expect(demoBox).not.toBeNull();
+    else expect(demoBox).toBeNull();
     expect(themeBox).not.toBeNull();
     expect(triggerBox).not.toBeNull();
     expect(consoleBox).not.toBeNull();
     expect(signOutBox).not.toBeNull();
     expect(navigationBox!.x - (brandBox!.x + brandBox!.width)).toBeGreaterThanOrEqual(2);
+    if (demoBox) expect(demoBox.x - (brandBox!.x + brandBox!.width)).toBeGreaterThanOrEqual(2);
     expect(consoleBox!.x - (triggerBox!.x + triggerBox!.width)).toBeGreaterThanOrEqual(5);
     expect(consoleBox!.x - (themeBox!.x + themeBox!.width)).toBeGreaterThanOrEqual(5);
     expect(signOutBox!.x - (consoleBox!.x + consoleBox!.width)).toBeGreaterThanOrEqual(5);
@@ -153,8 +158,12 @@ test('theme controls fit beside authenticated public navigation across common ph
       consoleLink.evaluate((element) => getComputedStyle(element).fontSize),
       signOut.evaluate((element) => getComputedStyle(element).fontSize),
     ]);
+    const themeSymbolSize = await trigger.locator('.theme-symbol').evaluate(
+      (element) => parseFloat(getComputedStyle(element).width),
+    );
     expect(themeFontSize).toBe(consoleFontSize);
     expect(themeFontSize).toBe(signOutFontSize);
+    expect(themeSymbolSize).toBeLessThanOrEqual(16);
     await expectNoHorizontalOverflow(page);
   }
 

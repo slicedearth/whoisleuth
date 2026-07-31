@@ -72,11 +72,27 @@ test('public resources offer task-specific source boundaries on desktop and mobi
     'href',
     'https://github.com/slicedearth/whoisleuth/blob/main/docs/registry-data-contract.md',
   );
+  const breadcrumb = page.getByRole('navigation', { name: 'Breadcrumb' });
+  const breadcrumbLayout = await breadcrumb.locator(':scope > *').evaluateAll((elements) => elements.map((element) => {
+    const box = element.getBoundingClientRect();
+    const style = getComputedStyle(element);
+    return {
+      y: box.y,
+      height: box.height,
+      margin: style.margin,
+      padding: style.padding,
+    };
+  }));
+  expect(new Set(breadcrumbLayout.map((item) => Math.round(item.y))).size).toBe(1);
+  expect(new Set(breadcrumbLayout.map((item) => Math.round(item.height))).size).toBe(1);
+  expect(breadcrumbLayout[0]?.margin).toBe('0px');
+  expect(breadcrumbLayout[0]?.padding).toBe('0px');
   await expectNoHorizontalOverflow(page);
 
   await page.setViewportSize({ width: 320, height: 700 });
   await page.reload();
   await expect(page.getByRole('table', { name: 'Evidence sources and limitations' })).toBeVisible();
+  expect(await breadcrumb.evaluate((element) => getComputedStyle(element).marginLeft)).toBe('0px');
   await expectNoHorizontalOverflow(page);
 });
 
@@ -168,6 +184,36 @@ test('homepage and guide remain usable on a narrow mobile viewport', async ({ pa
   await expect(page.getByRole('navigation', { name: 'Guide sections' }).getByRole('link', { name: 'Practice' })).toHaveAttribute('href', '#practice');
   await expect(page.getByRole('navigation', { name: 'Guide sections' }).getByRole('link', { name: 'Reference' })).toHaveAttribute('href', '#reference');
   await expect(page.getByRole('heading', { name: 'Domain investigation terms.' })).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+});
+
+test('public footer keeps an even compact rhythm on mobile', async ({ page }) => {
+  await page.setViewportSize({ width: 412, height: 915 });
+  await page.goto('/');
+
+  const footer = page.locator('footer.site-footer');
+  const links = footer.locator('.footer-links a');
+  await expect(footer).toBeVisible();
+  await expect(links).toHaveCount(4);
+
+  const linkLayout = await links.evaluateAll((elements) => elements.map((element) => {
+    const box = element.getBoundingClientRect();
+    const style = getComputedStyle(element);
+    return {
+      height: box.height,
+      y: box.y,
+      marginLeft: style.marginLeft,
+      marginRight: style.marginRight,
+      paddingLeft: style.paddingLeft,
+      paddingRight: style.paddingRight
+    };
+  }));
+
+  expect(linkLayout.every((link) => link.height <= 32)).toBe(true);
+  expect(new Set(linkLayout.map((link) => Math.round(link.y))).size).toBe(1);
+  expect(linkLayout.every((link) => link.marginLeft === '0px' && link.marginRight === '0px')).toBe(true);
+  expect(linkLayout.every((link) => link.paddingLeft === '0px' && link.paddingRight === '0px')).toBe(true);
+  expect((await footer.boundingBox())?.height).toBeLessThan(210);
   await expectNoHorizontalOverflow(page);
 });
 

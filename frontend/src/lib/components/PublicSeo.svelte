@@ -7,7 +7,7 @@
     website = false,
     structuredData = null,
     imagePath = '/social-preview.png',
-    imageAlt = 'WHOISleuth domain intelligence evidence workspace',
+    imageAlt = 'WHOISleuth evidence topology connecting a domain to separately attributed intelligence sources',
   }: {
     title: string;
     description: string;

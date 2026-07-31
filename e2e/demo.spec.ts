@@ -191,9 +191,16 @@ test('keeps the public demo usable without mobile overflow', async ({ page }) =>
   await page.getByRole('button', { name: 'Use synthetic profile' }).click();
   await page.getByRole('button', { name: 'Load synthetic candidates' }).click();
   await page.getByRole('button', { name: 'Load related domains' }).click();
+  await page.setViewportSize({ width: 393, height: 852 });
   await expect(page.locator('.map-frame')).toBeHidden();
   await expect(page.locator('.map-mobile')).toBeVisible();
   expect(await page.locator('.map-mobile').evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+  expect(await page.locator('.map-mobile li span').evaluateAll((elements) => elements.every((element) => (
+    getComputedStyle(element).whiteSpace === 'normal'
+      && element.scrollWidth <= element.clientWidth + 1
+      && element.scrollHeight <= element.clientHeight + 1
+      && !element.textContent?.includes('…')
+  )))).toBe(true);
   await expect(page.getByRole('button', { name: 'Inspect northstar-login.example' })).toBeVisible();
   await expectNoHorizontalOverflow(page);
   await page.getByRole('button', { name: 'Inspect northstar-login.example' }).click();
@@ -207,6 +214,10 @@ test('keeps the public demo usable without mobile overflow', async ({ page }) =>
   await expect(mobileAgreement).toBeVisible();
   await expect(mobileAgreement.locator('article')).toHaveCount(3);
   await expect(mobileAgreement.locator('li')).toHaveCount(6);
+  await expect(page.locator('.matrix-legend')).toContainText('Source conflict');
+  await expect(page.locator('.matrix-legend')).toContainText('Source-only value');
+  await expect(page.locator('.matrix-legend')).toContainText('Incomplete / redacted');
+  await expect(page.locator('.matrix-legend').getByText('Different', { exact: true })).toHaveCount(0);
   await page.getByText('Synthetic RDAP and WHOIS fields are equivalent', { exact: true }).click();
   const comparisonTable = page.locator('.comparison .table-wrap');
   expect(await comparisonTable.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
