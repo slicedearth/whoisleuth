@@ -6,6 +6,8 @@
     CASE_ASSERTION_STATES,
     CASE_MANUAL_TRAIL_KINDS,
     CASE_PIN_COMPLETENESS,
+    CASE_SIGHTING_CATEGORIES,
+    CASE_SIGHTING_STATES,
     editCase,
     type CaseActionRecord,
     type CaseRecord,
@@ -63,6 +65,13 @@
   let trailKind = $state('pivot');
   let trailSummary = $state('');
   let trailTarget = $state('');
+  let sightingState = $state('observed_by_deployment');
+  let sightingCategory = $state('website');
+  let sightingSource = $state('WHOISleuth deep lookup');
+  let sightingObservedAt = $state('');
+  let sightingCompleteness = $state('complete');
+  let sightingEvidencePinId = $state('');
+  let sightingLimitations = $state('');
   const investigationTrail = $derived(buildCaseInvestigationTrail(record));
 
   let packetCategory = $state('');
@@ -188,6 +197,21 @@
     trailKind = 'pivot';
     trailSummary = '';
     trailTarget = '';
+  }
+
+  async function addSighting() {
+    await persist({
+      sighting: {
+        state: sightingState,
+        category: sightingCategory,
+        source: sightingSource,
+        observedAt: isoFromLocal(sightingObservedAt) || new Date().toISOString(),
+        completeness: sightingCompleteness,
+        evidencePinId: sightingEvidencePinId || null,
+        limitations: list(sightingLimitations),
+      },
+    }, `Recorded a source-qualified sighting for ${record.domain}.`);
+    sightingLimitations = '';
   }
 
   function actionInput() {
@@ -343,7 +367,7 @@
 <section id={`case-response-${record.id}`} class="response-workspace" aria-labelledby={`response-title-${record.id}`} tabindex="-1">
   <header>
     <div><p class="eyebrow">Reviewed response</p><h3 id={`response-title-${record.id}`}>Evidence, reasoning, and actions</h3></div>
-    <span>{countLabel(record.evidencePins.length, 'pin')} · {countLabel(record.decisions.length, 'decision')} · {countLabel(record.assertions.length, 'assertion')} · {countLabel(record.actions.length, 'action')}</span>
+    <span>{countLabel(record.evidencePins.length, 'pin')} · {countLabel(record.sightings.length, 'sighting')} · {countLabel(record.decisions.length, 'decision')} · {countLabel(record.assertions.length, 'assertion')} · {countLabel(record.actions.length, 'action')}</span>
   </header>
   {#if actionSummary.total}
     <div class="action-summary" role="group" aria-label="Case action outcome summary">
@@ -372,6 +396,26 @@
     </form>
     {#if record.evidencePins.length}
       <ol class="records">{#each [...record.evidencePins].reverse() as pin}<li><strong>{pin.label}</strong><p>{pin.value}</p><small>{pin.source} · {pin.completeness} · {pin.observedAt}</small>{#if pin.limitations.length}<small>Limits: {pin.limitations.join('; ')}</small>{/if}</li>{/each}</ol>
+    {/if}
+  </details>
+
+  <details>
+    <summary>Record a source-qualified sighting</summary>
+    <form class="response-form" onsubmit={(event) => { event.preventDefault(); void addSighting(); }}>
+      <p class="notice">Use observed or reported states for source evidence. Analyst confirmed, not reproduced, and expired are review conclusions and do not alter the original observation.</p>
+      <div class="two-columns">
+        <label class="field">Sighting state<select bind:value={sightingState}>{#each CASE_SIGHTING_STATES as value}<option {value}>{value.replaceAll('_', ' ')}</option>{/each}</select></label>
+        <label class="field">Evidence category<select bind:value={sightingCategory}>{#each CASE_SIGHTING_CATEGORIES as value}<option {value}>{value}</option>{/each}</select></label>
+        <label class="field">Source<input bind:value={sightingSource} maxlength="80" required></label>
+        <label class="field">Observed or reviewed at<input type="datetime-local" bind:value={sightingObservedAt}></label>
+        <label class="field">Completeness<select bind:value={sightingCompleteness}>{#each CASE_PIN_COMPLETENESS as value}<option {value}>{value}</option>{/each}</select></label>
+        {#if record.evidencePins.length}<label class="field">Supporting evidence pin<select bind:value={sightingEvidencePinId}><option value="">No pin selected</option>{#each record.evidencePins as pin}<option value={pin.id}>{pin.label}</option>{/each}</select></label>{/if}
+      </div>
+      <label class="field">Limitations <small>one per line</small><textarea bind:value={sightingLimitations} maxlength="2000" rows="2"></textarea></label>
+      <button class="btn" type="submit">Record sighting</button>
+    </form>
+    {#if record.sightings.length}
+      <ol class="records">{#each [...record.sightings].reverse() as sighting}<li><strong>{sighting.state.replaceAll('_', ' ')} · {sighting.category}</strong><p>{sighting.source}</p><small>{sighting.sourceClass} source · {sighting.completeness} · {sighting.observedAt}</small>{#if sighting.limitations.length}<small>Limits: {sighting.limitations.join('; ')}</small>{/if}</li>{/each}</ol>
     {/if}
   </details>
 

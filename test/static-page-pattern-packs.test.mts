@@ -70,6 +70,7 @@ function fixtureCase(overrides: Record<string, unknown> = {}): CaseRecord {
     actions: [],
     assertions: [],
     manualTrail: [],
+    sightings: [],
     createdAt: '2026-07-30T00:00:00.000Z',
     updatedAt: '2026-07-30T00:00:00.000Z',
   };

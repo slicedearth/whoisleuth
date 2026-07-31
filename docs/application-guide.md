@@ -405,9 +405,11 @@ Monitor contains Cases, Campaigns, Relationships, and Watchlists.
 
 - **Cases** retain analyst status, disposition, tags, notes, a bounded history
   of compact normalized evidence snapshots, analyst-selected evidence pins,
-  decision rationales, and reviewed response actions with follow-up outcomes.
-  Pins, decisions, and actions stay separately typed so an analyst assertion is
-  never presented as collected evidence.
+  source-qualified sightings, decision rationales, and reviewed response
+  actions with follow-up outcomes. Sightings keep deployment observations,
+  provider reports, and analyst-reviewed states separate. Pins, sightings,
+  decisions, and actions stay separately typed so an analyst assertion is never
+  presented as collected evidence.
 - **Campaigns** group existing case domains without duplicating their evidence
   or implying attribution. An expanded campaign projects bounded counts for
   password fields, official-identity relationships, redirect or transport
@@ -493,8 +495,10 @@ performs no reachability check and does not prove that a published contact is
 monitored, suitable, responsive, or responsible.
 
 Inside an expanded case, the response workspace keeps evidence pins, observed
-facts, analyst assertions, decisions, actions, and manual investigation steps
-separately typed. Its decision packet summarizes required incident facts,
+facts, source-qualified sightings, analyst assertions, decisions, actions, and
+manual investigation steps separately typed. **Not reproduced** and **expired**
+are analyst review states; they do not delete or negate the underlying
+observation. Its decision packet summarizes required incident facts,
 source freshness and limitations, open contradictions or unknowns, recipient
 provenance, disposition, and follow-up state before a local export. It never
 submits a report or treats a planned action as completed.

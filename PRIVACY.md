@@ -470,6 +470,12 @@ default (see the README), so many lookups return no personal data at all.
   shared, similar, or unavailable field is a review lead, not evidence of
   compromise, ownership, authorship, coordination, intent, safety, or
   maliciousness.
+  Cases can also retain bounded source-qualified sightings. A sighting records
+  a fixed state, evidence category, short source label, observation or review
+  time, completeness, optional evidence-pin reference, and limitations.
+  Deployment observations, provider reports, and analyst-reviewed states stay
+  distinct. An analyst state such as not reproduced or expired does not remove,
+  rewrite, or negate the original collected evidence.
   Investigation templates retain only allowlisted guide-stage identities,
   bounded analyst-authored labels and instructions, expected evidence,
   completion criteria, and optional additional request gates. They cannot add

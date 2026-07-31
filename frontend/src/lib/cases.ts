@@ -56,6 +56,8 @@ export {
   CASE_ASSERTION_STATES,
   CASE_MANUAL_TRAIL_KINDS,
   CASE_PIN_COMPLETENESS,
+  CASE_SIGHTING_CATEGORIES,
+  CASE_SIGHTING_STATES,
 } from './analysis/case-response-model.ts';
 export {
   EXTERNAL_FINDING_CATEGORIES,
@@ -76,6 +78,7 @@ export type {
   CaseDecisionRecord,
   CaseEvidencePin,
   CaseManualTrailEvent,
+  CaseSightingRecord,
   CaseTransitionExpectation,
 } from './analysis/case-response-model.ts';
 export type {

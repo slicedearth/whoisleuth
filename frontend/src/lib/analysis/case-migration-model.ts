@@ -29,16 +29,19 @@ import {
   mergeCaseDecisions,
   mergeCaseEvidencePins,
   mergeCaseManualTrail,
+  mergeCaseSightings,
   normalizeCaseActions,
   normalizeCaseAssertions,
   normalizeCaseDecisions,
   normalizeCaseEvidencePins,
   normalizeCaseManualTrail,
+  normalizeCaseSightings,
   type CaseActionRecord,
   type CaseAssertionRecord,
   type CaseDecisionRecord,
   type CaseEvidencePin,
   type CaseManualTrailEvent,
+  type CaseSightingRecord,
 } from './case-response-model.ts';
 
 const STATUS_VALUES = new Set(CASE_STATUSES.map((item) => item.value));
@@ -59,6 +62,7 @@ type ImportPatch = {
   actions: CaseActionRecord[];
   assertions: CaseAssertionRecord[];
   manualTrail: CaseManualTrailEvent[];
+  sightings: CaseSightingRecord[];
   tags: string[];
   notes: CaseNote[];
   createdAt: string | null;
@@ -167,6 +171,7 @@ function extractImportPatch(raw: unknown): ImportPatch | null {
     actions: normalizeCaseActions(record.actions, normalizedFallback),
     assertions: normalizeCaseAssertions(record.assertions, normalizedFallback, pinIds),
     manualTrail: normalizeCaseManualTrail(record.manualTrail, normalizedFallback),
+    sightings: normalizeCaseSightings(record.sightings, normalizedFallback, pinIds),
     tags: normalizeTags(record.tags),
     // Imported notes fall back only to the imported record's own timestamps
     // (never "now"), so a timestamp-less note gets a stable, deterministic time
@@ -215,6 +220,7 @@ function caseFromPatch(patch: ImportPatch, now: string): CaseRecord {
     actions: patch.actions,
     assertions: patch.assertions,
     manualTrail: patch.manualTrail,
+    sightings: patch.sightings,
     createdAt: patch.createdAt || patch.updatedAt || now,
     updatedAt: patch.updatedAt || patch.createdAt || now,
   };
@@ -245,6 +251,7 @@ function applyImportPatch(local: CaseRecord, patch: ImportPatch): CaseRecord {
     actions: mergeCaseActions(local.actions, patch.actions, fallback),
     assertions: mergeCaseAssertions(local.assertions, patch.assertions, fallback, pinIds),
     manualTrail: mergeCaseManualTrail(local.manualTrail, patch.manualTrail, fallback),
+    sightings: mergeCaseSightings(local.sightings, patch.sightings, fallback, pinIds),
     tags: normalizeTags([...local.tags, ...patch.tags]),
     notes: unionNotes(local.notes, patch.notes),
     createdAt: patch.createdAt && Date.parse(patch.createdAt) < Date.parse(local.createdAt) ? patch.createdAt : local.createdAt,
@@ -280,7 +287,7 @@ export function mergeCases(
   if (importedVersion !== null && Number.isInteger(importedVersion) && importedVersion > CASE_SCHEMA_VERSION) {
     throw new Error(`This case file was exported by a newer version of WHOISleuth (schema ${importedVersion}). Update the app before importing it.`);
   }
-  if (!CASE_IMPORT_VERSIONS.includes(importedVersion as 3 | 4 | 5 | 6 | 7 | typeof CASE_SCHEMA_VERSION)
+  if (!CASE_IMPORT_VERSIONS.includes(importedVersion as 3 | 4 | 5 | 6 | 7 | 8 | typeof CASE_SCHEMA_VERSION)
     || !importedRaw || typeof importedRaw !== 'object'
     || !Array.isArray(objectRecord(importedRaw).cases)) {
     throw new Error(`Expected a WHOISleuth case export using schema ${CASE_IMPORT_VERSIONS.join(' or ')}.`);

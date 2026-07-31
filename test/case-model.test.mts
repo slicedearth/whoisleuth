@@ -122,6 +122,7 @@ describe('case creation and updates', () => {
     assert.equal(record.createdAt, ISO);
     assert.equal(record.updatedAt, ISO);
     assert.deepEqual(record.evidenceHistory, []);
+    assert.deepEqual(record.sightings, []);
   });
 
   test('createCase rejects an invalid domain', () => {
@@ -932,6 +933,7 @@ describe('rejects unsupported future-schema imports', () => {
     assert.equal(model.mergeCases(local, { version: 5, cases: [{ domain: 'v5.example', updatedAt: ISO }] }).added, 1);
     assert.equal(model.mergeCases(local, { version: 6, cases: [{ domain: 'v6.example', updatedAt: ISO }] }).added, 1);
     assert.equal(model.mergeCases(local, { version: 7, cases: [{ domain: 'v7.example', updatedAt: ISO }] }).added, 1);
+    assert.equal(model.mergeCases(local, { version: 8, cases: [{ domain: 'v8.example', updatedAt: ISO }] }).added, 1);
     assert.equal(model.mergeCases(local, { version: model.CASE_SCHEMA_VERSION, cases: [{ domain: 'current.example', updatedAt: ISO }] }).added, 1);
   });
 });
