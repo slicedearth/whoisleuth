@@ -126,6 +126,11 @@ import {
   MAX_INVESTIGATION_TEMPLATE_STORE_BYTES,
 } from '../frontend/src/lib/analysis/investigation-template-model.ts';
 import {
+  INVESTIGATION_CACAO_PROFILE_VERSION,
+  INVESTIGATION_CACAO_SPEC_VERSION,
+  MAX_INVESTIGATION_CACAO_IMPORT_BYTES,
+} from '../frontend/src/lib/analysis/investigation-playbook-interchange.ts';
+import {
   MAX_ENVELOPE_BYTES as MAX_OBSERVATION_ENVELOPE_BYTES,
   OBSERVATION_ENVELOPE_SCHEMA,
   OBSERVATION_ENVELOPE_VERSION,
@@ -150,7 +155,7 @@ describe('schema compatibility inventory', () => {
     assert.equal(inventory.schema, SCHEMA_COMPATIBILITY_INVENTORY_SCHEMA);
     assert.equal(inventory.version, SCHEMA_COMPATIBILITY_INVENTORY_VERSION);
     assert.equal(inventory.generatedAt, NOW);
-    assert.equal(inventory.entries.length, 61);
+    assert.equal(inventory.entries.length, 62);
     assert.deepEqual(new Set(inventory.entries.map((entry) => entry.kind)), new Set([
       'browser_store', 'tab_store', 'hosted_store', 'export', 'cli_document', 'derived',
     ]));
@@ -206,6 +211,9 @@ describe('schema compatibility inventory', () => {
     assert.equal(byId(inventory, 'export.investigation-templates').schema, INVESTIGATION_TEMPLATE_SCHEMA);
     assert.equal(byId(inventory, 'export.investigation-templates').currentVersion, INVESTIGATION_TEMPLATE_VERSION);
     assert.equal(byId(inventory, 'export.investigation-templates').byteBudget, MAX_INVESTIGATION_TEMPLATE_IMPORT_BYTES);
+    assert.equal(byId(inventory, 'export.investigation-cacao-profile').schema, INVESTIGATION_CACAO_SPEC_VERSION);
+    assert.equal(byId(inventory, 'export.investigation-cacao-profile').currentVersion, INVESTIGATION_CACAO_PROFILE_VERSION);
+    assert.equal(byId(inventory, 'export.investigation-cacao-profile').byteBudget, MAX_INVESTIGATION_CACAO_IMPORT_BYTES);
     assert.equal(byId(inventory, 'export.bulk-review').schema, BULK_REVIEW_SCHEMA);
     assert.equal(byId(inventory, 'export.bulk-review').currentVersion, BULK_REVIEW_SCHEMA_VERSION);
     assert.equal(byId(inventory, 'export.bulk-review').byteBudget, MAX_BULK_REVIEW_STORE_BYTES);

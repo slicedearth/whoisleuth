@@ -483,6 +483,10 @@ default (see the README), so many lookups return no personal data at all.
   evidence, change a case, or remove mandatory gates. Saving, editing,
   importing, exporting, and deleting templates happen locally and make no
   network request.
+  A deliberate restricted CACAO 2.0 export represents the same allowlisted
+  stages as manual analyst steps. Its importer rejects executable or encoded
+  commands, branches, targets, credentials, and unknown capabilities; it never
+  executes imported command text or starts a request.
   Bulk filters and group summaries are derived locally from the compact rows
   already in memory. Explicit batch selection is stored in the same bounded
   shortlist and does not make a request. A selected deep rescan sends only the

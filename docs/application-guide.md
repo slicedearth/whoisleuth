@@ -773,6 +773,13 @@ collection. They can be exported or imported as a strict versioned JSON
 document and are included in the deliberate workspace archive. They contain
 analyst-authored workflow guidance, so review them before sharing.
 
+An individual template can also be exported as a restricted CACAO 2.0
+investigation profile and imported through the same template control. The
+profile accepts one connected linear sequence of manual analyst steps mapped
+to existing allowlisted WHOISleuth stages. It rejects executable or encoded
+commands, branching, targets, credentials, arbitrary routes, and unknown
+capabilities. Importing it never executes a command or starts collection.
+
 Monitor's **Inbox** projects one evidence-gap item per unresolved case when
 that case retains an explicit partial, failed, stale, inconclusive, or
 truncated evidence pin or an open analyst-authored unknown or contradiction.
