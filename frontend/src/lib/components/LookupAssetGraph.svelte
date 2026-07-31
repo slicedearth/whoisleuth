@@ -47,6 +47,13 @@
         nodes={projection.nodes}
         links={projection.links}
       />
+      {#if projection.collapsedGroups.length}
+        <p class="collapsed-note">
+          The visual map groups {projection.collapsedGroups.reduce((total, group) => total + group.omittedEdges, 0)}
+          additional high-degree relationship{projection.collapsedGroups.reduce((total, group) => total + group.omittedEdges, 0) === 1 ? '' : 's'}.
+          The exact relationship list remains complete.
+        </p>
+      {/if}
       <details>
         <summary>Review {projection.edges.length} exact relationship{projection.edges.length === 1 ? '' : 's'}</summary>
         <ul class="edge-list">
@@ -100,5 +107,6 @@
   .edge-list a{width:max-content;font:650 var(--text-2xs) var(--mono)}
   .limits ul{margin:0;padding-left:18px;color:var(--muted);font-size:var(--text-xs);line-height:1.5}
   .empty{margin:12px 0 0;color:var(--muted);font-size:var(--text-xs)}
+  .collapsed-note{margin:8px 0 0;color:var(--muted);font-size:var(--text-2xs);line-height:1.45}
   @media(max-width:720px){.edge-list{grid-template-columns:minmax(0,1fr)}}
 </style>

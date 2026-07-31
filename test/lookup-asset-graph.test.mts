@@ -156,3 +156,23 @@ test('asset graph bounds hostile or excessive collections', () => {
   assert.ok(graph.edges.length <= 120);
   assert.equal(graph.nodes.some((node) => node.label.includes('\u0000')), false);
 });
+
+test('asset graph collapses high-degree visual branches without dropping accessible edges', () => {
+  const graph = buildLookupAssetGraph({
+    target: 'example.test',
+    dnsEvidence: { status: 'success', complete: true },
+    dnsRecords: {
+      a: Array.from({ length: 16 }, (_, index) => `192.0.2.${index + 1}`),
+    },
+  });
+  const projection = projectLookupAssetGraph(graph, 'all');
+  assert.equal(projection.edges.length, 16);
+  assert.equal(projection.collapsedGroups.length, 1);
+  assert.equal(projection.collapsedGroups[0]?.hubId, graph.targetId);
+  assert.equal(projection.collapsedGroups[0]?.omittedEdges, 6);
+  assert.ok(projection.nodes.some((node) => node.id === `collapsed-${graph.targetId}`));
+  assert.equal(
+    projection.links.filter((link) => !String(link.id).startsWith('collapsed-link-')).length,
+    10,
+  );
+});

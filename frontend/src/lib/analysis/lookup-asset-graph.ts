@@ -60,6 +60,11 @@ export type LookupAssetGraphProjection = Readonly<{
   nodes: ForceGraphNodeInput[];
   links: ForceGraphLinkInput[];
   edges: readonly LookupAssetEdge[];
+  collapsedGroups: readonly Readonly<{
+    hubId: string;
+    hubLabel: string;
+    omittedEdges: number;
+  }>[];
 }>;
 
 type JsonRecord = Record<string, unknown>;
@@ -69,6 +74,7 @@ const MAX_NODES = 72;
 const MAX_EDGES = 120;
 const MAX_VALUES = 16;
 const MAX_LIMITATIONS = 5;
+const MAX_VISUAL_EDGES_PER_HUB = 10;
 
 function record(value: unknown): JsonRecord {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -835,12 +841,37 @@ export function projectLookupAssetGraph(
   const acceptedEdges = graph.edges.filter((edge) => lens === 'all'
     ? edge.lenses.includes('all') || edge.lenses.length > 0
     : edge.lenses.includes(lens));
-  const nodeIds = new Set([graph.targetId]);
+  const visualEdges: LookupAssetEdge[] = [];
+  const visualDegree = new Map<string, number>();
+  const omittedByHub = new Map<string, number>();
   for (const edge of acceptedEdges) {
+    const sourceDegree = visualDegree.get(edge.source) ?? 0;
+    const targetDegree = visualDegree.get(edge.target) ?? 0;
+    const saturatedHub = sourceDegree >= MAX_VISUAL_EDGES_PER_HUB
+      ? edge.source
+      : targetDegree >= MAX_VISUAL_EDGES_PER_HUB
+        ? edge.target
+        : null;
+    if (saturatedHub) {
+      omittedByHub.set(saturatedHub, (omittedByHub.get(saturatedHub) ?? 0) + 1);
+      continue;
+    }
+    visualEdges.push(edge);
+    visualDegree.set(edge.source, sourceDegree + 1);
+    visualDegree.set(edge.target, targetDegree + 1);
+  }
+  const nodeIds = new Set([graph.targetId]);
+  for (const edge of visualEdges) {
     nodeIds.add(edge.source);
     nodeIds.add(edge.target);
   }
-  const nodes = graph.nodes
+  const graphNodeById = new Map(graph.nodes.map((node) => [node.id, node]));
+  const collapsedGroups = [...omittedByHub.entries()].map(([hubId, omittedEdges]) => ({
+    hubId,
+    hubLabel: graphNodeById.get(hubId)?.label ?? hubId,
+    omittedEdges,
+  }));
+  const nodes: ForceGraphNodeInput[] = graph.nodes
     .filter((node) => nodeIds.has(node.id))
     .map((node) => ({
       id: node.id,
@@ -848,12 +879,29 @@ export function projectLookupAssetGraph(
       kind: node.kind,
       detail: node.detail,
     }));
-  const links = acceptedEdges.map((edge) => ({
+  for (const group of collapsedGroups) {
+    nodes.push({
+      id: `collapsed-${group.hubId}`,
+      label: `+${group.omittedEdges} more`,
+      kind: 'summary',
+      detail: `The visual graph groups ${group.omittedEdges} additional relationship${group.omittedEdges === 1 ? '' : 's'} connected to ${group.hubLabel}. The accessible relationship list retains every edge.`,
+    });
+  }
+  const links: ForceGraphLinkInput[] = visualEdges.map((edge) => ({
     id: edge.id,
     source: edge.source,
     target: edge.target,
     kind: edge.completeness === 'complete' ? 'observed' : 'derived',
     detail: `${edge.label} · ${edge.sourceLabel}${edge.boundary ? ` · ${edge.boundary.replaceAll('_', ' ')}` : ''}`,
   }));
-  return { nodes, links, edges: acceptedEdges };
+  for (const group of collapsedGroups) {
+    links.push({
+      id: `collapsed-link-${group.hubId}`,
+      source: group.hubId,
+      target: `collapsed-${group.hubId}`,
+      kind: 'derived',
+      detail: `${group.omittedEdges} additional bounded relationships are listed below`,
+    });
+  }
+  return { nodes, links, edges: acceptedEdges, collapsedGroups };
 }
