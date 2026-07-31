@@ -8,6 +8,7 @@
   import LookupAssessment from '$lib/components/LookupAssessment.svelte';
   import LookupAcquisitionDueDiligence from '$lib/components/LookupAcquisitionDueDiligence.svelte';
   import LookupActivationContext from '$lib/components/LookupActivationContext.svelte';
+  import LookupAssetGraph from '$lib/components/LookupAssetGraph.svelte';
   import LookupBrandMimicryReview from '$lib/components/LookupBrandMimicryReview.svelte';
   import LookupLifecycle from '$lib/components/LookupLifecycle.svelte';
   import LookupDecisionSupport from '$lib/components/LookupDecisionSupport.svelte';
@@ -51,6 +52,7 @@
   } from '$lib/analysis/abuse-recipient-resolver.ts';
   import { compactHttpObservation } from '$lib/analysis/http-summary.ts';
   import { buildLookupEvidenceCoverageLedger } from '$lib/analysis/evidence-coverage-ledger.ts';
+  import { buildLookupAssetGraph } from '$lib/analysis/lookup-asset-graph.ts';
   import {
     buildLookupDecisionSupport,
     buildLookupEvidenceQualityMatrix,
@@ -344,6 +346,27 @@
     technologyProfile,
     securityPosture,
     securityPostureSummary,
+  }));
+  const lookupAssetGraph=$derived(buildLookupAssetGraph({
+    target:caseDomain,
+    observedAt:result?.fetchedAt,
+    rdapParsed,
+    dnsEvidence,
+    dnsRecords,
+    observedNetworkContext,
+    observedNetworkEndpoint,
+    observedNetwork,
+    httpEvidence,
+    tlsEvidence,
+    tlsCertificate,
+    tlsAltNames,
+    tlsPublicKey,
+    tlsIssuer,
+    pageCanonical,
+    pageOpenGraphUrl,
+    pageForms,
+    pageResources,
+    pageIdentity,
   }));
   const analystEvidencePivots=$derived(buildAnalystEvidencePivots({
     type:result?.type,
@@ -677,6 +700,8 @@
         target={evidenceTopologyTarget}
         nodes={evidenceTopologyNodes}
       />
+
+      <LookupAssetGraph graph={lookupAssetGraph} />
 
       <AnalystEvidencePivots pivots={analystEvidencePivots} />
 
