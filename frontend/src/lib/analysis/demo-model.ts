@@ -9,6 +9,7 @@ import { normalizeCase } from './case-model.ts';
 import type { CaseEvidenceSnapshot } from './case-model.ts';
 import { deriveTimeline } from './evidence-display.ts';
 import { RISK_MODEL_VERSION } from './scoring.ts';
+import { inspectRdapCapabilities } from '../../../../lib/rdap-capabilities.mts';
 
 export const SYNTHETIC_DEMO_VERSION = 1;
 export const SYNTHETIC_DEMO_EXPORT_VERSION = 5;
@@ -558,6 +559,13 @@ export function syntheticDemoLookupView(id: string) {
           { source: 'whois', state: conclusive ? 'complete' : 'unavailable', observedAt, conformance: [], redactionCount: 0, issueCount: conclusive ? 0 : 1, issues: conclusive ? [] : ['No usable synthetic publication was available.'] },
           { source: 'registrar_rdap', state: 'unavailable', observedAt: null, conformance: [], redactionCount: 0, issueCount: 1, issues: ['No registrar publication is included in this fixture.'] },
         ],
+        rdapCapabilities: {
+          registry: inspectRdapCapabilities(
+            conclusive ? { conformance: ['rdap_level_0', 'redacted'] } : undefined,
+            conclusive ? 'success' : 'unavailable',
+          ),
+          registrar: inspectRdapCapabilities(undefined, 'unavailable'),
+        },
         abuseRouting: [],
       },
       registrar: { visible: false, label: '', endpoint: '', detail: '', stateDetail: '', error: false, success: false, parsed: {} },

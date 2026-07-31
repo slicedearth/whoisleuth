@@ -350,7 +350,7 @@ test.describe('accessible cross-case relationship table', () => {
     expect(json.result.suggestedFilename()).toMatch(/^whoisleuth-relationship-graph-\d{4}-\d{2}-\d{2}\.json$/);
     const document = JSON.parse(json.content);
     expect(document.schema).toBe('whoisleuth.relationship-graph');
-    expect(document.version).toBe(1);
+    expect(document.version).toBe(2);
     expect(document.graph.nodes).toHaveLength(4);
     expect(document.graph.edges).toHaveLength(4);
     expect(JSON.stringify(document)).not.toContain('hiddenIds');

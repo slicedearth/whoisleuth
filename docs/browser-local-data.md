@@ -78,6 +78,11 @@ atomic multi-record commits, keyed and indexed reads, rollback after an aborted
 transaction, quota failure, retained legacy input, deletion, cleanup, and
 bounded operation deadlines.
 
+Production browser-local operations use a bounded ten-second deadline. This
+still fails closed instead of waiting indefinitely while allowing ordinary
+manifest and record transactions to finish on slower mobile devices or under
+temporary browser contention.
+
 A wrapper library such as Dexie is not required for this capability. It may be
 reconsidered if the production adapter, schema upgrades, or transaction code
 becomes difficult to maintain. Adding it before that evidence would increase
