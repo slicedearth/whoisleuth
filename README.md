@@ -188,6 +188,7 @@ npm run platform:local-data
 npm run release:check
 npm run security:codeql
 npm run registry:drift
+npm run rdap-extensions:drift
 npm run deployment:self-check -- https://your-deployment.example
 ```
 
@@ -199,8 +200,10 @@ buffering, cancellation, slow consumers, authentication expiry, duplicate
 events, timeouts, and final-response equivalence without enabling response
 streaming in any deployed adapter.
 The registry-drift and deployment checks make only their documented, fixed,
-bounded network requests. Automated unit and browser tests use deterministic
-fixtures and do not query live registries, domains, or providers.
+bounded network requests. The RDAP extension audit is offline by default; its
+explicit `--live` mode makes one bounded request to the fixed official registry
+URL. Automated unit and browser tests use deterministic fixtures and do not
+query live registries, domains, or providers.
 
 ## Deployment summary
 

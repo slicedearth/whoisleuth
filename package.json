@@ -35,6 +35,7 @@
     "schema:inventory": "node tools/schema-inventory.mts",
     "deployment:self-check": "node tools/deployment-self-check.mts",
     "registry:drift": "node tools/registry-drift-audit.mts",
+    "rdap-extensions:drift": "node tools/rdap-extension-drift-audit.mts",
     "registry:fixtures": "node tools/registry-fixture-freshness.mts",
     "registry:fixture-scaffold": "node tools/registry-fixture-scaffold.mts",
     "unicode:confusables": "node tools/unicode-confusable-audit.mts",

@@ -56,6 +56,11 @@ interface CatalogEntry {
   capability: string;
 }
 
+export interface ReviewedRdapExtensionCatalogEntry {
+  identifier: string;
+  status: 'current' | 'obsolete';
+}
+
 // Reviewed against the protocol registry on 2026-07-31. The registry-drift
 // audit owns freshness checks; runtime lookup behavior never depends on this
 // catalogue being exhaustive.
@@ -213,6 +218,16 @@ const EXTENSION_CATALOG: Readonly<Record<string, CatalogEntry>> = Object.freeze(
     capability: 'DNS time-to-live values in RDAP responses.',
   },
 });
+
+export function reviewedRdapExtensionCatalog(): ReviewedRdapExtensionCatalogEntry[] {
+  return Object.entries(EXTENSION_CATALOG)
+    .filter(([, entry]) => entry.category !== 'core')
+    .map(([identifier, entry]) => Object.freeze({
+      identifier,
+      status: entry.status ?? 'current',
+    }))
+    .sort((left, right) => left.identifier.localeCompare(right.identifier));
+}
 
 function record(value: unknown): UnknownRecord | null {
   return value && typeof value === 'object' && !Array.isArray(value)

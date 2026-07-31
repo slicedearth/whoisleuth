@@ -105,6 +105,10 @@ import {
   REGISTRY_DRIFT_AUDIT_VERSION,
 } from '../tools/registry-drift-audit.mts';
 import {
+  RDAP_EXTENSION_DRIFT_AUDIT_SCHEMA,
+  RDAP_EXTENSION_DRIFT_AUDIT_VERSION,
+} from '../tools/rdap-extension-drift-audit.mts';
+import {
   SPECIALIST_WORKFLOW_BENCHMARK_SCHEMA,
   SPECIALIST_WORKFLOW_BENCHMARK_VERSION,
 } from '../tools/specialist-workflow-benchmark.mts';
@@ -155,7 +159,7 @@ describe('schema compatibility inventory', () => {
     assert.equal(inventory.schema, SCHEMA_COMPATIBILITY_INVENTORY_SCHEMA);
     assert.equal(inventory.version, SCHEMA_COMPATIBILITY_INVENTORY_VERSION);
     assert.equal(inventory.generatedAt, NOW);
-    assert.equal(inventory.entries.length, 62);
+    assert.equal(inventory.entries.length, 63);
     assert.deepEqual(new Set(inventory.entries.map((entry) => entry.kind)), new Set([
       'browser_store', 'tab_store', 'hosted_store', 'export', 'cli_document', 'derived',
     ]));
@@ -194,6 +198,8 @@ describe('schema compatibility inventory', () => {
     assert.equal(byId(inventory, 'cli.deployment-self-check').currentVersion, DEPLOYMENT_SELF_CHECK_VERSION);
     assert.equal(byId(inventory, 'cli.registry-drift-audit').schema, REGISTRY_DRIFT_AUDIT_SCHEMA);
     assert.equal(byId(inventory, 'cli.registry-drift-audit').currentVersion, REGISTRY_DRIFT_AUDIT_VERSION);
+    assert.equal(byId(inventory, 'cli.rdap-extension-drift-audit').schema, RDAP_EXTENSION_DRIFT_AUDIT_SCHEMA);
+    assert.equal(byId(inventory, 'cli.rdap-extension-drift-audit').currentVersion, RDAP_EXTENSION_DRIFT_AUDIT_VERSION);
     assert.equal(byId(inventory, 'cli.specialist-workflow-benchmark').schema, SPECIALIST_WORKFLOW_BENCHMARK_SCHEMA);
     assert.equal(byId(inventory, 'cli.specialist-workflow-benchmark').currentVersion, SPECIALIST_WORKFLOW_BENCHMARK_VERSION);
     assert.equal(byId(inventory, 'derived.curated-connector-result').schema, CURATED_CONNECTOR_RESULT_SCHEMA);
