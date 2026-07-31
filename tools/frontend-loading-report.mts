@@ -160,7 +160,7 @@ export function buildFrontendLoadingReport(input: FrontendLoadingReportInput) {
     limitations: Object.freeze([
       'Sizes are per-file gzip estimates from one production build, not measured network timings.',
       'The report models initial static route dependencies and excludes later user-triggered dynamic imports.',
-      'A large protected chunk alone does not justify splitting it; use authenticated runtime measurements before changing its boundaries.',
+      'A large protected chunk alone does not justify splitting it; run npm run frontend:authenticated-loading-report before changing its boundaries.',
     ]),
   });
 }

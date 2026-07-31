@@ -66,6 +66,7 @@
     "lookup:transport-qualify": "node tools/incremental-lookup-qualification.mts",
     "lookup:staging-evidence": "node tools/incremental-lookup-staging-evidence.mts",
     "frontend:loading-report": "node tools/frontend-loading-report.mts",
+    "frontend:authenticated-loading-report": "playwright test e2e/console-loading.spec.ts --workers=1",
     "benchmark:workflow": "node tools/specialist-workflow-benchmark.mts",
     "platform:local-data": "node tools/local-data-platform-evaluation.mts",
     "catalog:retire": "node tools/retire-browser-catalog.mts",

@@ -224,13 +224,19 @@ static dependency closure:
 ```bash
 npm run build
 npm run frontend:loading-report
+npm run frontend:authenticated-loading-report
 ```
 
 The report uses only local build artifacts. It fails if the browser-local
 workspace chunk enters a public route and reports gzip estimates rather than
-claiming measured network timings. A large protected chunk is not, by itself,
-a reason to split the storage boundary; authenticated runtime measurements are
-still required before changing that architecture.
+claiming measured network timings. The authenticated Playwright report then
+cold-loads Lookup and Monitor through the real local sign-in boundary, measures
+encoded transfer bytes with Chromium's network protocol, records the first
+enabled route control time and main-thread long tasks, and attaches one JSON
+measurement per route. Its deliberately broad regression ceilings are build
+health tripwires, not user-performance claims or internet benchmarks. A large
+protected chunk is not, by itself, a reason to split the storage boundary;
+review the runtime measurements before changing that architecture.
 
 Both commands are offline. The qualification report exercises protocol
 chunking, buffering detection, slow-consumer handling, authentication expiry,

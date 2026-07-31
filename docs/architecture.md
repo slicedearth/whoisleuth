@@ -278,6 +278,16 @@ visible: without the optional distributed provider, Express budgets are
 process-local and Netlify budgets are warm-instance-local and reset on cold
 starts.
 
+Protected-route loading has two separate local checks. The static manifest
+report measures each route's production asset closure and fails if the
+browser-local workspace chunk enters a public route. The authenticated
+Playwright baseline cold-loads Lookup and Monitor through the local session
+boundary, records encoded transfer bytes, first enabled route-control time,
+paint and navigation milestones, and Chromium long-task cost, and applies broad
+regression ceilings. These local measurements are repeatable build tripwires,
+not claims about production latency, mobile hardware, proxy behavior, or a
+particular visitor's experience.
+
 ## Common-infrastructure catalogue
 
 Evidence-cluster review can qualify an exact retained IP relationship against a
