@@ -340,6 +340,42 @@ function identityEntries(input: Readonly<{
   return output;
 }
 
+function certificatePolicyEntries(value: unknown): LookupDecisionEntry[] {
+  const review = record(value);
+  const findings = Array.isArray(review.findings) ? review.findings.slice(0, 8) : [];
+  const output: LookupDecisionEntry[] = [];
+  for (const item of findings) {
+    const finding = record(item);
+    const id = text(finding.id, 80);
+    const state = text(finding.state, 80);
+    const label = text(finding.label, 120) || 'Certificate policy';
+    if (state === 'apparently_outside_current_policy' || state === 'changed') {
+      output.push({
+        id: `certificate-policy-${id || state}`,
+        state: 'conflict',
+        importance: id === 'expected_spki' ? 'high' : 'medium',
+        title: label,
+        detail: text(finding.detail, 300) || 'Observed certificate context differs from the current reviewed policy context.',
+        sources: Array.isArray(finding.sources) ? finding.sources.map((source) => text(source, 80)).filter(Boolean) : ['DNS', 'TLS'],
+        href: '#evidence-certificate-policy',
+      });
+      continue;
+    }
+    if (state === 'indeterminate' || state === 'no_target_policy_observed') {
+      output.push({
+        id: `certificate-policy-${id || state}`,
+        state: 'uncertain',
+        importance: 'low',
+        title: `${label} is indeterminate`,
+        detail: text(finding.detail, 300) || 'Current evidence does not support a policy comparison.',
+        sources: Array.isArray(finding.sources) ? finding.sources.map((source) => text(source, 80)).filter(Boolean) : ['DNS', 'TLS'],
+        href: '#evidence-certificate-policy',
+      });
+    }
+  }
+  return output;
+}
+
 function prioritizeEntries(
   entries: readonly LookupDecisionEntry[],
   task: LookupTaskView,
@@ -373,12 +409,14 @@ export function buildLookupDecisionSupport(input: Readonly<{
   canonicalUrl?: unknown;
   openGraphUrl?: unknown;
   tlsAuthorization?: unknown;
+  certificatePolicyReview?: unknown;
   hasCaseSection?: boolean;
 }>): LookupDecisionSupport {
   const entries = prioritizeEntries([
     ...comparisonEntries(input.registryComparison, 'registry-whois'),
     ...comparisonEntries(input.registrarPublicationComparison, 'registry-registrar'),
     ...identityEntries(input),
+    ...certificatePolicyEntries(input.certificatePolicyReview),
   ], input.task);
   const actions: LookupNextAction[] = [];
   const firstConflict = entries.find((entry) => entry.state === 'conflict');

@@ -14,6 +14,7 @@
   import LookupDecisionSupport from '$lib/components/LookupDecisionSupport.svelte';
   import LookupEvidenceQuality from '$lib/components/LookupEvidenceQuality.svelte';
   import LookupEvidenceReplay from '$lib/components/LookupEvidenceReplay.svelte';
+  import LookupCertificatePolicyReview from '$lib/components/LookupCertificatePolicyReview.svelte';
   import LookupCredentialSurfaceProfile from '$lib/components/LookupCredentialSurfaceProfile.svelte';
   import LookupDnsEvidence from '$lib/components/LookupDnsEvidence.svelte';
   import LookupExternalIntelligence from '$lib/components/LookupExternalIntelligence.svelte';
@@ -54,6 +55,7 @@
   import { compactHttpObservation } from '$lib/analysis/http-summary.ts';
   import { buildLookupEvidenceCoverageLedger } from '$lib/analysis/evidence-coverage-ledger.ts';
   import { buildLookupAssetGraph } from '$lib/analysis/lookup-asset-graph.ts';
+  import { buildCertificatePolicyReview } from '$lib/analysis/certificate-policy-review.ts';
   import {
     buildLookupInvestigationBrief,
     formatLookupInvestigationBriefMarkdown,
@@ -353,6 +355,19 @@
     securityPosture,
     securityPostureSummary,
   }));
+  const desiredCertificateBaseline=$derived(
+    profile?.desiredPostureBaselines.find((item)=>item.domain===caseDomain)??null,
+  );
+  const certificatePolicyReview=$derived(buildCertificatePolicyReview({
+    observedAt:result?.fetchedAt,
+    dnsEvidence,
+    dnsRecords,
+    tlsEvidence,
+    tlsIssuer,
+    tlsPublicKey,
+    tlsAltNames,
+    baseline:desiredCertificateBaseline,
+  }));
   const lookupAssetGraph=$derived(buildLookupAssetGraph({
     target:caseDomain,
     observedAt:result?.fetchedAt,
@@ -373,6 +388,7 @@
     pageForms,
     pageResources,
     pageIdentity,
+    certificatePolicyReview,
   }));
   const analystEvidencePivots=$derived(buildAnalystEvidencePivots({
     type:result?.type,
@@ -455,6 +471,7 @@
     canonicalUrl:pageCanonical.url,
     openGraphUrl:pageOpenGraphUrl.url,
     tlsAuthorization,
+    certificatePolicyReview,
     hasCaseSection,
   }));
   const evidenceQualityMatrix=$derived(buildLookupEvidenceQualityMatrix({
@@ -808,6 +825,7 @@
 
       {#if tlsEvidence.source==='tls'}
         <div class="evidence-component" id="evidence-tls"><LookupTlsEvidence status={statusLabel(show(tlsEvidence.status))} complete={tlsEvidence.complete!==false} rows={networkDisplay.tlsRows} findings={networkDisplay.tlsFindings} leafCertificate={networkDisplay.leafCertificate} alternativeNames={networkDisplay.alternativeNames} alternativeNamesTruncated={Boolean(tlsAltNames.truncated)} chain={networkDisplay.tlsChain} chainTruncated={Boolean(tlsEvidence.chainTruncated)} validationDetails={networkDisplay.tlsValidation} limitations={Array.isArray(tlsEvidence.limitations)?tlsEvidence.limitations.map(String):[]} validFrom={typeof tlsCertificate.validFrom==='string'?tlsCertificate.validFrom:null} validTo={typeof tlsCertificate.validTo==='string'?tlsCertificate.validTo:null} observedAt={typeof result.fetchedAt==='string'?result.fetchedAt:null} /></div>
+        <div class="evidence-component"><LookupCertificatePolicyReview review={certificatePolicyReview} /></div>
       {/if}
 
       {#if sslbl.sslblVersion===1}

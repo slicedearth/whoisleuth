@@ -133,6 +133,34 @@ test('identity inconsistencies are bounded review leads with direct evidence lin
   assert.equal(support.entries.find((entry) => entry.id === 'page-open-graph-origin')?.href, '#evidence-page-identity');
 });
 
+test('certificate policy differences remain review leads while incomplete policy remains uncertain', () => {
+  const support = buildLookupDecisionSupport({
+    task: 'owned',
+    coverage,
+    refreshPlan: { ...refreshPlan, items: [] },
+    certificatePolicyReview: {
+      findings: [{
+        id: 'expected_spki',
+        label: 'Reviewed expected certificate public key',
+        state: 'changed',
+        detail: 'The observed key differs from the reviewed baseline.',
+        sources: ['TLS certificate', 'Brand Profile'],
+      }, {
+        id: 'caa',
+        label: 'Current CAA and observed issuer',
+        state: 'indeterminate',
+        detail: 'CAA evidence was incomplete.',
+        sources: ['DNS', 'TLS certificate'],
+      }],
+    },
+  });
+  assert.equal(support.entries.find((entry) => entry.id === 'certificate-policy-expected_spki')?.state, 'conflict');
+  assert.equal(support.entries.find((entry) => entry.id === 'certificate-policy-caa')?.state, 'uncertain');
+  assert.ok(support.entries
+    .filter((entry) => entry.id.startsWith('certificate-policy-'))
+    .every((entry) => entry.href === '#evidence-certificate-policy'));
+});
+
 test('quality matrix joins coverage, timing, freshness, refresh, and downstream use', () => {
   const matrix = buildLookupEvidenceQualityMatrix({
     coverage,

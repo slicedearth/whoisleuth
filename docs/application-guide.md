@@ -142,6 +142,17 @@ family. These visuals use only evidence already present in the response.
 Source tables, status labels, collection times, provenance, and limitations
 remain the complete review surface.
 
+Deep domain Lookup also compares a currently observed certificate issuer with
+settled CAA publication at the queried domain. Recognized issuer mappings can
+produce an aligned or apparently-outside-current-policy review state. An
+unknown issuer, incomplete DNS, or missing target-domain CAA remains
+indeterminate; parent-label CAA inheritance is not inferred when it was not
+collected. When the active Brand Profile contains a reviewed expected issuer
+or SPKI value for the official domain, the same panel compares that analyst
+baseline without treating a difference as compromise or improper issuance.
+Current CAA cannot establish the policy that applied when an existing
+certificate was issued.
+
 **Evidence coverage** summarizes which requested source and analysis families
 completed and which remained limited, unavailable, skipped, unsupported,
 unknown, or not found. It preserves those states separately, lists retained

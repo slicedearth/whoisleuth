@@ -167,6 +167,7 @@ export function buildLookupAssetGraph(input: Readonly<{
   pageForms?: unknown;
   pageResources?: unknown;
   pageIdentity?: unknown;
+  certificatePolicyReview?: unknown;
 }>): LookupAssetGraph {
   const target = hostname(input.target);
   if (!target) {
@@ -561,6 +562,30 @@ export function buildLookupAssetGraph(input: Readonly<{
           limitations: limitations(tlsEvidence.limitations),
           lenses: ['certificate'],
           href: '#evidence-tls',
+        });
+      }
+    }
+    for (const finding of records(record(input.certificatePolicyReview).findings, 8)) {
+      const findingId = text(finding.id, 80);
+      const state = text(finding.state, 80);
+      if (!findingId || state === 'not_configured') continue;
+      const policyId = addNode(
+        'identity',
+        text(finding.label, 160) || 'Certificate policy',
+        state.replaceAll('_', ' '),
+      );
+      if (policyId) {
+        addEdge({
+          source: certificateId,
+          target: policyId,
+          kind: 'reviewed-against-policy',
+          label: 'reviewed against',
+          sourceLabel: 'DNS / TLS / Brand Profile',
+          observedAt: isoDate(record(input.certificatePolicyReview).observedAt) || observedAt,
+          completeness: state === 'indeterminate' || state === 'no_target_policy_observed' ? 'partial' : 'complete',
+          limitations: limitations(finding.limitations),
+          lenses: ['certificate'],
+          href: '#evidence-certificate-policy',
         });
       }
     }

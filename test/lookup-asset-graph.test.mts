@@ -63,6 +63,15 @@ function fixture() {
     tlsAltNames: { dnsNames: ['example.test', '*.example.test'] },
     tlsPublicKey: { type: 'rsa', bits: 2048, fingerprintSha256: 'b'.repeat(64) },
     tlsIssuer: { organization: 'Example Certificate Authority' },
+    certificatePolicyReview: {
+      observedAt: '2026-07-31T00:00:04.000Z',
+      findings: [{
+        id: 'caa',
+        label: 'Current CAA and observed issuer',
+        state: 'indeterminate',
+        limitations: ['Parent policy was not collected.'],
+      }],
+    },
   });
 }
 
@@ -90,6 +99,7 @@ test('graph lenses reuse one model without cross-contaminating evidence classes'
   assert.ok(delegation.edges.some((edge) => edge.completeness === 'partial'));
   assert.ok(certificate.edges.some((edge) => edge.kind === 'authorizes-name'));
   assert.ok(certificate.edges.some((edge) => edge.kind === 'issued-by'));
+  assert.ok(certificate.edges.some((edge) => edge.kind === 'reviewed-against-policy'));
 });
 
 test('asset graph bounds hostile or excessive collections', () => {
