@@ -15,6 +15,7 @@
   import BulkDomainComparison from '$lib/components/BulkDomainComparison.svelte';
   import BulkReviewCockpit from '$lib/components/BulkReviewCockpit.svelte';
   import BulkMailExposureReview from '$lib/components/BulkMailExposureReview.svelte';
+  import BulkPeerOutliers from '$lib/components/BulkPeerOutliers.svelte';
   import PageHeading from '$lib/components/PageHeading.svelte';
   import { activeProfile, isDomainAllowlisted, profileDomainKind, profileSignals, type BrandProfile } from '$lib/brand-profiles';
   import { loadCandidateHandoff, type Candidate, type CandidateHandoff, type CertificateTransparencyProvenance } from '$lib/candidate-handoff';
@@ -109,6 +110,10 @@
   } from '$lib/analysis/bulk-pacing.ts';
   import { buildBulkReviewManifest } from '$lib/analysis/bulk-review-export.ts';
   import {
+    buildBulkPeerOutlierExport,
+    buildBulkPeerOutlierMatrix,
+  } from '$lib/analysis/bulk-peer-outliers.ts';
+  import {
     buildBulkMailExposureExport,
     buildBulkMailExposureReport,
   } from '$lib/analysis/bulk-mail-exposure.ts';
@@ -154,6 +159,7 @@
   }));
   const advancedFilterOptions=$derived(bulkAdvancedFilterOptions(triageRows));
   const groupSummary=$derived(buildBulkTriageGroups(filtered.map((row)=>toBulkRouteTriageRow(row,caseByDomain.get(row.domain)||null)),groupBy));
+  const peerOutlierMatrix=$derived(buildBulkPeerOutlierMatrix(filtered));
   const shortlistedDomains=$derived(new Set(shortlist.map(item=>item.domain)));
   const reviewedIndicatorRows=$derived(filtered.map((row)=>({
     ...row,
@@ -271,6 +277,7 @@
   async function importShortlistFile(event:Event){const input=event.currentTarget as HTMLInputElement,file=input.files?.[0];if(!file)return;try{if(file.size>MAX_SHORTLIST_IMPORT_BYTES)throw new Error('Shortlist imports are limited to 2 MB.');const result=await importShortlist(JSON.parse(await file.text()));shortlist=await loadShortlist();const skipped=result.skipped?`; skipped ${result.skipped} invalid, duplicate, or over-limit entr${result.skipped===1?'y':'ies'}`:'';shortlistStatus=`Imported ${result.added} new and ${result.updated} updated shortlist entries${skipped}.`;}catch(cause){shortlistStatus=cause instanceof Error?cause.message:'Shortlist import failed';}finally{input.value='';}}
   async function importDomainFile(event:Event){const control=event.currentTarget as HTMLInputElement,file=control.files?.[0];if(!file)return;try{if(file.size>MAX_DOMAIN_IMPORT_BYTES)throw new Error('Domain-list imports are limited to 2 MB.');const parsed=parseDomainInput(await file.text());if(!parsed.entries.length)throw new Error('No domain entries were found in that file.');input=parsed.entries.join('\n');status=`Loaded ${parsed.entries.length} unique entries from ${file.name}${parsed.usedHeader?' using its domain column':''}${parsed.duplicates?`; removed ${parsed.duplicates} duplicate${parsed.duplicates===1?'':'s'}`:''}.`;}catch(cause){status=cause instanceof Error?cause.message:'Could not import the domain list.';}finally{control.value='';}}
   function exportCoverage(){if(!coverage)return;const rows=[['dimension','group','total','protected','registered','available','unknown','coverage_percent'],...coverage.mutationGroups.map((group)=>['mutation',group.label,group.total,group.protected,group.registered,group.available,group.unknown,group.coveragePercent]),...coverage.tldGroups.map((group)=>['tld',group.label,group.total,group.protected,group.registered,group.available,group.unknown,group.coveragePercent])];const url=URL.createObjectURL(new Blob([rowsToCsv(rows)],{type:'text/csv'}));const anchor=document.createElement('a');anchor.href=url;anchor.download=`defensive-registration-coverage-${new Date().toISOString().slice(0,10)}.csv`;anchor.click();URL.revokeObjectURL(url);}
+  function exportPeerOutliers(){const exported=buildBulkPeerOutlierExport(peerOutlierMatrix,new Date().toISOString());downloadText(exported.content,exported.filename,'text/csv');}
   async function waitWhilePaused(){if(!paused)return;await new Promise<void>(resolve=>pauseResolvers.push(resolve));}
   function resume(){paused=false;for(const resolve of pauseResolvers.splice(0))resolve();}
   function togglePause(){if(paused)resume();else paused=true;}
@@ -518,6 +525,7 @@
       selectedDomains={shortlistedDomains}
       {selectDomains}
     />
+    <BulkPeerOutliers matrix={peerOutlierMatrix} exportMatrix={exportPeerOutliers} />
     <BulkResultsTable
       rows={resultRows}
       {sortKey}
