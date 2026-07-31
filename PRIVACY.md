@@ -487,6 +487,10 @@ default (see the README), so many lookups return no personal data at all.
   stages as manual analyst steps. Its importer rejects executable or encoded
   commands, branches, targets, credentials, and unknown capabilities; it never
   executes imported command text or starts a request.
+  The public Guide's three fixed fictional practice scenarios keep their
+  current choice and step only in component memory. They make no request, write
+  no browser storage, disappear on reload, and do not produce findings or
+  evidence reports.
   Bulk filters and group summaries are derived locally from the compact rows
   already in memory. Explicit batch selection is stored in the same bounded
   shortlist and does not make a request. A selected deep rescan sends only the

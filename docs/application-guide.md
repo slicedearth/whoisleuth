@@ -729,6 +729,12 @@ Dashboard can coordinate three standard recipes:
 - infrastructure pivot; and
 - new-domain triage.
 
+The public Guide includes one deterministic offline practice scenario for each
+recipe. Each scenario uses reserved fictional domains, fixed evidence states
+and limitations, and immediate decision feedback. It makes no request, writes
+no browser storage, produces no finding, and can be reset or replayed at any
+time.
+
 The guide shows one current action, concrete instructions, expected evidence,
 completion criteria, request implications, and reviewed, partial, or skipped
 outcomes. A partial or skipped outcome requires a short reason so deferred,

@@ -78,6 +78,12 @@ test('public guide explains tasks, result states, glossary terms, and common que
   await trackingSteps.nth(2).click();
   await expect(page.locator('#tool-monitor-next')).toBeInViewport();
   await expect(page.locator('.goal-paths article')).toHaveCount(3);
+  const practice = page.getByRole('region', { name: 'Try a guided analyst decision.' });
+  await expect(practice).toBeVisible();
+  await expect(practice.getByLabel('Practice scenario')).toHaveValue('brand-boundary-review');
+  await practice.getByLabel('Review the official domain and trusted allowlists before generating candidates.').check();
+  await expect(practice.getByText('Defensible choice')).toBeVisible();
+  await expect(practice.getByRole('button', { name: 'Next decision' })).toBeEnabled();
   await expect(page.locator('.tool-guide article')).toHaveCount(5);
   await expect(page.locator('.reference-guide article')).toHaveCount(1);
   await expect(page.locator('.state-grid article')).toHaveCount(9);
@@ -87,7 +93,7 @@ test('public guide explains tasks, result states, glossary terms, and common que
   await expect(page.locator('.glossary-grid').getByText('PTR', { exact: true })).toBeVisible();
   await expect(page.locator('.glossary-grid').getByText('SOA', { exact: true })).toBeVisible();
   await expect(page.locator('.glossary-grid').getByText('Website profile snapshot', { exact: true })).toBeVisible();
-  await expect(page.locator('.faq-list details')).toHaveCount(20);
+  await expect(page.locator('.faq-list details')).toHaveCount(21);
 
   const question = page.getByText('Does WHOISleuth decide whether a domain is malicious?', { exact: true });
   await question.click();
@@ -134,6 +140,7 @@ test('homepage and guide remain usable on a narrow mobile viewport', async ({ pa
   await expect(page.getByRole('navigation', { name: 'Guide sections' })).toBeVisible();
   await expect(page.getByRole('region', { name: 'Common WHOISleuth workflow map' })).toBeVisible();
   await expect(page.getByRole('navigation', { name: 'Guide sections' }).getByRole('link', { name: 'Tools' })).toHaveAttribute('href', '#tools');
+  await expect(page.getByRole('navigation', { name: 'Guide sections' }).getByRole('link', { name: 'Practice' })).toHaveAttribute('href', '#practice');
   await expect(page.getByRole('navigation', { name: 'Guide sections' }).getByRole('link', { name: 'Reference' })).toHaveAttribute('href', '#reference');
   await expect(page.getByRole('heading', { name: 'Domain investigation terms.' })).toBeVisible();
   await expectNoHorizontalOverflow(page);

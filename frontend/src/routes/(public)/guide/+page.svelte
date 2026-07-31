@@ -2,6 +2,7 @@
   import PublicSeo from '$lib/components/PublicSeo.svelte';
   import PublicConsoleCta from '$lib/components/PublicConsoleCta.svelte';
   import PublicGoalPaths from '$lib/components/PublicGoalPaths.svelte';
+  import OfflineInvestigationScenarios from '$lib/components/OfflineInvestigationScenarios.svelte';
   import {
     commonMistakes,
     glossaryTerms,
@@ -40,6 +41,7 @@
 
 <nav class="guide-index card" aria-label="Guide sections">
   <a href="#start">Start here</a>
+  <a href="#practice">Practice</a>
   <a href="#tools">Tools</a>
   <a href="#reference">Reference</a>
   <a href="#results">Read results</a>
@@ -51,6 +53,11 @@
 <section id="start" class="guide-section" aria-labelledby="start-title">
   <div class="section-intro"><h2 id="start-title">Choose the outcome you need.</h2><p>There is no single required route through the console. These paths cover the most common starting points.</p></div>
   <PublicGoalPaths goals={publicGuideGoals} linkSteps ariaLabel="Common WHOISleuth workflow map" />
+</section>
+
+<section id="practice" class="guide-section" aria-labelledby="practice-title">
+  <div class="section-intro"><h2 id="practice-title">Practice the decision, not just the click path.</h2><p>Work through deterministic examples for Brand sweep, Infrastructure pivot, and New-domain triage before starting a live collection.</p></div>
+  <OfflineInvestigationScenarios />
 </section>
 
 <section id="tools" class="guide-section" aria-labelledby="tools-title">
@@ -138,7 +145,6 @@
   @media(max-width:680px){
     .guide-index{display:grid;position:relative;top:auto;grid-template-columns:repeat(2,minmax(0,1fr));overflow:visible}
     .guide-index a{min-width:0;white-space:normal}
-    .guide-index a:last-child{grid-column:1 / -1}
     .tool-guide,.reference-guide,.state-grid{grid-template-columns:1fr}
     .tool-guide dl div,.reference-guide dl div,.glossary-grid>div{grid-template-columns:1fr;gap:4px}
     .guide-section{scroll-margin-top:20px}
