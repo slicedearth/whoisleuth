@@ -771,10 +771,12 @@ default (see the README), so many lookups return no personal data at all.
   window ends. Deployments without this optional configuration keep
   concurrency state in server memory only and have no durable usage counters.
 
-The signed session cookie is stateless and valid for up to 30 days. Signing
-out removes it from that browser but does not revoke a captured copy; the
-operator must rotate `SESSION_SECRET` (or the shared password when it is also
-used for signing) to invalidate all outstanding sessions before expiry.
+The signed session cookie is stateless and valid for the configured lifetime,
+which defaults to 7 days and cannot exceed 30 days. Lowering the configured
+maximum rejects tokens with a longer remaining lifetime. Signing out removes
+the cookie from that browser but does not revoke a captured copy; the operator
+must rotate `SESSION_SECRET` (or the shared password when it is also used for
+signing) to invalidate all outstanding sessions before expiry.
 
 ## Audience measurement
 

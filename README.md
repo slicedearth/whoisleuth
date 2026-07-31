@@ -107,6 +107,7 @@ Install, build, and start the Express deployment:
 npm install
 SITE_PASSWORD=choose-a-password \
 SESSION_SECRET=choose-a-separate-random-secret \
+SESSION_MAX_AGE_DAYS=7 \
 npm start
 ```
 
@@ -115,9 +116,10 @@ Open `http://localhost:3000` for the public overview or
 
 `SITE_PASSWORD` is the deployment-wide shared password. `SESSION_SECRET`
 should be a separate random value, such as 32 random bytes encoded as hex. The
-application has no individual accounts, roles, or selective session
-revocation. See the [getting-started guide](docs/getting-started.md) for local
-development, verification, browser tests, and CLI usage.
+optional `SESSION_MAX_AGE_DAYS` setting accepts a whole number from 1 to 30 and
+defaults to 7. The application has no individual accounts, roles, or selective
+session revocation. See the [getting-started guide](docs/getting-started.md) for
+local development, verification, browser tests, and CLI usage.
 
 ## Architecture
 

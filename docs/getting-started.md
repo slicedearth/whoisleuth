@@ -25,6 +25,7 @@ Build the prerendered frontend and start the Express deployment:
 ```bash
 SITE_PASSWORD=choose-a-password \
 SESSION_SECRET=choose-a-separate-random-secret \
+SESSION_MAX_AGE_DAYS=7 \
 npm start
 ```
 
@@ -35,7 +36,8 @@ Open:
 
 `SITE_PASSWORD` is required. `SESSION_SECRET` should be a separate random
 value, such as 32 random bytes encoded as hex. Do not reuse another account
-password or expose either value to frontend code.
+password or expose either value to frontend code. `SESSION_MAX_AGE_DAYS` is
+optional, accepts a whole number from 1 to 30, and defaults to 7.
 
 To use another port:
 
@@ -43,6 +45,7 @@ To use another port:
 PORT=4000 \
 SITE_PASSWORD=choose-a-password \
 SESSION_SECRET=choose-a-separate-random-secret \
+SESSION_MAX_AGE_DAYS=7 \
 npm start
 ```
 

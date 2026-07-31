@@ -9,20 +9,30 @@ deployment, and the public deployment self-check.
 WHOISleuth uses one deployment-wide password rather than individual accounts.
 Set:
 
-- `SITE_PASSWORD` to the shared Console password; and
+- `SITE_PASSWORD` to the shared Console password;
 - `SESSION_SECRET` to a separate random signing secret, such as 32 random bytes
-  encoded as hex.
+  encoded as hex; and
+- optionally, `SESSION_MAX_AGE_DAYS` to a whole number from 1 to 30. It
+  defaults to 7.
 
 Every investigation API route validates the signed session independently. The
 login and boolean session-status routes are the narrow anonymous API exceptions
 needed to enter the Console and render public navigation. Direct anonymous
 navigation to protected pages returns to sign-in.
 
-Sessions are stateless and valid for up to 30 days. Signing out clears the
-cookie in that browser but cannot revoke a copied token. Rotate
+Sessions are stateless and valid for the configured lifetime, which defaults
+to 7 days and cannot exceed 30 days. Invalid lifetime configuration prevents
+new sessions and rejects existing ones. Lowering the configured lifetime also
+rejects tokens whose remaining lifetime exceeds the new maximum. Signing out
+clears the cookie in that browser but cannot revoke a copied token. Rotate
 `SESSION_SECRET` to invalidate all outstanding sessions. If an older deployment
 omits it, the application derives a slower signing key from `SITE_PASSWORD`,
 but an independent secret is recommended.
+
+Deployments upgrading from the previous fixed 30-day session lifetime move to
+the 7-day default unless `SESSION_MAX_AGE_DAYS` is set explicitly. Existing
+cookies with more than 7 days remaining are rejected, so affected users must
+sign in again after the deployment.
 
 The shared login provides no individual identity, role, per-user audit trail,
 or selective revocation. Every signed-in user can manage the same optional
@@ -210,7 +220,8 @@ stop.
    `npm run build`, publishes `frontend/build`, and packages
    `netlify/functions/`.
 3. Set `SITE_PASSWORD` and a separate `SESSION_SECRET` before the first
-   production deployment.
+   production deployment. Optionally set `SESSION_MAX_AGE_DAYS` from 1 to 30;
+   otherwise sessions default to 7 days.
 4. Add optional provider, distributed-budget, or scheduled-monitor values only
    after reviewing their boundaries above.
 5. Confirm the deploy log reports the code-based login and Lookup rate rules as
