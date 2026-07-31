@@ -391,7 +391,10 @@ produce legitimate relationships.
 **Service dependency review** reuses current CNAME, HTTPS alias-mode,
 nameserver, mail-server, and final HTTP-origin evidence. A fixed, bounded local
 catalogue can label recognized service families without making another
-request. Each match displays the fixed catalogue provenance and review date.
+request. Each match can expose the catalogue evidence class, source treatment,
+licence treatment, source date, review age, and SHA-256 catalogue digest.
+The offline signature audit reports stale metadata, suffix collisions, and
+digest changes before a reviewed catalogue update is accepted.
 Exact matches against three bounded passive page-title phrases can add a
 collision-prone deprovision cue, while evidence older than 30 days is labelled
 stale and incomplete DNS stays inconclusive. Analysts can optionally enter reviewed expected targets or parent

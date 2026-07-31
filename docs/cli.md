@@ -190,6 +190,14 @@ unrecognized, and local-only identifiers. `--json` emits
 requires specification and fixture review; the command never enables an
 extension, changes authority or availability logic, or issues reverse search.
 
+`npm run service-dependencies:audit` validates the passive service-dependency
+catalogue entirely offline. It checks the catalogue digest, duplicate
+identifiers and target suffixes, evidence classes, source and licence
+treatment, source dates, and a fixed 180-day review age. `--json` emits
+`whoisleuth.service-dependency-signature-audit` version 1. A stale or changed
+signature requires manual provider and benign-fixture review; the command
+never resolves a target, checks an account, or tests claimability.
+
 ## Offline Risk calibration
 
 `risk-calibrate` replays a versioned analyst-labelled fixture dataset through
