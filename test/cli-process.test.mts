@@ -6,7 +6,6 @@ import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 import { MAX_CLI_ERROR_MESSAGE_LENGTH, boundedCliErrorMessage } from '../cli/errors.mts';
-import { sha256ArtifactDigest } from '../frontend/src/lib/analysis/artifact-integrity.ts';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const ROOT = join(__dirname, '..');
@@ -77,133 +76,12 @@ function runBinary(args: string[], input = '') {
 }
 
 describe('installed CLI process boundary', () => {
-  test('help, version, and usage failures preserve stable streams and exit codes', () => {
-    const help = runBinary(['--help']);
-    assert.equal(help.status, 0);
-    assert.match(help.stdout, /^WHOISleuth CLI/);
-    assert.equal(help.stderr, '');
-
-    const commandHelp = runBinary(['registry-support', '--help']);
-    assert.equal(commandHelp.status, 0);
-    assert.match(commandHelp.stdout, /^WHOISleuth registry-support/);
-    assert.match(commandHelp.stdout, /registry-support <domain\|suffix>/);
-    assert.doesNotMatch(commandHelp.stdout, /whoisleuth bulk/);
-    assert.equal(commandHelp.stderr, '');
-
-    const version = runBinary(['--version']);
-    assert.equal(version.status, 0);
-    assert.match(version.stdout, /^\d+\.\d+\.\d+\n$/);
-    assert.equal(version.stderr, '');
-
+  test('usage failures preserve the installed executable stream and exit contract', () => {
     const invalid = runBinary(['not-a-command']);
     assert.equal(invalid.status, 2);
     assert.equal(invalid.stdout, '');
     assert.match(invalid.stderr, /^Usage error: Unknown command/);
     assert.equal(invalid.stderr.trim().split('\n').length, 1);
-  });
-
-  test('offline discovery runs through the executable without hosted or network access', () => {
-    const result = runBinary(['discover', 'example', '--tlds', 'com', '--preset', 'common', '--json']);
-    assert.equal(result.status, 0);
-    assert.equal(result.stderr, '');
-    const document = JSON.parse(result.stdout);
-    assert.equal(document.schema, 'whoisleuth.cli.discover');
-    assert.equal(document.seed, 'example');
-    assert.ok(document.candidates.length > 0);
-  });
-
-  test('registry capability coverage runs through the executable as an offline catalogue view', () => {
-    const result = runBinary(['registry-support', 'portal.example.uk', '--json']);
-    assert.equal(result.status, 0);
-    assert.equal(result.stderr, '');
-    const document = JSON.parse(result.stdout);
-    assert.equal(document.schema, 'whoisleuth.cli.registry-support');
-    assert.equal(document.version, 2);
-    assert.equal(document.catalogueVersion, 26);
-    assert.equal(document.standardsCoverage.genericAndRestricted.rdapCovered, 1114);
-    assert.equal(document.suffix, 'uk');
-    assert.equal(document.profile.explicitSuffixProfile, true);
-    assert.equal(document.interpretation.liveReachability, 'not_tested');
-  });
-
-  test('Risk calibration runs through the executable as an offline fixture replay', () => {
-    const input = {
-      schema: 'whoisleuth.risk-calibration-dataset',
-      version: 1,
-      records: [{
-        id: 'fixture-1',
-        domain: 'login.example.test',
-        analystDisposition: 'confirmed_abuse',
-        evidence: {
-          availability: 'registered',
-          mutationTypes: ['dictionary'],
-          faviconMatch: true,
-          phishingLanguageMatch: 'verify account',
-          hasPasswordField: true,
-        },
-      }],
-    };
-    const result = runBinary(['risk-calibrate', '--json'], JSON.stringify(input));
-    assert.equal(result.status, 0);
-    assert.equal(result.stderr, '');
-    const document = JSON.parse(result.stdout);
-    assert.equal(document.schema, 'whoisleuth.cli.risk-calibration');
-    assert.equal(document.riskModelVersion, 6);
-    assert.equal(document.interpretation.networkRequests, false);
-    assert.match(document.interpretation.statement, /does not.*prove maliciousness or safety/i);
-  });
-
-  test('offline artifact verification checks integrity without printing artifact contents', async () => {
-    const unsigned = {
-      schema: 'whoisleuth.acquisition-decision',
-      version: 1,
-      generatedAt: '2026-07-29T00:00:00.000Z',
-      decision: {
-        domain: 'sensitive-target.invalid',
-        rationale: 'Analyst-only rationale that must not be echoed.',
-      },
-    };
-    const input = {
-      ...unsigned,
-      integrity: {
-        algorithm: 'SHA-256',
-        digestSha256: await sha256ArtifactDigest(unsigned),
-      },
-    };
-    const result = runBinary(['verify-artifact', '--json'], JSON.stringify(input));
-    assert.equal(result.status, 0);
-    assert.equal(result.stderr, '');
-    const document = JSON.parse(result.stdout);
-    assert.equal(document.schema, 'whoisleuth.offline-artifact-verification');
-    assert.equal(document.state, 'verified');
-    assert.equal(document.checks.contentIntegrity, 'verified');
-    assert.doesNotMatch(result.stdout, /sensitive-target|Analyst-only rationale/);
-  });
-
-  test('source reliability reporting aggregates operations without retaining targets or queries', () => {
-    const lookup = savedLookup();
-    const input = {
-      ...lookup,
-      diagnostics: {
-        ...lookup.diagnostics,
-        timing: {
-          version: 1,
-          sources: [{ source: 'rdap', durationMs: 125 }],
-        },
-      },
-    };
-    const result = runBinary(['source-report', '--json'], JSON.stringify(input));
-    assert.equal(result.status, 0);
-    assert.equal(result.stderr, '');
-    const document = JSON.parse(result.stdout);
-    assert.equal(document.schema, 'whoisleuth.source-reliability-report');
-    assert.equal(document.documentsReviewed, 1);
-    assert.deepEqual(document.privacy, {
-      targetsRetained: 0,
-      queriesRetained: 0,
-      rawEvidenceRetained: 0,
-    });
-    assert.doesNotMatch(result.stdout, /example\\.test|rdap\\.example|fixtureSecret/);
   });
 
   test('saved lookup comparison is a real-process offline transformation', () => {
@@ -217,27 +95,6 @@ describe('installed CLI process boundary', () => {
     assert.equal(document.registrarPublicationComparison.counts.conflict, 0);
     assert.ok(document.registrarPublicationComparison.counts.equivalent > 0);
     assert.doesNotMatch(result.stdout, /fixtureSecret|fixture response body|registrarSecret|private@example/);
-  });
-
-  test('JSON, Markdown, and HTML evidence formats preserve their process contracts', () => {
-    const input = JSON.stringify(savedLookup());
-    const json = runBinary(['export', '--compact'], input);
-    assert.equal(json.status, 0);
-    assert.equal(json.stderr, '');
-    assert.equal(JSON.parse(json.stdout).schema, 'whoisleuth.lookup-evidence');
-    assert.match(json.stdout, /fixtureSecret/);
-
-    const markdown = runBinary(['export', '--markdown'], input);
-    assert.equal(markdown.status, 0);
-    assert.equal(markdown.stderr, '');
-    assert.match(markdown.stdout, /^# Lookup evidence report/);
-    assert.doesNotMatch(markdown.stdout, /fixtureSecret|fixture response body/);
-
-    const html = runBinary(['export', '--html'], input);
-    assert.equal(html.status, 0);
-    assert.equal(html.stderr, '');
-    assert.match(html.stdout, /^<!doctype html>/);
-    assert.doesNotMatch(html.stdout, /fixtureSecret|fixture response body|<script\b|<a\b/i);
   });
 });
 

@@ -5,6 +5,7 @@
   import { loadLocalInvestigationProjection } from '$lib/investigation-search';
   import { activeProfile } from '$lib/brand-profiles';
   import { loadCases, type CaseRecord } from '$lib/cases';
+  import { isExpectedBrowserLocalDataFailure } from '$lib/browser-local-data.ts';
   import type { BrandProfile } from '$lib/analysis/brand-profile-model.ts';
   import { buildInvestigationHandoffReadiness } from '$lib/analysis/investigation-handoff-readiness.ts';
   import { buildGuidedCollectionPreflight } from '$lib/analysis/collection-preflight.ts';
@@ -66,6 +67,9 @@
   let targetChangePending = $state(false);
   let contextDomain = $state('');
   let contextError = $state('');
+  let localContextError = $state('');
+  let evidenceContextAvailable = $state(true);
+  let savedRecordContextAvailable = $state(true);
   let guideSection = $state<HTMLElement | null>(null);
   let actionPanel = $state<HTMLElement | null>(null);
   let actionVisible = $state(true);
@@ -122,9 +126,27 @@
     }).format(parsed)}`;
   }
 
-  async function refresh() {
-    guide = loadInvestigationGuide();
-    await Promise.all([refreshEvidence(), refreshContext()]);
+  async function refreshStoredContext() {
+    localContextError = '';
+    const [evidenceResult, recordResult] = await Promise.allSettled([
+      refreshEvidence(),
+      refreshContext(),
+    ]);
+    for (const result of [evidenceResult, recordResult]) {
+      if (result.status === 'rejected' && !isExpectedBrowserLocalDataFailure(result.reason)) throw result.reason;
+    }
+    evidenceContextAvailable = evidenceResult.status === 'fulfilled';
+    savedRecordContextAvailable = recordResult.status === 'fulfilled';
+    if (!evidenceContextAvailable) {
+      evidence = { observations: 0, relationships: 0, partial: false, truncated: false, latestObservedAt: '' };
+    }
+    if (!savedRecordContextAvailable) {
+      contextProfile = null;
+      contextCase = null;
+    }
+    if (!evidenceContextAvailable || !savedRecordContextAvailable) {
+      localContextError = 'Some browser-local investigation context is unavailable. The guide remains usable, and unavailable saved data is not treated as absent.';
+    }
   }
 
   function guideIdentity(value: InvestigationGuide | null) {
@@ -219,7 +241,7 @@
       contextDomain = guide?.focusDomain || guide?.domain || '';
       contextError = '';
     }
-    await Promise.all([refreshEvidence(), refreshContext()]);
+    void refreshStoredContext();
     if (identityChanged) void revealGuide();
     void observeAction();
   }
@@ -319,7 +341,7 @@
       targetChangePending = false;
       contextDomain = domain;
       contextError = '';
-      void Promise.all([refreshEvidence(), refreshContext()]);
+      void refreshStoredContext();
     } catch (cause) {
       contextError = cause instanceof Error ? cause.message : 'Could not change the investigation target.';
     }
@@ -426,11 +448,13 @@
 
   onMount(() => {
     mounted = true;
-    void refresh().then(async () => {
+    guide = loadInvestigationGuide();
+    void (async () => {
       contextDomain = guide?.focusDomain || guide?.domain || '';
       if (revealOnMount) await revealGuide();
       await observeAction();
-    });
+      void refreshStoredContext();
+    })();
     window.addEventListener(INVESTIGATION_GUIDE_EVENT, refreshFromEvent);
     return () => {
       actionObserver?.disconnect();
@@ -467,11 +491,12 @@
     </div>
     <dl class="context-tray" aria-label="Active investigation context">
       <div><dt>Target</dt><dd>{guide.focusDomain || guide.domain}</dd></div>
-      <div><dt>Brand Profile</dt><dd>{contextProfile?.name || 'None active'}</dd></div>
-      <div><dt>Case</dt><dd>{contextCase ? `${contextCase.status} · ${contextCase.disposition}` : 'Not retained'}</dd></div>
-      <div><dt>Evidence freshness</dt><dd>{evidenceFreshness}</dd></div>
+      <div><dt>Brand Profile</dt><dd>{savedRecordContextAvailable ? contextProfile?.name || 'None active' : 'Unavailable'}</dd></div>
+      <div><dt>Case</dt><dd>{savedRecordContextAvailable ? contextCase ? `${contextCase.status} · ${contextCase.disposition}` : 'Not retained' : 'Unavailable'}</dd></div>
+      <div><dt>Evidence freshness</dt><dd>{evidenceContextAvailable ? evidenceFreshness : 'Unavailable'}</dd></div>
       <div><dt>Next action</dt><dd>{actionStage?.label || 'Review completed plan'}</dd></div>
     </dl>
+    {#if localContextError}<p class="local-context-error" role="status">{localContextError}</p>{/if}
 
     {#if !contextDismissed}
     {#if actionStage && actionProgress}
@@ -621,8 +646,8 @@
 
     <div class="secondary-details">
       <details class="evidence-checkpoint">
-        <summary>Saved evidence · {evidence.observations} observation{evidence.observations === 1 ? '' : 's'} · {evidence.relationships} relationship{evidence.relationships === 1 ? '' : 's'}</summary>
-        <p>{evidence.observations || evidence.relationships ? 'These retained records are a checkpoint, not proof that a step is complete.' : 'No saved observation in this browser currently links to this domain. This does not mean evidence is absent elsewhere.'}{evidence.partial ? ' Some retained evidence is partial.' : ''}{evidence.truncated ? ' A saved-data or source limit was reached.' : ''}</p>
+        <summary>{evidenceContextAvailable ? `Saved evidence · ${evidence.observations} observation${evidence.observations === 1 ? '' : 's'} · ${evidence.relationships} relationship${evidence.relationships === 1 ? '' : 's'}` : 'Saved evidence unavailable'}</summary>
+        <p>{evidenceContextAvailable ? evidence.observations || evidence.relationships ? 'These retained records are a checkpoint, not proof that a step is complete.' : 'No saved observation in this browser currently links to this domain. This does not mean evidence is absent elsewhere.' : 'Browser-local evidence could not be read. Continue with the guide, but do not interpret this state as an empty evidence history.'}{evidenceContextAvailable && evidence.partial ? ' Some retained evidence is partial.' : ''}{evidenceContextAvailable && evidence.truncated ? ' A saved-data or source limit was reached.' : ''}</p>
       </details>
       <details class="guide-options">
         <summary>Guide options</summary>
@@ -676,6 +701,7 @@
   .context-tray div{display:block;min-width:0;padding:8px 9px;background:var(--surface)}
   .context-tray dt,.context-tray dd{display:block}
   .context-tray dd{margin:3px 0 0;overflow-wrap:anywhere}
+  .local-context-error{margin:8px 0 0;color:var(--warning);font-size:var(--text-2xs);line-height:1.45}
   .current-action{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(250px,.85fr);gap:18px;align-items:start;margin-top:13px;padding:16px;border:1px solid rgb(var(--accent-rgb) / .5);border-radius:var(--radius-md);background:rgb(var(--accent-rgb) / .07);scroll-margin-top:88px}
   .step-number{margin:0;color:var(--accent);font:700 var(--text-2xs) var(--mono);text-transform:uppercase}
   .action-copy h2{margin:4px 0 5px;font:700 var(--text-md) var(--mono)}

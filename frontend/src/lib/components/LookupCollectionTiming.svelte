@@ -5,7 +5,7 @@
   } from '$lib/analysis/lookup-response.ts';
   import { projectCollectionTiming } from '$lib/analysis/visualization-models.ts';
 
-  let { timing }: { timing: LookupTiming } = $props();
+  let { timing, embedded = false }: { timing: LookupTiming; embedded?: boolean } = $props();
 
   const sourceLabels: Record<LookupTimingSource, string> = {
     rdap: 'Registry RDAP',
@@ -35,11 +35,15 @@
   }
 </script>
 
-<section class="collection-timing card" aria-labelledby="collection-timing-title">
+<section class="collection-timing" class:card={!embedded} class:embedded aria-labelledby="collection-timing-title">
   <header>
     <div>
-      <p class="eyebrow">Request diagnostics</p>
-      <h4 id="collection-timing-title">Collection timing</h4>
+      {#if !embedded}<p class="eyebrow">Request diagnostics</p>{/if}
+      {#if embedded}
+        <h5 id="collection-timing-title">Collection timing</h5>
+      {:else}
+        <h4 id="collection-timing-title">Collection timing</h4>
+      {/if}
     </div>
     <span class="chip info">{duration(timing.totalMs)} total</span>
   </header>
@@ -95,9 +99,11 @@
 </section>
 
 <style>
-  .collection-timing{padding:var(--card-pad)}
+  .collection-timing{min-width:0;padding:var(--card-pad)}
+  .collection-timing.embedded{padding:4px 0 0}
   header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
-  header h4{margin:2px 0 0;font:700 var(--text-lg) var(--mono)}
+  header :is(h4,h5){margin:2px 0 0;font:700 var(--text-lg) var(--mono)}
+  .embedded header h5{font-size:var(--text-sm)}
   header .chip{flex:0 0 auto}
   .timing-note{max-width:78ch;margin:10px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.55}
   .timing-chart{max-width:100%;margin-top:14px;overflow-x:auto;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel-raised);overscroll-behavior-x:contain}
@@ -112,7 +118,7 @@
   .timing-source.rejected circle{fill:var(--danger)}
   .timing-limit{margin:7px 0 0;color:var(--muted);font-size:var(--text-2xs)}
   .timing-data{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;border:0;list-style:none}
-  @media(max-width:620px){
+  @media(max-width:760px){
     .timing-chart{overflow:visible}
     .timing-chart svg{display:none}
     .mobile-timing{display:grid;gap:11px;padding:12px}

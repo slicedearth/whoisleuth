@@ -86,6 +86,10 @@ const PROJECT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), 
 // review instead of suppressing an entire rule or file.
 const KNOWN_CODEQL_FINDINGS: readonly KnownCodeqlFinding[] = Object.freeze([
   Object.freeze({ ruleId: 'js/disabling-certificate-validation', file: 'lib/tls-intelligence.mts', primaryLocationLineHash: 'bb6b221105506c3:1', primaryLocationStartColumnFingerprint: '0', reason: 'accepted_behavior' as const }),
+  // The route and file are both fixed build-time allowlist entries. No request
+  // value reaches sendFile, and applying an API limiter to public static HTML
+  // would be the wrong boundary for ordinary page delivery.
+  Object.freeze({ ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: '751dfac96b8cab6a:1', primaryLocationStartColumnFingerprint: '19', reason: 'false_positive' as const }),
   Object.freeze({ ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: 'c95b56b6acb3e65b:1', primaryLocationStartColumnFingerprint: '23', reason: 'false_positive' as const }),
 ]);
 

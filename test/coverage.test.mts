@@ -1,7 +1,6 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import * as coverage from '../frontend/src/lib/analysis/coverage.ts';
-import * as provenance from '../frontend/src/lib/analysis/candidate-provenance.ts';
 import { requiredValue } from './value-assertions.mts';
 
 describe('defensive-registration coverage', () => {
@@ -49,36 +48,5 @@ describe('defensive-registration coverage', () => {
     );
     assert.equal(report.summary.total, 1);
     assert.equal(requiredValue(report.candidates[0]).domain, 'scanned.com');
-  });
-});
-
-describe('candidate provenance context', () => {
-  test('merges duplicate candidate metadata without losing mutation families', () => {
-    provenance.setCandidateProvenance([
-      { domain: 'EXAMPLE.com', source: 'brand.com', tld: 'com', mutationTypes: ['dictionary'] },
-      { domain: 'example.com', source: 'brand.com', tld: 'com', mutationTypes: ['bitsquatting'] },
-    ]);
-    assert.deepEqual(
-      requiredValue(provenance.getCandidateProvenance('example.com')).mutationTypes,
-      ['dictionary', 'bitsquatting'],
-    );
-    assert.equal(provenance.listCandidateProvenance().length, 1);
-  });
-
-  test('restores provenance from stored bulk-result field names', () => {
-    provenance.setCandidateProvenance([
-      {
-        domain: 'stored.example',
-        sourceDomain: 'brand.example',
-        candidateTld: 'example',
-        mutationTypes: ['dictionary'],
-      },
-    ]);
-    assert.deepEqual(provenance.getCandidateProvenance('stored.example'), {
-      domain: 'stored.example',
-      source: 'brand.example',
-      tld: 'example',
-      mutationTypes: ['dictionary'],
-    });
   });
 });

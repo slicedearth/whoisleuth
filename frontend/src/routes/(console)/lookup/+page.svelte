@@ -842,6 +842,7 @@
         refreshPlan={lookupSourceRefreshPlan}
         query={String(result?.query || caseDomain)}
         depth={lookupEvidenceDepth}
+        timing={lookupTiming}
       />
 
       <LookupOverviewFacts facts={[...lookupSummary.facts]} diagnostics={[...lookupSummary.diagnostics]} hasAssessment={availability.applicable!==false} />

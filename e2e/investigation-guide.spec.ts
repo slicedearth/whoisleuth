@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures';
-import { expectNoHorizontalOverflow, migrateLegacyBrowserData } from './helpers';
+import { expectNoHorizontalOverflow, failBrowserLocalReads, migrateLegacyBrowserData } from './helpers';
 
 const GUIDE_KEY = 'whoisleuth:investigation-guide:v4';
 const PREVIOUS_GUIDE_KEY = 'whoisleuth:investigation-guide:v3';
@@ -423,6 +423,22 @@ test('return control recovers when the first action-panel scroll is displaced', 
     const visibleHeight = Math.max(0, Math.min(rect.bottom, window.innerHeight) - Math.max(rect.top, 0));
     return (visibleWidth * visibleHeight) / Math.max(1, rect.width * rect.height);
   })).toBeGreaterThanOrEqual(0.2);
+});
+
+test('a browser-local context failure does not block or misstate a guided investigation', async ({ page }) => {
+  await page.goto('/dashboard');
+  await expect(page.locator('.index-count')).toBeVisible();
+  await page.getByRole('textbox', { name: 'Domain', exact: true }).fill('portal.example.test');
+  await failBrowserLocalReads(page);
+  await page.getByRole('button', { name: 'Start guide' }).click();
+
+  const guide = page.locator('.guide');
+  await expect(guide).toBeFocused();
+  await expect(currentAction(page)).toContainText('Collect domain evidence');
+  await expect(guide.getByRole('status')).toContainText('unavailable saved data is not treated as absent');
+  await expect(guide.getByText('Unavailable', { exact: true })).toHaveCount(3);
+  await guide.getByText('Saved evidence unavailable', { exact: true }).click();
+  await expect(guide).toContainText('do not interpret this state as an empty evidence history');
 });
 
 test('partial progress, pause, resume, and restart remain explicit', async ({ page }) => {
