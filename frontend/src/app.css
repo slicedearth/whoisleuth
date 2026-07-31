@@ -519,11 +519,11 @@ main { grid-area: main; width: min(1280px,100%); margin: auto; padding: 30px cla
   .shell > header > a { display: flex; min-width: 0; gap: 10px; align-items: center; font-family: var(--mono); }
   .shell > header > a strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .navigation-toggle { display: block; width: 40px; height: 40px; padding: 0; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--panel); }
-  .shell > aside { position: fixed; inset: 0 auto auto 0; visibility: hidden; width: min(310px,86vw); height: 100dvh; padding-bottom: max(74px,calc(env(safe-area-inset-bottom) + 24px)); overflow-y: auto; overscroll-behavior: contain; scroll-padding-bottom: max(74px,calc(env(safe-area-inset-bottom) + 24px)); pointer-events: none; transform: translateX(-105%); transition: transform .18s,visibility 0s linear .18s; }
+  .shell > aside { position: fixed; inset: 0 auto auto 0; visibility: hidden; width: min(310px,86vw); height: 100dvh; padding-bottom: max(74px,calc(env(safe-area-inset-bottom) + 24px)); overflow-y: auto; overscroll-behavior: contain; scroll-padding-bottom: max(74px,calc(env(safe-area-inset-bottom) + 24px)); pointer-events: none; transform: translateX(-105%); transition:none; }
   .shell > aside .terminal-strip { padding-right: 52px; }
   .shell > aside .brand { display: none; }
   .shell > aside .session { flex: 0 0 auto; margin-bottom: 0; scroll-margin-bottom: max(74px,calc(env(safe-area-inset-bottom) + 24px)); }
-  .shell.open > aside { visibility: visible; pointer-events: auto; transform: none; transition-delay: 0s; }
+  .shell.open > aside { visibility: visible; pointer-events: auto; transform: none; transition:transform .18s; }
   .navigation-drawer-close { position: absolute; top: 5px; right: 8px; z-index: 1; display: grid; width: 30px; height: 30px; padding: 0; place-items: center; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--panel); color: var(--text); font: 700 1.15rem/1 var(--mono); }
   .navigation-drawer-close:hover,.navigation-drawer-close:focus-visible { border-color: var(--accent); color: var(--accent); }
   .scrim { position: fixed; inset: 0; z-index: 10; border: 0; background: rgb(var(--shadow-rgb) / .7); }

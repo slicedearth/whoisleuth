@@ -548,7 +548,7 @@ test('reviewed response records persist and produce a local non-submitted packet
   await page.reload();
   await page.getByRole('tab', { name: /Cases/ }).click();
   await page.locator('.case-head', { hasText: 'response.invalid' }).click();
-  await expect(page.locator('.response-workspace')).toContainText('1 pin · 1 decision · 0 assertions · 1 action');
+  await expect(page.locator('.response-workspace')).toContainText('1 pin · 0 sightings · 1 decision · 0 assertions · 1 action');
 });
 
 test('external findings require a validated preview before creating local evidence pins', async ({ page }) => {
@@ -585,7 +585,7 @@ test('external findings require a validated preview before creating local eviden
   await externalImport.locator('input[type="file"]').setInputFiles(file);
   await externalImport.getByRole('button', { name: 'Import into cases' }).click();
   await expect(page.getByRole('status')).toContainText('skipped 1 duplicate');
-  await expect(page.locator('.response-workspace')).toContainText('1 pin · 0 decisions');
+  await expect(page.locator('.response-workspace')).toContainText('1 pin · 0 sightings · 0 decisions');
 });
 
 test('portable WARC evidence is normalized locally before deliberate case import', async ({ page }) => {
@@ -668,7 +668,7 @@ test('STIX claims require an existing selected case and remain separate from col
   const caseHead = page.locator('.case-head', { hasText: 'intelligence-case.invalid' });
   if (await caseHead.getAttribute('aria-expanded') !== 'true') await caseHead.click();
   const response = page.locator('.response-workspace');
-  await expect(response).toContainText('0 pins · 0 decisions · 1 assertion');
+  await expect(response).toContainText('0 pins · 0 sightings · 0 decisions · 1 assertion');
   await response.getByText('Structure facts, hypotheses, unknowns, and next steps', { exact: true }).click();
   await expect(response).toContainText('external import · open');
   await expect(response).toContainText('External review source');

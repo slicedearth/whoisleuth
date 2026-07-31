@@ -35,7 +35,7 @@
         <h4 id="evidence-quality-title">Source quality and freshness</h4>
         <p>Review endpoint class, source state, age, truncation, request timing, limitations, and downstream uses before relying on a conclusion.</p>
       </div>
-      <div class="metrics" role="group" aria-label="Evidence quality summary">
+      <div class="metrics" role="group" aria-label="Evidence coverage summary">
         <span><strong>{matrix.completeCount}</strong> complete</span>
         <span class:attention={matrix.limitedCount > 0}><strong>{matrix.limitedCount}</strong> limited</span>
         {#if matrix.totalMs !== null}<span><strong>{duration(matrix.totalMs)}</strong> total</span>{/if}

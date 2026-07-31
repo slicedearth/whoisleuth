@@ -89,7 +89,7 @@
         The file will include <strong>{preview.included} reviewed case{preview.included === 1 ? '' : 's'}</strong>
         with domain names, analyst dispositions, and bounded normalized scoring inputs.
       </p>
-      <div class="counts" aria-label="Calibration export counts">
+      <div class="counts" role="group" aria-label="Calibration export counts">
         <span><strong>{preview.selected}</strong> selected</span>
         <span><strong>{preview.included}</strong> included</span>
         <span><strong>{preview.excluded}</strong> excluded</span>

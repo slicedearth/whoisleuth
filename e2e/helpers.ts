@@ -42,9 +42,24 @@ export async function useTheme(page: Page, preference: 'dark' | 'light' | 'syste
 export async function expectNoHorizontalOverflow(page: Page) {
   const overflow = await page.evaluate(() => {
     const doc = document.documentElement;
-    return { scrollWidth: doc.scrollWidth, clientWidth: doc.clientWidth };
+    const offenders = [...document.querySelectorAll<HTMLElement>('body *')]
+      .map((element) => {
+        const rect = element.getBoundingClientRect();
+        return {
+          element: `${element.tagName.toLowerCase()}${element.id ? `#${element.id}` : ''}${element.classList.length ? `.${[...element.classList].join('.')}` : ''}`,
+          left: Math.round(rect.left),
+          right: Math.round(rect.right),
+          width: Math.round(rect.width),
+        };
+      })
+      .filter((item) => item.right > doc.clientWidth + 1 || item.left < -1)
+      .slice(0, 8);
+    return { scrollWidth: doc.scrollWidth, clientWidth: doc.clientWidth, offenders };
   });
-  expect(overflow.scrollWidth).toBeLessThanOrEqual(overflow.clientWidth + OVERFLOW_TOLERANCE_PX);
+  expect(
+    overflow.scrollWidth,
+    `horizontal overflow: ${JSON.stringify(overflow.offenders)}`,
+  ).toBeLessThanOrEqual(overflow.clientWidth + OVERFLOW_TOLERANCE_PX);
 }
 
 export async function boundingBox(locator: Locator) {

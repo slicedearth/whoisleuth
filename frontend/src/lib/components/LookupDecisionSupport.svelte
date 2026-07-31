@@ -23,7 +23,7 @@
       <h4 id="decision-support-title">{support.guidance.label}</h4>
       <p>{support.guidance.summary}</p>
     </div>
-    <div class="counts" aria-label="Decision-support summary">
+    <div class="counts" role="group" aria-label="Decision-support summary">
       <span class:attention={support.counts.conflicts > 0}><strong>{support.counts.conflicts}</strong> disagreements</span>
       <span class:attention={support.counts.uncertainties > 0}><strong>{support.counts.uncertainties}</strong> uncertain</span>
     </div>
@@ -54,7 +54,7 @@
     </section>
   </div>
   {#if onbriefcopy || onbriefhandoff}
-    <div class="brief-actions" aria-label="Investigation brief actions">
+    <div class="brief-actions" role="group" aria-label="Investigation brief actions">
       {#if onbriefcopy}<button class="btn small" type="button" onclick={onbriefcopy}>Copy current brief</button>{/if}
       {#if onbriefhandoff}<button class="btn small" type="button" onclick={onbriefhandoff}>Record brief handoff</button>{/if}
     </div>

@@ -72,7 +72,7 @@
           <code>{replay.digestSha256}</code>
         </div>
 
-        <div class="source-grid" aria-label="Replayed source health">
+        <div class="source-grid" role="group" aria-label="Replayed source health">
           {#each replay.sources as source (source.id)}
             <article>
               <strong>{source.label}</strong>

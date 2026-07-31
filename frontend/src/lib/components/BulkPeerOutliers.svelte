@@ -21,7 +21,7 @@
       <button type="button" class="btn small" disabled={!matrix.rows.length} onclick={exportMatrix}>Export outliers</button>
     </header>
 
-    <div class="summary" aria-label="Peer comparison summary">
+    <div class="summary" role="group" aria-label="Peer comparison summary">
       <span><strong>{matrix.cohortSize}</strong> compared</span>
       <span><strong>{matrix.dimensions.length}</strong> dimensions</span>
       <span><strong>{matrix.rows.length}</strong> uncommon rows</span>
@@ -75,10 +75,10 @@
   .row-list article>header strong{overflow-wrap:anywhere}
   .row-list article>header span{flex:0 0 auto;color:var(--violet);font:650 var(--text-2xs) var(--mono)}
   .row-list ul{display:grid;gap:7px;margin:10px 0 0;padding:0;list-style:none}
-  .row-list li{display:grid;gap:3px;padding-top:7px;border-top:1px solid var(--border)}
+  .row-list li{display:grid;min-width:0;max-width:100%;gap:3px;padding-top:7px;border-top:1px solid var(--border)}
   .row-list li strong{font-size:var(--text-xs)}
-  .row-list code{color:var(--text);font-size:var(--text-2xs);overflow-wrap:anywhere}
-  .row-list li span,.empty{color:var(--muted);font-size:var(--text-2xs);line-height:1.45}
+  .row-list code{min-width:0;color:var(--text);font-size:var(--text-2xs);overflow-wrap:anywhere}
+  .row-list li span,.empty{min-width:0;color:var(--muted);font-size:var(--text-2xs);line-height:1.45;overflow-wrap:anywhere}
   details{margin-top:12px;border-top:1px solid var(--border)}
   summary{padding:11px 0;color:var(--text);font:680 var(--text-xs) var(--mono);cursor:pointer}
   summary:focus-visible{outline:2px solid var(--focus);outline-offset:3px}

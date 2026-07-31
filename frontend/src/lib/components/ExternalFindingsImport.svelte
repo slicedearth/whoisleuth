@@ -219,7 +219,7 @@
           <span>{countLabel(findingsPreview.findings.length, 'finding')} · {countLabel(domains.length, 'domain')}</span>
         </header>
         {#if conversionReport}
-          <div class="preview-metrics" aria-label="Observation conversion summary">
+          <div class="preview-metrics" role="group" aria-label="Observation conversion summary">
             <span><strong>{conversionReport.accepted}</strong> accepted</span>
             <span><strong>{conversionReport.rejected}</strong> rejected</span>
             <span><strong>{conversionReport.duplicates}</strong> duplicate</span>
@@ -245,7 +245,7 @@
           <div><p class="eyebrow">Validated {intelligencePreview.format.toUpperCase()} preview</p><h3 id="external-intelligence-preview-title">{intelligencePreview.sourceName}</h3></div>
           <span>{countLabel(intelligencePreview.items.length, 'claim')} · {countLabel(intelligencePreview.exclusions.length, 'exclusion')}</span>
         </header>
-        <div class="preview-metrics" aria-label="External intelligence normalization summary">
+        <div class="preview-metrics" role="group" aria-label="External intelligence normalization summary">
           <span><strong>{intelligencePreview.items.length}</strong> accepted</span>
           <span><strong>{intelligencePreview.duplicatesSkipped}</strong> duplicate</span>
           <span><strong>{intelligencePreview.conflicts.length}</strong> conflict</span>

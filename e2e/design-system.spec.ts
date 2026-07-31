@@ -566,11 +566,11 @@ test('a data-heavy Lookup result groups evidence into navigable sections', async
   const coverageSummary = coverage.getByRole('group', { name: 'Evidence coverage summary' });
   await expect(coverageSummary.getByText(/complete$/u)).toBeVisible();
   await expect(coverageSummary.getByText(/limited$/u)).toBeVisible();
-  await coverage.getByText(/Review \d+ source and analysis states/u).click();
+  await coverage.getByText(/Review \d+ source and analysis records/u).click();
   await expect(coverage).toContainText('Registry RDAP');
   await expect(coverage).toContainText('WHOIS');
   await expect(coverage).toContainText('DNS');
-  await expect(coverage).toContainText('Limited, unavailable, skipped, unsupported, unknown, and not-found states remain distinct');
+  await expect(coverage).toContainText('Missing, failed, stale, unsupported, and not-found evidence remains distinct');
 
   const registrationFact = page.locator('.summaries article').filter({ hasText: 'Registration' }).first();
   await registrationFact.getByText('Inspect evidence').click();
