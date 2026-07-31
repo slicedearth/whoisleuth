@@ -278,6 +278,13 @@ raw lookup responses, or expanded contacts. Retained observations can be
 reviewed and deleted under Monitor Relationships, included in the workspace
 archive, found through local investigation search, and projected into the
 relationship graph when at least two member domains also have local cases.
+For projection-backed relationships, the table and graph inspector also show a
+bounded discovery path from each retained case domain to the selected
+infrastructure or identifier. The path records each comparison method,
+classification, immediate parent, hop count, and scope distance using existing
+local evidence only. Exported relationship graphs include the same minimized
+path details. Distance is an explanation of the retained pivot, not evidence
+of ownership, coordination, intent, maliciousness, or safety.
 
 Defensive registration coverage groups a generated scan by mutation family and
 domain ending. It distinguishes protected or allowlisted domains, registered

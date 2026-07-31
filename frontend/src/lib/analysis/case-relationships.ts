@@ -14,17 +14,22 @@ import {
   MAX_PROJECTION_LIMITATIONS,
 } from './investigation-projection.ts';
 import { readBoundedInvestigationProjection } from './investigation-projection-reader.ts';
+import {
+  buildInvestigationLineage,
+  type InvestigationLineagePath,
+} from './investigation-lineage.ts';
 
 export const CASE_RELATIONSHIP_VERSION = 1;
 export const MAX_RELATIONSHIP_CASES = MAX_CASES;
 export const MAX_CASE_RELATIONSHIP_GROUPS = 100;
 export const MAX_CASES_PER_RELATIONSHIP = 50;
-export const INVESTIGATION_CASE_RELATIONSHIP_VERSION = 1;
+export const INVESTIGATION_CASE_RELATIONSHIP_VERSION = 2;
 export const MAX_RELATIONSHIP_PROVENANCE_OBSERVATIONS = 100;
 export const MAX_RELATIONSHIP_SCOPE_OPTIONS = 100;
 export const MAX_RELATIONSHIP_SOURCE_OPTIONS = 100;
 export const MAX_RELATIONSHIP_METHODS = 4;
 export const MAX_RELATIONSHIP_CLASSIFICATIONS = 4;
+export const MAX_RELATIONSHIP_LINEAGE_PATHS = 50;
 
 const SAFE_CASE_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
 const PROJECTION_RELATIONSHIP_TYPES = new Map([
@@ -114,6 +119,8 @@ export interface CaseRelationshipGroup {
   truncated?: boolean;
   observations?: CaseRelationshipObservation[];
   omittedObservations?: number;
+  lineagePaths?: InvestigationLineagePath[];
+  omittedLineagePaths?: number;
   limitations?: string[];
 }
 
@@ -173,6 +180,8 @@ interface ProjectionBucket {
   methods: Set<string>;
   classifications: Set<string>;
   observations: Map<string, CaseRelationshipObservation>;
+  lineagePaths: Map<string, InvestigationLineagePath>;
+  omittedLineagePaths: number;
   limitations: unknown[];
   firstObservedAt: string;
   lastObservedAt: string;
@@ -412,6 +421,7 @@ export function buildInvestigationCaseRelationships(rawProjection: unknown): Cas
   if (projection.state !== 'ready') {
     return emptyProjectionRelationships(projection.state, projection.version, [projection.detail]);
   }
+  const lineage = buildInvestigationLineage(rawProjection);
   const projectionVersion = projection.version;
 
   const entities = new Map<string, ProjectionEntity>();
@@ -440,6 +450,13 @@ export function buildInvestigationCaseRelationships(rawProjection: unknown): Cas
   const relationships = projection.relationships
     .map(plainRecord)
     .filter((value): value is Record<string, unknown> => value !== null);
+  const lineageByRelationshipId = new Map<string, InvestigationLineagePath[]>();
+  for (const path of lineage.paths) {
+    const relationshipId = path.steps.at(-1)?.relationshipId;
+    if (!relationshipId) continue;
+    if (!lineageByRelationshipId.has(relationshipId)) lineageByRelationshipId.set(relationshipId, []);
+    lineageByRelationshipId.get(relationshipId)?.push(path);
+  }
   const casesByDomain = new Map<string, Map<string, ProjectionCaseMember>>();
   const campaignsByDomain = new Map<string, Map<string, CaseRelationshipCampaign>>();
   for (const relationship of relationships) {
@@ -489,6 +506,8 @@ export function buildInvestigationCaseRelationships(rawProjection: unknown): Cas
         methods: new Set<string>(),
         classifications: new Set<string>(),
         observations: new Map<string, CaseRelationshipObservation>(),
+        lineagePaths: new Map<string, InvestigationLineagePath>(),
+        omittedLineagePaths: 0,
         limitations: [],
         firstObservedAt: '',
         lastObservedAt: '',
@@ -513,6 +532,14 @@ export function buildInvestigationCaseRelationships(rawProjection: unknown): Cas
     bucket.limitations.push(...(Array.isArray(relationship.limitations)
       ? relationship.limitations.slice(0, MAX_PROJECTION_LIMITATIONS * 2)
       : []));
+    for (const path of lineageByRelationshipId.get(safeProjectionText(relationship.id, 100)) ?? []) {
+      if (path.seed.id !== domainEntity.id || path.target.id !== targetEntity.id) continue;
+      if (bucket.lineagePaths.size < MAX_RELATIONSHIP_LINEAGE_PATHS) {
+        bucket.lineagePaths.set(path.id, path);
+      } else {
+        bucket.omittedLineagePaths += 1;
+      }
+    }
     const sourceObservationIds = Array.isArray(relationship.sourceObservationIds) ? relationship.sourceObservationIds : [];
     if (sourceObservationIds.length > MAX_RELATIONSHIP_PROVENANCE_OBSERVATIONS * 2) bucket.truncated = true;
     for (const rawId of sourceObservationIds.slice(0, MAX_RELATIONSHIP_PROVENANCE_OBSERVATIONS * 2)) {
@@ -557,6 +584,11 @@ export function buildInvestigationCaseRelationships(rawProjection: unknown): Cas
     const allObservations = [...bucket.observations.values()].sort((left, right) => right.observedAt.localeCompare(left.observedAt) || left.id.localeCompare(right.id));
     const allMethods = [...bucket.methods].sort();
     const allClassifications = [...bucket.classifications].sort();
+    const allLineagePaths = [...bucket.lineagePaths.values()].sort((left, right) =>
+      left.seed.label.localeCompare(right.seed.label)
+      || left.scopeDistance - right.scopeDistance
+      || left.target.label.localeCompare(right.target.label)
+      || left.id.localeCompare(right.id));
     const methods = allMethods.slice(0, MAX_RELATIONSHIP_METHODS);
     const classifications = allClassifications.slice(0, MAX_RELATIONSHIP_CLASSIFICATIONS);
     const groupTruncated = bucket.truncated
@@ -564,7 +596,8 @@ export function buildInvestigationCaseRelationships(rawProjection: unknown): Cas
       || allCampaigns.length > MAX_RELATIONSHIP_SCOPE_OPTIONS
       || allObservations.length > MAX_RELATIONSHIP_PROVENANCE_OBSERVATIONS
       || allMethods.length > methods.length
-      || allClassifications.length > classifications.length;
+      || allClassifications.length > classifications.length
+      || bucket.omittedLineagePaths > 0;
     if (groupTruncated) truncated = true;
     return {
       type: bucket.type,
@@ -584,6 +617,8 @@ export function buildInvestigationCaseRelationships(rawProjection: unknown): Cas
       truncated: groupTruncated,
       observations: allObservations.slice(0, MAX_RELATIONSHIP_PROVENANCE_OBSERVATIONS),
       omittedObservations: Math.max(0, allObservations.length - MAX_RELATIONSHIP_PROVENANCE_OBSERVATIONS),
+      lineagePaths: allLineagePaths,
+      omittedLineagePaths: bucket.omittedLineagePaths,
       limitations: projectionLimitations(bucket.limitations),
     };
   }).sort((left, right) => (Number(order.get(left.type)) - Number(order.get(right.type)))
@@ -615,6 +650,7 @@ export function buildInvestigationCaseRelationships(rawProjection: unknown): Cas
     truncated,
     limitations: projectionLimitations([
       ...(Array.isArray(projection.limitations) ? projection.limitations : []),
+      ...(lineage.state === 'ready' ? lineage.limitations : [lineage.limitations[0] ?? 'Discovery lineage was unavailable.']),
       ...(filterOptionsTruncated ? ['Source, case, or campaign filter options were bounded; retained relationship rows remain available in the table.'] : []),
       'Relationship groups use retained observation history. Filter by observation time and inspect provenance before treating a historical pivot as current.',
       'Shared infrastructure or destinations are investigation pivots, not proof of common ownership, coordination, intent, or maliciousness.',

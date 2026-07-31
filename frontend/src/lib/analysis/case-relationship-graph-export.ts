@@ -11,9 +11,11 @@ import {
 import type { CaseRelationshipSummary } from './case-relationships.ts';
 
 export const RELATIONSHIP_GRAPH_EXPORT_SCHEMA = 'whoisleuth.relationship-graph';
-export const RELATIONSHIP_GRAPH_EXPORT_VERSION = 1;
+export const RELATIONSHIP_GRAPH_EXPORT_VERSION = 2;
 export const MAX_RELATIONSHIP_GRAPH_EXPORT_BYTES = 512 * 1024;
 export const MAX_RELATIONSHIP_GRAPH_EXPORT_OBSERVATIONS_PER_RELATIONSHIP = 8;
+export const MAX_RELATIONSHIP_GRAPH_EXPORT_LINEAGE_PATHS = 8;
+export const MAX_RELATIONSHIP_GRAPH_EXPORT_LINEAGE_STEPS = 8;
 export const MAX_RELATIONSHIP_GRAPH_EXPORT_LIMITATIONS = 12;
 
 const CONTROL_RE = /[\x00-\x1f\x7f]/;
@@ -41,6 +43,30 @@ interface RelationshipGraphExportObservation {
   complete: boolean | null;
   truncated: boolean | null;
   schemaVersions: Record<string, number>;
+  limitations: string[];
+}
+
+interface RelationshipGraphExportLineageStep {
+  position: number;
+  relationshipType: string;
+  method: string;
+  classification: string;
+  from: string;
+  to: string;
+}
+
+interface RelationshipGraphExportLineagePath {
+  seed: string;
+  seedMethods: string[];
+  immediateParent: string;
+  target: string;
+  hopCount: number;
+  scopeDistance: number;
+  discoveryMethod: string;
+  classification: string;
+  complete: boolean | null;
+  truncated: boolean;
+  steps: RelationshipGraphExportLineageStep[];
   limitations: string[];
 }
 
@@ -185,12 +211,66 @@ function observation(value: unknown): RelationshipGraphExportObservation {
   };
 }
 
+function lineageEntityLabel(value: unknown): string {
+  const item = record(value);
+  return text(item.label ?? item.canonical, 300);
+}
+
+function lineagePath(value: unknown): RelationshipGraphExportLineagePath | null {
+  const item = record(value);
+  const seed = lineageEntityLabel(item.seed);
+  const immediateParent = lineageEntityLabel(item.immediateParent);
+  const target = lineageEntityLabel(item.target);
+  const hopCount = integer(item.hopCount, MAX_RELATIONSHIP_GRAPH_EXPORT_LINEAGE_STEPS);
+  const scopeDistance = integer(item.scopeDistance, MAX_RELATIONSHIP_GRAPH_EXPORT_LINEAGE_STEPS);
+  if (!seed || !immediateParent || !target || hopCount < 1 || scopeDistance < 1) return null;
+  const steps: RelationshipGraphExportLineageStep[] = [];
+  for (const rawStep of Array.isArray(item.steps)
+    ? item.steps.slice(0, MAX_RELATIONSHIP_GRAPH_EXPORT_LINEAGE_STEPS)
+    : []) {
+    const step = record(rawStep);
+    const from = lineageEntityLabel(step.from);
+    const to = lineageEntityLabel(step.to);
+    const relationshipType = text(step.relationshipType, 80);
+    if (!from || !to || !relationshipType) continue;
+    steps.push({
+      position: integer(step.position, MAX_RELATIONSHIP_GRAPH_EXPORT_LINEAGE_STEPS),
+      relationshipType,
+      method: text(step.method, 200),
+      classification: text(step.classification, 40) || 'derived',
+      from,
+      to,
+    });
+  }
+  if (!steps.length) return null;
+  return {
+    seed,
+    seedMethods: strings(item.seedMethods, 4, 80),
+    immediateParent,
+    target,
+    hopCount,
+    scopeDistance,
+    discoveryMethod: text(item.discoveryMethod, 200),
+    classification: text(item.classification, 40) || 'derived',
+    complete: booleanOrNull(item.complete),
+    truncated: item.truncated === true || steps.length < hopCount,
+    steps,
+    limitations: strings(item.limitations, 8, 300),
+  };
+}
+
 function relationshipMetadata(node: CaseRelationshipGraphRelationshipNode) {
   const retained = Array.isArray(node.observations)
     ? node.observations.slice(0, MAX_RELATIONSHIP_GRAPH_EXPORT_OBSERVATIONS_PER_RELATIONSHIP).map(observation)
     : [];
   const totalObservationCount = integer(node.observations?.length) + integer(node.omittedObservations);
   const omittedObservationCount = Math.max(0, totalObservationCount - retained.length);
+  const lineagePaths = (Array.isArray(node.lineagePaths) ? node.lineagePaths : [])
+    .slice(0, MAX_RELATIONSHIP_GRAPH_EXPORT_LINEAGE_PATHS)
+    .map(lineagePath)
+    .filter((value): value is RelationshipGraphExportLineagePath => value !== null);
+  const totalLineagePathCount = integer(node.lineagePaths?.length) + integer(node.omittedLineagePaths);
+  const omittedLineagePathCount = Math.max(0, totalLineagePathCount - lineagePaths.length);
   return {
     relationshipType: text(node.type, 40),
     value: text(node.value, 300),
@@ -202,11 +282,16 @@ function relationshipMetadata(node: CaseRelationshipGraphRelationshipNode) {
     firstObservedAt: timestamp(node.firstObservedAt),
     lastObservedAt: timestamp(node.lastObservedAt),
     complete: booleanOrNull(node.complete),
-    truncated: node.truncated === true || omittedObservationCount > 0,
+    truncated: node.truncated === true || omittedObservationCount > 0 || omittedLineagePathCount > 0,
     observationCount: totalObservationCount,
     exportedObservationCount: retained.length,
     omittedObservationCount,
     observations: retained,
+    lineagePathCount: totalLineagePathCount,
+    exportedLineagePathCount: lineagePaths.length,
+    omittedLineagePathCount,
+    maximumScopeDistance: lineagePaths.reduce((maximum, path) => Math.max(maximum, path.scopeDistance), 0),
+    discoveryPaths: lineagePaths,
     limitations: strings(node.limitations, MAX_RELATIONSHIP_GRAPH_EXPORT_LIMITATIONS, 300),
   };
 }
@@ -341,6 +426,9 @@ const NODE_FIELDS: ReadonlyArray<readonly [string, string]> = [
   ['lastObservedAt', 'Last observed'], ['complete', 'Complete'], ['truncated', 'Truncated'],
   ['observationCount', 'Observation count'], ['exportedObservationCount', 'Exported observation count'],
   ['omittedObservationCount', 'Omitted observation count'], ['observations', 'Source observations'],
+  ['lineagePathCount', 'Discovery path count'], ['exportedLineagePathCount', 'Exported discovery path count'],
+  ['omittedLineagePathCount', 'Omitted discovery path count'], ['maximumScopeDistance', 'Maximum scope distance'],
+  ['discoveryPaths', 'Discovery paths'],
   ['limitations', 'Limitations'],
 ];
 
