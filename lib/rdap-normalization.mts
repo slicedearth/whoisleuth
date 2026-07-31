@@ -674,5 +674,7 @@ function parseRdap<const T extends string>(type: T, data: unknown): NormalizedRd
 export {
   parseRdap,
   normalizeRdapEvents,
+  summarizeServerTruncation as summarizeRdapServerTruncation,
+  summarizeTextBlocks as summarizeRdapTextBlocks,
   summarizeLifecycle,
 };

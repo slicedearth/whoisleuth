@@ -29,6 +29,7 @@ const CAPABILITY_STATUSES = new Set<CapabilityStatus>(['supported', 'disabled', 
 const DEFINITIONS: readonly CapabilityDefinition[] = Object.freeze([
   { id: 'lookup', status: 'supported', execution: 'hosted', scanModes: ['fast', 'deep'] },
   { id: 'rdap', status: 'supported', execution: 'hosted', scanModes: ['fast', 'deep'] },
+  { id: 'rdap_nameserver_search', status: 'supported', execution: 'hosted', scanModes: [] },
   { id: 'whois', status: 'supported', execution: 'hosted', scanModes: ['deep'] },
   { id: 'availability', status: 'supported', execution: 'hosted', scanModes: ['fast', 'deep'] },
   { id: 'dns_intelligence', status: 'supported', execution: 'hosted', scanModes: ['deep'] },

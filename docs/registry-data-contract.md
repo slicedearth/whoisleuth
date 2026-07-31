@@ -26,6 +26,12 @@ full successful response contains:
   non-applicable result for IP/ASN input.
 - `diagnostics`: independent source status and provenance. Deep non-compact
   responses also include bounded orchestration timing described below.
+
+`GET /api/rdap-nameserver-search?nameserver=<hostname>&scope=<suffix>` is a
+separate authenticated Discover action. It accepts one normalized nameserver
+and one top-level registry suffix, selects the registry from IANA RDAP
+bootstrap data, and requests its RFC 9082 `nsLdhName` domain search. It does not
+change the Fast, Compact, Deep, availability, or monitoring contracts.
 - `networkContext`: for an eligible deep non-compact domain result, a
   separately attributed summary of one observed public endpoint address and
   its IP RDAP network registration.
@@ -371,8 +377,9 @@ temporary application-control responses, not upstream registry results or
 evidence about the queried domain. Current endpoint denials also include the
 server-derived `operationFeature` and `operationFeatureModelVersion: 1`.
 Version 1 distinguishes fast/deep ordinary Lookup, fast/deep compact Bulk,
-direct RDAP, direct WHOIS, fast/deep availability, Certificate Transparency,
-and domain-posture requests. The feature is accounting provenance rather than
+direct RDAP, registry-scoped nameserver search, direct WHOIS, fast/deep
+availability, Certificate Transparency, and domain-posture requests. The
+feature is accounting provenance rather than
 proof of the browser workflow: compact mode is the Bulk contract, but a custom
 client can select a different compatible response shape, so future durable
 enforcement must also retain deployment-wide totals.
@@ -450,6 +457,18 @@ state, and a control-safe detail of at most 240 characters.
 Registrar diagnostics may include its status, endpoint, HTTPS transport,
 upstream status, fetch time, and one bounded attempt. Registrar `not_found` is
 diagnostic only and never an availability signal.
+
+The nameserver-search response uses schema
+`whoisleuth.rdap-nameserver-search`, version 1. It always sets
+`lowerBound: true`, identifies the canonical nameserver and selected registry
+suffix, and preserves `success`, `partial`, `no_results`, `unsupported`,
+`rate_limited`, or `unavailable`. It inspects no more than 800 returned objects,
+retains no more than 200 unique in-scope domains, and exposes local or
+registry-declared truncation, invalid omitted rows, bounded notices, endpoint
+attempts, observation time, and limitations. Raw RDAP search payloads and
+published contacts are discarded. `no_results` means only that the selected
+registry returned no match for that bounded request; it is not evidence that
+the nameserver is unused elsewhere.
 
 Observed-network diagnostics may include status, selected address, address
 family, whether the selection came from TLS or DNS fallback, IP RDAP endpoint,

@@ -13,6 +13,7 @@ const FEATURE_DISABLED_ERROR_CODE = 'FEATURE_DISABLED';
 const NETWORK_FEATURE_DEFINITIONS = Object.freeze({
   lookup: Object.freeze({ env: 'WHOISLEUTH_DISABLE_LOOKUP', label: 'Unified Lookup' }),
   rdap: Object.freeze({ env: 'WHOISLEUTH_DISABLE_RDAP', label: 'RDAP' }),
+  rdap_nameserver_search: Object.freeze({ env: 'WHOISLEUTH_DISABLE_RDAP_NAMESERVER_SEARCH', label: 'RDAP nameserver search' }),
   whois: Object.freeze({ env: 'WHOISLEUTH_DISABLE_WHOIS', label: 'WHOIS' }),
   availability: Object.freeze({ env: 'WHOISLEUTH_DISABLE_AVAILABILITY', label: 'availability analysis' }),
   dns_intelligence: Object.freeze({ env: 'WHOISLEUTH_DISABLE_DNS_INTELLIGENCE', label: 'DNS intelligence' }),
@@ -49,6 +50,7 @@ type FeatureDisabledError = {
 };
 
 const FEATURE_DEPENDENCIES: Readonly<Partial<Record<NetworkFeatureId, readonly NetworkFeatureId[]>>> = Object.freeze({
+  rdap_nameserver_search: Object.freeze(['rdap'] as NetworkFeatureId[]),
   domain_posture: Object.freeze(['dns_intelligence'] as NetworkFeatureId[]),
 });
 

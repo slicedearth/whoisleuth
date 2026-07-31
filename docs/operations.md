@@ -62,6 +62,7 @@ Set a switch to `1`, `true`, `yes`, or `on` to disable that hosted feature:
 | --- | --- |
 | `WHOISLEUTH_DISABLE_LOOKUP` | Blocks unified Lookup and Bulk submissions. |
 | `WHOISLEUTH_DISABLE_RDAP` | Blocks direct RDAP and omits it from unified Lookup and availability. |
+| `WHOISLEUTH_DISABLE_RDAP_NAMESERVER_SEARCH` | Blocks the deliberate registry-scoped nameserver search in Discover. Disabling RDAP also blocks it. |
 | `WHOISLEUTH_DISABLE_WHOIS` | Blocks direct WHOIS and omits it from Deep Lookup and availability. |
 | `WHOISLEUTH_DISABLE_AVAILABILITY` | Blocks direct availability and omits it from unified Lookup. |
 | `WHOISLEUTH_DISABLE_DNS_INTELLIGENCE` | Stops evidence and posture DNS queries while retaining transport DNS needed by enabled endpoints. |
@@ -118,7 +119,7 @@ Express and functions share fixed-window request controls:
 | Route family | Default ceiling |
 | --- | ---: |
 | Login | 10 attempts per 5 minutes per client IP |
-| Lookup, RDAP, WHOIS, availability, Certificate Transparency, and posture | 1,000 requests per minute per client IP |
+| Lookup, RDAP, registry-scoped nameserver search, WHOIS, availability, Certificate Transparency, and posture | 1,000 requests per minute per client IP |
 | Scheduled-monitor management | 60 authenticated requests per minute per warm runtime and signed session, plus the general API limit |
 
 An exceeded limit returns HTTP 429 with `Retry-After`. The in-memory limiter is
@@ -134,7 +135,7 @@ Network-heavy authenticated operations also acquire an immediate lease:
 
 | Operation class | Included work | Per session | Per runtime instance |
 | --- | --- | ---: | ---: |
-| `registry_light` | Fast Lookup, RDAP, Fast availability | 12 | 36 |
+| `registry_light` | Fast Lookup, RDAP, registry-scoped nameserver search, Fast availability | 12 | 36 |
 | `registry_deep` | Deep Lookup, WHOIS, Deep availability | 4 | 12 |
 | `certificate_search` | Certificate Transparency | 2 | 4 |
 | `posture_audit` | Official-domain posture audit | 3 | 8 |

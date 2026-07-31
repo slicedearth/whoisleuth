@@ -135,7 +135,11 @@ version 7 and their existing payload shape.
 - **RDAP** starts from validated IANA bootstrap data, prefers HTTPS, validates
   successful objects against the requested domain/IP/ASN, and records bounded
   endpoint-attempt diagnostics. A stale validated bootstrap can bridge a
-  temporary bootstrap outage.
+  temporary bootstrap outage. Discover can separately request one RFC 9082
+  nameserver search from the IANA-selected service for an analyst-supplied
+  registry suffix. That explicit action retains at most 200 normalized
+  in-scope domains, is never part of Fast, Compact, Deep, or monitoring, and
+  remains a registry-scoped lower bound rather than a global reverse pivot.
 - **WHOIS** follows a bounded TCP/43 referral chain with validated public
   targets, per-hop attempt caps, one overall deadline, incremental decoding,
   and source-aware authority analysis. Positive registry evidence is not

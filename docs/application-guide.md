@@ -286,6 +286,19 @@ ownership, or maliciousness. Structured certificate-log results initially sort
 by latest retained observation. **Reset view** restores that default for
 certificate-log results and restores review-cue ordering for local generation.
 
+**Nameservers** is a separate, deliberate hosted pivot. Enter one nameserver
+hostname and one registry suffix. WHOISleuth uses IANA RDAP bootstrap data to
+select that suffix's registry and requests the registry's RFC 9082
+`nsLdhName` domain search. It inspects a bounded response, retains at most 200
+normalized domains, and exposes unsupported, rate-limited, unavailable,
+partial, and no-result states without broadening them. The result is a lower
+bound for that one registry, not a passive-DNS dataset or internet-wide reverse
+nameserver inventory. A shared nameserver is an investigation pivot, not proof
+of common ownership, control, intent, activity, or maliciousness. Selected
+domains can continue through the ordinary reviewed Discover-to-Bulk handoff;
+the nameserver query and raw registry response are not saved in the browser
+workspace.
+
 Filtered and sorted candidate lists are paginated locally. Selecting all
 filtered entries operates on the complete bounded filtered set, not only the
 visible page. New result sets start unselected so moving hundreds or thousands

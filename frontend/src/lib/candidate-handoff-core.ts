@@ -20,6 +20,7 @@ export const HANDOFF_SOURCES = [
   'typosquat',
   'keyword',
   'certificate-transparency',
+  'nameserver',
   'watchlist',
   'manual',
 ] as const;

@@ -48,6 +48,12 @@
   force = true
 
 [[redirects]]
+  from = "/api/rdap-nameserver-search"
+  to = "/.netlify/functions/rdap-nameserver-search"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/api/whois"
   to = "/.netlify/functions/whois"
   status = 200

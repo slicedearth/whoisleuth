@@ -5,6 +5,10 @@ import { fileURLToPath } from 'node:url';
 
 import { classifyQuery } from './lib/classify.mts';
 import { fetchRdapRecord } from './lib/rdap.mts';
+import {
+  RdapNameserverSearchInputError,
+  searchRdapNameserver,
+} from './lib/rdap-nameserver-search.mts';
 import { buildWhoisChain, parseWhoisChain } from './lib/whois.mts';
 import { checkDomainAvailability } from './lib/availability.mts';
 import { runUnifiedLookup, LOOKUP_ERROR_CODES } from './lib/lookup.mts';
@@ -302,6 +306,23 @@ app.get('/api/rdap', apiRateLimit, requireAuth, requireFeature('rdap'), async (r
       });
     } catch (err) {
       sendUnexpectedApiError(res);
+    }
+  });
+});
+
+app.get('/api/rdap-nameserver-search', apiRateLimit, requireAuth, requireFeature('rdap_nameserver_search'), async (req: RequestLike, res: ResponseLike) => {
+  return withExpressOperationBudget(req, res, operationBudgetTargetFor('rdap_nameserver_search'), async () => {
+    try {
+      const result = await searchRdapNameserver(
+        queryText(req.query.nameserver),
+        queryText(req.query.scope),
+      );
+      return res.status(200).json(result);
+    } catch (error) {
+      if (error instanceof RdapNameserverSearchInputError) {
+        return res.status(400).json({ error: error.message, errorCode: error.code });
+      }
+      return sendUnexpectedApiError(res);
     }
   });
 });

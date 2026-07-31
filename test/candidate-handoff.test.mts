@@ -58,6 +58,17 @@ describe('candidate handoff CT provenance', () => {
     assert.deepStrictEqual(loaded.candidates[0].mutationTypes, ['keyword']);
   });
 
+  test('registry nameserver candidates retain their explicit handoff source', () => {
+    const loaded = roundTrip('nameserver', [{
+      domain: 'matched.example',
+      source: 'ns1.infrastructure.example',
+      mutationTypes: ['rdap_nameserver_search'],
+    }]);
+    assert.equal(loaded.source, 'nameserver');
+    assert.equal(loaded.candidates[0].domain, 'matched.example');
+    assert.deepStrictEqual(loaded.candidates[0].mutationTypes, ['rdap_nameserver_search']);
+  });
+
   test('unknown nested keys are removed on save', () => {
     const stored = core.buildHandoff('certificate-transparency', [
       ctCandidate({ certificateTransparency: { hostnames: ['a.example.com'], firstObservedAt: null, lastObservedAt: null, certificateCount: 1, junk: 'x' } }),

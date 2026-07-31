@@ -25,6 +25,15 @@ default (see the README), so many lookups return no personal data at all.
   candidates continue to Bulk, only the resulting domain names and bounded
   mutation provenance follow the normal lookup path; the original dictionary
   list does not.
+- **Registry-scoped nameserver search**: when an analyst explicitly enters a
+  nameserver and one registry suffix in Discover, the deployment selects that
+  registry through IANA RDAP bootstrap data and sends the nameserver in a
+  bounded public RDAP search request. The transient response retains at most
+  200 normalized in-scope domains, source state, observation time, truncation,
+  endpoint attempts, and limitations. It discards the raw registry response
+  and published contacts. The result is a lower bound for that registry, not a
+  global reverse-nameserver inventory. Nothing is saved unless the analyst
+  deliberately selects resulting domains for the ordinary Bulk handoff.
 - **Single and bulk lookups**: proxied through the server and never written to
   an ordinary investigation database or disk server-side. Request data is
   transient, while bounded registry bootstrap and selected public RDAP/WHOIS

@@ -35,6 +35,10 @@
   } from '$lib/analysis/discover-candidate-sort.ts';
   import { MAX_CT_QUERY_LENGTH, normalizeCtQuery } from '$lib/analysis/ct-query.ts';
   import { analyzeDomainIdn } from '$lib/analysis/idn-confusables.ts';
+  import {
+    normalizeRdapNameserverSearchResponse,
+    type RdapNameserverSearchView,
+  } from '$lib/analysis/rdap-nameserver-search.ts';
   import { clearCtHistory, loadCtHistory, removeCtHistory, saveCtHistorySearch, type CtHistoryEntry, type CtHistoryStore } from '$lib/ct-history';
   import { CAPABILITY_CONTEXT, disabledCapability, type CapabilityGetter } from '$lib/capabilities';
   import {
@@ -47,7 +51,7 @@
     updateInvestigationGuideOutcome,
   } from '$lib/investigation-guide';
 
-  type Mode = 'typosquat' | 'keyword' | 'certificate-transparency';
+  type Mode = 'typosquat' | 'keyword' | 'certificate-transparency' | 'nameserver';
   type GenerationPresetId = 'common' | 'impersonation' | 'all' | 'custom';
   type KeyboardLayoutId = 'qwerty' | 'azerty' | 'qwertz' | 'all';
   type CandidateScope = 'all' | 'review-cues' | 'unicode' | 'mixed' | 'reference' | 'selected';
@@ -58,6 +62,7 @@
   let customMutationFamilies = $state<string[]>([...DEFAULT_CUSTOM_MUTATION_FAMILY_IDS]);
   let seed = $state('');
   let tldText = $state('com, net, org');
+  let registryScope = $state('com');
   let customDictionaryText = $state('');
   let candidates = $state<Candidate[]>([]);
   let generatedContext = $state<Candidate[]>([]);
@@ -78,25 +83,30 @@
   let ctPreviousCheckedAt = $state<string|null>(null);
   let ctNewOnly = $state(false);
   let ctHistoryNotice = $state('');
+  let rdapSearchSummary = $state<RdapNameserverSearchView|null>(null);
   let page = $state(1);
   const capabilityReport=getContext<CapabilityGetter>(CAPABILITY_CONTEXT);
   const ctDisabled=$derived(disabledCapability(capabilityReport?.()||null,'certificate_transparency'));
+  const rdapSearchDisabled=$derived(disabledCapability(capabilityReport?.()||null,'rdap_nameserver_search'));
   // Monotonic request token: a slower, older CT response can never overwrite a
   // newer completed search (or a mode switch that invalidated it).
   let searchToken = 0;
   // The in-flight CT request, so switching tabs (or a new search) can cancel it
   // and never leave the UI stuck in its loading/disabled state.
-  let ctController: AbortController | null = null;
+  let searchController: AbortController | null = null;
 
   // Invalidates and aborts any in-flight CT search and clears its loading
   // state. Called on every mode switch and before starting a new search.
-  function cancelCtSearch() {
+  function cancelHostedSearch() {
     searchToken++;
-    ctController?.abort();
-    ctController = null;
+    searchController?.abort();
+    searchController = null;
     searching = false;
   }
-  const mutationLabels = MUTATION_LABELS as Record<string, string>;
+  const mutationLabels:Record<string,string> = {
+    ...MUTATION_LABELS,
+    rdap_nameserver_search: 'Registry nameserver result',
+  };
   const generationPresets = Object.values(GENERATION_PRESETS) as Array<{
     id: GenerationPresetId;
     label: string;
@@ -280,6 +290,7 @@
     status = '';
     error = '';
     candidateMetadata = new Map();
+    rdapSearchSummary = null;
     resetCandidateView();
   }
 
@@ -348,11 +359,11 @@
     status = `Loaded discovery defaults from ${profile.name}.`;
   }
 
-  function selectMode(next:Mode){cancelCtSearch();mode=next;candidates=[];generatedContext=[];selected=new Set();candidateMetadata=new Map();status='';error='';ctResultKind=null;resetCandidateView();resetCtComparison();}
-  function tabKeydown(event:KeyboardEvent){const order:Mode[]=['typosquat','keyword','certificate-transparency'];const current=order.indexOf(mode);let index=-1;if(event.key==='ArrowRight')index=(current+1)%order.length;else if(event.key==='ArrowLeft')index=(current+order.length-1)%order.length;else if(event.key==='Home')index=0;else if(event.key==='End')index=order.length-1;if(index<0)return;const nextMode=order[index];if(!nextMode)return;event.preventDefault();selectMode(nextMode);requestAnimationFrame(()=>document.querySelectorAll<HTMLButtonElement>('[role="tab"]')[index]?.focus());}
+  function selectMode(next:Mode){cancelHostedSearch();mode=next;candidates=[];generatedContext=[];selected=new Set();candidateMetadata=new Map();status='';error='';ctResultKind=null;rdapSearchSummary=null;resetCandidateView();resetCtComparison();}
+  function tabKeydown(event:KeyboardEvent){const order:Mode[]=['typosquat','keyword','certificate-transparency','nameserver'];const current=order.indexOf(mode);let index=-1;if(event.key==='ArrowRight')index=(current+1)%order.length;else if(event.key==='ArrowLeft')index=(current+order.length-1)%order.length;else if(event.key==='Home')index=0;else if(event.key==='End')index=order.length-1;if(index<0)return;const nextMode=order[index];if(!nextMode)return;event.preventDefault();selectMode(nextMode);requestAnimationFrame(()=>document.querySelectorAll<HTMLButtonElement>('[role="tab"]')[index]?.focus());}
 
   function generate() {
-    cancelCtSearch(); ctResultKind = null; resetCtComparison();
+    cancelHostedSearch(); ctResultKind = null; rdapSearchSummary = null; resetCtComparison();
     if (!seed.trim()) { error = 'Enter a brand, domain, or keyword.'; return; }
     const selection = tldSelection();
     if (!selection.values.length && !seed.includes('.')) { error = 'Enter at least one valid TLD.'; return; }
@@ -403,10 +414,11 @@
     catch (cause) { error = cause instanceof Error ? cause.message : 'Enter a valid certificate-log keyword.'; return; }
     if (!query) { error = 'Enter a brand or keyword to search.'; return; }
     // Supersede and abort any earlier in-flight search before starting.
-    cancelCtSearch();
+    cancelHostedSearch();
     const token = searchToken;
     const controller = new AbortController();
-    ctController = controller;
+    searchController = controller;
+    rdapSearchSummary = null;
     searching = true; error = ''; status = 'Searching Certificate Transparency logs…'; resetCtComparison();
     try {
       const response = await fetch(`/api/ct-search?q=${encodeURIComponent(query)}`, { signal: controller.signal });
@@ -446,7 +458,69 @@
       ctResultKind = null; candidates = []; generatedContext = []; selected = new Set(); resetCtComparison();
       error = cause instanceof Error ? cause.message : 'Certificate search failed'; status = '';
     } finally {
-      if (token === searchToken) { searching = false; ctController = null; }
+      if (token === searchToken) { searching = false; searchController = null; }
+    }
+  }
+
+  function rdapSearchStatusMessage(summary:RdapNameserverSearchView) {
+    const scope = `.${summary.registryScope}`;
+    if (summary.state === 'unsupported') return `${scope} did not advertise a usable RDAP nameserver-search result. No broader absence conclusion was made.`;
+    if (summary.state === 'rate_limited') return `${scope} temporarily rate-limited the nameserver search. No result set was inferred.`;
+    if (summary.state === 'unavailable') return `${scope} nameserver search was unavailable. No result set was inferred.`;
+    if (summary.state === 'no_results') return `${scope} returned no matching domain objects in this request. This is still registry-scoped, not an internet-wide absence result.`;
+    const qualifier = summary.state === 'partial' || summary.truncated ? 'bounded partial' : 'bounded';
+    return `${scope} returned ${summary.resultCount} ${qualifier} domain result${summary.resultCount===1?'':'s'} for this nameserver.`;
+  }
+
+  async function searchNameserver() {
+    if (rdapSearchDisabled) { error = rdapSearchDisabled.reason || 'RDAP nameserver search is disabled by deployment policy.'; return; }
+    const nameserver = seed.trim();
+    const scope = registryScope.trim();
+    if (!nameserver) { error = 'Enter a nameserver hostname.'; return; }
+    if (!scope) { error = 'Enter one registry suffix.'; return; }
+    cancelHostedSearch();
+    const token = searchToken;
+    const controller = new AbortController();
+    searchController = controller;
+    searching = true;
+    error = '';
+    status = 'Searching the selected registry…';
+    rdapSearchSummary = null;
+    resetCtComparison();
+    try {
+      const response = await fetch(`/api/rdap-nameserver-search?nameserver=${encodeURIComponent(nameserver)}&scope=${encodeURIComponent(scope)}`, {
+        signal: controller.signal,
+      });
+      const body: unknown = await response.json().catch(() => ({}));
+      if (token !== searchToken) return;
+      if (!response.ok) {
+        const message = body && typeof body === 'object' && !Array.isArray(body)
+          ? String((body as Record<string, unknown>).error || '')
+          : '';
+        throw new Error(message || `Registry search failed (${response.status})`);
+      }
+      const summary = normalizeRdapNameserverSearchResponse(body);
+      if (!summary) throw new Error('The server returned an invalid nameserver-search response.');
+      rdapSearchSummary = summary;
+      ctResultKind = null;
+      const next:Candidate[] = summary.domains.map((domain) => ({
+        domain: domain.domain,
+        source: summary.nameserver,
+        mutationTypes: ['rdap_nameserver_search'],
+      }));
+      const { filtered, excluded } = withoutAllowlisted(next);
+      const excludedNote = excluded ? ` Excluded ${excluded} trusted profile domain${excluded===1?'':'s'}.` : '';
+      setResults(filtered, `${rdapSearchStatusMessage(summary)}${excludedNote}`, next, 'generated');
+    } catch (cause) {
+      if (token !== searchToken) return;
+      rdapSearchSummary = null;
+      candidates = [];
+      generatedContext = [];
+      selected = new Set();
+      error = cause instanceof Error ? cause.message : 'Registry search failed';
+      status = '';
+    } finally {
+      if (token === searchToken) { searching = false; searchController = null; }
     }
   }
 
@@ -573,20 +647,22 @@
 </script>
 
 <svelte:head><title>Discover · WHOISleuth</title></svelte:head>
-<PageHeading eyebrow="Find candidates" title="Discover" description="Generate explainable lookalikes, explore defensive registrations, and search public Certificate Transparency logs." />
+<PageHeading eyebrow="Find candidates" title="Discover" description="Generate explainable lookalikes, search certificate logs, or pivot through one registry's nameserver results." />
 
 <section class="controls card">
   {#if mode==='certificate-transparency'&&ctDisabled}<p class="feature-disabled" role="note">{ctDisabled.reason||'Certificate Transparency search is disabled by deployment policy.'}</p>{/if}
-  {#if profile}<div class="profile-context"><span>Active profile: <strong>{profile.name}</strong></span><button class="btn small" onclick={useProfile}>Use profile defaults</button></div>{/if}
+  {#if mode==='nameserver'&&rdapSearchDisabled}<p class="feature-disabled" role="note">{rdapSearchDisabled.reason||'RDAP nameserver search is disabled by deployment policy.'}</p>{/if}
+  {#if profile&&mode!=='nameserver'}<div class="profile-context"><span>Active profile: <strong>{profile.name}</strong></span><button class="btn small" onclick={useProfile}>Use profile defaults</button></div>{/if}
   <div class="modes" role="tablist" aria-label="Discovery method">
     <button role="tab" aria-selected={mode==='typosquat'} tabindex={mode==='typosquat'?0:-1} class:active={mode==='typosquat'} onclick={()=>selectMode('typosquat')} onkeydown={tabKeydown}>Lookalikes</button>
     <button role="tab" aria-selected={mode==='keyword'} tabindex={mode==='keyword'?0:-1} class:active={mode==='keyword'} onclick={()=>selectMode('keyword')} onkeydown={tabKeydown}>Name ideas</button>
     <button role="tab" aria-selected={mode==='certificate-transparency'} tabindex={mode==='certificate-transparency'?0:-1} class:active={mode==='certificate-transparency'} onclick={()=>selectMode('certificate-transparency')} onkeydown={tabKeydown}>Certificates</button>
+    <button role="tab" aria-selected={mode==='nameserver'} tabindex={mode==='nameserver'?0:-1} class:active={mode==='nameserver'} onclick={()=>selectMode('nameserver')} onkeydown={tabKeydown}>Nameservers</button>
   </div>
   <div class="fields">
-    <label class="field">{mode==='keyword' ? 'Keyword' : mode==='certificate-transparency' ? 'Certificate-log keyword' : 'Brand or domain'}<input id="discovery-seed" bind:value={seed} maxlength={mode==='certificate-transparency'?MAX_CT_QUERY_LENGTH:MAX_GENERATION_INPUT_LENGTH} aria-describedby={mode==='certificate-transparency'?'ct-query-guidance':undefined} placeholder={mode==='typosquat'?'example.com':'Example brand'}></label>
-    {#if mode!=='certificate-transparency'}<label class="field">TLDs<input bind:value={tldText} maxlength={maxTldTextLength} aria-describedby="generation-limits" placeholder="com, net, org"></label>{/if}
-    <button class="primary" onclick={mode==='certificate-transparency'?searchCt:generate} disabled={searching||(mode==='certificate-transparency'&&Boolean(ctDisabled))}>{searching?'Searching…':mode==='certificate-transparency'?'Search certificates':'Generate candidates'}</button>
+    <label class="field">{mode==='keyword' ? 'Keyword' : mode==='certificate-transparency' ? 'Certificate-log keyword' : mode==='nameserver' ? 'Nameserver hostname' : 'Brand or domain'}<input id="discovery-seed" bind:value={seed} maxlength={mode==='certificate-transparency'?MAX_CT_QUERY_LENGTH:mode==='nameserver'?253:MAX_GENERATION_INPUT_LENGTH} aria-describedby={mode==='certificate-transparency'?'ct-query-guidance':mode==='nameserver'?'rdap-search-guidance':undefined} placeholder={mode==='typosquat'?'example.com':mode==='nameserver'?'ns1.example.net':'Example brand'}></label>
+    {#if mode==='nameserver'}<label class="field">Registry suffix<input bind:value={registryScope} maxlength="63" aria-describedby="rdap-search-guidance" placeholder="com"></label>{:else if mode!=='certificate-transparency'}<label class="field">TLDs<input bind:value={tldText} maxlength={maxTldTextLength} aria-describedby="generation-limits" placeholder="com, net, org"></label>{/if}
+    <button class="primary" onclick={mode==='certificate-transparency'?searchCt:mode==='nameserver'?searchNameserver:generate} disabled={searching||(mode==='certificate-transparency'&&Boolean(ctDisabled))||(mode==='nameserver'&&Boolean(rdapSearchDisabled))}>{searching?'Searching…':mode==='certificate-transparency'?'Search certificates':mode==='nameserver'?'Search registry':'Generate candidates'}</button>
   </div>
   {#if mode==='typosquat'}
     <DiscoverGenerationOptions
@@ -614,11 +690,19 @@
     />
   {/if}
   {#if mode==='certificate-transparency'}<p class="generation-limits" id="ct-query-guidance">Search public certificate names using a keyword of up to {MAX_CT_QUERY_LENGTH} characters. This does not submit the target for a live website scan.</p>{/if}
+  {#if mode==='nameserver'}<p class="generation-limits" id="rdap-search-guidance">Search one IANA-selected registry for domains it reports against this nameserver. The result is a bounded lower bound for that suffix, not a global reverse-nameserver inventory.</p>{/if}
   {#if mode==='keyword'}<p class="generation-limits" id="generation-limits">Generation is bounded to {MAX_GENERATION_TLDS} TLDs, {MAX_NAME_VARIANTS.toLocaleString()} label variants, and {MAX_GENERATED_CANDIDATES.toLocaleString()} candidates per run.</p>{/if}
   {#if error}<p class="error" role="alert">{error}</p>{:else if status}<p class="status" role="status" aria-live="polite">{status}</p>{/if}
   {#if ctHistoryNotice}<p class="ct-history-notice" role="status">{ctHistoryNotice}</p>{/if}
   {#if mode==='certificate-transparency' && ctHistory.entries.length}
     <DiscoverCtHistory entries={historyDisplayEntries()} useEntry={useHistoryQuery} deleteEntry={deleteHistoryQuery} clearHistory={deleteAllHistory} />
+  {/if}
+  {#if mode==='nameserver' && rdapSearchSummary}
+    <div class="rdap-search-summary" role="note">
+      <strong>Registry-scoped result · .{rdapSearchSummary.registryScope}</strong>
+      <span>{rdapSearchSummary.resultCount} returned · {rdapSearchSummary.state.replace('_',' ')} · observed {historyDate(rdapSearchSummary.observedAt)}</span>
+      <p>{rdapSearchSummary.limitations[0] || 'This result is limited to the selected registry.'}</p>
+    </div>
   {/if}
 </section>
 
@@ -667,9 +751,13 @@
   .fields{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(160px,.7fr) auto;gap:10px;align-items:end}
   .generation-limits{margin:10px 0 0;color:var(--muted);font-size:var(--text-xs)}
   .ct-history-notice{color:var(--amber);font-size:var(--text-xs)}
+  .rdap-search-summary{display:grid;gap:4px;margin-top:14px;padding:12px;border:1px solid rgb(var(--accent2-rgb) / .28);border-radius:var(--radius-md);background:rgb(var(--accent2-rgb) / .04);font-size:var(--text-xs)}
+  .rdap-search-summary strong{color:var(--text)}
+  .rdap-search-summary span,.rdap-search-summary p{color:var(--muted)}
+  .rdap-search-summary p{margin:2px 0 0}
   @media(max-width:700px){
     .fields{grid-template-columns:1fr}
-    .modes{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));overflow:visible}
+    .modes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));overflow:visible}
     .modes button{min-width:0;padding-inline:2px;font-size:.62rem;line-height:1.2;white-space:normal}
     .profile-context{align-items:flex-start;flex-direction:column}
   }
