@@ -1,10 +1,42 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  createRateLimitChecker,
   getClientIp,
   getForwardedProtocol,
   trustsForwardedHeaders,
 } from '../lib/rate-limit.mts';
+
+describe('fixed-window bucket bounds', () => {
+  test('fails closed for new identities at capacity without evicting active buckets', () => {
+    const check = createRateLimitChecker(2);
+    const config = { limit: 2, windowMs: 60_000 };
+
+    assert.deepEqual(check('login:first', config, 1_000), { allowed: true });
+    assert.deepEqual(check('login:second', config, 1_000), { allowed: true });
+    assert.deepEqual(check('login:third', config, 1_000), {
+      allowed: false,
+      retryAfterSeconds: 60,
+    });
+    assert.deepEqual(check('login:first', config, 1_001), { allowed: true });
+  });
+
+  test('reclaims expired buckets before admitting a new identity', () => {
+    const check = createRateLimitChecker(1);
+    const config = { limit: 1, windowMs: 60_000 };
+
+    assert.deepEqual(check('api:first', config, 1_000), { allowed: true });
+    assert.deepEqual(check('api:second', config, 61_001), { allowed: true });
+  });
+
+  test('rejects an overlong bucket key instead of retaining it', () => {
+    const check = createRateLimitChecker(2);
+    assert.deepEqual(check(`login:${'x'.repeat(200)}`, { limit: 1, windowMs: 60_000 }, 1_000), {
+      allowed: false,
+      retryAfterSeconds: 60,
+    });
+  });
+});
 
 describe('forwarded-header trust', () => {
   test('is opt-in for self-hosting and enabled by the Netlify runtime', () => {

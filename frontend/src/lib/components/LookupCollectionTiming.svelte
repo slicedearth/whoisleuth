@@ -3,6 +3,7 @@
     LookupTiming,
     LookupTimingSource,
   } from '$lib/analysis/lookup-response.ts';
+  import { formatCollectionDuration } from '$lib/analysis/lookup-display-shared.ts';
   import { projectCollectionTiming } from '$lib/analysis/visualization-models.ts';
 
   let { timing, embedded = false }: { timing: LookupTiming; embedded?: boolean } = $props();
@@ -20,11 +21,6 @@
     malware_ioc_intelligence: 'Malware infrastructure intelligence',
   };
   const chart = $derived(projectCollectionTiming(timing.sources, timing.totalMs));
-
-  function duration(value: number): string {
-    if (value < 1_000) return `${value} ms`;
-    return `${(value / 1_000).toFixed(value < 10_000 ? 1 : 0)} s`;
-  }
 
   function mobileBarStyle(source: (typeof chart.sources)[number]): string {
     const total = chart.totalMs;
@@ -45,7 +41,7 @@
         <h4 id="collection-timing-title">Collection timing</h4>
       {/if}
     </div>
-    <span class="chip info">{duration(timing.totalMs)} total</span>
+    <span class="chip info">{formatCollectionDuration(timing.totalMs)} total</span>
   </header>
 
   <p class="timing-note">
@@ -59,13 +55,13 @@
       <svg viewBox={`0 0 ${chart.width} ${chart.height}`} aria-hidden="true">
         {#each chart.ticks as tick}
           <line x1={tick.x} x2={tick.x} y1="18" y2={chart.height - 10} class="tick-line" />
-          <text x={tick.x} y="13" text-anchor="middle" class="tick-label">{duration(tick.value)}</text>
+          <text x={tick.x} y="13" text-anchor="middle" class="tick-label">{formatCollectionDuration(tick.value)}</text>
         {/each}
         {#each chart.sources as source}
           <g class:rejected={source.outcome === 'rejected'} class="timing-source">
             <text x="8" y={source.y + 13}>{sourceLabels[source.label as LookupTimingSource] ?? source.label}</text>
             <rect x={source.x} y={source.y} width={source.width} height="17" rx="4">
-              <title>{duration(source.durationMs)} duration, settled at +{duration(source.completedAfterMs)}</title>
+              <title>{formatCollectionDuration(source.durationMs)} duration, settled at +{formatCollectionDuration(source.completedAfterMs)}</title>
             </rect>
             <circle cx={source.x + source.width} cy={source.y + 8.5} r="4" />
           </g>
@@ -75,7 +71,7 @@
         {#each chart.sources as source}
           <div class:rejected={source.outcome === 'rejected'} class="mobile-timing-source">
             <span>{sourceLabels[source.label as LookupTimingSource] ?? source.label}</span>
-            <strong>{duration(source.durationMs)} · +{duration(source.completedAfterMs)}</strong>
+            <strong>{formatCollectionDuration(source.durationMs)} · +{formatCollectionDuration(source.completedAfterMs)}</strong>
             <i style={mobileBarStyle(source)}><b></b></i>
           </div>
         {/each}
@@ -91,8 +87,8 @@
         <span class:rejected={source.outcome === 'rejected'} class="outcome">
           {source.outcome === 'rejected' ? 'request error' : 'settled'}
         </span>
-        <span class="duration">{duration(source.durationMs)}</span>
-        <span class="settled">at +{duration(source.completedAfterMs)}</span>
+        <span class="duration">{formatCollectionDuration(source.durationMs)}</span>
+        <span class="settled">at +{formatCollectionDuration(source.completedAfterMs)}</span>
       </li>
     {/each}
   </ul>

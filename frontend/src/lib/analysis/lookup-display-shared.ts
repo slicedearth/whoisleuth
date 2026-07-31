@@ -76,6 +76,12 @@ export const show = (value: unknown): string =>
 
 export const statusLabel = (value: string): string => value.replaceAll('_', ' ');
 
+export function formatCollectionDuration(value: number | null): string {
+  if (value === null) return 'Not separately timed';
+  if (value < 1_000) return `${value} ms`;
+  return `${(value / 1_000).toFixed(value < 10_000 ? 1 : 0)} s`;
+}
+
 export const stringList = (value: unknown): string[] =>
   Array.isArray(value) ? value.map((item) => String(item)) : [];
 

@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { LookupEvidenceQualityMatrix } from '$lib/analysis/lookup-decision-support.ts';
+  import { formatCollectionDuration } from '$lib/analysis/lookup-display-shared.ts';
   import type { LookupTiming } from '$lib/analysis/lookup-response.ts';
   import type { LookupSourceRefreshPlan } from '$lib/analysis/lookup-source-refresh.ts';
   import LookupCollectionTiming from '$lib/components/LookupCollectionTiming.svelte';
@@ -19,12 +20,6 @@
     timing: LookupTiming | null;
   } = $props();
 
-  function duration(value: number | null): string {
-    if (value === null) return 'Not separately timed';
-    if (value < 1_000) return `${value} ms`;
-    return `${(value / 1_000).toFixed(value < 10_000 ? 1 : 0)} s`;
-  }
-
   function observed(value: string | null): string {
     if (!value) return 'Observation time unavailable';
     return new Date(value).toLocaleString();
@@ -42,7 +37,7 @@
       <div class="metrics" role="group" aria-label="Evidence coverage summary">
         <span><strong>{matrix.completeCount}</strong> complete</span>
         <span class:attention={matrix.limitedCount > 0}><strong>{matrix.limitedCount}</strong> limited</span>
-        {#if matrix.totalMs !== null}<span><strong>{duration(matrix.totalMs)}</strong> total</span>{/if}
+        {#if matrix.totalMs !== null}<span><strong>{formatCollectionDuration(matrix.totalMs)}</strong> total</span>{/if}
       </div>
     </header>
 
@@ -73,7 +68,7 @@
               {#if entry.ageDays !== null}<small>{entry.ageDays} day{entry.ageDays === 1 ? '' : 's'} old</small>{/if}
             </div>
             <div class="timing" role="cell">
-              <span class:rejected={entry.timingOutcome === 'rejected'}>{duration(entry.durationMs)}</span>
+              <span class:rejected={entry.timingOutcome === 'rejected'}>{formatCollectionDuration(entry.durationMs)}</span>
               {#if entry.timingOutcome}<small>{entry.timingOutcome === 'rejected' ? 'Request error' : 'Settled branch'}</small>{/if}
             </div>
             <div class="supports" role="cell">

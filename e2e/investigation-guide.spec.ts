@@ -439,6 +439,42 @@ test('a browser-local context failure does not block or misstate a guided invest
   await expect(guide.getByText('Unavailable', { exact: true })).toHaveCount(3);
   await guide.getByText('Saved evidence unavailable', { exact: true }).click();
   await expect(guide).toContainText('do not interpret this state as an empty evidence history');
+
+  await page.evaluate((key) => {
+    const stored = JSON.parse(sessionStorage.getItem(key) || 'null');
+    const now = new Date().toISOString();
+    for (const stage of stored.stages.slice(0, 2)) {
+      stage.outcome = 'complete';
+      stage.updatedAt = now;
+    }
+    stored.updatedAt = now;
+    sessionStorage.setItem(key, JSON.stringify(stored));
+    window.dispatchEvent(new CustomEvent('whoisleuth:investigation-guide-change'));
+  }, GUIDE_KEY);
+
+  const caseHandoff = guide.getByRole('region', { name: 'Case handoff readiness' });
+  await expect(currentAction(page)).toContainText('Record disposition');
+  await expect(caseHandoff).toContainText('Handoff context unavailable');
+  await expect(caseHandoff).toContainText('No handoff check is inferred from unavailable saved data.');
+  await expect(caseHandoff).not.toContainText(/No case retained|No typed|Open questions reviewed/u);
+
+  await page.evaluate((key) => {
+    const stored = JSON.parse(sessionStorage.getItem(key) || 'null');
+    const now = new Date().toISOString();
+    for (const stage of stored.stages) {
+      stage.outcome = 'complete';
+      stage.updatedAt = now;
+    }
+    stored.updatedAt = now;
+    sessionStorage.setItem(key, JSON.stringify(stored));
+    window.dispatchEvent(new CustomEvent('whoisleuth:investigation-guide-change'));
+  }, GUIDE_KEY);
+
+  const completedHandoff = guide.getByRole('region', { name: 'Completed guide handoff readiness' });
+  await expect(guide.locator('.guide-complete')).toBeVisible();
+  await expect(completedHandoff).toContainText('Handoff context unavailable');
+  await expect(completedHandoff).toContainText('No completed handoff state is inferred from unavailable saved data.');
+  await expect(completedHandoff).not.toContainText(/evidence pin|decision|unresolved unknown/u);
 });
 
 test('partial progress, pause, resume, and restart remain explicit', async ({ page }) => {

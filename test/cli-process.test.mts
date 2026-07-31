@@ -76,6 +76,18 @@ function runBinary(args: string[], input = '') {
 }
 
 describe('installed CLI process boundary', () => {
+  test('version preserves the installed executable stream and exit contract', () => {
+    const packageDocument = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')) as unknown;
+    assert.ok(packageDocument && typeof packageDocument === 'object' && !Array.isArray(packageDocument));
+    const version = (packageDocument as Record<string, unknown>).version;
+    assert.equal(typeof version, 'string');
+
+    const result = runBinary(['--version']);
+    assert.equal(result.status, 0);
+    assert.equal(result.stdout, `${version}\n`);
+    assert.equal(result.stderr, '');
+  });
+
   test('usage failures preserve the installed executable stream and exit contract', () => {
     const invalid = runBinary(['not-a-command']);
     assert.equal(invalid.status, 2);

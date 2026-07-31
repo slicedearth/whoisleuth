@@ -22,36 +22,67 @@ type RateLimitDecision = {
   allowed: boolean;
   retryAfterSeconds?: number;
 };
+type RateLimitChecker = (
+  key: string,
+  config: RateLimitConfig,
+  now?: number,
+) => RateLimitDecision;
 
-const buckets = new Map<string, RateLimitBucket>();
 const SWEEP_INTERVAL_MS = 5 * 60 * 1000;
-let nextSweepAt = 0;
+const MAX_RATE_LIMIT_BUCKETS = 4_096;
+const MAX_RATE_LIMIT_KEY_LENGTH = 160;
 
-function sweepExpiredBuckets(now: number): void {
-  if (now < nextSweepAt) return;
-  nextSweepAt = now + SWEEP_INTERVAL_MS;
-  for (const [key, bucket] of buckets) {
-    if (now >= bucket.resetAt) buckets.delete(key);
+function createRateLimitChecker(maximumBuckets = MAX_RATE_LIMIT_BUCKETS): RateLimitChecker {
+  if (!Number.isSafeInteger(maximumBuckets) || maximumBuckets < 1) {
+    throw new Error('Rate-limit bucket capacity must be a positive safe integer.');
   }
-}
+  const buckets = new Map<string, RateLimitBucket>();
+  let nextSweepAt = 0;
 
-function checkRateLimit(key: string, { limit, windowMs }: RateLimitConfig): RateLimitDecision {
-  const now = Date.now();
-  sweepExpiredBuckets(now);
-  const bucket = buckets.get(key);
+  function sweepExpiredBuckets(now: number, force = false): void {
+    if (!force && now < nextSweepAt) return;
+    nextSweepAt = now + SWEEP_INTERVAL_MS;
+    for (const [key, bucket] of buckets) {
+      if (now >= bucket.resetAt) buckets.delete(key);
+    }
+  }
 
-  if (!bucket || now >= bucket.resetAt) {
-    buckets.set(key, { count: 1, resetAt: now + windowMs });
+  return (key, { limit, windowMs }, suppliedNow = Date.now()): RateLimitDecision => {
+    const now = Number.isFinite(suppliedNow) ? suppliedNow : Date.now();
+    sweepExpiredBuckets(now);
+    const bucket = buckets.get(key);
+
+    if (!bucket || now >= bucket.resetAt) {
+      if (!key || key.length > MAX_RATE_LIMIT_KEY_LENGTH) {
+        return { allowed: false, retryAfterSeconds: Math.max(1, Math.ceil(windowMs / 1_000)) };
+      }
+      if (!bucket && buckets.size >= maximumBuckets) {
+        sweepExpiredBuckets(now, true);
+        if (buckets.size >= maximumBuckets) {
+          let earliestResetAt = now + windowMs;
+          for (const retained of buckets.values()) {
+            earliestResetAt = Math.min(earliestResetAt, retained.resetAt);
+          }
+          return {
+            allowed: false,
+            retryAfterSeconds: Math.max(1, Math.ceil((earliestResetAt - now) / 1_000)),
+          };
+        }
+      }
+      buckets.set(key, { count: 1, resetAt: now + windowMs });
+      return { allowed: true };
+    }
+
+    if (bucket.count >= limit) {
+      return { allowed: false, retryAfterSeconds: Math.max(1, Math.ceil((bucket.resetAt - now) / 1_000)) };
+    }
+
+    bucket.count += 1;
     return { allowed: true };
-  }
-
-  if (bucket.count >= limit) {
-    return { allowed: false, retryAfterSeconds: Math.max(1, Math.ceil((bucket.resetAt - now) / 1000)) };
-  }
-
-  bucket.count += 1;
-  return { allowed: true };
+  };
 }
+
+const checkRateLimit = createRateLimitChecker();
 
 // Expired buckets are swept lazily during rate-limit checks. This avoids an
 // import-time timer in request-scoped runtimes while preserving the same
@@ -141,6 +172,7 @@ const SCHEDULED_MONITOR_MANAGEMENT_RATE_LIMIT: Readonly<RateLimitConfig> = {
 
 export {
   checkRateLimit,
+  createRateLimitChecker,
   trustsForwardedHeaders,
   getForwardedProtocol,
   getClientIp,
@@ -154,5 +186,6 @@ export type {
   HeaderInput,
   RateLimitBucket,
   RateLimitConfig,
+  RateLimitChecker,
   RateLimitDecision,
 };

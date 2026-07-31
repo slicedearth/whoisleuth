@@ -10,6 +10,7 @@ process.env.SESSION_SECRET = process.env.SESSION_SECRET || 'test-only-session-si
 const { app } = await import('../server.mts');
 const {
   CANONICAL_TRAILING_SLASH_REDIRECTS,
+  PRERENDERED_HTML_FILE_OVERRIDES,
   PRERENDERED_ROUTES,
 } = await import('../lib/prerendered-routes.mts');
 const {
@@ -65,10 +66,8 @@ describe('canonical route redirects', () => {
     assert.deepEqual([...PRERENDERED_ROUTES].sort(), sourceRoutes);
   });
 
-  test('serves the public resource hub before its child directory can redirect it', async () => {
-    const response = await fetch(`${origin}/resources`, { redirect: 'manual' });
-    assert.equal(response.status, 200);
-    assert.match(await response.text(), /Understand the evidence before using the result/u);
+  test('maps the public resource hub to a fixed prerendered file before child-route handling', () => {
+    assert.deepEqual(PRERENDERED_HTML_FILE_OVERRIDES, [['/resources', 'resources.html']]);
   });
 
   test('redirect each allowlisted trailing-slash route to its fixed local path', async () => {

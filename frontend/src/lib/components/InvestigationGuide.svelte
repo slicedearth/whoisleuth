@@ -70,6 +70,8 @@
   let localContextError = $state('');
   let evidenceContextAvailable = $state(true);
   let savedRecordContextAvailable = $state(true);
+  let localContextPending = $state(true);
+  let localContextRefreshVersion = 0;
   let guideSection = $state<HTMLElement | null>(null);
   let actionPanel = $state<HTMLElement | null>(null);
   let actionVisible = $state(true);
@@ -103,6 +105,9 @@
     caseRecord: contextCase,
     evidenceProjection: evidence,
   }));
+  const handoffContextAvailable = $derived(
+    !localContextPending && evidenceContextAvailable && savedRecordContextAvailable,
+  );
   const caseWorkspaceHref = $derived(contextCase
     ? `/monitor?view=cases&case=${encodeURIComponent(contextCase.id)}#case-response-${encodeURIComponent(contextCase.id)}`
     : null);
@@ -127,14 +132,14 @@
   }
 
   async function refreshStoredContext() {
+    const refreshVersion = ++localContextRefreshVersion;
+    localContextPending = true;
     localContextError = '';
     const [evidenceResult, recordResult] = await Promise.allSettled([
       refreshEvidence(),
       refreshContext(),
     ]);
-    for (const result of [evidenceResult, recordResult]) {
-      if (result.status === 'rejected' && !isExpectedBrowserLocalDataFailure(result.reason)) throw result.reason;
-    }
+    if (refreshVersion !== localContextRefreshVersion) return;
     evidenceContextAvailable = evidenceResult.status === 'fulfilled';
     savedRecordContextAvailable = recordResult.status === 'fulfilled';
     if (!evidenceContextAvailable) {
@@ -144,8 +149,14 @@
       contextProfile = null;
       contextCase = null;
     }
+    localContextPending = false;
     if (!evidenceContextAvailable || !savedRecordContextAvailable) {
-      localContextError = 'Some browser-local investigation context is unavailable. The guide remains usable, and unavailable saved data is not treated as absent.';
+      const expectedFailure = [evidenceResult, recordResult].every((result) => (
+        result.status === 'fulfilled' || isExpectedBrowserLocalDataFailure(result.reason)
+      ));
+      localContextError = expectedFailure
+        ? 'Some browser-local investigation context is unavailable. The guide remains usable, and unavailable saved data is not treated as absent.'
+        : 'Browser-local investigation context could not be refreshed. The guide remains usable, and unreadable saved data is not treated as absent.';
     }
   }
 
@@ -491,9 +502,9 @@
     </div>
     <dl class="context-tray" aria-label="Active investigation context">
       <div><dt>Target</dt><dd>{guide.focusDomain || guide.domain}</dd></div>
-      <div><dt>Brand Profile</dt><dd>{savedRecordContextAvailable ? contextProfile?.name || 'None active' : 'Unavailable'}</dd></div>
-      <div><dt>Case</dt><dd>{savedRecordContextAvailable ? contextCase ? `${contextCase.status} · ${contextCase.disposition}` : 'Not retained' : 'Unavailable'}</dd></div>
-      <div><dt>Evidence freshness</dt><dd>{evidenceContextAvailable ? evidenceFreshness : 'Unavailable'}</dd></div>
+      <div><dt>Brand Profile</dt><dd>{localContextPending ? 'Loading…' : savedRecordContextAvailable ? contextProfile?.name || 'None active' : 'Unavailable'}</dd></div>
+      <div><dt>Case</dt><dd>{localContextPending ? 'Loading…' : savedRecordContextAvailable ? contextCase ? `${contextCase.status} · ${contextCase.disposition}` : 'Not retained' : 'Unavailable'}</dd></div>
+      <div><dt>Evidence freshness</dt><dd>{localContextPending ? 'Loading…' : evidenceContextAvailable ? evidenceFreshness : 'Unavailable'}</dd></div>
       <div><dt>Next action</dt><dd>{actionStage?.label || 'Review completed plan'}</dd></div>
     </dl>
     {#if localContextError}<p class="local-context-error" role="status">{localContextError}</p>{/if}
@@ -521,22 +532,32 @@
           <div class="action-controls">
             <p class="mobile-action-label"><span>Next action</span><strong>{actionStage.label}</strong></p>
             {#if actionStage.workspace === 'monitor'}
-              <section class:ready={handoffReadiness.status === 'ready'} class="handoff-readiness" aria-label="Case handoff readiness">
-                <div>
-                  <span>Case handoff</span>
-                  <strong>{handoffReadiness.label}</strong>
-                </div>
-                <ul>
-                  {#each handoffReadiness.checks as check}
-                    <li class:caution={check.state === 'caution'} class:block={check.state === 'block'}>
-                      <span aria-hidden="true">{check.state === 'pass' ? '✓' : check.state === 'caution' ? '!' : '×'}</span>
-                      <span><strong>{check.label}</strong><small>{check.detail}</small></span>
-                    </li>
-                  {/each}
-                </ul>
-                {#if caseWorkspaceHref}<a class="btn compact" href={caseWorkspaceHref}>Open case decision workspace</a>{/if}
-                <p>{handoffReadiness.limitations[0]}</p>
-              </section>
+              {#if handoffContextAvailable}
+                <section class:ready={handoffReadiness.status === 'ready'} class="handoff-readiness" aria-label="Case handoff readiness">
+                  <div>
+                    <span>Case handoff</span>
+                    <strong>{handoffReadiness.label}</strong>
+                  </div>
+                  <ul>
+                    {#each handoffReadiness.checks as check}
+                      <li class:caution={check.state === 'caution'} class:block={check.state === 'block'}>
+                        <span aria-hidden="true">{check.state === 'pass' ? '✓' : check.state === 'caution' ? '!' : '×'}</span>
+                        <span><strong>{check.label}</strong><small>{check.detail}</small></span>
+                      </li>
+                    {/each}
+                  </ul>
+                  {#if caseWorkspaceHref}<a class="btn compact" href={caseWorkspaceHref}>Open case decision workspace</a>{/if}
+                  <p>{handoffReadiness.limitations[0]}</p>
+                </section>
+              {:else}
+                <section class="handoff-readiness unavailable" aria-label="Case handoff readiness">
+                  <div>
+                    <span>Case handoff</span>
+                    <strong>{localContextPending ? 'Checking browser-local context' : 'Handoff context unavailable'}</strong>
+                  </div>
+                  <p>{localContextPending ? 'The readiness check will appear after browser-local case and evidence context settles.' : 'Browser-local case or evidence context could not be read. No handoff check is inferred from unavailable saved data.'}</p>
+                </section>
+              {/if}
             {/if}
             {#if guide.status === 'paused'}
               <button class="primary compact" type="button" onclick={togglePause}>Resume guide</button>
@@ -603,14 +624,24 @@
         <p class="step-number">Guide reviewed</p>
         <h2>All {stages.length} steps have an outcome</h2>
         <p>Review the full plan or export the compact progress summary. The guide outcomes remain analyst workflow markers, not findings about the target.</p>
-        <section class:ready={handoffReadiness.status === 'ready'} class="handoff-readiness complete-handoff" aria-label="Completed guide handoff readiness">
-          <div>
-            <span>Decision handoff</span>
-            <strong>{handoffReadiness.label}</strong>
-          </div>
-          <p>{handoffReadiness.counts.evidencePins} evidence pin{handoffReadiness.counts.evidencePins === 1 ? '' : 's'} · {handoffReadiness.counts.decisions} decision{handoffReadiness.counts.decisions === 1 ? '' : 's'} · {handoffReadiness.counts.openUnknowns + handoffReadiness.counts.openContradictions} unresolved unknown or contradiction record{handoffReadiness.counts.openUnknowns + handoffReadiness.counts.openContradictions === 1 ? '' : 's'}</p>
-          {#if caseWorkspaceHref}<a class="btn compact" href={caseWorkspaceHref}>Review case decision workspace</a>{/if}
-        </section>
+        {#if handoffContextAvailable}
+          <section class:ready={handoffReadiness.status === 'ready'} class="handoff-readiness complete-handoff" aria-label="Completed guide handoff readiness">
+            <div>
+              <span>Decision handoff</span>
+              <strong>{handoffReadiness.label}</strong>
+            </div>
+            <p>{handoffReadiness.counts.evidencePins} evidence pin{handoffReadiness.counts.evidencePins === 1 ? '' : 's'} · {handoffReadiness.counts.decisions} decision{handoffReadiness.counts.decisions === 1 ? '' : 's'} · {handoffReadiness.counts.openUnknowns + handoffReadiness.counts.openContradictions} unresolved unknown or contradiction record{handoffReadiness.counts.openUnknowns + handoffReadiness.counts.openContradictions === 1 ? '' : 's'}</p>
+            {#if caseWorkspaceHref}<a class="btn compact" href={caseWorkspaceHref}>Review case decision workspace</a>{/if}
+          </section>
+        {:else}
+          <section class="handoff-readiness complete-handoff unavailable" aria-label="Completed guide handoff readiness">
+            <div>
+              <span>Decision handoff</span>
+              <strong>{localContextPending ? 'Checking browser-local context' : 'Handoff context unavailable'}</strong>
+            </div>
+            <p>{localContextPending ? 'The readiness summary will appear after browser-local case and evidence context settles.' : 'Browser-local case or evidence context could not be read. No completed handoff state is inferred from unavailable saved data.'}</p>
+          </section>
+        {/if}
       </article>
     {/if}
 
@@ -646,8 +677,8 @@
 
     <div class="secondary-details">
       <details class="evidence-checkpoint">
-        <summary>{evidenceContextAvailable ? `Saved evidence · ${evidence.observations} observation${evidence.observations === 1 ? '' : 's'} · ${evidence.relationships} relationship${evidence.relationships === 1 ? '' : 's'}` : 'Saved evidence unavailable'}</summary>
-        <p>{evidenceContextAvailable ? evidence.observations || evidence.relationships ? 'These retained records are a checkpoint, not proof that a step is complete.' : 'No saved observation in this browser currently links to this domain. This does not mean evidence is absent elsewhere.' : 'Browser-local evidence could not be read. Continue with the guide, but do not interpret this state as an empty evidence history.'}{evidenceContextAvailable && evidence.partial ? ' Some retained evidence is partial.' : ''}{evidenceContextAvailable && evidence.truncated ? ' A saved-data or source limit was reached.' : ''}</p>
+        <summary>{localContextPending ? 'Checking saved evidence' : evidenceContextAvailable ? `Saved evidence · ${evidence.observations} observation${evidence.observations === 1 ? '' : 's'} · ${evidence.relationships} relationship${evidence.relationships === 1 ? '' : 's'}` : 'Saved evidence unavailable'}</summary>
+        <p>{localContextPending ? 'Browser-local evidence context is still loading, so no retained-evidence conclusion is available yet.' : evidenceContextAvailable ? evidence.observations || evidence.relationships ? 'These retained records are a checkpoint, not proof that a step is complete.' : 'No saved observation in this browser currently links to this domain. This does not mean evidence is absent elsewhere.' : 'Browser-local evidence could not be read. Continue with the guide, but do not interpret this state as an empty evidence history.'}{!localContextPending && evidenceContextAvailable && evidence.partial ? ' Some retained evidence is partial.' : ''}{!localContextPending && evidenceContextAvailable && evidence.truncated ? ' A saved-data or source limit was reached.' : ''}</p>
       </details>
       <details class="guide-options">
         <summary>Guide options</summary>
@@ -731,6 +762,7 @@
   .outcome-review>small{color:var(--muted);font-size:var(--text-2xs);line-height:1.4}
   .handoff-readiness{display:grid;gap:8px;padding:11px;border:1px solid var(--warning);border-radius:var(--radius-sm);background:var(--surface)}
   .handoff-readiness.ready{border-color:var(--accent)}
+  .handoff-readiness.unavailable{border-color:var(--border)}
   .handoff-readiness>div>span,.handoff-readiness>div>strong{display:block}
   .handoff-readiness>div>span{color:var(--muted);font:700 var(--text-2xs) var(--mono);text-transform:uppercase}
   .handoff-readiness>div>strong{margin-top:2px;font:700 var(--text-xs) var(--mono)}
