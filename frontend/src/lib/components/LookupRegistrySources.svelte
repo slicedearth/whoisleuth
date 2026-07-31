@@ -4,6 +4,7 @@
     projectEvidenceMatrix,
     type MatrixInput,
   } from '$lib/analysis/visualization-models.ts';
+  import { buildRdapReverseSearchPreviews } from '$lib/analysis/rdap-reverse-search-preview.ts';
 
   type JsonRecord = Record<string, unknown>;
   type DisplayRow = { label: string; value: string; datetime?: string };
@@ -91,6 +92,10 @@
   const registrarDeclarations = $derived(asRecords(registrarCapabilities.declarations));
   const registryReverseSearch = $derived(asRecord(registryCapabilities.reverseSearch));
   const registrarReverseSearch = $derived(asRecord(registrarCapabilities.reverseSearch));
+  const registryReversePreviews = $derived(buildRdapReverseSearchPreviews(rdapParsed, registryCapabilities));
+  const registrarReversePreviews = $derived(buildRdapReverseSearchPreviews(registrar.parsed, registrarCapabilities));
+  let showRegistryReversePreview = $state(false);
+  let showRegistrarReversePreview = $state(false);
   const abuseRouting = $derived(asRecords(insights.abuseRouting));
   const registryTraceState = $derived<TraceState>(rdapError
     ? 'unavailable'
@@ -320,6 +325,18 @@
             <ul>{#each registryDeclarations as declaration}<li><code>{String(declaration.identifier || '')}</code><span>{String(declaration.capability || '')}</span>{#if declaration.status === 'obsolete'}<small>Registered as obsolete</small>{:else if declaration.category === 'unknown'}<small>Unclassified; retained without interpretation</small>{/if}</li>{/each}</ul>
           {:else}<p>No usable declaration was retained from this response.</p>{/if}
           <p><strong>Reverse search:</strong> {display(registryReverseSearch.state)}. {String(registryReverseSearch.detail || '')}</p>
+          {#if registryReversePreviews.length}
+            <button class="preview-control" type="button" aria-expanded={showRegistryReversePreview} onclick={() => showRegistryReversePreview = !showRegistryReversePreview}>
+              {showRegistryReversePreview ? 'Hide' : 'Prepare'} disclosure preview
+            </button>
+            {#if showRegistryReversePreview}
+              <ul class="reverse-preview">
+                {#each registryReversePreviews as preview (preview.id)}
+                  <li><code>{preview.queryShape}</code><span>{preview.disclosure}</span><small>Published {preview.sourceRole} entity · preview only</small></li>
+                {/each}
+              </ul>
+            {/if}
+          {/if}
         </article>
         <article>
           <header><strong>Registrar RDAP</strong><span class={`chip ${registrarCapabilities.state === 'complete' ? 'ok' : registrarCapabilities.state === 'partial' ? 'warn' : ''}`}>{display(registrarCapabilities.state)}</span></header>
@@ -327,9 +344,21 @@
             <ul>{#each registrarDeclarations as declaration}<li><code>{String(declaration.identifier || '')}</code><span>{String(declaration.capability || '')}</span>{#if declaration.status === 'obsolete'}<small>Registered as obsolete</small>{:else if declaration.category === 'unknown'}<small>Unclassified; retained without interpretation</small>{/if}</li>{/each}</ul>
           {:else}<p>No usable declaration was retained from this response.</p>{/if}
           <p><strong>Reverse search:</strong> {display(registrarReverseSearch.state)}. {String(registrarReverseSearch.detail || '')}</p>
+          {#if registrarReversePreviews.length}
+            <button class="preview-control" type="button" aria-expanded={showRegistrarReversePreview} onclick={() => showRegistrarReversePreview = !showRegistrarReversePreview}>
+              {showRegistrarReversePreview ? 'Hide' : 'Prepare'} disclosure preview
+            </button>
+            {#if showRegistrarReversePreview}
+              <ul class="reverse-preview">
+                {#each registrarReversePreviews as preview (preview.id)}
+                  <li><code>{preview.queryShape}</code><span>{preview.disclosure}</span><small>Published {preview.sourceRole} entity · preview only</small></li>
+                {/each}
+              </ul>
+            {/if}
+          {/if}
         </article>
       </div>
-      <p class="capability-limit">Declarations are response metadata, not proof that an operation is authorized, anonymous, complete, or correctly implemented. WHOISleuth does not issue a help or reverse-search request from this view.</p>
+      <p class="capability-limit">Declarations are response metadata, not proof that an operation is authorized, anonymous, complete, or correctly implemented. A preview reveals the exact public identifier that a later confirmed request would disclose, but does not issue a help or reverse-search request.</p>
     </details>
     {#if abuseRouting.length}
       <details class="routing">
@@ -460,6 +489,7 @@
   .publication-quality,.routing{margin:0 var(--card-pad) var(--card-pad);border:1px solid var(--border);border-radius:var(--radius-sm)}.publication-quality>summary,.routing>summary{padding:10px 11px}
   .publication-list{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;background:var(--border)}.publication-list article{padding:10px;background:var(--panel)}.publication-list strong,.publication-list small{display:block}.publication-list .chip{display:inline-block;margin:5px 0}.publication-list small,.publication-list p{color:var(--muted);font-size:var(--text-2xs);overflow-wrap:anywhere}.publication-list p{margin:5px 0 0}
   .rdap-capabilities{margin:0 var(--card-pad) var(--card-pad);border:1px solid var(--border);border-radius:var(--radius-sm)}.rdap-capabilities>summary{padding:10px 11px}.capability-sources{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;background:var(--border)}.capability-sources article{min-width:0;padding:11px;background:var(--panel)}.capability-sources header{display:flex;justify-content:space-between;gap:8px;align-items:center}.capability-sources ul{display:grid;gap:7px;padding:0;margin:10px 0;list-style:none}.capability-sources li{display:grid;grid-template-columns:minmax(105px,.6fr) minmax(0,1fr);gap:4px 8px;align-items:start}.capability-sources code{color:var(--accent);font-size:var(--text-2xs);overflow-wrap:anywhere}.capability-sources li span,.capability-sources p,.capability-limit{color:var(--muted);font-size:var(--text-xs);line-height:1.5}.capability-sources li small{grid-column:2;color:var(--muted);font-size:var(--text-2xs)}.capability-limit{margin:10px 11px}
+  .preview-control{min-height:34px;padding:6px 9px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised);color:var(--text);font:650 var(--text-2xs) var(--mono);cursor:pointer}.preview-control:hover{border-color:var(--accent);color:var(--accent)}.preview-control:focus-visible{outline:2px solid var(--focus);outline-offset:2px}.capability-sources .reverse-preview{margin:8px 0 0}.capability-sources .reverse-preview li{display:grid;grid-template-columns:1fr;gap:4px;padding:8px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}.capability-sources .reverse-preview li small{grid-column:1}
   .routing ul{display:grid;gap:1px;margin:0;padding:0;background:var(--border);list-style:none}.routing li{padding:10px;background:var(--panel)}.routing strong,.routing span,.routing small{display:block;overflow-wrap:anywhere}.routing span{margin-top:4px}.routing small{margin-top:3px;color:var(--muted);font-size:var(--text-2xs)}
   .comparison .table-wrap{border-top:1px solid var(--border)}
   .comparison tr.conflict{background:rgb(var(--danger-rgb) / .03)}
