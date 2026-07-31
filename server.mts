@@ -29,7 +29,13 @@ import {
   buildClearCookie,
   isTrustedLoginOrigin,
 } from './lib/auth.mts';
-import { checkRateLimit, getClientIp, getForwardedProtocol, LOGIN_RATE_LIMIT, API_RATE_LIMIT } from './lib/rate-limit.mts';
+import {
+  checkApiRateLimit,
+  checkLoginRateLimit,
+  getClientIp,
+  getForwardedProtocol,
+} from './lib/rate-limit.mts';
+import type { RateLimitChecker } from './lib/rate-limit.mts';
 import {
   defaultOperationBudget,
   operationBudgetError,
@@ -65,7 +71,6 @@ type StaticResponseLike = ResponseLike & {
 
 type Next = () => void;
 type ErrorNext = (error?: unknown) => void;
-type RateLimitOptions = Readonly<{ limit: number; windowMs: number }>;
 type OperationTarget = ReturnType<typeof operationBudgetTargetFor>;
 
 function recordValue(value: unknown, key: string): unknown {
@@ -162,10 +167,10 @@ function requireAuth(req: RequestLike, res: ResponseLike, next: Next) {
   next();
 }
 
-function rateLimit(scope: string, opts: RateLimitOptions) {
+function rateLimit(check: RateLimitChecker) {
   return (req: RequestLike, res: ResponseLike, next: Next) => {
-    const key = `${scope}:${getClientIp(req.headers, req.socket && req.socket.remoteAddress)}`;
-    const { allowed, retryAfterSeconds } = checkRateLimit(key, opts);
+    const identity = getClientIp(req.headers, req.socket && req.socket.remoteAddress);
+    const { allowed, retryAfterSeconds } = check(identity);
     if (!allowed) {
       res.setHeader('Retry-After', String(retryAfterSeconds));
       return res.status(429).json({ error: 'Too many requests. Please try again later.', errorCode: LOOKUP_ERROR_CODES.RATE_LIMITED });
@@ -174,8 +179,8 @@ function rateLimit(scope: string, opts: RateLimitOptions) {
   };
 }
 
-const loginRateLimit = rateLimit('login', LOGIN_RATE_LIMIT);
-const apiRateLimit = rateLimit('api', API_RATE_LIMIT);
+const loginRateLimit = rateLimit(checkLoginRateLimit);
+const apiRateLimit = rateLimit(checkApiRateLimit);
 const parseApiJson = express.json({ limit: MAX_API_JSON_BODY_BYTES });
 
 function requireFeature(feature: NetworkFeatureId) {

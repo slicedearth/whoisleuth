@@ -2,39 +2,50 @@ import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   createRateLimitChecker,
+  createScopedRateLimitCheckers,
   getClientIp,
   getForwardedProtocol,
   trustsForwardedHeaders,
 } from '../lib/rate-limit.mts';
 
 describe('fixed-window bucket bounds', () => {
-  test('fails closed for new identities at capacity without evicting active buckets', () => {
-    const check = createRateLimitChecker(2);
-    const config = { limit: 2, windowMs: 60_000 };
+  test('evicts the oldest identity at capacity instead of locking out every new identity', () => {
+    const check = createRateLimitChecker({ limit: 2, windowMs: 60_000 }, 2);
 
-    assert.deepEqual(check('login:first', config, 1_000), { allowed: true });
-    assert.deepEqual(check('login:second', config, 1_000), { allowed: true });
-    assert.deepEqual(check('login:third', config, 1_000), {
-      allowed: false,
-      retryAfterSeconds: 60,
-    });
-    assert.deepEqual(check('login:first', config, 1_001), { allowed: true });
+    assert.deepEqual(check('first', 1_000), { allowed: true });
+    assert.deepEqual(check('first', 1_001), { allowed: true });
+    assert.deepEqual(check('first', 1_002), { allowed: false, retryAfterSeconds: 60 });
+    assert.deepEqual(check('second', 1_003), { allowed: true });
+    assert.deepEqual(check('third', 1_004), { allowed: true });
+    assert.deepEqual(check('first', 1_005), { allowed: true });
   });
 
   test('reclaims expired buckets before admitting a new identity', () => {
-    const check = createRateLimitChecker(1);
-    const config = { limit: 1, windowMs: 60_000 };
+    const check = createRateLimitChecker({ limit: 1, windowMs: 60_000 }, 1);
 
-    assert.deepEqual(check('api:first', config, 1_000), { allowed: true });
-    assert.deepEqual(check('api:second', config, 61_001), { allowed: true });
+    assert.deepEqual(check('first', 1_000), { allowed: true });
+    assert.deepEqual(check('second', 61_001), { allowed: true });
   });
 
-  test('rejects an overlong bucket key instead of retaining it', () => {
-    const check = createRateLimitChecker(2);
-    assert.deepEqual(check(`login:${'x'.repeat(200)}`, { limit: 1, windowMs: 60_000 }, 1_000), {
+  test('rejects empty and overlong bucket keys instead of retaining them', () => {
+    const check = createRateLimitChecker({ limit: 1, windowMs: 60_000 }, 2);
+    assert.deepEqual(check('', 1_000), {
       allowed: false,
       retryAfterSeconds: 60,
     });
+    assert.deepEqual(check('x'.repeat(200), 1_000), {
+      allowed: false,
+      retryAfterSeconds: 60,
+    });
+  });
+
+  test('isolates login capacity from high-cardinality API traffic', () => {
+    const checkers = createScopedRateLimitCheckers(2);
+
+    assert.deepEqual(checkers.api('api-first', 1_000), { allowed: true });
+    assert.deepEqual(checkers.api('api-second', 1_001), { allowed: true });
+    assert.deepEqual(checkers.api('api-third', 1_002), { allowed: true });
+    assert.deepEqual(checkers.login('new-login', 1_003), { allowed: true });
   });
 });
 

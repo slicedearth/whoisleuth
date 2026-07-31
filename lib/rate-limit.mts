@@ -5,7 +5,9 @@
 // endpoints (rdap/whois/availability/ct-search/domain-posture) to stop a scripted flood
 // from hammering upstream registries, without breaking the documented
 // worst-case bulk scan (up to MAX_FAST_BULK_DOMAINS domains, client-driven
-// at the Bulk workspace's configured number of in-flight requests).
+// at the Bulk workspace's configured number of in-flight requests). Each
+// request class owns a separate bounded store so high-cardinality lookup
+// traffic cannot consume the login or hosted-management bucket budget.
 //
 // This is in-memory, so on server.mts (one long-lived process) it limits
 // globally; on Netlify Functions each container has its own memory, so it
@@ -24,15 +26,22 @@ type RateLimitDecision = {
 };
 type RateLimitChecker = (
   key: string,
-  config: RateLimitConfig,
   now?: number,
 ) => RateLimitDecision;
+type ScopedRateLimitCheckers = Readonly<{
+  login: RateLimitChecker;
+  api: RateLimitChecker;
+  scheduledMonitorManagement: RateLimitChecker;
+}>;
 
 const SWEEP_INTERVAL_MS = 5 * 60 * 1000;
-const MAX_RATE_LIMIT_BUCKETS = 4_096;
+const MAX_RATE_LIMIT_BUCKETS_PER_SCOPE = 4_096;
 const MAX_RATE_LIMIT_KEY_LENGTH = 160;
 
-function createRateLimitChecker(maximumBuckets = MAX_RATE_LIMIT_BUCKETS): RateLimitChecker {
+function createRateLimitChecker(
+  config: Readonly<RateLimitConfig>,
+  maximumBuckets = MAX_RATE_LIMIT_BUCKETS_PER_SCOPE,
+): RateLimitChecker {
   if (!Number.isSafeInteger(maximumBuckets) || maximumBuckets < 1) {
     throw new Error('Rate-limit bucket capacity must be a positive safe integer.');
   }
@@ -47,7 +56,8 @@ function createRateLimitChecker(maximumBuckets = MAX_RATE_LIMIT_BUCKETS): RateLi
     }
   }
 
-  return (key, { limit, windowMs }, suppliedNow = Date.now()): RateLimitDecision => {
+  return (key, suppliedNow = Date.now()): RateLimitDecision => {
+    const { limit, windowMs } = config;
     const now = Number.isFinite(suppliedNow) ? suppliedNow : Date.now();
     sweepExpiredBuckets(now);
     const bucket = buckets.get(key);
@@ -59,14 +69,14 @@ function createRateLimitChecker(maximumBuckets = MAX_RATE_LIMIT_BUCKETS): RateLi
       if (!bucket && buckets.size >= maximumBuckets) {
         sweepExpiredBuckets(now, true);
         if (buckets.size >= maximumBuckets) {
-          let earliestResetAt = now + windowMs;
-          for (const retained of buckets.values()) {
-            earliestResetAt = Math.min(earliestResetAt, retained.resetAt);
-          }
-          return {
-            allowed: false,
-            retryAfterSeconds: Math.max(1, Math.ceil((earliestResetAt - now) / 1_000)),
-          };
+          // A checker owns one fixed window, so insertion order also orders
+          // expiry. Evicting the oldest entry keeps memory bounded without
+          // turning table saturation into a lockout for every new identity.
+          // Under a high-cardinality flood, eviction can reset one retained
+          // identity's counter; this limiter is defense in depth rather than
+          // exact distributed accounting.
+          const oldestKey = buckets.keys().next().value;
+          if (typeof oldestKey === 'string') buckets.delete(oldestKey);
         }
       }
       buckets.set(key, { count: 1, resetAt: now + windowMs });
@@ -82,7 +92,18 @@ function createRateLimitChecker(maximumBuckets = MAX_RATE_LIMIT_BUCKETS): RateLi
   };
 }
 
-const checkRateLimit = createRateLimitChecker();
+function createScopedRateLimitCheckers(
+  maximumBucketsPerScope = MAX_RATE_LIMIT_BUCKETS_PER_SCOPE,
+): ScopedRateLimitCheckers {
+  return Object.freeze({
+    login: createRateLimitChecker(LOGIN_RATE_LIMIT, maximumBucketsPerScope),
+    api: createRateLimitChecker(API_RATE_LIMIT, maximumBucketsPerScope),
+    scheduledMonitorManagement: createRateLimitChecker(
+      SCHEDULED_MONITOR_MANAGEMENT_RATE_LIMIT,
+      maximumBucketsPerScope,
+    ),
+  });
+}
 
 // Expired buckets are swept lazily during rate-limit checks. This avoids an
 // import-time timer in request-scoped runtimes while preserving the same
@@ -170,9 +191,17 @@ const SCHEDULED_MONITOR_MANAGEMENT_RATE_LIMIT: Readonly<RateLimitConfig> = {
   windowMs: 60 * 1000,
 };
 
+const scopedRateLimitCheckers = createScopedRateLimitCheckers();
+const checkLoginRateLimit = scopedRateLimitCheckers.login;
+const checkApiRateLimit = scopedRateLimitCheckers.api;
+const checkScheduledMonitorManagementRateLimit = scopedRateLimitCheckers.scheduledMonitorManagement;
+
 export {
-  checkRateLimit,
+  checkLoginRateLimit,
+  checkApiRateLimit,
+  checkScheduledMonitorManagementRateLimit,
   createRateLimitChecker,
+  createScopedRateLimitCheckers,
   trustsForwardedHeaders,
   getForwardedProtocol,
   getClientIp,
@@ -188,4 +217,5 @@ export type {
   RateLimitConfig,
   RateLimitChecker,
   RateLimitDecision,
+  ScopedRateLimitCheckers,
 };

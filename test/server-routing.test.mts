@@ -66,7 +66,7 @@ describe('canonical route redirects', () => {
     assert.deepEqual([...PRERENDERED_ROUTES].sort(), sourceRoutes);
   });
 
-  test('maps the public resource hub to a fixed prerendered file before child-route handling', () => {
+  test('declares the fixed prerendered file for the public resource hub', () => {
     assert.deepEqual(PRERENDERED_HTML_FILE_OVERRIDES, [['/resources', 'resources.html']]);
   });
 

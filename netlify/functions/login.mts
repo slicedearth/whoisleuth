@@ -6,7 +6,7 @@
 // handler.
 
 import { checkPassword, createSessionToken, buildSessionCookie, isTrustedLoginOrigin } from '../../lib/auth.mts';
-import { checkRateLimit, getClientIp, LOGIN_RATE_LIMIT } from '../../lib/rate-limit.mts';
+import { checkLoginRateLimit, getClientIp } from '../../lib/rate-limit.mts';
 import {
   API_REQUEST_ERROR_CODES,
   MAX_API_JSON_BODY_BYTES,
@@ -59,7 +59,7 @@ async function handleLoginRequest(
   }
 
   const ip = getClientIp(headers);
-  const { allowed, retryAfterSeconds } = checkRateLimit(`login:${ip}`, LOGIN_RATE_LIMIT);
+  const { allowed, retryAfterSeconds } = checkLoginRateLimit(ip);
   if (!allowed) {
     return json(429, { error: 'Too many requests. Please try again later.' }, { 'Retry-After': String(retryAfterSeconds) });
   }

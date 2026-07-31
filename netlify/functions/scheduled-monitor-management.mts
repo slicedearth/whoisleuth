@@ -12,8 +12,7 @@ import {
 } from '../../lib/http.mts';
 import { guardNetlifyNetworkRequest } from '../../lib/netlify-network-guard.mts';
 import {
-  checkRateLimit,
-  SCHEDULED_MONITOR_MANAGEMENT_RATE_LIMIT,
+  checkScheduledMonitorManagementRateLimit,
 } from '../../lib/rate-limit.mts';
 import {
   createScheduledMonitorManager,
@@ -133,10 +132,7 @@ async function runScheduledMonitorManagementFunction(
       errorCode: 'CROSS_SITE_REQUEST_BLOCKED',
     }, NO_STORE_HEADERS);
   }
-  const rate = checkRateLimit(
-    `scheduled-monitor-management:${guard.sessionKey}`,
-    SCHEDULED_MONITOR_MANAGEMENT_RATE_LIMIT,
-  );
+  const rate = checkScheduledMonitorManagementRateLimit(guard.sessionKey || 'missing-session');
   if (!rate.allowed) {
     return json(429, {
       error: 'Too many hosted monitoring requests. Please try again later.',
