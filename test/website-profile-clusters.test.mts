@@ -39,6 +39,7 @@ function snapshot(
       formActionOrigins: [],
     },
     sources: [{ source: 'http', state: 'success' }],
+    certificate: null,
   };
 }
 

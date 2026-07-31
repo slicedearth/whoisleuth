@@ -461,6 +461,13 @@ default (see the README), so many lookups return no personal data at all.
   curated technology identifiers, passive posture states, selected
   page-identity digests, up to 30 normalized resource hosts and tracking
   identifiers, up to 20 external form-action origins, and source-health states.
+  When the same reviewed Deep result contains a normalized leaf certificate,
+  the snapshot can additionally retain its SHA-256 and SPKI SHA-256
+  fingerprints, bounded subject and issuer labels, serial, validity dates,
+  authorization and hostname-match states, and TLS completeness. It stores no
+  certificate bytes or expanded alternative-name list. The certificate record
+  is labelled as observed by this browser at the snapshot time; it is not
+  refreshed automatically and is not a statement of current deployment.
   It excludes complete URLs, form paths and queries, raw RDAP, WHOIS, HTTP,
   HTML, contact, credential, and provider payloads. Snapshot comparison,
   deletion, import, and export happen locally and make no request. Monitor can

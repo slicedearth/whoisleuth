@@ -631,6 +631,7 @@
       lookupEvidenceDepth,
       technologyProfile,
       securityPosture,
+      tlsEvidence,
       baseline:observedPageBaseline,
       pageIdentity,
       technologyFindings:pageDisplay.technologyFindings,

@@ -889,6 +889,13 @@ are never retained automatically: Bulk writes one only after the analyst
 selects **Retain observation**. Browser storage can still be cleared or evicted
 and does not synchronize across devices.
 
+An explicitly saved Deep Lookup can include a normalized leaf-certificate
+observation in its website profile snapshot. The local Lookup inventory shows
+the latest retained observation per domain and exact shared-fingerprint review
+leads. These records contain bounded certificate metadata and digests, not
+certificate bytes, and describe what this deployment observed at that time
+rather than a current certificate inventory supplied by a third party.
+
 Dashboard can create one deliberate workspace archive for the supported
 collections and preferences, including retained relationship observations and
 compact saved Bulk sessions. Version 2 added Bulk sessions, version 3 added

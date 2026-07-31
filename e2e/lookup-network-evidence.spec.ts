@@ -155,6 +155,23 @@ test('HTTP intelligence presents bounded redirect provenance and response metada
             securityHeaders: { strictTransportSecurity: 'observed', contentSecurityPolicy: 'observed', xFrameOptions: 'observed', xContentTypeOptions: 'observed', referrerPolicy: 'observed' },
           },
         },
+        tls: {
+          version: 1, profileVersion: 2, status: 'success', observedAt: '2026-07-13T00:00:00.000Z',
+          scanMode: 'deep', source: 'tls', durationMs: 42, complete: true, truncated: false,
+          limitations: ['This is a point-in-time TLS handshake fixture.'],
+          authorization: { authorized: true, error: null },
+          hostname: { matches: true, error: null },
+          validity: { status: 'valid' },
+          certificate: {
+            subject: { commonNames: ['http-evidence.test'], organizations: [] },
+            issuer: { commonNames: ['Fixture issuing authority'], organizations: [] },
+            serialNumber: 'a1b2c3',
+            validFrom: '2026-07-01T00:00:00.000Z',
+            validTo: '2026-08-01T00:00:00.000Z',
+            fingerprintSha256: '7'.repeat(64),
+            publicKey: { fingerprintSha256: '8'.repeat(64) },
+          },
+        },
         pageIdentity: {
           identityVersion: 3, version: 1, status: 'partial', observedAt: '2026-07-13T00:00:00.000Z', scanMode: 'deep', source: 'html',
           durationMs: null, complete: false, truncated: true,
@@ -445,8 +462,22 @@ test('HTTP intelligence presents bounded redirect provenance and response metada
     domain: 'http-evidence.test',
     complete: false,
     truncated: true,
+    certificate: {
+      fingerprintSha256: '7'.repeat(64),
+      spkiFingerprintSha256: '8'.repeat(64),
+      issuer: 'Fixture issuing authority',
+      subject: 'http-evidence.test',
+      complete: true,
+      truncated: false,
+    },
   });
   expect(JSON.stringify(retainedSnapshots.records[0]?.value)).not.toContain('secret');
+  const certificateInventory = snapshots.getByRole('region', { name: 'Observed certificate inventory' });
+  await expect(certificateInventory).toContainText('1 observation · 1 domain');
+  await expect(certificateInventory).toContainText('http-evidence.test');
+  await certificateInventory.locator('summary').click();
+  await expect(certificateInventory.getByText('7'.repeat(64), { exact: true })).toBeVisible();
+  await expect(certificateInventory.getByText('8'.repeat(64), { exact: true })).toBeVisible();
   await snapshots.getByText(/Manage 1 saved snapshot/).click();
   page.once('dialog', (dialog) => dialog.accept());
   await snapshots.getByRole('button', { name: 'Delete' }).click();
