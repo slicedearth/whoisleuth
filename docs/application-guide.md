@@ -177,6 +177,11 @@ current task view. It keeps verified normalized facts, explicit
 contradictions, unknowns, source-quality counts, observed relationship types,
 and suggested manual next steps separate. It does not add analyst assertions,
 make an attribution, or turn an incomplete source into a negative conclusion.
+The Identity & trust graph lens classifies observed destinations as the same
+origin, within the queried registrable domain, a reviewed Brand Profile
+relationship, external, or unresolved. These are routing and declaration
+relationships, not proof that data was submitted or that two hosts share
+ownership or control.
 
 The collapsed **Replay exported evidence** control accepts only a current
 first-party Lookup evidence JSON document of up to 5 MB. The browser validates

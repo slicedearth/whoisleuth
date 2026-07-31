@@ -4,6 +4,12 @@ import type {
 } from './visualization-models.ts';
 
 export type LookupAssetGraphLens = 'all' | 'identity' | 'delegation' | 'certificate';
+export type LookupTrustBoundary =
+  | 'external'
+  | 'reviewed_profile'
+  | 'same_origin'
+  | 'same_registrable_domain'
+  | 'unresolved';
 export type LookupAssetNodeKind =
   | 'address'
   | 'certificate'
@@ -38,6 +44,7 @@ export type LookupAssetEdge = Readonly<{
   limitations: readonly string[];
   lenses: readonly LookupAssetGraphLens[];
   href: `#${string}`;
+  boundary?: LookupTrustBoundary;
 }>;
 
 export type LookupAssetGraph = Readonly<{
@@ -174,6 +181,11 @@ export function buildLookupAssetGraph(input: Readonly<{
   pageIdentity?: unknown;
   structuredDataIdentity?: unknown;
   certificatePolicyReview?: unknown;
+  profileDomains?: Readonly<{
+    official?: readonly string[];
+    partner?: readonly string[];
+    allowlisted?: readonly string[];
+  }>;
 }>): LookupAssetGraph {
   const target = hostname(input.target);
   if (!target) {
@@ -227,6 +239,21 @@ export function buildLookupAssetGraph(input: Readonly<{
     if (!targetNode) return null;
     addEdge({ ...edge, source, target: targetNode });
     return targetNode;
+  };
+  const reviewedProfileDomains = new Set([
+    ...textList(input.profileDomains?.official, 32),
+    ...textList(input.profileDomains?.partner, 32),
+    ...textList(input.profileDomains?.allowlisted, 32),
+  ].map((value) => value.toLowerCase().replace(/\.$/u, '')));
+  const trustBoundary = (
+    candidate: string | null,
+    sourceHost = target,
+  ): LookupTrustBoundary => {
+    if (!candidate) return 'unresolved';
+    if (candidate === sourceHost) return 'same_origin';
+    if (candidate === target || candidate.endsWith(`.${target}`)) return 'same_registrable_domain';
+    if (reviewedProfileDomains.has(candidate)) return 'reviewed_profile';
+    return 'external';
   };
 
   const dnsEvidence = record(input.dnsEvidence);
@@ -434,6 +461,7 @@ export function buildLookupAssetGraph(input: Readonly<{
           limitations: limitations(httpEvidence.limitations),
           lenses: ['all', 'identity'],
           href: '#evidence-http',
+          boundary: trustBoundary(finalHost),
         },
         'Observed final website origin',
       )
@@ -453,6 +481,7 @@ export function buildLookupAssetGraph(input: Readonly<{
         limitations: limitations(record(input.pageIdentity).limitations),
         lenses: ['identity'],
         href: '#evidence-page-identity',
+        boundary: trustBoundary(canonicalHost, finalHost || target),
       },
       'Publisher-declared canonical origin',
       identitySource,
@@ -472,6 +501,7 @@ export function buildLookupAssetGraph(input: Readonly<{
         limitations: limitations(record(input.pageIdentity).limitations),
         lenses: ['identity'],
         href: '#evidence-page-identity',
+        boundary: trustBoundary(openGraphHost, finalHost || target),
       },
       'Publisher-declared Open Graph origin',
       identitySource,
@@ -492,6 +522,7 @@ export function buildLookupAssetGraph(input: Readonly<{
           limitations: ['A declared form action does not prove that a user submitted data or that the endpoint received it.'],
           lenses: ['identity'],
           href: '#evidence-page-identity',
+          boundary: trustBoundary(host, finalHost || target),
         },
         'External form-action origin',
         identitySource,
@@ -513,6 +544,7 @@ export function buildLookupAssetGraph(input: Readonly<{
           limitations: ['A static resource reference does not prove that a browser loaded the resource or disclosed data to it.'],
           lenses: ['identity'],
           href: '#evidence-page-identity',
+          boundary: trustBoundary(host, finalHost || target),
         },
         'External resource origin',
         identitySource,
@@ -579,6 +611,7 @@ export function buildLookupAssetGraph(input: Readonly<{
           limitations: limitations(structuredIdentity.limitations),
           lenses: ['identity'],
           href: '#evidence-structured-identity',
+          boundary: trustBoundary(declaredOrigin, finalHost || target),
         },
         'Publisher-declared structured-data origin',
         entityId || identitySource,
@@ -600,6 +633,7 @@ export function buildLookupAssetGraph(input: Readonly<{
           ].slice(0, MAX_LIMITATIONS),
           lenses: ['identity'],
           href: '#evidence-structured-identity',
+          boundary: trustBoundary(hostname(sameAsHost), finalHost || target),
         },
         'Publisher-declared sameAs host',
         entityId || identitySource,
@@ -640,8 +674,9 @@ export function buildLookupAssetGraph(input: Readonly<{
           observedAt: isoDate(tlsEvidence.observedAt) || observedAt,
           completeness: sourceCompleteness(tlsEvidence),
           limitations: limitations(tlsEvidence.limitations),
-          lenses: ['certificate'],
+          lenses: ['certificate', 'identity'],
           href: '#evidence-tls',
+          boundary: trustBoundary(hostname(name)),
         });
       }
     }
@@ -749,7 +784,7 @@ export function projectLookupAssetGraph(
     source: edge.source,
     target: edge.target,
     kind: edge.completeness === 'complete' ? 'observed' : 'derived',
-    detail: `${edge.label} · ${edge.sourceLabel}`,
+    detail: `${edge.label} · ${edge.sourceLabel}${edge.boundary ? ` · ${edge.boundary.replaceAll('_', ' ')}` : ''}`,
   }));
   return { nodes, links, edges: acceptedEdges };
 }

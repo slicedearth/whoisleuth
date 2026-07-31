@@ -392,6 +392,11 @@
     pageIdentity,
     structuredDataIdentity,
     certificatePolicyReview,
+    profileDomains:{
+      official:profile?.officialDomains??[],
+      partner:profile?.approvedPartnerDomains??[],
+      allowlisted:profile?.allowlistedDomains??[],
+    },
   }));
   const analystEvidencePivots=$derived(buildAnalystEvidencePivots({
     type:result?.type,

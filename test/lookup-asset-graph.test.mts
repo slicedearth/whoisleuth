@@ -84,6 +84,11 @@ function fixture() {
         limitations: ['Parent policy was not collected.'],
       }],
     },
+    profileDomains: {
+      official: ['example.test'],
+      partner: ['identity.example'],
+      allowlisted: ['profile.example'],
+    },
   });
 }
 
@@ -99,6 +104,8 @@ test('asset graph keeps separately attributed typed relationships', () => {
   assert.ok(graph.edges.some((edge) => edge.kind === 'form-destination'));
   assert.ok(graph.edges.some((edge) => edge.kind === 'declares-publisher'));
   assert.ok(graph.edges.some((edge) => edge.kind === 'declares-same-as'));
+  assert.ok(graph.edges.some((edge) => edge.kind === 'declares-open-graph' && edge.boundary === 'reviewed_profile'));
+  assert.ok(graph.edges.some((edge) => edge.kind === 'form-destination' && edge.boundary === 'external'));
   assert.ok(graph.edges.some((edge) => edge.kind === 'uses-key'));
   assert.ok(graph.edges.every((edge) => edge.observedAt !== null));
 });
@@ -110,6 +117,7 @@ test('graph lenses reuse one model without cross-contaminating evidence classes'
   const certificate = projectLookupAssetGraph(graph, 'certificate');
 
   assert.ok(identity.edges.some((edge) => edge.kind === 'form-destination'));
+  assert.ok(identity.edges.some((edge) => edge.kind === 'authorizes-name' && edge.boundary === 'same_registrable_domain'));
   assert.ok(identity.edges.every((edge) => edge.lenses.includes('identity')));
   assert.ok(delegation.edges.some((edge) => edge.kind === 'registry-publishes'));
   assert.ok(delegation.edges.some((edge) => edge.completeness === 'partial'));
