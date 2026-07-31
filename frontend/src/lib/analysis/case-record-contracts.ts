@@ -6,8 +6,8 @@ import type {
   CaseManualTrailEvent,
 } from './case-response-model.ts';
 
-export const CASE_SCHEMA_VERSION = 7;
-export const CASE_IMPORT_VERSIONS = [3, 4, 5, 6, CASE_SCHEMA_VERSION] as const;
+export const CASE_SCHEMA_VERSION = 8;
+export const CASE_IMPORT_VERSIONS = [3, 4, 5, 6, 7, CASE_SCHEMA_VERSION] as const;
 export const MAX_CASES = 500;
 export const MAX_NOTES_PER_CASE = 50;
 export const MAX_NOTE_LENGTH = 2000;
@@ -95,6 +95,7 @@ export type CaseEvidenceSnapshot = {
   faviconNearMatch: boolean | null;
   reusesOfficialAssets: boolean | null;
   hasPasswordField: boolean | null;
+  hasExternalFormAction: boolean | null;
   phishingLanguageMatch: string | null;
   mutationTypes: string[];
 };

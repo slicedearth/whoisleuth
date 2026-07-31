@@ -47,6 +47,7 @@ function deepSnapshot(overrides: Partial<CaseEvidenceSnapshot> = {}): CaseEviden
     faviconNearMatch: null,
     reusesOfficialAssets: null,
     hasPasswordField: null,
+    hasExternalFormAction: null,
     phishingLanguageMatch: null,
     mutationTypes: [],
     ...overrides,

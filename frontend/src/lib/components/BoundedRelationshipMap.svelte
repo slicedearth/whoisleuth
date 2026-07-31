@@ -19,6 +19,7 @@
 
   const graph = $derived(projectBoundedForceGraph(nodes, links));
   const shortLabel = (value: string) => value.length > 22 ? `${value.slice(0, 20)}…` : value;
+  const nodeLabel = (id: string) => graph.nodes.find((node) => node.id === id)?.label ?? id;
 </script>
 
 {#if graph.nodes.length > 1 && graph.links.length}
@@ -73,6 +74,23 @@
         </g>
       </svg>
     </div>
+    <div
+      class="map-mobile"
+      role="img"
+      aria-label={`${title}. ${graph.nodes.length} nodes and ${graph.links.length} relationships. Exact evidence follows the visual.`}
+    >
+      <ul aria-hidden="true">
+        {#each graph.links.slice(0, 12) as link (link.id)}
+          <li class:derived={link.kind === 'derived'}>
+            <span>{nodeLabel(link.sourceId)}</span>
+            <b aria-hidden="true">→</b>
+            <span>{nodeLabel(link.targetId)}</span>
+            <small>{link.detail || link.kind}</small>
+          </li>
+        {/each}
+      </ul>
+      {#if graph.links.length > 12}<p>Showing 12 of {graph.links.length} mapped relationships. Exact evidence remains below.</p>{/if}
+    </div>
     <p class="limit">Lines show observed or explicitly derived relationships in the current bounded dataset. They do not establish common ownership or intent.</p>
   </section>
 {/if}
@@ -85,6 +103,7 @@
   .relationship-map>p{max-width:760px;margin:6px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.5}
   .map-frame{max-width:100%;margin-top:11px;overflow:auto;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised);overscroll-behavior:contain}
   .map-frame:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+  .map-mobile{display:none}
   svg{display:block;width:100%;min-width:640px;height:auto}
   .background{fill:var(--panel-raised)}
   .grid-line{fill:none;stroke:color-mix(in srgb,var(--border) 58%,transparent);stroke-width:1}
@@ -97,6 +116,14 @@
   .node text{fill:var(--text);font:650 10px var(--mono);paint-order:stroke;stroke:var(--panel-raised);stroke-width:4px;stroke-linejoin:round}
   .limit{font-size:var(--text-2xs)!important}
   @media(max-width:700px){
-    .map-frame svg{width:720px;min-width:720px}
+    .map-frame{display:none}
+    .map-mobile{display:grid;gap:7px;margin-top:11px}
+    .map-mobile ul{display:grid;gap:7px;margin:0;padding:0;list-style:none}
+    .map-mobile li{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:6px;align-items:center;min-width:0;padding:9px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
+    .map-mobile li.derived{border-style:dashed}
+    .map-mobile li span{min-width:0;font:650 var(--text-2xs) var(--mono);overflow-wrap:anywhere}
+    .map-mobile li b{color:var(--accent);font-size:var(--text-xs)}
+    .map-mobile li small{grid-column:1/-1;color:var(--muted);font-size:var(--text-2xs);overflow-wrap:anywhere}
+    .map-mobile>p{margin:0;color:var(--muted);font-size:var(--text-2xs)}
   }
 </style>

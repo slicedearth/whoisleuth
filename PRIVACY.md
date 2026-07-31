@@ -61,6 +61,25 @@ default (see the README), so many lookups return no personal data at all.
   briefly cached in server memory like other RDAP responses. The selected
   address can belong to a CDN, proxy, load balancer, or shared edge and is not
   proof of an origin host, hosting control, ownership, intent, or maliciousness.
+- **Authoritative DNS health in deep Lookup**: deep non-compact domain Lookup
+  can compare the recursive nameserver view with registry RDAP nameserver and
+  glue publication, then send direct NS and SOA queries to at most four
+  selected nameservers and two validated public addresses per nameserver.
+  Registry, recursive, and direct evidence remain separately attributed.
+  Private and reserved addresses are rejected before a direct query. Refused,
+  unreachable, partial, truncated, and unsupported observations remain
+  explicit and are not treated as record absence. This collection is excluded
+  from Fast and compact Bulk lookups and never decides registration
+  availability, ownership, control, intent, safety, or maliciousness.
+- **Source-specific Lookup refresh**: Lookup can deliberately retry a limited
+  RDAP, WHOIS, or grouped domain-evidence source, and can offer those source
+  groups after the displayed unified observation becomes stale. Each retry
+  repeats only the stated bounded endpoint and displays a separate source
+  result with its own observation and supersession time. Repeated refreshes
+  form a capped versioned chain in page memory. That chain is cleared with the
+  page and does not merge into, replace, save, or export the original unified
+  response. A limited or failed retry remains inconclusive and is not evidence
+  of absence or safety.
 - **Analyst-controlled external evidence pivots**: a completed Lookup can show
   a collapsed set of ordinary links to reviewed public registration,
   top-level-domain delegation, Certificate Transparency, archived-page,
@@ -436,11 +455,17 @@ default (see the README), so many lookups return no personal data at all.
   saves a completed Deep Lookup. Each bounded record contains the canonical
   domain, observation and save times, collection completeness and truncation,
   curated technology identifiers, passive posture states, selected
-  page-identity digests, and source-health states. It excludes raw RDAP,
-  WHOIS, HTTP, HTML, contact, credential, and provider payloads. Snapshot
-  comparison, deletion, import, and export happen locally and make no request.
-  A changed or unavailable field is a review lead, not evidence of compromise,
-  ownership, intent, safety, or maliciousness.
+  page-identity digests, up to 30 normalized resource hosts and tracking
+  identifiers, up to 20 external form-action origins, and source-health states.
+  It excludes complete URLs, form paths and queries, raw RDAP, WHOIS, HTTP,
+  HTML, contact, credential, and provider payloads. Snapshot comparison,
+  deletion, import, and export happen locally and make no request. Monitor can
+  derive exact historical clusters and explainable weighted relationships from
+  compatible saved components. A deliberate action records a selected cluster
+  as a separately typed analyst assertion in one browser-local case. A changed,
+  shared, similar, or unavailable field is a review lead, not evidence of
+  compromise, ownership, authorship, coordination, intent, safety, or
+  maliciousness.
   Investigation templates retain only allowlisted guide-stage identities,
   bounded analyst-authored labels and instructions, expected evidence,
   completion criteria, and optional additional request gates. They cannot add
@@ -479,6 +504,47 @@ default (see the README), so many lookups return no personal data at all.
   application make no network request, do not fetch references, and do not
   change analyst status or disposition. Creating or editing these records makes
   no network request.
+  Fixed-column external finding conversion, documented domain, DNS, and
+  certificate observation-row conversion, and sanitised web-capture summary
+  import happen locally before that ordinary reviewed case import. Row
+  conversion reports accepted, rejected, duplicate, and truncated counts
+  without retaining excluded values. Capture summaries retain only normalized
+  domains and HTTP(S) origins, bounded titles, technology labels, request
+  domains, screenshot or DOM-digest plain file names, MIME types, declared
+  sizes, dimensions where applicable, SHA-256 digests, timestamps,
+  completeness, limitations, and optional source references. Artifact bytes
+  are not imported or independently verified. These schemas reject raw HTML,
+  screenshot bytes, archives, decompression fields, path traversal, cookies,
+  authorization data, request bodies, complete URLs, paths, queries,
+  fragments, and arbitrary fields. WHOISleuth does not collect or
+  independently verify the imported observation.
+  A selected security.txt result can be organized transiently into disclosure
+  health using only its retained contact, policy, encryption, language, expiry,
+  and source state. This adds no request and does not test contact
+  reachability. Certificate and security.txt expiry dates enter the local
+  review calendar only when the analyst explicitly pins those facts to a case.
+  The calendar excludes the pinned values themselves, recipient values, notes,
+  and source payloads.
+  A privacy-safe browser handoff can reduce a pasted domain or HTTP(S) URL to
+  the normalized hostname or a sanitized HTTP(S) origin after discarding
+  credentials, port, path, query, fragment, and browser-local identifiers.
+  The default destination is a local Lookup link that fills Deep Lookup
+  without starting collection or saving the target. An analyst can instead
+  enter an exact loopback companion endpoint or HTTPS external endpoint;
+  WHOISleuth does not discover, validate, poll, or retain that configuration.
+  Before opening a non-Lookup destination, the browser shows the exact
+  disclosed value, destination URL, and local-device or third-party visibility
+  and requires explicit confirmation. Only the displayed normalized hostname
+  or sanitized origin is sent to that endpoint.
+  A local DNS change rehearsal can compare analyst-entered intended nameserver,
+  glue, DS, MX, CAA, and critical address sets plus a DNSSEC change type and
+  readiness confirmations with displayed bounded DNS and registry evidence.
+  Proposed values remain separate from observed records. It makes no request,
+  saves nothing automatically, and changes no DNS or registry state. A
+  deliberate checklist download includes the domain, proposed and observed
+  normalized sets, findings, unknowns, sequence, rollback steps, and
+  limitations. It verifies no authorization and cannot guarantee a safe or
+  successful change.
   Watchlists retain a bounded timeline of material scan changes alongside
   their latest results; older timeline events are automatically discarded.
   Structured Certificate Transparency searches retain bounded per-keyword
@@ -639,7 +705,14 @@ default (see the README), so many lookups return no personal data at all.
   DKIM public keys are parsed transiently for supported algorithm and size
   evidence and are not retained by the server. Registry and resolver failures,
   exhausted traversal bounds, and unsupported policy targets remain explicit
-  incomplete states.
+  incomplete states. A Brand Profile can separately retain analyst-authored
+  desired nameserver, DS, MX, CAA, TLS issuer or public-key digest,
+  transfer-lock, and renewal-review values; reviewed suppressions; and one
+  explicitly selected compact prior posture observation per official domain.
+  Those local values are not sent with a posture request, do not change
+  infrastructure, and appear only in deliberate profile, baseline, or
+  workspace exports. Incomplete or unsupported public evidence never becomes
+  an aligned result.
 - **External response actions**: WHOISleuth records only analyst-authored
   planned or completed actions in browser-local cases. It does not open a
   pre-addressed mail client, send a report, contact a provider, change DNS, or

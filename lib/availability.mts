@@ -57,6 +57,7 @@ type HomepageResult = {
   detail: string;
   http: HttpObservation;
   responsePolicy?: ResponsePolicyAnalysis | null;
+  technologyHeaders?: Record<string, string>;
 };
 type HomepageFailure = { url: string; error: string };
 type HomepageFetchDetail = {
@@ -312,6 +313,15 @@ async function fetchHomepage(domain: string, { fetcher = safeFetchDetailed as Ho
           status: 'fetched',
           detail: `Homepage responded over ${scheme.toUpperCase()} (HTTP ${res.status}).`,
           responsePolicy: analyzeResponsePolicyHeaders(res.headers),
+          technologyHeaders: {
+            'cf-ray': res.headers.get('cf-ray') || '',
+            'x-drupal-cache': res.headers.get('x-drupal-cache') || '',
+            'x-fastly-request-id': res.headers.get('x-fastly-request-id') || '',
+            'x-powered-by': res.headers.get('x-powered-by') || '',
+            'x-shopify-stage': res.headers.get('x-shopify-stage') || '',
+            'x-sorting-hat-podid': res.headers.get('x-sorting-hat-podid') || '',
+            'x-vercel-id': res.headers.get('x-vercel-id') || '',
+          },
           http: buildHttpObservation({ ...detail, durationMs: Date.now() - attemptStartedAt }, {
             previousAttempts: failures,
             capturedBodyBytes: body.bytesRead,
@@ -409,6 +419,7 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
   let registrationSource: RegistrationSource = null;
   let registrationConfidence: RegistrationConfidence = 'high';
   let dnssec: string | null = null;
+  let registryDnsEvidence: unknown = null;
 
   if (rdapEnabled) {
     try {
@@ -437,6 +448,7 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
         }
         const parsed = errorRecord(record.parsed);
         if (Object.keys(parsed).length) {
+          registryDnsEvidence = parsed;
           statuses = Array.isArray(parsed.statuses)
             ? parsed.statuses.filter((status: unknown): status is string => typeof status === 'string').map((status: string) => status.toLowerCase())
             : [];
@@ -647,7 +659,10 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
       http: skippedHttpObservation(),
     }),
     dnsIntelligenceEnabled
-      ? collectDns(domain, { includeExtendedContext: options.includeExtendedDnsContext === true })
+      ? collectDns(domain, {
+          includeExtendedContext: options.includeExtendedDnsContext === true,
+          registryEvidence: registryDnsEvidence,
+        })
       : Promise.resolve(skippedDnsIntelligence(
           'DNS intelligence is disabled by deployment policy.',
           { includeExtendedContext: options.includeExtendedDnsContext === true },
@@ -667,6 +682,7 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
     pageTitle: null,
     hasPasswordField: false,
     phishingLanguageMatch: null,
+    hasExternalFormAction: null,
     externalAssetHosts: [],
     pageIdentity: null,
     credentialSurfaceProfile: null,
@@ -693,6 +709,7 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
         sourceTruncated: homepage.http?.response?.bodyTruncated === true,
         exactBodyHash: homepage.http?.response?.bodyHash,
         httpServer: homepage.http?.response?.server,
+        responseHeaders: homepage.technologyHeaders,
         activityStatus,
         includePageIdentity: pageIdentityEligible,
         ...(options.includeCredentialSurfaceProfile !== undefined

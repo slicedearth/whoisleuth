@@ -25,7 +25,12 @@ function currentAction(page: import('@playwright/test').Page) {
 async function allowAndOpen(page: import('@playwright/test').Page, tool: 'Discover' | 'Bulk' | 'Lookup') {
   const action = currentAction(page);
   await action.getByRole('button', { name: 'Review requests' }).click();
-  await expect(action.getByRole('region', { name: /Review requests for/ })).toContainText('Requests:');
+  const review = action.getByRole('region', { name: /Review requests for/ });
+  await expect(review).toBeVisible();
+  await expect(review).toContainText('1 target');
+  await expect(review).toContainText('Retention');
+  await expect(review).toContainText('Controls');
+  await expect(review).toContainText('Limits');
   await action.getByRole('button', { name: `Allow and open ${tool}` }).click();
 }
 
@@ -359,7 +364,9 @@ test('brand sweep carries the official domain and selected candidates across eve
   await expect(currentAction(page)).toContainText('Inspect priority domain');
   await currentAction(page).getByRole('link', { name: 'Choose a Bulk candidate' }).click();
   await expect(page.locator('#results')).toBeInViewport();
-  await page.locator('.results-table tbody tr').first().getByRole('button', { name: 'Inspect' }).click();
+  const primaryRow = page.locator('.results-table tbody tr', { hasText: primaryCandidate });
+  await expect(primaryRow).toHaveCount(1);
+  await primaryRow.getByRole('button', { name: 'Inspect' }).click();
   await expect(page).toHaveURL(new RegExp(`/lookup\\?q=${primaryCandidate.replaceAll('.', '\\.')}.*depth=deep`));
   await expect.poll(async () => page.evaluate((key) => {
     const stored = JSON.parse(sessionStorage.getItem(key) || 'null');

@@ -1,0 +1,307 @@
+// Pure, framework-neutral analyst-case records, evidence histories, bounded
+// record normalization, and analyst updates.
+
+import {
+  appendCaseAction,
+  appendCaseAssertion,
+  appendCaseDecision,
+  appendCaseEvidencePin,
+  appendCaseEvidencePins,
+  appendCaseManualTrailEvent,
+  normalizeCaseActions,
+  normalizeCaseAssertions,
+  normalizeCaseDecisions,
+  normalizeCaseEvidencePins,
+  normalizeCaseManualTrail,
+  updateCaseAction,
+  updateCaseAssertion,
+  type CaseActionRecord,
+  type CaseAssertionRecord,
+  type CaseDecisionRecord,
+  type CaseEvidencePin,
+  type CaseManualTrailEvent,
+} from './case-response-model.ts';
+import {
+  CASE_DISPOSITIONS,
+  CASE_IMPORT_VERSIONS,
+  CASE_SCHEMA_VERSION,
+  CASE_SOURCES,
+  CASE_STATUSES,
+  DEFAULT_DISPOSITION,
+  DEFAULT_SOURCE,
+  DEFAULT_STATUS,
+  EVIDENCE_SOURCES,
+  MAX_CASES,
+  MAX_CASE_IMPORT_BYTES,
+  MAX_CASE_STORE_BYTES,
+  MAX_DOMAIN_LENGTH,
+  MAX_EVIDENCE_CHANGES,
+  MAX_EVIDENCE_DETAIL_LENGTH,
+  MAX_EVIDENCE_FACTORS,
+  MAX_EVIDENCE_MUTATIONS,
+  MAX_EVIDENCE_NAMESERVERS,
+  MAX_EVIDENCE_SNAPSHOTS_PER_CASE,
+  MAX_EVIDENCE_STRING_LENGTH,
+  MAX_EVIDENCE_TITLE_LENGTH,
+  MAX_NOTES_PER_CASE,
+  MAX_NOTE_LENGTH,
+  MAX_TAGS_PER_CASE,
+  MAX_TAG_LENGTH,
+  type CaseEvidenceMaterial,
+  type CaseEvidenceSnapshot,
+  type CaseInput,
+  type CaseNote,
+  type CasePatch,
+  type CaseRecord,
+  type CaseStore,
+  type CompareFieldSpec,
+  type EvidenceChange,
+  type EvidenceFactor,
+  type SnapshotOptions,
+} from './case-record-contracts.ts';
+import {
+  DEFAULT_EVIDENCE_SOURCE,
+  EVIDENCE_SOURCE_SET,
+  deterministicId,
+  isoOrNow,
+  makeId,
+  normalizeDisposition,
+  normalizeDomain,
+  normalizeNoteBody,
+  normalizeNotes,
+  normalizeSource,
+  normalizeStatus,
+  normalizeTags,
+  objectRecord,
+  safeId,
+} from './case-record-core.ts';
+import {
+  normalizeEvidenceHistory,
+} from './case-evidence-model.ts';
+
+// ---------------------------------------------------------------------------
+// Case normalization
+// ---------------------------------------------------------------------------
+
+// A case's own source maps onto snapshot provenance for newly captured
+// evidence. A hand-opened ('manual') case has no scan provenance.
+function inferCaptureSource(caseSource: unknown): string {
+  return typeof caseSource === 'string' && EVIDENCE_SOURCE_SET.has(caseSource) && caseSource !== 'import'
+    ? caseSource
+    : DEFAULT_EVIDENCE_SOURCE;
+}
+
+// Builds a case's bounded current-schema evidence history. Uses a lenient
+// local fallback timestamp so recoverable current data always loads.
+function normalizeCaseEvidence(
+  record: Record<string, unknown>,
+  createdAt: string,
+  updatedAt: string,
+  now: string,
+): CaseEvidenceSnapshot[] {
+  const localFallback = updatedAt || createdAt || now;
+  if (Array.isArray(record.evidenceHistory)) {
+    return normalizeEvidenceHistory(record.evidenceHistory, { source: DEFAULT_EVIDENCE_SOURCE, fallback: localFallback });
+  }
+  return [];
+}
+
+/**
+ * Validates a single case field-by-field for LOCAL recovery: missing scalars
+ * and timestamps are defaulted so our own stored data always loads. Returns
+ * null when the record has no usable domain. An `existing` record preserves
+ * stable identity/timestamps across an update. Import validation is separate
+ * (see mergeCases) so a defaulted value can never win over local data.
+ * @param {unknown} raw
+ * @param {CaseRecord} [existing]
+ * @param {string} [nowIso]
+ * @returns {CaseRecord | null}
+ */
+export function normalizeCase(
+  raw: unknown,
+  existing?: CaseRecord,
+  nowIso?: string,
+): CaseRecord | null {
+  const now = nowIso || new Date().toISOString();
+  const record = objectRecord(raw);
+  const domain = normalizeDomain(existing ? existing.domain : record.domain);
+  if (!domain) return null;
+  const createdAt = existing ? existing.createdAt : isoOrNow(record.createdAt, now);
+  const updatedAt = isoOrNow(record.updatedAt, now);
+  const evidencePins = normalizeCaseEvidencePins(record.evidencePins, updatedAt);
+  const pinIds = new Set(evidencePins.map((item) => item.id));
+  return {
+    id: existing ? existing.id : safeId(record.id) || deterministicId(domain),
+    domain,
+    status: normalizeStatus(record.status),
+    disposition: normalizeDisposition(record.disposition),
+    tags: normalizeTags(record.tags),
+    notes: normalizeNotes(record.notes, now),
+    source: normalizeSource(record.source),
+    evidenceHistory: normalizeCaseEvidence(record, createdAt, updatedAt, now),
+    evidencePins,
+    decisions: normalizeCaseDecisions(record.decisions, updatedAt, pinIds),
+    actions: normalizeCaseActions(record.actions, updatedAt),
+    assertions: normalizeCaseAssertions(record.assertions, updatedAt, pinIds),
+    manualTrail: normalizeCaseManualTrail(record.manualTrail, updatedAt),
+    createdAt,
+    updatedAt,
+  };
+}
+
+/**
+ * @param {{ domain: unknown, status?: unknown, disposition?: unknown, source?: unknown, tags?: unknown, evidence?: unknown, note?: unknown }} input
+ * @param {string} [nowIso]
+ * @returns {CaseRecord}
+ */
+export function createCase(input: CaseInput, nowIso?: string): CaseRecord {
+  const now = nowIso || new Date().toISOString();
+  const domain = normalizeDomain(input.domain);
+  if (!domain) throw new Error('A valid domain is required to open a case.');
+  const noteBody = normalizeNoteBody(input.note);
+  const source = normalizeSource(input.source);
+  return {
+    id: makeId(),
+    domain,
+    status: normalizeStatus(input.status),
+    disposition: normalizeDisposition(input.disposition),
+    tags: normalizeTags(input.tags),
+    notes: noteBody ? [{ id: makeId(), body: noteBody, createdAt: now }] : [],
+    source,
+    evidenceHistory: normalizeEvidenceHistory(input.evidence ? [input.evidence] : [], {
+      source: inferCaptureSource(source),
+      fallback: now,
+    }),
+    evidencePins: input.evidencePins !== undefined
+      ? appendCaseEvidencePins([], input.evidencePins, now)
+      : input.evidencePin !== undefined
+        ? appendCaseEvidencePin([], input.evidencePin, now)
+        : [],
+    decisions: input.decision !== undefined
+      ? appendCaseDecision([], input.decision, now)
+      : [],
+    actions: input.action !== undefined
+      ? appendCaseAction([], input.action, now)
+      : [],
+    assertions: input.assertion !== undefined
+      ? appendCaseAssertion([], input.assertion, now)
+      : [],
+    manualTrail: input.trailEvent !== undefined
+      ? appendCaseManualTrailEvent([], input.trailEvent, now)
+      : [],
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+/**
+ * Opens the existing case for a domain, or creates one. Returns a new array
+ * (callers persist it) plus the resolved record and whether it was created.
+ * @param {CaseRecord[]} cases
+ * @param {{ domain: unknown, status?: unknown, disposition?: unknown, source?: unknown, tags?: unknown, evidence?: unknown, note?: unknown }} input
+ * @param {string} [nowIso]
+ * @returns {{ cases: CaseRecord[], record: CaseRecord, created: boolean }}
+ */
+export function openOrCreateCase(
+  cases: CaseRecord[],
+  input: CaseInput,
+  nowIso?: string,
+): { cases: CaseRecord[]; record: CaseRecord; created: boolean } {
+  const domain = normalizeDomain(input.domain);
+  if (!domain) throw new Error('A valid domain is required to open a case.');
+  const existing = cases.find((item) => item.domain === domain);
+  if (existing) return { cases, record: existing, created: false };
+  if (cases.length >= MAX_CASES) throw new Error(`Cases are limited to ${MAX_CASES}. Delete or export some first.`);
+  const record = createCase({ ...input, domain }, nowIso);
+  return { cases: [record, ...cases], record, created: true };
+}
+
+/**
+ * Applies a partial update to one case by id, bumping updatedAt. A `note` in
+ * the patch is appended (respecting the per-case note bound); a `tags` array
+ * replaces the tag set; an `evidence` value appends a new snapshot to the
+ * history (deduplicated, so a materially identical re-capture only advances the
+ * latest observation time). Returns a new array and the updated record.
+ * @param {CaseRecord[]} cases
+ * @param {string} id
+ * @param {{ status?: unknown, disposition?: unknown, tags?: unknown, source?: unknown, evidence?: unknown, note?: unknown }} patch
+ * @param {string} [nowIso]
+ * @returns {{ cases: CaseRecord[], record: CaseRecord }}
+ */
+export function updateCase(
+  cases: CaseRecord[],
+  id: string,
+  patch: CasePatch,
+  nowIso?: string,
+): { cases: CaseRecord[]; record: CaseRecord } {
+  const now = nowIso || new Date().toISOString();
+  const index = cases.findIndex((item) => item.id === id);
+  if (index < 0) throw new Error('That case no longer exists.');
+  const current = cases[index];
+  if (!current) throw new Error('That case no longer exists.');
+  let notes = current.notes;
+  if (patch.note !== undefined) {
+    const body = normalizeNoteBody(patch.note);
+    if (!body) throw new Error('A note cannot be empty.');
+    if (notes.length >= MAX_NOTES_PER_CASE) {
+      throw new Error(`Each case is limited to ${MAX_NOTES_PER_CASE} notes.`);
+    }
+    notes = [...notes, { id: makeId(), body, createdAt: now }];
+  }
+  const source = patch.source !== undefined ? normalizeSource(patch.source) : current.source;
+  let evidenceHistory = current.evidenceHistory;
+  if (patch.evidence !== undefined) {
+    evidenceHistory = normalizeEvidenceHistory(
+      [...current.evidenceHistory, ...(patch.evidence ? [patch.evidence] : [])],
+      { source: inferCaptureSource(source), fallback: now },
+    );
+  }
+  let evidencePins = current.evidencePins;
+  if (patch.evidencePins !== undefined) {
+    evidencePins = appendCaseEvidencePins(evidencePins, patch.evidencePins, now);
+  }
+  if (patch.evidencePin !== undefined) {
+    evidencePins = appendCaseEvidencePin(evidencePins, patch.evidencePin, now);
+  }
+  const pinIds = new Set(evidencePins.map((item) => item.id));
+  let decisions = current.decisions;
+  if (patch.decision !== undefined) {
+    decisions = appendCaseDecision(current.decisions, patch.decision, now, pinIds);
+  }
+  let actions = current.actions;
+  if (patch.action !== undefined) {
+    actions = appendCaseAction(current.actions, patch.action, now);
+  }
+  if (patch.actionUpdate !== undefined) {
+    actions = updateCaseAction(actions, patch.actionUpdate, now);
+  }
+  let assertions = current.assertions;
+  if (patch.assertion !== undefined) {
+    assertions = appendCaseAssertion(current.assertions, patch.assertion, now, pinIds);
+  }
+  if (patch.assertionUpdate !== undefined) {
+    assertions = updateCaseAssertion(assertions, patch.assertionUpdate, now, pinIds);
+  }
+  let manualTrail = current.manualTrail;
+  if (patch.trailEvent !== undefined) {
+    manualTrail = appendCaseManualTrailEvent(current.manualTrail, patch.trailEvent, now);
+  }
+  const record: CaseRecord = {
+    ...current,
+    status: patch.status !== undefined ? normalizeStatus(patch.status) : current.status,
+    disposition: patch.disposition !== undefined ? normalizeDisposition(patch.disposition) : current.disposition,
+    tags: patch.tags !== undefined ? normalizeTags(patch.tags) : current.tags,
+    source,
+    evidenceHistory,
+    evidencePins,
+    decisions,
+    actions,
+    assertions,
+    manualTrail,
+    notes,
+    updatedAt: now,
+  };
+  const next = [...cases];
+  next[index] = record;
+  return { cases: next, record };
+}

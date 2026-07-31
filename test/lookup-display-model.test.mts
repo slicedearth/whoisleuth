@@ -194,8 +194,18 @@ test('keeps registry comparison and source diagnostics separately attributed', (
         {
           label: 'Registrar',
           status: 'conflict',
+          rdapState: 'value',
+          whoisState: 'value',
           rdapDisplay: 'Registry value',
           whoisDisplay: 'WHOIS value',
+        },
+        {
+          label: 'Registry object ID',
+          status: 'whois_unavailable',
+          rdapState: 'value',
+          whoisState: 'unavailable',
+          rdapDisplay: 'REGISTRY-OBJECT',
+          whoisDisplay: 'Unsupported by source',
         },
       ],
     },
@@ -223,6 +233,10 @@ test('keeps registry comparison and source diagnostics separately attributed', (
   });
 
   assert.equal(registry.comparisonRows[0]?.tone, 'danger');
+  assert.equal(registry.comparisonRows[0]?.rdapMatrixState, 'conflict');
+  assert.equal(registry.comparisonRows[0]?.whoisMatrixState, 'conflict');
+  assert.equal(registry.comparisonRows[1]?.rdapMatrixState, 'observed');
+  assert.equal(registry.comparisonRows[1]?.whoisMatrixState, 'unavailable');
   assert.equal(registry.whoisContactRoles[0]?.contacts[0]?.identity, 'Abuse desk');
   assert.equal(registry.registrarRdap.label, 'partial');
   assert.match(registry.diagnosticDetail({

@@ -6,7 +6,6 @@ import { domainToASCII } from 'node:url';
 
 import { registryDateIso } from './registry-dates.mts';
 import {
-  MAX_WHOIS_BYTES,
   queryWhoisAddress,
   whoisQuery,
 } from './whois-transport.mts';
@@ -15,416 +14,40 @@ import {
   buildWhoisChainUncached,
   fetchGtRegistryWhois,
   type WhoisChain,
-  type WhoisHop,
 } from './whois-chain.mts';
+import {
+  analyzeWhoisChainAuthority,
+  hasNicKgRegistrationEvidence,
+} from './whois-authority.mts';
+import {
+  parseIndentedContactBlock,
+  resolveFredContact,
+  resolveIrnicContact,
+  resolveIsnicRole,
+} from './whois-contacts.mts';
+import { normalizeWhoisChain } from './whois-normalization.mts';
+import {
+  MAX_WHOIS_FIELD_LENGTH,
+  boundedWhoisValue,
+  parseBoundedWhoisSection,
+  parseIndentedWhoisSubfield,
+  parseIndentedWhoisValue,
+  whoisFieldLimit,
+} from './whois-values.mts';
 import type {
   ParsedWhoisRecord,
-  WhoisAuthority,
   WhoisContact,
   WhoisLifecycle,
   WhoisScalarFields,
 } from './whois-contracts.mts';
 
-type UnknownRecord = Record<string, unknown>;
-const MAX_WHOIS_FIELD_LENGTH = 1000;
 const MAX_WHOIS_NAMESERVERS = 200;
 const MAX_WHOIS_STATUSES = 100;
-const MAX_WHOIS_HOPS = 6;
 const WHOIS_DOMAIN_RE = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i;
-
-function normalizeWhoisChain(value: unknown): WhoisChain {
-  if (!Array.isArray(value)) return [];
-  const normalized: WhoisChain = [];
-  for (const hopValue of value.slice(0, MAX_WHOIS_HOPS)) {
-    if (!hopValue || typeof hopValue !== 'object' || Array.isArray(hopValue)) continue;
-    const hop = hopValue as UnknownRecord;
-    if (typeof hop.server !== 'string' || !hop.server.trim()) continue;
-    normalized.push({
-      server: hop.server.slice(0, 300),
-      ...(typeof hop.address === 'string' || hop.address === null ? { address: hop.address } : {}),
-      ...(typeof hop.queriedAt === 'string' ? { queriedAt: hop.queriedAt.slice(0, 64) } : {}),
-      ...(typeof hop.queryProfile === 'string' ? { queryProfile: hop.queryProfile.slice(0, 80) } : {}),
-      ...(typeof hop.responseEncoding === 'string' ? { responseEncoding: hop.responseEncoding.slice(0, 40) } : {}),
-      ...(typeof hop.response === 'string' ? { response: hop.response.slice(0, MAX_WHOIS_BYTES) } : {}),
-      ...(typeof hop.error === 'string' ? { error: hop.error.slice(0, 1000) } : {}),
-    });
-  }
-  return normalized;
-}
 
 // ---------------------------------------------------------------------------
 // WHOIS response parsing (merges the referral chain into readable fields)
 // ---------------------------------------------------------------------------
-
-// Some registries (FRED-based systems like .cz and .cr) list "registrant:
-// HANDLE" as a pointer to a separate "contact: HANDLE" block elsewhere in
-// the same response, rather than the name directly - e.g.
-//   registrant:   CN_1173
-//   ...
-//   contact:      CN_1173
-//   org:          NETIM
-//   name:         Bruno VINCENT
-// This resolves that indirection when a matching contact block exists.
-function resolveFredContact(text: string, handle: string | null | undefined) {
-  if (!handle) return null;
-  const escaped = handle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const headerMatch = text.match(new RegExp(`^[ \\t]*contact:[ \\t]*${escaped}[ \\t]*$`, 'im'));
-  if (!headerMatch) return null;
-
-  const rest = text.slice((headerMatch.index ?? 0) + headerMatch[0].length);
-  // the block ends at a blank line, or the next top-level "domain:"/"nsset:"/
-  // "contact:" section, whichever comes first
-  const endMatch = rest.match(/\n[ \t]*\n|^[ \t]*(?:domain|nsset|contact):/im);
-  const block = endMatch ? rest.slice(0, endMatch.index) : rest;
-
-  const get = (re: RegExp): string | null => {
-    const m = block.match(re);
-    return m?.[1]?.trim() || null;
-  };
-  const addresses = [...block.matchAll(/^[ \t]*address:[ \t]*(.+)$/gim)]
-    .map((match) => match[1]?.trim())
-    .filter((value): value is string => Boolean(value));
-
-  return {
-    name: get(/^[ \t]*name:[ \t]*(.+)$/im),
-    org: get(/^[ \t]*org:[ \t]*(.+)$/im),
-    email: get(/^[ \t]*e-?mail:[ \t]*(.+)$/im),
-    phone: get(/^[ \t]*phone:[ \t]*(.+)$/im),
-    address: addresses.length ? addresses.join(', ') : null,
-  };
-}
-
-// ISNIC places the registrant handle in the domain block and publishes the
-// corresponding organisation in a later `role`/`nic-hdl` block. Resolve only
-// that exact adjacent marker pair, cap the inspected block, and keep the
-// handle separately typed so it is not presented as a person's name.
-function resolveIsnicRole(text: string, handle: string | null | undefined) {
-  if (!handle) return null;
-  const escaped = handle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const headerMatch = text.match(new RegExp(
-    `^[ \\t]*role:[ \\t]*(.+)\\r?\\n[ \\t]*nic-hdl:[ \\t]*${escaped}[ \\t]*$`,
-    'im',
-  ));
-  if (!headerMatch) return null;
-
-  const lines = text.slice((headerMatch.index ?? 0) + headerMatch[0].length)
-    .split('\n', 22);
-  const block: string[] = [];
-  for (const line of lines) {
-    if (!line.trim()) {
-      if (block.length) break;
-      continue;
-    }
-    if (/^[ \t]*(?:role|person|domain):/i.test(line)) break;
-    if (block.length >= 20) break;
-    block.push(line);
-  }
-  const blockText = block.join('\n');
-  const get = (pattern: RegExp, maxLength: number) => {
-    const match = blockText.match(pattern);
-    return match ? boundedWhoisValue(match[1], maxLength) : { value: null, truncated: false };
-  };
-  const rawAddresses = [...blockText.matchAll(/^[ \t]*address:[ \t]*(.+)$/gim)];
-  const addresses = rawAddresses.slice(0, 4)
-    .map((match) => boundedWhoisValue(match[1], 300))
-    .filter((entry) => entry.value);
-  const address = boundedWhoisValue(addresses.map((entry) => entry.value).join(', '), 1000);
-  return {
-    org: boundedWhoisValue(headerMatch[1], 300),
-    email: get(/^[ \t]*e-?mail:[ \t]*(.+)$/im, 320),
-    phone: get(/^[ \t]*phone:[ \t]*(.+)$/im, 100),
-    address,
-    truncated: block.length >= 20 || rawAddresses.length > addresses.length
-      || addresses.some((entry) => entry.truncated),
-  };
-}
-
-// IRNIC publishes contact handles in the domain object and the corresponding
-// bounded contact record in a later `nic-hdl` block. Interpret only a block
-// carrying the exact requested handle and IRNIC source marker; terse `org`,
-// `person`, and `e-mail` labels are otherwise too ambiguous to use globally.
-function resolveIrnicContact(text: string, handle: string | null | undefined) {
-  if (!handle) return null;
-  const escaped = handle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const headerMatch = text.match(new RegExp(`^[ \\t]*nic-hdl:[ \\t]*${escaped}[ \\t]*$`, 'im'));
-  if (!headerMatch) return null;
-  const lines = text.slice((headerMatch.index ?? 0) + headerMatch[0].length)
-    .split('\n', 22);
-  const block: string[] = [];
-  for (const line of lines) {
-    if (!line.trim()) {
-      if (block.length) break;
-      continue;
-    }
-    if (/^[ \t]*(?:domain|nic-hdl):/i.test(line)) break;
-    if (block.length >= 20) break;
-    block.push(line);
-  }
-  const blockText = block.join('\n');
-  if (!/^[ \t]*source[ \t]*:[ \t]*IRNIC(?:\s|$)/im.test(blockText)) return null;
-  const get = (pattern: RegExp, maxLength: number) => {
-    const match = blockText.match(pattern);
-    return match ? boundedWhoisValue(match[1], maxLength) : { value: null, truncated: false };
-  };
-  const rawAddresses = [...blockText.matchAll(/^[ \t]*address[ \t]*:[ \t]*(.+)$/gim)];
-  const addresses = rawAddresses.slice(0, 4)
-    .map((match) => boundedWhoisValue(match[1], 300))
-    .filter((entry) => entry.value);
-  const address = boundedWhoisValue(addresses.map((entry) => entry.value).join(', '), 1000);
-  return {
-    name: get(/^[ \t]*person[ \t]*:[ \t]*(.+)$/im, 300),
-    org: get(/^[ \t]*org[ \t]*:[ \t]*(.+)$/im, 300),
-    email: get(/^[ \t]*e-?mail[ \t]*:[ \t]*(.+)$/im, 320),
-    phone: get(/^[ \t]*phone[ \t]*:[ \t]*(.+)$/im, 100),
-    address,
-    truncated: block.length >= 20 || rawAddresses.length > addresses.length
-      || addresses.some((entry) => entry.truncated),
-  };
-}
-
-// Some legacy thick-WHOIS registries (e.g. .edu via EDUCAUSE) list a
-// registrant/admin/technical contact as an unlabeled, indented block under a
-// plain header line instead of "Field: value" pairs - e.g.
-//   Administrative Contact:
-//   \tJane Doe
-//   \tExample University
-//   \tRoom 100, 1 Example Way
-//   \tExampleville, EX 00000
-//   \tUSA
-//   \t+1.5555550100
-//   \tjane@example.edu
-// The block ends at the next blank line. Line content (not position) finds
-// the email/phone since the address can span a variable number of lines;
-// the first remaining line is treated as the name. Whatever's left
-// (typically an org line plus the address itself) is folded into `address`
-// rather than split further - there's no reliable way to tell an org line
-// from an address line by shape alone, and folding still surfaces all of it
-// to the user rather than silently dropping it.
-function parseIndentedContactBlock(text: string, headerRe: RegExp) {
-  const headerMatch = text.match(headerRe);
-  if (!headerMatch) return null;
-  const rest = text.slice((headerMatch.index ?? 0) + headerMatch[0].length);
-  const blankLineMatch = rest.match(/\n[ \t]*\n/);
-  const blockText = blankLineMatch ? rest.slice(0, blankLineMatch.index) : rest;
-  // Legacy contact blocks are small. Bound the lines retained by this
-  // heuristic so a malformed response cannot make one block absorb an
-  // arbitrarily large remainder of the already byte-capped response.
-  const allLines = blockText.split('\n').map((l) => l.trim()).filter(Boolean);
-  const lines = allLines.slice(0, 20);
-  if (lines.length === 0) return null;
-
-  const remaining = [...lines];
-  const emailIdx = remaining.findIndex((l) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(l));
-  const email = emailIdx !== -1 ? remaining.splice(emailIdx, 1)[0] : null;
-  const phoneIdx = remaining.findIndex((l) => /^[+\d][\d.\-() ]{6,}$/.test(l));
-  const phone = phoneIdx !== -1 ? remaining.splice(phoneIdx, 1)[0] : null;
-
-  const name = remaining.shift() || null;
-  const address = remaining.length ? remaining.join(', ') : null;
-
-  return { name, address, phone, email, truncated: allLines.length > lines.length };
-}
-
-// ---------------------------------------------------------------------------
-// Chain authority analysis - decides whether a domain is genuinely
-// unregistered, which is not "did any hop's text contain 'no match'". A WHOIS
-// referral chain runs IANA root -> registry -> registrar; the registry hop is
-// authoritative for *existence*, and a registrar hop that fails, rate-limits,
-// or (misbehaving) returns "no match" must NOT override positive registration
-// evidence the registry already gave. Treating a global "any hop said no
-// match" boolean as availability produces false "available" verdicts whenever
-// a downstream registrar WHOIS hiccups.
-// ---------------------------------------------------------------------------
-
-const NOT_FOUND_RE = /no match for|no match\b|not found|no entries found|domain not found|no object found|not registered|status\s*:\s*(?:available|free)\b|registered\s*:\s*(?:no|false)\b|is available for registration/i;
-
-// Some ccTLD registries publish terse, line-oriented availability responses
-// that would be unsafe to recognize as arbitrary prose. Keep each documented
-// form anchored to the complete line so surrounding descriptive text cannot
-// become registry evidence.
-const LINE_NOT_FOUND_PATTERNS = Object.freeze([
-  /^[ \t]*%[ \t]*nothing found[ \t]*$/im,
-  /^[ \t]*[a-z0-9](?:[a-z0-9.-]{0,252})[ \t]+is free[ \t]*$/im,
-  /^[ \t]*el dominio no se encuentra registrado en nic argentina[ \t]*$/im,
-  /^[ \t]*the domain has not been registered\.?[ \t]*$/im,
-  /^[ \t]*the queried object does not exist:[ \t]*no matching objects found[ \t]*$/im,
-  /^[ \t]*no record found for[ \t]+'[a-z0-9.-]{1,253}'\.?[ \t]*$/im,
-  /^[ \t]*no data found[ \t]*$/im,
-  /^[ \t]*>>[ \t]*no data found for domain[ \t]*:[ \t]*[a-z0-9.-]{1,253}[ \t]*$/im,
-  /^[ \t]*domain[ \t]+[a-z0-9.-]{1,253}[ \t]+is available for purchase[ \t]*$/im,
-]);
-
-// InternetNZ's documented .nz WHOIS protocol uses a numeric query_status
-// field rather than the generic prose above. Only 220 means that the queried
-// domain is available. Active and pending-release objects still exist in the
-// registry, while reserved/conflicted/prohibited states remain inconclusive
-// because they are neither ordinary registrations nor generally available.
-const NZ_NOT_FOUND_RE = /^[ \t]*query_status[ \t]*:[ \t]*220(?:\s|$)/im;
-const NZ_POSITIVE_RE = /^[ \t]*query_status[ \t]*:[ \t]*(?:200|210)(?:\s|$)/im;
-const NZ_TEMPORARY_FAILURE_RE = /^[ \t]*query_status[ \t]*:[ \t]*4\d{2}(?:\s|$)/im;
-
-// Rate-limit / soft-failure language. Explicit response lines take precedence
-// over "not found" so a throttled registrar cannot read as available. Keep the
-// match line-oriented: registry policy prose may describe throttling without
-// reporting that the current query was throttled.
-const RATE_LIMIT_LINE_RE = /^[ \t]*(?:[%#*;>-]+[ \t]*)?(?:(?:error|status)[ \t:.-]+)?(?:whois[ \t]+limit[ \t]+exceeded|query[ \t]+(?:rate[ \t-]*)?limit[ \t]+exceeded|(?:request|query)[ \t]+limit[ \t]+(?:exceeded|reached)|rate[ \t-]*limit(?:[ \t]+exceeded)?|too[ \t]+many[ \t]+(?:requests|queries)|quota[ \t]+exceeded|number[ \t]+of[^\r\n]{0,120}[ \t]+exceeded|(?:requests?|queries?)[ \t]+(?:are[ \t]+)?throttled|throttled|(?:service[ \t]+)?temporarily[ \t]+unavailable|(?:please[ \t]+)?try[ \t]+again[ \t]+later|please[ \t]+wait)\b[^\r\n]{0,240}$/im;
-
-// Positive registration evidence: a field that only appears for a domain that
-// actually exists, carrying a non-empty value. The IANA root hop is excluded
-// by the caller (it describes the TLD delegation, not the queried domain).
-const POSITIVE_REGISTRATION_RE = /^[ \t*]*(?:Domain(?:[ \t]+Name)?|domainname|Registrar|Registrar WHOIS Server|Creation Date|Created(?: On)?|Registry Expiry Date|Registered(?: On)?|Name Server|nserver|Sponsoring Registrar)[ \t.]*:[ \t]*\S/im;
-const POSITIVE_BRACKET_RE = /\[(?:Domain Name|Registrant|Name Server)\][ \t]*\S/i;
-
-function hasSectionedRegistrationEvidence(text: string): boolean {
-  if (!/^[ \t]*Relevant dates[ \t]*:[ \t]*$/im.test(text)
-    || !/^[ \t]*Registration status[ \t]*:[ \t]*$/im.test(text)) return false;
-  const domain = parseIndentedWhoisValue(
-    text,
-    /^[ \t]*Domain(?: name)?[ \t]*:[ \t]*$/im,
-    whoisFieldLimit('domainName'),
-  );
-  const status = parseIndentedWhoisValue(
-    text,
-    /^[ \t]*Registration status[ \t]*:[ \t]*$/im,
-    160,
-  );
-  return Boolean(domain?.value && status?.value);
-}
-
-function hasNicKgRegistrationEvidence(text: string): boolean {
-  return /^% This is the \.kg ccTLD Whois server[ \t]*$/im.test(text)
-    && /^[ \t]*Domain[ \t]+[a-z0-9.-]+[ \t]+\([A-Z][A-Z0-9_-]*\)[ \t]*$/im.test(text)
-    && /^[ \t]*Record created[ \t]*:[ \t]*\S/im.test(text)
-    && /^[ \t]*Name servers in the listed order[ \t]*:[ \t]*$/im.test(text);
-}
-
-function classifyHopEvidence(hop: WhoisHop, index: number): string {
-  if (hop.error) return 'error';
-  const text = hop.response || '';
-  if (!text.trim()) return 'inconclusive';
-  // Explicit failures and availability declarations take precedence over an
-  // echoed "Domain Name:" line. Several registries echo the query before
-  // saying "Status: available" or "Registered: no"; treating that echo as
-  // positive evidence turns an unregistered domain into a registered one.
-  if (RATE_LIMIT_LINE_RE.test(text)) return 'rate_limited';
-  if (NZ_TEMPORARY_FAILURE_RE.test(text)) return 'rate_limited';
-  if (NZ_NOT_FOUND_RE.test(text)) return 'negative';
-  if (NOT_FOUND_RE.test(text) || LINE_NOT_FOUND_PATTERNS.some((pattern) => pattern.test(text))) return 'negative';
-  // Hop 0 is IANA's TLD delegation record, never evidence about the queried
-  // domain itself.
-  if (index > 0 && (POSITIVE_REGISTRATION_RE.test(text)
-    || POSITIVE_BRACKET_RE.test(text) || NZ_POSITIVE_RE.test(text)
-    || hasSectionedRegistrationEvidence(text)
-    || hasNicKgRegistrationEvidence(text))) return 'positive';
-  return 'inconclusive';
-}
-
-// Pure, fixture-testable: given the referral chain, decide existence and
-// report which hop settled it and whether a later hop failed or contradicted
-// it. The first definitive non-root response is the registry-level authority;
-// later registrar output is diagnostic but cannot reverse that decision.
-function analyzeWhoisChainAuthority(chain: unknown): WhoisAuthority {
-  const source = normalizeWhoisChain(chain);
-  const evidence = source.map((hop, index) => ({
-    server: hop.server,
-    index,
-    kind: classifyHopEvidence(hop, index),
-  }));
-
-  const failed = evidence.filter((e) => e.kind === 'error' || e.kind === 'rate_limited');
-  // The authoritative hop is the first non-root hop that gave a definitive
-  // (positive or negative) answer - i.e. the registry, before any flaky
-  // registrar referral.
-  const authoritative = evidence.find((e) => e.index > 0 && (e.kind === 'positive' || e.kind === 'negative'));
-  const conflict = authoritative
-    ? evidence.find((e) => e.index > authoritative.index
-      && (e.kind === 'positive' || e.kind === 'negative')
-      && e.kind !== authoritative.kind)
-    : null;
-  const registrationStatus: WhoisAuthority['registrationStatus'] = !authoritative
-    ? 'inconclusive'
-    : authoritative.kind === 'positive' ? 'registered' : 'not_found';
-  return {
-    registrationStatus,
-    notFound: registrationStatus === 'not_found',
-    notFoundSource: registrationStatus === 'not_found' && authoritative ? authoritative.server : null,
-    authoritativeHop: authoritative ? authoritative.server : null,
-    failedHop: failed[0]?.server ?? null,
-    conflictingHop: conflict ? conflict.server : null,
-    chainStatus: authoritative && failed.length === 0 && !conflict ? 'complete' : 'partial',
-  };
-}
-
-function boundedWhoisValue(value: unknown, maxLength = MAX_WHOIS_FIELD_LENGTH) {
-  if (typeof value !== 'string' || /[\u0000-\u0008\u000a-\u001f\u007f]/.test(value)) return { value: null, truncated: false };
-  const normalized = value.replace(/\s+/g, ' ').trim();
-  if (!normalized) return { value: null, truncated: false };
-  return {
-    value: normalized.slice(0, maxLength).trim() || null,
-    truncated: normalized.length > maxLength,
-  };
-}
-
-// Some sectioned registry responses put a field value on the next indented
-// line rather than beside the header, for example "Domain name:" followed by
-// the queried domain. Skip only leading blank lines, require indentation, and
-// retain one bounded scalar so a malformed response cannot make the section
-// absorb a following header or an arbitrary remainder of the response.
-function parseIndentedWhoisValue(text: string, headerRe: RegExp, maxLength: number) {
-  const headerMatch = text.match(headerRe);
-  if (!headerMatch) return null;
-  const lines = text.slice((headerMatch.index ?? 0) + headerMatch[0].length).split('\n').slice(0, 8);
-  for (const line of lines) {
-    if (!line.trim()) continue;
-    if (!/^[ \t]/.test(line)) return null;
-    return boundedWhoisValue(line, maxLength);
-  }
-  return null;
-}
-
-// A few registry formats place a small labelled record below a section
-// header, for example "Registrar:" followed by an indented "Name:" line.
-// Inspect only the next eight indented lines and require the exact requested
-// subfield so a URL or neighbouring section cannot be promoted accidentally.
-function parseIndentedWhoisSubfield(
-  text: string,
-  headerRe: RegExp,
-  subfieldRe: RegExp,
-  maxLength: number,
-) {
-  const headerMatch = text.match(headerRe);
-  if (!headerMatch) return null;
-  const lines = text.slice((headerMatch.index ?? 0) + headerMatch[0].length).split('\n').slice(0, 8);
-  for (const line of lines) {
-    if (!line.trim()) continue;
-    if (!/^[ \t]/.test(line)) return null;
-    const match = line.match(subfieldRe);
-    if (match) return boundedWhoisValue(match[1], maxLength);
-  }
-  return null;
-}
-
-// Return one small, named section from a registry response. Section-scoped
-// aliases such as `name:` are too ambiguous to interpret globally, so callers
-// must first prove a registry-specific marker set and then parse only this
-// bounded slice.
-function parseBoundedWhoisSection(text: string, headerRe: RegExp, maxLines = 20) {
-  const headerMatch = text.match(headerRe);
-  if (!headerMatch) return '';
-  const lines = text.slice((headerMatch.index ?? 0) + headerMatch[0].length)
-    .split('\n', maxLines + 2);
-  const section: string[] = [];
-  for (const line of lines) {
-    if (!line.trim()) {
-      if (section.length) break;
-      continue;
-    }
-    if (/^[ \t]*\[[^\]]+\][ \t]*$/.test(line)) break;
-    if (section.length >= maxLines) break;
-    section.push(line);
-  }
-  return section.join('\n');
-}
 
 function assignBoundedWhoisMatch(
   text: string,
@@ -440,19 +63,6 @@ function assignBoundedWhoisMatch(
   if (!bounded.value) return;
   fields[key] = bounded.value;
   if (bounded.truncated) truncatedFields.add(key);
-}
-
-function whoisFieldLimit(key: string): number {
-  if (/Email$/i.test(key)) return 320;
-  if (/Phone$/i.test(key)) return 100;
-  if (/Date$/i.test(key)) return 100;
-  if (/Url$/i.test(key)) return 2048;
-  if (/domainName/i.test(key)) return 253;
-  if (/Address/i.test(key)) return 1000;
-  // A registry may publish several repeated street lines. Keep their bounded
-  // composition rather than truncating it back to one line in the final pass.
-  if (/Street/i.test(key)) return 1000;
-  return 300;
 }
 
 function addBoundedWhoisSetValue(set: Set<string>, rawValue: unknown, {

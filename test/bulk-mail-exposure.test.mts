@@ -42,6 +42,7 @@ function result(
     faviconNearMatch: false,
     reusesOfficialAssets: false,
     hasPasswordField: false,
+    hasExternalFormAction: null,
     phishingLanguageMatch: null,
     riskModelVersion: 6,
     riskFactors: [],

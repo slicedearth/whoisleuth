@@ -30,6 +30,10 @@ type BenchmarkMainOptions = BenchmarkOptions & Readonly<{
   stdout?: WritableLike;
   stderr?: WritableLike;
 }>;
+type BenchmarkArguments = Readonly<{
+  json: boolean;
+  requireReviewed: boolean;
+}>;
 type UnknownRecord = Record<string, unknown>;
 type FixtureResult = Readonly<{
   id: string;
@@ -57,6 +61,7 @@ export const MAX_TECHNOLOGY_BENCHMARK_LABEL_LENGTH = 120;
 const ID_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const CONTROL_RE = /[\u0000-\u001f\u007f]/u;
 const CATEGORIES = new Set([
+  'application runtime',
   'content management',
   'commerce',
   'site builder',
@@ -66,7 +71,13 @@ const CATEGORIES = new Set([
   'delivery platform',
 ]);
 const CONFIDENCE_LEVELS = new Set(['high', 'medium']);
-const EVIDENCE_SOURCES = new Set(['generator metadata', 'static HTML', 'resource origin', 'HTTP server header']);
+const EVIDENCE_SOURCES = new Set([
+  'generator metadata',
+  'static HTML',
+  'resource origin',
+  'HTTP server header',
+  'passive response header',
+]);
 const FIXTURE_KINDS = new Set(['positive', 'negative', 'overlap', 'truncation']);
 
 function record(value: unknown): UnknownRecord {
@@ -306,6 +317,10 @@ export function buildTechnologySignatureBenchmark(options: BenchmarkOptions = {}
     ]).size, 0);
   const failedFixtures = fixtures.filter((fixture) => fixture.status === 'fail').length;
   const failedReviewedFixtures = reviewedFixtures.filter((fixture) => fixture.status === 'fail').length;
+  const reviewedSignatureIds = new Set(reviewedFixtures.flatMap((fixture) => fixture.expectedIds));
+  const reviewedSignatureCoverage = TECHNOLOGY_SIGNATURE_CATALOGUE
+    .filter((signature) => reviewedSignatureIds.has(signature.id))
+    .length;
   const unknownObservedIds = fixtures
     .flatMap((fixture) => fixture.observedIds)
     .filter((id) => !catalogueById.has(id));
@@ -330,7 +345,8 @@ export function buildTechnologySignatureBenchmark(options: BenchmarkOptions = {}
       reviewedFixtures: reviewedFixtures.length,
       passedReviewedFixtures: reviewedFixtures.length - failedReviewedFixtures,
       failedReviewedFixtures,
-      realWorldCoverageEstablished: reviewedFixtures.length > 0
+      reviewedSignatureCoverage,
+      realWorldCoverageEstablished: reviewedSignatureCoverage === TECHNOLOGY_SIGNATURE_CATALOGUE.length
         && failedReviewedFixtures === 0,
       lintErrors: lintErrors.length,
       ready: failedFixtures === 0
@@ -372,7 +388,7 @@ export function buildTechnologySignatureBenchmark(options: BenchmarkOptions = {}
     limitations: Object.freeze([
       'The synthetic corpus is an offline regression and calibration set, not a live technology-coverage measurement.',
       reviewedFixtures.length
-        ? 'The reviewed corpus contains minimized contributor-reviewed observations, but its coverage remains selective and must not be generalized to the wider web.'
+        ? 'The reviewed corpus contains minimized contributor-reviewed observations. The coverage gate requires at least one passing reviewed observation for every catalogue signature and still must not be generalized to the wider web.'
         : 'The contributor-reviewed corpus is empty, so this report makes no claim about real-world technology coverage.',
       'A matched signature is an implementation clue from the selected response, not proof of ownership, safety, maliciousness, support status, or exploitability.',
       'Unmatched and truncated evidence remains inconclusive because technologies can be concealed, rendered by scripts, proxied, or absent from the captured prefix.',
@@ -391,7 +407,8 @@ export function formatTechnologySignatureBenchmark(
   const lines = [
     'WHOISleuth technology-signature benchmark',
     `Summary: ${report.summary.passedFixtures}/${report.summary.fixtures} fixtures passed; ${report.summary.lintErrors} catalogue lint errors`,
-    `Reviewed observations: ${report.summary.passedReviewedFixtures}/${report.summary.reviewedFixtures} passed; real-world coverage ${report.summary.realWorldCoverageEstablished ? 'sampled' : 'not established'}`,
+    `Reviewed observations: ${report.summary.passedReviewedFixtures}/${report.summary.reviewedFixtures} passed; ${report.summary.reviewedSignatureCoverage}/${report.summary.signatures} signatures sampled`,
+    `Real-world coverage gate: ${report.summary.realWorldCoverageEstablished ? 'complete' : 'not established'}`,
     `Coverage: ${report.metrics.positiveCoverage}/${report.summary.signatures} positive; ${report.metrics.negativeCoverage}/${report.summary.signatures} negative`,
     `Matches: ${report.metrics.expectedMatches} expected; ${report.metrics.missedMatches} missed; ${report.metrics.unexpectedMatches} unexpected`,
     `False-positive controls: ${report.metrics.falsePositiveMatches}/${report.metrics.deliberateNonmatches}`,
@@ -419,25 +436,32 @@ export function formatTechnologySignatureBenchmark(
   return `${lines.join('\n')}\n`;
 }
 
-export function parseArguments(args: readonly string[]): { json: boolean } {
+export function parseArguments(args: readonly string[]): BenchmarkArguments {
   let json = false;
+  let requireReviewed = false;
   for (const arg of args) {
     if (arg === '--json') {
       if (json) throw new TypeError('--json may be supplied only once.');
       json = true;
+    } else if (arg === '--require-reviewed') {
+      if (requireReviewed) throw new TypeError('--require-reviewed may be supplied only once.');
+      requireReviewed = true;
     } else throw new TypeError(`Unknown option: ${arg}`);
   }
-  return { json };
+  return { json, requireReviewed };
 }
 
 export function main(args = process.argv.slice(2), options: BenchmarkMainOptions = {}): number {
   try {
-    const { json } = parseArguments(args);
+    const { json, requireReviewed } = parseArguments(args);
     const report = buildTechnologySignatureBenchmark(options);
     (options.stdout || process.stdout).write(
       json ? `${JSON.stringify(report, null, 2)}\n` : formatTechnologySignatureBenchmark(report),
     );
-    return report.summary.ready ? 0 : 1;
+    return report.summary.ready
+      && (!requireReviewed || report.summary.realWorldCoverageEstablished)
+      ? 0
+      : 1;
   } catch (error) {
     (options.stderr || process.stderr).write(
       `${boundedText(error instanceof Error ? error.message : error, 'Technology-signature benchmark failed.')}\n`,

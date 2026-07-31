@@ -189,6 +189,7 @@ function pickKnownSnapshotFields(snapshot: CaseEvidenceSnapshot): CaseEvidenceSn
     faviconNearMatch: snapshot.faviconNearMatch,
     reusesOfficialAssets: snapshot.reusesOfficialAssets,
     hasPasswordField: snapshot.hasPasswordField,
+    hasExternalFormAction: snapshot.hasExternalFormAction,
     phishingLanguageMatch: snapshot.phishingLanguageMatch,
     mutationTypes: Array.isArray(snapshot.mutationTypes) ? [...snapshot.mutationTypes] : [],
   };

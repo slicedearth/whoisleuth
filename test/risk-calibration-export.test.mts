@@ -55,6 +55,7 @@ function caseRecord(overrides: Partial<CaseRecord> = {}): CaseRecord {
       faviconNearMatch: false,
       reusesOfficialAssets: true,
       hasPasswordField: true,
+      hasExternalFormAction: true,
       phishingLanguageMatch: 'private phrase',
       mutationTypes: ['dictionary', 'unsupported-private-mutation'],
     }],

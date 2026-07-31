@@ -1,7 +1,19 @@
 <script lang="ts">
   import type { EvidenceCoverageLedger } from '$lib/analysis/evidence-coverage-ledger.ts';
+  import type { LookupSourceRefreshPlan } from '$lib/analysis/lookup-source-refresh.ts';
+  import LookupSourceRefresh from '$lib/components/LookupSourceRefresh.svelte';
 
-  let { ledger }: { ledger: EvidenceCoverageLedger } = $props();
+  let {
+    ledger,
+    refreshPlan,
+    query,
+    depth,
+  }: {
+    ledger: EvidenceCoverageLedger;
+    refreshPlan: LookupSourceRefreshPlan;
+    query: string;
+    depth: 'deep' | 'fast';
+  } = $props();
 
   function categoryLabel(value: string) {
     return value.charAt(0).toUpperCase() + value.slice(1);
@@ -33,6 +45,7 @@
             </div>
             <span class={`state state-${entry.state}`}>{entry.statusLabel}</span>
             {#if entry.limitations.length}
+              <span class="limitations-label">Limits</span>
               <ul class="limitations">
                 {#each entry.limitations as limitation}
                   <li>{limitation}</li>
@@ -42,7 +55,8 @@
           </li>
         {/each}
       </ul>
-      <p class="coverage-note">Limited, unavailable, skipped, unsupported, unknown, and not-found states remain distinct. No source is retried automatically from this view.</p>
+      <p class="coverage-note">Bullets identify source-specific limitations, not general descriptions, so a complete source may have none. Limited, unavailable, skipped, unsupported, unknown, and not-found states remain distinct. No source is retried automatically from this view.</p>
+      <LookupSourceRefresh plan={refreshPlan} {query} {depth} />
     </details>
   </section>
 {/if}
@@ -70,6 +84,7 @@
   .state-complete{border-color:color-mix(in srgb,var(--accent) 42%,var(--border));color:var(--accent)}
   .state-partial,.state-unavailable,.state-unknown{border-color:color-mix(in srgb,var(--amber) 48%,var(--border));color:var(--amber)}
   .state-not_found,.state-skipped,.state-unsupported{color:var(--muted)}
+  .limitations-label{grid-column:1/-1;color:var(--muted);font:650 var(--text-2xs) var(--mono);text-transform:uppercase}
   .limitations{grid-column:1/-1;margin:0;padding-left:17px;color:var(--muted);font-size:var(--text-2xs);line-height:1.45}
   .coverage-note{margin:9px 0 0;color:var(--muted);font-size:var(--text-2xs);line-height:1.5}
   @media(max-width:720px){

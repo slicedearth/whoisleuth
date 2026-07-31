@@ -65,6 +65,14 @@ sources decides domain availability, Risk, ownership, or hosting control.
 Press **Ctrl+Enter** or **Command+Enter** in the query field to start the same
 validated submission as the Run lookup button.
 
+Before starting, expand **Collection preflight** to review the target count,
+selected profile, included, optional, or policy-disabled source families,
+retention boundary, cancellation controls, and important limitations. The same
+summary appears in Bulk and at approval-gated guided-investigation steps. It
+describes planned source families rather than promising an exact request count:
+redirects, referrals, source eligibility, and bounded retries can change the
+number of requests that actually run.
+
 The primary assessment, source health, and material registration conflicts
 remain expanded. Long RDAP and WHOIS records and secondary DNS, HTTP, page,
 passive-posture, technology, TLS, and observed-network cards start collapsed.
@@ -82,6 +90,18 @@ evidence or claims that missing data is absent.
 **Cancel lookup** stops the browser from waiting and discards any incomplete
 response; already-admitted server work can still finish within its existing
 bounds. Leaving Lookup applies the same browser cancellation.
+
+If a completed result contains limited Registry RDAP, WHOIS, or domain-evidence
+states, **Evidence coverage** offers an explicit source-family refresh. Results
+are normalized into a short transient health summary, with a 2 MiB response
+bound, and are not merged into the original envelope. Repeated refreshes form
+a bounded versioned display chain with explicit observation and supersession
+times. That transient chain is cleared with the page and is not saved or
+exported. A result that is at
+least seven days old can offer the same reviewed refreshes for otherwise
+complete sources. Run a complete Lookup before saving, comparing, or exporting
+replacement evidence so observations collected at different times are not
+silently combined.
 
 After a successful deep full response, **Collection timing** reports total
 request time plus the duration and settle offset of each source branch that
@@ -304,12 +324,36 @@ provenance. WHOISleuth does not combine them into a mimicry or maliciousness
 score, and common infrastructure, templates, libraries, or analytics can
 produce legitimate relationships.
 
-**Service dependency review** reuses current DNS evidence to surface CNAME and
-HTTPS alias-mode targets. External targets are manual review leads. WHOISleuth
-does not follow them, query provider accounts, test claimability, or label a
-service dangling or vulnerable. Complete current DNS evidence with no alias is
-reported only as a point-in-time non-observation; incomplete DNS remains
-unavailable.
+**Service dependency review** reuses current CNAME, HTTPS alias-mode,
+nameserver, mail-server, and final HTTP-origin evidence. A fixed, bounded local
+catalogue can label recognized service families without making another
+request. Each match displays the fixed catalogue provenance and review date.
+Exact matches against three bounded passive page-title phrases can add a
+collision-prone deprovision cue, while evidence older than 30 days is labelled
+stale and incomplete DNS stays inconclusive. Analysts can optionally enter reviewed expected targets or parent
+namespaces and exact reviewed false-positive targets for the current Lookup
+view; neither input is retained. Candidate, unresolved, active, unsupported,
+and false-positive labels remain manual review states. “Active” means only
+that the target also appeared in the already-observed final HTTP navigation
+chain. WHOISleuth does not follow targets, query provider accounts, test
+claimability, or label a service dangling or vulnerable. A catalogue, scope,
+or navigation match does not verify provider configuration, account ownership,
+service assignment, abandonment, or claimability. Complete current DNS
+evidence with no dependency is reported only as a point-in-time
+non-observation; incomplete DNS remains unavailable.
+
+**DNS change rehearsal** is available under a completed authoritative DNS
+health result in Deep Lookup. Enter the complete intended nameserver set,
+optional in-bailiwick glue, intended DS, MX, CAA and critical address sets, the
+DNSSEC change type, and reviewed readiness confirmations. The local planner
+keeps proposed values separate from the current observation, highlights
+unresolved evidence, set changes, missing glue, unprepared authorities, TTL
+preparation, and DNSSEC ordering, then presents an ordered change and rollback
+checklist. A deliberate JSON download preserves the reviewed comparison,
+unknowns, provenance boundary, and limitations. Entered values remain analyst
+assertions. Nothing is saved automatically. The rehearsal makes no request,
+changes no DNS or registry state, and cannot guarantee propagation or
+correctness.
 
 ### Monitor
 
@@ -333,6 +377,16 @@ Monitor contains Cases, Campaigns, Relationships, and Watchlists.
   and campaign membership without another network request. The Evidence
   clusters review layer groups connected cases, keeps every contributing
   relationship inspectable, and qualifies common shared infrastructure.
+  A separate website-profile view groups exact curated technology identifiers,
+  identity digests, normalized resource hosts, tracking identifiers, and
+  external form-action origins across explicitly saved compact observations.
+  It also calculates bounded weighted relationships from compatible latest
+  snapshots while listing every contributing field and weight. First and last
+  dates describe only browser-local saved history. It can be searched by
+  domain or evidence type, keeps partial snapshots visible, and can record a
+  selected cluster as a separately typed analyst assertion in one case.
+  Common software, services, templates, placeholders, trackers, and copied
+  content mean these groups are pivots rather than attribution.
   Split, merge, label, and dismiss controls alter only the current review view;
   export the reviewed view if it needs to be retained.
 - **Watchlists** retain bounded material-change timelines and can be rescanned
@@ -351,7 +405,45 @@ The **Review inbox** is a bounded local queue projected from retained cases,
 planned case actions, material watchlist changes, and incomplete saved Bulk
 sessions. Its filters and due-state labels help an analyst resume work; opening
 an item does not start collection, change a disposition, submit a response, or
-claim that the underlying evidence is complete.
+claim that the underlying evidence is complete. Evidence-gap items link both
+to the owning case and to a prefilled Deep Lookup refresh. Detail filters can
+narrow the transient projection by retained source, observation age, case
+domain, priority, and next manual action. Every row states why it received its
+position in the deterministic overdue, due-date, priority, observation-time,
+and stable-identity order. An analyst can
+dismiss the exact current gap only after choosing a fixed review outcome. The
+dismissal is recorded in the case investigation trail; it does not resolve or
+delete a pin or assertion. A changed gap receives a new fingerprint and returns
+to the queue.
+
+The Dashboard **privacy-safe browser handoff** accepts a pasted domain or
+HTTP(S) URL and reduces it to either the normalized hostname or sanitized
+HTTP(S) origin. Credentials, port, path, query, fragment, and browser-local
+identifiers are omitted. The default destination is a prefilled Deep Lookup
+that does not submit. An analyst can instead configure an exact loopback
+companion endpoint or HTTPS external endpoint; WHOISleuth discovers neither.
+The preview shows the exact disclosed value, destination URL, and visibility,
+and a non-Lookup destination requires explicit confirmation before opening.
+An optional separate action records only the prepared handoff and normalized
+domain in a selected browser-local case trail. It never records the external
+result.
+
+Below the inbox, **Contact and lifecycle review** projects reporting routes
+only from deliberately saved case actions. A due label means the saved due or
+follow-up date has arrived; it does not prove that a route is reachable,
+monitored, suitable, or responsible. The local iCalendar export contains
+bounded action-review and observed domain-expiry dates plus certificate and
+security.txt expiry dates only when the analyst explicitly selected those
+facts as case evidence pins. It excludes case notes, recipient values, and
+other evidence values. Every observed expiry date remains point-in-time
+evidence, not a current-state guarantee, release, deletion, availability, or
+acquisition forecast.
+
+When a selected Lookup includes security.txt, its disclosure-health summary
+organizes retained contact, policy, encryption, language, and expiry coverage.
+Expired, expiring, partial, and unavailable states remain distinct. The summary
+performs no reachability check and does not prove that a published contact is
+monitored, suitable, responsive, or responsible.
 
 Inside an expanded case, the response workspace keeps evidence pins, observed
 facts, analyst assertions, decisions, actions, and manual investigation steps
@@ -363,6 +455,21 @@ submits a report or treats a planned action as completed.
 The complete evidence timeline remains depth-aware. A Fast observation does
 not erase last-known Deep-only evidence, and score changes are compared only
 when their explicit model versions match.
+
+Monitor's custom-rule view includes optional reviewed static page-pattern
+packs. The packs are fixed sets of the same bounded, inspectable rule
+conditions available to an analyst. They keep generic patterns separate from
+brand-relative comparisons, explicitly label confidence as **review
+required**, and can use retained password-field, off-origin
+form-action, favicon, official-asset, urgent-language, wallet-prompt, mail, and
+availability cues. Only the boolean existence of an external form action is
+copied into compact case evidence, not its destination. Packs contribute no
+custom score and create review tags rather than maliciousness findings.
+Built-in packs pass duplicate-id and equivalent-logic lint plus benign and
+held-out fixtures. A local JSON pack must use the same bounded validator,
+allowlisted fields and operators, zero-score contract, and declarative rule
+format; it cannot execute code. Installing a pack makes a browser-local rule
+copy that can be inspected, disabled, edited, exported, or deleted.
 
 An open domain case can also turn a selected Lookup checkpoint into a reviewed
 acquisition-transition plan. Mark each fact as expected to stay the same,
@@ -469,7 +576,10 @@ Deep single Lookup can derive several views from one bounded homepage response:
 Technology indicators are evidence-backed clues, not a complete software
 inventory. The bounded catalogue uses generator metadata and tokenized live
 elements, attributes, static-asset paths, resource origins, and selected server
-headers. Static collection does not execute JavaScript, and sites can conceal
+headers. It also compares an allowlist of already-observed passive response
+headers against fixed runtime, framework, commerce, and delivery signatures;
+only the curated match and evidence class survive, not the header value.
+Static collection does not execute JavaScript, and sites can conceal
 or remove distinctive indicators. Site-builder and commerce signatures do not
 identify the host platform from a retained third-party resource origin alone;
 they require a page, generator, or additional storefront marker. Delivery
@@ -488,12 +598,16 @@ maliciousness.
 After a completed Deep Lookup, **Save current snapshot** creates one bounded
 browser-local website profile only when the analyst chooses it. The snapshot
 keeps curated technology identifiers, posture states, page-identity digests,
-source health, collection completeness, and timestamps. It excludes raw RDAP,
-WHOIS, HTTP, HTML, contact, and provider payloads. Select an earlier and later
-snapshot of the same domain to review added, removed, changed, unavailable, or
-incomparable fields. Differences are leads for review, not evidence of
-compromise, ownership, intent, or maliciousness. Saving, comparing, deleting,
-exporting, and importing snapshots make no network request.
+bounded resource hosts, tracking identifiers, external form-action origins,
+source health, collection completeness, and timestamps. It excludes form
+paths and queries, raw RDAP, WHOIS, HTTP, HTML, contact, and provider payloads.
+Select an earlier and later snapshot of the same domain to review added,
+removed, changed, unavailable, or incomparable fields. Monitor can search
+exact historical relationships and explainable weighted latest-snapshot
+relationships across domains. Differences and similarity are leads for
+review, not evidence of compromise, ownership, coordination, intent, or
+maliciousness. Saving, comparing, clustering, deleting, exporting, and
+importing snapshots make no network request.
 
 Response-policy checks use the same selected homepage response and make no
 extra request. They retain fixed finding identifiers and bounded counts rather
@@ -582,6 +696,10 @@ current browser-local case has a reviewed disposition, a typed analyst
 decision, supporting evidence pins, and explicit unresolved unknowns or
 contradictions. This checklist measures workflow structure only. It does not
 validate an analyst conclusion or make a claim about the target.
+Approval-gated steps show the same Collection preflight language used by
+Lookup and Bulk before the analyst opens the tool. Approval applies only to
+that bounded guide step. It is not general authorization for active testing or
+an assurance that every named source will succeed.
 
 The Console also offers a short in-tab undo after changing a Bulk review state,
 shortlist membership, case tags, or a temporary evidence-cluster label. The
@@ -604,6 +722,14 @@ collection. They can be exported or imported as a strict versioned JSON
 document and are included in the deliberate workspace archive. They contain
 analyst-authored workflow guidance, so review them before sharing.
 
+Monitor's **Inbox** projects one evidence-gap item per unresolved case when
+that case retains an explicit partial, failed, stale, inconclusive, or
+truncated evidence pin or an open analyst-authored unknown or contradiction.
+It does not infer facts that were never saved. A fixed 7-day aging threshold
+and 30-day stale threshold organise only the review queue; they do not assert
+that the underlying fact changed. Resolving the queue requires reviewing the
+owning case rather than treating a source failure as absence.
+
 Monitor's **Timeline** view combines a bounded projection of deliberately
 retained case snapshots, evidence pins and checkpoint facts, website-profile
 snapshots, watchlist checks, and relationship observations. Filters cover
@@ -613,15 +739,40 @@ completeness, truncation, derivation, and source state, and links back to its
 owning record. The projection does not copy raw payloads, pin values, analyst
 notes, or relationship values, and it never starts collection.
 
-The Cases view also accepts the strict WHOISleuth external-findings schema and
+The Cases view also accepts the strict WHOISleuth external-findings schema,
+fixed-column finding rows in CSV or JSON, sanitised web-capture summaries, and
 bounded STIX 2.1 or MISP event JSON. Every file is validated and previewed
-locally before a merge. STIX and MISP previews separate accepted claims,
+locally before a merge. Generic row conversion accepts only domain, category,
+summary, observation time, completeness, limitation, and reference columns.
+The capture schema accepts bounded titles, normalized HTTP(S) origins,
+technology labels, screenshot SHA-256 digests, completeness, and limitations;
+it rejects raw HTML, screenshot content, cookies, request bodies, complete
+URLs, and arbitrary fields. STIX and MISP previews separate accepted claims,
 duplicates, conflicting identifiers, and exclusions, then require an existing
 case to be selected. Merged claims become external `unknown` assertions with
 their source-file SHA-256 digest, publisher, external identifier, timestamps,
 confidence, labels, and markings. They do not become collected evidence and do
 not create cases, start collection, change scores, publish events, or enable
 correlation. See [External findings and intelligence import](external-findings-import.md).
+
+Brand Profile posture results include a local **desired-state review**. It
+organizes the selected standard, defensive-no-mail, or parked profile into
+registration, mail, transport, and certificate-policy groups while preserving
+each server-returned check status. The external-dependency review keeps
+observed and unavailable dependencies distinct. It never tests provider
+accounts or claimability and never labels a dependency dangling, abandoned,
+vulnerable, safe, or controlled by another party.
+
+The **Owned-domain baseline** editor can additionally retain analyst-authored
+expectations for nameservers, DS records, MX records, CAA policy, a reviewed
+TLS issuer or public-key digest, transfer-lock intent, and a renewal review
+date. Later posture audits label each configured field as aligned, drifted,
+unknown, unsupported, suppressed, or not configured. The analyst must
+explicitly retain an audit before it becomes the previous comparison point.
+Suppressions require a reason and can expire. Desired state and retained
+observations are included in deliberate Brand Profile, workspace, or
+single-baseline exports; they are never applied to registrar, DNS, mail, or
+certificate-provider accounts.
 
 ## Browser-local storage and archives
 

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { checkDomainAvailability } from '../lib/availability.mts';
+import type { collectDnsIntelligence } from '../lib/dns-intelligence.mts';
 import { networkFeaturePolicy } from '../lib/feature-policy.mts';
 import { recordValue, stringValue } from './value-assertions.mts';
 
@@ -108,6 +109,56 @@ test('a disabled registry source prevents otherwise successful deep evidence bei
   assert.equal(result.websiteProbeStatus, 'active');
   assert.equal(result.deepScanComplete, false);
   assert.equal(recordValue(result.tls).status, 'success');
+});
+
+test('deep DNS collection receives the bounded registry publication without another RDAP request', async () => {
+  const parsedRegistry = {
+    domain: 'EXAMPLE.COM',
+    statuses: [],
+    nameservers: ['NS1.EXAMPLE.COM'],
+    nameserverDetails: [{ name: 'NS1.EXAMPLE.COM', addresses: ['192.0.2.53'] }],
+    delegationSigned: true,
+    dsData: [{ keyTag: 1, algorithm: 13, digestType: 2, digest: 'aa' }],
+    registrar: { name: 'Example Registrar' },
+    registrant: null,
+    abuse: null,
+    events: [],
+    lifecycle: {},
+    dnssec: 'signed',
+  };
+  let dnsCalls = 0;
+  await availability('example.com', {
+    includeExtendedDnsContext: true,
+    featurePolicy: networkFeaturePolicy({
+      WHOISLEUTH_DISABLE_WHOIS: '1',
+      WHOISLEUTH_DISABLE_WEBSITE_PROBE: '1',
+      WHOISLEUTH_DISABLE_TLS_INTELLIGENCE: '1',
+    }),
+    rdapRecord: {
+      upstreamStatus: 200,
+      parsed: parsedRegistry,
+    },
+    collectDnsIntelligence: async (
+      _domain: string,
+      options: Parameters<typeof collectDnsIntelligence>[1],
+    ) => {
+      dnsCalls += 1;
+      assert.equal(options?.includeExtendedContext, true);
+      assert.equal(options?.registryEvidence, parsedRegistry);
+      return {
+        status: 'success',
+        complete: true,
+        records: { a: [], aaaa: [], cname: [], ns: ['ns1.example.com'], mx: [], spf: [], dmarc: [], caa: [] },
+        hasMx: false,
+        hasNullMx: false,
+        mxHosts: [],
+        hasSpf: false,
+        hasDmarc: false,
+      };
+    },
+  });
+
+  assert.equal(dnsCalls, 1);
 });
 
 test('enabled TLS intelligence runs once in parallel and remains explicit in deep evidence', async () => {

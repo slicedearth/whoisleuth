@@ -669,7 +669,8 @@
   .ct-history-notice{color:var(--amber);font-size:var(--text-xs)}
   @media(max-width:700px){
     .fields{grid-template-columns:1fr}
-    .modes{overflow:auto}
+    .modes{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));overflow:visible}
+    .modes button{min-width:0;padding-inline:2px;font-size:.62rem;line-height:1.2;white-space:normal}
     .profile-context{align-items:flex-start;flex-direction:column}
   }
 </style>

@@ -11,6 +11,22 @@
     type ExternalFindingsDocument,
     type ExternalIntelligencePreview,
   } from '$lib/cases';
+  import {
+    EXTERNAL_FINDING_ROWS_SCHEMA,
+    CERTIFICATE_OBSERVATION_ROWS_SCHEMA,
+    DNS_OBSERVATION_ROWS_SCHEMA,
+    DOMAIN_OBSERVATION_ROWS_SCHEMA,
+    convertExternalFindingRows,
+    convertExternalFindingsCsv,
+    convertSupportedExternalFindings,
+    type ExternalFindingConversionReport,
+  } from '$lib/analysis/external-findings-converters.ts';
+  import {
+    WEB_CAPTURE_SUMMARY_SCHEMA,
+    WEB_CAPTURE_MANIFEST_SCHEMA,
+    parseWebCaptureManifest,
+    parseWebCaptureSummary,
+  } from '$lib/analysis/web-capture-import.ts';
 
   let {
     cases,
@@ -27,6 +43,7 @@
     | Readonly<{ kind: 'intelligence'; document: ExternalIntelligencePreview }>;
 
   let preview = $state<Preview | null>(null);
+  let conversionReport = $state<ExternalFindingConversionReport | null>(null);
   let applying = $state(false);
   let targetCaseId = $state('');
   const findingsPreview = $derived(preview?.kind === 'findings' ? preview.document : null);
@@ -47,6 +64,7 @@
     const input = event.currentTarget as HTMLInputElement;
     const file = input.files?.[0];
     preview = null;
+    conversionReport = null;
     targetCaseId = '';
     if (!file) return;
     try {
@@ -54,11 +72,15 @@
         throw new Error('External intelligence imports are limited to 512 KiB.');
       }
       const bytes = await file.arrayBuffer();
-      let value: unknown;
-      try {
-        value = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
-      } catch {
-        throw new Error('The selected file is not valid UTF-8 JSON.');
+      const decoded = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+      const csv = file.name.toLowerCase().endsWith('.csv') || file.type === 'text/csv';
+      let value: unknown = null;
+      if (!csv) {
+        try {
+          value = JSON.parse(decoded);
+        } catch {
+          throw new Error('The selected file is not valid UTF-8 JSON.');
+        }
       }
       if (value && typeof value === 'object' && !Array.isArray(value) && (value as Record<string, unknown>).schema === EXTERNAL_FINDINGS_SCHEMA) {
         if (file.size > MAX_EXTERNAL_FINDINGS_IMPORT_BYTES) {
@@ -68,6 +90,73 @@
         preview = { kind: 'findings', document };
         const domainCount = new Set(document.findings.map((finding) => finding.domain)).size;
         onmessage(`Validated ${document.findings.length} local finding${document.findings.length === 1 ? '' : 's'} for ${domainCount} domain${domainCount === 1 ? '' : 's'}. Review the preview before importing.`);
+      } else if (
+        value
+        && typeof value === 'object'
+        && !Array.isArray(value)
+        && [
+          DOMAIN_OBSERVATION_ROWS_SCHEMA,
+          DNS_OBSERVATION_ROWS_SCHEMA,
+          CERTIFICATE_OBSERVATION_ROWS_SCHEMA,
+        ].includes(String((value as Record<string, unknown>).schema))
+      ) {
+        if (file.size > MAX_EXTERNAL_FINDINGS_IMPORT_BYTES) {
+          throw new Error('Converted observation imports are limited to 384 KiB.');
+        }
+        const schema = (value as Record<string, unknown>).schema;
+        const format = schema === DOMAIN_OBSERVATION_ROWS_SCHEMA
+          ? 'domain-observations-v1'
+          : schema === DNS_OBSERVATION_ROWS_SCHEMA
+            ? 'dns-observations-v1'
+            : 'certificate-observations-v1';
+        conversionReport = convertSupportedExternalFindings(value, format);
+        preview = { kind: 'findings', document: conversionReport.document };
+        onmessage(`Converted ${conversionReport.accepted} accepted ${format.replaceAll('-', ' ')} row${conversionReport.accepted === 1 ? '' : 's'}; ${conversionReport.rejected} rejected, ${conversionReport.duplicates} duplicate, truncation ${conversionReport.truncated ? 'reached' : 'not reached'}. Review before importing.`);
+      } else if (
+        csv
+        || Array.isArray(value)
+        || (
+          value
+          && typeof value === 'object'
+          && !Array.isArray(value)
+          && (value as Record<string, unknown>).schema === EXTERNAL_FINDING_ROWS_SCHEMA
+        )
+      ) {
+        if (file.size > MAX_EXTERNAL_FINDINGS_IMPORT_BYTES) {
+          throw new Error('Converted finding imports are limited to 384 KiB.');
+        }
+        const document = csv
+          ? convertExternalFindingsCsv(decoded)
+          : convertExternalFindingRows(value);
+        preview = { kind: 'findings', document };
+        const domainCount = new Set(document.findings.map((finding) => finding.domain)).size;
+        onmessage(`Converted and validated ${document.findings.length} finding${document.findings.length === 1 ? '' : 's'} for ${domainCount} domain${domainCount === 1 ? '' : 's'}. Review the normalized preview before importing.`);
+      } else if (
+        value
+        && typeof value === 'object'
+        && !Array.isArray(value)
+        && (value as Record<string, unknown>).schema === WEB_CAPTURE_MANIFEST_SCHEMA
+      ) {
+        if (file.size > MAX_EXTERNAL_FINDINGS_IMPORT_BYTES) {
+          throw new Error('Sanitised web-capture manifests are limited to 384 KiB.');
+        }
+        const document = parseWebCaptureManifest(value);
+        preview = { kind: 'findings', document };
+        const domainCount = new Set(document.findings.map((finding) => finding.domain)).size;
+        onmessage(`Validated ${document.findings.length} sanitised web-capture manifest finding${document.findings.length === 1 ? '' : 's'} for ${domainCount} domain${domainCount === 1 ? '' : 's'}. Artifact bytes were not imported. Review before importing.`);
+      } else if (
+        value
+        && typeof value === 'object'
+        && !Array.isArray(value)
+        && (value as Record<string, unknown>).schema === WEB_CAPTURE_SUMMARY_SCHEMA
+      ) {
+        if (file.size > MAX_EXTERNAL_FINDINGS_IMPORT_BYTES) {
+          throw new Error('Sanitised web-capture imports are limited to 384 KiB.');
+        }
+        const document = parseWebCaptureSummary(value);
+        preview = { kind: 'findings', document };
+        const domainCount = new Set(document.findings.map((finding) => finding.domain)).size;
+        onmessage(`Validated ${document.findings.length} sanitised web-capture finding${document.findings.length === 1 ? '' : 's'} for ${domainCount} domain${domainCount === 1 ? '' : 's'}. Review the normalized preview before importing.`);
       } else {
         const document = parseExternalIntelligenceDocument(value, await sourceDigest(bytes));
         preview = { kind: 'intelligence', document };
@@ -94,6 +183,7 @@
       }
       await oncomplete();
       preview = null;
+      conversionReport = null;
       targetCaseId = '';
     } catch (cause) {
       onmessage(cause instanceof Error ? cause.message : 'External findings could not be imported.');
@@ -106,21 +196,34 @@
 <details class="external-import card">
   <summary>Import bounded external findings</summary>
   <div class="import-body">
-    <p>Preview the strict <code>whoisleuth.external-findings</code> schema, a bounded STIX 2.1 bundle, or a bounded MISP event locally before changing a case. Imports never fetch references, run code, alter dispositions, start collection, score claims, publish events, or submit data elsewhere.</p>
-    <label class="btn file-btn">Choose JSON<input type="file" accept="application/json,.json" onchange={selectFile}></label>
+    <p>Preview the strict <code>whoisleuth.external-findings</code>, sanitised capture summary or artifact-metadata manifest, documented domain, DNS, or certificate observation rows, fixed-column CSV/JSON rows, a bounded STIX 2.1 bundle, or a bounded MISP event locally before changing a case. Imports never fetch references, accept archive contents, run code, alter dispositions, start collection, score claims, publish events, or submit data elsewhere.</p>
+    <label class="btn file-btn">Choose JSON or CSV<input type="file" accept="application/json,text/csv,.json,.csv" onchange={selectFile}></label>
     {#if findingsPreview}
       <section class="preview" aria-labelledby="external-findings-preview-title">
         <header>
           <div><p class="eyebrow">Validated findings preview</p><h3 id="external-findings-preview-title">{findingsPreview.source.name}</h3></div>
           <span>{countLabel(findingsPreview.findings.length, 'finding')} · {countLabel(domains.length, 'domain')}</span>
         </header>
+        {#if conversionReport}
+          <div class="preview-metrics" aria-label="Observation conversion summary">
+            <span><strong>{conversionReport.accepted}</strong> accepted</span>
+            <span><strong>{conversionReport.rejected}</strong> rejected</span>
+            <span><strong>{conversionReport.duplicates}</strong> duplicate</span>
+            <span><strong>{conversionReport.truncated ? 'yes' : 'no'}</strong> truncated</span>
+          </div>
+          {#if conversionReport.exclusions.length}
+            <details class="excluded"><summary>Review conversion exclusions</summary>
+              <ul>{#each conversionReport.exclusions as exclusion}<li><strong>Row {exclusion.row}</strong><p>{exclusion.reason}</p></li>{/each}</ul>
+            </details>
+          {/if}
+        {/if}
         <ul>
           {#each findingsPreview.findings.slice(0, 8) as finding}
             <li><strong>{finding.domain}</strong><span>{finding.category} · {finding.completeness}</span><p>{finding.summary}</p></li>
           {/each}
         </ul>
         {#if findingsPreview.findings.length > 8}<p class="preview-note">Showing 8 of {findingsPreview.findings.length} validated findings.</p>{/if}
-        <div class="actions"><button class="primary" type="button" onclick={() => void applyImport()} disabled={applying}>{applying ? 'Importing…' : 'Import into cases'}</button><button class="btn" type="button" onclick={() => preview = null} disabled={applying}>Cancel</button></div>
+        <div class="actions"><button class="primary" type="button" onclick={() => void applyImport()} disabled={applying}>{applying ? 'Importing…' : 'Import into cases'}</button><button class="btn" type="button" onclick={() => { preview = null; conversionReport = null; }} disabled={applying}>Cancel</button></div>
       </section>
     {:else if intelligencePreview}
       <section class="preview" aria-labelledby="external-intelligence-preview-title">

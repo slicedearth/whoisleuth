@@ -15,7 +15,7 @@ import type {
 } from './case-response-model.ts';
 
 export const CASE_EVIDENCE_CHECKPOINT_VERSION = 1;
-export const MAX_CHECKPOINT_FACTS = 20;
+export const MAX_CHECKPOINT_FACTS = 24;
 export const MAX_CHECKPOINT_LIMITATIONS = 6;
 
 export type CheckpointComparisonState =
@@ -29,7 +29,7 @@ export type CheckpointComparisonState =
 export type CheckpointFact = Readonly<{
   version: 1;
   field: string;
-  category: 'dns' | 'http' | 'network' | 'page_identity' | 'registration' | 'tls';
+  category: 'disclosure' | 'dns' | 'http' | 'network' | 'page_identity' | 'registration' | 'tls';
   label: string;
   value: string | null;
   source: string;
@@ -198,6 +198,9 @@ export function buildLookupCheckpointFacts(
   const httpObservedAt = timestamp(http.observedAt, generatedAt);
   const availability = view.availability;
   const pageState = sourceState(availability.websiteProbeStatus ?? http.status);
+  const securityTxt = record(view.securityTxt);
+  const securityTxtState = sourceState(securityTxt.state);
+  const securityTxtObservedAt = timestamp(securityTxt.observedAt, generatedAt);
 
   const specifications: Array<Omit<CheckpointFact, 'version' | 'sourceSchema'>> = [
     { field: 'registration.registrar', category: 'registration', label: 'Registrar', value: entityName(view.rdapParsed.registrar) ?? entityName(view.whoisParsed.registrar), source: 'registry RDAP or WHOIS', sourceState: registrationState, observedAt: registrationObservedAt, collectionDepth: depth, completeness: completeness(registrationState), truncated: registrationTruncated, limitations: ['Registrar publication is point-in-time registration context and does not prove present control.'] },
@@ -213,6 +216,7 @@ export function buildLookupCheckpointFacts(
     { field: 'tls.protocol', category: 'tls', label: 'TLS protocol', value: factValue(tls.protocol), source: 'TLS', sourceState: tlsState, observedAt: tlsObservedAt, collectionDepth: depth, completeness: completeness(tlsState), truncated: tls.truncated === true ? true : null, limitations: sourceLimitations(tls.limitations) },
     { field: 'tls.certificate_sha256', category: 'tls', label: 'TLS certificate SHA-256', value: factValue(tlsCertificate.fingerprintSha256), source: 'TLS', sourceState: tlsState, observedAt: tlsObservedAt, collectionDepth: depth, completeness: completeness(tlsState), truncated: tls.truncated === true ? true : null, limitations: sourceLimitations(tls.limitations) },
     { field: 'tls.issuer', category: 'tls', label: 'TLS issuer', value: entityName(tlsIssuer), source: 'TLS certificate', sourceState: tlsState, observedAt: tlsObservedAt, collectionDepth: depth, completeness: completeness(tlsState), truncated: tls.truncated === true ? true : null, limitations: sourceLimitations(tls.limitations) },
+    { field: 'tls.valid_to', category: 'tls', label: 'TLS certificate expiry', value: factValue(tlsCertificate.validTo), source: 'TLS certificate', sourceState: tlsState, observedAt: tlsObservedAt, collectionDepth: depth, completeness: completeness(tlsState), truncated: tls.truncated === true ? true : null, limitations: sourceLimitations(tls.limitations) },
     { field: 'network.selected_address', category: 'network', label: 'Observed network address', value: factValue(networkEndpoint.address), source: 'IP RDAP context', sourceState: networkState, observedAt: networkObservedAt, collectionDepth: depth, completeness: completeness(networkState), truncated: network.truncated === true ? true : null, limitations: sourceLimitations(network.limitations) },
     { field: 'network.registration', category: 'network', label: 'Observed network registration', value: factValue(networkRegistration.name ?? networkRegistration.handle), source: 'IP RDAP context', sourceState: networkState, observedAt: networkObservedAt, collectionDepth: depth, completeness: completeness(networkState), truncated: network.truncated === true ? true : null, limitations: sourceLimitations(network.limitations) },
     { field: 'network.cidrs', category: 'network', label: 'Observed network CIDRs', value: factValue(networkRegistration.cidrs), source: 'IP RDAP context', sourceState: networkState, observedAt: networkObservedAt, collectionDepth: depth, completeness: completeness(networkState), truncated: network.truncated === true ? true : null, limitations: sourceLimitations(network.limitations) },
@@ -220,6 +224,8 @@ export function buildLookupCheckpointFacts(
     { field: 'http.response_status', category: 'http', label: 'HTTP response status', value: factValue(httpResponse.status), source: 'HTTP', sourceState: httpState, observedAt: httpObservedAt, collectionDepth: depth, completeness: completeness(httpState), truncated: http.truncated === true ? true : null, limitations: sourceLimitations(http.limitations) },
     { field: 'page.title', category: 'page_identity', label: 'Page title', value: factValue(availability.pageTitle), source: 'static homepage observation', sourceState: pageState, observedAt: httpObservedAt, collectionDepth: depth, completeness: completeness(pageState), truncated: http.truncated === true ? true : null, limitations: sourceLimitations(http.limitations) },
     { field: 'page.password_field', category: 'page_identity', label: 'Password field', value: factValue(availability.hasPasswordField), source: 'static homepage observation', sourceState: pageState, observedAt: httpObservedAt, collectionDepth: depth, completeness: completeness(pageState), truncated: http.truncated === true ? true : null, limitations: ['Static HTML evidence does not execute JavaScript and may not represent the rendered page.'] },
+    { field: 'disclosure.security_txt_expires', category: 'disclosure', label: 'security.txt expiry', value: factValue(securityTxt.expiresAt), source: 'security.txt', sourceState: securityTxtState, observedAt: securityTxtObservedAt, collectionDepth: depth, completeness: completeness(securityTxtState), truncated: securityTxt.truncated === true ? true : null, limitations: sourceLimitations(securityTxt.limitations) },
+    { field: 'disclosure.security_txt_contacts', category: 'disclosure', label: 'security.txt contacts', value: factValue(securityTxt.contacts), source: 'security.txt', sourceState: securityTxtState, observedAt: securityTxtObservedAt, collectionDepth: depth, completeness: completeness(securityTxtState), truncated: securityTxt.truncated === true ? true : null, limitations: ['Publication does not prove that a contact is monitored, appropriate, responsive, or responsible.', ...sourceLimitations(securityTxt.limitations)].slice(0, MAX_CHECKPOINT_LIMITATIONS) },
   ];
 
   return specifications.map<CheckpointFact>((fact) => ({

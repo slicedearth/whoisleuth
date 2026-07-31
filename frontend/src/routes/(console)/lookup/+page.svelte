@@ -51,6 +51,7 @@
   } from '$lib/analysis/abuse-recipient-resolver.ts';
   import { compactHttpObservation } from '$lib/analysis/http-summary.ts';
   import { buildLookupEvidenceCoverageLedger } from '$lib/analysis/evidence-coverage-ledger.ts';
+  import { buildLookupSourceRefreshPlan } from '$lib/analysis/lookup-source-refresh.ts';
   import { buildLookupCheckpointFacts } from '$lib/analysis/case-evidence-checkpoint.ts';
   import { buildAnalystEvidencePivots } from '$lib/analysis/analyst-evidence-pivots.ts';
   import { calibrateExternalIntelligenceRisk } from '$lib/analysis/external-intelligence-risk.ts';
@@ -129,6 +130,8 @@
   let caseRecord=$state<CaseRecord|null>(null);let caseNote=$state('');let caseStatus=$state('');
   let evidenceDensity=$state<LookupEvidenceDensity>('standard');
   let taskView=$state<LookupTaskView>('general');
+  let serviceDependencyScope=$state('');
+  let serviceDependencyFalsePositives=$state('');
   let pageActive=false;
   const lookupRequestController=new LookupRequestController();
   const lookupCaseController=new LookupCaseController();
@@ -238,6 +241,19 @@
     tlsValidity,
     tlsDiagnostics,
   }));
+  const dnsRehearsalEvidence=$derived({
+    currentGlue:records(rec(rec(dnsEvidence.delegation).registry).nameserverDetails),
+    currentDs:records(rdapParsed.dsData),
+    currentMx:records(dnsRecords.mx),
+    currentCaa:records(dnsRecords.caa),
+    currentCriticalAddresses:[{
+      hostname:String(availability.domain||result?.registrableDomain||'').trim().toLowerCase(),
+      addresses:[
+        ...(Array.isArray(dnsRecords.a)?dnsRecords.a.map(String):[]),
+        ...(Array.isArray(dnsRecords.aaaa)?dnsRecords.aaaa.map(String):[]),
+      ],
+    }],
+  });
   const registryDisplay=$derived(buildLookupRegistryDisplay({
     result,
     rdapParsed,
@@ -262,6 +278,7 @@
     registryInsights,
     availabilityAbuse:availability.abuse,
     securityTxt,
+    networkContext:observedNetworkContext,
   }));
   const sourceOnlyCount=$derived(comparison.counts.rdap_only+comparison.counts.whois_only);
   const redactedComparisonCount=$derived(comparison.counts.rdap_redacted+comparison.counts.whois_redacted);
@@ -361,6 +378,11 @@
     domain:caseDomain,
     dnsEvidence,
     dnsRecords,
+    httpEvidence,
+    authorizedScope:serviceDependencyScope,
+    falsePositiveTargets:serviceDependencyFalsePositives,
+    pageTitle:pageIdentity.title,
+    observedAt:result?.fetchedAt,
   }));
   const evidenceCoverage=$derived(buildLookupEvidenceCoverageLedger({
     targetType:result?.type,
@@ -384,6 +406,10 @@
     whoisParsed,
     threatIntelligenceProviders,
   }));
+  const lookupSourceRefreshPlan=$derived(buildLookupSourceRefreshPlan(
+    evidenceCoverage,
+    result?.fetchedAt,
+  ));
   const lookupSummary=$derived(buildLookupSummaryModel({
     availability,
     rdapParsed,
@@ -422,6 +448,7 @@
     pageTitle:availability.pageTitle??null,
     faviconMatch:profileSignals.faviconMatch??null,faviconNearMatch:profileSignals.faviconNearMatch??null,
     reusesOfficialAssets:profileSignals.reusesOfficialAssets??null,hasPasswordField:availability.hasPasswordField??null,
+    hasExternalFormAction:availability.hasExternalFormAction??null,
     phishingLanguageMatch:availability.phishingLanguageMatch??null,
     ...compactHttpSummary,
     mutationTypes:[]
@@ -502,6 +529,7 @@
       technologyProfile,
       securityPosture,
       baseline:observedPageBaseline,
+      pageIdentity,
       technologyFindings:pageDisplay.technologyFindings,
       securityPostureFindings:pageDisplay.securityPostureFindings,
       diagnostics,
@@ -528,7 +556,7 @@
       return;
     }
 
-    loading=true;loadingElapsedMs=0;error='';result=null;caseRecord=null;caseNote='';caseStatus='';
+    loading=true;loadingElapsedMs=0;error='';result=null;caseRecord=null;caseNote='';caseStatus='';serviceDependencyScope='';serviceDependencyFalsePositives='';
     const target=entries[0];if(!target)return;
     const lookupUrl=buildLookupRequestUrl(target,{
       mode:lookupMode,
@@ -641,7 +669,12 @@
         />
       {/if}
 
-      <LookupEvidenceCoverage ledger={evidenceCoverage} />
+      <LookupEvidenceCoverage
+        ledger={evidenceCoverage}
+        refreshPlan={lookupSourceRefreshPlan}
+        query={String(result?.query || caseDomain)}
+        depth={lookupEvidenceDepth}
+      />
 
       <LookupOverviewFacts facts={[...lookupSummary.facts]} diagnostics={[...lookupSummary.diagnostics]} hasAssessment={availability.applicable!==false} />
 
@@ -686,6 +719,10 @@
           rows={networkDisplay.dnsRows}
           failureDetail={networkDisplay.dnsQueryFailures}
           truncated={Boolean(dnsEvidence.truncated)}
+          delegation={networkDisplay.dnsDelegation}
+          rehearsalEvidence={dnsRehearsalEvidence}
+          domain={caseDomain}
+          allowRehearsal={result?.type === 'domain'}
           note="Point-in-time resolver evidence. HTTPS service-binding targets, aliases, ports, and address hints are displayed as publication evidence only; WHOISleuth does not follow or connect to them. Shared DNS infrastructure does not prove common ownership or maliciousness."
         /></div>
         {#if serviceDependencyReview}
@@ -694,6 +731,8 @@
             target={caseDomain}
             technologies={pageDisplay.technologyFindings}
             libraries={pageDisplay.browserLibraries}
+            bind:authorizedScope={serviceDependencyScope}
+            bind:falsePositiveTargets={serviceDependencyFalsePositives}
           /></div>
         {/if}
       {/if}

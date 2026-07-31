@@ -15,6 +15,7 @@ export type LookupSnapshotInput = Readonly<{
   technologyProfile: JsonRecord;
   securityPosture: JsonRecord;
   baseline: PageBaseline | null;
+  pageIdentity?: JsonRecord;
   technologyFindings: readonly WebsiteSnapshotTechnology[];
   securityPostureFindings: readonly WebsiteSnapshotPosture[];
   diagnostics: JsonRecord;
@@ -30,6 +31,8 @@ export function buildLookupWebsiteSnapshot(input: LookupSnapshotInput): WebsiteP
     securityPosture,
     technologyProfile,
   } = input;
+  const pageIdentity = rec(input.pageIdentity);
+  const externalActionOrigins = rec(pageIdentity.forms).externalActionOrigins;
   return {
     id: input.id,
     domain: input.domain,
@@ -59,6 +62,15 @@ export function buildLookupWebsiteSnapshot(input: LookupSnapshotInput): WebsiteP
       resourceHosts: baseline?.resourceHosts.value ?? null,
       trackingIdentifiers: baseline?.trackingIdentifiers.value ?? null,
       faviconHash: baseline?.faviconHash ?? null,
+    },
+    identityValues: {
+      resourceHosts: baseline?.resourceHosts.values ?? [],
+      trackingIdentifiers: baseline?.trackingIdentifiers.values ?? [],
+      formActionOrigins: Array.isArray(externalActionOrigins)
+        ? externalActionOrigins
+            .filter((value): value is string => typeof value === 'string')
+            .slice(0, 20)
+        : [],
     },
     sources: SNAPSHOT_SOURCES.flatMap((source) => {
       const state = boundedTechnologyText(rec(diagnostics[source]).status, 40);

@@ -196,12 +196,38 @@ origins, rejects target-bearing or contact material, and verifies the expected
 catalogue result. The checked-in reviewed corpus starts empty, so it makes no
 claim about real-world coverage until reviewed contributions are added.
 
+Use the separate coverage gate when deciding whether the reviewed corpus is
+complete enough to support a catalogue-wide coverage claim:
+
+```bash
+npm run technology:coverage-check
+```
+
+This command intentionally fails while any catalogue signature lacks a passing,
+minimized contributor-reviewed observation. The ordinary synthetic benchmark
+continues to measure deterministic signature behavior and collision controls;
+it does not become a proxy for real-world coverage.
+
 ### Incremental Lookup qualification
 
 ```bash
 npm run lookup:transport-spike
 npm run lookup:transport-qualify
 ```
+
+After a production build, measure each public and protected route's initial
+static dependency closure:
+
+```bash
+npm run build
+npm run frontend:loading-report
+```
+
+The report uses only local build artifacts. It fails if the browser-local
+workspace chunk enters a public route and reports gzip estimates rather than
+claiming measured network timings. A large protected chunk is not, by itself,
+a reason to split the storage boundary; authenticated runtime measurements are
+still required before changing that architecture.
 
 Both commands are offline. The qualification report exercises protocol
 chunking, buffering detection, slow-consumer handling, authentication expiry,
@@ -210,6 +236,22 @@ equivalence. A clean report is necessary but not sufficient for production.
 Each authenticated staging adapter and its real proxy or CDN must pass the same
 gates before that adapter can be marked qualified. Express and Netlify remain
 disabled and use the ordinary buffered response.
+
+After staged adapter runs have produced redacted evidence summaries for the
+same build, verify them offline with:
+
+```bash
+npm run lookup:staging-evidence -- express.json netlify.json
+```
+
+The strict evidence contract requires fresh desktop and mobile measurements
+through both direct and production-proxy paths, progressive event timing,
+collector-visible cancellation, safe response headers, authentication-expiry
+handling, duplicate and timeout rejection, ordinary fallback success, and
+final-envelope equivalence. Extra fields are rejected so targets, queries,
+credentials, responses, and partial events cannot enter the summary. A passing
+report records staging qualification only; it does not enable either adapter
+or change the production deployment.
 
 ### First-use analyst study
 

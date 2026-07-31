@@ -67,6 +67,46 @@ Additional properties, unsupported categories or completeness states, invalid
 domains or dates, control characters, empty findings, and future schema
 versions reject the whole document.
 
+## Documented observation-row converters
+
+Three neutral version-1 row formats can be converted locally into the strict
+findings schema. Each root uses `schemaVersion: 1`, an optional bounded
+`source.name`, and an `observations` array:
+
+| Schema | Required row fields | Result |
+| --- | --- | --- |
+| `whoisleuth.domain-observation-rows` | `domain`, `source`, `status`, `observedAt` | Registration-category finding |
+| `whoisleuth.dns-observation-rows` | `domain`, supported `type`, `value`, `observedAt` | DNS-category finding |
+| `whoisleuth.certificate-observation-rows` | `domain`, 64-character `fingerprintSha256`, `observedAt` | Certificate-category finding |
+
+Rows can additionally supply a supported `completeness` state and a bounded
+`reference`. Certificate rows can include a bounded issuer and `notAfter`
+timestamp. Supported DNS types are A, AAAA, CAA, CNAME, DS, MX, NS, SOA, SVCB,
+HTTPS, and TXT. Conversion inspects at most 400 rows, retains at most 100
+strict findings, and reports accepted, rejected, duplicate, and truncated
+counts before import. Exclusions identify only the row number and a fixed
+reason, not rejected values. The converter does not autodetect arbitrary
+third-party files, fetch records, or treat imported values as independently
+verified observations.
+
+## Sanitised capture artifact manifest
+
+`whoisleuth.web-capture-manifest` version 1 imports reviewed metadata for a
+sanitised screenshot and optional DOM digest without importing either
+artifact's bytes. Each capture declares a domain, capture time, completeness,
+optional page title and final HTTP(S) origin, up to 30 request domains, up to 20
+technology labels, limitations, and one or two artifact metadata records.
+
+A screenshot record contains a plain file name, PNG, JPEG, or WebP MIME type,
+SHA-256 digest, declared byte size up to 10 MiB, and dimensions up to
+10,000 by 10,000. A DOM-digest record contains a plain file name,
+`application/json` MIME type, SHA-256 digest, and declared byte size up to
+1 MiB. The importer does not read or verify referenced files. It rejects
+embedded bytes, archive or decompression fields, path separators, parent-path
+names, URL credentials, paths, queries, fragments, duplicate artifact kinds,
+unsupported MIME types, and arbitrary fields. The resulting case finding says
+that the metadata was imported and unverified.
+
 ## Bounds and merge behavior
 
 - Maximum file size: 384 KiB.

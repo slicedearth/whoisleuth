@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { buildBulkCollectionPreflight } from '$lib/analysis/collection-preflight.ts';
+  import CollectionPreflight from '$lib/components/CollectionPreflight.svelte';
   import type {
     BulkPacing,
     BulkPacingOption,
@@ -63,6 +65,13 @@
     total: number;
     status: string;
   } = $props();
+  const preflight = $derived(buildBulkCollectionPreflight({
+    mode,
+    targetCount: entryCount,
+    concurrency,
+    pacingLabel: pacingOptions.find((option) => option.id === pacing)?.detail ?? 'Bounded request pacing',
+    disabledSourceIds: scanLimitations.map((item) => item.replaceAll(' ', '_')),
+  }));
 </script>
 
 <section class="queue card">
@@ -80,6 +89,7 @@
     {#if running}<button class="btn" onclick={togglePause}>{paused ? 'Resume' : 'Pause'}</button><button class="btn danger" onclick={cancel}>Cancel</button>{/if}
   </div>
   <p class="mode-help">{mode === 'deep' ? 'Bulk Deep collects compact WHOIS, DNS, website, TLS, and mail signals for triage. Open a domain in Lookup for the complete source-level evidence and optional enrichments.' : 'Fast keeps the lower-request registration-first contract and omits WHOIS, website, TLS, and deep enrichment.'} {pacingOptions.find((option) => option.id === pacing)?.detail ?? 'Bounded request pacing'}; at most {concurrency} {concurrency === 1 ? 'lookup runs' : 'lookups run'} in parallel.</p>
+  <CollectionPreflight {preflight} />
   {#if running || total}<div class="progress" role="progressbar" aria-label="Bulk scan progress" aria-valuemin="0" aria-valuemax={total} aria-valuenow={completed}><span style:width={`${total ? completed / total * 100 : 0}%`}></span></div>{/if}
   {#if running || total}<p class="progress-detail">{progress.completed} of {progress.total} settled · {progress.percent}% · {progress.label}</p>{/if}
   {#if running || total}

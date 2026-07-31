@@ -230,6 +230,7 @@ export async function buildIncrementalLookupQualificationReport() {
       'Reject an adapter if the first event is buffered until the final event, cancellation does not reach the collector, or the final envelope differs from ordinary Lookup.',
       'Require no-store, nosniff, uncompressed responses without a fixed content length and measure first-event latency plus an intentional server-side event gap rather than relying on Fetch chunk boundaries.',
       'Keep the ordinary non-streaming Lookup path as a fallback until desktop and mobile staging runs are clean.',
+      'Verify fresh same-build Express and Netlify evidence with lookup:staging-evidence; a passing summary does not enable a route.',
     ]),
   });
 }

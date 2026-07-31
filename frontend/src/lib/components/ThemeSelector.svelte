@@ -142,7 +142,7 @@
 {#if storageWarning}<span class="sr-only" role="status">{storageWarning}</span>{/if}
 
 <style>
-  .theme-selector{--theme-trigger-width:104px;display:flex;width:var(--theme-trigger-width);min-width:0;align-items:center;color:var(--muted);font:700 var(--text-2xs) var(--mono);white-space:nowrap}
+  .theme-selector{--theme-trigger-width:104px;display:flex;flex:0 0 var(--theme-trigger-width);width:var(--theme-trigger-width);min-width:0;align-items:center;color:var(--muted);font:700 var(--text-2xs) var(--mono);white-space:nowrap}
   .theme-control{position:relative;width:100%;min-width:0}
   .theme-selector .theme-trigger{display:inline-flex;width:100%;min-width:0;height:30px;align-items:center;justify-content:space-between;gap:8px;padding:0 9px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel);color:var(--text);font-family:var(--mono);font-size:inherit;font-weight:700;line-height:1}
   .theme-trigger:hover,.theme-trigger:focus-visible{border-color:var(--accent);background:var(--panel)}
@@ -158,9 +158,12 @@
     .theme-selector{--theme-trigger-width:88px}
     .theme-selector .theme-trigger{gap:5px;padding-inline:6px}
   }
-  @media(max-width:360px){
-    .theme-selector{--theme-trigger-width:72px}
+  @media(max-width:400px){
+    .theme-selector{--theme-trigger-width:70px}
     .theme-selector .theme-trigger{gap:3px;padding-inline:3px}
     .theme-symbol{width:16px;height:16px}
+  }
+  @media(max-width:360px){
+    .theme-selector{--theme-trigger-width:68px}
   }
 </style>

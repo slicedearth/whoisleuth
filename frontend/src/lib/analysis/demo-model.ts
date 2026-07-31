@@ -214,6 +214,7 @@ function frozenCandidate(value: SyntheticCandidateInput): SyntheticDemoCandidate
     faviconNearMatch: false,
     reusesOfficialAssets: false,
     hasPasswordField: value.id === 'credential-lure',
+    hasExternalFormAction: value.id === 'credential-lure',
     phishingLanguageMatch: value.id === 'credential-lure' ? 'Sign in to continue' : null,
     mutationTypes: [value.mutation],
   };
@@ -463,9 +464,9 @@ export function syntheticDemoLookupView(id: string) {
     registry: {
       comparisonSummary: conclusive ? 'Synthetic RDAP and WHOIS fields are equivalent' : 'Synthetic comparison unavailable',
       comparisonRows: conclusive ? [
-        { label: 'Registrar', rdapValue: registry.registrar, whoisValue: registry.registrar, status: 'equivalent', assessment: 'Equivalent', tone: 'good' },
-        { label: 'Created', rdapValue: registry.registeredAt, whoisValue: registry.registeredAt, status: 'equivalent', assessment: 'Equivalent', tone: 'good' },
-        { label: 'Nameservers', rdapValue: dns.nameservers.join(', '), whoisValue: dns.nameservers.join(', '), status: 'equivalent', assessment: 'Equivalent', tone: 'good' },
+        { label: 'Registrar', rdapValue: registry.registrar, whoisValue: registry.registrar, status: 'equivalent', rdapMatrixState: 'equal', whoisMatrixState: 'equal', assessment: 'Equivalent', tone: 'good' },
+        { label: 'Created', rdapValue: registry.registeredAt, whoisValue: registry.registeredAt, status: 'equivalent', rdapMatrixState: 'equal', whoisMatrixState: 'equal', assessment: 'Equivalent', tone: 'good' },
+        { label: 'Nameservers', rdapValue: dns.nameservers.join(', '), whoisValue: dns.nameservers.join(', '), status: 'equivalent', rdapMatrixState: 'equal', whoisMatrixState: 'equal', assessment: 'Equivalent', tone: 'good' },
       ] : [],
       comparisonHasConflicts: false,
       rdapError: conclusive ? '' : 'The synthetic registry fixture is inconclusive; no absence finding is inferred.',
@@ -573,6 +574,26 @@ export function syntheticDemoLookupView(id: string) {
       ],
       failureDetail: conclusive ? '' : 'the synthetic DNS collection was not evaluated',
       truncated: false,
+      delegation: conclusive ? {
+        status: 'Success',
+        complete: true,
+        detail: 'The bounded synthetic delegation-health collection completed.',
+        parentNameservers: dns.nameservers,
+        registryNameservers: dns.nameservers,
+        findings: [
+          { id: 'parent_registry_ns', label: 'Parent and registry nameservers', state: 'healthy', summary: 'Parent view and registry publication agree', detail: 'The fixed nameserver sets are equivalent.', remediation: '' },
+          { id: 'authority_reachability', label: 'Direct nameserver reachability', state: 'healthy', summary: 'Selected nameservers answered direct NS and SOA queries', detail: 'Synthetic fixture only; no DNS query occurred.', remediation: '' },
+        ],
+        authorities: dns.nameservers.slice(0, 2).map((nameserver) => ({
+          nameserver,
+          state: 'success',
+          addressSource: 'Registry glue',
+          addresses: ['192.0.2.53'],
+          nameservers: dns.nameservers,
+          soaPrimary: dns.nameservers[0] || '',
+        })),
+        limitations: ['Synthetic delegation evidence demonstrates the layout only and is not a live DNS-health finding.'],
+      } : null,
     },
     http: {
       status: /inconclusive/i.test(website.status) ? 'Partial' : 'Success',

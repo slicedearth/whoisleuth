@@ -39,6 +39,7 @@ function profile(overrides = {}) {
     retiredDkimSelectors: [],
     mailProtectionProfile: 'standard',
     protectionAttestations: [],
+    desiredPostureBaselines: [],
     trademarkOwner: '',
     trademarkRegistration: '',
     officialFaviconHash: '',
@@ -113,6 +114,56 @@ test('normalizes defensive mail profiles, retired selectors, and expiring analys
     note: 'Reviewed with owner.',
   }]);
   assert.deepEqual(normalizeProtectionAttestations([{ control: 'registry_lock', state: 'future', assertedAt: NOW }]), []);
+});
+
+test('normalizes bounded desired posture baselines and retained observations', () => {
+  const result = normalizeBrandProfile(profile({
+    desiredPostureBaselines: [{
+      version: 1,
+      domain: 'EXAMPLE.INVALID.',
+      nameservers: ['NS2.EXAMPLE.INVALID.', 'ns1.example.invalid', 'ns1.example.invalid'],
+      ds: ['12345 13 2 abcdef'],
+      mx: ['10 mail.example.invalid'],
+      caa: ['0 issue "ca.invalid"'],
+      tlsIssuer: 'Reviewed issuer',
+      tlsSpkiSha256: 'A'.repeat(64),
+      registrarLock: 'required',
+      renewalReviewAt: '2026-12-01',
+      suppressions: [
+        { field: 'mx', reason: 'Reviewed transition.', expiresAt: '2026-10-01' },
+        { field: 'future', reason: 'Discard me.' },
+      ],
+      note: 'Reviewed with the domain owner.',
+      previousObservation: {
+        observedAt: NOW,
+        checks: [
+          { id: 'mx', status: 'pass', records: ['10 mail.example.invalid'] },
+          { id: 'mx', status: 'danger', records: [] },
+          { id: 'future', status: 'invalid', records: [] },
+        ],
+      },
+      updatedAt: NOW,
+    }, {
+      version: 1,
+      domain: 'not-official.invalid',
+    }],
+  }));
+  assert.ok(result);
+  assert.equal(result.desiredPostureBaselines.length, 1);
+  const baseline = requiredValue(result.desiredPostureBaselines[0]);
+  assert.equal(baseline.domain, 'example.invalid');
+  assert.deepEqual(baseline.nameservers, ['ns1.example.invalid', 'ns2.example.invalid']);
+  assert.equal(baseline.tlsSpkiSha256, 'a'.repeat(64));
+  assert.deepEqual(baseline.suppressions, [{
+    field: 'mx',
+    reason: 'Reviewed transition.',
+    expiresAt: '2026-10-01T00:00:00.000Z',
+  }]);
+  assert.deepEqual(baseline.previousObservation?.checks, [{
+    id: 'mx',
+    status: 'pass',
+    records: ['10 mail.example.invalid'],
+  }]);
 });
 
 test('bounds attacker-controlled list input before searching for usable values', () => {
@@ -229,8 +280,8 @@ test('imports reject unrelated and future schemas', () => {
   assert.throws(() => mergeBrandProfiles([], {}), /not a WHOISleuth Brand Profile export/i);
   assert.throws(() => mergeBrandProfiles([], [profile()]), /not a WHOISleuth Brand Profile export/i);
   assert.throws(() => mergeBrandProfiles([], { schema: 'whoisleuth.cases', version: 2, profiles: [] }), /not a WHOISleuth Brand Profile export/);
-  assert.throws(() => mergeBrandProfiles([], { schema: 'whoisleuth.brand-profiles', version: 1, profiles: [] }), /using schema 2 or 3/);
-  assert.throws(() => mergeBrandProfiles([], { schema: 'whoisleuth.brand-profiles', version: 4, profiles: [] }), /newer schema 4/);
+  assert.throws(() => mergeBrandProfiles([], { schema: 'whoisleuth.brand-profiles', version: 1, profiles: [] }), /using schema 2, 3, or 4/);
+  assert.throws(() => mergeBrandProfiles([], { schema: 'whoisleuth.brand-profiles', version: BRAND_PROFILE_SCHEMA_VERSION + 1, profiles: [] }), /newer schema 5/);
 });
 
 test('serialized stores stay within a dedicated UTF-8 byte budget', () => {

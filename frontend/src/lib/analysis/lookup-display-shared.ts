@@ -22,6 +22,8 @@ export type SourceStatus = {
 export type ComparisonField = {
   label: string;
   status: string;
+  rdapState?: string;
+  whoisState?: string;
   rdapDisplay: string;
   whoisDisplay: string;
 };
@@ -29,6 +31,8 @@ export type ComparisonField = {
 export type RdapPublicationField = {
   label: string;
   status: string;
+  registryState?: string;
+  registrarState?: string;
   registryDisplay: string;
   registrarDisplay: string;
 };

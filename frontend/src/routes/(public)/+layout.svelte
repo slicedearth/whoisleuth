@@ -80,7 +80,7 @@
   .public-header nav a,.public-header nav button{display:inline-flex;position:static;width:auto;height:var(--public-nav-control-h);min-height:var(--public-nav-control-h);align-items:center;justify-content:center;margin:0;padding:0 11px;border:1px solid transparent;border-radius:var(--radius-sm);color:var(--muted);background:transparent;font:700 var(--text-xs) var(--mono);white-space:nowrap}
   .public-header nav :global(.theme-selector){height:var(--public-nav-control-h);margin:0 5px;font-size:var(--text-xs)}
   .public-header nav :global(.theme-control),.public-header nav :global(.theme-trigger){height:100%}
-  .public-header nav :global(.theme-trigger){min-height:100%;font-size:var(--text-xs)}
+  .public-header nav :global(.theme-trigger){min-height:100%;font-size:inherit}
   .public-header nav a::before{content:none}
   .public-header nav a:hover,.public-header nav a.active,.public-header nav button:hover{border-color:var(--border);color:var(--text);background:rgb(var(--accent-rgb) / .07)}
   .public-header nav a.console-link{border-color:color-mix(in srgb,var(--accent) 45%,var(--border));color:var(--accent)}
@@ -97,7 +97,7 @@
     .public-brand .brand-copy{display:block}
     .public-brand strong{font-size:.78rem}
     .public-brand small{display:none}
-    .public-header nav{--public-nav-control-h:32px;width:auto;min-width:0;flex:1 1 auto;flex-wrap:nowrap;justify-content:flex-end;gap:2px;padding:0}
+    .public-header nav{--public-nav-control-h:32px;width:auto;min-width:0;flex:1 1 auto;flex-wrap:nowrap;justify-content:flex-end;gap:6px;padding:0}
     .public-header nav a,.public-header nav button{display:inline-flex;flex:0 0 auto;align-items:center;justify-content:center;padding:0 6px;font-size:.68rem}
     .public-header nav .overview-link{display:none}
     .public-header nav :global(.theme-selector){margin:0;font-size:.68rem}
@@ -105,13 +105,20 @@
     .console-label-short{display:inline}
     .public-content{padding-top:38px}
   }
-  @media(max-width:360px){
+  @media(max-width:400px){
     .public-shell{padding-inline:8px}
     .public-header{gap:4px}
     .public-brand{gap:4px}
     .public-brand .mark{width:24px;height:24px}
     .public-brand strong{font-size:.68rem}
-    .public-header nav a,.public-header nav button{padding-inline:3px;font-size:.6rem}
-    .public-header nav :global(.theme-selector){font-size:.6rem}
+    .public-header nav{gap:8px}
+    .public-header nav a,.public-header nav button{padding-inline:3px;font-size:.625rem;line-height:1}
+    .public-header nav :global(.theme-selector){font-size:.625rem;line-height:1}
+  }
+  @media(max-width:360px){
+    .public-header nav a,.public-header nav button{padding-inline:2px}
+  }
+  @media(max-width:330px){
+    .public-header nav > a[href="/demo"]{display:none}
   }
 </style>

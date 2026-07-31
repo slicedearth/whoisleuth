@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { buildDisclosurePolicyHealth } from '$lib/analysis/disclosure-policy-health.ts';
   let {
     state = 'unavailable',
     detail = '',
@@ -26,6 +27,14 @@
   } = $props();
 
   const stateLabel = $derived(state.replaceAll('_', ' ').replace(/^./u, (value) => value.toUpperCase()));
+  const health = $derived(buildDisclosurePolicyHealth({
+    state,
+    expiresAt,
+    contacts,
+    policies,
+    encryption,
+    languages,
+  }));
 </script>
 
 <details class="security-txt evidence-card card">
@@ -41,6 +50,11 @@
       <div><dt>Observed</dt><dd>{observedAt ? new Date(observedAt).toLocaleString() : '—'}</dd></div>
       <div><dt>Expires</dt><dd>{expiresAt ? new Date(expiresAt).toLocaleString() : '—'}</dd></div>
     </dl>
+    <section class="health" aria-label="Disclosure policy health">
+      <div><strong>{health.state}</strong><span>{health.expiryDays === null ? 'Expiry unavailable' : `${health.expiryDays} days to expiry`}</span></div>
+      <p>{health.coverage.contacts} contact · {health.coverage.policies} policy · {health.coverage.encryption} encryption reference · {health.coverage.languages} language</p>
+      {#if health.review.length}<ul>{#each health.review as item}<li>{item}</li>{/each}</ul>{/if}
+    </section>
 
     {#if contacts.length}
       <section aria-labelledby="security-txt-contacts"><h5 id="security-txt-contacts">Published contacts</h5><ul>{#each contacts as value}<li><code>{value}</code></li>{/each}</ul></section>
@@ -74,6 +88,9 @@
   dt{color:var(--muted);font:700 var(--text-2xs) var(--mono);text-transform:uppercase}
   dd{margin:4px 0 0;overflow-wrap:anywhere;font:var(--text-xs) var(--mono)}
   section{margin-top:16px}
+  .health{padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
+  .health>div{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px}.health>div strong{color:var(--accent2);text-transform:capitalize}.health>div span,.health p,.health li{color:var(--muted);font-size:var(--text-2xs)}
+  .health p{margin:7px 0 0}.health ul{margin-top:8px}
   h5{margin:0 0 7px;font:700 var(--text-xs) var(--mono)}
   ul{display:grid;gap:6px;margin:0;padding-left:20px}
   li,code{min-width:0;overflow-wrap:anywhere;word-break:break-word}

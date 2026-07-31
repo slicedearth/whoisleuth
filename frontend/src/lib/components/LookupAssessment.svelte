@@ -33,8 +33,7 @@
 {#snippet FactorChart(score: NonNullable<ScoreExplanation>, label: string)}
   {@const chart = projectScoreFactors(score.factors)}
   {#if chart.factors.length}
-    <!-- svelte-ignore a11y_no_noninteractive_tabindex -- scrollable contribution chart must be keyboard reachable -->
-    <div class="factor-chart" role="img" tabindex="0" aria-label={`${label} score contribution chart with ${chart.factors.length} non-zero factors`}>
+    <div class="factor-chart" role="img" aria-label={`${label} score contribution chart with ${chart.factors.length} non-zero factors`}>
       <svg viewBox={`0 0 ${chart.width} ${chart.height}`} aria-hidden="true">
         <line x1={chart.zeroX} x2={chart.zeroX} y1="8" y2={chart.height - 8} class="zero-line" />
         {#each chart.factors as factor}
@@ -121,11 +120,10 @@
   .score.warn b{background:var(--amber)}
   .signals{display:flex;flex-wrap:wrap;gap:6px;margin-top:14px}
   .signals .chip{white-space:normal}
-  .score-details{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
-  .score-details details{margin-top:0}
-  .factor-chart{max-width:100%;margin:10px 12px 0;overflow-x:auto;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised);overscroll-behavior-x:contain}
-  .factor-chart:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
-  .factor-chart svg{display:block;width:100%;min-width:620px;height:auto}
+  .score-details{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;min-width:0;margin-top:12px}
+  .score-details details{min-width:0;margin-top:0;overflow:hidden}
+  .factor-chart{width:calc(100% - 24px);min-width:0;margin:10px 12px 0;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
+  .factor-chart svg{display:block;width:100%;min-width:0;height:auto}
   .zero-line{stroke:var(--border-strong);stroke-width:1.5}
   .factor text{fill:var(--muted);font-family:var(--mono);font-size:9px}
   .factor rect{fill:rgb(var(--violet-rgb) / .22);stroke:var(--violet)}
@@ -140,8 +138,9 @@
     .scores{margin-top:12px}
   }
   @media(max-width:650px){
-    .score-details{grid-template-columns:1fr}
+    .score-details{grid-template-columns:minmax(0,1fr)}
     .scores{display:grid;grid-template-columns:1fr 1fr}
     .score{width:auto}
+    .factor-chart{display:none}
   }
 </style>

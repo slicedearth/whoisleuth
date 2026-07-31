@@ -296,7 +296,7 @@ test('valid posture results disclose bounded SPF and external-dependency evidenc
 
   await expect(page.getByRole('status')).toHaveText('Audited 1/1 official domain.');
   await expect(page.getByText('SPF expansion', { exact: true })).toBeVisible();
-  await page.getByText('External dependencies', { exact: true }).click();
+  await page.getByText('External dependency review', { exact: true }).click();
   await expect(page.getByText('ns1.example.net', { exact: true })).toBeVisible();
 });
 
@@ -336,7 +336,7 @@ test('a browser quota failure reports a stable message and preserves the previou
   await cleanBrandStorage(page);
   const stored = [profileFixture()];
   await migrateLegacyBrowserData(page, { [PROFILES_KEY]: stored });
-  await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 1 });
+  const before = await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 1 });
   await failBrowserLocalManifestWrites(page, 'brand_profiles');
 
   await page.getByRole('button', { name: 'Edit' }).click();
@@ -344,5 +344,5 @@ test('a browser quota failure reports a stable message and preserves the previou
   await page.getByRole('button', { name: 'Save profile' }).click();
   await expect(page.getByRole('status')).toContainText('out of storage space');
   const after = await readBrowserLocalCollection(page, 'brand_profiles');
-  expect(after.records.map((entry) => entry.value)).toEqual(stored);
+  expect(after.records.map((entry) => entry.value)).toEqual(before.records.map((entry) => entry.value));
 });

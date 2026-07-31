@@ -38,6 +38,7 @@ test('builds the compact lookup snapshot behind a typed behavior-neutral facade'
     technologyProfile: { complete: true, truncated: false },
     securityPosture: { complete: true, truncated: false },
     baseline,
+    pageIdentity: { forms: { externalActionOrigins: ['https://forms.snapshot.example'] } },
     technologyFindings: [{ id: 'framework', name: 'Framework', category: 'framework', confidence: 'high' }],
     securityPostureFindings: [{ id: 'transport', state: 'observed' }],
     diagnostics: {
@@ -50,6 +51,11 @@ test('builds the compact lookup snapshot behind a typed behavior-neutral facade'
   assert.equal(snapshot.complete, true);
   assert.equal(snapshot.truncated, false);
   assert.equal(snapshot.identity.normalizedHtml, DIGEST);
+  assert.deepEqual(snapshot.identityValues, {
+    resourceHosts: ['assets.snapshot.example'],
+    trackingIdentifiers: [],
+    formActionOrigins: ['https://forms.snapshot.example'],
+  });
   assert.deepEqual(snapshot.sources, [
     { source: 'rdap', state: 'success' },
     { source: 'whois', state: 'partial' },

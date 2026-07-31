@@ -12,6 +12,8 @@
     rdapValue: string;
     whoisValue: string;
     status: string;
+    rdapMatrixState: string;
+    whoisMatrixState: string;
     assessment: string;
     tone: string;
   };
@@ -20,6 +22,8 @@
     registryValue: string;
     registrarValue: string;
     status: string;
+    registryMatrixState: string;
+    registrarMatrixState: string;
     assessment: string;
     tone: string;
   };
@@ -113,15 +117,15 @@
     for (const row of comparisonRows) {
       const current = rowFor(row.label);
       current.cells.push(
-        { column: 'Registry RDAP', state: row.status, detail: row.rdapValue },
-        { column: 'WHOIS', state: row.status, detail: row.whoisValue },
+        { column: 'Registry RDAP', state: row.rdapMatrixState, detail: row.rdapValue },
+        { column: 'WHOIS', state: row.whoisMatrixState, detail: row.whoisValue },
       );
     }
     for (const row of registrar.comparisonRows ?? []) {
       const current = rowFor(row.label);
       current.cells.push(
-        { column: 'Registry RDAP', state: row.status, detail: row.registryValue },
-        { column: 'Registrar RDAP', state: row.status, detail: row.registrarValue },
+        { column: 'Registry RDAP', state: row.registryMatrixState, detail: row.registryValue },
+        { column: 'Registrar RDAP', state: row.registrarMatrixState, detail: row.registrarValue },
       );
     }
     return projectEvidenceMatrix(columns, [...rows.values()]);
@@ -161,6 +165,7 @@
     if (state === 'different' || state === 'partial') return '≠';
     if (state === 'conflict') return '!';
     if (state === 'observed') return '•';
+    if (state === 'unavailable') return '×';
     return '?';
   };
 </script>
@@ -257,6 +262,8 @@
       <li class="state-equal"><span>=</span>Equivalent</li>
       <li class="state-different"><span>≠</span>Different</li>
       <li class="state-conflict"><span>!</span>Conflict</li>
+      <li class="state-observed"><span>•</span>Observed</li>
+      <li class="state-unavailable"><span>×</span>Unavailable</li>
       <li class="state-not_collected"><span>?</span>Not collected</li>
     </ul>
   </section>
@@ -310,7 +317,7 @@
 {#if comparisonRows.length}
   <details class="comparison card" open={comparisonHasConflicts}>
     <summary>{comparisonSummary}</summary>
-    <div class="table-wrap"><table><thead><tr><th>Field</th><th>RDAP</th><th>WHOIS</th><th>Assessment</th></tr></thead><tbody>{#each comparisonRows as row}<tr class:conflict={row.status === 'conflict'}><th scope="row">{row.label}</th><td>{row.rdapValue}</td><td>{row.whoisValue}</td><td><span class={`chip ${row.tone}`}>{row.assessment}</span></td></tr>{/each}</tbody></table></div>
+    <div class="table-wrap"><table><thead><tr><th>Field</th><th>RDAP</th><th>WHOIS</th><th>Assessment</th></tr></thead><tbody>{#each comparisonRows as row}<tr class:conflict={row.status === 'conflict'}><th scope="row" data-label="Field">{row.label}</th><td data-label="Registry RDAP">{row.rdapValue}</td><td data-label="WHOIS">{row.whoisValue}</td><td data-label="Assessment"><span class={`chip ${row.tone}`}>{row.assessment}</span></td></tr>{/each}</tbody></table></div>
   </details>
 {/if}
 
@@ -355,7 +362,7 @@
         <section class="publication-comparison" aria-labelledby="registrar-publication-comparison-title">
           <h4 id="registrar-publication-comparison-title">{registrar.comparisonSummary}</h4>
           <p>These remain separate publications. A difference can reflect update timing or disclosure policy and does not by itself establish that either source is incorrect.</p>
-          <div class="table-wrap"><table><thead><tr><th>Field</th><th>Registry RDAP</th><th>Registrar RDAP</th><th>Assessment</th></tr></thead><tbody>{#each registrar.comparisonRows || [] as row}<tr class:conflict={row.status === 'conflict'}><th scope="row">{row.label}</th><td>{row.registryValue}</td><td>{row.registrarValue}</td><td><span class={`chip ${row.tone}`}>{row.assessment}</span></td></tr>{/each}</tbody></table></div>
+          <div class="table-wrap"><table><thead><tr><th>Field</th><th>Registry RDAP</th><th>Registrar RDAP</th><th>Assessment</th></tr></thead><tbody>{#each registrar.comparisonRows || [] as row}<tr class:conflict={row.status === 'conflict'}><th scope="row" data-label="Field">{row.label}</th><td data-label="Registry RDAP">{row.registryValue}</td><td data-label="Registrar RDAP">{row.registrarValue}</td><td data-label="Assessment"><span class={`chip ${row.tone}`}>{row.assessment}</span></td></tr>{/each}</tbody></table></div>
         </section>
       {/if}
       <RdapDomainSource parsed={registrar.parsed} source="Registrar" />
@@ -477,6 +484,16 @@
     .matrix-mobile .state-conflict .mobile-agreement-marker{border-color:var(--danger);color:var(--danger);background:rgb(var(--danger-rgb) / .13);clip-path:polygon(25% 0,75% 0,100% 25%,100% 75%,75% 100%,25% 100%,0 75%,0 25%)}
     .matrix-mobile .state-observed .mobile-agreement-marker{border-color:var(--accent);border-radius:3px;color:var(--accent);background:rgb(var(--accent-rgb) / .14)}
     .matrix-mobile .state-not_collected .mobile-agreement-marker,.matrix-mobile .state-unavailable .mobile-agreement-marker,.matrix-mobile .state-unknown .mobile-agreement-marker{border-style:dashed}
+    .comparison .table-wrap,.publication-comparison .table-wrap{overflow:visible;border-top:0}
+    .comparison table,.comparison tbody,.comparison tr,.comparison th[scope='row'],.comparison td,.publication-comparison table,.publication-comparison tbody,.publication-comparison tr,.publication-comparison th[scope='row'],.publication-comparison td{display:block;width:100%}
+    .comparison thead,.publication-comparison thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+    .comparison tbody,.publication-comparison tbody{display:grid;gap:8px;padding:0 var(--card-pad) var(--card-pad)}
+    .publication-comparison tbody{padding:10px}
+    .comparison tr,.publication-comparison tr{overflow:hidden;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}
+    .comparison th[scope='row'],.comparison td,.publication-comparison th[scope='row'],.publication-comparison td{display:grid;grid-template-columns:minmax(88px,108px) minmax(0,1fr);gap:8px;min-width:0;padding:8px 9px;border-top:1px solid var(--border);overflow-wrap:anywhere}
+    .comparison th[scope='row'],.publication-comparison th[scope='row']{border-top:0;color:var(--text);font-size:var(--text-xs);text-align:left}
+    .comparison th[scope='row']::before,.comparison td::before,.publication-comparison th[scope='row']::before,.publication-comparison td::before{content:attr(data-label);color:var(--muted);font:650 var(--text-2xs) var(--mono);text-transform:uppercase}
+    .comparison td>*,.publication-comparison td>*{grid-column:2;min-width:0}
     dl{grid-template-columns:1fr;gap:4px}
     dt:not(:first-child){margin-top:7px}
   }

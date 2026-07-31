@@ -82,6 +82,7 @@ export const RULE_FIELD_DEFINITIONS: readonly RuleFieldDefinition[] = Object.fre
   { value: 'faviconNearMatch', label: 'Similar favicon', kind: 'boolean' },
   { value: 'reusesOfficialAssets', label: 'Official assets reused', kind: 'boolean' },
   { value: 'phishingLanguageMatch', label: 'Phishing-language signal', kind: 'text' },
+  { value: 'hasExternalFormAction', label: 'External form action observed', kind: 'boolean' },
   { value: 'mutationTypes', label: 'Mutation type', kind: 'list' },
   { value: 'nameservers', label: 'Nameserver', kind: 'list' },
   { value: 'httpSecurityHeaders', label: 'HTTP security header', kind: 'list' },

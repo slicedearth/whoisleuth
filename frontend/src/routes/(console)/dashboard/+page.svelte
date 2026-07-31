@@ -6,6 +6,7 @@
   import InvestigationSearch from '$lib/components/InvestigationSearch.svelte';
   import WorkspaceArchive from '$lib/components/WorkspaceArchive.svelte';
   import InvestigationTemplateManager from '$lib/components/InvestigationTemplateManager.svelte';
+  import BrowserLookupHandoff from '$lib/components/BrowserLookupHandoff.svelte';
   import { loadProfiles } from '$lib/brand-profiles';
   import { loadCases } from '$lib/cases';
   import { loadLocalInvestigationSearchIndex } from '$lib/investigation-search';
@@ -165,6 +166,8 @@
     {#if compareError}<p class="error" role="alert">{compareError}</p>{/if}
   </form>
 </section>
+
+<BrowserLookupHandoff />
 
 <InvestigationSearch index={investigationIndex} />
 

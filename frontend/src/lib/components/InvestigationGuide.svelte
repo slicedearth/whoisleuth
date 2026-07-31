@@ -7,6 +7,8 @@
   import { loadCases, type CaseRecord } from '$lib/cases';
   import type { BrandProfile } from '$lib/analysis/brand-profile-model.ts';
   import { buildInvestigationHandoffReadiness } from '$lib/analysis/investigation-handoff-readiness.ts';
+  import { buildGuidedCollectionPreflight } from '$lib/analysis/collection-preflight.ts';
+  import CollectionPreflight from '$lib/components/CollectionPreflight.svelte';
   import { normalizeInvestigationGuideDomain } from '$lib/analysis/investigation-guide.ts';
   import { toolNavigation } from '$lib/workspaces';
   import {
@@ -101,6 +103,13 @@
     ? `/monitor?view=cases&case=${encodeURIComponent(contextCase.id)}#case-response-${encodeURIComponent(contextCase.id)}`
     : null);
   const evidenceFreshness = $derived(formatEvidenceFreshness(evidence.latestObservedAt, evidence.observations));
+  const actionPreflight = $derived(actionStage ? buildGuidedCollectionPreflight({
+    label: actionStage.label,
+    requestImpact: actionStage.requestImpact,
+    prerequisite: actionStage.prerequisite,
+    requiresApproval: actionStage.requiresApproval,
+    approved: actionApproved,
+  }) : null);
 
   function formatEvidenceFreshness(observedAt: string, observations: number): string {
     if (!observations || !observedAt) return 'No retained evidence';
@@ -516,8 +525,7 @@
               {#if reviewingStageId === actionStage.id}
                 <section class="request-review" aria-label={`Review requests for ${actionStage.label}`}>
                   <strong>Before opening {toolLabel(actionStage)}</strong>
-                  <p><b>Requests:</b> {actionStage.requestImpact}</p>
-                  <p><b>Check first:</b> {actionStage.prerequisite}</p>
+                  {#if actionPreflight}<CollectionPreflight preflight={actionPreflight} open />{/if}
                   <div class="request-actions">
                     <button class="primary compact" type="button" onclick={() => approveAndOpen(actionStage)}>Allow and open {toolLabel(actionStage)}</button>
                     <button class="btn compact" type="button" onclick={() => reviewingStageId = ''}>Cancel</button>
@@ -686,8 +694,8 @@
   .mobile-action-label strong{margin-top:2px;font:700 var(--text-sm) var(--mono)}
   .request-review{display:grid;gap:7px;padding:11px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface)}
   .request-review>strong{font:700 var(--text-xs) var(--mono)}
-  .request-review p,.candidate-note,.outcome-state{margin:0;color:var(--muted);font-size:var(--text-2xs);line-height:1.45}
-  .request-review b,.candidate-note strong{color:var(--text)}
+  .candidate-note,.outcome-state{margin:0;color:var(--muted);font-size:var(--text-2xs);line-height:1.45}
+  .candidate-note strong{color:var(--text)}
   .request-actions,.outcome-actions{display:flex;flex-wrap:wrap;gap:6px}
   .outcome-actions{margin-top:2px;padding-top:9px;border-top:1px solid var(--border)}
   .outcome-actions>span{flex:1 0 100%;color:var(--muted);font:700 var(--text-2xs) var(--mono)}
