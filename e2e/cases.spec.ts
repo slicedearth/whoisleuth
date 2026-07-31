@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
+import { gzipSync, zipSync } from 'fflate';
 import { expect, test } from './fixtures';
 import { boundingBox, expectNoHorizontalOverflow, migrateLegacyBrowserData, readBrowserLocalCollection, requiredValue, runBulkScan } from './helpers';
 import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model';
@@ -622,6 +623,61 @@ test('portable WARC evidence is normalized locally before deliberate case import
   await expect(externalImport).not.toContainText('token=secret');
   await externalImport.getByRole('button', { name: 'Import into cases' }).click();
   await expect(page.locator('.case-head', { hasText: 'archive-review.invalid' })).toBeVisible();
+});
+
+test('portable WACZ evidence verifies package fixity before using the WARC privacy filter', async ({ page }) => {
+  await openCasesView(page);
+  const externalImport = page.locator('details', { hasText: 'Import bounded external findings' });
+  await externalImport.getByText('Import bounded external findings', { exact: true }).click();
+  const block = Buffer.from([
+    'HTTP/1.1 200 OK',
+    'Content-Type: text/html; charset=utf-8',
+    '',
+    '<!doctype html><html><head><title>Reviewed packaged page</title></head><body>discarded package body</body></html>',
+  ].join('\r\n'));
+  const recordDigest = createHash('sha256').update(block).digest('hex');
+  const headers = Buffer.from([
+    'WARC/1.1',
+    'WARC-Type: response',
+    'WARC-Date: 2026-07-28T01:00:00.000Z',
+    'WARC-Record-ID: <urn:uuid:wacz-e2e-response>',
+    'WARC-Target-URI: https://package-review.invalid/private?token=secret',
+    `WARC-Block-Digest: sha256:${recordDigest}`,
+    'Content-Type: application/http; msgtype=response',
+    `Content-Length: ${block.byteLength}`,
+    '',
+    '',
+  ].join('\r\n'));
+  const compressedWarc = gzipSync(Buffer.concat([headers, block, Buffer.from('\r\n\r\n')]));
+  const manifest = Buffer.from(JSON.stringify({
+    profile: 'data-package',
+    wacz_version: '1.1.1',
+    resources: [{
+      name: 'capture.warc.gz',
+      path: 'archive/capture.warc.gz',
+      hash: `sha256:${createHash('sha256').update(compressedWarc).digest('hex')}`,
+      bytes: compressedWarc.byteLength,
+    }],
+  }));
+  const wacz = zipSync({
+    'archive/capture.warc.gz': [compressedWarc, { level: 0 }],
+    'datapackage.json': manifest,
+    'datapackage-digest.json': Buffer.from(JSON.stringify({
+      path: 'datapackage.json',
+      hash: `sha256:${createHash('sha256').update(manifest).digest('hex')}`,
+    })),
+  });
+  await externalImport.locator('input[type="file"]').setInputFiles({
+    name: 'reviewed-evidence.wacz',
+    mimeType: 'application/wacz',
+    buffer: Buffer.from(wacz),
+  });
+  await expect(externalImport.getByRole('heading', { name: 'Portable WACZ evidence' })).toBeVisible();
+  await expect(externalImport).toContainText('Reviewed packaged page');
+  await expect(externalImport).not.toContainText('discarded package body');
+  await expect(externalImport).not.toContainText('token=secret');
+  await externalImport.getByRole('button', { name: 'Import into cases' }).click();
+  await expect(page.locator('.case-head', { hasText: 'package-review.invalid' })).toBeVisible();
 });
 
 test('STIX claims require an existing selected case and remain separate from collected evidence', async ({ page }) => {

@@ -536,6 +536,16 @@ default (see the README), so many lookups return no personal data at all.
   authorization data, request bodies, complete URLs, paths, queries,
   fragments, and arbitrary fields. WHOISleuth does not collect or
   independently verify the imported observation.
+  A separate analyst-selected WARC or WACZ import is also processed only in
+  browser memory. It is capped at 8 MiB and retains only normalized page
+  findings after excluding request records, sensitive headers, downloads,
+  unsupported or excessive responses, and mismatched supported record
+  digests. WACZ packages are not replayed. Safe ZIP paths, entry and byte
+  bounds, the data-package manifest, declared WARC resource sizes, and SHA-256
+  resource digests are checked before the same WARC filter runs; an optional
+  manifest digest is verified when present. Package indexes, page lists,
+  screenshots, custom files, raw response content, and archive bytes are not
+  stored.
   A selected security.txt result can be organized transiently into disclosure
   health using only its retained contact, policy, encryption, language, expiry,
   and source state. This adds no request and does not test contact

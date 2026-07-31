@@ -68,6 +68,7 @@
   "dependencies": {
     "@netlify/blobs": "10.1.0",
     "express": "^5.2.1",
+    "fflate": "0.8.3",
     "parse5": "^8.0.1",
     "tldts": "^7.4.9",
     "undici": "^8.5.0"

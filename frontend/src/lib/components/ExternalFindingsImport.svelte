@@ -31,6 +31,10 @@
     MAX_WARC_IMPORT_BYTES,
     parseWarcEvidenceArchive,
   } from '$lib/analysis/warc-evidence-import.ts';
+  import {
+    MAX_WACZ_IMPORT_BYTES,
+    parseWaczEvidenceArchive,
+  } from '$lib/analysis/wacz-evidence-import.ts';
 
   let {
     cases,
@@ -72,6 +76,16 @@
     targetCaseId = '';
     if (!file) return;
     try {
+      const wacz = file.name.toLowerCase().endsWith('.wacz') || file.type === 'application/wacz';
+      if (wacz) {
+        if (file.size > MAX_WACZ_IMPORT_BYTES) {
+          throw new Error('Portable WACZ imports are limited to 8 MiB.');
+        }
+        const report = await parseWaczEvidenceArchive(await file.arrayBuffer(), file.name);
+        preview = { kind: 'findings', document: report.document };
+        onmessage(`Validated ${report.accepted} portable WACZ finding${report.accepted === 1 ? '' : 's'} from ${report.warcResources} verified WARC resource${report.warcResources === 1 ? '' : 's'} and ${report.records} bounded record${report.records === 1 ? '' : 's'}; ${report.excluded} excluded. The package stayed local and only normalized page evidence is available for deliberate import.`);
+        return;
+      }
       const warc = file.name.toLowerCase().endsWith('.warc') || file.type === 'application/warc';
       if (warc) {
         if (file.size > MAX_WARC_IMPORT_BYTES) {
@@ -210,8 +224,8 @@
 <details class="external-import card">
   <summary>Import bounded external findings</summary>
   <div class="import-body">
-    <p>Preview the strict <code>whoisleuth.external-findings</code>, sanitised capture summary or artifact-metadata manifest, documented domain, DNS, or certificate observation rows, fixed-column CSV/JSON rows, a bounded STIX 2.1 bundle, a bounded MISP event, or a strict uncompressed WARC response archive locally before changing a case. WARC processing rejects or discards request records, sensitive headers, downloads, unsupported response types, excessive records, and mismatched supported record digests. Imports never fetch references, run code, alter dispositions, start collection, score claims, publish events, or submit data elsewhere.</p>
-    <label class="btn file-btn">Choose JSON, CSV, or WARC<input type="file" accept="application/json,text/csv,application/warc,.json,.csv,.warc" onchange={selectFile}></label>
+    <p>Preview the strict <code>whoisleuth.external-findings</code>, sanitised capture summary or artifact-metadata manifest, documented domain, DNS, or certificate observation rows, fixed-column CSV/JSON rows, a bounded STIX 2.1 bundle, a bounded MISP event, or a strict WARC/WACZ response archive locally before changing a case. WARC processing rejects or discards request records, sensitive headers, downloads, unsupported response types, excessive records, and mismatched supported record digests. WACZ processing additionally bounds ZIP expansion and verifies its declared WARC resources before applying the same WARC privacy filter. Imports never fetch references, run code, alter dispositions, start collection, score claims, publish events, or submit data elsewhere.</p>
+    <label class="btn file-btn">Choose JSON, CSV, WARC, or WACZ<input type="file" accept="application/json,text/csv,application/warc,application/wacz,.json,.csv,.warc,.wacz" onchange={selectFile}></label>
     {#if findingsPreview}
       <section class="preview" aria-labelledby="external-findings-preview-title">
         <header>
