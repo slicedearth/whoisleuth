@@ -151,7 +151,13 @@ one SOA query to retain the bounded primary nameserver, responsible mailbox,
 serial, refresh, retry, expiry, and minimum-TTL values. It also adds one HTTPS
 resource-record query through the deployment's configured recursive DNS
 servers and retains up to sixteen normalized service-binding publications.
-Compact Bulk keeps the existing eight-query profile. Each record family has an independent
+The same full Deep path resolves the effective CAA policy by walking from the
+exact hostname toward, but not including, the DNS root. It reuses the direct
+CAA answer, stops at the first non-empty RRset, and queries at most eight owner
+names. A resolver error stops the walk and remains incomplete rather than
+being treated as an empty RRset. The direct-owner and effective-policy records
+remain separately attributed. Compact Bulk keeps the existing eight-query
+profile and does not run the parent walk. Each record family has an independent
 `success`/`not_found`/`error` diagnostic, malformed neighbours are counted and
 discarded, and capped inventories set their truncation flag.
 Resolver failure produces `null` for the compatible `hasMx`, `hasSpf`, or

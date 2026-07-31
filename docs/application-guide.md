@@ -59,7 +59,9 @@ investigation data.
 Lookup accepts one domain, IPv4 or IPv6 address, or ASN. A domain Lookup keeps
 registry, registrar, WHOIS, DNS, HTTP, TLS, page, network, and optional provider
 evidence separately attributed. Deep domain Lookup can add the zone's bounded
-SOA publication and HTTPS service-binding records published for the origin.
+SOA publication, HTTPS service-binding records published for the origin, and
+the effective CAA policy found from the exact hostname or its nearest
+publishing parent.
 Deep public-IP Lookup can add separately attributed PTR names. None of these
 sources decides domain availability, Risk, ownership, or hosting control.
 Press **Ctrl+Enter** or **Command+Enter** in the query field to start the same
@@ -148,11 +150,11 @@ Source tables, status labels, collection times, provenance, and limitations
 remain the complete review surface.
 
 Deep domain Lookup also compares a currently observed certificate issuer with
-settled CAA publication at the queried domain. Recognized issuer mappings can
+the effective CAA publication found from the exact hostname or its nearest
+publishing parent. Recognized issuer mappings can
 produce an aligned or apparently-outside-current-policy review state. An
-unknown issuer, incomplete DNS, or missing target-domain CAA remains
-indeterminate; parent-label CAA inheritance is not inferred when it was not
-collected. When the active Brand Profile contains a reviewed expected issuer,
+unknown issuer or incomplete DNS remains indeterminate. When the active Brand
+Profile contains a reviewed expected issuer,
 SAN pattern, or SPKI value for the official domain, the same panel compares that analyst
 baseline without treating a difference as compromise or improper issuance.
 Current CAA cannot establish the policy that applied when an existing
@@ -567,7 +569,7 @@ Fast and Deep are collection profiles, not confidence ratings.
 | Profile | Intended use | Collection boundary |
 | --- | --- | --- |
 | **Fast Lookup or Bulk** | Lower-request registration-first triage. | Uses RDAP-led registration analysis and a bounded authoritative DNS-delegation fallback where needed. WHOIS, website, TLS, and Deep enrichments are skipped explicitly. |
-| **Deep single Lookup** | Complete review of one important target. | Can add WHOIS, registrar RDAP, DNS with SOA zone context and HTTPS service-binding publications, public-IP PTR context, HTTP, favicon, page identity, privacy-minimized credential-surface counts, TLS, technology, passive posture, observed IP network context, and explicitly selected optional sources. |
+| **Deep single Lookup** | Complete review of one important target. | Can add WHOIS, registrar RDAP, DNS with SOA zone context, HTTPS service-binding publications, and effective inherited CAA, public-IP PTR context, HTTP, favicon, page identity, privacy-minimized credential-surface counts, TLS, technology, passive posture, observed IP network context, and explicitly selected optional sources. |
 | **Deep Bulk** | Richer comparison across a bounded candidate set. | Uses a compact response with WHOIS, DNS, website, TLS, and mail context needed for triage. Full raw sources and single-Lookup-only enrichments remain omitted. |
 
 Deep single Lookup is the default in the Lookup page. Bulk keeps its own

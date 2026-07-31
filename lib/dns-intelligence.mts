@@ -33,6 +33,7 @@ type DnsResolver = (value: string) => Promise<unknown>;
 type DnsIntelligenceOptions = {
   resolvers?: Record<string, DnsResolver>;
   includeExtendedContext?: boolean;
+  includeInheritedCaa?: boolean;
   timeoutMs?: number;
   now?: () => number;
   observedAt?: () => string;
@@ -80,12 +81,19 @@ const MAX_DNS_UINT32 = 0xffff_ffff;
 const MAX_SERVICE_PARAMETER_KEYS = 24;
 const MAX_SERVICE_ALPN_IDS = 16;
 const MAX_SERVICE_ADDRESS_HINTS = 8;
+const MAX_CAA_TREE_QUERIES = 8;
 const DNS_CONTROL_CHARACTER_RE = /[\u0000-\u001f\u007f]/u;
 const MISSING_CODES = new Set(['ENODATA', 'ENOTFOUND', 'ENONAME']);
 
 function skippedDnsIntelligence(
   detail = 'DNS intelligence is disabled by deployment policy.',
-  { includeExtendedContext = false }: { includeExtendedContext?: boolean } = {},
+  {
+    includeExtendedContext = false,
+    includeInheritedCaa = false,
+  }: {
+    includeExtendedContext?: boolean;
+    includeInheritedCaa?: boolean;
+  } = {},
 ) {
   const skipped = { status: 'skipped', error: null, truncated: false, discarded: 0 };
   const recordTypes = ['a', 'aaaa', 'cname', 'ns', 'mx', 'spf', 'dmarc', 'caa'];
@@ -105,6 +113,26 @@ function skippedDnsIntelligence(
       a: [], aaaa: [], cname: [], ns: [], mx: [], spf: [], dmarc: [], caa: [],
       ...(includeExtendedContext ? { soa: [], https: [] } : {}),
     },
+    ...(includeInheritedCaa ? {
+      caaPolicy: {
+        ...createObservation({
+          status: 'skipped',
+          scanMode: 'deep',
+          source: 'dns',
+          complete: false,
+          limitations: [detail],
+          diagnostics: {
+            tree: { status: 'skipped', count: 0, truncated: false },
+          },
+        }),
+        policyVersion: 1,
+        queryLimit: MAX_CAA_TREE_QUERIES,
+        queriedOwners: [],
+        effectiveOwner: null,
+        inherited: null,
+        records: [],
+      },
+    } : {}),
     hasMx: null,
     hasNullMx: null,
     mxHosts: [],
@@ -460,9 +488,171 @@ async function query<T>(factory: () => Promise<unknown>, normalize: (value: unkn
   }
 }
 
+type CaaPolicyQuery = {
+  owner: string;
+  status: DnsQueryResult<CaaRecord>['status'];
+  error: string | null;
+  truncated: boolean;
+  discarded: number;
+};
+
+type EffectiveCaaOptions = {
+  resolver?: DnsResolver;
+  directResult?: DnsQueryResult<CaaRecord>;
+  timeoutMs?: number;
+  now?: () => number;
+  observedAt?: () => string;
+  queryLimit?: number;
+};
+
+async function collectEffectiveCaaPolicy(domain: string, options: EffectiveCaaOptions = {}) {
+  const normalizedDomain = normalizeHostname(domain);
+  const queryLimit = Math.max(
+    1,
+    Math.min(MAX_CAA_TREE_QUERIES, Math.floor(options.queryLimit || MAX_CAA_TREE_QUERIES)),
+  );
+  const now = options.now || Date.now;
+  const started = now();
+  const limitations = [
+    'The effective CAA policy is the first non-empty RRset found from the exact hostname toward, but not including, the DNS root, following RFC 8659.',
+    'The deployment resolver handles CNAME or DNAME alias processing. WHOISleuth does not independently follow aliases during the parent-tree walk.',
+    `The tree walk is capped at ${queryLimit} owner names. Resolver failure is not treated as an empty RRset and stops the walk.`,
+  ];
+  if (!normalizedDomain) {
+    return {
+      ...createObservation({
+        status: 'error',
+        observedAt: (options.observedAt || (() => new Date().toISOString()))(),
+        scanMode: 'deep',
+        source: 'dns',
+        durationMs: Math.max(0, now() - started),
+        complete: false,
+        limitations,
+        diagnostics: {
+          tree: { status: 'error', detail: 'The CAA owner name was invalid.', count: 0, truncated: false },
+        },
+      }),
+      policyVersion: 1,
+      queryLimit,
+      queriedOwners: [] as CaaPolicyQuery[],
+      effectiveOwner: null,
+      inherited: null,
+      records: [] as CaaRecord[],
+    };
+  }
+
+  const labels = normalizedDomain.split('.');
+  const allOwners = labels.map((_, index) => labels.slice(index).join('.'));
+  const owners = allOwners.slice(0, queryLimit);
+  const limitReached = allOwners.length > owners.length;
+  const resolver = options.resolver || dns.resolveCaa;
+  const timeoutMs = options.timeoutMs || DNS_TIMEOUT_MS;
+  const queries: CaaPolicyQuery[] = [];
+
+  for (const [index, owner] of owners.entries()) {
+    const result = index === 0 && options.directResult
+      ? options.directResult
+      : await query(() => resolver(owner), normalizeCaa, timeoutMs);
+    queries.push({
+      owner,
+      status: result.status,
+      error: result.error,
+      truncated: result.truncated,
+      discarded: result.discarded,
+    });
+    if (result.status === 'error') {
+      return {
+        ...createObservation({
+          status: index === 0 ? 'error' : 'partial',
+          observedAt: (options.observedAt || (() => new Date().toISOString()))(),
+          scanMode: 'deep',
+          source: 'dns',
+          durationMs: Math.max(0, now() - started),
+          complete: false,
+          limitations,
+          diagnostics: {
+            tree: {
+              status: index === 0 ? 'error' : 'partial',
+              error: result.error,
+              count: queries.length,
+              truncated: false,
+            },
+          },
+        }),
+        policyVersion: 1,
+        queryLimit,
+        queriedOwners: queries,
+        effectiveOwner: null,
+        inherited: null,
+        records: [] as CaaRecord[],
+      };
+    }
+    if (result.records.length > 0) {
+      const incomplete = result.truncated || result.discarded > 0;
+      return {
+        ...createObservation({
+          status: incomplete ? 'partial' : 'success',
+          observedAt: (options.observedAt || (() => new Date().toISOString()))(),
+          scanMode: 'deep',
+          source: 'dns',
+          durationMs: Math.max(0, now() - started),
+          complete: !incomplete,
+          truncated: result.truncated,
+          limitations,
+          diagnostics: {
+            tree: {
+              status: incomplete ? 'partial' : 'success',
+              detail: owner,
+              count: queries.length,
+              truncated: result.truncated,
+              discarded: result.discarded,
+            },
+          },
+        }),
+        policyVersion: 1,
+        queryLimit,
+        queriedOwners: queries,
+        effectiveOwner: owner,
+        inherited: owner !== normalizedDomain,
+        records: result.records,
+      };
+    }
+  }
+
+  return {
+    ...createObservation({
+      status: limitReached ? 'partial' : 'not_found',
+      observedAt: (options.observedAt || (() => new Date().toISOString()))(),
+      scanMode: 'deep',
+      source: 'dns',
+      durationMs: Math.max(0, now() - started),
+      complete: !limitReached,
+      truncated: limitReached,
+      limitations,
+      diagnostics: {
+        tree: {
+          status: limitReached ? 'partial' : 'not_found',
+          detail: limitReached
+            ? 'The owner-name query cap was reached before the DNS root.'
+            : 'No applicable CAA RRset was observed.',
+          count: queries.length,
+          truncated: limitReached,
+        },
+      },
+    }),
+    policyVersion: 1,
+    queryLimit,
+    queriedOwners: queries,
+    effectiveOwner: null,
+    inherited: null,
+    records: [] as CaaRecord[],
+  };
+}
+
 async function collectDnsIntelligence(domain: string, options: DnsIntelligenceOptions = {}) {
   const resolvers = options.resolvers || {};
   const includeExtendedContext = options.includeExtendedContext === true;
+  const includeInheritedCaa = options.includeInheritedCaa === true;
   const timeoutMs = options.timeoutMs || DNS_TIMEOUT_MS;
   const now = options.now || Date.now;
   const started = now();
@@ -475,6 +665,15 @@ async function collectDnsIntelligence(domain: string, options: DnsIntelligenceOp
   const spfPromise = query(invoke('resolveTxt', dns.resolveTxt), (records) => normalizeTxtPolicies(records, 'v=spf1'), timeoutMs);
   const dmarcPromise = query(invoke('resolveTxt', dns.resolveTxt, `_dmarc.${domain}`), (records) => normalizeTxtPolicies(records, 'v=dmarc1'), timeoutMs);
   const caaPromise = query(invoke('resolveCaa', dns.resolveCaa), normalizeCaa, timeoutMs);
+  const caaPolicyPromise = includeInheritedCaa
+    ? caaPromise.then((directResult) => collectEffectiveCaaPolicy(domain, {
+        resolver: resolvers.resolveCaa || dns.resolveCaa,
+        directResult,
+        timeoutMs,
+        now,
+        ...(options.observedAt ? { observedAt: options.observedAt } : {}),
+      }))
+    : Promise.resolve(null);
   const soaPromise = includeExtendedContext
     ? query(invoke('resolveSoa', dns.resolveSoa), normalizeSoa, timeoutMs)
     : Promise.resolve(null);
@@ -499,7 +698,7 @@ async function collectDnsIntelligence(domain: string, options: DnsIntelligenceOp
         ...(options.observedAt ? { observedAt: options.observedAt } : {}),
       }))
     : Promise.resolve(null);
-  const [a, aaaa, cname, ns, mx, spf, dmarc, caa, soa, https, delegation] = await Promise.all([
+  const [a, aaaa, cname, ns, mx, spf, dmarc, caa, caaPolicy, soa, https, delegation] = await Promise.all([
     aPromise,
     aaaaPromise,
     cnamePromise,
@@ -508,6 +707,7 @@ async function collectDnsIntelligence(domain: string, options: DnsIntelligenceOp
     spfPromise,
     dmarcPromise,
     caaPromise,
+    caaPolicyPromise,
     soaPromise,
     httpsPromise,
     delegationPromise,
@@ -524,6 +724,7 @@ async function collectDnsIntelligence(domain: string, options: DnsIntelligenceOp
   const incomplete = errorCount > 0
     || truncated
     || discardedCount > 0
+    || (caaPolicy !== null && caaPolicy.complete !== true)
     || (delegation !== null && delegation.status !== 'success');
   const classifiedMx = mx.status === 'error' ? null : classifyMxRecords(mx.records);
 
@@ -546,6 +747,7 @@ async function collectDnsIntelligence(domain: string, options: DnsIntelligenceOp
         'SVCB uses protocol-specific underscored query names. The domain lookup therefore queries the HTTPS-compatible record only; the shared resolver supports SVCB for explicit future service queries.',
       ] : []),
       ...(delegation ? ['Delegation health compares separately attributed registry, recursive parent-view, and direct nameserver evidence and never decides domain availability.'] : []),
+      ...(caaPolicy ? ['Effective CAA is separately attributed from the exact-owner CAA answer and never affects availability or Risk.'] : []),
     ],
     diagnostics: {
       ...Object.fromEntries(Object.entries(queries).map(([name, item]) => [name, {
@@ -559,6 +761,14 @@ async function collectDnsIntelligence(domain: string, options: DnsIntelligenceOp
           status: delegation.status,
           truncated: delegation.truncated,
           count: delegation.authorities.length,
+        },
+      } : {}),
+      ...(caaPolicy ? {
+        caa_policy: {
+          status: caaPolicy.status,
+          detail: caaPolicy.effectiveOwner || 'No effective owner observed',
+          truncated: caaPolicy.truncated,
+          count: caaPolicy.queriedOwners.length,
         },
       } : {}),
     },
@@ -581,6 +791,7 @@ async function collectDnsIntelligence(domain: string, options: DnsIntelligenceOp
     hasSpf: spf.status === 'error' ? null : spf.records.length > 0,
     hasDmarc: dmarc.status === 'error' ? null : dmarc.records.length > 0,
     delegation,
+    ...(caaPolicy ? { caaPolicy } : {}),
   };
 }
 
@@ -654,6 +865,7 @@ async function collectReverseDnsIntelligence(
 
 export {
   collectDnsIntelligence,
+  collectEffectiveCaaPolicy,
   collectReverseDnsIntelligence,
   failedReverseDnsIntelligence,
   skippedDnsIntelligence,

@@ -61,6 +61,32 @@ test('absent target CAA remains indeterminate because parent inheritance was not
   assert.match(caa?.detail ?? '', /Parent-label inheritance was not collected/u);
 });
 
+test('completed inherited CAA is used as the effective certificate-policy source', () => {
+  const review = buildCertificatePolicyReview({
+    dnsEvidence: {
+      source: 'dns',
+      status: 'success',
+      complete: true,
+      caaPolicy: {
+        policyVersion: 1,
+        source: 'dns',
+        status: 'success',
+        complete: true,
+        truncated: false,
+        effectiveOwner: 'example.test',
+        inherited: true,
+        records: [{ tag: 'issue', value: 'letsencrypt.org', critical: 0 }],
+      },
+    },
+    dnsRecords: { caa: [] },
+    tlsEvidence: { source: 'tls', status: 'success', complete: true },
+    tlsIssuer: { organization: "Let's Encrypt" },
+  });
+  const caa = review.findings.find((item) => item.id === 'caa');
+  assert.equal(caa?.state, 'aligned');
+  assert.match(caa?.detail ?? '', /at example\.test/u);
+});
+
 test('unavailable current evidence never becomes a mismatch', () => {
   const review = buildCertificatePolicyReview({
     dnsEvidence: { source: 'dns', status: 'partial', complete: false },

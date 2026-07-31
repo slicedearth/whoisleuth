@@ -174,6 +174,27 @@ export function buildLookupNetworkDisplay(input: {
   if (Array.isArray(dnsRecords.https) || rec(dnsEvidence.diagnostics).https) {
     dnsRows.push({ label: 'HTTPS service binding', value: dnsDisplay('https') });
   }
+  const caaPolicy = rec(dnsEvidence.caaPolicy);
+  if (caaPolicy.policyVersion === 1) {
+    const effectiveRecords = records(caaPolicy.records)
+      .slice(0, 16)
+      .map((item) => `${show(item.critical)} ${show(item.tag)} ${show(item.value)}`)
+      .join(' | ');
+    dnsRows.push(
+      {
+        label: 'Effective CAA owner',
+        value: caaPolicy.effectiveOwner
+          ? `${boundedTechnologyText(caaPolicy.effectiveOwner, 253)}${caaPolicy.inherited === true ? ' · inherited' : ' · exact hostname'}`
+          : caaPolicy.status === 'not_found'
+            ? 'No applicable policy observed'
+            : 'Unavailable',
+      },
+      {
+        label: 'Effective CAA policy',
+        value: effectiveRecords || (caaPolicy.status === 'not_found' ? 'Not observed' : 'Unavailable'),
+      },
+    );
+  }
   const delegation = rec(dnsEvidence.delegation);
   const delegationFindings = records(delegation.findings).slice(0, 8).map((item) => ({
     id: boundedTechnologyText(item.id, 80),
@@ -344,10 +365,17 @@ export function buildLookupNetworkDisplay(input: {
   return {
     dnsRows,
     dnsDelegation,
-    dnsQueryFailures: Object.entries(rec(dnsEvidence.diagnostics))
-      .filter(([, item]) => rec(item).status === 'error')
-      .map(([name, item]) => `${name.toUpperCase()}: ${rec(item).error || 'query failed'}`)
-      .join(' · '),
+    dnsQueryFailures: [
+      ...Object.entries(rec(dnsEvidence.diagnostics))
+        .filter(([, item]) => rec(item).status === 'error')
+        .map(([name, item]) => `${name.toUpperCase()}: ${rec(item).error || 'query failed'}`),
+      ...(() => {
+        const policyDiagnostic = rec(rec(caaPolicy.diagnostics).tree);
+        return policyDiagnostic.error
+          ? [`CAA inheritance: ${boundedTechnologyText(policyDiagnostic.error, 180)}`]
+          : [];
+      })(),
+    ].join(' · '),
     reverseDnsRows: [
       {
         label: 'PTR names',

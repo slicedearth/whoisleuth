@@ -115,6 +115,8 @@ function caaFinding(input: Readonly<{
   records: CaaRecord[];
   issuer: string;
   wildcard: boolean;
+  effectivePolicy: boolean;
+  effectiveOwner: string;
 }>): CertificatePolicyFinding {
   const fixedLimitations = [
     'The comparison uses current point-in-time CAA and certificate evidence and cannot establish which policy applied when the certificate was issued.',
@@ -142,12 +144,16 @@ function caaFinding(input: Readonly<{
       state: 'no_target_policy_observed',
       observed: input.issuer ? [input.issuer] : [],
       expected: [],
-      detail: 'No applicable CAA issue authorization was observed at the queried domain. Parent-label inheritance was not collected, so this is not a conclusion that no effective CAA policy exists.',
+      detail: input.effectivePolicy
+        ? 'No applicable CAA issue authorization was observed in the completed effective-policy walk.'
+        : 'No applicable CAA issue authorization was observed at the queried domain. Parent-label inheritance was not collected, so this is not a conclusion that no effective CAA policy exists.',
       sources: ['DNS', 'TLS certificate'],
-      limitations: [
-        ...fixedLimitations,
-        'Parent-label CAA inheritance is outside the current settled evidence and remains unknown.',
-      ],
+      limitations: input.effectivePolicy
+        ? fixedLimitations
+        : [
+            ...fixedLimitations,
+            'Parent-label CAA inheritance is outside the current settled evidence and remains unknown.',
+          ],
     };
   }
   const expected = applicable.map((item) => item.value);
@@ -172,8 +178,8 @@ function caaFinding(input: Readonly<{
     observed: [input.issuer, ...identifiers],
     expected,
     detail: aligned
-      ? 'The observed certificate issuer maps to an authorization identifier published in the current target-domain CAA evidence.'
-      : 'The observed certificate issuer did not map to an authorization identifier in the current target-domain CAA evidence.',
+      ? `The observed certificate issuer maps to an authorization identifier published in the current CAA evidence${input.effectiveOwner ? ` at ${input.effectiveOwner}` : ''}.`
+      : `The observed certificate issuer did not map to an authorization identifier in the current CAA evidence${input.effectiveOwner ? ` at ${input.effectiveOwner}` : ''}.`,
     sources: ['DNS', 'TLS certificate'],
     limitations: fixedLimitations,
   };
@@ -303,9 +309,19 @@ export function buildCertificatePolicyReview(input: Readonly<{
       .filter(Boolean))]
     : [];
   const wildcard = observedNames.some((item) => item.startsWith('*.'));
-  const records = caaRecords(dnsRecords.caa);
+  const caaPolicy = record(dnsEvidence.caaPolicy);
+  const effectivePolicy = caaPolicy.policyVersion === 1;
+  const records = caaRecords(effectivePolicy ? caaPolicy.records : dnsRecords.caa);
+  const policyEvidence = effectivePolicy ? caaPolicy : dnsEvidence;
   const findings: CertificatePolicyFinding[] = [
-    caaFinding({ dnsEvidence, records, issuer, wildcard }),
+    caaFinding({
+      dnsEvidence: policyEvidence,
+      records,
+      issuer,
+      wildcard,
+      effectivePolicy,
+      effectiveOwner: text(caaPolicy.effectiveOwner, 253),
+    }),
   ];
   if (input.baseline) {
     findings.push(

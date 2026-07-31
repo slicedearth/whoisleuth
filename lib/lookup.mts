@@ -242,6 +242,7 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
     ? timing.measure('domain_evidence', () => checkAvailability(classified.value, {
         fast,
         includeExtendedDnsContext: !compact,
+        includeInheritedCaa: !fast && !compact,
         includeCredentialSurfaceProfile: !fast && !compact,
         includeStructuredDataIdentity: !fast && !compact,
         includeTechnologyProfile: !compact,

@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   collectDnsIntelligence,
+  collectEffectiveCaaPolicy,
   collectReverseDnsIntelligence,
   normalizeAddresses,
   normalizeHostnames,
@@ -79,6 +80,86 @@ test('MX, policy, and CAA normalization retains only bounded material records', 
     truncated: false,
     discarded: 1,
   });
+});
+
+test('effective CAA stops at the exact hostname when it publishes a policy', async () => {
+  const queried: string[] = [];
+  const result = await collectEffectiveCaaPolicy('shop.example.test', {
+    resolver: async (owner) => {
+      queried.push(owner);
+      return [{ critical: 0, tag: 'issue', value: 'ca.example' }];
+    },
+    observedAt: () => '2026-07-31T00:00:00.000Z',
+  });
+
+  assert.equal(result.status, 'success');
+  assert.equal(result.complete, true);
+  assert.equal(result.effectiveOwner, 'shop.example.test');
+  assert.equal(result.inherited, false);
+  assert.deepEqual(result.records, [{ critical: 0, tag: 'issue', value: 'ca.example' }]);
+  assert.deepEqual(queried, ['shop.example.test']);
+});
+
+test('effective CAA inherits the first parent policy without merging source owners', async () => {
+  const queried: string[] = [];
+  const result = await collectEffectiveCaaPolicy('shop.eu.example.test', {
+    resolver: async (owner) => {
+      queried.push(owner);
+      if (owner === 'example.test') {
+        return [{ critical: 128, tag: 'issuewild', value: 'parent-ca.example' }];
+      }
+      return [];
+    },
+  });
+
+  assert.equal(result.status, 'success');
+  assert.equal(result.complete, true);
+  assert.equal(result.effectiveOwner, 'example.test');
+  assert.equal(result.inherited, true);
+  assert.deepEqual(result.queriedOwners.map((query) => query.owner), [
+    'shop.eu.example.test',
+    'eu.example.test',
+    'example.test',
+  ]);
+  assert.deepEqual(queried, [
+    'shop.eu.example.test',
+    'eu.example.test',
+    'example.test',
+  ]);
+});
+
+test('effective CAA stops on resolver failure instead of treating it as absence', async () => {
+  const queried: string[] = [];
+  const result = await collectEffectiveCaaPolicy('shop.example.test', {
+    resolver: async (owner) => {
+      queried.push(owner);
+      if (owner === 'example.test') throw new Error('resolver unavailable');
+      return [];
+    },
+  });
+
+  assert.equal(result.status, 'partial');
+  assert.equal(result.complete, false);
+  assert.equal(result.effectiveOwner, null);
+  assert.equal(result.inherited, null);
+  assert.deepEqual(queried, ['shop.example.test', 'example.test']);
+  assert.match(String(recordValue(recordValue(result.diagnostics.tree)).error), /resolver unavailable/);
+});
+
+test('effective CAA discloses the eight-owner cap without querying closer to the root', async () => {
+  const queried: string[] = [];
+  const result = await collectEffectiveCaaPolicy('a.b.c.d.e.f.g.h.example.test', {
+    resolver: async (owner) => {
+      queried.push(owner);
+      return [];
+    },
+  });
+
+  assert.equal(result.status, 'partial');
+  assert.equal(result.complete, false);
+  assert.equal(result.truncated, true);
+  assert.equal(queried.length, 8);
+  assert.equal(queried.includes('example.test'), false);
 });
 
 test('SOA normalization retains one bounded record and rejects malformed timing values', () => {
@@ -227,6 +308,31 @@ test('extended SOA and HTTPS work is omitted unless the deep single-lookup calle
   assert.equal(Object.hasOwn(result.records, 'https'), false);
   assert.equal(Object.hasOwn(result.diagnostics, 'soa'), false);
   assert.equal(Object.hasOwn(result.diagnostics, 'https'), false);
+  assert.equal(Object.hasOwn(result, 'caaPolicy'), false);
+});
+
+test('the full deep DNS collector reuses the exact-owner CAA result before walking parents', async () => {
+  const caaQueries: string[] = [];
+  const result = await collectDnsIntelligence('shop.example.test', {
+    resolvers: resolvers({
+      resolveCaa: async (owner) => {
+        caaQueries.push(owner);
+        return owner === 'example.test'
+          ? [{ critical: 0, tag: 'issue', value: 'parent-ca.example' }]
+          : [];
+      },
+    }),
+    includeInheritedCaa: true,
+  });
+
+  assert.deepEqual(caaQueries, ['shop.example.test', 'example.test']);
+  assert.deepEqual(result.records.caa, []);
+  const caaPolicy = requiredValue(result.caaPolicy);
+  assert.equal(caaPolicy.effectiveOwner, 'example.test');
+  assert.equal(caaPolicy.inherited, true);
+  assert.deepEqual(caaPolicy.records, [
+    { critical: 0, tag: 'issue', value: 'parent-ca.example' },
+  ]);
 });
 
 test('authoritative absence remains false while resolver failure remains unknown', async () => {
