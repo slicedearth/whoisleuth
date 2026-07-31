@@ -24,7 +24,11 @@ automated verdicts.
   &nbsp;·&nbsp;
   <a href="https://whoisleuth.com/demo"><strong>Explore the synthetic demo</strong></a>
   &nbsp;·&nbsp;
-  <a href="https://whoisleuth.com/guide"><strong>Read the public guide</strong></a>
+  <a href="https://whoisleuth.com/resources"><strong>Browse investigation resources</strong></a>
+</p>
+
+<p align="center">
+  <a href="https://whoisleuth.com/demo"><img src="docs/assets/whoisleuth-homepage.png" width="960" alt="WHOISleuth public homepage showing a fictional domain investigation workflow" /></a>
 </p>
 
 The demo uses fixed fictional evidence on reserved domains. Its six-stage

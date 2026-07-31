@@ -12,6 +12,9 @@ const {
   CANONICAL_TRAILING_SLASH_REDIRECTS,
   PRERENDERED_ROUTES,
 } = await import('../lib/prerendered-routes.mts');
+const {
+  PUBLIC_RESOURCE_ROUTES,
+} = await import('../lib/public-resource-routes.mts');
 
 function routeSourcePages(directory: string): string[] {
   const files: string[] = [];
@@ -54,9 +57,18 @@ after(async () => {
 describe('canonical route redirects', () => {
   test('shared manifest covers every prerendered page source', () => {
     const sourceRoutes = routeSourcePages(join(process.cwd(), 'frontend', 'src', 'routes'))
-      .map(publicRouteForPage)
+      .flatMap((filename): string[] => {
+        const route = publicRouteForPage(filename);
+        return route === '/resources/[slug]' ? [...PUBLIC_RESOURCE_ROUTES] : [route];
+      })
       .sort();
     assert.deepEqual([...PRERENDERED_ROUTES].sort(), sourceRoutes);
+  });
+
+  test('serves the public resource hub before its child directory can redirect it', async () => {
+    const response = await fetch(`${origin}/resources`, { redirect: 'manual' });
+    assert.equal(response.status, 200);
+    assert.match(await response.text(), /Understand the evidence before using the result/u);
   });
 
   test('redirect each allowlisted trailing-slash route to its fixed local path', async () => {

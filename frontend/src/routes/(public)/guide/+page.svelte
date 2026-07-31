@@ -36,7 +36,7 @@
   <p class="eyebrow">Guide and glossary</p>
   <h1>Use WHOISleuth with confidence.</h1>
   <p>Choose a task, then use the source-state and glossary references to interpret results without overstating them.</p>
-  <div class="guide-actions"><a class="primary" href="/demo">Try the synthetic demo</a><PublicConsoleCta /></div>
+  <div class="guide-actions"><a class="primary" href="/demo">Try the synthetic demo</a><a class="btn" href="/resources">Browse topic guides</a><PublicConsoleCta /></div>
 </header>
 
 <nav class="guide-index card" aria-label="Guide sections">

@@ -3,7 +3,19 @@
   "version": "1.26.0",
   "private": true,
   "license": "AGPL-3.0-only",
-  "description": "Domain intelligence and brand-protection toolkit built on WHOIS/RDAP - lookups, bulk scans, availability/opportunity scoring, typosquat detection, and watchlist monitoring.",
+  "description": "Open-source, local-first domain intelligence and brand-protection console for WHOIS, RDAP, DNS, certificate transparency, lookalike domains, and web evidence.",
+  "keywords": [
+    "whois",
+    "rdap",
+    "dns",
+    "domain-intelligence",
+    "brand-protection",
+    "typosquatting",
+    "certificate-transparency",
+    "osint",
+    "threat-intelligence",
+    "asn"
+  ],
   "files": [
     "bin/**/*.mts",
     "cli/**/*.mts",

@@ -32,6 +32,8 @@ test('homepage presents plain-language goals, restrained branding, and synthetic
   await expect(page.getByText('Fixed fictional data from the public demo. No live target is contacted.')).toBeVisible();
   await expect(page.locator('.hero-actions').getByRole('link', { name: 'Open console' })).toHaveAttribute('href', '/dashboard');
   await expect(page.getByRole('link', { name: 'Sign in to investigate' })).toHaveCount(0);
+  await expect(page.locator('.learn article')).toHaveCount(4);
+  await expect(page.getByRole('link', { name: 'Browse all domain investigation resources' })).toHaveAttribute('href', '/resources');
 
   await page.setViewportSize({ width: 390, height: 844 });
   const sourceSummary = page.locator('.mobile-source-summary');
@@ -52,6 +54,29 @@ test('homepage presents plain-language goals, restrained branding, and synthetic
   });
   expect(sourceStateColors.warning).toBe(sourceStateColors.amber);
   expect(sourceStateColors.warning).not.toBe(sourceStateColors.success);
+  await expectNoHorizontalOverflow(page);
+});
+
+test('public resources offer task-specific source boundaries on desktop and mobile', async ({ page }) => {
+  await page.goto('/resources');
+
+  await expect(page.getByRole('heading', { name: 'Understand the evidence before using the result.' })).toBeVisible();
+  await expect(page.locator('.resource-grid article')).toHaveCount(8);
+  await page.getByRole('link', { name: 'RDAP versus WHOIS', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'RDAP versus WHOIS: why registration sources disagree' })).toBeVisible();
+  await expect(page.getByRole('table', { name: 'Evidence sources and limitations' })).toBeVisible();
+  await expect(page.getByRole('row')).toHaveCount(4);
+  await expect(page.getByRole('heading', { name: 'Questions worth answering.' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Inspect synthetic registration evidence' })).toHaveAttribute('href', '/demo');
+  await expect(page.getByRole('link', { name: 'Open docs/registry-data-contract.md' })).toHaveAttribute(
+    'href',
+    'https://github.com/slicedearth/whoisleuth/blob/main/docs/registry-data-contract.md',
+  );
+  await expectNoHorizontalOverflow(page);
+
+  await page.setViewportSize({ width: 320, height: 700 });
+  await page.reload();
+  await expect(page.getByRole('table', { name: 'Evidence sources and limitations' })).toBeVisible();
   await expectNoHorizontalOverflow(page);
 });
 

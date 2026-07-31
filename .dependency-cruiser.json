@@ -61,7 +61,7 @@
       },
       "to": {
         "couldNotResolve": true,
-        "pathNot": "^(?:\\$app/|svelte/internal/)"
+        "pathNot": "^(?:\\$app/|svelte/internal/|@sveltejs/kit$)"
       }
     }
   ],

@@ -24,6 +24,19 @@ describe('CLI package boundary', () => {
     assert.equal(packageJson.private, true);
     assert.equal(packageJson.license, 'AGPL-3.0-only');
     assert.equal(Object.hasOwn(packageJson, 'main'), false);
+    assert.match(packageJson.description, /local-first domain intelligence/u);
+    assert.deepEqual(packageJson.keywords, [
+      'whois',
+      'rdap',
+      'dns',
+      'domain-intelligence',
+      'brand-protection',
+      'typosquatting',
+      'certificate-transparency',
+      'osint',
+      'threat-intelligence',
+      'asn',
+    ]);
   });
 
   test('uses a narrow allowlist for distributable runtime files', () => {

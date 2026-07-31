@@ -9,7 +9,10 @@ import { buildWhoisChain, parseWhoisChain } from './lib/whois.mts';
 import { checkDomainAvailability } from './lib/availability.mts';
 import { runUnifiedLookup, LOOKUP_ERROR_CODES } from './lib/lookup.mts';
 import { createLookupHttpResponse } from './lib/lookup-response-contract.mts';
-import { CANONICAL_TRAILING_SLASH_REDIRECTS } from './lib/prerendered-routes.mts';
+import {
+  CANONICAL_TRAILING_SLASH_REDIRECTS,
+  PRERENDERED_HTML_FILE_OVERRIDES,
+} from './lib/prerendered-routes.mts';
 import { searchCertificateTransparency } from './lib/ct-search.mts';
 import { isCtQueryError, normalizeCtQuery } from './lib/ct-query.mts';
 import { checkDomainPosture, normalizeAuditDomain, normalizeDkimSelectors, normalizeMailProtectionProfile } from './lib/domain-posture.mts';
@@ -54,6 +57,10 @@ type ResponseLike = {
   status: (statusCode: number) => ResponseLike;
   json: (body: unknown) => unknown;
   redirect: (statusCode: number, path: string) => unknown;
+};
+
+type StaticResponseLike = ResponseLike & {
+  sendFile: (path: string) => unknown;
 };
 
 type Next = () => void;
@@ -111,12 +118,24 @@ app.use('/_app/immutable', express.static(path.join(svelteBuildDir, '_app', 'imm
   immutable: true,
   maxAge: '1y',
 }));
-app.use(express.static(svelteBuildDir, { extensions: ['html'] }));
 for (const [sourcePath, canonicalPath] of CANONICAL_TRAILING_SLASH_REDIRECTS) {
-  app.get(sourcePath, (_req: RequestLike, res: ResponseLike) => {
+  app.get(sourcePath, (req: RequestLike, res: ResponseLike, next: Next) => {
+    if (req.path !== sourcePath) {
+      next();
+      return;
+    }
     res.redirect(308, canonicalPath);
   });
 }
+// A prerendered route can also be the parent directory for other pages.
+// Serve its exact HTML file before express.static sees the directory and
+// redirects to a non-existent index file.
+for (const [routePath, htmlFile] of PRERENDERED_HTML_FILE_OVERRIDES) {
+  app.get(routePath, (_req: RequestLike, res: StaticResponseLike) => {
+    res.sendFile(path.join(svelteBuildDir, htmlFile));
+  });
+}
+app.use(express.static(svelteBuildDir, { extensions: ['html'] }));
 
 // True when the request actually arrived over HTTPS - directly, or via a
 // reverse proxy that sets the standard forwarded-proto header - so the
