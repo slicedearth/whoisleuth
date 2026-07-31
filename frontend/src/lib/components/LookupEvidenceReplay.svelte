@@ -4,6 +4,7 @@
     parseLookupEvidenceReplay,
     type LookupEvidenceReplay,
   } from '$lib/analysis/lookup-evidence-replay.ts';
+  import LookupAssetGraph from '$lib/components/LookupAssetGraph.svelte';
 
   let replay = $state<LookupEvidenceReplay | null>(null);
   let status = $state('');
@@ -88,6 +89,26 @@
           </aside>
         {/if}
 
+        <section class="brief" aria-labelledby="replay-brief-title">
+          <h3 id="replay-brief-title">Historical review brief</h3>
+          <div>
+            <article>
+              <strong>Verified export facts</strong>
+              <p>{replay.facts.length} normalized fact{replay.facts.length === 1 ? '' : 's'} retained with source labels.</p>
+            </article>
+            <article>
+              <strong>Unknown or incomplete</strong>
+              {#if replay.unknowns.length}<ul>{#each replay.unknowns as unknown}<li>{unknown}</li>{/each}</ul>{:else}<p>No incomplete replay source was identified.</p>{/if}
+            </article>
+            <article>
+              <strong>Next manual steps</strong>
+              <ol>{#each replay.recommendedSteps as step}<li>{step}</li>{/each}</ol>
+            </article>
+          </div>
+        </section>
+
+        <LookupAssetGraph graph={replay.graph} />
+
         <details class="limits">
           <summary>Replay limitations</summary>
           <ul>{#each replay.limitations as limitation}<li>{limitation}</li>{/each}</ul>
@@ -130,10 +151,16 @@
   dd small{display:block;margin-top:3px;color:var(--muted)}
   aside{padding:10px;border:1px solid color-mix(in srgb,var(--warn) 42%,var(--border));border-radius:var(--radius-sm);background:var(--warn-bg)}
   aside ul,.limits ul{margin:7px 0 0;padding-left:18px;font-size:var(--text-xs);line-height:1.5}
+  .brief{display:grid;gap:8px}
+  .brief>div{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
+  .brief article{min-width:0;padding:9px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
+  .brief strong{font-size:var(--text-xs)}
+  .brief p,.brief ul,.brief ol{margin:5px 0 0;color:var(--muted);font-size:var(--text-2xs);line-height:1.5}
+  .brief ul,.brief ol{padding-left:17px}
   .limits{border-top:1px solid var(--border)}
   .limits>summary{padding:10px 0;font:680 var(--text-xs) var(--mono);cursor:pointer}
   @media(max-width:760px){
-    .source-grid,dl{grid-template-columns:minmax(0,1fr)}
+    .source-grid,dl,.brief>div{grid-template-columns:minmax(0,1fr)}
     .replay-result>header{display:grid}
   }
 </style>

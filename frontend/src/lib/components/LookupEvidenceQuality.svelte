@@ -28,12 +28,12 @@
 </script>
 
 {#if matrix.entries.length}
-  <section class="quality card" id="evidence-quality" aria-labelledby="evidence-quality-title">
+  <section class="quality card" id="evidence-quality" aria-label="Evidence coverage">
     <header>
       <div>
         <p class="eyebrow">Evidence reliability</p>
         <h4 id="evidence-quality-title">Source quality and freshness</h4>
-        <p>Review source state, age, request timing, limitations, and downstream uses before relying on a conclusion.</p>
+        <p>Review endpoint class, source state, age, truncation, request timing, limitations, and downstream uses before relying on a conclusion.</p>
       </div>
       <div class="metrics" role="group" aria-label="Evidence quality summary">
         <span><strong>{matrix.completeCount}</strong> complete</span>
@@ -57,9 +57,13 @@
             <div class="source" role="cell">
               <small>{entry.category}</small>
               <strong>{entry.label}</strong>
+              <span class="endpoint">{entry.endpointClass}</span>
               {#if entry.refreshAvailable}<span class="refresh">Refresh available</span>{/if}
             </div>
-            <div role="cell"><span class="state state-{entry.state}">{entry.statusLabel}</span></div>
+            <div role="cell">
+              <span class="state state-{entry.state}">{entry.statusLabel}</span>
+              {#if entry.truncated}<span class="truncated">Truncated</span>{/if}
+            </div>
             <div class="observed" role="cell">
               <span>{observed(entry.observedAt)}</span>
               {#if entry.ageDays !== null}<small>{entry.ageDays} day{entry.ageDays === 1 ? '' : 's'} old</small>{/if}
@@ -107,10 +111,12 @@
   .source small,.observed small,.timing small{color:var(--muted);font:var(--text-2xs) var(--mono)}
   .source small{text-transform:uppercase}
   .source strong{overflow-wrap:anywhere;font-size:var(--text-xs)}
+  .endpoint{color:var(--muted);font-size:var(--text-2xs);line-height:1.4;overflow-wrap:anywhere}
   .refresh{width:max-content;margin-top:3px;color:var(--accent);font:650 var(--text-2xs) var(--mono)}
   .state{display:inline-flex;width:max-content;max-width:100%;padding:3px 6px;border:1px solid var(--border);border-radius:999px;color:var(--muted);font:650 var(--text-2xs) var(--mono)}
   .state-complete{border-color:color-mix(in srgb,var(--accent) 42%,var(--border));color:var(--accent)}
   .state-partial,.state-unavailable,.state-unknown{border-color:color-mix(in srgb,var(--amber) 48%,var(--border));color:var(--amber)}
+  .truncated{display:block;width:max-content;margin-top:5px;color:var(--amber);font:650 var(--text-2xs) var(--mono)}
   .observed span,.timing span,.supports{color:var(--text);font-size:var(--text-2xs);line-height:1.45;overflow-wrap:anywhere}
   .timing span.rejected{color:var(--danger)}
   .limitations{grid-column:1/-1;padding-top:8px;border-top:1px solid var(--border);color:var(--muted);font-size:var(--text-2xs)}

@@ -76,8 +76,11 @@ number of requests that actually run.
 The primary assessment, source health, and material registration conflicts
 remain expanded. Long RDAP and WHOIS records and secondary DNS, HTTP, page,
 passive-posture, technology, TLS, and observed-network cards start collapsed.
-Their state and summary remain visible. Expand a section before relying on its
-evidence, collection time, or limitations.
+Their state and summary remain visible. Selecting an acquisition, brand,
+incident-response, or owned-domain task opens the most relevant settled
+evidence cards and reorders the section navigation without changing collection
+or hiding any source. Expand a section before relying on its evidence,
+collection time, or limitations.
 
 The Registry interpretation panel classifies bounded `rdapConformance`
 declarations already returned by registry and registrar RDAP. Recognized,
@@ -155,9 +158,10 @@ certificate was issued.
 
 **Evidence coverage** summarizes which requested source and analysis families
 completed and which remained limited, unavailable, skipped, unsupported,
-unknown, or not found. It preserves those states separately, lists retained
-limitations, and never retries a source or converts incomplete collection into
-a clean finding.
+unknown, or not found. It preserves those states separately and shows endpoint
+class, observation age, explicit truncation, retained limitations, branch
+timing, downstream uses, and whether a deliberate refresh is available. It
+never retries a source or converts incomplete collection into a clean finding.
 
 After a successful Lookup, **Download report** creates a readable Markdown
 summary locally in the browser. Domain reports include registry, registrar,
@@ -177,9 +181,10 @@ make an attribution, or turn an incomplete source into a negative conclusion.
 The collapsed **Replay exported evidence** control accepts only a current
 first-party Lookup evidence JSON document of up to 5 MB. The browser validates
 the schema, calculates a SHA-256 file digest, and displays a bounded normalized
-source and fact summary without uploading the file or contacting the target.
-Replay time is not observation time. Raw source payloads in the export are not
-rendered, and future or foreign schemas fail closed.
+source and fact summary, historical review brief, and relationship graph
+without uploading the file or contacting the target. Replay time is not
+observation time. Raw source payloads in the export are not rendered, and
+future or foreign schemas fail closed.
 
 When a domain case is open, **Retain selected normalized facts** lets you save
 only the fields needed for later review. Each field keeps source, observation
@@ -409,7 +414,11 @@ Monitor contains Cases, Campaigns, Relationships, and Watchlists.
   actions with follow-up outcomes. Sightings keep deployment observations,
   provider reports, and analyst-reviewed states separate. Pins, sightings,
   decisions, and actions stay separately typed so an analyst assertion is never
-  presented as collected evidence.
+  presented as collected evidence. A deliberate case control can export the
+  bounded source-qualified sightings as a local STIX 2.1 bundle. Affirmative
+  states become separately attributed observations, while every state remains
+  a note so not-reproduced or expired reviews cannot erase earlier evidence.
+  The export does not publish or transmit the bundle.
 - **Campaigns** group existing case domains without duplicating their evidence
   or implying attribution. An expanded campaign projects bounded counts for
   password fields, official-identity relationships, redirect or transport

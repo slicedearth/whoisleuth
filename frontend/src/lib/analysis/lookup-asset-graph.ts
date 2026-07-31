@@ -9,9 +9,13 @@ export type LookupAssetNodeKind =
   | 'certificate'
   | 'hostname'
   | 'identity'
+  | 'issuer'
   | 'key'
   | 'network'
   | 'observation'
+  | 'origin'
+  | 'prefix'
+  | 'registrar'
   | 'target'
   | 'tracker';
 
@@ -150,6 +154,7 @@ function sourceCompleteness(value: unknown): 'complete' | 'partial' | 'unknown' 
 export function buildLookupAssetGraph(input: Readonly<{
   target?: unknown;
   observedAt?: unknown;
+  rdapEvidence?: unknown;
   rdapParsed?: unknown;
   dnsEvidence?: unknown;
   dnsRecords?: unknown;
@@ -167,6 +172,7 @@ export function buildLookupAssetGraph(input: Readonly<{
   pageForms?: unknown;
   pageResources?: unknown;
   pageIdentity?: unknown;
+  structuredDataIdentity?: unknown;
   certificatePolicyReview?: unknown;
 }>): LookupAssetGraph {
   const target = hostname(input.target);
@@ -268,6 +274,34 @@ export function buildLookupAssetGraph(input: Readonly<{
     }
   }
 
+  const rdapEvidence = record(input.rdapEvidence);
+  const rdapParsed = record(input.rdapParsed);
+  const registrarEntity = record(rdapParsed.registrar);
+  const registrar = text(
+    registrarEntity.name
+      ?? registrarEntity.fn
+      ?? registrarEntity.handle
+      ?? (typeof rdapParsed.registrar === 'string' ? rdapParsed.registrar : ''),
+    180,
+  );
+  if (registrar) {
+    connect(
+      'registrar',
+      registrar,
+      {
+        kind: 'registered-via',
+        label: 'registered via',
+        sourceLabel: 'Registry RDAP',
+        observedAt,
+        completeness: sourceCompleteness(rdapEvidence),
+        limitations: limitations(rdapEvidence.limitations),
+        lenses: ['all'],
+        href: '#evidence-registry',
+      },
+      'Published registrar of record',
+    );
+  }
+
   const delegation = record(dnsEvidence.delegation);
   const delegationLimits = limitations(delegation.limitations);
   const registryObservationId = addNode('observation', 'Registry publication', 'Registry nameserver and glue evidence');
@@ -366,6 +400,24 @@ export function buildLookupAssetGraph(input: Readonly<{
       href: '#evidence-network-context',
     });
   }
+  for (const cidr of textList(network.cidrs, 8)) {
+    const prefixId = addNode('prefix', cidr, 'Published IP RDAP network prefix');
+    const prefixSource = networkId || endpointId;
+    if (prefixId && prefixSource) {
+      addEdge({
+        source: prefixSource,
+        target: prefixId,
+        kind: 'publishes-prefix',
+        label: 'publishes prefix',
+        sourceLabel: 'IP RDAP',
+        observedAt: isoDate(networkContext.observedAt) || observedAt,
+        completeness: sourceCompleteness(networkContext),
+        limitations: limitations(networkContext.limitations),
+        lenses: ['all'],
+        href: '#evidence-network-context',
+      });
+    }
+  }
 
   const httpEvidence = record(input.httpEvidence);
   const finalHost = urlHost(httpEvidence.finalUrl);
@@ -390,7 +442,7 @@ export function buildLookupAssetGraph(input: Readonly<{
   const canonicalHost = urlHost(record(input.pageCanonical).url);
   if (canonicalHost) {
     connect(
-      'identity',
+      'origin',
       canonicalHost,
       {
         kind: 'declares-canonical',
@@ -409,7 +461,7 @@ export function buildLookupAssetGraph(input: Readonly<{
   const openGraphHost = urlHost(record(input.pageOpenGraphUrl).url);
   if (openGraphHost) {
     connect(
-      'identity',
+      'origin',
       openGraphHost,
       {
         kind: 'declares-open-graph',
@@ -429,7 +481,7 @@ export function buildLookupAssetGraph(input: Readonly<{
     const host = urlHost(origin);
     if (host) {
       connect(
-        'identity',
+        'origin',
         host,
         {
           kind: 'form-destination',
@@ -485,6 +537,72 @@ export function buildLookupAssetGraph(input: Readonly<{
         },
         text(identifier.type, 80),
         identitySource,
+      );
+    }
+  }
+
+  const structuredIdentity = record(input.structuredDataIdentity);
+  for (const entity of records(structuredIdentity.entities, 12)) {
+    const entityLabel = text(entity.name, 180);
+    const declaredOrigin = urlHost(entity.declaredOrigin);
+    const entityId = entityLabel
+      ? connect(
+          'identity',
+          entityLabel,
+          {
+            kind: 'declares-publisher',
+            label: 'declares publisher',
+            sourceLabel: 'Structured identity metadata',
+            observedAt,
+            completeness: sourceCompleteness(structuredIdentity),
+            limitations: [
+              ...limitations(structuredIdentity.limitations),
+              'Publisher-declared structured metadata is not independent identity verification.',
+            ].slice(0, MAX_LIMITATIONS),
+            lenses: ['identity'],
+            href: '#evidence-structured-identity',
+          },
+          textList(entity.types, 5).join(', ') || 'Publisher-declared entity',
+          identitySource,
+        )
+      : identitySource;
+    if (declaredOrigin) {
+      connect(
+        'origin',
+        declaredOrigin,
+        {
+          kind: 'declares-origin',
+          label: 'declares origin',
+          sourceLabel: 'Structured identity metadata',
+          observedAt,
+          completeness: sourceCompleteness(structuredIdentity),
+          limitations: limitations(structuredIdentity.limitations),
+          lenses: ['identity'],
+          href: '#evidence-structured-identity',
+        },
+        'Publisher-declared structured-data origin',
+        entityId || identitySource,
+      );
+    }
+    for (const sameAsHost of textList(entity.sameAsHosts, 12)) {
+      connect(
+        'origin',
+        sameAsHost,
+        {
+          kind: 'declares-same-as',
+          label: 'declares sameAs',
+          sourceLabel: 'Structured identity metadata',
+          observedAt,
+          completeness: sourceCompleteness(structuredIdentity),
+          limitations: [
+            ...limitations(structuredIdentity.limitations),
+            'A sameAs declaration is a site-authored claim and does not establish ownership or control.',
+          ].slice(0, MAX_LIMITATIONS),
+          lenses: ['identity'],
+          href: '#evidence-structured-identity',
+        },
+        'Publisher-declared sameAs host',
+        entityId || identitySource,
       );
     }
   }
@@ -549,7 +667,7 @@ export function buildLookupAssetGraph(input: Readonly<{
     const issuer = record(input.tlsIssuer);
     const issuerLabel = text(issuer.organization || issuer.commonName || issuer.CN, 180);
     if (issuerLabel) {
-      const issuerId = addNode('identity', issuerLabel, 'Certificate issuer');
+      const issuerId = addNode('issuer', issuerLabel, 'Certificate issuer');
       if (issuerId) {
         addEdge({
           source: certificateId,

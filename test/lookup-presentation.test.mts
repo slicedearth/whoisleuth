@@ -4,6 +4,7 @@ import test from 'node:test';
 import {
   normalizeLookupEvidenceDensity,
   normalizeLookupTaskView,
+  lookupTaskInitiallyExpands,
   prioritizeLookupSectionLinks,
   readLookupPresentation,
   writeLookupPresentation,
@@ -37,6 +38,15 @@ test('prioritizes navigation without changing or removing the shared evidence li
   ]);
   assert.deepEqual(new Set(acquisition), new Set(links));
   assert.notEqual(acquisition, links);
+});
+
+test('task views open only the evidence panels that answer their primary questions', () => {
+  assert.equal(lookupTaskInitiallyExpands('brand', 'page-identity'), true);
+  assert.equal(lookupTaskInitiallyExpands('brand', 'dns'), false);
+  assert.equal(lookupTaskInitiallyExpands('owned', 'dns'), true);
+  assert.equal(lookupTaskInitiallyExpands('incident', 'security-posture'), true);
+  assert.equal(lookupTaskInitiallyExpands('general', 'http'), false);
+  assert.equal(lookupTaskInitiallyExpands('invalid', 'http'), false);
 });
 
 test('reads and writes a bounded versioned browser presentation preference', () => {

@@ -16,6 +16,7 @@ const coverage: EvidenceCoverageLedger = {
       category: 'registry',
       state: 'complete',
       statusLabel: 'Complete',
+      truncated: false,
       limitations: [],
       manualReviewSuggested: false,
     },
@@ -25,6 +26,7 @@ const coverage: EvidenceCoverageLedger = {
       category: 'registry',
       state: 'partial',
       statusLabel: 'Partial',
+      truncated: false,
       limitations: ['The referral chain ended before an authoritative record was returned.'],
       manualReviewSuggested: true,
     },
@@ -34,6 +36,7 @@ const coverage: EvidenceCoverageLedger = {
       category: 'web',
       state: 'complete',
       statusLabel: 'Complete',
+      truncated: false,
       limitations: [],
       manualReviewSuggested: false,
     },
@@ -183,6 +186,8 @@ test('quality matrix joins coverage, timing, freshness, refresh, and downstream 
   assert.equal(matrix.entries.find((entry) => entry.id === 'whois')?.durationMs, 900);
   assert.equal(matrix.entries.find((entry) => entry.id === 'whois')?.timingOutcome, 'rejected');
   assert.equal(matrix.entries.find((entry) => entry.id === 'whois')?.refreshAvailable, true);
+  assert.equal(matrix.entries.find((entry) => entry.id === 'rdap')?.endpointClass, 'Authoritative registry endpoint');
+  assert.equal(matrix.entries.find((entry) => entry.id === 'rdap')?.truncated, false);
   assert.deepEqual(matrix.entries.find((entry) => entry.id === 'rdap')?.supports, [
     'Registration summary',
     'Lifecycle',

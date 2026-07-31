@@ -2,6 +2,10 @@ import {
   LOOKUP_EVIDENCE_SCHEMA,
   LOOKUP_EVIDENCE_SCHEMA_VERSION,
 } from './evidence-export.ts';
+import {
+  buildLookupAssetGraph,
+  type LookupAssetGraph,
+} from './lookup-asset-graph.ts';
 
 export const LOOKUP_EVIDENCE_REPLAY_MAX_BYTES = 5 * 1024 * 1024;
 
@@ -32,6 +36,9 @@ export type LookupEvidenceReplay = Readonly<{
   sources: readonly LookupEvidenceReplaySource[];
   facts: readonly LookupEvidenceReplayFact[];
   contradictions: readonly string[];
+  unknowns: readonly string[];
+  recommendedSteps: readonly string[];
+  graph: LookupAssetGraph;
   limitations: readonly string[];
 }>;
 
@@ -195,6 +202,7 @@ export async function parseLookupEvidenceReplay(
   const pageIdentity = record(availability.pageIdentity);
   const technology = record(availability.technologyProfile);
   const securityPosture = record(availability.securityPosture);
+  const structuredDataIdentity = record(availability.structuredDataIdentity);
   const sourceDescriptors: SourceDescriptor[] = [
     { id: 'rdap', label: 'Registry RDAP', value: rdap, fallbackObservedAt: record(diagnostics.rdap).fetchedAt },
     { id: 'whois', label: 'WHOIS', value: whois, fallbackObservedAt: record(diagnostics.whois).queriedAt },
@@ -233,6 +241,41 @@ export async function parseLookupEvidenceReplay(
     ...comparisonContradictions(analysis.registryComparison, 'Registry RDAP and WHOIS'),
     ...comparisonContradictions(analysis.registrarPublicationComparison, 'Registry and registrar RDAP'),
   ], 16);
+  const unknowns = unique(replaySources.flatMap((item) => (
+    item.state === 'success' && item.complete !== false
+      ? []
+      : [`${item.label}: ${item.state}${item.complete === false ? ' and incomplete' : ''}.`]
+  )), 12);
+  const recommendedSteps = unique([
+    ...(contradictions.length ? ['Review each contradictory registration field against its separately attributed source evidence.'] : []),
+    ...(unknowns.length ? ['Refresh incomplete or unavailable sources in a deliberate live Lookup if current evidence is required.'] : []),
+    'Use the retained observation time and file digest when citing this historical evidence.',
+    'Record analyst assertions separately from the replayed observations.',
+  ], 6);
+  const networkContext = record(sources.network);
+  const graph = buildLookupAssetGraph({
+    target: query.registrableDomain ?? query.inputHostname ?? query.submitted,
+    observedAt: exportedAt,
+    rdapEvidence: rdap,
+    rdapParsed,
+    dnsEvidence: dns,
+    dnsRecords: dns.records,
+    observedNetworkContext: networkContext,
+    observedNetworkEndpoint: networkContext.endpoint,
+    observedNetwork: networkContext.network,
+    httpEvidence: http,
+    tlsEvidence: tls,
+    tlsCertificate: tls.certificate,
+    tlsAltNames: record(tls.certificate).subjectAltNames,
+    tlsPublicKey: record(tls.certificate).publicKey,
+    tlsIssuer: record(tls.certificate).issuer,
+    pageCanonical: pageIdentity.canonical,
+    pageOpenGraphUrl: pageIdentity.openGraph,
+    pageForms: pageIdentity.forms,
+    pageResources: pageIdentity.resources,
+    pageIdentity,
+    structuredDataIdentity,
+  });
   const limitations = unique([
     ...replaySources.flatMap((item) => item.limitations),
     ...stringList(availability.limitations, 12),
@@ -253,6 +296,9 @@ export async function parseLookupEvidenceReplay(
     sources: replaySources,
     facts,
     contradictions,
+    unknowns,
+    recommendedSteps,
+    graph,
     limitations,
   };
 }

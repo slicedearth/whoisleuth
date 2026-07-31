@@ -43,6 +43,8 @@ function fixture() {
     },
     observedNetworkEndpoint: { address: '192.0.2.10', selectedFrom: 'tls_connection' },
     observedNetwork: { name: 'Example network', cidrs: ['192.0.2.0/24'] },
+    rdapEvidence: { status: 'success', complete: true },
+    rdapParsed: { registrar: { name: 'Example Registrar' } },
     httpEvidence: {
       status: 'success',
       complete: true,
@@ -57,6 +59,16 @@ function fixture() {
       status: 'success',
       complete: true,
       trackingIdentifiers: [{ type: 'tag-container', value: 'TAG-1234' }],
+    },
+    structuredDataIdentity: {
+      status: 'success',
+      complete: true,
+      entities: [{
+        types: ['Organization'],
+        name: 'Example Publisher',
+        declaredOrigin: 'https://publisher.example/',
+        sameAsHosts: ['profile.example'],
+      }],
     },
     tlsEvidence: { status: 'success', complete: true, observedAt: '2026-07-31T00:00:04.000Z' },
     tlsCertificate: { fingerprintSha256: 'a'.repeat(64) },
@@ -82,7 +94,11 @@ test('asset graph keeps separately attributed typed relationships', () => {
   assert.ok(graph.nodes.some((node) => node.kind === 'target' && node.label === 'example.test'));
   assert.ok(graph.edges.some((edge) => edge.kind === 'resolves-to' && edge.sourceLabel === 'DNS'));
   assert.ok(graph.edges.some((edge) => edge.kind === 'registered-with' && edge.sourceLabel === 'IP RDAP'));
+  assert.ok(graph.nodes.some((node) => node.kind === 'prefix' && node.label === '192.0.2.0/24'));
+  assert.ok(graph.nodes.some((node) => node.kind === 'registrar' && node.label === 'Example Registrar'));
   assert.ok(graph.edges.some((edge) => edge.kind === 'form-destination'));
+  assert.ok(graph.edges.some((edge) => edge.kind === 'declares-publisher'));
+  assert.ok(graph.edges.some((edge) => edge.kind === 'declares-same-as'));
   assert.ok(graph.edges.some((edge) => edge.kind === 'uses-key'));
   assert.ok(graph.edges.every((edge) => edge.observedAt !== null));
 });

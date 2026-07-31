@@ -716,7 +716,9 @@ test('Lookup task and density controls change presentation without changing evid
 
   await density.selectOption('full');
   await expect(page.locator('#raw-data details')).toBeVisible();
+  await expect(page.locator('#evidence-dns > details')).toHaveJSProperty('open', false);
   await task.selectOption('acquisition');
+  await expect(page.locator('#evidence-dns > details')).toHaveJSProperty('open', true);
   await expect(localNav.getByRole('link').evaluateAll((links) => links.map((link) => link.textContent?.trim()))).resolves.toEqual([
     'Overview',
     'Registry',

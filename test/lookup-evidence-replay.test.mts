@@ -43,8 +43,12 @@ function evidence(overrides: Record<string, unknown> = {}): Record<string, unkno
         http: { status: 'success', finalUrl: 'https://example.test/' },
         tls: {
           status: 'success',
+          complete: true,
           connectedAddress: '192.0.2.10',
-          certificate: { fingerprintSha256: 'a'.repeat(64) },
+          certificate: {
+            fingerprintSha256: 'a'.repeat(64),
+            subjectAltNames: { dnsNames: ['example.test'] },
+          },
         },
         pageIdentity: { status: 'success', title: '<script>alert(1)</script>' },
         technologyProfile: { status: 'success', findings: [{ name: 'Example CMS' }] },
@@ -66,6 +70,9 @@ test('replay validates and summarizes a current first-party export without raw r
   assert.ok(replay.sources.some((source) => source.id === 'rdap' && source.state === 'success'));
   assert.ok(replay.facts.some((fact) => fact.label === 'Detected technology' && fact.value === 'Example CMS'));
   assert.ok(replay.contradictions.some((value) => value.includes('Statuses')));
+  assert.ok(replay.unknowns.some((value) => value.includes('WHOIS')));
+  assert.ok(replay.recommendedSteps.some((value) => value.includes('historical evidence')));
+  assert.ok(replay.graph.edges.some((edge) => edge.kind === 'presents-certificate'));
   assert.equal(JSON.stringify(replay).includes('<script>'), true);
 });
 

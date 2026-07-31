@@ -50,8 +50,10 @@ export type LookupEvidenceQualityEntry = Readonly<{
   id: string;
   label: string;
   category: string;
+  endpointClass: string;
   state: EvidenceCoverageState;
   statusLabel: string;
+  truncated: boolean;
   observedAt: string | null;
   ageDays: number | null;
   durationMs: number | null;
@@ -172,6 +174,24 @@ const SUPPORTS: Readonly<Record<string, readonly string[]>> = Object.freeze({
   'security-txt': Object.freeze(['Security contact route']),
   sslbl: Object.freeze(['Certificate warning-data comparison']),
   'external-intelligence': Object.freeze(['Optional external context']),
+});
+
+const ENDPOINT_CLASS: Readonly<Record<string, string>> = Object.freeze({
+  rdap: 'Authoritative registry endpoint',
+  whois: 'WHOIS transport',
+  'registrar-rdap': 'Registrar publication endpoint',
+  availability: 'Authority-aware analysis',
+  dns: 'DNS resolver and authorities',
+  'reverse-dns': 'Reverse DNS resolver',
+  'network-context': 'IP RDAP and routing',
+  http: 'Bounded HTTP collection',
+  tls: 'TLS endpoint',
+  'page-identity': 'Static page analysis',
+  technology: 'Derived analysis',
+  'security-posture': 'Derived analysis',
+  'security-txt': 'Selected well-known resource',
+  sslbl: 'Local warning-data snapshot',
+  'external-intelligence': 'Optional external provider',
 });
 
 function record(value: unknown): JsonRecord {
@@ -523,8 +543,10 @@ export function buildLookupEvidenceQualityMatrix(input: Readonly<{
       id: entry.id,
       label: entry.label,
       category: entry.category,
+      endpointClass: ENDPOINT_CLASS[entry.id] ?? 'Source-specific collection',
       state: entry.state,
       statusLabel: entry.statusLabel,
+      truncated: entry.truncated,
       observedAt,
       ageDays: currentAgeDays,
       durationMs: timing?.durationMs ?? null,

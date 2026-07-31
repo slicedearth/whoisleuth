@@ -24,6 +24,7 @@ export type EvidenceCoverageEntry = Readonly<{
   category: EvidenceCoverageCategory;
   state: EvidenceCoverageState;
   statusLabel: string;
+  truncated: boolean;
   limitations: readonly string[];
   manualReviewSuggested: boolean;
 }>;
@@ -182,6 +183,7 @@ export function buildEvidenceCoverageLedger(
       category: input.category,
       state,
       statusLabel: statusLabel(state),
+      truncated: input.truncated === true,
       limitations: normalizeLimitations(input.limitations),
       manualReviewSuggested: state === 'partial' || state === 'unavailable' || state === 'unknown',
     });

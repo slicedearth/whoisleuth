@@ -101,6 +101,7 @@
   import {
     normalizeLookupEvidenceDensity,
     normalizeLookupTaskView,
+    lookupTaskInitiallyExpands,
     readLookupPresentation,
     writeLookupPresentation,
     type LookupEvidenceDensity,
@@ -371,6 +372,7 @@
   const lookupAssetGraph=$derived(buildLookupAssetGraph({
     target:caseDomain,
     observedAt:result?.fetchedAt,
+    rdapEvidence:rdap,
     rdapParsed,
     dnsEvidence,
     dnsRecords,
@@ -388,6 +390,7 @@
     pageForms,
     pageResources,
     pageIdentity,
+    structuredDataIdentity,
     certificatePolicyReview,
   }));
   const analystEvidencePivots=$derived(buildAnalystEvidencePivots({
@@ -805,6 +808,7 @@
           rehearsalEvidence={dnsRehearsalEvidence}
           domain={caseDomain}
           allowRehearsal={result?.type === 'domain'}
+          initiallyExpanded={lookupTaskInitiallyExpands(taskView,'dns')}
           note="Point-in-time resolver evidence. HTTPS service-binding targets, aliases, ports, and address hints are displayed as publication evidence only; WHOISleuth does not follow or connect to them. Shared DNS infrastructure does not prove common ownership or maliciousness."
         /></div>
         {#if serviceDependencyReview}
@@ -820,11 +824,11 @@
       {/if}
 
       {#if httpEvidence.source==='http'}
-        <div class="evidence-component" id="evidence-http"><LookupHttpEvidence status={statusLabel(show(httpEvidence.status))} complete={httpEvidence.complete!==false} rows={networkDisplay.httpRows} crossOriginRedirect={Boolean(httpEvidence.crossOriginRedirect)} httpsDowngrade={Boolean(httpEvidence.httpsDowngrade)} redirects={networkDisplay.httpRedirects} attempts={networkDisplay.httpAttempts} metadata={networkDisplay.httpMetadata} limitations={Array.isArray(httpEvidence.limitations)?httpEvidence.limitations.map(String):[]} /></div>
+        <div class="evidence-component" id="evidence-http"><LookupHttpEvidence status={statusLabel(show(httpEvidence.status))} complete={httpEvidence.complete!==false} rows={networkDisplay.httpRows} crossOriginRedirect={Boolean(httpEvidence.crossOriginRedirect)} httpsDowngrade={Boolean(httpEvidence.httpsDowngrade)} redirects={networkDisplay.httpRedirects} attempts={networkDisplay.httpAttempts} metadata={networkDisplay.httpMetadata} limitations={Array.isArray(httpEvidence.limitations)?httpEvidence.limitations.map(String):[]} initiallyExpanded={lookupTaskInitiallyExpands(taskView,'http')} /></div>
       {/if}
 
       {#if tlsEvidence.source==='tls'}
-        <div class="evidence-component" id="evidence-tls"><LookupTlsEvidence status={statusLabel(show(tlsEvidence.status))} complete={tlsEvidence.complete!==false} rows={networkDisplay.tlsRows} findings={networkDisplay.tlsFindings} leafCertificate={networkDisplay.leafCertificate} alternativeNames={networkDisplay.alternativeNames} alternativeNamesTruncated={Boolean(tlsAltNames.truncated)} chain={networkDisplay.tlsChain} chainTruncated={Boolean(tlsEvidence.chainTruncated)} validationDetails={networkDisplay.tlsValidation} limitations={Array.isArray(tlsEvidence.limitations)?tlsEvidence.limitations.map(String):[]} validFrom={typeof tlsCertificate.validFrom==='string'?tlsCertificate.validFrom:null} validTo={typeof tlsCertificate.validTo==='string'?tlsCertificate.validTo:null} observedAt={typeof result.fetchedAt==='string'?result.fetchedAt:null} /></div>
+        <div class="evidence-component" id="evidence-tls"><LookupTlsEvidence status={statusLabel(show(tlsEvidence.status))} complete={tlsEvidence.complete!==false} rows={networkDisplay.tlsRows} findings={networkDisplay.tlsFindings} leafCertificate={networkDisplay.leafCertificate} alternativeNames={networkDisplay.alternativeNames} alternativeNamesTruncated={Boolean(tlsAltNames.truncated)} chain={networkDisplay.tlsChain} chainTruncated={Boolean(tlsEvidence.chainTruncated)} validationDetails={networkDisplay.tlsValidation} limitations={Array.isArray(tlsEvidence.limitations)?tlsEvidence.limitations.map(String):[]} validFrom={typeof tlsCertificate.validFrom==='string'?tlsCertificate.validFrom:null} validTo={typeof tlsCertificate.validTo==='string'?tlsCertificate.validTo:null} observedAt={typeof result.fetchedAt==='string'?result.fetchedAt:null} initiallyExpanded={lookupTaskInitiallyExpands(taskView,'tls')} /></div>
         <div class="evidence-component"><LookupCertificatePolicyReview review={certificatePolicyReview} /></div>
       {/if}
 
@@ -875,6 +879,7 @@
           trackingIdentifiers={pageDisplay.trackingIdentifiers}
           fingerprints={pageDisplay.fingerprints}
           limitations={stringList(pageIdentity.limitations)}
+          initiallyExpanded={lookupTaskInitiallyExpands(taskView,'page-identity')}
         /></div>
       {/if}
 
@@ -890,6 +895,7 @@
           methods={credentialSurface.methods}
           actions={credentialSurface.actions}
           limitations={pageDisplay.credentialSurfaceLimitations}
+          initiallyExpanded={lookupTaskInitiallyExpands(taskView,'credential-surface')}
         /></div>
       {/if}
 
@@ -900,6 +906,7 @@
           summary={pageDisplay.securityPostureSummary}
           findings={pageDisplay.securityPostureFindings}
           limitations={pageDisplay.securityPostureLimitations}
+          initiallyExpanded={lookupTaskInitiallyExpands(taskView,'security-posture')}
         /></div>
       {/if}
 
@@ -909,6 +916,7 @@
           complete={Boolean(structuredDataIdentity.complete)}
           entities={pageDisplay.structuredIdentities}
           limitations={pageDisplay.structuredIdentityLimitations}
+          initiallyExpanded={lookupTaskInitiallyExpands(taskView,'structured-identity')}
         /></div>
       {/if}
 
@@ -924,6 +932,7 @@
           libraryCatalog={boundedTechnologyText((browserLibraryProfile.catalog as JsonRecord)?.version,80)}
           libraries={pageDisplay.browserLibraries}
           libraryLimitations={pageDisplay.browserLibraryLimitations}
+          initiallyExpanded={lookupTaskInitiallyExpands(taskView,'technology')}
         /></div>
       {/if}
 
@@ -986,6 +995,7 @@
           fetchedAt={dateTimeAttribute(observedNetworkRdap.fetchedAt)||''}
           rows={pageDisplay.observedNetworkRows}
           limitations={pageDisplay.observedNetworkLimitations}
+          initiallyExpanded={lookupTaskInitiallyExpands(taskView,'network-context')}
         /></div>
       {/if}
     </section>
