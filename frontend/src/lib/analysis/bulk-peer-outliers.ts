@@ -4,14 +4,17 @@ import { rowsToCsv } from './utils.ts';
 export type BulkPeerDimensionId =
   | 'activity'
   | 'address_set'
+  | 'certificate_fingerprint'
   | 'cname_set'
   | 'dnssec'
   | 'favicon'
   | 'form_destination'
   | 'mail_posture'
   | 'nameserver_set'
+  | 'official_asset_host_set'
   | 'registrar'
-  | 'source_coverage';
+  | 'source_coverage'
+  | 'tracking_identifier_set';
 
 export type BulkPeerDimension = Readonly<{
   id: BulkPeerDimensionId;
@@ -53,14 +56,17 @@ const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/gu;
 const DIMENSION_LABELS: Readonly<Record<BulkPeerDimensionId, string>> = Object.freeze({
   activity: 'Website activity',
   address_set: 'Observed address set',
+  certificate_fingerprint: 'Leaf certificate fingerprint',
   cname_set: 'CNAME set',
   dnssec: 'DNSSEC publication',
   favicon: 'Favicon fingerprint',
   form_destination: 'External form destination',
   mail_posture: 'Mail posture',
   nameserver_set: 'Nameserver set',
+  official_asset_host_set: 'Official asset host set',
   registrar: 'Registrar',
   source_coverage: 'Source coverage',
+  tracking_identifier_set: 'Tracking identifier set',
 });
 
 function text(value: unknown, maximum = 300): string {
@@ -117,6 +123,15 @@ function dimensionValue(row: ScanResult, dimension: BulkPeerDimensionId): string
     return normalizedSet([...(row.dns?.records.a ?? []), ...(row.dns?.records.aaaa ?? [])]);
   }
   if (dimension === 'cname_set') return normalizedSet(row.dns?.records.cname);
+  if (dimension === 'certificate_fingerprint') {
+    return text(row.relationship.certificateFingerprint, 128).toLowerCase() || null;
+  }
+  if (dimension === 'official_asset_host_set') {
+    return normalizedSet(row.relationship.officialAssetHosts);
+  }
+  if (dimension === 'tracking_identifier_set') {
+    return normalizedSet(row.relationship.trackingIdentifiers);
+  }
   return sourceCoverage(row);
 }
 

@@ -64,7 +64,17 @@ function row(domain: string, overrides: Partial<ScanResult> = {}): ScanResult {
       },
     },
     dnssec: 'signed',
-    relationship: { version: 1, groups: [], limitations: [], truncated: false },
+    relationship: {
+      version: 2,
+      nameservers: ['ns1.example.test', 'ns2.example.test'],
+      ipAddresses: ['192.0.2.10'],
+      trackingIdentifiers: ['google-analytics:G-COMMON'],
+      officialAssetHosts: ['cdn.example.test'],
+      faviconHash: 'a'.repeat(64),
+      faviconPHash: null,
+      certificateFingerprint: 'b'.repeat(64),
+      truncated: false,
+    },
     sourceCoverage: [
       { source: 'rdap', state: 'complete' },
       { source: 'dns', state: 'complete' },
@@ -109,6 +119,36 @@ test('small or fragmented cohorts do not manufacture outliers', () => {
     row('three.example', { registrar: 'Registrar Three' }),
   ]);
   assert.equal(fragmented.rows.some((item) => item.findings.some((finding) => finding.dimension === 'registrar')), false);
+});
+
+test('peer outliers compare bounded relationship evidence without adding collection', () => {
+  const rows = [
+    row('one.example'),
+    row('two.example'),
+    row('three.example'),
+    row('different.example', {
+      relationship: {
+        ...row('temporary.example').relationship,
+        trackingIdentifiers: ['google-analytics:G-DIFFERENT'],
+        officialAssetHosts: ['assets.different.example'],
+        certificateFingerprint: 'c'.repeat(64),
+      },
+    }),
+    row('unavailable.example', {
+      relationship: {
+        ...row('temporary.example').relationship,
+        trackingIdentifiers: [],
+        officialAssetHosts: [],
+        certificateFingerprint: null,
+      },
+    }),
+  ];
+  const matrix = buildBulkPeerOutlierMatrix(rows);
+  const different = matrix.rows.find((item) => item.domain === 'different.example');
+  assert.ok(different?.findings.some((finding) => finding.dimension === 'tracking_identifier_set'));
+  assert.ok(different?.findings.some((finding) => finding.dimension === 'official_asset_host_set'));
+  assert.ok(different?.findings.some((finding) => finding.dimension === 'certificate_fingerprint'));
+  assert.equal(matrix.dimensions.find((item) => item.id === 'certificate_fingerprint')?.excludedCount, 1);
 });
 
 test('outlier export is formula-safe and includes the local baseline', () => {
