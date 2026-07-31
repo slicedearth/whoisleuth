@@ -9,6 +9,7 @@
   let replay = $state<LookupEvidenceReplay | null>(null);
   let status = $state('');
   let loading = $state(false);
+  let expectedSha256 = $state('');
 
   async function load(event: Event) {
     const control = event.currentTarget as HTMLInputElement;
@@ -21,8 +22,12 @@
       if (file.size > LOOKUP_EVIDENCE_REPLAY_MAX_BYTES) {
         throw new Error('Lookup evidence replay files are limited to 5 MB.');
       }
-      replay = await parseLookupEvidenceReplay(await file.text());
-      status = `Loaded ${file.name} locally. No source was contacted.`;
+      const checksum = expectedSha256.trim();
+      replay = await parseLookupEvidenceReplay(
+        await file.text(),
+        checksum ? { expectedSha256: checksum } : {},
+      );
+      status = `Loaded ${file.name} locally${replay.digestVerified ? ' and verified its checksum' : ''}. No source was contacted.`;
     } catch (cause) {
       status = cause instanceof Error ? cause.message : 'The evidence file could not be replayed.';
     } finally {
@@ -44,7 +49,11 @@
       <span>{loading ? 'Reading evidence…' : 'Choose evidence JSON'}</span>
       <input type="file" accept="application/json,.json" disabled={loading} onchange={load} />
     </label>
-    <p class="note">The file stays in this browser tab. Replay validates the current schema, records the file digest, and renders bounded normalized facts only.</p>
+    <label class="checksum">
+      <span>Expected SHA-256 <small>optional</small></span>
+      <input bind:value={expectedSha256} maxlength="64" inputmode="text" autocomplete="off" spellcheck="false" placeholder="Paste a trusted 64-character checksum before choosing the file" />
+    </label>
+    <p class="note">The file stays in this browser tab. Replay validates schema, nesting and entry bounds, calculates the file digest, optionally verifies a trusted checksum, and renders bounded normalized facts only.</p>
     {#if status}<p class:loaded={Boolean(replay)} aria-live="polite">{status}</p>{/if}
 
     {#if replay}
@@ -59,7 +68,7 @@
         </header>
 
         <div class="digest">
-          <small>File SHA-256</small>
+          <small>File SHA-256 · {replay.digestVerified ? 'verified against supplied checksum' : 'calculated locally; no expected checksum supplied'}</small>
           <code>{replay.digestSha256}</code>
         </div>
 
@@ -129,6 +138,7 @@
   .picker{display:inline-flex;align-items:center;margin-top:12px;padding:8px 11px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised);font:680 var(--text-xs) var(--mono);cursor:pointer}
   .picker:focus-within{outline:2px solid var(--focus);outline-offset:3px}
   .picker input{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+  .checksum{display:grid;gap:5px;max-width:760px;margin-top:10px}.checksum span{color:var(--muted);font:650 var(--text-2xs) var(--mono)}.checksum small{font-weight:500}.checksum input{width:100%;font-family:var(--mono)}
   .note{max-width:760px;margin:9px 0}
   .loaded{color:var(--good)}
   .replay-result{display:grid;gap:12px;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)}

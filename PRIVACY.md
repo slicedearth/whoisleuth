@@ -620,7 +620,12 @@ default (see the README), so many lookups return no personal data at all.
   context when collected; ASN reports include normalized routing registration
   evidence. All preserve source states and collection time while excluding raw
   RDAP and WHOIS responses, expanded contacts, provider payloads, scripts, and
-  remote assets. A
+  remote assets. A selected current-schema Lookup evidence JSON file can be
+  replayed locally after schema, nesting, entry-count, and byte-limit checks.
+  Replay calculates SHA-256 and can compare it with an explicitly supplied
+  trusted checksum. The file and checksum remain in the current browser tab,
+  no source is contacted, raw payloads are not rendered, and replay time is not
+  treated as observation time. A
   deliberate unified workspace archive can contain cases and their analyst
   notes, campaigns, Brand Profiles, watchlists, shortlist entries, custom
   detection rules, retained relationship observations, compact saved Bulk

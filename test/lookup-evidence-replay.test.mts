@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   LOOKUP_EVIDENCE_REPLAY_MAX_BYTES,
+  LOOKUP_EVIDENCE_REPLAY_MAX_ENTRIES,
   parseLookupEvidenceReplay,
 } from '../frontend/src/lib/analysis/lookup-evidence-replay.ts';
 import {
@@ -67,6 +68,7 @@ test('replay validates and summarizes a current first-party export without raw r
   assert.equal(replay.target, 'example.test');
   assert.equal(replay.availability, 'registered');
   assert.equal(replay.digestSha256.length, 64);
+  assert.equal(replay.digestVerified, false);
   assert.ok(replay.sources.some((source) => source.id === 'rdap' && source.state === 'success'));
   assert.ok(replay.facts.some((fact) => fact.label === 'Detected technology' && fact.value === 'Example CMS'));
   assert.ok(replay.contradictions.some((value) => value.includes('Statuses')));
@@ -74,6 +76,23 @@ test('replay validates and summarizes a current first-party export without raw r
   assert.ok(replay.recommendedSteps.some((value) => value.includes('historical evidence')));
   assert.ok(replay.graph.edges.some((edge) => edge.kind === 'presents-certificate'));
   assert.equal(JSON.stringify(replay).includes('<script>'), true);
+});
+
+test('replay verifies an explicitly supplied checksum and rejects a mismatch', async () => {
+  const input = JSON.stringify(evidence());
+  const calculated = await parseLookupEvidenceReplay(input);
+  const verified = await parseLookupEvidenceReplay(input, {
+    expectedSha256: calculated.digestSha256.toUpperCase(),
+  });
+  assert.equal(verified.digestVerified, true);
+  await assert.rejects(
+    () => parseLookupEvidenceReplay(input, { expectedSha256: '0'.repeat(64) }),
+    /does not match/u,
+  );
+  await assert.rejects(
+    () => parseLookupEvidenceReplay(input, { expectedSha256: 'invalid' }),
+    /64 hexadecimal/u,
+  );
 });
 
 test('replay fails closed for foreign, future, malformed, and oversized documents', async () => {
@@ -89,5 +108,11 @@ test('replay fails closed for foreign, future, malformed, and oversized document
   await assert.rejects(
     () => parseLookupEvidenceReplay('x'.repeat(LOOKUP_EVIDENCE_REPLAY_MAX_BYTES + 1)),
     /limited to 5 MB/u,
+  );
+  await assert.rejects(
+    () => parseLookupEvidenceReplay(JSON.stringify(evidence({
+      extra: Array.from({ length: LOOKUP_EVIDENCE_REPLAY_MAX_ENTRIES + 1 }, () => null),
+    }))),
+    /structured entries/u,
   );
 });

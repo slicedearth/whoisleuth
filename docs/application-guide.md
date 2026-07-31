@@ -180,11 +180,12 @@ make an attribution, or turn an incomplete source into a negative conclusion.
 
 The collapsed **Replay exported evidence** control accepts only a current
 first-party Lookup evidence JSON document of up to 5 MB. The browser validates
-the schema, calculates a SHA-256 file digest, and displays a bounded normalized
-source and fact summary, historical review brief, and relationship graph
-without uploading the file or contacting the target. Replay time is not
-observation time. Raw source payloads in the export are not rendered, and
-future or foreign schemas fail closed.
+the schema, nesting, and structured entry count, calculates a SHA-256 file
+digest, and can compare it with a trusted checksum pasted before import. It
+displays a bounded normalized source and fact summary, historical review brief,
+and relationship graph without uploading the file or contacting the target.
+Replay time is not observation time. Raw source payloads in the export are not
+rendered, and future or foreign schemas fail closed.
 
 When a domain case is open, **Retain selected normalized facts** lets you save
 only the fields needed for later review. Each field keeps source, observation

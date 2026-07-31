@@ -8,6 +8,7 @@ import {
 } from './lookup-asset-graph.ts';
 
 export const LOOKUP_EVIDENCE_REPLAY_MAX_BYTES = 5 * 1024 * 1024;
+export const LOOKUP_EVIDENCE_REPLAY_MAX_ENTRIES = 20_000;
 
 export type LookupEvidenceReplaySource = Readonly<{
   id: string;
@@ -28,6 +29,7 @@ export type LookupEvidenceReplay = Readonly<{
   version: 1;
   schemaVersion: number;
   digestSha256: string;
+  digestVerified: boolean;
   exportedAt: string;
   target: string;
   targetType: string;
@@ -54,6 +56,8 @@ const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/gu;
 const MAX_SOURCES = 16;
 const MAX_FACTS = 20;
 const MAX_LIMITATIONS = 24;
+const MAX_DOCUMENT_DEPTH = 24;
+const SHA256_RE = /^[a-f0-9]{64}$/u;
 
 function record(value: unknown): JsonRecord {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -163,8 +167,34 @@ async function sha256(value: string): Promise<string> {
   return [...new Uint8Array(digest)].map((item) => item.toString(16).padStart(2, '0')).join('');
 }
 
+function validateDocumentShape(value: unknown): void {
+  const pending: Array<Readonly<{ value: unknown; depth: number }>> = [{ value, depth: 0 }];
+  let entries = 0;
+  while (pending.length) {
+    const current = pending.pop();
+    if (!current) break;
+    entries += 1;
+    if (entries > LOOKUP_EVIDENCE_REPLAY_MAX_ENTRIES) {
+      throw new Error(`Lookup evidence replay files are limited to ${LOOKUP_EVIDENCE_REPLAY_MAX_ENTRIES.toLocaleString('en')} structured entries.`);
+    }
+    if (current.depth > MAX_DOCUMENT_DEPTH) {
+      throw new Error(`Lookup evidence replay files are limited to ${MAX_DOCUMENT_DEPTH} nested levels.`);
+    }
+    if (Array.isArray(current.value)) {
+      for (const item of current.value) pending.push({ value: item, depth: current.depth + 1 });
+      continue;
+    }
+    if (current.value && typeof current.value === 'object') {
+      for (const item of Object.values(current.value)) {
+        pending.push({ value: item, depth: current.depth + 1 });
+      }
+    }
+  }
+}
+
 export async function parseLookupEvidenceReplay(
   input: string,
+  options: Readonly<{ expectedSha256?: string }> = {},
 ): Promise<LookupEvidenceReplay> {
   const bytes = new TextEncoder().encode(input).byteLength;
   if (!bytes) throw new Error('The evidence file is empty.');
@@ -176,6 +206,15 @@ export async function parseLookupEvidenceReplay(
     parsed = JSON.parse(input);
   } catch {
     throw new Error('The selected file is not valid JSON.');
+  }
+  validateDocumentShape(parsed);
+  const expectedSha256 = text(options.expectedSha256, 64).toLowerCase();
+  if (expectedSha256 && !SHA256_RE.test(expectedSha256)) {
+    throw new Error('The expected SHA-256 checksum must contain exactly 64 hexadecimal characters.');
+  }
+  const digestSha256 = await sha256(input);
+  if (expectedSha256 && expectedSha256 !== digestSha256) {
+    throw new Error('The evidence file does not match the expected SHA-256 checksum.');
   }
   const document = record(parsed);
   if (document.schema !== LOOKUP_EVIDENCE_SCHEMA) {
@@ -287,7 +326,8 @@ export async function parseLookupEvidenceReplay(
   return {
     version: 1,
     schemaVersion: LOOKUP_EVIDENCE_SCHEMA_VERSION,
-    digestSha256: await sha256(input),
+    digestSha256,
+    digestVerified: Boolean(expectedSha256),
     exportedAt,
     target: text(query.registrableDomain ?? query.inputHostname ?? query.submitted, 253) || 'Unknown target',
     targetType: text(query.type, 40) || 'unknown',
