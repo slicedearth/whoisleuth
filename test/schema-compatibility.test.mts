@@ -182,6 +182,10 @@ describe('schema compatibility inventory', () => {
     assert.equal(byId(inventory, 'browser.website-snapshots').schema, WEBSITE_SNAPSHOT_SCHEMA);
     assert.equal(byId(inventory, 'browser.website-snapshots').currentVersion, WEBSITE_SNAPSHOT_SCHEMA_VERSION);
     assert.equal(byId(inventory, 'browser.website-snapshots').byteBudget, MAX_WEBSITE_SNAPSHOT_STORE_BYTES);
+    assert.deepEqual(byId(inventory, 'browser.bulk-sessions').supportedVersions, [1, 2]);
+    assert.equal(byId(inventory, 'browser.bulk-sessions').migration, 'normalize_to_current');
+    assert.deepEqual(byId(inventory, 'export.bulk-sessions').supportedVersions, [1, 2]);
+    assert.equal(byId(inventory, 'export.bulk-sessions').migration, 'normalize_to_current');
     assert.equal(byId(inventory, 'browser.investigation-templates').schema, INVESTIGATION_TEMPLATE_SCHEMA);
     assert.equal(byId(inventory, 'browser.investigation-templates').currentVersion, INVESTIGATION_TEMPLATE_VERSION);
     assert.equal(byId(inventory, 'browser.investigation-templates').byteBudget, MAX_INVESTIGATION_TEMPLATE_STORE_BYTES);
