@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
   buildCaseLifecycleEvents,
+  filterCaseLifecycleEvents,
   serializeCaseLifecycleCalendar,
 } from '../frontend/src/lib/analysis/case-lifecycle-calendar.ts';
 import { normalizeCase } from '../frontend/src/lib/analysis/case-model.ts';
@@ -80,6 +81,21 @@ describe('case lifecycle calendar', () => {
       'certificate_expiry_review',
       'domain_expiry_review',
     ]);
+    assert.deepEqual(events.map((event) => event.source), [
+      'case_action',
+      'case_action',
+      'evidence_pin',
+      'evidence_pin',
+      'evidence_history',
+    ]);
+    assert.deepEqual(
+      filterCaseLifecycleEvents(events, { window: '30d' }, '2026-06-15T00:00:00.000Z').map((event) => event.kind),
+      ['action_due', 'action_follow_up'],
+    );
+    assert.deepEqual(
+      filterCaseLifecycleEvents(events, { kind: 'certificate_expiry_review', window: 'all' }).map((event) => event.kind),
+      ['certificate_expiry_review'],
+    );
     const calendar = serializeCaseLifecycleCalendar(record ? [record] : [], '2026-06-01T00:00:00.000Z');
     assert.match(calendar, /BEGIN:VCALENDAR/);
     assert.match(calendar, /X-WHOISLEUTH-SCHEMA:whoisleuth\.case-review-calendar/);

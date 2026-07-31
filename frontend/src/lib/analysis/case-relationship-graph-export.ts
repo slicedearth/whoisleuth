@@ -11,7 +11,7 @@ import {
 import type { CaseRelationshipSummary } from './case-relationships.ts';
 
 export const RELATIONSHIP_GRAPH_EXPORT_SCHEMA = 'whoisleuth.relationship-graph';
-export const RELATIONSHIP_GRAPH_EXPORT_VERSION = 2;
+export const RELATIONSHIP_GRAPH_EXPORT_VERSION = 3;
 export const MAX_RELATIONSHIP_GRAPH_EXPORT_BYTES = 512 * 1024;
 export const MAX_RELATIONSHIP_GRAPH_EXPORT_OBSERVATIONS_PER_RELATIONSHIP = 8;
 export const MAX_RELATIONSHIP_GRAPH_EXPORT_LINEAGE_PATHS = 8;
@@ -292,6 +292,13 @@ function relationshipMetadata(node: CaseRelationshipGraphRelationshipNode) {
     omittedLineagePathCount,
     maximumScopeDistance: lineagePaths.reduce((maximum, path) => Math.max(maximum, path.scopeDistance), 0),
     discoveryPaths: lineagePaths,
+    workspaceCaseCount: integer(node.workspaceCaseCount),
+    localOccurrenceCount: integer(node.localOccurrenceCount),
+    localFrequencyPercent: Number.isFinite(node.localFrequencyPercent)
+      ? Math.max(0, Math.min(100, node.localFrequencyPercent))
+      : 0,
+    commonality: text(node.commonality, 40) || 'limited_sample',
+    commonalityExplanation: text(node.commonalityExplanation, 300),
     limitations: strings(node.limitations, MAX_RELATIONSHIP_GRAPH_EXPORT_LIMITATIONS, 300),
   };
 }
@@ -429,6 +436,9 @@ const NODE_FIELDS: ReadonlyArray<readonly [string, string]> = [
   ['lineagePathCount', 'Discovery path count'], ['exportedLineagePathCount', 'Exported discovery path count'],
   ['omittedLineagePathCount', 'Omitted discovery path count'], ['maximumScopeDistance', 'Maximum scope distance'],
   ['discoveryPaths', 'Discovery paths'],
+  ['workspaceCaseCount', 'Workspace case count'], ['localOccurrenceCount', 'Local occurrence count'],
+  ['localFrequencyPercent', 'Local frequency percent'], ['commonality', 'Local commonality'],
+  ['commonalityExplanation', 'Local commonality explanation'],
   ['limitations', 'Limitations'],
 ];
 

@@ -192,7 +192,11 @@ default (see the README), so many lookups return no personal data at all.
   limitations, and up to 8 bounded source observations per relationship as
   versioned JSON, GraphML, or GEXF. It excludes case notes, status, disposition,
   raw registry or page responses, contacts, credentials, and transient graph
-  view state. Selected security-policy values are discarded after the
+  view state. The table and graph can also calculate how frequently a
+  relationship appears among comparable cases already retained in the current
+  browser workspace. This local proportion is not sent anywhere, does not
+  estimate wider internet prevalence, and is not evidence of attribution.
+  Selected security-policy values are discarded after the
   transient analysis described below. Other raw header values, attempt errors,
   and redirect inventories are not copied into browser-local investigation
   stores or graph exports.
@@ -523,8 +527,10 @@ default (see the README), so many lookups return no personal data at all.
   and source state. This adds no request and does not test contact
   reachability. Certificate and security.txt expiry dates enter the local
   review calendar only when the analyst explicitly pins those facts to a case.
-  The calendar excludes the pinned values themselves, recipient values, notes,
-  and source payloads.
+  A filterable browser view groups these review dates with saved action due and
+  follow-up dates and links them back to their local cases. The calendar and
+  view exclude the pinned values themselves, recipient values, notes, and
+  source payloads.
   A privacy-safe browser handoff can reduce a pasted domain or HTTP(S) URL to
   the normalized hostname or a sanitized HTTP(S) origin after discarding
   credentials, port, path, query, fragment, and browser-local identifiers.

@@ -318,6 +318,10 @@ classification, immediate parent, hop count, and scope distance using existing
 local evidence only. Exported relationship graphs include the same minimized
 path details. Distance is an explanation of the retained pivot, not evidence
 of ownership, coordination, intent, maliciousness, or safety.
+Each relationship also reports how many comparable cases in the current
+browser workspace contain it. The resulting focused, shared, widespread, or
+limited-sample label describes only this local collection. It is not an
+internet-wide rarity estimate and does not strengthen an attribution claim.
 
 Defensive registration coverage groups a generated scan by mutation family and
 domain ending. It distinguishes protected or allowlisted domains, registered
@@ -471,7 +475,10 @@ result.
 Below the inbox, **Contact and lifecycle review** projects reporting routes
 only from deliberately saved case actions. A due label means the saved due or
 follow-up date has arrived; it does not prove that a route is reachable,
-monitored, suitable, or responsible. The local iCalendar export contains
+monitored, suitable, or responsible. Its browser-local timeline can filter
+upcoming, overdue, 30-day, or 90-day review events by evidence type and links
+each event back to its case and retained source class. The local iCalendar
+export contains
 bounded action-review and observed domain-expiry dates plus certificate and
 security.txt expiry dates only when the analyst explicitly selected those
 facts as case evidence pins. It excludes case notes, recipient values, and

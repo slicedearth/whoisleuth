@@ -122,6 +122,11 @@ export interface CaseRelationshipGroup {
   lineagePaths?: InvestigationLineagePath[];
   omittedLineagePaths?: number;
   limitations?: string[];
+  workspaceCaseCount?: number;
+  localOccurrenceCount?: number;
+  localFrequencyPercent?: number;
+  commonality?: 'limited_sample' | 'focused' | 'shared' | 'widespread';
+  commonalityExplanation?: string;
 }
 
 export interface CaseRelationshipScopeOption {
@@ -252,6 +257,40 @@ function group(
   return { type, label, method, value, cases, description };
 }
 
+function withLocalCommonality(
+  relationship: CaseRelationshipGroup,
+  workspaceCaseCount: number,
+  occurrenceCount = relationship.cases.length,
+): CaseRelationshipGroup {
+  const safeWorkspaceCount = Math.max(0, Math.min(MAX_RELATIONSHIP_CASES, Math.trunc(workspaceCaseCount)));
+  const safeOccurrenceCount = Math.max(0, Math.min(safeWorkspaceCount, Math.trunc(occurrenceCount)));
+  const frequency = safeWorkspaceCount
+    ? Math.round((safeOccurrenceCount / safeWorkspaceCount) * 1_000) / 10
+    : 0;
+  const commonality = safeWorkspaceCount < 3
+    ? 'limited_sample'
+    : frequency >= 50
+      ? 'widespread'
+      : frequency >= 20
+        ? 'shared'
+        : 'focused';
+  const commonalityExplanation = commonality === 'limited_sample'
+    ? `Observed in ${safeOccurrenceCount} of ${safeWorkspaceCount} comparable local cases. The sample is too small to characterize commonality.`
+    : commonality === 'widespread'
+      ? `Observed in ${safeOccurrenceCount} of ${safeWorkspaceCount} comparable local cases (${frequency}%). This is widespread in this workspace and may reflect common infrastructure.`
+      : commonality === 'shared'
+        ? `Observed in ${safeOccurrenceCount} of ${safeWorkspaceCount} comparable local cases (${frequency}%). This is shared across a material part of this workspace.`
+        : `Observed in ${safeOccurrenceCount} of ${safeWorkspaceCount} comparable local cases (${frequency}%). This is focused within this workspace and cannot describe wider prevalence.`;
+  return {
+    ...relationship,
+    workspaceCaseCount: safeWorkspaceCount,
+    localOccurrenceCount: safeOccurrenceCount,
+    localFrequencyPercent: frequency,
+    commonality,
+    commonalityExplanation,
+  };
+}
+
 /**
  * Builds deterministic relationships from the latest valid evidence snapshot
  * in each case. Nameserver comparison uses the bounded retained normalized set;
@@ -332,9 +371,16 @@ export function buildCaseRelationships(rawCases: unknown): CaseRelationshipSumma
     || left.cases.map((item) => item.domain).join('|').localeCompare(right.cases.map((item) => item.domain).join('|')));
   if (output.length > MAX_CASE_RELATIONSHIP_GROUPS) truncated = true;
   const groups = output.slice(0, MAX_CASE_RELATIONSHIP_GROUPS).map((item) => {
-    if (item.cases.length <= MAX_CASES_PER_RELATIONSHIP) return item;
+    const occurrenceCount = item.cases.length;
+    if (item.cases.length <= MAX_CASES_PER_RELATIONSHIP) {
+      return withLocalCommonality(item, seenIds.size, occurrenceCount);
+    }
     truncated = true;
-    return { ...item, cases: item.cases.slice(0, MAX_CASES_PER_RELATIONSHIP) };
+    return withLocalCommonality(
+      { ...item, cases: item.cases.slice(0, MAX_CASES_PER_RELATIONSHIP) },
+      seenIds.size,
+      occurrenceCount,
+    );
   });
 
   return {
@@ -578,6 +624,9 @@ export function buildInvestigationCaseRelationships(rawProjection: unknown): Cas
     'favicon',
     'official_asset',
   ].map((value, index) => [value, index]));
+  const workspaceCaseIds = new Set(
+    [...casesByDomain.values()].flatMap((caseMap) => [...caseMap.keys()]),
+  );
   const candidates = [...buckets.values()].filter((bucket) => bucket.cases.size >= 2).map((bucket) => {
     const allCases = [...bucket.cases.values()].sort((left, right) => left.domain.localeCompare(right.domain));
     const allCampaigns = [...bucket.campaigns.values()].sort((left, right) => left.label.localeCompare(right.label) || left.id.localeCompare(right.id));
@@ -599,7 +648,7 @@ export function buildInvestigationCaseRelationships(rawProjection: unknown): Cas
       || allClassifications.length > classifications.length
       || bucket.omittedLineagePaths > 0;
     if (groupTruncated) truncated = true;
-    return {
+    return withLocalCommonality({
       type: bucket.type,
       label: bucket.label,
       method: safeProjectionText(methods.join(' / '), 400),
@@ -620,18 +669,18 @@ export function buildInvestigationCaseRelationships(rawProjection: unknown): Cas
       lineagePaths: allLineagePaths,
       omittedLineagePaths: bucket.omittedLineagePaths,
       limitations: projectionLimitations(bucket.limitations),
-    };
+    }, workspaceCaseIds.size, allCases.length);
   }).sort((left, right) => (Number(order.get(left.type)) - Number(order.get(right.type)))
     || left.value.localeCompare(right.value)
     || left.cases.map((item) => item.domain).join('|').localeCompare(right.cases.map((item) => item.domain).join('|')));
 
   if (candidates.length > MAX_CASE_RELATIONSHIP_GROUPS) truncated = true;
   const groups = candidates.slice(0, MAX_CASE_RELATIONSHIP_GROUPS);
-  const allSourceValues = [...new Set(groups.flatMap((group) => group.sources))].sort();
+  const allSourceValues: string[] = [...new Set(groups.flatMap((group) => group.sources ?? []))].sort();
   const sourceValues = allSourceValues.slice(0, MAX_RELATIONSHIP_SOURCE_OPTIONS);
   const sourceOptionsTruncated = sourceValues.length < allSourceValues.length;
   const cases = new Map(groups.flatMap((group) => group.cases.map((item) => [item.id, item])));
-  const campaigns = new Map(groups.flatMap((group) => group.campaigns.map((item) => [item.id, item])));
+  const campaigns = new Map(groups.flatMap((group) => (group.campaigns ?? []).map((item) => [item.id, item])));
   const scopeOptions: CaseRelationshipScopeOption[] = [
     ...[...cases.values()].sort((left, right) => left.domain.localeCompare(right.domain)).map((item) => ({ value: `case:${item.id}`, kind: 'case' as const, label: item.domain })),
     ...[...campaigns.values()].sort((left, right) => left.label.localeCompare(right.label) || left.id.localeCompare(right.id)).map((item) => ({ value: `campaign:${item.id}`, kind: 'campaign' as const, label: item.label })),
@@ -653,6 +702,7 @@ export function buildInvestigationCaseRelationships(rawProjection: unknown): Cas
       ...(lineage.state === 'ready' ? lineage.limitations : [lineage.limitations[0] ?? 'Discovery lineage was unavailable.']),
       ...(filterOptionsTruncated ? ['Source, case, or campaign filter options were bounded; retained relationship rows remain available in the table.'] : []),
       'Relationship groups use retained observation history. Filter by observation time and inspect provenance before treating a historical pivot as current.',
+      'Commonality is calculated only across comparable cases retained in this browser workspace. It does not estimate internet-wide prevalence or attribution.',
       'Shared infrastructure or destinations are investigation pivots, not proof of common ownership, coordination, intent, or maliciousness.',
     ]),
   };

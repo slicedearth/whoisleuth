@@ -259,6 +259,11 @@ describe('projection-backed cross-case relationships', () => {
     assert.ok(nameservers.observations);
     assert.ok(result.scopeOptions);
     assert.deepEqual(nameservers.cases.map((item) => item.domain), ['a.invalid', 'b.invalid']);
+    assert.equal(nameservers.workspaceCaseCount, 2);
+    assert.equal(nameservers.localOccurrenceCount, 2);
+    assert.equal(nameservers.localFrequencyPercent, 100);
+    assert.equal(nameservers.commonality, 'limited_sample');
+    assert.match(nameservers.commonalityExplanation || '', /sample is too small/i);
     assert.deepEqual(nameservers.campaigns.map((item) => item.label), ['Shared infrastructure review']);
     assert.deepEqual(nameservers.sources, ['import', 'lookup', 'monitor']);
     assert.equal(nameservers.firstObservedAt, '2026-07-01T00:00:00.000Z');
@@ -320,6 +325,27 @@ describe('projection-backed cross-case relationships', () => {
     assert.equal(summary.groups.length, 1);
     assert.equal(filterInvestigationCaseRelationships(summary, { period: '365d' }).groups.length, 0);
     assert.equal(filterInvestigationCaseRelationships(summary, { period: 'all' }).groups.length, 1);
+  });
+
+  test('describes workspace-only commonality without claiming internet rarity', () => {
+    const result = buildCaseRelationships([
+      caseRecord('case-a', 'a.invalid', [snapshot({ nameservers: ['ns.shared.invalid'] })]),
+      caseRecord('case-b', 'b.invalid', [snapshot({ nameservers: ['ns.shared.invalid'] })]),
+      caseRecord('case-c', 'c.invalid', [snapshot({ nameservers: ['ns.other.invalid'] })]),
+      caseRecord('case-d', 'd.invalid', [snapshot({ nameservers: ['ns.other-d.invalid'] })]),
+      caseRecord('case-e', 'e.invalid', [snapshot({ nameservers: ['ns.other-e.invalid'] })]),
+      caseRecord('case-f', 'f.invalid', [snapshot({ nameservers: ['ns.other-f.invalid'] })]),
+      caseRecord('case-g', 'g.invalid', [snapshot({ nameservers: ['ns.other-g.invalid'] })]),
+      caseRecord('case-h', 'h.invalid', [snapshot({ nameservers: ['ns.other-h.invalid'] })]),
+      caseRecord('case-i', 'i.invalid', [snapshot({ nameservers: ['ns.other-i.invalid'] })]),
+      caseRecord('case-j', 'j.invalid', [snapshot({ nameservers: ['ns.other-j.invalid'] })]),
+      caseRecord('case-k', 'k.invalid', [snapshot({ nameservers: ['ns.other-k.invalid'] })]),
+    ]);
+    const relationship = requiredValue(result.groups[0]);
+    assert.equal(relationship.commonality, 'focused');
+    assert.equal(relationship.localOccurrenceCount, 2);
+    assert.equal(relationship.workspaceCaseCount, 11);
+    assert.doesNotMatch(relationship.commonalityExplanation || '', /rare on the internet/i);
   });
 
   test('marks a group and summary partial when referenced provenance is unavailable', () => {
