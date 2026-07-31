@@ -86,6 +86,24 @@ describe('case relationship clusters', () => {
     assert.match(result.clusters[0]?.limitations[0] ?? '', /shared by many cases/iu);
   });
 
+  test('qualifies an exact reviewed catalogue range without needing high local degree', async () => {
+    const { COMMON_INFRASTRUCTURE_SNAPSHOT } = await import(
+      '../frontend/src/lib/analysis/common-infrastructure.ts'
+    );
+    const source = COMMON_INFRASTRUCTURE_SNAPSHOT.sources.find((item) =>
+      item.values.some((value) => /^\d/u.test(value)));
+    assert.ok(source);
+    const address = source.values.find((value) => /^\d/u.test(value))?.split('/')[0];
+    assert.ok(address);
+    const result = buildCaseRelationshipClusters(summary([
+      relationship('ip_address', address, ['one.invalid', 'two.invalid']),
+    ]));
+
+    assert.equal(result.clusters[0]?.confidence, 'shared_infrastructure');
+    assert.equal(result.clusters[0]?.infrastructureMatches[0]?.sourceId, source.id);
+    assert.match(result.clusters[0]?.limitations[0] ?? '', /Exact catalogue match/iu);
+  });
+
   test('applies review-only labels, split, merge, and dismissal controls', () => {
     const source = buildCaseRelationshipClusters(summary([
       relationship('certificate', 'certificate-a', ['one.invalid', 'two.invalid']),

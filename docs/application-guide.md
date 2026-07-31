@@ -466,7 +466,13 @@ Monitor contains Cases, Campaigns, Relationships, and Watchlists.
   typed, provenance-backed links across those records, stored case evidence,
   and campaign membership without another network request. The Evidence
   clusters review layer groups connected cases, keeps every contributing
-  relationship inspectable, and qualifies common shared infrastructure.
+  relationship inspectable, and qualifies common shared infrastructure. An
+  exact IP relationship can also be checked locally against a pinned,
+  attributed Common-infrastructure snapshot containing only fresh reviewed
+  cloud, delivery, and public-resolver CIDRs. A match identifies a shared
+  published range, not an origin host, tenant, account, operator, ownership,
+  intent, safety, or maliciousness. A non-match remains inconclusive because
+  the catalogue is deliberately incomplete.
   A separate website-profile view groups exact curated technology identifiers,
   identity digests, normalized resource hosts, tracking identifiers, and
   external form-action origins across explicitly saved compact observations.

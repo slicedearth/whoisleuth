@@ -48,6 +48,8 @@
     "sslbl:snapshot": "node tools/sslbl-snapshot.mts",
     "sslbl:check": "node tools/sslbl-snapshot.mts --check-only",
     "sslbl:status": "node tools/sslbl-snapshot-status.mts",
+    "common-infrastructure:update": "node tools/common-infrastructure-snapshot.mts",
+    "common-infrastructure:check": "node tools/common-infrastructure-snapshot.mts --check-only",
     "lookup:transport-spike": "node tools/incremental-lookup-transport-spike.mts",
     "lookup:transport-qualify": "node tools/incremental-lookup-qualification.mts",
     "lookup:staging-evidence": "node tools/incremental-lookup-staging-evidence.mts",

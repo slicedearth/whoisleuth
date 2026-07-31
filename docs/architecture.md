@@ -274,6 +274,23 @@ visible: without the optional distributed provider, Express budgets are
 process-local and Netlify budgets are warm-instance-local and reset on cold
 starts.
 
+## Common-infrastructure catalogue
+
+Evidence-cluster review can qualify an exact retained IP relationship against a
+checked-in Common-infrastructure snapshot. The maintenance command
+`npm run common-infrastructure:update -- --commit <full-sha>` reads only a
+pinned MISP warning-lists commit, caps every source response at 1 MiB, accepts
+only exact CIDR lists no older than 30 days, rejects malformed or duplicate
+entries, and caps the generated snapshot at 20,000 entries and 1 MiB. The
+retained snapshot records the upstream commit, source date, SHA-256 digest,
+licence, exclusions, and limitations.
+
+Runtime matching is browser-local and makes no provider request. A match only
+qualifies the relationship as shared infrastructure. It does not identify an
+origin host, tenant, account, operator, ownership, intent, safety, or
+maliciousness. A non-match is inconclusive. Stale or oversized sources are
+excluded rather than silently treated as current.
+
 ## Verification strategy
 
 The test pyramid is designed to avoid dependence on public services:
