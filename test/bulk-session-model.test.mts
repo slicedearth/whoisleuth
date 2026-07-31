@@ -55,6 +55,19 @@ function result(domain = 'priority.invalid', overrides: Record<string, unknown> 
       records: { a: ['192.0.2.20'], aaaa: [], cname: [], caa: [] },
     },
     dnssec: 'signed',
+    comparisonEvidence: {
+      version: 1,
+      technology: {
+        state: 'success',
+        ids: ['shop-platform', 'web-framework'],
+        truncated: false,
+      },
+      tls: {
+        state: 'success',
+        issuerLabel: 'Example Issuing CA',
+        spkiSha256: 'b'.repeat(64),
+      },
+    },
     relationship: {
       version: 2,
       nameservers: ['ns1.priority.invalid'],
@@ -113,6 +126,11 @@ describe('saved Bulk sessions', () => {
     assert.equal(normalized.results.length, 1);
     assert.deepEqual(normalized.results[0]?.relationship.nameservers, ['ns1.priority.invalid']);
     assert.deepEqual(normalized.results[0]?.relationship.trackingIdentifiers, ['google-analytics:UA-ABC-1']);
+    assert.deepEqual(normalized.results[0]?.comparisonEvidence?.technology.ids, [
+      'shop-platform',
+      'web-framework',
+    ]);
+    assert.equal(normalized.results[0]?.comparisonEvidence?.tls.issuerLabel, 'Example Issuing CA');
     assert.equal(Object.prototype.hasOwnProperty.call(normalized.results[0] || {}, 'registrant'), false);
     assert.equal(JSON.stringify(normalized).includes('private@priority.invalid'), false);
   });
@@ -129,6 +147,20 @@ describe('saved Bulk sessions', () => {
       normalized.domains.filter((domain) => !new Set(normalized.results.map((item) => item.domain)).has(domain)),
       ['second.invalid', 'third.invalid'],
     );
+  });
+
+  test('migrates schema-one sessions without inventing comparison evidence', () => {
+    const normalized = normalizeBulkSessionStore({
+      schema: BULK_SESSION_SCHEMA,
+      version: 1,
+      sessions: [session('legacy-session', {
+        results: [result('priority.invalid', { comparisonEvidence: undefined })],
+      })],
+    });
+
+    assert.equal(normalized.version, BULK_SESSION_SCHEMA_VERSION);
+    assert.equal(normalized.sessions[0]?.id, 'legacy-session');
+    assert.equal(normalized.sessions[0]?.results[0]?.comparisonEvidence, null);
   });
 
   test('deduplicates, orders, caps, and enforces the serialized store budget', () => {
@@ -173,16 +205,17 @@ describe('saved Bulk sessions', () => {
     assert.match(comparison.limitations.join(' '), /does not establish domain removal/i);
   });
 
-  test('exports and non-destructively merges only the current contract', () => {
+  test('exports the current contract and accepts supported legacy sessions non-destructively', () => {
     const exported = buildBulkSessionExport([session()]);
     assert.equal(exported.schema, BULK_SESSION_SCHEMA);
     assert.equal(exported.version, BULK_SESSION_SCHEMA_VERSION);
     const merged = mergeBulkSessions([], exported);
     assert.equal(merged.added, 1);
     assert.equal(merged.sessions.length, 1);
+    assert.equal(mergeBulkSessions([], { ...exported, version: 1 }).added, 1);
     assert.throws(
-      () => mergeBulkSessions([], { ...exported, version: 2 }),
-      /newer schema 2/i,
+      () => mergeBulkSessions([], { ...exported, version: 3 }),
+      /newer schema 3/i,
     );
   });
 });

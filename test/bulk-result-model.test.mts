@@ -47,6 +47,15 @@ function sessionResult(overrides: Partial<BulkSessionResult> = {}): BulkSessionR
     riskFactors: [{ label: 'Example factor', points: 20 }],
     dns: null,
     dnssec: null,
+    comparisonEvidence: {
+      version: 1,
+      technology: { state: 'success', ids: ['shop-platform'], truncated: false },
+      tls: {
+        state: 'success',
+        issuerLabel: 'Example Issuing CA',
+        spkiSha256: 'a'.repeat(64),
+      },
+    },
     relationship: {
       version: 2,
       nameservers: [],
@@ -133,6 +142,7 @@ describe('Bulk result model', () => {
     assert.equal(restored.registrant, null);
     assert.equal(restored.abuseEvidence, null);
     assert.equal(restored.ct, null);
+    assert.deepEqual(restored.comparisonEvidence?.technology.ids, ['shop-platform']);
   });
 
   it('produces stable mode-sensitive digests and injectable identifiers', async () => {

@@ -37,6 +37,7 @@ import {
   plannedLookupProgressSources,
   type LookupSourceSettlement,
 } from './lookup-source-progress.mts';
+import { buildBulkComparisonEvidence } from './bulk-comparison-evidence.mts';
 
 type LookupOptions = {
   fetchRdapRecord?: typeof fetchRdapRecord;
@@ -245,7 +246,7 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
         includeInheritedCaa: !fast && !compact,
         includeCredentialSurfaceProfile: !fast && !compact,
         includeStructuredDataIdentity: !fast && !compact,
-        includeTechnologyProfile: !compact,
+        includeTechnologyProfile: !fast,
         includeSecurityPosture: !compact,
         featurePolicy,
         rdapRecordPromise: rdapPromise,
@@ -633,6 +634,9 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
   // opt-in response prevents large scans from downloading and retaining the
   // same registry payloads the backend already used to build `availability`.
   if (compact) {
+    const bulkComparison = !fast
+      ? buildBulkComparisonEvidence(availability)
+      : null;
     const {
       credentialSurfaceProfile: _credentialSurfaceProfile,
       structuredDataIdentity: _structuredDataIdentity,
@@ -642,7 +646,13 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
       securityPosture: _securityPosture,
       ...compactAvailability
     } = availability;
-    return { availability: compactAvailability, diagnostics };
+    return {
+      availability: {
+        ...compactAvailability,
+        ...(bulkComparison ? { bulkComparison } : {}),
+      },
+      diagnostics,
+    };
   }
   const targetDomain = classified.registrableDomain || classified.value;
   const threatIntelligenceProviders: ThreatIntelligenceResult[] = [];

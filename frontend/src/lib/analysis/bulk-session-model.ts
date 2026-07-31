@@ -5,7 +5,8 @@
 import { normalizeDomain } from './case-model.ts';
 
 export const BULK_SESSION_SCHEMA = 'whoisleuth.bulk-sessions';
-export const BULK_SESSION_SCHEMA_VERSION = 1;
+export const BULK_SESSION_SCHEMA_VERSION = 2;
+export const SUPPORTED_BULK_SESSION_SCHEMA_VERSIONS = Object.freeze([1, BULK_SESSION_SCHEMA_VERSION]);
 export const MAX_BULK_SESSIONS = 10;
 export const MAX_BULK_SESSION_ROWS = 2_000;
 export const MAX_BULK_SESSION_STORE_BYTES = 4 * 1024 * 1024;
@@ -20,6 +21,7 @@ const DIGEST_RE = /^sha256:[a-f0-9]{64}$/u;
 const HASH_64_RE = /^[a-f0-9]{64}$/iu;
 const PHASH_RE = /^[a-f0-9]{16}$/iu;
 const SOURCE_RE = /^[a-z][a-z0-9_-]{0,39}$/u;
+const TECHNOLOGY_ID_RE = /^[a-z0-9][a-z0-9_-]{0,79}$/u;
 const TRACKING_IDENTIFIER_RE = /^[a-z-]{1,40}:[A-Z0-9-]{1,64}$/u;
 const SESSION_STATES = new Set(['complete', 'partial', 'cancelled']);
 const RESULT_STATES = new Set(['complete', 'error']);
@@ -34,6 +36,7 @@ const SOURCE_STATES = new Set([
   'error',
 ]);
 const TRUST_STATES = new Set(['official', 'partner', 'allowlisted']);
+const COMPARISON_STATES = new Set(['error', 'not_found', 'partial', 'success', 'unavailable']);
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -80,6 +83,20 @@ export type BulkSessionDnsEvidence = {
   };
 };
 
+export type BulkSessionComparisonEvidence = {
+  version: 1;
+  technology: {
+    state: 'error' | 'not_found' | 'partial' | 'success' | 'unavailable';
+    ids: string[];
+    truncated: boolean;
+  };
+  tls: {
+    state: 'error' | 'not_found' | 'partial' | 'success' | 'unavailable';
+    issuerLabel: string | null;
+    spkiSha256: string | null;
+  };
+};
+
 export type BulkSessionResult = {
   domain: string;
   status: 'complete' | 'error';
@@ -114,6 +131,7 @@ export type BulkSessionResult = {
   riskFactors: BulkSessionRiskFactor[];
   dns: BulkSessionDnsEvidence | null;
   dnssec: string | null;
+  comparisonEvidence?: BulkSessionComparisonEvidence | null;
   relationship: BulkSessionRelationship;
   sourceCoverage: BulkSessionSourceCoverage[];
 };
@@ -292,6 +310,39 @@ function normalizeDns(value: unknown): BulkSessionDnsEvidence | null {
   };
 }
 
+export function normalizeBulkComparisonEvidence(value: unknown): BulkSessionComparisonEvidence | null {
+  const item = record(value);
+  const technology = record(item?.technology);
+  const tls = record(item?.tls);
+  if (!item || item.version !== 1 || !technology || !tls) return null;
+  const technologyState = boundedText(technology.state, 40);
+  const tlsState = boundedText(tls.state, 40);
+  if (!COMPARISON_STATES.has(technologyState) || !COMPARISON_STATES.has(tlsState)) return null;
+  const ids = Array.isArray(technology.ids)
+    ? [...new Set(technology.ids
+      .slice(0, 48)
+      .map((candidate) => boundedText(candidate, 80).toLowerCase())
+      .filter((candidate) => TECHNOLOGY_ID_RE.test(candidate)))]
+      .sort()
+      .slice(0, 12)
+    : [];
+  const technologyUsable = ['success', 'partial'].includes(technologyState);
+  const tlsUsable = ['success', 'partial'].includes(tlsState);
+  return {
+    version: 1,
+    technology: {
+      state: technologyState as BulkSessionComparisonEvidence['technology']['state'],
+      ids: technologyUsable ? ids : [],
+      truncated: technologyUsable && technology.truncated === true,
+    },
+    tls: {
+      state: tlsState as BulkSessionComparisonEvidence['tls']['state'],
+      issuerLabel: tlsUsable ? boundedText(tls.issuerLabel, 240) || null : null,
+      spkiSha256: tlsUsable ? nullableHash(tls.spkiSha256, HASH_64_RE) : null,
+    },
+  };
+}
+
 export function normalizeBulkSessionResult(value: unknown): BulkSessionResult | null {
   const item = record(value);
   const domain = normalizeDomain(item?.domain);
@@ -333,6 +384,7 @@ export function normalizeBulkSessionResult(value: unknown): BulkSessionResult | 
     riskFactors: normalizeRiskFactors(item.riskFactors),
     dns: normalizeDns(item.dns),
     dnssec: boundedText(item.dnssec, 40) || null,
+    comparisonEvidence: normalizeBulkComparisonEvidence(item.comparisonEvidence),
     relationship: normalizeRelationship(item.relationship),
     sourceCoverage: normalizeSourceCoverage(item.sourceCoverage),
   };
@@ -396,7 +448,7 @@ export function normalizeBulkSessionStore(raw: unknown): BulkSessionStore {
   const candidates = Array.isArray(raw)
     ? raw
     : value?.schema === BULK_SESSION_SCHEMA
-      && value.version === BULK_SESSION_SCHEMA_VERSION
+      && SUPPORTED_BULK_SESSION_SCHEMA_VERSIONS.includes(Number(value.version))
       && Array.isArray(value.sessions)
       ? value.sessions
       : [];
@@ -480,6 +532,18 @@ function resultChanges(previous: BulkSessionResult, current: BulkSessionResult):
   if (previous.risk !== current.risk) changes.push(`Risk: ${previous.risk ?? 'unavailable'} → ${current.risk ?? 'unavailable'}`);
   if (previous.registrar !== current.registrar) changes.push(`Registrar: ${previous.registrar} → ${current.registrar}`);
   if (previous.activity !== current.activity) changes.push(`Website: ${previous.activity} → ${current.activity}`);
+  const previousComparison = previous.comparisonEvidence;
+  const currentComparison = current.comparisonEvidence;
+  if (JSON.stringify(previousComparison?.technology.ids ?? null)
+    !== JSON.stringify(currentComparison?.technology.ids ?? null)) {
+    changes.push(`Technology IDs: ${previousComparison?.technology.ids.join(', ') || 'not recorded'} → ${currentComparison?.technology.ids.join(', ') || 'not recorded'}`);
+  }
+  if ((previousComparison?.tls.issuerLabel ?? null) !== (currentComparison?.tls.issuerLabel ?? null)) {
+    changes.push(`TLS issuer: ${previousComparison?.tls.issuerLabel || 'not recorded'} → ${currentComparison?.tls.issuerLabel || 'not recorded'}`);
+  }
+  if ((previousComparison?.tls.spkiSha256 ?? null) !== (currentComparison?.tls.spkiSha256 ?? null)) {
+    changes.push(`TLS public key: ${previousComparison?.tls.spkiSha256 || 'not recorded'} → ${currentComparison?.tls.spkiSha256 || 'not recorded'}`);
+  }
   const previousSources = sourceStateMap(previous);
   const currentSources = sourceStateMap(current);
   for (const source of [...new Set([...previousSources.keys(), ...currentSources.keys()])].sort()) {
@@ -556,7 +620,7 @@ export function mergeBulkSessions(
   if (!imported || imported.schema !== BULK_SESSION_SCHEMA || !Array.isArray(imported.sessions)) {
     throw new Error('This file is not a WHOISleuth Bulk session export.');
   }
-  if (imported.version !== BULK_SESSION_SCHEMA_VERSION) {
+  if (!SUPPORTED_BULK_SESSION_SCHEMA_VERSIONS.includes(Number(imported.version))) {
     if (typeof imported.version === 'number' && imported.version > BULK_SESSION_SCHEMA_VERSION) {
       throw new Error(`This Bulk session export uses newer schema ${imported.version}. Update the app before importing it.`);
     }

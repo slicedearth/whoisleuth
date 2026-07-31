@@ -14,6 +14,9 @@ export type BulkPeerDimensionId =
   | 'official_asset_host_set'
   | 'registrar'
   | 'source_coverage'
+  | 'technology_set'
+  | 'tls_issuer'
+  | 'tls_spki'
   | 'tracking_identifier_set';
 
 export type BulkPeerDimension = Readonly<{
@@ -66,6 +69,9 @@ const DIMENSION_LABELS: Readonly<Record<BulkPeerDimensionId, string>> = Object.f
   official_asset_host_set: 'Official asset host set',
   registrar: 'Registrar',
   source_coverage: 'Source coverage',
+  technology_set: 'Technology identifier set',
+  tls_issuer: 'TLS issuer label',
+  tls_spki: 'TLS public-key fingerprint',
   tracking_identifier_set: 'Tracking identifier set',
 });
 
@@ -131,6 +137,15 @@ function dimensionValue(row: ScanResult, dimension: BulkPeerDimensionId): string
   }
   if (dimension === 'tracking_identifier_set') {
     return normalizedSet(row.relationship.trackingIdentifiers);
+  }
+  if (dimension === 'technology_set') {
+    return normalizedSet(row.comparisonEvidence?.technology.ids);
+  }
+  if (dimension === 'tls_issuer') {
+    return text(row.comparisonEvidence?.tls.issuerLabel, 240).toLowerCase() || null;
+  }
+  if (dimension === 'tls_spki') {
+    return text(row.comparisonEvidence?.tls.spkiSha256, 64).toLowerCase() || null;
   }
   return sourceCoverage(row);
 }

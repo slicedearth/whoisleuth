@@ -31,6 +31,13 @@ the aggregate exceeds the 5 MiB planning reference used by the former
 local-storage design. The model ceilings still apply in IndexedDB so changing
 the backend does not make any collection unbounded.
 
+Saved Bulk session schema 2 adds an optional compact comparison envelope to
+each settled Deep row. It retains at most 12 normalized technology identifiers,
+a bounded TLS issuer label, an exact SPKI SHA-256 fingerprint, and independent
+source states. Schema 1 remains readable and is normalized without inventing
+the fields. The envelope does not contain raw page, script, certificate, TLS,
+WHOIS, RDAP, or contact data.
+
 Investigation search still builds a disposable bounded projection from cases,
 campaigns, Brand Profiles, and analyst-selected relationship observations.
 Retained relationship observations first pass through a versioned, typed common

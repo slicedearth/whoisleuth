@@ -11,6 +11,7 @@ type AvailabilityFixtureOptions = {
   featurePolicy?: unknown;
   includeCredentialSurfaceProfile?: boolean;
   includeExtendedDnsContext?: boolean;
+  includeInheritedCaa?: boolean;
   includeSecurityPosture?: boolean;
   includeStructuredDataIdentity?: boolean;
   includeTechnologyProfile?: boolean;
@@ -288,14 +289,27 @@ describe('runUnifiedLookup', () => {
       checkDomainAvailability: async (_domain: string, options: AvailabilityFixtureOptions) => {
         assert.equal(options.includeCredentialSurfaceProfile, false);
         assert.equal(options.includeStructuredDataIdentity, false);
-        assert.equal(options.includeTechnologyProfile, false);
+        assert.equal(options.includeTechnologyProfile, true);
         assert.equal(options.includeSecurityPosture, false);
         assert.equal(options.includeExtendedDnsContext, false);
+        assert.equal(options.includeInheritedCaa, false);
         return {
           state: 'registered', confidence: 'high', registrar: 'Example Registrar',
           credentialSurfaceProfile: { source: 'html', inputs: { classifiedCount: 1 } },
           structuredDataIdentity: { source: 'html', entities: [{ name: 'must be omitted' }] },
-          technologyProfile: { source: 'derived', findings: [{ name: 'must be omitted' }] },
+          technologyProfile: {
+            source: 'derived',
+            status: 'success',
+            findings: [{ id: 'shop-platform', name: 'Must be omitted' }],
+          },
+          tls: {
+            source: 'tls',
+            status: 'success',
+            certificate: {
+              issuer: { commonNames: ['Example Issuing CA'] },
+              publicKey: { fingerprintSha256: 'a'.repeat(64) },
+            },
+          },
           pageRoleProfile: { source: 'derived', primaryRole: 'authentication' },
           clientBehaviorProfile: { source: 'derived', indicators: [{ id: 'browser_storage' }] },
           securityPosture: { source: 'derived', findings: [{ label: 'must be omitted' }] },
@@ -303,7 +317,8 @@ describe('runUnifiedLookup', () => {
       },
     });
 
-    assert.deepEqual(result.availability.registrar, 'Example Registrar');
+    const compactAvailability = recordValue(result.availability);
+    assert.deepEqual(compactAvailability.registrar, 'Example Registrar');
     assert.equal(result.diagnostics.rdap.status, 'success');
     assert.equal(Object.hasOwn(result, 'rdap'), false);
     assert.equal(Object.hasOwn(result, 'whois'), false);
@@ -313,6 +328,38 @@ describe('runUnifiedLookup', () => {
     assert.equal(Object.hasOwn(result.availability, 'pageRoleProfile'), false);
     assert.equal(Object.hasOwn(result.availability, 'clientBehaviorProfile'), false);
     assert.equal(Object.hasOwn(result.availability, 'securityPosture'), false);
+    assert.deepEqual(compactAvailability.bulkComparison, {
+      version: 1,
+      technology: { state: 'success', ids: ['shop-platform'], truncated: false },
+      tls: {
+        state: 'success',
+        issuerLabel: 'Example Issuing CA',
+        spkiSha256: 'a'.repeat(64),
+      },
+    });
+  });
+
+  test('does not add comparison evidence or technology analysis to compact Fast lookups', async () => {
+    const result = await runCompactLookup(classifiedDomain, {
+      fast: true,
+      compact: true,
+      fetchRdapRecord: async () => null,
+      buildWhoisChain: async () => [],
+      checkDomainAvailability: async (_domain: string, options: AvailabilityFixtureOptions) => {
+        assert.equal(options.includeTechnologyProfile, false);
+        return {
+          state: 'unknown',
+          confidence: 'low',
+          technologyProfile: {
+            status: 'success',
+            findings: [{ id: 'must-not-be-retained' }],
+          },
+        };
+      },
+    });
+
+    assert.equal(Object.hasOwn(result.availability, 'bulkComparison'), false);
+    assert.equal(Object.hasOwn(result.availability, 'technologyProfile'), false);
   });
 
   test('adds an exact local SSLBL comparison only to deep non-compact domain lookups', async () => {

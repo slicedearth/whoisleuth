@@ -317,6 +317,19 @@ describe('compact Bulk Lookup HTTP response contract', () => {
         state: 'unknown',
         confidence: 'low',
         deepScanComplete: false,
+        bulkComparison: {
+          version: 1,
+          technology: {
+            state: 'success',
+            ids: ['shop-platform', 'web-framework'],
+            truncated: false,
+          },
+          tls: {
+            state: 'partial',
+            issuerLabel: 'Example Issuing CA',
+            spkiSha256: 'a'.repeat(64),
+          },
+        },
         additiveEvidence: { source: 'bounded' },
       },
     });
@@ -391,6 +404,40 @@ describe('compact Bulk Lookup HTTP response contract', () => {
         },
       }),
       compactResponse({ availability: oversizedAvailability }),
+      compactResponse({
+        availability: {
+          ...compactResponse().availability,
+          bulkComparison: {
+            version: 2,
+            technology: { state: 'success', ids: [], truncated: false },
+            tls: { state: 'success', issuerLabel: null, spkiSha256: null },
+          },
+        },
+      }),
+      compactResponse({
+        availability: {
+          ...compactResponse().availability,
+          bulkComparison: {
+            version: 1,
+            technology: {
+              state: 'success',
+              ids: Array.from({ length: 13 }, (_, index) => `technology-${index}`),
+              truncated: true,
+            },
+            tls: { state: 'success', issuerLabel: null, spkiSha256: null },
+          },
+        },
+      }),
+      compactResponse({
+        availability: {
+          ...compactResponse().availability,
+          bulkComparison: {
+            version: 1,
+            technology: { state: 'future', ids: [], truncated: false },
+            tls: { state: 'success', issuerLabel: null, spkiSha256: 'not-a-digest' },
+          },
+        },
+      }),
       compactResponse({ diagnostics: { ...compactResponse().diagnostics, version: 8 } }),
       compactResponse({
         diagnostics: {

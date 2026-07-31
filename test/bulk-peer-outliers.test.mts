@@ -64,6 +64,19 @@ function row(domain: string, overrides: Partial<ScanResult> = {}): ScanResult {
       },
     },
     dnssec: 'signed',
+    comparisonEvidence: {
+      version: 1,
+      technology: {
+        state: 'success',
+        ids: ['shop-platform', 'web-framework'],
+        truncated: false,
+      },
+      tls: {
+        state: 'success',
+        issuerLabel: 'Common Issuing CA',
+        spkiSha256: 'd'.repeat(64),
+      },
+    },
     relationship: {
       version: 2,
       nameservers: ['ns1.example.test', 'ns2.example.test'],
@@ -127,6 +140,15 @@ test('peer outliers compare bounded relationship evidence without adding collect
     row('two.example'),
     row('three.example'),
     row('different.example', {
+      comparisonEvidence: {
+        version: 1,
+        technology: { state: 'success', ids: ['different-platform'], truncated: false },
+        tls: {
+          state: 'success',
+          issuerLabel: 'Different Issuing CA',
+          spkiSha256: 'e'.repeat(64),
+        },
+      },
       relationship: {
         ...row('temporary.example').relationship,
         trackingIdentifiers: ['google-analytics:G-DIFFERENT'],
@@ -148,6 +170,9 @@ test('peer outliers compare bounded relationship evidence without adding collect
   assert.ok(different?.findings.some((finding) => finding.dimension === 'tracking_identifier_set'));
   assert.ok(different?.findings.some((finding) => finding.dimension === 'official_asset_host_set'));
   assert.ok(different?.findings.some((finding) => finding.dimension === 'certificate_fingerprint'));
+  assert.ok(different?.findings.some((finding) => finding.dimension === 'technology_set'));
+  assert.ok(different?.findings.some((finding) => finding.dimension === 'tls_issuer'));
+  assert.ok(different?.findings.some((finding) => finding.dimension === 'tls_spki'));
   assert.equal(matrix.dimensions.find((item) => item.id === 'certificate_fingerprint')?.excludedCount, 1);
 });
 

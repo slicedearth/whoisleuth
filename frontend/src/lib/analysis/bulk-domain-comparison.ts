@@ -8,7 +8,7 @@ import { sha256ArtifactDigest } from './artifact-integrity.ts';
 import { BULK_REVIEW_STALE_AFTER_DAYS } from './bulk-retry-plan.ts';
 
 export const BULK_DOMAIN_COMPARISON_SCHEMA = 'whoisleuth.domain-comparison';
-export const BULK_DOMAIN_COMPARISON_VERSION = 2;
+export const BULK_DOMAIN_COMPARISON_VERSION = 3;
 
 export type BulkDomainComparisonState =
   | 'conflicting'
@@ -48,7 +48,7 @@ export type BulkDomainComparisonRow = Readonly<{
 }>;
 
 export type BulkDomainComparison = Readonly<{
-  version: 2;
+  version: 3;
   leftDomain: string;
   rightDomain: string;
   observedAt: string | null;
@@ -230,6 +230,24 @@ function context(
   };
 }
 
+function comparisonEvidenceContext(
+  left: BulkSessionResult,
+  right: BulkSessionResult,
+  family: 'technology' | 'tls',
+  base: ReturnType<typeof context>,
+) {
+  const stateFor = (value: BulkSessionResult): BulkDomainComparisonSourceState => {
+    const state = value.comparisonEvidence?.[family].state;
+    if (!state) return 'not_recorded';
+    return state === 'success' ? 'complete' : state;
+  };
+  return {
+    ...base,
+    leftSourceState: stateFor(left),
+    rightSourceState: stateFor(right),
+  };
+}
+
 function freshness(
   observedAt: string | null,
   now: number,
@@ -256,6 +274,11 @@ export function buildBulkDomainComparison(
   const dns = context(left, right, 'DNS evidence', ['dns'], observedAt, options);
   const http = context(left, right, 'HTTP and static page evidence', ['http'], observedAt, options);
   const tls = context(left, right, 'TLS evidence', ['tls'], observedAt, options);
+  const compactTechnology = comparisonEvidenceContext(left, right, 'technology', {
+    ...http,
+    source: 'Bounded technology identifiers',
+  });
+  const compactTls = comparisonEvidenceContext(left, right, 'tls', tls);
   const source = context(left, right, 'Recorded source coverage', [], observedAt, options);
   const registrationConflicting = [left.availability, right.availability]
     .some((value) => ['conflict', 'conflicting'].includes(value.toLowerCase()));
@@ -273,6 +296,8 @@ export function buildBulkDomainComparison(
     row('ip-addresses', 'infrastructure', 'Observed IP addresses', left.relationship.ipAddresses, right.relationship.ipAddresses, 'Normalized exact set comparison', dns, ['Shared hosting and CDNs are common and do not prove common control.']),
     row('tls-source', 'certificate', 'TLS collection', tls.leftSourceState, tls.rightSourceState, 'Retained compact source-state comparison', tls),
     row('certificate', 'certificate', 'Leaf certificate fingerprint', left.relationship.certificateFingerprint, right.relationship.certificateFingerprint, 'Exact SHA-256 comparison', tls, ['Multi-domain certificates and managed hosting are common.']),
+    row('tls-issuer', 'certificate', 'TLS issuer label', left.comparisonEvidence?.tls.issuerLabel ?? null, right.comparisonEvidence?.tls.issuerLabel ?? null, 'Normalized retained issuer-label comparison', compactTls, ['Issuer labels are certificate metadata and do not establish common ownership or control.']),
+    row('tls-spki', 'certificate', 'TLS public-key fingerprint', left.comparisonEvidence?.tls.spkiSha256 ?? null, right.comparisonEvidence?.tls.spkiSha256 ?? null, 'Exact SPKI SHA-256 comparison', compactTls, ['Public-key reuse can be an investigative lead but does not establish ownership, intent, safety, or maliciousness.']),
     row('mail', 'mail', 'MX observed', left.hasMx, right.hasMx, 'Compact Deep DNS observation', dns),
     row('null-mx', 'mail', 'Null MX observed', left.hasNullMx, right.hasNullMx, 'Compact Deep DNS observation', dns),
     row('spf', 'mail', 'SPF observed', left.hasSpf, right.hasSpf, 'Compact Deep DNS observation', dns),
@@ -284,7 +309,7 @@ export function buildBulkDomainComparison(
     row('password-field', 'identity', 'Password field', left.hasPasswordField, right.hasPasswordField, 'Bounded static form observation', http),
     row('phishing-language', 'identity', 'Phishing-language indicator', left.phishingLanguageMatch, right.phishingLanguageMatch, 'Bounded explainable page-language signal', http, ['A wording match is a review lead, not proof of malicious intent.']),
     row('official-assets', 'identity', 'Official asset reuse', left.reusesOfficialAssets, right.reusesOfficialAssets, 'Configured Brand Profile comparison', http),
-    row('technology', 'technology', 'Technology findings', null, null, 'Technology details are deliberately excluded from compact Bulk retention', http, ['Open each domain in Deep Lookup to collect and compare current technology evidence explicitly.'], { retained: false }),
+    row('technology', 'technology', 'Technology identifiers', left.comparisonEvidence?.technology.ids ?? [], right.comparisonEvidence?.technology.ids ?? [], 'Normalized exact set comparison of at most 12 curated identifiers', compactTechnology, ['An unmatched identifier is not evidence that a technology is absent. Shared technologies do not establish common ownership or control.']),
     row('source-health', 'source', 'Recorded source coverage', sourceSummary(left), sourceSummary(right), 'Source-by-source compact state comparison', source, ['A source-state difference can reflect collection conditions rather than a domain change.']),
   ];
   const counts: Record<BulkDomainComparisonState, number> = {

@@ -69,10 +69,12 @@ full successful response contains:
 raw RDAP JSON, WHOIS response bodies, and expanded registry contacts are not
 downloaded into Bulk or copied into watchlists and analyst cases. Deep compact
 collection still runs the bounded WHOIS, DNS, website, TLS, and mail checks
-used by triage, but omits the single-domain registrar-RDAP follow-up, observed
-network RDAP, credential-surface profile, structured-data identity,
-technology profile, page-role profile, client-behaviour profile, passive
-security-posture detail,
+used by triage. Compact Deep can derive and retain only the bounded
+`bulkComparison` technology identifiers, TLS issuer label, SPKI fingerprint,
+and their source states. It omits the single-domain registrar-RDAP follow-up,
+observed network RDAP, credential-surface profile, structured-data identity,
+complete technology profile, page-role profile, client-behaviour profile,
+passive security-posture detail,
 `security.txt`, and optional external-intelligence providers.
 
 Fast mode is WHOIS-free. It uses RDAP first and may perform a bounded NS lookup
@@ -189,8 +191,19 @@ The observation is point-in-time context. CNAME targets are not followed
 recursively, unrelated TXT records are not retained, and shared DNS
 infrastructure is not proof of common ownership or maliciousness. Full Lookup
 and deliberate evidence exports retain the bounded observation. Compact Bulk
-responses may display or export it, but watchlists and analyst cases continue
-to store only their existing compact compatibility fields.
+does not retain the delegation-health observation or the inherited CAA walk.
+Watchlists and analyst cases continue to store only their existing compact
+compatibility fields.
+
+Compact Deep Bulk responses can include a version-1 `bulkComparison` envelope.
+It is derived from technology and TLS evidence already collected for that
+request and adds no request of its own. The envelope contains independent
+source states, at most 12 normalized curated technology identifiers, a
+truncation flag, one issuer label capped at 240 characters, and one exact
+lowercase SPKI SHA-256 fingerprint. Fast Bulk omits the envelope. The complete
+technology profile, signature evidence, certificate record, alternative names,
+chain, and TLS session details remain excluded. A source miss, failure, or
+partial result stays explicit and does not become an empty authoritative set.
 
 Node.js 24 does not expose HTTPS or SVCB through its documented high-level DNS
 resolver API, so WHOISleuth implements the small required DNS wire boundary

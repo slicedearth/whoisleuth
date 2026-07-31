@@ -306,6 +306,18 @@ never reached a settled row. Saving never retains raw source payloads or
 expanded contact records, and resuming does not repeat failed rows unless the
 analyst separately selects **Retry failed**.
 
+Compact Deep rows also retain a versioned comparison envelope built only from
+evidence already collected for that row. It contains at most 12 normalized
+technology identifiers, one bounded TLS issuer label, one exact SPKI SHA-256
+fingerprint, and the independent technology and TLS source states. The
+two-domain workspace, peer-outlier review, saved-session change summary, and
+CSV export can use those fields without another request. Empty or incomplete
+fields retain their source state and are not treated as evidence of absence.
+The complete technology evidence, certificate profile, page markup, script
+references, and raw TLS material remain excluded. Saved session schema 2 adds
+this envelope; schema 1 sessions remain readable and show the new fields as
+not recorded.
+
 The lookalike mail-exposure review groups the currently filtered compact rows
 without another request. It keeps receiving mail with SPF and DMARC, receiving
 mail with an authentication gap, incomplete authentication evidence, null MX,
@@ -570,7 +582,7 @@ Fast and Deep are collection profiles, not confidence ratings.
 | --- | --- | --- |
 | **Fast Lookup or Bulk** | Lower-request registration-first triage. | Uses RDAP-led registration analysis and a bounded authoritative DNS-delegation fallback where needed. WHOIS, website, TLS, and Deep enrichments are skipped explicitly. |
 | **Deep single Lookup** | Complete review of one important target. | Can add WHOIS, registrar RDAP, DNS with SOA zone context, HTTPS service-binding publications, and effective inherited CAA, public-IP PTR context, HTTP, favicon, page identity, privacy-minimized credential-surface counts, TLS, technology, passive posture, observed IP network context, and explicitly selected optional sources. |
-| **Deep Bulk** | Richer comparison across a bounded candidate set. | Uses a compact response with WHOIS, DNS, website, TLS, and mail context needed for triage. Full raw sources and single-Lookup-only enrichments remain omitted. |
+| **Deep Bulk** | Richer comparison across a bounded candidate set. | Uses a compact response with WHOIS, DNS, website, TLS, mail, up to 12 normalized technology identifiers, a bounded TLS issuer label, and an SPKI SHA-256 fingerprint. Full raw sources, rich technology and certificate records, and single-Lookup-only enrichments remain omitted. |
 
 Deep single Lookup is the default in the Lookup page. Bulk keeps its own
 explicit mode selection and safety limits.
