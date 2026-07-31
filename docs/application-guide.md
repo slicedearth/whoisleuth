@@ -410,8 +410,9 @@ Monitor contains Cases, Campaigns, Relationships, and Watchlists.
 
 - **Cases** retain analyst status, disposition, tags, notes, a bounded history
   of compact normalized evidence snapshots, analyst-selected evidence pins,
-  source-qualified sightings, decision rationales, and reviewed response
-  actions with follow-up outcomes. Sightings keep deployment observations,
+  source-qualified sightings, first/last-observed source chronologies, decision
+  rationales, and reviewed response actions with follow-up outcomes. Sightings
+  keep deployment observations,
   provider reports, and analyst-reviewed states separate. Pins, sightings,
   decisions, and actions stay separately typed so an analyst assertion is never
   presented as collected evidence. A deliberate case control can export the
