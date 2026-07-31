@@ -38,6 +38,9 @@ describe('registry insight interpretation', () => {
     ]);
     assert.equal(result.publications[0]?.state, 'complete');
     assert.equal(result.abuseRouting[0]?.contact, 'registry-abuse@example.test');
+    assert.equal(result.rdapCapabilities.registry.state, 'complete');
+    assert.equal(result.rdapCapabilities.registry.reverseSearch.state, 'not_advertised');
+    assert.equal(result.rdapCapabilities.registrar.state, 'unavailable');
   });
 
   test('separates pending delete from redemption and does not promise acquisition', () => {

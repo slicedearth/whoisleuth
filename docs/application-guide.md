@@ -79,6 +79,14 @@ passive-posture, technology, TLS, and observed-network cards start collapsed.
 Their state and summary remain visible. Expand a section before relying on its
 evidence, collection time, or limitations.
 
+The Registry interpretation panel classifies bounded `rdapConformance`
+declarations already returned by registry and registrar RDAP. Recognized,
+obsolete, and unclassified identifiers remain distinct. A `reverse_search`
+declaration is shown only as an advertised capability: this view does not fetch
+the server help document, discover permitted properties, or issue a reverse
+search. An individual response that omits the declaration is not treated as
+proof that the server does not support it.
+
 During collection, Lookup identifies the requested source families and shows
 elapsed time plus a 40-second browser deadline. Every core Express and Netlify
 deployment currently uses one buffered response and keeps each source pending
