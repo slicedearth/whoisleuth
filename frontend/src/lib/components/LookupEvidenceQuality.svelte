@@ -1,0 +1,134 @@
+<script lang="ts">
+  import type { LookupEvidenceQualityMatrix } from '$lib/analysis/lookup-decision-support.ts';
+  import type { LookupSourceRefreshPlan } from '$lib/analysis/lookup-source-refresh.ts';
+  import LookupSourceRefresh from '$lib/components/LookupSourceRefresh.svelte';
+
+  let {
+    matrix,
+    refreshPlan,
+    query,
+    depth,
+  }: {
+    matrix: LookupEvidenceQualityMatrix;
+    refreshPlan: LookupSourceRefreshPlan;
+    query: string;
+    depth: 'deep' | 'fast';
+  } = $props();
+
+  function duration(value: number | null): string {
+    if (value === null) return 'Not separately timed';
+    if (value < 1_000) return `${value} ms`;
+    return `${(value / 1_000).toFixed(value < 10_000 ? 1 : 0)} s`;
+  }
+
+  function observed(value: string | null): string {
+    if (!value) return 'Observation time unavailable';
+    return new Date(value).toLocaleString();
+  }
+</script>
+
+{#if matrix.entries.length}
+  <section class="quality card" id="evidence-quality" aria-labelledby="evidence-quality-title">
+    <header>
+      <div>
+        <p class="eyebrow">Evidence reliability</p>
+        <h4 id="evidence-quality-title">Source quality and freshness</h4>
+        <p>Review source state, age, request timing, limitations, and downstream uses before relying on a conclusion.</p>
+      </div>
+      <div class="metrics" role="group" aria-label="Evidence quality summary">
+        <span><strong>{matrix.completeCount}</strong> complete</span>
+        <span class:attention={matrix.limitedCount > 0}><strong>{matrix.limitedCount}</strong> limited</span>
+        {#if matrix.totalMs !== null}<span><strong>{duration(matrix.totalMs)}</strong> total</span>{/if}
+      </div>
+    </header>
+
+    <details>
+      <summary>Review {matrix.entries.length} source and analysis records</summary>
+      <div class="matrix" role="table" aria-label="Source quality and freshness">
+        <div class="matrix-head" role="row">
+          <span role="columnheader">Source</span>
+          <span role="columnheader">State</span>
+          <span role="columnheader">Observed</span>
+          <span role="columnheader">Timing</span>
+          <span role="columnheader">Supports</span>
+        </div>
+        {#each matrix.entries as entry (entry.id)}
+          <div class="quality-row" class:limited={entry.state === 'partial' || entry.state === 'unavailable' || entry.state === 'unknown'} role="row">
+            <div class="source" role="cell">
+              <small>{entry.category}</small>
+              <strong>{entry.label}</strong>
+              {#if entry.refreshAvailable}<span class="refresh">Refresh available</span>{/if}
+            </div>
+            <div role="cell"><span class="state state-{entry.state}">{entry.statusLabel}</span></div>
+            <div class="observed" role="cell">
+              <span>{observed(entry.observedAt)}</span>
+              {#if entry.ageDays !== null}<small>{entry.ageDays} day{entry.ageDays === 1 ? '' : 's'} old</small>{/if}
+            </div>
+            <div class="timing" role="cell">
+              <span class:rejected={entry.timingOutcome === 'rejected'}>{duration(entry.durationMs)}</span>
+              {#if entry.timingOutcome}<small>{entry.timingOutcome === 'rejected' ? 'Request error' : 'Settled branch'}</small>{/if}
+            </div>
+            <div class="supports" role="cell">
+              {entry.supports.length ? entry.supports.join(', ') : 'Source-specific evidence'}
+            </div>
+            {#if entry.limitations.length}
+              <div class="limitations" role="cell">
+                <strong>Limitations</strong>
+                <ul>{#each entry.limitations as limitation}<li>{limitation}</li>{/each}</ul>
+              </div>
+            {/if}
+          </div>
+        {/each}
+      </div>
+      <p class="note">Source branches may overlap, so their durations do not add up to total request time. Missing, failed, stale, unsupported, and not-found evidence remains distinct and is never treated as proof of absence or safety.</p>
+      <LookupSourceRefresh plan={refreshPlan} {query} {depth} />
+    </details>
+  </section>
+{/if}
+
+<style>
+  .quality{min-width:0;padding:var(--card-pad);scroll-margin-top:calc(var(--anchor-offset) + 12px)}
+  header{display:flex;align-items:flex-start;justify-content:space-between;gap:18px}
+  header h4{margin:2px 0 0;font:700 var(--text-lg) var(--mono)}
+  header p:not(.eyebrow){max-width:720px;margin:6px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.5}
+  .metrics{display:flex;flex:0 0 auto;gap:7px;flex-wrap:wrap;justify-content:flex-end}
+  .metrics span{padding:7px 9px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised);color:var(--muted);font:var(--text-2xs) var(--mono)}
+  .metrics strong{color:var(--text);font-size:var(--text-sm)}
+  .metrics .attention strong{color:var(--amber)}
+  details{margin-top:12px;border-top:1px solid var(--border)}
+  summary{padding:12px 0;color:var(--text);font:680 var(--text-xs) var(--mono);cursor:pointer}
+  summary:focus-visible{outline:2px solid var(--focus);outline-offset:3px}
+  .matrix{display:grid;gap:7px}
+  .matrix-head,.quality-row{display:grid;grid-template-columns:minmax(150px,1.25fr) minmax(92px,.65fr) minmax(155px,1fr) minmax(120px,.8fr) minmax(180px,1.25fr);gap:9px;align-items:start}
+  .matrix-head{padding:0 10px;color:var(--muted);font:650 var(--text-2xs) var(--mono);text-transform:uppercase}
+  .quality-row{min-width:0;padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
+  .quality-row.limited{border-color:color-mix(in srgb,var(--amber) 38%,var(--border))}
+  .source,.observed,.timing{display:grid;gap:2px;min-width:0}
+  .source small,.observed small,.timing small{color:var(--muted);font:var(--text-2xs) var(--mono)}
+  .source small{text-transform:uppercase}
+  .source strong{overflow-wrap:anywhere;font-size:var(--text-xs)}
+  .refresh{width:max-content;margin-top:3px;color:var(--accent);font:650 var(--text-2xs) var(--mono)}
+  .state{display:inline-flex;width:max-content;max-width:100%;padding:3px 6px;border:1px solid var(--border);border-radius:999px;color:var(--muted);font:650 var(--text-2xs) var(--mono)}
+  .state-complete{border-color:color-mix(in srgb,var(--accent) 42%,var(--border));color:var(--accent)}
+  .state-partial,.state-unavailable,.state-unknown{border-color:color-mix(in srgb,var(--amber) 48%,var(--border));color:var(--amber)}
+  .observed span,.timing span,.supports{color:var(--text);font-size:var(--text-2xs);line-height:1.45;overflow-wrap:anywhere}
+  .timing span.rejected{color:var(--danger)}
+  .limitations{grid-column:1/-1;padding-top:8px;border-top:1px solid var(--border);color:var(--muted);font-size:var(--text-2xs)}
+  .limitations strong{font:650 var(--text-2xs) var(--mono);text-transform:uppercase}
+  .limitations ul{margin:5px 0 0;padding-left:17px;line-height:1.45}
+  .note{margin:9px 0 0;color:var(--muted);font-size:var(--text-2xs);line-height:1.5}
+  @media(max-width:920px){
+    .matrix-head{display:none}
+    .quality-row{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .supports{grid-column:1/-1}
+  }
+  @media(max-width:720px){
+    header{display:grid}
+    .metrics{width:100%;justify-content:flex-start}
+    .metrics span{flex:1}
+  }
+  @media(max-width:480px){
+    .quality-row{grid-template-columns:minmax(0,1fr)}
+    .supports,.limitations{grid-column:1}
+  }
+</style>

@@ -10,7 +10,8 @@
   import LookupActivationContext from '$lib/components/LookupActivationContext.svelte';
   import LookupBrandMimicryReview from '$lib/components/LookupBrandMimicryReview.svelte';
   import LookupLifecycle from '$lib/components/LookupLifecycle.svelte';
-  import LookupEvidenceCoverage from '$lib/components/LookupEvidenceCoverage.svelte';
+  import LookupDecisionSupport from '$lib/components/LookupDecisionSupport.svelte';
+  import LookupEvidenceQuality from '$lib/components/LookupEvidenceQuality.svelte';
   import LookupCredentialSurfaceProfile from '$lib/components/LookupCredentialSurfaceProfile.svelte';
   import LookupDnsEvidence from '$lib/components/LookupDnsEvidence.svelte';
   import LookupExternalIntelligence from '$lib/components/LookupExternalIntelligence.svelte';
@@ -35,7 +36,6 @@
   import RegistryAccessNotice from '$lib/components/RegistryAccessNotice.svelte';
   import LookupCaseResponse from '$lib/components/LookupCaseResponse.svelte';
   import LookupEvidenceCheckpoint from '$lib/components/LookupEvidenceCheckpoint.svelte';
-  import LookupCollectionTiming from '$lib/components/LookupCollectionTiming.svelte';
   import PageHeading from '$lib/components/PageHeading.svelte';
   import { activeProfile, profileSignals as matchProfileSignals, type BrandProfile } from '$lib/brand-profiles';
   import { dispositionLabel as caseDispositionLabel, statusLabel as caseStatusLabel, type CaseRecord, type CaseTransitionExpectation } from '$lib/cases';
@@ -51,6 +51,10 @@
   } from '$lib/analysis/abuse-recipient-resolver.ts';
   import { compactHttpObservation } from '$lib/analysis/http-summary.ts';
   import { buildLookupEvidenceCoverageLedger } from '$lib/analysis/evidence-coverage-ledger.ts';
+  import {
+    buildLookupDecisionSupport,
+    buildLookupEvidenceQualityMatrix,
+  } from '$lib/analysis/lookup-decision-support.ts';
   import { buildLookupSourceRefreshPlan } from '$lib/analysis/lookup-source-refresh.ts';
   import { buildLookupCheckpointFacts } from '$lib/analysis/case-evidence-checkpoint.ts';
   import { buildAnalystEvidencePivots } from '$lib/analysis/analyst-evidence-pivots.ts';
@@ -410,6 +414,26 @@
     evidenceCoverage,
     result?.fetchedAt,
   ));
+  const lookupDecisionSupport=$derived(buildLookupDecisionSupport({
+    task:taskView,
+    coverage:evidenceCoverage,
+    refreshPlan:lookupSourceRefreshPlan,
+    registryComparison:comparison,
+    registrarPublicationComparison,
+    requestedHost:result?.inputHostname||result?.registrableDomain||result?.query,
+    registrableDomain:result?.registrableDomain,
+    finalUrl:httpEvidence.finalUrl,
+    canonicalUrl:pageCanonical.url,
+    openGraphUrl:pageOpenGraphUrl.url,
+    tlsAuthorization,
+    hasCaseSection,
+  }));
+  const evidenceQualityMatrix=$derived(buildLookupEvidenceQualityMatrix({
+    coverage:evidenceCoverage,
+    refreshPlan:lookupSourceRefreshPlan,
+    timing:lookupTiming,
+    observedAt:result?.fetchedAt,
+  }));
   const lookupSummary=$derived(buildLookupSummaryModel({
     availability,
     rdapParsed,
@@ -633,6 +657,8 @@
         <LookupAssessment detail={show(availability.detail||availability.state)} confidence={show(availability.confidence)} {risk} {opportunity} signals={[...lookupSummary.signals]} trusted={String(profileSignals.trusted||'')} />
       {/if}
 
+      <LookupDecisionSupport support={lookupDecisionSupport} />
+
       {#if sslbl.sslblVersion===1&&sslbl.verdict==='listed'}
         <aside class="sslbl-review-lead" aria-labelledby="sslbl-review-lead-title">
           <div>
@@ -642,10 +668,6 @@
           </div>
           <a class="button secondary" href="#evidence-sslbl">Review certificate evidence</a>
         </aside>
-      {/if}
-
-      {#if lookupTiming}
-        <LookupCollectionTiming timing={lookupTiming} />
       {/if}
 
       <EvidenceTopology
@@ -669,8 +691,8 @@
         />
       {/if}
 
-      <LookupEvidenceCoverage
-        ledger={evidenceCoverage}
+      <LookupEvidenceQuality
+        matrix={evidenceQualityMatrix}
         refreshPlan={lookupSourceRefreshPlan}
         query={String(result?.query || caseDomain)}
         depth={lookupEvidenceDepth}
