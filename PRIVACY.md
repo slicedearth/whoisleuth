@@ -707,6 +707,20 @@ default (see the README), so many lookups return no personal data at all.
   only the command, sequence, time, source state or Bulk item index, and final
   exit status. They exclude targets, queries, endpoints, error details, and
   evidence values. None of these files or events is uploaded by the CLI.
+- **Supervised CLI candidate scans**: `discover-scan` explicitly sends a
+  deterministic bounded subset of locally generated candidate domains through
+  compact Lookup collection. Optional literal resolver addresses receive the
+  DNS questions for that run and can apply their own logging and retention.
+  An analyst allowlist changes review priority only and is not copied into
+  output. Exact shared address, nameserver, and mail-server observations are
+  derived locally and do not establish common control. A deliberate private
+  observation snapshot retains candidate domains, registration state,
+  confidence, bounded DNS summaries, attempt times, and material differences.
+  It excludes raw registry publications, contacts, page contents, and request
+  details. A failed later attempt preserves prior usable evidence and remains
+  unavailable rather than becoming a removal or negative finding. The CLI does
+  not upload the snapshot or perform acquisition, blocking, reporting, or
+  enforcement actions.
 - **In-tab undo**: the Console's 12-second undo notice is held only in the
   current tab's runtime memory. It can restore a prior Bulk review state,
   shortlist membership, case-tag set, or temporary evidence-cluster label by

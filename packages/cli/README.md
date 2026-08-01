@@ -19,6 +19,7 @@ node bin/whoisleuth.mts lookup example.test --deep --markdown --output lookup.md
 node bin/whoisleuth.mts bulk domains.txt --deep --checkpoint bulk-checkpoint.json
 node bin/whoisleuth.mts bulk domains.txt --csv --registered-only
 node bin/whoisleuth.mts discover example.test --dictionary private-terms.txt --snapshot discovery-state.json --json
+node bin/whoisleuth.mts discover-scan example.test --scan-limit 50 --checkpoint candidate-scan.json --json
 node bin/whoisleuth.mts page-compare official.json candidate.json --json
 node bin/whoisleuth.mts mail-review bulk.json --json
 node bin/whoisleuth.mts diff first-lookup.json second-lookup.json --json
@@ -50,7 +51,10 @@ cleanup before exiting immediately.
 Bulk also supports fixed-column CSV, domain-only output, registered and
 inconclusive output filters, and bounded A, AAAA, NS, and MX summaries. Discover
 supports local custom dictionaries and private snapshot comparison suitable
-for an operator-managed scheduler. Saved Deep lookups can be compared across
+for an operator-managed scheduler. The separate networked `discover-scan`
+command can collect a deterministic bounded subset in chunks, retain mutation
+provenance, apply a non-destructive analyst allowlist, group exact shared DNS
+observations, and compare a private material-change snapshot. Saved Deep lookups can be compared across
 static page, favicon, technology, and TLS evidence, while saved Bulk output can
 be reviewed for passive MX, null MX, SPF, DMARC, and shared-provider context.
 

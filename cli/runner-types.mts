@@ -20,6 +20,7 @@ type LookupDependency = (
     compact?: boolean;
     onSourceSettled?: (settlement: LookupSourceSettlement) => void;
     signal?: AbortSignal;
+    dnsResolverServers?: readonly string[];
   },
 ) => unknown | Promise<unknown>;
 
@@ -48,6 +49,7 @@ type CliDependencies = {
   readCompareInput?: (source?: string | null) => string | Promise<string>;
   readDiffInput?: (source: string) => string | Promise<string>;
   readDiscoveryDictionary?: (source: string) => string | Promise<string>;
+  readDiscoveryAllowlist?: (source: string) => string | Promise<string>;
   readExportInput?: (source?: string | null) => string | Promise<string>;
   readRiskCalibrationInput?: (source?: string | null) => string | Promise<string>;
   readArtifactInput?: (source?: string | null) => string | Promise<string>;

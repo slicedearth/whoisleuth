@@ -31,6 +31,8 @@ node bin/whoisleuth.mts bulk domains.txt --deep --checkpoint bulk-checkpoint.jso
 node bin/whoisleuth.mts ct-search 'example brand' --json
 node bin/whoisleuth.mts discover example.com --preset common --jsonl
 node bin/whoisleuth.mts discover example.test --dictionary private-terms.txt --snapshot discovery-state.json --json
+node bin/whoisleuth.mts discover-scan example.test --scan-limit 50 --checkpoint candidate-scan.json --json
+node bin/whoisleuth.mts discover-scan example.test --deep --scan-limit 20 --resolver 192.0.2.53 --observation-snapshot observed-candidates.json --csv
 node bin/whoisleuth.mts posture example.com --selectors selector1 --retired-selectors selector0 --mail-profile defensive-no-mail --json
 node bin/whoisleuth.mts http example.com --json
 node bin/whoisleuth.mts tls example.com --json
@@ -263,7 +265,7 @@ machine access is not evidence that a domain is unregistered or safe.
 | 70 | Unexpected CLI bootstrap failure. |
 | 130 | The analyst cancelled the command. No partial final result was emitted. |
 
-This release supports `lookup`, `bulk`, `ct-search`, `discover`, `posture`,
+This release supports `lookup`, `bulk`, `ct-search`, `discover`, `discover-scan`, `posture`,
 `http`, `tls`, `registry-support`, `risk-calibrate`, `verify-artifact`,
 `inspect-archive`, `sign-artifact`, `verify-signature`, `source-report`,
 `compare`, `page-compare`, `mail-review`, `diff`, `export`, `doctor`, `completion`, and `manual`. Additional command families
@@ -535,6 +537,49 @@ from the same reviewed script, ranks curated mappings first, and returns at
 most 256 candidates. JSON and terminal output report generated candidates,
 cross-script or invalid combinations omitted by policy, and lower-ranked
 label variants omitted by the family or overall generation budget.
+
+## Supervised candidate scan
+
+`discover-scan` composes the same bounded generator with the compact Lookup
+collector. Unlike `discover`, it is an explicitly networked command. It selects
+the first deterministic candidates up to `--scan-limit`, processes fixed
+chunks sequentially, and retains each registration and DNS source state. Fast
+mode is the default and accepts at most 500 candidates. Explicit `--deep` mode
+is capped at 50 candidates and concurrency 3 because it can add WHOIS, DNS,
+HTTP, TLS, page, and technology work for every selected candidate.
+
+Use `--chunk-size 1-100`, `--concurrency 1-8`, and the existing private
+`--checkpoint <file> [--resume]` boundary to control a run. The checkpoint is
+tied to the exact ordered candidate set and scan mode. A new generation order,
+limit, or mode requires another checkpoint. `--resolver` accepts at most three
+literal IPv4 or IPv6 recursive-resolver addresses and applies them only to DNS
+observations in this local run. Resolver hostnames and automatic third-party
+resolver selection are not supported. The selected resolvers can observe the
+queried candidates and may apply their own logging and retention policies.
+
+An optional newline-delimited `--allowlist` accepts at most 500 domains and 64
+KiB. Matching candidates remain in evidence and are labelled `suppressed` in
+the review queue; allowlisting never deletes a result or asserts that it is
+safe. Output filters select registered, inconclusive, acquisition-review, or
+suppressed rows without changing whole-run counts or source health. JSON,
+JSONL, CSV, and domain-list forms retain mutation provenance and explicit
+review lanes. The queue provides next manual actions, not automatic lookup,
+acquisition, blocking, submission, or enforcement.
+
+Deep compact results can group exact shared addresses, nameservers, and mail
+servers observed across at least two candidates. These bounded relationships
+are pivot leads only. Common hosting, delivery, registrar, and mail services
+can produce the same relationship without common ownership or control.
+
+`--observation-snapshot <file>` keeps a private versioned local projection of
+registration state, confidence, and bounded A, AAAA, NS, MX, null-MX, SPF, and
+DMARC summaries for the exact candidate set, mode, and resolver selection. A
+later identical run reports material field changes. If collection fails, the
+prior usable observation is preserved and the failed attempt is reported as
+unavailable rather than converting missing data into a removal. Raw registry
+records, contacts, page content, and request details are excluded. Snapshot
+differences are review prompts, not proof of ownership, control, intent,
+safety, or maliciousness.
 
 ## Domain posture audit
 

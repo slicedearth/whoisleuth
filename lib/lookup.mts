@@ -12,10 +12,12 @@ import { OPERATION_BUDGET_ERROR_CODE } from './operation-budget.mts';
 import { checkDomainAvailability } from './availability.mts';
 import { abortable } from './abort.mts';
 import {
+  collectDnsIntelligence,
   collectReverseDnsIntelligence,
   failedReverseDnsIntelligence,
   skippedReverseDnsIntelligence,
 } from './dns-intelligence.mts';
+import { createSelectedDnsResolvers } from './dns-resolver-selection.mts';
 import { collectObservedNetworkContext } from './observed-network-context.mts';
 import { collectSecurityTxt, securityTxtUnavailable } from './security-txt.mts';
 import { registryAccessDiagnosticFor } from './registry-capabilities.mts';
@@ -64,6 +66,7 @@ type LookupOptions = {
   now?: () => number;
   onSourceSettled?: (settlement: LookupSourceSettlement) => void;
   signal?: AbortSignal;
+  dnsResolverServers?: readonly string[];
 };
 type RegistrarRdap = {
   status: string;
@@ -205,6 +208,9 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
   const fetchRegistrarRdap = options.fetchRegistrarRdapRecord || fetchRegistrarRdapRecord;
   const fetchWhois = options.buildWhoisChain || buildWhoisChain;
   const checkAvailability = options.checkDomainAvailability || checkDomainAvailability;
+  const selectedDnsResolvers = options.dnsResolverServers?.length
+    ? createSelectedDnsResolvers(options.dnsResolverServers)
+    : null;
   const collectReverseDns = options.collectReverseDnsIntelligence || collectReverseDnsIntelligence;
   const collectNetworkContext = options.collectObservedNetworkContext || collectObservedNetworkContext;
   const collectDisclosureContacts = options.collectSecurityTxt || collectSecurityTxt;
@@ -256,6 +262,11 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
         featurePolicy,
         rdapRecordPromise: rdapPromise,
         whoisChainPromise: whoisPromise,
+        ...(selectedDnsResolvers ? {
+          dnsResolvers: selectedDnsResolvers,
+          resolveNs: selectedDnsResolvers.resolveNs as (domain: string) => Promise<string[]>,
+          collectDnsIntelligence,
+        } : {}),
       }))
     : null;
   // Reverse DNS is separately attributed operator context for deep public-IP

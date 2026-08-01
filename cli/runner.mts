@@ -20,6 +20,7 @@ import {
   readCompareInputBounded,
 } from './compare.mts';
 import { runDiscoveryCommand } from './discovery-command-runner.mts';
+import { runDiscoveryScanCommand } from './discovery-scan-command-runner.mts';
 import { boundedCliErrorMessage, CliUsageError } from './errors.mts';
 import {
   evidenceCommandFailureLabel,
@@ -100,6 +101,7 @@ Investigate:
 Discover:
   ct-search          Search certificate-transparency observations.
   discover           Generate offline lookalike candidates.
+  discover-scan      Collect a bounded candidate review queue.
   registry-support   Explain local registry coverage without a request.
 
 Review saved evidence:
@@ -139,6 +141,7 @@ const COMMAND_USAGE: Readonly<Record<CliCommand, string>> = Object.freeze({
   bulk: 'whoisleuth bulk [file] [--json|--jsonl|--csv|--domains] [--registered-only|--inconclusive-only] [--fast|--deep] [--concurrency <1-8>] [--checkpoint <file> [--resume]] [--events]',
   'ct-search': 'whoisleuth ct-search <keyword> [--json] [--quiet] [--no-color]',
   discover: 'whoisleuth discover <brand|domain> [--tlds <list>] [--preset <name>|--families <ids>] [--keyboard <layout>] [--dictionary <file>] [--snapshot <file>] [--json|--jsonl|--domains]',
+  'discover-scan': 'whoisleuth discover-scan <brand|domain> [--fast|--deep] [--scan-limit <n>] [--chunk-size <n>] [--concurrency <n>] [--resolver <IPs>] [--allowlist <file>] [--checkpoint <file> [--resume]] [--observation-snapshot <file>] [--json|--jsonl|--csv|--domains]',
   posture: 'whoisleuth posture <domain> [--selectors <list>] [--retired-selectors <list>] [--mail-profile <profile>] [--json] [--quiet] [--no-color]',
   http: 'whoisleuth http <domain> [--json] [--quiet] [--no-color]',
   tls: 'whoisleuth tls <hostname> [--json] [--quiet] [--no-color]',
@@ -191,6 +194,11 @@ const COMMAND_DETAILS: Readonly<Record<CliCommand, Readonly<{ description: strin
     description: 'Generate bounded lookalike-domain candidates from local mutation rules.',
     example: 'whoisleuth discover example.test --preset common --jsonl',
     boundary: 'Generation and optional local snapshot comparison are offline. Candidates are leads only and are not resolved, registered, or classified as malicious.',
+  },
+  'discover-scan': {
+    description: 'Generate a bounded candidate set, collect a selected subset, and produce a supervised review queue.',
+    example: 'whoisleuth discover-scan example.test --scan-limit 50 --checkpoint scan.json --json',
+    boundary: 'This command performs network collection. Fast compact lookup is the default; deep mode is capped at 50 candidates. Allowlisting changes review priority only and shared infrastructure remains a lead, not attribution.',
   },
   posture: {
     description: 'Review bounded DNS mail, delegation, and domain-control posture.',
@@ -692,6 +700,11 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
     if (args.action === 'discover') {
       failureLabel = 'Candidate generation';
       return await runDiscoveryCommand(args, dependencies, commandContext);
+    }
+
+    if (args.action === 'discover-scan') {
+      failureLabel = 'Candidate scan';
+      return await runDiscoveryScanCommand(args, dependencies, commandContext);
     }
 
     if (args.action === 'ct-search'

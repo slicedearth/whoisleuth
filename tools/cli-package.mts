@@ -382,6 +382,10 @@ export async function checkCliPackage(repositoryRoot: string): Promise<CliPackag
     if (!Array.isArray(discoveryDocument.candidates) || discoveryDocument.candidates.length === 0) {
       throw new TypeError('Installed offline discover command returned no candidates.');
     }
+    const discoveryScanHelp = await runInstalledCheck(executable, ['discover-scan', '--help'], 'discover-scan help');
+    if (!discoveryScanHelp.includes('whoisleuth discover-scan') || !discoveryScanHelp.includes('This command performs network collection.')) {
+      throw new TypeError('Installed discover-scan help did not preserve its explicit network boundary.');
+    }
 
     return Object.freeze({
       schema: CLI_PACKAGE_REPORT_SCHEMA,
@@ -392,7 +396,7 @@ export async function checkCliPackage(repositoryRoot: string): Promise<CliPackag
       packedEntryCount: entries.length,
       packedBytes,
       unpackedBytes,
-      installedChecks: Object.freeze(['help', 'version', 'doctor', 'completion', 'manual', 'registry-support', 'discover']),
+      installedChecks: Object.freeze(['help', 'version', 'doctor', 'completion', 'manual', 'registry-support', 'discover', 'discover-scan-help']),
       publicationEnabled: false,
     });
   } finally {

@@ -14,6 +14,7 @@ import { fetchRdapRecord } from './rdap.mts';
 import { buildWhoisChain, parseWhoisChain } from './whois.mts';
 import { safeFetchDetailed, readTextCapped } from './safe-fetch.mts';
 import { collectDnsIntelligence, skippedDnsIntelligence } from './dns-intelligence.mts';
+import type { DnsResolver } from './dns-intelligence.mts';
 import { fetchFaviconHash } from './favicon.mts';
 import { extractHtmlSignals } from './html-signals.mts';
 import { featureDecision, networkFeaturePolicy } from './feature-policy.mts';
@@ -97,6 +98,7 @@ type AvailabilityOptions = {
   includeTechnologyProfile?: boolean;
   includeSecurityPosture?: boolean;
   collectDnsIntelligence?: typeof collectDnsIntelligence;
+  dnsResolvers?: Record<string, DnsResolver>;
   collectTlsIntelligence?: typeof collectTlsIntelligence;
   fetchHomepage?: (domain: string) => Promise<HomepageResult>;
   fetchFaviconHash?: typeof fetchFaviconHash;
@@ -661,6 +663,7 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
     }),
     dnsIntelligenceEnabled
       ? collectDns(domain, {
+          ...(options.dnsResolvers ? { resolvers: options.dnsResolvers } : {}),
           includeExtendedContext: options.includeExtendedDnsContext === true,
           includeInheritedCaa: options.includeInheritedCaa === true,
           registryEvidence: registryDnsEvidence,

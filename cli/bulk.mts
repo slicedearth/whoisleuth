@@ -23,6 +23,7 @@ type BulkLookupOptions = {
   onItemSettled?: (result: BulkLookupResult) => void;
   initialResults?: readonly BulkLookupResult[];
   signal?: AbortSignal;
+  dnsResolverServers?: readonly string[];
 };
 
 type BulkLookupSuccess = {
@@ -148,6 +149,7 @@ async function runBulkLookups(queries: string[], options: BulkLookupOptions = {}
             fast: options.deep !== true,
             compact: true,
             ...(options.signal ? { signal: options.signal } : {}),
+            ...(options.dnsResolverServers?.length ? { dnsResolverServers: options.dnsResolverServers } : {}),
           }));
           lookupPromises.set(lookupKey, lookupPromise);
         }

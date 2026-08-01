@@ -70,6 +70,31 @@ const classifiedDomain: Extract<ClassifiedQuery, { type: 'domain' }> = {
 };
 
 describe('runUnifiedLookup', () => {
+  test('passes an explicit bounded DNS resolver selection into domain evidence collection', async () => {
+    let capturedResolveNs: unknown = null;
+    let capturedDnsResolverKeys: string[] = [];
+    const result = await runCompactLookup(classifiedDomain, {
+      fast: true,
+      compact: true,
+      dnsResolverServers: ['192.0.2.53'],
+      fetchRdapRecord: async () => null,
+      buildWhoisChain: async () => [],
+      checkDomainAvailability: async (_domain: string, options: AvailabilityFixtureOptions & {
+        dnsResolvers?: Record<string, unknown>;
+        resolveNs?: unknown;
+      }) => {
+        capturedResolveNs = options.resolveNs;
+        capturedDnsResolverKeys = Object.keys(options.dnsResolvers || {}).sort();
+        return { applicable: true, state: 'unknown', confidence: 'medium' };
+      },
+    });
+    assert.equal(result.availability.state, 'unknown');
+    assert.equal(typeof capturedResolveNs, 'function');
+    assert.deepEqual(capturedDnsResolverKeys, [
+      'resolve4', 'resolve6', 'resolveCaa', 'resolveCname', 'resolveMx', 'resolveNs', 'resolveSoa', 'resolveTxt',
+    ]);
+  });
+
   test('reports each planned deep source once without exposing or changing its raw result', async () => {
     const settlements: Array<{
       source: string;

@@ -18,6 +18,7 @@ const CLI_COMMANDS = [
   'bulk',
   'ct-search',
   'discover',
+  'discover-scan',
   'posture',
   'http',
   'tls',
@@ -55,6 +56,7 @@ type CliAction =
   | ({ action: 'bulk'; source: string | null; output: 'terminal' | 'json' | 'jsonl' | 'csv' | 'domains'; deep: boolean; concurrency: number; checkpoint: string | null; resume: boolean; events: boolean; filter: 'all' | 'registered' | 'inconclusive' } & TerminalOptions)
   | ({ action: 'ct-search'; keyword: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'discover'; seed: string | null; output: 'terminal' | 'json' | 'jsonl' | 'domains'; preset: 'common' | 'impersonation' | 'all' | 'custom'; keyboardLayout: 'qwerty' | 'azerty' | 'qwertz' | 'all'; tldText: string | null; dictionarySource: string | null; familyText: string | null; snapshotSource: string | null } & TerminalOptions)
+  | ({ action: 'discover-scan'; seed: string | null; output: 'terminal' | 'json' | 'jsonl' | 'csv' | 'domains'; preset: 'common' | 'impersonation' | 'all' | 'custom'; keyboardLayout: 'qwerty' | 'azerty' | 'qwertz' | 'all'; tldText: string | null; dictionarySource: string | null; familyText: string | null; deep: boolean; scanLimit: number; chunkSize: number; concurrency: number; checkpoint: string | null; resume: boolean; resolverText: string | null; observationSnapshot: string | null; allowlistSource: string | null; filter: 'all' | 'registered' | 'inconclusive' | 'acquisition' | 'suppressed'; events: boolean } & TerminalOptions)
   | ({ action: 'posture'; domain: string | null; output: 'terminal' | 'json'; selectorText: string | null; retiredSelectorText: string | null; mailProfile: 'defensive_no_mail' | 'parked' | 'standard' } & TerminalOptions)
   | ({ action: 'http'; domain: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'tls'; hostname: string | null; output: 'terminal' | 'json' } & TerminalOptions)
@@ -153,6 +155,7 @@ function parseCliArgumentsCore(argv: string[]): CliAction {
   if (command === 'manual') return parseManualArguments(argv.slice(1));
   if (command === 'ct-search') return parseCtSearchArguments(argv.slice(1));
   if (command === 'discover') return parseDiscoverArguments(argv.slice(1));
+  if (command === 'discover-scan') return parseDiscoverScanArguments(argv.slice(1));
   if (command === 'posture') return parsePostureArguments(argv.slice(1));
   if (command === 'http') return parseHttpArguments(argv.slice(1));
   if (command === 'tls') return parseTlsArguments(argv.slice(1));
@@ -391,6 +394,148 @@ function parseDiscoverArguments(argv: string[]): Extract<CliArguments, { action:
     throw new CliUsageError('--dictionary requires the impersonation or all preset.');
   }
   return { action: 'discover', seed, output, quiet, color, preset, keyboardLayout, tldText, dictionarySource, familyText, snapshotSource };
+}
+
+function parseDiscoverScanArguments(argv: string[]): Extract<CliArguments, { action: 'discover-scan' }> {
+  let seed: string | null = null;
+  let output: 'terminal' | 'json' | 'jsonl' | 'csv' | 'domains' = 'terminal';
+  let quiet = false;
+  let color = true;
+  let preset: 'common' | 'impersonation' | 'all' | 'custom' = 'all';
+  let keyboardLayout: 'qwerty' | 'azerty' | 'qwertz' | 'all' = 'qwerty';
+  let tldText: string | null = null;
+  let dictionarySource: string | null = null;
+  let familyText: string | null = null;
+  let presetSet = false;
+  let keyboardSet = false;
+  let deep = false;
+  let scanModeSet = false;
+  let scanLimit: number | null = null;
+  let chunkSize: number | null = null;
+  let concurrency: number | null = null;
+  let checkpoint: string | null = null;
+  let resume = false;
+  let resolverText: string | null = null;
+  let observationSnapshot: string | null = null;
+  let allowlistSource: string | null = null;
+  let filter: 'all' | 'registered' | 'inconclusive' | 'acquisition' | 'suppressed' = 'all';
+  let filterSet = false;
+  let events = false;
+
+  for (let index = 0; index < argv.length; index++) {
+    const argument = argv[index];
+    if (argument === undefined) break;
+    if (argument === '--json' || argument === '--jsonl' || argument === '--csv' || argument === '--domains') {
+      if (output !== 'terminal') throw new CliUsageError('Choose only one output format.');
+      output = argument === '--json' ? 'json' : argument === '--jsonl' ? 'jsonl' : argument === '--csv' ? 'csv' : 'domains';
+    } else if (argument === '--preset') {
+      if (presetSet) throw new CliUsageError('--preset may be supplied only once.');
+      if (familyText !== null) throw new CliUsageError('--preset cannot be combined with --families.');
+      const value = argv[++index];
+      if (value !== 'common' && value !== 'impersonation' && value !== 'all') {
+        throw new CliUsageError('--preset requires common, impersonation, or all.');
+      }
+      preset = value;
+      presetSet = true;
+    } else if (argument === '--keyboard') {
+      if (keyboardSet) throw new CliUsageError('--keyboard may be supplied only once.');
+      const value = argv[++index];
+      if (value !== 'qwerty' && value !== 'azerty' && value !== 'qwertz' && value !== 'all') {
+        throw new CliUsageError('--keyboard requires qwerty, azerty, qwertz, or all.');
+      }
+      keyboardLayout = value;
+      keyboardSet = true;
+    } else if (argument === '--tlds') {
+      if (tldText !== null) throw new CliUsageError('--tlds may be supplied only once.');
+      const value = argv[++index];
+      if (!value) throw new CliUsageError('--tlds requires a comma-separated list.');
+      tldText = value;
+    } else if (argument === '--dictionary') {
+      if (dictionarySource !== null) throw new CliUsageError('--dictionary may be supplied only once.');
+      const value = argv[++index];
+      if (!value || value.startsWith('-')) throw new CliUsageError('--dictionary requires one UTF-8 text file.');
+      dictionarySource = value;
+    } else if (argument === '--families') {
+      if (familyText !== null) throw new CliUsageError('--families may be supplied only once.');
+      if (presetSet) throw new CliUsageError('--families cannot be combined with --preset.');
+      const value = argv[++index];
+      if (!value || value.startsWith('-')) throw new CliUsageError('--families requires a comma-separated list of mutation family IDs.');
+      familyText = value;
+      preset = 'custom';
+    } else if (argument === '--deep' || argument === '--fast') {
+      if (scanModeSet) throw new CliUsageError('--fast and --deep are mutually exclusive and may be supplied only once.');
+      deep = argument === '--deep';
+      scanModeSet = true;
+    } else if (argument === '--scan-limit') {
+      if (scanLimit !== null) throw new CliUsageError('--scan-limit may be supplied only once.');
+      scanLimit = positiveIntegerOption(argv[++index], '--scan-limit', 500);
+    } else if (argument === '--chunk-size') {
+      if (chunkSize !== null) throw new CliUsageError('--chunk-size may be supplied only once.');
+      chunkSize = positiveIntegerOption(argv[++index], '--chunk-size', 100);
+    } else if (argument === '--concurrency') {
+      if (concurrency !== null) throw new CliUsageError('--concurrency may be supplied only once.');
+      concurrency = positiveIntegerOption(argv[++index], '--concurrency', 8);
+    } else if (argument === '--checkpoint') {
+      if (checkpoint !== null) throw new CliUsageError('--checkpoint may be supplied only once.');
+      const value = argv[++index];
+      if (!value || value.startsWith('-')) throw new CliUsageError('--checkpoint requires one bounded file path.');
+      checkpoint = value;
+    } else if (argument === '--resume') {
+      if (resume) throw new CliUsageError('--resume may be supplied only once.');
+      resume = true;
+    } else if (argument === '--resolver') {
+      if (resolverText !== null) throw new CliUsageError('--resolver may be supplied only once.');
+      const value = argv[++index];
+      if (!value || value.startsWith('-')) throw new CliUsageError('--resolver requires a comma-separated list of IP addresses.');
+      resolverText = value;
+    } else if (argument === '--observation-snapshot') {
+      if (observationSnapshot !== null) throw new CliUsageError('--observation-snapshot may be supplied only once.');
+      const value = argv[++index];
+      if (!value || value.startsWith('-')) throw new CliUsageError('--observation-snapshot requires one bounded local state file path.');
+      observationSnapshot = value;
+    } else if (argument === '--allowlist') {
+      if (allowlistSource !== null) throw new CliUsageError('--allowlist may be supplied only once.');
+      const value = argv[++index];
+      if (!value || value.startsWith('-')) throw new CliUsageError('--allowlist requires one newline-delimited local file.');
+      allowlistSource = value;
+    } else if (argument === '--registered-only' || argument === '--inconclusive-only'
+      || argument === '--acquisition-only' || argument === '--suppressed-only') {
+      if (filterSet) throw new CliUsageError('Discovery scan filters are mutually exclusive and may be supplied only once.');
+      filter = argument === '--registered-only' ? 'registered'
+        : argument === '--inconclusive-only' ? 'inconclusive'
+          : argument === '--acquisition-only' ? 'acquisition' : 'suppressed';
+      filterSet = true;
+    } else if (argument === '--events') {
+      if (events) throw new CliUsageError('--events may be supplied only once.');
+      events = true;
+    } else if (argument === '--quiet') quiet = true;
+    else if (argument === '--no-color') color = false;
+    else if (argument.startsWith('-')) throw new CliUsageError(`Unknown option "${argument}".`);
+    else if (seed === null) seed = argument;
+    else throw new CliUsageError('discover-scan accepts one brand label or domain. Quote multi-word labels as one argument.');
+  }
+  const maximum = deep ? 50 : 500;
+  if (scanLimit !== null && scanLimit > maximum) throw new CliUsageError(`--scan-limit is capped at ${maximum} in ${deep ? 'deep' : 'fast'} mode.`);
+  const maximumConcurrency = deep ? 3 : 8;
+  if ((concurrency ?? (deep ? 2 : 4)) > maximumConcurrency) {
+    throw new CliUsageError(`--concurrency is capped at ${maximumConcurrency} in ${deep ? 'deep' : 'fast'} mode.`);
+  }
+  if (resume && checkpoint === null) throw new CliUsageError('--resume requires --checkpoint.');
+  if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
+  if (dictionarySource && preset === 'common') throw new CliUsageError('--dictionary requires the impersonation or all preset.');
+  return {
+    action: 'discover-scan', seed, output, quiet, color, preset, keyboardLayout, tldText,
+    dictionarySource, familyText, deep, scanLimit: scanLimit ?? Math.min(100, maximum),
+    chunkSize: chunkSize ?? 25, concurrency: concurrency ?? (deep ? 2 : 4), checkpoint,
+    resume, resolverText, observationSnapshot, allowlistSource, filter, events,
+  };
+}
+
+function positiveIntegerOption(value: string | undefined, option: string, maximum: number): number {
+  if (!value || !/^\d+$/u.test(value)) throw new CliUsageError(`${option} requires an integer from 1 to ${maximum}.`);
+  const parsed = Number(value);
+  if (parsed < 1 || parsed > maximum) throw new CliUsageError(`${option} must be from 1 to ${maximum}.`);
+  return parsed;
 }
 
 function parsePostureArguments(argv: string[]): Extract<CliArguments, { action: 'posture' }> {
