@@ -6,7 +6,7 @@
 import { normalizePageBaseline } from './page-baseline.ts';
 import { hammingDistanceHex } from './utils.ts';
 
-export const PAGE_COMPARISON_VERSION = 1;
+export const PAGE_COMPARISON_VERSION = 2;
 
 type PageBaseline = NonNullable<ReturnType<typeof normalizePageBaseline>>;
 type DigestComponent = { value: string; truncated: boolean };
@@ -110,6 +110,36 @@ function formComponent(
   return digestComponent('form_structure', 'Form structure', 'Form-structure', reference, observed);
 }
 
+function faviconComponent(reference: PageBaseline, observed: PageBaseline): PageComparisonComponent {
+  if (!reference.faviconHash && !observed.faviconHash && !reference.faviconPHash && !observed.faviconPHash) {
+    return component('favicon', 'Favicon', 'Exact SHA-256 or 64-bit dHash distance', 'not_observed', 'Not observed', 'Neither capture produced a favicon fingerprint.', false);
+  }
+  if (reference.faviconHash && observed.faviconHash && reference.faviconHash === observed.faviconHash) {
+    return component('favicon', 'Favicon', 'Exact SHA-256 equality', 'same', 'Same favicon digest', 'The bounded favicon byte digests are equal.', false);
+  }
+  if (!reference.faviconPHash || !observed.faviconPHash) {
+    return component('favicon', 'Favicon', 'Exact SHA-256 or 64-bit dHash distance', 'unavailable', 'Not comparable', 'The exact favicon digests differ or are incomplete, and both captures did not retain an informative perceptual fingerprint.', false);
+  }
+  const distance = hammingDistanceHex(reference.faviconPHash, observed.faviconPHash);
+  if (distance === null) {
+    return component('favicon', 'Favicon', '64-bit dHash distance', 'unavailable', 'Not comparable', 'The favicon perceptual fingerprints use an unsupported or malformed representation.', true);
+  }
+  const near = distance <= 6;
+  return {
+    ...component(
+      'favicon',
+      'Favicon',
+      '64-bit dHash distance',
+      distance === 0 ? 'same' : near ? 'overlap' : 'different',
+      distance === 0 ? 'Same perceptual fingerprint' : near ? 'Perceptually similar' : 'Perceptually different',
+      `The favicon perceptual fingerprints differ by ${distance} of 64 bits. Similarity is a review lead and does not establish copying, ownership, intent, safety, or maliciousness.`,
+      false,
+    ),
+    hammingDistance: distance,
+    agreementPercent: Math.round(((64 - distance) / 64) * 100),
+  };
+}
+
 function intersect(left: readonly string[], right: readonly string[]): string[] {
   const rightSet = new Set(right);
   return left.filter((value) => rightSet.has(value));
@@ -182,6 +212,7 @@ export function comparePageBaselines(rawReference: unknown, rawObserved: unknown
     visibleTextComponent(reference.visibleText, observed.visibleText),
     digestComponent('dom_structure', 'DOM structure', 'Static tag-sequence', reference.domStructure, observed.domStructure),
     formComponent(reference.formStructure, observed.formStructure),
+    faviconComponent(reference, observed),
     setComponent('resource_hosts', 'External resource hosts', 'host', reference.resourceHosts, observed.resourceHosts, (value) => value),
     setComponent('tracking_identifiers', 'Tracking identifiers', 'identifier', reference.trackingIdentifiers, observed.trackingIdentifiers, (value) => `${value.type}:${value.value}`),
   ];

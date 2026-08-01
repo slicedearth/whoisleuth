@@ -47,8 +47,8 @@ function item(result: PageComparison, id: string): PageComparisonComponent {
 describe('explainable page-baseline comparison', () => {
   test('reports independent identical components without an aggregate score', () => {
     const result = requiredValue(comparison.comparePageBaselines(stored(), stored({ domain: 'observed.example', lookupDomain: 'observed.example', observedAt: LATER })));
-    assert.equal(result.comparisonVersion, 1);
-    assert.deepEqual(result.counts, { same: 6, overlap: 0, different: 0, notObserved: 0, unavailable: 0 });
+    assert.equal(result.comparisonVersion, 2);
+    assert.deepEqual(result.counts, { same: 6, overlap: 0, different: 0, notObserved: 1, unavailable: 0 });
     assert.equal(result.partial, false);
     assert.equal('score' in result, false);
     assert.equal('similarity' in result, false);
@@ -81,10 +81,26 @@ describe('explainable page-baseline comparison', () => {
     assert.equal(item(neither, 'visible_text').status, 'not_observed');
     assert.equal(item(neither, 'form_structure').status, 'not_observed');
     assert.equal(neither.counts.same, 4);
+    assert.equal(item(neither, 'favicon').status, 'not_observed');
 
     const one = requiredValue(comparison.comparePageBaselines(stored({ visibleText: null, formStructure: null }), stored()));
     assert.equal(item(one, 'visible_text').status, 'unavailable');
     assert.equal(item(one, 'form_structure').status, 'unavailable');
+  });
+
+  test('compares favicons exactly before using bounded perceptual distance', () => {
+    const exact = requiredValue(comparison.comparePageBaselines(
+      stored({ faviconHash: SHA_A, faviconPHash: '0f0f0f0f0f0f0f0f' }),
+      stored({ faviconHash: SHA_A, faviconPHash: 'f0f0f0f0f0f0f0f0' }),
+    ));
+    assert.equal(item(exact, 'favicon').status, 'same');
+
+    const near = requiredValue(comparison.comparePageBaselines(
+      stored({ faviconHash: SHA_A, faviconPHash: '0f0f0f0f0f0f0f0f' }),
+      stored({ faviconHash: SHA_D, faviconPHash: '0f0f0f0f0f0f0f07' }),
+    ));
+    assert.equal(item(near, 'favicon').status, 'overlap');
+    assert.equal(item(near, 'favicon').hammingDistance, 1);
   });
 
   test('reports bounded set equality, overlap, and disjoint sets independently', () => {

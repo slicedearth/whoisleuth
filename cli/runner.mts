@@ -40,6 +40,12 @@ import {
   formatTerminalRiskCalibration,
 } from './formatters/terminal.mts';
 import { buildCliLookupDiff, formatCliLookupDiff } from './lookup-diff.mts';
+import { buildCliPageComparison, formatCliPageComparison } from './page-compare.mts';
+import {
+  MAX_MAIL_REVIEW_INPUT_BYTES,
+  buildCliMailReview,
+  formatCliMailReview,
+} from './mail-review.mts';
 import { runLookupCommand } from './lookup-command-runner.mts';
 import { buildCliManual } from './manual.mts';
 import { createBufferedOutput, writePrivateFile } from './output-file.mts';
@@ -99,6 +105,8 @@ Discover:
 Review saved evidence:
   source-report      Summarise source reliability without retaining targets.
   compare            Compare saved registry publications.
+  page-compare       Compare saved static page and TLS evidence.
+  mail-review        Review saved passive mail exposure evidence.
   diff               Compare two saved domain observations.
   export             Convert a saved lookup into an evidence report.
   inspect-archive    Inspect a workspace archive, redacted by default.
@@ -142,6 +150,8 @@ const COMMAND_USAGE: Readonly<Record<CliCommand, string>> = Object.freeze({
   'verify-signature': 'whoisleuth verify-signature [package.json] [--public-key-file <file>] [--json] [--quiet] [--no-color]',
   'source-report': 'whoisleuth source-report [lookup.json] [--json] [--quiet] [--no-color]',
   compare: 'whoisleuth compare [lookup.json] [--json] [--quiet] [--no-color]',
+  'page-compare': 'whoisleuth page-compare <left.json> <right.json> [--json] [--quiet] [--no-color]',
+  'mail-review': 'whoisleuth mail-review [bulk.json|bulk.jsonl] [--json] [--quiet] [--no-color]',
   diff: 'whoisleuth diff <left.json> <right.json> [--json] [--quiet] [--no-color]',
   export: 'whoisleuth export [lookup.json] [--markdown|--html|--compact]',
 });
@@ -236,6 +246,16 @@ const COMMAND_DETAILS: Readonly<Record<CliCommand, Readonly<{ description: strin
     description: 'Compare separately attributed registry publications in a saved lookup.',
     example: 'whoisleuth compare lookup.json --json',
     boundary: 'Comparison is offline. Differences are review context and do not by themselves prove which publication is current.',
+  },
+  'page-compare': {
+    description: 'Compare static page identity, favicon, technology, and TLS evidence in two saved deep lookups.',
+    example: 'whoisleuth page-compare official.json candidate.json --json',
+    boundary: 'Comparison is offline and component-based. It executes no page code and produces no aggregate similarity or maliciousness score.',
+  },
+  'mail-review': {
+    description: 'Review passive MX, null MX, SPF, DMARC, and shared mail-provider evidence from saved Bulk results.',
+    example: 'whoisleuth mail-review candidates.json --json',
+    boundary: 'Review is offline and sends no SMTP traffic. Missing or partial DNS evidence remains inconclusive.',
   },
   diff: {
     description: 'Compare bounded evidence retained in two saved domain lookups.',
@@ -552,6 +572,55 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
       const now = dependencies.now ? dependencies.now() : new Date().toISOString();
       const document = buildCliCompareDocument(result, now);
       if (!args.quiet) write(stdout, args.output === 'json' ? formatJsonDocument(document) : terminal(formatTerminalCompare(document), args.color));
+      return EXIT_CODES.SUCCESS;
+    }
+
+    if (args.action === 'page-compare') {
+      failureLabel = 'Static page comparison';
+      const readDiffInput = dependencies.readDiffInput || (async (source: string) => (
+        readSavedLookupInputBounded(createReadStream(source, { highWaterMark: 64 * 1024 }), {
+          limit: MAX_SAVED_LOOKUP_INPUT_BYTES,
+          label: 'Page comparison input',
+        })
+      ));
+      let leftInput: string;
+      let rightInput: string;
+      try {
+        [leftInput, rightInput] = await Promise.all([
+          readDiffInput(args.leftSource),
+          readDiffInput(args.rightSource),
+        ]);
+      } catch (error) {
+        if (error instanceof CliUsageError) throw error;
+        throw new CliUsageError(`Could not read page comparison input: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
+      }
+      const document = buildCliPageComparison(leftInput, rightInput, commandContext.now());
+      if (!args.quiet) write(stdout, args.output === 'json'
+        ? formatJsonDocument(document)
+        : terminal(formatCliPageComparison(document), args.color));
+      return EXIT_CODES.SUCCESS;
+    }
+
+    if (args.action === 'mail-review') {
+      failureLabel = 'Passive mail review';
+      let input: string;
+      try {
+        input = dependencies.readMailReviewInput
+          ? await dependencies.readMailReviewInput(args.source)
+          : await readSavedLookupInputBounded(args.source
+            ? createReadStream(args.source, { highWaterMark: 64 * 1024 })
+            : dependencies.stdin || process.stdin, {
+              limit: MAX_MAIL_REVIEW_INPUT_BYTES,
+              label: 'Mail review input',
+            });
+      } catch (error) {
+        if (error instanceof CliUsageError) throw error;
+        throw new CliUsageError(`Could not read mail review input: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
+      }
+      const document = buildCliMailReview(input, commandContext.now());
+      if (!args.quiet) write(stdout, args.output === 'json'
+        ? formatJsonDocument(document)
+        : terminal(formatCliMailReview(document), args.color));
       return EXIT_CODES.SUCCESS;
     }
 

@@ -29,6 +29,8 @@ const CLI_COMMANDS = [
   'verify-signature',
   'source-report',
   'compare',
+  'page-compare',
+  'mail-review',
   'diff',
   'export',
 ] as const;
@@ -64,6 +66,8 @@ type CliAction =
   | VerifySignatureArguments
   | ({ action: 'source-report'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'compare'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
+  | ({ action: 'page-compare'; leftSource: string; rightSource: string; output: 'terminal' | 'json' } & TerminalOptions)
+  | ({ action: 'mail-review'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'diff'; leftSource: string; rightSource: string; output: 'terminal' | 'json' } & TerminalOptions)
   | { action: 'export'; source: string | null; format: 'json' | 'markdown' | 'html'; compact: boolean };
 type CliArguments = CliAction & FileOutputOptions;
@@ -160,6 +164,8 @@ function parseCliArgumentsCore(argv: string[]): CliAction {
   if (command === 'verify-signature') return parseVerifySignatureArguments(argv.slice(1));
   if (command === 'source-report') return parseSourceReportArguments(argv.slice(1));
   if (command === 'compare') return parseCompareArguments(argv.slice(1));
+  if (command === 'page-compare') return parsePageCompareArguments(argv.slice(1));
+  if (command === 'mail-review') return parseMailReviewArguments(argv.slice(1));
   if (command === 'diff') return parseDiffArguments(argv.slice(1));
   if (command === 'export') return parseExportArguments(argv.slice(1));
   let query: string | null = null;
@@ -485,6 +491,50 @@ function parseCompareArguments(argv: string[]): Extract<CliArguments, { action: 
   }
   if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
   return { action: 'compare', source, output, quiet, color };
+}
+
+function parsePageCompareArguments(argv: string[]): Extract<CliArguments, { action: 'page-compare' }> {
+  const parsed = parseTwoFileComparisonArguments(argv, 'page-compare');
+  return { action: 'page-compare', ...parsed };
+}
+
+function parseTwoFileComparisonArguments(argv: string[], command: string) {
+  const sources: string[] = [];
+  let output: 'terminal' | 'json' = 'terminal';
+  let quiet = false;
+  let color = true;
+  for (const argument of argv) {
+    if (argument === '--json') {
+      if (output !== 'terminal') throw new CliUsageError('--json may be supplied only once.');
+      output = 'json';
+    } else if (argument === '--quiet') quiet = true;
+    else if (argument === '--no-color') color = false;
+    else if (argument.startsWith('-')) throw new CliUsageError(`Unknown option "${argument}".`);
+    else sources.push(argument);
+  }
+  if (sources.length !== 2 || !sources[0] || !sources[1]) throw new CliUsageError(`${command} requires two input JSON files.`);
+  if (sources[0] === sources[1]) throw new CliUsageError(`${command} requires two different input files.`);
+  if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
+  return { leftSource: sources[0], rightSource: sources[1], output, quiet, color };
+}
+
+function parseMailReviewArguments(argv: string[]): Extract<CliArguments, { action: 'mail-review' }> {
+  let source: string | null = null;
+  let output: 'terminal' | 'json' = 'terminal';
+  let quiet = false;
+  let color = true;
+  for (const argument of argv) {
+    if (argument === '--json') {
+      if (output !== 'terminal') throw new CliUsageError('--json may be supplied only once.');
+      output = 'json';
+    } else if (argument === '--quiet') quiet = true;
+    else if (argument === '--no-color') color = false;
+    else if (argument.startsWith('-')) throw new CliUsageError(`Unknown option "${argument}".`);
+    else if (source === null) source = argument;
+    else throw new CliUsageError('mail-review accepts one optional Bulk JSON or JSONL input file.');
+  }
+  if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
+  return { action: 'mail-review', source, output, quiet, color };
 }
 
 function parseDiffArguments(argv: string[]): Extract<CliArguments, { action: 'diff' }> {

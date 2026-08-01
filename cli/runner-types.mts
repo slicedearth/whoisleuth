@@ -55,6 +55,7 @@ type CliDependencies = {
   readPrivateKeyFile?: (source: string) => string | Promise<string>;
   readPublicKeyFile?: (source: string) => string | Promise<string>;
   readSourceReliabilityInput?: (source?: string | null) => string | Promise<string>;
+  readMailReviewInput?: (source?: string | null) => string | Promise<string>;
   now?: () => string;
   nowMs?: () => number;
   environment?: TerminalEnvironment;
