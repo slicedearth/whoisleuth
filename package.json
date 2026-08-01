@@ -58,7 +58,7 @@
     "benchmark:workflow": "node tools/specialist-workflow-benchmark.mts",
     "platform:local-data": "node tools/local-data-platform-evaluation.mts",
     "catalog:retire": "node tools/retire-browser-catalog.mts",
-    "architecture:check": "npm run sync --workspace=frontend && depcruise --config .dependency-cruiser.json --output-type err-long -- lib cli bin netlify/functions frontend/src tools server.mts",
+    "architecture:check": "npm run sync --workspace=frontend && depcruise --config .dependency-cruiser.json --output-type err-long -- lib cli bin netlify/functions frontend/src packages tools server.mts",
     "release:check": "node tools/release-version-check.mts",
     "licenses:check": "node tools/third-party-notices.mts --check",
     "licenses:update": "node tools/third-party-notices.mts --write",
