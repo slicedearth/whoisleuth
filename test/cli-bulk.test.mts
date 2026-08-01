@@ -290,21 +290,24 @@ describe('bulk output and runner', () => {
   });
 
   test('CSV and domain-list output retain bounded DNS summaries', () => {
-    const result = compactResult('one.test');
-    result.availability = {
-      ...result.availability,
-      dns: {
-        status: 'success',
-        records: {
-          a: ['192.0.2.10'],
-          aaaa: ['2001:db8::10'],
-          ns: ['ns1.example.test'],
-          mx: [{ priority: 10, exchange: 'mail.example.test.' }],
+    const baseResult = compactResult('one.test');
+    const result = {
+      ...baseResult,
+      availability: {
+        ...baseResult.availability,
+        dns: {
+          status: 'success',
+          records: {
+            a: ['192.0.2.10'],
+            aaaa: ['2001:db8::10'],
+            ns: ['ns1.example.test'],
+            mx: [{ priority: 10, exchange: 'mail.example.test.' }],
+          },
         },
+        hasNullMx: false,
+        hasSpf: true,
+        hasDmarc: false,
       },
-      hasNullMx: false,
-      hasSpf: true,
-      hasDmarc: false,
     };
     const items: BulkLookupResult[] = [
       { index: 0, query: 'one.test', ok: true, classified: classified('one.test'), result },
