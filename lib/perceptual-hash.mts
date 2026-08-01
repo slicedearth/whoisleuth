@@ -401,6 +401,11 @@ function faviconPerceptualHash(buf: Buffer): string | null {
   }
 }
 
+// The same bounded decoder is also suitable for fixed-size PNG screenshots
+// produced by the optional local capture package. Keep the generic name as an
+// alias so the evidence contract does not imply that a screenshot is a favicon.
+const imagePerceptualHash = faviconPerceptualHash;
+
 const HEX_HASH_RE = /^[0-9a-f]{16}$/;
 const POPCOUNT = new Uint8Array(16);
 for (let i = 0; i < 16; i += 1) POPCOUNT[i] = (i & 1) + ((i >> 1) & 1) + ((i >> 2) & 1) + ((i >> 3) & 1);
@@ -419,4 +424,4 @@ function hammingDistanceHex(a: unknown, b: unknown): number | null {
   return distance;
 }
 
-export { faviconPerceptualHash, hammingDistanceHex };
+export { faviconPerceptualHash, hammingDistanceHex, imagePerceptualHash };

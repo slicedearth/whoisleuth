@@ -3,6 +3,7 @@ import { describe, test } from 'node:test';
 import {
   WEB_CAPTURE_SUMMARY_SCHEMA,
   WEB_CAPTURE_MANIFEST_SCHEMA,
+  WEB_CAPTURE_MANIFEST_VERSION,
   parseWebCaptureManifest,
   parseWebCaptureSummary,
 } from '../frontend/src/lib/analysis/web-capture-import.ts';
@@ -116,6 +117,35 @@ describe('sanitised web-capture import', () => {
     assert.equal(document.findings.length, 1);
     assert.match(document.findings[0]?.summary || '', /api\.example\.test.*1440x900.*DOM digest/isu);
     assert.match(document.findings[0]?.limitations.join(' ') || '', /did not receive artifact bytes/iu);
+  });
+
+  test('accepts current screenshot perceptual hashes while retaining version 1 compatibility', () => {
+    const current = parseWebCaptureManifest({
+      schema: WEB_CAPTURE_MANIFEST_SCHEMA,
+      schemaVersion: WEB_CAPTURE_MANIFEST_VERSION,
+      source: { name: 'Local capture package', reference: null, collectedAt: '2026-08-01T00:00:00Z' },
+      captures: [{
+        domain: 'example.test',
+        capturedAt: '2026-08-01T00:00:00Z',
+        artifacts: [{
+          kind: 'screenshot', fileName: 'capture.png', mimeType: 'image/png',
+          sha256: 'a'.repeat(64), perceptualHash: '0123456789abcdef', bytes: 100, width: 100, height: 100,
+        }],
+      }],
+    });
+    assert.match(current.findings[0]?.summary ?? '', /dHash 0123456789abcdef/u);
+    assert.throws(() => parseWebCaptureManifest({
+      schema: WEB_CAPTURE_MANIFEST_SCHEMA,
+      schemaVersion: 1,
+      source: { name: 'Legacy capture', reference: null, collectedAt: null },
+      captures: [{
+        domain: 'example.test', capturedAt: '2026-08-01T00:00:00Z',
+        artifacts: [{
+          kind: 'screenshot', fileName: 'capture.png', mimeType: 'image/png',
+          sha256: 'a'.repeat(64), perceptualHash: '0123456789abcdef', bytes: 100, width: 100, height: 100,
+        }],
+      }],
+    }), /perceptual hash is unsupported/u);
   });
 
   test('rejects path traversal, archive payloads, and unsupported artifact declarations', () => {
