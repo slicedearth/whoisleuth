@@ -446,7 +446,7 @@ test('HTTP intelligence presents bounded redirect provenance and response metada
   await expect(pageComparison.getByText('official.example', { exact: true })).toBeVisible();
   await expect(pageComparison.locator('article').filter({ hasText: 'Normalized HTML' }).getByText('Same captured digest', { exact: true })).toBeVisible();
   await expect(pageComparison.locator('article').filter({ hasText: 'Visible text' }).getByText('100% bit agreement', { exact: true })).toBeVisible();
-  await expect(pageComparison.locator('article').filter({ hasText: 'DOM structure' }).getByText('Different captured digest', { exact: true })).toBeVisible();
+  await expect(pageComparison.locator('article').filter({ hasText: 'DOM structure' }).getByText('Different captured structure', { exact: true })).toBeVisible();
   await expect(pageComparison.locator('article').filter({ hasText: 'External resource hosts' }).getByText('1 host shared', { exact: true })).toBeVisible();
   await expect(pageComparison.getByText('Shared: assets.example', { exact: true })).toBeVisible();
   await expect(pageComparison.getByText(/does not combine these observations into a page-similarity score or use them to change the Risk score/i)).toBeVisible();
