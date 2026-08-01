@@ -36,6 +36,19 @@ import {
   SAVED_LOOKUP_SCHEMA_VERSION,
 } from '../cli/saved-lookup.mts';
 import {
+  CLI_BULK_CHECKPOINT_SCHEMA,
+  CLI_BULK_CHECKPOINT_VERSION,
+  MAX_BULK_CHECKPOINT_BYTES,
+} from '../cli/bulk-checkpoint.mts';
+import {
+  CLI_LOOKUP_DIFF_SCHEMA,
+  CLI_LOOKUP_DIFF_VERSION,
+} from '../cli/lookup-diff.mts';
+import {
+  CLI_PROGRESS_EVENT_SCHEMA,
+  CLI_PROGRESS_EVENT_VERSION,
+} from '../cli/progress-events.mts';
+import {
   BRAND_PROFILE_SCHEMA,
   BRAND_PROFILE_SCHEMA_VERSION,
   MAX_PROFILE_STORE_BYTES,
@@ -213,7 +226,7 @@ import {
 
 export const SCHEMA_COMPATIBILITY_INVENTORY_SCHEMA = 'whoisleuth.schema-compatibility-inventory';
 export const SCHEMA_COMPATIBILITY_INVENTORY_VERSION = 1;
-export const MAX_SCHEMA_COMPATIBILITY_ENTRIES = 64;
+export const MAX_SCHEMA_COMPATIBILITY_ENTRIES = 67;
 
 type ContractKind = 'browser_store' | 'tab_store' | 'hosted_store' | 'export' | 'cli_document' | 'derived';
 type FutureVersionBehavior = 'reject' | 'preserve_without_write' | 'discard' | 'not_applicable';
@@ -301,6 +314,9 @@ const ENTRIES: SchemaCompatibilityEntry[] = [
   entry({ id: 'cli.lookup', kind: 'cli_document', schema: CLI_LOOKUP_SCHEMA, currentVersion: CLI_LOOKUP_SCHEMA_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: MAX_SAVED_LOOKUP_INPUT_BYTES, owner: 'cli/formatters/json.mts', note: 'Saved domain lookups are parsed for compare and evidence export only at the exact current version.' }),
   entry({ id: 'cli.bulk', kind: 'cli_document', schema: CLI_BULK_SCHEMA, currentVersion: CLI_BULK_SCHEMA_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'cli/formatters/json.mts', note: 'Bounded bulk result document.' }),
   entry({ id: 'cli.bulk-item', kind: 'cli_document', schema: CLI_BULK_ITEM_SCHEMA, currentVersion: CLI_BULK_SCHEMA_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'cli/formatters/json.mts', note: 'One bounded bulk JSONL or document item.' }),
+  entry({ id: 'cli.bulk-checkpoint', kind: 'cli_document', schema: CLI_BULK_CHECKPOINT_SCHEMA, currentVersion: CLI_BULK_CHECKPOINT_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'normalized_rewrite', byteBudget: MAX_BULK_CHECKPOINT_BYTES, owner: 'cli/bulk-checkpoint.mts', note: 'Private local compact Bulk checkpoint tied to the exact ordered input digest and scan mode.' }),
+  entry({ id: 'cli.progress-event', kind: 'cli_document', schema: CLI_PROGRESS_EVENT_SCHEMA, currentVersion: CLI_PROGRESS_EVENT_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'cli/progress-events.mts', note: 'Target-free JSONL lifecycle event emitted on standard error only when explicitly requested.' }),
+  entry({ id: 'cli.lookup-diff', kind: 'cli_document', schema: CLI_LOOKUP_DIFF_SCHEMA, currentVersion: CLI_LOOKUP_DIFF_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: MAX_SAVED_LOOKUP_INPUT_BYTES, owner: 'cli/lookup-diff.mts', note: 'Offline comparison of two exact-current bounded saved Lookup documents.' }),
   entry({ id: 'cli.ct-search', kind: 'cli_document', schema: CLI_CT_SEARCH_SCHEMA, currentVersion: CLI_CT_SEARCH_SCHEMA_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'cli/formatters/json.mts', note: 'Certificate log search output.' }),
   entry({ id: 'cli.discover', kind: 'cli_document', schema: CLI_DISCOVER_SCHEMA, currentVersion: CLI_DISCOVER_SCHEMA_VERSION, supportedVersions: [1, 2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'cli/formatters/json.mts', note: 'Candidate discovery document.' }),
   entry({ id: 'cli.discover-item', kind: 'cli_document', schema: CLI_DISCOVER_ITEM_SCHEMA, currentVersion: CLI_DISCOVER_SCHEMA_VERSION, supportedVersions: [1, 2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'cli/formatters/json.mts', note: 'One candidate discovery JSONL item.' }),

@@ -11,6 +11,9 @@ import { CliUsageError } from './errors.mts';
 const MAX_CLI_ARGUMENTS = 32;
 const MAX_CLI_ARGUMENT_LENGTH = 1024;
 const CLI_COMMANDS = [
+  'completion',
+  'doctor',
+  'manual',
   'lookup',
   'bulk',
   'ct-search',
@@ -26,6 +29,7 @@ const CLI_COMMANDS = [
   'verify-signature',
   'source-report',
   'compare',
+  'diff',
   'export',
 ] as const;
 type CliCommand = typeof CLI_COMMANDS[number];
@@ -35,11 +39,18 @@ type TerminalOptions = {
   color: boolean;
 };
 
-type CliArguments =
+type LookupDetail = 'summary' | 'standard' | 'verbose';
+type CompletionShell = 'bash' | 'zsh' | 'fish';
+type FileOutputOptions = { destination?: string; force?: true };
+
+type CliAction =
   | { action: 'help'; command?: CliCommand }
   | { action: 'version' }
-  | ({ action: 'lookup'; query: string | null; output: 'terminal' | 'json'; deep: boolean } & TerminalOptions)
-  | ({ action: 'bulk'; source: string | null; output: 'terminal' | 'json' | 'jsonl'; deep: boolean; concurrency: number } & TerminalOptions)
+  | ({ action: 'completion'; shell: CompletionShell })
+  | ({ action: 'manual' })
+  | ({ action: 'doctor'; network: boolean; output: 'terminal' | 'json' } & TerminalOptions)
+  | ({ action: 'lookup'; query: string | null; output: 'terminal' | 'json' | 'markdown' | 'html'; deep: boolean; detail: LookupDetail; strictExit: boolean; events: boolean } & TerminalOptions)
+  | ({ action: 'bulk'; source: string | null; output: 'terminal' | 'json' | 'jsonl'; deep: boolean; concurrency: number; checkpoint: string | null; resume: boolean; events: boolean } & TerminalOptions)
   | ({ action: 'ct-search'; keyword: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'discover'; seed: string | null; output: 'terminal' | 'json' | 'jsonl'; preset: 'common' | 'impersonation' | 'all' | 'custom'; keyboardLayout: 'qwerty' | 'azerty' | 'qwertz' | 'all'; tldText: string | null; dictionarySource: string | null; familyText: string | null } & TerminalOptions)
   | ({ action: 'posture'; domain: string | null; output: 'terminal' | 'json'; selectorText: string | null; retiredSelectorText: string | null; mailProfile: 'defensive_no_mail' | 'parked' | 'standard' } & TerminalOptions)
@@ -53,7 +64,15 @@ type CliArguments =
   | VerifySignatureArguments
   | ({ action: 'source-report'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'compare'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
+  | ({ action: 'diff'; leftSource: string; rightSource: string; output: 'terminal' | 'json' } & TerminalOptions)
   | { action: 'export'; source: string | null; format: 'json' | 'markdown' | 'html'; compact: boolean };
+type CliArguments = CliAction & FileOutputOptions;
+
+type ExtractedFileOutput = {
+  argv: string[];
+  destination: string | null;
+  force: boolean;
+};
 
 function boundedArgument(value: unknown): string {
   if (typeof value !== 'string' || value.length > MAX_CLI_ARGUMENT_LENGTH || /[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/.test(value)) {
@@ -66,11 +85,47 @@ function isCliCommand(value: string): value is CliCommand {
   return (CLI_COMMANDS as readonly string[]).includes(value);
 }
 
+function extractFileOutputArguments(argv: string[]): ExtractedFileOutput {
+  const retained: string[] = [];
+  let destination: string | null = null;
+  let force = false;
+  for (let index = 0; index < argv.length; index++) {
+    const argument = argv[index];
+    if (argument === undefined) break;
+    if (index > 0 && argument === '--output') {
+      if (destination !== null) throw new CliUsageError('--output may be supplied only once.');
+      const value = argv[++index];
+      if (!value || value.startsWith('-')) throw new CliUsageError('--output requires one bounded file path.');
+      destination = value;
+    } else if (index > 0 && argument === '--force') {
+      if (force) throw new CliUsageError('--force may be supplied only once.');
+      force = true;
+    } else {
+      retained.push(argument);
+    }
+  }
+  if (force && destination === null) throw new CliUsageError('--force requires --output.');
+  return { argv: retained, destination, force };
+}
+
 function parseCliArguments(rawArgv: unknown): CliArguments {
   if (!Array.isArray(rawArgv) || rawArgv.length > MAX_CLI_ARGUMENTS) {
     throw new CliUsageError(`At most ${MAX_CLI_ARGUMENTS} command arguments are supported.`);
   }
-  const argv = rawArgv.map(boundedArgument);
+  const extracted = extractFileOutputArguments(rawArgv.map(boundedArgument));
+  const parsed = parseCliArgumentsCore(extracted.argv);
+  if ('quiet' in parsed && parsed.quiet && extracted.destination !== null) {
+    throw new CliUsageError('--quiet cannot be combined with --output.');
+  }
+  if ('events' in parsed && parsed.events && extracted.destination !== null) {
+    throw new CliUsageError('--events cannot be combined with --output because completion must describe the final output delivery.');
+  }
+  return extracted.destination === null
+    ? parsed
+    : { ...parsed, destination: extracted.destination, ...(extracted.force ? { force: true as const } : {}) };
+}
+
+function parseCliArgumentsCore(argv: string[]): CliAction {
   if (!argv.length) return { action: 'help' };
   const firstArgument = argv[0] ?? '';
   const helpRequested = argv.includes('--help') || argv.includes('-h');
@@ -89,6 +144,9 @@ function parseCliArguments(rawArgv: unknown): CliArguments {
     throw new CliUsageError(`Unknown command "${command}". This release supports: ${CLI_COMMANDS.join(', ')}.`);
   }
   if (command === 'bulk') return parseBulkArguments(argv.slice(1));
+  if (command === 'completion') return parseCompletionArguments(argv.slice(1));
+  if (command === 'doctor') return parseDoctorArguments(argv.slice(1));
+  if (command === 'manual') return parseManualArguments(argv.slice(1));
   if (command === 'ct-search') return parseCtSearchArguments(argv.slice(1));
   if (command === 'discover') return parseDiscoverArguments(argv.slice(1));
   if (command === 'posture') return parsePostureArguments(argv.slice(1));
@@ -102,17 +160,25 @@ function parseCliArguments(rawArgv: unknown): CliArguments {
   if (command === 'verify-signature') return parseVerifySignatureArguments(argv.slice(1));
   if (command === 'source-report') return parseSourceReportArguments(argv.slice(1));
   if (command === 'compare') return parseCompareArguments(argv.slice(1));
+  if (command === 'diff') return parseDiffArguments(argv.slice(1));
   if (command === 'export') return parseExportArguments(argv.slice(1));
   let query: string | null = null;
-  let output: 'terminal' | 'json' = 'terminal';
+  let output: 'terminal' | 'json' | 'markdown' | 'html' = 'terminal';
   let deep = false;
   let scanMode: 'fast' | 'deep' | null = null;
   let quiet = false;
   let color = true;
+  let detail: LookupDetail = 'standard';
+  let detailSet = false;
+  let strictExit = false;
+  let events = false;
   for (const argument of argv.slice(1)) {
     if (argument === '--json') {
       if (output !== 'terminal') throw new CliUsageError('Choose only one output format.');
       output = 'json';
+    } else if (argument === '--markdown' || argument === '--html') {
+      if (output !== 'terminal') throw new CliUsageError('Choose only one output format.');
+      output = argument === '--markdown' ? 'markdown' : 'html';
     } else if (argument === '--deep') {
       if (scanMode) throw new CliUsageError('--fast and --deep are mutually exclusive and may be supplied only once.');
       deep = true;
@@ -121,6 +187,16 @@ function parseCliArguments(rawArgv: unknown): CliArguments {
       if (scanMode) throw new CliUsageError('--fast and --deep are mutually exclusive and may be supplied only once.');
       deep = false;
       scanMode = 'fast';
+    } else if (argument === '--summary' || argument === '--verbose') {
+      if (detailSet) throw new CliUsageError('--summary and --verbose are mutually exclusive and may be supplied only once.');
+      detail = argument === '--summary' ? 'summary' : 'verbose';
+      detailSet = true;
+    } else if (argument === '--strict-exit') {
+      if (strictExit) throw new CliUsageError('--strict-exit may be supplied only once.');
+      strictExit = true;
+    } else if (argument === '--events') {
+      if (events) throw new CliUsageError('--events may be supplied only once.');
+      events = true;
     } else if (argument === '--quiet') quiet = true;
     else if (argument === '--no-color') color = false;
     else if (argument.startsWith('-')) throw new CliUsageError(`Unknown option "${argument}".`);
@@ -128,7 +204,40 @@ function parseCliArguments(rawArgv: unknown): CliArguments {
     else throw new CliUsageError('lookup accepts one query. Use the bulk command for multiple inputs.');
   }
   if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
-  return { action: 'lookup', query, output, deep, quiet, color };
+  if (detailSet && output !== 'terminal') throw new CliUsageError('--summary and --verbose apply only to terminal output.');
+  return { action: 'lookup', query, output, deep, detail, strictExit, events, quiet, color };
+}
+
+function parseCompletionArguments(argv: string[]): Extract<CliArguments, { action: 'completion' }> {
+  if (argv.length !== 1 || !['bash', 'zsh', 'fish'].includes(argv[0] || '')) {
+    throw new CliUsageError('completion requires exactly one shell: bash, zsh, or fish.');
+  }
+  return { action: 'completion', shell: argv[0] as CompletionShell };
+}
+
+function parseManualArguments(argv: string[]): Extract<CliArguments, { action: 'manual' }> {
+  if (argv.length !== 0) throw new CliUsageError('manual does not accept command arguments.');
+  return { action: 'manual' };
+}
+
+function parseDoctorArguments(argv: string[]): Extract<CliArguments, { action: 'doctor' }> {
+  let network = false;
+  let output: 'terminal' | 'json' = 'terminal';
+  let quiet = false;
+  let color = true;
+  for (const argument of argv) {
+    if (argument === '--network') {
+      if (network) throw new CliUsageError('--network may be supplied only once.');
+      network = true;
+    } else if (argument === '--json') {
+      if (output !== 'terminal') throw new CliUsageError('--json may be supplied only once.');
+      output = 'json';
+    } else if (argument === '--quiet') quiet = true;
+    else if (argument === '--no-color') color = false;
+    else throw new CliUsageError(`Unknown option "${argument}".`);
+  }
+  if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
+  return { action: 'doctor', network, output, quiet, color };
 }
 
 function parseBulkArguments(argv: string[]): Extract<CliArguments, { action: 'bulk' }> {
@@ -139,6 +248,9 @@ function parseBulkArguments(argv: string[]): Extract<CliArguments, { action: 'bu
   let quiet = false;
   let color = true;
   let concurrency: number | null = null;
+  let checkpoint: string | null = null;
+  let resume = false;
+  let events = false;
   for (let index = 0; index < argv.length; index++) {
     const argument = argv[index];
     if (argument === undefined) break;
@@ -155,6 +267,17 @@ function parseBulkArguments(argv: string[]): Extract<CliArguments, { action: 'bu
       if (!raw || !/^\d+$/.test(raw)) throw new CliUsageError('--concurrency requires an integer from 1 to 8.');
       concurrency = Number(raw);
       if (concurrency < 1 || concurrency > 8) throw new CliUsageError('--concurrency must be from 1 to 8.');
+    } else if (argument === '--checkpoint') {
+      if (checkpoint !== null) throw new CliUsageError('--checkpoint may be supplied only once.');
+      const value = argv[++index];
+      if (!value || value.startsWith('-')) throw new CliUsageError('--checkpoint requires one bounded file path.');
+      checkpoint = value;
+    } else if (argument === '--resume') {
+      if (resume) throw new CliUsageError('--resume may be supplied only once.');
+      resume = true;
+    } else if (argument === '--events') {
+      if (events) throw new CliUsageError('--events may be supplied only once.');
+      events = true;
     } else if (argument === '--quiet') quiet = true;
     else if (argument === '--no-color') color = false;
     else if (argument.startsWith('-')) throw new CliUsageError(`Unknown option "${argument}".`);
@@ -162,11 +285,12 @@ function parseBulkArguments(argv: string[]): Extract<CliArguments, { action: 'bu
     else throw new CliUsageError('bulk accepts one optional input file. Otherwise pipe newline-delimited queries on stdin.');
   }
   if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
+  if (resume && checkpoint === null) throw new CliUsageError('--resume requires --checkpoint.');
   const maximum = deep ? 3 : 8;
   if (concurrency !== null && concurrency > maximum) {
     throw new CliUsageError(`--concurrency is capped at ${maximum} in ${deep ? 'deep' : 'fast'} bulk mode.`);
   }
-  return { action: 'bulk', source, output, deep, quiet, color, concurrency: concurrency ?? (deep ? 2 : 4) };
+  return { action: 'bulk', source, output, deep, quiet, color, concurrency: concurrency ?? (deep ? 2 : 4), checkpoint, resume, events };
 }
 
 function parseCtSearchArguments(argv: string[]): Extract<CliArguments, { action: 'ct-search' }> {
@@ -353,6 +477,29 @@ function parseCompareArguments(argv: string[]): Extract<CliArguments, { action: 
   return { action: 'compare', source, output, quiet, color };
 }
 
+function parseDiffArguments(argv: string[]): Extract<CliArguments, { action: 'diff' }> {
+  let leftSource: string | null = null;
+  let rightSource: string | null = null;
+  let output: 'terminal' | 'json' = 'terminal';
+  let quiet = false;
+  let color = true;
+  for (const argument of argv) {
+    if (argument === '--json') {
+      if (output !== 'terminal') throw new CliUsageError('--json may be supplied only once.');
+      output = 'json';
+    } else if (argument === '--quiet') quiet = true;
+    else if (argument === '--no-color') color = false;
+    else if (argument.startsWith('-')) throw new CliUsageError(`Unknown option "${argument}".`);
+    else if (leftSource === null) leftSource = argument;
+    else if (rightSource === null) rightSource = argument;
+    else throw new CliUsageError('diff accepts exactly two saved lookup JSON files.');
+  }
+  if (!leftSource || !rightSource) throw new CliUsageError('diff requires exactly two saved lookup JSON files.');
+  if (leftSource === rightSource) throw new CliUsageError('diff requires two different input files.');
+  if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
+  return { action: 'diff', leftSource, rightSource, output, quiet, color };
+}
+
 function parseRegistrySupportArguments(argv: string[]): Extract<CliArguments, { action: 'registry-support' }> {
   let target: string | null = null;
   let output: 'terminal' | 'json' = 'terminal';
@@ -459,4 +606,4 @@ function parseExportArguments(argv: string[]): Extract<CliArguments, { action: '
 }
 
 export { CLI_COMMANDS, CliUsageError, MAX_CLI_ARGUMENTS, MAX_CLI_ARGUMENT_LENGTH, parseCliArguments };
-export type { CliArguments, CliCommand };
+export type { CliArguments, CliCommand, CompletionShell, LookupDetail };

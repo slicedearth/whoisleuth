@@ -37,9 +37,9 @@ async function expectNoAccessibilityViolations(page: Page, testInfo: TestInfo, s
   ).toEqual([]);
 }
 
-async function expectSequentialHeadingOrder(page: Page) {
+async function expectSequentialHeadingOrder(page: Page, state: string) {
   const results = await new AxeBuilder({ page }).withRules(['heading-order']).analyze();
-  expect(results.violations, 'public homepage produced a heading-order violation').toEqual([]);
+  expect(results.violations, `${state} produced a heading-order violation`).toEqual([]);
 }
 
 async function installLookupFixture(page: Page) {
@@ -113,7 +113,7 @@ test('scans representative public initial, error, populated, and expanded states
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto('/');
   await expectNoAccessibilityViolations(page, testInfo, 'public-initial-dark-desktop');
-  await expectSequentialHeadingOrder(page);
+  await expectSequentialHeadingOrder(page, 'public homepage');
 
   await page.goto('/resources/rdap-vs-whois');
   await expectNoAccessibilityViolations(page, testInfo, 'public-resource-dark-desktop');
@@ -132,9 +132,18 @@ test('scans representative public initial, error, populated, and expanded states
   await page.getByRole('button', { name: 'Use synthetic profile' }).click();
   await page.getByRole('button', { name: 'Load synthetic candidates' }).click();
   await page.getByRole('button', { name: 'Inspect northstar-login.example' }).click();
+  const lookupEvidenceHeading = page.getByRole('heading', { name: 'Synthetic lookup evidence' });
+  await expect(lookupEvidenceHeading).toHaveCSS('position', 'absolute');
+  expect((await lookupEvidenceHeading.boundingBox())?.height).toBeLessThanOrEqual(1);
   await page.locator('.technology-card > summary').click();
   await expect(page.locator('.technology-card')).toHaveAttribute('open', '');
   await expectNoAccessibilityViolations(page, testInfo, 'public-populated-expanded-light-mobile');
+  await expectSequentialHeadingOrder(page, 'public populated demo');
+  await page.getByRole('button', { name: 'Open synthetic case in Monitor' }).click();
+  const caseEvidenceHeading = page.getByRole('heading', { name: 'Synthetic case evidence' });
+  await expect(caseEvidenceHeading).toHaveCSS('position', 'absolute');
+  expect((await caseEvidenceHeading.boundingBox())?.height).toBeLessThanOrEqual(1);
+  await expectSequentialHeadingOrder(page, 'public monitor demo');
 });
 
 test('scans authenticated desktop and expanded mobile drawer states', async ({ page }, testInfo) => {

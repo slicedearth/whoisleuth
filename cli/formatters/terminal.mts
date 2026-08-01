@@ -21,6 +21,7 @@ type TerminalBulkItem = {
   result?: unknown;
 };
 type TerminalBulkMetadata = { duplicates?: number };
+type LookupTerminalDetail = 'summary' | 'standard' | 'verbose';
 
 function safeTerminalValue(value: unknown, fallback = '—'): string {
   if (value === null || value === undefined || value === '') return fallback;
@@ -60,34 +61,50 @@ function terminalCountSummary(
     .join(', ');
 }
 
-function formatTerminalLookup(document: TerminalRecord): string {
+function appendSection(lines: string[], label: string, values: string[]): void {
+  if (!values.length) return;
+  if (lines.length) lines.push('');
+  lines.push(`${label}:`, ...values);
+}
+
+function formatTerminalLookup(
+  document: TerminalRecord,
+  { detail = 'standard' }: { detail?: LookupTerminalDetail } = {},
+): string {
   const availability = terminalRecord(document.availability);
   const diagnostics = terminalRecord(document.diagnostics);
   const rdapDiagnostics = terminalRecord(diagnostics.rdap);
   const whoisDiagnostics = terminalRecord(diagnostics.whois);
-  const lines = [
+  const targetLines = [
     `Query          ${safeTerminalValue(document.query)}`,
     `Type           ${safeTerminalValue(document.type)}`,
     `Mode           ${titleCase(document.mode)}`,
   ];
   if (document.inputHostname && document.inputHostname !== document.registrableDomain) {
-    lines.push(`Input host     ${safeTerminalValue(document.inputHostname)}`);
-    lines.push(`Registry query ${safeTerminalValue(document.registrableDomain)}`);
+    targetLines.push(`Input host     ${safeTerminalValue(document.inputHostname)}`);
+    targetLines.push(`Registry query ${safeTerminalValue(document.registrableDomain)}`);
   }
   if (availability.applicable) {
-    lines.push(`Availability   ${titleCase(availability.state)}`);
-    lines.push(`Confidence     ${titleCase(availability.confidence)}`);
+    targetLines.push(`Availability   ${titleCase(availability.state)}`);
+    targetLines.push(`Confidence     ${titleCase(availability.confidence)}`);
   }
-  lines.push(`RDAP           ${titleCase(rdapDiagnostics.status)}`);
-  if (rdapDiagnostics.endpoint) lines.push(`RDAP source    ${safeTerminalValue(rdapDiagnostics.endpoint)}`);
+
+  const registrationLines = [
+    `RDAP           ${titleCase(rdapDiagnostics.status)}`,
+    `WHOIS          ${titleCase(whoisDiagnostics.status)}`,
+  ];
+  if (detail !== 'summary' && rdapDiagnostics.endpoint) {
+    registrationLines.splice(1, 0, `RDAP source    ${safeTerminalValue(rdapDiagnostics.endpoint)}`);
+  }
   const registrarRdap = terminalRecord(rdapDiagnostics.registrar);
   if (Object.keys(registrarRdap).length) {
-    lines.push(`Registrar RDAP ${titleCase(registrarRdap.status)}`);
-    if (registrarRdap.endpoint) lines.push(`Registrar source ${safeTerminalValue(registrarRdap.endpoint)}`);
+    registrationLines.push(`Registrar RDAP ${titleCase(registrarRdap.status)}`);
+    if (detail !== 'summary' && registrarRdap.endpoint) {
+      registrationLines.push(`Registrar source ${safeTerminalValue(registrarRdap.endpoint)}`);
+    }
   }
-  lines.push(`WHOIS          ${titleCase(whoisDiagnostics.status)}`);
   const registryInsights = terminalRecord(document.registryInsights);
-  if (registryInsights.version === 1) {
+  if (detail !== 'summary' && registryInsights.version === 1) {
     const lifecycle = terminalRecord(registryInsights.lifecycle);
     const disclosure = terminalRecord(registryInsights.contactDisclosure);
     const registryDisclosure = terminalRecord(disclosure.registryRdap);
@@ -101,11 +118,13 @@ function formatTerminalLookup(document: TerminalRecord): string {
       partial: publications.filter((item) => item.state === 'partial').length,
       unavailable: publications.filter((item) => item.state === 'unavailable').length,
     };
-    lines.push(`Lifecycle      ${titleCase(lifecycle.label)}`);
-    lines.push(`Disclosure     RDAP ${titleCase(registryDisclosure.state)} · WHOIS ${titleCase(whoisDisclosure.state)}`);
-    lines.push(`Reconciliation ${titleCase(reconciliation.state)}`);
-    lines.push(`Publications   ${publicationCounts.complete} complete · ${publicationCounts.partial} partial · ${publicationCounts.unavailable} unavailable`);
+    registrationLines.push(`Lifecycle      ${titleCase(lifecycle.label)}`);
+    registrationLines.push(`Disclosure     RDAP ${titleCase(registryDisclosure.state)} · WHOIS ${titleCase(whoisDisclosure.state)}`);
+    registrationLines.push(`Reconciliation ${titleCase(reconciliation.state)}`);
+    registrationLines.push(`Publications   ${publicationCounts.complete} complete · ${publicationCounts.partial} partial · ${publicationCounts.unavailable} unavailable`);
   }
+
+  const websiteLines: string[] = [];
   if (document.mode === 'deep' && document.type === 'domain') {
     const dns = terminalRecord(availability.dns);
     const http = terminalRecord(availability.http);
@@ -118,20 +137,20 @@ function formatTerminalLookup(document: TerminalRecord): string {
     const posture = terminalRecord(availability.securityPosture);
     const postureSummary = terminalRecord(posture.summary);
 
-    if (availability.activityStatus) lines.push(`Web activity   ${titleCase(availability.activityStatus)}`);
-    if (availability.pageTitle) lines.push(`Page title     ${safeTerminalValue(availability.pageTitle)}`);
-    if (dns.status) lines.push(`DNS evidence   ${titleCase(dns.status)}`);
+    if (availability.activityStatus) websiteLines.push(`Web activity   ${titleCase(availability.activityStatus)}`);
+    if (detail !== 'summary' && availability.pageTitle) websiteLines.push(`Page title     ${safeTerminalValue(availability.pageTitle)}`);
+    if (dns.status) websiteLines.push(`DNS evidence   ${titleCase(dns.status)}`);
     if (http.status) {
-      lines.push(`HTTP evidence  ${titleCase(http.status)}`);
+      websiteLines.push(`HTTP evidence  ${titleCase(http.status)}`);
       const responseDetail = [
         httpResponse.status ? `HTTP ${safeTerminalValue(httpResponse.status)}` : null,
         http.transportSecurity ? safeTerminalValue(http.transportSecurity).toUpperCase() : null,
       ].filter(Boolean).join(' · ');
-      if (responseDetail) lines.push(`HTTP response  ${responseDetail}`);
+      if (detail !== 'summary' && responseDetail) websiteLines.push(`HTTP response  ${responseDetail}`);
     }
     if (tls.status) {
-      lines.push(`TLS evidence   ${titleCase(tls.status)}`);
-      if (tls.protocol) lines.push(`TLS protocol   ${safeTerminalValue(tls.protocol)}`);
+      websiteLines.push(`TLS evidence   ${titleCase(tls.status)}`);
+      if (detail !== 'summary' && tls.protocol) websiteLines.push(`TLS protocol   ${safeTerminalValue(tls.protocol)}`);
     }
     if (credentialSurface.status || credentialSurface.source === 'html') {
       const forms = terminalRecord(credentialSurface.forms);
@@ -141,8 +160,8 @@ function formatTerminalLookup(document: TerminalRecord): string {
       const formCount = terminalCount(forms.count);
       const inputCount = terminalCount(inputs.count);
       const externalActionCount = terminalCount(actions.external);
-      lines.push(`Credential UI  ${titleCase(credentialSurface.status)} · ${safeTerminalValue(inputs.classifiedCount, '0')} classified input${Number(inputs.classifiedCount) === 1 ? '' : 's'}`);
-      lines.push(`Form surface   ${safeTerminalValue(formCount)} form${formCount === 1 ? '' : 's'} · ${safeTerminalValue(inputCount)} input${inputCount === 1 ? '' : 's'} · ${safeTerminalValue(externalActionCount)} external action${externalActionCount === 1 ? '' : 's'}`);
+      websiteLines.push(`Credential UI  ${titleCase(credentialSurface.status)} · ${safeTerminalValue(inputs.classifiedCount, '0')} classified input${Number(inputs.classifiedCount) === 1 ? '' : 's'}`);
+      if (detail !== 'summary') websiteLines.push(`Form surface   ${safeTerminalValue(formCount)} form${formCount === 1 ? '' : 's'} · ${safeTerminalValue(inputCount)} input${inputCount === 1 ? '' : 's'} · ${safeTerminalValue(externalActionCount)} external action${externalActionCount === 1 ? '' : 's'}`);
       const visible = [
         ['password', categories.password],
         ['email', categories.email],
@@ -150,42 +169,42 @@ function formatTerminalLookup(document: TerminalRecord): string {
         ['one-time code', categories.one_time_code],
         ['payment related', categories.payment],
       ].filter(([, count]) => Number(count) > 0).map(([label, count]) => `${safeTerminalValue(label)} ${safeTerminalValue(count)}`);
-      if (visible.length) lines.push(`Input purposes ${safeTerminalValue(visible.join(' · '))}`);
+      if (detail !== 'summary' && visible.length) websiteLines.push(`Input purposes ${safeTerminalValue(visible.join(' · '))}`);
     }
     if (structuredIdentity.status || structuredIdentity.source === 'html') {
       const entities = Array.isArray(structuredIdentity.entities) ? structuredIdentity.entities : [];
-      lines.push(`Structured ID  ${titleCase(structuredIdentity.status)} · ${entities.length} declared entit${entities.length === 1 ? 'y' : 'ies'}`);
+      websiteLines.push(`Structured ID  ${titleCase(structuredIdentity.status)} · ${entities.length} declared entit${entities.length === 1 ? 'y' : 'ies'}`);
       const visible = entities.slice(0, 4).map((entity: unknown) => {
         const item = terminalRecord(entity);
         const types = Array.isArray(item.types) ? item.types.slice(0, 3).map((value: unknown) => safeTerminalValue(value)).join('/') : '';
         return `${safeTerminalValue(item.name, 'Unnamed declaration')}${types ? ` (${types})` : ''}`;
       });
-      if (visible.length) lines.push(`Declarations   ${safeTerminalValue(visible.join('; '))}`);
+      if (detail !== 'summary' && visible.length) websiteLines.push(`Declarations   ${safeTerminalValue(visible.join('; '))}`);
     }
     if (technology.status || technology.source === 'derived') {
       const findings = Array.isArray(technology.findings) ? technology.findings : [];
-      lines.push(`Technology     ${titleCase(technology.status)} · ${findings.length} indicator${findings.length === 1 ? '' : 's'}`);
+      websiteLines.push(`Technology     ${titleCase(technology.status)} · ${findings.length} indicator${findings.length === 1 ? '' : 's'}`);
       const visible = findings.slice(0, 6).map((finding: unknown) => {
         const item = terminalRecord(finding);
         const qualifiers = [item.category, item.confidence].filter(Boolean).map((value) => safeTerminalValue(value));
         return `${safeTerminalValue(item.name, 'Unnamed indicator')}${qualifiers.length ? ` (${qualifiers.join(', ')})` : ''}`;
       });
-      if (visible.length) {
+      if (detail !== 'summary' && visible.length) {
         const omitted = findings.length - visible.length;
-        lines.push(`Indicators     ${safeTerminalValue(`${visible.join('; ')}${omitted > 0 ? `; +${omitted} more` : ''}`)}`);
+        websiteLines.push(`Indicators     ${safeTerminalValue(`${visible.join('; ')}${omitted > 0 ? `; +${omitted} more` : ''}`)}`);
       }
-      if (browserLibraries.profileVersion === 1 || browserLibraries.source === 'derived') {
+      if (detail !== 'summary' && (browserLibraries.profileVersion === 1 || browserLibraries.source === 'derived')) {
         const libraries = Array.isArray(browserLibraries.findings) ? browserLibraries.findings : [];
         const advisoryMatches = libraries.filter((finding: unknown) => terminalCount(terminalRecord(finding).advisoryCount) > 0).length;
-        lines.push(
+        websiteLines.push(
           `JS libraries   ${titleCase(browserLibraries.status)} · ${libraries.length} apparent · `
           + `${advisoryMatches} with catalogue advisory match${advisoryMatches === 1 ? '' : 'es'}`,
         );
       }
     }
     if (posture.status || posture.source === 'derived') {
-      lines.push(`Posture        ${titleCase(posture.status)}`);
-      lines.push(
+      websiteLines.push(`Posture        ${titleCase(posture.status)}`);
+      if (detail !== 'summary') websiteLines.push(
         `Posture counts ${terminalCount(postureSummary.observed)} observed · `
         + `${terminalCount(postureSummary.potentialExposure)} potential exposure · `
         + `${terminalCount(postureSummary.observedAbsence)} observed absence · `
@@ -193,32 +212,57 @@ function formatTerminalLookup(document: TerminalRecord): string {
       );
     }
   }
+
+  const networkLines: string[] = [];
   if (document.mode === 'deep' && (document.type === 'ipv4' || document.type === 'ipv6')) {
     const reverseDns = terminalRecord(document.reverseDns);
     const reverseDnsRecords = terminalRecord(reverseDns.records);
     const ptrNames = Array.isArray(reverseDnsRecords.ptr)
       ? reverseDnsRecords.ptr.slice(0, 5).map((value: unknown) => safeTerminalValue(value))
       : [];
-    if (reverseDns.status) lines.push(`Reverse DNS    ${titleCase(reverseDns.status)}`);
-    if (ptrNames.length) lines.push(`PTR names      ${safeTerminalValue(ptrNames.join(', '))}`);
+    if (reverseDns.status) networkLines.push(`Reverse DNS    ${titleCase(reverseDns.status)}`);
+    if (detail !== 'summary' && ptrNames.length) networkLines.push(`PTR names      ${safeTerminalValue(ptrNames.join(', '))}`);
   }
   const network = terminalRecord(document.networkContext);
   if (network.contextVersion === 1) {
     const endpoint = terminalRecord(network.endpoint);
     const networkRecord = terminalRecord(network.network);
-    lines.push(`Network RDAP   ${titleCase(network.status)}`);
-    if (endpoint.address) lines.push(`Selected IP    ${safeTerminalValue(endpoint.address)}`);
+    networkLines.push(`Network RDAP   ${titleCase(network.status)}`);
+    if (detail !== 'summary' && endpoint.address) networkLines.push(`Selected IP    ${safeTerminalValue(endpoint.address)}`);
     if (networkRecord.name || networkRecord.holder) {
-      lines.push(`Network        ${safeTerminalValue(networkRecord.name || networkRecord.holder)}`);
+      networkLines.push(`Network        ${safeTerminalValue(networkRecord.name || networkRecord.holder)}`);
     }
   }
+
+  const sourceHealthLines: string[] = [];
   const registryAccess = terminalRecord(diagnostics.registryAccess);
   if (Object.keys(registryAccess).length) {
-    lines.push(`Registry access .${safeTerminalValue(registryAccess.suffix)}`);
-    lines.push(`WHOIS access   ${registryAccessProfileLabel(registryAccess.whoisAccessProfile)}`);
-    lines.push(`RDAP access    ${registryAccessProfileLabel(registryAccess.rdapAccessProfile)}`);
-    if (registryAccess.limitation) lines.push(`Access note    ${safeTerminalValue(registryAccess.limitation)}`);
+    sourceHealthLines.push(`Registry access .${safeTerminalValue(registryAccess.suffix)}`);
+    sourceHealthLines.push(`WHOIS access   ${registryAccessProfileLabel(registryAccess.whoisAccessProfile)}`);
+    sourceHealthLines.push(`RDAP access    ${registryAccessProfileLabel(registryAccess.rdapAccessProfile)}`);
+    if (detail !== 'summary' && registryAccess.limitation) sourceHealthLines.push(`Access note    ${safeTerminalValue(registryAccess.limitation)}`);
   }
+
+  const collectionLines: string[] = [];
+  if (detail === 'verbose') {
+    collectionLines.push(`Generated      ${safeTerminalValue(document.generatedAt, 'unknown')}`);
+    const timing = terminalRecord(document.timing);
+    if (Number(timing.totalMs) >= 0) collectionLines.push(`Total time     ${safeTerminalValue(timing.totalMs)} ms`);
+    const sources = Array.isArray(timing.sources) ? timing.sources.map(terminalRecord) : [];
+    for (const source of sources.slice(0, 16)) {
+      collectionLines.push(
+        `${safeTerminalValue(source.source, 'source')} ${titleCase(source.outcome)} · ${safeTerminalValue(source.durationMs, '0')} ms`,
+      );
+    }
+  }
+
+  const lines: string[] = [];
+  appendSection(lines, 'Target', targetLines);
+  appendSection(lines, 'Registration', registrationLines);
+  appendSection(lines, 'Website and security', websiteLines);
+  appendSection(lines, 'Network', networkLines);
+  appendSection(lines, 'Source health', sourceHealthLines);
+  appendSection(lines, 'Collection', collectionLines);
   return `${lines.join('\n')}\n`;
 }
 

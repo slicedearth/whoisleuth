@@ -4,6 +4,7 @@ const EXIT_CODES = Object.freeze({
   LOOKUP_FAILED: 3,
   PARTIAL_FAILURE: 4,
   INTERNAL_ERROR: 70,
+  CANCELLED: 130,
 } as const);
 
 export default EXIT_CODES;

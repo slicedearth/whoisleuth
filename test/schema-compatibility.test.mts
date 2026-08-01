@@ -163,7 +163,7 @@ describe('schema compatibility inventory', () => {
     assert.equal(inventory.schema, SCHEMA_COMPATIBILITY_INVENTORY_SCHEMA);
     assert.equal(inventory.version, SCHEMA_COMPATIBILITY_INVENTORY_VERSION);
     assert.equal(inventory.generatedAt, NOW);
-    assert.equal(inventory.entries.length, 64);
+    assert.equal(inventory.entries.length, 67);
     assert.deepEqual(new Set(inventory.entries.map((entry) => entry.kind)), new Set([
       'browser_store', 'tab_store', 'hosted_store', 'export', 'cli_document', 'derived',
     ]));
@@ -171,6 +171,9 @@ describe('schema compatibility inventory', () => {
     assert.equal(byId(inventory, 'browser.cases').currentVersion, CASE_SCHEMA_VERSION);
     assert.equal(byId(inventory, 'export.lookup-evidence').schema, LOOKUP_EVIDENCE_SCHEMA);
     assert.equal(byId(inventory, 'export.lookup-evidence').currentVersion, LOOKUP_EVIDENCE_SCHEMA_VERSION);
+    assert.equal(byId(inventory, 'cli.bulk-checkpoint').schema, 'whoisleuth.cli.bulk-checkpoint');
+    assert.equal(byId(inventory, 'cli.progress-event').schema, 'whoisleuth.cli.progress');
+    assert.equal(byId(inventory, 'cli.lookup-diff').schema, 'whoisleuth.cli.lookup-diff');
     assert.deepEqual(byId(inventory, 'export.lookup-evidence').supportedVersions, [12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23]);
     assert.deepEqual(byId(inventory, 'export.synthetic-demo').supportedVersions, [2, 3, 4, 5]);
     assert.equal(byId(inventory, 'export.relationship-graph').schema, RELATIONSHIP_GRAPH_EXPORT_SCHEMA);

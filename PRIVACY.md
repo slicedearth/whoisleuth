@@ -692,6 +692,21 @@ default (see the README), so many lookups return no personal data at all.
   signature time, signature, and public key; WHOISleuth does not generate,
   store, recover, rotate, publish, or establish trust in signing keys. These
   commands make no network request and do not upload input.
+- **CLI output, checkpoints, and progress**: every CLI command can deliberately
+  write its bounded output to a private local file. Existing files are refused
+  unless replacement is explicit. Bulk checkpoints are separate private local
+  files capped at 16 MiB and contain the ordered input digest, scan mode, times,
+  queries, classifications, bounded errors, and compact per-query results. They
+  do not contain full Lookup responses, but they can still identify the targets
+  investigated and remain under the operator's retention and deletion control.
+  Resume validates the entire checkpoint and requires the exact original input
+  and scan mode. Direct Markdown and HTML reports use the same normalized
+  evidence projection as the existing export command. Saved-Lookup diff reads
+  two local current-schema domain documents and emits a bounded comparison
+  without contacting either target. Optional versioned progress events contain
+  only the command, sequence, time, source state or Bulk item index, and final
+  exit status. They exclude targets, queries, endpoints, error details, and
+  evidence values. None of these files or events is uploaded by the CLI.
 - **In-tab undo**: the Console's 12-second undo notice is held only in the
   current tab's runtime memory. It can restore a prior Bulk review state,
   shortlist membership, case-tag set, or temporary evidence-cluster label by

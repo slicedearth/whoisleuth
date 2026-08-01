@@ -1186,4 +1186,19 @@ describe('runUnifiedLookup', () => {
     assert.equal(result.diagnostics.availability.status, 'disabled');
     assert.equal(result.diagnostics.availability.errorCode, 'FEATURE_DISABLED');
   });
+
+  test('cancellation rejects promptly without assembling a partial final envelope', async () => {
+    const controller = new AbortController();
+    const never = () => new Promise<never>(() => {});
+    const lookup = runUnifiedLookup(classifiedDomain, {
+      signal: controller.signal,
+      fetchRdapRecord: never,
+      buildWhoisChain: never,
+      checkDomainAvailability: never,
+    });
+    setImmediate(() => controller.abort());
+    await assert.rejects(lookup, (error: unknown) => (
+      error instanceof DOMException && error.name === 'AbortError'
+    ));
+  });
 });

@@ -5,9 +5,11 @@ lookup modules as the Express and serverless adapters. It does not call the
 hosted WHOISleuth deployment.
 
 `whoisleuth --help` displays the copyright, AGPL-3.0-only licence, and official
-source location. `whoisleuth <command> --help` displays the focused invocation
-for one command without printing the full command list. Packaged copies include
-`LICENSE`, `NOTICE`, and `TRADEMARKS.md` alongside the CLI documentation.
+source location. It groups commands by investigation, discovery, saved-evidence,
+integrity, and calibration workflows. `whoisleuth <command> --help` displays the
+command's purpose, focused invocation, example, and collection boundary without
+printing the full command list. Packaged copies include `LICENSE`, `NOTICE`, and
+`TRADEMARKS.md` alongside the CLI documentation.
 
 ## Commands
 
@@ -16,8 +18,14 @@ node bin/whoisleuth.mts lookup example.com
 node bin/whoisleuth.mts lookup AS13335 --json
 printf 'example.com\n' | node bin/whoisleuth.mts lookup --json
 node bin/whoisleuth.mts lookup example.com --deep
+node bin/whoisleuth.mts lookup example.com --deep --summary
+node bin/whoisleuth.mts lookup example.com --deep --verbose
+node bin/whoisleuth.mts lookup example.com --deep --markdown --output lookup.md
+node bin/whoisleuth.mts lookup example.com --deep --json --strict-exit --events
 cat domains.txt | node bin/whoisleuth.mts bulk --jsonl
 node bin/whoisleuth.mts bulk domains.txt --concurrency 4
+node bin/whoisleuth.mts bulk domains.txt --deep --checkpoint bulk-checkpoint.json
+node bin/whoisleuth.mts bulk domains.txt --deep --checkpoint bulk-checkpoint.json --resume
 node bin/whoisleuth.mts ct-search 'example brand' --json
 node bin/whoisleuth.mts discover example.com --preset common --jsonl
 node bin/whoisleuth.mts posture example.com --selectors selector1 --retired-selectors selector0 --mail-profile defensive-no-mail --json
@@ -34,22 +42,30 @@ node bin/whoisleuth.mts sign-artifact response-packet.json --private-key-file an
 node bin/whoisleuth.mts verify-signature response-packet.signed.json --public-key-file analyst-public.pem
 node bin/whoisleuth.mts lookup example.com --deep --json > lookup.json
 node bin/whoisleuth.mts compare lookup.json --json
+node bin/whoisleuth.mts diff first-lookup.json second-lookup.json --json
 node bin/whoisleuth.mts export lookup.json > evidence.json
 node bin/whoisleuth.mts export lookup.json --markdown > evidence.md
 node bin/whoisleuth.mts export lookup.json --html > evidence.html
+node bin/whoisleuth.mts doctor
+node bin/whoisleuth.mts doctor --network --json
+node bin/whoisleuth.mts completion zsh
+node bin/whoisleuth.mts manual | man -l -
 ```
 
-These examples run from a checked-out repository. The package exposes a
-`whoisleuth` binary for local linking or installation from source, but the
-package is not currently published to the public npm registry; do not assume
-that an unqualified `npx whoisleuth` resolves to this repository.
+These examples run from a checked-out repository. The root application package
+remains private. A separate scoped CLI archive is assembled from the exact
+executable dependency closure, installed in a temporary directory, and smoke
+tested with:
 
-The root package is distribution-scoped to the CLI: an npm archive contains
-only the executable, its TypeScript CLI and shared runtime modules, this guide,
-and the required package metadata and notices. The positive allowlist keeps the
-archive boundary stable as the repository evolves. The self-hosted application
-continues to run from a repository checkout through `npm start`; it is not
-represented as an installable library entry point.
+```bash
+npm run cli:package:check
+```
+
+The check includes only the executable, reachable TypeScript modules, CLI
+guide, licence, notices, and trademark terms. It excludes application routes,
+deployment adapters, tests, and development tools. The candidate package is
+still private and is not published to the public npm registry; do not assume
+that an unqualified `npx whoisleuth` resolves to this repository.
 
 Lookup defaults to the conservative fast profile. `--deep` must be requested
 explicitly and can add bounded WHOIS, DNS, website, TLS, registrar RDAP, and
@@ -71,26 +87,67 @@ Standard input is capped at 4 KiB and must contain one non-empty line.
 suffix, or leading-dot suffix as an argument or on stdin and makes no network
 request. Its output is described below.
 
+`doctor` is offline by default. It checks the Node runtime, platform, terminal
+capabilities, and availability of offline command families. `doctor --network`
+adds bounded public-DNS and WHOIS port 43 checks against fixed diagnostic
+infrastructure. It retains only state and a bounded explanation, not resolved
+addresses or response content. A failed optional network check returns the
+partial-failure exit code rather than claiming that all CLI collection is
+unavailable.
+
+`completion bash`, `completion zsh`, and `completion fish` print static shell
+completion scripts to stdout. The command does not edit a shell profile or make
+a network request. Review the generated script before sourcing it or placing it
+in the relevant shell completion directory. `manual` prints a generated roff
+manual page and likewise changes no local configuration.
+
 ## Deployment boundary
 
 The CLI is a local repository tool. The serverless deployment publishes only
 `frontend/build` and packages functions only from `netlify/functions`, so
 `bin/` and `cli/` are not part of the hosted static site or function bundle.
-The package also remains private and is not published to the public npm
-registry.
+Both the application root and the assembled CLI package remain private and are
+not published to the public npm registry.
 
 Commands that query RDAP, WHOIS, DNS, HTTP, TLS, or Certificate Transparency do
 so directly from the machine running the CLI. They do not use the hosted login,
 hosted session, or deployment usage controls; upstream providers can see and
 rate-limit the local machine's network address. Offline `discover`, `compare`,
-`risk-calibrate`, `verify-artifact`, `source-report`, and `export` operations
-make no network requests and write their results only to local stdout unless
-the user redirects them to a file.
+`diff`, `risk-calibrate`, `verify-artifact`, `source-report`, `export`,
+`completion`, and `manual` operations make no network requests. Commands write
+to stdout unless the analyst deliberately selects a local output file.
 
 ## Output
 
-Human-readable terminal output is the default. `--json` writes one versioned
-document to standard output:
+Human-readable terminal output is the default. On an interactive terminal it
+uses restrained semantic colour, groups Lookup evidence by purpose, wraps
+prose to the detected terminal width, and shows transient progress on stderr
+for slower collection. State remains explicit in text, so colour is never the
+only distinction. Redirected terminal output, JSON, and JSONL contain no ANSI
+sequences or progress text. `--no-color` and the conventional `NO_COLOR`
+environment variable disable colour; `WHOISLEUTH_NO_PROGRESS=1` disables the
+transient indicator.
+
+Every command accepts `--output <file>` as a safer alternative to shell
+redirection. WHOISleuth buffers bounded output, creates a private temporary file
+beside the destination, syncs it, and publishes it atomically with mode `0600`.
+An existing destination is refused. `--force` is valid only with `--output` and
+allows an intentional atomic replacement. A failed or cancelled command does
+not publish a partial output file. Output is capped at 32 MiB.
+
+`lookup --markdown` and `lookup --html` build the existing normalized evidence
+report directly after one completed domain lookup. They do not start a second
+collection. These report formats reject IP and ASN inputs before collection;
+JSON and terminal output remain available for those query types.
+
+Lookup terminal output supports three detail levels. The standard view keeps
+the normal bounded evidence summary. `--summary` keeps the source states and
+key findings while omitting endpoints and supporting detail. `--verbose` adds
+the document generation time and the existing bounded per-source collection
+timings. These switches are presentation-only and cannot be combined with
+`--json`; they do not change collection or the result document.
+
+`--json` writes one versioned document to standard output:
 
 ```json
 {
@@ -141,6 +198,41 @@ posture signal, into proof of exploitability, hosting control, ownership, or
 maliciousness. Use `--json` when the full bounded evidence, limitations, and
 source diagnostics are required.
 
+`lookup --strict-exit` is an opt-in automation policy. It still emits the
+ordinary complete output document, but returns exit code 4 when a requested
+diagnostic source is partial, unavailable, rate-limited, timed out, or failed.
+The default exit contract remains unchanged, so inconclusive source health does
+not silently break existing scripts.
+
+`lookup --events` and `bulk --events` write versioned
+`whoisleuth.cli.progress` version 1 JSONL lifecycle events to stderr while the
+ordinary final result stays on stdout. Events contain only the command,
+sequence, time, source state or Bulk item index, and final exit status. They do
+not contain a target, query, endpoint, error detail, or evidence value. Human
+progress and error text are suppressed while events are active. `--events`
+cannot be combined with `--output`, because the final event must describe the
+same completed stdout delivery observed by the caller.
+
+Pressing Ctrl-C asks an in-flight Lookup or Bulk run to stop, suppresses any
+partial final result, flushes an enabled Bulk checkpoint, and exits with code
+130. Already started network operations remain subject to their existing hard
+timeouts while the shared in-process API unwinds; the executable terminates
+after CLI cleanup, and a second Ctrl-C exits immediately.
+
+Bulk can persist compact progress with `--checkpoint <file>`. A new checkpoint
+is private, bounded to 16 MiB, versioned, and tied to the exact ordered input
+and scan mode by SHA-256. It stores only compact per-item results, never full
+Lookup responses. Reusing the same path is refused unless `--resume` is also
+specified. Resume revalidates the complete untrusted document and skips only
+the exact completed rows; changed input, mode, schema, digest, or malformed
+results fail closed.
+
+`diff <left.json> <right.json>` compares two different saved domain Lookup
+documents entirely offline. It reuses the bounded Bulk comparison model for
+registration, DNS, page identity, mail, certificate, and relationship fields,
+keeps missing and unavailable evidence distinct, and makes no ownership or
+maliciousness inference. The output records both original observation times.
+
 When diagnostics version 5, 6, 7, or 8 reports a documented registry collection
 constraint, terminal output also shows the suffix, WHOIS and RDAP access
 profiles, and the bounded limitation. This is static access-policy context: it
@@ -154,13 +246,16 @@ machine access is not evidence that a domain is unregistered or safe.
 | 0 | Command completed. Individual sources may still be partial or inconclusive; inspect diagnostics. |
 | 2 | Invalid command, option, input, or stdin shape. |
 | 3 | The requested lookup, collection, or comparison operation could not run. |
-| 4 | A bulk command completed with one or more per-query failures. |
+| 4 | A bounded operation completed partially, such as Bulk item failures or failed explicit Doctor network checks. |
 | 70 | Unexpected CLI bootstrap failure. |
+| 130 | The analyst cancelled the command. No partial final result was emitted. |
 
 This release supports `lookup`, `bulk`, `ct-search`, `discover`, `posture`,
 `http`, `tls`, `registry-support`, `risk-calibrate`, `verify-artifact`,
-`source-report`, `compare`, and `export`. Additional export formats are added
-as separate bounded increments rather than exposing incomplete aliases.
+`inspect-archive`, `sign-artifact`, `verify-signature`, `source-report`,
+`compare`, `diff`, `export`, `doctor`, `completion`, and `manual`. Additional command families
+are added as separate bounded increments rather than exposing incomplete
+aliases.
 
 ## Registry capability coverage
 

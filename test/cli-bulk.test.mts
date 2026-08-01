@@ -69,6 +69,9 @@ describe('bulk CLI argument parsing', () => {
       quiet: false,
       color: true,
       concurrency: 4,
+      checkpoint: null,
+      resume: false,
+      events: false,
     });
   });
 
@@ -81,6 +84,9 @@ describe('bulk CLI argument parsing', () => {
       quiet: false,
       color: false,
       concurrency: 3,
+      checkpoint: null,
+      resume: false,
+      events: false,
     });
   });
 
@@ -192,6 +198,43 @@ describe('bulk lookup execution', () => {
     assert.ok(classificationFailure.error.length <= 300);
     assert.doesNotMatch(classificationFailure.error, /[\x00-\x1f\x7f]/);
     assert.equal(lookupFailure.error, 'upstream failure');
+  });
+
+  test('reuses validated checkpoint results without repeating completed lookups', async () => {
+    const queries = ['done.test', 'pending.test'];
+    const completed: BulkLookupResult = {
+      index: 0,
+      query: 'done.test',
+      ok: true,
+      classified: classified('done.test'),
+      result: compactResult('done.test'),
+    };
+    const requested: string[] = [];
+    const results = await runBulkLookups(queries, {
+      concurrency: 2,
+      classifyQuery: classified,
+      initialResults: [completed],
+      runUnifiedLookup: async (item) => {
+        requested.push(item.value);
+        return compactResult(item.value);
+      },
+    });
+    assert.deepEqual(requested, ['pending.test']);
+    assert.deepEqual(results.map((item) => item.query), queries);
+  });
+
+  test('stops scheduling and does not convert analyst cancellation into an item failure', async () => {
+    const controller = new AbortController();
+    const work = runBulkLookups(['one.test', 'two.test'], {
+      concurrency: 1,
+      classifyQuery: classified,
+      signal: controller.signal,
+      runUnifiedLookup: async () => new Promise(() => {}),
+    });
+    setImmediate(() => controller.abort());
+    await assert.rejects(work, (error: unknown) => (
+      error instanceof DOMException && error.name === 'AbortError'
+    ));
   });
 });
 

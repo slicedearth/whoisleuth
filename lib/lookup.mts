@@ -62,6 +62,7 @@ type LookupOptions = {
   featurePolicy?: ReturnType<typeof networkFeaturePolicy>;
   now?: () => number;
   onSourceSettled?: (settlement: LookupSourceSettlement) => void;
+  signal?: AbortSignal;
 };
 type RegistrarRdap = {
   status: string;
@@ -198,6 +199,19 @@ function createLookupTimingTracker(
   };
 }
 
+function abortable<T>(operation: () => Promise<T> | T, signal?: AbortSignal): Promise<T> {
+  if (!signal) return Promise.resolve().then(operation);
+  if (signal.aborted) return Promise.reject(signal.reason || new DOMException('Aborted', 'AbortError'));
+  return new Promise<T>((resolve, reject) => {
+    const aborted = () => reject(signal.reason || new DOMException('Aborted', 'AbortError'));
+    signal.addEventListener('abort', aborted, { once: true });
+    Promise.resolve()
+      .then(operation)
+      .then(resolve, reject)
+      .finally(() => signal.removeEventListener('abort', aborted));
+  });
+}
+
 async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOptions = {}) {
   const fetchRdap = options.fetchRdapRecord || fetchRdapRecord;
   const fetchRegistrarRdap = options.fetchRegistrarRdapRecord || fetchRegistrarRdapRecord;
@@ -218,6 +232,9 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
   const securityTxtRequested = options.securityTxt === true;
   const featurePolicy = options.featurePolicy || networkFeaturePolicy();
   const timing = createLookupTimingTracker(!fast && !compact, options.now || Date.now);
+  const measure = <T,>(source: LookupTimingSource, operation: () => Promise<T> | T) => (
+    timing.measure(source, () => abortable(operation, options.signal))
+  );
   const rdapEnabled = featureDecision('rdap', featurePolicy).enabled;
   const whoisEnabled = featureDecision('whois', featurePolicy).enabled;
   const availabilityEnabled = featureDecision('availability', featurePolicy).enabled;
@@ -226,21 +243,21 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
   const skipWhois = fast || !whoisEnabled;
 
   const rdapPromise = rdapEnabled
-    ? timing.measure('rdap', () => fetchRdap(classified.type, classified.value))
+    ? measure('rdap', () => fetchRdap(classified.type, classified.value))
     : Promise.resolve(null);
   const whoisPromise = skipWhois
     ? Promise.resolve(null)
-    : timing.measure('whois', () => fetchWhois(classified.value));
+    : measure('whois', () => fetchWhois(classified.value));
   // Registrar RDAP is a separately attributed deep-lookup enrichment. It may
   // overlap the WHOIS chain, but it never joins the promises used to decide
   // availability and can add up to its own bounded timeout to a deep lookup.
   const registrarRdapPromise: Promise<RegistrarRdap | null> | null = classified.type === 'domain' && rdapEnabled && !fast && !compact
     ? rdapPromise.then((record) => record && record.upstreamStatus === 200 && record.parsed
-        ? timing.measure('registrar_rdap', () => fetchRegistrarRdap(classified.value, record))
+        ? measure('registrar_rdap', () => fetchRegistrarRdap(classified.value, record))
         : null)
     : null;
   const availabilityPromise = classified.type === 'domain' && availabilityEnabled
-    ? timing.measure('domain_evidence', () => checkAvailability(classified.value, {
+    ? measure('domain_evidence', () => checkAvailability(classified.value, {
         fast,
         includeExtendedDnsContext: !compact,
         includeInheritedCaa: !fast && !compact,
@@ -260,7 +277,7 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
     && !fast
     && !compact;
   const reverseDnsPromise = reverseDnsEligible && dnsIntelligenceEnabled
-    ? timing.measure('reverse_dns', () => collectReverseDns(classified.value))
+    ? measure('reverse_dns', () => collectReverseDns(classified.value))
     : null;
   // Network registration is an additive deep-only source. It starts only
   // after availability has produced the existing TLS/DNS observations and
@@ -273,11 +290,11 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
     && !compact
     && availabilityPromise
     ? availabilityPromise.then(
-        (availability) => timing.measure(
+        (availability) => measure(
           'network_context',
           () => collectNetworkContext(availability, { fetchRdapRecord: fetchRdap }),
         ),
-        () => timing.measure(
+        () => measure(
           'network_context',
           () => collectNetworkContext({}, { fetchRdapRecord: fetchRdap }),
         ),
@@ -291,13 +308,13 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
     && websiteProbeEnabled
     && !fast
     && !compact
-    ? timing.measure('security_txt', () => collectDisclosureContacts(classified.inputHostname))
+    ? measure('security_txt', () => collectDisclosureContacts(classified.inputHostname))
     : null;
   const urlscanIntelligencePromise: Promise<ThreatIntelligenceResult | null> | null = externalIntelligence
     && classified.type === 'domain'
     && !fast
     && !compact
-    ? timing.measure(
+    ? measure(
         'external_intelligence',
         () => fetchUrlscanIntelligence(classified.registrableDomain || classified.value),
       )
@@ -306,7 +323,7 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
     && classified.type === 'domain'
     && !fast
     && !compact
-    ? timing.measure(
+    ? measure(
         'malware_host_intelligence',
         () => fetchUrlhausIntelligence(classified.registrableDomain || classified.value),
       )
@@ -315,7 +332,7 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
     && classified.type === 'domain'
     && !fast
     && !compact
-    ? timing.measure(
+    ? measure(
         'malware_ioc_intelligence',
         () => fetchThreatfoxIntelligence(classified.registrableDomain || classified.value),
       )
@@ -381,6 +398,7 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
     urlhausIntelligencePromise,
     threatfoxIntelligencePromise,
   ]);
+  options.signal?.throwIfAborted();
 
   const rdapRecord = rdapResult.status === 'fulfilled' ? rdapResult.value : null;
   const whoisChain = whoisResult.status === 'fulfilled' ? whoisResult.value : null;

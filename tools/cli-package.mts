@@ -1,0 +1,437 @@
+#!/usr/bin/env node
+
+import { execFile as execFileCallback } from 'node:child_process';
+import { chmod, copyFile, mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { promisify } from 'node:util';
+
+type JsonRecord = Record<string, unknown>;
+type WritableLike = { write(value: string): unknown };
+type MainOptions = Readonly<{
+  repositoryRoot?: string;
+  stdout?: WritableLike;
+  stderr?: WritableLike;
+}>;
+
+type DependencyEntry = Readonly<{
+  couldNotResolve?: unknown;
+  module?: unknown;
+}>;
+
+type DependencyModule = Readonly<{
+  source?: unknown;
+  dependencies?: unknown;
+}>;
+
+export type CliPackageReport = Readonly<{
+  schema: typeof CLI_PACKAGE_REPORT_SCHEMA;
+  version: typeof CLI_PACKAGE_REPORT_VERSION;
+  packageName: string;
+  packageVersion: string;
+  sourceModuleCount: number;
+  packedEntryCount: number;
+  packedBytes: number;
+  unpackedBytes: number;
+  installedChecks: readonly string[];
+  publicationEnabled: false;
+}>;
+
+const execFile = promisify(execFileCallback);
+
+export const CLI_PACKAGE_REPORT_SCHEMA = 'whoisleuth.cli-package-check';
+export const CLI_PACKAGE_REPORT_VERSION = 1;
+export const MAX_CLI_PACKAGE_GRAPH_BYTES = 8 * 1024 * 1024;
+export const MAX_CLI_PACKAGE_MODULES = 256;
+export const MAX_CLI_PACKAGE_SOURCE_BYTES = 8 * 1024 * 1024;
+export const MAX_CLI_PACKAGE_FILE_BYTES = 2 * 1024 * 1024;
+export const MAX_CLI_PACKAGE_ENTRIES = 220;
+export const MAX_CLI_PACKAGE_PACKED_BYTES = 2 * 1024 * 1024;
+export const MAX_CLI_PACKAGE_UNPACKED_BYTES = 6 * 1024 * 1024;
+
+const LOCAL_SOURCE_PATTERN = /^(?:bin|cli|lib|frontend\/src\/lib\/analysis)\/[A-Za-z0-9._/-]+\.(?:mts|ts)$/u;
+const REQUIRED_SOURCE_MODULES = Object.freeze(['bin/whoisleuth.mts', 'cli/runner.mts']);
+const RUNTIME_DEPENDENCIES = Object.freeze(['parse5', 'tldts', 'undici']);
+const SUPPORT_FILES = Object.freeze([
+  ['packages/cli/README.md', 'README.md'],
+  ['docs/cli.md', 'docs/cli.md'],
+  ['LICENSE', 'LICENSE'],
+  ['NOTICE', 'NOTICE'],
+  ['TRADEMARKS.md', 'TRADEMARKS.md'],
+  ['LICENSES/Retire.js-Apache-2.0.txt', 'LICENSES/Retire.js-Apache-2.0.txt'],
+  ['frontend/static/third-party-notices.txt', 'third-party-notices.txt'],
+] as const);
+
+function record(value: unknown, label: string): JsonRecord {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new TypeError(`${label} must be a JSON object.`);
+  }
+  return value as JsonRecord;
+}
+
+function boundedString(value: unknown, label: string, maxLength = 240): string {
+  if (typeof value !== 'string' || value.length === 0 || value.length > maxLength || value.trim() !== value) {
+    throw new TypeError(`${label} must be a non-empty bounded string.`);
+  }
+  return value;
+}
+
+function safeRelativePath(value: unknown, label: string): string {
+  const candidate = boundedString(value, label, 512);
+  if (path.isAbsolute(candidate) || candidate.includes('\\') || candidate.split('/').some((part) => !part || part === '.' || part === '..')) {
+    throw new TypeError(`${label} is not a safe repository-relative path.`);
+  }
+  return candidate;
+}
+
+function dependencies(value: unknown): readonly DependencyEntry[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || value.length > 512) throw new TypeError('Dependency graph entries must be a bounded array.');
+  return value.map((entry, index) => record(entry, `Dependency ${index + 1}`));
+}
+
+export function selectCliPackageSources(graphValue: unknown): readonly string[] {
+  const graph = record(graphValue, 'Dependency graph');
+  if (!Array.isArray(graph.modules) || graph.modules.length === 0 || graph.modules.length > MAX_CLI_PACKAGE_MODULES) {
+    throw new TypeError(`Dependency graph must contain between 1 and ${MAX_CLI_PACKAGE_MODULES} modules.`);
+  }
+
+  const selected = new Set<string>();
+  for (const [index, moduleValue] of graph.modules.entries()) {
+    const module = record(moduleValue, `Dependency module ${index + 1}`) as DependencyModule;
+    const source = safeRelativePath(module.source, `Dependency module ${index + 1} source`);
+    for (const [dependencyIndex, dependency] of dependencies(module.dependencies).entries()) {
+      if (dependency.couldNotResolve === true) {
+        const unresolved = typeof dependency.module === 'string' ? dependency.module.slice(0, 160) : 'unknown';
+        throw new TypeError(`CLI dependency ${source} -> ${unresolved} could not be resolved (${dependencyIndex + 1}).`);
+      }
+    }
+    if (LOCAL_SOURCE_PATTERN.test(source)) selected.add(source);
+  }
+
+  for (const required of REQUIRED_SOURCE_MODULES) {
+    if (!selected.has(required)) throw new TypeError(`Dependency graph is missing required CLI source ${required}.`);
+  }
+  return Object.freeze([...selected].sort());
+}
+
+export function buildCliPackageManifest(rootManifestValue: unknown, templateManifestValue: unknown): JsonRecord {
+  const rootManifest = record(rootManifestValue, 'Root package manifest');
+  const templateManifest = record(templateManifestValue, 'CLI package template');
+  const rootDependencies = record(rootManifest.dependencies, 'Root package dependencies');
+  const packageName = boundedString(templateManifest.name, 'CLI package name', 128);
+  const packageVersion = boundedString(rootManifest.version, 'Root package version', 128);
+
+  if (!packageName.startsWith('@') || !packageName.includes('/')) {
+    throw new TypeError('CLI package name must remain scoped.');
+  }
+  if (templateManifest.private !== true) {
+    throw new TypeError('CLI package template must remain private until publication is explicitly approved.');
+  }
+
+  const selectedDependencies: Record<string, string> = {};
+  for (const dependency of RUNTIME_DEPENDENCIES) {
+    selectedDependencies[dependency] = boundedString(rootDependencies[dependency], `Root dependency ${dependency}`, 128);
+  }
+
+  return {
+    ...templateManifest,
+    version: packageVersion,
+    dependencies: selectedDependencies,
+    files: [
+      'bin/**/*.mjs',
+      'cli/**/*.mjs',
+      'lib/**/*.mjs',
+      'frontend/src/lib/analysis/**/*.js',
+      'docs/cli.md',
+      'LICENSE',
+      'LICENSES/*.txt',
+      'NOTICE',
+      'README.md',
+      'TRADEMARKS.md',
+      'third-party-notices.txt',
+    ],
+  };
+}
+
+async function readBoundedJson(filename: string, maxBytes = MAX_CLI_PACKAGE_GRAPH_BYTES): Promise<unknown> {
+  const metadata = await stat(filename);
+  if (!metadata.isFile() || metadata.size > maxBytes) throw new TypeError(`${path.basename(filename)} is missing or exceeds its byte limit.`);
+  try {
+    return JSON.parse(await readFile(filename, 'utf8'));
+  } catch {
+    throw new TypeError(`${path.basename(filename)} is not valid JSON.`);
+  }
+}
+
+async function dependencyGraph(repositoryRoot: string): Promise<unknown> {
+  const executable = path.join(repositoryRoot, 'node_modules', 'dependency-cruiser', 'bin', 'dependency-cruise.mjs');
+  const { stdout } = await execFile(process.execPath, [
+    executable,
+    '--config',
+    path.join(repositoryRoot, '.dependency-cruiser.json'),
+    '--output-type',
+    'json',
+    'bin/whoisleuth.mts',
+  ], {
+    cwd: repositoryRoot,
+    encoding: 'utf8',
+    maxBuffer: MAX_CLI_PACKAGE_GRAPH_BYTES,
+  });
+  try {
+    return JSON.parse(stdout);
+  } catch {
+    throw new TypeError('CLI dependency graph is not valid JSON.');
+  }
+}
+
+async function copyPackageFile(repositoryRoot: string, stagingRoot: string, source: string, destination: string, state: { totalBytes: number }): Promise<void> {
+  const safeSource = safeRelativePath(source, 'Package source');
+  const safeDestination = safeRelativePath(destination, 'Package destination');
+  const sourcePath = path.join(repositoryRoot, safeSource);
+  const destinationPath = path.join(stagingRoot, safeDestination);
+  const metadata = await stat(sourcePath);
+  if (!metadata.isFile() || metadata.size > MAX_CLI_PACKAGE_FILE_BYTES) {
+    throw new TypeError(`${safeSource} is missing or exceeds the per-file package limit.`);
+  }
+  state.totalBytes += metadata.size;
+  if (state.totalBytes > MAX_CLI_PACKAGE_SOURCE_BYTES) throw new TypeError('CLI package sources exceed the aggregate byte limit.');
+  await mkdir(path.dirname(destinationPath), { recursive: true });
+  await copyFile(sourcePath, destinationPath);
+}
+
+async function validatePackageSources(repositoryRoot: string, sources: readonly string[], state: { totalBytes: number }): Promise<void> {
+  for (const source of sources) {
+    const metadata = await stat(path.join(repositoryRoot, safeRelativePath(source, 'Package module source')));
+    if (!metadata.isFile() || metadata.size > MAX_CLI_PACKAGE_FILE_BYTES) {
+      throw new TypeError(`${source} is missing or exceeds the per-file package limit.`);
+    }
+    state.totalBytes += metadata.size;
+    if (state.totalBytes > MAX_CLI_PACKAGE_SOURCE_BYTES) throw new TypeError('CLI package sources exceed the aggregate byte limit.');
+  }
+}
+
+async function compilePackageSources(repositoryRoot: string, temporaryRoot: string, stagingRoot: string, sources: readonly string[]): Promise<void> {
+  const configurationPath = path.join(temporaryRoot, 'tsconfig.cli-package.json');
+  const configuration = {
+    compilerOptions: {
+      target: 'ES2022',
+      module: 'NodeNext',
+      moduleResolution: 'NodeNext',
+      rootDir: repositoryRoot,
+      outDir: stagingRoot,
+      allowImportingTsExtensions: true,
+      rewriteRelativeImportExtensions: true,
+      erasableSyntaxOnly: true,
+      verbatimModuleSyntax: true,
+      moduleDetection: 'force',
+      strict: true,
+      noUncheckedIndexedAccess: true,
+      exactOptionalPropertyTypes: true,
+      esModuleInterop: true,
+      skipLibCheck: true,
+      types: ['node'],
+      typeRoots: [path.join(repositoryRoot, 'node_modules', '@types')],
+      lib: ['ES2022', 'DOM', 'DOM.Iterable'],
+      declaration: false,
+      sourceMap: false,
+    },
+    files: sources.map((source) => path.join(repositoryRoot, source)),
+  };
+  await writeFile(configurationPath, `${JSON.stringify(configuration, null, 2)}\n`, 'utf8');
+  const compiler = path.join(repositoryRoot, 'node_modules', 'typescript', 'bin', 'tsc');
+  try {
+    await execFile(process.execPath, [compiler, '--project', configurationPath], {
+      cwd: repositoryRoot,
+      encoding: 'utf8',
+      timeout: 120_000,
+      maxBuffer: 4 * 1024 * 1024,
+    });
+  } catch (error) {
+    const commandError = error && typeof error === 'object' ? error as { stderr?: unknown; stdout?: unknown } : {};
+    const output = [commandError.stderr, commandError.stdout]
+      .find((value): value is string => typeof value === 'string' && value.trim().length > 0)
+      ?.trim()
+      .slice(0, 4_000);
+    throw new TypeError(`CLI TypeScript compilation failed${output ? `: ${output}` : '.'}`);
+  }
+  await chmod(path.join(stagingRoot, 'bin', 'whoisleuth.mjs'), 0o755);
+}
+
+function parsePackResult(value: unknown): JsonRecord {
+  if (!Array.isArray(value) || value.length !== 1) throw new TypeError('npm pack must return exactly one package result.');
+  return record(value[0], 'npm pack result');
+}
+
+function packedFiles(packResult: JsonRecord): readonly string[] {
+  if (!Array.isArray(packResult.files) || packResult.files.length === 0 || packResult.files.length > MAX_CLI_PACKAGE_ENTRIES) {
+    throw new TypeError(`Packed CLI must contain between 1 and ${MAX_CLI_PACKAGE_ENTRIES} entries.`);
+  }
+  return Object.freeze(packResult.files.map((entry, index) => safeRelativePath(record(entry, `Packed entry ${index + 1}`).path, `Packed entry ${index + 1} path`)));
+}
+
+function positiveInteger(value: unknown, label: string, maximum: number): number {
+  if (!Number.isSafeInteger(value) || Number(value) < 1 || Number(value) > maximum) {
+    throw new TypeError(`${label} must be between 1 and ${maximum}.`);
+  }
+  return Number(value);
+}
+
+async function runInstalledCheck(executable: string, args: readonly string[], label: string): Promise<string> {
+  const { stdout, stderr } = await execFile(process.execPath, [executable, ...args], {
+    encoding: 'utf8',
+    timeout: 15_000,
+    maxBuffer: 2 * 1024 * 1024,
+    env: { ...process.env, FORCE_COLOR: '0', NO_COLOR: '1' },
+  });
+  if (stderr) throw new TypeError(`Installed CLI ${label} wrote unexpected diagnostics.`);
+  return stdout;
+}
+
+export async function checkCliPackage(repositoryRoot: string): Promise<CliPackageReport> {
+  const temporaryRoot = await mkdtemp(path.join(tmpdir(), 'whoisleuth-cli-package-'));
+  const stagingRoot = path.join(temporaryRoot, 'staging');
+  const artifactsRoot = path.join(temporaryRoot, 'artifacts');
+  const installRoot = path.join(temporaryRoot, 'install');
+  try {
+    await Promise.all([mkdir(stagingRoot, { recursive: true }), mkdir(artifactsRoot, { recursive: true }), mkdir(installRoot, { recursive: true })]);
+    const [graph, rootManifest, templateManifest] = await Promise.all([
+      dependencyGraph(repositoryRoot),
+      readBoundedJson(path.join(repositoryRoot, 'package.json')),
+      readBoundedJson(path.join(repositoryRoot, 'packages', 'cli', 'package.template.json')),
+    ]);
+    const sources = selectCliPackageSources(graph);
+    const manifest = buildCliPackageManifest(rootManifest, templateManifest);
+    const copyState = { totalBytes: 0 };
+    await validatePackageSources(repositoryRoot, sources, copyState);
+    await compilePackageSources(repositoryRoot, temporaryRoot, stagingRoot, sources);
+    for (const [source, destination] of SUPPORT_FILES) await copyPackageFile(repositoryRoot, stagingRoot, source, destination, copyState);
+    await writeFile(path.join(stagingRoot, 'package.json'), `${JSON.stringify(manifest, null, 2)}\n`, { encoding: 'utf8', mode: 0o644 });
+
+    const npmCache = path.join(temporaryRoot, 'npm-cache');
+    const commonEnvironment = {
+      ...process.env,
+      npm_config_audit: 'false',
+      npm_config_cache: npmCache,
+      npm_config_fund: 'false',
+      npm_config_ignore_scripts: 'true',
+    };
+    const { stdout: packOutput } = await execFile('npm', ['pack', '--json', '--pack-destination', artifactsRoot], {
+      cwd: stagingRoot,
+      encoding: 'utf8',
+      maxBuffer: 4 * 1024 * 1024,
+      env: commonEnvironment,
+    });
+    const packResult = parsePackResult(JSON.parse(packOutput));
+    const entries = packedFiles(packResult);
+    const packedBytes = positiveInteger(packResult.size, 'Packed CLI bytes', MAX_CLI_PACKAGE_PACKED_BYTES);
+    const unpackedBytes = positiveInteger(packResult.unpackedSize, 'Unpacked CLI bytes', MAX_CLI_PACKAGE_UNPACKED_BYTES);
+    const filename = safeRelativePath(packResult.filename, 'Packed CLI filename');
+    const tarball = path.join(artifactsRoot, filename);
+    const requiredEntries = ['bin/whoisleuth.mjs', 'cli/runner.mjs', 'package.json', 'README.md', 'LICENSE', 'docs/cli.md'];
+    for (const required of requiredEntries) {
+      if (!entries.includes(required)) throw new TypeError(`Packed CLI is missing ${required}.`);
+    }
+    if (entries.some((entry) => /^(?:e2e|netlify|test|tools|frontend\/src\/routes)(?:\/|$)/u.test(entry))) {
+      throw new TypeError('Packed CLI contains an excluded application or test path.');
+    }
+
+    await writeFile(path.join(installRoot, 'package.json'), '{"private":true}\n', 'utf8');
+    await execFile('npm', ['install', '--package-lock=false', '--ignore-scripts', '--no-audit', '--no-fund', tarball], {
+      cwd: installRoot,
+      encoding: 'utf8',
+      timeout: 120_000,
+      maxBuffer: 4 * 1024 * 1024,
+      env: commonEnvironment,
+    });
+    const packageName = boundedString(manifest.name, 'Generated package name', 128);
+    const packageVersion = boundedString(manifest.version, 'Generated package version', 128);
+    const executable = path.join(installRoot, 'node_modules', ...packageName.split('/'), 'bin', 'whoisleuth.mjs');
+    const help = await runInstalledCheck(executable, ['--help'], 'help');
+    if (!help.startsWith('WHOISleuth CLI\n') || !help.includes('Fast lookup is the default; deep collection')) throw new TypeError('Installed CLI help contract failed.');
+    const version = await runInstalledCheck(executable, ['--version'], 'version');
+    if (version !== `${packageVersion}\n`) throw new TypeError('Installed CLI version does not match the generated package manifest.');
+    const doctor = await runInstalledCheck(executable, ['doctor', '--json'], 'doctor');
+    const doctorDocument = record(JSON.parse(doctor), 'Installed doctor output');
+    if (doctorDocument.schema !== 'whoisleuth.cli.doctor' || doctorDocument.networkRequested !== false) {
+      throw new TypeError('Installed offline doctor command returned the wrong contract.');
+    }
+    const completion = await runInstalledCheck(executable, ['completion', 'bash'], 'completion');
+    if (!completion.includes('complete -F _whoisleuth_completion whoisleuth')) {
+      throw new TypeError('Installed bash completion command returned the wrong script.');
+    }
+    const manual = await runInstalledCheck(executable, ['manual'], 'manual');
+    if (!manual.startsWith('.TH WHOISLEUTH 1') || !manual.includes('.SS diff')) {
+      throw new TypeError('Installed CLI manual command returned the wrong document.');
+    }
+    const registrySupport = await runInstalledCheck(executable, ['registry-support', 'example.test', '--json'], 'registry-support');
+    const registryDocument = record(JSON.parse(registrySupport), 'Installed registry-support output');
+    if (registryDocument.schema !== 'whoisleuth.cli.registry-support') throw new TypeError('Installed offline registry-support command returned the wrong schema.');
+    const discovery = await runInstalledCheck(executable, [
+      'discover',
+      'example.test',
+      '--families',
+      'character_omission',
+      '--tlds',
+      'test',
+      '--json',
+    ], 'discover');
+    const discoveryDocument = record(JSON.parse(discovery), 'Installed discover output');
+    if (discoveryDocument.schema !== 'whoisleuth.cli.discover') throw new TypeError('Installed offline discover command returned the wrong schema.');
+    if (!Array.isArray(discoveryDocument.candidates) || discoveryDocument.candidates.length === 0) {
+      throw new TypeError('Installed offline discover command returned no candidates.');
+    }
+
+    return Object.freeze({
+      schema: CLI_PACKAGE_REPORT_SCHEMA,
+      version: CLI_PACKAGE_REPORT_VERSION,
+      packageName,
+      packageVersion,
+      sourceModuleCount: sources.length,
+      packedEntryCount: entries.length,
+      packedBytes,
+      unpackedBytes,
+      installedChecks: Object.freeze(['help', 'version', 'doctor', 'completion', 'manual', 'registry-support', 'discover']),
+      publicationEnabled: false,
+    });
+  } finally {
+    await rm(temporaryRoot, { recursive: true, force: true });
+  }
+}
+
+export function formatCliPackageReport(report: CliPackageReport): string {
+  return [
+    'WHOISleuth scoped CLI package check',
+    `Package: ${report.packageName}@${report.packageVersion}`,
+    `Dependency-closure modules: ${report.sourceModuleCount}`,
+    `Packed entries: ${report.packedEntryCount}`,
+    `Archive bytes: ${report.packedBytes} packed / ${report.unpackedBytes} unpacked`,
+    `Installed checks: ${report.installedChecks.join(', ')}`,
+    'Publication: disabled',
+  ].join('\n');
+}
+
+export function parseArguments(args: readonly string[]): { json: boolean } {
+  if (args.length === 0) return { json: false };
+  if (args.length === 1 && args[0] === '--json') return { json: true };
+  throw new TypeError('Usage: node tools/cli-package.mts [--json]');
+}
+
+export async function main(args = process.argv.slice(2), options: MainOptions = {}): Promise<number> {
+  const stdout = options.stdout || process.stdout;
+  const stderr = options.stderr || process.stderr;
+  try {
+    const parsed = parseArguments(args);
+    const repositoryRoot = path.resolve(options.repositoryRoot || process.cwd());
+    const report = await checkCliPackage(repositoryRoot);
+    stdout.write(`${parsed.json ? JSON.stringify(report, null, 2) : formatCliPackageReport(report)}\n`);
+    return 0;
+  } catch (error) {
+    stderr.write(`${error instanceof Error ? error.message : 'CLI package check failed.'}\n`);
+    return 2;
+  }
+}
+
+const invokedAsScript = process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1]);
+if (invokedAsScript) process.exitCode = await main();

@@ -37,6 +37,21 @@ appropriate. `release:check` is offline and read-only. It verifies that:
 
 The command does not create a tag, commit, release, deployment, or package.
 
+The separately assembled CLI candidate follows the same application version but
+does not make the root application package publishable. Before any CLI release,
+run:
+
+```bash
+npm run cli:package:check
+```
+
+This compiles the executable's bounded dependency closure, audits the archive,
+installs the exact tarball in a temporary directory, and exercises help,
+version, and offline commands across eager and lazy module loading. The
+generated manifest remains private. An
+actual registry release additionally requires explicit approval of the package
+name, npm account controls, provenance configuration, and the final tarball.
+
 Review schema compatibility whenever a release changes persisted or exported
 evidence:
 
