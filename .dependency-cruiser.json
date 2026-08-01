@@ -17,7 +17,7 @@
       "comment": "Shared, CLI, and browser-library modules must have an application consumer so obsolete production files cannot survive behind tests alone.",
       "from": {
         "path": "^(?:cli|frontend/src/lib|lib)/",
-        "pathNot": "^(?:frontend/src/lib/local-data-platform-probe\\.ts|lib/(?:netlify-function-types|threat-intelligence-types|whois-contracts)\\.mts)$",
+        "pathNot": "^(?:cli/runner-types\\.mts|frontend/src/lib/local-data-platform-probe\\.ts|lib/(?:netlify-function-types|threat-intelligence-types|whois-contracts)\\.mts)$",
         "orphan": true
       },
       "to": {}

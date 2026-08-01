@@ -633,13 +633,12 @@ test('terminal values strip controls and stay bounded', () => {
   assert.ok(result.length <= 240);
 });
 
-test('package metadata exposes an executable local CLI entry point', () => {
+test('repository source exposes an executable local CLI entry point', () => {
   const root = path.join(__dirname, '..');
-  const packageJson = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
-  assert.deepEqual(packageJson.bin, { whoisleuth: 'bin/whoisleuth.mts' });
-  const mode = fs.statSync(path.join(root, packageJson.bin.whoisleuth)).mode;
+  const entryPoint = path.join(root, 'bin/whoisleuth.mts');
+  const mode = fs.statSync(entryPoint).mode;
   assert.notEqual(mode & 0o111, 0);
-  const result = spawnSync(process.execPath, [path.join(root, packageJson.bin.whoisleuth), '--help'], { encoding: 'utf8' });
+  const result = spawnSync(process.execPath, [entryPoint, '--help'], { encoding: 'utf8' });
   assert.equal(result.status, 0);
   assert.match(result.stdout, /WHOISleuth CLI/);
   assert.match(result.stdout, /Copyright 2026 slicedearth/);

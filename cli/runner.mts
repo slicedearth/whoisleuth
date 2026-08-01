@@ -2,31 +2,16 @@ import { Buffer } from 'node:buffer';
 import { createReadStream } from 'node:fs';
 import { createRequire } from 'node:module';
 
-import { fetchHomepage } from '../lib/availability.mts';
 import { abortable } from '../lib/abort.mts';
-import { classifyQuery } from '../lib/classify.mts';
-import type { ClassifiedQuery } from '../lib/classify.mts';
-import { searchCertificateTransparency } from '../lib/ct-search.mts';
-import { checkDomainPosture, normalizeAuditDomain, normalizeDkimSelectors } from '../lib/domain-posture.mts';
-import { runUnifiedLookup } from '../lib/lookup.mts';
-import type { LookupSourceSettlement } from '../lib/lookup.mts';
 import { resolvePublicAddresses } from '../lib/safe-fetch.mts';
 import { whoisQuery } from '../lib/whois-transport.mts';
 import { REGISTRY_CAPABILITIES_VERSION, registryCapabilityFor } from '../lib/registry-capabilities.mts';
-import type { RegistryCompatibilityRow } from '../lib/registry-capabilities.mts';
-import { collectTlsIntelligence, normalizeTlsHostname } from '../lib/tls-intelligence.mts';
 import { explainRiskScore, RISK_MODEL_VERSION, RISK_REVIEW_THRESHOLD } from '../lib/risk-scoring.mts';
 import { CLI_COMMANDS, parseCliArguments } from './arguments.mts';
 import type { CliArguments, CliCommand } from './arguments.mts';
-import { createBulkCheckpointWriter } from './bulk-checkpoint.mts';
+import { runBulkCommand } from './bulk-command-runner.mts';
 import { buildShellCompletion } from './completion.mts';
 import { buildDoctorReport, formatDoctorReport } from './doctor.mts';
-import {
-  MAX_BULK_INPUT_BYTES,
-  parseBulkQueries,
-  readTextStreamBounded,
-  runBulkLookups,
-} from './bulk.mts';
 import type { BoundedTextStream } from './bulk.mts';
 import {
   MAX_COMPARE_INPUT_BYTES,
@@ -34,12 +19,7 @@ import {
   parseCliLookupDocument,
   readCompareInputBounded,
 } from './compare.mts';
-import {
-  DEFAULT_DISCOVERY_TLDS,
-  MAX_DISCOVERY_DICTIONARY_BYTES,
-  normalizeDiscoveryTlds,
-  readDiscoveryDictionaryBounded,
-} from './discover.mts';
+import { runDiscoveryCommand } from './discovery-command-runner.mts';
 import { boundedCliErrorMessage, CliUsageError } from './errors.mts';
 import {
   evidenceCommandFailureLabel,
@@ -50,38 +30,21 @@ import { buildCliEvidenceExport, formatCliEvidenceExport } from './export-eviden
 import EXIT_CODES from './exit-codes.mts';
 import { formatLookupEvidenceHtml } from './formatters/html.mts';
 import {
-  buildCliBulkDocument,
   buildCliCompareDocument,
-  buildCliCtSearchDocument,
-  buildCliDiscoverDocument,
-  buildCliHttpDocument,
-  buildCliLookupDocument,
-  buildCliPostureDocument,
-  buildCliTlsDocument,
-  formatDiscoverJsonLines,
   formatJsonDocument,
-  formatJsonLines,
 } from './formatters/json.mts';
 import { formatLookupEvidenceMarkdown } from './formatters/markdown.mts';
 import {
-  formatTerminalBulk,
   formatTerminalCompare,
-  formatTerminalCtSearch,
-  formatTerminalDiscover,
-  formatTerminalHttp,
-  formatTerminalLookup,
-  formatTerminalPosture,
   formatTerminalRegistrySupport,
   formatTerminalRiskCalibration,
-  formatTerminalTls,
 } from './formatters/terminal.mts';
-import { buildHttpProbeResult } from './http.mts';
 import { buildCliLookupDiff, formatCliLookupDiff } from './lookup-diff.mts';
+import { runLookupCommand } from './lookup-command-runner.mts';
 import { buildCliManual } from './manual.mts';
 import { createBufferedOutput, writePrivateFile } from './output-file.mts';
-import { normalizePostureSelectors } from './posture.mts';
 import { createTerminalProgress, type TerminalProgress } from './progress.mts';
-import { createCliProgressEvents, type CliProgressEvents } from './progress-events.mts';
+import type { CliProgressEvents } from './progress-events.mts';
 import { buildRegistrySupportDocument } from './registry-support.mts';
 import {
   MAX_OFFLINE_ARTIFACT_BYTES,
@@ -102,13 +65,13 @@ import {
 } from './risk-calibration.mts';
 import { MAX_SAVED_LOOKUP_INPUT_BYTES, readSavedLookupInputBounded } from './saved-lookup.mts';
 import type { UnknownRecord } from './saved-lookup.mts';
-import { lookupStrictExitFindings } from './strict-exit.mts';
 import {
   presentTerminalOutput,
   terminalPresentation,
   type TerminalEnvironment,
-  type WritableTerminal,
 } from './terminal-presentation.mts';
+import { runNetworkCommand } from './network-command-runner.mts';
+import type { CliCommandContext, CliDependencies, WritableLike } from './runner-types.mts';
 
 const require = createRequire(import.meta.url);
 const { version: VERSION } = require('../package.json') as { version: string };
@@ -291,74 +254,6 @@ function commandHelp(command: CliCommand): string {
   return `WHOISleuth ${command}\n${detail.description}\n\nUsage:\n  ${COMMAND_USAGE[command]}\n\nExample:\n  ${detail.example}\n\nBoundary:\n  ${detail.boundary}\n\nRun "whoisleuth --help" to see the grouped command list.\n`;
 }
 
-type WritableLike = WritableTerminal;
-type LookupDependency = (
-  classified: ClassifiedQuery,
-  options?: { fast?: boolean; compact?: boolean; onSourceSettled?: (settlement: LookupSourceSettlement) => void; signal?: AbortSignal },
-) => unknown | Promise<unknown>;
-type DiscoveryGeneratorDependency = {
-  MAX_GENERATION_TLDS: number;
-  MUTATION_FAMILY_IDS: readonly string[];
-  MUTATION_LABELS: Readonly<Record<string, string>>;
-  normalizeMutationFamilyIds(raw: unknown): string[];
-  normalizeCustomDictionaryTerms(raw: unknown): { values: string[]; rejectedCount: number };
-  generateTyposquatCandidateSet(
-    seed: string,
-    tlds: string[],
-    options: Record<string, unknown>,
-  ): UnknownRecord & {
-    inputValid: boolean;
-    candidates: Array<{ domain: unknown; source: unknown; tld: unknown; mutationTypes: unknown }>;
-  };
-};
-type CliDependencies = {
-  stdout?: WritableLike;
-  stderr?: WritableLike;
-  stdin?: BoundedTextStream;
-  readStdin?: () => string | Promise<string>;
-  readBulkInput?: (source?: string | null) => string | Promise<string>;
-  readCompareInput?: (source?: string | null) => string | Promise<string>;
-  readDiffInput?: (source: string) => string | Promise<string>;
-  readDiscoveryDictionary?: (source: string) => string | Promise<string>;
-  readExportInput?: (source?: string | null) => string | Promise<string>;
-  readRiskCalibrationInput?: (source?: string | null) => string | Promise<string>;
-  readArtifactInput?: (source?: string | null) => string | Promise<string>;
-  readPassphraseFile?: (source: string) => string | Promise<string>;
-  readPrivateKeyFile?: (source: string) => string | Promise<string>;
-  readPublicKeyFile?: (source: string) => string | Promise<string>;
-  readSourceReliabilityInput?: (source?: string | null) => string | Promise<string>;
-  now?: () => string;
-  nowMs?: () => number;
-  environment?: TerminalEnvironment;
-  signal?: AbortSignal;
-  classifyQuery?: typeof classifyQuery;
-  runUnifiedLookup?: LookupDependency;
-  searchCertificateTransparency?: (keyword: unknown) => unknown | Promise<unknown>;
-  loadTyposquatGenerator?: () => Promise<DiscoveryGeneratorDependency>;
-  normalizeAuditDomain?: (raw: unknown) => string | null;
-  normalizeDkimSelectors?: (raw: unknown) => string[];
-  checkDomainPosture?: (
-    domain: string,
-    options?: { dkimSelectors?: unknown[]; retiredDkimSelectors?: unknown[]; mailProtectionProfile?: unknown },
-  ) => unknown | Promise<unknown>;
-  fetchHomepage?: (domain: string) => unknown | Promise<unknown>;
-  normalizeTlsHostname?: (value: unknown) => string | null;
-  collectTlsIntelligence?: (hostname: string) => unknown | Promise<unknown>;
-  registryCapabilityFor?: (value: unknown) => RegistryCompatibilityRow | null;
-  registryCapabilitiesVersion?: number;
-  explainRiskScore?: typeof explainRiskScore;
-  riskModelVersion?: number;
-  riskReviewThreshold?: number;
-  loadRegistryComparison?: () => Promise<typeof import('../lib/registry-comparison.mts')>;
-  loadEvidenceExport?: () => Promise<typeof import('../lib/evidence-export.mts')>;
-  resolvePublicAddresses?: typeof resolvePublicAddresses;
-  whoisQuery?: typeof whoisQuery;
-  createBulkCheckpointWriter?: typeof createBulkCheckpointWriter;
-  // Tests and embedders inject bounded implementations for every external
-  // operation; individual commands validate their results at existing module
-  // boundaries before formatting or persistence.
-};
-
 async function readStdinBounded(
   stream: BoundedTextStream | null | undefined,
   limit = MAX_STDIN_BYTES,
@@ -409,7 +304,7 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
   const stderr = dependencies.stderr || process.stderr;
   const environment = dependencies.environment || process.env;
   let progress: TerminalProgress | null = null;
-  let eventProgress: CliProgressEvents | null = null;
+  const eventProgress: { current: CliProgressEvents | null } = { current: null };
   let failureLabel = 'Lookup';
   try {
     const terminal = (value: string, color = true) => formatForTerminal(value, stdout, color, environment);
@@ -441,6 +336,26 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
         endProgress();
       }
     };
+    const readSingleInput = async (): Promise<string> => (
+      dependencies.readStdin
+        ? await dependencies.readStdin()
+        : await readStdinBounded(dependencies.stdin || process.stdin)
+    );
+    const commandContext: CliCommandContext = Object.freeze({
+      stdout,
+      stderr,
+      terminal,
+      writeStdout: (value: string) => write(stdout, value),
+      writeStderr: (value: string) => write(stderr, value),
+      readSingleInput,
+      now: () => dependencies.now ? dependencies.now() : new Date().toISOString(),
+      beginProgress,
+      endProgress,
+      withProgress,
+      setEventProgress: (next: CliProgressEvents) => {
+        eventProgress.current = next;
+      },
+    });
     if (args.action === 'help') {
       write(stdout, terminal(args.command ? commandHelp(args.command) : HELP));
       return EXIT_CODES.SUCCESS;
@@ -702,309 +617,49 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
 
     if (args.action === 'bulk') {
       failureLabel = 'Bulk lookup';
-      eventProgress = createCliProgressEvents(stderr, {
-        command: 'bulk',
-        enabled: args.events,
-        ...(dependencies.now ? { now: dependencies.now } : {}),
-      });
-      eventProgress.emit({ event: 'started' });
-      let input: string;
-      try {
-        input = dependencies.readBulkInput
-          ? await dependencies.readBulkInput(args.source)
-          : await readTextStreamBounded(args.source
-            ? createReadStream(args.source, { highWaterMark: 64 * 1024 })
-            : dependencies.stdin || process.stdin, MAX_BULK_INPUT_BYTES);
-      } catch (error) {
-        if (error instanceof CliUsageError) throw error;
-        throw new CliUsageError(`Could not read bulk input: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
-      }
-      const parsed = parseBulkQueries(input, { deep: args.deep });
-      const classify = dependencies.classifyQuery || classifyQuery;
-      const checkpointWriter = dependencies.createBulkCheckpointWriter || createBulkCheckpointWriter;
-      const checkpoint = args.checkpoint
-        ? await checkpointWriter({
-            path: args.checkpoint,
-            queries: parsed.queries,
-            deep: args.deep,
-            resume: args.resume,
-            classifyQuery: classify,
-            ...(dependencies.now ? { now: dependencies.now } : {}),
-          })
-        : null;
-      const indicator = beginProgress(`Collecting 0 of ${parsed.queries.length} targets`);
-      let completed = checkpoint?.initialResults.length || 0;
-      if (completed) indicator.update(`Resumed ${completed} of ${parsed.queries.length} targets`);
-      let items: Awaited<ReturnType<typeof runBulkLookups>>;
-      let checkpointFailure: unknown = null;
-      try {
-        items = await runBulkLookups(parsed.queries, {
-          deep: args.deep,
-          concurrency: args.concurrency,
-          classifyQuery: classify,
-          runUnifiedLookup: dependencies.runUnifiedLookup || runUnifiedLookup,
-          ...(checkpoint ? { initialResults: checkpoint.initialResults } : {}),
-          ...(dependencies.signal ? { signal: dependencies.signal } : {}),
-          onItemSettled: (item) => {
-            completed += 1;
-            indicator.update(`Collected ${completed} of ${parsed.queries.length} targets`);
-            eventProgress?.emit({ event: 'item_settled', index: item.index, ok: item.ok });
-            checkpoint?.record(item);
-          },
-        });
-      } finally {
-        endProgress();
-        try {
-          await checkpoint?.flush();
-        } catch (error) {
-          checkpointFailure = error;
-        }
-      }
-      const metadata = { deep: args.deep, duplicates: parsed.duplicates, generatedAt: dependencies.now ? dependencies.now() : new Date().toISOString() };
-      if (!args.quiet) {
-        if (args.output === 'json') write(stdout, formatJsonDocument(buildCliBulkDocument(items, metadata)));
-        else if (args.output === 'jsonl') write(stdout, formatJsonLines(items, metadata));
-        else write(stdout, terminal(formatTerminalBulk(items, metadata), args.color));
-      }
-      if (checkpointFailure) {
-        eventProgress.emit({ event: 'warning', state: 'checkpoint_unavailable' });
-        if (!eventProgress.enabled) {
-          write(stderr, `Checkpoint warning: ${boundedCliErrorMessage(checkpointFailure, 'Checkpoint could not be written')}. Completed output is still available.\n`);
-        }
-      }
-      const exitCode = checkpointFailure || items.some((item) => !item.ok)
-        ? EXIT_CODES.PARTIAL_FAILURE
-        : EXIT_CODES.SUCCESS;
-      eventProgress.emit({ event: 'completed', exitCode });
-      return exitCode;
-    }
-
-    if (args.action === 'ct-search') {
-      failureLabel = 'Certificate Transparency search';
-      const readInput = dependencies.readStdin || (() => readStdinBounded(dependencies.stdin || process.stdin));
-      const keyword = args.keyword || await readInput();
-      if (!keyword) throw new CliUsageError('ct-search requires one keyword as an argument or on stdin.');
-      const search = dependencies.searchCertificateTransparency || searchCertificateTransparency;
-      const result = await withProgress('Searching certificate observations', () => search(keyword));
-      const now = dependencies.now ? dependencies.now() : new Date().toISOString();
-      const document = buildCliCtSearchDocument(keyword, result as UnknownRecord, now);
-      if (!args.quiet) write(stdout, args.output === 'json' ? formatJsonDocument(document) : terminal(formatTerminalCtSearch(document), args.color));
-      return EXIT_CODES.SUCCESS;
+      return await runBulkCommand(args, dependencies, commandContext);
     }
 
     if (args.action === 'discover') {
       failureLabel = 'Candidate generation';
-      const readInput = dependencies.readStdin || (() => readStdinBounded(dependencies.stdin || process.stdin));
-      const seed = args.seed || await readInput();
-      if (!seed) throw new CliUsageError('discover requires one brand label or domain as an argument or on stdin.');
-      const loadGenerator = dependencies.loadTyposquatGenerator || (() => import('../lib/typosquat-generator.mts'));
-      const generator = await loadGenerator();
-      const tlds = normalizeDiscoveryTlds(args.tldText || DEFAULT_DISCOVERY_TLDS.join(','), generator.MAX_GENERATION_TLDS);
-      const requestedFamilies = args.familyText
-        ? [...new Set(args.familyText.split(',').map((value) => value.trim()).filter(Boolean))]
-        : [];
-      const mutationFamilies = args.preset === 'custom'
-        ? generator.normalizeMutationFamilyIds(requestedFamilies)
-        : [];
-      if (args.preset === 'custom'
-        && (!mutationFamilies.length || mutationFamilies.length !== requestedFamilies.length)) {
-        throw new CliUsageError(`--families requires one or more supported IDs: ${generator.MUTATION_FAMILY_IDS.join(', ')}.`);
-      }
-      let dictionaryText = '';
-      if (args.dictionarySource) {
-        if (args.preset === 'custom'
-          && !mutationFamilies.includes('dictionary')
-          && !mutationFamilies.includes('dictionary_token_replacement')) {
-          throw new CliUsageError('--dictionary requires a dictionary mutation family.');
-        }
-        try {
-          dictionaryText = dependencies.readDiscoveryDictionary
-            ? await dependencies.readDiscoveryDictionary(args.dictionarySource)
-            : await readDiscoveryDictionaryBounded(
-              createReadStream(args.dictionarySource, { highWaterMark: MAX_DISCOVERY_DICTIONARY_BYTES }),
-              MAX_DISCOVERY_DICTIONARY_BYTES,
-            );
-        } catch (error) {
-          if (error instanceof CliUsageError) throw error;
-          throw new CliUsageError(`Could not read discovery dictionary: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
-        }
-        const normalizedDictionary = generator.normalizeCustomDictionaryTerms(dictionaryText);
-        if (!normalizedDictionary.values.length) {
-          throw new CliUsageError('The discovery dictionary did not contain any valid terms.');
-        }
-      }
-      const result = generator.generateTyposquatCandidateSet(seed, tlds, {
-        preset: args.preset,
-        keyboardLayout: args.keyboardLayout,
-        dictionaryTerms: dictionaryText,
-        ...(args.preset === 'custom' ? { mutationTypes: mutationFamilies } : {}),
-      });
-      if (!result.inputValid) throw new CliUsageError('discover requires a valid brand label or domain with one suffix label.');
-      const now = dependencies.now ? dependencies.now() : new Date().toISOString();
-      const normalizedDictionary = generator.normalizeCustomDictionaryTerms(dictionaryText);
-      const metadata = {
-        generatedAt: now,
-        seed,
-        preset: args.preset,
-        keyboardLayout: args.keyboardLayout,
-        tlds,
-        mutationFamilies,
-        dictionaryTermCount: normalizedDictionary.values.length,
-        rejectedDictionaryTermCount: normalizedDictionary.rejectedCount,
-      };
-      const document = buildCliDiscoverDocument(seed, result, metadata);
-      if (!args.quiet) {
-        if (args.output === 'json') write(stdout, formatJsonDocument(document));
-        else if (args.output === 'jsonl') write(stdout, formatDiscoverJsonLines(result.candidates, metadata));
-        else write(stdout, terminal(formatTerminalDiscover(document, generator.MUTATION_LABELS), args.color));
-      }
-      return EXIT_CODES.SUCCESS;
+      return await runDiscoveryCommand(args, dependencies, commandContext);
     }
 
-    if (args.action === 'posture') {
-      failureLabel = 'Domain posture audit';
-      const readInput = dependencies.readStdin || (() => readStdinBounded(dependencies.stdin || process.stdin));
-      const requestedDomain = args.domain || await readInput();
-      if (!requestedDomain) throw new CliUsageError('posture requires one domain as an argument or on stdin.');
-      const normalizeDomain = dependencies.normalizeAuditDomain || normalizeAuditDomain;
-      const domain = normalizeDomain(requestedDomain);
-      if (!domain) throw new CliUsageError('posture requires a valid domain name.');
-      const normalizeSelectors = dependencies.normalizeDkimSelectors || normalizeDkimSelectors;
-      const dkimSelectors = normalizePostureSelectors(args.selectorText, normalizeSelectors);
-      const retiredDkimSelectors = normalizePostureSelectors(args.retiredSelectorText, normalizeSelectors)
-        .filter((selector) => !dkimSelectors.includes(selector))
-        .slice(0, Math.max(0, 10 - dkimSelectors.length));
-      const audit = dependencies.checkDomainPosture || checkDomainPosture;
-      const report = await withProgress('Collecting domain posture evidence', () => audit(domain, {
-          dkimSelectors,
-          retiredDkimSelectors,
-          mailProtectionProfile: args.mailProfile,
-        }));
-      const now = dependencies.now ? dependencies.now() : new Date().toISOString();
-      const document = buildCliPostureDocument(requestedDomain, report as UnknownRecord, now);
-      if (!args.quiet) write(stdout, args.output === 'json' ? formatJsonDocument(document) : terminal(formatTerminalPosture(document), args.color));
-      return EXIT_CODES.SUCCESS;
+    if (args.action === 'ct-search'
+      || args.action === 'posture'
+      || args.action === 'http'
+      || args.action === 'tls') {
+      failureLabel = args.action === 'ct-search'
+        ? 'Certificate Transparency search'
+        : args.action === 'posture'
+          ? 'Domain posture audit'
+          : args.action === 'http'
+            ? 'HTTP probe'
+            : 'TLS intelligence';
+      return await runNetworkCommand(args, dependencies, commandContext);
     }
 
-    if (args.action === 'http') {
-      failureLabel = 'HTTP probe';
-      const readInput = dependencies.readStdin || (() => readStdinBounded(dependencies.stdin || process.stdin));
-      const requestedDomain = args.domain || await readInput();
-      if (!requestedDomain) throw new CliUsageError('http requires one domain as an argument or on stdin.');
-      const normalizeDomain = dependencies.normalizeAuditDomain || normalizeAuditDomain;
-      const domain = normalizeDomain(requestedDomain);
-      if (!domain) throw new CliUsageError('http requires a valid domain name.');
-      const probe = dependencies.fetchHomepage || fetchHomepage;
-      const result = buildHttpProbeResult(
-        domain,
-        await withProgress('Inspecting the homepage request', () => probe(domain)),
-      );
-      const now = dependencies.now ? dependencies.now() : new Date().toISOString();
-      const document = buildCliHttpDocument(requestedDomain, result, now);
-      if (!args.quiet) write(stdout, args.output === 'json' ? formatJsonDocument(document) : terminal(formatTerminalHttp(document), args.color));
-      return EXIT_CODES.SUCCESS;
-    }
-
-    if (args.action === 'tls') {
-      failureLabel = 'TLS intelligence';
-      const readInput = dependencies.readStdin || (() => readStdinBounded(dependencies.stdin || process.stdin));
-      const requestedHostname = args.hostname || await readInput();
-      if (!requestedHostname) throw new CliUsageError('tls requires one hostname as an argument or on stdin.');
-      const normalizeHostname = dependencies.normalizeTlsHostname || normalizeTlsHostname;
-      const hostname = normalizeHostname(requestedHostname);
-      if (!hostname) throw new CliUsageError('tls requires a valid DNS hostname, not an IP address.');
-      const collect = dependencies.collectTlsIntelligence || collectTlsIntelligence;
-      const result = await withProgress('Inspecting the current TLS connection', () => collect(hostname));
-      const now = dependencies.now ? dependencies.now() : new Date().toISOString();
-      const document = buildCliTlsDocument(requestedHostname, result as UnknownRecord, now);
-      if (!args.quiet) write(stdout, args.output === 'json' ? formatJsonDocument(document) : terminal(formatTerminalTls(document), args.color));
-      return EXIT_CODES.SUCCESS;
-    }
-
-    eventProgress = createCliProgressEvents(stderr, {
-      command: 'lookup',
-      enabled: args.events,
-      ...(dependencies.now ? { now: dependencies.now } : {}),
-    });
-    eventProgress.emit({ event: 'started' });
-    const readInput = dependencies.readStdin || (() => readStdinBounded(dependencies.stdin || process.stdin));
-    const query = args.query || await readInput();
-    if (!query) throw new CliUsageError('lookup requires one domain, IP address, or ASN as an argument or on stdin.');
-    const classify = dependencies.classifyQuery || classifyQuery;
-    const executeLookup = dependencies.runUnifiedLookup || runUnifiedLookup;
-    let classified;
-    try { classified = classify(query); }
-    catch (error) { throw new CliUsageError(boundedCliErrorMessage(error, 'Invalid query')); }
-    if ((args.output === 'markdown' || args.output === 'html') && classified.type !== 'domain') {
-      throw new CliUsageError('Markdown and HTML reports support domain lookups only.');
-    }
-    const indicator = beginProgress(args.deep ? 'Collecting deep Lookup evidence' : 'Collecting registration evidence');
-    let settledSources = 0;
-    let result: unknown;
-    try {
-      result = await abortable(() => executeLookup(classified, args.deep
-        ? {
-            fast: false,
-            compact: false,
-            ...(dependencies.signal ? { signal: dependencies.signal } : {}),
-            onSourceSettled: (settlement) => {
-              settledSources += 1;
-              indicator.update(
-                `Collected ${settledSources} source${settledSources === 1 ? '' : 's'} · ${settlement.source.replaceAll('_', ' ')} ${settlement.state}`,
-              );
-              eventProgress?.emit({ event: 'source_settled', source: settlement.source, state: settlement.state });
-            },
-          }
-          : {
-            fast: true,
-            compact: false,
-            ...(dependencies.signal ? { signal: dependencies.signal } : {}),
-          }), dependencies.signal);
-    } finally {
-      endProgress();
-    }
-    const now = dependencies.now ? dependencies.now() : new Date().toISOString();
-    const document = buildCliLookupDocument(query, classified, result as UnknownRecord, now, args.deep ? 'deep' : 'fast');
-    if (!args.quiet) {
-      if (args.output === 'json') write(stdout, formatJsonDocument(document));
-      else if (args.output === 'markdown' || args.output === 'html') {
-        const loadEvidence = dependencies.loadEvidenceExport || (() => import('../lib/evidence-export.mts'));
-        const evidenceModule = await loadEvidence();
-        const report = buildCliEvidenceExport(JSON.stringify(document), evidenceModule, now);
-        write(stdout, args.output === 'markdown'
-          ? formatLookupEvidenceMarkdown(report)
-          : formatLookupEvidenceHtml(report));
-      } else {
-        write(stdout, terminal(formatTerminalLookup(document, { detail: args.detail }), args.color));
-      }
-    }
-    const strictFindings = args.strictExit ? lookupStrictExitFindings(document) : [];
-    const exitCode = strictFindings.length ? EXIT_CODES.PARTIAL_FAILURE : EXIT_CODES.SUCCESS;
-    if (strictFindings.length && !args.events) {
-      write(stderr, `Strict exit: ${strictFindings.length} requested source state${strictFindings.length === 1 ? '' : 's'} were incomplete.\n`);
-    }
-    eventProgress.emit({ event: 'completed', exitCode });
-    return exitCode;
+    return await runLookupCommand(args, dependencies, commandContext);
   } catch (error) {
     (progress as TerminalProgress | null)?.stop();
     progress = null;
     if (isCancellation(error, dependencies.signal)) {
-      eventProgress?.emit({ event: 'cancelled', exitCode: EXIT_CODES.CANCELLED });
-      if (!eventProgress?.enabled) write(stderr, 'Cancelled by analyst.\n');
+      eventProgress.current?.emit({ event: 'cancelled', exitCode: EXIT_CODES.CANCELLED });
+      if (!eventProgress.current?.enabled) write(stderr, 'Cancelled by analyst.\n');
       return EXIT_CODES.CANCELLED;
     }
     if (error instanceof CliUsageError) {
-      eventProgress?.emit({
+      eventProgress.current?.emit({
         event: 'failed',
         state: 'usage',
         reason: usageEventReason(error),
         exitCode: EXIT_CODES.USAGE,
       });
-      if (!eventProgress?.enabled) write(stderr, `Usage error: ${boundedCliErrorMessage(error, 'Invalid command')}\n`);
+      if (!eventProgress.current?.enabled) write(stderr, `Usage error: ${boundedCliErrorMessage(error, 'Invalid command')}\n`);
       return EXIT_CODES.USAGE;
     }
-    eventProgress?.emit({ event: 'failed', state: 'operational', exitCode: EXIT_CODES.LOOKUP_FAILED });
-    if (!eventProgress?.enabled) write(stderr, `${failureLabel} failed: ${boundedCliErrorMessage(error, 'Unexpected command failure')}\n`);
+    eventProgress.current?.emit({ event: 'failed', state: 'operational', exitCode: EXIT_CODES.LOOKUP_FAILED });
+    if (!eventProgress.current?.enabled) write(stderr, `${failureLabel} failed: ${boundedCliErrorMessage(error, 'Unexpected command failure')}\n`);
     return EXIT_CODES.LOOKUP_FAILED;
   }
 }
