@@ -229,8 +229,10 @@ npm run frontend:authenticated-loading-report
 ```
 
 The report uses only local build artifacts. It fails if the browser-local
-workspace chunk enters a public route and reports gzip estimates rather than
-claiming measured network timings. The authenticated Playwright report then
+workspace chunk enters a public route, a generated route lacks a reviewed
+gzip ceiling, or a route exceeds that deliberately generous regression budget.
+CI runs this check after the production build. The estimates are not measured
+network timings. The authenticated Playwright report then
 cold-loads Lookup and Monitor through the real local sign-in boundary, measures
 encoded transfer bytes with Chromium's network protocol, records the first
 enabled route control time and main-thread long tasks, and attaches one JSON

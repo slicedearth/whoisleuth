@@ -19,6 +19,11 @@ describe('continuous integration workflow', () => {
     assert.match(WORKFLOW, /^permissions:\s*\n\s{2}contents: read$/mu);
     assert.doesNotMatch(WORKFLOW, /\b(?:contents|issues|pull-requests|actions): write\b/u);
     assert.match(WORKFLOW, /^\s{2}verify:\s*$/mu);
+    assert.match(WORKFLOW, /^concurrency:\s*\n\s{2}group: ci-/mu);
+    assert.match(WORKFLOW, /^\s{2}cancel-in-progress: \$\{\{ github\.event_name == 'pull_request' \}\}$/mu);
+    assert.match(WORKFLOW, /^\s{4}timeout-minutes: 30$/mu);
+    assert.match(WORKFLOW, /^\s{10}persist-credentials: false$/mu);
+    assert.match(WORKFLOW, /^\s+run: npm ci --include=optional --ignore-scripts$/mu);
     const actions = [...WORKFLOW.matchAll(/^\s+uses: ([^@\s]+)@([^\s#]+)/gmu)]
       .map((match) => ({ action: match[1], revision: match[2] }));
     assert.deepEqual(actions.map(({ action }) => action), [
@@ -35,6 +40,7 @@ describe('continuous integration workflow', () => {
       'npm run typecheck',
       'npm run check',
       'npm run build',
+      'npm run frontend:loading-report',
       'npm run security:retire',
       'npm run test:e2e',
     ]) {

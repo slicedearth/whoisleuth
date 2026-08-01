@@ -53,6 +53,7 @@ function report(publicImports?: readonly string[]) {
     measureAsset(file) {
       return { file, bytes: file.length * 10, gzipBytes: file.length * 4 };
     },
+    routeGzipBudgets: { '/': 1_000, '/dashboard': 1_000 },
   });
 }
 
@@ -68,6 +69,31 @@ describe('frontend loading report', () => {
       true,
     );
     assert.match(formatFrontendLoadingReport(result), /Public-route exposure: none/);
+    assert.match(formatFrontendLoadingReport(result), /Route budgets: within reviewed ceilings/);
+  });
+
+  test('fails closed for missing and exceeded route budgets', () => {
+    const missing = buildFrontendLoadingReport({
+      manifest: fixtureManifest(),
+      routeNodes: routes,
+      measureAsset(file) {
+        return { file, bytes: file.length * 10, gzipBytes: file.length * 4 };
+      },
+      routeGzipBudgets: { '/': 1_000 },
+    });
+    assert.equal(missing.ready, false);
+    assert.deepEqual(missing.summary.missingBudgetPaths, ['/dashboard']);
+
+    const exceeded = buildFrontendLoadingReport({
+      manifest: fixtureManifest(),
+      routeNodes: routes,
+      measureAsset(file) {
+        return { file, bytes: file.length * 10, gzipBytes: file.length * 4 };
+      },
+      routeGzipBudgets: { '/': 1, '/dashboard': 1_000 },
+    });
+    assert.equal(exceeded.ready, false);
+    assert.deepEqual(exceeded.summary.overBudgetPaths, ['/']);
   });
 
   test('fails closed when a public layout imports the workspace chunk', () => {
