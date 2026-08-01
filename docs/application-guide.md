@@ -867,13 +867,15 @@ owning record. The projection does not copy raw payloads, pin values, analyst
 notes, or relationship values, and it never starts collection.
 
 The Cases view also accepts the strict WHOISleuth external-findings schema,
-fixed-column finding rows in CSV or JSON, sanitised web-capture summaries,
+fixed-column finding rows in CSV or JSON, sanitised web-capture summaries and
+artifact manifests,
 strict uncompressed WARC response archives, and bounded STIX 2.1 or MISP event
 JSON. Every file is validated and previewed locally before a merge. Generic row
 conversion accepts only domain, category, summary, observation time,
 completeness, limitation, and reference columns.
-The capture schema accepts bounded titles, normalized HTTP(S) origins,
-technology labels, screenshot SHA-256 digests, completeness, and limitations;
+The capture schemas accept bounded titles, normalized HTTP(S) origins,
+technology labels, screenshot SHA-256 digests, optional version-2 perceptual
+dHashes, artifact dimensions and sizes, completeness, and limitations;
 it rejects raw HTML, screenshot content, cookies, request bodies, complete
 URLs, and arbitrary fields. STIX and MISP previews separate accepted claims,
 duplicates, conflicting identifiers, and exclusions, then require an existing
@@ -891,7 +893,10 @@ supported block digests. Supported SHA-1 or SHA-256 block digests are verified
 locally. Only the normalized domain, origin, title, status, observation time,
 completeness, limitations, and archive SHA-256 digest reach the preview. Raw
 archive bytes and paths, queries, fragments, headers, and bodies are discarded.
-WACZ ZIP containers are not accepted by this version.
+Bounded WACZ 1.x ZIP containers are also accepted through the same WARC privacy
+filter when their manifest, safe resource paths, sizes, compression, and
+SHA-256 digests validate. Screenshots, indexes, page lists, custom files, and
+other package content are ignored rather than merged into a case.
 
 Brand Profile posture results include a local **desired-state review**. It
 organizes the selected standard, defensive-no-mail, or parked profile into

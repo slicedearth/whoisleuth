@@ -153,7 +153,7 @@ deployment parity, see the [architecture orientation](docs/architecture.md).
 | [Browser-local data](docs/browser-local-data.md) | IndexedDB, migration, rollback, capacity, and the separate encryption decision. |
 | [External findings and intelligence import](docs/external-findings-import.md) | Strict local findings schema plus bounded STIX 2.1 and MISP previews, source-file digests, exclusions, and explicit case-assertion merge behavior. |
 | [Dependency maintenance](docs/dependency-maintenance.md) | Low-noise updates, human review, and GitHub dependency-graph SPDX export. |
-| [CLI guide](docs/cli.md) | Commands, terminal presentation, completion, diagnostics, output formats, exit codes, offline calibration, artifact verification, source diagnostics, and evidence exports. |
+| [CLI guide](docs/cli.md) | Commands, terminal presentation, completion, diagnostics, discovery snapshots, saved page and mail review, optional local rendered capture, output formats, exit codes, and evidence exports. |
 | [Engineering case study](docs/engineering-case-study.md) | Constraints, representative decisions, hard problems, and review entry points. |
 | [Privacy notice](PRIVACY.md) | Collection, browser storage, optional hosted processing, retention, export, and deletion. |
 

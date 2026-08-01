@@ -17,6 +17,10 @@ node bin/whoisleuth.mts lookup example.test
 node bin/whoisleuth.mts lookup example.test --deep --summary
 node bin/whoisleuth.mts lookup example.test --deep --markdown --output lookup.md
 node bin/whoisleuth.mts bulk domains.txt --deep --checkpoint bulk-checkpoint.json
+node bin/whoisleuth.mts bulk domains.txt --csv --registered-only
+node bin/whoisleuth.mts discover example.test --dictionary private-terms.txt --snapshot discovery-state.json --json
+node bin/whoisleuth.mts page-compare official.json candidate.json --json
+node bin/whoisleuth.mts mail-review bulk.json --json
 node bin/whoisleuth.mts diff first-lookup.json second-lookup.json --json
 node bin/whoisleuth.mts registry-support example.test --json
 node bin/whoisleuth.mts doctor
@@ -42,6 +46,13 @@ checkpoint. A checkpoint write failure preserves completed output and returns
 the partial-result exit code. Ctrl-C suppresses partial final output and
 returns exit code 130; a second interrupt performs best-effort temporary-file
 cleanup before exiting immediately.
+
+Bulk also supports fixed-column CSV, domain-only output, registered and
+inconclusive output filters, and bounded A, AAAA, NS, and MX summaries. Discover
+supports local custom dictionaries and private snapshot comparison suitable
+for an operator-managed scheduler. Saved Deep lookups can be compared across
+static page, favicon, technology, and TLS evidence, while saved Bulk output can
+be reviewed for passive MX, null MX, SPF, DMARC, and shared-provider context.
 
 See `docs/cli.md` in the package for the complete command, privacy, output, and
 evidence-contract reference.

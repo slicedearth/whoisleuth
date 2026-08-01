@@ -23,11 +23,14 @@ node bin/whoisleuth.mts lookup example.com --deep --verbose
 node bin/whoisleuth.mts lookup example.com --deep --markdown --output lookup.md
 node bin/whoisleuth.mts lookup example.com --deep --json --strict-exit --events
 cat domains.txt | node bin/whoisleuth.mts bulk --jsonl
+node bin/whoisleuth.mts bulk domains.txt --csv --registered-only
+node bin/whoisleuth.mts bulk domains.txt --domains --inconclusive-only
 node bin/whoisleuth.mts bulk domains.txt --concurrency 4
 node bin/whoisleuth.mts bulk domains.txt --deep --checkpoint bulk-checkpoint.json
 node bin/whoisleuth.mts bulk domains.txt --deep --checkpoint bulk-checkpoint.json --resume
 node bin/whoisleuth.mts ct-search 'example brand' --json
 node bin/whoisleuth.mts discover example.com --preset common --jsonl
+node bin/whoisleuth.mts discover example.test --dictionary private-terms.txt --snapshot discovery-state.json --json
 node bin/whoisleuth.mts posture example.com --selectors selector1 --retired-selectors selector0 --mail-profile defensive-no-mail --json
 node bin/whoisleuth.mts http example.com --json
 node bin/whoisleuth.mts tls example.com --json
@@ -42,6 +45,8 @@ node bin/whoisleuth.mts sign-artifact response-packet.json --private-key-file an
 node bin/whoisleuth.mts verify-signature response-packet.signed.json --public-key-file analyst-public.pem
 node bin/whoisleuth.mts lookup example.com --deep --json > lookup.json
 node bin/whoisleuth.mts compare lookup.json --json
+node bin/whoisleuth.mts page-compare official.json candidate.json --json
+node bin/whoisleuth.mts mail-review bulk.json --json
 node bin/whoisleuth.mts diff first-lookup.json second-lookup.json --json
 node bin/whoisleuth.mts export lookup.json > evidence.json
 node bin/whoisleuth.mts export lookup.json --markdown > evidence.md
@@ -113,7 +118,7 @@ Commands that query RDAP, WHOIS, DNS, HTTP, TLS, or Certificate Transparency do
 so directly from the machine running the CLI. They do not use the hosted login,
 hosted session, or deployment usage controls; upstream providers can see and
 rate-limit the local machine's network address. Offline `discover`, `compare`,
-`diff`, `risk-calibrate`, `verify-artifact`, `source-report`, `export`,
+`page-compare`, `mail-review`, `diff`, `risk-calibrate`, `verify-artifact`, `source-report`, `export`,
 `completion`, and `manual` operations make no network requests. Commands write
 to stdout unless the analyst deliberately selects a local output file.
 
@@ -261,7 +266,7 @@ machine access is not evidence that a domain is unregistered or safe.
 This release supports `lookup`, `bulk`, `ct-search`, `discover`, `posture`,
 `http`, `tls`, `registry-support`, `risk-calibrate`, `verify-artifact`,
 `inspect-archive`, `sign-artifact`, `verify-signature`, `source-report`,
-`compare`, `diff`, `export`, `doctor`, `completion`, and `manual`. Additional command families
+`compare`, `page-compare`, `mail-review`, `diff`, `export`, `doctor`, `completion`, and `manual`. Additional command families
 are added as separate bounded increments rather than exposing incomplete
 aliases.
 
@@ -444,8 +449,19 @@ deep mode.
 
 Bulk uses the shared compact lookup response, so it does not retain raw RDAP
 objects or WHOIS response bodies. `--json` returns one bounded collection;
-`--jsonl` emits one self-contained versioned item per line. A mixture of
-successful and failed queries exits with code 4 while preserving every result.
+`--jsonl` emits one self-contained versioned item per line. Version 2 adds a
+bounded `dnsSummary` projection for observed A, AAAA, NS, and MX records plus
+null MX, SPF, and DMARC state. `--csv` writes fixed columns for automation,
+including the DNS summaries and explicit outcome; `--domains` writes only the
+normalized retained domain names for a subsequent command.
+
+`--registered-only` and `--inconclusive-only` are mutually exclusive output
+filters. The first retains registered, for-sale, and expiring authority-aware
+states. The second retains unknown authority states and failed rows. Filtering
+does not change collection and never converts an unavailable or failed source
+into an unregistered result. Machine documents record collected and emitted
+counts. A mixture of successful and failed queries exits with code 4 while
+preserving every collected result before output filtering.
 
 ## Certificate Transparency search
 
@@ -488,6 +504,16 @@ selection. Supported IDs are `character_addition`, `character_omission`,
 `dictionary_token_replacement`, `tld_typo`, and `tld_substitution`. Machine
 output records the normalized custom selection. A custom dictionary file
 requires `dictionary` or `dictionary_token_replacement` in that selection.
+
+`--domains` writes the unique candidate names only. `--snapshot <file>` keeps
+one private, versioned local observation of the normalized seed, generation
+configuration, custom-dictionary digest, and candidate set. The first run
+creates the snapshot; later runs report added and removed candidates before
+atomically replacing it. The snapshot never stores private dictionary terms.
+Use the same command from a local scheduler such as cron or a system timer to
+perform repeatable discovery runs. WHOISleuth does not install a scheduler,
+run a background daemon, or infer that an added candidate is registered,
+active, available, or malicious.
 
 Dotted subdomain permutations are intentionally excluded because the lookup
 pipeline validates a hostname's registrable parent. The CLI does not present
@@ -603,6 +629,57 @@ ordering, and date-precision differences while distinguishing conflicts,
 one-source publication, redaction, incomplete sources, and unavailable
 sources. This is source reconciliation, not an availability, ownership, or
 maliciousness decision.
+
+## Static page comparison
+
+`page-compare <left.json> <right.json>` reads two different version-1 saved
+Deep domain Lookup documents and compares the already-retained static page
+identity, exact and perceptual favicon evidence, technology identifiers, TLS
+issuer label, and TLS public-key fingerprint. It makes no request and requires
+complete supported static page-identity observations on both sides.
+
+Each page component remains independent. Exact, similar, overlapping,
+different, unavailable, and partial evidence are not collapsed into a score.
+Matching components are investigative relationships rather than proof of
+copying, common ownership, control, intent, safety, or maliciousness. Static
+comparison does not execute JavaScript; use the optional local rendered
+capture package only when that additional active behavior is authorised.
+
+## Passive mail exposure review
+
+`mail-review [bulk.json|bulk.jsonl]` reads version-2 Bulk output locally and
+summarizes MX, null MX, SPF, DMARC, and mail-provider relationships. It keeps
+authenticated mail, authentication gaps, incomplete authentication evidence,
+no explicit MX, null MX, and incomplete DNS evidence as separate states.
+Shared-provider relationships are based only on the registrable domain of an
+observed MX hostname and do not establish shared ownership or control.
+
+The command makes no DNS or SMTP request and retains no source path. It does
+not test message acceptance, relay behavior, mailbox existence, catch-all
+behavior, SMTP banners, or whether a mail server is rogue, safe, or malicious.
+
+## Optional local rendered capture
+
+`packages/web-capture` is a private repo-local Playwright package, not part of
+the distributable core CLI or hosted application. It requires an explicit
+authorization flag and one new output directory:
+
+```bash
+npm run capture:local -- https://example.test --output-dir ./capture-example --authorize-rendered-capture
+```
+
+It writes a fixed 1024x768 PNG, screenshot SHA-256 and perceptual dHash, a DOM
+digest containing hashes and bounded element counts rather than markup or page
+text, and a version-2 `whoisleuth.web-capture-manifest` compatible with the
+Cases importer. Version-1 manifests remain importable.
+
+Rendered capture executes page JavaScript. It caps HTTP(S) requests and request
+hostnames, blocks downloads, service workers, WebSockets, non-read methods,
+credentials, non-default ports, and private or reserved addresses, and retains
+no request path, query, headers, bodies, cookies, credentials, DOM markup, or
+page text. The browser connection is not pinned to the address checked before
+each hostname's first request, so DNS rebinding remains a residual risk. Use a
+disposable network-restricted environment for untrusted targets.
 
 ## Lookup evidence export
 
