@@ -5,7 +5,7 @@ import { CliUsageError } from './errors.mts';
 import { parseSavedLookupDocument, type SavedLookupDocument, type UnknownRecord } from './saved-lookup.mts';
 
 export const CLI_PAGE_COMPARE_SCHEMA = 'whoisleuth.cli.page-compare';
-export const CLI_PAGE_COMPARE_VERSION = 1;
+export const CLI_PAGE_COMPARE_VERSION = 2;
 
 type ComparisonState = 'different' | 'equal' | 'overlap' | 'unavailable';
 

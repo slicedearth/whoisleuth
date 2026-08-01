@@ -54,9 +54,10 @@ supports local custom dictionaries and private snapshot comparison suitable
 for an operator-managed scheduler. The separate networked `discover-scan`
 command can collect a deterministic bounded subset in chunks, retain mutation
 provenance, apply a non-destructive analyst allowlist, group exact shared DNS
-observations, and compare a private material-change snapshot. Saved Deep lookups can be compared across
-static page, favicon, technology, and TLS evidence, while saved Bulk output can
-be reviewed for passive MX, null MX, SPF, DMARC, and shared-provider context.
+observations, and compare a private material-change snapshot. Saved Deep
+lookups can be compared across static page, parse5-tokenized DOM structure,
+favicon, technology, and TLS evidence, while saved Bulk output can be reviewed
+for passive MX, null MX, SPF, DMARC, and shared-provider context.
 
 See `docs/cli.md` in the package for the complete command, privacy, output, and
 evidence-contract reference.

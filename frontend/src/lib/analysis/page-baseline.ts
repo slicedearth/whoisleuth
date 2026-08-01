@@ -42,6 +42,7 @@ export type DomStructureComponent = {
   nodeCount: number;
   parser: 'static-tag-sequence-v1';
   truncated: boolean;
+  similarity?: VisibleTextComponent | null;
 };
 
 export type FormStructureComponent = {
@@ -158,12 +159,14 @@ function domComponent(raw: unknown): DomStructureComponent | null {
   const digest = sha256(value.value);
   const nodeCount = count(value.nodeCount, MAX_HTML_TOKENS);
   if (!digest || nodeCount === null) return null;
+  const similarity = value.similarity == null ? null : visibleTextComponent(value.similarity);
   return {
     algorithm: 'sha256',
     value: digest,
     nodeCount,
     parser: 'static-tag-sequence-v1',
     truncated: value.truncated === true,
+    ...(value.similarity == null ? {} : { similarity }),
   };
 }
 
@@ -261,8 +264,10 @@ export function normalizePageBaseline(raw: unknown): PageBaseline | null {
   const resourceHosts = resourceHostComponent(value.resourceHosts);
   const trackingIdentifiers = identifierComponent(value.trackingIdentifiers);
   if (!resourceHosts || !trackingIdentifiers) return null;
+  const rawDomStructure = record(value.domStructure);
   const optionalComponentInvalid = (value.visibleText != null && !visibleText)
-    || (value.formStructure != null && !formStructure);
+    || (value.formStructure != null && !formStructure)
+    || (rawDomStructure?.similarity != null && !domStructure.similarity);
   const truncated = value.truncated === true || optionalComponentInvalid || normalizedHtml.truncated || domStructure.truncated
     || visibleText?.truncated === true || formStructure?.truncated === true
     || resourceHosts.truncated || trackingIdentifiers.truncated;

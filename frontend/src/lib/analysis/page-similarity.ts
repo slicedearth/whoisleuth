@@ -6,7 +6,7 @@
 import { normalizePageBaseline } from './page-baseline.ts';
 import { hammingDistanceHex } from './utils.ts';
 
-export const PAGE_COMPARISON_VERSION = 2;
+export const PAGE_COMPARISON_VERSION = 3;
 
 type PageBaseline = NonNullable<ReturnType<typeof normalizePageBaseline>>;
 type DigestComponent = { value: string; truncated: boolean };
@@ -91,6 +91,55 @@ function visibleTextComponent(
       `${agreementPercent}% bit agreement${reference.truncated || observed.truncated ? ' · partial evidence' : ''}`,
       `The fingerprints differ by ${distance} of 64 bits. Bit agreement is a fuzzy comparison aid, not a percentage of copied text.`,
       reference.truncated || observed.truncated,
+    ),
+    hammingDistance: distance,
+    agreementPercent,
+  };
+}
+
+function domStructureComponent(
+  reference: PageBaseline['domStructure'],
+  observed: PageBaseline['domStructure'],
+): PageComparisonComponent {
+  const partial = reference.truncated || observed.truncated
+    || reference.similarity?.truncated === true || observed.similarity?.truncated === true;
+  if (reference.value === observed.value) {
+    return component(
+      'dom_structure',
+      'DOM structure',
+      'Exact SHA-256 equality',
+      'same',
+      `Same captured structure${partial ? ' · partial evidence' : ''}`,
+      'The exact static tag-sequence digests are equal for the bounded material captured on each page.',
+      partial,
+    );
+  }
+  if (!reference.similarity || !observed.similarity) {
+    return component(
+      'dom_structure',
+      'DOM structure',
+      'Exact SHA-256 equality',
+      'different',
+      `Different captured structure${partial ? ' · partial evidence' : ''}`,
+      'The exact static tag-sequence digests differ. At least one older capture lacks the optional standards-token similarity fingerprint.',
+      partial,
+    );
+  }
+  const distance = hammingDistanceHex(reference.similarity.value, observed.similarity.value);
+  if (distance === null) {
+    return component('dom_structure', 'DOM structure', 'Exact SHA-256, then 64-bit SimHash distance', 'unavailable', 'Not comparable', 'The DOM-structure similarity fingerprints use an unsupported or malformed representation.', true);
+  }
+  const agreementPercent = Math.round(((64 - distance) / 64) * 100);
+  const near = distance <= 8;
+  return {
+    ...component(
+      'dom_structure',
+      'DOM structure',
+      'Exact SHA-256, then 64-bit SimHash distance',
+      near ? 'overlap' : 'different',
+      `${near ? 'Similar' : 'Different'} captured structure · ${agreementPercent}% bit agreement${partial ? ' · partial evidence' : ''}`,
+      `The standards-token fingerprints differ by ${distance} of 64 bits. The bounded eight-bit proximity threshold is a review lead and does not establish copying, ownership, intent, safety, or maliciousness.`,
+      partial,
     ),
     hammingDistance: distance,
     agreementPercent,
@@ -210,7 +259,7 @@ export function comparePageBaselines(rawReference: unknown, rawObserved: unknown
   const components = [
     digestComponent('normalized_html', 'Normalized HTML', 'Normalized-HTML', reference.normalizedHtml, observed.normalizedHtml),
     visibleTextComponent(reference.visibleText, observed.visibleText),
-    digestComponent('dom_structure', 'DOM structure', 'Static tag-sequence', reference.domStructure, observed.domStructure),
+    domStructureComponent(reference.domStructure, observed.domStructure),
     formComponent(reference.formStructure, observed.formStructure),
     faviconComponent(reference, observed),
     setComponent('resource_hosts', 'External resource hosts', 'host', reference.resourceHosts, observed.resourceHosts, (value) => value),

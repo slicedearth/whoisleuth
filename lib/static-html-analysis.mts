@@ -31,10 +31,12 @@ type StaticFormAnalysis = {
 
 type StaticHtmlAnalysis = {
   markup: string;
+  structureTokens: string[];
   scripts: StaticScript[];
   forms: StaticFormAnalysis;
   inputLimitReached: boolean;
   tagLimitReached: boolean;
+  structureLimitReached: boolean;
   scriptLimitReached: boolean;
   inlineLimitReached: boolean;
   tagsExamined: number;
@@ -43,6 +45,7 @@ type StaticHtmlAnalysis = {
 
 const MAX_STATIC_HTML_CHARS = 300_000;
 const MAX_STATIC_HTML_TAGS = 8_192;
+const MAX_STATIC_STRUCTURE_TOKENS = 4_096;
 const MAX_TECHNOLOGY_TAGS = 2_048;
 const MAX_TAG_LENGTH = 4_096;
 const MAX_ATTRIBUTES_PER_TAG = 128;
@@ -80,6 +83,10 @@ const RAW_TEXT_MODES: Readonly<Record<string, number>> = Object.freeze({
   title: TokenizerMode.RCDATA,
   xmp: TokenizerMode.RAWTEXT,
 });
+const VOID_TAGS = new Set([
+  'area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta',
+  'param', 'source', 'track', 'wbr',
+]);
 
 type StaticHtmlAnalysisOptions = {
   baseUrl?: unknown;
@@ -240,6 +247,7 @@ function analyzeStaticHtml(value: unknown, options: StaticHtmlAnalysisOptions = 
   const html = supplied.slice(0, MAX_STATIC_HTML_CHARS);
   const baseUrl = safeBaseUrl(options.baseUrl);
   const markup: string[] = [];
+  const structureTokens: string[] = [];
   const scripts: StaticScript[] = [];
   const forms: StaticFormAnalysis = {
     formsObserved: 0,
@@ -255,6 +263,7 @@ function analyzeStaticHtml(value: unknown, options: StaticHtmlAnalysisOptions = 
   let tagsExamined = 0;
   let inlineCharactersExamined = 0;
   let tagLimitReached = false;
+  let structureLimitReached = false;
   let scriptLimitReached = false;
   let inlineLimitReached = false;
 
@@ -270,6 +279,14 @@ function analyzeStaticHtml(value: unknown, options: StaticHtmlAnalysisOptions = 
     if (retainedLength < chars.length) inlineLimitReached = true;
   }
 
+  function appendStructureToken(value: string): void {
+    if (structureTokens.length >= MAX_STATIC_STRUCTURE_TOKENS) {
+      structureLimitReached = true;
+      return;
+    }
+    structureTokens.push(value);
+  }
+
   const handler: TokenHandler = {
     onStartTag(token) {
       const tagName = token.tagName.toLowerCase();
@@ -282,6 +299,7 @@ function analyzeStaticHtml(value: unknown, options: StaticHtmlAnalysisOptions = 
         return;
       }
       tagsExamined += 1;
+      appendStructureToken(token.selfClosing || VOID_TAGS.has(tagName) ? `${tagName}/` : tagName);
 
       if (markup.length < MAX_TECHNOLOGY_TAGS) {
         const serialized = serializedStartTag(tagName, token.attrs);
@@ -334,7 +352,9 @@ function analyzeStaticHtml(value: unknown, options: StaticHtmlAnalysisOptions = 
       activeInlineScript = reference ? null : script;
     },
     onEndTag(token) {
-      if (token.tagName.toLowerCase() === 'script') activeInlineScript = null;
+      const tagName = token.tagName.toLowerCase();
+      if (tagName === 'script') activeInlineScript = null;
+      if (!VOID_TAGS.has(tagName)) appendStructureToken(`/${tagName}`);
     },
     onCharacter(token) {
       appendInlineScript(token.chars);
@@ -355,10 +375,12 @@ function analyzeStaticHtml(value: unknown, options: StaticHtmlAnalysisOptions = 
 
   return {
     markup: markup.join('\n'),
+    structureTokens,
     scripts,
     forms,
     inputLimitReached,
     tagLimitReached,
+    structureLimitReached,
     scriptLimitReached,
     inlineLimitReached,
     tagsExamined,
@@ -376,6 +398,7 @@ export {
   MAX_STATIC_HTML_CHARS,
   MAX_STATIC_INPUTS,
   MAX_STATIC_HTML_TAGS,
+  MAX_STATIC_STRUCTURE_TOKENS,
   MAX_TAG_LENGTH,
   MAX_TECHNOLOGY_TAGS,
   analyzeStaticHtml,

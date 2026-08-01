@@ -680,7 +680,9 @@ maliciousness decision.
 `page-compare <left.json> <right.json>` reads two different version-1 saved
 Deep domain Lookup documents and compares the already-retained static page
 identity, exact and perceptual favicon evidence, technology identifiers, TLS
-issuer label, and TLS public-key fingerprint. It makes no request and requires
+issuer label, and TLS public-key fingerprint. DOM structure is compared first
+by its exact bounded tag-sequence digest, then, when both captures provide it,
+by a parse5-tokenized structural SimHash. It makes no request and requires
 complete supported static page-identity observations on both sides.
 
 Each page component remains independent. Exact, similar, overlapping,

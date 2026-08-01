@@ -47,7 +47,7 @@ function item(result: PageComparison, id: string): PageComparisonComponent {
 describe('explainable page-baseline comparison', () => {
   test('reports independent identical components without an aggregate score', () => {
     const result = requiredValue(comparison.comparePageBaselines(stored(), stored({ domain: 'observed.example', lookupDomain: 'observed.example', observedAt: LATER })));
-    assert.equal(result.comparisonVersion, 2);
+    assert.equal(result.comparisonVersion, 3);
     assert.deepEqual(result.counts, { same: 6, overlap: 0, different: 0, notObserved: 1, unavailable: 0 });
     assert.equal(result.partial, false);
     assert.equal('score' in result, false);
@@ -64,6 +64,25 @@ describe('explainable page-baseline comparison', () => {
     assert.equal(item(result, 'normalized_html').status, 'different');
     assert.equal(item(result, 'dom_structure').status, 'different');
     assert.equal(item(result, 'form_structure').status, 'same');
+  });
+
+  test('reports close parse-token structure fingerprints as an explainable overlap', () => {
+    const result = requiredValue(comparison.comparePageBaselines(stored({
+      domStructure: {
+        algorithm: 'sha256', value: SHA_B, nodeCount: 15, parser: 'static-tag-sequence-v1', truncated: false,
+        similarity: { algorithm: 'simhash64-v1', value: '0000000000000000', tokenCount: 15, featureCount: 13, truncated: false },
+      },
+    }), stored({
+      domStructure: {
+        algorithm: 'sha256', value: SHA_D, nodeCount: 16, parser: 'static-tag-sequence-v1', truncated: false,
+        similarity: { algorithm: 'simhash64-v1', value: '000000000000000f', tokenCount: 16, featureCount: 14, truncated: false },
+      },
+    })));
+    const structure = item(result, 'dom_structure');
+    assert.equal(structure.status, 'overlap');
+    assert.equal(structure.hammingDistance, 4);
+    assert.equal(structure.agreementPercent, 94);
+    assert.match(structure.detail, /does not establish copying/u);
   });
 
   test('reports visible-text bit agreement without calling it copied-text percentage', () => {

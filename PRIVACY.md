@@ -313,8 +313,9 @@ default (see the README), so many lookups return no personal data at all.
   and complete email addresses are not retained.
   Page identity can also include versioned SHA-256 fingerprints for the exact
   captured body, noise-reduced normalized HTML, static tag structure, and form
-  structure; a fuzzy visible-text SimHash; and bounded external-resource-host
-  and public-tracking-identifier sets with deterministic set digests.
+  structure; fuzzy visible-text and parse5-tokenized structure SimHashes; and
+  bounded external-resource-host and public-tracking-identifier sets with
+  deterministic set digests.
   Intermediate normalized markup and visible text are discarded immediately
   after fingerprinting. These digests support comparison but do not prove page
   authorship, ownership, intent, or maliciousness.

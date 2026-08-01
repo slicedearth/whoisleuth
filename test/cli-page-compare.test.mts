@@ -71,7 +71,7 @@ describe('offline static page comparison', () => {
       ISO,
     );
     assert.equal(document.schema, 'whoisleuth.cli.page-compare');
-    assert.equal(document.version, 1);
+    assert.equal(document.version, 2);
     assert.equal(document.page.components.find((component) => component.id === 'favicon')?.outcome, 'Perceptually similar');
     assert.equal(document.technology.state, 'equal');
     assert.equal(document.tls.issuer.state, 'equal');
