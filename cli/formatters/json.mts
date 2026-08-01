@@ -1,4 +1,5 @@
 import type { BulkLookupResult, ClassifiedQuery } from '../bulk.mts';
+import { bulkDnsSummary } from '../bulk-output.mts';
 import type { UnknownRecord } from '../saved-lookup.mts';
 
 const CLI_LOOKUP_SCHEMA = 'whoisleuth.cli.lookup';
@@ -12,7 +13,7 @@ const CLI_HTTP_SCHEMA = 'whoisleuth.cli.http';
 const CLI_TLS_SCHEMA = 'whoisleuth.cli.tls';
 const CLI_COMPARE_SCHEMA = 'whoisleuth.cli.compare';
 const CLI_LOOKUP_SCHEMA_VERSION = 1;
-const CLI_BULK_SCHEMA_VERSION = 1;
+const CLI_BULK_SCHEMA_VERSION = 2;
 const CLI_CT_SEARCH_SCHEMA_VERSION = 1;
 const CLI_DISCOVER_SCHEMA_VERSION = 2;
 const CLI_POSTURE_SCHEMA_VERSION = 1;
@@ -38,7 +39,13 @@ type DiscoverMetadata = {
   rejectedDictionaryTermCount?: unknown;
 };
 
-type BulkMetadata = { generatedAt: string; deep?: boolean; duplicates?: number };
+type BulkMetadata = {
+  generatedAt: string;
+  deep?: boolean;
+  duplicates?: number;
+  collectedTotal?: number;
+  filter?: 'all' | 'inconclusive' | 'registered';
+};
 
 function buildCliLookupDocument(
   query: string,
@@ -111,6 +118,13 @@ function formatDiscoverJsonLines(candidates: DiscoverCandidate[], metadata: Disc
   return `${candidates.map((candidate) => JSON.stringify(discoverJsonItem(candidate, metadata))).join('\n')}\n`;
 }
 
+function formatDiscoverDomainList(candidates: DiscoverCandidate[]): string {
+  const domains = [...new Set(candidates.flatMap((candidate) => (
+    typeof candidate.domain === 'string' && candidate.domain ? [candidate.domain] : []
+  )))];
+  return domains.length ? `${domains.join('\n')}\n` : '';
+}
+
 function versionedResult(
   result: Readonly<object>,
   schema: string,
@@ -155,6 +169,7 @@ function bulkJsonItem(item: BulkLookupResult, metadata: BulkMetadata): UnknownRe
     isSubdomain: item.classified.isSubdomain,
     availability: result.availability,
     diagnostics: result.diagnostics,
+    dnsSummary: bulkDnsSummary(item),
     mode: metadata.deep ? 'deep' : 'fast',
   };
 }
@@ -164,7 +179,14 @@ function buildCliBulkDocument(items: BulkLookupResult[], metadata: BulkMetadata)
   return {
     schema: CLI_BULK_SCHEMA, version: CLI_BULK_SCHEMA_VERSION, generatedAt: metadata.generatedAt,
     mode: metadata.deep ? 'deep' : 'fast',
-    summary: { total: items.length, succeeded, failed: items.length - succeeded, duplicatesRemoved: metadata.duplicates || 0 },
+    filter: metadata.filter || 'all',
+    summary: {
+      collected: metadata.collectedTotal ?? items.length,
+      matched: items.length,
+      succeeded,
+      failed: items.length - succeeded,
+      duplicatesRemoved: metadata.duplicates || 0,
+    },
     results: items.map((item) => bulkJsonItem(item, metadata)),
   };
 }
@@ -182,6 +204,6 @@ export {
   buildCliBulkDocument, buildCliCompareDocument,
   buildCliCtSearchDocument, buildCliDiscoverDocument, buildCliHttpDocument,
   buildCliLookupDocument, buildCliPostureDocument, buildCliTlsDocument,
-  bulkJsonItem, discoverJsonItem, formatDiscoverJsonLines, formatJsonDocument, formatJsonLines,
+  bulkJsonItem, discoverJsonItem, formatDiscoverDomainList, formatDiscoverJsonLines, formatJsonDocument, formatJsonLines,
 };
 export type { BulkMetadata, DiscoverCandidate, DiscoverMetadata };

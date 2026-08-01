@@ -1,5 +1,8 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { Writable } from 'node:stream';
 
 import { parseCliArguments } from '../cli/arguments.mts';
@@ -14,6 +17,7 @@ import {
 import EXIT_CODES from '../cli/exit-codes.mts';
 import {
   buildCliDiscoverDocument,
+  formatDiscoverDomainList,
   formatDiscoverJsonLines,
 } from '../cli/formatters/json.mts';
 import {
@@ -112,6 +116,7 @@ describe('discover CLI argument parsing', () => {
       tldText: null,
       dictionarySource: null,
       familyText: null,
+      snapshotSource: null,
     });
   });
 
@@ -130,6 +135,7 @@ describe('discover CLI argument parsing', () => {
       tldText: 'com,net',
       dictionarySource: 'terms.txt',
       familyText: null,
+      snapshotSource: null,
     });
   });
 
@@ -147,6 +153,7 @@ describe('discover CLI argument parsing', () => {
       tldText: null,
       dictionarySource: 'terms.txt',
       familyText: 'pluralization,dictionary',
+      snapshotSource: null,
     });
   });
 
@@ -167,6 +174,7 @@ describe('discover CLI argument parsing', () => {
     assert.throws(() => parseCliArguments(['discover', 'x', '--preset', 'common', '--dictionary', 'terms.txt']), /requires the impersonation or all preset/);
     assert.throws(() => parseCliArguments(['discover', 'one', 'two']), /one brand label or domain/);
     assert.throws(() => parseCliArguments(['discover', 'x', '--json', '--quiet']), /cannot be combined/);
+    assert.throws(() => parseCliArguments(['discover', 'x', '--snapshot']), /requires one bounded/);
   });
 });
 
@@ -252,6 +260,11 @@ describe('discover output', () => {
     assert.ok(lines.every((item) => Array.isArray(item.mutationFamilies) && item.mutationFamilies.length === 0));
     assert.deepEqual(lines.map((item) => item.domain), ['candidate-0.test', 'candidate-1.test']);
     assert.equal(formatDiscoverJsonLines([], metadata), '');
+  });
+
+  test('domain-list output is newline-delimited and deduplicated', () => {
+    assert.equal(formatDiscoverDomainList([candidate(0), candidate(1), candidate(0)]), 'candidate-0.test\ncandidate-1.test\n');
+    assert.equal(formatDiscoverDomainList([]), '');
   });
 
   test('terminal display cap and mutation labels are explicit', () => {
@@ -481,5 +494,46 @@ describe('discover runner', () => {
     assert.equal(code, EXIT_CODES.LOOKUP_FAILED);
     assert.match(stderr.value(), /^Candidate generation failed: load failed /);
     assert.ok(stderr.value().length < 340);
+  });
+
+  test('local snapshots compare generated candidate sets without exposing dictionary terms', async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'whoisleuth-discovery-'));
+    const snapshot = path.join(directory, 'state.json');
+    try {
+      const firstStdout = capture();
+      const first = await runCli([
+        'discover', 'example.test', '--json', '--dictionary', 'terms.txt', '--snapshot', snapshot,
+      ], {
+        stdout: firstStdout.stream,
+        stderr: capture().stream,
+        now: () => '2026-07-14T00:00:00.000Z',
+        readDiscoveryDictionary: async () => 'invoice\n',
+        loadTyposquatGenerator: async () => fakeGenerator(() => generationResult({ candidates: [candidate(0)] })),
+      });
+      assert.equal(first, EXIT_CODES.SUCCESS);
+      const firstDocument = JSON.parse(firstStdout.value());
+      assert.equal(firstDocument.snapshot.baselineCreated, true);
+      assert.equal(JSON.stringify(firstDocument).includes('invoice'), false);
+
+      const secondStdout = capture();
+      const second = await runCli([
+        'discover', 'example.test', '--json', '--dictionary', 'terms.txt', '--snapshot', snapshot,
+      ], {
+        stdout: secondStdout.stream,
+        stderr: capture().stream,
+        now: () => '2026-07-15T00:00:00.000Z',
+        readDiscoveryDictionary: async () => 'invoice\n',
+        loadTyposquatGenerator: async () => fakeGenerator(() => generationResult({ candidates: [candidate(1)] })),
+      });
+      assert.equal(second, EXIT_CODES.SUCCESS);
+      const secondDocument = JSON.parse(secondStdout.value());
+      assert.deepEqual(secondDocument.snapshot.added, ['candidate-1.test']);
+      assert.deepEqual(secondDocument.snapshot.removed, ['candidate-0.test']);
+      const saved = JSON.parse(await readFile(snapshot, 'utf8'));
+      assert.deepEqual(saved.candidates, ['candidate-1.test']);
+      assert.equal(saved.schema, 'whoisleuth.cli.discovery-snapshot');
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
   });
 });

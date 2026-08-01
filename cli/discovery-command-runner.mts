@@ -1,4 +1,5 @@
 import { createReadStream } from 'node:fs';
+import { createHash } from 'node:crypto';
 
 import type { CliArguments } from './arguments.mts';
 import {
@@ -11,9 +12,11 @@ import { boundedCliErrorMessage, CliUsageError } from './errors.mts';
 import EXIT_CODES from './exit-codes.mts';
 import {
   buildCliDiscoverDocument,
+  formatDiscoverDomainList,
   formatDiscoverJsonLines,
   formatJsonDocument,
 } from './formatters/json.mts';
+import { updateDiscoverySnapshot } from './discovery-snapshot.mts';
 import { formatTerminalDiscover } from './formatters/terminal.mts';
 import type { CliCommandContext, CliDependencies } from './runner-types.mts';
 
@@ -87,11 +90,35 @@ async function runDiscoveryCommand(
     dictionaryTermCount: normalizedDictionary.values.length,
     rejectedDictionaryTermCount: normalizedDictionary.rejectedCount,
   };
-  const document = buildCliDiscoverDocument(seed, result, metadata);
+  const snapshot = args.snapshotSource
+    ? await updateDiscoverySnapshot(
+        args.snapshotSource,
+        result.candidates.map((candidate) => candidate.domain),
+        {
+          seed,
+          preset: args.preset,
+          keyboardLayout: args.keyboardLayout,
+          tlds,
+          mutationFamilies,
+          dictionaryDigestSha256: dictionaryText
+            ? createHash('sha256').update(dictionaryText).digest('hex')
+            : null,
+        },
+        metadata.generatedAt,
+      )
+    : null;
+  const baseDocument = buildCliDiscoverDocument(seed, result, metadata);
+  const document = snapshot ? { ...baseDocument, snapshot } : baseDocument;
   if (!args.quiet) {
     if (args.output === 'json') context.writeStdout(formatJsonDocument(document));
     else if (args.output === 'jsonl') context.writeStdout(formatDiscoverJsonLines(result.candidates, metadata));
+    else if (args.output === 'domains') context.writeStdout(formatDiscoverDomainList(result.candidates));
     else context.writeStdout(context.terminal(formatTerminalDiscover(document, generator.MUTATION_LABELS), args.color));
+  }
+  if (snapshot && ['domains', 'jsonl'].includes(args.output)) {
+    context.writeStderr(
+      `Discovery snapshot: ${snapshot.baselineCreated ? 'baseline created' : `${snapshot.added.length} added, ${snapshot.removed.length} removed`} (${snapshot.currentCandidateCount} current).\n`,
+    );
   }
   return EXIT_CODES.SUCCESS;
 }

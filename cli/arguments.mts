@@ -50,9 +50,9 @@ type CliAction =
   | ({ action: 'manual' })
   | ({ action: 'doctor'; network: boolean; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'lookup'; query: string | null; output: 'terminal' | 'json' | 'markdown' | 'html'; deep: boolean; detail: LookupDetail; strictExit: boolean; events: boolean } & TerminalOptions)
-  | ({ action: 'bulk'; source: string | null; output: 'terminal' | 'json' | 'jsonl'; deep: boolean; concurrency: number; checkpoint: string | null; resume: boolean; events: boolean } & TerminalOptions)
+  | ({ action: 'bulk'; source: string | null; output: 'terminal' | 'json' | 'jsonl' | 'csv' | 'domains'; deep: boolean; concurrency: number; checkpoint: string | null; resume: boolean; events: boolean; filter: 'all' | 'registered' | 'inconclusive' } & TerminalOptions)
   | ({ action: 'ct-search'; keyword: string | null; output: 'terminal' | 'json' } & TerminalOptions)
-  | ({ action: 'discover'; seed: string | null; output: 'terminal' | 'json' | 'jsonl'; preset: 'common' | 'impersonation' | 'all' | 'custom'; keyboardLayout: 'qwerty' | 'azerty' | 'qwertz' | 'all'; tldText: string | null; dictionarySource: string | null; familyText: string | null } & TerminalOptions)
+  | ({ action: 'discover'; seed: string | null; output: 'terminal' | 'json' | 'jsonl' | 'domains'; preset: 'common' | 'impersonation' | 'all' | 'custom'; keyboardLayout: 'qwerty' | 'azerty' | 'qwertz' | 'all'; tldText: string | null; dictionarySource: string | null; familyText: string | null; snapshotSource: string | null } & TerminalOptions)
   | ({ action: 'posture'; domain: string | null; output: 'terminal' | 'json'; selectorText: string | null; retiredSelectorText: string | null; mailProfile: 'defensive_no_mail' | 'parked' | 'standard' } & TerminalOptions)
   | ({ action: 'http'; domain: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'tls'; hostname: string | null; output: 'terminal' | 'json' } & TerminalOptions)
@@ -242,7 +242,7 @@ function parseDoctorArguments(argv: string[]): Extract<CliArguments, { action: '
 
 function parseBulkArguments(argv: string[]): Extract<CliArguments, { action: 'bulk' }> {
   let source: string | null = null;
-  let output: 'terminal' | 'json' | 'jsonl' = 'terminal';
+  let output: 'terminal' | 'json' | 'jsonl' | 'csv' | 'domains' = 'terminal';
   let deep = false;
   let scanMode: 'fast' | 'deep' | null = null;
   let quiet = false;
@@ -251,12 +251,13 @@ function parseBulkArguments(argv: string[]): Extract<CliArguments, { action: 'bu
   let checkpoint: string | null = null;
   let resume = false;
   let events = false;
+  let filter: 'all' | 'registered' | 'inconclusive' = 'all';
   for (let index = 0; index < argv.length; index++) {
     const argument = argv[index];
     if (argument === undefined) break;
-    if (argument === '--json' || argument === '--jsonl') {
+    if (argument === '--json' || argument === '--jsonl' || argument === '--csv' || argument === '--domains') {
       if (output !== 'terminal') throw new CliUsageError('Choose only one output format.');
-      output = argument === '--json' ? 'json' : 'jsonl';
+      output = argument === '--json' ? 'json' : argument === '--jsonl' ? 'jsonl' : argument === '--csv' ? 'csv' : 'domains';
     } else if (argument === '--deep' || argument === '--fast') {
       if (scanMode) throw new CliUsageError('--fast and --deep are mutually exclusive and may be supplied only once.');
       scanMode = argument === '--deep' ? 'deep' : 'fast';
@@ -278,6 +279,9 @@ function parseBulkArguments(argv: string[]): Extract<CliArguments, { action: 'bu
     } else if (argument === '--events') {
       if (events) throw new CliUsageError('--events may be supplied only once.');
       events = true;
+    } else if (argument === '--registered-only' || argument === '--inconclusive-only') {
+      if (filter !== 'all') throw new CliUsageError('--registered-only and --inconclusive-only are mutually exclusive and may be supplied only once.');
+      filter = argument === '--registered-only' ? 'registered' : 'inconclusive';
     } else if (argument === '--quiet') quiet = true;
     else if (argument === '--no-color') color = false;
     else if (argument.startsWith('-')) throw new CliUsageError(`Unknown option "${argument}".`);
@@ -290,7 +294,7 @@ function parseBulkArguments(argv: string[]): Extract<CliArguments, { action: 'bu
   if (concurrency !== null && concurrency > maximum) {
     throw new CliUsageError(`--concurrency is capped at ${maximum} in ${deep ? 'deep' : 'fast'} bulk mode.`);
   }
-  return { action: 'bulk', source, output, deep, quiet, color, concurrency: concurrency ?? (deep ? 2 : 4), checkpoint, resume, events };
+  return { action: 'bulk', source, output, deep, quiet, color, concurrency: concurrency ?? (deep ? 2 : 4), checkpoint, resume, events, filter };
 }
 
 function parseCtSearchArguments(argv: string[]): Extract<CliArguments, { action: 'ct-search' }> {
@@ -314,7 +318,7 @@ function parseCtSearchArguments(argv: string[]): Extract<CliArguments, { action:
 
 function parseDiscoverArguments(argv: string[]): Extract<CliArguments, { action: 'discover' }> {
   let seed: string | null = null;
-  let output: 'terminal' | 'json' | 'jsonl' = 'terminal';
+  let output: 'terminal' | 'json' | 'jsonl' | 'domains' = 'terminal';
   let quiet = false;
   let color = true;
   let preset: 'common' | 'impersonation' | 'all' | 'custom' = 'all';
@@ -322,14 +326,15 @@ function parseDiscoverArguments(argv: string[]): Extract<CliArguments, { action:
   let tldText: string | null = null;
   let dictionarySource: string | null = null;
   let familyText: string | null = null;
+  let snapshotSource: string | null = null;
   let presetSet = false;
   let keyboardSet = false;
   for (let index = 0; index < argv.length; index++) {
     const argument = argv[index];
     if (argument === undefined) break;
-    if (argument === '--json' || argument === '--jsonl') {
+    if (argument === '--json' || argument === '--jsonl' || argument === '--domains') {
       if (output !== 'terminal') throw new CliUsageError('Choose only one output format.');
-      output = argument === '--json' ? 'json' : 'jsonl';
+      output = argument === '--json' ? 'json' : argument === '--jsonl' ? 'jsonl' : 'domains';
     } else if (argument === '--preset') {
       if (presetSet) throw new CliUsageError('--preset may be supplied only once.');
       if (familyText !== null) throw new CliUsageError('--preset cannot be combined with --families.');
@@ -364,6 +369,11 @@ function parseDiscoverArguments(argv: string[]): Extract<CliArguments, { action:
       if (!value || value.startsWith('-')) throw new CliUsageError('--families requires a comma-separated list of mutation family IDs.');
       familyText = value;
       preset = 'custom';
+    } else if (argument === '--snapshot') {
+      if (snapshotSource !== null) throw new CliUsageError('--snapshot may be supplied only once.');
+      const value = argv[++index];
+      if (!value || value.startsWith('-')) throw new CliUsageError('--snapshot requires one bounded local state file path.');
+      snapshotSource = value;
     } else if (argument === '--quiet') quiet = true;
     else if (argument === '--no-color') color = false;
     else if (argument.startsWith('-')) throw new CliUsageError(`Unknown option "${argument}".`);
@@ -374,7 +384,7 @@ function parseDiscoverArguments(argv: string[]): Extract<CliArguments, { action:
   if (dictionarySource && preset === 'common') {
     throw new CliUsageError('--dictionary requires the impersonation or all preset.');
   }
-  return { action: 'discover', seed, output, quiet, color, preset, keyboardLayout, tldText, dictionarySource, familyText };
+  return { action: 'discover', seed, output, quiet, color, preset, keyboardLayout, tldText, dictionarySource, familyText, snapshotSource };
 }
 
 function parsePostureArguments(argv: string[]): Extract<CliArguments, { action: 'posture' }> {

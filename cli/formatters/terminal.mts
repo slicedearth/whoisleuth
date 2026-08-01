@@ -20,7 +20,11 @@ type TerminalBulkItem = {
   error?: unknown;
   result?: unknown;
 };
-type TerminalBulkMetadata = { duplicates?: number };
+type TerminalBulkMetadata = {
+  collectedTotal?: number;
+  duplicates?: number;
+  filter?: 'all' | 'inconclusive' | 'registered';
+};
 type LookupTerminalDetail = 'summary' | 'standard' | 'verbose';
 
 function safeTerminalValue(value: unknown, fallback = '—'): string {
@@ -319,7 +323,11 @@ function formatTerminalBulk(items: TerminalBulkItem[], metadata: TerminalBulkMet
   });
   const succeeded = items.filter((item) => item.ok).length;
   lines.push('');
-  lines.push(`${items.length} queries · ${succeeded} succeeded · ${items.length - succeeded} failed · ${metadata.duplicates || 0} duplicates removed`);
+  const collected = metadata.collectedTotal ?? items.length;
+  const filter = metadata.filter && metadata.filter !== 'all'
+    ? ` · ${items.length} matched ${metadata.filter}`
+    : '';
+  lines.push(`${collected} collected${filter} · ${succeeded} succeeded · ${items.length - succeeded} failed in output · ${metadata.duplicates || 0} duplicates removed`);
   return `${lines.join('\n')}\n`;
 }
 
@@ -360,6 +368,7 @@ function formatTerminalDiscover(document: TerminalRecord, mutationLabels: Mutati
   const candidates = Array.isArray(document.candidates) ? document.candidates : [];
   const visible = candidates.slice(0, MAX_DISCOVER_TERMINAL_CANDIDATES);
   const advanced = terminalRecord(document.advancedConfusable);
+  const snapshot = terminalRecord(document.snapshot);
   const lines = [
     `Seed           ${safeTerminalValue(document.seed)}`,
     `Preset         ${safeTerminalValue(document.preset)}`,
@@ -372,6 +381,11 @@ function formatTerminalDiscover(document: TerminalRecord, mutationLabels: Mutati
   ];
   if (Object.keys(advanced).length) {
     lines.push(`Advanced IDN   ${safeTerminalValue(advanced.generated, '0')} generated, ${safeTerminalValue(advanced.omittedByPolicy, '0')} policy-omitted, ${safeTerminalValue(advanced.omittedByBudget, '0')} budget-omitted`);
+  }
+  if (Object.keys(snapshot).length) {
+    lines.push(
+      `Snapshot       ${snapshot.baselineCreated ? 'Baseline created' : `${safeTerminalValue(Array.isArray(snapshot.added) ? snapshot.added.length : 0, '0')} added · ${safeTerminalValue(Array.isArray(snapshot.removed) ? snapshot.removed.length : 0, '0')} removed`}`,
+    );
   }
   lines.push('');
   for (const value of visible) {

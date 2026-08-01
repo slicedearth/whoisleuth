@@ -3,9 +3,9 @@ import { CLI_COMMANDS, type CompletionShell } from './arguments.mts';
 const COMMON_OPTIONS = Object.freeze(['--help', '--output', '--force']);
 const OPTIONS_BY_COMMAND: Readonly<Record<string, readonly string[]>> = Object.freeze({
   lookup: ['--json', '--markdown', '--html', '--fast', '--deep', '--summary', '--verbose', '--strict-exit', '--events', '--quiet', '--no-color'],
-  bulk: ['--json', '--jsonl', '--fast', '--deep', '--concurrency', '--checkpoint', '--resume', '--events', '--quiet', '--no-color'],
+  bulk: ['--json', '--jsonl', '--csv', '--domains', '--registered-only', '--inconclusive-only', '--fast', '--deep', '--concurrency', '--checkpoint', '--resume', '--events', '--quiet', '--no-color'],
   'ct-search': ['--json', '--quiet', '--no-color'],
-  discover: ['--tlds', '--preset', '--families', '--keyboard', '--dictionary', '--json', '--jsonl', '--quiet', '--no-color'],
+  discover: ['--tlds', '--preset', '--families', '--keyboard', '--dictionary', '--snapshot', '--json', '--jsonl', '--domains', '--quiet', '--no-color'],
   posture: ['--selectors', '--retired-selectors', '--mail-profile', '--json', '--quiet', '--no-color'],
   http: ['--json', '--quiet', '--no-color'],
   tls: ['--json', '--quiet', '--no-color'],
@@ -61,6 +61,7 @@ const FILE_OPTIONS = Object.freeze([
   '--passphrase-file',
   '--private-key-file',
   '--public-key-file',
+  '--snapshot',
 ]);
 
 const TEXT_OPTIONS = Object.freeze([

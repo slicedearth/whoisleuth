@@ -128,9 +128,9 @@ const COMMAND_USAGE: Readonly<Record<CliCommand, string>> = Object.freeze({
   doctor: 'whoisleuth doctor [--network] [--json] [--quiet] [--no-color]',
   manual: 'whoisleuth manual',
   lookup: 'whoisleuth lookup <domain|IP|ASN> [--json|--markdown|--html] [--fast|--deep] [--summary|--verbose] [--strict-exit] [--events] [--quiet] [--no-color]',
-  bulk: 'whoisleuth bulk [file] [--json|--jsonl] [--fast|--deep] [--concurrency <1-8>] [--checkpoint <file> [--resume]] [--events]',
+  bulk: 'whoisleuth bulk [file] [--json|--jsonl|--csv|--domains] [--registered-only|--inconclusive-only] [--fast|--deep] [--concurrency <1-8>] [--checkpoint <file> [--resume]] [--events]',
   'ct-search': 'whoisleuth ct-search <keyword> [--json] [--quiet] [--no-color]',
-  discover: 'whoisleuth discover <brand|domain> [--tlds <list>] [--preset <name>|--families <ids>] [--keyboard <layout>] [--dictionary <file>] [--json|--jsonl]',
+  discover: 'whoisleuth discover <brand|domain> [--tlds <list>] [--preset <name>|--families <ids>] [--keyboard <layout>] [--dictionary <file>] [--snapshot <file>] [--json|--jsonl|--domains]',
   posture: 'whoisleuth posture <domain> [--selectors <list>] [--retired-selectors <list>] [--mail-profile <profile>] [--json] [--quiet] [--no-color]',
   http: 'whoisleuth http <domain> [--json] [--quiet] [--no-color]',
   tls: 'whoisleuth tls <hostname> [--json] [--quiet] [--no-color]',
@@ -170,7 +170,7 @@ const COMMAND_DETAILS: Readonly<Record<CliCommand, Readonly<{ description: strin
   bulk: {
     description: 'Triage newline-delimited domains, IPs, or ASNs with bounded concurrency.',
     example: 'cat domains.txt | whoisleuth bulk --jsonl',
-    boundary: 'Fast and deep jobs use separate concurrency ceilings. Each target retains its own explicit source and failure state.',
+    boundary: 'Fast and deep jobs use separate concurrency ceilings. Filters affect output only; collection failures and inconclusive authority states remain explicit in JSON, JSONL, and CSV.',
   },
   'ct-search': {
     description: 'Search certificate-transparency observations for one bounded keyword.',
@@ -180,7 +180,7 @@ const COMMAND_DETAILS: Readonly<Record<CliCommand, Readonly<{ description: strin
   discover: {
     description: 'Generate bounded lookalike-domain candidates from local mutation rules.',
     example: 'whoisleuth discover example.test --preset common --jsonl',
-    boundary: 'Generation is offline. Candidates are leads only and are not resolved, registered, or classified as malicious.',
+    boundary: 'Generation and optional local snapshot comparison are offline. Candidates are leads only and are not resolved, registered, or classified as malicious.',
   },
   posture: {
     description: 'Review bounded DNS mail, delegation, and domain-control posture.',
