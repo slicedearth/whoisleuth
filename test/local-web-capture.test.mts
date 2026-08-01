@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, test } from 'node:test';
@@ -12,6 +12,12 @@ import {
   captureRenderedPage,
   parseCaptureArguments,
 } from '../packages/web-capture/capture.mts';
+import {
+  WEB_CAPTURE_COMPARISON_SCHEMA,
+  compareRenderedCaptures,
+  formatRenderedCaptureComparison,
+  parseCaptureCompareArguments,
+} from '../packages/web-capture/compare.mts';
 import { parseWebCaptureManifest } from '../frontend/src/lib/analysis/web-capture-import.ts';
 
 const PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
@@ -22,7 +28,7 @@ function pngChunk(type: string, data: Buffer) {
   return Buffer.concat([length, Buffer.from(type, 'ascii'), data, Buffer.alloc(4)]);
 }
 
-function patternedPng(width = 64, height = 64) {
+function patternedPng(width = 64, height = 64, flat = false) {
   const header = Buffer.alloc(13);
   header.writeUInt32BE(width, 0);
   header.writeUInt32BE(height, 4);
@@ -33,7 +39,7 @@ function patternedPng(width = 64, height = 64) {
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
       const offset = y * (stride + 1) + 1 + x * 4;
-      const value = (x * 91 + y * 151) % 256;
+      const value = flat ? 128 : (x * 91 + y * 151) % 256;
       raw[offset] = value;
       raw[offset + 1] = value;
       raw[offset + 2] = value;
@@ -56,23 +62,32 @@ function fakeRoute(url: string) {
   } as unknown as Route;
 }
 
-function fakeBrowser() {
+function fakeBrowser(options: {
+  hostname?: string;
+  title?: string;
+  finalUrl?: string;
+  structure?: string;
+  visibleText?: string;
+  elementCount?: number;
+  flatScreenshot?: boolean;
+} = {}) {
   let routeHandler: ((route: Route) => Promise<void>) | null = null;
   const page = {
     on: () => {},
     goto: async () => {
-      await routeHandler?.(fakeRoute('https://example.test/entry?discard=this'));
+      await routeHandler?.(fakeRoute(`https://${options.hostname ?? 'example.test'}/entry?discard=this`));
       await routeHandler?.(fakeRoute('https://static.example.test/asset.js?secret=discarded'));
     },
     waitForTimeout: async () => {},
-    url: () => 'https://example.test/final?private=value',
-    title: async () => ' Example sign in ',
+    url: () => options.finalUrl ?? `https://${options.hostname ?? 'example.test'}/final?private=value`,
+    title: async () => options.title ?? ' Example sign in ',
     evaluate: async () => ({
-      structure: 'html body main form input button', visibleText: 'private rendered page text',
+      structure: options.structure ?? 'html body main form input button',
+      visibleText: options.visibleText ?? 'private rendered page text',
       structureTruncated: false, textTruncated: false,
-      elementCount: 6, formCount: 1, inputCount: 2, scriptCount: 0, imageCount: 0,
+      elementCount: options.elementCount ?? 6, formCount: 1, inputCount: 2, scriptCount: 0, imageCount: 0,
     }),
-    screenshot: async () => patternedPng(),
+    screenshot: async () => patternedPng(64, 64, options.flatScreenshot === true),
   };
   const context = {
     route: async (_pattern: string, handler: (route: Route) => Promise<void>) => { routeHandler = handler; },
@@ -127,6 +142,89 @@ describe('optional local rendered capture package', () => {
       await assert.rejects(() => captureRenderedPage({
         targetUrl: 'https://example.test/', outputDirectory: destination, timeoutMs: 5000,
       }, { launchBrowser: async () => fakeBrowser(), resolveAddresses: async () => [] }), /EEXIST|ENOTEMPTY|exist/u);
+    } finally {
+      await rm(parent, { recursive: true, force: true });
+    }
+  });
+
+  test('compares two verified local captures offline without exposing paths or retained page text', async () => {
+    const parent = await mkdtemp(path.join(tmpdir(), 'whoisleuth-capture-compare-test-'));
+    const leftDirectory = path.join(parent, 'left');
+    const rightDirectory = path.join(parent, 'right');
+    try {
+      await captureRenderedPage({
+        targetUrl: 'https://left.example.test/', outputDirectory: leftDirectory, timeoutMs: 5000,
+      }, {
+        launchBrowser: async () => fakeBrowser({ hostname: 'left.example.test', title: 'Account', visibleText: 'left private text' }),
+        resolveAddresses: async () => [{ address: '192.0.2.1', family: 4 }],
+        now: () => '2026-08-01T00:00:00.000Z',
+      });
+      await captureRenderedPage({
+        targetUrl: 'https://right.example.test/', outputDirectory: rightDirectory, timeoutMs: 5000,
+      }, {
+        launchBrowser: async () => fakeBrowser({
+          hostname: 'right.example.test', title: 'Account', visibleText: 'right private text',
+          structure: 'html body main section form input button', elementCount: 7,
+        }),
+        resolveAddresses: async () => [{ address: '192.0.2.2', family: 4 }],
+        now: () => '2026-08-01T00:05:00.000Z',
+      });
+      const leftManifest = path.join(leftDirectory, 'manifest.json');
+      const rightManifest = path.join(rightDirectory, 'manifest.json');
+      assert.deepEqual(parseCaptureCompareArguments([leftManifest, rightManifest, '--json']), {
+        leftManifest, rightManifest, output: 'json',
+      });
+      const comparison = await compareRenderedCaptures(leftManifest, rightManifest, '2026-08-01T00:10:00.000Z');
+      assert.equal(comparison.schema, WEB_CAPTURE_COMPARISON_SCHEMA);
+      assert.equal(comparison.screenshot.state, 'same');
+      assert.equal(comparison.renderedDom.structure.state, 'different');
+      assert.equal(comparison.renderedDom.visibleText.state, 'different');
+      assert.equal(comparison.page.title.state, 'same');
+      assert.equal(comparison.page.requestDomains.state, 'overlap');
+      assert.deepEqual(comparison.page.requestDomains.shared, ['static.example.test']);
+      assert.equal(comparison.renderedDom.counts.elements.delta, 1);
+      assert.deepEqual(comparison.integrity.left, { screenshot: true, perceptualHash: true, domDigest: true });
+      assert.match(formatRenderedCaptureComparison(comparison), /Rendered capture comparison/u);
+      assert.doesNotMatch(JSON.stringify(comparison), /private text|capture-compare-test|manifest\.json/u);
+
+      const originalRightManifest = await readFile(rightManifest, 'utf8');
+      const unsafeManifest = JSON.parse(originalRightManifest);
+      unsafeManifest.captures[0].artifacts[1].fileName = '../dom-digest.json';
+      await writeFile(rightManifest, `${JSON.stringify(unsafeManifest)}\n`);
+      await assert.rejects(() => compareRenderedCaptures(leftManifest, rightManifest), /plain file name/u);
+      await writeFile(rightManifest, originalRightManifest);
+      await writeFile(path.join(rightDirectory, 'dom-digest.json'), '{}\n');
+      await assert.rejects(() => compareRenderedCaptures(leftManifest, rightManifest), /size does not match|integrity verification/u);
+    } finally {
+      await rm(parent, { recursive: true, force: true });
+    }
+  });
+
+  test('keeps an unavailable screenshot perceptual hash distinct from a visual difference', async () => {
+    const parent = await mkdtemp(path.join(tmpdir(), 'whoisleuth-capture-flat-test-'));
+    const leftDirectory = path.join(parent, 'left');
+    const rightDirectory = path.join(parent, 'right');
+    try {
+      const captures: Array<readonly [string, string]> = [
+        ['flat-left.example.test', leftDirectory],
+        ['flat-right.example.test', rightDirectory],
+      ];
+      for (const [domain, destination] of captures) {
+        await captureRenderedPage({ targetUrl: `https://${domain}/`, outputDirectory: destination, timeoutMs: 5000 }, {
+          launchBrowser: async () => fakeBrowser({ hostname: domain, flatScreenshot: true }),
+          resolveAddresses: async () => [{ address: '192.0.2.1', family: 4 }],
+          now: () => '2026-08-01T00:00:00.000Z',
+        });
+      }
+      const comparison = await compareRenderedCaptures(
+        path.join(leftDirectory, 'manifest.json'),
+        path.join(rightDirectory, 'manifest.json'),
+      );
+      assert.equal(comparison.screenshot.state, 'same');
+      assert.equal(comparison.screenshot.method, 'Exact SHA-256 equality');
+      assert.equal(comparison.screenshot.hammingDistance, null);
+      assert.equal(comparison.screenshot.agreementPercent, null);
+      assert.equal(comparison.integrity.left.perceptualHash, true);
     } finally {
       await rm(parent, { recursive: true, force: true });
     }

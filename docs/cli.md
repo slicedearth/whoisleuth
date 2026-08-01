@@ -713,6 +713,7 @@ authorization flag and one new output directory:
 
 ```bash
 npm run capture:local -- https://example.test --output-dir ./capture-example --authorize-rendered-capture
+npm run capture:compare -- ./official/manifest.json ./candidate/manifest.json --json
 ```
 
 It writes a fixed 1024x768 PNG, screenshot SHA-256 and perceptual dHash, a DOM
@@ -727,6 +728,15 @@ no request path, query, headers, bodies, cookies, credentials, DOM markup, or
 page text. The browser connection is not pinned to the address checked before
 each hostname's first request, so DNS rebinding remains a residual risk. Use a
 disposable network-restricted environment for untrusted targets.
+
+The separate offline comparison command accepts two selected version-2 local
+capture manifests. It first verifies each referenced screenshot and DOM digest
+against its declared size, SHA-256, and screenshot perceptual hash, then
+compares screenshot distance, exact rendered DOM and visible-text digests,
+bounded element counts, page identity, technologies, and request-domain sets.
+It does not recrawl either target, reveal the input paths, or collapse the
+independent components into a similarity or maliciousness score. A missing
+perceptual hash remains unavailable rather than becoming a visual difference.
 
 ## Lookup evidence export
 

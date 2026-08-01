@@ -693,6 +693,18 @@ default (see the README), so many lookups return no personal data at all.
   signature time, signature, and public key; WHOISleuth does not generate,
   store, recover, rotate, publish, or establish trust in signing keys. These
   commands make no network request and do not upload input.
+- **Optional local rendered-capture comparison**: the separate repo-local
+  capture package can compare two explicitly selected version-2 manifests
+  without contacting either target. It verifies each referenced screenshot and
+  DOM digest against its declared size and SHA-256, recomputes the screenshot
+  perceptual hash, and reports independent screenshot, rendered DOM,
+  visible-text, page-identity, request-domain, technology, and element-count
+  relationships. Input paths, DOM markup, page text, request paths, queries,
+  headers, bodies, cookies, and credentials are not copied into the comparison
+  output. Missing perceptual evidence remains unavailable, partial captures
+  remain partial, and no combined similarity or maliciousness score is
+  produced. The local artifact files remain under the operator's retention and
+  deletion control.
 - **CLI output, checkpoints, and progress**: every CLI command can deliberately
   write its bounded output to a private local file. Existing files are refused
   unless replacement is explicit. Bulk checkpoints are separate private local
