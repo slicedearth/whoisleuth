@@ -10,6 +10,7 @@ import { fetchRdapRecord, fetchRegistrarRdapRecord } from './rdap.mts';
 import { buildWhoisChain, parseWhoisChain } from './whois.mts';
 import { OPERATION_BUDGET_ERROR_CODE } from './operation-budget.mts';
 import { checkDomainAvailability } from './availability.mts';
+import { abortable } from './abort.mts';
 import {
   collectReverseDnsIntelligence,
   failedReverseDnsIntelligence,
@@ -197,19 +198,6 @@ function createLookupTimingTracker(
       };
     },
   };
-}
-
-function abortable<T>(operation: () => Promise<T> | T, signal?: AbortSignal): Promise<T> {
-  if (!signal) return Promise.resolve().then(operation);
-  if (signal.aborted) return Promise.reject(signal.reason || new DOMException('Aborted', 'AbortError'));
-  return new Promise<T>((resolve, reject) => {
-    const aborted = () => reject(signal.reason || new DOMException('Aborted', 'AbortError'));
-    signal.addEventListener('abort', aborted, { once: true });
-    Promise.resolve()
-      .then(operation)
-      .then(resolve, reject)
-      .finally(() => signal.removeEventListener('abort', aborted));
-  });
 }
 
 async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOptions = {}) {

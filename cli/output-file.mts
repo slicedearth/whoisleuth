@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { unlinkSync } from 'node:fs';
 import { link, open, rename, unlink } from 'node:fs/promises';
 import { basename, dirname, join, resolve } from 'node:path';
 
@@ -7,6 +8,7 @@ import type { WritableTerminal } from './terminal-presentation.mts';
 
 export const MAX_CLI_OUTPUT_BYTES = 32 * 1024 * 1024;
 export const MAX_CLI_OUTPUT_PATH_LENGTH = 4096;
+const pendingOutputFiles = new Set<string>();
 
 type BufferedOutput = Readonly<{
   stream: WritableTerminal;
@@ -44,7 +46,11 @@ function createBufferedOutput(): BufferedOutput {
   });
 }
 
-async function writePrivateFile(pathValue: unknown, content: string, options: { force?: boolean } = {}): Promise<string> {
+async function writePrivateFile(
+  pathValue: unknown,
+  content: string,
+  options: { force?: boolean; existingFileMessage?: string } = {},
+): Promise<string> {
   const target = safeOutputPath(pathValue);
   if (Buffer.byteLength(content, 'utf8') > MAX_CLI_OUTPUT_BYTES) {
     throw new CliUsageError(`Generated output is limited to ${MAX_CLI_OUTPUT_BYTES} bytes.`);
@@ -55,6 +61,7 @@ async function writePrivateFile(pathValue: unknown, content: string, options: { 
   try {
     const handle = await open(temporary, 'wx', 0o600);
     temporaryCreated = true;
+    pendingOutputFiles.add(temporary);
     try {
       await handle.writeFile(content, { encoding: 'utf8' });
       await handle.sync();
@@ -70,7 +77,7 @@ async function writePrivateFile(pathValue: unknown, content: string, options: { 
       } catch (error) {
         const code = error && typeof error === 'object' && 'code' in error ? error.code : null;
         if (code === 'EEXIST') {
-          throw new CliUsageError(`Output file already exists: ${target}. Use --force to replace it.`);
+          throw new CliUsageError(options.existingFileMessage || `Output file already exists: ${target}. Use --force to replace it.`);
         }
         throw error;
       }
@@ -80,8 +87,22 @@ async function writePrivateFile(pathValue: unknown, content: string, options: { 
     return target;
   } finally {
     if (temporaryCreated) await unlink(temporary).catch(() => {});
+    pendingOutputFiles.delete(temporary);
   }
 }
 
-export { createBufferedOutput, safeOutputPath, writePrivateFile };
+function cleanupPendingOutputFilesSync(): void {
+  for (const path of pendingOutputFiles) {
+    try {
+      unlinkSync(path);
+    } catch {
+      // A second interrupt is an emergency exit. Best-effort cleanup must not
+      // delay it or replace the analyst-requested exit status.
+    } finally {
+      pendingOutputFiles.delete(path);
+    }
+  }
+}
+
+export { cleanupPendingOutputFilesSync, createBufferedOutput, safeOutputPath, writePrivateFile };
 export type { BufferedOutput };

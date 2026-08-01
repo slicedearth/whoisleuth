@@ -1,4 +1,5 @@
 import { Buffer } from 'node:buffer';
+import { abortable } from '../lib/abort.mts';
 import { CliUsageError } from './arguments.mts';
 import type { ClassifiedQuery } from '../lib/classify.mts';
 
@@ -101,16 +102,6 @@ function boundedLookupError(error: unknown): string {
     .slice(0, 300) || 'Lookup failed';
 }
 
-function abortable<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
-  if (!signal) return promise;
-  if (signal.aborted) return Promise.reject(signal.reason || new DOMException('Aborted', 'AbortError'));
-  return new Promise<T>((resolve, reject) => {
-    const aborted = () => reject(signal.reason || new DOMException('Aborted', 'AbortError'));
-    signal.addEventListener('abort', aborted, { once: true });
-    promise.then(resolve, reject).finally(() => signal.removeEventListener('abort', aborted));
-  });
-}
-
 async function runBulkLookups(queries: string[], options: BulkLookupOptions = {}): Promise<BulkLookupResult[]> {
   const classify = options.classifyQuery;
   const executeLookup = options.runUnifiedLookup;
@@ -160,7 +151,7 @@ async function runBulkLookups(queries: string[], options: BulkLookupOptions = {}
           }));
           lookupPromises.set(lookupKey, lookupPromise);
         }
-        const result = await abortable(lookupPromise, options.signal);
+        const result = await abortable(() => lookupPromise, options.signal);
         const item: BulkLookupResult = { index, query, ok: true, classified, result };
         results[index] = item;
         notify(item);

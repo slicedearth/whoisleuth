@@ -3,6 +3,7 @@ import { createReadStream } from 'node:fs';
 import { createRequire } from 'node:module';
 
 import { fetchHomepage } from '../lib/availability.mts';
+import { abortable } from '../lib/abort.mts';
 import { classifyQuery } from '../lib/classify.mts';
 import type { ClassifiedQuery } from '../lib/classify.mts';
 import { searchCertificateTransparency } from '../lib/ct-search.mts';
@@ -390,26 +391,17 @@ function formatForTerminal(
   return presentTerminalOutput(value, terminalPresentation(stream, color, environment));
 }
 
-function cancellationError(signal?: AbortSignal): unknown {
-  return signal?.reason || new DOMException('Aborted', 'AbortError');
-}
-
 function isCancellation(error: unknown, signal?: AbortSignal): boolean {
   return signal?.aborted === true
     || Boolean(error && typeof error === 'object' && 'name' in error && error.name === 'AbortError');
 }
 
-function abortable<T>(operation: () => T | Promise<T>, signal?: AbortSignal): Promise<T> {
-  if (!signal) return Promise.resolve().then(operation);
-  if (signal.aborted) return Promise.reject(cancellationError(signal));
-  return new Promise<T>((resolve, reject) => {
-    const aborted = () => reject(cancellationError(signal));
-    signal.addEventListener('abort', aborted, { once: true });
-    Promise.resolve()
-      .then(operation)
-      .then(resolve, reject)
-      .finally(() => signal.removeEventListener('abort', aborted));
-  });
+function usageEventReason(error: unknown): string {
+  const message = boundedCliErrorMessage(error, 'Invalid command input').toLowerCase();
+  if (message.includes('could not read')) return 'input_unavailable';
+  if (message.includes('cannot be combined') || message.includes('mutually exclusive')) return 'conflicting_options';
+  if (message.includes('requires') || message.includes('did not contain')) return 'missing_input';
+  return 'invalid_input';
 }
 
 async function runParsedCli(args: CliArguments, dependencies: CliDependencies = {}): Promise<number> {
@@ -1002,7 +994,12 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
       return EXIT_CODES.CANCELLED;
     }
     if (error instanceof CliUsageError) {
-      eventProgress?.emit({ event: 'failed', state: 'usage', exitCode: EXIT_CODES.USAGE });
+      eventProgress?.emit({
+        event: 'failed',
+        state: 'usage',
+        reason: usageEventReason(error),
+        exitCode: EXIT_CODES.USAGE,
+      });
       if (!eventProgress?.enabled) write(stderr, `Usage error: ${boundedCliErrorMessage(error, 'Invalid command')}\n`);
       return EXIT_CODES.USAGE;
     }

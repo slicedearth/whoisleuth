@@ -212,7 +212,10 @@ async function createBulkCheckpointWriter(options: Readonly<{
         if (Buffer.byteLength(content, 'utf8') > MAX_BULK_CHECKPOINT_BYTES) {
           throw new CliUsageError(`Bulk checkpoints are limited to ${MAX_BULK_CHECKPOINT_BYTES} bytes.`);
         }
-        await writePrivateFile(options.path, content, { force: created });
+        await writePrivateFile(options.path, content, {
+          force: created,
+          existingFileMessage: 'Bulk checkpoint already exists; use --resume or choose another path.',
+        });
         created = true;
       } catch (error) {
         writeFailure = error;

@@ -38,7 +38,10 @@ offline unless `--network` is explicitly supplied, and completion scripts are
 printed without modifying shell configuration. Commands can use atomic private
 `--output` files, Lookup can emit strict automation exits and target-free
 versioned progress events, and Bulk can resume an exact validated compact
-checkpoint. Ctrl-C suppresses partial final output and returns exit code 130.
+checkpoint. A checkpoint write failure preserves completed output and returns
+the partial-result exit code. Ctrl-C suppresses partial final output and
+returns exit code 130; a second interrupt performs best-effort temporary-file
+cleanup before exiting immediately.
 
 See `docs/cli.md` in the package for the complete command, privacy, output, and
 evidence-contract reference.

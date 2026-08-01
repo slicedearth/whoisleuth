@@ -54,12 +54,18 @@ describe('CLI terminal presentation', () => {
     const output = captureTerminal();
     assert.equal(terminalPresentation(output.stream, false, { TERM: 'xterm' }).color, false);
     assert.equal(terminalPresentation(output.stream, true, { TERM: 'xterm', NO_COLOR: '1' }).color, false);
+    assert.equal(terminalPresentation(output.stream, true, { TERM: 'xterm', NO_COLOR: '' }).color, true);
     assert.equal(terminalPresentation(output.stream, true, { TERM: 'dumb' }).interactive, false);
   });
 
   test('preserves long unbroken evidence values instead of silently truncating them', () => {
     const token = 'x'.repeat(70);
     assert.equal(wrapTerminalOutput(`Value          ${token}\n`, 40), `Value          ${token}\n`);
+  });
+
+  test('keeps command examples copyable at the narrow terminal floor', () => {
+    const command = '  cat domains.txt | whoisleuth bulk --jsonl';
+    assert.equal(wrapTerminalOutput(`${command}\n`, 40), `${command}\n`);
   });
 });
 

@@ -48,7 +48,6 @@ const COMMAND_DESCRIPTIONS: Readonly<Record<string, string>> = Object.freeze({
 });
 
 const VALUE_OPTIONS: Readonly<Record<string, readonly string[]>> = Object.freeze({
-  completion: ['bash', 'zsh', 'fish'],
   '--preset': ['common', 'impersonation', 'all'],
   '--keyboard': ['qwerty', 'azerty', 'qwertz', 'all'],
   '--mail-profile': ['standard', 'defensive-no-mail', 'parked'],
@@ -89,15 +88,15 @@ _whoisleuth_completion() {
     COMPREPLY=( $(compgen -W "${CLI_COMMANDS.join(' ')} --help --version" -- "\${current}") )
     return
   fi
+  if [[ "\${command}" == "completion" && \${COMP_CWORD} -eq 2 ]]; then
+    COMPREPLY=( $(compgen -W "bash zsh fish" -- "\${current}") )
+    return
+  fi
   case "\${previous}" in
 ${valueCases}
     ${FILE_OPTIONS.join('|')}) COMPREPLY=( $(compgen -f -- "\${current}") ); return ;;
     ${TEXT_OPTIONS.join('|')}) COMPREPLY=(); return ;;
   esac
-  if [[ "\${command}" == "completion" && \${COMP_CWORD} -eq 2 ]]; then
-    COMPREPLY=( $(compgen -W "bash zsh fish" -- "\${current}") )
-    return
-  fi
   case "\${command}" in
 ${cases}
     *) options="--help" ;;
@@ -123,6 +122,10 @@ _whoisleuth() {
   fi
   command="\${words[2]}"
   previous="\${words[CURRENT-1]}"
+  if [[ "\${command}" == "completion" && CURRENT -eq 3 ]]; then
+    compadd -- bash zsh fish
+    return
+  fi
   case "\${previous}" in
 ${valueCases}
     ${FILE_OPTIONS.join('|')}) _files; return ;;
@@ -162,6 +165,7 @@ complete -c whoisleuth -f
 complete -c whoisleuth -n '__fish_use_subcommand' -l help
 complete -c whoisleuth -n '__fish_use_subcommand' -l version
 ${commandLines.join('\n')}
+complete -c whoisleuth -n '__fish_seen_subcommand_from completion' -a 'bash zsh fish'
 ${optionLines.join('\n')}
 ${valueLines.join('\n')}
 `;

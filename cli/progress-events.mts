@@ -10,6 +10,7 @@ type ProgressEventFields = Readonly<{
   event: 'cancelled' | 'completed' | 'failed' | 'item_settled' | 'source_settled' | 'started' | 'warning';
   source?: unknown;
   state?: unknown;
+  reason?: unknown;
   index?: unknown;
   ok?: unknown;
   exitCode?: unknown;
@@ -53,6 +54,7 @@ function createCliProgressEvents(
       if (!enabled || !stream || sequence >= MAX_CLI_PROGRESS_EVENTS) return;
       const source = text(fields.source);
       const state = text(fields.state);
+      const reason = text(fields.reason);
       const index = integer(fields.index, 0, 10_000);
       const exitCode = integer(fields.exitCode, 0, 255);
       const document = {
@@ -64,6 +66,7 @@ function createCliProgressEvents(
         event: fields.event,
         ...(source ? { source } : {}),
         ...(state ? { state } : {}),
+        ...(reason ? { reason } : {}),
         ...(index !== null ? { index } : {}),
         ...(typeof fields.ok === 'boolean' ? { ok: fields.ok } : {}),
         ...(exitCode !== null ? { exitCode } : {}),

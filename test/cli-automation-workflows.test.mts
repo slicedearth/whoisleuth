@@ -199,6 +199,7 @@ describe('strict exit and machine progress events', () => {
       command: 'lookup',
       event: 'failed',
       state: 'usage',
+      reason: 'missing_input',
       exitCode: EXIT_CODES.USAGE,
     });
   });
@@ -353,6 +354,25 @@ describe('resumable Bulk checkpoints', () => {
     assert.equal(document.results.length, 2);
     assert.match(stderr.value(), /Checkpoint warning: fixture checkpoint destination unavailable/u);
     assert.doesNotMatch(stderr.value(), /one\.example|two\.example/u);
+  });
+
+  test('uses checkpoint-specific guidance if creation loses an existence race', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'whoisleuth-cli-checkpoint-race-'));
+    const path = join(directory, 'bulk.json');
+    try {
+      const writer = await createBulkCheckpointWriter({
+        path,
+        queries: ['one.example'],
+        deep: false,
+        resume: false,
+        classifyQuery: classifiedDomain,
+        now: () => NOW,
+      });
+      await writeFile(path, 'racing writer\n', { mode: 0o600 });
+      await assert.rejects(writer.flush(), /use --resume or choose another path/u);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
   });
 
   test('keeps checkpoint failure target-free in machine progress events', async () => {

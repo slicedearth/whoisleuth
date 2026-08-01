@@ -1,4 +1,5 @@
 import { resolvePublicAddresses } from '../lib/safe-fetch.mts';
+import { withTimeout } from '../lib/abort.mts';
 import { whoisQuery } from '../lib/whois-transport.mts';
 import type { TerminalPresentation } from './terminal-presentation.mts';
 
@@ -36,6 +37,7 @@ type DoctorOptions = Readonly<{
   architecture?: string;
   resolveAddresses?: typeof resolvePublicAddresses;
   queryWhois?: typeof whoisQuery;
+  networkTimeoutMs?: number;
 }>;
 
 function boundedDetail(value: unknown, fallback: string): string {
@@ -95,8 +97,17 @@ async function buildDoctorReport(options: DoctorOptions): Promise<DoctorReport> 
   } else {
     const resolve = options.resolveAddresses || resolvePublicAddresses;
     const query = options.queryWhois || whoisQuery;
+    const networkTimeoutMs = Number.isSafeInteger(options.networkTimeoutMs)
+      && Number(options.networkTimeoutMs) >= 1
+      && Number(options.networkTimeoutMs) <= NETWORK_TIMEOUT_MS
+      ? Number(options.networkTimeoutMs)
+      : NETWORK_TIMEOUT_MS;
     try {
-      const addresses = await resolve(NETWORK_HOST);
+      const addresses = await withTimeout(
+        () => resolve(NETWORK_HOST),
+        networkTimeoutMs,
+        `Public DNS check timed out after ${networkTimeoutMs} ms.`,
+      );
       checks.push(Object.freeze({
         id: 'public_dns',
         label: 'Public DNS',
@@ -115,8 +126,8 @@ async function buildDoctorReport(options: DoctorOptions): Promise<DoctorReport> 
     }
     try {
       const response = await query(NETWORK_HOST, NETWORK_QUERY, {
-        timeoutMs: NETWORK_TIMEOUT_MS - 1_000,
-        totalDeadlineMs: NETWORK_TIMEOUT_MS,
+        timeoutMs: Math.max(1, networkTimeoutMs - 1_000),
+        totalDeadlineMs: networkTimeoutMs,
       });
       checks.push(Object.freeze({
         id: 'whois_transport',

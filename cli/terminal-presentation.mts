@@ -60,7 +60,7 @@ function terminalPresentation(
     && !environment.CI;
   const color = interactive
     && requestedColor
-    && environment.NO_COLOR === undefined;
+    && (environment.NO_COLOR === undefined || environment.NO_COLOR === '');
   return Object.freeze({
     color,
     interactive,
@@ -100,6 +100,9 @@ function splitAtWord(value: string, maximum: number): readonly [string, string] 
 
 function wrapLine(line: string, width: number): string[] {
   if (!line || line.length <= width) return [line];
+  if (/^\s*(?:whoisleuth\b|node\s+bin\/whoisleuth\.mts\b|(?:cat|printf)\b.*\|\s*whoisleuth\b)/u.test(line)) {
+    return [line];
+  }
   const keyValue = line.match(/^(\s{0,4}\S(?:.*?\S)?)(\s{2,})(\S.*)$/u);
   const leading = line.match(/^\s*/u)?.[0] || '';
   const prefix = keyValue ? `${keyValue[1]}${keyValue[2]}` : leading;

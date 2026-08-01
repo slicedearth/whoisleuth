@@ -124,9 +124,10 @@ uses restrained semantic colour, groups Lookup evidence by purpose, wraps
 prose to the detected terminal width, and shows transient progress on stderr
 for slower collection. State remains explicit in text, so colour is never the
 only distinction. Redirected terminal output, JSON, and JSONL contain no ANSI
-sequences or progress text. `--no-color` and the conventional `NO_COLOR`
-environment variable disable colour; `WHOISLEUTH_NO_PROGRESS=1` disables the
-transient indicator.
+sequences or progress text. `--no-color` and a non-empty conventional
+`NO_COLOR` environment variable disable colour; `WHOISLEUTH_NO_PROGRESS=1`
+disables the transient indicator. Command examples remain one copyable line
+even when prose is wrapped for a narrow terminal.
 
 Every command accepts `--output <file>` as a safer alternative to shell
 redirection. WHOISleuth buffers bounded output, creates a private temporary file
@@ -207,17 +208,19 @@ not silently break existing scripts.
 `lookup --events` and `bulk --events` write versioned
 `whoisleuth.cli.progress` version 1 JSONL lifecycle events to stderr while the
 ordinary final result stays on stdout. Events contain only the command,
-sequence, time, source state or Bulk item index, and final exit status. They do
-not contain a target, query, endpoint, error detail, or evidence value. Human
-progress and error text are suppressed while events are active. `--events`
-cannot be combined with `--output`, because the final event must describe the
-same completed stdout delivery observed by the caller.
+sequence, time, source state or Bulk item index, categorical failure reasons,
+and final exit status. They do not contain a target, query, endpoint, file
+path, error detail, or evidence value. Human progress and error text are
+suppressed while events are active. `--events` cannot be combined with
+`--output`, because the final event must describe the same completed stdout
+delivery observed by the caller.
 
 Pressing Ctrl-C asks an in-flight Lookup or Bulk run to stop, suppresses any
 partial final result, flushes an enabled Bulk checkpoint, and exits with code
 130. Already started network operations remain subject to their existing hard
 timeouts while the shared in-process API unwinds; the executable terminates
-after CLI cleanup, and a second Ctrl-C exits immediately.
+after CLI cleanup. A second Ctrl-C removes any known unpublished temporary
+output file on a best-effort basis before exiting immediately.
 
 Bulk can persist compact progress with `--checkpoint <file>`. A new checkpoint
 is private, bounded to 16 MiB, versioned, and tied to the exact ordered input
@@ -226,6 +229,11 @@ Lookup responses. Reusing the same path is refused unless `--resume` is also
 specified. Resume revalidates the complete untrusted document and skips only
 the exact completed rows; changed input, mode, schema, digest, or malformed
 results fail closed.
+
+If checkpoint persistence fails after collection, WHOISleuth still emits the
+completed final result, reports the checkpoint limitation, and exits with code
+4. The last successfully published checkpoint remains available, but it may
+not contain the final completed items.
 
 `diff <left.json> <right.json>` compares two different saved domain Lookup
 documents entirely offline. It reuses the bounded Bulk comparison model for

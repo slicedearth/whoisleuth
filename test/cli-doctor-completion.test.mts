@@ -35,10 +35,13 @@ describe('CLI shell completion', () => {
     const syntax = spawnSync('bash', ['-n'], { input: bash, encoding: 'utf8' });
     assert.equal(syntax.status, 0, syntax.stderr);
     assert.doesNotMatch(bash, /--preset\) COMPREPLY=.*custom/u);
+    assert.equal((bash.match(/command.*completion.*COMP_CWORD.*-eq 2/gu) || []).length, 1);
+    assert.doesNotMatch(bash, /^\s+completion\) COMPREPLY/gmu);
     const zsh = buildShellCompletion('zsh');
     assert.match(zsh, /funcstack\[1\].*_whoisleuth/u);
     assert.doesNotMatch(zsh, /--preset\) compadd -- .*custom/u);
     assert.match(buildShellCompletion('fish'), /-l output -r -F/u);
+    assert.match(buildShellCompletion('fish'), /__fish_seen_subcommand_from completion.*bash zsh fish/u);
   });
 
   test('offers only discover preset values accepted by the argument parser', () => {
@@ -146,5 +149,26 @@ describe('CLI doctor', () => {
     assert.equal(report.networkRequested, true);
     assert.equal(report.state, 'partial');
     assert.equal(report.checks.filter((check: { state: string }) => check.state === 'partial').length, 2);
+  });
+
+  test('bounds a stalled DNS diagnostic before continuing to WHOIS', async () => {
+    let whoisCalled = false;
+    const startedAt = Date.now();
+    const report = await buildDoctorReport({
+      version: '1.2.3',
+      generatedAt: '2026-08-01T00:00:00.000Z',
+      network: true,
+      networkTimeoutMs: 10,
+      presentation: { interactive: false, color: false, width: null },
+      resolveAddresses: async () => new Promise(() => {}),
+      queryWhois: async () => {
+        whoisCalled = true;
+        return 'fixture response';
+      },
+    });
+    assert.ok(Date.now() - startedAt < 1_000);
+    assert.equal(whoisCalled, true);
+    assert.equal(report.state, 'partial');
+    assert.match(report.checks.find((check) => check.id === 'public_dns')?.detail || '', /timed out after 10 ms/u);
   });
 });

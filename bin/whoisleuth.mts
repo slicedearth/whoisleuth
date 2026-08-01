@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { boundedCliErrorMessage } from '../cli/errors.mts';
+import { cleanupPendingOutputFilesSync } from '../cli/output-file.mts';
 import { runCli } from '../cli/runner.mts';
 
 for (const stream of [process.stdout, process.stderr]) {
@@ -15,7 +16,10 @@ let interruptionCount = 0;
 const interrupt = () => {
   interruptionCount += 1;
   if (interruptionCount === 1) cancellation.abort(new DOMException('Aborted', 'AbortError'));
-  else process.exit(130);
+  else {
+    cleanupPendingOutputFilesSync();
+    process.exit(130);
+  }
 };
 process.on('SIGINT', interrupt);
 
