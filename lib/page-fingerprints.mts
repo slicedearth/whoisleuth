@@ -3,6 +3,7 @@
 // those intermediate representations exist only long enough to derive a digest.
 
 import { createHash } from 'node:crypto';
+import { analyzeStaticHtml } from './static-html-analysis.mts';
 
 type ExactBodyHash = {
   algorithm: 'sha256';
@@ -414,19 +415,24 @@ function createPageFingerprints(html: unknown, options: PageFingerprintOptions =
   };
   if (options.sourceTruncated === true && exact.scope === 'complete-body') exact = { ...exact, scope: 'captured-prefix' };
   const normalized = normalizedMarkupAndStructure(source.text, baseUrl);
+  const parsedStructure = analyzeStaticHtml(source.text, { baseUrl });
   const text = visibleTextFingerprint(normalized.visibleText);
+  const structureSimilarity = simHash64(parsedStructure.structureTokens);
   const forms = formStructureFingerprint(staticMarkup(source.text), baseUrl);
   const resourceHosts = normalizedResourceHosts(options.resources);
   const identifiers = normalizedIdentifiers(options.trackingIdentifiers, options.identifiersTruncated === true);
   const truncated = options.sourceTruncated === true || source.truncated || normalized.normalizedTruncated
-    || normalized.structureTruncated || text?.truncated === true || forms?.truncated === true
+    || normalized.structureTruncated || parsedStructure.inputLimitReached || parsedStructure.tagLimitReached
+    || parsedStructure.structureLimitReached || text?.truncated === true || forms?.truncated === true
     || resourceHosts.truncated || identifiers.truncated;
   const limitations = [
     'Fingerprints summarize capped static HTML and are comparison aids, not cryptographic proof of page authorship or intent.',
     'Visible-text SimHash is a fuzzy similarity fingerprint and must not be treated as a cryptographic digest.',
+    'DOM-structure SimHash is derived from a standards-compliant static token stream and is a review aid, not proof that two pages share an author or template.',
   ];
   if (source.truncated) limitations.push(`Fingerprint input was capped at ${MAX_FINGERPRINT_SOURCE_BYTES} UTF-8 bytes.`);
   if (normalized.normalizedTruncated || normalized.structureTruncated) limitations.push(`Fingerprint tokenization reached the ${MAX_FINGERPRINT_TOKENS}-token or ${MAX_FINGERPRINT_TAG_LENGTH}-character tag boundary.`);
+  if (parsedStructure.tagLimitReached || parsedStructure.structureLimitReached) limitations.push('Standards-compliant DOM-structure tokenization reached its bounded tag or token limit.');
   if (normalized.attributesTruncated) limitations.push(`Some tags exceeded the ${MAX_FINGERPRINT_ATTRIBUTES}-attribute fingerprint boundary.`);
   if (text?.truncated) limitations.push(`Visible-text fingerprinting retained only the first ${MAX_VISIBLE_TEXT_TOKENS} normalized tokens.`);
   if (forms?.truncated) limitations.push(`Form fingerprinting retained at most ${MAX_FORM_FINGERPRINTS} forms and ${MAX_FORM_CONTROLS} controls.`);
@@ -446,6 +452,13 @@ function createPageFingerprints(html: unknown, options: PageFingerprintOptions =
       nodeCount: normalized.structureTokens.length,
       parser: 'static-tag-sequence-v1',
       truncated: normalized.structureTruncated,
+      similarity: structureSimilarity ? {
+        algorithm: 'simhash64-v1',
+        value: structureSimilarity.value,
+        tokenCount: parsedStructure.structureTokens.length,
+        featureCount: structureSimilarity.featureCount,
+        truncated: parsedStructure.inputLimitReached || parsedStructure.tagLimitReached || parsedStructure.structureLimitReached,
+      } : null,
     },
     formStructure: forms,
     resourceHosts,

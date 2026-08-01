@@ -40,6 +40,8 @@ describe('page fingerprints', () => {
     assert.match(requiredValue(result.visibleText).value, /^[a-f0-9]{16}$/);
     assert.equal(result.domStructure.algorithm, 'sha256');
     assert.equal(result.domStructure.parser, 'static-tag-sequence-v1');
+    assert.equal(result.domStructure.similarity?.algorithm, 'simhash64-v1');
+    assert.match(requiredValue(result.domStructure.similarity).value, /^[a-f0-9]{16}$/);
     assert.equal(requiredValue(result.formStructure).formCount, 1);
     assert.equal(requiredValue(result.formStructure).controlCount, 1);
     assert.deepEqual(result.resourceHosts.values, ['cdn.example']);
@@ -92,7 +94,18 @@ describe('page fingerprints', () => {
     const second = fingerprints('<main><section><h1>Confirm your payment details</h1><form method="post"><input type="password"><button>Continue</button></form></section></main>');
     assert.notEqual(requiredValue(first.visibleText).value, requiredValue(second.visibleText).value);
     assert.notEqual(first.domStructure.value, second.domStructure.value);
+    assert.notEqual(requiredValue(first.domStructure.similarity).value, requiredValue(second.domStructure.similarity).value);
     assert.notEqual(requiredValue(first.formStructure).value, requiredValue(second.formStructure).value);
+  });
+
+  test('derives bounded structural similarity from standards-compliant HTML tokens', () => {
+    const malformed = fingerprints('<main><section><p>One<p>Two</section></main>');
+    const explicit = fingerprints('<main><section><p>One</p><p>Two</p></section></main>');
+
+    assert.equal(malformed.domStructure.similarity?.algorithm, 'simhash64-v1');
+    assert.equal(explicit.domStructure.similarity?.algorithm, 'simhash64-v1');
+    assert.ok(requiredValue(malformed.domStructure.similarity).tokenCount > 0);
+    assert.doesNotMatch(JSON.stringify(malformed.domStructure.similarity), /One|Two/u);
   });
 
   test('visible text excludes comments and raw or non-executing element bodies', () => {

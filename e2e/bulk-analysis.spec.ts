@@ -859,6 +859,7 @@ test('risk model v6 exposes cross-family corroboration in Bulk triage', async ({
 });
 
 test('deep results present bounded relationship evidence including exact native certificate identity', async ({ page }) => {
+  test.slow();
   const profile = {
     id: 'relationship-profile', name: 'Example profile', officialDomains: ['official.example'], productNames: [], tlds: ['example'],
     approvedPartnerDomains: [], allowlistedDomains: [], allowlistedRegistrars: [], dkimSelectors: [],

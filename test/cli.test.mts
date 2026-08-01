@@ -12,6 +12,7 @@ import { buildCliLookupDocument } from '../cli/formatters/json.mts';
 import { formatTerminalLookup, safeTerminalValue } from '../cli/formatters/terminal.mts';
 import { MAX_STDIN_BYTES, readStdinBounded, runCli } from '../cli/runner.mts';
 import type { ClassifiedQuery } from '../lib/classify.mts';
+import type { LookupSourceSettlement } from '../lib/lookup.mts';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 
@@ -42,11 +43,11 @@ function classifiedDomain(value: string, inputHostname = value): ClassifiedQuery
 
 describe('CLI argument parsing', () => {
   test('defaults lookup to fast terminal output', () => {
-    assert.deepEqual(parseCliArguments(['lookup', 'example.com']), { action: 'lookup', query: 'example.com', output: 'terminal', deep: false, quiet: false, color: true });
+    assert.deepEqual(parseCliArguments(['lookup', 'example.com']), { action: 'lookup', query: 'example.com', output: 'terminal', deep: false, detail: 'standard', strictExit: false, events: false, quiet: false, color: true });
   });
 
   test('accepts explicit deep JSON output and bounded stdin mode', () => {
-    assert.deepEqual(parseCliArguments(['lookup', '--deep', '--json', '--no-color']), { action: 'lookup', query: null, output: 'json', deep: true, quiet: false, color: false });
+    assert.deepEqual(parseCliArguments(['lookup', '--deep', '--json', '--no-color']), { action: 'lookup', query: null, output: 'json', deep: true, detail: 'standard', strictExit: false, events: false, quiet: false, color: false });
   });
 
   test('rejects unknown commands, options, conflicting modes, and multiple queries', () => {
@@ -57,6 +58,42 @@ describe('CLI argument parsing', () => {
     assert.throws(() => parseCliArguments(['lookup', '--fast', '--fast']), /only once/);
     assert.throws(() => parseCliArguments(['lookup', 'one.com', 'two.com']), /one query/);
     assert.throws(() => parseCliArguments(['lookup', 'x', '--json', '--quiet']), /cannot be combined/);
+    assert.throws(() => parseCliArguments(['lookup', 'x', '--summary', '--verbose']), /mutually exclusive/);
+    assert.throws(() => parseCliArguments(['lookup', 'x', '--summary', '--json']), /terminal output/);
+  });
+
+  test('parses terminal detail, completion, and offline-first doctor options', () => {
+    assert.deepEqual(parseCliArguments(['lookup', 'example.test', '--summary']), {
+      action: 'lookup',
+      query: 'example.test',
+      output: 'terminal',
+      deep: false,
+      detail: 'summary',
+      strictExit: false,
+      events: false,
+      quiet: false,
+      color: true,
+    });
+    assert.deepEqual(parseCliArguments(['lookup', 'example.test', '--verbose']), {
+      action: 'lookup',
+      query: 'example.test',
+      output: 'terminal',
+      deep: false,
+      detail: 'verbose',
+      strictExit: false,
+      events: false,
+      quiet: false,
+      color: true,
+    });
+    assert.deepEqual(parseCliArguments(['completion', 'zsh']), { action: 'completion', shell: 'zsh' });
+    assert.deepEqual(parseCliArguments(['doctor']), {
+      action: 'doctor', network: false, output: 'terminal', quiet: false, color: true,
+    });
+    assert.deepEqual(parseCliArguments(['doctor', '--network', '--json']), {
+      action: 'doctor', network: true, output: 'json', quiet: false, color: true,
+    });
+    assert.throws(() => parseCliArguments(['completion', 'powershell']), /bash, zsh, or fish/u);
+    assert.throws(() => parseCliArguments(['doctor', '--network', '--network']), /only once/u);
   });
 
   test('help and version actions never require a command', () => {
@@ -65,6 +102,25 @@ describe('CLI argument parsing', () => {
     assert.deepEqual(parseCliArguments(['registry-support', '-h']), { action: 'help', command: 'registry-support' });
     assert.throws(() => parseCliArguments(['lookup', 'example.com', '--help']), /Help accepts/);
     assert.deepEqual(parseCliArguments(['--version']), { action: 'version' });
+  });
+
+  test('help groups workflows and gives each command a purpose, example, and boundary', async () => {
+    const stdout = capture();
+    const stderr = capture();
+    assert.equal(await runCli([], { stdout: stdout.stream, stderr: stderr.stream }), EXIT_CODES.SUCCESS);
+    assert.match(stdout.value(), /Investigate:\n/u);
+    assert.match(stdout.value(), /Discover:\n/u);
+    assert.match(stdout.value(), /Review saved evidence:\n/u);
+    assert.match(stdout.value(), /Fast lookup is the default/u);
+    assert.equal(stderr.value(), '');
+
+    const commandStdout = capture();
+    assert.equal(await runCli(['lookup', '--help'], { stdout: commandStdout.stream, stderr: stderr.stream }), EXIT_CODES.SUCCESS);
+    assert.match(commandStdout.value(), /Collect registration evidence for one domain, IP, or ASN\./u);
+    assert.match(commandStdout.value(), /Example:\n  whoisleuth lookup example\.test --deep/u);
+    assert.match(commandStdout.value(), /Boundary:\n  Fast is the default\./u);
+    assert.doesNotMatch(commandStdout.value(), /whoisleuth bulk/u);
+    assert.equal(stderr.value(), '');
   });
 
   test('parses bounded offline artifact verification inputs', () => {
@@ -177,7 +233,11 @@ describe('CLI lookup runner', () => {
   test('reuses classification and unified lookup with fast mode by default', async () => {
     const stdout = capture();
     const stderr = capture();
-    let options;
+    let options: {
+      fast?: boolean;
+      compact?: boolean;
+      onSourceSettled?: (settlement: LookupSourceSettlement) => void;
+    } | undefined;
     const code = await runCli(['lookup', 'login.example.com', '--json'], {
       stdout: stdout.stream,
       stderr: stderr.stream,
@@ -198,16 +258,22 @@ describe('CLI lookup runner', () => {
 
   test('deep mode is explicit and stdin can provide the one query', async () => {
     const stdout = capture();
-    let options;
+    let lookupCalled = false;
     const code = await runCli(['lookup', '--deep'], {
       stdout: stdout.stream,
       stderr: capture().stream,
       readStdin: async () => 'AS13335',
       classifyQuery: () => ({ type: 'asn', value: 'AS13335' }),
-      runUnifiedLookup: async (_classified, received) => { options = received; return lookupResult({ availability: { applicable: false, type: 'asn' }, diagnostics: { rdap: { status: 'success' }, whois: { status: 'complete' } } }); },
+      runUnifiedLookup: async (_classified, received) => {
+        lookupCalled = true;
+        assert.equal(received?.fast, false);
+        assert.equal(received?.compact, false);
+        assert.equal(typeof received?.onSourceSettled, 'function');
+        return lookupResult({ availability: { applicable: false, type: 'asn' }, diagnostics: { rdap: { status: 'success' }, whois: { status: 'complete' } } });
+      },
     });
     assert.equal(code, EXIT_CODES.SUCCESS);
-    assert.deepEqual(options, { fast: false, compact: false });
+    assert.equal(lookupCalled, true);
     assert.match(stdout.value(), /Type\s+asn/);
     assert.match(stdout.value(), /Mode\s+Deep/);
   });
@@ -251,6 +317,34 @@ test('machine document and terminal formatter preserve explicit source states', 
   assert.match(terminal, /RDAP\s+Success/);
   assert.match(terminal, /WHOIS\s+Skipped/);
   assert.equal(document.generatedAt, '2026-07-14T00:00:00.000Z');
+});
+
+test('terminal lookup groups evidence and supports concise and diagnostic detail levels', () => {
+  const document = buildCliLookupDocument(
+    'example.test',
+    classifiedDomain('example.test'),
+    lookupResult({
+      timing: {
+        version: 1,
+        totalMs: 120,
+        sources: [{ source: 'rdap', outcome: 'fulfilled', durationMs: 40, completedAfterMs: 40 }],
+      },
+    }),
+    '2026-07-14T00:00:00.000Z',
+    'deep',
+  );
+  const standard = formatTerminalLookup(document);
+  const summary = formatTerminalLookup(document, { detail: 'summary' });
+  const verbose = formatTerminalLookup(document, { detail: 'verbose' });
+
+  assert.match(standard, /^Target:\n/u);
+  assert.match(standard, /\nRegistration:\n/u);
+  assert.match(standard, /RDAP source\s+https:\/\/rdap\.invalid/u);
+  assert.doesNotMatch(summary, /RDAP source|Generated|Total time/u);
+  assert.match(verbose, /\nCollection:\n/u);
+  assert.match(verbose, /Generated\s+2026-07-14T00:00:00\.000Z/u);
+  assert.match(verbose, /Total time\s+120 ms/u);
+  assert.match(verbose, /rdap Fulfilled · 40 ms/u);
 });
 
 test('terminal lookup separately attributes represented registrar RDAP diagnostics', () => {
@@ -539,13 +633,12 @@ test('terminal values strip controls and stay bounded', () => {
   assert.ok(result.length <= 240);
 });
 
-test('package metadata exposes an executable local CLI entry point', () => {
+test('repository source exposes an executable local CLI entry point', () => {
   const root = path.join(__dirname, '..');
-  const packageJson = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
-  assert.deepEqual(packageJson.bin, { whoisleuth: 'bin/whoisleuth.mts' });
-  const mode = fs.statSync(path.join(root, packageJson.bin.whoisleuth)).mode;
+  const entryPoint = path.join(root, 'bin/whoisleuth.mts');
+  const mode = fs.statSync(entryPoint).mode;
   assert.notEqual(mode & 0o111, 0);
-  const result = spawnSync(process.execPath, [path.join(root, packageJson.bin.whoisleuth), '--help'], { encoding: 'utf8' });
+  const result = spawnSync(process.execPath, [entryPoint, '--help'], { encoding: 'utf8' });
   assert.equal(result.status, 0);
   assert.match(result.stdout, /WHOISleuth CLI/);
   assert.match(result.stdout, /Copyright 2026 slicedearth/);

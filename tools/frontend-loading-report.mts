@@ -32,11 +32,32 @@ export type FrontendLoadingReportInput = Readonly<{
   manifest: Manifest;
   routeNodes: readonly RouteNode[];
   measureAsset: (file: string) => AssetMeasurement;
+  routeGzipBudgets?: Readonly<Record<string, number>>;
 }>;
 
 export const FRONTEND_LOADING_REPORT_SCHEMA = 'whoisleuth.frontend-loading-report';
 export const FRONTEND_LOADING_REPORT_VERSION = 1;
 export const BROWSER_LOCAL_CHUNK_NAME = 'browser-local-data-service';
+const kibibytes = (value: number) => value * 1024;
+
+// These are reviewed regression ceilings with deliberate headroom over the
+// current production build, not performance targets or network guarantees.
+export const FRONTEND_ROUTE_GZIP_BUDGETS: Readonly<Record<string, number>> = Object.freeze({
+  '/': kibibytes(150),
+  '/brands': kibibytes(285),
+  '/bulk': kibibytes(380),
+  '/dashboard': kibibytes(325),
+  '/demo': kibibytes(225),
+  '/discover': kibibytes(320),
+  '/guide': kibibytes(100),
+  '/login': kibibytes(80),
+  '/lookup': kibibytes(490),
+  '/monitor': kibibytes(475),
+  '/privacy': kibibytes(105),
+  '/registry-support': kibibytes(285),
+  '/resources': kibibytes(90),
+  '/resources/[slug]': kibibytes(90),
+});
 
 function publicPath(routeKey: string): string {
   const value = routeKey.replace(/\/\([^/]+\)/gu, '');
@@ -126,15 +147,23 @@ export function buildFrontendLoadingReport(input: FrontendLoadingReportInput) {
     .find(([, entry]) => entry.name === BROWSER_LOCAL_CHUNK_NAME);
   if (!browserLocalEntry) throw new Error('Client manifest is missing the browser-local workspace chunk.');
   const browserLocalFile = browserLocalEntry[1].file;
+  const budgets = input.routeGzipBudgets ?? FRONTEND_ROUTE_GZIP_BUDGETS;
   const routes = input.routeNodes
     .map((route) => {
       const measured = routeAssets(input.manifest, route, input.measureAsset);
+      const path = publicPath(route.routeKey);
+      const configuredBudget = budgets[path];
+      const budgetGzipBytes = Number.isSafeInteger(configuredBudget) && (configuredBudget ?? 0) > 0
+        ? configuredBudget as number
+        : null;
       return Object.freeze({
-        path: publicPath(route.routeKey),
+        path,
         access: route.routeKey.includes('(public)') ? 'public' as const : 'protected' as const,
         assetCount: measured.assets.length,
         bytes: measured.bytes,
         gzipBytes: measured.gzipBytes,
+        budgetGzipBytes,
+        overBudget: budgetGzipBytes === null || measured.gzipBytes > budgetGzipBytes,
         includesBrowserLocalWorkspace: measured.assets.some((asset) => asset.file === browserLocalFile),
       });
     })
@@ -143,22 +172,29 @@ export function buildFrontendLoadingReport(input: FrontendLoadingReportInput) {
   const protectedRoutes = routes.filter((route) => route.access === 'protected');
   const browserLocalWorkspace = input.measureAsset(browserLocalFile);
   const publicRouteLeak = publicRoutes.some((route) => route.includesBrowserLocalWorkspace);
+  const missingBudgetPaths = routes.filter((route) => route.budgetGzipBytes === null).map((route) => route.path);
+  const overBudgetPaths = routes
+    .filter((route) => route.budgetGzipBytes !== null && route.overBudget)
+    .map((route) => route.path);
   return Object.freeze({
     schema: FRONTEND_LOADING_REPORT_SCHEMA,
     version: FRONTEND_LOADING_REPORT_VERSION,
     mode: 'post_build_static_manifest',
-    ready: !publicRouteLeak,
+    ready: !publicRouteLeak && missingBudgetPaths.length === 0 && overBudgetPaths.length === 0,
     browserLocalWorkspace,
     summary: Object.freeze({
       publicRoutes: publicRoutes.length,
       protectedRoutes: protectedRoutes.length,
       publicRouteLeak,
+      missingBudgetPaths: Object.freeze(missingBudgetPaths),
+      overBudgetPaths: Object.freeze(overBudgetPaths),
       largestPublicRouteGzipBytes: Math.max(0, ...publicRoutes.map((route) => route.gzipBytes)),
       largestProtectedRouteGzipBytes: Math.max(0, ...protectedRoutes.map((route) => route.gzipBytes)),
     }),
     routes: Object.freeze(routes),
     limitations: Object.freeze([
       'Sizes are per-file gzip estimates from one production build, not measured network timings.',
+      'Per-route ceilings are reviewed regression tripwires with headroom, not performance targets.',
       'The report models initial static route dependencies and excludes later user-triggered dynamic imports.',
       'A large protected chunk alone does not justify splitting it; run npm run frontend:authenticated-loading-report before changing its boundaries.',
     ]),
@@ -170,12 +206,13 @@ export function formatFrontendLoadingReport(report: ReturnType<typeof buildFront
     'Frontend loading report',
     `Browser-local workspace: ${(report.browserLocalWorkspace.gzipBytes / 1024).toFixed(2)} KiB gzip`,
     `Public-route exposure: ${report.summary.publicRouteLeak ? 'FAILED' : 'none'}`,
+    `Route budgets: ${report.summary.missingBudgetPaths.length || report.summary.overBudgetPaths.length ? 'FAILED' : 'within reviewed ceilings'}`,
     '',
-    'Route                         Access      Gzip KiB  Workspace',
+    'Route                         Access      Gzip KiB  Budget KiB  Workspace',
   ];
   for (const route of report.routes) {
     lines.push(
-      `${route.path.padEnd(29)} ${route.access.padEnd(11)} ${(route.gzipBytes / 1024).toFixed(2).padStart(8)}  ${route.includesBrowserLocalWorkspace ? 'yes' : 'no'}`,
+      `${route.path.padEnd(29)} ${route.access.padEnd(11)} ${(route.gzipBytes / 1024).toFixed(2).padStart(8)}  ${route.budgetGzipBytes === null ? 'missing'.padStart(10) : (route.budgetGzipBytes / 1024).toFixed(0).padStart(10)}  ${route.includesBrowserLocalWorkspace ? 'yes' : 'no'}`,
     );
   }
   lines.push('', ...report.limitations);

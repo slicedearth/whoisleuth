@@ -7,17 +7,27 @@ import {
   parseExternalFindingsDocument,
   type ExternalFindingsDocument,
 } from './external-findings-import.ts';
-
-export const WEB_CAPTURE_SUMMARY_SCHEMA = 'whoisleuth.web-capture-summary';
-export const WEB_CAPTURE_SUMMARY_VERSION = 1;
-export const WEB_CAPTURE_MANIFEST_SCHEMA = 'whoisleuth.web-capture-manifest';
-export const WEB_CAPTURE_MANIFEST_VERSION = 1;
+import {
+  MAX_WEB_CAPTURE_DOM_DIGEST_BYTES,
+  MAX_WEB_CAPTURE_SCREENSHOT_BYTES,
+  WEB_CAPTURE_MANIFEST_SCHEMA,
+  WEB_CAPTURE_MANIFEST_VERSION,
+  WEB_CAPTURE_SUMMARY_SCHEMA,
+  WEB_CAPTURE_SUMMARY_VERSION,
+} from '../../../../lib/web-capture-contract.mts';
+export {
+  WEB_CAPTURE_MANIFEST_SCHEMA,
+  WEB_CAPTURE_MANIFEST_VERSION,
+  WEB_CAPTURE_SUMMARY_SCHEMA,
+  WEB_CAPTURE_SUMMARY_VERSION,
+} from '../../../../lib/web-capture-contract.mts';
 export const MAX_WEB_CAPTURE_SUMMARIES = 50;
-export const MAX_WEB_CAPTURE_SCREENSHOT_BYTES = 10 * 1024 * 1024;
-export const MAX_WEB_CAPTURE_DOM_DIGEST_BYTES = 1024 * 1024;
+export { MAX_WEB_CAPTURE_DOM_DIGEST_BYTES, MAX_WEB_CAPTURE_SCREENSHOT_BYTES } from '../../../../lib/web-capture-contract.mts';
 const MAX_CAPTURE_TECHNOLOGIES = 20;
 const MAX_CAPTURE_ORIGINS = 30;
 const SHA256_RE = /^[a-f0-9]{64}$/i;
+const PERCEPTUAL_HASH_RE = /^[a-f0-9]{16}$/i;
+const SUPPORTED_WEB_CAPTURE_MANIFEST_VERSIONS = new Set([1, WEB_CAPTURE_MANIFEST_VERSION]);
 const CONTROL_RE = /[\u0000-\u001f\u007f]/u;
 const ROOT_KEYS = new Set(['schema', 'schemaVersion', 'source', 'captures']);
 const SOURCE_KEYS = new Set(['name', 'reference', 'collectedAt']);
@@ -43,7 +53,7 @@ const MANIFEST_CAPTURE_KEYS = new Set([
   'artifacts',
 ]);
 const PAGE_KEYS = new Set(['title', 'finalOrigin']);
-const ARTIFACT_KEYS = new Set(['kind', 'fileName', 'mimeType', 'sha256', 'bytes', 'width', 'height']);
+const ARTIFACT_KEYS = new Set(['kind', 'fileName', 'mimeType', 'sha256', 'perceptualHash', 'bytes', 'width', 'height']);
 
 function record(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -202,10 +212,11 @@ export function parseWebCaptureManifest(value: unknown): ExternalFindingsDocumen
     !root
     || !onlyKeys(root, ROOT_KEYS)
     || root.schema !== WEB_CAPTURE_MANIFEST_SCHEMA
-    || root.schemaVersion !== WEB_CAPTURE_MANIFEST_VERSION
+    || !SUPPORTED_WEB_CAPTURE_MANIFEST_VERSIONS.has(Number(root.schemaVersion))
   ) {
-    throw new Error(`Web capture manifests must use ${WEB_CAPTURE_MANIFEST_SCHEMA} schema version ${WEB_CAPTURE_MANIFEST_VERSION}.`);
+    throw new Error(`Web capture manifests must use ${WEB_CAPTURE_MANIFEST_SCHEMA} schema version 1 or ${WEB_CAPTURE_MANIFEST_VERSION}.`);
   }
+  const manifestVersion = Number(root.schemaVersion);
   const source = record(root.source);
   if (!source || !onlyKeys(source, SOURCE_KEYS)) throw new Error('Web capture manifests require a bounded source object.');
   const sourceName = text(source.name, 80, 'Capture source name');
@@ -271,11 +282,16 @@ export function parseWebCaptureManifest(value: unknown): ExternalFindingsDocumen
         }
         const width = positiveInteger(artifact.width, 10_000, `Web capture manifest ${index + 1} screenshot width`);
         const height = positiveInteger(artifact.height, 10_000, `Web capture manifest ${index + 1} screenshot height`);
-        artifactSummaries.push(`Screenshot ${fileName}: ${mimeType}, ${width}x${height}, ${bytes} bytes, SHA-256 ${sha256}.`);
+        const perceptualHash = artifact.perceptualHash === undefined || artifact.perceptualHash === null || artifact.perceptualHash === ''
+          ? null
+          : manifestVersion >= 2 && typeof artifact.perceptualHash === 'string' && PERCEPTUAL_HASH_RE.test(artifact.perceptualHash)
+            ? artifact.perceptualHash.toLowerCase()
+            : (() => { throw new Error(`Web capture manifest ${index + 1} screenshot perceptual hash is unsupported.`); })();
+        artifactSummaries.push(`Screenshot ${fileName}: ${mimeType}, ${width}x${height}, ${bytes} bytes, SHA-256 ${sha256}${perceptualHash ? `, dHash ${perceptualHash}` : ''}.`);
       } else {
         if (mimeType !== 'application/json') throw new Error(`Web capture manifest ${index + 1} DOM digest MIME type is unsupported.`);
-        if (artifact.width !== undefined || artifact.height !== undefined) {
-          throw new Error(`Web capture manifest ${index + 1} DOM digest cannot declare image dimensions.`);
+        if (artifact.width !== undefined || artifact.height !== undefined || artifact.perceptualHash !== undefined) {
+          throw new Error(`Web capture manifest ${index + 1} DOM digest cannot declare image-only fields.`);
         }
         artifactSummaries.push(`DOM digest ${fileName}: application/json, ${bytes} bytes, SHA-256 ${sha256}.`);
       }

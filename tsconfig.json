@@ -33,6 +33,9 @@
     "tools/**/*.ts",
     "tools/**/*.mts",
     "tools/**/*.cts",
+    "packages/**/*.ts",
+    "packages/**/*.mts",
+    "packages/**/*.cts",
     "fixtures/**/*.ts",
     "fixtures/**/*.mts",
     "fixtures/**/*.cts"

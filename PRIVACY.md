@@ -313,8 +313,9 @@ default (see the README), so many lookups return no personal data at all.
   and complete email addresses are not retained.
   Page identity can also include versioned SHA-256 fingerprints for the exact
   captured body, noise-reduced normalized HTML, static tag structure, and form
-  structure; a fuzzy visible-text SimHash; and bounded external-resource-host
-  and public-tracking-identifier sets with deterministic set digests.
+  structure; fuzzy visible-text and parse5-tokenized structure SimHashes; and
+  bounded external-resource-host and public-tracking-identifier sets with
+  deterministic set digests.
   Intermediate normalized markup and visible text are discarded immediately
   after fingerprinting. These digests support comparison but do not prove page
   authorship, ownership, intent, or maliciousness.
@@ -692,6 +693,52 @@ default (see the README), so many lookups return no personal data at all.
   signature time, signature, and public key; WHOISleuth does not generate,
   store, recover, rotate, publish, or establish trust in signing keys. These
   commands make no network request and do not upload input.
+- **Optional local rendered-capture comparison**: the separate repo-local
+  capture package can compare two explicitly selected version-2 manifests
+  without contacting either target. It verifies each referenced screenshot and
+  DOM digest against its declared size and SHA-256, recomputes the screenshot
+  perceptual hash, and reports independent screenshot, rendered DOM,
+  visible-text, page-identity, request-domain, technology, and element-count
+  relationships. Input paths, DOM markup, page text, request paths, queries,
+  headers, bodies, cookies, and credentials are not copied into the comparison
+  output. Missing perceptual evidence remains unavailable, partial captures
+  remain partial, and no combined similarity or maliciousness score is
+  produced. The local artifact files remain under the operator's retention and
+  deletion control.
+- **CLI output, checkpoints, and progress**: every CLI command can deliberately
+  write its bounded output to a private local file. Existing files are refused
+  unless replacement is explicit. Bulk checkpoints are separate private local
+  files capped at 16 MiB and contain the ordered input digest, scan mode, times,
+  queries, classifications, bounded errors, and compact per-query results. They
+  do not contain full Lookup responses, but they can still identify the targets
+  investigated and remain under the operator's retention and deletion control.
+  Resume validates the entire checkpoint and requires the exact original input
+  and scan mode. Direct Markdown and HTML reports use the same normalized
+  evidence projection as the existing export command. Saved-Lookup diff reads
+  two local current-schema domain documents and emits a bounded comparison
+  without contacting either target. Optional versioned progress events contain
+  only the command, sequence, time, source state or Bulk item index, and final
+  exit status. They exclude targets, queries, endpoints, error details, and
+  evidence values. None of these files or events is uploaded by the CLI.
+- **Supervised CLI candidate scans**: `discover-scan` explicitly sends a
+  deterministic bounded subset of locally generated candidate domains through
+  compact Lookup collection. Optional literal resolver addresses receive the
+  DNS questions for that run and can apply their own logging and retention.
+  An analyst allowlist changes review priority only. The complete list and
+  unmatched entries are not copied into output; a scanned candidate that
+  matches is explicitly labelled `suppressed` and can be selected with the
+  deliberate suppressed-only output filter. Exact shared address, nameserver, and mail-server observations are
+  derived locally and do not establish common control. A deliberate private
+  observation snapshot retains candidate domains, registration state,
+  confidence, bounded DNS summaries, component-specific observation times,
+  latest component states, and material differences. Version 1 snapshots are
+  normalized to version 2 on the next write.
+  It excludes raw registry publications, contacts, page contents, and request
+  details. A failed or partial registration or DNS component preserves the
+  previous usable evidence for that component and remains unavailable rather
+  than becoming a removal or negative finding. The CLI does
+  not upload the snapshot or perform acquisition, blocking, reporting, or
+  enforcement actions.
 - **In-tab undo**: the Console's 12-second undo notice is held only in the
   current tab's runtime memory. It can restore a prior Bulk review state,
   shortlist membership, case-tag set, or temporary evidence-cluster label by

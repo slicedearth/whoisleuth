@@ -5,19 +5,9 @@ import { statSync } from 'node:fs';
 import { join } from 'node:path';
 
 import packageJson from '../package.json' with { type: 'json' };
+import packageTemplate from '../packages/cli/package.template.json' with { type: 'json' };
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
-const EXPECTED_PACKAGE_FILES = [
-  'bin/**/*.mts',
-  'cli/**/*.mts',
-  'lib/**/*.mts',
-  'docs/cli.md',
-  'LICENSE',
-  'LICENSES/Retire.js-Apache-2.0.txt',
-  'NOTICE',
-  'frontend/static/third-party-notices.txt',
-  'TRADEMARKS.md',
-];
 
 describe('CLI package boundary', () => {
   test('remains private and does not advertise an application library entry point', () => {
@@ -39,13 +29,15 @@ describe('CLI package boundary', () => {
     ]);
   });
 
-  test('uses a narrow allowlist for distributable runtime files', () => {
-    assert.deepEqual(packageJson.files, EXPECTED_PACKAGE_FILES);
+  test('leaves distributable metadata to the scoped package builder', () => {
+    assert.equal(Object.hasOwn(packageJson, 'files'), false);
+    assert.equal(Object.hasOwn(packageJson, 'bin'), false);
+    assert.equal(packageTemplate.private, true);
+    assert.deepEqual(packageTemplate.bin, { whoisleuth: 'bin/whoisleuth.mjs' });
   });
 
-  test('exposes the native TypeScript CLI entry point as an executable', () => {
-    assert.deepEqual(packageJson.bin, { whoisleuth: 'bin/whoisleuth.mts' });
-    const mode = statSync(join(__dirname, '..', packageJson.bin.whoisleuth)).mode;
+  test('keeps the source CLI entry point executable for repository use', () => {
+    const mode = statSync(join(__dirname, '..', 'bin/whoisleuth.mts')).mode;
     assert.notEqual(mode & 0o111, 0);
   });
 });

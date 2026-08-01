@@ -96,12 +96,20 @@ describe('rowsToCsv', () => {
         ['example.com', '=HYPERLINK("https://evil.example")'],
         ['example.net', '  @SUM(1,2)'],
       ]),
-      'domain,registrar\nexample.com,"\'=HYPERLINK(""https://evil.example"")"\nexample.net,"\'  @SUM(1,2)"'
+      'domain,registrar\nexample.com,"\'=HYPERLINK(""https://evil.example"")"\nexample.net,"\'@SUM(1,2)"'
     );
   });
 
   test('quotes delimiters and preserves ordinary scalar values', () => {
     assert.equal(utils.rowsToCsv([['one,two', 3, null]]), '"one,two",3,');
+  });
+
+  test('bounds and strips control characters before formula and record handling', () => {
+    assert.equal(utils.toCsvValue('line one\rline two'), 'line one line two');
+    assert.equal(utils.toCsvValue('\t+1'), "'+1");
+    assert.equal(utils.rowsToCsv([['safe', '0\rFORMULA']]), 'safe,0 FORMULA');
+    assert.equal(utils.toCsvValue('x'.repeat(32_769)).length, 32_768);
+    assert.equal(utils.toCsvValue(['one', 'two']), 'one | two');
   });
 });
 

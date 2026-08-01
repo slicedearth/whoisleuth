@@ -1,4 +1,5 @@
 import { Buffer } from 'node:buffer';
+import { abortable } from '../lib/abort.mts';
 import { CliUsageError } from './arguments.mts';
 import type { ClassifiedQuery } from '../lib/classify.mts';
 
@@ -17,8 +18,12 @@ type BulkLookupOptions = {
   classifyQuery?: (query: string) => ClassifiedQuery;
   runUnifiedLookup?: (
     classified: ClassifiedQuery,
-    options: { fast: boolean; compact: true },
+    options: { fast: boolean; compact: true; signal?: AbortSignal },
   ) => unknown | Promise<unknown>;
+  onItemSettled?: (result: BulkLookupResult) => void;
+  initialResults?: readonly BulkLookupResult[];
+  signal?: AbortSignal;
+  dnsResolverServers?: readonly string[];
 };
 
 type BulkLookupSuccess = {
@@ -111,12 +116,28 @@ async function runBulkLookups(queries: string[], options: BulkLookupOptions = {}
     throw new TypeError('Bulk concurrency is invalid.');
   }
   const results = new Array<BulkLookupResult>(queries.length);
+  for (const result of options.initialResults || []) {
+    if (!Number.isSafeInteger(result.index) || result.index < 0 || result.index >= queries.length
+      || queries[result.index] !== result.query || results[result.index]) {
+      throw new TypeError('Initial Bulk results are invalid.');
+    }
+    results[result.index] = result;
+  }
   const lookupPromises = new Map<string, Promise<unknown>>();
   let cursor = 0;
+  function notify(result: BulkLookupResult): void {
+    try {
+      options.onItemSettled?.(result);
+    } catch {
+      // Presentation callbacks must never change collection results.
+    }
+  }
   async function worker(): Promise<void> {
     while (true) {
+      options.signal?.throwIfAborted();
       const index = cursor++;
       if (index >= queries.length) return;
+      if (results[index]) continue;
       const query = queries[index];
       if (query === undefined) return;
       try {
@@ -127,18 +148,25 @@ async function runBulkLookups(queries: string[], options: BulkLookupOptions = {}
           lookupPromise = Promise.resolve().then(() => runUnifiedLookup(classified, {
             fast: options.deep !== true,
             compact: true,
+            ...(options.signal ? { signal: options.signal } : {}),
+            ...(options.dnsResolverServers?.length ? { dnsResolverServers: options.dnsResolverServers } : {}),
           }));
           lookupPromises.set(lookupKey, lookupPromise);
         }
-        const result = await lookupPromise;
-        results[index] = { index, query, ok: true, classified, result };
+        const result = await abortable(() => lookupPromise, options.signal);
+        const item: BulkLookupResult = { index, query, ok: true, classified, result };
+        results[index] = item;
+        notify(item);
       } catch (error) {
-        results[index] = { index, query, ok: false, error: boundedLookupError(error) };
+        if (options.signal?.aborted) throw options.signal.reason || new DOMException('Aborted', 'AbortError');
+        const item: BulkLookupResult = { index, query, ok: false, error: boundedLookupError(error) };
+        results[index] = item;
+        notify(item);
       }
     }
   }
   await Promise.all(Array.from(
-    { length: Math.min(concurrency as number, queries.length) },
+    { length: Math.min(concurrency as number, Math.max(1, queries.length - (options.initialResults?.length || 0))) },
     () => worker(),
   ));
   return results;

@@ -12,6 +12,7 @@ import {
   normalizeBulkSessionStore,
   upsertBulkSession,
 } from '../frontend/src/lib/analysis/bulk-session-model.ts';
+import { normalizeCaaCritical } from '../frontend/src/lib/analysis/dns-record-normalization.ts';
 
 const FIRST = '2026-07-28T01:00:00.000Z';
 const LATER = '2026-07-29T01:00:00.000Z';
@@ -104,6 +105,32 @@ function session(id = 'session-one', overrides: Record<string, unknown> = {}) {
 }
 
 describe('saved Bulk sessions', () => {
+  test('normalizes bounded CAA critical flags and rejects malformed values', () => {
+    assert.equal(normalizeCaaCritical(0), 0);
+    assert.equal(normalizeCaaCritical('128'), 128);
+    assert.equal(normalizeCaaCritical(255), 255);
+    for (const value of [-1, 256, 1.5, Number.NaN, '256', '0\rFORMULA', ' 0', '', null]) {
+      assert.equal(normalizeCaaCritical(value), null);
+    }
+    const normalized = normalizeBulkSession(session('caa-session', {
+      results: [result('priority.invalid', {
+        dns: {
+          status: 'success',
+          records: {
+            a: [], aaaa: [], cname: [],
+            caa: [
+              { critical: '0', tag: 'issue', value: 'ca.example.test' },
+              { critical: '0\rFORMULA', tag: 'issue', value: 'discard.example.test' },
+            ],
+          },
+        },
+      })],
+    }));
+    assert.deepEqual(normalized?.results[0]?.dns?.records.caa, [
+      { critical: 0, tag: 'issue', value: 'ca.example.test' },
+    ]);
+  });
+
   test('normalizes compact evidence while excluding unknown and contact fields', () => {
     const normalized = normalizeBulkSession(session('session-one', {
       results: [result('priority.invalid', {

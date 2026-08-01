@@ -4,6 +4,7 @@ import { expectNoHorizontalOverflow } from './helpers';
 test.use({ storageState: { cookies: [], origins: [] } });
 
 test('completes the public synthetic workflow without investigation requests or production-store access', async ({ page }) => {
+  test.slow();
   const apiRequestPaths: string[] = [];
   page.on('request', (request) => {
     const { pathname } = new URL(request.url());

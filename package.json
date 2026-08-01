@@ -1,6 +1,6 @@
 {
   "name": "whoisleuth",
-  "version": "1.26.0",
+  "version": "1.31.2",
   "private": true,
   "license": "AGPL-3.0-only",
   "description": "Open-source, local-first domain intelligence and brand-protection console for WHOIS, RDAP, DNS, certificate transparency, lookalike domains, and web evidence.",
@@ -16,20 +16,6 @@
     "threat-intelligence",
     "asn"
   ],
-  "files": [
-    "bin/**/*.mts",
-    "cli/**/*.mts",
-    "lib/**/*.mts",
-    "docs/cli.md",
-    "LICENSE",
-    "LICENSES/Retire.js-Apache-2.0.txt",
-    "NOTICE",
-    "frontend/static/third-party-notices.txt",
-    "TRADEMARKS.md"
-  ],
-  "bin": {
-    "whoisleuth": "bin/whoisleuth.mts"
-  },
   "workspaces": [
     "frontend"
   ],
@@ -44,6 +30,9 @@
     "test:e2e": "playwright test",
     "test:e2e:built": "WHOISLEUTH_E2E_USE_BUILD=1 playwright test",
     "test:e2e:install": "playwright install --with-deps chromium",
+  "capture:local": "node packages/web-capture/bin/whoisleuth-capture.mts",
+  "capture:compare": "node packages/web-capture/bin/whoisleuth-capture.mts compare",
+    "cli:package:check": "node tools/cli-package.mts",
     "schema:inventory": "node tools/schema-inventory.mts",
     "deployment:self-check": "node tools/deployment-self-check.mts",
     "registry:drift": "node tools/registry-drift-audit.mts",
@@ -70,7 +59,7 @@
     "benchmark:workflow": "node tools/specialist-workflow-benchmark.mts",
     "platform:local-data": "node tools/local-data-platform-evaluation.mts",
     "catalog:retire": "node tools/retire-browser-catalog.mts",
-    "architecture:check": "npm run sync --workspace=frontend && depcruise --config .dependency-cruiser.json --output-type err-long -- lib cli bin netlify/functions frontend/src tools server.mts",
+    "architecture:check": "npm run sync --workspace=frontend && depcruise --config .dependency-cruiser.json --output-type err-long -- lib cli bin netlify/functions frontend/src packages tools server.mts",
     "release:check": "node tools/release-version-check.mts",
     "licenses:check": "node tools/third-party-notices.mts --check",
     "licenses:update": "node tools/third-party-notices.mts --write",

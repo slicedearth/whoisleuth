@@ -13,6 +13,7 @@ import {
   runBulkLookups,
 } from '../cli/bulk.mts';
 import type { BulkLookupResult, ClassifiedQuery } from '../cli/bulk.mts';
+import { formatBulkCsv, formatBulkDomainList, selectBulkItems } from '../cli/bulk-output.mts';
 import EXIT_CODES from '../cli/exit-codes.mts';
 import { buildCliBulkDocument, formatJsonLines } from '../cli/formatters/json.mts';
 import { formatTerminalBulk } from '../cli/formatters/terminal.mts';
@@ -69,6 +70,10 @@ describe('bulk CLI argument parsing', () => {
       quiet: false,
       color: true,
       concurrency: 4,
+      checkpoint: null,
+      resume: false,
+      events: false,
+      filter: 'all',
     });
   });
 
@@ -81,6 +86,10 @@ describe('bulk CLI argument parsing', () => {
       quiet: false,
       color: false,
       concurrency: 3,
+      checkpoint: null,
+      resume: false,
+      events: false,
+      filter: 'all',
     });
   });
 
@@ -92,6 +101,7 @@ describe('bulk CLI argument parsing', () => {
     assert.throws(() => parseCliArguments(['bulk', '--concurrency', '0']), /from 1 to 8/);
     assert.throws(() => parseCliArguments(['bulk', '--deep', '--concurrency', '4']), /capped at 3/);
     assert.throws(() => parseCliArguments(['bulk', '--json', '--quiet']), /cannot be combined/);
+    assert.throws(() => parseCliArguments(['bulk', '--registered-only', '--inconclusive-only']), /mutually exclusive/);
   });
 });
 
@@ -193,6 +203,43 @@ describe('bulk lookup execution', () => {
     assert.doesNotMatch(classificationFailure.error, /[\x00-\x1f\x7f]/);
     assert.equal(lookupFailure.error, 'upstream failure');
   });
+
+  test('reuses validated checkpoint results without repeating completed lookups', async () => {
+    const queries = ['done.test', 'pending.test'];
+    const completed: BulkLookupResult = {
+      index: 0,
+      query: 'done.test',
+      ok: true,
+      classified: classified('done.test'),
+      result: compactResult('done.test'),
+    };
+    const requested: string[] = [];
+    const results = await runBulkLookups(queries, {
+      concurrency: 2,
+      classifyQuery: classified,
+      initialResults: [completed],
+      runUnifiedLookup: async (item) => {
+        requested.push(item.value);
+        return compactResult(item.value);
+      },
+    });
+    assert.deepEqual(requested, ['pending.test']);
+    assert.deepEqual(results.map((item) => item.query), queries);
+  });
+
+  test('stops scheduling and does not convert analyst cancellation into an item failure', async () => {
+    const controller = new AbortController();
+    const work = runBulkLookups(['one.test', 'two.test'], {
+      concurrency: 1,
+      classifyQuery: classified,
+      signal: controller.signal,
+      runUnifiedLookup: async () => new Promise(() => {}),
+    });
+    setImmediate(() => controller.abort());
+    await assert.rejects(work, (error: unknown) => (
+      error instanceof DOMException && error.name === 'AbortError'
+    ));
+  });
 });
 
 describe('bulk output and runner', () => {
@@ -204,7 +251,8 @@ describe('bulk output and runner', () => {
     const metadata = { deep: false, duplicates: 2, generatedAt: '2026-07-14T00:00:00.000Z' };
     const document = buildCliBulkDocument(items, metadata);
     assert.equal(document.schema, 'whoisleuth.cli.bulk');
-    assert.deepEqual(document.summary, { total: 2, succeeded: 1, failed: 1, duplicatesRemoved: 2 });
+    assert.equal(document.version, 2);
+    assert.deepEqual(document.summary, { collected: 2, matched: 2, succeeded: 1, failed: 1, duplicatesRemoved: 2 });
     assert.deepEqual(arrayValue(document.results).map((item) => recordValue(item).query), ['one.test', 'bad']);
     const lines = formatJsonLines(items, metadata).trim().split('\n').map((line) => JSON.parse(line));
     assert.deepEqual(lines.map((item) => item.schema), ['whoisleuth.cli.bulk.item', 'whoisleuth.cli.bulk.item']);
@@ -218,7 +266,7 @@ describe('bulk output and runner', () => {
     ], { duplicates: 1 });
     assert.match(output, /✓ one\.test — Registered \(High confidence\)/);
     assert.match(output, /! bad — Invalid query/);
-    assert.match(output, /2 queries · 1 succeeded · 1 failed · 1 duplicates removed/);
+    assert.match(output, /2 collected · 1 succeeded · 1 failed in output · 1 duplicates removed/);
   });
 
   test('runner emits successful and failed JSON items with partial-failure exit code', async () => {
@@ -238,7 +286,64 @@ describe('bulk output and runner', () => {
     assert.equal(code, EXIT_CODES.PARTIAL_FAILURE);
     assert.equal(stderr.value(), '');
     const output = JSON.parse(stdout.value());
-    assert.deepEqual(output.summary, { total: 2, succeeded: 1, failed: 1, duplicatesRemoved: 1 });
+    assert.deepEqual(output.summary, { collected: 2, matched: 2, succeeded: 1, failed: 1, duplicatesRemoved: 1 });
+  });
+
+  test('CSV and domain-list output retain bounded DNS summaries', () => {
+    const baseResult = compactResult('one.test');
+    const result = {
+      ...baseResult,
+      availability: {
+        ...baseResult.availability,
+        dns: {
+          status: 'success',
+          records: {
+            a: ['192.0.2.10'],
+            aaaa: ['2001:db8::10'],
+            ns: ['ns1.example.test'],
+            mx: [{ priority: 10, exchange: 'mail.example.test.' }],
+          },
+        },
+        hasNullMx: false,
+        hasSpf: true,
+        hasDmarc: false,
+      },
+    };
+    const items: BulkLookupResult[] = [
+      { index: 0, query: 'one.test', ok: true, classified: classified('one.test'), result },
+    ];
+    const csv = formatBulkCsv(items);
+    assert.match(csv, /^query,domain,outcome,availability,confidence,dns_status,/u);
+    assert.match(csv, /192\.0\.2\.10/);
+    assert.match(csv, /,2001:db8::10,/u);
+    assert.match(csv, /10 mail\.example\.test/u);
+    assert.match(csv, /observed,not_observed/u);
+    assert.equal(formatBulkDomainList(items), 'one.test\n');
+  });
+
+  test('CSV output neutralizes untrusted query and error formulas', () => {
+    const csv = formatBulkCsv([{
+      index: 0,
+      query: '=IMPORTDATA("https://example.invalid")',
+      ok: false,
+      error: '@unexpected',
+    }]);
+    assert.match(csv, /"'=IMPORTDATA\(""https:\/\/example\.invalid""\)"/u);
+    assert.match(csv, /,'@unexpected$/mu);
+  });
+
+  test('registered and inconclusive filters preserve authority-aware states', () => {
+    const item = (domain: string, state: string): BulkLookupResult => ({
+      index: 0,
+      query: domain,
+      ok: true,
+      classified: classified(domain),
+      result: { ...compactResult(domain), availability: { ...compactResult(domain).availability, state } },
+    });
+    const failed: BulkLookupResult = { index: 3, query: 'failed.test', ok: false, error: 'Unavailable' };
+    const items = [item('registered.test', 'registered'), item('sale.test', 'for_sale'), item('unknown.test', 'unknown'), failed];
+    assert.deepEqual(selectBulkItems(items, 'registered').map((value) => value.query), ['registered.test', 'sale.test']);
+    assert.deepEqual(selectBulkItems(items, 'inconclusive').map((value) => value.query), ['unknown.test', 'failed.test']);
   });
 
   test('runner treats unreadable input as usage failure before any lookup', async () => {

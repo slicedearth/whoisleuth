@@ -879,3 +879,5 @@ export {
   normalizeServiceBindings,
   normalizePtr,
 };
+
+export type { DnsResolver };

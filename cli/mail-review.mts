@@ -1,0 +1,208 @@
+import { Buffer } from 'node:buffer';
+import { getDomain } from 'tldts';
+
+import { CliUsageError } from './errors.mts';
+
+export const CLI_MAIL_REVIEW_SCHEMA = 'whoisleuth.cli.mail-review';
+export const CLI_MAIL_REVIEW_VERSION = 1;
+export const MAX_MAIL_REVIEW_INPUT_BYTES = 16 * 1024 * 1024;
+export const MAX_MAIL_REVIEW_ROWS = 500;
+
+type UnknownRecord = Record<string, unknown>;
+type MailState = 'authenticated_mail' | 'evidence_incomplete' | 'mail_auth_gap' | 'mail_auth_incomplete' | 'no_explicit_mx' | 'null_mx';
+
+function record(value: unknown): UnknownRecord {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as UnknownRecord : {};
+}
+
+function text(value: unknown, maximum = 500): string {
+  return typeof value === 'string'
+    ? value.replace(/[\u0000-\u001f\u007f]+/gu, ' ').replace(/\s+/gu, ' ').trim().slice(0, maximum)
+    : '';
+}
+
+function boolean(value: unknown): boolean | null {
+  return typeof value === 'boolean' ? value : null;
+}
+
+function mxHosts(availability: UnknownRecord, summary: UnknownRecord): string[] {
+  const direct = Array.isArray(availability.mxHosts) ? availability.mxHosts : [];
+  const summarized = Array.isArray(summary.mx) ? summary.mx : [];
+  const output = new Set<string>();
+  for (const candidate of [...direct, ...summarized].slice(0, 200)) {
+    const normalized = text(candidate, 300).replace(/^\d+\s+/u, '').replace(/\.$/u, '').toLowerCase();
+    if (normalized && normalized.length <= 253) output.add(normalized);
+    if (output.size >= 50) break;
+  }
+  return [...output];
+}
+
+function providerDomains(hosts: readonly string[]): string[] {
+  return [...new Set(hosts.flatMap((host) => {
+    const labels = host.split('.').filter(Boolean);
+    const domain = getDomain(host, { allowPrivateDomains: true })
+      ?? (labels.length >= 2 ? labels.slice(-2).join('.') : null);
+    return domain ? [domain.toLowerCase()] : [];
+  }))].sort().slice(0, 20);
+}
+
+function mailState(input: Readonly<{
+  dnsStatus: string;
+  hasMx: boolean | null;
+  hasNullMx: boolean | null;
+  hasSpf: boolean | null;
+  hasDmarc: boolean | null;
+}>): MailState {
+  if (!['success', 'partial'].includes(input.dnsStatus)) return 'evidence_incomplete';
+  if (input.hasNullMx === true) return 'null_mx';
+  if (input.hasMx === true) {
+    if (input.hasSpf === true && input.hasDmarc === true) return 'authenticated_mail';
+    if (input.hasSpf === false || input.hasDmarc === false) return 'mail_auth_gap';
+    return 'mail_auth_incomplete';
+  }
+  if (input.hasMx === false && input.hasNullMx === false) return 'no_explicit_mx';
+  return 'evidence_incomplete';
+}
+
+function normalizeMailRow(value: unknown) {
+  const item = record(value);
+  if (item.ok !== true) return null;
+  const availability = record(item.availability);
+  const summary = record(item.dnsSummary);
+  const domain = text(item.registrableDomain ?? item.query ?? availability.domain, 253).toLowerCase().replace(/\.$/u, '');
+  if (!domain || !domain.includes('.')) return null;
+  const dns = record(availability.dns);
+  const dnsStatus = text(summary.status ?? dns.status, 40).toLowerCase() || 'unavailable';
+  const hosts = mxHosts(availability, summary);
+  const hasMx = boolean(availability.hasMx) ?? (hosts.length ? true : null);
+  const hasNullMx = boolean(availability.hasNullMx) ?? boolean(summary.hasNullMx);
+  const hasSpf = boolean(availability.hasSpf) ?? boolean(summary.hasSpf);
+  const hasDmarc = boolean(availability.hasDmarc) ?? boolean(summary.hasDmarc);
+  const state = mailState({ dnsStatus, hasMx, hasNullMx, hasSpf, hasDmarc });
+  return {
+    domain,
+    state,
+    dnsStatus,
+    hasMx,
+    hasNullMx,
+    hasSpf,
+    hasDmarc,
+    mxHosts: hosts,
+    providerDomains: providerDomains(hosts),
+    limitations: [
+      ...(dnsStatus === 'partial' ? ['DNS evidence was partial.'] : []),
+      ...(state === 'no_explicit_mx' ? ['No explicit MX is not equivalent to a null MX or proof that delivery is impossible.'] : []),
+      'Mail configuration does not establish use, control, intent, safety, or maliciousness.',
+    ],
+  };
+}
+
+function parseInput(textValue: unknown): UnknownRecord[] {
+  if (typeof textValue !== 'string' || Buffer.byteLength(textValue, 'utf8') > MAX_MAIL_REVIEW_INPUT_BYTES) {
+    throw new CliUsageError(`Mail review input is limited to ${MAX_MAIL_REVIEW_INPUT_BYTES} bytes.`);
+  }
+  const textInput = textValue.replace(/^\uFEFF/u, '').trim();
+  if (!textInput) throw new CliUsageError('Mail review requires one Bulk JSON or JSONL document.');
+  let values: unknown[];
+  try {
+    const parsed = JSON.parse(textInput);
+    const document = record(parsed);
+    if (document.schema === 'whoisleuth.cli.bulk' && document.version === 2 && Array.isArray(document.results)) {
+      values = document.results;
+    } else if (document.schema === 'whoisleuth.cli.bulk.item' && document.version === 2) {
+      values = [document];
+    } else {
+      throw new CliUsageError('Mail review requires WHOISleuth Bulk JSON schema version 2.');
+    }
+  } catch (error) {
+    if (error instanceof CliUsageError) throw error;
+    try {
+      values = textInput.split(/\r?\n/u).filter(Boolean).map((line) => JSON.parse(line));
+    } catch {
+      throw new CliUsageError('Mail review input must be valid WHOISleuth Bulk JSON or JSONL.');
+    }
+  }
+  if (!values.length || values.length > MAX_MAIL_REVIEW_ROWS) {
+    throw new CliUsageError(`Mail review supports between 1 and ${MAX_MAIL_REVIEW_ROWS} Bulk rows.`);
+  }
+  const rows = values.map((value) => record(value));
+  if (rows.some((value) => value.schema !== 'whoisleuth.cli.bulk.item' || value.version !== 2)) {
+    throw new CliUsageError('Every Mail review row must use WHOISleuth Bulk item schema version 2.');
+  }
+  return rows;
+}
+
+function buildCliMailReview(textValue: unknown, generatedAt = new Date().toISOString()) {
+  const inputRows = parseInput(textValue);
+  const rows = inputRows.map(normalizeMailRow).filter((row): row is NonNullable<ReturnType<typeof normalizeMailRow>> => Boolean(row));
+  if (!rows.length) throw new CliUsageError('Mail review input contains no completed domain results.');
+  const counts: Record<MailState, number> = {
+    authenticated_mail: 0,
+    evidence_incomplete: 0,
+    mail_auth_gap: 0,
+    mail_auth_incomplete: 0,
+    no_explicit_mx: 0,
+    null_mx: 0,
+  };
+  for (const row of rows) counts[row.state] += 1;
+  const providerMap = new Map<string, string[]>();
+  for (const row of rows) {
+    for (const provider of row.providerDomains) {
+      const domains = providerMap.get(provider) ?? [];
+      domains.push(row.domain);
+      providerMap.set(provider, domains);
+    }
+  }
+  const providerRelationships = [...providerMap.entries()]
+    .filter(([, domains]) => new Set(domains).size >= 2)
+    .map(([providerDomain, domains]) => ({
+      providerDomain,
+      domains: [...new Set(domains)].sort().slice(0, 100),
+      method: 'Shared registrable domain of an observed MX hostname',
+      limitation: 'Shared mail providers are common and do not establish common ownership, control, intent, safety, or maliciousness.',
+    }))
+    .sort((left, right) => left.providerDomain.localeCompare(right.providerDomain))
+    .slice(0, 100);
+  return {
+    schema: CLI_MAIL_REVIEW_SCHEMA,
+    version: CLI_MAIL_REVIEW_VERSION,
+    generatedAt,
+    counts,
+    rows,
+    providerRelationships,
+    limitations: [
+      'This review is passive and uses DNS evidence already retained in a WHOISleuth Bulk result; it makes no network request.',
+      'Null MX, no explicit MX, receiving mail, authentication gaps, and incomplete evidence remain separate states.',
+      'SMTP delivery, mailbox existence, catch-all behavior, banner collection, and message acceptance were not tested.',
+    ],
+  };
+}
+
+function formatCliMailReview(document: ReturnType<typeof buildCliMailReview>): string {
+  const lines = [
+    'Passive mail exposure review',
+    `Domains          ${document.rows.length}`,
+    `Authenticated    ${document.counts.authenticated_mail}`,
+    `Auth gaps        ${document.counts.mail_auth_gap}`,
+    `Null MX          ${document.counts.null_mx}`,
+    `No explicit MX   ${document.counts.no_explicit_mx}`,
+    `Incomplete       ${document.counts.evidence_incomplete + document.counts.mail_auth_incomplete}`,
+    '',
+  ];
+  for (const row of document.rows) {
+    lines.push(`${row.domain}  ${row.state.replaceAll('_', ' ')}`);
+    lines.push(`  MX providers  ${row.providerDomains.join(', ') || 'None observed'}`);
+    lines.push(`  SPF / DMARC   ${row.hasSpf === null ? 'unknown' : row.hasSpf ? 'observed' : 'not observed'} / ${row.hasDmarc === null ? 'unknown' : row.hasDmarc ? 'observed' : 'not observed'}`);
+  }
+  if (document.providerRelationships.length) {
+    lines.push('', 'Shared mail-provider relationships');
+    for (const relationship of document.providerRelationships) {
+      lines.push(`${relationship.providerDomain}  ${relationship.domains.join(', ')}`);
+    }
+  }
+  lines.push('', 'Limitations:');
+  for (const limitation of document.limitations) lines.push(`  - ${limitation}`);
+  return `${lines.join('\n')}\n`;
+}
+
+export { buildCliMailReview, formatCliMailReview, mailState, normalizeMailRow };

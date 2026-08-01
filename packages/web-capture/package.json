@@ -1,0 +1,13 @@
+{
+  "name": "@slicedearth/whoisleuth-web-capture",
+  "version": "1.1.0",
+  "private": true,
+  "type": "module",
+  "license": "AGPL-3.0-only",
+  "bin": {
+    "whoisleuth-capture": "bin/whoisleuth-capture.mts"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}

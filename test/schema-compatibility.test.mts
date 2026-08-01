@@ -92,6 +92,20 @@ import {
   buildCliTlsDocument,
 } from '../cli/formatters/json.mts';
 import {
+  CLI_DISCOVERY_SCAN_ITEM_SCHEMA,
+  CLI_DISCOVERY_SCAN_SCHEMA,
+  CLI_DISCOVERY_SCAN_VERSION,
+} from '../cli/discovery-scan.mts';
+import {
+  CLI_DISCOVERY_SNAPSHOT_SCHEMA,
+  MAX_DISCOVERY_SNAPSHOT_BYTES,
+} from '../cli/discovery-snapshot.mts';
+import {
+  CLI_DISCOVERY_OBSERVATION_SCHEMA,
+  CLI_DISCOVERY_OBSERVATION_VERSION,
+  MAX_DISCOVERY_OBSERVATION_BYTES,
+} from '../cli/discovery-observation-snapshot.mts';
+import {
   LOOKUP_EVIDENCE_SCHEMA,
   LOOKUP_EVIDENCE_SCHEMA_VERSION,
   buildLookupEvidence,
@@ -143,6 +157,21 @@ import {
   OBSERVATION_ENVELOPE_SCHEMA,
   OBSERVATION_ENVELOPE_VERSION,
 } from '../frontend/src/lib/analysis/observation-envelope.ts';
+import {
+  WEB_CAPTURE_SUMMARY_SCHEMA,
+  WEB_CAPTURE_SUMMARY_VERSION,
+} from '../frontend/src/lib/analysis/web-capture-import.ts';
+import {
+  MAX_WEB_CAPTURE_DOM_DIGEST_BYTES,
+  WEB_CAPTURE_DOM_DIGEST_SCHEMA,
+  WEB_CAPTURE_MANIFEST_SCHEMA,
+  WEB_CAPTURE_MANIFEST_VERSION,
+} from '../packages/web-capture/capture.mts';
+import {
+  MAX_MANIFEST_BYTES,
+  WEB_CAPTURE_COMPARISON_SCHEMA,
+  WEB_CAPTURE_COMPARISON_VERSION,
+} from '../packages/web-capture/compare.mts';
 
 const NOW = '2026-07-19T00:00:00.000Z';
 
@@ -163,7 +192,7 @@ describe('schema compatibility inventory', () => {
     assert.equal(inventory.schema, SCHEMA_COMPATIBILITY_INVENTORY_SCHEMA);
     assert.equal(inventory.version, SCHEMA_COMPATIBILITY_INVENTORY_VERSION);
     assert.equal(inventory.generatedAt, NOW);
-    assert.equal(inventory.entries.length, 64);
+    assert.equal(inventory.entries.length, 75);
     assert.deepEqual(new Set(inventory.entries.map((entry) => entry.kind)), new Set([
       'browser_store', 'tab_store', 'hosted_store', 'export', 'cli_document', 'derived',
     ]));
@@ -171,6 +200,30 @@ describe('schema compatibility inventory', () => {
     assert.equal(byId(inventory, 'browser.cases').currentVersion, CASE_SCHEMA_VERSION);
     assert.equal(byId(inventory, 'export.lookup-evidence').schema, LOOKUP_EVIDENCE_SCHEMA);
     assert.equal(byId(inventory, 'export.lookup-evidence').currentVersion, LOOKUP_EVIDENCE_SCHEMA_VERSION);
+    assert.equal(byId(inventory, 'cli.bulk-checkpoint').schema, 'whoisleuth.cli.bulk-checkpoint');
+    assert.equal(byId(inventory, 'cli.progress-event').schema, 'whoisleuth.cli.progress');
+    assert.equal(byId(inventory, 'cli.lookup-diff').schema, 'whoisleuth.cli.lookup-diff');
+    assert.deepEqual(byId(inventory, 'cli.bulk').supportedVersions, [1, 2]);
+    assert.deepEqual(byId(inventory, 'cli.bulk-item').supportedVersions, [1, 2]);
+    assert.equal(byId(inventory, 'cli.discovery-scan').schema, CLI_DISCOVERY_SCAN_SCHEMA);
+    assert.equal(byId(inventory, 'cli.discovery-scan-item').schema, CLI_DISCOVERY_SCAN_ITEM_SCHEMA);
+    assert.equal(byId(inventory, 'cli.discovery-scan').currentVersion, CLI_DISCOVERY_SCAN_VERSION);
+    assert.equal(byId(inventory, 'cli.discovery-snapshot').schema, CLI_DISCOVERY_SNAPSHOT_SCHEMA);
+    assert.equal(byId(inventory, 'cli.discovery-snapshot').byteBudget, MAX_DISCOVERY_SNAPSHOT_BYTES);
+    assert.equal(byId(inventory, 'cli.discovery-observation-snapshot').schema, CLI_DISCOVERY_OBSERVATION_SCHEMA);
+    assert.equal(byId(inventory, 'cli.discovery-observation-snapshot').currentVersion, CLI_DISCOVERY_OBSERVATION_VERSION);
+    assert.deepEqual(byId(inventory, 'cli.discovery-observation-snapshot').supportedVersions, [1, 2]);
+    assert.equal(byId(inventory, 'cli.discovery-observation-snapshot').byteBudget, MAX_DISCOVERY_OBSERVATION_BYTES);
+    assert.equal(byId(inventory, 'export.web-capture-summary').schema, WEB_CAPTURE_SUMMARY_SCHEMA);
+    assert.equal(byId(inventory, 'export.web-capture-summary').currentVersion, WEB_CAPTURE_SUMMARY_VERSION);
+    assert.equal(byId(inventory, 'export.web-capture-manifest').schema, WEB_CAPTURE_MANIFEST_SCHEMA);
+    assert.equal(byId(inventory, 'export.web-capture-manifest').currentVersion, WEB_CAPTURE_MANIFEST_VERSION);
+    assert.deepEqual(byId(inventory, 'export.web-capture-manifest').supportedVersions, [1, 2]);
+    assert.equal(byId(inventory, 'export.web-capture-manifest').byteBudget, MAX_MANIFEST_BYTES);
+    assert.equal(byId(inventory, 'export.web-capture-dom-digest').schema, WEB_CAPTURE_DOM_DIGEST_SCHEMA);
+    assert.equal(byId(inventory, 'export.web-capture-dom-digest').byteBudget, MAX_WEB_CAPTURE_DOM_DIGEST_BYTES);
+    assert.equal(byId(inventory, 'cli.web-capture-comparison').schema, WEB_CAPTURE_COMPARISON_SCHEMA);
+    assert.equal(byId(inventory, 'cli.web-capture-comparison').currentVersion, WEB_CAPTURE_COMPARISON_VERSION);
     assert.deepEqual(byId(inventory, 'export.lookup-evidence').supportedVersions, [12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23]);
     assert.deepEqual(byId(inventory, 'export.synthetic-demo').supportedVersions, [2, 3, 4, 5]);
     assert.equal(byId(inventory, 'export.relationship-graph').schema, RELATIONSHIP_GRAPH_EXPORT_SCHEMA);

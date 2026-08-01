@@ -78,6 +78,7 @@ npm test
 npm run typecheck
 npm run check
 npm run build
+npm run cli:package:check
 npm run test:e2e:built
 git diff --check
 npm audit --omit=dev
@@ -228,8 +229,10 @@ npm run frontend:authenticated-loading-report
 ```
 
 The report uses only local build artifacts. It fails if the browser-local
-workspace chunk enters a public route and reports gzip estimates rather than
-claiming measured network timings. The authenticated Playwright report then
+workspace chunk enters a public route, a generated route lacks a reviewed
+gzip ceiling, or a route exceeds that deliberately generous regression budget.
+CI runs this check after the production build. The estimates are not measured
+network timings. The authenticated Playwright report then
 cold-loads Lookup and Monitor through the real local sign-in boundary, measures
 encoded transfer bytes with Chromium's network protocol, records the first
 enabled route control time and main-thread long tasks, and attaches one JSON
@@ -478,16 +481,28 @@ application. Start with:
 
 ```bash
 node bin/whoisleuth.mts --help
+node bin/whoisleuth.mts doctor
 ```
 
 The [CLI guide](cli.md) documents commands for Lookup, Bulk, Certificate
 Transparency, discovery, posture, HTTP and TLS intelligence, registry-source
 comparison, compatibility inspection, Risk calibration, artifact verification,
 privacy-safe source diagnostics, and evidence export. It also defines output
-formats and exit codes.
+formats, exit codes, terminal detail levels, TTY-only progress and colour,
+offline-first diagnostics, atomic private file output, strict automation exits,
+resumable Bulk checkpoints, cancellation, saved-Lookup diff, direct readable
+reports, machine progress events, a generated manual, and bash, zsh, and fish
+completion scripts.
 
 The CLI is a local package boundary. It is not included in the static frontend
-or the Netlify function bundles unless a shared module is also used there.
+or the Netlify function bundles unless a shared module is also used there. The
+candidate scoped package remains private, but its exact compiled dependency
+closure can be packed, installed, and smoke tested without leaving temporary
+artifacts in the repository:
+
+```bash
+npm run cli:package:check
+```
 
 ## Project layout
 

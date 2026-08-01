@@ -5,19 +5,31 @@
       "severity": "error",
       "comment": "Application modules must not participate in circular dependencies.",
       "from": {
-        "path": "^(?:bin|cli|frontend/src|lib|netlify/functions|tools)(?:/|$)|^server\\.mts$"
+        "path": "^(?:bin|cli|frontend/src|lib|netlify/functions|packages|tools)(?:/|$)|^server\\.mts$"
       },
       "to": {
         "circular": true
       }
     },
     {
+      "name": "optional-local-tools-stay-outside-application-adapters",
+      "severity": "error",
+      "comment": "Optional active local packages may reuse bounded shared primitives but must not become alternate frontend, hosted, server, or core CLI entry points.",
+      "from": {
+        "path": "^packages/(?:web-capture|smtp-banner)/"
+      },
+      "to": {
+        "path": "^(?:bin|cli|frontend/src|netlify/functions)(?:/|$)|^server\\.mts$",
+        "reachable": true
+      }
+    },
+    {
       "name": "production-no-orphans",
       "severity": "error",
-      "comment": "Shared and browser-library modules must have an application consumer so obsolete production files cannot survive behind tests alone.",
+      "comment": "Shared, CLI, and browser-library modules must have an application consumer so obsolete production files cannot survive behind tests alone.",
       "from": {
-        "path": "^(?:frontend/src/lib|lib)/",
-        "pathNot": "^(?:frontend/src/lib/local-data-platform-probe\\.ts|lib/(?:netlify-function-types|threat-intelligence-types|whois-contracts)\\.mts)$",
+        "path": "^(?:cli|frontend/src/lib|lib)/",
+        "pathNot": "^(?:cli/runner-types\\.mts|frontend/src/lib/local-data-platform-probe\\.ts|lib/(?:netlify-function-types|threat-intelligence-types|whois-contracts)\\.mts)$",
         "orphan": true
       },
       "to": {}
@@ -68,7 +80,7 @@
       "severity": "error",
       "comment": "Application imports must resolve under the locked TypeScript and workspace configuration.",
       "from": {
-        "path": "^(?:bin|cli|frontend/src|lib|netlify/functions|tools)(?:/|$)|^server\\.mts$"
+        "path": "^(?:bin|cli|frontend/src|lib|netlify/functions|packages|tools)(?:/|$)|^server\\.mts$"
       },
       "to": {
         "couldNotResolve": true,

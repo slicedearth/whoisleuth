@@ -1,5 +1,5 @@
 import { Buffer } from 'node:buffer';
-import { isIP } from 'node:net';
+import { isValidAsciiDomainName } from '../lib/hostname.mts';
 
 import { CliUsageError } from './arguments.mts';
 import type { BoundedTextStream } from './bulk.mts';
@@ -22,7 +22,6 @@ const MAX_PROVIDERS = 10;
 const MAX_FINDINGS_PER_PROVIDER = 100;
 const MAX_TIMESTAMP_LENGTH = 64;
 const CONTROL_RE = /[\x00-\x1f\x7f]/;
-const DOMAIN_RE = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
 const DISPOSITIONS = new Set([
   'unreviewed', 'suspicious', 'confirmed_abuse', 'false_positive', 'expected', 'closed_no_action',
 ]);
@@ -267,7 +266,7 @@ export function parseRiskCalibrationDataset(text: unknown): CalibrationDataset {
     if (ids.has(id)) throw new CliUsageError(`${prefix}.id must be unique.`);
     ids.add(id);
     const domain = boundedString(record.domain, `${prefix}.domain`, 253).toLowerCase().replace(/\.$/, '');
-    if (!DOMAIN_RE.test(domain) || isIP(domain)) throw new CliUsageError(`${prefix}.domain must be a valid ASCII DNS hostname, not an IP address.`);
+    if (!isValidAsciiDomainName(domain, { requireDot: true })) throw new CliUsageError(`${prefix}.domain must be a valid ASCII DNS hostname, not an IP address.`);
     const analystDisposition = boundedString(record.analystDisposition, `${prefix}.analystDisposition`, 32);
     if (!DISPOSITIONS.has(analystDisposition)) throw new CliUsageError(`${prefix}.analystDisposition is unsupported.`);
     return {

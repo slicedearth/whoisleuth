@@ -3,6 +3,7 @@
 // WHOIS, HTTP, TLS, page, or provider payloads.
 
 import { normalizeDomain } from './case-model.ts';
+import { normalizeCaaCritical } from './dns-record-normalization.ts';
 
 export const BULK_SESSION_SCHEMA = 'whoisleuth.bulk-sessions';
 export const BULK_SESSION_SCHEMA_VERSION = 2;
@@ -79,7 +80,7 @@ export type BulkSessionDnsEvidence = {
     a: string[];
     aaaa: string[];
     cname: string[];
-    caa: Array<{ critical: number | string; tag: string; value: string }>;
+    caa: Array<{ critical: number; tag: string; value: string }>;
   };
 };
 
@@ -293,8 +294,8 @@ function normalizeDns(value: unknown): BulkSessionDnsEvidence | null {
         const caaRecord = record(candidate);
         const tag = boundedText(caaRecord?.tag, 64);
         const recordValue = boundedText(caaRecord?.value, 500);
-        const critical = caaRecord?.critical;
-        return tag && recordValue && (typeof critical === 'number' || typeof critical === 'string')
+        const critical = normalizeCaaCritical(caaRecord?.critical);
+        return tag && recordValue && critical !== null
           ? [{ critical, tag, value: recordValue }]
           : [];
       })

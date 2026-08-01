@@ -1,0 +1,11 @@
+export const WEB_CAPTURE_SUMMARY_SCHEMA = 'whoisleuth.web-capture-summary';
+export const WEB_CAPTURE_SUMMARY_VERSION = 1;
+export const WEB_CAPTURE_MANIFEST_SCHEMA = 'whoisleuth.web-capture-manifest';
+export const WEB_CAPTURE_MANIFEST_VERSION = 2;
+export const WEB_CAPTURE_DOM_DIGEST_SCHEMA = 'whoisleuth.dom-digest';
+export const WEB_CAPTURE_DOM_DIGEST_VERSION = 1;
+export const WEB_CAPTURE_COMPARISON_SCHEMA = 'whoisleuth.web-capture-comparison';
+export const WEB_CAPTURE_COMPARISON_VERSION = 1;
+export const MAX_WEB_CAPTURE_MANIFEST_BYTES = 1024 * 1024;
+export const MAX_WEB_CAPTURE_DOM_DIGEST_BYTES = 1024 * 1024;
+export const MAX_WEB_CAPTURE_SCREENSHOT_BYTES = 10 * 1024 * 1024;
