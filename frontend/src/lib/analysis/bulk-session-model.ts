@@ -3,6 +3,7 @@
 // WHOIS, HTTP, TLS, page, or provider payloads.
 
 import { normalizeDomain } from './case-model.ts';
+import { normalizeCaaCritical } from './dns-record-normalization.ts';
 
 export const BULK_SESSION_SCHEMA = 'whoisleuth.bulk-sessions';
 export const BULK_SESSION_SCHEMA_VERSION = 2;
@@ -282,15 +283,6 @@ function normalizeRelationship(value: unknown): BulkSessionRelationship {
     certificateFingerprint: nullableHash(item?.certificateFingerprint, HASH_64_RE),
     truncated: item?.truncated === true,
   };
-}
-
-export function normalizeCaaCritical(value: unknown): number | null {
-  if (typeof value === 'number') {
-    return Number.isSafeInteger(value) && value >= 0 && value <= 255 ? value : null;
-  }
-  if (typeof value !== 'string' || !/^\d{1,3}$/u.test(value)) return null;
-  const parsed = Number(value);
-  return parsed <= 255 ? parsed : null;
 }
 
 function normalizeDns(value: unknown): BulkSessionDnsEvidence | null {

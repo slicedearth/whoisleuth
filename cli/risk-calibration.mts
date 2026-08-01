@@ -1,6 +1,5 @@
 import { Buffer } from 'node:buffer';
-import { isIP } from 'node:net';
-import { isValidAsciiHostname } from '../lib/hostname.mts';
+import { isValidAsciiDomainName } from '../lib/hostname.mts';
 
 import { CliUsageError } from './arguments.mts';
 import type { BoundedTextStream } from './bulk.mts';
@@ -267,7 +266,7 @@ export function parseRiskCalibrationDataset(text: unknown): CalibrationDataset {
     if (ids.has(id)) throw new CliUsageError(`${prefix}.id must be unique.`);
     ids.add(id);
     const domain = boundedString(record.domain, `${prefix}.domain`, 253).toLowerCase().replace(/\.$/, '');
-    if (!isValidAsciiHostname(domain, { requireDot: true }) || isIP(domain)) throw new CliUsageError(`${prefix}.domain must be a valid ASCII DNS hostname, not an IP address.`);
+    if (!isValidAsciiDomainName(domain, { requireDot: true })) throw new CliUsageError(`${prefix}.domain must be a valid ASCII DNS hostname, not an IP address.`);
     const analystDisposition = boundedString(record.analystDisposition, `${prefix}.analystDisposition`, 32);
     if (!DISPOSITIONS.has(analystDisposition)) throw new CliUsageError(`${prefix}.analystDisposition is unsupported.`);
     return {

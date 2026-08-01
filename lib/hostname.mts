@@ -25,4 +25,22 @@ function isValidAsciiHostname(value: unknown, options: Readonly<{
   return true;
 }
 
-export { isValidAsciiHostname };
+function isIpv4Literal(value: string): boolean {
+  const parts = value.split('.');
+  return parts.length === 4 && parts.every((part) => {
+    if (!/^(?:0|[1-9]\d{0,2})$/u.test(part)) return false;
+    return Number(part) <= 255;
+  });
+}
+
+// Domain-only records must not accept an IPv4 literal merely because its
+// dotted decimal labels also satisfy hostname syntax. IPv6 literals already
+// fail the ASCII hostname grammar because they contain colons.
+function isValidAsciiDomainName(value: unknown, options: Readonly<{
+  requireDot?: boolean;
+  requireLowercase?: boolean;
+}> = {}): value is string {
+  return isValidAsciiHostname(value, options) && !isIpv4Literal(value);
+}
+
+export { isValidAsciiDomainName, isValidAsciiHostname };

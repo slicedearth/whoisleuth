@@ -1,5 +1,7 @@
 // Browser-safe analysis helpers shared by the Svelte tools.
 
+import { serializeCsvCell, serializeCsvRows } from '../../../../lib/csv.mts';
+
 // Deliberately conservative (no +tags, no comments, no quoted local parts) -
 // this only gates whether a WHOIS/RDAP-sourced string is safe to drop into a
 // mailto: URI as the recipient, not a general email validator. mailto:
@@ -160,27 +162,12 @@ export function groupBySimilarFavicon(records: unknown, maxDistance: number): st
   return [...groups.values()].filter((domains) => domains.length >= 2);
 }
 
-// A leading =, +, -, or @ (or tab/CR) makes Excel/Sheets/LibreOffice
-// evaluate the cell as a formula instead of text - a real risk here since
-// several exported columns (registrant/registrar name, nameservers) come
-// straight from a domain's own WHOIS record, which its owner fully
-// controls. Prefixing with a single quote forces text interpretation
-// (spreadsheet apps hide the leading quote, so this doesn't change what's
-// visibly displayed for ordinary values).
-const CSV_FORMULA_TRIGGER_RE = /^(?:[\t\r\n ]*[=+\-@]|[\t\r\n])/;
-const MAX_CSV_CELL_LENGTH = 32_768;
-
 export function toCsvValue(v: unknown): string {
-  let s = (v === null || v === undefined ? '' : String(v))
-    .replace(/[\u0000-\u001f\u007f]+/gu, ' ')
-    .slice(0, MAX_CSV_CELL_LENGTH);
-  if (CSV_FORMULA_TRIGGER_RE.test(s)) s = `'${s}`;
-  if (/[",\r\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
-  return s;
+  return serializeCsvCell(v);
 }
 
 export function rowsToCsv(rows: readonly (readonly unknown[])[]): string {
-  return rows.map((row) => row.map(toCsvValue).join(',')).join('\n');
+  return serializeCsvRows(rows);
 }
 
 function splitDelimitedLine(line: string, delimiter: string = ','): string[] {

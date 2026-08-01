@@ -3,8 +3,8 @@ import type { WatchlistComparableRecord } from './watchlist-history.ts';
 import { analyzeDomainIdn } from './idn-confusables.ts';
 import type { CompactLookupHttpResponse } from './lookup-response.ts';
 import type { RelationshipObservation } from './relationship-evidence.ts';
+import { normalizeCaaCritical } from './dns-record-normalization.ts';
 import {
-  normalizeCaaCritical,
   type BulkSessionDnsEvidence,
   type BulkSessionComparisonEvidence,
   type BulkSessionMode,

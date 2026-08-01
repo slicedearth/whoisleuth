@@ -1,12 +1,11 @@
 import { createHash } from 'node:crypto';
 import { open } from 'node:fs/promises';
-import { isIP } from 'node:net';
 
 import type { BulkLookupResult } from './bulk.mts';
 import { availabilityState, bulkDnsSummary } from './bulk-output.mts';
 import { CliUsageError } from './errors.mts';
 import { writePrivateFile } from './output-file.mts';
-import { isValidAsciiHostname } from '../lib/hostname.mts';
+import { isValidAsciiDomainName } from '../lib/hostname.mts';
 
 export const CLI_DISCOVERY_OBSERVATION_SCHEMA = 'whoisleuth.cli.discovery-observation-snapshot';
 export const CLI_DISCOVERY_OBSERVATION_VERSION = 2;
@@ -43,7 +42,7 @@ function record(value: unknown): Record<string, unknown> {
 
 function domainValue(value: unknown): string {
   const domain = typeof value === 'string' ? value.trim().toLowerCase() : '';
-  if (isIP(domain) !== 0 || !isValidAsciiHostname(domain, { requireDot: true, requireLowercase: true })) {
+  if (!isValidAsciiDomainName(domain, { requireDot: true, requireLowercase: true })) {
     throw new CliUsageError('Discovery observation snapshot contains an invalid domain.');
   }
   return domain;

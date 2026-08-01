@@ -10,9 +10,9 @@ import {
   mergeBulkSessions,
   normalizeBulkSession,
   normalizeBulkSessionStore,
-  normalizeCaaCritical,
   upsertBulkSession,
 } from '../frontend/src/lib/analysis/bulk-session-model.ts';
+import { normalizeCaaCritical } from '../frontend/src/lib/analysis/dns-record-normalization.ts';
 
 const FIRST = '2026-07-28T01:00:00.000Z';
 const LATER = '2026-07-29T01:00:00.000Z';

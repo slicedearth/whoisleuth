@@ -1,10 +1,9 @@
 import { createHash } from 'node:crypto';
 import { open } from 'node:fs/promises';
-import { isIP } from 'node:net';
 
 import { CliUsageError } from './errors.mts';
 import { writePrivateFile } from './output-file.mts';
-import { isValidAsciiHostname } from '../lib/hostname.mts';
+import { isValidAsciiDomainName } from '../lib/hostname.mts';
 
 export const CLI_DISCOVERY_SNAPSHOT_SCHEMA = 'whoisleuth.cli.discovery-snapshot';
 export const CLI_DISCOVERY_SNAPSHOT_VERSION = 1;
@@ -59,8 +58,7 @@ function normalizedDomains(value: unknown): string[] {
   }
   const output = new Set<string>();
   for (const candidate of value) {
-    if (typeof candidate !== 'string' || isIP(candidate) !== 0
-      || !isValidAsciiHostname(candidate, { requireDot: true, requireLowercase: true })) {
+    if (!isValidAsciiDomainName(candidate, { requireDot: true, requireLowercase: true })) {
       throw new CliUsageError('Discovery snapshot contains an invalid candidate domain.');
     }
     output.add(candidate);
