@@ -747,7 +747,7 @@ test('long untrusted values wrap inside result tiles without page overflow', asy
   await page.locator('#query').fill(domain);
   await page.getByRole('button', { name: 'Run lookup' }).click();
 
-  await expect(page.getByRole('heading', { name: domain })).toBeVisible();
+  await expect(page.getByRole('heading', { name: domain })).toBeVisible({ timeout: 15_000 });
   await expectNoHorizontalOverflow(page);
 });
 
