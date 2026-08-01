@@ -7,7 +7,7 @@ import { CliUsageError } from './errors.mts';
 import type { WritableTerminal } from './terminal-presentation.mts';
 
 export const MAX_CLI_OUTPUT_BYTES = 32 * 1024 * 1024;
-export const MAX_CLI_OUTPUT_PATH_LENGTH = 4096;
+const MAX_CLI_OUTPUT_PATH_LENGTH = 4096;
 const pendingOutputFiles = new Set<string>();
 
 type BufferedOutput = Readonly<{
@@ -104,5 +104,4 @@ function cleanupPendingOutputFilesSync(): void {
   }
 }
 
-export { cleanupPendingOutputFilesSync, createBufferedOutput, safeOutputPath, writePrivateFile };
-export type { BufferedOutput };
+export { cleanupPendingOutputFilesSync, createBufferedOutput, writePrivateFile };

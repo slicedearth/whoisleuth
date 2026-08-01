@@ -243,9 +243,7 @@ async function createBulkCheckpointWriter(options: Readonly<{
 }
 
 export {
-  checkpointDigest,
   createBulkCheckpointWriter,
   parseBulkCheckpoint,
-  readCheckpointFile,
 };
 export type { BulkCheckpointDocument, BulkCheckpointWriter };

@@ -16,20 +16,6 @@
     "threat-intelligence",
     "asn"
   ],
-  "files": [
-    "bin/**/*.mts",
-    "cli/**/*.mts",
-    "lib/**/*.mts",
-    "docs/cli.md",
-    "LICENSE",
-    "LICENSES/Retire.js-Apache-2.0.txt",
-    "NOTICE",
-    "frontend/static/third-party-notices.txt",
-    "TRADEMARKS.md"
-  ],
-  "bin": {
-    "whoisleuth": "bin/whoisleuth.mts"
-  },
   "workspaces": [
     "frontend"
   ],

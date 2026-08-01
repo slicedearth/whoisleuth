@@ -189,5 +189,5 @@ function formatCliLookupDiff(document: CliLookupDiffDocument): string {
   return `${output.join('\n')}\n`;
 }
 
-export { buildCliLookupDiff, formatCliLookupDiff, lookupComparisonInput };
+export { buildCliLookupDiff, formatCliLookupDiff };
 export type { CliLookupDiffDocument };

@@ -80,7 +80,6 @@ function createTerminalProgress(
 }
 
 export {
-  MAX_PROGRESS_MESSAGE_LENGTH,
   createTerminalProgress,
   safeProgressMessage,
 };

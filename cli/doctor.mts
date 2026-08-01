@@ -174,11 +174,6 @@ function formatDoctorReport(report: DoctorReport): string {
 }
 
 export {
-  DOCTOR_SCHEMA,
-  DOCTOR_VERSION,
-  MAX_DOCTOR_DETAIL_LENGTH,
-  MINIMUM_NODE_MAJOR,
-  NETWORK_TIMEOUT_MS,
   buildDoctorReport,
   formatDoctorReport,
 };

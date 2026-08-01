@@ -168,10 +168,6 @@ function presentTerminalOutput(value: string, presentation: TerminalPresentation
 }
 
 export {
-  ANSI_RESET,
-  DEFAULT_TERMINAL_WIDTH,
-  MAX_TERMINAL_WIDTH,
-  MIN_TERMINAL_WIDTH,
   presentTerminalOutput,
   terminalPresentation,
   tone,

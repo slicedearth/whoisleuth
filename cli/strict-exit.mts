@@ -1,6 +1,6 @@
 import type { UnknownRecord } from './saved-lookup.mts';
 
-export const STRICT_EXIT_FAILURE_STATES = Object.freeze([
+const STRICT_EXIT_FAILURE_STATES = Object.freeze([
   'error',
   'failed',
   'partial',
@@ -8,7 +8,7 @@ export const STRICT_EXIT_FAILURE_STATES = Object.freeze([
   'timeout',
   'unavailable',
 ] as const);
-export const MAX_STRICT_EXIT_NODES = 2_000;
+const MAX_STRICT_EXIT_NODES = 2_000;
 
 const FAILURE_STATES = new Set<string>(STRICT_EXIT_FAILURE_STATES);
 const STATUS_FIELDS = new Set(['state', 'status']);

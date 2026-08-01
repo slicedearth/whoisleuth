@@ -178,10 +178,5 @@ function buildShellCompletion(shell: CompletionShell): string {
 }
 
 export {
-  COMMAND_DESCRIPTIONS,
-  FILE_OPTIONS,
-  OPTIONS_BY_COMMAND,
-  TEXT_OPTIONS,
-  VALUE_OPTIONS,
   buildShellCompletion,
 };

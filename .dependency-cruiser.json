@@ -14,9 +14,9 @@
     {
       "name": "production-no-orphans",
       "severity": "error",
-      "comment": "Shared and browser-library modules must have an application consumer so obsolete production files cannot survive behind tests alone.",
+      "comment": "Shared, CLI, and browser-library modules must have an application consumer so obsolete production files cannot survive behind tests alone.",
       "from": {
-        "path": "^(?:frontend/src/lib|lib)/",
+        "path": "^(?:cli|frontend/src/lib|lib)/",
         "pathNot": "^(?:frontend/src/lib/local-data-platform-probe\\.ts|lib/(?:netlify-function-types|threat-intelligence-types|whois-contracts)\\.mts)$",
         "orphan": true
       },

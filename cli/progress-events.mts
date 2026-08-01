@@ -3,8 +3,8 @@ import type { WritableTerminal } from './terminal-presentation.mts';
 
 export const CLI_PROGRESS_EVENT_SCHEMA = 'whoisleuth.cli.progress';
 export const CLI_PROGRESS_EVENT_VERSION = 1;
-export const MAX_CLI_PROGRESS_EVENTS = 2_100;
-export const MAX_CLI_PROGRESS_EVENT_DETAIL_LENGTH = 120;
+const MAX_CLI_PROGRESS_EVENTS = 2_100;
+const MAX_CLI_PROGRESS_EVENT_DETAIL_LENGTH = 120;
 
 type ProgressEventFields = Readonly<{
   event: 'cancelled' | 'completed' | 'failed' | 'item_settled' | 'source_settled' | 'started' | 'warning';
