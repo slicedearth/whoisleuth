@@ -187,6 +187,10 @@ function parseArtifact(value: unknown, label: string): Artifact {
   if ((kind === 'screenshot' && mimeType !== 'image/png') || (kind === 'dom_digest' && mimeType !== 'application/json')) {
     throw new Error(`${label} has an unsupported MIME type.`);
   }
+  if (kind === 'dom_digest'
+    && (Object.hasOwn(artifact, 'perceptualHash') || Object.hasOwn(artifact, 'width') || Object.hasOwn(artifact, 'height'))) {
+    throw new Error(`${label} cannot include image-only fields.`);
+  }
   const perceptualHash = artifact.perceptualHash == null
     ? null
     : typeof artifact.perceptualHash === 'string' && PERCEPTUAL_HASH_RE.test(artifact.perceptualHash)
@@ -194,10 +198,6 @@ function parseArtifact(value: unknown, label: string): Artifact {
       : (() => { throw new Error(`${label} has an invalid perceptual hash.`); })();
   const width = kind === 'screenshot' ? positiveInteger(artifact.width, 10_000, `${label} width`) : null;
   const height = kind === 'screenshot' ? positiveInteger(artifact.height, 10_000, `${label} height`) : null;
-  if (kind === 'dom_digest'
-    && (Object.hasOwn(artifact, 'perceptualHash') || Object.hasOwn(artifact, 'width') || Object.hasOwn(artifact, 'height'))) {
-    throw new Error(`${label} cannot include image-only fields.`);
-  }
   return {
     kind,
     fileName: artifactName(artifact.fileName, `${label} file name`),

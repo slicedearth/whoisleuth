@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { open } from 'node:fs/promises';
+import { isIP } from 'node:net';
 
 import type { BulkLookupResult } from './bulk.mts';
 import { availabilityState, bulkDnsSummary } from './bulk-output.mts';
@@ -42,7 +43,7 @@ function record(value: unknown): Record<string, unknown> {
 
 function domainValue(value: unknown): string {
   const domain = typeof value === 'string' ? value.trim().toLowerCase() : '';
-  if (!isValidAsciiHostname(domain, { requireDot: true, requireLowercase: true })) {
+  if (isIP(domain) !== 0 || !isValidAsciiHostname(domain, { requireDot: true, requireLowercase: true })) {
     throw new CliUsageError('Discovery observation snapshot contains an invalid domain.');
   }
   return domain;

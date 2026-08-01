@@ -207,7 +207,7 @@ function dnsValues(value: BulkSessionResult, type: keyof BulkSessionDnsEvidence[
   if (!value.dns) return [];
   const records = value.dns.records[type];
   return type === 'caa'
-    ? (records as Array<{ critical: number | string; tag: string; value: string }>)
+    ? (records as Array<{ critical: number; tag: string; value: string }>)
       .map((item) => `${item.critical} ${item.tag} ${item.value}`)
     : records as string[];
 }

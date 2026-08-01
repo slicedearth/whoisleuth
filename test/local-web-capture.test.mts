@@ -200,6 +200,10 @@ describe('optional local rendered capture package', () => {
       invalidDimensions.captures[0].artifacts[0].width = 0;
       await writeFile(rightManifest, `${JSON.stringify(invalidDimensions)}\n`);
       await assert.rejects(() => compareRenderedCaptures(leftManifest, rightManifest), /width is outside/u);
+      const invalidDomImageField = JSON.parse(originalRightManifest);
+      invalidDomImageField.captures[0].artifacts[1].perceptualHash = 'not-a-hash';
+      await writeFile(rightManifest, `${JSON.stringify(invalidDomImageField)}\n`);
+      await assert.rejects(() => compareRenderedCaptures(leftManifest, rightManifest), /cannot include image-only fields/u);
       const missingLimitations = JSON.parse(originalRightManifest);
       missingLimitations.captures[0].limitations = [];
       await writeFile(rightManifest, `${JSON.stringify(missingLimitations)}\n`);

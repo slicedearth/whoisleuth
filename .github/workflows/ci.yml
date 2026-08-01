@@ -42,6 +42,8 @@ jobs:
         run: npm run check
       - name: Build Svelte frontend
         run: npm run build
+      - name: Scan built browser assets
+        run: npm run security:retire
       - name: Install Playwright Chromium
         run: npm run test:e2e:install
       - name: Run Playwright e2e suite

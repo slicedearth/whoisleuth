@@ -211,6 +211,21 @@ describe('chunked discovery collection', () => {
 });
 
 describe('discovery observation snapshots', () => {
+  test('rejects IP literals from domain-only observation snapshots', async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'whoisleuth-observed-ip-'));
+    try {
+      await assert.rejects(() => updateDiscoveryObservationSnapshot(
+        path.join(directory, 'observed.json'),
+        [{ domain: '192.0.2.1' }],
+        [success(0, '192.0.2.1')],
+        { deep: true, resolverServers: [] },
+        '2026-08-01T00:00:00.000Z',
+      ), /invalid domain/u);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
   test('reports material changes and preserves prior evidence across a failed attempt', async () => {
     const directory = await mkdtemp(path.join(tmpdir(), 'whoisleuth-observed-'));
     const snapshot = path.join(directory, 'observed.json');

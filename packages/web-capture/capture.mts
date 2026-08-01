@@ -8,6 +8,7 @@ import { imagePerceptualHash } from '../../lib/perceptual-hash.mts';
 import { resolvePublicAddresses } from '../../lib/safe-fetch.mts';
 import {
   MAX_WEB_CAPTURE_DOM_DIGEST_BYTES,
+  MAX_WEB_CAPTURE_MANIFEST_BYTES,
   MAX_WEB_CAPTURE_SCREENSHOT_BYTES,
   WEB_CAPTURE_DOM_DIGEST_SCHEMA,
   WEB_CAPTURE_DOM_DIGEST_VERSION,
@@ -16,6 +17,7 @@ import {
 } from '../../lib/web-capture-contract.mts';
 export {
   MAX_WEB_CAPTURE_DOM_DIGEST_BYTES,
+  MAX_WEB_CAPTURE_MANIFEST_BYTES,
   MAX_WEB_CAPTURE_SCREENSHOT_BYTES,
   WEB_CAPTURE_DOM_DIGEST_SCHEMA,
   WEB_CAPTURE_DOM_DIGEST_VERSION,
@@ -311,6 +313,9 @@ export async function captureRenderedPage(
       }],
     };
     const manifestBytes = Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`);
+    if (manifestBytes.length > MAX_WEB_CAPTURE_MANIFEST_BYTES) {
+      throw new Error(`Rendered capture manifest exceeds the ${MAX_WEB_CAPTURE_MANIFEST_BYTES}-byte limit.`);
+    }
     await privateWrite(path.join(temporaryDirectory, 'manifest.json'), manifestBytes);
     await rename(temporaryDirectory, targetDirectory);
     return manifest;

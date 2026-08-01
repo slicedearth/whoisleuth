@@ -14,6 +14,7 @@ import {
   normalizeDiscoveryTlds,
   readDiscoveryDictionaryBounded,
 } from '../cli/discover.mts';
+import { updateDiscoverySnapshot } from '../cli/discovery-snapshot.mts';
 import EXIT_CODES from '../cli/exit-codes.mts';
 import {
   buildCliDiscoverDocument,
@@ -532,6 +533,23 @@ describe('discover runner', () => {
       const saved = JSON.parse(await readFile(snapshot, 'utf8'));
       assert.deepEqual(saved.candidates, ['candidate-1.test']);
       assert.equal(saved.schema, 'whoisleuth.cli.discovery-snapshot');
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  test('rejects IP literals from domain-only discovery snapshots', async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'whoisleuth-discovery-ip-'));
+    try {
+      await assert.rejects(() => updateDiscoverySnapshot(
+        path.join(directory, 'state.json'),
+        ['192.0.2.1'],
+        {
+          seed: 'example.test', preset: 'standard', keyboardLayout: 'qwerty',
+          tlds: ['test'], mutationFamilies: ['character_omission'], dictionaryDigestSha256: null,
+        },
+        '2026-08-01T00:00:00.000Z',
+      ), /invalid candidate domain/u);
     } finally {
       await rm(directory, { recursive: true, force: true });
     }

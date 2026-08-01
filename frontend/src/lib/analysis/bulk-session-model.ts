@@ -79,7 +79,7 @@ export type BulkSessionDnsEvidence = {
     a: string[];
     aaaa: string[];
     cname: string[];
-    caa: Array<{ critical: number | string; tag: string; value: string }>;
+    caa: Array<{ critical: number; tag: string; value: string }>;
   };
 };
 
@@ -284,6 +284,15 @@ function normalizeRelationship(value: unknown): BulkSessionRelationship {
   };
 }
 
+export function normalizeCaaCritical(value: unknown): number | null {
+  if (typeof value === 'number') {
+    return Number.isSafeInteger(value) && value >= 0 && value <= 255 ? value : null;
+  }
+  if (typeof value !== 'string' || !/^\d{1,3}$/u.test(value)) return null;
+  const parsed = Number(value);
+  return parsed <= 255 ? parsed : null;
+}
+
 function normalizeDns(value: unknown): BulkSessionDnsEvidence | null {
   const item = record(value);
   const records = record(item?.records);
@@ -293,8 +302,8 @@ function normalizeDns(value: unknown): BulkSessionDnsEvidence | null {
         const caaRecord = record(candidate);
         const tag = boundedText(caaRecord?.tag, 64);
         const recordValue = boundedText(caaRecord?.value, 500);
-        const critical = caaRecord?.critical;
-        return tag && recordValue && (typeof critical === 'number' || typeof critical === 'string')
+        const critical = normalizeCaaCritical(caaRecord?.critical);
+        return tag && recordValue && critical !== null
           ? [{ critical, tag, value: recordValue }]
           : [];
       })

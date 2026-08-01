@@ -3,13 +3,14 @@ import type { WatchlistComparableRecord } from './watchlist-history.ts';
 import { analyzeDomainIdn } from './idn-confusables.ts';
 import type { CompactLookupHttpResponse } from './lookup-response.ts';
 import type { RelationshipObservation } from './relationship-evidence.ts';
-import type {
-  BulkSessionDnsEvidence,
-  BulkSessionComparisonEvidence,
-  BulkSessionMode,
-  BulkSessionResult,
-  BulkSessionSourceCoverage,
-  BulkSessionSourceState,
+import {
+  normalizeCaaCritical,
+  type BulkSessionDnsEvidence,
+  type BulkSessionComparisonEvidence,
+  type BulkSessionMode,
+  type BulkSessionResult,
+  type BulkSessionSourceCoverage,
+  type BulkSessionSourceState,
 } from './bulk-session-model.ts';
 
 const MAX_COMPACT_TEXT_LENGTH = 500;
@@ -140,9 +141,7 @@ export function compactDnsEvidence(value: unknown): BulkDnsEvidence | null {
       const item = plainRecord(value);
       const tag = boundedText(item?.tag, 64);
       const recordValue = boundedText(item?.value);
-      const critical = typeof item?.critical === 'number' || typeof item?.critical === 'string'
-        ? item.critical
-        : null;
+      const critical = normalizeCaaCritical(item?.critical);
       return tag && recordValue && critical !== null
         ? [{ critical, tag, value: recordValue }]
         : [];

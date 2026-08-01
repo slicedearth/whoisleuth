@@ -168,11 +168,14 @@ export function groupBySimilarFavicon(records: unknown, maxDistance: number): st
 // (spreadsheet apps hide the leading quote, so this doesn't change what's
 // visibly displayed for ordinary values).
 const CSV_FORMULA_TRIGGER_RE = /^(?:[\t\r\n ]*[=+\-@]|[\t\r\n])/;
+const MAX_CSV_CELL_LENGTH = 32_768;
 
 export function toCsvValue(v: unknown): string {
-  let s = v === null || v === undefined ? '' : String(v);
+  let s = (v === null || v === undefined ? '' : String(v))
+    .replace(/[\u0000-\u001f\u007f]+/gu, ' ')
+    .slice(0, MAX_CSV_CELL_LENGTH);
   if (CSV_FORMULA_TRIGGER_RE.test(s)) s = `'${s}`;
-  if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  if (/[",\r\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
   return s;
 }
 

@@ -35,6 +35,7 @@ describe('continuous integration workflow', () => {
       'npm run typecheck',
       'npm run check',
       'npm run build',
+      'npm run security:retire',
       'npm run test:e2e',
     ]) {
       assert.match(WORKFLOW, new RegExp(`^\\s+run: ${command.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&')}$`, 'mu'));

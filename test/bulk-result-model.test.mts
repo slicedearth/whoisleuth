@@ -107,6 +107,19 @@ describe('Bulk result model', () => {
     });
   });
 
+  it('normalizes legacy CAA critical strings and drops malformed flags', () => {
+    assert.deepEqual(compactDnsEvidence({
+      status: 'success',
+      records: {
+        caa: [
+          { critical: '128', tag: 'issue', value: 'ca.example.test' },
+          { critical: '0\rFORMULA', tag: 'issue', value: 'discard.example.test' },
+          { critical: 256, tag: 'issue', value: 'discard-too.example.test' },
+        ],
+      },
+    })?.records.caa, [{ critical: 128, tag: 'issue', value: 'ca.example.test' }]);
+  });
+
   it('keeps source health separate and maps only supported states', () => {
     const body = {
       availability: {

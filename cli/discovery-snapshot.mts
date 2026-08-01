@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { open } from 'node:fs/promises';
+import { isIP } from 'node:net';
 
 import { CliUsageError } from './errors.mts';
 import { writePrivateFile } from './output-file.mts';
@@ -58,7 +59,8 @@ function normalizedDomains(value: unknown): string[] {
   }
   const output = new Set<string>();
   for (const candidate of value) {
-    if (!isValidAsciiHostname(candidate, { requireDot: true, requireLowercase: true })) {
+    if (typeof candidate !== 'string' || isIP(candidate) !== 0
+      || !isValidAsciiHostname(candidate, { requireDot: true, requireLowercase: true })) {
       throw new CliUsageError('Discovery snapshot contains an invalid candidate domain.');
     }
     output.add(candidate);
