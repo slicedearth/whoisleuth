@@ -7,14 +7,22 @@ import {
   parseExternalFindingsDocument,
   type ExternalFindingsDocument,
 } from './external-findings-import.ts';
-
-export const WEB_CAPTURE_SUMMARY_SCHEMA = 'whoisleuth.web-capture-summary';
-export const WEB_CAPTURE_SUMMARY_VERSION = 1;
-export const WEB_CAPTURE_MANIFEST_SCHEMA = 'whoisleuth.web-capture-manifest';
-export const WEB_CAPTURE_MANIFEST_VERSION = 2;
+import {
+  MAX_WEB_CAPTURE_DOM_DIGEST_BYTES,
+  MAX_WEB_CAPTURE_SCREENSHOT_BYTES,
+  WEB_CAPTURE_MANIFEST_SCHEMA,
+  WEB_CAPTURE_MANIFEST_VERSION,
+  WEB_CAPTURE_SUMMARY_SCHEMA,
+  WEB_CAPTURE_SUMMARY_VERSION,
+} from '../../../../lib/web-capture-contract.mts';
+export {
+  WEB_CAPTURE_MANIFEST_SCHEMA,
+  WEB_CAPTURE_MANIFEST_VERSION,
+  WEB_CAPTURE_SUMMARY_SCHEMA,
+  WEB_CAPTURE_SUMMARY_VERSION,
+} from '../../../../lib/web-capture-contract.mts';
 export const MAX_WEB_CAPTURE_SUMMARIES = 50;
-export const MAX_WEB_CAPTURE_SCREENSHOT_BYTES = 10 * 1024 * 1024;
-export const MAX_WEB_CAPTURE_DOM_DIGEST_BYTES = 1024 * 1024;
+export { MAX_WEB_CAPTURE_DOM_DIGEST_BYTES, MAX_WEB_CAPTURE_SCREENSHOT_BYTES } from '../../../../lib/web-capture-contract.mts';
 const MAX_CAPTURE_TECHNOLOGIES = 20;
 const MAX_CAPTURE_ORIGINS = 30;
 const SHA256_RE = /^[a-f0-9]{64}$/i;

@@ -1,4 +1,5 @@
 import type { BulkLookupResult } from './bulk.mts';
+import { cliCsvCell } from './csv.mts';
 
 type UnknownRecord = Record<string, unknown>;
 type BulkResultFilter = 'all' | 'inconclusive' | 'registered';
@@ -77,11 +78,6 @@ function bulkDnsSummary(item: BulkLookupResult) {
   };
 }
 
-function csvCell(value: unknown): string {
-  const text = Array.isArray(value) ? value.join(' | ') : boundedText(value, 32_768);
-  return /[",\r\n]/u.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
-}
-
 function booleanCell(value: boolean | null): string {
   return value === null ? 'unknown' : value ? 'observed' : 'not_observed';
 }
@@ -109,7 +105,7 @@ function formatBulkCsv(items: readonly BulkLookupResult[]): string {
       booleanCell(dns.hasSpf),
       booleanCell(dns.hasDmarc),
       item.ok ? '' : item.error,
-    ].map(csvCell).join(',');
+    ].map(cliCsvCell).join(',');
   });
   return `${[header.join(','), ...rows].join('\n')}\n`;
 }

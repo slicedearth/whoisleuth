@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { Readable, Writable } from 'node:stream';
@@ -17,6 +17,8 @@ import {
 } from '../cli/discovery-scan.mts';
 import {
   CLI_DISCOVERY_OBSERVATION_SCHEMA,
+  CLI_DISCOVERY_OBSERVATION_VERSION,
+  snapshotConfigurationDigest,
   updateDiscoveryObservationSnapshot,
 } from '../cli/discovery-observation-snapshot.mts';
 import EXIT_CODES from '../cli/exit-codes.mts';
@@ -174,6 +176,12 @@ describe('discovery scan allowlists and relationships', () => {
     assert.match(formatDiscoveryScanCsv(document), /^domain,availability,/u);
     assert.equal(formatDiscoveryScanDomains(document), 'three.example\n');
   });
+
+  test('neutralizes untrusted collection errors in CSV output', () => {
+    const failed: BulkLookupResult = { index: 0, query: 'one.example', ok: false, error: '=HYPERLINK("https://example.invalid")' };
+    const document = buildDiscoveryScanDocument(candidates().slice(0, 1), [failed], metadata({ generatedCandidateCount: 1, selectedCandidateCount: 1 }), new Set());
+    assert.match(formatDiscoveryScanCsv(document), /"'=HYPERLINK\(""https:\/\/example\.invalid""\)"/u);
+  });
 });
 
 describe('chunked discovery collection', () => {
@@ -226,8 +234,80 @@ describe('discovery observation snapshots', () => {
       assert.equal(second.changed[0]?.domain, 'one.example');
       const stored = JSON.parse(await readFile(snapshot, 'utf8'));
       assert.equal(stored.schema, CLI_DISCOVERY_OBSERVATION_SCHEMA);
+      assert.equal(stored.version, CLI_DISCOVERY_OBSERVATION_VERSION);
       assert.equal(stored.observations[1].latestAttemptState, 'error');
       assert.equal(stored.observations[1].availabilityState, 'registered');
+      assert.equal(stored.observations[1].registrationObservedAt, '2026-08-01T00:00:00.000Z');
+      assert.equal(stored.observations[1].dnsObservedAt, '2026-08-01T00:00:00.000Z');
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  test('preserves complete DNS evidence when a later component is partial', async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'whoisleuth-observed-partial-'));
+    const snapshot = path.join(directory, 'observed.json');
+    try {
+      const selected = candidates().slice(0, 1);
+      await updateDiscoveryObservationSnapshot(
+        snapshot, selected, [success(0, 'one.example')],
+        { deep: true, resolverServers: [] }, '2026-08-01T00:00:00.000Z',
+      );
+      const partial = success(0, 'one.example');
+      if (partial.ok) {
+        const availability = (partial.result as Record<string, unknown>).availability as Record<string, unknown>;
+        availability.dns = { status: 'partial', records: { a: [], aaaa: [], ns: [], mx: [] } };
+      }
+      const result = await updateDiscoveryObservationSnapshot(
+        snapshot, selected, [partial],
+        { deep: true, resolverServers: [] }, '2026-08-02T00:00:00.000Z',
+      );
+      assert.deepEqual(result.changed, []);
+      assert.deepEqual(result.unavailable, ['one.example']);
+      assert.deepEqual(result.unavailableComponents, [{ domain: 'one.example', components: ['dns'] }]);
+      const stored = JSON.parse(await readFile(snapshot, 'utf8'));
+      const observation = stored.observations[0];
+      assert.equal(observation.latestAttemptState, 'partial');
+      assert.equal(observation.latestDnsState, 'partial');
+      assert.deepEqual(observation.dns.a, ['192.0.2.11']);
+      assert.equal(observation.dns.status, 'success');
+      assert.equal(observation.dnsObservedAt, '2026-08-01T00:00:00.000Z');
+      assert.equal(observation.registrationObservedAt, '2026-08-02T00:00:00.000Z');
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  test('migrates a version 1 snapshot before replacing it with component-aware version 2 evidence', async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'whoisleuth-observed-v1-'));
+    const snapshot = path.join(directory, 'observed.json');
+    const domains = ['one.example'];
+    const configuration = { domains, deep: true, resolverServers: [] as string[] };
+    try {
+      await writeFile(snapshot, `${JSON.stringify({
+        schema: CLI_DISCOVERY_OBSERVATION_SCHEMA,
+        version: 1,
+        generatedAt: '2026-07-31T00:00:00.000Z',
+        configurationDigestSha256: snapshotConfigurationDigest(configuration),
+        observationCount: 1,
+        observations: [{
+          domain: 'one.example',
+          observedAt: '2026-07-31T00:00:00.000Z',
+          latestAttemptAt: '2026-07-31T00:00:00.000Z',
+          latestAttemptState: 'success',
+          availabilityState: 'registered',
+          confidence: 'high',
+          dns: { status: 'success', a: ['192.0.2.1'], aaaa: [], ns: [], mx: [], hasNullMx: false, hasSpf: false, hasDmarc: false },
+        }],
+      }, null, 2)}\n`, { mode: 0o600 });
+      await updateDiscoveryObservationSnapshot(
+        snapshot, candidates().slice(0, 1), [success(0, 'one.example')],
+        { deep: true, resolverServers: [] }, '2026-08-01T00:00:00.000Z',
+      );
+      const stored = JSON.parse(await readFile(snapshot, 'utf8'));
+      assert.equal(stored.version, 2);
+      assert.equal(stored.observations[0].registrationObservedAt, '2026-08-01T00:00:00.000Z');
+      assert.equal(stored.observations[0].dnsObservedAt, '2026-08-01T00:00:00.000Z');
     } finally {
       await rm(directory, { recursive: true, force: true });
     }

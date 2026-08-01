@@ -4,22 +4,30 @@ import { lstat, readFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { hammingDistanceHex, imagePerceptualHash } from '../../lib/perceptual-hash.mts';
+import { isValidAsciiHostname } from '../../lib/hostname.mts';
 import {
-  MAX_CAPTURE_HOSTS,
+  MAX_WEB_CAPTURE_MANIFEST_BYTES,
+  MAX_WEB_CAPTURE_DOM_DIGEST_BYTES,
+  MAX_WEB_CAPTURE_SCREENSHOT_BYTES,
+  WEB_CAPTURE_COMPARISON_SCHEMA,
+  WEB_CAPTURE_COMPARISON_VERSION,
+  WEB_CAPTURE_DOM_DIGEST_SCHEMA,
+  WEB_CAPTURE_DOM_DIGEST_VERSION,
   WEB_CAPTURE_MANIFEST_SCHEMA,
   WEB_CAPTURE_MANIFEST_VERSION,
-} from './capture.mts';
+} from '../../lib/web-capture-contract.mts';
+import { MAX_CAPTURE_HOSTS } from './capture.mts';
 
-export const WEB_CAPTURE_COMPARISON_SCHEMA = 'whoisleuth.web-capture-comparison';
-export const WEB_CAPTURE_COMPARISON_VERSION = 1;
-export const MAX_MANIFEST_BYTES = 1024 * 1024;
-export const MAX_DOM_DIGEST_BYTES = 1024 * 1024;
-export const MAX_SCREENSHOT_BYTES = 10 * 1024 * 1024;
+export { WEB_CAPTURE_COMPARISON_SCHEMA, WEB_CAPTURE_COMPARISON_VERSION } from '../../lib/web-capture-contract.mts';
+export const MAX_MANIFEST_BYTES = MAX_WEB_CAPTURE_MANIFEST_BYTES;
+export const MAX_DOM_DIGEST_BYTES = MAX_WEB_CAPTURE_DOM_DIGEST_BYTES;
+export const MAX_SCREENSHOT_BYTES = MAX_WEB_CAPTURE_SCREENSHOT_BYTES;
 
 const SHA256_RE = /^[a-f0-9]{64}$/iu;
 const PERCEPTUAL_HASH_RE = /^[a-f0-9]{16}$/iu;
 const CONTROL_RE = /[\u0000-\u001f\u007f]/u;
 const ROOT_KEYS = new Set(['schema', 'schemaVersion', 'source', 'captures']);
+const SOURCE_KEYS = new Set(['name', 'reference', 'collectedAt']);
 const CAPTURE_KEYS = new Set(['domain', 'capturedAt', 'completeness', 'limitations', 'page', 'requestDomains', 'technologies', 'artifacts']);
 const PAGE_KEYS = new Set(['title', 'finalOrigin']);
 const ARTIFACT_KEYS = new Set(['kind', 'fileName', 'mimeType', 'sha256', 'perceptualHash', 'bytes', 'width', 'height']);
@@ -38,6 +46,8 @@ type Artifact = Readonly<{
   sha256: string;
   perceptualHash: string | null;
   bytes: number;
+  width: number | null;
+  height: number | null;
 }>;
 type CaptureManifest = Readonly<{
   manifestPath: string;
@@ -124,7 +134,7 @@ function captureDomain(value: unknown, label: string): string {
   const candidate = (boundedText(value, 253, label) ?? '').toLowerCase().replace(/\.$/u, '');
   const unbracketed = candidate.startsWith('[') && candidate.endsWith(']') ? candidate.slice(1, -1) : candidate;
   if (isIP(unbracketed)) return candidate;
-  if (!/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)*[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/u.test(candidate)) {
+  if (!isValidAsciiHostname(candidate, { requireDot: false, requireLowercase: true })) {
     throw new Error(`${label} must be a normalized hostname or IP address.`);
   }
   return candidate;
@@ -145,6 +155,13 @@ function technologyList(value: unknown, label: string): string[] {
     if (candidate) output.add(candidate);
   }
   return [...output].sort();
+}
+
+function limitationList(value: unknown, label: string): string[] {
+  if (!Array.isArray(value) || value.length < 1 || value.length > 8) {
+    throw new Error(`${label} must contain between 1 and 8 bounded statements.`);
+  }
+  return value.map((item, index) => boundedText(item, 300, `${label} ${index + 1}`) ?? '');
 }
 
 function origin(value: unknown, label: string): string | null {
@@ -175,7 +192,12 @@ function parseArtifact(value: unknown, label: string): Artifact {
     : typeof artifact.perceptualHash === 'string' && PERCEPTUAL_HASH_RE.test(artifact.perceptualHash)
       ? artifact.perceptualHash.toLowerCase()
       : (() => { throw new Error(`${label} has an invalid perceptual hash.`); })();
-  if (kind === 'dom_digest' && perceptualHash) throw new Error(`${label} cannot include a perceptual hash.`);
+  const width = kind === 'screenshot' ? positiveInteger(artifact.width, 10_000, `${label} width`) : null;
+  const height = kind === 'screenshot' ? positiveInteger(artifact.height, 10_000, `${label} height`) : null;
+  if (kind === 'dom_digest'
+    && (Object.hasOwn(artifact, 'perceptualHash') || Object.hasOwn(artifact, 'width') || Object.hasOwn(artifact, 'height'))) {
+    throw new Error(`${label} cannot include image-only fields.`);
+  }
   return {
     kind,
     fileName: artifactName(artifact.fileName, `${label} file name`),
@@ -183,6 +205,8 @@ function parseArtifact(value: unknown, label: string): Artifact {
     sha256: digest(artifact.sha256, `${label} digest`),
     perceptualHash,
     bytes: positiveInteger(artifact.bytes, maximum, `${label} size`),
+    width,
+    height,
   };
 }
 
@@ -192,11 +216,17 @@ function parseManifest(value: unknown, manifestPath: string): CaptureManifest {
     || root.schemaVersion !== WEB_CAPTURE_MANIFEST_VERSION || !Array.isArray(root.captures) || root.captures.length !== 1) {
     throw new Error(`Rendered comparison requires one ${WEB_CAPTURE_MANIFEST_SCHEMA} version ${WEB_CAPTURE_MANIFEST_VERSION} capture.`);
   }
+  const source = record(root.source);
+  if (!source || !onlyKeys(source, SOURCE_KEYS)) throw new Error('Rendered capture source metadata is invalid.');
+  boundedText(source.name, 80, 'Rendered capture source name');
+  boundedText(source.reference, 500, 'Rendered capture source reference', true);
+  const sourceCollectedAt = timestamp(source.collectedAt, 'Rendered capture source time');
   const capture = record(root.captures[0]);
   if (!capture || !onlyKeys(capture, CAPTURE_KEYS)) throw new Error('Rendered capture contains unsupported fields.');
   const completeness = capture.completeness === 'complete' || capture.completeness === 'partial'
     ? capture.completeness
     : (() => { throw new Error('Rendered capture completeness must be complete or partial.'); })();
+  limitationList(capture.limitations, 'Rendered capture limitations');
   const page = record(capture.page);
   if (!page || !onlyKeys(page, PAGE_KEYS)) throw new Error('Rendered capture page metadata is invalid.');
   if (!Array.isArray(capture.artifacts) || capture.artifacts.length !== 2) {
@@ -206,10 +236,12 @@ function parseManifest(value: unknown, manifestPath: string): CaptureManifest {
   const screenshot = artifacts.find((artifact) => artifact.kind === 'screenshot');
   const domDigest = artifacts.find((artifact) => artifact.kind === 'dom_digest');
   if (!screenshot || !domDigest) throw new Error('Rendered capture must contain distinct screenshot and DOM digest artifacts.');
+  const capturedAt = timestamp(capture.capturedAt, 'Rendered capture time');
+  if (sourceCollectedAt !== capturedAt) throw new Error('Rendered capture source time does not match its capture time.');
   return {
     manifestPath,
     domain: captureDomain(capture.domain, 'Rendered capture domain'),
-    capturedAt: timestamp(capture.capturedAt, 'Rendered capture time'),
+    capturedAt,
     completeness,
     title: boundedText(page.title, 300, 'Rendered capture title', true),
     finalOrigin: origin(page.finalOrigin, 'Rendered capture final origin'),
@@ -220,14 +252,18 @@ function parseManifest(value: unknown, manifestPath: string): CaptureManifest {
   };
 }
 
-function parseDomDigest(value: unknown, expectedDomain: string): DomDigest {
+function parseDomDigest(value: unknown, expectedDomain: string, expectedCapturedAt: string): DomDigest {
   const root = record(value);
-  if (!root || !onlyKeys(root, DOM_ROOT_KEYS) || root.schema !== 'whoisleuth.dom-digest' || root.version !== 1) {
+  if (!root || !onlyKeys(root, DOM_ROOT_KEYS) || root.schema !== WEB_CAPTURE_DOM_DIGEST_SCHEMA
+    || root.version !== WEB_CAPTURE_DOM_DIGEST_VERSION) {
     throw new Error('Rendered DOM digest uses an unsupported schema.');
   }
   const domain = captureDomain(root.domain, 'Rendered DOM digest domain');
   if (domain !== expectedDomain) throw new Error('Rendered DOM digest domain does not match its manifest.');
-  timestamp(root.capturedAt, 'Rendered DOM digest time');
+  if (timestamp(root.capturedAt, 'Rendered DOM digest time') !== expectedCapturedAt) {
+    throw new Error('Rendered DOM digest time does not match its manifest.');
+  }
+  limitationList(root.limitations, 'Rendered DOM digest limitations');
   const counts = record(root.counts);
   const structure = record(root.structure);
   const visibleText = record(root.visibleText);
@@ -293,7 +329,7 @@ async function loadCapture(manifestPath: string): Promise<LoadedCapture> {
   } catch {
     throw new Error('Rendered DOM digest is not valid JSON.');
   }
-  return { manifest, dom: parseDomDigest(domValue, manifest.domain), screenshotHashVerified, screenshotPerceptualHashVerified, domHashVerified };
+  return { manifest, dom: parseDomDigest(domValue, manifest.domain, manifest.capturedAt), screenshotHashVerified, screenshotPerceptualHashVerified, domHashVerified };
 }
 
 function setComparison(left: readonly string[], right: readonly string[]) {

@@ -559,8 +559,10 @@ queried candidates and may apply their own logging and retention policies.
 
 An optional newline-delimited `--allowlist` accepts at most 500 domains and 64
 KiB. Matching candidates remain in evidence and are labelled `suppressed` in
-the review queue; allowlisting never deletes a result or asserts that it is
-safe. Output filters select registered, inconclusive, acquisition-review, or
+the review queue; the full list and unmatched entries are not copied into
+output, while each matching scanned candidate necessarily exposes that match.
+Allowlisting never deletes a result or asserts that it is safe. Output filters
+select registered, inconclusive, acquisition-review, or
 suppressed rows without changing whole-run counts or source health. JSON,
 JSONL, CSV, and domain-list forms retain mutation provenance and explicit
 review lanes. The queue provides next manual actions, not automatic lookup,
@@ -573,10 +575,14 @@ can produce the same relationship without common ownership or control.
 
 `--observation-snapshot <file>` keeps a private versioned local projection of
 registration state, confidence, and bounded A, AAAA, NS, MX, null-MX, SPF, and
-DMARC summaries for the exact candidate set, mode, and resolver selection. A
-later identical run reports material field changes. If collection fails, the
-prior usable observation is preserved and the failed attempt is reported as
-unavailable rather than converting missing data into a removal. Raw registry
+DMARC summaries for the exact candidate set, mode, and resolver selection.
+Version 2 records registration and DNS observation times and latest component
+states separately; version 1 is read and normalized on the next write. A later
+identical run reports material field changes only for components collected
+with enough completeness to support the comparison. If registration or DNS is
+partial or unavailable, the prior usable evidence for that component is
+preserved and the attempt is reported as unavailable rather than converting
+missing data into a removal. Raw registry
 records, contacts, page content, and request details are excluded. Snapshot
 differences are review prompts, not proof of ownership, control, intent,
 safety, or maliciousness.
@@ -731,7 +737,9 @@ disposable network-restricted environment for untrusted targets.
 
 The separate offline comparison command accepts two selected version-2 local
 capture manifests. It first verifies each referenced screenshot and DOM digest
-against its declared size, SHA-256, and screenshot perceptual hash, then
+against its declared size, SHA-256, screenshot dimensions, and perceptual hash;
+it also validates bounded source and limitation metadata and requires the DOM,
+manifest, and source collection times to agree. It then
 compares screenshot distance, exact rendered DOM and visible-text digests,
 bounded element counts, page identity, technologies, and request-domain sets.
 It does not recrawl either target, reveal the input paths, or collapse the

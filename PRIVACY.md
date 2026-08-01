@@ -724,14 +724,19 @@ default (see the README), so many lookups return no personal data at all.
   deterministic bounded subset of locally generated candidate domains through
   compact Lookup collection. Optional literal resolver addresses receive the
   DNS questions for that run and can apply their own logging and retention.
-  An analyst allowlist changes review priority only and is not copied into
-  output. Exact shared address, nameserver, and mail-server observations are
+  An analyst allowlist changes review priority only. The complete list and
+  unmatched entries are not copied into output; a scanned candidate that
+  matches is explicitly labelled `suppressed` and can be selected with the
+  deliberate suppressed-only output filter. Exact shared address, nameserver, and mail-server observations are
   derived locally and do not establish common control. A deliberate private
   observation snapshot retains candidate domains, registration state,
-  confidence, bounded DNS summaries, attempt times, and material differences.
+  confidence, bounded DNS summaries, component-specific observation times,
+  latest component states, and material differences. Version 1 snapshots are
+  normalized to version 2 on the next write.
   It excludes raw registry publications, contacts, page contents, and request
-  details. A failed later attempt preserves prior usable evidence and remains
-  unavailable rather than becoming a removal or negative finding. The CLI does
+  details. A failed or partial registration or DNS component preserves the
+  previous usable evidence for that component and remains unavailable rather
+  than becoming a removal or negative finding. The CLI does
   not upload the snapshot or perform acquisition, blocking, reporting, or
   enforcement actions.
 - **In-tab undo**: the Console's 12-second undo notice is held only in the

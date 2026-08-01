@@ -3,6 +3,7 @@ import { open } from 'node:fs/promises';
 
 import { CliUsageError } from './errors.mts';
 import { writePrivateFile } from './output-file.mts';
+import { isValidAsciiHostname } from '../lib/hostname.mts';
 
 export const CLI_DISCOVERY_SNAPSHOT_SCHEMA = 'whoisleuth.cli.discovery-snapshot';
 export const CLI_DISCOVERY_SNAPSHOT_VERSION = 1;
@@ -38,7 +39,6 @@ type DiscoverySnapshotDiff = Readonly<{
   limitations: readonly string[];
 }>;
 
-const DOMAIN_RE = /^(?=.{1,253}$)(?:xn--[a-z0-9-]{1,59}|[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)(?:\.(?:xn--[a-z0-9-]{1,59}|[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?))+$/u;
 const SHA256_RE = /^[a-f0-9]{64}$/u;
 
 function configurationDigest(configuration: SnapshotConfiguration): string {
@@ -58,7 +58,7 @@ function normalizedDomains(value: unknown): string[] {
   }
   const output = new Set<string>();
   for (const candidate of value) {
-    if (typeof candidate !== 'string' || !DOMAIN_RE.test(candidate) || candidate !== candidate.toLowerCase()) {
+    if (!isValidAsciiHostname(candidate, { requireDot: true, requireLowercase: true })) {
       throw new CliUsageError('Discovery snapshot contains an invalid candidate domain.');
     }
     output.add(candidate);

@@ -6,9 +6,22 @@ import type { Browser, BrowserContext, Page, Route } from '@playwright/test';
 
 import { imagePerceptualHash } from '../../lib/perceptual-hash.mts';
 import { resolvePublicAddresses } from '../../lib/safe-fetch.mts';
-
-export const WEB_CAPTURE_MANIFEST_SCHEMA = 'whoisleuth.web-capture-manifest';
-export const WEB_CAPTURE_MANIFEST_VERSION = 2;
+import {
+  MAX_WEB_CAPTURE_DOM_DIGEST_BYTES,
+  MAX_WEB_CAPTURE_SCREENSHOT_BYTES,
+  WEB_CAPTURE_DOM_DIGEST_SCHEMA,
+  WEB_CAPTURE_DOM_DIGEST_VERSION,
+  WEB_CAPTURE_MANIFEST_SCHEMA,
+  WEB_CAPTURE_MANIFEST_VERSION,
+} from '../../lib/web-capture-contract.mts';
+export {
+  MAX_WEB_CAPTURE_DOM_DIGEST_BYTES,
+  MAX_WEB_CAPTURE_SCREENSHOT_BYTES,
+  WEB_CAPTURE_DOM_DIGEST_SCHEMA,
+  WEB_CAPTURE_DOM_DIGEST_VERSION,
+  WEB_CAPTURE_MANIFEST_SCHEMA,
+  WEB_CAPTURE_MANIFEST_VERSION,
+} from '../../lib/web-capture-contract.mts';
 export const MAX_CAPTURE_REQUESTS = 100;
 export const MAX_CAPTURE_HOSTS = 30;
 export const MAX_CAPTURE_URL_LENGTH = 2048;
@@ -242,13 +255,13 @@ export async function captureRenderedPage(
     const dom = await projectDom(page);
     const screenshot = await page.screenshot({ type: 'png', fullPage: false, animations: 'disabled' });
     const screenshotBuffer = Buffer.from(screenshot);
-    if (!screenshotBuffer.length || screenshotBuffer.length > 10 * 1024 * 1024) {
+    if (!screenshotBuffer.length || screenshotBuffer.length > MAX_WEB_CAPTURE_SCREENSHOT_BYTES) {
       throw new Error('Rendered screenshot is empty or exceeds the 10 MiB artifact bound.');
     }
     const capturedAt = dependencies.now?.() ?? new Date().toISOString();
     const domDigest = {
-      schema: 'whoisleuth.dom-digest',
-      version: 1,
+      schema: WEB_CAPTURE_DOM_DIGEST_SCHEMA,
+      version: WEB_CAPTURE_DOM_DIGEST_VERSION,
       capturedAt,
       domain: target.hostname.toLowerCase(),
       counts: {
@@ -263,7 +276,7 @@ export async function captureRenderedPage(
       limitations: ['No DOM markup, visible text, form values, request paths, query strings, headers, bodies, cookies, or credentials are retained.'],
     };
     const domBytes = Buffer.from(`${JSON.stringify(domDigest, null, 2)}\n`);
-    if (domBytes.length > 1024 * 1024) throw new Error('DOM digest exceeds the 1 MiB artifact bound.');
+    if (domBytes.length > MAX_WEB_CAPTURE_DOM_DIGEST_BYTES) throw new Error('DOM digest exceeds the 1 MiB artifact bound.');
     const screenshotName = 'screenshot.png';
     const domName = 'dom-digest.json';
     await privateWrite(path.join(temporaryDirectory, screenshotName), screenshotBuffer);

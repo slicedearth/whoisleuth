@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -188,13 +189,35 @@ describe('optional local rendered capture package', () => {
       assert.doesNotMatch(JSON.stringify(comparison), /private text|capture-compare-test|manifest\.json/u);
 
       const originalRightManifest = await readFile(rightManifest, 'utf8');
+      const rightDomPath = path.join(rightDirectory, 'dom-digest.json');
+      const originalRightDom = await readFile(rightDomPath, 'utf8');
       const unsafeManifest = JSON.parse(originalRightManifest);
       unsafeManifest.captures[0].artifacts[1].fileName = '../dom-digest.json';
       await writeFile(rightManifest, `${JSON.stringify(unsafeManifest)}\n`);
       await assert.rejects(() => compareRenderedCaptures(leftManifest, rightManifest), /plain file name/u);
       await writeFile(rightManifest, originalRightManifest);
-      await writeFile(path.join(rightDirectory, 'dom-digest.json'), '{}\n');
+      const invalidDimensions = JSON.parse(originalRightManifest);
+      invalidDimensions.captures[0].artifacts[0].width = 0;
+      await writeFile(rightManifest, `${JSON.stringify(invalidDimensions)}\n`);
+      await assert.rejects(() => compareRenderedCaptures(leftManifest, rightManifest), /width is outside/u);
+      const missingLimitations = JSON.parse(originalRightManifest);
+      missingLimitations.captures[0].limitations = [];
+      await writeFile(rightManifest, `${JSON.stringify(missingLimitations)}\n`);
+      await assert.rejects(() => compareRenderedCaptures(leftManifest, rightManifest), /limitations must contain/u);
+      const mismatchedDom = JSON.parse(originalRightDom);
+      mismatchedDom.capturedAt = '2026-08-01T00:06:00.000Z';
+      const mismatchedDomText = `${JSON.stringify(mismatchedDom, null, 2)}\n`;
+      const mismatchedManifest = JSON.parse(originalRightManifest);
+      const domArtifact = mismatchedManifest.captures[0].artifacts[1];
+      domArtifact.bytes = Buffer.byteLength(mismatchedDomText);
+      domArtifact.sha256 = createHash('sha256').update(mismatchedDomText).digest('hex');
+      await writeFile(rightDomPath, mismatchedDomText);
+      await writeFile(rightManifest, `${JSON.stringify(mismatchedManifest)}\n`);
+      await assert.rejects(() => compareRenderedCaptures(leftManifest, rightManifest), /time does not match/u);
+      await writeFile(rightManifest, originalRightManifest);
+      await writeFile(rightDomPath, '{}\n');
       await assert.rejects(() => compareRenderedCaptures(leftManifest, rightManifest), /size does not match|integrity verification/u);
+      await writeFile(rightDomPath, originalRightDom);
     } finally {
       await rm(parent, { recursive: true, force: true });
     }

@@ -321,6 +321,17 @@ describe('bulk output and runner', () => {
     assert.equal(formatBulkDomainList(items), 'one.test\n');
   });
 
+  test('CSV output neutralizes untrusted query and error formulas', () => {
+    const csv = formatBulkCsv([{
+      index: 0,
+      query: '=IMPORTDATA("https://example.invalid")',
+      ok: false,
+      error: '@unexpected',
+    }]);
+    assert.match(csv, /"'=IMPORTDATA\(""https:\/\/example\.invalid""\)"/u);
+    assert.match(csv, /,'@unexpected$/mu);
+  });
+
   test('registered and inconclusive filters preserve authority-aware states', () => {
     const item = (domain: string, state: string): BulkLookupResult => ({
       index: 0,

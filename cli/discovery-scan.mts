@@ -4,6 +4,7 @@ import { Buffer } from 'node:buffer';
 import type { BulkLookupResult, BulkLookupOptions } from './bulk.mts';
 import { runBulkLookups } from './bulk.mts';
 import { REGISTERED_STATES, availabilityState, bulkDnsSummary } from './bulk-output.mts';
+import { cliCsvCell } from './csv.mts';
 import { CliUsageError } from './errors.mts';
 import type { UnknownRecord } from './saved-lookup.mts';
 
@@ -335,18 +336,13 @@ function formatDiscoveryScanJsonLines(document: ReturnType<typeof buildDiscovery
     : '';
 }
 
-function csvCell(value: unknown): string {
-  const text = Array.isArray(value) ? value.join(' | ') : boundedText(value, 32_768);
-  return /[",\r\n]/u.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
-}
-
 function formatDiscoveryScanCsv(document: ReturnType<typeof buildDiscoveryScanDocument>): string {
   const header = ['domain', 'availability', 'confidence', 'review_lane', 'mutation_types', 'a', 'aaaa', 'ns', 'mx', 'relationship_ids', 'error'];
   const rows = document.results.map((item) => [
     item.domain, item.availabilityState, item.confidence, item.review.lane, item.mutationTypes,
     item.dnsSummary.a, item.dnsSummary.aaaa, item.dnsSummary.ns, item.dnsSummary.mx,
     item.relationshipIds, 'error' in item ? item.error : '',
-  ].map(csvCell).join(','));
+  ].map(cliCsvCell).join(','));
   return `${[header.join(','), ...rows].join('\n')}\n`;
 }
 
