@@ -40,48 +40,20 @@
   import LookupCaseResponse from '$lib/components/LookupCaseResponse.svelte';
   import LookupEvidenceCheckpoint from '$lib/components/LookupEvidenceCheckpoint.svelte';
   import PageHeading from '$lib/components/PageHeading.svelte';
-  import { activeProfile, profileSignals as matchProfileSignals, type BrandProfile } from '$lib/brand-profiles';
+  import { activeProfile, type BrandProfile } from '$lib/brand-profiles';
   import { dispositionLabel as caseDispositionLabel, statusLabel as caseStatusLabel, type CaseRecord, type CaseTransitionExpectation } from '$lib/cases';
   import { saveCandidateHandoff } from '$lib/candidate-handoff';
-  import { outreachAction, type Contact } from '$lib/drafts';
   import { buildLookupEvidence, evidenceFilename } from '$lib/analysis/evidence-export.ts';
-  import { analyzeDomainIdn } from '$lib/analysis/idn-confusables.ts';
-  import { buildActivationContext } from '$lib/analysis/activation-context.ts';
-  import { buildAcquisitionDueDiligence } from '$lib/analysis/acquisition-due-diligence.ts';
-  import { buildBrandMimicryReview } from '$lib/analysis/brand-mimicry-review.ts';
   import {
-    resolveAbuseRecipients,
-  } from '$lib/analysis/abuse-recipient-resolver.ts';
-  import { compactHttpObservation } from '$lib/analysis/http-summary.ts';
-  import { buildLookupEvidenceCoverageLedger } from '$lib/analysis/evidence-coverage-ledger.ts';
-  import { buildLookupAssetGraph } from '$lib/analysis/lookup-asset-graph.ts';
-  import { buildCertificatePolicyReview } from '$lib/analysis/certificate-policy-review.ts';
-  import {
-    buildLookupInvestigationBrief,
     formatLookupInvestigationBriefMarkdown,
     lookupInvestigationBriefFilename,
   } from '$lib/analysis/lookup-investigation-brief.ts';
-  import {
-    buildLookupDecisionSupport,
-    buildLookupEvidenceQualityMatrix,
-  } from '$lib/analysis/lookup-decision-support.ts';
-  import { buildLookupSourceRefreshPlan } from '$lib/analysis/lookup-source-refresh.ts';
-  import { buildLookupCheckpointFacts } from '$lib/analysis/case-evidence-checkpoint.ts';
-  import { buildAnalystEvidencePivots } from '$lib/analysis/analyst-evidence-pivots.ts';
-  import { calibrateExternalIntelligenceRisk } from '$lib/analysis/external-intelligence-risk.ts';
-  import {
-    buildLookupEvidenceTopologyNodes,
-  } from '$lib/analysis/evidence-topology.ts';
   import {
     createLookupViewModel,
     type LookupHttpResponse,
   } from '$lib/analysis/lookup-response.ts';
   import {
     boundedTechnologyText,
-    buildLookupLifecycleDates,
-    buildLookupNetworkDisplay,
-    buildLookupPageDisplay,
-    buildLookupRegistryDisplay,
     dateTimeAttribute,
     formatDate,
     rec,
@@ -91,6 +63,7 @@
     stringList,
     type JsonRecord,
   } from '$lib/analysis/lookup-display-model.ts';
+  import { buildLookupRouteAnalysis } from '$lib/analysis/lookup-route-analysis.ts';
   import {
     LOOKUP_CLIENT_TIMEOUT_MS,
   } from '$lib/analysis/lookup-request.ts';
@@ -112,31 +85,13 @@
     buildLookupReadableReport,
     lookupReadableReportFilename,
   } from '$lib/analysis/lookup-readable-report.ts';
-  import { buildLookupSummaryModel } from '$lib/analysis/lookup-summary-model.ts';
-  import { createPageBaseline } from '$lib/analysis/page-baseline.ts';
-  import { comparePageBaselines } from '$lib/analysis/page-similarity.ts';
   import { buildServiceDependencyReview } from '$lib/analysis/service-dependency-review.ts';
-  import { compareRdapPublications, compareRegistrySources } from '$lib/analysis/registry-comparison.ts';
-  import { entityDisplayName, parseDomainInput } from '$lib/analysis/utils.ts';
+  import { parseDomainInput } from '$lib/analysis/utils.ts';
   import { CAPABILITY_CONTEXT, disabledCapabilities, disabledCapability, featureCapability, type CapabilityGetter } from '$lib/capabilities';
   import { readLookupWorkflowState, writeLookupWorkflowState } from '$lib/console-workflow-state.ts';
   import { LookupRequestController } from '$lib/controllers/lookup-request-controller';
   import { LookupCaseController } from '$lib/controllers/lookup-case-controller';
-  import {
-    explainOpportunityScore,
-    explainRiskScore,
-  } from '$lib/analysis/scoring.ts';
-
-  type ScoreExplanation = { modelVersion?:number; score:number; factors:Array<{label:string;delta:number}> }|null;
   type LookupMode = 'fast' | 'deep';
-
-  function latestIsoTimestamp(...values: unknown[]): string | null {
-    const timestamps = values
-      .flatMap((value) => Array.isArray(value) ? value : [value])
-      .map((value) => typeof value === 'string' ? Date.parse(value) : Number.NaN)
-      .filter(Number.isFinite);
-    return timestamps.length ? new Date(Math.max(...timestamps)).toISOString() : null;
-  }
 
   let query=$state('');
   let lookupMode=$state<LookupMode>('deep');
@@ -178,10 +133,8 @@
   });
   const lookupView=$derived(createLookupViewModel(result));
   const availability=$derived(lookupView.availability);
-  const lookupEvidenceDepth=$derived(availability.deepScanComplete===false?'fast':'deep');
   const rdap=$derived(lookupView.rdap);
   const registrarRdap=$derived(lookupView.registrarRdap);
-  const registrarRdapParsed=$derived(lookupView.registrarRdapParsed);
   const whois=$derived(lookupView.whois);
   const rdapParsed=$derived(lookupView.rdapParsed);
   const whoisParsed=$derived(lookupView.whoisParsed);
@@ -190,42 +143,23 @@
   const registryAccess=$derived(lookupView.registryAccess);
   const registryInsights=$derived(lookupView.registryInsights);
   const reverseDns=$derived(lookupView.reverseDns);
-  const reverseDnsRecords=$derived(lookupView.reverseDnsRecords);
   const observedNetworkContext=$derived(lookupView.observedNetworkContext);
   const observedNetworkEndpoint=$derived(lookupView.observedNetworkEndpoint);
   const observedNetworkRdap=$derived(lookupView.observedNetworkRdap);
-  const observedNetwork=$derived(lookupView.observedNetwork);
   const securityTxt=$derived(lookupView.securityTxt);
   const sslbl=$derived(lookupView.sslbl);
   const sslblSnapshot=$derived(rec(sslbl.snapshot));
-  const threatIntelligence=$derived(lookupView.threatIntelligence);
   const threatIntelligenceProviders=$derived(lookupView.threatIntelligenceProviders);
   const dnsEvidence=$derived(lookupView.dnsEvidence);
   const dnsRecords=$derived(lookupView.dnsRecords);
   const httpEvidence=$derived(lookupView.httpEvidence);
-  const httpResponse=$derived(lookupView.httpResponse);
-  const httpSecurityHeaders=$derived(lookupView.httpSecurityHeaders);
   const tlsEvidence=$derived(lookupView.tlsEvidence);
   const tlsCertificate=$derived(lookupView.tlsCertificate);
-  const tlsSubject=$derived(lookupView.tlsSubject);
-  const tlsIssuer=$derived(lookupView.tlsIssuer);
   const tlsAltNames=$derived(lookupView.tlsAltNames);
-  const tlsPublicKey=$derived(lookupView.tlsPublicKey);
-  const tlsCipher=$derived(lookupView.tlsCipher);
-  const tlsAuthorization=$derived(lookupView.tlsAuthorization);
-  const tlsHostname=$derived(lookupView.tlsHostname);
-  const tlsValidity=$derived(lookupView.tlsValidity);
-  const tlsDiagnostics=$derived(lookupView.tlsDiagnostics);
   const pageIdentity=$derived(lookupView.pageIdentity);
-  const pageCanonical=$derived(lookupView.pageCanonical);
-  const pageMetaRefresh=$derived(lookupView.pageMetaRefresh);
-  const pageOpenGraph=$derived(lookupView.pageOpenGraph);
-  const pageOpenGraphUrl=$derived(lookupView.pageOpenGraphUrl);
   const pageForms=$derived(lookupView.pageForms);
   const pageResources=$derived(lookupView.pageResources);
-  const pageResourceTypes=$derived(lookupView.pageResourceTypes);
   const pageDownloads=$derived(lookupView.pageDownloads);
-  const pageFingerprints=$derived(lookupView.pageFingerprints);
   const credentialSurfaceProfile=$derived(lookupView.credentialSurfaceProfile);
   const structuredDataIdentity=$derived(lookupView.structuredDataIdentity);
   const technologyProfile=$derived(lookupView.technologyProfile);
@@ -233,262 +167,44 @@
   const clientBehaviorProfile=$derived(lookupView.clientBehaviorProfile);
   const browserLibraryProfile=$derived(rec(technologyProfile.browserLibraryProfile));
   const securityPosture=$derived(lookupView.securityPosture);
-  const securityPostureSummary=$derived(lookupView.securityPostureSummary);
-  const compactHttpSummary=$derived(compactHttpObservation(availability.http)||{});
-  const whoisRoleOrder=['registrant','administrative','technical','billing','abuse'];
-  const whoisContactsByRole=$derived(rec(whoisParsed.contactsByRole));
-  const rdapDiagnostic=$derived(rec(diagnostics.rdap));
-  const whoisDiagnostic=$derived(rec(diagnostics.whois));
-  const lookupObservedAt=$derived(latestIsoTimestamp(
-    result?.observedAt,
-    result?.fetchedAt,
-    rdapDiagnostic.fetchedAt,
-    whoisDiagnostic.queriedAt,
-    registrarRdap.fetchedAt,
-    reverseDns.observedAt,
-    observedNetworkContext.observedAt,
-    observedNetworkRdap.fetchedAt,
-    dnsEvidence.observedAt,
-    httpEvidence.observedAt,
-    tlsEvidence.observedAt,
-    pageIdentity.observedAt,
-    technologyProfile.observedAt,
-    pageRoleProfile.observedAt,
-    clientBehaviorProfile.observedAt,
-    securityPosture.observedAt,
-    securityTxt.observedAt,
-    sslbl.observedAt,
-    threatIntelligenceProviders.map((provider)=>rec(provider).observedAt),
-  ));
-  const evidenceObservedAtById=$derived.by(()=>{
-    const output:Record<string,unknown>={
-      rdap:rdapDiagnostic.fetchedAt,
-      whois:whoisDiagnostic.queriedAt,
-      availability:latestIsoTimestamp(dnsEvidence.observedAt,httpEvidence.observedAt,tlsEvidence.observedAt),
-      'registrar-rdap':registrarRdap.fetchedAt,
-      'reverse-dns':reverseDns.observedAt,
-      'network-context':latestIsoTimestamp(observedNetworkContext.observedAt,observedNetworkRdap.fetchedAt),
-      dns:dnsEvidence.observedAt,
-      http:httpEvidence.observedAt,
-      tls:tlsEvidence.observedAt,
-      'page-identity':latestIsoTimestamp(pageIdentity.observedAt,httpEvidence.observedAt),
-      technology:latestIsoTimestamp(technologyProfile.observedAt,httpEvidence.observedAt),
-      'page-role':latestIsoTimestamp(pageRoleProfile.observedAt,httpEvidence.observedAt),
-      'client-behavior':latestIsoTimestamp(clientBehaviorProfile.observedAt,httpEvidence.observedAt),
-      'security-posture':latestIsoTimestamp(securityPosture.observedAt,httpEvidence.observedAt,tlsEvidence.observedAt),
-      'security-txt':securityTxt.observedAt,
-      'sslbl-certificate':sslbl.observedAt,
-    };
-    for(const providerValue of threatIntelligenceProviders){
-      const provider=rec(providerValue);
-      const identity=rec(provider.provider);
-      const id=String(identity.id||'').trim();
-      if(id)output[`external-${id}`]=provider.observedAt;
-    }
-    return output;
-  });
-  const populatedWhoisRoles=$derived(whoisRoleOrder.filter((role)=>records(whoisContactsByRole[role]).length>0));
-  const comparison=$derived(result?.type==='domain'?compareRegistrySources(rdapParsed,whoisParsed,{rdapStatus:typeof rdapDiagnostic.status==='string'?rdapDiagnostic.status:undefined,whoisStatus:typeof whoisDiagnostic.status==='string'?whoisDiagnostic.status:undefined}):{fields:[],counts:{equivalent:0,conflict:0,rdap_only:0,whois_only:0,rdap_redacted:0,whois_redacted:0,rdap_unavailable:0,whois_unavailable:0,rdap_incomplete:0,whois_incomplete:0}});
-  const registrarPublicationComparison=$derived(result?.type==='domain'?compareRdapPublications(rdapParsed,registrarRdapParsed,{registryStatus:typeof rdapDiagnostic.status==='string'?rdapDiagnostic.status:undefined,registrarStatus:typeof registrarRdap.status==='string'?registrarRdap.status:undefined}):{fields:[],counts:{equivalent:0,conflict:0,registry_only:0,registrar_only:0,registry_redacted:0,registrar_redacted:0,registry_unavailable:0,registrar_unavailable:0,registry_incomplete:0,registrar_incomplete:0}});
-  const lifecycleDates=$derived(buildLookupLifecycleDates({availability,rdapParsed,whoisParsed}));
-  const networkDisplay=$derived(buildLookupNetworkDisplay({
-    availability,
-    reverseDns,
-    reverseDnsRecords,
-    dnsEvidence,
-    dnsRecords,
-    httpEvidence,
-    httpResponse,
-    httpSecurityHeaders,
-    tlsEvidence,
-    tlsCertificate,
-    tlsSubject,
-    tlsIssuer,
-    tlsAltNames,
-    tlsPublicKey,
-    tlsCipher,
-    tlsAuthorization,
-    tlsHostname,
-    tlsValidity,
-    tlsDiagnostics,
-  }));
-  const dnsRehearsalEvidence=$derived({
-    currentGlue:records(rec(rec(dnsEvidence.delegation).registry).nameserverDetails),
-    currentDs:records(rdapParsed.dsData),
-    currentMx:records(dnsRecords.mx),
-    currentCaa:records(dnsRecords.caa),
-    currentCriticalAddresses:[{
-      hostname:String(availability.domain||result?.registrableDomain||'').trim().toLowerCase(),
-      addresses:[
-        ...(Array.isArray(dnsRecords.a)?dnsRecords.a.map(String):[]),
-        ...(Array.isArray(dnsRecords.aaaa)?dnsRecords.aaaa.map(String):[]),
-      ],
-    }],
-  });
-  const registryDisplay=$derived(buildLookupRegistryDisplay({
+  const lookupAnalysis=$derived(buildLookupRouteAnalysis({
     result,
-    rdapParsed,
-    whoisParsed,
-    whoisContactsByRole,
-    populatedWhoisRoles,
-    comparison,
-    registrarRdap,
-    registrarRdapParsed,
-    registrarPublicationComparison,
+    lookupView,
+    profile,
+    task:taskView,
   }));
-  const idnAnalysis=$derived(result?.type==='domain'?analyzeDomainIdn(String(result?.registrableDomain||availability.domain||''),profile?.officialDomains||[]):null);
-  const profileSignals=$derived.by(()=>{
-    return matchProfileSignals(String(availability.domain||result?.registrableDomain||''),availability,profile);
-  });
-  const externalRiskContext=$derived(calibrateExternalIntelligenceRisk(threatIntelligence));
-  const scoredAvailability=$derived({...availability,...profileSignals,threatIntelligence});
-  const opportunity=$derived(explainOpportunityScore(scoredAvailability) as ScoreExplanation);
-  const risk=$derived(explainRiskScore(scoredAvailability) as ScoreExplanation);
-  const outreach=$derived(outreachAction(String(availability.domain||result?.registrableDomain||''),(availability.registrant||null) as Contact|null));
-  const abuseRecipientResolution=$derived(resolveAbuseRecipients({
-    registryInsights,
-    availabilityAbuse:availability.abuse,
-    securityTxt,
-    networkContext:observedNetworkContext,
-  }));
-  const sourceOnlyCount=$derived(comparison.counts.rdap_only+comparison.counts.whois_only);
-  const redactedComparisonCount=$derived(comparison.counts.rdap_redacted+comparison.counts.whois_redacted);
-  const limitedComparisonCount=$derived(comparison.counts.rdap_unavailable+comparison.counts.whois_unavailable+comparison.counts.rdap_incomplete+comparison.counts.whois_incomplete);
-  const caseDomain=$derived(String(availability.domain||result?.registrableDomain||'').trim().toLowerCase());
-  const observedPageBaseline=$derived(createPageBaseline(caseDomain,availability));
-  const pageComparison=$derived(comparePageBaselines(profile?.pageBaseline,observedPageBaseline));
-  const pageDisplay=$derived(buildLookupPageDisplay({
-    pageIdentity,
-    pageCanonical,
-    pageMetaRefresh,
-    pageOpenGraph,
-    pageOpenGraphUrl,
-    pageForms,
-    pageResources,
-    pageResourceTypes,
-    pageDownloads,
-    pageFingerprints,
-    credentialSurfaceProfile,
-    structuredDataIdentity,
-    technologyProfile,
-    browserLibraryProfile,
-    pageRoleProfile,
-    clientBehaviorProfile,
-    observedNetworkContext,
-    observedNetworkEndpoint,
-    observedNetwork,
-    securityPosture,
-    securityPostureSummary,
-    pageComparison,
-  }));
-  const brandMimicryReview=$derived(buildBrandMimicryReview({
-    hasActiveProfile:Boolean(profile),
-    trustedDomainKind:profileSignals.trusted,
-    profileSignals,
-    pageComparison,
-    hasPasswordField:availability.hasPasswordField,
-    phishingLanguageMatch:availability.phishingLanguageMatch,
-  }));
-  const hasWebEvidence=$derived(reverseDns.source==='reverse_dns'||dnsEvidence.source==='dns'||httpEvidence.source==='http'||tlsEvidence.source==='tls'||sslbl.sslblVersion===1||pageIdentity.source==='html'||credentialSurfaceProfile.source==='html'||structuredDataIdentity.source==='html'||technologyProfile.source==='derived'||pageRoleProfile.source==='derived'||clientBehaviorProfile.source==='derived'||securityPosture.source==='derived'||securityTxt.securityTxtVersion===1||Boolean(pageComparison)||Boolean(profile?.pageBaseline&&result?.type==='domain'));
-  const hasCaseSection=$derived(Boolean(caseDomain)||Boolean(outreach)||abuseRecipientResolution.recipients.length>0);
-  const evidenceTopologyNodes=$derived(buildLookupEvidenceTopologyNodes({
-    targetType:result?.type,
-    availability,
-    diagnostics,
-    registrarRdap,
-    observedNetworkContext,
-    observedNetworkEndpoint,
-    dnsEvidence,
-    reverseDns,
-    reverseDnsRecords,
-    httpEvidence,
-    httpResponse,
-    tlsEvidence,
-    tlsAuthorization,
-    pageIdentity,
-    structuredDataIdentity,
-    securityTxt,
-    technologyProfile,
-    securityPosture,
-    securityPostureSummary,
-  }));
-  const desiredCertificateBaseline=$derived(
-    profile?.desiredPostureBaselines.find((item)=>item.domain===caseDomain)??null,
-  );
-  const certificatePolicyReview=$derived(buildCertificatePolicyReview({
-    observedAt:lookupObservedAt,
-    dnsEvidence,
-    dnsRecords,
-    tlsEvidence,
-    tlsIssuer,
-    tlsPublicKey,
-    tlsAltNames,
-    baseline:desiredCertificateBaseline,
-  }));
-  const lookupAssetGraph=$derived(buildLookupAssetGraph({
-    target:caseDomain,
-    observedAt:lookupObservedAt,
-    rdapEvidence:rdap,
-    rdapParsed,
-    dnsEvidence,
-    dnsRecords,
-    observedNetworkContext,
-    observedNetworkEndpoint,
-    observedNetwork,
-    httpEvidence,
-    tlsEvidence,
-    tlsCertificate,
-    tlsAuthorization,
-    tlsHostname,
-    tlsAltNames,
-    tlsPublicKey,
-    tlsIssuer,
-    pageCanonical,
-    pageOpenGraphUrl,
-    pageForms,
-    pageResources,
-    pageIdentity,
-    structuredDataIdentity,
-    certificatePolicyReview,
-    profileDomains:{
-      official:profile?.officialDomains??[],
-      partner:profile?.approvedPartnerDomains??[],
-      allowlisted:profile?.allowlistedDomains??[],
-    },
-  }));
-  const analystEvidencePivots=$derived(buildAnalystEvidencePivots({
-    type:result?.type,
-    query:result?.query,
-    registrableDomain:result?.registrableDomain,
-    observedAddress:observedNetworkEndpoint.address,
-    observedCidrs:observedNetwork.cidrs,
-    startAutnum:rdapParsed.startAutnum,
-    endAutnum:rdapParsed.endAutnum,
-  }));
-  const activationContext=$derived(buildActivationContext({
-    registryCreated:lifecycleDates.created,
-    registryUpdated:lifecycleDates.updated,
-    registryExpires:lifecycleDates.expires,
-    tlsValidFrom:tlsCertificate.validFrom,
-    tlsValidTo:tlsCertificate.validTo,
-    observedAt:lookupObservedAt,
-    dnsStatus:dnsEvidence.status,
-    dnsComplete:dnsEvidence.complete,
-    hasMx:availability.hasMx,
-    hasSpf:availability.hasSpf,
-    hasDmarc:availability.hasDmarc,
-    httpStatus:httpResponse.status,
-    pageObserved:pageIdentity.source==='html',
-    tlsObserved:tlsEvidence.source==='tls'&&tlsEvidence.status!=='skipped',
-  }));
-  const acquisitionDueDiligence=$derived(buildAcquisitionDueDiligence({
-    availability,
-    registryInsights,
-    activationContext,
-    dnsEvidence,
-    dnsRecords,
-    tlsEvidence,
-  }));
+  const lookupEvidenceDepth=$derived(lookupAnalysis.lookupEvidenceDepth);
+  const lookupObservedAt=$derived(lookupAnalysis.lookupObservedAt);
+  const populatedWhoisRoles=$derived(lookupAnalysis.populatedWhoisRoles);
+  const comparison=$derived(lookupAnalysis.comparison);
+  const registrarPublicationComparison=$derived(lookupAnalysis.registrarPublicationComparison);
+  const lifecycleDates=$derived(lookupAnalysis.lifecycleDates);
+  const networkDisplay=$derived(lookupAnalysis.networkDisplay);
+  const dnsRehearsalEvidence=$derived(lookupAnalysis.dnsRehearsalEvidence);
+  const registryDisplay=$derived(lookupAnalysis.registryDisplay);
+  const idnAnalysis=$derived(lookupAnalysis.idnAnalysis);
+  const profileSignals=$derived(lookupAnalysis.profileSignals);
+  const externalRiskContext=$derived(lookupAnalysis.externalRiskContext);
+  const opportunity=$derived(lookupAnalysis.opportunity);
+  const risk=$derived(lookupAnalysis.risk);
+  const outreach=$derived(lookupAnalysis.outreach);
+  const abuseRecipientResolution=$derived(lookupAnalysis.abuseRecipientResolution);
+  const sourceOnlyCount=$derived(lookupAnalysis.sourceOnlyCount);
+  const redactedComparisonCount=$derived(lookupAnalysis.redactedComparisonCount);
+  const limitedComparisonCount=$derived(lookupAnalysis.limitedComparisonCount);
+  const caseDomain=$derived(lookupAnalysis.caseDomain);
+  const observedPageBaseline=$derived(lookupAnalysis.observedPageBaseline);
+  const pageComparison=$derived(lookupAnalysis.pageComparison);
+  const pageDisplay=$derived(lookupAnalysis.pageDisplay);
+  const brandMimicryReview=$derived(lookupAnalysis.brandMimicryReview);
+  const hasWebEvidence=$derived(lookupAnalysis.hasWebEvidence);
+  const hasCaseSection=$derived(lookupAnalysis.hasCaseSection);
+  const evidenceTopologyNodes=$derived(lookupAnalysis.evidenceTopologyNodes);
+  const certificatePolicyReview=$derived(lookupAnalysis.certificatePolicyReview);
+  const lookupAssetGraph=$derived(lookupAnalysis.lookupAssetGraph);
+  const analystEvidencePivots=$derived(lookupAnalysis.analystEvidencePivots);
+  const activationContext=$derived(lookupAnalysis.activationContext);
+  const acquisitionDueDiligence=$derived(lookupAnalysis.acquisitionDueDiligence);
   const serviceDependencyReview=$derived(buildServiceDependencyReview({
     domain:caseDomain,
     dnsEvidence,
@@ -499,109 +215,15 @@
     pageTitle:pageIdentity.title,
     observedAt:lookupObservedAt,
   }));
-  const evidenceCoverage=$derived(buildLookupEvidenceCoverageLedger({
-    targetType:result?.type,
-    availability,
-    diagnostics,
-    registrarRdap,
-    reverseDns,
-    observedNetworkContext,
-    dnsEvidence,
-    httpEvidence,
-    httpResponse,
-    tlsEvidence,
-    pageIdentity,
-    pageRoleProfile,
-    clientBehaviorProfile,
-    technologyProfile,
-    securityPosture,
-    securityTxt,
-    sslbl,
-    rdapParsed,
-    whoisParsed,
-    threatIntelligenceProviders,
-  }));
-  const lookupSourceRefreshPlan=$derived(buildLookupSourceRefreshPlan(
-    evidenceCoverage,
-    lookupObservedAt,
-  ));
-  const lookupDecisionSupport=$derived(buildLookupDecisionSupport({
-    task:taskView,
-    coverage:evidenceCoverage,
-    refreshPlan:lookupSourceRefreshPlan,
-    registryComparison:comparison,
-    registrarPublicationComparison,
-    requestedHost:result?.inputHostname||result?.registrableDomain||result?.query,
-    registrableDomain:result?.registrableDomain,
-    finalUrl:httpEvidence.finalUrl,
-    canonicalUrl:pageCanonical.url,
-    openGraphUrl:pageOpenGraphUrl.url,
-    tlsAuthorization,
-    certificatePolicyReview,
-    hasCaseSection,
-  }));
-  const evidenceQualityMatrix=$derived(buildLookupEvidenceQualityMatrix({
-    coverage:evidenceCoverage,
-    refreshPlan:lookupSourceRefreshPlan,
-    timing:lookupTiming,
-    observedAt:lookupObservedAt,
-    observedAtByEvidence:evidenceObservedAtById,
-  }));
-  const lookupSummary=$derived(buildLookupSummaryModel({
-    availability,
-    rdapParsed,
-    whoisParsed,
-    registrarRdap,
-    registryComparison:comparison,
-    registrarPublicationComparison,
-    diagnostics,
-    profileSignals,
-    idnAnalysis,
-    resultObservedAt:lookupObservedAt,
-    createdDate:lifecycleDates.created,
-    expiresDate:lifecycleDates.expires,
-    updatedDate:lifecycleDates.updated,
-  }));
-  const lookupInvestigationBrief=$derived(buildLookupInvestigationBrief({
-    target:result?.registrableDomain||result?.query,
-    targetType:result?.type,
-    task:taskView,
-    summary:lookupSummary,
-    decisionSupport:lookupDecisionSupport,
-    quality:evidenceQualityMatrix,
-    graph:lookupAssetGraph,
-  }));
-  const evidenceTopologyTarget=$derived({
-    label:show(result?.registrableDomain||result?.query),
-    detail:`${show(result?.type)} · ${lookupEvidenceDepth} lookup`,
-    status:show(availability.state),
-  });
-  const caseEvidence=$derived({
-    availability:String(availability.state||''),
-    confidence:availability.confidence?String(availability.confidence):null,
-    riskModelVersion:risk?.modelVersion??null,
-    riskScore:risk?risk.score:null,
-    opportunityScore:opportunity?opportunity.score:null,
-    riskFactors:risk?risk.factors.map((f)=>({label:f.label,points:f.delta})):[],
-    opportunityFactors:opportunity?opportunity.factors.map((f)=>({label:f.label,points:f.delta})):[],
-    registrar:entityDisplayName(availability.registrar)||entityDisplayName(rdapParsed.registrar)||entityDisplayName(whoisParsed.registrar),
-    createdDate:lifecycleDates.created,
-    expiryDate:lifecycleDates.expires,
-    nameservers:Array.isArray(availability.nameservers)?availability.nameservers:[],
-    hasMx:availability.hasMx??null,hasSpf:availability.hasSpf??null,hasDmarc:availability.hasDmarc??null,
-    activityStatus:availability.activityStatus?String(availability.activityStatus):null,
-    websiteProbeDetail:availability.websiteProbeDetail?String(availability.websiteProbeDetail):null,
-    pageTitle:availability.pageTitle??null,
-    faviconMatch:profileSignals.faviconMatch??null,faviconNearMatch:profileSignals.faviconNearMatch??null,
-    reusesOfficialAssets:profileSignals.reusesOfficialAssets??null,hasPasswordField:availability.hasPasswordField??null,
-    hasExternalFormAction:availability.hasExternalFormAction??null,
-    phishingLanguageMatch:availability.phishingLanguageMatch??null,
-    ...compactHttpSummary,
-    mutationTypes:[]
-  });
-  const checkpointFacts=$derived(result?.type==='domain'
-    ? buildLookupCheckpointFacts(result,{collectionDepth:lookupEvidenceDepth})
-    : []);
+  const evidenceCoverage=$derived(lookupAnalysis.evidenceCoverage);
+  const lookupSourceRefreshPlan=$derived(lookupAnalysis.lookupSourceRefreshPlan);
+  const lookupDecisionSupport=$derived(lookupAnalysis.lookupDecisionSupport);
+  const evidenceQualityMatrix=$derived(lookupAnalysis.evidenceQualityMatrix);
+  const lookupSummary=$derived(lookupAnalysis.lookupSummary);
+  const lookupInvestigationBrief=$derived(lookupAnalysis.lookupInvestigationBrief);
+  const evidenceTopologyTarget=$derived(lookupAnalysis.evidenceTopologyTarget);
+  const caseEvidence=$derived(lookupAnalysis.caseEvidence);
+  const checkpointFacts=$derived(lookupAnalysis.checkpointFacts);
 
   async function refreshProfileContext(){
     try{profile=await activeProfile();}
