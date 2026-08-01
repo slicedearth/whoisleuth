@@ -620,6 +620,17 @@ test('TLS intelligence presents one-connection certificate evidence without narr
   await expect(card.getByText('UNABLE_TO_VERIFY_LEAF_SIGNATURE', { exact: true })).toBeVisible();
   await expect(card.getByText(/one connection to one validated public address/i)).toBeVisible();
 
+  const policyCard = page.locator('#evidence-certificate-policy');
+  await expect(policyCard).not.toHaveAttribute('open', '');
+  await expect(policyCard.getByRole('heading', { name: 'Certificate policy context' })).toBeVisible();
+  await expect(policyCard.locator(':scope > summary .chevron')).toHaveCount(0);
+  await expect(policyCard.locator(':scope > summary .evidence-status')).toHaveText('partial');
+  await expect(policyCard.locator(':scope > summary .evidence-summary-detail')).toHaveText('Current CAA, observed issuer, and reviewed expectations');
+  await expect(policyCard.getByText('CAA collection was incomplete, unavailable, or truncated, so no current-policy comparison is available.', { exact: true })).toBeHidden();
+  await policyCard.locator(':scope > summary').click();
+  await expect(policyCard.getByText('CAA collection was incomplete, unavailable, or truncated, so no current-policy comparison is available.', { exact: true })).toBeVisible();
+  await expect(policyCard.getByText('Partial', { exact: true })).toBeVisible();
+
   await page.setViewportSize({ width: 390, height: 844 });
   await expectNoHorizontalOverflow(page);
 });
