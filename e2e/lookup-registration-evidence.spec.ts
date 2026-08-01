@@ -217,7 +217,9 @@ test('deep Lookup presents registrar and observed network RDAP as separate sourc
   const section = page.locator('details.registrar-rdap');
   await expect(section).not.toHaveAttribute('open', '');
   const summary = section.locator(':scope > summary');
-  await expect(summary).toHaveText('Registrar RDAP · success');
+  await expect(summary.getByRole('heading', { name: 'Registrar RDAP' })).toBeVisible();
+  await expect(summary.locator('.evidence-summary-detail')).toHaveText('Separately attributed sponsoring-registrar publication');
+  await expect(summary.locator('.evidence-status')).toHaveText('success');
   await summary.focus();
   await summary.press('Enter');
   await expect(section).toHaveAttribute('open', '');

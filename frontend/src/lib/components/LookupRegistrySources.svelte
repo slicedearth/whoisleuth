@@ -1,5 +1,6 @@
 <script lang="ts">
   import RdapDomainSource from '$lib/components/RdapDomainSource.svelte';
+  import { evidenceStatusTone } from '$lib/analysis/evidence-status-tone.ts';
   import {
     projectEvidenceMatrix,
     type MatrixInput,
@@ -416,8 +417,17 @@
 </div>
 
 {#if registrar.visible}
-  <details class="registrar-rdap card">
-    <summary>Registrar RDAP · {registrar.label}</summary>
+  <details class="registrar-rdap evidence-card card" aria-labelledby="registrar-rdap-title">
+    <summary class="evidence-summary">
+      <span class="evidence-summary-row">
+        <span class="evidence-summary-copy">
+          <span class="eyebrow">Registration source</span>
+          <span class="evidence-summary-title" id="registrar-rdap-title" role="heading" aria-level="4">Registrar RDAP</span>
+          <span class="evidence-summary-detail">Separately attributed sponsoring-registrar publication</span>
+        </span>
+        <span class="evidence-status {evidenceStatusTone(registrar.label)}">{registrar.label}</span>
+      </span>
+    </summary>
     <div class="registrar-provenance">
       {#if registrar.endpoint}<strong>{registrar.endpoint}</strong>{/if}
       {#if registrar.detail}<span>{registrar.detail}</span>{/if}
@@ -520,7 +530,7 @@
   .contact-inventory strong{font-size:var(--text-xs)}
   .contact-inventory span{margin-top:4px;color:var(--muted);font-size:var(--text-xs)}
   .registrar-rdap{margin-top:12px}
-  .registrar-provenance{display:grid;gap:5px;padding:0 var(--card-pad) 14px;font-size:var(--text-xs)}
+  .registrar-provenance{display:grid;gap:5px;padding:14px var(--card-pad);border-top:1px solid var(--border);font-size:var(--text-xs)}
   .registrar-provenance strong,.registrar-provenance span,.registrar-provenance p{overflow-wrap:anywhere}
   .registrar-provenance strong{font-family:var(--mono)}
   .registrar-provenance span,.registrar-provenance p{color:var(--muted)}
