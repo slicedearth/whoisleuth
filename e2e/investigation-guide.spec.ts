@@ -362,7 +362,9 @@ test('brand sweep carries the official domain and selected candidates across eve
 
   await runBulkStep(page, 'Triage candidates');
   await expect(currentAction(page)).toContainText('Inspect priority domain');
-  await currentAction(page).getByRole('link', { name: 'Choose a Bulk candidate' }).click();
+  const candidateSelectionLink = currentAction(page).getByRole('link', { name: 'Choose a Bulk candidate' });
+  await expect(candidateSelectionLink).toHaveAttribute('href', '#results');
+  await candidateSelectionLink.click();
   await expect(page).toHaveURL('/bulk?source=discover#results');
   await expect(page.locator('#results')).toBeInViewport();
   const primaryRow = page.locator('.results-table tbody tr', { hasText: primaryCandidate });

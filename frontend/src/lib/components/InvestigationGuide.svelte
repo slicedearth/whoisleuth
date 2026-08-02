@@ -96,9 +96,7 @@
   const actionApproved = $derived(Boolean(actionStage && (!actionStage.requiresApproval || actionProgress?.approvedAt)));
   const candidateSelectionRequired = $derived(Boolean(guide?.recipeId === 'brand_sweep' && actionStage?.id === 'lookup' && !guide.focusDomain));
   const actionHref = $derived(actionStage && guide
-    ? candidateSelectionRequired && page.url.pathname === '/bulk'
-      ? '#results'
-      : actionIsCurrent
+    ? actionIsCurrent
       ? targetHashes.get(actionStage.path) || actionStage.path
       : investigationGuideHref(actionStage.id, guide.domain, guide.recipeId, guide.focusDomain)
     : '/dashboard');
@@ -568,7 +566,12 @@
               <button class="btn compact" type="button" onclick={() => setOutcome(actionStage.id, 'pending')}>Reopen this step</button>
             {:else if candidateSelectionRequired}
               <p class="candidate-note">Choose one priority result in Bulk and use its <strong>Inspect</strong> action. WHOISleuth will carry that candidate into this step.</p>
-              <a class="primary compact" href={actionHref}>{actionLabel(actionStage)}</a>
+              <a
+                class="primary compact"
+                href={page.url.pathname === '/bulk'
+                  ? '#results'
+                  : investigationGuideHref(actionStage.id, guide.domain, guide.recipeId, guide.focusDomain)}
+              >{actionLabel(actionStage)}</a>
             {:else if actionStage.requiresApproval && !actionApproved}
               {#if reviewingStageId === actionStage.id}
                 <section class="request-review" aria-label={`Review requests for ${actionStage.label}`}>
