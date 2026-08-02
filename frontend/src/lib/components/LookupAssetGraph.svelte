@@ -46,6 +46,7 @@
         description="Nodes are bounded facts from the current Deep lookup. Dashed visual edges indicate partial or uncertain collection, not inferred absence."
         nodes={projection.nodes}
         links={projection.links}
+        focusNodeId={graph.targetId}
       />
       {#if projection.collapsedGroups.length}
         <p class="collapsed-note">

@@ -36,6 +36,14 @@ test('completes the public synthetic workflow without investigation requests or 
   await page.getByRole('button', { name: 'Load related domains' }).click();
   await expect(page.locator('.relationship-glyph svg')).toHaveAttribute('data-icon', 'nameserver');
   await expect(page.getByRole('img', { name: /Shared evidence relationships/u })).toBeVisible();
+  const relationshipMap = page.locator('.relationship-map');
+  await expect(relationshipMap.locator('.cluster-legend')).toBeVisible();
+  await expect(relationshipMap.locator('.cluster-legend li')).toHaveCount(2);
+  await expect(relationshipMap.locator('.map-summary')).toContainText('facts');
+  await expect(relationshipMap.locator('.map-summary')).toContainText('links');
+  expect(await relationshipMap.locator('.map-frame').evaluate((element) => (
+    element.scrollWidth <= element.clientWidth + 1
+  ))).toBe(true);
   await expect(page.locator('.candidate')).toHaveCount(2);
   await page.getByRole('button', { name: 'All candidates · 3' }).click();
   await page.getByRole('button', { name: 'High priority · 1' }).click();

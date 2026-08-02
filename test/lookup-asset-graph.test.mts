@@ -138,6 +138,9 @@ test('graph lenses reuse one model without cross-contaminating evidence classes'
   assert.ok(certificate.edges.some((edge) => edge.kind === 'reviewed-hostname-match'));
   assert.ok(certificate.edges.some((edge) => edge.kind === 'reviewed-runtime-trust'));
   assert.ok(certificate.edges.some((edge) => edge.kind === 'reviewed-against-policy'));
+  assert.equal(identity.nodes.find((node) => node.label === 'identity.example')?.group, 'identity');
+  assert.equal(delegation.nodes.find((node) => node.label === 'ns1.example.test')?.group, 'dns');
+  assert.equal(certificate.nodes.find((node) => node.label === '*.example.test')?.group, 'certificate');
 });
 
 test('asset graph bounds hostile or excessive collections', () => {

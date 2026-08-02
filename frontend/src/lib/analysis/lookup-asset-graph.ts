@@ -76,6 +76,36 @@ const MAX_VALUES = 16;
 const MAX_LIMITATIONS = 5;
 const MAX_VISUAL_EDGES_PER_HUB = 10;
 
+function projectedNodeGroup(
+  node: LookupAssetNode,
+  edges: readonly LookupAssetEdge[],
+): Readonly<{ id: string; label: string }> {
+  if (node.kind === 'target') return { id: 'focus', label: 'Lookup target' };
+  if (node.kind === 'address' || node.kind === 'network' || node.kind === 'prefix') {
+    return { id: 'network', label: 'Network' };
+  }
+  if (node.kind === 'registrar') return { id: 'registration', label: 'Registration' };
+  if (node.kind === 'certificate' || node.kind === 'issuer' || node.kind === 'key') {
+    return { id: 'certificate', label: 'Certificates' };
+  }
+  if (node.kind === 'observation') return { id: 'delegation', label: 'Delegation' };
+  if (node.kind === 'identity' || node.kind === 'origin' || node.kind === 'tracker') {
+    return { id: 'identity', label: 'Web identity' };
+  }
+  if (node.kind === 'hostname') {
+    const incident = edges.filter((edge) => edge.source === node.id || edge.target === node.id);
+    if (incident.some((edge) => edge.kind === 'authorizes-name')) {
+      return { id: 'certificate', label: 'Certificates' };
+    }
+    if (incident.some((edge) => edge.lenses.includes('identity') && !edge.lenses.includes('delegation'))) {
+      return { id: 'identity', label: 'Web identity' };
+    }
+    return { id: 'dns', label: 'DNS and routing' };
+  }
+  if (node.kind === 'summary') return { id: 'summary', label: 'Grouped evidence' };
+  return { id: 'evidence', label: 'Other evidence' };
+}
+
 function record(value: unknown): JsonRecord {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? value as JsonRecord
@@ -873,18 +903,25 @@ export function projectLookupAssetGraph(
   }));
   const nodes: ForceGraphNodeInput[] = graph.nodes
     .filter((node) => nodeIds.has(node.id))
-    .map((node) => ({
-      id: node.id,
-      label: node.label,
-      kind: node.kind,
-      detail: node.detail,
-    }));
+    .map((node) => {
+      const group = projectedNodeGroup(node, visualEdges);
+      return {
+        id: node.id,
+        label: node.label,
+        kind: node.kind,
+        detail: node.detail,
+        group: group.id,
+        groupLabel: group.label,
+      };
+    });
   for (const group of collapsedGroups) {
     nodes.push({
       id: `collapsed-${group.hubId}`,
       label: `+${group.omittedEdges} more`,
       kind: 'summary',
       detail: `The visual graph groups ${group.omittedEdges} additional relationship${group.omittedEdges === 1 ? '' : 's'} connected to ${group.hubLabel}. The accessible relationship list retains every edge.`,
+      group: 'summary',
+      groupLabel: 'Grouped evidence',
     });
   }
   const links: ForceGraphLinkInput[] = visualEdges.map((edge) => ({

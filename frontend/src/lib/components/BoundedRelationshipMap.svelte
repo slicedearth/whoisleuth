@@ -10,64 +10,100 @@
     description,
     nodes,
     links,
+    focusNodeId = '',
   }: {
     title: string;
     description: string;
     nodes: ForceGraphNodeInput[];
     links: ForceGraphLinkInput[];
+    focusNodeId?: string;
   } = $props();
 
-  const graph = $derived(projectBoundedForceGraph(nodes, links));
-  const shortLabel = (value: string) => value.length > 22 ? `${value.slice(0, 20)}…` : value;
+  const graph = $derived(projectBoundedForceGraph(nodes, links, { focusNodeId }));
   const nodeLabel = (id: string) => graph.nodes.find((node) => node.id === id)?.label ?? id;
+  const linkPath = (link: (typeof graph.links)[number]) => {
+    const deltaX = link.targetX - link.sourceX;
+    const deltaY = link.targetY - link.sourceY;
+    const distance = Math.max(1, Math.hypot(deltaX, deltaY));
+    const direction = [...link.id].reduce((total, character) => total + character.charCodeAt(0), 0) % 2 ? 1 : -1;
+    const curve = Math.min(22, distance * 0.08) * direction;
+    const controlX = (link.sourceX + link.targetX) / 2 - deltaY / distance * curve;
+    const controlY = (link.sourceY + link.targetY) / 2 + deltaX / distance * curve;
+    return `M ${link.sourceX} ${link.sourceY} Q ${controlX} ${controlY} ${link.targetX} ${link.targetY}`;
+  };
 </script>
 
 {#if graph.nodes.length > 1 && graph.links.length}
   <section class="relationship-map" aria-label={title}>
     <header>
       <div><p class="eyebrow">Bounded relationship map</p><h3>{title}</h3></div>
-      {#if graph.truncated}<span>Partial visual</span>{/if}
+      <div class="map-summary" role="group" aria-label="Map summary">
+        <span>{graph.nodes.length} facts</span>
+        <span>{graph.links.length} links</span>
+        {#if graph.truncated}<strong>Partial visual</strong>{/if}
+      </div>
     </header>
     <p>{description}</p>
-    <!-- svelte-ignore a11y_no_noninteractive_tabindex -- scrollable relationship map must be keyboard reachable -->
+    {#if graph.clusters.length}
+      <ul class="cluster-legend" aria-label="Evidence groups">
+        {#each graph.clusters as cluster (cluster.id)}
+          <li class={`cluster-${cluster.index}`}><i aria-hidden="true"></i>{cluster.label}<span>{cluster.count}</span></li>
+        {/each}
+      </ul>
+    {/if}
     <div
       class="map-frame"
       role="img"
-      tabindex="0"
       aria-label={`${title}. ${graph.nodes.length} nodes and ${graph.links.length} relationships. Exact evidence follows the visual.`}
     >
       <svg viewBox={`0 0 ${graph.width} ${graph.height}`} aria-hidden="true">
-        <defs>
-          <pattern id="relationship-map-grid" width="24" height="24" patternUnits="userSpaceOnUse">
-            <path d="M 24 0 L 0 0 0 24" class="grid-line"></path>
-          </pattern>
-        </defs>
         <rect width={graph.width} height={graph.height} class="background"></rect>
-        <rect width={graph.width} height={graph.height} fill="url(#relationship-map-grid)"></rect>
+        {#each graph.nodes.filter((node) => node.kind === 'target') as node (node.id)}
+          <circle cx={node.x} cy={node.y} r="96" class="focus-halo"></circle>
+        {/each}
         <g class="links">
           {#each graph.links as link (link.id)}
-            <line
-              x1={link.sourceX}
-              y1={link.sourceY}
-              x2={link.targetX}
-              y2={link.targetY}
+            <path
+              d={linkPath(link)}
               class:derived={link.kind === 'derived'}
-            ><title>{link.detail || link.kind}</title></line>
+            ><title>{link.detail || link.kind}</title></path>
+            <circle cx={link.targetX} cy={link.targetY} r="2.4" class:derived={link.kind === 'derived'}></circle>
           {/each}
         </g>
         <g class="nodes">
           {#each graph.nodes as node (node.id)}
-            <g transform={`translate(${node.x} ${node.y})`} class={`node kind-${node.kind}`}>
+            <g transform={`translate(${node.x} ${node.y})`} class={`node kind-${node.kind} cluster-${node.clusterIndex}`}>
               {#if node.kind === 'target'}
-                <rect x="-47" y="-17" width="94" height="34" rx="6"></rect>
+                <rect
+                  class="node-shape target-shape"
+                  x={-(node.labelWidth + 20) / 2}
+                  y={-(node.labelLines.length * 13 + 17) / 2}
+                  width={node.labelWidth + 20}
+                  height={node.labelLines.length * 13 + 17}
+                  rx="9"
+                ></rect>
               {:else if node.kind === 'technology'}
-                <path d="M0 -20 20 0 0 20-20 0Z"></path>
+                <path class="node-shape" d="M0 -20 20 0 0 20-20 0Z"></path>
               {:else if node.kind === 'relationship'}
-                <rect x="-18" y="-18" width="36" height="36" rx="4"></rect>
+                <rect class="node-shape" x="-18" y="-18" width="36" height="36" rx="6"></rect>
               {:else}
-                <circle r="18"></circle>
+                <circle class="node-shape" r={node.kind === 'summary' ? 15 : 18}></circle>
               {/if}
-              <text y={node.kind === 'target' ? 4 : 34} text-anchor="middle">{shortLabel(node.label)}</text>
+              {#if node.kind !== 'target'}
+                <rect
+                  class="label-plate"
+                  x={-node.labelWidth / 2}
+                  y="25"
+                  width={node.labelWidth}
+                  height={node.labelLines.length * 13 + 8}
+                  rx="6"
+                ></rect>
+              {/if}
+              <text
+                class:target-label={node.kind === 'target'}
+                y={node.kind === 'target' ? -(node.labelLines.length - 1) * 6.5 + 4 : 37}
+                text-anchor="middle"
+              >{#each node.labelLines as line, index}<tspan x="0" dy={index === 0 ? 0 : 13}>{line}</tspan>{/each}</text>
               <title>{node.label}{node.detail ? `: ${node.detail}` : ''}</title>
             </g>
           {/each}
@@ -96,26 +132,41 @@
 {/if}
 
 <style>
-  .relationship-map{min-width:0;margin:13px 0;padding:13px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel)}
+  .relationship-map{container-type:inline-size;min-width:0;margin:13px 0;padding:13px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel)}
   header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
   h3{margin:2px 0 0;font:700 var(--text-sm) var(--mono)}
-  header span{color:var(--amber);font:650 var(--text-2xs) var(--mono);text-transform:uppercase}
+  .map-summary{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:5px}
+  .map-summary span,.map-summary strong{padding:3px 7px;border:1px solid var(--border);border-radius:999px;color:var(--muted);font:650 var(--text-2xs) var(--mono);white-space:nowrap}
+  .map-summary strong{color:var(--amber)}
   .relationship-map>p{max-width:760px;margin:6px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.5}
-  .map-frame{max-width:100%;margin-top:11px;overflow:auto;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised);overscroll-behavior:contain}
-  .map-frame:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+  .cluster-legend{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 0;padding:0;list-style:none}
+  .cluster-legend li{--cluster-tone:var(--accent);display:inline-flex;align-items:center;gap:6px;padding:4px 7px;border:1px solid color-mix(in srgb,var(--cluster-tone) 32%,var(--border));border-radius:999px;background:color-mix(in srgb,var(--cluster-tone) 5%,var(--panel-raised));color:var(--muted);font:650 var(--text-2xs) var(--mono)}
+  .cluster-legend i{width:7px;height:7px;border-radius:50%;background:var(--cluster-tone);box-shadow:0 0 8px color-mix(in srgb,var(--cluster-tone) 38%,transparent)}
+  .cluster-legend span{color:var(--text)}
+  .map-frame{max-width:100%;margin-top:11px;overflow:hidden;border:1px solid var(--border);border-radius:var(--radius-sm);background-color:var(--panel-raised);background-image:radial-gradient(circle,color-mix(in srgb,var(--border) 70%,transparent) 1px,transparent 1px);background-size:24px 24px;overscroll-behavior:contain}
   .map-mobile{display:none}
-  svg{display:block;width:100%;min-width:640px;height:auto}
-  .background{fill:var(--panel-raised)}
-  .grid-line{fill:none;stroke:color-mix(in srgb,var(--border) 58%,transparent);stroke-width:1}
-  .links line{stroke:color-mix(in srgb,var(--muted) 52%,transparent);stroke-width:1.4}
-  .links line.derived{stroke-dasharray:5 4}
-  .node circle,.node rect,.node path{fill:var(--panel);stroke:var(--border-strong);stroke-width:1.5}
-  .node.kind-target rect{fill:color-mix(in srgb,var(--accent) 8%,var(--panel));stroke:var(--accent)}
-  .node.kind-relationship rect{stroke-dasharray:3 2}
-  .node.kind-technology path{fill:color-mix(in srgb,var(--violet) 8%,var(--panel));stroke:var(--violet)}
-  .node text{fill:var(--text);font:650 10px var(--mono);paint-order:stroke;stroke:var(--panel-raised);stroke-width:4px;stroke-linejoin:round}
+  svg{display:block;width:100%;height:auto}
+  .background{fill:transparent}
+  .focus-halo{fill:color-mix(in srgb,var(--accent) 5%,transparent);stroke:color-mix(in srgb,var(--accent) 12%,transparent);stroke-width:1;pointer-events:none}
+  .links path{fill:none;stroke:color-mix(in srgb,var(--muted) 46%,transparent);stroke-width:1.35}
+  .links path.derived{stroke-dasharray:5 5}
+  .links circle{fill:color-mix(in srgb,var(--muted) 64%,transparent)}
+  .links circle.derived{fill:var(--panel-raised);stroke:color-mix(in srgb,var(--muted) 64%,transparent);stroke-width:1}
+  .node{--cluster-tone:var(--accent)}
+  .cluster-0{--cluster-tone:#5eb3ff}.cluster-1{--cluster-tone:#b89cff}.cluster-2{--cluster-tone:#d66fd6}.cluster-3{--cluster-tone:#2db7c5}
+  .cluster-4{--cluster-tone:#8a91ff}.cluster-5{--cluster-tone:#bb77ff}.cluster-6{--cluster-tone:#5f8fd6}.cluster-7{--cluster-tone:#d388b7}
+  .node-shape{fill:color-mix(in srgb,var(--cluster-tone) 9%,var(--panel));stroke:var(--cluster-tone);stroke-width:1.7}
+  .node.kind-target .node-shape{fill:color-mix(in srgb,var(--accent) 12%,var(--panel));stroke:var(--accent);stroke-width:2}
+  .node.kind-relationship .node-shape,.node.kind-summary .node-shape{stroke-dasharray:3 3}
+  .label-plate{fill:color-mix(in srgb,var(--panel-raised) 94%,transparent);stroke:color-mix(in srgb,var(--cluster-tone) 28%,var(--border));stroke-width:1}
+  .node text{fill:var(--text);font:650 10px var(--mono);pointer-events:none}
+  .node text.target-label{font-weight:750}
   .limit{font-size:var(--text-2xs)!important}
   @media(max-width:700px){
+    header{align-items:flex-start}.map-summary{max-width:130px}
+    .cluster-legend{gap:5px}.cluster-legend li{padding:3px 6px}
+  }
+  @container(max-width:660px){
     .map-frame{display:none}
     .map-mobile{display:grid;gap:7px;margin-top:11px}
     .map-mobile ul{display:grid;gap:7px;margin:0;padding:0;list-style:none}
