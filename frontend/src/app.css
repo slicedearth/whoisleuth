@@ -565,7 +565,7 @@ main { grid-area: main; width: min(1280px,100%); margin: auto; padding: 30px cla
   .results-table tbody { display: grid; gap: 10px; }
   .results-table tr {
     display: grid;
-    grid-template-columns: repeat(2,minmax(0,1fr));
+    grid-template-columns: repeat(3,minmax(0,1fr));
     padding: 13px;
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
@@ -597,8 +597,7 @@ main { grid-area: main; width: min(1280px,100%); margin: auto; padding: 30px cla
   .results-table td:first-child::before { display: none; }
   .results-table td:nth-child(2),
   .results-table td:nth-child(3),
-  .results-table td:nth-child(4) { overflow-wrap: anywhere; }
-  .results-table td:nth-child(4) { grid-column: 1 / -1; }
+  .results-table td:nth-child(4) { white-space: nowrap; }
   .results-table td:nth-child(n+5) {
     grid-column: 1 / -1;
     display: grid;
