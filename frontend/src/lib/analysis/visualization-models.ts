@@ -525,6 +525,8 @@ export function projectTrendPoints(rawPoints: readonly TrendPointInput[]) {
   const x = scalePoint<string>().domain(points.map((point) => point.id)).range([64, 850]).padding(0.45);
   const maximum = Math.max(1, ...points.map((point) => point.total));
   const y = scaleLinear().domain([0, maximum]).range([190, 24]).nice().clamp(true);
+  const first = points[0] ?? null;
+  const latest = points.at(-1) ?? null;
   return {
     width: 900,
     height: 225,
@@ -536,6 +538,13 @@ export function projectTrendPoints(rawPoints: readonly TrendPointInput[]) {
       y: y(point.total),
       addedY: y(point.added),
     })),
+    summary: {
+      firstTotal: first?.total ?? 0,
+      latestTotal: latest?.total ?? 0,
+      peakTotal: points.reduce((peak, point) => Math.max(peak, point.total), 0),
+      newlyObserved: points.reduce((total, point) => total + point.added, 0),
+      partialChecks: points.filter((point) => point.partial).length,
+    },
     truncated: candidates.length > points.length,
   };
 }

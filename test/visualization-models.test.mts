@@ -359,6 +359,13 @@ describe('bounded visualization models', () => {
     assert.equal(projected.points.length, MAX_TREND_POINTS);
     assert.equal(projected.truncated, true);
     assert.equal(requiredValue(projected.points.at(-1)).total, 28);
+    assert.deepEqual(projected.summary, {
+      firstTotal: 5,
+      latestTotal: 28,
+      peakTotal: 28,
+      newlyObserved: 24,
+      partialChecks: 1,
+    });
   });
 
   test('caps retained-monitor events and evidence lanes without erasing zero-change cells', () => {

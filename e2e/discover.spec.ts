@@ -621,6 +621,34 @@ test('a complete CT baseline persists across reload and labels newly observed do
   await expect(page.locator('.candidate strong')).toHaveText(['other.invalid']);
 });
 
+test('certificate history uses a compact mobile summary without horizontal scrolling', async ({ page }) => {
+  await page.setViewportSize({ width: 393, height: 852 });
+  let requestCount = 0;
+  await page.route('**/api/ct-search**', (route) => {
+    requestCount += 1;
+    const body = requestCount === 1 ? initialBaselineResponse : structuredResponse;
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+  });
+
+  await runCtSearch(page);
+  await runCtSearch(page);
+  const history = page.locator('details.ct-history');
+  await history.locator(':scope > summary').click();
+  await history.locator('.ct-checks > summary').click();
+
+  const summary = history.locator('.ct-trend-summary');
+  await expect(summary).toBeVisible();
+  await expect(summary.locator('dt')).toHaveText(['First', 'Latest', 'Peak', 'Newly found']);
+  await expect(summary.locator('dd')).toHaveText(['1', '2', '2', '1']);
+  await expect(history.locator('.ct-trend svg')).toBeHidden();
+  await expect.poll(() => history.locator('.ct-trend').evaluate((element) => (
+    element.scrollWidth <= element.clientWidth
+  ))).toBe(true);
+  await expect.poll(() => page.evaluate(() => (
+    document.documentElement.scrollWidth <= document.documentElement.clientWidth
+  ))).toBe(true);
+});
+
 test('previous certificate searches can be reused and deleted', async ({ page }) => {
   await mockCtSearch(page, initialBaselineResponse);
   await runCtSearch(page, 'Example Brand');
