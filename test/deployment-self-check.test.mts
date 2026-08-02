@@ -11,12 +11,14 @@ import {
   runDeploymentSelfCheck,
 } from '../tools/deployment-self-check.mts';
 import type { FetchOnce, SelfCheckResult } from '../tools/deployment-self-check.mts';
+import { HTTP_BASELINE_CONTENT_SECURITY_POLICY } from '../lib/security-headers.mts';
 
 const SECURITY_HEADERS = {
   'X-Content-Type-Options': 'nosniff',
   'X-Frame-Options': 'DENY',
   'Referrer-Policy': 'strict-origin-when-cross-origin',
   'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
+  'Content-Security-Policy': HTTP_BASELINE_CONTENT_SECURITY_POLICY,
   'Strict-Transport-Security': 'max-age=31536000',
 };
 

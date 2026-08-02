@@ -51,6 +51,7 @@ import {
 import { featureDisabledError, networkFeaturePolicy } from './lib/feature-policy.mts';
 import type { NetworkFeatureId, NetworkFeaturePolicy } from './lib/feature-policy.mts';
 import { MAX_API_JSON_BODY_BYTES, apiErrorResponseFor, apiUnexpectedErrorResponse } from './lib/http.mts';
+import { HTTP_BASELINE_CONTENT_SECURITY_POLICY } from './lib/security-headers.mts';
 
 type RequestLike = {
   protocol: string;
@@ -112,6 +113,7 @@ app.use((req: RequestLike, res: ResponseLike, next: Next) => {
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  res.setHeader('Content-Security-Policy', HTTP_BASELINE_CONTENT_SECURITY_POLICY);
   if (isHttps(req)) res.setHeader('Strict-Transport-Security', 'max-age=31536000');
   next();
 });

@@ -2,6 +2,8 @@
 // json() directly, while the Express runtime reuses the bounded JSON body
 // limit and sanitized request-error vocabulary below.
 
+import { HTTP_BASELINE_CONTENT_SECURITY_POLICY } from './security-headers.mts';
+
 const MAX_API_JSON_BODY_BYTES = 1024 * 1024;
 
 const API_REQUEST_ERROR_CODES = Object.freeze({
@@ -93,6 +95,7 @@ function json(
       'X-Frame-Options': 'DENY',
       'Referrer-Policy': 'strict-origin-when-cross-origin',
       'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
+      'Content-Security-Policy': HTTP_BASELINE_CONTENT_SECURITY_POLICY,
       'Strict-Transport-Security': 'max-age=31536000',
       'Cache-Control': 'no-store',
       ...extraHeaders,

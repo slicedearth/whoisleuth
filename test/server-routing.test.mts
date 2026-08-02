@@ -4,6 +4,8 @@ import { join, relative, sep } from 'node:path';
 import { after, before, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 
+import { HTTP_BASELINE_CONTENT_SECURITY_POLICY } from '../lib/security-headers.mts';
+
 process.env.SITE_PASSWORD = process.env.SITE_PASSWORD || 'test-only-secret';
 process.env.SESSION_SECRET = process.env.SESSION_SECRET || 'test-only-session-signing-secret';
 
@@ -86,5 +88,13 @@ describe('canonical route redirects', () => {
 
     assert.equal(response.status, 404);
     assert.equal(response.headers.get('location'), null);
+    assert.match(response.headers.get('content-security-policy') || '', /default-src 'none'/u);
+  });
+
+  test('applies the shared response policy at an application boundary', async () => {
+    const response = await fetch(`${origin}/api/session`);
+
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get('content-security-policy'), HTTP_BASELINE_CONTENT_SECURITY_POLICY);
   });
 });
