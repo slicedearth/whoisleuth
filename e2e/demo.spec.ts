@@ -44,6 +44,14 @@ test('completes the public synthetic workflow without investigation requests or 
   expect(await relationshipMap.locator('.map-frame').evaluate((element) => (
     element.scrollWidth <= element.clientWidth + 1
   ))).toBe(true);
+  const firstEvidenceGroup = relationshipMap.locator('.cluster-legend button').first();
+  await firstEvidenceGroup.click();
+  await expect(firstEvidenceGroup).toHaveAttribute('aria-pressed', 'true');
+  await expect(relationshipMap.locator('.focus-note')).toBeVisible();
+  await expect(relationshipMap.locator('.node.muted')).not.toHaveCount(0);
+  await firstEvidenceGroup.click();
+  await expect(firstEvidenceGroup).toHaveAttribute('aria-pressed', 'false');
+  await expect(relationshipMap.locator('.node.muted')).toHaveCount(0);
   await expect(page.locator('.candidate')).toHaveCount(2);
   await page.getByRole('button', { name: 'All candidates · 3' }).click();
   await page.getByRole('button', { name: 'High priority · 1' }).click();

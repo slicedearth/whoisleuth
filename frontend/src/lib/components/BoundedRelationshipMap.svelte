@@ -20,7 +20,22 @@
   } = $props();
 
   const graph = $derived(projectBoundedForceGraph(nodes, links, { focusNodeId }));
+  let activeGroup = $state('');
+  const selectedGroup = $derived(graph.clusters.some((cluster) => cluster.id === activeGroup) ? activeGroup : '');
+  const selectedCluster = $derived(graph.clusters.find((cluster) => cluster.id === selectedGroup));
   const nodeLabel = (id: string) => graph.nodes.find((node) => node.id === id)?.label ?? id;
+  const nodeGroup = (id: string) => graph.nodes.find((node) => node.id === id)?.group ?? '';
+  const nodeIsMuted = (node: (typeof graph.nodes)[number]) => Boolean(
+    selectedGroup && node.kind !== 'target' && node.group !== selectedGroup,
+  );
+  const linkIsMuted = (link: (typeof graph.links)[number]) => Boolean(
+    selectedGroup
+      && nodeGroup(link.sourceId) !== selectedGroup
+      && nodeGroup(link.targetId) !== selectedGroup,
+  );
+  const mobileLinks = $derived(selectedGroup
+    ? graph.links.filter((link) => !linkIsMuted(link))
+    : graph.links);
   const linkPath = (link: (typeof graph.links)[number]) => {
     const deltaX = link.targetX - link.sourceX;
     const deltaY = link.targetY - link.sourceY;
@@ -47,9 +62,23 @@
     {#if graph.clusters.length}
       <ul class="cluster-legend" aria-label="Evidence groups">
         {#each graph.clusters as cluster (cluster.id)}
-          <li class={`cluster-${cluster.index}`}><i aria-hidden="true"></i>{cluster.label}<span>{cluster.count}</span></li>
+          <li class={`cluster-${cluster.index}`}>
+            <button
+              type="button"
+              aria-pressed={selectedGroup === cluster.id}
+              aria-label={`${selectedGroup === cluster.id ? 'Show all groups instead of' : 'Focus'} ${cluster.label}, ${cluster.count} facts`}
+              onclick={() => activeGroup = selectedGroup === cluster.id ? '' : cluster.id}
+            ><i aria-hidden="true"></i>{cluster.label}<span>{cluster.count}</span></button>
+          </li>
         {/each}
       </ul>
+    {/if}
+    <ul class="link-legend" aria-label="Relationship line styles">
+      <li><i class="observed" aria-hidden="true"></i>Observed</li>
+      <li><i class="derived" aria-hidden="true"></i>Partial or derived</li>
+    </ul>
+    {#if selectedCluster}
+      <p class="focus-note" role="status">Showing emphasis for {selectedCluster.label}. Select it again to show every group.</p>
     {/if}
     <div
       class="map-frame"
@@ -66,13 +95,24 @@
             <path
               d={linkPath(link)}
               class:derived={link.kind === 'derived'}
+              class:muted={linkIsMuted(link)}
             ><title>{link.detail || link.kind}</title></path>
-            <circle cx={link.targetX} cy={link.targetY} r="2.4" class:derived={link.kind === 'derived'}></circle>
+            <circle
+              cx={link.targetX}
+              cy={link.targetY}
+              r="2.4"
+              class:derived={link.kind === 'derived'}
+              class:muted={linkIsMuted(link)}
+            ></circle>
           {/each}
         </g>
         <g class="nodes">
           {#each graph.nodes as node (node.id)}
-            <g transform={`translate(${node.x} ${node.y})`} class={`node kind-${node.kind} cluster-${node.clusterIndex}`}>
+            <g
+              transform={`translate(${node.x} ${node.y})`}
+              class={`node kind-${node.kind} cluster-${node.clusterIndex}`}
+              class:muted={nodeIsMuted(node)}
+            >
               {#if node.kind === 'target'}
                 <rect
                   class="node-shape target-shape"
@@ -116,7 +156,7 @@
       aria-label={`${title}. ${graph.nodes.length} nodes and ${graph.links.length} relationships. Exact evidence follows the visual.`}
     >
       <ul aria-hidden="true">
-        {#each graph.links.slice(0, 12) as link (link.id)}
+        {#each mobileLinks.slice(0, 12) as link (link.id)}
           <li class:derived={link.kind === 'derived'}>
             <span>{nodeLabel(link.sourceId)}</span>
             <b aria-hidden="true">→</b>
@@ -125,7 +165,7 @@
           </li>
         {/each}
       </ul>
-      {#if graph.links.length > 12}<p>Showing 12 of {graph.links.length} mapped relationships. Exact evidence remains below.</p>{/if}
+      {#if mobileLinks.length > 12}<p>Showing 12 of {mobileLinks.length} mapped relationships. Exact evidence remains below.</p>{/if}
     </div>
     <p class="limit">Lines show observed or explicitly derived relationships in the current bounded dataset. They do not establish common ownership or intent.</p>
   </section>
@@ -140,9 +180,18 @@
   .map-summary strong{color:var(--amber)}
   .relationship-map>p{max-width:760px;margin:6px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.5}
   .cluster-legend{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 0;padding:0;list-style:none}
-  .cluster-legend li{--cluster-tone:var(--accent);display:inline-flex;align-items:center;gap:6px;padding:4px 7px;border:1px solid color-mix(in srgb,var(--cluster-tone) 32%,var(--border));border-radius:999px;background:color-mix(in srgb,var(--cluster-tone) 5%,var(--panel-raised));color:var(--muted);font:650 var(--text-2xs) var(--mono)}
+  .cluster-legend li{--cluster-tone:var(--accent)}
+  .cluster-legend button{display:inline-flex;align-items:center;gap:6px;padding:4px 7px;border:1px solid color-mix(in srgb,var(--cluster-tone) 32%,var(--border));border-radius:999px;background:color-mix(in srgb,var(--cluster-tone) 5%,var(--panel-raised));color:var(--muted);font:650 var(--text-2xs) var(--mono);cursor:pointer}
+  .cluster-legend button:hover{border-color:color-mix(in srgb,var(--cluster-tone) 60%,var(--border-strong));color:var(--text)}
+  .cluster-legend button:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+  .cluster-legend button[aria-pressed="true"]{border-color:var(--cluster-tone);background:color-mix(in srgb,var(--cluster-tone) 14%,var(--panel-raised));color:var(--text)}
   .cluster-legend i{width:7px;height:7px;border-radius:50%;background:var(--cluster-tone);box-shadow:0 0 8px color-mix(in srgb,var(--cluster-tone) 38%,transparent)}
   .cluster-legend span{color:var(--text)}
+  .link-legend{display:flex;flex-wrap:wrap;gap:11px;margin:8px 0 0;padding:0;list-style:none;color:var(--muted);font:600 var(--text-2xs) var(--mono)}
+  .link-legend li{display:inline-flex;align-items:center;gap:6px}
+  .link-legend i{display:block;width:23px;border-top:1.5px solid color-mix(in srgb,var(--muted) 65%,transparent)}
+  .link-legend i.derived{border-top-style:dashed}
+  .focus-note{margin-top:7px!important;color:var(--text)!important;font:650 var(--text-2xs) var(--mono)!important}
   .map-frame{max-width:100%;margin-top:11px;overflow:hidden;border:1px solid var(--border);border-radius:var(--radius-sm);background-color:var(--panel-raised);background-image:radial-gradient(circle,color-mix(in srgb,var(--border) 70%,transparent) 1px,transparent 1px);background-size:24px 24px;overscroll-behavior:contain}
   .map-mobile{display:none}
   svg{display:block;width:100%;height:auto}
@@ -150,6 +199,7 @@
   .focus-halo{fill:color-mix(in srgb,var(--accent) 5%,transparent);stroke:color-mix(in srgb,var(--accent) 12%,transparent);stroke-width:1;pointer-events:none}
   .links path{fill:none;stroke:color-mix(in srgb,var(--muted) 46%,transparent);stroke-width:1.35}
   .links path.derived{stroke-dasharray:5 5}
+  .links path.muted,.links circle.muted{opacity:.1}
   .links circle{fill:color-mix(in srgb,var(--muted) 64%,transparent)}
   .links circle.derived{fill:var(--panel-raised);stroke:color-mix(in srgb,var(--muted) 64%,transparent);stroke-width:1}
   .node{--cluster-tone:var(--accent)}
@@ -161,10 +211,11 @@
   .label-plate{fill:color-mix(in srgb,var(--panel-raised) 94%,transparent);stroke:color-mix(in srgb,var(--cluster-tone) 28%,var(--border));stroke-width:1}
   .node text{fill:var(--text);font:650 10px var(--mono);pointer-events:none}
   .node text.target-label{font-weight:750}
+  .node.muted{opacity:.14}
   .limit{font-size:var(--text-2xs)!important}
   @media(max-width:700px){
     header{align-items:flex-start}.map-summary{max-width:130px}
-    .cluster-legend{gap:5px}.cluster-legend li{padding:3px 6px}
+    .cluster-legend{gap:5px}.cluster-legend button{padding:3px 6px}
   }
   @container(max-width:660px){
     .map-frame{display:none}
