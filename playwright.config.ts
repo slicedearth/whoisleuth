@@ -8,10 +8,15 @@ export default defineConfig({
   testDir: './e2e',
   fullyParallel: true,
   forbidOnly: isCI,
-  retries: isCI ? 2 : 0,
+  failOnFlakyTests: isCI,
+  retries: isCI ? 1 : 0,
   ...(isCI ? { workers: 1 } : {}),
   reporter: isCI
-    ? [['list'], ['html', { outputFolder: 'playwright-report', open: 'never' }]]
+    ? [
+        ['list'],
+        ['json', { outputFile: 'playwright-results.json' }],
+        ['html', { outputFolder: 'playwright-report', open: 'never' }],
+      ]
     : [['list']],
   use: {
     baseURL: BASE_URL,

@@ -7,14 +7,6 @@ on:
         description: Exact semantic version selected by the release tag
         required: true
         type: string
-      publication_mode:
-        description: The first version publishes directly; later versions enter npm staging
-        required: true
-        default: stage-publish
-        type: choice
-        options:
-          - stage-publish
-          - initial-publish
 
 permissions:
   contents: read
@@ -41,7 +33,6 @@ jobs:
       - name: Validate release selection
         env:
           EXPECTED_VERSION: ${{ inputs.version }}
-          PUBLICATION_MODE: ${{ inputs.publication_mode }}
         run: |
           node --input-type=module -e '
             import manifest from "./package.json" with { type: "json" };
@@ -54,9 +45,6 @@ jobs:
             }
             if (process.env.GITHUB_REF !== `refs/tags/v${expected}`) {
               throw new Error("Run the workflow from the exact semantic release tag.");
-            }
-            if (process.env.PUBLICATION_MODE === "initial-publish" && expected !== "1.32.0") {
-              throw new Error("Direct publication is restricted to the first public CLI version.");
             }
           '
           git merge-base --is-ancestor "$GITHUB_SHA" origin/main
@@ -120,11 +108,5 @@ jobs:
           test "${#archives[@]}" -eq 1
           sha256sum --check "${archives[0]}.sha256"
           echo "archive=$RELEASE_DIRECTORY/${archives[0]}" >> "$GITHUB_OUTPUT"
-      - name: Publish first public version with provenance
-        if: inputs.publication_mode == 'initial-publish'
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_FIRST_PUBLISH_TOKEN }}
-        run: npm publish "${{ steps.candidate.outputs.archive }}" --access public --provenance
-      - name: Stage subsequent version with provenance
-        if: inputs.publication_mode == 'stage-publish'
+      - name: Stage reviewed version with provenance
         run: npm stage publish "${{ steps.candidate.outputs.archive }}" --access public --provenance

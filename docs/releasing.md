@@ -54,7 +54,8 @@ An explicitly approved release candidate can be assembled outside the working
 tree without performing a registry action:
 
 ```bash
-npm run cli:package:release -- /tmp/whoisleuth-cli-release --tag v1.32.0 --json
+VERSION="$(node -p "require('./package.json').version")"
+npm run cli:package:release -- /tmp/whoisleuth-cli-release --tag "v${VERSION}" --json
 ```
 
 Release assembly removes the private flag only from the generated archive,
@@ -63,11 +64,15 @@ documented command help boundary, writes a SHA-256 digest, and refuses a tag
 that does not match the root application version. Existing output files are not
 overwritten.
 
-Registry publication is deliberately separate from candidate assembly. It must
-use the exact reviewed tag, preserve the recorded archive digest, attach
-registry provenance, and require an explicit maintainer approval. Local
-assembly commands do not publish, configure credentials, or approve a staged
-version.
+Registry publication is deliberately separate from candidate assembly. The
+CLI package is declared as [dual-use security
+software](https://docs.npmjs.com/policies/dual-use/). The tagged release workflow
+may submit only the exact reviewed archive through trusted publishing to npm
+staging. The workflow must not use either token-based direct publication or a
+direct OIDC publish path. A maintainer must inspect and approve the staged
+version with interactive two-factor authentication before it becomes
+available. Local assembly commands do not publish, configure credentials, or
+approve a staged version.
 
 Review schema compatibility whenever a release changes persisted or exported
 evidence:

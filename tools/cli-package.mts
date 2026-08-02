@@ -98,6 +98,7 @@ const INSTALLED_COMMAND_HELP_CHECKS = Object.freeze([
 const SUPPORT_FILES = Object.freeze([
   ['packages/cli/README.md', 'README.md'],
   ['docs/cli.md', 'docs/cli.md'],
+  ['DISCLOSURE', 'DISCLOSURE'],
   ['LICENSE', 'LICENSE'],
   ['NOTICE', 'NOTICE'],
   ['TRADEMARKS.md', 'TRADEMARKS.md'],
@@ -168,6 +169,7 @@ export function buildCliPackageManifest(
   const rootDependencies = record(rootManifest.dependencies, 'Root package dependencies');
   const packageName = boundedString(templateManifest.name, 'CLI package name', 128);
   const packageVersion = boundedString(rootManifest.version, 'Root package version', 128);
+  const contentPolicy = record(templateManifest.contentPolicy, 'CLI package content policy');
 
   if (!packageName.startsWith('@') || !packageName.includes('/')) {
     throw new TypeError('CLI package name must remain scoped.');
@@ -177,6 +179,9 @@ export function buildCliPackageManifest(
   }
   if (Object.hasOwn(templateManifest, 'publishConfig')) {
     throw new TypeError('CLI package template must not contain release-only publication configuration.');
+  }
+  if (contentPolicy.class !== 'dual-use' || Object.keys(contentPolicy).length !== 1) {
+    throw new TypeError('CLI package content policy must declare only the dual-use class.');
   }
 
   const selectedDependencies: Record<string, string> = {};
@@ -191,6 +196,7 @@ export function buildCliPackageManifest(
   return {
     ...generatedTemplate,
     version: packageVersion,
+    contentPolicy: { class: 'dual-use' },
     dependencies: selectedDependencies,
     files: [
       'bin/**/*.mjs',
@@ -198,6 +204,7 @@ export function buildCliPackageManifest(
       'lib/**/*.mjs',
       'frontend/src/lib/analysis/**/*.js',
       'docs/cli.md',
+      'DISCLOSURE',
       'LICENSE',
       'LICENSES/*.txt',
       'NOTICE',
@@ -395,7 +402,7 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
     const unpackedBytes = positiveInteger(packResult.unpackedSize, 'Unpacked CLI bytes', MAX_CLI_PACKAGE_UNPACKED_BYTES);
     const filename = safeRelativePath(packResult.filename, 'Packed CLI filename');
     const tarball = path.join(artifactsRoot, filename);
-    const requiredEntries = ['bin/whoisleuth.mjs', 'cli/runner.mjs', 'package.json', 'README.md', 'LICENSE', 'docs/cli.md'];
+    const requiredEntries = ['bin/whoisleuth.mjs', 'cli/runner.mjs', 'package.json', 'README.md', 'DISCLOSURE', 'LICENSE', 'docs/cli.md'];
     for (const required of requiredEntries) {
       if (!entries.includes(required)) throw new TypeError(`Packed CLI is missing ${required}.`);
     }
@@ -418,6 +425,10 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
     }
     const executable = path.join(installRoot, 'node_modules', ...packageName.split('/'), 'bin', 'whoisleuth.mjs');
     const installedManifest = record(await readBoundedJson(path.join(path.dirname(executable), '..', 'package.json')), 'Installed package manifest');
+    const installedContentPolicy = record(installedManifest.contentPolicy, 'Installed package content policy');
+    if (installedContentPolicy.class !== 'dual-use' || Object.keys(installedContentPolicy).length !== 1) {
+      throw new TypeError('Installed CLI does not retain the dual-use content declaration.');
+    }
     if (publicationEnabled) {
       const publishConfig = record(installedManifest.publishConfig, 'Installed package publishConfig');
       if (Object.hasOwn(installedManifest, 'private') || publishConfig.access !== 'public' || publishConfig.provenance !== true) {

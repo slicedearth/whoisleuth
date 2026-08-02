@@ -3,6 +3,9 @@
   "private": true,
   "type": "module",
   "license": "AGPL-3.0-only",
+  "contentPolicy": {
+    "class": "dual-use"
+  },
   "description": "Local-first WHOIS, RDAP, DNS, TLS, certificate transparency, and domain investigation CLI.",
   "keywords": [
     "whois",

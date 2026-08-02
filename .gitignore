@@ -4,6 +4,7 @@ frontend/build/
 *.log
 .DS_Store
 playwright-report/
+playwright-results.json
 playwright/.auth/
 test-results/
 blob-report/
