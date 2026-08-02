@@ -357,6 +357,17 @@ export function investigationGuideHref(
   return stageDefinition.path;
 }
 
+export function investigationGuideApprovedHref(guide: InvestigationGuide, stageId: unknown): string {
+  const stageDefinition = investigationGuideStageForGuide(guide, stageId);
+  if (!stageDefinition) return '/dashboard';
+  if (stageDefinition.workspace === 'bulk'
+    && guide.recipeId === 'brand_sweep'
+    && guide.reviewDomains.length > 0) {
+    return '/bulk?source=discover#domains';
+  }
+  return investigationGuideHref(stageDefinition.id, guide.domain, guide.recipeId, guide.focusDomain);
+}
+
 function createStageProgress(stageDefinition: InvestigationRecipeStage, now: string): InvestigationGuideStageProgress {
   return { id: stageDefinition.id, outcome: 'pending', approvedAt: null, openedAt: null, reviewNote: null, updatedAt: now };
 }

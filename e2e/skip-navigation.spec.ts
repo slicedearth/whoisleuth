@@ -1,7 +1,7 @@
 import { expect, test } from './fixtures';
 import { boundingBox, expectNoHorizontalOverflow, useTheme } from './helpers';
 
-test('public pages expose a first-focusable skip link in the dark desktop theme', async ({ page }) => {
+test('public pages expose a first-focusable skip link in the dark desktop theme', { tag: '@timing-sensitive' }, async ({ page }) => {
   await useTheme(page, 'dark');
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto('/');
@@ -28,7 +28,7 @@ test('public pages expose a first-focusable skip link in the dark desktop theme'
   await expectNoHorizontalOverflow(page);
 });
 
-test('Console pages expose the same skip target in the light mobile theme', async ({ page }) => {
+test('Console pages expose the same skip target in the light mobile theme', { tag: '@timing-sensitive' }, async ({ page }) => {
   await useTheme(page, 'light');
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/lookup');
@@ -48,7 +48,7 @@ test('Console pages expose the same skip target in the light mobile theme', asyn
   await expectNoHorizontalOverflow(page);
 });
 
-test('skip navigation removes its reveal transition when reduced motion is requested', async ({ page }) => {
+test('skip navigation removes its reveal transition when reduced motion is requested', { tag: '@timing-sensitive' }, async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('/');
 
