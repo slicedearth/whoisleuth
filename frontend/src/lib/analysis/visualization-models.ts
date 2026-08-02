@@ -5,11 +5,13 @@ import {
 } from './visualization-bounds.ts';
 
 export {
+  FORCE_GRAPH_LINK_KINDS,
   MAX_FORCE_GRAPH_LINKS,
   MAX_FORCE_GRAPH_NODES,
   projectBoundedForceGraph,
 } from './visualization-force-graph.ts';
 export type {
+  ForceGraphLinkKind,
   ForceGraphLinkInput,
   ForceGraphNodeInput,
 } from './visualization-force-graph.ts';

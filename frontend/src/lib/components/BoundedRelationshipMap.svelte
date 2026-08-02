@@ -1,6 +1,7 @@
 <script lang="ts">
   import {
     projectBoundedForceGraph,
+    type ForceGraphLinkKind,
     type ForceGraphLinkInput,
     type ForceGraphNodeInput,
   } from '$lib/analysis/visualization-models.ts';
@@ -21,7 +22,14 @@
 
   const graph = $derived(projectBoundedForceGraph(nodes, links, { focusNodeId }));
   let activeGroup = $state('');
-  let activeLinkKind = $state<'all' | 'observed' | 'derived'>('all');
+  let activeLinkKind = $state<'all' | ForceGraphLinkKind>('all');
+  const linkKindLabels: Readonly<Record<ForceGraphLinkKind, string>> = {
+    observed: 'Observed',
+    partial: 'Partial',
+    unknown: 'Unknown',
+    derived: 'Derived',
+    summary: 'Grouped',
+  };
   const selectedGroup = $derived(graph.clusters.some((cluster) => cluster.id === activeGroup) ? activeGroup : '');
   const selectedCluster = $derived(graph.clusters.find((cluster) => cluster.id === selectedGroup));
   const graphIdentity = $derived([
@@ -46,6 +54,13 @@
   const focusedLinks = $derived(graph.links.filter(linkMatchesFocus));
   const focusedNodeIds = $derived(new Set(focusedLinks.flatMap((link) => [link.sourceId, link.targetId])));
   const omittedInputCount = $derived(graph.omittedNodeInputs + graph.omittedLinkInputs);
+  const availableLinkKinds = $derived((Object.keys(linkKindLabels) as ForceGraphLinkKind[])
+    .map((kind) => ({
+      kind,
+      label: linkKindLabels[kind],
+      count: graph.links.filter((link) => link.kind === kind).length,
+    }))
+    .filter((item) => item.count > 0));
   const nodeIsMuted = (node: (typeof graph.nodes)[number]) => Boolean(
     node.kind !== 'target'
       && (
@@ -97,19 +112,20 @@
         {/each}
       </ul>
     {/if}
-    <div class="link-filter" role="group" aria-label="Relationship evidence filter">
-      <button type="button" aria-pressed={activeLinkKind === 'all'} onclick={() => activeLinkKind = 'all'}>All</button>
-      <button type="button" aria-pressed={activeLinkKind === 'observed'} onclick={() => activeLinkKind = 'observed'}>
-        <i class="observed" aria-hidden="true"></i>Observed
-      </button>
-      <button type="button" aria-pressed={activeLinkKind === 'derived'} onclick={() => activeLinkKind = 'derived'}>
-        <i class="derived" aria-hidden="true"></i>Partial or derived
-      </button>
-    </div>
+    {#if availableLinkKinds.length > 1}
+      <div class="link-filter" role="group" aria-label="Relationship evidence filter">
+        <button type="button" aria-pressed={activeLinkKind === 'all'} onclick={() => activeLinkKind = 'all'}>All <span>{graph.links.length}</span></button>
+        {#each availableLinkKinds as item (item.kind)}
+          <button type="button" aria-pressed={activeLinkKind === item.kind} onclick={() => activeLinkKind = item.kind}>
+            <i class={item.kind} aria-hidden="true"></i>{item.label} <span>{item.count}</span>
+          </button>
+        {/each}
+      </div>
+    {/if}
     {#if filtersActive}
       <div class="focus-status">
         <p class="focus-note" role="status">
-          Showing {focusedLinks.length} of {graph.links.length} mapped relationships{selectedCluster ? ` for ${selectedCluster.label}` : ''}: {activeLinkKind === 'all' ? 'all relationship states' : activeLinkKind === 'observed' ? 'observed only' : 'partial or derived only'}.
+          Showing {focusedLinks.length} of {graph.links.length} mapped relationships{selectedCluster ? ` for ${selectedCluster.label}` : ''}: {activeLinkKind === 'all' ? 'all relationship states' : `${linkKindLabels[activeLinkKind].toLowerCase()} only`}.
         </p>
         <button type="button" onclick={resetVisualFilters}>Reset visual filters</button>
       </div>
@@ -128,14 +144,20 @@
           {#each graph.links as link (link.id)}
             <path
               d={linkPath(link)}
+              class:partial={link.kind === 'partial'}
+              class:unknown={link.kind === 'unknown'}
               class:derived={link.kind === 'derived'}
+              class:summary={link.kind === 'summary'}
               class:muted={linkIsMuted(link)}
             ><title>{link.detail || link.kind}</title></path>
             <circle
               cx={link.targetX}
               cy={link.targetY}
               r="2.4"
+              class:partial={link.kind === 'partial'}
+              class:unknown={link.kind === 'unknown'}
               class:derived={link.kind === 'derived'}
+              class:summary={link.kind === 'summary'}
               class:muted={linkIsMuted(link)}
             ></circle>
           {/each}
@@ -191,7 +213,7 @@
     >
       <ul aria-hidden="true">
         {#each mobileLinks.slice(0, 12) as link (link.id)}
-          <li class:derived={link.kind === 'derived'}>
+          <li class:partial={link.kind === 'partial'} class:unknown={link.kind === 'unknown'} class:derived={link.kind === 'derived'} class:summary={link.kind === 'summary'}>
             <span>{nodeLabel(link.sourceId)}</span>
             <b aria-hidden="true">→</b>
             <span>{nodeLabel(link.targetId)}</span>
@@ -231,7 +253,11 @@
   .link-filter button:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
   .link-filter button[aria-pressed="true"]{border-color:var(--border-strong);color:var(--text);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--border-strong) 42%,transparent)}
   .link-filter i{display:block;width:23px;border-top:1.5px solid color-mix(in srgb,var(--muted) 65%,transparent)}
-  .link-filter i.derived{border-top-style:dashed}
+  .link-filter span{color:var(--text);font-variant-numeric:tabular-nums}
+  .link-filter i.partial{border-color:var(--amber);border-top-style:dashed}
+  .link-filter i.unknown{border-top-style:dotted}
+  .link-filter i.derived{border-color:var(--accent);border-top-style:dashed}
+  .link-filter i.summary{border-top-style:dotted}
   .focus-status{display:flex;align-items:center;justify-content:space-between;gap:9px;margin-top:7px}
   .focus-note{margin:0!important;color:var(--text)!important;font:650 var(--text-2xs) var(--mono)!important}
   .focus-status button{flex:0 0 auto;padding:3px 7px;border:1px solid var(--border);border-radius:999px;background:var(--panel-raised);color:var(--muted);font:600 var(--text-2xs) var(--mono);cursor:pointer}
@@ -243,10 +269,13 @@
   .background{fill:transparent}
   .focus-halo{fill:color-mix(in srgb,var(--accent) 5%,transparent);stroke:color-mix(in srgb,var(--accent) 12%,transparent);stroke-width:1;pointer-events:none}
   .links path{fill:none;stroke:color-mix(in srgb,var(--muted) 46%,transparent);stroke-width:1.35}
-  .links path.derived{stroke-dasharray:5 5}
+  .links path.partial{stroke:color-mix(in srgb,var(--amber) 66%,var(--border));stroke-dasharray:5 5}
+  .links path.unknown{stroke-dasharray:2 5}
+  .links path.derived{stroke:color-mix(in srgb,var(--accent) 56%,var(--border));stroke-dasharray:7 4}
+  .links path.summary{stroke-dasharray:2 4}
   .links path.muted,.links circle.muted{opacity:.1}
   .links circle{fill:color-mix(in srgb,var(--muted) 64%,transparent)}
-  .links circle.derived{fill:var(--panel-raised);stroke:color-mix(in srgb,var(--muted) 64%,transparent);stroke-width:1}
+  .links circle.partial,.links circle.unknown,.links circle.derived,.links circle.summary{fill:var(--panel-raised);stroke:color-mix(in srgb,var(--muted) 64%,transparent);stroke-width:1}
   .node{--cluster-tone:var(--accent)}
   .cluster-0{--cluster-tone:#5eb3ff}.cluster-1{--cluster-tone:#b89cff}.cluster-2{--cluster-tone:#d66fd6}.cluster-3{--cluster-tone:#2db7c5}
   .cluster-4{--cluster-tone:#8a91ff}.cluster-5{--cluster-tone:#bb77ff}.cluster-6{--cluster-tone:#5f8fd6}.cluster-7{--cluster-tone:#d388b7}
@@ -269,7 +298,9 @@
     .map-mobile{display:grid;gap:7px;margin-top:11px}
     .map-mobile ul{display:grid;gap:7px;margin:0;padding:0;list-style:none}
     .map-mobile li{display:grid;grid-template-columns:14px minmax(0,1fr);gap:3px 8px;align-items:center;min-width:0;padding:9px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
-    .map-mobile li.derived{border-style:dashed}
+    .map-mobile li.partial{border-color:color-mix(in srgb,var(--amber) 48%,var(--border));border-style:dashed}
+    .map-mobile li.unknown,.map-mobile li.summary{border-style:dotted}
+    .map-mobile li.derived{border-color:color-mix(in srgb,var(--accent) 44%,var(--border));border-style:dashed}
     .map-mobile li span{min-width:0;color:var(--text);font:650 var(--text-2xs) var(--mono);line-height:1.35;overflow-wrap:anywhere;white-space:normal}
     .map-mobile li span:first-child{grid-column:2;grid-row:1}
     .map-mobile li span:nth-of-type(2){grid-column:2;grid-row:2}

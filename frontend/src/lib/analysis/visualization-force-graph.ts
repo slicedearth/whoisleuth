@@ -17,6 +17,16 @@ import {
 export const MAX_FORCE_GRAPH_NODES = 48;
 export const MAX_FORCE_GRAPH_LINKS = 80;
 
+export const FORCE_GRAPH_LINK_KINDS = [
+  'observed',
+  'partial',
+  'unknown',
+  'derived',
+  'summary',
+] as const;
+
+export type ForceGraphLinkKind = typeof FORCE_GRAPH_LINK_KINDS[number];
+
 export type ForceGraphNodeInput = {
   id: string;
   label: string;
@@ -53,9 +63,17 @@ type ProjectedForceLink = SimulationLinkDatum<ProjectedForceNode> & {
   id: string;
   source: string | ProjectedForceNode;
   target: string | ProjectedForceNode;
-  kind: string;
+  kind: ForceGraphLinkKind;
   detail: string;
 };
+
+function forceGraphLinkKind(value: unknown): ForceGraphLinkKind {
+  const normalized = boundedId(value);
+  if (!normalized) return 'observed';
+  return FORCE_GRAPH_LINK_KINDS.includes(normalized as ForceGraphLinkKind)
+    ? normalized as ForceGraphLinkKind
+    : 'unknown';
+}
 
 const FORCE_GRAPH_GROUPS: Readonly<Record<string, Readonly<{ id: string; label: string }>>> = {
   address: { id: 'network', label: 'Network' },
@@ -297,7 +315,7 @@ export function projectBoundedForceGraph(
       id: boundedText(link?.id, 80) || `link-${index}`,
       source: boundedText(link?.source, 80),
       target: boundedText(link?.target, 80),
-      kind: boundedId(link?.kind) || 'observed',
+      kind: forceGraphLinkKind(link?.kind),
       detail: boundedText(link?.detail, 100),
     }))
     .filter((link) => {

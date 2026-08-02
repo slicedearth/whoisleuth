@@ -213,7 +213,7 @@ describe('bounded visualization models', () => {
       node.labelLines.join('').replaceAll(' ', '') === node.label.replaceAll(' ', '')));
   });
 
-  test('normalizes relationship kinds and rejects duplicate link keys', () => {
+  test('bounds relationship states and rejects duplicate link keys', () => {
     const projected = projectBoundedForceGraph([
       { id: 'target', label: 'Target', kind: 'Target Node' },
       { id: 'source', label: 'Source', kind: 'External Source' },
@@ -224,7 +224,7 @@ describe('bounded visualization models', () => {
 
     assert.deepEqual(projected.nodes.map((node) => node.kind), ['external-source', 'target-node']);
     assert.equal(projected.links.length, 1);
-    assert.equal(projected.links[0]?.kind, 'derived-finding');
+    assert.equal(projected.links[0]?.kind, 'unknown');
     assert.equal(projected.omittedNodeInputs, 0);
     assert.equal(projected.omittedLinkInputs, 1);
     assert.equal(projected.truncated, true);

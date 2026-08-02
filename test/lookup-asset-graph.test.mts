@@ -175,6 +175,10 @@ test('asset graph collapses high-degree visual branches without dropping accessi
   assert.equal(projection.collapsedGroups[0]?.omittedEdges, 6);
   assert.ok(projection.nodes.some((node) => node.id === `collapsed-${graph.targetId}`));
   assert.equal(
+    projection.links.find((link) => String(link.id).startsWith('collapsed-link-'))?.kind,
+    'summary',
+  );
+  assert.equal(
     projection.links.filter((link) => !String(link.id).startsWith('collapsed-link-')).length,
     10,
   );
@@ -209,4 +213,20 @@ test('high-degree visual branches retain representative evidence families', () =
   );
   assert.equal(projection.edges.length, graph.edges.length);
   assert.ok(projection.collapsedGroups.some((group) => group.hubId === graph.targetId));
+});
+
+test('visual links keep partial and unknown evidence distinct from derived analysis', () => {
+  const graph = fixture();
+  const projection = projectLookupAssetGraph(graph, 'all');
+  const partialIds = new Set(graph.edges
+    .filter((edge) => edge.completeness === 'partial')
+    .map((edge) => edge.id));
+  const unknownIds = new Set(graph.edges
+    .filter((edge) => edge.completeness === 'unknown')
+    .map((edge) => edge.id));
+
+  assert.ok(partialIds.size > 0);
+  assert.ok(projection.links.some((link) => partialIds.has(link.id) && link.kind === 'partial'));
+  assert.ok(projection.links.every((link) => !unknownIds.has(link.id) || link.kind === 'unknown'));
+  assert.equal(projection.links.some((link) => link.kind === 'derived'), false);
 });

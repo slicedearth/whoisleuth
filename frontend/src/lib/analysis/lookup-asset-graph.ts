@@ -959,7 +959,11 @@ export function projectLookupAssetGraph(
     id: edge.id,
     source: edge.source,
     target: edge.target,
-    kind: edge.completeness === 'complete' ? 'observed' : 'derived',
+    kind: edge.completeness === 'complete'
+      ? 'observed'
+      : edge.completeness === 'partial'
+        ? 'partial'
+        : 'unknown',
     detail: `${edge.label} · ${edge.sourceLabel}${edge.boundary ? ` · ${edge.boundary.replaceAll('_', ' ')}` : ''}`,
   }));
   for (const group of collapsedGroups) {
@@ -967,7 +971,7 @@ export function projectLookupAssetGraph(
       id: `collapsed-link-${group.hubId}`,
       source: group.hubId,
       target: `collapsed-${group.hubId}`,
-      kind: 'derived',
+      kind: 'summary',
       detail: `${group.omittedEdges} additional bounded relationships are listed below`,
     });
   }
