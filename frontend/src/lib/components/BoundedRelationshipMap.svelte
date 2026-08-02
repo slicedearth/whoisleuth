@@ -54,6 +54,11 @@
   );
   const linkIsMuted = (link: (typeof graph.links)[number]) => !linkMatchesFocus(link);
   const mobileLinks = $derived(focusedLinks);
+  const filtersActive = $derived(Boolean(selectedGroup) || activeLinkKind !== 'all');
+  const resetVisualFilters = () => {
+    activeGroup = '';
+    activeLinkKind = 'all';
+  };
   const linkPath = (link: (typeof graph.links)[number]) => {
     const deltaX = link.targetX - link.sourceX;
     const deltaY = link.targetY - link.sourceY;
@@ -100,10 +105,13 @@
         <i class="derived" aria-hidden="true"></i>Partial or derived
       </button>
     </div>
-    {#if selectedCluster || activeLinkKind !== 'all'}
-      <p class="focus-note" role="status">
-        Showing {selectedCluster ? `${selectedCluster.label} · ` : ''}{activeLinkKind === 'all' ? 'all relationship states' : activeLinkKind === 'observed' ? 'observed relationships' : 'partial or derived relationships'}.
-      </p>
+    {#if filtersActive}
+      <div class="focus-status">
+        <p class="focus-note" role="status">
+          Showing {focusedLinks.length} of {graph.links.length} mapped relationships{selectedCluster ? ` for ${selectedCluster.label}` : ''}: {activeLinkKind === 'all' ? 'all relationship states' : activeLinkKind === 'observed' ? 'observed only' : 'partial or derived only'}.
+        </p>
+        <button type="button" onclick={resetVisualFilters}>Reset visual filters</button>
+      </div>
     {/if}
     <div
       class="map-frame"
@@ -191,6 +199,7 @@
         {/each}
       </ul>
       {#if mobileLinks.length > 12}<p>Showing 12 of {mobileLinks.length} mapped relationships. Exact evidence remains below.</p>{/if}
+      {#if !mobileLinks.length}<p>No mapped relationships match these visual filters. Exact evidence remains below.</p>{/if}
     </div>
     <p class="limit">Lines show observed or explicitly derived relationships in the current bounded dataset. They do not establish common ownership or intent.</p>
   </section>
@@ -219,7 +228,11 @@
   .link-filter button[aria-pressed="true"]{border-color:var(--border-strong);color:var(--text);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--border-strong) 42%,transparent)}
   .link-filter i{display:block;width:23px;border-top:1.5px solid color-mix(in srgb,var(--muted) 65%,transparent)}
   .link-filter i.derived{border-top-style:dashed}
-  .focus-note{margin-top:7px!important;color:var(--text)!important;font:650 var(--text-2xs) var(--mono)!important}
+  .focus-status{display:flex;align-items:center;justify-content:space-between;gap:9px;margin-top:7px}
+  .focus-note{margin:0!important;color:var(--text)!important;font:650 var(--text-2xs) var(--mono)!important}
+  .focus-status button{flex:0 0 auto;padding:3px 7px;border:1px solid var(--border);border-radius:999px;background:var(--panel-raised);color:var(--muted);font:600 var(--text-2xs) var(--mono);cursor:pointer}
+  .focus-status button:hover{border-color:var(--border-strong);color:var(--text)}
+  .focus-status button:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
   .map-frame{max-width:100%;margin-top:11px;overflow:hidden;border:1px solid var(--border);border-radius:var(--radius-sm);background-color:var(--panel-raised);background-image:radial-gradient(circle,color-mix(in srgb,var(--border) 70%,transparent) 1px,transparent 1px);background-size:24px 24px;overscroll-behavior:contain}
   .map-mobile{display:none}
   svg{display:block;width:100%;height:auto}
@@ -244,6 +257,7 @@
   @media(max-width:700px){
     header{align-items:flex-start}.map-summary{max-width:130px}
     .cluster-legend{gap:5px}.cluster-legend button{padding:3px 6px}
+    .focus-status{align-items:flex-start;flex-direction:column}
   }
   @container(max-width:660px){
     .map-frame{display:none}

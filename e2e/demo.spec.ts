@@ -56,9 +56,12 @@ test('completes the public synthetic workflow without investigation requests or 
   await derivedRelationships.click();
   await expect(derivedRelationships).toHaveAttribute('aria-pressed', 'true');
   await expect(relationshipMap.locator('.links path.muted')).not.toHaveCount(0);
-  await relationshipMap.getByRole('button', { name: 'All', exact: true }).click();
+  await expect(relationshipMap.getByRole('status')).toContainText(/Showing \d+ of \d+ mapped relationships/);
+  await relationshipMap.getByRole('button', { name: 'Reset visual filters' }).click();
   await expect(derivedRelationships).toHaveAttribute('aria-pressed', 'false');
+  await expect(relationshipMap.getByRole('button', { name: 'All', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await expect(relationshipMap.locator('.links path.muted')).toHaveCount(0);
+  await expect(relationshipMap.getByRole('button', { name: 'Reset visual filters' })).toHaveCount(0);
   await expect(page.locator('.candidate')).toHaveCount(2);
   await page.getByRole('button', { name: 'All candidates · 3' }).click();
   await page.getByRole('button', { name: 'High priority · 1' }).click();
