@@ -94,12 +94,14 @@
   const reviewedCount = $derived(guide?.stages.filter((stage) => stage.outcome !== 'pending').length || 0);
   const actionIsCurrent = $derived(Boolean(actionStage && currentStage?.id === actionStage.id));
   const actionApproved = $derived(Boolean(actionStage && (!actionStage.requiresApproval || actionProgress?.approvedAt)));
+  const candidateSelectionRequired = $derived(Boolean(guide?.recipeId === 'brand_sweep' && actionStage?.id === 'lookup' && !guide.focusDomain));
   const actionHref = $derived(actionStage && guide
-    ? actionIsCurrent
+    ? candidateSelectionRequired && page.url.pathname === '/bulk'
+      ? '#results'
+      : actionIsCurrent
       ? targetHashes.get(actionStage.path) || actionStage.path
       : investigationGuideHref(actionStage.id, guide.domain, guide.recipeId, guide.focusDomain)
     : '/dashboard');
-  const candidateSelectionRequired = $derived(Boolean(guide?.recipeId === 'brand_sweep' && actionStage?.id === 'lookup' && !guide.focusDomain));
   const candidateHandoffRequired = $derived(Boolean(guide?.recipeId === 'brand_sweep' && actionStage?.id === 'discover'));
   const handoffReadiness = $derived(buildInvestigationHandoffReadiness({
     caseRecord: contextCase,
