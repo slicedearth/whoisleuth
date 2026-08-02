@@ -15,6 +15,8 @@ export const REGISTRY_SUPPORT_SORT_KEYS = Object.freeze([
   'suffix',
   'coverage',
   'registry_class',
+  'service_path',
+  'rdap_access',
   'whois_access',
   'whois_query',
 ] as const);
@@ -178,6 +180,8 @@ export function sortRegistrySupportRows(
   const valueFor = (row: RegistryCompatibilityRow): string | null => {
     if (normalizedKey === 'coverage') return row.coverageState;
     if (normalizedKey === 'registry_class') return row.registryClass;
+    if (normalizedKey === 'service_path') return registryServiceCoverage(row);
+    if (normalizedKey === 'rdap_access') return row.rdapAccessProfile;
     if (normalizedKey === 'whois_access') return row.whoisAccessProfile;
     if (normalizedKey === 'whois_query') return row.whoisQueryProfile;
     return row.suffixes[0] ?? null;

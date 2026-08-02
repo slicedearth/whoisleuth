@@ -198,7 +198,7 @@ test('sorts bounded filtered rows deterministically without mutating catalogue o
   const before = rows.map((row) => row.id);
 
   assert.deepEqual(REGISTRY_SUPPORT_SORT_KEYS, [
-    'suffix', 'coverage', 'registry_class', 'whois_access', 'whois_query',
+    'suffix', 'coverage', 'registry_class', 'service_path', 'rdap_access', 'whois_access', 'whois_query',
   ]);
   assert.equal(requiredValue(sortRegistrySupportRows(rows, 'suffix', 'desc')[0]).suffixes[0], 'zw');
   assert.equal(requiredValue(sortRegistrySupportRows(rows, 'unexpected', 'asc')[0]).suffixes[0], 'ac');
@@ -207,6 +207,12 @@ test('sorts bounded filtered rows deterministically without mutating catalogue o
   const byCoverage = sortRegistrySupportRows(rows, 'coverage', 'asc');
   assert.equal(byCoverage[0]?.coverageState, 'access_documented');
   assert.equal(byCoverage.at(-1)?.coverageState, 'fixture_verified');
+  const byServicePath = sortRegistrySupportRows(rows, 'service_path', 'asc');
+  assert.equal(registryServiceCoverage(requiredValue(byServicePath[0])), 'both');
+  assert.equal(registryServiceCoverage(requiredValue(byServicePath.at(-1))), 'whois_only');
+  const byRdapAccess = sortRegistrySupportRows(rows, 'rdap_access', 'asc');
+  assert.equal(requiredValue(byRdapAccess[0]).rdapAccessProfile, 'iana-bootstrap');
+  assert.equal(requiredValue(byRdapAccess.at(-1)).rdapAccessProfile, 'no-iana-service');
   assert.equal(sortRegistrySupportRows(null, 'suffix', 'asc').length, 0);
 });
 

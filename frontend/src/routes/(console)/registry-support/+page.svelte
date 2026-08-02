@@ -280,6 +280,8 @@
         <option value="suffix">Suffix</option>
         <option value="coverage">Coverage</option>
         <option value="registry_class">Registry class</option>
+        <option value="service_path">Service path</option>
+        <option value="rdap_access">RDAP access</option>
         <option value="whois_access">WHOIS access</option>
         <option value="whois_query">WHOIS query</option>
       </select>
