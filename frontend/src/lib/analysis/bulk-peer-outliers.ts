@@ -54,6 +54,7 @@ export type BulkPeerOutlierMatrix = Readonly<{
 
 const MAX_ROWS = 500;
 const MIN_COHORT = 3;
+export const MAX_BULK_PEER_OUTLIER_FILTER_LENGTH = 100;
 const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/gu;
 
 const DIMENSION_LABELS: Readonly<Record<BulkPeerDimensionId, string>> = Object.freeze({
@@ -229,6 +230,27 @@ export function buildBulkPeerOutlierMatrix(rows: readonly ScanResult[]): BulkPee
       ...(truncated ? [`The comparison was capped at ${MAX_ROWS} rows.`] : []),
     ],
   };
+}
+
+export function filterBulkPeerOutlierRows(
+  matrix: BulkPeerOutlierMatrix,
+  query: unknown = '',
+  dimension: unknown = 'all',
+): BulkPeerOutlierRow[] {
+  const normalizedQuery = text(query, MAX_BULK_PEER_OUTLIER_FILTER_LENGTH).toLowerCase();
+  const normalizedDimension = (Object.keys(DIMENSION_LABELS) as BulkPeerDimensionId[])
+    .includes(dimension as BulkPeerDimensionId)
+    ? dimension as BulkPeerDimensionId
+    : null;
+  return matrix.rows.flatMap((row) => {
+    const findings = row.findings.filter((finding) => {
+      if (normalizedDimension && finding.dimension !== normalizedDimension) return false;
+      if (!normalizedQuery) return true;
+      return [row.domain, finding.label, finding.value, finding.baselineValue]
+        .some((value) => value.toLowerCase().includes(normalizedQuery));
+    });
+    return findings.length ? [{ domain: row.domain, findings }] : [];
+  });
 }
 
 export function buildBulkPeerOutlierExport(

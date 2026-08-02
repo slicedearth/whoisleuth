@@ -1,5 +1,10 @@
 <script lang="ts">
-  import type { BulkPeerOutlierMatrix } from '$lib/analysis/bulk-peer-outliers.ts';
+  import Pagination from '$lib/components/Pagination.svelte';
+  import {
+    filterBulkPeerOutlierRows,
+    MAX_BULK_PEER_OUTLIER_FILTER_LENGTH,
+    type BulkPeerOutlierMatrix,
+  } from '$lib/analysis/bulk-peer-outliers.ts';
 
   let {
     matrix,
@@ -8,6 +13,34 @@
     matrix: BulkPeerOutlierMatrix;
     exportMatrix: () => void;
   } = $props();
+
+  const PAGE_SIZE = 12;
+  let query = $state('');
+  let dimension = $state('all');
+  let page = $state(1);
+  const availableDimensions = $derived(
+    [...new Map(matrix.rows
+      .flatMap((row) => row.findings)
+      .map((finding) => [finding.dimension, finding.label] as const)).entries()]
+      .sort((left, right) => left[1].localeCompare(right[1])),
+  );
+  const filteredRows = $derived(filterBulkPeerOutlierRows(matrix, query, dimension));
+  const pageCount = $derived(Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE)));
+  const currentPage = $derived(Math.min(page, pageCount));
+  const visibleRows = $derived(filteredRows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE));
+  const firstVisibleRow = $derived(filteredRows.length ? ((currentPage - 1) * PAGE_SIZE) + 1 : 0);
+  const lastVisibleRow = $derived(((currentPage - 1) * PAGE_SIZE) + visibleRows.length);
+  const filtering = $derived(Boolean(query.trim()) || dimension !== 'all');
+
+  function setPage(value: number) {
+    page = Math.max(1, Math.min(pageCount, Math.trunc(value) || 1));
+  }
+
+  function resetFilters() {
+    query = '';
+    dimension = 'all';
+    page = 1;
+  }
 </script>
 
 {#if matrix.cohortSize >= 3}
@@ -18,7 +51,7 @@
         <h2 id="bulk-outlier-title">Local cohort outliers</h2>
         <p>Find low-frequency differences within the current filtered view. These are review cues, not risk or attribution conclusions.</p>
       </div>
-      <button type="button" class="btn small" disabled={!matrix.rows.length} onclick={exportMatrix}>Export outliers</button>
+      <button type="button" class="btn small" disabled={!matrix.rows.length} onclick={exportMatrix}>Export all outliers</button>
     </header>
 
     <div class="summary" role="group" aria-label="Peer comparison summary">
@@ -28,22 +61,52 @@
     </div>
 
     {#if matrix.rows.length}
-      <div class="row-list">
-        {#each matrix.rows as row (row.domain)}
-          <article>
-            <header><strong>{row.domain}</strong><span>{row.findings.length} uncommon value{row.findings.length === 1 ? '' : 's'}</span></header>
-            <ul>
-              {#each row.findings as finding}
-                <li>
-                  <strong>{finding.label}</strong>
-                  <code>{finding.value}</code>
-                  <span>Observed in {finding.frequency} of {finding.observedCount}; local baseline: {finding.baselineValue}</span>
-                </li>
-              {/each}
-            </ul>
-          </article>
-        {/each}
-      </div>
+      <fieldset class="filters">
+        <legend>Filter uncommon rows</legend>
+        <label>Domain or evidence
+          <input
+            type="search"
+            maxlength={MAX_BULK_PEER_OUTLIER_FILTER_LENGTH}
+            placeholder="Filter domains or values"
+            value={query}
+            oninput={(event) => { query = event.currentTarget.value; page = 1; }}
+          >
+        </label>
+        <label>Evidence dimension
+          <select value={dimension} onchange={(event) => { dimension = event.currentTarget.value; page = 1; }}>
+            <option value="all">All dimensions</option>
+            {#each availableDimensions as [id, label]}
+              <option value={id}>{label}</option>
+            {/each}
+          </select>
+        </label>
+        <button type="button" class="btn small" disabled={!filtering} onclick={resetFilters}>Reset filters</button>
+      </fieldset>
+      <p class="result-count" role="status" aria-live="polite">
+        Showing {firstVisibleRow}–{lastVisibleRow} of {filteredRows.length} matching uncommon domain{filteredRows.length === 1 ? '' : 's'} ({matrix.rows.length} total).
+      </p>
+
+      {#if visibleRows.length}
+        <div class="row-list">
+          {#each visibleRows as row (row.domain)}
+            <article>
+              <header><strong>{row.domain}</strong><span>{row.findings.length} uncommon value{row.findings.length === 1 ? '' : 's'}</span></header>
+              <ul>
+                {#each row.findings as finding}
+                  <li>
+                    <strong>{finding.label}</strong>
+                    <code>{finding.value}</code>
+                    <span>Observed in {finding.frequency} of {finding.observedCount}; local baseline: {finding.baselineValue}</span>
+                  </li>
+                {/each}
+              </ul>
+            </article>
+          {/each}
+        </div>
+        <Pagination {currentPage} {pageCount} {setPage} ariaLabel="Peer outlier pages" />
+      {:else}
+        <p class="empty">No uncommon row matches the current filters. Reset the view to review the complete local comparison.</p>
+      {/if}
     {:else}
       <p class="empty">No value met the conservative low-frequency threshold in this view. This does not mean the domains are equivalent or complete.</p>
     {/if}
@@ -69,6 +132,11 @@
   .summary{display:flex;flex-wrap:wrap;gap:7px;margin-top:12px}
   .summary span{padding:7px 9px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised);color:var(--muted);font:var(--text-2xs) var(--mono)}
   .summary strong{color:var(--violet);font-size:var(--text-sm)}
+  .filters{display:grid;grid-template-columns:minmax(220px,1fr) minmax(180px,.7fr) auto;gap:10px;align-items:end;margin-top:12px;padding:11px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel-raised)}
+  .filters legend{padding:0 5px;color:var(--muted);font:600 var(--text-2xs) var(--mono)}
+  .filters label{display:grid;gap:5px;min-width:0;color:var(--muted);font:600 var(--text-2xs) var(--mono)}
+  .filters input,.filters select{width:100%;min-width:0;min-height:var(--control-h)}
+  .result-count{margin:9px 2px 0;color:var(--muted);font-size:var(--text-2xs)}
   .row-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px}
   .row-list article{min-width:0;padding:11px;border:1px solid color-mix(in srgb,var(--violet) 34%,var(--border));border-radius:var(--radius-md);background:var(--panel-raised)}
   .row-list article>header{display:flex;align-items:center;justify-content:space-between;gap:8px}
@@ -90,6 +158,8 @@
   @media(max-width:720px){
     .outliers>header{display:grid}
     .outliers>header button{width:100%}
+    .filters{grid-template-columns:minmax(0,1fr)}
+    .filters button{width:100%}
     .row-list,.baselines{grid-template-columns:minmax(0,1fr)}
   }
 </style>
