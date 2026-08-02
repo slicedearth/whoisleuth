@@ -288,6 +288,32 @@ describe('bounded visualization models', () => {
     }
   });
 
+  test('keeps evidence-family colour slots stable across different graph subsets', () => {
+    const target = { id: 'target', label: 'reviewed-example.test', kind: 'target' };
+    const network = { id: 'address', label: '192.0.2.40', kind: 'address' };
+    const certificate = { id: 'certificate', label: 'Certificate observation', kind: 'certificate' };
+    const complete = projectBoundedForceGraph([target, network, certificate], [
+      { id: 'network-link', source: 'target', target: 'address' },
+      { id: 'certificate-link', source: 'target', target: 'certificate' },
+    ], { focusNodeId: 'target' });
+    const networkOnly = projectBoundedForceGraph([target, network], [
+      { id: 'network-link', source: 'target', target: 'address' },
+    ], { focusNodeId: 'target' });
+
+    assert.equal(
+      complete.clusters.find((cluster) => cluster.id === 'network')?.index,
+      networkOnly.clusters.find((cluster) => cluster.id === 'network')?.index,
+    );
+    assert.equal(
+      complete.nodes.find((node) => node.id === 'address')?.clusterIndex,
+      networkOnly.nodes.find((node) => node.id === 'address')?.clusterIndex,
+    );
+    assert.notEqual(
+      complete.clusters.find((cluster) => cluster.id === 'network')?.index,
+      complete.clusters.find((cluster) => cluster.id === 'certificate')?.index,
+    );
+  });
+
   test('projects capped defensive-coverage bars while preserving exact counts', () => {
     const projected = projectCoverageBars(Array.from({ length: 22 }, (_, index) => ({
       id: `group-${index}`,

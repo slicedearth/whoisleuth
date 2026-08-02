@@ -78,6 +78,29 @@ const FORCE_GRAPH_GROUPS: Readonly<Record<string, Readonly<{ id: string; label: 
   tracker: { id: 'identity', label: 'Identity' },
 };
 
+const FORCE_GRAPH_CLUSTER_INDEX: Readonly<Record<string, number>> = {
+  certificate: 0,
+  hosts: 1,
+  identity: 2,
+  network: 3,
+  observations: 4,
+  registration: 5,
+  relationships: 6,
+  services: 7,
+  summary: 6,
+  technology: 7,
+};
+
+function forceGraphClusterIndex(group: string) {
+  const assigned = FORCE_GRAPH_CLUSTER_INDEX[group];
+  if (assigned !== undefined) return assigned;
+  let hash = 0;
+  for (const [index, character] of [...group].entries()) {
+    hash = (hash + (character.codePointAt(0) ?? 0) * (index + 1)) % 8;
+  }
+  return hash;
+}
+
 function forceGraphGroup(kind: string, rawGroup: unknown, rawGroupLabel: unknown) {
   const requested = boundedId(rawGroup);
   const requestedLabel = boundedText(rawGroupLabel, 40);
@@ -309,7 +332,7 @@ export function projectBoundedForceGraph(
   const centerX = width / 2;
   const centerY = height / 2;
   const clusterCenters = forceGraphClusterCenters(groupIds, width, height, Boolean(focusNode));
-  const clusterIndex = new Map(groupIds.map((group, index) => [group, index % 8]));
+  const clusterIndex = new Map(groupIds.map((group) => [group, forceGraphClusterIndex(group)]));
   for (const node of nodes) node.clusterIndex = clusterIndex.get(node.group) ?? 0;
 
   if (nodes.length) {
@@ -378,11 +401,11 @@ export function projectBoundedForceGraph(
       y,
     })),
     links: projectedLinks,
-    clusters: groupIds.map((group, index) => ({
+    clusters: groupIds.map((group) => ({
       id: group,
       label: groupLabels.get(group) ?? group,
       count: nodes.filter((node) => node.id !== focusNode?.id && node.group === group).length,
-      index: index % 8,
+      index: clusterIndex.get(group) ?? 0,
     })),
     omittedNodeInputs,
     omittedLinkInputs,
