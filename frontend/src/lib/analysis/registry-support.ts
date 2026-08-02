@@ -19,6 +19,14 @@ export const REGISTRY_SUPPORT_SORT_KEYS = Object.freeze([
   'whois_query',
 ] as const);
 export type RegistrySupportSortKey = typeof REGISTRY_SUPPORT_SORT_KEYS[number];
+export const REGISTRY_SERVICE_COVERAGE_FILTERS = Object.freeze([
+  'all',
+  'both',
+  'rdap_only',
+  'whois_only',
+  'neither',
+] as const);
+export type RegistryServiceCoverage = Exclude<typeof REGISTRY_SERVICE_COVERAGE_FILTERS[number], 'all'>;
 
 const COVERAGE_LABELS: Readonly<Record<string, string>> = Object.freeze({
   discovery_only: 'Discovery only',
@@ -54,10 +62,36 @@ export function registryCoverageLabel(value: unknown): string {
     : 'Unknown';
 }
 
+export function registryServiceCoverage(
+  row: Pick<RegistryCompatibilityRow, 'rdapAccessProfile' | 'whoisAccessProfile'>,
+): RegistryServiceCoverage {
+  const rdapAvailable = row.rdapAccessProfile !== 'no-iana-service';
+  const whoisAvailable = row.whoisAccessProfile !== 'no-iana-service';
+  if (rdapAvailable && whoisAvailable) return 'both';
+  if (rdapAvailable) return 'rdap_only';
+  if (whoisAvailable) return 'whois_only';
+  return 'neither';
+}
+
+export function registryServiceCoverageLabel(value: unknown): string {
+  return ({
+    both: 'RDAP and WHOIS paths',
+    rdap_only: 'RDAP only',
+    whois_only: 'WHOIS path only',
+    neither: 'No IANA-published service',
+  } as Readonly<Record<string, string>>)[String(value)] ?? 'Unknown';
+}
+
 export function registrySupportCatalogue() {
   const sourceRows = registryCompatibilityMatrix();
   const rows = sourceRows.slice(0, MAX_REGISTRY_SUPPORT_ROWS);
   const standardsCoverage = registryStandardsCoverageSnapshot();
+  const serviceCoverage = {
+    both: rows.filter((row) => registryServiceCoverage(row) === 'both').length,
+    rdapOnly: rows.filter((row) => registryServiceCoverage(row) === 'rdap_only').length,
+    whoisOnly: rows.filter((row) => registryServiceCoverage(row) === 'whois_only').length,
+    neither: rows.filter((row) => registryServiceCoverage(row) === 'neither').length,
+  };
   return {
     version: REGISTRY_CAPABILITIES_VERSION,
     rows,
@@ -68,6 +102,7 @@ export function registrySupportCatalogue() {
       fixtureVerified: rows.filter((row) => row.coverageState === 'fixture_verified').length,
       accessDocumented: rows.filter((row) => row.coverageState === 'access_documented').length,
       fallbacks: rows.filter((row) => Boolean(row.fallbackProfile)).length,
+      serviceCoverage,
     },
   };
 }
@@ -95,6 +130,7 @@ export function filterRegistrySupportRows(
   rows: readonly RegistryCompatibilityRow[] | null,
   query: unknown,
   coverage: unknown,
+  serviceCoverage: unknown = 'all',
 ): RegistryCompatibilityRow[] {
   const boundedRows = Array.isArray(rows) ? rows.slice(0, MAX_REGISTRY_SUPPORT_ROWS) : [];
   const normalizedQuery = typeof query === 'string'
@@ -106,8 +142,13 @@ export function filterRegistrySupportRows(
   const normalizedCoverage = ['fixture_verified', 'access_documented'].includes(String(coverage))
     ? String(coverage)
     : 'all';
+  const normalizedServiceCoverage = (REGISTRY_SERVICE_COVERAGE_FILTERS as readonly string[])
+    .includes(String(serviceCoverage))
+    ? String(serviceCoverage)
+    : 'all';
   return boundedRows.filter((row) => {
     if (normalizedCoverage !== 'all' && row.coverageState !== normalizedCoverage) return false;
+    if (normalizedServiceCoverage !== 'all' && registryServiceCoverage(row) !== normalizedServiceCoverage) return false;
     if (!searchableQuery) return true;
     return [
       row.suffixes[0], row.id, row.registryClass, row.coverageState,

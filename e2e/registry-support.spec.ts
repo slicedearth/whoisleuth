@@ -29,6 +29,13 @@ test('the registry-support catalogue filters locally and retains explicit interp
   await expect(page.locator('.summary-grid article').filter({ hasText: 'Explicit suffixes' }).locator('strong')).toHaveText('335');
   await expect(page.locator('.catalogue-section tbody tr')).toHaveCount(50);
   await expect(page.locator('.result-count')).toContainText('Showing 1–50 of 335 matching profiles (335 total)');
+  await page.locator('#service-filter').selectOption('rdap_only');
+  await expect(page.locator('.catalogue-section tbody tr')).toHaveCount(25);
+  await expect(page.locator('.result-count')).toContainText('Showing 1–25 of 25 matching profiles (335 total)');
+  await page.getByText('Review DEV profile').click();
+  await expect(page.locator('.catalogue-section tbody tr').filter({ hasText: '.dev' }).locator('a[target="_blank"]')).toHaveCount(1);
+  await page.locator('#service-filter').selectOption('all');
+  await expect(page.locator('.catalogue-section tbody tr')).toHaveCount(50);
   const standards = page.getByRole('region', { name: 'Generic TLD RDAP snapshot' });
   await expect(standards).toContainText('1114 / 1114');
   await expect(standards).toContainText('12 / 14');
@@ -206,6 +213,7 @@ test('the registry-support reference remains readable without horizontal overflo
 
   await expect(page.getByLabel('Suffix or capability')).toBeVisible();
   await expect(page.locator('#coverage-filter')).toBeVisible();
+  await expect(page.locator('#service-filter')).toBeVisible();
   await page.getByLabel('Suffix or capability').fill('vn');
   await expect(page.locator('.catalogue-section tbody tr')).toHaveCount(1);
   await expectNoHorizontalOverflow(page);

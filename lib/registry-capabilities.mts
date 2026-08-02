@@ -16,6 +16,22 @@ import type {
   RegistryStandardsCoverageSnapshot,
 } from './registry-capability-catalogue.mts';
 
+const IANA_TLD_RECORD_PREFIX = 'https://www.iana.org/domains/root/db/';
+
+function documentationUrlsForSuffix(
+  capability: Readonly<RegistryCapability>,
+  suffixes: readonly string[],
+): string[] {
+  if (suffixes.length !== 1 || capability.suffixes.length <= 1) {
+    return [...capability.documentationUrls];
+  }
+  const suffix = suffixes[0];
+  const matchingIanaRecord = suffix ? `${IANA_TLD_RECORD_PREFIX}${suffix}.html` : '';
+  return capability.documentationUrls.filter((url) => (
+    !url.startsWith(IANA_TLD_RECORD_PREFIX) || url === matchingIanaRecord
+  ));
+}
+
 function cloneCapability(
   capability: Readonly<RegistryCapability>,
   { suffixes = capability.suffixes }: { suffixes?: string[] } = {},
@@ -25,7 +41,7 @@ function cloneCapability(
     suffixes: [...suffixes],
     fixtureScenarios: [...capability.fixtureScenarios],
     verificationFiles: [...capability.verificationFiles],
-    documentationUrls: [...capability.documentationUrls],
+    documentationUrls: documentationUrlsForSuffix(capability, suffixes),
   };
 }
 

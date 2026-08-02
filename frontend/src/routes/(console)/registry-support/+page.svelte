@@ -8,6 +8,8 @@
     inspectRegistrySupport,
     registryAccessLabel,
     registryCoverageLabel,
+    registryServiceCoverage,
+    registryServiceCoverageLabel,
     registrySupportCatalogue,
     registrySupportLabel,
     sortRegistrySupportRows,
@@ -26,6 +28,7 @@
   const standards = catalogue.standardsCoverage;
   let query = $state('');
   let coverage = $state('all');
+  let serviceCoverage = $state('all');
   let sortKey = $state('suffix');
   let sortDirection = $state('asc');
   let page = $state(1);
@@ -34,7 +37,7 @@
   let inspectionActive = $state(false);
   let hydrated = $state(false);
   let capabilityTarget = $state<CapabilityTargetFilter>('all');
-  const filteredRows = $derived(filterRegistrySupportRows(catalogue.rows, query, coverage));
+  const filteredRows = $derived(filterRegistrySupportRows(catalogue.rows, query, coverage, serviceCoverage));
   const sortedRows = $derived(sortRegistrySupportRows(filteredRows, sortKey, sortDirection));
   const pageCount = $derived(Math.max(1, Math.ceil(sortedRows.length / PAGE_SIZE)));
   const currentPage = $derived(Math.min(page, pageCount));
@@ -204,6 +207,7 @@
             <div><dt>WHOIS discovery</dt><dd>{registryAccessLabel(profile.whoisDiscovery)}</dd></div>
             <div><dt>RDAP access</dt><dd>{registryAccessLabel(profile.rdapAccessProfile)}</dd></div>
             <div><dt>WHOIS access</dt><dd>{registryAccessLabel(profile.whoisAccessProfile)}</dd></div>
+            <div><dt>Service profile</dt><dd>{registryServiceCoverageLabel(registryServiceCoverage(profile))}</dd></div>
             <div><dt>WHOIS query</dt><dd>{registrySupportLabel(profile.whoisQueryProfile)}</dd></div>
             <div><dt>Parser</dt><dd>{registrySupportLabel(profile.whoisParserProfile)}</dd></div>
             {#if profile.fallbackProfile}<div><dt>Fallback</dt><dd>{registrySupportLabel(profile.fallbackProfile)}</dd></div>{/if}
@@ -233,6 +237,15 @@
         <option value="all">All coverage states</option>
         <option value="fixture_verified">Fixture verified</option>
         <option value="access_documented">Access documented</option>
+      </select>
+    </label>
+    <label for="service-filter">Service path
+      <select id="service-filter" value={serviceCoverage} onchange={(event) => { serviceCoverage = event.currentTarget.value; page = 1; }}>
+        <option value="all">All service paths</option>
+        <option value="both">RDAP and WHOIS ({catalogue.summary.serviceCoverage.both})</option>
+        <option value="rdap_only">RDAP only ({catalogue.summary.serviceCoverage.rdapOnly})</option>
+        <option value="whois_only">WHOIS path only ({catalogue.summary.serviceCoverage.whoisOnly})</option>
+        <option value="neither">No IANA service ({catalogue.summary.serviceCoverage.neither})</option>
       </select>
     </label>
     <label for="registry-sort">Sort by
