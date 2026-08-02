@@ -51,6 +51,7 @@ export type LookupEvidenceQualityEntry = Readonly<{
   label: string;
   category: string;
   endpointClass: string;
+  description: string;
   state: EvidenceCoverageState;
   statusLabel: string;
   truncated: boolean;
@@ -192,6 +193,24 @@ const ENDPOINT_CLASS: Readonly<Record<string, string>> = Object.freeze({
   'security-txt': 'Selected well-known resource',
   sslbl: 'Local warning-data snapshot',
   'external-intelligence': 'Optional external provider',
+});
+
+const SOURCE_DESCRIPTION: Readonly<Record<string, string>> = Object.freeze({
+  rdap: 'Structured registration data selected through the registry bootstrap.',
+  whois: 'Referral-aware text registration data collected through the WHOIS service path.',
+  'registrar-rdap': 'A separately attributed registrar publication discovered from registry RDAP.',
+  availability: 'An authority-aware conclusion derived from the enabled registration sources.',
+  dns: 'Point-in-time delegation, address, mail, and service records from bounded DNS collection.',
+  'reverse-dns': 'Operator-published PTR context for an observed public address.',
+  'network-context': 'Point-in-time IP registration and routing context for an observed endpoint.',
+  http: 'A bounded homepage request covering redirects, response metadata, and a capped body prefix.',
+  tls: 'A point-in-time TLS handshake to one validated public address for the requested hostname.',
+  'page-identity': 'Static identity, form, resource, and page-component signals from retained HTML.',
+  technology: 'Curated technology signatures evaluated against already observed page evidence.',
+  'security-posture': 'Passive security controls derived from collected DNS, HTTP, TLS, and page evidence.',
+  'security-txt': 'A bounded request for the selected well-known security contact resource.',
+  sslbl: 'A local comparison against a versioned certificate warning-data snapshot.',
+  'external-intelligence': 'Optional provider context retained with its own source state and limitations.',
 });
 
 function record(value: unknown): JsonRecord {
@@ -562,6 +581,8 @@ export function buildLookupEvidenceQualityMatrix(input: Readonly<{
       label: entry.label,
       category: entry.category,
       endpointClass: ENDPOINT_CLASS[entry.id] ?? 'Source-specific collection',
+      description: SOURCE_DESCRIPTION[entry.id]
+        ?? 'Source-specific evidence retained with its original state and limitations.',
       state: entry.state,
       statusLabel: entry.statusLabel,
       truncated: entry.truncated,

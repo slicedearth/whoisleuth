@@ -158,6 +158,7 @@ test('deep lookup reports pending elapsed time and final source settle timing', 
   await expect(coverage).toContainText('700 ms');
   await expect(coverage).toContainText('Request error');
   await expect(coverage).toContainText('WHOIS');
+  await expect(coverage).toContainText('A bounded homepage request covering redirects, response metadata, and a capped body prefix.');
   await expect(coverage).toContainText('2.0 s');
   const diagnostics = coverage.locator('details.timing-detail');
   await expect(diagnostics).not.toHaveAttribute('open', '');

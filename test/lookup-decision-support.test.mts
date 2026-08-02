@@ -231,6 +231,14 @@ test('quality matrix joins coverage, timing, freshness, refresh, and downstream 
   assert.equal(matrix.entries.find((entry) => entry.id === 'rdap')?.observedAt, '2026-07-30T00:00:00.000Z');
   assert.equal(matrix.entries.find((entry) => entry.id === 'whois')?.refreshAvailable, true);
   assert.equal(matrix.entries.find((entry) => entry.id === 'rdap')?.endpointClass, 'Authoritative registry endpoint');
+  assert.match(
+    matrix.entries.find((entry) => entry.id === 'rdap')?.description ?? '',
+    /Structured registration data/u,
+  );
+  assert.match(
+    matrix.entries.find((entry) => entry.id === 'http')?.description ?? '',
+    /bounded homepage request/ui,
+  );
   assert.equal(matrix.entries.find((entry) => entry.id === 'rdap')?.truncated, false);
   assert.deepEqual(matrix.entries.find((entry) => entry.id === 'rdap')?.supports, [
     'Registration summary',
