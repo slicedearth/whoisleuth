@@ -1,6 +1,7 @@
 <script lang="ts">
   import BoundedRelationshipMap from '$lib/components/BoundedRelationshipMap.svelte';
   import {
+    countLookupAssetGraphEdgesByLens,
     projectLookupAssetGraph,
     type LookupAssetGraph,
     type LookupAssetGraphLens,
@@ -10,12 +11,17 @@
 
   let lens = $state<LookupAssetGraphLens>('all');
   const projection = $derived(projectLookupAssetGraph(graph, lens));
+  const lensCounts = $derived(countLookupAssetGraphEdgesByLens(graph));
+  const collapsedRelationshipCount = $derived(
+    projection.collapsedGroups.reduce((total, group) => total + group.omittedEdges, 0),
+  );
   const labels: Readonly<Record<LookupAssetGraphLens, string>> = {
     all: 'Infrastructure',
     identity: 'Identity & trust',
     delegation: 'Delegation',
     certificate: 'Certificate',
   };
+  const lensOptions = Object.entries(labels) as [LookupAssetGraphLens, string][];
 </script>
 
 {#if graph.nodes.length > 1 && graph.edges.length}
@@ -30,13 +36,14 @@
     </header>
 
     <div class="lenses" role="group" aria-label="Evidence graph lens">
-      {#each Object.entries(labels) as [id, label]}
+      {#each lensOptions as [id, label]}
         <button
           type="button"
           class:active={lens === id}
           aria-pressed={lens === id}
-          onclick={() => lens = id as LookupAssetGraphLens}
-        >{label}</button>
+          aria-label={`${label}: ${lensCounts[id]} exact relationship${lensCounts[id] === 1 ? '' : 's'}`}
+          onclick={() => lens = id}
+        >{label}<span aria-hidden="true">{lensCounts[id]}</span></button>
       {/each}
     </div>
 
@@ -49,11 +56,17 @@
         focusNodeId={graph.targetId}
       />
       {#if projection.collapsedGroups.length}
-        <p class="collapsed-note">
-          The visual map groups {projection.collapsedGroups.reduce((total, group) => total + group.omittedEdges, 0)}
-          additional high-degree relationship{projection.collapsedGroups.reduce((total, group) => total + group.omittedEdges, 0) === 1 ? '' : 's'}.
-          The exact relationship list remains complete.
-        </p>
+        <details class="collapsed-summary">
+          <summary>
+            Visual grouping: {collapsedRelationshipCount} relationship{collapsedRelationshipCount === 1 ? '' : 's'} across {projection.collapsedGroups.length} high-degree hub{projection.collapsedGroups.length === 1 ? '' : 's'}
+          </summary>
+          <p>Only the visual layout is condensed. The exact relationship list remains complete.</p>
+          <ul>
+            {#each projection.collapsedGroups as group (group.hubId)}
+              <li><strong>{group.hubLabel}</strong><span>{group.omittedEdges} grouped relationship{group.omittedEdges === 1 ? '' : 's'}</span></li>
+            {/each}
+          </ul>
+        </details>
       {/if}
       <details>
         <summary>Review {projection.edges.length} exact relationship{projection.edges.length === 1 ? '' : 's'}</summary>
@@ -91,8 +104,10 @@
   header p:not(.eyebrow){max-width:720px;margin:6px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.5}
   .partial{color:var(--amber);font:650 var(--text-2xs) var(--mono);text-transform:uppercase}
   .lenses{display:flex;flex-wrap:wrap;gap:6px;margin-top:13px}
-  .lenses button{min-height:34px;padding:6px 10px;border:1px solid var(--border);border-radius:999px;background:var(--panel-raised);color:var(--muted);font:650 var(--text-2xs) var(--mono);cursor:pointer}
+  .lenses button{display:inline-flex;align-items:center;gap:7px;min-height:34px;padding:6px 8px 6px 10px;border:1px solid var(--border);border-radius:999px;background:var(--panel-raised);color:var(--muted);font:650 var(--text-2xs) var(--mono);cursor:pointer}
+  .lenses button span{display:grid;min-width:21px;min-height:21px;place-items:center;padding:0 5px;border:1px solid var(--border);border-radius:999px;background:var(--panel);color:var(--text);font-size:var(--text-2xs)}
   .lenses button:hover,.lenses button.active{border-color:var(--accent);color:var(--accent)}
+  .lenses button.active span{border-color:color-mix(in srgb,var(--accent) 45%,var(--border));color:var(--accent)}
   .lenses button:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
   details{margin-top:10px;border-top:1px solid var(--border)}
   summary{padding:11px 0;color:var(--text);font:680 var(--text-xs) var(--mono);cursor:pointer}
@@ -108,6 +123,15 @@
   .edge-list a{width:max-content;font:650 var(--text-2xs) var(--mono)}
   .limits ul{margin:0;padding-left:18px;color:var(--muted);font-size:var(--text-xs);line-height:1.5}
   .empty{margin:12px 0 0;color:var(--muted);font-size:var(--text-xs)}
-  .collapsed-note{margin:8px 0 0;color:var(--muted);font-size:var(--text-2xs);line-height:1.45}
-  @media(max-width:720px){.edge-list{grid-template-columns:minmax(0,1fr)}}
+  .collapsed-summary{margin-top:8px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
+  .collapsed-summary summary{padding:9px 10px;font-size:var(--text-2xs)}
+  .collapsed-summary p{margin:0;padding:0 10px;color:var(--muted);font-size:var(--text-2xs);line-height:1.45}
+  .collapsed-summary ul{display:grid;gap:5px;margin:8px 0 0;padding:0 10px 10px;list-style:none}
+  .collapsed-summary li{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;min-width:0;padding-top:5px;border-top:1px solid var(--border);font-size:var(--text-2xs)}
+  .collapsed-summary strong{overflow-wrap:anywhere}
+  .collapsed-summary li span{flex:0 0 auto;color:var(--muted);font-family:var(--mono);overflow-wrap:anywhere}
+  @media(max-width:720px){
+    .edge-list{grid-template-columns:minmax(0,1fr)}
+    .collapsed-summary li{display:grid;gap:3px}
+  }
 </style>

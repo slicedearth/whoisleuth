@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   buildLookupAssetGraph,
+  countLookupAssetGraphEdgesByLens,
   projectLookupAssetGraph,
 } from '../frontend/src/lib/analysis/lookup-asset-graph.ts';
 
@@ -124,10 +125,17 @@ test('asset graph keeps separately attributed typed relationships', () => {
 
 test('graph lenses reuse one model without cross-contaminating evidence classes', () => {
   const graph = fixture();
+  const counts = countLookupAssetGraphEdgesByLens(graph);
   const identity = projectLookupAssetGraph(graph, 'identity');
   const delegation = projectLookupAssetGraph(graph, 'delegation');
   const certificate = projectLookupAssetGraph(graph, 'certificate');
 
+  assert.deepEqual(counts, {
+    all: graph.edges.length,
+    identity: identity.edges.length,
+    delegation: delegation.edges.length,
+    certificate: certificate.edges.length,
+  });
   assert.ok(identity.edges.some((edge) => edge.kind === 'form-destination'));
   assert.ok(identity.edges.some((edge) => edge.kind === 'authorizes-name' && edge.boundary === 'same_registrable_domain'));
   assert.ok(identity.edges.every((edge) => edge.lenses.includes('identity')));

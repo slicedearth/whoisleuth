@@ -4,6 +4,7 @@ import type {
 } from './visualization-models.ts';
 
 export type LookupAssetGraphLens = 'all' | 'identity' | 'delegation' | 'certificate';
+export type LookupAssetGraphLensCounts = Readonly<Record<LookupAssetGraphLens, number>>;
 export type LookupTrustBoundary =
   | 'external'
   | 'reviewed_profile'
@@ -135,6 +136,12 @@ function interleaveVisualEdgesByFamily(
     if (!appended) break;
   }
   return ordered;
+}
+
+function edgeMatchesLens(edge: LookupAssetEdge, lens: LookupAssetGraphLens): boolean {
+  return lens === 'all'
+    ? edge.lenses.includes('all') || edge.lenses.length > 0
+    : edge.lenses.includes(lens);
 }
 
 function record(value: unknown): JsonRecord {
@@ -895,13 +902,20 @@ export function buildLookupAssetGraph(input: Readonly<{
   };
 }
 
+export function countLookupAssetGraphEdgesByLens(graph: LookupAssetGraph): LookupAssetGraphLensCounts {
+  return Object.freeze({
+    all: graph.edges.filter((edge) => edgeMatchesLens(edge, 'all')).length,
+    identity: graph.edges.filter((edge) => edgeMatchesLens(edge, 'identity')).length,
+    delegation: graph.edges.filter((edge) => edgeMatchesLens(edge, 'delegation')).length,
+    certificate: graph.edges.filter((edge) => edgeMatchesLens(edge, 'certificate')).length,
+  });
+}
+
 export function projectLookupAssetGraph(
   graph: LookupAssetGraph,
   lens: LookupAssetGraphLens,
 ): LookupAssetGraphProjection {
-  const acceptedEdges = graph.edges.filter((edge) => lens === 'all'
-    ? edge.lenses.includes('all') || edge.lenses.length > 0
-    : edge.lenses.includes(lens));
+  const acceptedEdges = graph.edges.filter((edge) => edgeMatchesLens(edge, lens));
   const graphNodeById = new Map(graph.nodes.map((node) => [node.id, node]));
   const visualEdges: LookupAssetEdge[] = [];
   const visualDegree = new Map<string, number>();
