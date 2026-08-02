@@ -16,6 +16,13 @@ const PLAYWRIGHT_CONFIG = fs.readFileSync(
   path.join(__dirname, '..', 'playwright.config.ts'),
   'utf8',
 );
+const E2E_DIRECTORY = path.join(__dirname, '..', 'e2e');
+const E2E_SOURCES = fs.readdirSync(E2E_DIRECTORY)
+  .filter((entry) => entry.endsWith('.ts'))
+  .map((entry) => ({
+    entry,
+    source: fs.readFileSync(path.join(E2E_DIRECTORY, entry), 'utf8'),
+  }));
 const PACKAGE_MANIFEST = JSON.parse(fs.readFileSync(
   path.join(__dirname, '..', 'package.json'),
   'utf8',
@@ -99,6 +106,13 @@ describe('continuous integration workflow', () => {
     assert.match(PLAYWRIGHT_CONFIG, /screenshot: 'only-on-failure'/u);
   });
 
+  test('browser tests synchronize on observable state instead of fixed delays', () => {
+    for (const { entry, source } of E2E_SOURCES) {
+      assert.doesNotMatch(source, /\bwaitForTimeout\s*\(/u, `${entry} uses a fixed Playwright delay`);
+      assert.doesNotMatch(source, /\bsetTimeout\s*\(/u, `${entry} uses a fixed timer delay`);
+    }
+  });
+
   test('repeats timing-sensitive browser workflows without retries on a bounded schedule', () => {
     assert.match(STRESS_WORKFLOW, /^\s{2}schedule:\s*\n\s{4}- cron: '17 3 \* \* 1'\s*\n\s{2}workflow_dispatch:$/mu);
     assert.match(STRESS_WORKFLOW, /^permissions:\s*\n\s{2}contents: read$/mu);
@@ -106,7 +120,7 @@ describe('continuous integration workflow', () => {
     assert.match(STRESS_WORKFLOW, /^\s+run: npm run test:e2e:stress$/mu);
     assert.equal(
       PACKAGE_MANIFEST.scripts?.['test:e2e:stress'],
-      'playwright test e2e/skip-navigation.spec.ts e2e/investigation-guide.spec.ts --workers=1 --retries=0 --repeat-each=5',
+      'playwright test --grep @timing-sensitive --workers=1 --retries=0 --repeat-each=10',
     );
     assert.equal(occurrences(STRESS_WORKFLOW, /^\s{10}persist-credentials: false$/gmu), 1);
     const actions = pinnedActions(STRESS_WORKFLOW);

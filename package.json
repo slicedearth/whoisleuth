@@ -1,6 +1,6 @@
 {
   "name": "whoisleuth",
-  "version": "1.32.1",
+  "version": "1.32.2",
   "private": true,
   "license": "AGPL-3.0-only",
   "description": "Open-source, local-first domain intelligence and brand-protection console for WHOIS, RDAP, DNS, certificate transparency, lookalike domains, and web evidence.",
@@ -29,7 +29,7 @@
     "check": "npm run check --workspace=frontend",
     "test:e2e": "playwright test",
     "test:e2e:built": "WHOISLEUTH_E2E_USE_BUILD=1 playwright test",
-    "test:e2e:stress": "playwright test e2e/skip-navigation.spec.ts e2e/investigation-guide.spec.ts --workers=1 --retries=0 --repeat-each=5",
+    "test:e2e:stress": "playwright test --grep @timing-sensitive --workers=1 --retries=0 --repeat-each=10",
     "test:e2e:install": "playwright install --with-deps chromium",
     "capture:local": "node packages/web-capture/bin/whoisleuth-capture.mts",
     "capture:compare": "node packages/web-capture/bin/whoisleuth-capture.mts compare",

@@ -11,6 +11,7 @@ import {
   INVESTIGATION_GUIDE_LEGACY_VERSION,
   INVESTIGATION_GUIDE_VERSION,
   INVESTIGATION_RECIPES,
+  investigationGuideApprovedHref,
   investigationGuideHref,
   investigationGuideRecipe,
   investigationGuideStageForPath,
@@ -206,6 +207,21 @@ test('maps recipe stages to existing tool routes with safe target handoff', () =
   assert.equal(investigationGuideHref('lookup', 'example.test', 'brand_sweep'), '/bulk#results');
   assert.equal(investigationGuideHref('lookup', 'example.test', 'brand_sweep', 'candidate.example'), '/lookup?q=candidate.example&depth=deep#query');
   assert.equal(investigationGuideHref('invented', 'example.test', 'brand_sweep'), '/dashboard');
+});
+
+test('routes an approved reviewed brand candidate set through its dedicated Bulk handoff', () => {
+  const brand = createInvestigationGuide('portal.example.test', 'brand_sweep', STARTED_AT);
+  assert.ok(brand);
+  assert.equal(investigationGuideApprovedHref(brand, 'bulk'), '/bulk?investigation=portal.example.test#domains');
+
+  const reviewed = setInvestigationGuideReviewDomains(brand, ['candidate.example'], OPENED_AT);
+  assert.ok(reviewed);
+  assert.equal(investigationGuideApprovedHref(reviewed, 'bulk'), '/bulk?source=discover#domains');
+
+  const triage = createInvestigationGuide('portal.example.test', 'new_domain_triage', STARTED_AT);
+  assert.ok(triage);
+  assert.equal(investigationGuideApprovedHref(triage, 'bulk'), '/bulk?investigation=portal.example.test#domains');
+  assert.equal(investigationGuideApprovedHref(reviewed, 'invented'), '/dashboard');
 });
 
 test('stores one bounded analyst-selected focus domain without changing the official target', () => {

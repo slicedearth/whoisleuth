@@ -18,6 +18,7 @@
     downloadInvestigationGuideSummary,
     INVESTIGATION_GUIDE_EVENT,
     MAX_INVESTIGATION_GUIDE_REVIEW_NOTE_LENGTH,
+    investigationGuideApprovedHref,
     investigationGuideHref,
     investigationGuideRecipe,
     investigationGuideStageForGuidePath,
@@ -362,15 +363,17 @@
     guide = approveInvestigationGuideCollection(stage.id);
     reviewingStageId = '';
     if (!guide) return;
-    const preserveCandidateHandoff = stage.path === '/bulk'
-      && page.url.pathname === stage.path
-      && page.url.searchParams.get('source') === 'discover';
-    if (preserveCandidateHandoff) {
-      guide = recordInvestigationGuideVisit(page.url.pathname);
-      await focusRouteTarget('#domains');
+    const approvedHref = investigationGuideApprovedHref(guide, stage.id);
+    if (approvedHref === '/bulk?source=discover#domains') {
+      if (page.url.pathname === stage.path && page.url.searchParams.get('source') === 'discover') {
+        guide = recordInvestigationGuideVisit(page.url.pathname);
+        await focusRouteTarget('#domains');
+      } else {
+        await goto(approvedHref);
+      }
       return;
     }
-    await goto(investigationGuideHref(stage.id, guide.domain, guide.recipeId, guide.focusDomain));
+    await goto(approvedHref);
   }
 
   function setOutcome(stageId: string, outcome: 'pending' | 'complete' | 'partial' | 'skipped') {

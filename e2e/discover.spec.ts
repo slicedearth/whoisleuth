@@ -728,11 +728,22 @@ test('a future CT history schema is never overwritten by an older app', async ({
   expect(stored).toEqual(future);
 });
 
-test('switching tabs during an in-flight CT request does not leave the UI stuck', async ({ page }) => {
-  // A deliberately slow CT response so the request is still in flight when the
-  // tab switches. The handler tolerates the request being aborted by that switch.
+test('switching tabs during an in-flight CT request does not leave the UI stuck', { tag: '@timing-sensitive' }, async ({ page }) => {
+  let markFirstRequestStarted = () => {};
+  const firstRequestStarted = new Promise<void>((resolve) => {
+    markFirstRequestStarted = resolve;
+  });
+  let releaseFirstResponse = () => {};
+  const firstResponseReleased = new Promise<void>((resolve) => {
+    releaseFirstResponse = resolve;
+  });
+  let requestCount = 0;
   await page.route('**/api/ct-search**', async (route) => {
-    await new Promise((resolve) => setTimeout(resolve, 1500));
+    requestCount += 1;
+    if (requestCount === 1) {
+      markFirstRequestStarted();
+      await firstResponseReleased;
+    }
     try {
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(structuredResponse) });
     } catch {
@@ -743,10 +754,12 @@ test('switching tabs during an in-flight CT request does not leave the UI stuck'
   await page.getByRole('tab', { name: 'Certificates' }).click();
   await page.locator('.fields input').first().fill('example');
   await page.getByRole('button', { name: 'Search certificates' }).click();
+  await firstRequestStarted;
   await expect(page.getByRole('button', { name: /Searching/ })).toBeDisabled();
 
   // Switch tabs mid-request: the loading/disabled state must not get stuck.
   await page.getByRole('tab', { name: 'Lookalikes' }).click();
+  releaseFirstResponse();
   await expect(page.getByRole('button', { name: 'Generate candidates' })).toBeEnabled();
   await expect(page.getByRole('button', { name: /Searching/ })).toHaveCount(0);
 

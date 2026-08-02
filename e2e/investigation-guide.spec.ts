@@ -280,7 +280,7 @@ test('an analyst can save and run a bounded local guide template without removin
   await expectNoHorizontalOverflow(page);
 });
 
-test('new-domain triage leads from a deep lookup through comparison and a review queue', async ({ page }) => {
+test('new-domain triage leads from a deep lookup through comparison and a review queue', { tag: '@timing-sensitive' }, async ({ page }) => {
   test.slow();
   await installLookupFixture(page);
   await startRecipe(page);
@@ -295,7 +295,7 @@ test('new-domain triage leads from a deep lookup through comparison and a review
   await expect(page.locator('.guide')).toContainText('3 of 3 steps reviewed');
 });
 
-test('infrastructure pivot keeps the starting domain through lookup, peer comparison, and retention', async ({ page }) => {
+test('infrastructure pivot keeps the starting domain through lookup, peer comparison, and retention', { tag: '@timing-sensitive' }, async ({ page }) => {
   test.slow();
   await installLookupFixture(page);
   await startRecipe(page, 'Infrastructure pivot');
@@ -306,7 +306,7 @@ test('infrastructure pivot keeps the starting domain through lookup, peer compar
   await expect(page.locator('.guide')).toContainText('3 of 3 steps reviewed');
 });
 
-test('returning to the same guided Bulk step keeps its peer set and completed results', async ({ page }) => {
+test('returning to the same guided Bulk step keeps its peer set and completed results', { tag: '@timing-sensitive' }, async ({ page }) => {
   await installLookupFixture(page);
   await startRecipe(page);
 
@@ -326,7 +326,7 @@ test('returning to the same guided Bulk step keeps its peer set and completed re
   await expect(page.getByRole('status').filter({ hasText: 'Completed 2 of 2 lookups.' })).toBeVisible();
 });
 
-test('brand sweep carries the official domain and selected candidates across every tool', async ({ page }) => {
+test('brand sweep carries the official domain and selected candidates across every tool', { tag: '@timing-sensitive' }, async ({ page }) => {
   test.slow();
   await installLookupFixture(page);
   await startRecipe(page, 'Brand sweep');
@@ -401,7 +401,7 @@ test('request review is keyboard-operable and opening a tool does not claim comp
   expect(stored.stages[0].outcome).toBe('pending');
 });
 
-test('return control recovers when the first action-panel scroll is displaced', async ({ page }) => {
+test('return control recovers when the first action-panel scroll is displaced', { tag: '@timing-sensitive' }, async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 568 });
   await startRecipe(page);
   const action = currentAction(page);
