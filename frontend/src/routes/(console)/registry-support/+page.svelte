@@ -39,6 +39,13 @@
   let capabilityTarget = $state<CapabilityTargetFilter>('all');
   const filteredRows = $derived(filterRegistrySupportRows(catalogue.rows, query, coverage, serviceCoverage));
   const sortedRows = $derived(sortRegistrySupportRows(filteredRows, sortKey, sortDirection));
+  const activeRefinementCount = $derived([
+    query.trim().length > 0,
+    coverage !== 'all',
+    serviceCoverage !== 'all',
+    sortKey !== 'suffix',
+    sortDirection !== 'asc',
+  ].filter(Boolean).length);
   const pageCount = $derived(Math.max(1, Math.ceil(sortedRows.length / PAGE_SIZE)));
   const currentPage = $derived(Math.min(page, pageCount));
   const visibleRows = $derived(sortedRows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE));
@@ -65,6 +72,15 @@
     inspectionInput = '';
     inspectedValue = '';
     inspectionActive = false;
+  }
+
+  function resetCatalogueView() {
+    query = '';
+    coverage = 'all';
+    serviceCoverage = 'all';
+    sortKey = 'suffix';
+    sortDirection = 'asc';
+    page = 1;
   }
 
   function capabilityStateClass(state: LookupCapabilityState): string {
@@ -263,6 +279,10 @@
         <option value="desc">Descending</option>
       </select>
     </label>
+    <div class="filter-actions">
+      <button class="btn" type="button" onclick={resetCatalogueView} disabled={activeRefinementCount === 0}>Reset view</button>
+      <span aria-live="polite">{activeRefinementCount ? `${activeRefinementCount} refinement${activeRefinementCount === 1 ? '' : 's'} active` : 'Default view'}</span>
+    </div>
   </fieldset>
 
   <p class="result-count" role="status" aria-live="polite">
@@ -335,6 +355,7 @@
   .filters legend{padding:0 5px;color:var(--muted);font:600 var(--text-2xs) var(--mono)}
   .filters label{display:grid;gap:6px;color:var(--muted);font:600 var(--text-xs) var(--mono)}
   .filters .search{flex:1;min-width:240px}.filters input,.filters select{min-height:var(--control-h)}
+  .filter-actions{display:flex;min-width:150px;align-items:center;gap:9px}.filter-actions span{color:var(--muted);font:600 var(--text-2xs) var(--mono);white-space:nowrap}
   .result-count{margin:12px 2px;color:var(--muted);font-size:var(--text-xs)}
   .table-wrap{overflow:auto;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel)}
   table{width:100%;border-collapse:collapse;font-size:var(--text-xs)}caption{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
@@ -347,5 +368,5 @@
   .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
   @media(max-width:1400px){.table-wrap,.capability-table-wrap{overflow:visible;border:0;background:none}table,tbody,tr,td{display:block;width:100%}thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}tbody{display:grid;gap:10px}tr{overflow:hidden;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel)}td{display:grid;grid-template-columns:minmax(95px,115px) minmax(0,1fr);gap:8px;min-width:0;border-top:1px solid var(--border)}td:first-child{border-top:0}td::before{content:attr(data-label);color:var(--muted);font:600 var(--text-2xs) var(--mono);text-transform:uppercase}td>*{grid-column:2;min-width:0}.capability-table{min-width:0}.capability-table td{max-width:none}.capability-table td:first-child,.capability-table td:last-child{min-width:0}td>strong{margin-top:0}.profile-detail{grid-column:1 / -1}}
   @media(max-width:900px){.summary-grid,.standards-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.standards-notes{grid-template-columns:1fr}.inspection-card dl{grid-template-columns:repeat(2,minmax(0,1fr))}.interpretation{grid-template-columns:1fr}.interpretation p:last-child{grid-column:1}}
-  @media(max-width:560px){.summary-grid,.standards-grid{grid-template-columns:1fr}.capability-intro{align-items:start;flex-direction:column}.capability-filter{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));width:100%}.inspector-form{grid-template-columns:1fr}.inspection-card dl{grid-template-columns:1fr}.filters{display:grid}.filters .search{min-width:0}.filters input,.filters select{width:100%}.version{justify-self:start}.profile-detail dl>div{grid-template-columns:1fr}.profile-detail dd{margin-top:2px}}
+  @media(max-width:560px){.summary-grid,.standards-grid{grid-template-columns:1fr}.capability-intro{align-items:start;flex-direction:column}.capability-filter{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));width:100%}.inspector-form{grid-template-columns:1fr}.inspection-card dl{grid-template-columns:1fr}.filters{display:grid}.filters .search{min-width:0}.filters input,.filters select{width:100%}.filter-actions{min-width:0;justify-content:space-between}.version{justify-self:start}.profile-detail dl>div{grid-template-columns:1fr}.profile-detail dd{margin-top:2px}}
 </style>

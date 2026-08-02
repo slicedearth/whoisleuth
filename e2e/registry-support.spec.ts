@@ -91,6 +91,16 @@ test('the registry-support catalogue filters locally and retains explicit interp
 
   await search.fill('no matching capability');
   await expect(page.getByRole('heading', { name: 'No matching profiles' })).toBeVisible();
+  await expect(page.getByText('2 refinements active')).toBeVisible();
+  await page.getByRole('button', { name: 'Reset view' }).click();
+  await expect(search).toHaveValue('');
+  await expect(page.locator('#coverage-filter')).toHaveValue('all');
+  await expect(page.locator('#service-filter')).toHaveValue('all');
+  await expect(page.locator('#registry-sort')).toHaveValue('suffix');
+  await expect(page.locator('#registry-sort-direction')).toHaveValue('asc');
+  await expect(page.locator('.catalogue-section tbody tr')).toHaveCount(50);
+  await expect(page.getByText('Default view')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Reset view' })).toBeDisabled();
   await expect(page.getByRole('heading', { name: 'Coverage is not live registry status.' })).toBeVisible();
   expect(unexpectedApiRequests).toEqual([]);
 });
@@ -216,6 +226,8 @@ test('the registry-support reference remains readable without horizontal overflo
   await expect(page.locator('#service-filter')).toBeVisible();
   await page.getByLabel('Suffix or capability').fill('vn');
   await expect(page.locator('.catalogue-section tbody tr')).toHaveCount(1);
+  await expect(page.getByText('1 refinement active')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Reset view' })).toBeVisible();
   await expectNoHorizontalOverflow(page);
 });
 
