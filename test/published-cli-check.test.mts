@@ -92,10 +92,32 @@ describe('published CLI verification', () => {
 
   test('checks the exact installed command without lifecycle scripts or network diagnostics', async () => {
     const calls: string[][] = [];
+    const inheritedEnvironment = {
+      PATH: process.env.PATH,
+      HOME: '/fixture/home',
+      NODE_AUTH_TOKEN: 'must-not-be-forwarded',
+      NPM_TOKEN: 'must-not-be-forwarded',
+      NPM_CONFIG_USERCONFIG: '/fixture/credentialed-user.npmrc',
+      'npm_config_//registry.npmjs.org/:_authToken': 'must-not-be-forwarded',
+      npm_config_cert: 'must-not-be-forwarded',
+      npm_config_email: 'must-not-be-forwarded@example.invalid',
+      npm_config_key: 'must-not-be-forwarded',
+    } satisfies NodeJS.ProcessEnv;
     const execute: ExecuteCommand = async (executable, args, options) => {
       assert.equal(executable, 'npm');
       assert.equal(options.env.npm_config_ignore_scripts, 'true');
       assert.equal(options.env.npm_config_loglevel, 'silent');
+      assert.equal(options.env.npm_config_always_auth, 'false');
+      assert.equal(options.env.HOME, '/fixture/home');
+      assert.ok(options.env.npm_config_userconfig?.startsWith(`${options.cwd}/`));
+      assert.ok(options.env.npm_config_globalconfig?.startsWith(`${options.cwd}/`));
+      assert.equal(options.env.NODE_AUTH_TOKEN, undefined);
+      assert.equal(options.env.NPM_TOKEN, undefined);
+      assert.equal(options.env.NPM_CONFIG_USERCONFIG, undefined);
+      assert.equal(options.env['npm_config_//registry.npmjs.org/:_authToken'], undefined);
+      assert.equal(options.env.npm_config_cert, undefined);
+      assert.equal(options.env.npm_config_email, undefined);
+      assert.equal(options.env.npm_config_key, undefined);
       calls.push([...args]);
       if (args[0] === 'view') return { stdout: JSON.stringify(publishedManifest()), stderr: '' };
       if (args.at(-1) === '--version') return { stdout: `${VERSION}\n`, stderr: '' };
@@ -112,7 +134,7 @@ describe('published CLI verification', () => {
       };
     };
 
-    const report = await checkPublishedCli(VERSION, { execute });
+    const report = await checkPublishedCli(VERSION, { execute, environment: inheritedEnvironment });
     assert.deepEqual(report.checks, ['metadata', 'integrity', 'registry-signature', 'oidc-provenance', 'version', 'offline-doctor']);
     assert.equal(calls.length, 3);
     assert.ok(calls.slice(1).every((args) => args.includes('--ignore-scripts')));

@@ -272,7 +272,7 @@ describe('discover output', () => {
     const candidates = Array.from({ length: MAX_DISCOVER_TERMINAL_CANDIDATES + 1 }, (_, index) => candidate(index));
     const document = buildCliDiscoverDocument(metadata.seed, generationResult({ candidates }), metadata);
     const output = formatTerminalDiscover(document, { character_omission: 'Character omission' });
-    assert.match(output, /candidate-0\.test — Character omission/);
+    assert.match(output, /candidate-0\.test: Character omission/);
     assert.match(output, /Showing 200 of 201 candidates/);
     assert.equal(arrayValue(document.candidates).length, 201);
   });

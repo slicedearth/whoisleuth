@@ -104,9 +104,9 @@ describe('posture output', () => {
     const output = formatTerminalPosture(buildCliPostureDocument('example.test', postureReport()));
     assert.match(output, /Domain\s+example\.test/);
     assert.match(output, /1 action · 1 review · 1 pass · 1 info/);
-    assert.match(output, /\[PASS\] SPF — Restrictive policy/);
+    assert.match(output, /\[PASS\] SPF: Restrictive policy/);
     assert.match(output, /Record\s+v=spf1 -all/);
-    assert.match(output, /\[DANGER\] DMARC — No policy/);
+    assert.match(output, /\[DANGER\] DMARC: No policy/);
     assert.match(output, /Next\s+Publish a policy/);
   });
 

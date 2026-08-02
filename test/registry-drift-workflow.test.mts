@@ -14,6 +14,7 @@ describe('official registry drift workflow', () => {
 
   test('uses read-only permissions, fixed action revisions, and no secrets', () => {
     assert.match(WORKFLOW, /^permissions:\s*\n\s{2}contents: read$/mu);
+    assert.match(WORKFLOW, /^\s{10}persist-credentials: false$/mu);
     assert.doesNotMatch(WORKFLOW, /\b(?:contents|issues|pull-requests|actions): write\b/u);
     assert.doesNotMatch(WORKFLOW, /\bsecrets\./u);
 
