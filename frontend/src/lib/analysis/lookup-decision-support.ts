@@ -239,6 +239,7 @@ function comparisonEntries(
 ): LookupDecisionEntry[] {
   const output: LookupDecisionEntry[] = [];
   const source = record(comparison);
+  const sourceHealth = record(source.sourceHealth);
   const fields = Array.isArray(source.fields) ? source.fields.slice(0, 24) : [];
   for (const item of fields) {
     const field = record(item);
@@ -261,7 +262,22 @@ function comparisonEntries(
       });
       continue;
     }
-    if (status.includes('unavailable') || status.includes('incomplete')) {
+    const unavailableSource = status.startsWith('rdap_')
+      ? 'rdap'
+      : status.startsWith('whois_')
+        ? 'whois'
+        : status.startsWith('registry_')
+          ? 'registry'
+          : status.startsWith('registrar_')
+            ? 'registrar'
+            : null;
+    const unavailableSourceStatus = unavailableSource
+      ? text(record(sourceHealth[unavailableSource]).status, 64)
+      : null;
+    if (
+      (status.includes('unavailable') || status.includes('incomplete'))
+      && unavailableSourceStatus !== 'unsupported'
+    ) {
       output.push({
         id: `${kind}-${suffix || output.length}-${status}`,
         state: 'uncertain',

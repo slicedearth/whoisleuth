@@ -9,6 +9,7 @@ import whoisFixtures from '../fixtures/whois-registry-fixtures.mts';
 import {
   REGISTRY_CAPABILITIES_VERSION,
   VERSION_26_NO_RDAP_SUFFIXES,
+  VERSION_27_RDAP_ONLY_GENERIC_SUFFIXES,
   registryAccessDiagnosticFor,
   registryCapabilityFor,
   registryCompatibilityMatrix,
@@ -147,7 +148,7 @@ const VERSION_24_PROMOTED_SUFFIXES = new Set(['xn--90ae', 'xn--l1acc', 'xn--wgbl
 
 describe('registry capability metadata', () => {
   test('has a versioned, deterministic compatibility matrix', () => {
-    assert.equal(REGISTRY_CAPABILITIES_VERSION, 26);
+    assert.equal(REGISTRY_CAPABILITIES_VERSION, 27);
     const first = registryCompatibilityMatrix();
     const second = registryCompatibilityMatrix();
     assert.deepEqual(first, second);
@@ -177,7 +178,8 @@ describe('registry capability metadata', () => {
       'xn--p1ai', 'xn--pgbs0dh', 'xn--q7ce6a', 'xn--qxa6a', 'xn--qxam',
       'xn--rvc1e0am3e', 'xn--s9brj9c', 'xn--wgbh1c', 'xn--wgbl6a', 'xn--xkc2al3hye2a',
       'xn--xkc2dl3a5ee0h', 'xn--y9a3aq', 'xn--yfro4i67o', 'xn--ygbi2ammx', 'ye', 'yt', 'za', 'zm', 'zw',
-    ]);
+      ...VERSION_27_RDAP_ONLY_GENERIC_SUFFIXES,
+    ].sort());
     assert.equal(first.every((row) => row.explicitSuffixProfile), true);
     assert.equal(first.filter((row) => row.registryClass === 'country-code').length, 309);
     assert.equal(first.filter((row) => row.registryClass === 'sponsored').length, 2);
@@ -680,6 +682,30 @@ describe('registry capability metadata', () => {
     assert.equal(required(registryCapabilityFor('example.tw')).rdapAccessProfile, 'iana-bootstrap');
     assert.equal(required(registryCapabilityFor('example.xn--kpry57d')).rdapAccessProfile, 'iana-bootstrap');
     assert.equal(required(registryCapabilityFor('example.xn--kprw13d')).id, 'twnic-no-rdap-colon');
+  });
+
+  test('records version twenty-seven generic RDAP-only access without implying missing evidence', () => {
+    assert.equal(VERSION_27_RDAP_ONLY_GENERIC_SUFFIXES.length, 23);
+    assert.equal(new Set(VERSION_27_RDAP_ONLY_GENERIC_SUFFIXES).size, 23);
+
+    for (const suffix of VERSION_27_RDAP_ONLY_GENERIC_SUFFIXES) {
+      const capability = required(registryCapabilityFor(`example.${suffix}`));
+      assert.equal(capability.id, 'generic-rdap-only-documented', suffix);
+      assert.equal(capability.registryClass, 'generic', suffix);
+      assert.equal(capability.coverageState, 'access_documented', suffix);
+      assert.equal(capability.whoisAccessProfile, 'no-iana-service', suffix);
+      assert.equal(capability.rdapAccessProfile, 'iana-bootstrap', suffix);
+      assert.equal(capability.explicitSuffixProfile, true, suffix);
+      assert.match(capability.limitation, /RDAP bootstrap service but no domain WHOIS referral/i, suffix);
+      assert.ok(
+        capability.documentationUrls.includes(`https://www.iana.org/domains/root/db/${suffix}.html`),
+        `${suffix}: IANA provenance`,
+      );
+      const diagnostic = required(registryAccessDiagnosticFor(`example.${suffix}`));
+      assert.equal(diagnostic.whoisAccessProfile, 'no-iana-service', suffix);
+      assert.equal(diagnostic.rdapAccessProfile, 'iana-bootstrap', suffix);
+      assert.equal(diagnostic.authority, 'context_only', suffix);
+    }
   });
 
   test('rejects malformed, numeric, overlong, and control-bearing inputs', () => {
