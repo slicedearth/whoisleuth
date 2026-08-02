@@ -16,18 +16,21 @@ import {
   registrySupportLabel,
   sortRegistrySupportRows,
 } from '../frontend/src/lib/analysis/registry-support.ts';
-import { registryCompatibilityMatrix } from '../lib/registry-capabilities.mts';
+import {
+  VERSION_27_RDAP_ONLY_GENERIC_SUFFIXES,
+  registryCompatibilityMatrix,
+} from '../lib/registry-capabilities.mts';
 
 test('builds the bounded registry-support catalogue from the shared capability matrix', () => {
   const catalogue = registrySupportCatalogue();
 
-  assert.equal(catalogue.version, 26);
-  assert.equal(catalogue.rows.length, 312);
+  assert.equal(catalogue.version, 27);
+  assert.equal(catalogue.rows.length, 335);
   assert.equal(catalogue.truncated, false);
   assert.deepEqual(catalogue.summary, {
-    profiles: 312,
+    profiles: 335,
     fixtureVerified: 218,
-    accessDocumented: 94,
+    accessDocumented: 117,
     fallbacks: 1,
   });
   assert.deepEqual(catalogue.standardsCoverage.counts, {
@@ -142,7 +145,8 @@ test('filters registry profiles by suffix, capability text, and explicit coverag
     'xn--fzc2c9e2c', 'xn--mgbai9azgqp6j', 'xn--mgbayh7gpa', 'xn--mgbc0a9azcg',
     'xn--mgbcpq6gpa1a', 'xn--mgbpl2fh', 'xn--mgbtx2b', 'xn--node', 'xn--qxam', 'xn--wgbh1c',
     'xn--xkc2al3hye2a', 'xn--ygbi2ammx', 'za', 'zw',
-  ]);
+    ...VERSION_27_RDAP_ONLY_GENERIC_SUFFIXES,
+  ].sort());
   assert.deepEqual(filterRegistrySupportRows(rows, 'access', 'fixture_verified'), []);
 });
 
