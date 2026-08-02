@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
   buildBulkPeerOutlierExport,
   buildBulkPeerOutlierMatrix,
+  filterBulkPeerOutlierRows,
 } from '../frontend/src/lib/analysis/bulk-peer-outliers.ts';
 import type { ScanResult } from '../frontend/src/lib/analysis/bulk-result-model.ts';
 
@@ -187,4 +188,42 @@ test('outlier export is formula-safe and includes the local baseline', () => {
   assert.match(output.filename, /2026-07-31/u);
   assert.match(output.content, /cohort_baseline/u);
   assert.doesNotMatch(output.content, /^=different/u);
+});
+
+test('peer outlier rows filter by bounded domain, evidence, and dimension values', () => {
+  const matrix = buildBulkPeerOutlierMatrix([
+    row('one.example'),
+    row('two.example'),
+    row('three.example'),
+    row('different.example', {
+      registrar: 'Different Registrar',
+      nameservers: ['ns9.example.test'],
+      saved: {
+        ...row('temporary.example').saved,
+        registrarName: 'Different Registrar',
+        nameservers: ['ns9.example.test'],
+      },
+    }),
+  ]);
+
+  assert.deepEqual(filterBulkPeerOutlierRows(matrix, 'different.example').map((item) => item.domain), ['different.example']);
+  assert.deepEqual(filterBulkPeerOutlierRows(matrix, 'ns9.example.test').map((item) => item.domain), ['different.example']);
+  assert.deepEqual(
+    filterBulkPeerOutlierRows(matrix, '', 'registrar')[0]?.findings.map((finding) => finding.dimension),
+    ['registrar'],
+  );
+  assert.equal(filterBulkPeerOutlierRows(matrix, '', 'technology_set').length, 0);
+  assert.deepEqual(filterBulkPeerOutlierRows(matrix, '', 'unsupported'), matrix.rows);
+});
+
+test('peer outlier filtering is non-mutating and removes control characters before matching', () => {
+  const matrix = buildBulkPeerOutlierMatrix([
+    row('one.example'),
+    row('two.example'),
+    row('three.example'),
+    row('different.example', { registrar: 'Different Registrar' }),
+  ]);
+  const before = structuredClone(matrix);
+  assert.deepEqual(filterBulkPeerOutlierRows(matrix, 'different\u0000.example'), []);
+  assert.deepEqual(matrix, before);
 });

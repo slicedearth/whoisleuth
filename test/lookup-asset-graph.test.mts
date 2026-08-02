@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   buildLookupAssetGraph,
+  countLookupAssetGraphEdgesByLens,
   projectLookupAssetGraph,
 } from '../frontend/src/lib/analysis/lookup-asset-graph.ts';
 
@@ -124,10 +125,17 @@ test('asset graph keeps separately attributed typed relationships', () => {
 
 test('graph lenses reuse one model without cross-contaminating evidence classes', () => {
   const graph = fixture();
+  const counts = countLookupAssetGraphEdgesByLens(graph);
   const identity = projectLookupAssetGraph(graph, 'identity');
   const delegation = projectLookupAssetGraph(graph, 'delegation');
   const certificate = projectLookupAssetGraph(graph, 'certificate');
 
+  assert.deepEqual(counts, {
+    all: graph.edges.length,
+    identity: identity.edges.length,
+    delegation: delegation.edges.length,
+    certificate: certificate.edges.length,
+  });
   assert.ok(identity.edges.some((edge) => edge.kind === 'form-destination'));
   assert.ok(identity.edges.some((edge) => edge.kind === 'authorizes-name' && edge.boundary === 'same_registrable_domain'));
   assert.ok(identity.edges.every((edge) => edge.lenses.includes('identity')));
@@ -138,6 +146,9 @@ test('graph lenses reuse one model without cross-contaminating evidence classes'
   assert.ok(certificate.edges.some((edge) => edge.kind === 'reviewed-hostname-match'));
   assert.ok(certificate.edges.some((edge) => edge.kind === 'reviewed-runtime-trust'));
   assert.ok(certificate.edges.some((edge) => edge.kind === 'reviewed-against-policy'));
+  assert.equal(identity.nodes.find((node) => node.label === 'identity.example')?.group, 'identity');
+  assert.equal(delegation.nodes.find((node) => node.label === 'ns1.example.test')?.group, 'dns');
+  assert.equal(certificate.nodes.find((node) => node.label === '*.example.test')?.group, 'certificate');
 });
 
 test('asset graph bounds hostile or excessive collections', () => {
@@ -172,7 +183,58 @@ test('asset graph collapses high-degree visual branches without dropping accessi
   assert.equal(projection.collapsedGroups[0]?.omittedEdges, 6);
   assert.ok(projection.nodes.some((node) => node.id === `collapsed-${graph.targetId}`));
   assert.equal(
+    projection.links.find((link) => String(link.id).startsWith('collapsed-link-'))?.kind,
+    'summary',
+  );
+  assert.equal(
     projection.links.filter((link) => !String(link.id).startsWith('collapsed-link-')).length,
     10,
   );
+});
+
+test('high-degree visual branches retain representative evidence families', () => {
+  const graph = buildLookupAssetGraph({
+    target: 'example.test',
+    observedAt: '2026-08-01T00:00:00.000Z',
+    dnsEvidence: { status: 'success', complete: true },
+    dnsRecords: {
+      a: Array.from({ length: 16 }, (_, index) => `192.0.2.${index + 1}`),
+      ns: ['ns1.example.test'],
+    },
+    rdapEvidence: { status: 'success', complete: true },
+    rdapParsed: { registrar: { name: 'Example Registrar' } },
+    httpEvidence: {
+      status: 'success',
+      complete: true,
+      finalUrl: 'https://www.example.test/',
+    },
+    pageOpenGraphUrl: { url: 'https://identity.example/' },
+    tlsEvidence: { status: 'success', complete: true },
+    tlsCertificate: { fingerprintSha256: 'a'.repeat(64) },
+  });
+  const projection = projectLookupAssetGraph(graph, 'all');
+  const representedGroups = new Set(projection.nodes.map((node) => node.group));
+
+  assert.deepEqual(
+    [...representedGroups].filter((group) => group !== 'focus' && group !== 'summary').sort(),
+    ['certificate', 'dns', 'identity', 'network', 'registration'],
+  );
+  assert.equal(projection.edges.length, graph.edges.length);
+  assert.ok(projection.collapsedGroups.some((group) => group.hubId === graph.targetId));
+});
+
+test('visual links keep partial and unknown evidence distinct from derived analysis', () => {
+  const graph = fixture();
+  const projection = projectLookupAssetGraph(graph, 'all');
+  const partialIds = new Set(graph.edges
+    .filter((edge) => edge.completeness === 'partial')
+    .map((edge) => edge.id));
+  const unknownIds = new Set(graph.edges
+    .filter((edge) => edge.completeness === 'unknown')
+    .map((edge) => edge.id));
+
+  assert.ok(partialIds.size > 0);
+  assert.ok(projection.links.some((link) => partialIds.has(link.id) && link.kind === 'partial'));
+  assert.ok(projection.links.every((link) => !unknownIds.has(link.id) || link.kind === 'unknown'));
+  assert.equal(projection.links.some((link) => link.kind === 'derived'), false);
 });

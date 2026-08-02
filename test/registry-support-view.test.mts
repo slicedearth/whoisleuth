@@ -12,23 +12,34 @@ import {
   inspectRegistrySupport,
   registryAccessLabel,
   registryCoverageLabel,
+  registryServiceCoverage,
+  registryServiceCoverageLabel,
   registrySupportCatalogue,
   registrySupportLabel,
   sortRegistrySupportRows,
 } from '../frontend/src/lib/analysis/registry-support.ts';
-import { registryCompatibilityMatrix } from '../lib/registry-capabilities.mts';
+import {
+  VERSION_27_RDAP_ONLY_GENERIC_SUFFIXES,
+  registryCompatibilityMatrix,
+} from '../lib/registry-capabilities.mts';
 
 test('builds the bounded registry-support catalogue from the shared capability matrix', () => {
   const catalogue = registrySupportCatalogue();
 
-  assert.equal(catalogue.version, 26);
-  assert.equal(catalogue.rows.length, 312);
+  assert.equal(catalogue.version, 27);
+  assert.equal(catalogue.rows.length, 335);
   assert.equal(catalogue.truncated, false);
   assert.deepEqual(catalogue.summary, {
-    profiles: 312,
+    profiles: 335,
     fixtureVerified: 218,
-    accessDocumented: 94,
+    accessDocumented: 117,
     fallbacks: 1,
+    serviceCoverage: {
+      both: 72,
+      rdapOnly: 25,
+      whoisOnly: 167,
+      neither: 71,
+    },
   });
   assert.deepEqual(catalogue.standardsCoverage.counts, {
     activeTlds: 1438,
@@ -74,6 +85,11 @@ test('inspects explicit and generic suffix support through the shared catalogue'
   assert.equal(generic.profile.coverageState, 'discovery_only');
   assert.equal(generic.profile.rdapDiscovery, 'iana-bootstrap');
   assert.equal(generic.profile.whoisDiscovery, 'iana-referral');
+
+  const rdapOnly = inspectRegistrySupport('.dev');
+  assert.ok(rdapOnly.profile);
+  assert.equal(registryServiceCoverage(rdapOnly.profile), 'rdap_only');
+  assert.deepEqual(rdapOnly.profile.documentationUrls, ['https://www.iana.org/domains/root/db/dev.html']);
 
   const education = inspectRegistrySupport('.edu');
   assert.ok(education.profile);
@@ -142,8 +158,18 @@ test('filters registry profiles by suffix, capability text, and explicit coverag
     'xn--fzc2c9e2c', 'xn--mgbai9azgqp6j', 'xn--mgbayh7gpa', 'xn--mgbc0a9azcg',
     'xn--mgbcpq6gpa1a', 'xn--mgbpl2fh', 'xn--mgbtx2b', 'xn--node', 'xn--qxam', 'xn--wgbh1c',
     'xn--xkc2al3hye2a', 'xn--ygbi2ammx', 'za', 'zw',
-  ]);
+    ...VERSION_27_RDAP_ONLY_GENERIC_SUFFIXES,
+  ].sort());
   assert.deepEqual(filterRegistrySupportRows(rows, 'access', 'fixture_verified'), []);
+  assert.equal(filterRegistrySupportRows(rows, '', 'all', 'rdap_only').length, 25);
+  assert.equal(filterRegistrySupportRows(rows, '', 'all', 'whois_only').length, 167);
+  assert.equal(filterRegistrySupportRows(rows, '', 'all', 'both').length, 72);
+  assert.equal(filterRegistrySupportRows(rows, '', 'all', 'neither').length, 71);
+  assert.deepEqual(
+    filterRegistrySupportRows(rows, '', 'all', 'rdap_only').map((row) => row.suffixes[0]),
+    [...VERSION_27_RDAP_ONLY_GENERIC_SUFFIXES, 'na', 'pn'].sort(),
+  );
+  assert.equal(filterRegistrySupportRows(rows, '', 'all', 'unexpected').length, rows.length);
 });
 
 test('bounds and sanitizes untrusted filter input without mutating the rows', () => {
@@ -172,7 +198,7 @@ test('sorts bounded filtered rows deterministically without mutating catalogue o
   const before = rows.map((row) => row.id);
 
   assert.deepEqual(REGISTRY_SUPPORT_SORT_KEYS, [
-    'suffix', 'coverage', 'registry_class', 'whois_access', 'whois_query',
+    'suffix', 'coverage', 'registry_class', 'service_path', 'rdap_access', 'whois_access', 'whois_query',
   ]);
   assert.equal(requiredValue(sortRegistrySupportRows(rows, 'suffix', 'desc')[0]).suffixes[0], 'zw');
   assert.equal(requiredValue(sortRegistrySupportRows(rows, 'unexpected', 'asc')[0]).suffixes[0], 'ac');
@@ -181,6 +207,12 @@ test('sorts bounded filtered rows deterministically without mutating catalogue o
   const byCoverage = sortRegistrySupportRows(rows, 'coverage', 'asc');
   assert.equal(byCoverage[0]?.coverageState, 'access_documented');
   assert.equal(byCoverage.at(-1)?.coverageState, 'fixture_verified');
+  const byServicePath = sortRegistrySupportRows(rows, 'service_path', 'asc');
+  assert.equal(registryServiceCoverage(requiredValue(byServicePath[0])), 'both');
+  assert.equal(registryServiceCoverage(requiredValue(byServicePath.at(-1))), 'whois_only');
+  const byRdapAccess = sortRegistrySupportRows(rows, 'rdap_access', 'asc');
+  assert.equal(requiredValue(byRdapAccess[0]).rdapAccessProfile, 'iana-bootstrap');
+  assert.equal(requiredValue(byRdapAccess.at(-1)).rdapAccessProfile, 'no-iana-service');
   assert.equal(sortRegistrySupportRows(null, 'suffix', 'asc').length, 0);
 });
 
@@ -190,6 +222,9 @@ test('renders stable human-readable labels for known and unknown catalogue value
   assert.equal(registryAccessLabel('iana-bootstrap'), 'IANA bootstrap discovery');
   assert.equal(registryAccessLabel('registry-policy-restricted'), 'Registry policy restricted');
   assert.equal(registryAccessLabel(null), 'Unknown');
+  assert.equal(registryServiceCoverageLabel('rdap_only'), 'RDAP only');
+  assert.equal(registryServiceCoverageLabel('whois_only'), 'WHOIS path only');
+  assert.equal(registryServiceCoverageLabel('unexpected'), 'Unknown');
   assert.equal(registrySupportLabel('jprs-domain-english'), 'Jprs Domain English');
   assert.equal(registrySupportLabel('\u0000'), 'Unknown');
 });

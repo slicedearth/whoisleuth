@@ -77,7 +77,7 @@ type RegistryCapabilitySeed = Pick<
   'id' | 'suffixes' | 'registryClass' | 'whoisParserProfile' | 'fixtureScenarios'
 >>;
 
-const REGISTRY_CAPABILITIES_VERSION = 26;
+const REGISTRY_CAPABILITIES_VERSION = 27;
 const MAX_CAPABILITY_INPUT_LENGTH = 253;
 
 const REGISTRY_STANDARDS_COVERAGE_SNAPSHOT = Object.freeze({
@@ -213,6 +213,11 @@ const VERSION_26_NO_RDAP_SUFFIXES = Object.freeze([
   'xn--xkc2dl3a5ee0h', 'xn--y9a3aq',
 ]);
 const VERSION_26_NO_RDAP_SUFFIX_SET = new Set(VERSION_26_NO_RDAP_SUFFIXES);
+const VERSION_27_RDAP_ONLY_GENERIC_SUFFIXES = Object.freeze([
+  'app', 'boo', 'channel', 'dad', 'day', 'dev', 'esq', 'foo', 'how', 'info',
+  'ing', 'meme', 'mov', 'new', 'nexus', 'page', 'phd', 'prof', 'rsvp', 'soy',
+  'web', 'xn--q9jyb4c', 'zip',
+]);
 const NO_IANA_MACHINE_SERVICE_SUFFIXES = Object.freeze([
   ...VERSION_15_NO_IANA_MACHINE_SERVICE_SUFFIXES,
   ...VERSION_16_NO_IANA_MACHINE_SERVICE_SUFFIXES,
@@ -248,6 +253,21 @@ const DEFAULT_CAPABILITY = freezeCapability({
 });
 
 const EXPLICIT_CAPABILITY_SEEDS: RegistryCapabilitySeed[] = [
+  {
+    id: 'generic-rdap-only-documented',
+    suffixes: [...VERSION_27_RDAP_ONLY_GENERIC_SUFFIXES],
+    registryClass: 'generic',
+    whoisParserProfile: 'generic-colon',
+    fixtureScenarios: [],
+    coverageState: 'access_documented',
+    whoisAccessProfile: 'no-iana-service',
+    rdapAccessProfile: 'iana-bootstrap',
+    verificationFiles: [],
+    documentationUrls: VERSION_27_RDAP_ONLY_GENERIC_SUFFIXES.map(
+      (suffix) => `https://www.iana.org/domains/root/db/${suffix}.html`,
+    ),
+    limitation: RDAP_ONLY_MACHINE_SERVICE_LIMITATION,
+  },
   {
     id: 'nic-ar-colon', suffixes: ['ar'], registryClass: 'country-code',
     whoisParserProfile: 'nic-ar-colon', fixtureScenarios: ['registered', 'not_found'],
@@ -1279,6 +1299,7 @@ export {
   REGISTRY_CAPABILITIES_VERSION,
   MAX_CAPABILITY_INPUT_LENGTH,
   VERSION_26_NO_RDAP_SUFFIXES,
+  VERSION_27_RDAP_ONLY_GENERIC_SUFFIXES,
   REGISTRY_STANDARDS_COVERAGE_SNAPSHOT,
   DEFAULT_CAPABILITY,
   EXPLICIT_CAPABILITIES,

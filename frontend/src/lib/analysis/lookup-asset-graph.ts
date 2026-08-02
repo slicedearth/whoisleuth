@@ -4,6 +4,7 @@ import type {
 } from './visualization-models.ts';
 
 export type LookupAssetGraphLens = 'all' | 'identity' | 'delegation' | 'certificate';
+export type LookupAssetGraphLensCounts = Readonly<Record<LookupAssetGraphLens, number>>;
 export type LookupTrustBoundary =
   | 'external'
   | 'reviewed_profile'
@@ -75,6 +76,73 @@ const MAX_EDGES = 120;
 const MAX_VALUES = 16;
 const MAX_LIMITATIONS = 5;
 const MAX_VISUAL_EDGES_PER_HUB = 10;
+
+function projectedNodeGroup(
+  node: LookupAssetNode,
+  edges: readonly LookupAssetEdge[],
+): Readonly<{ id: string; label: string }> {
+  if (node.kind === 'target') return { id: 'focus', label: 'Lookup target' };
+  if (node.kind === 'address' || node.kind === 'network' || node.kind === 'prefix') {
+    return { id: 'network', label: 'Network' };
+  }
+  if (node.kind === 'registrar') return { id: 'registration', label: 'Registration' };
+  if (node.kind === 'certificate' || node.kind === 'issuer' || node.kind === 'key') {
+    return { id: 'certificate', label: 'Certificates' };
+  }
+  if (node.kind === 'observation') return { id: 'delegation', label: 'Delegation' };
+  if (node.kind === 'identity' || node.kind === 'origin' || node.kind === 'tracker') {
+    return { id: 'identity', label: 'Web identity' };
+  }
+  if (node.kind === 'hostname') {
+    const incident = edges.filter((edge) => edge.source === node.id || edge.target === node.id);
+    if (incident.some((edge) => edge.kind === 'authorizes-name')) {
+      return { id: 'certificate', label: 'Certificates' };
+    }
+    if (incident.some((edge) => edge.lenses.includes('identity') && !edge.lenses.includes('delegation'))) {
+      return { id: 'identity', label: 'Web identity' };
+    }
+    return { id: 'dns', label: 'DNS and routing' };
+  }
+  if (node.kind === 'summary') return { id: 'summary', label: 'Grouped evidence' };
+  return { id: 'evidence', label: 'Other evidence' };
+}
+
+function interleaveVisualEdgesByFamily(
+  edges: readonly LookupAssetEdge[],
+  nodesById: ReadonlyMap<string, LookupAssetNode>,
+): LookupAssetEdge[] {
+  const buckets = new Map<string, LookupAssetEdge[]>();
+  for (const edge of edges) {
+    const endpointGroups = [nodesById.get(edge.source), nodesById.get(edge.target)]
+      .filter((node): node is LookupAssetNode => Boolean(node))
+      .map((node) => projectedNodeGroup(node, edges).id)
+      .filter((group) => group !== 'focus')
+      .sort();
+    const family = [...new Set(endpointGroups)].join('+') || 'evidence';
+    const bucket = buckets.get(family) ?? [];
+    bucket.push(edge);
+    buckets.set(family, bucket);
+  }
+  const families = [...buckets.keys()].sort();
+  const ordered: LookupAssetEdge[] = [];
+  for (let offset = 0; ordered.length < edges.length; offset += 1) {
+    let appended = false;
+    for (const family of families) {
+      const edge = buckets.get(family)?.[offset];
+      if (!edge) continue;
+      ordered.push(edge);
+      appended = true;
+    }
+    if (!appended) break;
+  }
+  return ordered;
+}
+
+function edgeMatchesLens(edge: LookupAssetEdge, lens: LookupAssetGraphLens): boolean {
+  return lens === 'all'
+    ? edge.lenses.includes('all') || edge.lenses.length > 0
+    : edge.lenses.includes(lens);
+}
 
 function record(value: unknown): JsonRecord {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -834,17 +902,25 @@ export function buildLookupAssetGraph(input: Readonly<{
   };
 }
 
+export function countLookupAssetGraphEdgesByLens(graph: LookupAssetGraph): LookupAssetGraphLensCounts {
+  return Object.freeze({
+    all: graph.edges.filter((edge) => edgeMatchesLens(edge, 'all')).length,
+    identity: graph.edges.filter((edge) => edgeMatchesLens(edge, 'identity')).length,
+    delegation: graph.edges.filter((edge) => edgeMatchesLens(edge, 'delegation')).length,
+    certificate: graph.edges.filter((edge) => edgeMatchesLens(edge, 'certificate')).length,
+  });
+}
+
 export function projectLookupAssetGraph(
   graph: LookupAssetGraph,
   lens: LookupAssetGraphLens,
 ): LookupAssetGraphProjection {
-  const acceptedEdges = graph.edges.filter((edge) => lens === 'all'
-    ? edge.lenses.includes('all') || edge.lenses.length > 0
-    : edge.lenses.includes(lens));
+  const acceptedEdges = graph.edges.filter((edge) => edgeMatchesLens(edge, lens));
+  const graphNodeById = new Map(graph.nodes.map((node) => [node.id, node]));
   const visualEdges: LookupAssetEdge[] = [];
   const visualDegree = new Map<string, number>();
   const omittedByHub = new Map<string, number>();
-  for (const edge of acceptedEdges) {
+  for (const edge of interleaveVisualEdgesByFamily(acceptedEdges, graphNodeById)) {
     const sourceDegree = visualDegree.get(edge.source) ?? 0;
     const targetDegree = visualDegree.get(edge.target) ?? 0;
     const saturatedHub = sourceDegree >= MAX_VISUAL_EDGES_PER_HUB
@@ -865,7 +941,6 @@ export function projectLookupAssetGraph(
     nodeIds.add(edge.source);
     nodeIds.add(edge.target);
   }
-  const graphNodeById = new Map(graph.nodes.map((node) => [node.id, node]));
   const collapsedGroups = [...omittedByHub.entries()].map(([hubId, omittedEdges]) => ({
     hubId,
     hubLabel: graphNodeById.get(hubId)?.label ?? hubId,
@@ -873,25 +948,36 @@ export function projectLookupAssetGraph(
   }));
   const nodes: ForceGraphNodeInput[] = graph.nodes
     .filter((node) => nodeIds.has(node.id))
-    .map((node) => ({
-      id: node.id,
-      label: node.label,
-      kind: node.kind,
-      detail: node.detail,
-    }));
+    .map((node) => {
+      const group = projectedNodeGroup(node, visualEdges);
+      return {
+        id: node.id,
+        label: node.label,
+        kind: node.kind,
+        detail: node.detail,
+        group: group.id,
+        groupLabel: group.label,
+      };
+    });
   for (const group of collapsedGroups) {
     nodes.push({
       id: `collapsed-${group.hubId}`,
       label: `+${group.omittedEdges} more`,
       kind: 'summary',
       detail: `The visual graph groups ${group.omittedEdges} additional relationship${group.omittedEdges === 1 ? '' : 's'} connected to ${group.hubLabel}. The accessible relationship list retains every edge.`,
+      group: 'summary',
+      groupLabel: 'Grouped evidence',
     });
   }
   const links: ForceGraphLinkInput[] = visualEdges.map((edge) => ({
     id: edge.id,
     source: edge.source,
     target: edge.target,
-    kind: edge.completeness === 'complete' ? 'observed' : 'derived',
+    kind: edge.completeness === 'complete'
+      ? 'observed'
+      : edge.completeness === 'partial'
+        ? 'partial'
+        : 'unknown',
     detail: `${edge.label} · ${edge.sourceLabel}${edge.boundary ? ` · ${edge.boundary.replaceAll('_', ' ')}` : ''}`,
   }));
   for (const group of collapsedGroups) {
@@ -899,7 +985,7 @@ export function projectLookupAssetGraph(
       id: `collapsed-link-${group.hubId}`,
       source: group.hubId,
       target: `collapsed-${group.hubId}`,
-      kind: 'derived',
+      kind: 'summary',
       detail: `${group.omittedEdges} additional bounded relationships are listed below`,
     });
   }

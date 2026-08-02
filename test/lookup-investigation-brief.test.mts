@@ -77,6 +77,7 @@ const quality: LookupEvidenceQualityMatrix = {
     label: 'HTTP',
     category: 'web',
     endpointClass: 'Bounded HTTP collection',
+    description: 'A bounded homepage request.',
     state: 'partial',
     statusLabel: 'Partial',
     truncated: true,

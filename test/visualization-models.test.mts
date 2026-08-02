@@ -131,6 +131,20 @@ describe('bounded visualization models', () => {
     assert.ok(projected.ticks.every((tick) => Number.isFinite(tick.x)));
   });
 
+  test('distinguishes the longest branch from the branch that settled last', () => {
+    const projected = projectCollectionTiming([
+      { source: 'registry', durationMs: 400, completedAfterMs: 400, outcome: 'fulfilled' },
+      { source: 'whois', durationMs: 250, completedAfterMs: 900, outcome: 'rejected' },
+      { source: 'domain-evidence', durationMs: 700, completedAfterMs: 850, outcome: 'fulfilled' },
+    ], 920);
+
+    assert.equal(projected.longestSource?.label, 'domain-evidence');
+    assert.equal(projected.longestSource?.durationMs, 700);
+    assert.equal(projected.lastSettledSource?.label, 'whois');
+    assert.equal(projected.lastSettledSource?.completedAfterMs, 900);
+    assert.equal(projected.requestErrorCount, 1);
+  });
+
   test('bounds signed score factors around a shared zero axis', () => {
     const projected = projectScoreFactors([
       { label: 'Positive', delta: 18 },
@@ -186,13 +200,20 @@ describe('bounded visualization models', () => {
 
     assert.equal(first.nodes.length, MAX_FORCE_GRAPH_NODES);
     assert.equal(first.links.length, MAX_FORCE_GRAPH_LINKS);
+    assert.equal(first.omittedNodeInputs, 4);
+    assert.equal(first.omittedLinkInputs, 8);
     assert.equal(first.truncated, true);
     assert.deepEqual(first, second);
     assert.deepEqual({ nodes, links }, original);
-    assert.ok(first.nodes.every((node) => node.x >= 48 && node.x <= 852 && node.y >= 38 && node.y <= 402));
+    assert.ok(first.nodes.every((node) =>
+      node.x >= 38 && node.x <= first.width - 38
+      && node.y >= 28 && node.y <= first.height - 52));
+    assert.ok(first.clusters.some((cluster) => cluster.label === 'Domains and hosts'));
+    assert.ok(first.nodes.every((node) =>
+      node.labelLines.join('').replaceAll(' ', '') === node.label.replaceAll(' ', '')));
   });
 
-  test('normalizes relationship kinds and rejects duplicate link keys', () => {
+  test('bounds relationship states and rejects duplicate link keys', () => {
     const projected = projectBoundedForceGraph([
       { id: 'target', label: 'Target', kind: 'Target Node' },
       { id: 'source', label: 'Source', kind: 'External Source' },
@@ -203,8 +224,108 @@ describe('bounded visualization models', () => {
 
     assert.deepEqual(projected.nodes.map((node) => node.kind), ['external-source', 'target-node']);
     assert.equal(projected.links.length, 1);
-    assert.equal(projected.links[0]?.kind, 'derived-finding');
+    assert.equal(projected.links[0]?.kind, 'unknown');
+    assert.equal(projected.omittedNodeInputs, 0);
+    assert.equal(projected.omittedLinkInputs, 1);
     assert.equal(projected.truncated, true);
+  });
+
+  test('clusters a busy target map without boundary coordinate piles or shortened labels', () => {
+    const nodes: ForceGraphNodeInput[] = [
+      { id: 'target', label: 'reviewed-example.test', kind: 'target' },
+      ...Array.from({ length: 10 }, (_, index) => ({
+        id: `address-${index}`,
+        label: `2001:db8:abcd:${index}::1234`,
+        kind: 'address',
+      })),
+      ...Array.from({ length: 5 }, (_, index) => ({
+        id: `identity-${index}`,
+        label: `Reviewed publisher identity ${index + 1}`,
+        kind: 'identity',
+      })),
+      ...Array.from({ length: 4 }, (_, index) => ({
+        id: `certificate-${index}`,
+        label: `Certificate observation ${index + 1}`,
+        kind: 'certificate',
+      })),
+    ];
+    const links: ForceGraphLinkInput[] = nodes.slice(1).map((node, index) => ({
+      id: `target-link-${index}`,
+      source: 'target',
+      target: node.id,
+      kind: index % 4 === 0 ? 'derived' : 'observed',
+    }));
+    const projected = projectBoundedForceGraph(nodes, links, { focusNodeId: 'target' });
+
+    assert.equal(projected.nodes.length, nodes.length);
+    assert.equal(projected.clusters.length, 3);
+    assert.deepEqual(projected.nodes.find((node) => node.id === 'target')?.labelLines, ['reviewed-example.', 'test']);
+    assert.equal(new Set(projected.nodes.map((node) => `${Math.round(node.x)}:${Math.round(node.y)}`)).size, nodes.length);
+    assert.ok(projected.height > 480);
+    for (const [leftIndex, left] of projected.nodes.entries()) {
+      const leftBounds = left.kind === 'target'
+        ? {
+            left: left.x - (left.labelWidth + 20) / 2,
+            right: left.x + (left.labelWidth + 20) / 2,
+            top: left.y - (left.labelLines.length * 13 + 17) / 2,
+            bottom: left.y + (left.labelLines.length * 13 + 17) / 2,
+          }
+        : {
+            left: left.x - Math.max(20, left.labelWidth / 2),
+            right: left.x + Math.max(20, left.labelWidth / 2),
+            top: left.y + 25,
+            bottom: left.y + 33 + left.labelLines.length * 13,
+          };
+      for (const right of projected.nodes.slice(leftIndex + 1)) {
+        const rightBounds = right.kind === 'target'
+          ? {
+              left: right.x - (right.labelWidth + 20) / 2,
+              right: right.x + (right.labelWidth + 20) / 2,
+              top: right.y - (right.labelLines.length * 13 + 17) / 2,
+              bottom: right.y + (right.labelLines.length * 13 + 17) / 2,
+            }
+          : {
+              left: right.x - Math.max(20, right.labelWidth / 2),
+              right: right.x + Math.max(20, right.labelWidth / 2),
+              top: right.y + 25,
+              bottom: right.y + 33 + right.labelLines.length * 13,
+            };
+        assert.equal(
+          leftBounds.left < rightBounds.right
+            && leftBounds.right > rightBounds.left
+            && leftBounds.top < rightBounds.bottom
+            && leftBounds.bottom > rightBounds.top,
+          false,
+          `${left.id} should not overlap ${right.id}`,
+        );
+      }
+    }
+  });
+
+  test('keeps evidence-family colour slots stable across different graph subsets', () => {
+    const target = { id: 'target', label: 'reviewed-example.test', kind: 'target' };
+    const network = { id: 'address', label: '192.0.2.40', kind: 'address' };
+    const certificate = { id: 'certificate', label: 'Certificate observation', kind: 'certificate' };
+    const complete = projectBoundedForceGraph([target, network, certificate], [
+      { id: 'network-link', source: 'target', target: 'address' },
+      { id: 'certificate-link', source: 'target', target: 'certificate' },
+    ], { focusNodeId: 'target' });
+    const networkOnly = projectBoundedForceGraph([target, network], [
+      { id: 'network-link', source: 'target', target: 'address' },
+    ], { focusNodeId: 'target' });
+
+    assert.equal(
+      complete.clusters.find((cluster) => cluster.id === 'network')?.index,
+      networkOnly.clusters.find((cluster) => cluster.id === 'network')?.index,
+    );
+    assert.equal(
+      complete.nodes.find((node) => node.id === 'address')?.clusterIndex,
+      networkOnly.nodes.find((node) => node.id === 'address')?.clusterIndex,
+    );
+    assert.notEqual(
+      complete.clusters.find((cluster) => cluster.id === 'network')?.index,
+      complete.clusters.find((cluster) => cluster.id === 'certificate')?.index,
+    );
   });
 
   test('projects capped defensive-coverage bars while preserving exact counts', () => {
@@ -238,6 +359,13 @@ describe('bounded visualization models', () => {
     assert.equal(projected.points.length, MAX_TREND_POINTS);
     assert.equal(projected.truncated, true);
     assert.equal(requiredValue(projected.points.at(-1)).total, 28);
+    assert.deepEqual(projected.summary, {
+      firstTotal: 5,
+      latestTotal: 28,
+      peakTotal: 28,
+      newlyObserved: 24,
+      partialChecks: 1,
+    });
   });
 
   test('caps retained-monitor events and evidence lanes without erasing zero-change cells', () => {

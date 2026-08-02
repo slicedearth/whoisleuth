@@ -25,10 +25,17 @@ test('the registry-support catalogue filters locally and retains explicit interp
 
   await page.goto('/registry-support');
 
-  await expect(page.getByText('Catalogue v26')).toBeVisible();
-  await expect(page.locator('.summary-grid article').filter({ hasText: 'Explicit suffixes' }).locator('strong')).toHaveText('312');
+  await expect(page.getByText('Catalogue v27')).toBeVisible();
+  await expect(page.locator('.summary-grid article').filter({ hasText: 'Explicit suffixes' }).locator('strong')).toHaveText('335');
   await expect(page.locator('.catalogue-section tbody tr')).toHaveCount(50);
-  await expect(page.locator('.result-count')).toContainText('Showing 1–50 of 312 matching profiles (312 total)');
+  await expect(page.locator('.result-count')).toContainText('Showing 1–50 of 335 matching profiles (335 total)');
+  await page.locator('#service-filter').selectOption('rdap_only');
+  await expect(page.locator('.catalogue-section tbody tr')).toHaveCount(25);
+  await expect(page.locator('.result-count')).toContainText('Showing 1–25 of 25 matching profiles (335 total)');
+  await page.getByText('Review DEV profile').click();
+  await expect(page.locator('.catalogue-section tbody tr').filter({ hasText: '.dev' }).locator('a[target="_blank"]')).toHaveCount(1);
+  await page.locator('#service-filter').selectOption('all');
+  await expect(page.locator('.catalogue-section tbody tr')).toHaveCount(50);
   const standards = page.getByRole('region', { name: 'Generic TLD RDAP snapshot' });
   await expect(standards).toContainText('1114 / 1114');
   await expect(standards).toContainText('12 / 14');
@@ -65,21 +72,35 @@ test('the registry-support catalogue filters locally and retains explicit interp
   await search.clear();
   await page.locator('#coverage-filter').selectOption('access_documented');
   await expect(page.locator('.catalogue-section tbody tr')).toHaveCount(50);
-  await expect(page.locator('.result-count')).toContainText('Showing 1–50 of 94 matching profiles (312 total)');
+  await expect(page.locator('.result-count')).toContainText('Showing 1–50 of 117 matching profiles (335 total)');
   await expect(page.locator('.catalogue-section tbody')).toContainText('.ao');
   await expect(page.locator('.catalogue-section tbody')).toContainText('.ch');
   await expect(page.locator('.catalogue-section tbody')).toContainText('.es');
   await expect(page.locator('.catalogue-section tbody')).toContainText('.gr');
   await expect(page.locator('.catalogue-section tbody')).toContainText('.arpa');
   await page.getByRole('button', { name: 'Next' }).click();
-  await expect(page.locator('.catalogue-section tbody tr')).toHaveCount(44);
-  await expect(page.locator('.result-count')).toContainText('Showing 51–94 of 94 matching profiles (312 total)');
+  await expect(page.locator('.catalogue-section tbody tr')).toHaveCount(50);
+  await expect(page.locator('.result-count')).toContainText('Showing 51–100 of 117 matching profiles (335 total)');
   await expect(page.locator('.catalogue-section tbody')).toContainText('.mil');
   await expect(page.locator('.catalogue-section tbody')).toContainText('.vn');
+  await page.getByRole('button', { name: 'Next' }).click();
+  await expect(page.locator('.catalogue-section tbody tr')).toHaveCount(17);
+  await expect(page.locator('.result-count')).toContainText('Showing 101–117 of 117 matching profiles (335 total)');
+  await expect(page.locator('.catalogue-section tbody')).toContainText('.zip');
   await expect(page.locator('.catalogue-section tbody')).toContainText('.zw');
 
   await search.fill('no matching capability');
   await expect(page.getByRole('heading', { name: 'No matching profiles' })).toBeVisible();
+  await expect(page.getByText('2 refinements active')).toBeVisible();
+  await page.getByRole('button', { name: 'Reset view' }).click();
+  await expect(search).toHaveValue('');
+  await expect(page.locator('#coverage-filter')).toHaveValue('all');
+  await expect(page.locator('#service-filter')).toHaveValue('all');
+  await expect(page.locator('#registry-sort')).toHaveValue('suffix');
+  await expect(page.locator('#registry-sort-direction')).toHaveValue('asc');
+  await expect(page.locator('.catalogue-section tbody tr')).toHaveCount(50);
+  await expect(page.getByText('Default view')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Reset view' })).toBeDisabled();
   await expect(page.getByRole('heading', { name: 'Coverage is not live registry status.' })).toBeVisible();
   expect(unexpectedApiRequests).toEqual([]);
 });
@@ -129,6 +150,12 @@ test('the local inspector explains explicit and generic suffix support without a
   await inspectButton.click();
   await expect(result).toContainText('Explicit suffix profile');
   await expect(result).toContainText('.uk');
+  await page.getByRole('link', { name: 'Show in catalogue' }).click();
+  await expect(page).toHaveURL(/#registry-catalogue$/u);
+  await expect(page.getByLabel('Suffix or capability')).toHaveValue('uk');
+  await expect(page.locator('.catalogue-section tbody tr')).toHaveCount(1);
+  await expect(page.locator('.catalogue-section tbody tr')).toContainText('.uk');
+  await expect(page.getByText('1 refinement active')).toBeVisible();
 
   await input.fill('https://example.invalid/path');
   await inspectButton.click();
@@ -202,8 +229,11 @@ test('the registry-support reference remains readable without horizontal overflo
 
   await expect(page.getByLabel('Suffix or capability')).toBeVisible();
   await expect(page.locator('#coverage-filter')).toBeVisible();
+  await expect(page.locator('#service-filter')).toBeVisible();
   await page.getByLabel('Suffix or capability').fill('vn');
   await expect(page.locator('.catalogue-section tbody tr')).toHaveCount(1);
+  await expect(page.getByText('1 refinement active')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Reset view' })).toBeVisible();
   await expectNoHorizontalOverflow(page);
 });
 

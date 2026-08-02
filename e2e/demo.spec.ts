@@ -36,6 +36,26 @@ test('completes the public synthetic workflow without investigation requests or 
   await page.getByRole('button', { name: 'Load related domains' }).click();
   await expect(page.locator('.relationship-glyph svg')).toHaveAttribute('data-icon', 'nameserver');
   await expect(page.getByRole('img', { name: /Shared evidence relationships/u })).toBeVisible();
+  const relationshipMap = page.locator('.relationship-map');
+  await expect(relationshipMap.locator('.cluster-legend')).toBeVisible();
+  await expect(relationshipMap.locator('.cluster-legend li')).toHaveCount(2);
+  await expect(relationshipMap.locator('.map-summary')).toContainText('facts');
+  await expect(relationshipMap.locator('.map-summary')).toContainText('links');
+  expect(await relationshipMap.locator('.map-frame').evaluate((element) => (
+    element.scrollWidth <= element.clientWidth + 1
+  ))).toBe(true);
+  const firstEvidenceGroup = relationshipMap.locator('.cluster-legend button').first();
+  await firstEvidenceGroup.click();
+  await expect(firstEvidenceGroup).toHaveAttribute('aria-pressed', 'true');
+  await expect(relationshipMap.locator('.focus-note')).toBeVisible();
+  await expect(relationshipMap.locator('.node.muted')).not.toHaveCount(0);
+  await firstEvidenceGroup.click();
+  await expect(firstEvidenceGroup).toHaveAttribute('aria-pressed', 'false');
+  await expect(relationshipMap.locator('.node.muted')).toHaveCount(0);
+  await expect(relationshipMap.getByRole('group', { name: 'Relationship evidence filter' })).toHaveCount(0);
+  await expect(relationshipMap.locator('.links path')).not.toHaveCount(0);
+  await expect(relationshipMap.locator('.links path.muted')).toHaveCount(0);
+  await expect(relationshipMap.getByRole('button', { name: 'Reset visual filters' })).toHaveCount(0);
   await expect(page.locator('.candidate')).toHaveCount(2);
   await page.getByRole('button', { name: 'All candidates · 3' }).click();
   await page.getByRole('button', { name: 'High priority · 1' }).click();
@@ -61,6 +81,10 @@ test('completes the public synthetic workflow without investigation requests or 
   await expect(page.locator('.certificate-shape')).not.toHaveCount(0);
   await expect(page.locator('.observation-shape')).not.toHaveCount(0);
   await expect(page.getByRole('img', { name: 'Overlapping collection timing for 4 source branches' })).toBeVisible();
+  const timingSummary = page.locator('.timing-summary');
+  await expect(timingSummary).toContainText('Domain evidence');
+  await expect(timingSummary).toContainText('Network context');
+  await expect(timingSummary).toContainText('None observed');
   const agreementPlot = page.getByRole('img', { name: 'Registration agreement plot with 3 fields' });
   await expect(agreementPlot).toBeVisible();
   await expect(agreementPlot.locator('.agreement-track')).toHaveCount(3);

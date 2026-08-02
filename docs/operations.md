@@ -238,6 +238,15 @@ Bulk makes one compact `/api/lookup` call per domain with bounded browser
 concurrency. It does not hold one serverless invocation open for the complete
 list.
 
+Static HTML receives a deployment-wide response-header Content Security Policy
+before parsing begins. SvelteKit also emits a stricter hash-restricted meta
+policy for each prerendered page; browsers enforce both policies. The response
+policy deliberately permits inline script and style so it remains compatible
+with generated static pages, while the per-page policy restricts scripts to
+the generated hash. Both policies keep network, object, form, base, image, and
+font sources bounded, and the response policy additionally denies framing.
+Express and direct JSON functions emit the same baseline response policy.
+
 ## Deployment self-check
 
 Run:

@@ -158,12 +158,18 @@ test('deep lookup reports pending elapsed time and final source settle timing', 
   await expect(coverage).toContainText('700 ms');
   await expect(coverage).toContainText('Request error');
   await expect(coverage).toContainText('WHOIS');
+  await expect(coverage).toContainText('A bounded homepage request covering redirects, response metadata, and a capped body prefix.');
   await expect(coverage).toContainText('2.0 s');
   const diagnostics = coverage.locator('details.timing-detail');
   await expect(diagnostics).not.toHaveAttribute('open', '');
   await diagnostics.getByText('Request diagnostics', { exact: true }).click();
   await expect(diagnostics.getByRole('heading', { name: 'Collection timing' })).toBeVisible();
   await expect(diagnostics.getByRole('img', { name: 'Overlapping collection timing for 3 source branches' })).toBeVisible();
+  const timingSummary = diagnostics.locator('.timing-summary');
+  await expect(timingSummary).toContainText('Longest branch');
+  await expect(timingSummary).toContainText('Domain evidence');
+  await expect(timingSummary).toContainText('Request errors');
+  await expect(timingSummary).toContainText('1 branch');
   await page.setViewportSize({ width: 320, height: 720 });
   await expect(diagnostics.locator('svg')).toBeHidden();
   await expect(diagnostics.locator('.mobile-timing')).toBeVisible();

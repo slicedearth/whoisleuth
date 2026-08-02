@@ -57,6 +57,7 @@
               <small>{entry.category}</small>
               <strong>{entry.label}</strong>
               <span class="endpoint">{entry.endpointClass}</span>
+              <span class="description">{entry.description}</span>
               {#if entry.refreshAvailable}<span class="refresh">Refresh available</span>{/if}
             </div>
             <div role="cell">
@@ -122,7 +123,8 @@
   .source small,.observed small,.timing small{color:var(--muted);font:var(--text-2xs) var(--mono)}
   .source small{text-transform:uppercase}
   .source strong{overflow-wrap:anywhere;font-size:var(--text-xs)}
-  .endpoint{color:var(--muted);font-size:var(--text-2xs);line-height:1.4;overflow-wrap:anywhere}
+  .endpoint{color:var(--muted);font:650 var(--text-2xs) var(--mono);line-height:1.4;overflow-wrap:anywhere}
+  .description{margin-top:3px;color:var(--muted);font-size:var(--text-2xs);line-height:1.45;overflow-wrap:anywhere}
   .refresh{width:max-content;margin-top:3px;color:var(--accent);font:650 var(--text-2xs) var(--mono)}
   .state{display:inline-flex;width:max-content;max-width:100%;padding:3px 6px;border:1px solid var(--border);border-radius:999px;color:var(--muted);font:650 var(--text-2xs) var(--mono)}
   .state-complete{border-color:color-mix(in srgb,var(--accent) 42%,var(--border));color:var(--accent)}

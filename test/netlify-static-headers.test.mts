@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
+import { HTTP_BASELINE_CONTENT_SECURITY_POLICY } from '../lib/security-headers.mts';
+
 function headerRules(source: string): string[] {
   return source
     .split('[[headers]]')
@@ -34,4 +36,10 @@ test('prerendered responses resist edge script injection without weakening immut
     requiredValue(rules[fallbackIndex]),
     /Cache-Control = "public, max-age=0, must-revalidate, no-transform"/,
   );
+  assert.ok(
+    requiredValue(rules[fallbackIndex]).includes(
+      `Content-Security-Policy = "${HTTP_BASELINE_CONTENT_SECURITY_POLICY}"`,
+    ),
+  );
+  assert.doesNotMatch(requiredValue(rules[immutableIndex]), /Content-Security-Policy/);
 });

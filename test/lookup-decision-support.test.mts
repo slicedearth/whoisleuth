@@ -109,6 +109,44 @@ test('decision support keeps conflicts separate from incomplete source compariso
   assert.ok(support.actions.some((action) => action.id === 'review-refresh-options'));
 });
 
+test('decision support does not turn an unsupported WHOIS service into incident uncertainty', () => {
+  const support = buildLookupDecisionSupport({
+    task: 'incident',
+    coverage: {
+      ...coverage,
+      entries: coverage.entries.map((entry) => entry.id === 'whois'
+        ? {
+            ...entry,
+            state: 'unsupported',
+            statusLabel: 'Unsupported',
+            limitations: ['IANA publishes an RDAP service but no domain WHOIS referral.'],
+            manualReviewSuggested: false,
+          }
+        : entry),
+      counts: { ...coverage.counts, partial: 0, unsupported: 1 },
+      limitedCount: 0,
+    },
+    refreshPlan: { ...refreshPlan, items: [] },
+    registryComparison: {
+      sourceHealth: {
+        rdap: { status: 'success', condition: 'complete' },
+        whois: { status: 'unsupported', condition: 'unavailable' },
+      },
+      fields: [{
+        label: 'Registrar',
+        status: 'whois_unavailable',
+        rdapDisplay: 'Example Registrar',
+        whoisDisplay: 'Unsupported by source',
+      }],
+    },
+    registrarPublicationComparison: { fields: [] },
+  });
+
+  assert.equal(support.counts.uncertainties, 0);
+  assert.equal(support.entries.some((entry) => entry.sources.includes('WHOIS')), false);
+  assert.equal(support.actions.some((action) => action.id === 'inspect-limited-source'), false);
+});
+
 test('identity inconsistencies are bounded review leads with direct evidence links', () => {
   const support = buildLookupDecisionSupport({
     task: 'brand',
@@ -193,6 +231,14 @@ test('quality matrix joins coverage, timing, freshness, refresh, and downstream 
   assert.equal(matrix.entries.find((entry) => entry.id === 'rdap')?.observedAt, '2026-07-30T00:00:00.000Z');
   assert.equal(matrix.entries.find((entry) => entry.id === 'whois')?.refreshAvailable, true);
   assert.equal(matrix.entries.find((entry) => entry.id === 'rdap')?.endpointClass, 'Authoritative registry endpoint');
+  assert.match(
+    matrix.entries.find((entry) => entry.id === 'rdap')?.description ?? '',
+    /Structured registration data/u,
+  );
+  assert.match(
+    matrix.entries.find((entry) => entry.id === 'http')?.description ?? '',
+    /bounded homepage request/ui,
+  );
   assert.equal(matrix.entries.find((entry) => entry.id === 'rdap')?.truncated, false);
   assert.deepEqual(matrix.entries.find((entry) => entry.id === 'rdap')?.supports, [
     'Registration summary',

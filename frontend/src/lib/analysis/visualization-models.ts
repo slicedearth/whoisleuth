@@ -1,38 +1,52 @@
 import { scaleBand, scaleLinear, scalePoint } from 'd3-scale';
 import {
-  forceCenter,
-  forceCollide,
-  forceLink,
-  forceManyBody,
-  forceSimulation,
-  type SimulationLinkDatum,
-  type SimulationNodeDatum,
-} from 'd3-force';
+  boundedVisualizationId as boundedId,
+  boundedVisualizationNumber as boundedNumber,
+  boundedVisualizationText as boundedText,
+  validVisualizationDate as validDate,
+} from './visualization-bounds.ts';
 
-export const MAX_LIFECYCLE_EVENTS = 8;
+export {
+  FORCE_GRAPH_LINK_KINDS,
+  MAX_FORCE_GRAPH_LINKS,
+  MAX_FORCE_GRAPH_NODES,
+  projectBoundedForceGraph,
+} from './visualization-force-graph.ts';
+export type {
+  ForceGraphLinkKind,
+  ForceGraphLinkInput,
+  ForceGraphNodeInput,
+} from './visualization-force-graph.ts';
+export {
+  MAX_VISUAL_MATRIX_COLUMNS,
+  MAX_VISUAL_MATRIX_ROWS,
+  projectEvidenceMatrix,
+} from './visualization-matrix.ts';
+export type {
+  MatrixCellState,
+  MatrixInput,
+} from './visualization-matrix.ts';
+export {
+  MAX_COLLECTION_TIMING_SOURCES,
+  MAX_LIFECYCLE_EVENTS,
+  MAX_TREND_POINTS,
+  projectCollectionTiming,
+  projectLifecycleEvents,
+  projectTrendPoints,
+} from './visualization-time-series.ts';
+export type {
+  CollectionTimingInput,
+  LifecycleEventInput,
+  TrendPointInput,
+} from './visualization-time-series.ts';
+
 export const MAX_REDIRECT_NODES = 9;
 export const MAX_TRIAGE_PLOT_POINTS = 300;
 export const WATCHLIST_ACTIVITY_DAYS = 28;
-export const MAX_COLLECTION_TIMING_SOURCES = 16;
 export const MAX_SCORE_FACTORS = 16;
-export const MAX_VISUAL_MATRIX_ROWS = 24;
-export const MAX_VISUAL_MATRIX_COLUMNS = 6;
-export const MAX_FORCE_GRAPH_NODES = 48;
-export const MAX_FORCE_GRAPH_LINKS = 80;
 export const MAX_COVERAGE_BAR_GROUPS = 18;
-export const MAX_TREND_POINTS = 24;
 export const MAX_MONITOR_TIMELINE_EVENTS = 12;
 export const MAX_MONITOR_TIMELINE_LANES = 6;
-
-type LifecycleKind = 'registry' | 'certificate' | 'observation';
-
-export type LifecycleEventInput = {
-  id: string;
-  label: string;
-  date: string | null | undefined;
-  detail?: string;
-  kind?: LifecycleKind;
-};
 
 export type RedirectInput = {
   status: string;
@@ -56,51 +70,9 @@ export type WatchlistActivityInput = {
   conclusiveCount?: number;
 };
 
-export type CollectionTimingInput = {
-  source: string;
-  durationMs: number;
-  completedAfterMs: number;
-  outcome: string;
-};
-
 export type ScoreFactorInput = {
   label: string;
   delta: number;
-};
-
-export type MatrixCellState =
-  | 'equal'
-  | 'different'
-  | 'conflict'
-  | 'observed'
-  | 'partial'
-  | 'unavailable'
-  | 'not_collected'
-  | 'unknown';
-
-export type MatrixInput = {
-  id: string;
-  label: string;
-  cells: Array<{
-    column: string;
-    state: MatrixCellState | string;
-    detail?: string;
-  }>;
-};
-
-export type ForceGraphNodeInput = {
-  id: string;
-  label: string;
-  kind: string;
-  detail?: string;
-};
-
-export type ForceGraphLinkInput = {
-  id: string;
-  source: string;
-  target: string;
-  kind?: string;
-  detail?: string;
 };
 
 export type CoverageBarInput = {
@@ -110,14 +82,6 @@ export type CoverageBarInput = {
   registered: number;
   available: number;
   unknown: number;
-};
-
-export type TrendPointInput = {
-  id: string;
-  date: string;
-  total: number;
-  added: number;
-  partial?: boolean;
 };
 
 export type MonitorTimelineInput = {
@@ -137,100 +101,10 @@ export type CertificateValidityInput = {
   observedAt?: string | null | undefined;
 };
 
-function boundedText(value: unknown, maxLength: number) {
-  return String(value ?? '')
-    .replace(/[\u0000-\u001f\u007f]/gu, ' ')
-    .replace(/\s+/gu, ' ')
-    .trim()
-    .slice(0, maxLength);
-}
-
-function boundedId(value: unknown) {
-  return boundedText(value, 64)
-    .toLowerCase()
-    .replace(/[^a-z0-9_-]+/gu, '-')
-    .replace(/^-+|-+$/gu, '');
-}
-
-function validDate(value: unknown) {
-  const text = boundedText(value, 64);
-  const milliseconds = Date.parse(text);
-  return Number.isFinite(milliseconds) ? { text: new Date(milliseconds).toISOString(), milliseconds } : null;
-}
-
 function boundedScore(value: unknown) {
   if (value === null || value === undefined || value === '') return null;
   const score = Number(value);
   return Number.isFinite(score) ? Math.max(0, Math.min(100, score)) : null;
-}
-
-function boundedNumber(value: unknown, minimum: number, maximum: number, fallback = 0) {
-  const number = Number(value);
-  return Number.isFinite(number)
-    ? Math.max(minimum, Math.min(maximum, number))
-    : fallback;
-}
-
-function normalizedMatrixState(value: unknown): MatrixCellState {
-  const state = boundedText(value, 30).toLowerCase();
-  if (state === 'equal' || state === 'equivalent' || state === 'same') return 'equal';
-  if (state === 'different') return 'different';
-  if (state === 'conflict' || state === 'conflicting') return 'conflict';
-  if (state === 'observed' || state === 'complete' || state === 'success') return 'observed';
-  if (state === 'partial' || state === 'inconclusive' || state === 'rate_limited' || state === 'missing') return 'partial';
-  if (state === 'unavailable' || state === 'error' || state === 'failed') return 'unavailable';
-  if (state === 'not_collected' || state === 'skipped' || state === 'disabled' || state === 'not_recorded') {
-    return 'not_collected';
-  }
-  return 'unknown';
-}
-
-export function projectLifecycleEvents(rawEvents: readonly LifecycleEventInput[]) {
-  const seen = new Set<string>();
-  const candidates = (Array.isArray(rawEvents) ? rawEvents : [])
-    .map((event) => {
-      const id = boundedId(event?.id);
-      const label = boundedText(event?.label, 40);
-      const date = validDate(event?.date);
-      if (!id || !label || !date) return null;
-      const kind: LifecycleKind = event.kind === 'certificate' || event.kind === 'observation'
-        ? event.kind
-        : 'registry';
-      return {
-        id,
-        label,
-        date: date.text,
-        milliseconds: date.milliseconds,
-        detail: boundedText(event.detail, 100),
-        kind,
-      };
-    })
-    .filter((event): event is NonNullable<typeof event> => Boolean(event))
-    .sort((a, b) => a.milliseconds - b.milliseconds || a.id.localeCompare(b.id))
-    .filter((event) => {
-      if (seen.has(event.id)) return false;
-      seen.add(event.id);
-      return true;
-    });
-  const accepted = candidates.slice(0, MAX_LIFECYCLE_EVENTS);
-  const x = scalePoint<string>()
-    .domain(accepted.map((event) => event.id))
-    .range([70, 830])
-    .padding(accepted.length > 1 ? 0.35 : 0.5);
-  const laneY = [48, 158, 27];
-  const events = accepted.map((event, index) => ({
-    ...event,
-    x: x(event.id) ?? 450,
-    labelY: laneY[index % laneY.length] ?? 102,
-    anchor: index === 0 ? 'start' : index === accepted.length - 1 ? 'end' : 'middle',
-  }));
-  return {
-    width: 900,
-    height: 205,
-    axisY: 102,
-    events,
-    truncated: candidates.length > accepted.length,
-  };
 }
 
 function redirectLabel(value: unknown) {
@@ -428,48 +302,6 @@ export function projectWatchlistActivity(rawEvents: WatchlistActivityInput[]) {
   };
 }
 
-export function projectCollectionTiming(
-  rawSources: readonly CollectionTimingInput[],
-  rawTotalMs: number,
-) {
-  const candidates = (Array.isArray(rawSources) ? rawSources : [])
-    .map((source, index) => {
-      const id = boundedId(source?.source) || `source-${index}`;
-      const durationMs = boundedNumber(source?.durationMs, 0, 300_000);
-      const completedAfterMs = boundedNumber(source?.completedAfterMs, 0, 300_000);
-      return {
-        id,
-        label: boundedText(source?.source, 48) || `Source ${index + 1}`,
-        outcome: boundedText(source?.outcome, 24).toLowerCase() || 'unknown',
-        durationMs,
-        completedAfterMs,
-        startedAfterMs: Math.max(0, completedAfterMs - durationMs),
-      };
-    })
-    .sort((a, b) => a.completedAfterMs - b.completedAfterMs || a.id.localeCompare(b.id));
-  const sources = candidates.slice(0, MAX_COLLECTION_TIMING_SOURCES);
-  const totalMs = Math.max(
-    1,
-    boundedNumber(rawTotalMs, 0, 300_000),
-    ...sources.map((source) => source.completedAfterMs),
-  );
-  const x = scaleLinear().domain([0, totalMs]).range([190, 860]).clamp(true);
-  const rowHeight = 30;
-  return {
-    width: 900,
-    height: Math.max(92, 50 + sources.length * rowHeight),
-    totalMs,
-    ticks: x.ticks(5).map((value) => ({ value, x: x(value) })),
-    sources: sources.map((source, index) => ({
-      ...source,
-      x: x(source.startedAfterMs),
-      width: Math.max(3, x(source.completedAfterMs) - x(source.startedAfterMs)),
-      y: 30 + index * rowHeight,
-    })),
-    truncated: candidates.length > sources.length,
-  };
-}
-
 export function projectScoreFactors(rawFactors: readonly ScoreFactorInput[]) {
   const candidates = (Array.isArray(rawFactors) ? rawFactors : [])
     .map((factor, index) => ({
@@ -498,188 +330,6 @@ export function projectScoreFactors(rawFactors: readonly ScoreFactorInput[]) {
       };
     }),
     truncated: candidates.length > factors.length,
-  };
-}
-
-export function projectEvidenceMatrix(
-  rawColumns: readonly string[],
-  rawRows: readonly MatrixInput[],
-) {
-  const columns = [...new Set((Array.isArray(rawColumns) ? rawColumns : [])
-    .map((column) => boundedText(column, 40))
-    .filter(Boolean))]
-    .slice(0, MAX_VISUAL_MATRIX_COLUMNS);
-  const columnSet = new Set(columns);
-  const seenRows = new Set<string>();
-  const candidates = (Array.isArray(rawRows) ? rawRows : [])
-    .map((row, index) => {
-      const id = boundedId(row?.id) || `row-${index}`;
-      const label = boundedText(row?.label, 56);
-      if (!label || seenRows.has(id)) return null;
-      seenRows.add(id);
-      const rowCells = (Array.isArray(row.cells) ? row.cells : []) as MatrixInput['cells'];
-      const byColumn = new Map(rowCells
-        .map((cell) => {
-          const column = boundedText(cell?.column, 40);
-          return [column, {
-            state: normalizedMatrixState(cell?.state),
-            detail: boundedText(cell?.detail, 120),
-          }] as const;
-        })
-        .filter(([column]) => columnSet.has(column)));
-      return {
-        id,
-        label,
-        cells: columns.map((column) => ({
-          column,
-          state: byColumn.get(column)?.state ?? 'not_collected',
-          detail: byColumn.get(column)?.detail ?? '',
-        })),
-      };
-    })
-    .filter((row): row is NonNullable<typeof row> => Boolean(row));
-  const rows = candidates.slice(0, MAX_VISUAL_MATRIX_ROWS);
-  const width = 900;
-  const top = 54;
-  const left = 210;
-  const rowHeight = 30;
-  const x = scaleBand<string>().domain(columns).range([left, 870]).padding(0.12);
-  const y = scaleBand<string>().domain(rows.map((row) => row.id))
-    .range([top, top + Math.max(1, rows.length) * rowHeight])
-    .padding(0.12);
-  return {
-    width,
-    height: Math.max(104, top + rows.length * rowHeight + 22),
-    columns: columns.map((column) => ({
-      label: column,
-      x: x(column) ?? left,
-      width: x.bandwidth(),
-    })),
-    rows: rows.map((row) => ({
-      ...row,
-      y: y(row.id) ?? top,
-      height: y.bandwidth(),
-      cells: row.cells.map((cell) => ({
-        ...cell,
-        x: x(cell.column) ?? left,
-        width: x.bandwidth(),
-      })),
-    })),
-    truncated: candidates.length > rows.length || rawColumns.length > columns.length,
-  };
-}
-
-type ProjectedForceNode = SimulationNodeDatum & {
-  id: string;
-  label: string;
-  kind: string;
-  detail: string;
-  x: number;
-  y: number;
-};
-
-type ProjectedForceLink = SimulationLinkDatum<ProjectedForceNode> & {
-  id: string;
-  source: string | ProjectedForceNode;
-  target: string | ProjectedForceNode;
-  kind: string;
-  detail: string;
-};
-
-export function projectBoundedForceGraph(
-  rawNodes: readonly ForceGraphNodeInput[],
-  rawLinks: readonly ForceGraphLinkInput[],
-) {
-  const rawNodeCount = Array.isArray(rawNodes) ? rawNodes.length : 0;
-  const rawLinkCount = Array.isArray(rawLinks) ? rawLinks.length : 0;
-  const seen = new Set<string>();
-  const candidates = (Array.isArray(rawNodes) ? rawNodes : [])
-    .slice(0, MAX_FORCE_GRAPH_NODES * 2)
-    .map((node, index) => {
-      const id = boundedText(node?.id, 80);
-      const label = boundedText(node?.label, 64);
-      if (!id || !label || seen.has(id)) return null;
-      seen.add(id);
-      return {
-        id,
-        label,
-        kind: boundedId(node?.kind) || 'evidence',
-        detail: boundedText(node?.detail, 100),
-        x: 0,
-        y: 0,
-      } satisfies ProjectedForceNode;
-    })
-    .filter((node): node is ProjectedForceNode => Boolean(node))
-    .sort((a, b) => a.id.localeCompare(b.id));
-  const nodes = candidates.slice(0, MAX_FORCE_GRAPH_NODES);
-  const nodeIds = new Set(nodes.map((node) => node.id));
-  const seenLinks = new Set<string>();
-  const links = (Array.isArray(rawLinks) ? rawLinks : [])
-    .slice(0, MAX_FORCE_GRAPH_LINKS * 2)
-    .map((link, index) => ({
-      id: boundedText(link?.id, 80) || `link-${index}`,
-      source: boundedText(link?.source, 80),
-      target: boundedText(link?.target, 80),
-      kind: boundedId(link?.kind) || 'observed',
-      detail: boundedText(link?.detail, 100),
-    }))
-    .filter((link) => {
-      if (
-        link.source === link.target
-        || !nodeIds.has(link.source)
-        || !nodeIds.has(link.target)
-        || seenLinks.has(link.id)
-      ) {
-        return false;
-      }
-      seenLinks.add(link.id);
-      return true;
-    })
-    .sort((a, b) => a.id.localeCompare(b.id))
-    .slice(0, MAX_FORCE_GRAPH_LINKS) satisfies ProjectedForceLink[];
-
-  if (nodes.length) {
-    const simulation = forceSimulation(nodes)
-      .force('link', forceLink<ProjectedForceNode, ProjectedForceLink>(links)
-        .id((node) => node.id)
-        .distance((link) => link.kind === 'derived' ? 110 : 90)
-        .strength(0.7))
-      .force('charge', forceManyBody().strength(-210))
-      .force('center', forceCenter(450, 220))
-      .force('collide', forceCollide<ProjectedForceNode>()
-        .radius((node) => node.kind === 'target' ? 50 : node.kind === 'domain' ? 34 : 30)
-        .iterations(2))
-      .stop();
-    simulation.tick(220);
-    for (const node of nodes) {
-      node.x = Math.max(48, Math.min(852, Number(node.x) || 450));
-      node.y = Math.max(38, Math.min(402, Number(node.y) || 220));
-    }
-  }
-
-  const projectedLinks = links.flatMap((link) => {
-    const source = typeof link.source === 'string' ? nodes.find((node) => node.id === link.source) : link.source;
-    const target = typeof link.target === 'string' ? nodes.find((node) => node.id === link.target) : link.target;
-    return source && target ? [{
-      id: link.id,
-      sourceId: source.id,
-      targetId: target.id,
-      sourceX: source.x,
-      sourceY: source.y,
-      targetX: target.x,
-      targetY: target.y,
-      kind: link.kind,
-      detail: link.detail,
-    }] : [];
-  });
-  return {
-    width: 900,
-    height: 440,
-    nodes: nodes.map(({ id, label, kind, detail, x, y }) => ({ id, label, kind, detail, x, y })),
-    links: projectedLinks,
-    truncated: rawNodeCount > candidates.length
-      || candidates.length > nodes.length
-      || rawLinkCount > links.length,
   };
 }
 
@@ -724,44 +374,6 @@ export function projectCoverageBars(rawGroups: readonly CoverageBarInput[]) {
       return { ...group, y: 20 + index * rowHeight, segments };
     }),
     truncated: candidates.length > groups.length,
-  };
-}
-
-export function projectTrendPoints(rawPoints: readonly TrendPointInput[]) {
-  const seen = new Set<string>();
-  const candidates = (Array.isArray(rawPoints) ? rawPoints : [])
-    .map((point, index) => {
-      const date = validDate(point?.date);
-      const id = boundedId(point?.id) || `point-${index}`;
-      if (!date || seen.has(id)) return null;
-      seen.add(id);
-      return {
-        id,
-        date: date.text,
-        milliseconds: date.milliseconds,
-        total: Math.trunc(boundedNumber(point?.total, 0, 100_000)),
-        added: Math.trunc(boundedNumber(point?.added, 0, 100_000)),
-        partial: Boolean(point?.partial),
-      };
-    })
-    .filter((point): point is NonNullable<typeof point> => Boolean(point))
-    .sort((a, b) => a.milliseconds - b.milliseconds || a.id.localeCompare(b.id));
-  const points = candidates.slice(-MAX_TREND_POINTS);
-  const x = scalePoint<string>().domain(points.map((point) => point.id)).range([64, 850]).padding(0.45);
-  const maximum = Math.max(1, ...points.map((point) => point.total));
-  const y = scaleLinear().domain([0, maximum]).range([190, 24]).nice().clamp(true);
-  return {
-    width: 900,
-    height: 225,
-    maximum,
-    ticks: y.ticks(4).map((value) => ({ value, y: y(value) })),
-    points: points.map((point) => ({
-      ...point,
-      x: x(point.id) ?? 450,
-      y: y(point.total),
-      addedY: y(point.added),
-    })),
-    truncated: candidates.length > points.length,
   };
 }
 

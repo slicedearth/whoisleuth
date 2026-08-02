@@ -346,9 +346,10 @@ test('registrar RDAP unsupported and error states remain neutral source rows', a
 test('registry access constraints remain neutral, explicit, and mobile-safe', async ({ page }) => {
   await page.route('**/api/lookup?*', async (route) => {
     const query = new URL(route.request().url()).searchParams.get('q') || '';
-    const suffix = query.endsWith('.vn') ? 'vn' : query.endsWith('.ch') ? 'ch' : 'es';
+    const suffix = query.endsWith('.vn') ? 'vn' : query.endsWith('.ch') ? 'ch' : query.endsWith('.dev') ? 'dev' : 'es';
     const isEs = suffix === 'es';
     const isCh = suffix === 'ch';
+    const isDev = suffix === 'dev';
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -364,14 +365,16 @@ test('registry access constraints remain neutral, explicit, and mobile-safe', as
             whoisAccessProfile: isEs
               ? 'source-ip-authorization-required'
               : isCh ? 'registry-policy-restricted' : 'no-iana-service',
-            rdapAccessProfile: 'no-iana-service', authority: 'context_only',
+            rdapAccessProfile: isDev ? 'iana-bootstrap' : 'no-iana-service', authority: 'context_only',
             limitation: isEs
               ? 'The registry WHOIS service requires advance source-IP authorization. A failed or unavailable query is not evidence that the domain is unregistered.'
               : isCh
                 ? 'The registry may restrict ordinary port-43 clients and direct them to its official lookup. Its non-standard-port Domain Check is not integrated, and IANA publishes no RDAP service. Missing registry data is not evidence that the domain is unregistered.'
-                : 'IANA publishes no domain WHOIS or RDAP service for this suffix. The official browser lookup is not integrated, and missing registry data is not evidence that the domain is unregistered.',
+                : isDev
+                  ? 'IANA publishes an RDAP bootstrap service but no domain WHOIS referral for this suffix. Missing WHOIS data is contextual only and is not evidence that the domain is unregistered.'
+                  : 'IANA publishes no domain WHOIS or RDAP service for this suffix. The official browser lookup is not integrated, and missing registry data is not evidence that the domain is unregistered.',
           },
-          rdap: { status: 'unsupported' }, whois: { status: 'partial' }, availability: { status: 'complete' },
+          rdap: { status: isDev ? 'success' : 'unsupported' }, whois: { status: isDev ? 'unsupported' : 'partial' }, availability: { status: 'complete' },
         },
       }),
     });
@@ -394,9 +397,16 @@ test('registry access constraints remain neutral, explicit, and mobile-safe', as
   await page.locator('#query').fill('example.vn');
   await page.getByRole('button', { name: 'Run lookup' }).click();
   const vnNotice = page.getByRole('region', { name: '.VN collection constraints' });
-  await expect(vnNotice.getByText('Service not published')).toBeVisible();
+  await expect(vnNotice.getByText('No IANA service')).toBeVisible();
   await expect(vnNotice.getByText('No service published by IANA')).toHaveCount(2);
   await expect(vnNotice.getByText(/official browser lookup is not integrated/i)).toBeVisible();
+
+  await page.locator('#query').fill('example.dev');
+  await page.getByRole('button', { name: 'Run lookup' }).click();
+  const devNotice = page.getByRole('region', { name: '.DEV collection constraints' });
+  await expect(devNotice.getByText('RDAP only')).toBeVisible();
+  await expect(devNotice.getByText(/WHOIS absence is expected and does not make the lookup incomplete/i)).toBeVisible();
+  await expect(devNotice).toHaveClass(/expected/);
 
   await page.setViewportSize({ width: 360, height: 780 });
   await expectNoHorizontalOverflow(page);

@@ -8,6 +8,8 @@
     inspectRegistrySupport,
     registryAccessLabel,
     registryCoverageLabel,
+    registryServiceCoverage,
+    registryServiceCoverageLabel,
     registrySupportCatalogue,
     registrySupportLabel,
     sortRegistrySupportRows,
@@ -26,6 +28,7 @@
   const standards = catalogue.standardsCoverage;
   let query = $state('');
   let coverage = $state('all');
+  let serviceCoverage = $state('all');
   let sortKey = $state('suffix');
   let sortDirection = $state('asc');
   let page = $state(1);
@@ -34,8 +37,15 @@
   let inspectionActive = $state(false);
   let hydrated = $state(false);
   let capabilityTarget = $state<CapabilityTargetFilter>('all');
-  const filteredRows = $derived(filterRegistrySupportRows(catalogue.rows, query, coverage));
+  const filteredRows = $derived(filterRegistrySupportRows(catalogue.rows, query, coverage, serviceCoverage));
   const sortedRows = $derived(sortRegistrySupportRows(filteredRows, sortKey, sortDirection));
+  const activeRefinementCount = $derived([
+    query.trim().length > 0,
+    coverage !== 'all',
+    serviceCoverage !== 'all',
+    sortKey !== 'suffix',
+    sortDirection !== 'asc',
+  ].filter(Boolean).length);
   const pageCount = $derived(Math.max(1, Math.ceil(sortedRows.length / PAGE_SIZE)));
   const currentPage = $derived(Math.min(page, pageCount));
   const visibleRows = $derived(sortedRows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE));
@@ -62,6 +72,20 @@
     inspectionInput = '';
     inspectedValue = '';
     inspectionActive = false;
+  }
+
+  function resetCatalogueView() {
+    query = '';
+    coverage = 'all';
+    serviceCoverage = 'all';
+    sortKey = 'suffix';
+    sortDirection = 'asc';
+    page = 1;
+  }
+
+  function showInspectedProfile(suffix: string | undefined) {
+    resetCatalogueView();
+    query = suffix ?? '';
   }
 
   function capabilityStateClass(state: LookupCapabilityState): string {
@@ -204,10 +228,17 @@
             <div><dt>WHOIS discovery</dt><dd>{registryAccessLabel(profile.whoisDiscovery)}</dd></div>
             <div><dt>RDAP access</dt><dd>{registryAccessLabel(profile.rdapAccessProfile)}</dd></div>
             <div><dt>WHOIS access</dt><dd>{registryAccessLabel(profile.whoisAccessProfile)}</dd></div>
+            <div><dt>Service profile</dt><dd>{registryServiceCoverageLabel(registryServiceCoverage(profile))}</dd></div>
             <div><dt>WHOIS query</dt><dd>{registrySupportLabel(profile.whoisQueryProfile)}</dd></div>
             <div><dt>Parser</dt><dd>{registrySupportLabel(profile.whoisParserProfile)}</dd></div>
             {#if profile.fallbackProfile}<div><dt>Fallback</dt><dd>{registrySupportLabel(profile.fallbackProfile)}</dd></div>{/if}
           </dl>
+          {#if profile.explicitSuffixProfile && profile.suffixes[0]}
+            <div class="inspection-handoff">
+              <a class="btn" href="#registry-catalogue" onclick={() => showInspectedProfile(profile.suffixes[0])}>Show in catalogue</a>
+              <span>Apply the exact suffix filter and review its fixture and documentation references.</span>
+            </div>
+          {/if}
           <p class="limitation"><strong>Limitation:</strong> {profile.limitation}</p>
           <p class="no-inference">This catalogue result does not decide registration, availability, ownership, safety, or maliciousness.</p>
         </article>
@@ -216,7 +247,7 @@
   {/if}
 </section>
 
-<section class="catalogue-section" aria-labelledby="catalogue-title">
+<section class="catalogue-section" id="registry-catalogue" aria-labelledby="catalogue-title">
   <header class="section-intro">
     <p class="eyebrow">Compatibility catalogue</p>
     <h2 id="catalogue-title">Implemented registry profiles</h2>
@@ -235,11 +266,22 @@
         <option value="access_documented">Access documented</option>
       </select>
     </label>
+    <label for="service-filter">Service path
+      <select id="service-filter" value={serviceCoverage} onchange={(event) => { serviceCoverage = event.currentTarget.value; page = 1; }}>
+        <option value="all">All service paths</option>
+        <option value="both">RDAP and WHOIS ({catalogue.summary.serviceCoverage.both})</option>
+        <option value="rdap_only">RDAP only ({catalogue.summary.serviceCoverage.rdapOnly})</option>
+        <option value="whois_only">WHOIS path only ({catalogue.summary.serviceCoverage.whoisOnly})</option>
+        <option value="neither">No IANA service ({catalogue.summary.serviceCoverage.neither})</option>
+      </select>
+    </label>
     <label for="registry-sort">Sort by
       <select id="registry-sort" value={sortKey} onchange={(event) => { sortKey = event.currentTarget.value; page = 1; }}>
         <option value="suffix">Suffix</option>
         <option value="coverage">Coverage</option>
         <option value="registry_class">Registry class</option>
+        <option value="service_path">Service path</option>
+        <option value="rdap_access">RDAP access</option>
         <option value="whois_access">WHOIS access</option>
         <option value="whois_query">WHOIS query</option>
       </select>
@@ -250,6 +292,10 @@
         <option value="desc">Descending</option>
       </select>
     </label>
+    <div class="filter-actions">
+      <button class="btn" type="button" onclick={resetCatalogueView} disabled={activeRefinementCount === 0}>Reset view</button>
+      <span aria-live="polite">{activeRefinementCount ? `${activeRefinementCount} refinement${activeRefinementCount === 1 ? '' : 's'} active` : 'Default view'}</span>
+    </div>
   </fieldset>
 
   <p class="result-count" role="status" aria-live="polite">
@@ -314,14 +360,16 @@
   .summary-grid p{margin:0;color:var(--text);font-size:var(--text-xs);line-height:1.45}
   .standards-section{margin-top:34px}.standards-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.standards-grid article{display:grid;gap:6px;padding:16px}.standards-grid span{color:var(--muted);font:700 var(--text-2xs) var(--mono);letter-spacing:.05em;text-transform:uppercase}.standards-grid strong{color:var(--accent2);font:750 1.2rem var(--mono);overflow-wrap:anywhere}.standards-grid p{margin:0;color:var(--text);font-size:var(--text-xs);line-height:1.45}.standards-notes{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;margin-top:8px;padding:16px}.standards-notes h3{margin:0 0 6px;font:700 var(--text-sm) var(--mono)}.standards-notes p{margin:0;color:var(--muted);font-size:var(--text-xs);line-height:1.55}.standards-notes code{color:var(--accent)}
   .capability-section{margin-top:34px}.capability-intro{display:flex;max-width:none;gap:16px;align-items:end;justify-content:space-between}.capability-intro>div{max-width:840px}.capability-filter{display:flex;flex-wrap:wrap;gap:8px 18px;margin:0 0 10px;padding:12px 15px}.capability-filter legend{padding:0 5px;color:var(--muted);font:600 var(--text-2xs) var(--mono)}.capability-filter label{display:flex;gap:7px;align-items:center;font-size:var(--text-xs)}.capability-filter input{margin:0}.capability-table-wrap{overflow:auto;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel)}.capability-table{min-width:1040px}.capability-table td{min-width:120px;max-width:290px;line-height:1.45}.capability-table td:first-child{min-width:190px}.capability-table td:last-child{min-width:260px;color:var(--muted)}.capability-table td>strong{font-size:var(--text-xs)}.capability-table td>small{color:var(--muted);font:600 var(--text-2xs) var(--mono)}.capability-state{display:inline-block!important;width:max-content;max-width:100%;margin:0!important;border:1px solid var(--border);border-radius:999px;padding:4px 7px;color:var(--muted)!important;font:700 var(--text-2xs) var(--mono);white-space:nowrap}.capability-state.collected{border-color:color-mix(in srgb,var(--accent2) 42%,var(--border));color:var(--accent2)!important}.capability-state.conditional{border-color:color-mix(in srgb,var(--amber) 48%,var(--border));color:var(--amber)!important}.capability-state.not-collected,.capability-state.not-applicable{color:var(--muted)!important}.matrix-note{margin:9px 2px 0;color:var(--muted);font-size:var(--text-xs);line-height:1.5}
-  .catalogue-section{margin-top:34px}
+  .catalogue-section{margin-top:34px;scroll-margin-top:calc(var(--anchor-offset) + 12px)}
   .inspector-section{margin-top:34px}
   .section-intro{max-width:840px;margin-bottom:14px}.section-intro h2{margin:3px 0 0;font:700 1.15rem var(--mono)}.section-intro>p:not(.eyebrow){margin:7px 0 0;color:var(--muted);font-size:var(--text-sm);line-height:1.55}
   .inspector-form{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:end;padding:15px}.inspector-form label{display:grid;gap:6px;color:var(--muted);font:600 var(--text-xs) var(--mono)}.inspector-form input{width:100%;min-height:var(--control-h)}.inspector-actions{display:flex;flex-wrap:wrap;gap:8px}.inspection-output{margin-top:10px}.inspection-card{display:grid;gap:14px;padding:18px}.inspection-card>header{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:start;justify-content:space-between}.inspection-card h3{margin:3px 0 0;color:var(--accent);font:750 1.25rem var(--mono)}.inspection-card dl{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:0}.inspection-card dl>div{min-width:0;padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface)}.inspection-card dt{color:var(--muted);font:600 var(--text-2xs) var(--mono);text-transform:uppercase}.inspection-card dd{margin:5px 0 0;overflow-wrap:anywhere}.no-inference{margin:0;color:var(--muted);font-size:var(--text-xs);line-height:1.5}
+  .inspection-handoff{display:flex;flex-wrap:wrap;align-items:center;gap:9px}.inspection-handoff span{color:var(--muted);font-size:var(--text-xs);line-height:1.45}
   .filters{display:flex;min-width:0;flex-wrap:wrap;gap:12px;align-items:end;padding:15px}
   .filters legend{padding:0 5px;color:var(--muted);font:600 var(--text-2xs) var(--mono)}
   .filters label{display:grid;gap:6px;color:var(--muted);font:600 var(--text-xs) var(--mono)}
   .filters .search{flex:1;min-width:240px}.filters input,.filters select{min-height:var(--control-h)}
+  .filter-actions{display:flex;min-width:150px;align-items:center;gap:9px}.filter-actions span{color:var(--muted);font:600 var(--text-2xs) var(--mono);white-space:nowrap}
   .result-count{margin:12px 2px;color:var(--muted);font-size:var(--text-xs)}
   .table-wrap{overflow:auto;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel)}
   table{width:100%;border-collapse:collapse;font-size:var(--text-xs)}caption{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
@@ -334,5 +382,5 @@
   .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
   @media(max-width:1400px){.table-wrap,.capability-table-wrap{overflow:visible;border:0;background:none}table,tbody,tr,td{display:block;width:100%}thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}tbody{display:grid;gap:10px}tr{overflow:hidden;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel)}td{display:grid;grid-template-columns:minmax(95px,115px) minmax(0,1fr);gap:8px;min-width:0;border-top:1px solid var(--border)}td:first-child{border-top:0}td::before{content:attr(data-label);color:var(--muted);font:600 var(--text-2xs) var(--mono);text-transform:uppercase}td>*{grid-column:2;min-width:0}.capability-table{min-width:0}.capability-table td{max-width:none}.capability-table td:first-child,.capability-table td:last-child{min-width:0}td>strong{margin-top:0}.profile-detail{grid-column:1 / -1}}
   @media(max-width:900px){.summary-grid,.standards-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.standards-notes{grid-template-columns:1fr}.inspection-card dl{grid-template-columns:repeat(2,minmax(0,1fr))}.interpretation{grid-template-columns:1fr}.interpretation p:last-child{grid-column:1}}
-  @media(max-width:560px){.summary-grid,.standards-grid{grid-template-columns:1fr}.capability-intro{align-items:start;flex-direction:column}.capability-filter{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));width:100%}.inspector-form{grid-template-columns:1fr}.inspection-card dl{grid-template-columns:1fr}.filters{display:grid}.filters .search{min-width:0}.filters input,.filters select{width:100%}.version{justify-self:start}.profile-detail dl>div{grid-template-columns:1fr}.profile-detail dd{margin-top:2px}}
+  @media(max-width:560px){.summary-grid,.standards-grid{grid-template-columns:1fr}.capability-intro{align-items:start;flex-direction:column}.capability-filter{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));width:100%}.inspector-form{grid-template-columns:1fr}.inspection-card dl{grid-template-columns:1fr}.filters{display:grid}.filters .search{min-width:0}.filters input,.filters select{width:100%}.filter-actions{min-width:0;justify-content:space-between}.version{justify-self:start}.profile-detail dl>div{grid-template-columns:1fr}.profile-detail dd{margin-top:2px}}
 </style>

@@ -7,10 +7,11 @@
   schedule = "*/5 * * * *"
 
 # Mirrors the response security headers server.mts sets for self-hosted
-# deployments. SvelteKit emits a hash-restricted CSP meta tag in every
-# prerendered page. Keep the immutable rule first because Netlify applies the
-# first matching header rule. The fallback no-transform directive prevents
-# edge services from injecting scripts into prerendered HTML.
+# deployments. The fallback adds an immediate response-header CSP while
+# SvelteKit's per-page meta policy applies the stricter generated script hash.
+# Browsers enforce both policies. Keep the immutable rule first because
+# Netlify applies the first matching header rule. The fallback no-transform
+# directive prevents edge services from injecting scripts into prerendered HTML.
 [[headers]]
   for = "/_app/immutable/*"
   [headers.values]
@@ -29,6 +30,7 @@
     X-Frame-Options = "DENY"
     Referrer-Policy = "strict-origin-when-cross-origin"
     Permissions-Policy = "camera=(), microphone=(), geolocation=()"
+    Content-Security-Policy = "default-src 'self'; connect-src 'self'; font-src 'self'; img-src 'self' data:; object-src 'none'; script-src 'self' 'unsafe-inline'; script-src-attr 'none'; style-src 'self' 'unsafe-inline'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
     Strict-Transport-Security = "max-age=31536000"
 
 [[redirects]]

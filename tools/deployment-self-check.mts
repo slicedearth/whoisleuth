@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { readTextCapped, safeFetchDetailed } from '../lib/safe-fetch.mts';
+import { HTTP_BASELINE_CONTENT_SECURITY_POLICY } from '../lib/security-headers.mts';
 
 type CheckStatus = 'pass' | 'fail' | 'unsupported' | 'inconclusive';
 type SelfCheckId =
@@ -71,6 +72,7 @@ const SECURITY_HEADERS = Object.freeze({
   'x-frame-options': 'DENY',
   'referrer-policy': 'strict-origin-when-cross-origin',
   'permissions-policy': 'camera=(), microphone=(), geolocation=()',
+  'content-security-policy': HTTP_BASELINE_CONTENT_SECURITY_POLICY,
 });
 
 const PROBES: readonly ProbeDefinition[] = Object.freeze([

@@ -8,12 +8,29 @@ import {
   REGISTRY_CAPABILITIES_VERSION,
   REGISTRY_STANDARDS_COVERAGE_SNAPSHOT,
   VERSION_26_NO_RDAP_SUFFIXES,
+  VERSION_27_RDAP_ONLY_GENERIC_SUFFIXES,
 } from './registry-capability-catalogue.mts';
 import type {
   RegistryCapability,
   RegistryCompatibilityRow,
   RegistryStandardsCoverageSnapshot,
 } from './registry-capability-catalogue.mts';
+
+const IANA_TLD_RECORD_PREFIX = 'https://www.iana.org/domains/root/db/';
+
+function documentationUrlsForSuffix(
+  capability: Readonly<RegistryCapability>,
+  suffixes: readonly string[],
+): string[] {
+  if (suffixes.length !== 1 || capability.suffixes.length <= 1) {
+    return [...capability.documentationUrls];
+  }
+  const suffix = suffixes[0];
+  const matchingIanaRecord = suffix ? `${IANA_TLD_RECORD_PREFIX}${suffix}.html` : '';
+  return capability.documentationUrls.filter((url) => (
+    !url.startsWith(IANA_TLD_RECORD_PREFIX) || url === matchingIanaRecord
+  ));
+}
 
 function cloneCapability(
   capability: Readonly<RegistryCapability>,
@@ -24,7 +41,7 @@ function cloneCapability(
     suffixes: [...suffixes],
     fixtureScenarios: [...capability.fixtureScenarios],
     verificationFiles: [...capability.verificationFiles],
-    documentationUrls: [...capability.documentationUrls],
+    documentationUrls: documentationUrlsForSuffix(capability, suffixes),
   };
 }
 
@@ -143,6 +160,7 @@ function registryCompatibilityMatrix(): RegistryCompatibilityRow[] {
 export {
   REGISTRY_CAPABILITIES_VERSION,
   VERSION_26_NO_RDAP_SUFFIXES,
+  VERSION_27_RDAP_ONLY_GENERIC_SUFFIXES,
   registryCapabilityFor,
   registryCompatibilityMatrix,
   listRegistryCapabilities,

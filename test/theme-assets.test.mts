@@ -25,6 +25,10 @@ test('the website, browser favicon, and README use the same approved vector', as
   assert.match(component, /src="\/favicon\.svg"/);
   assert.match(component, /alt=""/);
   assert.match(appHtml, /<link rel="icon" type="image\/svg\+xml" href="\/favicon\.svg">/);
+  assert.ok(
+    appHtml.indexOf('%sveltekit.head%') < appHtml.indexOf('<script src="/theme-init.js"></script>'),
+    'the generated CSP meta policy must precede theme initialization',
+  );
   assert.match(
     readme,
     /^<h1 align="center"><img src="frontend\/static\/favicon\.svg" width="48" height="48" alt="" \/> WHOISleuth<\/h1>/,

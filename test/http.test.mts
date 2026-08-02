@@ -8,6 +8,7 @@ import {
   withNetlifyApiErrorBoundary,
 } from '../lib/http.mts';
 import { requiredValue } from './value-assertions.mts';
+import { HTTP_BASELINE_CONTENT_SECURITY_POLICY } from '../lib/security-headers.mts';
 
 describe('Netlify JSON responses', () => {
   test('include the API security headers emitted by the Express server', () => {
@@ -20,6 +21,7 @@ describe('Netlify JSON responses', () => {
     assert.equal(response.headers['X-Frame-Options'], 'DENY');
     assert.equal(response.headers['Referrer-Policy'], 'strict-origin-when-cross-origin');
     assert.equal(response.headers['Permissions-Policy'], 'camera=(), microphone=(), geolocation=()');
+    assert.equal(response.headers['Content-Security-Policy'], HTTP_BASELINE_CONTENT_SECURITY_POLICY);
     assert.equal(response.headers['Strict-Transport-Security'], 'max-age=31536000');
     assert.equal(response.headers['Cache-Control'], 'no-store');
   });
