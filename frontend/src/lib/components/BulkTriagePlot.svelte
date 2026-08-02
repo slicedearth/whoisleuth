@@ -20,6 +20,7 @@
     description="A visual index of the currently filtered results. Both axes are explainable heuristics, not a maliciousness or ownership determination."
     metric={matchedCount}
     metricLabel="filtered results"
+    headingLevel={3}
     compact
   >
     {#if plot.points.length}
