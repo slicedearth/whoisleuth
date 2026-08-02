@@ -1,9 +1,10 @@
-<h1 align="center"><img src="frontend/static/favicon.svg" width="48" height="48" alt="" /> WHOISleuth</h1>
+<h1 align="center"><img src="frontend/static/favicon.svg" width="44" height="44" align="middle" alt="" />&nbsp;WHOISleuth</h1>
 
 <p align="center">
   <img src="https://img.shields.io/badge/license-AGPL--3.0--only-blue.svg" alt="License: AGPL-3.0-only" />
   <img src="https://img.shields.io/badge/node-%3E%3D24-brightgreen" alt="Node >= 24" />
   <img src="https://img.shields.io/badge/frontend-SvelteKit%20%2B%20Vite-ff3e00" alt="SvelteKit and Vite" />
+  <a href="https://www.npmjs.com/package/@slicedearth/whoisleuth-cli"><img src="https://img.shields.io/npm/v/@slicedearth/whoisleuth-cli?label=cli&logo=npm" alt="Published CLI version" /></a>
   <a href="https://github.com/slicedearth/whoisleuth/actions/workflows/ci.yml"><img src="https://github.com/slicedearth/whoisleuth/actions/workflows/ci.yml/badge.svg" alt="CI status" /></a>
   <a href="https://app.netlify.com/projects/whoisleuth/deploys"><img src="https://api.netlify.com/api/v1/badges/600adb21-cece-4a13-8df8-d177ace3d945/deploy-status" alt="Netlify status" /></a>
 </p>
@@ -117,7 +118,7 @@ Open `http://localhost:3000` for the public overview or
 Published CLI releases can run without hosting the application:
 
 ```bash
-npm exec --yes --package=@slicedearth/whoisleuth-cli -- whoisleuth --help
+npm exec --yes --ignore-scripts --package=@slicedearth/whoisleuth-cli -- whoisleuth --help
 ```
 
 `SITE_PASSWORD` is the deployment-wide shared password. `SESSION_SECRET`
@@ -256,7 +257,8 @@ drafts only where you have a legitimate purpose and comply with applicable
 registry terms, privacy law, anti-spam law, and authorization boundaries.
 
 See [PRIVACY.md](PRIVACY.md) for data handling and deletion guidance. Review
-and adapt that notice before sharing your own deployment.
+and adapt that notice before sharing your own deployment. Report suspected
+vulnerabilities privately through the [security policy](SECURITY.md).
 
 ## Project structure
 

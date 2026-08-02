@@ -1,6 +1,6 @@
 {
   "name": "whoisleuth",
-  "version": "1.32.2",
+  "version": "1.33.0",
   "private": true,
   "license": "AGPL-3.0-only",
   "description": "Open-source, local-first domain intelligence and brand-protection console for WHOIS, RDAP, DNS, certificate transparency, lookalike domains, and web evidence.",
@@ -35,6 +35,7 @@
     "capture:compare": "node packages/web-capture/bin/whoisleuth-capture.mts compare",
     "cli:package:check": "node tools/cli-package.mts",
     "cli:package:release": "node tools/cli-package.mts --release-candidate",
+    "cli:package:verify-published": "node tools/published-cli-check.mts",
     "schema:inventory": "node tools/schema-inventory.mts",
     "deployment:self-check": "node tools/deployment-self-check.mts",
     "registry:drift": "node tools/registry-drift-audit.mts",
@@ -76,8 +77,8 @@
     "express": "^5.2.1",
     "fflate": "0.8.3",
     "parse5": "^8.0.1",
-    "tldts": "^7.4.9",
-    "undici": "^8.7.0"
+    "tldts": "^7.4.10",
+    "undici": "^8.9.0"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.12.1",

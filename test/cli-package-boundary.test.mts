@@ -30,12 +30,17 @@ describe('CLI package boundary', () => {
   });
 
   test('leaves distributable metadata to the scoped package builder', () => {
+    const packageReadme = readFileSync(join(__dirname, '..', 'packages', 'cli', 'README.md'), 'utf8');
     assert.equal(Object.hasOwn(packageJson, 'files'), false);
     assert.equal(Object.hasOwn(packageJson, 'bin'), false);
     assert.equal(packageTemplate.private, true);
+    assert.equal(packageTemplate.author, 'slicedearth');
     assert.deepEqual(packageTemplate.contentPolicy, { class: 'dual-use' });
     assert.deepEqual(packageTemplate.bin, { whoisleuth: 'bin/whoisleuth.mjs' });
     assert.match(readFileSync(join(__dirname, '..', 'DISCLOSURE'), 'utf8'), /defensive domain investigation/u);
+    assert.match(readFileSync(join(__dirname, '..', 'SECURITY.md'), 'utf8'), /private vulnerability reporting/u);
+    assert.match(packageReadme, /npm install --global --ignore-scripts @slicedearth\/whoisleuth-cli/u);
+    assert.match(packageReadme, /WHOISleuth does not require them/u);
   });
 
   test('keeps the source CLI entry point executable for repository use', () => {

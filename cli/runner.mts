@@ -3,7 +3,7 @@ import { createReadStream } from 'node:fs';
 import { createRequire } from 'node:module';
 
 import { abortable } from '../lib/abort.mts';
-import { resolvePublicAddresses } from '../lib/safe-fetch.mts';
+import { resolvePublicAddresses, safeFetch } from '../lib/safe-fetch.mts';
 import { whoisQuery } from '../lib/whois-transport.mts';
 import { REGISTRY_CAPABILITIES_VERSION, registryCapabilityFor } from '../lib/registry-capabilities.mts';
 import { explainRiskScore, RISK_MODEL_VERSION, RISK_REVIEW_THRESHOLD } from '../lib/risk-scoring.mts';
@@ -408,10 +408,11 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
         network: args.network,
         presentation: terminalPresentation(stdout, args.color, environment),
         ...(dependencies.resolvePublicAddresses ? { resolveAddresses: dependencies.resolvePublicAddresses } : {}),
+        ...(dependencies.safeFetch ? { fetchHttps: dependencies.safeFetch } : { fetchHttps: safeFetch }),
         ...(dependencies.whoisQuery ? { queryWhois: dependencies.whoisQuery } : {}),
       });
       const report = args.network
-        ? await withProgress('Checking public DNS and WHOIS connectivity', buildReport)
+        ? await withProgress('Checking public DNS, HTTPS, and WHOIS connectivity', buildReport)
         : await buildReport();
       if (!args.quiet) {
         write(stdout, args.output === 'json'

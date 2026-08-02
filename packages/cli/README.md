@@ -11,19 +11,35 @@ WHOISleuth requires Node.js 24 or later. Run the reviewed public package without
 a global installation:
 
 ```bash
-npm exec --yes --package=@slicedearth/whoisleuth-cli -- whoisleuth --help
+npm exec --yes --ignore-scripts --package=@slicedearth/whoisleuth-cli -- whoisleuth --help
 ```
 
 Or install the `whoisleuth` command globally:
 
 ```bash
-npm install --global @slicedearth/whoisleuth-cli
+npm install --global --ignore-scripts @slicedearth/whoisleuth-cli
 whoisleuth doctor
+```
+
+Update an existing global installation and confirm the installed release with:
+
+```bash
+npm install --global --ignore-scripts @slicedearth/whoisleuth-cli@latest
+whoisleuth --version
 ```
 
 The package version follows the application version. Each release is assembled
 from the executable's bounded dependency closure and retains the project
 licence, notices, trademark terms, source location, and provenance metadata.
+The generated package manifest pins each direct runtime dependency to the exact
+version exercised by the reviewed repository lockfile.
+
+The package has no install, postinstall, or other lifecycle scripts. Network
+access begins only when an analyst runs a networked command. Offline commands
+may read deliberately selected local evidence or configuration files, but do
+not upload them or invoke a hosted WHOISleuth deployment. The installation
+examples disable lifecycle scripts for the package and its dependency tree;
+WHOISleuth does not require them.
 
 ## Repository checkout
 
@@ -79,6 +95,7 @@ favicon, technology, and TLS evidence, while saved Bulk output can be reviewed
 for passive MX, null MX, SPF, DMARC, and shared-provider context.
 
 See `docs/cli.md` in the package for the complete command, privacy, output, and
-evidence-contract reference.
+evidence-contract reference. Report suspected vulnerabilities through the
+private channel described in `SECURITY.md`.
 
 Copyright 2026 slicedearth. Licensed under AGPL-3.0-only.

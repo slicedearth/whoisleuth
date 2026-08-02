@@ -17,9 +17,16 @@ Public releases require Node.js 24 or later and install the `whoisleuth`
 command:
 
 ```bash
-npm exec --yes --package=@slicedearth/whoisleuth-cli -- whoisleuth --help
-npm install --global @slicedearth/whoisleuth-cli
+npm exec --yes --ignore-scripts --package=@slicedearth/whoisleuth-cli -- whoisleuth --help
+npm install --global --ignore-scripts @slicedearth/whoisleuth-cli
 whoisleuth doctor
+```
+
+Update and verify an existing global installation with:
+
+```bash
+npm install --global --ignore-scripts @slicedearth/whoisleuth-cli@latest
+whoisleuth --version
 ```
 
 The scoped package and application share one semantic version. The package runs
@@ -87,10 +94,13 @@ npm run cli:package:check
 
 The check includes only the executable, reachable TypeScript modules, CLI
 guide, licence, notices, and trademark terms. It excludes application routes,
-deployment adapters, tests, and development tools. Its generated manifest stays
-private. Release-candidate assembly is a separate explicit operation and never
-publishes from a developer checkout. Use the scoped package name; an unqualified
-`npx whoisleuth` is not this project.
+deployment adapters, tests, and development tools. Direct runtime dependencies
+are pinned to the exact versions exercised by the reviewed repository lockfile.
+The package and its dependencies require no lifecycle scripts, so the install
+examples disable them explicitly.
+Its generated manifest stays private. Release-candidate assembly is a separate
+explicit operation and never publishes from a developer checkout. Use the
+scoped package name; an unqualified `npx whoisleuth` is not this project.
 
 Lookup defaults to the conservative fast profile. `--deep` must be requested
 explicitly and can add bounded WHOIS, DNS, website, TLS, registrar RDAP, and
@@ -114,11 +124,13 @@ request. Its output is described below.
 
 `doctor` is offline by default. It checks the Node runtime, platform, terminal
 capabilities, and availability of offline command families. `doctor --network`
-adds bounded public-DNS and WHOIS port 43 checks against fixed diagnostic
-infrastructure. It retains only state and a bounded explanation, not resolved
-addresses or response content. A failed optional network check returns the
-partial-failure exit code rather than claiming that all CLI collection is
-unavailable.
+adds independent bounded public-DNS, HTTPS/RDAP bootstrap, and WHOIS port 43
+checks against fixed IANA diagnostic infrastructure. The three probes run
+within the same per-probe ceiling so one stalled transport does not block the
+others. The report retains only state, HTTP status, and a bounded explanation,
+not resolved addresses or response content. A failed optional network check
+returns the partial-failure exit code rather than claiming that all CLI
+collection is unavailable.
 
 `completion bash`, `completion zsh`, and `completion fish` print static shell
 completion scripts to stdout. The command does not edit a shell profile or make
@@ -128,11 +140,12 @@ manual page and likewise changes no local configuration.
 
 ## Deployment boundary
 
-The CLI is a local repository tool. The serverless deployment publishes only
-`frontend/build` and packages functions only from `netlify/functions`, so
-`bin/` and `cli/` are not part of the hosted static site or function bundle.
-Both the application root and the assembled CLI package remain private and are
-not published to the public npm registry.
+The CLI runs locally. The serverless deployment publishes only `frontend/build`
+and packages functions only from `netlify/functions`, so `bin/` and `cli/` are
+not part of the hosted static site or function bundle. The application root and
+ordinary package-check candidate remain private. Explicitly reviewed CLI
+release candidates can be published under the scoped public package described
+in the installation section.
 
 Commands that query RDAP, WHOIS, DNS, HTTP, TLS, or Certificate Transparency do
 so directly from the machine running the CLI. They do not use the hosted login,
