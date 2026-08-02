@@ -5,11 +5,29 @@ HTTP, TLS, certificate-transparency, domain-posture, and lookalike analysis
 used by the self-hosted application. Network commands run directly from the
 operator's machine. Offline evidence commands do not contact the hosted site.
 
-The scoped package is still private while its exact archive, installed command
-surface, account controls, and release provenance are reviewed. The public npm
-registry is therefore not an approved installation source yet.
+## Install
 
-From a repository checkout:
+WHOISleuth requires Node.js 24 or later. Run the reviewed public package without
+a global installation:
+
+```bash
+npm exec --yes --package=@slicedearth/whoisleuth-cli -- whoisleuth --help
+```
+
+Or install the `whoisleuth` command globally:
+
+```bash
+npm install --global @slicedearth/whoisleuth-cli
+whoisleuth doctor
+```
+
+The package version follows the application version. Each release is assembled
+from the executable's bounded dependency closure and retains the project
+licence, notices, trademark terms, source location, and provenance metadata.
+
+## Repository checkout
+
+Contributors can run the same source command without installing the package:
 
 ```bash
 node bin/whoisleuth.mts --help
@@ -27,7 +45,6 @@ node bin/whoisleuth.mts registry-support example.test --json
 node bin/whoisleuth.mts doctor
 node bin/whoisleuth.mts completion zsh
 node bin/whoisleuth.mts manual | man -l -
-npm run cli:package:check
 ```
 
 Fast lookup is the default. Deep collection must be requested explicitly and

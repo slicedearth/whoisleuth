@@ -11,6 +11,22 @@ command's purpose, focused invocation, example, and collection boundary without
 printing the full command list. Packaged copies include `LICENSE`, `NOTICE`, and
 `TRADEMARKS.md` alongside the CLI documentation.
 
+## Installation
+
+Public releases require Node.js 24 or later and install the `whoisleuth`
+command:
+
+```bash
+npm exec --yes --package=@slicedearth/whoisleuth-cli -- whoisleuth --help
+npm install --global @slicedearth/whoisleuth-cli
+whoisleuth doctor
+```
+
+The scoped package and application share one semantic version. The package runs
+locally and does not call the hosted WHOISleuth deployment. Networked commands
+contact only the sources described by their collection profile; offline review,
+comparison, verification, completion, and manual commands remain local.
+
 ## Commands
 
 ```bash
@@ -59,10 +75,11 @@ node bin/whoisleuth.mts completion zsh
 node bin/whoisleuth.mts manual | man -l -
 ```
 
-These examples run from a checked-out repository. The root application package
-remains private. A separate scoped CLI archive is assembled from the exact
-executable dependency closure, installed in a temporary directory, and smoke
-tested with:
+These examples run from a checked-out repository; replace
+`node bin/whoisleuth.mts` with `whoisleuth` after installation. The root
+application package remains private. A separate scoped CLI archive is assembled
+from the exact executable dependency closure, installed in a temporary
+directory, and smoke tested with:
 
 ```bash
 npm run cli:package:check
@@ -70,9 +87,10 @@ npm run cli:package:check
 
 The check includes only the executable, reachable TypeScript modules, CLI
 guide, licence, notices, and trademark terms. It excludes application routes,
-deployment adapters, tests, and development tools. The candidate package is
-still private and is not published to the public npm registry; do not assume
-that an unqualified `npx whoisleuth` resolves to this repository.
+deployment adapters, tests, and development tools. Its generated manifest stays
+private. Release-candidate assembly is a separate explicit operation and never
+publishes from a developer checkout. Use the scoped package name; an unqualified
+`npx whoisleuth` is not this project.
 
 Lookup defaults to the conservative fast profile. `--deep` must be requested
 explicitly and can add bounded WHOIS, DNS, website, TLS, registrar RDAP, and

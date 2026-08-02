@@ -114,6 +114,12 @@ npm start
 Open `http://localhost:3000` for the public overview or
 `http://localhost:3000/login` for the protected Console.
 
+Published CLI releases can run without hosting the application:
+
+```bash
+npm exec --yes --package=@slicedearth/whoisleuth-cli -- whoisleuth --help
+```
+
 `SITE_PASSWORD` is the deployment-wide shared password. `SESSION_SECRET`
 should be a separate random value, such as 32 random bytes encoded as hex. The
 optional `SESSION_MAX_AGE_DAYS` setting accepts a whole number from 1 to 30 and

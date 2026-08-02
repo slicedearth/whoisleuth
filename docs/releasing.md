@@ -48,9 +48,26 @@ npm run cli:package:check
 This compiles the executable's bounded dependency closure, audits the archive,
 installs the exact tarball in a temporary directory, and exercises help,
 version, and offline commands across eager and lazy module loading. The
-generated manifest remains private. An
-actual registry release additionally requires explicit approval of the package
-name, npm account controls, provenance configuration, and the final tarball.
+generated manifest remains private.
+
+An explicitly approved release candidate can be assembled outside the working
+tree without performing a registry action:
+
+```bash
+npm run cli:package:release -- /tmp/whoisleuth-cli-release --tag v1.32.0 --json
+```
+
+Release assembly removes the private flag only from the generated archive,
+adds public-access and provenance metadata, installs and exercises every
+documented command help boundary, writes a SHA-256 digest, and refuses a tag
+that does not match the root application version. Existing output files are not
+overwritten.
+
+Registry publication is deliberately separate from candidate assembly. It must
+use the exact reviewed tag, preserve the recorded archive digest, attach
+registry provenance, and require an explicit maintainer approval. Local
+assembly commands do not publish, configure credentials, or approve a staged
+version.
 
 Review schema compatibility whenever a release changes persisted or exported
 evidence:
