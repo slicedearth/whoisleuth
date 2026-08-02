@@ -31,7 +31,7 @@ test('the website, browser favicon, and README use the same approved vector', as
   );
   assert.match(
     readme,
-    /^<h1 align="center"><img src="frontend\/static\/favicon\.svg" width="48" height="48" alt="" \/> WHOISleuth<\/h1>/,
+    /^<h1 align="center"><img src="frontend\/static\/favicon\.svg" width="44" height="44" align="middle" alt="" \/>&nbsp;WHOISleuth<\/h1>/,
   );
   assert.doesNotMatch(readme, /^<p align="center">\s*<img src="frontend\/static\/favicon\.svg"/);
 });

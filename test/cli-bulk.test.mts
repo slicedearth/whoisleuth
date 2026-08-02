@@ -264,8 +264,8 @@ describe('bulk output and runner', () => {
       { query: 'one.test', ok: true, result: compactResult('one.test') },
       { query: 'bad', ok: false, error: 'Invalid query' },
     ], { duplicates: 1 });
-    assert.match(output, /✓ one\.test — Registered \(High confidence\)/);
-    assert.match(output, /! bad — Invalid query/);
+    assert.match(output, /✓ one\.test: Registered \(High confidence\)/);
+    assert.match(output, /! bad: Invalid query/);
     assert.match(output, /2 collected · 1 succeeded · 1 failed in output · 1 duplicates removed/);
   });
 

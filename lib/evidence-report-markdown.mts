@@ -40,7 +40,7 @@ function formatLookupEvidenceMarkdown(
 ): string {
   const report: LookupEvidenceReport = buildLookupEvidenceReport(document, options);
   const lines = [
-    `# Lookup evidence report — ${escapeMarkdownValue(report.title)}`,
+    `# Lookup evidence report: ${escapeMarkdownValue(report.title)}`,
     '', `> ${report.notice}`, '',
   ];
   appendFields(lines, report.metadata);
@@ -60,7 +60,7 @@ function formatLookupEvidenceMarkdown(
     lines.push('- No comparable normalized fields were published.');
   } else {
     for (const field of report.comparison.fields) {
-      lines.push(`- **${escapeMarkdownValue(field.label)} — ${escapeMarkdownValue(field.status)}:** RDAP ${escapeMarkdownValue(field.rdap)}; WHOIS ${escapeMarkdownValue(field.whois)}`);
+      lines.push(`- **${escapeMarkdownValue(field.label)} (${escapeMarkdownValue(field.status)}):** RDAP ${escapeMarkdownValue(field.rdap)}; WHOIS ${escapeMarkdownValue(field.whois)}`);
     }
     if (report.comparison.omitted) lines.push(`- ${report.comparison.omitted} additional comparison fields omitted.`);
   }
@@ -68,7 +68,7 @@ function formatLookupEvidenceMarkdown(
     lines.push('', '## Registry / registrar RDAP comparison');
     appendFields(lines, report.registrarComparison.health);
     for (const field of report.registrarComparison.fields) {
-      lines.push(`- **${escapeMarkdownValue(field.label)} — ${escapeMarkdownValue(field.status)}:** Registry RDAP ${escapeMarkdownValue(field.registry)}; registrar RDAP ${escapeMarkdownValue(field.registrar)}`);
+      lines.push(`- **${escapeMarkdownValue(field.label)} (${escapeMarkdownValue(field.status)}):** Registry RDAP ${escapeMarkdownValue(field.registry)}; registrar RDAP ${escapeMarkdownValue(field.registrar)}`);
     }
     if (report.registrarComparison.omitted) lines.push(`- ${report.registrarComparison.omitted} additional comparison fields omitted.`);
   }

@@ -9,6 +9,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
+import { normalizeSemanticVersion } from './release-version-check.mts';
+
 type JsonRecord = Record<string, unknown>;
 type WritableLike = { write(value: string): unknown };
 type MainOptions = Readonly<{
@@ -36,6 +38,7 @@ export type CliPackageReport = Readonly<{
   packedEntryCount: number;
   packedBytes: number;
   unpackedBytes: number;
+  runtimeDependencies: Readonly<Record<string, string>>;
   installedChecks: readonly string[];
   publicationEnabled: boolean;
   archiveFilename: string | null;
@@ -58,7 +61,7 @@ type ParsedArguments = Readonly<{
 const execFile = promisify(execFileCallback);
 
 export const CLI_PACKAGE_REPORT_SCHEMA = 'whoisleuth.cli-package-check';
-export const CLI_PACKAGE_REPORT_VERSION = 2;
+export const CLI_PACKAGE_REPORT_VERSION = 3;
 export const MAX_CLI_PACKAGE_GRAPH_BYTES = 8 * 1024 * 1024;
 export const MAX_CLI_PACKAGE_MODULES = 256;
 export const MAX_CLI_PACKAGE_SOURCE_BYTES = 8 * 1024 * 1024;
@@ -78,7 +81,6 @@ const INSTALLED_COMMAND_HELP_CHECKS = Object.freeze([
   'posture',
   'ct-search',
   'discover',
-  'discover-scan',
   'registry-support',
   'source-report',
   'compare',
@@ -101,6 +103,7 @@ const SUPPORT_FILES = Object.freeze([
   ['DISCLOSURE', 'DISCLOSURE'],
   ['LICENSE', 'LICENSE'],
   ['NOTICE', 'NOTICE'],
+  ['SECURITY.md', 'SECURITY.md'],
   ['TRADEMARKS.md', 'TRADEMARKS.md'],
   ['LICENSES/Retire.js-Apache-2.0.txt', 'LICENSES/Retire.js-Apache-2.0.txt'],
   ['frontend/static/third-party-notices.txt', 'third-party-notices.txt'],
@@ -162,13 +165,18 @@ export function selectCliPackageSources(graphValue: unknown): readonly string[] 
 export function buildCliPackageManifest(
   rootManifestValue: unknown,
   templateManifestValue: unknown,
+  lockfileValue: unknown,
   options: Readonly<{ publicationEnabled?: boolean }> = {},
 ): JsonRecord {
   const rootManifest = record(rootManifestValue, 'Root package manifest');
   const templateManifest = record(templateManifestValue, 'CLI package template');
+  const lockfile = record(lockfileValue, 'Root package lockfile');
   const rootDependencies = record(rootManifest.dependencies, 'Root package dependencies');
+  const lockPackages = record(lockfile.packages, 'Root package lockfile packages');
+  const lockRoot = record(lockPackages[''], 'Root package lockfile root');
+  const lockRootDependencies = record(lockRoot.dependencies, 'Root package lockfile dependencies');
   const packageName = boundedString(templateManifest.name, 'CLI package name', 128);
-  const packageVersion = boundedString(rootManifest.version, 'Root package version', 128);
+  const packageVersion = normalizeSemanticVersion(rootManifest.version);
   const contentPolicy = record(templateManifest.contentPolicy, 'CLI package content policy');
 
   if (!packageName.startsWith('@') || !packageName.includes('/')) {
@@ -180,13 +188,33 @@ export function buildCliPackageManifest(
   if (Object.hasOwn(templateManifest, 'publishConfig')) {
     throw new TypeError('CLI package template must not contain release-only publication configuration.');
   }
+  for (const field of ['scripts', 'main', 'module', 'exports', 'dependencies', 'devDependencies', 'optionalDependencies', 'peerDependencies']) {
+    if (Object.hasOwn(templateManifest, field)) {
+      throw new TypeError(`CLI package template must not declare ${field}.`);
+    }
+  }
   if (contentPolicy.class !== 'dual-use' || Object.keys(contentPolicy).length !== 1) {
     throw new TypeError('CLI package content policy must declare only the dual-use class.');
   }
 
+  if (lockfile.lockfileVersion !== 3) throw new TypeError('Root package lockfile must use lockfile version 3.');
+  if (
+    lockfile.name !== rootManifest.name
+    || lockRoot.name !== rootManifest.name
+    || normalizeSemanticVersion(lockfile.version) !== packageVersion
+    || normalizeSemanticVersion(lockRoot.version) !== packageVersion
+  ) {
+    throw new TypeError('Root package manifest and lockfile identity must match before CLI assembly.');
+  }
+
   const selectedDependencies: Record<string, string> = {};
   for (const dependency of RUNTIME_DEPENDENCIES) {
-    selectedDependencies[dependency] = boundedString(rootDependencies[dependency], `Root dependency ${dependency}`, 128);
+    const requested = boundedString(rootDependencies[dependency], `Root dependency ${dependency}`, 128);
+    if (lockRootDependencies[dependency] !== requested) {
+      throw new TypeError(`Root dependency ${dependency} must match the lockfile request.`);
+    }
+    const lockedPackage = record(lockPackages[`node_modules/${dependency}`], `Locked dependency ${dependency}`);
+    selectedDependencies[dependency] = normalizeSemanticVersion(lockedPackage.version);
   }
 
   const publicationEnabled = options.publicationEnabled === true;
@@ -209,6 +237,7 @@ export function buildCliPackageManifest(
       'LICENSES/*.txt',
       'NOTICE',
       'README.md',
+      'SECURITY.md',
       'TRADEMARKS.md',
       'third-party-notices.txt',
     ],
@@ -369,13 +398,14 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
   const installRoot = path.join(temporaryRoot, 'install');
   try {
     await Promise.all([mkdir(stagingRoot, { recursive: true }), mkdir(artifactsRoot, { recursive: true }), mkdir(installRoot, { recursive: true })]);
-    const [graph, rootManifest, templateManifest] = await Promise.all([
+    const [graph, rootManifest, templateManifest, lockfile] = await Promise.all([
       dependencyGraph(repositoryRoot),
       readBoundedJson(path.join(repositoryRoot, 'package.json')),
       readBoundedJson(path.join(repositoryRoot, 'packages', 'cli', 'package.template.json')),
+      readBoundedJson(path.join(repositoryRoot, 'package-lock.json')),
     ]);
     const sources = selectCliPackageSources(graph);
-    const manifest = buildCliPackageManifest(rootManifest, templateManifest, { publicationEnabled });
+    const manifest = buildCliPackageManifest(rootManifest, templateManifest, lockfile, { publicationEnabled });
     const copyState = { totalBytes: 0 };
     await validatePackageSources(repositoryRoot, sources, copyState);
     await compilePackageSources(repositoryRoot, temporaryRoot, stagingRoot, sources);
@@ -402,12 +432,15 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
     const unpackedBytes = positiveInteger(packResult.unpackedSize, 'Unpacked CLI bytes', MAX_CLI_PACKAGE_UNPACKED_BYTES);
     const filename = safeRelativePath(packResult.filename, 'Packed CLI filename');
     const tarball = path.join(artifactsRoot, filename);
-    const requiredEntries = ['bin/whoisleuth.mjs', 'cli/runner.mjs', 'package.json', 'README.md', 'DISCLOSURE', 'LICENSE', 'docs/cli.md'];
+    const requiredEntries = ['bin/whoisleuth.mjs', 'cli/runner.mjs', 'package.json', 'README.md', 'DISCLOSURE', 'LICENSE', 'SECURITY.md', 'docs/cli.md'];
     for (const required of requiredEntries) {
       if (!entries.includes(required)) throw new TypeError(`Packed CLI is missing ${required}.`);
     }
     if (entries.some((entry) => /^(?:e2e|netlify|test|tools|frontend\/src\/routes)(?:\/|$)/u.test(entry))) {
       throw new TypeError('Packed CLI contains an excluded application or test path.');
+    }
+    if (entries.some((entry) => /\.(?:[cm]?ts|svelte|map)$/u.test(entry))) {
+      throw new TypeError('Packed CLI contains source or source-map files instead of compiled runtime files.');
     }
 
     await writeFile(path.join(installRoot, 'package.json'), '{"private":true}\n', 'utf8');
@@ -425,10 +458,42 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
     }
     const executable = path.join(installRoot, 'node_modules', ...packageName.split('/'), 'bin', 'whoisleuth.mjs');
     const installedManifest = record(await readBoundedJson(path.join(path.dirname(executable), '..', 'package.json')), 'Installed package manifest');
+    if (
+      installedManifest.name !== packageName
+      || installedManifest.version !== packageVersion
+      || installedManifest.license !== 'AGPL-3.0-only'
+      || installedManifest.author !== 'slicedearth'
+    ) {
+      throw new TypeError('Installed CLI identity metadata does not match the reviewed package contract.');
+    }
+    const installedBin = record(installedManifest.bin, 'Installed CLI executable mapping');
+    const installedEngines = record(installedManifest.engines, 'Installed CLI engine requirement');
+    if (installedBin.whoisleuth !== 'bin/whoisleuth.mjs' || Object.keys(installedBin).length !== 1 || installedEngines.node !== '>=24') {
+      throw new TypeError('Installed CLI executable or runtime boundary does not match the reviewed package contract.');
+    }
     const installedContentPolicy = record(installedManifest.contentPolicy, 'Installed package content policy');
     if (installedContentPolicy.class !== 'dual-use' || Object.keys(installedContentPolicy).length !== 1) {
       throw new TypeError('Installed CLI does not retain the dual-use content declaration.');
     }
+    for (const field of ['scripts', 'main', 'module', 'exports', 'devDependencies', 'optionalDependencies', 'peerDependencies']) {
+      if (Object.hasOwn(installedManifest, field)) throw new TypeError(`Installed CLI must not declare ${field}.`);
+    }
+    const installedDependencies = record(installedManifest.dependencies, 'Installed CLI dependencies');
+    const generatedDependencies = record(manifest.dependencies, 'Generated CLI dependencies');
+    if (Object.keys(installedDependencies).length !== RUNTIME_DEPENDENCIES.length) {
+      throw new TypeError('Installed CLI must retain only the bounded runtime dependencies.');
+    }
+    for (const dependency of RUNTIME_DEPENDENCIES) {
+      if (installedDependencies[dependency] !== generatedDependencies[dependency]) {
+        throw new TypeError(`Installed CLI dependency ${dependency} does not match the generated exact version.`);
+      }
+    }
+    const runtimeDependencies = Object.freeze(Object.fromEntries(
+      RUNTIME_DEPENDENCIES.map((dependency) => [
+        dependency,
+        boundedString(generatedDependencies[dependency], `Generated CLI dependency ${dependency}`, 128),
+      ]),
+    ));
     if (publicationEnabled) {
       const publishConfig = record(installedManifest.publishConfig, 'Installed package publishConfig');
       if (Object.hasOwn(installedManifest, 'private') || publishConfig.access !== 'public' || publishConfig.provenance !== true) {
@@ -506,6 +571,7 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
       packedEntryCount: entries.length,
       packedBytes,
       unpackedBytes,
+      runtimeDependencies,
       installedChecks: Object.freeze([
         'help',
         'version',
@@ -514,6 +580,7 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
         'manual',
         'registry-support',
         'discover',
+        'discover-scan-network-boundary',
         ...commandHelpChecks,
       ]),
       publicationEnabled,
@@ -537,6 +604,7 @@ export function formatCliPackageReport(report: CliPackageReport): string {
     `Dependency-closure modules: ${report.sourceModuleCount}`,
     `Packed entries: ${report.packedEntryCount}`,
     `Archive bytes: ${report.packedBytes} packed / ${report.unpackedBytes} unpacked`,
+    `Runtime dependencies: ${Object.entries(report.runtimeDependencies).map(([name, version]) => `${name}@${version}`).join(', ')}`,
     `Installed checks: ${report.installedChecks.join(', ')}`,
     ...(report.publicationEnabled
       ? [

@@ -1,4 +1,4 @@
-import { resolvePublicAddresses } from '../lib/safe-fetch.mts';
+import { resolvePublicAddresses, safeFetch } from '../lib/safe-fetch.mts';
 import { withTimeout } from '../lib/abort.mts';
 import { whoisQuery } from '../lib/whois-transport.mts';
 import type { TerminalPresentation } from './terminal-presentation.mts';
@@ -8,6 +8,7 @@ const DOCTOR_VERSION = 1;
 const MINIMUM_NODE_MAJOR = 24;
 const NETWORK_HOST = 'whois.iana.org';
 const NETWORK_QUERY = 'example.com';
+const NETWORK_HTTPS_URL = 'https://data.iana.org/rdap/dns.json';
 const NETWORK_TIMEOUT_MS = 6_000;
 const MAX_DOCTOR_DETAIL_LENGTH = 180;
 
@@ -36,6 +37,7 @@ type DoctorOptions = Readonly<{
   platform?: string;
   architecture?: string;
   resolveAddresses?: typeof resolvePublicAddresses;
+  fetchHttps?: typeof safeFetch;
   queryWhois?: typeof whoisQuery;
   networkTimeoutMs?: number;
 }>;
@@ -92,59 +94,100 @@ async function buildDoctorReport(options: DoctorOptions): Promise<DoctorReport> 
       id: 'network',
       label: 'Network checks',
       state: 'skipped',
-      detail: 'Not requested. Run doctor --network to test bounded public DNS and WHOIS connectivity.',
+      detail: 'Not requested. Run doctor --network to test bounded public DNS, HTTPS, and WHOIS connectivity.',
     }));
   } else {
     const resolve = options.resolveAddresses || resolvePublicAddresses;
+    const fetchHttps = options.fetchHttps || safeFetch;
     const query = options.queryWhois || whoisQuery;
     const networkTimeoutMs = Number.isSafeInteger(options.networkTimeoutMs)
       && Number(options.networkTimeoutMs) >= 1
       && Number(options.networkTimeoutMs) <= NETWORK_TIMEOUT_MS
       ? Number(options.networkTimeoutMs)
       : NETWORK_TIMEOUT_MS;
-    try {
-      const addresses = await withTimeout(
-        () => resolve(NETWORK_HOST),
-        networkTimeoutMs,
-        `Public DNS check timed out after ${networkTimeoutMs} ms.`,
-      );
-      checks.push(Object.freeze({
-        id: 'public_dns',
-        label: 'Public DNS',
-        state: addresses.length > 0 ? 'pass' : 'partial',
-        detail: addresses.length > 0
-          ? `${addresses.length} public address${addresses.length === 1 ? '' : 'es'} validated; addresses were not retained.`
-          : 'The fixed diagnostic host returned no validated public addresses.',
-      }));
-    } catch (error) {
-      checks.push(Object.freeze({
-        id: 'public_dns',
-        label: 'Public DNS',
-        state: 'partial',
-        detail: boundedDetail(error && typeof error === 'object' && 'message' in error ? error.message : error, 'Public DNS check failed.'),
-      }));
-    }
-    try {
-      const response = await query(NETWORK_HOST, NETWORK_QUERY, {
-        timeoutMs: Math.max(1, networkTimeoutMs - 1_000),
-        totalDeadlineMs: networkTimeoutMs,
-      });
-      checks.push(Object.freeze({
-        id: 'whois_transport',
-        label: 'WHOIS transport',
-        state: response.trim() ? 'pass' : 'partial',
-        detail: response.trim()
-          ? 'A bounded port 43 response was received; response content was not retained.'
-          : 'The fixed diagnostic query returned an empty response.',
-      }));
-    } catch (error) {
-      checks.push(Object.freeze({
-        id: 'whois_transport',
-        label: 'WHOIS transport',
-        state: 'partial',
-        detail: boundedDetail(error && typeof error === 'object' && 'message' in error ? error.message : error, 'WHOIS transport check failed.'),
-      }));
-    }
+    const networkChecks = await Promise.all([
+      (async (): Promise<DoctorCheck> => {
+        try {
+          const addresses = await withTimeout(
+            () => resolve(NETWORK_HOST),
+            networkTimeoutMs,
+            `Public DNS check timed out after ${networkTimeoutMs} ms.`,
+          );
+          return Object.freeze({
+            id: 'public_dns',
+            label: 'Public DNS',
+            state: addresses.length > 0 ? 'pass' : 'partial',
+            detail: addresses.length > 0
+              ? `${addresses.length} public address${addresses.length === 1 ? '' : 'es'} validated; addresses were not retained.`
+              : 'The fixed diagnostic host returned no validated public addresses.',
+          });
+        } catch (error) {
+          return Object.freeze({
+            id: 'public_dns',
+            label: 'Public DNS',
+            state: 'partial',
+            detail: boundedDetail(error && typeof error === 'object' && 'message' in error ? error.message : error, 'Public DNS check failed.'),
+          });
+        }
+      })(),
+      (async (): Promise<DoctorCheck> => {
+        try {
+          const response = await withTimeout(
+            () => fetchHttps(NETWORK_HTTPS_URL, {
+              headers: { accept: 'application/json' },
+              signal: AbortSignal.timeout(networkTimeoutMs),
+            }),
+            networkTimeoutMs,
+            `HTTPS check timed out after ${networkTimeoutMs} ms.`,
+          );
+          const status = response.status;
+          await response.body?.cancel().catch(() => {});
+          return Object.freeze({
+            id: 'https_transport',
+            label: 'HTTPS transport',
+            state: response.ok ? 'pass' : 'partial',
+            detail: response.ok
+              ? `The fixed IANA RDAP bootstrap endpoint returned HTTP ${status}; response content was not retained.`
+              : `The fixed IANA RDAP bootstrap endpoint returned HTTP ${status}.`,
+          });
+        } catch (error) {
+          return Object.freeze({
+            id: 'https_transport',
+            label: 'HTTPS transport',
+            state: 'partial',
+            detail: boundedDetail(error && typeof error === 'object' && 'message' in error ? error.message : error, 'HTTPS transport check failed.'),
+          });
+        }
+      })(),
+      (async (): Promise<DoctorCheck> => {
+        try {
+          const response = await withTimeout(
+            () => query(NETWORK_HOST, NETWORK_QUERY, {
+              timeoutMs: Math.max(1, networkTimeoutMs - 1_000),
+              totalDeadlineMs: networkTimeoutMs,
+            }),
+            networkTimeoutMs,
+            `WHOIS check timed out after ${networkTimeoutMs} ms.`,
+          );
+          return Object.freeze({
+            id: 'whois_transport',
+            label: 'WHOIS transport',
+            state: response.trim() ? 'pass' : 'partial',
+            detail: response.trim()
+              ? 'A bounded port 43 response was received; response content was not retained.'
+              : 'The fixed diagnostic query returned an empty response.',
+          });
+        } catch (error) {
+          return Object.freeze({
+            id: 'whois_transport',
+            label: 'WHOIS transport',
+            state: 'partial',
+            detail: boundedDetail(error && typeof error === 'object' && 'message' in error ? error.message : error, 'WHOIS transport check failed.'),
+          });
+        }
+      })(),
+    ]);
+    checks.push(...networkChecks);
   }
 
   const state = checks.some((check) => check.state === 'partial') ? 'partial' : 'pass';

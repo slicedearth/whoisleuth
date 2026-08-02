@@ -78,7 +78,7 @@
 {/snippet}
 
 {#snippet CoverageTable(groups: CoverageGroup[], loadDomains: (domains: string[]) => void)}
-  <div class="table-wrap"><table><thead><tr><th>Group</th><th>Protected</th><th>Registered</th><th>Available</th><th>Unknown</th><th>Actions</th></tr></thead><tbody>{#each groups as group}<tr><td>{group.label}</td><td>{group.protected}</td><td>{group.registered}</td><td>{group.available}</td><td>{group.unknown}</td><td><button class="btn small" onclick={() => loadDomains(group.actionableDomains)} disabled={!group.actionableDomains.length}>Load gaps</button></td></tr>{/each}</tbody></table></div>
+  <div class="table-wrap"><table><thead><tr><th>Group</th><th>Protected</th><th>Registered</th><th>Available</th><th>Unknown</th><th>Actions</th></tr></thead><tbody>{#each groups as group}<tr><td data-label="Group">{group.label}</td><td data-label="Protected">{group.protected}</td><td data-label="Registered">{group.registered}</td><td data-label="Available">{group.available}</td><td data-label="Unknown">{group.unknown}</td><td data-label="Actions"><button class="btn small" onclick={() => loadDomains(group.actionableDomains)} disabled={!group.actionableDomains.length}>Load gaps</button></td></tr>{/each}</tbody></table></div>
 {/snippet}
 
 <style>
@@ -99,6 +99,16 @@
   .coverage-chart .state-unknown{fill:var(--panel);stroke:var(--muted);stroke-dasharray:3 2}
   @media(max-width:700px){
     .coverage-tables{grid-template-columns:1fr}
-    .coverage .table-wrap{max-width:100%;margin-inline:0;padding-inline:0;overflow-x:auto}
+    .coverage-chart{display:none}
+    .coverage .table-wrap{max-width:100%;margin-inline:0;padding-inline:0;overflow:visible;border:0}
+    .coverage table,.coverage tbody{display:block}
+    .coverage thead{position:absolute;width:1px;height:1px;padding:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+    .coverage tbody{display:grid;gap:8px}
+    .coverage tr{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));padding:11px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}
+    .coverage td{display:block;min-width:0;padding:7px;border:0;overflow-wrap:anywhere}
+    .coverage td::before{content:attr(data-label);display:block;margin-bottom:3px;color:var(--muted);font:600 .62rem var(--mono);letter-spacing:.06em;text-transform:uppercase}
+    .coverage td:first-child,.coverage td:last-child{grid-column:1 / -1}
+    .coverage td:first-child{padding-bottom:9px;border-bottom:1px solid var(--border);font-weight:700}
+    .coverage td:last-child .btn{width:100%}
   }
 </style>

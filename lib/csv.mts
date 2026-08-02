@@ -2,7 +2,7 @@
 // contain upstream evidence, so normalize controls and prevent spreadsheet
 // formula execution before applying ordinary CSV quoting.
 
-const CSV_FORMULA_TRIGGER_RE = /^(?:[\t\r\n ]*[=+\-@]|[\t\r\n])/u;
+const CSV_FORMULA_TRIGGER_RE = /^[=+\-@]/u;
 
 export const MAX_CSV_CELL_LENGTH = 32_768;
 

@@ -314,12 +314,12 @@ function formatTerminalRegistrySupport(document: TerminalRecord): string {
 
 function formatTerminalBulk(items: TerminalBulkItem[], metadata: TerminalBulkMetadata): string {
   const lines = items.map((item) => {
-    if (!item.ok) return `! ${safeTerminalValue(item.query)} — ${safeTerminalValue(item.error, 'Lookup failed')}`;
+    if (!item.ok) return `! ${safeTerminalValue(item.query)}: ${safeTerminalValue(item.error, 'Lookup failed')}`;
     const result = terminalRecord(item.result);
     const availability = terminalRecord(result.availability);
     const state = titleCase(availability.state);
     const confidence = titleCase(availability.confidence);
-    return `✓ ${safeTerminalValue(item.query)} — ${state} (${confidence} confidence)`;
+    return `✓ ${safeTerminalValue(item.query)}: ${state} (${confidence} confidence)`;
   });
   const succeeded = items.filter((item) => item.ok).length;
   lines.push('');
@@ -400,7 +400,7 @@ function formatTerminalDiscover(document: TerminalRecord, mutationLabels: Mutati
     const unicodeDetail = unicodeDomain && unicodeDomain !== candidateDomain
       ? ` [Unicode: ${safeTerminalValue(unicodeDomain)}]`
       : '';
-    lines.push(`${safeTerminalValue(candidateDomain)}${unicodeDetail} — ${labels.join(', ') || 'Generated variant'}`);
+    lines.push(`${safeTerminalValue(candidateDomain)}${unicodeDetail}: ${labels.join(', ') || 'Generated variant'}`);
   }
   if (!visible.length) lines.push('No candidates were generated.');
   if (candidates.length > visible.length) {
@@ -429,7 +429,7 @@ function formatTerminalPosture(document: TerminalRecord): string {
   ];
   for (const value of checks) {
     const item = terminalRecord(value);
-    lines.push(`[${safeTerminalValue(item.status, 'info').toUpperCase()}] ${safeTerminalValue(item.label)} — ${safeTerminalValue(item.summary)}`);
+    lines.push(`[${safeTerminalValue(item.status, 'info').toUpperCase()}] ${safeTerminalValue(item.label)}: ${safeTerminalValue(item.summary)}`);
     if (item.detail) lines.push(`  Detail  ${safeTerminalValue(item.detail)}`);
     if (item.remediation) lines.push(`  Next    ${safeTerminalValue(item.remediation)}`);
     const records = Array.isArray(item.records) ? item.records : [];
@@ -474,7 +474,7 @@ function formatTerminalHttp(document: TerminalRecord): string {
   for (const value of attempts) {
     const attempt = terminalRecord(value);
     const outcome = attempt.httpStatus ? `HTTP ${attempt.httpStatus}` : attempt.error || attempt.outcome;
-    lines.push(`Attempt        ${safeTerminalValue(attempt.url)} — ${safeTerminalValue(outcome)}`);
+    lines.push(`Attempt        ${safeTerminalValue(attempt.url)}: ${safeTerminalValue(outcome)}`);
   }
   for (const limitation of limitations) lines.push(`Limitation     ${safeTerminalValue(limitation)}`);
   return `${lines.join('\n')}\n`;
@@ -562,7 +562,7 @@ function formatTerminalTls(document: TerminalRecord): string {
   if (diagnostics.error) lines.push(`Error          ${safeTerminalValue(diagnostics.error)}`);
   for (const value of findings) {
     const finding = terminalRecord(value);
-    lines.push(`Finding        ${safeTerminalValue(finding.label)} — ${safeTerminalValue(finding.detail)}`);
+    lines.push(`Finding        ${safeTerminalValue(finding.label)}: ${safeTerminalValue(finding.detail)}`);
   }
   for (const limitation of limitations) lines.push(`Limitation     ${safeTerminalValue(limitation)}`);
   return `${lines.join('\n')}\n`;

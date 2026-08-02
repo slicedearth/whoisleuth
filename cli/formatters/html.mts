@@ -34,7 +34,7 @@ function renderRegistrarComparison(comparison: { fields: PublicationComparisonFi
 
 function formatLookupEvidenceHtml(document: unknown): string {
   const report: LookupEvidenceReport = buildLookupEvidenceReport(document);
-  const title = `Lookup evidence report — ${report.title}`;
+  const title = `Lookup evidence report: ${report.title}`;
   return `<!doctype html>
 <html lang="en">
 <head>

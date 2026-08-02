@@ -131,7 +131,7 @@
                 <thead><tr><th>Domain</th><th>Observed change</th></tr></thead>
                 <tbody>
                   {#each comparison.rows as row}
-                    <tr><th scope="row">{row.domain}</th><td>{row.changes.join(' ')}</td></tr>
+                    <tr><th scope="row" data-label="Domain">{row.domain}</th><td data-label="Observed change">{row.changes.join(' ')}</td></tr>
                   {/each}
                 </tbody>
               </table>
@@ -180,5 +180,13 @@
     .section-heading,article{display:grid}
     .save-row,.compare-controls{grid-template-columns:1fr}
     .session-actions{justify-content:flex-start}
+    .table-wrap{max-height:none;overflow:visible;border:0}
+    table,tbody{display:block}
+    thead{position:absolute;width:1px;height:1px;padding:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+    tbody{display:grid;gap:8px}
+    tr{display:block;padding:11px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}
+    th,td{display:block;min-width:0;padding:7px 0;border:0;overflow-wrap:anywhere}
+    th{padding-top:0;padding-bottom:9px;border-bottom:1px solid var(--border)}
+    td::before{content:attr(data-label);display:block;margin-bottom:4px;color:var(--muted);font:600 .62rem var(--mono);letter-spacing:.06em;text-transform:uppercase}
   }
 </style>

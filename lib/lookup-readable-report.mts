@@ -451,7 +451,7 @@ function formatNetworkIdentifierReadableReport(
   const reverseDns = isJsonObject(projected.reverseDns) ? projected.reverseDns : {};
   const reverseRecords = isJsonObject(reverseDns.records) ? reverseDns.records : {};
   const lines = [
-    `# ${title} — ${markdownValue(submitted)}`,
+    `# ${title}: ${markdownValue(submitted)}`,
     '',
     '> Human-readable point-in-time summary. Raw RDAP and WHOIS responses, expanded contacts, secrets, and remote assets are deliberately excluded.',
     '',

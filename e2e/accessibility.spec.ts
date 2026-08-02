@@ -12,7 +12,10 @@ const REQUIRED_MANUAL_RULES = new Set([
 
 async function expectNoAccessibilityViolations(page: Page, testInfo: TestInfo, state: string) {
   const startedAt = Date.now();
-  const results = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze();
+  const results = await new AxeBuilder({ page })
+    .withTags(WCAG_TAGS)
+    .options({ rules: { 'target-size': { enabled: true } } })
+    .analyze();
   const durationMs = Date.now() - startedAt;
   await testInfo.attach(`axe-${state}.json`, {
     body: JSON.stringify({
@@ -159,6 +162,11 @@ test('scans authenticated desktop and expanded mobile drawer states', async ({ p
   await page.getByRole('button', { name: 'Toggle navigation' }).click();
   await expect(page.getByRole('button', { name: 'Close navigation' })).toBeFocused();
   await expectNoAccessibilityViolations(page, testInfo, 'console-drawer-dark-mobile');
+
+  await page.goto('/registry-support');
+  await page.getByLabel('Suffix or capability').fill('bv');
+  await page.getByText('Review BV profile', { exact: true }).click();
+  await expectNoAccessibilityViolations(page, testInfo, 'console-registry-support-expanded-dark-mobile');
 });
 
 test('scans populated Lookup, Bulk, and guided-investigation states', async ({ page }, testInfo) => {

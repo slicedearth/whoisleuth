@@ -481,7 +481,7 @@ application. Public releases require Node.js 24 or later and can run without a
 global installation:
 
 ```bash
-npm exec --yes --package=@slicedearth/whoisleuth-cli -- whoisleuth --help
+npm exec --yes --ignore-scripts --package=@slicedearth/whoisleuth-cli -- whoisleuth --help
 ```
 
 From a repository checkout, start with:

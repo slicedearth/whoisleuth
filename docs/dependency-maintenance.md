@@ -29,6 +29,17 @@ The existing pinned action references, lockfile, production audit, CodeQL,
 architecture check, and generated production notices remain independent
 controls. Dependabot does not amend or auto-merge them.
 
+Pull requests also run the pinned GitHub Dependency Review action. It compares
+manifest and lockfile changes with the base branch and blocks newly introduced
+vulnerabilities of moderate severity or higher. The workflow has read-only
+repository permissions and does not replace the complete locked install or
+production dependency audit.
+
+Published CLI releases have a separate exact-version check documented in the
+[release guide](releasing.md). It verifies registry integrity, signature and
+provenance metadata after publication rather than treating a clean source
+lockfile as proof that the public artifact is identical.
+
 ## SPDX export
 
 GitHub derives an SPDX 2.3 compatible SBOM from the repository dependency

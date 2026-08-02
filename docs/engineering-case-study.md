@@ -171,7 +171,7 @@ timeline.
 ### Concurrency limits that work in more than one runtime
 
 The default operation-budget provider is synchronous and in memory, which is
-appropriate for one Express process and useful—but explicitly limited—inside a
+appropriate for one Express process and useful, but explicitly limited, inside a
 warm function instance. The same atomic acquire/release contract can use an
 optional HTTPS REST provider for expiring distributed leases and fixed-window
 operation counters. Only opaque lease and feature metadata leaves the runtime;

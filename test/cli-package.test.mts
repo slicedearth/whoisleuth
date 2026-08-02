@@ -9,6 +9,7 @@ import {
 } from '../tools/cli-package.mts';
 
 const rootManifest = {
+  name: 'whoisleuth',
   version: '1.26.0',
   dependencies: {
     express: '^5.2.1',
@@ -23,8 +24,25 @@ const templateManifest = {
   private: true,
   type: 'module',
   license: 'AGPL-3.0-only',
+  author: 'slicedearth',
   contentPolicy: { class: 'dual-use' },
   bin: { whoisleuth: 'bin/whoisleuth.mjs' },
+};
+
+const lockfile = {
+  name: 'whoisleuth',
+  version: '1.26.0',
+  lockfileVersion: 3,
+  packages: {
+    '': {
+      name: 'whoisleuth',
+      version: '1.26.0',
+      dependencies: rootManifest.dependencies,
+    },
+    'node_modules/parse5': { version: '8.0.1' },
+    'node_modules/tldts': { version: '7.4.10' },
+    'node_modules/undici': { version: '8.9.0' },
+  },
 };
 
 describe('scoped CLI package contract', () => {
@@ -58,23 +76,23 @@ describe('scoped CLI package contract', () => {
     assert.throws(() => selectCliPackageSources({ modules: [{ source: 'bin/whoisleuth.mts' }] }), /cli\/runner\.mts/u);
   });
 
-  test('generates a private version-aligned manifest with only runtime dependencies', () => {
-    const manifest = buildCliPackageManifest(rootManifest, templateManifest);
+  test('generates a private version-aligned manifest with exact locked runtime dependencies', () => {
+    const manifest = buildCliPackageManifest(rootManifest, templateManifest, lockfile);
     assert.equal(manifest.name, '@slicedearth/whoisleuth-cli');
     assert.equal(manifest.version, '1.26.0');
     assert.equal(manifest.private, true);
     assert.deepEqual(manifest.contentPolicy, { class: 'dual-use' });
     assert.deepEqual(manifest.dependencies, {
-      parse5: '^8.0.1',
-      tldts: '^7.4.9',
-      undici: '^8.7.0',
+      parse5: '8.0.1',
+      tldts: '7.4.10',
+      undici: '8.9.0',
     });
     assert.equal(Object.hasOwn(manifest.dependencies as object, 'express'), false);
     assert.equal(Object.hasOwn(manifest, 'publishConfig'), false);
   });
 
   test('generates public metadata only for an explicit release candidate', () => {
-    const manifest = buildCliPackageManifest(rootManifest, templateManifest, { publicationEnabled: true });
+    const manifest = buildCliPackageManifest(rootManifest, templateManifest, lockfile, { publicationEnabled: true });
     assert.equal(Object.hasOwn(manifest, 'private'), false);
     assert.deepEqual(manifest.publishConfig, {
       access: 'public',
@@ -83,11 +101,27 @@ describe('scoped CLI package contract', () => {
   });
 
   test('refuses an unscoped or publication-enabled template', () => {
-    assert.throws(() => buildCliPackageManifest(rootManifest, { ...templateManifest, name: 'whoisleuth-cli' }), /must remain scoped/u);
-    assert.throws(() => buildCliPackageManifest(rootManifest, { ...templateManifest, private: false }), /must remain private/u);
-    assert.throws(() => buildCliPackageManifest(rootManifest, { ...templateManifest, publishConfig: { access: 'public' } }), /must not contain release-only/u);
-    assert.throws(() => buildCliPackageManifest(rootManifest, { ...templateManifest, contentPolicy: { class: 'ordinary' } }), /dual-use class/u);
-    assert.throws(() => buildCliPackageManifest(rootManifest, { ...templateManifest, contentPolicy: { class: 'dual-use', extra: true } }), /dual-use class/u);
+    assert.throws(() => buildCliPackageManifest(rootManifest, { ...templateManifest, name: 'whoisleuth-cli' }, lockfile), /must remain scoped/u);
+    assert.throws(() => buildCliPackageManifest(rootManifest, { ...templateManifest, private: false }, lockfile), /must remain private/u);
+    assert.throws(() => buildCliPackageManifest(rootManifest, { ...templateManifest, publishConfig: { access: 'public' } }, lockfile), /must not contain release-only/u);
+    assert.throws(() => buildCliPackageManifest(rootManifest, { ...templateManifest, scripts: { postinstall: 'node install.mjs' } }, lockfile), /must not declare scripts/u);
+    assert.throws(() => buildCliPackageManifest(rootManifest, { ...templateManifest, contentPolicy: { class: 'ordinary' } }, lockfile), /dual-use class/u);
+    assert.throws(() => buildCliPackageManifest(rootManifest, { ...templateManifest, contentPolicy: { class: 'dual-use', extra: true } }, lockfile), /dual-use class/u);
+  });
+
+  test('refuses dependency ranges that drift from the reviewed lockfile', () => {
+    assert.throws(() => buildCliPackageManifest(
+      { ...rootManifest, dependencies: { ...rootManifest.dependencies, undici: '^8.9.0' } },
+      templateManifest,
+      lockfile,
+    ), /must match the lockfile request/u);
+    assert.throws(() => buildCliPackageManifest(rootManifest, templateManifest, {
+      ...lockfile,
+      packages: {
+        ...lockfile.packages,
+        'node_modules/undici': { version: '^8.9.0' },
+      },
+    }), /Release version must contain major, minor, and patch/u);
   });
 
   test('keeps arguments and the human report explicit', () => {
@@ -103,19 +137,21 @@ describe('scoped CLI package contract', () => {
     assert.throws(() => parseArguments(['--release-candidate', '/tmp/release']), /Usage/u);
     const output = formatCliPackageReport({
       schema: 'whoisleuth.cli-package-check',
-      version: 2,
+      version: 3,
       packageName: '@slicedearth/whoisleuth-cli',
       packageVersion: '1.26.0',
       sourceModuleCount: 156,
       packedEntryCount: 165,
       packedBytes: 700_000,
       unpackedBytes: 2_800_000,
+      runtimeDependencies: { parse5: '8.0.1', tldts: '7.4.10', undici: '8.9.0' },
       installedChecks: ['help', 'version', 'doctor', 'completion', 'manual', 'registry-support', 'discover'],
       publicationEnabled: false,
       archiveFilename: null,
       archiveSha256: null,
     });
     assert.match(output, /Publication: disabled/u);
+    assert.match(output, /Runtime dependencies: parse5@8\.0\.1, tldts@7\.4\.10, undici@8\.9\.0/u);
     assert.match(output, /Installed checks: help, version, doctor, completion, manual, registry-support, discover/u);
   });
 });

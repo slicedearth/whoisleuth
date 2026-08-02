@@ -2,7 +2,7 @@ import type { ClassifiedQuery, classifyQuery } from '../lib/classify.mts';
 import type { LookupSourceSettlement } from '../lib/lookup.mts';
 import type { explainRiskScore } from '../lib/risk-scoring.mts';
 import type { RegistryCompatibilityRow } from '../lib/registry-capabilities.mts';
-import type { resolvePublicAddresses } from '../lib/safe-fetch.mts';
+import type { resolvePublicAddresses, safeFetch } from '../lib/safe-fetch.mts';
 import type { whoisQuery } from '../lib/whois-transport.mts';
 import type { BoundedTextStream } from './bulk.mts';
 import type { createBulkCheckpointWriter } from './bulk-checkpoint.mts';
@@ -83,6 +83,7 @@ type CliDependencies = {
   loadRegistryComparison?: () => Promise<typeof import('../lib/registry-comparison.mts')>;
   loadEvidenceExport?: () => Promise<typeof import('../lib/evidence-export.mts')>;
   resolvePublicAddresses?: typeof resolvePublicAddresses;
+  safeFetch?: typeof safeFetch;
   whoisQuery?: typeof whoisQuery;
   createBulkCheckpointWriter?: typeof createBulkCheckpointWriter;
 };

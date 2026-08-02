@@ -163,7 +163,7 @@ describe('HTTP CLI output', () => {
     assert.match(output, /Final URL\s+https:\/\/www\.example\.test\/home/);
     assert.match(output, /strictTransportSecurity, contentSecurityPolicy, xContentTypeOptions/);
     assert.match(output, /sha256:a{64} \(complete-body\)/);
-    assert.match(output, /Attempt\s+https:\/\/example\.test\/ — HTTP 200/);
+    assert.match(output, /Attempt\s+https:\/\/example\.test\/: HTTP 200/);
     assert.match(output, /Limitation\s+URL query strings were omitted/);
   });
 

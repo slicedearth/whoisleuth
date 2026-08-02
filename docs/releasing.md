@@ -59,10 +59,11 @@ npm run cli:package:release -- /tmp/whoisleuth-cli-release --tag "v${VERSION}" -
 ```
 
 Release assembly removes the private flag only from the generated archive,
-adds public-access and provenance metadata, installs and exercises every
-documented command help boundary, writes a SHA-256 digest, and refuses a tag
-that does not match the root application version. Existing output files are not
-overwritten.
+pins direct runtime dependencies to the exact versions exercised by the
+reviewed lockfile, adds public-access and provenance metadata, installs and
+exercises every documented command help boundary, writes a SHA-256 digest, and
+refuses a tag that does not match the root application version. Existing output
+files are not overwritten.
 
 Registry publication is deliberately separate from candidate assembly. The
 CLI package is declared as [dual-use security
@@ -73,6 +74,21 @@ direct OIDC publish path. A maintainer must inspect and approve the staged
 version with interactive two-factor authentication before it becomes
 available. Local assembly commands do not publish, configure credentials, or
 approve a staged version.
+
+After the approved version becomes public, verify the exact registry artifact:
+
+```bash
+VERSION="$(node -p "require('./package.json').version")"
+npm run cli:package:verify-published -- "$VERSION"
+```
+
+The post-publication check reads bounded metadata from the public registry,
+requires the exact dependency pins, archive integrity, registry signature,
+SLSA provenance attestation, executable identity, and package-size boundaries,
+then runs `--version` and the offline doctor through an exact-version
+`npm exec --ignore-scripts` installation. It does not use npm credentials or
+run network diagnostics inside WHOISleuth. Run it only after registry
+publication; an unavailable or still-staged version fails explicitly.
 
 Review schema compatibility whenever a release changes persisted or exported
 evidence:

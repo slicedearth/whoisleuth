@@ -93,6 +93,10 @@ describe('CLI doctor', () => {
         networkCalled = true;
         return [];
       },
+      fetchHttps: async () => {
+        networkCalled = true;
+        return new Response();
+      },
       queryWhois: async () => {
         networkCalled = true;
         return '';
@@ -117,6 +121,12 @@ describe('CLI doctor', () => {
         calls.push(`dns:${hostname}`);
         return [{ address: '192.0.2.10', family: 4 }];
       },
+      fetchHttps: async (url, options) => {
+        calls.push(`https:${url}`);
+        assert.equal(options?.headers && new Headers(options.headers).get('accept'), 'application/json');
+        assert.ok(options?.signal);
+        return new Response('private bootstrap response must not be retained', { status: 200 });
+      },
       queryWhois: async (server, query, options) => {
         assert.ok(options);
         calls.push(`whois:${server}:${query}:${options.totalDeadlineMs}`);
@@ -125,11 +135,13 @@ describe('CLI doctor', () => {
     });
     assert.deepEqual(calls, [
       'dns:whois.iana.org',
+      'https:https://data.iana.org/rdap/dns.json',
       'whois:whois.iana.org:example.com:6000',
     ]);
     assert.equal(report.state, 'pass');
-    assert.doesNotMatch(JSON.stringify(report), /private diagnostic response/u);
+    assert.doesNotMatch(JSON.stringify(report), /private (?:bootstrap|diagnostic) response/u);
     assert.match(JSON.stringify(report), /addresses were not retained/u);
+    assert.match(JSON.stringify(report), /HTTP 200/u);
   });
 
   test('returns a partial result for failed explicit network diagnostics', async () => {
@@ -140,6 +152,7 @@ describe('CLI doctor', () => {
       stderr: stderr.stream,
       now: () => '2026-08-01T00:00:00.000Z',
       resolvePublicAddresses: async () => { throw new Error('fixture DNS unavailable'); },
+      safeFetch: async () => { throw new Error('fixture HTTPS unavailable'); },
       whoisQuery: async () => { throw new Error('fixture transport unavailable'); },
     });
     assert.equal(code, EXIT_CODES.PARTIAL_FAILURE);
@@ -148,10 +161,10 @@ describe('CLI doctor', () => {
     assert.equal(report.schema, 'whoisleuth.cli.doctor');
     assert.equal(report.networkRequested, true);
     assert.equal(report.state, 'partial');
-    assert.equal(report.checks.filter((check: { state: string }) => check.state === 'partial').length, 2);
+    assert.equal(report.checks.filter((check: { state: string }) => check.state === 'partial').length, 3);
   });
 
-  test('bounds a stalled DNS diagnostic before continuing to WHOIS', async () => {
+  test('runs independent bounded diagnostics without one stalled transport blocking the others', async () => {
     let whoisCalled = false;
     const startedAt = Date.now();
     const report = await buildDoctorReport({
@@ -161,6 +174,7 @@ describe('CLI doctor', () => {
       networkTimeoutMs: 10,
       presentation: { interactive: false, color: false, width: null },
       resolveAddresses: async () => new Promise(() => {}),
+      fetchHttps: async () => new Promise(() => {}),
       queryWhois: async () => {
         whoisCalled = true;
         return 'fixture response';
@@ -170,5 +184,6 @@ describe('CLI doctor', () => {
     assert.equal(whoisCalled, true);
     assert.equal(report.state, 'partial');
     assert.match(report.checks.find((check) => check.id === 'public_dns')?.detail || '', /timed out after 10 ms/u);
+    assert.match(report.checks.find((check) => check.id === 'https_transport')?.detail || '', /timed out after 10 ms/u);
   });
 });
