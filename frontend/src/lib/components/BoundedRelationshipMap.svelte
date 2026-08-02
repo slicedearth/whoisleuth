@@ -21,21 +21,39 @@
 
   const graph = $derived(projectBoundedForceGraph(nodes, links, { focusNodeId }));
   let activeGroup = $state('');
+  let activeLinkKind = $state<'all' | 'observed' | 'derived'>('all');
   const selectedGroup = $derived(graph.clusters.some((cluster) => cluster.id === activeGroup) ? activeGroup : '');
   const selectedCluster = $derived(graph.clusters.find((cluster) => cluster.id === selectedGroup));
+  const graphIdentity = $derived([
+    focusNodeId,
+    ...graph.nodes.map((node) => node.id),
+    ...graph.links.map((link) => link.id),
+  ].join('|'));
+  $effect(() => {
+    if (graphIdentity) {
+      activeGroup = '';
+      activeLinkKind = 'all';
+    }
+  });
   const nodeLabel = (id: string) => graph.nodes.find((node) => node.id === id)?.label ?? id;
   const nodeGroup = (id: string) => graph.nodes.find((node) => node.id === id)?.group ?? '';
+  const linkMatchesFocus = (link: (typeof graph.links)[number]) => (
+    (!selectedGroup
+      || nodeGroup(link.sourceId) === selectedGroup
+      || nodeGroup(link.targetId) === selectedGroup)
+    && (activeLinkKind === 'all' || link.kind === activeLinkKind)
+  );
+  const focusedLinks = $derived(graph.links.filter(linkMatchesFocus));
+  const focusedNodeIds = $derived(new Set(focusedLinks.flatMap((link) => [link.sourceId, link.targetId])));
   const nodeIsMuted = (node: (typeof graph.nodes)[number]) => Boolean(
-    selectedGroup && node.kind !== 'target' && node.group !== selectedGroup,
+    node.kind !== 'target'
+      && (
+        Boolean(selectedGroup && node.group !== selectedGroup)
+        || Boolean(activeLinkKind !== 'all' && !focusedNodeIds.has(node.id))
+      ),
   );
-  const linkIsMuted = (link: (typeof graph.links)[number]) => Boolean(
-    selectedGroup
-      && nodeGroup(link.sourceId) !== selectedGroup
-      && nodeGroup(link.targetId) !== selectedGroup,
-  );
-  const mobileLinks = $derived(selectedGroup
-    ? graph.links.filter((link) => !linkIsMuted(link))
-    : graph.links);
+  const linkIsMuted = (link: (typeof graph.links)[number]) => !linkMatchesFocus(link);
+  const mobileLinks = $derived(focusedLinks);
   const linkPath = (link: (typeof graph.links)[number]) => {
     const deltaX = link.targetX - link.sourceX;
     const deltaY = link.targetY - link.sourceY;
@@ -73,12 +91,19 @@
         {/each}
       </ul>
     {/if}
-    <ul class="link-legend" aria-label="Relationship line styles">
-      <li><i class="observed" aria-hidden="true"></i>Observed</li>
-      <li><i class="derived" aria-hidden="true"></i>Partial or derived</li>
-    </ul>
-    {#if selectedCluster}
-      <p class="focus-note" role="status">Showing emphasis for {selectedCluster.label}. Select it again to show every group.</p>
+    <div class="link-filter" role="group" aria-label="Relationship evidence filter">
+      <button type="button" aria-pressed={activeLinkKind === 'all'} onclick={() => activeLinkKind = 'all'}>All</button>
+      <button type="button" aria-pressed={activeLinkKind === 'observed'} onclick={() => activeLinkKind = 'observed'}>
+        <i class="observed" aria-hidden="true"></i>Observed
+      </button>
+      <button type="button" aria-pressed={activeLinkKind === 'derived'} onclick={() => activeLinkKind = 'derived'}>
+        <i class="derived" aria-hidden="true"></i>Partial or derived
+      </button>
+    </div>
+    {#if selectedCluster || activeLinkKind !== 'all'}
+      <p class="focus-note" role="status">
+        Showing {selectedCluster ? `${selectedCluster.label} · ` : ''}{activeLinkKind === 'all' ? 'all relationship states' : activeLinkKind === 'observed' ? 'observed relationships' : 'partial or derived relationships'}.
+      </p>
     {/if}
     <div
       class="map-frame"
@@ -187,10 +212,13 @@
   .cluster-legend button[aria-pressed="true"]{border-color:var(--cluster-tone);background:color-mix(in srgb,var(--cluster-tone) 14%,var(--panel-raised));color:var(--text)}
   .cluster-legend i{width:7px;height:7px;border-radius:50%;background:var(--cluster-tone);box-shadow:0 0 8px color-mix(in srgb,var(--cluster-tone) 38%,transparent)}
   .cluster-legend span{color:var(--text)}
-  .link-legend{display:flex;flex-wrap:wrap;gap:11px;margin:8px 0 0;padding:0;list-style:none;color:var(--muted);font:600 var(--text-2xs) var(--mono)}
-  .link-legend li{display:inline-flex;align-items:center;gap:6px}
-  .link-legend i{display:block;width:23px;border-top:1.5px solid color-mix(in srgb,var(--muted) 65%,transparent)}
-  .link-legend i.derived{border-top-style:dashed}
+  .link-filter{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
+  .link-filter button{display:inline-flex;align-items:center;gap:6px;padding:3px 7px;border:1px solid var(--border);border-radius:999px;background:var(--panel-raised);color:var(--muted);font:600 var(--text-2xs) var(--mono);cursor:pointer}
+  .link-filter button:hover{border-color:var(--border-strong);color:var(--text)}
+  .link-filter button:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+  .link-filter button[aria-pressed="true"]{border-color:var(--border-strong);color:var(--text);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--border-strong) 42%,transparent)}
+  .link-filter i{display:block;width:23px;border-top:1.5px solid color-mix(in srgb,var(--muted) 65%,transparent)}
+  .link-filter i.derived{border-top-style:dashed}
   .focus-note{margin-top:7px!important;color:var(--text)!important;font:650 var(--text-2xs) var(--mono)!important}
   .map-frame{max-width:100%;margin-top:11px;overflow:hidden;border:1px solid var(--border);border-radius:var(--radius-sm);background-color:var(--panel-raised);background-image:radial-gradient(circle,color-mix(in srgb,var(--border) 70%,transparent) 1px,transparent 1px);background-size:24px 24px;overscroll-behavior:contain}
   .map-mobile{display:none}
