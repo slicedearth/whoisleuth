@@ -1,7 +1,7 @@
 import { fileURLToPath } from 'node:url';
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { statSync } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
 import packageJson from '../package.json' with { type: 'json' };
@@ -33,7 +33,9 @@ describe('CLI package boundary', () => {
     assert.equal(Object.hasOwn(packageJson, 'files'), false);
     assert.equal(Object.hasOwn(packageJson, 'bin'), false);
     assert.equal(packageTemplate.private, true);
+    assert.deepEqual(packageTemplate.contentPolicy, { class: 'dual-use' });
     assert.deepEqual(packageTemplate.bin, { whoisleuth: 'bin/whoisleuth.mjs' });
+    assert.match(readFileSync(join(__dirname, '..', 'DISCLOSURE'), 'utf8'), /defensive domain investigation/u);
   });
 
   test('keeps the source CLI entry point executable for repository use', () => {

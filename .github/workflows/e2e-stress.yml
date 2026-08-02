@@ -1,0 +1,54 @@
+name: Browser stress
+
+on:
+  schedule:
+    - cron: '17 3 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: browser-stress
+  cancel-in-progress: false
+
+jobs:
+  repeat:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --include=optional --ignore-scripts
+      - name: Build Svelte frontend
+        run: npm run build
+      - name: Install Playwright Chromium
+        run: npm run test:e2e:install
+      - name: Repeat historically timing-sensitive workflows without retries
+        run: npm run test:e2e:stress
+      - name: Upload Playwright result data
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: browser-stress-results
+          path: playwright-results.json
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Upload Playwright failure report
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: browser-stress-report
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore
+          retention-days: 7

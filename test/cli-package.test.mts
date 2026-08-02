@@ -23,6 +23,7 @@ const templateManifest = {
   private: true,
   type: 'module',
   license: 'AGPL-3.0-only',
+  contentPolicy: { class: 'dual-use' },
   bin: { whoisleuth: 'bin/whoisleuth.mjs' },
 };
 
@@ -62,6 +63,7 @@ describe('scoped CLI package contract', () => {
     assert.equal(manifest.name, '@slicedearth/whoisleuth-cli');
     assert.equal(manifest.version, '1.26.0');
     assert.equal(manifest.private, true);
+    assert.deepEqual(manifest.contentPolicy, { class: 'dual-use' });
     assert.deepEqual(manifest.dependencies, {
       parse5: '^8.0.1',
       tldts: '^7.4.9',
@@ -84,6 +86,8 @@ describe('scoped CLI package contract', () => {
     assert.throws(() => buildCliPackageManifest(rootManifest, { ...templateManifest, name: 'whoisleuth-cli' }), /must remain scoped/u);
     assert.throws(() => buildCliPackageManifest(rootManifest, { ...templateManifest, private: false }), /must remain private/u);
     assert.throws(() => buildCliPackageManifest(rootManifest, { ...templateManifest, publishConfig: { access: 'public' } }), /must not contain release-only/u);
+    assert.throws(() => buildCliPackageManifest(rootManifest, { ...templateManifest, contentPolicy: { class: 'ordinary' } }), /dual-use class/u);
+    assert.throws(() => buildCliPackageManifest(rootManifest, { ...templateManifest, contentPolicy: { class: 'dual-use', extra: true } }), /dual-use class/u);
   });
 
   test('keeps arguments and the human report explicit', () => {

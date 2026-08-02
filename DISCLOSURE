@@ -1,0 +1,18 @@
+WHOISleuth is a defensive domain investigation and brand-protection tool. Its
+command-line package can collect bounded WHOIS, RDAP, DNS, HTTP, TLS,
+certificate-transparency, website, and related infrastructure evidence. It can
+also generate and review lookalike-domain candidates, compare saved evidence,
+and prepare analyst-controlled reports. These security-relevant capabilities
+can have both legitimate and potentially harmful uses.
+
+WHOISleuth is intended for authorised defensive investigation, abuse response,
+threat research, domain acquisition due diligence, asset review, and education.
+Network collection is initiated explicitly by the operator, uses bounded
+requests, and keeps source provenance and incomplete results visible. The tool
+does not exploit targets, bypass access controls, submit credentials, execute
+remote page scripts, or automate enforcement actions.
+
+Operators are responsible for using WHOISleuth only on systems and data they
+are authorised to examine and in accordance with applicable laws, provider
+terms, and organisational policies. Observations and heuristic signals are
+investigative leads, not proof of ownership, intent, safety, or maliciousness.
