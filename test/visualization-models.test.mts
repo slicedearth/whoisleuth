@@ -131,6 +131,20 @@ describe('bounded visualization models', () => {
     assert.ok(projected.ticks.every((tick) => Number.isFinite(tick.x)));
   });
 
+  test('distinguishes the longest branch from the branch that settled last', () => {
+    const projected = projectCollectionTiming([
+      { source: 'registry', durationMs: 400, completedAfterMs: 400, outcome: 'fulfilled' },
+      { source: 'whois', durationMs: 250, completedAfterMs: 900, outcome: 'rejected' },
+      { source: 'domain-evidence', durationMs: 700, completedAfterMs: 850, outcome: 'fulfilled' },
+    ], 920);
+
+    assert.equal(projected.longestSource?.label, 'domain-evidence');
+    assert.equal(projected.longestSource?.durationMs, 700);
+    assert.equal(projected.lastSettledSource?.label, 'whois');
+    assert.equal(projected.lastSettledSource?.completedAfterMs, 900);
+    assert.equal(projected.requestErrorCount, 1);
+  });
+
   test('bounds signed score factors around a shared zero axis', () => {
     const projected = projectScoreFactors([
       { label: 'Positive', delta: 18 },

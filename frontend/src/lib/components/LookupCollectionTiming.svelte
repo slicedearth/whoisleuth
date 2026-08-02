@@ -22,6 +22,10 @@
   };
   const chart = $derived(projectCollectionTiming(timing.sources, timing.totalMs));
 
+  function displaySourceLabel(source: string): string {
+    return sourceLabels[source as LookupTimingSource] ?? source;
+  }
+
   function mobileBarStyle(source: (typeof chart.sources)[number]): string {
     const total = chart.totalMs;
     const start = Math.max(0, source.completedAfterMs - source.durationMs);
@@ -47,7 +51,33 @@
   <p class="timing-note">
     Reported after the final response. Source branches overlap, so their durations do not add up to the total.
     A settled branch can still report partial, unavailable, or not-found evidence in its source card.
+    Timing identifies elapsed branches, not why a source took that long.
   </p>
+
+  {#if chart.longestSource && chart.lastSettledSource}
+    <dl class="timing-summary" aria-label="Collection timing summary">
+      <div>
+        <dt>Longest branch</dt>
+        <dd>
+          {displaySourceLabel(chart.longestSource.label)}
+          <strong>{formatCollectionDuration(chart.longestSource.durationMs)}</strong>
+        </dd>
+      </div>
+      <div>
+        <dt>Last settled</dt>
+        <dd>
+          {displaySourceLabel(chart.lastSettledSource.label)}
+          <strong>+{formatCollectionDuration(chart.lastSettledSource.completedAfterMs)}</strong>
+        </dd>
+      </div>
+      <div>
+        <dt>Request errors</dt>
+        <dd>
+          {chart.requestErrorCount ? `${chart.requestErrorCount} ${chart.requestErrorCount === 1 ? 'branch' : 'branches'}` : 'None observed'}
+        </dd>
+      </div>
+    </dl>
+  {/if}
 
   {#if chart.sources.length}
     <!-- svelte-ignore a11y_no_noninteractive_tabindex -- scrollable diagnostic chart must be keyboard reachable -->
@@ -59,7 +89,7 @@
         {/each}
         {#each chart.sources as source}
           <g class:rejected={source.outcome === 'rejected'} class="timing-source">
-            <text x="8" y={source.y + 13}>{sourceLabels[source.label as LookupTimingSource] ?? source.label}</text>
+            <text x="8" y={source.y + 13}>{displaySourceLabel(source.label)}</text>
             <rect x={source.x} y={source.y} width={source.width} height="17" rx="4">
               <title>{formatCollectionDuration(source.durationMs)} duration, settled at +{formatCollectionDuration(source.completedAfterMs)}</title>
             </rect>
@@ -70,7 +100,7 @@
       <div class="mobile-timing" aria-hidden="true">
         {#each chart.sources as source}
           <div class:rejected={source.outcome === 'rejected'} class="mobile-timing-source">
-            <span>{sourceLabels[source.label as LookupTimingSource] ?? source.label}</span>
+            <span>{displaySourceLabel(source.label)}</span>
             <strong>{formatCollectionDuration(source.durationMs)} · +{formatCollectionDuration(source.completedAfterMs)}</strong>
             <i style={mobileBarStyle(source)}><b></b></i>
           </div>
@@ -102,6 +132,11 @@
   .embedded header h5{font-size:var(--text-sm)}
   header .chip{flex:0 0 auto}
   .timing-note{max-width:78ch;margin:10px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.55}
+  .timing-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:12px 0 0}
+  .timing-summary>div{min-width:0;padding:9px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}
+  .timing-summary dt{color:var(--muted);font:650 var(--text-2xs) var(--mono);text-transform:uppercase;letter-spacing:.04em}
+  .timing-summary dd{display:flex;justify-content:space-between;gap:8px;min-width:0;margin:4px 0 0;color:var(--text);font-size:var(--text-xs);overflow-wrap:anywhere}
+  .timing-summary strong{flex:none;color:var(--accent);font:650 var(--text-2xs) var(--mono);font-variant-numeric:tabular-nums}
   .timing-chart{max-width:100%;margin-top:14px;overflow-x:auto;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel-raised);overscroll-behavior-x:contain}
   .timing-chart:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
   .timing-chart svg{display:block;width:100%;min-width:680px;height:auto}
@@ -115,6 +150,7 @@
   .timing-limit{margin:7px 0 0;color:var(--muted);font-size:var(--text-2xs)}
   .timing-data{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;border:0;list-style:none}
   @media(max-width:760px){
+    .timing-summary{grid-template-columns:1fr}
     .timing-chart{overflow:visible}
     .timing-chart svg{display:none}
     .mobile-timing{display:grid;gap:11px;padding:12px}

@@ -87,6 +87,10 @@ test('completes the public synthetic workflow without investigation requests or 
   await expect(page.locator('.certificate-shape')).not.toHaveCount(0);
   await expect(page.locator('.observation-shape')).not.toHaveCount(0);
   await expect(page.getByRole('img', { name: 'Overlapping collection timing for 4 source branches' })).toBeVisible();
+  const timingSummary = page.locator('.timing-summary');
+  await expect(timingSummary).toContainText('Domain evidence');
+  await expect(timingSummary).toContainText('Network context');
+  await expect(timingSummary).toContainText('None observed');
   const agreementPlot = page.getByRole('img', { name: 'Registration agreement plot with 3 fields' });
   await expect(agreementPlot).toBeVisible();
   await expect(agreementPlot.locator('.agreement-track')).toHaveCount(3);

@@ -394,6 +394,12 @@ export function projectCollectionTiming(
     })
     .sort((a, b) => a.completedAfterMs - b.completedAfterMs || a.id.localeCompare(b.id));
   const sources = candidates.slice(0, MAX_COLLECTION_TIMING_SOURCES);
+  const longestSource = [...sources]
+    .sort((a, b) => b.durationMs - a.durationMs
+      || b.completedAfterMs - a.completedAfterMs
+      || a.id.localeCompare(b.id))[0] ?? null;
+  const lastSettledSource = sources.at(-1) ?? null;
+  const requestErrorCount = sources.filter((source) => source.outcome === 'rejected').length;
   const totalMs = Math.max(
     1,
     boundedNumber(rawTotalMs, 0, 300_000),
@@ -405,6 +411,9 @@ export function projectCollectionTiming(
     width: 900,
     height: Math.max(92, 50 + sources.length * rowHeight),
     totalMs,
+    longestSource,
+    lastSettledSource,
+    requestErrorCount,
     ticks: x.ticks(5).map((value) => ({ value, x: x(value) })),
     sources: sources.map((source, index) => ({
       ...source,
