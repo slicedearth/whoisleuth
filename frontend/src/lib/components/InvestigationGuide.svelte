@@ -365,7 +365,7 @@
     reviewingStageId = '';
     if (!guide) return;
     const preserveCandidateHandoff = stage.path === '/bulk'
-      && actionIsCurrent
+      && page.url.pathname === '/bulk'
       && page.url.searchParams.get('source') === 'discover';
     if (preserveCandidateHandoff) {
       guide = recordInvestigationGuideVisit(page.url.pathname);
