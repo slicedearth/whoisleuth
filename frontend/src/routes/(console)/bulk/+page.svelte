@@ -17,15 +17,15 @@
   import BulkMailExposureReview from '$lib/components/BulkMailExposureReview.svelte';
   import BulkPeerOutliers from '$lib/components/BulkPeerOutliers.svelte';
   import PageHeading from '$lib/components/PageHeading.svelte';
-  import { activeProfile, isDomainAllowlisted, profileDomainKind, profileSignals, type BrandProfile } from '$lib/brand-profiles';
+  import { activeProfile, isDomainAllowlisted, profileDomainKind, type BrandProfile } from '$lib/brand-profiles';
   import { loadCandidateHandoff, type Candidate, type CandidateHandoff, type CertificateTransparencyProvenance } from '$lib/candidate-handoff';
   import { clearShortlist, exportShortlist, importShortlist, loadShortlist, MAX_SHORTLIST_IMPORT_BYTES, setShortlistSelection, toggleShortlist, type ShortlistRecord } from '$lib/shortlist';
   import { CASE_DISPOSITIONS, dispositionLabel, editCase, loadCases, openCase, type CaseRecord } from '$lib/cases';
   import { saveWatchlist } from '$lib/watchlists';
   import { MUTATION_LABELS } from '$lib/analysis/typosquat-generator.ts';
   import { buildCoverageReport } from '$lib/analysis/coverage.ts';
-  import { computeOpportunityScore, explainRiskScore, formatActivityCell } from '$lib/analysis/scoring.ts';
-  import { entityDisplayName, parseDomainInput, rowsToCsv } from '$lib/analysis/utils.ts';
+  import { normalizeBulkScanResult } from '$lib/analysis/bulk-scan-normalizer.ts';
+  import { parseDomainInput, rowsToCsv } from '$lib/analysis/utils.ts';
   import { buildScanRelationships, relationshipObservation, RELATIONSHIP_EVIDENCE_VERSION } from '$lib/analysis/relationship-evidence.ts';
   import type { RelationshipObservation } from '$lib/analysis/relationship-evidence.ts';
   import { relationshipObservationId } from '$lib/analysis/relationship-observation-model.ts';
@@ -35,29 +35,17 @@
   import { buildStixIndicatorExport } from '$lib/analysis/stix-indicator-export.ts';
   import { buildMispIndicatorExport } from '$lib/analysis/misp-indicator-export.ts';
   import { analyzeDomainIdn } from '$lib/analysis/idn-confusables.ts';
-  import { compactHttpObservation, normalizeHttpSummary } from '$lib/analysis/http-summary.ts';
-  import {
-    lookupRecord,
-    type CompactLookupHttpResponse,
-  } from '$lib/analysis/lookup-response.ts';
+  import { normalizeHttpSummary } from '$lib/analysis/http-summary.ts';
+  import type { CompactLookupHttpResponse } from '$lib/analysis/lookup-response.ts';
   import { fetchCompactBulkLookup } from '$lib/analysis/bulk-lookup-controller.ts';
   import {
-    boundedStrings,
-    boundedText,
     bulkSessionInputDigest,
-    compactContact,
-    compactDnsEvidence,
-    compactSourceCoverage,
     createBulkSessionId,
     fromBulkSessionResult,
-    nullableBoolean,
-    plainRecord,
     toBulkSessionResult,
-    type SavedScanRecord,
     type ScanMode,
     type ScanResult,
   } from '$lib/analysis/bulk-result-model.ts';
-  import { normalizeBulkComparisonEvidence } from '$lib/analysis/bulk-session-model.ts';
   import { defaultBulkSortDirection, sortBulkResults, type BulkSortDirection, type BulkSortKey } from '$lib/analysis/bulk-sort.ts';
   import {
     buildBulkTriageGroups,
@@ -124,6 +112,7 @@
   const MAX_DOMAIN_IMPORT_BYTES = 2 * 1024 * 1024;
   const PAGE_SIZE = 100;
   const RESULT_PUBLISH_MS = 100;
+  type ShortlistSelectionResult = Awaited<ReturnType<typeof setShortlistSelection>>;
 
   let handoff = $state<CandidateHandoff|null>(null);
   let input = $state(''); let mode = $state<ScanMode>('fast'); let running = $state(false); let paused = $state(false);
@@ -267,7 +256,40 @@
   function isShortlisted(domain:string){return shortlistedDomains.has(domain);}
   async function toggleSaved(row:ScanResult){const previous=shortlist.find((item)=>item.domain===row.domain);try{const added=await toggleShortlist({...row.saved,riskScore:row.risk,opportunityScore:row.opportunity,savedAt:new Date().toISOString()});shortlist=await loadShortlist();shortlistStatus=added?`Added ${row.domain} to the shortlist.`:`Removed ${row.domain} from the shortlist.`;registerAnalystUndo({kind:'shortlist_membership',action:added?'Added to shortlist':'Removed from shortlist',affectedRecord:row.domain,undo:async()=>{if(previous)await setShortlistSelection([previous],true);else await setShortlistSelection([shortlistPayload(row)],false);shortlist=await loadShortlist();return `${row.domain} ${previous?'restored to':'removed from'} the shortlist.`;}});}catch(cause){shortlistStatus=cause instanceof Error?cause.message:'Could not update shortlist.';}}
   function shortlistPayload(row:ScanResult){return{...row.saved,riskScore:row.risk,opportunityScore:row.opportunity,savedAt:new Date().toISOString()};}
-  async function selectRows(rows:ScanResult[],selected=true){const affected=rows.slice(0,500);const affectedDomains=new Set(affected.map((row)=>row.domain));const previous=shortlist.filter((item)=>affectedDomains.has(item.domain));try{const result=await setShortlistSelection(affected.map(shortlistPayload),selected);shortlist=await loadShortlist();shortlistStatus=selected?`Selected ${result.added} new and refreshed ${result.updated} existing domain${result.added+result.updated===1?'':'s'}${result.skipped?`; skipped ${result.skipped} invalid or over-limit row${result.skipped===1?'':'s'}`:''}.`:`Removed ${result.removed} domain${result.removed===1?'':'s'} from the shortlist.`;if(result.added+result.updated+result.removed>0)registerAnalystUndo({kind:'shortlist_membership',action:selected?'Updated shortlist selection':'Removed shortlist selection',affectedRecord:`${affected.length} domain${affected.length===1?'':'s'}`,undo:async()=>{await setShortlistSelection(affected.map(shortlistPayload),false);if(previous.length)await setShortlistSelection(previous,true);shortlist=await loadShortlist();return `Restored the prior shortlist membership for ${affected.length} domain${affected.length===1?'':'s'}.`;}});}catch(cause){shortlistStatus=cause instanceof Error?cause.message:'Could not update the selection.';}}
+  function shortlistSelectionStatus(result:ShortlistSelectionResult,selected:boolean):string {
+    if(!selected)return `Removed ${result.removed} domain${result.removed===1?'':'s'} from the shortlist.`;
+    const changed=result.added+result.updated;
+    const skipped=result.skipped
+      ? `; skipped ${result.skipped} invalid or over-limit row${result.skipped===1?'':'s'}`
+      : '';
+    return `Selected ${result.added} new and refreshed ${result.updated} existing domain${changed===1?'':'s'}${skipped}.`;
+  }
+  async function restoreShortlistSelection(affected:ScanResult[],previous:ShortlistRecord[]):Promise<string> {
+    await setShortlistSelection(affected.map(shortlistPayload),false);
+    if(previous.length)await setShortlistSelection(previous,true);
+    shortlist=await loadShortlist();
+    return `Restored the prior shortlist membership for ${affected.length} domain${affected.length===1?'':'s'}.`;
+  }
+  async function selectRows(rows:ScanResult[],selected=true){
+    const affected=rows.slice(0,500);
+    const affectedDomains=new Set(affected.map((row)=>row.domain));
+    const previous=shortlist.filter((item)=>affectedDomains.has(item.domain));
+    try{
+      const result=await setShortlistSelection(affected.map(shortlistPayload),selected);
+      shortlist=await loadShortlist();
+      shortlistStatus=shortlistSelectionStatus(result,selected);
+      if(result.added+result.updated+result.removed>0){
+        registerAnalystUndo({
+          kind:'shortlist_membership',
+          action:selected?'Updated shortlist selection':'Removed shortlist selection',
+          affectedRecord:`${affected.length} domain${affected.length===1?'':'s'}`,
+          undo:()=>restoreShortlistSelection(affected,previous),
+        });
+      }
+    }catch(cause){
+      shortlistStatus=cause instanceof Error?cause.message:'Could not update the selection.';
+    }
+  }
   async function selectDomains(domains:string[]){const wanted=new Set(domains);await selectRows(filtered.filter((row)=>wanted.has(row.domain)),true);}
   async function selectFiltered(){await selectRows(filtered,true);}
   async function clearFilteredSelection(){await selectRows(filtered,false);}
@@ -284,7 +306,10 @@
   function togglePause(){if(paused)resume();else paused=true;}
   function cancel(){resume();controller?.abort();status=`Cancelled after ${completed} of ${total} lookups.`;}
   async function fetchLookup(domain:string,signal:AbortSignal):Promise<CompactLookupHttpResponse>{return fetchCompactBulkLookup(domain,mode,signal);}
-  function normalize(domain:string,body:CompactLookupHttpResponse):ScanResult {const av=lookupRecord(body.availability);const canonicalDomain=body.availability.domain;const candidate=provenance(domain)||provenance(canonicalDomain);const matched=profileSignals(canonicalDomain,av,profile);const idn=analyzeDomainIdn(canonicalDomain,profile?.officialDomains||[]);const scoring={...av,...matched,availability:body.availability.state,mutationTypes:candidate?.mutationTypes||[]};const riskExplanation=explainRiskScore(scoring);const risk=riskExplanation?.score??null;const opportunity=computeOpportunityScore(scoring);const nameservers=boundedStrings(av.nameservers);const registrant=compactContact(av.registrant);const abuse=plainRecord(av.abuse);const abuseEmail=boundedText(abuse?.email,320);const hasMx=nullableBoolean(av.hasMx);const hasNullMx=nullableBoolean(av.hasNullMx);const hasSpf=nullableBoolean(av.hasSpf);const hasDmarc=nullableBoolean(av.hasDmarc);const activityStatus=boundedText(av.activityStatus,40);const privacyProtected=nullableBoolean(av.privacyProtected);const abuseEvidence=abuseEmail?{abuseEmail}:null;const httpSummary=compactHttpObservation(av.http)||{};const relationship=relationshipObservation(av,profile?.officialDomains||[]);const hasExternalFormAction=nullableBoolean(av.hasExternalFormAction);const comparisonEvidence=normalizeBulkComparisonEvidence(av.bulkComparison);const saved:SavedScanRecord={domain:canonicalDomain,scanDepth:mode,availability:body.availability.state,registrarName:entityDisplayName(av.registrar)||'—',nameservers,createdDate:boundedText(av.createdDate,64),expiryDate:boundedText(av.expiryDate,64),privacyProtected,hasMx,hasNullMx,hasSpf,hasDmarc,activityStatus,pageTitle:boundedText(av.pageTitle,300),...httpSummary,faviconHash:boundedText(av.faviconHash,64),faviconPHash:boundedText(av.faviconPHash,64),faviconMatch:matched.faviconMatch,faviconNearMatch:matched.faviconNearMatch,reusesOfficialAssets:matched.reusesOfficialAssets,hasPasswordField:nullableBoolean(av.hasPasswordField),hasExternalFormAction,phishingLanguageMatch:boundedText(av.phishingLanguageMatch,300),riskModelVersion:riskExplanation?.modelVersion??null,riskScore:risk,riskFactors:riskExplanation?.factors.map((factor)=>({label:factor.label,points:factor.delta}))||[],mutationTypes:candidate?.mutationTypes||[]};return{domain:canonicalDomain,status:'complete',availability:saved.availability,confidence:body.availability.confidence,registrar:saved.registrarName,activity:formatActivityCell(activityStatus,hasMx,hasSpf,hasDmarc),risk,opportunity,mutationTypes:candidate?.mutationTypes||[],trusted:matched.trusted,error:'',saved,nameservers,faviconHash:saved.faviconHash,faviconPHash:saved.faviconPHash,faviconMatch:matched.faviconMatch,faviconNearMatch:matched.faviconNearMatch,reusesOfficialAssets:matched.reusesOfficialAssets,hasPasswordField:saved.hasPasswordField===true,hasExternalFormAction,phishingLanguageMatch:saved.phishingLanguageMatch??null,registrant,abuseEvidence,ct:candidate?.certificateTransparency||null,idn,dns:compactDnsEvidence(av.dns),dnssec:boundedText(av.dnssec,40),comparisonEvidence,relationship,sourceCoverage:compactSourceCoverage(body,av)};}
+  function normalize(domain:string,body:CompactLookupHttpResponse):ScanResult {
+    const candidate=provenance(domain)||provenance(body.availability.domain)||null;
+    return normalizeBulkScanResult(body,{mode,profile,candidate});
+  }
   function failedResult(domain:string,message:string):ScanResult{const candidate=provenance(domain);const mutationTypes=candidate?.mutationTypes||[];const idn=analyzeDomainIdn(domain,profile?.officialDomains||[]);return{domain:idn?.asciiDomain||domain,status:'error',availability:'error',confidence:'unknown',registrar:'—',activity:'—',risk:null,opportunity:null,mutationTypes,trusted:profileDomainKind(domain,profile),error:message,saved:{domain:idn?.asciiDomain||domain,scanDepth:mode,availability:'error',registrarName:'—',nameservers:[],faviconHash:null,faviconPHash:null,riskFactors:[],mutationTypes,error:message},nameservers:[],faviconHash:null,faviconPHash:null,faviconMatch:false,faviconNearMatch:false,reusesOfficialAssets:false,hasPasswordField:false,hasExternalFormAction:null,phishingLanguageMatch:null,registrant:null,abuseEvidence:null,ct:candidate?.certificateTransparency||null,idn,dns:null,dnssec:null,comparisonEvidence:null,relationship:relationshipObservation({},[]),sourceCoverage:[{source:'lookup',state:'error'}]};}
   async function saveCurrentBulkSession(){const name=bulkSessionName.trim();const domains=parseDomains();if(!name||!domains.length||!results.length){bulkSessionStatus='Enter a session name and complete at least one result before saving.';return;}try{const settled=new Set(results.map((row)=>row.domain));const isComplete=domains.every((domain)=>settled.has(domain));const now=new Date().toISOString();const result=await saveBulkSession({id:currentBulkSessionId||createBulkSessionId(),name,mode,state:isComplete?'complete':status.startsWith('Cancelled')?'cancelled':'partial',inputDigest:await bulkSessionInputDigest(domains,mode),domains,results:results.map(toBulkSessionResult),startedAt:scanStartedAt||now,updatedAt:now,completedAt:isComplete?now:null});currentBulkSessionId=result.session.id;bulkSessions=await loadBulkSessions();bulkSessionStatus=`${result.added?'Saved':'Updated'} ${result.session.name}.${result.pruned?` Pruned ${result.pruned} older session${result.pruned===1?'':'s'} to stay within storage.`:''}`;}catch(cause){bulkSessionStatus=cause instanceof Error?cause.message:'Could not save the Bulk session.';}}
   function loadSavedBulkSession(session:BulkSession){resume();controller?.abort();currentBulkSessionId=session.id;bulkSessionName=session.name;mode=session.mode;input=session.domains.join('\n');results=session.results.map((row)=>fromBulkSessionResult(row,profile?.officialDomains||[]));completed=results.length;total=session.domains.length;page=1;scanStartedAt=session.startedAt;status=`Loaded ${session.name}: ${results.length} of ${session.domains.length} rows settled. Contact records were not retained.`;requestAnimationFrame(()=>document.querySelector('#results')?.scrollIntoView({behavior:'auto'}));}
