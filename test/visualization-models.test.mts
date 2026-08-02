@@ -186,6 +186,8 @@ describe('bounded visualization models', () => {
 
     assert.equal(first.nodes.length, MAX_FORCE_GRAPH_NODES);
     assert.equal(first.links.length, MAX_FORCE_GRAPH_LINKS);
+    assert.equal(first.omittedNodeInputs, 4);
+    assert.equal(first.omittedLinkInputs, 8);
     assert.equal(first.truncated, true);
     assert.deepEqual(first, second);
     assert.deepEqual({ nodes, links }, original);
@@ -209,6 +211,8 @@ describe('bounded visualization models', () => {
     assert.deepEqual(projected.nodes.map((node) => node.kind), ['external-source', 'target-node']);
     assert.equal(projected.links.length, 1);
     assert.equal(projected.links[0]?.kind, 'derived-finding');
+    assert.equal(projected.omittedNodeInputs, 0);
+    assert.equal(projected.omittedLinkInputs, 1);
     assert.equal(projected.truncated, true);
   });
 

@@ -359,6 +359,8 @@ export function projectBoundedForceGraph(
       detail: link.detail,
     }] : [];
   });
+  const omittedNodeInputs = Math.max(0, rawNodeCount - nodes.length);
+  const omittedLinkInputs = Math.max(0, rawLinkCount - projectedLinks.length);
   return {
     width,
     height,
@@ -382,8 +384,8 @@ export function projectBoundedForceGraph(
       count: nodes.filter((node) => node.id !== focusNode?.id && node.group === group).length,
       index: index % 8,
     })),
-    truncated: rawNodeCount > candidates.length
-      || candidates.length > nodes.length
-      || rawLinkCount > links.length,
+    omittedNodeInputs,
+    omittedLinkInputs,
+    truncated: omittedNodeInputs > 0 || omittedLinkInputs > 0,
   };
 }

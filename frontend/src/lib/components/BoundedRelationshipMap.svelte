@@ -45,6 +45,7 @@
   );
   const focusedLinks = $derived(graph.links.filter(linkMatchesFocus));
   const focusedNodeIds = $derived(new Set(focusedLinks.flatMap((link) => [link.sourceId, link.targetId])));
+  const omittedInputCount = $derived(graph.omittedNodeInputs + graph.omittedLinkInputs);
   const nodeIsMuted = (node: (typeof graph.nodes)[number]) => Boolean(
     node.kind !== 'target'
       && (
@@ -78,7 +79,7 @@
       <div class="map-summary" role="group" aria-label="Map summary">
         <span>{graph.nodes.length} facts</span>
         <span>{graph.links.length} links</span>
-        {#if graph.truncated}<strong>Partial visual</strong>{/if}
+        {#if graph.truncated}<strong>Partial visual · {omittedInputCount} omitted</strong>{/if}
       </div>
     </header>
     <p>{description}</p>
@@ -116,7 +117,7 @@
     <div
       class="map-frame"
       role="img"
-      aria-label={`${title}. ${graph.nodes.length} nodes and ${graph.links.length} relationships. Exact evidence follows the visual.`}
+      aria-label={`${title}. ${graph.nodes.length} nodes and ${graph.links.length} relationships.${graph.truncated ? ` ${omittedInputCount} visual inputs omitted after bounded normalization.` : ''} Exact evidence follows the visual.`}
     >
       <svg viewBox={`0 0 ${graph.width} ${graph.height}`} aria-hidden="true">
         <rect width={graph.width} height={graph.height} class="background"></rect>
@@ -186,7 +187,7 @@
     <div
       class="map-mobile"
       role="img"
-      aria-label={`${title}. ${graph.nodes.length} nodes and ${graph.links.length} relationships. Exact evidence follows the visual.`}
+      aria-label={`${title}. ${graph.nodes.length} nodes and ${graph.links.length} relationships.${graph.truncated ? ` ${omittedInputCount} visual inputs omitted after bounded normalization.` : ''} Exact evidence follows the visual.`}
     >
       <ul aria-hidden="true">
         {#each mobileLinks.slice(0, 12) as link (link.id)}
@@ -201,6 +202,9 @@
       {#if mobileLinks.length > 12}<p>Showing 12 of {mobileLinks.length} mapped relationships. Exact evidence remains below.</p>{/if}
       {#if !mobileLinks.length}<p>No mapped relationships match these visual filters. Exact evidence remains below.</p>{/if}
     </div>
+    {#if graph.truncated}
+      <p class="visual-limit">The bounded visual omitted {graph.omittedNodeInputs} fact {graph.omittedNodeInputs === 1 ? 'input' : 'inputs'} and {graph.omittedLinkInputs} relationship {graph.omittedLinkInputs === 1 ? 'input' : 'inputs'} after normalization or display limits. Use the exact evidence below for source detail.</p>
+    {/if}
     <p class="limit">Lines show observed or explicitly derived relationships in the current bounded dataset. They do not establish common ownership or intent.</p>
   </section>
 {/if}
@@ -253,6 +257,7 @@
   .node text{fill:var(--text);font:650 10px var(--mono);pointer-events:none}
   .node text.target-label{font-weight:750}
   .node.muted{opacity:.14}
+  .visual-limit{color:var(--amber)!important;font-size:var(--text-2xs)!important}
   .limit{font-size:var(--text-2xs)!important}
   @media(max-width:700px){
     header{align-items:flex-start}.map-summary{max-width:130px}
