@@ -25,10 +25,10 @@ test('the registry-support catalogue filters locally and retains explicit interp
 
   await page.goto('/registry-support');
 
-  await expect(page.getByText('Catalogue v26')).toBeVisible();
-  await expect(page.locator('.summary-grid article').filter({ hasText: 'Explicit suffixes' }).locator('strong')).toHaveText('312');
+  await expect(page.getByText('Catalogue v27')).toBeVisible();
+  await expect(page.locator('.summary-grid article').filter({ hasText: 'Explicit suffixes' }).locator('strong')).toHaveText('335');
   await expect(page.locator('.catalogue-section tbody tr')).toHaveCount(50);
-  await expect(page.locator('.result-count')).toContainText('Showing 1–50 of 312 matching profiles (312 total)');
+  await expect(page.locator('.result-count')).toContainText('Showing 1–50 of 335 matching profiles (335 total)');
   const standards = page.getByRole('region', { name: 'Generic TLD RDAP snapshot' });
   await expect(standards).toContainText('1114 / 1114');
   await expect(standards).toContainText('12 / 14');
@@ -65,17 +65,21 @@ test('the registry-support catalogue filters locally and retains explicit interp
   await search.clear();
   await page.locator('#coverage-filter').selectOption('access_documented');
   await expect(page.locator('.catalogue-section tbody tr')).toHaveCount(50);
-  await expect(page.locator('.result-count')).toContainText('Showing 1–50 of 94 matching profiles (312 total)');
+  await expect(page.locator('.result-count')).toContainText('Showing 1–50 of 117 matching profiles (335 total)');
   await expect(page.locator('.catalogue-section tbody')).toContainText('.ao');
   await expect(page.locator('.catalogue-section tbody')).toContainText('.ch');
   await expect(page.locator('.catalogue-section tbody')).toContainText('.es');
   await expect(page.locator('.catalogue-section tbody')).toContainText('.gr');
   await expect(page.locator('.catalogue-section tbody')).toContainText('.arpa');
   await page.getByRole('button', { name: 'Next' }).click();
-  await expect(page.locator('.catalogue-section tbody tr')).toHaveCount(44);
-  await expect(page.locator('.result-count')).toContainText('Showing 51–94 of 94 matching profiles (312 total)');
+  await expect(page.locator('.catalogue-section tbody tr')).toHaveCount(50);
+  await expect(page.locator('.result-count')).toContainText('Showing 51–100 of 117 matching profiles (335 total)');
   await expect(page.locator('.catalogue-section tbody')).toContainText('.mil');
   await expect(page.locator('.catalogue-section tbody')).toContainText('.vn');
+  await page.getByRole('button', { name: 'Next' }).click();
+  await expect(page.locator('.catalogue-section tbody tr')).toHaveCount(17);
+  await expect(page.locator('.result-count')).toContainText('Showing 101–117 of 117 matching profiles (335 total)');
+  await expect(page.locator('.catalogue-section tbody')).toContainText('.zip');
   await expect(page.locator('.catalogue-section tbody')).toContainText('.zw');
 
   await search.fill('no matching capability');
