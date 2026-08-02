@@ -83,6 +83,11 @@
     page = 1;
   }
 
+  function showInspectedProfile(suffix: string | undefined) {
+    resetCatalogueView();
+    query = suffix ?? '';
+  }
+
   function capabilityStateClass(state: LookupCapabilityState): string {
     return state.replace('_', '-');
   }
@@ -228,6 +233,12 @@
             <div><dt>Parser</dt><dd>{registrySupportLabel(profile.whoisParserProfile)}</dd></div>
             {#if profile.fallbackProfile}<div><dt>Fallback</dt><dd>{registrySupportLabel(profile.fallbackProfile)}</dd></div>{/if}
           </dl>
+          {#if profile.explicitSuffixProfile && profile.suffixes[0]}
+            <div class="inspection-handoff">
+              <a class="btn" href="#registry-catalogue" onclick={() => showInspectedProfile(profile.suffixes[0])}>Show in catalogue</a>
+              <span>Apply the exact suffix filter and review its fixture and documentation references.</span>
+            </div>
+          {/if}
           <p class="limitation"><strong>Limitation:</strong> {profile.limitation}</p>
           <p class="no-inference">This catalogue result does not decide registration, availability, ownership, safety, or maliciousness.</p>
         </article>
@@ -236,7 +247,7 @@
   {/if}
 </section>
 
-<section class="catalogue-section" aria-labelledby="catalogue-title">
+<section class="catalogue-section" id="registry-catalogue" aria-labelledby="catalogue-title">
   <header class="section-intro">
     <p class="eyebrow">Compatibility catalogue</p>
     <h2 id="catalogue-title">Implemented registry profiles</h2>
@@ -347,10 +358,11 @@
   .summary-grid p{margin:0;color:var(--text);font-size:var(--text-xs);line-height:1.45}
   .standards-section{margin-top:34px}.standards-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.standards-grid article{display:grid;gap:6px;padding:16px}.standards-grid span{color:var(--muted);font:700 var(--text-2xs) var(--mono);letter-spacing:.05em;text-transform:uppercase}.standards-grid strong{color:var(--accent2);font:750 1.2rem var(--mono);overflow-wrap:anywhere}.standards-grid p{margin:0;color:var(--text);font-size:var(--text-xs);line-height:1.45}.standards-notes{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;margin-top:8px;padding:16px}.standards-notes h3{margin:0 0 6px;font:700 var(--text-sm) var(--mono)}.standards-notes p{margin:0;color:var(--muted);font-size:var(--text-xs);line-height:1.55}.standards-notes code{color:var(--accent)}
   .capability-section{margin-top:34px}.capability-intro{display:flex;max-width:none;gap:16px;align-items:end;justify-content:space-between}.capability-intro>div{max-width:840px}.capability-filter{display:flex;flex-wrap:wrap;gap:8px 18px;margin:0 0 10px;padding:12px 15px}.capability-filter legend{padding:0 5px;color:var(--muted);font:600 var(--text-2xs) var(--mono)}.capability-filter label{display:flex;gap:7px;align-items:center;font-size:var(--text-xs)}.capability-filter input{margin:0}.capability-table-wrap{overflow:auto;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel)}.capability-table{min-width:1040px}.capability-table td{min-width:120px;max-width:290px;line-height:1.45}.capability-table td:first-child{min-width:190px}.capability-table td:last-child{min-width:260px;color:var(--muted)}.capability-table td>strong{font-size:var(--text-xs)}.capability-table td>small{color:var(--muted);font:600 var(--text-2xs) var(--mono)}.capability-state{display:inline-block!important;width:max-content;max-width:100%;margin:0!important;border:1px solid var(--border);border-radius:999px;padding:4px 7px;color:var(--muted)!important;font:700 var(--text-2xs) var(--mono);white-space:nowrap}.capability-state.collected{border-color:color-mix(in srgb,var(--accent2) 42%,var(--border));color:var(--accent2)!important}.capability-state.conditional{border-color:color-mix(in srgb,var(--amber) 48%,var(--border));color:var(--amber)!important}.capability-state.not-collected,.capability-state.not-applicable{color:var(--muted)!important}.matrix-note{margin:9px 2px 0;color:var(--muted);font-size:var(--text-xs);line-height:1.5}
-  .catalogue-section{margin-top:34px}
+  .catalogue-section{margin-top:34px;scroll-margin-top:calc(var(--anchor-offset) + 12px)}
   .inspector-section{margin-top:34px}
   .section-intro{max-width:840px;margin-bottom:14px}.section-intro h2{margin:3px 0 0;font:700 1.15rem var(--mono)}.section-intro>p:not(.eyebrow){margin:7px 0 0;color:var(--muted);font-size:var(--text-sm);line-height:1.55}
   .inspector-form{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:end;padding:15px}.inspector-form label{display:grid;gap:6px;color:var(--muted);font:600 var(--text-xs) var(--mono)}.inspector-form input{width:100%;min-height:var(--control-h)}.inspector-actions{display:flex;flex-wrap:wrap;gap:8px}.inspection-output{margin-top:10px}.inspection-card{display:grid;gap:14px;padding:18px}.inspection-card>header{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:start;justify-content:space-between}.inspection-card h3{margin:3px 0 0;color:var(--accent);font:750 1.25rem var(--mono)}.inspection-card dl{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:0}.inspection-card dl>div{min-width:0;padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface)}.inspection-card dt{color:var(--muted);font:600 var(--text-2xs) var(--mono);text-transform:uppercase}.inspection-card dd{margin:5px 0 0;overflow-wrap:anywhere}.no-inference{margin:0;color:var(--muted);font-size:var(--text-xs);line-height:1.5}
+  .inspection-handoff{display:flex;flex-wrap:wrap;align-items:center;gap:9px}.inspection-handoff span{color:var(--muted);font-size:var(--text-xs);line-height:1.45}
   .filters{display:flex;min-width:0;flex-wrap:wrap;gap:12px;align-items:end;padding:15px}
   .filters legend{padding:0 5px;color:var(--muted);font:600 var(--text-2xs) var(--mono)}
   .filters label{display:grid;gap:6px;color:var(--muted);font:600 var(--text-xs) var(--mono)}

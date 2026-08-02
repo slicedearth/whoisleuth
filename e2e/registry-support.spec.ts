@@ -150,6 +150,12 @@ test('the local inspector explains explicit and generic suffix support without a
   await inspectButton.click();
   await expect(result).toContainText('Explicit suffix profile');
   await expect(result).toContainText('.uk');
+  await page.getByRole('link', { name: 'Show in catalogue' }).click();
+  await expect(page).toHaveURL(/#registry-catalogue$/u);
+  await expect(page.getByLabel('Suffix or capability')).toHaveValue('uk');
+  await expect(page.locator('.catalogue-section tbody tr')).toHaveCount(1);
+  await expect(page.locator('.catalogue-section tbody tr')).toContainText('.uk');
+  await expect(page.getByText('1 refinement active')).toBeVisible();
 
   await input.fill('https://example.invalid/path');
   await inspectButton.click();
