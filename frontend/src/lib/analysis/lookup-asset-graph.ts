@@ -106,6 +106,37 @@ function projectedNodeGroup(
   return { id: 'evidence', label: 'Other evidence' };
 }
 
+function interleaveVisualEdgesByFamily(
+  edges: readonly LookupAssetEdge[],
+  nodesById: ReadonlyMap<string, LookupAssetNode>,
+): LookupAssetEdge[] {
+  const buckets = new Map<string, LookupAssetEdge[]>();
+  for (const edge of edges) {
+    const endpointGroups = [nodesById.get(edge.source), nodesById.get(edge.target)]
+      .filter((node): node is LookupAssetNode => Boolean(node))
+      .map((node) => projectedNodeGroup(node, edges).id)
+      .filter((group) => group !== 'focus')
+      .sort();
+    const family = [...new Set(endpointGroups)].join('+') || 'evidence';
+    const bucket = buckets.get(family) ?? [];
+    bucket.push(edge);
+    buckets.set(family, bucket);
+  }
+  const families = [...buckets.keys()].sort();
+  const ordered: LookupAssetEdge[] = [];
+  for (let offset = 0; ordered.length < edges.length; offset += 1) {
+    let appended = false;
+    for (const family of families) {
+      const edge = buckets.get(family)?.[offset];
+      if (!edge) continue;
+      ordered.push(edge);
+      appended = true;
+    }
+    if (!appended) break;
+  }
+  return ordered;
+}
+
 function record(value: unknown): JsonRecord {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? value as JsonRecord
@@ -871,10 +902,11 @@ export function projectLookupAssetGraph(
   const acceptedEdges = graph.edges.filter((edge) => lens === 'all'
     ? edge.lenses.includes('all') || edge.lenses.length > 0
     : edge.lenses.includes(lens));
+  const graphNodeById = new Map(graph.nodes.map((node) => [node.id, node]));
   const visualEdges: LookupAssetEdge[] = [];
   const visualDegree = new Map<string, number>();
   const omittedByHub = new Map<string, number>();
-  for (const edge of acceptedEdges) {
+  for (const edge of interleaveVisualEdgesByFamily(acceptedEdges, graphNodeById)) {
     const sourceDegree = visualDegree.get(edge.source) ?? 0;
     const targetDegree = visualDegree.get(edge.target) ?? 0;
     const saturatedHub = sourceDegree >= MAX_VISUAL_EDGES_PER_HUB
@@ -895,7 +927,6 @@ export function projectLookupAssetGraph(
     nodeIds.add(edge.source);
     nodeIds.add(edge.target);
   }
-  const graphNodeById = new Map(graph.nodes.map((node) => [node.id, node]));
   const collapsedGroups = [...omittedByHub.entries()].map(([hubId, omittedEdges]) => ({
     hubId,
     hubLabel: graphNodeById.get(hubId)?.label ?? hubId,

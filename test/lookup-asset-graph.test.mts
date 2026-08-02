@@ -179,3 +179,34 @@ test('asset graph collapses high-degree visual branches without dropping accessi
     10,
   );
 });
+
+test('high-degree visual branches retain representative evidence families', () => {
+  const graph = buildLookupAssetGraph({
+    target: 'example.test',
+    observedAt: '2026-08-01T00:00:00.000Z',
+    dnsEvidence: { status: 'success', complete: true },
+    dnsRecords: {
+      a: Array.from({ length: 16 }, (_, index) => `192.0.2.${index + 1}`),
+      ns: ['ns1.example.test'],
+    },
+    rdapEvidence: { status: 'success', complete: true },
+    rdapParsed: { registrar: { name: 'Example Registrar' } },
+    httpEvidence: {
+      status: 'success',
+      complete: true,
+      finalUrl: 'https://www.example.test/',
+    },
+    pageOpenGraphUrl: { url: 'https://identity.example/' },
+    tlsEvidence: { status: 'success', complete: true },
+    tlsCertificate: { fingerprintSha256: 'a'.repeat(64) },
+  });
+  const projection = projectLookupAssetGraph(graph, 'all');
+  const representedGroups = new Set(projection.nodes.map((node) => node.group));
+
+  assert.deepEqual(
+    [...representedGroups].filter((group) => group !== 'focus' && group !== 'summary').sort(),
+    ['certificate', 'dns', 'identity', 'network', 'registration'],
+  );
+  assert.equal(projection.edges.length, graph.edges.length);
+  assert.ok(projection.collapsedGroups.some((group) => group.hubId === graph.targetId));
+});
