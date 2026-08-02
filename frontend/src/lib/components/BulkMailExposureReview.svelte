@@ -70,7 +70,7 @@
         <tbody>
           {#each visibleRows as row (row.domain)}
             <tr>
-              <th scope="row">
+              <th scope="row" data-label="Domain">
                 <span class="selected" aria-hidden="true">{selectedDomains.has(row.domain) ? '●' : '○'}</span>
                 <span class="sr-only">{selectedDomains.has(row.domain) ? 'Selected' : 'Not selected'}</span>
                 <a href={`/lookup?q=${encodeURIComponent(row.domain)}&depth=deep#query`}>{row.domain}</a>
@@ -123,6 +123,14 @@
     header{align-items:stretch;flex-direction:column}
     header .btn{width:100%}
     .groups{grid-template-columns:1fr}
-    .table-wrap{margin-inline:calc(-1 * var(--card-pad));border-inline:0;border-radius:0}
+    .table-wrap{margin-inline:0;overflow:visible;border:0}
+    table,tbody{display:block}
+    thead{position:absolute;width:1px;height:1px;padding:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+    tbody{display:grid;gap:10px}
+    tr{display:block;padding:12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}
+    th,td{display:block;min-width:0;padding:9px 0;border:0;overflow-wrap:anywhere}
+    th{padding-top:0;padding-bottom:11px;border-bottom:1px solid var(--border)}
+    td::before{content:attr(data-label);display:block;margin-bottom:5px;color:var(--muted);font:600 .62rem var(--mono);letter-spacing:.06em;text-transform:uppercase}
+    td+td{border-top:1px solid var(--border)}
   }
 </style>

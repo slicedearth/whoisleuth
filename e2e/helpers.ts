@@ -62,6 +62,31 @@ export async function expectNoHorizontalOverflow(page: Page) {
   ).toBeLessThanOrEqual(overflow.clientWidth + OVERFLOW_TOLERANCE_PX);
 }
 
+export async function expectNoHorizontalScrollContainers(locator: Locator) {
+  const offenders = await locator.evaluate((root) => {
+    const elements = root instanceof HTMLElement
+      ? [root, ...root.querySelectorAll<HTMLElement>('*')]
+      : [...root.querySelectorAll<HTMLElement>('*')];
+    return elements
+      .filter((element) => {
+        const { overflowX } = getComputedStyle(element);
+        return (overflowX === 'auto' || overflowX === 'scroll')
+          && element.clientWidth > 0
+          && element.scrollWidth > element.clientWidth + 1;
+      })
+      .slice(0, 8)
+      .map((element) => ({
+        element: `${element.tagName.toLowerCase()}${element.id ? `#${element.id}` : ''}${element.classList.length ? `.${[...element.classList].join('.')}` : ''}`,
+        clientWidth: element.clientWidth,
+        scrollWidth: element.scrollWidth,
+      }));
+  });
+  expect(
+    offenders,
+    `nested horizontal scroll containers: ${JSON.stringify(offenders)}`,
+  ).toEqual([]);
+}
+
 export async function boundingBox(locator: Locator) {
   const box = await locator.boundingBox();
   expect(box, 'expected element to have a rendered bounding box').not.toBeNull();

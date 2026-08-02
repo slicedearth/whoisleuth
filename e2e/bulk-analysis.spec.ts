@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { expect, test } from './fixtures';
-import { boundingBox, expectNoHorizontalOverflow, failBrowserLocalReads, migrateLegacyBrowserData, pseudoContent, readBrowserLocalCollection, runBulkScan } from './helpers';
+import { boundingBox, expectNoHorizontalOverflow, expectNoHorizontalScrollContainers, failBrowserLocalReads, migrateLegacyBrowserData, pseudoContent, readBrowserLocalCollection, runBulkScan } from './helpers';
 
 // Default fixtures use dotless values so classifyQuery rejects them before
 // any upstream work. Tests that need completed result data install an explicit
@@ -274,6 +274,9 @@ test('supports focused review and an evidence-qualified two-domain comparison', 
 
   await page.setViewportSize({ width: 390, height: 844 });
   await expectNoHorizontalOverflow(page);
+  await expectNoHorizontalScrollContainers(page.locator('#results'));
+  await expectNoHorizontalScrollContainers(comparison);
+  await expectNoHorizontalScrollContainers(mailReview);
 });
 
 test('persists named review views and per-domain review state without restarting collection', async ({ page }) => {
@@ -518,6 +521,10 @@ test('saves compact Bulk sessions, restores them after reload, and compares late
   await page.getByLabel('Later session', { exact: true }).selectOption({ label: 'Later review' });
   await expect(page.getByText('Registration: registered → available')).toBeVisible();
   await expect(page.getByText(/source-state change may reflect collection availability/i)).toBeVisible();
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expectNoHorizontalOverflow(page);
+  await expectNoHorizontalScrollContainers(page.getByRole('region', { name: 'Saved Bulk sessions' }));
 
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Saved Bulk sessions' })).toBeVisible();
@@ -1003,4 +1010,5 @@ test('candidate handoff presents defensive coverage actions and export', async (
   await expect(page.locator('#domains')).toHaveValue('login-example.example\nsecure-example.example');
   await page.setViewportSize({ width: 390, height: 844 });
   await expectNoHorizontalOverflow(page);
+  await expectNoHorizontalScrollContainers(coverage);
 });

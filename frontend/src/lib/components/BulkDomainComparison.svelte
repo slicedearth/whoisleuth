@@ -83,7 +83,7 @@
         <tbody>
           {#each comparison.rows as row (row.id)}
             <tr class:different={row.state === 'different'}>
-              <th scope="row"><span>{category(row.category)}</span><strong>{row.label}</strong><small>{row.method}</small></th>
+              <th scope="row" data-label="Evidence"><span>{category(row.category)}</span><strong>{row.label}</strong><small>{row.method}</small></th>
               <td data-label={comparison.leftDomain}>
                 {row.left}
                 <small>{row.source} · {row.leftSourceState.replaceAll('_', ' ')}</small>
@@ -143,6 +143,15 @@
   @media(max-width:700px){
     header{align-items:stretch;flex-direction:column}
     header .btn{width:100%}
-    .table-wrap{margin-inline:calc(-1 * var(--card-pad));border-inline:0;border-radius:0}
+    .comparison-matrix{display:none}
+    .table-wrap{margin-inline:0;overflow:visible;border:0}
+    table,tbody{display:block}
+    thead{position:absolute;width:1px;height:1px;padding:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+    tbody{display:grid;gap:10px}
+    tr{display:block;padding:12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}
+    th,td{display:block;min-width:0;padding:9px 0;border:0;overflow-wrap:anywhere}
+    th{padding-top:0;padding-bottom:11px;border-bottom:1px solid var(--border)}
+    td::before{content:attr(data-label);display:block;margin-bottom:5px;color:var(--muted);font:600 .62rem var(--mono);letter-spacing:.06em;text-transform:uppercase;overflow-wrap:anywhere}
+    td+td{border-top:1px solid var(--border)}
   }
 </style>
