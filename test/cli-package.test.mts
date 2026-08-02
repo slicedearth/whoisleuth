@@ -68,20 +68,38 @@ describe('scoped CLI package contract', () => {
       undici: '^8.7.0',
     });
     assert.equal(Object.hasOwn(manifest.dependencies as object, 'express'), false);
+    assert.equal(Object.hasOwn(manifest, 'publishConfig'), false);
+  });
+
+  test('generates public metadata only for an explicit release candidate', () => {
+    const manifest = buildCliPackageManifest(rootManifest, templateManifest, { publicationEnabled: true });
+    assert.equal(Object.hasOwn(manifest, 'private'), false);
+    assert.deepEqual(manifest.publishConfig, {
+      access: 'public',
+      provenance: true,
+    });
   });
 
   test('refuses an unscoped or publication-enabled template', () => {
     assert.throws(() => buildCliPackageManifest(rootManifest, { ...templateManifest, name: 'whoisleuth-cli' }), /must remain scoped/u);
     assert.throws(() => buildCliPackageManifest(rootManifest, { ...templateManifest, private: false }), /must remain private/u);
+    assert.throws(() => buildCliPackageManifest(rootManifest, { ...templateManifest, publishConfig: { access: 'public' } }), /must not contain release-only/u);
   });
 
   test('keeps arguments and the human report explicit', () => {
-    assert.deepEqual(parseArguments([]), { json: false });
-    assert.deepEqual(parseArguments(['--json']), { json: true });
+    assert.deepEqual(parseArguments([]), { json: false, publicationEnabled: false });
+    assert.deepEqual(parseArguments(['--json']), { json: true, publicationEnabled: false });
+    assert.deepEqual(parseArguments(['--release-candidate', '/tmp/release', '--tag', 'v1.26.0', '--json']), {
+      json: true,
+      publicationEnabled: true,
+      artifactDirectory: '/tmp/release',
+      expectedTag: 'v1.26.0',
+    });
     assert.throws(() => parseArguments(['--publish']), /Usage/u);
+    assert.throws(() => parseArguments(['--release-candidate', '/tmp/release']), /Usage/u);
     const output = formatCliPackageReport({
       schema: 'whoisleuth.cli-package-check',
-      version: 1,
+      version: 2,
       packageName: '@slicedearth/whoisleuth-cli',
       packageVersion: '1.26.0',
       sourceModuleCount: 156,
@@ -90,6 +108,8 @@ describe('scoped CLI package contract', () => {
       unpackedBytes: 2_800_000,
       installedChecks: ['help', 'version', 'doctor', 'completion', 'manual', 'registry-support', 'discover'],
       publicationEnabled: false,
+      archiveFilename: null,
+      archiveSha256: null,
     });
     assert.match(output, /Publication: disabled/u);
     assert.match(output, /Installed checks: help, version, doctor, completion, manual, registry-support, discover/u);

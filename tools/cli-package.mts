@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 
 import { execFile as execFileCallback } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { constants as fsConstants } from 'node:fs';
 import { chmod, copyFile, mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -35,13 +37,28 @@ export type CliPackageReport = Readonly<{
   packedBytes: number;
   unpackedBytes: number;
   installedChecks: readonly string[];
-  publicationEnabled: false;
+  publicationEnabled: boolean;
+  archiveFilename: string | null;
+  archiveSha256: string | null;
+}>;
+
+type CliPackageOptions = Readonly<{
+  publicationEnabled?: boolean;
+  artifactDirectory?: string;
+  expectedTag?: string;
+}>;
+
+type ParsedArguments = Readonly<{
+  json: boolean;
+  publicationEnabled: boolean;
+  artifactDirectory?: string;
+  expectedTag?: string;
 }>;
 
 const execFile = promisify(execFileCallback);
 
 export const CLI_PACKAGE_REPORT_SCHEMA = 'whoisleuth.cli-package-check';
-export const CLI_PACKAGE_REPORT_VERSION = 1;
+export const CLI_PACKAGE_REPORT_VERSION = 2;
 export const MAX_CLI_PACKAGE_GRAPH_BYTES = 8 * 1024 * 1024;
 export const MAX_CLI_PACKAGE_MODULES = 256;
 export const MAX_CLI_PACKAGE_SOURCE_BYTES = 8 * 1024 * 1024;
@@ -53,6 +70,31 @@ export const MAX_CLI_PACKAGE_UNPACKED_BYTES = 6 * 1024 * 1024;
 const LOCAL_SOURCE_PATTERN = /^(?:bin|cli|lib|frontend\/src\/lib\/analysis)\/[A-Za-z0-9._/-]+\.(?:mts|ts)$/u;
 const REQUIRED_SOURCE_MODULES = Object.freeze(['bin/whoisleuth.mts', 'cli/runner.mts']);
 const RUNTIME_DEPENDENCIES = Object.freeze(['parse5', 'tldts', 'undici']);
+const INSTALLED_COMMAND_HELP_CHECKS = Object.freeze([
+  'lookup',
+  'bulk',
+  'http',
+  'tls',
+  'posture',
+  'ct-search',
+  'discover',
+  'discover-scan',
+  'registry-support',
+  'source-report',
+  'compare',
+  'page-compare',
+  'mail-review',
+  'diff',
+  'export',
+  'inspect-archive',
+  'verify-artifact',
+  'sign-artifact',
+  'verify-signature',
+  'risk-calibrate',
+  'doctor',
+  'completion',
+  'manual',
+]);
 const SUPPORT_FILES = Object.freeze([
   ['packages/cli/README.md', 'README.md'],
   ['docs/cli.md', 'docs/cli.md'],
@@ -116,7 +158,11 @@ export function selectCliPackageSources(graphValue: unknown): readonly string[] 
   return Object.freeze([...selected].sort());
 }
 
-export function buildCliPackageManifest(rootManifestValue: unknown, templateManifestValue: unknown): JsonRecord {
+export function buildCliPackageManifest(
+  rootManifestValue: unknown,
+  templateManifestValue: unknown,
+  options: Readonly<{ publicationEnabled?: boolean }> = {},
+): JsonRecord {
   const rootManifest = record(rootManifestValue, 'Root package manifest');
   const templateManifest = record(templateManifestValue, 'CLI package template');
   const rootDependencies = record(rootManifest.dependencies, 'Root package dependencies');
@@ -129,14 +175,21 @@ export function buildCliPackageManifest(rootManifestValue: unknown, templateMani
   if (templateManifest.private !== true) {
     throw new TypeError('CLI package template must remain private until publication is explicitly approved.');
   }
+  if (Object.hasOwn(templateManifest, 'publishConfig')) {
+    throw new TypeError('CLI package template must not contain release-only publication configuration.');
+  }
 
   const selectedDependencies: Record<string, string> = {};
   for (const dependency of RUNTIME_DEPENDENCIES) {
     selectedDependencies[dependency] = boundedString(rootDependencies[dependency], `Root dependency ${dependency}`, 128);
   }
 
+  const publicationEnabled = options.publicationEnabled === true;
+  const generatedTemplate = { ...templateManifest };
+  if (publicationEnabled) delete generatedTemplate.private;
+
   return {
-    ...templateManifest,
+    ...generatedTemplate,
     version: packageVersion,
     dependencies: selectedDependencies,
     files: [
@@ -152,6 +205,12 @@ export function buildCliPackageManifest(rootManifestValue: unknown, templateMani
       'TRADEMARKS.md',
       'third-party-notices.txt',
     ],
+    ...(publicationEnabled ? {
+      publishConfig: {
+        access: 'public',
+        provenance: true,
+      },
+    } : {}),
   };
 }
 
@@ -289,7 +348,14 @@ async function runInstalledCheck(executable: string, args: readonly string[], la
   return stdout;
 }
 
-export async function checkCliPackage(repositoryRoot: string): Promise<CliPackageReport> {
+export async function checkCliPackage(repositoryRoot: string, options: CliPackageOptions = {}): Promise<CliPackageReport> {
+  const publicationEnabled = options.publicationEnabled === true;
+  if (publicationEnabled && (!options.artifactDirectory || !options.expectedTag)) {
+    throw new TypeError('Release-candidate assembly requires an artifact directory and expected semantic tag.');
+  }
+  if (!publicationEnabled && (options.artifactDirectory || options.expectedTag)) {
+    throw new TypeError('Artifact output and tag validation are available only for release-candidate assembly.');
+  }
   const temporaryRoot = await mkdtemp(path.join(tmpdir(), 'whoisleuth-cli-package-'));
   const stagingRoot = path.join(temporaryRoot, 'staging');
   const artifactsRoot = path.join(temporaryRoot, 'artifacts');
@@ -302,7 +368,7 @@ export async function checkCliPackage(repositoryRoot: string): Promise<CliPackag
       readBoundedJson(path.join(repositoryRoot, 'packages', 'cli', 'package.template.json')),
     ]);
     const sources = selectCliPackageSources(graph);
-    const manifest = buildCliPackageManifest(rootManifest, templateManifest);
+    const manifest = buildCliPackageManifest(rootManifest, templateManifest, { publicationEnabled });
     const copyState = { totalBytes: 0 };
     await validatePackageSources(repositoryRoot, sources, copyState);
     await compilePackageSources(repositoryRoot, temporaryRoot, stagingRoot, sources);
@@ -347,7 +413,19 @@ export async function checkCliPackage(repositoryRoot: string): Promise<CliPackag
     });
     const packageName = boundedString(manifest.name, 'Generated package name', 128);
     const packageVersion = boundedString(manifest.version, 'Generated package version', 128);
+    if (publicationEnabled && options.expectedTag !== `v${packageVersion}`) {
+      throw new TypeError(`Release-candidate tag must equal v${packageVersion}.`);
+    }
     const executable = path.join(installRoot, 'node_modules', ...packageName.split('/'), 'bin', 'whoisleuth.mjs');
+    const installedManifest = record(await readBoundedJson(path.join(path.dirname(executable), '..', 'package.json')), 'Installed package manifest');
+    if (publicationEnabled) {
+      const publishConfig = record(installedManifest.publishConfig, 'Installed package publishConfig');
+      if (Object.hasOwn(installedManifest, 'private') || publishConfig.access !== 'public' || publishConfig.provenance !== true) {
+        throw new TypeError('Installed release candidate does not retain the public provenance contract.');
+      }
+    } else if (installedManifest.private !== true || Object.hasOwn(installedManifest, 'publishConfig')) {
+      throw new TypeError('Installed package check does not retain its private publication boundary.');
+    }
     const help = await runInstalledCheck(executable, ['--help'], 'help');
     if (!help.startsWith('WHOISleuth CLI\n') || !help.includes('Fast lookup is the default; deep collection')) throw new TypeError('Installed CLI help contract failed.');
     const version = await runInstalledCheck(executable, ['--version'], 'version');
@@ -387,7 +465,28 @@ export async function checkCliPackage(repositoryRoot: string): Promise<CliPackag
       throw new TypeError('Installed discover-scan help did not preserve its explicit network boundary.');
     }
 
-    return Object.freeze({
+    const commandHelpChecks: string[] = [];
+    for (const command of INSTALLED_COMMAND_HELP_CHECKS) {
+      const commandHelp = await runInstalledCheck(executable, [command, '--help'], `${command} help`);
+      if (!commandHelp.includes(`whoisleuth ${command}`)) {
+        throw new TypeError(`Installed ${command} help did not preserve its command contract.`);
+      }
+      commandHelpChecks.push(`${command}-help`);
+    }
+
+    let archiveFilename: string | null = null;
+    let archiveSha256: string | null = null;
+    if (publicationEnabled) {
+      const artifactDirectory = path.resolve(options.artifactDirectory as string);
+      await mkdir(artifactDirectory, { recursive: true });
+      archiveFilename = `whoisleuth-cli-${packageVersion}.tgz`;
+      const archivePath = path.join(artifactDirectory, archiveFilename);
+      await copyFile(tarball, archivePath, fsConstants.COPYFILE_EXCL);
+      archiveSha256 = createHash('sha256').update(await readFile(tarball)).digest('hex');
+      await writeFile(path.join(artifactDirectory, `${archiveFilename}.sha256`), `${archiveSha256}  ${archiveFilename}\n`, { encoding: 'utf8', flag: 'wx', mode: 0o644 });
+    }
+
+    const report = Object.freeze({
       schema: CLI_PACKAGE_REPORT_SCHEMA,
       version: CLI_PACKAGE_REPORT_VERSION,
       packageName,
@@ -396,9 +495,25 @@ export async function checkCliPackage(repositoryRoot: string): Promise<CliPackag
       packedEntryCount: entries.length,
       packedBytes,
       unpackedBytes,
-      installedChecks: Object.freeze(['help', 'version', 'doctor', 'completion', 'manual', 'registry-support', 'discover', 'discover-scan-help']),
-      publicationEnabled: false,
+      installedChecks: Object.freeze([
+        'help',
+        'version',
+        'doctor',
+        'completion',
+        'manual',
+        'registry-support',
+        'discover',
+        ...commandHelpChecks,
+      ]),
+      publicationEnabled,
+      archiveFilename,
+      archiveSha256,
     });
+    if (publicationEnabled) {
+      const artifactDirectory = path.resolve(options.artifactDirectory as string);
+      await writeFile(path.join(artifactDirectory, 'cli-package-report.json'), `${JSON.stringify(report, null, 2)}\n`, { encoding: 'utf8', flag: 'wx', mode: 0o644 });
+    }
+    return report;
   } finally {
     await rm(temporaryRoot, { recursive: true, force: true });
   }
@@ -412,14 +527,46 @@ export function formatCliPackageReport(report: CliPackageReport): string {
     `Packed entries: ${report.packedEntryCount}`,
     `Archive bytes: ${report.packedBytes} packed / ${report.unpackedBytes} unpacked`,
     `Installed checks: ${report.installedChecks.join(', ')}`,
-    'Publication: disabled',
+    ...(report.publicationEnabled
+      ? [
+          'Publication candidate: enabled',
+          `Archive: ${report.archiveFilename}`,
+          `SHA-256: ${report.archiveSha256}`,
+          'Registry action: not performed',
+        ]
+      : ['Publication: disabled']),
   ].join('\n');
 }
 
-export function parseArguments(args: readonly string[]): { json: boolean } {
-  if (args.length === 0) return { json: false };
-  if (args.length === 1 && args[0] === '--json') return { json: true };
-  throw new TypeError('Usage: node tools/cli-package.mts [--json]');
+export function parseArguments(args: readonly string[]): ParsedArguments {
+  if (args.length === 0) return { json: false, publicationEnabled: false };
+  if (args.length === 1 && args[0] === '--json') return { json: true, publicationEnabled: false };
+
+  let json = false;
+  let artifactDirectory: string | undefined;
+  let expectedTag: string | undefined;
+  for (let index = 0; index < args.length; index += 1) {
+    const argument = args[index];
+    if (argument === '--json' && !json) {
+      json = true;
+      continue;
+    }
+    if (argument === '--release-candidate' && artifactDirectory === undefined) {
+      artifactDirectory = args[index + 1];
+      index += 1;
+      continue;
+    }
+    if (argument === '--tag' && expectedTag === undefined) {
+      expectedTag = args[index + 1];
+      index += 1;
+      continue;
+    }
+    throw new TypeError('Usage: node tools/cli-package.mts [--json] | --release-candidate <directory> --tag <vX.Y.Z> [--json]');
+  }
+  if (!artifactDirectory || artifactDirectory.length > 1_024 || !expectedTag || expectedTag.length > 129) {
+    throw new TypeError('Usage: node tools/cli-package.mts [--json] | --release-candidate <directory> --tag <vX.Y.Z> [--json]');
+  }
+  return { json, publicationEnabled: true, artifactDirectory, expectedTag };
 }
 
 export async function main(args = process.argv.slice(2), options: MainOptions = {}): Promise<number> {
@@ -428,7 +575,11 @@ export async function main(args = process.argv.slice(2), options: MainOptions = 
   try {
     const parsed = parseArguments(args);
     const repositoryRoot = path.resolve(options.repositoryRoot || process.cwd());
-    const report = await checkCliPackage(repositoryRoot);
+    const report = await checkCliPackage(repositoryRoot, {
+      publicationEnabled: parsed.publicationEnabled,
+      ...(parsed.artifactDirectory ? { artifactDirectory: parsed.artifactDirectory } : {}),
+      ...(parsed.expectedTag ? { expectedTag: parsed.expectedTag } : {}),
+    });
     stdout.write(`${parsed.json ? JSON.stringify(report, null, 2) : formatCliPackageReport(report)}\n`);
     return 0;
   } catch (error) {

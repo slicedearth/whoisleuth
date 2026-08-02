@@ -477,7 +477,14 @@ Runs the bounded public-boundary check documented in
 ## Command-line interface
 
 The first-party CLI calls the same shared intelligence modules as the hosted
-application. Start with:
+application. Public releases require Node.js 24 or later and can run without a
+global installation:
+
+```bash
+npm exec --yes --package=@slicedearth/whoisleuth-cli -- whoisleuth --help
+```
+
+From a repository checkout, start with:
 
 ```bash
 node bin/whoisleuth.mts --help
@@ -496,9 +503,9 @@ completion scripts.
 
 The CLI is a local package boundary. It is not included in the static frontend
 or the Netlify function bundles unless a shared module is also used there. The
-candidate scoped package remains private, but its exact compiled dependency
-closure can be packed, installed, and smoke tested without leaving temporary
-artifacts in the repository:
+root application and ordinary candidate stay private, while the exact compiled
+dependency closure can be packed, installed, and smoke tested without leaving
+temporary artifacts in the repository:
 
 ```bash
 npm run cli:package:check
