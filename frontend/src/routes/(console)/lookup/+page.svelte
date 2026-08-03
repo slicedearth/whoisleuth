@@ -12,6 +12,7 @@
   import LookupBrandMimicryReview from '$lib/components/LookupBrandMimicryReview.svelte';
   import LookupLifecycle from '$lib/components/LookupLifecycle.svelte';
   import LookupDecisionSupport from '$lib/components/LookupDecisionSupport.svelte';
+  import LookupClaimReadiness from '$lib/components/LookupClaimReadiness.svelte';
   import LookupEvidenceQuality from '$lib/components/LookupEvidenceQuality.svelte';
   import LookupEvidenceReplay from '$lib/components/LookupEvidenceReplay.svelte';
   import LookupCertificatePolicyReview from '$lib/components/LookupCertificatePolicyReview.svelte';
@@ -218,6 +219,7 @@
   const evidenceCoverage=$derived(lookupAnalysis.evidenceCoverage);
   const lookupSourceRefreshPlan=$derived(lookupAnalysis.lookupSourceRefreshPlan);
   const lookupDecisionSupport=$derived(lookupAnalysis.lookupDecisionSupport);
+  const lookupClaimReadiness=$derived(lookupAnalysis.lookupClaimReadiness);
   const evidenceQualityMatrix=$derived(lookupAnalysis.evidenceQualityMatrix);
   const lookupSummary=$derived(lookupAnalysis.lookupSummary);
   const lookupInvestigationBrief=$derived(lookupAnalysis.lookupInvestigationBrief);
@@ -424,6 +426,8 @@
         onbriefcopy={copyInvestigationBrief}
         onbriefhandoff={caseRecord ? recordInvestigationBriefHandoff : null}
       />
+
+      <LookupClaimReadiness readiness={lookupClaimReadiness} />
 
       {#if sslbl.sslblVersion===1&&sslbl.verdict==='listed'}
         <aside class="sslbl-review-lead" aria-labelledby="sslbl-review-lead-title">

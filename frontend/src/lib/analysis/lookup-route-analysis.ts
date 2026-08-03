@@ -13,6 +13,7 @@ import { calibrateExternalIntelligenceRisk } from './external-intelligence-risk.
 import { compactHttpObservation } from './http-summary.ts';
 import { analyzeDomainIdn } from './idn-confusables.ts';
 import { buildLookupAssetGraph } from './lookup-asset-graph.ts';
+import { buildLookupClaimReadiness } from './lookup-claim-readiness.ts';
 import {
   buildLookupDecisionSupport,
   buildLookupEvidenceQualityMatrix,
@@ -467,6 +468,23 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     certificatePolicyReview,
     hasCaseSection,
   });
+  const lookupClaimReadiness = buildLookupClaimReadiness({
+    targetType: result?.type,
+    task,
+    coverage: evidenceCoverage,
+    decisionSupport: lookupDecisionSupport,
+    availabilityState: availability.state,
+    hasActiveProfile: Boolean(profile),
+    hasCaseSection,
+    responseRecipientCount: abuseRecipientResolution.recipients.length,
+    registryComparison: comparison,
+    registrarPublicationComparison,
+    observedAt: {
+      registry: rdapDiagnostic.fetchedAt,
+      whois: whoisDiagnostic.queriedAt,
+      registrar: registrarRdap.fetchedAt,
+    },
+  });
   const evidenceQualityMatrix = buildLookupEvidenceQualityMatrix({
     coverage: evidenceCoverage,
     refreshPlan: lookupSourceRefreshPlan,
@@ -573,6 +591,7 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     evidenceCoverage,
     lookupSourceRefreshPlan,
     lookupDecisionSupport,
+    lookupClaimReadiness,
     evidenceQualityMatrix,
     lookupSummary,
     lookupInvestigationBrief,
