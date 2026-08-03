@@ -550,7 +550,7 @@ main { grid-area: main; width: min(1280px,100%); margin: auto; padding: 30px cla
 
 @media (max-width: 700px) {
   /* Results become self-contained records on narrow screens. This avoids
-     forcing eight table columns into a phone-width horizontal scroller. */
+     forcing the full result matrix into a phone-width horizontal scroller. */
   .triage .results-table { margin-inline: 0; padding-inline: 0; overflow: visible; }
   .results-table table, .results-table tbody { display: block; }
   .results-table thead {

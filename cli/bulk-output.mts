@@ -2,7 +2,7 @@ import type { BulkLookupResult } from './bulk.mts';
 import { cliCsvCell } from './csv.mts';
 
 type UnknownRecord = Record<string, unknown>;
-type BulkResultFilter = 'all' | 'inconclusive' | 'registered';
+type BulkResultFilter = 'all' | 'errors' | 'inconclusive' | 'registered';
 
 const REGISTERED_STATES = new Set(['expiring', 'for_sale', 'registered']);
 const MAX_DNS_VALUES_PER_TYPE = 100;
@@ -26,6 +26,7 @@ function availabilityState(item: BulkLookupResult): string {
 function selectBulkItems(items: readonly BulkLookupResult[], filter: BulkResultFilter): BulkLookupResult[] {
   if (filter === 'all') return [...items];
   return items.filter((item) => {
+    if (filter === 'errors') return !item.ok;
     if (!item.ok) return filter === 'inconclusive';
     const state = availabilityState(item);
     return filter === 'registered' ? REGISTERED_STATES.has(state) : state === 'unknown';
@@ -117,12 +118,17 @@ function formatBulkDomainList(items: readonly BulkLookupResult[]): string {
   return values.length ? `${[...new Set(values)].join('\n')}\n` : '';
 }
 
+function formatBulkQueryList(items: readonly BulkLookupResult[]): string {
+  return items.length ? `${items.map((item) => item.query).join('\n')}\n` : '';
+}
+
 export {
   REGISTERED_STATES,
   availabilityState,
   bulkDnsSummary,
   formatBulkCsv,
   formatBulkDomainList,
+  formatBulkQueryList,
   selectBulkItems,
 };
 export type { BulkResultFilter };

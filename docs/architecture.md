@@ -320,8 +320,10 @@ The test pyramid is designed to avoid dependence on public services:
    workflows, browser storage and downloads, API isolation, and the public
    synthetic demo against a local production-style server.
 5. CI runs the locked install, production dependency audit, and complete
-   verification sequence for pushes and pull requests, retaining browser
-   artifacts only on failure.
+   verification sequence for pushes and pull requests, retaining bounded
+   coverage and browser-result summaries plus failure-only traces and
+   screenshots. Scheduled property and duration profiles provide deeper test
+   health evidence without live collection.
 
 ### Enforced dependency boundaries
 

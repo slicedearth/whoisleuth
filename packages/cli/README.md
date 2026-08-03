@@ -49,17 +49,22 @@ Contributors can run the same source command without installing the package:
 node bin/whoisleuth.mts --help
 node bin/whoisleuth.mts lookup example.test
 node bin/whoisleuth.mts lookup example.test --deep --summary
+node bin/whoisleuth.mts lookup example.test --deep --plan --json
 node bin/whoisleuth.mts lookup example.test --deep --markdown --output lookup.md
 node bin/whoisleuth.mts bulk domains.txt --deep --checkpoint bulk-checkpoint.json
 node bin/whoisleuth.mts bulk domains.txt --csv --registered-only
+node bin/whoisleuth.mts bulk domains.txt --queries --errors-only
 node bin/whoisleuth.mts discover example.test --dictionary private-terms.txt --snapshot discovery-state.json --json
 node bin/whoisleuth.mts discover-scan example.test --scan-limit 50 --checkpoint candidate-scan.json --json
 node bin/whoisleuth.mts page-compare official.json candidate.json --json
 node bin/whoisleuth.mts mail-review bulk.json --json
 node bin/whoisleuth.mts diff first-lookup.json second-lookup.json --json
+node bin/whoisleuth.mts timeline first-observation.json second-observation.json latest-observation.json --json
 node bin/whoisleuth.mts registry-support example.test --json
 node bin/whoisleuth.mts doctor
+node bin/whoisleuth.mts commands --json
 node bin/whoisleuth.mts completion zsh
+node bin/whoisleuth.mts completion powershell
 node bin/whoisleuth.mts manual | man -l -
 ```
 
@@ -67,6 +72,13 @@ Fast lookup is the default. Deep collection must be requested explicitly and
 can disclose the target to additional authoritative or first-party network
 sources. Missing, partial, rate-limited, and unsupported sources remain
 explicit and are never interpreted as evidence of safety or absence.
+`lookup --plan` classifies a target and explains the selected source families
+and disclosures without making a network request. `commands --json` exposes the
+installed command contracts for local wrappers without running collection.
+Focused command help and the generated manual label every operation as offline
+or networked and state its target, input, and concurrency boundaries. The
+packaged [dual-use disclosure](DISCLOSURE) defines the supported defensive use
+of those capabilities.
 
 Interactive output uses restrained semantic colour, width-aware wrapping, and
 stderr-only progress for slower collection. Redirected and machine-readable
@@ -81,8 +93,15 @@ the partial-result exit code. Ctrl-C suppresses partial final output and
 returns exit code 130; a second interrupt performs best-effort temporary-file
 cleanup before exiting immediately.
 
-Bulk also supports fixed-column CSV, domain-only output, registered and
-inconclusive output filters, and bounded A, AAAA, NS, and MX summaries. Discover
+The offline `timeline` command orders 2 to 20 saved Lookup documents for one
+domain and compares each adjacent observation. It retains observation times and
+normalized field states but no input filenames or raw registry payloads.
+Observed differences remain separate from missing, unavailable, and changed
+collection conditions.
+
+Bulk also supports fixed-column CSV, domain-only or exact-query output,
+registered, inconclusive, and hard-failure output filters, and bounded A, AAAA,
+NS, and MX summaries. Discover
 supports local custom dictionaries and private snapshot comparison suitable
 for an operator-managed scheduler. The separate networked `discover-scan`
 command can collect a deterministic bounded subset in chunks, retain mutation

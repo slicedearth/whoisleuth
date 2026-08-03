@@ -10,7 +10,7 @@ import {
   readTextStreamBounded,
   runBulkLookups,
 } from './bulk.mts';
-import { formatBulkCsv, formatBulkDomainList, selectBulkItems } from './bulk-output.mts';
+import { formatBulkCsv, formatBulkDomainList, formatBulkQueryList, selectBulkItems } from './bulk-output.mts';
 import { boundedCliErrorMessage, CliUsageError } from './errors.mts';
 import EXIT_CODES from './exit-codes.mts';
 import { buildCliBulkDocument, formatJsonDocument, formatJsonLines } from './formatters/json.mts';
@@ -100,6 +100,7 @@ async function runBulkCommand(
     else if (args.output === 'jsonl') context.writeStdout(formatJsonLines(selectedItems, metadata));
     else if (args.output === 'csv') context.writeStdout(formatBulkCsv(selectedItems));
     else if (args.output === 'domains') context.writeStdout(formatBulkDomainList(selectedItems));
+    else if (args.output === 'queries') context.writeStdout(formatBulkQueryList(selectedItems));
     else context.writeStdout(context.terminal(formatTerminalBulk(selectedItems, metadata), args.color));
   }
   if (checkpointFailure) {

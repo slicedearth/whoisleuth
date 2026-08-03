@@ -188,6 +188,9 @@ Additional offline or bounded maintainer checks include:
 
 ```bash
 npm run schema:inventory
+npm run test:coverage
+npm run test:properties
+npm run test:profile
 npm run registry:fixtures
 npm run benchmark:technology
 npm run technology:fixture-review -- reviewed-input.json
@@ -255,6 +258,8 @@ redacted, stale, incomplete, or parsed imperfectly. Scores and generated
 candidates require analyst review. Use collection, contact data, and report
 drafts only where you have a legitimate purpose and comply with applicable
 registry terms, privacy law, anti-spam law, and authorization boundaries.
+The [dual-use disclosure](DISCLOSURE) defines the supported defensive scope and
+the capability boundaries deliberately excluded from WHOISleuth.
 
 See [PRIVACY.md](PRIVACY.md) for data handling and deletion guidance. Review
 and adapt that notice before sharing your own deployment. Report suspected

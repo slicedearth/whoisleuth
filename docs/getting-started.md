@@ -97,6 +97,30 @@ The commands cover:
 Automated tests use deterministic fixtures. They must not contact live
 registries, domains, Certificate Transparency services, or optional providers.
 
+Additional test-health commands are available without adding live collection:
+
+```bash
+npm run test:coverage
+npm run test:properties
+npm run test:profile
+```
+
+The coverage command writes an ignored `test-coverage.lcov` report for the
+production TypeScript modules exercised by the Node suite. Property checks keep
+their ordinary local run counts small. A scheduled read-only workflow runs them
+at ten times that depth with a recorded seed, which can be replayed locally:
+
+```bash
+WHOISLEUTH_FAST_CHECK_RUN_MULTIPLIER=10 \
+WHOISLEUTH_FAST_CHECK_SEED=123456 \
+npm run test:properties
+```
+
+The multiplier, seed, generated case counts, and result summaries are bounded.
+The duration profile reports the slowest test files and individual tests so
+performance regressions can be investigated without imposing timing-sensitive
+pass or fail thresholds.
+
 ## Browser end-to-end tests
 
 Install the Chromium build used by Playwright once:
@@ -120,7 +144,9 @@ npm run test:e2e:built
 Playwright starts a local production-style server on port 4173 with test-only
 authentication values from `playwright.config.ts`. Failure traces and
 screenshots are written to the ignored `test-results/` directory. A successful
-local run does not create a retained HTML report.
+local run does not create a retained HTML report. CI also converts the bounded
+JSON reporter output into a shard summary containing result counts, retries,
+slow tests, and attachment types without copying attachment paths.
 
 Representative public and authenticated states also run local axe-core checks
 for WCAG-tagged regressions. The scanner is a development-only dependency: it

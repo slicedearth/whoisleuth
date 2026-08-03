@@ -14,6 +14,7 @@ import {
 import { normalizeRdapEvents, summarizeLifecycle } from '../lib/rdap-normalization.mts';
 import { isPrivateAddress } from '../lib/safe-fetch.mts';
 import { parseWhoisChain } from '../lib/whois.mts';
+import { fastCheckParameters } from './helpers/fast-check-config.mts';
 
 type Ipv4Bytes = readonly [number, number, number, number];
 
@@ -62,7 +63,7 @@ describe('core protocol property coverage', () => {
       assert.equal(isPrivateAddress(`::ffff:${high}:${low}`), expected);
       assert.equal(isPrivateAddress(`64:ff9b::${high}:${low}`), expected);
       assert.equal(isPrivateAddress(`2002:${high}:${low}::`), expected);
-    }), { numRuns: 500 });
+    }), fastCheckParameters(500));
   });
 
   test('classifies equivalent full and compressed IPv6 forms identically', () => {
@@ -72,7 +73,7 @@ describe('core protocol property coverage', () => {
         const full = groups.map((group) => group.toString(16).padStart(4, '0')).join(':');
         assert.equal(isPrivateAddress(full), isPrivateAddress(compressIpv6(groups)));
       },
-    ), { numRuns: 300 });
+    ), fastCheckParameters(300));
   });
 
   test('decodes both embedded Teredo addresses before allowing a target', () => {
@@ -86,7 +87,7 @@ describe('core protocol property coverage', () => {
         isPrivateAddress(teredo),
         referencePrivateIpv4(server) || referencePrivateIpv4(client),
       );
-    }), { numRuns: 300 });
+    }), fastCheckParameters(300));
   });
 
   test('keeps RDAP lifecycle conclusions independent of bounded event order', () => {
@@ -114,7 +115,7 @@ describe('core protocol property coverage', () => {
         assert.ok(forward.every((entry) => (entry.date?.length ?? 0) <= 64));
         assert.ok(forward.every((entry) => (entry.actor?.length ?? 0) <= 160));
       },
-    ), { numRuns: 200 });
+    ), fastCheckParameters(200));
   });
 
   test('keeps arbitrary bounded WHOIS text within normalized collection limits', () => {
@@ -129,7 +130,7 @@ describe('core protocol property coverage', () => {
       assert.deepEqual(parsed.fieldsTruncated, [...new Set(parsed.fieldsTruncated)].sort());
       assert.match(parsed.registrationStatus, /^(registered|not_found|inconclusive)$/u);
       assert.match(parsed.chainStatus, /^(complete|partial)$/u);
-    }), { numRuns: 300 });
+    }), fastCheckParameters(300));
   });
 
   test('keeps generated confusables deterministic, unique, and within declared budgets', () => {
@@ -152,6 +153,6 @@ describe('core protocol property coverage', () => {
       const wholeLabel = wholeLabelConfusableVariantsForAscii(label);
       assert.equal(new Set(wholeLabel.map((variant) => variant.unicodeLabel)).size, wholeLabel.length);
       assert.ok(wholeLabel.every((variant) => unicodeSkeleton(variant.unicodeLabel) === label));
-    }), { numRuns: 100 });
+    }), fastCheckParameters(100));
   });
 });

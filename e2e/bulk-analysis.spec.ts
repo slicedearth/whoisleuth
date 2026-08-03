@@ -83,6 +83,47 @@ test('a small scan completes and reports the correct error count', async ({ page
   await expect(outcomes.locator('div', { hasText: 'Pending' })).toContainText('0');
 });
 
+test('keeps mobile Bulk review focused while making secondary tools discoverable', async ({ page }) => {
+  await page.setViewportSize({ width: 393, height: 852 });
+  const domains = invalidDomains(3);
+  await runBulkScan(page, domains);
+
+  const workspaceToggle = page.getByRole('button', { name: /Workspace tools/u });
+  await expect(workspaceToggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.getByRole('heading', { name: 'Saved Bulk sessions' })).toBeHidden();
+
+  const resultView = page.getByRole('group', { name: 'Bulk result view' });
+  await expect(resultView.getByRole('button', { name: 'Review', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('region', { name: 'Bulk review cockpit' })).toBeVisible();
+  await expect(page.locator('.results-table')).toBeHidden();
+  expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBeLessThan(6_000);
+
+  const filtersToggle = page.getByRole('button', { name: /^Filters 0$/u });
+  await expect(page.getByLabel('Source coverage')).toBeHidden();
+  await filtersToggle.click();
+  await expect(page.getByLabel('Source coverage')).toBeVisible();
+  await expect(filtersToggle).toHaveAttribute('aria-expanded', 'true');
+  await filtersToggle.click();
+
+  await resultView.getByRole('button', { name: 'List', exact: true }).click();
+  await expect(page.locator('.results-table')).toBeVisible();
+  const firstRow = page.locator('.results-table tbody tr').first();
+  const websiteCell = firstRow.locator('td[data-label="Website"]');
+  await expect(websiteCell).toBeHidden();
+  await firstRow.getByRole('button', { name: `Show details for ${domains[0]}` }).click();
+  await expect(websiteCell).toBeVisible();
+
+  await resultView.getByRole('button', { name: 'Analysis', exact: true }).click();
+  await expect(page.getByRole('button', { name: /Result distribution/u })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Lookalike mail exposure' })).toBeHidden();
+  const mailExposureToggle = page.getByRole('button', { name: /Mail exposure/u });
+  await mailExposureToggle.click();
+  await expect(mailExposureToggle).toHaveAttribute('aria-expanded', 'true');
+
+  await expectNoHorizontalOverflow(page);
+  await expectNoHorizontalScrollContainers(page.locator('#results'));
+});
+
 test('filters, groups, and selected-only actions use compact observed evidence', async ({ page }) => {
   await page.route('**/api/lookup?*', async (route) => {
     const domain = new URL(route.request().url()).searchParams.get('q') || '';
@@ -127,7 +168,7 @@ test('filters, groups, and selected-only actions use compact observed evidence',
   const stored = await readBrowserLocalCollection(page, 'shortlist', { minimumRecords: 1 });
   expect(stored.records[0]?.value).toMatchObject({ domain: 'limited-one.example' });
   await page.getByRole('region', { name: 'Undo analyst change' }).getByRole('button', { name: 'Undo', exact: true }).click();
-  await expect(page.getByText('0 selected in the filtered set')).toBeVisible();
+  await expect(page.getByText('1 selected in the filtered set')).toBeHidden();
   await groups.getByRole('button', { name: 'Select group' }).click();
   await expect(page.getByText('1 selected in the filtered set')).toBeVisible();
 
@@ -273,6 +314,9 @@ test('supports focused review and an evidence-qualified two-domain comparison', 
   expect(mailExport.integrity.digestSha256).toMatch(/^sha256:[a-f0-9]{64}$/u);
 
   await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole('group', { name: 'Bulk result view' }).getByRole('button', { name: 'Analysis', exact: true }).click();
+  await page.getByRole('button', { name: /Mail exposure/u }).click();
+  await page.getByRole('button', { name: /Domain comparison/u }).click();
   await expectNoHorizontalOverflow(page);
   await expectNoHorizontalScrollContainers(page.locator('#results'));
   await expectNoHorizontalScrollContainers(comparison);
@@ -332,6 +376,7 @@ test('persists named review views and per-domain review state without restarting
   await expect(page.locator('.review-views .review-status')).toContainText('No scan was started');
 
   await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole('button', { name: /Workspace tools/u }).click();
   await expectNoHorizontalOverflow(page);
 });
 
@@ -387,7 +432,7 @@ test('results stay a sortable table at desktop width', async ({ page }) => {
   for (const header of ['Registration', 'Website', 'Registrar', 'Mutation']) {
     await expect(page.locator('.results-table th', { has: page.getByRole('button', { name: new RegExp(`^${header}`) }) })).toBeVisible();
   }
-  await expect(page.getByLabel('Sort')).toHaveValue('risk');
+  await expect(page.getByLabel('Desktop result sort')).toHaveValue('risk');
   await expect(page.getByLabel('Order')).toHaveValue('1');
 
   await expect(page.locator('.results-table tbody tr')).toHaveCount(domains.length);
@@ -431,14 +476,14 @@ test('sorts complete results by registration, confidence, website, registrar, an
       .reduce((total, count) => total + count, 0),
   ).toBe(2);
 
-  await page.getByLabel('Sort').selectOption('registrar');
+  await page.getByLabel('Desktop result sort').selectOption('registrar');
   await expect.poll(domains).toEqual(['alpha.example', 'bravo.example', 'charlie.example']);
 
-  await page.getByLabel('Sort').selectOption('confidence');
+  await page.getByLabel('Desktop result sort').selectOption('confidence');
   await expect(page.getByLabel('Order')).toHaveValue('-1');
   await expect.poll(domains).toEqual(['alpha.example', 'bravo.example', 'charlie.example']);
 
-  await page.getByLabel('Sort').selectOption('activity');
+  await page.getByLabel('Desktop result sort').selectOption('activity');
   await page.getByLabel('Order').selectOption('-1');
   await expect.poll(domains).toEqual(['bravo.example', 'alpha.example', 'charlie.example']);
 
@@ -446,7 +491,8 @@ test('sorts complete results by registration, confidence, website, registrar, an
   await expect.poll(domains).toEqual(['alpha.example', 'bravo.example', 'charlie.example']);
 
   await page.setViewportSize({ width: 390, height: 844 });
-  await expect(page.getByLabel('Sort')).toBeVisible();
+  await expect(page.getByLabel('Mobile result sort')).toBeVisible();
+  await page.getByRole('button', { name: /^Filters 0$/u }).click();
   await expect(page.getByLabel('Order')).toBeVisible();
   await expectNoHorizontalOverflow(page);
 });
@@ -455,7 +501,7 @@ test('keeps the current queue, results, filters, sort, and page during console n
   const domains = invalidDomains(101);
   await runBulkScan(page, domains);
   await page.locator('.filters').getByRole('button', { name: /^errors / }).click();
-  await page.getByLabel('Sort').selectOption('domain');
+  await page.getByLabel('Desktop result sort').selectOption('domain');
   await page.getByLabel('Order').selectOption('-1');
   await page.getByRole('navigation', { name: 'Bulk result pages' }).getByRole('button', { name: 'Next' }).click();
 
@@ -464,7 +510,7 @@ test('keeps the current queue, results, filters, sort, and page during console n
   await consoleNavigation.getByRole('link', { name: /^Bulk/ }).click();
 
   await expect(page.locator('#domains')).toHaveValue(domains.join('\n'));
-  await expect(page.getByLabel('Sort')).toHaveValue('domain');
+  await expect(page.getByLabel('Desktop result sort')).toHaveValue('domain');
   await expect(page.getByLabel('Order')).toHaveValue('-1');
   await expect(page.getByRole('navigation', { name: 'Bulk result pages' })).toContainText('Page 2 of 2');
   await expect(page.locator('.results-table tbody tr')).toHaveCount(1);
@@ -523,10 +569,12 @@ test('saves compact Bulk sessions, restores them after reload, and compares late
   await expect(page.getByText(/source-state change may reflect collection availability/i)).toBeVisible();
 
   await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole('button', { name: /Workspace tools/u }).click();
   await expectNoHorizontalOverflow(page);
   await expectNoHorizontalScrollContainers(page.getByRole('region', { name: 'Saved Bulk sessions' }));
 
   await page.reload();
+  await page.getByRole('button', { name: /Workspace tools/u }).click();
   await expect(page.getByRole('heading', { name: 'Saved Bulk sessions' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Baseline review' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Later review' })).toBeVisible();
@@ -662,10 +710,11 @@ test('long domains retain a readable table column and wrap safely in mobile card
   await expectNoHorizontalOverflow(page);
 
   await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole('group', { name: 'Bulk result view' }).getByRole('button', { name: 'List', exact: true }).click();
   const mobileDomainBox = await boundingBox(domainValue);
   const mobileRowBox = await boundingBox(row);
   expect(mobileDomainBox.width).toBeGreaterThan(200);
-  expect(mobileRowBox.height).toBeLessThan(500);
+  expect(mobileRowBox.height).toBeLessThan(360);
   await expectNoHorizontalOverflow(page);
 });
 
@@ -674,6 +723,7 @@ test('results become labelled stacked cards at mobile width, with compact and fu
   await runBulkScan(page, domains);
 
   await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole('group', { name: 'Bulk result view' }).getByRole('button', { name: 'List', exact: true }).click();
 
   const thead = page.locator('.results-table thead');
   const theadBox = await boundingBox(thead);
@@ -691,6 +741,12 @@ test('results become labelled stacked cards at mobile width, with compact and fu
     expect(await pseudoContent(cell, '::before')).toContain(label);
   }
 
+  const collapsedLabels = ['Website', 'Registrar', 'Mutation', 'Actions'];
+  for (const label of collapsedLabels) {
+    await expect(row.locator(`td[data-label="${label}"]`)).toBeHidden();
+  }
+
+  await row.getByRole('button', { name: `Show details for ${domains[0]}` }).click();
   const fullWidthLabels = ['Website', 'Registrar', 'Mutation', 'Actions'];
   for (const label of fullWidthLabels) {
     const cell = row.locator(`td[data-label="${label}"]`);
@@ -1009,6 +1065,8 @@ test('candidate handoff presents defensive coverage actions and export', async (
   await coverage.getByRole('button', { name: 'Load gaps' }).first().click();
   await expect(page.locator('#domains')).toHaveValue('login-example.example\nsecure-example.example');
   await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole('group', { name: 'Bulk result view' }).getByRole('button', { name: 'Analysis', exact: true }).click();
+  await page.getByRole('button', { name: /Defensive coverage/u }).click();
   await expectNoHorizontalOverflow(page);
   await expectNoHorizontalScrollContainers(coverage);
 });

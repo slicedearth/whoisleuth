@@ -10,6 +10,7 @@ import { explainRiskScore, RISK_MODEL_VERSION, RISK_REVIEW_THRESHOLD } from '../
 import { CLI_COMMANDS, parseCliArguments } from './arguments.mts';
 import type { CliArguments, CliCommand } from './arguments.mts';
 import { runBulkCommand } from './bulk-command-runner.mts';
+import { buildCliCommandCatalogue, formatCliCommandCatalogue } from './command-catalogue.mts';
 import { buildShellCompletion } from './completion.mts';
 import { buildDoctorReport, formatDoctorReport } from './doctor.mts';
 import type { BoundedTextStream } from './bulk.mts';
@@ -41,6 +42,11 @@ import {
   formatTerminalRiskCalibration,
 } from './formatters/terminal.mts';
 import { buildCliLookupDiff, formatCliLookupDiff } from './lookup-diff.mts';
+import {
+  MAX_LOOKUP_TIMELINE_INPUT_BYTES,
+  buildCliLookupTimeline,
+  formatCliLookupTimeline,
+} from './lookup-timeline.mts';
 import { buildCliPageComparison, formatCliPageComparison } from './page-compare.mts';
 import {
   MAX_MAIL_REVIEW_INPUT_BYTES,
@@ -110,9 +116,10 @@ Review saved evidence:
   page-compare       Compare saved static page and TLS evidence.
   mail-review        Review saved passive mail exposure evidence.
   diff               Compare two saved domain observations.
+  timeline           Compare a sequence of observations for one domain.
   export             Convert a saved lookup into an evidence report.
   inspect-archive    Inspect a workspace archive, redacted by default.
-  verify-artifact    Validate an archive, packet, or manifest offline.
+  verify-artifact    Validate saved evidence or an integrity envelope offline.
 
 Integrity and calibration:
   sign-artifact      Sign one reviewed packet or manifest locally.
@@ -121,7 +128,8 @@ Integrity and calibration:
 
 Terminal:
   doctor             Check the local runtime; network tests require --network.
-  completion         Print a completion script for bash, zsh, or fish.
+  commands           List command contracts for people or local tooling.
+  completion         Print completion for bash, zsh, fish, or PowerShell.
   manual             Print the generated manual page.
 
 Run "whoisleuth <command> --help" for focused usage and an example.
@@ -134,11 +142,12 @@ Copyright 2026 slicedearth. Licensed under AGPL-3.0-only.
 Source and licence: https://github.com/slicedearth/whoisleuth
 `;
 const COMMAND_USAGE: Readonly<Record<CliCommand, string>> = Object.freeze({
-  completion: 'whoisleuth completion <bash|zsh|fish>',
+  completion: 'whoisleuth completion <bash|zsh|fish|powershell>',
   doctor: 'whoisleuth doctor [--network] [--json] [--quiet] [--no-color]',
+  commands: 'whoisleuth commands [--json] [--quiet] [--no-color]',
   manual: 'whoisleuth manual',
-  lookup: 'whoisleuth lookup <domain|IP|ASN> [--json|--markdown|--html] [--fast|--deep] [--summary|--verbose] [--strict-exit] [--events] [--quiet] [--no-color]',
-  bulk: 'whoisleuth bulk [file] [--json|--jsonl|--csv|--domains] [--registered-only|--inconclusive-only] [--fast|--deep] [--concurrency <1-8>] [--checkpoint <file> [--resume]] [--events]',
+  lookup: 'whoisleuth lookup <domain|IP|ASN> [--json|--markdown|--html] [--fast|--deep] [--plan] [--summary|--verbose] [--strict-exit] [--events] [--quiet] [--no-color]',
+  bulk: 'whoisleuth bulk [file] [--json|--jsonl|--csv|--domains|--queries] [--registered-only|--inconclusive-only|--errors-only] [--fast|--deep] [--concurrency <1-8>] [--checkpoint <file> [--resume]] [--events]',
   'ct-search': 'whoisleuth ct-search <keyword> [--json] [--quiet] [--no-color]',
   discover: 'whoisleuth discover <brand|domain> [--tlds <list>] [--preset <name>|--families <ids>] [--keyboard <layout>] [--dictionary <file>] [--snapshot <file>] [--json|--jsonl|--domains]',
   'discover-scan': 'whoisleuth discover-scan <brand|domain> [--fast|--deep] [--scan-limit <n>] [--chunk-size <n>] [--concurrency <n>] [--resolver <IPs>] [--allowlist <file>] [--checkpoint <file> [--resume]] [--observation-snapshot <file>] [--json|--jsonl|--csv|--domains]',
@@ -156,6 +165,7 @@ const COMMAND_USAGE: Readonly<Record<CliCommand, string>> = Object.freeze({
   'page-compare': 'whoisleuth page-compare <left.json> <right.json> [--json] [--quiet] [--no-color]',
   'mail-review': 'whoisleuth mail-review [bulk.json|bulk.jsonl] [--json] [--quiet] [--no-color]',
   diff: 'whoisleuth diff <left.json> <right.json> [--json] [--quiet] [--no-color]',
+  timeline: 'whoisleuth timeline <observation.json> <observation.json> [...] [--json] [--quiet] [--no-color]',
   export: 'whoisleuth export [lookup.json] [--markdown|--html|--compact]',
 });
 
@@ -169,6 +179,11 @@ const COMMAND_DETAILS: Readonly<Record<CliCommand, Readonly<{ description: strin
     description: 'Check the supported runtime and local terminal capabilities.',
     example: 'whoisleuth doctor --json',
     boundary: 'The default check is offline. Public DNS and port 43 checks run only when --network is explicitly supplied.',
+  },
+  commands: {
+    description: 'List the installed command contracts in terminal or versioned JSON form.',
+    example: 'whoisleuth commands --json',
+    boundary: 'Catalogue generation is offline. It reports declared command modes and limits without executing collection or inspecting local evidence.',
   },
   manual: {
     description: 'Print a generated roff manual page for local installation.',
@@ -226,7 +241,7 @@ const COMMAND_DETAILS: Readonly<Record<CliCommand, Readonly<{ description: strin
     boundary: 'Calibration is offline and diagnostic. It never trains, tunes, or changes the scoring model automatically.',
   },
   'verify-artifact': {
-    description: 'Validate a supported archive, packet, or manifest without printing evidence contents.',
+    description: 'Validate a supported archive, packet, manifest, or saved Lookup without printing evidence contents.',
     example: 'whoisleuth verify-artifact workspace.json --json',
     boundary: 'Verification is offline and redacted. Encrypted archives require an explicitly supplied passphrase file.',
   },
@@ -270,6 +285,11 @@ const COMMAND_DETAILS: Readonly<Record<CliCommand, Readonly<{ description: strin
     example: 'whoisleuth diff first.json second.json --json',
     boundary: 'Comparison is offline. Missing, unavailable, equal, and different evidence remain separate states.',
   },
+  timeline: {
+    description: 'Build an ordered same-domain history from saved Lookup observations.',
+    example: 'whoisleuth timeline first.json second.json latest.json --json',
+    boundary: 'The command is offline, accepts 2 to 20 bounded inputs for one domain, retains no filenames or raw registry payloads, and does not treat changed collection conditions as a domain change.',
+  },
   export: {
     description: 'Convert one saved lookup into a versioned evidence report.',
     example: 'whoisleuth export lookup.json --markdown',
@@ -277,9 +297,41 @@ const COMMAND_DETAILS: Readonly<Record<CliCommand, Readonly<{ description: strin
   },
 });
 
+const COMMAND_COLLECTION: Readonly<Record<CliCommand, Readonly<{
+  mode: 'offline' | 'network';
+  scope: string;
+}>>> = Object.freeze({
+  completion: { mode: 'offline', scope: 'Prints one static script and changes no shell configuration.' },
+  doctor: { mode: 'network', scope: 'Network access is opt-in with --network and is limited to fixed public DNS, HTTPS, and WHOIS diagnostics.' },
+  commands: { mode: 'offline', scope: 'Reads the embedded command catalogue and performs no collection.' },
+  manual: { mode: 'offline', scope: 'Builds documentation from the embedded command catalogue.' },
+  lookup: { mode: 'network', scope: 'Accepts one target. Fast is the default; deep collection must be selected explicitly.' },
+  bulk: { mode: 'network', scope: 'Accepts at most 500 fast or 50 deep targets, with concurrency capped at 8 fast or 3 deep.' },
+  'ct-search': { mode: 'network', scope: 'Accepts one bounded search keyword and queries the fixed certificate-transparency source.' },
+  discover: { mode: 'offline', scope: 'Generates a bounded candidate set from local rules, dictionaries, and optional saved snapshots.' },
+  'discover-scan': { mode: 'network', scope: 'Scans at most 500 fast or 50 deep candidates, with concurrency capped at 8 fast or 3 deep.' },
+  posture: { mode: 'network', scope: 'Accepts one domain and performs bounded DNS queries only.' },
+  http: { mode: 'network', scope: 'Accepts one domain and follows only the bounded SSRF-guarded homepage redirect workflow.' },
+  tls: { mode: 'network', scope: 'Accepts one public hostname and opens one bounded certificate connection.' },
+  'registry-support': { mode: 'offline', scope: 'Reads the embedded registry capability catalogue for one domain or suffix.' },
+  'risk-calibrate': { mode: 'offline', scope: 'Reads one bounded reviewed-label dataset and changes no model or evidence.' },
+  'verify-artifact': { mode: 'offline', scope: 'Reads one selected bounded archive, packet, manifest, or saved Lookup document.' },
+  'inspect-archive': { mode: 'offline', scope: 'Reads one selected bounded workspace archive with redacted output by default.' },
+  'sign-artifact': { mode: 'offline', scope: 'Reads one selected artifact and one local private key without transmitting either.' },
+  'verify-signature': { mode: 'offline', scope: 'Reads one selected signed package and optional local public key.' },
+  'source-report': { mode: 'offline', scope: 'Reads bounded saved evidence and emits target-free source reliability data.' },
+  compare: { mode: 'offline', scope: 'Reads one saved Lookup and compares its separately attributed registry publications.' },
+  'page-compare': { mode: 'offline', scope: 'Reads two saved Lookup documents and executes no page code.' },
+  'mail-review': { mode: 'offline', scope: 'Reads one saved Bulk result and sends no DNS or SMTP traffic.' },
+  diff: { mode: 'offline', scope: 'Reads two saved Lookup documents for different domains.' },
+  timeline: { mode: 'offline', scope: 'Reads 2 to 20 saved observations for one domain, capped at 32 MiB in total.' },
+  export: { mode: 'offline', scope: 'Reads one saved Lookup and writes one bounded report.' },
+});
+
 function commandHelp(command: CliCommand): string {
   const detail = COMMAND_DETAILS[command];
-  return `WHOISleuth ${command}\n${detail.description}\n\nUsage:\n  ${COMMAND_USAGE[command]}\n\nExample:\n  ${detail.example}\n\nBoundary:\n  ${detail.boundary}\n\nRun "whoisleuth --help" to see the grouped command list.\n`;
+  const collection = COMMAND_COLLECTION[command];
+  return `WHOISleuth ${command}\n${detail.description}\n\nUsage:\n  ${COMMAND_USAGE[command]}\n\nExample:\n  ${detail.example}\n\nCollection:\n  ${collection.mode === 'offline' ? 'Offline' : 'Network'}: ${collection.scope}\n\nBoundary:\n  ${detail.boundary}\n\nRun "whoisleuth --help" to see the grouped command list.\n`;
 }
 
 async function readStdinBounded(
@@ -395,8 +447,28 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
       return EXIT_CODES.SUCCESS;
     }
 
+    if (args.action === 'commands') {
+      const catalogue = buildCliCommandCatalogue({
+        commands: CLI_COMMANDS,
+        collections: COMMAND_COLLECTION,
+        details: COMMAND_DETAILS,
+        usage: COMMAND_USAGE,
+        packageVersion: VERSION,
+      });
+      if (!args.quiet) write(stdout, args.output === 'json'
+        ? formatJsonDocument(catalogue)
+        : terminal(formatCliCommandCatalogue(catalogue), args.color));
+      return EXIT_CODES.SUCCESS;
+    }
+
     if (args.action === 'manual') {
-      write(stdout, buildCliManual({ commands: CLI_COMMANDS, details: COMMAND_DETAILS, usage: COMMAND_USAGE, version: VERSION }));
+      write(stdout, buildCliManual({
+        commands: CLI_COMMANDS,
+        collections: COMMAND_COLLECTION,
+        details: COMMAND_DETAILS,
+        usage: COMMAND_USAGE,
+        version: VERSION,
+      }));
       return EXIT_CODES.SUCCESS;
     }
 
@@ -660,6 +732,36 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
       if (!args.quiet) write(stdout, args.output === 'json'
         ? formatJsonDocument(document)
         : terminal(formatCliLookupDiff(document), args.color));
+      return EXIT_CODES.SUCCESS;
+    }
+
+    if (args.action === 'timeline') {
+      failureLabel = 'Lookup observation timeline';
+      const readTimelineInput = dependencies.readDiffInput || (async (source: string) => (
+        readSavedLookupInputBounded(createReadStream(source, { highWaterMark: 64 * 1024 }), {
+          limit: MAX_SAVED_LOOKUP_INPUT_BYTES,
+          label: 'Lookup timeline input',
+        })
+      ));
+      const inputs: string[] = [];
+      let totalBytes = 0;
+      try {
+        for (const source of args.sources) {
+          const input = await readTimelineInput(source);
+          totalBytes += Buffer.byteLength(input, 'utf8');
+          if (totalBytes > MAX_LOOKUP_TIMELINE_INPUT_BYTES) {
+            throw new CliUsageError(`Lookup timeline input is limited to ${MAX_LOOKUP_TIMELINE_INPUT_BYTES} bytes in total.`);
+          }
+          inputs.push(input);
+        }
+      } catch (error) {
+        if (error instanceof CliUsageError) throw error;
+        throw new CliUsageError(`Could not read Lookup timeline input: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
+      }
+      const document = buildCliLookupTimeline(inputs, commandContext.now());
+      if (!args.quiet) write(stdout, args.output === 'json'
+        ? formatJsonDocument(document)
+        : terminal(formatCliLookupTimeline(document), args.color));
       return EXIT_CODES.SUCCESS;
     }
 

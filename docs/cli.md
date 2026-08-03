@@ -8,7 +8,9 @@ hosted WHOISleuth deployment.
 source location. It groups commands by investigation, discovery, saved-evidence,
 integrity, and calibration workflows. `whoisleuth <command> --help` displays the
 command's purpose, focused invocation, example, and collection boundary without
-printing the full command list. Packaged copies include `LICENSE`, `NOTICE`, and
+printing the full command list. `whoisleuth commands --json` exposes those same
+contracts as a stable local catalogue for wrappers and terminal tooling.
+Packaged copies include `LICENSE`, `NOTICE`, and
 `TRADEMARKS.md` alongside the CLI documentation.
 
 ## Installation
@@ -41,6 +43,7 @@ node bin/whoisleuth.mts lookup example.com
 node bin/whoisleuth.mts lookup AS13335 --json
 printf 'example.com\n' | node bin/whoisleuth.mts lookup --json
 node bin/whoisleuth.mts lookup example.com --deep
+node bin/whoisleuth.mts lookup example.com --deep --plan --json
 node bin/whoisleuth.mts lookup example.com --deep --summary
 node bin/whoisleuth.mts lookup example.com --deep --verbose
 node bin/whoisleuth.mts lookup example.com --deep --markdown --output lookup.md
@@ -48,6 +51,7 @@ node bin/whoisleuth.mts lookup example.com --deep --json --strict-exit --events
 cat domains.txt | node bin/whoisleuth.mts bulk --jsonl
 node bin/whoisleuth.mts bulk domains.txt --csv --registered-only
 node bin/whoisleuth.mts bulk domains.txt --domains --inconclusive-only
+node bin/whoisleuth.mts bulk domains.txt --queries --errors-only
 node bin/whoisleuth.mts bulk domains.txt --concurrency 4
 node bin/whoisleuth.mts bulk domains.txt --deep --checkpoint bulk-checkpoint.json
 node bin/whoisleuth.mts bulk domains.txt --deep --checkpoint bulk-checkpoint.json --resume
@@ -62,6 +66,7 @@ node bin/whoisleuth.mts tls example.com --json
 node bin/whoisleuth.mts registry-support example.uk --json
 node bin/whoisleuth.mts risk-calibrate calibration.json --json
 node bin/whoisleuth.mts verify-artifact workspace.json --json
+node bin/whoisleuth.mts verify-artifact lookup.json --json
 node bin/whoisleuth.mts verify-artifact workspace-encrypted.json --passphrase-file passphrase.txt --json
 node bin/whoisleuth.mts source-report lookup.json --json
 node bin/whoisleuth.mts inspect-archive workspace.json --json
@@ -73,12 +78,15 @@ node bin/whoisleuth.mts compare lookup.json --json
 node bin/whoisleuth.mts page-compare official.json candidate.json --json
 node bin/whoisleuth.mts mail-review bulk.json --json
 node bin/whoisleuth.mts diff first-lookup.json second-lookup.json --json
+node bin/whoisleuth.mts timeline first-observation.json second-observation.json latest-observation.json --json
 node bin/whoisleuth.mts export lookup.json > evidence.json
 node bin/whoisleuth.mts export lookup.json --markdown > evidence.md
 node bin/whoisleuth.mts export lookup.json --html > evidence.html
 node bin/whoisleuth.mts doctor
 node bin/whoisleuth.mts doctor --network --json
+node bin/whoisleuth.mts commands --json
 node bin/whoisleuth.mts completion zsh
+node bin/whoisleuth.mts completion powershell
 node bin/whoisleuth.mts manual | man -l -
 ```
 
@@ -114,6 +122,14 @@ up to five normalized PTR names; JSON retains up to eight. PTR names are
 operator-published routing context, not proof of hosting control or ownership.
 Fast lookups do not run this query.
 
+`lookup --plan` performs classification and prints a versioned preflight without
+starting collection. It lists the normalized target, selected fast or deep
+mode, planned source families, conditional operations, and the data each family
+may receive. The plan cannot predict live feature configuration, cache state,
+redirects, referrals, source availability, or an exact request count. It can be
+combined with `--json`, but not with report, detail, strict-exit, progress-event,
+or quiet options.
+
 Only one query is accepted by `lookup`. Multiple-input processing belongs to
 the explicit `bulk` command rather than being silently inferred by `lookup`.
 Standard input is capped at 4 KiB and must contain one non-empty line.
@@ -132,11 +148,25 @@ not resolved addresses or response content. A failed optional network check
 returns the partial-failure exit code rather than claiming that all CLI
 collection is unavailable.
 
-`completion bash`, `completion zsh`, and `completion fish` print static shell
-completion scripts to stdout. The command does not edit a shell profile or make
-a network request. Review the generated script before sourcing it or placing it
-in the relevant shell completion directory. `manual` prints a generated roff
-manual page and likewise changes no local configuration.
+`completion bash`, `completion zsh`, `completion fish`, and `completion
+powershell` print static shell completion scripts to stdout. The command does
+not edit a shell profile or make a network request. Review the generated script
+before sourcing it or placing it in the relevant shell completion directory.
+`manual` prints a generated roff manual page and likewise changes no local
+configuration.
+
+`commands` prints the installed command catalogue without running collection or
+reading evidence. `commands --json` emits version 1 of the
+`whoisleuth.cli.command-catalogue` schema, including each command's usage,
+example, declared collection mode, collection scope, and boundary. This is the
+supported discovery contract for local wrappers; it is not a permission grant
+or a substitute for focused help.
+
+Focused command help and the generated manual classify every operation as
+offline or networked and state the relevant target, input, and concurrency
+ceiling. These labels describe observable behavior rather than granting
+authorization. The packaged `DISCLOSURE` defines the intended defensive scope;
+operators remain responsible for law, provider terms, and authorization.
 
 ## Deployment boundary
 
@@ -151,8 +181,8 @@ Commands that query RDAP, WHOIS, DNS, HTTP, TLS, or Certificate Transparency do
 so directly from the machine running the CLI. They do not use the hosted login,
 hosted session, or deployment usage controls; upstream providers can see and
 rate-limit the local machine's network address. Offline `discover`, `compare`,
-`page-compare`, `mail-review`, `diff`, `risk-calibrate`, `verify-artifact`, `source-report`, `export`,
-`completion`, and `manual` operations make no network requests. Commands write
+`page-compare`, `mail-review`, `diff`, `timeline`, `risk-calibrate`, `verify-artifact`, `source-report`, `export`,
+`commands`, `completion`, and `manual` operations make no network requests. Commands write
 to stdout unless the analyst deliberately selects a local output file.
 
 ## Output
@@ -279,6 +309,15 @@ registration, DNS, page identity, mail, certificate, and relationship fields,
 keeps missing and unavailable evidence distinct, and makes no ownership or
 maliciousness inference. The output records both original observation times.
 
+`timeline <observation.json> <observation.json> [...]` accepts from 2 to 20
+saved Lookup documents for one domain, orders them by their validated
+observation times, and compares each adjacent pair offline. The 32 MiB aggregate
+input ceiling is enforced while files are read and again by the timeline
+builder. Output retains normalized field states and observation times but no
+input filenames or raw registry payloads. A difference can reflect a domain
+change or changed collection conditions, so the command makes no current-state,
+ownership, intent, safety, or maliciousness conclusion.
+
 When diagnostics version 5, 6, 7, or 8 reports a documented registry collection
 constraint, terminal output also shows the suffix, WHOIS and RDAP access
 profiles, and the bounded limitation. This is static access-policy context: it
@@ -299,7 +338,7 @@ machine access is not evidence that a domain is unregistered or safe.
 This release supports `lookup`, `bulk`, `ct-search`, `discover`, `discover-scan`, `posture`,
 `http`, `tls`, `registry-support`, `risk-calibrate`, `verify-artifact`,
 `inspect-archive`, `sign-artifact`, `verify-signature`, `source-report`,
-`compare`, `page-compare`, `mail-review`, `diff`, `export`, `doctor`, `completion`, and `manual`. Additional command families
+`compare`, `page-compare`, `mail-review`, `diff`, `timeline`, `export`, `doctor`, `commands`, `completion`, and `manual`. Additional command families
 are added as separate bounded increments rather than exposing incomplete
 aliases.
 
@@ -398,7 +437,11 @@ Risk model.
 evidence contents. Input is capped at 15 MiB. It currently recognises ordinary
 and encrypted workspace archives, case-response packets, acquisition-decision
 exports, domain-comparison exports, Bulk mail-exposure exports, and Bulk review
-manifests.
+manifests. It also validates the bounded versioned structure of saved CLI
+Lookup JSON. Because saved Lookup documents do not embed a checksum or
+signature, that result is reported as `structure_valid` with content integrity
+explicitly unchecked. Saved Lookup validation retains its stricter 8 MiB
+document ceiling.
 
 For an ordinary workspace archive, the command validates the versioned
 structure, section byte counts, record counts, and per-section checksums. For a
@@ -482,19 +525,25 @@ deep mode.
 
 Bulk uses the shared compact lookup response, so it does not retain raw RDAP
 objects or WHOIS response bodies. `--json` returns one bounded collection;
-`--jsonl` emits one self-contained versioned item per line. Version 2 adds a
+`--jsonl` emits one self-contained versioned item per line. `--domains` emits
+only successfully normalized domain names, while `--queries` preserves the
+selected bounded input queries and is suitable for an exact retry queue.
+Version 2 adds a
 bounded `dnsSummary` projection for observed A, AAAA, NS, and MX records plus
 null MX, SPF, and DMARC state. `--csv` writes fixed columns for automation,
-including the DNS summaries and explicit outcome; `--domains` writes only the
-normalized retained domain names for a subsequent command.
+including the DNS summaries and explicit outcome.
 
-`--registered-only` and `--inconclusive-only` are mutually exclusive output
-filters. The first retains registered, for-sale, and expiring authority-aware
-states. The second retains unknown authority states and failed rows. Filtering
-does not change collection and never converts an unavailable or failed source
-into an unregistered result. Machine documents record collected and emitted
-counts. A mixture of successful and failed queries exits with code 4 while
-preserving every collected result before output filtering.
+`--registered-only`, `--inconclusive-only`, and `--errors-only` are mutually
+exclusive output filters. The first retains registered, for-sale, and expiring
+authority-aware states. The second retains unknown authority states and failed
+rows. The third retains only rows whose lookup operation failed, which is useful
+for producing an exact retry queue without treating an inconclusive successful
+lookup as an operational error. Filtering does not change collection and never
+converts an unavailable or failed source into an unregistered result. Machine
+documents record collected and emitted counts. A mixture of successful and
+failed queries exits with code 4 while preserving every collected result before
+output filtering. For example, `bulk domains.txt --queries --errors-only`
+produces only the exact failed inputs while retaining the partial-failure exit.
 
 ## Certificate Transparency search
 

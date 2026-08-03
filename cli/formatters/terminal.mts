@@ -23,7 +23,7 @@ type TerminalBulkItem = {
 type TerminalBulkMetadata = {
   collectedTotal?: number;
   duplicates?: number;
-  filter?: 'all' | 'inconclusive' | 'registered';
+  filter?: 'all' | 'errors' | 'inconclusive' | 'registered';
 };
 type LookupTerminalDetail = 'summary' | 'standard' | 'verbose';
 

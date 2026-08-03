@@ -59,8 +59,16 @@ jobs:
           cache: npm
       - name: Install locked dependencies
         run: npm ci --include=optional --ignore-scripts
-      - name: Run tests
-        run: npm test
+      - name: Run tests with production-source coverage
+        run: npm run test:coverage
+      - name: Upload unit coverage
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: unit-coverage
+          path: test-coverage.lcov
+          if-no-files-found: ignore
+          retention-days: 7
 
   browser:
     runs-on: ubuntu-latest
@@ -95,6 +103,11 @@ jobs:
         run: npm run test:e2e:install
       - name: Run Playwright e2e shard
         run: npm run test:e2e -- --shard=${{ matrix.shard }}
+      - name: Summarize Playwright result data
+        if: always()
+        env:
+          WHOISLEUTH_PLAYWRIGHT_RUN_LABEL: ${{ matrix.label }}
+        run: npm run test:e2e:summary
       - name: Upload Playwright result data
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7

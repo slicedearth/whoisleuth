@@ -34,6 +34,11 @@ jobs:
         run: npm run test:e2e:install
       - name: Repeat historically timing-sensitive workflows without retries
         run: npm run test:e2e:stress
+      - name: Summarize Playwright result data
+        if: always()
+        env:
+          WHOISLEUTH_PLAYWRIGHT_RUN_LABEL: stress
+        run: npm run test:e2e:summary
       - name: Upload Playwright result data
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7

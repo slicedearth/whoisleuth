@@ -18,14 +18,16 @@ function capture() {
 
 describe('CLI shell completion', () => {
   test('generates bounded static scripts for each supported shell', () => {
-    for (const shell of ['bash', 'zsh', 'fish'] as const) {
+    for (const shell of ['bash', 'zsh', 'fish', 'powershell'] as const) {
       const script = buildShellCompletion(shell);
       assert.ok(script.length > 100 && script.length < 30_000);
       assert.match(script, /whoisleuth/u);
       assert.match(script, /lookup/u);
       assert.match(script, /doctor/u);
       assert.match(script, /manual/u);
+      assert.match(script, /commands/u);
       assert.match(script, /diff/u);
+      assert.match(script, /timeline/u);
       assert.match(script, /(?:--checkpoint|-l checkpoint)/u);
       assert.match(script, /(?:--output|-l output)/u);
       assert.match(script, /(?:--summary|-l summary)/u);
@@ -41,7 +43,16 @@ describe('CLI shell completion', () => {
     assert.match(zsh, /funcstack\[1\].*_whoisleuth/u);
     assert.doesNotMatch(zsh, /--preset\) compadd -- .*custom/u);
     assert.match(buildShellCompletion('fish'), /-l output -r -F/u);
-    assert.match(buildShellCompletion('fish'), /__fish_seen_subcommand_from completion.*bash zsh fish/u);
+    assert.match(buildShellCompletion('fish'), /__fish_seen_subcommand_from completion.*bash zsh fish powershell/u);
+    const powershell = buildShellCompletion('powershell');
+    assert.match(powershell, /Register-ArgumentCompleter -Native -CommandName whoisleuth/u);
+    const powershellSyntax = spawnSync('pwsh', [
+      '-NoProfile',
+      '-NonInteractive',
+      '-Command',
+      '$code = [Console]::In.ReadToEnd(); [void][scriptblock]::Create($code)',
+    ], { input: powershell, encoding: 'utf8' });
+    assert.equal(powershellSyntax.status, 0, powershellSyntax.stderr);
   });
 
   test('offers only discover preset values accepted by the argument parser', () => {
@@ -50,7 +61,7 @@ describe('CLI shell completion', () => {
       assert.equal(parsed.action, 'discover');
       if (parsed.action === 'discover') assert.equal(parsed.preset, preset);
     }
-    for (const shell of ['bash', 'zsh', 'fish'] as const) {
+    for (const shell of ['bash', 'zsh', 'fish', 'powershell'] as const) {
       assert.doesNotMatch(buildShellCompletion(shell), /(?:--preset|-a) ['"]?custom/u);
     }
   });
@@ -63,6 +74,7 @@ describe('CLI shell completion', () => {
     assert.match(stdout.value(), /complete -F _whoisleuth_completion whoisleuth/u);
     assert.equal(stderr.value(), '');
     assert.deepEqual(parseCliArguments(['completion', 'fish']), { action: 'completion', shell: 'fish' });
+    assert.deepEqual(parseCliArguments(['completion', 'powershell']), { action: 'completion', shell: 'powershell' });
   });
 
   test('prints a generated manual with every supported command and stable exit statuses', async () => {
@@ -73,6 +85,10 @@ describe('CLI shell completion', () => {
     assert.match(stdout.value(), /^\.TH WHOISLEUTH 1/mu);
     assert.match(stdout.value(), /\.SS lookup/u);
     assert.match(stdout.value(), /\.SS diff/u);
+    assert.match(stdout.value(), /\.SS timeline/u);
+    assert.match(stdout.value(), /\.SS commands/u);
+    assert.match(stdout.value(), /Collection: offline\./u);
+    assert.match(stdout.value(), /Collection: network\./u);
     assert.match(stdout.value(), /130 analyst cancellation/u);
     assert.equal(stderr.value(), '');
   });

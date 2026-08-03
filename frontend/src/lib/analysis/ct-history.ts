@@ -132,8 +132,8 @@ export function normalizeCtHistoryStore(raw: unknown): CtHistoryStore {
   };
 }
 
-function serializedBytes(store: CtHistoryStore): number {
-  return new TextEncoder().encode(JSON.stringify(store)).length;
+function serializedBytes(value: unknown): number {
+  return new TextEncoder().encode(JSON.stringify(value)).length;
 }
 
 /**
@@ -146,13 +146,15 @@ function serializedBytes(store: CtHistoryStore): number {
  */
 export function enforceCtHistoryBudget(rawStore: unknown): CtHistoryStore {
   const store = normalizeCtHistoryStore(rawStore);
-  while (serializedBytes(store) > MAX_CT_HISTORY_STORE_BYTES) {
+  let storeBytes = serializedBytes(store);
+  while (storeBytes > MAX_CT_HISTORY_STORE_BYTES) {
     let changed = false;
     for (let entryIndex = store.entries.length - 1; entryIndex >= 0 && !changed; entryIndex--) {
       const entry = store.entries[entryIndex];
       if (!entry) continue;
       for (const event of entry.history) {
         if (event.newDomains.length) {
+          storeBytes -= serializedBytes(event.newDomains) - serializedBytes([]);
           event.newDomains = [];
           changed = true;
           break;
@@ -163,18 +165,34 @@ export function enforceCtHistoryBudget(rawStore: unknown): CtHistoryStore {
     for (let entryIndex = store.entries.length - 1; entryIndex >= 0 && !changed; entryIndex--) {
       const entry = store.entries[entryIndex];
       if (entry && entry.history.length > 1) {
+        const removed = entry.history[0];
+        if (!removed) continue;
+        // Removing one member from a multi-member JSON array also removes one
+        // comma, so the byte accounting remains exact without reserializing
+        // the complete bounded store on every iteration.
+        storeBytes -= serializedBytes(removed) + 1;
         entry.history.shift();
         changed = true;
       }
     }
     if (changed) continue;
     if (store.entries.length > 1) {
+      const removed = store.entries.at(-1);
+      if (!removed) break;
+      storeBytes -= serializedBytes(removed) + 1;
       store.entries.pop();
       continue;
     }
     // One maximally-sized normalized baseline is well below the budget. This
     // guard only prevents an accidental infinite loop if the schema changes.
     break;
+  }
+  // Keep one final measurement as a defensive check around the incremental
+  // accounting. This fallback is bounded by the 30-entry retention ceiling.
+  let measuredBytes = serializedBytes(store);
+  while (measuredBytes > MAX_CT_HISTORY_STORE_BYTES && store.entries.length > 1) {
+    store.entries.pop();
+    measuredBytes = serializedBytes(store);
   }
   return store;
 }

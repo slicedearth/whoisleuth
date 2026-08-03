@@ -5,6 +5,7 @@ frontend/build/
 .DS_Store
 playwright-report/
 playwright-results.json
+test-coverage.lcov
 playwright/.auth/
 test-results/
 blob-report/

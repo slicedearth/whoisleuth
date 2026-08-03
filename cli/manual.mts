@@ -5,6 +5,10 @@ type CommandDetail = Readonly<{
   example: string;
   boundary: string;
 }>;
+type CommandCollection = Readonly<{
+  mode: 'offline' | 'network';
+  scope: string;
+}>;
 
 function roffText(value: string): string {
   return value
@@ -16,12 +20,14 @@ function roffText(value: string): string {
 function buildCliManual(options: Readonly<{
   commands: readonly CliCommand[];
   details: Readonly<Record<CliCommand, CommandDetail>>;
+  collections: Readonly<Record<CliCommand, CommandCollection>>;
   usage: Readonly<Record<CliCommand, string>>;
   version: string;
 }>): string {
   const commands = options.commands.map((command) => {
     const detail = options.details[command];
-    return `.SS ${roffText(command)}\n${roffText(detail.description)}\n.PP\n.B ${roffText(options.usage[command])}\n.PP\nExample: ${roffText(detail.example)}\n.PP\nBoundary: ${roffText(detail.boundary)}`;
+    const collection = options.collections[command];
+    return `.SS ${roffText(command)}\n${roffText(detail.description)}\n.PP\n.B ${roffText(options.usage[command])}\n.PP\nExample: ${roffText(detail.example)}\n.PP\nCollection: ${roffText(collection.mode)}. ${roffText(collection.scope)}\n.PP\nBoundary: ${roffText(detail.boundary)}`;
   }).join('\n');
   return `.TH WHOISLEUTH 1 "" "WHOISleuth ${roffText(options.version)}" "User Commands"
 .SH NAME
@@ -47,4 +53,4 @@ whoisleuth --help, whoisleuth doctor, whoisleuth completion
 }
 
 export { buildCliManual };
-export type { CommandDetail };
+export type { CommandCollection, CommandDetail };
