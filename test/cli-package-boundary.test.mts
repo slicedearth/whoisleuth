@@ -6,6 +6,11 @@ import { join } from 'node:path';
 
 import packageJson from '../package.json' with { type: 'json' };
 import packageTemplate from '../packages/cli/package.template.json' with { type: 'json' };
+import {
+  WHOISLEUTH_PROJECT_URL,
+  WHOISLEUTH_SOURCE_ISSUES_URL,
+  WHOISLEUTH_SOURCE_REPOSITORY_GIT_URL,
+} from '../lib/project-metadata.mts';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 
@@ -37,6 +42,9 @@ describe('CLI package boundary', () => {
     assert.equal(packageTemplate.author, 'slicedearth');
     assert.deepEqual(packageTemplate.contentPolicy, { class: 'dual-use' });
     assert.deepEqual(packageTemplate.bin, { whoisleuth: 'bin/whoisleuth.mjs' });
+    assert.equal(packageTemplate.repository.url, WHOISLEUTH_SOURCE_REPOSITORY_GIT_URL);
+    assert.equal(packageTemplate.homepage, WHOISLEUTH_PROJECT_URL);
+    assert.equal(packageTemplate.bugs.url, WHOISLEUTH_SOURCE_ISSUES_URL);
     assert.match(readFileSync(join(__dirname, '..', 'DISCLOSURE'), 'utf8'), /defensive domain investigation/u);
     assert.match(readFileSync(join(__dirname, '..', 'SECURITY.md'), 'utf8'), /private vulnerability reporting/u);
     assert.match(packageReadme, /npm install --global --ignore-scripts @slicedearth\/whoisleuth-cli/u);
