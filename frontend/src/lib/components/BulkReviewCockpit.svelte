@@ -77,7 +77,7 @@
     <div>
       <p class="eyebrow">Focused review</p>
       <h2 id="review-cockpit-title">Bulk review cockpit</h2>
-      <p>Review one filtered domain at a time while the full table remains available below. Nothing advances or changes state automatically.</p>
+      <p>Review one filtered domain at a time while the full list remains available in this scan. Nothing advances or changes state automatically.</p>
     </div>
     <button class="btn" class:active={enabled} type="button" aria-pressed={enabled} onclick={() => enabled = !enabled}>{enabled ? 'Disable shortcuts' : 'Enable shortcuts'}</button>
   </header>

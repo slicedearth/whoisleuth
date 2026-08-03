@@ -16,6 +16,7 @@
   import BulkReviewCockpit from '$lib/components/BulkReviewCockpit.svelte';
   import BulkMailExposureReview from '$lib/components/BulkMailExposureReview.svelte';
   import BulkPeerOutliers from '$lib/components/BulkPeerOutliers.svelte';
+  import BulkMobileDisclosure from '$lib/components/BulkMobileDisclosure.svelte';
   import PageHeading from '$lib/components/PageHeading.svelte';
   import { activeProfile, isDomainAllowlisted, profileDomainKind, type BrandProfile } from '$lib/brand-profiles';
   import { loadCandidateHandoff, type Candidate, type CandidateHandoff, type CertificateTransparencyProvenance } from '$lib/candidate-handoff';
@@ -113,6 +114,7 @@
   const PAGE_SIZE = 100;
   const RESULT_PUBLISH_MS = 100;
   type ShortlistSelectionResult = Awaited<ReturnType<typeof setShortlistSelection>>;
+  type MobileResultView = 'review' | 'list' | 'analysis';
 
   let handoff = $state<CandidateHandoff|null>(null);
   let input = $state(''); let mode = $state<ScanMode>('fast'); let running = $state(false); let paused = $state(false);
@@ -132,6 +134,8 @@
   let bulkReviewStore=$state<BulkReviewStore>({schema:BULK_REVIEW_SCHEMA,version:BULK_REVIEW_SCHEMA_VERSION,presets:[],rows:[]});let reviewStateFilter=$state<BulkReviewFilter>('');let bulkReviewStatus=$state('');
   let retryStatus=$state('');
   let localContextStatus=$state('');
+  let workspaceToolsOpen=$state(false);
+  let mobileResultView=$state<MobileResultView>('review');
   const capabilityReport=getContext<CapabilityGetter>(CAPABILITY_CONTEXT);
   const lookupDisabled=$derived(disabledCapability(capabilityReport?.()||null,'lookup'));
   const scanLimitations=$derived(disabledCapabilities(capabilityReport?.()||null,mode==='fast'?['rdap','availability']:['rdap','whois','availability','dns_intelligence','website_probe','tls_intelligence']));
@@ -423,30 +427,44 @@
 
 <p class="local-context-status" role="status">{localContextStatus}</p>
 
-<BulkSessions
-  sessions={bulkSessions}
-  currentSessionId={currentBulkSessionId}
-  saveName={bulkSessionName}
-  setSaveName={(value)=>bulkSessionName=value}
-  saveCurrent={saveCurrentBulkSession}
-  loadSession={loadSavedBulkSession}
-  resumeSession={resumeSavedBulkSession}
-  deleteSession={removeSavedBulkSession}
-  exportSessions={downloadBulkSessions}
-  status={bulkSessionStatus}
-  canSave={!running&&results.length>0}
-/>
+<section class="bulk-workspace-shell" aria-label="Bulk workspace tools">
+  <button
+    class="mobile-workspace-toggle"
+    type="button"
+    aria-controls="bulk-workspace-content"
+    aria-expanded={workspaceToolsOpen}
+    onclick={() => workspaceToolsOpen = !workspaceToolsOpen}
+  >
+    <span><strong>Workspace tools</strong><small>Saved sessions, views, and review queues</small></span>
+    <span aria-hidden="true">{workspaceToolsOpen ? '−' : '+'}</span>
+  </button>
+  <div id="bulk-workspace-content" class:mobile-collapsed={!workspaceToolsOpen} class="bulk-workspace-content">
+    <BulkSessions
+      sessions={bulkSessions}
+      currentSessionId={currentBulkSessionId}
+      saveName={bulkSessionName}
+      setSaveName={(value)=>bulkSessionName=value}
+      saveCurrent={saveCurrentBulkSession}
+      loadSession={loadSavedBulkSession}
+      resumeSession={resumeSavedBulkSession}
+      deleteSession={removeSavedBulkSession}
+      exportSessions={downloadBulkSessions}
+      status={bulkSessionStatus}
+      canSave={!running&&results.length>0}
+    />
 
-<BulkReviewWorkspace
-  store={bulkReviewStore}
-  currentView={currentBulkReviewView()}
-  reviewFilter={reviewStateFilter}
-  setReviewFilter={(value)=>{reviewStateFilter=value;page=1;}}
-  saveView={saveCurrentBulkReviewView}
-  loadView={loadBulkReviewView}
-  deleteView={removeBulkReviewView}
-  status={bulkReviewStatus}
-/>
+    <BulkReviewWorkspace
+      store={bulkReviewStore}
+      currentView={currentBulkReviewView()}
+      reviewFilter={reviewStateFilter}
+      setReviewFilter={(value)=>{reviewStateFilter=value;page=1;}}
+      saveView={saveCurrentBulkReviewView}
+      loadView={loadBulkReviewView}
+      deleteView={removeBulkReviewView}
+      status={bulkReviewStatus}
+    />
+  </div>
+</section>
 
 {#if results.length}
   <section id="results" class="triage card" tabindex="-1">
@@ -470,6 +488,7 @@
       {signalFilters}
       {toggleSignal}
       {sourceFilter}
+      reviewFilter={reviewStateFilter}
       setSourceFilter={(value)=>{sourceFilter=value;page=1;}}
       {lifecycleFilter}
       setLifecycleFilter={(value)=>{lifecycleFilter=value;page=1;}}
@@ -509,80 +528,118 @@
       {setSelectedDisposition}
       caseOptions={CASE_DISPOSITIONS}
     />
-    <BulkTriagePlot
-      points={filtered.map((row)=>({
-        domain:row.domain,
-        risk:row.risk,
-        opportunity:row.opportunity,
-        availability:row.availability,
-        trusted:Boolean(row.trusted),
-      }))}
-      matchedCount={filtered.length}
-    />
-    <BulkMailExposureReview
-      report={mailExposureReport}
-      selectedDomains={shortlistedDomains}
-      {selectDomains}
-      exportReport={exportMailExposure}
-    />
-    <BulkReviewCockpit
-      rows={cockpitRows}
-      {retryPlan}
-      {retryStatus}
-      setReviewState={setReviewStateAt}
-      toggleSaved={toggleSavedAt}
-      trackCase={trackCaseAt}
-      caseOptions={CASE_DISPOSITIONS}
-      setDisposition={setDispositionAt}
-      {watchlistName}
-      setWatchlistName={(value)=>watchlistName=value}
-      saveToWatchlist={saveCurrentResultAt}
-      actionStatus={saveStatus||caseStatus}
-      inspectDomain={inspectAt}
-      executeRetry={executeReviewedRetry}
-    />
-    <BulkDomainComparison comparison={domainComparison} exportComparison={exportDomainComparison} />
-    <BulkGroupSummary
-      {groupBy}
-      groups={groupSummary.groups}
-      excluded={groupSummary.excluded}
-      truncated={groupSummary.truncated}
-      overlapping={groupSummary.overlapping}
-      selectedDomains={shortlistedDomains}
-      {selectDomains}
-    />
-    <BulkPeerOutliers matrix={peerOutlierMatrix} exportMatrix={exportPeerOutliers} />
-    <BulkResultsTable
-      rows={resultRows}
-      {sortKey}
-      {sortDirection}
-      {setSort}
-      toggleSaved={toggleSavedAt}
-      caseOptions={CASE_DISPOSITIONS}
-      setDisposition={setDispositionAt}
-      trackCase={trackCaseAt}
-      inspectDomain={inspectAt}
-      {copyDraft}
-      {currentPage}
-      {pageCount}
-      setPage={(value)=>page=value}
-      {draftStatus}
-      {caseStatus}
-      setReviewState={setReviewStateAt}
-    />
+    <div class="mobile-result-switcher" role="group" aria-label="Bulk result view">
+      <button type="button" aria-controls="bulk-review-panel" aria-pressed={mobileResultView==='review'} onclick={()=>mobileResultView='review'}>Review</button>
+      <button type="button" aria-controls="bulk-list-panel" aria-pressed={mobileResultView==='list'} onclick={()=>mobileResultView='list'}>List</button>
+      <button type="button" aria-controls="bulk-analysis-panel" aria-pressed={mobileResultView==='analysis'} onclick={()=>mobileResultView='analysis'}>Analysis</button>
+    </div>
+
+    <div id="bulk-review-panel" class:mobile-view-active={mobileResultView==='review'} class="mobile-result-panel review-result-panel">
+      <BulkReviewCockpit
+        rows={cockpitRows}
+        {retryPlan}
+        {retryStatus}
+        setReviewState={setReviewStateAt}
+        toggleSaved={toggleSavedAt}
+        trackCase={trackCaseAt}
+        caseOptions={CASE_DISPOSITIONS}
+        setDisposition={setDispositionAt}
+        {watchlistName}
+        setWatchlistName={(value)=>watchlistName=value}
+        saveToWatchlist={saveCurrentResultAt}
+        actionStatus={saveStatus||caseStatus}
+        inspectDomain={inspectAt}
+        executeRetry={executeReviewedRetry}
+      />
+    </div>
+
+    <div id="bulk-list-panel" class:mobile-view-active={mobileResultView==='list'} class="mobile-result-panel list-result-panel">
+      <BulkResultsTable
+        rows={resultRows}
+        {sortKey}
+        {sortDirection}
+        {setSort}
+        toggleSaved={toggleSavedAt}
+        caseOptions={CASE_DISPOSITIONS}
+        setDisposition={setDispositionAt}
+        trackCase={trackCaseAt}
+        inspectDomain={inspectAt}
+        {copyDraft}
+        {currentPage}
+        {pageCount}
+        setPage={(value)=>page=value}
+        {draftStatus}
+        {caseStatus}
+        setReviewState={setReviewStateAt}
+      />
+    </div>
+
+    <div id="bulk-analysis-panel" class:mobile-view-active={mobileResultView==='analysis'} class="mobile-result-panel analysis-result-panel">
+      <BulkMobileDisclosure title="Result distribution" description="Compare risk and opportunity across the filtered set.">
+        <BulkTriagePlot
+          points={filtered.map((row)=>({
+            domain:row.domain,
+            risk:row.risk,
+            opportunity:row.opportunity,
+            availability:row.availability,
+            trusted:Boolean(row.trusted),
+          }))}
+          matchedCount={filtered.length}
+        />
+      </BulkMobileDisclosure>
+      <BulkMobileDisclosure title="Mail exposure" description="Review observed mail and authentication posture.">
+        <BulkMailExposureReview
+          report={mailExposureReport}
+          selectedDomains={shortlistedDomains}
+          {selectDomains}
+          exportReport={exportMailExposure}
+        />
+      </BulkMobileDisclosure>
+      {#if domainComparison}
+        <BulkMobileDisclosure title="Domain comparison" description="Compare two selected or settled domains.">
+          <BulkDomainComparison comparison={domainComparison} exportComparison={exportDomainComparison} />
+        </BulkMobileDisclosure>
+      {/if}
+      {#if groupBy}
+        <BulkMobileDisclosure title="Group summary" description="Review the grouping selected in the filters.">
+          <BulkGroupSummary
+            {groupBy}
+            groups={groupSummary.groups}
+            excluded={groupSummary.excluded}
+            truncated={groupSummary.truncated}
+            overlapping={groupSummary.overlapping}
+            selectedDomains={shortlistedDomains}
+            {selectDomains}
+          />
+        </BulkMobileDisclosure>
+      {/if}
+      <BulkMobileDisclosure title="Cohort outliers" description="Find uncommon evidence within this result set.">
+        <BulkPeerOutliers matrix={peerOutlierMatrix} exportMatrix={exportPeerOutliers} />
+      </BulkMobileDisclosure>
+    </div>
   </section>
 
-  <BulkRelationships
-    groups={relationshipSummary.groups}
-    truncated={relationshipSummary.truncated}
-    limitations={relationshipSummary.limitations}
-    {loadDomains}
-    {retainObservation}
-    observationId={relationshipObservationId}
-    retainedIds={retainedRelationshipIds}
-    retainStatus={relationshipRetentionStatus}
-  />
-  <BulkCoverage {coverage} {exportCoverage} {loadDomains} />
+  <div class:mobile-view-active={mobileResultView==='analysis'} class="mobile-result-panel extended-analysis-panel">
+    {#if relationshipSummary.groups.length || relationshipSummary.limitations.length}
+      <BulkMobileDisclosure title="Relationships" description="Review shared infrastructure observed in this scan.">
+        <BulkRelationships
+          groups={relationshipSummary.groups}
+          truncated={relationshipSummary.truncated}
+          limitations={relationshipSummary.limitations}
+          {loadDomains}
+          {retainObservation}
+          observationId={relationshipObservationId}
+          retainedIds={retainedRelationshipIds}
+          retainStatus={relationshipRetentionStatus}
+        />
+      </BulkMobileDisclosure>
+    {/if}
+    {#if coverage}
+      <BulkMobileDisclosure title="Defensive coverage" description="Review generated candidate coverage and gaps.">
+        <BulkCoverage {coverage} {exportCoverage} {loadDomains} />
+      </BulkMobileDisclosure>
+    {/if}
+  </div>
 {/if}
 
 <BulkShortlist domains={shortlist.map((item)=>item.domain)} status={shortlistStatus} {loadShortlisted} {downloadShortlist} {importShortlistFile} {removeAllShortlisted} />
@@ -590,7 +647,25 @@
 <style>
   .local-context-status{margin:12px 0 0;color:var(--warning);font-size:var(--text-sm)}
   .local-context-status:empty{display:none}
+  .bulk-workspace-shell,.bulk-workspace-content,.mobile-result-panel{display:contents}
+  .mobile-workspace-toggle,.mobile-result-switcher{display:none}
   .triage{padding:var(--card-pad)}
   .triage{margin-top:16px}
   .triage :global(#bulk-triage-plot){margin:16px 0}
+  @media(max-width:700px){
+    .bulk-workspace-shell{display:block;margin-top:16px}
+    .mobile-workspace-toggle{display:flex;width:100%;min-width:0;align-items:center;justify-content:space-between;gap:12px;padding:12px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel-raised);color:var(--text);text-align:left}
+    .mobile-workspace-toggle span:first-child{display:grid;min-width:0;gap:3px}
+    .mobile-workspace-toggle strong{font:700 var(--text-sm) var(--mono)}
+    .mobile-workspace-toggle small{color:var(--muted);font-size:var(--text-xs);font-weight:400;line-height:1.4}
+    .mobile-workspace-toggle span:last-child{flex:0 0 auto;color:var(--accent);font:700 var(--text-lg) var(--mono)}
+    .bulk-workspace-content{display:block}
+    .bulk-workspace-content.mobile-collapsed{display:none}
+    .mobile-result-switcher{position:sticky;z-index:6;top:calc(var(--console-mobile-toolbar-height,0px) + 8px);display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;margin:12px 0;padding:4px;border:1px solid var(--border);border-radius:var(--radius-md);background:color-mix(in srgb,var(--panel) 94%,transparent);box-shadow:var(--shadow-sm);backdrop-filter:blur(10px)}
+    .mobile-result-switcher button{min-width:0;min-height:36px;padding:6px 8px;border:0;border-radius:var(--radius-sm);background:transparent;color:var(--muted);font:700 var(--text-xs) var(--mono)}
+    .mobile-result-switcher button[aria-pressed='true']{background:rgb(var(--accent-rgb) / .12);color:var(--accent)}
+    .mobile-result-panel{display:none}
+    .mobile-result-panel.mobile-view-active{display:block}
+    .extended-analysis-panel{margin-top:10px}
+  }
 </style>
