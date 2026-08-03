@@ -36,8 +36,8 @@
   .footer-meta>p a{text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:3px}
   a:hover{color:var(--text)}
   @media(max-width:720px){
-    footer{align-items:flex-start;flex-direction:column;gap:18px;padding:20px 0 24px}
-    .footer-meta{width:100%;gap:10px;text-align:left}
+    footer{align-items:flex-start;flex-direction:column;gap:16px;padding:18px 0 22px}
+    .footer-meta{width:100%;gap:8px;text-align:left}
     .footer-links{width:100%;justify-content:flex-start;flex-wrap:wrap;gap:8px 16px}
   }
 </style>

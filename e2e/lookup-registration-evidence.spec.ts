@@ -198,7 +198,7 @@ test('deep Lookup presents registrar and observed network RDAP as separate sourc
   await page.getByRole('button', { name: 'Run lookup' }).click();
 
   const evidenceQuality = page.locator('#evidence-quality');
-  await evidenceQuality.locator(':scope > summary').click();
+  await evidenceQuality.locator(':scope > details').first().locator(':scope > summary').click();
   await expect(evidenceQuality).not.toContainText('Observation time unavailable');
 
   const agreementMatrix = page.locator('.agreement-matrix');
