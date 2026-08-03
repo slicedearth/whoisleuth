@@ -14,6 +14,7 @@ import {
   RDAP_BOOTSTRAP_URL,
   REGISTRY_DRIFT_AUDIT_SCHEMA,
   ROOT_ZONE_URL,
+  digestRootZoneTldSet,
   formatRegistryDriftAudit,
   main,
   parseArguments,
@@ -44,6 +45,7 @@ const SNAPSHOT = Object.freeze({
   sources: {
     rootZoneVersion: '2026010100',
     rootZoneLastUpdatedAt: '2026-01-01T00:00:00.000Z',
+    rootZoneTldSetSha256: digestRootZoneTldSet(['aa', 'bb', 'cc']),
     rdapBootstrapPublication: '2026-01-02T00:00:00.000Z',
     rdapBootstrapVersion: '1.0',
     urls: [ROOT_ZONE_URL, RDAP_BOOTSTRAP_URL],
@@ -116,6 +118,7 @@ describe('official registry source parsers', () => {
     });
     assert.ok(Object.isFrozen(parsed));
     assert.ok(Object.isFrozen(parsed.tlds));
+    assert.match(digestRootZoneTldSet(parsed.tlds), /^[a-f0-9]{64}$/u);
   });
 
   test('rejects malformed headers, suffixes, duplicates, NUL bytes, byte overflow, and record overflow', () => {
@@ -162,11 +165,12 @@ describe('official registry drift report', () => {
     assert.equal(report.schema, REGISTRY_DRIFT_AUDIT_SCHEMA);
     assert.equal(report.version, 1);
     assert.equal(report.generatedAt, '2026-01-04T00:00:00.000Z');
-    assert.deepEqual(report.summary, { current: 9, drift: 0, inconclusive: 0 });
+    assert.deepEqual(report.summary, { current: 10, drift: 0, inconclusive: 0 });
     assert.equal(report.bounds.requestCount, 2);
     assert.equal(report.bounds.requestLimit, 2);
     assert.deepEqual(report.observed.rootZone, {
-      version: '2026010100', lastUpdatedAt: '2026-01-01T00:00:00.000Z', activeTlds: 3,
+      version: '2026010100', lastUpdatedAt: '2026-01-01T00:00:00.000Z',
+      tldSetSha256: SNAPSHOT.sources.rootZoneTldSetSha256, activeTlds: 3,
     });
     assert.deepEqual(report.observed.rdapBootstrap, {
       publication: '2026-01-02T00:00:00.000Z', version: '1.0', serviceGroups: 2,
@@ -174,6 +178,34 @@ describe('official registry drift report', () => {
     });
     assert.equal(report.baseline.catalogueVersion, 27);
     assert.doesNotMatch(JSON.stringify(report), /must not be retained|AA\nBB/);
+  });
+
+  test('keeps routine root-zone publication advances current when TLD membership is unchanged', async () => {
+    const advancedRoot = ROOT_ZONE
+      .replace('2026010100', '2026010200')
+      .replace('Thu Jan 1 00:00:00 2026 UTC', 'Fri Jan 2 00:00:00 2026 UTC');
+    const report = await runRegistryDriftAudit(options({
+      fetchSource: async (url) => new Response(url === ROOT_ZONE_URL ? advancedRoot : RDAP_BOOTSTRAP, { status: 200 }),
+    }));
+
+    assert.deepEqual(report.summary, { current: 10, drift: 0, inconclusive: 0 });
+    for (const id of ['root_zone_version', 'root_zone_updated_at', 'root_zone_tld_set']) {
+      const check = report.checks.find((candidate) => candidate.id === id);
+      assert.equal(check?.status, 'current');
+    }
+    assert.match(requiredValue(report.checks.find((check) => check.id === 'root_zone_version')).detail, /advanced.*TLD set remained unchanged/i);
+  });
+
+  test('keeps non-advancing root-zone publication metadata reviewable', async () => {
+    const regressedRoot = ROOT_ZONE.replace('2026010100', '2025010100');
+    const report = await runRegistryDriftAudit(options({
+      fetchSource: async (url) => new Response(url === ROOT_ZONE_URL ? regressedRoot : RDAP_BOOTSTRAP, { status: 200 }),
+    }));
+
+    assert.deepEqual(report.summary, { current: 9, drift: 1, inconclusive: 0 });
+    const version = requiredValue(report.checks.find((check) => check.id === 'root_zone_version'));
+    assert.equal(version.status, 'drift');
+    assert.match(version.detail, /did not advance normally.*requires review/i);
   });
 
   test('identifies metadata, assignment, and RDAP-profile drift without inferring availability', async () => {
@@ -190,7 +222,7 @@ describe('official registry drift report', () => {
     const report = await runRegistryDriftAudit(options({
       fetchSource: async (url) => new Response(url === ROOT_ZONE_URL ? changedRoot : changedRdap, { status: 200 }),
     }));
-    assert.equal(report.summary.drift, 8);
+    assert.equal(report.summary.drift, 9);
     assert.equal(report.summary.current, 1);
     const rdapAssignments = report.checks.find((check) => check.id === 'rdap_suffix_assignments');
     const assignments = report.checks.find((check) => check.id === 'explicit_suffix_assignments');
@@ -210,7 +242,7 @@ describe('official registry drift report', () => {
         ? new Response('', { status: 503 })
         : new Response('{not-json', { status: 200 }),
     }));
-    assert.deepEqual(report.summary, { current: 0, drift: 0, inconclusive: 9 });
+    assert.deepEqual(report.summary, { current: 0, drift: 0, inconclusive: 10 });
     assert.equal(report.observed.rootZone, null);
     assert.equal(report.observed.rdapBootstrap, null);
     assert.equal(requiredValue(report.sources[0]).status, 503);
@@ -230,7 +262,7 @@ describe('official registry drift report', () => {
     }));
     assert.equal(report.bounds.requestTimeoutMs, 7000);
     assert.equal(report.bounds.totalTimeoutMs, 15_000);
-    assert.equal(report.summary.inconclusive, 5);
+    assert.equal(report.summary.inconclusive, 6);
     assert.ok(requiredValue(report.sources[0]).error);
     assert.match(requiredValue(requiredValue(report.sources[0]).error), /exceeded/);
   });
@@ -252,10 +284,22 @@ describe('official registry drift report', () => {
     assert.equal(calls, 0);
   });
 
+  test('rejects a malformed embedded TLD-set digest before fetching', async () => {
+    let calls = 0;
+    await assert.rejects(runRegistryDriftAudit(options({
+      snapshot: {
+        ...structuredClone(SNAPSHOT),
+        sources: { ...SNAPSHOT.sources, rootZoneTldSetSha256: 'not-a-digest' },
+      },
+      fetchSource: async () => { calls += 1; return new Response('', { status: 200 }); },
+    })), /TLD-set SHA-256 digest is invalid/i);
+    assert.equal(calls, 0);
+  });
+
   test('formats a bounded neutral terminal report', async () => {
     const output = formatRegistryDriftAudit(await runRegistryDriftAudit(options()));
     assert.match(output, /^WHOISleuth official-registry drift audit/m);
-    assert.match(output, /9 current, 0 drift, 0 inconclusive/);
+    assert.match(output, /10 current, 0 drift, 0 inconclusive/);
     assert.match(output, /RDAP service transport: 2 HTTPS-capable, 0 HTTP-only/);
     assert.match(output, /does not query registries or change the embedded catalogue/);
     assert.doesNotMatch(output, /unregistered|safe|malicious/);

@@ -354,8 +354,12 @@ report caps response bytes, parsed records, deadlines, and reported suffix
 differences. It does not accept a target, query a registry, test live domain
 reachability, update the catalogue, or interpret drift as registration,
 availability, ownership, safety, or maliciousness evidence. Automated tests
-exercise only injected fixtures; running the command is an explicit manual
-network operation. The read-only `registry-drift.yml` workflow also runs the
+exercise only injected fixtures. The root-zone check compares a canonical
+SHA-256 digest of the sorted active TLD set, so routine serial or publication
+time advances remain visible without requiring review when membership is
+unchanged. Changed membership, service coverage, explicit profiles, or an
+unavailable source remains reviewable. Running the command is an explicit
+manual network operation. The read-only `registry-drift.yml` workflow also runs the
 same command weekly or on explicit dispatch with locked dependencies, no
 secrets, no write permissions, and a ten-minute job deadline. A non-current
 result retains its versioned JSON report for seven days and fails the workflow

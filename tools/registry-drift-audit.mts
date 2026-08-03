@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -144,6 +145,12 @@ function parseRootZoneTldList(value: unknown): RootZoneObservation {
     lastUpdatedAt: canonicalTimestamp(lastUpdated, 'The IANA root-zone update time'),
     tlds: Object.freeze(tlds),
   });
+}
+
+function digestRootZoneTldSet(suffixes: readonly string[]): string {
+  return createHash('sha256')
+    .update(`${[...suffixes].sort((left, right) => left < right ? -1 : left > right ? 1 : 0).join('\n')}\n`, 'utf8')
+    .digest('hex');
 }
 
 function parseRdapBootstrap(value: unknown): RdapBootstrapObservation {
@@ -300,6 +307,62 @@ function comparisonCheck(
   });
 }
 
+function rootZonePublicationCheck(
+  id: string,
+  label: string,
+  baseline: string,
+  observed: string | null,
+  rootZoneSetStatus: AuditStatus,
+  unavailableDetail: string,
+  advanced: (baseline: string, observed: string) => boolean,
+): AuditCheck {
+  if (observed === null) {
+    return Object.freeze({ id, label, status: 'inconclusive', baseline, observed, detail: unavailableDetail });
+  }
+  if (observed === baseline) {
+    return Object.freeze({
+      id,
+      label,
+      status: 'current',
+      baseline,
+      observed,
+      detail: 'The official publication metadata matches the embedded snapshot.',
+    });
+  }
+  if (rootZoneSetStatus === 'current' && advanced(baseline, observed)) {
+    return Object.freeze({
+      id,
+      label,
+      status: 'current',
+      baseline,
+      observed,
+      detail: 'The official publication metadata advanced while the canonical TLD set remained unchanged.',
+    });
+  }
+  return Object.freeze({
+    id,
+    label,
+    status: 'drift',
+    baseline,
+    observed,
+    detail: rootZoneSetStatus === 'drift'
+      ? 'The official publication metadata changed alongside canonical TLD-set drift and requires review.'
+      : 'The official publication metadata did not advance normally and requires review.',
+  });
+}
+
+function rootZoneSerialAdvanced(baseline: string, observed: string): boolean {
+  return /^[0-9]{8,20}$/u.test(baseline)
+    && /^[0-9]{8,20}$/u.test(observed)
+    && BigInt(observed) > BigInt(baseline);
+}
+
+function rootZoneTimestampAdvanced(baseline: string, observed: string): boolean {
+  const baselineTime = Date.parse(baseline);
+  const observedTime = Date.parse(observed);
+  return Number.isFinite(baselineTime) && Number.isFinite(observedTime) && observedTime > baselineTime;
+}
+
 function suffixCheck(
   id: string,
   label: string,
@@ -357,9 +420,17 @@ function evaluateRegistryDrift(
   const unassignedRdapSuffixes = activeTlds && rdapSuffixes
     ? [...rdapSuffixes].filter((suffix) => !activeTlds.has(suffix))
     : null;
+  const rootZoneSetCheck = comparisonCheck(
+    'root_zone_tld_set',
+    'Root-zone TLD set',
+    snapshot.sources.rootZoneTldSetSha256,
+    root ? digestRootZoneTldSet(root.tlds) : null,
+    rootZone.error || 'The root-zone source was unavailable.',
+  );
   return Object.freeze([
-    comparisonCheck('root_zone_version', 'Root-zone version', snapshot.sources.rootZoneVersion, root?.version ?? null, rootZone.error || 'The root-zone source was unavailable.'),
-    comparisonCheck('root_zone_updated_at', 'Root-zone update time', snapshot.sources.rootZoneLastUpdatedAt, root?.lastUpdatedAt ?? null, rootZone.error || 'The root-zone source was unavailable.'),
+    rootZonePublicationCheck('root_zone_version', 'Root-zone version', snapshot.sources.rootZoneVersion, root?.version ?? null, rootZoneSetCheck.status, rootZone.error || 'The root-zone source was unavailable.', rootZoneSerialAdvanced),
+    rootZonePublicationCheck('root_zone_updated_at', 'Root-zone update time', snapshot.sources.rootZoneLastUpdatedAt, root?.lastUpdatedAt ?? null, rootZoneSetCheck.status, rootZone.error || 'The root-zone source was unavailable.', rootZoneTimestampAdvanced),
+    rootZoneSetCheck,
     comparisonCheck('active_tld_count', 'Active TLD count', snapshot.counts.activeTlds, root?.tlds.length ?? null, rootZone.error || 'The root-zone source was unavailable.'),
     comparisonCheck('rdap_publication', 'RDAP bootstrap publication', snapshot.sources.rdapBootstrapPublication, rdap?.publication ?? null, rdapBootstrap.error || 'The RDAP bootstrap source was unavailable.'),
     comparisonCheck('rdap_version', 'RDAP bootstrap version', snapshot.sources.rdapBootstrapVersion, rdap?.version ?? null, rdapBootstrap.error || 'The RDAP bootstrap source was unavailable.'),
@@ -410,6 +481,9 @@ function sourceProjection<T>(observation: SourceObservation<T>): Readonly<Omit<S
 async function runRegistryDriftAudit(options: RegistryDriftAuditOptions = {}) {
   const snapshot = options.snapshot || registryStandardsCoverageSnapshot();
   const capabilities = options.capabilities || registryCompatibilityMatrix();
+  if (!/^[a-f0-9]{64}$/u.test(snapshot.sources.rootZoneTldSetSha256)) {
+    throw new TypeError('The embedded root-zone TLD-set SHA-256 digest is invalid.');
+  }
   if (!Array.isArray(capabilities) || capabilities.length > MAX_CAPABILITY_ROWS) {
     throw new RangeError(`The registry capability catalogue exceeded ${MAX_CAPABILITY_ROWS} rows.`);
   }
@@ -435,6 +509,7 @@ async function runRegistryDriftAudit(options: RegistryDriftAuditOptions = {}) {
       verifiedAt: snapshot.verifiedAt,
       rootZoneVersion: snapshot.sources.rootZoneVersion,
       rootZoneLastUpdatedAt: snapshot.sources.rootZoneLastUpdatedAt,
+      rootZoneTldSetSha256: snapshot.sources.rootZoneTldSetSha256,
       activeTlds: snapshot.counts.activeTlds,
       rdapBootstrapPublication: snapshot.sources.rdapBootstrapPublication,
       rdapBootstrapVersion: snapshot.sources.rdapBootstrapVersion,
@@ -446,6 +521,7 @@ async function runRegistryDriftAudit(options: RegistryDriftAuditOptions = {}) {
       rootZone: rootZone.value ? Object.freeze({
         version: rootZone.value.version,
         lastUpdatedAt: rootZone.value.lastUpdatedAt,
+        tldSetSha256: digestRootZoneTldSet(rootZone.value.tlds),
         activeTlds: rootZone.value.tlds.length,
       }) : null,
       rdapBootstrap: rdapBootstrap.value ? Object.freeze({
@@ -474,7 +550,7 @@ async function runRegistryDriftAudit(options: RegistryDriftAuditOptions = {}) {
     limitations: Object.freeze([
       'This manual audit compares two official IANA catalogue files with the embedded snapshot and explicit suffix claims.',
       'It does not query a registry, test live domain reachability, rewrite the catalogue, or decide registration, availability, ownership, safety, or maliciousness.',
-      'A changed publication or version is drift requiring review, not evidence that WHOISleuth lookup behavior is defective.',
+      'Root-zone publication metadata may advance without review when the canonical TLD set is unchanged; changed membership, service coverage, or explicit profiles remains reviewable drift.',
     ]),
   });
 }
@@ -556,6 +632,7 @@ export {
   REGISTRY_DRIFT_AUDIT_VERSION,
   ROOT_ZONE_URL,
   evaluateRegistryDrift,
+  digestRootZoneTldSet,
   formatRegistryDriftAudit,
   main,
   parseArguments,

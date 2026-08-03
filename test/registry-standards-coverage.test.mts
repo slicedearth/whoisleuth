@@ -33,6 +33,7 @@ describe('registry standards coverage snapshot', () => {
     assert.equal(counts.infrastructureRdapCovered, 0);
     assert.equal(Number.isNaN(Date.parse(snapshot.verifiedAt)), false);
     assert.equal(Number.isNaN(Date.parse(snapshot.sources.rootZoneLastUpdatedAt)), false);
+    assert.match(snapshot.sources.rootZoneTldSetSha256, /^[a-f0-9]{64}$/u);
     assert.equal(Number.isNaN(Date.parse(snapshot.sources.rdapBootstrapPublication)), false);
     assert.ok(snapshot.sources.urls.every((value) => new URL(value).protocol === 'https:'));
   });

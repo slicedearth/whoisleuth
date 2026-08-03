@@ -43,6 +43,7 @@ type RegistryStandardsCoverageSnapshot = {
   sources: {
     rootZoneVersion: string;
     rootZoneLastUpdatedAt: string;
+    rootZoneTldSetSha256: string;
     rdapBootstrapPublication: string;
     rdapBootstrapVersion: string;
     urls: string[];
@@ -83,10 +84,11 @@ const MAX_CAPABILITY_INPUT_LENGTH = 253;
 const REGISTRY_STANDARDS_COVERAGE_SNAPSHOT = Object.freeze({
   schema: 'whoisleuth.registry-standards-coverage' as const,
   version: 1,
-  verifiedAt: '2026-08-01',
+  verifiedAt: '2026-08-03',
   sources: Object.freeze({
-    rootZoneVersion: '2026073100',
-    rootZoneLastUpdatedAt: '2026-07-31T07:07:01.000Z',
+    rootZoneVersion: '2026080200',
+    rootZoneLastUpdatedAt: '2026-08-02T07:07:01.000Z',
+    rootZoneTldSetSha256: 'aa0a75a9860b2cba07d7fe8172f4546d981be3674bf6764fb0d5f39a45940d25',
     rdapBootstrapPublication: '2026-07-23T02:00:03.000Z',
     rdapBootstrapVersion: '1.0',
     urls: Object.freeze([
