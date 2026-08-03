@@ -1,6 +1,7 @@
 import { buildLookupEvidence } from './evidence-export.mts';
 import { formatLookupEvidenceMarkdown } from './evidence-report-markdown.mts';
 import { buildRegistryInsights } from './registry-insights.mts';
+import { WHOISLEUTH_SOURCE_REPOSITORY_URL } from './project-metadata.mts';
 import {
   createLookupViewModel,
   isJsonObject,
@@ -461,7 +462,7 @@ function formatNetworkIdentifierReadableReport(
   ];
   appendReadableField(lines, 'Generated', generatedAt);
   appendReadableField(lines, 'Generator', typeof applicationVersion === 'string' ? `WHOISleuth ${applicationVersion}` : 'WHOISleuth');
-  appendReadableField(lines, 'Project', 'https://github.com/slicedearth/whoisleuth');
+  appendReadableField(lines, 'Project', WHOISLEUTH_SOURCE_REPOSITORY_URL);
   appendReadableField(lines, 'Report contract', `whoisleuth.lookup-readable-report v${LOOKUP_READABLE_REPORT_VERSION}`);
   lines.push('', '## Query');
   appendReadableField(lines, 'Submitted', submitted);

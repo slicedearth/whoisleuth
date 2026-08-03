@@ -1,9 +1,11 @@
 <script lang="ts">
+  import { WHOISLEUTH_SOURCE_REPOSITORY_URL } from '../../../../lib/project-metadata.mts';
+
   let { console = false }: { console?: boolean } = $props();
   const revision = __WHOISLEUTH_BUILD_REVISION__;
   const sourceHref = /^[a-f0-9]{7,64}$/u.test(revision)
-    ? `https://github.com/slicedearth/whoisleuth/tree/${revision}`
-    : 'https://github.com/slicedearth/whoisleuth';
+    ? `${WHOISLEUTH_SOURCE_REPOSITORY_URL}/tree/${revision}`
+    : WHOISLEUTH_SOURCE_REPOSITORY_URL;
   const revisionLabel = /^[a-f0-9]{7,64}$/u.test(revision) ? revision.slice(0, 7) : 'local';
 </script>
 

@@ -1,5 +1,17 @@
 <script lang="ts">
   import PublicSeo from '$lib/components/PublicSeo.svelte';
+  import {
+    FAVICON_FETCH_TIMEOUT_MS,
+    HOMEPAGE_FETCH_TIMEOUT_MS,
+    MAX_FAVICON_BYTES,
+    MAX_FAVICON_CANDIDATES,
+    MAX_HOMEPAGE_BYTES,
+    MAX_OUTBOUND_REDIRECTS,
+  } from '../../../../../lib/outbound-request-bounds.mts';
+  import { WHOISLEUTH_REQUEST_POLICY_URL } from '../../../../../lib/project-metadata.mts';
+
+  const seconds = (milliseconds: number) => Math.round(milliseconds / 1_000);
+  const bytes = (value: number) => value.toLocaleString('en-US');
 </script>
 
 <PublicSeo
@@ -17,7 +29,7 @@
 
   <section aria-labelledby="identity-title">
     <h2 id="identity-title">Request identity</h2>
-    <pre>WHOISleuth/{__WHOISLEUTH_VERSION__} (+https://whoisleuth.com/request-policy)</pre>
+    <pre>WHOISleuth/{__WHOISLEUTH_VERSION__} (+{WHOISLEUTH_REQUEST_POLICY_URL})</pre>
     <p>The identifier is used for bounded homepage, favicon, Certificate Transparency, MTA-STS policy, and explicitly enabled optional-provider requests. RDAP, WHOIS, DNS, and TLS connections use their own protocol contracts.</p>
   </section>
 
@@ -25,9 +37,9 @@
     <h2 id="web-title">Website observation</h2>
     <ul>
       <li>Fetches only the homepage origin submitted for a Deep investigation; it does not crawl site paths, follow ordinary page links, submit forms, log in, or execute page scripts.</li>
-      <li>Tries HTTPS first and HTTP only as a fallback. Redirects are revalidated and capped at five hops.</li>
-      <li>Uses a six-second homepage deadline and caps the retained homepage body at 300,000 bytes.</li>
-      <li>Checks at most four declared or conventional favicon candidates in priority order, one at a time, with a five-second deadline and 200,000-byte cap per candidate.</li>
+      <li>Tries HTTPS first and HTTP only as a fallback. Redirects are revalidated and capped at {MAX_OUTBOUND_REDIRECTS} hops.</li>
+      <li>Uses a {seconds(HOMEPAGE_FETCH_TIMEOUT_MS)}-second homepage deadline and caps the retained homepage body at {bytes(MAX_HOMEPAGE_BYTES)} bytes.</li>
+      <li>Checks at most {MAX_FAVICON_CANDIDATES} declared or conventional favicon candidates in priority order, one at a time, with a {seconds(FAVICON_FETCH_TIMEOUT_MS)}-second deadline and {bytes(MAX_FAVICON_BYTES)}-byte cap per candidate.</li>
       <li>Blocks private, loopback, link-local, multicast, reserved, and other non-public destinations and revalidates every redirect against DNS-rebinding controls.</li>
       <li>Does not retain cookies, credentials, authorization headers, request bodies, URL fragments, or downloaded files.</li>
     </ul>

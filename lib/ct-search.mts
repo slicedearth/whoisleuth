@@ -13,6 +13,14 @@ import { normalizeCtQuery } from './ct-query.mts';
 import { safeFetch, readTextCapped } from './safe-fetch.mts';
 import { whoisleuthRequestHeaders } from './outbound-identity.mts';
 import { createObservation } from './observation.mts';
+import {
+  MAX_CT_RESPONSE_CERTIFICATE_GROUPS,
+  MAX_CT_RESPONSE_DOMAINS_PER_GROUP,
+  MAX_CT_RESPONSE_HOSTNAMES_PER_GROUP,
+  MAX_CT_RESPONSE_HOSTNAMES_PER_MATCH,
+  MAX_CT_RESPONSE_RESULTS,
+  MAX_CT_RESPONSE_TIMESTAMP_LENGTH,
+} from './ct-response-bounds.mts';
 
 type CtRow = Record<string, unknown>;
 type CtDependencies = {
@@ -41,7 +49,7 @@ type CtCertificateGroup = {
 };
 
 const CRT_SH_TIMEOUT_MS = 20000;
-const MAX_RESULTS = 500;
+const MAX_RESULTS = MAX_CT_RESPONSE_RESULTS;
 // crt.sh's response size scales with how many certificates ever matched the
 // keyword, not with MAX_RESULTS - a broad single-word keyword can have
 // millions of matching certificates, and unlike the domain-homepage fetch in
@@ -73,10 +81,10 @@ const MAX_CT_ROWS = 50_000;
 
 // Structured-match bounds.
 const MAX_MATCHES = MAX_RESULTS; // 500
-const MAX_HOSTNAMES_PER_MATCH = 50;
-const MAX_CERTIFICATE_GROUPS = 100;
-const MAX_DOMAINS_PER_CERTIFICATE_GROUP = 20;
-const MAX_HOSTNAMES_PER_CERTIFICATE_GROUP = 30;
+const MAX_HOSTNAMES_PER_MATCH = MAX_CT_RESPONSE_HOSTNAMES_PER_MATCH;
+const MAX_CERTIFICATE_GROUPS = MAX_CT_RESPONSE_CERTIFICATE_GROUPS;
+const MAX_DOMAINS_PER_CERTIFICATE_GROUP = MAX_CT_RESPONSE_DOMAINS_PER_GROUP;
+const MAX_HOSTNAMES_PER_CERTIFICATE_GROUP = MAX_CT_RESPONSE_HOSTNAMES_PER_GROUP;
 
 const HOSTNAME_RE = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/;
 
@@ -89,7 +97,7 @@ const MAX_ID_DIGITS = 32;
 const MAX_SERIAL_LENGTH = 128;
 
 // Maximum length for an entry_timestamp string before it is rejected.
-const MAX_TIMESTAMP_LENGTH = 64;
+const MAX_TIMESTAMP_LENGTH = MAX_CT_RESPONSE_TIMESTAMP_LENGTH;
 
 function normalizeHostname(raw: string): string | null {
   let h = raw.trim().toLowerCase();

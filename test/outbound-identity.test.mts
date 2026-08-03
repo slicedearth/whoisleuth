@@ -3,6 +3,8 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import test from 'node:test';
 
+import packageDocument from '../package.json' with { type: 'json' };
+
 import {
   WHOISLEUTH_REQUEST_POLICY_URL,
   WHOISLEUTH_USER_AGENT,
@@ -13,7 +15,6 @@ import {
 const root = process.cwd();
 
 test('outbound identity matches the package version and public request policy', () => {
-  const packageDocument = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as { version: string };
   assert.equal(WHOISLEUTH_USER_AGENT_VERSION, packageDocument.version);
   assert.equal(WHOISLEUTH_REQUEST_POLICY_URL, 'https://whoisleuth.com/request-policy');
   assert.equal(WHOISLEUTH_USER_AGENT, `WHOISleuth/${packageDocument.version} (+${WHOISLEUTH_REQUEST_POLICY_URL})`);

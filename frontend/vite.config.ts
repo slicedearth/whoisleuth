@@ -4,6 +4,7 @@ import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 import { defineConfig, type Plugin } from 'vite';
+import { normalizeBoundedSemanticVersion } from '../lib/semantic-version.mts';
 
 const THEME_INIT_PATH = fileURLToPath(new URL('./src/theme-init.ts', import.meta.url));
 const THEME_INIT_ASSET = 'theme-init.js';
@@ -11,10 +12,7 @@ const ROOT_PACKAGE_PATH = fileURLToPath(new URL('../package.json', import.meta.u
 
 async function applicationVersion(): Promise<string> {
   const document = JSON.parse(await readFile(ROOT_PACKAGE_PATH, 'utf8')) as { version?: unknown };
-  if (typeof document.version !== 'string' || document.version.length > 128) {
-    throw new TypeError('Root package version is unavailable to the frontend build.');
-  }
-  return document.version;
+  return normalizeBoundedSemanticVersion(document.version, 'Root package');
 }
 
 function buildRevision(): string {

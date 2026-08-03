@@ -3,17 +3,18 @@
   import PublicResourceCards from '$lib/components/PublicResourceCards.svelte';
   import PublicSeo from '$lib/components/PublicSeo.svelte';
   import { PUBLIC_RESOURCES } from '$lib/public-resources';
+  import { WHOISLEUTH_SITE_ORIGIN } from '../../../../../lib/project-metadata.mts';
 
   const collectionSchema = {
     '@context': 'https://schema.org',
     '@type': 'CollectionPage',
     name: 'WHOISleuth domain investigation resources',
     description: 'Practical source-aware guides for domain registration, lookalikes, certificates, network context, Bulk comparison and local-first investigation.',
-    url: 'https://whoisleuth.com/resources',
+    url: `${WHOISLEUTH_SITE_ORIGIN}/resources`,
     hasPart: PUBLIC_RESOURCES.map((resource) => ({
       '@type': 'TechArticle',
       headline: resource.title,
-      url: `https://whoisleuth.com/resources/${resource.slug}`,
+      url: `${WHOISLEUTH_SITE_ORIGIN}/resources/${resource.slug}`,
     })),
   };
 </script>

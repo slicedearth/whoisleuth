@@ -318,6 +318,7 @@ async function compilePackageSources(repositoryRoot: string, temporaryRoot: stri
       target: 'ES2022',
       module: 'NodeNext',
       moduleResolution: 'NodeNext',
+      resolveJsonModule: true,
       rootDir: repositoryRoot,
       outDir: stagingRoot,
       allowImportingTsExtensions: true,

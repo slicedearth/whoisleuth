@@ -26,8 +26,11 @@ import { analyzeWebsiteSecurityPosture } from './website-security-posture.mts';
 import { analyzeResponsePolicyHeaders } from './response-policy.mts';
 import type { ResponsePolicyAnalysis } from './response-policy.mts';
 import { nonEmptyErrorMessage } from './error-detail.mts';
+import {
+  HOMEPAGE_FETCH_TIMEOUT_MS,
+  MAX_HOMEPAGE_BYTES,
+} from './outbound-request-bounds.mts';
 
-const MAX_HOMEPAGE_BYTES = 300000;
 const DNS_DELEGATION_TIMEOUT_MS = 4000;
 const MAX_DELEGATION_NAMESERVERS = 50;
 const MISSING_DNS_CODES = new Set(['ENODATA', 'ENOTFOUND', 'ENONAME', 'NXDOMAIN']);
@@ -288,7 +291,7 @@ async function fetchHomepage(domain: string, { fetcher = safeFetchDetailed as Ho
     const requestUrl = `${scheme}://${domain}`;
     const attemptStartedAt = Date.now();
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 6000);
+    const timeout = setTimeout(() => controller.abort(), HOMEPAGE_FETCH_TIMEOUT_MS);
     try {
       const fetched = await fetcher(requestUrl, { signal: controller.signal, headers });
       const fetchedResponse = fetched instanceof Response ? fetched : fetched.response;

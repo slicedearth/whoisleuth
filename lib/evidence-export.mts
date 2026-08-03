@@ -1,9 +1,9 @@
 import { compareRdapPublications, compareRegistrySources } from './registry-comparison.mts';
 import { buildRegistryInsights } from './registry-insights.mts';
+import { WHOISLEUTH_SOURCE_REPOSITORY_URL } from './project-metadata.mts';
 
 export const LOOKUP_EVIDENCE_SCHEMA = 'whoisleuth.lookup-evidence';
 export const LOOKUP_EVIDENCE_SCHEMA_VERSION = 24;
-export const WHOISLEUTH_PROJECT_URL = 'https://github.com/slicedearth/whoisleuth';
 
 type UnknownRecord = Record<string, unknown>;
 type LookupEvidenceOptions = { generatedAt?: string; idnAnalysis?: unknown; applicationVersion?: unknown };
@@ -417,7 +417,7 @@ export function buildLookupEvidence(response: unknown, options: LookupEvidenceOp
     application: {
       name: 'WHOISleuth',
       version: boundedSemanticVersion(applicationVersion),
-      projectUrl: WHOISLEUTH_PROJECT_URL,
+      projectUrl: WHOISLEUTH_SOURCE_REPOSITORY_URL,
     },
     query: {
       submitted: body.query || null,

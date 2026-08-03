@@ -1,6 +1,7 @@
 <script lang="ts">
   import PageHeading from '$lib/components/PageHeading.svelte';
   import PublicSeo from '$lib/components/PublicSeo.svelte';
+  import { WHOISLEUTH_SOURCE_REPOSITORY_URL } from '../../../../../lib/project-metadata.mts';
 </script>
 
 <PublicSeo
@@ -129,7 +130,7 @@
   <p>This policy may change over time. Material changes will update the date shown above.</p>
 
   <h2 id="privacy-contact">13. Contact</h2>
-  <p>Use the <a href="/contact">protected Contact page</a> for a privacy request, concern about an outbound request, or security report. It reveals the relevant project role address only after verification and prepares an email in your own client; it does not send or retain the draft. The repository contains the complete <a href="https://github.com/slicedearth/whoisleuth/blob/main/PRIVACY.md" target="_blank" rel="noopener">privacy documentation</a>.</p>
+  <p>Use the <a href="/contact">protected Contact page</a> for a privacy request, concern about an outbound request, or security report. It reveals the relevant project role address only after verification and prepares an email in your own client; it does not send or retain the draft. The repository contains the complete <a href={`${WHOISLEUTH_SOURCE_REPOSITORY_URL}/blob/main/PRIVACY.md`} target="_blank" rel="noopener">privacy documentation</a>.</p>
 </article>
 </div>
 

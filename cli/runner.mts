@@ -68,6 +68,7 @@ import {
 import { runLookupCommand } from './lookup-command-runner.mts';
 import { buildCliManual } from './manual.mts';
 import { buildInvestigationPlan, formatInvestigationPlan } from './investigation-plan.mts';
+import { WHOISLEUTH_SOURCE_REPOSITORY_URL } from '../lib/project-metadata.mts';
 import { createBufferedOutput, writePrivateFile } from './output-file.mts';
 import { createTerminalProgress, type TerminalProgress } from './progress.mts';
 import type { CliProgressEvents } from './progress-events.mts';
@@ -155,7 +156,7 @@ Diagnostics are written to stderr. Fast lookup is the default; deep collection
 must be requested explicitly and can disclose a target to additional sources.
 
 Copyright 2026 slicedearth. Licensed under AGPL-3.0-only.
-Source and licence: https://github.com/slicedearth/whoisleuth
+Source and licence: ${WHOISLEUTH_SOURCE_REPOSITORY_URL}
 `;
 const COMMAND_USAGE: Readonly<Record<CliCommand, string>> = Object.freeze({
   completion: 'whoisleuth completion <bash|zsh|fish|powershell>',

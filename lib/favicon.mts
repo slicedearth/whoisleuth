@@ -18,14 +18,15 @@ import * as crypto from 'node:crypto';
 import { safeFetch, readBytesCapped } from './safe-fetch.mts';
 import { whoisleuthRequestHeaders } from './outbound-identity.mts';
 import { faviconPerceptualHash } from './perceptual-hash.mts';
-
-const MAX_FAVICON_BYTES = 200000; // generous for a favicon, small enough to bound memory
-const FAVICON_FETCH_TIMEOUT_MS = 5000;
+import {
+  FAVICON_FETCH_TIMEOUT_MS,
+  MAX_FAVICON_BYTES,
+  MAX_FAVICON_CANDIDATES,
+} from './outbound-request-bounds.mts';
 // Bounds worst-case work when a (possibly hostile) page declares many icon
 // links - we try candidates in priority order and stop at the first that
 // yields hashable bytes, so this only bites on pages where every earlier
 // candidate fails.
-const MAX_FAVICON_CANDIDATES = 4;
 
 type IconLink = { href: string; priority: number };
 type FaviconHash = { hash: string; phash: string | null };

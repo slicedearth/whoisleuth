@@ -3,6 +3,10 @@
 import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+  MAX_SEMANTIC_VERSION_LENGTH,
+  normalizeBoundedSemanticVersion,
+} from '../lib/semantic-version.mts';
 
 type JsonRecord = Record<string, unknown>;
 type WritableLike = { write(value: string): unknown };
@@ -14,7 +18,7 @@ type MainOptions = Readonly<{
 
 export const RELEASE_VERSION_CHECK_SCHEMA = 'whoisleuth.release-version-check';
 export const RELEASE_VERSION_CHECK_VERSION = 1;
-export const MAX_RELEASE_VERSION_LENGTH = 128;
+export const MAX_RELEASE_VERSION_LENGTH = MAX_SEMANTIC_VERSION_LENGTH;
 export const MAX_RELEASE_MANIFEST_BYTES = 2 * 1024 * 1024;
 
 function record(value: unknown, label: string): JsonRecord {
@@ -24,41 +28,8 @@ function record(value: unknown, label: string): JsonRecord {
   return value as JsonRecord;
 }
 
-function validateIdentifierList(value: string, label: string, forbidNumericLeadingZero: boolean): void {
-  const identifiers = value.split('.');
-  if (identifiers.some((identifier) => identifier.length === 0)) {
-    throw new TypeError(`${label} contains an empty identifier.`);
-  }
-  for (const identifier of identifiers) {
-    if (!/^[0-9A-Za-z-]+$/u.test(identifier)) {
-      throw new TypeError(`${label} contains an invalid identifier.`);
-    }
-    if (forbidNumericLeadingZero && /^[0-9]+$/u.test(identifier) && identifier.length > 1 && identifier.startsWith('0')) {
-      throw new TypeError(`${label} numeric identifiers must not contain leading zeroes.`);
-    }
-  }
-}
-
 export function normalizeSemanticVersion(value: unknown): string {
-  if (typeof value !== 'string' || value.length === 0 || value.length > MAX_RELEASE_VERSION_LENGTH || value.trim() !== value) {
-    throw new TypeError('Release version must be a bounded semantic-version string.');
-  }
-
-  const buildParts = value.split('+');
-  if (buildParts.length > 2) throw new TypeError('Release version contains more than one build-metadata separator.');
-  const [precedence, buildMetadata] = buildParts;
-  if (!precedence) throw new TypeError('Release version must include numeric precedence.');
-  const prereleaseSeparator = precedence.indexOf('-');
-  const core = prereleaseSeparator === -1 ? precedence : precedence.slice(0, prereleaseSeparator);
-  const prerelease = prereleaseSeparator === -1 ? undefined : precedence.slice(prereleaseSeparator + 1);
-  const coreParts = core.split('.');
-
-  if (coreParts.length !== 3 || coreParts.some((part) => !/^(?:0|[1-9][0-9]*)$/u.test(part))) {
-    throw new TypeError('Release version must contain major, minor, and patch numbers without leading zeroes.');
-  }
-  if (prerelease !== undefined) validateIdentifierList(prerelease, 'Release prerelease', true);
-  if (buildMetadata !== undefined) validateIdentifierList(buildMetadata, 'Release build metadata', false);
-  return value;
+  return normalizeBoundedSemanticVersion(value, 'Release');
 }
 
 export function buildReleaseVersionReport(packageManifestValue: unknown, lockfileValue: unknown) {

@@ -12,23 +12,32 @@
 // bounds what the server sent.
 
 import { normalizeDomain } from './case-model.ts';
+import { MAX_CANDIDATE_SOURCE_LENGTH } from '../../../../lib/candidate-provenance-bounds.mts';
+import {
+  MAX_CT_RESPONSE_CERTIFICATE_GROUPS,
+  MAX_CT_RESPONSE_DOMAINS_PER_GROUP,
+  MAX_CT_RESPONSE_HOSTNAMES_PER_GROUP,
+  MAX_CT_RESPONSE_HOSTNAMES_PER_MATCH,
+  MAX_CT_RESPONSE_RESULTS,
+  MAX_CT_RESPONSE_TIMESTAMP_LENGTH,
+} from '../../../../lib/ct-response-bounds.mts';
 
 // The stable mutation/source token every CT-derived candidate carries so Bulk,
 // coverage, and the handoff can recognise its provenance.
 export const CERTIFICATE_TRANSPARENCY_MUTATION = 'certificate_transparency';
 
-// Bounds. Kept aligned with the backend's own caps (lib/ct-search.mts) so a
+// Shared response bounds come from the backend contract so a
 // well-formed response is never clipped, while a hostile or malformed one can
 // never impose unbounded work or storage.
-export const MAX_CT_CANDIDATES = 500; // mirrors backend MAX_MATCHES / MAX_RESULTS
-export const MAX_CT_HOSTNAMES = 50; // mirrors backend MAX_HOSTNAMES_PER_MATCH
+export const MAX_CT_CANDIDATES = MAX_CT_RESPONSE_RESULTS;
+export const MAX_CT_HOSTNAMES = MAX_CT_RESPONSE_HOSTNAMES_PER_MATCH;
 export const MAX_CT_HOSTNAME_LENGTH = 253; // a DNS name can never exceed this
-export const MAX_CT_TIMESTAMP_LENGTH = 64; // mirrors backend MAX_TIMESTAMP_LENGTH
+export const MAX_CT_TIMESTAMP_LENGTH = MAX_CT_RESPONSE_TIMESTAMP_LENGTH;
 export const MAX_CT_CERTIFICATE_COUNT = 1_000_000; // clamp for the deduped count
-export const MAX_CT_SOURCE_LENGTH = 253; // same bound the handoff enforces on source
-export const MAX_CT_CERTIFICATE_GROUPS = 100;
-export const MAX_CT_GROUP_DOMAINS = 20;
-export const MAX_CT_GROUP_HOSTNAMES = 30;
+export const MAX_CT_SOURCE_LENGTH = MAX_CANDIDATE_SOURCE_LENGTH;
+export const MAX_CT_CERTIFICATE_GROUPS = MAX_CT_RESPONSE_CERTIFICATE_GROUPS;
+export const MAX_CT_GROUP_DOMAINS = MAX_CT_RESPONSE_DOMAINS_PER_GROUP;
+export const MAX_CT_GROUP_HOSTNAMES = MAX_CT_RESPONSE_HOSTNAMES_PER_GROUP;
 export const MAX_CT_GROUP_INPUT_ITEMS = 500;
 
 // Input-processing caps. A well-formed backend response stays far below these
