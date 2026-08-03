@@ -19,6 +19,7 @@ function document(overrides: Record<string, unknown> = {}) {
     findings: [{
       domain: 'review.example',
       category: 'page',
+      evidenceClass: 'provider_report',
       summary: 'A login form was reported in a retained external observation.',
       observedAt: '2026-07-27T01:00:00.000Z',
       completeness: 'partial',
@@ -35,10 +36,19 @@ describe('strict external findings import', () => {
     assert.equal(parsed.source.name, 'Local analyst export');
     assert.equal(parsed.findings[0]?.domain, 'review.example');
     assert.equal(parsed.findings[0]?.reference, 'finding-17');
+    assert.equal(parsed.findings[0]?.evidenceClass, 'provider_report');
+  });
+
+  test('migrates version 1 to a provider report and preserves deployment observations', () => {
+    const { evidenceClass: _evidenceClass, ...legacyFinding } = document().findings[0]!;
+    const legacy = document({ schemaVersion: 1, findings: [legacyFinding] });
+    assert.equal(parseExternalFindingsDocument(legacy).findings[0]?.evidenceClass, 'provider_report');
+    const deployment = document({ findings: [{ ...document().findings[0], evidenceClass: 'deployment_observation' }] });
+    assert.equal(parseExternalFindingsDocument(deployment).findings[0]?.evidenceClass, 'deployment_observation');
   });
 
   test('rejects future schemas, additional fields, controls, and unsupported categories', () => {
-    assert.throws(() => parseExternalFindingsDocument(document({ schemaVersion: 2 })), /schema version 1/u);
+    assert.throws(() => parseExternalFindingsDocument(document({ schemaVersion: 3 })), /schema version 1 or 2/u);
     assert.throws(() => parseExternalFindingsDocument({ ...document(), executable: 'no' }), /additional top-level/u);
     assert.throws(() => parseExternalFindingsDocument(document({
       findings: [{ ...document().findings[0], summary: 'bad\u0000value' }],
@@ -71,7 +81,7 @@ describe('strict external findings import', () => {
     assert.equal(merged.findingsAdded, 1);
     assert.equal(record?.status, 'resolved');
     assert.equal(record?.disposition, 'false_positive');
-    assert.equal(record?.evidencePins[0]?.source, 'Import: Local analyst export');
+    assert.equal(record?.evidencePins[0]?.source, 'Provider report: Local analyst export');
     assert.match(record?.evidencePins[0]?.limitations[0] ?? '', /did not collect or independently verify/u);
   });
 

@@ -166,6 +166,7 @@ export function parseWebCaptureSummary(value: unknown): ExternalFindingsDocument
     findings.push({
       domain,
       category: technologies.length && summaries.length === 1 ? 'http' : 'page',
+      evidenceClass: 'deployment_observation',
       summary: summaries.join(' '),
       observedAt,
       completeness,
@@ -307,6 +308,7 @@ export function parseWebCaptureManifest(value: unknown): ExternalFindingsDocumen
     findings.push({
       domain,
       category: 'page',
+      evidenceClass: 'deployment_observation',
       summary: summaries.join(' '),
       observedAt,
       completeness,

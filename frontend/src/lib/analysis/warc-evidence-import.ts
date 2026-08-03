@@ -288,6 +288,7 @@ export async function parseWarcEvidenceArchive(
     findings.push({
       domain,
       category: 'page',
+      evidenceClass: 'deployment_observation',
       summary: [
         `Reviewed WARC page response from ${target.origin}.`,
         title ? `Observed title "${title}".` : '',

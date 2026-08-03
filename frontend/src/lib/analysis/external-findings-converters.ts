@@ -73,6 +73,7 @@ function rowsDocument(rows: readonly unknown[], source: string): ExternalFinding
     return {
       domain: item.domain,
       category: item.category,
+      evidenceClass: item.evidenceClass ?? 'provider_report',
       summary: item.summary,
       observedAt: item.observed_at ?? item.observedAt,
       completeness: item.completeness ?? 'unknown',

@@ -6,7 +6,7 @@ import {
 } from './case-model.ts';
 
 export const EXTERNAL_FINDINGS_SCHEMA = 'whoisleuth.external-findings';
-export const EXTERNAL_FINDINGS_VERSION = 1;
+export const EXTERNAL_FINDINGS_VERSION = 2;
 export const MAX_EXTERNAL_FINDINGS_IMPORT_BYTES = 384 * 1024;
 export const MAX_EXTERNAL_FINDINGS = 100;
 export const MAX_EXTERNAL_FINDINGS_PER_DOMAIN = 20;
@@ -23,10 +23,12 @@ export const EXTERNAL_FINDING_CATEGORIES = [
   'reputation',
 ] as const;
 export type ExternalFindingCategory = typeof EXTERNAL_FINDING_CATEGORIES[number];
+export type ExternalFindingEvidenceClass = 'deployment_observation' | 'provider_report';
 
 export type ExternalFinding = Readonly<{
   domain: string;
   category: ExternalFindingCategory;
+  evidenceClass: ExternalFindingEvidenceClass;
   summary: string;
   observedAt: string;
   completeness: 'complete' | 'inconclusive' | 'partial' | 'unknown';
@@ -61,6 +63,7 @@ const SOURCE_KEYS = new Set(['name', 'reference', 'collectedAt']);
 const FINDING_KEYS = new Set([
   'domain',
   'category',
+  'evidenceClass',
   'summary',
   'observedAt',
   'completeness',
@@ -117,6 +120,7 @@ function findingKey(finding: ExternalFinding, sourceName: string): string {
   return [
     finding.domain,
     finding.category,
+    finding.evidenceClass,
     finding.summary,
     finding.observedAt,
     finding.completeness,
@@ -129,8 +133,8 @@ export function parseExternalFindingsDocument(value: unknown): ExternalFindingsD
   if (!root || !hasOnlyKeys(root, ROOT_KEYS)) {
     throw new Error('External findings must use the documented object shape without additional top-level fields.');
   }
-  if (root.schema !== EXTERNAL_FINDINGS_SCHEMA || root.schemaVersion !== EXTERNAL_FINDINGS_VERSION) {
-    throw new Error(`External findings must use ${EXTERNAL_FINDINGS_SCHEMA} schema version ${EXTERNAL_FINDINGS_VERSION}.`);
+  if (root.schema !== EXTERNAL_FINDINGS_SCHEMA || (root.schemaVersion !== 1 && root.schemaVersion !== EXTERNAL_FINDINGS_VERSION)) {
+    throw new Error(`External findings must use ${EXTERNAL_FINDINGS_SCHEMA} schema version 1 or ${EXTERNAL_FINDINGS_VERSION}.`);
   }
   const sourceValue = record(root.source);
   if (!sourceValue || !hasOnlyKeys(sourceValue, SOURCE_KEYS)) {
@@ -162,9 +166,16 @@ export function parseExternalFindingsDocument(value: unknown): ExternalFindingsD
     if (typeof item.completeness !== 'string' || !COMPLETENESS.has(item.completeness)) {
       throw new Error(`Finding ${index + 1} completeness is unsupported.`);
     }
+    const evidenceClass = item.evidenceClass === undefined && root.schemaVersion === 1
+      ? 'provider_report'
+      : item.evidenceClass;
+    if (evidenceClass !== 'deployment_observation' && evidenceClass !== 'provider_report') {
+      throw new Error(`Finding ${index + 1} evidence class is unsupported.`);
+    }
     const finding: ExternalFinding = {
       domain,
       category: item.category as ExternalFindingCategory,
+      evidenceClass,
       summary: requiredText(item.summary, 900, `Finding ${index + 1} summary`),
       observedAt: iso(item.observedAt, `Finding ${index + 1} observation time`) as string,
       completeness: item.completeness as ExternalFinding['completeness'],
@@ -200,10 +211,16 @@ function pinValue(finding: ExternalFinding): string {
     : finding.summary;
 }
 
+function importedSourceLabel(finding: ExternalFinding, sourceName: string): string {
+  return finding.evidenceClass === 'deployment_observation'
+    ? `Deployment observation: ${sourceName}`
+    : `Provider report: ${sourceName}`;
+}
+
 function existingPinKey(recordValue: CaseRecord, finding: ExternalFinding, sourceName: string): string {
   const expectedLabel = `External ${finding.category} finding`;
   const expectedValue = pinValue(finding);
-  const expectedSource = `Import: ${sourceName}`;
+  const expectedSource = importedSourceLabel(finding, sourceName);
   return recordValue.evidencePins.some((pin) => (
     pin.label === expectedLabel
     && pin.value === expectedValue
@@ -234,7 +251,9 @@ export function mergeExternalFindingsIntoCases(
       continue;
     }
     const sourceLimitations = [
-      `Imported from ${document.source.name}; WHOISleuth did not collect or independently verify this finding.`,
+      finding.evidenceClass === 'deployment_observation'
+        ? `Imported as an observation made by ${document.source.name}; this browser session did not collect or independently verify it.`
+        : `Reported by ${document.source.name}; WHOISleuth did not collect or independently verify this provider finding.`,
       ...(document.source.reference ? [`Source reference: ${document.source.reference}`] : []),
       ...finding.limitations,
     ];
@@ -242,7 +261,7 @@ export function mergeExternalFindingsIntoCases(
       evidencePin: {
         label: `External ${finding.category} finding`,
         value: pinValue(finding),
-        source: `Import: ${document.source.name}`,
+        source: importedSourceLabel(finding, document.source.name),
         observedAt: finding.observedAt,
         completeness: finding.completeness,
         limitations: sourceLimitations,
