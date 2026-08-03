@@ -557,11 +557,15 @@ does not call the hosted WHOISleuth deployment. Quote a multi-word keyword so
 the shell passes it as one argument.
 
 Terminal output summarizes certificate rows, observed hostnames, canonical
-registrable-domain matches, observation times, and completeness. It shows at
-most 100 matches and five hostnames per match, with explicit omission notes.
-`--json` returns the complete bounded structured result in the versioned
-`whoisleuth.cli.ct-search` schema. CT observations do not prove that a website
-is active or malicious.
+registrable-domain matches, observation times, bounded certificate-issuance
+groups, and completeness. An issuance group contains names observed together
+in one public certificate record; a cross-domain group is a review lead, not
+an attribution or ownership finding. Terminal output shows at most 100 matches
+and five hostnames per match, with explicit omission notes. `--json` returns
+the complete bounded structured result in the versioned
+`whoisleuth.cli.ct-search` schema. The certificate-group cap is reported
+separately from the registrable-domain result cap. CT observations do not prove
+that a website is active or malicious.
 
 ## Lookalike discovery
 

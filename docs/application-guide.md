@@ -282,9 +282,15 @@ Certificate Transparency search is a separate hosted action. It groups
 observed hostnames by canonical registrable domain and retains bounded first
 and last observation times plus certificate counts. These timestamps describe
 public-log observations. They do not prove registration time, website activity,
-ownership, or maliciousness. Structured certificate-log results initially sort
-by latest retained observation. **Reset view** restores that default for
-certificate-log results and restores review-cue ordering for local generation.
+ownership, or maliciousness. It also groups names observed together in each
+retained public certificate record. Cross-domain issuance and wildcard groups
+are review leads only; shared certificates can reflect ordinary hosting,
+platform, or certificate-management arrangements. The issuance-group cap is
+independent of the registrable-domain result cap, so one projection cannot
+silently change the completeness of the other. Structured certificate-log
+results initially sort by latest retained observation. **Reset view** restores
+that default for certificate-log results and restores review-cue ordering for
+local generation.
 
 **Nameservers** is a separate, deliberate hosted pivot. Enter one nameserver
 hostname and one registry suffix. WHOISleuth uses IANA RDAP bootstrap data to
@@ -450,6 +456,13 @@ unknowns, provenance boundary, and limitations. Entered values remain analyst
 assertions. Nothing is saved automatically. The rehearsal makes no request,
 changes no DNS or registry state, and cannot guarantee propagation or
 correctness.
+
+The same authoritative DNS result retains a bounded SOA projection for each
+responding selected authority. Lookup compares the primary name and serial
+published by those authorities and exposes disagreements without treating them
+as propagation proof or record absence. Serial agreement is only a
+point-in-time consistency check across the authorities reached during that
+request; it does not validate every resolver or secondary server.
 
 ### Monitor
 

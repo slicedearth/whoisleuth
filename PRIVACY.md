@@ -74,6 +74,10 @@ default (see the README), so many lookups return no personal data at all.
   can compare the recursive nameserver view with registry RDAP nameserver and
   glue publication, then send direct NS and SOA queries to at most four
   selected nameservers and two validated public addresses per nameserver.
+  Each selected authority can contribute one bounded SOA projection containing
+  its primary name, hostmaster, serial, refresh, retry, expire, and minimum TTL
+  fields. WHOISleuth compares the retained primary names and serials across
+  reached authorities without claiming global propagation or consistency.
   Registry, recursive, and direct evidence remain separately attributed.
   Private and reserved addresses are rejected before a direct query. Refused,
   unreachable, partial, truncated, and unsupported observations remain
@@ -597,7 +601,11 @@ default (see the README), so many lookups return no personal data at all.
   Structured Certificate Transparency searches retain bounded per-keyword
   domain baselines and check summaries so Discover can identify domains that
   are new since the previous complete search. Capped or legacy results never
-  replace a complete baseline. Brand Profile page baselines are captured only
+  replace a complete baseline. The current response can also contain a
+  separately capped projection of names observed together in individual public
+  certificate records. Those certificate groups are not added to the saved CT
+  history baseline, and group-cap state remains distinct from domain-result
+  completeness. Brand Profile page baselines are captured only
   on explicit request and are stored only when the profile is saved. A failed
   or inconclusive recapture does not replace an existing baseline.
   Cleared via each entry's **Remove**/**Delete** button, the **Clear all**

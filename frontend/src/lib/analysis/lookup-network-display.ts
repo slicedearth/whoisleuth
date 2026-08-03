@@ -215,6 +215,24 @@ export function buildLookupNetworkDisplay(input: {
     addresses: stringList(item.addresses).slice(0, 2),
     nameservers: stringList(item.nameservers).slice(0, 16),
     soaPrimary: boundedTechnologyText(item.soaPrimary, 253),
+    soa: (() => {
+      const value = rec(item.soa);
+      const number = (field: unknown) => (
+        typeof field === 'number' && Number.isSafeInteger(field) && field >= 0 && field <= 0xffff_ffff
+          ? field
+          : null
+      );
+      const projection = {
+        nsname: boundedTechnologyText(value.nsname, 253) || null,
+        hostmaster: boundedTechnologyText(value.hostmaster, 253) || null,
+        serial: number(value.serial),
+        refresh: number(value.refresh),
+        retry: number(value.retry),
+        expire: number(value.expire),
+        minttl: number(value.minttl),
+      };
+      return Object.values(projection).every((field) => field === null) ? null : projection;
+    })(),
   }));
   const dnsDelegation = delegation.delegationHealthVersion === 1
     ? {

@@ -333,6 +333,11 @@ function formatTerminalBulk(items: TerminalBulkItem[], metadata: TerminalBulkMet
 
 function formatTerminalCtSearch(document: TerminalRecord): string {
   const matches = Array.isArray(document.matches) ? document.matches : [];
+  const certificateGroups = Array.isArray(document.certificateGroups) ? document.certificateGroups : [];
+  const crossDomainGroups = certificateGroups.filter((value: unknown) => {
+    const group = terminalRecord(value);
+    return Array.isArray(group.domains) && group.domains.length > 1;
+  });
   const visible = matches.slice(0, MAX_CT_TERMINAL_MATCHES);
   const observation = terminalRecord(document.observation);
   const lines = [
@@ -341,7 +346,9 @@ function formatTerminalCtSearch(document: TerminalRecord): string {
     `Certificates   ${safeTerminalValue(document.certCount, '0')}`,
     `Observed hosts ${safeTerminalValue(Array.isArray(document.domains) ? document.domains.length : 0, '0')}`,
     `Matches        ${safeTerminalValue(matches.length, '0')}`,
+    `Issuance groups ${safeTerminalValue(certificateGroups.length, '0')} (${safeTerminalValue(crossDomainGroups.length, '0')} cross-domain)`,
     `Truncated      ${document.truncated ? 'Yes' : 'No'}`,
+    `Group cap      ${document.certificateGroupsTruncated ? 'Reached' : 'Not reached'}`,
     '',
   ];
   if (!visible.length) {

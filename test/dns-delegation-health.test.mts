@@ -37,6 +37,15 @@ describe('DNS delegation health', () => {
         return {
           nameservers: PARENT.records,
           soaPrimary: 'ns1.example.test',
+          soa: {
+            nsname: 'ns1.example.test',
+            hostmaster: 'hostmaster.example.test',
+            serial: 2026080301,
+            refresh: 3600,
+            retry: 600,
+            expire: 1209600,
+            minttl: 300,
+          },
           errorCode: null,
           error: null,
         };
@@ -54,9 +63,37 @@ describe('DNS delegation health', () => {
       { nameserver: 'ns1.example.test', address: '93.184.216.34' },
       { nameserver: 'ns2.example.test', address: '1.1.1.1' },
     ]);
+    assert.equal(recordValue(requiredValue(result.authorities[0]).soa).serial, 2026080301);
+    assert.equal(result.findings.find((finding) => finding.id === 'authority_soa_consistency')?.state, 'healthy');
     assert.equal(result.authorities.every((authority) => authority.addressSource === 'registry_glue'), true);
     assert.equal(result.findings.every((finding) => finding.state === 'healthy'), true);
     assert.match(result.limitations.join(' '), /does not decide registration availability/i);
+  });
+
+  test('flags different authoritative SOA serials without treating either answer as absent', async () => {
+    const result = await collectDnsDelegationHealth('example.test', PARENT, {
+      registryEvidence: REGISTRY,
+      queryAuthority: async ({ nameserver }) => ({
+        nameservers: PARENT.records,
+        soaPrimary: 'ns1.example.test',
+        soa: {
+          nsname: 'ns1.example.test',
+          hostmaster: 'hostmaster.example.test',
+          serial: nameserver.startsWith('ns1') ? 2026080301 : 2026080209,
+          refresh: 3600,
+          retry: 600,
+          expire: 1209600,
+          minttl: 300,
+        },
+        errorCode: null,
+        error: null,
+      }),
+      observedAt: () => OBSERVED_AT,
+    });
+    const finding = requiredValue(result.findings.find((item) => item.id === 'authority_soa_consistency'));
+    assert.equal(finding.state, 'warning');
+    assert.match(finding.summary, /different SOA serials/u);
+    assert.equal(result.complete, true);
   });
 
   test('reports inconsistent, lame, unreachable, missing-glue, and DNSSEC publication states', async () => {

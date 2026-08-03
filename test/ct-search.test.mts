@@ -105,6 +105,8 @@ describe('empty and invalid input', () => {
     const result = summarizeCtResults([]);
     assert.deepStrictEqual(result.domains, []);
     assert.deepStrictEqual(result.matches, []);
+    assert.deepStrictEqual(result.certificateGroups, []);
+    assert.equal(result.certificateGroupsTruncated, false);
     assert.equal(result.truncated, false);
   });
 
@@ -333,6 +335,20 @@ describe('certificate identity', () => {
       row({ id: 2, name_value: 'c.example.com', common_name: '' }),
     ]);
     assert.equal(requiredValue(result.matches[0]).certificateCount, 2);
+  });
+
+  test('retains bounded per-certificate hostname and registrable-domain groups', () => {
+    const result = summarizeCtResults([
+      row({ id: 41, name_value: '*.login.example.com\nwww.example.net', common_name: 'example.com', entry_timestamp: '2026-08-01T00:00:00Z' }),
+      row({ id: 41, name_value: 'checkout.example.org', common_name: '', entry_timestamp: '2026-08-02T00:00:00Z' }),
+      row({ id: 42, name_value: 'single.example.com', common_name: '', entry_timestamp: '2026-08-03T00:00:00Z' }),
+    ]);
+    const shared = requiredValue(result.certificateGroups.find((group) => group.certificateKey === 'id:41'));
+    assert.deepStrictEqual(shared.domains, ['example.com', 'example.net', 'example.org']);
+    assert.deepStrictEqual(shared.hostnames, ['checkout.example.org', 'example.com', 'login.example.com', 'www.example.net']);
+    assert.equal(shared.observedAt, '2026-08-02T00:00:00.000Z');
+    assert.equal(shared.wildcardObserved, true);
+    assert.equal(result.certificateGroups.length, 2);
   });
 
   test('numeric string id equivalent to number id', () => {
