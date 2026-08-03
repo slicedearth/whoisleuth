@@ -98,6 +98,7 @@
     normalizeBulkPacing,
     type BulkPacing,
   } from '$lib/analysis/bulk-pacing.ts';
+  import { bulkQueryLimit } from '$lib/analysis/bulk-limits.ts';
   import { buildBulkReviewManifest } from '$lib/analysis/bulk-review-export.ts';
   import {
     buildBulkPeerOutlierExport,
@@ -189,6 +190,7 @@
   const relationshipSummary=$derived(buildScanRelationships(running?[]:results));
   const parsedInput=$derived(parseDomainInput(input));
   const scanProgress=$derived(buildBulkProgressEstimate(completed,total,scanElapsedMs));
+  const currentQueryLimit=$derived(bulkQueryLimit(mode));
   const scanOutcomes=$derived(buildBulkProgressOutcomes(results,total));
   const activeConcurrency=$derived(bulkConcurrency(mode,pacing));
   $effect(()=>{if(routePage.url.searchParams.has('investigation')&&!running&&results.length)selectInvestigationGuideReviewDomains(results.map((row)=>row.domain));});
@@ -340,7 +342,7 @@
   }
   async function inspectAt(index:number){const row=resultAt(index);if(!row)return;selectInvestigationGuideFocusDomain(row.domain);await goto(`/lookup?q=${encodeURIComponent(row.domain)}&depth=deep#query`);}
   async function run(domains:string[],replace=true,preservePrior=false):Promise<string[]>{
-    const limit=mode==='fast'?2000:200;
+    const limit=bulkQueryLimit(mode);
     if(!domains.length){status='Enter at least one domain.';return[];}
     if(domains.length>limit){status=`${mode==='fast'?'Fast':'Deep'} scans are limited to ${limit} domains.`;return[];}
     const scanController=new AbortController();
@@ -415,6 +417,7 @@
   {running}
   {paused}
   entryCount={parsedInput.entries.length}
+  queryLimit={currentQueryLimit}
   duplicateCount={parsedInput.duplicates}
   {importDomainFile}
   {start}

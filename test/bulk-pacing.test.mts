@@ -14,8 +14,8 @@ test('keeps operator pacing bounded and preserves the established default', () =
   assert.equal(normalizeBulkPacing('unknown'), 'standard');
   assert.equal(bulkConcurrency('fast', 'gentle'), 2);
   assert.equal(bulkConcurrency('deep', 'gentle'), 1);
-  assert.equal(bulkConcurrency('fast', 'standard'), 12);
-  assert.equal(bulkConcurrency('deep', 'standard'), 4);
+  assert.equal(bulkConcurrency('fast', 'standard'), 8);
+  assert.equal(bulkConcurrency('deep', 'standard'), 3);
 });
 
 test('derives a bounded progress estimate only from the current scan', () => {

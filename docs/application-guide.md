@@ -317,6 +317,12 @@ It supports pasted domains, text files, common delimited files, and handoffs
 from Discover. Results can be filtered and sorted without changing the saved or
 exported scan data.
 
+One browser or CLI Bulk job accepts at most 500 Fast targets or 50 Deep
+targets. The Standard pacing option runs at most eight Fast or three Deep
+lookups concurrently; Gentle and Balanced apply lower pressure. These are
+per-job safety and resource ceilings, not authorization to scan domains. Each
+target remains subject to deployment, provider, and source limits.
+
 Bulk sessions are saved only when the analyst names and saves the current
 investigation. Each bounded browser-local session retains the input domain
 order, scan mode, compact settled rows, and per-source completion states so it

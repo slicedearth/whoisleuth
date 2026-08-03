@@ -29,6 +29,7 @@
     running,
     paused,
     entryCount,
+    queryLimit,
     duplicateCount,
     importDomainFile,
     start,
@@ -56,6 +57,7 @@
     running: boolean;
     paused: boolean;
     entryCount: number;
+    queryLimit: number;
     duplicateCount: number;
     importDomainFile: (event: Event) => void | Promise<void>;
     start: () => void | Promise<void>;
@@ -81,11 +83,12 @@
   {#if handoffSource}<p class="handoff">Loaded {handoffCount} candidate{handoffCount === 1 ? '' : 's'} from {handoffSource}.</p>{/if}
   <div class="queue-label"><label class="queue-title" for="domains">Domains</label><label class="btn small file-btn">Import CSV or text<input type="file" accept=".csv,.txt,text/csv,text/plain" onchange={importDomainFile} disabled={running}></label></div>
   <textarea id="domains" value={input} oninput={(event) => setInput(event.currentTarget.value)} disabled={running} placeholder="example.com&#10;example.net"></textarea>
-  <p class="input-help">Paste newline, comma, semicolon, or tab-separated entries. CSV files may include a named domain column.{#if duplicateCount} {duplicateCount} duplicate{duplicateCount === 1 ? '' : 's'} removed.{/if}</p>
+  <p class="input-help">Paste newline, comma, semicolon, or tab-separated entries. CSV files may include a named domain column. One {mode === 'deep' ? 'Deep' : 'Fast'} job is limited to {queryLimit} unique domains.{#if duplicateCount} {duplicateCount} duplicate{duplicateCount === 1 ? '' : 's'} removed.{/if}</p>
+  {#if entryCount > queryLimit}<p class="input-limit" role="alert">Remove {entryCount - queryLimit} domain{entryCount - queryLimit === 1 ? '' : 's'} before starting this {mode === 'deep' ? 'Deep' : 'Fast'} job.</p>{/if}
   <div class="queue-actions">
     <label class="field">Scan mode<select value={mode} onchange={(event) => setMode(event.currentTarget.value as ScanMode)} disabled={running}><option value="fast">Fast · registration</option><option value="deep">Deep · compact web and mail triage</option></select></label>
     <label class="field">Request pacing<select value={pacing} onchange={(event) => setPacing(event.currentTarget.value as BulkPacing)} disabled={running}>{#each pacingOptions as option}<option value={option.id}>{option.label}</option>{/each}</select></label>
-    <button class="primary" onclick={start} disabled={running || !input.trim() || Boolean(lookupDisabledReason)}>{entryCount ? `Scan ${entryCount} domain${entryCount === 1 ? '' : 's'}` : 'Scan domains'}</button>
+    <button class="primary" onclick={start} disabled={running || !input.trim() || entryCount > queryLimit || Boolean(lookupDisabledReason)}>{entryCount ? `Scan ${entryCount} domain${entryCount === 1 ? '' : 's'}` : 'Scan domains'}</button>
     {#if running}<button class="btn" onclick={togglePause}>{paused ? 'Resume' : 'Pause'}</button><button class="btn danger" onclick={cancel}>Cancel</button>{/if}
   </div>
   <p class="mode-help">{mode === 'deep' ? 'Bulk Deep collects compact WHOIS, DNS, website, TLS, mail, and bounded technology signals for triage and comparison. Open a domain in Lookup for the complete source-level evidence and optional enrichments.' : 'Fast keeps the lower-request registration-first contract and omits WHOIS, website, TLS, and deep enrichment.'} {pacingOptions.find((option) => option.id === pacing)?.detail ?? 'Bounded request pacing'}; at most {concurrency} {concurrency === 1 ? 'lookup runs' : 'lookups run'} in parallel.</p>
@@ -111,6 +114,7 @@
   .queue-label{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:7px}
   .queue-title{font:700 var(--text-sm) var(--mono)}
   .input-help{margin:8px 0 0;color:var(--muted);font-size:var(--text-xs)}
+  .input-limit{margin:8px 0 0;color:var(--danger);font-size:var(--text-xs)}
   textarea{width:100%;min-height:150px;padding:12px;background:rgb(var(--bg-rgb) / .78);font-family:var(--mono);font-size:var(--text-sm)}
   .queue-actions{display:flex;gap:9px;align-items:end;margin-top:12px}
   .queue-actions .field:first-child{margin-right:auto}
