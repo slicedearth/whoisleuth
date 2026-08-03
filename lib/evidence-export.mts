@@ -2,10 +2,11 @@ import { compareRdapPublications, compareRegistrySources } from './registry-comp
 import { buildRegistryInsights } from './registry-insights.mts';
 
 export const LOOKUP_EVIDENCE_SCHEMA = 'whoisleuth.lookup-evidence';
-export const LOOKUP_EVIDENCE_SCHEMA_VERSION = 23;
+export const LOOKUP_EVIDENCE_SCHEMA_VERSION = 24;
+export const WHOISLEUTH_PROJECT_URL = 'https://github.com/slicedearth/whoisleuth';
 
 type UnknownRecord = Record<string, unknown>;
-type LookupEvidenceOptions = { generatedAt?: string; idnAnalysis?: unknown };
+type LookupEvidenceOptions = { generatedAt?: string; idnAnalysis?: unknown; applicationVersion?: unknown };
 
 const REGISTRAR_RDAP_STATUSES = new Set([
   'success', 'partial', 'error', 'unsupported', 'not_found', 'skipped', 'disabled',
@@ -44,6 +45,13 @@ function boundedTimestamp(value: unknown): string | null {
   if (!text) return null;
   const time = Date.parse(text);
   return Number.isFinite(time) ? new Date(time).toISOString() : null;
+}
+
+function boundedSemanticVersion(value: unknown): string | null {
+  const text = boundedString(value, 128);
+  return text && /^(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/u.test(text)
+    ? text
+    : null;
 }
 
 function boundedEndpoint(value: unknown): string | null {
@@ -376,7 +384,7 @@ function registrarPublicationComparison(body: UnknownRecord, registryParsed: Unk
 }
 
 export function buildLookupEvidence(response: unknown, options: LookupEvidenceOptions = {}) {
-  const { generatedAt = new Date().toISOString(), idnAnalysis = null } = options;
+  const { generatedAt = new Date().toISOString(), idnAnalysis = null, applicationVersion = null } = options;
   const body = recordOrNull(response) || {};
   const rdap = recordOrNull(body.rdap);
   const whois = recordOrNull(body.whois);
@@ -406,7 +414,11 @@ export function buildLookupEvidence(response: unknown, options: LookupEvidenceOp
     schema: LOOKUP_EVIDENCE_SCHEMA,
     schemaVersion: LOOKUP_EVIDENCE_SCHEMA_VERSION,
     generatedAt,
-    application: { name: 'WHOISleuth' },
+    application: {
+      name: 'WHOISleuth',
+      version: boundedSemanticVersion(applicationVersion),
+      projectUrl: WHOISLEUTH_PROJECT_URL,
+    },
     query: {
       submitted: body.query || null,
       type: body.type || null,

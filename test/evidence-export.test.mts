@@ -383,7 +383,7 @@ describe('lookup evidence export', () => {
     const registryInsights = requiredValue(result.analysis.registryInsights);
 
     assert.equal(result.schema, 'whoisleuth.lookup-evidence');
-    assert.equal(result.schemaVersion, 23);
+    assert.equal(result.schemaVersion, 24);
     assert.equal(result.query.submitted, 'login.example.com');
     assert.equal(result.query.registrableDomain, 'example.com');
     assert.equal(rdapDiagnostics.status, 'success');
@@ -485,10 +485,22 @@ describe('lookup evidence export', () => {
       },
     });
 
-    assert.equal(result.schemaVersion, 23);
+    assert.equal(result.schemaVersion, 24);
     const idn = recordValue(result.analysis.idn);
     assert.equal(idn.version, 1);
     assert.equal(idn.unicodeDomain, 'éxample.test');
+  });
+
+  test('retains bounded generator metadata without accepting an arbitrary version or URL', () => {
+    const result = evidence.buildLookupEvidence(fixtureResponse(), { applicationVersion: '1.35.0' });
+    assert.deepEqual(result.application, {
+      name: 'WHOISleuth',
+      version: '1.35.0',
+      projectUrl: 'https://github.com/slicedearth/whoisleuth',
+    });
+    assert.equal(evidence.buildLookupEvidence(fixtureResponse(), {
+      applicationVersion: 'not a version\nhttps://untrusted.example',
+    }).application.version, null);
   });
 
   test('retains bounded DNS provenance already present in the availability assessment', () => {

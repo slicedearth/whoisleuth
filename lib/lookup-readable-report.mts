@@ -12,6 +12,7 @@ export const LOOKUP_READABLE_REPORT_VERSION = 2;
 export const MAX_LOOKUP_READABLE_REPORT_BYTES = 64 * 1024;
 
 type LookupReadableReportOptions = {
+  applicationVersion?: unknown;
   generatedAt?: string;
   risk?: unknown;
 };
@@ -382,7 +383,7 @@ function buildLookupReadableReport(
   const generatedAt = generatedTimestamp(options.generatedAt);
   const projected = projectedLookup(response);
   if (response.type !== 'domain') {
-    const markdown = formatNetworkIdentifierReadableReport(projected, generatedAt);
+    const markdown = formatNetworkIdentifierReadableReport(projected, generatedAt, options.applicationVersion);
     if (new TextEncoder().encode(markdown).byteLength > MAX_LOOKUP_READABLE_REPORT_BYTES) {
       throw new RangeError('Readable Lookup report exceeded its byte limit.');
     }
@@ -391,6 +392,7 @@ function buildLookupReadableReport(
   const evidence = buildLookupEvidence(projected, {
     generatedAt,
     idnAnalysis: null,
+    applicationVersion: options.applicationVersion,
   });
   const projectedRdap = isJsonObject(projected.rdap) ? projected.rdap : {};
   const registrarRdap = isJsonObject(projectedRdap.registrarRdap)
@@ -438,6 +440,7 @@ function appendReadableField(lines: string[], label: string, value: unknown): vo
 function formatNetworkIdentifierReadableReport(
   projectedRaw: Record<string, unknown>,
   generatedAt: string,
+  applicationVersion: unknown,
 ): string {
   const projected = projectedRaw as JsonObject;
   const type = typeof projected.type === 'string' ? projected.type : 'network';
@@ -457,6 +460,8 @@ function formatNetworkIdentifierReadableReport(
     '',
   ];
   appendReadableField(lines, 'Generated', generatedAt);
+  appendReadableField(lines, 'Generator', typeof applicationVersion === 'string' ? `WHOISleuth ${applicationVersion}` : 'WHOISleuth');
+  appendReadableField(lines, 'Project', 'https://github.com/slicedearth/whoisleuth');
   appendReadableField(lines, 'Report contract', `whoisleuth.lookup-readable-report v${LOOKUP_READABLE_REPORT_VERSION}`);
   lines.push('', '## Query');
   appendReadableField(lines, 'Submitted', submitted);

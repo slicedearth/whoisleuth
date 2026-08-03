@@ -224,7 +224,7 @@ describe('schema compatibility inventory', () => {
     assert.equal(byId(inventory, 'export.web-capture-dom-digest').byteBudget, MAX_WEB_CAPTURE_DOM_DIGEST_BYTES);
     assert.equal(byId(inventory, 'cli.web-capture-comparison').schema, WEB_CAPTURE_COMPARISON_SCHEMA);
     assert.equal(byId(inventory, 'cli.web-capture-comparison').currentVersion, WEB_CAPTURE_COMPARISON_VERSION);
-    assert.deepEqual(byId(inventory, 'export.lookup-evidence').supportedVersions, [12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23]);
+    assert.deepEqual(byId(inventory, 'export.lookup-evidence').supportedVersions, [12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24]);
     assert.deepEqual(byId(inventory, 'export.synthetic-demo').supportedVersions, [2, 3, 4, 5]);
     assert.equal(byId(inventory, 'export.relationship-graph').schema, RELATIONSHIP_GRAPH_EXPORT_SCHEMA);
     assert.equal(byId(inventory, 'export.relationship-graph').currentVersion, RELATIONSHIP_GRAPH_EXPORT_VERSION);

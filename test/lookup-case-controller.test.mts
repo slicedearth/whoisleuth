@@ -6,6 +6,7 @@ import {
   type LookupCaseApi,
 } from '../frontend/src/lib/controllers/lookup-case-controller.ts';
 import { createCase } from '../frontend/src/lib/analysis/case-model.ts';
+import { LOOKUP_EVIDENCE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/evidence-export.ts';
 
 function unused(): Promise<never> {
   throw new Error('Unused test dependency');
@@ -89,7 +90,7 @@ describe('Lookup case controller', () => {
       sourceSchema: {
         collection: 'lookup_result',
         schema: 'whoisleuth.lookup-evidence',
-        version: 23,
+        version: LOOKUP_EVIDENCE_SCHEMA_VERSION,
       },
     }], ['dns.mx']);
 

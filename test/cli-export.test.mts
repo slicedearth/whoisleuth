@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { Readable, Writable } from 'node:stream';
 
 import { parseCliArguments } from '../cli/arguments.mts';
-import { buildCliEvidenceExport, formatCliEvidenceExport } from '../cli/export-evidence.mts';
+import { APPLICATION_VERSION, buildCliEvidenceExport, formatCliEvidenceExport } from '../cli/export-evidence.mts';
 import {
   MAX_MARKDOWN_VALUE_LENGTH,
   escapeMarkdownValue,
@@ -202,8 +202,13 @@ describe('lookup evidence export conversion', () => {
       '2026-07-14T09:00:00.000Z'
     );
     assert.equal(result.schema, 'whoisleuth.lookup-evidence');
-    assert.equal(result.schemaVersion, 23);
+    assert.equal(result.schemaVersion, 24);
     assert.equal(result.generatedAt, '2026-07-14T09:00:00.000Z');
+    assert.deepEqual(result.application, {
+      name: 'WHOISleuth',
+      version: APPLICATION_VERSION,
+      projectUrl: 'https://github.com/slicedearth/whoisleuth',
+    });
     const query = recordValue(result.query);
     const sources = recordValue(result.sources);
     const analysis = recordValue(result.analysis);

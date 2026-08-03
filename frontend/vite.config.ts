@@ -6,6 +6,15 @@ import { defineConfig, type Plugin } from 'vite';
 
 const THEME_INIT_PATH = fileURLToPath(new URL('./src/theme-init.ts', import.meta.url));
 const THEME_INIT_ASSET = 'theme-init.js';
+const ROOT_PACKAGE_PATH = fileURLToPath(new URL('../package.json', import.meta.url));
+
+async function applicationVersion(): Promise<string> {
+  const document = JSON.parse(await readFile(ROOT_PACKAGE_PATH, 'utf8')) as { version?: unknown };
+  if (typeof document.version !== 'string' || document.version.length > 128) {
+    throw new TypeError('Root package version is unavailable to the frontend build.');
+  }
+  return document.version;
+}
 
 async function compileThemeInitializer(): Promise<string> {
   const source = await readFile(THEME_INIT_PATH, 'utf8');
@@ -53,11 +62,14 @@ function themeInitializerPlugin(): Plugin {
   };
 }
 
-export default defineConfig({
+export default defineConfig(async () => ({
+  define: {
+    __WHOISLEUTH_VERSION__: JSON.stringify(await applicationVersion()),
+  },
   plugins: [themeInitializerPlugin(), sveltekit()],
   server: {
     proxy: {
       '/api': 'http://localhost:3000',
     },
   },
-});
+}));
