@@ -33,6 +33,7 @@ const CLI_COMMANDS = [
   'compare',
   'page-compare',
   'mail-review',
+  'review-evidence',
   'diff',
   'timeline',
   'export',
@@ -73,6 +74,7 @@ type CliAction =
   | ({ action: 'compare'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'page-compare'; leftSource: string; rightSource: string; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'mail-review'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
+  | ({ action: 'review-evidence'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'diff'; leftSource: string; rightSource: string; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'timeline'; sources: readonly string[]; output: 'terminal' | 'json' } & TerminalOptions)
   | { action: 'export'; source: string | null; format: 'json' | 'markdown' | 'html'; compact: boolean };
@@ -174,6 +176,7 @@ function parseCliArgumentsCore(argv: string[]): CliAction {
   if (command === 'compare') return parseCompareArguments(argv.slice(1));
   if (command === 'page-compare') return parsePageCompareArguments(argv.slice(1));
   if (command === 'mail-review') return parseMailReviewArguments(argv.slice(1));
+  if (command === 'review-evidence') return parseReviewEvidenceArguments(argv.slice(1));
   if (command === 'diff') return parseDiffArguments(argv.slice(1));
   if (command === 'timeline') return parseTimelineArguments(argv.slice(1));
   if (command === 'export') return parseExportArguments(argv.slice(1));
@@ -722,6 +725,25 @@ function parseMailReviewArguments(argv: string[]): Extract<CliArguments, { actio
   }
   if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
   return { action: 'mail-review', source, output, quiet, color };
+}
+
+function parseReviewEvidenceArguments(argv: string[]): Extract<CliArguments, { action: 'review-evidence' }> {
+  let source: string | null = null;
+  let output: 'terminal' | 'json' = 'terminal';
+  let quiet = false;
+  let color = true;
+  for (const argument of argv) {
+    if (argument === '--json') {
+      if (output !== 'terminal') throw new CliUsageError('--json may be supplied only once.');
+      output = 'json';
+    } else if (argument === '--quiet') quiet = true;
+    else if (argument === '--no-color') color = false;
+    else if (argument.startsWith('-')) throw new CliUsageError(`Unknown option "${argument}".`);
+    else if (source === null) source = argument;
+    else throw new CliUsageError('review-evidence accepts one optional versioned JSON input file.');
+  }
+  if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
+  return { action: 'review-evidence', source, output, quiet, color };
 }
 
 function parseDiffArguments(argv: string[]): Extract<CliArguments, { action: 'diff' }> {

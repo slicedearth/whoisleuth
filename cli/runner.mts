@@ -53,6 +53,11 @@ import {
   buildCliMailReview,
   formatCliMailReview,
 } from './mail-review.mts';
+import {
+  MAX_OFFLINE_EVIDENCE_INPUT_BYTES,
+  buildOfflineEvidenceReview,
+  formatOfflineEvidenceReview,
+} from './offline-evidence-review.mts';
 import { runLookupCommand } from './lookup-command-runner.mts';
 import { buildCliManual } from './manual.mts';
 import { createBufferedOutput, writePrivateFile } from './output-file.mts';
@@ -115,6 +120,7 @@ Review saved evidence:
   compare            Compare saved registry publications.
   page-compare       Compare saved static page and TLS evidence.
   mail-review        Review saved passive mail exposure evidence.
+  review-evidence    Review supplied DNS, routing, GeoIP, or RDAP evidence offline.
   diff               Compare two saved domain observations.
   timeline           Compare a sequence of observations for one domain.
   export             Convert a saved lookup into an evidence report.
@@ -164,6 +170,7 @@ const COMMAND_USAGE: Readonly<Record<CliCommand, string>> = Object.freeze({
   compare: 'whoisleuth compare [lookup.json] [--json] [--quiet] [--no-color]',
   'page-compare': 'whoisleuth page-compare <left.json> <right.json> [--json] [--quiet] [--no-color]',
   'mail-review': 'whoisleuth mail-review [bulk.json|bulk.jsonl] [--json] [--quiet] [--no-color]',
+  'review-evidence': 'whoisleuth review-evidence [evidence.json] [--json] [--quiet] [--no-color]',
   diff: 'whoisleuth diff <left.json> <right.json> [--json] [--quiet] [--no-color]',
   timeline: 'whoisleuth timeline <observation.json> <observation.json> [...] [--json] [--quiet] [--no-color]',
   export: 'whoisleuth export [lookup.json] [--markdown|--html|--compact]',
@@ -280,6 +287,11 @@ const COMMAND_DETAILS: Readonly<Record<CliCommand, Readonly<{ description: strin
     example: 'whoisleuth mail-review candidates.json --json',
     boundary: 'Review is offline and sends no SMTP traffic. Missing or partial DNS evidence remains inconclusive.',
   },
+  'review-evidence': {
+    description: 'Review one versioned DNSSEC, TLSA, RPKI, GeoIP, encrypted-DNS, or RDAP planning document offline.',
+    example: 'whoisleuth review-evidence dnssec-evidence.json --json',
+    boundary: 'The command reads only the supplied document. It performs no DNS, RDAP, BGP, GeoIP-provider, TLS, HTTP, or SMTP request.',
+  },
   diff: {
     description: 'Compare bounded evidence retained in two saved domain lookups.',
     example: 'whoisleuth diff first.json second.json --json',
@@ -323,6 +335,7 @@ const COMMAND_COLLECTION: Readonly<Record<CliCommand, Readonly<{
   compare: { mode: 'offline', scope: 'Reads one saved Lookup and compares its separately attributed registry publications.' },
   'page-compare': { mode: 'offline', scope: 'Reads two saved Lookup documents and executes no page code.' },
   'mail-review': { mode: 'offline', scope: 'Reads one saved Bulk result and sends no DNS or SMTP traffic.' },
+  'review-evidence': { mode: 'offline', scope: 'Reads one bounded versioned evidence or request-planning document and performs no collection.' },
   diff: { mode: 'offline', scope: 'Reads two saved Lookup documents for different domains.' },
   timeline: { mode: 'offline', scope: 'Reads 2 to 20 saved observations for one domain, capped at 32 MiB in total.' },
   export: { mode: 'offline', scope: 'Reads one saved Lookup and writes one bounded report.' },
@@ -702,6 +715,30 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
       if (!args.quiet) write(stdout, args.output === 'json'
         ? formatJsonDocument(document)
         : terminal(formatCliMailReview(document), args.color));
+      return EXIT_CODES.SUCCESS;
+    }
+
+    if (args.action === 'review-evidence') {
+      failureLabel = 'Offline evidence review';
+      let input: string;
+      try {
+        input = dependencies.readArtifactInput
+          ? await dependencies.readArtifactInput(args.source)
+          : await readSavedLookupInputBounded(args.source
+            ? createReadStream(args.source, { highWaterMark: 64 * 1024 })
+            : dependencies.stdin || process.stdin, {
+              limit: MAX_OFFLINE_EVIDENCE_INPUT_BYTES,
+              label: 'Offline evidence input',
+            });
+      } catch (error) {
+        if (error instanceof CliUsageError) throw error;
+        throw new CliUsageError(`Could not read offline evidence input: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
+      }
+      if (!input.trim()) throw new CliUsageError('review-evidence requires one JSON file or a document on stdin.');
+      const document = buildOfflineEvidenceReview(input, commandContext.now());
+      if (!args.quiet) write(stdout, args.output === 'json'
+        ? formatJsonDocument(document)
+        : terminal(formatOfflineEvidenceReview(document), args.color));
       return EXIT_CODES.SUCCESS;
     }
 
