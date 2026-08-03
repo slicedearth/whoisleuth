@@ -5,6 +5,7 @@
 const REGISTERED_STATES = new Set(['registered', 'for_sale', 'expiring']);
 
 type CoverageStatus = 'protected' | 'registered' | 'available' | 'unknown';
+type CoveragePriority = 'P1' | 'P2' | 'P3';
 
 type CoverageCounts = Record<CoverageStatus, number> & {
   total: number;
@@ -40,6 +41,14 @@ type CoverageGroup = CoverageCounts & {
   actionableDomains: string[];
 };
 
+type CoveragePlanRow = CoverageCandidate & {
+  status: CoverageStatus;
+  priority: CoveragePriority;
+  action: 'review_acquisition' | 'resolve_evidence' | 'investigate_registration' | 'verify_protection';
+  actionLabel: string;
+  rationale: string;
+};
+
 function emptyCounts(): CoverageCounts {
   return { total: 0, protected: 0, registered: 0, available: 0, unknown: 0 };
 }
@@ -49,6 +58,41 @@ function classifyCandidate(candidate: CoverageCandidate, allowlistedDomains: Rea
   if (candidate.availability === 'available') return 'available';
   if (typeof candidate.availability === 'string' && REGISTERED_STATES.has(candidate.availability)) return 'registered';
   return 'unknown';
+}
+
+function planRow(candidate: CoverageCandidate, status: CoverageStatus): CoveragePlanRow {
+  if (status === 'available') return {
+    ...candidate,
+    status,
+    priority: 'P1',
+    action: 'review_acquisition',
+    actionLabel: 'Review defensive acquisition',
+    rationale: 'The authoritative availability result supports a time-sensitive manual registration decision. Recheck before purchase.',
+  };
+  if (status === 'unknown') return {
+    ...candidate,
+    status,
+    priority: 'P1',
+    action: 'resolve_evidence',
+    actionLabel: 'Resolve source coverage',
+    rationale: 'The retained sources did not support a registration conclusion. Missing evidence is not availability.',
+  };
+  if (status === 'registered') return {
+    ...candidate,
+    status,
+    priority: 'P2',
+    action: 'investigate_registration',
+    actionLabel: 'Review registered candidate',
+    rationale: 'The candidate appears registered. Review current evidence and ownership context before monitoring or escalation.',
+  };
+  return {
+    ...candidate,
+    status,
+    priority: 'P3',
+    action: 'verify_protection',
+    actionLabel: 'Verify protection record',
+    rationale: 'The active profile classifies this candidate as protected. Confirm the reviewed profile remains current.',
+  };
 }
 
 function addToGroup(
@@ -115,22 +159,35 @@ export function buildCoverageReport(
   const summary = emptyCounts();
   const mutationGroups = new Map<string, CoverageGroup>();
   const tldGroups = new Map<string, CoverageGroup>();
-  const candidates: Array<CoverageCandidate & { status: CoverageStatus }> = [];
+  const candidates: CoveragePlanRow[] = [];
   for (const candidate of candidatesByDomain.values()) {
     const status = classifyCandidate(candidate, allowlistedDomains);
     summary.total += 1;
     summary[status] += 1;
-    candidates.push({ ...candidate, status });
+    candidates.push(planRow(candidate, status));
     for (const mutationType of candidate.mutationTypes) {
       addToGroup(mutationGroups, mutationType, mutationLabels[mutationType] || mutationType, candidate, status);
     }
     if (candidate.tld) addToGroup(tldGroups, candidate.tld, `.${candidate.tld}`, candidate, status);
   }
 
+  const priorityOrder: Record<CoveragePriority, number> = { P1: 0, P2: 1, P3: 2 };
+  const actionOrder: Record<CoveragePlanRow['action'], number> = {
+    review_acquisition: 0,
+    resolve_evidence: 1,
+    investigate_registration: 2,
+    verify_protection: 3,
+  };
+  candidates.sort((left, right) => (
+    priorityOrder[left.priority] - priorityOrder[right.priority]
+    || actionOrder[left.action] - actionOrder[right.action]
+    || left.domain.localeCompare(right.domain)
+  ));
   return {
     summary: { ...summary, coveragePercent: summary.total ? Math.round((summary.protected / summary.total) * 100) : 0 },
     candidates,
     mutationGroups: finishGroups(mutationGroups),
     tldGroups: finishGroups(tldGroups),
+    plan: candidates,
   };
 }

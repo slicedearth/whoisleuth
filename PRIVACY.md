@@ -612,6 +612,16 @@ default (see the README), so many lookups return no personal data at all.
   button in either panel, the campaign deletion controls, the deletion controls
   under **Previous certificate searches**, or by clearing the browser's site
   data. Clearing site data also removes the saved appearance preference.
+- **Local registry IDN table review**: Discover can deliberately read one local
+  RFC 7940 LGR XML file of at most 2 MiB and compare its normalized
+  single-code-point repertoire with the current Unicode candidates for an
+  analyst-entered suffix. The browser calculates a SHA-256 digest and displays
+  the local filename, repertoire count, exclusions, and limitations. The file,
+  digest, suffix, and review result stay in the current tab, are not uploaded,
+  are not added to candidate handoffs or workspace storage, and do not affect
+  availability, Risk, or candidate selection. Document types and entities are
+  rejected. Context rules, variant dispositions, registry eligibility, price,
+  and live acceptance are not evaluated.
 - **Optional hosted scheduled monitoring**: disabled by default. When the
   operator explicitly enables the Netlify worker and a scheduled watchlist is
   present, it retains the bounded watchlist name, canonical domains, interval,

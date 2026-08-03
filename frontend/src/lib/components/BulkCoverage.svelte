@@ -23,6 +23,13 @@
     summary: CoverageSummary;
     mutationGroups: CoverageGroup[];
     tldGroups: CoverageGroup[];
+    plan: Array<{
+      domain: string;
+      status: string;
+      priority: 'P1' | 'P2' | 'P3';
+      actionLabel: string;
+      rationale: string;
+    }>;
   };
 
   let {
@@ -55,6 +62,22 @@
       <div><h3>By mutation</h3>{@render CoverageChart(coverage.mutationGroups, 'Mutation-family coverage')}{@render CoverageTable(coverage.mutationGroups, loadDomains)}</div>
       <div><h3>By TLD</h3>{@render CoverageChart(coverage.tldGroups, 'TLD coverage')}{@render CoverageTable(coverage.tldGroups, loadDomains)}</div>
     </div>
+    {#if coverage.plan.length}
+      <details class="coverage-plan">
+        <summary>Prioritized next actions · {coverage.plan.length}</summary>
+        <p>Priority reflects the next defensive review step, not domain risk, intent, or maliciousness.</p>
+        <div class="plan-list">
+          {#each coverage.plan.slice(0, 20) as row}
+            <article>
+              <span class:high={row.priority === 'P1'} class="priority">{row.priority}</span>
+              <div><strong>{row.domain}</strong><span>{row.actionLabel} · {row.status}</span><small>{row.rationale}</small></div>
+              <button class="btn small" onclick={() => loadDomains([row.domain])}>Load</button>
+            </article>
+          {/each}
+        </div>
+        {#if coverage.plan.length > 20}<p>Showing the first 20 deterministic actions. The coverage export includes the complete bounded plan.</p>{/if}
+      </details>
+    {/if}
   </section>
 {/if}
 
@@ -97,6 +120,16 @@
   .coverage-chart .state-registered{fill:rgb(var(--danger-rgb) / .22);stroke:var(--danger)}
   .coverage-chart .state-available{fill:rgb(var(--amber-rgb) / .23);stroke:var(--amber)}
   .coverage-chart .state-unknown{fill:var(--panel);stroke:var(--muted);stroke-dasharray:3 2}
+  .coverage-plan{margin-top:14px;padding:12px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel-raised)}
+  .coverage-plan>summary{cursor:pointer;font:700 var(--text-sm) var(--mono)}
+  .coverage-plan>p{color:var(--muted);font-size:var(--text-xs)}
+  .plan-list{display:grid;gap:7px;margin-top:10px}
+  .plan-list article{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:9px;align-items:start;padding:9px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}
+  .plan-list article>div{display:grid;gap:3px;min-width:0}
+  .plan-list strong{overflow-wrap:anywhere;font-size:var(--text-xs)}
+  .plan-list span,.plan-list small{color:var(--muted);font-size:var(--text-2xs)}
+  .priority{padding:3px 6px;border:1px solid var(--border);border-radius:99px;color:var(--text)!important;font:700 var(--text-2xs) var(--mono)}
+  .priority.high{border-color:rgb(var(--amber-rgb) / .5);color:var(--amber)!important}
   @media(max-width:700px){
     .coverage-tables{grid-template-columns:1fr}
     .coverage-chart{display:none}
@@ -110,5 +143,7 @@
     .coverage td:first-child,.coverage td:last-child{grid-column:1 / -1}
     .coverage td:first-child{padding-bottom:9px;border-bottom:1px solid var(--border);font-weight:700}
     .coverage td:last-child .btn{width:100%}
+    .plan-list article{grid-template-columns:auto minmax(0,1fr)}
+    .plan-list article .btn{grid-column:1 / -1;width:100%}
   }
 </style>

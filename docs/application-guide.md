@@ -388,7 +388,20 @@ Defensive registration coverage groups a generated scan by mutation family and
 domain ending. It distinguishes protected or allowlisted domains, registered
 exposures, available gaps, and unknown results without making extra requests.
 Stacked bars summarize the same exact counts retained in the accompanying
-tables. The two-domain workspace similarly adds a field matrix while preserving
+tables. A deterministic next-action plan places available and unresolved rows
+first, followed by registered candidates and profile-protected names. Its P1
+through P3 labels describe review order only; they are not a risk or
+maliciousness score. The CSV export includes the complete bounded plan.
+
+Discover can optionally compare Unicode candidates with one analyst-selected
+RFC 7940 LGR XML file. The file stays in the current browser tab, is capped at
+2 MiB, rejects document types and entities, and retains only a normalized
+single-code-point repertoire plus the local filename and SHA-256 digest. The
+review reports whether candidate code points appear in the imported table for
+the analyst-entered suffix. It does not evaluate contextual rules, variant
+dispositions, eligibility, price, live acceptance, or availability, so
+"listed by table" is never presented as registrable.
+The two-domain workspace similarly adds a field matrix while preserving
 source state, values, evidence links, conflicts, one-sided evidence, and
 limitations in its table.
 

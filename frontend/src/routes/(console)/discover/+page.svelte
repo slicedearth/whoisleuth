@@ -4,6 +4,7 @@
   import DiscoverCandidateResults from '$lib/components/DiscoverCandidateResults.svelte';
   import DiscoverCtHistory from '$lib/components/DiscoverCtHistory.svelte';
   import DiscoverCertificateGroups from '$lib/components/DiscoverCertificateGroups.svelte';
+  import DiscoverIdnPolicyReview from '$lib/components/DiscoverIdnPolicyReview.svelte';
   import DiscoverGenerationOptions from '$lib/components/DiscoverGenerationOptions.svelte';
   import PageHeading from '$lib/components/PageHeading.svelte';
   import {
@@ -168,6 +169,10 @@
   const pageCount = $derived(Math.max(1, Math.ceil(visible.length / DISCOVER_PAGE_SIZE)));
   const currentPage = $derived(Math.min(page, pageCount));
   const pagedVisible = $derived(visible.slice((currentPage - 1) * DISCOVER_PAGE_SIZE, currentPage * DISCOVER_PAGE_SIZE));
+  const idnPolicyCandidates = $derived(candidates.map((candidate) => ({
+    domain: candidate.domain,
+    unicodeDomain: candidateMetadata.get(candidate.domain)?.unicodeDomain || '',
+  })));
   const selectedCandidates = $derived(candidates.filter((c) => selected.has(c.domain)));
   const selectedVisibleCount = $derived(visible.reduce((count, candidate) => count + Number(selected.has(candidate.domain)), 0));
   const reviewControlsActive = $derived(
@@ -718,6 +723,9 @@
 {/if}
 
 {#if candidates.length}
+  {#if mode === 'typosquat' || mode === 'keyword'}
+    <DiscoverIdnPolicyReview candidates={idnPolicyCandidates} />
+  {/if}
   <DiscoverCandidateResults
     selectedCount={selected.size}
     candidateCount={candidates.length}
