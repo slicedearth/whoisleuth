@@ -65,6 +65,7 @@
     type JsonRecord,
   } from '$lib/analysis/lookup-display-model.ts';
   import { buildLookupRouteAnalysis } from '$lib/analysis/lookup-route-analysis.ts';
+  import type { LookupFreshnessPolicyInput, LookupFreshnessThresholds } from '$lib/analysis/lookup-source-refresh.ts';
   import {
     LOOKUP_CLIENT_TIMEOUT_MS,
   } from '$lib/analysis/lookup-request.ts';
@@ -109,6 +110,9 @@
   let caseRecord=$state<CaseRecord|null>(null);let caseNote=$state('');let caseStatus=$state('');
   let evidenceDensity=$state<LookupEvidenceDensity>('standard');
   let taskView=$state<LookupTaskView>('general');
+  let freshnessPolicyMode=$state<'task-default'|'analyst-custom'>('task-default');
+  let customFreshnessThresholds=$state<LookupFreshnessThresholds>({registration:30,network:7,web:3});
+  const freshnessPolicyInput=$derived<LookupFreshnessPolicyInput|undefined>(freshnessPolicyMode==='analyst-custom'?{id:'analyst-custom',thresholdsDays:customFreshnessThresholds}:undefined);
   let serviceDependencyScope=$state('');
   let serviceDependencyFalsePositives=$state('');
   let pageActive=false;
@@ -173,6 +177,7 @@
     lookupView,
     profile,
     task:taskView,
+    ...(freshnessPolicyInput?{freshnessPolicy:freshnessPolicyInput}:{}),
   }));
   const lookupEvidenceDepth=$derived(lookupAnalysis.lookupEvidenceDepth);
   const lookupObservedAt=$derived(lookupAnalysis.lookupObservedAt);
@@ -279,6 +284,10 @@
   function setTaskView(value:LookupTaskView){
     taskView=normalizeLookupTaskView(value);
     writeLookupPresentation(localStorage,{density:evidenceDensity,task:taskView});
+  }
+  function setFreshnessPolicy(value:{mode:'task-default'|'analyst-custom';thresholdsDays:LookupFreshnessThresholds}){
+    freshnessPolicyMode=value.mode;
+    customFreshnessThresholds=value.thresholdsDays;
   }
   onMount(()=>{
     pageActive=true;
@@ -470,6 +479,7 @@
         query={String(result?.query || caseDomain)}
         depth={lookupEvidenceDepth}
         timing={lookupTiming}
+        onpolicychange={setFreshnessPolicy}
       />
 
       <LookupOverviewFacts facts={[...lookupSummary.facts]} diagnostics={[...lookupSummary.diagnostics]} hasAssessment={availability.applicable!==false} />

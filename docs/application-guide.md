@@ -112,11 +112,14 @@ are normalized into a short transient health summary, with a 2 MiB response
 bound, and are not merged into the original envelope. Repeated refreshes form
 a bounded versioned display chain with explicit observation and supersession
 times. That transient chain is cleared with the page and is not saved or
-exported. A result that is at
-least seven days old can offer the same reviewed refreshes for otherwise
-complete sources. Run a complete Lookup before saving, comparing, or exporting
-replacement evidence so observations collected at different times are not
-silently combined.
+exported. Task-specific defaults use different review ages for registration,
+network, and web evidence. The analyst can replace them with bounded one-to-365
+day thresholds for the current result. The versioned policy is shown in the
+quality panel and included in the downloaded investigation brief; custom values
+are not saved. Thresholds organize review only and do not make an older
+observation false or a newer observation complete. Run a complete Lookup before
+saving, comparing, or exporting replacement evidence so observations collected
+at different times are not silently combined.
 
 After a successful deep full response, **Collection timing** reports total
 request time plus the duration and settle offset of each source branch that
@@ -166,6 +169,8 @@ unknown, or not found. It preserves those states separately and shows endpoint
 class, observation age, explicit truncation, retained limitations, branch
 timing, downstream uses, and whether a deliberate refresh is available. It
 never retries a source or converts incomplete collection into a clean finding.
+Its freshness policy records the task, policy version, and separate
+registration, network, and web thresholds used for refresh suggestions.
 
 After a successful Lookup, **Download report** creates a readable Markdown
 summary locally in the browser. Domain reports include registry, registrar,

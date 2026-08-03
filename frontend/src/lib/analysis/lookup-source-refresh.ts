@@ -2,15 +2,32 @@ import type {
   EvidenceCoverageEntry,
   EvidenceCoverageLedger,
 } from './evidence-coverage-ledger.ts';
+import type { LookupTaskView } from './lookup-presentation.ts';
 
 export const LOOKUP_SOURCE_REFRESH_VERSION = 1 as const;
 export const LOOKUP_SOURCE_STALE_AFTER_DAYS = 7;
+export const LOOKUP_FRESHNESS_POLICY_VERSION = 1 as const;
 export const LOOKUP_SOURCE_REFRESH_TIMEOUT_MS = 40_000;
 export const MAX_LOOKUP_SOURCE_REFRESH_KEYS = 512;
 export const MAX_LOOKUP_SOURCE_REFRESH_BYTES = 2 * 1024 * 1024;
 export const MAX_LOOKUP_SOURCE_REFRESH_HISTORY = 12;
 
 export type LookupSourceRefreshId = 'availability' | 'rdap' | 'whois';
+export type LookupFreshnessThresholds = Readonly<{
+  registration: number;
+  network: number;
+  web: number;
+}>;
+export type LookupFreshnessPolicy = Readonly<{
+  version: typeof LOOKUP_FRESHNESS_POLICY_VERSION;
+  id: 'task-default' | 'analyst-custom';
+  task: LookupTaskView;
+  thresholdsDays: LookupFreshnessThresholds;
+}>;
+export type LookupFreshnessPolicyInput = Readonly<{
+  id?: unknown;
+  thresholdsDays?: Readonly<Partial<Record<keyof LookupFreshnessThresholds, unknown>>>;
+}>;
 
 export type LookupSourceRefreshPlanItem = Readonly<{
   id: LookupSourceRefreshId;
@@ -20,12 +37,15 @@ export type LookupSourceRefreshPlanItem = Readonly<{
   reason: 'limited' | 'stale';
   requestDisclosure: string;
   supersedesObservedAt: string | null;
+  ageDays?: number | null;
+  staleAfterDays?: number;
 }>;
 
 export type LookupSourceRefreshPlan = Readonly<{
   version: typeof LOOKUP_SOURCE_REFRESH_VERSION;
   stale: boolean;
   ageDays: number | null;
+  freshnessPolicy: LookupFreshnessPolicy;
   items: readonly LookupSourceRefreshPlanItem[];
   limitations: readonly string[];
 }>;
@@ -67,6 +87,38 @@ const DOMAIN_EVIDENCE_IDS = new Set([
   'technology',
   'tls',
 ]);
+const NETWORK_EVIDENCE_IDS = new Set(['availability', 'dns', 'reverse-dns', 'network-context']);
+const WEB_EVIDENCE_IDS = new Set(['http', 'tls', 'page-identity', 'page-role', 'client-behavior', 'security-posture', 'technology']);
+const TASK_FRESHNESS_THRESHOLDS: Readonly<Record<LookupTaskView, LookupFreshnessThresholds>> = Object.freeze({
+  general: Object.freeze({ registration: 30, network: 7, web: 3 }),
+  acquisition: Object.freeze({ registration: 7, network: 3, web: 3 }),
+  brand: Object.freeze({ registration: 30, network: 3, web: 1 }),
+  incident: Object.freeze({ registration: 14, network: 1, web: 1 }),
+  owned: Object.freeze({ registration: 30, network: 7, web: 3 }),
+});
+
+function freshnessDays(value: unknown, fallback: number): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? Math.max(1, Math.min(365, Math.round(parsed))) : fallback;
+}
+
+export function buildLookupFreshnessPolicy(
+  task: LookupTaskView,
+  input?: LookupFreshnessPolicyInput,
+): LookupFreshnessPolicy {
+  const defaults = TASK_FRESHNESS_THRESHOLDS[task];
+  const custom = input?.id === 'analyst-custom';
+  return {
+    version: LOOKUP_FRESHNESS_POLICY_VERSION,
+    id: custom ? 'analyst-custom' : 'task-default',
+    task,
+    thresholdsDays: custom ? {
+      registration: freshnessDays(input?.thresholdsDays?.registration, defaults.registration),
+      network: freshnessDays(input?.thresholdsDays?.network, defaults.network),
+      web: freshnessDays(input?.thresholdsDays?.web, defaults.web),
+    } : { ...defaults },
+  };
+}
 
 function observedAgeDays(observedAt: unknown, now: unknown): number | null {
   if (typeof observedAt !== 'string' || typeof now !== 'string') return null;
@@ -88,9 +140,14 @@ export function buildLookupSourceRefreshPlan(
   ledger: EvidenceCoverageLedger,
   observedAt: unknown,
   now: unknown = new Date().toISOString(),
+  options: Readonly<{
+    task?: LookupTaskView;
+    freshnessPolicy?: LookupFreshnessPolicyInput;
+    observedAtByEvidence?: Readonly<Record<string, unknown>>;
+  }> = {},
 ): LookupSourceRefreshPlan {
   const ageDays = observedAgeDays(observedAt, now);
-  const stale = ageDays !== null && ageDays >= LOOKUP_SOURCE_STALE_AFTER_DAYS;
+  const freshnessPolicy = buildLookupFreshnessPolicy(options.task ?? 'general', options.freshnessPolicy);
   const entries = ledger.entries.slice(0, 24);
   const plans: LookupSourceRefreshPlanItem[] = [];
   const groups: Array<{
@@ -99,6 +156,7 @@ export function buildLookupSourceRefreshPlan(
     endpoint: LookupSourceRefreshPlanItem['endpoint'];
     ids: ReadonlySet<string>;
     disclosure: string;
+    threshold: keyof LookupFreshnessThresholds;
   }> = [
     {
       id: 'rdap',
@@ -106,6 +164,7 @@ export function buildLookupSourceRefreshPlan(
       endpoint: '/api/rdap',
       ids: new Set(['rdap']),
       disclosure: 'Starts one bounded registry RDAP operation for this target.',
+      threshold: 'registration',
     },
     {
       id: 'whois',
@@ -113,6 +172,7 @@ export function buildLookupSourceRefreshPlan(
       endpoint: '/api/whois',
       ids: new Set(['whois']),
       disclosure: 'Starts one bounded referral-aware WHOIS operation for this target.',
+      threshold: 'registration',
     },
     {
       id: 'availability',
@@ -120,13 +180,25 @@ export function buildLookupSourceRefreshPlan(
       endpoint: '/api/availability',
       ids: DOMAIN_EVIDENCE_IDS,
       disclosure: 'Repeats the bounded domain-evidence branch, including eligible DNS, HTTP, page, and TLS work for the selected depth.',
+      threshold: 'network',
     },
   ];
   for (const group of groups) {
     const evidenceIds = availableIds(entries, group.ids);
     if (!evidenceIds.length) continue;
     const isLimited = limited(entries, group.ids);
-    if (!isLimited && !stale) continue;
+    const thresholds = evidenceIds.map((id) => WEB_EVIDENCE_IDS.has(id)
+      ? freshnessPolicy.thresholdsDays.web
+      : NETWORK_EVIDENCE_IDS.has(id)
+        ? freshnessPolicy.thresholdsDays.network
+        : freshnessPolicy.thresholdsDays[group.threshold]);
+    const staleAfterDays = Math.min(...thresholds);
+    const evidenceAges = evidenceIds
+      .map((id) => observedAgeDays(options.observedAtByEvidence?.[id] ?? observedAt, now))
+      .filter((value): value is number => value !== null);
+    const groupAgeDays = evidenceAges.length ? Math.max(...evidenceAges) : ageDays;
+    const groupStale = groupAgeDays !== null && groupAgeDays >= staleAfterDays;
+    if (!isLimited && !groupStale) continue;
     plans.push({
       id: group.id,
       label: group.label,
@@ -137,17 +209,22 @@ export function buildLookupSourceRefreshPlan(
       supersedesObservedAt: typeof observedAt === 'string' && Number.isFinite(Date.parse(observedAt))
         ? new Date(observedAt).toISOString()
         : null,
+      ageDays: groupAgeDays,
+      staleAfterDays,
     });
   }
+  const stale = plans.some((item) => item.reason === 'stale');
   return {
     version: LOOKUP_SOURCE_REFRESH_VERSION,
     stale,
     ageDays,
+    freshnessPolicy,
     items: plans,
     limitations: [
       'A source refresh is displayed separately and never merged into the original unified Lookup envelope.',
       'Run a complete Lookup before saving, comparing, or exporting replacement evidence collected at one review time.',
       'A retry can remain partial or unavailable and never proves that missing evidence is absent.',
+      'Freshness thresholds organise review only. They do not make an older observation false or a newer observation complete.',
     ],
   };
 }

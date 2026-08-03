@@ -30,7 +30,7 @@ import {
 import { buildLookupInvestigationBrief } from './lookup-investigation-brief.ts';
 import type { LookupTaskView } from './lookup-presentation.ts';
 import type { LookupHttpResponse, LookupViewModel } from './lookup-response.ts';
-import { buildLookupSourceRefreshPlan } from './lookup-source-refresh.ts';
+import { buildLookupSourceRefreshPlan, type LookupFreshnessPolicyInput } from './lookup-source-refresh.ts';
 import { buildLookupSummaryModel } from './lookup-summary-model.ts';
 import { createPageBaseline } from './page-baseline.ts';
 import { comparePageBaselines } from './page-similarity.ts';
@@ -49,6 +49,7 @@ export interface LookupRouteAnalysisInput {
   lookupView: LookupViewModel;
   profile: BrandProfile | null;
   task: LookupTaskView;
+  freshnessPolicy?: LookupFreshnessPolicyInput;
 }
 
 export function latestLookupTimestamp(...values: unknown[]): string | null {
@@ -457,7 +458,16 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     whoisParsed,
     threatIntelligenceProviders,
   });
-  const lookupSourceRefreshPlan = buildLookupSourceRefreshPlan(evidenceCoverage, lookupObservedAt);
+  const lookupSourceRefreshPlan = buildLookupSourceRefreshPlan(
+    evidenceCoverage,
+    lookupObservedAt,
+    new Date().toISOString(),
+    {
+      task,
+      observedAtByEvidence: evidenceObservedAtById,
+      ...(input.freshnessPolicy ? { freshnessPolicy: input.freshnessPolicy } : {}),
+    },
+  );
   const lookupDecisionSupport = buildLookupDecisionSupport({
     task,
     coverage: evidenceCoverage,
