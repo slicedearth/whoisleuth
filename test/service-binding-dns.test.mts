@@ -15,6 +15,7 @@ import type {
   ResolverEndpoint,
   ServiceBindingRecordType,
 } from '../lib/service-binding-dns.mts';
+import { fastCheckParameters } from './helpers/fast-check-config.mts';
 import { requiredValue } from './value-assertions.mts';
 
 type WireAnswer = {
@@ -294,12 +295,12 @@ test('property checks keep arbitrary DNS input deterministic, bounded, and termi
         assert.ok(error.message.length <= 180);
       }
     },
-  ), { numRuns: 600, seed: 9460 });
+  ), fastCheckParameters(600, 9_460));
 });
 
 test('property checks format all 16-byte IPv6 hints as valid addresses', () => {
   fc.assert(fc.property(
     fc.uint8Array({ minLength: 16, maxLength: 16 }),
     (bytes: Uint8Array) => assert.equal(net.isIP(formatIpv6(Buffer.from(bytes))), 6),
-  ), { numRuns: 600, seed: 5952 });
+  ), fastCheckParameters(600, 5_952));
 });

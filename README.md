@@ -188,6 +188,9 @@ Additional offline or bounded maintainer checks include:
 
 ```bash
 npm run schema:inventory
+npm run test:coverage
+npm run test:properties
+npm run test:profile
 npm run registry:fixtures
 npm run benchmark:technology
 npm run technology:fixture-review -- reviewed-input.json

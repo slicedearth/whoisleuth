@@ -12,6 +12,7 @@ import {
   MAX_SCRIPT_ELEMENTS,
   analyzeBrowserLibraries,
 } from '../lib/browser-library-profile.mts';
+import { fastCheckParameters } from './helpers/fast-check-config.mts';
 
 const OBSERVED_AT = '2026-07-27T00:00:00.000Z';
 
@@ -134,6 +135,6 @@ describe('bounded browser-library profile', () => {
         assert.ok(profile.findings.length <= MAX_LIBRARY_FINDINGS);
         assert.doesNotMatch(JSON.stringify(profile), /PRIVATE-/);
       },
-    ), { numRuns: 400, seed: 5952 });
+    ), fastCheckParameters(400, 5_952));
   });
 });

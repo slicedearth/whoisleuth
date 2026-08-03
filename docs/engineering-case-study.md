@@ -182,10 +182,10 @@ query targets and evidence do not.
 The project treats repeatable verification as part of feature design rather
 than a final release activity.
 
-- The Node suite has grown beyond 2,000 tests covering parsers, normalization,
+- The Node suite has grown beyond 2,800 tests covering parsers, normalization,
   malformed input, bounds, deterministic ordering, migrations, scoring,
   security controls, injected transports, and compatibility behavior.
-- More than 190 Chromium Playwright tests cover authentication, responsive and
+- More than 230 Chromium Playwright tests cover authentication, responsive and
   accessible workflows, browser storage, downloads, isolation, and the public
   synthetic demo against a production-style local server.
 - Browser tests actively block off-origin requests and use fixtures, reserved
@@ -196,8 +196,10 @@ than a final release activity.
   browser specifications, and the pre-render theme bootstrap. Svelte checks
   and a production build cover the component and generated-asset boundaries.
 - CI runs the locked install, production dependency audit, and complete
-  verification pyramid on every push and pull request, retaining Playwright
-  artifacts only when a run fails.
+  verification pyramid on every push and pull request. It retains production
+  source coverage, bounded Playwright result summaries, and failure-only browser
+  artifacts for diagnosis. A scheduled lane expands property checks and records
+  duration profiles without contacting live sources.
 
 The CI badge and latest workflow run are authoritative as the suite continues
 to grow.

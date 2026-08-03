@@ -18,6 +18,7 @@ import {
   buildFirstUseStudyReport,
   buildFirstUseStudySessionTemplate,
 } from '../tools/first-use-analyst-study.mts';
+import { fastCheckParameters } from './helpers/fast-check-config.mts';
 
 function fingerprint(value: Uint8Array): string {
   return Buffer.from(value).toString('hex');
@@ -45,7 +46,7 @@ describe('evidence-quality contract properties', () => {
         assert.equal(parsed.fingerprints.length, new Set(parsed.fingerprints).size);
         assert.match(parsed.entriesDigestSha256, /^[a-f0-9]{64}$/u);
       },
-    ), { numRuns: 80 });
+    ), fastCheckParameters(80));
   });
 
   test('reconstructs a complete progress contract across arbitrary UTF-8 chunk boundaries', () => {
@@ -82,7 +83,7 @@ describe('evidence-quality contract properties', () => {
         decoder.finish();
         assert.deepEqual(reducer.finish(), final);
       },
-    ), { numRuns: 100 });
+    ), fastCheckParameters(100));
   });
 
   test('rejects arbitrary undocumented first-use session fields', () => {
@@ -97,6 +98,6 @@ describe('evidence-quality contract properties', () => {
           /documented fields/iu,
         );
       },
-    ), { numRuns: 50 });
+    ), fastCheckParameters(50));
   });
 });

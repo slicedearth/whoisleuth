@@ -12,6 +12,10 @@ const STRESS_WORKFLOW = fs.readFileSync(
   path.join(__dirname, '..', '.github', 'workflows', 'e2e-stress.yml'),
   'utf8',
 );
+const TEST_HEALTH_WORKFLOW = fs.readFileSync(
+  path.join(__dirname, '..', '.github', 'workflows', 'test-health.yml'),
+  'utf8',
+);
 const PLAYWRIGHT_CONFIG = fs.readFileSync(
   path.join(__dirname, '..', 'playwright.config.ts'),
   'utf8',
@@ -72,6 +76,7 @@ describe('continuous integration workflow', () => {
       'actions/setup-node',
       'actions/checkout',
       'actions/setup-node',
+      'actions/upload-artifact',
       'actions/checkout',
       'actions/setup-node',
       'actions/upload-artifact',
@@ -82,18 +87,20 @@ describe('continuous integration workflow', () => {
       'npm run release:check',
       'npm run licenses:check',
       'npm audit --omit=dev',
-      'npm test',
+      'npm run test:coverage',
       'npm run typecheck',
       'npm run check',
       'npm run build',
       'npm run frontend:loading-report',
       'npm run security:retire',
       'npm run test:e2e -- --shard=${{ matrix.shard }}',
+      'npm run test:e2e:summary',
     ]) {
       assert.match(WORKFLOW, new RegExp(`^\\s+run: ${escapeRegExp(command)}$`, 'mu'));
     }
     assert.match(WORKFLOW, /^\s{10}- shard: 1\/2\s*\n\s{12}label: 1-of-2\s*\n\s{10}- shard: 2\/2\s*\n\s{12}label: 2-of-2$/mu);
     assert.match(WORKFLOW, /^\s{10}path: playwright-results\.json$/mu);
+    assert.match(WORKFLOW, /^\s{10}path: test-coverage\.lcov$/mu);
     assert.match(WORKFLOW, /^\s{10}retention-days: 7$/mu);
   });
 
@@ -118,6 +125,7 @@ describe('continuous integration workflow', () => {
     assert.match(STRESS_WORKFLOW, /^permissions:\s*\n\s{2}contents: read$/mu);
     assert.doesNotMatch(STRESS_WORKFLOW, /\b(?:contents|issues|pull-requests|actions): write\b/u);
     assert.match(STRESS_WORKFLOW, /^\s+run: npm run test:e2e:stress$/mu);
+    assert.match(STRESS_WORKFLOW, /^\s+run: npm run test:e2e:summary$/mu);
     assert.equal(
       PACKAGE_MANIFEST.scripts?.['test:e2e:stress'],
       'playwright test --grep @timing-sensitive --workers=1 --retries=0 --repeat-each=10',
@@ -128,6 +136,25 @@ describe('continuous integration workflow', () => {
       'actions/checkout',
       'actions/setup-node',
       'actions/upload-artifact',
+      'actions/upload-artifact',
+    ]);
+    for (const { revision } of actions) assert.match(revision, /^[a-f0-9]{40}$/u);
+  });
+
+  test('runs expanded property checks and duration profiling on a bounded schedule', () => {
+    assert.match(TEST_HEALTH_WORKFLOW, /^\s{2}schedule:\s*\n\s{4}- cron: '43 3 \* \* 3'\s*\n\s{2}workflow_dispatch:$/mu);
+    assert.match(TEST_HEALTH_WORKFLOW, /^permissions:\s*\n\s{2}contents: read$/mu);
+    assert.doesNotMatch(TEST_HEALTH_WORKFLOW, /\b(?:contents|issues|pull-requests|actions): write\b/u);
+    assert.match(TEST_HEALTH_WORKFLOW, /^\s{10}WHOISLEUTH_FAST_CHECK_RUN_MULTIPLIER: '10'$/mu);
+    assert.match(TEST_HEALTH_WORKFLOW, /^\s{10}WHOISLEUTH_FAST_CHECK_SEED: \$\{\{ github\.run_number \}\}$/mu);
+    assert.match(TEST_HEALTH_WORKFLOW, /^\s+run: npm run test:properties$/mu);
+    assert.match(TEST_HEALTH_WORKFLOW, /npm run test:profile \| tee test-duration-report\.txt/u);
+    assert.match(TEST_HEALTH_WORKFLOW, /^\s{10}path: test-duration-report\.txt$/mu);
+    assert.equal(occurrences(TEST_HEALTH_WORKFLOW, /^\s{10}persist-credentials: false$/gmu), 1);
+    const actions = pinnedActions(TEST_HEALTH_WORKFLOW);
+    assert.deepEqual(actions.map(({ action }) => action), [
+      'actions/checkout',
+      'actions/setup-node',
       'actions/upload-artifact',
     ]);
     for (const { revision } of actions) assert.match(revision, /^[a-f0-9]{40}$/u);
