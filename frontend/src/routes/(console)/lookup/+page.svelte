@@ -27,6 +27,7 @@
   import LookupPageIdentity from '$lib/components/LookupPageIdentity.svelte';
   import LookupPageRoleBehavior from '$lib/components/LookupPageRoleBehavior.svelte';
   import LookupRegistrySources from '$lib/components/LookupRegistrySources.svelte';
+  import RegistrationDisclosurePlanner from '$lib/components/RegistrationDisclosurePlanner.svelte';
   import LookupResultHeader from '$lib/components/LookupResultHeader.svelte';
   import LookupPresentationControls from '$lib/components/LookupPresentationControls.svelte';
   import LookupSecurityPosture from '$lib/components/LookupSecurityPosture.svelte';
@@ -704,6 +705,17 @@
         insights={registryInsights}
         registrar={registryDisplay.registrarRdap}
       /></div>
+
+      {#if result.type==='domain' && Array.isArray(rdapParsed.redactions) && rdapParsed.redactions.length}
+        <div class="evidence-component"><RegistrationDisclosurePlanner
+          domain={caseDomain}
+          observedAt={lookupObservedAt}
+          registryRdapEndpoint={boundedTechnologyText(rdap.endpoint,2048)}
+          {rdapParsed}
+          registrar={registryDisplay.registrarRdap}
+          caseReference={caseRecord?.id ?? ''}
+        /></div>
+      {/if}
 
       {#if observedNetworkContext.contextVersion===1}
         <div class="evidence-component" id="evidence-network"><LookupNetworkContext

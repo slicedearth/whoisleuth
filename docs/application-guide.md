@@ -1034,6 +1034,14 @@ observations, or compact case history.
   hosting/network, security-contact, browser/blocklist, or internal-SOC review.
   JSON, Markdown, and email-text outputs remain local, require review, and do
   not submit anything.
+- When Registry RDAP declares redacted fields, use the disclosure planner to
+  build a minimized JSON review packet from those bounded declarations and a
+  separate analyst-authored purpose, justification, requested-field selection,
+  and case reference. Its preflight requires review of available public
+  evidence, data minimisation, affected-party rights, and the current request
+  route. It excludes raw RDAP, raw WHOIS, and discovered personal contacts,
+  does not determine requester entitlement or registrar participation, and
+  never submits a request.
 - Defensive domain lists require an explicit reviewed selection and eligible
   analyst disposition. Review their exclusions, expiry, provenance manifest,
   and paired rollback instructions before applying them. Wildcard RPZ coverage

@@ -89,6 +89,22 @@ test('bounded RDAP contact roles and repeated channels render in Lookup', async 
   await comparison.locator('summary').click();
   await expect(comparison.getByText('WHOIS incomplete').first()).toBeVisible();
 
+  const disclosurePlanner = page.locator('details.disclosure-planner');
+  await expect(disclosurePlanner).not.toHaveAttribute('open', '');
+  await disclosurePlanner.locator(':scope > summary').click();
+  await expect(disclosurePlanner.getByText(/1 structured redaction declaration observed/)).toBeVisible();
+  await expect(disclosurePlanner.getByRole('button', { name: 'Export review packet' })).toBeDisabled();
+  await disclosurePlanner.getByLabel('Request purpose').selectOption('cybersecurity-investigation');
+  await disclosurePlanner.getByLabel('Analyst justification').fill('The selected contact is necessary to review a documented domain impersonation incident.');
+  await disclosurePlanner.getByLabel('Registrant email').check();
+  await disclosurePlanner.getByLabel(/Available public registration evidence/).check();
+  await disclosurePlanner.getByLabel(/Every requested field is necessary/).check();
+  await disclosurePlanner.getByLabel(/Privacy and rights impacts/).check();
+  await disclosurePlanner.getByLabel(/Current service eligibility/).check();
+  await expect(disclosurePlanner.getByText('review cautions')).toBeVisible();
+  await expect(disclosurePlanner.getByRole('button', { name: 'Export review packet' })).toBeEnabled();
+  await expect(disclosurePlanner.getByRole('link', { name: 'Review current service information' })).toHaveAttribute('href', 'https://www.icann.org/rdrs-en/');
+
   await page.setViewportSize({ width: 390, height: 844 });
   await expectNoHorizontalOverflow(page);
 });
@@ -177,7 +193,7 @@ test('deep Lookup presents registrar and observed network RDAP as separate sourc
   await page.getByRole('button', { name: 'Run lookup' }).click();
 
   const evidenceQuality = page.locator('#evidence-quality');
-  await evidenceQuality.locator('summary').click();
+  await evidenceQuality.locator(':scope > summary').click();
   await expect(evidenceQuality).not.toContainText('Observation time unavailable');
 
   const agreementMatrix = page.locator('.agreement-matrix');
