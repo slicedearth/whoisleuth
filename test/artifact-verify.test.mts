@@ -84,6 +84,34 @@ describe('offline artifact verifier', () => {
     );
   });
 
+  test('validates saved Lookup structure without claiming content integrity', async () => {
+    const lookup = {
+      schema: 'whoisleuth.cli.lookup',
+      version: 1,
+      generatedAt: '2026-07-15T00:00:00.000Z',
+      mode: 'fast',
+      query: 'example.test',
+      type: 'domain',
+      registrableDomain: 'example.test',
+      diagnostics: {
+        rdap: { status: 'success' },
+        whois: { status: 'skipped' },
+      },
+      rdap: { parsed: { domain: 'EXAMPLE.TEST' } },
+    };
+    const report = await verifyOfflineArtifact(JSON.stringify(lookup));
+    assert.equal(report.artifact.kind, 'saved_lookup');
+    assert.equal(report.state, 'structure_valid');
+    assert.equal(report.checks.structure, 'verified');
+    assert.equal(report.checks.contentIntegrity, 'not_checked');
+    assert.match(report.limitations[0] || '', /no embedded checksum or signature/u);
+
+    await assert.rejects(
+      verifyOfflineArtifact(JSON.stringify({ ...lookup, diagnostics: { rdap: { status: 'success' }, whois: { status: 'complete' } } })),
+      /missing normalized parsed data/iu,
+    );
+  });
+
   test('rejects unsupported, malformed, and oversized input', async () => {
     await assert.rejects(verifyOfflineArtifact('{'), /not valid JSON/iu);
     await assert.rejects(

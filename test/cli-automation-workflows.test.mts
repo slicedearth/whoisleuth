@@ -90,7 +90,7 @@ describe('CLI automation arguments', () => {
     });
     assert.deepEqual(parseCliArguments(['lookup', 'example.test', '--strict-exit', '--output', 'result.json', '--force']), {
       action: 'lookup', query: 'example.test', output: 'terminal', deep: false, detail: 'standard', strictExit: true,
-      events: false, quiet: false, color: true, destination: 'result.json', force: true,
+      events: false, plan: false, quiet: false, color: true, destination: 'result.json', force: true,
     });
     assert.deepEqual(parseCliArguments(['bulk', '--checkpoint', 'bulk.json', '--resume', '--events']), {
       action: 'bulk', source: null, output: 'terminal', deep: false, quiet: false, color: true, concurrency: 4,

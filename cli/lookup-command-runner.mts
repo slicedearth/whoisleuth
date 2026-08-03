@@ -9,6 +9,7 @@ import { formatLookupEvidenceHtml } from './formatters/html.mts';
 import { buildCliLookupDocument, formatJsonDocument } from './formatters/json.mts';
 import { formatLookupEvidenceMarkdown } from './formatters/markdown.mts';
 import { formatTerminalLookup } from './formatters/terminal.mts';
+import { buildCliLookupPlan, formatCliLookupPlan } from './lookup-plan.mts';
 import { createCliProgressEvents } from './progress-events.mts';
 import type { CliCommandContext, CliDependencies } from './runner-types.mts';
 import type { UnknownRecord } from './saved-lookup.mts';
@@ -40,6 +41,14 @@ async function runLookupCommand(
   }
   if ((args.output === 'markdown' || args.output === 'html') && classified.type !== 'domain') {
     throw new CliUsageError('Markdown and HTML reports support domain lookups only.');
+  }
+
+  if (args.plan) {
+    const plan = buildCliLookupPlan(query, classified, args.deep);
+    context.writeStdout(args.output === 'json'
+      ? formatJsonDocument(plan)
+      : context.terminal(formatCliLookupPlan(plan), args.color));
+    return EXIT_CODES.SUCCESS;
   }
 
   const indicator = context.beginProgress(args.deep

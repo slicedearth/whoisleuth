@@ -49,6 +49,7 @@ Contributors can run the same source command without installing the package:
 node bin/whoisleuth.mts --help
 node bin/whoisleuth.mts lookup example.test
 node bin/whoisleuth.mts lookup example.test --deep --summary
+node bin/whoisleuth.mts lookup example.test --deep --plan --json
 node bin/whoisleuth.mts lookup example.test --deep --markdown --output lookup.md
 node bin/whoisleuth.mts bulk domains.txt --deep --checkpoint bulk-checkpoint.json
 node bin/whoisleuth.mts bulk domains.txt --csv --registered-only
@@ -61,6 +62,7 @@ node bin/whoisleuth.mts diff first-lookup.json second-lookup.json --json
 node bin/whoisleuth.mts timeline first-observation.json second-observation.json latest-observation.json --json
 node bin/whoisleuth.mts registry-support example.test --json
 node bin/whoisleuth.mts doctor
+node bin/whoisleuth.mts commands --json
 node bin/whoisleuth.mts completion zsh
 node bin/whoisleuth.mts completion powershell
 node bin/whoisleuth.mts manual | man -l -
@@ -70,6 +72,9 @@ Fast lookup is the default. Deep collection must be requested explicitly and
 can disclose the target to additional authoritative or first-party network
 sources. Missing, partial, rate-limited, and unsupported sources remain
 explicit and are never interpreted as evidence of safety or absence.
+`lookup --plan` classifies a target and explains the selected source families
+and disclosures without making a network request. `commands --json` exposes the
+installed command contracts for local wrappers without running collection.
 Focused command help and the generated manual label every operation as offline
 or networked and state its target, input, and concurrency boundaries. The
 packaged [dual-use disclosure](DISCLOSURE) defines the supported defensive use

@@ -2,7 +2,7 @@ import { CLI_COMMANDS, type CompletionShell } from './arguments.mts';
 
 const COMMON_OPTIONS = Object.freeze(['--help', '--output', '--force']);
 const OPTIONS_BY_COMMAND: Readonly<Record<string, readonly string[]>> = Object.freeze({
-  lookup: ['--json', '--markdown', '--html', '--fast', '--deep', '--summary', '--verbose', '--strict-exit', '--events', '--quiet', '--no-color'],
+  lookup: ['--json', '--markdown', '--html', '--fast', '--deep', '--plan', '--summary', '--verbose', '--strict-exit', '--events', '--quiet', '--no-color'],
   bulk: ['--json', '--jsonl', '--csv', '--domains', '--queries', '--registered-only', '--inconclusive-only', '--errors-only', '--fast', '--deep', '--concurrency', '--checkpoint', '--resume', '--events', '--quiet', '--no-color'],
   'ct-search': ['--json', '--quiet', '--no-color'],
   discover: ['--tlds', '--preset', '--families', '--keyboard', '--dictionary', '--snapshot', '--json', '--jsonl', '--domains', '--quiet', '--no-color'],
@@ -24,6 +24,7 @@ const OPTIONS_BY_COMMAND: Readonly<Record<string, readonly string[]>> = Object.f
   timeline: ['--json', '--quiet', '--no-color'],
   export: ['--markdown', '--html', '--compact'],
   completion: [],
+  commands: ['--json', '--quiet', '--no-color'],
   doctor: ['--network', '--json', '--quiet', '--no-color'],
   manual: [],
 });
@@ -39,7 +40,7 @@ const COMMAND_DESCRIPTIONS: Readonly<Record<string, string>> = Object.freeze({
   tls: 'Inspect one TLS connection',
   'registry-support': 'Explain local registry coverage',
   'risk-calibrate': 'Replay reviewed Risk labels offline',
-  'verify-artifact': 'Validate an evidence artifact offline',
+  'verify-artifact': 'Validate saved evidence offline',
   'inspect-archive': 'Inspect an archive locally',
   'sign-artifact': 'Sign a reviewed artifact locally',
   'verify-signature': 'Verify a signed evidence package',
@@ -51,6 +52,7 @@ const COMMAND_DESCRIPTIONS: Readonly<Record<string, string>> = Object.freeze({
   timeline: 'Build same-domain history from saved lookups',
   export: 'Convert a lookup to an evidence report',
   completion: 'Print shell completion',
+  commands: 'List installed command contracts',
   doctor: 'Check the local CLI runtime',
   manual: 'Print the generated manual page',
 });

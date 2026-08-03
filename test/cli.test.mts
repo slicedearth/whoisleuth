@@ -43,11 +43,11 @@ function classifiedDomain(value: string, inputHostname = value): ClassifiedQuery
 
 describe('CLI argument parsing', () => {
   test('defaults lookup to fast terminal output', () => {
-    assert.deepEqual(parseCliArguments(['lookup', 'example.com']), { action: 'lookup', query: 'example.com', output: 'terminal', deep: false, detail: 'standard', strictExit: false, events: false, quiet: false, color: true });
+    assert.deepEqual(parseCliArguments(['lookup', 'example.com']), { action: 'lookup', query: 'example.com', output: 'terminal', deep: false, detail: 'standard', strictExit: false, events: false, plan: false, quiet: false, color: true });
   });
 
   test('accepts explicit deep JSON output and bounded stdin mode', () => {
-    assert.deepEqual(parseCliArguments(['lookup', '--deep', '--json', '--no-color']), { action: 'lookup', query: null, output: 'json', deep: true, detail: 'standard', strictExit: false, events: false, quiet: false, color: false });
+    assert.deepEqual(parseCliArguments(['lookup', '--deep', '--json', '--no-color']), { action: 'lookup', query: null, output: 'json', deep: true, detail: 'standard', strictExit: false, events: false, plan: false, quiet: false, color: false });
   });
 
   test('rejects unknown commands, options, conflicting modes, and multiple queries', () => {
@@ -71,6 +71,7 @@ describe('CLI argument parsing', () => {
       detail: 'summary',
       strictExit: false,
       events: false,
+      plan: false,
       quiet: false,
       color: true,
     });
@@ -82,6 +83,7 @@ describe('CLI argument parsing', () => {
       detail: 'verbose',
       strictExit: false,
       events: false,
+      plan: false,
       quiet: false,
       color: true,
     });
@@ -93,8 +95,12 @@ describe('CLI argument parsing', () => {
     assert.deepEqual(parseCliArguments(['doctor', '--network', '--json']), {
       action: 'doctor', network: true, output: 'json', quiet: false, color: true,
     });
+    assert.deepEqual(parseCliArguments(['commands', '--json']), {
+      action: 'commands', output: 'json', quiet: false, color: true,
+    });
     assert.throws(() => parseCliArguments(['completion', 'nushell']), /bash, zsh, fish, or powershell/u);
     assert.throws(() => parseCliArguments(['doctor', '--network', '--network']), /only once/u);
+    assert.throws(() => parseCliArguments(['lookup', 'example.test', '--plan', '--events']), /cannot be combined/u);
   });
 
   test('help and version actions never require a command', () => {
@@ -123,6 +129,22 @@ describe('CLI argument parsing', () => {
     assert.match(commandStdout.value(), /Boundary:\n  Fast is the default\./u);
     assert.doesNotMatch(commandStdout.value(), /whoisleuth bulk/u);
     assert.equal(stderr.value(), '');
+  });
+
+  test('prints a versioned command catalogue for local tooling', async () => {
+    const stdout = capture();
+    const stderr = capture();
+    const code = await runCli(['commands', '--json'], { stdout: stdout.stream, stderr: stderr.stream });
+    assert.equal(code, EXIT_CODES.SUCCESS);
+    assert.equal(stderr.value(), '');
+    const catalogue = JSON.parse(stdout.value());
+    assert.equal(catalogue.schema, 'whoisleuth.cli.command-catalogue');
+    assert.equal(catalogue.version, 1);
+    assert.ok(catalogue.commands.length >= 25);
+    const lookup = catalogue.commands.find((entry: { command: string }) => entry.command === 'lookup');
+    assert.equal(lookup.collection.mode, 'network');
+    assert.match(lookup.usage, /--plan/u);
+    assert.match(lookup.boundary, /Fast is the default/u);
   });
 
   test('parses bounded offline artifact verification inputs', () => {
@@ -278,6 +300,30 @@ describe('CLI lookup runner', () => {
     assert.equal(lookupCalled, true);
     assert.match(stdout.value(), /Type\s+asn/);
     assert.match(stdout.value(), /Mode\s+Deep/);
+  });
+
+  test('lookup preflight makes no network request and preserves conditional disclosures', async () => {
+    const stdout = capture();
+    const stderr = capture();
+    let lookupCalled = false;
+    const code = await runCli(['lookup', 'login.example.test', '--deep', '--plan', '--json'], {
+      stdout: stdout.stream,
+      stderr: stderr.stream,
+      runUnifiedLookup: async () => { lookupCalled = true; return {}; },
+    });
+    assert.equal(code, EXIT_CODES.SUCCESS);
+    assert.equal(lookupCalled, false);
+    assert.equal(stderr.value(), '');
+    const plan = JSON.parse(stdout.value());
+    assert.equal(plan.schema, 'whoisleuth.cli.lookup-plan');
+    assert.equal(plan.mode, 'deep');
+    assert.equal(plan.target.normalized, 'example.test');
+    assert.equal(plan.target.inputHostname, 'login.example.test');
+    assert.equal(plan.planning.networkRequestsMade, false);
+    assert.deepEqual(plan.planning.sources.map((source: { source: string }) => source.source), [
+      'rdap', 'whois', 'domain_evidence', 'registrar_rdap', 'network_context',
+    ]);
+    assert.equal(plan.planning.sources.find((source: { source: string }) => source.source === 'registrar_rdap').conditional, true);
   });
 
   test('invalid input is a usage error and never calls lookup', async () => {

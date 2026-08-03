@@ -10,6 +10,7 @@ import { explainRiskScore, RISK_MODEL_VERSION, RISK_REVIEW_THRESHOLD } from '../
 import { CLI_COMMANDS, parseCliArguments } from './arguments.mts';
 import type { CliArguments, CliCommand } from './arguments.mts';
 import { runBulkCommand } from './bulk-command-runner.mts';
+import { buildCliCommandCatalogue, formatCliCommandCatalogue } from './command-catalogue.mts';
 import { buildShellCompletion } from './completion.mts';
 import { buildDoctorReport, formatDoctorReport } from './doctor.mts';
 import type { BoundedTextStream } from './bulk.mts';
@@ -118,7 +119,7 @@ Review saved evidence:
   timeline           Compare a sequence of observations for one domain.
   export             Convert a saved lookup into an evidence report.
   inspect-archive    Inspect a workspace archive, redacted by default.
-  verify-artifact    Validate an archive, packet, or manifest offline.
+  verify-artifact    Validate saved evidence or an integrity envelope offline.
 
 Integrity and calibration:
   sign-artifact      Sign one reviewed packet or manifest locally.
@@ -127,6 +128,7 @@ Integrity and calibration:
 
 Terminal:
   doctor             Check the local runtime; network tests require --network.
+  commands           List command contracts for people or local tooling.
   completion         Print completion for bash, zsh, fish, or PowerShell.
   manual             Print the generated manual page.
 
@@ -142,8 +144,9 @@ Source and licence: https://github.com/slicedearth/whoisleuth
 const COMMAND_USAGE: Readonly<Record<CliCommand, string>> = Object.freeze({
   completion: 'whoisleuth completion <bash|zsh|fish|powershell>',
   doctor: 'whoisleuth doctor [--network] [--json] [--quiet] [--no-color]',
+  commands: 'whoisleuth commands [--json] [--quiet] [--no-color]',
   manual: 'whoisleuth manual',
-  lookup: 'whoisleuth lookup <domain|IP|ASN> [--json|--markdown|--html] [--fast|--deep] [--summary|--verbose] [--strict-exit] [--events] [--quiet] [--no-color]',
+  lookup: 'whoisleuth lookup <domain|IP|ASN> [--json|--markdown|--html] [--fast|--deep] [--plan] [--summary|--verbose] [--strict-exit] [--events] [--quiet] [--no-color]',
   bulk: 'whoisleuth bulk [file] [--json|--jsonl|--csv|--domains|--queries] [--registered-only|--inconclusive-only|--errors-only] [--fast|--deep] [--concurrency <1-8>] [--checkpoint <file> [--resume]] [--events]',
   'ct-search': 'whoisleuth ct-search <keyword> [--json] [--quiet] [--no-color]',
   discover: 'whoisleuth discover <brand|domain> [--tlds <list>] [--preset <name>|--families <ids>] [--keyboard <layout>] [--dictionary <file>] [--snapshot <file>] [--json|--jsonl|--domains]',
@@ -176,6 +179,11 @@ const COMMAND_DETAILS: Readonly<Record<CliCommand, Readonly<{ description: strin
     description: 'Check the supported runtime and local terminal capabilities.',
     example: 'whoisleuth doctor --json',
     boundary: 'The default check is offline. Public DNS and port 43 checks run only when --network is explicitly supplied.',
+  },
+  commands: {
+    description: 'List the installed command contracts in terminal or versioned JSON form.',
+    example: 'whoisleuth commands --json',
+    boundary: 'Catalogue generation is offline. It reports declared command modes and limits without executing collection or inspecting local evidence.',
   },
   manual: {
     description: 'Print a generated roff manual page for local installation.',
@@ -233,7 +241,7 @@ const COMMAND_DETAILS: Readonly<Record<CliCommand, Readonly<{ description: strin
     boundary: 'Calibration is offline and diagnostic. It never trains, tunes, or changes the scoring model automatically.',
   },
   'verify-artifact': {
-    description: 'Validate a supported archive, packet, or manifest without printing evidence contents.',
+    description: 'Validate a supported archive, packet, manifest, or saved Lookup without printing evidence contents.',
     example: 'whoisleuth verify-artifact workspace.json --json',
     boundary: 'Verification is offline and redacted. Encrypted archives require an explicitly supplied passphrase file.',
   },
@@ -295,6 +303,7 @@ const COMMAND_COLLECTION: Readonly<Record<CliCommand, Readonly<{
 }>>> = Object.freeze({
   completion: { mode: 'offline', scope: 'Prints one static script and changes no shell configuration.' },
   doctor: { mode: 'network', scope: 'Network access is opt-in with --network and is limited to fixed public DNS, HTTPS, and WHOIS diagnostics.' },
+  commands: { mode: 'offline', scope: 'Reads the embedded command catalogue and performs no collection.' },
   manual: { mode: 'offline', scope: 'Builds documentation from the embedded command catalogue.' },
   lookup: { mode: 'network', scope: 'Accepts one target. Fast is the default; deep collection must be selected explicitly.' },
   bulk: { mode: 'network', scope: 'Accepts at most 500 fast or 50 deep targets, with concurrency capped at 8 fast or 3 deep.' },
@@ -306,7 +315,7 @@ const COMMAND_COLLECTION: Readonly<Record<CliCommand, Readonly<{
   tls: { mode: 'network', scope: 'Accepts one public hostname and opens one bounded certificate connection.' },
   'registry-support': { mode: 'offline', scope: 'Reads the embedded registry capability catalogue for one domain or suffix.' },
   'risk-calibrate': { mode: 'offline', scope: 'Reads one bounded reviewed-label dataset and changes no model or evidence.' },
-  'verify-artifact': { mode: 'offline', scope: 'Reads one selected bounded archive, packet, or manifest.' },
+  'verify-artifact': { mode: 'offline', scope: 'Reads one selected bounded archive, packet, manifest, or saved Lookup document.' },
   'inspect-archive': { mode: 'offline', scope: 'Reads one selected bounded workspace archive with redacted output by default.' },
   'sign-artifact': { mode: 'offline', scope: 'Reads one selected artifact and one local private key without transmitting either.' },
   'verify-signature': { mode: 'offline', scope: 'Reads one selected signed package and optional local public key.' },
@@ -435,6 +444,20 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
 
     if (args.action === 'completion') {
       write(stdout, buildShellCompletion(args.shell));
+      return EXIT_CODES.SUCCESS;
+    }
+
+    if (args.action === 'commands') {
+      const catalogue = buildCliCommandCatalogue({
+        commands: CLI_COMMANDS,
+        collections: COMMAND_COLLECTION,
+        details: COMMAND_DETAILS,
+        usage: COMMAND_USAGE,
+        packageVersion: VERSION,
+      });
+      if (!args.quiet) write(stdout, args.output === 'json'
+        ? formatJsonDocument(catalogue)
+        : terminal(formatCliCommandCatalogue(catalogue), args.color));
       return EXIT_CODES.SUCCESS;
     }
 

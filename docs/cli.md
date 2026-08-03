@@ -8,7 +8,9 @@ hosted WHOISleuth deployment.
 source location. It groups commands by investigation, discovery, saved-evidence,
 integrity, and calibration workflows. `whoisleuth <command> --help` displays the
 command's purpose, focused invocation, example, and collection boundary without
-printing the full command list. Packaged copies include `LICENSE`, `NOTICE`, and
+printing the full command list. `whoisleuth commands --json` exposes those same
+contracts as a stable local catalogue for wrappers and terminal tooling.
+Packaged copies include `LICENSE`, `NOTICE`, and
 `TRADEMARKS.md` alongside the CLI documentation.
 
 ## Installation
@@ -41,6 +43,7 @@ node bin/whoisleuth.mts lookup example.com
 node bin/whoisleuth.mts lookup AS13335 --json
 printf 'example.com\n' | node bin/whoisleuth.mts lookup --json
 node bin/whoisleuth.mts lookup example.com --deep
+node bin/whoisleuth.mts lookup example.com --deep --plan --json
 node bin/whoisleuth.mts lookup example.com --deep --summary
 node bin/whoisleuth.mts lookup example.com --deep --verbose
 node bin/whoisleuth.mts lookup example.com --deep --markdown --output lookup.md
@@ -63,6 +66,7 @@ node bin/whoisleuth.mts tls example.com --json
 node bin/whoisleuth.mts registry-support example.uk --json
 node bin/whoisleuth.mts risk-calibrate calibration.json --json
 node bin/whoisleuth.mts verify-artifact workspace.json --json
+node bin/whoisleuth.mts verify-artifact lookup.json --json
 node bin/whoisleuth.mts verify-artifact workspace-encrypted.json --passphrase-file passphrase.txt --json
 node bin/whoisleuth.mts source-report lookup.json --json
 node bin/whoisleuth.mts inspect-archive workspace.json --json
@@ -80,6 +84,7 @@ node bin/whoisleuth.mts export lookup.json --markdown > evidence.md
 node bin/whoisleuth.mts export lookup.json --html > evidence.html
 node bin/whoisleuth.mts doctor
 node bin/whoisleuth.mts doctor --network --json
+node bin/whoisleuth.mts commands --json
 node bin/whoisleuth.mts completion zsh
 node bin/whoisleuth.mts completion powershell
 node bin/whoisleuth.mts manual | man -l -
@@ -117,6 +122,14 @@ up to five normalized PTR names; JSON retains up to eight. PTR names are
 operator-published routing context, not proof of hosting control or ownership.
 Fast lookups do not run this query.
 
+`lookup --plan` performs classification and prints a versioned preflight without
+starting collection. It lists the normalized target, selected fast or deep
+mode, planned source families, conditional operations, and the data each family
+may receive. The plan cannot predict live feature configuration, cache state,
+redirects, referrals, source availability, or an exact request count. It can be
+combined with `--json`, but not with report, detail, strict-exit, progress-event,
+or quiet options.
+
 Only one query is accepted by `lookup`. Multiple-input processing belongs to
 the explicit `bulk` command rather than being silently inferred by `lookup`.
 Standard input is capped at 4 KiB and must contain one non-empty line.
@@ -142,6 +155,13 @@ before sourcing it or placing it in the relevant shell completion directory.
 `manual` prints a generated roff manual page and likewise changes no local
 configuration.
 
+`commands` prints the installed command catalogue without running collection or
+reading evidence. `commands --json` emits version 1 of the
+`whoisleuth.cli.command-catalogue` schema, including each command's usage,
+example, declared collection mode, collection scope, and boundary. This is the
+supported discovery contract for local wrappers; it is not a permission grant
+or a substitute for focused help.
+
 Focused command help and the generated manual classify every operation as
 offline or networked and state the relevant target, input, and concurrency
 ceiling. These labels describe observable behavior rather than granting
@@ -162,7 +182,7 @@ so directly from the machine running the CLI. They do not use the hosted login,
 hosted session, or deployment usage controls; upstream providers can see and
 rate-limit the local machine's network address. Offline `discover`, `compare`,
 `page-compare`, `mail-review`, `diff`, `timeline`, `risk-calibrate`, `verify-artifact`, `source-report`, `export`,
-`completion`, and `manual` operations make no network requests. Commands write
+`commands`, `completion`, and `manual` operations make no network requests. Commands write
 to stdout unless the analyst deliberately selects a local output file.
 
 ## Output
@@ -318,7 +338,7 @@ machine access is not evidence that a domain is unregistered or safe.
 This release supports `lookup`, `bulk`, `ct-search`, `discover`, `discover-scan`, `posture`,
 `http`, `tls`, `registry-support`, `risk-calibrate`, `verify-artifact`,
 `inspect-archive`, `sign-artifact`, `verify-signature`, `source-report`,
-`compare`, `page-compare`, `mail-review`, `diff`, `timeline`, `export`, `doctor`, `completion`, and `manual`. Additional command families
+`compare`, `page-compare`, `mail-review`, `diff`, `timeline`, `export`, `doctor`, `commands`, `completion`, and `manual`. Additional command families
 are added as separate bounded increments rather than exposing incomplete
 aliases.
 
@@ -417,7 +437,11 @@ Risk model.
 evidence contents. Input is capped at 15 MiB. It currently recognises ordinary
 and encrypted workspace archives, case-response packets, acquisition-decision
 exports, domain-comparison exports, Bulk mail-exposure exports, and Bulk review
-manifests.
+manifests. It also validates the bounded versioned structure of saved CLI
+Lookup JSON. Because saved Lookup documents do not embed a checksum or
+signature, that result is reported as `structure_valid` with content integrity
+explicitly unchecked. Saved Lookup validation retains its stricter 8 MiB
+document ceiling.
 
 For an ordinary workspace archive, the command validates the versioned
 structure, section byte counts, record counts, and per-section checksums. For a

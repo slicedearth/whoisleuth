@@ -32,6 +32,11 @@ import {
   readWorkspaceArchive,
 } from '../frontend/src/lib/analysis/workspace-archive.ts';
 import { sha256ArtifactDigest } from '../frontend/src/lib/analysis/artifact-integrity.ts';
+import {
+  SAVED_LOOKUP_SCHEMA,
+  SAVED_LOOKUP_SCHEMA_VERSION,
+  parseSavedLookupDocument,
+} from './saved-lookup.mts';
 
 export const OFFLINE_ARTIFACT_VERIFICATION_SCHEMA = 'whoisleuth.offline-artifact-verification';
 export const OFFLINE_ARTIFACT_VERIFICATION_VERSION = 1;
@@ -42,8 +47,9 @@ type ArtifactKind =
   | 'workspace_archive'
   | 'encrypted_workspace_archive'
   | 'case_response_packet'
+  | 'saved_lookup'
   | 'signed_review_artifact';
-type VerificationState = 'verified' | 'envelope_valid';
+type VerificationState = 'verified' | 'envelope_valid' | 'structure_valid';
 type UnknownRecord = Record<string, unknown>;
 
 export type OfflineArtifactVerificationReport = Readonly<{
@@ -262,6 +268,34 @@ export async function verifyOfflineArtifact(
       }),
       limitations: Object.freeze([
         'Packet digest verification detects changes after export; it does not authenticate the analyst, recipient, or truth of the retained observations.',
+      ]),
+    });
+  }
+
+  if (schema === SAVED_LOOKUP_SCHEMA) {
+    if (version !== SAVED_LOOKUP_SCHEMA_VERSION) {
+      throw new TypeError('This saved Lookup document version is not supported.');
+    }
+    const document = parseSavedLookupDocument(raw, { label: 'Saved Lookup artifact' });
+    return Object.freeze({
+      schema: OFFLINE_ARTIFACT_VERIFICATION_SCHEMA,
+      version: OFFLINE_ARTIFACT_VERIFICATION_VERSION,
+      artifact: Object.freeze({ kind: 'saved_lookup', schema, version }),
+      state: 'structure_valid',
+      valid: true,
+      checks: Object.freeze({
+        structure: 'verified',
+        contentIntegrity: 'not_checked',
+        authenticatedEncryption: 'not_applicable',
+      }),
+      summary: Object.freeze({
+        inputBytes: inputBytes(raw),
+        sectionCount: null,
+        recordCount: null,
+        ciphertextBytes: null,
+      }),
+      limitations: Object.freeze([
+        `The saved ${document.mode} Lookup matches its versioned structural contract, but this document format has no embedded checksum or signature. Structural validity does not prove that its evidence is accurate, current, or unchanged since collection.`,
       ]),
     });
   }

@@ -13,6 +13,7 @@ const MAX_CLI_ARGUMENT_LENGTH = 1024;
 const CLI_COMMANDS = [
   'completion',
   'doctor',
+  'commands',
   'manual',
   'lookup',
   'bulk',
@@ -51,9 +52,10 @@ type CliAction =
   | { action: 'help'; command?: CliCommand }
   | { action: 'version' }
   | ({ action: 'completion'; shell: CompletionShell })
+  | ({ action: 'commands'; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'manual' })
   | ({ action: 'doctor'; network: boolean; output: 'terminal' | 'json' } & TerminalOptions)
-  | ({ action: 'lookup'; query: string | null; output: 'terminal' | 'json' | 'markdown' | 'html'; deep: boolean; detail: LookupDetail; strictExit: boolean; events: boolean } & TerminalOptions)
+  | ({ action: 'lookup'; query: string | null; output: 'terminal' | 'json' | 'markdown' | 'html'; deep: boolean; detail: LookupDetail; strictExit: boolean; events: boolean; plan: boolean } & TerminalOptions)
   | ({ action: 'bulk'; source: string | null; output: 'terminal' | 'json' | 'jsonl' | 'csv' | 'domains' | 'queries'; deep: boolean; concurrency: number; checkpoint: string | null; resume: boolean; events: boolean; filter: 'all' | 'registered' | 'inconclusive' | 'errors' } & TerminalOptions)
   | ({ action: 'ct-search'; keyword: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'discover'; seed: string | null; output: 'terminal' | 'json' | 'jsonl' | 'domains'; preset: 'common' | 'impersonation' | 'all' | 'custom'; keyboardLayout: 'qwerty' | 'azerty' | 'qwertz' | 'all'; tldText: string | null; dictionarySource: string | null; familyText: string | null; snapshotSource: string | null } & TerminalOptions)
@@ -154,6 +156,7 @@ function parseCliArgumentsCore(argv: string[]): CliAction {
   if (command === 'bulk') return parseBulkArguments(argv.slice(1));
   if (command === 'completion') return parseCompletionArguments(argv.slice(1));
   if (command === 'doctor') return parseDoctorArguments(argv.slice(1));
+  if (command === 'commands') return parseCommandsArguments(argv.slice(1));
   if (command === 'manual') return parseManualArguments(argv.slice(1));
   if (command === 'ct-search') return parseCtSearchArguments(argv.slice(1));
   if (command === 'discover') return parseDiscoverArguments(argv.slice(1));
@@ -184,6 +187,7 @@ function parseCliArgumentsCore(argv: string[]): CliAction {
   let detailSet = false;
   let strictExit = false;
   let events = false;
+  let plan = false;
   for (const argument of argv.slice(1)) {
     if (argument === '--json') {
       if (output !== 'terminal') throw new CliUsageError('Choose only one output format.');
@@ -209,6 +213,9 @@ function parseCliArgumentsCore(argv: string[]): CliAction {
     } else if (argument === '--events') {
       if (events) throw new CliUsageError('--events may be supplied only once.');
       events = true;
+    } else if (argument === '--plan') {
+      if (plan) throw new CliUsageError('--plan may be supplied only once.');
+      plan = true;
     } else if (argument === '--quiet') quiet = true;
     else if (argument === '--no-color') color = false;
     else if (argument.startsWith('-')) throw new CliUsageError(`Unknown option "${argument}".`);
@@ -217,7 +224,11 @@ function parseCliArgumentsCore(argv: string[]): CliAction {
   }
   if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
   if (detailSet && output !== 'terminal') throw new CliUsageError('--summary and --verbose apply only to terminal output.');
-  return { action: 'lookup', query, output, deep, detail, strictExit, events, quiet, color };
+  if (plan && (output === 'markdown' || output === 'html')) throw new CliUsageError('--plan supports terminal or JSON output only.');
+  if (plan && (detailSet || strictExit || events || quiet)) {
+    throw new CliUsageError('--plan cannot be combined with detail, strict-exit, event, or quiet options.');
+  }
+  return { action: 'lookup', query, output, deep, detail, strictExit, events, plan, quiet, color };
 }
 
 function parseCompletionArguments(argv: string[]): Extract<CliArguments, { action: 'completion' }> {
@@ -230,6 +241,22 @@ function parseCompletionArguments(argv: string[]): Extract<CliArguments, { actio
 function parseManualArguments(argv: string[]): Extract<CliArguments, { action: 'manual' }> {
   if (argv.length !== 0) throw new CliUsageError('manual does not accept command arguments.');
   return { action: 'manual' };
+}
+
+function parseCommandsArguments(argv: string[]): Extract<CliArguments, { action: 'commands' }> {
+  let output: 'terminal' | 'json' = 'terminal';
+  let quiet = false;
+  let color = true;
+  for (const argument of argv) {
+    if (argument === '--json') {
+      if (output !== 'terminal') throw new CliUsageError('--json may be supplied only once.');
+      output = 'json';
+    } else if (argument === '--quiet') quiet = true;
+    else if (argument === '--no-color') color = false;
+    else throw new CliUsageError(`Unknown option "${argument}".`);
+  }
+  if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
+  return { action: 'commands', output, quiet, color };
 }
 
 function parseDoctorArguments(argv: string[]): Extract<CliArguments, { action: 'doctor' }> {

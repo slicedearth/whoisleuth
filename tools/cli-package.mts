@@ -95,6 +95,7 @@ const INSTALLED_COMMAND_HELP_CHECKS = Object.freeze([
   'verify-signature',
   'risk-calibrate',
   'doctor',
+  'commands',
   'completion',
   'manual',
 ]);
@@ -512,6 +513,17 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
     if (doctorDocument.schema !== 'whoisleuth.cli.doctor' || doctorDocument.networkRequested !== false) {
       throw new TypeError('Installed offline doctor command returned the wrong contract.');
     }
+    const commands = await runInstalledCheck(executable, ['commands', '--json'], 'commands');
+    const commandCatalogue = record(JSON.parse(commands), 'Installed command catalogue');
+    if (commandCatalogue.schema !== 'whoisleuth.cli.command-catalogue' || !Array.isArray(commandCatalogue.commands)) {
+      throw new TypeError('Installed command catalogue returned the wrong contract.');
+    }
+    const lookupPlan = await runInstalledCheck(executable, ['lookup', 'example.test', '--deep', '--plan', '--json'], 'lookup plan');
+    const lookupPlanDocument = record(JSON.parse(lookupPlan), 'Installed Lookup plan');
+    if (lookupPlanDocument.schema !== 'whoisleuth.cli.lookup-plan'
+      || record(lookupPlanDocument.planning, 'Installed Lookup plan collection').networkRequestsMade !== false) {
+      throw new TypeError('Installed offline Lookup plan returned the wrong contract.');
+    }
     const completion = await runInstalledCheck(executable, ['completion', 'bash'], 'completion');
     if (!completion.includes('complete -F _whoisleuth_completion whoisleuth')) {
       throw new TypeError('Installed bash completion command returned the wrong script.');
@@ -577,6 +589,8 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
         'help',
         'version',
         'doctor',
+        'commands',
+        'lookup-plan',
         'completion',
         'manual',
         'registry-support',
