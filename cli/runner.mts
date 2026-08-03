@@ -67,6 +67,7 @@ import {
 } from '../lib/domain-control-manifest.mts';
 import { runLookupCommand } from './lookup-command-runner.mts';
 import { buildCliManual } from './manual.mts';
+import { buildInvestigationPlan, formatInvestigationPlan } from './investigation-plan.mts';
 import { createBufferedOutput, writePrivateFile } from './output-file.mts';
 import { createTerminalProgress, type TerminalProgress } from './progress.mts';
 import type { CliProgressEvents } from './progress-events.mts';
@@ -129,6 +130,7 @@ Review saved evidence:
   mail-review        Review saved passive mail exposure evidence.
   review-evidence    Review supplied DNS, routing, GeoIP, or RDAP evidence offline.
   domain-control     Build or review an integrity-protected desired-state manifest.
+  workflow-plan      Plan a fixed investigation recipe without executing it.
   diff               Compare two saved domain observations.
   timeline           Compare a sequence of observations for one domain.
   export             Convert a saved lookup into an evidence report.
@@ -180,6 +182,7 @@ const COMMAND_USAGE: Readonly<Record<CliCommand, string>> = Object.freeze({
   'mail-review': 'whoisleuth mail-review [bulk.json|bulk.jsonl] [--json] [--quiet] [--no-color]',
   'review-evidence': 'whoisleuth review-evidence [evidence.json] [--json] [--quiet] [--no-color]',
   'domain-control': 'whoisleuth domain-control [manifest-input.json|review-input.json] [--json] [--quiet] [--no-color]',
+  'workflow-plan': 'whoisleuth workflow-plan <recipe> <domain|brand> [--json] [--quiet] [--no-color]',
   diff: 'whoisleuth diff <left.json> <right.json> [--json] [--quiet] [--no-color]',
   timeline: 'whoisleuth timeline <observation.json> <observation.json> [...] [--json] [--quiet] [--no-color]',
   export: 'whoisleuth export [lookup.json] [--markdown|--html|--compact]',
@@ -306,6 +309,11 @@ const COMMAND_DETAILS: Readonly<Record<CliCommand, Readonly<{ description: strin
     example: 'whoisleuth domain-control domain-control-input.json --json',
     boundary: 'The command is offline and changes no registrar, DNS, mail, or certificate configuration. Only complete supplied observations can produce drift.',
   },
+  'workflow-plan': {
+    description: 'Build a fixed domain-investigation plan from existing bounded CLI commands.',
+    example: 'whoisleuth workflow-plan domain-triage example.test --json',
+    boundary: 'Planning is offline and plan-only. It does not execute commands, expand placeholders, read files, make requests, or submit evidence.',
+  },
   diff: {
     description: 'Compare bounded evidence retained in two saved domain lookups.',
     example: 'whoisleuth diff first.json second.json --json',
@@ -351,6 +359,7 @@ const COMMAND_COLLECTION: Readonly<Record<CliCommand, Readonly<{
   'mail-review': { mode: 'offline', scope: 'Reads one saved Bulk result and sends no DNS or SMTP traffic.' },
   'review-evidence': { mode: 'offline', scope: 'Reads one bounded versioned evidence or request-planning document and performs no collection.' },
   'domain-control': { mode: 'offline', scope: 'Reads one bounded desired-state or review document and performs no collection or configuration change.' },
+  'workflow-plan': { mode: 'offline', scope: 'Builds a fixed typed recipe and executes none of its network or file steps.' },
   diff: { mode: 'offline', scope: 'Reads two saved Lookup documents for different domains.' },
   timeline: { mode: 'offline', scope: 'Reads 2 to 20 saved observations for one domain, capped at 32 MiB in total.' },
   export: { mode: 'offline', scope: 'Reads one saved Lookup and writes one bounded report.' },
@@ -794,6 +803,15 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
       if (!args.quiet) write(stdout, args.output === 'json'
         ? formatJsonDocument(document)
         : terminal(formatDomainControlResult(document), args.color));
+      return EXIT_CODES.SUCCESS;
+    }
+
+    if (args.action === 'workflow-plan') {
+      failureLabel = 'Investigation plan';
+      const document = buildInvestigationPlan(args.recipe, args.subject, commandContext.now());
+      if (!args.quiet) write(stdout, args.output === 'json'
+        ? formatJsonDocument(document)
+        : terminal(formatInvestigationPlan(document), args.color));
       return EXIT_CODES.SUCCESS;
     }
 

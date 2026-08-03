@@ -1,4 +1,5 @@
 import { CLI_COMMANDS, type CompletionShell } from './arguments.mts';
+import { INVESTIGATION_PLAN_RECIPES } from './investigation-plan.mts';
 
 const COMMON_OPTIONS = Object.freeze(['--help', '--output', '--force']);
 const OPTIONS_BY_COMMAND: Readonly<Record<string, readonly string[]>> = Object.freeze({
@@ -22,6 +23,7 @@ const OPTIONS_BY_COMMAND: Readonly<Record<string, readonly string[]>> = Object.f
   'mail-review': ['--json', '--quiet', '--no-color'],
   'review-evidence': ['--json', '--quiet', '--no-color'],
   'domain-control': ['--json', '--quiet', '--no-color'],
+  'workflow-plan': ['--json', '--quiet', '--no-color'],
   diff: ['--json', '--quiet', '--no-color'],
   timeline: ['--json', '--quiet', '--no-color'],
   export: ['--markdown', '--html', '--compact'],
@@ -52,6 +54,7 @@ const COMMAND_DESCRIPTIONS: Readonly<Record<string, string>> = Object.freeze({
   'mail-review': 'Review saved passive mail evidence',
   'review-evidence': 'Review supplied evidence offline',
   'domain-control': 'Build or review a domain control manifest',
+  'workflow-plan': 'Plan a fixed investigation recipe',
   diff: 'Compare two saved domain lookups',
   timeline: 'Build same-domain history from saved lookups',
   export: 'Convert a lookup to an evidence report',
@@ -110,6 +113,10 @@ _whoisleuth_completion() {
     COMPREPLY=( $(compgen -W "bash zsh fish powershell" -- "\${current}") )
     return
   fi
+  if [[ "\${command}" == "workflow-plan" && \${COMP_CWORD} -eq 2 ]]; then
+    COMPREPLY=( $(compgen -W "${INVESTIGATION_PLAN_RECIPES.join(' ')}" -- "\${current}") )
+    return
+  fi
   case "\${previous}" in
 ${valueCases}
     ${FILE_OPTIONS.join('|')}) COMPREPLY=( $(compgen -f -- "\${current}") ); return ;;
@@ -142,6 +149,10 @@ _whoisleuth() {
   previous="\${words[CURRENT-1]}"
   if [[ "\${command}" == "completion" && CURRENT -eq 3 ]]; then
     compadd -- bash zsh fish powershell
+    return
+  fi
+  if [[ "\${command}" == "workflow-plan" && CURRENT -eq 3 ]]; then
+    compadd -- ${INVESTIGATION_PLAN_RECIPES.join(' ')}
     return
   fi
   case "\${previous}" in
@@ -184,6 +195,7 @@ complete -c whoisleuth -n '__fish_use_subcommand' -l help
 complete -c whoisleuth -n '__fish_use_subcommand' -l version
 ${commandLines.join('\n')}
 complete -c whoisleuth -n '__fish_seen_subcommand_from completion' -a 'bash zsh fish powershell'
+complete -c whoisleuth -n '__fish_seen_subcommand_from workflow-plan' -a '${INVESTIGATION_PLAN_RECIPES.join(' ')}'
 ${optionLines.join('\n')}
 ${valueLines.join('\n')}
 `;
@@ -204,6 +216,7 @@ ${Object.entries(commandOptions).map(([command, options]) => `    '${command}' =
   $values = @{
 ${Object.entries(VALUE_OPTIONS).map(([option, values]) => `    '${option}' = @(${values.map((value) => `'${value}'`).join(', ')})`).join('\n')}
     'completion' = @('bash', 'zsh', 'fish', 'powershell')
+    'workflow-plan' = @(${INVESTIGATION_PLAN_RECIPES.map((value) => `'${value}'`).join(', ')})
   }
   $elements = @($commandAst.CommandElements | ForEach-Object { $_.Extent.Text })
   $command = if ($elements.Count -gt 1) { $elements[1] } else { '' }
@@ -212,6 +225,8 @@ ${Object.entries(VALUE_OPTIONS).map(([option, values]) => `    '${option}' = @($
     @($commands) + @('--help', '--version')
   } elseif ($command -eq 'completion' -and $elements.Count -le 3) {
     $values['completion']
+  } elseif ($command -eq 'workflow-plan' -and $elements.Count -le 3) {
+    $values['workflow-plan']
   } elseif ($values.ContainsKey($previous)) {
     $values[$previous]
   } elseif ($options.ContainsKey($command)) {

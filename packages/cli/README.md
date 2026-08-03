@@ -59,6 +59,7 @@ node bin/whoisleuth.mts discover-scan example.test --scan-limit 50 --checkpoint 
 node bin/whoisleuth.mts page-compare official.json candidate.json --json
 node bin/whoisleuth.mts mail-review bulk.json --json
 node bin/whoisleuth.mts domain-control domain-control-input.json --json
+node bin/whoisleuth.mts workflow-plan domain-triage example.test --json
 node bin/whoisleuth.mts diff first-lookup.json second-lookup.json --json
 node bin/whoisleuth.mts timeline first-observation.json second-observation.json latest-observation.json --json
 node bin/whoisleuth.mts registry-support example.test --json

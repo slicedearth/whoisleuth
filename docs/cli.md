@@ -79,6 +79,7 @@ node bin/whoisleuth.mts page-compare official.json candidate.json --json
 node bin/whoisleuth.mts mail-review bulk.json --json
 node bin/whoisleuth.mts review-evidence dnssec-evidence.json --json
 node bin/whoisleuth.mts domain-control domain-control-input.json --json
+node bin/whoisleuth.mts workflow-plan domain-triage example.test --json
 node bin/whoisleuth.mts diff first-lookup.json second-lookup.json --json
 node bin/whoisleuth.mts timeline first-observation.json second-observation.json latest-observation.json --json
 node bin/whoisleuth.mts export lookup.json > evidence.json
@@ -183,7 +184,7 @@ Commands that query RDAP, WHOIS, DNS, HTTP, TLS, or Certificate Transparency do
 so directly from the machine running the CLI. They do not use the hosted login,
 hosted session, or deployment usage controls; upstream providers can see and
 rate-limit the local machine's network address. Offline `discover`, `compare`,
-`page-compare`, `mail-review`, `review-evidence`, `domain-control`, `diff`, `timeline`, `risk-calibrate`, `verify-artifact`, `source-report`, `export`,
+`page-compare`, `mail-review`, `review-evidence`, `domain-control`, `workflow-plan`, `diff`, `timeline`, `risk-calibrate`, `verify-artifact`, `source-report`, `export`,
 `commands`, `completion`, and `manual` operations make no network requests. Commands write
 to stdout unless the analyst deliberately selects a local output file.
 
@@ -340,7 +341,7 @@ machine access is not evidence that a domain is unregistered or safe.
 This release supports `lookup`, `bulk`, `ct-search`, `discover`, `discover-scan`, `posture`,
 `http`, `tls`, `registry-support`, `risk-calibrate`, `verify-artifact`,
 `inspect-archive`, `sign-artifact`, `verify-signature`, `source-report`,
-`compare`, `page-compare`, `mail-review`, `review-evidence`, `domain-control`, `diff`, `timeline`, `export`, `doctor`, `commands`, `completion`, and `manual`. Additional command families
+`compare`, `page-compare`, `mail-review`, `review-evidence`, `domain-control`, `workflow-plan`, `diff`, `timeline`, `export`, `doctor`, `commands`, `completion`, and `manual`. Additional command families
 are added as separate bounded increments rather than exposing incomplete
 aliases.
 
@@ -863,6 +864,21 @@ contains one manifest plus separately attributed observations. Only a complete
 missing observations remain inconclusive, and unrelated observations are
 counted but ignored. The review performs no DNS, RDAP, HTTP, TLS, SMTP, or
 registrar request.
+
+## Fixed investigation plans
+
+`workflow-plan <recipe> <domain|brand>` turns one of four fixed recipes into a
+versioned `whoisleuth.cli.investigation-plan` document. Supported recipes are
+`domain-triage`, `lookalike-review`, `owned-domain-review`, and
+`historical-comparison`. Each step names an existing CLI command, carries its
+arguments as a JSON array, declares whether it is offline or networked, and
+marks network-disclosure or analyst-selection approval gates.
+
+The command is plan-only. It does not execute a step, construct a shell script,
+interpret a placeholder as a file path, read an artifact, make a request,
+change a case, or submit evidence. Analysts deliberately run selected commands
+after reviewing their collection boundaries. This provides repeatable
+domain-specific workflows without an arbitrary automation or plugin surface.
 
 ## Optional local rendered capture
 
