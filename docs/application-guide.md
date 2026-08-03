@@ -424,6 +424,19 @@ mail, SPF, and reporting dependencies. Resolver failures and exhausted bounds
 remain incomplete. External infrastructure is a review lead, not an ownership,
 insecurity, or exploitability claim.
 
+The **DMARC and SMTP TLS reports** workbench accepts deliberately selected
+aggregate XML or JSON reports, including bounded gzip and ZIP containers. It
+parses them entirely in the current browser tab and summarizes sender IPs,
+message volume, DKIM and SPF outcomes, dispositions, TLS delivery totals, MX
+policy scope, and failure categories. Imported values are compared with the
+active profile's official-domain list, but they are not added to the profile or
+workspace. Leaving the page or selecting Clear removes the in-memory review.
+The optional JSON download includes source-file and artifact digests; it does
+not authenticate the report sender or turn an aggregate outcome into a current
+safety or intent conclusion. XML document types and entities are rejected, and
+file, decompression, entry, record, policy, and failure-detail limits are
+enforced before presentation.
+
 The profile can separately retain six expiring analyst attestations for
 registrar MFA, recovery-email separation, registry lock, emergency contacts,
 account audit logging, and zone backups. These statements are not inferred

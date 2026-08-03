@@ -476,6 +476,18 @@ default (see the README), so many lookups return no personal data at all.
   message data. Its optional JSON export is generated locally, includes an
   integrity digest and stated limitations, and excludes raw DNS responses,
   contacts, scripts, and provider payloads.
+  The Brands page can also review explicitly selected DMARC aggregate XML and
+  SMTP TLS aggregate JSON reports. Plain, gzip, and ZIP inputs are decoded and
+  parsed in the current browser tab within fixed file, expanded-byte, archive,
+  record, policy, and failure-detail limits. The report files and parsed
+  sending IP addresses, message counts, alignment outcomes, dispositions, MX
+  names, and transport-failure categories are not uploaded, added to
+  IndexedDB, or saved in the Brand Profile. They remain in page memory until
+  cleared or the page is left. A deliberate JSON export includes the bounded
+  parsed reports, profile-scope comparison, limitations, source-file digests,
+  and an artifact digest. WHOISleuth does not authenticate the report sender,
+  contact a reporting provider, perform DNS or SMTP collection, or treat an
+  imported outcome as current domain safety or sender intent.
   Website profile snapshots are retained only after an analyst explicitly
   saves a completed Deep Lookup. Each bounded record contains the canonical
   domain, observation and save times, collection completeness and truncation,
