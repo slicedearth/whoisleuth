@@ -16,6 +16,10 @@ describe('IP prefix primitives', () => {
 
   test('rejects invalid, scoped, and non-canonical embedded IPv4 forms', () => {
     assert.equal(parseIpPrefix('192.0.2.0/33'), null);
+    assert.equal(parseIpPrefix('192.0.2.0/'), null);
+    assert.equal(parseIpPrefix('192.0.2.0/+8'), null);
+    assert.equal(parseIpPrefix('192.0.2.0/1e1'), null);
+    assert.equal(parseIpPrefix('192.0.2.0/0x10'), null);
     assert.equal(parseIpPrefix('fe80::1%en0'), null);
     assert.equal(parseIpPrefix('::ffff:192.0.2.1'), null);
   });

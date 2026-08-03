@@ -79,6 +79,14 @@ describe('local aggregate mail report parsing', () => {
     assert.doesNotMatch(report.organization ?? '', /[<>]/u);
   });
 
+  test('scans adversarial unmatched XML tags within a bounded main-thread cost', { timeout: 1_000 }, async () => {
+    const malformed = `<feedback>${'<record>'.repeat(50_000)}</feedback>`;
+    const [report] = await parseMailReportFiles('aggregate.xml', encoder.encode(malformed));
+    assert.equal(report?.kind, 'dmarc');
+    if (!report || report.kind !== 'dmarc') throw new Error('Expected one DMARC report.');
+    assert.equal(report.records.length, 0);
+  });
+
   test('parses TLS-RPT policy outcomes and aggregates repeated failure types', async () => {
     const [report] = await parseMailReportFiles('tls.json', encoder.encode(JSON.stringify(TLS_REPORT)));
     assert.equal(report?.kind, 'tls-rpt');

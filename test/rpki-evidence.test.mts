@@ -46,4 +46,15 @@ describe('local RPKI route review', () => {
       authorizations: SNAPSHOT,
     }).state, 'invalid_input');
   });
+
+  test('rejects malformed authorization prefixes without manufacturing route invalidity', () => {
+    const report = reviewRpkiRoute({
+      routePrefix: '198.51.100.0/24',
+      originAsn: 64496,
+      authorizations: { roas: [{ prefix: '192.0.2.0/', maxLength: 0, asn: 64500 }] },
+    });
+    assert.equal(report.state, 'not_found');
+    assert.equal(report.coveringAuthorizationCount, 0);
+    assert.equal(report.rejectedCount, 1);
+  });
 });

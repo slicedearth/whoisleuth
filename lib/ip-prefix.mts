@@ -38,6 +38,7 @@ function parseIpPrefix(value: unknown): IpPrefix | null {
   const family = isIP(addressValue);
   if (family !== 4 && family !== 6) return null;
   const maximum = family === 4 ? 32 : 128;
+  if (lengthValue !== undefined && !/^\d{1,3}$/u.test(lengthValue)) return null;
   const length = lengthValue === undefined ? maximum : Number(lengthValue);
   if (!Number.isInteger(length) || length < 0 || length > maximum) return null;
   const numeric = ipValue(addressValue, family);

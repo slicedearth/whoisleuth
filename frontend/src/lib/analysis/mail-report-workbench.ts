@@ -195,12 +195,30 @@ function cleanText(value: unknown, maximum = 300): string | null {
   return normalized || null;
 }
 
-function xmlValues(xml: string, tag: string, maximum = 10_000): string[] {
+function xmlBlocks(xml: string, tag: string, maximum: number): string[] {
   const escaped = tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const expression = new RegExp(`<(?:[A-Za-z_][\\w.-]*:)?${escaped}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/(?:[A-Za-z_][\\w.-]*:)?${escaped}\\s*>`, 'gi');
+  const expression = new RegExp(`<(\\/?)(?:[A-Za-z_][\\w.-]*:)?${escaped}(?=\\s|\\/?>)([^<>]*)>`, 'gi');
   const values: string[] = [];
+  const openOffsets: number[] = [];
   for (let match = expression.exec(xml); match && values.length < maximum; match = expression.exec(xml)) {
-    const value = cleanText(decodeXml(removeXmlMarkup(String(match[1] ?? ''))), 1_000);
+    const closing = match[1] === '/';
+    const suffix = match[2] ?? '';
+    if (closing) {
+      if (!/^\s*$/u.test(suffix)) continue;
+      const start = openOffsets.pop();
+      if (start !== undefined) values.push(xml.slice(start, match.index));
+      continue;
+    }
+    if (/\/\s*$/u.test(suffix)) continue;
+    if (openOffsets.length < maximum + 1) openOffsets.push(expression.lastIndex);
+  }
+  return values;
+}
+
+function xmlValues(xml: string, tag: string, maximum = 10_000): string[] {
+  const values: string[] = [];
+  for (const block of xmlBlocks(xml, tag, maximum)) {
+    const value = cleanText(decodeXml(removeXmlMarkup(block)), 1_000);
     if (value) values.push(value);
   }
   return values;
@@ -208,14 +226,6 @@ function xmlValues(xml: string, tag: string, maximum = 10_000): string[] {
 
 function firstXmlValue(xml: string, tag: string, maximum = 300): string | null {
   return cleanText(xmlValues(xml, tag, 1)[0], maximum);
-}
-
-function xmlBlocks(xml: string, tag: string, maximum: number): string[] {
-  const escaped = tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const expression = new RegExp(`<(?:[A-Za-z_][\\w.-]*:)?${escaped}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/(?:[A-Za-z_][\\w.-]*:)?${escaped}\\s*>`, 'gi');
-  const values: string[] = [];
-  for (let match = expression.exec(xml); match && values.length < maximum; match = expression.exec(xml)) values.push(String(match[1] ?? ''));
-  return values;
 }
 
 function boundedCount(value: unknown): number {
