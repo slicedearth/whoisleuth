@@ -212,6 +212,41 @@ describe('Bulk evidence review workflow', () => {
     assert.match(plan.destinations.join(' '), /target HTTP\(S\)/u);
   });
 
+  test('does not retry a registry protocol that is authoritatively not published', () => {
+    const plan = buildBulkRetryPlan([
+      result('candidate.dev', {
+        sourceCoverage: [
+          { source: 'rdap', state: 'complete' },
+          { source: 'whois', state: 'unsupported' },
+        ],
+      }),
+      result('candidate.com', {
+        sourceCoverage: [
+          { source: 'rdap', state: 'complete' },
+          { source: 'whois', state: 'unsupported' },
+        ],
+      }),
+    ], 'deep', GENERATED_AT, Date.parse(GENERATED_AT));
+    assert.equal(plan.lookupRequests, 1);
+    assert.equal(plan.rows[0]?.domain, 'candidate.com');
+    assert.deepEqual(plan.rows[0]?.limitedSources, ['whois']);
+  });
+
+  test('does not retry a row solely because a source was deliberately skipped', () => {
+    const plan = buildBulkRetryPlan([
+      result('fast.example', {
+        scanDepth: 'fast',
+        sourceCoverage: [
+          { source: 'rdap', state: 'complete' },
+          { source: 'whois', state: 'skipped' },
+        ],
+      }),
+    ], 'fast', GENERATED_AT, Date.parse(GENERATED_AT));
+    assert.equal(plan.lookupRequests, 0);
+    assert.deepEqual(plan.rows, []);
+    assert.match(plan.limitations.join(' '), /deliberately skipped/i);
+  });
+
   test('retains stronger settled evidence when a retry fails or loses source coverage', () => {
     const previous = result('retain.example');
     assert.equal(

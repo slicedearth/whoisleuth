@@ -487,8 +487,10 @@ npm run registry:drift -- --json
 
 Makes exactly two fixed, capped requests to official IANA catalogues. It
 compares the embedded compatibility snapshot without probing registries or
-rewriting files. Exit status 1 reports reviewable drift and status 2 reports an
-inconclusive check or invalid invocation.
+rewriting files. Root-zone serial and publication-time changes remain visible
+but do not fail the audit when the canonical active-TLD set is unchanged. Exit
+status 1 reports changed membership, service coverage, or profile claims that
+need review; status 2 reports an inconclusive check or invalid invocation.
 
 ### Deployment self-check
 

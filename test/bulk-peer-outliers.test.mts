@@ -177,6 +177,34 @@ test('peer outliers compare bounded relationship evidence without adding collect
   assert.equal(matrix.dimensions.find((item) => item.id === 'certificate_fingerprint')?.excludedCount, 1);
 });
 
+test('source-coverage outliers ignore expected unpublished registry protocols', () => {
+  const matrix = buildBulkPeerOutlierMatrix([
+    row('one.example'),
+    row('two.example'),
+    row('three.example'),
+    row('candidate.dev', {
+      sourceCoverage: [
+        { source: 'rdap', state: 'complete' },
+        { source: 'whois', state: 'unsupported' },
+      ],
+    }),
+    row('candidate.com', {
+      sourceCoverage: [
+        { source: 'rdap', state: 'complete' },
+        { source: 'whois', state: 'unsupported' },
+      ],
+    }),
+  ]);
+  const expectedAbsence = matrix.rows.find((item) => item.domain === 'candidate.dev');
+  const unexpectedAbsence = matrix.rows.find((item) => item.domain === 'candidate.com');
+  assert.equal(expectedAbsence?.findings.some((finding) => finding.dimension === 'source_coverage') ?? false, false);
+  assert.equal(
+    unexpectedAbsence?.findings.find((finding) => finding.dimension === 'source_coverage')?.value,
+    'limited: whois',
+  );
+  assert.match(matrix.limitations.join(' '), /expected unpublished registry protocols/i);
+});
+
 test('outlier export is formula-safe and includes the local baseline', () => {
   const matrix = buildBulkPeerOutlierMatrix([
     row('one.example'),
