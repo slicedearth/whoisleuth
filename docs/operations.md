@@ -216,6 +216,38 @@ stop.
 
 ## Netlify deployment
 
+### Protected public contact route
+
+The optional public `/contact` page exposes no address in the static HTML,
+JavaScript bundle, footer, or unauthenticated configuration response. It uses a
+free Cloudflare Turnstile widget and returns one configured role address only
+after server-side verification. The browser POST accepts exactly a contact
+category and token; the subject and message stay local until the user opens the
+prepared email draft.
+
+1. Create a managed Turnstile widget for every production hostname that serves
+   this deployment.
+2. Configure inbound role aliases with the operator's mail-routing provider.
+   Use separate privacy, outbound-request, and security aliases that forward to
+   a monitored private mailbox.
+3. Set `TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY`, and a comma-separated
+   `TURNSTILE_ALLOWED_HOSTNAMES` list. Include each exact production hostname;
+   use `localhost` only for local testing.
+4. Set one or more of `WHOISLEUTH_PRIVACY_CONTACT`,
+   `WHOISLEUTH_OUTBOUND_CONTACT`, and `WHOISLEUTH_SECURITY_CONTACT` to the
+   corresponding role addresses. Categories without a valid configured route
+   are not offered.
+5. Verify that `/api/contact-route` returns the public site key and category
+   names without any address, then complete one real challenge and confirm that
+   the resulting draft opens locally. Do not log request bodies or verification
+   tokens at an upstream proxy.
+
+If any required challenge setting is absent or malformed, the page fails
+closed and no address is revealed. The verification token is single-use and
+hostname/action checked; no remote-IP field is forwarded by WHOISleuth.
+
+### Site deployment
+
 1. Connect the repository to Netlify or deploy it with the Netlify CLI.
 2. Keep the repository root as the build base. `netlify.toml` runs
    `npm run build`, publishes `frontend/build`, and packages

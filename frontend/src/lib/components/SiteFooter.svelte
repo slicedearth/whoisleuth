@@ -11,6 +11,7 @@
       <a href="/resources">Learn</a>
       <a href="/guide">Guide</a>
       <a href="/privacy">Privacy</a>
+      <a href="/contact">Contact</a>
     </nav>
   </div>
 </footer>

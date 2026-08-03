@@ -30,7 +30,7 @@
     X-Frame-Options = "DENY"
     Referrer-Policy = "strict-origin-when-cross-origin"
     Permissions-Policy = "camera=(), microphone=(), geolocation=()"
-    Content-Security-Policy = "default-src 'self'; connect-src 'self'; font-src 'self'; img-src 'self' data:; object-src 'none'; script-src 'self' 'unsafe-inline'; script-src-attr 'none'; style-src 'self' 'unsafe-inline'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+    Content-Security-Policy = "default-src 'self'; connect-src 'self'; font-src 'self'; img-src 'self' data:; object-src 'none'; script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com; script-src-attr 'none'; style-src 'self' 'unsafe-inline'; base-uri 'self'; form-action 'self'; frame-src https://challenges.cloudflare.com; frame-ancestors 'none'"
     Strict-Transport-Security = "max-age=31536000"
 
 [[redirects]]
@@ -69,6 +69,9 @@
 
 # The login function exports its own /api/login path and function-level rate
 # limit. Its custom path removes the default direct function endpoint.
+
+# The contact-route function likewise exports /api/contact-route directly and
+# applies its own public edge limit before server-side challenge verification.
 
 [[redirects]]
   from = "/api/logout"

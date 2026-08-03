@@ -1,9 +1,8 @@
 # Privacy Notice
 
-This is a template for whoever operates a deployment of this tool
-(self-hosted or on Netlify) to adapt - fill in `[operator contact]` below
-and adjust anything that doesn't match your actual deployment before
-publishing it to anyone you share `SITE_PASSWORD` with.
+This notice describes the public WHOISleuth deployment and is also a template
+for self-hosted operators to adapt when their configuration, hosting, enabled
+providers, retention, or contact routes differ.
 
 ## What personal data this tool processes
 
@@ -17,6 +16,14 @@ default (see the README), so many lookups return no personal data at all.
 
 ## Where that data goes
 
+- **Protected contact handoff**: the public Contact page keeps its subject and
+  message fields in current page memory. To reveal a privacy, outbound-request,
+  or security role address, the browser sends only that fixed category and a
+  short-lived verification token to this deployment. The server sends the
+  token, but not the draft, target data, or contact address, to Cloudflare
+  Turnstile for validation. After successful verification, the server returns
+  one configured role address and the browser prepares a local `mailto:` link.
+  WHOISleuth does not send the email, retain the draft, or accept attachments.
 - **Custom Discover dictionary**: optional pasted or imported terms are
   normalized and capped at 100 unique entries, 32 characters per term, and
   4,096 input characters. They remain transient in the current browser tab,
@@ -878,11 +885,12 @@ registrant to access/delete their data is fulfilled by deleting whatever you
 personally exported (CSV/JSON files) or saved (shortlist/watchlist entries and
 history) about them, and not re-querying afterward. Use the **Clear all**
 buttons for browser-local records; an operator who enabled hosted scheduled
-monitoring must also remove the relevant encrypted Blob state. Public support
-requests are not handled through the deployed site; people authorised to use
-the protected console should contact the operator who provided access. Direct
-data-subject requests to:
-`[operator contact]`.
+monitoring must also remove the relevant encrypted Blob state. Use the
+deployment's protected `/contact` page for a privacy request, concern about an
+outbound request, or security report. It reveals the relevant project role
+address only after verification and prepares an email in the user's own client;
+it does not send or retain the draft. A self-hosted operator must configure and
+monitor its own role addresses.
 
 ## Hosting / sub-processors
 
@@ -892,7 +900,16 @@ data-subject requests to:
   bounded lookups and its site-wide Blobs service retains the application-
   encrypted state and ordinary object metadata. Check Netlify's own Data
   Processing Addendum if you're operating this beyond a personal/internal
-  scale.
+  scale. Netlify can retain ordinary request and function-log metadata under
+  the deployment plan's current logging policy. WHOISleuth does not
+  intentionally log contact drafts, verification tokens, raw registry
+  responses, or role addresses, but operators must also review any edge,
+  function, proxy, and drain configuration they enable.
+- Cloudflare Turnstile: only on the public Contact page, the browser loads the
+  verification widget and the deployment sends its short-lived token to the
+  fixed verification endpoint. Cloudflare receives ordinary request metadata
+  under its privacy terms. The subject, message, selected project address, and
+  investigation data are not sent to Cloudflare.
 - Upstash: only when the operator explicitly configures distributed operation
   limits, the minimal lease and optional fixed-window counter metadata
   described above is processed through its HTTPS REST service. Operators

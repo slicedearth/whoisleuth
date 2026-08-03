@@ -8,6 +8,7 @@ const PRERENDERED_ROUTES = Object.freeze([
   '/',
   '/brands',
   '/bulk',
+  '/contact',
   '/dashboard',
   '/demo',
   '/discover',

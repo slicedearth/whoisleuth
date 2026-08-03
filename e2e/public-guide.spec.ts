@@ -194,7 +194,7 @@ test('public footer keeps an even compact rhythm on mobile', async ({ page }) =>
   const footer = page.locator('footer.site-footer');
   const links = footer.locator('.footer-links a');
   await expect(footer).toBeVisible();
-  await expect(links).toHaveCount(4);
+  await expect(links).toHaveCount(5);
 
   const linkLayout = await links.evaluateAll((elements) => elements.map((element) => {
     const box = element.getBoundingClientRect();

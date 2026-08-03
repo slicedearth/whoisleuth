@@ -9,11 +9,12 @@ const HTTP_BASELINE_CONTENT_SECURITY_POLICY = [
   "font-src 'self'",
   "img-src 'self' data:",
   "object-src 'none'",
-  "script-src 'self' 'unsafe-inline'",
+  "script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com",
   "script-src-attr 'none'",
   "style-src 'self' 'unsafe-inline'",
   "base-uri 'self'",
   "form-action 'self'",
+  'frame-src https://challenges.cloudflare.com',
   "frame-ancestors 'none'",
 ].join('; ');
 

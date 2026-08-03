@@ -5,6 +5,7 @@ import {
   createScopedRateLimitCheckers,
   getClientIp,
   getForwardedProtocol,
+  CONTACT_ROUTE_RATE_LIMIT,
   PRERENDERED_HTML_RATE_LIMIT,
   trustsForwardedHeaders,
 } from '../lib/rate-limit.mts';
@@ -54,14 +55,22 @@ describe('fixed-window bucket bounds', () => {
 
     assert.deepEqual(checkers.login('login', 1_000), { allowed: true });
     assert.deepEqual(checkers.api('api', 1_001), { allowed: true });
-    assert.deepEqual(checkers.scheduledMonitorManagement('monitor', 1_002), { allowed: true });
-    assert.deepEqual(checkers.prerenderedHtml('html', 1_003), { allowed: true });
+    assert.deepEqual(checkers.contactRoute('contact', 1_002), { allowed: true });
+    assert.deepEqual(checkers.scheduledMonitorManagement('monitor', 1_003), { allowed: true });
+    assert.deepEqual(checkers.prerenderedHtml('html', 1_004), { allowed: true });
   });
 
   test('keeps the fixed HTML override generous but bounded', () => {
     assert.deepEqual(PRERENDERED_HTML_RATE_LIMIT, {
       limit: 600,
       windowMs: 60_000,
+    });
+  });
+
+  test('keeps contact verification separately and conservatively bounded', () => {
+    assert.deepEqual(CONTACT_ROUTE_RATE_LIMIT, {
+      limit: 60,
+      windowMs: 600_000,
     });
   });
 });
