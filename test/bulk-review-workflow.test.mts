@@ -232,6 +232,21 @@ describe('Bulk evidence review workflow', () => {
     assert.deepEqual(plan.rows[0]?.limitedSources, ['whois']);
   });
 
+  test('does not retry a row solely because a source was deliberately skipped', () => {
+    const plan = buildBulkRetryPlan([
+      result('fast.example', {
+        scanDepth: 'fast',
+        sourceCoverage: [
+          { source: 'rdap', state: 'complete' },
+          { source: 'whois', state: 'skipped' },
+        ],
+      }),
+    ], 'fast', GENERATED_AT, Date.parse(GENERATED_AT));
+    assert.equal(plan.lookupRequests, 0);
+    assert.deepEqual(plan.rows, []);
+    assert.match(plan.limitations.join(' '), /deliberately skipped/i);
+  });
+
   test('retains stronger settled evidence when a retry fails or loses source coverage', () => {
     const previous = result('retain.example');
     assert.equal(

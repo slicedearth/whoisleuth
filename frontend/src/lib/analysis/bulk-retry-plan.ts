@@ -44,7 +44,7 @@ function freshness(value: unknown, now = Date.now()): BulkRetryFreshness {
 }
 
 function retryRow(value: BulkSessionResult, isStale: boolean): BulkRetryPlanRow | null {
-  const limitedSources = limitedBulkSources(value.domain, value.sourceCoverage, { includeSkipped: true })
+  const limitedSources = limitedBulkSources(value.domain, value.sourceCoverage)
     .sort()
     .slice(0, 12);
   const reasons: BulkRetryReason[] = [];
@@ -80,6 +80,7 @@ export function buildBulkRetryPlan(
       'This repeats the selected lookup profile; the current API does not request only one upstream source.',
       `Evidence is marked stale after ${BULK_REVIEW_STALE_AFTER_DAYS} days for review purposes; this is a local observation age, not an upstream record age.`,
       'Optional third-party intelligence providers are not contacted by Bulk.',
+      'Sources deliberately skipped by the selected scan profile or deployment policy do not independently trigger a retry.',
       'A retry can remain partial or fail and does not convert unavailable evidence into absence.',
     ],
   };

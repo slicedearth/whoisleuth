@@ -44,7 +44,7 @@ describe('authority-aware Bulk source coverage', () => {
     ]), ['dns', 'rdap']);
     assert.deepEqual(limitedBulkSources('candidate.dev', [
       { source: 'whois', state: 'skipped' },
-    ], { includeSkipped: true }), ['whois']);
+    ]), []);
   });
 
   test('fails closed for malformed domains and bounded source entries', () => {

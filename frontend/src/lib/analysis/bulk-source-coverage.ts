@@ -75,12 +75,11 @@ export function isExpectedUnsupportedBulkSource(
 export function limitedBulkSources(
   domain: unknown,
   coverage: unknown,
-  options: Readonly<{ includeSkipped?: boolean }> = {},
 ): string[] {
   const expectedUnsupported = expectedUnsupportedSources(domain);
   return observations(coverage)
     .filter(({ source, state }) => (
-      (LIMITED_SOURCE_STATES.has(state) || (options.includeSkipped === true && state === 'skipped'))
+      LIMITED_SOURCE_STATES.has(state)
       && !(state === 'unsupported' && expectedUnsupported.has(source))
     ))
     .map(({ source }) => source);
