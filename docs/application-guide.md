@@ -979,6 +979,12 @@ the latest retained observation per domain and exact shared-fingerprint review
 leads. These records contain bounded certificate metadata and digests, not
 certificate bytes, and describe what this deployment observed at that time
 rather than a current certificate inventory supplied by a third party.
+The snapshot can also retain up to 20 normalized service-dependency rows from
+the already displayed DNS and final-navigation review. Comparing two compatible
+snapshots calls out active-to-unresolved and active-to-passive-deprovision-cue
+transitions for manual review. It never follows the dependency, tests an
+account, or treats a transition as proof of abandonment, vulnerability, or
+claimability.
 
 Dashboard can create one deliberate workspace archive for the supported
 collections and preferences, including retained relationship observations and

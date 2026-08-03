@@ -127,6 +127,20 @@
           <ul>{#each comparison.changes as change}<li><span>{change.state}</span><code>{change.field}</code><small>{change.before || 'Unavailable'} → {change.after || 'Unavailable'}</small></li>{/each}</ul>
         {:else}<p>No curated field changed between these compatible snapshots.</p>{/if}
       </div>
+      {#if comparison.dependencyTransitions.length}
+        <section class="dependency-transitions" aria-labelledby="dependency-transition-title">
+          <h4 id="dependency-transition-title">Dependency transitions to review</h4>
+          <ul>
+            {#each comparison.dependencyTransitions as transition}
+              <li class:attention={transition.state === 'active_to_unresolved' || transition.state === 'active_to_deprovision_cue'}>
+                <strong>{transition.recordType} · {transition.state.replaceAll('_', ' ')}</strong>
+                <code>{transition.target}</code>
+                <p>{transition.detail}</p>
+              </li>
+            {/each}
+          </ul>
+        </section>
+      {/if}
     {/if}
     <details>
       <summary>Manage {domainSnapshots.length} saved snapshot{domainSnapshots.length === 1 ? '' : 's'}</summary>
@@ -193,6 +207,14 @@
   .comparison li{display:grid;grid-template-columns:auto minmax(0,1fr);gap:3px 8px}
   .comparison li span{color:var(--accent);font:700 var(--text-2xs) var(--mono);text-transform:uppercase}
   .comparison li small{grid-column:2;overflow-wrap:anywhere;color:var(--muted)}
+  .dependency-transitions{margin-top:10px;padding:12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface)}
+  .dependency-transitions h4{margin:0;font:700 var(--text-xs) var(--mono)}
+  .dependency-transitions ul{display:grid;gap:7px;margin:9px 0 0;padding:0;list-style:none}
+  .dependency-transitions li{display:grid;gap:3px;padding:9px;border:1px solid var(--border);border-radius:var(--radius-sm)}
+  .dependency-transitions li.attention{border-color:color-mix(in srgb,var(--amber) 48%,var(--border))}
+  .dependency-transitions strong{font:700 var(--text-2xs) var(--mono);text-transform:uppercase}
+  .dependency-transitions code{overflow-wrap:anywhere}
+  .dependency-transitions p{margin:2px 0 0;color:var(--muted);font-size:var(--text-2xs);line-height:1.5}
   details{margin-top:10px}
   summary{font:700 var(--text-xs) var(--mono)}
   .saved-list li{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 0;border-top:1px solid var(--border);font-size:var(--text-xs)}

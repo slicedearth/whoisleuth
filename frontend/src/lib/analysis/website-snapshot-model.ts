@@ -1,7 +1,7 @@
 import { normalizeDomain } from './case-model.ts';
 
 export const WEBSITE_SNAPSHOT_SCHEMA = 'whoisleuth.website-profile-snapshots';
-export const WEBSITE_SNAPSHOT_SCHEMA_VERSION = 3;
+export const WEBSITE_SNAPSHOT_SCHEMA_VERSION = 4;
 export const MAX_WEBSITE_SNAPSHOTS = 60;
 export const MAX_WEBSITE_SNAPSHOTS_PER_DOMAIN = 12;
 export const MAX_WEBSITE_SNAPSHOT_STORE_BYTES = 512 * 1024;
@@ -15,6 +15,13 @@ export type WebsiteSnapshotTechnology = Readonly<{
 }>;
 export type WebsiteSnapshotPosture = Readonly<{ id: string; state: string }>;
 export type WebsiteSnapshotSource = Readonly<{ source: string; state: string }>;
+export type WebsiteSnapshotDependency = Readonly<{
+  recordType: 'CNAME' | 'HTTPS' | 'NS' | 'MX' | 'HTTP';
+  target: string;
+  state: 'candidate' | 'unresolved' | 'active' | 'unsupported' | 'false_positive';
+  qualification: string;
+  serviceFamily: string | null;
+}>;
 export type WebsiteCertificateObservation = Readonly<{
   observationVersion: 1;
   source: 'tls';
@@ -58,6 +65,7 @@ export type WebsiteProfileSnapshot = Readonly<{
   identity: WebsiteIdentityDigests;
   identityValues: WebsiteIdentityValues;
   sources: WebsiteSnapshotSource[];
+  dependencies: WebsiteSnapshotDependency[];
   certificate: WebsiteCertificateObservation | null;
 }>;
 export type WebsiteSnapshotChange = Readonly<{
@@ -65,6 +73,12 @@ export type WebsiteSnapshotChange = Readonly<{
   state: 'added' | 'removed' | 'changed' | 'unavailable' | 'incomparable';
   before: string | null;
   after: string | null;
+}>;
+export type WebsiteDependencyTransition = Readonly<{
+  target: string;
+  recordType: WebsiteSnapshotDependency['recordType'];
+  state: 'active_to_unresolved' | 'active_to_deprovision_cue' | 'added' | 'removed';
+  detail: string;
 }>;
 
 type UnknownRecord = Record<string, unknown>;
@@ -124,6 +138,22 @@ function source(value: unknown): WebsiteSnapshotSource | null {
   const sourceName = text(item?.source, 40);
   const state = text(item?.state, 40);
   return sourceName && state ? { source: sourceName, state } : null;
+}
+function dependency(value: unknown): WebsiteSnapshotDependency | null {
+  const item = record(value);
+  const recordType = text(item?.recordType, 10);
+  const target = normalizeDomain(item?.target);
+  const state = text(item?.state, 40);
+  if (!target
+    || !['CNAME', 'HTTPS', 'NS', 'MX', 'HTTP'].includes(recordType)
+    || !['candidate', 'unresolved', 'active', 'unsupported', 'false_positive'].includes(state)) return null;
+  return {
+    recordType: recordType as WebsiteSnapshotDependency['recordType'],
+    target,
+    state: state as WebsiteSnapshotDependency['state'],
+    qualification: text(item?.qualification, 80) || 'inconclusive',
+    serviceFamily: nullableText(item?.serviceFamily, 120),
+  };
 }
 function nullableBoolean(value: unknown): boolean | null {
   return typeof value === 'boolean' ? value : null;
@@ -220,6 +250,7 @@ export function normalizeWebsiteProfileSnapshot(raw: unknown): WebsiteProfileSna
     identity: identity(value?.identity),
     identityValues: identityValues(value?.identityValues),
     sources: values(value?.sources, 16, source) as WebsiteSnapshotSource[],
+    dependencies: values(value?.dependencies, 20, dependency) as WebsiteSnapshotDependency[],
     certificate: certificate(value?.certificate),
   };
 }
@@ -302,13 +333,49 @@ export function compareWebsiteSnapshots(beforeRaw: unknown, afterRaw: unknown) {
   const before = normalizeWebsiteProfileSnapshot(beforeRaw);
   const after = normalizeWebsiteProfileSnapshot(afterRaw);
   if (!before || !after || before.domain !== after.domain) {
-    return { compatible: false, changes: [{ field: 'snapshot', state: 'incomparable', before: before?.domain ?? null, after: after?.domain ?? null }] as WebsiteSnapshotChange[] };
+    return {
+      compatible: false,
+      changes: [{ field: 'snapshot', state: 'incomparable', before: before?.domain ?? null, after: after?.domain ?? null }] as WebsiteSnapshotChange[],
+      dependencyTransitions: [] as WebsiteDependencyTransition[],
+    };
   }
   const changes = [
     ...compareMap('technology', new Map(before.technologies.map((item) => [item.id, `${item.name}|${item.category}|${item.confidence}`])), new Map(after.technologies.map((item) => [item.id, `${item.name}|${item.category}|${item.confidence}`]))),
     ...compareMap('posture', new Map(before.posture.map((item) => [item.id, item.state])), new Map(after.posture.map((item) => [item.id, item.state]))),
     ...compareMap('source', new Map(before.sources.map((item) => [item.source, item.state])), new Map(after.sources.map((item) => [item.source, item.state]))),
+    ...compareMap(
+      'dependency',
+      new Map(before.dependencies.map((item) => [`${item.recordType}:${item.target}`, `${item.state}|${item.qualification}`])),
+      new Map(after.dependencies.map((item) => [`${item.recordType}:${item.target}`, `${item.state}|${item.qualification}`])),
+    ),
   ];
+  const dependencyTransitions: WebsiteDependencyTransition[] = [];
+  const beforeDependencies = new Map(before.dependencies.map((item) => [`${item.recordType}:${item.target}`, item]));
+  const afterDependencies = new Map(after.dependencies.map((item) => [`${item.recordType}:${item.target}`, item]));
+  for (const key of [...new Set([...beforeDependencies.keys(), ...afterDependencies.keys()])].sort()) {
+    const left = beforeDependencies.get(key);
+    const right = afterDependencies.get(key);
+    if (left?.state === 'active' && right?.qualification === 'known_deprovision_pattern') {
+      dependencyTransitions.push({
+        target: right.target,
+        recordType: right.recordType,
+        state: 'active_to_deprovision_cue',
+        detail: 'An earlier active navigation target now matches a reviewed passive deprovision-page cue. Verify the service account and DNS manually; this does not establish claimability.',
+      });
+    } else if (left?.state === 'active' && right?.state === 'unresolved') {
+      dependencyTransitions.push({
+        target: right.target,
+        recordType: right.recordType,
+        state: 'active_to_unresolved',
+        detail: 'An earlier active dependency is unresolved in the later retained observation. Resolver or collection failure remains possible.',
+      });
+    } else if (!left && right) {
+      dependencyTransitions.push({ target: right.target, recordType: right.recordType, state: 'added', detail: 'This dependency first appears in the later retained snapshot.' });
+    } else if (left && !right && after.complete) {
+      dependencyTransitions.push({ target: left.target, recordType: left.recordType, state: 'removed', detail: 'This dependency is not represented in the later complete snapshot. It may have been intentionally removed or replaced.' });
+    }
+    if (dependencyTransitions.length >= 20) break;
+  }
   for (const key of Object.keys(before.identity) as Array<keyof WebsiteIdentityDigests>) {
     const left = before.identity[key];
     const right = after.identity[key];
@@ -371,5 +438,5 @@ export function compareWebsiteSnapshots(beforeRaw: unknown, afterRaw: unknown) {
   if (before.complete !== after.complete || before.truncated !== after.truncated) {
     changes.push({ field: 'completeness', state: 'incomparable', before: `${before.complete}/${before.truncated}`, after: `${after.complete}/${after.truncated}` });
   }
-  return { compatible: true, changes };
+  return { compatible: true, changes, dependencyTransitions };
 }

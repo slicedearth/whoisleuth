@@ -318,6 +318,7 @@
       technologyFindings:pageDisplay.technologyFindings,
       securityPostureFindings:pageDisplay.securityPostureFindings,
       diagnostics,
+      dependencies:serviceDependencyReview?.dependencies??[],
     });
   }
   function downloadEvidence(){if(!result)return;const body=JSON.stringify(buildLookupEvidence(result,{idnAnalysis,applicationVersion:__WHOISLEUTH_VERSION__}),null,2);const url=URL.createObjectURL(new Blob([body],{type:'application/json'}));const anchor=document.createElement('a');anchor.href=url;anchor.download=evidenceFilename(result);anchor.click();URL.revokeObjectURL(url);}

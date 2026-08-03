@@ -5,6 +5,7 @@ import type {
   WebsiteSnapshotPosture,
   WebsiteSnapshotTechnology,
 } from './website-snapshot-model.ts';
+import type { ServiceDependency } from './service-dependency-review.ts';
 
 export type LookupSnapshotInput = Readonly<{
   id: string;
@@ -20,6 +21,7 @@ export type LookupSnapshotInput = Readonly<{
   technologyFindings: readonly WebsiteSnapshotTechnology[];
   securityPostureFindings: readonly WebsiteSnapshotPosture[];
   diagnostics: JsonRecord;
+  dependencies?: readonly ServiceDependency[];
 }>;
 
 const SNAPSHOT_SOURCES = Object.freeze(['rdap', 'whois', 'availability', 'dns', 'http', 'tls']);
@@ -125,6 +127,13 @@ export function buildLookupWebsiteSnapshot(input: LookupSnapshotInput): WebsiteP
         : [],
     },
     certificate: certificateObservation(input),
+    dependencies: (input.dependencies ?? []).slice(0, 20).map((item) => ({
+      recordType: item.recordType,
+      target: item.target,
+      state: item.state,
+      qualification: item.qualification,
+      serviceFamily: item.serviceFamily ?? null,
+    })),
     sources: SNAPSHOT_SOURCES.flatMap((source) => {
       const state = boundedTechnologyText(rec(diagnostics[source]).status, 40);
       return state ? [{ source, state }] : [];
