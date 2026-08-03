@@ -103,7 +103,6 @@ export function registrySupportCatalogue() {
       profiles: rows.length,
       fixtureVerified: rows.filter((row) => row.coverageState === 'fixture_verified').length,
       accessDocumented: rows.filter((row) => row.coverageState === 'access_documented').length,
-      fallbacks: rows.filter((row) => Boolean(row.fallbackProfile)).length,
       serviceCoverage,
     },
   };
@@ -154,7 +153,7 @@ export function filterRegistrySupportRows(
     if (!searchableQuery) return true;
     return [
       row.suffixes[0], row.id, row.registryClass, row.coverageState,
-      row.whoisQueryProfile, row.whoisParserProfile, row.fallbackProfile,
+      row.whoisQueryProfile, row.whoisParserProfile,
       row.whoisAccessProfile, row.rdapAccessProfile, row.limitation,
       ...row.fixtureScenarios,
     ].filter(Boolean).some((value) => String(value).toLowerCase()

@@ -46,7 +46,6 @@ describe('registry fixture freshness tooling', () => {
         whoisQueryScope: 'first-referral',
         whoisEncodingProfile: 'utf-8',
         whoisParserProfile: 'generic-colon',
-        fallbackProfile: null,
         whoisAccessProfile: 'iana-referral',
         rdapAccessProfile: 'iana-bootstrap',
         coverageState: 'fixture_verified',

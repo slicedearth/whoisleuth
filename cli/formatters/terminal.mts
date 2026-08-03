@@ -299,7 +299,6 @@ function formatTerminalRegistrySupport(document: TerminalRecord): string {
     `WHOIS scope    ${supportLabel(whois.queryScope)}`,
     `WHOIS encoding ${supportLabel(whois.encodingProfile)}`,
     `WHOIS parser   ${supportLabel(whois.parserProfile)}`,
-    `Fallback       ${profile.fallbackProfile ? supportLabel(profile.fallbackProfile) : 'None'}`,
     `Fixture states ${fixtures.length ? fixtures.map((value: unknown) => supportLabel(value)).join(', ') : 'None documented'}`,
   ];
   for (const file of files) lines.push(`Verified by    ${safeTerminalValue(file)}`);

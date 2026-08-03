@@ -351,13 +351,13 @@ aliases.
 catalogue for one domain or suffix. It distinguishes an explicit
 fixture-backed or access-documented suffix profile from the generic IANA
 discovery profile and reports the RDAP and WHOIS discovery/access paths,
-WHOIS query and parser profiles, any bounded fallback, fixture scenarios,
+WHOIS query and parser profiles, fixture scenarios,
 verification references, documentation references, and the catalogue's
 limitation. The same document includes a dated, official-source aggregate of
 generic, generic-restricted, sponsored, and infrastructure RDAP coverage. That
 snapshot is separate from the suffix profile and from live reachability.
 
-Terminal output is bounded and control-safe. `--json` emits version 2 of the
+Terminal output is bounded and control-safe. `--json` emits version 3 of the
 `whoisleuth.cli.registry-support` schema. Unknown but syntactically valid
 suffixes retain the generic `discovery_only` profile; malformed input exits
 with code 2. The command never probes a registry or tests current reachability.

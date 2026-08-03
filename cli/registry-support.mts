@@ -5,7 +5,7 @@ import {
 } from '../lib/registry-capabilities.mts';
 
 const REGISTRY_SUPPORT_SCHEMA = 'whoisleuth.cli.registry-support';
-const REGISTRY_SUPPORT_SCHEMA_VERSION = 2;
+const REGISTRY_SUPPORT_SCHEMA_VERSION = 3;
 const REGISTRY_STANDARDS_COVERAGE_SCHEMA = 'whoisleuth.registry-standards-coverage';
 const MAX_REGISTRY_SUPPORT_TEXT_LENGTH = 2048;
 const MAX_REGISTRY_SUPPORT_REFERENCES = 20;
@@ -43,7 +43,6 @@ type RegistrySupportDocument = {
       encodingProfile: string;
       parserProfile: string;
     };
-    fallbackProfile: string | null;
   };
   verification: {
     fixtureScenarios: string[];
@@ -155,9 +154,6 @@ function buildRegistrySupportDocument(
         encodingProfile: boundedText(capability.whoisEncodingProfile, 'unknown', 64),
         parserProfile: boundedText(capability.whoisParserProfile, 'unknown', 128),
       },
-      fallbackProfile: capability.fallbackProfile
-        ? boundedText(capability.fallbackProfile, 'unknown', 128)
-        : null,
     },
     verification: {
       fixtureScenarios: boundedList(capability.fixtureScenarios, 'token'),

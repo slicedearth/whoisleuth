@@ -26,19 +26,18 @@ import {
 test('builds the bounded registry-support catalogue from the shared capability matrix', () => {
   const catalogue = registrySupportCatalogue();
 
-  assert.equal(catalogue.version, 27);
+  assert.equal(catalogue.version, 28);
   assert.equal(catalogue.rows.length, 335);
   assert.equal(catalogue.truncated, false);
   assert.deepEqual(catalogue.summary, {
     profiles: 335,
-    fixtureVerified: 218,
-    accessDocumented: 117,
-    fallbacks: 1,
+    fixtureVerified: 217,
+    accessDocumented: 118,
     serviceCoverage: {
       both: 72,
       rdapOnly: 25,
-      whoisOnly: 167,
-      neither: 71,
+      whoisOnly: 166,
+      neither: 72,
     },
   });
   assert.deepEqual(catalogue.standardsCoverage.counts, {
@@ -152,7 +151,7 @@ test('filters registry profiles by suffix, capability text, and explicit coverag
   assert.deepEqual(filterRegistrySupportRows(rows, '', 'access_documented').map((row) => row.suffixes[0]), [
     'al', 'ao', 'aq', 'arpa', 'az', 'ba', 'bb', 'bd', 'bo', 'bs', 'bt', 'bv', 'bw', 'bz', 'cd', 'cf', 'cg',
     'ch', 'ck', 'cu', 'cw', 'cy', 'dj', 'eg', 'er', 'es', 'et', 'fk', 'ga', 'gb', 'ge',
-    'gm', 'gp', 'gq', 'gr', 'gu', 'gw', 'hm', 'iq', 'jm', 'jo', 'kh', 'km', 'kp', 'kw', 'lc', 'li', 'lk',
+    'gm', 'gp', 'gq', 'gr', 'gt', 'gu', 'gw', 'hm', 'iq', 'jm', 'jo', 'kh', 'km', 'kp', 'kw', 'lc', 'li', 'lk',
     'lr', 'mh', 'mil', 'mp', 'mt', 'mv', 'na', 'ne', 'ni', 'np', 'nr', 'pa', 'pf', 'ph', 'pn', 'ps', 'py',
     'sb', 'sj', 'sl', 'sm', 'sv', 'sz', 'tj', 'tk', 'tl', 'tt', 'uy', 'va', 'vi', 'vn', 'xn--54b7fta0cc',
     'xn--fzc2c9e2c', 'xn--mgbai9azgqp6j', 'xn--mgbayh7gpa', 'xn--mgbc0a9azcg',
@@ -162,9 +161,9 @@ test('filters registry profiles by suffix, capability text, and explicit coverag
   ].sort());
   assert.deepEqual(filterRegistrySupportRows(rows, 'access', 'fixture_verified'), []);
   assert.equal(filterRegistrySupportRows(rows, '', 'all', 'rdap_only').length, 25);
-  assert.equal(filterRegistrySupportRows(rows, '', 'all', 'whois_only').length, 167);
+  assert.equal(filterRegistrySupportRows(rows, '', 'all', 'whois_only').length, 166);
   assert.equal(filterRegistrySupportRows(rows, '', 'all', 'both').length, 72);
-  assert.equal(filterRegistrySupportRows(rows, '', 'all', 'neither').length, 71);
+  assert.equal(filterRegistrySupportRows(rows, '', 'all', 'neither').length, 72);
   assert.deepEqual(
     filterRegistrySupportRows(rows, '', 'all', 'rdap_only').map((row) => row.suffixes[0]),
     [...VERSION_27_RDAP_ONLY_GENERIC_SUFFIXES, 'na', 'pn'].sort(),
