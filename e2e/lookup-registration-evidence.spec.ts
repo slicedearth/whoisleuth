@@ -84,6 +84,11 @@ test('bounded RDAP contact roles and repeated channels render in Lookup', async 
   await expect(page.getByText('Phone: +61 1, +61 2')).toBeVisible();
   await expect(page.getByText('Email: abuse@example.com')).toBeVisible();
   await expect(page.getByText(/attempts: rate limited → success/)).toBeVisible();
+  const capsule = page.locator('details.capsule');
+  await expect(capsule.getByText('Portable investigation capsule')).toBeVisible();
+  await capsule.locator(':scope > summary').click();
+  await expect(capsule.getByRole('button', { name: 'Download capsule' })).toBeEnabled();
+  await expect(capsule.getByRole('checkbox')).toBeDisabled();
   const comparison = page.locator('.comparison');
   await expect(comparison.getByText(/0 source-only · 0 redacted · 4 unavailable\/incomplete/)).toBeVisible();
   await comparison.locator('summary').click();

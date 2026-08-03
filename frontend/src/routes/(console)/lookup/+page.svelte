@@ -21,6 +21,7 @@
   import LookupExternalIntelligence from '$lib/components/LookupExternalIntelligence.svelte';
   import LookupForm from '$lib/components/LookupForm.svelte';
   import LookupHttpEvidence from '$lib/components/LookupHttpEvidence.svelte';
+  import LookupInvestigationCapsule from '$lib/components/LookupInvestigationCapsule.svelte';
   import LookupNetworkContext from '$lib/components/LookupNetworkContext.svelte';
   import LookupOverviewFacts from '$lib/components/LookupOverviewFacts.svelte';
   import LookupPageComparison from '$lib/components/LookupPageComparison.svelte';
@@ -229,6 +230,7 @@
   const evidenceQualityMatrix=$derived(lookupAnalysis.evidenceQualityMatrix);
   const lookupSummary=$derived(lookupAnalysis.lookupSummary);
   const lookupInvestigationBrief=$derived(lookupAnalysis.lookupInvestigationBrief);
+  const lookupEvidenceDocument=$derived(result?buildLookupEvidence(result,{idnAnalysis,applicationVersion:__WHOISLEUTH_VERSION__}):null);
   const evidenceTopologyTarget=$derived(lookupAnalysis.evidenceTopologyTarget);
   const caseEvidence=$derived(lookupAnalysis.caseEvidence);
   const checkpointFacts=$derived(lookupAnalysis.checkpointFacts);
@@ -331,7 +333,7 @@
       dependencies:serviceDependencyReview?.dependencies??[],
     });
   }
-  function downloadEvidence(){if(!result)return;const body=JSON.stringify(buildLookupEvidence(result,{idnAnalysis,applicationVersion:__WHOISLEUTH_VERSION__}),null,2);const url=URL.createObjectURL(new Blob([body],{type:'application/json'}));const anchor=document.createElement('a');anchor.href=url;anchor.download=evidenceFilename(result);anchor.click();URL.revokeObjectURL(url);}
+  function downloadEvidence(){if(!result||!lookupEvidenceDocument)return;const body=JSON.stringify(lookupEvidenceDocument,null,2);const url=URL.createObjectURL(new Blob([body],{type:'application/json'}));const anchor=document.createElement('a');anchor.href=url;anchor.download=evidenceFilename(result);anchor.click();URL.revokeObjectURL(url);}
   function downloadReadableReport(){if(!result)return;const body=buildLookupReadableReport(result,{risk,applicationVersion:__WHOISLEUTH_VERSION__});const url=URL.createObjectURL(new Blob([body],{type:'text/markdown;charset=utf-8'}));const anchor=document.createElement('a');anchor.href=url;anchor.download=lookupReadableReportFilename(result);anchor.click();URL.revokeObjectURL(url);}
   function downloadInvestigationBrief(){if(!result)return;const body=formatLookupInvestigationBriefMarkdown(lookupInvestigationBrief);const url=URL.createObjectURL(new Blob([body],{type:'text/markdown;charset=utf-8'}));const anchor=document.createElement('a');anchor.href=url;anchor.download=lookupInvestigationBriefFilename(lookupInvestigationBrief);anchor.click();URL.revokeObjectURL(url);}
   async function copyDraft(text:string,label:string){try{await navigator.clipboard.writeText(text);draftStatus=`Copied ${label} to the clipboard.`;}catch{draftStatus='Clipboard access was unavailable. Use the email draft link instead.';}}
@@ -439,6 +441,16 @@
       />
 
       <LookupClaimReadiness readiness={lookupClaimReadiness} />
+
+      {#if lookupEvidenceDocument}
+        <LookupInvestigationCapsule
+          applicationVersion={__WHOISLEUTH_VERSION__}
+          lookupEvidence={lookupEvidenceDocument}
+          brief={lookupInvestigationBrief}
+          graph={lookupAssetGraph}
+          {caseRecord}
+        />
+      {/if}
 
       {#if sslbl.sslblVersion===1&&sslbl.verdict==='listed'}
         <aside class="sslbl-review-lead" aria-labelledby="sslbl-review-lead-title">

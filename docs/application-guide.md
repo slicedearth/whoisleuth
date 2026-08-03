@@ -1026,6 +1026,13 @@ observations, or compact case history.
   summary. It omits raw registration payloads and expanded contacts.
 - Use the Lookup JSON evidence package when complete captured source material
   is required, and treat it as potentially containing public contact data.
+- Use the portable investigation capsule when a recipient needs one manifest
+  tying the current evidence-file digest to the bounded investigation brief,
+  relationship graph, source schemas, and application version. The capsule
+  does not embed the Lookup evidence file. A deliberate option can include
+  bounded analyst decisions and assertions from the linked case; notes,
+  contacts, actions, and raw payloads remain excluded. Checksums detect changed
+  content but do not authenticate a signer.
 - Build a case response packet only after recording the category, affected
   party, exact HTTP(S) URLs, observed harm, UTC observation time, and separately
   sourced contact routes. Select the intended audience first: the local preview
