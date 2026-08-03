@@ -1,4 +1,5 @@
 import type { ScanResult } from './bulk-result-model.ts';
+import { classifyBulkSourceCoverage, limitedBulkSources } from './bulk-source-coverage.ts';
 import { rowsToCsv } from './utils.ts';
 
 export type BulkPeerDimensionId =
@@ -107,11 +108,11 @@ function mailPosture(row: ScanResult): string | null {
 }
 
 function sourceCoverage(row: ScanResult): string | null {
-  const values = row.sourceCoverage
-    .map((item) => `${text(item.source, 40)}:${text(item.state, 40)}`)
-    .filter((item) => !item.endsWith(':'))
-    .sort();
-  return values.length ? values.join(' | ') : null;
+  const coverageClass = classifyBulkSourceCoverage(row.domain, row.sourceCoverage);
+  if (coverageClass === 'unrecorded') return null;
+  if (coverageClass === 'complete') return 'complete';
+  const sources = [...new Set(limitedBulkSources(row.domain, row.sourceCoverage))].sort();
+  return sources.length ? `limited: ${sources.join(' | ')}` : 'limited';
 }
 
 function dimensionValue(row: ScanResult, dimension: BulkPeerDimensionId): string | null {
@@ -226,6 +227,7 @@ export function buildBulkPeerOutlierMatrix(rows: readonly ScanResult[]): BulkPee
       'Outliers are low-frequency values relative only to the current analyst-selected and filtered cohort.',
       'An uncommon value does not establish maliciousness, ownership, control, or misconfiguration.',
       'Unavailable and unrecorded values are excluded rather than treated as differences.',
+      'Expected unpublished registry protocols remain in the retained result but do not create a source-coverage outlier.',
       'The matrix uses existing compact Bulk evidence and does not start additional requests.',
       ...(truncated ? [`The comparison was capped at ${MAX_ROWS} rows.`] : []),
     ],
