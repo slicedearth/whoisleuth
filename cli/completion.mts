@@ -3,7 +3,7 @@ import { CLI_COMMANDS, type CompletionShell } from './arguments.mts';
 const COMMON_OPTIONS = Object.freeze(['--help', '--output', '--force']);
 const OPTIONS_BY_COMMAND: Readonly<Record<string, readonly string[]>> = Object.freeze({
   lookup: ['--json', '--markdown', '--html', '--fast', '--deep', '--summary', '--verbose', '--strict-exit', '--events', '--quiet', '--no-color'],
-  bulk: ['--json', '--jsonl', '--csv', '--domains', '--registered-only', '--inconclusive-only', '--fast', '--deep', '--concurrency', '--checkpoint', '--resume', '--events', '--quiet', '--no-color'],
+  bulk: ['--json', '--jsonl', '--csv', '--domains', '--queries', '--registered-only', '--inconclusive-only', '--errors-only', '--fast', '--deep', '--concurrency', '--checkpoint', '--resume', '--events', '--quiet', '--no-color'],
   'ct-search': ['--json', '--quiet', '--no-color'],
   discover: ['--tlds', '--preset', '--families', '--keyboard', '--dictionary', '--snapshot', '--json', '--jsonl', '--domains', '--quiet', '--no-color'],
   'discover-scan': ['--tlds', '--preset', '--families', '--keyboard', '--dictionary', '--fast', '--deep', '--scan-limit', '--chunk-size', '--concurrency', '--resolver', '--allowlist', '--checkpoint', '--resume', '--observation-snapshot', '--registered-only', '--inconclusive-only', '--acquisition-only', '--suppressed-only', '--events', '--json', '--jsonl', '--csv', '--domains', '--quiet', '--no-color'],

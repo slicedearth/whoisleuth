@@ -53,7 +53,7 @@ type CliAction =
   | ({ action: 'manual' })
   | ({ action: 'doctor'; network: boolean; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'lookup'; query: string | null; output: 'terminal' | 'json' | 'markdown' | 'html'; deep: boolean; detail: LookupDetail; strictExit: boolean; events: boolean } & TerminalOptions)
-  | ({ action: 'bulk'; source: string | null; output: 'terminal' | 'json' | 'jsonl' | 'csv' | 'domains'; deep: boolean; concurrency: number; checkpoint: string | null; resume: boolean; events: boolean; filter: 'all' | 'registered' | 'inconclusive' } & TerminalOptions)
+  | ({ action: 'bulk'; source: string | null; output: 'terminal' | 'json' | 'jsonl' | 'csv' | 'domains' | 'queries'; deep: boolean; concurrency: number; checkpoint: string | null; resume: boolean; events: boolean; filter: 'all' | 'registered' | 'inconclusive' | 'errors' } & TerminalOptions)
   | ({ action: 'ct-search'; keyword: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'discover'; seed: string | null; output: 'terminal' | 'json' | 'jsonl' | 'domains'; preset: 'common' | 'impersonation' | 'all' | 'custom'; keyboardLayout: 'qwerty' | 'azerty' | 'qwertz' | 'all'; tldText: string | null; dictionarySource: string | null; familyText: string | null; snapshotSource: string | null } & TerminalOptions)
   | ({ action: 'discover-scan'; seed: string | null; output: 'terminal' | 'json' | 'jsonl' | 'csv' | 'domains'; preset: 'common' | 'impersonation' | 'all' | 'custom'; keyboardLayout: 'qwerty' | 'azerty' | 'qwertz' | 'all'; tldText: string | null; dictionarySource: string | null; familyText: string | null; deep: boolean; scanLimit: number; chunkSize: number; concurrency: number; checkpoint: string | null; resume: boolean; resolverText: string | null; observationSnapshot: string | null; allowlistSource: string | null; filter: 'all' | 'registered' | 'inconclusive' | 'acquisition' | 'suppressed'; events: boolean } & TerminalOptions)
@@ -251,7 +251,7 @@ function parseDoctorArguments(argv: string[]): Extract<CliArguments, { action: '
 
 function parseBulkArguments(argv: string[]): Extract<CliArguments, { action: 'bulk' }> {
   let source: string | null = null;
-  let output: 'terminal' | 'json' | 'jsonl' | 'csv' | 'domains' = 'terminal';
+  let output: 'terminal' | 'json' | 'jsonl' | 'csv' | 'domains' | 'queries' = 'terminal';
   let deep = false;
   let scanMode: 'fast' | 'deep' | null = null;
   let quiet = false;
@@ -260,13 +260,21 @@ function parseBulkArguments(argv: string[]): Extract<CliArguments, { action: 'bu
   let checkpoint: string | null = null;
   let resume = false;
   let events = false;
-  let filter: 'all' | 'registered' | 'inconclusive' = 'all';
+  let filter: 'all' | 'registered' | 'inconclusive' | 'errors' = 'all';
   for (let index = 0; index < argv.length; index++) {
     const argument = argv[index];
     if (argument === undefined) break;
-    if (argument === '--json' || argument === '--jsonl' || argument === '--csv' || argument === '--domains') {
+    if (argument === '--json' || argument === '--jsonl' || argument === '--csv' || argument === '--domains' || argument === '--queries') {
       if (output !== 'terminal') throw new CliUsageError('Choose only one output format.');
-      output = argument === '--json' ? 'json' : argument === '--jsonl' ? 'jsonl' : argument === '--csv' ? 'csv' : 'domains';
+      output = argument === '--json'
+        ? 'json'
+        : argument === '--jsonl'
+          ? 'jsonl'
+          : argument === '--csv'
+            ? 'csv'
+            : argument === '--domains'
+              ? 'domains'
+              : 'queries';
     } else if (argument === '--deep' || argument === '--fast') {
       if (scanMode) throw new CliUsageError('--fast and --deep are mutually exclusive and may be supplied only once.');
       scanMode = argument === '--deep' ? 'deep' : 'fast';
@@ -288,9 +296,13 @@ function parseBulkArguments(argv: string[]): Extract<CliArguments, { action: 'bu
     } else if (argument === '--events') {
       if (events) throw new CliUsageError('--events may be supplied only once.');
       events = true;
-    } else if (argument === '--registered-only' || argument === '--inconclusive-only') {
-      if (filter !== 'all') throw new CliUsageError('--registered-only and --inconclusive-only are mutually exclusive and may be supplied only once.');
-      filter = argument === '--registered-only' ? 'registered' : 'inconclusive';
+    } else if (argument === '--registered-only' || argument === '--inconclusive-only' || argument === '--errors-only') {
+      if (filter !== 'all') throw new CliUsageError('Bulk output filters are mutually exclusive and may be supplied only once.');
+      filter = argument === '--registered-only'
+        ? 'registered'
+        : argument === '--inconclusive-only'
+          ? 'inconclusive'
+          : 'errors';
     } else if (argument === '--quiet') quiet = true;
     else if (argument === '--no-color') color = false;
     else if (argument.startsWith('-')) throw new CliUsageError(`Unknown option "${argument}".`);

@@ -13,7 +13,7 @@ import {
   runBulkLookups,
 } from '../cli/bulk.mts';
 import type { BulkLookupResult, ClassifiedQuery } from '../cli/bulk.mts';
-import { formatBulkCsv, formatBulkDomainList, selectBulkItems } from '../cli/bulk-output.mts';
+import { formatBulkCsv, formatBulkDomainList, formatBulkQueryList, selectBulkItems } from '../cli/bulk-output.mts';
 import EXIT_CODES from '../cli/exit-codes.mts';
 import { buildCliBulkDocument, formatJsonLines } from '../cli/formatters/json.mts';
 import { formatTerminalBulk } from '../cli/formatters/terminal.mts';
@@ -102,6 +102,10 @@ describe('bulk CLI argument parsing', () => {
     assert.throws(() => parseCliArguments(['bulk', '--deep', '--concurrency', '4']), /capped at 3/);
     assert.throws(() => parseCliArguments(['bulk', '--json', '--quiet']), /cannot be combined/);
     assert.throws(() => parseCliArguments(['bulk', '--registered-only', '--inconclusive-only']), /mutually exclusive/);
+    assert.throws(() => parseCliArguments(['bulk', '--errors-only', '--registered-only']), /mutually exclusive/);
+    const errorsOnly = parseCliArguments(['bulk', 'domains.txt', '--queries', '--errors-only']);
+    assert.equal(errorsOnly.action, 'bulk');
+    if (errorsOnly.action === 'bulk') assert.equal(errorsOnly.filter, 'errors');
   });
 });
 
@@ -319,6 +323,7 @@ describe('bulk output and runner', () => {
     assert.match(csv, /10 mail\.example\.test/u);
     assert.match(csv, /observed,not_observed/u);
     assert.equal(formatBulkDomainList(items), 'one.test\n');
+    assert.equal(formatBulkQueryList(items), 'one.test\n');
   });
 
   test('CSV output neutralizes untrusted query and error formulas', () => {
@@ -332,7 +337,7 @@ describe('bulk output and runner', () => {
     assert.match(csv, /,'@unexpected$/mu);
   });
 
-  test('registered and inconclusive filters preserve authority-aware states', () => {
+  test('registered, inconclusive, and error filters preserve authority-aware states', () => {
     const item = (domain: string, state: string): BulkLookupResult => ({
       index: 0,
       query: domain,
@@ -344,6 +349,45 @@ describe('bulk output and runner', () => {
     const items = [item('registered.test', 'registered'), item('sale.test', 'for_sale'), item('unknown.test', 'unknown'), failed];
     assert.deepEqual(selectBulkItems(items, 'registered').map((value) => value.query), ['registered.test', 'sale.test']);
     assert.deepEqual(selectBulkItems(items, 'inconclusive').map((value) => value.query), ['unknown.test', 'failed.test']);
+    assert.deepEqual(selectBulkItems(items, 'errors').map((value) => value.query), ['failed.test']);
+  });
+
+  test('errors-only emits an exact failed-query retry queue without changing the partial exit', async () => {
+    const stdout = capture();
+    const code = await runCli(['bulk', '--queries', '--errors-only'], {
+      stdout: stdout.stream,
+      stderr: capture().stream,
+      readBulkInput: async () => 'unknown.test\nfailed.test\n',
+      classifyQuery: classified,
+      runUnifiedLookup: async (item) => {
+        if (item.value === 'failed.test') throw new Error('fixture collection failure');
+        return {
+          ...compactResult(item.value),
+          availability: { ...compactResult(item.value).availability, state: 'unknown' },
+        };
+      },
+    });
+    assert.equal(code, EXIT_CODES.PARTIAL_FAILURE);
+    assert.equal(stdout.value(), 'failed.test\n');
+
+    const json = capture();
+    await runCli(['bulk', '--json', '--errors-only'], {
+      stdout: json.stream,
+      stderr: capture().stream,
+      readBulkInput: async () => 'unknown.test\nfailed.test\n',
+      classifyQuery: (query) => {
+        if (query === 'failed.test') throw new Error('fixture collection failure');
+        return classified(query);
+      },
+      runUnifiedLookup: async (item) => ({
+        ...compactResult(item.value),
+        availability: { ...compactResult(item.value).availability, state: 'unknown' },
+      }),
+    });
+    const report = JSON.parse(json.value());
+    assert.equal(report.summary.collected, 2);
+    assert.equal(report.summary.matched, 1);
+    assert.deepEqual(report.results.map((item: { query: string }) => item.query), ['failed.test']);
   });
 
   test('runner treats unreadable input as usage failure before any lookup', async () => {

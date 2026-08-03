@@ -48,6 +48,7 @@ node bin/whoisleuth.mts lookup example.com --deep --json --strict-exit --events
 cat domains.txt | node bin/whoisleuth.mts bulk --jsonl
 node bin/whoisleuth.mts bulk domains.txt --csv --registered-only
 node bin/whoisleuth.mts bulk domains.txt --domains --inconclusive-only
+node bin/whoisleuth.mts bulk domains.txt --queries --errors-only
 node bin/whoisleuth.mts bulk domains.txt --concurrency 4
 node bin/whoisleuth.mts bulk domains.txt --deep --checkpoint bulk-checkpoint.json
 node bin/whoisleuth.mts bulk domains.txt --deep --checkpoint bulk-checkpoint.json --resume
@@ -482,19 +483,25 @@ deep mode.
 
 Bulk uses the shared compact lookup response, so it does not retain raw RDAP
 objects or WHOIS response bodies. `--json` returns one bounded collection;
-`--jsonl` emits one self-contained versioned item per line. Version 2 adds a
+`--jsonl` emits one self-contained versioned item per line. `--domains` emits
+only successfully normalized domain names, while `--queries` preserves the
+selected bounded input queries and is suitable for an exact retry queue.
+Version 2 adds a
 bounded `dnsSummary` projection for observed A, AAAA, NS, and MX records plus
 null MX, SPF, and DMARC state. `--csv` writes fixed columns for automation,
-including the DNS summaries and explicit outcome; `--domains` writes only the
-normalized retained domain names for a subsequent command.
+including the DNS summaries and explicit outcome.
 
-`--registered-only` and `--inconclusive-only` are mutually exclusive output
-filters. The first retains registered, for-sale, and expiring authority-aware
-states. The second retains unknown authority states and failed rows. Filtering
-does not change collection and never converts an unavailable or failed source
-into an unregistered result. Machine documents record collected and emitted
-counts. A mixture of successful and failed queries exits with code 4 while
-preserving every collected result before output filtering.
+`--registered-only`, `--inconclusive-only`, and `--errors-only` are mutually
+exclusive output filters. The first retains registered, for-sale, and expiring
+authority-aware states. The second retains unknown authority states and failed
+rows. The third retains only rows whose lookup operation failed, which is useful
+for producing an exact retry queue without treating an inconclusive successful
+lookup as an operational error. Filtering does not change collection and never
+converts an unavailable or failed source into an unregistered result. Machine
+documents record collected and emitted counts. A mixture of successful and
+failed queries exits with code 4 while preserving every collected result before
+output filtering. For example, `bulk domains.txt --queries --errors-only`
+produces only the exact failed inputs while retaining the partial-failure exit.
 
 ## Certificate Transparency search
 

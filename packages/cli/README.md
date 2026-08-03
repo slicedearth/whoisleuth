@@ -52,6 +52,7 @@ node bin/whoisleuth.mts lookup example.test --deep --summary
 node bin/whoisleuth.mts lookup example.test --deep --markdown --output lookup.md
 node bin/whoisleuth.mts bulk domains.txt --deep --checkpoint bulk-checkpoint.json
 node bin/whoisleuth.mts bulk domains.txt --csv --registered-only
+node bin/whoisleuth.mts bulk domains.txt --queries --errors-only
 node bin/whoisleuth.mts discover example.test --dictionary private-terms.txt --snapshot discovery-state.json --json
 node bin/whoisleuth.mts discover-scan example.test --scan-limit 50 --checkpoint candidate-scan.json --json
 node bin/whoisleuth.mts page-compare official.json candidate.json --json
@@ -81,8 +82,9 @@ the partial-result exit code. Ctrl-C suppresses partial final output and
 returns exit code 130; a second interrupt performs best-effort temporary-file
 cleanup before exiting immediately.
 
-Bulk also supports fixed-column CSV, domain-only output, registered and
-inconclusive output filters, and bounded A, AAAA, NS, and MX summaries. Discover
+Bulk also supports fixed-column CSV, domain-only or exact-query output,
+registered, inconclusive, and hard-failure output filters, and bounded A, AAAA,
+NS, and MX summaries. Discover
 supports local custom dictionaries and private snapshot comparison suitable
 for an operator-managed scheduler. The separate networked `discover-scan`
 command can collect a deterministic bounded subset in chunks, retain mutation

@@ -44,7 +44,7 @@ type BulkMetadata = {
   deep?: boolean;
   duplicates?: number;
   collectedTotal?: number;
-  filter?: 'all' | 'inconclusive' | 'registered';
+  filter?: 'all' | 'errors' | 'inconclusive' | 'registered';
 };
 
 function buildCliLookupDocument(

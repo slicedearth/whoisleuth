@@ -138,7 +138,7 @@ const COMMAND_USAGE: Readonly<Record<CliCommand, string>> = Object.freeze({
   doctor: 'whoisleuth doctor [--network] [--json] [--quiet] [--no-color]',
   manual: 'whoisleuth manual',
   lookup: 'whoisleuth lookup <domain|IP|ASN> [--json|--markdown|--html] [--fast|--deep] [--summary|--verbose] [--strict-exit] [--events] [--quiet] [--no-color]',
-  bulk: 'whoisleuth bulk [file] [--json|--jsonl|--csv|--domains] [--registered-only|--inconclusive-only] [--fast|--deep] [--concurrency <1-8>] [--checkpoint <file> [--resume]] [--events]',
+  bulk: 'whoisleuth bulk [file] [--json|--jsonl|--csv|--domains|--queries] [--registered-only|--inconclusive-only|--errors-only] [--fast|--deep] [--concurrency <1-8>] [--checkpoint <file> [--resume]] [--events]',
   'ct-search': 'whoisleuth ct-search <keyword> [--json] [--quiet] [--no-color]',
   discover: 'whoisleuth discover <brand|domain> [--tlds <list>] [--preset <name>|--families <ids>] [--keyboard <layout>] [--dictionary <file>] [--snapshot <file>] [--json|--jsonl|--domains]',
   'discover-scan': 'whoisleuth discover-scan <brand|domain> [--fast|--deep] [--scan-limit <n>] [--chunk-size <n>] [--concurrency <n>] [--resolver <IPs>] [--allowlist <file>] [--checkpoint <file> [--resume]] [--observation-snapshot <file>] [--json|--jsonl|--csv|--domains]',
