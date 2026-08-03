@@ -17,6 +17,8 @@ const BASE = {
   currentMx: [{ priority: 10, exchange: 'mail.example.net' }],
   currentCaa: [{ critical: 0, tag: 'issue', value: 'ca.example' }],
   currentCriticalAddresses: [{ hostname: 'www.example.test', addresses: ['192.0.2.20'] }],
+  currentRegistrationStatuses: ['clientTransferProhibited'],
+  currentTlsSpkiSha256: 'b'.repeat(64),
   proposedNameservers: 'ns3.example.net\nns4.example.net',
   proposedGlue: '',
   proposedDs: `12345 13 2 ${'a'.repeat(64)}`,
@@ -24,6 +26,10 @@ const BASE = {
   proposedCaa: '0 issue ca.example',
   proposedCriticalAddresses: 'www.example.test 192.0.2.20',
   dnssecChange: 'unchanged' as const,
+  registrarLockChange: 'unchanged' as const,
+  certificateKeyChange: 'unchanged' as const,
+  proposedTlsSpkiSha256: '',
+  certificateReplacementReady: false,
   ttlLowered: true,
   zonePrepublished: true,
   currentEvidenceComplete: true,
@@ -37,6 +43,41 @@ describe('DNS change rehearsal', () => {
     assert.match(result.sequence.join(' '), /submit the parent nameserver change/i);
     assert.match(result.limitations.join(' '), /does not change DNS/i);
     assert.match(result.limitations.join(' '), /does not guarantee/i);
+  });
+
+  test('keeps registrar controls and certificate-key assertions separate from observations', () => {
+    const result = buildDnsChangeRehearsal({
+      ...BASE,
+      registrarLockChange: 'disable',
+      certificateKeyChange: 'rotate',
+      proposedTlsSpkiSha256: 'c'.repeat(64),
+      certificateReplacementReady: true,
+    });
+    assert.equal(result.observed.registrarLock, 'observed');
+    assert.equal(result.observed.tlsSpkiSha256, 'b'.repeat(64));
+    assert.equal(result.proposed.registrarLockChange, 'disable');
+    assert.equal(result.proposed.tlsSpkiSha256, 'c'.repeat(64));
+    assert.equal(result.findings.find((item) => item.id === 'registrar_lock')?.state, 'review');
+    assert.equal(result.findings.find((item) => item.id === 'certificate_key')?.state, 'review');
+    assert.match(result.sequence.join(' '), /re-enable and verify/i);
+  });
+
+  test('blocks an unready or unchanged replacement certificate key', () => {
+    const unchanged = buildDnsChangeRehearsal({
+      ...BASE,
+      certificateKeyChange: 'rotate',
+      proposedTlsSpkiSha256: 'b'.repeat(64),
+      certificateReplacementReady: true,
+    });
+    assert.equal(unchanged.findings.find((item) => item.id === 'certificate_key')?.state, 'blocked');
+
+    const unready = buildDnsChangeRehearsal({
+      ...BASE,
+      certificateKeyChange: 'rotate',
+      proposedTlsSpkiSha256: 'c'.repeat(64),
+      certificateReplacementReady: false,
+    });
+    assert.equal(unready.findings.find((item) => item.id === 'certificate_key')?.state, 'blocked');
   });
 
   test('blocks missing in-bailiwick glue and unconfirmed authority readiness', () => {

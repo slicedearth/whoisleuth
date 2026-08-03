@@ -60,6 +60,8 @@
       currentMx?: readonly unknown[];
       currentCaa?: readonly unknown[];
       currentCriticalAddresses?: readonly unknown[];
+      currentRegistrationStatuses?: readonly unknown[];
+      currentTlsSpkiSha256?: unknown;
     };
     domain?: string;
     allowRehearsal?: boolean;
@@ -137,6 +139,8 @@
             currentMx={rehearsalEvidence.currentMx ?? []}
             currentCaa={rehearsalEvidence.currentCaa ?? []}
             currentCriticalAddresses={rehearsalEvidence.currentCriticalAddresses ?? []}
+            currentRegistrationStatuses={rehearsalEvidence.currentRegistrationStatuses ?? []}
+            currentTlsSpkiSha256={rehearsalEvidence.currentTlsSpkiSha256 ?? null}
             evidenceComplete={delegation.complete}
           />
         {/if}

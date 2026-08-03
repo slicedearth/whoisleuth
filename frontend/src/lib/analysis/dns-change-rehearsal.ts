@@ -1,10 +1,12 @@
-export const DNS_CHANGE_REHEARSAL_VERSION = 1;
+export const DNS_CHANGE_REHEARSAL_VERSION = 2;
 export const DNS_CHANGE_REHEARSAL_EXPORT_SCHEMA = 'whoisleuth.dns-change-rehearsal';
 export const MAX_REHEARSAL_NAMESERVERS = 8;
 export const MAX_REHEARSAL_GLUE = 16;
 export const MAX_REHEARSAL_RECORDS = 32;
 
 export type DnssecChange = 'unchanged' | 'enable' | 'rotate' | 'disable';
+export type RegistrarLockChange = 'unchanged' | 'enable' | 'disable';
+export type CertificateKeyChange = 'unchanged' | 'rotate';
 export type DnsChangeFinding = Readonly<{
   id: string;
   state: 'ready' | 'review' | 'blocked' | 'unknown';
@@ -12,7 +14,7 @@ export type DnsChangeFinding = Readonly<{
   detail: string;
 }>;
 export type DnsChangeRehearsal = Readonly<{
-  version: 1;
+  version: 2;
   ready: boolean;
   observed: Readonly<{
     nameservers: readonly string[];
@@ -22,6 +24,8 @@ export type DnsChangeRehearsal = Readonly<{
     mx: readonly string[];
     caa: readonly string[];
     criticalAddresses: readonly { hostname: string; addresses: readonly string[] }[];
+    registrarLock: 'observed' | 'unknown';
+    tlsSpkiSha256: string | null;
     complete: boolean;
   }>;
   proposed: Readonly<{
@@ -32,6 +36,10 @@ export type DnsChangeRehearsal = Readonly<{
     caa: readonly string[];
     criticalAddresses: readonly { hostname: string; addresses: readonly string[] }[];
     dnssecChange: DnssecChange;
+    registrarLockChange: RegistrarLockChange;
+    certificateKeyChange: CertificateKeyChange;
+    tlsSpkiSha256: string | null;
+    certificateReplacementReady: boolean;
   }>;
   findings: readonly DnsChangeFinding[];
   sequence: readonly string[];
@@ -49,6 +57,8 @@ export type DnsChangeRehearsalInput = Readonly<{
   currentMx?: readonly unknown[];
   currentCaa?: readonly unknown[];
   currentCriticalAddresses?: readonly unknown[];
+  currentRegistrationStatuses?: readonly unknown[];
+  currentTlsSpkiSha256?: unknown;
   proposedNameservers: string;
   proposedGlue: string;
   proposedDs?: string;
@@ -56,6 +66,10 @@ export type DnsChangeRehearsalInput = Readonly<{
   proposedCaa?: string;
   proposedCriticalAddresses?: string;
   dnssecChange: DnssecChange;
+  registrarLockChange: RegistrarLockChange;
+  certificateKeyChange: CertificateKeyChange;
+  proposedTlsSpkiSha256?: string;
+  certificateReplacementReady: boolean;
   ttlLowered: boolean;
   zonePrepublished: boolean;
   currentEvidenceComplete: boolean;
@@ -251,6 +265,21 @@ function sameSet(left: readonly string[], right: readonly string[]): boolean {
   return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
+function tlsSpkiSha256(value: unknown): string | null {
+  const normalized = typeof value === 'string'
+    ? value.trim().toLowerCase().replaceAll(':', '')
+    : '';
+  return /^[a-f0-9]{64}$/u.test(normalized) ? normalized : null;
+}
+
+function registrarLockState(value: readonly unknown[] | undefined): 'observed' | 'unknown' {
+  for (const item of Array.isArray(value) ? value.slice(0, MAX_REHEARSAL_RECORDS) : []) {
+    const normalized = String(item).toLowerCase().replace(/[^a-z]/gu, '');
+    if (normalized === 'clienttransferprohibited') return 'observed';
+  }
+  return 'unknown';
+}
+
 function finding(
   id: string,
   state: DnsChangeFinding['state'],
@@ -292,6 +321,9 @@ export function buildDnsChangeRehearsal(input: DnsChangeRehearsalInput): DnsChan
   const proposedCaa = caaRecords(input.proposedCaa);
   const currentCriticalAddresses = addressRows(input.currentCriticalAddresses);
   const proposedCriticalAddresses = addressRows(input.proposedCriticalAddresses);
+  const currentRegistrarLock = registrarLockState(input.currentRegistrationStatuses);
+  const currentTlsSpkiSha256 = tlsSpkiSha256(input.currentTlsSpkiSha256);
+  const proposedTlsSpkiSha256 = tlsSpkiSha256(input.proposedTlsSpkiSha256);
   const inBailiwick = proposed.filter((item) => item === domain || item.endsWith(`.${domain}`));
   const missingGlue = inBailiwick.filter((item) => !glue.some((row) => (
     row.nameserver === item && row.addresses.length > 0
@@ -335,6 +367,46 @@ export function buildDnsChangeRehearsal(input: DnsChangeRehearsalInput): DnsChan
   const proposedAddressSet = proposedCriticalAddresses.flatMap((row) => row.addresses.map((itemAddress) => `${row.hostname} ${itemAddress}`)).sort();
   findings.push(recordSetFinding('critical_addresses', 'Critical address', observedAddressSet, proposedAddressSet));
 
+  if (input.registrarLockChange === 'enable') {
+    findings.push(currentRegistrarLock === 'observed'
+      ? finding('registrar_lock', 'ready', 'Registrar transfer lock is already observed', 'A client transfer prohibited status is present in the retained registration evidence. Confirm the state in the registrar control plane before relying on it.')
+      : finding('registrar_lock', 'review', 'Registrar transfer lock enablement is planned', 'No client transfer prohibited status was observed. Enable the lock through the authorised registrar control plane and verify a refreshed registration observation.'));
+  } else if (input.registrarLockChange === 'disable') {
+    findings.push(currentRegistrarLock === 'observed'
+      ? finding('registrar_lock', 'review', 'Temporary registrar transfer unlock is planned', 'Keep the unlocked interval as short as the approved procedure permits, complete the authorised operation, then re-enable and verify the lock.')
+      : finding('registrar_lock', 'unknown', 'Current registrar transfer-lock state is unknown', 'A lock removal should not be planned from evidence that does not show a client transfer prohibited status. Confirm the current control-plane state first.'));
+  } else {
+    findings.push(finding(
+      'registrar_lock',
+      'ready',
+      'No registrar transfer-lock change declared',
+      currentRegistrarLock === 'observed'
+        ? 'A client transfer prohibited status is observed and this rehearsal leaves it unchanged.'
+        : 'The retained evidence does not prove the lock state; this rehearsal makes no change to it.',
+    ));
+  }
+
+  if (input.certificateKeyChange === 'rotate') {
+    findings.push(!proposedTlsSpkiSha256
+      ? finding('certificate_key', 'blocked', 'Enter the replacement certificate key fingerprint', 'Provide the replacement leaf-certificate SPKI SHA-256 fingerprint so the planned key differs from the retained observation.')
+      : currentTlsSpkiSha256 && proposedTlsSpkiSha256 === currentTlsSpkiSha256
+        ? finding('certificate_key', 'blocked', 'Replacement certificate key matches the current key', 'A key rotation needs a different reviewed SPKI SHA-256 fingerprint.')
+        : !input.certificateReplacementReady
+          ? finding('certificate_key', 'blocked', 'Replacement certificate is not confirmed ready', 'Issue and validate the replacement certificate and key on the intended endpoint before retiring the current key.')
+          : finding('certificate_key', 'review', 'Certificate key rotation is represented', currentTlsSpkiSha256
+            ? 'The entered replacement SPKI SHA-256 differs from the retained leaf-certificate key fingerprint.'
+            : 'No compatible current key fingerprint was retained. The replacement is represented, but the analyst must verify the previous key separately.'));
+  } else {
+    findings.push(finding(
+      'certificate_key',
+      'ready',
+      'No certificate key change declared',
+      currentTlsSpkiSha256
+        ? 'The retained leaf-certificate SPKI SHA-256 is recorded for rollback comparison.'
+        : 'No compatible leaf-certificate key fingerprint was retained; this rehearsal does not infer that a certificate is absent.',
+    ));
+  }
+
   const ready = proposed.length > 0 && !findings.some((item) => item.state === 'blocked' || item.state === 'unknown');
   const sequence = [
     'Confirm the retained current parent, registry, and direct-authority evidence is fresh enough for the planned change.',
@@ -347,6 +419,9 @@ export function buildDnsChangeRehearsal(input: DnsChangeRehearsalInput): DnsChan
     ...(input.dnssecChange === 'rotate' ? ['Maintain the required DNSSEC overlap until old validation paths can be retired safely.'] : []),
     ...(input.dnssecChange === 'disable' ? ['Remove the parent DS and wait for expiry before making the zone unsigned.'] : []),
     ...(changingNameservers ? ['Submit the parent nameserver change only after all readiness gates are reviewed.'] : []),
+    ...(input.registrarLockChange === 'disable' ? ['Disable the registrar transfer lock only for the approved operation, then re-enable and verify it immediately afterward.'] : []),
+    ...(input.registrarLockChange === 'enable' ? ['Enable the registrar transfer lock and confirm the refreshed registration status through the authorised control plane.'] : []),
+    ...(input.certificateKeyChange === 'rotate' ? ['Deploy and validate the replacement certificate key before removing the previous certificate or key material.'] : []),
     'Re-run a complete external check after the change and keep failed or location-dependent observations inconclusive.',
   ];
   const unknowns = findings
@@ -365,6 +440,8 @@ export function buildDnsChangeRehearsal(input: DnsChangeRehearsalInput): DnsChan
       mx: currentMx,
       caa: currentCaa,
       criticalAddresses: currentCriticalAddresses,
+      registrarLock: currentRegistrarLock,
+      tlsSpkiSha256: currentTlsSpkiSha256,
       complete: input.currentEvidenceComplete,
     },
     proposed: {
@@ -375,11 +452,15 @@ export function buildDnsChangeRehearsal(input: DnsChangeRehearsalInput): DnsChan
       caa: proposedCaa,
       criticalAddresses: proposedCriticalAddresses,
       dnssecChange: input.dnssecChange,
+      registrarLockChange: input.registrarLockChange,
+      certificateKeyChange: input.certificateKeyChange,
+      tlsSpkiSha256: proposedTlsSpkiSha256,
+      certificateReplacementReady: input.certificateReplacementReady,
     },
     findings,
     sequence,
     rollback: [
-      'Retain the previous nameserver, glue, zone, and DS values in the approved change record.',
+      'Retain the previous nameserver, glue, zone, DS, registrar-lock state, and certificate key fingerprint in the approved change record.',
       'Define the condition that triggers rollback before making a parent or DNSSEC change.',
       'Restore the last reviewed parent and DNSSEC publication only through the registry or DNS provider control plane.',
       'Verify the rolled-back state directly and through recursive observations; cached disagreement can persist temporarily.',
@@ -387,7 +468,7 @@ export function buildDnsChangeRehearsal(input: DnsChangeRehearsalInput): DnsChan
     unknowns,
     limitations: [
       'This is a local planning aid. It does not change DNS, query a provider account, submit a registry update, or verify authorization.',
-      'Entered nameservers and glue are analyst assertions, not observed evidence.',
+      'Entered nameservers, glue, registrar-lock intent, and replacement key fingerprint are analyst assertions, not observed evidence.',
       'Point-in-time observations and generic sequencing cannot replace the registry, DNS operator, and DNSSEC rollover procedures for the affected zone.',
       'A ready rehearsal means the entered gates are represented; it does not guarantee propagation, correctness, availability, or a successful change.',
     ],

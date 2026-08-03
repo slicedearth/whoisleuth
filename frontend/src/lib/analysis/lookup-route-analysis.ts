@@ -243,6 +243,11 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
         ...(Array.isArray(dnsRecords.aaaa) ? dnsRecords.aaaa.map(String) : []),
       ],
     }],
+    currentRegistrationStatuses: [
+      ...(Array.isArray(rdapParsed.statuses) ? rdapParsed.statuses : []),
+      ...(Array.isArray(whoisParsed.statuses) ? whoisParsed.statuses : []),
+    ],
+    currentTlsSpkiSha256: tlsPublicKey.fingerprintSha256,
   };
   const registryDisplay = buildLookupRegistryDisplay({
     result,

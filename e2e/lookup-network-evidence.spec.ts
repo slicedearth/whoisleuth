@@ -96,7 +96,7 @@ test('deep DNS evidence distinguishes observed records from partial resolver fai
   await card.getByText('Direct nameserver observations', { exact: true }).click();
   await expect(card.getByText('ns2.example', { exact: true }).last()).toBeVisible();
   await expect(card.getByText(/does not decide registration availability/i)).toBeVisible();
-  await card.getByText('Plan a DNS change', { exact: true }).click();
+  await card.getByText('Plan a domain control change', { exact: true }).click();
   await card.getByLabel('Intended nameservers').fill('ns3.example.net\nns4.example.net');
   await card.getByLabel(/Relevant TTL preparation/).check();
   await card.getByLabel(/Proposed authorities already serve/).check();

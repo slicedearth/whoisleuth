@@ -476,18 +476,19 @@ service assignment, abandonment, or claimability. Complete current DNS
 evidence with no dependency is reported only as a point-in-time
 non-observation; incomplete DNS remains unavailable.
 
-**DNS change rehearsal** is available under a completed authoritative DNS
-health result in Deep Lookup. Enter the complete intended nameserver set,
-optional in-bailiwick glue, intended DS, MX, CAA and critical address sets, the
-DNSSEC change type, and reviewed readiness confirmations. The local planner
-keeps proposed values separate from the current observation, highlights
-unresolved evidence, set changes, missing glue, unprepared authorities, TTL
-preparation, and DNSSEC ordering, then presents an ordered change and rollback
-checklist. A deliberate JSON download preserves the reviewed comparison,
-unknowns, provenance boundary, and limitations. Entered values remain analyst
-assertions. Nothing is saved automatically. The rehearsal makes no request,
-changes no DNS or registry state, and cannot guarantee propagation or
-correctness.
+**Domain-control change rehearsal** is available under a completed authoritative
+DNS health result in Deep Lookup. Enter the complete intended nameserver set,
+optional in-bailiwick glue, intended DS, MX, CAA and critical address sets,
+DNSSEC and registrar-lock intent, an optional replacement certificate public-key
+fingerprint, and reviewed readiness confirmations. The local planner keeps
+proposed values separate from the current observation, highlights unresolved
+evidence, set changes, missing glue, unprepared authorities, TTL preparation,
+DNSSEC ordering, short-lived transfer unlocks and certificate-key sequencing,
+then presents an ordered change and rollback checklist. A deliberate JSON
+download preserves the reviewed comparison, unknowns, provenance boundary, and
+limitations. Entered values remain analyst assertions. Nothing is saved
+automatically. The rehearsal makes no request, changes no DNS, registrar or
+certificate state, and cannot guarantee propagation or correctness.
 
 The same authoritative DNS result retains a bounded SOA projection for each
 responding selected authority. Lookup compares the primary name and serial
