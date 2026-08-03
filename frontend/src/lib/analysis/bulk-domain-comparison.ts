@@ -63,6 +63,7 @@ export type BulkDomainComparison = Readonly<{
 
 type ComparableValue = boolean | number | string | null | readonly string[];
 type ComparisonOptions = Readonly<{
+  allowSameDomain?: boolean;
   leftEvidenceHref?: unknown;
   now?: number;
   rightEvidenceHref?: unknown;
@@ -268,7 +269,7 @@ export function buildBulkDomainComparison(
 ): BulkDomainComparison | null {
   const left = normalizeBulkSessionResult(leftRaw);
   const right = normalizeBulkSessionResult(rightRaw);
-  if (!left || !right || left.domain === right.domain) return null;
+  if (!left || !right || (left.domain === right.domain && !options.allowSameDomain)) return null;
   const observedAt = timestamp(observedAtRaw);
   const registry = context(left, right, 'Registry and registrar evidence', ['rdap', 'availability'], observedAt, options);
   const dns = context(left, right, 'DNS evidence', ['dns'], observedAt, options);
@@ -329,11 +330,17 @@ export function buildBulkDomainComparison(
     freshness: freshness(observedAt, options.now ?? Date.now()),
     rows,
     counts,
-    limitations: [
-      'This compares compact settled evidence already present in Bulk and makes no new request.',
-      'Missing, unavailable, and differently collected evidence remain distinct from an observed difference.',
-      'Equality does not establish common ownership, infrastructure control, intent, safety, or maliciousness.',
-    ],
+    limitations: options.allowSameDomain
+      ? [
+        'This compares normalized evidence already present in two saved observations for the same domain and makes no new request.',
+        'Missing, unavailable, and differently collected evidence remain distinct from an observed difference.',
+        'An observed difference can reflect changed collection conditions and does not by itself establish current state, ownership, intent, safety, or maliciousness.',
+      ]
+      : [
+        'This compares compact settled evidence already present in Bulk and makes no new request.',
+        'Missing, unavailable, and differently collected evidence remain distinct from an observed difference.',
+        'Equality does not establish common ownership, infrastructure control, intent, safety, or maliciousness.',
+      ],
   };
 }
 

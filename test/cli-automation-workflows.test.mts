@@ -10,6 +10,7 @@ import { createBulkCheckpointWriter, parseBulkCheckpoint } from '../cli/bulk-che
 import EXIT_CODES from '../cli/exit-codes.mts';
 import { buildCliLookupDocument } from '../cli/formatters/json.mts';
 import { buildCliLookupDiff } from '../cli/lookup-diff.mts';
+import { buildCliLookupTimeline } from '../cli/lookup-timeline.mts';
 import { CLI_PROGRESS_EVENT_SCHEMA, CLI_PROGRESS_EVENT_VERSION } from '../cli/progress-events.mts';
 import { runCli } from '../cli/runner.mts';
 import { lookupStrictExitFindings } from '../cli/strict-exit.mts';
@@ -41,7 +42,7 @@ function classifiedDomain(domain: string): ClassifiedQuery {
   };
 }
 
-function lookupResult(domain: string, status = 'success') {
+function lookupResult(domain: string, status = 'success', address?: string) {
   return {
     rdap: {
       parsed: {
@@ -57,7 +58,7 @@ function lookupResult(domain: string, status = 'success') {
       domain,
       state: 'registered',
       confidence: 'high',
-      dns: { status: 'success', records: { a: domain.startsWith('left') ? ['192.0.2.10'] : ['192.0.2.20'] } },
+      dns: { status: 'success', records: { a: [address ?? (domain.startsWith('left') ? '192.0.2.10' : '192.0.2.20')] } },
     },
     diagnostics: {
       version: 8,
@@ -68,12 +69,12 @@ function lookupResult(domain: string, status = 'success') {
   };
 }
 
-function savedLookup(domain: string): string {
+function savedLookup(domain: string, generatedAt = NOW, address?: string): string {
   return JSON.stringify(buildCliLookupDocument(
     domain,
     classifiedDomain(domain),
-    lookupResult(domain),
-    NOW,
+    lookupResult(domain, 'success', address),
+    generatedAt,
     'fast',
   ));
 }
@@ -83,6 +84,9 @@ describe('CLI automation arguments', () => {
     assert.deepEqual(parseCliArguments(['manual']), { action: 'manual' });
     assert.deepEqual(parseCliArguments(['diff', 'left.json', 'right.json', '--json']), {
       action: 'diff', leftSource: 'left.json', rightSource: 'right.json', output: 'json', quiet: false, color: true,
+    });
+    assert.deepEqual(parseCliArguments(['timeline', 'first.json', 'second.json', 'latest.json', '--json']), {
+      action: 'timeline', sources: ['first.json', 'second.json', 'latest.json'], output: 'json', quiet: false, color: true,
     });
     assert.deepEqual(parseCliArguments(['lookup', 'example.test', '--strict-exit', '--output', 'result.json', '--force']), {
       action: 'lookup', query: 'example.test', output: 'terminal', deep: false, detail: 'standard', strictExit: true,
@@ -96,6 +100,8 @@ describe('CLI automation arguments', () => {
     assert.throws(() => parseCliArguments(['lookup', 'example.test', '--force']), /requires --output/u);
     assert.throws(() => parseCliArguments(['bulk', '--resume']), /requires --checkpoint/u);
     assert.throws(() => parseCliArguments(['diff', 'same.json', 'same.json']), /two different input files/u);
+    assert.throws(() => parseCliArguments(['timeline', 'one.json']), /from 2 to 20/u);
+    assert.throws(() => parseCliArguments(['timeline', 'same.json', 'same.json']), /must be different/u);
   });
 });
 
@@ -256,6 +262,45 @@ describe('direct reports and saved Lookup diff', () => {
     assert.equal(lookupCalled, false);
     assert.equal(JSON.parse(stdout.value()).schema, 'whoisleuth.cli.lookup-diff');
     assert.doesNotMatch(stdout.value(), /response|contact/iu);
+  });
+
+  test('orders and compares a bounded same-domain observation history offline', async () => {
+    const oldest = savedLookup('history.example', '2026-06-01T00:00:00.000Z', '192.0.2.10');
+    const middle = savedLookup('history.example', '2026-07-01T00:00:00.000Z', '192.0.2.20');
+    const latest = savedLookup('history.example', '2026-08-01T00:00:00.000Z', '192.0.2.30');
+    const direct = buildCliLookupTimeline([latest, oldest, middle], NOW);
+    assert.equal(direct.schema, 'whoisleuth.cli.lookup-timeline');
+    assert.deepEqual(direct.observations.map((item) => item.generatedAt), [
+      '2026-06-01T00:00:00.000Z',
+      '2026-07-01T00:00:00.000Z',
+      '2026-08-01T00:00:00.000Z',
+    ]);
+    assert.equal(direct.summary.transitionCount, 2);
+    assert.equal(direct.summary.transitionsWithObservedChanges, 2);
+    assert.ok(direct.transitions.every((item) => item.comparison.leftDomain === 'history.example'
+      && item.comparison.rightDomain === 'history.example'));
+
+    const stdout = capture();
+    let lookupCalled = false;
+    const inputs: Record<string, string> = { 'first.json': oldest, 'second.json': middle, 'latest.json': latest };
+    const code = await runCli(['timeline', 'latest.json', 'first.json', 'second.json', '--json'], {
+      stdout: stdout.stream,
+      stderr: capture().stream,
+      now: () => NOW,
+      readDiffInput: async (source) => inputs[source] || '',
+      runUnifiedLookup: async () => { lookupCalled = true; },
+    });
+    assert.equal(code, EXIT_CODES.SUCCESS);
+    assert.equal(lookupCalled, false);
+    assert.equal(JSON.parse(stdout.value()).schema, 'whoisleuth.cli.lookup-timeline');
+    assert.doesNotMatch(stdout.value(), /first\.json|second\.json|latest\.json/iu);
+    assert.equal(JSON.parse(stdout.value()).privacy.rawRegistryPayloadsCopied, 0);
+
+    assert.throws(
+      () => buildCliLookupTimeline([oldest, savedLookup('other.example', '2026-07-01T00:00:00.000Z')], NOW),
+      /exactly one domain/u,
+    );
+    assert.throws(() => buildCliLookupTimeline([oldest, oldest], NOW), /observation times must be unique/u);
   });
 });
 

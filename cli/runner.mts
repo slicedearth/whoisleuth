@@ -41,6 +41,11 @@ import {
   formatTerminalRiskCalibration,
 } from './formatters/terminal.mts';
 import { buildCliLookupDiff, formatCliLookupDiff } from './lookup-diff.mts';
+import {
+  MAX_LOOKUP_TIMELINE_INPUT_BYTES,
+  buildCliLookupTimeline,
+  formatCliLookupTimeline,
+} from './lookup-timeline.mts';
 import { buildCliPageComparison, formatCliPageComparison } from './page-compare.mts';
 import {
   MAX_MAIL_REVIEW_INPUT_BYTES,
@@ -110,6 +115,7 @@ Review saved evidence:
   page-compare       Compare saved static page and TLS evidence.
   mail-review        Review saved passive mail exposure evidence.
   diff               Compare two saved domain observations.
+  timeline           Compare a sequence of observations for one domain.
   export             Convert a saved lookup into an evidence report.
   inspect-archive    Inspect a workspace archive, redacted by default.
   verify-artifact    Validate an archive, packet, or manifest offline.
@@ -156,6 +162,7 @@ const COMMAND_USAGE: Readonly<Record<CliCommand, string>> = Object.freeze({
   'page-compare': 'whoisleuth page-compare <left.json> <right.json> [--json] [--quiet] [--no-color]',
   'mail-review': 'whoisleuth mail-review [bulk.json|bulk.jsonl] [--json] [--quiet] [--no-color]',
   diff: 'whoisleuth diff <left.json> <right.json> [--json] [--quiet] [--no-color]',
+  timeline: 'whoisleuth timeline <observation.json> <observation.json> [...] [--json] [--quiet] [--no-color]',
   export: 'whoisleuth export [lookup.json] [--markdown|--html|--compact]',
 });
 
@@ -269,6 +276,11 @@ const COMMAND_DETAILS: Readonly<Record<CliCommand, Readonly<{ description: strin
     description: 'Compare bounded evidence retained in two saved domain lookups.',
     example: 'whoisleuth diff first.json second.json --json',
     boundary: 'Comparison is offline. Missing, unavailable, equal, and different evidence remain separate states.',
+  },
+  timeline: {
+    description: 'Build an ordered same-domain history from saved Lookup observations.',
+    example: 'whoisleuth timeline first.json second.json latest.json --json',
+    boundary: 'The command is offline, accepts 2 to 20 bounded inputs for one domain, retains no filenames or raw registry payloads, and does not treat changed collection conditions as a domain change.',
   },
   export: {
     description: 'Convert one saved lookup into a versioned evidence report.',
@@ -660,6 +672,36 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
       if (!args.quiet) write(stdout, args.output === 'json'
         ? formatJsonDocument(document)
         : terminal(formatCliLookupDiff(document), args.color));
+      return EXIT_CODES.SUCCESS;
+    }
+
+    if (args.action === 'timeline') {
+      failureLabel = 'Lookup observation timeline';
+      const readTimelineInput = dependencies.readDiffInput || (async (source: string) => (
+        readSavedLookupInputBounded(createReadStream(source, { highWaterMark: 64 * 1024 }), {
+          limit: MAX_SAVED_LOOKUP_INPUT_BYTES,
+          label: 'Lookup timeline input',
+        })
+      ));
+      const inputs: string[] = [];
+      let totalBytes = 0;
+      try {
+        for (const source of args.sources) {
+          const input = await readTimelineInput(source);
+          totalBytes += Buffer.byteLength(input, 'utf8');
+          if (totalBytes > MAX_LOOKUP_TIMELINE_INPUT_BYTES) {
+            throw new CliUsageError(`Lookup timeline input is limited to ${MAX_LOOKUP_TIMELINE_INPUT_BYTES} bytes in total.`);
+          }
+          inputs.push(input);
+        }
+      } catch (error) {
+        if (error instanceof CliUsageError) throw error;
+        throw new CliUsageError(`Could not read Lookup timeline input: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
+      }
+      const document = buildCliLookupTimeline(inputs, commandContext.now());
+      if (!args.quiet) write(stdout, args.output === 'json'
+        ? formatJsonDocument(document)
+        : terminal(formatCliLookupTimeline(document), args.color));
       return EXIT_CODES.SUCCESS;
     }
 

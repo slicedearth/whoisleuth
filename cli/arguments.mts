@@ -33,6 +33,7 @@ const CLI_COMMANDS = [
   'page-compare',
   'mail-review',
   'diff',
+  'timeline',
   'export',
 ] as const;
 type CliCommand = typeof CLI_COMMANDS[number];
@@ -71,6 +72,7 @@ type CliAction =
   | ({ action: 'page-compare'; leftSource: string; rightSource: string; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'mail-review'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'diff'; leftSource: string; rightSource: string; output: 'terminal' | 'json' } & TerminalOptions)
+  | ({ action: 'timeline'; sources: readonly string[]; output: 'terminal' | 'json' } & TerminalOptions)
   | { action: 'export'; source: string | null; format: 'json' | 'markdown' | 'html'; compact: boolean };
 type CliArguments = CliAction & FileOutputOptions;
 
@@ -170,6 +172,7 @@ function parseCliArgumentsCore(argv: string[]): CliAction {
   if (command === 'page-compare') return parsePageCompareArguments(argv.slice(1));
   if (command === 'mail-review') return parseMailReviewArguments(argv.slice(1));
   if (command === 'diff') return parseDiffArguments(argv.slice(1));
+  if (command === 'timeline') return parseTimelineArguments(argv.slice(1));
   if (command === 'export') return parseExportArguments(argv.slice(1));
   let query: string | null = null;
   let output: 'terminal' | 'json' | 'markdown' | 'html' = 'terminal';
@@ -715,6 +718,30 @@ function parseDiffArguments(argv: string[]): Extract<CliArguments, { action: 'di
   if (leftSource === rightSource) throw new CliUsageError('diff requires two different input files.');
   if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
   return { action: 'diff', leftSource, rightSource, output, quiet, color };
+}
+
+function parseTimelineArguments(argv: string[]): Extract<CliArguments, { action: 'timeline' }> {
+  const sources: string[] = [];
+  let output: 'terminal' | 'json' = 'terminal';
+  let quiet = false;
+  let color = true;
+  for (const argument of argv) {
+    if (argument === '--json') {
+      if (output !== 'terminal') throw new CliUsageError('--json may be supplied only once.');
+      output = 'json';
+    } else if (argument === '--quiet') quiet = true;
+    else if (argument === '--no-color') color = false;
+    else if (argument.startsWith('-')) throw new CliUsageError(`Unknown option "${argument}".`);
+    else sources.push(argument);
+  }
+  if (sources.length < 2 || sources.length > 20) {
+    throw new CliUsageError('timeline requires from 2 to 20 saved lookup JSON files.');
+  }
+  if (new Set(sources).size !== sources.length) {
+    throw new CliUsageError('timeline input files must be different.');
+  }
+  if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
+  return { action: 'timeline', sources, output, quiet, color };
 }
 
 function parseRegistrySupportArguments(argv: string[]): Extract<CliArguments, { action: 'registry-support' }> {

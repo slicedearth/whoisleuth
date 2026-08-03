@@ -19,6 +19,9 @@ type CliLookupDiffDocument = Readonly<{
   comparison: BulkDomainComparison;
   limitations: readonly string[];
 }>;
+type LookupDiffOptions = Readonly<{
+  domainMode?: 'different' | 'same';
+}>;
 
 function record(value: unknown): UnknownRecord {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as UnknownRecord : {};
@@ -137,16 +140,25 @@ function buildCliLookupDiff(
   leftText: string,
   rightText: string,
   generatedAt = new Date().toISOString(),
+  options: LookupDiffOptions = {},
 ): CliLookupDiffDocument {
   const left = parseSavedLookupDocument(leftText, { label: 'Left lookup input' });
   const right = parseSavedLookupDocument(rightText, { label: 'Right lookup input' });
-  if (left.registrableDomain === right.registrableDomain) {
+  const domainMode = options.domainMode ?? 'different';
+  if (domainMode === 'different' && left.registrableDomain === right.registrableDomain) {
     throw new CliUsageError('Lookup diff requires documents for two different domains.');
+  }
+  if (domainMode === 'same' && left.registrableDomain !== right.registrableDomain) {
+    throw new CliUsageError('Lookup history requires observations for the same domain.');
   }
   const comparison = buildBulkDomainComparison(
     lookupComparisonInput(left),
     lookupComparisonInput(right),
-    null,
+    domainMode === 'same' ? right.generatedAt : null,
+    {
+      allowSameDomain: domainMode === 'same',
+      ...(domainMode === 'same' ? { now: Date.parse(right.generatedAt) } : {}),
+    },
   );
   if (!comparison) throw new CliUsageError('Lookup documents could not be compared.');
   return {
@@ -157,9 +169,13 @@ function buildCliLookupDiff(
     right: { domain: right.registrableDomain, generatedAt: right.generatedAt, mode: right.mode },
     comparison,
     limitations: [
-      'This command compares bounded observations already present in two saved Lookup documents and makes no network request.',
+      domainMode === 'same'
+        ? 'This comparison uses bounded observations already present in two saved Lookup documents for the same domain and makes no network request.'
+        : 'This command compares bounded observations already present in two saved Lookup documents and makes no network request.',
       'A missing value remains distinct from unavailable collection and from an observed difference.',
-      'Shared infrastructure or matching values do not establish common ownership, control, intent, safety, or maliciousness.',
+      domainMode === 'same'
+        ? 'An observed difference can reflect a domain change or changed collection conditions and does not by itself establish current state, intent, safety, or maliciousness.'
+        : 'Shared infrastructure or matching values do not establish common ownership, control, intent, safety, or maliciousness.',
     ],
   };
 }
@@ -190,4 +206,4 @@ function formatCliLookupDiff(document: CliLookupDiffDocument): string {
 }
 
 export { buildCliLookupDiff, formatCliLookupDiff };
-export type { CliLookupDiffDocument };
+export type { CliLookupDiffDocument, LookupDiffOptions };

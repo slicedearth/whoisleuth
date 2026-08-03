@@ -74,6 +74,7 @@ node bin/whoisleuth.mts compare lookup.json --json
 node bin/whoisleuth.mts page-compare official.json candidate.json --json
 node bin/whoisleuth.mts mail-review bulk.json --json
 node bin/whoisleuth.mts diff first-lookup.json second-lookup.json --json
+node bin/whoisleuth.mts timeline first-observation.json second-observation.json latest-observation.json --json
 node bin/whoisleuth.mts export lookup.json > evidence.json
 node bin/whoisleuth.mts export lookup.json --markdown > evidence.md
 node bin/whoisleuth.mts export lookup.json --html > evidence.html
@@ -152,7 +153,7 @@ Commands that query RDAP, WHOIS, DNS, HTTP, TLS, or Certificate Transparency do
 so directly from the machine running the CLI. They do not use the hosted login,
 hosted session, or deployment usage controls; upstream providers can see and
 rate-limit the local machine's network address. Offline `discover`, `compare`,
-`page-compare`, `mail-review`, `diff`, `risk-calibrate`, `verify-artifact`, `source-report`, `export`,
+`page-compare`, `mail-review`, `diff`, `timeline`, `risk-calibrate`, `verify-artifact`, `source-report`, `export`,
 `completion`, and `manual` operations make no network requests. Commands write
 to stdout unless the analyst deliberately selects a local output file.
 
@@ -280,6 +281,15 @@ registration, DNS, page identity, mail, certificate, and relationship fields,
 keeps missing and unavailable evidence distinct, and makes no ownership or
 maliciousness inference. The output records both original observation times.
 
+`timeline <observation.json> <observation.json> [...]` accepts from 2 to 20
+saved Lookup documents for one domain, orders them by their validated
+observation times, and compares each adjacent pair offline. The 32 MiB aggregate
+input ceiling is enforced while files are read and again by the timeline
+builder. Output retains normalized field states and observation times but no
+input filenames or raw registry payloads. A difference can reflect a domain
+change or changed collection conditions, so the command makes no current-state,
+ownership, intent, safety, or maliciousness conclusion.
+
 When diagnostics version 5, 6, 7, or 8 reports a documented registry collection
 constraint, terminal output also shows the suffix, WHOIS and RDAP access
 profiles, and the bounded limitation. This is static access-policy context: it
@@ -300,7 +310,7 @@ machine access is not evidence that a domain is unregistered or safe.
 This release supports `lookup`, `bulk`, `ct-search`, `discover`, `discover-scan`, `posture`,
 `http`, `tls`, `registry-support`, `risk-calibrate`, `verify-artifact`,
 `inspect-archive`, `sign-artifact`, `verify-signature`, `source-report`,
-`compare`, `page-compare`, `mail-review`, `diff`, `export`, `doctor`, `completion`, and `manual`. Additional command families
+`compare`, `page-compare`, `mail-review`, `diff`, `timeline`, `export`, `doctor`, `completion`, and `manual`. Additional command families
 are added as separate bounded increments rather than exposing incomplete
 aliases.
 

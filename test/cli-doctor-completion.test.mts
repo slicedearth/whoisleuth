@@ -26,6 +26,7 @@ describe('CLI shell completion', () => {
       assert.match(script, /doctor/u);
       assert.match(script, /manual/u);
       assert.match(script, /diff/u);
+      assert.match(script, /timeline/u);
       assert.match(script, /(?:--checkpoint|-l checkpoint)/u);
       assert.match(script, /(?:--output|-l output)/u);
       assert.match(script, /(?:--summary|-l summary)/u);
@@ -73,6 +74,7 @@ describe('CLI shell completion', () => {
     assert.match(stdout.value(), /^\.TH WHOISLEUTH 1/mu);
     assert.match(stdout.value(), /\.SS lookup/u);
     assert.match(stdout.value(), /\.SS diff/u);
+    assert.match(stdout.value(), /\.SS timeline/u);
     assert.match(stdout.value(), /130 analyst cancellation/u);
     assert.equal(stderr.value(), '');
   });

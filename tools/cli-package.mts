@@ -87,6 +87,7 @@ const INSTALLED_COMMAND_HELP_CHECKS = Object.freeze([
   'page-compare',
   'mail-review',
   'diff',
+  'timeline',
   'export',
   'inspect-archive',
   'verify-artifact',

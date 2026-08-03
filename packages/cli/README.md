@@ -58,6 +58,7 @@ node bin/whoisleuth.mts discover-scan example.test --scan-limit 50 --checkpoint 
 node bin/whoisleuth.mts page-compare official.json candidate.json --json
 node bin/whoisleuth.mts mail-review bulk.json --json
 node bin/whoisleuth.mts diff first-lookup.json second-lookup.json --json
+node bin/whoisleuth.mts timeline first-observation.json second-observation.json latest-observation.json --json
 node bin/whoisleuth.mts registry-support example.test --json
 node bin/whoisleuth.mts doctor
 node bin/whoisleuth.mts completion zsh
@@ -81,6 +82,12 @@ checkpoint. A checkpoint write failure preserves completed output and returns
 the partial-result exit code. Ctrl-C suppresses partial final output and
 returns exit code 130; a second interrupt performs best-effort temporary-file
 cleanup before exiting immediately.
+
+The offline `timeline` command orders 2 to 20 saved Lookup documents for one
+domain and compares each adjacent observation. It retains observation times and
+normalized field states but no input filenames or raw registry payloads.
+Observed differences remain separate from missing, unavailable, and changed
+collection conditions.
 
 Bulk also supports fixed-column CSV, domain-only or exact-query output,
 registered, inconclusive, and hard-failure output filters, and bounded A, AAAA,
