@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
 import {
+  MAX_CONTACT_ADDRESS_LENGTH,
   MAX_TURNSTILE_TOKEN_LENGTH,
   TURNSTILE_EXPECTED_ACTION,
   TURNSTILE_VERIFY_URL,
@@ -9,6 +10,7 @@ import {
   parseContactRouteBody,
   verifyContactRoute,
 } from '../lib/contact-route.mts';
+import { normalizeContactAddress } from '../lib/contact-address.mts';
 
 const ENV = Object.freeze({
   TURNSTILE_SITE_KEY: 'public-site-key',
@@ -32,6 +34,19 @@ function verificationResponse(overrides: Record<string, unknown> = {}) {
 }
 
 describe('public contact configuration', () => {
+  test('shares one strict address normalizer with the browser handoff', () => {
+    assert.equal(normalizeContactAddress(' Privacy@Example.Test '), 'privacy@example.test');
+    for (const value of [
+      'not an address',
+      'missing-tld@example',
+      'route@example..test',
+      `route@${'a'.repeat(64)}.test`,
+      `a@b.${'c'.repeat(MAX_CONTACT_ADDRESS_LENGTH)}`,
+    ]) {
+      assert.equal(normalizeContactAddress(value), null, value);
+    }
+  });
+
   test('publishes only the site key and configured category names', () => {
     const config = contactRoutePublicConfig(ENV);
 

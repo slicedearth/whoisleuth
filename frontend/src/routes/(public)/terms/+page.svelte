@@ -45,5 +45,6 @@
   header>p:not(.eyebrow),section p,li,small{color:var(--muted);line-height:1.7}
   section{padding:30px 0;border-bottom:1px solid var(--border)}
   h2{margin:0 0 12px;font:700 clamp(1.35rem,3vw,1.9rem) var(--mono);letter-spacing:-.035em}
+  section a{color:var(--accent);text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:3px}
   li+li{margin-top:7px}
 </style>

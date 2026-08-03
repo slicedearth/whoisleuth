@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import PageHeading from '$lib/components/PageHeading.svelte';
   import PublicSeo from '$lib/components/PublicSeo.svelte';
+  import { normalizeContactAddress } from '../../../../../lib/contact-address.mts';
 
   type ContactCategory = 'privacy' | 'outbound' | 'security';
   type TurnstileApi = {
@@ -169,8 +170,8 @@
       const record = payload && typeof payload === 'object' && !Array.isArray(payload)
         ? payload as Record<string, unknown>
         : {};
-      const route = typeof record.route === 'string' ? record.route.trim().toLowerCase() : '';
-      if (!response.ok || route.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(route)) {
+      const route = normalizeContactAddress(record.route);
+      if (!response.ok || !route) {
         throw new Error('Contact verification failed');
       }
       resolvedRoute = route;
@@ -241,14 +242,16 @@
       {submitting ? 'Verifying…' : 'Verify and prepare email'}
     </button>
 
-    {#if error}<p class="form-error" role="status">{error}</p>{/if}
-    {#if resolvedRoute && mailtoHref}
-      <section class="prepared" aria-live="polite">
-        <p class="eyebrow">Email ready</p>
-        <p>The selected role address is <code>{resolvedRoute}</code>. Nothing has been sent.</p>
-        <a class="primary" href={mailtoHref}>Open email draft</a>
-      </section>
-    {/if}
+    <div class="form-feedback" aria-live="polite" aria-atomic="true">
+      {#if error}<p class="form-error">{error}</p>{/if}
+      {#if resolvedRoute && mailtoHref}
+        <section class="prepared">
+          <p class="eyebrow">Email ready</p>
+          <p>The selected role address is <code>{resolvedRoute}</code>. Nothing has been sent.</p>
+          <a class="primary" href={mailtoHref}>Open email draft</a>
+        </section>
+      {/if}
+    </div>
   </form>
 
   <aside class="contact-notes card">
@@ -277,6 +280,7 @@
   .challenge-shell{min-height:66px;display:flex;align-items:center;overflow:hidden}
   .challenge-shell.loading{padding:12px;border:1px dashed var(--border);border-radius:var(--radius-sm)}
   button.primary{justify-self:start}
+  .form-feedback:empty{display:none}
   .form-error{margin:0;color:var(--danger);font-size:var(--text-xs)}
   .prepared{display:grid;justify-items:start;gap:9px;padding:14px;border:1px solid color-mix(in srgb,var(--accent) 38%,var(--border));border-radius:var(--radius-sm)}
   .prepared p{margin:0;overflow-wrap:anywhere}

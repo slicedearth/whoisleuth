@@ -3,6 +3,10 @@
 // stay in the browser and are never accepted by this server boundary.
 
 import { readTextCapped, safeFetchDetailed } from './safe-fetch.mts';
+import {
+  MAX_CONTACT_ADDRESS_LENGTH,
+  normalizeContactAddress,
+} from './contact-address.mts';
 
 type EnvironmentInput = Record<string, unknown>;
 type ContactCategory = 'privacy' | 'outbound' | 'security';
@@ -48,7 +52,6 @@ const MAX_TURNSTILE_SITE_KEY_LENGTH = 128;
 const MAX_TURNSTILE_SECRET_LENGTH = 256;
 const MAX_ALLOWED_HOSTNAMES_LENGTH = 1_024;
 const MAX_ALLOWED_HOSTNAMES = 10;
-const MAX_CONTACT_ROUTE_LENGTH = 254;
 const TURNSTILE_TIMEOUT_MS = 8_000;
 
 function boundedEnvironmentText(
@@ -68,21 +71,6 @@ function contactCategory(value: unknown): ContactCategory | null {
     && (CONTACT_CATEGORIES as readonly string[]).includes(value)
     ? value as ContactCategory
     : null;
-}
-
-function contactRoute(value: unknown): string | null {
-  if (typeof value !== 'string' || value.length > MAX_CONTACT_ROUTE_LENGTH) return null;
-  const normalized = value.trim().toLowerCase();
-  if (!normalized || /[\u0000-\u0020\u007f]/u.test(normalized)) return null;
-  if (!/^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?$/u.test(normalized)) {
-    return null;
-  }
-  const [local = '', domain = ''] = normalized.split('@');
-  if (!local || local.length > 64 || !domain || domain.length > 253 || !domain.includes('.')) return null;
-  if (domain.split('.').some((label) => (
-    !label || label.length > 63 || !/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/u.test(label)
-  ))) return null;
-  return normalized;
 }
 
 function allowedHostnames(env: EnvironmentInput | null | undefined): string[] {
@@ -107,7 +95,7 @@ function allowedHostnames(env: EnvironmentInput | null | undefined): string[] {
 function configuredRoutes(env: EnvironmentInput | null | undefined): Map<ContactCategory, string> {
   const routes = new Map<ContactCategory, string>();
   for (const category of CONTACT_CATEGORIES) {
-    const route = contactRoute(env?.[CONTACT_ROUTE_ENV_KEYS[category]]);
+    const route = normalizeContactAddress(env?.[CONTACT_ROUTE_ENV_KEYS[category]]);
     if (route) routes.set(category, route);
   }
   return routes;
@@ -223,6 +211,7 @@ async function verifyContactRoute(
 export {
   CONTACT_CATEGORIES,
   CONTACT_ROUTE_ENV_KEYS,
+  MAX_CONTACT_ADDRESS_LENGTH,
   MAX_CONTACT_ROUTE_BODY_BYTES,
   MAX_TURNSTILE_TOKEN_LENGTH,
   TURNSTILE_EXPECTED_ACTION,

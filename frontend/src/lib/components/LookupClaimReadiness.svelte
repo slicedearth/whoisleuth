@@ -10,7 +10,6 @@
     ready: 'Evidence ready',
     limited: 'Limited',
     not_ready: 'Not ready',
-    not_applicable: 'Not applicable',
   };
 </script>
 

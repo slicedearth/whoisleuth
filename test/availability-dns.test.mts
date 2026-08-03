@@ -107,6 +107,44 @@ test('fast availability never treats a missing DNS delegation as available', asy
   assert.notEqual(result.state, 'available');
 });
 
+test('unknown availability names a registry capability refusal', async () => {
+  const result = await availability('example.gt', {
+    fast: true,
+    rdapRecord: null,
+    dnsDelegation: {
+      delegated: false,
+      nameservers: [],
+      nameserversTruncated: false,
+      error: null,
+    },
+  });
+
+  assert.equal(result.state, 'unknown');
+  assert.match(stringValue(result.detail), /RDAP was not queried/u);
+  assert.match(stringValue(result.detail), /no IANA-published RDAP service/u);
+});
+
+test('deep availability names a registry permission requirement', async () => {
+  const result = await availability('example.es', {
+    rdapRecord: null,
+    whoisChain: [{
+      server: 'registry capability policy',
+      queryProfile: 'not-issued',
+      responseEncoding: 'utf-8',
+      error: 'WHOIS collection requires registry permission or source authorization; no socket was opened.',
+    }],
+    dnsDelegation: {
+      delegated: false,
+      nameservers: [],
+      nameserversTruncated: false,
+      error: null,
+    },
+  });
+
+  assert.equal(result.state, 'unknown');
+  assert.match(stringValue(result.detail), /registry permission or source authorization is required/u);
+});
+
 test('RDAP registration remains authoritative and does not invoke the DNS fallback', async () => {
   let dnsCalls = 0;
   const result = await availability('example.test', {

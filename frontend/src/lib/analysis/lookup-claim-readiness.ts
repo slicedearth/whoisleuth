@@ -2,7 +2,7 @@ import type { EvidenceCoverageLedger, EvidenceCoverageState } from './evidence-c
 import type { LookupDecisionSupport } from './lookup-decision-support.ts';
 import type { LookupTaskView } from './lookup-presentation.ts';
 
-export type LookupClaimReadinessState = 'ready' | 'limited' | 'not_ready' | 'not_applicable';
+export type LookupClaimReadinessState = 'ready' | 'limited' | 'not_ready';
 
 export type LookupClaimReadinessEntry = Readonly<{
   id: string;
@@ -269,7 +269,6 @@ export function buildLookupClaimReadiness(input: Readonly<{
     ready: 0,
     limited: 0,
     not_ready: 0,
-    not_applicable: 0,
   };
   for (const entry of entries) counts[entry.state] += 1;
   return {

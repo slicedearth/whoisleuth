@@ -26,6 +26,7 @@ import { analyzeWebsiteSecurityPosture } from './website-security-posture.mts';
 import { analyzeResponsePolicyHeaders } from './response-policy.mts';
 import type { ResponsePolicyAnalysis } from './response-policy.mts';
 import { nonEmptyErrorMessage } from './error-detail.mts';
+import { registryServiceAdmissionFor } from './registry-capabilities.mts';
 import {
   HOMEPAGE_FETCH_TIMEOUT_MS,
   MAX_HOMEPAGE_BYTES,
@@ -384,6 +385,21 @@ function deriveWebsiteActivity(homepageStatus: string, hasFavicon: boolean, alre
   return 'unreachable';
 }
 
+function registryPolicyDetail(domain: string, fast: boolean): string {
+  const details: string[] = [];
+  const rdapAdmission = registryServiceAdmissionFor(domain, 'rdap');
+  if (rdapAdmission && !rdapAdmission.allowed) {
+    details.push('RDAP was not queried because the registry capability profile records no IANA-published RDAP service for this suffix.');
+  }
+  const whoisAdmission = fast ? null : registryServiceAdmissionFor(domain, 'whois');
+  if (whoisAdmission && !whoisAdmission.allowed) {
+    details.push(whoisAdmission.state === 'permission_required'
+      ? 'WHOIS was not queried because registry permission or source authorization is required.'
+      : 'WHOIS was not queried because IANA publishes no domain WHOIS service for this suffix.');
+  }
+  return details.length ? ` ${details.join(' ')}` : '';
+}
+
 // fast: true skips the WHOIS fallback (no TCP:43 chain) and the homepage
 // fetch (no for-sale/parking detection) - just RDAP plus the signals
 // derivable from it (age, expiry proximity, privacy). Meant for scanning
@@ -582,14 +598,15 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
     const disabledDetail = disabledSources.length
       ? ` ${disabledSources.join(', ')} ${disabledSources.length === 1 ? 'is' : 'are'} disabled by deployment policy.`
       : '';
+    const policyDetail = registryPolicyDetail(domain, fast);
     return {
       state: 'unknown',
       confidence: 'low',
       detail: fast
-        ? `No enabled registration source produced a record or authoritative delegation. A fast scan cannot determine registration status.${disabledDetail}`
+        ? `No enabled registration source produced a record or authoritative delegation. A fast scan cannot determine registration status.${disabledDetail}${policyDetail}`
         : whoisParsed && whoisParsed.failedHop
-        ? `WHOIS was inconclusive - a referral hop did not answer conclusively (${whoisParsed.failedHop}).`
-        : `No enabled registration source returned conclusive data or an authoritative DNS delegation.${disabledDetail}`,
+        ? `WHOIS was inconclusive - a referral hop did not answer conclusively (${whoisParsed.failedHop}).${policyDetail}`
+        : `No enabled registration source returned conclusive data or an authoritative DNS delegation.${disabledDetail}${policyDetail}`,
       ...(!fast && whoisEnabled ? { source: 'whois' } : {}),
     };
   }
