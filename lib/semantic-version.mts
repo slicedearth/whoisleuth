@@ -28,7 +28,7 @@ function validateIdentifierList(
   }
 }
 
-export function normalizeBoundedSemanticVersion(value: unknown, label = 'Semantic version'): string {
+export function normalizeBoundedSemanticVersion(value: unknown, label = 'Semantic'): string {
   if (typeof value !== 'string'
     || value.length === 0
     || value.length > MAX_SEMANTIC_VERSION_LENGTH
@@ -51,4 +51,12 @@ export function normalizeBoundedSemanticVersion(value: unknown, label = 'Semanti
   if (prerelease !== undefined) validateIdentifierList(prerelease, label, 'prerelease', true);
   if (buildMetadata !== undefined) validateIdentifierList(buildMetadata, label, 'build metadata', false);
   return value;
+}
+
+export function normalizeBoundedStableSemanticVersion(value: unknown, label = 'Stable semantic'): string {
+  const version = normalizeBoundedSemanticVersion(value, label);
+  if (version.includes('-') || version.includes('+')) {
+    fail(label, 'version must not include prerelease or build identifiers.');
+  }
+  return version;
 }

@@ -1,6 +1,7 @@
 import { compareRdapPublications, compareRegistrySources } from './registry-comparison.mts';
 import { buildRegistryInsights } from './registry-insights.mts';
 import { WHOISLEUTH_SOURCE_REPOSITORY_URL } from './project-metadata.mts';
+import { normalizeBoundedSemanticVersion } from './semantic-version.mts';
 
 export const LOOKUP_EVIDENCE_SCHEMA = 'whoisleuth.lookup-evidence';
 export const LOOKUP_EVIDENCE_SCHEMA_VERSION = 24;
@@ -48,10 +49,11 @@ function boundedTimestamp(value: unknown): string | null {
 }
 
 function boundedSemanticVersion(value: unknown): string | null {
-  const text = boundedString(value, 128);
-  return text && /^(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/u.test(text)
-    ? text
-    : null;
+  try {
+    return normalizeBoundedSemanticVersion(value, 'Evidence application');
+  } catch {
+    return null;
+  }
 }
 
 function boundedEndpoint(value: unknown): string | null {

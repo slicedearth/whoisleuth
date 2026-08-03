@@ -36,10 +36,9 @@ jobs:
         run: |
           node --input-type=module -e '
             import manifest from "./package.json" with { type: "json" };
+            import { normalizeBoundedStableSemanticVersion } from "./lib/semantic-version.mts";
             const expected = process.env.EXPECTED_VERSION || "";
-            if (!/^(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)$/.test(expected)) {
-              throw new Error("The selected version must be a stable semantic version.");
-            }
+            normalizeBoundedStableSemanticVersion(expected, "The selected release");
             if (manifest.version !== expected || manifest.private !== true) {
               throw new Error("The selected version must match the private root manifest.");
             }

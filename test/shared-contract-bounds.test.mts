@@ -27,7 +27,10 @@ import {
   WHOISLEUTH_SOURCE_REPOSITORY_GIT_URL,
   WHOISLEUTH_SOURCE_REPOSITORY_URL,
 } from '../lib/project-metadata.mts';
-import { normalizeBoundedSemanticVersion } from '../lib/semantic-version.mts';
+import {
+  normalizeBoundedSemanticVersion,
+  normalizeBoundedStableSemanticVersion,
+} from '../lib/semantic-version.mts';
 import {
   MAX_CT_CANDIDATES,
   MAX_CT_CERTIFICATE_GROUPS,
@@ -106,9 +109,14 @@ test('public project URLs derive from one canonical origin', () => {
 
 test('release, runtime, and frontend versions share strict semantic-version parsing', () => {
   assert.equal(normalizeBoundedSemanticVersion('1.2.3-rc.1+build.4'), '1.2.3-rc.1+build.4');
+  assert.equal(normalizeBoundedStableSemanticVersion('1.2.3'), '1.2.3');
   assert.throws(() => normalizeBoundedSemanticVersion('1.2.3-01'), /leading zeroes/u);
   assert.throws(() => normalizeBoundedSemanticVersion(' 1.2.3'), /bounded semantic-version/u);
+  assert.throws(() => normalizeBoundedStableSemanticVersion('1.2.3-rc.1'), /prerelease or build/u);
+  assert.throws(() => normalizeBoundedStableSemanticVersion('1.2.3+build.4'), /prerelease or build/u);
   for (const filename of [
+    '.github/workflows/cli-release.yml',
+    'lib/evidence-export.mts',
     'lib/outbound-identity.mts',
     'tools/release-version-check.mts',
     'frontend/vite.config.ts',
