@@ -62,6 +62,7 @@ node bin/whoisleuth.mts timeline first-observation.json second-observation.json 
 node bin/whoisleuth.mts registry-support example.test --json
 node bin/whoisleuth.mts doctor
 node bin/whoisleuth.mts completion zsh
+node bin/whoisleuth.mts completion powershell
 node bin/whoisleuth.mts manual | man -l -
 ```
 
@@ -69,6 +70,10 @@ Fast lookup is the default. Deep collection must be requested explicitly and
 can disclose the target to additional authoritative or first-party network
 sources. Missing, partial, rate-limited, and unsupported sources remain
 explicit and are never interpreted as evidence of safety or absence.
+Focused command help and the generated manual label every operation as offline
+or networked and state its target, input, and concurrency boundaries. The
+packaged [dual-use disclosure](DISCLOSURE) defines the supported defensive use
+of those capabilities.
 
 Interactive output uses restrained semantic colour, width-aware wrapping, and
 stderr-only progress for slower collection. Redirected and machine-readable

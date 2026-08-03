@@ -101,7 +101,7 @@ _whoisleuth_completion() {
     return
   fi
   if [[ "\${command}" == "completion" && \${COMP_CWORD} -eq 2 ]]; then
-    COMPREPLY=( $(compgen -W "bash zsh fish" -- "\${current}") )
+    COMPREPLY=( $(compgen -W "bash zsh fish powershell" -- "\${current}") )
     return
   fi
   case "\${previous}" in
@@ -135,7 +135,7 @@ _whoisleuth() {
   command="\${words[2]}"
   previous="\${words[CURRENT-1]}"
   if [[ "\${command}" == "completion" && CURRENT -eq 3 ]]; then
-    compadd -- bash zsh fish
+    compadd -- bash zsh fish powershell
     return
   fi
   case "\${previous}" in
@@ -177,16 +177,56 @@ complete -c whoisleuth -f
 complete -c whoisleuth -n '__fish_use_subcommand' -l help
 complete -c whoisleuth -n '__fish_use_subcommand' -l version
 ${commandLines.join('\n')}
-complete -c whoisleuth -n '__fish_seen_subcommand_from completion' -a 'bash zsh fish'
+complete -c whoisleuth -n '__fish_seen_subcommand_from completion' -a 'bash zsh fish powershell'
 ${optionLines.join('\n')}
 ${valueLines.join('\n')}
+`;
+}
+
+function powershellCompletion(): string {
+  const commandOptions = Object.fromEntries(CLI_COMMANDS.map((command) => [
+    command,
+    [...COMMON_OPTIONS, ...(OPTIONS_BY_COMMAND[command] || [])],
+  ]));
+  return `# WHOISleuth PowerShell completion
+Register-ArgumentCompleter -Native -CommandName whoisleuth -ScriptBlock {
+  param($wordToComplete, $commandAst, $cursorPosition)
+  $commands = @(${CLI_COMMANDS.map((command) => `'${command}'`).join(', ')})
+  $options = @{
+${Object.entries(commandOptions).map(([command, options]) => `    '${command}' = @(${options.map((option) => `'${option}'`).join(', ')})`).join('\n')}
+  }
+  $values = @{
+${Object.entries(VALUE_OPTIONS).map(([option, values]) => `    '${option}' = @(${values.map((value) => `'${value}'`).join(', ')})`).join('\n')}
+    'completion' = @('bash', 'zsh', 'fish', 'powershell')
+  }
+  $elements = @($commandAst.CommandElements | ForEach-Object { $_.Extent.Text })
+  $command = if ($elements.Count -gt 1) { $elements[1] } else { '' }
+  $previous = if ($elements.Count -gt 1) { $elements[$elements.Count - 1] } else { '' }
+  $candidates = if ($elements.Count -le 2) {
+    @($commands) + @('--help', '--version')
+  } elseif ($command -eq 'completion' -and $elements.Count -le 3) {
+    $values['completion']
+  } elseif ($values.ContainsKey($previous)) {
+    $values[$previous]
+  } elseif ($options.ContainsKey($command)) {
+    $options[$command]
+  } else {
+    @('--help')
+  }
+  foreach ($candidate in $candidates) {
+    if ($candidate.StartsWith($wordToComplete, [System.StringComparison]::OrdinalIgnoreCase)) {
+      [System.Management.Automation.CompletionResult]::new($candidate, $candidate, 'ParameterValue', $candidate)
+    }
+  }
+}
 `;
 }
 
 function buildShellCompletion(shell: CompletionShell): string {
   if (shell === 'bash') return bashCompletion();
   if (shell === 'zsh') return zshCompletion();
-  return fishCompletion();
+  if (shell === 'fish') return fishCompletion();
+  return powershellCompletion();
 }
 
 export {

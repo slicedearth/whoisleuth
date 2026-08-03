@@ -81,6 +81,7 @@ node bin/whoisleuth.mts export lookup.json --html > evidence.html
 node bin/whoisleuth.mts doctor
 node bin/whoisleuth.mts doctor --network --json
 node bin/whoisleuth.mts completion zsh
+node bin/whoisleuth.mts completion powershell
 node bin/whoisleuth.mts manual | man -l -
 ```
 
@@ -134,11 +135,18 @@ not resolved addresses or response content. A failed optional network check
 returns the partial-failure exit code rather than claiming that all CLI
 collection is unavailable.
 
-`completion bash`, `completion zsh`, and `completion fish` print static shell
-completion scripts to stdout. The command does not edit a shell profile or make
-a network request. Review the generated script before sourcing it or placing it
-in the relevant shell completion directory. `manual` prints a generated roff
-manual page and likewise changes no local configuration.
+`completion bash`, `completion zsh`, `completion fish`, and `completion
+powershell` print static shell completion scripts to stdout. The command does
+not edit a shell profile or make a network request. Review the generated script
+before sourcing it or placing it in the relevant shell completion directory.
+`manual` prints a generated roff manual page and likewise changes no local
+configuration.
+
+Focused command help and the generated manual classify every operation as
+offline or networked and state the relevant target, input, and concurrency
+ceiling. These labels describe observable behavior rather than granting
+authorization. The packaged `DISCLOSURE` defines the intended defensive scope;
+operators remain responsible for law, provider terms, and authorization.
 
 ## Deployment boundary
 

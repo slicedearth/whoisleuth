@@ -44,7 +44,7 @@ type TerminalOptions = {
 };
 
 type LookupDetail = 'summary' | 'standard' | 'verbose';
-type CompletionShell = 'bash' | 'zsh' | 'fish';
+type CompletionShell = 'bash' | 'zsh' | 'fish' | 'powershell';
 type FileOutputOptions = { destination?: string; force?: true };
 
 type CliAction =
@@ -221,8 +221,8 @@ function parseCliArgumentsCore(argv: string[]): CliAction {
 }
 
 function parseCompletionArguments(argv: string[]): Extract<CliArguments, { action: 'completion' }> {
-  if (argv.length !== 1 || !['bash', 'zsh', 'fish'].includes(argv[0] || '')) {
-    throw new CliUsageError('completion requires exactly one shell: bash, zsh, or fish.');
+  if (argv.length !== 1 || !['bash', 'zsh', 'fish', 'powershell'].includes(argv[0] || '')) {
+    throw new CliUsageError('completion requires exactly one shell: bash, zsh, fish, or powershell.');
   }
   return { action: 'completion', shell: argv[0] as CompletionShell };
 }

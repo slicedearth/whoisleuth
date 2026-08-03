@@ -127,7 +127,7 @@ Integrity and calibration:
 
 Terminal:
   doctor             Check the local runtime; network tests require --network.
-  completion         Print a completion script for bash, zsh, or fish.
+  completion         Print completion for bash, zsh, fish, or PowerShell.
   manual             Print the generated manual page.
 
 Run "whoisleuth <command> --help" for focused usage and an example.
@@ -140,7 +140,7 @@ Copyright 2026 slicedearth. Licensed under AGPL-3.0-only.
 Source and licence: https://github.com/slicedearth/whoisleuth
 `;
 const COMMAND_USAGE: Readonly<Record<CliCommand, string>> = Object.freeze({
-  completion: 'whoisleuth completion <bash|zsh|fish>',
+  completion: 'whoisleuth completion <bash|zsh|fish|powershell>',
   doctor: 'whoisleuth doctor [--network] [--json] [--quiet] [--no-color]',
   manual: 'whoisleuth manual',
   lookup: 'whoisleuth lookup <domain|IP|ASN> [--json|--markdown|--html] [--fast|--deep] [--summary|--verbose] [--strict-exit] [--events] [--quiet] [--no-color]',
@@ -289,9 +289,40 @@ const COMMAND_DETAILS: Readonly<Record<CliCommand, Readonly<{ description: strin
   },
 });
 
+const COMMAND_COLLECTION: Readonly<Record<CliCommand, Readonly<{
+  mode: 'offline' | 'network';
+  scope: string;
+}>>> = Object.freeze({
+  completion: { mode: 'offline', scope: 'Prints one static script and changes no shell configuration.' },
+  doctor: { mode: 'network', scope: 'Network access is opt-in with --network and is limited to fixed public DNS, HTTPS, and WHOIS diagnostics.' },
+  manual: { mode: 'offline', scope: 'Builds documentation from the embedded command catalogue.' },
+  lookup: { mode: 'network', scope: 'Accepts one target. Fast is the default; deep collection must be selected explicitly.' },
+  bulk: { mode: 'network', scope: 'Accepts at most 500 fast or 50 deep targets, with concurrency capped at 8 fast or 3 deep.' },
+  'ct-search': { mode: 'network', scope: 'Accepts one bounded search keyword and queries the fixed certificate-transparency source.' },
+  discover: { mode: 'offline', scope: 'Generates a bounded candidate set from local rules, dictionaries, and optional saved snapshots.' },
+  'discover-scan': { mode: 'network', scope: 'Scans at most 500 fast or 50 deep candidates, with concurrency capped at 8 fast or 3 deep.' },
+  posture: { mode: 'network', scope: 'Accepts one domain and performs bounded DNS queries only.' },
+  http: { mode: 'network', scope: 'Accepts one domain and follows only the bounded SSRF-guarded homepage redirect workflow.' },
+  tls: { mode: 'network', scope: 'Accepts one public hostname and opens one bounded certificate connection.' },
+  'registry-support': { mode: 'offline', scope: 'Reads the embedded registry capability catalogue for one domain or suffix.' },
+  'risk-calibrate': { mode: 'offline', scope: 'Reads one bounded reviewed-label dataset and changes no model or evidence.' },
+  'verify-artifact': { mode: 'offline', scope: 'Reads one selected bounded archive, packet, or manifest.' },
+  'inspect-archive': { mode: 'offline', scope: 'Reads one selected bounded workspace archive with redacted output by default.' },
+  'sign-artifact': { mode: 'offline', scope: 'Reads one selected artifact and one local private key without transmitting either.' },
+  'verify-signature': { mode: 'offline', scope: 'Reads one selected signed package and optional local public key.' },
+  'source-report': { mode: 'offline', scope: 'Reads bounded saved evidence and emits target-free source reliability data.' },
+  compare: { mode: 'offline', scope: 'Reads one saved Lookup and compares its separately attributed registry publications.' },
+  'page-compare': { mode: 'offline', scope: 'Reads two saved Lookup documents and executes no page code.' },
+  'mail-review': { mode: 'offline', scope: 'Reads one saved Bulk result and sends no DNS or SMTP traffic.' },
+  diff: { mode: 'offline', scope: 'Reads two saved Lookup documents for different domains.' },
+  timeline: { mode: 'offline', scope: 'Reads 2 to 20 saved observations for one domain, capped at 32 MiB in total.' },
+  export: { mode: 'offline', scope: 'Reads one saved Lookup and writes one bounded report.' },
+});
+
 function commandHelp(command: CliCommand): string {
   const detail = COMMAND_DETAILS[command];
-  return `WHOISleuth ${command}\n${detail.description}\n\nUsage:\n  ${COMMAND_USAGE[command]}\n\nExample:\n  ${detail.example}\n\nBoundary:\n  ${detail.boundary}\n\nRun "whoisleuth --help" to see the grouped command list.\n`;
+  const collection = COMMAND_COLLECTION[command];
+  return `WHOISleuth ${command}\n${detail.description}\n\nUsage:\n  ${COMMAND_USAGE[command]}\n\nExample:\n  ${detail.example}\n\nCollection:\n  ${collection.mode === 'offline' ? 'Offline' : 'Network'}: ${collection.scope}\n\nBoundary:\n  ${detail.boundary}\n\nRun "whoisleuth --help" to see the grouped command list.\n`;
 }
 
 async function readStdinBounded(
@@ -408,7 +439,13 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
     }
 
     if (args.action === 'manual') {
-      write(stdout, buildCliManual({ commands: CLI_COMMANDS, details: COMMAND_DETAILS, usage: COMMAND_USAGE, version: VERSION }));
+      write(stdout, buildCliManual({
+        commands: CLI_COMMANDS,
+        collections: COMMAND_COLLECTION,
+        details: COMMAND_DETAILS,
+        usage: COMMAND_USAGE,
+        version: VERSION,
+      }));
       return EXIT_CODES.SUCCESS;
     }
 

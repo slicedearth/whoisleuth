@@ -86,13 +86,14 @@ describe('CLI argument parsing', () => {
       color: true,
     });
     assert.deepEqual(parseCliArguments(['completion', 'zsh']), { action: 'completion', shell: 'zsh' });
+    assert.deepEqual(parseCliArguments(['completion', 'powershell']), { action: 'completion', shell: 'powershell' });
     assert.deepEqual(parseCliArguments(['doctor']), {
       action: 'doctor', network: false, output: 'terminal', quiet: false, color: true,
     });
     assert.deepEqual(parseCliArguments(['doctor', '--network', '--json']), {
       action: 'doctor', network: true, output: 'json', quiet: false, color: true,
     });
-    assert.throws(() => parseCliArguments(['completion', 'powershell']), /bash, zsh, or fish/u);
+    assert.throws(() => parseCliArguments(['completion', 'nushell']), /bash, zsh, fish, or powershell/u);
     assert.throws(() => parseCliArguments(['doctor', '--network', '--network']), /only once/u);
   });
 
@@ -118,6 +119,7 @@ describe('CLI argument parsing', () => {
     assert.equal(await runCli(['lookup', '--help'], { stdout: commandStdout.stream, stderr: stderr.stream }), EXIT_CODES.SUCCESS);
     assert.match(commandStdout.value(), /Collect registration evidence for one domain, IP, or ASN\./u);
     assert.match(commandStdout.value(), /Example:\n  whoisleuth lookup example\.test --deep/u);
+    assert.match(commandStdout.value(), /Collection:\n  Network: Accepts one target\./u);
     assert.match(commandStdout.value(), /Boundary:\n  Fast is the default\./u);
     assert.doesNotMatch(commandStdout.value(), /whoisleuth bulk/u);
     assert.equal(stderr.value(), '');
