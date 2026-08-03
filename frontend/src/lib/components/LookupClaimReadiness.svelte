@@ -22,7 +22,7 @@
         <h4 id="claim-readiness-title">What the current evidence can support</h4>
         <p>Each row checks the evidence needed for one narrow statement. It does not add a score or convert an incomplete source into a negative conclusion.</p>
       </div>
-      <div class="counts" aria-label="Claim-readiness summary">
+      <div class="counts" role="group" aria-label="Claim-readiness summary">
         <span><strong>{readiness.counts.ready}</strong> ready</span>
         <span><strong>{readiness.counts.limited + readiness.counts.not_ready}</strong> limited</span>
       </div>
