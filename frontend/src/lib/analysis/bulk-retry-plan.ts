@@ -1,8 +1,8 @@
 import {
   normalizeBulkSessionResult,
   type BulkSessionResult,
-  type BulkSessionSourceState,
 } from './bulk-session-model.ts';
+import { limitedBulkSources } from './bulk-source-coverage.ts';
 
 export const MAX_BULK_RETRY_ROWS = 200;
 export const BULK_REVIEW_STALE_AFTER_DAYS = 7;
@@ -30,14 +30,6 @@ export type BulkRetryPlan = Readonly<{
   limitations: readonly string[];
 }>;
 
-const LIMITED_STATES = new Set<BulkSessionSourceState>([
-  'error',
-  'partial',
-  'skipped',
-  'unavailable',
-  'unsupported',
-]);
-
 function freshness(value: unknown, now = Date.now()): BulkRetryFreshness {
   if (typeof value !== 'string' || !Number.isFinite(Date.parse(value))) {
     return { observedAt: null, ageDays: null, state: 'unknown' };
@@ -52,9 +44,7 @@ function freshness(value: unknown, now = Date.now()): BulkRetryFreshness {
 }
 
 function retryRow(value: BulkSessionResult, isStale: boolean): BulkRetryPlanRow | null {
-  const limitedSources = value.sourceCoverage
-    .filter((item) => LIMITED_STATES.has(item.state))
-    .map((item) => item.source)
+  const limitedSources = limitedBulkSources(value.domain, value.sourceCoverage, { includeSkipped: true })
     .sort()
     .slice(0, 12);
   const reasons: BulkRetryReason[] = [];

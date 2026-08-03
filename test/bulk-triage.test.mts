@@ -49,6 +49,26 @@ describe('Bulk triage filters and grouping', () => {
     assert.equal(matchesBulkAdvancedFilters(limited, { ...CLEAR_FILTERS, caseDisposition: 'suspicious' }, NOW), true);
     assert.equal(matchesBulkAdvancedFilters(limited, { ...CLEAR_FILTERS, source: 'complete' }, NOW), false);
     assert.equal(matchesBulkAdvancedFilters(
+      row('candidate.dev', {
+        sourceCoverage: [
+          { source: 'rdap', state: 'complete' },
+          { source: 'whois', state: 'unsupported' },
+        ],
+      }),
+      { ...CLEAR_FILTERS, source: 'complete' },
+      NOW,
+    ), true);
+    assert.equal(matchesBulkAdvancedFilters(
+      row('candidate.com', {
+        sourceCoverage: [
+          { source: 'rdap', state: 'complete' },
+          { source: 'whois', state: 'unsupported' },
+        ],
+      }),
+      { ...CLEAR_FILTERS, source: 'limited' },
+      NOW,
+    ), true);
+    assert.equal(matchesBulkAdvancedFilters(
       row('unrecorded.invalid', { sourceCoverage: [], createdDate: null, hasMx: null }),
       { ...CLEAR_FILTERS, source: 'unrecorded', age: 'unknown', mail: 'unknown' },
       NOW,

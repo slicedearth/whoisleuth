@@ -2,6 +2,8 @@
 // helpers never infer missing evidence, issue requests, or qualify shared
 // infrastructure as ownership or coordination.
 
+import { classifyBulkSourceCoverage } from './bulk-source-coverage.ts';
+
 export const BULK_GROUP_LIMIT = 200;
 export const BULK_GROUP_DOMAIN_LIMIT = 2_000;
 
@@ -45,8 +47,6 @@ export type BulkTriageGroup = {
 };
 
 const CONTROL_RE = /[\u0000-\u001f\u007f]/u;
-const LIMITED_SOURCE_STATES = new Set(['partial', 'unavailable', 'unsupported', 'error']);
-
 function text(value: unknown, maximum = 300): string {
   return typeof value === 'string' && value.length <= maximum && !CONTROL_RE.test(value)
     ? value.trim()
@@ -54,10 +54,7 @@ function text(value: unknown, maximum = 300): string {
 }
 
 function sourceClass(row: BulkTriageRow): Exclude<BulkSourceFilter, ''> {
-  if (!row.sourceCoverage.length) return 'unrecorded';
-  return row.sourceCoverage.some((source) => LIMITED_SOURCE_STATES.has(source.state))
-    ? 'limited'
-    : 'complete';
+  return classifyBulkSourceCoverage(row.domain, row.sourceCoverage);
 }
 
 function ageClass(row: BulkTriageRow, nowMs: number): Exclude<BulkAgeFilter, ''> {

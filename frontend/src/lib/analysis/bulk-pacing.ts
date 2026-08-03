@@ -1,3 +1,5 @@
+import { limitedBulkSources } from './bulk-source-coverage.ts';
+
 export type BulkPacing = 'gentle' | 'balanced' | 'standard';
 export type BulkPacingOption = Readonly<{
   id: BulkPacing;
@@ -49,28 +51,10 @@ export const BULK_PACING_OPTIONS: readonly BulkPacingOption[] = Object.freeze([
 
 const PACING_IDS = new Set<BulkPacing>(BULK_PACING_OPTIONS.map((option) => option.id));
 const MAX_ESTIMATE_MS = 24 * 60 * 60 * 1000;
-const LIMITED_SOURCE_STATES = new Set([
-  'error',
-  'failed',
-  'inconclusive',
-  'partial',
-  'rate_limited',
-  'unsupported',
-  'unavailable',
-]);
-
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? value as Record<string, unknown>
     : {};
-}
-
-function sourceStates(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
-  return value
-    .slice(0, 32)
-    .map((item) => String(record(item).state ?? '').trim().toLowerCase())
-    .filter(Boolean);
 }
 
 export function normalizeBulkPacing(value: unknown): BulkPacing {
@@ -147,8 +131,7 @@ export function buildBulkProgressOutcomes(
       failed += 1;
       continue;
     }
-    const states = sourceStates(row.sourceCoverage);
-    if (states.some((state) => LIMITED_SOURCE_STATES.has(state))) {
+    if (limitedBulkSources(row.domain, row.sourceCoverage).length) {
       limited += 1;
       continue;
     }

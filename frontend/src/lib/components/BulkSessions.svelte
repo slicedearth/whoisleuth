@@ -1,5 +1,6 @@
 <script lang="ts">
   import { compareSavedBulkSessions, type BulkSession } from '$lib/bulk-sessions';
+  import { classifyBulkSourceCoverage } from '$lib/analysis/bulk-source-coverage.ts';
 
   let {
     sessions,
@@ -46,10 +47,12 @@
   }
 
   function sourceSummary(session: BulkSession): string {
-    const states = session.results.flatMap((result) => result.sourceCoverage.map((source) => source.state));
-    if (!states.length) return 'Source coverage was not retained';
-    const partial = states.filter((state) => state !== 'complete' && state !== 'skipped').length;
-    return partial ? `${partial} incomplete source observation${partial === 1 ? '' : 's'}` : 'Recorded sources complete or explicitly skipped';
+    const classes = session.results.map((result) => classifyBulkSourceCoverage(result.domain, result.sourceCoverage));
+    if (classes.every((value) => value === 'unrecorded')) return 'Source coverage was not retained';
+    const limited = classes.filter((value) => value === 'limited').length;
+    return limited
+      ? `${limited} result${limited === 1 ? '' : 's'} with limited source coverage`
+      : 'Recorded sources complete, skipped, or not published for the registry';
   }
 </script>
 

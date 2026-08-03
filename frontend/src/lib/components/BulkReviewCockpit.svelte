@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { describeBulkSourceCoverage } from '$lib/analysis/bulk-source-coverage.ts';
   import {
     nextBulkReviewIndex,
     type BulkReviewCockpitRow,
@@ -94,7 +95,7 @@
         <div><dt>Risk / opportunity</dt><dd>{current.risk ?? '—'} / {current.opportunity ?? '—'}</dd></div>
         <div><dt>Website</dt><dd>{current.activity}</dd></div>
         <div><dt>Registrar</dt><dd>{current.registrar}</dd></div>
-        <div><dt>Source coverage</dt><dd>{current.sourceCoverage.map((item) => `${item.source}: ${item.state}`).join(' · ') || 'Not recorded'}</dd></div>
+        <div><dt>Source coverage</dt><dd>{current.sourceCoverage.map((item) => describeBulkSourceCoverage(current.domain, item)).join(' · ') || 'Not recorded'}</dd></div>
         {#if current.error}<div><dt>Collection error</dt><dd class="error">{current.error}</dd></div>{/if}
       </dl>
       <div class="navigation">

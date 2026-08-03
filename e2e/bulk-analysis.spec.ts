@@ -195,6 +195,45 @@ test('filters, groups, and selected-only actions use compact observed evidence',
   expect(manifestContent.integrity.digestSha256).toMatch(/^sha256:[a-f0-9]{64}$/u);
 });
 
+test('keeps an expected missing registry protocol out of limited Bulk outcomes', async ({ page }) => {
+  await page.route('**/api/lookup?*', async (route) => {
+    const domain = new URL(route.request().url()).searchParams.get('q') || '';
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        availability: {
+          applicable: true,
+          domain,
+          state: 'registered',
+          confidence: 'high',
+          registrar: { name: 'Example Registrar' },
+        },
+        diagnostics: {
+          version: 7,
+          rdap: { status: 'complete' },
+          whois: { status: 'unsupported' },
+          availability: { status: 'complete' },
+        },
+      }),
+    });
+  });
+  await page.getByLabel('Scan mode').selectOption('deep');
+  await runBulkScan(page, ['candidate.dev', 'candidate.com']);
+
+  const outcomes = page.locator('.outcomes');
+  await expect(outcomes.locator('div', { hasText: 'Complete' })).toContainText('1');
+  await expect(outcomes.locator('div', { hasText: 'Limited' })).toContainText('1');
+  await page.getByLabel('Source coverage').selectOption('complete');
+  await expect(page.getByRole('region', { name: 'Bulk review cockpit' })).toContainText(
+    'whois: unsupported (no IANA-published service)',
+  );
+
+  await page.getByLabel('Source coverage').selectOption('limited');
+  await expect(page.locator('.results-table tbody tr')).toHaveCount(1);
+  await expect(page.locator('.results-table tbody tr')).toContainText('candidate.com');
+});
+
 test('supports focused review and an evidence-qualified two-domain comparison', async ({ page }) => {
   await page.route('**/api/lookup?*', async (route) => {
     const domain = new URL(route.request().url()).searchParams.get('q') || '';
