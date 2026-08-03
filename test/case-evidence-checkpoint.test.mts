@@ -119,7 +119,7 @@ describe('case evidence checkpoints', () => {
     assert.equal(byField.get('tls.valid_to')?.value, '2026-12-01T00:00:00.000Z');
     assert.equal(byField.get('disclosure.security_txt_expires')?.value, '2026-10-01T00:00:00.000Z');
     assert.equal(byField.get('disclosure.security_txt_contacts')?.value, 'mailto:security@checkpoint.example');
-    assert.equal(byField.get('registration.registrar')?.sourceSchema.version, 23);
+    assert.equal(byField.get('registration.registrar')?.sourceSchema.version, 24);
     assert.equal(JSON.stringify(facts).includes('secret=discard'), false);
   });
 
