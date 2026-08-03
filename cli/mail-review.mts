@@ -1,10 +1,11 @@
 import { Buffer } from 'node:buffer';
 import { getDomain } from 'tldts';
 
+import { analyzeTlsaEvidence, type TlsaEvidenceReport } from '../lib/tlsa-evidence.mts';
 import { CliUsageError } from './errors.mts';
 
 export const CLI_MAIL_REVIEW_SCHEMA = 'whoisleuth.cli.mail-review';
-export const CLI_MAIL_REVIEW_VERSION = 1;
+export const CLI_MAIL_REVIEW_VERSION = 2;
 export const MAX_MAIL_REVIEW_INPUT_BYTES = 16 * 1024 * 1024;
 export const MAX_MAIL_REVIEW_ROWS = 500;
 
@@ -79,6 +80,15 @@ function normalizeMailRow(value: unknown) {
   const hasSpf = boolean(availability.hasSpf) ?? boolean(summary.hasSpf);
   const hasDmarc = boolean(availability.hasDmarc) ?? boolean(summary.hasDmarc);
   const state = mailState({ dnsStatus, hasMx, hasNullMx, hasSpf, hasDmarc });
+  const tlsaInput = record(item.tlsaEvidence);
+  const dane = Object.keys(tlsaInput).length
+    ? analyzeTlsaEvidence({
+        dnssecState: tlsaInput.dnssecState,
+        records: tlsaInput.records,
+        certificateDerBase64: tlsaInput.certificateDerBase64,
+        spkiDerBase64: tlsaInput.spkiDerBase64,
+      })
+    : null;
   return {
     domain,
     state,
@@ -89,9 +99,11 @@ function normalizeMailRow(value: unknown) {
     hasDmarc,
     mxHosts: hosts,
     providerDomains: providerDomains(hosts),
+    dane,
     limitations: [
       ...(dnsStatus === 'partial' ? ['DNS evidence was partial.'] : []),
       ...(state === 'no_explicit_mx' ? ['No explicit MX is not equivalent to a null MX or proof that delivery is impossible.'] : []),
+      ...(dane?.state === 'matched' ? [] : dane ? ['Supplied TLSA evidence did not establish one complete DNSSEC-validated match.'] : ['No TLSA evidence was supplied for offline DANE comparison.']),
       'Mail configuration does not establish use, control, intent, safety, or maliciousness.',
     ],
   };
@@ -145,6 +157,15 @@ function buildCliMailReview(textValue: unknown, generatedAt = new Date().toISOSt
     null_mx: 0,
   };
   for (const row of rows) counts[row.state] += 1;
+  const daneCounts: Record<TlsaEvidenceReport['state'] | 'not_supplied', number> = {
+    matched: 0,
+    different: 0,
+    partial: 0,
+    unavailable: 0,
+    invalid: 0,
+    not_supplied: 0,
+  };
+  for (const row of rows) daneCounts[row.dane?.state ?? 'not_supplied'] += 1;
   const providerMap = new Map<string, string[]>();
   for (const row of rows) {
     for (const provider of row.providerDomains) {
@@ -168,11 +189,13 @@ function buildCliMailReview(textValue: unknown, generatedAt = new Date().toISOSt
     version: CLI_MAIL_REVIEW_VERSION,
     generatedAt,
     counts,
+    daneCounts,
     rows,
     providerRelationships,
     limitations: [
       'This review is passive and uses DNS evidence already retained in a WHOISleuth Bulk result; it makes no network request.',
       'Null MX, no explicit MX, receiving mail, authentication gaps, and incomplete evidence remain separate states.',
+      'Optional TLSA evidence is compared offline. A DANE match requires separately validated DNSSEC evidence from the same observation.',
       'SMTP delivery, mailbox existence, catch-all behavior, banner collection, and message acceptance were not tested.',
     ],
   };
@@ -187,12 +210,14 @@ function formatCliMailReview(document: ReturnType<typeof buildCliMailReview>): s
     `Null MX          ${document.counts.null_mx}`,
     `No explicit MX   ${document.counts.no_explicit_mx}`,
     `Incomplete       ${document.counts.evidence_incomplete + document.counts.mail_auth_incomplete}`,
+    `DANE matched     ${document.daneCounts.matched}`,
     '',
   ];
   for (const row of document.rows) {
     lines.push(`${row.domain}  ${row.state.replaceAll('_', ' ')}`);
     lines.push(`  MX providers  ${row.providerDomains.join(', ') || 'None observed'}`);
     lines.push(`  SPF / DMARC   ${row.hasSpf === null ? 'unknown' : row.hasSpf ? 'observed' : 'not observed'} / ${row.hasDmarc === null ? 'unknown' : row.hasDmarc ? 'observed' : 'not observed'}`);
+    lines.push(`  DANE / TLSA   ${row.dane?.state ?? 'not supplied'}`);
   }
   if (document.providerRelationships.length) {
     lines.push('', 'Shared mail-provider relationships');
