@@ -37,6 +37,11 @@ import {
   SAVED_LOOKUP_SCHEMA_VERSION,
   parseSavedLookupDocument,
 } from './saved-lookup.mts';
+import {
+  DOMAIN_CONTROL_MANIFEST_SCHEMA,
+  DOMAIN_CONTROL_MANIFEST_VERSION,
+  verifyDomainControlManifest,
+} from '../lib/domain-control-manifest.mts';
 
 export const OFFLINE_ARTIFACT_VERIFICATION_SCHEMA = 'whoisleuth.offline-artifact-verification';
 export const OFFLINE_ARTIFACT_VERIFICATION_VERSION = 1;
@@ -81,6 +86,7 @@ const SIGNED_ARTIFACT_VERSIONS: Readonly<Record<string, ReadonlySet<number>>> = 
   [BULK_DOMAIN_COMPARISON_SCHEMA]: new Set([BULK_DOMAIN_COMPARISON_VERSION]),
   [BULK_MAIL_EXPOSURE_SCHEMA]: new Set([BULK_MAIL_EXPOSURE_VERSION]),
   [BULK_REVIEW_MANIFEST_SCHEMA]: new Set([BULK_REVIEW_MANIFEST_VERSION]),
+  [DOMAIN_CONTROL_MANIFEST_SCHEMA]: new Set([DOMAIN_CONTROL_MANIFEST_VERSION]),
 });
 
 function record(value: unknown): UnknownRecord | null {
@@ -171,6 +177,7 @@ async function verifySignedArtifact(
   if (await sha256ArtifactDigest(unsigned) !== integrity.digestSha256) {
     throw new TypeError('The signed review artifact failed its SHA-256 integrity check.');
   }
+  if (schema === DOMAIN_CONTROL_MANIFEST_SCHEMA) verifyDomainControlManifest(value);
   return Object.freeze({
     schema: OFFLINE_ARTIFACT_VERIFICATION_SCHEMA,
     version: OFFLINE_ARTIFACT_VERIFICATION_VERSION,

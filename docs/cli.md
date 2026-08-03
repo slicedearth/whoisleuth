@@ -78,6 +78,7 @@ node bin/whoisleuth.mts compare lookup.json --json
 node bin/whoisleuth.mts page-compare official.json candidate.json --json
 node bin/whoisleuth.mts mail-review bulk.json --json
 node bin/whoisleuth.mts review-evidence dnssec-evidence.json --json
+node bin/whoisleuth.mts domain-control domain-control-input.json --json
 node bin/whoisleuth.mts diff first-lookup.json second-lookup.json --json
 node bin/whoisleuth.mts timeline first-observation.json second-observation.json latest-observation.json --json
 node bin/whoisleuth.mts export lookup.json > evidence.json
@@ -182,7 +183,7 @@ Commands that query RDAP, WHOIS, DNS, HTTP, TLS, or Certificate Transparency do
 so directly from the machine running the CLI. They do not use the hosted login,
 hosted session, or deployment usage controls; upstream providers can see and
 rate-limit the local machine's network address. Offline `discover`, `compare`,
-`page-compare`, `mail-review`, `review-evidence`, `diff`, `timeline`, `risk-calibrate`, `verify-artifact`, `source-report`, `export`,
+`page-compare`, `mail-review`, `review-evidence`, `domain-control`, `diff`, `timeline`, `risk-calibrate`, `verify-artifact`, `source-report`, `export`,
 `commands`, `completion`, and `manual` operations make no network requests. Commands write
 to stdout unless the analyst deliberately selects a local output file.
 
@@ -339,7 +340,7 @@ machine access is not evidence that a domain is unregistered or safe.
 This release supports `lookup`, `bulk`, `ct-search`, `discover`, `discover-scan`, `posture`,
 `http`, `tls`, `registry-support`, `risk-calibrate`, `verify-artifact`,
 `inspect-archive`, `sign-artifact`, `verify-signature`, `source-report`,
-`compare`, `page-compare`, `mail-review`, `review-evidence`, `diff`, `timeline`, `export`, `doctor`, `commands`, `completion`, and `manual`. Additional command families
+`compare`, `page-compare`, `mail-review`, `review-evidence`, `domain-control`, `diff`, `timeline`, `export`, `doctor`, `commands`, `completion`, and `manual`. Additional command families
 are added as separate bounded increments rather than exposing incomplete
 aliases.
 
@@ -839,6 +840,29 @@ The common output is `whoisleuth.cli.offline-evidence-review` version 1. It
 retains the nested result's explicit state and limitations. A locally
 consistent relationship is not converted into a claim about current
 publication, ownership, safety, or maliciousness.
+
+## Domain control manifests
+
+`domain-control [input.json]` builds or reviews a bounded desired-state
+manifest without making a request or changing configuration. A manifest input
+uses `whoisleuth.domain-control-manifest-input` version 1, includes an expiry,
+and may record expected nameservers, DS, MX, CAA, TLS issuer, TLS SPKI
+fingerprint, registrar-lock preference, and a renewal-review date for up to 100
+domains. Empty fields mean unconfigured; they do not require a record to be
+absent.
+
+The emitted `whoisleuth.domain-control-manifest` version 1 is normalized and
+protected by a canonical SHA-256 digest. It can also be passed to
+`sign-artifact` for an optional local Ed25519 signature. Integrity and
+signature verification detect changes and authenticate possession of the
+selected key; neither establishes that the desired state is correct.
+
+A review input uses `whoisleuth.domain-control-review-input` version 1 and
+contains one manifest plus separately attributed observations. Only a complete
+`observed` field may produce `drift`. Partial, unavailable, unsupported, and
+missing observations remain inconclusive, and unrelated observations are
+counted but ignored. The review performs no DNS, RDAP, HTTP, TLS, SMTP, or
+registrar request.
 
 ## Optional local rendered capture
 
