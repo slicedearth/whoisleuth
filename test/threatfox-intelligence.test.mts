@@ -20,6 +20,7 @@ type FetchCall = {
 
 const ENABLED_ENV = Object.freeze({
   WHOISLEUTH_ENABLE_THREATFOX: '1',
+  WHOISLEUTH_DEPLOYMENT_PURPOSE: 'personal',
   ABUSECH_AUTH_KEY: 'fixture-auth-key',
 });
 
@@ -102,6 +103,7 @@ describe('malware-IOC provider policy and configuration', () => {
     assert.equal(threatfoxConfiguration(ENABLED_ENV).configured, true);
     assert.equal(threatfoxConfiguration({
       WHOISLEUTH_ENABLE_THREATFOX: '1', URLHAUS_AUTH_KEY: 'legacy-fixture-key',
+      WHOISLEUTH_DEPLOYMENT_PURPOSE: 'personal',
     }).configured, true);
     assert.equal(threatfoxConfiguration({
       ...ENABLED_ENV, ABUSECH_AUTH_KEY: 'bad key', URLHAUS_AUTH_KEY: 'legacy-fixture-key',

@@ -7,6 +7,8 @@
 import { classifyQuery } from './classify.mts';
 import { abusechAuthKey } from './abusech-auth.mts';
 import { safeFetchDetailed, readTextCapped } from './safe-fetch.mts';
+import { whoisleuthRequestHeaders } from './outbound-identity.mts';
+import { providerPolicyAdmission } from './provider-policy-admission.mts';
 import {
   createThreatIntelligenceResult,
   defineThreatIntelligenceProvider,
@@ -72,12 +74,15 @@ function urlhausConfiguration(env: EnvironmentInput | null | undefined = process
   const source = env && typeof env === 'object' ? env : {};
   const enabled = enabledValue(source.WHOISLEUTH_ENABLE_URLHAUS);
   const authKey = abusechAuthKey(source);
+  const policy = providerPolicyAdmission(URLHAUS_PROVIDER.terms, source);
   return {
     enabled,
-    configured: enabled && authKey !== null,
+    configured: enabled && policy.allowed && authKey !== null,
     authKey: enabled ? authKey : null,
     reason: !enabled
       ? 'Malware-host intelligence is not enabled for this deployment.'
+      : !policy.allowed
+        ? policy.reason
       : authKey
         ? null
         : 'Malware-host intelligence is enabled but its API credential is unavailable or malformed.',
@@ -260,7 +265,7 @@ function createUrlhausIntelligenceAdapter(dependencies: AdapterDependencies = {}
           accept: 'application/json',
           'auth-key': configuration.authKey,
           'content-type': 'application/x-www-form-urlencoded;charset=UTF-8',
-          'user-agent': 'WHOISleuth/1.0',
+          ...whoisleuthRequestHeaders(),
         },
         body,
         signal: AbortSignal.timeout(URLHAUS_PROVIDER.limits.timeoutMs),

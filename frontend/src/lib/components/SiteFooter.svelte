@@ -1,16 +1,23 @@
 <script lang="ts">
   let { console = false }: { console?: boolean } = $props();
+  const revision = __WHOISLEUTH_BUILD_REVISION__;
+  const sourceHref = /^[a-f0-9]{7,64}$/u.test(revision)
+    ? `https://github.com/slicedearth/whoisleuth/tree/${revision}`
+    : 'https://github.com/slicedearth/whoisleuth';
+  const revisionLabel = /^[a-f0-9]{7,64}$/u.test(revision) ? revision.slice(0, 7) : 'local';
 </script>
 
 <footer class="site-footer public-footer" class:console>
   <p>WHOISleuth keeps registration and supporting evidence separate, so missing or inconclusive data is not presented as proof.</p>
   <div class="footer-meta">
-    <p>© 2026 Created by <a href="https://github.com/slicedearth" target="_blank" rel="noopener">slicedearth</a></p>
+    <p>WHOISleuth {__WHOISLEUTH_VERSION__} · build {revisionLabel} · © 2026 <a href="https://github.com/slicedearth" target="_blank" rel="noopener">slicedearth</a></p>
     <nav class="footer-links" aria-label="Footer">
-      <a href="https://github.com/slicedearth/whoisleuth" target="_blank" rel="noopener">Source and licence</a>
+      <a href={sourceHref} target="_blank" rel="noopener">Source and licence</a>
       <a href="/resources">Learn</a>
       <a href="/guide">Guide</a>
       <a href="/privacy">Privacy</a>
+      <a href="/terms">Terms</a>
+      <a href="/request-policy">Requests</a>
       <a href="/contact">Contact</a>
     </nav>
   </div>

@@ -16,6 +16,7 @@
 import * as crypto from 'node:crypto';
 
 import { safeFetch, readBytesCapped } from './safe-fetch.mts';
+import { whoisleuthRequestHeaders } from './outbound-identity.mts';
 import { faviconPerceptualHash } from './perceptual-hash.mts';
 
 const MAX_FAVICON_BYTES = 200000; // generous for a favicon, small enough to bound memory
@@ -130,7 +131,7 @@ function buildFaviconCandidates(domain: string, html = ''): string[] {
 }
 
 async function fetchFaviconHash(domain: string, { html = '' }: FaviconOptions = {}): Promise<FaviconHash | null> {
-  const headers = { 'User-Agent': 'Mozilla/5.0 (compatible; DomainStatusChecker/1.0)' };
+  const headers = whoisleuthRequestHeaders();
   const candidates = buildFaviconCandidates(domain, html);
 
   for (const url of candidates) {

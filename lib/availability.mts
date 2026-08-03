@@ -13,6 +13,7 @@ import { promises as dns } from 'node:dns';
 import { fetchRdapRecord } from './rdap.mts';
 import { buildWhoisChain, parseWhoisChain } from './whois.mts';
 import { safeFetchDetailed, readTextCapped } from './safe-fetch.mts';
+import { whoisleuthRequestHeaders } from './outbound-identity.mts';
 import { collectDnsIntelligence, skippedDnsIntelligence } from './dns-intelligence.mts';
 import type { DnsResolver } from './dns-intelligence.mts';
 import { fetchFaviconHash } from './favicon.mts';
@@ -280,7 +281,7 @@ async function checkDnsDelegation(domain: string, { resolver = dns.resolveNs }: 
 // an HTTP error can all produce the same null body. Keeping that distinction
 // avoids turning an inconclusive probe into a false inactivity claim.
 async function fetchHomepage(domain: string, { fetcher = safeFetchDetailed as HomepageFetcher }: { fetcher?: HomepageFetcher } = {}): Promise<HomepageResult> {
-  const headers = { 'User-Agent': 'Mozilla/5.0 (compatible; DomainStatusChecker/1.0)' };
+  const headers = whoisleuthRequestHeaders();
   const failures: HomepageFailure[] = [];
   const probeStartedAt = Date.now();
   for (const scheme of ['https', 'http']) {

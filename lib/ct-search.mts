@@ -11,6 +11,7 @@ import { parse } from 'tldts';
 
 import { normalizeCtQuery } from './ct-query.mts';
 import { safeFetch, readTextCapped } from './safe-fetch.mts';
+import { whoisleuthRequestHeaders } from './outbound-identity.mts';
 import { createObservation } from './observation.mts';
 
 type CtRow = Record<string, unknown>;
@@ -109,7 +110,7 @@ async function fetchCrtSh(keyword: string, attempt = 0, dependencies: CtDependen
     let res: Response;
     try {
       res = await fetcher(`https://crt.sh/?q=${encodeURIComponent(keyword)}&output=json`, {
-        headers: { Accept: 'application/json', 'User-Agent': 'Mozilla/5.0 (compatible; DomainStatusChecker/1.0)' },
+        headers: whoisleuthRequestHeaders({ Accept: 'application/json' }),
         signal: controller.signal,
       });
     } catch (err) {

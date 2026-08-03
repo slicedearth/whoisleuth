@@ -20,6 +20,7 @@ type FetchCall = {
 
 const ENABLED_ENV = Object.freeze({
   WHOISLEUTH_ENABLE_URLHAUS: '1',
+  WHOISLEUTH_DEPLOYMENT_PURPOSE: 'personal',
   URLHAUS_AUTH_KEY: 'fixture-auth-key',
 });
 
@@ -112,10 +113,12 @@ describe('malware-host provider policy and configuration', () => {
       reason: 'Malware-host intelligence is not enabled for this deployment.',
     });
     assert.equal(urlhausConfiguration({ WHOISLEUTH_ENABLE_URLHAUS: 'true' }).configured, false);
+    assert.match(urlhausConfiguration({ WHOISLEUTH_ENABLE_URLHAUS: 'true' }).reason ?? '', /DEPLOYMENT_PURPOSE/u);
     assert.equal(urlhausConfiguration({ ...ENABLED_ENV, URLHAUS_AUTH_KEY: 'bad key' }).configured, false);
     assert.equal(urlhausConfiguration(ENABLED_ENV).configured, true);
     assert.equal(urlhausConfiguration({
       WHOISLEUTH_ENABLE_URLHAUS: '1', ABUSECH_AUTH_KEY: 'shared-fixture-key',
+      WHOISLEUTH_DEPLOYMENT_PURPOSE: 'personal',
     }).configured, true);
   });
 });

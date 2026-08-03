@@ -5,6 +5,8 @@
 
 import { classifyQuery } from './classify.mts';
 import { safeFetchDetailed, readTextCapped } from './safe-fetch.mts';
+import { whoisleuthRequestHeaders } from './outbound-identity.mts';
+import { providerPolicyAdmission } from './provider-policy-admission.mts';
 import {
   createThreatIntelligenceResult,
   defineThreatIntelligenceProvider,
@@ -76,12 +78,15 @@ function urlscanConfiguration(env: EnvironmentInput | null | undefined = process
   const source = env && typeof env === 'object' ? env : {};
   const enabled = enabledValue(source.WHOISLEUTH_ENABLE_URLSCAN);
   const apiKey = normalizedApiKey(source.URLSCAN_API_KEY);
+  const policy = providerPolicyAdmission(URLSCAN_PROVIDER.terms, source);
   return {
     enabled,
-    configured: enabled && apiKey !== null,
+    configured: enabled && policy.allowed && apiKey !== null,
     apiKey: enabled ? apiKey : null,
     reason: !enabled
       ? 'Archived URLscan verdict search is not enabled for this deployment.'
+      : !policy.allowed
+        ? policy.reason
       : apiKey
         ? null
         : 'Archived URLscan verdict search is enabled but its API credential is unavailable or malformed.',
@@ -257,7 +262,7 @@ function createUrlscanIntelligenceAdapter(dependencies: AdapterDependencies = {}
         headers: {
           accept: 'application/json',
           'api-key': configuration.apiKey,
-          'user-agent': 'WHOISleuth/1.0',
+          ...whoisleuthRequestHeaders(),
         },
         signal: AbortSignal.timeout(URLSCAN_PROVIDER.limits.timeoutMs),
       }, { maxRedirects: 0 });

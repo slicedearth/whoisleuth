@@ -69,6 +69,7 @@
     "release:check": "node tools/release-version-check.mts",
     "licenses:check": "node tools/third-party-notices.mts --check",
     "licenses:update": "node tools/third-party-notices.mts --write",
+    "providers:policy-check": "node tools/provider-policy-freshness.mts",
     "security:codeql": "node tools/local-codeql.mts",
     "security:retire": "retire --path frontend/build --severity high --outputformat text"
   },

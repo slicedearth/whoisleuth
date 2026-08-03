@@ -26,6 +26,18 @@ const publicPages = [
     heading: 'Privacy policy',
   },
   {
+    path: '/terms',
+    canonical: 'https://whoisleuth.com/terms',
+    title: 'Terms and acceptable use | WHOISleuth',
+    heading: 'Terms and acceptable use',
+  },
+  {
+    path: '/request-policy',
+    canonical: 'https://whoisleuth.com/request-policy',
+    title: 'Automated request policy | WHOISleuth',
+    heading: 'Automated request policy',
+  },
+  {
     path: '/resources',
     canonical: 'https://whoisleuth.com/resources',
     title: 'Domain investigation resources | WHOISleuth',
@@ -99,6 +111,8 @@ test('public pages expose prerendered search and sharing metadata', async ({ req
     expect(html).toContain('<meta name="twitter:card" content="summary_large_image"');
     expect(html).toContain('<meta name="twitter:image" content="https://whoisleuth.com/social-preview.png"');
     expect(html).toContain(expected.heading);
+    expect(html).toMatch(/WHOISleuth \d+\.\d+\.\d+ · build (?:[a-f0-9]{7}|local)/u);
+    expect(html).toMatch(/href="https:\/\/github\.com\/slicedearth\/whoisleuth(?:\/tree\/[a-f0-9]{7,64})?"/u);
 
     if (expected.path === '/') {
       const schema = html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/u)?.[1];

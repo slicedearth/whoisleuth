@@ -84,6 +84,13 @@ Express reads these values for each request. A serverless platform may require
 an environment update or a new function instance before a changed value takes
 effect.
 
+The static build records the semantic application version and exact source
+revision in the footer. Netlify supplies `COMMIT_REF`; other build systems can
+set `WHOISLEUTH_BUILD_REVISION` to a 7-to-64-character hexadecimal commit ID.
+When neither environment metadata nor a Git checkout is available, the footer
+uses `local` and links to the repository root rather than claiming an exact
+source revision.
+
 ## Optional external intelligence
 
 External adapters are disabled by default and run only for a Deep,
@@ -96,6 +103,14 @@ non-compact single-domain Lookup when the analyst selects them.
 | Retained malware indicators | `WHOISLEUTH_ENABLE_THREATFOX=1` and `ABUSECH_AUTH_KEY` | Canonical registrable domain | Performs one exact-match search. It never submits an indicator or sample. |
 
 The legacy `URLHAUS_AUTH_KEY` remains accepted for the malware-host adapter.
+
+Every enabled optional adapter also requires an explicit
+`WHOISLEUTH_DEPLOYMENT_PURPOSE=personal`, `internal`, or `commercial` value.
+Current restricted-use providers are admitted only for `personal` deployments;
+`internal`, `commercial`, missing, or invalid declarations fail closed. A
+provider whose terms review is more than 180 days old also remains unavailable
+until its policy fields and review date are deliberately updated. CI enforces
+the same age bound with `npm run providers:policy-check`.
 
 Each adapter has bounded response size, result count, timeout, concurrency, and
 fair-use counters. It follows no credential-bearing redirect and keeps no

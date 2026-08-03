@@ -4,6 +4,8 @@
 
 import { abusechAuthKey } from './abusech-auth.mts';
 import { safeFetchDetailed, readTextCapped } from './safe-fetch.mts';
+import { whoisleuthRequestHeaders } from './outbound-identity.mts';
+import { providerPolicyAdmission } from './provider-policy-admission.mts';
 import {
   createThreatIntelligenceResult,
   defineThreatIntelligenceProvider,
@@ -65,12 +67,15 @@ function threatfoxConfiguration(env: EnvironmentInput | null | undefined = proce
   const source = env && typeof env === 'object' ? env : {};
   const enabled = enabledValue(source.WHOISLEUTH_ENABLE_THREATFOX);
   const authKey = abusechAuthKey(source);
+  const policy = providerPolicyAdmission(THREATFOX_PROVIDER.terms, source);
   return {
     enabled,
-    configured: enabled && authKey !== null,
+    configured: enabled && policy.allowed && authKey !== null,
     authKey: enabled ? authKey : null,
     reason: !enabled
       ? 'Malware-IOC intelligence is not enabled for this deployment.'
+      : !policy.allowed
+        ? policy.reason
       : authKey
         ? null
         : 'Malware-IOC intelligence is enabled but its API credential is unavailable or malformed.',
@@ -214,7 +219,7 @@ function createThreatfoxIntelligenceAdapter(dependencies: AdapterDependencies = 
           accept: 'application/json',
           'auth-key': configuration.authKey,
           'content-type': 'application/json',
-          'user-agent': 'WHOISleuth/1.0',
+          ...whoisleuthRequestHeaders(),
         },
         body,
         signal: AbortSignal.timeout(THREATFOX_PROVIDER.limits.timeoutMs),
