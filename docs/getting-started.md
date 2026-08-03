@@ -238,6 +238,37 @@ minimized contributor-reviewed observation. The ordinary synthetic benchmark
 continues to measure deterministic signature behavior and collision controls;
 it does not become a proxy for real-world coverage.
 
+The wider reviewed-accuracy programme keeps technology detection separate from
+lookalike analysis, page comparison, service-deprovision cues, and certificate
+grouping. Inspect its current evidence rather than inferring accuracy from
+synthetic fixture counts:
+
+```bash
+npm run accuracy:status
+npm run accuracy:status -- --json
+```
+
+An `unproven` result is intentional when a corpus lacks both positive and
+benign or collision cases. `limited` requires at least five cases, including
+both classes; `measured` requires at least twenty, including five from each
+class. Those labels describe only the checked-in corpus. They do not establish
+general recall, precision, ownership, intent, safety, or maliciousness.
+
+Contributors can create a privacy-first review worksheet without copying a
+live response into the repository:
+
+```bash
+npm run accuracy:review-scaffold -- \
+  --category page-similarity \
+  --id reviewed-page-collision
+```
+
+The scaffold uses a reserved target and requires an explicit factual or
+licensed source basis, privacy and redistribution review, a second review,
+and component-level expectations. It is an intake worksheet, not a fixture:
+each category still needs a purpose-built replay validator before reviewed
+observations can enter an accuracy claim.
+
 ### Incremental Lookup qualification
 
 ```bash

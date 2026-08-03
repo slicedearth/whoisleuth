@@ -50,6 +50,8 @@
     "technology:coverage-check": "node tools/technology-signature-benchmark.mts --require-reviewed",
     "technology:signature-scaffold": "node tools/technology-signature-scaffold.mts",
     "technology:fixture-review": "node tools/technology-fixture-review.mts",
+    "accuracy:status": "node tools/reviewed-accuracy-status.mts",
+    "accuracy:review-scaffold": "node tools/reviewed-accuracy-scaffold.mts",
     "service-dependencies:audit": "node tools/service-dependency-signature-audit.mts",
     "study:first-use": "node tools/first-use-analyst-study.mts",
     "sslbl:snapshot": "node tools/sslbl-snapshot.mts",
