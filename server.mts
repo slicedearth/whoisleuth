@@ -244,12 +244,12 @@ app.get('/api/contact-route', (_req: RequestLike, res: ResponseLike) => {
   res.json(contactRoutePublicConfig());
 });
 
-app.post('/api/contact-route', (req: RequestLike, res: ResponseLike, next: Next) => {
+app.post('/api/contact-route', contactRouteRateLimit, (req: RequestLike, res: ResponseLike, next: Next) => {
   if (!isTrustedOrigin(req.headers)) {
     return res.status(403).json({ error: 'Cross-site request blocked' });
   }
   next();
-}, contactRouteRateLimit, parseContactRouteJson, async (req: RequestLike, res: ResponseLike) => {
+}, parseContactRouteJson, async (req: RequestLike, res: ResponseLike) => {
   const parsed = parseContactRouteBody(req.body);
   if (!parsed) return res.status(400).json({ error: 'Invalid request body' });
   const result = await verifyContactRoute(parsed.category, parsed.token);

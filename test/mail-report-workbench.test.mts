@@ -67,6 +67,18 @@ describe('local aggregate mail report parsing', () => {
     );
   });
 
+  test('reduces nested markup and encoded angle brackets to plain report text', async () => {
+    const markedUp = DMARC_XML.replace(
+      '<org_name>Example Reporter</org_name>',
+      '<org_name>Example <b>Reporter</b> &lt;script&gt;</org_name>',
+    );
+    const [report] = await parseMailReportFiles('aggregate.xml', encoder.encode(markedUp));
+    assert.equal(report?.kind, 'dmarc');
+    if (!report || report.kind !== 'dmarc') throw new Error('Expected one DMARC report.');
+    assert.equal(report.organization, 'Example Reporter script');
+    assert.doesNotMatch(report.organization ?? '', /[<>]/u);
+  });
+
   test('parses TLS-RPT policy outcomes and aggregates repeated failure types', async () => {
     const [report] = await parseMailReportFiles('tls.json', encoder.encode(JSON.stringify(TLS_REPORT)));
     assert.equal(report?.kind, 'tls-rpt');

@@ -166,11 +166,28 @@ export function expandMailReportFile(name: string, input: Uint8Array): ExpandedF
 
 function decodeXml(value: string): string {
   return value
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
+    .replace(/&lt;/g, ' ')
+    .replace(/&gt;/g, ' ')
     .replace(/&quot;/g, '"')
     .replace(/&apos;/g, "'")
     .replace(/&amp;/g, '&');
+}
+
+function removeXmlMarkup(value: string): string {
+  let output = '';
+  let insideMarkup = false;
+  for (const character of value) {
+    if (character === '<') {
+      insideMarkup = true;
+      output += ' ';
+    } else if (character === '>') {
+      insideMarkup = false;
+      output += ' ';
+    } else if (!insideMarkup) {
+      output += character;
+    }
+  }
+  return output;
 }
 
 function cleanText(value: unknown, maximum = 300): string | null {
@@ -183,7 +200,7 @@ function xmlValues(xml: string, tag: string, maximum = 10_000): string[] {
   const expression = new RegExp(`<(?:[A-Za-z_][\\w.-]*:)?${escaped}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/(?:[A-Za-z_][\\w.-]*:)?${escaped}\\s*>`, 'gi');
   const values: string[] = [];
   for (let match = expression.exec(xml); match && values.length < maximum; match = expression.exec(xml)) {
-    const value = cleanText(decodeXml(String(match[1] ?? '').replace(/<[^>]+>/g, '')), 1_000);
+    const value = cleanText(decodeXml(removeXmlMarkup(String(match[1] ?? ''))), 1_000);
     if (value) values.push(value);
   }
   return values;

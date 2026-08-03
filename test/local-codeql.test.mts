@@ -280,6 +280,7 @@ describe('local CodeQL orchestration', () => {
     assert.match(output, /Result: NEW FINDINGS/);
     assert.match(output, /js\/example-rule at lib\/example\.mts:42/);
     assert.match(output, /Review this path/);
+    assert.match(output, /Fingerprint: fixture-line-hash:1 \/ 4/);
   });
 
   test('cleans temporary data after a CodeQL failure and bounds the diagnostic', async () => {
