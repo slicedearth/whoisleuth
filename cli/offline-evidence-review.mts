@@ -74,10 +74,13 @@ function buildOfflineEvidenceReview(value: unknown, generatedAt = new Date().toI
   } else if (input.schema === 'whoisleuth.tlsa-evidence-input') {
     kind = 'tlsa';
     result = analyzeTlsaEvidence({
+      serviceName: input.serviceName,
       dnssecState: input.dnssecState,
+      pkixValidationState: input.pkixValidationState,
       records: input.records,
       certificateDerBase64: input.certificateDerBase64,
       spkiDerBase64: input.spkiDerBase64,
+      authorityMaterials: input.authorityMaterials,
     });
   } else if (input.schema === 'whoisleuth.rpki-route-input') {
     kind = 'rpki';

@@ -77,6 +77,7 @@ node bin/whoisleuth.mts lookup example.com --deep --json > lookup.json
 node bin/whoisleuth.mts compare lookup.json --json
 node bin/whoisleuth.mts page-compare official.json candidate.json --json
 node bin/whoisleuth.mts mail-review bulk.json --json
+node bin/whoisleuth.mts review-evidence dnssec-evidence.json --json
 node bin/whoisleuth.mts diff first-lookup.json second-lookup.json --json
 node bin/whoisleuth.mts timeline first-observation.json second-observation.json latest-observation.json --json
 node bin/whoisleuth.mts export lookup.json > evidence.json
@@ -181,7 +182,7 @@ Commands that query RDAP, WHOIS, DNS, HTTP, TLS, or Certificate Transparency do
 so directly from the machine running the CLI. They do not use the hosted login,
 hosted session, or deployment usage controls; upstream providers can see and
 rate-limit the local machine's network address. Offline `discover`, `compare`,
-`page-compare`, `mail-review`, `diff`, `timeline`, `risk-calibrate`, `verify-artifact`, `source-report`, `export`,
+`page-compare`, `mail-review`, `review-evidence`, `diff`, `timeline`, `risk-calibrate`, `verify-artifact`, `source-report`, `export`,
 `commands`, `completion`, and `manual` operations make no network requests. Commands write
 to stdout unless the analyst deliberately selects a local output file.
 
@@ -338,7 +339,7 @@ machine access is not evidence that a domain is unregistered or safe.
 This release supports `lookup`, `bulk`, `ct-search`, `discover`, `discover-scan`, `posture`,
 `http`, `tls`, `registry-support`, `risk-calibrate`, `verify-artifact`,
 `inspect-archive`, `sign-artifact`, `verify-signature`, `source-report`,
-`compare`, `page-compare`, `mail-review`, `diff`, `timeline`, `export`, `doctor`, `commands`, `completion`, and `manual`. Additional command families
+`compare`, `page-compare`, `mail-review`, `review-evidence`, `diff`, `timeline`, `export`, `doctor`, `commands`, `completion`, and `manual`. Additional command families
 are added as separate bounded increments rather than exposing incomplete
 aliases.
 
@@ -790,6 +791,54 @@ observed MX hostname and do not establish shared ownership or control.
 The command makes no DNS or SMTP request and retains no source path. It does
 not test message acceptance, relay behavior, mailbox existence, catch-all
 behavior, SMTP banners, or whether a mail server is rogue, safe, or malicious.
+
+An analyst may add a bounded `tlsaEvidence` object to a version-2 Bulk item for
+offline DANE review. It must name the exact `_25._tcp.<mx-host>` service, and
+that host must occur in the same item's retained MX evidence. A certificate
+association match is complete only when `dnssecState` is `validated`. TLSA
+usages 0 and 1 additionally require `pkixValidationState: "validated"`.
+Usages 0 and 2 compare against the bounded `authorityMaterials` array; usages
+1 and 3 compare against the supplied leaf certificate or SPKI. Mismatched
+service names, missing certificate roles, unvalidated prerequisites, malformed
+material, and truncation remain invalid, partial, or untrusted rather than
+becoming a DANE match.
+
+## Offline supplied-evidence review
+
+`review-evidence [evidence.json]` accepts one version-1 JSON input and performs
+only deterministic local parsing, comparison, or request planning. Input is
+capped at 16 MiB. The command never retrieves DNS, opens SMTP, contacts an
+RDAP server, submits a resolver query, or looks up an address in a hosted
+GeoIP service.
+
+Supported input schemas are:
+
+- `whoisleuth.dnssec-evidence-input`: compares bounded DS and DNSKEY records,
+  recalculates DNSKEY key tags and supported DS digests, and reviews supplied
+  RRSIG validity windows at `observedAt`. `consistent` describes only the
+  supplied DS/DNSKEY relationship. It does not authenticate a chain to a root
+  trust anchor, validate RRSIG cryptography, or prove that a missing record is
+  absent.
+- `whoisleuth.tlsa-evidence-input`: binds TLSA records to one explicit
+  `_port._transport.hostname` service and compares supplied leaf or authority
+  certificate/SPKI bytes. `matched` requires independently validated DNSSEC;
+  PKIX-TA and PKIX-EE usages also require an independently validated PKIX path.
+  The command does not retrieve the certificate or negotiate STARTTLS.
+- `whoisleuth.rdap-search-input`: normalizes a supplied RDAP search-help
+  response and prepares an exact supported reverse-search request without
+  sending it.
+- `whoisleuth.rpki-route-input`: compares a route prefix and origin ASN with a
+  bounded analyst-supplied VRP set.
+- `whoisleuth.local-geoip-query`: queries an analyst-supplied bounded prefix
+  database whose source, version, and licence metadata remain in the result.
+- `whoisleuth.encrypted-dns-plan-input`: validates an explicitly reviewed
+  encrypted-DNS provider contract and prepares a bounded query plan. It does
+  not execute the plan.
+
+The common output is `whoisleuth.cli.offline-evidence-review` version 1. It
+retains the nested result's explicit state and limitations. A locally
+consistent relationship is not converted into a claim about current
+publication, ownership, safety, or maliciousness.
 
 ## Optional local rendered capture
 

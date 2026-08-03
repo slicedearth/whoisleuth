@@ -41,6 +41,7 @@ describe('offline DNSSEC evidence validation', () => {
     assert.equal(result.state, 'consistent');
     assert.equal(result.ownerName, 'example.test');
     assert.equal(result.matchedDsCount, 1);
+    assert.equal(result.rrsigRecordCount, 1);
     assert.equal(result.signatureTimeState, 'within_window');
   });
 
@@ -83,5 +84,25 @@ describe('offline DNSSEC evidence validation', () => {
     assert.equal(result.state, 'conflict');
     assert.equal(result.rejectedCount, 2);
     assert.equal(result.signatureTimeState, 'outside_window');
+  });
+
+  test('keeps mixed signature windows and malformed signatures from becoming a complete result', () => {
+    const value = fixture();
+    const result = validateDnssecEvidence({
+      ownerName: 'example.test',
+      delegationSigned: true,
+      dsRecords: [{ keyTag: value.keyTag, algorithm: 13, digestType: 2, digest: value.digest }],
+      dnskeyRecords: [{ flags: 257, protocol: 3, algorithm: 13, publicKeyBase64: value.publicKeyBase64 }],
+      observedAt: '2026-08-03T00:00:00.000Z',
+      rrSigRecords: [
+        { inception: '2026-08-01T00:00:00.000Z', expiration: '2026-08-10T00:00:00.000Z' },
+        { inception: '2026-07-01T00:00:00.000Z', expiration: '2026-07-02T00:00:00.000Z' },
+        { inception: 'invalid', expiration: 'invalid' },
+      ],
+    });
+    assert.equal(result.state, 'partial');
+    assert.equal(result.rrsigRecordCount, 2);
+    assert.equal(result.rejectedCount, 1);
+    assert.equal(result.signatureTimeState, 'mixed');
   });
 });

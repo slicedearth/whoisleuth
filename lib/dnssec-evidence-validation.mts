@@ -21,6 +21,11 @@ type DnssecDnskeyRecord = Readonly<{
   publicKeyBase64: string;
 }>;
 
+type DnssecRrsigRecord = Readonly<{
+  inception: number;
+  expiration: number;
+}>;
+
 type DnssecEvidenceInput = Readonly<{
   ownerName: unknown;
   delegationSigned?: unknown;
@@ -37,11 +42,12 @@ type DnssecEvidenceReport = Readonly<{
   ownerName: string | null;
   dsRecordCount: number;
   dnskeyRecordCount: number;
+  rrsigRecordCount: number;
   matchedDsCount: number;
   unsupportedDigestCount: number;
   rejectedCount: number;
   truncated: boolean;
-  signatureTimeState: 'within_window' | 'outside_window' | 'unavailable';
+  signatureTimeState: 'within_window' | 'outside_window' | 'mixed' | 'unavailable';
   findings: readonly string[];
   limitations: readonly string[];
 }>;
@@ -136,32 +142,42 @@ function dsDigest(owner: string, dnskey: DnssecDnskeyRecord, digestType: number)
   return createHash(hash).update(ownerWire(owner)).update(dnskeyRdata(dnskey)).digest('hex').toUpperCase();
 }
 
-function signatureTimeState(value: unknown, observedAt: unknown): 'within_window' | 'outside_window' | 'unavailable' {
-  if (!Array.isArray(value) || !value.length || typeof observedAt !== 'string') return 'unavailable';
+function normalizeRrsig(value: unknown): DnssecRrsigRecord | null {
+  const source = record(value);
+  if (!source || typeof source.inception !== 'string' || typeof source.expiration !== 'string') return null;
+  const inception = Date.parse(source.inception);
+  const expiration = Date.parse(source.expiration);
+  if (!Number.isFinite(inception) || !Number.isFinite(expiration) || inception > expiration) return null;
+  return Object.freeze({ inception, expiration });
+}
+
+function signatureTimeState(value: readonly DnssecRrsigRecord[], observedAt: unknown): DnssecEvidenceReport['signatureTimeState'] {
+  if (!value.length || typeof observedAt !== 'string') return 'unavailable';
   const observed = Date.parse(observedAt);
   if (!Number.isFinite(observed)) return 'unavailable';
-  let reviewed = 0;
-  for (const item of value.slice(0, MAX_DNSSEC_RECORDS)) {
-    const source = record(item);
-    const inception = typeof source?.inception === 'string' ? Date.parse(source.inception) : Number.NaN;
-    const expiration = typeof source?.expiration === 'string' ? Date.parse(source.expiration) : Number.NaN;
-    if (!Number.isFinite(inception) || !Number.isFinite(expiration) || inception > expiration) continue;
-    reviewed += 1;
-    if (observed < inception || observed > expiration) return 'outside_window';
+  let withinWindow = 0;
+  for (const item of value) {
+    if (observed >= item.inception && observed <= item.expiration) withinWindow += 1;
   }
-  return reviewed > 0 ? 'within_window' : 'unavailable';
+  if (withinWindow === value.length) return 'within_window';
+  return withinWindow === 0 ? 'outside_window' : 'mixed';
 }
 
 function validateDnssecEvidence(input: DnssecEvidenceInput): DnssecEvidenceReport {
   const normalizedOwner = ownerName(input.ownerName);
   const rawDs = Array.isArray(input.dsRecords) ? input.dsRecords : [];
   const rawDnskeys = Array.isArray(input.dnskeyRecords) ? input.dnskeyRecords : [];
+  const rawRrsigs = Array.isArray(input.rrSigRecords) ? input.rrSigRecords : [];
   const dsRecords = rawDs.slice(0, MAX_DNSSEC_RECORDS).map(normalizeDs).filter((item): item is DnssecDsRecord => item !== null);
   const dnskeys = rawDnskeys.slice(0, MAX_DNSSEC_RECORDS).map(normalizeDnskey).filter((item): item is DnssecDnskeyRecord => item !== null);
+  const rrsigs = rawRrsigs.slice(0, MAX_DNSSEC_RECORDS).map(normalizeRrsig).filter((item): item is DnssecRrsigRecord => item !== null);
   const rejectedCount = Math.min(rawDs.length, MAX_DNSSEC_RECORDS) - dsRecords.length
-    + Math.min(rawDnskeys.length, MAX_DNSSEC_RECORDS) - dnskeys.length;
-  const truncated = rawDs.length > MAX_DNSSEC_RECORDS || rawDnskeys.length > MAX_DNSSEC_RECORDS;
-  const signatureState = signatureTimeState(input.rrSigRecords, input.observedAt);
+    + Math.min(rawDnskeys.length, MAX_DNSSEC_RECORDS) - dnskeys.length
+    + Math.min(rawRrsigs.length, MAX_DNSSEC_RECORDS) - rrsigs.length;
+  const truncated = rawDs.length > MAX_DNSSEC_RECORDS
+    || rawDnskeys.length > MAX_DNSSEC_RECORDS
+    || rawRrsigs.length > MAX_DNSSEC_RECORDS;
+  const signatureState = signatureTimeState(rrsigs, input.observedAt);
   const findings: string[] = [];
   const limitations = [
     'This offline review verifies supplied DS and DNSKEY relationships only. It does not retrieve or authenticate a complete chain to a configured root trust anchor.',
@@ -176,6 +192,7 @@ function validateDnssecEvidence(input: DnssecEvidenceInput): DnssecEvidenceRepor
       ownerName: null,
       dsRecordCount: dsRecords.length,
       dnskeyRecordCount: dnskeys.length,
+      rrsigRecordCount: rrsigs.length,
       matchedDsCount: 0,
       unsupportedDigestCount: 0,
       rejectedCount,
@@ -195,6 +212,7 @@ function validateDnssecEvidence(input: DnssecEvidenceInput): DnssecEvidenceRepor
       ownerName: normalizedOwner,
       dsRecordCount: 0,
       dnskeyRecordCount: dnskeys.length,
+      rrsigRecordCount: rrsigs.length,
       matchedDsCount: 0,
       unsupportedDigestCount: 0,
       rejectedCount,
@@ -223,6 +241,7 @@ function validateDnssecEvidence(input: DnssecEvidenceInput): DnssecEvidenceRepor
   if (definiteConflict) findings.push('The supplied delegation, signature-time, DS, or DNSKEY evidence conflicts.');
   if (matchedDsCount > 0) findings.push(`${matchedDsCount} supplied DS record(s) matched a supplied DNSKEY.`);
   if (unsupportedDigestCount > 0) findings.push(`${unsupportedDigestCount} DS digest type(s) were retained as unsupported.`);
+  if (signatureState === 'mixed') findings.push('The supplied RRSIG validity windows were mixed at the observation time.');
   if (rejectedCount > 0) findings.push(`${rejectedCount} malformed record(s) were rejected.`);
   if (truncated) findings.push('The supplied record set exceeded the review bound and was truncated.');
 
@@ -232,7 +251,8 @@ function validateDnssecEvidence(input: DnssecEvidenceInput): DnssecEvidenceRepor
     && !definiteConflict
     && rejectedCount === 0
     && !truncated
-    && unsupportedDigestCount === 0;
+    && unsupportedDigestCount === 0
+    && signatureState !== 'mixed';
   return Object.freeze({
     schema: DNSSEC_EVIDENCE_SCHEMA,
     version: DNSSEC_EVIDENCE_VERSION,
@@ -240,6 +260,7 @@ function validateDnssecEvidence(input: DnssecEvidenceInput): DnssecEvidenceRepor
     ownerName: normalizedOwner,
     dsRecordCount: dsRecords.length,
     dnskeyRecordCount: dnskeys.length,
+    rrsigRecordCount: rrsigs.length,
     matchedDsCount,
     unsupportedDigestCount,
     rejectedCount,
@@ -257,4 +278,4 @@ export {
   dnskeyTag,
   validateDnssecEvidence,
 };
-export type { DnssecDnskeyRecord, DnssecDsRecord, DnssecEvidenceInput, DnssecEvidenceReport };
+export type { DnssecDnskeyRecord, DnssecDsRecord, DnssecEvidenceInput, DnssecEvidenceReport, DnssecRrsigRecord };

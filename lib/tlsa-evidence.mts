@@ -1,10 +1,24 @@
 import { Buffer } from 'node:buffer';
 import { createHash } from 'node:crypto';
+import { domainToASCII } from 'node:url';
 
 const TLSA_EVIDENCE_SCHEMA = 'whoisleuth.tlsa-evidence';
 const TLSA_EVIDENCE_VERSION = 1;
 const MAX_TLSA_RECORDS = 50;
 const MAX_CERTIFICATE_BYTES = 256 * 1024;
+const MAX_AUTHORITY_MATERIALS = 10;
+
+type TlsaService = Readonly<{
+  ownerName: string;
+  port: number;
+  transport: 'tcp' | 'udp';
+  hostname: string;
+}>;
+
+type CertificateMaterial = Readonly<{
+  certificateDer: Buffer | null;
+  spkiDer: Buffer | null;
+}>;
 
 type TlsaRecord = Readonly<{
   usage: number;
@@ -21,8 +35,13 @@ type TlsaRecordResult = TlsaRecord & Readonly<{
 type TlsaEvidenceReport = Readonly<{
   schema: typeof TLSA_EVIDENCE_SCHEMA;
   version: typeof TLSA_EVIDENCE_VERSION;
-  state: 'matched' | 'different' | 'partial' | 'unavailable' | 'invalid';
+  state: 'matched' | 'different' | 'partial' | 'untrusted' | 'unavailable' | 'invalid';
   dnssecState: 'validated' | 'insecure' | 'bogus' | 'unavailable';
+  pkixValidationState: 'validated' | 'failed' | 'unavailable';
+  service: TlsaService | null;
+  authorityMaterialCount: number;
+  authorityMaterialRejectedCount: number;
+  authorityMaterialTruncated: boolean;
   records: readonly TlsaRecordResult[];
   rejectedCount: number;
   truncated: boolean;
@@ -67,50 +86,103 @@ function decodeBoundedBase64(value: unknown): Buffer | null {
   return decoded.length > 0 && decoded.length <= MAX_CERTIFICATE_BYTES && decoded.toString('base64') === value ? decoded : null;
 }
 
-function comparisonValue(recordValue: TlsaRecord, certificateDer: Buffer | null, spkiDer: Buffer | null): string | null {
-  const selected = recordValue.selector === 0 ? certificateDer : spkiDer;
-  if (!selected) return null;
-  if (recordValue.matchingType === 0) return selected.toString('hex');
-  if (recordValue.matchingType === 1) return createHash('sha256').update(selected).digest('hex');
-  return createHash('sha512').update(selected).digest('hex');
+function normalizeTlsaServiceName(value: unknown): TlsaService | null {
+  if (typeof value !== 'string' || value.length > 270) return null;
+  const match = /^_(\d{1,5})\._(tcp|udp)\.(.+)$/iu.exec(value.trim().replace(/\.$/u, ''));
+  if (!match) return null;
+  const port = Number(match[1]);
+  const transport = match[2]?.toLowerCase();
+  const hostname = domainToASCII(String(match[3] ?? '').toLowerCase());
+  if (!Number.isInteger(port) || port < 1 || port > 65_535 || (transport !== 'tcp' && transport !== 'udp')) return null;
+  if (!hostname || hostname.length > 253 || hostname.split('.').some((label) => !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/u.test(label))) return null;
+  return Object.freeze({ ownerName: `_${port}._${transport}.${hostname}`, port, transport, hostname });
+}
+
+function normalizeCertificateMaterial(value: unknown): CertificateMaterial | null {
+  const source = record(value);
+  if (!source) return null;
+  const certificateDer = decodeBoundedBase64(source.certificateDerBase64);
+  const spkiDer = decodeBoundedBase64(source.spkiDerBase64);
+  return certificateDer || spkiDer ? Object.freeze({ certificateDer, spkiDer }) : null;
+}
+
+function selectedValues(recordValue: TlsaRecord, materials: readonly CertificateMaterial[]): string[] {
+  return materials.flatMap((material) => {
+    const selected = recordValue.selector === 0 ? material.certificateDer : material.spkiDer;
+    if (!selected) return [];
+    if (recordValue.matchingType === 0) return [selected.toString('hex')];
+    if (recordValue.matchingType === 1) return [createHash('sha256').update(selected).digest('hex')];
+    return [createHash('sha512').update(selected).digest('hex')];
+  });
 }
 
 function normalizeDnssecState(value: unknown): TlsaEvidenceReport['dnssecState'] {
   return value === 'validated' || value === 'insecure' || value === 'bogus' ? value : 'unavailable';
 }
 
+function normalizePkixValidationState(value: unknown): TlsaEvidenceReport['pkixValidationState'] {
+  return value === 'validated' || value === 'failed' ? value : 'unavailable';
+}
+
 function analyzeTlsaEvidence(input: Readonly<{
+  serviceName: unknown;
   dnssecState: unknown;
+  pkixValidationState?: unknown;
   records: unknown;
   certificateDerBase64?: unknown;
   spkiDerBase64?: unknown;
+  authorityMaterials?: unknown;
 }>): TlsaEvidenceReport {
+  const service = normalizeTlsaServiceName(input.serviceName);
   const dnssecState = normalizeDnssecState(input.dnssecState);
+  const pkixValidationState = normalizePkixValidationState(input.pkixValidationState);
+  const leafMaterial = normalizeCertificateMaterial({
+    certificateDerBase64: input.certificateDerBase64,
+    spkiDerBase64: input.spkiDerBase64,
+  });
+  const rawAuthorityMaterials = Array.isArray(input.authorityMaterials) ? input.authorityMaterials : [];
+  const normalizedAuthorityMaterials = rawAuthorityMaterials
+    .slice(0, MAX_AUTHORITY_MATERIALS)
+    .map(normalizeCertificateMaterial);
+  const authorityMaterials = normalizedAuthorityMaterials
+    .filter((item): item is CertificateMaterial => item !== null);
+  const authorityMaterialRejectedCount = normalizedAuthorityMaterials.length - authorityMaterials.length;
+  const authorityMaterialTruncated = rawAuthorityMaterials.length > MAX_AUTHORITY_MATERIALS;
   const raw = Array.isArray(input.records) ? input.records : null;
-  if (!raw) {
+  if (!raw || !service) {
     return Object.freeze({
       schema: TLSA_EVIDENCE_SCHEMA,
       version: TLSA_EVIDENCE_VERSION,
       state: 'invalid',
       dnssecState,
+      pkixValidationState,
+      service,
+      authorityMaterialCount: authorityMaterials.length,
+      authorityMaterialRejectedCount,
+      authorityMaterialTruncated,
       records: Object.freeze([]),
       rejectedCount: 0,
       truncated: false,
-      limitations: Object.freeze(['TLSA evidence must be supplied as a bounded record array.']),
+      limitations: Object.freeze([
+        ...(!raw ? ['TLSA evidence must be supplied as a bounded record array.'] : []),
+        ...(!service ? ['TLSA evidence must be bound to a valid _port._transport.hostname service name.'] : []),
+      ]),
     });
   }
   const truncated = raw.length > MAX_TLSA_RECORDS;
   const normalized = raw.slice(0, MAX_TLSA_RECORDS).map(normalizeTlsaRecord);
   const rejectedCount = normalized.filter((item) => item === null).length + Math.max(0, raw.length - MAX_TLSA_RECORDS);
   const records = normalized.filter((item): item is TlsaRecord => item !== null);
-  const certificateDer = decodeBoundedBase64(input.certificateDerBase64);
-  const spkiDer = decodeBoundedBase64(input.spkiDerBase64);
   const results = records.map((item): TlsaRecordResult => {
-    const selected = comparisonValue(item, certificateDer, spkiDer);
-    if (!selected) {
-      return Object.freeze({ ...item, state: 'unavailable', reason: `No bounded ${item.selector === 0 ? 'certificate' : 'SPKI'} bytes were supplied for comparison.` });
+    const materials = item.usage === 0 || item.usage === 2
+      ? authorityMaterials
+      : leafMaterial ? [leafMaterial] : [];
+    const selected = selectedValues(item, materials);
+    if (!selected.length) {
+      const role = item.usage === 0 || item.usage === 2 ? 'authority' : 'leaf';
+      return Object.freeze({ ...item, state: 'unavailable', reason: `No bounded ${role} ${item.selector === 0 ? 'certificate' : 'SPKI'} bytes were supplied for comparison.` });
     }
-    const matched = selected === item.associationData;
+    const matched = selected.includes(item.associationData);
     return Object.freeze({
       ...item,
       state: matched ? 'matched' : 'different',
@@ -123,15 +195,29 @@ function analyzeTlsaEvidence(input: Readonly<{
   const limitations = [
     'This offline comparison does not connect to the target, retrieve DNS, negotiate SMTP STARTTLS, or validate a DNSSEC chain.',
     'A TLSA match is usable as DANE evidence only when the DNSSEC state was independently validated for the same observation.',
+    'PKIX-TA and PKIX-EE usages require an independently validated PKIX path; association matching alone does not establish that prerequisite.',
   ];
   if (dnssecState !== 'validated' && hasMatch) {
     limitations.push('Certificate material matched, but DNSSEC was not validated, so the result remains partial.');
   }
+  const matchedPkixDependent = results.some((item) => item.state === 'matched' && (item.usage === 0 || item.usage === 1));
+  const matchedDaneOnly = results.some((item) => item.state === 'matched' && (item.usage === 2 || item.usage === 3));
+  if (matchedPkixDependent && pkixValidationState !== 'validated') {
+    limitations.push('A PKIX-dependent association matched, but a validated PKIX path was not supplied, so the result is not complete.');
+  }
+  if (authorityMaterialRejectedCount > 0 || authorityMaterialTruncated) {
+    limitations.push('Authority certificate material was malformed or exceeded the review bound, so an unmatched trust-anchor association remains partial.');
+  }
+  const trustedMatch = dnssecState === 'validated'
+    && (matchedDaneOnly || matchedPkixDependent && pkixValidationState === 'validated');
   const state = results.length === 0
     ? 'unavailable'
-    : dnssecState === 'bogus' || hasDifferent && !hasMatch
+    : hasDifferent && !hasMatch && rejectedCount === 0 && !truncated
+      && authorityMaterialRejectedCount === 0 && !authorityMaterialTruncated
       ? 'different'
-      : hasMatch && dnssecState === 'validated' && !hasUnavailable && rejectedCount === 0 && !truncated
+      : hasMatch && (dnssecState === 'bogus' || matchedPkixDependent && pkixValidationState === 'failed' && !matchedDaneOnly)
+        ? 'untrusted'
+      : trustedMatch && !hasUnavailable && rejectedCount === 0 && !truncated
         ? 'matched'
         : 'partial';
   return Object.freeze({
@@ -139,6 +225,11 @@ function analyzeTlsaEvidence(input: Readonly<{
     version: TLSA_EVIDENCE_VERSION,
     state,
     dnssecState,
+    pkixValidationState,
+    service,
+    authorityMaterialCount: authorityMaterials.length,
+    authorityMaterialRejectedCount,
+    authorityMaterialTruncated,
     records: Object.freeze(results),
     rejectedCount,
     truncated,
@@ -148,9 +239,11 @@ function analyzeTlsaEvidence(input: Readonly<{
 
 export {
   MAX_TLSA_RECORDS,
+  MAX_AUTHORITY_MATERIALS,
   TLSA_EVIDENCE_SCHEMA,
   TLSA_EVIDENCE_VERSION,
   analyzeTlsaEvidence,
   normalizeTlsaRecord,
+  normalizeTlsaServiceName,
 };
-export type { TlsaEvidenceReport, TlsaRecord, TlsaRecordResult };
+export type { CertificateMaterial, TlsaEvidenceReport, TlsaRecord, TlsaRecordResult, TlsaService };

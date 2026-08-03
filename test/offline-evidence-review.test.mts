@@ -26,7 +26,7 @@ describe('offline evidence review command', () => {
         request: { searchableResourceType: 'domains', relatedResourceType: 'entities', property: 'handle', value: 'EXAMPLE' },
       },
       { schema: 'whoisleuth.dnssec-evidence-input', version: 1, ownerName: 'example.test', delegationSigned: false, dsRecords: [] },
-      { schema: 'whoisleuth.tlsa-evidence-input', version: 1, dnssecState: 'unavailable', records: [] },
+      { schema: 'whoisleuth.tlsa-evidence-input', version: 1, serviceName: '_25._tcp.mx.example.test', dnssecState: 'unavailable', records: [] },
       { schema: 'whoisleuth.rpki-route-input', version: 1, routePrefix: '192.0.2.0/24', originAsn: 64496, authorizations: [] },
       {
         schema: 'whoisleuth.local-geoip-query',

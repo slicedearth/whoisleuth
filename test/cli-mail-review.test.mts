@@ -87,6 +87,7 @@ describe('passive mail exposure review', () => {
     const document = buildCliMailReview(bulkDocument([{
       ...row,
       tlsaEvidence: {
+        serviceName: '_25._tcp.mx.mail.example',
         dnssecState: 'validated',
         records: [{
           usage: 3,
@@ -102,5 +103,34 @@ describe('passive mail exposure review', () => {
     assert.equal(document.daneCounts.matched, 1);
     assert.equal(document.rows[0]?.dane?.state, 'matched');
     assert.match(formatCliMailReview(document), /DANE matched\s+1/u);
+  });
+
+  test('does not apply TLSA evidence from an unrelated endpoint to the reviewed MX host', () => {
+    const certificate = Buffer.from('fixture mail certificate');
+    const row = bulkItem('mail.example', {
+      hasMx: true,
+      hasNullMx: false,
+      hasSpf: true,
+      hasDmarc: true,
+      mxHosts: ['10 mx.mail.example'],
+    });
+    const document = buildCliMailReview(bulkDocument([{
+      ...row,
+      tlsaEvidence: {
+        serviceName: '_25._tcp.unrelated.example',
+        dnssecState: 'validated',
+        records: [{
+          usage: 3,
+          selector: 0,
+          matchingType: 1,
+          associationData: createHash('sha256').update(certificate).digest('hex'),
+        }],
+        certificateDerBase64: certificate.toString('base64'),
+      },
+    }]));
+
+    assert.equal(document.rows[0]?.dane?.state, 'invalid');
+    assert.equal(document.daneCounts.invalid, 1);
+    assert.match(document.rows[0]?.dane?.limitations.join(' ') ?? '', /did not identify port 25 on an MX hostname/u);
   });
 });

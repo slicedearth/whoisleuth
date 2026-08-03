@@ -65,6 +65,21 @@ function mailState(input: Readonly<{
   return 'evidence_incomplete';
 }
 
+function alignMailDaneEvidence(report: TlsaEvidenceReport, hosts: readonly string[]): TlsaEvidenceReport {
+  const aligned = report.service?.transport === 'tcp'
+    && report.service.port === 25
+    && hosts.includes(report.service.hostname);
+  if (aligned || report.state === 'invalid') return report;
+  return Object.freeze({
+    ...report,
+    state: 'invalid' as const,
+    limitations: Object.freeze([
+      ...report.limitations,
+      'The TLSA service name did not identify port 25 on an MX hostname retained for this domain.',
+    ]),
+  });
+}
+
 function normalizeMailRow(value: unknown) {
   const item = record(value);
   if (item.ok !== true) return null;
@@ -82,12 +97,15 @@ function normalizeMailRow(value: unknown) {
   const state = mailState({ dnsStatus, hasMx, hasNullMx, hasSpf, hasDmarc });
   const tlsaInput = record(item.tlsaEvidence);
   const dane = Object.keys(tlsaInput).length
-    ? analyzeTlsaEvidence({
+    ? alignMailDaneEvidence(analyzeTlsaEvidence({
+        serviceName: tlsaInput.serviceName,
         dnssecState: tlsaInput.dnssecState,
+        pkixValidationState: tlsaInput.pkixValidationState,
         records: tlsaInput.records,
         certificateDerBase64: tlsaInput.certificateDerBase64,
         spkiDerBase64: tlsaInput.spkiDerBase64,
-      })
+        authorityMaterials: tlsaInput.authorityMaterials,
+      }), hosts)
     : null;
   return {
     domain,
@@ -161,6 +179,7 @@ function buildCliMailReview(textValue: unknown, generatedAt = new Date().toISOSt
     matched: 0,
     different: 0,
     partial: 0,
+    untrusted: 0,
     unavailable: 0,
     invalid: 0,
     not_supplied: 0,
@@ -230,4 +249,4 @@ function formatCliMailReview(document: ReturnType<typeof buildCliMailReview>): s
   return `${lines.join('\n')}\n`;
 }
 
-export { buildCliMailReview, formatCliMailReview, mailState, normalizeMailRow };
+export { alignMailDaneEvidence, buildCliMailReview, formatCliMailReview, mailState, normalizeMailRow };
