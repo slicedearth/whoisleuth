@@ -287,7 +287,7 @@ test('deep Lookup presents registrar and observed network RDAP as separate sourc
   const downloadPath = await download.path();
   expect(downloadPath).not.toBeNull();
   const exported = JSON.parse(await readFile(downloadPath!, 'utf8'));
-  expect(exported.schemaVersion).toBe(24);
+  expect(exported.schemaVersion).toBe(25);
   expect(exported.application).toEqual({
     name: 'WHOISleuth',
     version: packageVersion,

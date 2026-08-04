@@ -712,10 +712,14 @@ inspection.
 
 ## Evidence export and privacy boundary
 
-Lookup evidence uses schema `whoisleuth.lookup-evidence`, version `24`. It
+Lookup evidence uses schema `whoisleuth.lookup-evidence`, version `25`. It
 contains query context, diagnostics, normalised sources, raw RDAP data, the raw
 WHOIS referral chain, availability analysis, and the source-health-aware
-registry comparison. Version 24 adds bounded generator metadata containing the
+registry comparison. Version 25 can retain the separately attributed,
+bounded A, AAAA, CAA and MX record-set comparison collected directly from
+selected authoritative nameservers during an eligible deep non-compact domain
+Lookup. Direct no-data, partial and failed observations remain distinct and do
+not change availability or Risk. Version 24 adds bounded generator metadata containing the
 WHOISleuth version and stable project URL. The metadata is produced locally and
 does not add analytics, remote assets, or another request. Version 23 can add an exact local SSLBL leaf-certificate
 comparison from an eligible deep non-compact domain Lookup. It retains the
@@ -790,7 +794,7 @@ network registration and bounded reverse-DNS context when collected. ASN
 reports present normalised routing registration fields without inventing
 reverse-DNS evidence. The separate JSON action retains the richer schema
 contract described above.
-When schema-version 17 through 24 JSON retains a supported version-5, version-6, or version-7
+When schema-version 17 through 25 JSON retains a supported version-5, version-6, or version-7
 `diagnostics.registryAccess` object, both readable formats include its bounded
 suffix, WHOIS and RDAP access profiles, and limitation in collection
 diagnostics. This remains collection context only and cannot decide
@@ -798,7 +802,7 @@ registration, availability, ownership, safety, or maliciousness. The readable
 formats also include the bounded observed network registration and its
 origin-host limitation when that source is present.
 
-Schema versions 17 through 24 can also retain the bounded normalised security.txt source
+Schema versions 17 through 25 can also retain the bounded normalised security.txt source
 from an explicitly requested deep Lookup. It excludes the response body and
 does not make publication an authorisation, availability, or Risk signal.
 

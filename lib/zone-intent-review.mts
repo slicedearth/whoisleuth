@@ -105,7 +105,7 @@ function txtDigest(value: string): string {
   return `sha256:${createHash('sha256').update(value).digest('hex')}`;
 }
 
-function normaliseRdata(type: ZoneRecordType, rawValue: string, origin: string): Pick<ZoneRecord, 'value' | 'valueTreatment'> {
+export function normaliseRdata(type: ZoneRecordType, rawValue: string, origin: string | null): Pick<ZoneRecord, 'value' | 'valueTreatment'> {
   const value = canonicalText(rawValue);
   const tokens = value.split(' ');
   const host = (input: string, label: string) => domainName(input, origin, label);

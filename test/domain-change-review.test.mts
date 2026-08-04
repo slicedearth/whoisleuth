@@ -93,6 +93,37 @@ describe('domain change review', () => {
     assert.deepEqual(cdnskey?.observations[0]?.values, ['257 3 13 AbCdEf+/=']);
   });
 
+  test('canonicalises structured DNS data without changing case-sensitive service parameters', () => {
+    const value = input();
+    value.authoritySnapshots[0]!.records.push(
+      {
+        owner: 'example.test',
+        type: 'HTTPS',
+        ttl: 300,
+        value: '1 service.example.test alpn=h2 ech=AbCdEf+/=',
+      },
+      {
+        owner: 'example.test',
+        type: 'CAA',
+        ttl: 300,
+        value: '0 ISSUE "ca.example"',
+      },
+      {
+        owner: 'example.test',
+        type: 'NS',
+        ttl: 300,
+        value: 'ns1.other.test',
+      },
+    );
+    const result = reviewDomainChange(value, NOW);
+    const https = result.authoritativeRecordMatrix.find((row) => row.type === 'HTTPS');
+    const caa = result.authoritativeRecordMatrix.find((row) => row.type === 'CAA');
+    const nameserver = result.authoritativeRecordMatrix.find((row) => row.type === 'NS');
+    assert.deepEqual(https?.observations[0]?.values, ['1 service.example.test alpn=h2 ech=AbCdEf+/=']);
+    assert.deepEqual(caa?.observations[0]?.values, ['0 issue ca.example']);
+    assert.deepEqual(nameserver?.observations[0]?.values, ['ns1.other.test']);
+  });
+
   test('dispatches through the offline review command contract', () => {
     const envelope = buildOfflineEvidenceReview(JSON.stringify(input()), NOW);
     assert.equal(envelope.kind, 'domain_change');
@@ -103,7 +134,7 @@ describe('domain change review', () => {
     assert.throws(() => reviewDomainChange({ ...input(), unexpected: true }, NOW), /unknown field/iu);
     const invalidAddress = input();
     invalidAddress.authoritySnapshots[0]!.records[0]!.value = 'not-an-address';
-    assert.throws(() => reviewDomainChange(invalidAddress, NOW), /IPv4/iu);
+    assert.throws(() => reviewDomainChange(invalidAddress, NOW), /A data must contain one valid address/iu);
     const overflow = input();
     overflow.authoritySnapshots = [{
       label: 'Authority A', source: 'fixture', state: 'observed', observedAt: NOW,

@@ -1,8 +1,7 @@
-import { createHash } from 'node:crypto';
-import { isIP } from 'node:net';
 import { domainToASCII } from 'node:url';
 
 import { exactKeys } from './bounded-contract-normalizers.mts';
+import { normaliseRdata } from './zone-intent-review.mts';
 
 export const DOMAIN_CHANGE_INPUT_SCHEMA = 'whoisleuth.domain-change.input';
 export const DOMAIN_CHANGE_REVIEW_SCHEMA = 'whoisleuth.domain-change.review';
@@ -70,19 +69,13 @@ function evidenceState(value: unknown, label: string): EvidenceState {
   return value;
 }
 
-function sha256(value: string): string {
-  return `sha256:${createHash('sha256').update(value).digest('hex')}`;
-}
-
 function normaliseValue(type: RecordType, value: unknown, label: string): { value: string; treatment: 'normalised' | 'sha256' } {
   const raw = text(value, label, 16_384);
-  if (type === 'TXT') return { value: sha256(raw), treatment: 'sha256' };
-  if (type === 'A' && isIP(raw) !== 4) throw new TypeError(`${label} must contain an IPv4 address.`);
-  if (type === 'AAAA' && isIP(raw) !== 6) throw new TypeError(`${label} must contain an IPv6 address.`);
-  // DNS names and hexadecimal digests compare case-insensitively, but the
-  // CDNSKEY public-key material is base64 and therefore case-sensitive.
-  if (type === 'CDNSKEY') return { value: raw, treatment: 'normalised' };
-  return { value: raw.toLowerCase(), treatment: 'normalised' };
+  const normalised = normaliseRdata(type, raw, null);
+  return {
+    value: normalised.value,
+    treatment: normalised.valueTreatment,
+  };
 }
 
 function normaliseRecord(value: unknown, apex: string, label: string) {
