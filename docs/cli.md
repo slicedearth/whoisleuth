@@ -941,7 +941,10 @@ The emitted `whoisleuth.domain-control-manifest` version 1 is normalized and
 protected by a canonical SHA-256 digest. It can also be passed to
 `sign-artifact` for an optional local Ed25519 signature. Integrity and
 signature verification detect changes and authenticate possession of the
-selected key; neither establishes that the desired state is correct.
+selected key; neither establishes that the desired state is correct. Manifest
+input and verification reject unknown fields, and verification rejects
+non-canonical content rather than returning a shape that differs from the
+normalized contract covered by the digest.
 
 A review input uses `whoisleuth.domain-control-review-input` version 1 and
 contains one manifest plus separately attributed observations. Only a complete
@@ -966,8 +969,10 @@ three fixed kinds:
 
 Provider labels, readiness confirmations, evidence references, and expected
 states remain analyst assertions. The output preserves incomplete and
-needs-review states, stores no credentials, makes no request, and changes no
-registrar, DNS, mail, certificate, or recovery configuration.
+needs-review states and gives every negative state an explicit review reason.
+The versioned input rejects unknown fields and contradictory evidence attached
+to an unfinished check. It stores no credentials, makes no request, and changes
+no registrar, DNS, mail, certificate, or recovery configuration.
 
 ## Pre-sharing review
 

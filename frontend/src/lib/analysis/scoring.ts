@@ -38,8 +38,8 @@ export type ActivityStatus = 'active' | 'parked' | 'unreachable' | 'no_site';
 export type ScoreTone = 'neutral' | 'good' | 'warn';
 
 export function fmtAge(value: unknown): string | null {
-  if (typeof value !== 'number' || !Number.isFinite(value)) return null;
-  const days = value;
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) return null;
+  const days = Math.round(value);
   if (days < 60) return `${days}d old`;
   const years = days / 365.25;
   return years < 1 ? `${Math.round(days / 30)}mo old` : `${years.toFixed(1)}y old`;
@@ -47,7 +47,7 @@ export function fmtAge(value: unknown): string | null {
 
 export function fmtExpiresIn(value: unknown): string | null {
   if (typeof value !== 'number' || !Number.isFinite(value)) return null;
-  const days = value;
+  const days = Math.round(value);
   return days < 0 ? `expired ${Math.abs(days)}d ago` : `expires in ${days}d`;
 }
 
@@ -76,9 +76,9 @@ export function formatActivityCell(
     ? ACTIVITY_LABELS[v as ActivityStatus]
     : '—';
   const mailParts: string[] = [];
-  if (hasMx) mailParts.push('MX');
-  if (hasSpf) mailParts.push('SPF');
-  if (hasDmarc) mailParts.push('DMARC');
+  if (hasMx === true) mailParts.push('MX');
+  if (hasSpf === true) mailParts.push('SPF');
+  if (hasDmarc === true) mailParts.push('DMARC');
   return mailParts.length ? `${label} · ${mailParts.join('+')}` : label;
 }
 

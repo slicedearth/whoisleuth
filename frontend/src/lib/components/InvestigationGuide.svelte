@@ -77,6 +77,8 @@
   let actionPanel = $state<HTMLElement | null>(null);
   let actionVisible = $state(true);
   let actionObserver: IntersectionObserver | null = null;
+  let actionObservationVersion = 0;
+  let handledLocation = '';
   let evidence = $state({ observations: 0, relationships: 0, partial: false, truncated: false, latestObservedAt: '' });
   let contextProfile = $state<BrandProfile | null>(null);
   let contextCase = $state<CaseRecord | null>(null);
@@ -186,20 +188,24 @@
   }
 
   async function observeAction() {
+    const observationVersion = ++actionObservationVersion;
     await tick();
+    if (observationVersion !== actionObservationVersion) return;
     actionObserver?.disconnect();
     actionObserver = null;
-    if (!actionPanel) {
+    const panel = actionPanel;
+    if (!panel) {
       actionVisible = true;
       return;
     }
-    actionVisible = actionExposureRatio(actionPanel) >= usefulActionExposure;
+    actionVisible = actionExposureRatio(panel) >= usefulActionExposure;
     if (typeof IntersectionObserver === 'undefined') return;
     actionObserver = new IntersectionObserver(([entry]) => {
+      if (observationVersion !== actionObservationVersion || actionPanel !== panel) return;
       const ratio = entry?.isIntersecting ? entry.intersectionRatio : 0;
       actionVisible = ratio >= (actionVisible ? usefulActionExposure : returnControlHideExposure);
     }, { threshold: [0, usefulActionExposure, returnControlHideExposure] });
-    actionObserver.observe(actionPanel);
+    actionObserver.observe(panel);
   }
 
   async function revealAction() {
@@ -300,6 +306,7 @@
   }
 
   function endGuide() {
+    actionObservationVersion += 1;
     actionObserver?.disconnect();
     actionObserver = null;
     clearInvestigationGuide();
@@ -370,10 +377,12 @@
         await focusRouteTarget('#domains');
       } else {
         await goto(approvedHref);
+        guide = recordInvestigationGuideVisit(stage.path) ?? guide;
       }
       return;
     }
     await goto(approvedHref);
+    guide = recordInvestigationGuideVisit(stage.path) ?? guide;
   }
 
   function setOutcome(stageId: string, outcome: 'pending' | 'complete' | 'partial' | 'skipped') {
@@ -463,14 +472,20 @@
   onMount(() => {
     mounted = true;
     guide = loadInvestigationGuide();
+    const pathname = page.url.pathname;
+    const hash = page.url.hash;
+    handledLocation = `${pathname}\u0000${hash}`;
+    guide = recordInvestigationGuideVisit(pathname) ?? guide;
     void (async () => {
       contextDomain = guide?.focusDomain || guide?.domain || '';
       if (revealOnMount) await revealGuide();
+      if (hash) await focusRouteTarget(hash);
       await observeAction();
       void refreshStoredContext();
     })();
     window.addEventListener(INVESTIGATION_GUIDE_EVENT, refreshFromEvent);
     return () => {
+      actionObservationVersion += 1;
       actionObserver?.disconnect();
       window.removeEventListener(INVESTIGATION_GUIDE_EVENT, refreshFromEvent);
     };
@@ -479,7 +494,9 @@
   $effect(() => {
     const pathname = page.url.pathname;
     const hash = page.url.hash;
-    if (mounted) {
+    const location = `${pathname}\u0000${hash}`;
+    if (mounted && location !== handledLocation) {
+      handledLocation = location;
       selectedStageId = '';
       reviewingStageId = '';
       guide = recordInvestigationGuideVisit(pathname);

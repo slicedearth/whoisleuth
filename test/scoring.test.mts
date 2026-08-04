@@ -18,11 +18,13 @@ describe('fmtAge', () => {
   test('null/undefined pass through as null', () => {
     assert.equal(scoring.fmtAge(null), null);
     assert.equal(scoring.fmtAge(undefined), null);
+    assert.equal(scoring.fmtAge(-1), null);
   });
 
   test('under 60 days is shown in days', () => {
     assert.equal(scoring.fmtAge(0), '0d old');
     assert.equal(scoring.fmtAge(59), '59d old');
+    assert.equal(scoring.fmtAge(29.6), '30d old');
   });
 
   test('under a year is shown in months', () => {
@@ -43,6 +45,7 @@ describe('fmtExpiresIn', () => {
   test('zero or positive days is "expires in"', () => {
     assert.equal(scoring.fmtExpiresIn(0), 'expires in 0d');
     assert.equal(scoring.fmtExpiresIn(10), 'expires in 10d');
+    assert.equal(scoring.fmtExpiresIn(2.6), 'expires in 3d');
   });
 
   test('negative days is "expired ... ago"', () => {
@@ -67,6 +70,7 @@ describe('formatActivityCell', () => {
   test('omits the mail suffix when nothing is configured', () => {
     assert.equal(scoring.formatActivityCell('active', false, false, false), 'Active site');
     assert.equal(scoring.formatActivityCell('unreachable', false, false, false), 'Website check inconclusive');
+    assert.equal(scoring.formatActivityCell('active', 'false', 1, {}), 'Active site');
   });
 
   test('falls back to an em-dash for an unrecognized/missing status', () => {

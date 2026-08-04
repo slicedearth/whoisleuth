@@ -1,5 +1,7 @@
 import { domainToASCII } from 'node:url';
 
+import { exactKeys } from './bounded-contract-normalizers.mts';
+
 const DOMAIN_ASSURANCE_INPUT_SCHEMA = 'whoisleuth.domain-assurance.input';
 const DOMAIN_ASSURANCE_SCHEMA = 'whoisleuth.domain-assurance';
 const DOMAIN_ASSURANCE_VERSION = 1;
@@ -8,6 +10,19 @@ const MAX_ASSURANCE_INPUT_BYTES = 2 * 1024 * 1024;
 type AssuranceKind = 'planned-change' | 'recovery-dependencies' | 'retirement';
 type AssuranceState = 'incomplete' | 'needs_review' | 'ready';
 type UnknownRecord = Record<string, unknown>;
+
+const ROOT_KEYS: Readonly<Record<AssuranceKind, ReadonlySet<string>>> = Object.freeze({
+  'planned-change': new Set(['schema', 'version', 'kind', 'domain', 'change']),
+  'recovery-dependencies': new Set(['schema', 'version', 'kind', 'assets']),
+  retirement: new Set(['schema', 'version', 'kind', 'domain', 'checks']),
+});
+const CHANGE_KEYS = new Set(['reference', 'startsAt', 'endsAt', 'milestones', 'rollbackCriteria', 'postChangeChecks']);
+const MILESTONE_KEYS = new Set(['id', 'label', 'expectedBy', 'evidenceSource', 'state', 'observedAt', 'evidenceReference']);
+const ROLLBACK_KEYS = new Set(['id', 'condition', 'owner', 'state']);
+const POST_CHANGE_CHECK_KEYS = new Set(['id', 'label', 'expectedState', 'evidenceSource', 'state', 'evidenceReference']);
+const RECOVERY_ASSET_KEYS = new Set(['domain', 'dependencies', 'readiness']);
+const RECOVERY_DEPENDENCY_KEYS = new Set(['registrar', 'dns', 'mail', 'certificate', 'recovery']);
+const RECOVERY_READINESS_KEYS = new Set(['registrarRecoveryTested', 'dnsRecoveryTested', 'recoveryMfaProtected']);
 
 type PlannedChangeResult = Readonly<{
   kind: 'planned-change';
@@ -150,6 +165,7 @@ function reviewState(reasons: string[], negative: boolean): AssuranceState {
 function buildPlannedChange(input: UnknownRecord): PlannedChangeResult {
   const target = domain(input.domain);
   const change = record(input.change);
+  exactKeys(change, CHANGE_KEYS, 'change');
   const startsAt = timestamp(change.startsAt, 'change.startsAt');
   const endsAt = timestamp(change.endsAt, 'change.endsAt');
   if (Date.parse(endsAt) <= Date.parse(startsAt)) throw new Error('change.endsAt must be later than change.startsAt.');
@@ -162,11 +178,15 @@ function buildPlannedChange(input: UnknownRecord): PlannedChangeResult {
   };
   const milestones = boundedArray(change.milestones, 'change.milestones', 1, 24).map((raw, index) => {
     const item = record(raw);
+    exactKeys(item, MILESTONE_KEYS, `change.milestones[${index}]`);
     const state = enumValue(item.state, `change.milestones[${index}].state`, ['missed', 'not_checked', 'observed', 'planned'] as const);
     const observedAt = optionalTimestamp(item.observedAt, `change.milestones[${index}].observedAt`);
     const evidenceReference = optionalText(item.evidenceReference, 300);
-    if (state === 'observed' && (!observedAt || !evidenceReference)) {
-      throw new Error('Observed change milestones require observedAt and evidenceReference.');
+    if ((state === 'observed' || state === 'missed') && (!observedAt || !evidenceReference)) {
+      throw new Error('Observed or missed change milestones require observedAt and evidenceReference.');
+    }
+    if ((state === 'planned' || state === 'not_checked') && (observedAt || evidenceReference)) {
+      throw new Error('Planned or unchecked change milestones cannot contain observation evidence.');
     }
     return {
       id: uniqueId(item.id, `change.milestones[${index}].id`),
@@ -180,6 +200,7 @@ function buildPlannedChange(input: UnknownRecord): PlannedChangeResult {
   });
   const rollbackCriteria = boundedArray(change.rollbackCriteria, 'change.rollbackCriteria', 1, 16).map((raw, index) => {
     const item = record(raw);
+    exactKeys(item, ROLLBACK_KEYS, `change.rollbackCriteria[${index}]`);
     return {
       id: uniqueId(item.id, `change.rollbackCriteria[${index}].id`),
       condition: text(item.condition, `change.rollbackCriteria[${index}].condition`, 240),
@@ -189,9 +210,11 @@ function buildPlannedChange(input: UnknownRecord): PlannedChangeResult {
   });
   const postChangeChecks = boundedArray(change.postChangeChecks, 'change.postChangeChecks', 1, 24).map((raw, index) => {
     const item = record(raw);
+    exactKeys(item, POST_CHANGE_CHECK_KEYS, `change.postChangeChecks[${index}]`);
     const state = enumValue(item.state, `change.postChangeChecks[${index}].state`, ['matched', 'not_checked', 'unexpected'] as const);
     const evidenceReference = optionalText(item.evidenceReference, 300);
     if (state !== 'not_checked' && !evidenceReference) throw new Error('Completed post-change checks require evidenceReference.');
+    if (state === 'not_checked' && evidenceReference) throw new Error('Unchecked post-change checks cannot contain an evidenceReference.');
     return {
       id: uniqueId(item.id, `change.postChangeChecks[${index}].id`),
       label: text(item.label, `change.postChangeChecks[${index}].label`, 180),
@@ -202,8 +225,11 @@ function buildPlannedChange(input: UnknownRecord): PlannedChangeResult {
     };
   });
   const reasons = [
+    ...(milestones.some((item) => item.state === 'missed') ? ['One or more change milestones were missed.'] : []),
     ...(milestones.some((item) => item.state === 'planned' || item.state === 'not_checked') ? ['One or more planned milestones have not been observed.'] : []),
+    ...(rollbackCriteria.some((item) => item.state === 'met') ? ['One or more rollback criteria were met.'] : []),
     ...(rollbackCriteria.some((item) => item.state === 'not_checked') ? ['One or more rollback criteria have not been evaluated.'] : []),
+    ...(postChangeChecks.some((item) => item.state === 'unexpected') ? ['One or more post-change checks produced an unexpected result.'] : []),
     ...(postChangeChecks.some((item) => item.state === 'not_checked') ? ['One or more post-change checks remain open.'] : []),
   ];
   const negative = milestones.some((item) => item.state === 'missed')
@@ -224,8 +250,11 @@ function buildPlannedChange(input: UnknownRecord): PlannedChangeResult {
 function buildRecoveryDependencies(input: UnknownRecord): RecoveryDependencyResult {
   const assets = boundedArray(input.assets, 'assets', 1, 100).map((raw, index) => {
     const item = record(raw);
+    exactKeys(item, RECOVERY_ASSET_KEYS, `assets[${index}]`);
     const dependencies = record(item.dependencies);
     const readiness = record(item.readiness);
+    exactKeys(dependencies, RECOVERY_DEPENDENCY_KEYS, `assets[${index}].dependencies`);
+    exactKeys(readiness, RECOVERY_READINESS_KEYS, `assets[${index}].readiness`);
     return {
       domain: domain(item.domain, `assets[${index}].domain`),
       dependencies: {
@@ -245,15 +274,16 @@ function buildRecoveryDependencies(input: UnknownRecord): RecoveryDependencyResu
   if (new Set(assets.map((asset) => asset.domain)).size !== assets.length) throw new Error('Recovery dependency domains must be unique.');
   const dependencyTypes = ['registrar', 'dns', 'mail', 'certificate', 'recovery'] as const;
   const concentrations = dependencyTypes.flatMap((dependencyType) => {
-    const byProvider = new Map<string, string[]>();
+    const byProvider = new Map<string, { label: string; domains: string[] }>();
     for (const asset of assets) {
       const provider = asset.dependencies[dependencyType];
       if (!provider) continue;
-      const domains = byProvider.get(provider.toLowerCase()) || [];
-      domains.push(asset.domain);
-      byProvider.set(provider.toLowerCase(), domains);
+      const key = provider.toLowerCase();
+      const group = byProvider.get(key) ?? { label: provider, domains: [] };
+      group.domains.push(asset.domain);
+      byProvider.set(key, group);
     }
-    return [...byProvider.entries()].filter(([, domains]) => domains.length > 1).map(([provider, domains]) => ({
+    return [...byProvider.values()].filter(({ domains }) => domains.length > 1).map(({ label: provider, domains }) => ({
       dependencyType,
       provider,
       domains: domains.sort(),
@@ -263,7 +293,11 @@ function buildRecoveryDependencies(input: UnknownRecord): RecoveryDependencyResu
   const unknownDependencies = assets.reduce((total, asset) => (
     total + dependencyTypes.filter((dependencyType) => asset.dependencies[dependencyType] === null).length
   ), 0);
+  const failedReadinessChecks = assets.reduce((total, asset) => (
+    total + Object.values(asset.readiness).filter((value) => value === false).length
+  ), 0);
   const reasons = [
+    ...(failedReadinessChecks ? [`${failedReadinessChecks} recovery readiness check${failedReadinessChecks === 1 ? ' is' : 's are'} recorded as not ready.`] : []),
     ...(unknownDependencies ? [`${unknownDependencies} dependency fields are not recorded.`] : []),
     ...(assets.some((asset) => Object.values(asset.readiness).some((value) => value === null)) ? ['One or more recovery checks have not been recorded.'] : []),
   ];
@@ -292,6 +326,7 @@ const RETIREMENT_CHECKS = Object.freeze([
 
 function buildRetirement(input: UnknownRecord): RetirementResult {
   const checksInput = record(input.checks);
+  exactKeys(checksInput, new Set(RETIREMENT_CHECKS.map(([id]) => id)), 'checks');
   const checks = RETIREMENT_CHECKS.map(([id, checkLabel, expected]) => {
     const value = nullableBoolean(checksInput[id], `checks.${id}`);
     return {
@@ -301,7 +336,11 @@ function buildRetirement(input: UnknownRecord): RetirementResult {
       expected,
     };
   });
-  const reasons = checks.filter((check) => check.state === 'not_checked').map((check) => `${check.label} has not been checked.`);
+  const reasons = checks.flatMap((check) => check.state === 'not_confirmed'
+    ? [`The expected retirement state for "${check.label}" is not confirmed.`]
+    : check.state === 'not_checked'
+      ? [`${check.label} has not been checked.`]
+      : []);
   const negative = checks.some((check) => check.state === 'not_confirmed');
   return {
     kind: 'retirement',
@@ -317,6 +356,7 @@ function buildDomainAssurance(inputRaw: unknown, generatedAt = new Date().toISOS
     throw new Error(`Domain assurance input must use ${DOMAIN_ASSURANCE_INPUT_SCHEMA} version ${DOMAIN_ASSURANCE_VERSION}.`);
   }
   const kind = enumValue(input.kind, 'kind', ['planned-change', 'recovery-dependencies', 'retirement'] as const satisfies readonly AssuranceKind[]);
+  exactKeys(input, ROOT_KEYS[kind], 'Domain assurance input');
   const result = kind === 'planned-change'
     ? buildPlannedChange(input)
     : kind === 'recovery-dependencies'
