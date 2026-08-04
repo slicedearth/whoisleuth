@@ -25,6 +25,7 @@ describe('offline evidence review command', () => {
         version: 1,
         help: { reverse_search_properties: [{ searchableResourceType: 'domains', relatedResourceType: 'entities', property: 'handle' }] },
         request: { searchableResourceType: 'domains', relatedResourceType: 'entities', property: 'handle', value: 'EXAMPLE' },
+        response: { reverse_search_properties_mapping: [{ property: 'handle', propertyPath: '$.entities[*].handle' }] },
       },
       { schema: 'whoisleuth.dnssec-evidence-input', version: 1, ownerName: 'example.test', delegationSigned: false, dsRecords: [] },
       { schema: 'whoisleuth.tlsa-evidence-input', version: 1, serviceName: '_25._tcp.mx.example.test', dnssecState: 'unavailable', records: [] },
@@ -82,6 +83,11 @@ describe('offline evidence review command', () => {
     assert.deepEqual(inputs.map((input) => buildOfflineEvidenceReview(JSON.stringify(input), ISO).kind), [
       'rdap_search', 'dnssec', 'tlsa', 'rpki', 'geoip', 'encrypted_dns', 'zone_intent', 'domain_portfolio', 'domain_change', 'nameserver_preflight',
     ]);
+    const rdap = buildOfflineEvidenceReview(JSON.stringify(inputs[0]), ISO).result as {
+      responseInspection: { state: string; mappings: Array<{ state: string }> };
+    };
+    assert.equal(rdap.responseInspection.state, 'complete');
+    assert.equal(rdap.responseInspection.mappings[0]?.state, 'registered');
   });
 
   test('exposes bounded terminal and JSON CLI output', async () => {

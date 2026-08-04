@@ -13,6 +13,7 @@ import {
   lookupLocalGeoIp,
 } from '../lib/local-geoip-evidence.mts';
 import {
+  inspectRdapReverseSearchResponse,
   normalizeRdapSearchHelp,
   planRdapReverseSearch,
 } from '../lib/rdap-search-workbench.mts';
@@ -57,14 +58,18 @@ function buildOfflineEvidenceReview(value: unknown, generatedAt = new Date().toI
     kind = 'rdap_search';
     const request = record(input.request);
     const help = normalizeRdapSearchHelp(input.help);
+    const plan = planRdapReverseSearch(help, {
+      searchableResourceType: String(request.searchableResourceType ?? ''),
+      relatedResourceType: String(request.relatedResourceType ?? ''),
+      property: String(request.property ?? ''),
+      value: request.value,
+    });
     result = Object.freeze({
       help,
-      plan: planRdapReverseSearch(help, {
-        searchableResourceType: String(request.searchableResourceType ?? ''),
-        relatedResourceType: String(request.relatedResourceType ?? ''),
-        property: String(request.property ?? ''),
-        value: request.value,
-      }),
+      plan,
+      responseInspection: input.response === undefined
+        ? null
+        : inspectRdapReverseSearchResponse(input.response, [request.property]),
     });
   } else if (input.schema === 'whoisleuth.dnssec-evidence-input') {
     kind = 'dnssec';
@@ -162,8 +167,10 @@ function formatOfflineEvidenceReview(document: ReturnType<typeof buildOfflineEvi
   if (document.kind === 'rdap_search') {
     const help = record(result.help);
     const plan = record(result.plan);
+    const responseInspection = record(result.responseInspection);
     lines.push(`Help   ${String(help.state ?? 'unavailable').replaceAll('_', ' ')}`);
     lines.push(`Plan   ${String(plan.state ?? 'unavailable').replaceAll('_', ' ')}`);
+    if (result.responseInspection !== null) lines.push(`Result ${String(responseInspection.state ?? 'invalid').replaceAll('_', ' ')}`);
   } else {
     for (const [label, key] of [
       ['Records', 'records'],

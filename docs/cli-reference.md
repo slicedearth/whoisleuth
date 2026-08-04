@@ -907,7 +907,10 @@ Supported input schemas are:
   The command does not retrieve the certificate or negotiate STARTTLS.
 - `whoisleuth.rdap-search-input`: normalises a supplied RDAP search-help
   response and prepares an exact supported reverse-search request without
-  sending it.
+  sending it. If the document also contains a previously obtained `response`,
+  the command checks its bounded property mappings against the reviewed
+  registration and reports omitted or unrecognised mappings without treating
+  the response as authoritative or complete.
 - `whoisleuth.rpki-route-input`: compares a route prefix and origin ASN with a
   bounded analyst-supplied VRP set.
 - `whoisleuth.local-geoip-query`: queries an analyst-supplied bounded prefix
