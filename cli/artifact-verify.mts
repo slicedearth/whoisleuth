@@ -42,6 +42,12 @@ import {
   DOMAIN_CONTROL_MANIFEST_VERSION,
   verifyDomainControlManifest,
 } from '../lib/domain-control-manifest.mts';
+import {
+  INVESTIGATION_CAPSULE_SCHEMA,
+  INVESTIGATION_CAPSULE_VERSION,
+  verifyInvestigationCapsule,
+  type InvestigationCapsule,
+} from '../frontend/src/lib/analysis/investigation-capsule.ts';
 
 export const OFFLINE_ARTIFACT_VERIFICATION_SCHEMA = 'whoisleuth.offline-artifact-verification';
 export const OFFLINE_ARTIFACT_VERIFICATION_VERSION = 1;
@@ -52,6 +58,7 @@ type ArtifactKind =
   | 'workspace_archive'
   | 'encrypted_workspace_archive'
   | 'case_response_packet'
+  | 'investigation_capsule'
   | 'saved_lookup'
   | 'signed_review_artifact';
 type VerificationState = 'verified' | 'envelope_valid' | 'structure_valid';
@@ -113,10 +120,14 @@ function parseJson(raw: string): UnknownRecord {
 }
 
 function artifactVersion(value: UnknownRecord): number {
-  if (!Number.isSafeInteger(value.version) || Number(value.version) < 1 || Number(value.version) > 1000) {
+  const declared = value.version ?? value.schemaVersion;
+  if (value.version !== undefined && value.schemaVersion !== undefined && value.version !== value.schemaVersion) {
+    throw new TypeError('Artifact version declarations do not agree.');
+  }
+  if (!Number.isSafeInteger(declared) || Number(declared) < 1 || Number(declared) > 1000) {
     throw new TypeError('Artifact version is missing or invalid.');
   }
-  return Number(value.version);
+  return Number(declared);
 }
 
 function inputBytes(raw: string): number {
@@ -275,6 +286,36 @@ export async function verifyOfflineArtifact(
       }),
       limitations: Object.freeze([
         'Packet digest verification detects changes after export; it does not authenticate the analyst, recipient, or truth of the retained observations.',
+      ]),
+    });
+  }
+
+  if (schema === INVESTIGATION_CAPSULE_SCHEMA) {
+    if (version !== INVESTIGATION_CAPSULE_VERSION) {
+      throw new TypeError('This investigation-capsule version is not supported.');
+    }
+    const verification = await verifyInvestigationCapsule(value as InvestigationCapsule);
+    if (!verification.valid) throw new TypeError('The investigation capsule failed its embedded projection integrity checks.');
+    return Object.freeze({
+      schema: OFFLINE_ARTIFACT_VERIFICATION_SCHEMA,
+      version: OFFLINE_ARTIFACT_VERIFICATION_VERSION,
+      artifact: Object.freeze({ kind: 'investigation_capsule', schema, version }),
+      state: 'verified',
+      valid: true,
+      checks: Object.freeze({
+        structure: 'verified',
+        contentIntegrity: 'verified',
+        authenticatedEncryption: 'not_applicable',
+      }),
+      summary: Object.freeze({
+        inputBytes: inputBytes(raw),
+        sectionCount: null,
+        recordCount: null,
+        ciphertextBytes: null,
+      }),
+      limitations: Object.freeze([
+        'The embedded brief, graph, and optional analyst-record projections match their declared digests; the linked Lookup evidence is not embedded and must be verified separately.',
+        'Digest verification detects changed content but does not authenticate the analyst, signer, collection source, or truth of retained observations and assertions.',
       ]),
     });
   }

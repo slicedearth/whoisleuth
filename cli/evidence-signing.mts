@@ -154,8 +154,8 @@ async function signableArtifact(raw: string): Promise<{
 }> {
   const artifact = parseObject(raw, 'Evidence artifact');
   const verification = await verifyOfflineArtifact(raw);
-  if (!['case_response_packet', 'signed_review_artifact'].includes(verification.artifact.kind)) {
-    throw new TypeError('Only reviewed response packets and supported review manifests can be signed.');
+  if (!['case_response_packet', 'investigation_capsule', 'signed_review_artifact'].includes(verification.artifact.kind)) {
+    throw new TypeError('Only reviewed response packets, investigation capsules, and supported review manifests can be signed.');
   }
   return { artifact, verification };
 }

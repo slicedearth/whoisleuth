@@ -53,6 +53,26 @@
           </article>
         {/each}
       </div>
+      {#if review.caaAuthorizations.some((authorization) => authorization.accountUris.length || authorization.validationMethods.length || authorization.unrecognizedParameters.length)}
+        <details class="authorization-parameters">
+          <summary>Review CAA authorization parameters</summary>
+          <div>
+            {#each review.caaAuthorizations as authorization}
+              {#if authorization.accountUris.length || authorization.validationMethods.length || authorization.unrecognizedParameters.length}
+                <article>
+                  <strong>{authorization.tag} {authorization.issuer}</strong>
+                  <dl>
+                    {#if authorization.accountUris.length}<div><dt>Account URI</dt><dd>{authorization.accountUris.join(', ')}</dd></div>{/if}
+                    {#if authorization.validationMethods.length}<div><dt>Validation methods</dt><dd>{authorization.validationMethods.join(', ')}</dd></div>{/if}
+                    {#if authorization.unrecognizedParameters.length}<div><dt>Other parameters</dt><dd>{authorization.unrecognizedParameters.join(', ')}</dd></div>{/if}
+                  </dl>
+                </article>
+              {/if}
+            {/each}
+          </div>
+          <p>These parameters are current DNS policy context. They do not prove which account or validation method was used for the observed certificate.</p>
+        </details>
+      {/if}
       <ul>{#each review.limitations as limitation}<li>{limitation}</li>{/each}</ul>
     </div>
   </details>
@@ -67,10 +87,14 @@
   .finding-state{flex:0 0 auto;padding:3px 7px;border:1px solid var(--border-strong);border-radius:999px;color:var(--muted);font:650 var(--text-2xs) var(--mono);text-transform:capitalize}
   .finding-state.complete{border-color:color-mix(in srgb,var(--success) 40%,var(--border));color:var(--success)}
   .finding-state.partial{border-color:color-mix(in srgb,var(--amber) 45%,var(--border));color:var(--amber)}
+  .authorization-parameters{margin-top:10px;border-top:1px solid var(--border)}
+  .authorization-parameters summary{padding:10px 0;color:var(--text);font:650 var(--text-xs) var(--mono);cursor:pointer}
+  .authorization-parameters>div{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .authorization-parameters>p{margin:9px 0 0;color:var(--muted);font-size:var(--text-2xs);line-height:1.45}
   article p,article small{display:block;color:var(--muted);font-size:var(--text-xs);line-height:1.45}
   dl{display:grid;gap:5px;margin:9px 0}
   dl div{display:grid;grid-template-columns:112px minmax(0,1fr);gap:7px}
   dt{color:var(--muted);font:600 var(--text-2xs) var(--mono)}
   dd{min-width:0;margin:0;font-size:var(--text-xs);overflow-wrap:anywhere}
-  @media(max-width:700px){.findings{grid-template-columns:1fr}article header{display:grid;gap:7px}.finding-state{justify-self:start}dl div{grid-template-columns:1fr}}
+  @media(max-width:700px){.findings,.authorization-parameters>div{grid-template-columns:1fr}article header{display:grid;gap:7px}.finding-state{justify-self:start}dl div{grid-template-columns:1fr}}
 </style>

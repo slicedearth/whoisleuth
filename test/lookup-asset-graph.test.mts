@@ -101,7 +101,7 @@ function fixture() {
 
 test('asset graph keeps separately attributed typed relationships', () => {
   const graph = fixture();
-  assert.equal(graph.version, 1);
+  assert.equal(graph.version, 2);
   assert.equal(graph.truncated, false);
   assert.ok(graph.nodes.some((node) => node.kind === 'target' && node.label === 'example.test'));
   assert.ok(graph.edges.some((edge) => edge.kind === 'resolves-to' && edge.sourceLabel === 'DNS'));
@@ -121,6 +121,8 @@ test('asset graph keeps separately attributed typed relationships', () => {
     /Valid from 2026-07-01T00:00:00\.000Z · Valid to 2026-10-01T00:00:00\.000Z/u,
   );
   assert.ok(graph.edges.every((edge) => edge.observedAt !== null));
+  assert.ok(graph.edges.every((edge) => graph.sources.some((source) => source.id === edge.sourceId)));
+  assert.ok(graph.sources.some((source) => source.label === 'DNS' && source.href === '#evidence-dns'));
 });
 
 test('graph lenses reuse one model without cross-contaminating evidence classes', () => {

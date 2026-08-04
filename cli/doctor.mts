@@ -1,7 +1,9 @@
-import { resolvePublicAddresses, safeFetch } from '../lib/safe-fetch.mts';
 import { withTimeout } from '../lib/abort.mts';
-import { whoisQuery } from '../lib/whois-transport.mts';
 import type { TerminalPresentation } from './terminal-presentation.mts';
+
+type ResolvePublicAddresses = typeof import('../lib/safe-fetch.mts').resolvePublicAddresses;
+type SafeFetch = typeof import('../lib/safe-fetch.mts').safeFetch;
+type WhoisQuery = typeof import('../lib/whois-transport.mts').whoisQuery;
 
 const DOCTOR_SCHEMA = 'whoisleuth.cli.doctor';
 const DOCTOR_VERSION = 1;
@@ -36,9 +38,9 @@ type DoctorOptions = Readonly<{
   nodeVersion?: string;
   platform?: string;
   architecture?: string;
-  resolveAddresses?: typeof resolvePublicAddresses;
-  fetchHttps?: typeof safeFetch;
-  queryWhois?: typeof whoisQuery;
+  resolveAddresses?: ResolvePublicAddresses;
+  fetchHttps?: SafeFetch;
+  queryWhois?: WhoisQuery;
   networkTimeoutMs?: number;
 }>;
 
@@ -97,9 +99,16 @@ async function buildDoctorReport(options: DoctorOptions): Promise<DoctorReport> 
       detail: 'Not requested. Run doctor --network to test bounded public DNS, HTTPS, and WHOIS connectivity.',
     }));
   } else {
-    const resolve = options.resolveAddresses || resolvePublicAddresses;
-    const fetchHttps = options.fetchHttps || safeFetch;
-    const query = options.queryWhois || whoisQuery;
+    const safeFetchModule = options.resolveAddresses && options.fetchHttps
+      ? null
+      : await import('../lib/safe-fetch.mts');
+    const whoisModule = options.queryWhois
+      ? null
+      : await import('../lib/whois-transport.mts');
+    const resolve = options.resolveAddresses || safeFetchModule?.resolvePublicAddresses;
+    const fetchHttps = options.fetchHttps || safeFetchModule?.safeFetch;
+    const query = options.queryWhois || whoisModule?.whoisQuery;
+    if (!resolve || !fetchHttps || !query) throw new TypeError('Network diagnostic dependencies are unavailable.');
     const networkTimeoutMs = Number.isSafeInteger(options.networkTimeoutMs)
       && Number(options.networkTimeoutMs) >= 1
       && Number(options.networkTimeoutMs) <= NETWORK_TIMEOUT_MS

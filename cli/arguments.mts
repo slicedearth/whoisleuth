@@ -28,7 +28,9 @@ const CLI_COMMANDS = [
   'http',
   'tls',
   'registry-support',
+  'registry-doctor',
   'risk-calibrate',
+  'lookalike-calibrate',
   'verify-artifact',
   'inspect-archive',
   'sign-artifact',
@@ -39,8 +41,11 @@ const CLI_COMMANDS = [
   'mail-review',
   'review-evidence',
   'domain-control',
+  'assurance',
+  'sharing-review',
   'workflow-plan',
   'diff',
+  'reconcile',
   'timeline',
   'export',
 ] as const;
@@ -62,7 +67,7 @@ type CliAction =
   | ({ action: 'commands'; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'manual' })
   | ({ action: 'doctor'; network: boolean; output: 'terminal' | 'json' } & TerminalOptions)
-  | ({ action: 'lookup'; query: string | null; output: 'terminal' | 'json' | 'markdown' | 'html'; deep: boolean; detail: LookupDetail; strictExit: boolean; events: boolean; plan: boolean } & TerminalOptions)
+  | ({ action: 'lookup'; query: string | null; output: 'terminal' | 'json' | 'markdown' | 'html'; deep: boolean; detail: LookupDetail; strictExit: boolean; events: boolean; plan: boolean; observerLabel: string | null; vantageLabel: string | null } & TerminalOptions)
   | ({ action: 'bulk'; source: string | null; output: 'terminal' | 'json' | 'jsonl' | 'csv' | 'domains' | 'queries'; deep: boolean; concurrency: number; checkpoint: string | null; resume: boolean; events: boolean; filter: 'all' | 'registered' | 'inconclusive' | 'errors' } & TerminalOptions)
   | ({ action: 'ct-search'; keyword: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'discover'; seed: string | null; output: 'terminal' | 'json' | 'jsonl' | 'domains'; preset: 'common' | 'impersonation' | 'all' | 'custom'; keyboardLayout: 'qwerty' | 'azerty' | 'qwertz' | 'all'; tldText: string | null; dictionarySource: string | null; familyText: string | null; snapshotSource: string | null } & TerminalOptions)
@@ -71,7 +76,9 @@ type CliAction =
   | ({ action: 'http'; domain: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'tls'; hostname: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'registry-support'; target: string | null; output: 'terminal' | 'json' } & TerminalOptions)
+  | ({ action: 'registry-doctor'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'risk-calibrate'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
+  | ({ action: 'lookalike-calibrate'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'verify-artifact'; source: string | null; passphraseSource: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | InspectArchiveArguments
   | SignArtifactArguments
@@ -82,8 +89,11 @@ type CliAction =
   | ({ action: 'mail-review'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'review-evidence'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'domain-control'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
+  | ({ action: 'assurance'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
+  | ({ action: 'sharing-review'; source: string | null; output: 'terminal' | 'json'; marking: 'clear' | 'green' | 'amber' | 'amber-strict' | 'red'; recipientScope: 'public' | 'community' | 'organization' | 'named-recipients'; purpose: string; humanReviewed: boolean; personalDataReviewed: boolean; redactionsConfirmed: boolean } & TerminalOptions)
   | ({ action: 'workflow-plan'; recipe: InvestigationPlanRecipe; subject: string; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'diff'; leftSource: string; rightSource: string; output: 'terminal' | 'json' } & TerminalOptions)
+  | ({ action: 'reconcile'; sources: readonly string[]; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'timeline'; sources: readonly string[]; output: 'terminal' | 'json' } & TerminalOptions)
   | { action: 'export'; source: string | null; format: 'json' | 'markdown' | 'html'; compact: boolean };
 type CliArguments = CliAction & FileOutputOptions;
@@ -175,7 +185,9 @@ function parseCliArgumentsCore(argv: string[]): CliAction {
   if (command === 'http') return parseHttpArguments(argv.slice(1));
   if (command === 'tls') return parseTlsArguments(argv.slice(1));
   if (command === 'registry-support') return parseRegistrySupportArguments(argv.slice(1));
+  if (command === 'registry-doctor') return parseRegistryDoctorArguments(argv.slice(1));
   if (command === 'risk-calibrate') return parseRiskCalibrateArguments(argv.slice(1));
+  if (command === 'lookalike-calibrate') return parseLookalikeCalibrateArguments(argv.slice(1));
   if (command === 'verify-artifact') return parseVerifyArtifactArguments(argv.slice(1));
   if (command === 'inspect-archive') return parseInspectArchiveArguments(argv.slice(1));
   if (command === 'sign-artifact') return parseSignArtifactArguments(argv.slice(1));
@@ -186,8 +198,11 @@ function parseCliArgumentsCore(argv: string[]): CliAction {
   if (command === 'mail-review') return parseMailReviewArguments(argv.slice(1));
   if (command === 'review-evidence') return parseReviewEvidenceArguments(argv.slice(1));
   if (command === 'domain-control') return parseDomainControlArguments(argv.slice(1));
+  if (command === 'assurance') return parseAssuranceArguments(argv.slice(1));
+  if (command === 'sharing-review') return parseSharingReviewArguments(argv.slice(1));
   if (command === 'workflow-plan') return parseWorkflowPlanArguments(argv.slice(1));
   if (command === 'diff') return parseDiffArguments(argv.slice(1));
+  if (command === 'reconcile') return parseReconcileArguments(argv.slice(1));
   if (command === 'timeline') return parseTimelineArguments(argv.slice(1));
   if (command === 'export') return parseExportArguments(argv.slice(1));
   let query: string | null = null;
@@ -201,7 +216,12 @@ function parseCliArgumentsCore(argv: string[]): CliAction {
   let strictExit = false;
   let events = false;
   let plan = false;
-  for (const argument of argv.slice(1)) {
+  let observerLabel: string | null = null;
+  let vantageLabel: string | null = null;
+  const lookupArguments = argv.slice(1);
+  for (let index = 0; index < lookupArguments.length; index++) {
+    const argument = lookupArguments[index];
+    if (argument === undefined) break;
     if (argument === '--json') {
       if (output !== 'terminal') throw new CliUsageError('Choose only one output format.');
       output = 'json';
@@ -229,6 +249,17 @@ function parseCliArgumentsCore(argv: string[]): CliAction {
     } else if (argument === '--plan') {
       if (plan) throw new CliUsageError('--plan may be supplied only once.');
       plan = true;
+    } else if (argument === '--observer' || argument === '--vantage') {
+      const isObserver = argument === '--observer';
+      if (isObserver ? observerLabel !== null : vantageLabel !== null) {
+        throw new CliUsageError(`${argument} may be supplied only once.`);
+      }
+      const value = lookupArguments[++index];
+      if (!value || value.startsWith('-')) throw new CliUsageError(`${argument} requires one bounded label.`);
+      const normalized = value.replace(/\s+/gu, ' ').trim();
+      if (!normalized || normalized.length > 80) throw new CliUsageError(`${argument} requires a label of at most 80 characters.`);
+      if (isObserver) observerLabel = normalized;
+      else vantageLabel = normalized;
     } else if (argument === '--quiet') quiet = true;
     else if (argument === '--no-color') color = false;
     else if (argument.startsWith('-')) throw new CliUsageError(`Unknown option "${argument}".`);
@@ -241,7 +272,7 @@ function parseCliArgumentsCore(argv: string[]): CliAction {
   if (plan && (detailSet || strictExit || events || quiet)) {
     throw new CliUsageError('--plan cannot be combined with detail, strict-exit, event, or quiet options.');
   }
-  return { action: 'lookup', query, output, deep, detail, strictExit, events, plan, quiet, color };
+  return { action: 'lookup', query, output, deep, detail, strictExit, events, plan, observerLabel, vantageLabel, quiet, color };
 }
 
 function parseCompletionArguments(argv: string[]): Extract<CliArguments, { action: 'completion' }> {
@@ -775,6 +806,82 @@ function parseDomainControlArguments(argv: string[]): Extract<CliArguments, { ac
   return { action: 'domain-control', source, output, quiet, color };
 }
 
+function parseAssuranceArguments(argv: string[]): Extract<CliArguments, { action: 'assurance' }> {
+  let source: string | null = null;
+  let output: 'terminal' | 'json' = 'terminal';
+  let quiet = false;
+  let color = true;
+  for (const argument of argv) {
+    if (argument === '--json') {
+      if (output !== 'terminal') throw new CliUsageError('--json may be supplied only once.');
+      output = 'json';
+    } else if (argument === '--quiet') quiet = true;
+    else if (argument === '--no-color') color = false;
+    else if (argument.startsWith('-')) throw new CliUsageError(`Unknown option "${argument}".`);
+    else if (source === null) source = argument;
+    else throw new CliUsageError('assurance accepts one optional versioned JSON input file.');
+  }
+  if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
+  return { action: 'assurance', source, output, quiet, color };
+}
+
+function parseSharingReviewArguments(argv: string[]): Extract<CliArguments, { action: 'sharing-review' }> {
+  let source: string | null = null;
+  let output: 'terminal' | 'json' = 'terminal';
+  let marking: 'clear' | 'green' | 'amber' | 'amber-strict' | 'red' | null = null;
+  let recipientScope: 'public' | 'community' | 'organization' | 'named-recipients' | null = null;
+  let purpose: string | null = null;
+  let humanReviewed = false;
+  let personalDataReviewed = false;
+  let redactionsConfirmed = false;
+  let quiet = false;
+  let color = true;
+  for (let index = 0; index < argv.length; index++) {
+    const argument = argv[index];
+    if (argument === undefined) break;
+    if (argument === '--json') {
+      if (output !== 'terminal') throw new CliUsageError('--json may be supplied only once.');
+      output = 'json';
+    } else if (argument === '--marking') {
+      if (marking !== null) throw new CliUsageError('--marking may be supplied only once.');
+      const value = argv[++index];
+      if (!['clear', 'green', 'amber', 'amber-strict', 'red'].includes(value || '')) {
+        throw new CliUsageError('--marking requires clear, green, amber, amber-strict, or red.');
+      }
+      marking = value as 'clear' | 'green' | 'amber' | 'amber-strict' | 'red';
+    } else if (argument === '--recipient-scope') {
+      if (recipientScope !== null) throw new CliUsageError('--recipient-scope may be supplied only once.');
+      const value = argv[++index];
+      if (!['public', 'community', 'organization', 'named-recipients'].includes(value || '')) {
+        throw new CliUsageError('--recipient-scope requires public, community, organization, or named-recipients.');
+      }
+      recipientScope = value as 'public' | 'community' | 'organization' | 'named-recipients';
+    } else if (argument === '--purpose') {
+      if (purpose !== null) throw new CliUsageError('--purpose may be supplied only once.');
+      const value = argv[++index];
+      if (!value || value.startsWith('-')) throw new CliUsageError('--purpose requires one bounded description.');
+      const normalized = value.replace(/\s+/gu, ' ').trim();
+      if (!normalized || normalized.length > 200) throw new CliUsageError('--purpose is limited to 200 characters.');
+      purpose = normalized;
+    } else if (argument === '--human-reviewed') humanReviewed = true;
+    else if (argument === '--personal-data-reviewed') personalDataReviewed = true;
+    else if (argument === '--redactions-confirmed') redactionsConfirmed = true;
+    else if (argument === '--quiet') quiet = true;
+    else if (argument === '--no-color') color = false;
+    else if (argument.startsWith('-')) throw new CliUsageError(`Unknown option "${argument}".`);
+    else if (source === null) source = argument;
+    else throw new CliUsageError('sharing-review accepts one optional artifact JSON file.');
+  }
+  if (!marking || !recipientScope || !purpose) {
+    throw new CliUsageError('sharing-review requires --marking, --recipient-scope, and --purpose.');
+  }
+  if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
+  return {
+    action: 'sharing-review', source, output, marking, recipientScope, purpose,
+    humanReviewed, personalDataReviewed, redactionsConfirmed, quiet, color,
+  };
+}
+
 function parseWorkflowPlanArguments(argv: string[]): Extract<CliArguments, { action: 'workflow-plan' }> {
   const positional: string[] = [];
   let output: 'terminal' | 'json' = 'terminal';
@@ -821,6 +928,30 @@ function parseDiffArguments(argv: string[]): Extract<CliArguments, { action: 'di
   return { action: 'diff', leftSource, rightSource, output, quiet, color };
 }
 
+function parseReconcileArguments(argv: string[]): Extract<CliArguments, { action: 'reconcile' }> {
+  const sources: string[] = [];
+  let output: 'terminal' | 'json' = 'terminal';
+  let quiet = false;
+  let color = true;
+  for (const argument of argv) {
+    if (argument === '--json') {
+      if (output !== 'terminal') throw new CliUsageError('--json may be supplied only once.');
+      output = 'json';
+    } else if (argument === '--quiet') quiet = true;
+    else if (argument === '--no-color') color = false;
+    else if (argument.startsWith('-')) throw new CliUsageError(`Unknown option "${argument}".`);
+    else sources.push(argument);
+  }
+  if (sources.length < 2 || sources.length > 5) {
+    throw new CliUsageError('reconcile requires from 2 to 5 saved lookup JSON files.');
+  }
+  if (new Set(sources).size !== sources.length) {
+    throw new CliUsageError('reconcile input files must be different.');
+  }
+  if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
+  return { action: 'reconcile', sources, output, quiet, color };
+}
+
 function parseTimelineArguments(argv: string[]): Extract<CliArguments, { action: 'timeline' }> {
   const sources: string[] = [];
   let output: 'terminal' | 'json' = 'terminal';
@@ -864,6 +995,25 @@ function parseRegistrySupportArguments(argv: string[]): Extract<CliArguments, { 
   return { action: 'registry-support', target, output, quiet, color };
 }
 
+function parseRegistryDoctorArguments(argv: string[]): Extract<CliArguments, { action: 'registry-doctor' }> {
+  let source: string | null = null;
+  let output: 'terminal' | 'json' = 'terminal';
+  let quiet = false;
+  let color = true;
+  for (const argument of argv) {
+    if (argument === '--json') {
+      if (output !== 'terminal') throw new CliUsageError('--json may be supplied only once.');
+      output = 'json';
+    } else if (argument === '--quiet') quiet = true;
+    else if (argument === '--no-color') color = false;
+    else if (argument.startsWith('-')) throw new CliUsageError(`Unknown option "${argument}".`);
+    else if (source === null) source = argument;
+    else throw new CliUsageError('registry-doctor accepts one optional saved Lookup JSON file.');
+  }
+  if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
+  return { action: 'registry-doctor', source, output, quiet, color };
+}
+
 function parseRiskCalibrateArguments(argv: string[]): Extract<CliArguments, { action: 'risk-calibrate' }> {
   let source: string | null = null;
   let output: 'terminal' | 'json' = 'terminal';
@@ -881,6 +1031,25 @@ function parseRiskCalibrateArguments(argv: string[]): Extract<CliArguments, { ac
   }
   if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
   return { action: 'risk-calibrate', source, output, quiet, color };
+}
+
+function parseLookalikeCalibrateArguments(argv: string[]): Extract<CliArguments, { action: 'lookalike-calibrate' }> {
+  let source: string | null = null;
+  let output: 'terminal' | 'json' = 'terminal';
+  let quiet = false;
+  let color = true;
+  for (const argument of argv) {
+    if (argument === '--json') {
+      if (output !== 'terminal') throw new CliUsageError('--json may be supplied only once.');
+      output = 'json';
+    } else if (argument === '--quiet') quiet = true;
+    else if (argument === '--no-color') color = false;
+    else if (argument.startsWith('-')) throw new CliUsageError(`Unknown option "${argument}".`);
+    else if (source === null) source = argument;
+    else throw new CliUsageError('lookalike-calibrate accepts one optional reviewed dataset JSON file.');
+  }
+  if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
+  return { action: 'lookalike-calibrate', source, output, quiet, color };
 }
 
 function parseVerifyArtifactArguments(argv: string[]): Extract<CliArguments, { action: 'verify-artifact' }> {

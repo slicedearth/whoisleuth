@@ -71,7 +71,7 @@ export const MAX_CLI_PACKAGE_GRAPH_BYTES = 8 * 1024 * 1024;
 export const MAX_CLI_PACKAGE_MODULES = 256;
 export const MAX_CLI_PACKAGE_SOURCE_BYTES = 8 * 1024 * 1024;
 export const MAX_CLI_PACKAGE_FILE_BYTES = 2 * 1024 * 1024;
-export const MAX_CLI_PACKAGE_ENTRIES = 220;
+export const MAX_CLI_PACKAGE_ENTRIES = 250;
 export const MAX_CLI_PACKAGE_PACKED_BYTES = 2 * 1024 * 1024;
 export const MAX_CLI_PACKAGE_UNPACKED_BYTES = 6 * 1024 * 1024;
 
@@ -87,13 +87,18 @@ const INSTALLED_COMMAND_HELP_CHECKS = Object.freeze([
   'ct-search',
   'discover',
   'registry-support',
+  'registry-doctor',
   'source-report',
   'compare',
   'page-compare',
   'mail-review',
+  'review-evidence',
   'domain-control',
+  'assurance',
+  'sharing-review',
   'workflow-plan',
   'diff',
+  'reconcile',
   'timeline',
   'export',
   'inspect-archive',
@@ -101,6 +106,7 @@ const INSTALLED_COMMAND_HELP_CHECKS = Object.freeze([
   'sign-artifact',
   'verify-signature',
   'risk-calibrate',
+  'lookalike-calibrate',
   'doctor',
   'commands',
   'completion',
@@ -381,7 +387,8 @@ function parsePackResult(value: unknown): JsonRecord {
 
 function packedFiles(packResult: JsonRecord): readonly string[] {
   if (!Array.isArray(packResult.files) || packResult.files.length === 0 || packResult.files.length > MAX_CLI_PACKAGE_ENTRIES) {
-    throw new TypeError(`Packed CLI must contain between 1 and ${MAX_CLI_PACKAGE_ENTRIES} entries.`);
+    const observed = Array.isArray(packResult.files) ? packResult.files.length : 0;
+    throw new TypeError(`Packed CLI contains ${observed} entries; expected between 1 and ${MAX_CLI_PACKAGE_ENTRIES}.`);
   }
   return Object.freeze(packResult.files.map((entry, index) => safeRelativePath(record(entry, `Packed entry ${index + 1}`).path, `Packed entry ${index + 1} path`)));
 }

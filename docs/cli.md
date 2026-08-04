@@ -48,6 +48,7 @@ node bin/whoisleuth.mts lookup example.com --deep --summary
 node bin/whoisleuth.mts lookup example.com --deep --verbose
 node bin/whoisleuth.mts lookup example.com --deep --markdown --output lookup.md
 node bin/whoisleuth.mts lookup example.com --deep --json --strict-exit --events
+node bin/whoisleuth.mts lookup example.test --deep --observer workstation-a --vantage office-egress --json > office.json
 cat domains.txt | node bin/whoisleuth.mts bulk --jsonl
 node bin/whoisleuth.mts bulk domains.txt --csv --registered-only
 node bin/whoisleuth.mts bulk domains.txt --domains --inconclusive-only
@@ -64,7 +65,9 @@ node bin/whoisleuth.mts posture example.com --selectors selector1 --retired-sele
 node bin/whoisleuth.mts http example.com --json
 node bin/whoisleuth.mts tls example.com --json
 node bin/whoisleuth.mts registry-support example.uk --json
+node bin/whoisleuth.mts registry-doctor lookup.json --json
 node bin/whoisleuth.mts risk-calibrate calibration.json --json
+node bin/whoisleuth.mts lookalike-calibrate reviewed-candidates.json --json
 node bin/whoisleuth.mts verify-artifact workspace.json --json
 node bin/whoisleuth.mts verify-artifact lookup.json --json
 node bin/whoisleuth.mts verify-artifact workspace-encrypted.json --passphrase-file passphrase.txt --json
@@ -79,8 +82,11 @@ node bin/whoisleuth.mts page-compare official.json candidate.json --json
 node bin/whoisleuth.mts mail-review bulk.json --json
 node bin/whoisleuth.mts review-evidence dnssec-evidence.json --json
 node bin/whoisleuth.mts domain-control domain-control-input.json --json
+node bin/whoisleuth.mts assurance domain-assurance-input.json --json
+node bin/whoisleuth.mts sharing-review response-packet.json --marking amber --recipient-scope organization --purpose 'Reviewed incident handoff' --human-reviewed --personal-data-reviewed --redactions-confirmed --json
 node bin/whoisleuth.mts workflow-plan domain-triage example.test --json
 node bin/whoisleuth.mts diff first-lookup.json second-lookup.json --json
+node bin/whoisleuth.mts reconcile office.json mobile.json external.json --json
 node bin/whoisleuth.mts timeline first-observation.json second-observation.json latest-observation.json --json
 node bin/whoisleuth.mts export lookup.json > evidence.json
 node bin/whoisleuth.mts export lookup.json --markdown > evidence.md
@@ -184,7 +190,9 @@ Commands that query RDAP, WHOIS, DNS, HTTP, TLS, or Certificate Transparency do
 so directly from the machine running the CLI. They do not use the hosted login,
 hosted session, or deployment usage controls; upstream providers can see and
 rate-limit the local machine's network address. Offline `discover`, `compare`,
-`page-compare`, `mail-review`, `review-evidence`, `domain-control`, `workflow-plan`, `diff`, `timeline`, `risk-calibrate`, `verify-artifact`, `source-report`, `export`,
+`page-compare`, `mail-review`, `review-evidence`, `domain-control`, `assurance`,
+`sharing-review`, `workflow-plan`, `diff`, `reconcile`, `timeline`,
+`risk-calibrate`, `lookalike-calibrate`, `registry-doctor`, `verify-artifact`, `source-report`, `export`,
 `commands`, `completion`, and `manual` operations make no network requests. Commands write
 to stdout unless the analyst deliberately selects a local output file.
 
@@ -312,6 +320,20 @@ registration, DNS, page identity, mail, certificate, and relationship fields,
 keeps missing and unavailable evidence distinct, and makes no ownership or
 maliciousness inference. The output records both original observation times.
 
+`lookup --observer <label> --vantage <label>` can add two bounded analyst labels
+to a saved Lookup document. The labels identify the person or process that ran
+the observation and the collection context chosen by that analyst; they are
+not verified identities, network measurements, or proof of independent
+collection. They do not change which sources are queried.
+
+`reconcile <observation.json> <observation.json> [...]` accepts from 2 to 5
+saved Lookup documents for the same domain and compares their bounded fields
+offline. It keeps agreement, disagreement, and non-comparable evidence
+separate, retains observation times and optional analyst labels, and copies no
+filenames or raw registration payloads. Distinct complete label pairs are
+reported as labelled collection contexts only; majority agreement is not
+treated as truth or authority.
+
 `timeline <observation.json> <observation.json> [...]` accepts from 2 to 20
 saved Lookup documents for one domain, orders them by their validated
 observation times, and compares each adjacent pair offline. The 32 MiB aggregate
@@ -339,9 +361,12 @@ machine access is not evidence that a domain is unregistered or safe.
 | 130 | The analyst cancelled the command. No partial final result was emitted. |
 
 This release supports `lookup`, `bulk`, `ct-search`, `discover`, `discover-scan`, `posture`,
-`http`, `tls`, `registry-support`, `risk-calibrate`, `verify-artifact`,
+`http`, `tls`, `registry-support`, `registry-doctor`, `risk-calibrate`,
+`lookalike-calibrate`, `verify-artifact`,
 `inspect-archive`, `sign-artifact`, `verify-signature`, `source-report`,
-`compare`, `page-compare`, `mail-review`, `review-evidence`, `domain-control`, `workflow-plan`, `diff`, `timeline`, `export`, `doctor`, `commands`, `completion`, and `manual`. Additional command families
+`compare`, `page-compare`, `mail-review`, `review-evidence`, `domain-control`,
+`assurance`, `sharing-review`, `workflow-plan`, `diff`, `reconcile`, `timeline`,
+`export`, `doctor`, `commands`, `completion`, and `manual`. Additional command families
 are added as separate bounded increments rather than exposing incomplete
 aliases.
 
@@ -363,6 +388,23 @@ suffixes retain the generic `discovery_only` profile; malformed input exits
 with code 2. The command never probes a registry or tests current reachability.
 Coverage is context only and cannot decide registration, availability,
 ownership, safety, or maliciousness.
+
+`registry-doctor [lookup.json]` compares one saved domain Lookup with the same
+reviewed local capability profile. It reports whether RDAP and WHOIS collection
+states align with allowed, permission-required, or unsupported access, counts
+bounded normalized publication fields, and reports whether a registry object
+identifier was observed. A missing identifier is a publication omission, not
+a failed lookup. The command is offline, makes no retry, and cannot establish
+current registry reachability.
+
+The offline RDAP supplied-evidence review implements the request shape defined
+by RFC 9536 for `resources`, `domains`, `nameservers`, and `entities`. It also
+validates a supplied server's `reverse_search_properties_mapping` response
+before preparing a request. Only registered IANA property paths and exact
+supported resource/property pairs are accepted. Preparing the request neither
+proves that a particular server supports it nor sends a reverse search; active
+execution remains gated on a reviewed server policy, privacy boundary, and
+deterministic fixtures.
 
 The separate maintenance command `npm run rdap-extensions:drift` compares the
 pinned official RDAP extension fixture with the reviewed local interpretation
@@ -434,13 +476,30 @@ dispositions that will be written, and the excluded evidence classes. The CLI
 still validates every exported record and never trains, tunes, or changes the
 Risk model.
 
+## Lookalike review-yield calibration
+
+`lookalike-calibrate [dataset.json]` summarizes reviewed candidate outcomes by
+mutation family without retaining domains, candidate identifiers, analyst
+notes, or evidence values in its output. Input uses
+`whoisleuth.lookalike-calibration-input` version 1, is capped at 2 MiB and 5,000
+unique opaque records, and requires one reviewed disposition plus from 1 to 12
+bounded mutation-family identifiers per record.
+
+The report keeps exact disposition counts, review-lead rate, false-positive
+rate, and a per-family sample state. Fewer than 20 reviewed observations remains
+`insufficient`. The command is diagnostic only: it does not tune candidate
+generation, filtering, ranking, or Risk, and a useful historical yield does not
+establish that a current candidate is malicious or safe.
+
 ## Offline artifact verification
 
 `verify-artifact` validates a supported local artifact without printing its
 evidence contents. Input is capped at 15 MiB. It currently recognises ordinary
 and encrypted workspace archives, case-response packets, acquisition-decision
 exports, domain-comparison exports, Bulk mail-exposure exports, and Bulk review
-manifests. It also validates the bounded versioned structure of saved CLI
+manifests. It also verifies the internal digests of a complete investigation
+capsule, including its evidence, brief, graph, and optional analyst-record
+projections, and that capsule can be passed to `sign-artifact`. It also validates the bounded versioned structure of saved CLI
 Lookup JSON. Because saved Lookup documents do not embed a checksum or
 signature, that result is reported as `structure_valid` with content integrity
 explicitly unchecked. Saved Lookup validation retains its stricter 8 MiB
@@ -868,6 +927,40 @@ contains one manifest plus separately attributed observations. Only a complete
 missing observations remain inconclusive, and unrelated observations are
 counted but ignored. The review performs no DNS, RDAP, HTTP, TLS, SMTP, or
 registrar request.
+
+## Domain assurance review
+
+`assurance [input.json]` reviews one bounded analyst-authored workflow entirely
+offline. The input uses `whoisleuth.domain-assurance.input` version 1 and one of
+three fixed kinds:
+
+- `planned-change` records a bounded window, evidence-backed milestones,
+  rollback criteria, and post-change checks;
+- `recovery-dependencies` reviews up to 100 domains across registrar, DNS,
+  mail, certificate, and recovery providers and highlights exact provider
+  concentration; and
+- `retirement` checks a fixed set of decommissioning controls without treating
+  an unchecked item as complete.
+
+Provider labels, readiness confirmations, evidence references, and expected
+states remain analyst assertions. The output preserves incomplete and
+needs-review states, stores no credentials, makes no request, and changes no
+registrar, DNS, mail, certificate, or recovery configuration.
+
+## Pre-sharing review
+
+`sharing-review [artifact.json]` performs a redacted local preflight before an
+analyst deliberately shares an artifact. The analyst must select a TLP 2.0
+marking, a recipient scope, and a bounded purpose. Optional confirmations record
+human review, personal-data review, and redaction review. The command validates
+supported artifact integrity where possible, detects stricter embedded TLP
+markings, and reports only key-category counts; it never emits inspected values
+or copies raw evidence.
+
+An imported stricter marking cannot be downgraded by the requested marking, and
+recipient scope is checked against the effective marking. Evading this local
+preflight remains possible, so the result is a review aid rather than access
+control, legal advice, or recipient authorization.
 
 ## Fixed investigation plans
 

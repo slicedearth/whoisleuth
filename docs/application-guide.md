@@ -140,7 +140,10 @@ source palette does not compete with the content. The palette uses cyan, blue,
 violet, magenta, and cool neutral tones with deliberately varied lightness.
 Red, amber, and green remain exclusive to semantic status. Source state remains
 a separate dot and text label, so colour does not replace success, partial,
-unavailable, or error semantics.
+unavailable, or error semantics. Each relationship also points to a bounded
+source-ledger entry carrying the source label, section anchor, observation time,
+completeness, and limitations. This supports traceability without copying raw
+responses into the graph.
 
 Risk and Opportunity cards show signed factor bars beside their exact factor
 lists. Domain results can also show a connected registration-source agreement
@@ -161,7 +164,11 @@ Profile contains a reviewed expected issuer,
 SAN pattern, or SPKI value for the official domain, the same panel compares that analyst
 baseline without treating a difference as compromise or improper issuance.
 Current CAA cannot establish the policy that applied when an existing
-certificate was issued.
+certificate was issued. The same panel lists recognized `accounturi` and
+`validationmethods` parameters and flags unrecognized parameters for review.
+Parameter publication is context only: WHOISleuth does not contact a certificate
+authority account, validate account ownership, or establish whether an
+authorization was used for the observed certificate.
 
 **Evidence coverage** summarizes which requested source and analysis families
 completed and which remained limited, unavailable, skipped, unsupported,
@@ -347,6 +354,13 @@ The complete technology evidence, certificate profile, page markup, script
 references, and raw TLS material remain excluded. Saved session schema 2 adds
 this envelope; schema 1 sessions remain readable and show the new fields as
 not recorded.
+
+The peer-outlier matrix derives a per-dimension cohort baseline only from rows
+with comparable evidence. It reports baseline share, strong, moderate, or
+fragmented consensus, observed share, contrast, and a bounded review score.
+That score orders review within the current result set; it is not Risk and does
+not imply maliciousness. Rows excluded by partial or unavailable evidence stay
+explicit rather than being treated as outliers.
 
 The lookalike mail-exposure review groups the currently filtered compact rows
 without another request. It keeps receiving mail with SPF and DMARC, receiving
@@ -1046,9 +1060,13 @@ observations, or compact case history.
   separate analyst-authored purpose, justification, requested-field selection,
   and case reference. Its preflight requires review of available public
   evidence, data minimisation, affected-party rights, and the current request
-  route. It excludes raw RDAP, raw WHOIS, and discovered personal contacts,
-  does not determine requester entitlement or registrar participation, and
-  never submits a request.
+  route, whether the domain is in the current gTLD service scope, registrar
+  participation, and requester materials. When those checks are complete it
+  links to the current ICANN Registration Data Request Service information and
+  account portal for a separate manual handoff. It excludes raw RDAP, raw
+  WHOIS, and discovered personal contacts, does not determine requester
+  entitlement or registrar participation, does not send the prepared packet to
+  ICANN or a registrar, and never submits a request.
 - Defensive domain lists require an explicit reviewed selection and eligible
   analyst disposition. Review their exclusions, expiry, provenance manifest,
   and paired rollback instructions before applying them. Wildcard RPZ coverage

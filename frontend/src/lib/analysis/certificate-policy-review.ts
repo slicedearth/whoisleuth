@@ -20,14 +20,22 @@ export type CertificatePolicyFinding = Readonly<{
 }>;
 
 export type CertificatePolicyReview = Readonly<{
-  version: 1;
+  version: 2;
   observedAt: string | null;
   findings: readonly CertificatePolicyFinding[];
+  caaAuthorizations: readonly CaaAuthorization[];
   limitations: readonly string[];
 }>;
 
 type JsonRecord = Record<string, unknown>;
-type CaaRecord = Readonly<{ tag: string; value: string; critical: number | null }>;
+export type CaaAuthorization = Readonly<{
+  tag: 'issue' | 'issuewild' | 'iodef';
+  issuer: string;
+  critical: number | null;
+  accountUris: readonly string[];
+  validationMethods: readonly string[];
+  unrecognizedParameters: readonly string[];
+}>;
 
 const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/gu;
 const KNOWN_ISSUERS: readonly Readonly<{ pattern: RegExp; identifiers: readonly string[] }>[] = Object.freeze([
@@ -61,24 +69,49 @@ function timestamp(value: unknown): string | null {
   return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
 }
 
-function caaRecords(value: unknown): CaaRecord[] {
+function caaParameterValue(value: string): string {
+  return value.trim().replace(/^['"]|['"]$/gu, '').trim().slice(0, 240);
+}
+
+export function parseCaaAuthorizations(value: unknown): CaaAuthorization[] {
   if (!Array.isArray(value)) return [];
-  const output: CaaRecord[] = [];
+  const output: CaaAuthorization[] = [];
   const seen = new Set<string>();
   for (const item of value.slice(0, 32)) {
     const candidate = record(item);
     const tag = text(candidate.tag ?? candidate.issue, 32).toLowerCase();
     const rawValue = text(candidate.value ?? candidate.issue, 300);
-    const normalizedValue = rawValue.split(';', 1)[0]?.replace(/^["']|["']$/gu, '').trim().toLowerCase() ?? '';
-    if (!['issue', 'issuewild', 'iodef'].includes(tag) || !normalizedValue) continue;
-    const key = `${tag}:${normalizedValue}`;
+    if (!['issue', 'issuewild', 'iodef'].includes(tag) || !rawValue) continue;
+    const [rawIssuer = '', ...rawParameters] = rawValue.split(';');
+    const issuer = caaParameterValue(rawIssuer).toLowerCase();
+    if (!issuer) continue;
+    const accountUris: string[] = [];
+    const validationMethods: string[] = [];
+    const unrecognizedParameters: string[] = [];
+    for (const rawParameter of rawParameters.slice(0, 12)) {
+      const separator = rawParameter.indexOf('=');
+      const name = caaParameterValue(separator >= 0 ? rawParameter.slice(0, separator) : rawParameter).toLowerCase();
+      const parameterValue = separator >= 0 ? caaParameterValue(rawParameter.slice(separator + 1)) : '';
+      if (!name) continue;
+      if (name === 'accounturi' && parameterValue) accountUris.push(parameterValue);
+      else if (name === 'validationmethods' && parameterValue) {
+        validationMethods.push(...parameterValue.split(',').map((method) => caaParameterValue(method).toLowerCase()).filter(Boolean));
+      } else {
+        unrecognizedParameters.push(parameterValue ? `${name}=${parameterValue}` : name);
+      }
+    }
+    const normalized = {
+      tag: tag as CaaAuthorization['tag'],
+      issuer,
+      critical: Number.isInteger(candidate.critical) ? Number(candidate.critical) : null,
+      accountUris: [...new Set(accountUris)].slice(0, 8),
+      validationMethods: [...new Set(validationMethods)].slice(0, 8),
+      unrecognizedParameters: [...new Set(unrecognizedParameters)].slice(0, 8),
+    };
+    const key = JSON.stringify(normalized);
     if (seen.has(key)) continue;
     seen.add(key);
-    output.push({
-      tag,
-      value: normalizedValue,
-      critical: Number.isInteger(candidate.critical) ? Number(candidate.critical) : null,
-    });
+    output.push(Object.freeze(normalized));
   }
   return output;
 }
@@ -112,7 +145,7 @@ function dnsSettled(value: JsonRecord): boolean {
 
 function caaFinding(input: Readonly<{
   dnsEvidence: JsonRecord;
-  records: CaaRecord[];
+  records: CaaAuthorization[];
   issuer: string;
   wildcard: boolean;
   effectivePolicy: boolean;
@@ -156,7 +189,7 @@ function caaFinding(input: Readonly<{
           ],
     };
   }
-  const expected = applicable.map((item) => item.value);
+  const expected = applicable.map((item) => item.issuer);
   const identifiers = issuerIdentifiers(input.issuer);
   if (!input.issuer || !identifiers.length) {
     return {
@@ -311,7 +344,7 @@ export function buildCertificatePolicyReview(input: Readonly<{
   const wildcard = observedNames.some((item) => item.startsWith('*.'));
   const caaPolicy = record(dnsEvidence.caaPolicy);
   const effectivePolicy = caaPolicy.policyVersion === 1;
-  const records = caaRecords(effectivePolicy ? caaPolicy.records : dnsRecords.caa);
+  const records = parseCaaAuthorizations(effectivePolicy ? caaPolicy.records : dnsRecords.caa);
   const policyEvidence = effectivePolicy ? caaPolicy : dnsEvidence;
   const findings: CertificatePolicyFinding[] = [
     caaFinding({
@@ -343,12 +376,14 @@ export function buildCertificatePolicyReview(input: Readonly<{
     );
   }
   return {
-    version: 1,
+    version: 2,
     observedAt: timestamp(tlsEvidence.observedAt ?? dnsEvidence.observedAt ?? input.observedAt),
     findings,
+    caaAuthorizations: records,
     limitations: [
       'CAA, TLS, and reviewed baseline observations can have different effective times.',
       'Current CAA cannot prove the policy that applied when an existing certificate was issued.',
+      'CAA account URIs and validation methods describe current authorization constraints; WHOISleuth does not test an account, issuance transaction, or challenge method.',
       'No finding changes Risk automatically.',
     ],
   };

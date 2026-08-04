@@ -3,10 +3,16 @@ const RDAP_SEARCH_WORKBENCH_VERSION = 1;
 const MAX_HELP_ENTRIES = 64;
 const MAX_QUERY_VALUE_LENGTH = 254;
 
-const SEARCHABLE_RESOURCE_TYPES = new Set(['domains', 'nameservers', 'entities', 'ips', 'autnums']);
-const RELATED_RESOURCE_TYPES = new Set(['domains', 'nameservers', 'entities', 'ips', 'autnums']);
+const SEARCHABLE_RESOURCE_TYPES = new Set(['domains', 'nameservers', 'entities']);
+const RELATED_RESOURCE_TYPES = new Set(['entity']);
 const RECOGNIZED_PROPERTIES = new Set(['handle', 'fn', 'email', 'role']);
 const SENSITIVE_PROPERTIES = new Set(['fn', 'email']);
+const REGISTERED_PROPERTY_PATHS: Readonly<Record<string, readonly string[]>> = Object.freeze({
+  email: Object.freeze(["$.entities[*].vcardArray[1][?(@[0]=='email')][3]"]),
+  fn: Object.freeze(["$.entities[*].vcardArray[1][?(@[0]=='fn')][3]"]),
+  handle: Object.freeze(['$.entities[*].handle']),
+  role: Object.freeze(['$.entities[*].roles']),
+});
 
 type RdapReverseSearchDeclaration = Readonly<{
   searchableResourceType: string;
@@ -42,6 +48,23 @@ type RdapReverseSearchPlan = Readonly<{
     requiresApproval: boolean;
   }> | null;
   limitation: string | null;
+}>;
+
+type RdapReverseSearchMapping = Readonly<{
+  property: string;
+  propertyPath: string;
+  state: 'registered' | 'unrecognized';
+}>;
+
+type RdapReverseSearchResponseInspection = Readonly<{
+  schema: typeof RDAP_SEARCH_WORKBENCH_SCHEMA;
+  version: typeof RDAP_SEARCH_WORKBENCH_VERSION;
+  state: 'complete' | 'partial' | 'invalid';
+  mappings: readonly RdapReverseSearchMapping[];
+  missingProperties: readonly string[];
+  rejectedCount: number;
+  truncated: boolean;
+  limitations: readonly string[];
 }>;
 
 function record(value: unknown): Record<string, unknown> | null {
@@ -184,14 +207,13 @@ function planRdapReverseSearch(
     });
   }
 
-  const parameter = `${relatedResourceType}_${property}`;
   const contactDisclosure = capability.disclosure === 'contact';
   return Object.freeze({
     schema: RDAP_SEARCH_WORKBENCH_SCHEMA,
     version: RDAP_SEARCH_WORKBENCH_VERSION,
     state: 'ready',
-    requestPath: `/${searchableResourceType}`,
-    query: Object.freeze({ [parameter]: value }),
+    requestPath: `/${searchableResourceType}/reverse_search/${relatedResourceType}`,
+    query: Object.freeze({ [property]: value }),
     disclosure: Object.freeze({
       class: capability.disclosure,
       summary: contactDisclosure
@@ -203,6 +225,92 @@ function planRdapReverseSearch(
   });
 }
 
+function inspectRdapReverseSearchResponse(
+  value: unknown,
+  requestedProperties: readonly unknown[] = [],
+): RdapReverseSearchResponseInspection {
+  const document = record(value);
+  if (!document) {
+    return Object.freeze({
+      schema: RDAP_SEARCH_WORKBENCH_SCHEMA,
+      version: RDAP_SEARCH_WORKBENCH_VERSION,
+      state: 'invalid',
+      mappings: Object.freeze([]),
+      missingProperties: Object.freeze([]),
+      rejectedCount: 0,
+      truncated: false,
+      limitations: Object.freeze(['The reverse-search response was not an object.']),
+    });
+  }
+  const requested = [...new Set(requestedProperties
+    .map(boundedToken)
+    .filter((property): property is string => Boolean(property)))]
+    .slice(0, RECOGNIZED_PROPERTIES.size);
+  const raw = document.reverse_search_properties_mapping;
+  if (!Array.isArray(raw)) {
+    return Object.freeze({
+      schema: RDAP_SEARCH_WORKBENCH_SCHEMA,
+      version: RDAP_SEARCH_WORKBENCH_VERSION,
+      state: 'invalid',
+      mappings: Object.freeze([]),
+      missingProperties: Object.freeze(requested),
+      rejectedCount: raw === undefined ? 0 : 1,
+      truncated: false,
+      limitations: Object.freeze([
+        'The response did not provide a valid reverse-search property mapping, so its result fields cannot be reconciled with the requested predicates.',
+      ]),
+    });
+  }
+
+  const mappings: RdapReverseSearchMapping[] = [];
+  const seen = new Set<string>();
+  let rejectedCount = 0;
+  const truncated = raw.length > MAX_HELP_ENTRIES;
+  for (const entry of raw.slice(0, MAX_HELP_ENTRIES)) {
+    const candidate = record(entry);
+    const property = boundedToken(candidate?.property);
+    const propertyPath = typeof candidate?.propertyPath === 'string'
+      ? candidate.propertyPath.trim().slice(0, 512)
+      : '';
+    if (!property || !propertyPath || /[\x00-\x1f\x7f]/u.test(propertyPath)) {
+      rejectedCount += 1;
+      continue;
+    }
+    const key = `${property}\u0000${propertyPath}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    mappings.push(Object.freeze({
+      property,
+      propertyPath,
+      state: REGISTERED_PROPERTY_PATHS[property]?.includes(propertyPath)
+        ? 'registered'
+        : 'unrecognized',
+    }));
+  }
+  if (truncated) rejectedCount += raw.length - MAX_HELP_ENTRIES;
+  const mappedProperties = new Set(mappings.map((mapping) => mapping.property));
+  const missingProperties = requested.filter((property) => !mappedProperties.has(property));
+  const limitations: string[] = [];
+  if (missingProperties.length) {
+    limitations.push(`The response omitted mappings for requested properties: ${missingProperties.join(', ')}.`);
+  }
+  if (mappings.some((mapping) => mapping.state === 'unrecognized')) {
+    limitations.push('At least one mapping differs from the locally reviewed IANA registration and requires manual specification review.');
+  }
+  if (rejectedCount) limitations.push(`${rejectedCount} malformed or excess mapping entr${rejectedCount === 1 ? 'y was' : 'ies were'} not used.`);
+  if (!mappings.length) limitations.push('No usable reverse-search property mapping was retained.');
+  return Object.freeze({
+    schema: RDAP_SEARCH_WORKBENCH_SCHEMA,
+    version: RDAP_SEARCH_WORKBENCH_VERSION,
+    state: mappings.length && !limitations.length ? 'complete' : mappings.length ? 'partial' : 'invalid',
+    mappings: Object.freeze(mappings),
+    missingProperties: Object.freeze(missingProperties),
+    rejectedCount,
+    truncated,
+    limitations: Object.freeze(limitations),
+  });
+}
+
 export {
   MAX_HELP_ENTRIES,
   MAX_QUERY_VALUE_LENGTH,
@@ -210,10 +318,13 @@ export {
   RDAP_SEARCH_WORKBENCH_VERSION,
   normalizeRdapSearchHelp,
   planRdapReverseSearch,
+  inspectRdapReverseSearchResponse,
 };
 export type {
   RdapReverseSearchCapability,
   RdapReverseSearchDeclaration,
   RdapReverseSearchPlan,
+  RdapReverseSearchMapping,
+  RdapReverseSearchResponseInspection,
   RdapSearchHelpSummary,
 };

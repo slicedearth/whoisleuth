@@ -1,8 +1,6 @@
 #!/usr/bin/env node
 
-import { boundedCliErrorMessage } from '../cli/errors.mts';
-import { cleanupPendingOutputFilesSync } from '../cli/output-file.mts';
-import { runCli } from '../cli/runner.mts';
+import { createRequire } from 'node:module';
 
 for (const stream of [process.stdout, process.stderr]) {
   stream.on('error', (error: NodeJS.ErrnoException) => {
@@ -11,27 +9,44 @@ for (const stream of [process.stdout, process.stderr]) {
   });
 }
 
-const cancellation = new AbortController();
-let interruptionCount = 0;
-const interrupt = () => {
-  interruptionCount += 1;
-  if (interruptionCount === 1) cancellation.abort(new DOMException('Aborted', 'AbortError'));
-  else {
-    cleanupPendingOutputFilesSync();
-    process.exit(130);
+const argv = process.argv.slice(2);
+if (argv.length === 1 && (argv[0] === '--version' || argv[0] === '-V')) {
+  const require = createRequire(import.meta.url);
+  const metadata = require('../package.json') as { version?: unknown };
+  if (typeof metadata.version !== 'string' || !metadata.version) {
+    process.stderr.write('Internal CLI error: Package version is unavailable.\n');
+    process.exitCode = 70;
+  } else {
+    process.stdout.write(`${metadata.version}\n`);
   }
-};
-process.on('SIGINT', interrupt);
+} else {
+  const [errorsModule, outputModule, runnerModule] = await Promise.all([
+    import('../cli/errors.mts'),
+    import('../cli/output-file.mts'),
+    import('../cli/runner.mts'),
+  ]);
+  const cancellation = new AbortController();
+  let interruptionCount = 0;
+  const interrupt = () => {
+    interruptionCount += 1;
+    if (interruptionCount === 1) cancellation.abort(new DOMException('Aborted', 'AbortError'));
+    else {
+      outputModule.cleanupPendingOutputFilesSync();
+      process.exit(130);
+    }
+  };
+  process.on('SIGINT', interrupt);
 
-runCli(process.argv.slice(2), { signal: cancellation.signal }).then((code) => {
-  if (code === 130) {
+  runnerModule.runCli(argv, { signal: cancellation.signal }).then((code) => {
+    if (code === 130) {
+      process.removeListener('SIGINT', interrupt);
+      process.exit(130);
+    }
+    process.exitCode = code;
+  }).catch((error: unknown) => {
+    process.stderr.write(`Internal CLI error: ${errorsModule.boundedCliErrorMessage(error)}\n`);
+    process.exitCode = 70;
+  }).finally(() => {
     process.removeListener('SIGINT', interrupt);
-    process.exit(130);
-  }
-  process.exitCode = code;
-}).catch((error: unknown) => {
-  process.stderr.write(`Internal CLI error: ${boundedCliErrorMessage(error)}\n`);
-  process.exitCode = 70;
-}).finally(() => {
-  process.removeListener('SIGINT', interrupt);
-});
+  });
+}

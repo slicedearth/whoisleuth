@@ -28,6 +28,8 @@ export type BulkPeerDimension = Readonly<{
   baselineValue: string;
   baselineCount: number;
   outlierFrequencyMaximum: number;
+  baselineShare: number;
+  consensus: 'strong' | 'moderate' | 'fragmented';
 }>;
 
 export type BulkPeerOutlier = Readonly<{
@@ -37,15 +39,22 @@ export type BulkPeerOutlier = Readonly<{
   frequency: number;
   observedCount: number;
   baselineValue: string;
+  baselineCount: number;
+  observedShare: number;
+  baselineShare: number;
+  contrast: number;
+  strength: 'strong' | 'moderate';
 }>;
 
 export type BulkPeerOutlierRow = Readonly<{
   domain: string;
   findings: readonly BulkPeerOutlier[];
+  reviewScore: number;
+  strongFindingCount: number;
 }>;
 
 export type BulkPeerOutlierMatrix = Readonly<{
-  version: 1;
+  version: 2;
   cohortSize: number;
   dimensions: readonly BulkPeerDimension[];
   rows: readonly BulkPeerOutlierRow[];
@@ -178,6 +187,7 @@ export function buildBulkPeerOutlierMatrix(rows: readonly ScanResult[]): BulkPee
       if (!baseline || observations.length < MIN_COHORT) continue;
       const majorityRequired = Math.ceil(observations.length * 0.5);
       const outlierMaximum = Math.max(1, Math.floor(observations.length * 0.2));
+      const baselineShare = baseline[1] / observations.length;
       dimensionSummaries.push({
         id: dimension,
         label: DIMENSION_LABELS[dimension],
@@ -186,6 +196,12 @@ export function buildBulkPeerOutlierMatrix(rows: readonly ScanResult[]): BulkPee
         baselineValue: baseline[0],
         baselineCount: baseline[1],
         outlierFrequencyMaximum: outlierMaximum,
+        baselineShare,
+        consensus: baselineShare >= 0.8
+          ? 'strong'
+          : baseline[1] >= majorityRequired
+            ? 'moderate'
+            : 'fragmented',
       });
       if (baseline[1] < majorityRequired) continue;
       for (const observation of observations) {
@@ -199,6 +215,11 @@ export function buildBulkPeerOutlierMatrix(rows: readonly ScanResult[]): BulkPee
           frequency,
           observedCount: observations.length,
           baselineValue: baseline[0],
+          baselineCount: baseline[1],
+          observedShare: frequency / observations.length,
+          baselineShare,
+          contrast: Math.max(0, Math.min(1, baselineShare - (frequency / observations.length))),
+          strength: baselineShare >= 0.8 && frequency === 1 ? 'strong' : 'moderate',
         });
         rowFindings.set(observation.domain, findings);
       }
@@ -211,14 +232,16 @@ export function buildBulkPeerOutlierMatrix(rows: readonly ScanResult[]): BulkPee
       return findings?.length
         ? [{
             domain: row.domain,
-            findings: findings.sort((left, right) => left.label.localeCompare(right.label)),
+            findings: findings.sort((left, right) => right.contrast - left.contrast || left.label.localeCompare(right.label)),
+            reviewScore: Math.round((findings.reduce((total, finding) => total + finding.contrast, 0) / findings.length) * 100),
+            strongFindingCount: findings.filter((finding) => finding.strength === 'strong').length,
           }]
         : [];
     })
-    .sort((left, right) => right.findings.length - left.findings.length || left.domain.localeCompare(right.domain));
+    .sort((left, right) => right.reviewScore - left.reviewScore || right.findings.length - left.findings.length || left.domain.localeCompare(right.domain));
 
   return {
-    version: 1,
+    version: 2,
     cohortSize: cohort.length,
     dimensions: dimensionSummaries,
     rows: outputRows,
@@ -251,7 +274,12 @@ export function filterBulkPeerOutlierRows(
       return [row.domain, finding.label, finding.value, finding.baselineValue]
         .some((value) => value.toLowerCase().includes(normalizedQuery));
     });
-    return findings.length ? [{ domain: row.domain, findings }] : [];
+    return findings.length ? [{
+      domain: row.domain,
+      findings,
+      reviewScore: Math.round((findings.reduce((total, finding) => total + finding.contrast, 0) / findings.length) * 100),
+      strongFindingCount: findings.filter((finding) => finding.strength === 'strong').length,
+    }] : [];
   });
 }
 
@@ -266,6 +294,9 @@ export function buildBulkPeerOutlierExport(
     'local_frequency',
     'observed_cohort',
     'cohort_baseline',
+    'baseline_frequency',
+    'contrast_percent',
+    'review_strength',
   ]];
   for (const row of matrix.rows) {
     for (const finding of row.findings) {
@@ -276,6 +307,9 @@ export function buildBulkPeerOutlierExport(
         finding.frequency,
         finding.observedCount,
         finding.baselineValue,
+        finding.baselineCount,
+        Math.round(finding.contrast * 100),
+        finding.strength,
       ]);
     }
   }

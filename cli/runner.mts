@@ -3,13 +3,10 @@ import { createReadStream } from 'node:fs';
 import { createRequire } from 'node:module';
 
 import { abortable } from '../lib/abort.mts';
-import { resolvePublicAddresses, safeFetch } from '../lib/safe-fetch.mts';
-import { whoisQuery } from '../lib/whois-transport.mts';
 import { REGISTRY_CAPABILITIES_VERSION, registryCapabilityFor } from '../lib/registry-capabilities.mts';
 import { explainRiskScore, RISK_MODEL_VERSION, RISK_REVIEW_THRESHOLD } from '../lib/risk-scoring.mts';
 import { CLI_COMMANDS, parseCliArguments } from './arguments.mts';
 import type { CliArguments, CliCommand } from './arguments.mts';
-import { runBulkCommand } from './bulk-command-runner.mts';
 import { buildCliCommandCatalogue, formatCliCommandCatalogue } from './command-catalogue.mts';
 import { buildShellCompletion } from './completion.mts';
 import { buildDoctorReport, formatDoctorReport } from './doctor.mts';
@@ -20,8 +17,6 @@ import {
   parseCliLookupDocument,
   readCompareInputBounded,
 } from './compare.mts';
-import { runDiscoveryCommand } from './discovery-command-runner.mts';
-import { runDiscoveryScanCommand } from './discovery-scan-command-runner.mts';
 import { boundedCliErrorMessage, CliUsageError } from './errors.mts';
 import {
   evidenceCommandFailureLabel,
@@ -42,6 +37,16 @@ import {
   formatTerminalRiskCalibration,
 } from './formatters/terminal.mts';
 import { buildCliLookupDiff, formatCliLookupDiff } from './lookup-diff.mts';
+import {
+  MAX_LOOKUP_RECONCILIATION_INPUT_BYTES,
+  buildCliLookupReconciliation,
+  formatCliLookupReconciliation,
+} from './lookup-reconcile.mts';
+import {
+  MAX_SHARING_REVIEW_BYTES,
+  buildSharingReview,
+  formatSharingReview,
+} from './sharing-review.mts';
 import {
   MAX_LOOKUP_TIMELINE_INPUT_BYTES,
   buildCliLookupTimeline,
@@ -65,7 +70,11 @@ import {
   formatDomainControlResult,
   reviewDomainControlManifest,
 } from '../lib/domain-control-manifest.mts';
-import { runLookupCommand } from './lookup-command-runner.mts';
+import {
+  MAX_ASSURANCE_INPUT_BYTES,
+  buildDomainAssurance,
+  formatDomainAssurance,
+} from '../lib/domain-assurance.mts';
 import { buildCliManual } from './manual.mts';
 import { buildInvestigationPlan, formatInvestigationPlan } from './investigation-plan.mts';
 import { WHOISLEUTH_SOURCE_REPOSITORY_URL } from '../lib/project-metadata.mts';
@@ -73,6 +82,7 @@ import { createBufferedOutput, writePrivateFile } from './output-file.mts';
 import { createTerminalProgress, type TerminalProgress } from './progress.mts';
 import type { CliProgressEvents } from './progress-events.mts';
 import { buildRegistrySupportDocument } from './registry-support.mts';
+import { buildRegistryDoctorReport, formatRegistryDoctorReport } from './registry-doctor.mts';
 import {
   MAX_OFFLINE_ARTIFACT_BYTES,
   MAX_OFFLINE_PASSPHRASE_FILE_BYTES,
@@ -90,6 +100,11 @@ import {
   parseRiskCalibrationDataset,
   readRiskCalibrationInputBounded,
 } from './risk-calibration.mts';
+import {
+  MAX_LOOKALIKE_CALIBRATION_BYTES,
+  buildLookalikeCalibration,
+  formatLookalikeCalibration,
+} from './lookalike-calibration.mts';
 import { MAX_SAVED_LOOKUP_INPUT_BYTES, readSavedLookupInputBounded } from './saved-lookup.mts';
 import type { UnknownRecord } from './saved-lookup.mts';
 import {
@@ -97,7 +112,6 @@ import {
   terminalPresentation,
   type TerminalEnvironment,
 } from './terminal-presentation.mts';
-import { runNetworkCommand } from './network-command-runner.mts';
 import type { CliCommandContext, CliDependencies, WritableLike } from './runner-types.mts';
 
 const require = createRequire(import.meta.url);
@@ -123,6 +137,7 @@ Discover:
   discover           Generate offline lookalike candidates.
   discover-scan      Collect a bounded candidate review queue.
   registry-support   Explain local registry coverage without a request.
+  registry-doctor    Diagnose a saved registry collection against local policy.
 
 Review saved evidence:
   source-report      Summarise source reliability without retaining targets.
@@ -131,8 +146,11 @@ Review saved evidence:
   mail-review        Review saved passive mail exposure evidence.
   review-evidence    Review supplied DNS, routing, GeoIP, or RDAP evidence offline.
   domain-control     Build or review an integrity-protected desired-state manifest.
+  assurance          Review change, recovery, concentration, or retirement plans.
+  sharing-review     Lint a reviewed artifact before deliberate sharing.
   workflow-plan      Plan a fixed investigation recipe without executing it.
   diff               Compare two saved domain observations.
+  reconcile          Reconcile independently labelled observations.
   timeline           Compare a sequence of observations for one domain.
   export             Convert a saved lookup into an evidence report.
   inspect-archive    Inspect a workspace archive, redacted by default.
@@ -142,6 +160,7 @@ Integrity and calibration:
   sign-artifact      Sign one reviewed packet or manifest locally.
   verify-signature   Verify one signed evidence package locally.
   risk-calibrate     Replay reviewed labels without changing the model.
+  lookalike-calibrate Summarise reviewed mutation-family yield without tuning generation.
 
 Terminal:
   doctor             Check the local runtime; network tests require --network.
@@ -163,7 +182,7 @@ const COMMAND_USAGE: Readonly<Record<CliCommand, string>> = Object.freeze({
   doctor: 'whoisleuth doctor [--network] [--json] [--quiet] [--no-color]',
   commands: 'whoisleuth commands [--json] [--quiet] [--no-color]',
   manual: 'whoisleuth manual',
-  lookup: 'whoisleuth lookup <domain|IP|ASN> [--json|--markdown|--html] [--fast|--deep] [--plan] [--summary|--verbose] [--strict-exit] [--events] [--quiet] [--no-color]',
+  lookup: 'whoisleuth lookup <domain|IP|ASN> [--json|--markdown|--html] [--fast|--deep] [--observer <label>] [--vantage <label>] [--plan] [--summary|--verbose] [--strict-exit] [--events] [--quiet] [--no-color]',
   bulk: 'whoisleuth bulk [file] [--json|--jsonl|--csv|--domains|--queries] [--registered-only|--inconclusive-only|--errors-only] [--fast|--deep] [--concurrency <1-8>] [--checkpoint <file> [--resume]] [--events]',
   'ct-search': 'whoisleuth ct-search <keyword> [--json] [--quiet] [--no-color]',
   discover: 'whoisleuth discover <brand|domain> [--tlds <list>] [--preset <name>|--families <ids>] [--keyboard <layout>] [--dictionary <file>] [--snapshot <file>] [--json|--jsonl|--domains]',
@@ -172,7 +191,9 @@ const COMMAND_USAGE: Readonly<Record<CliCommand, string>> = Object.freeze({
   http: 'whoisleuth http <domain> [--json] [--quiet] [--no-color]',
   tls: 'whoisleuth tls <hostname> [--json] [--quiet] [--no-color]',
   'registry-support': 'whoisleuth registry-support <domain|suffix> [--json] [--quiet] [--no-color]',
+  'registry-doctor': 'whoisleuth registry-doctor [lookup.json] [--json] [--quiet] [--no-color]',
   'risk-calibrate': 'whoisleuth risk-calibrate [dataset.json] [--json] [--quiet] [--no-color]',
+  'lookalike-calibrate': 'whoisleuth lookalike-calibrate [dataset.json] [--json] [--quiet] [--no-color]',
   'verify-artifact': 'whoisleuth verify-artifact [artifact.json] [--passphrase-file <file>] [--json] [--quiet] [--no-color]',
   'inspect-archive': 'whoisleuth inspect-archive [archive.json] [--passphrase-file <file>] [--search <value>] [--require-match] [--reveal] [--json]',
   'sign-artifact': 'whoisleuth sign-artifact [artifact.json] --private-key-file <file>',
@@ -183,8 +204,11 @@ const COMMAND_USAGE: Readonly<Record<CliCommand, string>> = Object.freeze({
   'mail-review': 'whoisleuth mail-review [bulk.json|bulk.jsonl] [--json] [--quiet] [--no-color]',
   'review-evidence': 'whoisleuth review-evidence [evidence.json] [--json] [--quiet] [--no-color]',
   'domain-control': 'whoisleuth domain-control [manifest-input.json|review-input.json] [--json] [--quiet] [--no-color]',
+  assurance: 'whoisleuth assurance [assurance-input.json] [--json] [--quiet] [--no-color]',
+  'sharing-review': 'whoisleuth sharing-review [artifact.json] --marking <level> --recipient-scope <scope> --purpose <text> [--human-reviewed] [--personal-data-reviewed] [--redactions-confirmed] [--json]',
   'workflow-plan': 'whoisleuth workflow-plan <recipe> <domain|brand> [--json] [--quiet] [--no-color]',
   diff: 'whoisleuth diff <left.json> <right.json> [--json] [--quiet] [--no-color]',
+  reconcile: 'whoisleuth reconcile <observation.json> <observation.json> [...] [--json] [--quiet] [--no-color]',
   timeline: 'whoisleuth timeline <observation.json> <observation.json> [...] [--json] [--quiet] [--no-color]',
   export: 'whoisleuth export [lookup.json] [--markdown|--html|--compact]',
 });
@@ -255,10 +279,20 @@ const COMMAND_DETAILS: Readonly<Record<CliCommand, Readonly<{ description: strin
     example: 'whoisleuth registry-support example.test --json',
     boundary: 'This command is offline. Catalogue coverage does not test live reachability or decide registration or availability.',
   },
+  'registry-doctor': {
+    description: 'Compare a saved Lookup registry result with the reviewed local capability profile.',
+    example: 'whoisleuth registry-doctor lookup.json --json',
+    boundary: 'The command is offline. It distinguishes expected access constraints from collection results and does not contact a live registry.',
+  },
   'risk-calibrate': {
     description: 'Replay reviewed labels against the current explainable Risk model.',
     example: 'whoisleuth risk-calibrate calibration.json --json',
     boundary: 'Calibration is offline and diagnostic. It never trains, tunes, or changes the scoring model automatically.',
+  },
+  'lookalike-calibrate': {
+    description: 'Summarize reviewed candidate dispositions by mutation family without retaining domains.',
+    example: 'whoisleuth lookalike-calibrate reviewed-candidates.json --json',
+    boundary: 'Calibration is offline and diagnostic. It omits candidate identifiers, domains, notes, and evidence and never tunes generation or filtering automatically.',
   },
   'verify-artifact': {
     description: 'Validate a supported archive, packet, manifest, or saved Lookup without printing evidence contents.',
@@ -310,6 +344,16 @@ const COMMAND_DETAILS: Readonly<Record<CliCommand, Readonly<{ description: strin
     example: 'whoisleuth domain-control domain-control-input.json --json',
     boundary: 'The command is offline and changes no registrar, DNS, mail, or certificate configuration. Only complete supplied observations can produce drift.',
   },
+  assurance: {
+    description: 'Review a versioned domain change, recovery-dependency, or retirement plan.',
+    example: 'whoisleuth assurance domain-assurance.json --json',
+    boundary: 'The command is offline and treats every provider label, readiness state, and evidence reference as analyst-authored input. It changes no configuration.',
+  },
+  'sharing-review': {
+    description: 'Lint one reviewed artifact against local integrity, marking, recipient, personal-data, and redaction controls.',
+    example: 'whoisleuth sharing-review packet.json --marking amber --recipient-scope organization --purpose "Reviewed incident handoff" --human-reviewed --personal-data-reviewed --redactions-confirmed --json',
+    boundary: 'The command is offline and emits no inspected values. Its result is a review aid, not legal advice or recipient authorization.',
+  },
   'workflow-plan': {
     description: 'Build a fixed domain-investigation plan from existing bounded CLI commands.',
     example: 'whoisleuth workflow-plan domain-triage example.test --json',
@@ -319,6 +363,11 @@ const COMMAND_DETAILS: Readonly<Record<CliCommand, Readonly<{ description: strin
     description: 'Compare bounded evidence retained in two saved domain lookups.',
     example: 'whoisleuth diff first.json second.json --json',
     boundary: 'Comparison is offline. Missing, unavailable, equal, and different evidence remain separate states.',
+  },
+  reconcile: {
+    description: 'Reconcile bounded values across independently labelled observations of one domain.',
+    example: 'whoisleuth reconcile office.json mobile.json external.json --json',
+    boundary: 'The command is offline, accepts 2 to 5 saved observations for one domain, and never treats labels as proof of network independence or majority agreement as truth.',
   },
   timeline: {
     description: 'Build an ordered same-domain history from saved Lookup observations.',
@@ -349,7 +398,9 @@ const COMMAND_COLLECTION: Readonly<Record<CliCommand, Readonly<{
   http: { mode: 'network', scope: 'Accepts one domain and follows only the bounded SSRF-guarded homepage redirect workflow.' },
   tls: { mode: 'network', scope: 'Accepts one public hostname and opens one bounded certificate connection.' },
   'registry-support': { mode: 'offline', scope: 'Reads the embedded registry capability catalogue for one domain or suffix.' },
+  'registry-doctor': { mode: 'offline', scope: 'Reads one saved Lookup and the embedded registry capability catalogue.' },
   'risk-calibrate': { mode: 'offline', scope: 'Reads one bounded reviewed-label dataset and changes no model or evidence.' },
+  'lookalike-calibrate': { mode: 'offline', scope: 'Reads at most 5,000 reviewed candidate labels from one dataset capped at 2 MiB.' },
   'verify-artifact': { mode: 'offline', scope: 'Reads one selected bounded archive, packet, manifest, or saved Lookup document.' },
   'inspect-archive': { mode: 'offline', scope: 'Reads one selected bounded workspace archive with redacted output by default.' },
   'sign-artifact': { mode: 'offline', scope: 'Reads one selected artifact and one local private key without transmitting either.' },
@@ -360,8 +411,11 @@ const COMMAND_COLLECTION: Readonly<Record<CliCommand, Readonly<{
   'mail-review': { mode: 'offline', scope: 'Reads one saved Bulk result and sends no DNS or SMTP traffic.' },
   'review-evidence': { mode: 'offline', scope: 'Reads one bounded versioned evidence or request-planning document and performs no collection.' },
   'domain-control': { mode: 'offline', scope: 'Reads one bounded desired-state or review document and performs no collection or configuration change.' },
+  assurance: { mode: 'offline', scope: 'Reads one versioned plan capped at 2 MiB and makes no request or configuration change.' },
+  'sharing-review': { mode: 'offline', scope: 'Reads one artifact capped at 15 MiB, emits no inspected values, and performs no transmission.' },
   'workflow-plan': { mode: 'offline', scope: 'Builds a fixed typed recipe and executes none of its network or file steps.' },
   diff: { mode: 'offline', scope: 'Reads two saved Lookup documents for different domains.' },
+  reconcile: { mode: 'offline', scope: 'Reads 2 to 5 saved observations for one domain, capped at 32 MiB in total.' },
   timeline: { mode: 'offline', scope: 'Reads 2 to 20 saved observations for one domain, capped at 32 MiB in total.' },
   export: { mode: 'offline', scope: 'Reads one saved Lookup and writes one bounded report.' },
 });
@@ -518,7 +572,7 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
         network: args.network,
         presentation: terminalPresentation(stdout, args.color, environment),
         ...(dependencies.resolvePublicAddresses ? { resolveAddresses: dependencies.resolvePublicAddresses } : {}),
-        ...(dependencies.safeFetch ? { fetchHttps: dependencies.safeFetch } : { fetchHttps: safeFetch }),
+        ...(dependencies.safeFetch ? { fetchHttps: dependencies.safeFetch } : {}),
         ...(dependencies.whoisQuery ? { queryWhois: dependencies.whoisQuery } : {}),
       });
       const report = args.network
@@ -547,6 +601,30 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
       return EXIT_CODES.SUCCESS;
     }
 
+    if (args.action === 'registry-doctor') {
+      failureLabel = 'Registry compatibility diagnostic';
+      let input: string;
+      try {
+        input = dependencies.readCompareInput
+          ? await dependencies.readCompareInput(args.source)
+          : await readSavedLookupInputBounded(args.source
+            ? createReadStream(args.source, { highWaterMark: 64 * 1024 })
+            : dependencies.stdin || process.stdin, {
+              limit: MAX_SAVED_LOOKUP_INPUT_BYTES,
+              label: 'Registry doctor input',
+            });
+      } catch (error) {
+        if (error instanceof CliUsageError) throw error;
+        throw new CliUsageError(`Could not read registry doctor input: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
+      }
+      if (!input.trim()) throw new CliUsageError('registry-doctor requires one saved Lookup JSON file or a document on stdin.');
+      const report = buildRegistryDoctorReport(input, commandContext.now());
+      if (!args.quiet) write(stdout, args.output === 'json'
+        ? formatJsonDocument(report)
+        : terminal(formatRegistryDoctorReport(report), args.color));
+      return report.summary.investigate ? EXIT_CODES.PARTIAL_FAILURE : EXIT_CODES.SUCCESS;
+    }
+
     if (args.action === 'risk-calibrate') {
       failureLabel = 'Risk calibration';
       let input: string;
@@ -568,6 +646,35 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
         reviewThreshold: dependencies.riskReviewThreshold || RISK_REVIEW_THRESHOLD,
       });
       if (!args.quiet) write(stdout, args.output === 'json' ? formatJsonDocument(report) : terminal(formatTerminalRiskCalibration(report), args.color));
+      return EXIT_CODES.SUCCESS;
+    }
+
+    if (args.action === 'lookalike-calibrate') {
+      failureLabel = 'Lookalike review-yield calibration';
+      let input: string;
+      try {
+        input = dependencies.readRiskCalibrationInput
+          ? await dependencies.readRiskCalibrationInput(args.source)
+          : await readSavedLookupInputBounded(args.source
+            ? createReadStream(args.source, { highWaterMark: 64 * 1024 })
+            : dependencies.stdin || process.stdin, {
+              limit: MAX_LOOKALIKE_CALIBRATION_BYTES,
+              label: 'Lookalike calibration input',
+            });
+      } catch (error) {
+        if (error instanceof CliUsageError) throw error;
+        throw new CliUsageError(`Could not read lookalike calibration input: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
+      }
+      if (!input.trim()) throw new CliUsageError('lookalike-calibrate requires one dataset JSON file or a document on stdin.');
+      let report;
+      try {
+        report = buildLookalikeCalibration(input, commandContext.now());
+      } catch (error) {
+        throw new CliUsageError(boundedCliErrorMessage(error, 'Lookalike calibration input is invalid'));
+      }
+      if (!args.quiet) write(stdout, args.output === 'json'
+        ? formatJsonDocument(report)
+        : terminal(formatLookalikeCalibration(report), args.color));
       return EXIT_CODES.SUCCESS;
     }
 
@@ -807,6 +914,77 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
       return EXIT_CODES.SUCCESS;
     }
 
+    if (args.action === 'assurance') {
+      failureLabel = 'Domain assurance review';
+      let input: string;
+      try {
+        input = dependencies.readArtifactInput
+          ? await dependencies.readArtifactInput(args.source)
+          : await readSavedLookupInputBounded(args.source
+            ? createReadStream(args.source, { highWaterMark: 64 * 1024 })
+            : dependencies.stdin || process.stdin, {
+              limit: MAX_ASSURANCE_INPUT_BYTES,
+              label: 'Domain assurance input',
+            });
+      } catch (error) {
+        if (error instanceof CliUsageError) throw error;
+        throw new CliUsageError(`Could not read domain assurance input: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
+      }
+      if (!input.trim()) throw new CliUsageError('assurance requires one versioned JSON file or a document on stdin.');
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(input);
+      } catch {
+        throw new CliUsageError('Domain assurance input is not valid JSON.');
+      }
+      let document;
+      try {
+        document = buildDomainAssurance(parsed, commandContext.now());
+      } catch (error) {
+        throw new CliUsageError(boundedCliErrorMessage(error, 'Domain assurance input is invalid'));
+      }
+      if (!args.quiet) write(stdout, args.output === 'json'
+        ? formatJsonDocument(document)
+        : terminal(formatDomainAssurance(document), args.color));
+      return EXIT_CODES.SUCCESS;
+    }
+
+    if (args.action === 'sharing-review') {
+      failureLabel = 'Evidence sharing review';
+      let input: string;
+      try {
+        input = dependencies.readArtifactInput
+          ? await dependencies.readArtifactInput(args.source)
+          : await readSavedLookupInputBounded(args.source
+            ? createReadStream(args.source, { highWaterMark: 64 * 1024 })
+            : dependencies.stdin || process.stdin, {
+              limit: MAX_SHARING_REVIEW_BYTES,
+              label: 'Sharing review input',
+            });
+      } catch (error) {
+        if (error instanceof CliUsageError) throw error;
+        throw new CliUsageError(`Could not read sharing review input: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
+      }
+      if (!input.trim()) throw new CliUsageError('sharing-review requires one artifact JSON file or a document on stdin.');
+      let document;
+      try {
+        document = await buildSharingReview(input, {
+          marking: args.marking,
+          recipientScope: args.recipientScope,
+          purpose: args.purpose,
+          humanReviewed: args.humanReviewed,
+          personalDataReviewed: args.personalDataReviewed,
+          redactionsConfirmed: args.redactionsConfirmed,
+        }, commandContext.now());
+      } catch (error) {
+        throw new CliUsageError(boundedCliErrorMessage(error, 'Sharing review input is invalid'));
+      }
+      if (!args.quiet) write(stdout, args.output === 'json'
+        ? formatJsonDocument(document)
+        : terminal(formatSharingReview(document), args.color));
+      return document.summary.status === 'blocked' ? EXIT_CODES.PARTIAL_FAILURE : EXIT_CODES.SUCCESS;
+    }
+
     if (args.action === 'workflow-plan') {
       failureLabel = 'Investigation plan';
       const document = buildInvestigationPlan(args.recipe, args.subject, commandContext.now());
@@ -843,6 +1021,36 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
       if (!args.quiet) write(stdout, args.output === 'json'
         ? formatJsonDocument(document)
         : terminal(formatCliLookupDiff(document), args.color));
+      return EXIT_CODES.SUCCESS;
+    }
+
+    if (args.action === 'reconcile') {
+      failureLabel = 'Lookup observation reconciliation';
+      const readReconciliationInput = dependencies.readDiffInput || (async (source: string) => (
+        readSavedLookupInputBounded(createReadStream(source, { highWaterMark: 64 * 1024 }), {
+          limit: MAX_SAVED_LOOKUP_INPUT_BYTES,
+          label: 'Lookup reconciliation input',
+        })
+      ));
+      const inputs: string[] = [];
+      let totalBytes = 0;
+      try {
+        for (const source of args.sources) {
+          const input = await readReconciliationInput(source);
+          totalBytes += Buffer.byteLength(input, 'utf8');
+          if (totalBytes > MAX_LOOKUP_RECONCILIATION_INPUT_BYTES) {
+            throw new CliUsageError(`Lookup reconciliation input is limited to ${MAX_LOOKUP_RECONCILIATION_INPUT_BYTES} bytes in total.`);
+          }
+          inputs.push(input);
+        }
+      } catch (error) {
+        if (error instanceof CliUsageError) throw error;
+        throw new CliUsageError(`Could not read Lookup reconciliation input: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
+      }
+      const document = buildCliLookupReconciliation(inputs, commandContext.now());
+      if (!args.quiet) write(stdout, args.output === 'json'
+        ? formatJsonDocument(document)
+        : terminal(formatCliLookupReconciliation(document), args.color));
       return EXIT_CODES.SUCCESS;
     }
 
@@ -908,16 +1116,19 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
 
     if (args.action === 'bulk') {
       failureLabel = 'Bulk lookup';
+      const { runBulkCommand } = await import('./bulk-command-runner.mts');
       return await runBulkCommand(args, dependencies, commandContext);
     }
 
     if (args.action === 'discover') {
       failureLabel = 'Candidate generation';
+      const { runDiscoveryCommand } = await import('./discovery-command-runner.mts');
       return await runDiscoveryCommand(args, dependencies, commandContext);
     }
 
     if (args.action === 'discover-scan') {
       failureLabel = 'Candidate scan';
+      const { runDiscoveryScanCommand } = await import('./discovery-scan-command-runner.mts');
       return await runDiscoveryScanCommand(args, dependencies, commandContext);
     }
 
@@ -932,9 +1143,11 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
           : args.action === 'http'
             ? 'HTTP probe'
             : 'TLS intelligence';
+      const { runNetworkCommand } = await import('./network-command-runner.mts');
       return await runNetworkCommand(args, dependencies, commandContext);
     }
 
+    const { runLookupCommand } = await import('./lookup-command-runner.mts');
     return await runLookupCommand(args, dependencies, commandContext);
   } catch (error) {
     (progress as TerminalProgress | null)?.stop();

@@ -23,12 +23,18 @@ test('registration disclosure plan keeps evidence and analyst claims separate', 
     dataMinimised: true,
     rightsImpactConsidered: true,
     currentProcessReviewed: true,
+    gtldScopeReviewed: true,
+    registrarParticipationReviewed: true,
+    requesterMaterialsReady: true,
     caseReference: 'CASE-104',
   }, '2026-08-04T02:00:00Z');
 
   assert.equal(plan.readiness, 'ready_for_manual_review');
   assert.equal(plan.submissionPerformed, false);
   assert.equal(plan.entitlementDetermined, false);
+  assert.equal(plan.schemaVersion, 2);
+  assert.equal(plan.serviceHandoff.submissionPerformed, false);
+  assert.equal(plan.serviceHandoff.portalUrl, 'https://rdrs.icann.org/');
   assert.deepEqual(plan.observedEvidence.redactions, [{ name: 'Registrant Email', method: 'removal', reason: 'Server policy' }]);
   assert.deepEqual(plan.analystRequest.requestedFields, ['registrant-email']);
   assert.equal(plan.analystRequest.justification.includes('impersonation'), true);

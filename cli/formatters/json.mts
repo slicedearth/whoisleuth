@@ -47,13 +47,25 @@ type BulkMetadata = {
   filter?: 'all' | 'errors' | 'inconclusive' | 'registered';
 };
 
+type LookupCollectionContext = Readonly<{
+  observerLabel?: string;
+  vantageLabel?: string;
+}>;
+
 function buildCliLookupDocument(
   query: string,
   classified: ClassifiedQuery,
   result: UnknownRecord,
   generatedAt = new Date().toISOString(),
   mode = 'fast',
+  collectionContext: LookupCollectionContext = {},
 ): UnknownRecord {
+  const observerLabel = typeof collectionContext.observerLabel === 'string'
+    ? collectionContext.observerLabel
+    : null;
+  const vantageLabel = typeof collectionContext.vantageLabel === 'string'
+    ? collectionContext.vantageLabel
+    : null;
   return {
     schema: CLI_LOOKUP_SCHEMA,
     version: CLI_LOOKUP_SCHEMA_VERSION,
@@ -64,6 +76,12 @@ function buildCliLookupDocument(
     inputHostname: classified.inputHostname,
     registrableDomain: classified.registrableDomain,
     isSubdomain: classified.isSubdomain,
+    ...((observerLabel || vantageLabel) ? {
+      collectionContext: {
+        ...(observerLabel ? { observerLabel } : {}),
+        ...(vantageLabel ? { vantageLabel } : {}),
+      },
+    } : {}),
     ...result,
   };
 }

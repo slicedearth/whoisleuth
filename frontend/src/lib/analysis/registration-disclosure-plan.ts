@@ -1,5 +1,5 @@
 export const REGISTRATION_DISCLOSURE_PLAN_SCHEMA = 'whoisleuth.registration-disclosure-plan';
-export const REGISTRATION_DISCLOSURE_PLAN_VERSION = 1;
+export const REGISTRATION_DISCLOSURE_PLAN_VERSION = 2;
 export const MAX_DISCLOSURE_JUSTIFICATION_LENGTH = 4000;
 export const MAX_DISCLOSURE_REFERENCE_LENGTH = 160;
 export const MAX_DISCLOSURE_REDACTIONS = 40;
@@ -31,6 +31,9 @@ export type RegistrationDisclosureInput = Readonly<{
   dataMinimised?: unknown;
   rightsImpactConsidered?: unknown;
   currentProcessReviewed?: unknown;
+  gtldScopeReviewed?: unknown;
+  registrarParticipationReviewed?: unknown;
+  requesterMaterialsReady?: unknown;
   caseReference?: unknown;
 }>;
 
@@ -53,7 +56,7 @@ export type RegistrationDisclosureCheck = Readonly<{
 
 export type RegistrationDisclosurePlan = Readonly<{
   schema: typeof REGISTRATION_DISCLOSURE_PLAN_SCHEMA;
-  schemaVersion: typeof REGISTRATION_DISCLOSURE_PLAN_VERSION;
+  schemaVersion: 2;
   generatedAt: string;
   localPreparationOnly: true;
   submissionPerformed: false;
@@ -81,13 +84,23 @@ export type RegistrationDisclosurePlan = Readonly<{
     dataMinimised: boolean;
     rightsImpactConsidered: boolean;
     currentProcessReviewed: boolean;
+    gtldScopeReviewed: boolean;
+    registrarParticipationReviewed: boolean;
+    requesterMaterialsReady: boolean;
     caseReference: string | null;
   }>;
   checks: readonly RegistrationDisclosureCheck[];
   unknowns: readonly string[];
   limitations: readonly string[];
   nextManualSteps: readonly string[];
-  currentServiceInformation: 'https://www.icann.org/rdrs-en/';
+  serviceHandoff: Readonly<{
+    id: 'icann-rdrs';
+    label: 'ICANN Registration Data Request Service';
+    informationUrl: 'https://www.icann.org/rdrs-en/';
+    portalUrl: 'https://rdrs.icann.org/';
+    accountRequired: true;
+    submissionPerformed: false;
+  }>;
 }>;
 
 type JsonRecord = Record<string, unknown>;
@@ -161,6 +174,9 @@ export function buildRegistrationDisclosurePlan(
   const dataMinimised = input.dataMinimised === true;
   const rightsImpactConsidered = input.rightsImpactConsidered === true;
   const currentProcessReviewed = input.currentProcessReviewed === true;
+  const gtldScopeReviewed = input.gtldScopeReviewed === true;
+  const registrarParticipationReviewed = input.registrarParticipationReviewed === true;
+  const requesterMaterialsReady = input.requesterMaterialsReady === true;
   const caseReference = boundedText(input.caseReference, MAX_DISCLOSURE_REFERENCE_LENGTH) || null;
 
   const checks: RegistrationDisclosureCheck[] = [
@@ -186,8 +202,17 @@ export function buildRegistrationDisclosurePlan(
       ? check('rights-impact', 'Rights impact considered', 'pass', 'The analyst confirmed that affected-party privacy and rights were considered.')
       : check('rights-impact', 'Rights impact considered', 'block', 'Consider and record the privacy and rights impact before export.'),
     currentProcessReviewed
-      ? check('current-process', 'Current request path reviewed', 'pass', 'The analyst confirmed that current eligibility, registrar participation, and submission instructions were checked manually.')
-      : check('current-process', 'Current request path reviewed', 'block', 'Check the current disclosure service and registrar process; WHOISleuth cannot determine eligibility or participation.'),
+      ? check('current-process', 'Current request path reviewed', 'pass', 'The analyst confirmed that current service instructions, terms, and submission process were checked manually.')
+      : check('current-process', 'Current request path reviewed', 'block', 'Check the current disclosure service instructions, terms, and request process.'),
+    gtldScopeReviewed
+      ? check('gtld-scope', 'gTLD service scope reviewed', 'pass', 'The analyst confirmed that the domain and request fit the current service scope.')
+      : check('gtld-scope', 'gTLD service scope reviewed', 'block', 'Confirm that the target is within the current nonpublic gTLD registration-data service scope.'),
+    registrarParticipationReviewed
+      ? check('registrar-participation', 'Registrar participation reviewed', 'pass', 'Current registrar participation was reviewed manually.')
+      : check('registrar-participation', 'Registrar participation reviewed', 'block', 'Check whether the registrar currently participates; WHOISleuth does not infer participation.'),
+    requesterMaterialsReady
+      ? check('requester-materials', 'Requester materials reviewed', 'pass', 'The analyst confirmed that identity, authority, and supporting materials are ready for manual review.')
+      : check('requester-materials', 'Requester materials reviewed', 'block', 'Review the requester identity, authority, supporting documents, and account requirements before handoff.'),
     caseReference
       ? check('case-reference', 'Case reference', 'pass', 'A bounded local or external case reference is included.')
       : check('case-reference', 'Case reference', 'caution', 'Add a case reference when one exists so the request can be traced.'),
@@ -224,6 +249,9 @@ export function buildRegistrationDisclosurePlan(
       dataMinimised,
       rightsImpactConsidered,
       currentProcessReviewed,
+      gtldScopeReviewed,
+      registrarParticipationReviewed,
+      requesterMaterialsReady,
       caseReference,
     },
     checks,
@@ -243,7 +271,14 @@ export function buildRegistrationDisclosurePlan(
       'Review the exported packet for necessity, accuracy, contradictions, and personal data before manual submission.',
       'Record the external reference and outcome in the case action trail after submission.',
     ],
-    currentServiceInformation: 'https://www.icann.org/rdrs-en/',
+    serviceHandoff: {
+      id: 'icann-rdrs',
+      label: 'ICANN Registration Data Request Service',
+      informationUrl: 'https://www.icann.org/rdrs-en/',
+      portalUrl: 'https://rdrs.icann.org/',
+      accountRequired: true,
+      submissionPerformed: false,
+    },
   };
 }
 

@@ -90,13 +90,15 @@
         <div class="row-list">
           {#each visibleRows as row (row.domain)}
             <article>
-              <header><strong>{row.domain}</strong><span>{row.findings.length} uncommon value{row.findings.length === 1 ? '' : 's'}</span></header>
+              <header><strong>{row.domain}</strong><span>{row.reviewScore}% contrast</span></header>
+              <p class="row-summary">{row.findings.length} uncommon value{row.findings.length === 1 ? '' : 's'}{row.strongFindingCount ? ` · ${row.strongFindingCount} strong` : ''}</p>
               <ul>
                 {#each row.findings as finding}
                   <li>
                     <strong>{finding.label}</strong>
                     <code>{finding.value}</code>
-                    <span>Observed in {finding.frequency} of {finding.observedCount}; local baseline: {finding.baselineValue}</span>
+                    <span class="finding-strength" data-strength={finding.strength}>{finding.strength} contrast · {Math.round(finding.contrast * 100)}%</span>
+                    <span>Observed in {finding.frequency} of {finding.observedCount}; local baseline in {finding.baselineCount}: {finding.baselineValue}</span>
                   </li>
                 {/each}
               </ul>
@@ -115,7 +117,7 @@
       <summary>Comparison baselines and limits</summary>
       <div class="baselines">
         {#each matrix.dimensions as dimension}
-          <p><strong>{dimension.label}</strong><span>{dimension.baselineValue} · {dimension.baselineCount}/{dimension.observedCount} observed{dimension.excludedCount ? ` · ${dimension.excludedCount} unavailable` : ''}</span></p>
+          <p><strong>{dimension.label}</strong><span>{dimension.consensus} consensus · {dimension.baselineValue} · {dimension.baselineCount}/{dimension.observedCount} observed{dimension.excludedCount ? ` · ${dimension.excludedCount} unavailable` : ''}</span></p>
         {/each}
       </div>
       <ul class="limitations">{#each matrix.limitations as limitation}<li>{limitation}</li>{/each}</ul>
@@ -142,11 +144,14 @@
   .row-list article>header{display:flex;align-items:center;justify-content:space-between;gap:8px}
   .row-list article>header strong{overflow-wrap:anywhere}
   .row-list article>header span{flex:0 0 auto;color:var(--violet);font:650 var(--text-2xs) var(--mono)}
+  .row-summary{margin:4px 0 0;color:var(--muted);font-size:var(--text-2xs)}
   .row-list ul{display:grid;gap:7px;margin:10px 0 0;padding:0;list-style:none}
   .row-list li{display:grid;min-width:0;max-width:100%;gap:3px;padding-top:7px;border-top:1px solid var(--border)}
   .row-list li strong{font-size:var(--text-xs)}
   .row-list code{min-width:0;color:var(--text);font-size:var(--text-2xs);overflow-wrap:anywhere}
   .row-list li span,.empty{min-width:0;color:var(--muted);font-size:var(--text-2xs);line-height:1.45;overflow-wrap:anywhere}
+  .row-list li .finding-strength{width:max-content;padding:2px 6px;border:1px solid color-mix(in srgb,var(--violet) 38%,var(--border));border-radius:999px;color:var(--violet);font:650 var(--text-2xs) var(--mono);text-transform:capitalize}
+  .row-list li .finding-strength[data-strength='strong']{border-color:color-mix(in srgb,var(--cyan) 42%,var(--border));color:var(--cyan)}
   details{margin-top:12px;border-top:1px solid var(--border)}
   summary{padding:11px 0;color:var(--text);font:680 var(--text-xs) var(--mono);cursor:pointer}
   summary:focus-visible{outline:2px solid var(--focus);outline-offset:3px}

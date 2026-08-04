@@ -105,7 +105,10 @@ test('bounded RDAP contact roles and repeated channels render in Lookup', async 
   await disclosurePlanner.getByLabel(/Available public registration evidence/).check();
   await disclosurePlanner.getByLabel(/Every requested field is necessary/).check();
   await disclosurePlanner.getByLabel(/Privacy and rights impacts/).check();
-  await disclosurePlanner.getByLabel(/Current service eligibility/).check();
+  await disclosurePlanner.getByLabel(/Current service instructions/).check();
+  await disclosurePlanner.getByLabel(/current nonpublic gTLD service scope/).check();
+  await disclosurePlanner.getByLabel(/Current registrar participation/).check();
+  await disclosurePlanner.getByLabel(/Requester identity, authority/).check();
   await expect(disclosurePlanner.getByText('review cautions')).toBeVisible();
   await expect(disclosurePlanner.getByRole('button', { name: 'Export review packet' })).toBeEnabled();
   await expect(disclosurePlanner.getByRole('link', { name: 'Review current service information' })).toHaveAttribute('href', 'https://www.icann.org/rdrs-en/');
