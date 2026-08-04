@@ -58,6 +58,7 @@
   let planOpen = $state(false);
   let selectedStageId = $state('');
   let reviewingStageId = $state('');
+  let reviewingLocation = $state('');
   let pendingOutcome = $state<'partial' | 'skipped' | null>(null);
   let outcomeNote = $state('');
   let restartPending = $state(false);
@@ -250,6 +251,7 @@
     if (identityChanged) {
       selectedStageId = '';
       reviewingStageId = '';
+      reviewingLocation = '';
       pendingOutcome = null;
       outcomeNote = '';
       planOpen = false;
@@ -352,6 +354,7 @@
       guide = startInvestigationGuide(domain, guide.recipeId, guide.template);
       selectedStageId = '';
       reviewingStageId = '';
+      reviewingLocation = '';
       pendingOutcome = null;
       outcomeNote = '';
       planOpen = false;
@@ -368,7 +371,7 @@
 
   async function approveAndOpen(stage: InvestigationRecipeStage) {
     guide = approveInvestigationGuideCollection(stage.id);
-    reviewingStageId = '';
+    closeRequestReview();
     if (!guide) return;
     const approvedHref = investigationGuideApprovedHref(guide, stage.id);
     if (approvedHref === '/bulk?source=discover#domains') {
@@ -383,6 +386,16 @@
     }
     await goto(approvedHref);
     guide = recordInvestigationGuideVisit(stage.path) ?? guide;
+  }
+
+  function openRequestReview(stageId: string) {
+    reviewingStageId = stageId;
+    reviewingLocation = `${page.url.pathname}\u0000${page.url.hash}`;
+  }
+
+  function closeRequestReview() {
+    reviewingStageId = '';
+    reviewingLocation = '';
   }
 
   function setOutcome(stageId: string, outcome: 'pending' | 'complete' | 'partial' | 'skipped') {
@@ -419,6 +432,7 @@
   function reviewStage(stageId: string) {
     selectedStageId = stageId;
     reviewingStageId = '';
+    reviewingLocation = '';
     pendingOutcome = null;
     outcomeNote = '';
     planOpen = false;
@@ -433,6 +447,7 @@
     guide = restartStoredInvestigationGuide();
     selectedStageId = '';
     reviewingStageId = '';
+    reviewingLocation = '';
     planOpen = false;
     restartPending = false;
   }
@@ -498,7 +513,10 @@
     if (mounted && location !== handledLocation) {
       handledLocation = location;
       selectedStageId = '';
-      reviewingStageId = '';
+      if (reviewingLocation !== location) {
+        reviewingStageId = '';
+        reviewingLocation = '';
+      }
       guide = recordInvestigationGuideVisit(pathname);
       if (hash) void focusRouteTarget(hash).then(observeAction);
       else void observeAction();
@@ -599,11 +617,11 @@
                   {#if actionPreflight}<CollectionPreflight preflight={actionPreflight} open />{/if}
                   <div class="request-actions">
                     <button class="primary compact" type="button" onclick={() => approveAndOpen(actionStage)}>Allow and open {toolLabel(actionStage)}</button>
-                    <button class="btn compact" type="button" onclick={() => reviewingStageId = ''}>Cancel</button>
+                    <button class="btn compact" type="button" onclick={closeRequestReview}>Cancel</button>
                   </div>
                 </section>
               {:else}
-                <button class="primary compact" type="button" onclick={() => reviewingStageId = actionStage.id}>Review requests</button>
+                <button class="primary compact" type="button" onclick={() => openRequestReview(actionStage.id)}>Review requests</button>
               {/if}
             {:else}
               <a class="primary compact" href={actionHref}>{actionLabel(actionStage)}</a>
