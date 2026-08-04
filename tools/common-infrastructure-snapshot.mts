@@ -61,6 +61,12 @@ export const MAX_SNAPSHOT_ENTRIES = 20_000;
 export const FRESHNESS_DAYS = 30;
 export const SOURCE_DEFINITIONS = Object.freeze([
   Object.freeze({
+    id: 'akamai',
+    label: 'Akamai shared edge',
+    category: 'cdn_edge',
+    list: 'akamai',
+  }),
+  Object.freeze({
     id: 'amazon-aws',
     label: 'Amazon Web Services',
     category: 'cloud_platform',
@@ -73,10 +79,22 @@ export const SOURCE_DEFINITIONS = Object.freeze([
     list: 'cloudflare',
   }),
   Object.freeze({
+    id: 'fastly',
+    label: 'Fastly shared edge',
+    category: 'cdn_edge',
+    list: 'fastly',
+  }),
+  Object.freeze({
     id: 'google-gcp',
     label: 'Google Cloud Platform',
     category: 'cloud_platform',
     list: 'google-gcp',
+  }),
+  Object.freeze({
+    id: 'microsoft-azure',
+    label: 'Microsoft Azure',
+    category: 'cloud_platform',
+    list: 'microsoft-azure',
   }),
 ] satisfies readonly SourceDefinition[]);
 export const REVIEWED_PUBLIC_RESOLVERS = Object.freeze([

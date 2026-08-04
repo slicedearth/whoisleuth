@@ -1,7 +1,7 @@
 {
   "schema": "whoisleuth.common-infrastructure",
   "version": 1,
-  "generatedAt": "2026-07-31T08:41:01.477Z",
+  "generatedAt": "2026-08-04T14:46:04.369Z",
   "source": {
     "project": "MISP warning-lists",
     "repository": "https://github.com/MISP/misp-warninglists",
@@ -4354,7 +4354,7 @@
       "type": "cidr",
       "sourcePath": "https://misp.github.io/misp-warninglists/#format-of-a-warning-list",
       "sourceVersion": 1,
-      "sourceDate": "2026-07-31",
+      "sourceDate": "2026-08-04",
       "sourceDigestSha256": "a6f01c1190e5d2e968a5860cb9445c183e24f3263f0b9a459aa7b00cb2f4cdcf",
       "values": [
         "8.8.4.4/32",
@@ -4366,7 +4366,20 @@
       ]
     }
   ],
-  "excludedSources": [],
+  "excludedSources": [
+    {
+      "id": "akamai",
+      "reason": "akamai source data is 834 days old and exceeds the 30-day freshness limit."
+    },
+    {
+      "id": "fastly",
+      "reason": "fastly source data is 834 days old and exceeds the 30-day freshness limit."
+    },
+    {
+      "id": "microsoft-azure",
+      "reason": "microsoft-azure source data is 609 days old and exceeds the 30-day freshness limit."
+    }
+  ],
   "limitations": [
     "A match identifies an address range published as shared cloud or delivery infrastructure. It does not identify the origin host, tenant, account, operator, ownership, intent, safety, or maliciousness.",
     "Non-matches are inconclusive because the catalogue is deliberately bounded and does not cover every provider, product, address, hosting service, resolver, or historical allocation.",
