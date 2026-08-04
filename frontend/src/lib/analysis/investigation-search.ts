@@ -9,6 +9,10 @@ import {
   type InvestigationStoreName,
 } from './investigation-projection.ts';
 import { readBoundedInvestigationProjection } from './investigation-projection-reader.ts';
+import {
+  buildBoundedSearchIndex,
+  type BoundedSearchIndex,
+} from '../../../../lib/bounded-local-search.mts';
 
 export const INVESTIGATION_SEARCH_SCHEMA = 'whoisleuth.investigation-search-index';
 export const INVESTIGATION_SEARCH_VERSION = 1;
@@ -161,6 +165,18 @@ const TYPE_PRIORITY: Record<InvestigationEntityType, number> = {
   favicon_cluster: 10,
   official_asset_host: 11,
 };
+const transientCandidateIndexes = new WeakMap<InvestigationSearchIndex, BoundedSearchIndex>();
+
+function candidateIndex(index: InvestigationSearchIndex): BoundedSearchIndex {
+  const current = transientCandidateIndexes.get(index);
+  if (current) return current;
+  const built = buildBoundedSearchIndex(index.entries.map((entry) => ({
+    id: entry.entityId,
+    terms: entry.terms.map((term) => term.normalized),
+  })), MAX_INVESTIGATION_SEARCH_ENTITIES);
+  transientCandidateIndexes.set(index, built);
+  return built;
+}
 
 function record(value: unknown): UnknownRecord | null {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as UnknownRecord : null;
@@ -484,7 +500,7 @@ export function buildInvestigationSearchIndex(rawProjection: unknown): Investiga
     ...(truncated ? ['The local search index reached a projection, entity, observation, term, or reference cap. Results may be partial.'] : []),
   ], MAX_INVESTIGATION_SEARCH_LIMITATIONS);
 
-  return {
+  const index: InvestigationSearchIndex = {
     schema: INVESTIGATION_SEARCH_SCHEMA,
     version: INVESTIGATION_SEARCH_VERSION,
     state: 'ready',
@@ -497,6 +513,8 @@ export function buildInvestigationSearchIndex(rawProjection: unknown): Investiga
     truncated,
     limitations,
   };
+  candidateIndex(index);
+  return index;
 }
 
 function termRank(term: InvestigationSearchTerm, query: string): number | null {
@@ -577,7 +595,9 @@ export function searchInvestigationIndex(
   }
 
   const matches: InvestigationSearchResult[] = [];
+  const candidateIds = candidateIndex(index).candidateIds(query, tokens);
   for (const entry of index.entries) {
+    if (!candidateIds.has(entry.entityId)) continue;
     const match = matchEntry(entry, query, tokens);
     if (!match) continue;
     const { terms: _terms, termsTruncated: _termsTruncated, ...result } = entry;

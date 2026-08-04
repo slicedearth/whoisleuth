@@ -87,7 +87,7 @@ type CliAction =
   | ({ action: 'compare'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'page-compare'; leftSource: string; rightSource: string; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'mail-review'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
-  | ({ action: 'review-evidence'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
+  | ({ action: 'review-evidence'; source: string | null; mmdbSource: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'domain-control'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'assurance'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'sharing-review'; source: string | null; output: 'terminal' | 'json'; marking: 'clear' | 'green' | 'amber' | 'amber-strict' | 'red'; recipientScope: 'public' | 'community' | 'organization' | 'named-recipients'; purpose: string; humanReviewed: boolean; personalDataReviewed: boolean; redactionsConfirmed: boolean } & TerminalOptions)
@@ -770,13 +770,20 @@ function parseMailReviewArguments(argv: string[]): Extract<CliArguments, { actio
 
 function parseReviewEvidenceArguments(argv: string[]): Extract<CliArguments, { action: 'review-evidence' }> {
   let source: string | null = null;
+  let mmdbSource: string | null = null;
   let output: 'terminal' | 'json' = 'terminal';
   let quiet = false;
   let color = true;
-  for (const argument of argv) {
+  for (let index = 0; index < argv.length; index += 1) {
+    const argument = argv[index];
+    if (argument === undefined) break;
     if (argument === '--json') {
       if (output !== 'terminal') throw new CliUsageError('--json may be supplied only once.');
       output = 'json';
+    } else if (argument === '--mmdb') {
+      const value = argv[++index];
+      if (!value || value.startsWith('-') || mmdbSource !== null) throw new CliUsageError('--mmdb requires one database file and may be supplied only once.');
+      mmdbSource = value;
     } else if (argument === '--quiet') quiet = true;
     else if (argument === '--no-color') color = false;
     else if (argument.startsWith('-')) throw new CliUsageError(`Unknown option "${argument}".`);
@@ -784,7 +791,7 @@ function parseReviewEvidenceArguments(argv: string[]): Extract<CliArguments, { a
     else throw new CliUsageError('review-evidence accepts one optional versioned JSON input file.');
   }
   if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
-  return { action: 'review-evidence', source, output, quiet, color };
+  return { action: 'review-evidence', source, mmdbSource, output, quiet, color };
 }
 
 function parseDomainControlArguments(argv: string[]): Extract<CliArguments, { action: 'domain-control' }> {

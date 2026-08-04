@@ -909,6 +909,15 @@ Supported input schemas are:
   bounded analyst-supplied VRP set.
 - `whoisleuth.local-geoip-query`: queries an analyst-supplied bounded prefix
   database whose source, version, and licence metadata remain in the result.
+- `whoisleuth.local-mmdb-query`: with an explicit `--mmdb <database-file>`,
+  queries one analyst-supplied MaxMind DB file locally. The query document must
+  carry `address`, `sourceLabel`, `databaseVersion`, and `license`. WHOISleuth
+  does not bundle, download, update, license, transmit, or retain the database.
+  The nested result uses the same address, network, country, region, city, ASN,
+  source, and limitation fields as the bounded JSON-prefix path. This mode is
+  CLI-only because a hosted or browser deployment cannot open an analyst's
+  local file; its JSON result remains portable to website-compatible evidence
+  archives and reports.
 - `whoisleuth.encrypted-dns-plan-input`: validates an explicitly reviewed
   encrypted-DNS provider contract and prepares a bounded query plan. It does
   not execute the plan.

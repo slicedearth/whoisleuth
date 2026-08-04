@@ -305,7 +305,40 @@ origin host, tenant, account, operator, ownership, intent, safety, or
 maliciousness. A non-match is inconclusive. Stale or oversized sources are
 excluded rather than silently treated as current.
 
+## Bounded local analysis dependencies
+
+Browser-local saved-work search uses a bounded in-memory candidate index and
+then applies the existing deterministic exact, prefix, boundary, and substring
+ranker. Fuzzy expansion is not enabled. The CLI's one-shot archive search keeps
+its exact allowlisted-field traversal because constructing a persistent browser
+index provides no benefit for a single offline query; both paths remain local,
+bounded, and redacted by default.
+
+Relationship clustering uses a shared bounded graph-analysis module for
+connected components and review paths. D3 remains presentation-only, and graph
+structure never becomes an ownership, coordination, intent, safety, or
+maliciousness conclusion. The same exported relationship evidence remains
+portable even where the CLI does not render the interactive browser view.
+
+TLS observations use Node's native certificate API for identity, validity,
+fingerprint, public-key, SAN, purpose, signature, and AIA evidence. A narrow
+supplemental parser reads only certificate-policy OIDs and CRL-distribution
+scheme counts that the native API does not expose. It retains neither raw
+certificate bytes nor distribution locations and fails soft on malformed
+extensions.
+
+Optional MMDB enrichment is CLI-only because hosted and browser deployments
+cannot open an analyst's local database. It requires an explicit local file and
+source, version, and licence metadata, performs no download or transmission,
+and emits the same bounded GeoIP evidence fields as the JSON-prefix review path.
+
 ## Verification strategy
+
+The offline conformance suite includes an independent RDAP response fixture
+from the permissively licensed ICANN reference implementation and validates
+WHOISleuth's two STIX export families against pinned OASIS STIX 2.1 JSON
+schemas. These are development oracles, not production dependencies, live
+registry tests, or claims of complete semantic interoperability.
 
 The test pyramid is designed to avoid dependence on public services:
 

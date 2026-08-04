@@ -378,6 +378,22 @@ export function buildLookupNetworkDisplay(input: {
         value: `${values.join(' · ') || 'None declared'}${aia.truncated ? ' · truncated' : ''}`,
       });
     }
+    const extensionProfile = rec(tlsCertificate.extensionProfile);
+    const policies = rec(extensionProfile.certificatePolicies);
+    if (Array.isArray(policies.oids)) {
+      const oids = policies.oids.filter((value): value is string => typeof value === 'string').slice(0, 16);
+      leafCertificate.push({
+        label: 'Certificate policies',
+        value: `${oids.join(' · ') || 'None declared'}${policies.truncated ? ' · truncated' : ''}`,
+      });
+    }
+    const crl = rec(extensionProfile.crlDistributionPoints);
+    if (Object.keys(crl).length) {
+      leafCertificate.push({
+        label: 'CRL distribution presence',
+        value: `${tlsMetadataCount(crl.total)} declared (${tlsMetadataCount(crl.https)} HTTPS, ${tlsMetadataCount(crl.http)} HTTP, ${tlsMetadataCount(crl.ldap)} LDAP, ${tlsMetadataCount(crl.other)} other)${crl.truncated ? ' · truncated' : ''}`,
+      });
+    }
   }
 
   return {

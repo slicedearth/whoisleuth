@@ -61,6 +61,7 @@ import {
 import {
   MAX_OFFLINE_EVIDENCE_INPUT_BYTES,
   buildOfflineEvidenceReview,
+  buildOfflineEvidenceReviewWithLocalResources,
   formatOfflineEvidenceReview,
 } from './offline-evidence-review.mts';
 import {
@@ -202,7 +203,7 @@ const COMMAND_USAGE: Readonly<Record<CliCommand, string>> = Object.freeze({
   compare: 'whoisleuth compare [lookup.json] [--json] [--quiet] [--no-color]',
   'page-compare': 'whoisleuth page-compare <left.json> <right.json> [--json] [--quiet] [--no-color]',
   'mail-review': 'whoisleuth mail-review [bulk.json|bulk.jsonl] [--json] [--quiet] [--no-color]',
-  'review-evidence': 'whoisleuth review-evidence [evidence.json] [--json] [--quiet] [--no-color]',
+  'review-evidence': 'whoisleuth review-evidence [evidence.json] [--mmdb <database-file>] [--json] [--quiet] [--no-color]',
   'domain-control': 'whoisleuth domain-control [manifest-input.json|review-input.json] [--json] [--quiet] [--no-color]',
   assurance: 'whoisleuth assurance [assurance-input.json] [--json] [--quiet] [--no-color]',
   'sharing-review': 'whoisleuth sharing-review [artifact.json] --marking <level> --recipient-scope <scope> --purpose <text> [--human-reviewed] [--personal-data-reviewed] [--redactions-confirmed] [--json]',
@@ -871,7 +872,9 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
         throw new CliUsageError(`Could not read offline evidence input: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
       }
       if (!input.trim()) throw new CliUsageError('review-evidence requires one JSON file or a document on stdin.');
-      const document = buildOfflineEvidenceReview(input, commandContext.now());
+      const document = args.mmdbSource
+        ? await buildOfflineEvidenceReviewWithLocalResources(input, commandContext.now(), { mmdbPath: args.mmdbSource })
+        : buildOfflineEvidenceReview(input, commandContext.now());
       if (!args.quiet) write(stdout, args.output === 'json'
         ? formatJsonDocument(document)
         : terminal(formatOfflineEvidenceReview(document), args.color));

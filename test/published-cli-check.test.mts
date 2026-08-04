@@ -27,7 +27,14 @@ function publishedManifest(overrides: Record<string, unknown> = {}) {
     repository: { type: 'git', url: 'git+https://github.com/slicedearth/whoisleuth.git' },
     homepage: 'https://whoisleuth.com/',
     bugs: { url: 'https://github.com/slicedearth/whoisleuth/issues' },
-    dependencies: { parse5: '8.0.1', tldts: '7.4.10', undici: '8.9.0' },
+    dependencies: {
+      '@peculiar/x509': '2.0.0',
+      maxmind: '5.0.7',
+      parse5: '8.0.1',
+      'reflect-metadata': '0.2.2',
+      tldts: '7.4.10',
+      undici: '8.9.0',
+    },
     dist: {
       integrity: `sha512-${'A'.repeat(86)}==`,
       shasum: 'a'.repeat(40),
@@ -58,7 +65,14 @@ describe('published CLI verification', () => {
     assert.equal(report.schema, 'whoisleuth.published-cli-check');
     assert.equal(report.version, 1);
     assert.equal(report.packageVersion, VERSION);
-    assert.deepEqual(report.runtimeDependencies, { parse5: '8.0.1', tldts: '7.4.10', undici: '8.9.0' });
+    assert.deepEqual(report.runtimeDependencies, {
+      '@peculiar/x509': '2.0.0',
+      maxmind: '5.0.7',
+      parse5: '8.0.1',
+      'reflect-metadata': '0.2.2',
+      tldts: '7.4.10',
+      undici: '8.9.0',
+    });
     assert.equal(report.registrySignatureCount, 1);
     assert.match(formatPublishedCliReport({ ...report, checks: ['metadata', 'version'] }), /Result: PASS/u);
   });
@@ -68,7 +82,10 @@ describe('published CLI verification', () => {
     assert.throws(() => validatePublishedManifest(publishedManifest({ author: 'different-publisher' }), VERSION), /author, licence, or module type/u);
     assert.throws(() => validatePublishedManifest(publishedManifest({ homepage: 'https://example.invalid/' }), VERSION), /source and support links/u);
     assert.throws(() => validatePublishedManifest(publishedManifest({
-      dependencies: { parse5: '^8.0.1', tldts: '7.4.10', undici: '8.9.0' },
+      dependencies: {
+        '@peculiar/x509': '2.0.0', maxmind: '5.0.7', parse5: '^8.0.1',
+        'reflect-metadata': '0.2.2', tldts: '7.4.10', undici: '8.9.0',
+      },
     }), VERSION), /major, minor, and patch/u);
     assert.throws(() => validatePublishedManifest(publishedManifest({
       dist: { ...(publishedManifest().dist as object), attestations: { url: 'https://registry.npmjs.org/fixture', provenance: {} } },

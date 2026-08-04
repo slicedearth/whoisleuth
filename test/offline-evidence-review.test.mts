@@ -4,6 +4,7 @@ import { describe, test } from 'node:test';
 import { parseCliArguments } from '../cli/arguments.mts';
 import {
   buildOfflineEvidenceReview,
+  buildOfflineEvidenceReviewWithLocalResources,
   formatOfflineEvidenceReview,
 } from '../cli/offline-evidence-review.mts';
 import { runCli } from '../cli/runner.mts';
@@ -67,6 +68,7 @@ describe('offline evidence review command', () => {
     assert.deepEqual(parseCliArguments(['review-evidence', 'evidence.json', '--json']), {
       action: 'review-evidence',
       source: 'evidence.json',
+      mmdbSource: null,
       output: 'json',
       quiet: false,
       color: true,
@@ -88,6 +90,26 @@ describe('offline evidence review command', () => {
     assert.equal(code, EXIT_CODES.SUCCESS);
     assert.equal(JSON.parse(stdout.value()).result.state, 'valid');
     assert.match(formatOfflineEvidenceReview(buildOfflineEvidenceReview(input, ISO)), /State\s+valid/u);
+  });
+
+  test('reads an explicitly supplied local MMDB without transmitting the address', async () => {
+    const input = JSON.stringify({
+      schema: 'whoisleuth.local-mmdb-query',
+      version: 1,
+      address: '81.2.69.142',
+      sourceLabel: 'Pinned test database',
+      databaseVersion: '606235df',
+      license: 'MIT',
+    });
+    const document = await buildOfflineEvidenceReviewWithLocalResources(input, ISO, {
+      mmdbPath: 'fixtures/mmdb/maxmind-db-test-data/GeoIP2-City-Test.mmdb',
+    });
+    const result = document.result as { state: string; match: { network: string; countryCode: string; city: string } };
+    assert.equal(result.state, 'matched');
+    assert.equal(result.match.network, '81.2.69.142/31');
+    assert.equal(result.match.countryCode, 'GB');
+    assert.equal(result.match.city, 'London');
+    await assert.rejects(buildOfflineEvidenceReviewWithLocalResources(input, ISO), /requires --mmdb/u);
   });
 
   test('rejects unversioned and unknown documents', () => {

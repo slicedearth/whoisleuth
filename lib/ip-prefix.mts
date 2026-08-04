@@ -54,5 +54,17 @@ function prefixContains(container: IpPrefix, candidate: IpPrefix): boolean {
     && (candidate.value & container.mask) === container.value;
 }
 
-export { parseIpPrefix, prefixContains };
+function formatIpPrefix(prefix: IpPrefix): string {
+  if (prefix.family === 4) {
+    const parts = [24n, 16n, 8n, 0n].map((shift) => Number((prefix.value >> shift) & 255n));
+    return `${parts.join('.')}/${prefix.length}`;
+  }
+  const parts = Array.from({ length: 8 }, (_, index) => {
+    const shift = BigInt((7 - index) * 16);
+    return ((prefix.value >> shift) & 0xffffn).toString(16);
+  });
+  return `${parts.join(':')}/${prefix.length}`;
+}
+
+export { parseIpPrefix, prefixContains, formatIpPrefix };
 export type { IpPrefix };

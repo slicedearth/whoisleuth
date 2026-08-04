@@ -14,6 +14,10 @@ import { domainToASCII } from 'node:url';
 
 import { createObservation } from './observation.mts';
 import { isPrivateAddress, resolvePublicAddresses } from './safe-fetch.mts';
+import {
+  parseCertificateExtensionProfile,
+  type CertificateExtensionProfile,
+} from './certificate-extension-profile.mts';
 
 type Tracker = { truncated: boolean; discarded: number };
 type UnknownRecord = Record<string, unknown>;
@@ -57,6 +61,7 @@ type NormalizedCertificate = {
   signature?: { algorithm: string | null; oid: string | null };
   extendedKeyUsage?: CertificatePurposes;
   authorityInformationAccess?: AuthorityInformationAccess;
+  extensionProfile?: CertificateExtensionProfile;
 };
 type TlsFinding = { id: string; tone: string; label: string; detail: string };
 type TlsProfile = {
@@ -113,7 +118,7 @@ type TlsCollectOptions = {
   clearTimer?: ClearTimer;
 };
 
-const TLS_PROFILE_VERSION = 2;
+const TLS_PROFILE_VERSION = 3;
 const TLS_PORT = 443;
 const TLS_TIMEOUT_MS = 5000;
 const MAX_RESOLVED_ADDRESSES = 64;
@@ -536,6 +541,14 @@ function normalizeCertificate(value: unknown, state: Tracker, options: { include
       parsedCertificate?.infoAccess || record.infoAccess,
       state,
     );
+    const extensionProfile = parseCertificateExtensionProfile(record.raw);
+    if (extensionProfile.parsed || extensionProfile.partial) {
+      certificate.extensionProfile = extensionProfile;
+      if (extensionProfile.partial) state.discarded += 1;
+      if (extensionProfile.certificatePolicies.truncated || extensionProfile.crlDistributionPoints.truncated) {
+        state.truncated = true;
+      }
+    }
   }
   return certificate;
 }

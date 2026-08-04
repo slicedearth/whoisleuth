@@ -77,7 +77,14 @@ export const MAX_CLI_PACKAGE_UNPACKED_BYTES = 6 * 1024 * 1024;
 
 const LOCAL_SOURCE_PATTERN = /^(?:bin|cli|lib|frontend\/src\/lib\/analysis)\/[A-Za-z0-9._/-]+\.(?:mts|ts)$/u;
 const REQUIRED_SOURCE_MODULES = Object.freeze(['bin/whoisleuth.mts', 'cli/runner.mts']);
-const RUNTIME_DEPENDENCIES = Object.freeze(['parse5', 'tldts', 'undici']);
+const RUNTIME_DEPENDENCIES = Object.freeze([
+  '@peculiar/x509',
+  'maxmind',
+  'parse5',
+  'reflect-metadata',
+  'tldts',
+  'undici',
+]);
 const INSTALLED_COMMAND_HELP_CHECKS = Object.freeze([
   'lookup',
   'bulk',

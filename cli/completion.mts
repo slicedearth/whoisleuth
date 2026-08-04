@@ -23,7 +23,7 @@ const OPTIONS_BY_COMMAND: Readonly<Record<string, readonly string[]>> = Object.f
   compare: ['--json', '--quiet', '--no-color'],
   'page-compare': ['--json', '--quiet', '--no-color'],
   'mail-review': ['--json', '--quiet', '--no-color'],
-  'review-evidence': ['--json', '--quiet', '--no-color'],
+  'review-evidence': ['--mmdb', '--json', '--quiet', '--no-color'],
   'domain-control': ['--json', '--quiet', '--no-color'],
   assurance: ['--json', '--quiet', '--no-color'],
   'sharing-review': ['--marking', '--recipient-scope', '--purpose', '--human-reviewed', '--personal-data-reviewed', '--redactions-confirmed', '--json', '--quiet', '--no-color'],
