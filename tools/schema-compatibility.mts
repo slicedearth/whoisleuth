@@ -80,6 +80,11 @@ import {
   DOMAIN_PORTFOLIO_REVIEW_VERSION,
 } from '../lib/domain-portfolio-review.mts';
 import {
+  DOMAIN_CHANGE_INPUT_SCHEMA,
+  DOMAIN_CHANGE_REVIEW_SCHEMA,
+  DOMAIN_CHANGE_REVIEW_VERSION,
+} from '../lib/domain-change-review.mts';
+import {
   MAX_ZONE_TEXT_BYTES,
   ZONE_INTENT_INPUT_SCHEMA,
   ZONE_INTENT_REVIEW_SCHEMA,
@@ -410,6 +415,8 @@ const ENTRIES: SchemaCompatibilityEntry[] = [
   entry({ id: 'cli.zone-intent-review', kind: 'cli_document', schema: ZONE_INTENT_REVIEW_SCHEMA, currentVersion: ZONE_INTENT_REVIEW_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'lib/zone-intent-review.mts', note: 'Offline desired-versus-observed DNS comparison with explicit partial and unsupported states; never applies a DNS change.' }),
   entry({ id: 'cli.domain-portfolio-input', kind: 'cli_document', schema: DOMAIN_PORTFOLIO_INPUT_SCHEMA, currentVersion: DOMAIN_PORTFOLIO_REVIEW_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: null, owner: 'lib/domain-portfolio-review.mts', note: 'Bounded analyst-supplied portfolio assertions without credentials, contact details, or provider requests.' }),
   entry({ id: 'cli.domain-portfolio-review', kind: 'cli_document', schema: DOMAIN_PORTFOLIO_REVIEW_SCHEMA, currentVersion: DOMAIN_PORTFOLIO_REVIEW_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'lib/domain-portfolio-review.mts', note: 'Offline concentration, renewal, and recovery-dependency review that preserves analyst-authored provenance.' }),
+  entry({ id: 'cli.domain-change-input', kind: 'cli_document', schema: DOMAIN_CHANGE_INPUT_SCHEMA, currentVersion: DOMAIN_CHANGE_REVIEW_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: null, owner: 'lib/domain-change-review.mts', note: 'Bounded analyst-supplied authority, resolver, ACME, certificate, service, and HSTS observations; TXT values are reduced to digests.' }),
+  entry({ id: 'cli.domain-change-review', kind: 'cli_document', schema: DOMAIN_CHANGE_REVIEW_SCHEMA, currentVersion: DOMAIN_CHANGE_REVIEW_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'lib/domain-change-review.mts', note: 'Offline DNS change gate with explicit record agreement, DNSSEC automation, resolver-divergence, ACME, TLS-continuity, service, and preload context.' }),
   entry({ id: 'cli.investigation-plan', kind: 'cli_document', schema: CLI_INVESTIGATION_PLAN_SCHEMA, currentVersion: CLI_INVESTIGATION_PLAN_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'cli/investigation-plan.mts', note: 'Plan-only fixed recipes composed from existing bounded commands; no step, placeholder, script, file, request, case change, or submission is executed.' }),
   entry({ id: 'cli.ct-search', kind: 'cli_document', schema: CLI_CT_SEARCH_SCHEMA, currentVersion: CLI_CT_SEARCH_SCHEMA_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'cli/formatters/json.mts', note: 'Certificate log search output.' }),
   entry({ id: 'cli.discover', kind: 'cli_document', schema: CLI_DISCOVER_SCHEMA, currentVersion: CLI_DISCOVER_SCHEMA_VERSION, supportedVersions: [1, 2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'cli/formatters/json.mts', note: 'Candidate discovery document.' }),

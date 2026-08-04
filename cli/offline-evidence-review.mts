@@ -5,6 +5,7 @@ import {
   planEncryptedDnsQuery,
 } from '../lib/encrypted-dns-contract.mts';
 import { validateDnssecEvidence } from '../lib/dnssec-evidence-validation.mts';
+import { reviewDomainChange } from '../lib/domain-change-review.mts';
 import { reviewDomainPortfolio } from '../lib/domain-portfolio-review.mts';
 import {
   buildLocalGeoIpDatabase,
@@ -49,7 +50,7 @@ function parseInput(value: unknown): UnknownRecord {
 
 function buildOfflineEvidenceReview(value: unknown, generatedAt = new Date().toISOString()) {
   const input = parseInput(value);
-  let kind: 'rdap_search' | 'dnssec' | 'tlsa' | 'rpki' | 'geoip' | 'encrypted_dns' | 'zone_intent' | 'domain_portfolio';
+  let kind: 'rdap_search' | 'dnssec' | 'tlsa' | 'rpki' | 'geoip' | 'encrypted_dns' | 'zone_intent' | 'domain_portfolio' | 'domain_change';
   let result: unknown;
   if (input.schema === 'whoisleuth.rdap-search-input') {
     kind = 'rdap_search';
@@ -108,6 +109,9 @@ function buildOfflineEvidenceReview(value: unknown, generatedAt = new Date().toI
   } else if (input.schema === 'whoisleuth.domain-portfolio.input') {
     kind = 'domain_portfolio';
     result = reviewDomainPortfolio(input, generatedAt);
+  } else if (input.schema === 'whoisleuth.domain-change.input') {
+    kind = 'domain_change';
+    result = reviewDomainChange(input, generatedAt);
   } else {
     throw new CliUsageError('Offline evidence review does not recognise this input schema.');
   }

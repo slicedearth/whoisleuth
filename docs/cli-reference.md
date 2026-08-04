@@ -935,6 +935,13 @@ Supported input schemas are:
   recovery concentration, renewal-review gaps and internal recovery-domain
   dependencies. Account labels and provider assignments remain analyst
   assertions, and the review makes no provider or account request.
+- `whoisleuth.domain-change.input`: compares bounded, separately labelled
+  authority and resolver observations; reviews CDS, CDNSKEY and CSYNC
+  publication consistency; inventories supplied SRV services and ACME
+  dependencies; and records TLS key continuity, stapling, embedded timestamp,
+  and HSTS preload context. TXT values are retained only as SHA-256 digests.
+  The result is an offline review gate, not a DNSSEC validation, preload-list
+  lookup, certificate-authority request, or permission to apply a change.
 
 The common output is `whoisleuth.cli.offline-evidence-review` version 1. It
 retains the nested result's explicit state and limitations. A locally
