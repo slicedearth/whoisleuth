@@ -81,6 +81,9 @@ default (see the README), so many lookups return no personal data at all.
   can compare the recursive nameserver view with registry RDAP nameserver and
   glue publication, then send direct NS and SOA queries to at most four
   selected nameservers and two validated public addresses per nameserver.
+  It can additionally query A, AAAA, CAA, and MX once through one selected
+  public address per nameserver, retaining at most sixteen normalised values
+  for each record type.
   Each selected authority can contribute one bounded SOA projection containing
   its primary name, hostmaster, serial, refresh, retry, expire, and minimum TTL
   fields. WHOISleuth compares the retained primary names and serials across

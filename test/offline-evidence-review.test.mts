@@ -137,6 +137,22 @@ describe('offline evidence review command', () => {
     assert.equal(parsed.action, 'review-evidence');
     assert.equal(parsed.action === 'review-evidence' && parsed.strictExit, true);
     assert.throws(() => parseCliArguments(['review-evidence', '--strict-exit', '--strict-exit']), /only once/iu);
+
+    const emptyZone = JSON.stringify({
+      schema: 'whoisleuth.zone-intent.input', version: 1, origin: 'example.test',
+      desired: { format: 'records', records: [] },
+      observed: { state: 'observed', source: 'Fixture', observedAt: ISO, records: [] },
+    });
+    const zoneStdout = capture();
+    const zoneCode = await runCli(['review-evidence', '--strict-exit'], {
+      stdout: zoneStdout.stream,
+      stderr: capture().stream,
+      now: () => ISO,
+      readArtifactInput: async () => emptyZone,
+    });
+    assert.equal(zoneCode, EXIT_CODES.PARTIAL_FAILURE);
+    assert.match(zoneStdout.value(), /State\s+review/u);
+    assert.match(zoneStdout.value(), /Compared\s+0/u);
   });
 
   test('reads an explicitly supplied local MMDB without transmitting the address', async () => {

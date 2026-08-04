@@ -413,7 +413,11 @@ export function reviewZoneIntent(inputRaw: unknown, generatedAtValue = new Date(
     observation: Object.freeze({ state: state as ObservationState, source, observedAt, records: Object.freeze(observed) }),
     comparisons: Object.freeze(comparisons),
     counts,
-    complete: state === 'observed' && !desiredResult.truncated && desiredResult.rejected.length === 0 && !comparisonsTruncated,
+    complete: comparisons.length > 0
+      && state === 'observed'
+      && !desiredResult.truncated
+      && desiredResult.rejected.length === 0
+      && !comparisonsTruncated,
     truncated: desiredResult.truncated || comparisonsTruncated,
     limitations: Object.freeze([
       'This local review parses only a bounded, deliberately supported subset of DNS master-file syntax and never applies a DNS change.',

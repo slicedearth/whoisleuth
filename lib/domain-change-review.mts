@@ -269,14 +269,38 @@ export function reviewDomainChange(inputRaw: unknown, generatedAtValue = new Dat
   const acmeDependencies = normaliseAcme(input.acmeDependencies ?? [], apex);
   const certificate = normaliseCertificate(input.certificate);
   const hsts = normaliseHsts(input.hsts);
+  const certificateReview = reviewCertificate(certificate);
   const differentAuthorityRows = authorityMatrix.filter((row) => row.state === 'different');
   const differentResolverRows = resolverMatrix.filter((row) => row.state === 'different');
+  const insufficientAuthorityRows = authorityMatrix.filter((row) => row.state === 'insufficient');
+  const insufficientResolverRows = resolverMatrix.filter((row) => row.state === 'insufficient');
+  const observedAuthorityCount = authoritySnapshots.filter((item) => item.state === 'observed').length;
+  const observedResolverCount = resolverSnapshots.filter((item) => item.state === 'observed').length;
   const incompleteVantages = [...authoritySnapshots, ...resolverSnapshots].filter((item) => item.state !== 'observed');
-  const reviewRequired = differentAuthorityRows.length > 0
-    || differentResolverRows.length > 0
-    || incompleteVantages.length > 0
-    || acmeDependencies.some((item) => item.state !== 'confirmed')
-    || reviewCertificate(certificate).findings.length > 0;
+  const gateReasons = [
+    ...(observedAuthorityCount < 2
+      ? ['At least two complete authority observations are required before a domain change can be marked ready.'] : []),
+    ...(!authorityMatrix.length
+      ? ['No comparable authority record evidence was supplied.'] : []),
+    ...differentAuthorityRows.map((row) => `Authority observations differ for ${row.owner} ${row.type}.`),
+    ...insufficientAuthorityRows.map((row) => `Authority evidence is insufficient for ${row.owner} ${row.type}.`),
+    ...(resolverSnapshots.length > 0 && observedResolverCount < 2
+      ? ['Supplied resolver evidence requires at least two complete observations.'] : []),
+    ...differentResolverRows.map((row) => `Resolver observations differ for ${row.owner} ${row.type}.`),
+    ...insufficientResolverRows.map((row) => `Resolver evidence is insufficient for ${row.owner} ${row.type}.`),
+    ...incompleteVantages.map((item) => `${item.label} evidence is ${item.state}.`),
+    ...acmeDependencies.filter((item) => item.state !== 'confirmed').map((item) => `${item.method} dependency for ${item.owner} is ${item.state}.`),
+    ...(certificate && certificate.state !== 'observed'
+      ? [`Certificate evidence is ${certificate.state}.`] : []),
+    ...(certificate?.state === 'observed' && certificateReview.continuity === 'unknown'
+      ? ['Certificate continuity cannot be reviewed without both current and planned public-key fingerprints.'] : []),
+    ...certificateReview.findings,
+    ...(hsts && hsts.state !== 'observed'
+      ? [`HSTS evidence is ${hsts.state}.`] : []),
+    ...(hsts?.state === 'observed' && hsts.preloadState === 'unavailable'
+      ? ['HSTS preload evidence is unavailable.'] : []),
+  ];
+  const reviewRequired = gateReasons.length > 0;
   return Object.freeze({
     schema: DOMAIN_CHANGE_REVIEW_SCHEMA,
     version: DOMAIN_CHANGE_REVIEW_VERSION,
@@ -287,18 +311,12 @@ export function reviewDomainChange(inputRaw: unknown, generatedAtValue = new Dat
     resolverDivergenceMatrix: resolverMatrix,
     dnssecAutomation: reviewDnssecAutomation(authorityMatrix),
     acmeDependencies,
-    certificate: reviewCertificate(certificate),
+    certificate: certificateReview,
     services: serviceInventory([...authoritySnapshots, ...resolverSnapshots]),
     hsts,
     gate: Object.freeze({
       pass: !reviewRequired,
-      reasons: Object.freeze([
-        ...differentAuthorityRows.map((row) => `Authority observations differ for ${row.owner} ${row.type}.`),
-        ...differentResolverRows.map((row) => `Resolver observations differ for ${row.owner} ${row.type}.`),
-        ...incompleteVantages.map((item) => `${item.label} evidence is ${item.state}.`),
-        ...acmeDependencies.filter((item) => item.state !== 'confirmed').map((item) => `${item.method} dependency for ${item.owner} is ${item.state}.`),
-        ...reviewCertificate(certificate).findings,
-      ]),
+      reasons: Object.freeze(gateReasons),
     }),
     limitations: Object.freeze([
       'This local review uses only analyst-supplied observations and makes no DNS, HTTP, certificate, certificate-authority, preload-list, or provider request.',

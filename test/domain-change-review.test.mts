@@ -53,6 +53,80 @@ function input() {
 }
 
 describe('domain change review', () => {
+  test('fails closed without two complete, comparable authority observations', () => {
+    const empty = reviewDomainChange({
+      schema: DOMAIN_CHANGE_INPUT_SCHEMA,
+      version: 1,
+      domain: 'example.test',
+      authoritySnapshots: [],
+      resolverSnapshots: [],
+      acmeDependencies: [],
+      certificate: null,
+      hsts: null,
+    }, NOW);
+    assert.equal(empty.state, 'review');
+    assert.equal(empty.gate.pass, false);
+    assert.match(empty.gate.reasons.join(' '), /two complete authority observations/iu);
+    assert.match(empty.gate.reasons.join(' '), /No comparable authority record evidence/iu);
+
+    const oneAuthorityBase = input();
+    const oneAuthority = {
+      ...oneAuthorityBase,
+      authoritySnapshots: oneAuthorityBase.authoritySnapshots.slice(0, 1),
+      resolverSnapshots: [],
+      acmeDependencies: [],
+      certificate: null,
+      hsts: null,
+    };
+    assert.equal(reviewDomainChange(oneAuthority, NOW).gate.pass, false);
+
+    const emptyAuthorities = input();
+    emptyAuthorities.authoritySnapshots.forEach((snapshot) => { snapshot.records = []; });
+    assert.equal(reviewDomainChange({
+      ...emptyAuthorities,
+      resolverSnapshots: [],
+      acmeDependencies: [],
+      certificate: null,
+      hsts: null,
+    }, NOW).gate.pass, false);
+
+    const aligned = input();
+    aligned.authoritySnapshots.forEach((snapshot) => {
+      snapshot.records = [{ owner: 'example.test', type: 'A', ttl: 300, value: '192.0.2.10' }];
+    });
+    assert.equal(reviewDomainChange({
+      ...aligned,
+      resolverSnapshots: [],
+      acmeDependencies: [],
+      certificate: null,
+      hsts: null,
+    }, NOW).gate.pass, true);
+  });
+
+  test('fails closed for explicitly incomplete certificate and HSTS evidence', () => {
+    const value = input();
+    value.authoritySnapshots.forEach((snapshot) => {
+      snapshot.records = [{ owner: 'example.test', type: 'A', ttl: 300, value: '192.0.2.10' }];
+    });
+    const result = reviewDomainChange({
+      ...value,
+      resolverSnapshots: [],
+      acmeDependencies: [],
+      certificate: {
+        state: 'unavailable', observedAt: NOW,
+        currentSpkiSha256: null, plannedSpkiSha256: null,
+        mustStaple: null, ocspStapled: null, embeddedSctCount: null,
+      },
+      hsts: {
+        state: 'observed', observedAt: NOW, header: null,
+        preloadState: 'unavailable', source: 'analyst-supplied pinned fixture',
+      },
+    }, NOW);
+    assert.equal(result.gate.pass, false);
+    assert.match(result.gate.reasons.join(' '), /Certificate evidence is unavailable/iu);
+    assert.match(result.gate.reasons.join(' '), /HSTS preload evidence is unavailable/iu);
+  });
+
   test('keeps authority, resolver, DNSSEC, ACME, TLS, service, and preload evidence explicit', () => {
     const result = reviewDomainChange(input(), NOW);
     assert.equal(result.schema, 'whoisleuth.domain-change.review');

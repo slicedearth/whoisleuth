@@ -158,7 +158,20 @@ async function buildOfflineEvidenceReviewWithLocalResources(
 
 function formatOfflineEvidenceReview(document: ReturnType<typeof buildOfflineEvidenceReview>): string {
   const result = record(document.result);
-  const state = typeof result.state === 'string' ? result.state : 'reviewed';
+  const gate = record(result.gate);
+  const counts = record(result.counts);
+  const count = (value: unknown): number => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : 0;
+  const listLength = (value: unknown): number => Array.isArray(value) ? value.length : 0;
+  const state = typeof result.state === 'string'
+    ? result.state
+    : document.kind === 'zone_intent'
+      ? result.complete === true
+        && ['different', 'missing', 'unexpected', 'incomplete'].every((key) => count(counts[key]) === 0)
+        ? 'aligned'
+        : 'review'
+      : typeof gate.pass === 'boolean'
+        ? gate.pass ? 'ready' : 'review'
+        : document.kind === 'domain_portfolio' ? 'inventory' : 'reviewed';
   const lines = [
     'Offline evidence review',
     `Kind   ${document.kind.replaceAll('_', ' ')}`,
@@ -171,6 +184,28 @@ function formatOfflineEvidenceReview(document: ReturnType<typeof buildOfflineEvi
     lines.push(`Help   ${String(help.state ?? 'unavailable').replaceAll('_', ' ')}`);
     lines.push(`Plan   ${String(plan.state ?? 'unavailable').replaceAll('_', ' ')}`);
     if (result.responseInspection !== null) lines.push(`Result ${String(responseInspection.state ?? 'invalid').replaceAll('_', ' ')}`);
+  } else if (document.kind === 'zone_intent') {
+    const desired = record(result.desired);
+    lines.push(`Desired ${listLength(desired.records)}`);
+    lines.push(`Compared ${listLength(result.comparisons)}`);
+    lines.push(`Aligned ${count(counts.aligned)}`);
+    lines.push(`Changed ${count(counts.different) + count(counts.missing) + count(counts.unexpected)}`);
+    lines.push(`Partial ${count(counts.incomplete)}`);
+    lines.push(`Rejected ${listLength(desired.rejected)}`);
+  } else if (document.kind === 'domain_change') {
+    lines.push(`Authority ${listLength(result.authoritativeRecordMatrix)} rows`);
+    lines.push(`Resolvers ${listLength(result.resolverDivergenceMatrix)} rows`);
+  } else if (document.kind === 'nameserver_preflight') {
+    const rows = Array.isArray(result.rows) ? result.rows : [];
+    lines.push(`Servers ${rows.length}`);
+    lines.push(`Ready  ${rows.filter((item) => record(item).ready === true).length}`);
+  } else if (document.kind === 'domain_portfolio') {
+    const unknownCounts = record(result.unknownCounts);
+    lines.push(`Assets ${listLength(result.assets)}`);
+    lines.push(`Dependencies ${listLength(result.simulations)}`);
+    lines.push(`Renewals ${listLength(result.renewalQueue)}`);
+    lines.push(`Recovery ${listLength(result.recoveryCycles)}`);
+    lines.push(`Unknown ${Object.values(unknownCounts).reduce<number>((total, value) => total + count(value), 0)}`);
   } else {
     for (const [label, key] of [
       ['Records', 'records'],
@@ -181,6 +216,14 @@ function formatOfflineEvidenceReview(document: ReturnType<typeof buildOfflineEvi
       if (Array.isArray(candidate)) lines.push(`${label.padEnd(7)}${candidate.length}`);
       else if (typeof candidate === 'number') lines.push(`${label.padEnd(7)}${candidate}`);
     }
+  }
+  const reasons = Array.isArray(gate.reasons) ? gate.reasons : [];
+  if (reasons.length) {
+    lines.push('', 'Review reasons:');
+    for (const reason of reasons.slice(0, 8)) {
+      if (typeof reason === 'string') lines.push(`  - ${reason.replace(/[\u0000-\u001f\u007f]+/gu, ' ').trim().slice(0, 240)}`);
+    }
+    if (reasons.length > 8) lines.push(`  - ${reasons.length - 8} more reason(s) omitted.`);
   }
   lines.push('', 'Limitations:');
   for (const limitation of document.limitations) lines.push(`  - ${limitation}`);

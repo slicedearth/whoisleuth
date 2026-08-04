@@ -10,6 +10,18 @@ import {
 const NOW = '2026-08-05T01:02:03.000Z';
 
 describe('zone intent review', () => {
+  test('does not call an empty observed comparison complete', () => {
+    const result = reviewZoneIntent({
+      schema: ZONE_INTENT_INPUT_SCHEMA,
+      version: 1,
+      origin: 'example.test',
+      desired: { format: 'records', records: [] },
+      observed: { state: 'observed', source: 'Fixture', observedAt: NOW, records: [] },
+    }, NOW);
+    assert.equal(result.comparisons.length, 0);
+    assert.equal(result.complete, false);
+  });
+
   test('parses a bounded master-file subset and compares records without retaining TXT values', () => {
     const result = reviewZoneIntent({
       schema: ZONE_INTENT_INPUT_SCHEMA,
