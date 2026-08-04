@@ -11,6 +11,7 @@ import {
   classifyCommonInfrastructureAddress,
   type CommonInfrastructureMatch,
 } from './common-infrastructure.ts';
+import { analyzeBoundedRelationshipGraph } from '../../../../lib/bounded-relationship-graph.mts';
 
 export const CASE_RELATIONSHIP_CLUSTER_VERSION = 2;
 export const MAX_RELATIONSHIP_CLUSTERS = 50;
@@ -171,46 +172,27 @@ export function buildCaseRelationshipClusters(
   summary: CaseRelationshipSummary,
 ): RelationshipClusterSummary {
   const groups = summary.groups.slice(0, MAX_RELATIONSHIP_CLUSTERS * 2);
-  const parent = new Map<string, string>();
   const members = new Map<string, CaseRelationshipMember>();
-
-  function find(id: string): string {
-    const current = parent.get(id);
-    if (!current || current === id) return id;
-    const root = find(current);
-    parent.set(id, root);
-    return root;
-  }
-
-  function union(left: string, right: string): void {
-    const leftRoot = find(left);
-    const rightRoot = find(right);
-    if (leftRoot !== rightRoot) parent.set(rightRoot, leftRoot);
-  }
+  const graphEdges: Array<{ source: string; target: string }> = [];
 
   let truncated = summary.truncated || summary.groups.length > groups.length;
   for (const group of groups) {
     const boundedCases = group.cases.slice(0, MAX_CLUSTER_CASES);
     if (group.cases.length > boundedCases.length) truncated = true;
     for (const member of boundedCases) {
-      if (!parent.has(member.id)) parent.set(member.id, member.id);
       members.set(member.id, member);
     }
     const first = boundedCases[0];
     if (!first) continue;
-    for (const member of boundedCases.slice(1)) union(first.id, member.id);
+    for (const member of boundedCases.slice(1)) graphEdges.push({ source: first.id, target: member.id });
   }
 
-  const casesByRoot = new Map<string, CaseRelationshipMember[]>();
-  for (const member of members.values()) {
-    const root = find(member.id);
-    const bucket = casesByRoot.get(root) ?? [];
-    bucket.push(member);
-    casesByRoot.set(root, bucket);
-  }
+  const graphAnalysis = analyzeBoundedRelationshipGraph([...members.keys()], graphEdges);
+  if (graphAnalysis.truncated) truncated = true;
 
   const output: RelationshipCluster[] = [];
-  for (const cases of casesByRoot.values()) {
+  for (const component of graphAnalysis.components) {
+    const cases = component.map((id) => members.get(id)).filter((value): value is CaseRelationshipMember => Boolean(value));
     if (cases.length < 2) continue;
     const caseIds = new Set(cases.map((item) => item.id));
     const relatedGroups = groups

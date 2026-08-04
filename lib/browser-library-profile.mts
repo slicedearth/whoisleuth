@@ -7,6 +7,7 @@
 import { createHash } from 'node:crypto';
 
 import { RETIRE_BROWSER_CATALOG } from './generated/retire-browser-catalog.mts';
+import { CISA_KEV_CATALOG } from './generated/cisa-kev-catalog.mts';
 import { createObservation } from './observation.mts';
 import {
   MAX_INLINE_SCRIPT_CHARS,
@@ -28,6 +29,8 @@ type BrowserLibraryFinding = {
   advisoryCount: number;
   highestSeverity: Severity | null;
   advisoryIdentifiers: string[];
+  knownExploitedCount: number;
+  knownExploitedIdentifiers: string[];
   weaknessClasses: string[];
 };
 type BrowserLibraryProfileInput = {
@@ -54,7 +57,7 @@ type DetectedComponent = {
   detections: Set<DetectionMethod>;
 };
 
-const BROWSER_LIBRARY_PROFILE_VERSION = 1;
+const BROWSER_LIBRARY_PROFILE_VERSION = 2;
 const MAX_LIBRARY_HTML_CHARS = MAX_STATIC_HTML_CHARS;
 const MAX_LIBRARY_FINDINGS = 16;
 const MAX_ADVISORY_IDENTIFIERS = 16;
@@ -74,6 +77,7 @@ const SEVERITY_WEIGHT: Readonly<Record<Severity, number>> = Object.freeze({
   critical: 4,
 });
 const CATALOG_COMPONENTS = RETIRE_BROWSER_CATALOG.components as UnknownRecord;
+const KNOWN_EXPLOITED_IDENTIFIERS = new Set<string>(CISA_KEV_CATALOG.identifiers);
 
 function record(value: unknown): UnknownRecord {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -280,6 +284,8 @@ function findingFromDetection(detected: DetectedComponent): BrowserLibraryFindin
     }
   }
 
+  const advisoryIdentifiers = [...identifiers].sort();
+  const knownExploitedIdentifiers = advisoryIdentifiers.filter((identifier) => KNOWN_EXPLOITED_IDENTIFIERS.has(identifier));
   return {
     id: detected.component,
     name: detected.component,
@@ -287,7 +293,9 @@ function findingFromDetection(detected: DetectedComponent): BrowserLibraryFindin
     detectionMethods: [...detected.detections].sort(),
     advisoryCount: vulnerabilities.length,
     highestSeverity,
-    advisoryIdentifiers: [...identifiers].sort(),
+    advisoryIdentifiers,
+    knownExploitedCount: knownExploitedIdentifiers.length,
+    knownExploitedIdentifiers,
     weaknessClasses: [...weaknesses].sort(),
   };
 }
@@ -328,6 +336,7 @@ function analyzeBrowserLibraries(input: BrowserLibraryProfileInput = {}) {
   const limitations = [
     'Library versions are inferred from passive static signatures and may be absent, transformed, or misleading.',
     'A catalogue advisory match identifies a component version associated with a published advisory; it does not establish reachability or exploitability.',
+    'A CISA KEV match means that the advisory identifier appears in the pinned known-exploited catalogue; it does not establish that the detected page exposes or executes the affected code path.',
     'Referenced scripts are not fetched, executed, or retained, and unmatched scripts are not evidence that no library is present.',
   ];
   if (input.sourceTruncated === true) limitations.push('The captured homepage body was truncated, so script evidence may be incomplete.');
@@ -343,6 +352,11 @@ function analyzeBrowserLibraries(input: BrowserLibraryProfileInput = {}) {
       name: 'Retire.js',
       version: RETIRE_BROWSER_CATALOG.catalogVersion,
       sourceRevision: RETIRE_BROWSER_CATALOG.sourceRevision,
+    },
+    knownExploitedCatalog: {
+      name: 'CISA KEV',
+      version: CISA_KEV_CATALOG.catalogVersion,
+      releasedAt: CISA_KEV_CATALOG.releasedAt,
     },
     ...createObservation({
       status: truncated ? 'partial' : 'success',
@@ -360,6 +374,7 @@ function analyzeBrowserLibraries(input: BrowserLibraryProfileInput = {}) {
         catalogComponents: Object.keys(CATALOG_COMPONENTS).length,
         findings: allFindings.length,
         advisoryMatches: allFindings.reduce((sum, finding) => sum + finding.advisoryCount, 0),
+        knownExploitedMatches: allFindings.reduce((sum, finding) => sum + finding.knownExploitedCount, 0),
       },
     }),
     findings: allFindings.slice(0, MAX_LIBRARY_FINDINGS),

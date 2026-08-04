@@ -240,9 +240,10 @@ describe('saved Bulk sessions', () => {
     assert.equal(merged.added, 1);
     assert.equal(merged.sessions.length, 1);
     assert.equal(mergeBulkSessions([], { ...exported, version: 1 }).added, 1);
+    assert.equal(mergeBulkSessions([], { ...exported, version: 2 }).added, 1);
     assert.throws(
-      () => mergeBulkSessions([], { ...exported, version: 3 }),
-      /newer schema 3/i,
+      () => mergeBulkSessions([], { ...exported, version: 4 }),
+      /newer schema 4/i,
     );
   });
 });

@@ -123,7 +123,7 @@ export function buildBrowserLookupHandoff(
     ...destination,
     discarded,
     limitations: [
-      'The handoff contains only the displayed normalized hostname or sanitized HTTP(S) origin. It never includes URL credentials, port, path, query, fragment, or browser-local identifiers.',
+      'The handoff contains only the displayed normalised hostname or sanitised HTTP(S) origin. It never includes URL credentials, port, path, query, fragment, or browser-local identifiers.',
       destinationKind === 'lookup'
         ? 'Opening the handoff fills Lookup but does not start collection. Review the target and collection plan before submitting.'
         : 'Opening the handoff discloses the displayed value to the exact displayed endpoint. WHOISleuth does not discover, validate, submit to, or monitor that service.',

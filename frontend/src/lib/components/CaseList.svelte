@@ -6,6 +6,7 @@
   import Pagination from '$lib/components/Pagination.svelte';
   import {
     CASE_DISPOSITIONS,
+    CASE_REVIEW_REASONS,
     CASE_STATUSES,
     dispositionLabel,
     sourceLabel,
@@ -26,6 +27,7 @@
     expand,
     setStatus,
     setDisposition,
+    setReviewReason,
     saveTags,
     addNote,
     removeCase,
@@ -48,6 +50,7 @@
     expand: (record: CaseRecord) => void;
     setStatus: (record: CaseRecord, value: string) => void;
     setDisposition: (record: CaseRecord, value: string) => void;
+    setReviewReason: (record: CaseRecord, value: string) => void;
     saveTags: (record: CaseRecord) => void;
     addNote: (record: CaseRecord) => void;
     removeCase: (record: CaseRecord) => void;
@@ -83,6 +86,7 @@
           <div class="field-grid">
             <label class="field">Status<select value={record.status} onchange={(event) => setStatus(record, event.currentTarget.value)}>{#each CASE_STATUSES as option}<option value={option.value}>{option.label}</option>{/each}</select></label>
             <label class="field">Disposition<select value={record.disposition} onchange={(event) => setDisposition(record, event.currentTarget.value)}>{#each CASE_DISPOSITIONS as option}<option value={option.value}>{option.label}</option>{/each}</select></label>
+            <label class="field">Review reason<select value={record.reviewReasonCode ?? ''} onchange={(event) => setReviewReason(record, event.currentTarget.value)}>{#each CASE_REVIEW_REASONS as option}<option value={option.value}>{option.label}</option>{/each}</select></label>
           </div>
           <form class="tags-edit" onsubmit={(event) => { event.preventDefault(); saveTags(record); }}>
             <label class="field" for={`tags-${record.id}`}>Tags <small>comma separated</small></label>

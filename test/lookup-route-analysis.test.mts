@@ -86,6 +86,11 @@ describe('Lookup route analysis', () => {
     assert.equal(analysis.evidenceTopologyTarget.label, 'example.test');
     assert.equal(analysis.evidenceTopologyTarget.detail, 'domain · fast lookup');
     assert.equal(analysis.caseEvidence.availability, 'registered');
+    assert.equal(analysis.risk?.modelVersion, 7);
+    assert.equal(analysis.opportunity?.modelVersion, 2);
+    assert.equal(analysis.risk?.evidenceQuality.scanDepth, 'fast');
+    assert.equal(analysis.risk?.evidenceQuality.state, 'partial');
+    assert.equal(analysis.caseEvidence.opportunityModelVersion, 2);
     assert.ok(analysis.evidenceCoverage.entries.length > 0);
   });
 

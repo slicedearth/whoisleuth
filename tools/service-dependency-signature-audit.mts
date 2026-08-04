@@ -111,7 +111,7 @@ export function auditServiceDependencySignatures(options: AuditOptions = {}) {
     limitations: Object.freeze([
       'The audit validates local signature metadata and freshness only. It does not contact a service, resolve a target, test an account, or assess claimability.',
       'A current signature identifies a reviewed routing pattern, not whether an observed dependency is assigned, abandoned, vulnerable, safe, or controlled.',
-      'Provider behavior changes require benign and ambiguous fixtures plus manual review before the digest is updated.',
+      'Provider behaviour changes require benign and ambiguous fixtures plus manual review before the digest is updated.',
     ]),
   });
 }

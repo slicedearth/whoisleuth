@@ -569,7 +569,7 @@ function normalizeConnectorOutputs(value: unknown): CuratedConnectorOutputs {
   }
   if (!entities.length) {
     throw new TypeError(
-      'Connector outputs require at least one normalized entity type',
+      'Connector outputs require at least one normalised entity type',
     );
   }
   const entityTypes = new Set(entities);

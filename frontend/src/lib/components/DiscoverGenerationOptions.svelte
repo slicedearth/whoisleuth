@@ -122,7 +122,7 @@
 </div>
 <details class="custom-dictionary">
   <summary>Custom dictionary · {dictionarySummary.values.length} accepted term{dictionarySummary.values.length === 1 ? '' : 's'}</summary>
-  <p>Add campaign, product, regional, or organization-specific words. Terms stay in this browser tab and are used only when you select Generate candidates.</p>
+  <p>Add campaign, product, regional, or organisation-specific words. Terms stay in this browser tab and are used only when you select Generate candidates.</p>
   <label class="field">
     Dictionary terms
     <textarea

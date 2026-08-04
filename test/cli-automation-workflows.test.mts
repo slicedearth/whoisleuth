@@ -10,6 +10,7 @@ import { createBulkCheckpointWriter, parseBulkCheckpoint } from '../cli/bulk-che
 import EXIT_CODES from '../cli/exit-codes.mts';
 import { buildCliLookupDocument } from '../cli/formatters/json.mts';
 import { buildCliLookupDiff } from '../cli/lookup-diff.mts';
+import { buildCliLookupReconciliation } from '../cli/lookup-reconcile.mts';
 import { buildCliLookupTimeline } from '../cli/lookup-timeline.mts';
 import { CLI_PROGRESS_EVENT_SCHEMA, CLI_PROGRESS_EVENT_VERSION } from '../cli/progress-events.mts';
 import { runCli } from '../cli/runner.mts';
@@ -69,13 +70,19 @@ function lookupResult(domain: string, status = 'success', address?: string) {
   };
 }
 
-function savedLookup(domain: string, generatedAt = NOW, address?: string): string {
+function savedLookup(
+  domain: string,
+  generatedAt = NOW,
+  address?: string,
+  collectionContext: Readonly<{ observerLabel?: string; vantageLabel?: string }> = {},
+): string {
   return JSON.stringify(buildCliLookupDocument(
     domain,
     classifiedDomain(domain),
     lookupResult(domain, 'success', address),
     generatedAt,
     'fast',
+    collectionContext,
   ));
 }
 
@@ -88,9 +95,23 @@ describe('CLI automation arguments', () => {
     assert.deepEqual(parseCliArguments(['timeline', 'first.json', 'second.json', 'latest.json', '--json']), {
       action: 'timeline', sources: ['first.json', 'second.json', 'latest.json'], output: 'json', quiet: false, color: true,
     });
+    assert.deepEqual(parseCliArguments(['reconcile', 'office.json', 'mobile.json', '--json']), {
+      action: 'reconcile', sources: ['office.json', 'mobile.json'], output: 'json', quiet: false, color: true,
+    });
+    assert.deepEqual(parseCliArguments(['assurance', 'plan.json', '--json']), {
+      action: 'assurance', source: 'plan.json', output: 'json', quiet: false, color: true,
+    });
+    assert.deepEqual(parseCliArguments([
+      'sharing-review', 'packet.json', '--marking', 'amber', '--recipient-scope', 'organization',
+      '--purpose', 'Reviewed handoff', '--human-reviewed', '--personal-data-reviewed', '--redactions-confirmed', '--json',
+    ]), {
+      action: 'sharing-review', source: 'packet.json', output: 'json', marking: 'amber', recipientScope: 'organization',
+      purpose: 'Reviewed handoff', humanReviewed: true, personalDataReviewed: true, redactionsConfirmed: true,
+      quiet: false, color: true,
+    });
     assert.deepEqual(parseCliArguments(['lookup', 'example.test', '--strict-exit', '--output', 'result.json', '--force']), {
       action: 'lookup', query: 'example.test', output: 'terminal', deep: false, detail: 'standard', strictExit: true,
-      events: false, plan: false, quiet: false, color: true, destination: 'result.json', force: true,
+      events: false, plan: false, observerLabel: null, vantageLabel: null, quiet: false, color: true, destination: 'result.json', force: true,
     });
     assert.deepEqual(parseCliArguments(['bulk', '--checkpoint', 'bulk.json', '--resume', '--events']), {
       action: 'bulk', source: null, output: 'terminal', deep: false, quiet: false, color: true, concurrency: 4,
@@ -102,6 +123,45 @@ describe('CLI automation arguments', () => {
     assert.throws(() => parseCliArguments(['diff', 'same.json', 'same.json']), /two different input files/u);
     assert.throws(() => parseCliArguments(['timeline', 'one.json']), /from 2 to 20/u);
     assert.throws(() => parseCliArguments(['timeline', 'same.json', 'same.json']), /must be different/u);
+    assert.throws(() => parseCliArguments(['reconcile', 'one.json']), /from 2 to 5/u);
+  });
+});
+
+describe('offline domain assurance', () => {
+  test('reviews a bounded retirement input without network collection', async () => {
+    const stdout = capture();
+    let lookupCalled = false;
+    const code = await runCli(['assurance', 'retirement.json', '--json'], {
+      stdout: stdout.stream,
+      stderr: capture().stream,
+      now: () => NOW,
+      readArtifactInput: async () => JSON.stringify({
+        schema: 'whoisleuth.domain-assurance.input',
+        version: 1,
+        kind: 'retirement',
+        domain: 'retired.example',
+        checks: { autoRenewDisabled: true, registrarLockMaintained: true },
+      }),
+      runUnifiedLookup: async () => { lookupCalled = true; },
+    });
+    assert.equal(code, EXIT_CODES.SUCCESS);
+    assert.equal(lookupCalled, false);
+    assert.equal(JSON.parse(stdout.value()).schema, 'whoisleuth.domain-assurance');
+  });
+
+  test('returns partial failure when a pre-sharing review is blocked', async () => {
+    const stdout = capture();
+    const code = await runCli([
+      'sharing-review', 'lookup.json', '--marking', 'clear', '--recipient-scope', 'public',
+      '--purpose', 'External handoff', '--json',
+    ], {
+      stdout: stdout.stream,
+      stderr: capture().stream,
+      now: () => NOW,
+      readArtifactInput: async () => savedLookup('share.example'),
+    });
+    assert.equal(code, EXIT_CODES.PARTIAL_FAILURE);
+    assert.equal(JSON.parse(stdout.value()).summary.status, 'blocked');
   });
 });
 
@@ -212,6 +272,24 @@ describe('strict exit and machine progress events', () => {
 });
 
 describe('direct reports and saved Lookup diff', () => {
+  test('retains analyst-supplied observation labels without changing collection', async () => {
+    const stdout = capture();
+    const code = await runCli([
+      'lookup', 'example.test', '--json', '--observer', 'Office resolver', '--vantage', 'Melbourne fibre',
+    ], {
+      stdout: stdout.stream,
+      stderr: capture().stream,
+      now: () => NOW,
+      classifyQuery: () => classifiedDomain('example.test'),
+      runUnifiedLookup: async () => lookupResult('example.test'),
+    });
+    assert.equal(code, EXIT_CODES.SUCCESS);
+    assert.deepEqual(JSON.parse(stdout.value()).collectionContext, {
+      observerLabel: 'Office resolver',
+      vantageLabel: 'Melbourne fibre',
+    });
+  });
+
   test('renders Markdown and HTML directly from one completed domain lookup', async () => {
     for (const [flag, marker] of [['--markdown', '# Lookup evidence report'], ['--html', '<!doctype html>']] as const) {
       const stdout = capture();
@@ -301,6 +379,38 @@ describe('direct reports and saved Lookup diff', () => {
       /exactly one domain/u,
     );
     assert.throws(() => buildCliLookupTimeline([oldest, oldest], NOW), /observation times must be unique/u);
+  });
+
+  test('reconciles labelled same-domain observations without retaining filenames or voting on truth', async () => {
+    const office = savedLookup('reconcile.example', '2026-06-01T00:00:00.000Z', '192.0.2.10', {
+      observerLabel: 'Office', vantageLabel: 'Resolver A',
+    });
+    const mobile = savedLookup('reconcile.example', '2026-06-01T00:01:00.000Z', '192.0.2.20', {
+      observerLabel: 'Mobile', vantageLabel: 'Resolver B',
+    });
+    const direct = buildCliLookupReconciliation([office, mobile], NOW);
+    assert.equal(direct.schema, 'whoisleuth.cli.lookup-reconciliation');
+    assert.equal(direct.independence.state, 'verified_distinct_labels');
+    assert.ok(direct.summary.disagreement > 0);
+    assert.equal(direct.privacy.filenamesRetained, 0);
+
+    const stdout = capture();
+    const inputs: Record<string, string> = { 'office.json': office, 'mobile.json': mobile };
+    const code = await runCli(['reconcile', 'office.json', 'mobile.json', '--json'], {
+      stdout: stdout.stream,
+      stderr: capture().stream,
+      now: () => NOW,
+      readDiffInput: async (source) => inputs[source] || '',
+    });
+    assert.equal(code, EXIT_CODES.SUCCESS);
+    assert.equal(JSON.parse(stdout.value()).schema, 'whoisleuth.cli.lookup-reconciliation');
+    assert.doesNotMatch(stdout.value(), /office\.json|mobile\.json/iu);
+
+    const unlabelled = buildCliLookupReconciliation([
+      savedLookup('reconcile.example', '2026-06-01T00:02:00.000Z'),
+      savedLookup('reconcile.example', '2026-06-01T00:03:00.000Z'),
+    ], NOW);
+    assert.equal(unlabelled.independence.state, 'unverified');
   });
 });
 

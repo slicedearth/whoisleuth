@@ -375,7 +375,7 @@ test('HTTP intelligence presents bounded redirect provenance and response metada
   await expect(pageCard.getByText('c'.repeat(16), { exact: true })).toBeVisible();
   await expect(pageCard.getByText(/visible-text SimHash is fuzzy comparison data/i)).toBeVisible();
   await expect(pageCard).not.toContainText('secret');
-  await expect(pageCard.getByText(/normalized markup, and visible text are not retained/i)).toBeVisible();
+  await expect(pageCard.getByText(/normalised markup, and visible text are not retained/i)).toBeVisible();
 
   const roleBehaviorCard = page.locator('details').filter({ has: page.getByRole('heading', { name: 'Page role and client behaviour' }) });
   await expect(roleBehaviorCard).not.toHaveAttribute('open', '');
@@ -444,12 +444,13 @@ test('HTTP intelligence presents bounded redirect provenance and response metada
   const pageComparison = page.locator('.page-comparison');
   await expect(pageComparison.getByRole('heading', { name: 'Official-site comparison' })).toBeVisible();
   await expect(pageComparison.getByText('official.example', { exact: true })).toBeVisible();
-  await expect(pageComparison.locator('article').filter({ hasText: 'Normalized HTML' }).getByText('Same captured digest', { exact: true })).toBeVisible();
+  await expect(pageComparison.locator('article').filter({ hasText: 'Normalised HTML' }).getByText('Same captured digest', { exact: true })).toBeVisible();
   await expect(pageComparison.locator('article').filter({ hasText: 'Visible text' }).getByText('100% bit agreement', { exact: true })).toBeVisible();
   await expect(pageComparison.locator('article').filter({ hasText: 'DOM structure' }).getByText('Different captured structure', { exact: true })).toBeVisible();
   await expect(pageComparison.locator('article').filter({ hasText: 'External resource hosts' }).getByText('1 host shared', { exact: true })).toBeVisible();
   await expect(pageComparison.getByText('Shared: assets.example', { exact: true })).toBeVisible();
-  await expect(pageComparison.getByText(/does not combine these observations into a page-similarity score or use them to change the Risk score/i)).toBeVisible();
+  await expect(pageComparison.getByText(/there is no overall page-similarity score/i)).toBeVisible();
+  await expect(pageComparison.getByText(/related matches cannot corroborate one another/i)).toBeVisible();
 
   const snapshots = page.locator('.snapshot-manager');
   await expect(snapshots.getByRole('heading', { name: 'Website profile snapshots' })).toBeVisible();
@@ -589,7 +590,7 @@ test('TLS intelligence presents one-connection certificate evidence without narr
           }],
           chainTruncated: false,
           findings: [
-            { id: 'certificate_unauthorized', tone: 'warning', label: 'Certificate not authorized', detail: 'The runtime trust store did not authorize the observed chain.' },
+            { id: 'certificate_unauthorized', tone: 'warning', label: 'Certificate not authorised', detail: 'The runtime trust store did not authorise the observed chain.' },
             { id: 'wildcard_certificate', tone: 'neutral', label: 'Wildcard certificate', detail: 'Wildcard use is common.' },
           ],
         },
@@ -609,8 +610,8 @@ test('TLS intelligence presents one-connection certificate evidence without narr
   await card.locator(':scope > summary').click();
   await expect(card.getByText('93.184.216.34', { exact: true })).toBeVisible();
   await expect(card.getByText('TLSv1.3', { exact: true })).toBeVisible();
-  await expect(card.getByText('Not authorized', { exact: true })).toBeVisible();
-  await expect(card.getByText('Certificate not authorized', { exact: true })).toBeVisible();
+  await expect(card.getByText('Not authorised', { exact: true })).toBeVisible();
+  await expect(card.getByText('Certificate not authorised', { exact: true })).toBeVisible();
   const leafCertificate = card.locator('.tls-detail').nth(0);
   await leafCertificate.locator('summary').click();
   await expect(leafCertificate.getByText('a'.repeat(64), { exact: true })).toBeVisible();

@@ -75,7 +75,7 @@ function caseRecord(overrides: Record<string, unknown> = {}) {
 describe('schema identity', () => {
   test('exports correct schema and version', () => {
     assert.equal(caseReport.CASE_REPORT_SCHEMA, 'whoisleuth.case-report');
-    assert.equal(caseReport.CASE_REPORT_SCHEMA_VERSION, 4);
+    assert.equal(caseReport.CASE_REPORT_SCHEMA_VERSION, 6);
   });
 });
 
@@ -89,18 +89,28 @@ describe('buildCaseReport JSON', () => {
     const { json } = caseReport.buildCaseReport(rec, { generatedAt: ISO });
 
     assert.equal(json.schema, 'whoisleuth.case-report');
-    assert.equal(json.schemaVersion, 4);
+    assert.equal(json.schemaVersion, 6);
     assert.equal(json.generatedAt, ISO);
     assert.equal(json.application.name, 'WHOISleuth');
     assert.equal(json.case.id, 'case-1');
     assert.equal(json.case.domain, 'test.invalid');
     assert.equal(json.case.notesIncluded, false);
+    assert.deepEqual(json.case.interoperabilityTags, []);
     assert.equal(json.currentAssessment, null);
     assert.deepStrictEqual(json.evidenceTimeline, []);
     assert.ok(typeof json.limitations === 'string');
     assert.ok(json.limitations.length > 0);
     // Notes not present when excluded.
     assert.equal('notes' in json.case, false);
+  });
+
+  test('derives conservative interoperability tags from reviewed analyst state', () => {
+    const rec = caseRecord({ disposition: 'false_positive', reviewReasonCode: 'shared_infrastructure' });
+    const { json } = caseReport.buildCaseReport(rec, { generatedAt: ISO });
+    assert.deepEqual(json.case.interoperabilityTags, [
+      'false-positive:confirmed="true"',
+      'false-positive:risk="high"',
+    ]);
   });
 
   test('separates structured assertions and explicit manual trail entries', () => {
@@ -402,7 +412,7 @@ describe('buildCaseReport Markdown', () => {
     const { markdown } = caseReport.buildCaseReport(rec, { generatedAt: ISO });
 
     assert.ok(markdown.includes('## Limitations & Provenance'));
-    assert.ok(markdown.includes('normalized browser-local observations'));
+    assert.ok(markdown.includes('normalised browser-local observations'));
   });
 
   test('notes excluded by default in markdown', () => {

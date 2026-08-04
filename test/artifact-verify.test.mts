@@ -15,6 +15,7 @@ import {
   encryptWorkspaceArchive,
 } from '../frontend/src/lib/analysis/workspace-archive-crypto.ts';
 import { sha256ArtifactDigest } from '../frontend/src/lib/analysis/artifact-integrity.ts';
+import { buildInvestigationCapsule } from '../frontend/src/lib/analysis/investigation-capsule.ts';
 
 const PASSPHRASE = 'fixture archive passphrase';
 
@@ -108,8 +109,36 @@ describe('offline artifact verifier', () => {
 
     await assert.rejects(
       verifyOfflineArtifact(JSON.stringify({ ...lookup, diagnostics: { rdap: { status: 'success' }, whois: { status: 'complete' } } })),
-      /missing normalized parsed data/iu,
+      /missing normalised parsed data/iu,
     );
+  });
+
+  test('verifies a whole investigation capsule and detects changed embedded projections', async () => {
+    const graph = {
+      version: 2 as const,
+      targetId: 'target-example',
+      nodes: [{ id: 'target-example', label: 'example.test', kind: 'target' as const, detail: 'Lookup target' }],
+      edges: [], sources: [], truncated: false, limitations: [],
+    };
+    const brief = {
+      schema: 'whoisleuth.investigation-brief' as const, schemaVersion: 1 as const,
+      generatedAt: '2026-08-04T00:00:00.000Z', target: 'example.test', targetType: 'domain',
+      task: 'general' as const, taskLabel: 'General review', question: 'What is known?', summary: 'Review evidence.',
+      observation: { observedAt: '2026-08-04T00:00:00.000Z', evidenceAgeDays: 0, completeSources: 1, limitedSources: 0, freshnessPolicy: { version: 1 as const, id: 'task-default' as const, task: 'general' as const, thresholdsDays: { registration: 30, network: 7, web: 3 } } },
+      verifiedFacts: [], contradictions: [], unknowns: [], nextActions: [],
+      relationships: { nodes: 1, edges: 0, truncated: false, kinds: [] }, limitations: [],
+    };
+    const capsule = await buildInvestigationCapsule({
+      applicationVersion: '1.36.1', lookupEvidence: { schema: 'whoisleuth.lookup-evidence', schemaVersion: 24 },
+      brief, graph, generatedAt: '2026-08-04T01:00:00Z',
+    });
+    const report = await verifyOfflineArtifact(JSON.stringify(capsule));
+    assert.equal(report.artifact.kind, 'investigation_capsule');
+    assert.equal(report.checks.contentIntegrity, 'verified');
+    await assert.rejects(verifyOfflineArtifact(JSON.stringify({
+      ...capsule,
+      graphSnapshot: { ...capsule.graphSnapshot, nodes: [{ ...capsule.graphSnapshot.nodes[0]!, label: 'changed.test' }] },
+    })), /embedded projection integrity/u);
   });
 
   test('rejects unsupported, malformed, and oversized input', async () => {

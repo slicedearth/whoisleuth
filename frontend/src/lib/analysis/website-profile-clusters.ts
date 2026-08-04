@@ -52,7 +52,7 @@ export type WebsiteProfileClusterSummary = Readonly<{
 }>;
 
 const IDENTITY_LABELS: Record<keyof WebsiteIdentityDigests, string> = {
-  normalizedHtml: 'Normalized page structure',
+  normalizedHtml: 'Normalised page structure',
   visibleText: 'Visible-text fingerprint',
   domStructure: 'DOM structure',
   formStructure: 'Form structure',

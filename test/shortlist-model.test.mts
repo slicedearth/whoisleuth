@@ -26,6 +26,7 @@ function record(domain = 'example.invalid', overrides = {}) {
     registrarName: 'Example Registrar',
     riskModelVersion: 5,
     riskScore: 72,
+    opportunityModelVersion: 2,
     opportunityScore: 41,
     mutationTypes: ['omission'],
     savedAt: NOW,
@@ -48,6 +49,7 @@ test('normalizes known shortlist evidence and discards arbitrary imported fields
   assert.equal(normalized.domain, 'example.invalid');
   assert.equal(normalized.riskScore, 100);
   assert.equal(normalized.opportunityScore, 0);
+  assert.equal(normalized.opportunityModelVersion, 2);
   const registrarName = normalized.registrarName;
   assert.ok(typeof registrarName === 'string');
   assert.equal(registrarName.length, 300);

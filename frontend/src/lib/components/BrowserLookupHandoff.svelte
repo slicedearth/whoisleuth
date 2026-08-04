@@ -103,8 +103,8 @@
       </select>
       <label for="handoff-format">Disclose</label>
       <select id="handoff-format" bind:value={disclosureFormat} onchange={() => { preview = null; disclosureConfirmed = false; }}>
-        <option value="domain">Normalized domain</option>
-        <option value="sanitized_url">Sanitized HTTP(S) origin</option>
+        <option value="domain">Normalised domain</option>
+        <option value="sanitized_url">Sanitised HTTP(S) origin</option>
       </select>
     </div>
     {#if destinationKind !== 'lookup'}

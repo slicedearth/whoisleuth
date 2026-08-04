@@ -81,7 +81,7 @@ describe('retained relationship observation model', () => {
     assert.equal(normalized.classification, 'derived');
     assert.equal(normalized.source, 'bulk_relationship_analysis');
     assert.equal(normalized.label, 'Shared nameserver set');
-    assert.equal(normalized.method, 'Exact normalized set');
+    assert.equal(normalized.method, 'Exact normalised set');
     assert.match(normalized.description, /shared DNS providers are common/i);
     assert.match(normalized.limitations.join(' '), /does not prove ownership/i);
     assert.equal(normalizeRelationshipObservation({ ...source, observedAt: 'not-a-date' }), null);

@@ -350,9 +350,9 @@ function dependency(
       : state === 'active'
         ? 'The target is within the reviewed scope and also appears in the already-observed final HTTP navigation chain. Confirm the provider assignment independently.'
         : state === 'candidate'
-          ? 'The target matches a reviewed service-family signature and is within the analyst-declared authorized scope. Confirm resolution and provider assignment manually.'
+          ? 'The target matches a reviewed service-family signature and is within the analyst-declared authorised scope. Confirm resolution and provider assignment manually.'
           : state === 'unresolved'
-            ? 'The external target matches a reviewed service-family signature, but its authorized scope or active assignment has not been established.'
+            ? 'The external target matches a reviewed service-family signature, but its authorised scope or active assignment has not been established.'
             : targetRelation === 'in_domain'
               ? 'The target remains inside the domain namespace. The external-service catalogue does not classify it.'
               : 'The external target does not match the bounded reviewed service-family catalogue. Manual classification is required.',
@@ -620,7 +620,7 @@ export function buildServiceDependencyReview(input: Readonly<{
         ],
     limitations: [
       'WHOISleuth does not follow dependency targets, query provider accounts, test claimability, or attempt service registration.',
-      'Service-family signatures and analyst-entered scope are local comparison aids only; neither establishes provider configuration, account ownership, authorization, abandonment, or claimability.',
+      'Service-family signatures and analyst-entered scope are local comparison aids only; neither establishes provider configuration, account ownership, authorisation, abandonment, or claimability.',
       `The fixed service catalogue contains ${signatures.length} reviewed families. ${catalogues.length ? 'Matching rows show their family and qualification.' : 'No observed target matched it.'}`,
       'Exact passive page-title matches are collision-prone review cues and never prove deprovisioning, claimability, or service state.',
       'Candidate, unresolved, active, unsupported, and false-positive labels organise manual review only. None establishes dangling status, vulnerability, claimability, ownership, control, safety, or maliciousness.',

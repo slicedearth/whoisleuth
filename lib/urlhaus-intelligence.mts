@@ -364,7 +364,7 @@ function createUrlhausIntelligenceAdapter(dependencies: AdapterDependencies = {}
         truncated,
         detail: findings.length
           ? `Found ${findings.length} bounded malware-distribution record${findings.length === 1 ? '' : 's'} for this host${truncated ? '; additional provider records may exist' : ''}.`
-          : 'The provider reported this host but no returned record could be safely normalized.',
+          : 'The provider reported this host but no returned record could be safely normalised.',
         upstreamStatus,
         findings,
         limitations: [

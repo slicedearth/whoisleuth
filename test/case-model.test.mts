@@ -376,6 +376,15 @@ describe('snapshot normalization', () => {
     assert.equal(orphaned.riskModelVersion, null);
   });
 
+  test('retains only a bounded Opportunity model version attached to Opportunity evidence', () => {
+    const current = normalizedSnapshot({ availability: 'registered', opportunityModelVersion: 2, opportunityScore: 42 }, { fallback: ISO });
+    assert.equal(current.opportunityModelVersion, 2);
+    const malformed = normalizedSnapshot({ availability: 'registered', opportunityModelVersion: '2', opportunityScore: 42 }, { fallback: ISO });
+    assert.equal(malformed.opportunityModelVersion, null);
+    const orphaned = normalizedSnapshot({ availability: 'registered', opportunityModelVersion: 2 }, { fallback: ISO });
+    assert.equal(orphaned.opportunityModelVersion, null);
+  });
+
   test('preserves null vs false for booleans', () => {
     const snap = normalizedSnapshot({ availability: 'registered', hasMx: false, hasSpf: true }, { fallback: ISO });
     assert.equal(snap.hasMx, false); // an observed "no MX", not missing data
@@ -703,6 +712,17 @@ describe('compareCaseEvidence', () => {
     const future = normalizedSnapshot({ scanDepth: 'deep', availability: 'registered', riskModelVersion: 2, riskScore: 80 }, { fallback: LATER });
     assert.equal(find(model.compareCaseEvidence(current, future), 'riskScore'), undefined);
     assert.deepEqual(model.caseEvidenceIncomparableReasons(current, future), ['risk-model']);
+  });
+
+  test('keeps unversioned or differently-versioned Opportunity scores readable but incomparable', () => {
+    const unversioned = normalizedSnapshot({ scanDepth: 'deep', availability: 'registered', opportunityScore: 90 }, { fallback: ISO });
+    const current = normalizedSnapshot({ scanDepth: 'deep', availability: 'registered', opportunityModelVersion: 2, opportunityScore: 42 }, { fallback: LATER });
+    assert.equal(find(model.compareCaseEvidence(unversioned, current), 'opportunityScore'), undefined);
+    assert.deepEqual(model.caseEvidenceIncomparableReasons(unversioned, current), ['opportunity-model']);
+
+    const future = normalizedSnapshot({ scanDepth: 'deep', availability: 'registered', opportunityModelVersion: 3, opportunityScore: 80 }, { fallback: LATER });
+    assert.equal(find(model.compareCaseEvidence(current, future), 'opportunityScore'), undefined);
+    assert.deepEqual(model.caseEvidenceIncomparableReasons(current, future), ['opportunity-model']);
   });
 
   test('reports ordinary changes while separately disclosing a risk-model mismatch', () => {

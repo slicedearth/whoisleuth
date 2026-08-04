@@ -284,7 +284,7 @@ describe('lookup evidence export conversion', () => {
     recordValue(missingParsed.rdap.registrarRdap).parsed = null;
     assert.throws(
       () => buildCliEvidenceExport(JSON.stringify(missingParsed), { buildLookupEvidence() {} }),
-      /Successful registrar RDAP input is missing normalized parsed data/
+      /Successful registrar RDAP input is missing normalised parsed data/
     );
 
     const unsupportedStatus = savedLookup();
@@ -352,7 +352,7 @@ describe('lookup evidence Markdown rendering', () => {
     const markdown = formatLookupEvidenceMarkdown(result);
 
     assert.match(markdown, /Registry access suffix/);
-    assert.match(markdown, /WHOIS access:\*\* Source\\-IP authorization required/);
+    assert.match(markdown, /WHOIS access:\*\* Source\\-IP authorisation required/);
     assert.match(markdown, /RDAP access:\*\* No service published by IANA/);
     assert.match(markdown, /Registry access constraints describe collection reachability only/);
     assert.doesNotMatch(markdown, /<script>|\]\(https:\/\//i);
@@ -430,7 +430,7 @@ describe('lookup evidence HTML rendering', () => {
     const html = formatLookupEvidenceHtml(result);
 
     assert.match(html, /Registry access suffix/);
-    assert.match(html, /Source-IP authorization required/);
+    assert.match(html, /Source-IP authorisation required/);
     assert.match(html, /No service published by IANA/);
     assert.match(html, /Restricted &lt;script&gt;alert\(1\)&lt;\/script&gt; collection context\./);
     assert.doesNotMatch(html, /<script>alert/);

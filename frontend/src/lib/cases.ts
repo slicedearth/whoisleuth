@@ -36,11 +36,13 @@ export type RiskCalibrationExportPreview = Readonly<{
   records: readonly Readonly<{
     domain: string;
     analystDisposition: string;
+    reviewReasonCode: string | null;
   }>[];
 }>;
 
 export {
   CASE_DISPOSITIONS,
+  CASE_REVIEW_REASONS,
   CASE_STATUSES,
   compareCaseEvidence,
   dispositionLabel,
@@ -268,6 +270,7 @@ export async function previewRiskCalibrationDataset(
     records: Object.freeze(payload.records.map((record) => Object.freeze({
       domain: record.domain,
       analystDisposition: record.analystDisposition,
+      reviewReasonCode: record.reviewReasonCode ?? null,
     }))),
   });
 }

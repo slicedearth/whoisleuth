@@ -77,12 +77,12 @@ const TYPE_METADATA: Record<RelationshipObservationType, {
 }> = Object.freeze({
   nameserver_set: Object.freeze({
     label: 'Shared nameserver set',
-    method: 'Exact normalized set',
-    description: 'These domains reported the same normalized nameserver set. Shared DNS providers are common.',
+    method: 'Exact normalised set',
+    description: 'These domains reported the same normalised nameserver set. Shared DNS providers are common.',
   }),
   ip_address: Object.freeze({
     label: 'Shared IP address',
-    method: 'Exact normalized address',
+    method: 'Exact normalised address',
     description: 'These domains resolved to the same IP address. Shared hosting, CDNs, and managed platforms are common.',
   }),
   certificate: Object.freeze({
@@ -93,7 +93,7 @@ const TYPE_METADATA: Record<RelationshipObservationType, {
   tracking_identifier: Object.freeze({
     label: 'Shared tracking identifier',
     method: 'Exact public identifier',
-    description: 'These pages exposed the same recognized public tracking identifier in bounded static HTML.',
+    description: 'These pages exposed the same recognised public tracking identifier in bounded static HTML.',
   }),
   favicon: Object.freeze({
     label: 'Similar favicon',

@@ -409,7 +409,7 @@ function buildLookupEvidenceReport(
       ...registryAccessFields,
     ],
     limitations: [
-      'This report summarizes point-in-time observations and registry publications. It does not prove ownership, activity, availability, or maliciousness.',
+      'This report summarises point-in-time observations and registry publications. It does not prove ownership, activity, availability, or maliciousness.',
       'Missing, skipped, partial, unsupported, or failed sources are inconclusive rather than negative evidence.',
       'The Risk score is a versioned heuristic review priority, not a probability or determination of maliciousness. Review its listed factors and the underlying source states.',
       'Raw registry payloads and full WHOIS referral responses are available only in the JSON evidence package and may contain public contact data.',

@@ -198,7 +198,7 @@ function validateEnvelope(raw: unknown): {
   }
 
   const salt = decodeBase64url(kdf.salt, SALT_BYTES, 'salt');
-  const iv = decodeBase64url(cipher.iv, IV_BYTES, 'initialization vector');
+  const iv = decodeBase64url(cipher.iv, IV_BYTES, 'initialisation vector');
   if (typeof value.ciphertext !== 'string' || value.ciphertext.length > MAX_CIPHERTEXT_BASE64URL_CHARACTERS) {
     throw new Error('The encrypted workspace archive ciphertext exceeds its byte limit.');
   }

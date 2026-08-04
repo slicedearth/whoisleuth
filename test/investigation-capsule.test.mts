@@ -17,7 +17,7 @@ const brief = {
   verifiedFacts: [], contradictions: [], unknowns: [], nextActions: [],
   relationships: { nodes: 1, edges: 0, truncated: false, kinds: [] }, limitations: [],
 };
-const graph = { version: 1 as const, targetId: 'target-example', nodes: [{ id: 'target-example', label: 'example.test', kind: 'target' as const, detail: 'Lookup target' }], edges: [], truncated: false, limitations: [] };
+const graph = { version: 2 as const, targetId: 'target-example', nodes: [{ id: 'target-example', label: 'example.test', kind: 'target' as const, detail: 'Lookup target' }], edges: [], sources: [], truncated: false, limitations: [] };
 
 test('investigation capsule links evidence and verifies embedded projections', async () => {
   const capsule = await buildInvestigationCapsule({

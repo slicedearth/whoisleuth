@@ -144,8 +144,7 @@ function serializedBytes(value: unknown): number {
  * searches. Current baselines are the last data discarded.
  * @param {unknown} rawStore
  */
-export function enforceCtHistoryBudget(rawStore: unknown): CtHistoryStore {
-  const store = normalizeCtHistoryStore(rawStore);
+function enforceNormalizedCtHistoryBudget(store: CtHistoryStore): CtHistoryStore {
   let storeBytes = serializedBytes(store);
   while (storeBytes > MAX_CT_HISTORY_STORE_BYTES) {
     let changed = false;
@@ -195,6 +194,10 @@ export function enforceCtHistoryBudget(rawStore: unknown): CtHistoryStore {
     measuredBytes = serializedBytes(store);
   }
   return store;
+}
+
+export function enforceCtHistoryBudget(rawStore: unknown): CtHistoryStore {
+  return enforceNormalizedCtHistoryBudget(normalizeCtHistoryStore(rawStore));
 }
 
 export function ctHistoryStoreVersion(raw: unknown): number | null {
@@ -250,9 +253,11 @@ export function recordCtHistorySearch(
     domains: truncated ? existing?.domains || [] : currentDomains,
     history: [...(existing?.history || []), event].slice(-MAX_CT_HISTORY_EVENTS),
   };
-  const nextStore = enforceCtHistoryBudget({
+  const nextStore = enforceNormalizedCtHistoryBudget({
     version: CT_HISTORY_SCHEMA_VERSION,
-    entries: [entry, ...store.entries.filter((item) => item.query !== query)],
+    entries: [entry, ...store.entries.filter((item) => item.query !== query)]
+      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt) || left.query.localeCompare(right.query))
+      .slice(0, MAX_CT_HISTORY_SEARCHES),
   });
 
   return {

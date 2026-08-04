@@ -16,6 +16,7 @@ import {
 import { reviewRpkiRoute } from '../lib/rpki-evidence.mts';
 import { analyzeTlsaEvidence } from '../lib/tlsa-evidence.mts';
 import { CliUsageError } from './errors.mts';
+import { LOCAL_MMDB_QUERY_SCHEMA, reviewLocalMmdb } from './local-mmdb-review.mts';
 
 const OFFLINE_EVIDENCE_REVIEW_SCHEMA = 'whoisleuth.cli.offline-evidence-review';
 const OFFLINE_EVIDENCE_REVIEW_VERSION = 1;
@@ -100,7 +101,7 @@ function buildOfflineEvidenceReview(value: unknown, generatedAt = new Date().toI
       { name: query.name, type: query.type },
     );
   } else {
-    throw new CliUsageError('Offline evidence review does not recognize this input schema.');
+    throw new CliUsageError('Offline evidence review does not recognise this input schema.');
   }
   return Object.freeze({
     schema: OFFLINE_EVIDENCE_REVIEW_SCHEMA,
@@ -110,6 +111,26 @@ function buildOfflineEvidenceReview(value: unknown, generatedAt = new Date().toI
     result,
     limitations: Object.freeze([
       'The review is local and uses only the supplied document. It does not refresh, transmit, or independently establish the current completeness of the evidence.',
+    ]),
+  });
+}
+
+async function buildOfflineEvidenceReviewWithLocalResources(
+  value: unknown,
+  generatedAt = new Date().toISOString(),
+  options: Readonly<{ mmdbPath?: string | null }> = {},
+) {
+  const input = parseInput(value);
+  if (input.schema !== LOCAL_MMDB_QUERY_SCHEMA) return buildOfflineEvidenceReview(value, generatedAt);
+  if (!options.mmdbPath) throw new CliUsageError('Local MMDB review requires --mmdb <database-file>.');
+  return Object.freeze({
+    schema: OFFLINE_EVIDENCE_REVIEW_SCHEMA,
+    version: OFFLINE_EVIDENCE_REVIEW_VERSION,
+    generatedAt,
+    kind: 'geoip' as const,
+    result: await reviewLocalMmdb(input, options.mmdbPath),
+    limitations: Object.freeze([
+      'The review is local and uses only the supplied query metadata and analyst-supplied database. It does not transmit the address or refresh the database.',
     ]),
   });
 }
@@ -152,5 +173,6 @@ export {
   OFFLINE_EVIDENCE_REVIEW_SCHEMA,
   OFFLINE_EVIDENCE_REVIEW_VERSION,
   buildOfflineEvidenceReview,
+  buildOfflineEvidenceReviewWithLocalResources,
   formatOfflineEvidenceReview,
 };

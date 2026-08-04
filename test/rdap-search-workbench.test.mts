@@ -3,6 +3,7 @@ import { describe, test } from 'node:test';
 
 import {
   MAX_HELP_ENTRIES,
+  inspectRdapReverseSearchResponse,
   normalizeRdapSearchHelp,
   planRdapReverseSearch,
 } from '../lib/rdap-search-workbench.mts';
@@ -11,8 +12,8 @@ describe('RDAP reverse-search workbench', () => {
   test('normalizes supported RFC-style help declarations without executing a request', () => {
     const summary = normalizeRdapSearchHelp({
       reverse_search_properties: [
-        { searchableResourceType: 'domains', relatedResourceType: 'entities', property: 'handle' },
-        { searchableResourceType: 'ips', relatedResourceType: 'entities', property: 'email' },
+        { searchableResourceType: 'domains', relatedResourceType: 'entity', property: 'handle' },
+        { searchableResourceType: 'nameservers', relatedResourceType: 'entity', property: 'email' },
       ],
     });
 
@@ -25,12 +26,12 @@ describe('RDAP reverse-search workbench', () => {
   test('requires the exact advertised tuple before producing a bounded plan', () => {
     const help = normalizeRdapSearchHelp({
       reverse_search_properties: [
-        { searchableResourceType: 'autnums', relatedResourceType: 'entities', property: 'handle' },
+        { searchableResourceType: 'domains', relatedResourceType: 'entity', property: 'handle' },
       ],
     });
     const ready = planRdapReverseSearch(help, {
-      searchableResourceType: 'autnums',
-      relatedResourceType: 'entities',
+      searchableResourceType: 'domains',
+      relatedResourceType: 'entity',
       property: 'handle',
       value: ' EXAMPLE-HANDLE ',
     });
@@ -38,8 +39,8 @@ describe('RDAP reverse-search workbench', () => {
       schema: 'whoisleuth.rdap-search-workbench',
       version: 1,
       state: 'ready',
-      requestPath: '/autnums',
-      query: { entities_handle: 'EXAMPLE-HANDLE' },
+      requestPath: '/domains/reverse_search/entity',
+      query: { handle: 'EXAMPLE-HANDLE' },
       disclosure: {
         class: 'identifier',
         summary: 'Would disclose the supplied handle identifier to the selected RDAP server.',
@@ -49,8 +50,8 @@ describe('RDAP reverse-search workbench', () => {
     });
 
     const unsupported = planRdapReverseSearch(help, {
-      searchableResourceType: 'domains',
-      relatedResourceType: 'entities',
+      searchableResourceType: 'nameservers',
+      relatedResourceType: 'entity',
       property: 'handle',
       value: 'EXAMPLE-HANDLE',
     });
@@ -65,7 +66,7 @@ describe('RDAP reverse-search workbench', () => {
 
     const entries = Array.from({ length: MAX_HELP_ENTRIES + 2 }, (_, index) => ({
       searchableResourceType: index === 0 ? 'domains' : 'widgets',
-      relatedResourceType: 'entities',
+      relatedResourceType: 'entity',
       property: index === 1 ? 'unknown_property' : 'handle',
     }));
     const summary = normalizeRdapSearchHelp({ reverse_search_properties: entries });
@@ -78,20 +79,41 @@ describe('RDAP reverse-search workbench', () => {
   test('rejects control-bearing or oversized query values', () => {
     const help = normalizeRdapSearchHelp({
       reverse_search_properties: [
-        { searchableResourceType: 'domains', relatedResourceType: 'entities', property: 'email' },
+        { searchableResourceType: 'domains', relatedResourceType: 'entity', property: 'email' },
       ],
     });
     assert.equal(planRdapReverseSearch(help, {
       searchableResourceType: 'domains',
-      relatedResourceType: 'entities',
+      relatedResourceType: 'entity',
       property: 'email',
       value: 'bad\nvalue',
     }).state, 'invalid');
     assert.equal(planRdapReverseSearch(help, {
       searchableResourceType: 'domains',
-      relatedResourceType: 'entities',
+      relatedResourceType: 'entity',
       property: 'email',
       value: 'x'.repeat(255),
     }).state, 'invalid');
+  });
+
+  test('validates response mappings against reviewed registrations without trusting unknown paths', () => {
+    const complete = inspectRdapReverseSearchResponse({
+      reverse_search_properties_mapping: [
+        { property: 'handle', propertyPath: '$.entities[*].handle' },
+      ],
+    }, ['handle']);
+    assert.equal(complete.state, 'complete');
+    assert.equal(complete.mappings[0]?.state, 'registered');
+
+    const partial = inspectRdapReverseSearchResponse({
+      reverse_search_properties_mapping: [
+        { property: 'email', propertyPath: '$.privateContacts[*].email' },
+        { property: 'bad\nproperty', propertyPath: '$.bad' },
+      ],
+    }, ['email', 'role']);
+    assert.equal(partial.state, 'partial');
+    assert.equal(partial.mappings[0]?.state, 'unrecognized');
+    assert.deepEqual(partial.missingProperties, ['role']);
+    assert.equal(partial.rejectedCount, 1);
   });
 });

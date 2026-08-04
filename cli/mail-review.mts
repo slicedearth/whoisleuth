@@ -215,7 +215,7 @@ function buildCliMailReview(textValue: unknown, generatedAt = new Date().toISOSt
       'This review is passive and uses DNS evidence already retained in a WHOISleuth Bulk result; it makes no network request.',
       'Null MX, no explicit MX, receiving mail, authentication gaps, and incomplete evidence remain separate states.',
       'Optional TLSA evidence is compared offline. A DANE match requires separately validated DNSSEC evidence from the same observation.',
-      'SMTP delivery, mailbox existence, catch-all behavior, banner collection, and message acceptance were not tested.',
+      'SMTP delivery, mailbox existence, catch-all behaviour, banner collection, and message acceptance were not tested.',
     ],
   };
 }

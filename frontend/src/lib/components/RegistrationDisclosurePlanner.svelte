@@ -25,7 +25,7 @@
   });
   const FIELD_LABELS: Readonly<Record<DisclosureFieldId, string>> = Object.freeze({
     'registrant-name': 'Registrant name',
-    'registrant-organization': 'Registrant organization',
+    'registrant-organization': 'Registrant organisation',
     'registrant-email': 'Registrant email',
     'registrant-phone': 'Registrant phone',
     'administrative-contact': 'Administrative contact',
@@ -55,6 +55,9 @@
   let dataMinimised = $state(false);
   let rightsImpactConsidered = $state(false);
   let currentProcessReviewed = $state(false);
+  let gtldScopeReviewed = $state(false);
+  let registrarParticipationReviewed = $state(false);
+  let requesterMaterialsReady = $state(false);
   let message = $state('');
 
   const redactions = $derived(Array.isArray(rdapParsed.redactions) ? rdapParsed.redactions : []);
@@ -75,6 +78,9 @@
     dataMinimised,
     rightsImpactConsidered,
     currentProcessReviewed,
+    gtldScopeReviewed,
+    registrarParticipationReviewed,
+    requesterMaterialsReady,
     caseReference,
   }, observedAt || new Date().toISOString()));
 
@@ -102,6 +108,9 @@
       dataMinimised,
       rightsImpactConsidered,
       currentProcessReviewed,
+      gtldScopeReviewed,
+      registrarParticipationReviewed,
+      requesterMaterialsReady,
       caseReference,
     });
     const url = URL.createObjectURL(new Blob([`${JSON.stringify(plan, null, 2)}\n`], { type: 'application/json;charset=utf-8' }));
@@ -117,7 +126,7 @@
 <details class="card disclosure-planner">
   <summary>Prepare a registration disclosure request</summary>
   <div class="planner-body">
-    <p class="muted">Build a minimized local packet from observed RDAP redactions and analyst-authored justification. WHOISleuth does not decide eligibility or entitlement and does not submit the request.</p>
+    <p class="muted">Build a minimised local packet from observed RDAP redactions and analyst-authored justification. WHOISleuth does not decide eligibility or entitlement and does not submit the request.</p>
 
     <div class="observed-summary">
       <strong>Observed public-data gap</strong>
@@ -156,7 +165,10 @@
       <label><input type="checkbox" bind:checked={publicDataReviewed}> Available public registration evidence was reviewed first.</label>
       <label><input type="checkbox" bind:checked={dataMinimised}> Every requested field is necessary for the stated purpose.</label>
       <label><input type="checkbox" bind:checked={rightsImpactConsidered}> Privacy and rights impacts were considered.</label>
-      <label><input type="checkbox" bind:checked={currentProcessReviewed}> Current service eligibility, registrar participation, and submission instructions were checked manually.</label>
+      <label><input type="checkbox" bind:checked={currentProcessReviewed}> Current service instructions, terms, and submission process were checked manually.</label>
+      <label><input type="checkbox" bind:checked={gtldScopeReviewed}> The target and request were checked against the current nonpublic gTLD service scope.</label>
+      <label><input type="checkbox" bind:checked={registrarParticipationReviewed}> Current registrar participation was reviewed manually.</label>
+      <label><input type="checkbox" bind:checked={requesterMaterialsReady}> Requester identity, authority, supporting material, and ICANN account requirements were reviewed.</label>
     </fieldset>
 
     <section class="preflight" aria-labelledby="disclosure-preflight-title">
@@ -167,7 +179,8 @@
 
     <div class="actions">
       <button class="btn" type="button" onclick={downloadPlan} disabled={preview.readiness === 'needs_input'}>Export review packet</button>
-      <a class="btn" href={preview.currentServiceInformation} target="_blank" rel="noopener noreferrer">Review current service information</a>
+      <a class="btn" href={preview.serviceHandoff.informationUrl} target="_blank" rel="noopener noreferrer">Review current service information</a>
+      {#if preview.readiness !== 'needs_input'}<a class="btn" href={preview.serviceHandoff.portalUrl} target="_blank" rel="noopener noreferrer">Open the reviewed request portal</a>{/if}
     </div>
     {#if message}<p class="success" role="status">{message}</p>{/if}
     <p class="fine-print">The exported file excludes raw RDAP, raw WHOIS, and discovered personal contact data. Review current requirements and the packet before any manual submission.</p>

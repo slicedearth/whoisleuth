@@ -193,7 +193,7 @@ const TIMING_SOURCES = new Set([
   'malware_ioc_intelligence',
 ]);
 const BASE_REPORT_LIMITATIONS = Object.freeze([
-  'This local report summarizes only source-health metadata present in the supplied files and does not contact or rank providers.',
+  'This local report summarises only source-health metadata present in the supplied files and does not contact or rank providers.',
   'Timing measurements from concurrent Lookup sources overlap and must not be added together as total wall-clock time.',
   'Provider result states and their observation-health states are counted separately because they describe different contracts.',
   'Missing timing or observation envelopes remain unmeasured rather than being treated as fast, complete, or reliable.',

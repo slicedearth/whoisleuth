@@ -105,7 +105,7 @@ function disclosure(
     return {
       source,
       state: 'unavailable',
-      detail: 'The source did not provide a usable normalized publication.',
+      detail: 'The source did not provide a usable normalised publication.',
     };
   }
   const parsed = record(parsedValue);
@@ -236,9 +236,9 @@ function publicationDiagnostic(
   const issues: string[] = [];
   if (state === 'unavailable') issues.push('No usable publication was available from this source.');
   if (parsed.serverTruncated === true) issues.push('The RDAP server declared a truncated response.');
-  if (parsed.entitiesTruncated === true) issues.push('The normalized entity inventory was capped.');
-  if (parsed.statusesTruncated === true) issues.push('The normalized status inventory was capped.');
-  if (strings(parsed.fieldsTruncated, 20).length) issues.push('One or more normalized WHOIS fields were capped.');
+  if (parsed.entitiesTruncated === true) issues.push('The normalised entity inventory was capped.');
+  if (parsed.statusesTruncated === true) issues.push('The normalised status inventory was capped.');
+  if (strings(parsed.fieldsTruncated, 20).length) issues.push('One or more normalised WHOIS fields were capped.');
   if (parsed.chainStatus === 'partial') issues.push('The WHOIS referral chain was incomplete or conflicting.');
   const conformance = strings(parsed.conformance, 30);
   const redactions = Array.isArray(parsed.redactions) ? parsed.redactions.slice(0, 50) : [];
@@ -343,9 +343,9 @@ export function buildRegistryInsights(input: {
         : unavailableCount
           ? 'The comparison is partial because at least one publication was unavailable or incomplete.'
           : sourceOnlyCount || redactedCount
-            ? 'The sources differ in publication or disclosure without a normalized conflict.'
+            ? 'The sources differ in publication or disclosure without a normalised conflict.'
             : counts.equivalent
-              ? 'The comparable fields are normalized as equivalent.'
+              ? 'The comparable fields are normalised as equivalent.'
               : 'No comparable fields were available.',
     },
     publications: [

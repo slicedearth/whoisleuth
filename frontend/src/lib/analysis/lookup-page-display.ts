@@ -83,7 +83,7 @@ export function buildLookupPageDisplay(input: {
       detail: exact.scope === 'captured-prefix' ? 'Captured prefix' : 'Complete captured body',
     },
     {
-      label: 'Normalized HTML',
+      label: 'Normalised HTML',
       value: normalizedHtml.value,
       detail: `${show(normalizedHtml.tokenCount)} tokens`,
     },
@@ -353,6 +353,8 @@ export function buildLookupPageDisplay(input: {
         advisoryCount: Math.max(0, Math.min(128, Number(finding.advisoryCount) || 0)),
         severity: boundedTechnologyText(finding.highestSeverity, 16),
         identifiers: stringList(finding.advisoryIdentifiers).slice(0, 16).join(', '),
+        knownExploitedIdentifiers: stringList(finding.knownExploitedIdentifiers).slice(0, 16).join(', '),
+        knownExploitedCount: Math.max(0, Math.min(16, Number(finding.knownExploitedCount) || 0)),
         weaknesses: stringList(finding.weaknessClasses).slice(0, 12).join(', '),
       })),
     browserLibraryLimitations: stringList(browserLibraryProfile.limitations)

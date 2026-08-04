@@ -12,7 +12,7 @@ import {
 } from './case-record-model.ts';
 
 export const RISK_CALIBRATION_DATASET_SCHEMA = 'whoisleuth.risk-calibration-dataset';
-export const RISK_CALIBRATION_DATASET_VERSION = 1;
+export const RISK_CALIBRATION_DATASET_VERSION = 2;
 export const MAX_RISK_CALIBRATION_EXPORT_RECORDS = 500;
 
 const REVIEWED_DISPOSITIONS = new Set([
@@ -51,12 +51,21 @@ type CalibrationEvidence = Readonly<{
   hasMx?: boolean;
   hasSpf?: boolean;
   hasDmarc?: boolean;
+  privacyProtected?: boolean;
+  phishingLanguageMatch?: string;
+  hasExternalFormAction?: boolean;
+  idnReferenceMatch?: boolean;
+  pageBaselineMatch?: boolean;
+  hasActiveBrandProfile?: boolean;
+  scanDepth?: string;
+  observedAt?: string;
 }>;
 
 type CalibrationRecord = Readonly<{
   id: string;
   domain: string;
   analystDisposition: string;
+  reviewReasonCode?: string;
   evidence: CalibrationEvidence;
 }>;
 
@@ -73,7 +82,7 @@ export type RiskCalibrationDatasetExport = Readonly<{
   limitations: readonly string[];
 }>;
 
-function optionalBoolean(value: boolean | null): boolean | undefined {
+function optionalBoolean(value: unknown): boolean | undefined {
   return typeof value === 'boolean' ? value : undefined;
 }
 
@@ -101,6 +110,11 @@ function projectEvidence(snapshot: CaseEvidenceSnapshot): CalibrationEvidence | 
   const hasMx = optionalBoolean(snapshot.hasMx);
   const hasSpf = optionalBoolean(snapshot.hasSpf);
   const hasDmarc = optionalBoolean(snapshot.hasDmarc);
+  const privacyProtected = optionalBoolean(snapshot.privacyProtected);
+  const hasExternalFormAction = optionalBoolean(snapshot.hasExternalFormAction);
+  const idnReferenceMatch = optionalBoolean(snapshot.idnReferenceMatch);
+  const pageBaselineMatch = optionalBoolean(snapshot.pageBaselineMatch);
+  const hasActiveBrandProfile = optionalBoolean(snapshot.hasActiveBrandProfile);
   return Object.freeze({
     availability,
     ...(activityStatus ? { activityStatus } : {}),
@@ -113,6 +127,16 @@ function projectEvidence(snapshot: CaseEvidenceSnapshot): CalibrationEvidence | 
     ...(hasMx !== undefined ? { hasMx } : {}),
     ...(hasSpf !== undefined ? { hasSpf } : {}),
     ...(hasDmarc !== undefined ? { hasDmarc } : {}),
+    ...(privacyProtected !== undefined ? { privacyProtected } : {}),
+    // Risk only tests whether a bounded phrase match exists. Preserve that
+    // signal without exporting page text that may contain sensitive content.
+    ...(snapshot.phishingLanguageMatch ? { phishingLanguageMatch: 'matched' } : {}),
+    ...(hasExternalFormAction !== undefined ? { hasExternalFormAction } : {}),
+    ...(idnReferenceMatch !== undefined ? { idnReferenceMatch } : {}),
+    ...(pageBaselineMatch !== undefined ? { pageBaselineMatch } : {}),
+    ...(hasActiveBrandProfile !== undefined ? { hasActiveBrandProfile } : {}),
+    ...(snapshot.scanDepth === 'fast' || snapshot.scanDepth === 'deep' ? { scanDepth: snapshot.scanDepth } : {}),
+    ...(snapshot.capturedAt ? { observedAt: snapshot.capturedAt } : {}),
   });
 }
 export function buildRiskCalibrationDatasetExport(
@@ -154,6 +178,7 @@ export function buildRiskCalibrationDatasetExport(
       id: record.id,
       domain: record.domain,
       analystDisposition: record.disposition,
+      ...(record.reviewReasonCode ? { reviewReasonCode: record.reviewReasonCode } : {}),
       evidence,
     }));
   }
@@ -169,7 +194,7 @@ export function buildRiskCalibrationDatasetExport(
       exclusions: Object.freeze(exclusions),
     }),
     limitations: Object.freeze([
-      'This file contains analyst-selected case domains, reviewed dispositions, and a bounded subset of normalized scoring inputs.',
+      'This file contains analyst-selected case domains, reviewed dispositions, and a bounded subset of normalised scoring inputs.',
       'It excludes notes, tags, assertions, actions, contacts, raw source data, provider payloads, and stored Risk scores.',
       'The CLI revalidates every record and does not tune the Risk model automatically. Analyst dispositions do not prove maliciousness or safety.',
     ]),

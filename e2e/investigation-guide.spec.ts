@@ -280,7 +280,9 @@ test('an analyst can save and run a bounded local guide template without removin
   await expectNoHorizontalOverflow(page);
 });
 
-test('new-domain triage leads from a deep lookup through comparison and a review queue', { tag: '@timing-sensitive' }, async ({ page }) => {
+test('new-domain triage leads from a deep lookup through comparison and a review queue', {
+  tag: ['@timing-sensitive', '@analyst-journey', '@journey-guided-new-domain-triage'],
+}, async ({ page }) => {
   test.slow();
   await installLookupFixture(page);
   await startRecipe(page);
@@ -295,8 +297,11 @@ test('new-domain triage leads from a deep lookup through comparison and a review
   await expect(page.locator('.guide')).toContainText('3 of 3 steps reviewed');
 });
 
-test('infrastructure pivot keeps the starting domain through lookup, peer comparison, and retention', { tag: '@timing-sensitive' }, async ({ page }) => {
+test('infrastructure pivot keeps the starting domain through lookup, peer comparison, and retention', {
+  tag: ['@timing-sensitive', '@analyst-journey', '@journey-guided-infrastructure-pivot'],
+}, async ({ page }) => {
   test.slow();
+  await page.setViewportSize({ width: 393, height: 852 });
   await installLookupFixture(page);
   await startRecipe(page, 'Infrastructure pivot');
 
@@ -326,8 +331,11 @@ test('returning to the same guided Bulk step keeps its peer set and completed re
   await expect(page.getByRole('status').filter({ hasText: 'Completed 2 of 2 lookups.' })).toBeVisible();
 });
 
-test('brand sweep carries the official domain and selected candidates across every tool', { tag: '@timing-sensitive' }, async ({ page }) => {
+test('brand sweep carries the official domain and selected candidates across every tool', {
+  tag: ['@timing-sensitive', '@analyst-journey', '@journey-guided-brand-sweep'],
+}, async ({ page }) => {
   test.slow();
+  await page.setViewportSize({ width: 393, height: 852 });
   await installLookupFixture(page);
   await startRecipe(page, 'Brand sweep');
 
@@ -367,9 +375,9 @@ test('brand sweep carries the official domain and selected candidates across eve
   await candidateSelectionLink.click();
   await expect(page).toHaveURL('/bulk?source=discover#results');
   await expect(page.locator('#results')).toBeInViewport();
-  const primaryRow = page.locator('.results-table tbody tr', { hasText: primaryCandidate });
-  await expect(primaryRow).toHaveCount(1);
-  await primaryRow.getByRole('button', { name: 'Inspect' }).click();
+  const reviewCockpit = page.getByRole('region', { name: 'Bulk review cockpit' });
+  await expect(reviewCockpit.getByRole('heading', { name: primaryCandidate })).toBeVisible();
+  await reviewCockpit.getByRole('button', { name: 'Inspect in Lookup' }).click();
   await expect(page).toHaveURL(new RegExp(`/lookup\\?q=${primaryCandidate.replaceAll('.', '\\.')}.*depth=deep`));
   await expect.poll(async () => page.evaluate((key) => {
     const stored = JSON.parse(sessionStorage.getItem(key) || 'null');

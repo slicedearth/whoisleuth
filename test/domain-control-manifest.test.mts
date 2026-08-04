@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { describe, it } from 'node:test';
 
 import {
@@ -13,6 +14,7 @@ import { parseCliArguments } from '../cli/arguments.mts';
 import { runCli } from '../cli/runner.mts';
 import EXIT_CODES from '../cli/exit-codes.mts';
 import { verifyOfflineArtifact } from '../cli/artifact-verify.mts';
+import { canonicalArtifactJson } from '../frontend/src/lib/analysis/artifact-integrity.ts';
 
 const generatedAt = '2026-08-03T00:00:00.000Z';
 
@@ -58,6 +60,52 @@ describe('domain control manifests', () => {
     const duplicate = input();
     duplicate.entries.push({ ...duplicate.entries[0]!, domain: 'example.test' });
     assert.throws(() => buildDomainControlManifest(duplicate, generatedAt), /unique domains/iu);
+  });
+
+  it('rejects non-canonical and unknown manifest content even with a matching digest', () => {
+    const built = buildDomainControlManifest(input(), generatedAt);
+    const { integrity, ...builtUnsigned } = built;
+    const unsigned = {
+      ...structuredClone(builtUnsigned),
+      entries: [{ ...structuredClone(built.entries[0]!), domain: 'Example.Test.' }],
+    };
+    const manifest = {
+      ...unsigned,
+      integrity: {
+        ...integrity,
+        digestSha256: `sha256:${createHash('sha256').update(canonicalArtifactJson(unsigned)).digest('hex')}`,
+      },
+    };
+    assert.throws(() => verifyDomainControlManifest(manifest), /canonical normalised content/iu);
+
+    const withUnknown = { ...buildDomainControlManifest(input(), generatedAt), extra: 'not part of the contract' };
+    assert.throws(() => verifyDomainControlManifest(withUnknown), /unknown field: extra/iu);
+
+    const withChangedLimitations = { ...buildDomainControlManifest(input(), generatedAt), limitations: ['Changed limitation'] };
+    assert.throws(() => verifyDomainControlManifest(withChangedLimitations), /unsupported or malformed structure/iu);
+  });
+
+  it('rejects unknown fields throughout manifest and review inputs', () => {
+    assert.throws(() => buildDomainControlManifest({ ...input(), secret: 'must-not-be-accepted' }, generatedAt), /unknown field: secret/iu);
+
+    const manifest = buildDomainControlManifest(input(), generatedAt);
+    assert.throws(() => reviewDomainControlManifest({
+      schema: DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA,
+      version: 1,
+      manifest,
+      observations: [{
+        domain: 'example.test',
+        fields: {
+          nameservers: {
+            state: 'observed',
+            values: ['ns1.example.test'],
+            source: 'saved DNS evidence',
+            observedAt: generatedAt,
+            rawPayload: 'must-not-be-accepted',
+          },
+        },
+      }],
+    }, generatedAt), /unknown field: rawPayload/iu);
   });
 
   it('reports drift only from complete separately attributed observations', () => {

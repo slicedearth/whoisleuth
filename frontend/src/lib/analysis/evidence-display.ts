@@ -24,6 +24,7 @@ const FIELD_LABELS = {
   availability: 'Availability',
   confidence: 'Confidence',
   riskModelVersion: 'Risk model version',
+  opportunityModelVersion: 'Opportunity model version',
   riskScore: 'Risk score',
   opportunityScore: 'Opportunity score',
   riskFactors: 'Risk factors',
@@ -65,7 +66,7 @@ export type TimelineEntry = {
   hasRepeatedObservation: boolean;
   changes: EvidenceChange[] | null;
   hasIncomparableChange: boolean;
-  incomparableReasons: Array<'scan-depth' | 'risk-model' | 'other'>;
+  incomparableReasons: Array<'opportunity-model' | 'scan-depth' | 'risk-model' | 'other'>;
   displayIndex: number;
 };
 type SnapshotGroup = {
@@ -80,7 +81,7 @@ const FIELD_GROUPS: Array<{ name: string; fields: SnapshotField[] }> = [
   },
   {
     name: 'Scoring',
-    fields: ['riskModelVersion', 'riskScore', 'riskFactors', 'opportunityScore', 'opportunityFactors'],
+    fields: ['riskModelVersion', 'riskScore', 'riskFactors', 'opportunityModelVersion', 'opportunityScore', 'opportunityFactors'],
   },
   {
     name: 'Mail and web',
@@ -145,7 +146,7 @@ export function formatSnapshotValue(field: string, value: unknown): string {
     }
     return value.join(', ');
   }
-  if (typeof value === 'number') return field === 'riskModelVersion' ? `v${value}` : String(value);
+  if (typeof value === 'number') return field === 'riskModelVersion' || field === 'opportunityModelVersion' ? `v${value}` : String(value);
   return String(value);
 }
 

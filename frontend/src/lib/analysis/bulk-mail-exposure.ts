@@ -226,7 +226,7 @@ export function buildBulkMailExposureReport(
     limitations: [
       'This review uses compact Bulk evidence already collected and makes no additional request.',
       'Null MX, no explicit MX, receiving mail, authentication gaps, and incomplete evidence remain separate states.',
-      'SMTP delivery, mailbox existence, catch-all behavior, and message acceptance were not tested.',
+      'SMTP delivery, mailbox existence, catch-all behaviour, and message acceptance were not tested.',
     ],
   };
 }

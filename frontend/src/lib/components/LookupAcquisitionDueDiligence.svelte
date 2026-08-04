@@ -119,7 +119,7 @@
     <section class="decision-workspace" aria-labelledby="acquisition-decision-title">
       <div>
         <h5 id="acquisition-decision-title">Analyst decision workspace</h5>
-        <p>Record a bounded local review artifact. This does not reserve, value, purchase, submit, or transfer the domain.{synthetic ? ' The download remains explicitly marked as synthetic.' : ''}</p>
+        <p>Record a bounded local review artefact. This does not reserve, value, purchase, submit, or transfer the domain.{synthetic ? ' The download remains explicitly marked as synthetic.' : ''}</p>
       </div>
       <label class="field">Current decision
         <select bind:value={decision}>

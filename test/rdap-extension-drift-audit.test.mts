@@ -59,7 +59,7 @@ beta,Any,[RFC0001],[IETF],COMMON\r
   test('bounds malformed sources and main failures', async () => {
     assert.throws(
       () => parseRdapExtensionRegistryCsv('Extension Identifier,Registry Operator\nbad'),
-      /header is not recognized/u,
+      /header is not recognised/u,
     );
     let stderr = '';
     const exitCode = await main(['--live'], {

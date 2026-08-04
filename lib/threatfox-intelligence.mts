@@ -304,7 +304,7 @@ function createThreatfoxIntelligenceAdapter(dependencies: AdapterDependencies = 
         truncated,
         detail: findings.length
           ? `Found ${findings.length} bounded malware-IOC record${findings.length === 1 ? '' : 's'} for this domain${truncated ? '; additional provider records may exist' : ''}.`
-          : 'The provider reported a match but no returned record could be safely normalized.',
+          : 'The provider reported a match but no returned record could be safely normalised.',
         upstreamStatus,
         findings,
         limitations: [

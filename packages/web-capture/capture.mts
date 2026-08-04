@@ -258,7 +258,7 @@ export async function captureRenderedPage(
     const screenshot = await page.screenshot({ type: 'png', fullPage: false, animations: 'disabled' });
     const screenshotBuffer = Buffer.from(screenshot);
     if (!screenshotBuffer.length || screenshotBuffer.length > MAX_WEB_CAPTURE_SCREENSHOT_BYTES) {
-      throw new Error('Rendered screenshot is empty or exceeds the 10 MiB artifact bound.');
+      throw new Error('Rendered screenshot is empty or exceeds the 10 MiB artefact bound.');
     }
     const capturedAt = dependencies.now?.() ?? new Date().toISOString();
     const domDigest = {
@@ -278,7 +278,7 @@ export async function captureRenderedPage(
       limitations: ['No DOM markup, visible text, form values, request paths, query strings, headers, bodies, cookies, or credentials are retained.'],
     };
     const domBytes = Buffer.from(`${JSON.stringify(domDigest, null, 2)}\n`);
-    if (domBytes.length > MAX_WEB_CAPTURE_DOM_DIGEST_BYTES) throw new Error('DOM digest exceeds the 1 MiB artifact bound.');
+    if (domBytes.length > MAX_WEB_CAPTURE_DOM_DIGEST_BYTES) throw new Error('DOM digest exceeds the 1 MiB artefact bound.');
     const screenshotName = 'screenshot.png';
     const domName = 'dom-digest.json';
     await privateWrite(path.join(temporaryDirectory, screenshotName), screenshotBuffer);

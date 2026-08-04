@@ -17,21 +17,23 @@ test('the shared WHOISleuth mark preserves the approved vector source', async ()
   assert.equal(createHash('sha256').update(svg).digest('hex'), APPROVED_MARK_SHA256);
 });
 
-test('the website, browser favicon, and README use the same approved vector', async () => {
+test('the website, browser favicons, and README use the same approved mark', async () => {
   const component = await readFile(new URL('../frontend/src/lib/components/BrandMark.svelte', import.meta.url), 'utf8');
   const appHtml = await readFile(new URL('../frontend/src/app.html', import.meta.url), 'utf8');
   const readme = await readFile(new URL('../README.md', import.meta.url), 'utf8');
+  const ico = await readFile(new URL('../frontend/static/favicon.ico', import.meta.url));
 
   assert.match(component, /src="\/favicon\.svg"/);
   assert.match(component, /alt=""/);
+  assert.match(appHtml, /<link rel="icon" href="\/favicon\.ico" sizes="64x64">/);
   assert.match(appHtml, /<link rel="icon" type="image\/svg\+xml" href="\/favicon\.svg">/);
+  assert.deepEqual([...ico.subarray(0, 8)], [0, 0, 1, 0, 1, 0, 64, 64]);
   assert.ok(
     appHtml.indexOf('%sveltekit.head%') < appHtml.indexOf('<script src="/theme-init.js"></script>'),
     'the generated CSP meta policy must precede theme initialization',
   );
   assert.match(
     readme,
-    /^<h1 align="center"><img src="frontend\/static\/favicon\.svg" width="44" height="44" align="middle" alt="" \/>&nbsp;WHOISleuth<\/h1>/,
+    /^<p align="center"><img src="frontend\/static\/favicon\.svg" width="64" height="64" alt="WHOISleuth mark" \/><\/p>\n<h1 align="center">WHOISleuth<\/h1>/,
   );
-  assert.doesNotMatch(readme, /^<p align="center">\s*<img src="frontend\/static\/favicon\.svg"/);
 });

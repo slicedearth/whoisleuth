@@ -6,9 +6,10 @@ import type {
   CaseManualTrailEvent,
   CaseSightingRecord,
 } from './case-response-model.ts';
+import { ANALYST_REVIEW_REASONS } from '../../../../lib/analyst-taxonomy.mts';
 
-export const CASE_SCHEMA_VERSION = 9;
-export const CASE_IMPORT_VERSIONS = [3, 4, 5, 6, 7, 8, CASE_SCHEMA_VERSION] as const;
+export const CASE_SCHEMA_VERSION = 10;
+export const CASE_IMPORT_VERSIONS = [3, 4, 5, 6, 7, 8, 9, CASE_SCHEMA_VERSION] as const;
 export const MAX_CASES = 500;
 export const MAX_NOTES_PER_CASE = 50;
 export const MAX_NOTE_LENGTH = 2000;
@@ -43,6 +44,8 @@ export const CASE_DISPOSITIONS: Array<{ value: string; label: string }> = [
   { value: 'closed_no_action', label: 'Closed without action' },
 ];
 
+export const CASE_REVIEW_REASONS: Array<{ value: string; label: string }> = ANALYST_REVIEW_REASONS.map((item) => ({ ...item }));
+
 export const CASE_SOURCES: Array<{ value: string; label: string }> = [
   { value: 'lookup', label: 'Lookup' },
   { value: 'bulk', label: 'Bulk' },
@@ -69,6 +72,7 @@ export type CaseEvidenceSnapshot = {
   confidence: string | null;
   riskModelVersion: number | null;
   riskScore: number | null;
+  opportunityModelVersion?: number | null;
   opportunityScore: number | null;
   riskFactors: EvidenceFactor[];
   opportunityFactors: EvidenceFactor[];
@@ -98,6 +102,10 @@ export type CaseEvidenceSnapshot = {
   hasPasswordField: boolean | null;
   hasExternalFormAction: boolean | null;
   phishingLanguageMatch: string | null;
+  privacyProtected?: boolean | null;
+  idnReferenceMatch?: boolean | null;
+  pageBaselineMatch?: boolean | null;
+  hasActiveBrandProfile?: boolean | null;
   mutationTypes: string[];
 };
 
@@ -111,6 +119,7 @@ export type CaseRecord = {
   domain: string;
   status: string;
   disposition: string;
+  reviewReasonCode?: string | null;
   tags: string[];
   notes: CaseNote[];
   source: string;
@@ -130,6 +139,7 @@ export type CaseInput = {
   domain: unknown;
   status?: unknown;
   disposition?: unknown;
+  reviewReasonCode?: unknown;
   source?: unknown;
   tags?: unknown;
   evidence?: unknown;
@@ -152,7 +162,7 @@ export type CompareFieldSpec = {
   label: string;
   type: string;
   depthGate?: 'both-deep' | 'comparable';
-  modelGate?: 'risk';
+  modelGate?: 'opportunity' | 'risk';
   direction?: 'risk';
   emptyGuard?: boolean;
 };

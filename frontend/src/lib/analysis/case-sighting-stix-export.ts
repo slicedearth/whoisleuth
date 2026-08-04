@@ -141,7 +141,7 @@ export function buildCaseSightingStixExport(
       x_whoisleuth_source: source,
       x_whoisleuth_category: sighting.category,
       x_whoisleuth_completeness: sighting.completeness,
-      x_whoisleuth_evidence_pin_id: sighting.evidencePinId,
+      ...(sighting.evidencePinId ? { x_whoisleuth_evidence_pin_id: sighting.evidencePinId } : {}),
       x_whoisleuth_limitations: sighting.limitations.slice(0, 8).map((item) => text(item, 240)).filter(Boolean),
       x_whoisleuth_interpretation: 'A source-qualified sighting is not an ownership, attribution, safety, or maliciousness conclusion.',
     });

@@ -154,7 +154,7 @@ function comparisonDiagnostics(
       basis.push('Operational registration field');
     } else if (/registrar|sponsor/u.test(normalizedLabel)) {
       hypothesis = 'Sponsorship publication or transfer timing difference';
-      detail = `A transfer, reseller relationship, source normalization, or publication delay could explain the difference. None is proven by this comparison alone.`;
+      detail = `A transfer, reseller relationship, source normalisation, or publication delay could explain the difference. None is proven by this comparison alone.`;
       basis.push('Registrar-related field');
     }
     output.push({

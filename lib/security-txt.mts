@@ -193,7 +193,7 @@ function parseSecurityTxt(text: unknown, options: ParseOptions = {}) {
   const limitations = [
     ...(signedPayload.signed ? ['A cleartext signature was present but was not cryptographically verified.'] : []),
     ...(canonicalMatches === false ? ['The fetched URL was not listed by the file as a Canonical location.'] : []),
-    ...(valuesTruncated ? ['The response or normalized field set exceeded a collection bound.'] : []),
+    ...(valuesTruncated ? ['The response or normalised field set exceeded a collection bound.'] : []),
   ];
   const detail = state === 'malformed'
     ? 'The file did not contain at least one valid Contact field and exactly one valid Expires field.'
@@ -314,7 +314,7 @@ async function collectSecurityTxt(hostname: unknown, dependencies: SecurityTxtDe
 
       if (response.status === 404 || response.status === 410) {
         await response.body?.cancel().catch(() => {});
-        return emptyResult('absent', 'No security.txt file was published at the standardized location for this hostname.', {
+        return emptyResult('absent', 'No security.txt file was published at the standardised location for this hostname.', {
           observedAt, requestedUrl, finalUrl: result.finalUrl, httpStatus: response.status, durationMs: now() - startedAt,
         });
       }
@@ -328,7 +328,7 @@ async function collectSecurityTxt(hostname: unknown, dependencies: SecurityTxtDe
       const charset = contentType.match(/;\s*charset\s*=\s*"?([^;"\s]+)/iu)?.[1]?.toLowerCase() || null;
       if (!/^text\/plain(?:\s*;|$)/iu.test(contentType) || (charset !== null && charset !== 'utf-8')) {
         await response.body?.cancel().catch(() => {});
-        return emptyResult('unsupported', 'The standardized endpoint did not return a UTF-8 text/plain security.txt document.', {
+        return emptyResult('unsupported', 'The standardised endpoint did not return a UTF-8 text/plain security.txt document.', {
           observedAt, requestedUrl, finalUrl: result.finalUrl, httpStatus: response.status, durationMs: now() - startedAt,
         });
       }

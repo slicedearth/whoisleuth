@@ -86,7 +86,7 @@ export function buildLookupCollectionPreflight(input: LookupPreflightInput): Col
         source('dns_intelligence', 'DNS', 'Collects bounded registration, delegation, mail, and network records.', disabledIds),
         source('website_probe', 'Website', 'Requests the exact public hostname with redirect revalidation and bounded response handling.', disabledIds),
         source('tls_intelligence', 'TLS', 'Collects bounded certificate and negotiated-connection evidence for eligible public endpoints.', disabledIds),
-        source('security_txt', 'security.txt', 'Requests the standardized disclosure-contact path only when explicitly selected.', disabledIds, input.includeSecurityTxt ? 'included' : 'optional'),
+        source('security_txt', 'security.txt', 'Requests the standardised disclosure-contact path only when explicitly selected.', disabledIds, input.includeSecurityTxt ? 'included' : 'optional'),
         source('external_intelligence', 'Selected third-party intelligence', 'Sends only the registrable domain to each explicitly selected search provider; no scan or report is submitted.', disabledIds,
           input.includeExternalIntelligence || input.includeMalwareHostIntelligence || input.includeMalwareIocIntelligence ? 'included' : 'optional'),
       ];
@@ -99,7 +99,7 @@ export function buildLookupCollectionPreflight(input: LookupPreflightInput): Col
       : `${input.mode === 'deep' ? 'Deep' : 'Fast'} Lookup will collect the eligible source families shown below for one target.`,
     targetCount,
     sources: sources.slice(0, MAX_COLLECTION_PREFLIGHT_SOURCES),
-    persistence: 'The request itself is not saved. Only an explicit case, watchlist, snapshot, or export action retains normalized evidence.',
+    persistence: 'The request itself is not saved. Only an explicit case, watchlist, snapshot, or export action retains normalised evidence.',
     controls: boundedNotes([
       'Cancel stops this browser from waiting; server work already admitted may finish within existing limits.',
       'Optional third-party sources remain off unless selected.',

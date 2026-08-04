@@ -50,6 +50,7 @@ node bin/whoisleuth.mts --help
 node bin/whoisleuth.mts lookup example.test
 node bin/whoisleuth.mts lookup example.test --deep --summary
 node bin/whoisleuth.mts lookup example.test --deep --plan --json
+node bin/whoisleuth.mts lookup example.test --deep --observer workstation-a --vantage office-egress --json
 node bin/whoisleuth.mts lookup example.test --deep --markdown --output lookup.md
 node bin/whoisleuth.mts bulk domains.txt --deep --checkpoint bulk-checkpoint.json
 node bin/whoisleuth.mts bulk domains.txt --csv --registered-only
@@ -59,10 +60,15 @@ node bin/whoisleuth.mts discover-scan example.test --scan-limit 50 --checkpoint 
 node bin/whoisleuth.mts page-compare official.json candidate.json --json
 node bin/whoisleuth.mts mail-review bulk.json --json
 node bin/whoisleuth.mts domain-control domain-control-input.json --json
+node bin/whoisleuth.mts assurance domain-assurance-input.json --json
+node bin/whoisleuth.mts sharing-review response-packet.json --marking amber --recipient-scope organization --purpose 'Reviewed handoff' --human-reviewed --personal-data-reviewed --redactions-confirmed --json
 node bin/whoisleuth.mts workflow-plan domain-triage example.test --json
 node bin/whoisleuth.mts diff first-lookup.json second-lookup.json --json
+node bin/whoisleuth.mts reconcile office.json mobile.json external.json --json
 node bin/whoisleuth.mts timeline first-observation.json second-observation.json latest-observation.json --json
 node bin/whoisleuth.mts registry-support example.test --json
+node bin/whoisleuth.mts registry-doctor lookup.json --json
+node bin/whoisleuth.mts lookalike-calibrate reviewed-candidates.json --json
 node bin/whoisleuth.mts doctor
 node bin/whoisleuth.mts commands --json
 node bin/whoisleuth.mts completion zsh
@@ -97,9 +103,17 @@ cleanup before exiting immediately.
 
 The offline `timeline` command orders 2 to 20 saved Lookup documents for one
 domain and compares each adjacent observation. It retains observation times and
-normalized field states but no input filenames or raw registry payloads.
+normalised field states but no input filenames or raw registry payloads.
 Observed differences remain separate from missing, unavailable, and changed
 collection conditions.
+
+Optional bounded observer and vantage labels let analysts distinguish saved
+collection contexts without changing collection. `reconcile` compares 2 to 5
+same-domain observations while keeping agreement, disagreement, and
+non-comparable evidence separate; the labels are context, not proof of
+independence. `registry-doctor`, `assurance`, `sharing-review`, and
+`lookalike-calibrate` add offline compatibility, change/recovery, sharing, and
+review-yield workflows without contacting the hosted application.
 
 Bulk also supports fixed-column CSV, domain-only or exact-query output,
 registered, inconclusive, and hard-failure output filters, and bounded A, AAAA,
@@ -115,7 +129,8 @@ lookups can be compared across static page, parse5-tokenized DOM structure,
 favicon, technology, and TLS evidence, while saved Bulk output can be reviewed
 for passive MX, null MX, SPF, DMARC, and shared-provider context.
 
-See `docs/cli.md` in the package for the complete command, privacy, output, and
+See `docs/cli.md` in the package for installation and first use, and
+`docs/cli-reference.md` for the complete command, privacy, output, and
 evidence-contract reference. Report suspected vulnerabilities through the
 private channel described in `SECURITY.md`.
 

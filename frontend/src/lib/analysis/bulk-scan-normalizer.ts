@@ -2,8 +2,10 @@ import { profileSignals, type BrandProfile } from '../brand-profiles.ts';
 import type { Candidate } from '../candidate-handoff-core.ts';
 import { analyzeDomainIdn } from './idn-confusables.ts';
 import { compactHttpObservation } from './http-summary.ts';
+import { createPageBaseline } from './page-baseline.ts';
+import { comparePageBaselines } from './page-similarity.ts';
 import { entityDisplayName } from './utils.ts';
-import { computeOpportunityScore, explainRiskScore, formatActivityCell } from './scoring.ts';
+import { explainOpportunityScore, explainRiskScore, formatActivityCell } from './scoring.ts';
 import { relationshipObservation } from './relationship-evidence.ts';
 import { lookupRecord, type CompactLookupHttpResponse } from './lookup-response.ts';
 import { normalizeBulkComparisonEvidence } from './bulk-session-model.ts';
@@ -26,6 +28,17 @@ export type BulkScanNormalizationContext = Readonly<{
   candidate: Candidate | null;
 }>;
 
+function pageBaselineRiskMatch(value: ReturnType<typeof comparePageBaselines>): boolean {
+  if (!value || value.partial) return false;
+  return value.components.filter((component) => {
+    if (component.partial) return false;
+    if (component.id === 'normalized_html' || component.id === 'form_structure') return component.status === 'same';
+    if (component.id === 'dom_structure') return component.status === 'same' || component.status === 'overlap';
+    if (component.id === 'visible_text') return component.status === 'same' || (component.agreementPercent ?? 0) >= 90;
+    return false;
+  }).length >= 2;
+}
+
 /**
  * Converts the compact HTTP lookup contract into the bounded result retained by
  * Bulk. Raw registration payloads and expanded contacts never cross this
@@ -40,17 +53,29 @@ export function normalizeBulkScanResult(
   const mutationTypes = context.candidate?.mutationTypes ?? [];
   const matched = profileSignals(domain, availability, context.profile);
   const idn = analyzeDomainIdn(domain, context.profile?.officialDomains ?? []);
+  const registrant = compactContact(availability.registrant);
+  const sourceCoverage = compactSourceCoverage(body, availability);
+  const pageComparison = comparePageBaselines(context.profile?.pageBaseline, createPageBaseline(domain, availability));
+  const pageBaselineMatch = pageBaselineRiskMatch(pageComparison);
+  const idnReferenceMatch = Boolean(idn?.referenceMatches.length);
   const scoring = {
     ...availability,
     ...matched,
     availability: body.availability.state,
     mutationTypes,
+    idnReferenceMatch,
+    pageBaselineMatch,
+    hasActiveBrandProfile: Boolean(context.profile),
+    hasPublicRegistrantContact: Boolean(registrant?.email),
+    scanDepth: context.mode,
+    observedAt: body.observedAt,
+    sourceCoverage,
   };
   const riskExplanation = explainRiskScore(scoring);
   const risk = riskExplanation?.score ?? null;
-  const opportunity = computeOpportunityScore(scoring);
+  const opportunityExplanation = explainOpportunityScore(scoring);
+  const opportunity = opportunityExplanation?.score ?? null;
   const nameservers = boundedStrings(availability.nameservers);
-  const registrant = compactContact(availability.registrant);
   const abuse = plainRecord(availability.abuse);
   const abuseEmail = boundedText(abuse?.email, 320);
   const hasMx = nullableBoolean(availability.hasMx);
@@ -90,7 +115,11 @@ export function normalizeBulkScanResult(
     hasPasswordField: nullableBoolean(availability.hasPasswordField),
     hasExternalFormAction,
     phishingLanguageMatch: boundedText(availability.phishingLanguageMatch, 300),
+    idnReferenceMatch,
+    pageBaselineMatch,
+    hasActiveBrandProfile: Boolean(context.profile),
     riskModelVersion: riskExplanation?.modelVersion ?? null,
+    opportunityModelVersion: opportunityExplanation?.modelVersion ?? null,
     riskScore: risk,
     riskFactors: riskExplanation?.factors.map((factor) => ({
       label: factor.label,
@@ -129,6 +158,6 @@ export function normalizeBulkScanResult(
     dnssec: boundedText(availability.dnssec, 40),
     comparisonEvidence,
     relationship,
-    sourceCoverage: compactSourceCoverage(body, availability),
+    sourceCoverage,
   };
 }

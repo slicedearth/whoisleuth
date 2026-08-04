@@ -51,7 +51,11 @@ export interface SavedScanRecord extends WatchlistComparableRecord {
   hasPasswordField?: boolean | null;
   hasExternalFormAction?: boolean | null;
   phishingLanguageMatch?: string | null;
+  idnReferenceMatch?: boolean | null;
+  pageBaselineMatch?: boolean | null;
+  hasActiveBrandProfile?: boolean | null;
   riskFactors: Array<{ label: string; points: number }>;
+  opportunityModelVersion?: number | null;
   mutationTypes: string[];
   error?: string;
 }
@@ -209,6 +213,7 @@ export function toBulkSessionResult(row: ScanResult): BulkSessionResult {
     scanDepth: row.saved.scanDepth,
     createdDate: row.saved.createdDate ?? null,
     expiryDate: row.saved.expiryDate ?? null,
+    privacyProtected: row.saved.privacyProtected ?? null,
     nameservers: row.nameservers,
     hasMx: row.saved.hasMx ?? null,
     hasNullMx: row.saved.hasNullMx ?? null,
@@ -224,7 +229,11 @@ export function toBulkSessionResult(row: ScanResult): BulkSessionResult {
     hasPasswordField: row.hasPasswordField,
     hasExternalFormAction: row.hasExternalFormAction,
     phishingLanguageMatch: row.phishingLanguageMatch,
+    idnReferenceMatch: row.saved.idnReferenceMatch ?? null,
+    pageBaselineMatch: row.saved.pageBaselineMatch ?? null,
+    hasActiveBrandProfile: row.saved.hasActiveBrandProfile ?? null,
     riskModelVersion: row.saved.riskModelVersion ?? null,
+    opportunityModelVersion: row.saved.opportunityModelVersion ?? null,
     riskFactors: row.saved.riskFactors,
     dns: row.dns,
     dnssec: row.dnssec,
@@ -246,6 +255,7 @@ export function fromBulkSessionResult(
     nameservers: row.nameservers,
     createdDate: row.createdDate,
     expiryDate: row.expiryDate,
+    privacyProtected: row.privacyProtected ?? null,
     hasMx: row.hasMx,
     hasNullMx: row.hasNullMx,
     hasSpf: row.hasSpf,
@@ -260,7 +270,11 @@ export function fromBulkSessionResult(
     hasPasswordField: row.hasPasswordField,
     hasExternalFormAction: row.hasExternalFormAction,
     phishingLanguageMatch: row.phishingLanguageMatch,
+    idnReferenceMatch: row.idnReferenceMatch ?? null,
+    pageBaselineMatch: row.pageBaselineMatch ?? null,
+    hasActiveBrandProfile: row.hasActiveBrandProfile ?? null,
     riskModelVersion: row.riskModelVersion,
+    opportunityModelVersion: row.opportunityModelVersion ?? null,
     riskScore: row.risk,
     riskFactors: row.riskFactors,
     mutationTypes: row.mutationTypes,

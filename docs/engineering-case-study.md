@@ -16,7 +16,7 @@ can run on modest infrastructure.
 The implementation has to reconcile several competing realities:
 
 - RDAP is structured but registry coverage, field publication, endpoint
-  behavior, and transport quality vary.
+  behaviour, and transport quality vary.
 - WHOIS is broadly useful but free-form, referral-driven, encoding-sensitive,
   and exposed over raw TCP sockets that browsers cannot open.
 - A website probe accepts an attacker-controlled hostname, so redirects, DNS
@@ -42,7 +42,7 @@ Those constraints shape the architecture more than the choice of framework.
 Express and Netlify use thin HTTP adapters around the same native TypeScript
 modules in `lib/`. Query classification, RDAP/WHOIS collection, availability, source
 diagnostics, feature policy, request safety, and operation budgets therefore
-have one behavior contract. This avoids a common serverless migration failure:
+have one behaviour contract. This avoids a common serverless migration failure:
 fixing a parser or security boundary in one runtime while the other silently
 diverges.
 
@@ -66,7 +66,7 @@ the same lookup endpoint per domain with bounded client concurrency and asks
 for a compact response that excludes raw registry bodies it will not display.
 
 The profile distinction keeps cost and latency visible while preserving one
-normalization path. It also gives retained evidence a meaningful comparability
+normalisation path. It also gives retained evidence a meaningful comparability
 boundary.
 
 ### Outbound requests fail closed
@@ -90,7 +90,7 @@ strings, arrays, redirect chains, certificate names, contact inventories,
 relationship groups, timeline entries, and imported iteration before retaining
 or displaying them.
 
-Browser-local cases add a serialized byte budget and deterministic evidence
+Browser-local cases add a serialised byte budget and deterministic evidence
 pruning. Analyst-authored notes, tags, status, and disposition are not silently
 discarded to make room for machine observations.
 
@@ -100,22 +100,22 @@ The backend does not write ordinary lookup material to an investigation
 database. Bounded process caches can briefly retain validated bootstrap or
 upstream results, while Brand Profiles, watchlists, cases, campaigns, shortlist
 entries, CT baselines, custom rules, and analyst-selected relationship
-observations use versioned browser-local schemas with normalization and
+observations use versioned browser-local schemas with normalisation and
 migration on read. Relationship observations are written only after an
 explicit analyst action. Deliberate exports are the portability boundary.
 
 An optional Netlify worker is narrower by design: it stores one
 application-encrypted, bounded compact watchlist projection so scheduled fast
 checks can resume. It does not become a case database, retain deep website
-evidence, synchronize ordinary browser stores, or add individual identities.
+evidence, synchronise ordinary browser stores, or add individual identities.
 This keeps hosted data custody and operating cost low while deliberately giving
-up general cross-device synchronization, accounts, background jobs,
+up general cross-device synchronisation, accounts, background jobs,
 notifications, and centrally managed retention.
 
 ### Derived analysis remains explainable
 
 Risk and opportunity results expose their contributing factors. Page
-similarity reports separate exact body, normalized HTML, visible text,
+similarity reports separate exact body, normalised HTML, visible text,
 structure, forms, resource hosts, tracking identifiers, and favicon signals
 rather than hiding them in one opaque percentage. Relationship views state the
 exact comparison method and retain human-readable limitations.
@@ -134,14 +134,14 @@ requested domain, IP range, or ASN range.
 
 The WHOIS client follows bounded referral chains, decodes split UTF-8 chunks,
 tries several validated addresses inside one deadline, retains hop diagnostics,
-and normalizes several registry response families without treating every
+and normalises several registry response families without treating every
 occurrence of a domain string as authoritative registration proof.
 
 ### Safe, useful website evidence
 
 One bounded homepage observation feeds activity classification, parking and
 for-sale signals, redirect provenance, favicon analysis, response fingerprints,
-static page identity, privacy-minimized credential-surface counts, curated
+static page identity, privacy-minimised credential-surface counts, curated
 technology indicators, and passive security posture. Reusing that capture
 avoids a series of slightly different requests while keeping the exact source
 and truncation boundary visible. The credential summary retains only fixed
@@ -157,7 +157,7 @@ Deep Lookup can also map one already-observed public endpoint address to a
 bounded IP RDAP registration projection. The result remains separately
 attributed because CDNs, proxies, load balancers, and shared hosting prevent it
 from proving origin or control. A separate opt-in security.txt action can show
-published disclosure contacts without treating the file as authorization to
+published disclosure contacts without treating the file as authorisation to
 test the target.
 
 ### Historical evidence that survives model evolution
@@ -182,9 +182,9 @@ query targets and evidence do not.
 The project treats repeatable verification as part of feature design rather
 than a final release activity.
 
-- The Node suite has grown beyond 2,800 tests covering parsers, normalization,
+- The Node suite has grown beyond 2,800 tests covering parsers, normalisation,
   malformed input, bounds, deterministic ordering, migrations, scoring,
-  security controls, injected transports, and compatibility behavior.
+  security controls, injected transports, and compatibility behaviour.
 - More than 230 Chromium Playwright tests cover authentication, responsive and
   accessible workflows, browser storage, downloads, isolation, and the public
   synthetic demo against a production-style local server.
@@ -198,7 +198,7 @@ than a final release activity.
 - CI runs the locked install, production dependency audit, and complete
   verification pyramid on every push and pull request. It retains production
   source coverage, bounded Playwright result summaries, and failure-only browser
-  artifacts for diagnosis. A scheduled lane expands property checks and records
+  artefacts for diagnosis. A scheduled lane expands property checks and records
   duration profiles without contacting live sources.
 
 The CI badge and latest workflow run are authoritative as the suite continues
@@ -208,19 +208,19 @@ to grow.
 
 | Area | Start here | What it demonstrates |
 | --- | --- | --- |
-| Unified evidence orchestration | [`lib/lookup.mts`](../lib/lookup.mts) | Parallel source reuse, fast/deep/compact behavior, and explicit source diagnostics. |
-| RDAP bootstrap and failover | [`lib/rdap.mts`](../lib/rdap.mts) | Validated bootstrap caching, endpoint selection, identity checks, and bounded structured normalization. |
+| Unified evidence orchestration | [`lib/lookup.mts`](../lib/lookup.mts) | Parallel source reuse, fast/deep/compact behaviour, and explicit source diagnostics. |
+| RDAP bootstrap and failover | [`lib/rdap.mts`](../lib/rdap.mts) | Validated bootstrap caching, endpoint selection, identity checks, and bounded structured normalisation. |
 | WHOIS referral analysis | [`lib/whois.mts`](../lib/whois.mts) | Raw TCP orchestration, public-address validation, authority reasoning, decoding, and registry compatibility. |
 | HTTP trust boundary | [`lib/safe-fetch.mts`](../lib/safe-fetch.mts) | DNS-rebinding resistance, address pinning, redirect validation, byte caps, and dispatcher lifecycle. |
 | Derived website analysis | [`lib/website-technology.mts`](../lib/website-technology.mts) and [`lib/website-security-posture.mts`](../lib/website-security-posture.mts) | Curated evidence rules, explicit source limitations, and passive findings without additional requests. |
 | Observed network context | [`lib/observed-network-context.mts`](../lib/observed-network-context.mts) | One-address selection, bounded IP RDAP projection, and non-attribution limitations. |
-| Disclosure contact collection | [`lib/security-txt.mts`](../lib/security-txt.mts) | Explicit opt-in gating, strict media and field parsing, safe redirects, and bounded normalized output. |
+| Disclosure contact collection | [`lib/security-txt.mts`](../lib/security-txt.mts) | Explicit opt-in gating, strict media and field parsing, safe redirects, and bounded normalised output. |
 | Hosted cost controls | [`lib/operation-budget.mts`](../lib/operation-budget.mts) | Provider-neutral atomic leases, feature identity, failure semantics, and optional durable accounting. |
 | Optional hosted monitoring | [`netlify/functions/scheduled-monitor.mts`](../netlify/functions/scheduled-monitor.mts) and [`lib/scheduled-monitor-netlify-store.mts`](../lib/scheduled-monitor-netlify-store.mts) | Private scheduling, encrypted compact state, resumable bounds, and explicit shared-login consequences. |
-| Historical evidence model | [`frontend/src/lib/analysis/case-model.ts`](../frontend/src/lib/analysis/case-model.ts) | Versioned schema migration, non-destructive imports, depth-aware comparison, and serialized storage budgets. |
+| Historical evidence model | [`frontend/src/lib/analysis/case-model.ts`](../frontend/src/lib/analysis/case-model.ts) | Versioned schema migration, non-destructive imports, depth-aware comparison, and serialised storage budgets. |
 | Typed local investigation projection | [`frontend/src/lib/analysis/investigation-projection.ts`](../frontend/src/lib/analysis/investigation-projection.ts) | Future-schema-safe source reads, deterministic entities, provenance-backed edges, and explicit projection bounds without a database. |
 | Local investigation search | [`frontend/src/lib/analysis/investigation-search.ts`](../frontend/src/lib/analysis/investigation-search.ts) | Bounded deterministic ranking over known projection fields, explicit source limitations, and passive pivots without network or persistence. |
-| Public demo boundary | [`frontend/src/lib/analysis/demo-model.ts`](../frontend/src/lib/analysis/demo-model.ts) | Fixed synthetic fixtures, dependency-aware state normalization, and a deliberately distinct export contract. |
+| Public demo boundary | [`frontend/src/lib/analysis/demo-model.ts`](../frontend/src/lib/analysis/demo-model.ts) | Fixed synthetic fixtures, dependency-aware state normalisation, and a deliberately distinct export contract. |
 | Browser network isolation | [`e2e/fixtures.ts`](../e2e/fixtures.ts) | Authentication setup, active off-origin request blocking, console failure collection, and scoped expected-noise handling. |
 
 ## Deliberate limitations
@@ -235,5 +235,5 @@ takedown service, or proof that a domain is malicious.
 
 These are explicit scope and trust decisions for the current project,
 not claims that the omitted features are trivial. Adding them would require a
-new identity, authorization, persistence, retention, privacy, and hosted-cost
+new identity, authorisation, persistence, retention, privacy, and hosted-cost
 model.

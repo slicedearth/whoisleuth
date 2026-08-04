@@ -314,7 +314,7 @@ export async function parseWaczEvidenceArchive(
     'wacz-evidence.warc',
   );
   const packageLimitation = manifestDigest === 'verified'
-    ? 'The WACZ manifest digest and each selected WARC resource SHA-256 digest were verified before normalization.'
+    ? 'The WACZ manifest digest and each selected WARC resource SHA-256 digest were verified before normalisation.'
     : 'Each selected WARC resource SHA-256 digest was verified; the optional WACZ manifest digest was not present.';
   const document = parseExternalFindingsDocument({
     schema: EXTERNAL_FINDINGS_SCHEMA,

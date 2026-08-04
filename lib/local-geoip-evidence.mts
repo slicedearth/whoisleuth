@@ -1,6 +1,6 @@
 import { isIP } from 'node:net';
 
-import { parseIpPrefix, prefixContains, type IpPrefix } from './ip-prefix.mts';
+import { formatIpPrefix, parseIpPrefix, prefixContains, type IpPrefix } from './ip-prefix.mts';
 
 const LOCAL_GEOIP_SCHEMA = 'whoisleuth.local-geoip-evidence';
 const LOCAL_GEOIP_VERSION = 1;
@@ -45,7 +45,7 @@ function normalizeGeoIpEntry(value: unknown): GeoIpEntry | null {
   const asnValue = source.asn === null || source.asn === undefined ? null : Number(String(source.asn).replace(/^AS/iu, ''));
   if (asnValue !== null && (!Number.isInteger(asnValue) || asnValue < 0 || asnValue > 4_294_967_295)) return null;
   return Object.freeze({
-    network: `${parsedNetwork.address}/${parsedNetwork.length}`,
+    network: formatIpPrefix(parsedNetwork),
     parsedNetwork,
     countryCode: country,
     region: boundedText(source.region, 120),

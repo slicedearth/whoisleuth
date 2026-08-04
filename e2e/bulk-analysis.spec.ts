@@ -83,7 +83,9 @@ test('a small scan completes and reports the correct error count', async ({ page
   await expect(outcomes.locator('div', { hasText: 'Pending' })).toContainText('0');
 });
 
-test('keeps mobile Bulk review focused while making secondary tools discoverable', async ({ page }) => {
+test('keeps mobile Bulk review focused while making secondary tools discoverable', {
+  tag: ['@analyst-journey', '@journey-bulk-peer-triage'],
+}, async ({ page }) => {
   await page.setViewportSize({ width: 393, height: 852 });
   const domains = invalidDomains(3);
   await runBulkScan(page, domains);
@@ -124,7 +126,9 @@ test('keeps mobile Bulk review focused while making secondary tools discoverable
   await expectNoHorizontalScrollContainers(page.locator('#results'));
 });
 
-test('filters, groups, and selected-only actions use compact observed evidence', async ({ page }) => {
+test('filters, groups, and selected-only actions use compact observed evidence', {
+  tag: ['@analyst-journey', '@journey-bulk-peer-triage'],
+}, async ({ page }) => {
   await page.route('**/api/lookup?*', async (route) => {
     const domain = new URL(route.request().url()).searchParams.get('q') || '';
     const limited = domain.startsWith('limited');
@@ -821,9 +825,9 @@ test('a 101-result scan paginates 100 then 1, and Previous/Next update the page'
   await expect(pagination).toContainText('Page 1 of 2');
 });
 
-test('IDN evidence renders and filters without changing the risk score', async ({ page }) => {
+test('IDN official-domain skeleton evidence renders, filters, and contributes once to Risk', async ({ page }) => {
   const profile = {
-    id: 'idn-profile', name: 'Example Brand', officialDomains: ['paypal.com'], productNames: [], tlds: ['com'],
+    id: 'idn-profile', name: 'Example Brand', officialDomains: ['sample.example'], productNames: [], tlds: ['example'],
     approvedPartnerDomains: [], allowlistedDomains: [], allowlistedRegistrars: [], dkimSelectors: [],
     trademarkOwner: '', trademarkRegistration: '', officialFaviconHash: '', officialFaviconPHash: '',
     createdAt: '2026-07-13T00:00:00.000Z', updatedAt: '2026-07-13T00:00:00.000Z',
@@ -837,19 +841,22 @@ test('IDN evidence renders and filters without changing the risk score', async (
     contentType: 'application/json',
     body: JSON.stringify({
       availability: {
-        applicable: true, domain: 'xn--ypal-43d9g.com', state: 'registered', confidence: 'high',
+        applicable: true, domain: 'xn--smple-4ve.example', state: 'registered', confidence: 'high',
         nameservers: [], privacyProtected: null, activityStatus: null,
       },
       diagnostics: { version: 7, rdap: { status: 'unsupported' }, whois: { status: 'skipped' }, availability: { status: 'complete' } },
     }),
   }));
 
-  await runBulkScan(page, ['xn--ypal-43d9g.com']);
+  await runBulkScan(page, ['xn--smple-4ve.example']);
   const row = page.locator('.results-table tbody tr');
-  await expect(row.getByText('Unicode: раypal.com', { exact: true })).toBeVisible();
+  await expect(row.getByText('Unicode: sаmple.example', { exact: true })).toBeVisible();
   await expect(row.getByText('Mixed writing scripts', { exact: true })).toBeVisible();
   await expect(row.getByText('Official-domain skeleton match', { exact: true })).toBeVisible();
-  await expect(row.locator('td[data-label="Risk"]')).toHaveText('10');
+  const riskCell = row.locator('td[data-label="Risk"]');
+  await expect(riskCell).toHaveText('26');
+  await expect(riskCell).toHaveAttribute('title', /IDN skeleton matches an official Brand Profile domain \+20/);
+  await expect(riskCell).toHaveAttribute('title', /Risk model v7/);
 
   await page.getByRole('button', { name: 'IDN / confusable' }).click();
   await expect(row).toBeVisible();
@@ -857,7 +864,7 @@ test('IDN evidence renders and filters without changing the risk score', async (
   await expectNoHorizontalOverflow(page);
 });
 
-test('risk model v6 exposes cross-family corroboration in Bulk triage', async ({ page }) => {
+test('risk model v7 exposes capped cross-family corroboration in Bulk triage', async ({ page }) => {
   const profile = {
     id: 'risk-profile', name: 'Example profile', officialDomains: ['official.example'], productNames: [], tlds: ['example'],
     approvedPartnerDomains: [], allowlistedDomains: [], allowlistedRegistrars: [], dkimSelectors: [],
@@ -892,9 +899,9 @@ test('risk model v6 exposes cross-family corroboration in Bulk triage', async ({
   await runBulkScan(page, ['candidate.example']);
   const row = page.locator('.results-table tbody tr');
   const riskCell = row.locator('td[data-label="Risk"]');
-  await expect(riskCell).toHaveText('85');
-  await expect(riskCell).toHaveAttribute('title', /Corroborating context across 3 distinct evidence families \+20/);
-  await expect(riskCell).toHaveAttribute('title', /Risk model v6/);
+  await expect(riskCell).toHaveText('79');
+  await expect(riskCell).toHaveAttribute('title', /Corroborating context across 3 independent evidence families \+18/);
+  await expect(riskCell).toHaveAttribute('title', /Risk model v7/);
 
   await page.getByRole('button', { name: 'high risk' }).click();
   await expect(row).toBeVisible();

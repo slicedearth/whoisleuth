@@ -100,10 +100,10 @@ function parseSavedLookupDocument(text: unknown, options: SavedLookupParseOption
   const rdapParsed = objectOrNull(rdap?.parsed);
   const whoisParsed = objectOrNull(whois?.parsed);
   if (rdapStatus === 'success' && !rdapParsed) {
-    throw new CliUsageError('Successful RDAP input is missing normalized parsed data.');
+    throw new CliUsageError('Successful RDAP input is missing normalised parsed data.');
   }
   if ((whoisStatus === 'complete' || whoisStatus === 'partial') && !whoisParsed) {
-    throw new CliUsageError('Successful WHOIS input is missing normalized parsed data.');
+    throw new CliUsageError('Successful WHOIS input is missing normalised parsed data.');
   }
   return document as SavedLookupDocument;
 }

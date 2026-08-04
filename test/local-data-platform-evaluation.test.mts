@@ -84,7 +84,7 @@ describe('local data platform evaluation', () => {
       return detail.length > 0 && detail.length <= MAX_LOCAL_DATA_EVALUATION_DETAIL_LENGTH;
     }));
     assert.match(report.limitations.join(' '), /not a measurement of one user workspace/i);
-    assert.match(report.limitations.join(' '), /quota and eviction behavior vary/i);
+    assert.match(report.limitations.join(' '), /quota and eviction behaviour vary/i);
   });
 
   test('is deterministic under injected time and exposes versioned JSON without user records', async () => {
@@ -105,7 +105,7 @@ describe('local data platform evaluation', () => {
     const output = formatLocalDataPlatformEvaluation(report);
     assert.match(output, /10\.5 MiB across 8 stores/);
     assert.match(output, /native_indexeddb \(no production dependency\)/);
-    assert.match(output, /Encryption, PWA support, and synchronization remain separately gated/);
+    assert.match(output, /Encryption, PWA support, and synchronisation remain separately gated/);
 
     assert.deepEqual(parseArguments([]), { json: false });
     assert.deepEqual(parseArguments(['--json']), { json: true });

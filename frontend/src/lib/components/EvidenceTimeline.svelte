@@ -22,7 +22,8 @@
   const filteredIncomparable = $derived(changedOnly && timeline.some(entry => entry.hasIncomparableChange && !visibleTimeline.includes(entry)));
 
   function incomparableLabel(reasons: string[]) {
-    if (reasons.includes('risk-model') && reasons.includes('scan-depth')) return 'Model and depth limit comparison';
+    if ((reasons.includes('risk-model') || reasons.includes('opportunity-model')) && reasons.includes('scan-depth')) return 'Model and depth limit comparison';
+    if (reasons.includes('opportunity-model')) return 'Opportunity models differ';
     if (reasons.includes('risk-model')) return 'Risk models differ';
     if (reasons.includes('scan-depth')) return 'Depth prevents comparison';
     return 'Comparison unavailable';
@@ -31,6 +32,7 @@
   function incomparableNote(reasons: string[]) {
     const notes = [];
     if (reasons.includes('risk-model')) notes.push('Risk scores and factors use different or unversioned models, so their numeric difference is not treated as a domain change.');
+    if (reasons.includes('opportunity-model')) notes.push('Opportunity scores and factors use different or unversioned models, so their numeric difference is not treated as a domain change.');
     if (reasons.includes('scan-depth')) notes.push('The capture depths differ, so unevaluated deep signals are not treated as additions or removals.');
     if (notes.length === 0) notes.push('The observations differ materially, but no reliable field-level comparison is available.');
     return notes.join(' ');

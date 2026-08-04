@@ -408,7 +408,7 @@ describe('portable workspace archive', () => {
 
     assert.ok(section);
     assert.equal(section.status, 'unsupported');
-    assert.match(section.reason, /does not recognize/);
+    assert.match(section.reason, /does not recognise/);
   });
 
   test('rejects undeclared section data', async () => {
@@ -442,7 +442,7 @@ describe('portable workspace archive', () => {
   test('rejects a cyclic imported archive instead of traversing it indefinitely', async () => {
     const archive: Record<string, unknown> = { schema: WORKSPACE_ARCHIVE_SCHEMA, version: WORKSPACE_ARCHIVE_VERSION };
     archive.self = archive;
-    await assert.rejects(readWorkspaceArchive(archive), /cannot be serialized/);
+    await assert.rejects(readWorkspaceArchive(archive), /cannot be serialised/);
   });
 
   test('previews additive records and existing identities without mutating either side', async () => {

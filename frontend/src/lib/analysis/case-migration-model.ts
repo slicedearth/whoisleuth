@@ -15,6 +15,7 @@ import {
   normalizeDomain,
   normalizeEvidenceHistory,
   normalizeNotes,
+  normalizeReviewReasonCode,
   normalizeTags,
   objectRecord,
   safeId,
@@ -55,6 +56,7 @@ type ImportPatch = {
   rawId: string | null;
   status: string | undefined;
   disposition: string | undefined;
+  reviewReasonCode: string | null | undefined;
   source: string | undefined;
   evidenceHistory: CaseEvidenceSnapshot[];
   evidencePins: CaseEvidencePin[];
@@ -164,6 +166,9 @@ function extractImportPatch(raw: unknown): ImportPatch | null {
     rawId: typeof record.id === 'string' ? record.id : null,
     status: importScalar(record.status, STATUS_VALUES),
     disposition: importScalar(record.disposition, DISPOSITION_VALUES),
+    reviewReasonCode: Object.hasOwn(record, 'reviewReasonCode')
+      ? normalizeReviewReasonCode(record.reviewReasonCode)
+      : undefined,
     source: importScalar(record.source, SOURCE_VALUES),
     evidenceHistory: normalizeEvidenceHistory(rawEvidence, { source: 'import', fallback: importFallback }),
     evidencePins,
@@ -211,6 +216,7 @@ function caseFromPatch(patch: ImportPatch, now: string): CaseRecord {
     domain: patch.domain,
     status: patch.status ?? DEFAULT_STATUS,
     disposition: patch.disposition ?? DEFAULT_DISPOSITION,
+    reviewReasonCode: patch.reviewReasonCode ?? null,
     tags: patch.tags,
     notes: patch.notes,
     source: patch.source ?? DEFAULT_SOURCE,
@@ -244,6 +250,7 @@ function applyImportPatch(local: CaseRecord, patch: ImportPatch): CaseRecord {
     ...local,
     status: patch.status !== undefined && importNewer ? patch.status : local.status,
     disposition: patch.disposition !== undefined && importNewer ? patch.disposition : local.disposition,
+    reviewReasonCode: patch.reviewReasonCode !== undefined && importNewer ? patch.reviewReasonCode : local.reviewReasonCode ?? null,
     source: patch.source !== undefined && importNewer ? patch.source : local.source,
     evidenceHistory: mergeEvidenceHistories(local.evidenceHistory, patch.evidenceHistory),
     evidencePins,
@@ -287,7 +294,7 @@ export function mergeCases(
   if (importedVersion !== null && Number.isInteger(importedVersion) && importedVersion > CASE_SCHEMA_VERSION) {
     throw new Error(`This case file was exported by a newer version of WHOISleuth (schema ${importedVersion}). Update the app before importing it.`);
   }
-  if (!CASE_IMPORT_VERSIONS.includes(importedVersion as 3 | 4 | 5 | 6 | 7 | 8 | typeof CASE_SCHEMA_VERSION)
+  if (!CASE_IMPORT_VERSIONS.includes(importedVersion as 3 | 4 | 5 | 6 | 7 | 8 | 9 | typeof CASE_SCHEMA_VERSION)
     || !importedRaw || typeof importedRaw !== 'object'
     || !Array.isArray(objectRecord(importedRaw).cases)) {
     throw new Error(`Expected a WHOISleuth case export using schema ${CASE_IMPORT_VERSIONS.join(' or ')}.`);

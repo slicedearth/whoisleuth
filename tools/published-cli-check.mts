@@ -60,9 +60,16 @@ const PACKAGE_ISSUES = WHOISLEUTH_SOURCE_ISSUES_URL;
 const PROVENANCE_PREDICATE = 'https://slsa.dev/provenance/v1';
 const REPORT_SCHEMA = 'whoisleuth.published-cli-check';
 const REPORT_VERSION = 1;
-const RUNTIME_DEPENDENCIES = Object.freeze(['parse5', 'tldts', 'undici']);
+const RUNTIME_DEPENDENCIES = Object.freeze([
+  '@peculiar/x509',
+  'maxmind',
+  'parse5',
+  'reflect-metadata',
+  'tldts',
+  'undici',
+]);
 const MAX_METADATA_BYTES = 512 * 1024;
-const MAX_PACKAGE_FILES = 220;
+const MAX_PACKAGE_FILES = 250;
 const MAX_UNPACKED_BYTES = 6 * 1024 * 1024;
 const MAX_ERROR_LENGTH = 512;
 const OVERRIDDEN_NPM_ENVIRONMENT_KEYS = new Set([

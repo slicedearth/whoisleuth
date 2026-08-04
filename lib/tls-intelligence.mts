@@ -14,6 +14,10 @@ import { domainToASCII } from 'node:url';
 
 import { createObservation } from './observation.mts';
 import { isPrivateAddress, resolvePublicAddresses } from './safe-fetch.mts';
+import {
+  parseCertificateExtensionProfile,
+  type CertificateExtensionProfile,
+} from './certificate-extension-profile.mts';
 
 type Tracker = { truncated: boolean; discarded: number };
 type UnknownRecord = Record<string, unknown>;
@@ -57,6 +61,7 @@ type NormalizedCertificate = {
   signature?: { algorithm: string | null; oid: string | null };
   extendedKeyUsage?: CertificatePurposes;
   authorityInformationAccess?: AuthorityInformationAccess;
+  extensionProfile?: CertificateExtensionProfile;
 };
 type TlsFinding = { id: string; tone: string; label: string; detail: string };
 type TlsProfile = {
@@ -113,7 +118,7 @@ type TlsCollectOptions = {
   clearTimer?: ClearTimer;
 };
 
-const TLS_PROFILE_VERSION = 2;
+const TLS_PROFILE_VERSION = 3;
 const TLS_PORT = 443;
 const TLS_TIMEOUT_MS = 5000;
 const MAX_RESOLVED_ADDRESSES = 64;
@@ -536,6 +541,14 @@ function normalizeCertificate(value: unknown, state: Tracker, options: { include
       parsedCertificate?.infoAccess || record.infoAccess,
       state,
     );
+    const extensionProfile = parseCertificateExtensionProfile(record.raw);
+    if (extensionProfile.parsed || extensionProfile.partial) {
+      certificate.extensionProfile = extensionProfile;
+      if (extensionProfile.partial) state.discarded += 1;
+      if (extensionProfile.certificatePolicies.truncated || extensionProfile.crlDistributionPoints.truncated) {
+        state.truncated = true;
+      }
+    }
   }
   return certificate;
 }
@@ -605,7 +618,7 @@ function tlsFindings(profile: TlsProfile): TlsFinding[] {
   const findings: TlsFinding[] = [];
   if (profile.validity.status === 'expired') findings.push({ id: 'certificate_expired', tone: 'warning', label: 'Certificate expired', detail: 'The leaf certificate was outside its validity period at observation time.' });
   if (profile.validity.status === 'not_yet_valid') findings.push({ id: 'certificate_not_yet_valid', tone: 'warning', label: 'Certificate not yet valid', detail: 'The leaf certificate validity period had not started at observation time.' });
-  if (profile.authorization.authorized === false) findings.push({ id: 'certificate_unauthorized', tone: 'warning', label: 'Certificate not authorized', detail: 'The runtime trust store did not authorize the observed certificate chain. This can reflect an incomplete chain, private CA, self-signed certificate, expiry, or another validation failure.' });
+  if (profile.authorization.authorized === false) findings.push({ id: 'certificate_unauthorized', tone: 'warning', label: 'Certificate not authorised', detail: 'The runtime trust store did not authorise the observed certificate chain. This can reflect an incomplete chain, private CA, self-signed certificate, expiry, or another validation failure.' });
   if (profile.hostname.matches === false) findings.push({ id: 'hostname_mismatch', tone: 'warning', label: 'Hostname mismatch', detail: 'The observed leaf certificate did not match the SNI hostname.' });
   if (profile.certificate?.subjectAltNames?.dnsNames.some((name) => name.startsWith('*.'))) findings.push({ id: 'wildcard_certificate', tone: 'neutral', label: 'Wildcard certificate', detail: 'The leaf certificate includes at least one wildcard DNS name. Wildcard use is common and is not inherently suspicious.' });
   return findings;
@@ -675,7 +688,7 @@ function buildTlsObservation(handshake: TlsHandshake = {}, options: TlsBuildOpti
       truncated: state.truncated,
       limitations: [
         'This is a point-in-time TLS handshake to one validated public address; other addresses or edge locations may present different results.',
-        'Authorization reflects the certificate authorities and verification behavior available to this runtime.',
+        'Authorisation reflects the certificate authorities and verification behaviour available to this runtime.',
         'The profile records the negotiated connection only and does not enumerate supported TLS versions or cipher suites.',
         ...(state.truncated ? ['One or more certificate fields or chain entries reached a retention limit.'] : []),
       ],

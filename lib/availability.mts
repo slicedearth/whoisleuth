@@ -397,7 +397,7 @@ function registryPolicyDetail(domain: string, fast: boolean): string {
   const whoisAdmission = fast ? null : registryServiceAdmissionFor(domain, 'whois');
   if (whoisAdmission && !whoisAdmission.allowed) {
     details.push(whoisAdmission.state === 'permission_required'
-      ? 'WHOIS was not queried because registry permission or source authorization is required.'
+      ? 'WHOIS was not queried because registry permission or source authorisation is required.'
       : 'WHOIS was not queried because IANA publishes no domain WHOIS service for this suffix.');
   }
   return details.length ? ` ${details.join(' ')}` : '';

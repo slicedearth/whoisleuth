@@ -214,7 +214,7 @@ export function convertSupportedExternalFindings(
     }
     try {
       const finding = rowsDocument([mapped], root.source).findings[0];
-      if (!finding) throw new Error('No normalized finding.');
+      if (!finding) throw new Error('No normalised finding.');
       const key = JSON.stringify(finding);
       if (seen.has(key)) {
         duplicates += 1;

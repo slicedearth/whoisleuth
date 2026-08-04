@@ -585,7 +585,7 @@ describe('runUnifiedLookup', () => {
       suffix: 'es', coverageState: 'access_documented',
       whoisAccessProfile: 'source-ip-authorization-required',
       rdapAccessProfile: 'no-iana-service',
-      limitation: 'The registry WHOIS service requires advance source-IP authorization. A failed or unavailable query is not evidence that the domain is unregistered.',
+      limitation: 'The registry WHOIS service requires advance source-IP authorisation. A failed or unavailable query is not evidence that the domain is unregistered.',
       authority: 'context_only',
     });
   });

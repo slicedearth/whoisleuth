@@ -35,6 +35,7 @@ export type LookupAssetNode = Readonly<{
 
 export type LookupAssetEdge = Readonly<{
   id: string;
+  sourceId: string;
   source: string;
   target: string;
   kind: string;
@@ -48,11 +49,21 @@ export type LookupAssetEdge = Readonly<{
   boundary?: LookupTrustBoundary;
 }>;
 
+export type LookupAssetSource = Readonly<{
+  id: string;
+  label: string;
+  href: `#${string}`;
+  observedAt: string | null;
+  completeness: 'complete' | 'partial' | 'unknown';
+  limitations: readonly string[];
+}>;
+
 export type LookupAssetGraph = Readonly<{
-  version: 1;
+  version: 2;
   targetId: string;
   nodes: readonly LookupAssetNode[];
   edges: readonly LookupAssetEdge[];
+  sources: readonly LookupAssetSource[];
   truncated: boolean;
   limitations: readonly string[];
 }>;
@@ -266,17 +277,19 @@ export function buildLookupAssetGraph(input: Readonly<{
   const target = hostname(input.target);
   if (!target) {
     return {
-      version: 1,
+      version: 2,
       targetId: '',
       nodes: [],
       edges: [],
+      sources: [],
       truncated: false,
-      limitations: ['A normalized domain target is required before an asset graph can be projected.'],
+      limitations: ['A normalised domain target is required before an asset graph can be projected.'],
     };
   }
   const observedAt = isoDate(input.observedAt);
   const nodes = new Map<string, LookupAssetNode>();
   const edges = new Map<string, LookupAssetEdge>();
+  const sources = new Map<string, LookupAssetSource>();
   let truncated = false;
   const targetId = nodeId('target', target);
   nodes.set(targetId, { id: targetId, label: target, kind: 'target', detail: 'Lookup target' });
@@ -294,7 +307,7 @@ export function buildLookupAssetGraph(input: Readonly<{
     }
     return id;
   };
-  const addEdge = (edge: Omit<LookupAssetEdge, 'id'>): void => {
+  const addEdge = (edge: Omit<LookupAssetEdge, 'id' | 'sourceId'>): void => {
     if (!nodes.has(edge.source) || !nodes.has(edge.target) || edge.source === edge.target) return;
     const id = `${edge.kind}-${hash(`${edge.source}|${edge.target}|${edge.sourceLabel}`)}`;
     if (edges.has(id)) return;
@@ -302,12 +315,31 @@ export function buildLookupAssetGraph(input: Readonly<{
       truncated = true;
       return;
     }
-    edges.set(id, { id, ...edge });
+    const sourceId = `source-${hash(`${edge.sourceLabel}|${edge.href}`)}`;
+    const existingSource = sources.get(sourceId);
+    const sourceLimitations = [...new Set([
+      ...(existingSource?.limitations ?? []),
+      ...edge.limitations,
+    ])].slice(0, MAX_LIMITATIONS);
+    const sourceCompleteness = existingSource?.completeness === 'partial' || edge.completeness === 'partial'
+      ? 'partial'
+      : existingSource?.completeness === 'unknown' || edge.completeness === 'unknown'
+        ? 'unknown'
+        : 'complete';
+    sources.set(sourceId, {
+      id: sourceId,
+      label: edge.sourceLabel,
+      href: edge.href,
+      observedAt: existingSource?.observedAt ?? edge.observedAt,
+      completeness: sourceCompleteness,
+      limitations: sourceLimitations,
+    });
+    edges.set(id, { id, sourceId, ...edge });
   };
   const connect = (
     kind: LookupAssetNodeKind,
     label: unknown,
-    edge: Omit<LookupAssetEdge, 'id' | 'source' | 'target'>,
+    edge: Omit<LookupAssetEdge, 'id' | 'sourceId' | 'source' | 'target'>,
     detail: unknown = '',
     source = targetId,
   ): string | null => {
@@ -787,8 +819,8 @@ export function buildLookupAssetGraph(input: Readonly<{
         'identity',
         authorizationReview.authorized ? 'Runtime trust confirmed' : 'Runtime trust not confirmed',
         authorizationReview.authorized
-          ? 'The runtime trust store authorized the observed certificate chain.'
-          : text(authorizationReview.error, 160) || 'The runtime trust store did not authorize the observed certificate chain.',
+          ? 'The runtime trust store authorised the observed certificate chain.'
+          : text(authorizationReview.error, 160) || 'The runtime trust store did not authorise the observed certificate chain.',
       );
       if (authorizationId) {
         addEdge({
@@ -888,10 +920,11 @@ export function buildLookupAssetGraph(input: Readonly<{
   }
 
   return {
-    version: 1,
+    version: 2,
     targetId,
     nodes: [...nodes.values()],
     edges: [...edges.values()],
+    sources: [...sources.values()].sort((left, right) => left.label.localeCompare(right.label)),
     truncated,
     limitations: [
       'The graph contains only settled evidence from this Lookup and does not start additional requests.',

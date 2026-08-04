@@ -121,6 +121,10 @@ test('peer outliers require a local majority and exclude unavailable values', ()
   const different = matrix.rows.find((item) => item.domain === 'different.example');
   assert.ok(different?.findings.some((finding) => finding.dimension === 'registrar'));
   assert.ok(different?.findings.some((finding) => finding.dimension === 'nameserver_set'));
+  assert.ok((different?.reviewScore ?? 0) > 0);
+  assert.equal(different?.strongFindingCount, 0);
+  assert.equal(different?.findings[0]?.strength, 'moderate');
+  assert.equal(different?.findings[0]?.baselineShare, 0.75);
   assert.equal(matrix.rows.some((item) => item.domain === 'missing.example'), false);
   assert.equal(matrix.dimensions.find((item) => item.id === 'registrar')?.excludedCount, 1);
 });
@@ -215,6 +219,7 @@ test('outlier export is formula-safe and includes the local baseline', () => {
   const output = buildBulkPeerOutlierExport(matrix, '2026-07-31T00:00:00.000Z');
   assert.match(output.filename, /2026-07-31/u);
   assert.match(output.content, /cohort_baseline/u);
+  assert.match(output.content, /contrast_percent/u);
   assert.doesNotMatch(output.content, /^=different/u);
 });
 

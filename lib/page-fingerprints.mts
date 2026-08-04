@@ -426,7 +426,7 @@ function createPageFingerprints(html: unknown, options: PageFingerprintOptions =
     || parsedStructure.structureLimitReached || text?.truncated === true || forms?.truncated === true
     || resourceHosts.truncated || identifiers.truncated;
   const limitations = [
-    'Fingerprints summarize capped static HTML and are comparison aids, not cryptographic proof of page authorship or intent.',
+    'Fingerprints summarise capped static HTML and are comparison aids, not cryptographic proof of page authorship or intent.',
     'Visible-text SimHash is a fuzzy similarity fingerprint and must not be treated as a cryptographic digest.',
     'DOM-structure SimHash is derived from a standards-compliant static token stream and is a review aid, not proof that two pages share an author or template.',
   ];

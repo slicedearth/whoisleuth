@@ -519,7 +519,7 @@ function formatNetworkIdentifierReadableReport(
     '- This report preserves the observed source states. Unavailable, partial, unsupported, stale, conflicting, or missing evidence is inconclusive rather than a negative finding.',
     '- Public registration and routing identifiers describe published allocation context. They do not prove ownership, current control, hosting responsibility, intent, safety, or maliciousness.',
     '- Reverse DNS names are operator-published context. They do not prove identity, hosting control, or a forward-confirmed relationship.',
-    '- The report projects only bounded normalized fields already collected by Lookup and makes no additional request.',
+    '- The report projects only bounded normalised fields already collected by Lookup and makes no additional request.',
     '',
   );
   return lines.join('\n');

@@ -86,6 +86,10 @@ async function runLookupCommand(
     result as UnknownRecord,
     now,
     args.deep ? 'deep' : 'fast',
+    {
+      ...(args.observerLabel ? { observerLabel: args.observerLabel } : {}),
+      ...(args.vantageLabel ? { vantageLabel: args.vantageLabel } : {}),
+    },
   );
   if (!args.quiet) {
     if (args.output === 'json') context.writeStdout(formatJsonDocument(document));

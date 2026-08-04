@@ -142,7 +142,7 @@ test('deep availability names a registry permission requirement', async () => {
   });
 
   assert.equal(result.state, 'unknown');
-  assert.match(stringValue(result.detail), /registry permission or source authorization is required/u);
+  assert.match(stringValue(result.detail), /registry permission or source authorisation is required/u);
 });
 
 test('RDAP registration remains authoritative and does not invoke the DNS fallback', async () => {

@@ -547,7 +547,7 @@ export async function buildSpecialistWorkflowBenchmark(options: BenchmarkOptions
     metrics,
     scenarios,
     limitations: Object.freeze([
-      'This benchmark replays checked-in sanitized registry fixtures, reserved domains, controlled synthetic page-evidence records, and deterministic local evidence only. It makes no network requests.',
+      'This benchmark replays checked-in sanitised registry fixtures, reserved domains, controlled synthetic page-evidence records, and deterministic local evidence only. It makes no network requests.',
       'It is a regression and workflow-contract benchmark, not a live coverage or production-performance claim.',
       'The time-to-first-pivot measure is a deterministic workflow-step proxy, not an analyst wall-clock measurement.',
       'Fixture labels, rule matches, scores, shared infrastructure, and pass rates do not prove ownership, intent, safety, or maliciousness.',

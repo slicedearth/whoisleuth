@@ -160,7 +160,7 @@ test('reviewed cases export an explicitly selected privacy-bounded Risk calibrat
 
   expect(exported).toMatchObject({
     schema: 'whoisleuth.risk-calibration-dataset',
-    version: 1,
+    version: 2,
     records: [{
       id: 'reviewed-calibration',
       domain: 'reviewed-calibration.invalid',
@@ -456,7 +456,9 @@ test('a note can be added and is shown in the record', async ({ page }) => {
   await expect(page.locator('.notes p').first()).toHaveText('This domain looks suspicious.');
 });
 
-test('reviewed response records persist and produce a local non-submitted packet', async ({ page }) => {
+test('reviewed response records persist and produce a local non-submitted packet', {
+  tag: ['@analyst-journey', '@journey-reviewed-response-decision'],
+}, async ({ page }) => {
   await openCasesView(page);
   await createCase(page, 'response.invalid');
 
@@ -796,7 +798,9 @@ test('filtering by status narrows the visible cases', async ({ page }) => {
   await expect(page.locator('.case-head', { hasText: 'filter-b.invalid' })).toHaveCount(0);
 });
 
-test('the Cases view has no horizontal overflow on a short mobile viewport', async ({ page }) => {
+test('the Cases view has no horizontal overflow on a short mobile viewport', {
+  tag: ['@analyst-journey', '@journey-reviewed-response-decision'],
+}, async ({ page }) => {
   await page.setViewportSize({ width: 360, height: 560 });
   await openCasesView(page);
   await createCase(page, 'mobile.invalid');

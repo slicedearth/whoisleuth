@@ -3,6 +3,7 @@
 
 import {
   CASE_DISPOSITIONS,
+  CASE_REVIEW_REASONS,
   CASE_IMPORT_VERSIONS,
   CASE_SCHEMA_VERSION,
   CASE_SOURCES,
@@ -66,6 +67,7 @@ export const EVIDENCE_SOURCE_RANK = {
 
 const STATUS_VALUES: Set<string> = new Set(CASE_STATUSES.map((item) => item.value));
 const DISPOSITION_VALUES: Set<string> = new Set(CASE_DISPOSITIONS.map((item) => item.value));
+const REVIEW_REASON_VALUES: Set<string> = new Set(CASE_REVIEW_REASONS.map((item) => item.value).filter(Boolean));
 const SOURCE_VALUES: Set<string> = new Set(CASE_SOURCES.map((item) => item.value));
 
 const STATUS_LABELS = Object.fromEntries(CASE_STATUSES.map((item) => [item.value, item.label]));
@@ -178,6 +180,9 @@ export function normalizeStatus(value: unknown): string {
 }
 export function normalizeDisposition(value: unknown): string {
   return typeof value === 'string' && DISPOSITION_VALUES.has(value) ? value : DEFAULT_DISPOSITION;
+}
+export function normalizeReviewReasonCode(value: unknown): string | null {
+  return typeof value === 'string' && REVIEW_REASON_VALUES.has(value) ? value : null;
 }
 export function normalizeSource(value: unknown): string {
   return typeof value === 'string' && SOURCE_VALUES.has(value) ? value : DEFAULT_SOURCE;

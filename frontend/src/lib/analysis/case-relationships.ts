@@ -36,17 +36,17 @@ const PROJECTION_RELATIONSHIP_TYPES = new Map([
   ['domain_uses_nameserver_set', {
     type: 'nameserver_set',
     label: 'Shared nameserver set',
-    description: 'Retained observations connect these cases to the same exact normalized nameserver set. Shared DNS providers are common.',
+    description: 'Retained observations connect these cases to the same exact normalised nameserver set. Shared DNS providers are common.',
   }],
   ['domain_reached_http_origin', {
     type: 'http_final_origin',
     label: 'Shared final website origin',
-    description: 'Retained comparable deep observations connect these cases to the same normalized website origin. Redirectors, parking services, CDNs, and shared platforms are common.',
+    description: 'Retained comparable deep observations connect these cases to the same normalised website origin. Redirectors, parking services, CDNs, and shared platforms are common.',
   }],
   ['domain_resolved_to_ip', {
     type: 'ip_address',
     label: 'Shared IP address',
-    description: 'An analyst-retained Bulk observation connects these cases to the same normalized IP address. Shared hosting, CDNs, and managed platforms are common.',
+    description: 'An analyst-retained Bulk observation connects these cases to the same normalised IP address. Shared hosting, CDNs, and managed platforms are common.',
   }],
   ['domain_presented_certificate', {
     type: 'certificate',
@@ -56,7 +56,7 @@ const PROJECTION_RELATIONSHIP_TYPES = new Map([
   ['domain_exposed_tracking_identifier', {
     type: 'tracking_identifier',
     label: 'Shared tracking identifier',
-    description: 'An analyst-retained observation connects these cases to the same recognized public page identifier.',
+    description: 'An analyst-retained observation connects these cases to the same recognised public page identifier.',
   }],
   ['domain_related_by_favicon', {
     type: 'favicon',
@@ -339,10 +339,10 @@ export function buildCaseRelationships(rawCases: unknown): CaseRelationshipSumma
     output.push(group(
       'nameserver_set',
       'Shared nameserver set',
-      'Exact retained normalized set',
+      'Exact retained normalised set',
       value,
       [...records].map(([id, domain]) => ({ id, domain })).sort((a, b) => a.domain.localeCompare(b.domain)),
-      'The latest retained evidence for these cases contains the same bounded normalized nameserver set. Shared DNS providers are common.',
+      'The latest retained evidence for these cases contains the same bounded normalised nameserver set. Shared DNS providers are common.',
     ));
   }
   for (const [value, records] of finalOrigins) {
@@ -350,7 +350,7 @@ export function buildCaseRelationships(rawCases: unknown): CaseRelationshipSumma
     output.push(group(
       'http_final_origin',
       'Shared final website origin',
-      'Exact normalized HTTP(S) origin',
+      'Exact normalised HTTP(S) origin',
       value,
       [...records].map(([id, domain]) => ({ id, domain })).sort((a, b) => a.domain.localeCompare(b.domain)),
       'The latest retained deep evidence for these cases ended at the same website origin. Redirectors, parking services, CDNs, and shared platforms are common.',

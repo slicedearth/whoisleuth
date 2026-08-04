@@ -43,11 +43,11 @@ function classifiedDomain(value: string, inputHostname = value): ClassifiedQuery
 
 describe('CLI argument parsing', () => {
   test('defaults lookup to fast terminal output', () => {
-    assert.deepEqual(parseCliArguments(['lookup', 'example.com']), { action: 'lookup', query: 'example.com', output: 'terminal', deep: false, detail: 'standard', strictExit: false, events: false, plan: false, quiet: false, color: true });
+    assert.deepEqual(parseCliArguments(['lookup', 'example.com']), { action: 'lookup', query: 'example.com', output: 'terminal', deep: false, detail: 'standard', strictExit: false, events: false, plan: false, observerLabel: null, vantageLabel: null, quiet: false, color: true });
   });
 
   test('accepts explicit deep JSON output and bounded stdin mode', () => {
-    assert.deepEqual(parseCliArguments(['lookup', '--deep', '--json', '--no-color']), { action: 'lookup', query: null, output: 'json', deep: true, detail: 'standard', strictExit: false, events: false, plan: false, quiet: false, color: false });
+    assert.deepEqual(parseCliArguments(['lookup', '--deep', '--json', '--no-color']), { action: 'lookup', query: null, output: 'json', deep: true, detail: 'standard', strictExit: false, events: false, plan: false, observerLabel: null, vantageLabel: null, quiet: false, color: false });
   });
 
   test('rejects unknown commands, options, conflicting modes, and multiple queries', () => {
@@ -72,6 +72,8 @@ describe('CLI argument parsing', () => {
       strictExit: false,
       events: false,
       plan: false,
+      observerLabel: null,
+      vantageLabel: null,
       quiet: false,
       color: true,
     });
@@ -84,6 +86,8 @@ describe('CLI argument parsing', () => {
       strictExit: false,
       events: false,
       plan: false,
+      observerLabel: null,
+      vantageLabel: null,
       quiet: false,
       color: true,
     });
@@ -642,7 +646,7 @@ test('terminal lookup explains represented registry access constraints', () => {
   const terminal = formatTerminalLookup(document);
 
   assert.match(terminal, /Registry access \.es/);
-  assert.match(terminal, /WHOIS access\s+Source-IP authorization required/);
+  assert.match(terminal, /WHOIS access\s+Source-IP authorisation required/);
   assert.match(terminal, /RDAP access\s+No service published by IANA/);
   assert.match(terminal, /Access note\s+Registry collection requires documented source authorization\./);
 });

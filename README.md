@@ -1,4 +1,5 @@
-<h1 align="center"><img src="frontend/static/favicon.svg" width="44" height="44" align="middle" alt="" />&nbsp;WHOISleuth</h1>
+<p align="center"><img src="frontend/static/favicon.svg" width="64" height="64" alt="WHOISleuth mark" /></p>
+<h1 align="center">WHOISleuth</h1>
 
 <p align="center">
   <img src="https://img.shields.io/badge/license-AGPL--3.0--only-blue.svg" alt="License: AGPL-3.0-only" />
@@ -65,7 +66,7 @@ analyst-controlled views over already collected evidence. They do not make an
 enforcement decision, prove ownership or safety, or silently start another
 request.
 
-For field-level behavior, limits, result states, saved-work semantics, and
+For field-level behaviour, limits, result states, saved-work semantics, and
 complete workflows, use the [application guide](docs/application-guide.md).
 The public [Guide](https://whoisleuth.com/guide) is the shortest introduction.
 
@@ -87,7 +88,7 @@ The public [Guide](https://whoisleuth.com/guide) is the shortest introduction.
   and rules use bounded IndexedDB stores in the current browser.
 - **Explainable analysis.** Risk, Opportunity, page similarity, relationship,
   technology, and posture findings expose their evidence and limitations.
-- **Supplementary visuals.** Charts summarize bounded data already present in
+- **Supplementary visuals.** Charts summarise bounded data already present in
   the page. Accessible source lists and tables remain the complete review
   surfaces.
 - **Human-controlled action.** WHOISleuth does not send reports, submit targets,
@@ -132,7 +133,7 @@ local development, verification, browser tests, and CLI usage.
 
 WHOISleuth uses a prerendered SvelteKit frontend and a small Node network
 boundary. Shared modules under `lib/` own classification, collection,
-validation, normalization, scoring, and evidence contracts. Thin adapters call
+validation, normalisation, scoring, and evidence contracts. Thin adapters call
 those modules from either:
 
 - `server.mts`, an Express server that also serves `frontend/build/`; or
@@ -155,12 +156,12 @@ deployment parity, see the [architecture orientation](docs/architecture.md).
 | [Release discipline](docs/releasing.md) | Semantic-version selection, manifest checks, protected-branch delivery, tagging, and rollback evidence. |
 | [Operations and deployment](docs/operations.md) | Authentication, proxy trust, feature switches, optional providers, rate and operation limits, hosted monitoring, Netlify, and deployment checks. |
 | [Architecture orientation](docs/architecture.md) | Components, request flow, outbound trust boundaries, persistence, and deliberate trade-offs. |
-| [Registry data contract](docs/registry-data-contract.md) | Normalized RDAP, WHOIS, diagnostics, provenance, and compatibility rules. |
+| [Registry data contract](docs/registry-data-contract.md) | Normalised RDAP, WHOIS, diagnostics, provenance, and compatibility rules. |
 | [Registry compatibility](docs/registry-compatibility.md) | Fixture-backed parser support and separately documented access context. |
 | [Browser-local data](docs/browser-local-data.md) | IndexedDB, migration, rollback, capacity, and the separate encryption decision. |
-| [External findings and intelligence import](docs/external-findings-import.md) | Strict local findings schema plus bounded STIX 2.1 and MISP previews, source-file digests, exclusions, and explicit case-assertion merge behavior. |
+| [External findings and intelligence import](docs/external-findings-import.md) | Strict local findings schema plus bounded STIX 2.1 and MISP previews, source-file digests, exclusions, and explicit case-assertion merge behaviour. |
 | [Dependency maintenance](docs/dependency-maintenance.md) | Low-noise updates, human review, and GitHub dependency-graph SPDX export. |
-| [CLI guide](docs/cli.md) | Commands, terminal presentation, completion, diagnostics, discovery snapshots, saved page, mail and offline supplied-evidence review, optional local rendered capture, output formats, exit codes, and evidence exports. |
+| [CLI guide](docs/cli.md) and [reference](docs/cli-reference.md) | Installation and first-use workflow, plus complete command, terminal, diagnostics, discovery, saved-evidence, optional local capture, output, exit-code, and export contracts. |
 | [Engineering case study](docs/engineering-case-study.md) | Constraints, representative decisions, hard problems, and review entry points. |
 | [Privacy notice](PRIVACY.md) | Collection, browser storage, optional hosted processing, retention, export, and deletion. |
 
@@ -257,7 +258,7 @@ The software is provided **as is, without warranty**. Registration data can be
 redacted, stale, incomplete, or parsed imperfectly. Scores and generated
 candidates require analyst review. Use collection, contact data, and report
 drafts only where you have a legitimate purpose and comply with applicable
-registry terms, privacy law, anti-spam law, and authorization boundaries.
+registry terms, privacy law, anti-spam law, and authorisation boundaries.
 The [dual-use disclosure](DISCLOSURE) defines the supported defensive scope and
 the capability boundaries deliberately excluded from WHOISleuth.
 
@@ -273,7 +274,7 @@ lib/                    Shared bounded collection and analysis modules
 netlify/functions/      Thin Netlify adapters and optional scheduled worker
 frontend/               Prerendered SvelteKit public site and protected Console
 bin/ and cli/            First-party command-line interface
-fixtures/               Sanitized deterministic registry fixtures
+fixtures/               Sanitised deterministic registry fixtures
 test/ and e2e/           Unit, integration, and browser verification
 tools/                  Maintainer checks and offline evaluation commands
 docs/                   User, operator, architecture, contract, and CLI guides

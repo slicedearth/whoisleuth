@@ -61,6 +61,14 @@ describe('technology signature benchmark', () => {
     assert.equal(report.bounds.networkRequests, 0);
     assert.ok(report.bounds.reviewedFixtureLimit > 0);
     assert.deepEqual(report.reviewedFixtures, []);
+    assert.equal(report.reviewedProgramme.staleFixtureIds.length, 0);
+    assert.equal(report.reviewedProgramme.unsampledSignatureIds.length, report.summary.signatures);
+    assert.equal(report.reviewedProgramme.licenseBases['factual-observation'], 0);
+    assert.equal(
+      Object.values(report.reviewedProgramme.byCategory).reduce((sum, category) => sum + category.signatures, 0),
+      report.summary.signatures,
+    );
+    assert.match(report.reviewedProgramme.nextAction, /contributor-reviewed/u);
     assert.equal(
       Object.values(report.metrics.byCategory).reduce((sum, category) => sum + category.signatures, 0),
       report.summary.signatures,

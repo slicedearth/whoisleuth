@@ -38,6 +38,7 @@ test('exports affirmative sightings as separately attributed STIX observations a
     && item.x_whoisleuth_source_qualified_state === 'observed_by_deployment'));
   assert.ok(bundle.objects.some((item) => item.type === 'note'
     && item.x_whoisleuth_completeness === 'partial'));
+  assert.equal(bundle.objects.some((item) => Object.hasOwn(item, 'x_whoisleuth_evidence_pin_id')), false);
 });
 
 test('keeps not-reproduced states as notes rather than negative observations', () => {

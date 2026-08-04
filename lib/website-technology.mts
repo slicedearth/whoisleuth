@@ -252,7 +252,7 @@ const TECHNOLOGY_SIGNATURES: TechnologySignature[] = [
   {
     id: 'adobe-commerce-magento', name: 'Adobe Commerce / Magento Open Source', category: 'commerce',
     evidence: [
-      htmlEvidence(['data-mage-init=', 'type="text/x-magento-init"', "type='text/x-magento-init'"], 'Static markup contains Commerce frontend initialization markers.'),
+      htmlEvidence(['data-mage-init=', 'type="text/x-magento-init"', "type='text/x-magento-init'"], 'Static markup contains Commerce frontend initialisation markers.'),
     ],
   },
   {

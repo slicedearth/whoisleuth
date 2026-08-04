@@ -42,16 +42,32 @@ import {
   DOMAIN_CONTROL_MANIFEST_VERSION,
   verifyDomainControlManifest,
 } from '../lib/domain-control-manifest.mts';
+import {
+  INVESTIGATION_CAPSULE_SCHEMA,
+  INVESTIGATION_CAPSULE_VERSION,
+  verifyInvestigationCapsule,
+  type InvestigationCapsule,
+} from '../frontend/src/lib/analysis/investigation-capsule.ts';
 
 export const OFFLINE_ARTIFACT_VERIFICATION_SCHEMA = 'whoisleuth.offline-artifact-verification';
 export const OFFLINE_ARTIFACT_VERIFICATION_VERSION = 1;
 export const MAX_OFFLINE_ARTIFACT_BYTES = 15 * 1024 * 1024;
 export const MAX_OFFLINE_PASSPHRASE_FILE_BYTES = 1024;
 
+export class UnsupportedOfflineArtifactError extends TypeError {
+  readonly code = 'unsupported_artifact';
+
+  constructor(message: string) {
+    super(message);
+    this.name = 'UnsupportedOfflineArtifactError';
+  }
+}
+
 type ArtifactKind =
   | 'workspace_archive'
   | 'encrypted_workspace_archive'
   | 'case_response_packet'
+  | 'investigation_capsule'
   | 'saved_lookup'
   | 'signed_review_artifact';
 type VerificationState = 'verified' | 'envelope_valid' | 'structure_valid';
@@ -96,7 +112,7 @@ function record(value: unknown): UnknownRecord | null {
 }
 
 function parseJson(raw: string): UnknownRecord {
-  if (typeof raw !== 'string') throw new TypeError('Artifact input must be UTF-8 JSON text.');
+  if (typeof raw !== 'string') throw new TypeError('Artefact input must be UTF-8 JSON text.');
   const bytes = Buffer.byteLength(raw, 'utf8');
   if (bytes === 0 || bytes > MAX_OFFLINE_ARTIFACT_BYTES) {
     throw new TypeError(`Artifact input must be between 1 byte and ${MAX_OFFLINE_ARTIFACT_BYTES} bytes.`);
@@ -105,18 +121,22 @@ function parseJson(raw: string): UnknownRecord {
   try {
     parsed = JSON.parse(raw);
   } catch {
-    throw new TypeError('Artifact input is not valid JSON.');
+    throw new TypeError('Artefact input is not valid JSON.');
   }
   const value = record(parsed);
-  if (!value) throw new TypeError('Artifact input must contain one JSON object.');
+  if (!value) throw new TypeError('Artefact input must contain one JSON object.');
   return value;
 }
 
 function artifactVersion(value: UnknownRecord): number {
-  if (!Number.isSafeInteger(value.version) || Number(value.version) < 1 || Number(value.version) > 1000) {
-    throw new TypeError('Artifact version is missing or invalid.');
+  const declared = value.version ?? value.schemaVersion;
+  if (value.version !== undefined && value.schemaVersion !== undefined && value.version !== value.schemaVersion) {
+    throw new TypeError('Artefact version declarations do not agree.');
   }
-  return Number(value.version);
+  if (!Number.isSafeInteger(declared) || Number(declared) < 1 || Number(declared) > 1000) {
+    throw new TypeError('Artefact version is missing or invalid.');
+  }
+  return Number(declared);
 }
 
 function inputBytes(raw: string): number {
@@ -164,18 +184,18 @@ async function verifySignedArtifact(
 ): Promise<OfflineArtifactVerificationReport> {
   const supported = SIGNED_ARTIFACT_VERSIONS[schema];
   if (!supported?.has(version)) {
-    throw new TypeError('This signed review-artifact schema or version is not supported.');
+    throw new UnsupportedOfflineArtifactError('This signed review-artifact schema or version is not supported.');
   }
   const integrity = record(value.integrity);
   if (!integrity
     || integrity.algorithm !== 'SHA-256'
     || typeof integrity.digestSha256 !== 'string'
     || !/^sha256:[a-f0-9]{64}$/u.test(integrity.digestSha256)) {
-    throw new TypeError('The signed review artifact has a missing or malformed integrity envelope.');
+    throw new TypeError('The signed review artefact has a missing or malformed integrity envelope.');
   }
   const { integrity: _integrity, ...unsigned } = value;
   if (await sha256ArtifactDigest(unsigned) !== integrity.digestSha256) {
-    throw new TypeError('The signed review artifact failed its SHA-256 integrity check.');
+    throw new TypeError('The signed review artefact failed its SHA-256 integrity check.');
   }
   if (schema === DOMAIN_CONTROL_MANIFEST_SCHEMA) verifyDomainControlManifest(value);
   return Object.freeze({
@@ -196,7 +216,7 @@ async function verifySignedArtifact(
       ciphertextBytes: null,
     }),
     limitations: Object.freeze([
-      'Digest verification detects changes to this exported artifact; it does not authenticate the analyst, collection source, or truth of the retained statements.',
+      'Digest verification detects changes to this exported artefact; it does not authenticate the analyst, collection source, or truth of the retained statements.',
     ]),
   });
 }
@@ -250,7 +270,7 @@ export async function verifyOfflineArtifact(
 
   if (schema === CASE_RESPONSE_PACKET_SCHEMA) {
     if (version !== CASE_RESPONSE_PACKET_VERSION) {
-      throw new TypeError('This case-response packet version is not supported.');
+      throw new UnsupportedOfflineArtifactError('This case-response packet version is not supported.');
     }
     const integrity = record(value.integrity);
     if (!integrity || !await verifyCaseResponsePacketIntegrity(value as CaseResponsePacket)) {
@@ -279,11 +299,41 @@ export async function verifyOfflineArtifact(
     });
   }
 
+  if (schema === INVESTIGATION_CAPSULE_SCHEMA) {
+    if (version !== INVESTIGATION_CAPSULE_VERSION) {
+      throw new UnsupportedOfflineArtifactError('This investigation-capsule version is not supported.');
+    }
+    const verification = await verifyInvestigationCapsule(value as InvestigationCapsule);
+    if (!verification.valid) throw new TypeError('The investigation capsule failed its embedded projection integrity checks.');
+    return Object.freeze({
+      schema: OFFLINE_ARTIFACT_VERIFICATION_SCHEMA,
+      version: OFFLINE_ARTIFACT_VERIFICATION_VERSION,
+      artifact: Object.freeze({ kind: 'investigation_capsule', schema, version }),
+      state: 'verified',
+      valid: true,
+      checks: Object.freeze({
+        structure: 'verified',
+        contentIntegrity: 'verified',
+        authenticatedEncryption: 'not_applicable',
+      }),
+      summary: Object.freeze({
+        inputBytes: inputBytes(raw),
+        sectionCount: null,
+        recordCount: null,
+        ciphertextBytes: null,
+      }),
+      limitations: Object.freeze([
+        'The embedded brief, graph, and optional analyst-record projections match their declared digests; the linked Lookup evidence is not embedded and must be verified separately.',
+        'Digest verification detects changed content but does not authenticate the analyst, signer, collection source, or truth of retained observations and assertions.',
+      ]),
+    });
+  }
+
   if (schema === SAVED_LOOKUP_SCHEMA) {
     if (version !== SAVED_LOOKUP_SCHEMA_VERSION) {
-      throw new TypeError('This saved Lookup document version is not supported.');
+      throw new UnsupportedOfflineArtifactError('This saved Lookup document version is not supported.');
     }
-    const document = parseSavedLookupDocument(raw, { label: 'Saved Lookup artifact' });
+    const document = parseSavedLookupDocument(raw, { label: 'Saved Lookup artefact' });
     return Object.freeze({
       schema: OFFLINE_ARTIFACT_VERIFICATION_SCHEMA,
       version: OFFLINE_ARTIFACT_VERIFICATION_VERSION,
@@ -314,7 +364,7 @@ export function formatOfflineArtifactVerification(
   report: OfflineArtifactVerificationReport,
 ): string {
   const lines = [
-    'WHOISleuth offline artifact verification',
+    'WHOISleuth offline artefact verification',
     `Artifact: ${report.artifact.kind} · ${report.artifact.schema} v${report.artifact.version}`,
     `State: ${report.state}`,
     `Structure: ${report.checks.structure}`,

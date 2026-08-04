@@ -465,7 +465,7 @@ describe('curated connector definition', () => {
     }), /outputs must be unique/);
     assert.throws(() => connector({
       outputs: { entities: [], relationships: [] },
-    }), /at least one normalized entity type/);
+    }), /at least one normalised entity type/);
   });
 
   test('enforces connector request, cache, output, and quota bounds', () => {

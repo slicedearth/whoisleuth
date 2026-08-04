@@ -90,7 +90,7 @@ function planEncryptedDnsQuery(adapter: EncryptedDnsAdapter, input: Readonly<{ n
       recipient: new URL(adapter.endpoint).hostname,
       queryRetention: adapter.queryRetention,
     }),
-    limitation: 'This plan does not execute a request. Provider availability, answer authority, validation, filtering, retention, and regional behavior remain untested.',
+    limitation: 'This plan does not execute a request. Provider availability, answer authority, validation, filtering, retention, and regional behaviour remain untested.',
   });
 }
 

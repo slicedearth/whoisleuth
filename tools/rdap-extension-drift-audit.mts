@@ -131,7 +131,7 @@ export function parseRdapExtensionRegistryCsv(value: string): RegistryEntry[] {
     || header[0] !== 'Extension Identifier'
     || header[1] !== 'Registry Operator'
   ) {
-    throw new TypeError('The RDAP extension registry header is not recognized.');
+    throw new TypeError('The RDAP extension registry header is not recognised.');
   }
   const output: RegistryEntry[] = [];
   const seen = new Set<string>();
@@ -245,7 +245,7 @@ function format(report: RdapExtensionDriftAudit): string {
   }
   lines.push(`Renamed: ${report.changes.renamed.length ? report.changes.renamed.map((item) => `${item.from} -> ${item.to}`).join(', ') : 'none'}`);
   lines.push(`Status changed: ${report.changes.statusChanged.length ? report.changes.statusChanged.map((item) => `${item.identifier} ${item.from} -> ${item.to}`).join(', ') : 'none'}`);
-  lines.push('No runtime extension behavior was changed.');
+  lines.push('No runtime extension behaviour was changed.');
   return `${lines.join('\n')}\n`;
 }
 

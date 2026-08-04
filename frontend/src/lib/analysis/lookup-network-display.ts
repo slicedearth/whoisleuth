@@ -378,6 +378,22 @@ export function buildLookupNetworkDisplay(input: {
         value: `${values.join(' · ') || 'None declared'}${aia.truncated ? ' · truncated' : ''}`,
       });
     }
+    const extensionProfile = rec(tlsCertificate.extensionProfile);
+    const policies = rec(extensionProfile.certificatePolicies);
+    if (Array.isArray(policies.oids)) {
+      const oids = policies.oids.filter((value): value is string => typeof value === 'string').slice(0, 16);
+      leafCertificate.push({
+        label: 'Certificate policies',
+        value: `${oids.join(' · ') || 'None declared'}${policies.truncated ? ' · truncated' : ''}`,
+      });
+    }
+    const crl = rec(extensionProfile.crlDistributionPoints);
+    if (Object.keys(crl).length) {
+      leafCertificate.push({
+        label: 'CRL distribution presence',
+        value: `${tlsMetadataCount(crl.total)} declared (${tlsMetadataCount(crl.https)} HTTPS, ${tlsMetadataCount(crl.http)} HTTP, ${tlsMetadataCount(crl.ldap)} LDAP, ${tlsMetadataCount(crl.other)} other)${crl.truncated ? ' · truncated' : ''}`,
+      });
+    }
   }
 
   return {
@@ -457,9 +473,9 @@ export function buildLookupNetworkDisplay(input: {
         label: 'Chain trust',
         value:
           tlsAuthorization.authorized === true
-            ? 'Authorized'
+            ? 'Authorised'
             : tlsAuthorization.authorized === false
-              ? 'Not authorized'
+              ? 'Not authorised'
               : 'Not observed',
         danger: tlsAuthorization.authorized === false,
       },
@@ -514,7 +530,7 @@ export function buildLookupNetworkDisplay(input: {
         ? [{ label: 'Collection', value: String(tlsDiagnostics.error) }]
         : []),
       ...(tlsAuthorization.error
-        ? [{ label: 'Authorization', value: String(tlsAuthorization.error) }]
+        ? [{ label: 'Authorisation', value: String(tlsAuthorization.error) }]
         : []),
       ...(tlsHostname.error ? [{ label: 'Hostname', value: String(tlsHostname.error) }] : []),
     ],

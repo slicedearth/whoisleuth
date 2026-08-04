@@ -8,7 +8,7 @@ catalogue, scoring, and other evidence schemas keep their own explicit versions.
 
 - **Patch** releases contain compatible fixes and maintenance changes.
 - **Minor** releases add compatible features or meaningfully expand existing
-  behavior.
+  behaviour.
 - **Major** releases intentionally break a public API, CLI, archive, stored-data,
   or deployment contract and require an approved compatibility and migration
   plan.
@@ -16,7 +16,7 @@ catalogue, scoring, and other evidence schemas keep their own explicit versions.
 A schema or scoring change does not automatically require a major application
 release when the deployed compatibility boundary remains intact. It must still
 bump its owning contract version, retain supported legacy readers, reject
-unsupported future versions, and document migration or comparison behavior.
+unsupported future versions, and document migration or comparison behaviour.
 
 ## Prepare a release
 
@@ -75,7 +75,7 @@ version with interactive two-factor authentication before it becomes
 available. Local assembly commands do not publish, configure credentials, or
 approve a staged version.
 
-After the approved version becomes public, verify the exact registry artifact:
+After the approved version becomes public, verify the exact registry artefact:
 
 ```bash
 VERSION="$(node -p "require('./package.json').version")"

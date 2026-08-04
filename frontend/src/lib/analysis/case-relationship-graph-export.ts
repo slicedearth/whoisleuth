@@ -547,7 +547,7 @@ export function buildRelationshipGraphExport(
       : gexf(document);
   const bytes = byteLength(content);
   if (bytes > MAX_RELATIONSHIP_GRAPH_EXPORT_BYTES) {
-    throw new Error('The bounded relationship graph export exceeded its 512 KiB serialized limit. Narrow the graph filters and try again.');
+    throw new Error('The bounded relationship graph export exceeded its 512 KiB serialised limit. Narrow the graph filters and try again.');
   }
   const suffix = normalizedFormat;
   const mimeType = normalizedFormat === 'json'

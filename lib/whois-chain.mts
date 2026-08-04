@@ -93,7 +93,7 @@ export async function buildWhoisChainUncached(
       queryProfile: 'not-issued',
       responseEncoding: 'utf-8',
       error: admission.state === 'permission_required'
-        ? 'WHOIS collection requires registry permission or source authorization; no socket was opened.'
+        ? 'WHOIS collection requires registry permission or source authorisation; no socket was opened.'
         : 'IANA publishes no domain WHOIS service for this suffix; no socket was opened.',
     }];
   }

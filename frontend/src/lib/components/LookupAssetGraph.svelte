@@ -86,6 +86,19 @@
           {/each}
         </ul>
       </details>
+      <details class="source-ledger">
+        <summary>Review {graph.sources.length} attributed source{graph.sources.length === 1 ? '' : 's'}</summary>
+        <ul>
+          {#each graph.sources as source (source.id)}
+            <li>
+              <div><strong>{source.label}</strong><span class:partial-source={source.completeness !== 'complete'}>{source.completeness}</span></div>
+              <p>{source.observedAt ? new Date(source.observedAt).toLocaleString() : 'Observation time unavailable'}</p>
+              {#if source.limitations.length}<small>{source.limitations.join(' ')}</small>{/if}
+              <a href={source.href}>Open attributed evidence</a>
+            </li>
+          {/each}
+        </ul>
+      </details>
     {:else}
       <p class="empty">This lookup did not retain settled relationships for the selected lens. That is not evidence that the relationship type is absent.</p>
     {/if}
@@ -122,6 +135,13 @@
   .edge-list .boundary{width:max-content;padding:2px 6px;border:1px solid var(--border);border-radius:999px;color:var(--cyan);font:650 var(--text-2xs) var(--mono);text-transform:capitalize}
   .edge-list a{width:max-content;font:650 var(--text-2xs) var(--mono)}
   .limits ul{margin:0;padding-left:18px;color:var(--muted);font-size:var(--text-xs);line-height:1.5}
+  .source-ledger>ul{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin:0;padding:0;list-style:none}
+  .source-ledger li{display:grid;gap:4px;min-width:0;padding:9px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
+  .source-ledger li>div{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+  .source-ledger span{color:var(--success);font:650 var(--text-2xs) var(--mono);text-transform:capitalize}
+  .source-ledger span.partial-source{color:var(--amber)}
+  .source-ledger p,.source-ledger small{margin:0;color:var(--muted);font-size:var(--text-2xs);line-height:1.4;overflow-wrap:anywhere}
+  .source-ledger a{width:max-content;font:650 var(--text-2xs) var(--mono)}
   .empty{margin:12px 0 0;color:var(--muted);font-size:var(--text-xs)}
   .collapsed-summary{margin-top:8px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
   .collapsed-summary summary{padding:9px 10px;font-size:var(--text-2xs)}
@@ -131,7 +151,7 @@
   .collapsed-summary strong{overflow-wrap:anywhere}
   .collapsed-summary li span{flex:0 0 auto;color:var(--muted);font-family:var(--mono);overflow-wrap:anywhere}
   @media(max-width:720px){
-    .edge-list{grid-template-columns:minmax(0,1fr)}
+    .edge-list,.source-ledger>ul{grid-template-columns:minmax(0,1fr)}
     .collapsed-summary li{display:grid;gap:3px}
   }
 </style>

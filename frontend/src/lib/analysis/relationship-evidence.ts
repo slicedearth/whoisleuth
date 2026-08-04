@@ -266,10 +266,10 @@ export function buildScanRelationships(rawRows: RelationshipRow[]): ScanRelation
   }
 
   const output: ScanRelationshipGroup[] = [];
-  for (const [value, domains] of nameserverSets) if (domains.size >= 2) output.push(group('nameserver_set', 'Shared nameserver set', 'Exact normalized set', value, [...domains].sort(), 'These domains reported the same normalized nameserver set retained by this scan.'));
-  for (const [value, domains] of addresses) if (domains.size >= 2) output.push(group('ip_address', 'Shared IP address', 'Exact normalized address', value, [...domains].sort(), 'These domains resolved to the same IP address in this scan. Shared hosting and CDNs are common.'));
+  for (const [value, domains] of nameserverSets) if (domains.size >= 2) output.push(group('nameserver_set', 'Shared nameserver set', 'Exact normalised set', value, [...domains].sort(), 'These domains reported the same normalised nameserver set retained by this scan.'));
+  for (const [value, domains] of addresses) if (domains.size >= 2) output.push(group('ip_address', 'Shared IP address', 'Exact normalised address', value, [...domains].sort(), 'These domains resolved to the same IP address in this scan. Shared hosting and CDNs are common.'));
   for (const [value, domains] of certificates) if (domains.size >= 2) output.push(group('certificate', 'Shared TLS certificate', 'Exact leaf-certificate SHA-256', value, [...domains].sort(), 'These domains presented the same leaf certificate in this scan. Multi-domain certificates, shared hosting, CDNs, and managed platforms are common.'));
-  for (const [value, domains] of identifiers) if (domains.size >= 2) output.push(group('tracking_identifier', 'Shared tracking identifier', 'Exact public identifier', value, [...domains].sort(), 'These pages exposed the same recognized public tracking identifier in bounded static HTML.'));
+  for (const [value, domains] of identifiers) if (domains.size >= 2) output.push(group('tracking_identifier', 'Shared tracking identifier', 'Exact public identifier', value, [...domains].sort(), 'These pages exposed the same recognised public tracking identifier in bounded static HTML.'));
 
   const faviconRows = rows.slice(0, MAX_FAVICON_ROWS).map(({ domain, observation }) => ({
     domain,

@@ -6,8 +6,8 @@ import { normalizeDomain } from './case-model.ts';
 import { normalizeCaaCritical } from './dns-record-normalization.ts';
 
 export const BULK_SESSION_SCHEMA = 'whoisleuth.bulk-sessions';
-export const BULK_SESSION_SCHEMA_VERSION = 2;
-export const SUPPORTED_BULK_SESSION_SCHEMA_VERSIONS = Object.freeze([1, BULK_SESSION_SCHEMA_VERSION]);
+export const BULK_SESSION_SCHEMA_VERSION = 3;
+export const SUPPORTED_BULK_SESSION_SCHEMA_VERSIONS = Object.freeze([1, 2, BULK_SESSION_SCHEMA_VERSION]);
 export const MAX_BULK_SESSIONS = 10;
 export const MAX_BULK_SESSION_ROWS = 2_000;
 export const MAX_BULK_SESSION_STORE_BYTES = 4 * 1024 * 1024;
@@ -113,6 +113,7 @@ export type BulkSessionResult = {
   scanDepth: BulkSessionMode;
   createdDate: string | null;
   expiryDate: string | null;
+  privacyProtected?: boolean | null;
   nameservers: string[];
   hasMx: boolean | null;
   hasNullMx: boolean | null;
@@ -128,7 +129,11 @@ export type BulkSessionResult = {
   hasPasswordField: boolean;
   hasExternalFormAction: boolean | null;
   phishingLanguageMatch: string | null;
+  idnReferenceMatch?: boolean | null;
+  pageBaselineMatch?: boolean | null;
+  hasActiveBrandProfile?: boolean | null;
   riskModelVersion: number | null;
+  opportunityModelVersion?: number | null;
   riskFactors: BulkSessionRiskFactor[];
   dns: BulkSessionDnsEvidence | null;
   dnssec: string | null;
@@ -366,6 +371,7 @@ export function normalizeBulkSessionResult(value: unknown): BulkSessionResult | 
     scanDepth: scanDepth as BulkSessionMode,
     createdDate: boundedText(item.createdDate, 64) || null,
     expiryDate: boundedText(item.expiryDate, 64) || null,
+    privacyProtected: nullableBoolean(item.privacyProtected),
     nameservers: boundedStrings(item.nameservers, 20),
     hasMx: nullableBoolean(item.hasMx),
     hasNullMx: nullableBoolean(item.hasNullMx),
@@ -381,7 +387,11 @@ export function normalizeBulkSessionResult(value: unknown): BulkSessionResult | 
     hasPasswordField: item.hasPasswordField === true,
     hasExternalFormAction: nullableBoolean(item.hasExternalFormAction),
     phishingLanguageMatch: boundedText(item.phishingLanguageMatch, 300) || null,
+    idnReferenceMatch: nullableBoolean(item.idnReferenceMatch),
+    pageBaselineMatch: nullableBoolean(item.pageBaselineMatch),
+    hasActiveBrandProfile: nullableBoolean(item.hasActiveBrandProfile),
     riskModelVersion: nullableVersion(item.riskModelVersion),
+    opportunityModelVersion: nullableVersion(item.opportunityModelVersion),
     riskFactors: normalizeRiskFactors(item.riskFactors),
     dns: normalizeDns(item.dns),
     dnssec: boundedText(item.dnssec, 40) || null,

@@ -37,6 +37,31 @@ test('certificate policy review aligns a recognized issuer with target CAA', () 
   assert.equal(review.findings.find((item) => item.id === 'expected_spki')?.state, 'aligned');
 });
 
+test('certificate policy review preserves bounded CAA account and validation constraints', () => {
+  const review = buildCertificatePolicyReview({
+    dnsEvidence: { source: 'dns', status: 'success', complete: true },
+    dnsRecords: {
+      caa: [{
+        tag: 'issue',
+        value: 'letsencrypt.org; accounturi=https://acme.example.test/account/fixture; validationmethods=dns-01,http-01; future=value',
+        critical: 0,
+      }],
+    },
+    tlsEvidence: { source: 'tls', status: 'success', complete: true },
+    tlsIssuer: { organization: "Let's Encrypt" },
+  });
+  assert.equal(review.version, 2);
+  assert.deepEqual(review.caaAuthorizations, [{
+    tag: 'issue',
+    issuer: 'letsencrypt.org',
+    critical: 0,
+    accountUris: ['https://acme.example.test/account/fixture'],
+    validationMethods: ['dns-01', 'http-01'],
+    unrecognizedParameters: ['future=value'],
+  }]);
+  assert.equal(review.findings.find((item) => item.id === 'caa')?.state, 'aligned');
+});
+
 test('certificate policy review reports apparent mismatch without claiming historic violation', () => {
   const review = buildCertificatePolicyReview({
     dnsEvidence: { source: 'dns', status: 'success', complete: true },

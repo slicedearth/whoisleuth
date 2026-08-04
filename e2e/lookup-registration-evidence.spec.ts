@@ -105,7 +105,10 @@ test('bounded RDAP contact roles and repeated channels render in Lookup', async 
   await disclosurePlanner.getByLabel(/Available public registration evidence/).check();
   await disclosurePlanner.getByLabel(/Every requested field is necessary/).check();
   await disclosurePlanner.getByLabel(/Privacy and rights impacts/).check();
-  await disclosurePlanner.getByLabel(/Current service eligibility/).check();
+  await disclosurePlanner.getByLabel(/Current service instructions/).check();
+  await disclosurePlanner.getByLabel(/current nonpublic gTLD service scope/).check();
+  await disclosurePlanner.getByLabel(/Current registrar participation/).check();
+  await disclosurePlanner.getByLabel(/Requester identity, authority/).check();
   await expect(disclosurePlanner.getByText('review cautions')).toBeVisible();
   await expect(disclosurePlanner.getByRole('button', { name: 'Export review packet' })).toBeEnabled();
   await expect(disclosurePlanner.getByRole('link', { name: 'Review current service information' })).toHaveAttribute('href', 'https://www.icann.org/rdrs-en/');
@@ -324,7 +327,7 @@ test('deep Lookup presents registrar and observed network RDAP as separate sourc
 
   await page.getByRole('button', { name: 'Create case' }).click();
   const checkpoint = page.locator('.checkpoint');
-  await expect(checkpoint.getByRole('heading', { name: 'Retain selected normalized facts' })).toBeVisible();
+  await expect(checkpoint.getByRole('heading', { name: 'Retain selected normalised facts' })).toBeVisible();
   await checkpoint.getByRole('checkbox', { name: /Registrar/u }).check();
   await checkpoint.getByRole('checkbox', { name: /Registration statuses/u }).check();
   await checkpoint.getByRole('button', { name: 'Save 2 checkpoint facts' }).click();
@@ -417,7 +420,7 @@ test('registry access constraints remain neutral, explicit, and mobile-safe', as
   await page.getByRole('button', { name: 'Run lookup' }).click();
   const notice = page.getByRole('region', { name: '.ES collection constraints' });
   await expect(notice.getByText('Restricted access')).toBeVisible();
-  await expect(notice.getByText('Source-IP authorization required')).toBeVisible();
+  await expect(notice.getByText('Source-IP authorisation required')).toBeVisible();
   await expect(notice.getByText(/does not decide registration, availability, safety, or maliciousness/i)).toBeVisible();
 
   await page.locator('#query').fill('example.ch');
@@ -550,8 +553,8 @@ test('optional external intelligence searches are explicit, attributed, and mobi
   await expect(section.getByText('Fixture malware-host records', { exact: true })).toBeVisible();
   await expect(section.getByText('Fixture malware-IOC records', { exact: true })).toBeVisible();
   await expect(section.getByText(/never affect availability/i)).toBeVisible();
-  await expect(section.getByText(/2 independent publisher families contributed \+18 under model v6/i)).toBeVisible();
-  const riskExplanation = page.getByText('Why the risk score is 28', { exact: true });
+  await expect(section.getByText(/2 independent publisher families contributed \+18 under model v7/i)).toBeVisible();
+  const riskExplanation = page.getByText('Why the risk score is 24', { exact: true });
   await riskExplanation.focus();
   await expect(riskExplanation).toBeFocused();
   await riskExplanation.press('Enter');
@@ -721,7 +724,7 @@ test('bounded WHOIS lifecycle and role-based contacts render in Lookup', async (
 test('IDN review shows Unicode and ASCII together with cautious profile similarity evidence', async ({ page }) => {
   await page.evaluate(() => {
     const profile = {
-      id: 'idn-profile', name: 'Example Brand', officialDomains: ['paypal.com'], productNames: [], tlds: ['com'],
+      id: 'idn-profile', name: 'Example Brand', officialDomains: ['sample.example'], productNames: [], tlds: ['example'],
       approvedPartnerDomains: [], allowlistedDomains: [], allowlistedRegistrars: [], dkimSelectors: [],
       trademarkOwner: '', trademarkRegistration: '', officialFaviconHash: '', officialFaviconPHash: '',
       createdAt: '2026-07-13T00:00:00.000Z', updatedAt: '2026-07-13T00:00:00.000Z',
@@ -734,20 +737,20 @@ test('IDN review shows Unicode and ASCII together with cautious profile similari
     status: 200,
     contentType: 'application/json',
     body: JSON.stringify({
-      query: 'xn--ypal-43d9g.com', type: 'domain', registrableDomain: 'xn--ypal-43d9g.com',
-      availability: { state: 'registered', confidence: 'high', domain: 'xn--ypal-43d9g.com' },
+      query: 'xn--smple-4ve.example', type: 'domain', registrableDomain: 'xn--smple-4ve.example',
+      availability: { state: 'registered', confidence: 'high', domain: 'xn--smple-4ve.example' },
       rdap: { upstreamStatus: 404, parsed: {} }, whois: { parsed: {}, chain: [] },
       diagnostics: { rdap: { status: 'not_found' }, whois: { status: 'partial' }, availability: { status: 'complete' } },
     }),
   }));
 
-  await page.locator('#query').fill('xn--ypal-43d9g.com');
+  await page.locator('#query').fill('xn--smple-4ve.example');
   await page.getByRole('button', { name: 'Run lookup' }).click();
   const card = page.locator('.idn-card');
   await expect(card.getByRole('heading', { name: 'IDN and confusable review' })).toBeVisible();
   await expect(card.getByText('tr39-17.0.0-bounded-ascii-v3', { exact: true })).toBeVisible();
-  await expect(card.getByText('раypal.com', { exact: true })).toBeVisible();
-  await expect(card.getByText('xn--ypal-43d9g.com', { exact: true })).toBeVisible();
+  await expect(card.getByText('sаmple.example', { exact: true })).toBeVisible();
+  await expect(card.getByText('xn--smple-4ve.example', { exact: true })).toBeVisible();
   await expect(card.getByText('Cyrillic, Latin', { exact: true })).toBeVisible();
   await expect(card.getByText('Mixed writing scripts', { exact: true })).toBeVisible();
   await expect(card.getByText('Confusable with an official domain', { exact: true })).toBeVisible();

@@ -42,7 +42,7 @@ test('reverse-search preview exposes bounded exact disclosures without making a 
   );
   assert.equal(
     previews.find((preview) => preview.property === 'email')?.queryShape,
-    'domains/reverse_search/entity?email=holder%40example.test',
+    '/domains/reverse_search/entity?email=holder%40example.test',
   );
   assert.match(
     previews.find((preview) => preview.property === 'handle')?.disclosure ?? '',

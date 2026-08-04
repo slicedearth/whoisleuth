@@ -114,7 +114,7 @@ the same age bound with `npm run providers:policy-check`.
 
 Each adapter has bounded response size, result count, timeout, concurrency, and
 fair-use counters. It follows no credential-bearing redirect and keeps no
-provider cache. Normalized results stay transient and outside browser-local
+provider cache. Normalised results stay transient and outside browser-local
 stores and structured Lookup exports.
 
 Provider terms, privacy, commercial-use, attribution, retention, caching, and

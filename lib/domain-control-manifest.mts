@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { domainToASCII } from 'node:url';
 
 import { canonicalArtifactJson } from '../frontend/src/lib/analysis/artifact-integrity.ts';
+import { exactKeys } from './bounded-contract-normalizers.mts';
 
 export const DOMAIN_CONTROL_MANIFEST_INPUT_SCHEMA = 'whoisleuth.domain-control-manifest-input';
 export const DOMAIN_CONTROL_MANIFEST_SCHEMA = 'whoisleuth.domain-control-manifest';
@@ -11,6 +12,19 @@ export const DOMAIN_CONTROL_REVIEW_SCHEMA = 'whoisleuth.domain-control-review';
 export const DOMAIN_CONTROL_REVIEW_VERSION = 1;
 export const MAX_DOMAIN_CONTROL_ENTRIES = 100;
 export const MAX_DOMAIN_CONTROL_RECORDS = 32;
+
+const MANIFEST_KEYS = new Set(['schema', 'version', 'generatedAt', 'expiresAt', 'entries', 'limitations', 'integrity']);
+const MANIFEST_ENTRY_KEYS = new Set(['domain', 'nameservers', 'ds', 'mx', 'caa', 'tlsIssuer', 'tlsSpkiSha256', 'registrarLock', 'renewalReviewAt', 'note']);
+const MANIFEST_INTEGRITY_KEYS = new Set(['algorithm', 'canonicalization', 'digestSha256']);
+const MANIFEST_INPUT_KEYS = new Set(['schema', 'version', 'expiresAt', 'entries']);
+const REVIEW_INPUT_KEYS = new Set(['schema', 'version', 'manifest', 'observations']);
+const OBSERVATION_KEYS = new Set(['domain', 'fields']);
+const OBSERVATION_FIELDS = new Set(['nameservers', 'ds', 'mx', 'caa', 'tlsIssuer', 'tlsSpkiSha256', 'registrarLock']);
+const OBSERVATION_FIELD_KEYS = new Set(['state', 'values', 'source', 'observedAt']);
+const DOMAIN_CONTROL_LIMITATIONS = Object.freeze([
+  'This analyst-authored manifest records intended domain-control state. It does not collect evidence or change registrar, DNS, mail, or certificate configuration.',
+  'Empty desired fields are unconfigured rather than claims that a record should be absent.',
+]);
 
 type UnknownRecord = Record<string, unknown>;
 type DomainControlField = 'nameservers' | 'ds' | 'mx' | 'caa' | 'tlsIssuer' | 'tlsSpkiSha256' | 'registrarLock';
@@ -152,6 +166,7 @@ export function buildDomainControlManifest(
   if (!source || source.schema !== DOMAIN_CONTROL_MANIFEST_INPUT_SCHEMA || source.version !== 1) {
     throw new TypeError(`Domain control manifest input must use ${DOMAIN_CONTROL_MANIFEST_INPUT_SCHEMA} version 1.`);
   }
+  exactKeys(source, MANIFEST_INPUT_KEYS, 'Domain control manifest input');
   const generatedAt = timestamp(generatedAtValue);
   const expiresAt = timestamp(source.expiresAt);
   if (!generatedAt || !expiresAt || Date.parse(expiresAt) <= Date.parse(generatedAt)) {
@@ -160,7 +175,10 @@ export function buildDomainControlManifest(
   if (!Array.isArray(source.entries) || source.entries.length < 1 || source.entries.length > MAX_DOMAIN_CONTROL_ENTRIES) {
     throw new TypeError(`Domain control manifest input must contain between 1 and ${MAX_DOMAIN_CONTROL_ENTRIES} entries.`);
   }
-  const entries = source.entries.map(normalizeEntry);
+  const entries = source.entries.map((entry, index) => {
+    exactKeys(entry, MANIFEST_ENTRY_KEYS, `Domain control manifest input entry ${index + 1}`);
+    return normalizeEntry(entry);
+  });
   if (entries.some((entry) => entry === null)) throw new TypeError('Domain control manifest contains an invalid entry.');
   const normalizedEntries = entries as DomainControlEntry[];
   const domains = new Set(normalizedEntries.map((entry) => entry.domain));
@@ -171,10 +189,7 @@ export function buildDomainControlManifest(
     generatedAt,
     expiresAt,
     entries: Object.freeze([...normalizedEntries].sort((left, right) => left.domain.localeCompare(right.domain))),
-    limitations: Object.freeze([
-      'This analyst-authored manifest records intended domain-control state. It does not collect evidence or change registrar, DNS, mail, or certificate configuration.',
-      'Empty desired fields are unconfigured rather than claims that a record should be absent.',
-    ]),
+    limitations: DOMAIN_CONTROL_LIMITATIONS,
   });
   return Object.freeze({
     ...base,
@@ -196,6 +211,8 @@ export function verifyDomainControlManifest(value: unknown): DomainControlManife
     || source.entries.length < 1
     || source.entries.length > MAX_DOMAIN_CONTROL_ENTRIES
     || !Array.isArray(source.limitations)
+    || source.limitations.length !== DOMAIN_CONTROL_LIMITATIONS.length
+    || source.limitations.some((limitation, index) => limitation !== DOMAIN_CONTROL_LIMITATIONS[index])
     || !integrity
     || integrity.algorithm !== 'SHA-256'
     || integrity.canonicalization !== 'sorted-json-v1'
@@ -203,18 +220,40 @@ export function verifyDomainControlManifest(value: unknown): DomainControlManife
     || !/^sha256:[a-f0-9]{64}$/u.test(integrity.digestSha256)) {
     throw new TypeError('Domain control manifest has an unsupported or malformed structure.');
   }
+  exactKeys(source, MANIFEST_KEYS, 'Domain control manifest');
+  exactKeys(integrity, MANIFEST_INTEGRITY_KEYS, 'Domain control manifest integrity');
+  for (const [index, entry] of source.entries.entries()) {
+    exactKeys(entry, MANIFEST_ENTRY_KEYS, `Domain control manifest entry ${index + 1}`);
+  }
   const generatedAt = timestamp(source.generatedAt);
   const expiresAt = timestamp(source.expiresAt);
   const entries = source.entries.map(normalizeEntry);
   if (!generatedAt || !expiresAt || Date.parse(expiresAt) <= Date.parse(generatedAt) || entries.some((entry) => entry === null)) {
-    throw new TypeError('Domain control manifest has invalid normalized content.');
+    throw new TypeError('Domain control manifest has invalid normalised content.');
   }
   const normalizedEntries = entries as DomainControlEntry[];
   if (new Set(normalizedEntries.map((entry) => entry.domain)).size !== normalizedEntries.length) {
     throw new TypeError('Domain control manifest entries must use unique domains.');
   }
   const { integrity: _integrity, ...unsigned } = source;
-  if (integrityDigest(unsigned) !== integrity.digestSha256) {
+  const canonical = Object.freeze({
+    schema: DOMAIN_CONTROL_MANIFEST_SCHEMA,
+    version: DOMAIN_CONTROL_MANIFEST_VERSION,
+    generatedAt,
+    expiresAt,
+    entries: Object.freeze([...normalizedEntries].sort((left, right) => left.domain.localeCompare(right.domain))),
+    limitations: DOMAIN_CONTROL_LIMITATIONS,
+  });
+  let suppliedCanonical: string;
+  try {
+    suppliedCanonical = canonicalArtifactJson(unsigned);
+  } catch {
+    throw new TypeError('Domain control manifest has invalid normalised content.');
+  }
+  if (suppliedCanonical !== canonicalArtifactJson(canonical)) {
+    throw new TypeError('Domain control manifest must use its canonical normalised content.');
+  }
+  if (`sha256:${createHash('sha256').update(suppliedCanonical).digest('hex')}` !== integrity.digestSha256) {
     throw new TypeError('Domain control manifest failed its SHA-256 integrity check.');
   }
   return source as unknown as DomainControlManifest;
@@ -238,10 +277,13 @@ function normalizeObservation(value: unknown): DomainControlObservation | null {
   const normalizedDomain = domain(source?.domain);
   const rawFields = record(source?.fields);
   if (!source || !normalizedDomain || !rawFields) return null;
+  exactKeys(source, OBSERVATION_KEYS, 'Domain control observation');
+  exactKeys(rawFields, OBSERVATION_FIELDS, 'Domain control observation fields');
   const fields: Partial<Record<DomainControlField, NormalizedObservationField>> = {};
   for (const field of ['nameservers', 'ds', 'mx', 'caa', 'tlsIssuer', 'tlsSpkiSha256', 'registrarLock'] as const) {
     const raw = record(rawFields[field]);
     if (!raw) continue;
+    exactKeys(raw, OBSERVATION_FIELD_KEYS, `Domain control observation field ${field}`);
     const state = raw.state;
     if (state !== 'observed' && state !== 'partial' && state !== 'unavailable' && state !== 'unsupported') return null;
     const sourceLabel = boundedText(raw.source, 120);
@@ -316,6 +358,7 @@ export function reviewDomainControlManifest(input: unknown, generatedAtValue = n
   if (!source || source.schema !== DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA || source.version !== 1) {
     throw new TypeError(`Domain control review input must use ${DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA} version 1.`);
   }
+  exactKeys(source, REVIEW_INPUT_KEYS, 'Domain control review input');
   const generatedAt = timestamp(generatedAtValue);
   if (!generatedAt) throw new TypeError('Domain control review time is invalid.');
   const manifest = verifyDomainControlManifest(source.manifest);

@@ -126,7 +126,7 @@
             </details>
             {#if item.report.dmarcAuthorizations.length}
               <details class="analysis">
-                <summary><span>DMARC reporting authorization</span><strong>{item.report.dmarcAuthorizations.length}</strong></summary>
+                <summary><span>DMARC reporting authorisation</span><strong>{item.report.dmarcAuthorizations.length}</strong></summary>
                 <ul>
                   {#each item.report.dmarcAuthorizations as authorization}
                     <li><span class="wrap">{authorization.destination}</span> · {authorization.reportType} · {authorization.state}</li>

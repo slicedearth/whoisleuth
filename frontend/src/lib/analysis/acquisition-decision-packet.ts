@@ -91,7 +91,7 @@ export async function buildAcquisitionDecisionPacket(input: Readonly<{
     },
     evidenceReview: input.review,
     limitations: [
-      'This local artifact records an analyst review of bounded point-in-time evidence and does not submit, reserve, value, purchase, or transfer a domain.',
+      'This local artefact records an analyst review of bounded point-in-time evidence and does not submit, reserve, value, purchase, or transfer a domain.',
       'A reviewed state records completion of the displayed manual checklist, not the accuracy of external statements or a legal, financial, eligibility, or ownership determination.',
       'Refresh authoritative registration and policy evidence immediately before acting.',
       ...(input.synthetic === true

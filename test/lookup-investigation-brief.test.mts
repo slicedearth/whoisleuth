@@ -97,10 +97,11 @@ const quality: LookupEvidenceQualityMatrix = {
 };
 
 const graph: LookupAssetGraph = {
-  version: 1,
+  version: 2,
   targetId: 'domain:example.test',
   nodes: [{ id: 'domain:example.test', kind: 'target', label: 'example.test', detail: 'Lookup target' }],
   edges: [],
+  sources: [],
   truncated: false,
   limitations: ['Relationship evidence is point in time.'],
 };

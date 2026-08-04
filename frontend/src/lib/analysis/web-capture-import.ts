@@ -313,7 +313,7 @@ export function parseWebCaptureManifest(value: unknown): ExternalFindingsDocumen
       observedAt,
       completeness,
       limitations: [
-        'Imported sanitised capture manifest metadata; WHOISleuth did not receive artifact bytes or independently verify their digests.',
+        'Imported sanitised capture manifest metadata; WHOISleuth did not receive artefact bytes or independently verify their digests.',
         ...limitations,
       ].slice(0, 8),
       reference: sourceReference,

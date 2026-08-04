@@ -85,12 +85,12 @@ or hiding any source. Expand a section before relying on its evidence,
 collection time, or limitations.
 
 The Registry interpretation panel classifies bounded `rdapConformance`
-declarations already returned by registry and registrar RDAP. Recognized,
+declarations already returned by registry and registrar RDAP. Recognised,
 obsolete, and unclassified identifiers remain distinct. When `reverse_search`
 is advertised, an analyst can deliberately reveal a bounded local preview of
 the exact published entity field and value that a later request would disclose.
 The preview makes no request, is not saved, does not fetch the server help
-document, and cannot establish that the operator supports or authorizes the
+document, and cannot establish that the operator supports or authorises the
 query. An individual response that omits the declaration is not treated as
 proof that the server does not support it.
 
@@ -108,7 +108,7 @@ bounds. Leaving Lookup applies the same browser cancellation.
 
 If a completed result contains limited Registry RDAP, WHOIS, or domain-evidence
 states, **Evidence coverage** offers an explicit source-family refresh. Results
-are normalized into a short transient health summary, with a 2 MiB response
+are normalised into a short transient health summary, with a 2 MiB response
 bound, and are not merged into the original envelope. Repeated refreshes form
 a bounded versioned display chain with explicit observation and supersession
 times. That transient chain is cleared with the page and is not saved or
@@ -140,7 +140,10 @@ source palette does not compete with the content. The palette uses cyan, blue,
 violet, magenta, and cool neutral tones with deliberately varied lightness.
 Red, amber, and green remain exclusive to semantic status. Source state remains
 a separate dot and text label, so colour does not replace success, partial,
-unavailable, or error semantics.
+unavailable, or error semantics. Each relationship also points to a bounded
+source-ledger entry carrying the source label, section anchor, observation time,
+completeness, and limitations. This supports traceability without copying raw
+responses into the graph.
 
 Risk and Opportunity cards show signed factor bars beside their exact factor
 lists. Domain results can also show a connected registration-source agreement
@@ -154,16 +157,20 @@ remain the complete review surface.
 
 Deep domain Lookup also compares a currently observed certificate issuer with
 the effective CAA publication found from the exact hostname or its nearest
-publishing parent. Recognized issuer mappings can
+publishing parent. Recognised issuer mappings can
 produce an aligned or apparently-outside-current-policy review state. An
 unknown issuer or incomplete DNS remains indeterminate. When the active Brand
 Profile contains a reviewed expected issuer,
 SAN pattern, or SPKI value for the official domain, the same panel compares that analyst
 baseline without treating a difference as compromise or improper issuance.
 Current CAA cannot establish the policy that applied when an existing
-certificate was issued.
+certificate was issued. The same panel lists recognised `accounturi` and
+`validationmethods` parameters and flags unrecognized parameters for review.
+Parameter publication is context only: WHOISleuth does not contact a certificate
+authority account, validate account ownership, or establish whether an
+authorisation was used for the observed certificate.
 
-**Evidence coverage** summarizes which requested source and analysis families
+**Evidence coverage** summarises which requested source and analysis families
 completed and which remained limited, unavailable, skipped, unsupported,
 unknown, or not found. It preserves those states separately and shows endpoint
 class, observation age, explicit truncation, retained limitations, branch
@@ -174,15 +181,15 @@ registration, network, and web thresholds used for refresh suggestions.
 
 After a successful Lookup, **Download report** creates a readable Markdown
 summary locally in the browser. Domain reports include registry, registrar,
-WHOIS, Risk, and limitation context. IP reports include normalized network
-registration and reverse-DNS evidence. ASN reports include normalized routing
+WHOIS, Risk, and limitation context. IP reports include normalised network
+registration and reverse-DNS evidence. ASN reports include normalised routing
 registration evidence. Each report preserves source health, collection time,
 partial states, and limitations while deliberately excluding raw RDAP and
 WHOIS responses, expanded contacts, provider payloads, scripts, and remote
 assets.
 
 **Download brief** creates a shorter deterministic decision packet from the
-current task view. It keeps verified normalized facts, explicit
+current task view. It keeps verified normalised facts, explicit
 contradictions, unknowns, source-quality counts, observed relationship types,
 and suggested manual next steps separate. It does not add analyst assertions,
 make an attribution, or turn an incomplete source into a negative conclusion.
@@ -205,22 +212,22 @@ The collapsed **Replay exported evidence** control accepts only a current
 first-party Lookup evidence JSON document of up to 5 MB. The browser validates
 the schema, nesting, and structured entry count, calculates a SHA-256 file
 digest, and can compare it with a trusted checksum pasted before import. It
-displays a bounded normalized source and fact summary, historical review brief,
+displays a bounded normalised source and fact summary, historical review brief,
 and relationship graph without uploading the file or contacting the target.
 Replay time is not observation time. Raw source payloads in the export are not
 rendered, and future or foreign schemas fail closed.
 
-When a domain case is open, **Retain selected normalized facts** lets you save
+When a domain case is open, **Retain selected normalised facts** lets you save
 only the fields needed for later review. Each field keeps source, observation
 time, collection depth, source state, completeness, truncation, schema version,
 and limitations. A later Lookup compares those fields without converting an
 unavailable or incomplete source into a change or an absent finding.
 
 **Export evidence JSON** remains the separate full-fidelity option. It can
-include normalized and raw registration sources, supporting observations,
+include normalised and raw registration sources, supporting observations,
 diagnostics, comparisons, and provenance. It can contain public contact data,
 so review and store it accordingly. Offline replay intentionally exposes only
-its bounded normalized review projection.
+its bounded normalised review projection.
 
 ### Discover
 
@@ -301,7 +308,7 @@ local generation.
 hostname and one registry suffix. WHOISleuth uses IANA RDAP bootstrap data to
 select that suffix's registry and requests the registry's RFC 9082
 `nsLdhName` domain search. It inspects a bounded response, retains at most 200
-normalized domains, and exposes unsupported, rate-limited, unavailable,
+normalised domains, and exposes unsupported, rate-limited, unavailable,
 partial, and no-result states without broadening them. The result is a lower
 bound for that one registry, not a passive-DNS dataset or internet-wide reverse
 nameserver inventory. A shared nameserver is an investigation pivot, not proof
@@ -325,7 +332,7 @@ exported scan data.
 One browser or CLI Bulk job accepts at most 500 Fast targets or 50 Deep
 targets. The Standard pacing option runs at most eight Fast or three Deep
 lookups concurrently; Gentle and Balanced apply lower pressure. These are
-per-job safety and resource ceilings, not authorization to scan domains. Each
+per-job safety and resource ceilings, not authorisation to scan domains. Each
 target remains subject to deployment, provider, and source limits.
 
 Bulk sessions are saved only when the analyst names and saves the current
@@ -337,7 +344,7 @@ expanded contact records, and resuming does not repeat failed rows unless the
 analyst separately selects **Retry failed**.
 
 Compact Deep rows also retain a versioned comparison envelope built only from
-evidence already collected for that row. It contains at most 12 normalized
+evidence already collected for that row. It contains at most 12 normalised
 technology identifiers, one bounded TLS issuer label, one exact SPKI SHA-256
 fingerprint, and the independent technology and TLS source states. The
 two-domain workspace, peer-outlier review, saved-session change summary, and
@@ -348,6 +355,13 @@ references, and raw TLS material remain excluded. Saved session schema 2 adds
 this envelope; schema 1 sessions remain readable and show the new fields as
 not recorded.
 
+The peer-outlier matrix derives a per-dimension cohort baseline only from rows
+with comparable evidence. It reports baseline share, strong, moderate, or
+fragmented consensus, observed share, contrast, and a bounded review score.
+That score orders review within the current result set; it is not Risk and does
+not imply maliciousness. Rows excluded by partial or unavailable evidence stay
+explicit rather than being treated as outliers.
+
 The lookalike mail-exposure review groups the currently filtered compact rows
 without another request. It keeps receiving mail with SPF and DMARC, receiving
 mail with an authentication gap, incomplete authentication evidence, null MX,
@@ -355,7 +369,7 @@ no explicit MX, and incomplete DNS evidence separate. When a Brand Profile is
 active, the review compares those observations with its configured standard,
 defensive-no-mail, or parked mail posture. That profile is analyst-configured
 context rather than a live observation. The review never opens an SMTP
-connection, sends a message, tests a mailbox or catch-all behavior, or treats
+connection, sends a message, tests a mailbox or catch-all behaviour, or treats
 mail configuration as evidence of use, control, intent, safety, or abuse.
 Selecting one classification adds only those visible domains to the existing
 browser-local selection so the ordinary reviewed export, case, disposition,
@@ -366,11 +380,11 @@ current scan. It can highlight exact nameserver sets, addresses, tracking
 identifiers, favicons, official asset hosts, and native certificate hashes. A
 shared observation is a pivot for investigation, not proof of common ownership,
 control, intent, coordination, or abuse.
-The bounded relationship map summarizes those same groups and member domains;
-the exact normalized values and methods remain in the cards beneath it.
+The bounded relationship map summarises those same groups and member domains;
+the exact normalised values and methods remain in the cards beneath it.
 
 Relationship groups remain transient with the Bulk result unless the analyst
-selects **Retain observation**. That action saves only the normalized value,
+selects **Retain observation**. That action saves only the normalised value,
 member domains, method, collection time, completeness, truncation, and stated
 limitations in the current browser. It does not save the complete Bulk result,
 raw lookup responses, or expanded contacts. Retained observations can be
@@ -381,7 +395,7 @@ For projection-backed relationships, the table and graph inspector also show a
 bounded discovery path from each retained case domain to the selected
 infrastructure or identifier. The path records each comparison method,
 classification, immediate parent, hop count, and scope distance using existing
-local evidence only. Exported relationship graphs include the same minimized
+local evidence only. Exported relationship graphs include the same minimised
 path details. Distance is an explanation of the retained pivot, not evidence
 of ownership, coordination, intent, maliciousness, or safety.
 Each relationship also reports how many comparable cases in the current
@@ -392,7 +406,7 @@ internet-wide rarity estimate and does not strengthen an attribution claim.
 Defensive registration coverage groups a generated scan by mutation family and
 domain ending. It distinguishes protected or allowlisted domains, registered
 exposures, available gaps, and unknown results without making extra requests.
-Stacked bars summarize the same exact counts retained in the accompanying
+Stacked bars summarise the same exact counts retained in the accompanying
 tables. A deterministic next-action plan places available and unresolved rows
 first, followed by registered candidates and profile-protected names. Its P1
 through P3 labels describe review order only; they are not a risk or
@@ -400,7 +414,7 @@ maliciousness score. The CSV export includes the complete bounded plan.
 
 Discover can optionally compare Unicode candidates with one analyst-selected
 RFC 7940 LGR XML file. The file stays in the current browser tab, is capped at
-2 MiB, rejects document types and entities, and retains only a normalized
+2 MiB, rejects document types and entities, and retains only a normalised
 single-code-point repertoire plus the local filename and SHA-256 digest. The
 review reports whether candidate code points appear in the imported table for
 the analyst-entered suffix. It does not evaluate contextual rules, variant
@@ -422,7 +436,7 @@ as registry transfer restrictions, nameserver delegation, SPF, DMARC, MX,
 DNSSEC, CAA, MTA-STS, TLS-RPT, BIMI, and explicitly supplied DKIM selectors.
 It recursively expands only literal SPF include and redirect branches within
 fixed query, depth, void-answer, cycle, and time bounds. It also validates
-external DMARC reporting authorization, parses supported DKIM public-key
+external DMARC reporting authorisation, parses supported DKIM public-key
 strength without retaining key material, checks whether configured retired
 selectors remain published, and inventories bounded external nameserver,
 mail, SPF, and reporting dependencies. Resolver failures and exhausted bounds
@@ -431,12 +445,12 @@ insecurity, or exploitability claim.
 
 The **DMARC and SMTP TLS reports** workbench accepts deliberately selected
 aggregate XML or JSON reports, including bounded gzip and ZIP containers. It
-parses them entirely in the current browser tab and summarizes sender IPs,
+parses them entirely in the current browser tab and summarises sender IPs,
 message volume, DKIM and SPF outcomes, dispositions, TLS delivery totals, MX
 policy scope, and failure categories. Imported values are compared with the
 active profile's official-domain list, but they are not added to the profile or
 workspace. Leaving the page or selecting Clear removes the in-memory review.
-The optional JSON download includes source-file and artifact digests; it does
+The optional JSON download includes source-file and artefact digests; it does
 not authenticate the report sender or turn an aggregate outcome into a current
 safety or intent conclusion. XML document types and entities are rejected, and
 file, decompression, entry, record, policy, and failure-detail limits are
@@ -462,7 +476,7 @@ produce legitimate relationships.
 
 **Service dependency review** reuses current CNAME, HTTPS alias-mode,
 nameserver, mail-server, and final HTTP-origin evidence. A fixed, bounded local
-catalogue can label recognized service families without making another
+catalogue can label recognised service families without making another
 request. Each match can expose the catalogue evidence class, source treatment,
 licence treatment, source date, review age, and SHA-256 catalogue digest.
 The offline signature audit reports stale metadata, suffix collisions, and
@@ -507,7 +521,7 @@ request; it does not validate every resolver or secondary server.
 Monitor contains Cases, Campaigns, Relationships, and Watchlists.
 
 - **Cases** retain analyst status, disposition, tags, notes, a bounded history
-  of compact normalized evidence snapshots, analyst-selected evidence pins,
+  of compact normalised evidence snapshots, analyst-selected evidence pins,
   source-qualified sightings, first/last-observed source chronologies, decision
   rationales, and reviewed response actions with follow-up outcomes. Sightings
   keep deployment observations,
@@ -538,7 +552,7 @@ Monitor contains Cases, Campaigns, Relationships, and Watchlists.
   intent, safety, or maliciousness. A non-match remains inconclusive because
   the catalogue is deliberately incomplete.
   A separate website-profile view groups exact curated technology identifiers,
-  identity digests, normalized resource hosts, tracking identifiers, and
+  identity digests, normalised resource hosts, tracking identifiers, and
   external form-action origins across explicitly saved compact observations.
   It also calculates bounded weighted relationships from compatible latest
   snapshots while listing every contributing field and weight. First and last
@@ -577,14 +591,14 @@ delete a pin or assertion. A changed gap receives a new fingerprint and returns
 to the queue.
 
 The Dashboard **privacy-safe browser handoff** accepts a pasted domain or
-HTTP(S) URL and reduces it to either the normalized hostname or sanitized
+HTTP(S) URL and reduces it to either the normalised hostname or sanitised
 HTTP(S) origin. Credentials, port, path, query, fragment, and browser-local
 identifiers are omitted. The default destination is a prefilled Deep Lookup
 that does not submit. An analyst can instead configure an exact loopback
 companion endpoint or HTTPS external endpoint; WHOISleuth discovers neither.
 The preview shows the exact disclosed value, destination URL, and visibility,
 and a non-Lookup destination requires explicit confirmation before opening.
-An optional separate action records only the prepared handoff and normalized
+An optional separate action records only the prepared handoff and normalised
 domain in a selected browser-local case trail. It never records the external
 result.
 
@@ -612,7 +626,7 @@ Inside an expanded case, the response workspace keeps evidence pins, observed
 facts, source-qualified sightings, analyst assertions, decisions, actions, and
 manual investigation steps separately typed. **Not reproduced** and **expired**
 are analyst review states; they do not delete or negate the underlying
-observation. Its decision packet summarizes required incident facts,
+observation. Its decision packet summarises required incident facts,
 source freshness and limitations, open contradictions or unknowns, recipient
 provenance, disposition, and follow-up state before a local export. It never
 submits a report or treats a planned action as completed.
@@ -651,8 +665,8 @@ Fast and Deep are collection profiles, not confidence ratings.
 | Profile | Intended use | Collection boundary |
 | --- | --- | --- |
 | **Fast Lookup or Bulk** | Lower-request registration-first triage. | Uses RDAP-led registration analysis and a bounded authoritative DNS-delegation fallback where needed. WHOIS, website, TLS, and Deep enrichments are skipped explicitly. |
-| **Deep single Lookup** | Complete review of one important target. | Can add WHOIS, registrar RDAP, DNS with SOA zone context, HTTPS service-binding publications, and effective inherited CAA, public-IP PTR context, HTTP, favicon, page identity, privacy-minimized credential-surface counts, TLS, technology, passive posture, observed IP network context, and explicitly selected optional sources. |
-| **Deep Bulk** | Richer comparison across a bounded candidate set. | Uses a compact response with WHOIS, DNS, website, TLS, mail, up to 12 normalized technology identifiers, a bounded TLS issuer label, and an SPKI SHA-256 fingerprint. Full raw sources, rich technology and certificate records, and single-Lookup-only enrichments remain omitted. |
+| **Deep single Lookup** | Complete review of one important target. | Can add WHOIS, registrar RDAP, DNS with SOA zone context, HTTPS service-binding publications, and effective inherited CAA, public-IP PTR context, HTTP, favicon, page identity, privacy-minimised credential-surface counts, TLS, technology, passive posture, observed IP network context, and explicitly selected optional sources. |
+| **Deep Bulk** | Richer comparison across a bounded candidate set. | Uses a compact response with WHOIS, DNS, website, TLS, mail, up to 12 normalised technology identifiers, a bounded TLS issuer label, and an SPKI SHA-256 fingerprint. Full raw sources, rich technology and certificate records, and single-Lookup-only enrichments remain omitted. |
 
 Deep single Lookup is the default in the Lookup page. Bulk keeps its own
 explicit mode selection and safety limits.
@@ -671,14 +685,14 @@ explicit mode selection and safety limits.
 | **Unavailable or error** | The source could not return usable evidence. |
 | **Inconclusive** | The available evidence cannot support a reliable yes or no conclusion. |
 
-The [registry data contract](registry-data-contract.md) documents normalized
+The [registry data contract](registry-data-contract.md) documents normalised
 source shapes, attempt provenance, diagnostics, caps, and compatibility rules.
 
 ## Registration and availability
 
 WHOISleuth discovers RDAP services through IANA bootstrap data, validates
 successful responses against the requested object, and records bounded
-endpoint-attempt diagnostics. Domain lifecycle events are normalized without
+endpoint-attempt diagnostics. Domain lifecycle events are normalised without
 discarding the bounded source list.
 
 WHOIS follows a bounded referral chain. Its authority model protects a
@@ -706,7 +720,7 @@ explicit limitations. A packet remains `draft` while its decision is unresolved
 or any manual check is outstanding. A `reviewed` packet records checklist
 completion only. It does not verify a counterparty or external statement and
 does not reserve, value, purchase, submit, or transfer the domain. The public
-Demo marks its equivalent artifact as synthetic.
+Demo marks its equivalent artefact as synthetic.
 
 A missing delegation, failed provider, absent website, or unavailable registrar
 source never means that a domain is available. Registry compatibility metadata
@@ -816,9 +830,12 @@ supported protocol, or confirm exploitability.
 Risk and Opportunity are separate, versioned heuristic scores:
 
 - **Risk** helps prioritise registered candidates using explainable observed
-  factors.
-- **Opportunity** helps prioritise apparently available candidates. It is not a
-  valuation or purchase recommendation.
+  evidence families. Generic activity, mail, age, or registration-privacy
+  context cannot create Risk on its own.
+- **Opportunity** describes acquisition-review readiness across registration,
+  listing, contactability, lifecycle, and current-use dimensions. It is not a
+  valuation, availability decision, release prediction, or purchase
+  recommendation.
 
 Risk groups related evidence into contextual families so repeated observations
 of the same kind do not manufacture independent corroboration. Optional
@@ -826,14 +843,24 @@ provider findings can contribute only through the explicit allowlist and
 corroboration rules of the current scoring model. A provider miss, outage, or
 unsupported target contributes nothing.
 
+Each explanation also shows evidence quality separately from the numeric score:
+source-state coverage, observed evidence families, scan depth,
+observation-time availability, and any collection limitations. Missing or
+failed evidence never lowers either score and does not become evidence of
+absence. Stored cases, Bulk sessions, and
+shortlist entries retain the relevant model version so unlike scores are not
+presented as a change in the domain.
+
 Always review the factor list and original evidence. A score does not establish
-maliciousness, ownership, safety, or intent. The [CLI guide](cli.md#offline-risk-calibration)
+maliciousness, ownership, safety, or intent. The [CLI reference](cli-reference.md#offline-risk-calibration)
 documents deterministic offline calibration against analyst-labelled fixtures.
 Monitor can deliberately export explicitly selected cases with reviewed
-dispositions and retained normalized evidence into that same offline dataset
-contract. The export excludes notes, tags, assertions, actions, contacts, raw
-source data, provider payloads, and stored Risk scores. It does not train or
-change the model.
+dispositions and retained normalised evidence into that same offline dataset
+contract. An optional reviewed reason code supports bounded stratification; a
+page-language match is reduced to a fixed indicator rather than exported text.
+The export excludes notes, tags, assertions, actions, contacts, raw source data,
+provider payloads, and stored Risk scores. It does not train or change the
+model.
 
 ## Guided investigations
 
@@ -862,14 +889,14 @@ The guide stores only compact progress in the current tab's `sessionStorage`.
 It does not decide when evidence is sufficient, create a case automatically,
 or infer a finding from navigation. Analysts remain responsible for starting
 each collection action and marking its outcome. At a case stage and after all
-steps have an outcome, a read-only handoff checklist summarizes whether the
+steps have an outcome, a read-only handoff checklist summarises whether the
 current browser-local case has a reviewed disposition, a typed analyst
 decision, supporting evidence pins, and explicit unresolved unknowns or
 contradictions. This checklist measures workflow structure only. It does not
 validate an analyst conclusion or make a claim about the target.
 Approval-gated steps show the same Collection preflight language used by
 Lookup and Bulk before the analyst opens the tool. Approval applies only to
-that bounded guide step. It is not general authorization for active testing or
+that bounded guide step. It is not general authorisation for active testing or
 an assurance that every named source will succeed.
 
 The Console also offers a short in-tab undo after changing a Bulk review state,
@@ -919,14 +946,14 @@ notes, or relationship values, and it never starts collection.
 
 The Cases view also accepts the strict WHOISleuth external-findings schema,
 fixed-column finding rows in CSV or JSON, sanitised web-capture summaries and
-artifact manifests,
+artefact manifests,
 strict uncompressed WARC response archives, and bounded STIX 2.1 or MISP event
 JSON. Every file is validated and previewed locally before a merge. Generic row
 conversion accepts only domain, category, summary, observation time,
 completeness, limitation, and reference columns.
-The capture schemas accept bounded titles, normalized HTTP(S) origins,
+The capture schemas accept bounded titles, normalised HTTP(S) origins,
 technology labels, screenshot SHA-256 digests, optional version-2 perceptual
-dHashes, artifact dimensions and sizes, completeness, and limitations;
+dHashes, artefact dimensions and sizes, completeness, and limitations;
 it rejects raw HTML, screenshot content, cookies, request bodies, complete
 URLs, and arbitrary fields. STIX and MISP previews separate accepted claims,
 duplicates, conflicting identifiers, and exclusions, then require an existing
@@ -938,10 +965,10 @@ correlation. See [External findings and intelligence import](external-findings-i
 
 WARC import is limited to an 8 MiB uncompressed archive, 100 bounded records,
 1 MiB per record, and 25 retained HTML response findings. It excludes request
-records, cookie and authorization material, downloads, compressed response
+records, cookie and authorisation material, downloads, compressed response
 bodies, non-HTML content, invalid targets, excessive bodies, and mismatched
 supported block digests. Supported SHA-1 or SHA-256 block digests are verified
-locally. Only the normalized domain, origin, title, status, observation time,
+locally. Only the normalised domain, origin, title, status, observation time,
 completeness, limitations, and archive SHA-256 digest reach the preview. Raw
 archive bytes and paths, queries, fragments, headers, and bodies are discarded.
 Bounded WACZ 1.x ZIP containers are also accepted through the same WARC privacy
@@ -976,15 +1003,15 @@ observations, explicitly saved Bulk sessions, website profile snapshots, and
 investigation templates use bounded native IndexedDB stores. Relationship observations
 are never retained automatically: Bulk writes one only after the analyst
 selects **Retain observation**. Browser storage can still be cleared or evicted
-and does not synchronize across devices.
+and does not synchronise across devices.
 
-An explicitly saved Deep Lookup can include a normalized leaf-certificate
+An explicitly saved Deep Lookup can include a normalised leaf-certificate
 observation in its website profile snapshot. The local Lookup inventory shows
 the latest retained observation per domain and exact shared-fingerprint review
 leads. These records contain bounded certificate metadata and digests, not
 certificate bytes, and describe what this deployment observed at that time
 rather than a current certificate inventory supplied by a third party.
-The snapshot can also retain up to 20 normalized service-dependency rows from
+The snapshot can also retain up to 20 normalised service-dependency rows from
 the already displayed DNS and final-navigation review. Comparing two compatible
 snapshots calls out active-to-unresolved and active-to-passive-deprovision-cue
 transitions for manual review. It never follows the dependency, tests an
@@ -1014,7 +1041,7 @@ The local CLI's `verify-artifact` command can check archive structure and
 checksums without displaying evidence. An encrypted archive requires a separate
 passphrase file before the command can authenticate its ciphertext and inspect
 the inner checksums; without one, only the envelope is checked. See
-[offline artifact verification](cli.md#offline-artifact-verification).
+[offline artefact verification](cli-reference.md#offline-artefact-verification).
 
 ## Reports and exports
 
@@ -1042,13 +1069,17 @@ observations, or compact case history.
   JSON, Markdown, and email-text outputs remain local, require review, and do
   not submit anything.
 - When Registry RDAP declares redacted fields, use the disclosure planner to
-  build a minimized JSON review packet from those bounded declarations and a
+  build a minimised JSON review packet from those bounded declarations and a
   separate analyst-authored purpose, justification, requested-field selection,
   and case reference. Its preflight requires review of available public
   evidence, data minimisation, affected-party rights, and the current request
-  route. It excludes raw RDAP, raw WHOIS, and discovered personal contacts,
-  does not determine requester entitlement or registrar participation, and
-  never submits a request.
+  route, whether the domain is in the current gTLD service scope, registrar
+  participation, and requester materials. When those checks are complete it
+  links to the current ICANN Registration Data Request Service information and
+  account portal for a separate manual handoff. It excludes raw RDAP, raw
+  WHOIS, and discovered personal contacts, does not determine requester
+  entitlement or registrar participation, does not send the prepared packet to
+  ICANN or a registrar, and never submits a request.
 - Defensive domain lists require an explicit reviewed selection and eligible
   analyst disposition. Review their exclusions, expiry, provenance manifest,
   and paired rollback instructions before applying them. Wildcard RPZ coverage

@@ -12,8 +12,11 @@ const rootManifest = {
   name: 'whoisleuth',
   version: '1.26.0',
   dependencies: {
+    '@peculiar/x509': '^2.0.0',
     express: '^5.2.1',
+    maxmind: '^5.0.7',
     parse5: '^8.0.1',
+    'reflect-metadata': '0.2.2',
     tldts: '^7.4.9',
     undici: '^8.7.0',
   },
@@ -42,7 +45,10 @@ const lockfile = {
       version: '1.26.0',
       dependencies: rootManifest.dependencies,
     },
+    'node_modules/@peculiar/x509': { version: '2.0.0' },
+    'node_modules/maxmind': { version: '5.0.7' },
     'node_modules/parse5': { version: '8.0.1' },
+    'node_modules/reflect-metadata': { version: '0.2.2' },
     'node_modules/tldts': { version: '7.4.10' },
     'node_modules/undici': { version: '8.9.0' },
   },
@@ -86,7 +92,10 @@ describe('scoped CLI package contract', () => {
     assert.equal(manifest.private, true);
     assert.deepEqual(manifest.contentPolicy, { class: 'dual-use' });
     assert.deepEqual(manifest.dependencies, {
+      '@peculiar/x509': '2.0.0',
+      maxmind: '5.0.7',
       parse5: '8.0.1',
+      'reflect-metadata': '0.2.2',
       tldts: '7.4.10',
       undici: '8.9.0',
     });
@@ -148,14 +157,21 @@ describe('scoped CLI package contract', () => {
       packedEntryCount: 165,
       packedBytes: 700_000,
       unpackedBytes: 2_800_000,
-      runtimeDependencies: { parse5: '8.0.1', tldts: '7.4.10', undici: '8.9.0' },
+      runtimeDependencies: {
+        '@peculiar/x509': '2.0.0',
+        maxmind: '5.0.7',
+        parse5: '8.0.1',
+        'reflect-metadata': '0.2.2',
+        tldts: '7.4.10',
+        undici: '8.9.0',
+      },
       installedChecks: ['help', 'version', 'doctor', 'completion', 'manual', 'registry-support', 'discover'],
       publicationEnabled: false,
       archiveFilename: null,
       archiveSha256: null,
     });
     assert.match(output, /Publication: disabled/u);
-    assert.match(output, /Runtime dependencies: parse5@8\.0\.1, tldts@7\.4\.10, undici@8\.9\.0/u);
+    assert.match(output, /Runtime dependencies: @peculiar\/x509@2\.0\.0, maxmind@5\.0\.7, parse5@8\.0\.1, reflect-metadata@0\.2\.2, tldts@7\.4\.10, undici@8\.9\.0/u);
     assert.match(output, /Installed checks: help, version, doctor, completion, manual, registry-support, discover/u);
   });
 });

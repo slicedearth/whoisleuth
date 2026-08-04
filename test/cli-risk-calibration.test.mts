@@ -15,7 +15,7 @@ import {
   parseRiskCalibrationDataset,
   readRiskCalibrationInputBounded,
 } from '../cli/risk-calibration.mts';
-import { explainRiskScore, RISK_MODEL_VERSION, RISK_REVIEW_THRESHOLD } from '../lib/risk-scoring.mts';
+import { explainRiskScore, explainRiskScoreV6, RISK_MODEL_VERSION, RISK_REVIEW_THRESHOLD } from '../lib/risk-scoring.mts';
 import { runCli } from '../cli/runner.mts';
 
 function capture() {
@@ -112,6 +112,10 @@ describe('risk calibration dataset projection', () => {
 
   test('rejects the wrong schema, empty and oversized collections, and malformed records', () => {
     assert.throws(() => parseRiskCalibrationDataset('{}'), /must use/);
+    assert.throws(() => parseRiskCalibrationDataset(JSON.stringify({
+      ...dataset([record()]),
+      version: String(RISK_CALIBRATION_DATASET_VERSION),
+    })), /must use/);
     assert.throws(() => parseRiskCalibrationDataset(JSON.stringify(dataset([]))), /non-empty records/);
     const tooMany = Array.from({ length: MAX_RISK_CALIBRATION_RECORDS + 1 }, (_, index) => record({ id: `r-${index}` }));
     assert.throws(() => parseRiskCalibrationDataset(JSON.stringify(dataset(tooMany))), /record limit/);
@@ -119,6 +123,7 @@ describe('risk calibration dataset projection', () => {
     assert.throws(() => parseRiskCalibrationDataset(JSON.stringify(dataset([record({ domain: 'not a host' })]))), /valid ASCII DNS hostname/);
     assert.throws(() => parseRiskCalibrationDataset(JSON.stringify(dataset([record({ domain: '192.0.2.1' })]))), /not an IP address/);
     assert.throws(() => parseRiskCalibrationDataset(JSON.stringify(dataset([record({ analystDisposition: 'malicious' })]))), /unsupported/);
+    assert.throws(() => parseRiskCalibrationDataset(JSON.stringify(dataset([record({ reviewReasonCode: 'invented' })]))), /reviewReasonCode is unsupported/);
   });
 
   test('rejects malformed scalar evidence instead of coercing it', () => {
@@ -172,8 +177,8 @@ describe('offline Risk calibration report', () => {
       reviewThreshold: RISK_REVIEW_THRESHOLD,
     });
     assert.equal(report.schema, 'whoisleuth.cli.risk-calibration');
-    assert.equal(report.version, 1);
-    assert.equal(report.riskModelVersion, 6);
+    assert.equal(report.version, 2);
+    assert.equal(report.riskModelVersion, 7);
     assert.deepEqual(report.summary, {
       total: 4,
       positive: 1,
@@ -192,9 +197,26 @@ describe('offline Risk calibration report', () => {
       recall: 1,
       specificity: 1,
       falsePositiveRate: 0,
+      f1: 1,
+      balancedAccuracy: 1,
+      confidence95: {
+        precision: { lower: 0.2065, upper: 1 },
+        recall: { lower: 0.2065, upper: 1 },
+        specificity: { lower: 0.2065, upper: 1 },
+      },
+    });
+    assert.ok(report.strata.every((stratum) => stratum.insufficientSample));
+    assert.deepEqual(report.modelComparison, {
+      available: false,
+      previousModelVersion: null,
+      currentModelVersion: 7,
+      scoresChanged: 0,
+      bandsChanged: 0,
+      thresholdClassificationsChanged: 0,
     });
     assert.equal(requiredValue(report.records[2]).exclusionReason, 'contextual_disposition');
     assert.equal(requiredValue(report.records[3]).exclusionReason, 'not_scored');
+    assert.deepEqual(requiredValue(report.records[0]).interoperabilityTags, []);
     assert.equal(report.interpretation.automaticTuning, false);
     assert.equal(report.interpretation.networkRequests, false);
     assert.match(report.interpretation.statement, /does not.*prove maliciousness or safety/i);
@@ -210,6 +232,25 @@ describe('offline Risk calibration report', () => {
     assert.equal(requiredValue(report.thresholds[0]).precision, null);
     assert.equal(requiredValue(report.thresholds[0]).recall, null);
     assert.equal(requiredValue(report.thresholds[0]).specificity, null);
+  });
+
+  test('replays the previous model without changing labels or current results', () => {
+    const parsed = parseRiskCalibrationDataset(JSON.stringify(dataset([
+      record({ id: 'positive-high' }),
+      record({ id: 'negative-low', domain: 'ordinary.example.test', analystDisposition: 'expected', evidence: { availability: 'registered' } }),
+    ])));
+    const report = buildRiskCalibrationReport(parsed, explainRiskScore, {
+      modelVersion: RISK_MODEL_VERSION,
+      reviewThreshold: RISK_REVIEW_THRESHOLD,
+      previousModelVersion: 6,
+      explainPreviousRiskScore: explainRiskScoreV6,
+    });
+    assert.equal(report.modelComparison.available, true);
+    assert.equal(report.modelComparison.previousModelVersion, 6);
+    assert.equal(report.modelComparison.currentModelVersion, 7);
+    assert.equal(report.modelComparison.scoresChanged, 2);
+    assert.equal(report.summary.positive, 1);
+    assert.equal(report.summary.negative, 1);
   });
 
   test('terminal output stays bounded and points to complete JSON', () => {

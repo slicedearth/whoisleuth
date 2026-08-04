@@ -37,6 +37,9 @@ describe('bounded browser-library profile', () => {
     }]);
     assert.ok(requiredValue(profile.findings[0]).advisoryCount > 0);
     assert.ok(requiredValue(profile.findings[0]).advisoryIdentifiers.includes('CVE-2020-11022'));
+    assert.deepEqual(requiredValue(profile.findings[0]).knownExploitedIdentifiers, ['CVE-2020-11023']);
+    assert.equal(requiredValue(profile.findings[0]).knownExploitedCount, 1);
+    assert.equal(profile.knownExploitedCatalog.version, '2026.08.03');
     assert.doesNotMatch(JSON.stringify(profile), /cdn\.example|private-marker|jquery\.min\.js/);
   });
 
@@ -59,6 +62,7 @@ describe('bounded browser-library profile', () => {
       { id: 'jquery', apparentVersion: '3.7.1', detectionMethods: ['inline signature'] },
     ]);
     assert.equal(requiredValue(profile.findings[1]).advisoryCount, 0);
+    assert.equal(requiredValue(profile.findings[1]).knownExploitedCount, 0);
   });
 
   test('keeps an unmatched page neutral rather than claiming no libraries exist', () => {

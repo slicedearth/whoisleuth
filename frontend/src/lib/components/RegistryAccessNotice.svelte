@@ -6,7 +6,7 @@
   const whoisAccess = $derived(text(access.whoisAccessProfile));
   const rdapAccess = $derived(text(access.rdapAccessProfile));
   const whoisLabel = $derived(whoisAccess === 'source-ip-authorization-required'
-    ? 'Source-IP authorization required'
+    ? 'Source-IP authorisation required'
     : whoisAccess === 'registry-policy-restricted'
       ? 'Registry policy restricted'
       : whoisAccess === 'no-iana-service'

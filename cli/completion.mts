@@ -3,7 +3,7 @@ import { INVESTIGATION_PLAN_RECIPES } from './investigation-plan.mts';
 
 const COMMON_OPTIONS = Object.freeze(['--help', '--output', '--force']);
 const OPTIONS_BY_COMMAND: Readonly<Record<string, readonly string[]>> = Object.freeze({
-  lookup: ['--json', '--markdown', '--html', '--fast', '--deep', '--plan', '--summary', '--verbose', '--strict-exit', '--events', '--quiet', '--no-color'],
+  lookup: ['--json', '--markdown', '--html', '--fast', '--deep', '--observer', '--vantage', '--plan', '--summary', '--verbose', '--strict-exit', '--events', '--quiet', '--no-color'],
   bulk: ['--json', '--jsonl', '--csv', '--domains', '--queries', '--registered-only', '--inconclusive-only', '--errors-only', '--fast', '--deep', '--concurrency', '--checkpoint', '--resume', '--events', '--quiet', '--no-color'],
   'ct-search': ['--json', '--quiet', '--no-color'],
   discover: ['--tlds', '--preset', '--families', '--keyboard', '--dictionary', '--snapshot', '--json', '--jsonl', '--domains', '--quiet', '--no-color'],
@@ -12,7 +12,9 @@ const OPTIONS_BY_COMMAND: Readonly<Record<string, readonly string[]>> = Object.f
   http: ['--json', '--quiet', '--no-color'],
   tls: ['--json', '--quiet', '--no-color'],
   'registry-support': ['--json', '--quiet', '--no-color'],
+  'registry-doctor': ['--json', '--quiet', '--no-color'],
   'risk-calibrate': ['--json', '--quiet', '--no-color'],
+  'lookalike-calibrate': ['--json', '--quiet', '--no-color'],
   'verify-artifact': ['--passphrase-file', '--json', '--quiet', '--no-color'],
   'inspect-archive': ['--passphrase-file', '--search', '--require-match', '--reveal', '--json', '--quiet', '--no-color'],
   'sign-artifact': ['--private-key-file'],
@@ -21,10 +23,13 @@ const OPTIONS_BY_COMMAND: Readonly<Record<string, readonly string[]>> = Object.f
   compare: ['--json', '--quiet', '--no-color'],
   'page-compare': ['--json', '--quiet', '--no-color'],
   'mail-review': ['--json', '--quiet', '--no-color'],
-  'review-evidence': ['--json', '--quiet', '--no-color'],
+  'review-evidence': ['--mmdb', '--json', '--quiet', '--no-color'],
   'domain-control': ['--json', '--quiet', '--no-color'],
+  assurance: ['--json', '--quiet', '--no-color'],
+  'sharing-review': ['--marking', '--recipient-scope', '--purpose', '--human-reviewed', '--personal-data-reviewed', '--redactions-confirmed', '--json', '--quiet', '--no-color'],
   'workflow-plan': ['--json', '--quiet', '--no-color'],
   diff: ['--json', '--quiet', '--no-color'],
+  reconcile: ['--json', '--quiet', '--no-color'],
   timeline: ['--json', '--quiet', '--no-color'],
   export: ['--markdown', '--html', '--compact'],
   completion: [],
@@ -43,10 +48,12 @@ const COMMAND_DESCRIPTIONS: Readonly<Record<string, string>> = Object.freeze({
   http: 'Inspect one homepage request',
   tls: 'Inspect one TLS connection',
   'registry-support': 'Explain local registry coverage',
+  'registry-doctor': 'Diagnose saved registry collection',
   'risk-calibrate': 'Replay reviewed Risk labels offline',
+  'lookalike-calibrate': 'Summarise reviewed lookalike yield offline',
   'verify-artifact': 'Validate saved evidence offline',
   'inspect-archive': 'Inspect an archive locally',
-  'sign-artifact': 'Sign a reviewed artifact locally',
+  'sign-artifact': 'Sign a reviewed artefact locally',
   'verify-signature': 'Verify a signed evidence package',
   'source-report': 'Build a target-free source report',
   compare: 'Compare registry publications in one lookup',
@@ -54,8 +61,11 @@ const COMMAND_DESCRIPTIONS: Readonly<Record<string, string>> = Object.freeze({
   'mail-review': 'Review saved passive mail evidence',
   'review-evidence': 'Review supplied evidence offline',
   'domain-control': 'Build or review a domain control manifest',
+  assurance: 'Review domain change, recovery, or retirement plans',
+  'sharing-review': 'Lint an artefact before deliberate sharing',
   'workflow-plan': 'Plan a fixed investigation recipe',
   diff: 'Compare two saved domain lookups',
+  reconcile: 'Reconcile independently labelled observations',
   timeline: 'Build same-domain history from saved lookups',
   export: 'Convert a lookup to an evidence report',
   completion: 'Print shell completion',
@@ -68,6 +78,8 @@ const VALUE_OPTIONS: Readonly<Record<string, readonly string[]>> = Object.freeze
   '--preset': ['common', 'impersonation', 'all'],
   '--keyboard': ['qwerty', 'azerty', 'qwertz', 'all'],
   '--mail-profile': ['standard', 'defensive-no-mail', 'parked'],
+  '--marking': ['clear', 'green', 'amber', 'amber-strict', 'red'],
+  '--recipient-scope': ['public', 'community', 'organization', 'named-recipients'],
   '--concurrency': ['1', '2', '3', '4', '5', '6', '7', '8'],
 });
 
@@ -86,10 +98,13 @@ const FILE_OPTIONS = Object.freeze([
 const TEXT_OPTIONS = Object.freeze([
   '--families',
   '--resolver',
+  '--purpose',
+  '--observer',
   '--retired-selectors',
   '--search',
   '--selectors',
   '--tlds',
+  '--vantage',
 ]);
 
 function commandOptions(command: string): string {

@@ -14,9 +14,9 @@
     {
       "name": "optional-local-tools-stay-outside-application-adapters",
       "severity": "error",
-      "comment": "Optional active local packages may reuse bounded shared primitives but must not become alternate frontend, hosted, server, or core CLI entry points.",
+      "comment": "The optional local capture package may reuse bounded shared primitives but must not become an alternate frontend, hosted, server, or core CLI entry point.",
       "from": {
-        "path": "^packages/(?:web-capture|smtp-banner)/"
+        "path": "^packages/web-capture/"
       },
       "to": {
         "path": "^(?:bin|cli|frontend/src|netlify/functions)(?:/|$)|^server\\.mts$",

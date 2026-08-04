@@ -35,14 +35,13 @@ import { buildLookupSummaryModel } from './lookup-summary-model.ts';
 import { createPageBaseline } from './page-baseline.ts';
 import { comparePageBaselines } from './page-similarity.ts';
 import { compareRdapPublications, compareRegistrySources } from './registry-comparison.ts';
-import { explainOpportunityScore, explainRiskScore } from './scoring.ts';
+import {
+  explainOpportunityScore,
+  explainRiskScore,
+  type OpportunityExplanation,
+  type RiskExplanation,
+} from './scoring.ts';
 import { entityDisplayName } from './utils.ts';
-
-type ScoreExplanation = {
-  modelVersion?: number;
-  score: number;
-  factors: Array<{ label: string; delta: number }>;
-} | null;
 
 export interface LookupRouteAnalysisInput {
   result: LookupHttpResponse | null;
@@ -50,6 +49,25 @@ export interface LookupRouteAnalysisInput {
   profile: BrandProfile | null;
   task: LookupTaskView;
   freshnessPolicy?: LookupFreshnessPolicyInput;
+}
+
+function pageBaselineRiskMatch(comparison: ReturnType<typeof comparePageBaselines>): boolean {
+  if (!comparison || comparison.partial) return false;
+  const strongMatches = comparison.components.filter((component) => {
+    if (component.partial) return false;
+    if (component.id === 'normalized_html' || component.id === 'form_structure') return component.status === 'same';
+    if (component.id === 'dom_structure') return component.status === 'same' || component.status === 'overlap';
+    if (component.id === 'visible_text') {
+      return component.status === 'same' || (component.agreementPercent ?? 0) >= 90;
+    }
+    return false;
+  });
+  return strongMatches.length >= 2;
+}
+
+function hasPublicRegistrantContact(value: unknown): boolean {
+  const contact = rec(value);
+  return ['email', 'url'].some((key) => typeof contact[key] === 'string' && String(contact[key]).trim().length > 0);
 }
 
 export function latestLookupTimestamp(...values: unknown[]): string | null {
@@ -270,9 +288,6 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     profile,
   );
   const externalRiskContext = calibrateExternalIntelligenceRisk(threatIntelligence);
-  const scoredAvailability = { ...availability, ...profileSignals, threatIntelligence };
-  const opportunity = explainOpportunityScore(scoredAvailability) as ScoreExplanation;
-  const risk = explainRiskScore(scoredAvailability) as ScoreExplanation;
   const outreach = outreachAction(
     String(availability.domain || result?.registrableDomain || ''),
     (availability.registrant || null) as Contact | null,
@@ -458,6 +473,27 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     whoisParsed,
     threatIntelligenceProviders,
   });
+  const scoreCoverage = evidenceCoverage.entries
+    .filter((entry) => ['rdap', 'whois', 'availability', 'registrar-rdap', 'dns', 'http', 'page-identity'].includes(entry.id)
+      || entry.id.startsWith('external-'))
+    .map((entry) => ({ source: entry.id, state: entry.state }));
+  const pageBaselineMatch = pageBaselineRiskMatch(pageComparison);
+  const idnReferenceMatch = Boolean(idnAnalysis?.referenceMatches.length);
+  const scoredAvailability = {
+    ...availability,
+    ...profileSignals,
+    threatIntelligence,
+    mutationTypes: [],
+    idnReferenceMatch,
+    pageBaselineMatch,
+    hasActiveBrandProfile: Boolean(profile),
+    hasPublicRegistrantContact: hasPublicRegistrantContact(availability.registrant),
+    scanDepth: lookupEvidenceDepth,
+    observedAt: lookupObservedAt,
+    sourceCoverage: scoreCoverage,
+  };
+  const opportunity: OpportunityExplanation | null = explainOpportunityScore(scoredAvailability);
+  const risk: RiskExplanation | null = explainRiskScore(scoredAvailability);
   const lookupSourceRefreshPlan = buildLookupSourceRefreshPlan(
     evidenceCoverage,
     lookupObservedAt,
@@ -541,6 +577,7 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     confidence: availability.confidence ? String(availability.confidence) : null,
     riskModelVersion: risk?.modelVersion ?? null,
     riskScore: risk?.score ?? null,
+    opportunityModelVersion: opportunity?.modelVersion ?? null,
     opportunityScore: opportunity?.score ?? null,
     riskFactors: risk?.factors.map((factor) => ({ label: factor.label, points: factor.delta })) ?? [],
     opportunityFactors: opportunity?.factors.map((factor) => ({ label: factor.label, points: factor.delta })) ?? [],
@@ -562,6 +599,10 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     hasPasswordField: availability.hasPasswordField ?? null,
     hasExternalFormAction: availability.hasExternalFormAction ?? null,
     phishingLanguageMatch: availability.phishingLanguageMatch ?? null,
+    privacyProtected: availability.privacyProtected ?? null,
+    idnReferenceMatch,
+    pageBaselineMatch,
+    hasActiveBrandProfile: Boolean(profile),
     ...compactHttpSummary,
     mutationTypes: [],
   };

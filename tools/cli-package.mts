@@ -71,13 +71,20 @@ export const MAX_CLI_PACKAGE_GRAPH_BYTES = 8 * 1024 * 1024;
 export const MAX_CLI_PACKAGE_MODULES = 256;
 export const MAX_CLI_PACKAGE_SOURCE_BYTES = 8 * 1024 * 1024;
 export const MAX_CLI_PACKAGE_FILE_BYTES = 2 * 1024 * 1024;
-export const MAX_CLI_PACKAGE_ENTRIES = 220;
+export const MAX_CLI_PACKAGE_ENTRIES = 250;
 export const MAX_CLI_PACKAGE_PACKED_BYTES = 2 * 1024 * 1024;
 export const MAX_CLI_PACKAGE_UNPACKED_BYTES = 6 * 1024 * 1024;
 
 const LOCAL_SOURCE_PATTERN = /^(?:bin|cli|lib|frontend\/src\/lib\/analysis)\/[A-Za-z0-9._/-]+\.(?:mts|ts)$/u;
 const REQUIRED_SOURCE_MODULES = Object.freeze(['bin/whoisleuth.mts', 'cli/runner.mts']);
-const RUNTIME_DEPENDENCIES = Object.freeze(['parse5', 'tldts', 'undici']);
+const RUNTIME_DEPENDENCIES = Object.freeze([
+  '@peculiar/x509',
+  'maxmind',
+  'parse5',
+  'reflect-metadata',
+  'tldts',
+  'undici',
+]);
 const INSTALLED_COMMAND_HELP_CHECKS = Object.freeze([
   'lookup',
   'bulk',
@@ -87,13 +94,18 @@ const INSTALLED_COMMAND_HELP_CHECKS = Object.freeze([
   'ct-search',
   'discover',
   'registry-support',
+  'registry-doctor',
   'source-report',
   'compare',
   'page-compare',
   'mail-review',
+  'review-evidence',
   'domain-control',
+  'assurance',
+  'sharing-review',
   'workflow-plan',
   'diff',
+  'reconcile',
   'timeline',
   'export',
   'inspect-archive',
@@ -101,6 +113,7 @@ const INSTALLED_COMMAND_HELP_CHECKS = Object.freeze([
   'sign-artifact',
   'verify-signature',
   'risk-calibrate',
+  'lookalike-calibrate',
   'doctor',
   'commands',
   'completion',
@@ -109,6 +122,7 @@ const INSTALLED_COMMAND_HELP_CHECKS = Object.freeze([
 const SUPPORT_FILES = Object.freeze([
   ['packages/cli/README.md', 'README.md'],
   ['docs/cli.md', 'docs/cli.md'],
+  ['docs/cli-reference.md', 'docs/cli-reference.md'],
   ['DISCLOSURE', 'DISCLOSURE'],
   ['LICENSE', 'LICENSE'],
   ['NOTICE', 'NOTICE'],
@@ -251,6 +265,7 @@ export function buildCliPackageManifest(
       'lib/**/*.mjs',
       'frontend/src/lib/analysis/**/*.js',
       'docs/cli.md',
+      'docs/cli-reference.md',
       'DISCLOSURE',
       'LICENSE',
       'LICENSES/*.txt',
@@ -381,7 +396,8 @@ function parsePackResult(value: unknown): JsonRecord {
 
 function packedFiles(packResult: JsonRecord): readonly string[] {
   if (!Array.isArray(packResult.files) || packResult.files.length === 0 || packResult.files.length > MAX_CLI_PACKAGE_ENTRIES) {
-    throw new TypeError(`Packed CLI must contain between 1 and ${MAX_CLI_PACKAGE_ENTRIES} entries.`);
+    const observed = Array.isArray(packResult.files) ? packResult.files.length : 0;
+    throw new TypeError(`Packed CLI contains ${observed} entries; expected between 1 and ${MAX_CLI_PACKAGE_ENTRIES}.`);
   }
   return Object.freeze(packResult.files.map((entry, index) => safeRelativePath(record(entry, `Packed entry ${index + 1}`).path, `Packed entry ${index + 1} path`)));
 }
@@ -407,10 +423,10 @@ async function runInstalledCheck(executable: string, args: readonly string[], la
 export async function checkCliPackage(repositoryRoot: string, options: CliPackageOptions = {}): Promise<CliPackageReport> {
   const publicationEnabled = options.publicationEnabled === true;
   if (publicationEnabled && (!options.artifactDirectory || !options.expectedTag)) {
-    throw new TypeError('Release-candidate assembly requires an artifact directory and expected semantic tag.');
+    throw new TypeError('Release-candidate assembly requires an artefact directory and expected semantic tag.');
   }
   if (!publicationEnabled && (options.artifactDirectory || options.expectedTag)) {
-    throw new TypeError('Artifact output and tag validation are available only for release-candidate assembly.');
+    throw new TypeError('Artefact output and tag validation are available only for release-candidate assembly.');
   }
   const temporaryRoot = await mkdtemp(path.join(tmpdir(), 'whoisleuth-cli-package-'));
   const stagingRoot = path.join(temporaryRoot, 'staging');
@@ -452,7 +468,7 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
     const unpackedBytes = positiveInteger(packResult.unpackedSize, 'Unpacked CLI bytes', MAX_CLI_PACKAGE_UNPACKED_BYTES);
     const filename = safeRelativePath(packResult.filename, 'Packed CLI filename');
     const tarball = path.join(artifactsRoot, filename);
-    const requiredEntries = ['bin/whoisleuth.mjs', 'cli/runner.mjs', 'package.json', 'README.md', 'DISCLOSURE', 'LICENSE', 'SECURITY.md', 'docs/cli.md'];
+    const requiredEntries = ['bin/whoisleuth.mjs', 'cli/runner.mjs', 'package.json', 'README.md', 'DISCLOSURE', 'LICENSE', 'SECURITY.md', 'docs/cli.md', 'docs/cli-reference.md'];
     for (const required of requiredEntries) {
       if (!entries.includes(required)) throw new TypeError(`Packed CLI is missing ${required}.`);
     }

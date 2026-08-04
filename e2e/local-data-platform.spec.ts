@@ -61,7 +61,7 @@ test('legacy browser data migrates once into verified IndexedDB records without 
   const collection = await readBrowserLocalCollection(page, 'shortlist', { minimumRecords: 1 });
   expect(collection.manifest).toMatchObject({
     collection: 'shortlist',
-    schemaVersion: 2,
+    schemaVersion: 3,
     codec: 'json-v1',
     revision: 1,
     recordCount: 1,
@@ -98,7 +98,7 @@ test('application writes remain authoritative across reloads while the retained 
   await expect(page.getByRole('status').filter({ hasText: 'Updated the legacy rollback copy' })).toBeVisible();
   expect(await page.evaluate((key) => JSON.parse(localStorage.getItem(key) || 'null'), SHORTLIST_KEY)).toEqual({
     schema: 'whoisleuth.shortlist',
-    version: 2,
+    version: 3,
     entries: [],
   });
 });
@@ -179,6 +179,6 @@ test('an older IndexedDB collection schema is normalized and recommitted at the 
   await page.reload();
 
   const collection = await readBrowserLocalCollection(page, 'shortlist', { minimumRecords: 1, minimumRevision: 2 });
-  expect(collection.manifest).toMatchObject({ schemaVersion: 2, revision: 2, source: 'application' });
+  expect(collection.manifest).toMatchObject({ schemaVersion: 3, revision: 2, source: 'application' });
   expect(collection.records.map((entry) => entry.value.domain)).toEqual(['priority.invalid']);
 });

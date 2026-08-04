@@ -102,7 +102,7 @@ export function buildRdapReverseSearchPreviews(
     const key = `${property}\u0000${normalized.toLowerCase()}`;
     if (seen.has(key)) return;
     seen.add(key);
-    const queryShape = `domains/reverse_search/entity?${property}=${encodeURIComponent(normalized)}`;
+    const queryShape = `/domains/reverse_search/entity?${property}=${encodeURIComponent(normalized)}`;
     output.push({
       id: `${property}-${identifier(key)}`,
       property,

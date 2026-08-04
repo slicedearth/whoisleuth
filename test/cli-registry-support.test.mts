@@ -143,7 +143,7 @@ describe('registry-support runner', () => {
     assert.equal(code, EXIT_CODES.SUCCESS);
     assert.match(stdout.value(), /Suffix\s+\.es/);
     assert.match(stdout.value(), /Coverage\s+Access documented/);
-    assert.match(stdout.value(), /Source-IP authorization required/);
+    assert.match(stdout.value(), /Source-IP authorisation required/);
     assert.match(stdout.value(), /does not test current live reachability/);
     assert.match(stdout.value(), /not evidence that the domain is unregistered/);
     assert.doesNotMatch(stdout.value(), /Domain is (?:unregistered|safe)/);

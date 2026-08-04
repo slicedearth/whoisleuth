@@ -15,11 +15,11 @@ let providerPromise: Promise<BrowserLocalDataProvider> | null = null;
 let serviceState: BrowserLocalDataServiceState = Object.freeze({ state: 'idle' });
 
 function boundedDetail(cause: unknown): string {
-  return (cause instanceof Error ? cause.message : 'Browser-local data could not be initialized.')
+  return (cause instanceof Error ? cause.message : 'Browser-local data could not be initialised.')
     .replace(/[\u0000-\u001f\u007f]+/gu, ' ')
     .replace(/\s+/gu, ' ')
     .trim()
-    .slice(0, 240) || 'Browser-local data could not be initialized.';
+    .slice(0, 240) || 'Browser-local data could not be initialised.';
 }
 
 export function browserLocalDataServiceState(): BrowserLocalDataServiceState {
