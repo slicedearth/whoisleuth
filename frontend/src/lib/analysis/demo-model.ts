@@ -612,6 +612,28 @@ export function syntheticDemoLookupView(id: string) {
           nameservers: dns.nameservers,
           soaPrimary: dns.nameservers[0] || '',
         })),
+        recordMatrix: [
+          {
+            type: 'A',
+            state: 'aligned',
+            observations: dns.nameservers.slice(0, 2).map((nameserver) => ({
+              nameserver,
+              state: 'success',
+              values: ['192.0.2.80'],
+              error: '',
+            })),
+          },
+          {
+            type: 'MX',
+            state: 'aligned',
+            observations: dns.nameservers.slice(0, 2).map((nameserver) => ({
+              nameserver,
+              state: 'success',
+              values: ['10 mail.example.test'],
+              error: '',
+            })),
+          },
+        ],
         limitations: ['Synthetic delegation evidence demonstrates the layout only and is not a live DNS-health finding.'],
       } : null,
     },

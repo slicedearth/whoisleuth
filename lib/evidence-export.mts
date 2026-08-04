@@ -4,7 +4,7 @@ import { WHOISLEUTH_SOURCE_REPOSITORY_URL } from './project-metadata.mts';
 import { normalizeBoundedSemanticVersion } from './semantic-version.mts';
 
 export const LOOKUP_EVIDENCE_SCHEMA = 'whoisleuth.lookup-evidence';
-export const LOOKUP_EVIDENCE_SCHEMA_VERSION = 24;
+export const LOOKUP_EVIDENCE_SCHEMA_VERSION = 25;
 
 type UnknownRecord = Record<string, unknown>;
 type LookupEvidenceOptions = { generatedAt?: string; idnAnalysis?: unknown; applicationVersion?: unknown };

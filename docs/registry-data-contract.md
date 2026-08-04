@@ -184,14 +184,16 @@ Deep non-compact Lookup also derives a version-1 `dns_delegation` observation.
 It keeps the recursive NS answer, registry RDAP nameserver/glue publication,
 and direct nameserver answers separately attributed. The collector selects at
 most four nameservers from the bounded parent and registry sets, uses at most
-two validated public addresses for each, and sends only direct NS and SOA
-queries to those addresses. Registry-published glue is preferred; otherwise
+two validated public addresses for each, and sends direct NS and SOA queries
+to those addresses. One selected address per nameserver can additionally
+receive bounded A, AAAA, CAA and MX queries; each retained record set is capped
+at sixteen normalised values. Registry-published glue is preferred; otherwise
 the deployment's recursive resolver supplies candidate addresses. Literal
 addresses are revalidated with the shared private/reserved-address policy
 before use.
 
 The observation reports parent/registry NS agreement, bounded direct
-reachability, selected-authority NS consistency, observed in-bailiwick glue,
+reachability, selected-authority NS and A/AAAA/CAA/MX consistency, observed in-bailiwick glue,
 and the internal consistency of registry DNSSEC fields. Refused or
 not-authoritative responses, unreachable authorities, missing observations,
 and source truncation remain distinct. A direct failure is inconclusive and

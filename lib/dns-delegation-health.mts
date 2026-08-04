@@ -31,11 +31,25 @@ type AuthorityQuery = (input: {
   address: string;
   timeoutMs: number;
 }) => Promise<AuthorityQueryResult>;
+type AuthorityRecordType = 'A' | 'AAAA' | 'CAA' | 'MX';
+type AuthorityRecordSet = {
+  type: AuthorityRecordType;
+  state: 'success' | 'not_found' | 'error';
+  values: string[];
+  error: string | null;
+};
+type AuthorityRecordQuery = (input: {
+  domain: string;
+  nameserver: string;
+  address: string;
+  timeoutMs: number;
+}) => Promise<AuthorityRecordSet[]>;
 type DnsDelegationHealthOptions = {
   registryEvidence?: unknown;
   resolve4?: (hostname: string) => Promise<unknown>;
   resolve6?: (hostname: string) => Promise<unknown>;
   queryAuthority?: AuthorityQuery;
+  queryAuthorityRecords?: AuthorityRecordQuery;
   timeoutMs?: number;
   now?: () => number;
   observedAt?: () => string;
@@ -46,6 +60,7 @@ const MAX_AUTHORITIES = 4;
 const MAX_AUTHORITY_ADDRESSES = 2;
 const MAX_NAMESERVERS = 16;
 const MAX_ERROR_LENGTH = 180;
+const MAX_AUTHORITY_RECORD_VALUES = 16;
 const DNS_DELEGATION_TIMEOUT_MS = 2200;
 const LAME_CODES = new Set(['ENOTAUTH', 'EREFUSED']);
 const MAX_SOA_VALUE = 0xffff_ffff;
@@ -177,6 +192,87 @@ async function defaultAuthorityQuery(input: {
   };
 }
 
+function normaliseAuthorityValues(type: AuthorityRecordType, value: unknown): string[] {
+  const rows = Array.isArray(value) ? value : [];
+  const values = rows.flatMap((item): string[] => {
+    if (type === 'A' || type === 'AAAA') {
+      const address = publicAddress(item);
+      return address && net.isIP(address) === (type === 'A' ? 4 : 6) ? [address] : [];
+    }
+    const source = record(item);
+    if (type === 'MX') {
+      const exchange = hostname(source.exchange);
+      const priority = Number(source.priority);
+      return exchange && Number.isSafeInteger(priority) && priority >= 0 && priority <= 65_535
+        ? [`${priority} ${exchange}`]
+        : [];
+    }
+    const critical = Number(source.critical);
+    const properties = ['issue', 'issuewild', 'iodef'].flatMap((key) => {
+      const candidate = boundedText(source[key], 500);
+      return candidate ? [`${Number.isSafeInteger(critical) && critical >= 0 && critical <= 255 ? critical : 0} ${key} ${candidate}`] : [];
+    });
+    return properties;
+  });
+  return [...new Set(values)].sort().slice(0, MAX_AUTHORITY_RECORD_VALUES);
+}
+
+async function defaultAuthorityRecordQuery(input: {
+  domain: string;
+  address: string;
+  timeoutMs: number;
+}): Promise<AuthorityRecordSet[]> {
+  const resolver = new dns.Resolver({
+    timeout: Math.max(250, Math.min(input.timeoutMs, DNS_DELEGATION_TIMEOUT_MS)),
+    tries: 1,
+  });
+  resolver.setServers([net.isIP(input.address) === 6 ? `[${input.address}]:53` : input.address]);
+  const queries: ReadonlyArray<readonly [AuthorityRecordType, Promise<unknown>]> = [
+    ['A', resolver.resolve4(input.domain)],
+    ['AAAA', resolver.resolve6(input.domain)],
+    ['CAA', resolver.resolveCaa(input.domain)],
+    ['MX', resolver.resolveMx(input.domain)],
+  ];
+  return Promise.all(queries.map(async ([type, promise]) => {
+    try {
+      const response = await withTimeout(promise, input.timeoutMs);
+      return { type, state: 'success' as const, values: normaliseAuthorityValues(type, response), error: null };
+    } catch (error) {
+      const code = errorCode(error);
+      const missing = code === 'ENODATA' || code === 'ENOTFOUND';
+      return { type, state: missing ? 'not_found' as const : 'error' as const, values: [], error: missing ? null : errorDetail(error) };
+    }
+  }));
+}
+
+function authorityRecordMatrix(authorities: readonly {
+  nameserver: string;
+  recordSets: readonly AuthorityRecordSet[];
+}[]) {
+  const types: AuthorityRecordType[] = ['A', 'AAAA', 'CAA', 'MX'];
+  return types.map((type) => {
+    const observations = authorities.map((authority) => {
+      const result = authority.recordSets.find((item) => item.type === type);
+      return {
+        nameserver: authority.nameserver,
+        state: result?.state ?? 'not_collected',
+        values: result?.values ?? [],
+        error: result?.error ?? null,
+      };
+    });
+    const complete = observations.filter((item) => item.state === 'success' || item.state === 'not_found');
+    const signatures = new Set(complete.map((item) => JSON.stringify(item.values)));
+    return {
+      type,
+      state: observations.some((item) => item.state === 'error') ? 'partial' as const
+        : complete.length < 2 ? 'insufficient' as const
+          : observations.some((item) => item.state === 'not_collected') ? 'partial' as const
+          : signatures.size === 1 ? 'aligned' as const : 'different' as const,
+      observations,
+    };
+  });
+}
+
 function registryProjection(value: unknown) {
   const registry = record(value);
   const nameserverDetails = (Array.isArray(registry.nameserverDetails)
@@ -246,6 +342,7 @@ function skippedDnsDelegationHealth(detail = 'Authoritative delegation checks we
       truncated: false,
     },
     authorities: [],
+    recordMatrix: [],
     findings: [],
   };
 }
@@ -269,6 +366,8 @@ async function collectDnsDelegationHealth(
   const resolve4 = options.resolve4 || dns.resolve4;
   const resolve6 = options.resolve6 || dns.resolve6;
   const queryAuthority = options.queryAuthority || defaultAuthorityQuery;
+  const queryAuthorityRecords = options.queryAuthorityRecords
+    ?? (options.queryAuthority ? null : defaultAuthorityRecordQuery);
   const timeoutMs = Math.max(250, Math.min(5000, Number(options.timeoutMs) || DNS_DELEGATION_TIMEOUT_MS));
   const now = options.now || Date.now;
   const started = now();
@@ -324,6 +423,28 @@ async function collectDnsDelegationHealth(
     const successful = attempts.find((attempt) => attempt.state === 'success');
     const partial = attempts.find((attempt) => attempt.state === 'partial');
     const retained = successful ?? partial;
+    let recordSets: AuthorityRecordSet[] = [];
+    const recordAddress = retained?.address ?? addresses[0];
+    if (queryAuthorityRecords && recordAddress) {
+      try {
+        recordSets = (await withTimeout(queryAuthorityRecords({ domain, nameserver, address: recordAddress, timeoutMs }), timeoutMs))
+          .filter((item) => ['A', 'AAAA', 'CAA', 'MX'].includes(item.type))
+          .slice(0, 4)
+          .map((item) => ({
+            type: item.type,
+            state: item.state,
+            values: [...new Set(item.values.map((value) => boundedText(value, 500)).filter((value): value is string => value !== null))].sort().slice(0, MAX_AUTHORITY_RECORD_VALUES),
+            error: boundedText(item.error, MAX_ERROR_LENGTH),
+          }));
+      } catch (error) {
+        recordSets = ['A', 'AAAA', 'CAA', 'MX'].map((type) => ({
+          type: type as AuthorityRecordType,
+          state: 'error' as const,
+          values: [],
+          error: errorDetail(error),
+        }));
+      }
+    }
     return {
       nameserver,
       addressSource: glue.length ? 'registry_glue' as const : 'recursive_address' as const,
@@ -338,6 +459,7 @@ async function collectDnsDelegationHealth(
       nameservers: retained?.nameservers ?? [],
       soaPrimary: retained?.soaPrimary ?? null,
       soa: retained?.soa ?? null,
+      recordSets,
       attempts,
     };
   }));
@@ -374,6 +496,10 @@ async function collectDnsDelegationHealth(
   ) || (
     registry.delegationSigned === false && registry.dsRecordCount > 0
   );
+  const recordMatrix = authorityRecordMatrix(authorities);
+  const recordDifferences = recordMatrix.filter((row) => row.state === 'different');
+  const recordPartial = recordMatrix.filter((row) => row.state === 'partial');
+  const recordInsufficient = recordMatrix.filter((row) => row.state === 'insufficient');
 
   const findings = [
     finding(
@@ -466,11 +592,27 @@ async function collectDnsDelegationHealth(
       `delegationSigned: ${registry.delegationSigned === null ? 'unavailable' : registry.delegationSigned}. DS records: ${registry.dsRecordCount}.`,
       'Confirm the registry DS set matches the intended zone-signing keys before enabling, rotating, or removing DNSSEC.',
     ),
+    ...(authorities.some((authority) => authority.recordSets.length) ? [finding(
+        'authority_record_consistency',
+        'Authoritative record consistency',
+        recordDifferences.length ? 'warning'
+          : recordPartial.length || recordInsufficient.length ? 'unknown' : 'healthy',
+        recordDifferences.length
+          ? `Direct authority answers differ for ${recordDifferences.map((row) => row.type).join(', ')}`
+          : recordPartial.length
+            ? 'Extended authority record comparison is incomplete'
+            : recordInsufficient.length
+              ? 'Fewer than two complete authority observations were available for one or more record types'
+            : 'Observed A, AAAA, CAA, and MX answers agree across selected authorities',
+        recordMatrix.map((row) => `${row.type}: ${row.state}`).join(' · '),
+        'Review propagation timing and the intended zone values before relying on a DNS change.',
+      )] : []),
   ];
   const collectionIncomplete = parentStatus === 'error'
     || parentQuery.truncated === true
     || registry.truncated
-    || authorities.some((authority) => authority.state !== 'success');
+    || authorities.some((authority) => authority.state !== 'success')
+    || recordPartial.length > 0;
   const status = !candidates.length && parentStatus === 'error'
     ? 'error'
     : collectionIncomplete ? 'partial' : 'success';
@@ -488,6 +630,7 @@ async function collectDnsDelegationHealth(
       limitations: [
         'The parent nameserver set is a point-in-time recursive resolver view; registry nameservers and glue come from the separately attributed RDAP publication.',
         'Direct queries use at most four selected nameservers and two validated public addresses per nameserver.',
+        'Extended A, AAAA, CAA, and MX comparison uses only one selected validated public address per nameserver and caps each record set at sixteen values.',
         'A direct answer does not prove global reachability, and a failed query is not evidence that the record is absent.',
         'DNS health does not decide registration availability, ownership, control, intent, safety, or maliciousness.',
         'The DNSSEC check compares bounded registry publication fields; it does not validate the full cryptographic chain.',
@@ -513,6 +656,7 @@ async function collectDnsDelegationHealth(
     },
     registry,
     authorities,
+    recordMatrix,
     findings,
   };
 }
@@ -528,6 +672,8 @@ export {
 
 export type {
   AuthorityQuery,
+  AuthorityRecordQuery,
+  AuthorityRecordSet,
   AuthorityQueryResult,
   DnsDelegationHealthOptions,
   ParentNameserverQuery,

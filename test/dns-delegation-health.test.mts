@@ -70,6 +70,39 @@ describe('DNS delegation health', () => {
     assert.match(result.limitations.join(' '), /does not decide registration availability/i);
   });
 
+  test('compares bounded direct authority record sets without merging their provenance', async () => {
+    const recordCalls: Array<{ nameserver: string; address: string }> = [];
+    const result = await collectDnsDelegationHealth('example.test', PARENT, {
+      registryEvidence: REGISTRY,
+      queryAuthority: async () => ({
+        nameservers: PARENT.records,
+        soaPrimary: 'ns1.example.test',
+        errorCode: null,
+        error: null,
+      }),
+      queryAuthorityRecords: async ({ nameserver, address }) => {
+        recordCalls.push({ nameserver, address });
+        return [
+          { type: 'A', state: 'success', values: [nameserver.startsWith('ns1') ? '192.0.2.10' : '192.0.2.20'], error: null },
+          { type: 'AAAA', state: 'not_found', values: [], error: null },
+          { type: 'CAA', state: 'success', values: ['0 issue ca.example'], error: null },
+          { type: 'MX', state: 'error', values: [], error: 'query timed out' },
+        ];
+      },
+      observedAt: () => OBSERVED_AT,
+    });
+
+    assert.deepEqual(recordCalls, [
+      { nameserver: 'ns1.example.test', address: '93.184.216.34' },
+      { nameserver: 'ns2.example.test', address: '1.1.1.1' },
+    ]);
+    assert.equal(result.recordMatrix.find((row) => row.type === 'A')?.state, 'different');
+    assert.equal(result.recordMatrix.find((row) => row.type === 'AAAA')?.state, 'aligned');
+    assert.equal(result.recordMatrix.find((row) => row.type === 'MX')?.state, 'partial');
+    assert.equal(result.status, 'partial');
+    assert.equal(result.findings.find((finding) => finding.id === 'authority_record_consistency')?.state, 'warning');
+  });
+
   test('flags different authoritative SOA serials without treating either answer as absent', async () => {
     const result = await collectDnsDelegationHealth('example.test', PARENT, {
       registryEvidence: REGISTRY,
