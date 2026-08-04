@@ -223,8 +223,9 @@ npm run technology:fixture-review -- reviewed-input.json
 The contributor supplies only reviewed factual markers. The tool reconstructs
 a fixed safe subset of recognised static markers and approved shared vendor
 origins, rejects target-bearing or contact material, and verifies the expected
-catalogue result. The checked-in reviewed corpus starts empty, so it makes no
-claim about real-world coverage until reviewed contributions are added.
+catalogue result. The checked-in reviewed corpus contains only minimised,
+target-free observations that have passed the contribution review. Its current
+partial signature coverage must not be generalised to the wider web.
 The benchmark also reports a 365-day review-age gate, unsampled signature IDs,
 declared licence-basis counts, and reviewed coverage by technology category.
 These maintenance signals cannot turn an empty or narrow corpus into a coverage

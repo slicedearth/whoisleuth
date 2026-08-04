@@ -27,4 +27,25 @@ export type TechnologyReviewedFixture = Readonly<{
   }>;
 }>;
 
-export const TECHNOLOGY_REVIEWED_FIXTURES: readonly TechnologyReviewedFixture[] = Object.freeze([]);
+export const TECHNOLOGY_REVIEWED_FIXTURES: readonly TechnologyReviewedFixture[] = Object.freeze([
+  Object.freeze({
+    schema: TECHNOLOGY_REVIEWED_FIXTURE_SCHEMA,
+    version: TECHNOLOGY_REVIEWED_FIXTURE_VERSION,
+    catalogueVersion: TECHNOLOGY_PROFILE_VERSION,
+    id: 'owned-public-sveltekit-20260805',
+    label: 'Reviewed sveltekit fixture',
+    reviewedAt: '2026-08-05T00:00:00.000Z',
+    observedAt: '2026-08-05T00:00:00.000Z',
+    licenseBasis: 'factual-observation',
+    expectedIds: Object.freeze(['sveltekit']),
+    input: Object.freeze({
+      html: '<a data-sveltekit-preload-data="hover"></a>',
+      observedAt: '2026-08-05T00:00:00.000Z',
+    }),
+    privacy: Object.freeze({
+      rawPageRetained: false,
+      sourceTargetRetained: false,
+      contactsRetained: false,
+    }),
+  }),
+]);

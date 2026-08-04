@@ -5,6 +5,7 @@ import { describe, test } from 'node:test';
 import {
   TECHNOLOGY_SIGNATURE_FIXTURES,
 } from '../fixtures/technology-signature-fixtures.mts';
+import { TECHNOLOGY_REVIEWED_FIXTURES } from '../fixtures/technology-reviewed-fixtures.mts';
 import {
   MAX_EVIDENCE_PER_TECHNOLOGY,
   TECHNOLOGY_SIGNATURE_CATALOGUE,
@@ -19,7 +20,7 @@ import {
   parseArguments,
 } from '../tools/technology-signature-benchmark.mts';
 
-const GENERATED_AT = '2026-07-28T00:00:00.000Z';
+const GENERATED_AT = '2026-08-05T01:00:00.000Z';
 
 function capture() {
   let value = '';
@@ -47,9 +48,9 @@ describe('technology signature benchmark', () => {
     assert.equal(report.summary.failedFixtures, 0);
     assert.equal(report.summary.lintErrors, 0);
     assert.equal(report.summary.ready, true);
-    assert.equal(report.summary.reviewedFixtures, 0);
+    assert.equal(report.summary.reviewedFixtures, TECHNOLOGY_REVIEWED_FIXTURES.length);
     assert.equal(report.summary.failedReviewedFixtures, 0);
-    assert.equal(report.summary.reviewedSignatureCoverage, 0);
+    assert.equal(report.summary.reviewedSignatureCoverage, 1);
     assert.equal(report.summary.realWorldCoverageEstablished, false);
     assert.equal(report.metrics.positiveCoverage, report.summary.signatures);
     assert.equal(report.metrics.negativeCoverage, report.summary.signatures);
@@ -60,10 +61,10 @@ describe('technology signature benchmark', () => {
     assert.equal(report.metrics.falsePositiveRate, 0);
     assert.equal(report.bounds.networkRequests, 0);
     assert.ok(report.bounds.reviewedFixtureLimit > 0);
-    assert.deepEqual(report.reviewedFixtures, []);
+    assert.equal(report.reviewedFixtures.length, TECHNOLOGY_REVIEWED_FIXTURES.length);
     assert.equal(report.reviewedProgramme.staleFixtureIds.length, 0);
-    assert.equal(report.reviewedProgramme.unsampledSignatureIds.length, report.summary.signatures);
-    assert.equal(report.reviewedProgramme.licenseBases['factual-observation'], 0);
+    assert.equal(report.reviewedProgramme.unsampledSignatureIds.length, report.summary.signatures - 1);
+    assert.equal(report.reviewedProgramme.licenseBases['factual-observation'], 1);
     assert.equal(
       Object.values(report.reviewedProgramme.byCategory).reduce((sum, category) => sum + category.signatures, 0),
       report.summary.signatures,
@@ -126,7 +127,7 @@ describe('technology signature benchmark', () => {
     const output = formatTechnologySignatureBenchmark(report);
     assert.match(output, /technology-signature benchmark/i);
     assert.match(output, /fixtures passed/);
-    assert.match(output, /0\/\d+ signatures sampled/);
+    assert.match(output, /1\/\d+ signatures sampled/);
     assert.match(output, /Real-world coverage gate: not established/);
     assert.match(output, /network requests: 0/);
     assert.deepEqual(parseArguments([]), { json: false, requireReviewed: false });

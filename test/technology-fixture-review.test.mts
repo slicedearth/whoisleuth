@@ -4,6 +4,7 @@ import { describe, test } from 'node:test';
 import {
   buildReviewedTechnologyFixture,
 } from '../tools/technology-fixture-review.mts';
+import { TECHNOLOGY_REVIEWED_FIXTURES } from '../fixtures/technology-reviewed-fixtures.mts';
 
 function input(overrides: Record<string, unknown> = {}) {
   return {
@@ -49,6 +50,17 @@ describe('reviewed technology-fixture contribution tool', () => {
       '<a data-sveltekit-preload-data="hover"></a>',
     );
     assert.doesNotMatch(JSON.stringify(fixture), /Private page wording/u);
+  });
+
+  test('keeps the checked-in observation reproducible through the sanitising review tool', () => {
+    const fixture = buildReviewedTechnologyFixture(input({
+      id: 'owned-public-sveltekit-20260805',
+      reviewedAt: '2026-08-05T00:00:00.000Z',
+      observedAt: '2026-08-05T00:00:00.000Z',
+      expectedIds: ['sveltekit'],
+      input: { html: '<a data-sveltekit-preload-data="hover">Excluded page wording</a>' },
+    }));
+    assert.deepEqual(fixture, TECHNOLOGY_REVIEWED_FIXTURES[0]);
   });
 
   test('rejects target-bearing material, unapproved origins, and mismatched expected results', () => {
