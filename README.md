@@ -1,4 +1,5 @@
-<h1 align="center"><img src="frontend/static/favicon.svg" width="44" height="44" align="middle" alt="" />&nbsp;WHOISleuth</h1>
+<p align="center"><img src="frontend/static/favicon.svg" width="64" height="64" alt="WHOISleuth mark" /></p>
+<h1 align="center">WHOISleuth</h1>
 
 <p align="center">
   <img src="https://img.shields.io/badge/license-AGPL--3.0--only-blue.svg" alt="License: AGPL-3.0-only" />
