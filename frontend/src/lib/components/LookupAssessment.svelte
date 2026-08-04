@@ -1,11 +1,22 @@
 <script lang="ts">
-  import { riskTone, scoreTone } from '$lib/analysis/scoring.ts';
+  import {
+    riskTone,
+    scoreTone,
+    type OpportunityExplanation,
+    type RiskExplanation,
+  } from '$lib/analysis/scoring.ts';
   import { projectScoreFactors } from '$lib/analysis/visualization-models.ts';
 
-  type ScoreExplanation = {
+  type SyntheticRiskExplanation = Readonly<{
+    synthetic: true;
+    modelVersion: null;
     score: number;
+    rawScore: number;
+    capped: false;
     factors: Array<{ label: string; delta: number }>;
-  } | null;
+  }>;
+  type DisplayRiskExplanation = RiskExplanation | SyntheticRiskExplanation;
+  type ScoreExplanation = OpportunityExplanation | DisplayRiskExplanation;
 
   let {
     detail,
@@ -17,20 +28,29 @@
   }: {
     detail: string;
     confidence: string;
-    risk: ScoreExplanation;
-    opportunity: ScoreExplanation;
+    risk: DisplayRiskExplanation | null;
+    opportunity: OpportunityExplanation | null;
     signals: Array<{ label: string; tone: string; detail?: string }>;
     trusted: string;
   } = $props();
 
-  function scoreTitle(score: NonNullable<ScoreExplanation>) {
+  function scoreTitle(score: ScoreExplanation) {
     return score.factors
       .map((factor) => `${factor.label} ${factor.delta >= 0 ? '+' : ''}${Math.round(factor.delta)}`)
       .join('\n');
   }
+
+  function qualitySummary(score: OpportunityExplanation | RiskExplanation): string {
+    const quality = score.evidenceQuality;
+    return `${quality.completeSources} complete · ${quality.limitedSources + quality.unavailableSources} limited source${quality.limitedSources + quality.unavailableSources === 1 ? '' : 's'}`;
+  }
+
+  function isSynthetic(score: ScoreExplanation): score is SyntheticRiskExplanation {
+    return 'synthetic' in score && score.synthetic === true;
+  }
 </script>
 
-{#snippet FactorChart(score: NonNullable<ScoreExplanation>, label: string)}
+{#snippet FactorChart(score: ScoreExplanation, label: string)}
   {@const chart = projectScoreFactors(score.factors)}
   {#if chart.factors.length}
     <div class="factor-chart" role="img" aria-label={`${label} score contribution chart with ${chart.factors.length} non-zero factors`}>
@@ -67,11 +87,13 @@
       {#if risk}
         <div class="score {riskTone(risk.score)}" title={scoreTitle(risk)}>
           <span>Risk</span><strong>{risk.score}</strong><i><b style:width={`${risk.score}%`}></b></i>
+          <small>{isSynthetic(risk) ? 'Synthetic fixture' : `v${risk.modelVersion} · ${risk.evidenceQuality.state}`}</small>
         </div>
       {/if}
       {#if opportunity}
         <div class="score {scoreTone(opportunity.score)}" title={scoreTitle(opportunity)}>
           <span>Opportunity</span><strong>{opportunity.score}</strong><i><b style:width={`${opportunity.score}%`}></b></i>
+          <small>v{opportunity.modelVersion} · {opportunity.evidenceQuality.state}</small>
         </div>
       {/if}
     </div>
@@ -93,6 +115,12 @@
     {#if risk}
       <details class="disclosure">
         <summary>Why the risk score is {risk.score}</summary>
+        {#if isSynthetic(risk)}
+          <p class="score-quality">Fixed demonstration score for layout and workflow practice. It was not produced by the live Risk model.</p>
+        {:else}
+          <p class="score-quality"><strong>Evidence coverage:</strong> {qualitySummary(risk)} · {risk.evidenceQuality.observedFamilies.length} observed scoring families. {risk.evidenceQuality.freshness === 'observed' ? 'Observation time recorded.' : 'Observation time unavailable.'}</p>
+        {/if}
+        {#if risk.capped}<p class="score-quality">Raw total {risk.rawScore}; displayed score capped at {risk.score}.</p>{/if}
         {@render FactorChart(risk, 'Risk')}
         <ul>{#each risk.factors as factor}<li><span>{factor.label}</span><strong>{factor.delta >= 0 ? '+' : ''}{Math.round(factor.delta)}</strong></li>{/each}</ul>
       </details>
@@ -100,6 +128,9 @@
     {#if opportunity}
       <details class="disclosure">
         <summary>Why the opportunity score is {opportunity.score}</summary>
+        <p class="score-quality"><strong>Evidence coverage:</strong> {qualitySummary(opportunity)}. This estimates acquisition readiness, not value or eventual availability.</p>
+        {#if opportunity.dimensions.length}<dl class="dimensions">{#each opportunity.dimensions as dimension}<div><dt>{dimension.label}</dt><dd>{dimension.contribution >= 0 ? '+' : ''}{dimension.contribution}</dd></div>{/each}</dl>{/if}
+        {#if opportunity.capped}<p class="score-quality">Raw total {opportunity.rawScore}; displayed score capped at {opportunity.score}.</p>{/if}
         {@render FactorChart(opportunity, 'Opportunity')}
         <ul>{#each opportunity.factors as factor}<li><span>{factor.label}</span><strong>{factor.delta >= 0 ? '+' : ''}{Math.round(factor.delta)}</strong></li>{/each}</ul>
       </details>
@@ -116,6 +147,7 @@
   .score strong{font-size:1.05rem}
   .score i{grid-column:1/-1;height:5px;overflow:hidden;border-radius:99px;background:var(--border)}
   .score b{display:block;height:100%;background:var(--accent)}
+  .score small{grid-column:1/-1;color:var(--muted);font:600 var(--text-2xs) var(--mono);text-transform:capitalize}
   .score.danger b{background:var(--danger)}
   .score.warn b{background:var(--amber)}
   .signals{display:flex;flex-wrap:wrap;gap:6px;margin-top:14px}
@@ -133,6 +165,11 @@
   .score-details ul{display:grid;gap:6px;margin:10px 12px;padding:0;list-style:none}
   .score-details li{display:flex;justify-content:space-between;gap:10px;color:var(--muted);font-size:var(--text-xs)}
   .score-details li strong{color:var(--text)}
+  .score-quality{margin:10px 12px 0;color:var(--muted);font-size:var(--text-xs);line-height:1.5}
+  .dimensions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin:10px 12px 0}
+  .dimensions div{display:flex;justify-content:space-between;gap:8px;padding:7px 8px;border:1px solid var(--border);border-radius:var(--radius-sm)}
+  .dimensions dt,.dimensions dd{margin:0;font-size:var(--text-2xs)}
+  .dimensions dt{color:var(--muted)}
   @media(max-width:900px){
     .availability .section-head{display:block}
     .scores{margin-top:12px}

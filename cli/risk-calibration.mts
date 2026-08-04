@@ -7,9 +7,10 @@ import { RISK_MUTATION_TYPES, RISK_REVIEW_THRESHOLD } from '../lib/risk-scoring.
 import type { RiskExplanation, RiskInput } from '../lib/risk-scoring.mts';
 
 export const RISK_CALIBRATION_DATASET_SCHEMA = 'whoisleuth.risk-calibration-dataset';
-export const RISK_CALIBRATION_DATASET_VERSION = 1;
+export const RISK_CALIBRATION_DATASET_VERSION = 2;
+export const SUPPORTED_RISK_CALIBRATION_DATASET_VERSIONS = Object.freeze([1, RISK_CALIBRATION_DATASET_VERSION]);
 export const RISK_CALIBRATION_REPORT_SCHEMA = 'whoisleuth.cli.risk-calibration';
-export const RISK_CALIBRATION_REPORT_VERSION = 1;
+export const RISK_CALIBRATION_REPORT_VERSION = 2;
 export const MAX_RISK_CALIBRATION_INPUT_BYTES = 2 * 1024 * 1024;
 export const MAX_RISK_CALIBRATION_RECORDS = 500;
 export const MAX_RISK_CALIBRATION_STRING_LENGTH = 256;
@@ -31,8 +32,14 @@ const AVAILABILITY_STATES = new Set(['registered', 'for_sale', 'expiring', 'avai
 const ACTIVITY_STATES = new Set(['active', 'parked', 'unreachable', 'no_site']);
 const BOOLEAN_FIELDS = [
   'faviconMatch', 'faviconNearMatch', 'reusesOfficialAssets', 'hasPasswordField',
-  'hasMx', 'hasSpf', 'hasDmarc', 'privacyProtected',
+  'hasMx', 'hasSpf', 'hasDmarc', 'privacyProtected', 'hasExternalFormAction',
+  'idnReferenceMatch', 'pageBaselineMatch', 'hasActiveBrandProfile',
 ] as const;
+const REVIEW_REASON_CODES = new Set([
+  'authorized_or_owned', 'shared_infrastructure', 'generic_platform_or_template',
+  'parked_or_reseller', 'insufficient_evidence', 'legitimate_third_party',
+  'confirmed_credential_abuse', 'confirmed_malware', 'other_reviewed',
+]);
 const MUTATION_TYPES = new Set(RISK_MUTATION_TYPES);
 
 type UnknownRecord = Record<string, unknown>;
@@ -57,11 +64,12 @@ type CalibrationRecord = {
   id: string;
   domain: string;
   analystDisposition: CalibrationDisposition;
+  reviewReasonCode?: string;
   evidence: CalibrationEvidence;
 };
 type CalibrationDataset = {
   schema: typeof RISK_CALIBRATION_DATASET_SCHEMA;
-  version: typeof RISK_CALIBRATION_DATASET_VERSION;
+  version: 1 | typeof RISK_CALIBRATION_DATASET_VERSION;
   records: CalibrationRecord[];
 };
 type ExplainRiskScore = (input: RiskInput) => RiskExplanation | null;
@@ -80,11 +88,19 @@ type ThresholdMetrics = {
   recall: number | null;
   specificity: number | null;
   falsePositiveRate: number | null;
+  f1: number | null;
+  balancedAccuracy: number | null;
+  confidence95: {
+    precision: { lower: number; upper: number } | null;
+    recall: { lower: number; upper: number } | null;
+    specificity: { lower: number; upper: number } | null;
+  };
 };
 type CalibrationReportRecord = CalibrationScoredRecord & {
   id: string;
   domain: string;
   analystDisposition: CalibrationDisposition;
+  reviewReasonCode: string | null;
   exclusionReason: 'not_scored' | 'contextual_disposition' | null;
   modelVersion: number;
   band: string;
@@ -96,7 +112,7 @@ type RiskCalibrationReport = {
   generatedAt: string;
   dataset: {
     schema: typeof RISK_CALIBRATION_DATASET_SCHEMA;
-    version: typeof RISK_CALIBRATION_DATASET_VERSION;
+    version: 1 | typeof RISK_CALIBRATION_DATASET_VERSION;
     recordCount: number;
   };
   riskModelVersion: number;
@@ -109,6 +125,21 @@ type RiskCalibrationReport = {
     scoreBands: Record<string, number>;
   };
   thresholds: ThresholdMetrics[];
+  strata: Array<{
+    dimension: 'review_reason' | 'scan_depth';
+    value: string;
+    sampleCount: number;
+    insufficientSample: boolean;
+    metrics: ThresholdMetrics;
+  }>;
+  modelComparison: {
+    available: boolean;
+    previousModelVersion: number | null;
+    currentModelVersion: number;
+    scoresChanged: number;
+    bandsChanged: number;
+    thresholdClassificationsChanged: number;
+  };
   records: CalibrationReportRecord[];
   interpretation: {
     authority: 'analyst_context_only';
@@ -196,6 +227,15 @@ function projectEvidence(value: unknown, field: string): CalibrationEvidence {
     if (!ACTIVITY_STATES.has(activity)) throw new CliUsageError(`${field}.activityStatus is unsupported.`);
     result.activityStatus = activity;
   }
+  if (source.scanDepth !== null && source.scanDepth !== undefined) {
+    const depth = boundedString(source.scanDepth, `${field}.scanDepth`, 16);
+    if (depth !== 'fast' && depth !== 'deep') throw new CliUsageError(`${field}.scanDepth must be fast or deep.`);
+    Object.assign(result, { scanDepth: depth });
+  }
+  if (source.observedAt !== null && source.observedAt !== undefined) {
+    const observedAt = optionalTimestamp(source.observedAt, `${field}.observedAt`);
+    if (observedAt) Object.assign(result, { observedAt });
+  }
   if (source.phishingLanguageMatch !== null && source.phishingLanguageMatch !== undefined) {
     result.phishingLanguageMatch = boundedString(source.phishingLanguageMatch, `${field}.phishingLanguageMatch`);
   }
@@ -248,8 +288,13 @@ export function parseRiskCalibrationDataset(text: unknown): CalibrationDataset {
     throw new CliUsageError('Risk calibration input must be valid JSON.');
   }
   const document = object(parsed, 'Risk calibration input');
-  if (document.schema !== RISK_CALIBRATION_DATASET_SCHEMA || document.version !== RISK_CALIBRATION_DATASET_VERSION) {
-    throw new CliUsageError(`Risk calibration input must use ${RISK_CALIBRATION_DATASET_SCHEMA} version ${RISK_CALIBRATION_DATASET_VERSION}.`);
+  const documentVersion = typeof document.version === 'number' && Number.isInteger(document.version)
+    ? document.version
+    : null;
+  if (document.schema !== RISK_CALIBRATION_DATASET_SCHEMA
+    || documentVersion === null
+    || !SUPPORTED_RISK_CALIBRATION_DATASET_VERSIONS.includes(documentVersion)) {
+    throw new CliUsageError(`Risk calibration input must use ${RISK_CALIBRATION_DATASET_SCHEMA} version ${SUPPORTED_RISK_CALIBRATION_DATASET_VERSIONS.join(' or ')}.`);
   }
   if (!Array.isArray(document.records) || !document.records.length) {
     throw new CliUsageError('Risk calibration input must contain a non-empty records array.');
@@ -269,22 +314,38 @@ export function parseRiskCalibrationDataset(text: unknown): CalibrationDataset {
     if (!isValidAsciiDomainName(domain, { requireDot: true })) throw new CliUsageError(`${prefix}.domain must be a valid ASCII DNS hostname, not an IP address.`);
     const analystDisposition = boundedString(record.analystDisposition, `${prefix}.analystDisposition`, 32);
     if (!DISPOSITIONS.has(analystDisposition)) throw new CliUsageError(`${prefix}.analystDisposition is unsupported.`);
+    let reviewReasonCode: string | undefined;
+    if (record.reviewReasonCode !== null && record.reviewReasonCode !== undefined) {
+      reviewReasonCode = boundedString(record.reviewReasonCode, `${prefix}.reviewReasonCode`, 64);
+      if (!REVIEW_REASON_CODES.has(reviewReasonCode)) throw new CliUsageError(`${prefix}.reviewReasonCode is unsupported.`);
+    }
     return {
       id,
       domain,
       analystDisposition: analystDisposition as CalibrationDisposition,
+      ...(reviewReasonCode ? { reviewReasonCode } : {}),
       evidence: projectEvidence(record.evidence, `${prefix}.evidence`),
     };
   });
   return {
     schema: RISK_CALIBRATION_DATASET_SCHEMA,
-    version: RISK_CALIBRATION_DATASET_VERSION,
+    version: documentVersion as 1 | typeof RISK_CALIBRATION_DATASET_VERSION,
     records,
   };
 }
 
 function ratio(numerator: number, denominator: number): number | null {
   return denominator ? Number((numerator / denominator).toFixed(4)) : null;
+}
+
+function wilson95(successes: number, total: number): { lower: number; upper: number } | null {
+  if (!total) return null;
+  const z = 1.96;
+  const proportion = successes / total;
+  const denominator = 1 + (z * z) / total;
+  const center = (proportion + (z * z) / (2 * total)) / denominator;
+  const margin = (z * Math.sqrt((proportion * (1 - proportion) + (z * z) / (4 * total)) / total)) / denominator;
+  return { lower: Number(Math.max(0, center - margin).toFixed(4)), upper: Number(Math.min(1, center + margin).toFixed(4)) };
 }
 
 function metricsForThreshold(records: readonly CalibrationScoredRecord[], threshold: number): ThresholdMetrics {
@@ -298,16 +359,30 @@ function metricsForThreshold(records: readonly CalibrationScoredRecord[], thresh
     if (record.metricClass === 'positive') flagged ? truePositive += 1 : falseNegative += 1;
     else flagged ? falsePositive += 1 : trueNegative += 1;
   }
+  const precision = ratio(truePositive, truePositive + falsePositive);
+  const recall = ratio(truePositive, truePositive + falseNegative);
+  const specificity = ratio(trueNegative, trueNegative + falsePositive);
   return {
     threshold,
     truePositive,
     falsePositive,
     trueNegative,
     falseNegative,
-    precision: ratio(truePositive, truePositive + falsePositive),
-    recall: ratio(truePositive, truePositive + falseNegative),
-    specificity: ratio(trueNegative, trueNegative + falsePositive),
+    precision,
+    recall,
+    specificity,
     falsePositiveRate: ratio(falsePositive, falsePositive + trueNegative),
+    f1: precision === null || recall === null || precision + recall === 0
+      ? null
+      : Number(((2 * precision * recall) / (precision + recall)).toFixed(4)),
+    balancedAccuracy: recall === null || specificity === null
+      ? null
+      : Number(((recall + specificity) / 2).toFixed(4)),
+    confidence95: {
+      precision: wilson95(truePositive, truePositive + falsePositive),
+      recall: wilson95(truePositive, truePositive + falseNegative),
+      specificity: wilson95(trueNegative, trueNegative + falsePositive),
+    },
   };
 }
 
@@ -327,7 +402,13 @@ function scoreBand(score: number | null): string {
 export function buildRiskCalibrationReport(
   dataset: CalibrationDataset,
   explainRiskScore: ExplainRiskScore,
-  options: { generatedAt?: string; modelVersion: number; reviewThreshold: number },
+  options: {
+    generatedAt?: string;
+    modelVersion: number;
+    reviewThreshold: number;
+    previousModelVersion?: number;
+    explainPreviousRiskScore?: ExplainRiskScore;
+  },
 ): RiskCalibrationReport {
   const records: CalibrationReportRecord[] = dataset.records.map((record) => {
     const explained = explainRiskScore(record.evidence);
@@ -337,6 +418,7 @@ export function buildRiskCalibrationReport(
       id: record.id,
       domain: record.domain,
       analystDisposition: record.analystDisposition,
+      reviewReasonCode: record.reviewReasonCode ?? null,
       metricClass: classification,
       includedInMetrics,
       exclusionReason: includedInMetrics
@@ -355,6 +437,49 @@ export function buildRiskCalibrationReport(
   const positive = records.filter((record) => record.metricClass === 'positive' && record.score !== null).length;
   const negative = records.filter((record) => record.metricClass === 'negative' && record.score !== null).length;
   const excluded = records.length - positive - negative;
+  const strata: RiskCalibrationReport['strata'] = [];
+  const appendStrata = (dimension: 'review_reason' | 'scan_depth', values: Map<string, CalibrationScoredRecord[]>): void => {
+    for (const [value, members] of [...values].sort(([left], [right]) => left.localeCompare(right))) {
+      const sampleCount = members.filter((member) => member.includedInMetrics).length;
+      strata.push({
+        dimension,
+        value,
+        sampleCount,
+        insufficientSample: sampleCount < 20,
+        metrics: metricsForThreshold(members, options.reviewThreshold),
+      });
+    }
+  };
+  const byDepth = new Map<string, CalibrationScoredRecord[]>();
+  const byReason = new Map<string, CalibrationScoredRecord[]>();
+  for (let index = 0; index < dataset.records.length; index += 1) {
+    const source = dataset.records[index];
+    const scored = records[index];
+    if (!source || !scored) continue;
+    const depth = source.evidence.scanDepth === 'deep' || source.evidence.scanDepth === 'fast' ? source.evidence.scanDepth : 'unknown';
+    byDepth.set(depth, [...(byDepth.get(depth) ?? []), scored]);
+    const reason = source.reviewReasonCode ?? 'not_recorded';
+    byReason.set(reason, [...(byReason.get(reason) ?? []), scored]);
+  }
+  appendStrata('scan_depth', byDepth);
+  appendStrata('review_reason', byReason);
+
+  let scoresChanged = 0;
+  let bandsChanged = 0;
+  let thresholdClassificationsChanged = 0;
+  if (options.explainPreviousRiskScore) {
+    for (let index = 0; index < dataset.records.length; index += 1) {
+      const source = dataset.records[index];
+      const current = records[index];
+      if (!source || !current) continue;
+      const previous = options.explainPreviousRiskScore(source.evidence);
+      if (previous?.score !== current.score) scoresChanged += 1;
+      if (scoreBand(previous?.score ?? null) !== current.band) bandsChanged += 1;
+      if (((previous?.score ?? -1) >= options.reviewThreshold) !== ((current.score ?? -1) >= options.reviewThreshold)) {
+        thresholdClassificationsChanged += 1;
+      }
+    }
+  }
   return {
     schema: RISK_CALIBRATION_REPORT_SCHEMA,
     version: RISK_CALIBRATION_REPORT_VERSION,
@@ -364,6 +489,15 @@ export function buildRiskCalibrationReport(
     currentReviewThreshold: options.reviewThreshold,
     summary: { total: records.length, positive, negative, excluded, scoreBands: bands },
     thresholds: RISK_CALIBRATION_THRESHOLDS.map((threshold) => metricsForThreshold(records, threshold)),
+    strata,
+    modelComparison: {
+      available: Boolean(options.explainPreviousRiskScore),
+      previousModelVersion: options.explainPreviousRiskScore ? options.previousModelVersion ?? null : null,
+      currentModelVersion: options.modelVersion,
+      scoresChanged,
+      bandsChanged,
+      thresholdClassificationsChanged,
+    },
     records,
     interpretation: {
       authority: 'analyst_context_only',

@@ -2,7 +2,7 @@
 // record normalization, and analyst updates.
 
 import { normalizeHttpSummary } from './http-summary.ts';
-import { normalizeRiskModelVersion } from './scoring.ts';
+import { normalizeOpportunityModelVersion, normalizeRiskModelVersion } from './scoring.ts';
 import {
   CASE_DISPOSITIONS,
   CASE_IMPORT_VERSIONS,
@@ -147,6 +147,7 @@ const DEEP_SIGNAL_FIELDS: Array<keyof CaseEvidenceMaterial> = [
   'httpSummaryVersion', 'httpEvidenceStatus', 'httpFinalOrigin', 'httpResponseStatus', 'httpTransportSecurity', 'httpRedirectCount',
   'httpCrossOriginRedirect', 'httpHttpsDowngrade', 'httpContentType', 'httpSecurityHeaders',
   'faviconMatch', 'faviconNearMatch', 'reusesOfficialAssets', 'hasPasswordField', 'hasExternalFormAction', 'phishingLanguageMatch',
+  'pageBaselineMatch',
 ];
 
 // Ordered list of the fields that make up a snapshot's *material* identity -
@@ -155,7 +156,7 @@ const DEEP_SIGNAL_FIELDS: Array<keyof CaseEvidenceMaterial> = [
 // another. Deterministic ordering here is what makes the fingerprint stable.
 const MATERIAL_FIELD_ORDER: Array<keyof CaseEvidenceMaterial> = [
   'scanDepth',
-  'availability', 'confidence', 'riskModelVersion', 'riskScore', 'opportunityScore',
+  'availability', 'confidence', 'riskModelVersion', 'riskScore', 'opportunityModelVersion', 'opportunityScore',
   'riskFactors', 'opportunityFactors',
   'registrar', 'createdDate', 'expiryDate', 'nameservers',
   'hasMx', 'hasSpf', 'hasDmarc',
@@ -163,6 +164,7 @@ const MATERIAL_FIELD_ORDER: Array<keyof CaseEvidenceMaterial> = [
   'httpSummaryVersion', 'httpEvidenceStatus', 'httpFinalOrigin', 'httpResponseStatus', 'httpTransportSecurity', 'httpRedirectCount',
   'httpCrossOriginRedirect', 'httpHttpsDowngrade', 'httpContentType', 'httpSecurityHeaders',
   'faviconMatch', 'faviconNearMatch', 'reusesOfficialAssets', 'hasPasswordField', 'hasExternalFormAction', 'phishingLanguageMatch',
+  'privacyProtected', 'idnReferenceMatch', 'pageBaselineMatch', 'hasActiveBrandProfile',
   'mutationTypes',
 ];
 
@@ -257,6 +259,7 @@ function buildSnapshot(
     confidence: evidenceString(record.confidence),
     riskModelVersion: normalizeRiskModelVersion(record.riskModelVersion),
     riskScore: clampScore(record.riskScore),
+    opportunityModelVersion: normalizeOpportunityModelVersion(record.opportunityModelVersion),
     opportunityScore: clampScore(record.opportunityScore),
     riskFactors: normalizeFactors(record.riskFactors),
     opportunityFactors: normalizeFactors(record.opportunityFactors),
@@ -286,11 +289,16 @@ function buildSnapshot(
     hasPasswordField: boolOrNull(record.hasPasswordField),
     hasExternalFormAction: boolOrNull(record.hasExternalFormAction),
     phishingLanguageMatch: evidenceString(record.phishingLanguageMatch),
+    privacyProtected: boolOrNull(record.privacyProtected),
+    idnReferenceMatch: boolOrNull(record.idnReferenceMatch),
+    pageBaselineMatch: boolOrNull(record.pageBaselineMatch),
+    hasActiveBrandProfile: boolOrNull(record.hasActiveBrandProfile),
     mutationTypes: normalizeMutationList(record.mutationTypes),
   };
   // A version without an actual risk assessment is orphaned metadata. Drop it
   // so it cannot make otherwise-identical evidence look materially different.
   if (fields.riskScore === null && fields.riskFactors.length === 0) fields.riskModelVersion = null;
+  if (fields.opportunityScore === null && fields.opportunityFactors.length === 0) fields.opportunityModelVersion = null;
   // A fast capture never evaluates the deep signals, so any value supplied for
   // them (e.g. a profile's default `false`) is discarded as unevaluated.
   if (scanDepth === 'fast') {
@@ -317,6 +325,7 @@ function buildSnapshot(
       hasPasswordField: null,
       hasExternalFormAction: null,
       phishingLanguageMatch: null,
+      pageBaselineMatch: null,
     });
   }
   if (!hasMaterialEvidence(fields)) return null;
@@ -459,8 +468,8 @@ const COMPARE_FIELDS: CompareFieldSpec[] = [
   { field: 'confidence', label: 'Confidence', type: 'token' },
   { field: 'riskScore', label: 'Risk score', type: 'score', depthGate: 'comparable', modelGate: 'risk', direction: 'risk' },
   { field: 'riskFactors', label: 'Risk factors', type: 'factors', depthGate: 'comparable', modelGate: 'risk' },
-  { field: 'opportunityScore', label: 'Opportunity score', type: 'score' },
-  { field: 'opportunityFactors', label: 'Opportunity factors', type: 'factors' },
+  { field: 'opportunityScore', label: 'Opportunity score', type: 'score', modelGate: 'opportunity' },
+  { field: 'opportunityFactors', label: 'Opportunity factors', type: 'factors', modelGate: 'opportunity' },
   { field: 'registrar', label: 'Registrar', type: 'registrar' },
   { field: 'createdDate', label: 'Creation date', type: 'date' },
   { field: 'expiryDate', label: 'Expiry date', type: 'date' },
@@ -502,6 +511,15 @@ function riskModelComparable(
   return before !== null && before === after;
 }
 
+function opportunityModelComparable(
+  previous: CaseEvidenceSnapshot | null | undefined,
+  current: CaseEvidenceSnapshot | null | undefined,
+): boolean {
+  const before = normalizeOpportunityModelVersion(previous?.opportunityModelVersion);
+  const after = normalizeOpportunityModelVersion(current?.opportunityModelVersion);
+  return before !== null && before === after;
+}
+
 function valuesMateriallyEqual(
   field: keyof CaseEvidenceMaterial,
   previous: CaseEvidenceSnapshot,
@@ -522,12 +540,15 @@ function valuesMateriallyEqual(
 export function caseEvidenceIncomparableReasons(
   previous: CaseEvidenceSnapshot | null | undefined,
   current: CaseEvidenceSnapshot | null | undefined,
-): Array<'scan-depth' | 'risk-model'> {
+): Array<'opportunity-model' | 'scan-depth' | 'risk-model'> {
   if (!previous || !current || previous.fingerprint === current.fingerprint) return [];
-  const reasons: Array<'scan-depth' | 'risk-model'> = [];
+  const reasons: Array<'opportunity-model' | 'scan-depth' | 'risk-model'> = [];
   const hasRiskEvidence = previous.riskScore !== null || current.riskScore !== null
     || previous.riskFactors.length > 0 || current.riskFactors.length > 0;
   if (hasRiskEvidence && !riskModelComparable(previous, current)) reasons.push('risk-model');
+  const hasOpportunityEvidence = previous.opportunityScore !== null || current.opportunityScore !== null
+    || previous.opportunityFactors.length > 0 || current.opportunityFactors.length > 0;
+  if (hasOpportunityEvidence && !opportunityModelComparable(previous, current)) reasons.push('opportunity-model');
 
   if (!depthComparable(previous.scanDepth, current.scanDepth)) {
     const deepOnlyChanged = DEEP_SIGNAL_FIELDS.some((field) => !valuesMateriallyEqual(field, previous, current));
@@ -683,11 +704,13 @@ export function compareCaseEvidence(
   const bothDeep = previous.scanDepth === 'deep' && current.scanDepth === 'deep';
   const comparableDepth = depthComparable(previous.scanDepth, current.scanDepth);
   const comparableRiskModel = riskModelComparable(previous, current);
+  const comparableOpportunityModel = opportunityModelComparable(previous, current);
   const changes: EvidenceChange[] = [];
   for (const spec of COMPARE_FIELDS) {
     if (spec.depthGate === 'both-deep' && !bothDeep) continue;
     if (spec.depthGate === 'comparable' && !comparableDepth) continue;
     if (spec.modelGate === 'risk' && !comparableRiskModel) continue;
+    if (spec.modelGate === 'opportunity' && !comparableOpportunityModel) continue;
     const result = compareField(spec, previous[spec.field], current[spec.field]);
     if (result) {
       changes.push({ field: spec.field, label: spec.label, before: result.before, after: result.after, tone: result.tone });

@@ -159,7 +159,7 @@ default (see the README), so many lookups return no personal data at all.
   and separately attributed. A lone publisher, a neutral miss, a failed
   provider, an unknown provider, or a non-phishing/non-malware category adds no
   Risk points. When positive qualifying records are corroborated across at
-  least two independent publisher families, Risk model v6 can add one bounded
+  least two independent publisher families, Risk model v7 can add one bounded
   factor. Multiple datasets operated by the same publisher count as one source.
   Browser-local cases and reports can retain the resulting score, model version,
   and factor label, but not the raw provider findings, references, or payloads.
@@ -347,7 +347,10 @@ default (see the README), so many lookups return no personal data at all.
   fingerprints are compared with the active profile baseline locally in the
   browser. Normalized HTML, visible text, DOM/form structure, resource hosts,
   and tracking identifiers remain separate comparison components; there is no
-  combined similarity score and the comparison does not affect Risk scoring.
+  combined similarity score. When at least two strong, non-partial components
+  match, one Boolean page-baseline signal can contribute within the capped
+  brand-presentation family of Risk model v7. It is not a separate score and
+  cannot corroborate other observations from the same family.
   A transient brand-mimicry review can organize those comparison components
   with existing favicon, official-asset, password-field, and bounded
   review-language observations. It adds no collection, combined score, or
@@ -386,9 +389,13 @@ default (see the README), so many lookups return no personal data at all.
   action URLs, paths, queries, and fragments are never retained. External form
   submission can be legitimate and is not a phishing, vulnerability, ownership,
   intent, or maliciousness finding. This analysis makes no additional request,
-  does not interact with a form, does not affect availability or Risk scoring,
-  and is excluded from compact Bulk results and browser-local cases, watchlists,
-  and profiles. It can appear in a deliberate full Lookup evidence export.
+  does not interact with a form, and never affects availability. A bounded
+  external-action Boolean can contribute only when a password field is also
+  observed, within the capped credential-lure family of Risk model v7. Compact
+  Bulk results and cases can retain the existing password, external-action, and
+  bounded review-language observations, but not the complete credential-surface
+  profile. The complete profile can appear in a deliberate full Lookup evidence
+  export and remains excluded from watchlists and profiles.
 - **Technology indicators**: a requested deep Lookup can derive a versioned
   technology profile from the selected HTTP server header, generator metadata,
   normalized resource origins, and capped static HTML already collected for
@@ -674,8 +681,10 @@ default (see the README), so many lookups return no personal data at all.
   contain campaign labels, descriptions, domain membership, timestamps, and
   stated interpretation limits; they do not include case evidence or notes.
   A deliberate Risk calibration export includes only explicitly selected case
-  IDs, domains, reviewed dispositions, and a bounded whitelist of normalized
-  scoring inputs from the latest retained evidence. It excludes notes, tags,
+  IDs, domains, reviewed dispositions, an optional reviewed reason code, and a
+  bounded whitelist of normalized scoring inputs from the latest retained
+  evidence. A page-language match is represented only by a fixed indicator
+  rather than the matched text. It excludes notes, tags,
   assertions, actions, contacts, raw source data, provider payloads, and stored
   Risk scores. The export is not anonymous, is not uploaded, and does not train,
   tune, or change the Risk model.

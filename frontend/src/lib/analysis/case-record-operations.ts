@@ -70,6 +70,7 @@ import {
   normalizeDisposition,
   normalizeDomain,
   normalizeNoteBody,
+  normalizeReviewReasonCode,
   normalizeNotes,
   normalizeSource,
   normalizeStatus,
@@ -137,6 +138,7 @@ export function normalizeCase(
     domain,
     status: normalizeStatus(record.status),
     disposition: normalizeDisposition(record.disposition),
+    reviewReasonCode: normalizeReviewReasonCode(record.reviewReasonCode),
     tags: normalizeTags(record.tags),
     notes: normalizeNotes(record.notes, now),
     source: normalizeSource(record.source),
@@ -174,6 +176,7 @@ export function createCase(input: CaseInput, nowIso?: string): CaseRecord {
     domain,
     status: normalizeStatus(input.status),
     disposition: normalizeDisposition(input.disposition),
+    reviewReasonCode: normalizeReviewReasonCode(input.reviewReasonCode),
     tags: normalizeTags(input.tags),
     notes: noteBody ? [{ id: makeId(), body: noteBody, createdAt: now }] : [],
     source,
@@ -302,6 +305,9 @@ export function updateCase(
     ...current,
     status: patch.status !== undefined ? normalizeStatus(patch.status) : current.status,
     disposition: patch.disposition !== undefined ? normalizeDisposition(patch.disposition) : current.disposition,
+    reviewReasonCode: patch.reviewReasonCode !== undefined
+      ? normalizeReviewReasonCode(patch.reviewReasonCode)
+      : current.reviewReasonCode ?? null,
     tags: patch.tags !== undefined ? normalizeTags(patch.tags) : current.tags,
     source,
     evidenceHistory,

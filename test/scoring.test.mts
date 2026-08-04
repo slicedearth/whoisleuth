@@ -82,54 +82,81 @@ describe('explainOpportunityScore / computeOpportunityScore', () => {
   });
 
   test('reads the state from r.state when r.availability is absent', () => {
-    assert.equal(scoring.computeOpportunityScore({ state: 'available' }), 90);
+    assert.equal(scoring.computeOpportunityScore({ state: 'available' }), 82);
   });
 
-  test('uses each state\'s base score with no other signals', () => {
-    assert.equal(scoring.computeOpportunityScore({ availability: 'for_sale' }), 95);
-    assert.equal(scoring.computeOpportunityScore({ availability: 'expiring' }), 85);
-    assert.equal(scoring.computeOpportunityScore({ availability: 'available' }), 90);
-    assert.equal(scoring.computeOpportunityScore({ availability: 'registered' }), 40);
+  test('uses versioned readiness bases rather than estimating domain value', () => {
+    assert.equal(scoring.OPPORTUNITY_MODEL_VERSION, 2);
+    assert.equal(scoring.computeOpportunityScore({ availability: 'for_sale' }), 76);
+    assert.equal(scoring.computeOpportunityScore({ availability: 'expiring' }), 52);
+    assert.equal(scoring.computeOpportunityScore({ availability: 'available' }), 82);
+    assert.equal(scoring.computeOpportunityScore({ availability: 'registered' }), 22);
   });
 
-  test('activity status shifts the score in the acquisition-friendly direction', () => {
-    assert.equal(scoring.computeOpportunityScore({ availability: 'registered', activityStatus: 'parked' }), 55);
-    assert.equal(scoring.computeOpportunityScore({ availability: 'registered', activityStatus: 'no_site' }), 45);
-    assert.equal(scoring.computeOpportunityScore({ availability: 'registered', activityStatus: 'unreachable' }), 40);
-    assert.equal(scoring.computeOpportunityScore({ availability: 'registered', activityStatus: 'active' }), 20);
-  });
-
-  test('public contact info scores higher than privacy-protected', () => {
-    assert.equal(scoring.computeOpportunityScore({ availability: 'registered', privacyProtected: false }), 50);
-    assert.equal(scoring.computeOpportunityScore({ availability: 'registered', privacyProtected: true }), 30);
-  });
-
-  test('age bonus scales with domain age and is capped at 20', () => {
-    assert.equal(scoring.computeOpportunityScore({ availability: 'registered', domainAgeDays: 730 }), 44); // (730/365)*2 = 4
-    assert.equal(scoring.computeOpportunityScore({ availability: 'registered', domainAgeDays: 10000 }), 60); // capped: 40 + 20
-  });
-
-  test('a domain age of exactly zero contributes no factor', () => {
-    const explained = opportunityExplanation({ availability: 'registered', domainAgeDays: 0 });
-    assert.equal(explained.factors.length, 1); // base only
-    assert.equal(explained.score, 40);
-  });
-
-  test('an imminent expiry only counts for a registered domain, under 30 days', () => {
-    assert.equal(scoring.computeOpportunityScore({ availability: 'registered', expiresInDays: 15 }), 50);
-    assert.equal(scoring.computeOpportunityScore({ availability: 'registered', expiresInDays: 30 }), 40); // not < 30
-    assert.equal(scoring.computeOpportunityScore({ availability: 'registered', expiresInDays: -1 }), 40); // already expired, not counted
-    assert.equal(scoring.computeOpportunityScore({ availability: 'available', expiresInDays: 15 }), 90); // only applies to 'registered'
-  });
-
-  test('the total is clamped to 100', () => {
-    const score = scoring.computeOpportunityScore({
-      availability: 'for_sale',
-      activityStatus: 'parked',
-      privacyProtected: false,
-      domainAgeDays: 10000,
+  test('confidence and explicit contactability have bounded visible dimensions', () => {
+    const explained = opportunityExplanation({
+      availability: 'registered',
+      confidence: 'high',
+      hasPublicRegistrantContact: true,
     });
-    assert.equal(score, 100); // 95 + 15 + 10 + 20 = 140, clamped
+    assert.equal(explained.modelVersion, 2);
+    assert.equal(explained.score, 40);
+    assert.deepEqual(explained.dimensions.map((item) => item.id), ['registration', 'contactability']);
+  });
+
+  test('active and parked pages qualify readiness without treating failed probes as no site', () => {
+    assert.equal(scoring.computeOpportunityScore({ availability: 'registered', activityStatus: 'parked' }), 25);
+    assert.equal(scoring.computeOpportunityScore({ availability: 'registered', activityStatus: 'active' }), 10);
+    assert.equal(scoring.computeOpportunityScore({ availability: 'registered', activityStatus: 'unreachable' }), 22);
+  });
+
+  test('registration privacy and age remain zero-point context', () => {
+    const publicRegistration = opportunityExplanation({ availability: 'registered', privacyProtected: false, domainAgeDays: 730 });
+    const privateRegistration = opportunityExplanation({ availability: 'registered', privacyProtected: true, domainAgeDays: 730 });
+    assert.equal(publicRegistration.score, 22);
+    assert.equal(privateRegistration.score, 22);
+    assert.ok(privateRegistration.factors.every((factor) => !factor.label.includes('Privacy protected')));
+  });
+
+  test('a domain age of exactly zero is retained as neutral context', () => {
+    const explained = opportunityExplanation({ availability: 'registered', domainAgeDays: 0 });
+    assert.equal(explained.factors.at(-1)?.delta, 0);
+    assert.equal(explained.score, 22);
+  });
+
+  test('imminent expiry is a small lifecycle cue and explicitly does not imply release', () => {
+    const explained = opportunityExplanation({ availability: 'registered', expiresInDays: 15 });
+    assert.equal(explained.score, 26);
+    assert.ok(explained.factors.some((factor) => factor.label.includes('release is not implied')));
+    assert.equal(scoring.computeOpportunityScore({ availability: 'registered', expiresInDays: 30 }), 22);
+  });
+
+  test('the total is clamped and evidence quality is reported separately', () => {
+    const explained = opportunityExplanation({
+      availability: 'for_sale',
+      confidence: 'high',
+      hasPublicRegistrantContact: true,
+      scanDepth: 'fast',
+      observedAt: '2026-08-01T00:00:00.000Z',
+      sourceCoverage: [{ source: 'rdap', state: 'complete' }],
+    });
+    assert.equal(explained.score, 94);
+    assert.equal(explained.evidenceQuality.state, 'complete');
+    assert.equal(explained.evidenceQuality.freshness, 'observed');
+  });
+
+  test('incomplete sources qualify Opportunity without lowering readiness', () => {
+    const complete = opportunityExplanation({
+      availability: 'available', scanDepth: 'fast', observedAt: '2026-08-01T00:00:00.000Z',
+      sourceCoverage: [{ source: 'rdap', state: 'complete' }],
+    });
+    const partial = opportunityExplanation({
+      availability: 'available', scanDepth: 'fast', observedAt: 'not-a-time',
+      sourceCoverage: [{ source: 'rdap', state: 'unavailable' }],
+    });
+    assert.equal(complete.score, partial.score);
+    assert.equal(partial.evidenceQuality.state, 'partial');
+    assert.equal(partial.evidenceQuality.freshness, 'unknown');
   });
 });
 
@@ -154,32 +181,21 @@ describe('explainRiskScore / computeRiskScore', () => {
   });
 
   test('stamps the explicit model version and gives ordinary states a low base score', () => {
-    assert.equal(scoring.RISK_MODEL_VERSION, 6);
-    assert.equal(riskExplanation({ availability: 'registered' }).modelVersion, 6);
-    assert.equal(scoring.computeRiskScore({ availability: 'registered' }), 10);
-    assert.equal(scoring.computeRiskScore({ availability: 'for_sale' }), 5);
-    assert.equal(scoring.computeRiskScore({ availability: 'expiring' }), 8);
+    assert.equal(scoring.RISK_MODEL_VERSION, 7);
+    assert.equal(riskExplanation({ availability: 'registered' }).modelVersion, 7);
+    assert.equal(scoring.computeRiskScore({ availability: 'registered' }), 6);
+    assert.equal(scoring.computeRiskScore({ availability: 'for_sale' }), 4);
+    assert.equal(scoring.computeRiskScore({ availability: 'expiring' }), 5);
   });
 
-  test('a favicon match contributes a bounded contextual factor', () => {
-    assert.equal(scoring.computeRiskScore({ availability: 'registered', faviconMatch: true }), 28);
-  });
-
-  test('a perceptual favicon near-match scores slightly below an exact match', () => {
-    assert.equal(scoring.computeRiskScore({ availability: 'registered', faviconNearMatch: true }), 24);
-  });
-
-  test('an exact favicon match takes precedence over a near-match (not double-counted)', () => {
-    assert.equal(scoring.computeRiskScore({ availability: 'registered', faviconMatch: true, faviconNearMatch: true }), 28);
-  });
-
-  test('an active site scores higher risk than a merely parked one', () => {
-    assert.equal(scoring.computeRiskScore({ availability: 'registered', activityStatus: 'active' }), 18);
-    assert.equal(scoring.computeRiskScore({ availability: 'registered', activityStatus: 'parked' }), 10);
-  });
-
-  test('a configured mail server adds risk', () => {
-    assert.equal(scoring.computeRiskScore({ availability: 'registered', hasMx: true }), 18);
+  test('generic activity, mail, age, and privacy cues are neutral without independent context', () => {
+    const explained = riskExplanation({
+      availability: 'registered', activityStatus: 'active', hasMx: true,
+      hasSpf: true, hasDmarc: true, privacyProtected: true, domainAgeDays: 10,
+    });
+    assert.equal(explained.score, 6);
+    assert.ok(explained.factors.filter((factor) => factor.family === 'operational-support').every((factor) => factor.delta === 0));
+    assert.equal(explained.factors.find((factor) => factor.label.includes('privacy'))?.delta, 0);
   });
 
   test('whole-label provenance does not add a second Unicode Risk contribution', () => {
@@ -198,31 +214,68 @@ describe('explainRiskScore / computeRiskScore', () => {
     assert.equal(scoring.computeRiskScore({
       availability: 'registered',
       mutationTypes: ['unicode_homoglyph_depth_2'],
-    }), 28);
+    }), 24);
   });
 
-  test('SPF+DMARC together score higher than either alone', () => {
-    assert.equal(scoring.computeRiskScore({ availability: 'registered', hasSpf: true, hasDmarc: true }), 13);
-    assert.equal(scoring.computeRiskScore({ availability: 'registered', hasSpf: true, hasDmarc: false }), 11);
-    assert.equal(scoring.computeRiskScore({ availability: 'registered', hasSpf: false, hasDmarc: true }), 11);
-    assert.equal(scoring.computeRiskScore({ availability: 'registered', hasSpf: false, hasDmarc: false }), 10);
+  test('brand observations share one capped family and do not self-corroborate', () => {
+    const brand = riskExplanation({
+      availability: 'registered',
+      faviconMatch: true,
+      reusesOfficialAssets: true,
+      pageBaselineMatch: true,
+    });
+    assert.equal(brand.score, 30);
+    assert.equal(brand.families.find((family) => family.id === 'brand-presentation')?.contribution, 24);
+    assert.equal(brand.factors.some((factor) => factor.label.includes('Corroborating')), false);
   });
 
-  test('hidden ownership (WHOIS privacy) adds risk', () => {
-    assert.equal(scoring.computeRiskScore({ availability: 'registered', privacyProtected: true }), 13);
+  test('external password destinations strengthen credential evidence without double counting', () => {
+    const explained = riskExplanation({
+      availability: 'registered', phishingLanguageMatch: 'verify your account',
+      hasPasswordField: true, hasExternalFormAction: true,
+    });
+    assert.equal(explained.score, 24);
+    assert.equal(explained.families.find((family) => family.id === 'credential-lure')?.contribution, 18);
   });
 
-  test('a more recently registered domain scores higher risk', () => {
-    assert.equal(scoring.computeRiskScore({ availability: 'registered', domainAgeDays: 30 }), 20);
-    assert.equal(scoring.computeRiskScore({ availability: 'registered', domainAgeDays: 200 }), 14);
-    assert.equal(scoring.computeRiskScore({ availability: 'registered', domainAgeDays: 365 }), 10);
-    assert.equal(scoring.computeRiskScore({ availability: 'registered', domainAgeDays: -1 }), 10);
-    assert.equal(scoring.computeRiskScore({ availability: 'registered', domainAgeDays: Number.NaN }), 10);
+  test('IDN reference matching and mutation provenance share one capped resemblance family', () => {
+    const explained = riskExplanation({
+      availability: 'registered', mutationTypes: ['dictionary'], idnReferenceMatch: true,
+    });
+    assert.equal(explained.score, 26);
+    assert.equal(explained.families.find((family) => family.id === 'domain-resemblance')?.contribution, 20);
   });
 
-  test('ordinary active mail-enabled registration evidence stays below danger', () => {
+  test('two independent contextual families receive a visible bounded bonus', () => {
+    const explained = riskExplanation({
+      availability: 'registered',
+      mutationTypes: ['dictionary'],
+      faviconMatch: true,
+    });
+    assert.equal(explained.score, 52);
+    assert.equal(explained.factors.find((factor) => factor.family === 'corroboration')?.delta, 10);
+  });
+
+  test('strong evidence across three primary families reaches review with bounded support', () => {
+    const explained = riskExplanation({
+      availability: 'registered',
+      mutationTypes: ['dictionary'],
+      faviconMatch: true,
+      reusesOfficialAssets: true,
+      phishingLanguageMatch: 'verify your account',
+      hasPasswordField: true,
+      activityStatus: 'active', hasMx: true, domainAgeDays: 10,
+    });
+    assert.equal(explained.score, 91);
+    assert.equal(scoring.riskTone(explained.score), 'danger');
+    assert.equal(explained.families.find((family) => family.id === 'operational-support')?.contribution, 12);
+  });
+
+  test('a single contextual family stays below review even with capped operational support', () => {
     const score = scoring.computeRiskScore({
       availability: 'registered',
+      faviconMatch: true,
+      reusesOfficialAssets: true,
       activityStatus: 'active',
       hasMx: true,
       hasSpf: true,
@@ -231,69 +284,6 @@ describe('explainRiskScore / computeRiskScore', () => {
       domainAgeDays: 10,
     });
     assert.equal(score, 42);
-    assert.equal(scoring.riskTone(score), 'warn');
-  });
-
-  test('correlated observations stay in one family and receive no corroboration bonus', () => {
-    const brand = riskExplanation({
-      availability: 'registered',
-      faviconMatch: true,
-      reusesOfficialAssets: true,
-    });
-    assert.equal(brand.score, 34);
-    assert.equal(brand.factors.some((factor) => factor.label.includes('Corroborating')), false);
-
-    const credential = riskExplanation({
-      availability: 'registered',
-      phishingLanguageMatch: 'verify your account',
-      hasPasswordField: true,
-    });
-    assert.equal(credential.score, 23);
-    assert.equal(credential.factors.some((factor) => factor.label.includes('Corroborating')), false);
-  });
-
-  test('two distinct contextual families receive a visible bounded bonus', () => {
-    const explained = riskExplanation({
-      availability: 'registered',
-      mutationTypes: ['dictionary'],
-      faviconMatch: true,
-    });
-    assert.equal(explained.score, 56);
-    assert.deepEqual(explained.factors.find((factor) => factor.label.includes('Corroborating')), {
-      label: 'Corroborating context across 2 distinct evidence families',
-      delta: 10,
-    });
-  });
-
-  test('strong evidence across all three families reaches danger with visible factors', () => {
-    const explained = riskExplanation({
-      availability: 'registered',
-      mutationTypes: ['dictionary'],
-      faviconMatch: true,
-      reusesOfficialAssets: true,
-      phishingLanguageMatch: 'verify your account',
-      hasPasswordField: true,
-    });
-    assert.equal(explained.score, 85);
-    assert.equal(scoring.riskTone(explained.score), 'danger');
-    assert.ok(explained.factors.some((factor) => factor.label.includes('Favicon')));
-    assert.ok(explained.factors.some((factor) => factor.label.includes('asset')));
-    assert.ok(explained.factors.some((factor) => factor.label.includes('3 distinct evidence families')));
-  });
-
-  test('even the strongest single contextual family cannot reach danger with all operational context', () => {
-    const score = scoring.computeRiskScore({
-      availability: 'registered',
-      faviconMatch: true,
-      reusesOfficialAssets: true,
-      activityStatus: 'active',
-      hasMx: true,
-      hasSpf: true,
-      hasDmarc: true,
-      privacyProtected: true,
-      domainAgeDays: 10,
-    });
-    assert.equal(score, 66);
     assert.equal(scoring.riskTone(score), 'warn');
   });
 
@@ -306,11 +296,11 @@ describe('explainRiskScore / computeRiskScore', () => {
     assert.equal(scoring.computeRiskScore({
       availability: 'registered',
       threatIntelligence: { providers: [provider('urlscan_search')] },
-    }), 10);
+    }), 6);
     assert.equal(scoring.computeRiskScore({
       availability: 'registered',
       threatIntelligence: { providers: [provider('urlhaus_host'), provider('threatfox_domain_ioc')] },
-    }), 10);
+    }), 6);
   });
 
   test('two independent recent publisher families add one explainable bounded factor', () => {
@@ -323,43 +313,8 @@ describe('explainRiskScore / computeRiskScore', () => {
       availability: 'registered',
       threatIntelligence: { providers: [provider('urlscan_search'), provider('urlhaus_host')] },
     });
-    assert.equal(explained.score, 28);
-    assert.deepEqual(explained.factors.at(-1), {
-      label: 'Corroborated recent external phishing/malware records',
-      delta: 18,
-    });
-  });
-
-  test('external evidence crosses the danger band only with independent publisher corroboration', () => {
-    const provider = (id: string) => ({
-      provider: { id }, state: 'success',
-      findings: [{ category: 'phishing', lastObservedAt: '2026-07-12T00:00:00.000Z' }],
-      observation: { observedAt: '2026-07-15T00:00:00.000Z' },
-    });
-    const base = {
-      availability: 'registered',
-      faviconMatch: true,
-      reusesOfficialAssets: true,
-      activityStatus: 'active',
-      hasMx: true,
-      hasSpf: true,
-      hasDmarc: true,
-      privacyProtected: true,
-      domainAgeDays: 10,
-    };
-    const loneSource = scoring.computeRiskScore({
-      ...base,
-      threatIntelligence: { providers: [provider('urlscan_search')] },
-    });
-    const corroborated = scoring.computeRiskScore({
-      ...base,
-      threatIntelligence: { providers: [provider('urlscan_search'), provider('urlhaus_host')] },
-    });
-
-    assert.equal(loneSource, 66);
-    assert.equal(scoring.riskTone(loneSource), 'warn');
-    assert.equal(corroborated, 84);
-    assert.equal(scoring.riskTone(corroborated), 'danger');
+    assert.equal(explained.score, 24);
+    assert.equal(explained.factors.find((factor) => factor.family === 'external-intelligence')?.delta, 18);
   });
 
   test('unknown providers and malformed external records cannot affect Risk', () => {
@@ -373,24 +328,15 @@ describe('explainRiskScore / computeRiskScore', () => {
         ],
       },
     });
-    assert.equal(explained.score, 10);
+    assert.equal(explained.score, 6);
     assert.equal(explained.factors.length, 1);
   });
 
   test('only allowlisted mutation provenance contributes bounded context', () => {
-    assert.equal(scoring.computeRiskScore({ availability: 'registered', mutationTypes: ['dictionary'] }), 28);
-    assert.equal(scoring.computeRiskScore({ availability: 'registered', mutationTypes: ['dictionary_token_replacement'] }), 28);
-    assert.equal(scoring.computeRiskScore({ availability: 'registered', mutationTypes: ['bitsquatting'] }), 22);
-    assert.equal(scoring.computeRiskScore({ availability: 'registered', mutationTypes: ['tld_embedding'] }), 22);
-    assert.equal(scoring.computeRiskScore({ availability: 'registered', mutationTypes: ['tld_substitution'] }), 22);
-    assert.equal(scoring.computeRiskScore({ availability: 'registered', mutationTypes: ['character_addition'] }), 18);
-    assert.equal(scoring.computeRiskScore({ availability: 'registered', mutationTypes: ['character_omission'] }), 18);
-    assert.equal(scoring.computeRiskScore({ availability: 'registered', mutationTypes: ['pluralization'] }), 18);
-    assert.equal(scoring.computeRiskScore({ availability: 'registered', mutationTypes: ['www_prefix'] }), 18);
-    assert.equal(scoring.computeRiskScore({ availability: 'registered', mutationTypes: ['hyphenation'] }), 18);
-    assert.equal(scoring.computeRiskScore({ availability: 'registered', mutationTypes: ['separator_omission'] }), 18);
-    assert.equal(scoring.computeRiskScore({ availability: 'registered', mutationTypes: ['word_reordering'] }), 18);
-    assert.equal(scoring.computeRiskScore({ availability: 'registered', mutationTypes: ['invented_high_risk'] }), 10);
+    assert.equal(scoring.computeRiskScore({ availability: 'registered', mutationTypes: ['dictionary'] }), 24);
+    assert.equal(scoring.computeRiskScore({ availability: 'registered', mutationTypes: ['bitsquatting'] }), 18);
+    assert.equal(scoring.computeRiskScore({ availability: 'registered', mutationTypes: ['character_addition'] }), 14);
+    assert.equal(scoring.computeRiskScore({ availability: 'registered', mutationTypes: ['invented_high_risk'] }), 6);
   });
 
   test('malformed truthy values cannot create impersonation or operational factors', () => {
@@ -405,8 +351,8 @@ describe('explainRiskScore / computeRiskScore', () => {
       hasSpf: 1,
       hasDmarc: {},
     });
-    assert.equal(explained.score, 10);
-    assert.deepEqual(explained.factors, [{ label: 'Base score for "registered"', delta: 10 }]);
+    assert.equal(explained.score, 6);
+    assert.deepEqual(explained.factors, [{ family: 'registration', label: 'Base context for “registered”', delta: 6 }]);
   });
 
   test('risk model versions are strictly bounded positive integers', () => {
@@ -416,22 +362,50 @@ describe('explainRiskScore / computeRiskScore', () => {
     }
   });
 
-  test('the total is clamped to 100', () => {
-    const score = scoring.computeRiskScore({
+  test('the total is clamped to 100 and missing evidence cannot add points', () => {
+    const explained = riskExplanation({
       availability: 'registered',
       mutationTypes: ['dictionary'],
+      idnReferenceMatch: true,
       faviconMatch: true,
       reusesOfficialAssets: true,
+      pageBaselineMatch: true,
       phishingLanguageMatch: 'verify your account',
       hasPasswordField: true,
+      hasExternalFormAction: true,
+      threatIntelligence: { providers: [
+        { provider: { id: 'urlscan_search' }, state: 'success', findings: [{ category: 'phishing', lastObservedAt: '2026-07-12T00:00:00.000Z' }], observation: { observedAt: '2026-07-15T00:00:00.000Z' } },
+        { provider: { id: 'urlhaus_host' }, state: 'success', findings: [{ category: 'malware', lastObservedAt: '2026-07-12T00:00:00.000Z' }], observation: { observedAt: '2026-07-15T00:00:00.000Z' } },
+      ] },
       activityStatus: 'active',
       hasMx: true,
       hasSpf: true,
       hasDmarc: true,
-      privacyProtected: true,
       domainAgeDays: 10,
+      scanDepth: 'deep',
+      sourceCoverage: [{ source: 'rdap', state: 'partial' }],
     });
-    assert.equal(score, 100);
+    assert.equal(explained.score, 100);
+    assert.equal(explained.capped, true);
+    assert.ok(explained.rawScore > 100);
+    assert.equal(explained.evidenceQuality.state, 'partial');
+  });
+
+  test('missing profile comparison evidence qualifies Risk without subtracting points', () => {
+    const explained = riskExplanation({
+      availability: 'registered',
+      hasActiveBrandProfile: true,
+      scanDepth: 'deep',
+      sourceCoverage: [{ source: 'rdap', state: 'complete' }],
+    });
+    assert.equal(explained.score, 6);
+    assert.deepEqual(explained.evidenceQuality.missingFamilies, [
+      'brand-presentation',
+      'credential-lure',
+      'domain-resemblance',
+      'operational-support',
+    ]);
+    assert.equal(explained.evidenceQuality.state, 'limited');
   });
 });
 
@@ -456,9 +430,29 @@ describe('formatScoreBreakdown', () => {
     const explained: scoring.RiskExplanation = {
       modelVersion: scoring.RISK_MODEL_VERSION,
       score: 45,
-      factors: [{ label: 'A', delta: 40 }, { label: 'B', delta: -5 }, { label: 'C', delta: 10 }],
+      rawScore: 45,
+      capped: false,
+      factors: [
+        { family: 'registration', label: 'A', delta: 40 },
+        { family: 'registration', label: 'B', delta: -5 },
+        { family: 'registration', label: 'C', delta: 10 },
+      ],
+      families: [],
+      evidenceQuality: {
+        version: 1,
+        state: 'complete',
+        scanDepth: 'deep',
+        freshness: 'observed',
+        completeSources: 1,
+        limitedSources: 0,
+        unavailableSources: 0,
+        skippedSources: 0,
+        observedFamilies: [],
+        missingFamilies: [],
+        limitations: [],
+      },
     };
-    assert.equal(scoring.formatScoreBreakdown(explained), 'A +40\nB -5\nC +10\nTotal 45');
-    assert.equal(scoring.formatScoreBreakdown(explained, '; '), 'A +40; B -5; C +10; Total 45');
+    assert.equal(scoring.formatScoreBreakdown(explained), `A +40\nB -5\nC +10\nTotal 45 · Risk model v${scoring.RISK_MODEL_VERSION} · evidence complete`);
+    assert.equal(scoring.formatScoreBreakdown(explained, '; '), `A +40; B -5; C +10; Total 45 · Risk model v${scoring.RISK_MODEL_VERSION} · evidence complete`);
   });
 });

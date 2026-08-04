@@ -160,7 +160,7 @@ test('reviewed cases export an explicitly selected privacy-bounded Risk calibrat
 
   expect(exported).toMatchObject({
     schema: 'whoisleuth.risk-calibration-dataset',
-    version: 1,
+    version: 2,
     records: [{
       id: 'reviewed-calibration',
       domain: 'reviewed-calibration.invalid',

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
-  import { dispositionLabel, type RiskCalibrationExportPreview } from '$lib/cases';
+  import { CASE_REVIEW_REASONS, dispositionLabel, type RiskCalibrationExportPreview } from '$lib/cases';
 
   let {
     preview,
@@ -19,6 +19,10 @@
   const DISPLAY_LIMIT = 20;
   const displayedRecords = $derived(preview.records.slice(0, DISPLAY_LIMIT));
   const omittedCount = $derived(Math.max(0, preview.records.length - displayedRecords.length));
+
+  function reasonLabel(value: string | null): string {
+    return CASE_REVIEW_REASONS.find((option) => option.value === value)?.label ?? 'Reason not recorded';
+  }
 
   function focusableElements(): HTMLElement[] {
     return dialog
@@ -87,7 +91,7 @@
     <div class="review-body">
       <p id="calibration-review-summary">
         The file will include <strong>{preview.included} reviewed case{preview.included === 1 ? '' : 's'}</strong>
-        with domain names, analyst dispositions, and bounded normalized scoring inputs.
+        with domain names, analyst dispositions, optional reviewed reason codes, and bounded normalized scoring inputs.
       </p>
       <div class="counts" role="group" aria-label="Calibration export counts">
         <span><strong>{preview.selected}</strong> selected</span>
@@ -98,7 +102,7 @@
         <h3>Records to include</h3>
         <ul>
           {#each displayedRecords as record (record.domain)}
-            <li><span>{record.domain}</span><small>{dispositionLabel(record.analystDisposition)}</small></li>
+            <li><span>{record.domain}</span><small>{dispositionLabel(record.analystDisposition)} · {reasonLabel(record.reviewReasonCode)}</small></li>
           {/each}
         </ul>
         {#if omittedCount}

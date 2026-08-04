@@ -4,7 +4,7 @@ import { createRequire } from 'node:module';
 
 import { abortable } from '../lib/abort.mts';
 import { REGISTRY_CAPABILITIES_VERSION, registryCapabilityFor } from '../lib/registry-capabilities.mts';
-import { explainRiskScore, RISK_MODEL_VERSION, RISK_REVIEW_THRESHOLD } from '../lib/risk-scoring.mts';
+import { explainRiskScore, explainRiskScoreV6, RISK_MODEL_VERSION, RISK_REVIEW_THRESHOLD } from '../lib/risk-scoring.mts';
 import { CLI_COMMANDS, parseCliArguments } from './arguments.mts';
 import type { CliArguments, CliCommand } from './arguments.mts';
 import { buildCliCommandCatalogue, formatCliCommandCatalogue } from './command-catalogue.mts';
@@ -644,6 +644,10 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
         generatedAt: dependencies.now ? dependencies.now() : new Date().toISOString(),
         modelVersion: dependencies.riskModelVersion || RISK_MODEL_VERSION,
         reviewThreshold: dependencies.riskReviewThreshold || RISK_REVIEW_THRESHOLD,
+        ...(!dependencies.explainRiskScore ? {
+          previousModelVersion: 6,
+          explainPreviousRiskScore: explainRiskScoreV6,
+        } : {}),
       });
       if (!args.quiet) write(stdout, args.output === 'json' ? formatJsonDocument(report) : terminal(formatTerminalRiskCalibration(report), args.color));
       return EXIT_CODES.SUCCESS;

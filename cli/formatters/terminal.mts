@@ -676,6 +676,7 @@ function formatTerminalRiskCalibration(document: TerminalRecord): string {
   const bands = terminalRecord(summary.scoreBands);
   const thresholds = Array.isArray(document.thresholds) ? document.thresholds : [];
   const records = Array.isArray(document.records) ? document.records : [];
+  const comparison = terminalRecord(document.modelComparison);
   const visible = records.slice(0, MAX_RISK_CALIBRATION_TERMINAL_RECORDS);
   const lines = [
     `Risk model     v${safeTerminalValue(document.riskModelVersion)}`,
@@ -690,8 +691,11 @@ function formatTerminalRiskCalibration(document: TerminalRecord): string {
   for (const value of thresholds) {
     const threshold = terminalRecord(value);
     lines.push(
-      `${String(safeTerminalValue(threshold.threshold)).padStart(3)}+  TP ${safeTerminalValue(threshold.truePositive, '0')}  FP ${safeTerminalValue(threshold.falsePositive, '0')}  TN ${safeTerminalValue(threshold.trueNegative, '0')}  FN ${safeTerminalValue(threshold.falseNegative, '0')}  precision ${safeTerminalValue(threshold.precision)}  recall ${safeTerminalValue(threshold.recall)}`,
+      `${String(safeTerminalValue(threshold.threshold)).padStart(3)}+  TP ${safeTerminalValue(threshold.truePositive, '0')}  FP ${safeTerminalValue(threshold.falsePositive, '0')}  TN ${safeTerminalValue(threshold.trueNegative, '0')}  FN ${safeTerminalValue(threshold.falseNegative, '0')}  precision ${safeTerminalValue(threshold.precision)}  recall ${safeTerminalValue(threshold.recall)}  F1 ${safeTerminalValue(threshold.f1)}`,
     );
+  }
+  if (comparison.available === true) {
+    lines.push('', `Model comparison  v${safeTerminalValue(comparison.previousModelVersion)} → v${safeTerminalValue(comparison.currentModelVersion)} · ${safeTerminalValue(comparison.scoresChanged, '0')} score changes · ${safeTerminalValue(comparison.thresholdClassificationsChanged, '0')} review-band changes`);
   }
   lines.push('', 'Records');
   for (const value of visible) {

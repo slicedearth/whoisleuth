@@ -830,9 +830,12 @@ supported protocol, or confirm exploitability.
 Risk and Opportunity are separate, versioned heuristic scores:
 
 - **Risk** helps prioritise registered candidates using explainable observed
-  factors.
-- **Opportunity** helps prioritise apparently available candidates. It is not a
-  valuation or purchase recommendation.
+  evidence families. Generic activity, mail, age, or registration-privacy
+  context cannot create Risk on its own.
+- **Opportunity** describes acquisition-review readiness across registration,
+  listing, contactability, lifecycle, and current-use dimensions. It is not a
+  valuation, availability decision, release prediction, or purchase
+  recommendation.
 
 Risk groups related evidence into contextual families so repeated observations
 of the same kind do not manufacture independent corroboration. Optional
@@ -840,14 +843,24 @@ provider findings can contribute only through the explicit allowlist and
 corroboration rules of the current scoring model. A provider miss, outage, or
 unsupported target contributes nothing.
 
+Each explanation also shows evidence quality separately from the numeric score:
+source-state coverage, observed evidence families, scan depth,
+observation-time availability, and any collection limitations. Missing or
+failed evidence never lowers either score and does not become evidence of
+absence. Stored cases, Bulk sessions, and
+shortlist entries retain the relevant model version so unlike scores are not
+presented as a change in the domain.
+
 Always review the factor list and original evidence. A score does not establish
 maliciousness, ownership, safety, or intent. The [CLI guide](cli.md#offline-risk-calibration)
 documents deterministic offline calibration against analyst-labelled fixtures.
 Monitor can deliberately export explicitly selected cases with reviewed
 dispositions and retained normalized evidence into that same offline dataset
-contract. The export excludes notes, tags, assertions, actions, contacts, raw
-source data, provider payloads, and stored Risk scores. It does not train or
-change the model.
+contract. An optional reviewed reason code supports bounded stratification; a
+page-language match is reduced to a fixed indicator rather than exported text.
+The export excludes notes, tags, assertions, actions, contacts, raw source data,
+provider payloads, and stored Risk scores. It does not train or change the
+model.
 
 ## Guided investigations
 

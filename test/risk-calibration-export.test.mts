@@ -89,6 +89,10 @@ describe('reviewed Risk calibration dataset export', () => {
       hasMx: true,
       hasSpf: false,
       hasDmarc: false,
+      phishingLanguageMatch: 'matched',
+      hasExternalFormAction: true,
+      scanDepth: 'deep',
+      observedAt: '2026-07-28T00:00:00.000Z',
     });
     const parsed = parseRiskCalibrationDataset(JSON.stringify(exported));
     assert.equal(parsed.records[0]?.domain, 'candidate.example');

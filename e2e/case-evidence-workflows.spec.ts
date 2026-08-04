@@ -416,7 +416,7 @@ test.describe('case report export', () => {
     const parsed = JSON.parse(text);
 
     expect(parsed.schema).toBe('whoisleuth.case-report');
-    expect(parsed.schemaVersion).toBe(4);
+    expect(parsed.schemaVersion).toBe(5);
     expect(parsed.case.domain).toBe('export-json.invalid');
     expect(parsed.case.notesIncluded).toBe(false);
     expect(parsed.evidenceTimeline.length).toBe(2);

@@ -189,6 +189,7 @@ function frozenCandidate(value: SyntheticCandidateInput): SyntheticDemoCandidate
     riskModelVersion: RISK_MODEL_VERSION,
     riskScore: value.risk,
     riskFactors: value.riskFactors,
+    opportunityModelVersion: null,
     opportunityScore: null,
     opportunityFactors: [],
     registrar: value.evidence.registry.registrar === 'Not observed' ? null : value.evidence.registry.registrar,
@@ -217,6 +218,10 @@ function frozenCandidate(value: SyntheticCandidateInput): SyntheticDemoCandidate
     hasPasswordField: value.id === 'credential-lure',
     hasExternalFormAction: value.id === 'credential-lure',
     phishingLanguageMatch: value.id === 'credential-lure' ? 'Sign in to continue' : null,
+    privacyProtected: null,
+    idnReferenceMatch: false,
+    pageBaselineMatch: false,
+    hasActiveBrandProfile: true,
     mutationTypes: [value.mutation],
   };
   const observations: SyntheticObservation[] = [
@@ -457,7 +462,14 @@ export function syntheticDemoLookupView(id: string) {
     assessment: {
       detail: candidate.availability,
       confidence: conclusive ? 'High' : 'Low',
-      risk: { score: candidate.risk, factors: candidate.riskFactors.map((factor) => ({ label: factor.label, delta: factor.points })) },
+      risk: {
+        synthetic: true as const,
+        modelVersion: null,
+        score: candidate.risk,
+        rawScore: candidate.risk,
+        capped: false as const,
+        factors: candidate.riskFactors.map((factor) => ({ label: factor.label, delta: factor.points })),
+      },
       opportunity: null,
       signals: candidate.signals.map((label) => ({ label, tone: candidate.risk >= 70 ? 'danger' : 'warn' })),
       trusted: '',

@@ -75,7 +75,7 @@ function caseRecord(overrides: Record<string, unknown> = {}) {
 describe('schema identity', () => {
   test('exports correct schema and version', () => {
     assert.equal(caseReport.CASE_REPORT_SCHEMA, 'whoisleuth.case-report');
-    assert.equal(caseReport.CASE_REPORT_SCHEMA_VERSION, 4);
+    assert.equal(caseReport.CASE_REPORT_SCHEMA_VERSION, 5);
   });
 });
 
@@ -89,7 +89,7 @@ describe('buildCaseReport JSON', () => {
     const { json } = caseReport.buildCaseReport(rec, { generatedAt: ISO });
 
     assert.equal(json.schema, 'whoisleuth.case-report');
-    assert.equal(json.schemaVersion, 4);
+    assert.equal(json.schemaVersion, 5);
     assert.equal(json.generatedAt, ISO);
     assert.equal(json.application.name, 'WHOISleuth');
     assert.equal(json.case.id, 'case-1');

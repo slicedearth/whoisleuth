@@ -3,10 +3,11 @@
 // import merging, and exact serialized-byte accounting.
 
 import { compactWatchlistResults } from './watchlist-history.ts';
-import { normalizeRiskModelVersion } from './scoring.ts';
+import { normalizeOpportunityModelVersion, normalizeRiskModelVersion } from './scoring.ts';
 
 export const SHORTLIST_SCHEMA = 'whoisleuth.shortlist';
-export const SHORTLIST_SCHEMA_VERSION = 2;
+export const SHORTLIST_SCHEMA_VERSION = 3;
+export const SUPPORTED_SHORTLIST_SCHEMA_VERSIONS = Object.freeze([2, SHORTLIST_SCHEMA_VERSION]);
 export const MAX_SHORTLIST_ENTRIES = 500;
 export const MAX_SHORTLIST_INPUTS = MAX_SHORTLIST_ENTRIES * 4;
 export const MAX_SHORTLIST_STORE_BYTES = 1024 * 1024;
@@ -29,6 +30,7 @@ export type ShortlistRecord = {
   riskScore: number | null;
   riskFactors: ShortlistFactor[];
   opportunityScore: number | null;
+  opportunityModelVersion: number | null;
   savedAt: string;
   [key: string]: unknown;
 };
@@ -114,6 +116,9 @@ export function normalizeShortlistRecord(
     riskScore,
     riskFactors: factors(value.riskFactors),
     opportunityScore: score(value.opportunityScore),
+    opportunityModelVersion: score(value.opportunityScore) === null
+      ? null
+      : normalizeOpportunityModelVersion(value.opportunityModelVersion),
     savedAt: timestamp(value.savedAt, timestamp(options.fallbackTimestamp, EPOCH)),
   };
 }
@@ -205,8 +210,8 @@ export function mergeShortlistStores(localRaw: unknown, importedRaw: unknown) {
   if (importedVersion !== null && importedVersion > SHORTLIST_SCHEMA_VERSION) {
     throw new Error(`This shortlist file uses newer schema ${importedVersion}. Update the app before importing it.`);
   }
-  if (importedVersion !== SHORTLIST_SCHEMA_VERSION) {
-    throw new Error(`Expected a WHOISleuth shortlist export using schema ${SHORTLIST_SCHEMA_VERSION}.`);
+  if (importedVersion === null || !SUPPORTED_SHORTLIST_SCHEMA_VERSIONS.includes(importedVersion)) {
+    throw new Error(`Expected a WHOISleuth shortlist export using schema ${SUPPORTED_SHORTLIST_SCHEMA_VERSIONS.join(' or ')}.`);
   }
   const local = normalizeShortlistStore(localRaw).entries;
   const byDomain = new Map(local.map((record) => [record.domain, record]));

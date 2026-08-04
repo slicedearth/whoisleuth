@@ -18,7 +18,7 @@ import { httpSecurityHeaderLabel } from './http-summary.ts';
 // ---------------------------------------------------------------------------
 
 export const CASE_REPORT_SCHEMA = 'whoisleuth.case-report';
-export const CASE_REPORT_SCHEMA_VERSION = 4;
+export const CASE_REPORT_SCHEMA_VERSION = 5;
 
 const APPLICATION_NAME = 'WHOISleuth';
 
@@ -27,7 +27,7 @@ const LIMITATIONS_TEXT = [
   'It is not a live lookup and does not contain raw WHOIS, RDAP, DNS, HTML, or responses collected during website checks.',
   'Absence of a signal (e.g. no MX record observed) does not prove nonexistence. It may not have been evaluated.',
   'Snapshot fingerprints are deduplication identifiers, not cryptographic evidence hashes.',
-  'Scan-depth and risk-model gates prevent misleading comparisons; "incomparable" means observations differ materially but one or more fields cannot be compared reliably.',
+  'Scan-depth and scoring-model gates prevent misleading comparisons; "incomparable" means observations differ materially but one or more fields cannot be compared reliably.',
   'Generated locally in the browser. Review the package before sharing it.',
 ].join(' ');
 
@@ -44,7 +44,7 @@ const LIMITATIONS_TEXT = [
  * @returns {string}
  */
 type ReportOptions = { includeNotes?: boolean; generatedAt?: string };
-type ReportReason = 'scan-depth' | 'risk-model' | 'other';
+type ReportReason = 'opportunity-model' | 'scan-depth' | 'risk-model' | 'other';
 type ReportChange = ReturnType<typeof compareCaseEvidence>[number];
 type ReportTimelineEntry = {
   snapshot: CaseEvidenceSnapshot;
@@ -64,6 +64,7 @@ type CaseReportJson = {
     domain: string;
     status: string;
     disposition: string;
+    reviewReasonCode: string | null;
     tags: string[];
     source: string;
     openedAt: string;
@@ -163,6 +164,7 @@ function pickKnownSnapshotFields(snapshot: CaseEvidenceSnapshot): CaseEvidenceSn
     confidence: snapshot.confidence,
     riskModelVersion: snapshot.riskModelVersion,
     riskScore: snapshot.riskScore,
+    opportunityModelVersion: snapshot.opportunityModelVersion ?? null,
     opportunityScore: snapshot.opportunityScore,
     riskFactors: factors(snapshot.riskFactors),
     opportunityFactors: factors(snapshot.opportunityFactors),
@@ -192,6 +194,10 @@ function pickKnownSnapshotFields(snapshot: CaseEvidenceSnapshot): CaseEvidenceSn
     hasPasswordField: snapshot.hasPasswordField,
     hasExternalFormAction: snapshot.hasExternalFormAction,
     phishingLanguageMatch: snapshot.phishingLanguageMatch,
+    privacyProtected: snapshot.privacyProtected ?? null,
+    idnReferenceMatch: snapshot.idnReferenceMatch ?? null,
+    pageBaselineMatch: snapshot.pageBaselineMatch ?? null,
+    hasActiveBrandProfile: snapshot.hasActiveBrandProfile ?? null,
     mutationTypes: Array.isArray(snapshot.mutationTypes) ? [...snapshot.mutationTypes] : [],
   };
 }
@@ -276,6 +282,7 @@ export function buildCaseReport(
       domain: caseRecord.domain,
       status: caseRecord.status,
       disposition: caseRecord.disposition,
+      reviewReasonCode: caseRecord.reviewReasonCode ?? null,
       tags: Array.isArray(caseRecord.tags) ? [...caseRecord.tags] : [],
       source: caseRecord.source,
       openedAt: caseRecord.createdAt,
@@ -342,6 +349,7 @@ function buildMarkdown(report: CaseReportJson): string {
   lines.push(`|-------|-------|`);
   lines.push(`| Status | ${escapeMarkdownInline(report.case.status)} |`);
   lines.push(`| Disposition | ${escapeMarkdownInline(report.case.disposition)} |`);
+  if (report.case.reviewReasonCode) lines.push(`| Review reason | ${escapeMarkdownInline(report.case.reviewReasonCode.replaceAll('_', ' '))} |`);
   lines.push(`| Source | ${escapeMarkdownInline(report.case.source)} |`);
   lines.push(`| Opened | ${escapeMarkdownInline(report.case.openedAt)} |`);
   lines.push(`| Updated | ${escapeMarkdownInline(report.case.updatedAt)} |`);
@@ -359,6 +367,7 @@ function buildMarkdown(report: CaseReportJson): string {
     lines.push(`- **Availability:** ${escapeMarkdownInline(formatReportValue(a.availability))}`);
     lines.push(`- **Risk score:** ${escapeMarkdownInline(formatReportValue(a.riskScore))}`);
     lines.push(`- **Risk model:** ${a.riskModelVersion === null ? 'Unversioned' : `v${escapeMarkdownInline(formatReportValue(a.riskModelVersion))}`}`);
+    lines.push(`- **Opportunity model:** ${a.opportunityModelVersion == null ? 'Unversioned' : `v${escapeMarkdownInline(formatReportValue(a.opportunityModelVersion))}`}`);
     lines.push(`- **Registrar:** ${escapeMarkdownInline(formatReportValue(a.registrar))}`);
     lines.push(`- **Website activity:** ${escapeMarkdownInline(formatReportValue(a.activityStatus))}`);
     if (a.httpResponseStatus != null) lines.push(`- **HTTP response:** ${escapeMarkdownInline(formatReportValue(a.httpResponseStatus))}`);
@@ -460,6 +469,7 @@ function buildMarkdown(report: CaseReportJson): string {
       if (entry.hasIncomparableChange) {
         const reasons = Array.isArray(entry.incomparableReasons) ? entry.incomparableReasons : [];
         if (reasons.includes('risk-model')) lines.push('> Risk scores and factors use different or unversioned models, so their numeric difference is not treated as a domain change.');
+        if (reasons.includes('opportunity-model')) lines.push('> Opportunity scores and factors use different or unversioned models, so their numeric difference is not treated as a domain change.');
         if (reasons.includes('scan-depth')) lines.push('> Capture depths differ, so unevaluated deep signals are not treated as additions or removals.');
         if (reasons.length === 0 || reasons.includes('other')) lines.push('> The observations differ materially, but no reliable field-level comparison is available.');
         lines.push('');

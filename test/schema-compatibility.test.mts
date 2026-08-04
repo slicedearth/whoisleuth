@@ -243,9 +243,9 @@ describe('schema compatibility inventory', () => {
     assert.equal(byId(inventory, 'browser.website-snapshots').currentVersion, WEBSITE_SNAPSHOT_SCHEMA_VERSION);
     assert.deepEqual(byId(inventory, 'browser.website-snapshots').supportedVersions, [1, 2, 3, 4]);
     assert.equal(byId(inventory, 'browser.website-snapshots').byteBudget, MAX_WEBSITE_SNAPSHOT_STORE_BYTES);
-    assert.deepEqual(byId(inventory, 'browser.bulk-sessions').supportedVersions, [1, 2]);
+    assert.deepEqual(byId(inventory, 'browser.bulk-sessions').supportedVersions, [1, 2, 3]);
     assert.equal(byId(inventory, 'browser.bulk-sessions').migration, 'normalize_to_current');
-    assert.deepEqual(byId(inventory, 'export.bulk-sessions').supportedVersions, [1, 2]);
+    assert.deepEqual(byId(inventory, 'export.bulk-sessions').supportedVersions, [1, 2, 3]);
     assert.equal(byId(inventory, 'export.bulk-sessions').migration, 'normalize_to_current');
     assert.equal(byId(inventory, 'browser.investigation-templates').schema, INVESTIGATION_TEMPLATE_SCHEMA);
     assert.equal(byId(inventory, 'browser.investigation-templates').currentVersion, INVESTIGATION_TEMPLATE_VERSION);
@@ -410,10 +410,10 @@ describe('schema compatibility inventory', () => {
     assert.equal(shortlistStoreVersion([]), 1);
     assert.deepEqual(byId(inventory, 'browser.brand-profiles').supportedVersions, [1, 2, 3, 4, 5]);
     assert.deepEqual(byId(inventory, 'browser.watchlists').supportedVersions, [1, 2]);
-    assert.deepEqual(byId(inventory, 'browser.shortlist').supportedVersions, [1, 2]);
+    assert.deepEqual(byId(inventory, 'browser.shortlist').supportedVersions, [1, 2, 3]);
     assert.deepEqual(byId(inventory, 'export.brand-profiles').supportedVersions, [2, 3, 4, 5]);
     assert.deepEqual(byId(inventory, 'export.watchlists').supportedVersions, [2]);
-    assert.deepEqual(byId(inventory, 'export.shortlist').supportedVersions, [2]);
+    assert.deepEqual(byId(inventory, 'export.shortlist').supportedVersions, [2, 3]);
   });
 
   test('formats a deterministic maintainer report without absolute paths or user data', () => {

@@ -84,11 +84,11 @@ describe('script analysis', () => {
 
 describe('versioned visual skeleton comparison', () => {
   test('matches a mixed-script lookalike to an official ASCII domain', () => {
-    const result = analysis(domainToASCII('раypal.com'), ['paypal.com']);
+    const result = analysis(domainToASCII('sаmple.example'), ['sample.example']);
     assert.equal(result.version, 1);
     assert.equal(result.mappingVersion, 'tr39-17.0.0-bounded-ascii-v3');
-    assert.equal(result.skeleton, 'paypal.com');
-    assert.deepEqual(result.referenceMatches.map((match) => match.asciiDomain), ['paypal.com']);
+    assert.equal(result.skeleton, 'sample.example');
+    assert.deepEqual(result.referenceMatches.map((match) => match.asciiDomain), ['sample.example']);
     assert.ok(result.findings.some((finding) => finding.id === 'official_skeleton_match'));
   });
 
@@ -105,7 +105,7 @@ describe('versioned visual skeleton comparison', () => {
   });
 
   test('normalizes full-width presentation forms before skeleton comparison', () => {
-    assert.equal(idn.unicodeSkeleton('ｐａｙｐａｌ.com'), 'paypal.com');
+    assert.equal(idn.unicodeSkeleton('ｓａｍｐｌｅ.example'), 'sample.example');
   });
 
   test('matches a newly curated Coptic lookalike with explicit script provenance', () => {
@@ -141,9 +141,9 @@ describe('versioned visual skeleton comparison', () => {
   });
 
   test('does not mutate the reference array', () => {
-    const references = ['paypal.com'];
+    const references = ['sample.example'];
     const before = structuredClone(references);
-    idn.analyzeDomainIdn(domainToASCII('раypal.com'), references);
+    idn.analyzeDomainIdn(domainToASCII('sаmple.example'), references);
     assert.deepEqual(references, before);
   });
 });

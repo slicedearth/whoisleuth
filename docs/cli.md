@@ -429,7 +429,11 @@ never resolves a target, checks an account, or tests claimability.
 the exact Risk model shared with the web application. It does not perform a
 lookup, contact the hosted deployment, persist the dataset, alter model weights,
 choose a threshold, or tune the model automatically. The report compares fixed
-thresholds from 40 through 90 and identifies 70 as the current review band.
+thresholds from 40 through 90 and identifies 70 as the current review band. It
+also reports F1, balanced accuracy, Wilson 95% intervals, deliberately small
+scan-depth and review-reason strata, and a current-versus-previous model replay.
+Strata with fewer than 20 included labels are marked insufficient rather than
+presented as reliable performance estimates.
 
 Input is capped at 2 MiB and 500 records. Each record requires a unique bounded
 ID, an ASCII DNS hostname, one existing analyst disposition, and a strict
@@ -440,12 +444,13 @@ and bounded before scoring. The accepted dataset envelope is:
 ```json
 {
   "schema": "whoisleuth.risk-calibration-dataset",
-  "version": 1,
+  "version": 2,
   "records": [
     {
       "id": "fixture-1",
       "domain": "login.example.test",
       "analystDisposition": "confirmed_abuse",
+      "reviewReasonCode": "confirmed_credential_abuse",
       "evidence": {
         "availability": "registered",
         "mutationTypes": ["dictionary"],
@@ -461,15 +466,18 @@ and `expected` are negative labels. `unreviewed`, `suspicious`, and
 `closed_no_action` remain contextual and are excluded from threshold quality
 metrics, as are records for which Risk is not applicable. Terminal output caps
 its record list at 100 while `--json` retains the complete bounded report,
-factor breakdowns, score bands, and per-threshold confusion metrics. Analyst
+factor breakdowns, score bands, confidence intervals, bounded strata, model
+comparison counts, and per-threshold confusion metrics. Analyst
 dispositions and heuristic scores are review context: neither proves
 maliciousness or safety.
 
 The authenticated Monitor workspace can deliberately create the accepted
 dataset from explicitly selected cases. Selection is available only when a case
 has a reviewed disposition and retained normalized evidence. That local export
-contains the case ID, domain, disposition, and a bounded whitelist of current
-scoring inputs. It excludes notes, tags, assertions, actions, contacts, raw
+contains the case ID, domain, disposition, optional reviewed reason code, and a
+bounded whitelist of current scoring inputs. A matched review-language signal
+is exported as a fixed indicator, not as captured page text. It excludes notes,
+tags, assertions, actions, contacts, raw
 source data, provider payloads, and stored Risk scores. Before download, a local
 review step shows the selected, included, and excluded counts, the domains and
 dispositions that will be written, and the excluded evidence classes. The CLI
