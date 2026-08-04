@@ -4,6 +4,7 @@
     scoreTone,
     type OpportunityExplanation,
     type RiskExplanation,
+    type RiskScoreSensitivity,
   } from '$lib/analysis/scoring.ts';
   import { projectScoreFactors } from '$lib/analysis/visualization-models.ts';
 
@@ -22,6 +23,7 @@
     detail,
     confidence,
     risk,
+    riskSensitivity = null,
     opportunity,
     signals,
     trusted,
@@ -29,6 +31,7 @@
     detail: string;
     confidence: string;
     risk: DisplayRiskExplanation | null;
+    riskSensitivity?: RiskScoreSensitivity | null;
     opportunity: OpportunityExplanation | null;
     signals: Array<{ label: string; tone: string; detail?: string }>;
     trusted: string;
@@ -119,6 +122,9 @@
           <p class="score-quality">Fixed demonstration score for layout and workflow practice. It was not produced by the live Risk model.</p>
         {:else}
           <p class="score-quality"><strong>Evidence coverage:</strong> {qualitySummary(risk)} · {risk.evidenceQuality.observedFamilies.length} observed scoring families. {risk.evidenceQuality.freshness === 'observed' ? 'Observation time recorded.' : 'Observation time unavailable.'}</p>
+          {#if riskSensitivity?.scenarios.length}
+            <p class="score-quality"><strong>Single-family sensitivity:</strong> the score ranges from {riskSensitivity.minimumScenarioScore} to {riskSensitivity.baselineScore} when each contributing evidence family is removed and the model is recalculated. {riskSensitivity.thresholdState === 'crosses' ? `The ${riskSensitivity.reviewThreshold}-point review threshold depends on combined evidence.` : riskSensitivity.thresholdState === 'stable_above' ? `It stays above the ${riskSensitivity.reviewThreshold}-point review threshold in every scenario.` : 'It is already below the review threshold.'}</p>
+          {/if}
         {/if}
         {#if risk.capped}<p class="score-quality">Raw total {risk.rawScore}; displayed score capped at {risk.score}.</p>{/if}
         {@render FactorChart(risk, 'Risk')}

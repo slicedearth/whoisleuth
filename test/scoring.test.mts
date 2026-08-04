@@ -431,6 +431,38 @@ describe('explainRiskScore / computeRiskScore', () => {
   });
 });
 
+describe('risk score sensitivity', () => {
+  test('recalculates caps and corroboration after removing each contributing family', () => {
+    const sensitivity = requiredValue(scoring.buildRiskScoreSensitivity({
+      availability: 'registered',
+      mutationTypes: ['unicode_homoglyph'],
+      faviconMatch: true,
+      hasPasswordField: true,
+      hasExternalFormAction: true,
+      activityStatus: 'active',
+      hasMx: true,
+      domainAgeDays: 20,
+    }));
+    assert.equal(sensitivity.baselineScore, 82);
+    assert.equal(sensitivity.minimumScenarioScore, 56);
+    assert.equal(sensitivity.thresholdState, 'crosses');
+    assert.deepEqual(sensitivity.scenarios.map((scenario) => scenario.excludedFamily), [
+      'brand-presentation',
+      'domain-resemblance',
+      'credential-lure',
+      'operational-support',
+    ]);
+    assert.match(sensitivity.limitations[0] ?? '', /does not predict missing evidence/iu);
+  });
+
+  test('keeps non-applicable and below-threshold states explicit', () => {
+    assert.equal(scoring.buildRiskScoreSensitivity({ availability: 'available' }), null);
+    const sensitivity = requiredValue(scoring.buildRiskScoreSensitivity({ availability: 'registered' }));
+    assert.equal(sensitivity.thresholdState, 'below');
+    assert.deepEqual(sensitivity.scenarios, []);
+  });
+});
+
 describe('riskTone', () => {
   test('buckets the risk score into a tone', () => {
     assert.equal(scoring.riskTone(null), 'neutral');

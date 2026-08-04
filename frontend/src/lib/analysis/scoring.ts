@@ -1,6 +1,7 @@
 export {
   RISK_MODEL_VERSION,
   RISK_REVIEW_THRESHOLD,
+  buildRiskScoreSensitivity,
   computeRiskScore,
   explainRiskScore,
   formatScoreBreakdown,
@@ -11,6 +12,8 @@ export type {
   RiskExplanation,
   RiskFactor,
   RiskInput,
+  RiskScoreSensitivity,
+  RiskSensitivityScenario,
 } from '../../../../lib/risk-scoring.mts';
 export {
   OPPORTUNITY_MODEL_VERSION,

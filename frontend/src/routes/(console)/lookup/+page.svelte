@@ -195,6 +195,7 @@
   const externalRiskContext=$derived(lookupAnalysis.externalRiskContext);
   const opportunity=$derived(lookupAnalysis.opportunity);
   const risk=$derived(lookupAnalysis.risk);
+  const riskSensitivity=$derived(lookupAnalysis.riskSensitivity);
   const outreach=$derived(lookupAnalysis.outreach);
   const abuseRecipientResolution=$derived(lookupAnalysis.abuseRecipientResolution);
   const sourceOnlyCount=$derived(lookupAnalysis.sourceOnlyCount);
@@ -431,7 +432,7 @@
       <h3 id="overview-title">Overview</h3>
 
       {#if availability.applicable!==false}
-        <LookupAssessment detail={show(availability.detail||availability.state)} confidence={show(availability.confidence)} {risk} {opportunity} signals={[...lookupSummary.signals]} trusted={String(profileSignals.trusted||'')} />
+        <LookupAssessment detail={show(availability.detail||availability.state)} confidence={show(availability.confidence)} {risk} {riskSensitivity} {opportunity} signals={[...lookupSummary.signals]} trusted={String(profileSignals.trusted||'')} />
       {/if}
 
       <LookupDecisionSupport

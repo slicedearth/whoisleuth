@@ -38,8 +38,10 @@ import { compareRdapPublications, compareRegistrySources } from './registry-comp
 import {
   explainOpportunityScore,
   explainRiskScore,
+  buildRiskScoreSensitivity,
   type OpportunityExplanation,
   type RiskExplanation,
+  type RiskScoreSensitivity,
 } from './scoring.ts';
 import { entityDisplayName } from './utils.ts';
 
@@ -494,6 +496,7 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
   };
   const opportunity: OpportunityExplanation | null = explainOpportunityScore(scoredAvailability);
   const risk: RiskExplanation | null = explainRiskScore(scoredAvailability);
+  const riskSensitivity: RiskScoreSensitivity | null = buildRiskScoreSensitivity(scoredAvailability);
   const lookupSourceRefreshPlan = buildLookupSourceRefreshPlan(
     evidenceCoverage,
     lookupObservedAt,
@@ -626,6 +629,7 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     externalRiskContext,
     opportunity,
     risk,
+    riskSensitivity,
     outreach,
     abuseRecipientResolution,
     sourceOnlyCount,
