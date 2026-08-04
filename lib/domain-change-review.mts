@@ -79,6 +79,9 @@ function normaliseValue(type: RecordType, value: unknown, label: string): { valu
   if (type === 'TXT') return { value: sha256(raw), treatment: 'sha256' };
   if (type === 'A' && isIP(raw) !== 4) throw new TypeError(`${label} must contain an IPv4 address.`);
   if (type === 'AAAA' && isIP(raw) !== 6) throw new TypeError(`${label} must contain an IPv6 address.`);
+  // DNS names and hexadecimal digests compare case-insensitively, but the
+  // CDNSKEY public-key material is base64 and therefore case-sensitive.
+  if (type === 'CDNSKEY') return { value: raw, treatment: 'normalised' };
   return { value: raw.toLowerCase(), treatment: 'normalised' };
 }
 

@@ -100,6 +100,12 @@ function publicAddress(value: unknown): string | null {
   return net.isIP(normalized) && !isPrivateAddress(normalized) ? normalized : null;
 }
 
+function observedAddress(value: unknown): string | null {
+  if (typeof value !== 'string' || value.length > 80 || /[\u0000-\u0020\u007f%]/u.test(value)) return null;
+  const normalised = value.toLowerCase();
+  return net.isIP(normalised) ? normalised : null;
+}
+
 function errorCode(error: unknown): string {
   const value = record(error).code;
   return typeof value === 'string' ? value.slice(0, 40) : '';
@@ -196,7 +202,10 @@ function normaliseAuthorityValues(type: AuthorityRecordType, value: unknown): st
   const rows = Array.isArray(value) ? value : [];
   const values = rows.flatMap((item): string[] => {
     if (type === 'A' || type === 'AAAA') {
-      const address = publicAddress(item);
+      // Returned record data is evidence, not a transport destination. Retain
+      // syntactically valid private and reserved addresses while continuing to
+      // require public addresses for the direct nameserver connection itself.
+      const address = observedAddress(item);
       return address && net.isIP(address) === (type === 'A' ? 4 : 6) ? [address] : [];
     }
     const source = record(item);
@@ -667,6 +676,7 @@ export {
   MAX_AUTHORITIES,
   MAX_AUTHORITY_ADDRESSES,
   collectDnsDelegationHealth,
+  normaliseAuthorityValues,
   skippedDnsDelegationHealth,
 };
 

@@ -80,6 +80,19 @@ describe('domain change review', () => {
     assert.doesNotMatch(JSON.stringify(result), /sensitive fixture value/u);
   });
 
+  test('preserves case-sensitive CDNSKEY public-key material', () => {
+    const value = input();
+    value.authoritySnapshots[0]!.records.push({
+      owner: 'example.test',
+      type: 'CDNSKEY',
+      ttl: 300,
+      value: '257 3 13 AbCdEf+/=',
+    });
+    const result = reviewDomainChange(value, NOW);
+    const cdnskey = result.authoritativeRecordMatrix.find((row) => row.type === 'CDNSKEY');
+    assert.deepEqual(cdnskey?.observations[0]?.values, ['257 3 13 AbCdEf+/=']);
+  });
+
   test('dispatches through the offline review command contract', () => {
     const envelope = buildOfflineEvidenceReview(JSON.stringify(input()), NOW);
     assert.equal(envelope.kind, 'domain_change');

@@ -5,6 +5,7 @@ import {
   MAX_AUTHORITIES,
   MAX_AUTHORITY_ADDRESSES,
   collectDnsDelegationHealth,
+  normaliseAuthorityValues,
   skippedDnsDelegationHealth,
 } from '../lib/dns-delegation-health.mts';
 import { recordValue, requiredValue } from './value-assertions.mts';
@@ -28,6 +29,13 @@ const REGISTRY = {
 };
 
 describe('DNS delegation health', () => {
+  test('retains private and reserved addresses as observed record data only', () => {
+    assert.deepEqual(normaliseAuthorityValues('A', ['10.0.0.1', '192.0.2.10', 'invalid']), [
+      '10.0.0.1',
+      '192.0.2.10',
+    ]);
+  });
+
   test('keeps registry, parent, and direct authority evidence separately attributed', async () => {
     const calls: Array<{ nameserver: string; address: string }> = [];
     const result = await collectDnsDelegationHealth('example.test', PARENT, {
