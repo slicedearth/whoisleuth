@@ -1,6 +1,6 @@
 {
   "name": "whoisleuth",
-  "version": "1.39.1",
+  "version": "1.40.0",
   "private": true,
   "license": "AGPL-3.0-only",
   "description": "Open-source, local-first domain intelligence and brand-protection console for WHOIS, RDAP, DNS, certificate transparency, lookalike domains, and web evidence.",

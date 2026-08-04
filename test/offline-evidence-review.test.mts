@@ -58,9 +58,21 @@ describe('offline evidence review command', () => {
         },
         query: { name: 'example.test', type: 'DNSKEY' },
       },
+      {
+        schema: 'whoisleuth.zone-intent.input', version: 1, origin: 'example.test',
+        desired: { format: 'records', records: [{ owner: '@', type: 'A', ttl: 300, value: '192.0.2.1' }] },
+        observed: { state: 'observed', source: 'Fixture', observedAt: ISO, records: [{ owner: '@', type: 'A', ttl: 300, value: '192.0.2.1' }] },
+      },
+      {
+        schema: 'whoisleuth.domain-portfolio.input', version: 1, portfolioLabel: 'Fixture',
+        assets: [{
+          domain: 'example.test', criticality: 'standard', registrar: null, registrarAccount: null,
+          expiresAt: null, autoRenew: null, dnsProviders: [], mailProviders: [], certificateProviders: [], recoveryDomains: [], reviewedAt: ISO,
+        }],
+      },
     ];
     assert.deepEqual(inputs.map((input) => buildOfflineEvidenceReview(JSON.stringify(input), ISO).kind), [
-      'rdap_search', 'dnssec', 'tlsa', 'rpki', 'geoip', 'encrypted_dns',
+      'rdap_search', 'dnssec', 'tlsa', 'rpki', 'geoip', 'encrypted_dns', 'zone_intent', 'domain_portfolio',
     ]);
   });
 

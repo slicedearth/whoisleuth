@@ -5,6 +5,7 @@ import {
   planEncryptedDnsQuery,
 } from '../lib/encrypted-dns-contract.mts';
 import { validateDnssecEvidence } from '../lib/dnssec-evidence-validation.mts';
+import { reviewDomainPortfolio } from '../lib/domain-portfolio-review.mts';
 import {
   buildLocalGeoIpDatabase,
   lookupLocalGeoIp,
@@ -15,6 +16,7 @@ import {
 } from '../lib/rdap-search-workbench.mts';
 import { reviewRpkiRoute } from '../lib/rpki-evidence.mts';
 import { analyzeTlsaEvidence } from '../lib/tlsa-evidence.mts';
+import { reviewZoneIntent } from '../lib/zone-intent-review.mts';
 import { CliUsageError } from './errors.mts';
 import { LOCAL_MMDB_QUERY_SCHEMA, reviewLocalMmdb } from './local-mmdb-review.mts';
 
@@ -47,7 +49,7 @@ function parseInput(value: unknown): UnknownRecord {
 
 function buildOfflineEvidenceReview(value: unknown, generatedAt = new Date().toISOString()) {
   const input = parseInput(value);
-  let kind: 'rdap_search' | 'dnssec' | 'tlsa' | 'rpki' | 'geoip' | 'encrypted_dns';
+  let kind: 'rdap_search' | 'dnssec' | 'tlsa' | 'rpki' | 'geoip' | 'encrypted_dns' | 'zone_intent' | 'domain_portfolio';
   let result: unknown;
   if (input.schema === 'whoisleuth.rdap-search-input') {
     kind = 'rdap_search';
@@ -100,6 +102,12 @@ function buildOfflineEvidenceReview(value: unknown, generatedAt = new Date().toI
       normalizeEncryptedDnsAdapter(input.adapter),
       { name: query.name, type: query.type },
     );
+  } else if (input.schema === 'whoisleuth.zone-intent.input') {
+    kind = 'zone_intent';
+    result = reviewZoneIntent(input, generatedAt);
+  } else if (input.schema === 'whoisleuth.domain-portfolio.input') {
+    kind = 'domain_portfolio';
+    result = reviewDomainPortfolio(input, generatedAt);
   } else {
     throw new CliUsageError('Offline evidence review does not recognise this input schema.');
   }

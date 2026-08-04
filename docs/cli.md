@@ -230,7 +230,7 @@ full contracts into the packaged reference.
 
 ### Offline supplied-evidence review
 
-[Read the DNSSEC, DANE, and supplied-observation review contract.](cli-reference.md#offline-supplied-evidence-review)
+[Read the DNSSEC, DANE, zone-intent, portfolio, and supplied-observation review contract.](cli-reference.md#offline-supplied-evidence-review)
 
 ### Domain control manifests
 

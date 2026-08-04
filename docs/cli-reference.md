@@ -924,6 +924,17 @@ Supported input schemas are:
 - `whoisleuth.encrypted-dns-plan-input`: validates an explicitly reviewed
   encrypted-DNS provider contract and prepares a bounded query plan. It does
   not execute the plan.
+- `whoisleuth.zone-intent.input`: parses either a deliberately supported,
+  bounded BIND master-file subset or normalised DNS records and compares it
+  with one separately attributed observation. TXT values are reduced to
+  SHA-256 digests, unsupported directives and records remain rejected, and an
+  incomplete observation never becomes a missing-record conclusion. The
+  review does not contact a resolver or apply a DNS change.
+- `whoisleuth.domain-portfolio.input`: reviews up to 500 analyst-supplied
+  domain inventory rows for exact registrar, DNS, mail, certificate and
+  recovery concentration, renewal-review gaps and internal recovery-domain
+  dependencies. Account labels and provider assignments remain analyst
+  assertions, and the review makes no provider or account request.
 
 The common output is `whoisleuth.cli.offline-evidence-review` version 1. It
 retains the nested result's explicit state and limitations. A locally
