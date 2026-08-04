@@ -4,6 +4,7 @@ import { describe, test } from 'node:test';
 import {
   MAX_ZONE_RECORDS,
   ZONE_INTENT_INPUT_SCHEMA,
+  normaliseRdata,
   reviewZoneIntent,
 } from '../lib/zone-intent-review.mts';
 
@@ -59,6 +60,40 @@ _443._tcp 300 IN TLSA 3 1 1 AABB
     assert.doesNotMatch(JSON.stringify(result), /v=spf1/u);
     assert.deepEqual(result.comparisons.find((item) => item.type === 'MX')?.desiredTtls, [300]);
     assert.deepEqual(result.comparisons.find((item) => item.type === 'MX')?.observedTtls, [600]);
+  });
+
+  test('concatenates quoted TXT character strings without corrupting spaces or escapes', () => {
+    const split = normaliseRdata('TXT', '"v=spf1 a" " -all"', null);
+    const joined = normaliseRdata('TXT', 'v=spf1 a -all', null);
+    assert.equal(split.value, joined.value);
+    assert.equal(normaliseRdata('TXT', '"abc" "def" "ghi"', null).value, normaliseRdata('TXT', 'abcdefghi', null).value);
+    assert.notEqual(normaliseRdata('TXT', '"a" "b"', null).value, normaliseRdata('TXT', 'a"b', null).value);
+    assert.equal(normaliseRdata('TXT', '"a\\\"b\\032c"', null).value, normaliseRdata('TXT', 'a"b c', null).value);
+
+    const dkim = 'p='.concat('A'.repeat(298));
+    const quoted = `"${dkim.slice(0, 150)}" "${dkim.slice(150)}"`;
+    assert.equal(normaliseRdata('TXT', quoted, null).value, normaliseRdata('TXT', dkim, null).value);
+  });
+
+  test('applies master-file relative names only to BIND input', () => {
+    const result = reviewZoneIntent({
+      schema: ZONE_INTENT_INPUT_SCHEMA,
+      version: 1,
+      origin: 'example.test',
+      desired: {
+        format: 'bind',
+        zoneText: 'www.example.test IN CNAME edge.example.test\nabsolute IN CNAME edge.example.net.',
+      },
+      observed: {
+        state: 'observed', source: 'Fixture', observedAt: NOW,
+        records: [
+          { owner: 'www.example.test.example.test', type: 'CNAME', value: 'edge.example.test.example.test' },
+          { owner: 'absolute.example.test', type: 'CNAME', value: 'edge.example.net' },
+        ],
+      },
+    }, NOW);
+    assert.equal(result.complete, true);
+    assert.equal(result.counts.aligned, 2);
   });
 
   test('keeps incomplete observations from becoming missing-record conclusions', () => {

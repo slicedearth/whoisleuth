@@ -14,6 +14,7 @@ export const MAX_ZONE_COMPARISONS = 2_000;
 type UnknownRecord = Record<string, unknown>;
 type ZoneRecordType = 'A' | 'AAAA' | 'CAA' | 'CDNSKEY' | 'CDS' | 'CNAME' | 'CSYNC' | 'DS' | 'HTTPS' | 'MX' | 'NS' | 'SRV' | 'SVCB' | 'TLSA' | 'TXT';
 type ObservationState = 'observed' | 'partial' | 'unavailable' | 'unsupported';
+type DomainNameMode = 'absolute' | 'master-file';
 
 const ROOT_KEYS = new Set(['schema', 'version', 'origin', 'desired', 'observed']);
 const DESIRED_KEYS = new Set(['format', 'zoneText', 'records']);
@@ -57,13 +58,13 @@ function timestamp(value: unknown, label: string): string {
   return new Date(parsed).toISOString();
 }
 
-function domainName(value: unknown, origin: string | null, label: string): string {
+function domainName(value: unknown, origin: string | null, label: string, mode: DomainNameMode = 'absolute'): string {
   const supplied = boundedText(value, label, 253).toLowerCase();
   const absolute = supplied.endsWith('.');
   const text = supplied.replace(/\.$/u, '');
   const candidate = text === '@'
     ? origin
-    : !origin || absolute || text === origin || text.endsWith(`.${origin}`)
+    : !origin || absolute || mode === 'absolute'
       ? text
       : `${text}.${origin}`;
   const ascii = domainToASCII(candidate ?? '');
@@ -73,13 +74,13 @@ function domainName(value: unknown, origin: string | null, label: string): strin
   return ascii;
 }
 
-function ownerName(value: unknown, origin: string, label: string): string {
+function ownerName(value: unknown, origin: string, label: string, mode: DomainNameMode = 'absolute'): string {
   const supplied = boundedText(value, label, 253).toLowerCase();
   const absolute = supplied.endsWith('.');
   const text = supplied.replace(/\.$/u, '');
   const candidate = text === '@'
     ? origin
-    : absolute || text === origin || text.endsWith(`.${origin}`)
+    : absolute || mode === 'absolute'
       ? text
       : `${text}.${origin}`;
   if (!candidate || candidate.length > 253 || candidate.split('.').some((part) => (
@@ -105,10 +106,71 @@ function txtDigest(value: string): string {
   return `sha256:${createHash('sha256').update(value).digest('hex')}`;
 }
 
-export function normaliseRdata(type: ZoneRecordType, rawValue: string, origin: string | null): Pick<ZoneRecord, 'value' | 'valueTreatment'> {
-  const value = canonicalText(rawValue);
+function boundedRecordText(value: unknown, label: string, maximum: number): string {
+  if (typeof value !== 'string' || value.length > maximum || /[\u0000-\u001f\u007f]/u.test(value)) {
+    throw new TypeError(`${label} must be bounded text without control characters.`);
+  }
+  const trimmed = value.trim();
+  if (!trimmed) throw new TypeError(`${label} must contain from 1 to ${maximum} characters.`);
+  return trimmed;
+}
+
+function decodeTxtRdata(rawValue: string): string {
+  const value = boundedRecordText(rawValue, 'TXT data', 16_384);
+  if (!value.startsWith('"')) return value;
+  let index = 0;
+  let output = '';
+  let segments = 0;
+  while (index < value.length) {
+    while (/\s/u.test(value[index] ?? '')) index += 1;
+    if (index >= value.length) break;
+    if (value[index] !== '"') throw new TypeError('TXT quoted character strings are malformed.');
+    index += 1;
+    segments += 1;
+    let closed = false;
+    while (index < value.length) {
+      const character = value[index];
+      if (character === '"') {
+        closed = true;
+        index += 1;
+        break;
+      }
+      if (character !== '\\') {
+        output += character;
+        index += 1;
+        continue;
+      }
+      const decimal = value.slice(index + 1, index + 4);
+      if (/^\d{3}$/u.test(decimal)) {
+        const byte = Number(decimal);
+        if (byte > 255) throw new TypeError('TXT decimal escape is outside the supported byte range.');
+        output += String.fromCharCode(byte);
+        index += 4;
+        continue;
+      }
+      const escaped = value[index + 1];
+      if (escaped === undefined) throw new TypeError('TXT data ends inside an escape sequence.');
+      output += escaped;
+      index += 2;
+    }
+    if (!closed) throw new TypeError('TXT quoted character string is unterminated.');
+    if (index < value.length && !/\s/u.test(value[index] ?? '')) {
+      throw new TypeError('TXT quoted character strings must be separated by whitespace.');
+    }
+  }
+  if (!segments || !output || output.length > 16_384) throw new TypeError('TXT data is invalid or too large.');
+  return output;
+}
+
+export function normaliseRdata(
+  type: ZoneRecordType,
+  rawValue: string,
+  origin: string | null,
+  nameMode: DomainNameMode = 'absolute',
+): Pick<ZoneRecord, 'value' | 'valueTreatment'> {
+  const value = type === 'TXT' ? boundedRecordText(rawValue, 'TXT data', 16_384) : canonicalText(rawValue);
   const tokens = value.split(' ');
-  const host = (input: string, label: string) => domainName(input, origin, label);
+  const host = (input: string, label: string) => domainName(input, origin, label, nameMode);
   if (type === 'A' || type === 'AAAA') {
     const family = type === 'A' ? 4 : 6;
     if (tokens.length !== 1 || isIP(tokens[0] ?? '') !== family) throw new TypeError(`${type} data must contain one valid address.`);
@@ -174,9 +236,7 @@ export function normaliseRdata(type: ZoneRecordType, rawValue: string, origin: s
     return { value: `${priority} ${target}${parameters.length ? ` ${parameters.join(' ')}` : ''}`, valueTreatment: 'normalised' };
   }
   if (type === 'TXT') {
-    const joined = value.replace(/(?:^|\s)"|"(?:\s|$)/gu, '');
-    if (!joined || joined.length > 16_384) throw new TypeError('TXT data is invalid or too large.');
-    return { value: txtDigest(joined), valueTreatment: 'sha256' };
+    return { value: txtDigest(decodeTxtRdata(value)), valueTreatment: 'sha256' };
   }
   throw new TypeError(`Unsupported record type ${type}.`);
 }
@@ -191,7 +251,10 @@ function normaliseRecord(value: unknown, origin: string, label: string): ZoneRec
   const ttl = source.ttl === null || source.ttl === undefined
     ? null
     : integerToken(String(source.ttl), 0, 0x7fff_ffff, `${label}.ttl`);
-  const normalised = normaliseRdata(type, boundedText(source.value, `${label}.value`, 16_384), origin);
+  const rawValue = type === 'TXT'
+    ? boundedRecordText(source.value, `${label}.value`, 16_384)
+    : boundedText(source.value, `${label}.value`, 16_384);
+  const normalised = normaliseRdata(type, rawValue, origin, 'absolute');
   return Object.freeze({ owner, ttl, type, ...normalised });
 }
 
@@ -229,7 +292,7 @@ function tokenise(line: string): string[] {
   let escaped = false;
   for (const char of line) {
     if (escaped) { current += char; escaped = false; continue; }
-    if (char === '\\') { escaped = true; continue; }
+    if (char === '\\') { current += char; escaped = true; continue; }
     if (char === '"') { quoted = !quoted; current += char; continue; }
     if (/\s/u.test(char) && !quoted) {
       if (current) { tokens.push(current); current = ''; }
@@ -287,7 +350,7 @@ function parseBindZone(zoneText: unknown, initialOrigin: string): { records: Zon
       const directive = tokens[0]?.toUpperCase();
       if (directive === '$ORIGIN') {
         if (tokens.length !== 2) throw new TypeError('$ORIGIN requires one domain name.');
-        origin = domainName(tokens[1], null, '$ORIGIN');
+        origin = domainName(tokens[1], origin, '$ORIGIN', 'master-file');
         lastOwner = origin;
         continue;
       }
@@ -296,7 +359,7 @@ function parseBindZone(zoneText: unknown, initialOrigin: string): { records: Zon
       let offset = 0;
       const ownerToken = entry.ownerOmitted ? lastOwner : tokens[offset++];
       if (!ownerToken) throw new TypeError('Record owner is missing.');
-      const owner = ownerName(ownerToken, origin, 'record owner');
+      const owner = ownerName(ownerToken, origin, 'record owner', 'master-file');
       lastOwner = owner;
       let ttl: number | null = null;
       if (/^\d+$/u.test(tokens[offset] ?? '')) ttl = integerToken(tokens[offset++] as string, 0, 0x7fff_ffff, 'record TTL');
@@ -304,7 +367,7 @@ function parseBindZone(zoneText: unknown, initialOrigin: string): { records: Zon
       const typeText = (tokens[offset++] ?? '').toUpperCase();
       if (!SUPPORTED_TYPES.has(typeText as ZoneRecordType)) throw new TypeError(`Record type ${typeText || '(missing)'} is unsupported.`);
       const rawValue = tokens.slice(offset).join(' ');
-      const normalised = normaliseRdata(typeText as ZoneRecordType, rawValue, origin);
+      const normalised = normaliseRdata(typeText as ZoneRecordType, rawValue, origin, 'master-file');
       if (records.length >= MAX_ZONE_RECORDS) { truncated = true; continue; }
       records.push(Object.freeze({ owner, ttl, type: typeText as ZoneRecordType, ...normalised }));
     } catch (error) {
