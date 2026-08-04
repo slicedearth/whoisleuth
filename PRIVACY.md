@@ -427,13 +427,17 @@ default (see the README), so many lookups return no personal data at all.
   browser-local case, watchlist, and profile records, but can appear in a
   deliberate full Lookup evidence export.
 - **Passive security posture**: a requested deep Lookup can interpret the
-  existing HTTP response, bounded static form and resource summaries, one TLS
+  existing HTTP response, an early bounded CSP meta policy from the already
+  captured homepage, bounded static form and resource summaries, one TLS
   handshake, DNSSEC publication, and CAA query as a separate versioned posture
   profile. It retains fixed finding identifiers, categories, state and tone
   labels, fixed explanations, fixed evidence classes, and bounded counts. It
   can review bounded Content-Security-Policy, Strict-Transport-Security,
   Referrer-Policy, and response-cookie attributes from the selected response
-  without another request. It does not copy response-header values, cookie
+  without another request. A CSP meta policy qualifies an inline-script header
+  finding only when it is fully parsed inside the explicit document head before
+  any script; later, malformed, or capped policies remain non-authoritative. It
+  does not copy response-header or meta-policy values, cookie
   names or values, paths, domains, nonces, hashes, reporting endpoints, TLS
   error strings, URLs, certificate contents, DNS record contents, or page
   markup into the derived profile.

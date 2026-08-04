@@ -15,15 +15,15 @@
 </script>
 
 <PublicSeo
-  title="Automated request policy | WHOISleuth"
-  description="How WHOISleuth identifies and bounds its automated HTTP requests, including homepage, favicon, policy and optional provider lookups."
+  title="Outbound request policy | WHOISleuth"
+  description="How WHOISleuth identifies and bounds its outbound HTTP requests, including homepage, favicon, policy and optional provider lookups."
   path="/request-policy"
 />
 
 <article class="policy-page">
   <header>
     <p class="eyebrow">Outbound transparency</p>
-    <h1>Automated request policy</h1>
+    <h1>Outbound request policy</h1>
     <p>WHOISleuth is a defensive domain-investigation tool. Its HTTP collectors identify themselves with a project-specific User-Agent and operate within fixed request, redirect, timeout, and response-size limits.</p>
   </header>
 

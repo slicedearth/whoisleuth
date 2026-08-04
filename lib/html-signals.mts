@@ -12,6 +12,7 @@ import { analyzeClientBehavior } from './client-behavior-profile.mts';
 import { createObservation } from './observation.mts';
 import { createPageFingerprints } from './page-fingerprints.mts';
 import { analyzePageRole } from './page-role-profile.mts';
+import { analyzeCspMetaPolicies } from './response-policy.mts';
 import { analyzeStaticHtml } from './static-html-analysis.mts';
 import { analyzeStructuredDataIdentity } from './structured-data-identity.mts';
 import { analyzeWebsiteTechnology } from './website-technology.mts';
@@ -628,6 +629,9 @@ function extractHtmlSignals(html: string, domain: string, options: HtmlSignalOpt
       ? pageIdentity.forms.externalActionOrigins.length > 0
       : null,
     externalAssetHosts: extractExternalAssetHosts(html, domain),
+    cspMetaPolicy: htmlAnalysis
+      ? analyzeCspMetaPolicies(htmlAnalysis.cspMetaPolicies, htmlAnalysis.cspMetaLimitReached)
+      : null,
     pageIdentity,
     credentialSurfaceProfile: includeCredentialSurfaceProfile && htmlAnalysis ? analyzeCredentialSurfaceProfile({
       htmlAnalysis,

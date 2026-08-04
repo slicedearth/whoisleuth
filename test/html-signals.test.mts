@@ -340,6 +340,32 @@ describe('pageIdentity', () => {
     assert.doesNotMatch(JSON.stringify({ role, behavior }), /private-key|private-value|class="login"/u);
   });
 
+  test('reduces an early CSP meta policy to bounded qualification metadata', () => {
+    const result = extractHtmlSignals(`
+      <html><head>
+        <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-private-value'">
+        <script>window.example = true</script>
+      </head></html>
+    `, 'example.com');
+
+    assert.deepEqual(result.cspMetaPolicy, {
+      cspMetaPolicyVersion: 1,
+      policiesObserved: 1,
+      policiesParsed: 1,
+      inlineScriptConstrained: true,
+      truncated: false,
+    });
+    assert.doesNotMatch(JSON.stringify(result.cspMetaPolicy), /private-value|sha256-/u);
+
+    const late = extractHtmlSignals(`
+      <html><head>
+        <script>window.example = true</script>
+        <meta http-equiv="Content-Security-Policy" content="script-src 'self'">
+      </head></html>
+    `, 'example.com');
+    assert.equal(late.cspMetaPolicy?.inlineScriptConstrained, false);
+  });
+
   test('derives structured identity from the same captured HTML', () => {
     const result = extractHtmlSignals(`
       <script type="application/ld+json">

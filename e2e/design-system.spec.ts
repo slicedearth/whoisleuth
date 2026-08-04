@@ -682,7 +682,8 @@ test('Lookup task and density controls change presentation without changing evid
   await expect(task).toHaveValue('general');
   await expect(density).toHaveValue('standard');
   await expect(page.getByRole('heading', { name: 'Raw evidence' })).toBeVisible();
-  await expect(page.locator('#raw-data details')).toBeHidden();
+  await expect(page.locator('#raw-data details')).toBeVisible();
+  await expect(page.locator('#raw-data details')).toHaveJSProperty('open', false);
 
   await density.selectOption('full');
   await expect(page.locator('#raw-data details')).toBeVisible();

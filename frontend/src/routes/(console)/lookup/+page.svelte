@@ -774,9 +774,6 @@
 <style>
   .result-root{min-width:0;overflow-x:clip;overflow-clip-margin:3px}
   .evidence-density{display:contents}
-  .density-standard .family-raw>:not(h3){display:none}
-  .density-standard .family-raw{min-height:34px;margin-top:14px}
-  .density-standard .family-raw>h3{margin-bottom:0}
   .density-summary>.result-section:not(.family-overview)>:not(h3){display:none}
   .density-summary>.result-section:not(.family-overview){min-height:34px;margin-top:14px}
   .density-summary>.result-section:not(.family-overview)>h3{margin-bottom:0}

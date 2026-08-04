@@ -139,6 +139,9 @@ function httpFindings(httpValue: unknown): PostureFinding[] {
 type ResponsePolicyFindingDefinition = {
   label: string;
   detail: (count: number) => string;
+  state?: PostureState;
+  tone?: PostureTone;
+  evidence?: string[];
 };
 
 const RESPONSE_POLICY_FINDINGS: Readonly<Record<string, ResponsePolicyFindingDefinition>> = Object.freeze({
@@ -163,8 +166,15 @@ const RESPONSE_POLICY_FINDINGS: Readonly<Record<string, ResponsePolicyFindingDef
     detail: () => "The effective selected script source included 'unsafe-eval'.",
   },
   csp_unsafe_inline: {
-    label: 'CSP permits unqualified inline script',
-    detail: () => "The effective selected script source included 'unsafe-inline' without an observed nonce or hash source in that directive.",
+    label: 'Response CSP header permits unqualified inline script',
+    detail: () => "The selected response header included 'unsafe-inline' without a nonce or hash source in that directive. A separate page policy was not observed early enough to qualify this response-scoped finding.",
+  },
+  csp_inline_constrained_by_meta: {
+    label: 'Page CSP further constrains inline script',
+    detail: () => 'A bounded CSP meta policy appeared before page scripts and further constrained the inline-script allowance in the selected response header. Browsers enforce both policies.',
+    state: 'observed',
+    tone: 'configured',
+    evidence: ['Selected HTTP response headers', 'Static page CSP meta policy'],
   },
   hsts_disabled: {
     label: 'HSTS disabled by selected response',
@@ -198,7 +208,7 @@ const RESPONSE_POLICY_FINDINGS: Readonly<Record<string, ResponsePolicyFindingDef
 
 function responsePolicyFindings(value: unknown): PostureFinding[] {
   const policy = record(value);
-  if (policy.responsePolicyVersion !== 1) return [];
+  if (![1, 2].includes(Number(policy.responsePolicyVersion))) return [];
   const findings: PostureFinding[] = [];
   const components = record(policy.components);
   const componentLabels: Array<[string, string]> = [
@@ -228,11 +238,11 @@ function responsePolicyFindings(value: unknown): PostureFinding[] {
     findings.push(finding(
       id,
       'response headers',
-      'potential_exposure',
-      'review',
+      definition.state ?? 'potential_exposure',
+      definition.tone ?? 'review',
       definition.label,
       definition.detail(count),
-      ['Transient selected response-policy analysis'],
+      definition.evidence ?? ['Transient selected response-policy analysis'],
     ));
   }
   return findings;

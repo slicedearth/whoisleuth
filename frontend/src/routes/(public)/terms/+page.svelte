@@ -31,7 +31,7 @@
 
   <section><h2>Evidence and decisions</h2><p>WHOISleuth provides bounded observations and explainable review aids, not legal conclusions, attribution, or a guarantee of ownership, control, availability, safety, or maliciousness. Keep unavailable and contradictory sources visible. Review every export, disclosure request, abuse report, and defensive control before using it.</p></section>
 
-  <section><h2>Data and upstream policies</h2><p>Do not retain, disclose, or export more personal or sensitive data than is necessary. Respect source-specific storage, caching, commercial-use, attribution, and redistribution terms. The <a href="/privacy">privacy policy</a> explains what the public deployment processes, while the <a href="/request-policy">automated request policy</a> explains bounded outbound behavior.</p></section>
+  <section><h2>Data and upstream policies</h2><p>Do not retain, disclose, or export more personal or sensitive data than is necessary. Respect source-specific storage, caching, commercial-use, attribution, and redistribution terms. The <a href="/privacy">privacy policy</a> explains what the public deployment processes, while the <a href="/request-policy">outbound request policy</a> explains bounded outbound behavior.</p></section>
 
   <section><h2>Availability and responsibility</h2><p>The service may be changed, limited, suspended, or withdrawn. Data sources can be delayed, incomplete, unavailable, or wrong. You remain responsible for validating evidence and for the consequences of your investigation, retention, disclosure, reporting, or defensive action.</p></section>
 

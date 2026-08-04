@@ -688,13 +688,18 @@ remain distinct from proof that no site exists.
 
 Selected security headers are observations only. Deep full Lookup transiently
 interprets bounded Content-Security-Policy, Strict-Transport-Security,
-Referrer-Policy, and Set-Cookie attributes from that same selected response.
-It retains only fixed policy finding identifiers, bounded cookie counts,
-component health, and limitations. Complete policies, cookie names and values,
-paths, domains, nonces, hashes, and reporting endpoints are discarded. Header
-absence and policy findings are not maliciousness or vulnerability verdicts
-and do not contribute to Risk scoring. A response can still establish
-web-service activity when its body is unavailable for HTML inspection.
+Referrer-Policy, and Set-Cookie attributes from that same selected response. It
+can also reduce a CSP meta policy from the already-captured homepage to fixed
+qualification metadata. The page policy qualifies an inline-script header
+finding only when it is fully parsed inside the explicit document head before
+any script; later, malformed, or capped policies remain non-authoritative. It
+retains only fixed policy finding identifiers, bounded policy and cookie counts,
+component health, and limitations. Complete response or meta policies, cookie
+names and values, paths, domains, nonces, hashes, and reporting endpoints are
+discarded. Header absence and policy findings are not maliciousness or
+vulnerability verdicts and do not contribute to Risk scoring. A response can
+still establish web-service activity when its body is unavailable for HTML
+inspection.
 
 ## Evidence export and privacy boundary
 

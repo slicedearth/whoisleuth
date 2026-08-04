@@ -34,8 +34,8 @@ const publicPages = [
   {
     path: '/request-policy',
     canonical: 'https://whoisleuth.com/request-policy',
-    title: 'Automated request policy | WHOISleuth',
-    heading: 'Automated request policy',
+    title: 'Outbound request policy | WHOISleuth',
+    heading: 'Outbound request policy',
   },
   {
     path: '/resources',

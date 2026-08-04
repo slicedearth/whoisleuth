@@ -23,7 +23,10 @@ import { buildHttpObservation, failedHttpObservation, skippedHttpObservation } f
 import { collectTlsIntelligence, skippedTlsObservation } from './tls-intelligence.mts';
 import { parseRegistryDate, registryDateIso } from './registry-dates.mts';
 import { analyzeWebsiteSecurityPosture } from './website-security-posture.mts';
-import { analyzeResponsePolicyHeaders } from './response-policy.mts';
+import {
+  analyzeResponsePolicyHeaders,
+  qualifyResponsePolicyWithCspMeta,
+} from './response-policy.mts';
 import type { ResponsePolicyAnalysis } from './response-policy.mts';
 import { nonEmptyErrorMessage } from './error-detail.mts';
 import { registryServiceAdmissionFor } from './registry-capabilities.mts';
@@ -713,6 +716,7 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
     phishingLanguageMatch: null,
     hasExternalFormAction: null,
     externalAssetHosts: [],
+    cspMetaPolicy: null,
     pageIdentity: null,
     credentialSurfaceProfile: null,
     structuredDataIdentity: null,
@@ -754,9 +758,11 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
     }
   }
 
+  const responsePolicy = qualifyResponsePolicyWithCspMeta(homepage.responsePolicy, htmlSignals.cspMetaPolicy);
+  const { cspMetaPolicy: _cspMetaPolicy, ...retainedHtmlSignals } = htmlSignals;
   const securityPosture = options.includeSecurityPosture === false ? null : analyzeWebsiteSecurityPosture({
     http: homepage.http,
-    responsePolicy: homepage.responsePolicy,
+    responsePolicy,
     pageIdentity: htmlSignals.pageIdentity,
     tls: tlsIntelligence,
     dns: dnsIntelligence,
@@ -793,7 +799,7 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
       deepScanComplete,
       faviconHash,
       faviconPHash,
-      ...htmlSignals,
+      ...retainedHtmlSignals,
       securityPosture,
       ...baseInfo,
       nameservers: nameservers.length ? nameservers : dnsIntelligence.records.ns,
@@ -818,7 +824,7 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
     deepScanComplete,
     faviconHash,
     faviconPHash,
-    ...htmlSignals,
+    ...retainedHtmlSignals,
     securityPosture,
     ...baseInfo,
     nameservers: nameservers.length ? nameservers : dnsIntelligence.records.ns,
