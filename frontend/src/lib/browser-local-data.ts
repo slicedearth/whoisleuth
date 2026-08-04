@@ -446,7 +446,7 @@ export class BrowserLocalDataProvider {
   }
 
   async #requireDefinition<T>(definition: LocalDataCollectionDefinition<T>): Promise<void> {
-    if (!this.#initializationPromise) throw new BrowserLocalDataError('LOCAL_DATA_NOT_INITIALIZED', 'Browser-local data has not been initialized.');
+    if (!this.#initializationPromise) throw new BrowserLocalDataError('LOCAL_DATA_NOT_INITIALIZED', 'Browser-local data has not been initialised.');
     await this.#initializationPromise;
     if (this.#definitions.get(definition.id) !== definition) {
       throw new BrowserLocalDataError('INVALID_LOCAL_DATA_DEFINITION', `The ${definition.label} definition is not registered with this provider.`);

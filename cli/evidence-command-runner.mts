@@ -148,10 +148,10 @@ export async function runEvidenceCommand(
   }
 
   if (args.action === 'sign-artifact') {
-    const input = await readArtifact(args.source, 'Evidence artifact input', dependencies);
+    const input = await readArtifact(args.source, 'Evidence artefact input', dependencies);
     if (!input.trim()) {
       throw new CliUsageError(
-        'sign-artifact requires one reviewed artifact file or an artifact on stdin.',
+        'sign-artifact requires one reviewed artefact file or an artefact on stdin.',
       );
     }
     const privateKey = await readKey(

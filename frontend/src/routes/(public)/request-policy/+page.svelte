@@ -41,7 +41,7 @@
       <li>Uses a {seconds(HOMEPAGE_FETCH_TIMEOUT_MS)}-second homepage deadline and caps the retained homepage body at {bytes(MAX_HOMEPAGE_BYTES)} bytes.</li>
       <li>Checks at most {MAX_FAVICON_CANDIDATES} declared or conventional favicon candidates in priority order, one at a time, with a {seconds(FAVICON_FETCH_TIMEOUT_MS)}-second deadline and {bytes(MAX_FAVICON_BYTES)}-byte cap per candidate.</li>
       <li>Blocks private, loopback, link-local, multicast, reserved, and other non-public destinations and revalidates every redirect against DNS-rebinding controls.</li>
-      <li>Does not retain cookies, credentials, authorization headers, request bodies, URL fragments, or downloaded files.</li>
+      <li>Does not retain cookies, credentials, authorisation headers, request bodies, URL fragments, or downloaded files.</li>
     </ul>
   </section>
 

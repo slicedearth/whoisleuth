@@ -462,7 +462,7 @@ function finalizePreview(
   }
   const conflicts = parsed.candidates
     .filter((candidate) => candidate.externalId && conflictKeys.has(candidate.externalId))
-    .map((candidate) => exclusion(candidate.externalId, candidate.entityType, 'One external identifier resolves to conflicting normalized values.'))
+    .map((candidate) => exclusion(candidate.externalId, candidate.entityType, 'One external identifier resolves to conflicting normalised values.'))
     .slice(0, MAX_EXTERNAL_INTELLIGENCE_EXCLUSIONS);
   const unique = new Map<string, ExternalIntelligenceItem>();
   let duplicatesSkipped = 0;

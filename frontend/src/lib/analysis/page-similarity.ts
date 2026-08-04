@@ -257,7 +257,7 @@ export function comparePageBaselines(rawReference: unknown, rawObserved: unknown
   if (!reference || !observed) return null;
 
   const components = [
-    digestComponent('normalized_html', 'Normalized HTML', 'Normalized-HTML', reference.normalizedHtml, observed.normalizedHtml),
+    digestComponent('normalized_html', 'Normalised HTML', 'Normalized-HTML', reference.normalizedHtml, observed.normalizedHtml),
     visibleTextComponent(reference.visibleText, observed.visibleText),
     domStructureComponent(reference.domStructure, observed.domStructure),
     formComponent(reference.formStructure, observed.formStructure),

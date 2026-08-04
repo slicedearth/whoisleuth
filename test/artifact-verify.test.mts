@@ -109,7 +109,7 @@ describe('offline artifact verifier', () => {
 
     await assert.rejects(
       verifyOfflineArtifact(JSON.stringify({ ...lookup, diagnostics: { rdap: { status: 'success' }, whois: { status: 'complete' } } })),
-      /missing normalized parsed data/iu,
+      /missing normalised parsed data/iu,
     );
   });
 

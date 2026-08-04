@@ -235,7 +235,7 @@ function byteLength(value: string): number {
   return new TextEncoder().encode(value).byteLength;
 }
 
-function serialize(value: unknown, message = 'The workspace archive contains data that cannot be serialized.'): string {
+function serialize(value: unknown, message = 'The workspace archive contains data that cannot be serialised.'): string {
   try {
     const serialized = JSON.stringify(value);
     if (typeof serialized !== 'string') throw new Error(message);
@@ -577,7 +577,7 @@ export async function readWorkspaceArchive(raw: unknown, options: WorkspaceArchi
     let reason = '';
     if (!definition) {
       status = 'unsupported';
-      reason = 'This app does not recognize the archive section.';
+      reason = 'This app does not recognise the archive section.';
     } else if (entry.version !== definition.version || entry.schema !== definition.schema) {
       status = 'unsupported';
       reason = entry.version > definition.version

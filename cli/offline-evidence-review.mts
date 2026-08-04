@@ -101,7 +101,7 @@ function buildOfflineEvidenceReview(value: unknown, generatedAt = new Date().toI
       { name: query.name, type: query.type },
     );
   } else {
-    throw new CliUsageError('Offline evidence review does not recognize this input schema.');
+    throw new CliUsageError('Offline evidence review does not recognise this input schema.');
   }
   return Object.freeze({
     schema: OFFLINE_EVIDENCE_REVIEW_SCHEMA,

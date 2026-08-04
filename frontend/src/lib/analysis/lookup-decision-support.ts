@@ -97,7 +97,7 @@ const TASK_GUIDANCE: Readonly<Record<LookupTaskView, Omit<LookupTaskGuidance, 't
   }),
   acquisition: Object.freeze({
     label: 'Acquisition review',
-    summary: 'Prioritize registration lifecycle, authority, transfer dependencies, mail, DNS, and services that would need a controlled transition.',
+    summary: 'Prioritise registration lifecycle, authority, transfer dependencies, mail, DNS, and services that would need a controlled transition.',
     questions: Object.freeze([
       'Is the registration conclusion authoritative and internally consistent?',
       'Which DNS, mail, certificate, and website dependencies require transition planning?',
@@ -107,7 +107,7 @@ const TASK_GUIDANCE: Readonly<Record<LookupTaskView, Omit<LookupTaskGuidance, 't
   }),
   brand: Object.freeze({
     label: 'Brand review',
-    summary: 'Prioritize declared identity, page similarity, credential surfaces, external destinations, and infrastructure relationships.',
+    summary: 'Prioritise declared identity, page similarity, credential surfaces, external destinations, and infrastructure relationships.',
     questions: Object.freeze([
       'Does the page claim or resemble a reviewed identity?',
       'Where do redirects, forms, resources, and trackers cross trust boundaries?',
@@ -117,9 +117,9 @@ const TASK_GUIDANCE: Readonly<Record<LookupTaskView, Omit<LookupTaskGuidance, 't
   }),
   incident: Object.freeze({
     label: 'Incident response',
-    summary: 'Prioritize current reachability, redirects, certificate state, credential surfaces, warning data, and evidence that can support a reviewed response.',
+    summary: 'Prioritise current reachability, redirects, certificate state, credential surfaces, warning data, and evidence that can support a reviewed response.',
     questions: Object.freeze([
-      'What behavior was observed at the recorded time?',
+      'What behaviour was observed at the recorded time?',
       'Which source limitations could change the response decision?',
       'What evidence and recipient route are ready for a reviewed handoff?',
     ]),
@@ -127,7 +127,7 @@ const TASK_GUIDANCE: Readonly<Record<LookupTaskView, Omit<LookupTaskGuidance, 't
   }),
   owned: Object.freeze({
     label: 'Owned-domain posture',
-    summary: 'Prioritize delegation, mail, certificate, security-policy, lifecycle, and change evidence for a domain under review.',
+    summary: 'Prioritise delegation, mail, certificate, security-policy, lifecycle, and change evidence for a domain under review.',
     questions: Object.freeze([
       'Do registry publication and directly observed delegation agree?',
       'Are mail, certificate, and website controls in the expected state?',
@@ -170,7 +170,7 @@ const SUPPORTS: Readonly<Record<string, readonly string[]>> = Object.freeze({
   'reverse-dns': Object.freeze(['Observed endpoint context']),
   'network-context': Object.freeze(['Delivery and routing context']),
   http: Object.freeze(['Redirects', 'Page collection', 'Website state']),
-  tls: Object.freeze(['Hostname authorization', 'Certificate scope']),
+  tls: Object.freeze(['Hostname authorisation', 'Certificate scope']),
   'page-identity': Object.freeze(['Declared page identity', 'Form and resource review']),
   technology: Object.freeze(['Technology profile']),
   'security-posture': Object.freeze(['Passive security posture']),
@@ -355,8 +355,8 @@ function identityEntries(input: Readonly<{
       id: 'tls-hostname-authorization',
       state: 'conflict',
       importance: 'high',
-      title: 'The observed certificate did not authorize the requested hostname',
-      detail: text(tlsAuthorization.error, 240) || 'TLS hostname authorization failed for the requested host.',
+      title: 'The observed certificate did not authorise the requested hostname',
+      detail: text(tlsAuthorization.error, 240) || 'TLS hostname authorisation failed for the requested host.',
       sources: ['TLS'],
       href: '#evidence-tls',
     });

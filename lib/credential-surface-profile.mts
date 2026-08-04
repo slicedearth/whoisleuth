@@ -34,7 +34,7 @@ function analyzeCredentialSurfaceProfile(input: CredentialSurfaceProfileInput = 
   const partial = truncated || unclassifiedActions > 0;
   const limitations = [
     'Static input categories use only bounded type and autocomplete declarations; JavaScript-rendered, non-semantic, disabled, and hidden controls are not classified.',
-    'Category counts can overlap when one input declares more than one recognized purpose.',
+    'Category counts can overlap when one input declares more than one recognised purpose.',
     'External submission can be legitimate and does not establish phishing, unsafe handling, ownership, intent, or maliciousness.',
     'No field names, values, labels, placeholders, complete action URLs, paths, queries, fragments, or arbitrary attributes are retained.',
   ];

@@ -163,8 +163,8 @@
   {#if securityTxtSupported}
     <fieldset class="intelligence-options">
       <legend>Optional disclosure contact</legend>
-      <p class="intelligence-hint">This starts one bounded HTTPS collection at the standardized security.txt location on the exact hostname entered.</p>
-      <label class="intelligence-option choice"><input type="checkbox" bind:checked={includeSecurityTxt} disabled={!deepMode || !securityTxtEligible}> <span><strong>Retrieve security.txt contacts</strong> Collects published contact, policy, expiry, language, and encryption references. Publication does not authorize security testing.</span></label>
+      <p class="intelligence-hint">This starts one bounded HTTPS collection at the standardised security.txt location on the exact hostname entered.</p>
+      <label class="intelligence-option choice"><input type="checkbox" bind:checked={includeSecurityTxt} disabled={!deepMode || !securityTxtEligible}> <span><strong>Retrieve security.txt contacts</strong> Collects published contact, policy, expiry, language, and encryption references. Publication does not authorise security testing.</span></label>
     </fieldset>
   {/if}
 

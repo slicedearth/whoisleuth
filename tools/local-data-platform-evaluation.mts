@@ -165,12 +165,12 @@ export function buildLocalDataPlatformEvaluation(options: Readonly<{ now?: () =>
       Object.freeze({
         id: 'privacy',
         status: 'preserve',
-        detail: boundedDetail('Any replacement must remain same-origin and browser-local by default and must not create hosted custody or synchronization.'),
+        detail: boundedDetail('Any replacement must remain same-origin and browser-local by default and must not create hosted custody or synchronisation.'),
       }),
       Object.freeze({
         id: 'offline',
         status: 'neutral',
-        detail: boundedDetail('Both localStorage and IndexedDB work without a network connection; PWA behavior is a separate decision.'),
+        detail: boundedDetail('Both localStorage and IndexedDB work without a network connection; PWA behaviour is a separate decision.'),
       }),
     ]),
     candidates: Object.freeze(candidates),
@@ -183,7 +183,7 @@ export function buildLocalDataPlatformEvaluation(options: Readonly<{ now?: () =>
     }),
     limitations: Object.freeze([
       boundedDetail('Declared store budgets are safety ceilings, not a measurement of one user workspace or a browser quota guarantee.'),
-      boundedDetail('Browser quota and eviction behavior vary by browser, device, storage pressure, and browsing mode.'),
+      boundedDetail('Browser quota and eviction behaviour vary by browser, device, storage pressure, and browsing mode.'),
       boundedDetail('The evaluation does not read existing browser records, benchmark a user device, or prove that a migration is safe.'),
     ]),
   });
@@ -198,7 +198,7 @@ export function formatLocalDataPlatformEvaluation(report: ReturnType<typeof buil
     `Capacity above reference: ${report.current.exceedsReferenceByMiB} MiB`,
     `Decision: ${report.decision.state}`,
     `Candidate: ${recommended?.id || 'none'} (${recommended?.productionDependency ? 'dependency required' : 'no production dependency'})`,
-    'Encryption, PWA support, and synchronization remain separately gated.',
+    'Encryption, PWA support, and synchronisation remain separately gated.',
     'Use --json for the complete versioned report.',
   ].join('\n');
 }

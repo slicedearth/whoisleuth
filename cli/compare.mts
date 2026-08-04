@@ -216,7 +216,7 @@ function projectCliRegistrarPublicationInput(document: SavedLookupDocument): {
   }
   const parsed = objectOrNull(registrar?.parsed);
   if (status === 'success' && !parsed) {
-    throw new CliUsageError('Successful registrar RDAP input is missing normalized parsed data.');
+    throw new CliUsageError('Successful registrar RDAP input is missing normalised parsed data.');
   }
   const projected = projectRdapSource(parsed, 'rdap.registrarRdap.parsed');
   delete projected.handle;

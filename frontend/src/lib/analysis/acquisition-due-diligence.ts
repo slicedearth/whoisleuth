@@ -133,7 +133,7 @@ function lifecycleItem(
       label: 'Lifecycle date observed',
       state: expiresInDays !== null && expiresInDays <= 30 ? 'review' : 'observed',
       detail: timing,
-      provenance: 'Normalized RDAP or WHOIS lifecycle',
+      provenance: 'Normalised RDAP or WHOIS lifecycle',
     };
   }
   return {
@@ -141,7 +141,7 @@ function lifecycleItem(
     label: completePublication ? 'Expiry date not published' : 'Lifecycle timing unavailable',
     state: completePublication ? 'observed' : 'unavailable',
     detail: completePublication
-      ? 'A usable publication was collected without a normalized expiry date. Registry policy and renewal state still require manual confirmation.'
+      ? 'A usable publication was collected without a normalised expiry date. Registry policy and renewal state still require manual confirmation.'
       : 'Incomplete or unavailable registry publications cannot establish an expiry or release window.',
     provenance: 'Registry publication quality',
   };
@@ -167,7 +167,7 @@ function transferItem(lifecycle: UnknownRecord, publications: UnknownRecord[]): 
       id: 'transfer',
       label: 'No interpreted lock status observed',
       state: 'review',
-      detail: 'The collected statuses did not contain a recognized client or server lock. This does not prove transfer eligibility or that other policy restrictions are absent.',
+      detail: 'The collected statuses did not contain a recognised client or server lock. This does not prove transfer eligibility or that other policy restrictions are absent.',
       provenance: 'EPP status interpretation',
     };
   }
@@ -356,7 +356,7 @@ function registryPolicyChecks(
       detail: statuses.length
         ? `The collected publication included ${statuses.slice(0, 6).join(', ')}${statuses.length > 6 ? ', …' : ''}. Confirm current registry timing and restoration or deletion rules; WHOISleuth does not predict release.`
         : publicationAvailable
-          ? 'No recognized lifecycle status was retained. Confirm renewal, grace, redemption, restoration, and deletion rules with the current registry or registrar.'
+          ? 'No recognised lifecycle status was retained. Confirm renewal, grace, redemption, restoration, and deletion rules with the current registry or registrar.'
           : 'No usable registry publication was available for a current lifecycle-policy review.',
       provenance: 'Separately attributed RDAP and WHOIS lifecycle publications',
     },
@@ -365,9 +365,9 @@ function registryPolicyChecks(
       label: locks.client === true || locks.server === true ? 'Confirm observed transfer constraints' : 'Confirm transfer and change-of-control requirements',
       state: publicationAvailable ? 'review' : 'unavailable',
       detail: locks.client === true || locks.server === true
-        ? 'Recognized client or server lock evidence was observed. Confirm authorization codes, lock removal, waiting periods, identity checks, and any registrar change-of-control process.'
+        ? 'Recognised client or server lock evidence was observed. Confirm authorisation codes, lock removal, waiting periods, identity checks, and any registrar change-of-control process.'
         : publicationAvailable
-          ? 'No recognized lock was retained, but that does not establish transfer eligibility. Confirm authorization, waiting periods, identity checks, and registrar requirements.'
+          ? 'No recognised lock was retained, but that does not establish transfer eligibility. Confirm authorisation, waiting periods, identity checks, and registrar requirements.'
           : 'No usable status publication was available to describe current transfer constraints.',
       provenance: 'EPP status interpretation and manual policy requirements',
     },

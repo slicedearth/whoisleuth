@@ -98,7 +98,7 @@ const EXTENSION_CATALOG: Readonly<Record<string, CatalogEntry>> = Object.freeze(
   farv1: {
     label: 'Federated authentication',
     category: 'standard',
-    capability: 'Federated authorization profile declaration.',
+    capability: 'Federated authorisation profile declaration.',
   },
   fred: {
     label: 'Registry-system extension',
@@ -165,7 +165,7 @@ const EXTENSION_CATALOG: Readonly<Record<string, CatalogEntry>> = Object.freeze(
   paging: {
     label: 'Result paging',
     category: 'standard',
-    capability: 'Paged search-result behavior.',
+    capability: 'Paged search-result behaviour.',
   },
   platformns: {
     label: 'Nameserver platform extension',
@@ -200,17 +200,17 @@ const EXTENSION_CATALOG: Readonly<Record<string, CatalogEntry>> = Object.freeze(
   rirsearch1: {
     label: 'Address-registry search',
     category: 'standard',
-    capability: 'Versioned network and autonomous-system search behavior.',
+    capability: 'Versioned network and autonomous-system search behaviour.',
   },
   sorting: {
     label: 'Result sorting',
     category: 'standard',
-    capability: 'Sorted search-result behavior.',
+    capability: 'Sorted search-result behaviour.',
   },
   subsetting: {
     label: 'Partial response',
     category: 'standard',
-    capability: 'Field-subset response behavior.',
+    capability: 'Field-subset response behaviour.',
   },
   ttl0: {
     label: 'DNS TTL extension',
@@ -333,7 +333,7 @@ export function inspectRdapCapabilities(
     .map((entry) => entry.identifier)
     .slice(0, MAX_RDAP_UNKNOWN_CAPABILITIES);
   const limitations = [
-    'Declarations describe what the server claims for this response; they do not prove that an operation is authorized, implemented correctly, complete, or available anonymously.',
+    'Declarations describe what the server claims for this response; they do not prove that an operation is authorised, implemented correctly, complete, or available anonymously.',
     'Unknown identifiers remain visible and neutral. Catalogue recognition never affects availability or Risk scoring.',
   ];
   if (state === 'unavailable') {

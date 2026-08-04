@@ -107,9 +107,15 @@ export function buildScoreEvidenceQuality(
   if (limitedSources || unavailableSources) {
     limitations.push('One or more score-relevant sources were partial, unavailable, or indeterminate.');
   }
+  if (skippedSources) {
+    limitations.push('One or more reported sources were skipped or unsupported and did not contribute to the score.');
+  }
   if (!coverage.length) limitations.push('Source-level coverage was not supplied with this score.');
   if (missingFamilies.length) limitations.push(`No usable observation was supplied for: ${missingFamilies.join(', ')}.`);
-  limitations.push('Evidence coverage qualifies the score; it never adds points or turns missing evidence into a negative finding.');
+  const boundedLimitations = [
+    ...limitations.slice(0, 5),
+    'Evidence coverage qualifies the score; it never adds points or turns missing evidence into a negative finding.',
+  ];
 
   return Object.freeze({
     version: SCORE_EVIDENCE_QUALITY_VERSION,
@@ -122,6 +128,6 @@ export function buildScoreEvidenceQuality(
     skippedSources,
     observedFamilies: Object.freeze(observedFamilies),
     missingFamilies: Object.freeze(missingFamilies),
-    limitations: Object.freeze(limitations.slice(0, 6)),
+    limitations: Object.freeze(boundedLimitations),
   });
 }

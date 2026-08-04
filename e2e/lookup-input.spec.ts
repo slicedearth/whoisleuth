@@ -465,7 +465,7 @@ test('security.txt collection is explicit, separately presented, and mobile safe
   await expect(disclosure).not.toHaveAttribute('open', '');
   await disclosure.locator('summary').click();
   await expect(disclosure.getByText('mailto:security@example.test', { exact: true })).toBeVisible();
-  await expect(disclosure.getByText(/does not authorize testing/u)).toBeVisible();
+  await expect(disclosure.getByText(/does not authorise testing/u)).toBeVisible();
 
   await page.setViewportSize({ width: 320, height: 640 });
   await expectNoHorizontalOverflow(page);

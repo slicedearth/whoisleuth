@@ -72,7 +72,7 @@
   <header>
     <div>
       <p class="eyebrow">Field checkpoint</p>
-      <h4 id="lookup-checkpoint-title">Retain selected normalized facts</h4>
+      <h4 id="lookup-checkpoint-title">Retain selected normalised facts</h4>
       <p>Choose only the facts needed for later review. Raw registry payloads, contacts, scripts, and unselected fields are not stored by this action.</p>
     </div>
     <button class="btn" type="button" disabled={!selectedFields.length} onclick={() => void save()}>Save {selectedFields.length || ''} checkpoint fact{selectedFields.length === 1 ? '' : 's'}</button>
@@ -103,7 +103,7 @@
       {/each}
     </div>
   {:else}
-    <p class="empty">No normalized fact is currently available to checkpoint. This does not mean the evidence is absent elsewhere.</p>
+    <p class="empty">No normalised fact is currently available to checkpoint. This does not mean the evidence is absent elsewhere.</p>
   {/if}
 
   {#if transitionComparison.length}

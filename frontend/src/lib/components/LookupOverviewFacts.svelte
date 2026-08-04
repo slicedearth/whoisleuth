@@ -48,7 +48,7 @@
           <div><dt>Observed</dt><dd>{fact.provenance.observedAt}</dd></div>
           <div><dt>Coverage</dt><dd>{fact.provenance.completeness}</dd></div>
           <div><dt>Field families</dt><dd>{fact.provenance.fieldFamilies.join(', ')}</dd></div>
-          <div><dt>Normalization</dt><dd>{fact.provenance.normalization}</dd></div>
+          <div><dt>Normalisation</dt><dd>{fact.provenance.normalization}</dd></div>
           <div><dt>Decision use</dt><dd>{fact.provenance.decisionImpact}</dd></div>
         </dl>
         {#if fact.provenance.conflicts.length}

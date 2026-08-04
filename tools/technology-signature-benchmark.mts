@@ -409,9 +409,9 @@ export function buildTechnologySignatureBenchmark(options: BenchmarkOptions = {}
       licenseBases: reviewedLicenseBases,
       byCategory: reviewedByCategory,
       nextAction: reviewedUnsampledSignatureIds.length
-        ? 'Add contributor-reviewed, minimized, licensed observations for unsampled signatures; do not use live test requests.'
+        ? 'Add contributor-reviewed, minimised, licensed observations for unsampled signatures; do not use live test requests.'
         : reviewedStaleFixtureIds.length
-          ? 'Re-review stale minimized fixtures before relying on the corpus for current coverage claims.'
+          ? 'Re-review stale minimised fixtures before relying on the corpus for current coverage claims.'
           : 'Maintain the reviewed corpus and investigate any benchmark regression before expanding signatures.',
     }),
     bounds: Object.freeze({
@@ -430,7 +430,7 @@ export function buildTechnologySignatureBenchmark(options: BenchmarkOptions = {}
     limitations: Object.freeze([
       'The synthetic corpus is an offline regression and calibration set, not a live technology-coverage measurement.',
       reviewedFixtures.length
-        ? 'The reviewed corpus contains minimized contributor-reviewed observations. The coverage gate requires at least one passing reviewed observation for every catalogue signature and still must not be generalized to the wider web.'
+        ? 'The reviewed corpus contains minimised contributor-reviewed observations. The coverage gate requires at least one passing reviewed observation for every catalogue signature and still must not be generalised to the wider web.'
         : 'The contributor-reviewed corpus is empty, so this report makes no claim about real-world technology coverage.',
       'A matched signature is an implementation clue from the selected response, not proof of ownership, safety, maliciousness, support status, or exploitability.',
       'Unmatched and truncated evidence remains inconclusive because technologies can be concealed, rendered by scripts, proxied, or absent from the captured prefix.',

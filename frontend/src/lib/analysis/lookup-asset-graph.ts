@@ -283,7 +283,7 @@ export function buildLookupAssetGraph(input: Readonly<{
       edges: [],
       sources: [],
       truncated: false,
-      limitations: ['A normalized domain target is required before an asset graph can be projected.'],
+      limitations: ['A normalised domain target is required before an asset graph can be projected.'],
     };
   }
   const observedAt = isoDate(input.observedAt);
@@ -819,8 +819,8 @@ export function buildLookupAssetGraph(input: Readonly<{
         'identity',
         authorizationReview.authorized ? 'Runtime trust confirmed' : 'Runtime trust not confirmed',
         authorizationReview.authorized
-          ? 'The runtime trust store authorized the observed certificate chain.'
-          : text(authorizationReview.error, 160) || 'The runtime trust store did not authorize the observed certificate chain.',
+          ? 'The runtime trust store authorised the observed certificate chain.'
+          : text(authorizationReview.error, 160) || 'The runtime trust store did not authorise the observed certificate chain.',
       );
       if (authorizationId) {
         addEdge({

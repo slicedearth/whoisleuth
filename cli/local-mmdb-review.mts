@@ -36,7 +36,7 @@ export async function reviewLocalMmdb(
   const license = boundedText(input.license, 240);
   if (!isIP(address)) throw new CliUsageError('Local MMDB review requires one valid IP address.');
   if (!sourceLabel || !databaseVersion || !license) {
-    throw new CliUsageError('Local MMDB review requires bounded sourceLabel, databaseVersion, and license metadata.');
+    throw new CliUsageError('Local MMDB review requires bounded sourceLabel, databaseVersion, and licence metadata.');
   }
   let info;
   try { info = await stat(databasePath); } catch { throw new CliUsageError('The supplied MMDB file could not be read.'); }

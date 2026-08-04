@@ -46,7 +46,7 @@
             <p>{finding.detail}</p>
             <dl>
               <div><dt>Observed</dt><dd>{finding.observed.join(', ') || 'Unavailable'}</dd></div>
-              <div><dt>Expected or authorized</dt><dd>{finding.expected.join(', ') || 'Not established'}</dd></div>
+              <div><dt>Expected or authorised</dt><dd>{finding.expected.join(', ') || 'Not established'}</dd></div>
               <div><dt>Sources</dt><dd>{finding.sources.join(', ')}</dd></div>
             </dl>
             {#if finding.limitations.length}<small>{finding.limitations.join(' ')}</small>{/if}
@@ -55,7 +55,7 @@
       </div>
       {#if review.caaAuthorizations.some((authorization) => authorization.accountUris.length || authorization.validationMethods.length || authorization.unrecognizedParameters.length)}
         <details class="authorization-parameters">
-          <summary>Review CAA authorization parameters</summary>
+          <summary>Review CAA authorisation parameters</summary>
           <div>
             {#each review.caaAuthorizations as authorization}
               {#if authorization.accountUris.length || authorization.validationMethods.length || authorization.unrecognizedParameters.length}

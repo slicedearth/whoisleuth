@@ -224,7 +224,7 @@
 <details class="external-import card">
   <summary>Import bounded external findings</summary>
   <div class="import-body">
-    <p>Preview the strict <code>whoisleuth.external-findings</code>, sanitised capture summary or artifact-metadata manifest, documented domain, DNS, or certificate observation rows, fixed-column CSV/JSON rows, a bounded STIX 2.1 bundle, a bounded MISP event, or a strict WARC/WACZ response archive locally before changing a case. WARC processing rejects or discards request records, sensitive headers, downloads, unsupported response types, excessive records, and mismatched supported record digests. WACZ processing additionally bounds ZIP expansion and verifies its declared WARC resources before applying the same WARC privacy filter. Imports never fetch references, run code, alter dispositions, start collection, score claims, publish events, or submit data elsewhere.</p>
+    <p>Preview the strict <code>whoisleuth.external-findings</code>, sanitised capture summary or artefact-metadata manifest, documented domain, DNS, or certificate observation rows, fixed-column CSV/JSON rows, a bounded STIX 2.1 bundle, a bounded MISP event, or a strict WARC/WACZ response archive locally before changing a case. WARC processing rejects or discards request records, sensitive headers, downloads, unsupported response types, excessive records, and mismatched supported record digests. WACZ processing additionally bounds ZIP expansion and verifies its declared WARC resources before applying the same WARC privacy filter. Imports never fetch references, run code, alter dispositions, start collection, score claims, publish events, or submit data elsewhere.</p>
     <label class="btn file-btn">Choose JSON, CSV, WARC, or WACZ<input type="file" accept="application/json,text/csv,application/warc,application/wacz,.json,.csv,.warc,.wacz" onchange={selectFile}></label>
     {#if findingsPreview}
       <section class="preview" aria-labelledby="external-findings-preview-title">
@@ -259,7 +259,7 @@
           <div><p class="eyebrow">Validated {intelligencePreview.format.toUpperCase()} preview</p><h3 id="external-intelligence-preview-title">{intelligencePreview.sourceName}</h3></div>
           <span>{countLabel(intelligencePreview.items.length, 'claim')} · {countLabel(intelligencePreview.exclusions.length, 'exclusion')}</span>
         </header>
-        <div class="preview-metrics" role="group" aria-label="External intelligence normalization summary">
+        <div class="preview-metrics" role="group" aria-label="External intelligence normalisation summary">
           <span><strong>{intelligencePreview.items.length}</strong> accepted</span>
           <span><strong>{intelligencePreview.duplicatesSkipped}</strong> duplicate</span>
           <span><strong>{intelligencePreview.conflicts.length}</strong> conflict</span>
@@ -283,7 +283,7 @@
         {/if}
         <label class="case-target">Merge into existing case<select bind:value={targetCaseId} disabled={applying || !intelligencePreview.items.length}><option value="">Select a case</option>{#each cases as record}<option value={record.id}>{record.domain}</option>{/each}</select></label>
         {#if !cases.length}<p class="preview-warning">Open a case before importing external intelligence. This importer never creates one automatically.</p>{/if}
-        <p class="preview-note">The source file SHA-256 digest, external identifier, publisher, timestamps, labels, markings, confidence, and normalized entity are retained on each imported assertion. Claims remain separate from collected evidence.</p>
+        <p class="preview-note">The source file SHA-256 digest, external identifier, publisher, timestamps, labels, markings, confidence, and normalised entity are retained on each imported assertion. Claims remain separate from collected evidence.</p>
         <div class="actions"><button class="primary" type="button" onclick={() => void applyImport()} disabled={applying || !targetCaseId || !intelligencePreview.items.length}>{applying ? 'Merging…' : 'Merge assertions into case'}</button><button class="btn" type="button" onclick={() => { preview = null; targetCaseId = ''; }} disabled={applying}>Cancel</button></div>
       </section>
     {/if}

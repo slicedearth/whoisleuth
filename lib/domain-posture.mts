@@ -179,7 +179,7 @@ function spfCheck(query: DnsQuery, expansion?: SpfExpansion): PostureCheck {
   const parsed = parseSpfRecords(query.records);
   if (parsed.records.length === 0) {
     return check('spf', 'SPF', 'warning', 'No SPF policy published', {
-      remediation: 'Publish one SPF TXT record that authorizes every legitimate sender and ends in -all once verified.',
+      remediation: 'Publish one SPF TXT record that authorises every legitimate sender and ends in -all once verified.',
     });
   }
   if (!parsed.valid) {
@@ -205,7 +205,7 @@ function spfCheck(query: DnsQuery, expansion?: SpfExpansion): PostureCheck {
     ...parsed.issues,
   ];
   if (parsed.terminalPolicy === 'pass') {
-    return check('spf', 'SPF', 'danger', 'Policy authorizes every sender (+all)', {
+    return check('spf', 'SPF', 'danger', 'Policy authorises every sender (+all)', {
       detail: details.join(' '), records: parsed.records,
       remediation: 'Replace +all with an explicit sender allowlist and a restrictive terminal policy.',
     });
@@ -229,7 +229,7 @@ function spfCheck(query: DnsQuery, expansion?: SpfExpansion): PostureCheck {
   return check('spf', 'SPF', 'warning', `Policy ends in ${parsed.terminalPolicy || 'an unknown result'}`, {
     detail: details.join(' '), records: parsed.records,
     remediation: parsed.terminalPolicy === 'softfail'
-      ? 'Move from ~all to -all after confirming every legitimate sending service is authorized.'
+      ? 'Move from ~all to -all after confirming every legitimate sending service is authorised.'
       : 'Add a restrictive -all terminal policy after confirming every legitimate sending service.',
   });
 }
@@ -287,7 +287,7 @@ function dmarcCheck(query: DnsQuery, authorizations: DmarcExternalAuthorization[
     return check('dmarc', 'DMARC', 'warning', `Enforced at p=${parsed.policy}; external reporting authorization is incomplete`, {
       detail: `${details.join(' ')} ${unresolvedExternal.map((authorization) => `${authorization.destination}: ${authorization.state}.`).join(' ')}`,
       records: parsed.records,
-      remediation: 'Publish the required external reporting authorization record or remove the unavailable destination.',
+      remediation: 'Publish the required external reporting authorisation record or remove the unavailable destination.',
     });
   }
   if (!parsed.aggregateReporting) {
@@ -344,7 +344,7 @@ function dnssecDelegationConsistencyCheck(
 ): PostureCheck {
   if (registry.error) {
     return check('dnssec_delegation_consistency', 'DNSSEC delegation consistency', 'info', 'Registry evidence is unavailable', {
-      detail: 'DNSSEC delegation and retained DS records could not be compared because normalized registry evidence was unavailable.',
+      detail: 'DNSSEC delegation and retained DS records could not be compared because normalised registry evidence was unavailable.',
     });
   }
   if (input.error) {
@@ -367,7 +367,7 @@ function dnssecDelegationConsistencyCheck(
   }
   if (registry.dsDataTruncated) {
     return check('dnssec_delegation_consistency', 'DNSSEC delegation consistency', 'info', 'Retained DS evidence is incomplete', {
-      detail: 'The normalized registry response reported truncated DS data, so apparent disagreement is inconclusive.',
+      detail: 'The normalised registry response reported truncated DS data, so apparent disagreement is inconclusive.',
     });
   }
   if (value === 'signed' && !hasDsRecords) {
@@ -509,7 +509,7 @@ function bimiCheck(query: DnsQuery, dmarcQuery: DnsQuery): PostureCheck {
     && (dmarc.legacyPct === null || dmarc.legacyPct === 100);
   if (!enforcementReady) {
     return check('bimi', 'BIMI', 'warning', 'Record exists but DMARC is not BIMI-ready', {
-      detail: 'BIMI display generally requires enforced DMARC for the organizational domain and subdomains. Mailbox providers apply additional requirements.',
+      detail: 'BIMI display generally requires enforced DMARC for the organisational domain and subdomains. Mailbox providers apply additional requirements.',
       records: parsed.records,
       remediation: 'Enforce DMARC at quarantine or reject for the domain and subdomains before relying on BIMI.',
     });
@@ -631,7 +631,7 @@ function registrationLockCheck(registry: RegistryPostureEvidence): PostureCheck 
   const statuses = registry.statuses.map((status) => status.toLowerCase().replace(/[^a-z]/gu, ''));
   if (statuses.length === 0) {
     return check('registration_lock', 'Registration controls', 'info', 'Registry lock state is unavailable', {
-      detail: 'No normalized EPP status was returned. This does not describe registrar account security.',
+      detail: 'No normalised EPP status was returned. This does not describe registrar account security.',
     });
   }
   const transferLocks = statuses.filter((status) => ['clienttransferprohibited', 'servertransferprohibited'].includes(status));
@@ -812,7 +812,7 @@ async function checkDomainPosture(
         nameservers: [],
         dsRecordCount: 0,
         dsDataTruncated: false,
-        error: rdap && 'error' in rdap ? rdap.error : 'RDAP did not return normalized domain evidence.',
+        error: rdap && 'error' in rdap ? rdap.error : 'RDAP did not return normalised domain evidence.',
       };
   const externalDependencies: ExternalDependency[] = buildExternalDependencies({
     domain,

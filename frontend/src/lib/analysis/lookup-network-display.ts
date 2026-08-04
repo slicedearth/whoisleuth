@@ -473,9 +473,9 @@ export function buildLookupNetworkDisplay(input: {
         label: 'Chain trust',
         value:
           tlsAuthorization.authorized === true
-            ? 'Authorized'
+            ? 'Authorised'
             : tlsAuthorization.authorized === false
-              ? 'Not authorized'
+              ? 'Not authorised'
               : 'Not observed',
         danger: tlsAuthorization.authorized === false,
       },
@@ -530,7 +530,7 @@ export function buildLookupNetworkDisplay(input: {
         ? [{ label: 'Collection', value: String(tlsDiagnostics.error) }]
         : []),
       ...(tlsAuthorization.error
-        ? [{ label: 'Authorization', value: String(tlsAuthorization.error) }]
+        ? [{ label: 'Authorisation', value: String(tlsAuthorization.error) }]
         : []),
       ...(tlsHostname.error ? [{ label: 'Hostname', value: String(tlsHostname.error) }] : []),
     ],

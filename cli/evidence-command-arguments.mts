@@ -94,7 +94,7 @@ export function parseSignArtifactArguments(argv: string[]): SignArtifactArgument
       privateKeySource = value;
     } else if (argument.startsWith('-')) throw new CliUsageError(`Unknown option "${argument}".`);
     else if (source === null) source = argument;
-    else throw new CliUsageError('sign-artifact accepts one optional JSON file. Otherwise pipe one artifact on stdin.');
+    else throw new CliUsageError('sign-artifact accepts one optional JSON file. Otherwise pipe one artefact on stdin.');
   }
   if (!privateKeySource) throw new CliUsageError('sign-artifact requires --private-key-file.');
   return { action: 'sign-artifact', source, privateKeySource };

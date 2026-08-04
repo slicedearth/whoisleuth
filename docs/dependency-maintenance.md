@@ -38,7 +38,7 @@ production dependency audit.
 Published CLI releases have a separate exact-version check documented in the
 [release guide](releasing.md). It verifies registry integrity, signature and
 provenance metadata after publication rather than treating a clean source
-lockfile as proof that the public artifact is identical.
+lockfile as proof that the public artefact is identical.
 
 ## SPDX export
 
@@ -53,7 +53,7 @@ X-GitHub-Api-Version: 2026-03-10
 ```
 
 With an authenticated GitHub CLI session, a reviewer can inspect the response
-without adding a workflow, package, repository secret, or stored artifact:
+without adding a workflow, package, repository secret, or stored artefact:
 
 ```bash
 gh api \

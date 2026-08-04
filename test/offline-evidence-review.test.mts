@@ -114,6 +114,6 @@ describe('offline evidence review command', () => {
 
   test('rejects unversioned and unknown documents', () => {
     assert.throws(() => buildOfflineEvidenceReview('{}'), /supported versioned/u);
-    assert.throws(() => buildOfflineEvidenceReview(JSON.stringify({ schema: 'unknown', version: 1 })), /does not recognize/u);
+    assert.throws(() => buildOfflineEvidenceReview(JSON.stringify({ schema: 'unknown', version: 1 })), /does not recognise/u);
   });
 });

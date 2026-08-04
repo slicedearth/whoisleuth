@@ -353,7 +353,7 @@ async function collectObservedNetworkContext(
     });
 
     const parsed = record(rdapRecord.parsed);
-    if (rdap.httpStatus !== 200 || !Object.keys(parsed).length) throw new Error('IP RDAP returned no usable normalized object');
+    if (rdap.httpStatus !== 200 || !Object.keys(parsed).length) throw new Error('IP RDAP returned no usable normalised object');
     const summary = networkSummary(parsed, selection.family);
     const partial = summary.truncated;
     const sourceObservedAt = rdap.fetchedAt || observedAt();

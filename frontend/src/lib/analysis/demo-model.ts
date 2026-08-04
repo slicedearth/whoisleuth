@@ -435,7 +435,7 @@ export function syntheticDemoRelationshipGroups(): SyntheticRelationshipGroup[] 
     const existing = groups.get(key) || {
       type: 'nameserver_set',
       label: candidate.relationship.label,
-      method: 'Exact normalized infrastructure value',
+      method: 'Exact normalised infrastructure value',
       value: candidate.relationship.value,
       normalizedValue: candidate.relationship.value.toLowerCase(),
       domains: [],
@@ -563,7 +563,7 @@ export function syntheticDemoLookupView(id: string) {
           redactedCount: conclusive ? 2 : 0,
           unavailableCount: conclusive ? 0 : 2,
           summary: conclusive
-            ? 'The comparable synthetic fields are normalized as equivalent.'
+            ? 'The comparable synthetic fields are normalised as equivalent.'
             : 'The synthetic comparison is partial because its registry sources are inconclusive.',
         },
         publications: [
@@ -641,7 +641,7 @@ export function syntheticDemoLookupView(id: string) {
       policies: active ? [`https://${candidate.domain}/security-policy`] : [],
       encryption: [],
       languages: active ? ['en'] : [],
-      limitations: ['Fixed synthetic disclosure fixture; no request was performed and no testing is authorized.'],
+      limitations: ['Fixed synthetic disclosure fixture; no request was performed and no testing is authorised.'],
     },
     structuredIdentity: {
       status: conclusive ? 'Success' : 'Partial',
@@ -674,7 +674,7 @@ export function syntheticDemoLookupView(id: string) {
         { id: 'certificate-hostname', category: 'Certificate', state: 'observed', tone: 'configured', label: 'Certificate hostname matched', detail: 'The fixed certificate fixture includes the candidate hostname.', evidence: ['TLS fixture'] },
         ...(active ? [
           { id: 'csp-header', category: 'Browser policy', state: 'observed_absence', tone: 'review', label: 'Content Security Policy not observed', detail: 'The fixed response-header fixture does not contain this policy.', evidence: ['HTTP fixture'] },
-          { id: 'password-form', category: 'Page behavior', state: 'potential_exposure', tone: 'review', label: 'Password form observed', detail: 'A password field appears in the fixed static page fixture.', evidence: ['Page fixture'] },
+          { id: 'password-form', category: 'Page behaviour', state: 'potential_exposure', tone: 'review', label: 'Password form observed', detail: 'A password field appears in the fixed static page fixture.', evidence: ['Page fixture'] },
         ] : []),
       ] : [
         { id: 'collection-unavailable', category: 'Collection', state: 'unavailable', tone: 'neutral', label: 'Posture evidence unavailable', detail: 'The synthetic deep collection is intentionally inconclusive.', evidence: [] },

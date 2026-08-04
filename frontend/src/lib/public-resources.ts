@@ -71,11 +71,11 @@ export const PUBLIC_RESOURCES: readonly PublicResource[] = Object.freeze([
     eyebrow: 'Registration evidence',
     summary: Object.freeze([
       'RDAP is structured JSON with bootstrap-based service discovery. WHOIS is text returned through registry or registrar-specific query rules. They can describe the same registration at different times and with different redaction policies.',
-      'A disagreement is not automatically an error. It is a review prompt. WHOISleuth preserves the source, authority, time, query path and normalized field used in each comparison.',
+      'A disagreement is not automatically an error. It is a review prompt. WHOISleuth preserves the source, authority, time, query path and normalised field used in each comparison.',
     ]),
     steps: Object.freeze([
       Object.freeze({ title: 'Identify authority', body: 'Registry evidence controls domain-existence decisions. Registrar RDAP can enrich the record, but it cannot silently override the authoritative registry result.' }),
-      Object.freeze({ title: 'Compare normalized fields', body: 'Review status values, lifecycle dates, registrar identity and nameservers after normalization while keeping the original source labels available.' }),
+      Object.freeze({ title: 'Compare normalised fields', body: 'Review status values, lifecycle dates, registrar identity and nameservers after normalisation while keeping the original source labels available.' }),
       Object.freeze({ title: 'Explain the conflict', body: 'Check collection time, redaction, referral path, source completeness and parsing limitations before treating different values as a material change.' }),
     ]),
     evidence: Object.freeze([
@@ -137,7 +137,7 @@ export const PUBLIC_RESOURCES: readonly PublicResource[] = Object.freeze([
     ]),
     steps: Object.freeze([
       Object.freeze({ title: 'Search reviewed terms', body: 'Use a bounded brand or domain query and retain the log source plus first and last observation context.' }),
-      Object.freeze({ title: 'Normalize certificate names', body: 'Remove invalid, wildcard-only and out-of-scope names before comparing exact canonical hostnames.' }),
+      Object.freeze({ title: 'Normalise certificate names', body: 'Remove invalid, wildcard-only and out-of-scope names before comparing exact canonical hostnames.' }),
       Object.freeze({ title: 'Pivot deliberately', body: 'Open selected names in Lookup, compare the observed leaf certificate or public key, and keep provider and deployment observations separately attributed.' }),
     ]),
     evidence: Object.freeze([
@@ -191,7 +191,7 @@ export const PUBLIC_RESOURCES: readonly PublicResource[] = Object.freeze([
     slug: 'bulk-domain-comparison',
     shortTitle: 'Bulk domain comparison',
     title: 'Compare multiple domains without flattening incomplete evidence',
-    description: 'Use bounded Bulk Fast or Bulk Deep collection, source-aware filters and two-domain comparisons to prioritize a review queue.',
+    description: 'Use bounded Bulk Fast or Bulk Deep collection, source-aware filters and two-domain comparisons to prioritise a review queue.',
     eyebrow: 'Bulk triage',
     summary: Object.freeze([
       'Bulk review is most useful when every row follows the same collection contract and incomplete sources stay visible. A failed domain request must not look like a low-risk result, and a missing field must not be treated as observed absence.',
@@ -257,12 +257,12 @@ export const PUBLIC_RESOURCES: readonly PublicResource[] = Object.freeze([
     eyebrow: 'Privacy and storage',
     summary: Object.freeze([
       'Domain investigations can contain sensitive notes, internal decisions, selected contacts and links between otherwise public observations. Sending every record to a hosted workspace is not always necessary for a solo or small trusted deployment.',
-      'WHOISleuth keeps core saved work in IndexedDB under the current browser origin. Network collection still reaches the relevant public sources, but browser-local cases and notes are not automatically synchronized or uploaded.',
+      'WHOISleuth keeps core saved work in IndexedDB under the current browser origin. Network collection still reaches the relevant public sources, but browser-local cases and notes are not automatically synchronised or uploaded.',
     ]),
     steps: Object.freeze([
       Object.freeze({ title: 'Keep collection and retention separate', body: 'Opening a tool does not save its result. The analyst must choose a case, snapshot, watchlist, relationship or export action.' }),
       Object.freeze({ title: 'Back up deliberately', body: 'A versioned workspace archive can be downloaded in encrypted or clearly labelled unencrypted form. The encrypted passphrase is never sent or recoverable.' }),
-      Object.freeze({ title: 'Know the durability boundary', body: 'Browser storage can be cleared and does not synchronize across devices. A reviewed encrypted archive remains the portability and recovery boundary.' }),
+      Object.freeze({ title: 'Know the durability boundary', body: 'Browser storage can be cleared and does not synchronise across devices. A reviewed encrypted archive remains the portability and recovery boundary.' }),
     ]),
     evidence: Object.freeze([
       Object.freeze({ source: 'IndexedDB workspace', usefulFor: 'Bounded cases, profiles, watchlists, rules, sessions and reviewed observations.', limitation: 'The active unlocked browser workspace is plaintext and same-origin code can access it.' }),

@@ -116,7 +116,7 @@ describe('sanitised web-capture import', () => {
     });
     assert.equal(document.findings.length, 1);
     assert.match(document.findings[0]?.summary || '', /api\.example\.test.*1440x900.*DOM digest/isu);
-    assert.match(document.findings[0]?.limitations.join(' ') || '', /did not receive artifact bytes/iu);
+    assert.match(document.findings[0]?.limitations.join(' ') || '', /did not receive artefact bytes/iu);
   });
 
   test('accepts current screenshot perceptual hashes while retaining version 1 compatibility', () => {

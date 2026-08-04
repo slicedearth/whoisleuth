@@ -33,7 +33,7 @@
     <label class="btn file-btn">Import JSON<input type="file" accept="application/json,.json" onchange={importCaseFile}></label>
   </div>
 </section>
-<p class="calibration-note">Calibration export includes only explicitly selected reviewed cases and a bounded subset of their latest normalized evidence. It excludes notes and does not change Risk.</p>
+<p class="calibration-note">Calibration export includes only explicitly selected reviewed cases and a bounded subset of their latest normalised evidence. It excludes notes and does not change Risk.</p>
 {#if message}<p class="message" role="status" aria-live="polite">{message}</p>{/if}
 
 <style>

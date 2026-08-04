@@ -137,7 +137,7 @@ export function buildLookupInvestigationBrief(
     limitations: uniqueText([
       ...limitedSources,
       ...input.graph.limitations,
-      'This brief is a deterministic organization of collected and derived evidence, not an attribution, ownership, safety, availability, or maliciousness conclusion.',
+      'This brief is a deterministic organisation of collected and derived evidence, not an attribution, ownership, safety, availability, or maliciousness conclusion.',
       'Analyst assertions, hypotheses, and decisions must remain separate from observed evidence.',
     ]),
   };
@@ -179,9 +179,9 @@ export function formatLookupInvestigationBriefMarkdown(
     `- **Source quality:** ${brief.observation.completeSources} complete; ${brief.observation.limitedSources} limited`,
     `- **Freshness policy:** v${brief.observation.freshnessPolicy.version} ${markdown(brief.observation.freshnessPolicy.id)} for ${markdown(brief.observation.freshnessPolicy.task)}; registration ${brief.observation.freshnessPolicy.thresholdsDays.registration}d, network ${brief.observation.freshnessPolicy.thresholdsDays.network}d, web ${brief.observation.freshnessPolicy.thresholdsDays.web}d`,
     '',
-    '## Verified normalized facts',
+    '## Verified normalised facts',
     '',
-    ...(brief.verifiedFacts.length ? brief.verifiedFacts.map(factLine) : ['- No normalized fact was available for this brief.']),
+    ...(brief.verifiedFacts.length ? brief.verifiedFacts.map(factLine) : ['- No normalised fact was available for this brief.']),
     '',
     '## Contradictory evidence',
     '',

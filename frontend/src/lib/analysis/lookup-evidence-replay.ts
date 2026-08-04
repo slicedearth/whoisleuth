@@ -324,7 +324,7 @@ export async function parseLookupEvidenceReplay(
     ...replaySources.flatMap((item) => item.limitations),
     ...stringList(availability.limitations, 12),
     'This is a local replay of a deliberate evidence export. It does not refresh any source or establish the target state at import time.',
-    'Only bounded normalized facts are shown here. Raw source payloads in the export are not rendered.',
+    'Only bounded normalised facts are shown here. Raw source payloads in the export are not rendered.',
     'Missing or unsupported evidence remains unavailable and is not evidence of absence, safety, or equivalence.',
   ], MAX_LIMITATIONS);
 

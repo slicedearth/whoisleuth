@@ -465,7 +465,7 @@ describe('comparison output', () => {
     assert.match(output, /\[EQUIVALENT\] Statuses/);
     assert.match(output, /not an availability or ownership decision/);
     assert.match(output, /Registry access \.zz/);
-    assert.match(output, /WHOIS access\s+Source-IP authorization required/);
+    assert.match(output, /WHOIS access\s+Source-IP authorisation required/);
     assert.match(output, /RDAP access\s+No service published by IANA/);
     assert.match(output, /Registry access describes collection reachability only/);
     assert.doesNotMatch(output, /Restricted\ncollection|x{241}/);

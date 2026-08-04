@@ -162,6 +162,24 @@ describe('explainOpportunityScore / computeOpportunityScore', () => {
     assert.equal(partial.evidenceQuality.state, 'partial');
     assert.equal(partial.evidenceQuality.freshness, 'unknown');
   });
+
+  test('reports skipped sources without changing score or hiding the invariant limitation', () => {
+    const complete = opportunityExplanation({
+      availability: 'available', scanDepth: 'fast',
+      sourceCoverage: [{ source: 'rdap', state: 'complete' }],
+    });
+    const skipped = opportunityExplanation({
+      availability: 'available', scanDepth: 'fast',
+      sourceCoverage: [
+        { source: 'rdap', state: 'complete' },
+        { source: 'whois', state: 'unsupported' },
+      ],
+    });
+    assert.equal(skipped.score, complete.score);
+    assert.equal(skipped.evidenceQuality.skippedSources, 1);
+    assert.match(skipped.evidenceQuality.limitations.join(' '), /skipped or unsupported/u);
+    assert.match(skipped.evidenceQuality.limitations.at(-1) ?? '', /never adds points/u);
+  });
 });
 
 describe('scoreTone', () => {

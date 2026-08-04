@@ -194,7 +194,7 @@ export function buildRiskCalibrationDatasetExport(
       exclusions: Object.freeze(exclusions),
     }),
     limitations: Object.freeze([
-      'This file contains analyst-selected case domains, reviewed dispositions, and a bounded subset of normalized scoring inputs.',
+      'This file contains analyst-selected case domains, reviewed dispositions, and a bounded subset of normalised scoring inputs.',
       'It excludes notes, tags, assertions, actions, contacts, raw source data, provider payloads, and stored Risk scores.',
       'The CLI revalidates every record and does not tune the Risk model automatically. Analyst dispositions do not prove maliciousness or safety.',
     ]),

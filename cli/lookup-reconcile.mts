@@ -173,7 +173,7 @@ function buildCliLookupReconciliation(
     },
     privacy: { filenamesRetained: 0, rawRegistryPayloadsCopied: 0 },
     limitations: [
-      'This report reconciles only bounded normalized values already present in saved Lookup documents and makes no network request.',
+      'This report reconciles only bounded normalised values already present in saved Lookup documents and makes no network request.',
       'Observer and vantage labels are analyst-supplied metadata. Distinct labels do not prove independent resolvers, networks, providers, caches, or collection paths.',
       'Agreement can reflect shared upstream data or collection conditions. Disagreement can reflect collection timing, propagation, source health, or a real domain change.',
       'Non-comparable evidence remains separate from agreement and is never interpreted as absence, safety, or a negative finding.',

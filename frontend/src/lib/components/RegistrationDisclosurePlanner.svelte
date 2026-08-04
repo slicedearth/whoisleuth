@@ -25,7 +25,7 @@
   });
   const FIELD_LABELS: Readonly<Record<DisclosureFieldId, string>> = Object.freeze({
     'registrant-name': 'Registrant name',
-    'registrant-organization': 'Registrant organization',
+    'registrant-organization': 'Registrant organisation',
     'registrant-email': 'Registrant email',
     'registrant-phone': 'Registrant phone',
     'administrative-contact': 'Administrative contact',
@@ -126,7 +126,7 @@
 <details class="card disclosure-planner">
   <summary>Prepare a registration disclosure request</summary>
   <div class="planner-body">
-    <p class="muted">Build a minimized local packet from observed RDAP redactions and analyst-authored justification. WHOISleuth does not decide eligibility or entitlement and does not submit the request.</p>
+    <p class="muted">Build a minimised local packet from observed RDAP redactions and analyst-authored justification. WHOISleuth does not decide eligibility or entitlement and does not submit the request.</p>
 
     <div class="observed-summary">
       <strong>Observed public-data gap</strong>

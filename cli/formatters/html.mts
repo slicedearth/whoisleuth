@@ -16,7 +16,7 @@ function renderGroups(groups: ReportGroup[]): string {
 }
 
 function renderComparison(comparison: { fields: ComparisonField[]; omitted: number }): string {
-  if (!comparison.fields.length) return '<p class="empty">No comparable normalized fields were published.</p>';
+  if (!comparison.fields.length) return '<p class="empty">No comparable normalised fields were published.</p>';
   const rows = comparison.fields.map((field) => `<tr><th scope="row">${escapeHtml(field.label)}</th><td><span class="status">${escapeHtml(field.status)}</span></td><td>${escapeHtml(field.rdap)}</td><td>${escapeHtml(field.whois)}</td></tr>`).join('');
   const omitted = comparison.omitted
     ? `<p class="omission">${escapeHtml(comparison.omitted)} additional comparison fields omitted.</p>`

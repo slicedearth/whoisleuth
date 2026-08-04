@@ -64,7 +64,7 @@
     </div>
     {#if coverage.plan.length}
       <details class="coverage-plan">
-        <summary>Prioritized next actions · {coverage.plan.length}</summary>
+        <summary>Prioritised next actions · {coverage.plan.length}</summary>
         <p>Priority reflects the next defensive review step, not domain risk, intent, or maliciousness.</p>
         <div class="plan-list">
           {#each coverage.plan.slice(0, 20) as row}

@@ -229,7 +229,7 @@ export function verifyDomainControlManifest(value: unknown): DomainControlManife
   const expiresAt = timestamp(source.expiresAt);
   const entries = source.entries.map(normalizeEntry);
   if (!generatedAt || !expiresAt || Date.parse(expiresAt) <= Date.parse(generatedAt) || entries.some((entry) => entry === null)) {
-    throw new TypeError('Domain control manifest has invalid normalized content.');
+    throw new TypeError('Domain control manifest has invalid normalised content.');
   }
   const normalizedEntries = entries as DomainControlEntry[];
   if (new Set(normalizedEntries.map((entry) => entry.domain)).size !== normalizedEntries.length) {
@@ -248,10 +248,10 @@ export function verifyDomainControlManifest(value: unknown): DomainControlManife
   try {
     suppliedCanonical = canonicalArtifactJson(unsigned);
   } catch {
-    throw new TypeError('Domain control manifest has invalid normalized content.');
+    throw new TypeError('Domain control manifest has invalid normalised content.');
   }
   if (suppliedCanonical !== canonicalArtifactJson(canonical)) {
-    throw new TypeError('Domain control manifest must use its canonical normalized content.');
+    throw new TypeError('Domain control manifest must use its canonical normalised content.');
   }
   if (`sha256:${createHash('sha256').update(suppliedCanonical).digest('hex')}` !== integrity.digestSha256) {
     throw new TypeError('Domain control manifest failed its SHA-256 integrity check.');

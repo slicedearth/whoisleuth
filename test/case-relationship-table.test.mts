@@ -76,7 +76,7 @@ describe('case relationship table projection', () => {
 
   test('search matches values, methods, labels, and member domains case-insensitively', () => {
     assert.equal(buildCaseRelationshipTable(relationshipFixture(), { query: 'SHARED.INVALID' }).matchingRelationships, 2);
-    assert.equal(requiredValue(buildCaseRelationshipTable(relationshipFixture(), { query: 'normalized set' }).rows[0]).type, 'nameserver_set');
+    assert.equal(requiredValue(buildCaseRelationshipTable(relationshipFixture(), { query: 'normalised set' }).rows[0]).type, 'nameserver_set');
     assert.equal(requiredValue(buildCaseRelationshipTable(relationshipFixture(), { query: 'final website' }).rows[0]).type, 'http_final_origin');
     assert.equal(requiredValue(buildCaseRelationshipTable(relationshipFixture(), { query: 'bravo.invalid' }).rows[0]).type, 'nameserver_set');
   });

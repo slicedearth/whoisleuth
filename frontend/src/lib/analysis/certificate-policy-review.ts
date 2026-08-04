@@ -153,7 +153,7 @@ function caaFinding(input: Readonly<{
 }>): CertificatePolicyFinding {
   const fixedLimitations = [
     'The comparison uses current point-in-time CAA and certificate evidence and cannot establish which policy applied when the certificate was issued.',
-    'WHOISleuth does not cryptographically verify issuance authorization or infer improper issuance, compromise, or maliciousness.',
+    'WHOISleuth does not cryptographically verify issuance authorisation or infer improper issuance, compromise, or maliciousness.',
   ];
   if (!dnsSettled(input.dnsEvidence)) {
     return {
@@ -178,8 +178,8 @@ function caaFinding(input: Readonly<{
       observed: input.issuer ? [input.issuer] : [],
       expected: [],
       detail: input.effectivePolicy
-        ? 'No applicable CAA issue authorization was observed in the completed effective-policy walk.'
-        : 'No applicable CAA issue authorization was observed at the queried domain. Parent-label inheritance was not collected, so this is not a conclusion that no effective CAA policy exists.',
+        ? 'No applicable CAA issue authorisation was observed in the completed effective-policy walk.'
+        : 'No applicable CAA issue authorisation was observed at the queried domain. Parent-label inheritance was not collected, so this is not a conclusion that no effective CAA policy exists.',
       sources: ['DNS', 'TLS certificate'],
       limitations: input.effectivePolicy
         ? fixedLimitations
@@ -198,7 +198,7 @@ function caaFinding(input: Readonly<{
       state: 'indeterminate',
       observed: input.issuer ? [input.issuer] : [],
       expected,
-      detail: 'Current CAA authorizations were observed, but the certificate issuer could not be mapped conservatively to a recognized CAA identifier.',
+      detail: 'Current CAA authorisations were observed, but the certificate issuer could not be mapped conservatively to a recognised CAA identifier.',
       sources: ['DNS', 'TLS certificate'],
       limitations: fixedLimitations,
     };
@@ -383,7 +383,7 @@ export function buildCertificatePolicyReview(input: Readonly<{
     limitations: [
       'CAA, TLS, and reviewed baseline observations can have different effective times.',
       'Current CAA cannot prove the policy that applied when an existing certificate was issued.',
-      'CAA account URIs and validation methods describe current authorization constraints; WHOISleuth does not test an account, issuance transaction, or challenge method.',
+      'CAA account URIs and validation methods describe current authorisation constraints; WHOISleuth does not test an account, issuance transaction, or challenge method.',
       'No finding changes Risk automatically.',
     ],
   };

@@ -467,7 +467,7 @@ export function buildDnsChangeRehearsal(input: DnsChangeRehearsalInput): DnsChan
     ],
     unknowns,
     limitations: [
-      'This is a local planning aid. It does not change DNS, query a provider account, submit a registry update, or verify authorization.',
+      'This is a local planning aid. It does not change DNS, query a provider account, submit a registry update, or verify authorisation.',
       'Entered nameservers, glue, registrar-lock intent, and replacement key fingerprint are analyst assertions, not observed evidence.',
       'Point-in-time observations and generic sequencing cannot replace the registry, DNS operator, and DNSSEC rollover procedures for the affected zone.',
       'A ready rehearsal means the entered gates are represented; it does not guarantee propagation, correctness, availability, or a successful change.',

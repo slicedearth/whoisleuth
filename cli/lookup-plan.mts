@@ -32,13 +32,13 @@ type CliLookupPlan = Readonly<{
 const RDAP: PlannedSource = Object.freeze({
   source: 'rdap',
   purpose: 'Collect authoritative registration or allocation evidence where supported.',
-  disclosure: 'The normalized target is sent to the applicable RDAP bootstrap and service endpoints.',
+  disclosure: 'The normalised target is sent to the applicable RDAP bootstrap and service endpoints.',
   conditional: false,
 });
 const WHOIS: PlannedSource = Object.freeze({
   source: 'whois',
   purpose: 'Collect separately attributed registry and referral publications.',
-  disclosure: 'The normalized target is sent over bounded TCP connections to applicable WHOIS services.',
+  disclosure: 'The normalised target is sent over bounded TCP connections to applicable WHOIS services.',
   conditional: false,
 });
 const FAST_DOMAIN_EVIDENCE: PlannedSource = Object.freeze({
@@ -68,7 +68,7 @@ const NETWORK_CONTEXT: PlannedSource = Object.freeze({
 const REVERSE_DNS: PlannedSource = Object.freeze({
   source: 'reverse_dns',
   purpose: 'Collect operator-published reverse-DNS context for a public IP address.',
-  disclosure: 'A DNS resolver receives the reverse lookup for the normalized IP address.',
+  disclosure: 'A DNS resolver receives the reverse lookup for the normalised IP address.',
   conditional: false,
 });
 

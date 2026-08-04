@@ -229,7 +229,7 @@
       <div>
         <p class="eyebrow">Publication comparison</p>
         <h4 id="registration-agreement-title">Registration source agreement</h4>
-        <p>Connected markers compare each field across separately attributed publications. A conflict means two collected sources publish materially different normalized values. A source-only value was usable in just one publication. Incomplete / redacted means a publication could not provide a complete comparable value. Exact values remain in the tables below.</p>
+        <p>Connected markers compare each field across separately attributed publications. A conflict means two collected sources publish materially different normalised values. A source-only value was usable in just one publication. Incomplete / redacted means a publication could not provide a complete comparable value. Exact values remain in the tables below.</p>
       </div>
       {#if comparisonMatrix.truncated}<span class="partial">Partial visual</span>{/if}
     </header>
@@ -369,7 +369,7 @@
           {/if}
         </article>
       </div>
-      <p class="capability-limit">Declarations are response metadata, not proof that an operation is authorized, anonymous, complete, or correctly implemented. A preview reveals the exact public identifier that a later confirmed request would disclose, but does not issue a help or reverse-search request.</p>
+      <p class="capability-limit">Declarations are response metadata, not proof that an operation is authorised, anonymous, complete, or correctly implemented. A preview reveals the exact public identifier that a later confirmed request would disclose, but does not issue a help or reverse-search request.</p>
     </details>
     {#if abuseRouting.length}
       <details class="routing">

@@ -412,7 +412,7 @@ describe('buildCaseReport Markdown', () => {
     const { markdown } = caseReport.buildCaseReport(rec, { generatedAt: ISO });
 
     assert.ok(markdown.includes('## Limitations & Provenance'));
-    assert.ok(markdown.includes('normalized browser-local observations'));
+    assert.ok(markdown.includes('normalised browser-local observations'));
   });
 
   test('notes excluded by default in markdown', () => {

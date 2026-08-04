@@ -25,7 +25,7 @@ default (see the README), so many lookups return no personal data at all.
   one configured role address and the browser prepares a local `mailto:` link.
   WHOISleuth does not send the email, retain the draft, or accept attachments.
 - **Custom Discover dictionary**: optional pasted or imported terms are
-  normalized and capped at 100 unique entries, 32 characters per term, and
+  normalised and capped at 100 unique entries, 32 characters per term, and
   4,096 input characters. They remain transient in the current browser tab,
   are not sent to the server or saved in the browser-local workspace, and are
   used only after the user selects **Generate candidates**. If selected
@@ -36,7 +36,7 @@ default (see the README), so many lookups return no personal data at all.
   nameserver and one registry suffix in Discover, the deployment selects that
   registry through IANA RDAP bootstrap data and sends the nameserver in a
   bounded public RDAP search request. The transient response retains at most
-  200 normalized in-scope domains, source state, observation time, truncation,
+  200 normalised in-scope domains, source state, observation time, truncation,
   endpoint attempts, and limitations. It discards the raw registry response
   and published contacts. The result is a lower bound for that registry, not a
   global reverse-nameserver inventory. Nothing is saved unless the analyst
@@ -46,7 +46,7 @@ default (see the README), so many lookups return no personal data at all.
   transient, while bounded registry bootstrap and selected public RDAP/WHOIS
   results can remain briefly in memory to reduce duplicate upstream requests.
   Single Lookup can display multiple bounded
-  registry-published contacts per RDAP role and bounded normalized WHOIS
+  registry-published contacts per RDAP role and bounded normalised WHOIS
   contacts for registrant, administrative, technical, billing, and abuse
   roles. Bulk, watchlist, and case data retain only the existing compact
   primary-contact fields; these expanded contact inventories are not copied
@@ -59,7 +59,7 @@ default (see the README), so many lookups return no personal data at all.
   availability or scoring. Fast and compact Bulk requests do not perform the
   follow-up, and registrar RDAP is not copied into browser-local watchlists,
   cases, or other compact stores. The deliberate raw unified-response view can
-  contain it. The structured Lookup evidence export can retain the normalized
+  contain it. The structured Lookup evidence export can retain the normalised
   portable-field comparison between registry and registrar publications,
   including both displayed source values and source-health states, but excludes
   the registrar raw object, contacts, entities, links, notices, and
@@ -113,14 +113,14 @@ default (see the README), so many lookups return no personal data at all.
   the link, under the destination's own privacy and retention terms.
 - **Optional security.txt disclosure lookup**: when selected for a deep
   single-domain Lookup, the server starts one bounded HTTPS collection at the
-  standardized security.txt location on the exact entered hostname. It retains
-  only normalized published contacts, policy and encryption references,
+  standardised security.txt location on the exact entered hostname. It retains
+  only normalised published contacts, policy and encryption references,
   preferred languages, canonical locations, expiry, and source health. The
   response body is discarded after parsing and no server cache is used. The
-  normalized result can be displayed and deliberately exported, but it is not
+  normalised result can be displayed and deliberately exported, but it is not
   copied into compact Bulk responses, cases, watchlists, profiles, or
   monitoring state and never affects availability or Risk. Publication does
-  not authorize testing or prove that a contact is monitored.
+  not authorise testing or prove that a contact is monitored.
 - **Optional archived-verdict search**: if the operator explicitly enables the
   URLscan adapter and a user selects it for a deep single-domain Lookup, the
   server sends only the canonical registrable domain to URLscan's Search API.
@@ -128,7 +128,7 @@ default (see the README), so many lookups return no personal data at all.
   for scanning. The provider also receives ordinary API request metadata and
   associates the query with the operator's API credential under its own
   privacy and retention policy. WHOISleuth keeps no provider cache; the bounded
-  normalized response is displayed transiently, excluded from browser-local
+  normalised response is displayed transiently, excluded from browser-local
   stores and the structured Lookup evidence export, and never affects
   availability. Fast and compact Bulk paths never make this request.
 - **Optional malware-host search**: if the operator explicitly enables the
@@ -138,7 +138,7 @@ default (see the README), so many lookups return no personal data at all.
   sample, or report. The provider also receives ordinary API request metadata
   and associates the query with the operator's API credential under its own
   privacy and retention policy. WHOISleuth keeps no provider cache; the
-  bounded normalized response is displayed transiently, excluded from
+  bounded normalised response is displayed transiently, excluded from
   browser-local stores and the structured Lookup evidence export, and never
   affects availability. Fast and compact Bulk paths never make this
   request. Community access is subject to not-for-profit fair-use terms;
@@ -150,7 +150,7 @@ default (see the README), so many lookups return no personal data at all.
   IOC, URL, sample, or report. The provider receives ordinary API request
   metadata and associates the query with the operator's abuse.ch credential
   under its own privacy and retention policy. WHOISleuth keeps no provider
-  cache; the bounded normalized response is displayed transiently, excluded
+  cache; the bounded normalised response is displayed transiently, excluded
   from browser-local stores and the structured Lookup evidence export, and
   never affects availability. Fast and compact Bulk paths never make
   this request. Older indicators expire from the community API, and commercial
@@ -178,13 +178,13 @@ default (see the README), so many lookups return no personal data at all.
   HTTPS resource-record query through up to three validated literal addresses
   from the deployment's configured DNS resolvers. The result retains bounded
   service priority, mode, effective target, TTL, ALPN identifiers, port,
-  address hints, mandatory keys, and the names and lengths of other recognized
+  address hints, mandatory keys, and the names and lengths of other recognised
   parameters. Opaque parameter values are discarded. WHOISleuth does not
   follow service-binding aliases or connect to published targets, ports, or
   address hints, and it does not disclose the query to a new third-party DNS
   service. A deep non-compact
   Lookup of a public IP address can add one PTR query and retain up to eight
-  normalized reverse-DNS names as a separately attributed source. Fast,
+  normalised reverse-DNS names as a separately attributed source. Fast,
   compact, Bulk, monitoring, private/special-purpose IP, and availability/Risk
   paths do not run the PTR query. These requests use the deployment's DNS
   resolver. PTR, SOA, and HTTPS service-binding publications are public
@@ -224,7 +224,7 @@ default (see the README), so many lookups return no personal data at all.
   nameserver, IP-address, native certificate, public tracking-identifier,
   favicon, and configured official-asset-host observations inside the current
   result set. Nothing is saved automatically. Selecting **Retain observation**
-  stores only one normalized relationship value, its bounded member domains,
+  stores only one normalised relationship value, its bounded member domains,
   method, observed and retained times, source and schema version, completeness,
   truncation, fixed description, and stated limitations in the browser's
   IndexedDB database. It excludes the complete Bulk result, raw RDAP/WHOIS or
@@ -266,7 +266,7 @@ default (see the README), so many lookups return no personal data at all.
   approval, opened, and outcome markers. Partial and skipped stages also retain
   a required review reason of up to 500 characters in the current tab's `sessionStorage`
   under `whoisleuth:investigation-guide:v4`. Deployed version 1, 2, and 3 records
-  can normalize without inventing a custom template when no current record
+  can normalise without inventing a custom template when no current record
   exists; future records remain untouched. A saved template can customise
   bounded guidance, omit allowlisted steps, and add approval gates. It cannot
   add arbitrary actions, run code, start collection, submit evidence, change a
@@ -285,7 +285,7 @@ default (see the README), so many lookups return no personal data at all.
   without raw evidence, case notes, credentials, provider responses, or scan
   results. A read-only local checkpoint derives retained observation and
   relationship counts from the typed investigation projection. A separate
-  case-handoff checklist summarizes browser-local disposition, decision,
+  case-handoff checklist summarises browser-local disposition, decision,
   evidence-pin, and open-question structure. Neither view decides stage
   completion or makes a finding about the target. **End guide** removes both
   current and migrated legacy tab records,
@@ -318,16 +318,16 @@ default (see the README), so many lookups return no personal data at all.
   the homepage HTML already captured by the HTTP probe. This can include the
   document language, canonical and meta-refresh targets, selected Open Graph
   fields, generator metadata, form counts, external form-action origins,
-  normalized resource counts, external resource/embedded origins, mail-contact
-  domains, download context, and recognized public tracking identifiers. URL
+  normalised resource counts, external resource/embedded origins, mail-contact
+  domains, download context, and recognised public tracking identifiers. URL
   credentials, queries, fragments, resource/download paths, form-action paths,
   and complete email addresses are not retained.
   Page identity can also include versioned SHA-256 fingerprints for the exact
-  captured body, noise-reduced normalized HTML, static tag structure, and form
+  captured body, noise-reduced normalised HTML, static tag structure, and form
   structure; fuzzy visible-text and parse5-tokenized structure SimHashes; and
   bounded external-resource-host and public-tracking-identifier sets with
   deterministic set digests.
-  Intermediate normalized markup and visible text are discarded immediately
+  Intermediate normalised markup and visible text are discarded immediately
   after fingerprinting. These digests support comparison but do not prove page
   authorship, ownership, intent, or maliciousness.
   The complete summary is not copied into Bulk, watchlists, or analyst cases;
@@ -336,16 +336,16 @@ default (see the README), so many lookups return no personal data at all.
   baseline in a Brand Profile. That browser-local baseline retains only the
   observation time, official domain, page title, canonical host, favicon
   hashes, versioned page fingerprints, and bounded external-resource host and
-  recognized tracking-identifier sets. It never stores page HTML, URL paths,
+  recognised tracking-identifier sets. It never stores page HTML, URL paths,
   query strings, headers, redirects, parser diagnostics, or raw responses.
   Bulk can transiently derive bounded scan-local relationships from its
-  nameserver, IP-address, favicon, recognized public-tracking-identifier, and
+  nameserver, IP-address, favicon, recognised public-tracking-identifier, and
   configured official-asset-host observations. These relationships stay in
   memory for the current result set, trigger no additional requests, and are
   not copied into browser-local stores or exports.
-  When a compatible current Lookup result is available, its normalized
+  When a compatible current Lookup result is available, its normalised
   fingerprints are compared with the active profile baseline locally in the
-  browser. Normalized HTML, visible text, DOM/form structure, resource hosts,
+  browser. Normalised HTML, visible text, DOM/form structure, resource hosts,
   and tracking identifiers remain separate comparison components; there is no
   combined similarity score. When at least two strong, non-partial components
   match, one Boolean page-baseline signal can contribute within the capped
@@ -369,7 +369,7 @@ default (see the README), so many lookups return no personal data at all.
 - **Structured identity metadata**: a requested deep Lookup can examine
   JSON-LD already present in the captured homepage response. It retains only
   curated schema types, bounded labels, declared HTTP(S) origins, and
-  normalized `sameAs` hostnames. It discards the raw JSON-LD immediately after
+  normalised `sameAs` hostnames. It discards the raw JSON-LD immediately after
   analysis and never retains contact fields, arbitrary properties, complete
   URLs, paths, queries, or fragments. Referenced JSON-LD is not fetched.
   Publisher-declared metadata does not prove identity, ownership, control,
@@ -398,7 +398,7 @@ default (see the README), so many lookups return no personal data at all.
   export and remains excluded from watchlists and profiles.
 - **Technology indicators**: a requested deep Lookup can derive a versioned
   technology profile from the selected HTTP server header, generator metadata,
-  normalized resource origins, and capped static HTML already collected for
+  normalised resource origins, and capped static HTML already collected for
   the page-identity analysis. A site-builder or commerce platform is not
   identified from a retained third-party resource origin alone; that origin
   must be corroborated by page, generator, or additional storefront evidence.
@@ -459,7 +459,7 @@ default (see the README), so many lookups return no personal data at all.
   Bulk sessions / Website profile snapshots / Investigation templates**: saved
   as bounded records in your own browser's IndexedDB database, not on the
   server, and visible to whoever can use that browser profile. On the first
-  authenticated load after this storage change, WHOISleuth normalizes
+  authenticated load after this storage change, WHOISleuth normalises
   supported legacy `localStorage` documents and
   copies them into a versioned IndexedDB manifest without deleting the source
   documents. Later IndexedDB writes are authoritative and do not automatically
@@ -483,7 +483,7 @@ default (see the README), so many lookups return no personal data at all.
   lookalike mail-exposure review uses those bounded fields, source coverage,
   mutation provenance, registration state, and the active Brand Profile's
   configured mail posture. It makes no additional request and never connects
-  to SMTP, sends a message, tests a mailbox or catch-all behavior, or retains
+  to SMTP, sends a message, tests a mailbox or catch-all behaviour, or retains
   message data. Its optional JSON export is generated locally, includes an
   integrity digest and stated limitations, and excludes raw DNS responses,
   contacts, scripts, and provider payloads.
@@ -496,19 +496,19 @@ default (see the README), so many lookups return no personal data at all.
   IndexedDB, or saved in the Brand Profile. They remain in page memory until
   cleared or the page is left. A deliberate JSON export includes the bounded
   parsed reports, profile-scope comparison, limitations, source-file digests,
-  and an artifact digest. WHOISleuth does not authenticate the report sender,
+  and an artefact digest. WHOISleuth does not authenticate the report sender,
   contact a reporting provider, perform DNS or SMTP collection, or treat an
   imported outcome as current domain safety or sender intent.
   Website profile snapshots are retained only after an analyst explicitly
   saves a completed Deep Lookup. Each bounded record contains the canonical
   domain, observation and save times, collection completeness and truncation,
   curated technology identifiers, passive posture states, selected
-  page-identity digests, up to 30 normalized resource hosts and tracking
+  page-identity digests, up to 30 normalised resource hosts and tracking
   identifiers, up to 20 external form-action origins, and source-health states.
-  When the same reviewed Deep result contains a normalized leaf certificate,
+  When the same reviewed Deep result contains a normalised leaf certificate,
   the snapshot can additionally retain its SHA-256 and SPKI SHA-256
   fingerprints, bounded subject and issuer labels, serial, validity dates,
-  authorization and hostname-match states, and TLS completeness. It stores no
+  authorisation and hostname-match states, and TLS completeness. It stores no
   certificate bytes or expanded alternative-name list. The certificate record
   is labelled as observed by this browser at the snapshot time; it is not
   refreshed automatically and is not a statement of current deployment.
@@ -555,7 +555,7 @@ default (see the README), so many lookups return no personal data at all.
   workspace archive so the receiving browser can restore the selected
   appearance; without a saved value the site follows the browser's
   operating-system preference.
-  Campaigns retain a bounded label, optional description, and normalized case
+  Campaigns retain a bounded label, optional description, and normalised case
   domain membership only. They do not copy case evidence, notes, status, or
   disposition, and deriving or editing them makes no network request.
   Cases can additionally retain bounded analyst-selected evidence pins,
@@ -577,18 +577,18 @@ default (see the README), so many lookups return no personal data at all.
   certificate observation-row conversion, and sanitised web-capture summary
   import happen locally before that ordinary reviewed case import. Row
   conversion reports accepted, rejected, duplicate, and truncated counts
-  without retaining excluded values. Capture summaries retain only normalized
+  without retaining excluded values. Capture summaries retain only normalised
   domains and HTTP(S) origins, bounded titles, technology labels, request
   domains, screenshot or DOM-digest plain file names, MIME types, declared
   sizes, dimensions where applicable, SHA-256 digests, timestamps,
-  completeness, limitations, and optional source references. Artifact bytes
+  completeness, limitations, and optional source references. Artefact bytes
   are not imported or independently verified. These schemas reject raw HTML,
   screenshot bytes, archives, decompression fields, path traversal, cookies,
-  authorization data, request bodies, complete URLs, paths, queries,
+  authorisation data, request bodies, complete URLs, paths, queries,
   fragments, and arbitrary fields. WHOISleuth does not collect or
   independently verify the imported observation.
   A separate analyst-selected WARC or WACZ import is also processed only in
-  browser memory. It is capped at 8 MiB and retains only normalized page
+  browser memory. It is capped at 8 MiB and retains only normalised page
   findings after excluding request records, sensitive headers, downloads,
   unsupported or excessive responses, and mismatched supported record
   digests. WACZ packages are not replayed. Safe ZIP paths, entry and byte
@@ -607,7 +607,7 @@ default (see the README), so many lookups return no personal data at all.
   view exclude the pinned values themselves, recipient values, notes, and
   source payloads.
   A privacy-safe browser handoff can reduce a pasted domain or HTTP(S) URL to
-  the normalized hostname or a sanitized HTTP(S) origin after discarding
+  the normalised hostname or a sanitised HTTP(S) origin after discarding
   credentials, port, path, query, fragment, and browser-local identifiers.
   The default destination is a local Lookup link that fills Deep Lookup
   without starting collection or saving the target. An analyst can instead
@@ -615,16 +615,16 @@ default (see the README), so many lookups return no personal data at all.
   WHOISleuth does not discover, validate, poll, or retain that configuration.
   Before opening a non-Lookup destination, the browser shows the exact
   disclosed value, destination URL, and local-device or third-party visibility
-  and requires explicit confirmation. Only the displayed normalized hostname
-  or sanitized origin is sent to that endpoint.
+  and requires explicit confirmation. Only the displayed normalised hostname
+  or sanitised origin is sent to that endpoint.
   A local DNS change rehearsal can compare analyst-entered intended nameserver,
   glue, DS, MX, CAA, and critical address sets plus a DNSSEC change type and
   readiness confirmations with displayed bounded DNS and registry evidence.
   Proposed values remain separate from observed records. It makes no request,
   saves nothing automatically, and changes no DNS or registry state. A
   deliberate checklist download includes the domain, proposed and observed
-  normalized sets, findings, unknowns, sequence, rollback steps, and
-  limitations. It verifies no authorization and cannot guarantee a safe or
+  normalised sets, findings, unknowns, sequence, rollback steps, and
+  limitations. It verifies no authorisation and cannot guarantee a safe or
   successful change.
   Watchlists retain a bounded timeline of material scan changes alongside
   their latest results; older timeline events are automatically discarded.
@@ -643,7 +643,7 @@ default (see the README), so many lookups return no personal data at all.
   under **Previous certificate searches**, or by clearing the browser's site
   data. Clearing site data also removes the saved appearance preference.
 - **Local registry IDN table review**: Discover can deliberately read one local
-  RFC 7940 LGR XML file of at most 2 MiB and compare its normalized
+  RFC 7940 LGR XML file of at most 2 MiB and compare its normalised
   single-code-point repertoire with the current Unicode candidates for an
   analyst-entered suffix. The browser calculates a SHA-256 digest and displays
   the local filename, repertoire count, exclusions, and limitations. The file,
@@ -682,7 +682,7 @@ default (see the README), so many lookups return no personal data at all.
   stated interpretation limits; they do not include case evidence or notes.
   A deliberate Risk calibration export includes only explicitly selected case
   IDs, domains, reviewed dispositions, an optional reviewed reason code, and a
-  bounded whitelist of normalized scoring inputs from the latest retained
+  bounded whitelist of normalised scoring inputs from the latest retained
   evidence. A page-language match is represented only by a fixed indicator
   rather than the matched text. It excludes notes, tags,
   assertions, actions, contacts, raw source data, provider payloads, and stored
@@ -693,8 +693,8 @@ default (see the README), so many lookups return no personal data at all.
   registry-published contact data. The separate Lookup Markdown reports are
   generated from bounded known-field projections in the browser. Domain
   reports include registry, registrar, WHOIS, Risk, and limitation context; IP
-  reports include normalized network registration and bounded reverse-DNS
-  context when collected; ASN reports include normalized routing registration
+  reports include normalised network registration and bounded reverse-DNS
+  context when collected; ASN reports include normalised routing registration
   evidence. All preserve source states and collection time while excluding raw
   RDAP and WHOIS responses, expanded contacts, provider payloads, scripts, and
   remote assets. A selected current-schema Lookup evidence JSON file can be
@@ -725,7 +725,7 @@ default (see the README), so many lookups return no personal data at all.
   import. From that point on, the file is yours to manage, so store it
   appropriately and delete it once you no longer need it.
 - **Offline CLI verification and diagnostics**: `verify-artifact` reads one
-  local supported archive, packet, or signed review artifact and reports only
+  local supported archive, packet, or signed review artefact and reports only
   its contract, integrity state, and bounded size or count metadata by default.
   `inspect-archive` first performs the same verification, then reports bounded
   section summaries. Exact search is limited to allowlisted target fields and
@@ -738,8 +738,8 @@ default (see the README), so many lookups return no personal data at all.
   truncation, and rate-limit counts. It does not
   retain or output targets, queries, endpoints, source limitations, raw
   evidence, or provider payloads. Optional `sign-artifact` signs only a
-  supported artifact that passes offline verification, using an externally
-  managed Ed25519 key file. The signed package contains the original artifact,
+  supported artefact that passes offline verification, using an externally
+  managed Ed25519 key file. The signed package contains the original artefact,
   signature time, signature, and public key; WHOISleuth does not generate,
   store, recover, rotate, publish, or establish trust in signing keys. These
   commands make no network request and do not upload input.
@@ -753,7 +753,7 @@ default (see the README), so many lookups return no personal data at all.
   headers, bodies, cookies, and credentials are not copied into the comparison
   output. Missing perceptual evidence remains unavailable, partial captures
   remain partial, and no combined similarity or maliciousness score is
-  produced. The local artifact files remain under the operator's retention and
+  produced. The local artefact files remain under the operator's retention and
   deletion control.
 - **CLI output, checkpoints, and progress**: every CLI command can deliberately
   write its bounded output to a private local file. Existing files are refused
@@ -763,7 +763,7 @@ default (see the README), so many lookups return no personal data at all.
   do not contain full Lookup responses, but they can still identify the targets
   investigated and remain under the operator's retention and deletion control.
   Resume validates the entire checkpoint and requires the exact original input
-  and scan mode. Direct Markdown and HTML reports use the same normalized
+  and scan mode. Direct Markdown and HTML reports use the same normalised
   evidence projection as the existing export command. Saved-Lookup diff reads
   two local current-schema domain documents and emits a bounded comparison
   without contacting either target. Optional versioned progress events contain
@@ -782,7 +782,7 @@ default (see the README), so many lookups return no personal data at all.
   observation snapshot retains candidate domains, registration state,
   confidence, bounded DNS summaries, component-specific observation times,
   latest component states, and material differences. Version 1 snapshots are
-  normalized to version 2 on the next write.
+  normalised to version 2 on the next write.
   It excludes raw registry publications, contacts, page contents, and request
   details. A failed or partial registration or DNS component preserves the
   previous usable evidence for that component and remains unavailable rather
@@ -793,7 +793,7 @@ default (see the README), so many lookups return no personal data at all.
   current tab's runtime memory. It can restore a prior Bulk review state,
   shortlist membership, case-tag set, or temporary evidence-cluster label by
   using the same browser-local write path as the original edit. The pending
-  action is not serialized, exported, uploaded, or retained after reload. It
+  action is not serialised, exported, uploaded, or retained after reload. It
   cannot replay collection or reverse imports, exports, confirmed deletions,
   case disposition changes, or source evidence.
 - **Retained-evidence timeline**: Monitor can project bounded metadata from
@@ -804,7 +804,7 @@ default (see the README), so many lookups return no personal data at all.
   duplicate raw payloads, pin values, relationship values, analyst notes, or
   page content, and does not start collection.
 - **External intelligence import**: a selected local STIX 2.1 or MISP JSON file
-  is decoded, hashed with SHA-256, normalized, previewed, and merged entirely in
+  is decoded, hashed with SHA-256, normalised, previewed, and merged entirely in
   the browser. Only the bounded supported entity claim and provenance metadata
   are retained on an explicitly selected existing case. Unsupported attribute
   values, raw files, descriptions, MISP comments, and provider payloads are not
@@ -829,7 +829,7 @@ default (see the README), so many lookups return no personal data at all.
   separate opt-in. WHOISleuth does not send either export or modify a defensive
   system.
 - **Field-level case checkpoints and readable reports**: an analyst can
-  deliberately save up to 20 normalized facts from a completed domain Lookup
+  deliberately save up to 20 normalised facts from a completed domain Lookup
   into an open browser-local case. A fact retains its source, observation time,
   collection depth, source state, completeness, truncation, schema version, and
   limitations. Raw registration payloads, expanded contacts, HTML, scripts,
@@ -847,7 +847,7 @@ default (see the README), so many lookups return no personal data at all.
   nameserver, DS, and DNSSEC delegation evidence, and (only when advertised)
   the official domain's own `mta-sts` HTTPS policy host. The bounded audit can
   follow literal SPF include and redirect TXT targets and query external DMARC
-  reporting-authorization names. Active and retired DKIM selector names saved
+  reporting-authorisation names. Active and retired DKIM selector names saved
   in a Brand Profile, plus its fixed mail-profile choice, are included in the
   request so those exact public DNS records and expectations can be checked.
   DKIM public keys are parsed transiently for supported algorithm and size

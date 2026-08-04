@@ -877,7 +877,7 @@ function parseSharingReviewArguments(argv: string[]): Extract<CliArguments, { ac
     else if (argument === '--no-color') color = false;
     else if (argument.startsWith('-')) throw new CliUsageError(`Unknown option "${argument}".`);
     else if (source === null) source = argument;
-    else throw new CliUsageError('sharing-review accepts one optional artifact JSON file.');
+    else throw new CliUsageError('sharing-review accepts one optional artefact JSON file.');
   }
   if (!marking || !recipientScope || !purpose) {
     throw new CliUsageError('sharing-review requires --marking, --recipient-scope, and --purpose.');
@@ -1082,7 +1082,7 @@ function parseVerifyArtifactArguments(argv: string[]): Extract<CliArguments, { a
     else if (argument === '--no-color') color = false;
     else if (argument.startsWith('-')) throw new CliUsageError(`Unknown option "${argument}".`);
     else if (source === null) source = argument;
-    else throw new CliUsageError('verify-artifact accepts one optional JSON file. Otherwise pipe one artifact on stdin.');
+    else throw new CliUsageError('verify-artifact accepts one optional JSON file. Otherwise pipe one artefact on stdin.');
   }
   if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
   return { action: 'verify-artifact', source, passphraseSource, output, quiet, color };

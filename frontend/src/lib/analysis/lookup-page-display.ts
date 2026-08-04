@@ -83,7 +83,7 @@ export function buildLookupPageDisplay(input: {
       detail: exact.scope === 'captured-prefix' ? 'Captured prefix' : 'Complete captured body',
     },
     {
-      label: 'Normalized HTML',
+      label: 'Normalised HTML',
       value: normalizedHtml.value,
       detail: `${show(normalizedHtml.tokenCount)} tokens`,
     },

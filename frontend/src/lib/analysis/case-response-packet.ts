@@ -59,7 +59,7 @@ export const RESPONSE_PACKET_PROFILES: readonly ResponsePacketProfile[] = Object
     includedEvidence: ['Exact URLs', 'Observation time', 'Case disposition', 'Selected evidence pins', 'Registrar contact provenance'],
     excludedEvidence: ['Raw WHOIS or RDAP payloads', 'Unselected contacts', 'Provider secrets', 'Unrelated analyst notes'],
     redactions: ['Remove unnecessary personal registration data', 'Remove credentials, tokens, and URL fragments'],
-    attachments: ['Reviewed response packet', 'Optional normalized case report'],
+    attachments: ['Reviewed response packet', 'Optional normalised case report'],
     followUpFields: ['Registrar reference', 'Acknowledgement time', 'Resolution or transfer outcome'],
   },
   {
@@ -73,7 +73,7 @@ export const RESPONSE_PACKET_PROFILES: readonly ResponsePacketProfile[] = Object
     includedEvidence: ['Exact URLs', 'Observation time', 'Registry contact provenance', 'Selected evidence pins', 'Prior action references'],
     excludedEvidence: ['Raw registry payloads', 'Unselected contacts', 'Secrets', 'Unsupported ownership claims'],
     redactions: ['Remove unnecessary personal registration data', 'Remove credentials, tokens, and URL fragments'],
-    attachments: ['Reviewed response packet', 'Optional normalized case report', 'Optional registrar reference'],
+    attachments: ['Reviewed response packet', 'Optional normalised case report', 'Optional registrar reference'],
     followUpFields: ['Registry reference', 'Registrar referral', 'Delegation or status outcome'],
   },
   {
@@ -87,7 +87,7 @@ export const RESPONSE_PACKET_PROFILES: readonly ResponsePacketProfile[] = Object
     includedEvidence: ['Exact URLs', 'Observation time', 'Selected HTTP, TLS, DNS, or page-identity pins', 'Contact provenance'],
     excludedEvidence: ['Raw response bodies', 'Cookies', 'Secrets', 'Unproven origin-host claims'],
     redactions: ['Remove credentials, query secrets, fragments, cookies, and unrelated contacts'],
-    attachments: ['Reviewed response packet', 'Optional normalized case report'],
+    attachments: ['Reviewed response packet', 'Optional normalised case report'],
     followUpFields: ['Provider ticket', 'Content status', 'Infrastructure change outcome'],
   },
   {
@@ -101,7 +101,7 @@ export const RESPONSE_PACKET_PROFILES: readonly ResponsePacketProfile[] = Object
     includedEvidence: ['Exact URLs', 'Observation time', 'Selected evidence pins', 'Contact source and limitations'],
     excludedEvidence: ['Raw upstream payloads', 'Secrets', 'Unselected case notes', 'Legal conclusions'],
     redactions: ['Remove credentials, tokens, personal data, and unrelated identifiers'],
-    attachments: ['Reviewed response packet', 'Optional normalized case report'],
+    attachments: ['Reviewed response packet', 'Optional normalised case report'],
     followUpFields: ['Security reference', 'Triage acknowledgement', 'Remediation outcome'],
   },
   {
@@ -111,11 +111,11 @@ export const RESPONSE_PACKET_PROFILES: readonly ResponsePacketProfile[] = Object
     subjectPrefix: 'Reviewed unsafe-site report',
     requiredContactKind: null,
     checklist: ['Use the recipient submission form or documented route manually', 'Include exact URLs and current observation time', 'Disclose source gaps and false-positive context'],
-    evidenceOrder: ['Exact URLs', 'Observed behavior', 'Selected corroborating evidence', 'Limitations'],
+    evidenceOrder: ['Exact URLs', 'Observed behaviour', 'Selected corroborating evidence', 'Limitations'],
     includedEvidence: ['Exact URLs', 'Observation time', 'Observed harm', 'Selected evidence pins', 'Contradictions and cautions'],
     excludedEvidence: ['Raw provider payloads', 'Secrets', 'Unselected personal data', 'Automated maliciousness claims'],
     redactions: ['Remove credentials, tokens, URL fragments, and unrelated contacts'],
-    attachments: ['Reviewed response packet', 'Optional normalized case report'],
+    attachments: ['Reviewed response packet', 'Optional normalised case report'],
     followUpFields: ['Submission reference', 'Review state', 'Listing or delisting outcome'],
   },
   {
@@ -129,7 +129,7 @@ export const RESPONSE_PACKET_PROFILES: readonly ResponsePacketProfile[] = Object
     includedEvidence: ['Case disposition', 'Selected evidence pins', 'Analyst decisions and assertions', 'Action history', 'Exact URLs when relevant'],
     excludedEvidence: ['Raw upstream payloads', 'Secrets', 'Unselected personal data', 'Unsupported attribution'],
     redactions: ['Remove credentials, tokens, and personal data not required for the internal decision'],
-    attachments: ['Reviewed response packet', 'Normalized case report when required by internal policy'],
+    attachments: ['Reviewed response packet', 'Normalised case report when required by internal policy'],
     followUpFields: ['Internal owner', 'Due date', 'Decision', 'Control or escalation outcome'],
   },
 ]);

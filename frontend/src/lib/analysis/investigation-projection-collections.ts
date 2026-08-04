@@ -137,7 +137,7 @@ function projectCaseSnapshot(
         from: domainEntity.id,
         to: entity.id,
         classification: 'normalized',
-        method: 'Exact retained normalized nameserver set',
+        method: 'Exact retained normalised nameserver set',
       }, observation);
     }
   }
@@ -152,7 +152,7 @@ function projectCaseSnapshot(
         from: domainEntity.id,
         to: entity.id,
         classification: 'normalized',
-        method: 'Exact normalized final HTTP(S) origin from comparable deep evidence',
+        method: 'Exact normalised final HTTP(S) origin from comparable deep evidence',
       }, observation);
     }
   }
@@ -382,7 +382,7 @@ for (const row of relationshipRows.records) {
         from: domainEntity.id,
         to: entity.id,
         classification: 'normalized',
-        method: 'Exact normalized nameserver set from scan-local relationship evidence',
+        method: 'Exact normalised nameserver set from scan-local relationship evidence',
       }, observation);
     }
   }

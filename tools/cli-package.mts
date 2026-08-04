@@ -122,6 +122,7 @@ const INSTALLED_COMMAND_HELP_CHECKS = Object.freeze([
 const SUPPORT_FILES = Object.freeze([
   ['packages/cli/README.md', 'README.md'],
   ['docs/cli.md', 'docs/cli.md'],
+  ['docs/cli-reference.md', 'docs/cli-reference.md'],
   ['DISCLOSURE', 'DISCLOSURE'],
   ['LICENSE', 'LICENSE'],
   ['NOTICE', 'NOTICE'],
@@ -264,6 +265,7 @@ export function buildCliPackageManifest(
       'lib/**/*.mjs',
       'frontend/src/lib/analysis/**/*.js',
       'docs/cli.md',
+      'docs/cli-reference.md',
       'DISCLOSURE',
       'LICENSE',
       'LICENSES/*.txt',
@@ -421,10 +423,10 @@ async function runInstalledCheck(executable: string, args: readonly string[], la
 export async function checkCliPackage(repositoryRoot: string, options: CliPackageOptions = {}): Promise<CliPackageReport> {
   const publicationEnabled = options.publicationEnabled === true;
   if (publicationEnabled && (!options.artifactDirectory || !options.expectedTag)) {
-    throw new TypeError('Release-candidate assembly requires an artifact directory and expected semantic tag.');
+    throw new TypeError('Release-candidate assembly requires an artefact directory and expected semantic tag.');
   }
   if (!publicationEnabled && (options.artifactDirectory || options.expectedTag)) {
-    throw new TypeError('Artifact output and tag validation are available only for release-candidate assembly.');
+    throw new TypeError('Artefact output and tag validation are available only for release-candidate assembly.');
   }
   const temporaryRoot = await mkdtemp(path.join(tmpdir(), 'whoisleuth-cli-package-'));
   const stagingRoot = path.join(temporaryRoot, 'staging');
@@ -466,7 +468,7 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
     const unpackedBytes = positiveInteger(packResult.unpackedSize, 'Unpacked CLI bytes', MAX_CLI_PACKAGE_UNPACKED_BYTES);
     const filename = safeRelativePath(packResult.filename, 'Packed CLI filename');
     const tarball = path.join(artifactsRoot, filename);
-    const requiredEntries = ['bin/whoisleuth.mjs', 'cli/runner.mjs', 'package.json', 'README.md', 'DISCLOSURE', 'LICENSE', 'SECURITY.md', 'docs/cli.md'];
+    const requiredEntries = ['bin/whoisleuth.mjs', 'cli/runner.mjs', 'package.json', 'README.md', 'DISCLOSURE', 'LICENSE', 'SECURITY.md', 'docs/cli.md', 'docs/cli-reference.md'];
     for (const required of requiredEntries) {
       if (!entries.includes(required)) throw new TypeError(`Packed CLI is missing ${required}.`);
     }

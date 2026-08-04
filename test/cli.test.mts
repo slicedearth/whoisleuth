@@ -646,7 +646,7 @@ test('terminal lookup explains represented registry access constraints', () => {
   const terminal = formatTerminalLookup(document);
 
   assert.match(terminal, /Registry access \.es/);
-  assert.match(terminal, /WHOIS access\s+Source-IP authorization required/);
+  assert.match(terminal, /WHOIS access\s+Source-IP authorisation required/);
   assert.match(terminal, /RDAP access\s+No service published by IANA/);
   assert.match(terminal, /Access note\s+Registry collection requires documented source authorization\./);
 });

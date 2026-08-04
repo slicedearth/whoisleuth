@@ -198,7 +198,7 @@
 {#if view==='dashboard'}
   <section class="demo-panel card" aria-labelledby="dashboard-heading">
     <p class="eyebrow">Dashboard · Synthetic preview</p><h2 id="dashboard-heading">Choose a focused investigation task</h2>
-    <p>The protected Dashboard normally summarizes browser-local work and opens each tool. These synthetic counts do not read production storage.</p>
+    <p>The protected Dashboard normally summarises browser-local work and opens each tool. These synthetic counts do not read production storage.</p>
     <div class="dashboard-summary"><article><span>Open cases</span><strong>0</strong></article><article><span>Watchlists</span><strong>0</strong></article><article><span>Brand profiles</span><strong>1 fixture</strong></article></div>
     <div class="tool-preview"><span>Brands</span><span>Discover</span><span>Bulk</span><span>Lookup</span><span>Monitor</span></div>
     <button class="primary" type="button" onclick={start}>Begin with Brands</button>
@@ -221,8 +221,8 @@
   </section>
 {:else if view==='bulk'}
   <section class="demo-panel" aria-labelledby="bulk-heading">
-    <p class="eyebrow">Bulk · Explainable triage</p><h2 id="bulk-heading">Prioritize candidates without collapsing evidence</h2>
-    <p>Risk values and relationships are fixed demonstrations. They prioritize review but do not assert ownership, coordination, intent, or maliciousness. The signed-in Console can filter and group only observed compact fields, act on an explicit shortlist, save resumable sessions, and retain one reviewed relationship. This demo never writes production investigation data.</p>
+    <p class="eyebrow">Bulk · Explainable triage</p><h2 id="bulk-heading">Prioritise candidates without collapsing evidence</h2>
+    <p>Risk values and relationships are fixed demonstrations. They prioritise review but do not assert ownership, coordination, intent, or maliciousness. The signed-in Console can filter and group only observed compact fields, act on an explicit shortlist, save resumable sessions, and retain one reviewed relationship. This demo never writes production investigation data.</p>
     <div class="filter-bar" role="group" aria-label="Candidate filters"><button class:active={candidateFilter==='all'} aria-pressed={candidateFilter==='all'} onclick={()=>candidateFilter='all'}>All candidates · 3</button><button class:active={candidateFilter==='high'} aria-pressed={candidateFilter==='high'} onclick={()=>candidateFilter='high'}>High priority · 1</button>{#if candidateFilter==='related'}<button class="active" aria-pressed="true">Related domains · {relatedDomains.length}</button>{/if}</div>
     <div class="candidate-grid">{#each candidates as candidate}<article class="candidate card"><div><code>{candidate.domain}</code><span class:high={candidate.risk>=70}>Risk {candidate.risk}</span></div><p>{candidate.mutation} · {candidate.availability}</p><ul>{#each candidate.signals as signal}<li>{signal}</li>{/each}</ul><details><summary>Why this score</summary><ul>{#each candidate.riskFactors as factor}<li>{factor.label} · +{factor.points}</li>{/each}</ul></details>{#if candidate.provenance.certificateCount}<p class="provenance">{candidate.provenance.source} · {candidate.provenance.certificateCount} certificates · latest {shortDate(candidate.provenance.lastObservedAt)}</p>{/if}<button type="button" onclick={()=>inspect(candidate.id)}>Inspect {candidate.domain}</button></article>{/each}</div>
     <BulkRelationships groups={relationshipGroups} truncated={false} limitations={['Shared infrastructure is investigation context only. It does not establish ownership, coordination, intent, or maliciousness.']} loadDomains={loadRelated} />

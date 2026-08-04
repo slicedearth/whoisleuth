@@ -327,7 +327,7 @@ test('deep Lookup presents registrar and observed network RDAP as separate sourc
 
   await page.getByRole('button', { name: 'Create case' }).click();
   const checkpoint = page.locator('.checkpoint');
-  await expect(checkpoint.getByRole('heading', { name: 'Retain selected normalized facts' })).toBeVisible();
+  await expect(checkpoint.getByRole('heading', { name: 'Retain selected normalised facts' })).toBeVisible();
   await checkpoint.getByRole('checkbox', { name: /Registrar/u }).check();
   await checkpoint.getByRole('checkbox', { name: /Registration statuses/u }).check();
   await checkpoint.getByRole('button', { name: 'Save 2 checkpoint facts' }).click();
@@ -420,7 +420,7 @@ test('registry access constraints remain neutral, explicit, and mobile-safe', as
   await page.getByRole('button', { name: 'Run lookup' }).click();
   const notice = page.getByRole('region', { name: '.ES collection constraints' });
   await expect(notice.getByText('Restricted access')).toBeVisible();
-  await expect(notice.getByText('Source-IP authorization required')).toBeVisible();
+  await expect(notice.getByText('Source-IP authorisation required')).toBeVisible();
   await expect(notice.getByText(/does not decide registration, availability, safety, or maliciousness/i)).toBeVisible();
 
   await page.locator('#query').fill('example.ch');

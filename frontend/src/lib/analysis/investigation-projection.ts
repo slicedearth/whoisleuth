@@ -293,7 +293,7 @@ const RELATIONSHIP_TYPES = new Set<InvestigationRelationshipType>([
 ]);
 
 const BASE_LIMITATIONS = Object.freeze([
-  'This projection uses only bounded evidence already retained locally or explicitly supplied normalized scan observations. It makes no network requests.',
+  'This projection uses only bounded evidence already retained locally or explicitly supplied normalised scan observations. It makes no network requests.',
   'Shared infrastructure and identifiers are investigation pivots, not proof of ownership, coordination, intent, or maliciousness.',
   'Missing, unsupported, partial, or inconclusive source data does not create a negative finding or an evidence edge.',
 ]);

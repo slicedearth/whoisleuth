@@ -57,7 +57,7 @@ function formatLookupEvidenceMarkdown(
   lines.push('', '## Registry-source comparison');
   appendFields(lines, report.comparison.health);
   if (!report.comparison.fields.length) {
-    lines.push('- No comparable normalized fields were published.');
+    lines.push('- No comparable normalised fields were published.');
   } else {
     for (const field of report.comparison.fields) {
       lines.push(`- **${escapeMarkdownValue(field.label)} (${escapeMarkdownValue(field.status)}):** RDAP ${escapeMarkdownValue(field.rdap)}; WHOIS ${escapeMarkdownValue(field.whois)}`);

@@ -19,7 +19,7 @@ reviewed before import into Cases. File permissions are private where the
 platform supports POSIX modes.
 
 The offline `compare` command accepts two selected version-2 manifests. Before
-comparing them it verifies the declared artifact sizes, SHA-256 digests, and
+comparing them it verifies the declared artefact sizes, SHA-256 digests, and
 screenshot perceptual hashes against the local files. It then reports exact
 rendered DOM and visible-text equality, screenshot dHash distance, bounded
 count changes, page identity, and request-domain overlap as separate

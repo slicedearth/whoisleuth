@@ -63,7 +63,27 @@ function formatIpPrefix(prefix: IpPrefix): string {
     const shift = BigInt((7 - index) * 16);
     return ((prefix.value >> shift) & 0xffffn).toString(16);
   });
-  return `${parts.join(':')}/${prefix.length}`;
+  let bestStart = -1;
+  let bestLength = 0;
+  for (let start = 0; start < parts.length;) {
+    if (parts[start] !== '0') {
+      start += 1;
+      continue;
+    }
+    let end = start + 1;
+    while (end < parts.length && parts[end] === '0') end += 1;
+    const length = end - start;
+    if (length > bestLength && length >= 2) {
+      bestStart = start;
+      bestLength = length;
+    }
+    start = end;
+  }
+  if (bestStart === -1) return `${parts.join(':')}/${prefix.length}`;
+  const left = parts.slice(0, bestStart).join(':');
+  const right = parts.slice(bestStart + bestLength).join(':');
+  const address = left && right ? `${left}::${right}` : left ? `${left}::` : right ? `::${right}` : '::';
+  return `${address}/${prefix.length}`;
 }
 
 export { parseIpPrefix, prefixContains, formatIpPrefix };

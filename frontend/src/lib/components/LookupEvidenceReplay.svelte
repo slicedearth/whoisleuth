@@ -53,7 +53,7 @@
       <span>Expected SHA-256 <small>optional</small></span>
       <input bind:value={expectedSha256} maxlength="64" inputmode="text" autocomplete="off" spellcheck="false" placeholder="Paste a trusted 64-character checksum before choosing the file" />
     </label>
-    <p class="note">The file stays in this browser tab. Replay validates schema, nesting and entry bounds, calculates the file digest, optionally verifies a trusted checksum, and renders bounded normalized facts only.</p>
+    <p class="note">The file stays in this browser tab. Replay validates schema, nesting and entry bounds, calculates the file digest, optionally verifies a trusted checksum, and renders bounded normalised facts only.</p>
     {#if status}<p class:loaded={Boolean(replay)} aria-live="polite">{status}</p>{/if}
 
     {#if replay}
@@ -83,7 +83,7 @@
         </div>
 
         {#if replay.facts.length}
-          <h3>Normalized facts</h3>
+          <h3>Normalised facts</h3>
           <dl>
             {#each replay.facts as fact}
               <div><dt>{fact.label}</dt><dd>{fact.value}<small>{fact.source}</small></dd></div>
@@ -103,7 +103,7 @@
           <div>
             <article>
               <strong>Verified export facts</strong>
-              <p>{replay.facts.length} normalized fact{replay.facts.length === 1 ? '' : 's'} retained with source labels.</p>
+              <p>{replay.facts.length} normalised fact{replay.facts.length === 1 ? '' : 's'} retained with source labels.</p>
             </article>
             <article>
               <strong>Unknown or incomplete</strong>

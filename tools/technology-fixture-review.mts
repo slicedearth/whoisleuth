@@ -164,15 +164,15 @@ function normalizeHeader(
 
 function normalizeMarkup(value: unknown): string | undefined {
   if (value === undefined || value === null || value === '') return undefined;
-  const markup = text(value, 'Minimized HTML', MAX_REVIEWED_MARKUP_BYTES).toLowerCase();
+  const markup = text(value, 'Minimised HTML', MAX_REVIEWED_MARKUP_BYTES).toLowerCase();
   if (EMAIL_RE.test(markup) || IPV4_RE.test(markup) || /<!--|<style\b/iu.test(markup)) {
-    throw new TypeError('Minimized HTML contains contact, address, comment, or style material.');
+    throw new TypeError('Minimised HTML contains contact, address, comment, or style material.');
   }
   const outputs = SAFE_MARKERS
     .filter(({ marker }) => markup.includes(marker))
     .map(({ output }) => output);
   if (!outputs.length) {
-    throw new TypeError('Minimized HTML contains no recognized catalogue marker.');
+    throw new TypeError('Minimised HTML contains no recognised catalogue marker.');
   }
   return [...new Set(outputs)].join('');
 }

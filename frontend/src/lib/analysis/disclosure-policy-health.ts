@@ -64,7 +64,7 @@ export function buildDisclosurePolicyHealth(
     coverage,
     review: review.slice(0, 6),
     limitations: [
-      'Health summarizes the selected security.txt observation only. It performs no reachability check and does not prove that a contact is monitored.',
+      'Health summarises the selected security.txt observation only. It performs no reachability check and does not prove that a contact is monitored.',
       'Missing, malformed, stale, or unavailable disclosure evidence is not evidence that no reporting route exists.',
     ],
   };

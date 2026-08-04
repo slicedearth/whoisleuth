@@ -36,7 +36,7 @@ const RECIPES: Readonly<Record<InvestigationPlanRecipe, Recipe>> = Object.freeze
     steps: (domain: string) => Object.freeze([
       step('collect', 'Collect a Deep lookup', 'lookup', [domain, '--deep', '--json'], 'network', 'network_disclosure', 'whoisleuth.cli.lookup', 'Review source health and limitations before using missing fields.'),
       step('export', 'Create a portable evidence report', 'export', ['<saved-lookup.json>'], 'offline', 'analyst_selection', 'whoisleuth.lookup-evidence', 'Select the reviewed lookup file; the plan never guesses a path.'),
-      step('verify', 'Verify the exported artifact', 'verify-artifact', ['<evidence.json>', '--json'], 'offline', 'analyst_selection', 'whoisleuth.offline-artifact-verification', 'Keep verification distinct from a claim that the observations are correct or current.'),
+      step('verify', 'Verify the exported artefact', 'verify-artifact', ['<evidence.json>', '--json'], 'offline', 'analyst_selection', 'whoisleuth.offline-artifact-verification', 'Keep verification distinct from a claim that the observations are correct or current.'),
     ]),
   }),
   'lookalike-review': Object.freeze({
@@ -123,7 +123,7 @@ export function buildInvestigationPlan(
     limitations: Object.freeze([
       'This document is a fixed plan. It does not execute commands, expand placeholders, make requests, read files, change cases, or submit reports.',
       'Network steps require deliberate execution and disclose the selected target to the sources described by that command.',
-      'Analyst-selection steps require reviewed local artifacts; placeholders are never interpreted as file paths by this planner.',
+      'Analyst-selection steps require reviewed local artefacts; placeholders are never interpreted as file paths by this planner.',
     ]),
   });
 }

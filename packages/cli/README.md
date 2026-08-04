@@ -103,7 +103,7 @@ cleanup before exiting immediately.
 
 The offline `timeline` command orders 2 to 20 saved Lookup documents for one
 domain and compares each adjacent observation. It retains observation times and
-normalized field states but no input filenames or raw registry payloads.
+normalised field states but no input filenames or raw registry payloads.
 Observed differences remain separate from missing, unavailable, and changed
 collection conditions.
 
@@ -129,7 +129,8 @@ lookups can be compared across static page, parse5-tokenized DOM structure,
 favicon, technology, and TLS evidence, while saved Bulk output can be reviewed
 for passive MX, null MX, SPF, DMARC, and shared-provider context.
 
-See `docs/cli.md` in the package for the complete command, privacy, output, and
+See `docs/cli.md` in the package for installation and first use, and
+`docs/cli-reference.md` for the complete command, privacy, output, and
 evidence-contract reference. Report suspected vulnerabilities through the
 private channel described in `SECURITY.md`.
 

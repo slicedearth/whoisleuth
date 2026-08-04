@@ -60,7 +60,7 @@ export function buildReviewedAccuracyScaffold(categoryInput: unknown, idInput: u
     },
     fixture: {
       target: 'fixture.example.invalid',
-      note: 'Add only the minimum normalized fields required to replay the relevant analyser.',
+      note: 'Add only the minimum normalised fields required to replay the relevant analyser.',
     },
   }, null, 2)}\n`;
 }

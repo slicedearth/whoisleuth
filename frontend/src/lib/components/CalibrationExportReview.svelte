@@ -91,7 +91,7 @@
     <div class="review-body">
       <p id="calibration-review-summary">
         The file will include <strong>{preview.included} reviewed case{preview.included === 1 ? '' : 's'}</strong>
-        with domain names, analyst dispositions, optional reviewed reason codes, and bounded normalized scoring inputs.
+        with domain names, analyst dispositions, optional reviewed reason codes, and bounded normalised scoring inputs.
       </p>
       <div class="counts" role="group" aria-label="Calibration export counts">
         <span><strong>{preview.selected}</strong> selected</span>

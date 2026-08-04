@@ -370,7 +370,7 @@ function bulkTimelineItems(sessions: readonly BulkSession[], now: string): Retai
       truncated: session.domains.length > MAX_RETAINED_TIMELINE_ENTITIES,
       derived: false,
       limitations: [
-        'Saved Bulk sessions retain compact normalized rows and source states, not raw WHOIS, RDAP, DNS, HTTP, TLS, page, or contact payloads.',
+        'Saved Bulk sessions retain compact normalised rows and source states, not raw WHOIS, RDAP, DNS, HTTP, TLS, page, or contact payloads.',
         'Freshness measures the age of this retained session observation. It does not establish the current state of any queued domain.',
       ],
     }];

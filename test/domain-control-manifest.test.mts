@@ -76,7 +76,7 @@ describe('domain control manifests', () => {
         digestSha256: `sha256:${createHash('sha256').update(canonicalArtifactJson(unsigned)).digest('hex')}`,
       },
     };
-    assert.throws(() => verifyDomainControlManifest(manifest), /canonical normalized content/iu);
+    assert.throws(() => verifyDomainControlManifest(manifest), /canonical normalised content/iu);
 
     const withUnknown = { ...buildDomainControlManifest(input(), generatedAt), extra: 'not part of the contract' };
     assert.throws(() => verifyDomainControlManifest(withUnknown), /unknown field: extra/iu);

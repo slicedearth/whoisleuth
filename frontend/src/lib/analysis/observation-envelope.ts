@@ -707,7 +707,7 @@ export function readObservationEnvelopeDocument(value: unknown): ObservationEnve
       || referencedObservations.some((observationId) => !observationIds.has(observationId))
       || mediaType === undefined || digest === undefined || !observedAt
       || complete === undefined || truncated === undefined || !limitations) {
-      return { state: 'invalid', version, document: null, detail: 'The common observation envelope contained a malformed artifact reference.' };
+      return { state: 'invalid', version, document: null, detail: 'The common observation envelope contained a malformed artefact reference.' };
     }
     artifactReferences.push({
       version: 1,

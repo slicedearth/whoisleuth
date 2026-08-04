@@ -291,7 +291,7 @@ const COMMAND_DETAILS: Readonly<Record<CliCommand, Readonly<{ description: strin
     boundary: 'Calibration is offline and diagnostic. It never trains, tunes, or changes the scoring model automatically.',
   },
   'lookalike-calibrate': {
-    description: 'Summarize reviewed candidate dispositions by mutation family without retaining domains.',
+    description: 'Summarise reviewed candidate dispositions by mutation family without retaining domains.',
     example: 'whoisleuth lookalike-calibrate reviewed-candidates.json --json',
     boundary: 'Calibration is offline and diagnostic. It omits candidate identifiers, domains, notes, and evidence and never tunes generation or filtering automatically.',
   },
@@ -351,9 +351,9 @@ const COMMAND_DETAILS: Readonly<Record<CliCommand, Readonly<{ description: strin
     boundary: 'The command is offline and treats every provider label, readiness state, and evidence reference as analyst-authored input. It changes no configuration.',
   },
   'sharing-review': {
-    description: 'Lint one reviewed artifact against local integrity, marking, recipient, personal-data, and redaction controls.',
+    description: 'Lint one reviewed artefact against local integrity, marking, recipient, personal-data, and redaction controls.',
     example: 'whoisleuth sharing-review packet.json --marking amber --recipient-scope organization --purpose "Reviewed incident handoff" --human-reviewed --personal-data-reviewed --redactions-confirmed --json',
-    boundary: 'The command is offline and emits no inspected values. Its result is a review aid, not legal advice or recipient authorization.',
+    boundary: 'The command is offline and emits only bounded schema/version metadata, no content values, and no raw evidence. Its result is a review aid, not legal advice or recipient authorisation.',
   },
   'workflow-plan': {
     description: 'Build a fixed domain-investigation plan from existing bounded CLI commands.',
@@ -404,7 +404,7 @@ const COMMAND_COLLECTION: Readonly<Record<CliCommand, Readonly<{
   'lookalike-calibrate': { mode: 'offline', scope: 'Reads at most 5,000 reviewed candidate labels from one dataset capped at 2 MiB.' },
   'verify-artifact': { mode: 'offline', scope: 'Reads one selected bounded archive, packet, manifest, or saved Lookup document.' },
   'inspect-archive': { mode: 'offline', scope: 'Reads one selected bounded workspace archive with redacted output by default.' },
-  'sign-artifact': { mode: 'offline', scope: 'Reads one selected artifact and one local private key without transmitting either.' },
+  'sign-artifact': { mode: 'offline', scope: 'Reads one selected artefact and one local private key without transmitting either.' },
   'verify-signature': { mode: 'offline', scope: 'Reads one selected signed package and optional local public key.' },
   'source-report': { mode: 'offline', scope: 'Reads bounded saved evidence and emits target-free source reliability data.' },
   compare: { mode: 'offline', scope: 'Reads one saved Lookup and compares its separately attributed registry publications.' },
@@ -413,7 +413,7 @@ const COMMAND_COLLECTION: Readonly<Record<CliCommand, Readonly<{
   'review-evidence': { mode: 'offline', scope: 'Reads one bounded versioned evidence or request-planning document and performs no collection.' },
   'domain-control': { mode: 'offline', scope: 'Reads one bounded desired-state or review document and performs no collection or configuration change.' },
   assurance: { mode: 'offline', scope: 'Reads one versioned plan capped at 2 MiB and makes no request or configuration change.' },
-  'sharing-review': { mode: 'offline', scope: 'Reads one artifact capped at 15 MiB, emits no inspected values, and performs no transmission.' },
+  'sharing-review': { mode: 'offline', scope: 'Reads one artefact capped at 15 MiB, emits only bounded schema/version metadata and no content values, and performs no transmission.' },
   'workflow-plan': { mode: 'offline', scope: 'Builds a fixed typed recipe and executes none of its network or file steps.' },
   diff: { mode: 'offline', scope: 'Reads two saved Lookup documents for different domains.' },
   reconcile: { mode: 'offline', scope: 'Reads 2 to 5 saved observations for one domain, capped at 32 MiB in total.' },
@@ -684,7 +684,7 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
     }
 
     if (args.action === 'verify-artifact') {
-      failureLabel = 'Artifact verification';
+      failureLabel = 'Artefact verification';
       let input: string;
       try {
         input = dependencies.readArtifactInput
@@ -693,13 +693,13 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
             ? createReadStream(args.source, { highWaterMark: 64 * 1024 })
             : dependencies.stdin || process.stdin, {
               limit: MAX_OFFLINE_ARTIFACT_BYTES,
-              label: 'Artifact input',
+              label: 'Artefact input',
             });
       } catch (error) {
         if (error instanceof CliUsageError) throw error;
         throw new CliUsageError(`Could not read artifact input: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
       }
-      if (!input.trim()) throw new CliUsageError('verify-artifact requires one JSON file or an artifact on stdin.');
+      if (!input.trim()) throw new CliUsageError('verify-artifact requires one JSON file or an artefact on stdin.');
 
       let passphrase: string | null = null;
       if (args.passphraseSource) {
@@ -972,7 +972,7 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
         if (error instanceof CliUsageError) throw error;
         throw new CliUsageError(`Could not read sharing review input: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
       }
-      if (!input.trim()) throw new CliUsageError('sharing-review requires one artifact JSON file or a document on stdin.');
+      if (!input.trim()) throw new CliUsageError('sharing-review requires one artefact JSON file or a document on stdin.');
       let document;
       try {
         document = await buildSharingReview(input, {

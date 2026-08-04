@@ -225,7 +225,7 @@
       {#if !mobileLinks.length}<p>No mapped relationships match these visual filters. Exact evidence remains below.</p>{/if}
     </div>
     {#if graph.truncated}
-      <p class="visual-limit">The bounded visual omitted {graph.omittedNodeInputs} fact {graph.omittedNodeInputs === 1 ? 'input' : 'inputs'} and {graph.omittedLinkInputs} relationship {graph.omittedLinkInputs === 1 ? 'input' : 'inputs'} after normalization or display limits. Use the exact evidence below for source detail.</p>
+      <p class="visual-limit">The bounded visual omitted {graph.omittedNodeInputs} fact {graph.omittedNodeInputs === 1 ? 'input' : 'inputs'} and {graph.omittedLinkInputs} relationship {graph.omittedLinkInputs === 1 ? 'input' : 'inputs'} after normalisation or display limits. Use the exact evidence below for source detail.</p>
     {/if}
     <p class="limit">Lines show observed or explicitly derived relationships in the current bounded dataset. They do not establish common ownership or intent.</p>
   </section>

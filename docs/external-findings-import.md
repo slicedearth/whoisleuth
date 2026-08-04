@@ -71,7 +71,7 @@ Additional properties, unsupported categories or completeness states, invalid
 domains or dates, control characters, empty findings, and future schema
 versions reject the whole document.
 
-Version 1 remains readable and normalizes to version 2. Because version 1 did
+Version 1 remains readable and normalises to version 2. Because version 1 did
 not distinguish provenance classes, its findings become `provider_report`
 rather than being upgraded to first-party observations. Analyst hypotheses and
 conclusions do not belong in this findings schema; use the separate case
@@ -99,13 +99,13 @@ reason, not rejected values. The converter does not autodetect arbitrary
 third-party files, fetch records, or treat imported values as independently
 verified observations.
 
-## Sanitised capture artifact manifest
+## Sanitised capture artefact manifest
 
 `whoisleuth.web-capture-manifest` versions 1 and 2 import reviewed metadata for a
 sanitised screenshot and optional DOM digest without importing either
-artifact's bytes. Each capture declares a domain, capture time, completeness,
+artefact's bytes. Each capture declares a domain, capture time, completeness,
 optional page title and final HTTP(S) origin, up to 30 request domains, up to 20
-technology labels, limitations, and one or two artifact metadata records.
+technology labels, limitations, and one or two artefact metadata records.
 
 A screenshot record contains a plain file name, PNG, JPEG, or WebP MIME type,
 SHA-256 digest, declared byte size up to 10 MiB, and dimensions up to
@@ -114,7 +114,7 @@ perceptual dHash produced by the optional local capture package. A DOM-digest re
 `application/json` MIME type, SHA-256 digest, and declared byte size up to
 1 MiB. The importer does not read or verify referenced files. It rejects
 embedded bytes, archive or decompression fields, path separators, parent-path
-names, URL credentials, paths, queries, fragments, duplicate artifact kinds,
+names, URL credentials, paths, queries, fragments, duplicate artefact kinds,
 unsupported MIME types, and arbitrary fields. The resulting case finding says
 that the metadata was imported and unverified.
 
@@ -123,12 +123,12 @@ that the metadata was imported and unverified.
 The Cases importer accepts a strict uncompressed `.warc` file as a separate
 local-only path. It parses at most 8 MiB, 100 records, and 1 MiB per record,
 then retains at most 25 supported HTML response findings. Request records,
-cookie or authorization material, downloads, compressed response bodies,
+cookie or authorisation material, downloads, compressed response bodies,
 non-HTML content, invalid or credentialed target URLs, excessive HTML, and
 mismatched supported record digests are excluded. The importer never executes
 page content or makes a request.
 
-For each retained response, the importer keeps only the normalized domain,
+For each retained response, the importer keeps only the normalised domain,
 HTTP(S) origin, bounded title, response status, WARC observation time,
 completeness, fixed limitations, and whole-archive SHA-256 digest. Supported
 SHA-1 and SHA-256 `WARC-Block-Digest` values are checked locally. A missing or
@@ -148,7 +148,7 @@ count, manifest size, and declared package bytes are bounded before the
 existing WARC privacy filter runs. Indexes, page lists, screenshots, custom
 files, and descriptive package fields are not imported.
 
-## Bounds and merge behavior
+## Bounds and merge behaviour
 
 - Maximum JSON or CSV file size: 384 KiB.
 - Maximum WARC or WACZ file size: 8 MiB.
@@ -163,7 +163,7 @@ files, and descriptive package fields are not imported.
 Applying a validated preview creates a missing case or adds evidence pins to an
 existing one in a single browser-storage update. Existing status, disposition,
 notes, assertions, decisions, actions, and evidence remain intact. Reimporting
-the same normalized finding from the same named source skips the duplicate.
+the same normalised finding from the same named source skips the duplicate.
 Normal case-storage limits still apply, including bounded evidence history and
 quota-aware pruning.
 
@@ -176,7 +176,7 @@ tokens, or unnecessary URL paths and query strings.
 
 The local file is limited to 512 KiB, 500 STIX objects or MISP attributes, a
 maximum nesting depth of 12, and 8,000 traversed JSON nodes. At most 100
-normalized claims are retained in a preview. The preview reports accepted
+normalised claims are retained in a preview. The preview reports accepted
 claims, exact duplicates, conflicting external identifiers, unsupported or
 malformed exclusions, and whether a bound truncated the result before an
 analyst can select an existing case and merge.
@@ -193,12 +193,12 @@ Complex STIX patterns, unsupported object and attribute types, deleted MISP
 attributes, malformed entity values, and STIX objects outside version 2.1 are
 not reinterpreted. Unsupported values are not copied into the exclusions list.
 
-For every merged assertion, WHOISleuth stores the normalized entity, source-file
+For every merged assertion, WHOISleuth stores the normalised entity, source-file
 SHA-256 digest, format, source name, publisher when declared, external
 identifier, external timestamps, confidence when declared, labels, and
 markings. The source digest identifies the exact local file used for the
 review; it is not a signature or proof that the publisher created the file.
-Repeated merges from the same normalized source claim are idempotent.
+Repeated merges from the same normalised source claim are idempotent.
 
 Imported claims use the `unknown` assertion class because the file is an
 external assertion, not a WHOISleuth observation or an analyst-verified fact.

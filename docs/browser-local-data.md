@@ -9,7 +9,7 @@ browser vault.
 
 ## Current evidence
 
-The owning browser-store models declare these independent serialized ceilings:
+The owning browser-store models declare these independent serialised ceilings:
 
 | Collection | Current backend | Declared ceiling |
 | --- | --- | ---: |
@@ -32,9 +32,9 @@ local-storage design. The model ceilings still apply in IndexedDB so changing
 the backend does not make any collection unbounded.
 
 Saved Bulk session schema 2 adds an optional compact comparison envelope to
-each settled Deep row. It retains at most 12 normalized technology identifiers,
+each settled Deep row. It retains at most 12 normalised technology identifiers,
 a bounded TLS issuer label, an exact SPKI SHA-256 fingerprint, and independent
-source states. Schema 1 remains readable and is normalized without inventing
+source states. Schema 1 remains readable and is normalised without inventing
 the fields. The envelope does not contain raw page, script, certificate, TLS,
 WHOIS, RDAP, or contact data.
 
@@ -54,7 +54,7 @@ imports can update several collections in one IndexedDB transaction.
 Website-profile snapshots retain at most 60 explicit analyst saves and 12 per
 canonical domain. They contain curated technology identifiers, posture states,
 identity digests, source health, timestamps, completeness markers and an
-optional normalized leaf-certificate observation from the same completed Deep
+optional normalised leaf-certificate observation from the same completed Deep
 Lookup rather than raw lookup responses or certificate bytes.
 Investigation templates retain at most 20 analyst-authored variants of the
 three built-in guides. They can customise bounded guidance, omit allowlisted
@@ -126,7 +126,7 @@ The provider:
 
 The migration is non-destructive and resumable:
 
-1. Read and normalize each supported legacy document through its existing
+1. Read and normalise each supported legacy document through its existing
    model.
 2. Write the bounded records and a migration manifest in one IndexedDB
    transaction.
@@ -152,10 +152,10 @@ on the same origin.
 Dashboard offers an optional encrypted wrapper around the ordinary checksummed
 workspace archive. Encryption and decryption happen in the browser through
 native Web Crypto. Version 1 uses PBKDF2-HMAC-SHA-256 with 600,000 iterations,
-a fresh 16-byte salt, and AES-256-GCM with a fresh 12-byte initialization
+a fresh 16-byte salt, and AES-256-GCM with a fresh 12-byte initialisation
 vector and 128-bit authentication tag. The schema, version, creation time,
 content contract, key-derivation parameters, salt, cipher parameters, and
-initialization vector are authenticated as additional data.
+initialisation vector are authenticated as additional data.
 
 The envelope is bounded to approximately 13.4 MiB around the existing 10 MiB
 plaintext archive limit. It accepts only its fixed version 1 algorithm contract
@@ -182,17 +182,17 @@ The threat model is deliberately narrow:
 
 ## Separate decisions
 
-- **IndexedDB vault:** Version 1 still stores normalized records as plaintext
+- **IndexedDB vault:** Version 1 still stores normalised records as plaintext
   JSON inside the browser database. Portable archive encryption does not change
   that boundary. An optional encrypted live vault would still require a
   separate passphrase and recovery design, opaque or blind lookup keys,
-  auto-lock behavior, rekeying, and performance tests. A key or passphrase must
+  auto-lock behaviour, rekeying, and performance tests. A key or passphrase must
   not be persisted beside the ciphertext. Encryption cannot protect records
   while the vault is unlocked from same-origin script or a malicious browser
   extension.
 - **PWA support:** Offline installation, caching, and service-worker lifecycle
   are independent from local database selection.
-- **Synchronization:** IndexedDB remains tied to one origin and browser profile.
+- **Synchronisation:** IndexedDB remains tied to one origin and browser profile.
   Cross-device or collaborative work would require a separately approved
   identity, custody, conflict, retention, and cost model.
 - **Durability:** Browser storage can still be cleared or evicted. A workspace

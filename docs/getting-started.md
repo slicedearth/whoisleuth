@@ -175,7 +175,7 @@ npm run schema:inventory
 
 Generates a report from the actual browser-store, hosted-state, export,
 interchange, CLI, and derived-model version constants. It records compatibility,
-migration direction, write behavior, and bounds without reading browser or
+migration direction, write behaviour, and bounds without reading browser or
 hosted data.
 
 ### Specialist workflow benchmark
@@ -213,7 +213,7 @@ raw pages or response headers. A proposed signature should not be merged until
 the benchmark reports no identifier, confidence, category, coverage, or
 collision error and its benign fixture does not create an unexpected match.
 
-Reviewed observations can be converted into a separately maintained minimized
+Reviewed observations can be converted into a separately maintained minimised
 fixture with:
 
 ```bash
@@ -221,7 +221,7 @@ npm run technology:fixture-review -- reviewed-input.json
 ```
 
 The contributor supplies only reviewed factual markers. The tool reconstructs
-a fixed safe subset of recognized static markers and approved shared vendor
+a fixed safe subset of recognised static markers and approved shared vendor
 origins, rejects target-bearing or contact material, and verifies the expected
 catalogue result. The checked-in reviewed corpus starts empty, so it makes no
 claim about real-world coverage until reviewed contributions are added.
@@ -238,8 +238,8 @@ npm run technology:coverage-check
 ```
 
 This command intentionally fails while any catalogue signature lacks a passing,
-minimized contributor-reviewed observation. The ordinary synthetic benchmark
-continues to measure deterministic signature behavior and collision controls;
+minimised contributor-reviewed observation. The ordinary synthetic benchmark
+continues to measure deterministic signature behaviour and collision controls;
 it does not become a proxy for real-world coverage.
 
 The wider reviewed-accuracy programme keeps technology detection separate from
@@ -289,7 +289,7 @@ npm run frontend:loading-report
 npm run frontend:authenticated-loading-report
 ```
 
-The report uses only local build artifacts. It fails if the browser-local
+The report uses only local build artefacts. It fails if the browser-local
 workspace chunk enters a public route, a generated route lacks a reviewed
 gzip ceiling, or a route exceeds that deliberately generous regression budget.
 CI runs this check after the production build. The estimates are not measured
@@ -438,8 +438,8 @@ envelope can become a result.
 
 The spike is not connected to the frontend, an API route, or a hosting
 provider. Production adoption remains gated on a separately reviewed adapter,
-remote-runtime compatibility, deadline and cancellation behavior, buffering
-and fallback behavior, deployment-wide cost controls, a deployment-specific
+remote-runtime compatibility, deadline and cancellation behaviour, buffering
+and fallback behaviour, deployment-wide cost controls, a deployment-specific
 privacy review, and authenticated desktop and mobile smoke tests. The existing
 buffered Netlify and Express endpoint remains the only deployed contract.
 
@@ -585,9 +585,10 @@ node bin/whoisleuth.mts --help
 node bin/whoisleuth.mts doctor
 ```
 
-The [CLI guide](cli.md) documents commands for Lookup, Bulk, Certificate
-Transparency, discovery, posture, HTTP and TLS intelligence, registry-source
-comparison, compatibility inspection, Risk calibration, artifact verification,
+The [CLI guide](cli.md) gives the installation and first-use path, while the
+[complete CLI reference](cli-reference.md) documents commands for Lookup,
+Bulk, Certificate Transparency, discovery, posture, HTTP and TLS intelligence, registry-source
+comparison, compatibility inspection, Risk calibration, artefact verification,
 privacy-safe source diagnostics, and evidence export. It also defines output
 formats, exit codes, terminal detail levels, TTY-only progress and colour,
 offline-first diagnostics, atomic private file output, strict automation exits,
@@ -599,7 +600,7 @@ The CLI is a local package boundary. It is not included in the static frontend
 or the Netlify function bundles unless a shared module is also used there. The
 root application and ordinary candidate stay private, while the exact compiled
 dependency closure can be packed, installed, and smoke tested without leaving
-temporary artifacts in the repository:
+temporary artefacts in the repository:
 
 ```bash
 npm run cli:package:check
@@ -613,7 +614,7 @@ lib/                    Shared bounded collection and analysis modules
 netlify/functions/      Thin Netlify adapters and optional scheduled worker
 frontend/               SvelteKit public site and protected Console
 bin/ and cli/            First-party CLI
-fixtures/               Sanitized deterministic registry fixtures
+fixtures/               Sanitised deterministic registry fixtures
 test/ and e2e/           Unit, integration, and browser verification
 tools/                  Maintainer checks and offline evaluation commands
 docs/                   User, operator, architecture, contract, and CLI guides

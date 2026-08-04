@@ -7,7 +7,7 @@ both runtimes call the same modules under `lib/` so registry parsing, request
 validation, feature policy, and evidence contracts do not fork by deployment.
 
 This document explains the major components, trust boundaries, request path,
-storage model, and deliberate trade-offs. Detailed normalized registry shapes
+storage model, and deliberate trade-offs. Detailed normalised registry shapes
 and compatibility fields live in the
 [registry data contract](registry-data-contract.md). Personal-data flows and
 retention are covered by [the privacy notice](../PRIVACY.md).
@@ -49,8 +49,8 @@ profiles, notes, raw registry payloads, or deep website evidence.
 | Layer | Owns | Does not own |
 | --- | --- | --- |
 | `frontend/src/routes/` | Public overview, demo, guide, sign-in, and privacy pages plus the protected Dashboard, Lookup, Discover, Bulk, Monitor, Brands, and Registry support interfaces. | Registry protocol logic, authentication enforcement, outbound-request trust decisions, or deployment-wide budgets. |
-| `frontend/src/lib/analysis/` | Pure scoring, candidate generation, comparison, typed investigation projection, relationship, history, report, and normalization models that can be tested without the DOM. | Direct network access or browser storage. |
-| Browser-store wrappers in `frontend/src/lib/` | Versioned access to Brand Profiles, watchlists, cases, campaigns, CT history, shortlist, custom rules, and analyst-selected relationship observations. | General server persistence, cross-device synchronization, accounts, or a general background-job system. |
+| `frontend/src/lib/analysis/` | Framework-neutral scoring, candidate generation, comparison, typed investigation projection, relationship, history, report, and normalisation models shared by browser, CLI, and server-side consumers. The historical path is not a frontend-only ownership boundary. | DOM APIs, direct network access, or browser storage. |
+| Browser-store wrappers in `frontend/src/lib/` | Versioned access to Brand Profiles, watchlists, cases, campaigns, CT history, shortlist, custom rules, and analyst-selected relationship observations. | General server persistence, cross-device synchronisation, accounts, or a general background-job system. |
 | `server.mts` and `netlify/functions/` | HTTP entry points, authentication, request throttling, feature enforcement, operation admission, response shaping, and the optional Netlify scheduled-watchlist boundary. | Separate copies of lookup and parsing rules. |
 | `lib/` | Query classification, RDAP bootstrap/failover, WHOIS referral chains, availability, DNS/HTTP/page/TLS intelligence, CT search, security.txt collection, optional external intelligence adapters, bounded structured identity, derived technology and response-policy/passive-posture analysis, observed network context, security boundaries, capability reporting, and operation budgets. | User interface state or analyst decisions. |
 | Optional distributed budget provider | Opaque expiring leases and bounded operation counters when explicitly configured. | Query targets, responses, evidence, notes, profiles, or session tokens. |
@@ -86,8 +86,8 @@ Fast and deep modes are execution profiles, not confidence labels:
 | Profile | Intended use | Hosted work |
 | --- | --- | --- |
 | **Fast** | High-volume candidate triage. | RDAP-led registration analysis, with bounded authoritative DNS delegation fallback where needed. WHOIS and deep website/TLS evidence are skipped explicitly. |
-| **Deep, full** | Single-target Lookup and full CLI investigation. | RDAP plus bounded registrar RDAP follow-up, WHOIS, availability, DNS with domain SOA or public-IP PTR context, HTTP, favicon, page identity, privacy-minimized credential-surface counts, publisher-declared structured identity, one-connection TLS, derived technology and passive-posture findings, and one observed-address IP RDAP context. Optional security.txt and external provider actions run only when explicitly selected. |
-| **Deep, compact** | Analyst-selected richer Bulk triage. | RDAP, WHOIS, availability, DNS, bounded website evidence, TLS evidence, up to 12 normalized technology identifiers, a bounded TLS issuer label, and an SPKI SHA-256 fingerprint needed by the compact result. Registrar RDAP follow-up, raw registry payloads, structured-identity, rich technology and passive-posture detail, the full certificate profile, observed-address IP RDAP, security.txt, and external providers remain omitted. |
+| **Deep, full** | Single-target Lookup and full CLI investigation. | RDAP plus bounded registrar RDAP follow-up, WHOIS, availability, DNS with domain SOA or public-IP PTR context, HTTP, favicon, page identity, privacy-minimised credential-surface counts, publisher-declared structured identity, one-connection TLS, derived technology and passive-posture findings, and one observed-address IP RDAP context. Optional security.txt and external provider actions run only when explicitly selected. |
+| **Deep, compact** | Analyst-selected richer Bulk triage. | RDAP, WHOIS, availability, DNS, bounded website evidence, TLS evidence, up to 12 normalised technology identifiers, a bounded TLS issuer label, and an SPKI SHA-256 fingerprint needed by the compact result. Registrar RDAP follow-up, raw registry payloads, structured-identity, rich technology and passive-posture detail, the full certificate profile, observed-address IP RDAP, security.txt, and external providers remain omitted. |
 
 Bulk uses the same `/api/lookup` orchestration one domain at a time and requests
 a compact response. The compact profile does not collect omitted full-lookup
@@ -137,7 +137,7 @@ version 7 and their existing payload shape.
   endpoint-attempt diagnostics. A stale validated bootstrap can bridge a
   temporary bootstrap outage. Discover can separately request one RFC 9082
   nameserver search from the IANA-selected service for an analyst-supplied
-  registry suffix. That explicit action retains at most 200 normalized
+  registry suffix. That explicit action retains at most 200 normalised
   in-scope domains, is never part of Fast, Compact, Deep, or monitoring, and
   remains a registry-scoped lower bound rather than a global reverse pivot.
 - **WHOIS** follows a bounded TCP/43 referral chain with validated public
@@ -186,11 +186,11 @@ flowchart TB
   scheduled["Selected compact watchlist"] -->|"application-encrypted when configured"| blob["Site-wide Netlify Blob"]
 ```
 
-The local stores are versioned, normalized on read, bounded by record and field
-counts, and protected by serialized byte budgets and deterministic pruning
+The local stores are versioned, normalised on read, bounded by record and field
+counts, and protected by serialised byte budgets and deterministic pruning
 where evidence volume is material. The dependency-free provider stores keyed
 records and collection manifests in IndexedDB and supports atomic
-multi-collection updates. A one-time migration normalizes supported legacy
+multi-collection updates. A one-time migration normalises supported legacy
 local-storage documents, verifies the committed record digests, and keeps the
 legacy source untouched. Later IndexedDB writes are authoritative; a deliberate
 Dashboard action can refresh the legacy compatibility copy before a rollback.
@@ -233,7 +233,7 @@ application bounds while removing the single-origin local-storage capacity
 assumption. Browser tests use only fixed synthetic records and isolate their
 database state. Portable workspace archives can be wrapped in browser-local
 passphrase-based authenticated encryption. The active IndexedDB codec remains
-plaintext, while a live encrypted vault, PWA support, and synchronization
+plaintext, while a live encrypted vault, PWA support, and synchronisation
 remain separate decisions documented in
 [the browser-local data architecture](browser-local-data.md).
 
@@ -285,7 +285,7 @@ Playwright baseline cold-loads Lookup and Monitor through the local session
 boundary, records encoded transfer bytes, first enabled route-control time,
 paint and navigation milestones, and Chromium long-task cost, and applies broad
 regression ceilings. These local measurements are repeatable build tripwires,
-not claims about production latency, mobile hardware, proxy behavior, or a
+not claims about production latency, mobile hardware, proxy behaviour, or a
 particular visitor's experience.
 
 ## Common-infrastructure catalogue
@@ -342,9 +342,9 @@ registry tests, or claims of complete semantic interoperability.
 
 The test pyramid is designed to avoid dependence on public services:
 
-1. Node tests exercise pure normalization, parsing, security boundaries,
+1. Node tests exercise pure normalisation, parsing, security boundaries,
    migrations, scoring, comparison, storage budgets, and injected transport
-   behavior with deterministic fixtures.
+   behaviour with deterministic fixtures.
 2. Strict TypeScript checks cover native backend contracts, tools, the CLI,
    Node tests, frontend analysis helpers, Playwright specifications, and the
    pre-render theme bootstrap; Svelte checks validate route components.
@@ -366,6 +366,19 @@ modules from reaching server networking, authentication, secret, filesystem,
 CLI, or function code, and requires optional intelligence adapters to import the
 provider-neutral contract directly.
 
+Framework-neutral models currently live under `frontend/src/lib/analysis/`
+because the browser was their first consumer. Server and CLI imports from that
+directory are deliberate; the enforced direction is that these modules stay
+pure and never acquire DOM, storage, credential, filesystem, or network
+dependencies. Moving them solely to rename the directory would create broad
+import churn without changing the trust boundary.
+
+Optional active local packages remain separate from the core CLI and hosted
+adapters. The dependency rule covers both implemented packages and reserved
+paths for separately approved active collectors, so a gated package cannot be
+quietly introduced as another application entry point. A reserved path does
+not mean the collector is shipped, supported, or authorised.
+
 Scheduled monitoring calls the shared Lookup dispatcher with both `fast` and
 `compact` fixed to `true`. Because that dispatcher owns the runtime collector
 gates, the architecture rule permits the dispatcher dependency but prohibits a
@@ -376,9 +389,9 @@ orchestration while keeping bypasses mechanically detectable.
 The on-demand `npm run schema:inventory` report is assembled from the owning
 contract constants and readers rather than a copied version table. Its explicit
 supported-version lists make a contract bump fail tests until legacy handling,
-future-version behavior, byte bounds, migration direction, and write semantics
+future-version behaviour, byte bounds, migration direction, and write semantics
 are reviewed.
-It reads no browser-local or hosted records and writes no inventory artifact.
+It reads no browser-local or hosted records and writes no inventory artefact.
 
 The maintainer-run `npm run registry:drift` audit compares the embedded
 registry-standards snapshot with exactly two fixed official IANA catalogue
@@ -406,9 +419,9 @@ DNS, Certificate Transparency, or websites.
 ## Deliberate trade-offs
 
 - **Shared password over accounts:** smaller operational and privacy surface;
-  no individual authorization or accountability.
+  no individual authorisation or accountability.
 - **Browser-local investigations over a database:** no hosted evidence store or
-  account synchronization. An optional bounded worker can rescan one encrypted
+  account synchronisation. An optional bounded worker can rescan one encrypted
   compact watchlist projection, but it is not a general job or cross-device
   investigation system.
 - **Fast/deep profiles over one maximal scan:** predictable bulk cost and clear
@@ -417,7 +430,7 @@ DNS, Certificate Transparency, or websites.
   explainable pivots with fewer claims; correlation still requires human
   interpretation.
 - **Two thin deployment adapters over platform-specific implementations:**
-  one behavior contract; platform execution limits and local-only controls must
+  one behaviour contract; platform execution limits and local-only controls must
   still be disclosed honestly.
 - **Synthetic public demo over live public lookup access:** portfolio and product
   exploration without exposing the protected console or spending hosted

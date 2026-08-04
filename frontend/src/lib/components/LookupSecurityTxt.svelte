@@ -67,7 +67,7 @@
     {/if}
     {#if languages.length}<p class="meta"><strong>Preferred languages:</strong> {languages.join(', ')}</p>{/if}
     {#each limitations as limitation}<p class="callout warn">{limitation}</p>{/each}
-    <p class="card-note">This file publishes a way to report security concerns. It does not authorize testing, prove that the contact is monitored, or affect the domain assessment.</p>
+    <p class="card-note">This file publishes a way to report security concerns. It does not authorise testing, prove that the contact is monitored, or affect the domain assessment.</p>
   </div>
 </details>
 

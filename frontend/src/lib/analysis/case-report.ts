@@ -24,7 +24,7 @@ export const CASE_REPORT_SCHEMA_VERSION = 6;
 const APPLICATION_NAME = 'WHOISleuth';
 
 const LIMITATIONS_TEXT = [
-  'This report contains normalized browser-local observations from WHOISleuth analyst cases.',
+  'This report contains normalised browser-local observations from WHOISleuth analyst cases.',
   'It is not a live lookup and does not contain raw WHOIS, RDAP, DNS, HTML, or responses collected during website checks.',
   'Absence of a signal (e.g. no MX record observed) does not prove nonexistence. It may not have been evaluated.',
   'Snapshot fingerprints are deduplication identifiers, not cryptographic evidence hashes.',

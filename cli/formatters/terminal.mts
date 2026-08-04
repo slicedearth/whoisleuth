@@ -626,7 +626,7 @@ function formatTerminalCompare(document: TerminalRecord): string {
   }
   lines.push('');
   if (!fields.length) {
-    lines.push('Neither source published a comparable normalized field.');
+    lines.push('Neither source published a comparable normalised field.');
   } else {
     for (const value of fields) {
       const field = terminalRecord(value);
@@ -654,7 +654,7 @@ function formatTerminalCompare(document: TerminalRecord): string {
       '',
     );
     if (!publicationFields.length) {
-      lines.push('Neither RDAP publication exposed a comparable normalized field.');
+      lines.push('Neither RDAP publication exposed a comparable normalised field.');
     } else {
       for (const value of publicationFields) {
         const field = terminalRecord(value);

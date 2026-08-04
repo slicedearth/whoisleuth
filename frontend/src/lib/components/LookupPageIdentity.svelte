@@ -69,7 +69,7 @@
       <details class="page-detail page-fingerprints disclosure"><summary>Page fingerprints · {fingerprints.length}</summary><dl>{#each fingerprints as row}<dt>{row.label}</dt><dd><code>{row.value}</code>{#if row.detail}<small>{row.detail}</small>{/if}</dd>{/each}</dl><p>SHA-256 components support exact equality checks. Visible-text SimHash is fuzzy comparison data, not a cryptographic digest or proof of common ownership.</p></details>
     {/if}
     {#if limitations.length}<p class="callout warn">{limitations.join(' ')}</p>{/if}
-    <p class="card-note">Bounded metadata and versioned fingerprints from the static HTML already captured for this lookup. Resource and embedded locations retain origins only; contact links retain domains only; download paths, URL queries, normalized markup, and visible text are not retained. These fields provide comparison and review context rather than proof of ownership or maliciousness.</p>
+    <p class="card-note">Bounded metadata and versioned fingerprints from the static HTML already captured for this lookup. Resource and embedded locations retain origins only; contact links retain domains only; download paths, URL queries, normalised markup, and visible text are not retained. These fields provide comparison and review context rather than proof of ownership or maliciousness.</p>
   </div>
 </details>
 

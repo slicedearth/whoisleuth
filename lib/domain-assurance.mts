@@ -4,7 +4,8 @@ import { exactKeys } from './bounded-contract-normalizers.mts';
 
 const DOMAIN_ASSURANCE_INPUT_SCHEMA = 'whoisleuth.domain-assurance.input';
 const DOMAIN_ASSURANCE_SCHEMA = 'whoisleuth.domain-assurance';
-const DOMAIN_ASSURANCE_VERSION = 1;
+const DOMAIN_ASSURANCE_VERSION = 2;
+const DOMAIN_ASSURANCE_SUPPORTED_INPUT_VERSIONS = Object.freeze([1, 2] as const);
 const MAX_ASSURANCE_INPUT_BYTES = 2 * 1024 * 1024;
 
 type AssuranceKind = 'planned-change' | 'recovery-dependencies' | 'retirement';
@@ -16,6 +17,7 @@ const ROOT_KEYS: Readonly<Record<AssuranceKind, ReadonlySet<string>>> = Object.f
   'recovery-dependencies': new Set(['schema', 'version', 'kind', 'assets']),
   retirement: new Set(['schema', 'version', 'kind', 'domain', 'checks']),
 });
+const RETIREMENT_ROOT_KEYS_V2 = new Set(['schema', 'version', 'kind', 'domain', 'checks', 'customChecks']);
 const CHANGE_KEYS = new Set(['reference', 'startsAt', 'endsAt', 'milestones', 'rollbackCriteria', 'postChangeChecks']);
 const MILESTONE_KEYS = new Set(['id', 'label', 'expectedBy', 'evidenceSource', 'state', 'observedAt', 'evidenceReference']);
 const ROLLBACK_KEYS = new Set(['id', 'condition', 'owner', 'state']);
@@ -23,6 +25,8 @@ const POST_CHANGE_CHECK_KEYS = new Set(['id', 'label', 'expectedState', 'evidenc
 const RECOVERY_ASSET_KEYS = new Set(['domain', 'dependencies', 'readiness']);
 const RECOVERY_DEPENDENCY_KEYS = new Set(['registrar', 'dns', 'mail', 'certificate', 'recovery']);
 const RECOVERY_READINESS_KEYS = new Set(['registrarRecoveryTested', 'dnsRecoveryTested', 'recoveryMfaProtected']);
+const CUSTOM_RETIREMENT_CHECK_KEYS = new Set(['id', 'label', 'expected', 'value']);
+const CUSTOM_RETIREMENT_CHECK_ID_RE = /^[a-z][a-z0-9-]{0,63}$/u;
 
 type PlannedChangeResult = Readonly<{
   kind: 'planned-change';
@@ -324,10 +328,10 @@ const RETIREMENT_CHECKS = Object.freeze([
   ['reRegistrationPrevented', 'Registration continuity or defensive renewal is planned', true],
 ] as const);
 
-function buildRetirement(input: UnknownRecord): RetirementResult {
+function buildRetirement(input: UnknownRecord, inputVersion: 1 | 2): RetirementResult {
   const checksInput = record(input.checks);
   exactKeys(checksInput, new Set(RETIREMENT_CHECKS.map(([id]) => id)), 'checks');
-  const checks = RETIREMENT_CHECKS.map(([id, checkLabel, expected]) => {
+  const fixedChecks = RETIREMENT_CHECKS.map(([id, checkLabel, expected]) => {
     const value = nullableBoolean(checksInput[id], `checks.${id}`);
     return {
       id,
@@ -336,6 +340,29 @@ function buildRetirement(input: UnknownRecord): RetirementResult {
       expected,
     };
   });
+  const fixedIds = new Set<string>(RETIREMENT_CHECKS.map(([id]) => id));
+  const customIds = new Set<string>();
+  const customChecks = inputVersion === 2 && input.customChecks !== undefined
+    ? boundedArray(input.customChecks, 'customChecks', 0, 20).map((raw, index) => {
+      const item = record(raw);
+      exactKeys(item, CUSTOM_RETIREMENT_CHECK_KEYS, `customChecks[${index}]`);
+      const id = text(item.id, `customChecks[${index}].id`, 64);
+      if (!CUSTOM_RETIREMENT_CHECK_ID_RE.test(id)) {
+        throw new Error(`customChecks[${index}].id must use lowercase letters, digits, and hyphens and begin with a letter.`);
+      }
+      if (fixedIds.has(id) || customIds.has(id)) throw new Error(`Retirement check id "${id}" is duplicated.`);
+      customIds.add(id);
+      if (typeof item.expected !== 'boolean') throw new Error(`customChecks[${index}].expected must be true or false.`);
+      const value = nullableBoolean(item.value, `customChecks[${index}].value`);
+      return {
+        id,
+        label: text(item.label, `customChecks[${index}].label`, 180),
+        state: value === null ? 'not_checked' as const : value === item.expected ? 'confirmed' as const : 'not_confirmed' as const,
+        expected: item.expected,
+      };
+    })
+    : [];
+  const checks = [...fixedChecks, ...customChecks];
   const reasons = checks.flatMap((check) => check.state === 'not_confirmed'
     ? [`The expected retirement state for "${check.label}" is not confirmed.`]
     : check.state === 'not_checked'
@@ -352,16 +379,18 @@ function buildRetirement(input: UnknownRecord): RetirementResult {
 
 function buildDomainAssurance(inputRaw: unknown, generatedAt = new Date().toISOString()): DomainAssuranceDocument {
   const input = record(inputRaw);
-  if (input.schema !== DOMAIN_ASSURANCE_INPUT_SCHEMA || input.version !== DOMAIN_ASSURANCE_VERSION) {
-    throw new Error(`Domain assurance input must use ${DOMAIN_ASSURANCE_INPUT_SCHEMA} version ${DOMAIN_ASSURANCE_VERSION}.`);
+  if (input.schema !== DOMAIN_ASSURANCE_INPUT_SCHEMA
+    || !DOMAIN_ASSURANCE_SUPPORTED_INPUT_VERSIONS.includes(input.version as 1 | 2)) {
+    throw new Error(`Domain assurance input must use ${DOMAIN_ASSURANCE_INPUT_SCHEMA} version 1 or ${DOMAIN_ASSURANCE_VERSION}.`);
   }
+  const inputVersion = input.version as 1 | 2;
   const kind = enumValue(input.kind, 'kind', ['planned-change', 'recovery-dependencies', 'retirement'] as const satisfies readonly AssuranceKind[]);
-  exactKeys(input, ROOT_KEYS[kind], 'Domain assurance input');
+  exactKeys(input, kind === 'retirement' && inputVersion === 2 ? RETIREMENT_ROOT_KEYS_V2 : ROOT_KEYS[kind], 'Domain assurance input');
   const result = kind === 'planned-change'
     ? buildPlannedChange(input)
     : kind === 'recovery-dependencies'
       ? buildRecoveryDependencies(input)
-      : buildRetirement(input);
+      : buildRetirement(input, inputVersion);
   return {
     schema: DOMAIN_ASSURANCE_SCHEMA,
     version: DOMAIN_ASSURANCE_VERSION,
@@ -411,6 +440,7 @@ function formatDomainAssurance(document: DomainAssuranceDocument): string {
 export {
   DOMAIN_ASSURANCE_INPUT_SCHEMA,
   DOMAIN_ASSURANCE_SCHEMA,
+  DOMAIN_ASSURANCE_SUPPORTED_INPUT_VERSIONS,
   DOMAIN_ASSURANCE_VERSION,
   MAX_ASSURANCE_INPUT_BYTES,
   buildDomainAssurance,

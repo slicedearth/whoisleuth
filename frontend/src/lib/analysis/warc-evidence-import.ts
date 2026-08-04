@@ -217,7 +217,7 @@ export async function parseWarcEvidenceArchive(
     const type = record.headers.get('warc-type')?.toLowerCase();
     if (type !== 'response') {
       addExclusion(exclusions, type === 'request'
-        ? 'Request records, request bodies, cookies, and authorization material were excluded.'
+        ? 'Request records, request bodies, cookies, and authorisation material were excluded.'
         : `WARC ${type || 'unknown'} records were excluded.`);
       continue;
     }
@@ -248,7 +248,7 @@ export async function parseWarcEvidenceArchive(
       || http.headers.has('authorization')
       || http.headers.has('proxy-authorization')
     ) {
-      addExclusion(exclusions, 'A response containing cookie or authorization material was excluded.');
+      addExclusion(exclusions, 'A response containing cookie or authorisation material was excluded.');
       continue;
     }
     if (/attachment/iu.test(http.headers.get('content-disposition') ?? '')) {
@@ -304,7 +304,7 @@ export async function parseWarcEvidenceArchive(
           : digestState === 'missing'
             ? 'The response did not declare a WARC-Block-Digest, so record-level integrity was not verified.'
             : 'The response used an unsupported WARC-Block-Digest representation, so record-level integrity was not verified.',
-        'Only normalized origin, title, status, observation time, completeness, limitations, and archive digest were retained.',
+        'Only normalised origin, title, status, observation time, completeness, limitations, and archive digest were retained.',
       ],
       reference: `urn:sha256:${archiveDigestSha256}`,
     });

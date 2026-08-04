@@ -595,7 +595,7 @@ describe('registry capability metadata', () => {
         VERSION_23_RDAP_SUFFIXES.has(suffix) ? 'iana-bootstrap' : 'no-iana-service',
         suffix,
       );
-      assert.match(profile.limitation, /response behavior is not fixture-verified/i, suffix);
+      assert.match(profile.limitation, /response behaviour is not fixture-verified/i, suffix);
       assert.match(profile.limitation, /not evidence that the domain is unregistered/i, suffix);
       assert.deepEqual(
         profile.documentationUrls,
@@ -752,7 +752,7 @@ describe('registry capability metadata', () => {
       coverageState: 'access_documented',
       whoisAccessProfile: 'source-ip-authorization-required',
       rdapAccessProfile: 'no-iana-service',
-      limitation: 'The registry WHOIS service requires advance source-IP authorization. A failed or unavailable query is not evidence that the domain is unregistered.',
+      limitation: 'The registry WHOIS service requires advance source-IP authorisation. A failed or unavailable query is not evidence that the domain is unregistered.',
       authority: 'context_only',
     });
     const vn = required(registryAccessDiagnosticFor('example.vn'));

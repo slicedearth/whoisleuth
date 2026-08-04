@@ -108,7 +108,7 @@ function httpFindings(httpValue: unknown): PostureFinding[] {
     || Array.isArray(response.securityHeaders)) {
     findings.push(finding(
       'http_headers_unavailable', 'response headers', 'unavailable', 'neutral', 'Response-header posture unavailable',
-      'The selected HTTP observation did not include the normalized security-header set.', ['Selected HTTP response headers'],
+      'The selected HTTP observation did not include the normalised security-header set.', ['Selected HTTP response headers'],
     ));
     return findings;
   }
@@ -352,16 +352,16 @@ function tlsFindings(tlsValue: unknown): PostureFinding[] {
 
   findings.push(authorization.authorized === true
     ? finding(
-      'certificate_authorized', 'certificate', 'observed', 'configured', 'Certificate chain authorized',
-      'The runtime trust store authorized the observed certificate chain for the retained connection.', ['TLS handshake'],
+      'certificate_authorized', 'certificate', 'observed', 'configured', 'Certificate chain authorised',
+      'The runtime trust store authorised the observed certificate chain for the retained connection.', ['TLS handshake'],
     )
     : authorization.authorized === false
       ? finding(
-        'certificate_not_authorized', 'certificate', 'potential_exposure', 'review', 'Certificate chain not authorized',
-        'The runtime trust store did not authorize the observed certificate chain. Review the separately attributed TLS evidence for context.', ['TLS handshake'],
+        'certificate_not_authorized', 'certificate', 'potential_exposure', 'review', 'Certificate chain not authorised',
+        'The runtime trust store did not authorise the observed certificate chain. Review the separately attributed TLS evidence for context.', ['TLS handshake'],
       )
       : finding(
-        'certificate_authorization_unavailable', 'certificate', 'unavailable', 'neutral', 'Certificate authorization unavailable',
+        'certificate_authorization_unavailable', 'certificate', 'unavailable', 'neutral', 'Certificate authorisation unavailable',
         'The retained TLS observation did not include a conclusive chain-authorization result.', ['TLS handshake'],
       ));
 
@@ -441,7 +441,7 @@ function dnsFindings(dnsValue: unknown, dnssecValue: unknown): PostureFinding[] 
       )
       : finding(
         'dnssec_unavailable', 'domain controls', 'unavailable', 'neutral', 'DNSSEC state unavailable',
-        'The retained registry and WHOIS evidence did not provide a recognized DNSSEC state.', ['Registry or WHOIS DNSSEC publication'],
+        'The retained registry and WHOIS evidence did not provide a recognised DNSSEC state.', ['Registry or WHOIS DNSSEC publication'],
       ));
 
   findings.push(!caaAvailable

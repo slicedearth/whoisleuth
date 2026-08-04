@@ -98,7 +98,7 @@
   <meta name="description" content="Review WHOISleuth's fixture-backed and access-documented registry compatibility coverage.">
 </svelte:head>
 
-<PageHeading eyebrow="Reference" title="Registry support" description="Inspect the versioned compatibility catalogue behind exceptional WHOIS query, parser, and access behavior.">
+<PageHeading eyebrow="Reference" title="Registry support" description="Inspect the versioned compatibility catalogue behind exceptional WHOIS query, parser, and access behaviour.">
   <span class="version">Catalogue v{catalogue.version}</span>
 </PageHeading>
 
@@ -250,7 +250,7 @@
   <header class="section-intro">
     <p class="eyebrow">Compatibility catalogue</p>
     <h2 id="catalogue-title">Implemented registry profiles</h2>
-    <p>Filter the explicit suffix profiles below. A suffix not listed here still uses normal IANA bootstrap and referral discovery, but has no suffix-specific fixture-backed behavior.</p>
+    <p>Filter the explicit suffix profiles below. A suffix not listed here still uses normal IANA bootstrap and referral discovery, but has no suffix-specific fixture-backed behaviour.</p>
   </header>
 
   <fieldset class="filters card">
@@ -309,7 +309,7 @@
     <div class="table-wrap">
       <table>
         <caption>Registry compatibility profiles</caption>
-        <thead><tr><th>Suffix</th><th>Coverage</th><th>Registry access</th><th>WHOIS behavior</th><th>Profile details</th></tr></thead>
+        <thead><tr><th>Suffix</th><th>Coverage</th><th>Registry access</th><th>WHOIS behaviour</th><th>Profile details</th></tr></thead>
         <tbody>
           {#each visibleRows as row}
             <tr>
@@ -346,7 +346,7 @@
 
 <aside class="interpretation card" aria-labelledby="interpretation-title">
   <div><p class="eyebrow">Interpretation</p><h2 id="interpretation-title">Coverage is not live registry status.</h2></div>
-  <p>Fixture verification describes implemented parsing behavior. Access documentation describes collection constraints. Neither tests current reachability nor decides registration, availability, ownership, safety, or maliciousness.</p>
+  <p>Fixture verification describes implemented parsing behaviour. Access documentation describes collection constraints. Neither tests current reachability nor decides registration, availability, ownership, safety, or maliciousness.</p>
   <p>For one suffix or domain in a local checkout, run <code>whoisleuth registry-support &lt;domain-or-suffix&gt;</code>.</p>
 </aside>
 

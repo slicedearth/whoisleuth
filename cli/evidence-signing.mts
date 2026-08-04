@@ -152,7 +152,7 @@ async function signableArtifact(raw: string): Promise<{
   artifact: UnknownRecord;
   verification: Awaited<ReturnType<typeof verifyOfflineArtifact>>;
 }> {
-  const artifact = parseObject(raw, 'Evidence artifact');
+  const artifact = parseObject(raw, 'Evidence artefact');
   const verification = await verifyOfflineArtifact(raw);
   if (!['case_response_packet', 'investigation_capsule', 'signed_review_artifact'].includes(verification.artifact.kind)) {
     throw new TypeError('Only reviewed response packets, investigation capsules, and supported review manifests can be signed.');
@@ -256,7 +256,7 @@ export async function verifyEvidencePackageSignature(
       trustedPublicKeyPem
         ? 'The signature and supplied public key match; recipient trust still depends on obtaining that public key through an authenticated channel.'
         : 'The signature is internally valid for the embedded public key, but signer identity was not authenticated because no trusted public key was supplied.',
-      'The signature authenticates the canonical sorted-JSON content, not the original whitespace, indentation, or object-key order of the serialized file.',
+      'The signature authenticates the canonical sorted-JSON content, not the original whitespace, indentation, or object-key order of the serialised file.',
       'A valid signature proves the canonical package content has not changed since signing; it does not establish that the retained observations or analyst statements are accurate.',
       'WHOISleuth does not generate, store, recover, rotate, or publish signing keys.',
     ]),

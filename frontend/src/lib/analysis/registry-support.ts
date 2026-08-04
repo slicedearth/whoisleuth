@@ -41,7 +41,7 @@ const ACCESS_LABELS: Readonly<Record<string, string>> = Object.freeze({
   'iana-referral': 'IANA referral discovery',
   'no-iana-service': 'No service published by IANA',
   'registry-policy-restricted': 'Registry policy restricted',
-  'source-ip-authorization-required': 'Source-IP authorization required',
+  'source-ip-authorization-required': 'Source-IP authorisation required',
 });
 
 export function registrySupportLabel(value: unknown): string {

@@ -3,7 +3,7 @@ const REGISTRY_ACCESS_PROFILE_LABELS: Readonly<Record<string, string>> = Object.
   'iana-referral': 'IANA referral discovery',
   'no-iana-service': 'No service published by IANA',
   'registry-policy-restricted': 'Registry policy restricted',
-  'source-ip-authorization-required': 'Source-IP authorization required',
+  'source-ip-authorization-required': 'Source-IP authorisation required',
 });
 const WHOIS_REGISTRY_ACCESS_PROFILES = new Set([
   'iana-referral',

@@ -230,12 +230,12 @@ function parseManifest(value: unknown, manifestPath: string): CaptureManifest {
   const page = record(capture.page);
   if (!page || !onlyKeys(page, PAGE_KEYS)) throw new Error('Rendered capture page metadata is invalid.');
   if (!Array.isArray(capture.artifacts) || capture.artifacts.length !== 2) {
-    throw new Error('Rendered capture must contain one screenshot and one DOM digest artifact.');
+    throw new Error('Rendered capture must contain one screenshot and one DOM digest artefact.');
   }
   const artifacts = capture.artifacts.map((artifact, index) => parseArtifact(artifact, `Rendered capture artifact ${index + 1}`));
   const screenshot = artifacts.find((artifact) => artifact.kind === 'screenshot');
   const domDigest = artifacts.find((artifact) => artifact.kind === 'dom_digest');
-  if (!screenshot || !domDigest) throw new Error('Rendered capture must contain distinct screenshot and DOM digest artifacts.');
+  if (!screenshot || !domDigest) throw new Error('Rendered capture must contain distinct screenshot and DOM digest artefacts.');
   const capturedAt = timestamp(capture.capturedAt, 'Rendered capture time');
   if (sourceCollectedAt !== capturedAt) throw new Error('Rendered capture source time does not match its capture time.');
   return {
@@ -321,7 +321,7 @@ async function loadCapture(manifestPath: string): Promise<LoadedCapture> {
   const screenshotPerceptualHashVerified = imagePerceptualHash(screenshotBytes) === manifest.screenshot.perceptualHash;
   const domHashVerified = sha256(domBytes) === manifest.domDigest.sha256;
   if (!screenshotHashVerified || !screenshotPerceptualHashVerified || !domHashVerified) {
-    throw new Error('Rendered capture artifact integrity verification failed.');
+    throw new Error('Rendered capture artefact integrity verification failed.');
   }
   let domValue: unknown;
   try {

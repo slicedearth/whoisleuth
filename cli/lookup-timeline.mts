@@ -135,7 +135,7 @@ function buildCliLookupTimeline(
       rawRegistryPayloadsCopied: 0,
     },
     limitations: [
-      'The timeline compares only bounded normalized fields already present in the selected saved Lookup documents and makes no network request.',
+      'The timeline compares only bounded normalised fields already present in the selected saved Lookup documents and makes no network request.',
       'Input filenames and raw registry payloads are not copied into the timeline output.',
       'Missing, unavailable, and not-recorded evidence remain separate from an observed difference.',
       'A difference can reflect a domain change or changed collection conditions and does not by itself establish current state, ownership, intent, safety, or maliciousness.',

@@ -1,4 +1,7 @@
-import { verifyOfflineArtifact } from './artifact-verify.mts';
+import {
+  UnsupportedOfflineArtifactError,
+  verifyOfflineArtifact,
+} from './artifact-verify.mts';
 
 const SHARING_REVIEW_SCHEMA = 'whoisleuth.cli.sharing-review';
 const SHARING_REVIEW_VERSION = 1;
@@ -10,6 +13,7 @@ type TlpMarking = typeof TLP_MARKINGS[number];
 type RecipientScope = typeof RECIPIENT_SCOPES[number];
 type FindingState = 'block' | 'caution' | 'pass';
 type UnknownRecord = Record<string, unknown>;
+const CONTROL_RE = /[\u0000-\u001f\u007f]/u;
 
 type SharingReviewOptions = Readonly<{
   marking: TlpMarking;
@@ -43,13 +47,21 @@ type SharingReviewDocument = Readonly<{
     detail: string;
   }>[];
   summary: Readonly<{ block: number; caution: number; pass: number; status: 'blocked' | 'ready' | 'review_cautions' }>;
-  privacy: Readonly<{ inspectedValuesEmitted: 0; rawEvidenceCopied: 0 }>;
+  privacy: Readonly<{
+    artifactMetadataFieldsEmitted: 0 | 1 | 2;
+    contentValuesEmitted: 0;
+    rawEvidenceCopied: 0;
+  }>;
   limitations: readonly string[];
 }>;
 
 const RISKY_KEYS = new Set([
   'authorization', 'cookie', 'cookies', 'credential', 'credentials', 'email', 'emails',
   'entities', 'password', 'phone', 'raw', 'rawrdap', 'rawwhois', 'registrant', 'session', 'token',
+]);
+const MARKING_KEYS = new Set([
+  'informationmarking', 'marking', 'markings', 'sharingmarking',
+  'tlp', 'tlplabel', 'tlpmarking', 'trafficlightprotocol',
 ]);
 
 function record(value: unknown): UnknownRecord | null {
@@ -58,6 +70,12 @@ function record(value: unknown): UnknownRecord | null {
 
 function normalizedKey(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]/gu, '');
+}
+
+function boundedMetadataText(value: unknown): string | null {
+  if (typeof value !== 'string' || value.length > 120 || CONTROL_RE.test(value)) return null;
+  const trimmed = value.trim();
+  return trimmed || null;
 }
 
 function markingFromText(value: string): TlpMarking | null {
@@ -81,7 +99,7 @@ function scanArtifact(root: UnknownRecord): Readonly<{
     if (next.key && RISKY_KEYS.has(normalizedKey(next.key))) riskyKeyCount += 1;
     if (typeof next.value === 'string') {
       const marking = markingFromText(next.value);
-      if (marking && (next.key === null || /mark|tlp/iu.test(next.key))) markings.add(marking);
+      if (marking && (next.key === null || MARKING_KEYS.has(normalizedKey(next.key)))) markings.add(marking);
       continue;
     }
     if (next.depth >= 12) {
@@ -141,20 +159,19 @@ async function buildSharingReview(
     const verification = await verifyOfflineArtifact(raw);
     integrity = verification.checks.contentIntegrity === 'verified' ? 'verified' : 'structure_only';
   } catch (error) {
-    const message = error instanceof Error ? error.message : '';
-    integrity = /not supported|schema or version/u.test(message) ? 'unsupported' : 'failed';
+    integrity = error instanceof UnsupportedOfflineArtifactError ? 'unsupported' : 'failed';
   }
 
   const findings: Array<SharingReviewDocument['findings'][number]> = [];
   const add = (id: string, state: FindingState, label: string, detail: string) => findings.push({ id, state, label, detail });
-  add('integrity', integrity === 'failed' ? 'block' : integrity === 'verified' ? 'pass' : 'caution', 'Artifact integrity',
+  add('integrity', integrity === 'failed' ? 'block' : integrity === 'verified' ? 'pass' : 'caution', 'Artefact integrity',
     integrity === 'verified'
-      ? 'The artifact passed its supported local integrity contract.'
+      ? 'The artefact passed its supported local integrity contract.'
       : integrity === 'structure_only'
-        ? 'The artifact passed its structural contract but has no verified content digest.'
+        ? 'The artefact passed its structural contract but has no verified content digest.'
         : integrity === 'unsupported'
-          ? 'This artifact schema has no supported local integrity verifier; review its producer and digest contract manually.'
-          : 'The artifact failed its supported structure or integrity contract.');
+          ? 'This artefact schema has no supported local integrity verifier; review its producer and digest contract manually.'
+          : 'The artefact failed its supported structure or integrity contract.');
   add('human-review', options.humanReviewed ? 'pass' : 'block', 'Human review', options.humanReviewed
     ? 'A deliberate human review was recorded for this sharing decision.'
     : 'Complete a deliberate human review before sharing.');
@@ -170,25 +187,35 @@ async function buildSharingReview(
     ? `${tlpLabel(options.marking)} is less restrictive than imported ${tlpLabel(strictestImported!)} evidence.`
     : strictestImported
       ? `The requested marking preserves the strictest imported marking (${tlpLabel(strictestImported)}).`
-      : 'No recognized imported TLP 2.0 marking was found in the bounded scan.');
+      : 'No recognised imported TLP 2.0 marking was found in the bounded scan.');
   add('recipient-scope', options.recipientScope === expectedScope(effective) ? 'pass' : 'block', 'Recipient scope',
     options.recipientScope === expectedScope(effective)
       ? `The recipient scope matches the effective ${tlpLabel(effective)} sharing boundary.`
       : `${tlpLabel(effective)} requires the ${expectedScope(effective)} recipient scope in this local policy.`);
-  if (scan.truncated) add('scan-bounds', 'caution', 'Bounded content scan', 'The defensive key and marking scan reached a traversal bound; review the artifact manually.');
+  if (scan.truncated) add('scan-bounds', 'caution', 'Bounded content scan', 'The defensive key and marking scan reached a traversal bound; review the artefact manually.');
 
   const counts = {
     block: findings.filter((finding) => finding.state === 'block').length,
     caution: findings.filter((finding) => finding.state === 'caution').length,
     pass: findings.filter((finding) => finding.state === 'pass').length,
   };
+  const artifactSchema = boundedMetadataText(artifact.schema);
+  const rawArtifactVersion = artifact.version ?? artifact.schemaVersion;
+  const artifactVersion = Number.isSafeInteger(rawArtifactVersion)
+    && Number(rawArtifactVersion) >= 1
+    && Number(rawArtifactVersion) <= 10_000
+    ? Number(rawArtifactVersion)
+    : null;
+  const artifactMetadataFieldsEmitted = (
+    Number(artifactSchema !== null) + Number(artifactVersion !== null)
+  ) as 0 | 1 | 2;
   return {
     schema: SHARING_REVIEW_SCHEMA,
     version: SHARING_REVIEW_VERSION,
     generatedAt,
     artifact: {
-      schema: typeof artifact.schema === 'string' ? artifact.schema.slice(0, 120) : null,
-      version: Number.isSafeInteger(artifact.version ?? artifact.schemaVersion) ? Number(artifact.version ?? artifact.schemaVersion) : null,
+      schema: artifactSchema,
+      version: artifactVersion,
       integrity,
     },
     sharing: {
@@ -203,9 +230,9 @@ async function buildSharingReview(
       ...counts,
       status: counts.block ? 'blocked' : counts.caution ? 'review_cautions' : 'ready',
     },
-    privacy: { inspectedValuesEmitted: 0, rawEvidenceCopied: 0 },
+    privacy: { artifactMetadataFieldsEmitted, contentValuesEmitted: 0, rawEvidenceCopied: 0 },
     limitations: [
-      'This is a local pre-sharing lint, not legal advice, recipient authorization, or proof that the artifact is accurate, current, complete, or safe to disclose.',
+      'This is a local pre-sharing lint, not legal advice, recipient authorisation, or proof that the artefact is accurate, current, complete, or safe to disclose.',
       'TLP 2.0 labels describe sharing boundaries; they do not replace source-specific terms, privacy obligations, confidentiality agreements, or recipient policy.',
       'The personal-data scan is bounded and key-based. It can miss sensitive meaning and therefore never replaces deliberate human review.',
       'The recorded purpose is required for analyst accountability but is intentionally omitted from machine output to avoid copying potentially sensitive case context.',
