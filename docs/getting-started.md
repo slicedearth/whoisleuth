@@ -347,6 +347,37 @@ notes, unknown fields, stale task definitions, repeated tasks, and duplicate
 canonical sessions. The result is a small-study diagnostic, not product
 analytics.
 
+### Synthetic analyst journeys
+
+The synthetic journey contract provides a deterministic, fixture-only
+regression lane. It maps the principal Console workflows to
+four controlled analyst roles and eight end-to-end goals, including initial
+domain review, Bulk peer triage, all three guided investigations, reviewed
+response preparation, workspace portability, and acquisition review.
+
+Inspect the plan, run the curated browser lane, or create a bounded result
+template with:
+
+```bash
+npm run journeys:synthetic -- --plan
+npm run test:e2e:journeys
+npm run journeys:synthetic -- --template=first-domain-assessment:mobile
+npm run journeys:synthetic -- results.json
+```
+
+The browser lane reuses the full application workflows and their existing
+desktop and mobile layout checks. It runs against local fixtures under the E2E
+network guard, makes no live registry or third-party requests, uses no retries,
+and retains traces only when a test fails. The plan also requires every task to
+declare both desktop and mobile coverage before it is accepted.
+
+Aggregated result files retain only controlled outcome states, milestone IDs,
+durations, and bounded error or backtrack counts. Identity, domains, queries,
+page contents, recordings, and free-form notes are rejected, and nothing is
+uploaded. These journeys can catch navigation, state-handoff, layout, and
+contract regressions. Interpret action and timing changes as leads for local
+inspection rather than conclusions about the interface or evidence.
+
 ### Local SSLBL snapshot maintenance
 
 Deep Lookup can compare the observed leaf-certificate SHA-1 fingerprint with a

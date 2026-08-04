@@ -83,7 +83,9 @@ test('a small scan completes and reports the correct error count', async ({ page
   await expect(outcomes.locator('div', { hasText: 'Pending' })).toContainText('0');
 });
 
-test('keeps mobile Bulk review focused while making secondary tools discoverable', async ({ page }) => {
+test('keeps mobile Bulk review focused while making secondary tools discoverable', {
+  tag: ['@analyst-journey', '@journey-bulk-peer-triage'],
+}, async ({ page }) => {
   await page.setViewportSize({ width: 393, height: 852 });
   const domains = invalidDomains(3);
   await runBulkScan(page, domains);
@@ -124,7 +126,9 @@ test('keeps mobile Bulk review focused while making secondary tools discoverable
   await expectNoHorizontalScrollContainers(page.locator('#results'));
 });
 
-test('filters, groups, and selected-only actions use compact observed evidence', async ({ page }) => {
+test('filters, groups, and selected-only actions use compact observed evidence', {
+  tag: ['@analyst-journey', '@journey-bulk-peer-triage'],
+}, async ({ page }) => {
   await page.route('**/api/lookup?*', async (route) => {
     const domain = new URL(route.request().url()).searchParams.get('q') || '';
     const limited = domain.startsWith('limited');

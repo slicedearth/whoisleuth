@@ -371,7 +371,13 @@ test('Lookup reports requested source families without implying staged completio
   await expect(page.locator('#result')).toBeVisible();
 });
 
-test('a data-heavy Lookup result groups evidence into navigable sections', async ({ page }) => {
+test('a data-heavy Lookup result groups evidence into navigable sections', {
+  tag: [
+    '@analyst-journey',
+    '@journey-first-domain-assessment',
+    '@journey-acquisition-uncertainty-review',
+  ],
+}, async ({ page }) => {
   test.slow();
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.route('**/api/lookup?*', (route) => route.fulfill({

@@ -211,7 +211,9 @@ async function downloadEncryptedWorkspaceArchive(
   return { download, content: Buffer.concat(body).toString('utf-8') };
 }
 
-test('the Dashboard presents task lanes without duplicating the sidebar labels', async ({ page }) => {
+test('the Dashboard presents task lanes without duplicating the sidebar labels', {
+  tag: ['@analyst-journey', '@journey-first-domain-assessment'],
+}, async ({ page }) => {
   await page.goto('/dashboard');
 
   await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
@@ -325,7 +327,9 @@ test('saved-work cards open the matching Monitor view', async ({ page }) => {
   await expect(page.getByRole('tab', { name: /Watchlists/ })).toHaveAttribute('aria-selected', 'true');
 });
 
-test('the dashboard exports one checksummed workspace archive without unrelated storage', async ({ page }) => {
+test('the dashboard exports one checksummed workspace archive without unrelated storage', {
+  tag: ['@analyst-journey', '@journey-workspace-portability-review'],
+}, async ({ page }) => {
   await page.goto('/dashboard');
   await seedArchiveWorkspace(page);
 
@@ -399,7 +403,9 @@ test('the dashboard encrypts and locally unlocks a portable workspace backup', a
   expect(cases.records.map((record) => record.value.domain)).toContain('archive-case.invalid');
 });
 
-test('workspace archive import previews conflicts before a non-destructive mobile-safe merge', async ({ page }) => {
+test('workspace archive import previews conflicts before a non-destructive mobile-safe merge', {
+  tag: ['@analyst-journey', '@journey-workspace-portability-review'],
+}, async ({ page }) => {
   await page.goto('/dashboard');
   await seedArchiveWorkspace(page);
   const { content } = await downloadWorkspaceArchive(page);
