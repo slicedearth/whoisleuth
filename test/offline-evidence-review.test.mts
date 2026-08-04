@@ -74,9 +74,13 @@ describe('offline evidence review command', () => {
         schema: 'whoisleuth.domain-change.input', version: 1, domain: 'example.test',
         authoritySnapshots: [], resolverSnapshots: [], acmeDependencies: [], certificate: null, hsts: null,
       },
+      {
+        schema: 'whoisleuth.nameserver-preflight.input', version: 1, domain: 'example.test',
+        intendedNameservers: ['ns1.example.test'], observations: [],
+      },
     ];
     assert.deepEqual(inputs.map((input) => buildOfflineEvidenceReview(JSON.stringify(input), ISO).kind), [
-      'rdap_search', 'dnssec', 'tlsa', 'rpki', 'geoip', 'encrypted_dns', 'zone_intent', 'domain_portfolio', 'domain_change',
+      'rdap_search', 'dnssec', 'tlsa', 'rpki', 'geoip', 'encrypted_dns', 'zone_intent', 'domain_portfolio', 'domain_change', 'nameserver_preflight',
     ]);
   });
 

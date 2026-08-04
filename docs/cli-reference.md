@@ -942,6 +942,11 @@ Supported input schemas are:
   and HSTS preload context. TXT values are retained only as SHA-256 digests.
   The result is an offline review gate, not a DNSSEC validation, preload-list
   lookup, certificate-authority request, or permission to apply a change.
+- `whoisleuth.nameserver-preflight.input`: reviews an intended nameserver set
+  against separately attributed direct-service observations before a
+  delegation change. It checks authoritative service, the served NS set, SOA
+  evidence, public addresses and in-bailiwick glue readiness without querying
+  DNS, opening a socket or changing registry configuration.
 
 The common output is `whoisleuth.cli.offline-evidence-review` version 1. It
 retains the nested result's explicit state and limitations. A locally

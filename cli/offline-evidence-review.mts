@@ -7,6 +7,7 @@ import {
 import { validateDnssecEvidence } from '../lib/dnssec-evidence-validation.mts';
 import { reviewDomainChange } from '../lib/domain-change-review.mts';
 import { reviewDomainPortfolio } from '../lib/domain-portfolio-review.mts';
+import { reviewNameserverPreflight } from '../lib/nameserver-preflight-review.mts';
 import {
   buildLocalGeoIpDatabase,
   lookupLocalGeoIp,
@@ -50,7 +51,7 @@ function parseInput(value: unknown): UnknownRecord {
 
 function buildOfflineEvidenceReview(value: unknown, generatedAt = new Date().toISOString()) {
   const input = parseInput(value);
-  let kind: 'rdap_search' | 'dnssec' | 'tlsa' | 'rpki' | 'geoip' | 'encrypted_dns' | 'zone_intent' | 'domain_portfolio' | 'domain_change';
+  let kind: 'rdap_search' | 'dnssec' | 'tlsa' | 'rpki' | 'geoip' | 'encrypted_dns' | 'zone_intent' | 'domain_portfolio' | 'domain_change' | 'nameserver_preflight';
   let result: unknown;
   if (input.schema === 'whoisleuth.rdap-search-input') {
     kind = 'rdap_search';
@@ -112,6 +113,9 @@ function buildOfflineEvidenceReview(value: unknown, generatedAt = new Date().toI
   } else if (input.schema === 'whoisleuth.domain-change.input') {
     kind = 'domain_change';
     result = reviewDomainChange(input, generatedAt);
+  } else if (input.schema === 'whoisleuth.nameserver-preflight.input') {
+    kind = 'nameserver_preflight';
+    result = reviewNameserverPreflight(input, generatedAt);
   } else {
     throw new CliUsageError('Offline evidence review does not recognise this input schema.');
   }

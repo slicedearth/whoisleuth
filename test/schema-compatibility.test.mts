@@ -192,7 +192,7 @@ describe('schema compatibility inventory', () => {
     assert.equal(inventory.schema, SCHEMA_COMPATIBILITY_INVENTORY_SCHEMA);
     assert.equal(inventory.version, SCHEMA_COMPATIBILITY_INVENTORY_VERSION);
     assert.equal(inventory.generatedAt, NOW);
-    assert.equal(inventory.entries.length, 92);
+    assert.equal(inventory.entries.length, 94);
     assert.deepEqual(new Set(inventory.entries.map((entry) => entry.kind)), new Set([
       'browser_store', 'tab_store', 'hosted_store', 'export', 'cli_document', 'derived',
     ]));
@@ -213,6 +213,7 @@ describe('schema compatibility inventory', () => {
     assert.equal(byId(inventory, 'cli.zone-intent-input').schema, 'whoisleuth.zone-intent.input');
     assert.equal(byId(inventory, 'cli.domain-portfolio-review').schema, 'whoisleuth.domain-portfolio.review');
     assert.equal(byId(inventory, 'cli.domain-change-review').schema, 'whoisleuth.domain-change.review');
+    assert.equal(byId(inventory, 'cli.nameserver-preflight-review').schema, 'whoisleuth.nameserver-preflight.review');
     assert.deepEqual(byId(inventory, 'cli.bulk').supportedVersions, [1, 2]);
     assert.deepEqual(byId(inventory, 'cli.bulk-item').supportedVersions, [1, 2]);
     assert.equal(byId(inventory, 'cli.discovery-scan').schema, CLI_DISCOVERY_SCAN_SCHEMA);
