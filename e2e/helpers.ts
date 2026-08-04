@@ -9,6 +9,7 @@ import type {
   BrowserLocalDecodedCollectionRecord,
   BrowserLocalCollectionId,
 } from '../frontend/src/lib/browser-local-data-definitions';
+import { WHOISLEUTH_SOURCE_REPOSITORY_URL } from '../lib/project-metadata.mts';
 
 // A few px of tolerance for subpixel layout rounding across engines.
 const OVERFLOW_TOLERANCE_PX = 1;
@@ -91,6 +92,19 @@ export async function boundingBox(locator: Locator) {
   const box = await locator.boundingBox();
   expect(box, 'expected element to have a rendered bounding box').not.toBeNull();
   return box!;
+}
+
+export async function expectVersionedSourceLink(locator: Locator) {
+  const href = await locator.getAttribute('href');
+  expect(href, 'expected an exact deployed-source link').not.toBeNull();
+  const actual = new URL(href!);
+  const repository = new URL(WHOISLEUTH_SOURCE_REPOSITORY_URL);
+  const revisionPrefix = `${repository.pathname.replace(/\/$/u, '')}/tree/`;
+  expect(actual.origin).toBe(repository.origin);
+  expect(actual.pathname.startsWith(revisionPrefix)).toBe(true);
+  expect(actual.pathname.slice(revisionPrefix.length)).toMatch(/^[a-f0-9]{40}$/u);
+  expect(actual.search).toBe('');
+  expect(actual.hash).toBe('');
 }
 
 export function requiredValue<Value>(

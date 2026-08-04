@@ -29,6 +29,7 @@ export type LookupInvestigationBrief = Readonly<{
     evidenceAgeDays: number | null;
     completeSources: number;
     limitedSources: number;
+    freshnessPolicy: LookupEvidenceQualityMatrix['freshnessPolicy'];
   }>;
   verifiedFacts: readonly LookupSummaryFact[];
   contradictions: readonly LookupDecisionEntry[];
@@ -121,6 +122,7 @@ export function buildLookupInvestigationBrief(
       evidenceAgeDays: input.quality.ageDays,
       completeSources: input.quality.completeCount,
       limitedSources: input.quality.limitedCount,
+      freshnessPolicy: input.quality.freshnessPolicy,
     },
     verifiedFacts,
     contradictions,
@@ -175,6 +177,7 @@ export function formatLookupInvestigationBriefMarkdown(
     `- **Summary:** ${markdown(brief.summary)}`,
     `- **Evidence observed:** ${markdown(brief.observation.observedAt ?? 'not reported')}`,
     `- **Source quality:** ${brief.observation.completeSources} complete; ${brief.observation.limitedSources} limited`,
+    `- **Freshness policy:** v${brief.observation.freshnessPolicy.version} ${markdown(brief.observation.freshnessPolicy.id)} for ${markdown(brief.observation.freshnessPolicy.task)}; registration ${brief.observation.freshnessPolicy.thresholdsDays.registration}d, network ${brief.observation.freshnessPolicy.thresholdsDays.network}d, web ${brief.observation.freshnessPolicy.thresholdsDays.web}d`,
     '',
     '## Verified normalized facts',
     '',

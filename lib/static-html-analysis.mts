@@ -5,10 +5,20 @@
 
 import { Tokenizer, TokenizerMode, type TokenHandler } from 'parse5';
 
+import {
+  MAX_CSP_META_POLICIES,
+  MAX_RESPONSE_POLICY_HEADER_BYTES,
+} from './response-policy.mts';
+
 type StaticScript = {
   reference: string | null;
   inlineContent: string;
   mediaType: string | null;
+};
+
+type StaticCspMetaPolicy = {
+  content: string;
+  beforeScript: boolean;
 };
 
 type StaticCredentialCategory = 'password' | 'email' | 'username' | 'one_time_code' | 'payment';
@@ -33,6 +43,8 @@ type StaticHtmlAnalysis = {
   markup: string;
   structureTokens: string[];
   scripts: StaticScript[];
+  cspMetaPolicies: StaticCspMetaPolicy[];
+  cspMetaLimitReached: boolean;
   forms: StaticFormAnalysis;
   inputLimitReached: boolean;
   tagLimitReached: boolean;
@@ -249,6 +261,7 @@ function analyzeStaticHtml(value: unknown, options: StaticHtmlAnalysisOptions = 
   const markup: string[] = [];
   const structureTokens: string[] = [];
   const scripts: StaticScript[] = [];
+  const cspMetaPolicies: StaticCspMetaPolicy[] = [];
   const forms: StaticFormAnalysis = {
     formsObserved: 0,
     inputsObserved: 0,
@@ -266,6 +279,9 @@ function analyzeStaticHtml(value: unknown, options: StaticHtmlAnalysisOptions = 
   let structureLimitReached = false;
   let scriptLimitReached = false;
   let inlineLimitReached = false;
+  let cspMetaLimitReached = false;
+  let insideExplicitHead = false;
+  let scriptElementSeen = false;
 
   function appendInlineScript(chars: string): void {
     if (!activeInlineScript || !chars) return;
@@ -300,6 +316,21 @@ function analyzeStaticHtml(value: unknown, options: StaticHtmlAnalysisOptions = 
       }
       tagsExamined += 1;
       appendStructureToken(token.selfClosing || VOID_TAGS.has(tagName) ? `${tagName}/` : tagName);
+
+      if (tagName === 'head') insideExplicitHead = true;
+      if (tagName === 'meta' && insideExplicitHead) {
+        const httpEquiv = attributeValue(token.attrs, 'http-equiv', 64);
+        if (httpEquiv.value === 'content-security-policy') {
+          const content = attributeValue(token.attrs, 'content', MAX_RESPONSE_POLICY_HEADER_BYTES);
+          if (content.value === null || !content.value) {
+            cspMetaLimitReached = cspMetaLimitReached || content.present || content.truncated;
+          } else if (cspMetaPolicies.length >= MAX_CSP_META_POLICIES) {
+            cspMetaLimitReached = true;
+          } else {
+            cspMetaPolicies.push({ content: content.value, beforeScript: !scriptElementSeen });
+          }
+        }
+      }
 
       if (markup.length < MAX_TECHNOLOGY_TAGS) {
         const serialized = serializedStartTag(tagName, token.attrs);
@@ -337,6 +368,7 @@ function analyzeStaticHtml(value: unknown, options: StaticHtmlAnalysisOptions = 
         activeInlineScript = null;
         return;
       }
+      scriptElementSeen = true;
       if (scripts.length >= MAX_SCRIPT_ELEMENTS) {
         scriptLimitReached = true;
         activeInlineScript = null;
@@ -354,6 +386,7 @@ function analyzeStaticHtml(value: unknown, options: StaticHtmlAnalysisOptions = 
     onEndTag(token) {
       const tagName = token.tagName.toLowerCase();
       if (tagName === 'script') activeInlineScript = null;
+      if (tagName === 'head') insideExplicitHead = false;
       if (!VOID_TAGS.has(tagName)) appendStructureToken(`/${tagName}`);
     },
     onCharacter(token) {
@@ -377,6 +410,8 @@ function analyzeStaticHtml(value: unknown, options: StaticHtmlAnalysisOptions = 
     markup: markup.join('\n'),
     structureTokens,
     scripts,
+    cspMetaPolicies,
+    cspMetaLimitReached,
     forms,
     inputLimitReached,
     tagLimitReached,
@@ -406,6 +441,7 @@ export {
 
 export type {
   StaticCredentialCategory,
+  StaticCspMetaPolicy,
   StaticFormAnalysis,
   StaticFormMethod,
   StaticHtmlAnalysis,

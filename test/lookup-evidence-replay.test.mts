@@ -15,6 +15,11 @@ function evidence(overrides: Record<string, unknown> = {}): Record<string, unkno
     schema: LOOKUP_EVIDENCE_SCHEMA,
     schemaVersion: LOOKUP_EVIDENCE_SCHEMA_VERSION,
     generatedAt: '2026-07-31T00:00:00.000Z',
+    application: {
+      name: 'WHOISleuth',
+      version: '1.34.1',
+      projectUrl: 'https://github.com/slicedearth/whoisleuth',
+    },
     query: { submitted: 'example.test', registrableDomain: 'example.test', type: 'domain' },
     diagnostics: {
       rdap: { status: 'success', fetchedAt: '2026-07-31T00:00:00.000Z' },
@@ -73,6 +78,7 @@ test('replay validates and summarizes a current first-party export without raw r
   assert.equal(replay.availability, 'registered');
   assert.equal(replay.digestSha256.length, 64);
   assert.equal(replay.digestVerified, false);
+  assert.equal(replay.generatorVersion, '1.34.1');
   assert.ok(replay.sources.some((source) => source.id === 'rdap' && source.state === 'success'));
   assert.ok(replay.facts.some((fact) => fact.label === 'Detected technology' && fact.value === 'Example CMS'));
   assert.ok(replay.contradictions.some((value) => value.includes('Statuses')));

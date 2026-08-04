@@ -33,6 +33,8 @@ jobs:
         run: npm run release:check
       - name: Verify production dependency notices
         run: npm run licenses:check
+      - name: Verify optional-provider policy freshness
+        run: npm run providers:policy-check
       - name: Verify scoped CLI package
         run: npm run cli:package:check
       - name: Verify architectural dependency boundaries

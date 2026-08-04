@@ -2,10 +2,12 @@ import { Buffer } from 'node:buffer';
 import { abortable } from '../lib/abort.mts';
 import { CliUsageError } from './arguments.mts';
 import type { ClassifiedQuery } from '../lib/classify.mts';
+import {
+  MAX_DEEP_BULK_QUERIES,
+  MAX_FAST_BULK_QUERIES,
+} from '../lib/bulk-limits.mts';
 
 const MAX_BULK_INPUT_BYTES = 1024 * 1024;
-const MAX_FAST_BULK_QUERIES = 500;
-const MAX_DEEP_BULK_QUERIES = 50;
 
 type BoundedTextStream = {
   isTTY?: boolean;

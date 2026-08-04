@@ -2,7 +2,7 @@
   import type { LookupEvidenceQualityMatrix } from '$lib/analysis/lookup-decision-support.ts';
   import { formatCollectionDuration } from '$lib/analysis/lookup-display-shared.ts';
   import type { LookupTiming } from '$lib/analysis/lookup-response.ts';
-  import type { LookupSourceRefreshPlan } from '$lib/analysis/lookup-source-refresh.ts';
+  import type { LookupFreshnessThresholds, LookupSourceRefreshPlan } from '$lib/analysis/lookup-source-refresh.ts';
   import LookupCollectionTiming from '$lib/components/LookupCollectionTiming.svelte';
   import LookupSourceRefresh from '$lib/components/LookupSourceRefresh.svelte';
 
@@ -12,13 +12,43 @@
     query,
     depth,
     timing,
+    onpolicychange,
   }: {
     matrix: LookupEvidenceQualityMatrix;
     refreshPlan: LookupSourceRefreshPlan;
     query: string;
     depth: 'deep' | 'fast';
     timing: LookupTiming | null;
+    onpolicychange: (value: { mode: 'task-default' | 'analyst-custom'; thresholdsDays: LookupFreshnessThresholds }) => void;
   } = $props();
+
+  let policyMode = $state<'task-default' | 'analyst-custom'>('task-default');
+  let registrationDays = $state(30);
+  let networkDays = $state(7);
+  let webDays = $state(3);
+
+  function boundedDays(value: number, fallback: number): number {
+    return Number.isFinite(value) ? Math.max(1, Math.min(365, Math.round(value))) : fallback;
+  }
+  function updatePolicy() {
+    onpolicychange({
+      mode: policyMode,
+      thresholdsDays: {
+        registration: boundedDays(registrationDays, refreshPlan.freshnessPolicy.thresholdsDays.registration),
+        network: boundedDays(networkDays, refreshPlan.freshnessPolicy.thresholdsDays.network),
+        web: boundedDays(webDays, refreshPlan.freshnessPolicy.thresholdsDays.web),
+      },
+    });
+  }
+  function selectPolicy(event: Event) {
+    policyMode = (event.currentTarget as HTMLSelectElement).value === 'analyst-custom' ? 'analyst-custom' : 'task-default';
+    if (policyMode === 'analyst-custom') {
+      registrationDays = refreshPlan.freshnessPolicy.thresholdsDays.registration;
+      networkDays = refreshPlan.freshnessPolicy.thresholdsDays.network;
+      webDays = refreshPlan.freshnessPolicy.thresholdsDays.web;
+    }
+    updatePolicy();
+  }
 
   function observed(value: string | null): string {
     if (!value) return 'Observation time unavailable';
@@ -85,6 +115,20 @@
         {/each}
       </div>
       <p class="note">Source branches may overlap, so their durations do not add up to total request time. Missing, failed, stale, unsupported, and not-found evidence remains distinct and is never treated as proof of absence or safety.</p>
+      <details class="freshness-policy">
+        <summary>Freshness policy · {refreshPlan.freshnessPolicy.id === 'analyst-custom' ? 'analyst-defined' : `${refreshPlan.freshnessPolicy.task} task default`}</summary>
+        <div class="policy-form">
+          <label>Policy<select value={policyMode} onchange={selectPolicy}><option value="task-default">Task default</option><option value="analyst-custom">Analyst-defined</option></select></label>
+          {#if policyMode === 'analyst-custom'}
+            <label>Registration days<input type="number" min="1" max="365" bind:value={registrationDays} onchange={updatePolicy}></label>
+            <label>Network days<input type="number" min="1" max="365" bind:value={networkDays} onchange={updatePolicy}></label>
+            <label>Web days<input type="number" min="1" max="365" bind:value={webDays} onchange={updatePolicy}></label>
+          {:else}
+            <p>Registration {refreshPlan.freshnessPolicy.thresholdsDays.registration} days · network {refreshPlan.freshnessPolicy.thresholdsDays.network} days · web {refreshPlan.freshnessPolicy.thresholdsDays.web} days.</p>
+          {/if}
+        </div>
+        <p class="note">Thresholds organise review and source-refresh suggestions for this result only. They are not saved and do not make older evidence false or newer evidence complete.</p>
+      </details>
       <LookupSourceRefresh plan={refreshPlan} {query} {depth} />
     </details>
 
@@ -136,6 +180,11 @@
   .limitations strong{font:650 var(--text-2xs) var(--mono);text-transform:uppercase}
   .limitations ul{margin:5px 0 0;padding-left:17px;line-height:1.45}
   .note{margin:9px 0 0;color:var(--muted);font-size:var(--text-2xs);line-height:1.5}
+  .freshness-policy{margin-top:9px;border-top:0}
+  .freshness-policy>summary{padding:9px 0}
+  .policy-form{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
+  .policy-form label{display:grid;gap:4px;color:var(--muted);font:650 var(--text-2xs) var(--mono)}
+  .policy-form p{grid-column:2/-1;align-self:center;margin:0;color:var(--muted);font-size:var(--text-2xs);line-height:1.5}
   @media(max-width:920px){
     .matrix-head{display:none}
     .quality-row{grid-template-columns:repeat(2,minmax(0,1fr))}
@@ -151,5 +200,7 @@
   @media(max-width:480px){
     .quality-row{grid-template-columns:minmax(0,1fr)}
     .supports,.limitations{grid-column:1}
+    .policy-form{grid-template-columns:minmax(0,1fr)}
+    .policy-form p{grid-column:1}
   }
 </style>

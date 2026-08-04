@@ -1,9 +1,8 @@
 # Privacy Notice
 
-This is a template for whoever operates a deployment of this tool
-(self-hosted or on Netlify) to adapt - fill in `[operator contact]` below
-and adjust anything that doesn't match your actual deployment before
-publishing it to anyone you share `SITE_PASSWORD` with.
+This notice describes the public WHOISleuth deployment and is also a template
+for self-hosted operators to adapt when their configuration, hosting, enabled
+providers, retention, or contact routes differ.
 
 ## What personal data this tool processes
 
@@ -17,6 +16,14 @@ default (see the README), so many lookups return no personal data at all.
 
 ## Where that data goes
 
+- **Protected contact handoff**: the public Contact page keeps its subject and
+  message fields in current page memory. To reveal a privacy, outbound-request,
+  or security role address, the browser sends only that fixed category and a
+  short-lived verification token to this deployment. The server sends the
+  token, but not the draft, target data, or contact address, to Cloudflare
+  Turnstile for validation. After successful verification, the server returns
+  one configured role address and the browser prepares a local `mailto:` link.
+  WHOISleuth does not send the email, retain the draft, or accept attachments.
 - **Custom Discover dictionary**: optional pasted or imported terms are
   normalized and capped at 100 unique entries, 32 characters per term, and
   4,096 input characters. They remain transient in the current browser tab,
@@ -74,6 +81,10 @@ default (see the README), so many lookups return no personal data at all.
   can compare the recursive nameserver view with registry RDAP nameserver and
   glue publication, then send direct NS and SOA queries to at most four
   selected nameservers and two validated public addresses per nameserver.
+  Each selected authority can contribute one bounded SOA projection containing
+  its primary name, hostmaster, serial, refresh, retry, expire, and minimum TTL
+  fields. WHOISleuth compares the retained primary names and serials across
+  reached authorities without claiming global propagation or consistency.
   Registry, recursive, and direct evidence remain separately attributed.
   Private and reserved addresses are rejected before a direct query. Refused,
   unreachable, partial, truncated, and unsupported observations remain
@@ -416,13 +427,17 @@ default (see the README), so many lookups return no personal data at all.
   browser-local case, watchlist, and profile records, but can appear in a
   deliberate full Lookup evidence export.
 - **Passive security posture**: a requested deep Lookup can interpret the
-  existing HTTP response, bounded static form and resource summaries, one TLS
+  existing HTTP response, an early bounded CSP meta policy from the already
+  captured homepage, bounded static form and resource summaries, one TLS
   handshake, DNSSEC publication, and CAA query as a separate versioned posture
   profile. It retains fixed finding identifiers, categories, state and tone
   labels, fixed explanations, fixed evidence classes, and bounded counts. It
   can review bounded Content-Security-Policy, Strict-Transport-Security,
   Referrer-Policy, and response-cookie attributes from the selected response
-  without another request. It does not copy response-header values, cookie
+  without another request. A CSP meta policy qualifies an inline-script header
+  finding only when it is fully parsed inside the explicit document head before
+  any script; later, malformed, or capped policies remain non-authoritative. It
+  does not copy response-header or meta-policy values, cookie
   names or values, paths, domains, nonces, hashes, reporting endpoints, TLS
   error strings, URLs, certificate contents, DNS record contents, or page
   markup into the derived profile.
@@ -465,6 +480,18 @@ default (see the README), so many lookups return no personal data at all.
   message data. Its optional JSON export is generated locally, includes an
   integrity digest and stated limitations, and excludes raw DNS responses,
   contacts, scripts, and provider payloads.
+  The Brands page can also review explicitly selected DMARC aggregate XML and
+  SMTP TLS aggregate JSON reports. Plain, gzip, and ZIP inputs are decoded and
+  parsed in the current browser tab within fixed file, expanded-byte, archive,
+  record, policy, and failure-detail limits. The report files and parsed
+  sending IP addresses, message counts, alignment outcomes, dispositions, MX
+  names, and transport-failure categories are not uploaded, added to
+  IndexedDB, or saved in the Brand Profile. They remain in page memory until
+  cleared or the page is left. A deliberate JSON export includes the bounded
+  parsed reports, profile-scope comparison, limitations, source-file digests,
+  and an artifact digest. WHOISleuth does not authenticate the report sender,
+  contact a reporting provider, perform DNS or SMTP collection, or treat an
+  imported outcome as current domain safety or sender intent.
   Website profile snapshots are retained only after an analyst explicitly
   saves a completed Deep Lookup. Each bounded record contains the canonical
   domain, observation and save times, collection completeness and truncation,
@@ -597,13 +624,27 @@ default (see the README), so many lookups return no personal data at all.
   Structured Certificate Transparency searches retain bounded per-keyword
   domain baselines and check summaries so Discover can identify domains that
   are new since the previous complete search. Capped or legacy results never
-  replace a complete baseline. Brand Profile page baselines are captured only
+  replace a complete baseline. The current response can also contain a
+  separately capped projection of names observed together in individual public
+  certificate records. Those certificate groups are not added to the saved CT
+  history baseline, and group-cap state remains distinct from domain-result
+  completeness. Brand Profile page baselines are captured only
   on explicit request and are stored only when the profile is saved. A failed
   or inconclusive recapture does not replace an existing baseline.
   Cleared via each entry's **Remove**/**Delete** button, the **Clear all**
   button in either panel, the campaign deletion controls, the deletion controls
   under **Previous certificate searches**, or by clearing the browser's site
   data. Clearing site data also removes the saved appearance preference.
+- **Local registry IDN table review**: Discover can deliberately read one local
+  RFC 7940 LGR XML file of at most 2 MiB and compare its normalized
+  single-code-point repertoire with the current Unicode candidates for an
+  analyst-entered suffix. The browser calculates a SHA-256 digest and displays
+  the local filename, repertoire count, exclusions, and limitations. The file,
+  digest, suffix, and review result stay in the current tab, are not uploaded,
+  are not added to candidate handoffs or workspace storage, and do not affect
+  availability, Risk, or candidate selection. Document types and entities are
+  rejected. Context rules, variant dispositions, registry eligibility, price,
+  and live acceptance are not evaluated.
 - **Optional hosted scheduled monitoring**: disabled by default. When the
   operator explicitly enables the Netlify worker and a scheduled watchlist is
   present, it retains the bounded watchlist name, canonical domains, interval,
@@ -860,11 +901,12 @@ registrant to access/delete their data is fulfilled by deleting whatever you
 personally exported (CSV/JSON files) or saved (shortlist/watchlist entries and
 history) about them, and not re-querying afterward. Use the **Clear all**
 buttons for browser-local records; an operator who enabled hosted scheduled
-monitoring must also remove the relevant encrypted Blob state. Public support
-requests are not handled through the deployed site; people authorised to use
-the protected console should contact the operator who provided access. Direct
-data-subject requests to:
-`[operator contact]`.
+monitoring must also remove the relevant encrypted Blob state. Use the
+deployment's protected `/contact` page for a privacy request, concern about an
+outbound request, or security report. It reveals the relevant project role
+address only after verification and prepares an email in the user's own client;
+it does not send or retain the draft. A self-hosted operator must configure and
+monitor its own role addresses.
 
 ## Hosting / sub-processors
 
@@ -874,7 +916,16 @@ data-subject requests to:
   bounded lookups and its site-wide Blobs service retains the application-
   encrypted state and ordinary object metadata. Check Netlify's own Data
   Processing Addendum if you're operating this beyond a personal/internal
-  scale.
+  scale. Netlify can retain ordinary request and function-log metadata under
+  the deployment plan's current logging policy. WHOISleuth does not
+  intentionally log contact drafts, verification tokens, raw registry
+  responses, or role addresses, but operators must also review any edge,
+  function, proxy, and drain configuration they enable.
+- Cloudflare Turnstile: only on the public Contact page, the browser loads the
+  verification widget and the deployment sends its short-lived token to the
+  fixed verification endpoint. Cloudflare receives ordinary request metadata
+  under its privacy terms. The subject, message, selected project address, and
+  investigation data are not sent to Cloudflare.
 - Upstash: only when the operator explicitly configures distributed operation
   limits, the minimal lease and optional fixed-window counter metadata
   described above is processed through its HTTPS REST service. Operators

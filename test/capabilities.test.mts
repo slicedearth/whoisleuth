@@ -133,9 +133,10 @@ test('optional scheduled monitoring is explicit, credential-gated, and Netlify-o
 
 test('optional archived-verdict search is explicit, credential-gated, and deep-only', () => {
   const disabled = capabilityReport('express', {});
-  const unavailable = capabilityReport('express', { WHOISLEUTH_ENABLE_URLSCAN: '1' });
+  const unavailable = capabilityReport('express', { WHOISLEUTH_ENABLE_URLSCAN: '1', WHOISLEUTH_DEPLOYMENT_PURPOSE: 'personal' });
   const supported = capabilityReport('express', {
     WHOISLEUTH_ENABLE_URLSCAN: '1',
+    WHOISLEUTH_DEPLOYMENT_PURPOSE: 'personal',
     URLSCAN_API_KEY: 'fixture-api-key',
   });
   const byId = (report: CapabilityReport) => featureById(report, 'urlscan_search');
@@ -151,9 +152,10 @@ test('optional archived-verdict search is explicit, credential-gated, and deep-o
 
 test('optional malware-host intelligence is explicit, credential-gated, and deep-only', () => {
   const disabled = capabilityReport('express', {});
-  const unavailable = capabilityReport('express', { WHOISLEUTH_ENABLE_URLHAUS: '1' });
+  const unavailable = capabilityReport('express', { WHOISLEUTH_ENABLE_URLHAUS: '1', WHOISLEUTH_DEPLOYMENT_PURPOSE: 'personal' });
   const supported = capabilityReport('express', {
     WHOISLEUTH_ENABLE_URLHAUS: '1',
+    WHOISLEUTH_DEPLOYMENT_PURPOSE: 'personal',
     URLHAUS_AUTH_KEY: 'fixture-auth-key',
   });
   const byId = (report: CapabilityReport) => featureById(report, 'urlhaus_host');
@@ -169,9 +171,10 @@ test('optional malware-host intelligence is explicit, credential-gated, and deep
 
 test('optional malware-IOC intelligence is explicit, credential-gated, and deep-only', () => {
   const disabled = capabilityReport('express', {});
-  const unavailable = capabilityReport('express', { WHOISLEUTH_ENABLE_THREATFOX: '1' });
+  const unavailable = capabilityReport('express', { WHOISLEUTH_ENABLE_THREATFOX: '1', WHOISLEUTH_DEPLOYMENT_PURPOSE: 'personal' });
   const supported = capabilityReport('express', {
     WHOISLEUTH_ENABLE_THREATFOX: '1',
+    WHOISLEUTH_DEPLOYMENT_PURPOSE: 'personal',
     ABUSECH_AUTH_KEY: 'fixture-auth-key',
   });
   const byId = (report: CapabilityReport) => featureById(report, 'threatfox_domain_ioc');

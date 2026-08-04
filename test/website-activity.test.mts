@@ -8,6 +8,7 @@ import {
   forSaleRedirectSignal,
 } from '../lib/availability.mts';
 import { networkFeaturePolicy } from '../lib/feature-policy.mts';
+import { analyzeResponsePolicyHeaders } from '../lib/response-policy.mts';
 import { arrayValue, recordValue, requiredValue } from './value-assertions.mts';
 
 describe('website activity classification', () => {
@@ -204,9 +205,12 @@ describe('website activity classification', () => {
       fetchHomepage: async () => {
         homepageCalls += 1;
         return {
-          text: '<html lang="en"><meta name="generator" content="Hugo 0.1"><link rel="canonical" href="../account?token=secret"><astro-island></astro-island><form method="post" action="https://collect.example/submit?key=secret"></form></html>',
+          text: '<html lang="en"><head><meta http-equiv="Content-Security-Policy" content="default-src \'self\'; script-src \'self\' \'sha256-private-page-hash\'"><meta name="generator" content="Hugo 0.1"><link rel="canonical" href="../account?token=secret"></head><body><astro-island></astro-island><form method="post" action="https://collect.example/submit?key=secret"></form></body></html>',
           status: 'fetched',
           detail: 'Homepage responded.',
+          responsePolicy: analyzeResponsePolicyHeaders(new Headers({
+            'content-security-policy': "default-src 'self'; script-src 'self' 'unsafe-inline'",
+          })),
           http: {
             observedAt: '2026-07-13T04:05:06.000Z',
             finalUrl: 'https://www.example.test/start/index.html',
@@ -255,7 +259,10 @@ describe('website activity classification', () => {
     assert.equal(securityPosture.source, 'derived');
     assert.equal(securityPosture.status, 'partial');
     assert.equal(securityFindings.some((item) => item.id === 'external_form_destinations'), true);
-    assert.doesNotMatch(JSON.stringify(securityPosture), /token=|key=|secret|submit|collect\.example/);
+    assert.equal(securityFindings.some((item) => item.id === 'csp_inline_constrained_by_meta'), true);
+    assert.equal(securityFindings.some((item) => item.id === 'csp_unsafe_inline'), false);
+    assert.equal(Object.hasOwn(availability, 'cspMetaPolicy'), false);
+    assert.doesNotMatch(JSON.stringify(securityPosture), /token=|key=|secret|submit|collect\.example|private-page-hash|sha256-/);
   });
 
   test('does not describe an explicitly non-HTML response as page identity evidence', async () => {

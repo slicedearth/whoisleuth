@@ -194,7 +194,7 @@ test('public footer keeps an even compact rhythm on mobile', async ({ page }) =>
   const footer = page.locator('footer.site-footer');
   const links = footer.locator('.footer-links a');
   await expect(footer).toBeVisible();
-  await expect(links).toHaveCount(4);
+  await expect(links).toHaveCount(7);
 
   const linkLayout = await links.evaluateAll((elements) => elements.map((element) => {
     const box = element.getBoundingClientRect();
@@ -210,7 +210,9 @@ test('public footer keeps an even compact rhythm on mobile', async ({ page }) =>
   }));
 
   expect(linkLayout.every((link) => link.height <= 32)).toBe(true);
-  expect(new Set(linkLayout.map((link) => Math.round(link.y))).size).toBe(1);
+  const rows = [...new Set(linkLayout.map((link) => Math.round(link.y)))].sort((a, b) => a - b);
+  expect(rows.length).toBeLessThanOrEqual(2);
+  if (rows.length === 2) expect(rows[1]! - rows[0]!).toBeLessThanOrEqual(40);
   expect(linkLayout.every((link) => link.marginLeft === '0px' && link.marginRight === '0px')).toBe(true);
   expect(linkLayout.every((link) => link.paddingLeft === '0px' && link.paddingRight === '0px')).toBe(true);
   expect((await footer.boundingBox())?.height).toBeLessThan(210);

@@ -9,14 +9,24 @@ WHOIS query sent to the registry referred by IANA; later referrals always
 receive the canonical plain domain. Every hop records the applied query profile
 and response encoding without duplicating the query value in the response.
 
+The shared registry-service admission check runs before every domain WHOIS or
+RDAP transport regardless of whether the request came from Express, a hosted
+function, the CLI, Bulk, availability analysis, or scheduled monitoring. A
+documented absent service is returned as unsupported without opening a socket
+or resolving an RDAP endpoint. Registry-policy and source-authorization WHOIS
+profiles are also blocked unless a future reviewed approval mechanism is
+explicitly configured; no deployment currently provides such an override.
+These admission results describe collection capability only and cannot decide
+registration or availability.
+
 ## Coverage states
 
 - **Discovery only** means WHOISleuth can attempt normal IANA bootstrap and
   referral discovery, but has no suffix-specific fixture proving an exceptional
   query, encoding, or parser profile. It is not a claim that the registry is
   reachable or that it publishes any particular field.
-- **Fixture verified** means synthetic, bounded fixtures exercise a parser or
-  fallback profile already implemented by WHOISleuth. It does not prove current
+- **Fixture verified** means synthetic, bounded fixtures exercise a parser
+  profile already implemented by WHOISleuth. It does not prove current
   live-registry availability, policy, completeness, or deployment reachability.
 - **Access documented** means an authoritative registry or IANA source documents
   an endpoint or collection constraint without fixture-verified parser behavior,
@@ -27,7 +37,7 @@ and response encoding without duplicating the query value in the response.
 
 Generic TLDs use live IANA RDAP bootstrap discovery and shared bounded RDAP
 parsing. WHOISleuth does not create a duplicate parser profile for each suffix.
-The version 27 catalogue includes an official-source snapshot verified on 28
+The version 28 catalogue includes an official-source snapshot verified on 28
 July 2026: all 1,114 current generic and generic-restricted TLDs were present in
 the IANA RDAP bootstrap, as were 12 of 14 sponsored TLDs. `.edu` and `.mil` are
 the sponsored exceptions, while the infrastructure suffix `.arpa` has no RDAP
@@ -35,7 +45,7 @@ bootstrap service. The dated snapshot describes published coverage only. It is
 not a live reachability, registration, availability, ownership, safety, or
 maliciousness result.
 
-Version 27 also distinguishes 23 generic TLDs for which IANA publishes RDAP but
+Version 28 also distinguishes 23 generic TLDs for which IANA publishes RDAP but
 no domain WHOIS referral: `.app`, `.boo`, `.channel`, `.dad`, `.day`, `.dev`,
 `.esq`, `.foo`, `.how`, `.info`, `.ing`, `.meme`, `.mov`, `.new`, `.nexus`,
 `.page`, `.phd`, `.prof`, `.rsvp`, `.soy`, `.web`, `.みんな`, and `.zip`. An
@@ -43,9 +53,9 @@ unsupported WHOIS source remains visible as access context but does not create
 an incident-response uncertainty or imply that an analyst should find a WHOIS
 record that the registry does not publish.
 
-The version 27 explicit matrix is:
+The version 28 explicit matrix is:
 
-| Suffix | Current WHOIS parser/fallback or access profile | Coverage |
+| Suffix | Current WHOIS parser or access profile | Coverage |
 | --- | --- | --- |
 | `.ac` | Shared standard colon fields with lifecycle, contacts, status, DNSSEC, and nameservers | Registered |
 | `.ad` | Standard colon fields with registry identity, lifecycle, registrar, status, DNSSEC, and nameservers; IANA RDAP is also available | Registered, not found |
@@ -146,7 +156,7 @@ The version 27 explicit matrix is:
 | `.gq` | IANA publishes a WHOIS referral, but response behavior is not fixture verified and IANA publishes no RDAP service | Access documented |
 | `.gr` | IANA publishes no domain WHOIS or RDAP service | Access documented |
 | `.gs` | Authoritative no-object response with separate RDAP availability; registered-field parsing is not claimed | Not found |
-| `.gt` | Bounded registry-web fallback into the normal WHOIS parser | Registered, not found, unavailable |
+| `.gt` | IANA publishes no domain WHOIS or RDAP service; the registry website is not automated | Access documented |
 | `.gu` | IANA publishes no domain WHOIS or RDAP service | Access documented |
 | `.gw` | IANA publishes no domain WHOIS or RDAP service | Access documented |
 | `.gy` | Standard colon fields with registry identity, lifecycle, registrar, status, DNSSEC, and nameservers; IANA RDAP is also available | Registered |

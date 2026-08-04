@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { buildEvidenceCoverageLedger } from '../frontend/src/lib/analysis/evidence-coverage-ledger.ts';
 import {
   buildLookupSourceRefreshPlan,
+  buildLookupFreshnessPolicy,
   mergeLookupSourceRefreshLedger,
   requestLookupSourceRefresh,
 } from '../frontend/src/lib/analysis/lookup-source-refresh.ts';
@@ -28,11 +29,32 @@ test('offers existing source groups when the unified envelope is stale', () => {
     { id: 'whois', label: 'WHOIS', category: 'registry', status: 'complete' },
     { id: 'http', label: 'HTTP', category: 'web', status: 'complete' },
   ]);
-  const plan = buildLookupSourceRefreshPlan(ledger, '2026-07-20T00:00:00.000Z', NOW);
+  const plan = buildLookupSourceRefreshPlan(ledger, '2026-06-20T00:00:00.000Z', NOW, { task: 'general' });
   assert.equal(plan.stale, true);
-  assert.equal(plan.ageDays, 10);
+  assert.equal(plan.ageDays, 40);
   assert.deepEqual(plan.items.map((item) => item.id), ['rdap', 'whois', 'availability']);
   assert.ok(plan.items.every((item) => item.reason === 'stale'));
+});
+
+test('uses bounded task-specific and analyst-defined freshness thresholds', () => {
+  assert.deepEqual(buildLookupFreshnessPolicy('incident').thresholdsDays, { registration: 14, network: 1, web: 1 });
+  const custom = buildLookupFreshnessPolicy('incident', {
+    id: 'analyst-custom',
+    thresholdsDays: { registration: 0, network: 400, web: 5.4 },
+  });
+  assert.deepEqual(custom.thresholdsDays, { registration: 1, network: 365, web: 5 });
+
+  const ledger = buildEvidenceCoverageLedger([
+    { id: 'rdap', label: 'RDAP', category: 'registry', status: 'complete' },
+    { id: 'http', label: 'HTTP', category: 'web', status: 'complete' },
+  ]);
+  const plan = buildLookupSourceRefreshPlan(ledger, '2026-07-29T00:00:00.000Z', NOW, {
+    task: 'incident',
+    observedAtByEvidence: { rdap: '2026-07-29T00:00:00.000Z', http: '2026-07-29T00:00:00.000Z' },
+  });
+  assert.deepEqual(plan.items.map((item) => item.id), ['availability']);
+  assert.equal(plan.items[0]?.staleAfterDays, 1);
+  assert.equal(plan.freshnessPolicy.version, 1);
 });
 
 test('summarizes a separate WHOIS refresh without retaining its raw response', async () => {

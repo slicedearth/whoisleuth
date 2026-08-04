@@ -117,6 +117,7 @@ const profiles: readonly ProviderConformanceProfile[] = Object.freeze([
     provider: URLSCAN_PROVIDER,
     enabledEnv: {
       WHOISLEUTH_ENABLE_URLSCAN: '1',
+      WHOISLEUTH_DEPLOYMENT_PURPOSE: 'personal',
       URLSCAN_API_KEY: 'fixture-api-key',
     },
     createAdapter: (mode) => {
@@ -138,6 +139,7 @@ const profiles: readonly ProviderConformanceProfile[] = Object.freeze([
     provider: URLHAUS_PROVIDER,
     enabledEnv: {
       WHOISLEUTH_ENABLE_URLHAUS: '1',
+      WHOISLEUTH_DEPLOYMENT_PURPOSE: 'personal',
       URLHAUS_AUTH_KEY: 'fixture-auth-key',
     },
     createAdapter: (mode) => {
@@ -166,6 +168,7 @@ const profiles: readonly ProviderConformanceProfile[] = Object.freeze([
     provider: THREATFOX_PROVIDER,
     enabledEnv: {
       WHOISLEUTH_ENABLE_THREATFOX: '1',
+      WHOISLEUTH_DEPLOYMENT_PURPOSE: 'personal',
       ABUSECH_AUTH_KEY: 'fixture-auth-key',
     },
     createAdapter: (mode) => {

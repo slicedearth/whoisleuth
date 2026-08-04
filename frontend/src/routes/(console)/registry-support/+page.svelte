@@ -98,7 +98,7 @@
   <meta name="description" content="Review WHOISleuth's fixture-backed and access-documented registry compatibility coverage.">
 </svelte:head>
 
-<PageHeading eyebrow="Reference" title="Registry support" description="Inspect the versioned compatibility catalogue behind exceptional WHOIS query, parser, fallback, and access behavior.">
+<PageHeading eyebrow="Reference" title="Registry support" description="Inspect the versioned compatibility catalogue behind exceptional WHOIS query, parser, and access behavior.">
   <span class="version">Catalogue v{catalogue.version}</span>
 </PageHeading>
 
@@ -106,7 +106,7 @@
   <article class="card"><span>Explicit suffixes</span><strong>{catalogue.summary.profiles}</strong><p>Versioned profiles in this catalogue</p></article>
   <article class="card"><span>Fixture verified</span><strong>{catalogue.summary.fixtureVerified}</strong><p>Profiles exercised by bounded local fixtures</p></article>
   <article class="card"><span>Access documented</span><strong>{catalogue.summary.accessDocumented}</strong><p>Profiles with a documented collection constraint</p></article>
-  <article class="card"><span>Fallbacks</span><strong>{catalogue.summary.fallbacks}</strong><p>Bounded non-port-43 collection profiles</p></article>
+  <article class="card"><span>No machine service</span><strong>{catalogue.summary.serviceCoverage.neither}</strong><p>Profiles without IANA-published WHOIS or RDAP</p></article>
 </section>
 
 <section class="standards-section" aria-labelledby="standards-title">
@@ -231,7 +231,6 @@
             <div><dt>Service profile</dt><dd>{registryServiceCoverageLabel(registryServiceCoverage(profile))}</dd></div>
             <div><dt>WHOIS query</dt><dd>{registrySupportLabel(profile.whoisQueryProfile)}</dd></div>
             <div><dt>Parser</dt><dd>{registrySupportLabel(profile.whoisParserProfile)}</dd></div>
-            {#if profile.fallbackProfile}<div><dt>Fallback</dt><dd>{registrySupportLabel(profile.fallbackProfile)}</dd></div>{/if}
           </dl>
           {#if profile.explicitSuffixProfile && profile.suffixes[0]}
             <div class="inspection-handoff">
@@ -317,7 +316,7 @@
               <td data-label="Suffix"><code>.{row.suffixes[0]}</code><small>{registrySupportLabel(row.registryClass)}</small></td>
               <td data-label="Coverage"><span class:documented={row.coverageState === 'access_documented'} class="coverage-badge">{registryCoverageLabel(row.coverageState)}</span></td>
               <td data-label="Registry access"><strong>RDAP</strong><span>{registryAccessLabel(row.rdapAccessProfile)}</span><strong>WHOIS</strong><span>{registryAccessLabel(row.whoisAccessProfile)}</span></td>
-              <td data-label="WHOIS behavior"><strong>{registrySupportLabel(row.whoisQueryProfile)}</strong><span>{registrySupportLabel(row.whoisParserProfile)}</span>{#if row.fallbackProfile}<small>Fallback: {registrySupportLabel(row.fallbackProfile)}</small>{/if}</td>
+              <td data-label="WHOIS behavior"><strong>{registrySupportLabel(row.whoisQueryProfile)}</strong><span>{registrySupportLabel(row.whoisParserProfile)}</span></td>
               <td data-label="Profile details">
                 <details>
                   <summary>Review {(row.suffixes[0] ?? 'unknown').toUpperCase()} profile</summary>

@@ -134,6 +134,20 @@ describe('passive website security posture', () => {
     assert.doesNotMatch(JSON.stringify(result), new RegExp(secret));
   });
 
+  test('presents an early page CSP as a configured qualification rather than an inline-script exposure', () => {
+    const result = analyze({
+      responsePolicy: responsePolicy({
+        responsePolicyVersion: 2,
+        signals: [{ id: 'csp_inline_constrained_by_meta' }],
+      }),
+    });
+    const constrained = byId(result, 'csp_inline_constrained_by_meta');
+    assert.equal(constrained.state, 'observed');
+    assert.equal(constrained.tone, 'configured');
+    assert.deepEqual(constrained.evidence, ['Selected HTTP response headers', 'Static page CSP meta policy']);
+    assert.equal(result.findings.some((item) => item.id === 'csp_unsafe_inline'), false);
+  });
+
   test('keeps malformed or capped policy components unavailable rather than absent', () => {
     const result = analyze({
       responsePolicy: responsePolicy({

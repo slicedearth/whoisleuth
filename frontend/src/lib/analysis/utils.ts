@@ -1,6 +1,11 @@
 // Browser-safe analysis helpers shared by the Svelte tools.
 
 import { serializeCsvCell, serializeCsvRows } from '../../../../lib/csv.mts';
+import {
+  hammingDistanceHex,
+  isInformativePerceptualHash,
+  isPerceptualHash,
+} from '../../../../lib/perceptual-hash-comparison.mts';
 
 // Deliberately conservative (no +tags, no comments, no quoted local parts) -
 // this only gates whether a WHOIS/RDAP-sourced string is safe to drop into a
@@ -43,41 +48,14 @@ export function entityDisplayName(value: unknown): string | null {
   return normalized || null;
 }
 
-// Hamming distance (0-64) between two 16-hex perceptual dHash strings (see
-// lib/perceptual-hash.mts), or null if either isn't a well-formed hash. Smaller
-// = more visually similar. Shared by the brand-profile near-match check and
-// bulk favicon clustering; mirrors the backend's hammingDistanceHex. The two
-// implementations target separate Node and browser execution boundaries.
-const HEX_HASH_RE = /^[0-9a-f]{16}$/;
-
-export function hammingDistanceHex(a: unknown, b: unknown): number | null {
-  if (typeof a !== 'string' || typeof b !== 'string') return null;
-  if (!HEX_HASH_RE.test(a) || !HEX_HASH_RE.test(b)) return null;
-  let distance = 0;
-  for (let i = 0; i < 16; i += 1) {
-    let diff = parseInt(a.charAt(i), 16) ^ parseInt(b.charAt(i), 16);
-    while (diff) { distance += diff & 1; diff >>= 1; }
-  }
-  return distance;
-}
+export { hammingDistanceHex };
 
 // A dHash carries usable structure only when its set-bit count is away from
-// the degenerate extremes - a near-all-zero (or near-all-one) hash comes from
-// a solid/monotonic icon and collides with every other such icon (see
-// lib/perceptual-hash.mts's MIN_INFORMATIVE_BITS, mirrored here). Generation
-// already rejects these, but this is re-checked at every comparison so a
-// degenerate hash saved into a Brand Profile before that guard existed can't
-// keep producing false near-matches.
-const MIN_INFORMATIVE_HASH_BITS = 10;
-
+// the degenerate extremes. The shared browser-safe contract applies the same
+// threshold during generation and comparison, including for older retained
+// profile values.
 export function isInformativeFaviconHash(hex: unknown): hex is string {
-  if (typeof hex !== 'string' || !HEX_HASH_RE.test(hex)) return false;
-  let bits = 0;
-  for (let i = 0; i < 16; i += 1) {
-    let n = parseInt(hex.charAt(i), 16);
-    while (n) { bits += n & 1; n >>= 1; }
-  }
-  return bits >= MIN_INFORMATIVE_HASH_BITS && bits <= 64 - MIN_INFORMATIVE_HASH_BITS;
+  return isInformativePerceptualHash(hex);
 }
 
 // Groups records that share a favicon, connecting two whenever their exact
@@ -102,7 +80,7 @@ function faviconRecord(value: unknown): FaviconRecord | null {
   const faviconHash = typeof record.faviconHash === 'string' && record.faviconHash
     ? record.faviconHash
     : null;
-  const faviconPHash = typeof record.faviconPHash === 'string' && HEX_HASH_RE.test(record.faviconPHash)
+  const faviconPHash = isPerceptualHash(record.faviconPHash)
     ? record.faviconPHash
     : null;
   return faviconHash || faviconPHash

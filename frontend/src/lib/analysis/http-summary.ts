@@ -4,10 +4,12 @@
 // smaller derived shape: no paths, queries, header values, attempt errors, or
 // redirect inventories.
 
+import { MAX_HTTP_EVIDENCE_REDIRECTS } from '../../../../lib/http-evidence-bounds.mts';
+
 export const HTTP_SUMMARY_VERSION = 1;
 export const MAX_HTTP_SUMMARY_ORIGIN_LENGTH = 300;
 export const MAX_HTTP_SUMMARY_CONTENT_TYPE_LENGTH = 100;
-export const MAX_HTTP_SUMMARY_REDIRECTS = 5;
+export const MAX_HTTP_SUMMARY_REDIRECTS = MAX_HTTP_EVIDENCE_REDIRECTS;
 export const MAX_HTTP_SECURITY_HEADER_INPUTS = 20;
 
 export const HTTP_SECURITY_HEADER_TOKENS = Object.freeze([

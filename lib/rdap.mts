@@ -25,6 +25,7 @@ import {
   type RdapFetch,
 } from './rdap-transport.mts';
 import type { RegistryRdapLinkSource } from './rdap-types.mts';
+import { registryServiceAdmissionFor } from './registry-capabilities.mts';
 
 async function fetchRdapFromBases<const T extends string>(
   type: T,
@@ -44,8 +45,15 @@ async function fetchRdapFromBases<const T extends string>(
 async function fetchRdapRecord<const T extends string>(
   type: T,
   value: string,
+  options: {
+    fetchRecord?: typeof fetchRdapRecordWithParser;
+  } = {},
 ) {
-  return fetchRdapRecordWithParser(type, value, parseRdap);
+  if (type === 'domain' && registryServiceAdmissionFor(value, 'rdap')?.allowed === false) {
+    return null;
+  }
+  const fetchRecord = options.fetchRecord ?? fetchRdapRecordWithParser;
+  return fetchRecord(type, value, parseRdap);
 }
 
 async function fetchRegistrarRdapRecord(

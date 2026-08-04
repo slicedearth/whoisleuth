@@ -58,6 +58,7 @@ const refreshPlan: LookupSourceRefreshPlan = {
   version: 1,
   stale: false,
   ageDays: 1,
+  freshnessPolicy: { version: 1, id: 'task-default', task: 'general', thresholdsDays: { registration: 30, network: 7, web: 3 } },
   items: [{
     id: 'whois',
     label: 'WHOIS',

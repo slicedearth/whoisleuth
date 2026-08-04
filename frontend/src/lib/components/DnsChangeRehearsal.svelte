@@ -3,6 +3,8 @@
     buildDnsChangeRehearsal,
     buildDnsChangeRehearsalExport,
     type DnssecChange,
+    type RegistrarLockChange,
+    type CertificateKeyChange,
   } from '$lib/analysis/dns-change-rehearsal.ts';
 
   let {
@@ -14,6 +16,8 @@
     currentMx = [],
     currentCaa = [],
     currentCriticalAddresses = [],
+    currentRegistrationStatuses = [],
+    currentTlsSpkiSha256 = null,
     evidenceComplete,
   }: {
     domain: string;
@@ -24,6 +28,8 @@
     currentMx?: readonly unknown[];
     currentCaa?: readonly unknown[];
     currentCriticalAddresses?: readonly unknown[];
+    currentRegistrationStatuses?: readonly unknown[];
+    currentTlsSpkiSha256?: unknown;
     evidenceComplete: boolean;
   } = $props();
 
@@ -34,6 +40,10 @@
   let proposedCaa = $state('');
   let proposedCriticalAddresses = $state('');
   let dnssecChange = $state<DnssecChange>('unchanged');
+  let registrarLockChange = $state<RegistrarLockChange>('unchanged');
+  let certificateKeyChange = $state<CertificateKeyChange>('unchanged');
+  let proposedTlsSpkiSha256 = $state('');
+  let certificateReplacementReady = $state(false);
   let ttlLowered = $state(false);
   let zonePrepublished = $state(false);
   let evaluated = $state(false);
@@ -46,6 +56,8 @@
     currentMx,
     currentCaa,
     currentCriticalAddresses,
+    currentRegistrationStatuses,
+    currentTlsSpkiSha256,
     proposedNameservers,
     proposedGlue,
     proposedDs,
@@ -53,6 +65,10 @@
     proposedCaa,
     proposedCriticalAddresses,
     dnssecChange,
+    registrarLockChange,
+    certificateKeyChange,
+    proposedTlsSpkiSha256,
+    certificateReplacementReady,
     ttlLowered,
     zonePrepublished,
     currentEvidenceComplete: evidenceComplete,
@@ -70,9 +86,9 @@
 </script>
 
 <details class="rehearsal">
-  <summary>Plan a DNS change</summary>
+  <summary>Plan a domain control change</summary>
   <div class="rehearsal-body">
-    <p>Rehearse the order of a proposed delegation change using this retained evidence and your entered plan. Nothing is submitted or changed.</p>
+    <p>Rehearse a proposed DNS, registrar-lock, or certificate-key change using retained evidence and your entered plan. Nothing is submitted or changed.</p>
     <div class="form-grid">
       <label class="field">
         Intended nameservers
@@ -113,10 +129,35 @@
           <option value="disable">Disable</option>
         </select>
       </label>
+      <label class="field">
+        Registrar transfer lock
+        <select bind:value={registrarLockChange}>
+          <option value="unchanged">No change</option>
+          <option value="enable">Enable transfer lock</option>
+          <option value="disable">Temporarily disable</option>
+        </select>
+        <small>This represents an intended control-plane action. Registration evidence cannot prove the current account setting.</small>
+      </label>
+      <label class="field">
+        Certificate key
+        <select bind:value={certificateKeyChange}>
+          <option value="unchanged">No change</option>
+          <option value="rotate">Rotate key</option>
+        </select>
+        <small>Use the leaf certificate public-key fingerprint, not the certificate fingerprint.</small>
+      </label>
+      {#if certificateKeyChange === 'rotate'}
+        <label class="field">
+          Replacement SPKI SHA-256
+          <input bind:value={proposedTlsSpkiSha256} autocomplete="off" spellcheck="false" placeholder="64 hexadecimal characters">
+          <small>The value stays in this tab unless you deliberately download the checklist.</small>
+        </label>
+      {/if}
       <fieldset>
         <legend>Readiness confirmations</legend>
         <label><input type="checkbox" bind:checked={ttlLowered}> Relevant TTL preparation is complete</label>
         <label><input type="checkbox" bind:checked={zonePrepublished}> Proposed authorities already serve the intended zone</label>
+        {#if certificateKeyChange === 'rotate'}<label><input type="checkbox" bind:checked={certificateReplacementReady}> Replacement certificate and key are issued and validated</label>{/if}
       </fieldset>
     </div>
     <div class="actions">

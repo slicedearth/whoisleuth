@@ -62,7 +62,7 @@
           <div>
             <p class="eyebrow">Offline evidence</p>
             <h2 id="replay-title">{replay.target}</h2>
-            <p>Exported {replay.exportedAt} · {replay.targetType} · schema {replay.schemaVersion}</p>
+            <p>Exported {replay.exportedAt} · {replay.targetType} · schema {replay.schemaVersion}{replay.generatorVersion ? ` · WHOISleuth ${replay.generatorVersion}` : ''}</p>
           </div>
           <span class="chip info">{replay.availability}</span>
         </header>

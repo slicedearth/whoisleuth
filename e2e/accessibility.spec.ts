@@ -149,6 +149,26 @@ test('scans representative public initial, error, populated, and expanded states
   await expectSequentialHeadingOrder(page, 'public monitor demo');
 });
 
+test('scans public policy and protected-contact routes', async ({ page }, testInfo) => {
+  await useTheme(page, 'dark');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.route('**/api/contact-route', async (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ available: false, siteKey: null, categories: [] }),
+  }));
+
+  for (const [route, state] of [
+    ['/contact', 'public-contact-unavailable-dark-mobile'],
+    ['/terms', 'public-terms-dark-mobile'],
+    ['/request-policy', 'public-request-policy-dark-mobile'],
+  ] as const) {
+    await page.goto(route);
+    await expectNoAccessibilityViolations(page, testInfo, state);
+    await expectSequentialHeadingOrder(page, state);
+  }
+});
+
 test('scans authenticated desktop and expanded mobile drawer states', async ({ page }, testInfo) => {
   await useTheme(page, 'light');
   await page.setViewportSize({ width: 1280, height: 800 });

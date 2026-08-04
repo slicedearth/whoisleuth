@@ -31,6 +31,7 @@ type RateLimitChecker = (
 type ScopedRateLimitCheckers = Readonly<{
   login: RateLimitChecker;
   api: RateLimitChecker;
+  contactRoute: RateLimitChecker;
   scheduledMonitorManagement: RateLimitChecker;
   prerenderedHtml: RateLimitChecker;
 }>;
@@ -99,6 +100,7 @@ function createScopedRateLimitCheckers(
   return Object.freeze({
     login: createRateLimitChecker(LOGIN_RATE_LIMIT, maximumBucketsPerScope),
     api: createRateLimitChecker(API_RATE_LIMIT, maximumBucketsPerScope),
+    contactRoute: createRateLimitChecker(CONTACT_ROUTE_RATE_LIMIT, maximumBucketsPerScope),
     scheduledMonitorManagement: createRateLimitChecker(
       SCHEDULED_MONITOR_MANAGEMENT_RATE_LIMIT,
       maximumBucketsPerScope,
@@ -187,6 +189,15 @@ const LOGIN_RATE_LIMIT: Readonly<RateLimitConfig> = { limit: 10, windowMs: 5 * 6
 // scan will complete inside one window.
 const API_RATE_LIMIT: Readonly<RateLimitConfig> = { limit: 1000, windowMs: 60 * 1000 };
 
+// Public contact-route resolution is protected by a third-party challenge as
+// well as this local burst limit. It never accepts message text, but a bounded
+// per-identity store still prevents repeated verification requests from one
+// warm runtime.
+const CONTACT_ROUTE_RATE_LIMIT: Readonly<RateLimitConfig> = {
+  limit: 60,
+  windowMs: 10 * 60 * 1000,
+};
+
 // Hosted-watchlist management performs strongly consistent Blob reads and
 // conditional writes rather than high-volume registry lookups. Keep a much
 // smaller authenticated-session burst budget so a signed-in client cannot
@@ -207,12 +218,14 @@ const PRERENDERED_HTML_RATE_LIMIT: Readonly<RateLimitConfig> = {
 const scopedRateLimitCheckers = createScopedRateLimitCheckers();
 const checkLoginRateLimit = scopedRateLimitCheckers.login;
 const checkApiRateLimit = scopedRateLimitCheckers.api;
+const checkContactRouteRateLimit = scopedRateLimitCheckers.contactRoute;
 const checkScheduledMonitorManagementRateLimit = scopedRateLimitCheckers.scheduledMonitorManagement;
 const checkPrerenderedHtmlRateLimit = scopedRateLimitCheckers.prerenderedHtml;
 
 export {
   checkLoginRateLimit,
   checkApiRateLimit,
+  checkContactRouteRateLimit,
   checkScheduledMonitorManagementRateLimit,
   checkPrerenderedHtmlRateLimit,
   createRateLimitChecker,
@@ -222,6 +235,7 @@ export {
   getClientIp,
   LOGIN_RATE_LIMIT,
   API_RATE_LIMIT,
+  CONTACT_ROUTE_RATE_LIMIT,
   SCHEDULED_MONITOR_MANAGEMENT_RATE_LIMIT,
   PRERENDERED_HTML_RATE_LIMIT,
 };

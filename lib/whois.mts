@@ -12,7 +12,6 @@ import {
 import {
   buildWhoisChain,
   buildWhoisChainUncached,
-  fetchGtRegistryWhois,
   type WhoisChain,
 } from './whois-chain.mts';
 import {
@@ -1249,6 +1248,5 @@ export {
   whoisQuery,
   queryWhoisAddress,
   buildWhoisChainUncached,
-  fetchGtRegistryWhois,
 };
 export type { ParsedWhoisRecord } from './whois-contracts.mts';

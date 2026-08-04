@@ -53,8 +53,22 @@ import {
   buildCliMailReview,
   formatCliMailReview,
 } from './mail-review.mts';
+import {
+  MAX_OFFLINE_EVIDENCE_INPUT_BYTES,
+  buildOfflineEvidenceReview,
+  formatOfflineEvidenceReview,
+} from './offline-evidence-review.mts';
+import {
+  DOMAIN_CONTROL_MANIFEST_INPUT_SCHEMA,
+  DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA,
+  buildDomainControlManifest,
+  formatDomainControlResult,
+  reviewDomainControlManifest,
+} from '../lib/domain-control-manifest.mts';
 import { runLookupCommand } from './lookup-command-runner.mts';
 import { buildCliManual } from './manual.mts';
+import { buildInvestigationPlan, formatInvestigationPlan } from './investigation-plan.mts';
+import { WHOISLEUTH_SOURCE_REPOSITORY_URL } from '../lib/project-metadata.mts';
 import { createBufferedOutput, writePrivateFile } from './output-file.mts';
 import { createTerminalProgress, type TerminalProgress } from './progress.mts';
 import type { CliProgressEvents } from './progress-events.mts';
@@ -115,6 +129,9 @@ Review saved evidence:
   compare            Compare saved registry publications.
   page-compare       Compare saved static page and TLS evidence.
   mail-review        Review saved passive mail exposure evidence.
+  review-evidence    Review supplied DNS, routing, GeoIP, or RDAP evidence offline.
+  domain-control     Build or review an integrity-protected desired-state manifest.
+  workflow-plan      Plan a fixed investigation recipe without executing it.
   diff               Compare two saved domain observations.
   timeline           Compare a sequence of observations for one domain.
   export             Convert a saved lookup into an evidence report.
@@ -139,7 +156,7 @@ Diagnostics are written to stderr. Fast lookup is the default; deep collection
 must be requested explicitly and can disclose a target to additional sources.
 
 Copyright 2026 slicedearth. Licensed under AGPL-3.0-only.
-Source and licence: https://github.com/slicedearth/whoisleuth
+Source and licence: ${WHOISLEUTH_SOURCE_REPOSITORY_URL}
 `;
 const COMMAND_USAGE: Readonly<Record<CliCommand, string>> = Object.freeze({
   completion: 'whoisleuth completion <bash|zsh|fish|powershell>',
@@ -164,6 +181,9 @@ const COMMAND_USAGE: Readonly<Record<CliCommand, string>> = Object.freeze({
   compare: 'whoisleuth compare [lookup.json] [--json] [--quiet] [--no-color]',
   'page-compare': 'whoisleuth page-compare <left.json> <right.json> [--json] [--quiet] [--no-color]',
   'mail-review': 'whoisleuth mail-review [bulk.json|bulk.jsonl] [--json] [--quiet] [--no-color]',
+  'review-evidence': 'whoisleuth review-evidence [evidence.json] [--json] [--quiet] [--no-color]',
+  'domain-control': 'whoisleuth domain-control [manifest-input.json|review-input.json] [--json] [--quiet] [--no-color]',
+  'workflow-plan': 'whoisleuth workflow-plan <recipe> <domain|brand> [--json] [--quiet] [--no-color]',
   diff: 'whoisleuth diff <left.json> <right.json> [--json] [--quiet] [--no-color]',
   timeline: 'whoisleuth timeline <observation.json> <observation.json> [...] [--json] [--quiet] [--no-color]',
   export: 'whoisleuth export [lookup.json] [--markdown|--html|--compact]',
@@ -280,6 +300,21 @@ const COMMAND_DETAILS: Readonly<Record<CliCommand, Readonly<{ description: strin
     example: 'whoisleuth mail-review candidates.json --json',
     boundary: 'Review is offline and sends no SMTP traffic. Missing or partial DNS evidence remains inconclusive.',
   },
+  'review-evidence': {
+    description: 'Review one versioned DNSSEC, TLSA, RPKI, GeoIP, encrypted-DNS, or RDAP planning document offline.',
+    example: 'whoisleuth review-evidence dnssec-evidence.json --json',
+    boundary: 'The command reads only the supplied document. It performs no DNS, RDAP, BGP, GeoIP-provider, TLS, HTTP, or SMTP request.',
+  },
+  'domain-control': {
+    description: 'Build an integrity-protected desired-state manifest or compare one with supplied observations.',
+    example: 'whoisleuth domain-control domain-control-input.json --json',
+    boundary: 'The command is offline and changes no registrar, DNS, mail, or certificate configuration. Only complete supplied observations can produce drift.',
+  },
+  'workflow-plan': {
+    description: 'Build a fixed domain-investigation plan from existing bounded CLI commands.',
+    example: 'whoisleuth workflow-plan domain-triage example.test --json',
+    boundary: 'Planning is offline and plan-only. It does not execute commands, expand placeholders, read files, make requests, or submit evidence.',
+  },
   diff: {
     description: 'Compare bounded evidence retained in two saved domain lookups.',
     example: 'whoisleuth diff first.json second.json --json',
@@ -323,6 +358,9 @@ const COMMAND_COLLECTION: Readonly<Record<CliCommand, Readonly<{
   compare: { mode: 'offline', scope: 'Reads one saved Lookup and compares its separately attributed registry publications.' },
   'page-compare': { mode: 'offline', scope: 'Reads two saved Lookup documents and executes no page code.' },
   'mail-review': { mode: 'offline', scope: 'Reads one saved Bulk result and sends no DNS or SMTP traffic.' },
+  'review-evidence': { mode: 'offline', scope: 'Reads one bounded versioned evidence or request-planning document and performs no collection.' },
+  'domain-control': { mode: 'offline', scope: 'Reads one bounded desired-state or review document and performs no collection or configuration change.' },
+  'workflow-plan': { mode: 'offline', scope: 'Builds a fixed typed recipe and executes none of its network or file steps.' },
   diff: { mode: 'offline', scope: 'Reads two saved Lookup documents for different domains.' },
   timeline: { mode: 'offline', scope: 'Reads 2 to 20 saved observations for one domain, capped at 32 MiB in total.' },
   export: { mode: 'offline', scope: 'Reads one saved Lookup and writes one bounded report.' },
@@ -702,6 +740,79 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
       if (!args.quiet) write(stdout, args.output === 'json'
         ? formatJsonDocument(document)
         : terminal(formatCliMailReview(document), args.color));
+      return EXIT_CODES.SUCCESS;
+    }
+
+    if (args.action === 'review-evidence') {
+      failureLabel = 'Offline evidence review';
+      let input: string;
+      try {
+        input = dependencies.readArtifactInput
+          ? await dependencies.readArtifactInput(args.source)
+          : await readSavedLookupInputBounded(args.source
+            ? createReadStream(args.source, { highWaterMark: 64 * 1024 })
+            : dependencies.stdin || process.stdin, {
+              limit: MAX_OFFLINE_EVIDENCE_INPUT_BYTES,
+              label: 'Offline evidence input',
+            });
+      } catch (error) {
+        if (error instanceof CliUsageError) throw error;
+        throw new CliUsageError(`Could not read offline evidence input: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
+      }
+      if (!input.trim()) throw new CliUsageError('review-evidence requires one JSON file or a document on stdin.');
+      const document = buildOfflineEvidenceReview(input, commandContext.now());
+      if (!args.quiet) write(stdout, args.output === 'json'
+        ? formatJsonDocument(document)
+        : terminal(formatOfflineEvidenceReview(document), args.color));
+      return EXIT_CODES.SUCCESS;
+    }
+
+    if (args.action === 'domain-control') {
+      failureLabel = 'Domain control review';
+      let input: string;
+      try {
+        input = dependencies.readArtifactInput
+          ? await dependencies.readArtifactInput(args.source)
+          : await readSavedLookupInputBounded(args.source
+            ? createReadStream(args.source, { highWaterMark: 64 * 1024 })
+            : dependencies.stdin || process.stdin, {
+              limit: MAX_OFFLINE_EVIDENCE_INPUT_BYTES,
+              label: 'Domain control input',
+            });
+      } catch (error) {
+        if (error instanceof CliUsageError) throw error;
+        throw new CliUsageError(`Could not read domain control input: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
+      }
+      if (!input.trim()) throw new CliUsageError('domain-control requires one JSON file or a document on stdin.');
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(input);
+      } catch {
+        throw new CliUsageError('Domain control input is not valid JSON.');
+      }
+      const schema = parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+        ? (parsed as Record<string, unknown>).schema
+        : null;
+      const document = schema === DOMAIN_CONTROL_MANIFEST_INPUT_SCHEMA
+        ? buildDomainControlManifest(parsed, commandContext.now())
+        : schema === DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA
+          ? reviewDomainControlManifest(parsed, commandContext.now())
+          : null;
+      if (!document) {
+        throw new CliUsageError(`Domain control input must use ${DOMAIN_CONTROL_MANIFEST_INPUT_SCHEMA} or ${DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA}.`);
+      }
+      if (!args.quiet) write(stdout, args.output === 'json'
+        ? formatJsonDocument(document)
+        : terminal(formatDomainControlResult(document), args.color));
+      return EXIT_CODES.SUCCESS;
+    }
+
+    if (args.action === 'workflow-plan') {
+      failureLabel = 'Investigation plan';
+      const document = buildInvestigationPlan(args.recipe, args.subject, commandContext.now());
+      if (!args.quiet) write(stdout, args.output === 'json'
+        ? formatJsonDocument(document)
+        : terminal(formatInvestigationPlan(document), args.color));
       return EXIT_CODES.SUCCESS;
     }
 

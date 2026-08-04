@@ -22,7 +22,7 @@ export const LOOKUP_PRESENTATION_STORAGE_KEY = 'whoisleuth:lookup-presentation:v
 
 export const LOOKUP_EVIDENCE_DENSITIES = Object.freeze([
   Object.freeze({ id: 'summary' as const, label: 'Summary', detail: 'Overview and source-state ledger, with detailed sections reduced to headings.' }),
-  Object.freeze({ id: 'standard' as const, label: 'Standard', detail: 'Evidence sections remain available while raw response data stays out of the reading path.' }),
+  Object.freeze({ id: 'standard' as const, label: 'Standard', detail: 'Evidence sections remain available while the raw response stays collapsed until you choose to inspect it.' }),
   Object.freeze({ id: 'full' as const, label: 'Full', detail: 'Every settled evidence section, including the bounded raw response view.' }),
 ]);
 

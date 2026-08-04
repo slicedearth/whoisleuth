@@ -27,6 +27,9 @@ const templateManifest = {
   author: 'slicedearth',
   contentPolicy: { class: 'dual-use' },
   bin: { whoisleuth: 'bin/whoisleuth.mjs' },
+  repository: { type: 'git', url: 'git+https://github.com/slicedearth/whoisleuth.git' },
+  homepage: 'https://whoisleuth.com/',
+  bugs: { url: 'https://github.com/slicedearth/whoisleuth/issues' },
 };
 
 const lockfile = {
@@ -107,6 +110,7 @@ describe('scoped CLI package contract', () => {
     assert.throws(() => buildCliPackageManifest(rootManifest, { ...templateManifest, scripts: { postinstall: 'node install.mjs' } }, lockfile), /must not declare scripts/u);
     assert.throws(() => buildCliPackageManifest(rootManifest, { ...templateManifest, contentPolicy: { class: 'ordinary' } }, lockfile), /dual-use class/u);
     assert.throws(() => buildCliPackageManifest(rootManifest, { ...templateManifest, contentPolicy: { class: 'dual-use', extra: true } }, lockfile), /dual-use class/u);
+    assert.throws(() => buildCliPackageManifest(rootManifest, { ...templateManifest, homepage: 'https://different.example/' }, lockfile), /shared project metadata/u);
   });
 
   test('refuses dependency ranges that drift from the reviewed lockfile', () => {

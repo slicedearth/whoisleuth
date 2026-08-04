@@ -46,6 +46,7 @@ export const FRONTEND_ROUTE_GZIP_BUDGETS: Readonly<Record<string, number>> = Obj
   '/': kibibytes(150),
   '/brands': kibibytes(285),
   '/bulk': kibibytes(380),
+  '/contact': kibibytes(80),
   '/dashboard': kibibytes(325),
   '/demo': kibibytes(225),
   '/discover': kibibytes(320),
@@ -55,8 +56,10 @@ export const FRONTEND_ROUTE_GZIP_BUDGETS: Readonly<Record<string, number>> = Obj
   '/monitor': kibibytes(475),
   '/privacy': kibibytes(105),
   '/registry-support': kibibytes(285),
+  '/request-policy': kibibytes(80),
   '/resources': kibibytes(90),
   '/resources/[slug]': kibibytes(90),
+  '/terms': kibibytes(80),
 });
 
 function publicPath(routeKey: string): string {

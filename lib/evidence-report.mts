@@ -117,6 +117,7 @@ function buildLookupEvidenceReport(
   options: LookupEvidenceReportOptions = {},
 ): LookupEvidenceReport {
   const report = objectOrEmpty(document);
+  const application = objectOrEmpty(report.application);
   const query = objectOrEmpty(report.query);
   const diagnostics = objectOrEmpty(report.diagnostics);
   const rdapDiagnostics = objectOrEmpty(diagnostics.rdap);
@@ -331,6 +332,8 @@ function buildLookupEvidenceReport(
     notice: 'Human-readable summary. The versioned JSON export remains the full-fidelity evidence package; raw RDAP JSON and WHOIS response bodies are deliberately omitted here.',
     metadata: [
       reportField('Generated', report.generatedAt),
+      reportField('Generator', application.version ? `${application.name || 'WHOISleuth'} ${application.version}` : application.name || 'WHOISleuth'),
+      reportField('Project', application.projectUrl),
       reportField('Report contract', `${cleanReportText(report.schema)} v${cleanReportText(report.schemaVersion)}`),
     ],
     query: [

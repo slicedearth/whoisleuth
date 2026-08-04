@@ -31,6 +31,14 @@ function ctResult(overrides = {}) {
     domains: ['login.example.test', 'secure.example.test'],
     certCount: 3,
     truncated: false,
+    certificateGroupsTruncated: false,
+    certificateGroups: [{
+      certificateKey: 'id:100',
+      domains: ['example.test', 'example.net'],
+      hostnames: ['login.example.test', 'secure.example.test', 'example.net'],
+      observedAt: '2026-07-14T00:00:00.000Z',
+      wildcardObserved: false,
+    }],
     matches: [{
       domain: 'example.test',
       hostnames: ['login.example.test', 'secure.example.test'],
@@ -97,6 +105,8 @@ describe('ct-search output', () => {
     assert.match(output, /Keyword\s+example/);
     assert.match(output, /CT status\s+Success/);
     assert.match(output, /Certificates\s+3/);
+    assert.match(output, /Issuance groups\s+1 \(1 cross-domain\)/);
+    assert.match(output, /Group cap\s+Not reached/);
     assert.match(output, /example\.test/);
     assert.match(output, /login\.example\.test, secure\.example\.test/);
     assert.match(output, /2026-07-01T00:00:00\.000Z → 2026-07-14T00:00:00\.000Z/);

@@ -31,6 +31,7 @@ export type LookupEvidenceReplay = Readonly<{
   digestSha256: string;
   digestVerified: boolean;
   exportedAt: string;
+  generatorVersion: string | null;
   target: string;
   targetType: string;
   availability: string;
@@ -225,6 +226,8 @@ export async function parseLookupEvidenceReplay(
   }
   const exportedAt = timestamp(document.generatedAt);
   if (!exportedAt) throw new Error('The evidence export timestamp is missing or invalid.');
+  const application = record(document.application);
+  const generatorVersion = text(application.version, 128) || null;
 
   const query = record(document.query);
   const diagnostics = record(document.diagnostics);
@@ -331,6 +334,7 @@ export async function parseLookupEvidenceReplay(
     digestSha256,
     digestVerified: Boolean(expectedSha256),
     exportedAt,
+    generatorVersion,
     target: text(query.registrableDomain ?? query.inputHostname ?? query.submitted, 253) || 'Unknown target',
     targetType: text(query.type, 40) || 'unknown',
     availability: text(availability.state, 64).replaceAll('_', ' ') || 'unknown',

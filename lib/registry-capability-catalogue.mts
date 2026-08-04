@@ -22,7 +22,6 @@ type RegistryCapability = {
   whoisQueryScope: 'first-referral';
   whoisEncodingProfile: 'utf-8';
   whoisParserProfile: string;
-  fallbackProfile: 'gt-registry-web' | null;
   whoisAccessProfile: WhoisAccessProfile;
   rdapAccessProfile: RdapAccessProfile;
   coverageState: CoverageState;
@@ -78,7 +77,7 @@ type RegistryCapabilitySeed = Pick<
   'id' | 'suffixes' | 'registryClass' | 'whoisParserProfile' | 'fixtureScenarios'
 >>;
 
-const REGISTRY_CAPABILITIES_VERSION = 27;
+const REGISTRY_CAPABILITIES_VERSION = 28;
 const MAX_CAPABILITY_INPUT_LENGTH = 253;
 
 const REGISTRY_STANDARDS_COVERAGE_SNAPSHOT = Object.freeze({
@@ -244,7 +243,6 @@ const DEFAULT_CAPABILITY = freezeCapability({
   whoisQueryScope: 'first-referral',
   whoisEncodingProfile: 'utf-8',
   whoisParserProfile: 'generic-colon',
-  fallbackProfile: null,
   whoisAccessProfile: 'iana-referral',
   rdapAccessProfile: 'iana-bootstrap',
   coverageState: 'discovery_only',
@@ -750,10 +748,12 @@ const EXPLICIT_CAPABILITY_SEEDS: RegistryCapabilitySeed[] = [
     ],
   },
   {
-    id: 'gt-registry-web', suffixes: ['gt'], registryClass: 'country-code',
-    whoisParserProfile: 'generic-colon', fallbackProfile: 'gt-registry-web',
-    fixtureScenarios: ['registered', 'not_found', 'unavailable'],
-    verificationFiles: ['test/whois-gt-fallback.test.mts'],
+    id: 'gt-no-iana-service', suffixes: ['gt'], registryClass: 'country-code',
+    whoisParserProfile: 'generic-colon', fixtureScenarios: [],
+    coverageState: 'access_documented', whoisAccessProfile: 'no-iana-service',
+    rdapAccessProfile: 'no-iana-service', verificationFiles: [],
+    documentationUrls: ['https://www.iana.org/domains/root/db/gt.html'],
+    limitation: 'IANA publishes no RDAP service or domain WHOIS service for this suffix. WHOISleuth does not automate the registry website.',
   },
   {
     id: 'carnet-icann-colon', suffixes: ['hr'], registryClass: 'country-code',
@@ -1272,7 +1272,6 @@ const EXPLICIT_CAPABILITIES = EXPLICIT_CAPABILITY_SEEDS.map((entry) => {
   const rdapAccessProfile = resolvedSeedRdapAccessProfile(entry);
   return freezeCapability({
     ...entry,
-    fallbackProfile: entry.fallbackProfile || null,
     rdapDiscovery: 'iana-bootstrap',
     whoisDiscovery: 'iana-referral',
     whoisQueryProfile: entry.whoisQueryProfile || 'plain-domain',

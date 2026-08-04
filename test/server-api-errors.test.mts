@@ -74,6 +74,29 @@ describe('Express API request-body errors', () => {
 });
 
 describe('Express API response parity', () => {
+  test('keeps the public contact route narrow and fail-closed', async () => {
+    const configuration = await fetch(`${origin}/api/contact-route`);
+    assert.equal(configuration.status, 200);
+    const configurationBody = recordValue(await configuration.json());
+    assert.deepEqual(Object.keys(configurationBody).sort(), ['available', 'categories', 'siteKey']);
+    assert.equal(Object.hasOwn(configurationBody, 'route'), false);
+
+    const extraField = await fetch(`${origin}/api/contact-route`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Origin: origin,
+      },
+      body: JSON.stringify({
+        category: 'privacy',
+        token: 'test-token',
+        message: 'this draft must stay local',
+      }),
+    });
+    assert.equal(extraField.status, 400);
+    assert.deepEqual(await extraField.json(), { error: 'Invalid request body' });
+  });
+
   test('preserves success and expected validation responses', async () => {
     const session = requiredValue(buildSessionCookie(createSessionToken(), { secure: false }).split(';')[0]);
     const success = await fetch(`${origin}/api/session`, {

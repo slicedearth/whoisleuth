@@ -91,6 +91,10 @@ const KNOWN_CODEQL_FINDINGS: readonly KnownCodeqlFinding[] = Object.freeze([
   // project-local limiter, so retain only this exact reviewed fingerprint.
   Object.freeze({ ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: '3398efe9f888d67d:1', primaryLocationStartColumnFingerprint: '45', reason: 'false_positive' as const }),
   Object.freeze({ ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: 'c95b56b6acb3e65b:1', primaryLocationStartColumnFingerprint: '23', reason: 'false_positive' as const }),
+  // Contact-route verification is preceded by its own bounded per-identity
+  // limiter. CodeQL models the token verification as authorization but does
+  // not follow the project-local Express middleware factory.
+  Object.freeze({ ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: 'e98683a11c64bf47:1', primaryLocationStartColumnFingerprint: '26', reason: 'false_positive' as const }),
 ]);
 
 function boundedText(value: unknown, maximum: number, fallback: string): string {
@@ -449,6 +453,9 @@ function formatLocalCodeqlReport(report: LocalCodeqlReport): string {
   for (const finding of report.findings.displayed) {
     const location = finding.file ? `${finding.file}${finding.line ? `:${finding.line}` : ''}` : 'unknown location';
     lines.push('', `${finding.level.toUpperCase()} ${finding.ruleId} at ${location}`, `  ${finding.message}`);
+    if (finding.primaryLocationLineHash && finding.primaryLocationStartColumnFingerprint) {
+      lines.push(`  Fingerprint: ${finding.primaryLocationLineHash} / ${finding.primaryLocationStartColumnFingerprint}`);
+    }
   }
   if (report.findings.truncated) {
     lines.push('', `Output was truncated after ${report.findings.displayed.length} displayed findings.`);

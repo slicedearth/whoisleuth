@@ -7,6 +7,7 @@
 import { normalizeDomain } from './analysis/case-model.ts';
 import { normalizeCtProvenance } from './analysis/ct-results.ts';
 import type { CtProvenance } from './analysis/ct-results.ts';
+import { MAX_CANDIDATE_SOURCE_LENGTH } from '../../../lib/candidate-provenance-bounds.mts';
 
 export const HANDOFF_KEY = 'whoisleuth:candidate-handoff:v1';
 export const HANDOFF_VERSION = 1;
@@ -14,7 +15,7 @@ export const MAX_HANDOFF_CANDIDATES = 2000;
 export const MAX_GENERATED_CONTEXT = 5000;
 export const MAX_MUTATION_TYPES = 30;
 export const MAX_MUTATION_TYPE_LENGTH = 80;
-export const MAX_SOURCE_LENGTH = 253;
+export const MAX_SOURCE_LENGTH = MAX_CANDIDATE_SOURCE_LENGTH;
 
 export const HANDOFF_SOURCES = [
   'typosquat',

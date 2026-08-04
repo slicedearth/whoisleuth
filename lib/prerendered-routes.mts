@@ -8,6 +8,7 @@ const PRERENDERED_ROUTES = Object.freeze([
   '/',
   '/brands',
   '/bulk',
+  '/contact',
   '/dashboard',
   '/demo',
   '/discover',
@@ -16,9 +17,11 @@ const PRERENDERED_ROUTES = Object.freeze([
   '/lookup',
   '/monitor',
   '/privacy',
+  '/request-policy',
   '/resources',
   ...PUBLIC_RESOURCE_ROUTES,
   '/registry-support',
+  '/terms',
 ] as const);
 
 const PRERENDERED_HTML_FILE_OVERRIDES = Object.freeze([

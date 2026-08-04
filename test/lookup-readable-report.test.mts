@@ -148,6 +148,7 @@ describe('browser-local readable Lookup report', () => {
   test('renders bounded source health, Risk explanation, truncation, and limitations without private fields', () => {
     const source = lookupResponse();
     const report = buildLookupReadableReport(source, {
+      applicationVersion: '1.35.0',
       generatedAt: '2026-07-26T02:00:00.000Z',
       risk: {
         modelVersion: 6,
@@ -161,6 +162,8 @@ describe('browser-local readable Lookup report', () => {
 
     assert.match(report, /^# Lookup evidence report/u);
     assert.match(report, /Generated:\*\* 2026\\-07\\-26T02\\:00\\:00\\\.000Z/u);
+    assert.match(report, /Generator:\*\* WHOISleuth 1\\\.35\\\.0/u);
+    assert.match(report, /Project:\*\* https\\:\/\/github\\\.com\/slicedearth\/whoisleuth/u);
     assert.match(report, /Risk score:\*\* 42\/100/u);
     assert.match(report, /Risk model:\*\* v6/u);
     assert.match(report, /Risk factors:\*\* Hostile/u);
@@ -244,6 +247,7 @@ describe('browser-local readable Lookup report', () => {
     });
     const projected = projectLookupForReadableReport(source);
     const report = buildLookupReadableReport(source, {
+      applicationVersion: '1.35.0',
       generatedAt: '2026-07-29T02:00:00.000Z',
     });
 
@@ -253,6 +257,7 @@ describe('browser-local readable Lookup report', () => {
     assert.match(report, /edge\\\.example\\\.test/u);
     assert.match(report, /Reverse DNS:\*\* partial/u);
     assert.match(report, /WHOIS:\*\* unsupported/u);
+    assert.match(report, /Generator:\*\* WHOISleuth 1\\\.35\\\.0/u);
     assert.match(report, /One PTR answer was omitted/u);
     assert.equal(JSON.stringify(projected).includes('private@example.test'), false);
     assert.equal(JSON.stringify(projected).includes('"raw"'), false);
@@ -292,6 +297,7 @@ describe('browser-local readable Lookup report', () => {
       },
     });
     const report = buildLookupReadableReport(source, {
+      applicationVersion: '1.35.0',
       generatedAt: '2026-07-29T02:00:00.000Z',
     });
 
@@ -300,6 +306,7 @@ describe('browser-local readable Lookup report', () => {
     assert.match(report, /DIRECT ALLOCATION/u);
     assert.match(report, /RDAP:\*\* partial/u);
     assert.match(report, /WHOIS:\*\* unavailable/u);
+    assert.match(report, /Generator:\*\* WHOISleuth 1\\\.35\\\.0/u);
     assert.doesNotMatch(report, /Reverse DNS context|private@example\.test/u);
   });
 });

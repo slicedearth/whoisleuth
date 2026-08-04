@@ -3,6 +3,8 @@
   import { getContext, onMount } from 'svelte';
   import DiscoverCandidateResults from '$lib/components/DiscoverCandidateResults.svelte';
   import DiscoverCtHistory from '$lib/components/DiscoverCtHistory.svelte';
+  import DiscoverCertificateGroups from '$lib/components/DiscoverCertificateGroups.svelte';
+  import DiscoverIdnPolicyReview from '$lib/components/DiscoverIdnPolicyReview.svelte';
   import DiscoverGenerationOptions from '$lib/components/DiscoverGenerationOptions.svelte';
   import PageHeading from '$lib/components/PageHeading.svelte';
   import {
@@ -26,7 +28,7 @@
   } from '$lib/analysis/typosquat-generator.ts';
   import { activeProfile, isDomainAllowlisted, type BrandProfile } from '$lib/brand-profiles';
   import { saveCandidateHandoff, type Candidate } from '$lib/candidate-handoff';
-  import { normalizeCtResponse, ctCandidateMatchesFilter } from '$lib/analysis/ct-results.ts';
+  import { normalizeCtResponse, ctCandidateMatchesFilter, type CtCertificateGroup } from '$lib/analysis/ct-results.ts';
   import {
     candidateReviewCues as buildCandidateReviewCues,
     sortDiscoverCandidates,
@@ -83,6 +85,8 @@
   let ctPreviousCheckedAt = $state<string|null>(null);
   let ctNewOnly = $state(false);
   let ctHistoryNotice = $state('');
+  let ctCertificateGroups = $state<CtCertificateGroup[]>([]);
+  let ctCertificateGroupsTruncated = $state(false);
   let rdapSearchSummary = $state<RdapNameserverSearchView|null>(null);
   let page = $state(1);
   const capabilityReport=getContext<CapabilityGetter>(CAPABILITY_CONTEXT);
@@ -165,6 +169,10 @@
   const pageCount = $derived(Math.max(1, Math.ceil(visible.length / DISCOVER_PAGE_SIZE)));
   const currentPage = $derived(Math.min(page, pageCount));
   const pagedVisible = $derived(visible.slice((currentPage - 1) * DISCOVER_PAGE_SIZE, currentPage * DISCOVER_PAGE_SIZE));
+  const idnPolicyCandidates = $derived(candidates.map((candidate) => ({
+    domain: candidate.domain,
+    unicodeDomain: candidateMetadata.get(candidate.domain)?.unicodeDomain || '',
+  })));
   const selectedCandidates = $derived(candidates.filter((c) => selected.has(c.domain)));
   const selectedVisibleCount = $derived(visible.reduce((count, candidate) => count + Number(selected.has(candidate.domain)), 0));
   const reviewControlsActive = $derived(
@@ -359,11 +367,11 @@
     status = `Loaded discovery defaults from ${profile.name}.`;
   }
 
-  function selectMode(next:Mode){cancelHostedSearch();mode=next;candidates=[];generatedContext=[];selected=new Set();candidateMetadata=new Map();status='';error='';ctResultKind=null;rdapSearchSummary=null;resetCandidateView();resetCtComparison();}
+  function selectMode(next:Mode){cancelHostedSearch();mode=next;candidates=[];generatedContext=[];selected=new Set();candidateMetadata=new Map();status='';error='';ctResultKind=null;ctCertificateGroups=[];ctCertificateGroupsTruncated=false;rdapSearchSummary=null;resetCandidateView();resetCtComparison();}
   function tabKeydown(event:KeyboardEvent){const order:Mode[]=['typosquat','keyword','certificate-transparency','nameserver'];const current=order.indexOf(mode);let index=-1;if(event.key==='ArrowRight')index=(current+1)%order.length;else if(event.key==='ArrowLeft')index=(current+order.length-1)%order.length;else if(event.key==='Home')index=0;else if(event.key==='End')index=order.length-1;if(index<0)return;const nextMode=order[index];if(!nextMode)return;event.preventDefault();selectMode(nextMode);requestAnimationFrame(()=>document.querySelectorAll<HTMLButtonElement>('[role="tab"]')[index]?.focus());}
 
   function generate() {
-    cancelHostedSearch(); ctResultKind = null; rdapSearchSummary = null; resetCtComparison();
+    cancelHostedSearch(); ctResultKind = null; ctCertificateGroups = []; ctCertificateGroupsTruncated = false; rdapSearchSummary = null; resetCtComparison();
     if (!seed.trim()) { error = 'Enter a brand, domain, or keyword.'; return; }
     const selection = tldSelection();
     if (!selection.values.length && !seed.includes('.')) { error = 'Enter at least one valid TLD.'; return; }
@@ -419,13 +427,17 @@
     const controller = new AbortController();
     searchController = controller;
     rdapSearchSummary = null;
+    ctCertificateGroups = [];
+    ctCertificateGroupsTruncated = false;
     searching = true; error = ''; status = 'Searching Certificate Transparency logs…'; resetCtComparison();
     try {
       const response = await fetch(`/api/ct-search?q=${encodeURIComponent(query)}`, { signal: controller.signal });
       const body = await response.json().catch(() => ({})) as Record<string, unknown>;
       if (token !== searchToken) return; // a newer search or a mode switch superseded this one
       if (!response.ok) throw new Error((body.error as string) || `Search failed (${response.status})`);
-      const { candidates: next, certCount, truncated } = normalizeCtResponse(body, query);
+      const { candidates: next, certificateGroups, certificateGroupsTruncated, certCount, truncated } = normalizeCtResponse(body, query);
+      ctCertificateGroups = certificateGroups;
+      ctCertificateGroupsTruncated = certificateGroupsTruncated;
       const { filtered, excluded } = withoutAllowlisted(next);
       ctResultKind = 'structured';
       const noun = 'registrable domain';
@@ -455,7 +467,7 @@
       if (token !== searchToken) return;
       // Clear any prior results so stale metadata is never shown as belonging
       // to this failed query.
-      ctResultKind = null; candidates = []; generatedContext = []; selected = new Set(); resetCtComparison();
+      ctResultKind = null; ctCertificateGroups = []; ctCertificateGroupsTruncated = false; candidates = []; generatedContext = []; selected = new Set(); resetCtComparison();
       error = cause instanceof Error ? cause.message : 'Certificate search failed'; status = '';
     } finally {
       if (token === searchToken) { searching = false; searchController = null; }
@@ -706,7 +718,14 @@
   {/if}
 </section>
 
+{#if mode==='certificate-transparency' && ctCertificateGroups.length}
+  <DiscoverCertificateGroups groups={ctCertificateGroups} truncated={ctCertificateGroupsTruncated} />
+{/if}
+
 {#if candidates.length}
+  {#if mode === 'typosquat' || mode === 'keyword'}
+    <DiscoverIdnPolicyReview candidates={idnPolicyCandidates} />
+  {/if}
   <DiscoverCandidateResults
     selectedCount={selected.size}
     candidateCount={candidates.length}

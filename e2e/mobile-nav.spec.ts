@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures';
-import { boundingBox, expectNoHorizontalOverflow } from './helpers';
+import { boundingBox, expectNoHorizontalOverflow, expectVersionedSourceLink } from './helpers';
 
 const VIEWPORTS = [
   { label: '320x640', width: 320, height: 640 },
@@ -159,6 +159,6 @@ test('closing the mobile drawer updates aria-expanded, and the footer exposes le
   const footer = page.locator('footer.site-footer');
   await expect(footer).toBeVisible();
   await expect(footer.getByRole('link', { name: 'Privacy' })).toHaveAttribute('href', '/privacy');
-  await expect(footer.getByRole('link', { name: 'Source and licence' })).toHaveAttribute('href', 'https://github.com/slicedearth/whoisleuth');
+  await expectVersionedSourceLink(footer.getByRole('link', { name: 'Source and licence' }));
   await expectNoHorizontalOverflow(page);
 });

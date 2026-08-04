@@ -15,6 +15,7 @@ type ResponsePolicySignalId =
   | 'csp_permissive_script_source'
   | 'csp_unsafe_eval'
   | 'csp_unsafe_inline'
+  | 'csp_inline_constrained_by_meta'
   | 'hsts_disabled'
   | 'hsts_short_max_age'
   | 'referrer_policy_permissive'
@@ -43,6 +44,9 @@ type ResponsePolicyAnalysis = {
     signalCount: number;
     cookieCount: number;
     cookiesTruncated: boolean;
+    cspMetaPoliciesObserved: number;
+    cspMetaPoliciesParsed: number;
+    cspMetaPoliciesTruncated: boolean;
   };
   limitations: string[];
 };
@@ -52,8 +56,26 @@ type HeaderResult = {
   value: string | null;
 };
 
-export const RESPONSE_POLICY_VERSION = 1;
+type CspInlineControl = 'restricted' | 'unqualified' | 'uncontrolled' | 'unknown';
+type CspAnalysis = {
+  state: ResponsePolicyComponentState;
+  inlineControl: CspInlineControl;
+};
+type CspMetaPolicyInput = {
+  content: unknown;
+  beforeScript: unknown;
+};
+type CspMetaPolicyAnalysis = {
+  cspMetaPolicyVersion: 1;
+  policiesObserved: number;
+  policiesParsed: number;
+  inlineScriptConstrained: boolean;
+  truncated: boolean;
+};
+
+export const RESPONSE_POLICY_VERSION = 2;
 export const MAX_RESPONSE_POLICY_HEADER_BYTES = 8 * 1024;
+export const MAX_CSP_META_POLICIES = 4;
 export const MAX_RESPONSE_POLICY_DIRECTIVES = 64;
 export const MAX_RESPONSE_POLICY_TOKENS = 128;
 export const MAX_RESPONSE_COOKIES = 32;
@@ -106,9 +128,9 @@ function unavailableHeaderState(header: HeaderResult): ResponsePolicyComponentSt
   return header.state === 'present' ? 'malformed' : header.state;
 }
 
-function analyzeCsp(header: HeaderResult, signals: ResponsePolicySignal[]): ResponsePolicyComponentState {
+function analyzeCsp(header: HeaderResult, signals: ResponsePolicySignal[]): CspAnalysis {
   if (header.state !== 'present' || !header.value) {
-    return unavailableHeaderState(header);
+    return { state: unavailableHeaderState(header), inlineControl: 'unknown' };
   }
 
   const directives = new Map<string, string[]>();
@@ -119,7 +141,7 @@ function analyzeCsp(header: HeaderResult, signals: ResponsePolicySignal[]): Resp
     if (!normalized) continue;
     const [rawName = '', ...rawTokens] = normalized.split(/\s+/u);
     const name = rawName.toLowerCase();
-    if (!DIRECTIVE_NAME_RE.test(name)) return 'malformed';
+    if (!DIRECTIVE_NAME_RE.test(name)) return { state: 'malformed', inlineControl: 'unknown' };
     if (directives.has(name)) continue;
     if (directives.size >= MAX_RESPONSE_POLICY_DIRECTIVES) {
       partial = true;
@@ -132,12 +154,13 @@ function analyzeCsp(header: HeaderResult, signals: ResponsePolicySignal[]): Resp
     directives.set(name, tokens);
   }
 
-  if (!directives.size) return 'malformed';
+  if (!directives.size) return { state: 'malformed', inlineControl: 'unknown' };
   const defaultSources = directives.get('default-src');
   const scriptSources = directives.get('script-src') || defaultSources;
   if (!defaultSources) addSignal(signals, 'csp_default_source_missing');
   if (!directives.has('base-uri')) addSignal(signals, 'csp_base_uri_missing');
   if (!directives.has('object-src') && !defaultSources) addSignal(signals, 'csp_object_source_unbounded');
+  let inlineControl: CspInlineControl = scriptSources ? 'restricted' : 'uncontrolled';
   if (scriptSources) {
     if (scriptSources.some((token) => ['*', 'http:', 'https:', 'data:', 'blob:'].includes(token))) {
       addSignal(signals, 'csp_permissive_script_source');
@@ -148,9 +171,87 @@ function analyzeCsp(header: HeaderResult, signals: ResponsePolicySignal[]): Resp
       && !scriptSources.some((token) => CSP_NONCE_OR_HASH_RE.test(token))
     ) {
       addSignal(signals, 'csp_unsafe_inline');
+      inlineControl = 'unqualified';
     }
   }
-  return partial ? 'partial' : 'parsed';
+  return {
+    state: partial ? 'partial' : 'parsed',
+    inlineControl: partial ? 'unknown' : inlineControl,
+  };
+}
+
+export function analyzeCspMetaPolicies(
+  value: unknown,
+  sourceTruncated = false,
+): CspMetaPolicyAnalysis {
+  const candidates = Array.isArray(value) ? value : [];
+  const policies = candidates.slice(0, MAX_CSP_META_POLICIES);
+  let policiesParsed = 0;
+  let inlineScriptConstrained = false;
+  let truncated = sourceTruncated || candidates.length > MAX_CSP_META_POLICIES;
+
+  for (const rawPolicy of policies) {
+    const policy = rawPolicy && typeof rawPolicy === 'object' && !Array.isArray(rawPolicy)
+      ? rawPolicy as CspMetaPolicyInput
+      : null;
+    if (!policy || typeof policy.content !== 'string') {
+      truncated = true;
+      continue;
+    }
+    const policyContent = policy.content;
+    const content = readHeader({ get: () => policyContent }, 'content-security-policy');
+    const analysis = analyzeCsp(content, []);
+    if (analysis.state !== 'parsed') {
+      truncated = true;
+      continue;
+    }
+    policiesParsed += 1;
+    if (policy.beforeScript === true && analysis.inlineControl === 'restricted') {
+      inlineScriptConstrained = true;
+    }
+  }
+
+  return {
+    cspMetaPolicyVersion: 1,
+    policiesObserved: boundedCount(candidates.length, MAX_CSP_META_POLICIES),
+    policiesParsed,
+    inlineScriptConstrained,
+    truncated,
+  };
+}
+
+export function qualifyResponsePolicyWithCspMeta(
+  value: ResponsePolicyAnalysis | null | undefined,
+  meta: CspMetaPolicyAnalysis | null | undefined,
+): ResponsePolicyAnalysis | null | undefined {
+  if (!value || !meta || meta.cspMetaPolicyVersion !== 1) return value;
+  const constrained = meta.inlineScriptConstrained
+    && value.signals.some((signal) => signal.id === 'csp_unsafe_inline');
+  const signals = constrained
+    ? [
+        ...value.signals.filter((signal) => signal.id !== 'csp_unsafe_inline'),
+        { id: 'csp_inline_constrained_by_meta' as const },
+      ]
+    : [...value.signals];
+  const limitations = [...value.limitations];
+  if (meta.policiesObserved > 0) {
+    limitations.push(constrained
+      ? 'A bounded CSP meta policy observed before page scripts further constrained inline script allowed by the response header.'
+      : 'CSP meta policy observations did not qualify the selected response-header finding; policies after scripts, malformed policies, and capped policies remain non-authoritative for this comparison.');
+  }
+  if (meta.truncated) limitations.push('CSP meta policy analysis reached a configured count, position, or byte boundary.');
+  return {
+    ...value,
+    signals: signals.slice(0, 16),
+    diagnostics: {
+      ...value.diagnostics,
+      signalCount: Math.min(signals.length, 16),
+      cspMetaPoliciesObserved: boundedCount(meta.policiesObserved, MAX_CSP_META_POLICIES),
+      cspMetaPoliciesParsed: boundedCount(meta.policiesParsed, MAX_CSP_META_POLICIES),
+      cspMetaPoliciesTruncated: meta.truncated,
+    },
+    limitations,
+  };
 }
 
 function analyzeHsts(header: HeaderResult, signals: ResponsePolicySignal[]): ResponsePolicyComponentState {
@@ -265,7 +366,7 @@ export function analyzeResponsePolicyHeaders(
   headers: HeaderReader | null | undefined,
 ): ResponsePolicyAnalysis {
   const signals: ResponsePolicySignal[] = [];
-  const contentSecurityPolicy = analyzeCsp(readHeader(headers, 'content-security-policy'), signals);
+  const contentSecurityPolicy = analyzeCsp(readHeader(headers, 'content-security-policy'), signals).state;
   const strictTransportSecurity = analyzeHsts(readHeader(headers, 'strict-transport-security'), signals);
   const referrerPolicy = analyzeReferrerPolicy(readHeader(headers, 'referrer-policy'), signals);
   const cookies = analyzeCookies(headers, signals);
@@ -292,6 +393,9 @@ export function analyzeResponsePolicyHeaders(
       signalCount: Math.min(signals.length, 16),
       cookieCount: boundedCount(cookies.count, MAX_RESPONSE_COOKIES),
       cookiesTruncated: cookies.truncated,
+      cspMetaPoliciesObserved: 0,
+      cspMetaPoliciesParsed: 0,
+      cspMetaPoliciesTruncated: false,
     },
     limitations,
   };
@@ -299,6 +403,7 @@ export function analyzeResponsePolicyHeaders(
 
 export type {
   HeaderReader as ResponsePolicyHeaderReader,
+  CspMetaPolicyAnalysis,
   ResponsePolicyAnalysis,
   ResponsePolicyComponentState,
   ResponsePolicySignal,

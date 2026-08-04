@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { WHOISLEUTH_SITE_ORIGIN } from '../../../../lib/project-metadata.mts';
+
   let {
     title,
     description,
@@ -19,9 +21,8 @@
     imageAlt?: string;
   } = $props();
 
-  const siteOrigin = 'https://whoisleuth.com';
-  const canonicalUrl = $derived(`${siteOrigin}${path}`);
-  const imageUrl = $derived(`${siteOrigin}${imagePath}`);
+  const canonicalUrl = $derived(`${WHOISLEUTH_SITE_ORIGIN}${path}`);
+  const imageUrl = $derived(`${WHOISLEUTH_SITE_ORIGIN}${imagePath}`);
   const robots = $derived(indexable
     ? 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1'
     : 'noindex, nofollow');
@@ -30,7 +31,7 @@
         '@context': 'https://schema.org',
         '@type': 'WebSite',
         name: 'WHOISleuth',
-        url: `${siteOrigin}/`,
+        url: `${WHOISLEUTH_SITE_ORIGIN}/`,
       }
     : structuredData).replaceAll('<', '\\u003c'));
 </script>

@@ -112,11 +112,14 @@ are normalized into a short transient health summary, with a 2 MiB response
 bound, and are not merged into the original envelope. Repeated refreshes form
 a bounded versioned display chain with explicit observation and supersession
 times. That transient chain is cleared with the page and is not saved or
-exported. A result that is at
-least seven days old can offer the same reviewed refreshes for otherwise
-complete sources. Run a complete Lookup before saving, comparing, or exporting
-replacement evidence so observations collected at different times are not
-silently combined.
+exported. Task-specific defaults use different review ages for registration,
+network, and web evidence. The analyst can replace them with bounded one-to-365
+day thresholds for the current result. The versioned policy is shown in the
+quality panel and included in the downloaded investigation brief; custom values
+are not saved. Thresholds organize review only and do not make an older
+observation false or a newer observation complete. Run a complete Lookup before
+saving, comparing, or exporting replacement evidence so observations collected
+at different times are not silently combined.
 
 After a successful deep full response, **Collection timing** reports total
 request time plus the duration and settle offset of each source branch that
@@ -166,6 +169,8 @@ unknown, or not found. It preserves those states separately and shows endpoint
 class, observation age, explicit truncation, retained limitations, branch
 timing, downstream uses, and whether a deliberate refresh is available. It
 never retries a source or converts incomplete collection into a clean finding.
+Its freshness policy records the task, policy version, and separate
+registration, network, and web thresholds used for refresh suggestions.
 
 After a successful Lookup, **Download report** creates a readable Markdown
 summary locally in the browser. Domain reports include registry, registrar,
@@ -282,9 +287,15 @@ Certificate Transparency search is a separate hosted action. It groups
 observed hostnames by canonical registrable domain and retains bounded first
 and last observation times plus certificate counts. These timestamps describe
 public-log observations. They do not prove registration time, website activity,
-ownership, or maliciousness. Structured certificate-log results initially sort
-by latest retained observation. **Reset view** restores that default for
-certificate-log results and restores review-cue ordering for local generation.
+ownership, or maliciousness. It also groups names observed together in each
+retained public certificate record. Cross-domain issuance and wildcard groups
+are review leads only; shared certificates can reflect ordinary hosting,
+platform, or certificate-management arrangements. The issuance-group cap is
+independent of the registrable-domain result cap, so one projection cannot
+silently change the completeness of the other. Structured certificate-log
+results initially sort by latest retained observation. **Reset view** restores
+that default for certificate-log results and restores review-cue ordering for
+local generation.
 
 **Nameservers** is a separate, deliberate hosted pivot. Enter one nameserver
 hostname and one registry suffix. WHOISleuth uses IANA RDAP bootstrap data to
@@ -310,6 +321,12 @@ Bulk checks each canonical domain through a separate bounded Lookup request.
 It supports pasted domains, text files, common delimited files, and handoffs
 from Discover. Results can be filtered and sorted without changing the saved or
 exported scan data.
+
+One browser or CLI Bulk job accepts at most 500 Fast targets or 50 Deep
+targets. The Standard pacing option runs at most eight Fast or three Deep
+lookups concurrently; Gentle and Balanced apply lower pressure. These are
+per-job safety and resource ceilings, not authorization to scan domains. Each
+target remains subject to deployment, provider, and source limits.
 
 Bulk sessions are saved only when the analyst names and saves the current
 investigation. Each bounded browser-local session retains the input domain
@@ -376,7 +393,20 @@ Defensive registration coverage groups a generated scan by mutation family and
 domain ending. It distinguishes protected or allowlisted domains, registered
 exposures, available gaps, and unknown results without making extra requests.
 Stacked bars summarize the same exact counts retained in the accompanying
-tables. The two-domain workspace similarly adds a field matrix while preserving
+tables. A deterministic next-action plan places available and unresolved rows
+first, followed by registered candidates and profile-protected names. Its P1
+through P3 labels describe review order only; they are not a risk or
+maliciousness score. The CSV export includes the complete bounded plan.
+
+Discover can optionally compare Unicode candidates with one analyst-selected
+RFC 7940 LGR XML file. The file stays in the current browser tab, is capped at
+2 MiB, rejects document types and entities, and retains only a normalized
+single-code-point repertoire plus the local filename and SHA-256 digest. The
+review reports whether candidate code points appear in the imported table for
+the analyst-entered suffix. It does not evaluate contextual rules, variant
+dispositions, eligibility, price, live acceptance, or availability, so
+"listed by table" is never presented as registrable.
+The two-domain workspace similarly adds a field matrix while preserving
 source state, values, evidence links, conflicts, one-sided evidence, and
 limitations in its table.
 
@@ -398,6 +428,19 @@ selectors remain published, and inventories bounded external nameserver,
 mail, SPF, and reporting dependencies. Resolver failures and exhausted bounds
 remain incomplete. External infrastructure is a review lead, not an ownership,
 insecurity, or exploitability claim.
+
+The **DMARC and SMTP TLS reports** workbench accepts deliberately selected
+aggregate XML or JSON reports, including bounded gzip and ZIP containers. It
+parses them entirely in the current browser tab and summarizes sender IPs,
+message volume, DKIM and SPF outcomes, dispositions, TLS delivery totals, MX
+policy scope, and failure categories. Imported values are compared with the
+active profile's official-domain list, but they are not added to the profile or
+workspace. Leaving the page or selecting Clear removes the in-memory review.
+The optional JSON download includes source-file and artifact digests; it does
+not authenticate the report sender or turn an aggregate outcome into a current
+safety or intent conclusion. XML document types and entities are rejected, and
+file, decompression, entry, record, policy, and failure-detail limits are
+enforced before presentation.
 
 The profile can separately retain six expiring analyst attestations for
 registrar MFA, recovery-email separation, registry lock, emergency contacts,
@@ -438,18 +481,26 @@ service assignment, abandonment, or claimability. Complete current DNS
 evidence with no dependency is reported only as a point-in-time
 non-observation; incomplete DNS remains unavailable.
 
-**DNS change rehearsal** is available under a completed authoritative DNS
-health result in Deep Lookup. Enter the complete intended nameserver set,
-optional in-bailiwick glue, intended DS, MX, CAA and critical address sets, the
-DNSSEC change type, and reviewed readiness confirmations. The local planner
-keeps proposed values separate from the current observation, highlights
-unresolved evidence, set changes, missing glue, unprepared authorities, TTL
-preparation, and DNSSEC ordering, then presents an ordered change and rollback
-checklist. A deliberate JSON download preserves the reviewed comparison,
-unknowns, provenance boundary, and limitations. Entered values remain analyst
-assertions. Nothing is saved automatically. The rehearsal makes no request,
-changes no DNS or registry state, and cannot guarantee propagation or
-correctness.
+**Domain-control change rehearsal** is available under a completed authoritative
+DNS health result in Deep Lookup. Enter the complete intended nameserver set,
+optional in-bailiwick glue, intended DS, MX, CAA and critical address sets,
+DNSSEC and registrar-lock intent, an optional replacement certificate public-key
+fingerprint, and reviewed readiness confirmations. The local planner keeps
+proposed values separate from the current observation, highlights unresolved
+evidence, set changes, missing glue, unprepared authorities, TTL preparation,
+DNSSEC ordering, short-lived transfer unlocks and certificate-key sequencing,
+then presents an ordered change and rollback checklist. A deliberate JSON
+download preserves the reviewed comparison, unknowns, provenance boundary, and
+limitations. Entered values remain analyst assertions. Nothing is saved
+automatically. The rehearsal makes no request, changes no DNS, registrar or
+certificate state, and cannot guarantee propagation or correctness.
+
+The same authoritative DNS result retains a bounded SOA projection for each
+responding selected authority. Lookup compares the primary name and serial
+published by those authorities and exposes disagreements without treating them
+as propagation proof or record absence. Serial agreement is only a
+point-in-time consistency check across the authorities reached during that
+request; it does not validate every resolver or secondary server.
 
 ### Monitor
 
@@ -933,6 +984,12 @@ the latest retained observation per domain and exact shared-fingerprint review
 leads. These records contain bounded certificate metadata and digests, not
 certificate bytes, and describe what this deployment observed at that time
 rather than a current certificate inventory supplied by a third party.
+The snapshot can also retain up to 20 normalized service-dependency rows from
+the already displayed DNS and final-navigation review. Comparing two compatible
+snapshots calls out active-to-unresolved and active-to-passive-deprovision-cue
+transitions for manual review. It never follows the dependency, tests an
+account, or treats a transition as proof of abandonment, vulnerability, or
+claimability.
 
 Dashboard can create one deliberate workspace archive for the supported
 collections and preferences, including retained relationship observations and
@@ -969,6 +1026,13 @@ observations, or compact case history.
   summary. It omits raw registration payloads and expanded contacts.
 - Use the Lookup JSON evidence package when complete captured source material
   is required, and treat it as potentially containing public contact data.
+- Use the portable investigation capsule when a recipient needs one manifest
+  tying the current evidence-file digest to the bounded investigation brief,
+  relationship graph, source schemas, and application version. The capsule
+  does not embed the Lookup evidence file. A deliberate option can include
+  bounded analyst decisions and assertions from the linked case; notes,
+  contacts, actions, and raw payloads remain excluded. Checksums detect changed
+  content but do not authenticate a signer.
 - Build a case response packet only after recording the category, affected
   party, exact HTTP(S) URLs, observed harm, UTC observation time, and separately
   sourced contact routes. Select the intended audience first: the local preview
@@ -977,6 +1041,14 @@ observations, or compact case history.
   hosting/network, security-contact, browser/blocklist, or internal-SOC review.
   JSON, Markdown, and email-text outputs remain local, require review, and do
   not submit anything.
+- When Registry RDAP declares redacted fields, use the disclosure planner to
+  build a minimized JSON review packet from those bounded declarations and a
+  separate analyst-authored purpose, justification, requested-field selection,
+  and case reference. Its preflight requires review of available public
+  evidence, data minimisation, affected-party rights, and the current request
+  route. It excludes raw RDAP, raw WHOIS, and discovered personal contacts,
+  does not determine requester entitlement or registrar participation, and
+  never submits a request.
 - Defensive domain lists require an explicit reviewed selection and eligible
   analyst disposition. Review their exclusions, expiry, provenance manifest,
   and paired rollback instructions before applying them. Wildcard RPZ coverage

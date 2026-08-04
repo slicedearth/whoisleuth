@@ -93,6 +93,7 @@ const quality: LookupEvidenceQualityMatrix = {
   limitedCount: 1,
   stale: false,
   ageDays: 0,
+  freshnessPolicy: { version: 1, id: 'task-default', task: 'incident', thresholdsDays: { registration: 14, network: 1, web: 1 } },
 };
 
 const graph: LookupAssetGraph = {

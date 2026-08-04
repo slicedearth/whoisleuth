@@ -34,7 +34,6 @@ function fixtureCapability(
     whoisQueryScope: 'first-referral',
     whoisEncodingProfile: 'utf-8',
     whoisParserProfile: 'generic-colon',
-    fallbackProfile: null,
     whoisAccessProfile: 'iana-referral',
     rdapAccessProfile: 'iana-bootstrap',
     coverageState: 'fixture_verified',
@@ -76,7 +75,7 @@ describe('versioned registry-support document', () => {
     });
     const document = buildRegistrySupportDocument('example.test', capability, 5, '2026-07-17T00:00:00.000Z');
     assert.equal(document.schema, 'whoisleuth.cli.registry-support');
-    assert.equal(document.version, 2);
+    assert.equal(document.version, 3);
     assert.equal(document.catalogueVersion, 5);
     assert.deepEqual(document.standardsCoverage.genericAndRestricted, {
       total: 1114,
@@ -110,7 +109,7 @@ describe('registry-support runner', () => {
     assert.equal(stderr.value(), '');
     assert.equal(lookupCalled, false);
     const document = JSON.parse(stdout.value());
-    assert.equal(document.catalogueVersion, 27);
+    assert.equal(document.catalogueVersion, 28);
     assert.equal(document.suffix, 'uk');
     assert.equal(document.profile.explicitSuffixProfile, true);
     assert.equal(document.profile.coverageState, 'fixture_verified');

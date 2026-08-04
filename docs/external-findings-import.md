@@ -12,18 +12,18 @@ assertions rather than collected evidence, and the importer never creates a
 case, starts a lookup, enriches an entity, changes a score, publishes an event,
 or enables MISP correlation or IDS use.
 
-An imported finding is not treated as a WHOISleuth observation. Its source,
-observation time, completeness, and limitations remain attached to a separately
-labelled evidence pin. WHOISleuth does not independently verify the finding,
+An imported finding is not treated as evidence collected by the current
+WHOISleuth session. Its source class, observation time, completeness, and
+limitations remain attached to a separately labelled evidence pin. WHOISleuth does not independently verify the finding,
 change the case's analyst status or disposition, fetch a reference, execute
 content, contact a provider, or submit a report.
 
-## Version 1 schema
+## Version 2 schema
 
 ```json
 {
   "schema": "whoisleuth.external-findings",
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "source": {
     "name": "Local analyst export",
     "reference": "offline review",
@@ -33,6 +33,7 @@ content, contact a provider, or submit a report.
     {
       "domain": "review-target.invalid",
       "category": "page",
+      "evidenceClass": "provider_report",
       "summary": "A credential form was reported in a retained external observation.",
       "observedAt": "2026-07-28T00:45:00.000Z",
       "completeness": "partial",
@@ -57,6 +58,9 @@ Each finding accepts only:
 - `domain`: a required canonicalisable domain;
 - `category`: `certificate`, `dns`, `http`, `malware`, `other`, `page`,
   `registration`, or `reputation`;
+- `evidenceClass`: `deployment_observation` when the named source made the
+  observation itself, or `provider_report` when the source reported it from a
+  separate dataset;
 - `summary`: required text, at most 900 characters;
 - `observedAt`: a required date and time;
 - `completeness`: `complete`, `inconclusive`, `partial`, or `unknown`;
@@ -66,6 +70,12 @@ Each finding accepts only:
 Additional properties, unsupported categories or completeness states, invalid
 domains or dates, control characters, empty findings, and future schema
 versions reject the whole document.
+
+Version 1 remains readable and normalizes to version 2. Because version 1 did
+not distinguish provenance classes, its findings become `provider_report`
+rather than being upgraded to first-party observations. Analyst hypotheses and
+conclusions do not belong in this findings schema; use the separate case
+assertion workflow so claims never become observed evidence.
 
 ## Documented observation-row converters
 

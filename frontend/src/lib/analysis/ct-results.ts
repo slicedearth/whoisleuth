@@ -12,20 +12,33 @@
 // bounds what the server sent.
 
 import { normalizeDomain } from './case-model.ts';
+import { MAX_CANDIDATE_SOURCE_LENGTH } from '../../../../lib/candidate-provenance-bounds.mts';
+import {
+  MAX_CT_RESPONSE_CERTIFICATE_GROUPS,
+  MAX_CT_RESPONSE_DOMAINS_PER_GROUP,
+  MAX_CT_RESPONSE_HOSTNAMES_PER_GROUP,
+  MAX_CT_RESPONSE_HOSTNAMES_PER_MATCH,
+  MAX_CT_RESPONSE_RESULTS,
+  MAX_CT_RESPONSE_TIMESTAMP_LENGTH,
+} from '../../../../lib/ct-response-bounds.mts';
 
 // The stable mutation/source token every CT-derived candidate carries so Bulk,
 // coverage, and the handoff can recognise its provenance.
 export const CERTIFICATE_TRANSPARENCY_MUTATION = 'certificate_transparency';
 
-// Bounds. Kept aligned with the backend's own caps (lib/ct-search.mts) so a
+// Shared response bounds come from the backend contract so a
 // well-formed response is never clipped, while a hostile or malformed one can
 // never impose unbounded work or storage.
-export const MAX_CT_CANDIDATES = 500; // mirrors backend MAX_MATCHES / MAX_RESULTS
-export const MAX_CT_HOSTNAMES = 50; // mirrors backend MAX_HOSTNAMES_PER_MATCH
+export const MAX_CT_CANDIDATES = MAX_CT_RESPONSE_RESULTS;
+export const MAX_CT_HOSTNAMES = MAX_CT_RESPONSE_HOSTNAMES_PER_MATCH;
 export const MAX_CT_HOSTNAME_LENGTH = 253; // a DNS name can never exceed this
-export const MAX_CT_TIMESTAMP_LENGTH = 64; // mirrors backend MAX_TIMESTAMP_LENGTH
+export const MAX_CT_TIMESTAMP_LENGTH = MAX_CT_RESPONSE_TIMESTAMP_LENGTH;
 export const MAX_CT_CERTIFICATE_COUNT = 1_000_000; // clamp for the deduped count
-export const MAX_CT_SOURCE_LENGTH = 253; // same bound the handoff enforces on source
+export const MAX_CT_SOURCE_LENGTH = MAX_CANDIDATE_SOURCE_LENGTH;
+export const MAX_CT_CERTIFICATE_GROUPS = MAX_CT_RESPONSE_CERTIFICATE_GROUPS;
+export const MAX_CT_GROUP_DOMAINS = MAX_CT_RESPONSE_DOMAINS_PER_GROUP;
+export const MAX_CT_GROUP_HOSTNAMES = MAX_CT_RESPONSE_HOSTNAMES_PER_GROUP;
+export const MAX_CT_GROUP_INPUT_ITEMS = 500;
 
 // Input-processing caps. A well-formed backend response stays far below these
 // (matches <= 500, hostnames <= 50 per match), but the response is untrusted:
@@ -49,8 +62,18 @@ export type CtCandidate = {
   certificateTransparency: CtProvenance | null;
 };
 
+export type CtCertificateGroup = {
+  certificateKey: string;
+  domains: string[];
+  hostnames: string[];
+  observedAt: string | null;
+  wildcardObserved: boolean;
+};
+
 export type CtNormalizationResult = {
   candidates: CtCandidate[];
+  certificateGroups: CtCertificateGroup[];
+  certificateGroupsTruncated: boolean;
   certCount: number;
   truncated: boolean;
 };
@@ -185,6 +208,55 @@ function boundedSource(label: unknown): string {
   return typeof label === 'string' ? label.slice(0, MAX_CT_SOURCE_LENGTH) : '';
 }
 
+function normalizeCertificateKey(value: unknown): string | null {
+  if (typeof value !== 'string' || value.length > 180) return null;
+  const normalized = value.trim().toLowerCase();
+  return /^(?:id:[0-9]{1,32}|issuer-serial:[0-9]{1,32}:[0-9a-f]{1,128}|row:[0-9]{1,8})$/u.test(normalized)
+    ? normalized
+    : null;
+}
+
+function normalizeDomainList(value: unknown, maximum: number): string[] {
+  if (!Array.isArray(value)) return [];
+  const output = new Set<string>();
+  for (const item of value.slice(0, MAX_CT_INPUT_HOSTNAMES)) {
+    if (typeof item !== 'string' || item.length > MAX_CT_HOSTNAME_LENGTH) continue;
+    const normalized = normalizeDomain(item);
+    if (normalized) output.add(normalized);
+    if (output.size >= maximum) break;
+  }
+  return [...output].sort();
+}
+
+function normalizeCertificateGroups(value: unknown): { groups: CtCertificateGroup[]; truncated: boolean } {
+  if (!Array.isArray(value)) return { groups: [], truncated: false };
+  let truncated = value.length > MAX_CT_GROUP_INPUT_ITEMS;
+  const output = new Map<string, CtCertificateGroup>();
+  for (const item of value.slice(0, MAX_CT_GROUP_INPUT_ITEMS)) {
+    const group = plainRecord(item);
+    if (!group) continue;
+    const certificateKey = normalizeCertificateKey(group.certificateKey);
+    if (!certificateKey || output.has(certificateKey)) continue;
+    if (Array.isArray(group.domains) && group.domains.length > MAX_CT_GROUP_DOMAINS) truncated = true;
+    if (Array.isArray(group.hostnames) && group.hostnames.length > MAX_CT_GROUP_HOSTNAMES) truncated = true;
+    const domains = normalizeDomainList(group.domains, MAX_CT_GROUP_DOMAINS);
+    const hostnames = normalizeHostnames(group.hostnames).slice(0, MAX_CT_GROUP_HOSTNAMES);
+    if (!domains.length) continue;
+    output.set(certificateKey, {
+      certificateKey,
+      domains,
+      hostnames,
+      observedAt: normalizeTimestamp(group.observedAt),
+      wildcardObserved: group.wildcardObserved === true,
+    });
+    if (output.size >= MAX_CT_CERTIFICATE_GROUPS) {
+      if (value.length > output.size) truncated = true;
+      break;
+    }
+  }
+  return { groups: [...output.values()], truncated };
+}
+
 /**
  * Does a candidate match a free-text filter, searching both its canonical
  * domain and any observed CT hostnames? A pure helper so Discover's filter and
@@ -270,8 +342,11 @@ export function normalizeCtResponse(response: unknown, sourceLabel: unknown): Ct
     throw new Error('Certificate Transparency results were malformed (expected a matches array).');
   }
   const built = buildStructuredCandidates(res.matches, source);
+  const certificateGroups = normalizeCertificateGroups(res.certificateGroups);
   return {
     candidates: built.candidates,
+    certificateGroups: certificateGroups.groups,
+    certificateGroupsTruncated: res.certificateGroupsTruncated === true || certificateGroups.truncated,
     certCount,
     truncated: truncated || built.truncated,
   };

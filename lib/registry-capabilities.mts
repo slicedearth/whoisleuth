@@ -124,6 +124,47 @@ function registryAccessDiagnosticFor(value: unknown) {
   };
 }
 
+type RegistryService = 'rdap' | 'whois';
+type RegistryServiceAdmission = {
+  service: RegistryService;
+  state: 'allowed' | 'unsupported' | 'permission_required';
+  allowed: boolean;
+  limitation: string;
+};
+
+function registryServiceAdmissionFor(
+  value: unknown,
+  service: RegistryService,
+): RegistryServiceAdmission | null {
+  const capability = registryCapabilityFor(value);
+  if (!capability || (service !== 'rdap' && service !== 'whois')) return null;
+  if (service === 'rdap') {
+    const allowed = capability.rdapAccessProfile === 'iana-bootstrap';
+    return {
+      service,
+      state: allowed ? 'allowed' : 'unsupported',
+      allowed,
+      limitation: capability.limitation,
+    };
+  }
+  if (capability.whoisAccessProfile === 'iana-referral') {
+    return {
+      service,
+      state: 'allowed',
+      allowed: true,
+      limitation: capability.limitation,
+    };
+  }
+  const permissionRequired = capability.whoisAccessProfile === 'registry-policy-restricted'
+    || capability.whoisAccessProfile === 'source-ip-authorization-required';
+  return {
+    service,
+    state: permissionRequired ? 'permission_required' : 'unsupported',
+    allowed: false,
+    limitation: capability.limitation,
+  };
+}
+
 function listRegistryCapabilities(): RegistryCapability[] {
   return EXPLICIT_CAPABILITIES.map((capability) =>
     cloneCapability(capability),
@@ -165,7 +206,12 @@ export {
   registryCompatibilityMatrix,
   listRegistryCapabilities,
   registryAccessDiagnosticFor,
+  registryServiceAdmissionFor,
   registryStandardsCoverageSnapshot,
+};
+export type {
+  RegistryService,
+  RegistryServiceAdmission,
 };
 export type {
   RdapAccessProfile,

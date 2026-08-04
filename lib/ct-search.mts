@@ -11,7 +11,16 @@ import { parse } from 'tldts';
 
 import { normalizeCtQuery } from './ct-query.mts';
 import { safeFetch, readTextCapped } from './safe-fetch.mts';
+import { whoisleuthRequestHeaders } from './outbound-identity.mts';
 import { createObservation } from './observation.mts';
+import {
+  MAX_CT_RESPONSE_CERTIFICATE_GROUPS,
+  MAX_CT_RESPONSE_DOMAINS_PER_GROUP,
+  MAX_CT_RESPONSE_HOSTNAMES_PER_GROUP,
+  MAX_CT_RESPONSE_HOSTNAMES_PER_MATCH,
+  MAX_CT_RESPONSE_RESULTS,
+  MAX_CT_RESPONSE_TIMESTAMP_LENGTH,
+} from './ct-response-bounds.mts';
 
 type CtRow = Record<string, unknown>;
 type CtDependencies = {
@@ -31,9 +40,16 @@ type CtMatch = {
   lastObservedAt: string | null;
   certificateCount: number;
 };
+type CtCertificateGroup = {
+  certificateKey: string;
+  domains: string[];
+  hostnames: string[];
+  observedAt: string | null;
+  wildcardObserved: boolean;
+};
 
 const CRT_SH_TIMEOUT_MS = 20000;
-const MAX_RESULTS = 500;
+const MAX_RESULTS = MAX_CT_RESPONSE_RESULTS;
 // crt.sh's response size scales with how many certificates ever matched the
 // keyword, not with MAX_RESULTS - a broad single-word keyword can have
 // millions of matching certificates, and unlike the domain-homepage fetch in
@@ -65,7 +81,10 @@ const MAX_CT_ROWS = 50_000;
 
 // Structured-match bounds.
 const MAX_MATCHES = MAX_RESULTS; // 500
-const MAX_HOSTNAMES_PER_MATCH = 50;
+const MAX_HOSTNAMES_PER_MATCH = MAX_CT_RESPONSE_HOSTNAMES_PER_MATCH;
+const MAX_CERTIFICATE_GROUPS = MAX_CT_RESPONSE_CERTIFICATE_GROUPS;
+const MAX_DOMAINS_PER_CERTIFICATE_GROUP = MAX_CT_RESPONSE_DOMAINS_PER_GROUP;
+const MAX_HOSTNAMES_PER_CERTIFICATE_GROUP = MAX_CT_RESPONSE_HOSTNAMES_PER_GROUP;
 
 const HOSTNAME_RE = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/;
 
@@ -78,7 +97,7 @@ const MAX_ID_DIGITS = 32;
 const MAX_SERIAL_LENGTH = 128;
 
 // Maximum length for an entry_timestamp string before it is rejected.
-const MAX_TIMESTAMP_LENGTH = 64;
+const MAX_TIMESTAMP_LENGTH = MAX_CT_RESPONSE_TIMESTAMP_LENGTH;
 
 function normalizeHostname(raw: string): string | null {
   let h = raw.trim().toLowerCase();
@@ -99,7 +118,7 @@ async function fetchCrtSh(keyword: string, attempt = 0, dependencies: CtDependen
     let res: Response;
     try {
       res = await fetcher(`https://crt.sh/?q=${encodeURIComponent(keyword)}&output=json`, {
-        headers: { Accept: 'application/json', 'User-Agent': 'Mozilla/5.0 (compatible; DomainStatusChecker/1.0)' },
+        headers: whoisleuthRequestHeaders({ Accept: 'application/json' }),
         signal: controller.signal,
       });
     } catch (err) {
@@ -281,10 +300,11 @@ function validateEntryTimestamp(value: unknown): string | null {
  *     lastObservedAt: string | null,
  *     certificateCount: number
  *   }>,
+ *   certificateGroups: CtCertificateGroup[],
  *   truncated: boolean
  * }}
  */
-function summarizeCtResults(rows: unknown): { domains: string[]; matches: CtMatch[]; truncated: boolean } {
+function summarizeCtResults(rows: unknown): { domains: string[]; matches: CtMatch[]; certificateGroups: CtCertificateGroup[]; certificateGroupsTruncated: boolean; truncated: boolean } {
   if (!Array.isArray(rows)) {
     throw new Error('crt.sh returned an unexpected response format (expected a JSON array).');
   }
@@ -303,6 +323,12 @@ function summarizeCtResults(rows: unknown): { domains: string[]; matches: CtMatc
   // Map<registrableDomain, { hostnames: Set, certIds: Set,
   // firstObservedAt: string|null, lastObservedAt: string|null }>
   const groupMap = new Map<string, CtGroup>();
+  const certificateMap = new Map<string, {
+    domains: Set<string>;
+    hostnames: Set<string>;
+    observedAt: string | null;
+    wildcardObserved: boolean;
+  }>();
 
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i] as CtRow;
@@ -311,8 +337,22 @@ function summarizeCtResults(rows: unknown): { domains: string[]; matches: CtMatc
     const certId = resolveCertId(row, i);
 
     // Collect hostnames from name_value and common_name.
-    const blob = `${row.name_value || ''}\n${row.common_name || ''}`;
+    const rawBlob = `${row.name_value || ''}\n${row.common_name || ''}`;
+    const blob = rawBlob;
     const ts = validateEntryTimestamp(row.entry_timestamp);
+    let certificate = certificateMap.get(certId);
+    if (!certificate) {
+      certificate = {
+        domains: new Set<string>(),
+        hostnames: new Set<string>(),
+        observedAt: ts,
+        wildcardObserved: false,
+      };
+      certificateMap.set(certId, certificate);
+    } else if (ts !== null && (certificate.observedAt === null || ts > certificate.observedAt)) {
+      certificate.observedAt = ts;
+    }
+    if (rawBlob.split('\n').some((line) => line.trim().startsWith('*.'))) certificate.wildcardObserved = true;
 
     for (const line of blob.split('\n')) {
       const host = normalizeHostname(line);
@@ -330,6 +370,8 @@ function summarizeCtResults(rows: unknown): { domains: string[]; matches: CtMatc
         registrableDomainByHostname.set(host, regDomain);
       }
       if (!regDomain) continue;
+      certificate.hostnames.add(host);
+      certificate.domains.add(regDomain);
 
       let group = groupMap.get(regDomain);
       if (!group) {
@@ -389,6 +431,29 @@ function summarizeCtResults(rows: unknown): { domains: string[]; matches: CtMatc
     return a.domain.localeCompare(b.domain);
   });
 
+  const certificateGroups = [...certificateMap.entries()]
+    .map(([certificateKey, group]) => ({
+      certificateKey: certificateKey.slice(0, 180),
+      domains: [...group.domains].sort().slice(0, MAX_DOMAINS_PER_CERTIFICATE_GROUP),
+      hostnames: [...group.hostnames].sort().slice(0, MAX_HOSTNAMES_PER_CERTIFICATE_GROUP),
+      observedAt: group.observedAt,
+      wildcardObserved: group.wildcardObserved,
+      domainCount: group.domains.size,
+      hostnameCount: group.hostnames.size,
+    }))
+    .filter((group) => group.domains.length > 0)
+    .sort((left, right) => (
+      right.domainCount - left.domainCount
+      || right.hostnameCount - left.hostnameCount
+      || (right.observedAt ?? '').localeCompare(left.observedAt ?? '')
+      || left.certificateKey.localeCompare(right.certificateKey)
+    ));
+  const certificateGroupsTruncated = certificateGroups.length > MAX_CERTIFICATE_GROUPS
+    || certificateGroups.some((group) => (
+      group.domainCount > MAX_DOMAINS_PER_CERTIFICATE_GROUP
+      || group.hostnameCount > MAX_HOSTNAMES_PER_CERTIFICATE_GROUP
+    ));
+
   const matchTruncated = matches.length > MAX_MATCHES;
   const perMatchTruncated = matches.some(
     (m) => (groupMap.get(m.domain)?.hostnames.size || 0) > MAX_HOSTNAMES_PER_MATCH,
@@ -397,6 +462,14 @@ function summarizeCtResults(rows: unknown): { domains: string[]; matches: CtMatc
   return {
     domains: sortedLegacy.slice(0, MAX_RESULTS),
     matches: matches.slice(0, MAX_MATCHES),
+    certificateGroups: certificateGroups.slice(0, MAX_CERTIFICATE_GROUPS).map((group) => ({
+      certificateKey: group.certificateKey,
+      domains: group.domains,
+      hostnames: group.hostnames,
+      observedAt: group.observedAt,
+      wildcardObserved: group.wildcardObserved,
+    })),
+    certificateGroupsTruncated,
     truncated: legacyTruncated || matchTruncated || perMatchTruncated,
   };
 }
@@ -410,12 +483,12 @@ async function searchCertificateTransparency(keyword: unknown, dependencies: CtD
   const trimmed = normalizeCtQuery(keyword);
   if (!trimmed) {
     return {
-      domains: [], certCount: 0, truncated: false, matches: [],
+      domains: [], certCount: 0, truncated: false, matches: [], certificateGroups: [], certificateGroupsTruncated: false,
       observation: createObservation({
         status: 'success', observedAt: new Date().toISOString(), source: 'certificate_transparency',
         durationMs: Date.now() - startedAt, complete: true, truncated: false,
         limitations: ['Certificate Transparency observations indicate public certificate logging, not current site activity or maliciousness.'],
-        diagnostics: { certificateRows: 0, matches: 0 },
+        diagnostics: { certificateRows: 0, matches: 0, certificateGroups: 0 },
       }),
     };
   }
@@ -426,14 +499,17 @@ async function searchCertificateTransparency(keyword: unknown, dependencies: CtD
     certCount: data.length,
     ...summary,
     observation: createObservation({
-      status: summary.truncated ? 'partial' : 'success',
+      status: summary.truncated || summary.certificateGroupsTruncated ? 'partial' : 'success',
       observedAt: new Date().toISOString(),
       source: 'certificate_transparency',
       durationMs: Date.now() - startedAt,
-      complete: !summary.truncated,
-      truncated: summary.truncated,
-      limitations: ['Certificate Transparency observations indicate public certificate logging, not current site activity or maliciousness.'],
-      diagnostics: { certificateRows: data.length, matches: summary.matches.length },
+      complete: !summary.truncated && !summary.certificateGroupsTruncated,
+      truncated: summary.truncated || summary.certificateGroupsTruncated,
+      limitations: [
+        'Certificate Transparency observations indicate public certificate logging, not current site activity or maliciousness.',
+        ...(summary.certificateGroupsTruncated ? ['The optional certificate-group projection was capped independently of the registrable-domain result set.'] : []),
+      ],
+      diagnostics: { certificateRows: data.length, matches: summary.matches.length, certificateGroups: summary.certificateGroups.length, certificateGroupsTruncated: summary.certificateGroupsTruncated },
     }),
   };
 }

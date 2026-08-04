@@ -1,3 +1,5 @@
+import { createRequire } from 'node:module';
+
 import { projectCliLookupComparisonInput } from './compare.mts';
 import { parseSavedLookupDocument } from './saved-lookup.mts';
 import type { UnknownRecord } from './saved-lookup.mts';
@@ -7,9 +9,12 @@ type EvidenceModule = {
   LOOKUP_EVIDENCE_SCHEMA_VERSION: unknown;
   buildLookupEvidence: (
     source: UnknownRecord,
-    options: { generatedAt: string; idnAnalysis: null },
+    options: { generatedAt: string; idnAnalysis: null; applicationVersion: string },
   ) => unknown;
 };
+
+const require = createRequire(import.meta.url);
+const { version: APPLICATION_VERSION } = require('../package.json') as { version: string };
 
 function objectOrNull(value: unknown): UnknownRecord | null {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as UnknownRecord : null;
@@ -30,7 +35,11 @@ function buildCliEvidenceExport(
     throw new TypeError('Lookup evidence export dependency is required.');
   }
   const buildLookupEvidence = dependency.buildLookupEvidence as EvidenceModule['buildLookupEvidence'];
-  const result = objectOrNull(buildLookupEvidence(source, { generatedAt, idnAnalysis: null }));
+  const result = objectOrNull(buildLookupEvidence(source, {
+    generatedAt,
+    idnAnalysis: null,
+    applicationVersion: APPLICATION_VERSION,
+  }));
   if (!result
       || result.schema !== dependency.LOOKUP_EVIDENCE_SCHEMA
       || result.schemaVersion !== dependency.LOOKUP_EVIDENCE_SCHEMA_VERSION) {
@@ -43,5 +52,5 @@ function formatCliEvidenceExport(document: unknown, compact = false): string {
   return `${JSON.stringify(document, null, compact ? 0 : 2)}\n`;
 }
 
-export { buildCliEvidenceExport, formatCliEvidenceExport };
+export { APPLICATION_VERSION, buildCliEvidenceExport, formatCliEvidenceExport };
 export type { EvidenceModule };

@@ -6,7 +6,9 @@ import {
   MAX_RESPONSE_POLICY_HEADER_BYTES,
   MIN_RECOMMENDED_HSTS_SECONDS,
   RESPONSE_POLICY_VERSION,
+  analyzeCspMetaPolicies,
   analyzeResponsePolicyHeaders,
+  qualifyResponsePolicyWithCspMeta,
 } from '../lib/response-policy.mts';
 import type { ResponsePolicyHeaderReader } from '../lib/response-policy.mts';
 
@@ -67,6 +69,38 @@ describe('privacy-minimized response-policy analysis', () => {
     }));
     assert.equal(signalIds(result).includes('csp_unsafe_inline'), false);
     assert.doesNotMatch(JSON.stringify(result), /private/);
+  });
+
+  test('qualifies a response-header inline allowance only when an earlier bounded meta policy constrains it', () => {
+    const headerPolicy = analyzeResponsePolicyHeaders(headers({
+      'content-security-policy': "default-src 'self'; script-src 'self' 'unsafe-inline'",
+    }));
+    const meta = analyzeCspMetaPolicies([{
+      content: "default-src 'self'; script-src 'self' 'sha256-private-page-hash'",
+      beforeScript: true,
+    }]);
+    const qualified = qualifyResponsePolicyWithCspMeta(headerPolicy, meta);
+    assert.ok(qualified);
+    assert.equal(signalIds(qualified).includes('csp_unsafe_inline'), false);
+    assert.equal(signalIds(qualified).includes('csp_inline_constrained_by_meta'), true);
+    assert.deepEqual(qualified.diagnostics, {
+      signalCount: 2,
+      cookieCount: 0,
+      cookiesTruncated: false,
+      cspMetaPoliciesObserved: 1,
+      cspMetaPoliciesParsed: 1,
+      cspMetaPoliciesTruncated: false,
+    });
+    assert.doesNotMatch(JSON.stringify(qualified), /private-page-hash|sha256-/u);
+
+    const lateMeta = analyzeCspMetaPolicies([{
+      content: "script-src 'self'",
+      beforeScript: false,
+    }]);
+    const unqualified = qualifyResponsePolicyWithCspMeta(headerPolicy, lateMeta);
+    assert.ok(unqualified);
+    assert.equal(signalIds(unqualified).includes('csp_unsafe_inline'), true);
+    assert.equal(signalIds(unqualified).includes('csp_inline_constrained_by_meta'), false);
   });
 
   test('distinguishes disabled, short, and sufficiently long HSTS durations', () => {

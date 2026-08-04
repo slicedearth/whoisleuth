@@ -77,6 +77,9 @@ node bin/whoisleuth.mts lookup example.com --deep --json > lookup.json
 node bin/whoisleuth.mts compare lookup.json --json
 node bin/whoisleuth.mts page-compare official.json candidate.json --json
 node bin/whoisleuth.mts mail-review bulk.json --json
+node bin/whoisleuth.mts review-evidence dnssec-evidence.json --json
+node bin/whoisleuth.mts domain-control domain-control-input.json --json
+node bin/whoisleuth.mts workflow-plan domain-triage example.test --json
 node bin/whoisleuth.mts diff first-lookup.json second-lookup.json --json
 node bin/whoisleuth.mts timeline first-observation.json second-observation.json latest-observation.json --json
 node bin/whoisleuth.mts export lookup.json > evidence.json
@@ -181,7 +184,7 @@ Commands that query RDAP, WHOIS, DNS, HTTP, TLS, or Certificate Transparency do
 so directly from the machine running the CLI. They do not use the hosted login,
 hosted session, or deployment usage controls; upstream providers can see and
 rate-limit the local machine's network address. Offline `discover`, `compare`,
-`page-compare`, `mail-review`, `diff`, `timeline`, `risk-calibrate`, `verify-artifact`, `source-report`, `export`,
+`page-compare`, `mail-review`, `review-evidence`, `domain-control`, `workflow-plan`, `diff`, `timeline`, `risk-calibrate`, `verify-artifact`, `source-report`, `export`,
 `commands`, `completion`, and `manual` operations make no network requests. Commands write
 to stdout unless the analyst deliberately selects a local output file.
 
@@ -338,7 +341,7 @@ machine access is not evidence that a domain is unregistered or safe.
 This release supports `lookup`, `bulk`, `ct-search`, `discover`, `discover-scan`, `posture`,
 `http`, `tls`, `registry-support`, `risk-calibrate`, `verify-artifact`,
 `inspect-archive`, `sign-artifact`, `verify-signature`, `source-report`,
-`compare`, `page-compare`, `mail-review`, `diff`, `timeline`, `export`, `doctor`, `commands`, `completion`, and `manual`. Additional command families
+`compare`, `page-compare`, `mail-review`, `review-evidence`, `domain-control`, `workflow-plan`, `diff`, `timeline`, `export`, `doctor`, `commands`, `completion`, and `manual`. Additional command families
 are added as separate bounded increments rather than exposing incomplete
 aliases.
 
@@ -348,13 +351,13 @@ aliases.
 catalogue for one domain or suffix. It distinguishes an explicit
 fixture-backed or access-documented suffix profile from the generic IANA
 discovery profile and reports the RDAP and WHOIS discovery/access paths,
-WHOIS query and parser profiles, any bounded fallback, fixture scenarios,
+WHOIS query and parser profiles, fixture scenarios,
 verification references, documentation references, and the catalogue's
 limitation. The same document includes a dated, official-source aggregate of
 generic, generic-restricted, sponsored, and infrastructure RDAP coverage. That
 snapshot is separate from the suffix profile and from live reachability.
 
-Terminal output is bounded and control-safe. `--json` emits version 2 of the
+Terminal output is bounded and control-safe. `--json` emits version 3 of the
 `whoisleuth.cli.registry-support` schema. Unknown but syntactically valid
 suffixes retain the generic `discovery_only` profile; malformed input exits
 with code 2. The command never probes a registry or tests current reachability.
@@ -554,11 +557,15 @@ does not call the hosted WHOISleuth deployment. Quote a multi-word keyword so
 the shell passes it as one argument.
 
 Terminal output summarizes certificate rows, observed hostnames, canonical
-registrable-domain matches, observation times, and completeness. It shows at
-most 100 matches and five hostnames per match, with explicit omission notes.
-`--json` returns the complete bounded structured result in the versioned
-`whoisleuth.cli.ct-search` schema. CT observations do not prove that a website
-is active or malicious.
+registrable-domain matches, observation times, bounded certificate-issuance
+groups, and completeness. An issuance group contains names observed together
+in one public certificate record; a cross-domain group is a review lead, not
+an attribution or ownership finding. Terminal output shows at most 100 matches
+and five hostnames per match, with explicit omission notes. `--json` returns
+the complete bounded structured result in the versioned
+`whoisleuth.cli.ct-search` schema. The certificate-group cap is reported
+separately from the registrable-domain result cap. CT observations do not prove
+that a website is active or malicious.
 
 ## Lookalike discovery
 
@@ -790,6 +797,92 @@ observed MX hostname and do not establish shared ownership or control.
 The command makes no DNS or SMTP request and retains no source path. It does
 not test message acceptance, relay behavior, mailbox existence, catch-all
 behavior, SMTP banners, or whether a mail server is rogue, safe, or malicious.
+
+An analyst may add a bounded `tlsaEvidence` object to a version-2 Bulk item for
+offline DANE review. It must name the exact `_25._tcp.<mx-host>` service, and
+that host must occur in the same item's retained MX evidence. A certificate
+association match is complete only when `dnssecState` is `validated`. TLSA
+usages 0 and 1 additionally require `pkixValidationState: "validated"`.
+Usages 0 and 2 compare against the bounded `authorityMaterials` array; usages
+1 and 3 compare against the supplied leaf certificate or SPKI. Mismatched
+service names, missing certificate roles, unvalidated prerequisites, malformed
+material, and truncation remain invalid, partial, or untrusted rather than
+becoming a DANE match.
+
+## Offline supplied-evidence review
+
+`review-evidence [evidence.json]` accepts one version-1 JSON input and performs
+only deterministic local parsing, comparison, or request planning. Input is
+capped at 16 MiB. The command never retrieves DNS, opens SMTP, contacts an
+RDAP server, submits a resolver query, or looks up an address in a hosted
+GeoIP service.
+
+Supported input schemas are:
+
+- `whoisleuth.dnssec-evidence-input`: compares bounded DS and DNSKEY records,
+  recalculates DNSKEY key tags and supported DS digests, and reviews supplied
+  RRSIG validity windows at `observedAt`. `consistent` describes only the
+  supplied DS/DNSKEY relationship. It does not authenticate a chain to a root
+  trust anchor, validate RRSIG cryptography, or prove that a missing record is
+  absent.
+- `whoisleuth.tlsa-evidence-input`: binds TLSA records to one explicit
+  `_port._transport.hostname` service and compares supplied leaf or authority
+  certificate/SPKI bytes. `matched` requires independently validated DNSSEC;
+  PKIX-TA and PKIX-EE usages also require an independently validated PKIX path.
+  The command does not retrieve the certificate or negotiate STARTTLS.
+- `whoisleuth.rdap-search-input`: normalizes a supplied RDAP search-help
+  response and prepares an exact supported reverse-search request without
+  sending it.
+- `whoisleuth.rpki-route-input`: compares a route prefix and origin ASN with a
+  bounded analyst-supplied VRP set.
+- `whoisleuth.local-geoip-query`: queries an analyst-supplied bounded prefix
+  database whose source, version, and licence metadata remain in the result.
+- `whoisleuth.encrypted-dns-plan-input`: validates an explicitly reviewed
+  encrypted-DNS provider contract and prepares a bounded query plan. It does
+  not execute the plan.
+
+The common output is `whoisleuth.cli.offline-evidence-review` version 1. It
+retains the nested result's explicit state and limitations. A locally
+consistent relationship is not converted into a claim about current
+publication, ownership, safety, or maliciousness.
+
+## Domain control manifests
+
+`domain-control [input.json]` builds or reviews a bounded desired-state
+manifest without making a request or changing configuration. A manifest input
+uses `whoisleuth.domain-control-manifest-input` version 1, includes an expiry,
+and may record expected nameservers, DS, MX, CAA, TLS issuer, TLS SPKI
+fingerprint, registrar-lock preference, and a renewal-review date for up to 100
+domains. Empty fields mean unconfigured; they do not require a record to be
+absent.
+
+The emitted `whoisleuth.domain-control-manifest` version 1 is normalized and
+protected by a canonical SHA-256 digest. It can also be passed to
+`sign-artifact` for an optional local Ed25519 signature. Integrity and
+signature verification detect changes and authenticate possession of the
+selected key; neither establishes that the desired state is correct.
+
+A review input uses `whoisleuth.domain-control-review-input` version 1 and
+contains one manifest plus separately attributed observations. Only a complete
+`observed` field may produce `drift`. Partial, unavailable, unsupported, and
+missing observations remain inconclusive, and unrelated observations are
+counted but ignored. The review performs no DNS, RDAP, HTTP, TLS, SMTP, or
+registrar request.
+
+## Fixed investigation plans
+
+`workflow-plan <recipe> <domain|brand>` turns one of four fixed recipes into a
+versioned `whoisleuth.cli.investigation-plan` document. Supported recipes are
+`domain-triage`, `lookalike-review`, `owned-domain-review`, and
+`historical-comparison`. Each step names an existing CLI command, carries its
+arguments as a JSON array, declares whether it is offline or networked, and
+marks network-disclosure or analyst-selection approval gates.
+
+The command is plan-only. It does not execute a step, construct a shell script,
+interpret a placeholder as a file path, read an artifact, make a request,
+change a case, or submit evidence. Analysts deliberately run selected commands
+after reviewing their collection boundaries. This provides repeatable
+domain-specific workflows without an arbitrary automation or plugin surface.
 
 ## Optional local rendered capture
 

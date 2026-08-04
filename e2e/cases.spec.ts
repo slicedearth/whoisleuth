@@ -558,11 +558,12 @@ test('external findings require a validated preview before creating local eviden
   await externalImport.getByText('Import bounded external findings', { exact: true }).click();
   const payload = JSON.stringify({
     schema: 'whoisleuth.external-findings',
-    schemaVersion: 1,
+    schemaVersion: 2,
     source: { name: 'Local analyst export', reference: 'offline review' },
     findings: [{
       domain: 'external-review.invalid',
       category: 'page',
+      evidenceClass: 'provider_report',
       summary: 'A credential form was reported in a retained external observation.',
       observedAt: '2026-07-28T01:00:00.000Z',
       completeness: 'partial',
@@ -575,13 +576,15 @@ test('external findings require a validated preview before creating local eviden
   await externalImport.locator('input[type="file"]').setInputFiles(file);
   await expect(externalImport.getByRole('heading', { name: 'Local analyst export' })).toBeVisible();
   await expect(externalImport).toContainText('1 finding · 1 domain');
+  await expect(externalImport).toContainText('page · provider report · partial');
   await expect(page.locator('.case-head', { hasText: 'external-review.invalid' })).toHaveCount(0);
 
   await externalImport.getByRole('button', { name: 'Import into cases' }).click();
   await expect(page.locator('.case-head', { hasText: 'external-review.invalid' })).toBeVisible();
   await page.locator('.case-head', { hasText: 'external-review.invalid' }).click();
   await expect(page.locator('.response-workspace')).toContainText('External page finding');
-  await expect(page.locator('.response-workspace')).toContainText('WHOISleuth did not collect or independently verify this finding');
+  await expect(page.locator('.response-workspace')).toContainText('Provider report: Local analyst export');
+  await expect(page.locator('.response-workspace')).toContainText('WHOISleuth did not collect or independently verify this provider finding');
 
   await externalImport.locator('input[type="file"]').setInputFiles(file);
   await externalImport.getByRole('button', { name: 'Import into cases' }).click();

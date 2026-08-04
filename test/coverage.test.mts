@@ -37,6 +37,12 @@ describe('defensive-registration coverage', () => {
     assert.equal(dictionary.protected, 1);
     assert.equal(dictionary.unknown, 1);
     assert.equal(requiredValue(report.tldGroups.find((group) => group.key === 'net')).total, 2);
+    assert.deepEqual(report.plan.map((row) => [row.domain, row.priority, row.action]), [
+      ['open.com', 'P1', 'review_acquisition'],
+      ['unknown.net', 'P1', 'resolve_evidence'],
+      ['taken.com', 'P2', 'investigate_registration'],
+      ['owned.net', 'P3', 'verify_protection'],
+    ]);
   });
 
   test('does not add unscanned, unprotected generated domains to a report', () => {

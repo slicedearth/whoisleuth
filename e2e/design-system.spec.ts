@@ -535,6 +535,12 @@ test('a data-heavy Lookup result groups evidence into navigable sections', async
   await expect(coverage).toContainText('WHOIS');
   await expect(coverage).toContainText('DNS');
   await expect(coverage).toContainText('Missing, failed, stale, unsupported, and not-found evidence remains distinct');
+  await coverage.getByText(/Freshness policy/u).click();
+  await coverage.getByLabel('Policy').selectOption('analyst-custom');
+  await coverage.getByLabel('Registration days').fill('10');
+  await coverage.getByLabel('Registration days').blur();
+  await expect(coverage).toContainText('Freshness policy · analyst-defined');
+  await expect(coverage).toContainText('Thresholds organise review');
 
   const registrationFact = page.locator('.summaries article').filter({ hasText: 'Registration' }).first();
   await registrationFact.getByText('Inspect evidence').click();
@@ -676,7 +682,8 @@ test('Lookup task and density controls change presentation without changing evid
   await expect(task).toHaveValue('general');
   await expect(density).toHaveValue('standard');
   await expect(page.getByRole('heading', { name: 'Raw evidence' })).toBeVisible();
-  await expect(page.locator('#raw-data details')).toBeHidden();
+  await expect(page.locator('#raw-data details')).toBeVisible();
+  await expect(page.locator('#raw-data details')).toHaveJSProperty('open', false);
 
   await density.selectOption('full');
   await expect(page.locator('#raw-data details')).toBeVisible();

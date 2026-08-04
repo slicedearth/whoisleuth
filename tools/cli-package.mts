@@ -9,6 +9,11 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
+import {
+  WHOISLEUTH_PROJECT_URL,
+  WHOISLEUTH_SOURCE_ISSUES_URL,
+  WHOISLEUTH_SOURCE_REPOSITORY_GIT_URL,
+} from '../lib/project-metadata.mts';
 import { normalizeSemanticVersion } from './release-version-check.mts';
 
 type JsonRecord = Record<string, unknown>;
@@ -86,6 +91,8 @@ const INSTALLED_COMMAND_HELP_CHECKS = Object.freeze([
   'compare',
   'page-compare',
   'mail-review',
+  'domain-control',
+  'workflow-plan',
   'diff',
   'timeline',
   'export',
@@ -180,6 +187,8 @@ export function buildCliPackageManifest(
   const packageName = boundedString(templateManifest.name, 'CLI package name', 128);
   const packageVersion = normalizeSemanticVersion(rootManifest.version);
   const contentPolicy = record(templateManifest.contentPolicy, 'CLI package content policy');
+  const repository = record(templateManifest.repository, 'CLI package repository');
+  const bugs = record(templateManifest.bugs, 'CLI package issue tracker');
 
   if (!packageName.startsWith('@') || !packageName.includes('/')) {
     throw new TypeError('CLI package name must remain scoped.');
@@ -197,6 +206,14 @@ export function buildCliPackageManifest(
   }
   if (contentPolicy.class !== 'dual-use' || Object.keys(contentPolicy).length !== 1) {
     throw new TypeError('CLI package content policy must declare only the dual-use class.');
+  }
+  if (
+    repository.type !== 'git'
+    || repository.url !== WHOISLEUTH_SOURCE_REPOSITORY_GIT_URL
+    || templateManifest.homepage !== WHOISLEUTH_PROJECT_URL
+    || bugs.url !== WHOISLEUTH_SOURCE_ISSUES_URL
+  ) {
+    throw new TypeError('CLI package public links must match the shared project metadata.');
   }
 
   if (lockfile.lockfileVersion !== 3) throw new TypeError('Root package lockfile must use lockfile version 3.');
@@ -316,6 +333,7 @@ async function compilePackageSources(repositoryRoot: string, temporaryRoot: stri
       target: 'ES2022',
       module: 'NodeNext',
       moduleResolution: 'NodeNext',
+      resolveJsonModule: true,
       rootDir: repositoryRoot,
       outDir: stagingRoot,
       allowImportingTsExtensions: true,

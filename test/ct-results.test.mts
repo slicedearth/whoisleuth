@@ -46,12 +46,52 @@ describe('structured response', () => {
     assert.equal(result.certCount, 42);
     assert.equal(result.truncated, false);
     assert.equal(result.candidates.length, 1);
+    assert.deepStrictEqual(result.certificateGroups, []);
+    assert.equal(result.certificateGroupsTruncated, false);
     const candidate = firstCandidate(result);
     assert.equal(candidate.domain, 'example.com');
     assert.equal(candidate.source, 'example');
     assert.deepStrictEqual(candidate.mutationTypes, ['certificate_transparency']);
     assert.deepStrictEqual(requiredValue(candidate.certificateTransparency).hostnames, ['a.example.com']);
     assert.equal(requiredValue(candidate.certificateTransparency).certificateCount, 3);
+  });
+
+  test('normalizes bounded certificate issuance groups', () => {
+    const result = normalizeCtResponse({
+      matches: [match()],
+      certificateGroups: [{
+        certificateKey: 'id:42',
+        domains: ['example.com', 'example.net', 'bad host'],
+        hostnames: ['login.example.com', 'www.example.net'],
+        observedAt: '2026-06-02T00:00:00Z',
+        wildcardObserved: true,
+        ignored: 'value',
+      }],
+    }, 'src');
+    assert.deepStrictEqual(result.certificateGroups, [{
+      certificateKey: 'id:42',
+      domains: ['example.com', 'example.net'],
+      hostnames: ['login.example.com', 'www.example.net'],
+      observedAt: '2026-06-02T00:00:00.000Z',
+      wildcardObserved: true,
+    }]);
+  });
+
+  test('drops malformed and duplicate certificate groups and reports bounded truncation', () => {
+    const many = Array.from({ length: bounds.MAX_CT_GROUP_INPUT_ITEMS + 1 }, (_, index) => ({
+      certificateKey: `id:${index + 1}`,
+      domains: [`d${index}.example`],
+      hostnames: [`d${index}.example`],
+    }));
+    const result = normalizeCtResponse({ matches: [match()], certificateGroups: many }, 'src');
+    assert.equal(result.certificateGroups.length, bounds.MAX_CT_CERTIFICATE_GROUPS);
+    assert.equal(result.certificateGroupsTruncated, true);
+    assert.equal(result.truncated, false);
+    const malformed = normalizeCtResponse({
+      matches: [match()],
+      certificateGroups: [{ certificateKey: 'bad key', domains: ['example.com'] }],
+    }, 'src');
+    assert.deepStrictEqual(malformed.certificateGroups, []);
   });
 
   test('one candidate per canonical domain (merge across duplicate matches)', () => {

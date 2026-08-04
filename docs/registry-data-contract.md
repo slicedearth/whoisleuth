@@ -688,20 +688,27 @@ remain distinct from proof that no site exists.
 
 Selected security headers are observations only. Deep full Lookup transiently
 interprets bounded Content-Security-Policy, Strict-Transport-Security,
-Referrer-Policy, and Set-Cookie attributes from that same selected response.
-It retains only fixed policy finding identifiers, bounded cookie counts,
-component health, and limitations. Complete policies, cookie names and values,
-paths, domains, nonces, hashes, and reporting endpoints are discarded. Header
-absence and policy findings are not maliciousness or vulnerability verdicts
-and do not contribute to Risk scoring. A response can still establish
-web-service activity when its body is unavailable for HTML inspection.
+Referrer-Policy, and Set-Cookie attributes from that same selected response. It
+can also reduce a CSP meta policy from the already-captured homepage to fixed
+qualification metadata. The page policy qualifies an inline-script header
+finding only when it is fully parsed inside the explicit document head before
+any script; later, malformed, or capped policies remain non-authoritative. It
+retains only fixed policy finding identifiers, bounded policy and cookie counts,
+component health, and limitations. Complete response or meta policies, cookie
+names and values, paths, domains, nonces, hashes, and reporting endpoints are
+discarded. Header absence and policy findings are not maliciousness or
+vulnerability verdicts and do not contribute to Risk scoring. A response can
+still establish web-service activity when its body is unavailable for HTML
+inspection.
 
 ## Evidence export and privacy boundary
 
-Lookup evidence uses schema `whoisleuth.lookup-evidence`, version `23`. It
+Lookup evidence uses schema `whoisleuth.lookup-evidence`, version `24`. It
 contains query context, diagnostics, normalized sources, raw RDAP data, the raw
 WHOIS referral chain, availability analysis, and the source-health-aware
-registry comparison. Version 23 can add an exact local SSLBL leaf-certificate
+registry comparison. Version 24 adds bounded generator metadata containing the
+WHOISleuth version and stable project URL. The metadata is produced locally and
+does not add analytics, remote assets, or another request. Version 23 can add an exact local SSLBL leaf-certificate
 comparison from an eligible deep non-compact domain Lookup. It retains the
 observed SHA-1 provider identifier, snapshot age and digest, exact verdict,
 source health, and limitations. It does not make another request, affect
@@ -774,7 +781,7 @@ network registration and bounded reverse-DNS context when collected. ASN
 reports present normalized routing registration fields without inventing
 reverse-DNS evidence. The separate JSON action retains the richer schema
 contract described above.
-When schema-version 17 through 23 JSON retains a supported version-5, version-6, or version-7
+When schema-version 17 through 24 JSON retains a supported version-5, version-6, or version-7
 `diagnostics.registryAccess` object, both readable formats include its bounded
 suffix, WHOIS and RDAP access profiles, and limitation in collection
 diagnostics. This remains collection context only and cannot decide
@@ -782,7 +789,7 @@ registration, availability, ownership, safety, or maliciousness. The readable
 formats also include the bounded observed network registration and its
 origin-host limitation when that source is present.
 
-Schema versions 17 through 23 can also retain the bounded normalized security.txt source
+Schema versions 17 through 24 can also retain the bounded normalized security.txt source
 from an explicitly requested deep Lookup. It excludes the response body and
 does not make publication an authorization, availability, or Risk signal.
 

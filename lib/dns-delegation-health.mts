@@ -21,6 +21,7 @@ type ParentNameserverQuery = {
 type AuthorityQueryResult = {
   nameservers: unknown[];
   soaPrimary: unknown;
+  soa?: unknown;
   errorCode: unknown;
   error: unknown;
 };
@@ -47,6 +48,7 @@ const MAX_NAMESERVERS = 16;
 const MAX_ERROR_LENGTH = 180;
 const DNS_DELEGATION_TIMEOUT_MS = 2200;
 const LAME_CODES = new Set(['ENOTAUTH', 'EREFUSED']);
+const MAX_SOA_VALUE = 0xffff_ffff;
 
 function record(value: unknown): UnknownRecord {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -96,6 +98,30 @@ function errorDetail(error: unknown): string {
     .slice(0, MAX_ERROR_LENGTH) || 'DNS query failed';
 }
 
+function soaProjection(value: unknown) {
+  const source = record(value);
+  const nsname = hostname(source.nsname);
+  const hostmaster = hostname(source.hostmaster);
+  const number = (field: unknown): number | null => (
+    typeof field === 'number'
+    && Number.isSafeInteger(field)
+    && field >= 0
+    && field <= MAX_SOA_VALUE
+      ? field
+      : null
+  );
+  const projection = {
+    nsname,
+    hostmaster,
+    serial: number(source.serial),
+    refresh: number(source.refresh),
+    retry: number(source.retry),
+    expire: number(source.expire),
+    minttl: number(source.minttl),
+  };
+  return Object.values(projection).every((field) => field === null) ? null : projection;
+}
+
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(Object.assign(new Error('DNS query timed out'), { code: 'ETIMEOUT' })), timeoutMs);
@@ -132,16 +158,20 @@ async function defaultAuthorityQuery(input: {
       ? soa.reason
       : null;
   if (reason !== null) {
+    const soaValue = soa.status === 'fulfilled' ? soaProjection(soa.value) : null;
     return {
       nameservers: nameservers.status === 'fulfilled' ? nameservers.value : [],
-      soaPrimary: soa.status === 'fulfilled' ? soa.value.nsname : null,
+      soaPrimary: soaValue?.nsname ?? null,
+      soa: soaValue,
       errorCode: errorCode(reason),
       error: errorDetail(reason),
     };
   }
+  const soaValue = soa.status === 'fulfilled' ? soaProjection(soa.value) : null;
   return {
     nameservers: nameservers.status === 'fulfilled' ? nameservers.value : [],
-    soaPrimary: soa.status === 'fulfilled' ? soa.value.nsname : null,
+    soaPrimary: soaValue?.nsname ?? null,
+    soa: soaValue,
     errorCode: null,
     error: null,
   };
@@ -266,8 +296,10 @@ async function collectDnsDelegationHealth(
         const code = boundedText(query.errorCode, 40);
         const error = boundedText(query.error, MAX_ERROR_LENGTH);
         const nameservers = hostnames(query.nameservers);
-        const soaPrimary = hostname(query.soaPrimary);
-        const hasAnswer = nameservers.length > 0 || soaPrimary !== null;
+        const soa = soaProjection(query.soa)
+          ?? soaProjection({ nsname: query.soaPrimary });
+        const soaPrimary = soa?.nsname ?? hostname(query.soaPrimary);
+        const hasAnswer = nameservers.length > 0 || soaPrimary !== null || soa !== null;
         const state = error && hasAnswer
           ? 'partial' as const
           : code && LAME_CODES.has(code)
@@ -275,7 +307,7 @@ async function collectDnsDelegationHealth(
             : error || !hasAnswer
               ? 'unreachable' as const
               : 'success' as const;
-        return { address, state, nameservers, soaPrimary, errorCode: code, error };
+        return { address, state, nameservers, soaPrimary, soa, errorCode: code, error };
       } catch (error) {
         const code = errorCode(error);
         return {
@@ -283,6 +315,7 @@ async function collectDnsDelegationHealth(
           state: LAME_CODES.has(code) ? 'lame' as const : 'unreachable' as const,
           nameservers: [],
           soaPrimary: null,
+          soa: null,
           errorCode: code || null,
           error: errorDetail(error),
         };
@@ -304,6 +337,7 @@ async function collectDnsDelegationHealth(
             : 'unreachable' as const,
       nameservers: retained?.nameservers ?? [],
       soaPrimary: retained?.soaPrimary ?? null,
+      soa: retained?.soa ?? null,
       attempts,
     };
   }));
@@ -317,6 +351,18 @@ async function collectDnsDelegationHealth(
     !sameSet(set, authoritySets[0] ?? [])
     || (parentNameservers.length > 0 && !sameSet(set, parentNameservers))
   ));
+  const retainedSoa = authorities
+    .filter((authority) => authority.state === 'success' || authority.state === 'partial')
+    .map((authority) => ({ nameserver: authority.nameserver, soa: authority.soa }))
+    .filter((entry): entry is { nameserver: string; soa: NonNullable<typeof entry.soa> } => entry.soa !== null);
+  const soaSerials = [...new Set(retainedSoa
+    .map((entry) => entry.soa.serial)
+    .filter((serial): serial is number => serial !== null))];
+  const soaPrimaries = [...new Set(retainedSoa
+    .map((entry) => entry.soa.nsname)
+    .filter((primary): primary is string => primary !== null))];
+  const soaSerialConflict = soaSerials.length > 1;
+  const soaPrimaryConflict = soaPrimaries.length > 1;
   const inBailiwick = candidates.filter((nameserver) => (
     nameserver === domain || nameserver.endsWith(`.${domain}`)
   ));
@@ -374,6 +420,24 @@ async function collectDnsDelegationHealth(
           : 'Direct nameserver answers agree with the observed parent view',
       successfulAuthorities.map((authority) => `${authority.nameserver}: ${authority.nameservers.join(', ') || 'no NS answer'}`).join(' | ') || 'No direct answers.',
       'Align the NS set served by every authority with the intended parent delegation before cutover.',
+    ),
+    finding(
+      'authority_soa_consistency',
+      'Authoritative SOA consistency',
+      retainedSoa.length < 2 || soaSerials.length < 1 || soaPrimaries.length < 1
+        ? 'unknown'
+        : soaSerialConflict || soaPrimaryConflict ? 'warning' : 'healthy',
+      retainedSoa.length < 2
+        ? 'Fewer than two authority SOA observations were available'
+        : soaSerialConflict
+          ? 'Authoritative servers published different SOA serials'
+          : soaPrimaryConflict
+            ? 'Authoritative servers published different SOA primary nameservers'
+            : 'Observed authority SOA serials and primary nameservers agree',
+      retainedSoa.map((entry) => (
+        `${entry.nameserver}: serial ${entry.soa.serial ?? 'unavailable'}, primary ${entry.soa.nsname ?? 'unavailable'}, refresh ${entry.soa.refresh ?? 'unavailable'}, retry ${entry.soa.retry ?? 'unavailable'}, expire ${entry.soa.expire ?? 'unavailable'}`
+      )).join(' | ') || 'No complete SOA observation was available.',
+      'Confirm zone propagation and the intended SOA primary before relying on a DNS change or secondary-server state.',
     ),
     finding(
       'in_bailiwick_glue',

@@ -13,6 +13,7 @@ import { promises as dns } from 'node:dns';
 import { fetchRdapRecord } from './rdap.mts';
 import { buildWhoisChain, parseWhoisChain } from './whois.mts';
 import { safeFetchDetailed, readTextCapped } from './safe-fetch.mts';
+import { whoisleuthRequestHeaders } from './outbound-identity.mts';
 import { collectDnsIntelligence, skippedDnsIntelligence } from './dns-intelligence.mts';
 import type { DnsResolver } from './dns-intelligence.mts';
 import { fetchFaviconHash } from './favicon.mts';
@@ -22,11 +23,18 @@ import { buildHttpObservation, failedHttpObservation, skippedHttpObservation } f
 import { collectTlsIntelligence, skippedTlsObservation } from './tls-intelligence.mts';
 import { parseRegistryDate, registryDateIso } from './registry-dates.mts';
 import { analyzeWebsiteSecurityPosture } from './website-security-posture.mts';
-import { analyzeResponsePolicyHeaders } from './response-policy.mts';
+import {
+  analyzeResponsePolicyHeaders,
+  qualifyResponsePolicyWithCspMeta,
+} from './response-policy.mts';
 import type { ResponsePolicyAnalysis } from './response-policy.mts';
 import { nonEmptyErrorMessage } from './error-detail.mts';
+import { registryServiceAdmissionFor } from './registry-capabilities.mts';
+import {
+  HOMEPAGE_FETCH_TIMEOUT_MS,
+  MAX_HOMEPAGE_BYTES,
+} from './outbound-request-bounds.mts';
 
-const MAX_HOMEPAGE_BYTES = 300000;
 const DNS_DELEGATION_TIMEOUT_MS = 4000;
 const MAX_DELEGATION_NAMESERVERS = 50;
 const MISSING_DNS_CODES = new Set(['ENODATA', 'ENOTFOUND', 'ENONAME', 'NXDOMAIN']);
@@ -280,14 +288,14 @@ async function checkDnsDelegation(domain: string, { resolver = dns.resolveNs }: 
 // an HTTP error can all produce the same null body. Keeping that distinction
 // avoids turning an inconclusive probe into a false inactivity claim.
 async function fetchHomepage(domain: string, { fetcher = safeFetchDetailed as HomepageFetcher }: { fetcher?: HomepageFetcher } = {}): Promise<HomepageResult> {
-  const headers = { 'User-Agent': 'Mozilla/5.0 (compatible; DomainStatusChecker/1.0)' };
+  const headers = whoisleuthRequestHeaders();
   const failures: HomepageFailure[] = [];
   const probeStartedAt = Date.now();
   for (const scheme of ['https', 'http']) {
     const requestUrl = `${scheme}://${domain}`;
     const attemptStartedAt = Date.now();
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 6000);
+    const timeout = setTimeout(() => controller.abort(), HOMEPAGE_FETCH_TIMEOUT_MS);
     try {
       const fetched = await fetcher(requestUrl, { signal: controller.signal, headers });
       const fetchedResponse = fetched instanceof Response ? fetched : fetched.response;
@@ -378,6 +386,21 @@ function deriveWebsiteActivity(homepageStatus: string, hasFavicon: boolean, alre
   if (alreadyParked) return 'parked';
   if (homepageStatus === 'fetched' || homepageStatus === 'responded' || hasFavicon) return 'active';
   return 'unreachable';
+}
+
+function registryPolicyDetail(domain: string, fast: boolean): string {
+  const details: string[] = [];
+  const rdapAdmission = registryServiceAdmissionFor(domain, 'rdap');
+  if (rdapAdmission && !rdapAdmission.allowed) {
+    details.push('RDAP was not queried because the registry capability profile records no IANA-published RDAP service for this suffix.');
+  }
+  const whoisAdmission = fast ? null : registryServiceAdmissionFor(domain, 'whois');
+  if (whoisAdmission && !whoisAdmission.allowed) {
+    details.push(whoisAdmission.state === 'permission_required'
+      ? 'WHOIS was not queried because registry permission or source authorization is required.'
+      : 'WHOIS was not queried because IANA publishes no domain WHOIS service for this suffix.');
+  }
+  return details.length ? ` ${details.join(' ')}` : '';
 }
 
 // fast: true skips the WHOIS fallback (no TCP:43 chain) and the homepage
@@ -578,14 +601,15 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
     const disabledDetail = disabledSources.length
       ? ` ${disabledSources.join(', ')} ${disabledSources.length === 1 ? 'is' : 'are'} disabled by deployment policy.`
       : '';
+    const policyDetail = registryPolicyDetail(domain, fast);
     return {
       state: 'unknown',
       confidence: 'low',
       detail: fast
-        ? `No enabled registration source produced a record or authoritative delegation. A fast scan cannot determine registration status.${disabledDetail}`
+        ? `No enabled registration source produced a record or authoritative delegation. A fast scan cannot determine registration status.${disabledDetail}${policyDetail}`
         : whoisParsed && whoisParsed.failedHop
-        ? `WHOIS was inconclusive - a referral hop did not answer conclusively (${whoisParsed.failedHop}).`
-        : `No enabled registration source returned conclusive data or an authoritative DNS delegation.${disabledDetail}`,
+        ? `WHOIS was inconclusive - a referral hop did not answer conclusively (${whoisParsed.failedHop}).${policyDetail}`
+        : `No enabled registration source returned conclusive data or an authoritative DNS delegation.${disabledDetail}${policyDetail}`,
       ...(!fast && whoisEnabled ? { source: 'whois' } : {}),
     };
   }
@@ -692,6 +716,7 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
     phishingLanguageMatch: null,
     hasExternalFormAction: null,
     externalAssetHosts: [],
+    cspMetaPolicy: null,
     pageIdentity: null,
     credentialSurfaceProfile: null,
     structuredDataIdentity: null,
@@ -733,9 +758,11 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
     }
   }
 
+  const responsePolicy = qualifyResponsePolicyWithCspMeta(homepage.responsePolicy, htmlSignals.cspMetaPolicy);
+  const { cspMetaPolicy: _cspMetaPolicy, ...retainedHtmlSignals } = htmlSignals;
   const securityPosture = options.includeSecurityPosture === false ? null : analyzeWebsiteSecurityPosture({
     http: homepage.http,
-    responsePolicy: homepage.responsePolicy,
+    responsePolicy,
     pageIdentity: htmlSignals.pageIdentity,
     tls: tlsIntelligence,
     dns: dnsIntelligence,
@@ -772,7 +799,7 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
       deepScanComplete,
       faviconHash,
       faviconPHash,
-      ...htmlSignals,
+      ...retainedHtmlSignals,
       securityPosture,
       ...baseInfo,
       nameservers: nameservers.length ? nameservers : dnsIntelligence.records.ns,
@@ -797,7 +824,7 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
     deepScanComplete,
     faviconHash,
     faviconPHash,
-    ...htmlSignals,
+    ...retainedHtmlSignals,
     securityPosture,
     ...baseInfo,
     nameservers: nameservers.length ? nameservers : dnsIntelligence.records.ns,

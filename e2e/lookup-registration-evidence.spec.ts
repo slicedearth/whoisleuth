@@ -1,8 +1,11 @@
 import { expect, test } from './fixtures';
 import { boundingBox, expectNoHorizontalOverflow, migrateLegacyBrowserData, readBrowserLocalCollection } from './helpers';
+import { readFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { TEST_SITE_PASSWORD } from './constants';
 import { ACTIVE_PROFILE_KEY } from '../frontend/src/lib/brand-profiles';
+
+const packageVersion = (JSON.parse(readFileSync('package.json', 'utf8')) as { version: string }).version;
 
 // Every value here is deliberately dotless (no TLD), so classifyQuery on the
 // server rejects it with a 400 before any RDAP/WHOIS/DNS call - these tests
@@ -81,10 +84,31 @@ test('bounded RDAP contact roles and repeated channels render in Lookup', async 
   await expect(page.getByText('Phone: +61 1, +61 2')).toBeVisible();
   await expect(page.getByText('Email: abuse@example.com')).toBeVisible();
   await expect(page.getByText(/attempts: rate limited → success/)).toBeVisible();
+  const capsule = page.locator('details.capsule');
+  await expect(capsule.getByText('Portable investigation capsule')).toBeVisible();
+  await capsule.locator(':scope > summary').click();
+  await expect(capsule.getByRole('button', { name: 'Download capsule' })).toBeEnabled();
+  await expect(capsule.getByRole('checkbox')).toBeDisabled();
   const comparison = page.locator('.comparison');
   await expect(comparison.getByText(/0 source-only · 0 redacted · 4 unavailable\/incomplete/)).toBeVisible();
   await comparison.locator('summary').click();
   await expect(comparison.getByText('WHOIS incomplete').first()).toBeVisible();
+
+  const disclosurePlanner = page.locator('details.disclosure-planner');
+  await expect(disclosurePlanner).not.toHaveAttribute('open', '');
+  await disclosurePlanner.locator(':scope > summary').click();
+  await expect(disclosurePlanner.getByText(/1 structured redaction declaration observed/)).toBeVisible();
+  await expect(disclosurePlanner.getByRole('button', { name: 'Export review packet' })).toBeDisabled();
+  await disclosurePlanner.getByLabel('Request purpose').selectOption('cybersecurity-investigation');
+  await disclosurePlanner.getByLabel('Analyst justification').fill('The selected contact is necessary to review a documented domain impersonation incident.');
+  await disclosurePlanner.getByLabel('Registrant email').check();
+  await disclosurePlanner.getByLabel(/Available public registration evidence/).check();
+  await disclosurePlanner.getByLabel(/Every requested field is necessary/).check();
+  await disclosurePlanner.getByLabel(/Privacy and rights impacts/).check();
+  await disclosurePlanner.getByLabel(/Current service eligibility/).check();
+  await expect(disclosurePlanner.getByText('review cautions')).toBeVisible();
+  await expect(disclosurePlanner.getByRole('button', { name: 'Export review packet' })).toBeEnabled();
+  await expect(disclosurePlanner.getByRole('link', { name: 'Review current service information' })).toHaveAttribute('href', 'https://www.icann.org/rdrs-en/');
 
   await page.setViewportSize({ width: 390, height: 844 });
   await expectNoHorizontalOverflow(page);
@@ -174,7 +198,7 @@ test('deep Lookup presents registrar and observed network RDAP as separate sourc
   await page.getByRole('button', { name: 'Run lookup' }).click();
 
   const evidenceQuality = page.locator('#evidence-quality');
-  await evidenceQuality.locator('summary').click();
+  await evidenceQuality.locator(':scope > details').first().locator(':scope > summary').click();
   await expect(evidenceQuality).not.toContainText('Observation time unavailable');
 
   const agreementMatrix = page.locator('.agreement-matrix');
@@ -260,7 +284,12 @@ test('deep Lookup presents registrar and observed network RDAP as separate sourc
   const downloadPath = await download.path();
   expect(downloadPath).not.toBeNull();
   const exported = JSON.parse(await readFile(downloadPath!, 'utf8'));
-  expect(exported.schemaVersion).toBe(23);
+  expect(exported.schemaVersion).toBe(24);
+  expect(exported.application).toEqual({
+    name: 'WHOISleuth',
+    version: packageVersion,
+    projectUrl: 'https://github.com/slicedearth/whoisleuth',
+  });
   expect(exported.analysis.registrarPublicationComparison.counts.conflict).toBe(1);
   expect(exported.analysis.registrarPublicationComparison.counts.equivalent).toBe(7);
   expect(exported.sources.network.endpoint.address).toBe('93.184.216.34');

@@ -47,7 +47,7 @@ test('the scan button only takes the high-contrast primary treatment once ready'
 test('offers bounded request pacing and preserves the operator choice during console navigation', async ({ page }) => {
   const pacing = page.getByLabel('Request pacing');
   await expect(pacing).toHaveValue('standard');
-  await expect(page.locator('.mode-help')).toContainText('at most 12 lookups run in parallel');
+  await expect(page.locator('.mode-help')).toContainText('at most 8 lookups run in parallel');
 
   await pacing.selectOption('gentle');
   await expect(page.locator('.mode-help')).toContainText('at most 2 lookups run in parallel');

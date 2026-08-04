@@ -6,6 +6,11 @@
     PUBLIC_RESOURCES,
     type PublicResource,
   } from '$lib/public-resources';
+  import {
+    WHOISLEUTH_PROJECT_URL,
+    WHOISLEUTH_SITE_ORIGIN,
+    WHOISLEUTH_SOURCE_REPOSITORY_URL,
+  } from '../../../../../../lib/project-metadata.mts';
 
   let { data }: { data: { resource: PublicResource } } = $props();
   const resource = $derived(data.resource);
@@ -17,11 +22,11 @@
     '@type': 'TechArticle',
     headline: resource.title,
     description: resource.description,
-    url: `https://whoisleuth.com/resources/${resource.slug}`,
+    url: `${WHOISLEUTH_SITE_ORIGIN}/resources/${resource.slug}`,
     isPartOf: {
       '@type': 'WebSite',
       name: 'WHOISleuth',
-      url: 'https://whoisleuth.com/',
+      url: WHOISLEUTH_PROJECT_URL,
     },
   });
 </script>
@@ -74,7 +79,7 @@
 
   <aside class="repository card">
     <div><p class="eyebrow">Inspect the implementation</p><h2>Review the contract behind this workflow.</h2></div>
-    <div><p>The repository documentation records collection bounds, provenance, privacy decisions and deliberate limitations.</p><a href={`https://github.com/slicedearth/whoisleuth/blob/main/${resource.repositoryDoc}`} target="_blank" rel="noopener">Open {resource.repositoryDoc}</a></div>
+    <div><p>The repository documentation records collection bounds, provenance, privacy decisions and deliberate limitations.</p><a href={`${WHOISLEUTH_SOURCE_REPOSITORY_URL}/blob/main/${resource.repositoryDoc}`} target="_blank" rel="noopener">Open {resource.repositoryDoc}</a></div>
   </aside>
 </article>
 

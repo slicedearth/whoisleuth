@@ -57,7 +57,7 @@
     <ul class="refresh-actions">
       {#each plan.items as item}
         <li>
-          <span><strong>{item.label}</strong><small>{item.reason}</small></span>
+          <span><strong>{item.label}</strong><small>{item.reason}{item.reason === 'stale' && item.ageDays !== null && item.ageDays !== undefined ? ` · ${item.ageDays}d / ${item.staleAfterDays}d` : ''}</small></span>
           <p>{item.requestDisclosure}</p>
           <button class="btn" type="button" onclick={() => refresh(item)} disabled={Boolean(active)}>
             {active === item.id ? 'Refreshing…' : `Refresh ${item.label}`}

@@ -23,6 +23,11 @@
 
 import * as zlib from 'node:zlib';
 
+import {
+  hammingDistanceHex,
+  isInformativePerceptualHash,
+} from './perceptual-hash-comparison.mts';
+
 type DecodedImage = {
   width: number;
   height: number;
@@ -346,22 +351,12 @@ function grayscaleGrid(image: DecodedImage, cols: number, rows: number): Float64
 // (callers fall back to the exact hash) rather than a collision-prone one.
 // isInformativeHash re-checks this at comparison time too, since a Brand
 // Profile saved before this guard existed may already hold a degenerate hash.
-const MIN_INFORMATIVE_BITS = 10;
-
-function popcountHex(hex: string): number {
-  let bits = 0;
-  for (let i = 0; i < hex.length; i += 1) bits += POPCOUNT[parseInt(hex.charAt(i), 16)] ?? 0;
-  return bits;
-}
-
 function isInformativeHash(hex: unknown): boolean {
-  if (typeof hex !== 'string' || !HEX_HASH_RE.test(hex)) return false;
-  const bits = popcountHex(hex);
-  return bits >= MIN_INFORMATIVE_BITS && bits <= 64 - MIN_INFORMATIVE_BITS;
+  return isInformativePerceptualHash(hex);
 }
 
 // 64-bit dHash over a 9x8 grid -> 16 hex chars, or null when the resulting
-// hash is degenerate (see MIN_INFORMATIVE_BITS). Each row contributes 8 bits:
+// hash is degenerate (see the shared comparison contract). Each row contributes 8 bits:
 // bit set when a cell is brighter than its right-hand neighbour.
 function dHash(image: DecodedImage): string | null {
   const cols = 9;
@@ -405,23 +400,5 @@ function faviconPerceptualHash(buf: Buffer): string | null {
 // produced by the optional local capture package. Keep the generic name as an
 // alias so the evidence contract does not imply that a screenshot is a favicon.
 const imagePerceptualHash = faviconPerceptualHash;
-
-const HEX_HASH_RE = /^[0-9a-f]{16}$/;
-const POPCOUNT = new Uint8Array(16);
-for (let i = 0; i < 16; i += 1) POPCOUNT[i] = (i & 1) + ((i >> 1) & 1) + ((i >> 2) & 1) + ((i >> 3) & 1);
-
-/**
- * Hamming distance (0-64) between two 16-hex dHash strings, or null if either
- * isn't a well-formed hash. Smaller = more visually similar.
- */
-function hammingDistanceHex(a: unknown, b: unknown): number | null {
-  if (typeof a !== 'string' || typeof b !== 'string') return null;
-  if (!HEX_HASH_RE.test(a) || !HEX_HASH_RE.test(b)) return null;
-  let distance = 0;
-  for (let i = 0; i < 16; i += 1) {
-    distance += POPCOUNT[parseInt(a.charAt(i), 16) ^ parseInt(b.charAt(i), 16)] ?? 0;
-  }
-  return distance;
-}
 
 export { faviconPerceptualHash, hammingDistanceHex, imagePerceptualHash };

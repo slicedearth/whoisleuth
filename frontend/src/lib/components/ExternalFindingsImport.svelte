@@ -247,7 +247,7 @@
         {/if}
         <ul>
           {#each findingsPreview.findings.slice(0, 8) as finding}
-            <li><strong>{finding.domain}</strong><span>{finding.category} · {finding.completeness}</span><p>{finding.summary}</p></li>
+            <li><strong>{finding.domain}</strong><span>{finding.category} · {finding.evidenceClass.replaceAll('_', ' ')} · {finding.completeness}</span><p>{finding.summary}</p></li>
           {/each}
         </ul>
         {#if findingsPreview.findings.length > 8}<p class="preview-note">Showing 8 of {findingsPreview.findings.length} validated findings.</p>{/if}

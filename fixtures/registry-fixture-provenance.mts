@@ -36,14 +36,4 @@ export const REGISTRY_FIXTURE_PROVENANCE: readonly RegistryFixtureProvenance[] =
     ]),
     interpretation: 'Synthetic RDAP objects exercise bounded normalized domain, network, and autonomous-system shapes. The digest does not establish publication or completeness for a particular registry.',
   }),
-  Object.freeze({
-    path: 'test/whois-gt-fallback.test.mts',
-    sourceDate: '2026-07-28',
-    verifiedAt: '2026-07-28',
-    sha256: '76c70d99ed682557c21ad861b06f727cf46b73568b99c52a79d0bcd39ee7fa39',
-    sourceUrls: Object.freeze([
-      'https://www.iana.org/domains/root/db/gt.html',
-    ]),
-    interpretation: 'The focused synthetic fallback test verifies the bounded official-web response contract without retaining or replaying live registration data.',
-  }),
 ]);

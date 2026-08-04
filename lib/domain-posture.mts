@@ -7,6 +7,7 @@ import { promises as dns } from 'node:dns';
 import { fetchRdapRecord } from './rdap.mts';
 import { nonEmptyErrorMessage } from './error-detail.mts';
 import { safeFetch, readTextCapped } from './safe-fetch.mts';
+import { whoisleuthRequestHeaders } from './outbound-identity.mts';
 import { classifyMxRecords } from './dns-mx.mts';
 import type { MxRecord } from './dns-mx.mts';
 import {
@@ -706,7 +707,7 @@ async function fetchMtaStsPolicy(domain: string): Promise<MtaStsPolicyFetch> {
     const url = `https://mta-sts.${domain}/.well-known/mta-sts.txt`;
     const res = await safeFetch(url, {
       signal: controller.signal,
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; WHOISleuth-Posture/1.0)', Accept: 'text/plain' },
+      headers: whoisleuthRequestHeaders({ Accept: 'text/plain' }),
     });
     if (!res.ok) {
       // Not reading this body - release it explicitly instead of leaving an

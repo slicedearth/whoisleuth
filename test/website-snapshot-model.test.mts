@@ -49,6 +49,7 @@ function snapshot(
       rawAction: 'excluded',
     },
     sources: [{ source: 'page', state: 'success', response: 'excluded' }],
+    dependencies: [{ recordType: 'CNAME', target: 'service.example.net', state: 'active', qualification: 'inconclusive', serviceFamily: 'Hosted service', raw: 'excluded' }],
     certificate: {
       fingerprintSha256: 'c'.repeat(64),
       spkiFingerprintSha256: 'd'.repeat(64),
@@ -83,6 +84,7 @@ describe('website profile snapshots', () => {
     }]);
     assert.deepEqual(normalized.posture, [{ id: 'https', state: 'observed' }]);
     assert.deepEqual(normalized.sources, [{ source: 'page', state: 'success' }]);
+    assert.deepEqual(normalized.dependencies, [{ recordType: 'CNAME', target: 'service.example.net', state: 'active', qualification: 'inconclusive', serviceFamily: 'Hosted service' }]);
     assert.deepEqual(normalized.identityValues, {
       resourceHosts: ['assets.snapshot.invalid'],
       trackingIdentifiers: [{ type: 'analytics', value: 'TRACK-1' }],
@@ -117,6 +119,7 @@ describe('website profile snapshots', () => {
         technologies: [{ id: 'commerce-one', name: 'Commerce One', category: 'commerce', confidence: 'medium' }],
         posture: [{ id: 'https', state: 'not_observed' }],
         sources: [{ source: 'page', state: 'partial' }],
+        dependencies: [{ recordType: 'CNAME', target: 'service.example.net', state: 'unresolved', qualification: 'known_deprovision_pattern', serviceFamily: 'Hosted service' }],
         identity: {
           normalizedHtml: 'c'.repeat(64),
           visibleText: null,
@@ -153,6 +156,8 @@ describe('website profile snapshots', () => {
     assert.ok(result.changes.some((change) => change.field === 'technology.commerce-one' && change.state === 'added'));
     assert.ok(result.changes.some((change) => change.field === 'posture.https' && change.state === 'changed'));
     assert.ok(result.changes.some((change) => change.field === 'source.page' && change.state === 'changed'));
+    assert.equal(result.dependencyTransitions[0]?.state, 'active_to_deprovision_cue');
+    assert.match(result.dependencyTransitions[0]?.detail ?? '', /does not establish claimability/u);
     assert.ok(result.changes.some((change) => change.field === 'identity.visibleText' && change.state === 'unavailable'));
     assert.ok(result.changes.some((change) => change.field === 'identityValues.resourceHosts.assets.snapshot.invalid' && change.state === 'removed'));
     assert.ok(result.changes.some((change) => change.field === 'certificate.fingerprintSha256' && change.state === 'changed'));
@@ -217,9 +222,10 @@ describe('website profile snapshots', () => {
     );
   });
 
-  test('keeps version 2 records readable without inventing certificate evidence', () => {
+  test('keeps version 2 records readable without inventing certificate or dependency evidence', () => {
     const legacy = snapshot('legacy-snapshot');
     Reflect.deleteProperty(legacy, 'certificate');
+    Reflect.deleteProperty(legacy, 'dependencies');
     const store = normalizeWebsiteSnapshotStore({
       schema: WEBSITE_SNAPSHOT_SCHEMA,
       version: 2,
@@ -227,5 +233,6 @@ describe('website profile snapshots', () => {
     });
     assert.equal(store.version, WEBSITE_SNAPSHOT_SCHEMA_VERSION);
     assert.equal(store.snapshots[0]?.certificate, null);
+    assert.deepEqual(store.snapshots[0]?.dependencies, []);
   });
 });

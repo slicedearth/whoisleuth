@@ -10,11 +10,12 @@ const config = {
       mode: 'hash',
       directives: {
         'default-src': ['self'],
-        'script-src': ['self'],
+        'script-src': ['self', 'https://challenges.cloudflare.com'],
         'style-src': ['self', 'unsafe-inline'],
         'img-src': ['self', 'data:'],
         'font-src': ['self'],
         'connect-src': ['self'],
+        'frame-src': ['https://challenges.cloudflare.com'],
         'base-uri': ['self'],
         'form-action': ['self'],
         'object-src': ['none']

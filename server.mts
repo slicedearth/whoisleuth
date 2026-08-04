@@ -35,6 +35,7 @@ import {
 } from './lib/auth.mts';
 import {
   checkApiRateLimit,
+  checkContactRouteRateLimit,
   checkLoginRateLimit,
   checkPrerenderedHtmlRateLimit,
   getClientIp,
@@ -52,6 +53,12 @@ import { featureDisabledError, networkFeaturePolicy } from './lib/feature-policy
 import type { NetworkFeatureId, NetworkFeaturePolicy } from './lib/feature-policy.mts';
 import { MAX_API_JSON_BODY_BYTES, apiErrorResponseFor, apiUnexpectedErrorResponse } from './lib/http.mts';
 import { HTTP_BASELINE_CONTENT_SECURITY_POLICY } from './lib/security-headers.mts';
+import {
+  MAX_CONTACT_ROUTE_BODY_BYTES,
+  contactRoutePublicConfig,
+  parseContactRouteBody,
+  verifyContactRoute,
+} from './lib/contact-route.mts';
 
 type RequestLike = {
   protocol: string;
@@ -189,7 +196,9 @@ function rateLimit(check: RateLimitChecker) {
 
 const loginRateLimit = rateLimit(checkLoginRateLimit);
 const apiRateLimit = rateLimit(checkApiRateLimit);
+const contactRouteRateLimit = rateLimit(checkContactRouteRateLimit);
 const parseApiJson = express.json({ limit: MAX_API_JSON_BODY_BYTES });
+const parseContactRouteJson = express.json({ limit: MAX_CONTACT_ROUTE_BODY_BYTES });
 
 function requireFeature(feature: NetworkFeatureId) {
   return (req: RequestLike, res: ResponseLike, next: Next) => {
@@ -229,6 +238,32 @@ app.post('/api/login', (req: RequestLike, res: ResponseLike, next: Next) => {
   }
   res.setHeader('Set-Cookie', buildSessionCookie(createSessionToken(), { secure: usesSecureCookies(req) }));
   res.json({ ok: true });
+});
+
+app.get('/api/contact-route', (_req: RequestLike, res: ResponseLike) => {
+  res.json(contactRoutePublicConfig());
+});
+
+app.post('/api/contact-route', contactRouteRateLimit, (req: RequestLike, res: ResponseLike, next: Next) => {
+  if (!isTrustedOrigin(req.headers)) {
+    return res.status(403).json({ error: 'Cross-site request blocked' });
+  }
+  next();
+}, parseContactRouteJson, async (req: RequestLike, res: ResponseLike) => {
+  const parsed = parseContactRouteBody(req.body);
+  if (!parsed) return res.status(400).json({ error: 'Invalid request body' });
+  const result = await verifyContactRoute(parsed.category, parsed.token);
+  if (result.status === 'ok') {
+    return res.status(200).json({ category: result.category, route: result.route });
+  }
+  if (result.status === 'unavailable') {
+    return res.status(503).json({ error: 'Contact route is not configured' });
+  }
+  return res.status(result.status === 'invalid_request' ? 400 : 403).json({
+    error: result.status === 'invalid_request'
+      ? 'Invalid request body'
+      : 'Contact verification failed',
+  });
 });
 
 app.post('/api/logout', requireAuth, (req: RequestLike, res: ResponseLike) => {

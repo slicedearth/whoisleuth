@@ -12,6 +12,7 @@
   import LookupBrandMimicryReview from '$lib/components/LookupBrandMimicryReview.svelte';
   import LookupLifecycle from '$lib/components/LookupLifecycle.svelte';
   import LookupDecisionSupport from '$lib/components/LookupDecisionSupport.svelte';
+  import LookupClaimReadiness from '$lib/components/LookupClaimReadiness.svelte';
   import LookupEvidenceQuality from '$lib/components/LookupEvidenceQuality.svelte';
   import LookupEvidenceReplay from '$lib/components/LookupEvidenceReplay.svelte';
   import LookupCertificatePolicyReview from '$lib/components/LookupCertificatePolicyReview.svelte';
@@ -20,12 +21,14 @@
   import LookupExternalIntelligence from '$lib/components/LookupExternalIntelligence.svelte';
   import LookupForm from '$lib/components/LookupForm.svelte';
   import LookupHttpEvidence from '$lib/components/LookupHttpEvidence.svelte';
+  import LookupInvestigationCapsule from '$lib/components/LookupInvestigationCapsule.svelte';
   import LookupNetworkContext from '$lib/components/LookupNetworkContext.svelte';
   import LookupOverviewFacts from '$lib/components/LookupOverviewFacts.svelte';
   import LookupPageComparison from '$lib/components/LookupPageComparison.svelte';
   import LookupPageIdentity from '$lib/components/LookupPageIdentity.svelte';
   import LookupPageRoleBehavior from '$lib/components/LookupPageRoleBehavior.svelte';
   import LookupRegistrySources from '$lib/components/LookupRegistrySources.svelte';
+  import RegistrationDisclosurePlanner from '$lib/components/RegistrationDisclosurePlanner.svelte';
   import LookupResultHeader from '$lib/components/LookupResultHeader.svelte';
   import LookupPresentationControls from '$lib/components/LookupPresentationControls.svelte';
   import LookupSecurityPosture from '$lib/components/LookupSecurityPosture.svelte';
@@ -64,6 +67,7 @@
     type JsonRecord,
   } from '$lib/analysis/lookup-display-model.ts';
   import { buildLookupRouteAnalysis } from '$lib/analysis/lookup-route-analysis.ts';
+  import type { LookupFreshnessPolicyInput, LookupFreshnessThresholds } from '$lib/analysis/lookup-source-refresh.ts';
   import {
     LOOKUP_CLIENT_TIMEOUT_MS,
   } from '$lib/analysis/lookup-request.ts';
@@ -108,6 +112,9 @@
   let caseRecord=$state<CaseRecord|null>(null);let caseNote=$state('');let caseStatus=$state('');
   let evidenceDensity=$state<LookupEvidenceDensity>('standard');
   let taskView=$state<LookupTaskView>('general');
+  let freshnessPolicyMode=$state<'task-default'|'analyst-custom'>('task-default');
+  let customFreshnessThresholds=$state<LookupFreshnessThresholds>({registration:30,network:7,web:3});
+  const freshnessPolicyInput=$derived<LookupFreshnessPolicyInput|undefined>(freshnessPolicyMode==='analyst-custom'?{id:'analyst-custom',thresholdsDays:customFreshnessThresholds}:undefined);
   let serviceDependencyScope=$state('');
   let serviceDependencyFalsePositives=$state('');
   let pageActive=false;
@@ -172,6 +179,7 @@
     lookupView,
     profile,
     task:taskView,
+    ...(freshnessPolicyInput?{freshnessPolicy:freshnessPolicyInput}:{}),
   }));
   const lookupEvidenceDepth=$derived(lookupAnalysis.lookupEvidenceDepth);
   const lookupObservedAt=$derived(lookupAnalysis.lookupObservedAt);
@@ -218,9 +226,11 @@
   const evidenceCoverage=$derived(lookupAnalysis.evidenceCoverage);
   const lookupSourceRefreshPlan=$derived(lookupAnalysis.lookupSourceRefreshPlan);
   const lookupDecisionSupport=$derived(lookupAnalysis.lookupDecisionSupport);
+  const lookupClaimReadiness=$derived(lookupAnalysis.lookupClaimReadiness);
   const evidenceQualityMatrix=$derived(lookupAnalysis.evidenceQualityMatrix);
   const lookupSummary=$derived(lookupAnalysis.lookupSummary);
   const lookupInvestigationBrief=$derived(lookupAnalysis.lookupInvestigationBrief);
+  const lookupEvidenceDocument=$derived(result?buildLookupEvidence(result,{idnAnalysis,applicationVersion:__WHOISLEUTH_VERSION__}):null);
   const evidenceTopologyTarget=$derived(lookupAnalysis.evidenceTopologyTarget);
   const caseEvidence=$derived(lookupAnalysis.caseEvidence);
   const checkpointFacts=$derived(lookupAnalysis.checkpointFacts);
@@ -278,6 +288,10 @@
     taskView=normalizeLookupTaskView(value);
     writeLookupPresentation(localStorage,{density:evidenceDensity,task:taskView});
   }
+  function setFreshnessPolicy(value:{mode:'task-default'|'analyst-custom';thresholdsDays:LookupFreshnessThresholds}){
+    freshnessPolicyMode=value.mode;
+    customFreshnessThresholds=value.thresholdsDays;
+  }
   onMount(()=>{
     pageActive=true;
     const presentation=readLookupPresentation(localStorage);
@@ -316,10 +330,11 @@
       technologyFindings:pageDisplay.technologyFindings,
       securityPostureFindings:pageDisplay.securityPostureFindings,
       diagnostics,
+      dependencies:serviceDependencyReview?.dependencies??[],
     });
   }
-  function downloadEvidence(){if(!result)return;const body=JSON.stringify(buildLookupEvidence(result,{idnAnalysis}),null,2);const url=URL.createObjectURL(new Blob([body],{type:'application/json'}));const anchor=document.createElement('a');anchor.href=url;anchor.download=evidenceFilename(result);anchor.click();URL.revokeObjectURL(url);}
-  function downloadReadableReport(){if(!result)return;const body=buildLookupReadableReport(result,{risk});const url=URL.createObjectURL(new Blob([body],{type:'text/markdown;charset=utf-8'}));const anchor=document.createElement('a');anchor.href=url;anchor.download=lookupReadableReportFilename(result);anchor.click();URL.revokeObjectURL(url);}
+  function downloadEvidence(){if(!result||!lookupEvidenceDocument)return;const body=JSON.stringify(lookupEvidenceDocument,null,2);const url=URL.createObjectURL(new Blob([body],{type:'application/json'}));const anchor=document.createElement('a');anchor.href=url;anchor.download=evidenceFilename(result);anchor.click();URL.revokeObjectURL(url);}
+  function downloadReadableReport(){if(!result)return;const body=buildLookupReadableReport(result,{risk,applicationVersion:__WHOISLEUTH_VERSION__});const url=URL.createObjectURL(new Blob([body],{type:'text/markdown;charset=utf-8'}));const anchor=document.createElement('a');anchor.href=url;anchor.download=lookupReadableReportFilename(result);anchor.click();URL.revokeObjectURL(url);}
   function downloadInvestigationBrief(){if(!result)return;const body=formatLookupInvestigationBriefMarkdown(lookupInvestigationBrief);const url=URL.createObjectURL(new Blob([body],{type:'text/markdown;charset=utf-8'}));const anchor=document.createElement('a');anchor.href=url;anchor.download=lookupInvestigationBriefFilename(lookupInvestigationBrief);anchor.click();URL.revokeObjectURL(url);}
   async function copyDraft(text:string,label:string){try{await navigator.clipboard.writeText(text);draftStatus=`Copied ${label} to the clipboard.`;}catch{draftStatus='Clipboard access was unavailable. Use the email draft link instead.';}}
   function resultSectionLinks(){return buildLookupResultSectionLinks({
@@ -425,6 +440,18 @@
         onbriefhandoff={caseRecord ? recordInvestigationBriefHandoff : null}
       />
 
+      <LookupClaimReadiness readiness={lookupClaimReadiness} />
+
+      {#if lookupEvidenceDocument}
+        <LookupInvestigationCapsule
+          applicationVersion={__WHOISLEUTH_VERSION__}
+          lookupEvidence={lookupEvidenceDocument}
+          brief={lookupInvestigationBrief}
+          graph={lookupAssetGraph}
+          {caseRecord}
+        />
+      {/if}
+
       {#if sslbl.sslblVersion===1&&sslbl.verdict==='listed'}
         <aside class="sslbl-review-lead" aria-labelledby="sslbl-review-lead-title">
           <div>
@@ -465,6 +492,7 @@
         query={String(result?.query || caseDomain)}
         depth={lookupEvidenceDepth}
         timing={lookupTiming}
+        onpolicychange={setFreshnessPolicy}
       />
 
       <LookupOverviewFacts facts={[...lookupSummary.facts]} diagnostics={[...lookupSummary.diagnostics]} hasAssessment={availability.applicable!==false} />
@@ -690,6 +718,17 @@
         registrar={registryDisplay.registrarRdap}
       /></div>
 
+      {#if result.type==='domain' && Array.isArray(rdapParsed.redactions) && rdapParsed.redactions.length}
+        <div class="evidence-component"><RegistrationDisclosurePlanner
+          domain={caseDomain}
+          observedAt={lookupObservedAt}
+          registryRdapEndpoint={boundedTechnologyText(rdap.endpoint,2048)}
+          {rdapParsed}
+          registrar={registryDisplay.registrarRdap}
+          caseReference={caseRecord?.id ?? ''}
+        /></div>
+      {/if}
+
       {#if observedNetworkContext.contextVersion===1}
         <div class="evidence-component" id="evidence-network"><LookupNetworkContext
           status={statusLabel(boundedTechnologyText(observedNetworkContext.status||'unsupported',40))}
@@ -735,9 +774,6 @@
 <style>
   .result-root{min-width:0;overflow-x:clip;overflow-clip-margin:3px}
   .evidence-density{display:contents}
-  .density-standard .family-raw>:not(h3){display:none}
-  .density-standard .family-raw{min-height:34px;margin-top:14px}
-  .density-standard .family-raw>h3{margin-bottom:0}
   .density-summary>.result-section:not(.family-overview)>:not(h3){display:none}
   .density-summary>.result-section:not(.family-overview){min-height:34px;margin-top:14px}
   .density-summary>.result-section:not(.family-overview)>h3{margin-bottom:0}

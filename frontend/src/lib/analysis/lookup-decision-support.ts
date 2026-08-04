@@ -3,6 +3,7 @@ import type {
   EvidenceCoverageState,
 } from './evidence-coverage-ledger.ts';
 import type { LookupSourceRefreshPlan } from './lookup-source-refresh.ts';
+import type { LookupFreshnessPolicy } from './lookup-source-refresh.ts';
 import type { LookupTaskView } from './lookup-presentation.ts';
 import type { LookupTiming, LookupTimingSource } from './lookup-response.ts';
 
@@ -73,6 +74,7 @@ export type LookupEvidenceQualityMatrix = Readonly<{
   limitedCount: number;
   stale: boolean;
   ageDays: number | null;
+  freshnessPolicy: LookupFreshnessPolicy;
 }>;
 
 type JsonRecord = Record<string, unknown>;
@@ -604,5 +606,6 @@ export function buildLookupEvidenceQualityMatrix(input: Readonly<{
     limitedCount: input.coverage.limitedCount,
     stale: input.refreshPlan.stale,
     ageDays: currentAgeDays,
+    freshnessPolicy: input.refreshPlan.freshnessPolicy,
   };
 }

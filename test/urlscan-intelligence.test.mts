@@ -20,6 +20,7 @@ type FetchCall = {
 
 const ENABLED_ENV = Object.freeze({
   WHOISLEUTH_ENABLE_URLSCAN: '1',
+  WHOISLEUTH_DEPLOYMENT_PURPOSE: 'personal',
   URLSCAN_API_KEY: 'fixture-api-key',
 });
 const UUID_A = '11111111-1111-4111-8111-111111111111';
@@ -100,8 +101,10 @@ describe('URLscan provider policy and configuration', () => {
       reason: 'Archived URLscan verdict search is not enabled for this deployment.',
     });
     assert.equal(urlscanConfiguration({ WHOISLEUTH_ENABLE_URLSCAN: 'true' }).configured, false);
+    assert.match(urlscanConfiguration({ WHOISLEUTH_ENABLE_URLSCAN: 'true' }).reason ?? '', /DEPLOYMENT_PURPOSE/u);
     assert.equal(urlscanConfiguration({ ...ENABLED_ENV, URLSCAN_API_KEY: 'bad key' }).configured, false);
     assert.equal(urlscanConfiguration(ENABLED_ENV).configured, true);
+    assert.equal(urlscanConfiguration({ ...ENABLED_ENV, WHOISLEUTH_DEPLOYMENT_PURPOSE: 'commercial' }).configured, false);
   });
 });
 

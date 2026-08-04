@@ -8,6 +8,11 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
 import { normalizeSemanticVersion } from './release-version-check.mts';
+import {
+  WHOISLEUTH_PROJECT_URL,
+  WHOISLEUTH_SOURCE_ISSUES_URL,
+  WHOISLEUTH_SOURCE_REPOSITORY_GIT_URL,
+} from '../lib/project-metadata.mts';
 
 type JsonRecord = Record<string, unknown>;
 type WritableLike = { write(value: string): unknown };
@@ -49,9 +54,9 @@ const defaultExecFile = promisify(execFileCallback);
 const PACKAGE_NAME = '@slicedearth/whoisleuth-cli';
 const PACKAGE_AUTHOR = 'slicedearth';
 const PUBLIC_REGISTRY = 'https://registry.npmjs.org';
-const SOURCE_REPOSITORY = 'git+https://github.com/slicedearth/whoisleuth.git';
-const PACKAGE_HOMEPAGE = 'https://whoisleuth.com/';
-const PACKAGE_ISSUES = 'https://github.com/slicedearth/whoisleuth/issues';
+const SOURCE_REPOSITORY = WHOISLEUTH_SOURCE_REPOSITORY_GIT_URL;
+const PACKAGE_HOMEPAGE = WHOISLEUTH_PROJECT_URL;
+const PACKAGE_ISSUES = WHOISLEUTH_SOURCE_ISSUES_URL;
 const PROVENANCE_PREDICATE = 'https://slsa.dev/provenance/v1';
 const REPORT_SCHEMA = 'whoisleuth.published-cli-check';
 const REPORT_VERSION = 1;

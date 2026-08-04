@@ -42,6 +42,15 @@
         addresses: readonly string[];
         nameservers: readonly string[];
         soaPrimary: string;
+        soa?: {
+          nsname: string | null;
+          hostmaster: string | null;
+          serial: number | null;
+          refresh: number | null;
+          retry: number | null;
+          expire: number | null;
+          minttl: number | null;
+        } | null;
       }[];
       limitations: readonly string[];
     } | null;
@@ -51,6 +60,8 @@
       currentMx?: readonly unknown[];
       currentCaa?: readonly unknown[];
       currentCriticalAddresses?: readonly unknown[];
+      currentRegistrationStatuses?: readonly unknown[];
+      currentTlsSpkiSha256?: unknown;
     };
     domain?: string;
     allowRehearsal?: boolean;
@@ -105,6 +116,14 @@
                   <div><strong>{authority.nameserver}</strong><span class={`authority-state state-${authority.state}`}>{authority.state}</span></div>
                   <p>{authority.addresses.join(' · ') || 'No eligible public address'} · {authority.addressSource}</p>
                   <small>NS answer: {authority.nameservers.join(' · ') || 'Unavailable'} · SOA primary: {authority.soaPrimary || 'Unavailable'}</small>
+                  {#if authority.soa}
+                    <dl class="soa-detail">
+                      <div><dt>Serial</dt><dd>{authority.soa.serial ?? 'Unavailable'}</dd></div>
+                      <div><dt>Refresh</dt><dd>{authority.soa.refresh ?? 'Unavailable'}{authority.soa.refresh !== null ? ' s' : ''}</dd></div>
+                      <div><dt>Retry</dt><dd>{authority.soa.retry ?? 'Unavailable'}{authority.soa.retry !== null ? ' s' : ''}</dd></div>
+                      <div><dt>Expire</dt><dd>{authority.soa.expire ?? 'Unavailable'}{authority.soa.expire !== null ? ' s' : ''}</dd></div>
+                    </dl>
+                  {/if}
                 </article>
               {/each}
             </div>
@@ -120,6 +139,8 @@
             currentMx={rehearsalEvidence.currentMx ?? []}
             currentCaa={rehearsalEvidence.currentCaa ?? []}
             currentCriticalAddresses={rehearsalEvidence.currentCriticalAddresses ?? []}
+            currentRegistrationStatuses={rehearsalEvidence.currentRegistrationStatuses ?? []}
+            currentTlsSpkiSha256={rehearsalEvidence.currentTlsSpkiSha256 ?? null}
             evidenceComplete={delegation.complete}
           />
         {/if}
@@ -154,8 +175,12 @@
   .authority-detail>summary{padding:9px 11px;cursor:pointer;font:600 var(--text-xs) var(--mono)}
   .authority-detail>div{display:grid;gap:7px;padding:0 8px 8px}
   .authority-detail p{margin:5px 0 0;overflow-wrap:anywhere}
+  .soa-detail{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px;margin:8px 0 0}
+  .soa-detail div{min-width:0;padding:6px;border:1px solid var(--border);border-radius:var(--radius-sm)}
+  .soa-detail dt{color:var(--muted);font:var(--text-2xs) var(--mono)}
+  .soa-detail dd{margin:3px 0 0;overflow-wrap:anywhere;font:600 var(--text-2xs) var(--mono)}
   .authority-state.state-success{color:var(--accent)}
   .authority-state.state-lame{color:var(--danger)}
   .authority-state.state-unreachable{color:var(--amber)}
-  @media(max-width:640px){.delegation-sources{grid-template-columns:1fr}}
+  @media(max-width:640px){.delegation-sources{grid-template-columns:1fr}.soa-detail{grid-template-columns:repeat(2,minmax(0,1fr))}}
 </style>

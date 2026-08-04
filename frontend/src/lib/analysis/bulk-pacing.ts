@@ -1,4 +1,8 @@
 import { limitedBulkSources } from './bulk-source-coverage.ts';
+import {
+  MAX_DEEP_BULK_CONCURRENCY,
+  MAX_FAST_BULK_CONCURRENCY,
+} from './bulk-limits.ts';
 
 export type BulkPacing = 'gentle' | 'balanced' | 'standard';
 export type BulkPacingOption = Readonly<{
@@ -43,9 +47,9 @@ export const BULK_PACING_OPTIONS: readonly BulkPacingOption[] = Object.freeze([
   Object.freeze({
     id: 'standard',
     label: 'Standard',
-    detail: 'Current bounded maximum',
-    fastConcurrency: 12,
-    deepConcurrency: 4,
+    detail: 'Bounded maximum for one analyst-triggered job',
+    fastConcurrency: MAX_FAST_BULK_CONCURRENCY,
+    deepConcurrency: MAX_DEEP_BULK_CONCURRENCY,
   }),
 ]);
 

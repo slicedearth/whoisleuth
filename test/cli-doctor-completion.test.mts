@@ -28,6 +28,7 @@ describe('CLI shell completion', () => {
       assert.match(script, /commands/u);
       assert.match(script, /diff/u);
       assert.match(script, /timeline/u);
+      assert.match(script, /domain-triage/u);
       assert.match(script, /(?:--checkpoint|-l checkpoint)/u);
       assert.match(script, /(?:--output|-l output)/u);
       assert.match(script, /(?:--summary|-l summary)/u);

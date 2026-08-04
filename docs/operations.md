@@ -84,6 +84,13 @@ Express reads these values for each request. A serverless platform may require
 an environment update or a new function instance before a changed value takes
 effect.
 
+The static build records the semantic application version and exact source
+revision in the footer. Netlify supplies `COMMIT_REF`; other build systems can
+set `WHOISLEUTH_BUILD_REVISION` to a 7-to-64-character hexadecimal commit ID.
+When neither environment metadata nor a Git checkout is available, the footer
+uses `local` and links to the repository root rather than claiming an exact
+source revision.
+
 ## Optional external intelligence
 
 External adapters are disabled by default and run only for a Deep,
@@ -96,6 +103,14 @@ non-compact single-domain Lookup when the analyst selects them.
 | Retained malware indicators | `WHOISLEUTH_ENABLE_THREATFOX=1` and `ABUSECH_AUTH_KEY` | Canonical registrable domain | Performs one exact-match search. It never submits an indicator or sample. |
 
 The legacy `URLHAUS_AUTH_KEY` remains accepted for the malware-host adapter.
+
+Every enabled optional adapter also requires an explicit
+`WHOISLEUTH_DEPLOYMENT_PURPOSE=personal`, `internal`, or `commercial` value.
+Current restricted-use providers are admitted only for `personal` deployments;
+`internal`, `commercial`, missing, or invalid declarations fail closed. A
+provider whose terms review is more than 180 days old also remains unavailable
+until its policy fields and review date are deliberately updated. CI enforces
+the same age bound with `npm run providers:policy-check`.
 
 Each adapter has bounded response size, result count, timeout, concurrency, and
 fair-use counters. It follows no credential-bearing redirect and keeps no
@@ -215,6 +230,38 @@ no longer required. Remove the schedule itself if no-op invocations must also
 stop.
 
 ## Netlify deployment
+
+### Protected public contact route
+
+The optional public `/contact` page exposes no address in the static HTML,
+JavaScript bundle, footer, or unauthenticated configuration response. It uses a
+free Cloudflare Turnstile widget and returns one configured role address only
+after server-side verification. The browser POST accepts exactly a contact
+category and token; the subject and message stay local until the user opens the
+prepared email draft.
+
+1. Create a managed Turnstile widget for every production hostname that serves
+   this deployment.
+2. Configure inbound role aliases with the operator's mail-routing provider.
+   Use separate privacy, outbound-request, and security aliases that forward to
+   a monitored private mailbox.
+3. Set `TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY`, and a comma-separated
+   `TURNSTILE_ALLOWED_HOSTNAMES` list. Include each exact production hostname;
+   use `localhost` only for local testing.
+4. Set one or more of `WHOISLEUTH_PRIVACY_CONTACT`,
+   `WHOISLEUTH_OUTBOUND_CONTACT`, and `WHOISLEUTH_SECURITY_CONTACT` to the
+   corresponding role addresses. Categories without a valid configured route
+   are not offered.
+5. Verify that `/api/contact-route` returns the public site key and category
+   names without any address, then complete one real challenge and confirm that
+   the resulting draft opens locally. Do not log request bodies or verification
+   tokens at an upstream proxy.
+
+If any required challenge setting is absent or malformed, the page fails
+closed and no address is revealed. The verification token is single-use and
+hostname/action checked; no remote-IP field is forwarded by WHOISleuth.
+
+### Site deployment
 
 1. Connect the repository to Netlify or deploy it with the Netlify CLI.
 2. Keep the repository root as the build base. `netlify.toml` runs
