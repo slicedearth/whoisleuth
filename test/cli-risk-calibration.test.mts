@@ -216,6 +216,7 @@ describe('offline Risk calibration report', () => {
     });
     assert.equal(requiredValue(report.records[2]).exclusionReason, 'contextual_disposition');
     assert.equal(requiredValue(report.records[3]).exclusionReason, 'not_scored');
+    assert.deepEqual(requiredValue(report.records[0]).interoperabilityTags, []);
     assert.equal(report.interpretation.automaticTuning, false);
     assert.equal(report.interpretation.networkRequests, false);
     assert.match(report.interpretation.statement, /does not.*prove maliciousness or safety/i);

@@ -10,6 +10,8 @@
     advisoryCount: number;
     severity: string;
     identifiers: string;
+    knownExploitedCount: number;
+    knownExploitedIdentifiers: string;
     weaknesses: string;
   };
 
@@ -108,6 +110,7 @@
                   <div><dt>Detected by</dt><dd>{library.detection || 'Static signature'}</dd></div>
                   {#if library.severity}<div><dt>Highest severity</dt><dd>{library.severity}</dd></div>{/if}
                   {#if library.identifiers}<div><dt>Identifiers</dt><dd>{library.identifiers}</dd></div>{/if}
+                  {#if library.knownExploitedCount}<div><dt>Known exploited catalogue</dt><dd>{library.knownExploitedIdentifiers}</dd></div>{/if}
                   {#if library.weaknesses}<div><dt>Weakness classes</dt><dd>{library.weaknesses}</dd></div>{/if}
                 </dl>
               </article>
@@ -118,7 +121,7 @@
         {/if}
 
         {#if libraryLimitations.length}<p class="callout warn">{libraryLimitations.join(' ')}</p>{/if}
-        <p class="card-note">WHOISleuth uses the pinned {libraryCatalog || 'Retire.js'} catalogue against script references and bounded inline content already present in the captured homepage. It does not download or execute referenced scripts. Advisory matches are review leads, not proof that affected code is reachable or exploitable.</p>
+        <p class="card-note">WHOISleuth uses pinned Retire.js and CISA KEV catalogue projections against script references and bounded inline content already present in the captured homepage. It does not download or execute referenced scripts. Advisory and known-exploited matches are review leads, not proof that affected code is present, reachable, or exploitable.</p>
       </section>
     {/if}
   </div>

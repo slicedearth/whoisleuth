@@ -435,6 +435,11 @@ scan-depth and review-reason strata, and a current-versus-previous model replay.
 Strata with fewer than 20 included labels are marked insufficient rather than
 presented as reliable performance estimates.
 
+The JSON report derives a bounded `interoperabilityTags` list from the
+analyst-owned disposition and review reason. The mapping uses reviewed MISP
+taxonomy terms only where the meaning is unambiguous. Tags do not change a
+score, disposition, or case, and no MISP service is contacted.
+
 Input is capped at 2 MiB and 500 records. Each record requires a unique bounded
 ID, an ASCII DNS hostname, one existing analyst disposition, and a strict
 whitelist of current scoring inputs. Unknown fields are discarded; arrays,

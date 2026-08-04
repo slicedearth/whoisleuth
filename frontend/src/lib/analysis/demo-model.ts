@@ -703,6 +703,8 @@ export function syntheticDemoLookupView(id: string) {
           advisoryCount: 1,
           severity: 'medium',
           identifiers: 'SYNTHETIC-ADVISORY-001',
+          knownExploitedCount: 0,
+          knownExploitedIdentifiers: '',
           weaknesses: 'Synthetic weakness class',
         },
       ] : [],

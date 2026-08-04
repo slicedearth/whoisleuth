@@ -1,5 +1,6 @@
 import { Buffer } from 'node:buffer';
 import { isValidAsciiDomainName } from '../lib/hostname.mts';
+import { ANALYST_REVIEW_REASON_VALUES, analystInteroperabilityTags } from '../lib/analyst-taxonomy.mts';
 
 import { CliUsageError } from './arguments.mts';
 import type { BoundedTextStream } from './bulk.mts';
@@ -35,11 +36,7 @@ const BOOLEAN_FIELDS = [
   'hasMx', 'hasSpf', 'hasDmarc', 'privacyProtected', 'hasExternalFormAction',
   'idnReferenceMatch', 'pageBaselineMatch', 'hasActiveBrandProfile',
 ] as const;
-const REVIEW_REASON_CODES = new Set([
-  'authorized_or_owned', 'shared_infrastructure', 'generic_platform_or_template',
-  'parked_or_reseller', 'insufficient_evidence', 'legitimate_third_party',
-  'confirmed_credential_abuse', 'confirmed_malware', 'other_reviewed',
-]);
+const REVIEW_REASON_CODES = ANALYST_REVIEW_REASON_VALUES;
 const MUTATION_TYPES = new Set(RISK_MUTATION_TYPES);
 
 type UnknownRecord = Record<string, unknown>;
@@ -101,6 +98,7 @@ type CalibrationReportRecord = CalibrationScoredRecord & {
   domain: string;
   analystDisposition: CalibrationDisposition;
   reviewReasonCode: string | null;
+  interoperabilityTags: string[];
   exclusionReason: 'not_scored' | 'contextual_disposition' | null;
   modelVersion: number;
   band: string;
@@ -419,6 +417,7 @@ export function buildRiskCalibrationReport(
       domain: record.domain,
       analystDisposition: record.analystDisposition,
       reviewReasonCode: record.reviewReasonCode ?? null,
+      interoperabilityTags: analystInteroperabilityTags(record.analystDisposition, record.reviewReasonCode),
       metricClass: classification,
       includedInMetrics,
       exclusionReason: includedInMetrics

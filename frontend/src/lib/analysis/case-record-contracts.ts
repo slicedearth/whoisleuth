@@ -6,6 +6,7 @@ import type {
   CaseManualTrailEvent,
   CaseSightingRecord,
 } from './case-response-model.ts';
+import { ANALYST_REVIEW_REASONS } from '../../../../lib/analyst-taxonomy.mts';
 
 export const CASE_SCHEMA_VERSION = 10;
 export const CASE_IMPORT_VERSIONS = [3, 4, 5, 6, 7, 8, 9, CASE_SCHEMA_VERSION] as const;
@@ -43,18 +44,7 @@ export const CASE_DISPOSITIONS: Array<{ value: string; label: string }> = [
   { value: 'closed_no_action', label: 'Closed without action' },
 ];
 
-export const CASE_REVIEW_REASONS: Array<{ value: string; label: string }> = [
-  { value: '', label: 'Not recorded' },
-  { value: 'authorized_or_owned', label: 'Authorised or owned domain' },
-  { value: 'shared_infrastructure', label: 'Shared infrastructure explained the signal' },
-  { value: 'generic_platform_or_template', label: 'Generic platform or template' },
-  { value: 'parked_or_reseller', label: 'Parking or reseller page' },
-  { value: 'insufficient_evidence', label: 'Insufficient evidence' },
-  { value: 'legitimate_third_party', label: 'Legitimate third party' },
-  { value: 'confirmed_credential_abuse', label: 'Confirmed credential abuse' },
-  { value: 'confirmed_malware', label: 'Confirmed malware' },
-  { value: 'other_reviewed', label: 'Other reviewed reason' },
-];
+export const CASE_REVIEW_REASONS: Array<{ value: string; label: string }> = ANALYST_REVIEW_REASONS.map((item) => ({ ...item }));
 
 export const CASE_SOURCES: Array<{ value: string; label: string }> = [
   { value: 'lookup', label: 'Lookup' },

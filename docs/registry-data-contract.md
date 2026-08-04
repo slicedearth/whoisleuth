@@ -41,13 +41,15 @@ change the Fast, Compact, Deep, availability, or monitoring contracts.
   standards-compliant bounded HTML tokenization pass and expands the curated
   generator, element, attribute, static-asset, and resource-origin catalogue
   for common content, commerce, site-building, framework, and static-site
-  platforms. It also carries a nested version-1 browser-library profile
-  derived from a pinned Retire.js catalogue. It
+  platforms. It also carries a nested version-2 browser-library profile
+  derived from a pinned Retire.js catalogue and a minimized pinned CISA Known
+  Exploited Vulnerabilities projection. It
   retains only apparent component versions, detection classes, and bounded
   advisory context without fetching referenced scripts or making another
   request. The advisory count covers every matching entry in the already
   bounded projected catalogue; retained advisory identifiers and weakness
-  classes remain capped independently.
+  classes remain capped independently. A KEV match is prioritization context,
+  not evidence that the observed page exposes or executes affected code.
 - `availability.structuredDataIdentity`: for eligible deep non-compact domain
   results with captured HTML, a version-1 projection of publisher-declared
   JSON-LD. It retains only curated schema types, bounded labels, declared

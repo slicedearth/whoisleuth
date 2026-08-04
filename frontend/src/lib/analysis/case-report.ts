@@ -12,13 +12,14 @@
 import { caseEvidenceIncomparableReasons, compareCaseEvidence, latestCaseEvidence } from './case-model.ts';
 import type { CaseEvidenceSnapshot, CaseRecord, EvidenceFactor } from './case-model.ts';
 import { httpSecurityHeaderLabel } from './http-summary.ts';
+import { analystInteroperabilityTags } from '../../../../lib/analyst-taxonomy.mts';
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
 export const CASE_REPORT_SCHEMA = 'whoisleuth.case-report';
-export const CASE_REPORT_SCHEMA_VERSION = 5;
+export const CASE_REPORT_SCHEMA_VERSION = 6;
 
 const APPLICATION_NAME = 'WHOISleuth';
 
@@ -65,6 +66,7 @@ type CaseReportJson = {
     status: string;
     disposition: string;
     reviewReasonCode: string | null;
+    interoperabilityTags: string[];
     tags: string[];
     source: string;
     openedAt: string;
@@ -283,6 +285,7 @@ export function buildCaseReport(
       status: caseRecord.status,
       disposition: caseRecord.disposition,
       reviewReasonCode: caseRecord.reviewReasonCode ?? null,
+      interoperabilityTags: analystInteroperabilityTags(caseRecord.disposition, caseRecord.reviewReasonCode),
       tags: Array.isArray(caseRecord.tags) ? [...caseRecord.tags] : [],
       source: caseRecord.source,
       openedAt: caseRecord.createdAt,

@@ -660,7 +660,7 @@
           complete={Boolean(technologyProfile.complete)}
           findings={pageDisplay.technologyFindings}
           limitations={pageDisplay.technologyLimitations}
-          libraryAvailable={browserLibraryProfile.profileVersion===1}
+          libraryAvailable={browserLibraryProfile.profileVersion===1||browserLibraryProfile.profileVersion===2}
           libraryStatus={statusLabel(show(browserLibraryProfile.status))}
           libraryComplete={Boolean(browserLibraryProfile.complete)}
           libraryCatalog={boundedTechnologyText((browserLibraryProfile.catalog as JsonRecord)?.version,80)}

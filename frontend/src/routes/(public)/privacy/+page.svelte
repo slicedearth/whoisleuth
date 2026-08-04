@@ -126,6 +126,8 @@
   <h2 id="privacy-children">11. Children's privacy</h2>
   <p>The service is not directed at children and is not knowingly used to collect personal data from children.</p>
 
+  <p><strong>Local catalogue comparison.</strong> The browser-library profile compares bounded CVE identifiers with a minimized pinned CISA Known Exploited Vulnerabilities projection. It retains only matching identifiers and catalogue metadata, makes no provider request, does not affect Risk scoring, and does not establish that the detected page includes, reaches, or executes affected code. Case reports and offline CLI calibration reports can also derive a small set of MISP-compatible machine tags from an analyst-owned disposition and reviewed reason; these tags are local export metadata and do not change collection, scoring, or case state.</p>
+
   <h2 id="privacy-changes">12. Changes</h2>
   <p>This policy may change over time. Material changes will update the date shown above.</p>
 
