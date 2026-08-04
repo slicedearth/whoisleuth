@@ -86,6 +86,7 @@ describe('offline evidence review command', () => {
       source: 'evidence.json',
       mmdbSource: null,
       output: 'json',
+      strictExit: false,
       quiet: false,
       color: true,
     });
@@ -106,6 +107,26 @@ describe('offline evidence review command', () => {
     assert.equal(code, EXIT_CODES.SUCCESS);
     assert.equal(JSON.parse(stdout.value()).result.state, 'valid');
     assert.match(formatOfflineEvidenceReview(buildOfflineEvidenceReview(input, ISO)), /State\s+valid/u);
+  });
+
+  test('offers an opt-in CI gate for explicit domain-change and zone-intent review failures', async () => {
+    const domainChange = JSON.stringify({
+      schema: 'whoisleuth.domain-change.input', version: 1, domain: 'example.test',
+      authoritySnapshots: [], resolverSnapshots: [],
+      acmeDependencies: [{ method: 'dns-01', owner: '_acme-challenge.example.test', target: null, provider: null, state: 'unknown' }],
+      certificate: null, hsts: null,
+    });
+    const code = await runCli(['review-evidence', '--json', '--strict-exit'], {
+      stdout: capture().stream,
+      stderr: capture().stream,
+      now: () => ISO,
+      readArtifactInput: async () => domainChange,
+    });
+    assert.equal(code, EXIT_CODES.PARTIAL_FAILURE);
+    const parsed = parseCliArguments(['review-evidence', '--strict-exit']);
+    assert.equal(parsed.action, 'review-evidence');
+    assert.equal(parsed.action === 'review-evidence' && parsed.strictExit, true);
+    assert.throws(() => parseCliArguments(['review-evidence', '--strict-exit', '--strict-exit']), /only once/iu);
   });
 
   test('reads an explicitly supplied local MMDB without transmitting the address', async () => {

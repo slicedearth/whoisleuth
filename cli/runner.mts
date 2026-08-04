@@ -203,7 +203,7 @@ const COMMAND_USAGE: Readonly<Record<CliCommand, string>> = Object.freeze({
   compare: 'whoisleuth compare [lookup.json] [--json] [--quiet] [--no-color]',
   'page-compare': 'whoisleuth page-compare <left.json> <right.json> [--json] [--quiet] [--no-color]',
   'mail-review': 'whoisleuth mail-review [bulk.json|bulk.jsonl] [--json] [--quiet] [--no-color]',
-  'review-evidence': 'whoisleuth review-evidence [evidence.json] [--mmdb <database-file>] [--json] [--quiet] [--no-color]',
+  'review-evidence': 'whoisleuth review-evidence [evidence.json] [--mmdb <database-file>] [--json] [--strict-exit] [--quiet] [--no-color]',
   'domain-control': 'whoisleuth domain-control [manifest-input.json|review-input.json] [--json] [--quiet] [--no-color]',
   assurance: 'whoisleuth assurance [assurance-input.json] [--json] [--quiet] [--no-color]',
   'sharing-review': 'whoisleuth sharing-review [artifact.json] --marking <level> --recipient-scope <scope> --purpose <text> [--human-reviewed] [--personal-data-reviewed] [--redactions-confirmed] [--json]',
@@ -336,9 +336,9 @@ const COMMAND_DETAILS: Readonly<Record<CliCommand, Readonly<{ description: strin
     boundary: 'Review is offline and sends no SMTP traffic. Missing or partial DNS evidence remains inconclusive.',
   },
   'review-evidence': {
-    description: 'Review one versioned DNSSEC, TLSA, RPKI, GeoIP, encrypted-DNS, or RDAP planning document offline.',
-    example: 'whoisleuth review-evidence dnssec-evidence.json --json',
-    boundary: 'The command reads only the supplied document. It performs no DNS, RDAP, BGP, GeoIP-provider, TLS, HTTP, or SMTP request.',
+    description: 'Review one versioned DNS, domain-change, routing, GeoIP, or RDAP planning document offline.',
+    example: 'whoisleuth review-evidence domain-change.json --json --strict-exit',
+    boundary: 'The command reads only the supplied document. It performs no DNS, RDAP, BGP, GeoIP-provider, TLS, HTTP, certificate-authority, or SMTP request.',
   },
   'domain-control': {
     description: 'Build an integrity-protected desired-state manifest or compare one with supplied observations.',
@@ -878,6 +878,20 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
       if (!args.quiet) write(stdout, args.output === 'json'
         ? formatJsonDocument(document)
         : terminal(formatOfflineEvidenceReview(document), args.color));
+      if (args.strictExit) {
+        const result = document.result && typeof document.result === 'object' && !Array.isArray(document.result)
+          ? document.result as Record<string, unknown>
+          : {};
+        const gate = result.gate && typeof result.gate === 'object' && !Array.isArray(result.gate)
+          ? result.gate as Record<string, unknown>
+          : null;
+        const zoneMismatch = document.kind === 'zone_intent' && (
+          result.complete !== true
+          || (result.counts && typeof result.counts === 'object' && !Array.isArray(result.counts)
+            && ['different', 'missing', 'unexpected', 'incomplete'].some((key) => Number((result.counts as Record<string, unknown>)[key]) > 0))
+        );
+        if (gate?.pass === false || zoneMismatch) return EXIT_CODES.PARTIAL_FAILURE;
+      }
       return EXIT_CODES.SUCCESS;
     }
 

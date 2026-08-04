@@ -948,6 +948,13 @@ retains the nested result's explicit state and limitations. A locally
 consistent relationship is not converted into a claim about current
 publication, ownership, safety, or maliciousness.
 
+`review-evidence --strict-exit` is an opt-in local automation boundary. It
+returns the partial-failure exit code when an input family exposes an explicit
+failed `gate`, or when a zone-intent comparison is incomplete or contains a
+difference, missing value or unexpected value. Other evidence families retain
+their ordinary exit behaviour; the flag does not invent a pass/fail policy for
+them. JSON is still emitted before the exit status is selected.
+
 ## Domain control manifests
 
 `domain-control [input.json]` builds or reviews a bounded desired-state
