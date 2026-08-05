@@ -825,7 +825,7 @@
   .compact{flex:none;padding:7px 10px;font-size:var(--text-2xs)}
   .plan-toggle{margin-top:10px}
   #investigation-plan{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:10px 0 0;padding:0;list-style:none}
-  #investigation-plan>li{min-width:0;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface2)}
+  #investigation-plan>li{min-width:0;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
   summary{cursor:pointer}
   #investigation-plan>li summary{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;gap:6px 9px;align-items:start;padding:12px;list-style:none}
   #investigation-plan>li summary::-webkit-details-marker{display:none}
@@ -863,7 +863,7 @@
   .guide-return span,.guide-return small{color:var(--muted);font-size:var(--text-2xs)}
   .guide-return strong{margin:2px 0;font-size:var(--text-xs);overflow-wrap:anywhere}
   .guide-return small{color:var(--accent);font-weight:700}
-  .guide-return:hover{border-color:var(--accent);background:var(--surface2)}
+  .guide-return:hover{border-color:var(--accent);background:var(--panel-raised)}
   @media(max-width:900px){#investigation-plan{grid-template-columns:1fr}.current-action{grid-template-columns:1fr}.context-tray{grid-template-columns:repeat(2,minmax(0,1fr))}}
   @media(max-width:560px){.guide-heading{flex-wrap:wrap}.context-actions{width:100%;justify-content:flex-start}.current-action>.action-copy{grid-row:2}.current-action>.action-controls{grid-row:1}.mobile-action-label{display:block}.action-controls>a,.action-controls>button{width:100%}.request-actions,.outcome-actions{display:grid}.secondary-details{display:grid}.guide-controls{display:grid;grid-template-columns:1fr 1fr}.guide-controls .btn{width:100%}.target-edit{grid-template-columns:1fr}dl div{grid-template-columns:1fr;gap:2px}.guide-return{right:10px;bottom:max(10px,env(safe-area-inset-bottom));max-width:calc(100vw - 20px)}}
   @media(max-width:360px){.guide-controls{grid-template-columns:1fr}#investigation-plan>li summary{grid-template-columns:auto minmax(0,1fr) auto}.stage-state{grid-column:2;text-align:left}#investigation-plan>li summary::after{grid-column:3;grid-row:1}}

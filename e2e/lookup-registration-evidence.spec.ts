@@ -12,6 +12,13 @@ const packageVersion = (JSON.parse(readFileSync('package.json', 'utf8')) as { ve
 // never trigger a live lookup, only client-side parsing/navigation.
 
 test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('whoisleuth:lookup-presentation:v1', JSON.stringify({
+      version: 1,
+      density: 'standard',
+      task: 'general',
+    }));
+  });
   await page.goto('/lookup');
 });
 
@@ -215,6 +222,7 @@ test('deep Lookup presents registrar and observed network RDAP as separate sourc
     hasText: 'Registry object ID, WHOIS: Incomplete / redacted',
   })).toHaveCount(1);
 
+  await page.getByRole('tab', { name: /^Relationships/ }).click();
   const analystPivots = page.locator('details.analyst-pivots');
   await expect(analystPivots).not.toHaveAttribute('open', '');
   await expect(analystPivots.getByText('External evidence pivots', { exact: true })).toBeVisible();
@@ -282,6 +290,7 @@ test('deep Lookup presents registrar and observed network RDAP as separate sourc
   await expect(responseRoutes.getByRole('button', { name: 'Record in case' })).toBeDisabled();
 
   const downloadPromise = page.waitForEvent('download');
+  await page.locator('.export-menu > summary').click();
   await page.getByRole('button', { name: 'Export evidence JSON' }).click();
   const download = await downloadPromise;
   const downloadPath = await download.path();
@@ -303,6 +312,7 @@ test('deep Lookup presents registrar and observed network RDAP as separate sourc
   expect(JSON.stringify(exported)).not.toContain('stat.ripe.net');
 
   const reportDownloadPromise = page.waitForEvent('download');
+  await page.locator('.export-menu > summary').click();
   await page.getByRole('button', { name: 'Download report' }).click();
   const reportDownload = await reportDownloadPromise;
   expect(reportDownload.suggestedFilename()).toMatch(
@@ -558,7 +568,9 @@ test('optional external intelligence searches are explicit, attributed, and mobi
   await riskExplanation.focus();
   await expect(riskExplanation).toBeFocused();
   await riskExplanation.press('Enter');
-  await expect(page.locator('.score-details ul').getByText('Corroborated recent external phishing/malware records')).toBeVisible();
+  await expect(page.locator('.factor-chart text').getByText('Corroborated recent external phishing/malware records')).toBeVisible();
+  const exactRiskFactors = page.locator('.score-details details').first().locator('.factor-list');
+  await expect(exactRiskFactors).toHaveCSS('clip-path', 'inset(50%)');
   await expect(section.getByText('phishing', { exact: true })).toBeVisible();
   await expect(section.getByText('malware', { exact: true })).toHaveCount(2);
   for (const link of await section.getByRole('link', { name: 'View attributed provider record' }).all()) {
@@ -566,6 +578,8 @@ test('optional external intelligence searches are explicit, attributed, and mobi
   }
 
   await page.setViewportSize({ width: 360, height: 780 });
+  await expect(page.locator('.score-details details').first().locator('.factor-chart')).toBeHidden();
+  await expect(exactRiskFactors).toHaveCSS('position', 'static');
   await expectNoHorizontalOverflow(page);
 });
 

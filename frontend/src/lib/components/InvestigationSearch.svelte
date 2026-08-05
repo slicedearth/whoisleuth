@@ -186,7 +186,7 @@
   .recent-work{margin-top:18px;padding-top:15px;border-top:1px solid var(--border)}
   .recent-work>div h3{margin:0;font:700 var(--text-sm) var(--mono)}
   .recent-work>div p{margin:4px 0 0;color:var(--muted);font-size:var(--text-2xs);line-height:1.45}
-  .result-card{height:100%;min-width:0;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface2);padding:15px}
+  .result-card{height:100%;min-width:0;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel-raised);padding:15px}
   .result-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
   .type-badge{color:var(--accent2);font:700 var(--text-2xs) var(--mono);letter-spacing:.05em;text-transform:uppercase}
   h3{margin:4px 0 0;overflow-wrap:anywhere;font:700 var(--text-md) var(--mono)}

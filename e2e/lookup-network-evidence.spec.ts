@@ -9,6 +9,13 @@ import { ACTIVE_PROFILE_KEY } from '../frontend/src/lib/brand-profiles';
 // never trigger a live lookup, only client-side parsing/navigation.
 
 test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('whoisleuth:lookup-presentation:v1', JSON.stringify({
+      version: 1,
+      density: 'standard',
+      task: 'general',
+    }));
+  });
   await page.goto('/lookup');
 });
 
@@ -705,6 +712,7 @@ test('IP results use network-specific RDAP labels instead of domain fields', asy
   await reverseDnsCard.locator(':scope > summary').click();
   await expect(reverseDnsCard.getByText('edge.example.test', { exact: true })).toBeVisible();
   await expect(reverseDnsCard.getByText(/does not prove hosting control/i)).toBeVisible();
+  await page.locator('.export-menu > summary').click();
   await expect(page.getByRole('button', { name: 'Download report' })).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
   await expectNoHorizontalOverflow(page);
@@ -738,6 +746,7 @@ test('ASN results retain allocation status and lifecycle metadata at narrow widt
   await expect(rdapSection.getByText('active', { exact: true })).toBeVisible();
   await expect(rdapSection.locator('time[datetime="2003-04-05T06:07:08.000Z"]')).toBeVisible();
   await expect(rdapSection.locator('time[datetime="2024-05-06T07:08:09.000Z"]')).toBeVisible();
+  await page.locator('.export-menu > summary').click();
   await expect(page.getByRole('button', { name: 'Download report' })).toBeVisible();
 
   await page.setViewportSize({ width: 390, height: 844 });

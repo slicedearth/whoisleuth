@@ -55,10 +55,12 @@ describe('lookup page actions', () => {
       }),
       [
         { href: '#overview', label: 'Overview' },
+        { href: '#registry', label: 'Registration' },
         { href: '#web-evidence', label: 'Web & DNS' },
-        { href: '#registry', label: 'Registry' },
+        { href: '#relationships-history', label: 'Relationships & history' },
+        { href: '#source-quality', label: 'Source quality' },
         { href: '#case-response', label: 'Case & response' },
-        { href: '#raw-data', label: 'Raw data' },
+        { href: '#advanced-evidence', label: 'Advanced' },
       ],
     );
   });
@@ -74,11 +76,12 @@ describe('lookup page actions', () => {
       }).map((link) => link.href),
       [
         '#overview',
-        '#external-intelligence',
         '#web-evidence',
+        '#relationships-history',
+        '#advanced-evidence',
         '#registry',
+        '#source-quality',
         '#case-response',
-        '#raw-data',
       ],
     );
   });

@@ -52,6 +52,13 @@
     void tick().then(() => keepActiveVisible(href));
   }
 
+  function jumpToSection(event: Event) {
+    const href = (event.currentTarget as HTMLSelectElement).value;
+    if (!href.startsWith('#')) return;
+    selectHref(href);
+    window.location.hash = href.slice(1);
+  }
+
   onMount(() => {
     let frame = 0;
     const update = () => {
@@ -89,7 +96,15 @@
   });
 </script>
 
-<div class="local-nav-shell" class:show-start-fade={showStartFade} class:show-end-fade={showEndFade}>
+<div class="local-nav-shell" class:track-current={trackCurrent} class:show-start-fade={showStartFade} class:show-end-fade={showEndFade}>
+  {#if trackCurrent}
+    <label class="local-nav-select">
+      <span>Jump to section</span>
+      <select aria-label="Jump to section" value={activeHref || links[0]?.href || ''} onchange={jumpToSection}>
+        {#each links as link}<option value={link.href}>{link.label}</option>{/each}
+      </select>
+    </label>
+  {/if}
   <nav class="local-nav" aria-label={label} bind:this={navigation}>
     {#if trackCurrent}<span class="local-nav-prompt" aria-hidden="true">trace://</span>{/if}
     {#each links as link}

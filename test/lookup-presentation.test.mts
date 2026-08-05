@@ -4,7 +4,6 @@ import test from 'node:test';
 import {
   normalizeLookupEvidenceDensity,
   normalizeLookupTaskView,
-  lookupTaskInitiallyExpands,
   prioritizeLookupSectionLinks,
   readLookupPresentation,
   writeLookupPresentation,
@@ -12,16 +11,17 @@ import {
 
 const links = [
   { href: '#overview' as const, label: 'Overview' },
+  { href: '#registry' as const, label: 'Registration' },
   { href: '#web-evidence' as const, label: 'Web & DNS' },
-  { href: '#registry' as const, label: 'Registry' },
-  { href: '#external-intelligence' as const, label: 'External intel' },
+  { href: '#relationships-history' as const, label: 'Relationships & history' },
+  { href: '#source-quality' as const, label: 'Source quality' },
   { href: '#case-response' as const, label: 'Case & response' },
-  { href: '#raw-data' as const, label: 'Raw data' },
+  { href: '#advanced-evidence' as const, label: 'External & raw' },
 ];
 
 test('normalizes persisted presentation settings to conservative defaults', () => {
   assert.equal(normalizeLookupEvidenceDensity('summary'), 'summary');
-  assert.equal(normalizeLookupEvidenceDensity('invalid'), 'standard');
+  assert.equal(normalizeLookupEvidenceDensity('invalid'), 'summary');
   assert.equal(normalizeLookupTaskView('incident'), 'incident');
   assert.equal(normalizeLookupTaskView({}), 'general');
 });
@@ -31,22 +31,14 @@ test('prioritizes navigation without changing or removing the shared evidence li
   assert.deepEqual(acquisition.map((link) => link.href), [
     '#overview',
     '#registry',
+    '#relationships-history',
     '#web-evidence',
+    '#source-quality',
     '#case-response',
-    '#external-intelligence',
-    '#raw-data',
+    '#advanced-evidence',
   ]);
   assert.deepEqual(new Set(acquisition), new Set(links));
   assert.notEqual(acquisition, links);
-});
-
-test('task views open only the evidence panels that answer their primary questions', () => {
-  assert.equal(lookupTaskInitiallyExpands('brand', 'page-identity'), true);
-  assert.equal(lookupTaskInitiallyExpands('brand', 'dns'), false);
-  assert.equal(lookupTaskInitiallyExpands('owned', 'dns'), true);
-  assert.equal(lookupTaskInitiallyExpands('incident', 'security-posture'), true);
-  assert.equal(lookupTaskInitiallyExpands('general', 'http'), false);
-  assert.equal(lookupTaskInitiallyExpands('invalid', 'http'), false);
 });
 
 test('reads and writes a bounded versioned browser presentation preference', () => {
@@ -61,8 +53,8 @@ test('reads and writes a bounded versioned browser presentation preference', () 
   assert.deepEqual(readLookupPresentation(storage), { density: 'full', task: 'brand' });
 
   stored = JSON.stringify({ version: 2, density: 'summary', task: 'owned' });
-  assert.deepEqual(readLookupPresentation(storage), { density: 'standard', task: 'general' });
+  assert.deepEqual(readLookupPresentation(storage), { density: 'summary', task: 'general' });
 
   stored = '{"broken"';
-  assert.deepEqual(readLookupPresentation(storage), { density: 'standard', task: 'general' });
+  assert.deepEqual(readLookupPresentation(storage), { density: 'summary', task: 'general' });
 });

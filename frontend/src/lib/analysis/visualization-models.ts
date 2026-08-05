@@ -308,8 +308,7 @@ export function projectScoreFactors(rawFactors: readonly ScoreFactorInput[]) {
       id: `${boundedId(factor?.label) || 'factor'}-${index}`,
       label: boundedText(factor?.label, 56) || `Factor ${index + 1}`,
       delta: boundedNumber(factor?.delta, -100, 100),
-    }))
-    .filter((factor) => factor.delta !== 0);
+    }));
   const factors = candidates.slice(0, MAX_SCORE_FACTORS);
   const maximum = Math.max(1, ...factors.map((factor) => Math.abs(factor.delta)));
   const x = scaleLinear().domain([-maximum, maximum]).range([220, 860]).clamp(true);
@@ -325,7 +324,7 @@ export function projectScoreFactors(rawFactors: readonly ScoreFactorInput[]) {
       return {
         ...factor,
         x: Math.min(zeroX, valueX),
-        width: Math.max(2, Math.abs(valueX - zeroX)),
+        width: factor.delta === 0 ? 0 : Math.max(2, Math.abs(valueX - zeroX)),
         y: 24 + index * rowHeight,
       };
     }),

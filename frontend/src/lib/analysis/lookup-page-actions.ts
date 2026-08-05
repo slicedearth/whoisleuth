@@ -65,6 +65,7 @@ export function buildLookupSectionLinks(input: {
 }): Array<{ href: `#${string}`; label: string }> {
   return [
     { href: '#overview', label: 'Overview' },
+    { href: '#registry', label: 'Registration' },
     ...(input.hasWebEvidence
       ? [
           {
@@ -73,14 +74,12 @@ export function buildLookupSectionLinks(input: {
           },
         ]
       : []),
-    { href: '#registry', label: 'Registry' },
-    ...(input.hasExternalIntelligence
-      ? [{ href: '#external-intelligence' as const, label: 'External intel' }]
-      : []),
+    { href: '#relationships-history', label: 'Relationships & history' },
+    { href: '#source-quality', label: 'Source quality' },
     ...(input.hasCaseSection
       ? [{ href: '#case-response' as const, label: 'Case & response' }]
       : []),
-    { href: '#raw-data', label: 'Raw data' },
+    { href: '#advanced-evidence', label: input.hasExternalIntelligence ? 'External & raw' : 'Advanced' },
   ];
 }
 

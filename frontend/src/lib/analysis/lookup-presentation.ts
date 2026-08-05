@@ -1,15 +1,5 @@
 export type LookupEvidenceDensity = 'summary' | 'standard' | 'full';
 export type LookupTaskView = 'general' | 'acquisition' | 'brand' | 'incident' | 'owned';
-export type LookupEvidencePanel =
-  | 'credential-surface'
-  | 'dns'
-  | 'http'
-  | 'network-context'
-  | 'page-identity'
-  | 'security-posture'
-  | 'structured-identity'
-  | 'technology'
-  | 'tls';
 export type LookupSectionLink = Readonly<{ href: `#${string}`; label: string }>;
 export type LookupPresentationState = Readonly<{
   density: LookupEvidenceDensity;
@@ -21,9 +11,9 @@ export type LookupPresentationStorage = Pick<Storage, 'getItem' | 'setItem'>;
 export const LOOKUP_PRESENTATION_STORAGE_KEY = 'whoisleuth:lookup-presentation:v1';
 
 export const LOOKUP_EVIDENCE_DENSITIES = Object.freeze([
-  Object.freeze({ id: 'summary' as const, label: 'Summary', detail: 'Overview and source-state ledger, with detailed sections reduced to headings.' }),
-  Object.freeze({ id: 'standard' as const, label: 'Standard', detail: 'Evidence sections remain available while the raw response stays collapsed until you choose to inspect it.' }),
-  Object.freeze({ id: 'full' as const, label: 'Full', detail: 'Every settled evidence section, including the bounded raw response view.' }),
+  Object.freeze({ id: 'summary' as const, label: 'Essentials', detail: 'A compact assessment, key observations, unresolved evidence, and one summary for each evidence family.' }),
+  Object.freeze({ id: 'standard' as const, label: 'Evidence', detail: 'Settled evidence is grouped by task while source detail and raw evidence stay collapsed until you inspect them.' }),
+  Object.freeze({ id: 'full' as const, label: 'All evidence', detail: 'Every settled evidence family remains available, including advanced and bounded raw evidence.' }),
 ]);
 
 export const LOOKUP_TASK_VIEWS = Object.freeze([
@@ -40,7 +30,7 @@ const TASKS = new Set<LookupTaskView>(LOOKUP_TASK_VIEWS.map((option) => option.i
 export function normalizeLookupEvidenceDensity(value: unknown): LookupEvidenceDensity {
   return typeof value === 'string' && DENSITIES.has(value as LookupEvidenceDensity)
     ? value as LookupEvidenceDensity
-    : 'standard';
+    : 'summary';
 }
 
 export function normalizeLookupTaskView(value: unknown): LookupTaskView {
@@ -67,7 +57,7 @@ export function readLookupPresentation(
   } catch {
     // Invalid or unavailable browser storage falls back to the stable defaults.
   }
-  return { density: 'standard', task: 'general' };
+  return { density: 'summary', task: 'general' };
 }
 
 export function writeLookupPresentation(
@@ -86,27 +76,12 @@ export function writeLookupPresentation(
 }
 
 const PRIORITY: Readonly<Record<LookupTaskView, readonly string[]>> = Object.freeze({
-  general: Object.freeze(['overview', 'web-evidence', 'registry', 'external-intelligence', 'case-response', 'raw-data']),
-  acquisition: Object.freeze(['overview', 'registry', 'web-evidence', 'case-response', 'external-intelligence', 'raw-data']),
-  brand: Object.freeze(['overview', 'web-evidence', 'external-intelligence', 'registry', 'case-response', 'raw-data']),
-  incident: Object.freeze(['overview', 'external-intelligence', 'web-evidence', 'registry', 'case-response', 'raw-data']),
-  owned: Object.freeze(['overview', 'registry', 'web-evidence', 'case-response', 'external-intelligence', 'raw-data']),
+  general: Object.freeze(['overview', 'registry', 'web-evidence', 'relationships-history', 'source-quality', 'case-response', 'advanced-evidence']),
+  acquisition: Object.freeze(['overview', 'registry', 'relationships-history', 'web-evidence', 'source-quality', 'case-response', 'advanced-evidence']),
+  brand: Object.freeze(['overview', 'web-evidence', 'relationships-history', 'registry', 'source-quality', 'case-response', 'advanced-evidence']),
+  incident: Object.freeze(['overview', 'web-evidence', 'relationships-history', 'advanced-evidence', 'registry', 'source-quality', 'case-response']),
+  owned: Object.freeze(['overview', 'registry', 'web-evidence', 'relationships-history', 'source-quality', 'case-response', 'advanced-evidence']),
 });
-
-const INITIAL_PANELS: Readonly<Record<LookupTaskView, readonly LookupEvidencePanel[]>> = {
-  general: [],
-  acquisition: ['dns', 'network-context', 'tls'],
-  brand: ['http', 'page-identity', 'credential-surface', 'structured-identity', 'technology'],
-  incident: ['http', 'tls', 'credential-surface', 'security-posture'],
-  owned: ['dns', 'network-context', 'tls', 'security-posture'],
-};
-
-export function lookupTaskInitiallyExpands(
-  task: unknown,
-  panel: LookupEvidencePanel,
-): boolean {
-  return INITIAL_PANELS[normalizeLookupTaskView(task)].includes(panel);
-}
 
 export function prioritizeLookupSectionLinks(
   links: readonly LookupSectionLink[],

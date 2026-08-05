@@ -149,13 +149,14 @@ describe('bounded visualization models', () => {
     const projected = projectScoreFactors([
       { label: 'Positive', delta: 18 },
       { label: 'Negative', delta: -7 },
-      { label: 'Ignored', delta: 0 },
+      { label: 'Baseline', delta: 0 },
       ...Array.from({ length: 20 }, (_, index) => ({ label: `Factor ${index}`, delta: index + 1 })),
     ]);
 
     assert.equal(projected.factors.length, MAX_SCORE_FACTORS);
     assert.equal(projected.truncated, true);
-    assert.ok(projected.factors.every((factor) => factor.width >= 2));
+    assert.ok(projected.factors.some((factor) => factor.label === 'Baseline' && factor.delta === 0 && factor.width === 0));
+    assert.ok(projected.factors.filter((factor) => factor.delta !== 0).every((factor) => factor.width >= 2));
     const negative = projected.factors.find((factor) => factor.delta < 0);
     assert.ok(negative);
     assert.ok((negative?.x ?? 0) < projected.zeroX);

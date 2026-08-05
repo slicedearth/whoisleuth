@@ -387,26 +387,29 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   await page.locator('#query').fill('sectioned-result.invalid');
   await page.getByRole('button', { name: 'Run lookup' }).click();
 
+  const controls = page.getByRole('region', { name: 'Choose what to review' });
+  await controls.getByLabel('Detail').selectOption('standard');
+
   const localNav = page.getByRole('navigation', { name: 'Result sections' });
   await expect(localNav).toBeVisible();
   await expect(localNav.getByRole('link', { name: 'Overview' })).toBeVisible();
   await expect(localNav.getByRole('link', { name: 'Web & DNS' })).toBeVisible();
-  await expect(localNav.getByRole('link', { name: 'Registry' })).toBeVisible();
-  await expect(localNav.getByRole('link', { name: 'Raw data' })).toBeVisible();
-  // Sections that have no evidence in this fixture offer no dead anchors.
-  await expect(localNav.getByRole('link', { name: 'External intel' })).toHaveCount(0);
+  await expect(localNav.getByRole('link', { name: 'Registration' })).toBeVisible();
+  await expect(localNav.getByRole('link', { name: 'Relationships & history' })).toBeVisible();
+  await expect(localNav.getByRole('link', { name: 'Source quality' })).toBeVisible();
+  await expect(localNav.getByRole('link', { name: 'Advanced' })).toBeVisible();
 
   await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Web and DNS evidence' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Registry sources' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Registration$/ })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Raw evidence' })).toBeVisible();
   await expect(page.getByLabel('Source diagnostics')).toContainText('rdap');
 
   // The D3-backed visual is paired with a complete, keyboard-operable source
   // rail. It does not replace the detailed source sections.
-  const topology = page.getByRole('region', { name: 'Evidence topology' });
+  const topology = page.getByRole('region', { name: 'Where this result came from' });
   await expect(topology).toBeVisible();
-  await expect(topology.getByRole('img', { name: 'Evidence topology visual overview' })).toBeVisible();
+  await expect(topology.getByRole('img', { name: 'Where this result came from visual overview' })).toBeVisible();
   const visualKey = topology.getByRole('group', { name: 'Evidence topology visual key' });
   await expect(visualKey).toContainText('Registry');
   await expect(visualKey).toContainText('Network');
@@ -494,6 +497,7 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   await expect(page).toHaveURL(/#evidence-dns$/);
   await expect(page.locator('#evidence-dns')).toBeInViewport();
 
+  await page.getByRole('tab', { name: /^Timeline/ }).click();
   const lifecycle = page.getByRole('region', { name: 'Observed lifecycle' });
   await expect(lifecycle).toBeVisible();
   await expect(lifecycle.getByRole('img', { name: 'Chronological lookup lifecycle overview' })).toBeVisible();
@@ -564,7 +568,7 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   await expect(page.locator('details.raw')).not.toHaveAttribute('open', '');
 
   // Keyboard operation: activating an anchor link moves to the section.
-  const registryLink = localNav.getByRole('link', { name: 'Registry' });
+  const registryLink = localNav.getByRole('link', { name: 'Registration' });
   await registryLink.focus();
   await registryLink.press('Enter');
   await expect(page).toHaveURL(/#registry$/);
@@ -586,15 +590,70 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
 
   for (const size of [
     { width: 1920, height: 1080 },
+    { width: 1440, height: 900 },
+    { width: 1024, height: 768 },
+    { width: 768, height: 1024 },
+    { width: 430, height: 932 },
+    { width: 393, height: 852 },
     { width: 320, height: 640 },
   ]) {
     await page.setViewportSize(size);
     await expectNoHorizontalOverflow(page);
+
+    await page.getByRole('tab', { name: /^Sources/ }).click();
+    const topologyGraphic = topology.getByRole('img', { name: 'Where this result came from visual overview' });
+    if (size.width > 700) {
+      await expect(topologyGraphic).toBeVisible();
+      const graphicBox = await boundingBox(topologyGraphic);
+      const panelBox = await boundingBox(topology);
+      expect(graphicBox.width).toBeGreaterThan(Math.min(520, panelBox.width * 0.72));
+      expect(graphicBox.width).toBeLessThanOrEqual(panelBox.width + 1);
+      expect(graphicBox.height).toBeGreaterThan(150);
+      expect(graphicBox.height).toBeLessThan(560);
+    } else {
+      await expect(topologyGraphic).toBeHidden();
+      await expect(topology.locator('.mobile-target')).toBeVisible();
+    }
+
+    await page.getByRole('tab', { name: /^Relationships/ }).click();
+    const relationshipMap = page.locator('.asset-graph .relationship-map');
+    if (await relationshipMap.count()) {
+      const mapFrame = relationshipMap.locator('.map-frame');
+      const mobileMap = relationshipMap.locator('.map-mobile');
+      if (await mapFrame.isVisible()) {
+        const graphBox = await boundingBox(mapFrame);
+        const panelBox = await boundingBox(relationshipMap);
+        expect(graphBox.width).toBeGreaterThan(Math.min(500, panelBox.width * 0.7));
+        expect(graphBox.width).toBeLessThanOrEqual(panelBox.width + 1);
+        expect(graphBox.height).toBeGreaterThan(180);
+        expect(graphBox.height).toBeLessThan(700);
+        expect(await mapFrame.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+      } else {
+        await expect(mobileMap).toBeVisible();
+        expect(await mobileMap.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+      }
+    }
+
+    await page.getByRole('tab', { name: /^Timeline/ }).click();
+    const lifecycleGraphic = lifecycle.getByRole('img', { name: 'Chronological lookup lifecycle overview' });
+    if (size.width > 700) {
+      await expect(lifecycleGraphic).toBeVisible();
+      const graphicBox = await boundingBox(lifecycleGraphic);
+      const panelBox = await boundingBox(lifecycle);
+      expect(graphicBox.width).toBeGreaterThan(Math.min(500, panelBox.width * 0.7));
+      expect(graphicBox.width).toBeLessThanOrEqual(panelBox.width + 1);
+      expect(graphicBox.height).toBeGreaterThan(130);
+      expect(graphicBox.height).toBeLessThan(520);
+    } else {
+      await expect(lifecycleGraphic).toBeHidden();
+      await expect(lifecycle.locator('ol[aria-label="Lookup lifecycle events"]')).toBeVisible();
+    }
   }
 
   // The desktop source graph becomes a connected, full-width source map on
   // narrow screens instead of shrinking every label into the wide SVG.
-  await expect(topology.getByRole('img', { name: 'Evidence topology visual overview' })).toBeHidden();
+  await page.getByRole('tab', { name: /^Sources/ }).click();
+  await expect(topology.getByRole('img', { name: 'Where this result came from visual overview' })).toBeHidden();
   await expect(topology.locator('.mobile-target')).toBeVisible();
   await expect(sourceRail.locator('.source-copy small').first()).toBeVisible();
   const mobileSourceIcons = sourceRail.locator('.source-glyph .source-icon');
@@ -628,6 +687,7 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
 
   // The wide chronological plot becomes a connected vertical timeline on
   // narrow screens rather than requiring a nested horizontal scrollbar.
+  await page.getByRole('tab', { name: /^Timeline/ }).click();
   await expect(lifecycle.getByRole('img', { name: 'Chronological lookup lifecycle overview' })).toBeHidden();
   const mobileTimeline = lifecycle.locator('ol[aria-label="Lookup lifecycle events"]');
   await expect(mobileTimeline).toBeVisible();
@@ -637,40 +697,28 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
     return Boolean(listRect && itemRect.left >= listRect.left - 0.5 && itemRect.right <= listRect.right + 0.5);
   }))).toBe(true);
 
-  // The local navigation stays a single scrollable row on narrow screens
-  // rather than stacking into a tall block. It also exposes overflow and
-  // keeps the active destination inside the visible strip.
-  const navBox = await boundingBox(localNav);
-  expect(navBox.height).toBeLessThanOrEqual(64);
-  expect(await localNav.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
-  await localNav.evaluate((element) => {
-    element.scrollLeft = 0;
-    element.dispatchEvent(new Event('scroll'));
-  });
-  await expect(page.locator('.local-nav-shell')).toHaveClass(/show-end-fade/);
-  await page.locator('#raw-data').evaluate((element) => element.scrollIntoView({ block: 'start' }));
-  const rawDataLink = localNav.getByRole('link', { name: 'Raw data' });
-  await expect(rawDataLink).toHaveAttribute('aria-current', 'location');
-  await expect.poll(async () => page.locator('#raw-data').evaluate((section) => {
+  // Mobile uses one compact native section picker instead of a horizontally
+  // scrolling trace strip. The chosen destination clears the sticky toolbar.
+  await expect(localNav).toBeHidden();
+  const sectionPicker = page.getByLabel('Jump to section');
+  await expect(sectionPicker).toBeVisible();
+  await sectionPicker.selectOption('#advanced-evidence');
+  await expect(page).toHaveURL(/#advanced-evidence$/);
+  await expect.poll(async () => page.locator('#advanced-evidence').evaluate((section) => {
     const sectionTop = section.getBoundingClientRect().top;
     const navigation = document.querySelector('.local-nav-shell');
     return navigation ? sectionTop >= navigation.getBoundingClientRect().bottom + 4 : false;
   })).toBe(true);
-  await expect.poll(async () => rawDataLink.evaluate((link) => {
-    const navigation = link.closest('nav');
-    if (!navigation) return false;
-    const navigationRect = navigation.getBoundingClientRect();
-    const linkRect = link.getBoundingClientRect();
-    return linkRect.left >= navigationRect.left - 0.5 && linkRect.right <= navigationRect.right + 0.5;
-  })).toBe(true);
+  await expect(sectionPicker).toHaveValue('#advanced-evidence');
 
   const downloadPromise = page.waitForEvent('download');
+  await page.locator('.export-menu > summary').click();
   await page.getByRole('button', { name: 'Export evidence JSON' }).click();
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toMatch(/^whoisleuth-evidence-sectioned-result\.invalid-.+\.json$/);
 });
 
-test('Lookup task and density controls change presentation without changing evidence', async ({ page }) => {
+test('Lookup focus and detail controls change presentation without changing evidence', async ({ page }) => {
   const domain = 'presentation-options.invalid';
   await page.route('**/api/lookup?*', (route) => route.fulfill({
     status: 200,
@@ -681,41 +729,58 @@ test('Lookup task and density controls change presentation without changing evid
   await page.locator('#query').fill(domain);
   await page.getByRole('button', { name: 'Run lookup' }).click();
 
-  const controls = page.getByRole('region', { name: 'Evidence view' });
-  const task = controls.getByLabel('Task');
-  const density = controls.getByLabel('Density');
+  const controls = page.getByRole('region', { name: 'Choose what to review' });
+  const task = controls.getByLabel('Focus');
+  const density = controls.getByLabel('Detail');
   const localNav = page.getByRole('navigation', { name: 'Result sections' });
   await expect(task).toHaveValue('general');
-  await expect(density).toHaveValue('standard');
+  await expect(density).toHaveValue('summary');
+  await expect(page.getByRole('heading', { name: 'At a glance' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Expand Advanced evidence' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Raw evidence' })).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Expand Registration evidence' }).click();
+  await expect(density).toHaveValue('summary');
+  await expect(page.locator('#evidence-registry')).toBeVisible();
+  await page.getByRole('button', { name: 'Collapse Registration evidence' }).click();
+  await expect(page.locator('#evidence-registry')).toHaveCount(0);
+
+  await density.selectOption('standard');
   await expect(page.getByRole('heading', { name: 'Raw evidence' })).toBeVisible();
   await expect(page.locator('#raw-data details')).toBeVisible();
   await expect(page.locator('#raw-data details')).toHaveJSProperty('open', false);
+  await page.getByRole('button', { name: 'Collapse Registration evidence' }).click();
+  await expect(page.locator('#evidence-registry')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Expand Registration evidence' }).click();
+  await expect(page.locator('#evidence-registry')).toBeVisible();
 
   await density.selectOption('full');
   await expect(page.locator('#raw-data details')).toBeVisible();
   await expect(page.locator('#evidence-dns > details')).toHaveJSProperty('open', false);
   await task.selectOption('acquisition');
-  await expect(page.locator('#evidence-dns > details')).toHaveJSProperty('open', true);
+  await expect(page.locator('#evidence-dns > details')).toHaveJSProperty('open', false);
   await expect(localNav.getByRole('link').evaluateAll((links) => links.map((link) => link.textContent?.trim()))).resolves.toEqual([
     'Overview',
-    'Registry',
+    'Registration',
+    'Relationships & history',
     'Web & DNS',
+    'Source quality',
     'Case & response',
-    'Raw data',
+    'Advanced',
   ]);
 
   await density.selectOption('summary');
-  await expect(page.getByRole('heading', { name: 'Registry sources' })).toBeVisible();
-  await expect(page.locator('#evidence-registry')).toBeHidden();
-  await expect(page.getByRole('region', { name: 'Evidence coverage' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Expand Registration evidence' })).toBeVisible();
+  await expect(page.locator('#evidence-registry')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Expand Source quality evidence' })).toBeVisible();
   await page.setViewportSize({ width: 320, height: 700 });
   await expectNoHorizontalOverflow(page);
 
   await page.reload();
   await page.locator('#query').fill(domain);
   await page.getByRole('button', { name: 'Run lookup' }).click();
-  await expect(page.getByRole('region', { name: 'Evidence view' }).getByLabel('Task')).toHaveValue('acquisition');
-  await expect(page.getByRole('region', { name: 'Evidence view' }).getByLabel('Density')).toHaveValue('summary');
+  await expect(page.getByRole('region', { name: 'Choose what to review' }).getByLabel('Focus')).toHaveValue('acquisition');
+  await expect(page.getByRole('region', { name: 'Choose what to review' }).getByLabel('Detail')).toHaveValue('summary');
 });
 
 test('primary, secondary, and destructive actions are visually distinct', async ({ page }) => {

@@ -168,7 +168,7 @@ export const PUBLIC_RESOURCES: readonly PublicResource[] = Object.freeze([
     ]),
     steps: Object.freeze([
       Object.freeze({ title: 'Frame the decision', body: 'State whether you are checking registration, possible impersonation, infrastructure overlap, acquisition readiness, service change or an abuse-reporting lead.' }),
-      Object.freeze({ title: 'Collect and compare', body: 'Use Fast for registration-first triage, Deep for richer evidence, and Bulk for consistent peer comparison. Keep partial sources visible.' }),
+      Object.freeze({ title: 'Collect and compare', body: 'Use Fast for registration-first triage, Deep for richer evidence, and Bulk for consistent peer comparison. In Lookup, choose the Focus that matches the decision, start from At a glance, and open only the Registration, Web and DNS, Relationships and history, Source quality, Case and response, or Advanced evidence families you need. Keep partial sources visible.' }),
       Object.freeze({ title: 'Record facts and actions', body: 'Pin individual evidence, separate analyst assertions, note contradictions, set reviewed case actions and export a response packet only after preflight.' }),
     ]),
     evidence: Object.freeze([
