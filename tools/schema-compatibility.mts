@@ -153,6 +153,35 @@ import {
   MAX_DISCOVERY_OBSERVATION_BYTES,
 } from '../cli/discovery-observation-snapshot.mts';
 import {
+  INVESTIGATION_MANIFEST_SCHEMA,
+  INVESTIGATION_MANIFEST_VERSION,
+  MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES,
+} from '../cli/investigation-manifest.mts';
+import {
+  CT_EVENT_BATCH_SCHEMA,
+  CT_EVENT_BATCH_VERSION,
+  MAX_CT_EVENT_INPUT_BYTES,
+} from '../cli/ct-event-intake.mts';
+import {
+  EXTERNAL_OBSERVATION_MAPPING_SCHEMA,
+  EXTERNAL_OBSERVATION_MAPPING_VERSION,
+  MAX_EXTERNAL_OBSERVATION_MAPPING_BYTES,
+} from '../cli/external-observation-mapping.mts';
+import {
+  OPEN_ASSET_MODEL_BRIDGE_SCHEMA,
+  OPEN_ASSET_MODEL_BRIDGE_VERSION,
+} from '../cli/open-asset-model-bridge.mts';
+import {
+  SOURCE_RELIABILITY_REPORT_SCHEMA,
+  SOURCE_RELIABILITY_REPORT_VERSION,
+  MAX_SOURCE_RELIABILITY_INPUT_BYTES,
+} from '../cli/source-reliability.mts';
+import {
+  MAX_OFFLINE_EVIDENCE_INPUT_BYTES,
+  OFFLINE_EVIDENCE_REVIEW_SCHEMA,
+  OFFLINE_EVIDENCE_REVIEW_VERSION,
+} from '../cli/offline-evidence-review.mts';
+import {
   BRAND_PROFILE_SCHEMA,
   BRAND_PROFILE_SCHEMA_VERSION,
   MAX_PROFILE_STORE_BYTES,
@@ -328,6 +357,22 @@ import {
   DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION,
 } from '../lib/domain-control-flight-recorder.mts';
 import {
+  DOMAIN_CHANGE_PACKET_INPUT_SCHEMA,
+  DOMAIN_CHANGE_PACKET_SCHEMA,
+  DOMAIN_CHANGE_PACKET_VERSION,
+  MAX_DOMAIN_CHANGE_PACKET_INPUT_BYTES,
+} from '../lib/domain-change-packet.mts';
+import {
+  DNS_CONVERGENCE_INPUT_SCHEMA,
+  DNS_CONVERGENCE_REVIEW_SCHEMA,
+  DNS_CONVERGENCE_REVIEW_VERSION,
+} from '../lib/dns-convergence-review.mts';
+import {
+  TRUST_STORE_COMPARISON_INPUT_SCHEMA,
+  TRUST_STORE_COMPARISON_REVIEW_SCHEMA,
+  TRUST_STORE_COMPARISON_REVIEW_VERSION,
+} from '../lib/trust-store-comparison.mts';
+import {
   registryStandardsCoverageSnapshot,
 } from '../lib/registry-capabilities.mts';
 import {
@@ -366,7 +411,7 @@ import {
 
 export const SCHEMA_COMPATIBILITY_INVENTORY_SCHEMA = 'whoisleuth.schema-compatibility-inventory';
 export const SCHEMA_COMPATIBILITY_INVENTORY_VERSION = 1;
-export const MAX_SCHEMA_COMPATIBILITY_ENTRIES = 120;
+export const MAX_SCHEMA_COMPATIBILITY_ENTRIES = 140;
 
 type ContractKind = 'browser_store' | 'tab_store' | 'hosted_store' | 'export' | 'cli_document' | 'derived';
 type FutureVersionBehavior = 'reject' | 'preserve_without_write' | 'discard' | 'not_applicable';
@@ -477,6 +522,12 @@ const ENTRIES: SchemaCompatibilityEntry[] = [
   entry({ id: 'cli.domain-portfolio-review', kind: 'cli_document', schema: DOMAIN_PORTFOLIO_REVIEW_SCHEMA, currentVersion: DOMAIN_PORTFOLIO_REVIEW_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'lib/domain-portfolio-review.mts', note: 'Offline concentration, renewal, and recovery-dependency review that preserves analyst-authored provenance.' }),
   entry({ id: 'cli.domain-change-input', kind: 'cli_document', schema: DOMAIN_CHANGE_INPUT_SCHEMA, currentVersion: DOMAIN_CHANGE_REVIEW_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: null, owner: 'lib/domain-change-review.mts', note: 'Bounded analyst-supplied authority, resolver, ACME, certificate, service, and HSTS observations; TXT values are reduced to digests.' }),
   entry({ id: 'cli.domain-change-review', kind: 'cli_document', schema: DOMAIN_CHANGE_REVIEW_SCHEMA, currentVersion: DOMAIN_CHANGE_REVIEW_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'lib/domain-change-review.mts', note: 'Offline DNS change gate with explicit record agreement, DNSSEC automation, resolver-divergence, ACME, TLS-continuity, service, and preload context.' }),
+  entry({ id: 'cli.domain-change-packet-input', kind: 'cli_document', schema: DOMAIN_CHANGE_PACKET_INPUT_SCHEMA, currentVersion: DOMAIN_CHANGE_PACKET_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: MAX_DOMAIN_CHANGE_PACKET_INPUT_BYTES, owner: 'lib/domain-change-packet.mts', note: 'Bounded analyst-supplied pre-change, post-change, and planned-change assurance inputs used without new collection.' }),
+  entry({ id: 'cli.domain-change-packet', kind: 'cli_document', schema: DOMAIN_CHANGE_PACKET_SCHEMA, currentVersion: DOMAIN_CHANGE_PACKET_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: null, owner: 'lib/domain-change-packet.mts', note: 'Canonical integrity-protected local change packet whose optional signature authenticates the canonical packet digest, not the truth of its observations.' }),
+  entry({ id: 'cli.dns-convergence-input', kind: 'cli_document', schema: DNS_CONVERGENCE_INPUT_SCHEMA, currentVersion: DNS_CONVERGENCE_REVIEW_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: MAX_OFFLINE_EVIDENCE_INPUT_BYTES, owner: 'lib/dns-convergence-review.mts', note: 'Bounded analyst-supplied expected DNS state and separately attributed observer snapshots; unavailable observations remain explicit.' }),
+  entry({ id: 'cli.dns-convergence-review', kind: 'cli_document', schema: DNS_CONVERGENCE_REVIEW_SCHEMA, currentVersion: DNS_CONVERGENCE_REVIEW_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'lib/dns-convergence-review.mts', note: 'Offline resolver-convergence matrix that separates agreement, divergence, incompleteness, and unavailable observations.' }),
+  entry({ id: 'cli.trust-store-comparison-input', kind: 'cli_document', schema: TRUST_STORE_COMPARISON_INPUT_SCHEMA, currentVersion: TRUST_STORE_COMPARISON_REVIEW_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: MAX_OFFLINE_EVIDENCE_INPUT_BYTES, owner: 'lib/trust-store-comparison.mts', note: 'Bounded analyst-supplied certificate-chain digests and separately attributed trust-store snapshots; certificate bytes and local store contents are excluded.' }),
+  entry({ id: 'cli.trust-store-comparison-review', kind: 'cli_document', schema: TRUST_STORE_COMPARISON_REVIEW_SCHEMA, currentVersion: TRUST_STORE_COMPARISON_REVIEW_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'lib/trust-store-comparison.mts', note: 'Offline exact-fingerprint intersection review; it does not perform certificate path validation or establish browser trust.' }),
   entry({ id: 'cli.nameserver-preflight-input', kind: 'cli_document', schema: NAMESERVER_PREFLIGHT_INPUT_SCHEMA, currentVersion: NAMESERVER_PREFLIGHT_REVIEW_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: null, owner: 'lib/nameserver-preflight-review.mts', note: 'Bounded intended nameserver set and separately attributed direct-service observations; performs no collection or registry change.' }),
   entry({ id: 'cli.nameserver-preflight-review', kind: 'cli_document', schema: NAMESERVER_PREFLIGHT_REVIEW_SCHEMA, currentVersion: NAMESERVER_PREFLIGHT_REVIEW_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'lib/nameserver-preflight-review.mts', note: 'Offline undelegated nameserver readiness gate covering authority, served NS set, SOA, public address and in-bailiwick glue evidence.' }),
   entry({ id: 'cli.investigation-plan', kind: 'cli_document', schema: CLI_INVESTIGATION_PLAN_SCHEMA, currentVersion: CLI_INVESTIGATION_PLAN_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'cli/investigation-plan.mts', note: 'Plan-only fixed recipes composed from existing bounded commands; no step, placeholder, script, file, request, case change, or submission is executed.' }),
@@ -498,6 +549,12 @@ const ENTRIES: SchemaCompatibilityEntry[] = [
   entry({ id: 'cli.discovery-scan-item', kind: 'cli_document', schema: CLI_DISCOVERY_SCAN_ITEM_SCHEMA, currentVersion: CLI_DISCOVERY_SCAN_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'cli/discovery-scan.mts', note: 'One bounded supervised candidate scan JSONL item.' }),
   entry({ id: 'cli.discovery-snapshot', kind: 'cli_document', schema: CLI_DISCOVERY_SNAPSHOT_SCHEMA, currentVersion: CLI_DISCOVERY_SNAPSHOT_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'normalized_rewrite', byteBudget: MAX_DISCOVERY_SNAPSHOT_BYTES, owner: 'cli/discovery-snapshot.mts', note: 'Private local generated-candidate baseline tied to the exact normalised discovery configuration and dictionary digest.' }),
   entry({ id: 'cli.discovery-observation-snapshot', kind: 'cli_document', schema: CLI_DISCOVERY_OBSERVATION_SCHEMA, currentVersion: CLI_DISCOVERY_OBSERVATION_VERSION, supportedVersions: [1, 2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'normalize_to_current', writeSemantics: 'normalized_rewrite', byteBudget: MAX_DISCOVERY_OBSERVATION_BYTES, owner: 'cli/discovery-observation-snapshot.mts', note: 'Private local registration and DNS baseline; version 2 preserves component-specific observation times and migrates version 1 on the next successful write.' }),
+  entry({ id: 'cli.ct-event-batch', kind: 'cli_document', schema: CT_EVENT_BATCH_SCHEMA, currentVersion: CT_EVENT_BATCH_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: MAX_CT_EVENT_INPUT_BYTES, owner: 'cli/ct-event-intake.mts', note: 'Local source-qualified certificate-event intake that emits browser-compatible external findings without contacting a log or retaining certificate bytes.' }),
+  entry({ id: 'cli.investigation-manifest', kind: 'cli_document', schema: INVESTIGATION_MANIFEST_SCHEMA, currentVersion: INVESTIGATION_MANIFEST_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES, owner: 'cli/investigation-manifest.mts', note: 'Path-free manifest of ordered raw and canonical artifact digests; it proves byte identity, not evidence truth or collection independence.' }),
+  entry({ id: 'cli.external-observation-mapping', kind: 'cli_document', schema: EXTERNAL_OBSERVATION_MAPPING_SCHEMA, currentVersion: EXTERNAL_OBSERVATION_MAPPING_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: MAX_EXTERNAL_OBSERVATION_MAPPING_BYTES, owner: 'cli/external-observation-mapping.mts', note: 'Strict analyst-authored mapping of bounded dotted fields into source-qualified browser-compatible findings; arbitrary code and prototype paths are refused.' }),
+  entry({ id: 'cli.open-asset-model-bridge', kind: 'cli_document', schema: OPEN_ASSET_MODEL_BRIDGE_SCHEMA, currentVersion: OPEN_ASSET_MODEL_BRIDGE_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'cli/open-asset-model-bridge.mts', note: 'Loss-aware local projection of strict external findings into a bounded open asset graph while preserving source, time, completeness, and limitations.' }),
+  entry({ id: 'cli.source-reliability-report', kind: 'cli_document', schema: SOURCE_RELIABILITY_REPORT_SCHEMA, currentVersion: SOURCE_RELIABILITY_REPORT_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: MAX_SOURCE_RELIABILITY_INPUT_BYTES, owner: 'cli/source-reliability.mts', note: 'Target-free local aggregation of source states, durations, truncation, and rate limits; reports retain no domains, queries, or raw response data.' }),
+  entry({ id: 'cli.offline-evidence-review', kind: 'cli_document', schema: OFFLINE_EVIDENCE_REVIEW_SCHEMA, currentVersion: OFFLINE_EVIDENCE_REVIEW_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: MAX_OFFLINE_EVIDENCE_INPUT_BYTES, owner: 'cli/offline-evidence-review.mts', note: 'Local wrapper for supported versioned evidence-review inputs; it performs no refresh, transmission, provider request, or configuration change.' }),
   entry({ id: 'cli.posture', kind: 'cli_document', schema: CLI_POSTURE_SCHEMA, currentVersion: CLI_POSTURE_SCHEMA_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'cli/formatters/json.mts', note: 'Owned-domain posture output.' }),
   entry({ id: 'cli.http', kind: 'cli_document', schema: CLI_HTTP_SCHEMA, currentVersion: CLI_HTTP_SCHEMA_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'cli/formatters/json.mts', note: 'Bounded HTTP evidence output.' }),
   entry({ id: 'cli.tls', kind: 'cli_document', schema: CLI_TLS_SCHEMA, currentVersion: CLI_TLS_SCHEMA_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'cli/formatters/json.mts', note: 'Bounded TLS evidence output.' }),
