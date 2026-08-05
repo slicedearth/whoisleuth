@@ -1,7 +1,7 @@
 import { parseSavedLookupDocument, type UnknownRecord } from './saved-lookup.mts';
 
 export const CLI_LOOKUP_BRIEF_SCHEMA = 'whoisleuth.cli.lookup-brief';
-export const CLI_LOOKUP_BRIEF_VERSION = 1;
+export const CLI_LOOKUP_BRIEF_VERSION = 2;
 
 function record(value: unknown): UnknownRecord {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as UnknownRecord : {};
@@ -47,12 +47,37 @@ export function buildCliLookupBrief(input: string, generatedAt = new Date().toIS
       const item = record(value);
       return item.status === 'conflict' ? [text(item.label, 120) ?? 'Registration publication conflict'] : [];
     }).slice(0, 16);
-  const recommendedActions = [
-    ...(contradictions.length ? ['Review the separately attributed registration publications before relying on the conflicting fields.'] : []),
-    ...(incomplete.length ? [`Refresh or explain the ${incomplete.map((item) => item.id).join(', ')} source state before treating missing values as meaningful.`] : []),
-    ...(document.mode === 'fast' ? ['Run a deliberate Deep lookup if DNS, HTTP, TLS, page, or network evidence is required.'] : []),
-    'Pin only the facts needed for the decision and keep analyst hypotheses separate from observations.',
-  ];
+  const actionPlan = [
+    ...(contradictions.length ? [{
+      id: 'registration-publication-review',
+      action: 'Review the separately attributed registration publications before relying on the conflicting fields.',
+      reason: `${contradictions.length} conflicting publication field${contradictions.length === 1 ? '' : 's'} were retained.`,
+      expectedOutcome: 'Establish which observation is current, authoritative, or still unresolved.',
+      evidence: 'registry publication comparison',
+    }] : []),
+    ...(incomplete.length ? [{
+      id: 'source-state-review',
+      action: `Refresh or explain the ${incomplete.map((item) => item.id).join(', ')} source state before treating missing values as meaningful.`,
+      reason: 'At least one source was not complete in the saved observation.',
+      expectedOutcome: 'Determine whether each limitation is transient, persistent, or expected for that source.',
+      evidence: 'source health',
+    }] : []),
+    ...(document.mode === 'fast' ? [{
+      id: 'collection-depth-review',
+      action: 'Run a deliberate Deep lookup if DNS, HTTP, TLS, page, or network evidence is required.',
+      reason: 'The saved observation used the intentionally narrower Fast contract.',
+      expectedOutcome: 'Collect the explicitly selected additional source classes without implying that unavailable evidence is absent.',
+      evidence: 'collection mode',
+    }] : []),
+    {
+      id: 'case-evidence-review',
+      action: 'Pin only the facts needed for the decision and keep analyst hypotheses separate from observations.',
+      reason: 'The brief organises one observation but does not create an analyst decision.',
+      expectedOutcome: 'Preserve a reviewable boundary between observed facts, hypotheses, unknowns, and decisions.',
+      evidence: 'case workflow',
+    },
+  ].slice(0, 6).map((item) => Object.freeze(item));
+  const recommendedActions = actionPlan.map((item) => item.action);
   return Object.freeze({
     schema: CLI_LOOKUP_BRIEF_SCHEMA,
     version: CLI_LOOKUP_BRIEF_VERSION,
@@ -64,6 +89,7 @@ export function buildCliLookupBrief(input: string, generatedAt = new Date().toIS
     sourceHealth: Object.freeze(sources),
     contradictions: Object.freeze(contradictions),
     unknowns: Object.freeze(incomplete.map((item) => `${item.id}: ${item.state}`)),
+    actionPlan: Object.freeze(actionPlan),
     recommendedActions: Object.freeze(recommendedActions.slice(0, 6)),
     limitations: Object.freeze([
       'This brief is derived from one saved Lookup and makes no request.',
@@ -86,7 +112,10 @@ export function formatCliLookupBrief(document: ReturnType<typeof buildCliLookupB
     ...(document.unknowns.length ? document.unknowns.map((item) => `  ${item}`) : ['  No incomplete source state was identified.']),
     '',
     'Recommended manual actions',
-    ...document.recommendedActions.map((item, index) => `  ${index + 1}. ${item}`),
+    ...document.actionPlan.flatMap((item, index) => [
+      `  ${index + 1}. ${item.action}`,
+      `     Expected outcome: ${item.expectedOutcome}`,
+    ]),
     '',
   ].join('\n');
 }

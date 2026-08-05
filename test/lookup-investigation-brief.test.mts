@@ -62,6 +62,7 @@ const support: LookupDecisionSupport = {
     id: 'review',
     label: 'Review registry evidence',
     reason: 'Resolve the status difference.',
+    expectedOutcome: 'Confirm which publication can support the current registry status.',
     href: '#registry',
     priority: 'high',
   }],

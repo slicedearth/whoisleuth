@@ -24,6 +24,8 @@ describe('CLI Lookup brief', () => {
     assert.ok(brief.facts.some((item) => item.label === 'Registrar' && item.value === 'Example Registrar'));
     assert.ok(brief.unknowns.includes('whois: partial'));
     assert.ok(brief.unknowns.includes('tls: unavailable'));
+    assert.ok(brief.actionPlan.every((item) => item.expectedOutcome.length > 20));
+    assert.match(brief.actionPlan.find((item) => item.id === 'source-state-review')?.expectedOutcome ?? '', /transient|persistent/u);
     assert.doesNotMatch(JSON.stringify(brief), /private raw value/u);
     assert.match(formatCliLookupBrief(brief), /Recommended manual actions/u);
   });
