@@ -2,6 +2,12 @@
 // Deep Lookup. Matching emits fixed labels only: no page phrase, surrounding
 // text, or arbitrary markup is returned or stored.
 
+import {
+  analyzeStaticHtml,
+  MAX_STATIC_HTML_CHARS,
+  type StaticHtmlAnalysis,
+} from './static-html-analysis.mts';
+
 type PageLanguageSignalCategory =
   | 'account_verification'
   | 'account_restriction'
@@ -25,12 +31,9 @@ type PageLanguagePack = Readonly<{
 }>;
 
 export const PAGE_LANGUAGE_SIGNAL_VERSION = 1;
-export const MAX_PAGE_LANGUAGE_SIGNAL_CHARS = 300_000;
+export const MAX_PAGE_LANGUAGE_SIGNAL_CHARS = MAX_STATIC_HTML_CHARS;
 
 const CONTROL_CHARACTER_RE = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/u;
-const HTML_COMMENT_RE = /<!--[\s\S]*?(?:-->|$)/gu;
-const NON_VISIBLE_BLOCK_RE = /<(script|style|template)\b[^>]*>[\s\S]*?(?:<\/\1\s*>|$)/giu;
-const HTML_TAG_RE = /<[^>]*>/gu;
 const CATEGORY_LABELS: Readonly<Record<PageLanguageSignalCategory, string>> = Object.freeze({
   account_verification: 'account-verification',
   account_restriction: 'account-restriction',
@@ -118,14 +121,14 @@ function preferredPacks(documentLanguage: unknown): readonly PageLanguagePack[] 
 export function detectPageLanguageSignal(
   input: unknown,
   documentLanguage?: unknown,
+  suppliedAnalysis?: Pick<StaticHtmlAnalysis, 'inputLimitReached' | 'visibleText' | 'visibleTextLimitReached'>,
 ): PageLanguageSignal | null {
   if (typeof input !== 'string' || !input || input.length > MAX_PAGE_LANGUAGE_SIGNAL_CHARS || CONTROL_CHARACTER_RE.test(input)) {
     return null;
   }
-  const visibleText = input
-    .replace(HTML_COMMENT_RE, ' ')
-    .replace(NON_VISIBLE_BLOCK_RE, ' ')
-    .replace(HTML_TAG_RE, ' ')
+  const analysis = suppliedAnalysis ?? analyzeStaticHtml(input, { includeVisibleText: true });
+  if (analysis.inputLimitReached || analysis.visibleTextLimitReached) return null;
+  const visibleText = analysis.visibleText
     .replace(/\s+/gu, ' ')
     .trim();
   if (!visibleText) return null;

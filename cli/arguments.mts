@@ -363,10 +363,14 @@ function parseManifestArguments(argv: string[]): Extract<CliArguments, { action:
   return { action: 'manifest', sources, workflow, configurationDigestSha256, output, quiet, color };
 }
 
-function parseOfflineImportArguments<T extends 'map-observations' | 'oam-export'>(
-  action: T,
-  argv: string[],
-): Extract<CliArguments, { action: T }> {
+type SingleJsonInput = Readonly<{
+  source: string | null;
+  output: 'terminal' | 'json';
+  quiet: boolean;
+  color: boolean;
+}>;
+
+function parseSingleJsonInput(argv: string[], overflowMessage: string): SingleJsonInput {
   let source: string | null = null;
   let output: 'terminal' | 'json' = 'terminal';
   let quiet = false;
@@ -379,10 +383,18 @@ function parseOfflineImportArguments<T extends 'map-observations' | 'oam-export'
     else if (argument === '--no-color') color = false;
     else if (argument.startsWith('-')) throw new CliUsageError(`Unknown option "${argument}".`);
     else if (source === null) source = argument;
-    else throw new CliUsageError(`${action} accepts one optional versioned JSON input file.`);
+    else throw new CliUsageError(overflowMessage);
   }
   if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
-  return { action, source, output, quiet, color } as Extract<CliArguments, { action: T }>;
+  return { source, output, quiet, color };
+}
+
+function parseOfflineImportArguments<T extends 'map-observations' | 'oam-export'>(
+  action: T,
+  argv: string[],
+): Extract<CliArguments, { action: T }> {
+  const parsed = parseSingleJsonInput(argv, `${action} accepts one optional versioned JSON input file.`);
+  return { action, ...parsed } as Extract<CliArguments, { action: T }>;
 }
 
 function parseCommandsArguments(argv: string[]): Extract<CliArguments, { action: 'commands' }> {
@@ -504,41 +516,16 @@ function parseBulkArguments(argv: string[]): Extract<CliArguments, { action: 'bu
 }
 
 function parseCtSearchArguments(argv: string[]): Extract<CliArguments, { action: 'ct-search' }> {
-  let keyword: string | null = null;
-  let output: 'terminal' | 'json' = 'terminal';
-  let quiet = false;
-  let color = true;
-  for (const argument of argv) {
-    if (argument === '--json') {
-      if (output !== 'terminal') throw new CliUsageError('--json may be supplied only once.');
-      output = 'json';
-    } else if (argument === '--quiet') quiet = true;
-    else if (argument === '--no-color') color = false;
-    else if (argument.startsWith('-')) throw new CliUsageError(`Unknown option "${argument}".`);
-    else if (keyword === null) keyword = argument;
-    else throw new CliUsageError('ct-search accepts one keyword. Quote multi-word keywords as one argument.');
-  }
-  if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
-  return { action: 'ct-search', keyword, output, quiet, color };
+  const { source: keyword, ...options } = parseSingleJsonInput(
+    argv,
+    'ct-search accepts one keyword. Quote multi-word keywords as one argument.',
+  );
+  return { action: 'ct-search', keyword, ...options };
 }
 
 function parseCtIntakeArguments(argv: string[]): Extract<CliArguments, { action: 'ct-intake' }> {
-  let source: string | null = null;
-  let output: 'terminal' | 'json' = 'terminal';
-  let quiet = false;
-  let color = true;
-  for (const argument of argv) {
-    if (argument === '--json') {
-      if (output !== 'terminal') throw new CliUsageError('--json may be supplied only once.');
-      output = 'json';
-    } else if (argument === '--quiet') quiet = true;
-    else if (argument === '--no-color') color = false;
-    else if (argument.startsWith('-')) throw new CliUsageError(`Unknown option "${argument}".`);
-    else if (source === null) source = argument;
-    else throw new CliUsageError('ct-intake accepts one optional versioned JSON event file.');
-  }
-  if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
-  return { action: 'ct-intake', source, output, quiet, color };
+  const parsed = parseSingleJsonInput(argv, 'ct-intake accepts one optional versioned JSON event file.');
+  return { action: 'ct-intake', ...parsed };
 }
 
 function parseDiscoverArguments(argv: string[]): Extract<CliArguments, { action: 'discover' }> {
@@ -817,60 +804,21 @@ function parsePostureArguments(argv: string[]): Extract<CliArguments, { action: 
 }
 
 function parseHttpArguments(argv: string[]): Extract<CliArguments, { action: 'http' }> {
-  let domain: string | null = null;
-  let output: 'terminal' | 'json' = 'terminal';
-  let quiet = false;
-  let color = true;
-  for (const argument of argv) {
-    if (argument === '--json') {
-      if (output !== 'terminal') throw new CliUsageError('--json may be supplied only once.');
-      output = 'json';
-    } else if (argument === '--quiet') quiet = true;
-    else if (argument === '--no-color') color = false;
-    else if (argument.startsWith('-')) throw new CliUsageError(`Unknown option "${argument}".`);
-    else if (domain === null) domain = argument;
-    else throw new CliUsageError('http accepts one domain.');
-  }
-  if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
-  return { action: 'http', domain, output, quiet, color };
+  const { source: domain, ...options } = parseSingleJsonInput(argv, 'http accepts one domain.');
+  return { action: 'http', domain, ...options };
 }
 
 function parseTlsArguments(argv: string[]): Extract<CliArguments, { action: 'tls' }> {
-  let hostname: string | null = null;
-  let output: 'terminal' | 'json' = 'terminal';
-  let quiet = false;
-  let color = true;
-  for (const argument of argv) {
-    if (argument === '--json') {
-      if (output !== 'terminal') throw new CliUsageError('--json may be supplied only once.');
-      output = 'json';
-    } else if (argument === '--quiet') quiet = true;
-    else if (argument === '--no-color') color = false;
-    else if (argument.startsWith('-')) throw new CliUsageError(`Unknown option "${argument}".`);
-    else if (hostname === null) hostname = argument;
-    else throw new CliUsageError('tls accepts one hostname.');
-  }
-  if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
-  return { action: 'tls', hostname, output, quiet, color };
+  const { source: hostname, ...options } = parseSingleJsonInput(argv, 'tls accepts one hostname.');
+  return { action: 'tls', hostname, ...options };
 }
 
 function parseCompareArguments(argv: string[]): Extract<CliArguments, { action: 'compare' }> {
-  let source: string | null = null;
-  let output: 'terminal' | 'json' = 'terminal';
-  let quiet = false;
-  let color = true;
-  for (const argument of argv) {
-    if (argument === '--json') {
-      if (output !== 'terminal') throw new CliUsageError('--json may be supplied only once.');
-      output = 'json';
-    } else if (argument === '--quiet') quiet = true;
-    else if (argument === '--no-color') color = false;
-    else if (argument.startsWith('-')) throw new CliUsageError(`Unknown option "${argument}".`);
-    else if (source === null) source = argument;
-    else throw new CliUsageError('compare accepts one optional lookup JSON file. Otherwise pipe one lookup document on stdin.');
-  }
-  if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
-  return { action: 'compare', source, output, quiet, color };
+  const parsed = parseSingleJsonInput(
+    argv,
+    'compare accepts one optional lookup JSON file. Otherwise pipe one lookup document on stdin.',
+  );
+  return { action: 'compare', ...parsed };
 }
 
 function parsePageCompareArguments(argv: string[]): Extract<CliArguments, { action: 'page-compare' }> {
@@ -899,22 +847,8 @@ function parseTwoFileComparisonArguments(argv: string[], command: string) {
 }
 
 function parseMailReviewArguments(argv: string[]): Extract<CliArguments, { action: 'mail-review' }> {
-  let source: string | null = null;
-  let output: 'terminal' | 'json' = 'terminal';
-  let quiet = false;
-  let color = true;
-  for (const argument of argv) {
-    if (argument === '--json') {
-      if (output !== 'terminal') throw new CliUsageError('--json may be supplied only once.');
-      output = 'json';
-    } else if (argument === '--quiet') quiet = true;
-    else if (argument === '--no-color') color = false;
-    else if (argument.startsWith('-')) throw new CliUsageError(`Unknown option "${argument}".`);
-    else if (source === null) source = argument;
-    else throw new CliUsageError('mail-review accepts one optional Bulk JSON or JSONL input file.');
-  }
-  if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
-  return { action: 'mail-review', source, output, quiet, color };
+  const parsed = parseSingleJsonInput(argv, 'mail-review accepts one optional Bulk JSON or JSONL input file.');
+  return { action: 'mail-review', ...parsed };
 }
 
 function parseReviewEvidenceArguments(argv: string[]): Extract<CliArguments, { action: 'review-evidence' }> {
@@ -948,22 +882,8 @@ function parseReviewEvidenceArguments(argv: string[]): Extract<CliArguments, { a
 }
 
 function parseBriefArguments(argv: string[]): Extract<CliArguments, { action: 'brief' }> {
-  let source: string | null = null;
-  let output: 'terminal' | 'json' = 'terminal';
-  let quiet = false;
-  let color = true;
-  for (const argument of argv) {
-    if (argument === '--json') {
-      if (output !== 'terminal') throw new CliUsageError('--json may be supplied only once.');
-      output = 'json';
-    } else if (argument === '--quiet') quiet = true;
-    else if (argument === '--no-color') color = false;
-    else if (argument.startsWith('-')) throw new CliUsageError(`Unknown option "${argument}".`);
-    else if (source === null) source = argument;
-    else throw new CliUsageError('brief accepts one optional saved Lookup file.');
-  }
-  if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
-  return { action: 'brief', source, output, quiet, color };
+  const parsed = parseSingleJsonInput(argv, 'brief accepts one optional saved Lookup file.');
+  return { action: 'brief', ...parsed };
 }
 
 function parseCasePackArguments(argv: string[]): Extract<CliArguments, { action: 'case-pack' }> {
@@ -1041,60 +961,18 @@ function parseMonitorOnceArguments(argv: string[]): Extract<CliArguments, { acti
 }
 
 function parseDomainControlArguments(argv: string[]): Extract<CliArguments, { action: 'domain-control' }> {
-  let source: string | null = null;
-  let output: 'terminal' | 'json' = 'terminal';
-  let quiet = false;
-  let color = true;
-  for (const argument of argv) {
-    if (argument === '--json') {
-      if (output !== 'terminal') throw new CliUsageError('--json may be supplied only once.');
-      output = 'json';
-    } else if (argument === '--quiet') quiet = true;
-    else if (argument === '--no-color') color = false;
-    else if (argument.startsWith('-')) throw new CliUsageError(`Unknown option "${argument}".`);
-    else if (source === null) source = argument;
-    else throw new CliUsageError('domain-control accepts one optional versioned JSON input file.');
-  }
-  if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
-  return { action: 'domain-control', source, output, quiet, color };
+  const parsed = parseSingleJsonInput(argv, 'domain-control accepts one optional versioned JSON input file.');
+  return { action: 'domain-control', ...parsed };
 }
 
 function parseAssuranceArguments(argv: string[]): Extract<CliArguments, { action: 'assurance' }> {
-  let source: string | null = null;
-  let output: 'terminal' | 'json' = 'terminal';
-  let quiet = false;
-  let color = true;
-  for (const argument of argv) {
-    if (argument === '--json') {
-      if (output !== 'terminal') throw new CliUsageError('--json may be supplied only once.');
-      output = 'json';
-    } else if (argument === '--quiet') quiet = true;
-    else if (argument === '--no-color') color = false;
-    else if (argument.startsWith('-')) throw new CliUsageError(`Unknown option "${argument}".`);
-    else if (source === null) source = argument;
-    else throw new CliUsageError('assurance accepts one optional versioned JSON input file.');
-  }
-  if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
-  return { action: 'assurance', source, output, quiet, color };
+  const parsed = parseSingleJsonInput(argv, 'assurance accepts one optional versioned JSON input file.');
+  return { action: 'assurance', ...parsed };
 }
 
 function parseChangePacketArguments(argv: string[]): Extract<CliArguments, { action: 'change-packet' }> {
-  let source: string | null = null;
-  let output: 'terminal' | 'json' = 'terminal';
-  let quiet = false;
-  let color = true;
-  for (const argument of argv) {
-    if (argument === '--json') {
-      if (output !== 'terminal') throw new CliUsageError('--json may be supplied only once.');
-      output = 'json';
-    } else if (argument === '--quiet') quiet = true;
-    else if (argument === '--no-color') color = false;
-    else if (argument.startsWith('-')) throw new CliUsageError(`Unknown option "${argument}".`);
-    else if (source === null) source = argument;
-    else throw new CliUsageError('change-packet accepts one optional versioned JSON input file.');
-  }
-  if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
-  return { action: 'change-packet', source, output, quiet, color };
+  const parsed = parseSingleJsonInput(argv, 'change-packet accepts one optional versioned JSON input file.');
+  return { action: 'change-packet', ...parsed };
 }
 
 function parseSharingReviewArguments(argv: string[]): Extract<CliArguments, { action: 'sharing-review' }> {
@@ -1284,60 +1162,18 @@ function parseTimelineArguments(argv: string[]): Extract<CliArguments, { action:
 }
 
 function parseRegistrySupportArguments(argv: string[]): Extract<CliArguments, { action: 'registry-support' }> {
-  let target: string | null = null;
-  let output: 'terminal' | 'json' = 'terminal';
-  let quiet = false;
-  let color = true;
-  for (const argument of argv) {
-    if (argument === '--json') {
-      if (output !== 'terminal') throw new CliUsageError('--json may be supplied only once.');
-      output = 'json';
-    } else if (argument === '--quiet') quiet = true;
-    else if (argument === '--no-color') color = false;
-    else if (argument.startsWith('-')) throw new CliUsageError(`Unknown option "${argument}".`);
-    else if (target === null) target = argument;
-    else throw new CliUsageError('registry-support accepts one domain or suffix.');
-  }
-  if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
-  return { action: 'registry-support', target, output, quiet, color };
+  const { source: target, ...options } = parseSingleJsonInput(argv, 'registry-support accepts one domain or suffix.');
+  return { action: 'registry-support', target, ...options };
 }
 
 function parseRegistryDoctorArguments(argv: string[]): Extract<CliArguments, { action: 'registry-doctor' }> {
-  let source: string | null = null;
-  let output: 'terminal' | 'json' = 'terminal';
-  let quiet = false;
-  let color = true;
-  for (const argument of argv) {
-    if (argument === '--json') {
-      if (output !== 'terminal') throw new CliUsageError('--json may be supplied only once.');
-      output = 'json';
-    } else if (argument === '--quiet') quiet = true;
-    else if (argument === '--no-color') color = false;
-    else if (argument.startsWith('-')) throw new CliUsageError(`Unknown option "${argument}".`);
-    else if (source === null) source = argument;
-    else throw new CliUsageError('registry-doctor accepts one optional saved Lookup JSON file.');
-  }
-  if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
-  return { action: 'registry-doctor', source, output, quiet, color };
+  const parsed = parseSingleJsonInput(argv, 'registry-doctor accepts one optional saved Lookup JSON file.');
+  return { action: 'registry-doctor', ...parsed };
 }
 
 function parseRegistryCohortArguments(argv: string[]): Extract<CliArguments, { action: 'registry-cohort' }> {
-  let source: string | null = null;
-  let output: 'terminal' | 'json' = 'terminal';
-  let quiet = false;
-  let color = true;
-  for (const argument of argv) {
-    if (argument === '--json') {
-      if (output !== 'terminal') throw new CliUsageError('--json may be supplied only once.');
-      output = 'json';
-    } else if (argument === '--quiet') quiet = true;
-    else if (argument === '--no-color') color = false;
-    else if (argument.startsWith('-')) throw new CliUsageError(`Unknown option "${argument}".`);
-    else if (source === null) source = argument;
-    else throw new CliUsageError('registry-cohort accepts one optional JSON or JSONL input file.');
-  }
-  if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
-  return { action: 'registry-cohort', source, output, quiet, color };
+  const parsed = parseSingleJsonInput(argv, 'registry-cohort accepts one optional JSON or JSONL input file.');
+  return { action: 'registry-cohort', ...parsed };
 }
 
 function parseRegistryScaffoldArguments(argv: string[]): Extract<CliArguments, { action: 'registry-scaffold' }> {
@@ -1360,41 +1196,16 @@ function parseRegistryScaffoldArguments(argv: string[]): Extract<CliArguments, {
 }
 
 function parseRiskCalibrateArguments(argv: string[]): Extract<CliArguments, { action: 'risk-calibrate' }> {
-  let source: string | null = null;
-  let output: 'terminal' | 'json' = 'terminal';
-  let quiet = false;
-  let color = true;
-  for (const argument of argv) {
-    if (argument === '--json') {
-      if (output !== 'terminal') throw new CliUsageError('--json may be supplied only once.');
-      output = 'json';
-    } else if (argument === '--quiet') quiet = true;
-    else if (argument === '--no-color') color = false;
-    else if (argument.startsWith('-')) throw new CliUsageError(`Unknown option "${argument}".`);
-    else if (source === null) source = argument;
-    else throw new CliUsageError('risk-calibrate accepts one optional dataset file. Otherwise pipe one dataset on stdin.');
-  }
-  if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
-  return { action: 'risk-calibrate', source, output, quiet, color };
+  const parsed = parseSingleJsonInput(
+    argv,
+    'risk-calibrate accepts one optional dataset file. Otherwise pipe one dataset on stdin.',
+  );
+  return { action: 'risk-calibrate', ...parsed };
 }
 
 function parseLookalikeCalibrateArguments(argv: string[]): Extract<CliArguments, { action: 'lookalike-calibrate' }> {
-  let source: string | null = null;
-  let output: 'terminal' | 'json' = 'terminal';
-  let quiet = false;
-  let color = true;
-  for (const argument of argv) {
-    if (argument === '--json') {
-      if (output !== 'terminal') throw new CliUsageError('--json may be supplied only once.');
-      output = 'json';
-    } else if (argument === '--quiet') quiet = true;
-    else if (argument === '--no-color') color = false;
-    else if (argument.startsWith('-')) throw new CliUsageError(`Unknown option "${argument}".`);
-    else if (source === null) source = argument;
-    else throw new CliUsageError('lookalike-calibrate accepts one optional reviewed dataset JSON file.');
-  }
-  if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
-  return { action: 'lookalike-calibrate', source, output, quiet, color };
+  const parsed = parseSingleJsonInput(argv, 'lookalike-calibrate accepts one optional reviewed dataset JSON file.');
+  return { action: 'lookalike-calibrate', ...parsed };
 }
 
 function parseVerifyArtifactArguments(argv: string[]): Extract<CliArguments, { action: 'verify-artifact' }> {
@@ -1427,22 +1238,11 @@ function parseVerifyArtifactArguments(argv: string[]): Extract<CliArguments, { a
 }
 
 function parseSourceReportArguments(argv: string[]): Extract<CliArguments, { action: 'source-report' }> {
-  let source: string | null = null;
-  let output: 'terminal' | 'json' = 'terminal';
-  let quiet = false;
-  let color = true;
-  for (const argument of argv) {
-    if (argument === '--json') {
-      if (output !== 'terminal') throw new CliUsageError('--json may be supplied only once.');
-      output = 'json';
-    } else if (argument === '--quiet') quiet = true;
-    else if (argument === '--no-color') color = false;
-    else if (argument.startsWith('-')) throw new CliUsageError(`Unknown option "${argument}".`);
-    else if (source === null) source = argument;
-    else throw new CliUsageError('source-report accepts one optional JSON file. Otherwise pipe lookup documents on stdin.');
-  }
-  if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
-  return { action: 'source-report', source, output, quiet, color };
+  const parsed = parseSingleJsonInput(
+    argv,
+    'source-report accepts one optional JSON file. Otherwise pipe lookup documents on stdin.',
+  );
+  return { action: 'source-report', ...parsed };
 }
 
 function parseExportArguments(argv: string[]): Extract<CliArguments, { action: 'export' }> {

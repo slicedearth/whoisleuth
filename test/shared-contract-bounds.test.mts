@@ -91,7 +91,7 @@ test('public project URLs derive from one canonical origin', () => {
     'lib/outbound-identity.mts',
     'lib/evidence-export.mts',
     'lib/lookup-readable-report.mts',
-    'cli/runner.mts',
+    'cli/command-reference.mts',
     'tools/published-cli-check.mts',
     'frontend/src/lib/components/PublicSeo.svelte',
     'frontend/src/lib/components/SiteFooter.svelte',

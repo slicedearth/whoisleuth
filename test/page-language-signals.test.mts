@@ -6,6 +6,7 @@ import {
   detectPageLanguageSignal,
   pageLanguagePackCatalogue,
 } from '../lib/page-language-signals.mts';
+import { analyzeStaticHtml } from '../lib/static-html-analysis.mts';
 
 describe('reviewed page-language signal packs', () => {
   test('detects reviewed high-specificity phrases without retaining matched page text', () => {
@@ -34,6 +35,10 @@ describe('reviewed page-language signal packs', () => {
     assert.equal(detectPageLanguageSignal('<style>.notice::after{content:"security alert"}</style><body>Account help</body>'), null);
     assert.equal(detectPageLanguageSignal('<div data-copy="verify your account">Account help</div>'), null);
     assert.equal(detectPageLanguageSignal(`<div data-copy="${'x'.repeat(5_000)} verify your account">Account help</div>`), null);
+    assert.equal(detectPageLanguageSignal('<div data-copy="a>verify your account">Account help</div>'), null);
+    assert.equal(detectPageLanguageSignal('<input data-rule="len>5" placeholder="Verify your account">'), null);
+    assert.equal(detectPageLanguageSignal('<button onclick="if(x>1)go()" title="Confirm your identity">Continue</button>'), null);
+    assert.equal(detectPageLanguageSignal(`<div data-cfg='{"min":1>0}' aria-label="Security alert">Account help</div>`), null);
     assert.equal(detectPageLanguageSignal('<body><strong>Verify your account</strong></body>')?.category, 'account_verification');
   });
 
@@ -42,5 +47,11 @@ describe('reviewed page-language signal packs', () => {
     assert.equal(catalogue.length, 7);
     assert.equal(catalogue.every((pack) => pack.categories.length === 5), true);
     assert.doesNotMatch(JSON.stringify(catalogue), /verify your account/iu);
+  });
+
+  test('keeps visible-text retention opt-in on the shared static tokenizer', () => {
+    const html = '<main>Account help</main>';
+    assert.equal(analyzeStaticHtml(html).visibleText, '');
+    assert.equal(analyzeStaticHtml(html, { includeVisibleText: true }).visibleText, 'Account help');
   });
 });

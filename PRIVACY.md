@@ -361,6 +361,17 @@ default (see the README), so many lookups return no personal data at all.
   maliciousness.
   The derived comparison itself is transient and is not added to cases,
   watchlists, profiles, or evidence exports.
+- **Reviewed page-language signals**: a requested deep Lookup can classify a
+  small fixed set of reviewed English, Spanish, French, German, Portuguese,
+  Italian, and Dutch account-pressure phrases in the visible text of the
+  already captured homepage. The bounded tokeniser excludes comments,
+  attributes, scripts, styles, and templates from this classification. Only a
+  fixed language and category label is retained; the matched phrase,
+  surrounding page text, markup, and arbitrary attributes are discarded. A
+  language match is a review cue rather than proof of deception, credential
+  collection, intent, safety, or maliciousness. The existing bounded language
+  observation can contribute only within the capped credential-lure family of
+  Risk model v7 and never affects availability.
 - **Service and transition review**: a deep Lookup can organize already
   collected DNS aliases, nameservers, web routing, mail publication, TLS
   source health, lifecycle statuses, and transfer locks into transient manual

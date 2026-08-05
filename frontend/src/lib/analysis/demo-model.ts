@@ -217,7 +217,7 @@ function frozenCandidate(value: SyntheticCandidateInput): SyntheticDemoCandidate
     reusesOfficialAssets: false,
     hasPasswordField: value.id === 'credential-lure',
     hasExternalFormAction: value.id === 'credential-lure',
-    phishingLanguageMatch: value.id === 'credential-lure' ? 'Sign in to continue' : null,
+    phishingLanguageMatch: value.id === 'credential-lure' ? 'Reviewed English account-verification language' : null,
     privacyProtected: null,
     idnReferenceMatch: false,
     pageBaselineMatch: false,

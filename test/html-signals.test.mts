@@ -105,6 +105,14 @@ describe('phishingLanguageMatch', () => {
     const match = extractHtmlSignals('<body>security alert\x07</body>', 'example.com').phishingLanguageMatch;
     assert.equal(match, null);
   });
+
+  test('does not treat quoted attribute text after a greater-than character as visible copy', () => {
+    const match = extractHtmlSignals(
+      '<main data-rule="len>5" aria-label="Verify your account">Account help</main>',
+      'example.com',
+    ).phishingLanguageMatch;
+    assert.equal(match, null);
+  });
 });
 
 describe('externalAssetHosts', () => {

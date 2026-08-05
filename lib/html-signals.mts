@@ -604,15 +604,15 @@ function extractPageIdentity(html: string, domain: string, options: HtmlSignalOp
 
 function extractHtmlSignals(html: string, domain: string, options: HtmlSignalOptions = {}) {
   const pageIdentity = options.includePageIdentity === false ? null : extractPageIdentity(html, domain, options);
-  const pageLanguageSignal = detectPageLanguageSignal(html, pageIdentity?.documentLanguage);
   const includeCredentialSurfaceProfile = pageIdentity && options.includeCredentialSurfaceProfile === true;
   const includeStructuredDataIdentity = pageIdentity && options.includeStructuredDataIdentity !== false;
   const includeTechnologyProfile = pageIdentity && options.includeTechnologyProfile !== false;
   const includeDerivedPageProfiles = Boolean(pageIdentity);
   const baseUrl = resolvedBaseUrl(domain, options.baseUrl);
   const htmlAnalysis = includeCredentialSurfaceProfile || includeStructuredDataIdentity || includeTechnologyProfile || includeDerivedPageProfiles
-    ? analyzeStaticHtml(html, { baseUrl })
+    ? analyzeStaticHtml(html, { baseUrl, includeVisibleText: true })
     : null;
+  const pageLanguageSignal = detectPageLanguageSignal(html, pageIdentity?.documentLanguage, htmlAnalysis ?? undefined);
   return {
     pageTitle: extractPageTitle(html),
     hasPasswordField: PASSWORD_FIELD_RE.test(html),

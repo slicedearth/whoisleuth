@@ -25,6 +25,7 @@ import {
   type TechnologyReviewedSource,
 } from '../fixtures/technology-reviewed-sources.mts';
 import { extractHtmlSignals } from '../lib/html-signals.mts';
+import { normalizeBoundedSemanticVersion } from '../lib/semantic-version.mts';
 import {
   PASSIVE_TECHNOLOGY_HEADER_NAMES,
   TECHNOLOGY_SIGNATURE_CATALOGUE,
@@ -72,7 +73,6 @@ const PACKAGE_REFERENCE_RE = /^npm:(?:@[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._-]
 const REPOSITORY_REFERENCE_RE = /^git:[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._-]*$/u;
 const CONTAINER_REFERENCE_RE = /^oci:(?:[a-z0-9.-]+\/)*[a-z0-9._-]+$/u;
 const DEMONSTRATION_REFERENCE_RE = /^official:[a-z0-9][a-z0-9._/-]*$/u;
-const EXACT_SEMVER_RE = /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/u;
 const EXACT_RUNTIME_VERSION_RE = /^(?:0|[1-9]\d*)(?:\.(?:0|[1-9]\d*)){2,3}(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/u;
 const REPOSITORY_REVISION_RE = /^[a-f0-9]{40}$/u;
 const CONTAINER_TAG_RE = /^[a-z0-9][a-z0-9._-]{0,79}$/u;
@@ -134,13 +134,17 @@ function sourceIdentity(options: ExampleReviewOptions): Readonly<{
   const reference = boundedText(options.sourceReference, 'Source reference', 160).toLowerCase();
   const revision = boundedText(options.sourceRevision, 'Source revision', 80);
   if (PACKAGE_REFERENCE_RE.test(reference)) {
-    if (!EXACT_SEMVER_RE.test(revision)) throw new TypeError('Package revisions must be exact semantic versions.');
+    const packageRevision = boundedText(
+      normalizeBoundedSemanticVersion(options.sourceRevision, 'Package revision'),
+      'Package revision',
+      80,
+    );
     if (typeof options.sourceIntegrity !== 'string' || !options.sourceIntegrity.trim()) {
       throw new TypeError('Package sources require a sha512 npm integrity value.');
     }
     const integrity = boundedText(options.sourceIntegrity, 'Package integrity', 160);
     if (!PACKAGE_INTEGRITY_RE.test(integrity)) throw new TypeError('Package sources require a sha512 npm integrity value.');
-    return Object.freeze({ kind: 'package', reference, revision, integrity });
+    return Object.freeze({ kind: 'package', reference, revision: packageRevision, integrity });
   }
   if (REPOSITORY_REFERENCE_RE.test(reference)) {
     if (!REPOSITORY_REVISION_RE.test(revision)) throw new TypeError('Repository sources require a full lowercase commit hash.');

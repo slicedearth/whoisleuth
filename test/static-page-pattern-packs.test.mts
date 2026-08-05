@@ -12,6 +12,7 @@ import {
   mergeDetectionRules,
 } from '../frontend/src/lib/analysis/detection-rule-model.ts';
 import type { CaseRecord } from '../frontend/src/lib/analysis/case-model.ts';
+import { detectPageLanguageSignal } from '../lib/page-language-signals.mts';
 
 function fixtureCase(overrides: Record<string, unknown> = {}): CaseRecord {
   return {
@@ -131,9 +132,16 @@ describe('reviewed static page-pattern packs', () => {
       hasPasswordField: true,
       phishingLanguageMatch: 'immediate action required',
     }), reviewedStaticPagePatternPackExport('urgent-account-language'));
-    const wallet = evaluateDetectionRules(fixtureCase({
-      phishingLanguageMatch: 'enter your recovery phrase',
-    }), reviewedStaticPagePatternPackExport('wallet-prompt-cues'));
+    const walletLabels = [
+      'Connect your wallet',
+      'Enter your seed phrase',
+      'Enter your recovery phrase',
+      'Enter your private key',
+    ].map((phrase) => detectPageLanguageSignal(`<main>${phrase}</main>`)?.label ?? null);
+    const walletMatches = walletLabels.map((phishingLanguageMatch) => evaluateDetectionRules(
+      fixtureCase({ phishingLanguageMatch }),
+      reviewedStaticPagePatternPackExport('wallet-prompt-cues'),
+    ));
     const copiedIdentity = evaluateDetectionRules(fixtureCase({
       hasPasswordField: true,
       reusesOfficialAssets: true,
@@ -143,10 +151,12 @@ describe('reviewed static page-pattern packs', () => {
       hasExternalFormAction: true,
     }), reviewedStaticPagePatternPackExport('external-form-destination'));
     assert.equal(urgent.matchedRules.map((item) => item.id).includes('pack-urgent-account-language-v1'), true);
-    assert.equal(wallet.matchedRules.map((item) => item.id).includes('pack-wallet-recovery-v1'), true);
+    assert.deepEqual(walletLabels, Array(4).fill('Reviewed English wallet or recovery-secret language'));
+    assert.equal(walletMatches.every((result) => result.matchedRules.length === 1), true);
+    assert.equal(walletMatches.every((result) => result.matchedRules[0]?.id === 'pack-wallet-recovery-secret-v1'), true);
     assert.equal(copiedIdentity.matchedRules.map((item) => item.id).includes('pack-credential-assets-v1'), true);
     assert.equal(externalForm.matchedRules.map((item) => item.id).includes('pack-password-external-form-v1'), true);
-    assert.equal([...urgent.matchedRules, ...wallet.matchedRules, ...copiedIdentity.matchedRules, ...externalForm.matchedRules]
+    assert.equal([...urgent.matchedRules, ...walletMatches.flatMap((result) => result.matchedRules), ...copiedIdentity.matchedRules, ...externalForm.matchedRules]
       .every((item) => item.riskDelta === 0), true);
   });
 

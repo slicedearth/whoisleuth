@@ -416,8 +416,26 @@ describe('reviewed technology reference-build intake', () => {
         ...positiveOptions,
         sourceRevision: 'latest',
       }),
-      /exact semantic versions/iu,
+      /Package revision version/iu,
     );
+    assert.throws(
+      () => buildTechnologyExampleReview(html, {
+        ...positiveOptions,
+        sourceRevision: '3.10.2-01',
+      }),
+      /leading zeroes/iu,
+    );
+    assert.throws(
+      () => buildTechnologyExampleReview(html, {
+        ...positiveOptions,
+        sourceRevision: '3.10.2-a..b',
+      }),
+      /empty identifier/iu,
+    );
+    assert.equal(buildTechnologyExampleReview(html, {
+      ...positiveOptions,
+      sourceRevision: '3.10.2-rc.1+build.4',
+    }).provenance.sourceRevision, '3.10.2-rc.1+build.4');
     assert.throws(
       () => buildTechnologyExampleReview(html, {
         ...positiveOptions,
