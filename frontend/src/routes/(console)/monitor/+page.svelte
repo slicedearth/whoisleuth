@@ -5,6 +5,7 @@
   import PageHeading from '$lib/components/PageHeading.svelte';
   import AnalystReviewInbox from '$lib/components/AnalystReviewInbox.svelte';
   import CaseLifecycleReview from '$lib/components/CaseLifecycleReview.svelte';
+  import CaseDecisionQuality from '$lib/components/CaseDecisionQuality.svelte';
   import MonitorViewTabs from '$lib/components/MonitorViewTabs.svelte';
   import CaseWorkspaceToolbar from '$lib/components/CaseWorkspaceToolbar.svelte';
   import CalibrationExportReview from '$lib/components/CalibrationExportReview.svelte';
@@ -27,6 +28,7 @@
   import RetainedRelationshipObservations from '$lib/components/RetainedRelationshipObservations.svelte';
   import { buildInvestigationCaseRelationships } from '$lib/analysis/case-relationships.ts';
   import { buildCaseRelationshipClusters } from '$lib/analysis/case-relationship-clusters.ts';
+  import { buildCaseDecisionQualityReport } from '$lib/analysis/case-decision-quality.ts';
   import { parseDomainInput } from '$lib/analysis/utils.ts';
   import { loadLocalCaseInvestigationProjection } from '$lib/investigation-search';
   import { deleteWatchlist, exportWatchlists, importWatchlists, loadWatchlists, MAX_WATCHLIST_IMPORT_BYTES, writeWatchlists, type WatchlistEntry, type Watchlists } from '$lib/watchlists';
@@ -90,6 +92,7 @@
   let websiteSnapshots=$state<WebsiteProfileSnapshot[]>([]);
   const websiteProfileClusters=$derived(buildWebsiteProfileClusters(websiteSnapshots));
   const reviewInbox=$derived(buildAnalystReviewInbox({cases,watchlists,bulkSessions}));
+  const decisionQuality=$derived(buildCaseDecisionQualityReport(cases));
   let casePage=$state(1);
   let campaignCount=$state(0);
   let investigationProjection=$state<unknown>(null);
@@ -241,6 +244,7 @@
 {#if view==='inbox'}
 <div id="panel-inbox" role="tabpanel" aria-labelledby="tab-inbox">
   <AnalystReviewInbox inbox={reviewInbox} ondismiss={dismissEvidenceGap} />
+  <CaseDecisionQuality report={decisionQuality} />
   {#if caseMessage}<p class="case-message" role="status" aria-live="polite">{caseMessage}</p>{/if}
   <CaseLifecycleReview records={cases} />
 </div>

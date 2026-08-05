@@ -228,6 +228,7 @@
   const lookupSourceRefreshPlan=$derived(lookupAnalysis.lookupSourceRefreshPlan);
   const lookupDecisionSupport=$derived(lookupAnalysis.lookupDecisionSupport);
   const lookupClaimReadiness=$derived(lookupAnalysis.lookupClaimReadiness);
+  const lookupEvidenceImpactPlan=$derived(lookupAnalysis.lookupEvidenceImpactPlan);
   const evidenceQualityMatrix=$derived(lookupAnalysis.evidenceQualityMatrix);
   const lookupSummary=$derived(lookupAnalysis.lookupSummary);
   const lookupInvestigationBrief=$derived(lookupAnalysis.lookupInvestigationBrief);
@@ -441,7 +442,7 @@
         onbriefhandoff={caseRecord ? recordInvestigationBriefHandoff : null}
       />
 
-      <LookupClaimReadiness readiness={lookupClaimReadiness} />
+      <LookupClaimReadiness readiness={lookupClaimReadiness} impact={lookupEvidenceImpactPlan} />
 
       {#if lookupEvidenceDocument}
         <LookupInvestigationCapsule

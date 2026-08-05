@@ -5,6 +5,7 @@ import {
   createDetectionRule as createRule,
   evaluateDetectionRules,
   evaluateRuleSet,
+  previewDetectionRule as previewRule,
   mergeDetectionRules,
   RULE_FIELD_DEFINITIONS,
   serializeDetectionRuleStore,
@@ -36,6 +37,7 @@ export type {
   DetectionRuleEvaluation,
   DetectionRuleMatch,
   RuleCondition as DetectionRuleCondition,
+  DetectionRulePreview,
 } from './analysis/detection-rule-model.ts';
 
 export async function loadDetectionRules(): Promise<DetectionRule[]> {
@@ -91,6 +93,10 @@ export function evaluateCaseRules(record: CaseRecord, rules: DetectionRule[] = [
 
 export function evaluateCasesAgainstRules(records: CaseRecord[], rules: DetectionRule[] = []): DetectionRuleEvaluation[] {
   return evaluateRuleSet(records, rules);
+}
+
+export function previewDetectionRule(records: CaseRecord[], rules: DetectionRule[], candidate: unknown) {
+  return previewRule(records, rules, candidate);
 }
 
 export function ruleFieldDefinition(field: string) {

@@ -56,6 +56,15 @@ export type DetectionRuleEvaluation = {
   matchedRules: DetectionRuleMatch[];
   suggestedTags: string[];
 };
+export type DetectionRulePreview = Readonly<{
+  candidate: DetectionRule;
+  matchCount: number;
+  affectedCaseIds: readonly string[];
+  affectedDispositionCounts: Readonly<Record<string, number>>;
+  unreviewedMatchCount: number;
+  collisionRuleIds: readonly string[];
+  limitation: string;
+}>;
 type RuleFieldDefinition = {
   value: string;
   label: string;
@@ -280,6 +289,47 @@ export function evaluateDetectionRules(caseRecord: CaseRecordInput, rawRules: un
 export function evaluateRuleSet(records: unknown, rawRules: unknown): DetectionRuleEvaluation[] {
   if (!Array.isArray(records)) return [];
   return records.slice(0, 500).map((record) => evaluateDetectionRules(record, rawRules));
+}
+
+function ruleSignature(rule: Pick<DetectionRule, 'match' | 'conditions'>): string {
+  return JSON.stringify({
+    match: rule.match,
+    conditions: [...rule.conditions]
+      .map((condition) => ({ ...condition }))
+      .sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right))),
+  });
+}
+
+export function previewDetectionRule(
+  records: unknown,
+  existingRules: unknown,
+  rawCandidate: unknown,
+): DetectionRulePreview | null {
+  const normalized = normalizeDetectionRule({ ...record(rawCandidate), id: 'preview-rule', enabled: true });
+  if (!normalized?.id) return null;
+  const candidate: DetectionRule = { ...normalized, id: normalized.id };
+  const sourceRecords = Array.isArray(records) ? records.slice(0, 500) : [];
+  const evaluations = evaluateRuleSet(sourceRecords, [candidate]).filter((item) => item.matchedRules.length > 0);
+  const recordsById = new Map(sourceRecords.map((item) => [String(record(item).id ?? ''), record(item)]));
+  const affectedDispositionCounts: Record<string, number> = {};
+  for (const evaluation of evaluations) {
+    const disposition = String(recordsById.get(evaluation.caseId)?.disposition ?? 'unreviewed');
+    affectedDispositionCounts[disposition] = (affectedDispositionCounts[disposition] ?? 0) + 1;
+  }
+  const signature = ruleSignature(candidate);
+  const collisionRuleIds = normalizeDetectionRuleStore(existingRules).rules
+    .filter((rule) => rule.name.toLowerCase() === candidate.name.toLowerCase() || ruleSignature(rule) === signature)
+    .map((rule) => rule.id)
+    .slice(0, MAX_DETECTION_RULES);
+  return Object.freeze({
+    candidate: Object.freeze(candidate),
+    matchCount: evaluations.length,
+    affectedCaseIds: Object.freeze(evaluations.map((item) => item.caseId).filter(Boolean)),
+    affectedDispositionCounts: Object.freeze(affectedDispositionCounts),
+    unreviewedMatchCount: affectedDispositionCounts.unreviewed ?? 0,
+    collisionRuleIds: Object.freeze(collisionRuleIds),
+    limitation: 'This preview evaluates the latest bounded evidence already retained in local cases. It does not save the rule, change a score, refresh evidence, or establish whether a match is correct.',
+  });
 }
 
 export function mergeDetectionRules(localRaw: unknown, importedRaw: unknown) {

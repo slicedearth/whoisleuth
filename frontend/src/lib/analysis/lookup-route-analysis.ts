@@ -14,6 +14,7 @@ import { compactHttpObservation } from './http-summary.ts';
 import { analyzeDomainIdn } from './idn-confusables.ts';
 import { buildLookupAssetGraph } from './lookup-asset-graph.ts';
 import { buildLookupClaimReadiness } from './lookup-claim-readiness.ts';
+import { buildLookupEvidenceImpactPlan } from './lookup-evidence-impact.ts';
 import {
   buildLookupDecisionSupport,
   buildLookupEvidenceQualityMatrix,
@@ -546,6 +547,10 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     observedAt: lookupObservedAt,
     observedAtByEvidence: evidenceObservedAtById,
   });
+  const lookupEvidenceImpactPlan = buildLookupEvidenceImpactPlan({
+    readiness: lookupClaimReadiness,
+    quality: evidenceQualityMatrix,
+  });
   const lookupSummary = buildLookupSummaryModel({
     availability,
     rdapParsed,
@@ -652,6 +657,7 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     lookupSourceRefreshPlan,
     lookupDecisionSupport,
     lookupClaimReadiness,
+    lookupEvidenceImpactPlan,
     evidenceQualityMatrix,
     lookupSummary,
     lookupInvestigationBrief,
