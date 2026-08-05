@@ -101,6 +101,12 @@ import type { CliProgressEvents } from './progress-events.mts';
 import { buildRegistrySupportDocument } from './registry-support.mts';
 import { buildRegistryDoctorReport, formatRegistryDoctorReport } from './registry-doctor.mts';
 import {
+  MAX_REGISTRY_COHORT_INPUT_BYTES,
+  buildRegistryCohortReport,
+  formatRegistryCohortReport,
+} from './registry-cohort.mts';
+import { buildRegistryFixtureScaffold } from './registry-fixture-scaffold.mts';
+import {
   MAX_OFFLINE_ARTIFACT_BYTES,
   MAX_OFFLINE_PASSPHRASE_FILE_BYTES,
   formatOfflineArtifactVerification,
@@ -155,6 +161,8 @@ Discover:
   discover-scan      Collect a bounded candidate review queue.
   registry-support   Explain local registry coverage without a request.
   registry-doctor    Diagnose a saved registry collection against local policy.
+  registry-cohort    Aggregate target-free registry quality cohorts.
+  registry-scaffold  Create a sanitised synthetic fixture scaffold.
 
 Review saved evidence:
   source-report      Summarise source reliability without retaining targets.
@@ -214,6 +222,8 @@ const COMMAND_USAGE: Readonly<Record<CliCommand, string>> = Object.freeze({
   tls: 'whoisleuth tls <hostname> [--json] [--quiet] [--no-color]',
   'registry-support': 'whoisleuth registry-support <domain|suffix> [--json] [--quiet] [--no-color]',
   'registry-doctor': 'whoisleuth registry-doctor [lookup.json] [--json] [--quiet] [--no-color]',
+  'registry-cohort': 'whoisleuth registry-cohort [lookups.json|lookups.jsonl] [--json] [--quiet] [--no-color]',
+  'registry-scaffold': 'whoisleuth registry-scaffold --profile <id> --suffix <suffix> --scenario <registered|not_found|inconclusive>',
   'risk-calibrate': 'whoisleuth risk-calibrate [dataset.json] [--json] [--quiet] [--no-color]',
   'lookalike-calibrate': 'whoisleuth lookalike-calibrate [dataset.json] [--json] [--quiet] [--no-color]',
   'verify-artifact': 'whoisleuth verify-artifact [artifact.json] [--passphrase-file <file>] [--json] [--quiet] [--no-color]',
@@ -309,6 +319,16 @@ const COMMAND_DETAILS: Readonly<Record<CliCommand, Readonly<{ description: strin
     description: 'Compare a saved Lookup registry result with the reviewed local capability profile.',
     example: 'whoisleuth registry-doctor lookup.json --json',
     boundary: 'The command is offline. It distinguishes expected access constraints from collection results and does not contact a live registry.',
+  },
+  'registry-cohort': {
+    description: 'Aggregate saved registry observations into privacy-safe suffix and capability-profile cohorts.',
+    example: 'whoisleuth registry-cohort saved-lookups.jsonl --json',
+    boundary: 'This command is offline and omits domains, queries, and raw evidence. Cohorts below the fixed minimum sample remain insufficient.',
+  },
+  'registry-scaffold': {
+    description: 'Create a bounded synthetic WHOIS fixture scaffold for one existing capability profile.',
+    example: 'whoisleuth registry-scaffold --profile example-profile --suffix test --scenario registered',
+    boundary: 'The output is a sanitised template only. Contributors must not paste live responses or personal registration data into fixtures.',
   },
   'risk-calibrate': {
     description: 'Replay reviewed labels against the current explainable Risk model.',
@@ -445,6 +465,8 @@ const COMMAND_COLLECTION: Readonly<Record<CliCommand, Readonly<{
   tls: { mode: 'network', scope: 'Accepts one public hostname and opens one bounded certificate connection.' },
   'registry-support': { mode: 'offline', scope: 'Reads the embedded registry capability catalogue for one domain or suffix.' },
   'registry-doctor': { mode: 'offline', scope: 'Reads one saved Lookup and the embedded registry capability catalogue.' },
+  'registry-cohort': { mode: 'offline', scope: 'Reads at most 500 saved Lookups and emits target-free suffix/profile cohort counts.' },
+  'registry-scaffold': { mode: 'offline', scope: 'Reads the embedded registry capability catalogue and prints one synthetic fixture template.' },
   'risk-calibrate': { mode: 'offline', scope: 'Reads one bounded reviewed-label dataset and changes no model or evidence.' },
   'lookalike-calibrate': { mode: 'offline', scope: 'Reads at most 5,000 reviewed candidate labels from one dataset capped at 2 MiB.' },
   'verify-artifact': { mode: 'offline', scope: 'Reads one selected bounded archive, packet, manifest, or saved Lookup document.' },
@@ -673,6 +695,41 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
         ? formatJsonDocument(report)
         : terminal(formatRegistryDoctorReport(report), args.color));
       return report.summary.investigate ? EXIT_CODES.PARTIAL_FAILURE : EXIT_CODES.SUCCESS;
+    }
+
+    if (args.action === 'registry-cohort') {
+      failureLabel = 'Registry quality cohort';
+      let input: string;
+      try {
+        input = dependencies.readCompareInput
+          ? await dependencies.readCompareInput(args.source)
+          : await readSavedLookupInputBounded(args.source
+            ? createReadStream(args.source, { highWaterMark: 64 * 1024 })
+            : dependencies.stdin || process.stdin, {
+              limit: MAX_REGISTRY_COHORT_INPUT_BYTES,
+              label: 'Registry cohort input',
+            });
+      } catch (error) {
+        if (error instanceof CliUsageError) throw error;
+        throw new CliUsageError(`Could not read registry cohort input: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
+      }
+      const report = buildRegistryCohortReport(input, commandContext.now());
+      if (!args.quiet) write(stdout, args.output === 'json'
+        ? formatJsonDocument(report)
+        : terminal(formatRegistryCohortReport(report), args.color));
+      return report.cohorts.some((cohort) => cohort.state === 'review')
+        ? EXIT_CODES.PARTIAL_FAILURE
+        : EXIT_CODES.SUCCESS;
+    }
+
+    if (args.action === 'registry-scaffold') {
+      failureLabel = 'Registry fixture scaffold';
+      try {
+        write(stdout, buildRegistryFixtureScaffold(args.profile, args.suffix, args.scenario));
+      } catch (error) {
+        throw new CliUsageError(boundedCliErrorMessage(error, 'Registry fixture scaffold failed'));
+      }
+      return EXIT_CODES.SUCCESS;
     }
 
     if (args.action === 'risk-calibrate') {

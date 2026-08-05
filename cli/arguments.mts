@@ -30,6 +30,8 @@ const CLI_COMMANDS = [
   'tls',
   'registry-support',
   'registry-doctor',
+  'registry-cohort',
+  'registry-scaffold',
   'risk-calibrate',
   'lookalike-calibrate',
   'verify-artifact',
@@ -82,6 +84,8 @@ type CliAction =
   | ({ action: 'tls'; hostname: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'registry-support'; target: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'registry-doctor'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
+  | ({ action: 'registry-cohort'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
+  | { action: 'registry-scaffold'; profile: string; suffix: string; scenario: 'registered' | 'not_found' | 'inconclusive' }
   | ({ action: 'risk-calibrate'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'lookalike-calibrate'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'verify-artifact'; source: string | null; passphraseSource: string | null; output: 'terminal' | 'json' } & TerminalOptions)
@@ -195,6 +199,8 @@ function parseCliArgumentsCore(argv: string[]): CliAction {
   if (command === 'tls') return parseTlsArguments(argv.slice(1));
   if (command === 'registry-support') return parseRegistrySupportArguments(argv.slice(1));
   if (command === 'registry-doctor') return parseRegistryDoctorArguments(argv.slice(1));
+  if (command === 'registry-cohort') return parseRegistryCohortArguments(argv.slice(1));
+  if (command === 'registry-scaffold') return parseRegistryScaffoldArguments(argv.slice(1));
   if (command === 'risk-calibrate') return parseRiskCalibrateArguments(argv.slice(1));
   if (command === 'lookalike-calibrate') return parseLookalikeCalibrateArguments(argv.slice(1));
   if (command === 'verify-artifact') return parseVerifyArtifactArguments(argv.slice(1));
@@ -1203,6 +1209,44 @@ function parseRegistryDoctorArguments(argv: string[]): Extract<CliArguments, { a
   }
   if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
   return { action: 'registry-doctor', source, output, quiet, color };
+}
+
+function parseRegistryCohortArguments(argv: string[]): Extract<CliArguments, { action: 'registry-cohort' }> {
+  let source: string | null = null;
+  let output: 'terminal' | 'json' = 'terminal';
+  let quiet = false;
+  let color = true;
+  for (const argument of argv) {
+    if (argument === '--json') {
+      if (output !== 'terminal') throw new CliUsageError('--json may be supplied only once.');
+      output = 'json';
+    } else if (argument === '--quiet') quiet = true;
+    else if (argument === '--no-color') color = false;
+    else if (argument.startsWith('-')) throw new CliUsageError(`Unknown option "${argument}".`);
+    else if (source === null) source = argument;
+    else throw new CliUsageError('registry-cohort accepts one optional JSON or JSONL input file.');
+  }
+  if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
+  return { action: 'registry-cohort', source, output, quiet, color };
+}
+
+function parseRegistryScaffoldArguments(argv: string[]): Extract<CliArguments, { action: 'registry-scaffold' }> {
+  let profile = '';
+  let suffix = '';
+  let scenario = '';
+  for (let index = 0; index < argv.length; index += 2) {
+    const option = argv[index];
+    const value = argv[index + 1];
+    if (!value) throw new CliUsageError(`${option || 'Option'} requires a value.`);
+    if (option === '--profile' && !profile) profile = value;
+    else if (option === '--suffix' && !suffix) suffix = value;
+    else if (option === '--scenario' && !scenario) scenario = value;
+    else throw new CliUsageError(`Unknown or repeated option "${option || ''}".`);
+  }
+  if (!profile || !suffix || !['registered', 'not_found', 'inconclusive'].includes(scenario)) {
+    throw new CliUsageError('registry-scaffold requires --profile, --suffix, and --scenario <registered|not_found|inconclusive>.');
+  }
+  return { action: 'registry-scaffold', profile, suffix, scenario: scenario as 'registered' | 'not_found' | 'inconclusive' };
 }
 
 function parseRiskCalibrateArguments(argv: string[]): Extract<CliArguments, { action: 'risk-calibrate' }> {

@@ -13,6 +13,8 @@ const OPTIONS_BY_COMMAND: Readonly<Record<string, readonly string[]>> = Object.f
   tls: ['--json', '--quiet', '--no-color'],
   'registry-support': ['--json', '--quiet', '--no-color'],
   'registry-doctor': ['--json', '--quiet', '--no-color'],
+  'registry-cohort': ['--json', '--quiet', '--no-color'],
+  'registry-scaffold': ['--profile', '--suffix', '--scenario'],
   'risk-calibrate': ['--json', '--quiet', '--no-color'],
   'lookalike-calibrate': ['--json', '--quiet', '--no-color'],
   'verify-artifact': ['--passphrase-file', '--json', '--quiet', '--no-color'],
@@ -53,6 +55,8 @@ const COMMAND_DESCRIPTIONS: Readonly<Record<string, string>> = Object.freeze({
   tls: 'Inspect one TLS connection',
   'registry-support': 'Explain local registry coverage',
   'registry-doctor': 'Diagnose saved registry collection',
+  'registry-cohort': 'Aggregate target-free registry quality cohorts',
+  'registry-scaffold': 'Create a sanitised registry fixture scaffold',
   'risk-calibrate': 'Replay reviewed Risk labels offline',
   'lookalike-calibrate': 'Summarise reviewed lookalike yield offline',
   'verify-artifact': 'Validate saved evidence offline',
@@ -207,13 +211,16 @@ function fishCompletion(): string {
   const commandLines = CLI_COMMANDS.map((command) => (
     `complete -c whoisleuth -n '__fish_use_subcommand' -a '${command}' -d '${COMMAND_DESCRIPTIONS[command] || command}'`
   ));
-  const optionLines = Object.entries(OPTIONS_BY_COMMAND).flatMap(([command, options]) => (
-    [...COMMON_OPTIONS, ...options].map((option) => {
+  const optionLine = (condition: string, option: string) => {
       const name = option.replace(/^--/u, '');
       const fileValue = FILE_OPTIONS.includes(option);
       const requiresValue = fileValue || [...Object.keys(VALUE_OPTIONS), ...TEXT_OPTIONS].includes(option);
-      return `complete -c whoisleuth -n '__fish_seen_subcommand_from ${command}' -l ${name}${requiresValue ? ' -r' : ''}${fileValue ? ' -F' : ''}`;
-    })
+      return `complete -c whoisleuth -n '${condition}' -l ${name}${requiresValue ? ' -r' : ''}${fileValue ? ' -F' : ''}`;
+  };
+  const commonCondition = `__fish_seen_subcommand_from ${CLI_COMMANDS.join(' ')}`;
+  const commonOptionLines = COMMON_OPTIONS.map((option) => optionLine(commonCondition, option));
+  const optionLines = Object.entries(OPTIONS_BY_COMMAND).flatMap(([command, options]) => (
+    options.map((option) => optionLine(`__fish_seen_subcommand_from ${command}`, option))
   ));
   const valueLines = Object.entries(VALUE_OPTIONS).flatMap(([option, values]) => (
     values.map((value) => `complete -c whoisleuth -n '__fish_prev_arg_in ${option}' -a '${value}'`)
@@ -225,6 +232,7 @@ complete -c whoisleuth -n '__fish_use_subcommand' -l version
 ${commandLines.join('\n')}
 complete -c whoisleuth -n '__fish_seen_subcommand_from completion' -a 'bash zsh fish powershell'
 complete -c whoisleuth -n '__fish_seen_subcommand_from workflow-plan' -a '${INVESTIGATION_PLAN_RECIPES.join(' ')}'
+${commonOptionLines.join('\n')}
 ${optionLines.join('\n')}
 ${valueLines.join('\n')}
 `;
