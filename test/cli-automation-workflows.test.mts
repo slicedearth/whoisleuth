@@ -115,7 +115,7 @@ describe('CLI automation arguments', () => {
     });
     assert.deepEqual(parseCliArguments(['bulk', '--checkpoint', 'bulk.json', '--resume', '--events']), {
       action: 'bulk', source: null, output: 'terminal', deep: false, quiet: false, color: true, concurrency: 4,
-      checkpoint: 'bulk.json', resume: true, events: true, filter: 'all',
+      checkpoint: 'bulk.json', resume: true, events: true, plan: false, filter: 'all',
     });
     assert.throws(() => parseCliArguments(['lookup', 'example.test', '--events', '--output', 'result.json']), /cannot be combined/u);
     assert.throws(() => parseCliArguments(['lookup', 'example.test', '--force']), /requires --output/u);

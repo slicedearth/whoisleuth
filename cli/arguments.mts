@@ -184,7 +184,8 @@ function parseCliArgumentsCore(argv: string[]): CliAction {
 
   const command = firstArgument;
   if (!isCliCommand(command)) {
-    throw new CliUsageError(`Unknown command "${command}". This release supports: ${CLI_COMMANDS.join(', ')}.`);
+    const displayedCommand = command.length > 80 ? `${command.slice(0, 79)}…` : command;
+    throw new CliUsageError(`Unknown command "${displayedCommand}". Run "whoisleuth commands" to list supported commands.`);
   }
   if (command === 'bulk') return parseBulkArguments(argv.slice(1));
   if (command === 'completion') return parseCompletionArguments(argv.slice(1));
