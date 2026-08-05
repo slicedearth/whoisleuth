@@ -2,6 +2,11 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
 import { parseSavedLookupDocument } from '../cli/saved-lookup.mts';
+import { TECHNOLOGY_SIGNATURE_FIXTURES } from '../fixtures/technology-signature-fixtures.mts';
+import {
+  TECHNOLOGY_SIGNATURE_CATALOGUE,
+  analyzeWebsiteTechnology,
+} from '../lib/website-technology.mts';
 import { buildReviewedTechnologyFixture } from '../tools/technology-fixture-review.mts';
 import {
   buildTechnologyReviewCandidate,
@@ -143,6 +148,34 @@ describe('technology review candidate intake', () => {
     assert.throws(
       () => parseArguments(['lookup.json', '--id=one', '--id=two']),
       /Invalid or repeated option/iu,
+    );
+  });
+
+  test('reconstructs every catalogue signature exercised by complete synthetic evidence', () => {
+    const reconstructedIds = new Set<string>();
+    let index = 0;
+    for (const fixture of TECHNOLOGY_SIGNATURE_FIXTURES) {
+      const profile = analyzeWebsiteTechnology(fixture.input);
+      if (profile.status !== 'success' || !profile.findings.length) continue;
+      index += 1;
+      const expectedIds = profile.findings.map((finding) => finding.id).sort();
+      const document = savedLookup({ availability: { technologyProfile: profile } });
+      const candidate = buildTechnologyReviewCandidate(document, {
+        id: `reviewed-catalogue-contract-${index}`,
+        expectedIds,
+        licenceBasis: 'factual-observation',
+        reviewedAt: '2026-08-05T11:00:00.000Z',
+      });
+      assert.deepEqual(
+        buildReviewedTechnologyFixture(candidate).expectedIds,
+        expectedIds,
+        fixture.id,
+      );
+      expectedIds.forEach((id) => reconstructedIds.add(id));
+    }
+    assert.deepEqual(
+      [...reconstructedIds].sort(),
+      TECHNOLOGY_SIGNATURE_CATALOGUE.map((signature) => signature.id).sort(),
     );
   });
 });

@@ -45,7 +45,7 @@ const GENERATOR_VALUES: Readonly<Record<string, string>> = Object.freeze({
   wordpress: 'WordPress', drupal: 'Drupal', joomla: 'Joomla', ghost: 'Ghost',
   'craft-cms': 'Craft CMS', typo3: 'TYPO3 CMS', opencart: 'OpenCart',
   prestashop: 'PrestaShop', wix: 'Wix', squarespace: 'Squarespace',
-  webflow: 'Webflow', framer: 'Framer', hugo: 'Hugo', jekyll: 'Jekyll',
+  webflow: 'Webflow', framer: 'Framer', weebly: 'Weebly', hugo: 'Hugo', jekyll: 'Jekyll',
   docusaurus: 'Docusaurus', eleventy: 'Eleventy', hexo: 'Hexo',
 });
 const SERVER_VALUES: Readonly<Record<string, string>> = Object.freeze({
