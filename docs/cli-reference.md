@@ -81,6 +81,8 @@ node bin/whoisleuth.mts inspect-archive workspace.json --json
 node bin/whoisleuth.mts inspect-archive workspace.json --search example.invalid --json
 node bin/whoisleuth.mts sign-artifact response-packet.json --private-key-file analyst-private.pem > response-packet.signed.json
 node bin/whoisleuth.mts ct-intake certificate-events.json --json > external-findings.json
+node bin/whoisleuth.mts map-observations observation-mapping.json --json > external-findings.json
+node bin/whoisleuth.mts oam-export external-findings.json --json > asset-bridge.json
 node bin/whoisleuth.mts manifest lookup.json comparison.json --workflow 'domain review' --json > investigation-manifest.json
 node bin/whoisleuth.mts verify-signature response-packet.signed.json --public-key-file analyst-public.pem
 node bin/whoisleuth.mts lookup example.com --deep --json > lookup.json
@@ -205,7 +207,8 @@ rate-limit the local machine's network address. Offline `discover`, `compare`,
 `page-compare`, `mail-review`, `review-evidence`, `domain-control`, `assurance`, `change-packet`,
 `sharing-review`, `workflow-plan`, `brief`, `case-pack`, `registry-cohort`,
 `registry-scaffold`, `diff`, `reconcile`, `timeline`,
-`risk-calibrate`, `lookalike-calibrate`, `registry-doctor`, `verify-artifact`, `source-report`, `export`,
+`risk-calibrate`, `lookalike-calibrate`, `registry-doctor`, `verify-artifact`, `source-report`,
+`map-observations`, `oam-export`, `export`,
 `commands`, `completion`, and `manual` operations make no network requests. Commands write
 to stdout unless the analyst deliberately selects a local output file.
 
@@ -390,7 +393,7 @@ machine access is not evidence that a domain is unregistered or safe.
 | 70 | Unexpected CLI bootstrap failure. |
 | 130 | The analyst cancelled the command. No partial final result was emitted. |
 
-This release supports `lookup`, `bulk`, `ct-search`, `ct-intake`, `discover`, `discover-scan`, `posture`,
+This release supports `lookup`, `bulk`, `ct-search`, `ct-intake`, `map-observations`, `oam-export`, `discover`, `discover-scan`, `posture`,
 `http`, `tls`, `registry-support`, `registry-doctor`, `registry-cohort`, `registry-scaffold`, `risk-calibrate`,
 `lookalike-calibrate`, `verify-artifact`,
 `inspect-archive`, `manifest`, `sign-artifact`, `verify-signature`, `source-report`,
@@ -716,6 +719,39 @@ per domain to match the browser import boundary. Omission is stated in each
 retained finding when the supplied batch exceeds those limits. The command
 makes no request and treats every certificate event as a review lead, not proof
 that the certificate was served, requested, or controlled by the named domain.
+
+## Declarative observation interchange
+
+`map-observations [mapping.json]` reads
+`whoisleuth.external-observation-mapping` version 1 and applies one strict,
+declarative profile to at most 500 local records. The profile selects bounded
+dotted field paths for the domain, summary, observation time, optional
+reference, and optional completeness. It fixes one source, evidence class, and
+finding category for the batch. Profiles cannot contain scripts, templates,
+computed expressions, network endpoints, or executable callbacks. Prototype
+paths and unknown fields are rejected.
+
+The resulting JSON is the existing browser-compatible
+`whoisleuth.external-findings` version 3 contract. It retains source identity,
+observation time, completeness, and limitations, while stating that field
+semantics were not independently verified. Deterministic output is capped at
+100 findings, 25 domains, and 20 findings per domain. The command makes no
+request and never interprets an omitted field as a negative observation.
+
+`oam-export [external-findings.json]` projects that strict findings document
+into `whoisleuth.open-asset-model-bridge` version 1. It uses the documented
+[OWASP Open Asset Model](https://github.com/owasp-amass/open-asset-model)
+vocabulary for bounded `FQDN`, `IPAddress`, and `TLSCertificate` assets plus
+`dns_record` and `san_dns_name` relations. Only typed A, AAAA, and SHA-256
+certificate observations create infrastructure assets or relations. Other
+findings remain represented by their FQDN asset.
+
+This bridge wrapper is not a claim that every receiving implementation accepts
+one universal native serialisation. Receivers must validate the projection
+against their supported model version. WHOISleuth preserves source and
+completeness as discovery metadata, does not invent a confidence score, and
+does not treat an edge as proof of ownership, control, coordination, intent,
+safety, or maliciousness.
 
 ## Lookalike discovery
 

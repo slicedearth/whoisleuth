@@ -21,6 +21,8 @@ const CLI_COMMANDS = [
   'commands',
   'manual',
   'manifest',
+  'map-observations',
+  'oam-export',
   'lookup',
   'bulk',
   'ct-search',
@@ -77,6 +79,8 @@ type CliAction =
   | ({ action: 'commands'; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'manual' })
   | ({ action: 'manifest'; sources: readonly string[]; workflow: string; configurationDigestSha256: string | null; output: 'terminal' | 'json' } & TerminalOptions)
+  | ({ action: 'map-observations'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
+  | ({ action: 'oam-export'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'doctor'; network: boolean; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'lookup'; query: string | null; output: 'terminal' | 'json' | 'markdown' | 'html' | 'junit'; deep: boolean; detail: LookupDetail; strictExit: boolean; events: boolean; plan: boolean; observerLabel: string | null; vantageLabel: string | null; failOn?: readonly CliFailPolicy[] } & TerminalOptions)
   | ({ action: 'bulk'; source: string | null; output: 'terminal' | 'json' | 'jsonl' | 'csv' | 'domains' | 'queries' | 'junit'; deep: boolean; concurrency: number; checkpoint: string | null; resume: boolean; events: boolean; plan: boolean; filter: 'all' | 'registered' | 'inconclusive' | 'errors'; failOn?: readonly CliFailPolicy[] } & TerminalOptions)
@@ -199,6 +203,8 @@ function parseCliArgumentsCore(argv: string[]): CliAction {
   if (command === 'commands') return parseCommandsArguments(argv.slice(1));
   if (command === 'manual') return parseManualArguments(argv.slice(1));
   if (command === 'manifest') return parseManifestArguments(argv.slice(1));
+  if (command === 'map-observations') return parseOfflineImportArguments('map-observations', argv.slice(1));
+  if (command === 'oam-export') return parseOfflineImportArguments('oam-export', argv.slice(1));
   if (command === 'ct-search') return parseCtSearchArguments(argv.slice(1));
   if (command === 'ct-intake') return parseCtIntakeArguments(argv.slice(1));
   if (command === 'discover') return parseDiscoverArguments(argv.slice(1));
@@ -355,6 +361,28 @@ function parseManifestArguments(argv: string[]): Extract<CliArguments, { action:
   if (new Set(sources).size !== sources.length) throw new CliUsageError('manifest artefact files must be different.');
   if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
   return { action: 'manifest', sources, workflow, configurationDigestSha256, output, quiet, color };
+}
+
+function parseOfflineImportArguments<T extends 'map-observations' | 'oam-export'>(
+  action: T,
+  argv: string[],
+): Extract<CliArguments, { action: T }> {
+  let source: string | null = null;
+  let output: 'terminal' | 'json' = 'terminal';
+  let quiet = false;
+  let color = true;
+  for (const argument of argv) {
+    if (argument === '--json') {
+      if (output !== 'terminal') throw new CliUsageError('--json may be supplied only once.');
+      output = 'json';
+    } else if (argument === '--quiet') quiet = true;
+    else if (argument === '--no-color') color = false;
+    else if (argument.startsWith('-')) throw new CliUsageError(`Unknown option "${argument}".`);
+    else if (source === null) source = argument;
+    else throw new CliUsageError(`${action} accepts one optional versioned JSON input file.`);
+  }
+  if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
+  return { action, source, output, quiet, color } as Extract<CliArguments, { action: T }>;
 }
 
 function parseCommandsArguments(argv: string[]): Extract<CliArguments, { action: 'commands' }> {

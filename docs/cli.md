@@ -109,9 +109,9 @@ HTTP status, and a bounded explanation.
 | Investigate a target | `lookup`, `http`, `tls`, `posture`, `registry-support` |
 | Review many targets | `bulk`, `discover`, `discover-scan`, `ct-search`, `ct-intake` |
 | Compare saved evidence | `compare`, `page-compare`, `diff`, `reconcile`, `timeline`, `mail-review` |
-| Review supplied evidence | `brief`, `review-evidence`, `registry-doctor`, `registry-cohort`, `source-report`, `sharing-review` |
+| Review supplied evidence | `brief`, `review-evidence`, `registry-doctor`, `registry-cohort`, `source-report`, `sharing-review`, `map-observations` |
 | Plan and assure changes | `domain-control`, `monitor-once`, `assurance`, `change-packet`, `workflow-plan`, `workflow-run` |
-| Verify and package evidence | `case-pack`, `manifest`, `verify-artifact`, `inspect-archive`, `sign-artifact`, `verify-signature`, `export` |
+| Verify and package evidence | `case-pack`, `manifest`, `oam-export`, `verify-artifact`, `inspect-archive`, `sign-artifact`, `verify-signature`, `export` |
 | Calibrate offline | `risk-calibrate`, `lookalike-calibrate` |
 | Operate the CLI | `doctor`, `registry-scaffold`, `commands`, `completion`, `manual` |
 
@@ -217,6 +217,10 @@ full contracts into the packaged reference.
 ### Local certificate event intake
 
 [Read the offline, source-qualified event import contract.](cli-reference.md#local-certificate-event-intake)
+
+### Declarative observation interchange
+
+[Read the bounded field-mapping and Open Asset Model bridge contracts.](cli-reference.md#declarative-observation-interchange)
 
 ### Lookalike discovery
 

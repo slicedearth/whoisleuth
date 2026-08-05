@@ -101,6 +101,15 @@ import {
   formatInvestigationManifest,
 } from './investigation-manifest.mts';
 import {
+  MAX_EXTERNAL_OBSERVATION_MAPPING_BYTES,
+  mapExternalObservations,
+  formatExternalObservationMapping,
+} from './external-observation-mapping.mts';
+import {
+  buildOpenAssetModelBridge,
+  formatOpenAssetModelBridge,
+} from './open-asset-model-bridge.mts';
+import {
   MAX_CT_EVENT_INPUT_BYTES,
   buildCtEventFindings,
   formatCtEventFindings,
@@ -181,6 +190,8 @@ Discover:
   registry-scaffold  Create a sanitised synthetic fixture scaffold.
 
 Review saved evidence:
+  map-observations    Apply a declarative profile to local observations.
+  oam-export          Project external findings into an open asset graph.
   source-report      Summarise source reliability without retaining targets.
   compare            Compare saved registry publications.
   page-compare       Compare saved static page and TLS evidence.
@@ -231,6 +242,8 @@ const COMMAND_USAGE: Readonly<Record<CliCommand, string>> = Object.freeze({
   commands: 'whoisleuth commands [--json] [--quiet] [--no-color]',
   manual: 'whoisleuth manual',
   manifest: 'whoisleuth manifest <artefact.json> [...] --workflow <label> [--configuration-digest <sha256:digest>] [--json] [--quiet] [--no-color]',
+  'map-observations': 'whoisleuth map-observations [mapping.json] [--json] [--quiet] [--no-color]',
+  'oam-export': 'whoisleuth oam-export [external-findings.json] [--json] [--quiet] [--no-color]',
   lookup: 'whoisleuth lookup <domain|IP|ASN> [--json|--junit|--markdown|--html] [--fast|--deep] [--observer <label>] [--vantage <label>] [--plan] [--summary|--verbose] [--strict-exit] [--fail-on <policies>] [--events] [--quiet] [--no-color]',
   bulk: 'whoisleuth bulk [file] [--json|--jsonl|--junit|--csv|--domains|--queries] [--registered-only|--inconclusive-only|--errors-only] [--fast|--deep] [--concurrency <1-8>] [--checkpoint <file> [--resume]] [--events] [--plan] [--fail-on <policies>]',
   'ct-search': 'whoisleuth ct-search <keyword> [--json] [--quiet] [--no-color]',
@@ -295,6 +308,16 @@ const COMMAND_DETAILS: Readonly<Record<CliCommand, Readonly<{ description: strin
     description: 'Record an ordered, path-free manifest for up to 16 local JSON artefacts.',
     example: 'whoisleuth manifest lookup.json comparison.json --workflow "domain review" --json',
     boundary: 'The command records hashes and bounded schema metadata only. It omits source paths and artefact contents and performs no network collection.',
+  },
+  'map-observations': {
+    description: 'Apply one bounded declarative field-mapping profile to local source observations.',
+    example: 'whoisleuth map-observations mapping.json --json',
+    boundary: 'Profiles select allowlisted dotted fields only. They execute no scripts, make no requests, and emit the browser-compatible external-findings contract.',
+  },
+  'oam-export': {
+    description: 'Project browser-compatible external findings into a bounded Open Asset Model bridge document.',
+    example: 'whoisleuth oam-export external-findings.json --json',
+    boundary: 'The projection is offline, preserves source completeness without inventing confidence, and covers only bounded FQDN, IP address, certificate, and related edge vocabulary.',
   },
   lookup: {
     description: 'Collect registration evidence for one domain, IP, or ASN.',
@@ -492,6 +515,8 @@ const COMMAND_COLLECTION: Readonly<Record<CliCommand, Readonly<{
   commands: { mode: 'offline', scope: 'Reads the embedded command catalogue and performs no collection.' },
   manual: { mode: 'offline', scope: 'Builds documentation from the embedded command catalogue.' },
   manifest: { mode: 'offline', scope: 'Reads 1 to 16 local JSON artefacts capped at 32 MiB in total and retains no source paths.' },
+  'map-observations': { mode: 'offline', scope: 'Reads one mapping document capped at 4 MiB and executes no scripts or requests.' },
+  'oam-export': { mode: 'offline', scope: 'Reads one browser-compatible external-findings document and projects bounded graph records locally.' },
   lookup: { mode: 'network', scope: 'Accepts one target. Fast is the default; deep collection must be selected explicitly.' },
   bulk: { mode: 'network', scope: 'Accepts at most 500 fast or 50 deep targets, with concurrency capped at 8 fast or 3 deep.' },
   'ct-search': { mode: 'network', scope: 'Accepts one bounded search keyword and queries the fixed certificate-transparency source.' },
@@ -705,6 +730,46 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
       if (!args.quiet) write(stdout, args.output === 'json'
         ? formatJsonDocument(document)
         : terminal(formatInvestigationManifest(document), args.color));
+      return EXIT_CODES.SUCCESS;
+    }
+
+    if (args.action === 'map-observations' || args.action === 'oam-export') {
+      const mapping = args.action === 'map-observations';
+      failureLabel = mapping ? 'External observation mapping' : 'Open Asset Model export';
+      let input: string;
+      try {
+        input = dependencies.readArtifactInput
+          ? await dependencies.readArtifactInput(args.source)
+          : await readSavedLookupInputBounded(args.source
+            ? createReadStream(args.source, { highWaterMark: 64 * 1024 })
+            : dependencies.stdin || process.stdin, {
+              limit: MAX_EXTERNAL_OBSERVATION_MAPPING_BYTES,
+              label: mapping ? 'External observation mapping input' : 'Open Asset Model bridge input',
+            });
+      } catch (error) {
+        if (error instanceof CliUsageError) throw error;
+        throw new CliUsageError(`Could not read ${mapping ? 'observation mapping' : 'asset bridge'} input: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
+      }
+      if (!input.trim()) throw new CliUsageError(`${args.action} requires one versioned JSON file or a document on stdin.`);
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(input);
+      } catch {
+        throw new CliUsageError(`${mapping ? 'External observation mapping' : 'Open Asset Model bridge'} input is not valid JSON.`);
+      }
+      let document;
+      try {
+        document = mapping
+          ? mapExternalObservations(parsed)
+          : buildOpenAssetModelBridge(parsed, commandContext.now());
+      } catch (error) {
+        throw new CliUsageError(boundedCliErrorMessage(error, `${mapping ? 'External observation mapping' : 'Open Asset Model bridge'} input is invalid`));
+      }
+      if (!args.quiet) write(stdout, args.output === 'json'
+        ? formatJsonDocument(document)
+        : terminal(mapping
+          ? formatExternalObservationMapping(document as ReturnType<typeof mapExternalObservations>)
+          : formatOpenAssetModelBridge(document as ReturnType<typeof buildOpenAssetModelBridge>), args.color));
       return EXIT_CODES.SUCCESS;
     }
 

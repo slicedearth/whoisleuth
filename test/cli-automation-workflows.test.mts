@@ -114,6 +114,12 @@ describe('CLI automation arguments', () => {
     assert.deepEqual(parseCliArguments(['ct-intake', 'events.json', '--json']), {
       action: 'ct-intake', source: 'events.json', output: 'json', quiet: false, color: true,
     });
+    assert.deepEqual(parseCliArguments(['map-observations', 'mapping.json', '--json']), {
+      action: 'map-observations', source: 'mapping.json', output: 'json', quiet: false, color: true,
+    });
+    assert.deepEqual(parseCliArguments(['oam-export', 'findings.json', '--json']), {
+      action: 'oam-export', source: 'findings.json', output: 'json', quiet: false, color: true,
+    });
     assert.deepEqual(parseCliArguments([
       'sharing-review', 'packet.json', '--marking', 'amber', '--recipient-scope', 'organization',
       '--purpose', 'Reviewed handoff', '--human-reviewed', '--personal-data-reviewed', '--redactions-confirmed', '--json',
@@ -237,6 +243,34 @@ describe('local certificate event intake', () => {
     assert.equal(code, EXIT_CODES.SUCCESS);
     assert.equal(lookupCalled, false);
     assert.equal(JSON.parse(stdout.value()).schema, 'whoisleuth.external-findings');
+  });
+
+  test('maps source observations and projects them without collection', async () => {
+    const mappingStdout = capture();
+    const mappedCode = await runCli(['map-observations', 'mapping.json', '--json'], {
+      stdout: mappingStdout.stream,
+      stderr: capture().stream,
+      now: () => NOW,
+      readArtifactInput: async () => JSON.stringify({
+        schema: 'whoisleuth.external-observation-mapping', version: 1,
+        source: { name: 'Fixture source', reference: null, collectedAt: NOW },
+        profile: {
+          id: 'fixture', version: 1, domainField: 'domain', summaryField: 'summary', observedAtField: 'observedAt',
+          referenceField: null, completenessField: null, category: 'other', evidenceClass: 'deployment_observation', limitations: [],
+        },
+        records: [{ domain: 'mapped.example.test', summary: 'Mapped fixture observation', observedAt: NOW }],
+      }),
+    });
+    assert.equal(mappedCode, EXIT_CODES.SUCCESS);
+    const bridgeStdout = capture();
+    const bridgeCode = await runCli(['oam-export', 'findings.json', '--json'], {
+      stdout: bridgeStdout.stream,
+      stderr: capture().stream,
+      now: () => NOW,
+      readArtifactInput: async () => mappingStdout.value(),
+    });
+    assert.equal(bridgeCode, EXIT_CODES.SUCCESS);
+    assert.equal(JSON.parse(bridgeStdout.value()).assets[0]?.type, 'FQDN');
   });
 });
 
