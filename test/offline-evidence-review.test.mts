@@ -76,12 +76,19 @@ describe('offline evidence review command', () => {
         authoritySnapshots: [], resolverSnapshots: [], acmeDependencies: [], certificate: null, hsts: null,
       },
       {
+        schema: 'whoisleuth.dns-convergence.input', version: 1, domain: 'example.test', expected: null,
+        snapshots: [
+          { observer: 'Resolver A', source: 'Fixture', observedAt: ISO, state: 'observed', records: [{ owner: '@', type: 'A', value: '192.0.2.1', ttl: 300 }] },
+          { observer: 'Resolver B', source: 'Fixture', observedAt: ISO, state: 'observed', records: [{ owner: '@', type: 'A', value: '192.0.2.1', ttl: 300 }] },
+        ],
+      },
+      {
         schema: 'whoisleuth.nameserver-preflight.input', version: 1, domain: 'example.test',
         intendedNameservers: ['ns1.example.test'], observations: [],
       },
     ];
     assert.deepEqual(inputs.map((input) => buildOfflineEvidenceReview(JSON.stringify(input), ISO).kind), [
-      'rdap_search', 'dnssec', 'tlsa', 'rpki', 'geoip', 'encrypted_dns', 'zone_intent', 'domain_portfolio', 'domain_change', 'nameserver_preflight',
+      'rdap_search', 'dnssec', 'tlsa', 'rpki', 'geoip', 'encrypted_dns', 'zone_intent', 'domain_portfolio', 'domain_change', 'dns_convergence', 'nameserver_preflight',
     ]);
     const rdap = buildOfflineEvidenceReview(JSON.stringify(inputs[0]), ISO).result as {
       responseInspection: { state: string; mappings: Array<{ state: string }> };

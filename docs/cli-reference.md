@@ -1020,6 +1020,13 @@ Supported input schemas are:
   and HSTS preload context. TXT values are retained only as SHA-256 digests.
   The result is an offline review gate, not a DNSSEC validation, preload-list
   lookup, certificate-authority request, or permission to apply a change.
+- `whoisleuth.dns-convergence.input`: compares the latest supplied observation
+  from at least two labelled resolvers or network vantages. It preserves
+  converged, divergent, unexpected, incomplete, and insufficient record-set
+  states, can compare against optional expected values, and projects a simple
+  observation-time plus TTL cache horizon. It does not query DNS or decide
+  which divergent value is authoritative, and supplied TTLs do not reveal
+  actual cache age or resolver refresh policy.
 - `whoisleuth.nameserver-preflight.input`: reviews an intended nameserver set
   against separately attributed direct-service observations before a
   delegation change. It checks authoritative service, the served NS set, SOA

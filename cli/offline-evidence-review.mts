@@ -20,6 +20,7 @@ import {
 import { reviewRpkiRoute } from '../lib/rpki-evidence.mts';
 import { analyzeTlsaEvidence } from '../lib/tlsa-evidence.mts';
 import { reviewZoneIntent } from '../lib/zone-intent-review.mts';
+import { reviewDnsConvergence } from '../lib/dns-convergence-review.mts';
 import { CliUsageError } from './errors.mts';
 import { LOCAL_MMDB_QUERY_SCHEMA, reviewLocalMmdb } from './local-mmdb-review.mts';
 
@@ -52,7 +53,7 @@ function parseInput(value: unknown): UnknownRecord {
 
 function buildOfflineEvidenceReview(value: unknown, generatedAt = new Date().toISOString()) {
   const input = parseInput(value);
-  let kind: 'rdap_search' | 'dnssec' | 'tlsa' | 'rpki' | 'geoip' | 'encrypted_dns' | 'zone_intent' | 'domain_portfolio' | 'domain_change' | 'nameserver_preflight';
+  let kind: 'rdap_search' | 'dnssec' | 'tlsa' | 'rpki' | 'geoip' | 'encrypted_dns' | 'zone_intent' | 'domain_portfolio' | 'domain_change' | 'dns_convergence' | 'nameserver_preflight';
   let result: unknown;
   if (input.schema === 'whoisleuth.rdap-search-input') {
     kind = 'rdap_search';
@@ -118,6 +119,9 @@ function buildOfflineEvidenceReview(value: unknown, generatedAt = new Date().toI
   } else if (input.schema === 'whoisleuth.domain-change.input') {
     kind = 'domain_change';
     result = reviewDomainChange(input, generatedAt);
+  } else if (input.schema === 'whoisleuth.dns-convergence.input') {
+    kind = 'dns_convergence';
+    result = reviewDnsConvergence(input, generatedAt);
   } else if (input.schema === 'whoisleuth.nameserver-preflight.input') {
     kind = 'nameserver_preflight';
     result = reviewNameserverPreflight(input, generatedAt);
@@ -195,6 +199,10 @@ function formatOfflineEvidenceReview(document: ReturnType<typeof buildOfflineEvi
   } else if (document.kind === 'domain_change') {
     lines.push(`Authority ${listLength(result.authoritativeRecordMatrix)} rows`);
     lines.push(`Resolvers ${listLength(result.resolverDivergenceMatrix)} rows`);
+  } else if (document.kind === 'dns_convergence') {
+    lines.push(`Observers ${listLength(result.observers)}`);
+    lines.push(`Snapshots ${listLength(result.snapshots)}`);
+    lines.push(`Record sets ${listLength(result.rows)}`);
   } else if (document.kind === 'nameserver_preflight') {
     const rows = Array.isArray(result.rows) ? result.rows : [];
     lines.push(`Servers ${rows.length}`);
