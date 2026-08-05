@@ -166,6 +166,7 @@ test('normalizes bounded desired posture baselines and retained observations', (
     status: 'pass',
     records: ['10 mail.example.invalid'],
   }]);
+  assert.deepEqual(baseline.observationHistory, [baseline.previousObservation]);
 });
 
 test('bounds attacker-controlled list input before searching for usable values', () => {

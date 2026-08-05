@@ -91,6 +91,7 @@
       suppressions: parseSuppressions(suppressions),
       note: note.trim(),
       previousObservation: existing?.previousObservation || null,
+      observationHistory: existing?.observationHistory || (existing?.previousObservation ? [existing.previousObservation] : []),
       updatedAt: new Date().toISOString(),
     };
     await saveBaselines([
