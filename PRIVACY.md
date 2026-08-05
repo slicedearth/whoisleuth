@@ -580,9 +580,14 @@ default (see the README), so many lookups return no personal data at all.
   certificate observation-row conversion, and sanitised web-capture summary
   import happen locally before that ordinary reviewed case import. Row
   conversion reports accepted, rejected, duplicate, and truncated counts
-  without retaining excluded values. Capture summaries retain only normalised
-  domains and HTTP(S) origins, bounded titles, technology labels, request
-  domains, screenshot or DOM-digest plain file names, MIME types, declared
+  without retaining excluded values. Accepted documented observation rows can
+  additionally retain an allowlisted source schema and version, field, bounded
+  value, and, for certificate observations only, bounded issuer and expiry
+  metadata. WHOISleuth keeps that external value source-qualified in the case;
+  only valid direct DNS or certificate relationships can become local graph
+  edges, and none is independently verified. Capture summaries retain only
+  normalised domains and HTTP(S) origins, bounded titles, technology labels,
+  request domains, screenshot or DOM-digest plain file names, MIME types, declared
   sizes, dimensions where applicable, SHA-256 digests, timestamps,
   completeness, limitations, and optional source references. Artefact bytes
   are not imported or independently verified. These schemas reject raw HTML,
@@ -860,6 +865,10 @@ default (see the README), so many lookups return no personal data at all.
   desired nameserver, DS, MX, CAA, TLS issuer, SAN patterns or public-key digest,
   transfer-lock, and renewal-review values; reviewed suppressions; and one
   explicitly selected compact prior posture observation per official domain.
+  It can also retain per-domain zone-intent, lifecycle, recovery-dependency,
+  and bounded approved-change-window context. These planning fields are
+  analyst-authored and do not establish the current state of a registry,
+  provider account, DNS zone, or service.
   Those local values are not sent with a posture request, do not change
   infrastructure, and appear only in deliberate profile, baseline, or
   workspace exports. Incomplete or unsupported public evidence never becomes
