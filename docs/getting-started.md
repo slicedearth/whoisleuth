@@ -265,6 +265,13 @@ finding. Output contains a catalogue-owned fixture plus a separate source
 record with the immutable source reference, reviewed licence, build recipe,
 runtime, and artefact digest. It never contains the source HTML, a site URL, or
 the evaluated page text, and fixture evaluation makes zero network requests.
+The output also compares the proposed fixture with the checked-in corpus. For
+each expected signature it distinguishes a first reviewed observation, a new
+independent source origin, and another observation from an origin already in
+the corpus. An existing fixture with the same identifier is excluded from this
+comparison so regenerating a fixture is treated as a replacement, not as extra
+evidence. The context lists fixture identifiers only; it does not copy source
+artefacts or target details.
 Containerised reference builds use `official-container-default` and must add an
 immutable `oci:` image reference containing both its tag and `sha256` digest.
 Small examples reproduced directly from official documentation use
@@ -363,8 +370,8 @@ OpenLiteSpeed, PrestaShop, OpenCart, and Craft CMS, plus an Eleventy benign
 control. A separately reviewed official TYPO3 demonstration contributes only
 its generator and selected-server facts; its page, URL, and content are not
 retained. Licensed static repository artefacts add positive Adobe Commerce and
-Magento, ASP.NET, ASP.NET Web Forms, Eleventy, Fastly, Framer, Microsoft IIS,
-Squarespace, Vercel, Webflow, Wix, and Amazon CloudFront evidence
+Magento, ASP.NET, ASP.NET Web Forms, BigCommerce, Eleventy, Fastly, Framer,
+Microsoft IIS, Squarespace, Vercel, Webflow, Wix, and Amazon CloudFront evidence
 without retaining the exported pages. The deployment-owned observation
 likewise retains only Cloudflare, Netlify, and SvelteKit markers rather than
 redistributed page content. Containerised CMS

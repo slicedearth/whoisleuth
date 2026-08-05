@@ -8,6 +8,7 @@ import { afterEach, describe, test } from 'node:test';
 import {
   MAX_TECHNOLOGY_EXAMPLE_HTML_BYTES,
   TECHNOLOGY_EXAMPLE_REVIEW_SCHEMA,
+  TECHNOLOGY_EXAMPLE_REVIEW_VERSION,
   buildTechnologyExampleReview,
   main,
   parseArguments,
@@ -55,6 +56,7 @@ describe('reviewed technology reference-build intake', () => {
     const html = '<!doctype html><html><head><meta name="generator" content="Docusaurus v3.10.2"></head><body>Reference wording</body></html>';
     const result = buildTechnologyExampleReview(html, positiveOptions);
     assert.equal(result.schema, TECHNOLOGY_EXAMPLE_REVIEW_SCHEMA);
+    assert.equal(result.version, TECHNOLOGY_EXAMPLE_REVIEW_VERSION);
     assert.equal(result.fixture.kind, 'positive');
     assert.deepEqual(result.fixture.expectedIds, ['docusaurus']);
     assert.deepEqual(result.fixture.input, {
@@ -69,7 +71,56 @@ describe('reviewed technology reference-build intake', () => {
     assert.deepEqual(result.provenance.supportingEnvironments, []);
     assert.equal(result.provenance.responseMetadataSha256, null);
     assert.match(result.provenance.artifactSha256, /^[a-f0-9]{64}$/u);
+    assert.deepEqual(result.provenanceContext, {
+      comparisonExcludesCandidateFixtureId: true,
+      existingFixtureIdsAtSourceOrigin: [],
+      firstObservedExpectedIds: ['docusaurus'],
+      independentSourceOriginExpectedIds: [],
+      repeatedSourceOriginExpectedIds: [],
+    });
     assert.doesNotMatch(JSON.stringify(result), /Reference wording|fixture\.invalid|https?:\/\//u);
+  });
+
+  test('distinguishes first, independent, and same-origin reviewed observations', () => {
+    const html = '<meta name="generator" content="Docusaurus">';
+    const repeated = buildTechnologyExampleReview(html, {
+      ...positiveOptions,
+      id: 'reviewed-docusaurus-repeat-20260805',
+    });
+    assert.ok(repeated.provenanceContext.existingFixtureIdsAtSourceOrigin.includes(
+      'official-docusaurus-starter-20260805',
+    ));
+    assert.deepEqual(repeated.provenanceContext.repeatedSourceOriginExpectedIds, ['docusaurus']);
+    assert.deepEqual(repeated.provenanceContext.independentSourceOriginExpectedIds, []);
+
+    const independent = buildTechnologyExampleReview(html, {
+      ...positiveOptions,
+      id: 'reviewed-docusaurus-independent-20260805',
+      sourceReference: 'git:example/docusaurus-reference',
+      sourceRevision: '92fd5b8da0f5c3d4164ae02fe605de363753e504',
+      sourceIntegrity: null,
+      runtimeReference: null,
+      buildRecipe: 'reviewed-repository-artifact',
+    });
+    assert.deepEqual(independent.provenanceContext.independentSourceOriginExpectedIds, ['docusaurus']);
+    assert.deepEqual(independent.provenanceContext.repeatedSourceOriginExpectedIds, []);
+
+    const first = buildTechnologyExampleReview(
+      '<main class="shopify-section"></main>',
+      {
+        ...positiveOptions,
+        id: 'reviewed-commerce-first-20260805',
+        expectedIds: ['shopify'],
+        sourceReference: 'git:example/commerce-reference',
+        sourceRevision: 'c9986dacd02965a788d66d96ba49021258f8459d',
+        sourceIntegrity: null,
+        runtimeReference: null,
+        buildRecipe: 'reviewed-repository-artifact',
+      },
+    );
+    assert.deepEqual(first.provenanceContext.firstObservedExpectedIds, ['shopify']);
+    assert.deepEqual(first.provenanceContext.independentSourceOriginExpectedIds, []);
+    assert.deepEqual(first.provenanceContext.repeatedSourceOriginExpectedIds, []);
   });
 
   test('derives a negative control only when the complete artefact produces no findings', () => {

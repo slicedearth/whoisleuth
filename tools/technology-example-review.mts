@@ -11,12 +11,15 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
+  TECHNOLOGY_REVIEWED_FIXTURES,
   TECHNOLOGY_REVIEW_INPUT_SCHEMA,
   TECHNOLOGY_REVIEW_INPUT_VERSION,
   MAX_TECHNOLOGY_REVIEW_IDS,
+  type TechnologyReviewedFixture,
   type TechnologyReviewLicenceBasis,
 } from '../fixtures/technology-reviewed-fixtures.mts';
 import {
+  TECHNOLOGY_REVIEWED_SOURCES,
   TECHNOLOGY_REVIEWED_SOURCE_SCHEMA,
   TECHNOLOGY_REVIEWED_SOURCE_VERSION,
   type TechnologyReviewedSource,
@@ -33,8 +36,9 @@ import {
 import { reconstructTechnologyReviewProfile } from './technology-review-candidate.mts';
 
 export const TECHNOLOGY_EXAMPLE_REVIEW_SCHEMA = 'whoisleuth.technology-example-review';
-export const TECHNOLOGY_EXAMPLE_REVIEW_VERSION = 4;
+export const TECHNOLOGY_EXAMPLE_REVIEW_VERSION = 5;
 export const MAX_TECHNOLOGY_EXAMPLE_HTML_BYTES = 512 * 1024;
+export const MAX_TECHNOLOGY_EXAMPLE_CORPUS_ENTRIES = 96;
 
 type WritableLike = { write(value: string): unknown };
 type BuildRecipe = TechnologyReviewedSource['buildRecipe'];
@@ -58,6 +62,10 @@ type ExampleReviewOptions = Readonly<{
   reviewedAt: string;
 }>;
 type ExampleReviewArguments = ExampleReviewOptions & Readonly<{ inputPath: string }>;
+type ExampleReviewCorpus = Readonly<{
+  fixtures: readonly TechnologyReviewedFixture[];
+  sources: readonly TechnologyReviewedSource[];
+}>;
 
 const ID_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
 const PACKAGE_REFERENCE_RE = /^npm:(?:@[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._-]*|[a-z0-9][a-z0-9._-]*)$/u;
@@ -205,6 +213,51 @@ export function technologyExampleArtifactDigest(html: string): string {
   return createHash('sha256').update(Buffer.from(html, 'utf8')).digest('hex');
 }
 
+function sourceOrigin(source: Pick<TechnologyReviewedSource, 'sourceKind' | 'sourceReference'>): string {
+  return `${source.sourceKind}:${source.sourceReference}`;
+}
+
+function buildProvenanceContext(
+  fixture: TechnologyReviewedFixture,
+  provenance: TechnologyReviewedSource,
+  corpus: ExampleReviewCorpus,
+) {
+  const sources = corpus.sources.slice(0, MAX_TECHNOLOGY_EXAMPLE_CORPUS_ENTRIES);
+  const fixtures = corpus.fixtures
+    .slice(0, MAX_TECHNOLOGY_EXAMPLE_CORPUS_ENTRIES)
+    .filter((entry) => entry.id !== fixture.id);
+  const sourceByFixtureId = new Map(sources.map((source) => [source.fixtureId, source]));
+  const candidateOrigin = sourceOrigin(provenance);
+  const originForFixture = (entry: TechnologyReviewedFixture): string => {
+    const source = sourceByFixtureId.get(entry.id);
+    return source ? sourceOrigin(source) : `unbound:${entry.licenseBasis}`;
+  };
+  const existingFixtureIdsAtSourceOrigin = fixtures
+    .filter((entry) => originForFixture(entry) === candidateOrigin)
+    .map((entry) => entry.id)
+    .sort();
+  const firstObservedExpectedIds: string[] = [];
+  const independentSourceOriginExpectedIds: string[] = [];
+  const repeatedSourceOriginExpectedIds: string[] = [];
+  for (const id of fixture.expectedIds) {
+    const existingOrigins = new Set(
+      fixtures
+        .filter((entry) => entry.expectedIds.includes(id))
+        .map(originForFixture),
+    );
+    if (existingOrigins.size === 0) firstObservedExpectedIds.push(id);
+    else if (existingOrigins.has(candidateOrigin)) repeatedSourceOriginExpectedIds.push(id);
+    else independentSourceOriginExpectedIds.push(id);
+  }
+  return Object.freeze({
+    comparisonExcludesCandidateFixtureId: true,
+    existingFixtureIdsAtSourceOrigin: Object.freeze(existingFixtureIdsAtSourceOrigin),
+    firstObservedExpectedIds: Object.freeze(firstObservedExpectedIds),
+    independentSourceOriginExpectedIds: Object.freeze(independentSourceOriginExpectedIds),
+    repeatedSourceOriginExpectedIds: Object.freeze(repeatedSourceOriginExpectedIds),
+  });
+}
+
 function validateOptions(options: ExampleReviewOptions) {
   const id = boundedText(options.id, 'Fixture id', 80).toLowerCase();
   if (!ID_RE.test(id)) throw new TypeError('Fixture id must be a lowercase hyphenated identifier.');
@@ -302,6 +355,10 @@ function validateOptions(options: ExampleReviewOptions) {
 export function buildTechnologyExampleReview(
   html: string,
   options: ExampleReviewOptions,
+  corpus: ExampleReviewCorpus = {
+    fixtures: TECHNOLOGY_REVIEWED_FIXTURES,
+    sources: TECHNOLOGY_REVIEWED_SOURCES,
+  },
 ) {
   const checked = validateOptions(options);
   const artifactBytes = Buffer.from(html, 'utf8');
@@ -379,6 +436,7 @@ export function buildTechnologyExampleReview(
     version: TECHNOLOGY_EXAMPLE_REVIEW_VERSION,
     fixture,
     provenance,
+    provenanceContext: buildProvenanceContext(fixture, provenance, corpus),
   });
 }
 
@@ -475,4 +533,4 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   process.exitCode = await main();
 }
 
-export type { ExampleReviewArguments, ExampleReviewOptions };
+export type { ExampleReviewArguments, ExampleReviewCorpus, ExampleReviewOptions };
