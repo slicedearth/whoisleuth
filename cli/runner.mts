@@ -190,6 +190,7 @@ Terminal:
 Run "whoisleuth <command> --help" for focused usage and an example.
 Use --json or --jsonl where supported for machine-readable stdout.
 Use --output <file> for atomic private file output and --force to replace it.
+Use --config <file> and --profile <name> for explicit versioned safe defaults.
 Diagnostics are written to stderr. Fast lookup is the default; deep collection
 must be requested explicitly and can disclose a target to additional sources.
 

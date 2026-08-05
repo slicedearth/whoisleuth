@@ -20,11 +20,20 @@ if (argv.length === 1 && (argv[0] === '--version' || argv[0] === '-V')) {
     process.stdout.write(`${metadata.version}\n`);
   }
 } else {
-  const [errorsModule, outputModule, runnerModule] = await Promise.all([
+  const [configModule, errorsModule, outputModule, runnerModule] = await Promise.all([
+    import('../cli/config-profile.mts'),
     import('../cli/errors.mts'),
     import('../cli/output-file.mts'),
     import('../cli/runner.mts'),
   ]);
+  let resolvedArgv: string[];
+  try {
+    resolvedArgv = await configModule.resolveCliProfileArguments(argv);
+  } catch (error) {
+    process.stderr.write(`Usage error: ${errorsModule.boundedCliErrorMessage(error, 'Invalid CLI profile')}\n`);
+    process.exitCode = 64;
+    resolvedArgv = [];
+  }
   const cancellation = new AbortController();
   let interruptionCount = 0;
   const interrupt = () => {
@@ -37,7 +46,8 @@ if (argv.length === 1 && (argv[0] === '--version' || argv[0] === '-V')) {
   };
   process.on('SIGINT', interrupt);
 
-  runnerModule.runCli(argv, { signal: cancellation.signal }).then((code) => {
+  const execution = resolvedArgv.length ? runnerModule.runCli(resolvedArgv, { signal: cancellation.signal }) : Promise.resolve(process.exitCode || 64);
+  execution.then((code) => {
     if (code === 130) {
       process.removeListener('SIGINT', interrupt);
       process.exit(130);

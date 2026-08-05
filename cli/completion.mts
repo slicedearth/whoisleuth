@@ -1,7 +1,7 @@
 import { CLI_COMMANDS, type CompletionShell } from './arguments.mts';
 import { INVESTIGATION_PLAN_RECIPES } from './investigation-plan.mts';
 
-const COMMON_OPTIONS = Object.freeze(['--help', '--output', '--force']);
+const COMMON_OPTIONS = Object.freeze(['--help', '--output', '--force', '--config', '--profile']);
 const OPTIONS_BY_COMMAND: Readonly<Record<string, readonly string[]>> = Object.freeze({
   lookup: ['--json', '--markdown', '--html', '--fast', '--deep', '--observer', '--vantage', '--plan', '--summary', '--verbose', '--strict-exit', '--events', '--quiet', '--no-color'],
   bulk: ['--json', '--jsonl', '--csv', '--domains', '--queries', '--registered-only', '--inconclusive-only', '--errors-only', '--fast', '--deep', '--concurrency', '--checkpoint', '--resume', '--events', '--quiet', '--no-color'],
@@ -94,6 +94,7 @@ const VALUE_OPTIONS: Readonly<Record<string, readonly string[]>> = Object.freeze
 
 const FILE_OPTIONS = Object.freeze([
   '--checkpoint',
+  '--config',
   '--allowlist',
   '--dictionary',
   '--output',
@@ -109,6 +110,7 @@ const FILE_OPTIONS = Object.freeze([
 const TEXT_OPTIONS = Object.freeze([
   '--families',
   '--resolver',
+  '--profile',
   '--purpose',
   '--observer',
   '--retired-selectors',
