@@ -28,6 +28,7 @@ export const MAX_TECHNOLOGY_REVIEW_INPUT_BYTES = 64 * 1024;
 export const MAX_REVIEWED_MARKUP_BYTES = 8 * 1024;
 export const MAX_REVIEWED_RESOURCE_ORIGINS = 16;
 export const MAX_REVIEWED_RESPONSE_HEADERS = 8;
+export const MAX_REVIEWED_FIXTURE_LABEL_LENGTH = 120;
 
 type UnknownRecord = Record<string, unknown>;
 type WritableLike = { write(value: string): unknown };
@@ -204,6 +205,17 @@ function negativeMarkup(ids: readonly string[]): string {
   return `<main>${names.join(' and ')} named in ordinary visible copy without implementation metadata.</main>`;
 }
 
+function reviewedFixtureLabel(expectedIds: readonly string[], negativeFor: readonly string[]): string {
+  const detailed = expectedIds.length
+    ? `Reviewed ${expectedIds.join(' + ')}${negativeFor.length ? ' mixed-control' : ''} fixture`
+    : `Reviewed negative control for ${negativeFor.join(' + ')}`;
+  if (detailed.length <= MAX_REVIEWED_FIXTURE_LABEL_LENGTH) return detailed;
+  if (expectedIds.length) {
+    return `Reviewed ${expectedIds.length}-technology${negativeFor.length ? ' mixed-control' : ' overlap'} fixture`;
+  }
+  return `Reviewed negative control for ${negativeFor.length} technology signatures`;
+}
+
 function normalizeOrigins(value: unknown): string[] {
   if (value === undefined || value === null) return [];
   if (!Array.isArray(value) || value.length > MAX_REVIEWED_RESOURCE_ORIGINS) {
@@ -306,9 +318,7 @@ export function buildReviewedTechnologyFixture(raw: unknown): TechnologyReviewed
   if (expectedIds.some((expected) => negativeFor.includes(expected))) {
     throw new TypeError('Reviewed input cannot both expect and forbid a technology id.');
   }
-  const label = expectedIds.length
-    ? `Reviewed ${expectedIds.join(' + ')}${negativeFor.length ? ' mixed-control' : ''} fixture`
-    : `Reviewed negative control for ${negativeFor.join(' + ')}`;
+  const label = reviewedFixtureLabel(expectedIds, negativeFor);
   const generator = normalizeHeader(input.generator, 'Generator value', 'generator');
   const httpServer = normalizeHeader(input.httpServer, 'HTTP server value', 'httpServer');
   const html = expectedIds.length

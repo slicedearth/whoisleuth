@@ -24,6 +24,9 @@ import {
   TECHNOLOGY_REVIEWED_FIXTURES,
   TECHNOLOGY_REVIEW_LICENCE_BASES,
 } from '../fixtures/technology-reviewed-fixtures.mts';
+import {
+  TECHNOLOGY_REVIEWED_SOURCES,
+} from '../fixtures/technology-reviewed-sources.mts';
 
 type WritableLike = { write(value: string): unknown };
 type BenchmarkOptions = Readonly<{ now?: () => Date }>;
@@ -51,7 +54,7 @@ type FixtureResult = Readonly<{
 }>;
 
 export const TECHNOLOGY_SIGNATURE_BENCHMARK_SCHEMA = 'whoisleuth.technology-signature-benchmark';
-export const TECHNOLOGY_SIGNATURE_BENCHMARK_VERSION = 3;
+export const TECHNOLOGY_SIGNATURE_BENCHMARK_VERSION = 4;
 export const MAX_TECHNOLOGY_BENCHMARK_SIGNATURES = 64;
 export const MAX_TECHNOLOGY_BENCHMARK_FIXTURES = 96;
 export const MAX_TECHNOLOGY_REVIEWED_BENCHMARK_FIXTURES = 96;
@@ -106,6 +109,24 @@ function timestamp(value: unknown): string {
 
 function ratio(numerator: number, denominator: number): number | null {
   return denominator > 0 ? Number((numerator / denominator).toFixed(4)) : null;
+}
+
+function reviewedSourceOriginByFixtureId(): ReadonlyMap<string, string> {
+  const origins = new Map(
+    TECHNOLOGY_REVIEWED_SOURCES.map((source) => [
+      source.fixtureId,
+      `${source.sourceKind}:${source.sourceReference}`,
+    ]),
+  );
+  for (const fixture of TECHNOLOGY_REVIEWED_FIXTURES) {
+    if (!origins.has(fixture.id)) {
+      // Deployment-owned and other intentionally unbound observations share a
+      // conservative origin. Multiple such fixtures remain repeat observations
+      // but cannot imply independent validation without recorded provenance.
+      origins.set(fixture.id, `unbound:${fixture.licenseBasis}`);
+    }
+  }
+  return origins;
 }
 
 export function lintTechnologySignatureBenchmark(
@@ -359,15 +380,22 @@ export function buildTechnologySignatureBenchmark(options: BenchmarkOptions = {}
     .map((signature) => signature.id)
     .filter((id) => !reviewedSignatureIds.has(id))
     .sort();
+  const reviewedSourceOrigins = reviewedSourceOriginByFixtureId();
   const reviewedBySignature = Object.freeze(Object.fromEntries(
     TECHNOLOGY_SIGNATURE_CATALOGUE.map((signature) => {
-      const observations = passingReviewedPositiveFixtures.filter((fixture) => fixture.expectedIds.includes(signature.id)).length;
+      const matchingFixtures = passingReviewedPositiveFixtures.filter((fixture) => fixture.expectedIds.includes(signature.id));
+      const observations = matchingFixtures.length;
+      const independentOrigins = new Set(
+        matchingFixtures.map((fixture) => reviewedSourceOrigins.get(fixture.id) || 'unbound:unknown'),
+      ).size;
       const sampledEvidenceRules = signature.evidence.filter((_evidence, index) => (
         reviewedEvidenceRuleIds.has(`${signature.id}:${index + 1}`)
       )).length;
       return [signature.id, Object.freeze({
         observations,
         repeated: observations >= 2,
+        independentOrigins,
+        independentlyRepeated: independentOrigins >= 2,
         evidenceRules: signature.evidence.length,
         sampledEvidenceRules,
         evidenceCoverage: ratio(sampledEvidenceRules, signature.evidence.length),
@@ -375,8 +403,15 @@ export function buildTechnologySignatureBenchmark(options: BenchmarkOptions = {}
     }),
   ));
   const reviewedRepeatCoverage = Object.values(reviewedBySignature).filter((entry) => entry.repeated).length;
+  const reviewedIndependentRepeatCoverage = Object.values(reviewedBySignature)
+    .filter((entry) => entry.independentlyRepeated)
+    .length;
   const reviewedUnderRepeatedSignatureIds = Object.entries(reviewedBySignature)
     .filter(([, entry]) => entry.observations < 2)
+    .map(([id]) => id)
+    .sort();
+  const reviewedUnderIndependentRepeatSignatureIds = Object.entries(reviewedBySignature)
+    .filter(([, entry]) => entry.independentOrigins < 2)
     .map(([id]) => id)
     .sort();
   const reviewedUnsampledEvidenceRuleIds = TECHNOLOGY_SIGNATURE_CATALOGUE.flatMap((signature) => (
@@ -405,14 +440,14 @@ export function buildTechnologySignatureBenchmark(options: BenchmarkOptions = {}
     catalogueSampled: reviewedSignatureCoverage === TECHNOLOGY_SIGNATURE_CATALOGUE.length
       && failedReviewedFixtures === 0,
     repeatSampled: reviewedSignatureCoverage === TECHNOLOGY_SIGNATURE_CATALOGUE.length
-      && reviewedRepeatCoverage === TECHNOLOGY_SIGNATURE_CATALOGUE.length
+      && reviewedIndependentRepeatCoverage === TECHNOLOGY_SIGNATURE_CATALOGUE.length
       && failedReviewedFixtures === 0,
     evidenceCovered: reviewedSignatureCoverage === TECHNOLOGY_SIGNATURE_CATALOGUE.length
-      && reviewedRepeatCoverage === TECHNOLOGY_SIGNATURE_CATALOGUE.length
+      && reviewedIndependentRepeatCoverage === TECHNOLOGY_SIGNATURE_CATALOGUE.length
       && reviewedEvidenceRuleIds.size === totalEvidenceRules
       && failedReviewedFixtures === 0,
     current: reviewedSignatureCoverage === TECHNOLOGY_SIGNATURE_CATALOGUE.length
-      && reviewedRepeatCoverage === TECHNOLOGY_SIGNATURE_CATALOGUE.length
+      && reviewedIndependentRepeatCoverage === TECHNOLOGY_SIGNATURE_CATALOGUE.length
       && reviewedEvidenceRuleIds.size === totalEvidenceRules
       && reviewedStaleFixtureIds.length === 0
       && failedReviewedFixtures === 0,
@@ -467,6 +502,7 @@ export function buildTechnologySignatureBenchmark(options: BenchmarkOptions = {}
       reviewedFalsePositiveMatches,
       reviewedSignatureCoverage,
       reviewedRepeatCoverage,
+      reviewedIndependentRepeatCoverage,
       reviewedEvidenceRuleCoverage: reviewedEvidenceRuleIds.size,
       lintErrors: lintErrors.length,
       ready: failedFixtures === 0
@@ -497,6 +533,7 @@ export function buildTechnologySignatureBenchmark(options: BenchmarkOptions = {}
       staleFixtureIds: Object.freeze(reviewedStaleFixtureIds),
       unsampledSignatureIds: Object.freeze(reviewedUnsampledSignatureIds),
       underRepeatedSignatureIds: Object.freeze(reviewedUnderRepeatedSignatureIds),
+      underIndependentRepeatSignatureIds: Object.freeze(reviewedUnderIndependentRepeatSignatureIds),
       unsampledEvidenceRuleIds: Object.freeze(reviewedUnsampledEvidenceRuleIds),
       maturity: reviewedMaturity,
       tiers: reviewedTiers,
@@ -507,13 +544,15 @@ export function buildTechnologySignatureBenchmark(options: BenchmarkOptions = {}
       bySignature: reviewedBySignature,
       nextAction: reviewedUnsampledSignatureIds.length
         ? 'Add contributor-reviewed, minimised, licensed observations for unsampled signatures; do not use live test requests.'
-        : reviewedUnderRepeatedSignatureIds.length
-          ? 'Add a second separately reviewed observation for each under-sampled signature.'
-          : reviewedUnsampledEvidenceRuleIds.length
-            ? 'Add reviewed observations that exercise the remaining catalogue evidence rules.'
-            : reviewedStaleFixtureIds.length
-              ? 'Re-review stale minimised fixtures before relying on the corpus for current coverage claims.'
-              : 'Maintain the current reviewed corpus and investigate any benchmark regression before expanding signatures.',
+        : reviewedUnderIndependentRepeatSignatureIds.length
+          ? 'Add a second reviewed observation from a distinct source origin for each under-sampled signature.'
+          : reviewedUnderRepeatedSignatureIds.length
+            ? 'Add a second separately reviewed observation for each under-sampled signature.'
+            : reviewedUnsampledEvidenceRuleIds.length
+              ? 'Add reviewed observations that exercise the remaining catalogue evidence rules.'
+              : reviewedStaleFixtureIds.length
+                ? 'Re-review stale minimised fixtures before relying on the corpus for current coverage claims.'
+                : 'Maintain the current reviewed corpus and investigate any benchmark regression before expanding signatures.',
     }),
     bounds: Object.freeze({
       signatureLimit: MAX_TECHNOLOGY_BENCHMARK_SIGNATURES,
@@ -531,7 +570,7 @@ export function buildTechnologySignatureBenchmark(options: BenchmarkOptions = {}
     limitations: Object.freeze([
       'The synthetic corpus is an offline regression and calibration set, not a live technology-coverage measurement.',
       reviewedFixtures.length
-        ? 'The reviewed corpus contains minimised contributor-reviewed observations. Its maturity tiers separately measure catalogue sampling, repeat observations, evidence-rule sampling, and review freshness; none establishes general accuracy on the wider web.'
+        ? 'The reviewed corpus contains minimised contributor-reviewed observations. Its maturity tiers separately measure catalogue sampling, independent source-origin repetition, evidence-rule sampling, and review freshness; none establishes general accuracy on the wider web.'
         : 'The contributor-reviewed corpus is empty, so this report makes no claim about real-world technology coverage.',
       'A matched signature is an implementation clue from the selected response, not proof of ownership, safety, maliciousness, support status, or exploitability.',
       'Unmatched and truncated evidence remains inconclusive because technologies can be concealed, rendered by scripts, proxied, or absent from the captured prefix.',
@@ -552,9 +591,10 @@ export function formatTechnologySignatureBenchmark(
     `Summary: ${report.summary.passedFixtures}/${report.summary.fixtures} fixtures passed; ${report.summary.lintErrors} catalogue lint errors`,
     `Reviewed observations: ${report.summary.passedReviewedFixtures}/${report.summary.reviewedFixtures} passed; ${report.summary.reviewedSignatureCoverage}/${report.summary.signatures} signatures sampled`,
     `Reviewed negative controls: ${report.summary.passedReviewedNegativeFixtures}/${report.summary.reviewedNegativeFixtures} passed`,
-    `Reviewed mixed controls: ${report.summary.passedReviewedMixedFixtures}/${report.summary.reviewedMixedFixtures} passed; ${report.summary.reviewedFalsePositiveMatches}/${report.summary.reviewedDeliberateNonmatches} false positives`,
+    `Reviewed mixed controls: ${report.summary.passedReviewedMixedFixtures}/${report.summary.reviewedMixedFixtures} passed`,
+    `Reviewed false-positive controls: ${report.summary.reviewedFalsePositiveMatches}/${report.summary.reviewedDeliberateNonmatches}`,
     `Reviewed corpus maturity: ${report.reviewedProgramme.maturity}`,
-    `Repeat sampling: ${report.summary.reviewedRepeatCoverage}/${report.summary.signatures} signatures; evidence rules: ${report.reviewedProgramme.sampledEvidenceRules}/${report.reviewedProgramme.totalEvidenceRules}`,
+    `Repeat sampling: ${report.summary.reviewedRepeatCoverage}/${report.summary.signatures} signatures; independent origins: ${report.summary.reviewedIndependentRepeatCoverage}/${report.summary.signatures}; evidence rules: ${report.reviewedProgramme.sampledEvidenceRules}/${report.reviewedProgramme.totalEvidenceRules}`,
     `Reviewed freshness: ${report.reviewedProgramme.staleFixtureIds.length} stale; ${report.reviewedProgramme.unsampledSignatureIds.length} unsampled signatures`,
     `Coverage: ${report.metrics.positiveCoverage}/${report.summary.signatures} positive; ${report.metrics.negativeCoverage}/${report.summary.signatures} negative`,
     `Matches: ${report.metrics.expectedMatches} expected; ${report.metrics.missedMatches} missed; ${report.metrics.unexpectedMatches} unexpected`,

@@ -12,6 +12,7 @@ import {
   main,
   parseArguments,
 } from '../tools/technology-example-review.mts';
+import { MAX_REVIEWED_FIXTURE_LABEL_LENGTH } from '../tools/technology-fixture-review.mts';
 
 const createdDirectories: string[] = [];
 const PACKAGE_INTEGRITY = 'sha512-EYByj6nk+aD9KeVxV6Hmo2/nAAT79P21Y82ycTBOBtrmqilloIbIEhgL2/8Xpt2Jz/pgNqHAwyusOGwmbKeJmA==';
@@ -101,6 +102,28 @@ describe('reviewed technology reference-build intake', () => {
       ),
       /unexpectedly detected/iu,
     );
+
+    const broadControl = buildTechnologyExampleReview(
+      '<main>Ordinary static starter</main>',
+      {
+        ...positiveOptions,
+        id: 'official-static-starter-negative-20260805',
+        expectedIds: [],
+        negativeFor: [
+          'angular', 'aspnet', 'aspnet-web-forms', 'astro', 'docusaurus',
+          'eleventy', 'express', 'framer', 'gatsby', 'hexo', 'hugo', 'jekyll',
+          'nextjs', 'nuxt', 'php', 'squarespace', 'sveltekit', 'webflow',
+          'weebly', 'wix',
+        ],
+        sourceReference: 'git:example/static-starter',
+        sourceRevision: 'ad55e344217ad86c1572567e10ba5f40002a13a3',
+        sourceIntegrity: null,
+        runtimeReference: null,
+        buildRecipe: 'reviewed-repository-artifact',
+      },
+    );
+    assert.equal(broadControl.fixture.label, 'Reviewed negative control for 20 technology signatures');
+    assert.ok(broadControl.fixture.label.length <= MAX_REVIEWED_FIXTURE_LABEL_LENGTH);
   });
 
   test('binds a containerised reference build to an immutable image digest', () => {

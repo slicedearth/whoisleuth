@@ -52,12 +52,13 @@ describe('technology signature benchmark', () => {
     assert.equal(report.summary.failedReviewedFixtures, 0);
     assert.equal(report.summary.reviewedSignatureCoverage, 39);
     assert.equal(report.summary.reviewedRepeatCoverage, 5);
+    assert.equal(report.summary.reviewedIndependentRepeatCoverage, 5);
     assert.equal(report.summary.reviewedEvidenceRuleCoverage, 44);
-    assert.equal(report.summary.reviewedNegativeFixtures, 1);
-    assert.equal(report.summary.passedReviewedNegativeFixtures, 1);
+    assert.equal(report.summary.reviewedNegativeFixtures, 2);
+    assert.equal(report.summary.passedReviewedNegativeFixtures, 2);
     assert.equal(report.summary.reviewedMixedFixtures, 28);
     assert.equal(report.summary.passedReviewedMixedFixtures, 28);
-    assert.equal(report.summary.reviewedDeliberateNonmatches, 87);
+    assert.equal(report.summary.reviewedDeliberateNonmatches, 107);
     assert.equal(report.summary.reviewedFalsePositiveMatches, 0);
     assert.equal(report.metrics.positiveCoverage, report.summary.signatures);
     assert.equal(report.metrics.negativeCoverage, report.summary.signatures);
@@ -72,6 +73,7 @@ describe('technology signature benchmark', () => {
     assert.equal(report.reviewedProgramme.staleFixtureIds.length, 0);
     assert.equal(report.reviewedProgramme.unsampledSignatureIds.length, report.summary.signatures - 39);
     assert.equal(report.reviewedProgramme.underRepeatedSignatureIds.length, report.summary.signatures - 5);
+    assert.equal(report.reviewedProgramme.underIndependentRepeatSignatureIds.length, report.summary.signatures - 5);
     assert.equal(report.reviewedProgramme.maturity, 'initial');
     assert.deepEqual(report.reviewedProgramme.tiers, {
       initial: true,
@@ -85,10 +87,12 @@ describe('technology signature benchmark', () => {
     const reviewedSvelteKit = report.reviewedProgramme.bySignature.sveltekit;
     assert.ok(reviewedSvelteKit);
     assert.equal(reviewedSvelteKit.observations, 1);
+    assert.equal(reviewedSvelteKit.independentOrigins, 1);
+    assert.equal(reviewedSvelteKit.independentlyRepeated, false);
     assert.equal(reviewedSvelteKit.sampledEvidenceRules, 1);
     assert.equal(report.reviewedProgramme.licenseBases['factual-observation'], 1);
     assert.equal(report.reviewedProgramme.licenseBases['public-domain'], 1);
-    assert.equal(report.reviewedProgramme.licenseBases['permissively-licensed-source'], 24);
+    assert.equal(report.reviewedProgramme.licenseBases['permissively-licensed-source'], 25);
     assert.equal(report.reviewedProgramme.licenseBases['copyleft-licensed-source'], 9);
     assert.equal(report.reviewedProgramme.licenseBases['official-demonstration-terms'], 1);
     assert.equal(report.reviewedProgramme.licenseBases['minimized-with-permission'], 1);
@@ -115,6 +119,7 @@ describe('technology signature benchmark', () => {
     const serialized = JSON.stringify(report);
     assert.doesNotMatch(serialized, /__NEXT_DATA__|data-mage-init|wixstatic|private-build|WordPress 7\.1/);
     assert.doesNotMatch(serialized, /"resourceOrigins"|"responseHeaders"|"httpServer"|"generator"|"html"|fixture-input/);
+    assert.doesNotMatch(serialized, /(?:npm|git|oci|official):/u);
   });
 
   test('catalogue lint rejects duplicate ids, missing fixtures, invalid confidence, and uncapped evidence', () => {
@@ -155,10 +160,11 @@ describe('technology signature benchmark', () => {
     assert.match(output, /technology-signature benchmark/i);
     assert.match(output, /fixtures passed/);
     assert.match(output, /39\/\d+ signatures sampled/);
-    assert.match(output, /Reviewed negative controls: 1\/1 passed/);
-    assert.match(output, /Reviewed mixed controls: 28\/28 passed; 0\/87 false positives/);
+    assert.match(output, /Reviewed negative controls: 2\/2 passed/);
+    assert.match(output, /Reviewed mixed controls: 28\/28 passed/);
+    assert.match(output, /Reviewed false-positive controls: 0\/107/);
     assert.match(output, /Reviewed corpus maturity: initial/);
-    assert.match(output, /Repeat sampling: 5\/\d+ signatures; evidence rules: 44\/\d+/);
+    assert.match(output, /Repeat sampling: 5\/\d+ signatures; independent origins: 5\/\d+; evidence rules: 44\/\d+/);
     assert.match(output, /network requests: 0/);
     assert.deepEqual(parseArguments([]), { json: false, requireReviewed: false });
     assert.deepEqual(parseArguments(['--json']), { json: true, requireReviewed: false });

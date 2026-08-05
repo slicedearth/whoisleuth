@@ -374,12 +374,15 @@ observed CMS, server, and runtime findings and selected competing signatures
 that were absent. The corpus remains small and its partial signature coverage
 must not be generalised to the wider web.
 The benchmark also reports a 365-day review age, unsampled and under-repeated
-signature IDs, sampled evidence rules, declared licence-basis counts, and
-reviewed coverage by technology category. Its maturity tiers are cumulative:
-an initial corpus, catalogue-wide sampling, two observations per signature,
-all evidence rules sampled, and finally a current corpus with no stale or
-failing observations. These maintenance signals cannot turn an empty or narrow
-corpus into a coverage claim and do not trigger live collection.
+signature IDs, independently sourced repetition, sampled evidence rules,
+declared licence-basis counts, and reviewed coverage by technology category.
+Multiple fixtures from the same package, repository, container, demonstration,
+or unbound deployment observation count as repeat observations but only one
+source origin. Its maturity tiers are cumulative: an initial corpus,
+catalogue-wide sampling, two independent source origins per signature, all
+evidence rules sampled, and finally a current corpus with no stale or failing
+observations. These maintenance signals cannot turn an empty or narrow corpus
+into a coverage claim and do not trigger live collection.
 
 Use the separate maintenance gate when a release process requires the highest
 reviewed-corpus tier:
@@ -388,11 +391,11 @@ reviewed-corpus tier:
 npm run technology:coverage-check
 ```
 
-This command intentionally fails until every catalogue signature has at least
-two passing minimised observations, every evidence rule has been sampled, and
-no observation is stale. The ordinary synthetic benchmark continues to measure
-deterministic signature behaviour and collision controls; neither result is a
-proxy for accuracy on the wider web.
+This command intentionally fails until every catalogue signature has passing
+minimised observations from at least two distinct source origins, every evidence
+rule has been sampled, and no observation is stale. The ordinary synthetic
+benchmark continues to measure deterministic signature behaviour and collision
+controls; neither result is a proxy for accuracy on the wider web.
 
 The wider reviewed-accuracy programme keeps technology detection separate from
 lookalike analysis, page comparison, service-deprovision cues, and certificate

@@ -13,6 +13,9 @@ import {
   TECHNOLOGY_REVIEWED_SOURCES,
 } from '../fixtures/technology-reviewed-sources.mts';
 import {
+  MAX_REVIEWED_FIXTURE_LABEL_LENGTH,
+} from '../tools/technology-fixture-review.mts';
+import {
   TECHNOLOGY_PROFILE_VERSION,
   TECHNOLOGY_SIGNATURE_CATALOGUE,
   analyzeWebsiteTechnology,
@@ -40,6 +43,7 @@ describe('contributor-reviewed technology fixture corpus', () => {
       assert.equal(fixture.version, TECHNOLOGY_REVIEWED_FIXTURE_VERSION);
       assert.equal(fixture.catalogueVersion, TECHNOLOGY_PROFILE_VERSION);
       assert.match(fixture.id, FIXTURE_ID_RE);
+      assert.ok(fixture.label.length > 0 && fixture.label.length <= MAX_REVIEWED_FIXTURE_LABEL_LENGTH);
       assert.equal(ids.has(fixture.id), false, `Duplicate reviewed fixture id: ${fixture.id}`);
       ids.add(fixture.id);
       assert.ok(LICENCE_BASES.has(fixture.licenseBasis));

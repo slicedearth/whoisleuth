@@ -33,7 +33,7 @@ import {
 import { reconstructTechnologyReviewProfile } from './technology-review-candidate.mts';
 
 export const TECHNOLOGY_EXAMPLE_REVIEW_SCHEMA = 'whoisleuth.technology-example-review';
-export const TECHNOLOGY_EXAMPLE_REVIEW_VERSION = 3;
+export const TECHNOLOGY_EXAMPLE_REVIEW_VERSION = 4;
 export const MAX_TECHNOLOGY_EXAMPLE_HTML_BYTES = 512 * 1024;
 
 type WritableLike = { write(value: string): unknown };
