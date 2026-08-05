@@ -2,6 +2,8 @@
 // not infer missing values and keep every string, object, enum, and counter
 // bounded before a provider or connector result reaches its public model.
 
+import { domainToASCII } from 'node:url';
+
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
@@ -71,4 +73,34 @@ export function boundedInteger(
     throw new TypeError(`${label} must be an integer between ${minimum} and ${maximum}`);
   }
   return value;
+}
+
+export function requireRecord(value: unknown, label: string): Record<string, unknown> {
+  if (!isRecord(value)) throw new TypeError(`${label} must be an object.`);
+  return value;
+}
+
+export function requireBoundedString(value: unknown, label: string, maxLength: number): string {
+  const normalised = strictBoundedString(value, maxLength);
+  if (!normalised) {
+    throw new TypeError(`${label} must contain from 1 to ${maxLength} characters without control characters.`);
+  }
+  return normalised;
+}
+
+export function requireIsoTimestamp(value: unknown, label: string): string {
+  const normalised = isoTimestamp(value);
+  if (!normalised) throw new TypeError(`${label} must be a valid timestamp.`);
+  return normalised;
+}
+
+export function requireDomainName(value: unknown, label: string, noun = 'domain name'): string {
+  const supplied = requireBoundedString(value, label, 253).toLowerCase().replace(/\.$/u, '');
+  const ascii = domainToASCII(supplied);
+  if (!ascii || !ascii.includes('.') || ascii.length > 253 || ascii.split('.').some((part) => (
+    !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/u.test(part)
+  ))) {
+    throw new TypeError(`${label} must be a valid ${noun}.`);
+  }
+  return ascii;
 }

@@ -1,7 +1,12 @@
 import { isIP } from 'node:net';
-import { domainToASCII } from 'node:url';
 
-import { exactKeys } from './bounded-contract-normalizers.mts';
+import {
+  exactKeys,
+  requireBoundedString,
+  requireDomainName,
+  requireIsoTimestamp,
+  requireRecord,
+} from './bounded-contract-normalizers.mts';
 import { isPrivateAddress } from './safe-fetch.mts';
 
 export const NAMESERVER_PREFLIGHT_INPUT_SCHEMA = 'whoisleuth.nameserver-preflight.input';
@@ -10,38 +15,21 @@ export const NAMESERVER_PREFLIGHT_REVIEW_VERSION = 1;
 export const MAX_PREFLIGHT_NAMESERVERS = 8;
 export const MAX_PREFLIGHT_ADDRESSES = 4;
 
-type UnknownRecord = Record<string, unknown>;
 type ObservationState = 'observed' | 'partial' | 'unavailable';
 
 const ROOT_KEYS = new Set(['schema', 'version', 'domain', 'intendedNameservers', 'observations']);
 const OBSERVATION_KEYS = new Set(['nameserver', 'state', 'source', 'observedAt', 'addresses', 'authoritative', 'servedNameservers', 'soaPrimary', 'soaSerial']);
 
-function object(value: unknown, label: string): UnknownRecord {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new TypeError(`${label} must be an object.`);
-  return value as UnknownRecord;
-}
-
 function text(value: unknown, label: string, maximum = 240): string {
-  if (typeof value !== 'string' || value.length > maximum * 4 || /[\u0000-\u001f\u007f]/u.test(value)) {
-    throw new TypeError(`${label} must be bounded text without control characters.`);
-  }
-  const normalised = value.replace(/\s+/gu, ' ').trim();
-  if (!normalised || normalised.length > maximum) throw new TypeError(`${label} must contain from 1 to ${maximum} characters.`);
-  return normalised;
+  return requireBoundedString(value, label, maximum);
 }
 
 function hostname(value: unknown, label: string): string {
-  const ascii = domainToASCII(text(value, label, 253).toLowerCase().replace(/\.$/u, ''));
-  if (!ascii || !ascii.includes('.') || ascii.length > 253 || ascii.split('.').some((part) => !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/u.test(part))) {
-    throw new TypeError(`${label} must be a valid hostname.`);
-  }
-  return ascii;
+  return requireDomainName(value, label, 'hostname');
 }
 
 function timestamp(value: unknown, label: string): string {
-  const parsed = Date.parse(text(value, label, 64));
-  if (!Number.isFinite(parsed)) throw new TypeError(`${label} must be a valid timestamp.`);
-  return new Date(parsed).toISOString();
+  return requireIsoTimestamp(value, label);
 }
 
 function state(value: unknown, label: string): ObservationState {
@@ -73,7 +61,7 @@ function sameSet(left: readonly string[], right: readonly string[]): boolean {
 }
 
 export function reviewNameserverPreflight(inputRaw: unknown, generatedAtValue = new Date().toISOString()) {
-  const input = object(inputRaw, 'Nameserver preflight input');
+  const input = requireRecord(inputRaw, 'Nameserver preflight input');
   if (input.schema !== NAMESERVER_PREFLIGHT_INPUT_SCHEMA || input.version !== 1) {
     throw new TypeError(`Nameserver preflight input must use ${NAMESERVER_PREFLIGHT_INPUT_SCHEMA} version 1.`);
   }
@@ -84,7 +72,7 @@ export function reviewNameserverPreflight(inputRaw: unknown, generatedAtValue = 
     throw new TypeError(`observations must contain no more than ${MAX_PREFLIGHT_NAMESERVERS} entries.`);
   }
   const observations = input.observations.map((raw, index) => {
-    const item = object(raw, `observations[${index}]`);
+    const item = requireRecord(raw, `observations[${index}]`);
     exactKeys(item, OBSERVATION_KEYS, `observations[${index}]`);
     const observationState = state(item.state, `observations[${index}].state`);
     const nameserver = hostname(item.nameserver, `observations[${index}].nameserver`);

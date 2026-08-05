@@ -65,5 +65,6 @@ describe('undelegated nameserver preflight review', () => {
     const unavailable = input();
     unavailable.observations[0]!.state = 'unavailable';
     assert.throws(() => reviewNameserverPreflight(unavailable, NOW), /cannot contain observed values/iu);
+    assert.throws(() => reviewNameserverPreflight({ ...input(), domain: 'example.test\nignored.test' }, NOW), /control characters/iu);
   });
 });

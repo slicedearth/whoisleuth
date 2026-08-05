@@ -1,13 +1,16 @@
-import { domainToASCII } from 'node:url';
-
-import { exactKeys } from './bounded-contract-normalizers.mts';
+import {
+  exactKeys,
+  requireBoundedString,
+  requireDomainName,
+  requireIsoTimestamp,
+  requireRecord,
+} from './bounded-contract-normalizers.mts';
 
 export const DOMAIN_PORTFOLIO_INPUT_SCHEMA = 'whoisleuth.domain-portfolio.input';
 export const DOMAIN_PORTFOLIO_REVIEW_SCHEMA = 'whoisleuth.domain-portfolio.review';
 export const DOMAIN_PORTFOLIO_REVIEW_VERSION = 1;
 export const MAX_PORTFOLIO_ASSETS = 500;
 
-type UnknownRecord = Record<string, unknown>;
 type DependencyType = 'certificate' | 'dns' | 'mail' | 'recovery' | 'registrar';
 
 const ROOT_KEYS = new Set(['schema', 'version', 'portfolioLabel', 'assets']);
@@ -16,16 +19,8 @@ const ASSET_KEYS = new Set([
   'certificateProviders', 'recoveryDomains', 'reviewedAt',
 ]);
 
-function record(value: unknown, label: string): UnknownRecord {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new TypeError(`${label} must be an object.`);
-  return value as UnknownRecord;
-}
-
 function text(value: unknown, label: string, maximum = 160): string {
-  if (typeof value !== 'string') throw new TypeError(`${label} must be text.`);
-  const normalised = value.replace(/[\u0000-\u001f\u007f]+/gu, ' ').replace(/\s+/gu, ' ').trim();
-  if (!normalised || normalised.length > maximum) throw new TypeError(`${label} must contain from 1 to ${maximum} characters.`);
-  return normalised;
+  return requireBoundedString(value, label, maximum);
 }
 
 function optionalText(value: unknown, label: string, maximum = 160): string | null {
@@ -35,18 +30,11 @@ function optionalText(value: unknown, label: string, maximum = 160): string | nu
 
 function timestamp(value: unknown, label: string, optional = false): string | null {
   if (optional && (value === null || value === undefined || value === '')) return null;
-  const parsed = Date.parse(text(value, label, 64));
-  if (!Number.isFinite(parsed)) throw new TypeError(`${label} must be a valid timestamp.`);
-  return new Date(parsed).toISOString();
+  return requireIsoTimestamp(value, label);
 }
 
 function domain(value: unknown, label: string): string {
-  const normalised = text(value, label, 253).toLowerCase().replace(/\.$/u, '');
-  const ascii = domainToASCII(normalised);
-  if (!ascii || !ascii.includes('.') || ascii.length > 253 || ascii.split('.').some((part) => !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/u.test(part))) {
-    throw new TypeError(`${label} must be a valid domain name.`);
-  }
-  return ascii;
+  return requireDomainName(value, label);
 }
 
 function textList(value: unknown, label: string): string[] {
@@ -66,7 +54,7 @@ function nullableBoolean(value: unknown, label: string): boolean | null {
 }
 
 export function reviewDomainPortfolio(inputRaw: unknown, generatedAtValue = new Date().toISOString()) {
-  const input = record(inputRaw, 'Domain portfolio input');
+  const input = requireRecord(inputRaw, 'Domain portfolio input');
   if (input.schema !== DOMAIN_PORTFOLIO_INPUT_SCHEMA || input.version !== 1) throw new TypeError(`Domain portfolio input must use ${DOMAIN_PORTFOLIO_INPUT_SCHEMA} version 1.`);
   exactKeys(input, ROOT_KEYS, 'Domain portfolio input');
   if (!Array.isArray(input.assets) || input.assets.length < 1 || input.assets.length > MAX_PORTFOLIO_ASSETS) {
@@ -74,7 +62,7 @@ export function reviewDomainPortfolio(inputRaw: unknown, generatedAtValue = new 
   }
   const portfolioLabel = text(input.portfolioLabel, 'portfolioLabel', 120);
   const assets = input.assets.map((raw, index) => {
-    const item = record(raw, `assets[${index}]`);
+    const item = requireRecord(raw, `assets[${index}]`);
     exactKeys(item, ASSET_KEYS, `assets[${index}]`);
     const criticality = item.criticality;
     if (criticality !== 'low' && criticality !== 'standard' && criticality !== 'high' && criticality !== 'critical') {

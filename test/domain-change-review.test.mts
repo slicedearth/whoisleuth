@@ -215,5 +215,6 @@ describe('domain change review', () => {
       records: Array.from({ length: MAX_DOMAIN_CHANGE_RECORDS + 1 }, () => ({ owner: 'example.test', type: 'NS', ttl: 300, value: 'ns.example.test' })),
     }];
     assert.throws(() => reviewDomainChange(overflow, NOW), /limited to/iu);
+    assert.throws(() => reviewDomainChange({ ...input(), domain: 'example.test\nignored.test' }, NOW), /control characters/iu);
   });
 });

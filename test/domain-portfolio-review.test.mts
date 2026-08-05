@@ -52,5 +52,6 @@ describe('domain portfolio review', () => {
       ...base,
       assets: [{ ...base.assets[0], dnsProviders: Array.from({ length: 17 }, (_, index) => `Provider ${index}`) }],
     }, NOW), /no more than 16/u);
+    assert.throws(() => reviewDomainPortfolio({ ...base, portfolioLabel: 'Fixture\nsecret' }, NOW), /control characters/iu);
   });
 });

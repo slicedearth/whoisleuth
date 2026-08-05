@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { isIP } from 'node:net';
 import { domainToASCII } from 'node:url';
 
-import { exactKeys } from './bounded-contract-normalizers.mts';
+import { exactKeys, requireIsoTimestamp, requireRecord } from './bounded-contract-normalizers.mts';
 
 export const ZONE_INTENT_INPUT_SCHEMA = 'whoisleuth.zone-intent.input';
 export const ZONE_INTENT_REVIEW_SCHEMA = 'whoisleuth.zone-intent.review';
@@ -11,7 +11,6 @@ export const MAX_ZONE_TEXT_BYTES = 1024 * 1024;
 export const MAX_ZONE_RECORDS = 5_000;
 export const MAX_ZONE_COMPARISONS = 2_000;
 
-type UnknownRecord = Record<string, unknown>;
 type ZoneRecordType = 'A' | 'AAAA' | 'CAA' | 'CDNSKEY' | 'CDS' | 'CNAME' | 'CSYNC' | 'DS' | 'HTTPS' | 'MX' | 'NS' | 'SRV' | 'SVCB' | 'TLSA' | 'TXT';
 type ObservationState = 'observed' | 'partial' | 'unavailable' | 'unsupported';
 type DomainNameMode = 'absolute' | 'master-file';
@@ -37,13 +36,8 @@ type RejectedRecord = Readonly<{
   reason: string;
 }>;
 
-function record(value: unknown, label: string): UnknownRecord {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new TypeError(`${label} must be an object.`);
-  return value as UnknownRecord;
-}
-
 function boundedText(value: unknown, label: string, maximum = 500): string {
-  if (typeof value !== 'string' || value.length > maximum * 4 || /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/u.test(value)) {
+  if (typeof value !== 'string' || value.length > maximum || /[\u0000-\u001f\u007f]/u.test(value)) {
     throw new TypeError(`${label} must be bounded text without control characters.`);
   }
   const normalised = value.replace(/\s+/gu, ' ').trim();
@@ -52,10 +46,7 @@ function boundedText(value: unknown, label: string, maximum = 500): string {
 }
 
 function timestamp(value: unknown, label: string): string {
-  const text = boundedText(value, label, 64);
-  const parsed = Date.parse(text);
-  if (!Number.isFinite(parsed)) throw new TypeError(`${label} must be a valid timestamp.`);
-  return new Date(parsed).toISOString();
+  return requireIsoTimestamp(value, label);
 }
 
 function domainName(value: unknown, origin: string | null, label: string, mode: DomainNameMode = 'absolute'): string {
@@ -242,7 +233,7 @@ export function normaliseRdata(
 }
 
 function normaliseRecord(value: unknown, origin: string, label: string): ZoneRecord {
-  const source = record(value, label);
+  const source = requireRecord(value, label);
   exactKeys(source, RECORD_KEYS, label);
   const typeText = boundedText(source.type, `${label}.type`, 16).toUpperCase();
   if (!SUPPORTED_TYPES.has(typeText as ZoneRecordType)) throw new TypeError(`${label}.type is unsupported.`);
@@ -389,7 +380,7 @@ function deduplicate(records: readonly ZoneRecord[]): ZoneRecord[] {
 }
 
 function parseDesired(value: unknown, origin: string): { records: ZoneRecord[]; rejected: RejectedRecord[]; truncated: boolean } {
-  const source = record(value, 'desired');
+  const source = requireRecord(value, 'desired');
   exactKeys(source, DESIRED_KEYS, 'desired');
   if (source.format === 'bind') return parseBindZone(source.zoneText, origin);
   if (source.format !== 'records') throw new TypeError('desired.format must be bind or records.');
@@ -414,13 +405,13 @@ function recordGroups(records: readonly ZoneRecord[]): Map<string, { owner: stri
 }
 
 export function reviewZoneIntent(inputRaw: unknown, generatedAtValue = new Date().toISOString()) {
-  const input = record(inputRaw, 'Zone intent input');
+  const input = requireRecord(inputRaw, 'Zone intent input');
   if (input.schema !== ZONE_INTENT_INPUT_SCHEMA || input.version !== 1) throw new TypeError(`Zone intent input must use ${ZONE_INTENT_INPUT_SCHEMA} version 1.`);
   exactKeys(input, ROOT_KEYS, 'Zone intent input');
   const origin = domainName(input.origin, null, 'origin');
   const desiredResult = parseDesired(input.desired, origin);
   const desired = deduplicate(desiredResult.records);
-  const observedInput = record(input.observed, 'observed');
+  const observedInput = requireRecord(input.observed, 'observed');
   exactKeys(observedInput, OBSERVED_KEYS, 'observed');
   const state = observedInput.state;
   if (state !== 'observed' && state !== 'partial' && state !== 'unavailable' && state !== 'unsupported') throw new TypeError('observed.state is unsupported.');

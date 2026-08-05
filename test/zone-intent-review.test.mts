@@ -121,5 +121,10 @@ _443._tcp 300 IN TLSA 3 1 1 AABB
     assert.equal(result.desired.rejected.length, 1);
     assert.match(result.desired.rejected[0]?.reason ?? '', /unsupported/u);
     assert.equal(result.complete, false);
+    assert.throws(() => reviewZoneIntent({
+      schema: ZONE_INTENT_INPUT_SCHEMA, version: 1, origin: 'example.test',
+      desired: { format: 'records', records: [] },
+      observed: { state: 'observed', source: 'Fixture\nsecret', observedAt: NOW, records: [] },
+    }, NOW), /control characters/iu);
   });
 });

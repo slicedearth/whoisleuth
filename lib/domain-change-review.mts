@@ -1,6 +1,10 @@
-import { domainToASCII } from 'node:url';
-
-import { exactKeys } from './bounded-contract-normalizers.mts';
+import {
+  exactKeys,
+  requireBoundedString,
+  requireDomainName,
+  requireIsoTimestamp,
+  requireRecord,
+} from './bounded-contract-normalizers.mts';
 import { normaliseRdata } from './zone-intent-review.mts';
 
 export const DOMAIN_CHANGE_INPUT_SCHEMA = 'whoisleuth.domain-change.input';
@@ -9,7 +13,6 @@ export const DOMAIN_CHANGE_REVIEW_VERSION = 1;
 export const MAX_DOMAIN_CHANGE_VANTAGES = 16;
 export const MAX_DOMAIN_CHANGE_RECORDS = 500;
 
-type UnknownRecord = Record<string, unknown>;
 type EvidenceState = 'observed' | 'partial' | 'unavailable';
 type RecordType = 'A' | 'AAAA' | 'CAA' | 'CDNSKEY' | 'CDS' | 'CNAME' | 'CSYNC' | 'HTTPS' | 'MX' | 'NS' | 'SRV' | 'SVCB' | 'TLSA' | 'TXT';
 
@@ -21,18 +24,8 @@ const CERTIFICATE_KEYS = new Set(['state', 'observedAt', 'currentSpkiSha256', 'p
 const HSTS_KEYS = new Set(['state', 'observedAt', 'header', 'preloadState', 'source']);
 const TYPES = new Set<RecordType>(['A', 'AAAA', 'CAA', 'CDNSKEY', 'CDS', 'CNAME', 'CSYNC', 'HTTPS', 'MX', 'NS', 'SRV', 'SVCB', 'TLSA', 'TXT']);
 
-function object(value: unknown, label: string): UnknownRecord {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new TypeError(`${label} must be an object.`);
-  return value as UnknownRecord;
-}
-
 function text(value: unknown, label: string, maximum = 500): string {
-  if (typeof value !== 'string' || value.length > maximum * 4 || /[\u0000-\u001f\u007f]/u.test(value)) {
-    throw new TypeError(`${label} must be bounded text without control characters.`);
-  }
-  const normalised = value.replace(/\s+/gu, ' ').trim();
-  if (!normalised || normalised.length > maximum) throw new TypeError(`${label} must contain from 1 to ${maximum} characters.`);
-  return normalised;
+  return requireBoundedString(value, label, maximum);
 }
 
 function optionalText(value: unknown, label: string, maximum = 500): string | null {
@@ -40,17 +33,11 @@ function optionalText(value: unknown, label: string, maximum = 500): string | nu
 }
 
 function timestamp(value: unknown, label: string): string {
-  const parsed = Date.parse(text(value, label, 64));
-  if (!Number.isFinite(parsed)) throw new TypeError(`${label} must be a valid timestamp.`);
-  return new Date(parsed).toISOString();
+  return requireIsoTimestamp(value, label);
 }
 
 function domain(value: unknown, label: string): string {
-  const ascii = domainToASCII(text(value, label, 253).toLowerCase().replace(/\.$/u, ''));
-  if (!ascii || !ascii.includes('.') || ascii.length > 253 || ascii.split('.').some((part) => !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/u.test(part))) {
-    throw new TypeError(`${label} must be a valid domain name.`);
-  }
-  return ascii;
+  return requireDomainName(value, label);
 }
 
 function owner(value: unknown, apex: string, label: string): string {
@@ -79,7 +66,7 @@ function normaliseValue(type: RecordType, value: unknown, label: string): { valu
 }
 
 function normaliseRecord(value: unknown, apex: string, label: string) {
-  const input = object(value, label);
+  const input = requireRecord(value, label);
   exactKeys(input, RECORD_KEYS, label);
   const type = text(input.type, `${label}.type`, 16).toUpperCase() as RecordType;
   if (!TYPES.has(type)) throw new TypeError(`${label}.type is unsupported.`);
@@ -95,7 +82,7 @@ function normaliseSnapshots(value: unknown, apex: string, label: string) {
   if (!Array.isArray(value) || value.length > MAX_DOMAIN_CHANGE_VANTAGES) throw new TypeError(`${label} must contain no more than ${MAX_DOMAIN_CHANGE_VANTAGES} snapshots.`);
   let totalRecords = 0;
   const snapshots = value.map((raw, index) => {
-    const item = object(raw, `${label}[${index}]`);
+    const item = requireRecord(raw, `${label}[${index}]`);
     exactKeys(item, SNAPSHOT_KEYS, `${label}[${index}]`);
     const state = evidenceState(item.state, `${label}[${index}].state`);
     if (!Array.isArray(item.records)) throw new TypeError(`${label}[${index}].records must be an array.`);
@@ -174,7 +161,7 @@ function reviewDnssecAutomation(matrix: ReturnType<typeof recordMatrix>) {
 function normaliseAcme(value: unknown, apex: string) {
   if (!Array.isArray(value) || value.length > 64) throw new TypeError('acmeDependencies must contain no more than 64 entries.');
   return Object.freeze(value.map((raw, index) => {
-    const item = object(raw, `acmeDependencies[${index}]`);
+    const item = requireRecord(raw, `acmeDependencies[${index}]`);
     exactKeys(item, ACME_KEYS, `acmeDependencies[${index}]`);
     const method = item.method;
     if (method !== 'dns-01' && method !== 'http-01' && method !== 'tls-alpn-01') throw new TypeError(`acmeDependencies[${index}].method is unsupported.`);
@@ -192,7 +179,7 @@ function normaliseAcme(value: unknown, apex: string) {
 
 function normaliseCertificate(value: unknown) {
   if (value === null || value === undefined) return null;
-  const item = object(value, 'certificate');
+  const item = requireRecord(value, 'certificate');
   exactKeys(item, CERTIFICATE_KEYS, 'certificate');
   const state = evidenceState(item.state, 'certificate.state');
   const digest = (candidate: unknown, label: string) => {
@@ -237,7 +224,7 @@ function reviewCertificate(certificate: ReturnType<typeof normaliseCertificate>)
 
 function normaliseHsts(value: unknown) {
   if (value === null || value === undefined) return null;
-  const item = object(value, 'hsts');
+  const item = requireRecord(value, 'hsts');
   exactKeys(item, HSTS_KEYS, 'hsts');
   const preloadState = item.preloadState;
   if (preloadState !== 'listed' && preloadState !== 'not_listed' && preloadState !== 'unavailable') throw new TypeError('hsts.preloadState is unsupported.');
@@ -258,7 +245,7 @@ function serviceInventory(snapshots: readonly ReturnType<typeof normaliseSnapsho
 }
 
 export function reviewDomainChange(inputRaw: unknown, generatedAtValue = new Date().toISOString()) {
-  const input = object(inputRaw, 'Domain change input');
+  const input = requireRecord(inputRaw, 'Domain change input');
   if (input.schema !== DOMAIN_CHANGE_INPUT_SCHEMA || input.version !== 1) throw new TypeError(`Domain change input must use ${DOMAIN_CHANGE_INPUT_SCHEMA} version 1.`);
   exactKeys(input, ROOT_KEYS, 'Domain change input');
   const apex = domain(input.domain, 'domain');
