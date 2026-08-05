@@ -78,6 +78,7 @@ const PASSIVE_HEADERS = new Set<string>(PASSIVE_TECHNOLOGY_HEADER_NAMES);
 const CONTROL_RE = /[\u0000-\u001f\u007f]/u;
 const REFERENCE_LICENCE_BASES = new Set<TechnologyReviewLicenceBasis>([
   'minimized-with-permission',
+  'public-domain',
   'permissively-licensed-source',
   'copyleft-licensed-source',
   'official-demonstration-terms',

@@ -219,6 +219,7 @@ describe('website technology profile', () => {
       ['TYPO3 CMS 13', 'typo3', 'content management'],
       ['OpenCart 4', 'opencart', 'commerce'],
       ['PrestaShop 9', 'prestashop', 'commerce'],
+      ['Wix.com Website Builder', 'wix', 'site builder'],
       ['Framer 2026', 'framer', 'site builder'],
       ['Weebly', 'weebly', 'site builder'],
       ['Docusaurus v3.8', 'docusaurus', 'static site generator'],

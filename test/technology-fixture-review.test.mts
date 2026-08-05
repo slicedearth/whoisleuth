@@ -77,6 +77,7 @@ describe('reviewed technology-fixture contribution tool', () => {
   test('accepts the reviewed source classes used by local and official examples', () => {
     for (const licenseBasis of [
       'minimized-with-permission',
+      'public-domain',
       'permissively-licensed-source',
       'copyleft-licensed-source',
       'official-demonstration-terms',
@@ -161,6 +162,64 @@ describe('reviewed technology-fixture contribution tool', () => {
 
     assert.deepEqual(fixture, checkedIn);
     assert.doesNotMatch(JSON.stringify(fixture), /private-page-id/u);
+  });
+
+  test('reproduces licensed generator, component, and form-state markers without retained values', () => {
+    const cases = [
+      {
+        id: 'licensed-eleventy-output-20260805',
+        reviewedAt: '2026-08-05T06:25:00.000Z',
+        observedAt: '2026-08-05T06:20:00.000Z',
+        licenseBasis: 'permissively-licensed-source',
+        expectedIds: ['eleventy'],
+        negativeFor: ['docusaurus', 'hexo', 'hugo', 'jekyll'],
+        input: { generator: 'Eleventy 2.0.1' },
+      },
+      {
+        id: 'licensed-framer-export-20260805',
+        reviewedAt: '2026-08-05T06:35:00.000Z',
+        observedAt: '2026-08-05T06:30:00.000Z',
+        licenseBasis: 'permissively-licensed-source',
+        expectedIds: ['framer'],
+        negativeFor: ['squarespace', 'webflow', 'weebly', 'wix'],
+        input: { html: '<div data-framer-name="private-component">Excluded copy</div>' },
+      },
+      {
+        id: 'licensed-webforms-export-20260805',
+        reviewedAt: '2026-08-05T06:45:00.000Z',
+        observedAt: '2026-08-05T06:40:00.000Z',
+        licenseBasis: 'public-domain',
+        expectedIds: ['aspnet-web-forms'],
+        negativeFor: ['angular', 'nextjs', 'nuxt', 'sveltekit'],
+        input: { html: '<input name="__VIEWSTATE" value="private-state">' },
+      },
+      {
+        id: 'licensed-squarespace-export-20260805',
+        reviewedAt: '2026-08-05T07:05:00.000Z',
+        observedAt: '2026-08-05T07:00:00.000Z',
+        licenseBasis: 'permissively-licensed-source',
+        expectedIds: ['squarespace'],
+        negativeFor: ['framer', 'webflow', 'weebly', 'wix'],
+        input: { generator: 'Squarespace 7.1' },
+      },
+      {
+        id: 'licensed-wix-export-20260805',
+        reviewedAt: '2026-08-05T07:15:00.000Z',
+        observedAt: '2026-08-05T07:10:00.000Z',
+        licenseBasis: 'permissively-licensed-source',
+        expectedIds: ['wix'],
+        negativeFor: ['framer', 'squarespace', 'webflow', 'weebly'],
+        input: { generator: 'Wix.com Website Builder' },
+      },
+    ];
+
+    for (const candidate of cases) {
+      const fixture = buildReviewedTechnologyFixture(input(candidate));
+      const checkedIn = TECHNOLOGY_REVIEWED_FIXTURES.find((item) => item.id === fixture.id);
+
+      assert.deepEqual(fixture, checkedIn);
+      assert.doesNotMatch(JSON.stringify(fixture), /private-component|private-state|Excluded copy/u);
+    }
   });
 
   test('creates catalogue-owned negative controls without retaining source page copy', () => {

@@ -351,21 +351,22 @@ observation time, selected factual markers, and digests—not the URL or page.
 The fixture review tool accepts only reviewed factual markers. It reconstructs
 a fixed safe subset of recognised static markers, passive response headers, and
 approved shared vendor origins, rejects target-bearing or contact material, and
-verifies the expected catalogue result. The checked-in reviewed corpus contains
-only minimised, target-free observations that have passed the contribution
-review. Source- and permission-reviewed reference builds retain separate immutable source and artefact
-digest records, while a benign named-technology example acts as a false-positive
-control. Current local examples cover official starter or default
-builds for Docusaurus, Ghost, Next.js, Astro, Nuxt, Gatsby, Hugo, Jekyll,
-WordPress, WooCommerce, Drupal, Joomla, nginx, Apache HTTP Server, Caddy, PHP,
-Angular, Express, Hexo, OpenLiteSpeed, PrestaShop, OpenCart, and Craft CMS, plus an
-Eleventy benign control. A separately reviewed official TYPO3 demonstration
-contributes only its generator and selected-server facts; its page, URL, and
-content are not retained. Licensed static repository artefacts add repeat
-Webflow coverage and one Amazon CloudFront marker without retaining the
-exported pages. The
-deployment-owned observation likewise retains only Cloudflare, Netlify, and
-SvelteKit markers rather than redistributed page content. Containerised CMS
+verifies the expected catalogue result. The checked-in reviewed corpus
+contains only minimised, target-free observations that have passed the
+contribution review. Source- and permission-reviewed reference builds retain
+separate immutable source and artefact digest records, while a benign
+named-technology example acts as a false-positive control. Current local
+examples cover official starter or default builds for Docusaurus, Ghost,
+Next.js, Astro, Nuxt, Gatsby, Hugo, Jekyll, WordPress, WooCommerce, Drupal,
+Joomla, nginx, Apache HTTP Server, Caddy, PHP, Angular, Express, Hexo,
+OpenLiteSpeed, PrestaShop, OpenCart, and Craft CMS, plus an Eleventy benign
+control. A separately reviewed official TYPO3 demonstration contributes only
+its generator and selected-server facts; its page, URL, and content are not
+retained. Licensed static repository artefacts add positive Eleventy, Framer,
+Squarespace, Webflow, Wix, ASP.NET Web Forms, and Amazon CloudFront evidence
+without retaining the exported pages. The deployment-owned observation
+likewise retains only Cloudflare, Netlify, and SvelteKit markers rather than
+redistributed page content. Containerised CMS
 cases use their first-party installation output rather than pretending an
 unconfigured image is a completed website. Mixed controls record both the
 observed CMS, server, and runtime findings and selected competing signatures

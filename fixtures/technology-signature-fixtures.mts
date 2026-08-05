@@ -82,7 +82,7 @@ const positiveFixtures: TechnologySignatureFixture[] = [
   positive('php', { responseHeaders: { 'x-powered-by': 'PHP/8.4 fixture' } }),
   positive('aspnet', { responseHeaders: { 'x-powered-by': 'ASP.NET' } }),
   positive('express', { responseHeaders: { 'x-powered-by': 'Express' } }),
-  positive('wix', { generator: 'Wix 2026' }),
+  positive('wix', { generator: 'Wix.com Website Builder' }),
   positive('squarespace', { generator: 'Squarespace 7' }),
   positive('webflow', { generator: 'Webflow 2026' }),
   positive('framer', { generator: 'Framer 2026' }),

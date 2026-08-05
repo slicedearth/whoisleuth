@@ -22,6 +22,7 @@ const FIXTURE_ID_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
 const LICENCE_BASES = new Set<string>(TECHNOLOGY_REVIEW_LICENCE_BASES);
 const PROVENANCE_LICENCE_BASES = new Set([
   'minimized-with-permission',
+  'public-domain',
   'permissively-licensed-source',
   'copyleft-licensed-source',
   'official-demonstration-terms',

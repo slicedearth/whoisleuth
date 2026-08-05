@@ -225,6 +225,32 @@ describe('reviewed technology reference-build intake', () => {
     assert.doesNotMatch(JSON.stringify(result), /private-page-id|private-site-id|Excluded copy/u);
   });
 
+  test('accepts public-domain repository artefacts without broadening source retention', () => {
+    const result = buildTechnologyExampleReview(
+      '<input type="hidden" name="__VIEWSTATE" id="__VIEWSTATE" value="excluded-state">',
+      {
+        ...positiveOptions,
+        id: 'licensed-webforms-export-20260805',
+        expectedIds: ['aspnet-web-forms'],
+        negativeFor: ['angular', 'nextjs', 'nuxt', 'sveltekit'],
+        licenceBasis: 'public-domain',
+        sourceReference: 'git:example/public-domain-export',
+        sourceRevision: 'c9986dacd02965a788d66d96ba49021258f8459d',
+        sourceIntegrity: null,
+        sourceLicence: 'CC0-1.0',
+        runtimeReference: null,
+        buildRecipe: 'reviewed-repository-artifact',
+      },
+    );
+
+    assert.equal(result.fixture.licenseBasis, 'public-domain');
+    assert.deepEqual(result.fixture.input, {
+      html: '<input name="__VIEWSTATE">',
+      observedAt: positiveOptions.observedAt,
+    });
+    assert.doesNotMatch(JSON.stringify(result), /excluded-state/u);
+  });
+
   test('records a reviewed official demonstration without inventing build or runtime provenance', () => {
     const result = buildTechnologyExampleReview(
       '<meta name="generator" content="TYPO3 CMS"><main>Excluded demonstration copy</main>',

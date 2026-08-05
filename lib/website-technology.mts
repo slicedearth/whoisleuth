@@ -72,7 +72,7 @@ type TechnologySignatureDescriptor = Readonly<{
   evidence: ReadonlyArray<Readonly<Omit<SignatureEvidence, 'matches'>>>;
 }>;
 
-const TECHNOLOGY_PROFILE_VERSION = 6;
+const TECHNOLOGY_PROFILE_VERSION = 7;
 const MAX_TECHNOLOGY_HTML_CHARS = MAX_STATIC_HTML_CHARS;
 const MAX_TECHNOLOGY_TAG_LENGTH = MAX_TAG_LENGTH;
 const MAX_TECHNOLOGY_FINDINGS = 24;
@@ -299,7 +299,7 @@ const TECHNOLOGY_SIGNATURES: TechnologySignature[] = [
     id: 'wix', name: 'Wix', category: 'site builder',
     requiresNonResourceEvidence: true,
     evidence: [
-      generatorEvidence(/^wix(?:\s|$)/i, 'Generator metadata identifies Wix.'),
+      generatorEvidence(/^wix(?:\.com)?(?:\s|$)/i, 'Generator metadata identifies Wix.'),
       htmlEvidence(['data-mesh-id='], 'Static markup contains a Wix-specific document attribute.', 'medium'),
       resourceEvidence(['static.parastorage.com', 'wixstatic.com'], 'A retained resource origin uses Wix delivery infrastructure.'),
     ],
