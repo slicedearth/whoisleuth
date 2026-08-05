@@ -5,6 +5,7 @@ import {
   TECHNOLOGY_REVIEWED_FIXTURE_SCHEMA,
   TECHNOLOGY_REVIEWED_FIXTURE_VERSION,
   TECHNOLOGY_REVIEWED_FIXTURES,
+  TECHNOLOGY_REVIEW_LICENCE_BASES,
 } from '../fixtures/technology-reviewed-fixtures.mts';
 import {
   TECHNOLOGY_PROFILE_VERSION,
@@ -13,11 +14,7 @@ import {
 } from '../lib/website-technology.mts';
 
 const FIXTURE_ID_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
-const LICENSE_BASES = new Set([
-  'factual-observation',
-  'minimized-with-permission',
-  'public-domain',
-]);
+const LICENCE_BASES = new Set<string>(TECHNOLOGY_REVIEW_LICENCE_BASES);
 
 describe('contributor-reviewed technology fixture corpus', () => {
   test('keeps every reviewed observation compatible, minimized, and deterministic', () => {
@@ -30,7 +27,7 @@ describe('contributor-reviewed technology fixture corpus', () => {
       assert.match(fixture.id, FIXTURE_ID_RE);
       assert.equal(ids.has(fixture.id), false, `Duplicate reviewed fixture id: ${fixture.id}`);
       ids.add(fixture.id);
-      assert.ok(LICENSE_BASES.has(fixture.licenseBasis));
+      assert.ok(LICENCE_BASES.has(fixture.licenseBasis));
       assert.ok(Number.isFinite(Date.parse(fixture.observedAt)));
       assert.ok(Number.isFinite(Date.parse(fixture.reviewedAt)));
       assert.ok(Date.parse(fixture.observedAt) <= Date.parse(fixture.reviewedAt));

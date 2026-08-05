@@ -239,6 +239,13 @@ copy the saved query, target, page text, raw response values, contacts, or URLs.
 The `minimized-with-permission` value retains the established fixture-contract
 spelling.
 
+Licence bases distinguish ordinary factual review, direct permission,
+public-domain material, permissively or copyleft-licensed local reference
+deployments, and official demonstrations whose applicable terms have been
+reviewed. An accessible public URL is not, by itself, sufficient permission for
+automated inspection. Prefer a locally run official example under its recorded
+licence; review live-demo terms separately before collection.
+
 The fixture review tool accepts only reviewed factual markers. It reconstructs
 a fixed safe subset of recognised static markers, passive response headers, and
 approved shared vendor origins, rejects target-bearing or contact material, and

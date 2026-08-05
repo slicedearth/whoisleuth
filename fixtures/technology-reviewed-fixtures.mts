@@ -7,7 +7,16 @@ import type { TechnologyInput } from '../lib/website-technology.mts';
 import { TECHNOLOGY_PROFILE_VERSION } from '../lib/website-technology.mts';
 
 export const TECHNOLOGY_REVIEWED_FIXTURE_SCHEMA = 'whoisleuth.technology-reviewed-fixture';
-export const TECHNOLOGY_REVIEWED_FIXTURE_VERSION = 1;
+export const TECHNOLOGY_REVIEWED_FIXTURE_VERSION = 2;
+export const TECHNOLOGY_REVIEW_LICENCE_BASES = Object.freeze([
+  'factual-observation',
+  'minimized-with-permission',
+  'public-domain',
+  'permissively-licensed-source',
+  'copyleft-licensed-source',
+  'official-demonstration-terms',
+] as const);
+export type TechnologyReviewLicenceBasis = typeof TECHNOLOGY_REVIEW_LICENCE_BASES[number];
 
 export type TechnologyReviewedFixture = Readonly<{
   schema: typeof TECHNOLOGY_REVIEWED_FIXTURE_SCHEMA;
@@ -17,7 +26,7 @@ export type TechnologyReviewedFixture = Readonly<{
   label: string;
   reviewedAt: string;
   observedAt: string;
-  licenseBasis: 'factual-observation' | 'minimized-with-permission' | 'public-domain';
+  licenseBasis: TechnologyReviewLicenceBasis;
   expectedIds: readonly string[];
   input: TechnologyInput;
   privacy: Readonly<{

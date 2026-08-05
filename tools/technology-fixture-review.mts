@@ -11,6 +11,7 @@ import { fileURLToPath } from 'node:url';
 import {
   TECHNOLOGY_REVIEWED_FIXTURE_SCHEMA,
   TECHNOLOGY_REVIEWED_FIXTURE_VERSION,
+  TECHNOLOGY_REVIEW_LICENCE_BASES,
   type TechnologyReviewedFixture,
 } from '../fixtures/technology-reviewed-fixtures.mts';
 import {
@@ -32,11 +33,7 @@ const ID_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
 const CONTROL_RE = /[\u0000-\u001f\u007f]/u;
 const EMAIL_RE = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/iu;
 const IPV4_RE = /(?:^|[^0-9])(?:\d{1,3}\.){3}\d{1,3}(?:[^0-9]|$)/u;
-const LICENSE_BASES = new Set([
-  'factual-observation',
-  'minimized-with-permission',
-  'public-domain',
-]);
+const LICENCE_BASES = new Set<string>(TECHNOLOGY_REVIEW_LICENCE_BASES);
 const SHARED_VENDOR_HOSTS = new Set([
   'cdn.shopify.com',
   'static.parastorage.com',
@@ -267,8 +264,8 @@ export function buildReviewedTechnologyFixture(raw: unknown): TechnologyReviewed
   if (!ID_RE.test(id)) throw new TypeError('Fixture id must be a lowercase hyphenated identifier.');
   const reviewedAt = timestamp(source.reviewedAt, 'Reviewed time');
   const observedAt = timestamp(source.observedAt, 'Observed time');
-  const licenseBasis = text(source.licenseBasis, 'License basis', 40);
-  if (!LICENSE_BASES.has(licenseBasis)) throw new TypeError('License basis is not supported.');
+  const licenseBasis = text(source.licenseBasis, 'Licence basis', 40);
+  if (!LICENCE_BASES.has(licenseBasis)) throw new TypeError('Licence basis is not supported.');
   const expectedIds = Array.isArray(source.expectedIds)
     ? [...new Set(source.expectedIds.map((value) => text(value, 'Expected technology id', 64).toLowerCase()))].sort()
     : [];

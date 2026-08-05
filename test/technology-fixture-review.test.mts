@@ -70,6 +70,17 @@ describe('reviewed technology-fixture contribution tool', () => {
     }
   });
 
+  test('accepts the reviewed source classes used by local and official examples', () => {
+    for (const licenseBasis of [
+      'permissively-licensed-source',
+      'copyleft-licensed-source',
+      'official-demonstration-terms',
+    ]) {
+      const fixture = buildReviewedTechnologyFixture(input({ licenseBasis }));
+      assert.equal(fixture.licenseBasis, licenseBasis);
+    }
+  });
+
   test('keeps the checked-in observation reproducible through the sanitising review tool', () => {
     const fixture = buildReviewedTechnologyFixture(input({
       id: 'owned-public-sveltekit-20260805',

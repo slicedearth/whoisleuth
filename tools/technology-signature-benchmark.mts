@@ -22,6 +22,7 @@ import {
   TECHNOLOGY_REVIEWED_FIXTURE_SCHEMA,
   TECHNOLOGY_REVIEWED_FIXTURE_VERSION,
   TECHNOLOGY_REVIEWED_FIXTURES,
+  TECHNOLOGY_REVIEW_LICENCE_BASES,
 } from '../fixtures/technology-reviewed-fixtures.mts';
 
 type WritableLike = { write(value: string): unknown };
@@ -386,7 +387,7 @@ export function buildTechnologySignatureBenchmark(options: BenchmarkOptions = {}
     })
   ));
   const reviewedLicenseBases = Object.freeze(Object.fromEntries(
-    ['factual-observation', 'minimized-with-permission', 'public-domain'].map((licenseBasis) => [
+    TECHNOLOGY_REVIEW_LICENCE_BASES.map((licenseBasis) => [
       licenseBasis,
       TECHNOLOGY_REVIEWED_FIXTURES.filter((fixture) => fixture.licenseBasis === licenseBasis).length,
     ]),

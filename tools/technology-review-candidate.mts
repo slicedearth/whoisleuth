@@ -14,6 +14,10 @@ import {
   type SavedLookupDocument,
 } from '../cli/saved-lookup.mts';
 import {
+  TECHNOLOGY_REVIEW_LICENCE_BASES,
+  type TechnologyReviewLicenceBasis,
+} from '../fixtures/technology-reviewed-fixtures.mts';
+import {
   TECHNOLOGY_SIGNATURE_CATALOGUE,
   analyzeWebsiteTechnology,
   type TechnologyEvidence,
@@ -25,7 +29,7 @@ type WritableLike = { write(value: string): unknown };
 type CandidateOptions = Readonly<{
   id: string;
   expectedIds: readonly string[];
-  licenceBasis: 'factual-observation' | 'minimized-with-permission' | 'public-domain';
+  licenceBasis: TechnologyReviewLicenceBasis;
   reviewedAt: string;
 }>;
 type CandidateArguments = CandidateOptions & Readonly<{ inputPath: string }>;
@@ -35,11 +39,7 @@ const ID_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
 const CONTROL_RE = /[\u0000-\u001f\u007f]/u;
 const MAX_FINDINGS = 24;
 const MAX_EVIDENCE = 4;
-const LICENCE_BASES = new Set<CandidateOptions['licenceBasis']>([
-  'factual-observation',
-  'minimized-with-permission',
-  'public-domain',
-]);
+const LICENCE_BASES = new Set<TechnologyReviewLicenceBasis>(TECHNOLOGY_REVIEW_LICENCE_BASES);
 
 const GENERATOR_VALUES: Readonly<Record<string, string>> = Object.freeze({
   wordpress: 'WordPress', drupal: 'Drupal', joomla: 'Joomla', ghost: 'Ghost',
@@ -261,7 +261,7 @@ export function parseArguments(args: readonly string[]): CandidateArguments {
   if (unknown.length) throw new TypeError(`Unknown option: --${unknown[0]}`);
   const licenceBasis = values.get('licence-basis');
   if (!LICENCE_BASES.has(licenceBasis as CandidateOptions['licenceBasis'])) {
-    throw new TypeError('Licence basis must be factual-observation, minimized-with-permission, or public-domain.');
+    throw new TypeError(`Licence basis must be one of: ${TECHNOLOGY_REVIEW_LICENCE_BASES.join(', ')}.`);
   }
   return {
     inputPath,
