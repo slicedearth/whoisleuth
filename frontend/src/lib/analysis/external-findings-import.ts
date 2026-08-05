@@ -6,7 +6,7 @@ import {
 } from './case-model.ts';
 
 export const EXTERNAL_FINDINGS_SCHEMA = 'whoisleuth.external-findings';
-export const EXTERNAL_FINDINGS_VERSION = 2;
+export const EXTERNAL_FINDINGS_VERSION = 3;
 export const MAX_EXTERNAL_FINDINGS_IMPORT_BYTES = 384 * 1024;
 export const MAX_EXTERNAL_FINDINGS = 100;
 export const MAX_EXTERNAL_FINDINGS_PER_DOMAIN = 20;
@@ -24,6 +24,17 @@ export const EXTERNAL_FINDING_CATEGORIES = [
 ] as const;
 export type ExternalFindingCategory = typeof EXTERNAL_FINDING_CATEGORIES[number];
 export type ExternalFindingEvidenceClass = 'deployment_observation' | 'provider_report';
+export type ExternalFindingStructuredObservation = Readonly<{
+  sourceSchema:
+    | 'whoisleuth.domain-observation-rows'
+    | 'whoisleuth.dns-observation-rows'
+    | 'whoisleuth.certificate-observation-rows';
+  sourceVersion: 1;
+  field: string;
+  value: string;
+  issuer: string | null;
+  notAfter: string | null;
+}>;
 
 export type ExternalFinding = Readonly<{
   domain: string;
@@ -34,6 +45,7 @@ export type ExternalFinding = Readonly<{
   completeness: 'complete' | 'inconclusive' | 'partial' | 'unknown';
   limitations: readonly string[];
   reference: string | null;
+  structuredObservation: ExternalFindingStructuredObservation | null;
 }>;
 
 export type ExternalFindingsDocument = Readonly<{
@@ -69,6 +81,20 @@ const FINDING_KEYS = new Set([
   'completeness',
   'limitations',
   'reference',
+  'structuredObservation',
+]);
+const STRUCTURED_OBSERVATION_KEYS = new Set([
+  'sourceSchema',
+  'sourceVersion',
+  'field',
+  'value',
+  'issuer',
+  'notAfter',
+]);
+const STRUCTURED_OBSERVATION_SCHEMAS = new Set([
+  'whoisleuth.domain-observation-rows',
+  'whoisleuth.dns-observation-rows',
+  'whoisleuth.certificate-observation-rows',
 ]);
 
 function record(value: unknown): Record<string, unknown> | null {
@@ -116,6 +142,36 @@ function limitations(value: unknown, index: number): string[] {
   return [...unique];
 }
 
+function structuredObservation(value: unknown, index: number): ExternalFindingStructuredObservation | null {
+  if (value === undefined || value === null) return null;
+  const item = record(value);
+  if (!item || !hasOnlyKeys(item, STRUCTURED_OBSERVATION_KEYS)) {
+    throw new Error(`Finding ${index + 1} structured observation has an invalid shape or additional fields.`);
+  }
+  if (typeof item.sourceSchema !== 'string' || !STRUCTURED_OBSERVATION_SCHEMAS.has(item.sourceSchema)) {
+    throw new Error(`Finding ${index + 1} structured observation source schema is unsupported.`);
+  }
+  if (item.sourceVersion !== 1) {
+    throw new Error(`Finding ${index + 1} structured observation source version is unsupported.`);
+  }
+  const field = requiredText(item.field, 40, `Finding ${index + 1} structured observation field`);
+  const observationValue = requiredText(item.value, 500, `Finding ${index + 1} structured observation value`);
+  const issuer = optionalText(item.issuer, 160, `Finding ${index + 1} certificate issuer`);
+  const notAfter = iso(item.notAfter, `Finding ${index + 1} certificate expiry`, true);
+  const certificateSchema = item.sourceSchema === 'whoisleuth.certificate-observation-rows';
+  if (!certificateSchema && (issuer !== null || notAfter !== null)) {
+    throw new Error(`Finding ${index + 1} non-certificate observation cannot declare certificate metadata.`);
+  }
+  return {
+    sourceSchema: item.sourceSchema as ExternalFindingStructuredObservation['sourceSchema'],
+    sourceVersion: 1,
+    field,
+    value: observationValue,
+    issuer,
+    notAfter,
+  };
+}
+
 function findingKey(finding: ExternalFinding, sourceName: string): string {
   return [
     finding.domain,
@@ -133,8 +189,11 @@ export function parseExternalFindingsDocument(value: unknown): ExternalFindingsD
   if (!root || !hasOnlyKeys(root, ROOT_KEYS)) {
     throw new Error('External findings must use the documented object shape without additional top-level fields.');
   }
-  if (root.schema !== EXTERNAL_FINDINGS_SCHEMA || (root.schemaVersion !== 1 && root.schemaVersion !== EXTERNAL_FINDINGS_VERSION)) {
-    throw new Error(`External findings must use ${EXTERNAL_FINDINGS_SCHEMA} schema version 1 or ${EXTERNAL_FINDINGS_VERSION}.`);
+  if (
+    root.schema !== EXTERNAL_FINDINGS_SCHEMA
+    || ![1, 2, EXTERNAL_FINDINGS_VERSION].includes(Number(root.schemaVersion))
+  ) {
+    throw new Error(`External findings must use ${EXTERNAL_FINDINGS_SCHEMA} schema version 1, 2, or ${EXTERNAL_FINDINGS_VERSION}.`);
   }
   const sourceValue = record(root.source);
   if (!sourceValue || !hasOnlyKeys(sourceValue, SOURCE_KEYS)) {
@@ -181,6 +240,7 @@ export function parseExternalFindingsDocument(value: unknown): ExternalFindingsD
       completeness: item.completeness as ExternalFinding['completeness'],
       limitations: limitations(item.limitations, index),
       reference: optionalText(item.reference, 500, `Finding ${index + 1} reference`),
+      structuredObservation: structuredObservation(item.structuredObservation, index),
     };
     const key = findingKey(finding, source.name);
     if (seen.has(key)) continue;
@@ -219,15 +279,36 @@ function importedSourceLabel(finding: ExternalFinding, sourceName: string): stri
 
 function existingPinKey(recordValue: CaseRecord, finding: ExternalFinding, sourceName: string): string {
   const expectedLabel = `External ${finding.category} finding`;
-  const expectedValue = pinValue(finding);
+  const expectedValue = finding.structuredObservation?.value ?? pinValue(finding);
   const expectedSource = importedSourceLabel(finding, sourceName);
+  const observation = finding.structuredObservation;
   return recordValue.evidencePins.some((pin) => (
     pin.label === expectedLabel
     && pin.value === expectedValue
     && pin.source === expectedSource
     && pin.observedAt === finding.observedAt
     && pin.completeness === finding.completeness
+    && (!observation || (
+      pin.field === observation.field
+      && pin.sourceSchema?.collection === 'external_observations'
+      && pin.sourceSchema.schema === observation.sourceSchema
+      && pin.sourceSchema.version === observation.sourceVersion
+    ))
   )) ? findingKey(finding, sourceName) : '';
+}
+
+function structuredPinFields(finding: ExternalFinding): Record<string, unknown> {
+  const observation = finding.structuredObservation;
+  if (!observation) return {};
+  return {
+    field: observation.field,
+    category: finding.category,
+    sourceSchema: {
+      collection: 'external_observations',
+      schema: observation.sourceSchema,
+      version: observation.sourceVersion,
+    },
+  };
 }
 
 export function mergeExternalFindingsIntoCases(
@@ -257,10 +338,12 @@ export function mergeExternalFindingsIntoCases(
       ...(document.source.reference ? [`Source reference: ${document.source.reference}`] : []),
       ...finding.limitations,
     ];
+    const existingPinIds = new Set(target.evidencePins.map((pin) => pin.id));
     const updated = updateCase(cases, target.id, {
       evidencePin: {
+        ...structuredPinFields(finding),
         label: `External ${finding.category} finding`,
-        value: pinValue(finding),
+        value: finding.structuredObservation?.value ?? pinValue(finding),
         source: importedSourceLabel(finding, document.source.name),
         observedAt: finding.observedAt,
         completeness: finding.completeness,
@@ -268,6 +351,30 @@ export function mergeExternalFindingsIntoCases(
       },
     }, now);
     cases = updated.cases;
+    const addedPin = updated.record.evidencePins.find((pin) => !existingPinIds.has(pin.id)) ?? null;
+    if (addedPin) {
+      cases = updateCase(cases, updated.record.id, {
+        sighting: {
+          state: finding.evidenceClass === 'deployment_observation'
+            ? 'observed_by_deployment'
+            : 'reported_by_provider',
+          category: finding.category === 'dns'
+            ? 'delegation'
+            : finding.category === 'certificate'
+              ? 'certificate'
+              : finding.category === 'registration'
+                ? 'registration'
+                : finding.category === 'http' || finding.category === 'page'
+                  ? 'website'
+                  : 'other',
+          source: document.source.name,
+          observedAt: finding.observedAt,
+          completeness: finding.completeness,
+          evidencePinId: addedPin.id,
+          limitations: sourceLimitations,
+        },
+      }, now).cases;
+    }
     findingsAdded += 1;
     if (existing) updatedDomains.add(finding.domain);
     else createdDomains.add(finding.domain);

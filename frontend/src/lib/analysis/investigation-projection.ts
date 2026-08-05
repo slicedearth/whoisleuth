@@ -62,6 +62,7 @@ export type InvestigationSourceState = 'absent' | 'invalid' | 'unsupported' | 's
 export type InvestigationObservationStatus = 'success' | 'partial';
 export type InvestigationObservationKind =
   | 'case_evidence'
+  | 'case_external_observation'
   | 'case_record'
   | 'brand_profile'
   | 'brand_page_baseline'
@@ -80,6 +81,8 @@ export type InvestigationRelationshipType =
   | 'campaign_contains_case'
   | 'domain_presented_certificate'
   | 'domain_resolved_to_ip'
+  | 'domain_aliases_to_domain'
+  | 'domain_uses_mail_server'
   | 'domain_exposed_tracking_identifier'
   | 'domain_related_by_favicon'
   | 'domain_loaded_official_asset';
@@ -108,6 +111,7 @@ export interface InvestigationSchemaVersions {
   campaign?: number | null;
   relationshipEvidence?: number | null;
   relationshipObservation?: number | null;
+  externalObservation?: number | null;
 }
 
 export interface InvestigationEntity {
@@ -215,7 +219,26 @@ export interface NormalizedCaseRecord {
   disposition: string;
   source: string;
   evidenceHistory: NormalizedCaseEvidenceSnapshot[];
+  evidencePins: NormalizedCaseEvidencePin[];
   updatedAt: string;
+}
+
+export interface NormalizedCaseEvidencePin {
+  id: string;
+  field: string | null;
+  category: string | null;
+  value: string;
+  source: string;
+  sourceState: string | null;
+  sourceSchema: {
+    collection: string;
+    schema: string;
+    version: number;
+  } | null;
+  observedAt: string;
+  completeness: string;
+  truncated: boolean | null;
+  limitations: string[];
 }
 
 export interface NormalizedBrandProfile {
@@ -287,6 +310,8 @@ const RELATIONSHIP_TYPES = new Set<InvestigationRelationshipType>([
   'campaign_contains_case',
   'domain_presented_certificate',
   'domain_resolved_to_ip',
+  'domain_aliases_to_domain',
+  'domain_uses_mail_server',
   'domain_exposed_tracking_identifier',
   'domain_related_by_favicon',
   'domain_loaded_official_asset',

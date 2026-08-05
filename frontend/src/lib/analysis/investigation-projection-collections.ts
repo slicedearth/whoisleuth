@@ -18,6 +18,7 @@ import type {
   NormalizedBrandProfile,
   NormalizedCampaign,
   NormalizedCaseEvidenceSnapshot,
+  NormalizedCaseEvidencePin,
   NormalizedCaseRecord,
   ObservationCandidate,
   RelationshipCandidate,
@@ -92,7 +93,134 @@ export function projectInvestigationCollections(
     projectionEntityType,
     projectionRelationshipType,
     projectionClassification,
-  } = context;
+} = context;
+const EXTERNAL_OBSERVATION_SCHEMAS = new Set([
+  'whoisleuth.domain-observation-rows',
+  'whoisleuth.dns-observation-rows',
+  'whoisleuth.certificate-observation-rows',
+]);
+
+function normalizedIp(value: string): string {
+  const candidate = value.trim().toLowerCase();
+  const ipv4Parts = candidate.split('.');
+  if (
+    ipv4Parts.length === 4
+    && ipv4Parts.every((part) => /^\d{1,3}$/u.test(part) && Number(part) <= 255)
+  ) return ipv4Parts.map((part) => String(Number(part))).join('.');
+  if (candidate.includes(':') && candidate.length <= 45 && /^[0-9a-f:.]+$/u.test(candidate)) return candidate;
+  return '';
+}
+
+function dnsTarget(value: string, field: string): string {
+  const candidate = field === 'MX'
+    ? value.trim().split(/\s+/u).at(-1) ?? ''
+    : value.trim();
+  return normalizeDomain(candidate.replace(/\.$/u, ''));
+}
+
+function projectExternalObservation(
+  pin: NormalizedCaseEvidencePin,
+  caseRecord: NormalizedCaseRecord,
+  domainEntity: InvestigationEntity,
+  caseEntity: InvestigationEntity,
+): void {
+  const sourceSchema = pin.sourceSchema;
+  const observedAt = timestamp(pin.observedAt);
+  if (
+    !sourceSchema
+    || sourceSchema.collection !== 'external_observations'
+    || !EXTERNAL_OBSERVATION_SCHEMAS.has(sourceSchema.schema)
+    || !observedAt
+    || !pin.field
+  ) return;
+  const completeness = pin.completeness === 'complete'
+    ? true
+    : pin.completeness === 'unknown'
+      ? null
+      : false;
+  const observation = addObservation({
+    id: stableId('observation', `case-external|${caseRecord.id}|${pin.id}|${observedAt}`),
+    kind: 'case_external_observation',
+    entityIds: [caseEntity.id, domainEntity.id],
+    store: 'cases',
+    recordId: caseRecord.id,
+    source: text(pin.source, 80) || 'external observation',
+    observedAt,
+    scanDepth: null,
+    status: pin.completeness === 'complete' ? 'success' : 'partial',
+    complete: completeness,
+    truncated: pin.truncated,
+    schemaVersions: { case: cases.version, externalObservation: sourceSchema.version },
+    limitations: [
+      'This observation was imported and was not independently collected by this browser session.',
+      ...pin.limitations,
+    ],
+  });
+  if (!observation) return;
+
+  if (sourceSchema.schema === 'whoisleuth.certificate-observation-rows' && pin.field === 'fingerprintSha256') {
+    const fingerprint = sha256(pin.value);
+    const entity = fingerprint ? addEntity('certificate', fingerprint, fingerprint, { fingerprintSha256: fingerprint }) : null;
+    if (entity) {
+      linkObservationEntity(observation, entity);
+      addRelationship({
+        type: 'domain_presented_certificate',
+        from: domainEntity.id,
+        to: entity.id,
+        classification: 'direct',
+        method: 'Imported exact leaf-certificate SHA-256 observation',
+      }, observation);
+    }
+    return;
+  }
+  if (sourceSchema.schema !== 'whoisleuth.dns-observation-rows') return;
+  const field = pin.field.toUpperCase();
+  if (field === 'A' || field === 'AAAA') {
+    const address = normalizedIp(pin.value);
+    const entity = address ? addEntity('ip_address', address, address, { address }) : null;
+    if (entity) {
+      linkObservationEntity(observation, entity);
+      addRelationship({
+        type: 'domain_resolved_to_ip',
+        from: domainEntity.id,
+        to: entity.id,
+        classification: 'direct',
+        method: `Imported exact DNS ${field} observation`,
+      }, observation);
+    }
+    return;
+  }
+  if (field === 'NS') {
+    const target = dnsTarget(pin.value, field);
+    const entity = target ? addEntity('nameserver_set', target, target, { nameservers: [target] }) : null;
+    if (entity) {
+      linkObservationEntity(observation, entity);
+      addRelationship({
+        type: 'domain_uses_nameserver_set',
+        from: domainEntity.id,
+        to: entity.id,
+        classification: 'direct',
+        method: 'Imported exact DNS NS observation',
+      }, observation);
+    }
+    return;
+  }
+  if (field === 'CNAME' || field === 'MX') {
+    const target = dnsTarget(pin.value, field);
+    const entity = target ? addEntity('domain', target, target, { domain: target }) : null;
+    if (entity) {
+      linkObservationEntity(observation, entity);
+      addRelationship({
+        type: field === 'CNAME' ? 'domain_aliases_to_domain' : 'domain_uses_mail_server',
+        from: domainEntity.id,
+        to: entity.id,
+        classification: 'direct',
+        method: `Imported exact DNS ${field} observation`,
+      }, observation);
+    }
+  }
+}
+
 function projectCaseSnapshot(
   snapshot: NormalizedCaseEvidenceSnapshot,
   caseRecord: NormalizedCaseRecord,
@@ -202,6 +330,9 @@ for (const caseRecord of orderedCases) {
   }, caseObservation);
   for (const snapshot of [...caseRecord.evidenceHistory].reverse()) {
     projectCaseSnapshot(snapshot, caseRecord, domainEntity, caseEntity);
+  }
+  for (const pin of caseRecord.evidencePins) {
+    projectExternalObservation(pin, caseRecord, domainEntity, caseEntity);
   }
 }
 

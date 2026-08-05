@@ -18,12 +18,12 @@ limitations remain attached to a separately labelled evidence pin. WHOISleuth do
 change the case's analyst status or disposition, fetch a reference, execute
 content, contact a provider, or submit a report.
 
-## Version 2 schema
+## Version 3 schema
 
 ```json
 {
   "schema": "whoisleuth.external-findings",
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "source": {
     "name": "Local analyst export",
     "reference": "offline review",
@@ -65,13 +65,15 @@ Each finding accepts only:
 - `observedAt`: a required date and time;
 - `completeness`: `complete`, `inconclusive`, `partial`, or `unknown`;
 - `limitations`: up to eight text entries of at most 240 characters each;
-- `reference`: optional text, at most 500 characters.
+- `reference`: optional text, at most 500 characters;
+- `structuredObservation`: optional strict metadata retained only for the
+  documented domain, DNS, and certificate row converters.
 
 Additional properties, unsupported categories or completeness states, invalid
 domains or dates, control characters, empty findings, and future schema
 versions reject the whole document.
 
-Version 1 remains readable and normalises to version 2. Because version 1 did
+Versions 1 and 2 remain readable and normalise to version 3. Because version 1 did
 not distinguish provenance classes, its findings become `provider_report`
 rather than being upgraded to first-party observations. Analyst hypotheses and
 conclusions do not belong in this findings schema; use the separate case
@@ -98,6 +100,15 @@ counts before import. Exclusions identify only the row number and a fixed
 reason, not rejected values. The converter does not autodetect arbitrary
 third-party files, fetch records, or treat imported values as independently
 verified observations.
+
+Converted rows retain their source schema, version, field, and bounded value
+on the case evidence pin, and add a source-qualified case sighting at the
+original observation time. Valid A, AAAA, NS, CNAME, MX, and certificate
+fingerprint values can therefore appear as direct, imported edges in the
+local asset graph. Other supported record types remain typed observations
+without an invented relationship. The original narrative pin remains visible
+for review, and every projected edge says that this browser session did not
+independently collect the observation.
 
 ## Sanitised capture artefact manifest
 

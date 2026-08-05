@@ -951,6 +951,11 @@ strict uncompressed WARC response archives, and bounded STIX 2.1 or MISP event
 JSON. Every file is validated and previewed locally before a merge. Generic row
 conversion accepts only domain, category, summary, observation time,
 completeness, limitation, and reference columns.
+Documented domain, DNS, and certificate observation rows additionally retain
+their source schema and typed field, create source-qualified timeline
+sightings, and contribute only valid direct A, AAAA, NS, CNAME, MX, or
+certificate relationships to the local asset graph. Unsupported or malformed
+relationship values remain observations and do not create graph edges.
 The capture schemas accept bounded titles, normalised HTTP(S) origins,
 technology labels, screenshot SHA-256 digests, optional version-2 perceptual
 dHashes, artefact dimensions and sizes, completeness, and limitations;

@@ -61,6 +61,14 @@ describe('external findings converters', () => {
       ],
     }, 'domain-observations-v1');
     assert.equal(report.document.findings[0]?.domain, 'example.test');
+    assert.deepEqual(report.document.findings[0]?.structuredObservation, {
+      sourceSchema: DOMAIN_OBSERVATION_ROWS_SCHEMA,
+      sourceVersion: 1,
+      field: 'status',
+      value: 'registered',
+      issuer: null,
+      notAfter: null,
+    });
     assert.equal(report.accepted, 1);
     assert.equal(report.duplicates, 1);
     assert.equal(report.rejected, 1);
@@ -79,6 +87,8 @@ describe('external findings converters', () => {
     }, 'dns-observations-v1');
     assert.equal(report.document.findings[0]?.category, 'dns');
     assert.match(report.document.findings[0]?.summary || '', /192\.0\.2\.10/u);
+    assert.equal(report.document.findings[0]?.structuredObservation?.field, 'A');
+    assert.equal(report.document.findings[0]?.structuredObservation?.value, '192.0.2.10');
     assert.equal(report.rejected, 1);
   });
 
@@ -100,6 +110,8 @@ describe('external findings converters', () => {
     }, 'certificate-observations-v1');
     assert.equal(report.document.findings[0]?.category, 'certificate');
     assert.match(report.document.findings[0]?.summary || '', new RegExp('a'.repeat(64), 'u'));
+    assert.equal(report.document.findings[0]?.structuredObservation?.value, 'a'.repeat(64));
+    assert.equal(report.document.findings[0]?.structuredObservation?.issuer, 'Example issuing CA');
     assert.equal(report.rejected, 1);
   });
 });

@@ -79,6 +79,7 @@ function rowsDocument(rows: readonly unknown[], source: string): ExternalFinding
       completeness: item.completeness ?? 'unknown',
       limitations: limitation,
       reference: item.reference ?? null,
+      structuredObservation: item.structuredObservation ?? null,
     };
   });
   return parseExternalFindingsDocument({
@@ -150,6 +151,14 @@ function mappedDomainObservation(value: unknown): Record<string, unknown> | null
     completeness: item.completeness ?? 'unknown',
     limitations: ['Imported state is an external observation and was not independently verified by WHOISleuth.'],
     reference: item.reference ?? null,
+    structuredObservation: {
+      sourceSchema: DOMAIN_OBSERVATION_ROWS_SCHEMA,
+      sourceVersion: SUPPORTED_OBSERVATION_ROWS_VERSION,
+      field: 'status',
+      value: status,
+      issuer: null,
+      notAfter: null,
+    },
   };
 }
 
@@ -168,6 +177,14 @@ function mappedDnsObservation(value: unknown): Record<string, unknown> | null {
     completeness: item.completeness ?? 'unknown',
     limitations: ['Imported DNS data was not queried or independently verified by WHOISleuth.'],
     reference: item.reference ?? null,
+    structuredObservation: {
+      sourceSchema: DNS_OBSERVATION_ROWS_SCHEMA,
+      sourceVersion: SUPPORTED_OBSERVATION_ROWS_VERSION,
+      field: type,
+      value: recordValue,
+      issuer: null,
+      notAfter: null,
+    },
   };
 }
 
@@ -187,6 +204,14 @@ function mappedCertificateObservation(value: unknown): Record<string, unknown> |
     completeness: item.completeness ?? 'unknown',
     limitations: ['Imported certificate metadata was not fetched or independently verified by WHOISleuth.'],
     reference: item.reference ?? null,
+    structuredObservation: {
+      sourceSchema: CERTIFICATE_OBSERVATION_ROWS_SCHEMA,
+      sourceVersion: SUPPORTED_OBSERVATION_ROWS_VERSION,
+      field: 'fingerprintSha256',
+      value: fingerprint.toLowerCase(),
+      issuer,
+      notAfter,
+    },
   };
 }
 
