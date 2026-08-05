@@ -80,6 +80,7 @@ node bin/whoisleuth.mts source-report lookup.json --json
 node bin/whoisleuth.mts inspect-archive workspace.json --json
 node bin/whoisleuth.mts inspect-archive workspace.json --search example.invalid --json
 node bin/whoisleuth.mts sign-artifact response-packet.json --private-key-file analyst-private.pem > response-packet.signed.json
+node bin/whoisleuth.mts ct-intake certificate-events.json --json > external-findings.json
 node bin/whoisleuth.mts verify-signature response-packet.signed.json --public-key-file analyst-public.pem
 node bin/whoisleuth.mts lookup example.com --deep --json > lookup.json
 node bin/whoisleuth.mts compare lookup.json --json
@@ -388,7 +389,7 @@ machine access is not evidence that a domain is unregistered or safe.
 | 70 | Unexpected CLI bootstrap failure. |
 | 130 | The analyst cancelled the command. No partial final result was emitted. |
 
-This release supports `lookup`, `bulk`, `ct-search`, `discover`, `discover-scan`, `posture`,
+This release supports `lookup`, `bulk`, `ct-search`, `ct-intake`, `discover`, `discover-scan`, `posture`,
 `http`, `tls`, `registry-support`, `registry-doctor`, `registry-cohort`, `registry-scaffold`, `risk-calibrate`,
 `lookalike-calibrate`, `verify-artifact`,
 `inspect-archive`, `sign-artifact`, `verify-signature`, `source-report`,
@@ -680,6 +681,23 @@ the complete bounded structured result in the versioned
 `whoisleuth.cli.ct-search` schema. The certificate-group cap is reported
 separately from the registrable-domain result cap. CT observations do not prove
 that a website is active or malicious.
+
+## Local certificate event intake
+
+`ct-intake [events.json]` reads `whoisleuth.ct-event-batch` version 1 entirely
+offline. Each source-qualified event supplies a log identifier, observation
+time, certificate SHA-256 digest, one or more DNS names, completeness, and
+optional issuer, expiry, and limitations. Unknown fields, malformed names,
+unsupported completeness values, and oversized batches are rejected.
+
+JSON output uses the existing `whoisleuth.external-findings` version 3 contract
+and can be deliberately imported into the browser Console. Wildcard names are
+normalised to their base DNS name, exact event/domain duplicates are removed,
+and deterministic output is capped at 100 findings, 25 domains, and 20 findings
+per domain to match the browser import boundary. Omission is stated in each
+retained finding when the supplied batch exceeds those limits. The command
+makes no request and treats every certificate event as a review lead, not proof
+that the certificate was served, requested, or controlled by the named domain.
 
 ## Lookalike discovery
 

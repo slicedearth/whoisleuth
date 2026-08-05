@@ -107,7 +107,7 @@ HTTP status, and a bounded explanation.
 | Goal | Commands |
 | --- | --- |
 | Investigate a target | `lookup`, `http`, `tls`, `posture`, `registry-support` |
-| Review many targets | `bulk`, `discover`, `discover-scan`, `ct-search` |
+| Review many targets | `bulk`, `discover`, `discover-scan`, `ct-search`, `ct-intake` |
 | Compare saved evidence | `compare`, `page-compare`, `diff`, `reconcile`, `timeline`, `mail-review` |
 | Review supplied evidence | `brief`, `review-evidence`, `registry-doctor`, `registry-cohort`, `source-report`, `sharing-review` |
 | Plan and assure changes | `domain-control`, `monitor-once`, `assurance`, `change-packet`, `workflow-plan`, `workflow-run` |
@@ -209,6 +209,10 @@ full contracts into the packaged reference.
 ### Certificate Transparency search
 
 [Read the CT query and source-limit contract.](cli-reference.md#certificate-transparency-search)
+
+### Local certificate event intake
+
+[Read the offline, source-qualified event import contract.](cli-reference.md#local-certificate-event-intake)
 
 ### Lookalike discovery
 

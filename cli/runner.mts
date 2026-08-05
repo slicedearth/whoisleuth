@@ -95,6 +95,11 @@ import {
   formatDomainChangePacket,
 } from '../lib/domain-change-packet.mts';
 import { buildCliManual } from './manual.mts';
+import {
+  MAX_CT_EVENT_INPUT_BYTES,
+  buildCtEventFindings,
+  formatCtEventFindings,
+} from './ct-event-intake.mts';
 import { buildInvestigationPlan, formatInvestigationPlan } from './investigation-plan.mts';
 import { formatInvestigationRun, runInvestigationRecipe } from './investigation-run.mts';
 import { evaluateCliFailPolicies, formatFailPolicyNotice } from './fail-policy.mts';
@@ -162,6 +167,7 @@ Investigate:
 
 Discover:
   ct-search          Search certificate-transparency observations.
+  ct-intake          Normalise a local certificate event batch for case import.
   discover           Generate offline lookalike candidates.
   discover-scan      Collect a bounded candidate review queue.
   registry-support   Explain local registry coverage without a request.
@@ -221,6 +227,7 @@ const COMMAND_USAGE: Readonly<Record<CliCommand, string>> = Object.freeze({
   lookup: 'whoisleuth lookup <domain|IP|ASN> [--json|--junit|--markdown|--html] [--fast|--deep] [--observer <label>] [--vantage <label>] [--plan] [--summary|--verbose] [--strict-exit] [--fail-on <policies>] [--events] [--quiet] [--no-color]',
   bulk: 'whoisleuth bulk [file] [--json|--jsonl|--junit|--csv|--domains|--queries] [--registered-only|--inconclusive-only|--errors-only] [--fast|--deep] [--concurrency <1-8>] [--checkpoint <file> [--resume]] [--events] [--plan] [--fail-on <policies>]',
   'ct-search': 'whoisleuth ct-search <keyword> [--json] [--quiet] [--no-color]',
+  'ct-intake': 'whoisleuth ct-intake [events.json] [--json] [--quiet] [--no-color]',
   discover: 'whoisleuth discover <brand|domain> [--tlds <list>] [--preset <name>|--families <ids>] [--keyboard <layout>] [--dictionary <file>] [--snapshot <file>] [--json|--jsonl|--domains]',
   'discover-scan': 'whoisleuth discover-scan <brand|domain> [--fast|--deep] [--scan-limit <n>] [--chunk-size <n>] [--concurrency <n>] [--resolver <IPs>] [--allowlist <file>] [--checkpoint <file> [--resume]] [--observation-snapshot <file>] [--json|--jsonl|--csv|--domains] [--plan] [--fail-on <policies>]',
   posture: 'whoisleuth posture <domain> [--selectors <list>] [--retired-selectors <list>] [--mail-profile <profile>] [--json|--sarif --owned-domain] [--quiet] [--no-color]',
@@ -291,6 +298,11 @@ const COMMAND_DETAILS: Readonly<Record<CliCommand, Readonly<{ description: strin
     description: 'Search certificate-transparency observations for one bounded keyword.',
     example: 'whoisleuth ct-search "example brand" --json',
     boundary: 'Certificate observations do not prove website activity, registration ownership, or malicious intent.',
+  },
+  'ct-intake': {
+    description: 'Normalise source-qualified local certificate events into browser-compatible findings.',
+    example: 'whoisleuth ct-intake certificate-events.json --json',
+    boundary: 'The command is offline, caps output at 100 findings, and treats every event as a review lead rather than proof of serving or control.',
   },
   discover: {
     description: 'Generate bounded lookalike-domain candidates from local mutation rules.',
@@ -470,6 +482,7 @@ const COMMAND_COLLECTION: Readonly<Record<CliCommand, Readonly<{
   lookup: { mode: 'network', scope: 'Accepts one target. Fast is the default; deep collection must be selected explicitly.' },
   bulk: { mode: 'network', scope: 'Accepts at most 500 fast or 50 deep targets, with concurrency capped at 8 fast or 3 deep.' },
   'ct-search': { mode: 'network', scope: 'Accepts one bounded search keyword and queries the fixed certificate-transparency source.' },
+  'ct-intake': { mode: 'offline', scope: 'Reads one source-qualified event batch capped at 4 MiB and makes no request.' },
   discover: { mode: 'offline', scope: 'Generates a bounded candidate set from local rules, dictionaries, and optional saved snapshots.' },
   'discover-scan': { mode: 'network', scope: 'Scans at most 500 fast or 50 deep candidates, with concurrency capped at 8 fast or 3 deep.' },
   posture: { mode: 'network', scope: 'Accepts one domain and performs bounded DNS queries only.' },
@@ -1434,6 +1447,41 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
       failureLabel = 'Candidate scan';
       const { runDiscoveryScanCommand } = await import('./discovery-scan-command-runner.mts');
       return await runDiscoveryScanCommand(args, dependencies, commandContext);
+    }
+
+    if (args.action === 'ct-intake') {
+      failureLabel = 'Certificate event intake';
+      let input: string;
+      try {
+        input = dependencies.readArtifactInput
+          ? await dependencies.readArtifactInput(args.source)
+          : await readSavedLookupInputBounded(args.source
+            ? createReadStream(args.source, { highWaterMark: 64 * 1024 })
+            : dependencies.stdin || process.stdin, {
+              limit: MAX_CT_EVENT_INPUT_BYTES,
+              label: 'Certificate event input',
+            });
+      } catch (error) {
+        if (error instanceof CliUsageError) throw error;
+        throw new CliUsageError(`Could not read certificate event input: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
+      }
+      if (!input.trim()) throw new CliUsageError('ct-intake requires one versioned JSON file or a document on stdin.');
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(input);
+      } catch {
+        throw new CliUsageError('Certificate event input is not valid JSON.');
+      }
+      let document;
+      try {
+        document = buildCtEventFindings(parsed);
+      } catch (error) {
+        throw new CliUsageError(boundedCliErrorMessage(error, 'Certificate event input is invalid'));
+      }
+      if (!args.quiet) write(stdout, args.output === 'json'
+        ? formatJsonDocument(document)
+        : terminal(formatCtEventFindings(document), args.color));
+      return EXIT_CODES.SUCCESS;
     }
 
     if (args.action === 'ct-search'

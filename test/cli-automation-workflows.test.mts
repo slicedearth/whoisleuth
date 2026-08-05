@@ -104,6 +104,9 @@ describe('CLI automation arguments', () => {
     assert.deepEqual(parseCliArguments(['change-packet', 'change.json', '--json']), {
       action: 'change-packet', source: 'change.json', output: 'json', quiet: false, color: true,
     });
+    assert.deepEqual(parseCliArguments(['ct-intake', 'events.json', '--json']), {
+      action: 'ct-intake', source: 'events.json', output: 'json', quiet: false, color: true,
+    });
     assert.deepEqual(parseCliArguments([
       'sharing-review', 'packet.json', '--marking', 'amber', '--recipient-scope', 'organization',
       '--purpose', 'Reviewed handoff', '--human-reviewed', '--personal-data-reviewed', '--redactions-confirmed', '--json',
@@ -200,6 +203,31 @@ describe('offline domain assurance', () => {
     assert.equal(code, EXIT_CODES.SUCCESS);
     assert.equal(lookupCalled, false);
     assert.equal(JSON.parse(stdout.value()).schema, 'whoisleuth.domain-change-packet');
+  });
+});
+
+describe('local certificate event intake', () => {
+  test('emits an import-compatible document without network collection', async () => {
+    const stdout = capture();
+    let lookupCalled = false;
+    const code = await runCli(['ct-intake', 'events.json', '--json'], {
+      stdout: stdout.stream,
+      stderr: capture().stream,
+      now: () => NOW,
+      readArtifactInput: async () => JSON.stringify({
+        schema: 'whoisleuth.ct-event-batch', version: 1,
+        source: { name: 'Fixture source', reference: null, collectedAt: NOW },
+        events: [{
+          logId: 'fixture:1', observedAt: NOW, certificateSha256: 'a'.repeat(64),
+          dnsNames: ['event.example.test'], issuer: null, notAfter: null,
+          completeness: 'complete', limitations: [],
+        }],
+      }),
+      runUnifiedLookup: async () => { lookupCalled = true; },
+    });
+    assert.equal(code, EXIT_CODES.SUCCESS);
+    assert.equal(lookupCalled, false);
+    assert.equal(JSON.parse(stdout.value()).schema, 'whoisleuth.external-findings');
   });
 });
 
