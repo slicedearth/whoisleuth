@@ -71,7 +71,9 @@ export const MAX_CLI_PACKAGE_GRAPH_BYTES = 8 * 1024 * 1024;
 export const MAX_CLI_PACKAGE_MODULES = 256;
 export const MAX_CLI_PACKAGE_SOURCE_BYTES = 8 * 1024 * 1024;
 export const MAX_CLI_PACKAGE_FILE_BYTES = 2 * 1024 * 1024;
-export const MAX_CLI_PACKAGE_ENTRIES = 250;
+// Keep a modest growth margin while the packed and unpacked byte ceilings remain
+// the primary package-bloat controls.
+export const MAX_CLI_PACKAGE_ENTRIES = 320;
 export const MAX_CLI_PACKAGE_PACKED_BYTES = 2 * 1024 * 1024;
 export const MAX_CLI_PACKAGE_UNPACKED_BYTES = 6 * 1024 * 1024;
 

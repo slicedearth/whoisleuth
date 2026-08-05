@@ -28,6 +28,15 @@ describe('reviewed page-language signal packs', () => {
     assert.equal(detectPageLanguageSignal('Security alert\u0007'), null);
   });
 
+  test('does not interpret comments, scripts, styles, or tag attributes as visible review language', () => {
+    assert.equal(detectPageLanguageSignal('<!-- verify your account --><body>Account help</body>'), null);
+    assert.equal(detectPageLanguageSignal('<script>"immediate action required"</script><body>Account help</body>'), null);
+    assert.equal(detectPageLanguageSignal('<style>.notice::after{content:"security alert"}</style><body>Account help</body>'), null);
+    assert.equal(detectPageLanguageSignal('<div data-copy="verify your account">Account help</div>'), null);
+    assert.equal(detectPageLanguageSignal(`<div data-copy="${'x'.repeat(5_000)} verify your account">Account help</div>`), null);
+    assert.equal(detectPageLanguageSignal('<body><strong>Verify your account</strong></body>')?.category, 'account_verification');
+  });
+
   test('publishes only fixed pack metadata for authoring review', () => {
     const catalogue = pageLanguagePackCatalogue();
     assert.equal(catalogue.length, 7);

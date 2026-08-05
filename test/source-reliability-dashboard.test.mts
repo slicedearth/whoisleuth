@@ -53,6 +53,15 @@ describe('browser-local source reliability dashboard', () => {
         : source),
     };
     assert.throws(() => parseSourceReliabilityDashboard(JSON.stringify(inconsistent)), /inconsistent state samples/iu);
+    const inconsistentRate = {
+      ...report,
+      sources: report.sources.map((source, index) => index === 0
+        ? { ...source, rates: { ...source.rates, failure: 1 } }
+        : source),
+    };
+    assert.throws(() => parseSourceReliabilityDashboard(JSON.stringify(inconsistentRate)), /inconsistent reliability rates/iu);
+    const inconsistentTotal = { ...report, totals: { ...report.totals, truncations: report.totals.truncations + 1 } };
+    assert.throws(() => parseSourceReliabilityDashboard(JSON.stringify(inconsistentTotal)), /inconsistent totals/iu);
     assert.throws(() => parseSourceReliabilityDashboard('x'.repeat(512 * 1024 + 1)), /between 1 byte/iu);
   });
 });

@@ -32,11 +32,12 @@ function digest(value: unknown, label: string): string {
   return normalised;
 }
 
-function digests(value: unknown, label: string, maximum: number): readonly string[] {
+function digests(value: unknown, label: string, maximum: number, sort = true): readonly string[] {
   if (!Array.isArray(value) || value.length > maximum) {
     throw new TypeError(`${label} must contain no more than ${maximum} SHA-256 digests.`);
   }
-  return Object.freeze([...new Set(value.map((entry, index) => digest(entry, `${label}[${index}]`)))].sort());
+  const values = [...new Set(value.map((entry, index) => digest(entry, `${label}[${index}]`)))];
+  return Object.freeze(sort ? values.sort() : values);
 }
 
 export function compareTrustStoreEvidence(inputRaw: unknown, generatedAtValue = new Date().toISOString()) {
@@ -53,6 +54,7 @@ export function compareTrustStoreEvidence(inputRaw: unknown, generatedAtValue = 
     certificateInput.fingerprintsSha256,
     'certificate.fingerprintsSha256',
     MAX_TRUST_STORE_CHAIN_CERTIFICATES,
+    false,
   );
   if (certificateState === 'unavailable' && certificateFingerprints.length) {
     throw new TypeError('An unavailable certificate observation cannot contain fingerprints.');

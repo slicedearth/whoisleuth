@@ -9,6 +9,7 @@ import {
   requireBoundedString,
   requireIsoTimestamp,
 } from '../lib/bounded-contract-normalizers.mts';
+import { normalizeBoundedSemanticVersion } from '../lib/semantic-version.mts';
 
 export const INVESTIGATION_MANIFEST_SCHEMA = 'whoisleuth.investigation-manifest';
 export const INVESTIGATION_MANIFEST_VERSION = 1;
@@ -54,10 +55,7 @@ export async function buildInvestigationManifest(
   }
   const generatedAt = requireIsoTimestamp(generatedAtValue, 'generatedAt');
   const workflow = requireBoundedString(input.workflow, 'workflow', 160);
-  const applicationVersion = requireBoundedString(applicationVersionValue, 'applicationVersion', 40);
-  if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/u.test(applicationVersion)) {
-    throw new TypeError('applicationVersion must be a semantic version.');
-  }
+  const applicationVersion = normalizeBoundedSemanticVersion(applicationVersionValue, 'Application');
   const configurationDigestSha256 = input.configurationDigestSha256;
   if (configurationDigestSha256 !== null && !SHA256_RE.test(configurationDigestSha256)) {
     throw new TypeError('configurationDigestSha256 must be a sha256: hexadecimal digest.');

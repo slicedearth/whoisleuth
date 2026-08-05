@@ -9,6 +9,7 @@ import {
   validatePublishedManifest,
   type ExecuteCommand,
 } from '../tools/published-cli-check.mts';
+import { MAX_CLI_PACKAGE_ENTRIES } from '../tools/cli-package.mts';
 
 const VERSION = '1.33.0';
 const PACKAGE_NAME = '@slicedearth/whoisleuth-cli';
@@ -105,6 +106,12 @@ describe('published CLI verification', () => {
         },
       },
     }), VERSION), /attestation URL is outside the public registry boundary/u);
+    assert.throws(() => validatePublishedManifest(publishedManifest({
+      dist: {
+        ...(publishedManifest().dist as object),
+        fileCount: MAX_CLI_PACKAGE_ENTRIES + 1,
+      },
+    }), VERSION), /Published file count must be between/u);
   });
 
   test('checks the exact installed command without lifecycle scripts or network diagnostics', async () => {

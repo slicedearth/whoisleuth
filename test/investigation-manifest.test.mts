@@ -39,4 +39,14 @@ describe('investigation manifest', () => {
       workflow: 'review', configurationDigestSha256: null, artifacts: [],
     }, NOW, '1.40.0'), /between 1 and 16/iu);
   });
+
+  test('uses the shared semantic-version boundary', async () => {
+    const document = await buildInvestigationManifest({
+      workflow: 'review', configurationDigestSha256: null, artifacts: [{ content: '{}' }],
+    }, NOW, '1.40.0-rc.1+local.2');
+    assert.equal(document.application.version, '1.40.0-rc.1+local.2');
+    await assert.rejects(() => buildInvestigationManifest({
+      workflow: 'review', configurationDigestSha256: null, artifacts: [{ content: '{}' }],
+    }, NOW, '01.40.0'), /leading zeroes/iu);
+  });
 });

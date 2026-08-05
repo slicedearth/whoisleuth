@@ -92,6 +92,10 @@ function rate(value: unknown, label: string): number | null {
   return value;
 }
 
+function expectedRate(numerator: number, denominator: number): number | null {
+  return denominator > 0 ? Number((numerator / denominator).toFixed(4)) : null;
+}
+
 function timestamp(value: unknown, label: string): string {
   if (typeof value !== 'string' || value.length > 64 || !Number.isFinite(Date.parse(value))) {
     throw new Error(`${label} must be a valid date and time.`);
@@ -202,6 +206,8 @@ export function parseSourceReliabilityDashboard(raw: string): SourceReliabilityD
     throw new Error('Source reliability report has invalid limitations.');
   }
   const seen = new Set<string>();
+  let sourceTruncations = 0;
+  let sourceRateLimits = 0;
   const rows = root.sources.map((rawSource, index): SourceReliabilityDashboardRow => {
     const source = record(rawSource, `Source ${index + 1}`);
     exactKeys(source, SOURCE_KEYS, `Source ${index + 1}`);
@@ -218,7 +224,12 @@ export function parseSourceReliabilityDashboard(raw: string): SourceReliabilityD
     if (Object.keys(states).length > ALLOWED_STATES.size || Object.keys(states).some((state) => !ALLOWED_STATES.has(state))) {
       throw new Error(`${source.source} contains an unsupported state.`);
     }
-    const countedStates = Object.entries(states).reduce((sum, [state, value]) => sum + count(value, `${source.source} ${state} count`), 0);
+    const stateCounts = new Map<string, number>();
+    const countedStates = Object.entries(states).reduce((sum, [state, value]) => {
+      const valueCount = count(value, `${source.source} ${state} count`);
+      stateCounts.set(state, valueCount);
+      return sum + valueCount;
+    }, 0);
     if (countedStates !== stateSamples) throw new Error(`${source.source} has inconsistent state samples.`);
     const rates = record(source.rates, `${source.source} rates`);
     exactKeys(rates, RATE_KEYS, `${source.source} rates`);
@@ -226,6 +237,24 @@ export function parseSourceReliabilityDashboard(raw: string): SourceReliabilityD
     const partialRate = rate(rates.partial, `${source.source} partial rate`);
     const truncatedRate = rate(rates.truncated, `${source.source} truncated rate`);
     const rateLimitedRate = rate(rates.rateLimited, `${source.source} rate-limited rate`);
+    const truncationCount = count(source.truncationCount, `${source.source} truncation count`);
+    const rateLimitedCount = count(source.rateLimitedCount, `${source.source} rate-limited count`);
+    if (truncationCount > observationSamples) throw new Error(`${source.source} has inconsistent truncation counts.`);
+    if (rateLimitedCount !== (stateCounts.get('rate_limited') ?? 0)) throw new Error(`${source.source} has inconsistent rate-limited counts.`);
+    const expectedRates = {
+      failure: expectedRate((stateCounts.get('error') ?? 0) + (stateCounts.get('unavailable') ?? 0), stateSamples),
+      partial: expectedRate(stateCounts.get('partial') ?? 0, stateSamples),
+      truncated: expectedRate(truncationCount, observationSamples),
+      rateLimited: expectedRate(rateLimitedCount, stateSamples),
+    };
+    if (failureRate !== expectedRates.failure
+      || partialRate !== expectedRates.partial
+      || truncatedRate !== expectedRates.truncated
+      || rateLimitedRate !== expectedRates.rateLimited) {
+      throw new Error(`${source.source} has inconsistent reliability rates.`);
+    }
+    sourceTruncations += truncationCount;
+    sourceRateLimits += rateLimitedCount;
     const durations = record(source.durationMs, `${source.source} durations`);
     exactKeys(durations, DURATION_KEYS, `${source.source} durations`);
     const durationTrend = record(source.durationTrend, `${source.source} duration trend`);
@@ -269,11 +298,13 @@ export function parseSourceReliabilityDashboard(raw: string): SourceReliabilityD
   const stateSamples = count(totals.stateSamples, 'Total state samples');
   const observationSamples = count(totals.observationSamples, 'Total observation samples');
   const timingSamples = count(totals.timingSamples, 'Total timing samples');
-  count(totals.truncations, 'Total truncations');
-  count(totals.rateLimits, 'Total rate limits');
+  const truncations = count(totals.truncations, 'Total truncations');
+  const rateLimits = count(totals.rateLimits, 'Total rate limits');
   if (stateSamples !== rows.reduce((sum, row) => sum + row.stateSamples, 0)
     || observationSamples !== rows.reduce((sum, row) => sum + row.observationSamples, 0)
-    || timingSamples !== rows.reduce((sum, row) => sum + row.timingSamples, 0)) {
+    || timingSamples !== rows.reduce((sum, row) => sum + row.timingSamples, 0)
+    || truncations !== sourceTruncations
+    || rateLimits !== sourceRateLimits) {
     throw new Error('Source reliability report has inconsistent totals.');
   }
   return Object.freeze({

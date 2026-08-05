@@ -35,8 +35,18 @@ describe('offline trust-store fingerprint comparison', () => {
     assert.equal(result.state, 'complete');
     assert.deepEqual(result.comparisons.map((comparison) => comparison.state), ['anchor_observed', 'not_observed']);
     assert.deepEqual(result.comparisons[0]?.matchedAnchorSha256, [ROOT]);
+    assert.equal(result.certificate.leafSha256, LEAF);
     assert.equal(result.certificate.runtimeAuthorisation, 'authorised');
     assert.match(result.limitations.join(' '), /does not build or validate a certificate path/iu);
+  });
+
+  test('preserves the supplied certificate-chain order when identifying the leaf', () => {
+    const reversedLexicalOrder = input();
+    const first = 'f'.repeat(64);
+    const second = '0'.repeat(64);
+    reversedLexicalOrder.certificate.fingerprintsSha256 = [first, second];
+    const result = compareTrustStoreEvidence(reversedLexicalOrder, NOW);
+    assert.equal(result.certificate.leafSha256, first);
   });
 
   test('keeps non-observation inconclusive when either input is partial', () => {

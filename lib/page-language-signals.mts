@@ -28,6 +28,9 @@ export const PAGE_LANGUAGE_SIGNAL_VERSION = 1;
 export const MAX_PAGE_LANGUAGE_SIGNAL_CHARS = 300_000;
 
 const CONTROL_CHARACTER_RE = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/u;
+const HTML_COMMENT_RE = /<!--[\s\S]*?(?:-->|$)/gu;
+const NON_VISIBLE_BLOCK_RE = /<(script|style|template)\b[^>]*>[\s\S]*?(?:<\/\1\s*>|$)/giu;
+const HTML_TAG_RE = /<[^>]*>/gu;
 const CATEGORY_LABELS: Readonly<Record<PageLanguageSignalCategory, string>> = Object.freeze({
   account_verification: 'account-verification',
   account_restriction: 'account-restriction',
@@ -119,9 +122,16 @@ export function detectPageLanguageSignal(
   if (typeof input !== 'string' || !input || input.length > MAX_PAGE_LANGUAGE_SIGNAL_CHARS || CONTROL_CHARACTER_RE.test(input)) {
     return null;
   }
+  const visibleText = input
+    .replace(HTML_COMMENT_RE, ' ')
+    .replace(NON_VISIBLE_BLOCK_RE, ' ')
+    .replace(HTML_TAG_RE, ' ')
+    .replace(/\s+/gu, ' ')
+    .trim();
+  if (!visibleText) return null;
   for (const pack of preferredPacks(documentLanguage)) {
     for (const pattern of pack.patterns) {
-      if (!pattern.expression.test(input)) continue;
+      if (!pattern.expression.test(visibleText)) continue;
       return Object.freeze({
         version: PAGE_LANGUAGE_SIGNAL_VERSION,
         packId: pack.id,
