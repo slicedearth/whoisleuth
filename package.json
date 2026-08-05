@@ -51,6 +51,7 @@
     "benchmark:technology": "node tools/technology-signature-benchmark.mts",
     "technology:coverage-check": "node tools/technology-signature-benchmark.mts --require-reviewed",
     "technology:signature-scaffold": "node tools/technology-signature-scaffold.mts",
+    "technology:review-candidate": "node tools/technology-review-candidate.mts",
     "technology:fixture-review": "node tools/technology-fixture-review.mts",
     "accuracy:status": "node tools/reviewed-accuracy-status.mts",
     "accuracy:review-scaffold": "node tools/reviewed-accuracy-scaffold.mts",

@@ -220,12 +220,32 @@ fixture with:
 npm run technology:fixture-review -- reviewed-input.json
 ```
 
-The contributor supplies only reviewed factual markers. The tool reconstructs
-a fixed safe subset of recognised static markers and approved shared vendor
-origins, rejects target-bearing or contact material, and verifies the expected
-catalogue result. The checked-in reviewed corpus contains only minimised,
-target-free observations that have passed the contribution review. Its current
-partial signature coverage must not be generalised to the wider web.
+To prepare that input from an existing saved Deep CLI lookup without making a
+second request, run:
+
+```bash
+npm run technology:review-candidate -- saved-deep-lookup.json \
+  --id=reviewed-sveltekit-observation \
+  --expected=sveltekit \
+  --licence-basis=minimized-with-permission \
+  --reviewed-at=2026-08-05T11:00:00.000Z \
+  > reviewed-input.json
+```
+
+The expected identifiers are an explicit analyst confirmation, not labels
+inferred by the tool. Candidate intake requires a complete, successful
+technology observation and rebuilds catalogue-owned markers only. It does not
+copy the saved query, target, page text, raw response values, contacts, or URLs.
+The `minimized-with-permission` value retains the established fixture-contract
+spelling.
+
+The fixture review tool accepts only reviewed factual markers. It reconstructs
+a fixed safe subset of recognised static markers, passive response headers, and
+approved shared vendor origins, rejects target-bearing or contact material, and
+verifies the expected catalogue result. The checked-in reviewed corpus contains
+only minimised, target-free observations that have passed the contribution
+review. Its current partial signature coverage must not be generalised to the
+wider web.
 The benchmark also reports a 365-day review-age gate, unsampled signature IDs,
 declared licence-basis counts, and reviewed coverage by technology category.
 These maintenance signals cannot turn an empty or narrow corpus into a coverage

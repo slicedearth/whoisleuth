@@ -52,6 +52,24 @@ describe('reviewed technology-fixture contribution tool', () => {
     assert.doesNotMatch(JSON.stringify(fixture), /Private page wording/u);
   });
 
+  test('reconstructs passive platform headers without retaining upstream values', () => {
+    const cases = [
+      ['php', 'x-powered-by', 'PHP/8.4.1', 'PHP'],
+      ['aspnet', 'x-powered-by', 'ASP.NET/4.8', 'ASP.NET'],
+      ['express', 'x-powered-by', 'Express/5', 'Express'],
+      ['fastly', 'x-fastly-request-id', 'private-request-identifier', 'fixture'],
+    ] as const;
+    for (const [technologyId, header, value, expected] of cases) {
+      const fixture = buildReviewedTechnologyFixture(input({
+        id: `reviewed-${technologyId}-header`,
+        expectedIds: [technologyId],
+        input: { responseHeaders: { [header]: value } },
+      }));
+      assert.deepEqual(fixture.input.responseHeaders, { [header]: expected });
+      assert.doesNotMatch(JSON.stringify(fixture), /private-request-identifier|8\.4\.1|4\.8/u);
+    }
+  });
+
   test('keeps the checked-in observation reproducible through the sanitising review tool', () => {
     const fixture = buildReviewedTechnologyFixture(input({
       id: 'owned-public-sveltekit-20260805',
@@ -93,6 +111,20 @@ describe('reviewed technology-fixture contribution tool', () => {
         },
       })),
       /unsupported fields/iu,
+    );
+    assert.throws(
+      () => buildReviewedTechnologyFixture(input({
+        expectedIds: ['php'],
+        input: { responseHeaders: { 'x-origin-debug': 'PHP' } },
+      })),
+      /not approved/iu,
+    );
+    assert.throws(
+      () => buildReviewedTechnologyFixture(input({
+        expectedIds: ['fastly'],
+        input: { responseHeaders: { 'x-fastly-request-id': 'https://private-target.invalid/request' } },
+      })),
+      /target or contact/iu,
     );
   });
 });

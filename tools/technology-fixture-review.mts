@@ -23,6 +23,7 @@ import {
 export const MAX_TECHNOLOGY_REVIEW_INPUT_BYTES = 64 * 1024;
 export const MAX_REVIEWED_MARKUP_BYTES = 8 * 1024;
 export const MAX_REVIEWED_RESOURCE_ORIGINS = 16;
+export const MAX_REVIEWED_RESPONSE_HEADERS = 8;
 
 type UnknownRecord = Record<string, unknown>;
 type WritableLike = { write(value: string): unknown };
@@ -104,11 +105,21 @@ const TECHNOLOGY_INPUT_KEYS = new Set([
   'httpServer',
   'html',
   'resourceOrigins',
+  'responseHeaders',
 ]);
 const HEADER_CANONICAL_VALUES: Readonly<Record<string, string>> = Object.freeze({
   cloudfront: 'CloudFront',
   'apache-http-server': 'Apache',
   'microsoft-iis': 'Microsoft-IIS',
+});
+const PASSIVE_HEADER_RECONSTRUCTIONS: Readonly<Record<string, Readonly<Record<string, string>>>> = Object.freeze({
+  'cf-ray': Object.freeze({ cloudflare: 'fixture' }),
+  'x-drupal-cache': Object.freeze({ drupal: 'fixture' }),
+  'x-fastly-request-id': Object.freeze({ fastly: 'fixture' }),
+  'x-powered-by': Object.freeze({ php: 'PHP', aspnet: 'ASP.NET', express: 'Express' }),
+  'x-shopify-stage': Object.freeze({ shopify: 'fixture' }),
+  'x-sorting-hat-podid': Object.freeze({ shopify: 'fixture' }),
+  'x-vercel-id': Object.freeze({ vercel: 'fixture' }),
 });
 
 function record(value: unknown): UnknownRecord | null {
@@ -210,6 +221,39 @@ function normalizeOrigins(value: unknown): string[] {
   return [...origins].sort();
 }
 
+function normalizeResponseHeaders(value: unknown): Record<string, string> {
+  if (value === undefined || value === null) return {};
+  const headers = record(value);
+  if (!headers || Object.keys(headers).length > MAX_REVIEWED_RESPONSE_HEADERS) {
+    throw new TypeError(`Response headers must be an object containing at most ${MAX_REVIEWED_RESPONSE_HEADERS} passive headers.`);
+  }
+  const output: Record<string, string> = {};
+  for (const [rawName, rawValue] of Object.entries(headers)) {
+    const name = text(rawName, 'Response header name', 64).toLowerCase();
+    const supported = PASSIVE_HEADER_RECONSTRUCTIONS[name];
+    if (!supported) throw new TypeError(`Response header ${name} is not approved for reviewed fixtures.`);
+    const headerValue = text(rawValue, `Response header ${name}`, 240);
+    if (EMAIL_RE.test(headerValue) || IPV4_RE.test(headerValue) || /https?:\/\//iu.test(headerValue)) {
+      throw new TypeError(`Response header ${name} contains target or contact material.`);
+    }
+    const findings = analyzeWebsiteTechnology({ responseHeaders: { [name]: headerValue } }).findings;
+    if (findings.length !== 1) {
+      throw new TypeError(`Response header ${name} must produce exactly one recognised catalogue technology before it can be minimised.`);
+    }
+    const finding = findings[0];
+    const canonical = finding ? supported[finding.id] : undefined;
+    if (!finding || !canonical) {
+      throw new TypeError(`Response header ${name} has no privacy-safe canonical reconstruction.`);
+    }
+    const reconstructed = analyzeWebsiteTechnology({ responseHeaders: { [name]: canonical } }).findings;
+    if (reconstructed.length !== 1 || reconstructed[0]?.id !== finding.id) {
+      throw new TypeError(`Response header ${name} has no stable canonical reconstruction.`);
+    }
+    output[name] = canonical;
+  }
+  return Object.fromEntries(Object.entries(output).sort(([left], [right]) => left.localeCompare(right)));
+}
+
 export function buildReviewedTechnologyFixture(raw: unknown): TechnologyReviewedFixture {
   const source = record(raw);
   const input = record(source?.input);
@@ -237,11 +281,13 @@ export function buildReviewedTechnologyFixture(raw: unknown): TechnologyReviewed
   const httpServer = normalizeHeader(input.httpServer, 'HTTP server value', 'httpServer');
   const html = normalizeMarkup(input.html);
   const resourceOrigins = normalizeOrigins(input.resourceOrigins);
+  const responseHeaders = normalizeResponseHeaders(input.responseHeaders);
   const normalizedInput: TechnologyInput = Object.freeze({
     ...(generator ? { generator } : {}),
     ...(httpServer ? { httpServer } : {}),
     ...(html ? { html } : {}),
     ...(resourceOrigins.length ? { resourceOrigins } : {}),
+    ...(Object.keys(responseHeaders).length ? { responseHeaders: Object.freeze(responseHeaders) } : {}),
     observedAt,
   });
   const observedIds = analyzeWebsiteTechnology(normalizedInput).findings.map((finding) => finding.id).sort();
