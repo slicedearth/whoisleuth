@@ -40,7 +40,10 @@ const CLI_COMMANDS = [
   'page-compare',
   'mail-review',
   'review-evidence',
+  'brief',
+  'case-pack',
   'domain-control',
+  'monitor-once',
   'assurance',
   'sharing-review',
   'workflow-plan',
@@ -88,7 +91,10 @@ type CliAction =
   | ({ action: 'page-compare'; leftSource: string; rightSource: string; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'mail-review'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'review-evidence'; source: string | null; mmdbSource: string | null; output: 'terminal' | 'json'; strictExit: boolean } & TerminalOptions)
+  | ({ action: 'brief'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
+  | ({ action: 'case-pack'; source: string | null; output: 'terminal' | 'json'; audience: 'internal' | 'trusted' | 'public'; reviewed: boolean } & TerminalOptions)
   | ({ action: 'domain-control'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
+  | ({ action: 'monitor-once'; source: string | null; previousSource: string | null; output: 'terminal' | 'json'; limit: number; concurrency: number } & TerminalOptions)
   | ({ action: 'assurance'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'sharing-review'; source: string | null; output: 'terminal' | 'json'; marking: 'clear' | 'green' | 'amber' | 'amber-strict' | 'red'; recipientScope: 'public' | 'community' | 'organization' | 'named-recipients'; purpose: string; humanReviewed: boolean; personalDataReviewed: boolean; redactionsConfirmed: boolean } & TerminalOptions)
   | ({ action: 'workflow-plan'; recipe: InvestigationPlanRecipe; subject: string; output: 'terminal' | 'json' } & TerminalOptions)
@@ -197,7 +203,10 @@ function parseCliArgumentsCore(argv: string[]): CliAction {
   if (command === 'page-compare') return parsePageCompareArguments(argv.slice(1));
   if (command === 'mail-review') return parseMailReviewArguments(argv.slice(1));
   if (command === 'review-evidence') return parseReviewEvidenceArguments(argv.slice(1));
+  if (command === 'brief') return parseBriefArguments(argv.slice(1));
+  if (command === 'case-pack') return parseCasePackArguments(argv.slice(1));
   if (command === 'domain-control') return parseDomainControlArguments(argv.slice(1));
+  if (command === 'monitor-once') return parseMonitorOnceArguments(argv.slice(1));
   if (command === 'assurance') return parseAssuranceArguments(argv.slice(1));
   if (command === 'sharing-review') return parseSharingReviewArguments(argv.slice(1));
   if (command === 'workflow-plan') return parseWorkflowPlanArguments(argv.slice(1));
@@ -796,6 +805,92 @@ function parseReviewEvidenceArguments(argv: string[]): Extract<CliArguments, { a
   }
   if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
   return { action: 'review-evidence', source, mmdbSource, output, strictExit, quiet, color };
+}
+
+function parseBriefArguments(argv: string[]): Extract<CliArguments, { action: 'brief' }> {
+  let source: string | null = null;
+  let output: 'terminal' | 'json' = 'terminal';
+  let quiet = false;
+  let color = true;
+  for (const argument of argv) {
+    if (argument === '--json') {
+      if (output !== 'terminal') throw new CliUsageError('--json may be supplied only once.');
+      output = 'json';
+    } else if (argument === '--quiet') quiet = true;
+    else if (argument === '--no-color') color = false;
+    else if (argument.startsWith('-')) throw new CliUsageError(`Unknown option "${argument}".`);
+    else if (source === null) source = argument;
+    else throw new CliUsageError('brief accepts one optional saved Lookup file.');
+  }
+  if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
+  return { action: 'brief', source, output, quiet, color };
+}
+
+function parseCasePackArguments(argv: string[]): Extract<CliArguments, { action: 'case-pack' }> {
+  let source: string | null = null;
+  let output: 'terminal' | 'json' = 'terminal';
+  let audience: 'internal' | 'trusted' | 'public' | null = null;
+  let reviewed = false;
+  let quiet = false;
+  let color = true;
+  for (let index = 0; index < argv.length; index += 1) {
+    const argument = argv[index];
+    if (argument === undefined) break;
+    if (argument === '--json') {
+      if (output !== 'terminal') throw new CliUsageError('--json may be supplied only once.');
+      output = 'json';
+    } else if (argument === '--audience') {
+      if (audience !== null) throw new CliUsageError('--audience may be supplied only once.');
+      const value = argv[++index];
+      if (!['internal', 'trusted', 'public'].includes(value || '')) throw new CliUsageError('--audience requires internal, trusted, or public.');
+      audience = value as NonNullable<typeof audience>;
+    } else if (argument === '--reviewed') {
+      if (reviewed) throw new CliUsageError('--reviewed may be supplied only once.');
+      reviewed = true;
+    } else if (argument === '--quiet') quiet = true;
+    else if (argument === '--no-color') color = false;
+    else if (argument.startsWith('-')) throw new CliUsageError(`Unknown option "${argument}".`);
+    else if (source === null) source = argument;
+    else throw new CliUsageError('case-pack accepts one optional case-export file.');
+  }
+  if (audience === null) throw new CliUsageError('case-pack requires --audience internal, trusted, or public.');
+  if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
+  return { action: 'case-pack', source, output, audience, reviewed, quiet, color };
+}
+
+function parseMonitorOnceArguments(argv: string[]): Extract<CliArguments, { action: 'monitor-once' }> {
+  let source: string | null = null;
+  let previousSource: string | null = null;
+  let output: 'terminal' | 'json' = 'terminal';
+  let limit = 20;
+  let concurrency = 2;
+  let quiet = false;
+  let color = true;
+  for (let index = 0; index < argv.length; index += 1) {
+    const argument = argv[index];
+    if (argument === undefined) break;
+    if (argument === '--json') {
+      if (output !== 'terminal') throw new CliUsageError('--json may be supplied only once.');
+      output = 'json';
+    } else if (argument === '--previous') {
+      if (previousSource !== null) throw new CliUsageError('--previous may be supplied only once.');
+      const value = argv[++index];
+      if (!value || value.startsWith('-')) throw new CliUsageError('--previous requires one prior monitor snapshot file.');
+      previousSource = value;
+    } else if (argument === '--limit' || argument === '--concurrency') {
+      const value = Number(argv[++index]);
+      const maximum = argument === '--limit' ? 20 : 3;
+      if (!Number.isSafeInteger(value) || value < 1 || value > maximum) throw new CliUsageError(`${argument} requires an integer from 1 to ${maximum}.`);
+      if (argument === '--limit') limit = value;
+      else concurrency = value;
+    } else if (argument === '--quiet') quiet = true;
+    else if (argument === '--no-color') color = false;
+    else if (argument.startsWith('-')) throw new CliUsageError(`Unknown option "${argument}".`);
+    else if (source === null) source = argument;
+    else throw new CliUsageError('monitor-once accepts one optional domain-control manifest file.');
+  }
+  if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
+  return { action: 'monitor-once', source, previousSource, output, limit, concurrency, quiet, color };
 }
 
 function parseDomainControlArguments(argv: string[]): Extract<CliArguments, { action: 'domain-control' }> {

@@ -81,6 +81,9 @@ import {
   buildCliDomainControlReview,
   formatCliDomainControlReview,
 } from './domain-control-observations.mts';
+import { buildCliLookupBrief, formatCliLookupBrief } from './lookup-brief.mts';
+import { buildCliCasePack, formatCliCasePack } from './case-pack.mts';
+import { formatDomainControlMonitor, runDomainControlMonitor } from './domain-control-monitor.mts';
 import {
   MAX_ASSURANCE_INPUT_BYTES,
   buildDomainAssurance,
@@ -156,7 +159,10 @@ Review saved evidence:
   page-compare       Compare saved static page and TLS evidence.
   mail-review        Review saved passive mail exposure evidence.
   review-evidence    Review supplied DNS, routing, GeoIP, or RDAP evidence offline.
+  brief              Turn one saved Lookup into a bounded decision brief.
+  case-pack          Build a reviewed browser-importable case package.
   domain-control     Build or review an integrity-protected desired-state manifest.
+  monitor-once       Run one bounded domain-control review and checkpoint.
   assurance          Review change, recovery, concentration, or retirement plans.
   sharing-review     Lint a reviewed artifact before deliberate sharing.
   workflow-plan      Plan a fixed investigation recipe without executing it.
@@ -214,7 +220,10 @@ const COMMAND_USAGE: Readonly<Record<CliCommand, string>> = Object.freeze({
   'page-compare': 'whoisleuth page-compare <left.json> <right.json> [--json] [--quiet] [--no-color]',
   'mail-review': 'whoisleuth mail-review [bulk.json|bulk.jsonl] [--json] [--quiet] [--no-color]',
   'review-evidence': 'whoisleuth review-evidence [evidence.json] [--mmdb <database-file>] [--json] [--strict-exit] [--quiet] [--no-color]',
+  brief: 'whoisleuth brief [lookup.json] [--json] [--quiet] [--no-color]',
+  'case-pack': 'whoisleuth case-pack [cases.json] --audience <internal|trusted|public> --reviewed [--json] [--quiet] [--no-color]',
   'domain-control': 'whoisleuth domain-control [manifest-input.json|review-input.json] [--json] [--quiet] [--no-color]',
+  'monitor-once': 'whoisleuth monitor-once [manifest.json] [--previous <snapshot.json>] [--limit <1-20>] [--concurrency <1-3>] [--json] [--quiet] [--no-color]',
   assurance: 'whoisleuth assurance [assurance-input.json] [--json] [--quiet] [--no-color]',
   'sharing-review': 'whoisleuth sharing-review [artifact.json] --marking <level> --recipient-scope <scope> --purpose <text> [--human-reviewed] [--personal-data-reviewed] [--redactions-confirmed] [--json]',
   'workflow-plan': 'whoisleuth workflow-plan <recipe> <domain|brand> [--json] [--quiet] [--no-color]',
@@ -350,10 +359,25 @@ const COMMAND_DETAILS: Readonly<Record<CliCommand, Readonly<{ description: strin
     example: 'whoisleuth review-evidence domain-change.json --json --strict-exit',
     boundary: 'The command reads only the supplied document. It performs no DNS, RDAP, BGP, GeoIP-provider, TLS, HTTP, certificate-authority, or SMTP request.',
   },
+  brief: {
+    description: 'Turn one saved Lookup into a compact decision brief with facts, unknowns, contradictions, and next actions.',
+    example: 'whoisleuth brief lookup.json --json',
+    boundary: 'The command is offline, excludes raw upstream payloads, and does not create an analyst assertion or claim that the saved observation is current.',
+  },
+  'case-pack': {
+    description: 'Build a reviewed, audience-specific and browser-importable case package.',
+    example: 'whoisleuth case-pack cases.json --audience trusted --reviewed --json',
+    boundary: 'The command is offline, creates a new package, never mutates the source archive, and requires an explicit review acknowledgement.',
+  },
   'domain-control': {
     description: 'Build an integrity-protected desired-state manifest or compare one with supplied observations.',
     example: 'whoisleuth domain-control domain-control-input.json --json',
     boundary: 'The command is offline and changes no registrar, DNS, mail, or certificate configuration. Only complete supplied observations can produce drift.',
+  },
+  'monitor-once': {
+    description: 'Collect one bounded owned-domain review and compare it with an optional prior checkpoint.',
+    example: 'whoisleuth monitor-once manifest.json --previous previous.json --json --output next.json',
+    boundary: 'This is an operator-scheduled one-shot collection, not a daemon. It caps targets and concurrency, retains normalised observations, and never changes domain configuration.',
   },
   assurance: {
     description: 'Review a versioned domain change, recovery-dependency, or retirement plan.',
@@ -421,7 +445,10 @@ const COMMAND_COLLECTION: Readonly<Record<CliCommand, Readonly<{
   'page-compare': { mode: 'offline', scope: 'Reads two saved Lookup documents and executes no page code.' },
   'mail-review': { mode: 'offline', scope: 'Reads one saved Bulk result and sends no DNS or SMTP traffic.' },
   'review-evidence': { mode: 'offline', scope: 'Reads one bounded versioned evidence or request-planning document and performs no collection.' },
+  brief: { mode: 'offline', scope: 'Reads one bounded saved Lookup and emits a compact source-aware decision brief.' },
+  'case-pack': { mode: 'offline', scope: 'Reads one bounded browser case export and writes a separate audience-specific package.' },
   'domain-control': { mode: 'offline', scope: 'Reads one bounded desired-state or review document and performs no collection or configuration change.' },
+  'monitor-once': { mode: 'network', scope: 'Runs deep collection for at most 20 manifest domains with concurrency capped at 3.' },
   assurance: { mode: 'offline', scope: 'Reads one versioned plan capped at 2 MiB and makes no request or configuration change.' },
   'sharing-review': { mode: 'offline', scope: 'Reads one artefact capped at 15 MiB, emits only bounded schema/version metadata and no content values, and performs no transmission.' },
   'workflow-plan': { mode: 'offline', scope: 'Builds a fixed typed recipe and executes none of its network or file steps.' },
@@ -905,6 +932,38 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
       return EXIT_CODES.SUCCESS;
     }
 
+    if (args.action === 'brief' || args.action === 'case-pack') {
+      const isBrief = args.action === 'brief';
+      failureLabel = isBrief ? 'Lookup brief' : 'Case pack';
+      let input: string;
+      try {
+        input = dependencies.readArtifactInput
+          ? await dependencies.readArtifactInput(args.source)
+          : await readSavedLookupInputBounded(args.source
+            ? createReadStream(args.source, { highWaterMark: 64 * 1024 })
+            : dependencies.stdin || process.stdin, {
+              limit: isBrief ? MAX_SAVED_LOOKUP_INPUT_BYTES : 4 * 1024 * 1024,
+              label: isBrief ? 'Lookup brief input' : 'Case-pack input',
+            });
+      } catch (error) {
+        if (error instanceof CliUsageError) throw error;
+        throw new CliUsageError(`Could not read ${isBrief ? 'Lookup brief' : 'case-pack'} input: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
+      }
+      if (!input.trim()) throw new CliUsageError(`${args.action} requires one JSON file or a document on stdin.`);
+      if (args.action === 'brief') {
+        const document = buildCliLookupBrief(input, commandContext.now());
+        if (!args.quiet) write(stdout, args.output === 'json'
+          ? formatJsonDocument(document)
+          : terminal(formatCliLookupBrief(document), args.color));
+      } else {
+        const document = buildCliCasePack(input, { audience: args.audience, reviewed: args.reviewed }, commandContext.now());
+        if (!args.quiet) write(stdout, args.output === 'json'
+          ? formatJsonDocument(document)
+          : terminal(formatCliCasePack(document), args.color));
+      }
+      return EXIT_CODES.SUCCESS;
+    }
+
     if (args.action === 'domain-control') {
       failureLabel = 'Domain control review';
       let input: string;
@@ -952,6 +1011,53 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
         ? formatJsonDocument(document)
         : terminal(terminalDocument, args.color));
       return EXIT_CODES.SUCCESS;
+    }
+
+    if (args.action === 'monitor-once') {
+      failureLabel = 'One-shot domain control review';
+      let manifestInput: string;
+      let previousInput: string | null = null;
+      try {
+        manifestInput = dependencies.readArtifactInput
+          ? await dependencies.readArtifactInput(args.source)
+          : await readSavedLookupInputBounded(args.source
+            ? createReadStream(args.source, { highWaterMark: 64 * 1024 })
+            : dependencies.stdin || process.stdin, {
+              limit: MAX_OFFLINE_EVIDENCE_INPUT_BYTES,
+              label: 'Domain-control manifest input',
+            });
+        if (args.previousSource) {
+          previousInput = dependencies.readDiffInput
+            ? await dependencies.readDiffInput(args.previousSource)
+            : await readSavedLookupInputBounded(createReadStream(args.previousSource, { highWaterMark: 64 * 1024 }), {
+              limit: MAX_OFFLINE_EVIDENCE_INPUT_BYTES,
+              label: 'Prior monitor snapshot',
+            });
+        }
+      } catch (error) {
+        if (error instanceof CliUsageError) throw error;
+        throw new CliUsageError(`Could not read monitor input: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
+      }
+      if (!manifestInput.trim()) throw new CliUsageError('monitor-once requires one domain-control manifest file or a document on stdin.');
+      const executeLookup = dependencies.runUnifiedLookup || (await import('../lib/lookup.mts')).runUnifiedLookup;
+      const progress = commandContext.beginProgress('Collecting bounded domain-control evidence');
+      let document;
+      try {
+        document = await runDomainControlMonitor(manifestInput, previousInput, {
+          executeLookup,
+          now: commandContext.now,
+          limit: args.limit,
+          concurrency: args.concurrency,
+          ...(dependencies.signal ? { signal: dependencies.signal } : {}),
+          onSettled: (completed, total) => progress.update(`Collected ${completed} of ${total} owned domains`),
+        });
+      } finally {
+        commandContext.endProgress();
+      }
+      if (!args.quiet) write(stdout, args.output === 'json'
+        ? formatJsonDocument(document)
+        : terminal(formatDomainControlMonitor(document), args.color));
+      return document.collection.failed ? EXIT_CODES.PARTIAL_FAILURE : EXIT_CODES.SUCCESS;
     }
 
     if (args.action === 'assurance') {

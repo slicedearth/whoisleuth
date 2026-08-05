@@ -24,7 +24,10 @@ const OPTIONS_BY_COMMAND: Readonly<Record<string, readonly string[]>> = Object.f
   'page-compare': ['--json', '--quiet', '--no-color'],
   'mail-review': ['--json', '--quiet', '--no-color'],
   'review-evidence': ['--mmdb', '--json', '--strict-exit', '--quiet', '--no-color'],
+  brief: ['--json', '--quiet', '--no-color'],
+  'case-pack': ['--audience', '--reviewed', '--json', '--quiet', '--no-color'],
   'domain-control': ['--json', '--quiet', '--no-color'],
+  'monitor-once': ['--previous', '--limit', '--concurrency', '--json', '--quiet', '--no-color'],
   assurance: ['--json', '--quiet', '--no-color'],
   'sharing-review': ['--marking', '--recipient-scope', '--purpose', '--human-reviewed', '--personal-data-reviewed', '--redactions-confirmed', '--json', '--quiet', '--no-color'],
   'workflow-plan': ['--json', '--quiet', '--no-color'],
@@ -60,7 +63,10 @@ const COMMAND_DESCRIPTIONS: Readonly<Record<string, string>> = Object.freeze({
   'page-compare': 'Compare saved static page evidence',
   'mail-review': 'Review saved passive mail evidence',
   'review-evidence': 'Review supplied evidence offline',
+  brief: 'Build a decision brief from a saved lookup',
+  'case-pack': 'Build a reviewed case package',
   'domain-control': 'Build or review a domain control manifest',
+  'monitor-once': 'Run one bounded domain control review',
   assurance: 'Review domain change, recovery, or retirement plans',
   'sharing-review': 'Lint an artefact before deliberate sharing',
   'workflow-plan': 'Plan a fixed investigation recipe',
@@ -80,6 +86,7 @@ const VALUE_OPTIONS: Readonly<Record<string, readonly string[]>> = Object.freeze
   '--mail-profile': ['standard', 'defensive-no-mail', 'parked'],
   '--marking': ['clear', 'green', 'amber', 'amber-strict', 'red'],
   '--recipient-scope': ['public', 'community', 'organization', 'named-recipients'],
+  '--audience': ['internal', 'trusted', 'public'],
   '--concurrency': ['1', '2', '3', '4', '5', '6', '7', '8'],
 });
 
@@ -93,6 +100,7 @@ const FILE_OPTIONS = Object.freeze([
   '--public-key-file',
   '--snapshot',
   '--observation-snapshot',
+  '--previous',
 ]);
 
 const TEXT_OPTIONS = Object.freeze([
