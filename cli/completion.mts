@@ -31,6 +31,7 @@ const OPTIONS_BY_COMMAND: Readonly<Record<string, readonly string[]>> = Object.f
   assurance: ['--json', '--quiet', '--no-color'],
   'sharing-review': ['--marking', '--recipient-scope', '--purpose', '--human-reviewed', '--personal-data-reviewed', '--redactions-confirmed', '--json', '--quiet', '--no-color'],
   'workflow-plan': ['--json', '--quiet', '--no-color'],
+  'workflow-run': ['--approve-network', '--resume', '--json', '--quiet', '--no-color'],
   diff: ['--json', '--quiet', '--no-color'],
   reconcile: ['--json', '--quiet', '--no-color'],
   timeline: ['--json', '--quiet', '--no-color'],
@@ -70,6 +71,7 @@ const COMMAND_DESCRIPTIONS: Readonly<Record<string, string>> = Object.freeze({
   assurance: 'Review domain change, recovery, or retirement plans',
   'sharing-review': 'Lint an artefact before deliberate sharing',
   'workflow-plan': 'Plan a fixed investigation recipe',
+  'workflow-run': 'Execute approved fixed-recipe steps',
   diff: 'Compare two saved domain lookups',
   reconcile: 'Reconcile independently labelled observations',
   timeline: 'Build same-domain history from saved lookups',
@@ -101,6 +103,7 @@ const FILE_OPTIONS = Object.freeze([
   '--snapshot',
   '--observation-snapshot',
   '--previous',
+  '--resume',
 ]);
 
 const TEXT_OPTIONS = Object.freeze([

@@ -91,6 +91,7 @@ import {
 } from '../lib/domain-assurance.mts';
 import { buildCliManual } from './manual.mts';
 import { buildInvestigationPlan, formatInvestigationPlan } from './investigation-plan.mts';
+import { formatInvestigationRun, runInvestigationRecipe } from './investigation-run.mts';
 import { WHOISLEUTH_SOURCE_REPOSITORY_URL } from '../lib/project-metadata.mts';
 import { createBufferedOutput, writePrivateFile } from './output-file.mts';
 import { createTerminalProgress, type TerminalProgress } from './progress.mts';
@@ -166,6 +167,7 @@ Review saved evidence:
   assurance          Review change, recovery, concentration, or retirement plans.
   sharing-review     Lint a reviewed artifact before deliberate sharing.
   workflow-plan      Plan a fixed investigation recipe without executing it.
+  workflow-run       Execute resumable approved steps from a fixed recipe.
   diff               Compare two saved domain observations.
   reconcile          Reconcile independently labelled observations.
   timeline           Compare a sequence of observations for one domain.
@@ -227,6 +229,7 @@ const COMMAND_USAGE: Readonly<Record<CliCommand, string>> = Object.freeze({
   assurance: 'whoisleuth assurance [assurance-input.json] [--json] [--quiet] [--no-color]',
   'sharing-review': 'whoisleuth sharing-review [artifact.json] --marking <level> --recipient-scope <scope> --purpose <text> [--human-reviewed] [--personal-data-reviewed] [--redactions-confirmed] [--json]',
   'workflow-plan': 'whoisleuth workflow-plan <recipe> <domain|brand> [--json] [--quiet] [--no-color]',
+  'workflow-run': 'whoisleuth workflow-run <recipe> <domain|brand> [--approve-network] [--resume <state.json>] [--json] [--quiet] [--no-color]',
   diff: 'whoisleuth diff <left.json> <right.json> [--json] [--quiet] [--no-color]',
   reconcile: 'whoisleuth reconcile <observation.json> <observation.json> [...] [--json] [--quiet] [--no-color]',
   timeline: 'whoisleuth timeline <observation.json> <observation.json> [...] [--json] [--quiet] [--no-color]',
@@ -394,6 +397,11 @@ const COMMAND_DETAILS: Readonly<Record<CliCommand, Readonly<{ description: strin
     example: 'whoisleuth workflow-plan domain-triage example.test --json',
     boundary: 'Planning is offline and plan-only. It does not execute commands, expand placeholders, read files, make requests, or submit evidence.',
   },
+  'workflow-run': {
+    description: 'Execute approved concrete steps from a fixed investigation recipe and emit a resumable checkpoint.',
+    example: 'whoisleuth workflow-run domain-triage example.test --approve-network --json --output run.json',
+    boundary: 'Only installed recipe commands can run. Network steps require explicit approval for each invocation, and analyst-selection placeholders always pause without interpretation.',
+  },
   diff: {
     description: 'Compare bounded evidence retained in two saved domain lookups.',
     example: 'whoisleuth diff first.json second.json --json',
@@ -452,6 +460,7 @@ const COMMAND_COLLECTION: Readonly<Record<CliCommand, Readonly<{
   assurance: { mode: 'offline', scope: 'Reads one versioned plan capped at 2 MiB and makes no request or configuration change.' },
   'sharing-review': { mode: 'offline', scope: 'Reads one artefact capped at 15 MiB, emits only bounded schema/version metadata and no content values, and performs no transmission.' },
   'workflow-plan': { mode: 'offline', scope: 'Builds a fixed typed recipe and executes none of its network or file steps.' },
+  'workflow-run': { mode: 'network', scope: 'Runs only concrete fixed-recipe steps; network collection requires --approve-network and analyst-selection steps always pause.' },
   diff: { mode: 'offline', scope: 'Reads two saved Lookup documents for different domains.' },
   reconcile: { mode: 'offline', scope: 'Reads 2 to 5 saved observations for one domain, capped at 32 MiB in total.' },
   timeline: { mode: 'offline', scope: 'Reads 2 to 20 saved observations for one domain, capped at 32 MiB in total.' },
@@ -1138,6 +1147,43 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
         ? formatJsonDocument(document)
         : terminal(formatInvestigationPlan(document), args.color));
       return EXIT_CODES.SUCCESS;
+    }
+
+    if (args.action === 'workflow-run') {
+      failureLabel = 'Investigation workflow';
+      let resumeInput: string | null = null;
+      if (args.resumeSource) {
+        try {
+          resumeInput = dependencies.readDiffInput
+            ? await dependencies.readDiffInput(args.resumeSource)
+            : await readSavedLookupInputBounded(createReadStream(args.resumeSource, { highWaterMark: 64 * 1024 }), {
+              limit: 24 * 1024 * 1024,
+              label: 'Investigation resume state',
+            });
+        } catch (error) {
+          if (error instanceof CliUsageError) throw error;
+          throw new CliUsageError(`Could not read investigation resume state: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
+        }
+      }
+      const document = await runInvestigationRecipe(args.recipe, args.subject, {
+        approveNetwork: args.approveNetwork,
+        resumeInput,
+        generatedAt: commandContext.now(),
+        execute: async (command, stepArguments) => {
+          const stepStdout = createBufferedOutput();
+          const stepStderr = createBufferedOutput();
+          const exitCode = await runCli([command, ...stepArguments], {
+            ...dependencies,
+            stdout: stepStdout.stream,
+            stderr: stepStderr.stream,
+          });
+          return { exitCode, stdout: stepStdout.value() };
+        },
+      });
+      if (!args.quiet) write(stdout, args.output === 'json'
+        ? formatJsonDocument(document)
+        : terminal(formatInvestigationRun(document), args.color));
+      return document.state === 'step_failed' ? EXIT_CODES.PARTIAL_FAILURE : EXIT_CODES.SUCCESS;
     }
 
     if (args.action === 'diff') {

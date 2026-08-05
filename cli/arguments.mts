@@ -47,6 +47,7 @@ const CLI_COMMANDS = [
   'assurance',
   'sharing-review',
   'workflow-plan',
+  'workflow-run',
   'diff',
   'reconcile',
   'timeline',
@@ -98,6 +99,7 @@ type CliAction =
   | ({ action: 'assurance'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'sharing-review'; source: string | null; output: 'terminal' | 'json'; marking: 'clear' | 'green' | 'amber' | 'amber-strict' | 'red'; recipientScope: 'public' | 'community' | 'organization' | 'named-recipients'; purpose: string; humanReviewed: boolean; personalDataReviewed: boolean; redactionsConfirmed: boolean } & TerminalOptions)
   | ({ action: 'workflow-plan'; recipe: InvestigationPlanRecipe; subject: string; output: 'terminal' | 'json' } & TerminalOptions)
+  | ({ action: 'workflow-run'; recipe: InvestigationPlanRecipe; subject: string; resumeSource: string | null; approveNetwork: boolean; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'diff'; leftSource: string; rightSource: string; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'reconcile'; sources: readonly string[]; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'timeline'; sources: readonly string[]; output: 'terminal' | 'json' } & TerminalOptions)
@@ -210,6 +212,7 @@ function parseCliArgumentsCore(argv: string[]): CliAction {
   if (command === 'assurance') return parseAssuranceArguments(argv.slice(1));
   if (command === 'sharing-review') return parseSharingReviewArguments(argv.slice(1));
   if (command === 'workflow-plan') return parseWorkflowPlanArguments(argv.slice(1));
+  if (command === 'workflow-run') return parseWorkflowRunArguments(argv.slice(1));
   if (command === 'diff') return parseDiffArguments(argv.slice(1));
   if (command === 'reconcile') return parseReconcileArguments(argv.slice(1));
   if (command === 'timeline') return parseTimelineArguments(argv.slice(1));
@@ -1009,6 +1012,41 @@ function parseWorkflowPlanArguments(argv: string[]): Extract<CliArguments, { act
   }
   if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
   return { action: 'workflow-plan', recipe: recipe as InvestigationPlanRecipe, subject: positional[1]!, output, quiet, color };
+}
+
+function parseWorkflowRunArguments(argv: string[]): Extract<CliArguments, { action: 'workflow-run' }> {
+  const positional: string[] = [];
+  let resumeSource: string | null = null;
+  let approveNetwork = false;
+  let output: 'terminal' | 'json' = 'terminal';
+  let quiet = false;
+  let color = true;
+  for (let index = 0; index < argv.length; index += 1) {
+    const argument = argv[index];
+    if (argument === undefined) break;
+    if (argument === '--json') {
+      if (output !== 'terminal') throw new CliUsageError('--json may be supplied only once.');
+      output = 'json';
+    } else if (argument === '--resume') {
+      if (resumeSource !== null) throw new CliUsageError('--resume may be supplied only once.');
+      const value = argv[++index];
+      if (!value || value.startsWith('-')) throw new CliUsageError('--resume requires one prior workflow-run state file.');
+      resumeSource = value;
+    } else if (argument === '--approve-network') {
+      if (approveNetwork) throw new CliUsageError('--approve-network may be supplied only once.');
+      approveNetwork = true;
+    } else if (argument === '--quiet') quiet = true;
+    else if (argument === '--no-color') color = false;
+    else if (argument.startsWith('-')) throw new CliUsageError(`Unknown option "${argument}".`);
+    else positional.push(argument);
+  }
+  if (positional.length !== 2) throw new CliUsageError('workflow-run requires one fixed recipe and one subject.');
+  const recipe = positional[0];
+  if (!INVESTIGATION_PLAN_RECIPES.includes(recipe as InvestigationPlanRecipe)) {
+    throw new CliUsageError(`workflow-run recipe must be one of: ${INVESTIGATION_PLAN_RECIPES.join(', ')}.`);
+  }
+  if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
+  return { action: 'workflow-run', recipe: recipe as InvestigationPlanRecipe, subject: positional[1]!, resumeSource, approveNetwork, output, quiet, color };
 }
 
 function parseDiffArguments(argv: string[]): Extract<CliArguments, { action: 'diff' }> {
