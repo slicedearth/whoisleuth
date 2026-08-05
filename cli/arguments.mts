@@ -11,6 +11,7 @@ import {
   INVESTIGATION_PLAN_RECIPES,
   type InvestigationPlanRecipe,
 } from './investigation-plan.mts';
+import { parseCliFailPolicies, type CliFailPolicy } from './fail-policy.mts';
 
 const MAX_CLI_ARGUMENTS = 32;
 const MAX_CLI_ARGUMENT_LENGTH = 1024;
@@ -71,11 +72,11 @@ type CliAction =
   | ({ action: 'commands'; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'manual' })
   | ({ action: 'doctor'; network: boolean; output: 'terminal' | 'json' } & TerminalOptions)
-  | ({ action: 'lookup'; query: string | null; output: 'terminal' | 'json' | 'markdown' | 'html'; deep: boolean; detail: LookupDetail; strictExit: boolean; events: boolean; plan: boolean; observerLabel: string | null; vantageLabel: string | null } & TerminalOptions)
-  | ({ action: 'bulk'; source: string | null; output: 'terminal' | 'json' | 'jsonl' | 'csv' | 'domains' | 'queries'; deep: boolean; concurrency: number; checkpoint: string | null; resume: boolean; events: boolean; filter: 'all' | 'registered' | 'inconclusive' | 'errors' } & TerminalOptions)
+  | ({ action: 'lookup'; query: string | null; output: 'terminal' | 'json' | 'markdown' | 'html'; deep: boolean; detail: LookupDetail; strictExit: boolean; events: boolean; plan: boolean; observerLabel: string | null; vantageLabel: string | null; failOn?: readonly CliFailPolicy[] } & TerminalOptions)
+  | ({ action: 'bulk'; source: string | null; output: 'terminal' | 'json' | 'jsonl' | 'csv' | 'domains' | 'queries'; deep: boolean; concurrency: number; checkpoint: string | null; resume: boolean; events: boolean; plan: boolean; filter: 'all' | 'registered' | 'inconclusive' | 'errors'; failOn?: readonly CliFailPolicy[] } & TerminalOptions)
   | ({ action: 'ct-search'; keyword: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'discover'; seed: string | null; output: 'terminal' | 'json' | 'jsonl' | 'domains'; preset: 'common' | 'impersonation' | 'all' | 'custom'; keyboardLayout: 'qwerty' | 'azerty' | 'qwertz' | 'all'; tldText: string | null; dictionarySource: string | null; familyText: string | null; snapshotSource: string | null } & TerminalOptions)
-  | ({ action: 'discover-scan'; seed: string | null; output: 'terminal' | 'json' | 'jsonl' | 'csv' | 'domains'; preset: 'common' | 'impersonation' | 'all' | 'custom'; keyboardLayout: 'qwerty' | 'azerty' | 'qwertz' | 'all'; tldText: string | null; dictionarySource: string | null; familyText: string | null; deep: boolean; scanLimit: number; chunkSize: number; concurrency: number; checkpoint: string | null; resume: boolean; resolverText: string | null; observationSnapshot: string | null; allowlistSource: string | null; filter: 'all' | 'registered' | 'inconclusive' | 'acquisition' | 'suppressed'; events: boolean } & TerminalOptions)
+  | ({ action: 'discover-scan'; seed: string | null; output: 'terminal' | 'json' | 'jsonl' | 'csv' | 'domains'; preset: 'common' | 'impersonation' | 'all' | 'custom'; keyboardLayout: 'qwerty' | 'azerty' | 'qwertz' | 'all'; tldText: string | null; dictionarySource: string | null; familyText: string | null; deep: boolean; scanLimit: number; chunkSize: number; concurrency: number; checkpoint: string | null; resume: boolean; resolverText: string | null; observationSnapshot: string | null; allowlistSource: string | null; filter: 'all' | 'registered' | 'inconclusive' | 'acquisition' | 'suppressed'; events: boolean; plan: boolean; failOn?: readonly CliFailPolicy[] } & TerminalOptions)
   | ({ action: 'posture'; domain: string | null; output: 'terminal' | 'json'; selectorText: string | null; retiredSelectorText: string | null; mailProfile: 'defensive_no_mail' | 'parked' | 'standard' } & TerminalOptions)
   | ({ action: 'http'; domain: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'tls'; hostname: string | null; output: 'terminal' | 'json' } & TerminalOptions)
@@ -95,7 +96,7 @@ type CliAction =
   | ({ action: 'brief'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'case-pack'; source: string | null; output: 'terminal' | 'json'; audience: 'internal' | 'trusted' | 'public'; reviewed: boolean } & TerminalOptions)
   | ({ action: 'domain-control'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
-  | ({ action: 'monitor-once'; source: string | null; previousSource: string | null; output: 'terminal' | 'json'; limit: number; concurrency: number } & TerminalOptions)
+  | ({ action: 'monitor-once'; source: string | null; previousSource: string | null; output: 'terminal' | 'json'; limit: number; concurrency: number; failOn?: readonly CliFailPolicy[] } & TerminalOptions)
   | ({ action: 'assurance'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'sharing-review'; source: string | null; output: 'terminal' | 'json'; marking: 'clear' | 'green' | 'amber' | 'amber-strict' | 'red'; recipientScope: 'public' | 'community' | 'organization' | 'named-recipients'; purpose: string; humanReviewed: boolean; personalDataReviewed: boolean; redactionsConfirmed: boolean } & TerminalOptions)
   | ({ action: 'workflow-plan'; recipe: InvestigationPlanRecipe; subject: string; output: 'terminal' | 'json' } & TerminalOptions)
@@ -228,6 +229,7 @@ function parseCliArgumentsCore(argv: string[]): CliAction {
   let strictExit = false;
   let events = false;
   let plan = false;
+  let failOn: CliFailPolicy[] | null = null;
   let observerLabel: string | null = null;
   let vantageLabel: string | null = null;
   const lookupArguments = argv.slice(1);
@@ -261,6 +263,9 @@ function parseCliArgumentsCore(argv: string[]): CliAction {
     } else if (argument === '--plan') {
       if (plan) throw new CliUsageError('--plan may be supplied only once.');
       plan = true;
+    } else if (argument === '--fail-on') {
+      if (failOn !== null) throw new CliUsageError('--fail-on may be supplied only once.');
+      failOn = parseCliFailPolicies(lookupArguments[++index]);
     } else if (argument === '--observer' || argument === '--vantage') {
       const isObserver = argument === '--observer';
       if (isObserver ? observerLabel !== null : vantageLabel !== null) {
@@ -281,10 +286,10 @@ function parseCliArgumentsCore(argv: string[]): CliAction {
   if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
   if (detailSet && output !== 'terminal') throw new CliUsageError('--summary and --verbose apply only to terminal output.');
   if (plan && (output === 'markdown' || output === 'html')) throw new CliUsageError('--plan supports terminal or JSON output only.');
-  if (plan && (detailSet || strictExit || events || quiet)) {
+  if (plan && (detailSet || strictExit || events || quiet || failOn !== null)) {
     throw new CliUsageError('--plan cannot be combined with detail, strict-exit, event, or quiet options.');
   }
-  return { action: 'lookup', query, output, deep, detail, strictExit, events, plan, observerLabel, vantageLabel, quiet, color };
+  return { action: 'lookup', query, output, deep, detail, strictExit, events, plan, observerLabel, vantageLabel, quiet, color, ...(failOn ? { failOn } : {}) };
 }
 
 function parseCompletionArguments(argv: string[]): Extract<CliArguments, { action: 'completion' }> {
@@ -346,6 +351,8 @@ function parseBulkArguments(argv: string[]): Extract<CliArguments, { action: 'bu
   let checkpoint: string | null = null;
   let resume = false;
   let events = false;
+  let plan = false;
+  let failOn: CliFailPolicy[] | null = null;
   let filter: 'all' | 'registered' | 'inconclusive' | 'errors' = 'all';
   for (let index = 0; index < argv.length; index++) {
     const argument = argv[index];
@@ -382,6 +389,12 @@ function parseBulkArguments(argv: string[]): Extract<CliArguments, { action: 'bu
     } else if (argument === '--events') {
       if (events) throw new CliUsageError('--events may be supplied only once.');
       events = true;
+    } else if (argument === '--plan') {
+      if (plan) throw new CliUsageError('--plan may be supplied only once.');
+      plan = true;
+    } else if (argument === '--fail-on') {
+      if (failOn !== null) throw new CliUsageError('--fail-on may be supplied only once.');
+      failOn = parseCliFailPolicies(argv[++index]);
     } else if (argument === '--registered-only' || argument === '--inconclusive-only' || argument === '--errors-only') {
       if (filter !== 'all') throw new CliUsageError('Bulk output filters are mutually exclusive and may be supplied only once.');
       filter = argument === '--registered-only'
@@ -397,11 +410,14 @@ function parseBulkArguments(argv: string[]): Extract<CliArguments, { action: 'bu
   }
   if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
   if (resume && checkpoint === null) throw new CliUsageError('--resume requires --checkpoint.');
+  if (plan && (events || resume || checkpoint !== null || quiet || failOn !== null || !['terminal', 'json'].includes(output))) {
+    throw new CliUsageError('--plan supports terminal or JSON output and cannot be combined with events, checkpoint, resume, or quiet options.');
+  }
   const maximum = deep ? 3 : 8;
   if (concurrency !== null && concurrency > maximum) {
     throw new CliUsageError(`--concurrency is capped at ${maximum} in ${deep ? 'deep' : 'fast'} bulk mode.`);
   }
-  return { action: 'bulk', source, output, deep, quiet, color, concurrency: concurrency ?? (deep ? 2 : 4), checkpoint, resume, events, filter };
+  return { action: 'bulk', source, output, deep, quiet, color, concurrency: concurrency ?? (deep ? 2 : 4), checkpoint, resume, events, plan, filter, ...(failOn ? { failOn } : {}) };
 }
 
 function parseCtSearchArguments(argv: string[]): Extract<CliArguments, { action: 'ct-search' }> {
@@ -519,6 +535,8 @@ function parseDiscoverScanArguments(argv: string[]): Extract<CliArguments, { act
   let filter: 'all' | 'registered' | 'inconclusive' | 'acquisition' | 'suppressed' = 'all';
   let filterSet = false;
   let events = false;
+  let plan = false;
+  let failOn: CliFailPolicy[] | null = null;
 
   for (let index = 0; index < argv.length; index++) {
     const argument = argv[index];
@@ -606,6 +624,12 @@ function parseDiscoverScanArguments(argv: string[]): Extract<CliArguments, { act
     } else if (argument === '--events') {
       if (events) throw new CliUsageError('--events may be supplied only once.');
       events = true;
+    } else if (argument === '--plan') {
+      if (plan) throw new CliUsageError('--plan may be supplied only once.');
+      plan = true;
+    } else if (argument === '--fail-on') {
+      if (failOn !== null) throw new CliUsageError('--fail-on may be supplied only once.');
+      failOn = parseCliFailPolicies(argv[++index]);
     } else if (argument === '--quiet') quiet = true;
     else if (argument === '--no-color') color = false;
     else if (argument.startsWith('-')) throw new CliUsageError(`Unknown option "${argument}".`);
@@ -619,13 +643,16 @@ function parseDiscoverScanArguments(argv: string[]): Extract<CliArguments, { act
     throw new CliUsageError(`--concurrency is capped at ${maximumConcurrency} in ${deep ? 'deep' : 'fast'} mode.`);
   }
   if (resume && checkpoint === null) throw new CliUsageError('--resume requires --checkpoint.');
+  if (plan && (events || resume || checkpoint !== null || observationSnapshot !== null || quiet || failOn !== null || !['terminal', 'json'].includes(output))) {
+    throw new CliUsageError('--plan supports terminal or JSON output and cannot be combined with events, checkpoint, resume, observation snapshots, or quiet options.');
+  }
   if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
   if (dictionarySource && preset === 'common') throw new CliUsageError('--dictionary requires the impersonation or all preset.');
   return {
     action: 'discover-scan', seed, output, quiet, color, preset, keyboardLayout, tldText,
     dictionarySource, familyText, deep, scanLimit: scanLimit ?? Math.min(100, maximum),
     chunkSize: chunkSize ?? 25, concurrency: concurrency ?? (deep ? 2 : 4), checkpoint,
-    resume, resolverText, observationSnapshot, allowlistSource, filter, events,
+    resume, resolverText, observationSnapshot, allowlistSource, filter, events, plan, ...(failOn ? { failOn } : {}),
   };
 }
 
@@ -867,6 +894,7 @@ function parseMonitorOnceArguments(argv: string[]): Extract<CliArguments, { acti
   let output: 'terminal' | 'json' = 'terminal';
   let limit = 20;
   let concurrency = 2;
+  let failOn: CliFailPolicy[] | null = null;
   let quiet = false;
   let color = true;
   for (let index = 0; index < argv.length; index += 1) {
@@ -886,6 +914,9 @@ function parseMonitorOnceArguments(argv: string[]): Extract<CliArguments, { acti
       if (!Number.isSafeInteger(value) || value < 1 || value > maximum) throw new CliUsageError(`${argument} requires an integer from 1 to ${maximum}.`);
       if (argument === '--limit') limit = value;
       else concurrency = value;
+    } else if (argument === '--fail-on') {
+      if (failOn !== null) throw new CliUsageError('--fail-on may be supplied only once.');
+      failOn = parseCliFailPolicies(argv[++index]);
     } else if (argument === '--quiet') quiet = true;
     else if (argument === '--no-color') color = false;
     else if (argument.startsWith('-')) throw new CliUsageError(`Unknown option "${argument}".`);
@@ -893,7 +924,7 @@ function parseMonitorOnceArguments(argv: string[]): Extract<CliArguments, { acti
     else throw new CliUsageError('monitor-once accepts one optional domain-control manifest file.');
   }
   if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
-  return { action: 'monitor-once', source, previousSource, output, limit, concurrency, quiet, color };
+  return { action: 'monitor-once', source, previousSource, output, limit, concurrency, quiet, color, ...(failOn ? { failOn } : {}) };
 }
 
 function parseDomainControlArguments(argv: string[]): Extract<CliArguments, { action: 'domain-control' }> {

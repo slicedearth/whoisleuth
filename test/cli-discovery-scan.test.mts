@@ -110,7 +110,7 @@ describe('discover-scan CLI arguments', () => {
       preset: 'all', keyboardLayout: 'qwerty', tldText: null, dictionarySource: null,
       familyText: null, deep: false, scanLimit: 100, chunkSize: 25, concurrency: 4,
       checkpoint: null, resume: false, resolverText: null, observationSnapshot: null,
-      allowlistSource: null, filter: 'all', events: false,
+      allowlistSource: null, filter: 'all', events: false, plan: false,
     });
   });
 

@@ -14,6 +14,7 @@ import { createCliProgressEvents } from './progress-events.mts';
 import type { CliCommandContext, CliDependencies } from './runner-types.mts';
 import type { UnknownRecord } from './saved-lookup.mts';
 import { lookupStrictExitFindings } from './strict-exit.mts';
+import { evaluateCliFailPolicies, formatFailPolicyNotice } from './fail-policy.mts';
 
 type LookupCommandArguments = Extract<CliArguments, { action: 'lookup' }>;
 
@@ -106,10 +107,12 @@ async function runLookupCommand(
   }
 
   const strictFindings = args.strictExit ? lookupStrictExitFindings(document) : [];
-  const exitCode = strictFindings.length ? EXIT_CODES.PARTIAL_FAILURE : EXIT_CODES.SUCCESS;
+  const policyFindings = evaluateCliFailPolicies(document, args.failOn || []);
+  const exitCode = strictFindings.length || policyFindings.length ? EXIT_CODES.PARTIAL_FAILURE : EXIT_CODES.SUCCESS;
   if (strictFindings.length && !args.events) {
     context.writeStderr(`Strict exit: ${strictFindings.length} requested source state${strictFindings.length === 1 ? '' : 's'} were incomplete.\n`);
   }
+  if (policyFindings.length && !args.events) context.writeStderr(formatFailPolicyNotice(policyFindings));
   eventProgress.emit({ event: 'completed', exitCode });
   return exitCode;
 }

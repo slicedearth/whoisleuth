@@ -15,6 +15,8 @@ import { boundedCliErrorMessage, CliUsageError } from './errors.mts';
 import EXIT_CODES from './exit-codes.mts';
 import { buildCliBulkDocument, formatJsonDocument, formatJsonLines } from './formatters/json.mts';
 import { formatTerminalBulk } from './formatters/terminal.mts';
+import { buildCollectionPreflight, formatCollectionPreflight } from './collection-preflight.mts';
+import { evaluateCliFailPolicies, formatFailPolicyNotice } from './fail-policy.mts';
 import { createCliProgressEvents } from './progress-events.mts';
 import type { CliCommandContext, CliDependencies } from './runner-types.mts';
 
@@ -46,6 +48,14 @@ async function runBulkCommand(
   }
 
   const parsed = parseBulkQueries(input, { deep: args.deep });
+  if (args.plan) {
+    const document = buildCollectionPreflight({
+      command: 'bulk', targetCount: parsed.queries.length, targetLimit: args.deep ? 50 : 500,
+      deep: args.deep, concurrency: args.concurrency, output: args.output, checkpoint: false,
+    });
+    context.writeStdout(args.output === 'json' ? formatJsonDocument(document) : context.terminal(formatCollectionPreflight(document), args.color));
+    return EXIT_CODES.SUCCESS;
+  }
   const classify = dependencies.classifyQuery || classifyQuery;
   const checkpointWriter = dependencies.createBulkCheckpointWriter || createBulkCheckpointWriter;
   const checkpoint = args.checkpoint
@@ -109,7 +119,9 @@ async function runBulkCommand(
       context.writeStderr(`Checkpoint warning: ${boundedCliErrorMessage(checkpointFailure, 'Checkpoint could not be written')}. Completed output is still available.\n`);
     }
   }
-  const exitCode = checkpointFailure || items.some((item) => !item.ok)
+  const policyFindings = evaluateCliFailPolicies(buildCliBulkDocument(items, { ...metadata, filter: 'all' }), args.failOn || []);
+  if (policyFindings.length && !eventProgress.enabled) context.writeStderr(formatFailPolicyNotice(policyFindings));
+  const exitCode = checkpointFailure || items.some((item) => !item.ok) || policyFindings.length
     ? EXIT_CODES.PARTIAL_FAILURE
     : EXIT_CODES.SUCCESS;
   eventProgress.emit({ event: 'completed', exitCode });

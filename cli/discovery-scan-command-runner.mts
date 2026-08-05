@@ -21,6 +21,8 @@ import { boundedCliErrorMessage, CliUsageError } from './errors.mts';
 import EXIT_CODES from './exit-codes.mts';
 import { formatJsonDocument } from './formatters/json.mts';
 import { createCliProgressEvents } from './progress-events.mts';
+import { buildCollectionPreflight, formatCollectionPreflight } from './collection-preflight.mts';
+import { evaluateCliFailPolicies, formatFailPolicyNotice } from './fail-policy.mts';
 import type { CliCommandContext, CliDependencies } from './runner-types.mts';
 
 type DiscoveryScanArguments = Extract<CliArguments, { action: 'discover-scan' }>;
@@ -61,6 +63,15 @@ async function runDiscoveryScanCommand(
     .slice(0, args.scanLimit);
   if (!candidates.length) throw new CliUsageError('discover-scan did not generate any valid candidates to collect.');
   const queries = candidates.map((candidate) => String(candidate.domain));
+  if (args.plan) {
+    const document = buildCollectionPreflight({
+      command: 'discover-scan', targetCount: queries.length, targetLimit: args.deep ? 50 : 500,
+      deep: args.deep, concurrency: args.concurrency, output: args.output, checkpoint: false,
+      customResolvers: Boolean(args.resolverText), allowlist: Boolean(args.allowlistSource),
+    });
+    context.writeStdout(args.output === 'json' ? formatJsonDocument(document) : context.terminal(formatCollectionPreflight(document), args.color));
+    return EXIT_CODES.SUCCESS;
+  }
   const classify = dependencies.classifyQuery || classifyQuery;
   let resolverServers: string[] = [];
   if (args.resolverText) {
@@ -151,7 +162,9 @@ async function runDiscoveryScanCommand(
       context.writeStderr(`Checkpoint warning: ${boundedCliErrorMessage(checkpointFailure, 'Checkpoint could not be written')}. Completed output is still available.\n`);
     }
   }
-  const exitCode = checkpointFailure || items.some((item) => !item.ok)
+  const policyFindings = evaluateCliFailPolicies(document, args.failOn || []);
+  if (policyFindings.length && !eventProgress.enabled) context.writeStderr(formatFailPolicyNotice(policyFindings));
+  const exitCode = checkpointFailure || items.some((item) => !item.ok) || policyFindings.length
     ? EXIT_CODES.PARTIAL_FAILURE
     : EXIT_CODES.SUCCESS;
   eventProgress.emit({ event: 'completed', exitCode });

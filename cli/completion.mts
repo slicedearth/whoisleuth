@@ -3,11 +3,11 @@ import { INVESTIGATION_PLAN_RECIPES } from './investigation-plan.mts';
 
 const COMMON_OPTIONS = Object.freeze(['--help', '--output', '--force', '--config', '--profile']);
 const OPTIONS_BY_COMMAND: Readonly<Record<string, readonly string[]>> = Object.freeze({
-  lookup: ['--json', '--markdown', '--html', '--fast', '--deep', '--observer', '--vantage', '--plan', '--summary', '--verbose', '--strict-exit', '--events', '--quiet', '--no-color'],
-  bulk: ['--json', '--jsonl', '--csv', '--domains', '--queries', '--registered-only', '--inconclusive-only', '--errors-only', '--fast', '--deep', '--concurrency', '--checkpoint', '--resume', '--events', '--quiet', '--no-color'],
+  lookup: ['--json', '--markdown', '--html', '--fast', '--deep', '--observer', '--vantage', '--plan', '--summary', '--verbose', '--strict-exit', '--fail-on', '--events', '--quiet', '--no-color'],
+  bulk: ['--json', '--jsonl', '--csv', '--domains', '--queries', '--registered-only', '--inconclusive-only', '--errors-only', '--fast', '--deep', '--concurrency', '--checkpoint', '--resume', '--events', '--plan', '--fail-on', '--quiet', '--no-color'],
   'ct-search': ['--json', '--quiet', '--no-color'],
   discover: ['--tlds', '--preset', '--families', '--keyboard', '--dictionary', '--snapshot', '--json', '--jsonl', '--domains', '--quiet', '--no-color'],
-  'discover-scan': ['--tlds', '--preset', '--families', '--keyboard', '--dictionary', '--fast', '--deep', '--scan-limit', '--chunk-size', '--concurrency', '--resolver', '--allowlist', '--checkpoint', '--resume', '--observation-snapshot', '--registered-only', '--inconclusive-only', '--acquisition-only', '--suppressed-only', '--events', '--json', '--jsonl', '--csv', '--domains', '--quiet', '--no-color'],
+  'discover-scan': ['--tlds', '--preset', '--families', '--keyboard', '--dictionary', '--fast', '--deep', '--scan-limit', '--chunk-size', '--concurrency', '--resolver', '--allowlist', '--checkpoint', '--resume', '--observation-snapshot', '--registered-only', '--inconclusive-only', '--acquisition-only', '--suppressed-only', '--events', '--plan', '--fail-on', '--json', '--jsonl', '--csv', '--domains', '--quiet', '--no-color'],
   posture: ['--selectors', '--retired-selectors', '--mail-profile', '--json', '--quiet', '--no-color'],
   http: ['--json', '--quiet', '--no-color'],
   tls: ['--json', '--quiet', '--no-color'],
@@ -27,7 +27,7 @@ const OPTIONS_BY_COMMAND: Readonly<Record<string, readonly string[]>> = Object.f
   brief: ['--json', '--quiet', '--no-color'],
   'case-pack': ['--audience', '--reviewed', '--json', '--quiet', '--no-color'],
   'domain-control': ['--json', '--quiet', '--no-color'],
-  'monitor-once': ['--previous', '--limit', '--concurrency', '--json', '--quiet', '--no-color'],
+  'monitor-once': ['--previous', '--limit', '--concurrency', '--fail-on', '--json', '--quiet', '--no-color'],
   assurance: ['--json', '--quiet', '--no-color'],
   'sharing-review': ['--marking', '--recipient-scope', '--purpose', '--human-reviewed', '--personal-data-reviewed', '--redactions-confirmed', '--json', '--quiet', '--no-color'],
   'workflow-plan': ['--json', '--quiet', '--no-color'],
@@ -110,6 +110,7 @@ const FILE_OPTIONS = Object.freeze([
 const TEXT_OPTIONS = Object.freeze([
   '--families',
   '--resolver',
+  '--fail-on',
   '--profile',
   '--purpose',
   '--observer',
