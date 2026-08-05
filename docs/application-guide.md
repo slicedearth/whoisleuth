@@ -479,7 +479,10 @@ When an active Brand Profile is available, **Brand mimicry review** organizes
 exact or perceptual favicon relationships, official-domain asset references,
 independent page-component comparisons, credential-surface context, and
 bounded review-language matches. Each cue retains its own method and
-provenance. WHOISleuth does not combine them into a mimicry or maliciousness
+provenance. Reviewed page-language packs cover a small fixed set of English,
+Spanish, French, German, Portuguese, Italian, and Dutch account-pressure
+phrases. A match retains only its fixed language and category label, not the
+matched phrase or surrounding page text. WHOISleuth does not combine them into a mimicry or maliciousness
 score, and common infrastructure, templates, libraries, or analytics can
 produce legitimate relationships.
 

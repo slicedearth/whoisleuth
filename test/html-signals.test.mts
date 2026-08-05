@@ -58,7 +58,7 @@ describe('pageTitle', () => {
 describe('reviewed static page-pattern inputs', () => {
   test('retains a bounded wallet prompt through the existing language cue', () => {
     const result = extractHtmlSignals('<main><p>Enter your recovery phrase to continue</p></main>', 'example.test');
-    assert.equal(result.phishingLanguageMatch, 'Enter your recovery phrase');
+    assert.equal(result.phishingLanguageMatch, 'Reviewed English wallet or recovery-secret language');
   });
 
   test('retains only whether a static form points off-origin', () => {
@@ -88,12 +88,12 @@ describe('hasPasswordField', () => {
 describe('phishingLanguageMatch', () => {
   test('matches known urgency/credential-harvesting phrasing', () => {
     const html = '<body>Please verify your account to continue.</body>';
-    assert.equal(extractHtmlSignals(html, 'example.com').phishingLanguageMatch, 'verify your account');
+    assert.equal(extractHtmlSignals(html, 'example.com').phishingLanguageMatch, 'Reviewed English account-verification language');
   });
 
   test('is case-insensitive', () => {
     const html = '<body>SECURITY ALERT: unusual activity detected</body>';
-    assert.equal(extractHtmlSignals(html, 'example.com').phishingLanguageMatch, 'SECURITY ALERT');
+    assert.equal(extractHtmlSignals(html, 'example.com').phishingLanguageMatch, 'Reviewed English urgent-action language');
   });
 
   test('is null for ordinary copy', () => {
@@ -101,10 +101,9 @@ describe('phishingLanguageMatch', () => {
     assert.equal(extractHtmlSignals(html, 'example.com').phishingLanguageMatch, null);
   });
 
-  test('retained phrase text cannot contain control characters', () => {
+  test('control-bearing page text does not produce a retained signal', () => {
     const match = extractHtmlSignals('<body>security alert\x07</body>', 'example.com').phishingLanguageMatch;
-    assert.equal(match, 'security alert');
-    assert.equal(/[\x00-\x1f\x7f]/.test(match), false);
+    assert.equal(match, null);
   });
 });
 
