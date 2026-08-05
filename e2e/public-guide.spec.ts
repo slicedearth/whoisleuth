@@ -24,11 +24,22 @@ test('homepage presents plain-language goals, restrained branding, and synthetic
   const goalBorders = await goalCards.evaluateAll((cards) => cards.map((card) => getComputedStyle(card).borderColor));
   expect(new Set(goalBorders).size).toBe(1);
   await expect(page.locator('.product-preview .preview-panel')).toHaveCount(3);
+  const previewTabs = page.getByRole('tablist', { name: 'Lookup result layout preview' });
+  await expect(previewTabs.getByRole('tab', { name: 'Sources' })).toHaveAttribute('aria-selected', 'true');
   const topology = page.getByRole('region', { name: 'Where this result comes from' });
   await expect(topology).toBeVisible();
   await expect(topology.locator('#homepage-evidence-topology-title')).toHaveCSS('clip-path', 'inset(50%)');
   await expect(topology.getByRole('img', { name: 'Where this result comes from visual overview' })).toBeVisible();
   await expect(topology.getByRole('list', { name: 'Evidence source status' }).getByRole('listitem')).toHaveCount(5);
+  await previewTabs.getByRole('tab', { name: 'At a glance' }).click();
+  const previewOverview = page.getByRole('tabpanel', { name: 'At a glance' });
+  await expect(previewOverview.getByText('5 sources', { exact: true })).toBeVisible();
+  await expect(previewOverview.getByText('Registration and website evidence collected')).toBeVisible();
+  await expect(topology).toHaveCount(0);
+  await previewTabs.getByRole('tab', { name: 'Timeline' }).click();
+  await expect(page.getByRole('list', { name: 'Synthetic lookup timeline' })).toBeVisible();
+  await previewTabs.getByRole('tab', { name: 'Sources' }).click();
+  await expect(topology).toBeVisible();
   await expect(page.getByText('Fixed fictional data from the public demo. No live target is contacted.')).toBeVisible();
   await expect(page.locator('.hero-actions').getByRole('link', { name: 'Open console' })).toHaveAttribute('href', '/dashboard');
   await expect(page.getByRole('link', { name: 'Sign in to investigate' })).toHaveCount(0);
@@ -36,6 +47,7 @@ test('homepage presents plain-language goals, restrained branding, and synthetic
   await expect(page.getByRole('link', { name: 'Browse all domain investigation resources' })).toHaveAttribute('href', '/resources');
 
   await page.setViewportSize({ width: 390, height: 844 });
+  await previewTabs.getByRole('tab', { name: 'Sources' }).click();
   const sourceSummary = page.locator('.mobile-source-summary');
   await expect(sourceSummary).toBeVisible();
   const sourceStateColors = await sourceSummary.evaluate((summary) => {

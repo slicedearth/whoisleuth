@@ -6,7 +6,11 @@
   import LookupLifecycle from '$lib/components/LookupLifecycle.svelte';
   import type { ActivationContext } from '$lib/analysis/activation-context.ts';
   import type { AnalystEvidencePivot } from '$lib/analysis/analyst-evidence-pivots.ts';
-  import type { EvidenceTopologyInput, EvidenceTopologyTarget } from '$lib/analysis/evidence-topology.ts';
+  import {
+    projectEvidenceTopology,
+    type EvidenceTopologyInput,
+    type EvidenceTopologyTarget,
+  } from '$lib/analysis/evidence-topology.ts';
   import type { LookupAssetGraph as LookupAssetGraphModel } from '$lib/analysis/lookup-asset-graph.ts';
   import type { LifecycleEventInput } from '$lib/analysis/visualization-models.ts';
 
@@ -21,6 +25,7 @@
     pivots,
     events,
     context = null,
+    onnavigate,
   }: {
     view: LookupVisualView;
     setview: (value: LookupVisualView) => void;
@@ -30,11 +35,13 @@
     pivots: AnalystEvidencePivot[];
     events: readonly LifecycleEventInput[];
     context?: ActivationContext | null;
+    onnavigate?: (href: string) => void;
   } = $props();
 
   const datedEventCount = $derived(events.filter((event) => typeof event.date === 'string' && Number.isFinite(Date.parse(event.date))).length);
+  const mappedSourceCount = $derived(projectEvidenceTopology(target, nodes).nodes.length);
   const options = $derived([
-    { id: 'sources' as const, label: 'Sources', count: nodes.length },
+    { id: 'sources' as const, label: 'Sources', count: mappedSourceCount },
     { id: 'relationships' as const, label: 'Relationships', count: graph.edges.length },
     { id: 'timeline' as const, label: 'Timeline', count: datedEventCount },
   ]);
@@ -69,6 +76,7 @@
         description="Use this bounded map to jump to separately attributed source and derived-evidence sections. Missing or failed sources remain explicit and are not treated as evidence of absence."
         {target}
         {nodes}
+        {onnavigate}
       />
     {:else if view === 'relationships'}
       <LookupAssetGraph {graph} />

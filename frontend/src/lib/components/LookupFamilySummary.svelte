@@ -35,7 +35,7 @@
     {/if}
   </span>
   <span class="section-toggle">
-    <span aria-hidden="true">{expanded ? '−' : '+'}</span>
+    <span class="toggle-icon" class:expanded aria-hidden="true"></span>
     {expanded ? 'Collapse details' : 'Expand details'}
   </span>
 </button>
@@ -50,7 +50,10 @@
   .metrics{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
   .metric{padding:4px 7px;border:1px solid var(--border);border-radius:999px;background:var(--panel-raised);color:var(--muted);font:650 var(--text-2xs) var(--mono)}
   .section-toggle{display:inline-flex;flex:0 0 auto;align-items:center;justify-content:center;gap:7px;white-space:nowrap;color:var(--text);font:700 var(--text-2xs) var(--mono)}
-  .section-toggle>span{display:grid;width:17px;height:17px;place-items:center;border:1px solid currentColor;border-radius:50%;font:750 var(--text-2xs) var(--mono);line-height:1}
+  .toggle-icon{display:block;position:relative;width:17px;height:17px;border:1px solid currentColor;border-radius:50%}
+  .toggle-icon::before,.toggle-icon::after{content:"";position:absolute;top:50%;left:50%;width:7px;height:1.5px;border-radius:999px;background:currentColor;transform:translate(-50%,-50%)}
+  .toggle-icon::after{width:1.5px;height:7px}
+  .toggle-icon.expanded::after{display:none}
   .family-summary:hover .section-toggle{color:var(--accent)}
   @media(max-width:620px){
     .family-summary{align-items:stretch;flex-direction:column;gap:11px}

@@ -8,6 +8,13 @@
   const selected = SYNTHETIC_DEMO_CANDIDATES[0];
   if (!selected) throw new Error('The synthetic homepage preview requires one candidate.');
   const timeline = syntheticDemoTimeline(selected.id, true);
+  type PreviewView = 'overview' | 'sources' | 'timeline';
+  let previewView = $state<PreviewView>('sources');
+  const previewTabs: ReadonlyArray<{ id: PreviewView; label: string }> = [
+    { id: 'overview', label: 'At a glance' },
+    { id: 'sources', label: 'Sources' },
+    { id: 'timeline', label: 'Timeline' },
+  ];
   const topologyNodes = [
     { id: 'registry', label: 'Registry', detail: selected.evidence.registry.status, status: 'success', side: 'left' as const, glyph: 'R', family: 'registry' as const },
     { id: 'dns', label: 'DNS', detail: selected.evidence.dns.status, status: 'success', side: 'left' as const, glyph: 'D', family: 'network' as const },
@@ -32,26 +39,61 @@
 
   <article class="preview-panel lookup-panel">
     <header><span>Lookup</span><small>{selected.domain}</small></header>
-    <div class="preview-tabs" role="group" aria-label="Lookup result layout preview"><span class="active">At a glance</span><span>Sources</span><span>Timeline</span></div>
-    <div class="assessment">
-      <div><small>Registration</small><strong>{selected.availability}</strong></div>
-      <div><small>Priority</small><strong>{selected.risk}<span>/100</span></strong></div>
-      <div><small>Mapped evidence</small><strong>{topologyNodes.length}<span> sources</span></strong></div>
-    </div>
-    <EvidenceTopology
-      id="homepage-evidence-topology"
-      title="Where this result comes from"
-      target={{ label: selected.domain, detail: 'Domain lookup', status: selected.availability }}
-      nodes={topologyNodes}
-      embedded
-      compact
-      headingLevel={2}
-    />
-    <ul class="mobile-source-summary" aria-label="Synthetic evidence source status">
-      {#each topologyNodes as node}
-        <li class={`state-${node.status}`}><span>{node.label}</span><strong>{node.status}</strong></li>
+    <div class="preview-tabs" role="tablist" aria-label="Lookup result layout preview">
+      {#each previewTabs as tab}
+        <button
+          id={`homepage-preview-tab-${tab.id}`}
+          type="button"
+          role="tab"
+          aria-selected={previewView === tab.id}
+          aria-controls="homepage-preview-panel"
+          class:active={previewView === tab.id}
+          onclick={() => previewView = tab.id}
+        >{tab.label}</button>
       {/each}
-    </ul>
+    </div>
+    <div
+      id="homepage-preview-panel"
+      class="preview-tab-panel"
+      role="tabpanel"
+      aria-labelledby={`homepage-preview-tab-${previewView}`}
+    >
+      {#if previewView === 'overview'}
+        <div class="assessment">
+          <div><small>Registration</small><strong>{selected.availability}</strong></div>
+          <div><small>Priority</small><strong>{selected.risk}<span>/100</span></strong></div>
+          <div><small>Mapped evidence</small><strong>{topologyNodes.length}{' '}<span>sources</span></strong></div>
+        </div>
+        <div class="preview-findings" aria-label="Synthetic lookup summary">
+          <p><span class="finding-state observed">Observed</span><strong>Registration and website evidence collected</strong></p>
+          <p><span class="finding-state review">Review</span><strong>One explainable risk cue remains</strong></p>
+        </div>
+      {:else if previewView === 'sources'}
+        <EvidenceTopology
+          id="homepage-evidence-topology"
+          title="Where this result comes from"
+          target={{ label: selected.domain, detail: 'Domain lookup', status: selected.availability }}
+          nodes={topologyNodes}
+          embedded
+          compact
+          headingLevel={2}
+        />
+        <ul class="mobile-source-summary" aria-label="Synthetic evidence source status">
+          {#each topologyNodes as node}
+            <li class={`state-${node.status}`}><span>{node.label}</span><strong>{node.status}</strong></li>
+          {/each}
+        </ul>
+      {:else}
+        <ol class="lookup-timeline" aria-label="Synthetic lookup timeline">
+          {#each timeline as entry,index}
+            <li class:changed={entry.changes.length > 0}>
+              <span aria-hidden="true"></span>
+              <div><strong>{entry.label}</strong><small>{index === 0 ? 'Latest observation' : entry.repeated ? 'Repeated observation' : 'Earlier observation'}</small></div>
+            </li>
+          {/each}
+        </ol>
+      {/if}
+    </div>
   </article>
 
   <article class="preview-panel monitor-panel">
@@ -81,10 +123,20 @@
   .candidate-row.selected{border-left-color:var(--accent2);background:rgb(var(--accent2-rgb) / .065)}
   .candidate-row>span{min-width:0}.candidate-row strong,.candidate-row small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .candidate-row strong{font:650 var(--text-xs) var(--mono)}.candidate-row small{margin-top:3px;color:var(--muted);font-size:.62rem}.candidate-row b{color:var(--amber);font:750 .9rem var(--mono)}
-  .preview-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:3px;padding:6px;border-bottom:1px solid var(--border);background:var(--panel-raised)}.preview-tabs span{min-width:0;padding:6px;border:1px solid transparent;border-radius:var(--radius-sm);color:var(--muted);font:650 .6rem var(--mono);text-align:center}.preview-tabs span.active{border-color:color-mix(in srgb,var(--accent) 55%,var(--border));background:var(--panel);color:var(--accent)}
+  .preview-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:3px;padding:6px;border-bottom:1px solid var(--border);background:var(--panel-raised)}
+  .preview-tabs button{min-width:0;min-height:34px;padding:6px;border:1px solid transparent;border-radius:var(--radius-sm);background:transparent;color:var(--muted);font:650 .6rem var(--mono);text-align:center;cursor:pointer}
+  .preview-tabs button:hover,.preview-tabs button.active{border-color:color-mix(in srgb,var(--accent) 55%,var(--border));background:var(--panel);color:var(--accent)}
+  .preview-tabs button:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
+  .preview-tab-panel{min-width:0}
   .assessment{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;background:var(--border)}
   .assessment div{display:grid;gap:4px;padding:13px;background:var(--panel)}.assessment small{color:var(--muted);font:var(--text-2xs) var(--mono)}.assessment strong{color:var(--accent2);font:750 1.05rem var(--mono)}.assessment strong span{color:var(--muted);font-size:.62rem}
+  .preview-findings{display:grid;gap:1px;padding:1px;background:var(--border)}
+  .preview-findings p{display:grid;grid-template-columns:auto minmax(0,1fr);gap:9px;align-items:center;margin:0;padding:13px;background:var(--panel)}
+  .preview-findings strong{font:650 var(--text-xs) var(--mono)}
+  .finding-state{padding:3px 6px;border:1px solid currentColor;border-radius:999px;font:700 .52rem var(--mono);text-transform:uppercase}
+  .finding-state.observed{color:var(--accent2)}.finding-state.review{color:var(--amber)}
   .mobile-source-summary{display:none}
+  .lookup-timeline{display:grid;gap:0;margin:0;padding:16px 18px;list-style:none}.lookup-timeline li{display:grid;position:relative;grid-template-columns:12px minmax(0,1fr);gap:8px;min-height:58px}.lookup-timeline li::before{content:"";position:absolute;top:13px;bottom:-7px;left:4px;width:1px;background:var(--border)}.lookup-timeline li:last-child::before{display:none}.lookup-timeline li>span{z-index:1;width:9px;height:9px;margin-top:8px;border:2px solid var(--muted);border-radius:50%;background:var(--panel)}.lookup-timeline li.changed>span{border-color:var(--accent2);box-shadow:0 0 7px rgb(var(--accent2-rgb) / .4)}.lookup-timeline li strong,.lookup-timeline li small{display:block}.lookup-timeline li strong{font:650 var(--text-xs) var(--mono)}.lookup-timeline li small{margin-top:4px;color:var(--muted);font-size:.62rem;line-height:1.35}
   .monitor-panel ol{display:grid;gap:0;margin:0;padding:12px 12px 12px 18px;list-style:none}.monitor-panel li{display:grid;position:relative;grid-template-columns:12px minmax(0,1fr);gap:8px;min-height:49px}.monitor-panel li::before{content:"";position:absolute;top:13px;bottom:-7px;left:4px;width:1px;background:var(--border)}.monitor-panel li:last-child::before{display:none}.monitor-panel li>span{z-index:1;width:9px;height:9px;margin-top:8px;border:2px solid var(--muted);border-radius:50%;background:var(--panel)}.monitor-panel li.changed>span{border-color:var(--accent2);box-shadow:0 0 7px rgb(var(--accent2-rgb) / .4)}.monitor-panel li strong,.monitor-panel li small{display:block}.monitor-panel li strong{font:650 var(--text-xs) var(--mono)}.monitor-panel li small{margin-top:4px;color:var(--muted);font-size:.62rem;line-height:1.35}
   .preview-note{margin:12px 0 0;color:var(--muted);font:var(--text-2xs) var(--mono);text-align:center}
   @media(max-width:820px){.product-preview{grid-template-columns:1fr 1fr;grid-template-rows:auto auto}.lookup-panel{grid-column:1 / -1;grid-row:1}.discover-panel{grid-column:1;grid-row:2}.monitor-panel{grid-column:2;grid-row:2}}
