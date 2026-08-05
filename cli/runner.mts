@@ -93,6 +93,7 @@ import { buildCliManual } from './manual.mts';
 import { buildInvestigationPlan, formatInvestigationPlan } from './investigation-plan.mts';
 import { formatInvestigationRun, runInvestigationRecipe } from './investigation-run.mts';
 import { evaluateCliFailPolicies, formatFailPolicyNotice } from './fail-policy.mts';
+import { formatCliJunit } from './ci-report.mts';
 import { WHOISLEUTH_SOURCE_REPOSITORY_URL } from '../lib/project-metadata.mts';
 import { createBufferedOutput, writePrivateFile } from './output-file.mts';
 import { createTerminalProgress, type TerminalProgress } from './progress.mts';
@@ -203,12 +204,12 @@ const COMMAND_USAGE: Readonly<Record<CliCommand, string>> = Object.freeze({
   doctor: 'whoisleuth doctor [--network] [--json] [--quiet] [--no-color]',
   commands: 'whoisleuth commands [--json] [--quiet] [--no-color]',
   manual: 'whoisleuth manual',
-  lookup: 'whoisleuth lookup <domain|IP|ASN> [--json|--markdown|--html] [--fast|--deep] [--observer <label>] [--vantage <label>] [--plan] [--summary|--verbose] [--strict-exit] [--fail-on <policies>] [--events] [--quiet] [--no-color]',
-  bulk: 'whoisleuth bulk [file] [--json|--jsonl|--csv|--domains|--queries] [--registered-only|--inconclusive-only|--errors-only] [--fast|--deep] [--concurrency <1-8>] [--checkpoint <file> [--resume]] [--events] [--plan] [--fail-on <policies>]',
+  lookup: 'whoisleuth lookup <domain|IP|ASN> [--json|--junit|--markdown|--html] [--fast|--deep] [--observer <label>] [--vantage <label>] [--plan] [--summary|--verbose] [--strict-exit] [--fail-on <policies>] [--events] [--quiet] [--no-color]',
+  bulk: 'whoisleuth bulk [file] [--json|--jsonl|--junit|--csv|--domains|--queries] [--registered-only|--inconclusive-only|--errors-only] [--fast|--deep] [--concurrency <1-8>] [--checkpoint <file> [--resume]] [--events] [--plan] [--fail-on <policies>]',
   'ct-search': 'whoisleuth ct-search <keyword> [--json] [--quiet] [--no-color]',
   discover: 'whoisleuth discover <brand|domain> [--tlds <list>] [--preset <name>|--families <ids>] [--keyboard <layout>] [--dictionary <file>] [--snapshot <file>] [--json|--jsonl|--domains]',
   'discover-scan': 'whoisleuth discover-scan <brand|domain> [--fast|--deep] [--scan-limit <n>] [--chunk-size <n>] [--concurrency <n>] [--resolver <IPs>] [--allowlist <file>] [--checkpoint <file> [--resume]] [--observation-snapshot <file>] [--json|--jsonl|--csv|--domains] [--plan] [--fail-on <policies>]',
-  posture: 'whoisleuth posture <domain> [--selectors <list>] [--retired-selectors <list>] [--mail-profile <profile>] [--json] [--quiet] [--no-color]',
+  posture: 'whoisleuth posture <domain> [--selectors <list>] [--retired-selectors <list>] [--mail-profile <profile>] [--json|--sarif --owned-domain] [--quiet] [--no-color]',
   http: 'whoisleuth http <domain> [--json] [--quiet] [--no-color]',
   tls: 'whoisleuth tls <hostname> [--json] [--quiet] [--no-color]',
   'registry-support': 'whoisleuth registry-support <domain|suffix> [--json] [--quiet] [--no-color]',
@@ -227,7 +228,7 @@ const COMMAND_USAGE: Readonly<Record<CliCommand, string>> = Object.freeze({
   brief: 'whoisleuth brief [lookup.json] [--json] [--quiet] [--no-color]',
   'case-pack': 'whoisleuth case-pack [cases.json] --audience <internal|trusted|public> --reviewed [--json] [--quiet] [--no-color]',
   'domain-control': 'whoisleuth domain-control [manifest-input.json|review-input.json] [--json] [--quiet] [--no-color]',
-  'monitor-once': 'whoisleuth monitor-once [manifest.json] [--previous <snapshot.json>] [--limit <1-20>] [--concurrency <1-3>] [--fail-on <policies>] [--json] [--quiet] [--no-color]',
+  'monitor-once': 'whoisleuth monitor-once [manifest.json] [--previous <snapshot.json>] [--limit <1-20>] [--concurrency <1-3>] [--fail-on <policies>] [--json|--junit] [--quiet] [--no-color]',
   assurance: 'whoisleuth assurance [assurance-input.json] [--json] [--quiet] [--no-color]',
   'sharing-review': 'whoisleuth sharing-review [artifact.json] --marking <level> --recipient-scope <scope> --purpose <text> [--human-reviewed] [--personal-data-reviewed] [--redactions-confirmed] [--json]',
   'workflow-plan': 'whoisleuth workflow-plan <recipe> <domain|brand> [--json] [--quiet] [--no-color]',
@@ -1067,7 +1068,9 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
       }
       if (!args.quiet) write(stdout, args.output === 'json'
         ? formatJsonDocument(document)
-        : terminal(formatDomainControlMonitor(document), args.color));
+        : args.output === 'junit'
+          ? formatCliJunit(document)
+          : terminal(formatDomainControlMonitor(document), args.color));
       const policyFindings = evaluateCliFailPolicies(document, args.failOn || []);
       if (policyFindings.length) write(stderr, formatFailPolicyNotice(policyFindings));
       return document.collection.failed || policyFindings.length ? EXIT_CODES.PARTIAL_FAILURE : EXIT_CODES.SUCCESS;

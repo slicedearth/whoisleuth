@@ -15,6 +15,7 @@ import type { CliCommandContext, CliDependencies } from './runner-types.mts';
 import type { UnknownRecord } from './saved-lookup.mts';
 import { lookupStrictExitFindings } from './strict-exit.mts';
 import { evaluateCliFailPolicies, formatFailPolicyNotice } from './fail-policy.mts';
+import { formatCliJunit } from './ci-report.mts';
 
 type LookupCommandArguments = Extract<CliArguments, { action: 'lookup' }>;
 
@@ -94,6 +95,7 @@ async function runLookupCommand(
   );
   if (!args.quiet) {
     if (args.output === 'json') context.writeStdout(formatJsonDocument(document));
+    else if (args.output === 'junit') context.writeStdout(formatCliJunit(document));
     else if (args.output === 'markdown' || args.output === 'html') {
       const loadEvidence = dependencies.loadEvidenceExport || (() => import('../lib/evidence-export.mts'));
       const evidenceModule = await loadEvidence();

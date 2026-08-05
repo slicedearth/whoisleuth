@@ -17,6 +17,7 @@ import { buildCliBulkDocument, formatJsonDocument, formatJsonLines } from './for
 import { formatTerminalBulk } from './formatters/terminal.mts';
 import { buildCollectionPreflight, formatCollectionPreflight } from './collection-preflight.mts';
 import { evaluateCliFailPolicies, formatFailPolicyNotice } from './fail-policy.mts';
+import { formatCliJunit } from './ci-report.mts';
 import { createCliProgressEvents } from './progress-events.mts';
 import type { CliCommandContext, CliDependencies } from './runner-types.mts';
 
@@ -105,8 +106,10 @@ async function runBulkCommand(
     filter: args.filter,
   };
   const selectedItems = selectBulkItems(items, args.filter);
+  const selectedDocument = buildCliBulkDocument(selectedItems, metadata);
   if (!args.quiet) {
-    if (args.output === 'json') context.writeStdout(formatJsonDocument(buildCliBulkDocument(selectedItems, metadata)));
+    if (args.output === 'json') context.writeStdout(formatJsonDocument(selectedDocument));
+    else if (args.output === 'junit') context.writeStdout(formatCliJunit(selectedDocument));
     else if (args.output === 'jsonl') context.writeStdout(formatJsonLines(selectedItems, metadata));
     else if (args.output === 'csv') context.writeStdout(formatBulkCsv(selectedItems));
     else if (args.output === 'domains') context.writeStdout(formatBulkDomainList(selectedItems));

@@ -22,6 +22,7 @@ import { normalizePostureSelectors } from './posture.mts';
 import type { CliCommandContext, CliDependencies } from './runner-types.mts';
 import type { UnknownRecord } from './saved-lookup.mts';
 import EXIT_CODES from './exit-codes.mts';
+import { buildPostureSarif } from './ci-report.mts';
 
 type NetworkCommandArguments = Extract<CliArguments, {
   action: 'ct-search' | 'posture' | 'http' | 'tls';
@@ -67,7 +68,9 @@ async function runNetworkCommand(
     if (!args.quiet) {
       context.writeStdout(args.output === 'json'
         ? formatJsonDocument(document)
-        : context.terminal(formatTerminalPosture(document), args.color));
+        : args.output === 'sarif'
+          ? formatJsonDocument(buildPostureSarif(document))
+          : context.terminal(formatTerminalPosture(document), args.color));
     }
     return EXIT_CODES.SUCCESS;
   }

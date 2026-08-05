@@ -72,12 +72,12 @@ type CliAction =
   | ({ action: 'commands'; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'manual' })
   | ({ action: 'doctor'; network: boolean; output: 'terminal' | 'json' } & TerminalOptions)
-  | ({ action: 'lookup'; query: string | null; output: 'terminal' | 'json' | 'markdown' | 'html'; deep: boolean; detail: LookupDetail; strictExit: boolean; events: boolean; plan: boolean; observerLabel: string | null; vantageLabel: string | null; failOn?: readonly CliFailPolicy[] } & TerminalOptions)
-  | ({ action: 'bulk'; source: string | null; output: 'terminal' | 'json' | 'jsonl' | 'csv' | 'domains' | 'queries'; deep: boolean; concurrency: number; checkpoint: string | null; resume: boolean; events: boolean; plan: boolean; filter: 'all' | 'registered' | 'inconclusive' | 'errors'; failOn?: readonly CliFailPolicy[] } & TerminalOptions)
+  | ({ action: 'lookup'; query: string | null; output: 'terminal' | 'json' | 'markdown' | 'html' | 'junit'; deep: boolean; detail: LookupDetail; strictExit: boolean; events: boolean; plan: boolean; observerLabel: string | null; vantageLabel: string | null; failOn?: readonly CliFailPolicy[] } & TerminalOptions)
+  | ({ action: 'bulk'; source: string | null; output: 'terminal' | 'json' | 'jsonl' | 'csv' | 'domains' | 'queries' | 'junit'; deep: boolean; concurrency: number; checkpoint: string | null; resume: boolean; events: boolean; plan: boolean; filter: 'all' | 'registered' | 'inconclusive' | 'errors'; failOn?: readonly CliFailPolicy[] } & TerminalOptions)
   | ({ action: 'ct-search'; keyword: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'discover'; seed: string | null; output: 'terminal' | 'json' | 'jsonl' | 'domains'; preset: 'common' | 'impersonation' | 'all' | 'custom'; keyboardLayout: 'qwerty' | 'azerty' | 'qwertz' | 'all'; tldText: string | null; dictionarySource: string | null; familyText: string | null; snapshotSource: string | null } & TerminalOptions)
   | ({ action: 'discover-scan'; seed: string | null; output: 'terminal' | 'json' | 'jsonl' | 'csv' | 'domains'; preset: 'common' | 'impersonation' | 'all' | 'custom'; keyboardLayout: 'qwerty' | 'azerty' | 'qwertz' | 'all'; tldText: string | null; dictionarySource: string | null; familyText: string | null; deep: boolean; scanLimit: number; chunkSize: number; concurrency: number; checkpoint: string | null; resume: boolean; resolverText: string | null; observationSnapshot: string | null; allowlistSource: string | null; filter: 'all' | 'registered' | 'inconclusive' | 'acquisition' | 'suppressed'; events: boolean; plan: boolean; failOn?: readonly CliFailPolicy[] } & TerminalOptions)
-  | ({ action: 'posture'; domain: string | null; output: 'terminal' | 'json'; selectorText: string | null; retiredSelectorText: string | null; mailProfile: 'defensive_no_mail' | 'parked' | 'standard' } & TerminalOptions)
+  | ({ action: 'posture'; domain: string | null; output: 'terminal' | 'json' | 'sarif'; selectorText: string | null; retiredSelectorText: string | null; mailProfile: 'defensive_no_mail' | 'parked' | 'standard'; ownedDomain: boolean } & TerminalOptions)
   | ({ action: 'http'; domain: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'tls'; hostname: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'registry-support'; target: string | null; output: 'terminal' | 'json' } & TerminalOptions)
@@ -96,7 +96,7 @@ type CliAction =
   | ({ action: 'brief'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'case-pack'; source: string | null; output: 'terminal' | 'json'; audience: 'internal' | 'trusted' | 'public'; reviewed: boolean } & TerminalOptions)
   | ({ action: 'domain-control'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
-  | ({ action: 'monitor-once'; source: string | null; previousSource: string | null; output: 'terminal' | 'json'; limit: number; concurrency: number; failOn?: readonly CliFailPolicy[] } & TerminalOptions)
+  | ({ action: 'monitor-once'; source: string | null; previousSource: string | null; output: 'terminal' | 'json' | 'junit'; limit: number; concurrency: number; failOn?: readonly CliFailPolicy[] } & TerminalOptions)
   | ({ action: 'assurance'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'sharing-review'; source: string | null; output: 'terminal' | 'json'; marking: 'clear' | 'green' | 'amber' | 'amber-strict' | 'red'; recipientScope: 'public' | 'community' | 'organization' | 'named-recipients'; purpose: string; humanReviewed: boolean; personalDataReviewed: boolean; redactionsConfirmed: boolean } & TerminalOptions)
   | ({ action: 'workflow-plan'; recipe: InvestigationPlanRecipe; subject: string; output: 'terminal' | 'json' } & TerminalOptions)
@@ -219,7 +219,7 @@ function parseCliArgumentsCore(argv: string[]): CliAction {
   if (command === 'timeline') return parseTimelineArguments(argv.slice(1));
   if (command === 'export') return parseExportArguments(argv.slice(1));
   let query: string | null = null;
-  let output: 'terminal' | 'json' | 'markdown' | 'html' = 'terminal';
+  let output: 'terminal' | 'json' | 'markdown' | 'html' | 'junit' = 'terminal';
   let deep = false;
   let scanMode: 'fast' | 'deep' | null = null;
   let quiet = false;
@@ -239,6 +239,9 @@ function parseCliArgumentsCore(argv: string[]): CliAction {
     if (argument === '--json') {
       if (output !== 'terminal') throw new CliUsageError('Choose only one output format.');
       output = 'json';
+    } else if (argument === '--junit') {
+      if (output !== 'terminal') throw new CliUsageError('Choose only one output format.');
+      output = 'junit';
     } else if (argument === '--markdown' || argument === '--html') {
       if (output !== 'terminal') throw new CliUsageError('Choose only one output format.');
       output = argument === '--markdown' ? 'markdown' : 'html';
@@ -285,7 +288,7 @@ function parseCliArgumentsCore(argv: string[]): CliAction {
   }
   if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
   if (detailSet && output !== 'terminal') throw new CliUsageError('--summary and --verbose apply only to terminal output.');
-  if (plan && (output === 'markdown' || output === 'html')) throw new CliUsageError('--plan supports terminal or JSON output only.');
+  if (plan && !['terminal', 'json'].includes(output)) throw new CliUsageError('--plan supports terminal or JSON output only.');
   if (plan && (detailSet || strictExit || events || quiet || failOn !== null)) {
     throw new CliUsageError('--plan cannot be combined with detail, strict-exit, event, or quiet options.');
   }
@@ -342,7 +345,7 @@ function parseDoctorArguments(argv: string[]): Extract<CliArguments, { action: '
 
 function parseBulkArguments(argv: string[]): Extract<CliArguments, { action: 'bulk' }> {
   let source: string | null = null;
-  let output: 'terminal' | 'json' | 'jsonl' | 'csv' | 'domains' | 'queries' = 'terminal';
+  let output: 'terminal' | 'json' | 'jsonl' | 'csv' | 'domains' | 'queries' | 'junit' = 'terminal';
   let deep = false;
   let scanMode: 'fast' | 'deep' | null = null;
   let quiet = false;
@@ -357,7 +360,7 @@ function parseBulkArguments(argv: string[]): Extract<CliArguments, { action: 'bu
   for (let index = 0; index < argv.length; index++) {
     const argument = argv[index];
     if (argument === undefined) break;
-    if (argument === '--json' || argument === '--jsonl' || argument === '--csv' || argument === '--domains' || argument === '--queries') {
+    if (argument === '--json' || argument === '--jsonl' || argument === '--csv' || argument === '--domains' || argument === '--queries' || argument === '--junit') {
       if (output !== 'terminal') throw new CliUsageError('Choose only one output format.');
       output = argument === '--json'
         ? 'json'
@@ -367,7 +370,9 @@ function parseBulkArguments(argv: string[]): Extract<CliArguments, { action: 'bu
             ? 'csv'
             : argument === '--domains'
               ? 'domains'
-              : 'queries';
+              : argument === '--queries'
+                ? 'queries'
+                : 'junit';
     } else if (argument === '--deep' || argument === '--fast') {
       if (scanMode) throw new CliUsageError('--fast and --deep are mutually exclusive and may be supplied only once.');
       scanMode = argument === '--deep' ? 'deep' : 'fast';
@@ -665,19 +670,26 @@ function positiveIntegerOption(value: string | undefined, option: string, maximu
 
 function parsePostureArguments(argv: string[]): Extract<CliArguments, { action: 'posture' }> {
   let domain: string | null = null;
-  let output: 'terminal' | 'json' = 'terminal';
+  let output: 'terminal' | 'json' | 'sarif' = 'terminal';
   let quiet = false;
   let color = true;
   let selectorText: string | null = null;
   let retiredSelectorText: string | null = null;
   let mailProfile: 'defensive_no_mail' | 'parked' | 'standard' = 'standard';
   let mailProfileSeen = false;
+  let ownedDomain = false;
   for (let index = 0; index < argv.length; index++) {
     const argument = argv[index];
     if (argument === undefined) break;
     if (argument === '--json') {
       if (output !== 'terminal') throw new CliUsageError('--json may be supplied only once.');
       output = 'json';
+    } else if (argument === '--sarif') {
+      if (output !== 'terminal') throw new CliUsageError('Choose only one output format.');
+      output = 'sarif';
+    } else if (argument === '--owned-domain') {
+      if (ownedDomain) throw new CliUsageError('--owned-domain may be supplied only once.');
+      ownedDomain = true;
     } else if (argument === '--selectors') {
       if (selectorText !== null) throw new CliUsageError('--selectors may be supplied only once.');
       const value = argv[++index];
@@ -703,7 +715,8 @@ function parsePostureArguments(argv: string[]): Extract<CliArguments, { action: 
     else throw new CliUsageError('posture accepts one domain.');
   }
   if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
-  return { action: 'posture', domain, output, quiet, color, selectorText, retiredSelectorText, mailProfile };
+  if (output === 'sarif' && !ownedDomain) throw new CliUsageError('--sarif requires --owned-domain to confirm the passive posture target is controlled by the operator.');
+  return { action: 'posture', domain, output, quiet, color, selectorText, retiredSelectorText, mailProfile, ownedDomain };
 }
 
 function parseHttpArguments(argv: string[]): Extract<CliArguments, { action: 'http' }> {
@@ -891,7 +904,7 @@ function parseCasePackArguments(argv: string[]): Extract<CliArguments, { action:
 function parseMonitorOnceArguments(argv: string[]): Extract<CliArguments, { action: 'monitor-once' }> {
   let source: string | null = null;
   let previousSource: string | null = null;
-  let output: 'terminal' | 'json' = 'terminal';
+  let output: 'terminal' | 'json' | 'junit' = 'terminal';
   let limit = 20;
   let concurrency = 2;
   let failOn: CliFailPolicy[] | null = null;
@@ -903,6 +916,9 @@ function parseMonitorOnceArguments(argv: string[]): Extract<CliArguments, { acti
     if (argument === '--json') {
       if (output !== 'terminal') throw new CliUsageError('--json may be supplied only once.');
       output = 'json';
+    } else if (argument === '--junit') {
+      if (output !== 'terminal') throw new CliUsageError('Choose only one output format.');
+      output = 'junit';
     } else if (argument === '--previous') {
       if (previousSource !== null) throw new CliUsageError('--previous may be supplied only once.');
       const value = argv[++index];
