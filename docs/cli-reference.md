@@ -1210,9 +1210,11 @@ states its evidence basis and expected outcome; it does not run the action or
 create a case.
 
 `case-pack [cases.json] --audience <internal|trusted|public> --reviewed` reads a
-browser case export, retains at most 25 normalised cases, applies the selected
+browser case export containing at most 25 normalised cases, applies the selected
 redaction boundary, and emits a browser-importable case collection with a
-canonical SHA-256 digest and redaction manifest. Trusted output removes notes,
+canonical SHA-256 digest and redaction manifest. It refuses an invalid,
+duplicate, larger, or generated package above the browser's 2 MiB import limit
+rather than silently omitting records or evidence. Trusted output removes notes,
 recipient values, and manual-pivot targets. Public output additionally removes
 actions and analyst assertions. The review flag records an explicit choice; it
 does not prove recipient authorisation or factual correctness.

@@ -59,7 +59,7 @@ backup. Encryption protects the downloaded file while locked; the active
 IndexedDB workspace remains plaintext and browser-local. Optional hosted
 monitoring retains only encrypted compact watchlist state.
 
-Deep Lookup keeps source health and provenance visible while organizing long
+Deep Lookup keeps source health and provenance visible while organising long
 supporting evidence into a scannable result. Reports, retained facts, website
 profiles, acquisition checklists, external pivots, and visual summaries are
 analyst-controlled views over already collected evidence. They do not make an

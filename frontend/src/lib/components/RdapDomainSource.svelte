@@ -35,7 +35,7 @@
 
   function contactDetails(contact: JsonRecord) {
     return [
-      Array.isArray(contact.organizations) && contact.organizations.length ? `Organizations: ${contact.organizations.join(', ')}` : null,
+      Array.isArray(contact.organizations) && contact.organizations.length ? `Organisations: ${contact.organizations.join(', ')}` : null,
       Array.isArray(contact.emails) && contact.emails.length ? `Email: ${contact.emails.join(', ')}` : null,
       Array.isArray(contact.phones) && contact.phones.length ? `Phone: ${contact.phones.join(', ')}` : null,
       Array.isArray(contact.addresses) && contact.addresses.length ? `Address: ${contact.addresses.join(' · ')}` : null,

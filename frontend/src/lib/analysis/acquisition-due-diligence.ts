@@ -445,7 +445,7 @@ export function buildAcquisitionDueDiligence(input: Readonly<{
     policyChecks,
     nextSteps,
     limitations: [
-      'This workspace organizes observed evidence; it does not value a domain or establish that it can be acquired.',
+      'This workspace organises observed evidence; it does not value a domain or establish that it can be acquired.',
       'Expiry dates, EPP statuses, sale signals, and contact routes can change after collection.',
       'WHOISleuth does not assess legal rights, registry eligibility, registrar terms, escrow, tax, or payment risk.',
     ],

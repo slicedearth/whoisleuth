@@ -429,7 +429,7 @@ export function buildOwnedDomainPostureReview(
     baselineComparisons: baselineComparisons(baseline, report, nowMs),
     previousChanges: previousChanges(baseline?.observationHistory?.at(-1) || baseline?.previousObservation || null, report),
     limitations: [
-      'The desired-state view organizes the selected Brand Profile and this point-in-time audit. It does not change DNS, registrar, mail, or provider configuration.',
+      'The desired-state view organises the selected Brand Profile and this point-in-time audit. It does not change DNS, registrar, mail, or provider configuration.',
       'An external dependency is a review lead. Unavailable evidence is not proof that a dependency is dangling, claimable, insecure, abandoned, or controlled by another party.',
       'Protection controls that cannot be observed from public data remain analyst attestations with their own review and expiry dates.',
     ],

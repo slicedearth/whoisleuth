@@ -354,7 +354,7 @@ default (see the README), so many lookups return no personal data at all.
   match, one Boolean page-baseline signal can contribute within the capped
   brand-presentation family of Risk model v7. It is not a separate score and
   cannot corroborate other observations from the same family.
-  A transient brand-mimicry review can organize those comparison components
+  A transient brand-mimicry review can organise those comparison components
   with existing favicon, official-asset, password-field, and bounded
   review-language observations. It adds no collection, combined score, or
   persistence, and it does not infer copying, ownership, control, intent, or
@@ -372,7 +372,7 @@ default (see the README), so many lookups return no personal data at all.
   collection, intent, safety, or maliciousness. The existing bounded language
   observation can contribute only within the capped credential-lure family of
   Risk model v7 and never affects availability.
-- **Service and transition review**: a deep Lookup can organize already
+- **Service and transition review**: a deep Lookup can organise already
   collected DNS aliases, nameservers, web routing, mail publication, TLS
   source health, lifecycle statuses, and transfer locks into transient manual
   review prompts. Alias targets are not followed, provider accounts are not
@@ -616,7 +616,7 @@ default (see the README), so many lookups return no personal data at all.
   manifest digest is verified when present. Package indexes, page lists,
   screenshots, custom files, raw response content, and archive bytes are not
   stored.
-  A selected security.txt result can be organized transiently into disclosure
+  A selected security.txt result can be organised transiently into disclosure
   health using only its retained contact, policy, encryption, language, expiry,
   and source state. This adds no request and does not test contact
   reachability. Certificate and security.txt expiry dates enter the local

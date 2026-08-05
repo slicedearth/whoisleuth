@@ -59,7 +59,7 @@ function relationshipItem(
 }
 
 /**
- * Organizes already-collected brand and page observations into independent,
+ * Organises already-collected brand and page observations into independent,
  * explainable review cues. It intentionally does not produce a similarity
  * score or infer copying, ownership, intent, or maliciousness.
  */

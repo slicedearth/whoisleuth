@@ -116,7 +116,7 @@ exported. Task-specific defaults use different review ages for registration,
 network, and web evidence. The analyst can replace them with bounded one-to-365
 day thresholds for the current result. The versioned policy is shown in the
 quality panel and included in the downloaded investigation brief; custom values
-are not saved. Thresholds organize review only and do not make an older
+are not saved. Thresholds organise review only and do not make an older
 observation false or a newer observation complete. Run a complete Lookup before
 saving, comparing, or exporting replacement evidence so observations collected
 at different times are not silently combined.
@@ -475,7 +475,7 @@ data without keeping page HTML, URL paths, query strings, credentials, or
 complete email addresses. Comparison results remain contextual evidence and do
 not prove common ownership or intent.
 
-When an active Brand Profile is available, **Brand mimicry review** organizes
+When an active Brand Profile is available, **Brand mimicry review** organises
 exact or perceptual favicon relationships, official-domain asset references,
 independent page-component comparisons, credential-surface context, and
 bounded review-language matches. Each cue retains its own method and
@@ -629,7 +629,7 @@ evidence, not a current-state guarantee, release, deletion, availability, or
 acquisition forecast.
 
 When a selected Lookup includes security.txt, its disclosure-health summary
-organizes retained contact, policy, encryption, language, and expiry coverage.
+organises retained contact, policy, encryption, language, and expiry coverage.
 Expired, expiring, partial, and unavailable states remain distinct. The summary
 performs no reachability check and does not prove that a published contact is
 monitored, suitable, responsive, or responsible.
@@ -713,7 +713,7 @@ Registrar RDAP, when available in a Deep single Lookup, remains a separate
 source and cannot decide registration availability.
 
 A collapsed **Acquisition due diligence** workspace reuses the evidence already
-present in a Deep result. It organizes the authority and confidence behind the
+present in a Deep result. It organises the authority and confidence behind the
 registration decision, published lifecycle dates and EPP statuses, interpreted
 transfer constraints, current web and mail dependencies, and separately
 attributed contact routes. It then maps the observed nameserver, web, mail, and
@@ -994,7 +994,7 @@ SHA-256 digests validate. Screenshots, indexes, page lists, custom files, and
 other package content are ignored rather than merged into a case.
 
 Brand Profile posture results include a local **desired-state review**. It
-organizes the selected standard, defensive-no-mail, or parked profile into
+organises the selected standard, defensive-no-mail, or parked profile into
 registration, mail, transport, and certificate-policy groups while preserving
 each server-returned check status. The external-dependency review keeps
 observed and unavailable dependencies distinct. It never tests provider

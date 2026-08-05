@@ -76,7 +76,7 @@
     </span>
   </summary>
   <div class="body">
-    <p class="intro">Organize existing registration, lifecycle, service, and contact evidence before a manual acquisition decision. No additional lookup or valuation is performed.</p>
+    <p class="intro">Organise existing registration, lifecycle, service, and contact evidence before a manual acquisition decision. No additional lookup or valuation is performed.</p>
     <div class="review-grid">
       {#each review.items as item}
         <article class:attention={item.state === 'review'} class:unavailable={item.state === 'unavailable'}>

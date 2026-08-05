@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
-import { buildCliCasePack, verifyCliCasePack } from '../cli/case-pack.mts';
+import {
+  buildCliCasePack,
+  MAX_CASE_PACK_CASES,
+  verifyCliCasePack,
+} from '../cli/case-pack.mts';
 import { runCli } from '../cli/runner.mts';
 import EXIT_CODES from '../cli/exit-codes.mts';
 import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model.ts';
@@ -56,5 +60,53 @@ describe('CLI case pack', () => {
     const changed = structuredClone(pack);
     changed.cases[0]!.domain = 'changed.invalid';
     assert.throws(() => verifyCliCasePack(changed), /failed its SHA-256/iu);
+  });
+
+  test('refuses a case set that cannot be transferred without omission', () => {
+    const source = exportedCases();
+    source.cases = Array.from({ length: MAX_CASE_PACK_CASES + 1 }, (_, index) => ({
+      ...source.cases[0]!,
+      id: `case-${index}`,
+      domain: `case-${index}.invalid`,
+    }));
+    assert.throws(
+      () => buildCliCasePack(JSON.stringify(source), { audience: 'trusted', reviewed: true }, NOW),
+      /limited to 25 reviewed cases.*no case is silently omitted/iu,
+    );
+  });
+
+  test('refuses malformed records instead of silently dropping them', () => {
+    const original = exportedCases();
+    const source: { version: number; cases: unknown[] } = {
+      version: original.version,
+      cases: [...original.cases],
+    };
+    source.cases = [...source.cases, { id: 'invalid-case' }];
+    assert.throws(
+      () => buildCliCasePack(JSON.stringify(source), { audience: 'trusted', reviewed: true }, NOW),
+      /invalid or duplicate case/iu,
+    );
+  });
+
+  test('keeps generated packages within the browser import byte boundary', () => {
+    const source = exportedCases();
+    source.cases = Array.from({ length: MAX_CASE_PACK_CASES }, (_, caseIndex) => ({
+      ...source.cases[0]!,
+      id: `case-${caseIndex}`,
+      domain: `case-${caseIndex}.invalid`,
+      notes: Array.from({ length: 50 }, (_, noteIndex) => ({
+        id: `note-${caseIndex}-${noteIndex}`,
+        body: 'x'.repeat(2000),
+        createdAt: NOW,
+      })),
+    }));
+    assert.throws(
+      () => buildCliCasePack(JSON.stringify(source), { audience: 'internal', reviewed: true }, NOW),
+      /exceeds the browser 2 MiB import limit.*no evidence is silently omitted/iu,
+    );
+    assert.equal(
+      buildCliCasePack(JSON.stringify(source), { audience: 'trusted', reviewed: true }, NOW).cases.length,
+      MAX_CASE_PACK_CASES,
+    );
   });
 });
