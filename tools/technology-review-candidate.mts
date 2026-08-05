@@ -105,6 +105,7 @@ const RESOURCE_ORIGINS: Readonly<Record<string, string>> = Object.freeze({
 const RESPONSE_HEADERS: Readonly<Record<string, Readonly<{ name: string; value: string }>>> = Object.freeze({
   drupal: Object.freeze({ name: 'x-drupal-cache', value: 'fixture' }),
   shopify: Object.freeze({ name: 'x-shopify-stage', value: 'fixture' }),
+  'craft-cms': Object.freeze({ name: 'x-powered-by', value: 'Craft CMS' }),
   php: Object.freeze({ name: 'x-powered-by', value: 'PHP' }),
   aspnet: Object.freeze({ name: 'x-powered-by', value: 'ASP.NET' }),
   express: Object.freeze({ name: 'x-powered-by', value: 'Express' }),

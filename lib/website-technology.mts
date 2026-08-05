@@ -223,7 +223,14 @@ const TECHNOLOGY_SIGNATURES: TechnologySignature[] = [
   },
   {
     id: 'craft-cms', name: 'Craft CMS', category: 'content management',
-    evidence: [generatorEvidence(/^craft cms(?:\s|$)/i, 'Generator metadata identifies Craft CMS.')],
+    evidence: [
+      generatorEvidence(/^craft cms(?:\s|$)/i, 'Generator metadata identifies Craft CMS.'),
+      responseHeaderEvidence(
+        'x-powered-by',
+        /(?:^|,\s*)craft cms(?:\s|$|\/)/i,
+        'The passive X-Powered-By response header identifies Craft CMS.',
+      ),
+    ],
   },
   {
     id: 'typo3', name: 'TYPO3 CMS', category: 'content management',

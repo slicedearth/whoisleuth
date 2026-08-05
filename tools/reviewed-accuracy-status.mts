@@ -61,8 +61,8 @@ const CORPORA: readonly Readonly<{
       positive: TECHNOLOGY_REVIEWED_FIXTURES.filter((fixture) => fixture.kind !== 'negative').length,
       benign: TECHNOLOGY_REVIEWED_FIXTURES.filter((fixture) => fixture.kind === 'negative').length,
     }),
-    limitation: 'The small licensed reference corpus does not establish coverage on the wider web.',
-    nextStep: 'Add independently reviewed positive and benign licensed reference builds without retaining page content.',
+    limitation: 'The small source- and permission-reviewed reference corpus does not establish coverage on the wider web.',
+    nextStep: 'Add independently reviewed positive and benign reference builds with a documented licence or permission basis, without retaining page content.',
   }),
   Object.freeze({
     key: 'service-deprovision-cues',

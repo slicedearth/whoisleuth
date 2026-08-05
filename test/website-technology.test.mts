@@ -187,6 +187,21 @@ describe('website technology profile', () => {
     assert.doesNotMatch(JSON.stringify(result), /8\\.4|private-build|private-request-value|unused-private-generator|must-not-be-evaluated/);
   });
 
+  test('recognises the default CMS runtime header without retaining its value', () => {
+    const result = analyze({
+      responseHeaders: {
+        'x-powered-by': 'Craft CMS/5.10.13.1',
+      },
+    });
+
+    assert.deepEqual(result.findings.map((item) => item.id), ['craft-cms']);
+    assert.deepEqual(finding(result, 'craft-cms').evidence, [{
+      source: 'passive response header',
+      description: 'The passive X-Powered-By response header identifies Craft CMS.',
+    }]);
+    assert.doesNotMatch(JSON.stringify(result), /5\.10\.13\.1/u);
+  });
+
   test('requires exact allowlisted header value signatures for runtime indicators', () => {
     const result = analyze({
       html: '<main>Fixture</main>',
@@ -195,6 +210,7 @@ describe('website technology profile', () => {
       },
     });
     assert.equal(result.findings.find((item) => item.id === 'php'), undefined);
+    assert.equal(result.findings.find((item) => item.id === 'craft-cms'), undefined);
   });
 
   test('recognizes an expanded set of generator-declared platforms', () => {

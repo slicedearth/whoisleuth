@@ -168,6 +168,36 @@ describe('reviewed technology reference-build intake', () => {
     assert.deepEqual(result.fixture.expectedIds, ['opencart']);
   });
 
+  test('records a locally permitted reference build without treating its runtime as open source', () => {
+    const result = buildTechnologyExampleReview(
+      '<main>Default welcome page</main>',
+      {
+        ...positiveOptions,
+        id: 'official-cms-local-reference-20260805',
+        expectedIds: ['craft-cms', 'nginx'],
+        negativeFor: ['drupal', 'wordpress'],
+        licenceBasis: 'minimized-with-permission',
+        sourceReference: 'git:craftcms/cms',
+        sourceRevision: 'd3fe86760eb6a6c2c2ba82495dcebb69d108b261',
+        sourceIntegrity: null,
+        sourceLicence: 'proprietary',
+        runtimeReference: 'craft-cms@5.10.13.1',
+        buildRecipe: 'official-repository-build',
+        buildEnvironment: 'oci:docker.io/craftcms/nginx:8.2@sha256:bead949d91c821518a084f3db193bb77cfca4f7436488908d7643305f178c317',
+        supportingEnvironments: [
+          'oci:docker.io/library/composer:2@sha256:4d71c3c2109c61d5415544264b59ad4087e4c5b7244481723664138fd36d5040',
+          'oci:docker.io/library/mariadb:11.8@sha256:d9f7eb2637296652f24b484afd5d246f759f49f5babcadc6a9e344c9acb75fbf',
+        ],
+        httpServer: 'nginx',
+        responseHeaders: { 'x-powered-by': 'Craft CMS' },
+      },
+    );
+
+    assert.equal(result.fixture.licenseBasis, 'minimized-with-permission');
+    assert.equal(result.provenance.sourceLicence, 'proprietary');
+    assert.deepEqual(result.fixture.expectedIds, ['craft-cms', 'nginx']);
+  });
+
   test('records a reviewed official demonstration without inventing build or runtime provenance', () => {
     const result = buildTechnologyExampleReview(
       '<meta name="generator" content="TYPO3 CMS"><main>Excluded demonstration copy</main>',

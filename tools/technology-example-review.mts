@@ -77,6 +77,7 @@ const MAX_SUPPORTING_ENVIRONMENTS = 4;
 const PASSIVE_HEADERS = new Set<string>(PASSIVE_TECHNOLOGY_HEADER_NAMES);
 const CONTROL_RE = /[\u0000-\u001f\u007f]/u;
 const REFERENCE_LICENCE_BASES = new Set<TechnologyReviewLicenceBasis>([
+  'minimized-with-permission',
   'permissively-licensed-source',
   'copyleft-licensed-source',
   'official-demonstration-terms',
@@ -214,7 +215,7 @@ function validateOptions(options: ExampleReviewOptions) {
     throw new TypeError('A technology id cannot be both expected and forbidden.');
   }
   if (!REFERENCE_LICENCE_BASES.has(options.licenceBasis)) {
-    throw new TypeError('Reference builds require a reviewed source or demonstration licence basis.');
+    throw new TypeError('Reference builds require explicit permission, a reviewed source licence, or approved demonstration terms.');
   }
   const source = sourceIdentity(options);
   const sourceLicence = boundedText(options.sourceLicence, 'Source licence', 80);
@@ -226,7 +227,7 @@ function validateOptions(options: ExampleReviewOptions) {
     if (options.licenceBasis === 'official-demonstration-terms') {
       throw new TypeError('Official demonstration terms apply only to an official demonstration source.');
     }
-    if (!SPDX_RE.test(sourceLicence)) throw new TypeError('Source licence must be a bounded SPDX-style expression.');
+    if (!SPDX_RE.test(sourceLicence)) throw new TypeError('Source licence must be a bounded licence identifier or expression.');
   }
   const runtimeReference = options.runtimeReference === null
     ? null

@@ -333,7 +333,7 @@ writes nothing, and reports fixture identifiers and match states without paths,
 page content, or response values. A mismatch is a review prompt: it never
 rewrites an accepted fixture or treats a changed upstream build as equivalent.
 
-Licence bases distinguish ordinary factual review, direct permission,
+Licence bases distinguish ordinary factual review, explicit local permission,
 public-domain material, permissively or copyleft-licensed local reference
 deployments, and official demonstrations whose applicable terms have been
 reviewed. An accessible public URL is not, by itself, sufficient permission for
@@ -347,12 +347,12 @@ a fixed safe subset of recognised static markers, passive response headers, and
 approved shared vendor origins, rejects target-bearing or contact material, and
 verifies the expected catalogue result. The checked-in reviewed corpus contains
 only minimised, target-free observations that have passed the contribution
-review. Licensed reference builds retain separate immutable source and artefact
+review. Source- and permission-reviewed reference builds retain separate immutable source and artefact
 digest records, while a benign named-technology example acts as a false-positive
-control. Current licensed examples cover official local starter or default
+control. Current local examples cover official starter or default
 builds for Docusaurus, Ghost, Next.js, Astro, Nuxt, Gatsby, Hugo, Jekyll,
 WordPress, WooCommerce, Drupal, Joomla, nginx, Apache HTTP Server, Caddy, PHP,
-Angular, Express, Hexo, OpenLiteSpeed, PrestaShop, and OpenCart, plus an
+Angular, Express, Hexo, OpenLiteSpeed, PrestaShop, OpenCart, and Craft CMS, plus an
 Eleventy benign control. A separately reviewed official TYPO3 demonstration
 contributes only its generator and selected-server facts; its page, URL, and
 content are not retained. The deployment-owned observation likewise retains

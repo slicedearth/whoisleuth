@@ -76,6 +76,7 @@ describe('reviewed technology-fixture contribution tool', () => {
 
   test('accepts the reviewed source classes used by local and official examples', () => {
     for (const licenseBasis of [
+      'minimized-with-permission',
       'permissively-licensed-source',
       'copyleft-licensed-source',
       'official-demonstration-terms',
@@ -115,6 +116,25 @@ describe('reviewed technology-fixture contribution tool', () => {
       input: {
         generator: 'TYPO3 CMS',
         httpServer: 'Apache',
+      },
+    }));
+    const checkedIn = TECHNOLOGY_REVIEWED_FIXTURES.find((item) => item.id === fixture.id);
+
+    assert.deepEqual(fixture, checkedIn);
+    assert.doesNotMatch(JSON.stringify(fixture), /https?:\/\//u);
+  });
+
+  test('reproduces a locally permitted reference build from minimised response facts', () => {
+    const fixture = buildReviewedTechnologyFixture(input({
+      id: 'official-craft-cms-reference-20260805',
+      reviewedAt: '2026-08-05T04:25:00.000Z',
+      observedAt: '2026-08-05T04:21:30.000Z',
+      licenseBasis: 'minimized-with-permission',
+      expectedIds: ['craft-cms', 'nginx'],
+      negativeFor: ['drupal', 'wordpress'],
+      input: {
+        httpServer: 'nginx',
+        responseHeaders: { 'x-powered-by': 'Craft CMS' },
       },
     }));
     const checkedIn = TECHNOLOGY_REVIEWED_FIXTURES.find((item) => item.id === fixture.id);

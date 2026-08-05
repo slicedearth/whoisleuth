@@ -21,6 +21,7 @@ import {
 const FIXTURE_ID_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
 const LICENCE_BASES = new Set<string>(TECHNOLOGY_REVIEW_LICENCE_BASES);
 const PROVENANCE_LICENCE_BASES = new Set([
+  'minimized-with-permission',
   'permissively-licensed-source',
   'copyleft-licensed-source',
   'official-demonstration-terms',
@@ -73,7 +74,7 @@ describe('contributor-reviewed technology fixture corpus', () => {
     }
   });
 
-  test('binds every licensed reference fixture to bounded target-free build provenance', () => {
+  test('binds every reviewed reference fixture to bounded target-free build provenance', () => {
     const fixturesById = new Map(TECHNOLOGY_REVIEWED_FIXTURES.map((fixture) => [fixture.id, fixture]));
     const sourceIds = new Set<string>();
     for (const source of TECHNOLOGY_REVIEWED_SOURCES) {

@@ -121,7 +121,12 @@ const PASSIVE_HEADER_RECONSTRUCTIONS: Readonly<Record<string, Readonly<Record<st
   'x-nf-request-id': Object.freeze({ netlify: 'fixture' }),
   'x-drupal-cache': Object.freeze({ drupal: 'fixture' }),
   'x-fastly-request-id': Object.freeze({ fastly: 'fixture' }),
-  'x-powered-by': Object.freeze({ php: 'PHP', aspnet: 'ASP.NET', express: 'Express' }),
+  'x-powered-by': Object.freeze({
+    'craft-cms': 'Craft CMS',
+    php: 'PHP',
+    aspnet: 'ASP.NET',
+    express: 'Express',
+  }),
   'x-shopify-stage': Object.freeze({ shopify: 'fixture' }),
   'x-sorting-hat-podid': Object.freeze({ shopify: 'fixture' }),
   'x-vercel-id': Object.freeze({ vercel: 'fixture' }),
