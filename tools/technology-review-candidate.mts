@@ -14,6 +14,9 @@ import {
   type SavedLookupDocument,
 } from '../cli/saved-lookup.mts';
 import {
+  TECHNOLOGY_REVIEW_INPUT_SCHEMA,
+  TECHNOLOGY_REVIEW_INPUT_VERSION,
+  MAX_TECHNOLOGY_REVIEW_IDS,
   TECHNOLOGY_REVIEW_LICENCE_BASES,
   type TechnologyReviewLicenceBasis,
 } from '../fixtures/technology-reviewed-fixtures.mts';
@@ -34,6 +37,11 @@ type CandidateOptions = Readonly<{
 }>;
 type CandidateArguments = CandidateOptions & Readonly<{ inputPath: string }>;
 type TechnologyEvidenceSource = TechnologyEvidence['source'];
+type ReconstructedTechnologyReviewProfile = Readonly<{
+  observedAt: string;
+  expectedIds: readonly string[];
+  input: TechnologyInput;
+}>;
 
 const ID_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
 const CONTROL_RE = /[\u0000-\u001f\u007f]/u;
@@ -61,6 +69,8 @@ const STATIC_MARKUP: Readonly<Record<string, string>> = Object.freeze({
   'adobe-commerce-magento': '<main data-mage-init="{}"></main>',
   bigcommerce: '<link href="https://cdn11.bigcommerce.com/s-fixture/theme.css">',
   woocommerce: '<link href="/wp-content/plugins/woocommerce/fixture.css">',
+  prestashop: '<link href="/modules/ps_fixture/fixture.css">',
+  opencart: '<a href="index.php?route=common/home"></a>',
   wix: '<main data-mesh-id="fixture"></main>',
   squarespace: '<main data-marker="squarespace-context"></main>',
   webflow: '<main data-wf-page="fixture"></main>',
@@ -99,6 +109,7 @@ const RESPONSE_HEADERS: Readonly<Record<string, Readonly<{ name: string; value: 
   aspnet: Object.freeze({ name: 'x-powered-by', value: 'ASP.NET' }),
   express: Object.freeze({ name: 'x-powered-by', value: 'Express' }),
   cloudflare: Object.freeze({ name: 'cf-ray', value: 'fixture' }),
+  netlify: Object.freeze({ name: 'x-nf-request-id', value: 'fixture' }),
   vercel: Object.freeze({ name: 'x-vercel-id', value: 'fixture' }),
   fastly: Object.freeze({ name: 'x-fastly-request-id', value: 'fixture' }),
 });
@@ -176,17 +187,18 @@ function addEvidence(
   input.responseHeaders = headers;
 }
 
-export function buildTechnologyReviewCandidate(
-  document: SavedLookupDocument,
-  options: CandidateOptions,
-): UnknownRecord {
-  if (document.mode !== 'deep') throw new TypeError('Technology review candidates require a saved Deep lookup.');
-  const availability = record(document.availability);
-  const profile = record(availability?.technologyProfile);
+export function reconstructTechnologyReviewProfile(
+  rawProfile: unknown,
+  confirmedIds: readonly string[],
+): ReconstructedTechnologyReviewProfile {
+  const profile = record(rawProfile);
   if (!profile || profile.status !== 'success' || profile.complete !== true || profile.truncated === true) {
     throw new TypeError('Technology review candidates require complete, successful technology evidence.');
   }
   const observedAt = timestamp(profile.observedAt, 'Technology observation time');
+  if (confirmedIds.length > MAX_TECHNOLOGY_REVIEW_IDS) {
+    throw new TypeError(`Expected technology ids must contain at most ${MAX_TECHNOLOGY_REVIEW_IDS} entries.`);
+  }
   const rawFindings = Array.isArray(profile.findings) ? profile.findings : [];
   if (!rawFindings.length || rawFindings.length > MAX_FINDINGS) {
     throw new TypeError(`Technology review candidates require between 1 and ${MAX_FINDINGS} findings.`);
@@ -214,14 +226,11 @@ export function buildTechnologyReviewCandidate(
       addEvidence(reconstructed, id, source, description);
     }
   }
-  const expectedIds = [...new Set(options.expectedIds.map((id) => boundedText(id, 'Expected technology id', 64).toLowerCase()))].sort();
+  const expectedIds = [...new Set(confirmedIds.map((id) => boundedText(id, 'Expected technology id', 64).toLowerCase()))].sort();
   observedIds.sort();
   if (JSON.stringify(expectedIds) !== JSON.stringify(observedIds)) {
     throw new TypeError(`Confirmed technology ids [${expectedIds.join(', ')}] do not match the saved findings [${observedIds.join(', ')}].`);
   }
-  const id = boundedText(options.id, 'Fixture id', 80).toLowerCase();
-  if (!ID_RE.test(id)) throw new TypeError('Fixture id must be a lowercase hyphenated identifier.');
-  if (!LICENCE_BASES.has(options.licenceBasis)) throw new TypeError('Licence basis is not supported.');
   const input: TechnologyInput = Object.freeze({
     ...(typeof reconstructed.generator === 'string' ? { generator: reconstructed.generator } : {}),
     ...(typeof reconstructed.httpServer === 'string' ? { httpServer: reconstructed.httpServer } : {}),
@@ -234,14 +243,35 @@ export function buildTechnologyReviewCandidate(
     throw new TypeError(`Target-free reconstruction produced [${rebuiltIds.join(', ')}] instead of [${expectedIds.join(', ')}].`);
   }
   return Object.freeze({
-    schema: 'whoisleuth.technology-fixture-review-input',
-    version: 1,
-    id,
-    reviewedAt: timestamp(options.reviewedAt, 'Reviewed time'),
     observedAt,
-    licenseBasis: options.licenceBasis,
     expectedIds: Object.freeze(expectedIds),
     input,
+  });
+}
+
+export function buildTechnologyReviewCandidate(
+  document: SavedLookupDocument,
+  options: CandidateOptions,
+): UnknownRecord {
+  if (document.mode !== 'deep') throw new TypeError('Technology review candidates require a saved Deep lookup.');
+  const availability = record(document.availability);
+  const reconstructed = reconstructTechnologyReviewProfile(
+    availability?.technologyProfile,
+    options.expectedIds,
+  );
+  const id = boundedText(options.id, 'Fixture id', 80).toLowerCase();
+  if (!ID_RE.test(id)) throw new TypeError('Fixture id must be a lowercase hyphenated identifier.');
+  if (!LICENCE_BASES.has(options.licenceBasis)) throw new TypeError('Licence basis is not supported.');
+  return Object.freeze({
+    schema: TECHNOLOGY_REVIEW_INPUT_SCHEMA,
+    version: TECHNOLOGY_REVIEW_INPUT_VERSION,
+    id,
+    reviewedAt: timestamp(options.reviewedAt, 'Reviewed time'),
+    observedAt: reconstructed.observedAt,
+    licenseBasis: options.licenceBasis,
+    expectedIds: reconstructed.expectedIds,
+    negativeFor: Object.freeze([]),
+    input: reconstructed.input,
   });
 }
 
@@ -296,4 +326,4 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   process.exitCode = await main();
 }
 
-export type { CandidateArguments, CandidateOptions };
+export type { CandidateArguments, CandidateOptions, ReconstructedTechnologyReviewProfile };

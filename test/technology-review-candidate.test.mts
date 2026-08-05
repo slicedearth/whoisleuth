@@ -58,12 +58,13 @@ describe('technology review candidate intake', () => {
     const candidate = buildTechnologyReviewCandidate(savedLookup(), options);
     assert.deepEqual(candidate, {
       schema: 'whoisleuth.technology-fixture-review-input',
-      version: 1,
+      version: 2,
       id: 'reviewed-sveltekit-deployment',
       reviewedAt: '2026-08-05T11:00:00.000Z',
       observedAt: '2026-08-05T09:00:00.000Z',
       licenseBasis: 'minimized-with-permission',
       expectedIds: ['sveltekit'],
+      negativeFor: [],
       input: { html: '<link href="/_app/immutable/fixture.css">' },
     });
     assert.doesNotMatch(JSON.stringify(candidate), /private-target|query|registrableDomain/u);

@@ -53,6 +53,8 @@
     "technology:signature-scaffold": "node tools/technology-signature-scaffold.mts",
     "technology:review-candidate": "node tools/technology-review-candidate.mts",
     "technology:fixture-review": "node tools/technology-fixture-review.mts",
+    "technology:example-review": "node tools/technology-example-review.mts",
+    "technology:source-verify": "node tools/technology-source-verify.mts",
     "accuracy:status": "node tools/reviewed-accuracy-status.mts",
     "accuracy:review-scaffold": "node tools/reviewed-accuracy-scaffold.mts",
     "service-dependencies:audit": "node tools/service-dependency-signature-audit.mts",

@@ -83,13 +83,60 @@ describe('website technology profile', () => {
 
   test('does not infer commerce platforms from ordinary page text or unrelated origins', () => {
     const result = analyze({
-      html: '<main>Migration notes mention Magento, BigCommerce, and WooCommerce.</main>',
+      html: '<main>Migration notes mention Magento, BigCommerce, OpenCart, PrestaShop, and WooCommerce.</main>',
       resourceOrigins: ['https://developer.bigcommerce.com'],
     });
 
     assert.equal(result.findings.find((item) => item.id === 'adobe-commerce-magento'), undefined);
     assert.equal(result.findings.find((item) => item.id === 'bigcommerce'), undefined);
+    assert.equal(result.findings.find((item) => item.id === 'opencart'), undefined);
+    assert.equal(result.findings.find((item) => item.id === 'prestashop'), undefined);
     assert.equal(result.findings.find((item) => item.id === 'woocommerce'), undefined);
+  });
+
+  test('recognises a PrestaShop installation from its default module asset convention', () => {
+    const result = analyze({
+      html: '<link rel="stylesheet" href="/modules/ps_feature/fixture.css">',
+    });
+
+    const item = finding(result, 'prestashop');
+    assert.equal(item.confidence, 'high');
+    assert.deepEqual(item.evidence, [{
+      source: 'static HTML',
+      description: 'Static resource paths use PrestaShop module conventions.',
+    }]);
+    assert.doesNotMatch(JSON.stringify(result), /ps_feature|fixture\.css/u);
+  });
+
+  test('recognises OpenCart routing and default asset conventions without page copy', () => {
+    const result = analyze({
+      html: '<a href="index.php?route=common/home"><img src="image/catalog/opencart-logo.png" alt="Store"></a>',
+    });
+
+    const item = finding(result, 'opencart');
+    assert.equal(item.confidence, 'high');
+    assert.deepEqual(item.evidence, [{
+      source: 'static HTML',
+      description: 'Static markup contains OpenCart routing or default asset conventions.',
+    }]);
+    assert.doesNotMatch(JSON.stringify(result), /common\/home|opencart-logo|Store/u);
+  });
+
+  test('recognises a Netlify request identifier behind another selected server', () => {
+    const result = analyze({
+      httpServer: 'cloudflare',
+      responseHeaders: {
+        'x-nf-request-id': 'bounded-request-marker',
+      },
+    });
+
+    const item = finding(result, 'netlify');
+    assert.equal(item.confidence, 'medium');
+    assert.deepEqual(item.evidence, [{
+      source: 'passive response header',
+      description: 'A Netlify request identifier response header was observed.',
+    }]);
+    assert.doesNotMatch(JSON.stringify(result), /bounded-request-marker/u);
   });
 
   test('does not identify a site-builder platform from an embedded resource origin alone', () => {

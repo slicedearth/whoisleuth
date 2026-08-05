@@ -50,9 +50,15 @@ describe('technology signature benchmark', () => {
     assert.equal(report.summary.ready, true);
     assert.equal(report.summary.reviewedFixtures, TECHNOLOGY_REVIEWED_FIXTURES.length);
     assert.equal(report.summary.failedReviewedFixtures, 0);
-    assert.equal(report.summary.reviewedSignatureCoverage, 1);
-    assert.equal(report.summary.reviewedRepeatCoverage, 0);
-    assert.equal(report.summary.reviewedEvidenceRuleCoverage, 1);
+    assert.equal(report.summary.reviewedSignatureCoverage, 26);
+    assert.equal(report.summary.reviewedRepeatCoverage, 3);
+    assert.equal(report.summary.reviewedEvidenceRuleCoverage, 30);
+    assert.equal(report.summary.reviewedNegativeFixtures, 1);
+    assert.equal(report.summary.passedReviewedNegativeFixtures, 1);
+    assert.equal(report.summary.reviewedMixedFixtures, 16);
+    assert.equal(report.summary.passedReviewedMixedFixtures, 16);
+    assert.equal(report.summary.reviewedDeliberateNonmatches, 42);
+    assert.equal(report.summary.reviewedFalsePositiveMatches, 0);
     assert.equal(report.metrics.positiveCoverage, report.summary.signatures);
     assert.equal(report.metrics.negativeCoverage, report.summary.signatures);
     assert.equal(report.metrics.missedMatches, 0);
@@ -64,8 +70,8 @@ describe('technology signature benchmark', () => {
     assert.ok(report.bounds.reviewedFixtureLimit > 0);
     assert.equal(report.reviewedFixtures.length, TECHNOLOGY_REVIEWED_FIXTURES.length);
     assert.equal(report.reviewedProgramme.staleFixtureIds.length, 0);
-    assert.equal(report.reviewedProgramme.unsampledSignatureIds.length, report.summary.signatures - 1);
-    assert.equal(report.reviewedProgramme.underRepeatedSignatureIds.length, report.summary.signatures);
+    assert.equal(report.reviewedProgramme.unsampledSignatureIds.length, report.summary.signatures - 26);
+    assert.equal(report.reviewedProgramme.underRepeatedSignatureIds.length, report.summary.signatures - 3);
     assert.equal(report.reviewedProgramme.maturity, 'initial');
     assert.deepEqual(report.reviewedProgramme.tiers, {
       initial: true,
@@ -74,13 +80,16 @@ describe('technology signature benchmark', () => {
       evidenceCovered: false,
       current: false,
     });
-    assert.equal(report.reviewedProgramme.sampledEvidenceRules, 1);
+    assert.equal(report.reviewedProgramme.sampledEvidenceRules, 30);
     assert.ok(report.reviewedProgramme.totalEvidenceRules > report.reviewedProgramme.sampledEvidenceRules);
     const reviewedSvelteKit = report.reviewedProgramme.bySignature.sveltekit;
     assert.ok(reviewedSvelteKit);
     assert.equal(reviewedSvelteKit.observations, 1);
     assert.equal(reviewedSvelteKit.sampledEvidenceRules, 1);
     assert.equal(report.reviewedProgramme.licenseBases['factual-observation'], 1);
+    assert.equal(report.reviewedProgramme.licenseBases['permissively-licensed-source'], 16);
+    assert.equal(report.reviewedProgramme.licenseBases['copyleft-licensed-source'], 7);
+    assert.equal(report.reviewedProgramme.licenseBases['official-demonstration-terms'], 1);
     assert.equal(
       Object.values(report.reviewedProgramme.byCategory).reduce((sum, category) => sum + category.signatures, 0),
       report.summary.signatures,
@@ -143,9 +152,11 @@ describe('technology signature benchmark', () => {
     const output = formatTechnologySignatureBenchmark(report);
     assert.match(output, /technology-signature benchmark/i);
     assert.match(output, /fixtures passed/);
-    assert.match(output, /1\/\d+ signatures sampled/);
+    assert.match(output, /26\/\d+ signatures sampled/);
+    assert.match(output, /Reviewed negative controls: 1\/1 passed/);
+    assert.match(output, /Reviewed mixed controls: 16\/16 passed; 0\/42 false positives/);
     assert.match(output, /Reviewed corpus maturity: initial/);
-    assert.match(output, /Repeat sampling: 0\/\d+ signatures; evidence rules: 1\/\d+/);
+    assert.match(output, /Repeat sampling: 3\/\d+ signatures; evidence rules: 30\/\d+/);
     assert.match(output, /network requests: 0/);
     assert.deepEqual(parseArguments([]), { json: false, requireReviewed: false });
     assert.deepEqual(parseArguments(['--json']), { json: true, requireReviewed: false });

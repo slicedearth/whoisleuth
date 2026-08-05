@@ -51,7 +51,7 @@ type FixtureResult = Readonly<{
 }>;
 
 export const TECHNOLOGY_SIGNATURE_BENCHMARK_SCHEMA = 'whoisleuth.technology-signature-benchmark';
-export const TECHNOLOGY_SIGNATURE_BENCHMARK_VERSION = 2;
+export const TECHNOLOGY_SIGNATURE_BENCHMARK_VERSION = 3;
 export const MAX_TECHNOLOGY_BENCHMARK_SIGNATURES = 64;
 export const MAX_TECHNOLOGY_BENCHMARK_FIXTURES = 96;
 export const MAX_TECHNOLOGY_REVIEWED_BENCHMARK_FIXTURES = 96;
@@ -80,7 +80,7 @@ const EVIDENCE_SOURCES = new Set([
   'HTTP server header',
   'passive response header',
 ]);
-const FIXTURE_KINDS = new Set(['positive', 'negative', 'overlap', 'truncation']);
+const FIXTURE_KINDS = new Set(['positive', 'negative', 'overlap', 'mixed', 'truncation']);
 
 function record(value: unknown): UnknownRecord {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as UnknownRecord : {};
@@ -258,9 +258,9 @@ export function buildTechnologySignatureBenchmark(options: BenchmarkOptions = {}
       .map((fixture) => evaluateFixture({
         id: fixture.id,
         label: fixture.label,
-        kind: 'reviewed',
+        kind: fixture.kind,
         expectedIds: fixture.expectedIds,
-        negativeFor: [],
+        negativeFor: fixture.negativeFor,
         expectedStatus: 'success',
         input: fixture.input,
       })),
@@ -283,7 +283,6 @@ export function buildTechnologySignatureBenchmark(options: BenchmarkOptions = {}
       .flatMap((fixture) => fixture.expectedIds)
       .filter((id) => signatureIds.has(id)).length;
     const falsePositiveMatches = fixtures
-      .filter((fixture) => fixture.kind === 'negative')
       .flatMap((fixture) => [...new Set([...fixture.unexpectedIds, ...fixture.forbiddenObservedIds])])
       .filter((id) => signatureIds.has(id)).length;
     return [category, Object.freeze({
@@ -312,7 +311,6 @@ export function buildTechnologySignatureBenchmark(options: BenchmarkOptions = {}
     0,
   );
   const falsePositiveMatches = fixtures
-    .filter((fixture) => fixture.kind === 'negative')
     .reduce((sum, fixture) => sum + new Set([
       ...fixture.unexpectedIds,
       ...fixture.forbiddenObservedIds,
@@ -325,12 +323,13 @@ export function buildTechnologySignatureBenchmark(options: BenchmarkOptions = {}
   const passingReviewedFixtures = TECHNOLOGY_REVIEWED_FIXTURES.filter((fixture) => (
     passingReviewedFixtureIds.has(fixture.id)
   ));
-  const reviewedSignatureIds = new Set(passingReviewedFixtures.flatMap((fixture) => fixture.expectedIds));
+  const passingReviewedPositiveFixtures = passingReviewedFixtures.filter((fixture) => fixture.kind !== 'negative');
+  const reviewedSignatureIds = new Set(passingReviewedPositiveFixtures.flatMap((fixture) => fixture.expectedIds));
   const reviewedSignatureCoverage = TECHNOLOGY_SIGNATURE_CATALOGUE
     .filter((signature) => reviewedSignatureIds.has(signature.id))
     .length;
   const reviewedEvidenceRuleIds = new Set<string>();
-  for (const fixture of passingReviewedFixtures) {
+  for (const fixture of passingReviewedPositiveFixtures) {
     for (const finding of analyzeWebsiteTechnology(fixture.input).findings) {
       const signature = catalogueById.get(finding.id);
       if (!signature) continue;
@@ -362,7 +361,7 @@ export function buildTechnologySignatureBenchmark(options: BenchmarkOptions = {}
     .sort();
   const reviewedBySignature = Object.freeze(Object.fromEntries(
     TECHNOLOGY_SIGNATURE_CATALOGUE.map((signature) => {
-      const observations = passingReviewedFixtures.filter((fixture) => fixture.expectedIds.includes(signature.id)).length;
+      const observations = passingReviewedPositiveFixtures.filter((fixture) => fixture.expectedIds.includes(signature.id)).length;
       const sampledEvidenceRules = signature.evidence.filter((_evidence, index) => (
         reviewedEvidenceRuleIds.has(`${signature.id}:${index + 1}`)
       )).length;
@@ -402,7 +401,7 @@ export function buildTechnologySignatureBenchmark(options: BenchmarkOptions = {}
     })];
   })));
   const reviewedTiers = Object.freeze({
-    initial: passingReviewedFixtures.length > 0 && failedReviewedFixtures === 0,
+    initial: passingReviewedPositiveFixtures.length > 0 && failedReviewedFixtures === 0,
     catalogueSampled: reviewedSignatureCoverage === TECHNOLOGY_SIGNATURE_CATALOGUE.length
       && failedReviewedFixtures === 0,
     repeatSampled: reviewedSignatureCoverage === TECHNOLOGY_SIGNATURE_CATALOGUE.length
@@ -424,6 +423,14 @@ export function buildTechnologySignatureBenchmark(options: BenchmarkOptions = {}
         : reviewedTiers.catalogueSampled ? 'catalogue-sampled'
           : reviewedTiers.initial ? 'initial'
             : 'empty';
+  const reviewedDeliberateNonmatches = TECHNOLOGY_REVIEWED_FIXTURES.reduce(
+    (sum, fixture) => sum + fixture.negativeFor.length,
+    0,
+  );
+  const reviewedFalsePositiveMatches = reviewedFixtures.reduce((sum, fixture) => sum + new Set([
+    ...fixture.unexpectedIds,
+    ...fixture.forbiddenObservedIds,
+  ]).size, 0);
   const unknownObservedIds = fixtures
     .flatMap((fixture) => fixture.observedIds)
     .filter((id) => !catalogueById.has(id));
@@ -448,6 +455,16 @@ export function buildTechnologySignatureBenchmark(options: BenchmarkOptions = {}
       reviewedFixtures: reviewedFixtures.length,
       passedReviewedFixtures: reviewedFixtures.length - failedReviewedFixtures,
       failedReviewedFixtures,
+      reviewedNegativeFixtures: reviewedFixtures.filter((fixture) => fixture.kind === 'negative').length,
+      passedReviewedNegativeFixtures: reviewedFixtures.filter((fixture) => (
+        fixture.kind === 'negative' && fixture.status === 'pass'
+      )).length,
+      reviewedMixedFixtures: reviewedFixtures.filter((fixture) => fixture.kind === 'mixed').length,
+      passedReviewedMixedFixtures: reviewedFixtures.filter((fixture) => (
+        fixture.kind === 'mixed' && fixture.status === 'pass'
+      )).length,
+      reviewedDeliberateNonmatches,
+      reviewedFalsePositiveMatches,
       reviewedSignatureCoverage,
       reviewedRepeatCoverage,
       reviewedEvidenceRuleCoverage: reviewedEvidenceRuleIds.size,
@@ -534,6 +551,8 @@ export function formatTechnologySignatureBenchmark(
     'WHOISleuth technology-signature benchmark',
     `Summary: ${report.summary.passedFixtures}/${report.summary.fixtures} fixtures passed; ${report.summary.lintErrors} catalogue lint errors`,
     `Reviewed observations: ${report.summary.passedReviewedFixtures}/${report.summary.reviewedFixtures} passed; ${report.summary.reviewedSignatureCoverage}/${report.summary.signatures} signatures sampled`,
+    `Reviewed negative controls: ${report.summary.passedReviewedNegativeFixtures}/${report.summary.reviewedNegativeFixtures} passed`,
+    `Reviewed mixed controls: ${report.summary.passedReviewedMixedFixtures}/${report.summary.reviewedMixedFixtures} passed; ${report.summary.reviewedFalsePositiveMatches}/${report.summary.reviewedDeliberateNonmatches} false positives`,
     `Reviewed corpus maturity: ${report.reviewedProgramme.maturity}`,
     `Repeat sampling: ${report.summary.reviewedRepeatCoverage}/${report.summary.signatures} signatures; evidence rules: ${report.reviewedProgramme.sampledEvidenceRules}/${report.reviewedProgramme.totalEvidenceRules}`,
     `Reviewed freshness: ${report.reviewedProgramme.staleFixtureIds.length} stale; ${report.reviewedProgramme.unsampledSignatureIds.length} unsampled signatures`,

@@ -104,15 +104,17 @@ function normalizedResourceHosts(value: unknown): Set<string> {
   return hosts;
 }
 
-const PASSIVE_HEADER_NAMES = new Set([
+const PASSIVE_TECHNOLOGY_HEADER_NAMES = Object.freeze([
   'cf-ray',
   'x-drupal-cache',
   'x-fastly-request-id',
+  'x-nf-request-id',
   'x-powered-by',
   'x-shopify-stage',
   'x-sorting-hat-podid',
   'x-vercel-id',
-]);
+] as const);
+const PASSIVE_HEADER_NAMES = new Set<string>(PASSIVE_TECHNOLOGY_HEADER_NAMES);
 
 function normalizedResponseHeaders(value: unknown): ReadonlyMap<string, string> {
   const input = value && typeof value === 'object' && !Array.isArray(value)
@@ -271,11 +273,20 @@ const TECHNOLOGY_SIGNATURES: TechnologySignature[] = [
   },
   {
     id: 'opencart', name: 'OpenCart', category: 'commerce',
-    evidence: [generatorEvidence(/^opencart(?:\s|$)/i, 'Generator metadata identifies OpenCart.')],
+    evidence: [
+      generatorEvidence(/^opencart(?:\s|$)/i, 'Generator metadata identifies OpenCart.'),
+      htmlEvidence(
+        ['index.php?route=common/home', 'image/catalog/opencart-logo.png'],
+        'Static markup contains OpenCart routing or default asset conventions.',
+      ),
+    ],
   },
   {
     id: 'prestashop', name: 'PrestaShop', category: 'commerce',
-    evidence: [generatorEvidence(/^prestashop(?:\s|$)/i, 'Generator metadata identifies PrestaShop.')],
+    evidence: [
+      generatorEvidence(/^prestashop(?:\s|$)/i, 'Generator metadata identifies PrestaShop.'),
+      htmlEvidence(['/modules/ps_'], 'Static resource paths use PrestaShop module conventions.'),
+    ],
   },
   {
     id: 'wix', name: 'Wix', category: 'site builder',
@@ -389,7 +400,10 @@ const TECHNOLOGY_SIGNATURES: TechnologySignature[] = [
   },
   {
     id: 'netlify', name: 'Netlify', category: 'delivery platform',
-    evidence: [serverEvidence(/^netlify(?:\s|$|\/)/i, 'The selected response server header identifies Netlify.')],
+    evidence: [
+      serverEvidence(/^netlify(?:\s|$|\/)/i, 'The selected response server header identifies Netlify.'),
+      responseHeaderEvidence('x-nf-request-id', null, 'A Netlify request identifier response header was observed.', 'medium'),
+    ],
   },
   {
     id: 'vercel', name: 'Vercel', category: 'delivery platform',
@@ -515,6 +529,7 @@ export {
   MAX_TECHNOLOGY_FINDINGS,
   MAX_TECHNOLOGY_HTML_CHARS,
   MAX_TECHNOLOGY_TAGS,
+  PASSIVE_TECHNOLOGY_HEADER_NAMES,
   TECHNOLOGY_PROFILE_VERSION,
   TECHNOLOGY_SIGNATURE_CATALOGUE,
   analyzeWebsiteTechnology,
