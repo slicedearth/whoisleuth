@@ -586,12 +586,13 @@ test('external findings require a validated preview before creating local eviden
   await page.locator('.case-head', { hasText: 'external-review.invalid' }).click();
   await expect(page.locator('.response-workspace')).toContainText('External page finding');
   await expect(page.locator('.response-workspace')).toContainText('Provider report: Local analyst export');
+  await expect(page.locator('.response-workspace')).toContainText('reported by provider · website');
   await expect(page.locator('.response-workspace')).toContainText('WHOISleuth did not collect or independently verify this provider finding');
 
   await externalImport.locator('input[type="file"]').setInputFiles(file);
   await externalImport.getByRole('button', { name: 'Import into cases' }).click();
   await expect(page.getByRole('status')).toContainText('skipped 1 duplicate');
-  await expect(page.locator('.response-workspace')).toContainText('1 pin · 0 sightings · 0 decisions');
+  await expect(page.locator('.response-workspace')).toContainText('1 pin · 1 sighting · 0 decisions');
 });
 
 test('portable WARC evidence is normalized locally before deliberate case import', async ({ page }) => {
