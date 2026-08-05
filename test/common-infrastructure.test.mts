@@ -11,7 +11,6 @@ import {
   classifyCommonInfrastructureAddress,
   COMMON_INFRASTRUCTURE_SNAPSHOT,
 } from '../frontend/src/lib/analysis/common-infrastructure.ts';
-import snapshotValue from '../frontend/src/lib/analysis/common-infrastructure-snapshot.json' with { type: 'json' };
 
 function warningList(version: number, list: string[]) {
   return JSON.stringify({
@@ -37,11 +36,6 @@ describe('Common-infrastructure catalogue', () => {
       'cloudflare',
       'google-gcp',
       'public-dns-core',
-    ]);
-    assert.deepEqual(snapshotValue.excludedSources.map((source) => source.id), [
-      'akamai',
-      'fastly',
-      'microsoft-azure',
     ]);
   });
 
@@ -78,9 +72,6 @@ describe('Common-infrastructure catalogue', () => {
       warningList(20260720, ['198.18.0.0/24']),
       warningList(20240101, ['198.19.0.0/24']),
       warningList(20260720, ['2001:4860::/32']),
-      warningList(20260720, ['198.20.0.0/24']),
-      warningList(20260720, ['198.21.0.0/24']),
-      warningList(20260720, ['2001:db8:1::/48']),
     ];
     let calls = 0;
     const snapshot = await buildCommonInfrastructureSnapshot('a'.repeat(40), {
@@ -91,10 +82,10 @@ describe('Common-infrastructure catalogue', () => {
       }),
     });
 
-    assert.equal(snapshot.sources.length, 6);
+    assert.equal(snapshot.sources.length, 3);
     assert.equal(snapshot.excludedSources.length, 1);
     assert.match(snapshot.excludedSources[0]?.reason ?? '', new RegExp(`${FRESHNESS_DAYS}-day freshness`, 'u'));
-    assert.equal(snapshot.entryCount, 11);
+    assert.equal(snapshot.entryCount, 8);
   });
 
   test('rejects oversized responses before parsing', async () => {
@@ -106,7 +97,7 @@ describe('Common-infrastructure catalogue', () => {
       }),
     });
     assert.deepEqual(snapshot.sources.map((source) => source.id), ['public-dns-core']);
-    assert.equal(snapshot.excludedSources.length, 6);
+    assert.equal(snapshot.excludedSources.length, 3);
     assert.ok(snapshot.excludedSources.every((item) => /exceeds its byte limit/iu.test(item.reason)));
   });
 

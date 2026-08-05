@@ -24,7 +24,7 @@ type RiskExplanation = {
   evidenceQuality: ScoreEvidenceQuality;
 };
 type RiskSensitivityScenario = Readonly<{
-  excludedFamily: Exclude<RiskFamily, 'registration' | 'corroboration'>;
+  excludedFamily: RemovableRiskFamily;
   score: number;
   difference: number;
 }>;
@@ -58,6 +58,7 @@ type RiskInput = ScoreEvidenceQualityInput & {
   privacyProtected?: unknown;
   domainAgeDays?: unknown;
 };
+type RemovableRiskFamily = Exclude<RiskFamily, 'registration' | 'corroboration'>;
 
 const RISK_STATES = new Set(['registered', 'for_sale', 'expiring']);
 const STATE_LABELS: Readonly<Record<string, string>> = Object.freeze({
@@ -84,6 +85,14 @@ const FAMILY_CAPS: Readonly<Partial<Record<RiskFamily, number>>> = Object.freeze
   'external-intelligence': 18,
   'operational-support': 12,
 });
+const REMOVABLE_RISK_FAMILY_MAP: Readonly<Record<RemovableRiskFamily, true>> = Object.freeze({
+  'brand-presentation': true,
+  'credential-lure': true,
+  'domain-resemblance': true,
+  'external-intelligence': true,
+  'operational-support': true,
+});
+const REMOVABLE_RISK_FAMILIES = Object.freeze(Object.keys(REMOVABLE_RISK_FAMILY_MAP) as RemovableRiskFamily[]);
 
 const HIGH_CONTEXT_MUTATIONS = new Set([
   'unicode_homoglyph',
@@ -256,7 +265,7 @@ export function explainRiskScore(input: RiskInput): RiskExplanation | null {
 export function buildRiskScoreSensitivity(input: RiskInput): RiskScoreSensitivity | null {
   const baseline = explainRiskScoreInternal(input, null);
   if (!baseline) return null;
-  const removableFamilies = (['domain-resemblance', 'brand-presentation', 'credential-lure', 'external-intelligence', 'operational-support'] as const)
+  const removableFamilies = REMOVABLE_RISK_FAMILIES
     .filter((family) => baseline.families.some((item) => item.id === family && item.contribution > 0));
   const scenarios = removableFamilies.map((excludedFamily) => {
     const result = explainRiskScoreInternal(input, excludedFamily);

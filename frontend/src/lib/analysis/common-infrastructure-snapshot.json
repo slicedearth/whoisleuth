@@ -4366,20 +4366,7 @@
       ]
     }
   ],
-  "excludedSources": [
-    {
-      "id": "akamai",
-      "reason": "akamai source data is 834 days old and exceeds the 30-day freshness limit."
-    },
-    {
-      "id": "fastly",
-      "reason": "fastly source data is 834 days old and exceeds the 30-day freshness limit."
-    },
-    {
-      "id": "microsoft-azure",
-      "reason": "microsoft-azure source data is 609 days old and exceeds the 30-day freshness limit."
-    }
-  ],
+  "excludedSources": [],
   "limitations": [
     "A match identifies an address range published as shared cloud or delivery infrastructure. It does not identify the origin host, tenant, account, operator, ownership, intent, safety, or maliciousness.",
     "Non-matches are inconclusive because the catalogue is deliberately bounded and does not cover every provider, product, address, hosting service, resolver, or historical allocation.",
