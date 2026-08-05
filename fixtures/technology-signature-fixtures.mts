@@ -103,7 +103,7 @@ const positiveFixtures: TechnologySignatureFixture[] = [
   positive('cloudfront', { httpServer: 'CloudFront' }),
   positive('netlify', { httpServer: 'Netlify' }),
   positive('vercel', { httpServer: 'Vercel' }),
-  positive('fastly', { responseHeaders: { 'x-fastly-request-id': 'fixture-request' } }),
+  positive('fastly', { responseHeaders: { 'x-served-by': 'cache-fixture-FIX' } }),
   positive('nginx', { httpServer: 'nginx/1.27' }),
   positive('apache-http-server', { httpServer: 'Apache/2.4' }),
   positive('microsoft-iis', { httpServer: 'Microsoft-IIS/10.0' }),

@@ -82,7 +82,7 @@ describe('technology review candidate intake', () => {
             id: 'fastly',
             evidence: [{
               source: 'passive response header',
-              description: 'A Fastly request identifier response header was observed.',
+              description: 'The passive X-Served-By response header contains a Fastly cache-node identifier.',
             }],
           }],
         },
@@ -94,7 +94,7 @@ describe('technology review candidate intake', () => {
       expectedIds: ['fastly'],
     });
     assert.deepEqual((candidate.input as Record<string, unknown>).responseHeaders, {
-      'x-fastly-request-id': 'fixture',
+      'x-served-by': 'cache-fixture-FIX',
     });
   });
 

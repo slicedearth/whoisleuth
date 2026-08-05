@@ -120,7 +120,7 @@ const PASSIVE_HEADER_RECONSTRUCTIONS: Readonly<Record<string, Readonly<Record<st
   'cf-ray': Object.freeze({ cloudflare: 'fixture' }),
   'x-nf-request-id': Object.freeze({ netlify: 'fixture' }),
   'x-drupal-cache': Object.freeze({ drupal: 'fixture' }),
-  'x-fastly-request-id': Object.freeze({ fastly: 'fixture' }),
+  'x-served-by': Object.freeze({ fastly: 'cache-fixture-FIX' }),
   'x-powered-by': Object.freeze({
     'craft-cms': 'Craft CMS',
     php: 'PHP',

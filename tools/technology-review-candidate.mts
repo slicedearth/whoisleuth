@@ -112,7 +112,7 @@ const RESPONSE_HEADERS: Readonly<Record<string, Readonly<{ name: string; value: 
   cloudflare: Object.freeze({ name: 'cf-ray', value: 'fixture' }),
   netlify: Object.freeze({ name: 'x-nf-request-id', value: 'fixture' }),
   vercel: Object.freeze({ name: 'x-vercel-id', value: 'fixture' }),
-  fastly: Object.freeze({ name: 'x-fastly-request-id', value: 'fixture' }),
+  fastly: Object.freeze({ name: 'x-served-by', value: 'cache-fixture-FIX' }),
 });
 
 function record(value: unknown): UnknownRecord | null {

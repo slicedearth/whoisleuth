@@ -61,7 +61,7 @@ describe('reviewed technology-fixture contribution tool', () => {
       ['php', 'x-powered-by', 'PHP/8.4.1', 'PHP'],
       ['aspnet', 'x-powered-by', 'ASP.NET/4.8', 'ASP.NET'],
       ['express', 'x-powered-by', 'Express/5', 'Express'],
-      ['fastly', 'x-fastly-request-id', 'private-request-identifier', 'fixture'],
+      ['fastly', 'x-served-by', 'cache-private-node-SYD', 'cache-fixture-FIX'],
     ] as const;
     for (const [technologyId, header, value, expected] of cases) {
       const fixture = buildReviewedTechnologyFixture(input({
@@ -164,7 +164,7 @@ describe('reviewed technology-fixture contribution tool', () => {
     assert.doesNotMatch(JSON.stringify(fixture), /private-page-id/u);
   });
 
-  test('reproduces licensed generator, component, and form-state markers without retained values', () => {
+  test('reproduces licensed repository evidence without retaining upstream values', () => {
     const cases = [
       {
         id: 'licensed-eleventy-output-20260805',
@@ -211,6 +211,45 @@ describe('reviewed technology-fixture contribution tool', () => {
         negativeFor: ['framer', 'squarespace', 'webflow', 'weebly'],
         input: { generator: 'Wix.com Website Builder' },
       },
+      {
+        id: 'licensed-server-framework-docs-20260805',
+        reviewedAt: '2026-08-05T08:05:00.000Z',
+        observedAt: '2026-08-05T08:00:00.000Z',
+        licenseBasis: 'permissively-licensed-source',
+        expectedIds: ['aspnet', 'microsoft-iis'],
+        negativeFor: ['apache-http-server', 'express', 'nginx', 'php'],
+        input: {
+          httpServer: 'Microsoft-IIS/10.0',
+          responseHeaders: { 'x-powered-by': 'ASP.NET/4.8' },
+        },
+      },
+      {
+        id: 'licensed-commerce-template-20260805',
+        reviewedAt: '2026-08-05T08:15:00.000Z',
+        observedAt: '2026-08-05T08:10:00.000Z',
+        licenseBasis: 'copyleft-licensed-source',
+        expectedIds: ['adobe-commerce-magento'],
+        negativeFor: ['bigcommerce', 'shopify', 'woocommerce'],
+        input: { html: '<main data-mage-init="private-initialisation">Excluded commerce copy</main>' },
+      },
+      {
+        id: 'licensed-delivery-response-20260805',
+        reviewedAt: '2026-08-05T08:25:00.000Z',
+        observedAt: '2026-08-05T08:20:00.000Z',
+        licenseBasis: 'permissively-licensed-source',
+        expectedIds: ['fastly'],
+        negativeFor: ['cloudflare', 'cloudfront', 'netlify', 'vercel'],
+        input: { responseHeaders: { 'x-served-by': 'cache-private-node-SYD' } },
+      },
+      {
+        id: 'licensed-deployment-header-docs-20260805',
+        reviewedAt: '2026-08-05T08:35:00.000Z',
+        observedAt: '2026-08-05T08:30:00.000Z',
+        licenseBasis: 'permissively-licensed-source',
+        expectedIds: ['vercel'],
+        negativeFor: ['cloudflare', 'cloudfront', 'fastly', 'netlify'],
+        input: { responseHeaders: { 'x-vercel-id': 'private-request-identifier' } },
+      },
     ];
 
     for (const candidate of cases) {
@@ -218,7 +257,10 @@ describe('reviewed technology-fixture contribution tool', () => {
       const checkedIn = TECHNOLOGY_REVIEWED_FIXTURES.find((item) => item.id === fixture.id);
 
       assert.deepEqual(fixture, checkedIn);
-      assert.doesNotMatch(JSON.stringify(fixture), /private-component|private-state|Excluded copy/u);
+      assert.doesNotMatch(
+        JSON.stringify(fixture),
+        /private-component|private-state|private-initialisation|private-request-identifier|cache-private-node|Excluded (?:copy|commerce copy)|4\.8/u,
+      );
     }
   });
 
@@ -309,7 +351,7 @@ describe('reviewed technology-fixture contribution tool', () => {
     assert.throws(
       () => buildReviewedTechnologyFixture(input({
         expectedIds: ['fastly'],
-        input: { responseHeaders: { 'x-fastly-request-id': 'https://private-target.invalid/request' } },
+        input: { responseHeaders: { 'x-served-by': 'https://private-target.invalid/request' } },
       })),
       /target or contact/iu,
     );

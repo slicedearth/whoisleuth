@@ -72,7 +72,7 @@ type TechnologySignatureDescriptor = Readonly<{
   evidence: ReadonlyArray<Readonly<Omit<SignatureEvidence, 'matches'>>>;
 }>;
 
-const TECHNOLOGY_PROFILE_VERSION = 7;
+const TECHNOLOGY_PROFILE_VERSION = 8;
 const MAX_TECHNOLOGY_HTML_CHARS = MAX_STATIC_HTML_CHARS;
 const MAX_TECHNOLOGY_TAG_LENGTH = MAX_TAG_LENGTH;
 const MAX_TECHNOLOGY_FINDINGS = 24;
@@ -107,7 +107,7 @@ function normalizedResourceHosts(value: unknown): Set<string> {
 const PASSIVE_TECHNOLOGY_HEADER_NAMES = Object.freeze([
   'cf-ray',
   'x-drupal-cache',
-  'x-fastly-request-id',
+  'x-served-by',
   'x-nf-request-id',
   'x-powered-by',
   'x-shopify-stage',
@@ -421,7 +421,12 @@ const TECHNOLOGY_SIGNATURES: TechnologySignature[] = [
   },
   {
     id: 'fastly', name: 'Fastly', category: 'delivery platform',
-    evidence: [responseHeaderEvidence('x-fastly-request-id', null, 'A Fastly request identifier response header was observed.', 'medium')],
+    evidence: [responseHeaderEvidence(
+      'x-served-by',
+      /(?:^|,\s*)cache-[a-z0-9-]+-[a-z]{3}(?:\s*,|$)/i,
+      'The passive X-Served-By response header contains a Fastly cache-node identifier.',
+      'medium',
+    )],
   },
   {
     id: 'nginx', name: 'nginx', category: 'web server',

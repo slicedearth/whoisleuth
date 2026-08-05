@@ -171,6 +171,21 @@ describe('website technology profile', () => {
     assert.doesNotMatch(JSON.stringify(result), /1\.27\.0|private-build/);
   });
 
+  test('recognises the standard cache-node response marker and rejects an obsolete request-id clue', () => {
+    const observed = analyzeWebsiteTechnology({
+      responseHeaders: {
+        'x-served-by': 'cache-control-fixture-CONTROL-SYD, cache-syd12345-SYD',
+      },
+    });
+    const obsolete = analyzeWebsiteTechnology({
+      responseHeaders: { 'x-fastly-request-id': 'private-request-id' },
+    });
+
+    assert.equal(observed.findings.some((finding) => finding.id === 'fastly'), true);
+    assert.equal(obsolete.findings.some((finding) => finding.id === 'fastly'), false);
+    assert.doesNotMatch(JSON.stringify(observed), /cache-syd12345|private-request-id/u);
+  });
+
   test('recognizes allowlisted passive response headers without retaining their values', () => {
     const result = analyze({
       html: '<main>Fixture</main>',

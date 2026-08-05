@@ -362,8 +362,9 @@ Joomla, nginx, Apache HTTP Server, Caddy, PHP, Angular, Express, Hexo,
 OpenLiteSpeed, PrestaShop, OpenCart, and Craft CMS, plus an Eleventy benign
 control. A separately reviewed official TYPO3 demonstration contributes only
 its generator and selected-server facts; its page, URL, and content are not
-retained. Licensed static repository artefacts add positive Eleventy, Framer,
-Squarespace, Webflow, Wix, ASP.NET Web Forms, and Amazon CloudFront evidence
+retained. Licensed static repository artefacts add positive Adobe Commerce and
+Magento, ASP.NET, ASP.NET Web Forms, Eleventy, Fastly, Framer, Microsoft IIS,
+Squarespace, Vercel, Webflow, Wix, and Amazon CloudFront evidence
 without retaining the exported pages. The deployment-owned observation
 likewise retains only Cloudflare, Netlify, and SvelteKit markers rather than
 redistributed page content. Containerised CMS
