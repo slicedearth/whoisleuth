@@ -1,10 +1,11 @@
 // Target-free provenance for reviewed technology fixtures derived from
-// licensed local reference builds. Source artefacts and page content are not
-// retained; immutable package or repository references and output digests let
-// maintainers verify the derivation boundary separately from fixture evidence.
+// licence- or permission-reviewed local sources. Source artefacts and page
+// content are not retained; immutable package or repository references and
+// output digests let maintainers verify the derivation boundary separately
+// from fixture evidence.
 
 export const TECHNOLOGY_REVIEWED_SOURCE_SCHEMA = 'whoisleuth.technology-reviewed-source';
-export const TECHNOLOGY_REVIEWED_SOURCE_VERSION = 4;
+export const TECHNOLOGY_REVIEWED_SOURCE_VERSION = 5;
 
 export type TechnologyReviewedSource = Readonly<{
   schema: typeof TECHNOLOGY_REVIEWED_SOURCE_SCHEMA;
@@ -21,13 +22,14 @@ export type TechnologyReviewedSource = Readonly<{
     | 'official-default-starter'
     | 'official-documentation-example'
     | 'official-repository-build'
+    | 'reviewed-repository-artifact'
     | 'official-container-default'
     | 'official-public-demonstration';
   buildEnvironment: string | null;
   supportingEnvironments: readonly string[];
   artifactSha256: string;
   responseMetadataSha256: string | null;
-  derivation: 'offline-local-build' | 'reviewed-public-demonstration';
+  derivation: 'offline-local-build' | 'reviewed-repository-artifact' | 'reviewed-public-demonstration';
   networkRequestsDuringFixtureEvaluation: 0;
   rawArtifactIncluded: false;
 }>;
@@ -524,6 +526,46 @@ export const TECHNOLOGY_REVIEWED_SOURCES: readonly TechnologyReviewedSource[] = 
     artifactSha256: 'ed967e8113b84ec3bcf63a7f82933c2525b6b83cbde82436407eb309f45ee69d',
     responseMetadataSha256: '90869f7bb21ac5e3b2fdf8fb74e7e1868808f5d4313bad6e30493ce24738e303',
     derivation: 'offline-local-build',
+    networkRequestsDuringFixtureEvaluation: 0,
+    rawArtifactIncluded: false,
+  }),
+  Object.freeze({
+    schema: TECHNOLOGY_REVIEWED_SOURCE_SCHEMA,
+    version: TECHNOLOGY_REVIEWED_SOURCE_VERSION,
+    fixtureId: 'licensed-webflow-export-20260805',
+    sourceKind: 'repository',
+    sourceReference: 'git:irisshaders/old-site',
+    sourceRevision: '92fd5b8da0f5c3d4164ae02fe605de363753e504',
+    sourceIntegrity: null,
+    sourceLicence: 'LGPL-3.0-only',
+    licenceReviewedAt: '2026-08-05T05:15:00.000Z',
+    runtimeReference: null,
+    buildRecipe: 'reviewed-repository-artifact',
+    buildEnvironment: null,
+    supportingEnvironments: Object.freeze([]),
+    artifactSha256: 'ac93af37592eae98948893ed8ccfd46cff252f490079d2c2cb5106f70d5475f4',
+    responseMetadataSha256: null,
+    derivation: 'reviewed-repository-artifact',
+    networkRequestsDuringFixtureEvaluation: 0,
+    rawArtifactIncluded: false,
+  }),
+  Object.freeze({
+    schema: TECHNOLOGY_REVIEWED_SOURCE_SCHEMA,
+    version: TECHNOLOGY_REVIEWED_SOURCE_VERSION,
+    fixtureId: 'licensed-webflow-export-repeat-20260805',
+    sourceKind: 'repository',
+    sourceReference: 'git:ecency/esteem.app',
+    sourceRevision: '1df16b822b2cf684682c3dc6519dd59ee4286210',
+    sourceIntegrity: null,
+    sourceLicence: 'MIT',
+    licenceReviewedAt: '2026-08-05T05:35:00.000Z',
+    runtimeReference: null,
+    buildRecipe: 'reviewed-repository-artifact',
+    buildEnvironment: null,
+    supportingEnvironments: Object.freeze([]),
+    artifactSha256: 'e984fe13e961e8e9217d755b078aac6a6b0e5e6987b00ca72776ea9327ecc3a5',
+    responseMetadataSha256: null,
+    derivation: 'reviewed-repository-artifact',
     networkRequestsDuringFixtureEvaluation: 0,
     rawArtifactIncluded: false,
   }),

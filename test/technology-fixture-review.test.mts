@@ -143,6 +143,26 @@ describe('reviewed technology-fixture contribution tool', () => {
     assert.doesNotMatch(JSON.stringify(fixture), /https?:\/\//u);
   });
 
+  test('reproduces a licensed static export without retaining its page identifiers', () => {
+    const fixture = buildReviewedTechnologyFixture(input({
+      id: 'licensed-webflow-export-20260805',
+      reviewedAt: '2026-08-05T05:15:00.000Z',
+      observedAt: '2026-08-05T05:10:00.000Z',
+      licenseBasis: 'copyleft-licensed-source',
+      expectedIds: ['cloudfront', 'webflow'],
+      negativeFor: ['framer', 'squarespace', 'weebly', 'wix'],
+      input: {
+        generator: 'Webflow',
+        html: '<html data-wf-page="private-page-id"></html>',
+        resourceOrigins: ['https://cloudfront.net'],
+      },
+    }));
+    const checkedIn = TECHNOLOGY_REVIEWED_FIXTURES.find((item) => item.id === fixture.id);
+
+    assert.deepEqual(fixture, checkedIn);
+    assert.doesNotMatch(JSON.stringify(fixture), /private-page-id/u);
+  });
+
   test('creates catalogue-owned negative controls without retaining source page copy', () => {
     const fixture = buildReviewedTechnologyFixture(input({
       id: 'reviewed-eleventy-negative',

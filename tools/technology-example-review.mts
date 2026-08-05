@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
-// Converts one bounded local HTML artefact from a reviewed reference build
-// into a target-free technology fixture and a separate provenance record.
-// The source artefact is read locally, never copied into output, and evaluated
+// Converts one bounded local HTML artefact from a reviewed reference source
+// into a target-free technology fixture and a separate provenance record. The
+// source artefact is read locally, never copied into output, and evaluated
 // without making a network request.
 
 import { createHash } from 'node:crypto';
@@ -33,7 +33,7 @@ import {
 import { reconstructTechnologyReviewProfile } from './technology-review-candidate.mts';
 
 export const TECHNOLOGY_EXAMPLE_REVIEW_SCHEMA = 'whoisleuth.technology-example-review';
-export const TECHNOLOGY_EXAMPLE_REVIEW_VERSION = 2;
+export const TECHNOLOGY_EXAMPLE_REVIEW_VERSION = 3;
 export const MAX_TECHNOLOGY_EXAMPLE_HTML_BYTES = 512 * 1024;
 
 type WritableLike = { write(value: string): unknown };
@@ -86,6 +86,7 @@ const BUILD_RECIPES = new Set<BuildRecipe>([
   'official-default-starter',
   'official-documentation-example',
   'official-repository-build',
+  'reviewed-repository-artifact',
   'official-container-default',
   'official-public-demonstration',
 ]);
@@ -232,11 +233,16 @@ function validateOptions(options: ExampleReviewOptions) {
   const runtimeReference = options.runtimeReference === null
     ? null
     : boundedText(options.runtimeReference, 'Runtime reference', 80).toLowerCase();
+  const isRepositoryArtifact = options.buildRecipe === 'reviewed-repository-artifact';
   if (source.kind === 'demonstration') {
     if (options.licenceBasis !== 'official-demonstration-terms'
       || options.buildRecipe !== 'official-public-demonstration'
       || runtimeReference !== null) {
       throw new TypeError('Official demonstrations require reviewed demonstration terms, the demonstration recipe, and no inferred runtime version.');
+    }
+  } else if (isRepositoryArtifact) {
+    if (source.kind !== 'repository' || runtimeReference !== null) {
+      throw new TypeError('Reviewed repository artefacts require a repository source and no inferred runtime version.');
     }
   } else {
     const runtimeMatch = RUNTIME_RE.exec(runtimeReference ?? '');
@@ -253,6 +259,9 @@ function validateOptions(options: ExampleReviewOptions) {
   }
   if (options.buildRecipe === 'official-container-default' && buildEnvironment === null) {
     throw new TypeError('Container builds require an immutable OCI build environment.');
+  }
+  if (isRepositoryArtifact && (buildEnvironment !== null || (options.supportingEnvironments?.length ?? 0) > 0)) {
+    throw new TypeError('Reviewed repository artefacts must not claim an unobserved build environment.');
   }
   if (source.kind === 'container') {
     const sourceEnvironment = `${source.reference}:${source.revision}@${source.integrity}`;
@@ -358,7 +367,9 @@ export function buildTechnologyExampleReview(
     responseMetadataSha256: responseMetadataDigest(checked.responseMetadata),
     derivation: checked.source.kind === 'demonstration'
       ? 'reviewed-public-demonstration'
-      : 'offline-local-build',
+      : options.buildRecipe === 'reviewed-repository-artifact'
+        ? 'reviewed-repository-artifact'
+        : 'offline-local-build',
     networkRequestsDuringFixtureEvaluation: 0,
     rawArtifactIncluded: false,
   });

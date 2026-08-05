@@ -103,7 +103,13 @@ describe('contributor-reviewed technology fixture corpus', () => {
       assert.equal(new Set(source.supportingEnvironments).size, source.supportingEnvironments.length);
       assert.ok(source.supportingEnvironments.every((value) => OCI_REFERENCE_RE.test(value)));
       assert.equal(source.supportingEnvironments.includes(source.buildEnvironment ?? ''), false);
-      if (source.sourceKind !== 'demonstration') {
+      if (source.buildRecipe === 'reviewed-repository-artifact') {
+        assert.equal(source.sourceKind, 'repository');
+        assert.equal(source.runtimeReference, null);
+        assert.equal(source.buildEnvironment, null);
+        assert.deepEqual(source.supportingEnvironments, []);
+        assert.equal(source.derivation, 'reviewed-repository-artifact');
+      } else if (source.sourceKind !== 'demonstration') {
         const runtimeVersion = /^[a-z][a-z0-9._-]*@(.+)$/u.exec(source.runtimeReference ?? '')?.[1];
         assert.match(runtimeVersion ?? '', EXACT_RUNTIME_VERSION_RE);
         assert.equal(source.derivation, 'offline-local-build');

@@ -198,6 +198,33 @@ describe('reviewed technology reference-build intake', () => {
     assert.deepEqual(result.fixture.expectedIds, ['craft-cms', 'nginx']);
   });
 
+  test('records a licensed repository artefact without inventing a build runtime', () => {
+    const result = buildTechnologyExampleReview(
+      '<html data-wf-page="private-page-id" data-wf-site="private-site-id"><main>Excluded copy</main></html>',
+      {
+        ...positiveOptions,
+        id: 'licensed-static-export-20260805',
+        expectedIds: ['webflow'],
+        negativeFor: ['framer', 'squarespace', 'weebly', 'wix'],
+        licenceBasis: 'copyleft-licensed-source',
+        sourceReference: 'git:example/static-export',
+        sourceRevision: '92fd5b8da0f5c3d4164ae02fe605de363753e504',
+        sourceIntegrity: null,
+        sourceLicence: 'LGPL-3.0-only',
+        runtimeReference: null,
+        buildRecipe: 'reviewed-repository-artifact',
+      },
+    );
+
+    assert.equal(result.provenance.runtimeReference, null);
+    assert.equal(result.provenance.derivation, 'reviewed-repository-artifact');
+    assert.deepEqual(result.fixture.input, {
+      html: '<main data-wf-page="fixture"></main>',
+      observedAt: positiveOptions.observedAt,
+    });
+    assert.doesNotMatch(JSON.stringify(result), /private-page-id|private-site-id|Excluded copy/u);
+  });
+
   test('records a reviewed official demonstration without inventing build or runtime provenance', () => {
     const result = buildTechnologyExampleReview(
       '<meta name="generator" content="TYPO3 CMS"><main>Excluded demonstration copy</main>',
@@ -343,6 +370,25 @@ describe('reviewed technology reference-build intake', () => {
         supportingEnvironments: ['oci:docker.io/library/mariadb:latest@sha256:not-a-digest'],
       }),
       /Supporting environments/iu,
+    );
+    assert.throws(
+      () => buildTechnologyExampleReview('<main data-wf-page="fixture"></main>', {
+        ...positiveOptions,
+        sourceReference: 'git:example/static-export',
+        sourceRevision: '92fd5b8da0f5c3d4164ae02fe605de363753e504',
+        sourceIntegrity: null,
+        runtimeReference: null,
+        buildRecipe: 'official-repository-build',
+      }),
+      /Runtime reference/iu,
+    );
+    assert.throws(
+      () => buildTechnologyExampleReview('<main data-wf-page="fixture"></main>', {
+        ...positiveOptions,
+        runtimeReference: null,
+        buildRecipe: 'reviewed-repository-artifact',
+      }),
+      /repository source/iu,
     );
     assert.throws(
       () => buildTechnologyExampleReview('<meta name="generator" content="TYPO3 CMS">', {

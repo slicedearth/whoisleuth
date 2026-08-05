@@ -282,6 +282,12 @@ database or similar service can be recorded with up to four repeated immutable
 The container is a disposable build boundary only; neither its image nor its
 runtime becomes a WHOISleuth production dependency.
 
+A static HTML artefact already committed to a reviewed repository can use
+`reviewed-repository-artifact`, a full commit hash, and no runtime or build
+environment. This mode is limited to repository sources whose licence permits
+local inspection. It records the source commit and artefact digest without
+inventing an unobserved build process or retaining the source page.
+
 When an official demonstration explicitly permits inspection but has no
 reproducible stable build, review a locally saved capture with a target-free
 `official:project/example` source reference, the observation timestamp as its
@@ -355,9 +361,11 @@ WordPress, WooCommerce, Drupal, Joomla, nginx, Apache HTTP Server, Caddy, PHP,
 Angular, Express, Hexo, OpenLiteSpeed, PrestaShop, OpenCart, and Craft CMS, plus an
 Eleventy benign control. A separately reviewed official TYPO3 demonstration
 contributes only its generator and selected-server facts; its page, URL, and
-content are not retained. The deployment-owned observation likewise retains
-only Cloudflare, Netlify, and SvelteKit markers rather than redistributed page
-content. Containerised CMS
+content are not retained. Licensed static repository artefacts add repeat
+Webflow coverage and one Amazon CloudFront marker without retaining the
+exported pages. The
+deployment-owned observation likewise retains only Cloudflare, Netlify, and
+SvelteKit markers rather than redistributed page content. Containerised CMS
 cases use their first-party installation output rather than pretending an
 unconfigured image is a completed website. Mixed controls record both the
 observed CMS, server, and runtime findings and selected competing signatures
