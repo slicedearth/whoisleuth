@@ -51,7 +51,8 @@ describe('technology signature benchmark', () => {
     assert.equal(report.summary.reviewedFixtures, TECHNOLOGY_REVIEWED_FIXTURES.length);
     assert.equal(report.summary.failedReviewedFixtures, 0);
     assert.equal(report.summary.reviewedSignatureCoverage, 1);
-    assert.equal(report.summary.realWorldCoverageEstablished, false);
+    assert.equal(report.summary.reviewedRepeatCoverage, 0);
+    assert.equal(report.summary.reviewedEvidenceRuleCoverage, 1);
     assert.equal(report.metrics.positiveCoverage, report.summary.signatures);
     assert.equal(report.metrics.negativeCoverage, report.summary.signatures);
     assert.equal(report.metrics.missedMatches, 0);
@@ -64,6 +65,21 @@ describe('technology signature benchmark', () => {
     assert.equal(report.reviewedFixtures.length, TECHNOLOGY_REVIEWED_FIXTURES.length);
     assert.equal(report.reviewedProgramme.staleFixtureIds.length, 0);
     assert.equal(report.reviewedProgramme.unsampledSignatureIds.length, report.summary.signatures - 1);
+    assert.equal(report.reviewedProgramme.underRepeatedSignatureIds.length, report.summary.signatures);
+    assert.equal(report.reviewedProgramme.maturity, 'initial');
+    assert.deepEqual(report.reviewedProgramme.tiers, {
+      initial: true,
+      catalogueSampled: false,
+      repeatSampled: false,
+      evidenceCovered: false,
+      current: false,
+    });
+    assert.equal(report.reviewedProgramme.sampledEvidenceRules, 1);
+    assert.ok(report.reviewedProgramme.totalEvidenceRules > report.reviewedProgramme.sampledEvidenceRules);
+    const reviewedSvelteKit = report.reviewedProgramme.bySignature.sveltekit;
+    assert.ok(reviewedSvelteKit);
+    assert.equal(reviewedSvelteKit.observations, 1);
+    assert.equal(reviewedSvelteKit.sampledEvidenceRules, 1);
     assert.equal(report.reviewedProgramme.licenseBases['factual-observation'], 1);
     assert.equal(
       Object.values(report.reviewedProgramme.byCategory).reduce((sum, category) => sum + category.signatures, 0),
@@ -128,7 +144,8 @@ describe('technology signature benchmark', () => {
     assert.match(output, /technology-signature benchmark/i);
     assert.match(output, /fixtures passed/);
     assert.match(output, /1\/\d+ signatures sampled/);
-    assert.match(output, /Real-world coverage gate: not established/);
+    assert.match(output, /Reviewed corpus maturity: initial/);
+    assert.match(output, /Repeat sampling: 0\/\d+ signatures; evidence rules: 1\/\d+/);
     assert.match(output, /network requests: 0/);
     assert.deepEqual(parseArguments([]), { json: false, requireReviewed: false });
     assert.deepEqual(parseArguments(['--json']), { json: true, requireReviewed: false });
@@ -156,6 +173,6 @@ describe('technology signature benchmark', () => {
       stderr: stderr.stream,
       now: () => new Date(GENERATED_AT),
     }), 1);
-    assert.match(coverageStdout.value(), /Real-world coverage gate: not established/);
+    assert.match(coverageStdout.value(), /Reviewed corpus maturity: initial/);
   });
 });
