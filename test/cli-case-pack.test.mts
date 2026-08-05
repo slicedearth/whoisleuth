@@ -14,7 +14,7 @@ function exportedCases() {
     cases: [{
       id: 'case-1', domain: 'example.test', status: 'reviewing', disposition: 'unreviewed', tags: [],
       notes: [{ id: 'note-1', body: 'private analyst note', createdAt: NOW }], source: 'lookup', evidenceHistory: [], evidencePins: [], decisions: [],
-      actions: [{ id: 'action-1', type: 'provider_report', recipient: 'private recipient', contactSource: 'manual', contactLimitations: [], dueAt: null, state: 'planned', reference: null, followUpAt: null, outcome: null, createdAt: NOW, updatedAt: NOW }],
+      actions: [{ id: 'action-1', type: 'network_hosting_report', recipient: 'private recipient', contactSource: 'manual', contactLimitations: [], dueAt: null, state: 'planned', reference: null, followUpAt: null, outcome: null, createdAt: NOW, updatedAt: NOW }],
       assertions: [{ id: 'assertion-1', kind: 'hypothesis', statement: 'Needs review', rationale: null, evidencePinIds: [], evidenceRelations: [], state: 'open', createdAt: NOW, updatedAt: NOW }],
       manualTrail: [{ id: 'trail-1', kind: 'pivot', summary: 'Reviewed related host', target: 'private target', createdAt: NOW }], sightings: [], createdAt: NOW, updatedAt: NOW,
     }],
@@ -46,5 +46,7 @@ describe('CLI case pack', () => {
     assert.equal(output.version, CASE_SCHEMA_VERSION);
     assert.equal(output.packet.schema, 'whoisleuth.cli.case-pack');
     assert.equal(output.cases.length, 1);
+    assert.equal(output.cases[0].actions[0].recipient, '[redacted]');
+    assert.doesNotMatch(JSON.stringify(output), /private recipient/u);
   });
 });

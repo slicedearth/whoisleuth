@@ -67,6 +67,8 @@ whoisleuth bulk domains.txt --csv
 whoisleuth discover example.com --preset common --jsonl
 whoisleuth verify-artifact lookup.json --json
 whoisleuth compare lookup.json --json
+whoisleuth brief lookup.json
+whoisleuth registry-doctor lookup.json --json
 ```
 
 Only one query is accepted by `lookup`; multi-input processing belongs to
@@ -107,11 +109,11 @@ HTTP status, and a bounded explanation.
 | Investigate a target | `lookup`, `http`, `tls`, `posture`, `registry-support` |
 | Review many targets | `bulk`, `discover`, `discover-scan`, `ct-search` |
 | Compare saved evidence | `compare`, `page-compare`, `diff`, `reconcile`, `timeline`, `mail-review` |
-| Review supplied evidence | `review-evidence`, `registry-doctor`, `source-report`, `sharing-review` |
-| Plan and assure changes | `domain-control`, `assurance`, `workflow-plan` |
-| Verify and package evidence | `verify-artifact`, `inspect-archive`, `sign-artifact`, `verify-signature`, `export` |
+| Review supplied evidence | `brief`, `review-evidence`, `registry-doctor`, `registry-cohort`, `source-report`, `sharing-review` |
+| Plan and assure changes | `domain-control`, `monitor-once`, `assurance`, `workflow-plan`, `workflow-run` |
+| Verify and package evidence | `case-pack`, `verify-artifact`, `inspect-archive`, `sign-artifact`, `verify-signature`, `export` |
 | Calibrate offline | `risk-calibrate`, `lookalike-calibrate` |
-| Operate the CLI | `doctor`, `commands`, `completion`, `manual` |
+| Operate the CLI | `doctor`, `registry-scaffold`, `commands`, `completion`, `manual` |
 
 Use focused help for the exact arguments and collection ceiling:
 
@@ -137,6 +139,18 @@ explicit in text, so colour is never the only distinction.
   lifecycle events to stderr.
 - `--strict-exit` treats failures in explicitly requested source families as a
   partial failure while keeping skipped or unsupported sources neutral.
+- `--fail-on` applies explicit `source-failure`, `inconclusive`, `danger`, or
+  `material-drift` automation policy where the selected command supports it.
+- `--junit` emits bounded CI test cases for Lookup, Bulk, and one-shot control
+  reviews; owned-domain Posture can emit `--sarif` only with
+  `--owned-domain`.
+
+`--config <file> --profile <name>` applies a strict version-1 local profile.
+The default path is `$XDG_CONFIG_HOME/whoisleuth/config.json`. Profiles can set
+only presentation mode, Fast collection, bounded concurrency, and observer or
+vantage labels. They cannot add targets, enable Deep collection, select output
+paths, approve network work, or set failure policy. Explicit command options
+override defaults from the same option group.
 
 Every command accepts `--output <file>`. WHOISleuth buffers bounded output,
 creates a private temporary file beside the destination, syncs it, and publishes
@@ -247,6 +261,10 @@ full contracts into the packaged reference.
 ### Fixed investigation plans
 
 [Read the plan-only recipe contract and approval gates.](cli-reference.md#fixed-investigation-plans)
+
+### Local handoffs and one-shot monitoring
+
+[Read brief, case-package, fixed-recipe execution, and one-shot control-review contracts.](cli-reference.md#local-handoffs-and-one-shot-monitoring)
 
 ### Optional local rendered capture
 

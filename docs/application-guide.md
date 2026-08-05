@@ -461,6 +461,15 @@ registrar MFA, recovery-email separation, registry lock, emergency contacts,
 account audit logging, and zone backups. These statements are not inferred
 from public evidence and must be reviewed by the analyst.
 
+The browser-local **Domain Control Centre** organises every official domain
+against the same analyst-authored operating context. A profile can record a
+zone-intent label, lifecycle state, recovery dependency, and bounded approved
+change windows. The summary highlights portfolio concentration, recovery
+dependencies, nameserver-preflight coverage, planned changes, and retirement
+state. These fields are planning context only: they neither change DNS nor
+infer provider control. Approved windows label matching retained changes as
+expected while preserving the underlying observations and their limitations.
+
 An official-site baseline can retain bounded page identity and fingerprint
 data without keeping page HTML, URL paths, query strings, credentials, or
 complete email addresses. Comparison results remain contextual evidence and do

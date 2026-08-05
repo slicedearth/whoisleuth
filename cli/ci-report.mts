@@ -1,4 +1,5 @@
 import type { UnknownRecord } from './saved-lookup.mts';
+import { WHOISLEUTH_REQUEST_POLICY_URL } from '../lib/project-metadata.mts';
 
 function record(value: unknown): UnknownRecord {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as UnknownRecord : {};
@@ -64,7 +65,7 @@ export function buildPostureSarif(document: unknown) {
     version: '2.1.0',
     $schema: 'https://json.schemastore.org/sarif-2.1.0.json',
     runs: [Object.freeze({
-      tool: { driver: { name: 'WHOISleuth', informationUri: 'https://www.whoisleuth.com/request-policy', rules } },
+      tool: { driver: { name: 'WHOISleuth', informationUri: WHOISLEUTH_REQUEST_POLICY_URL, rules } },
       results: actionable.map((item) => ({
         ruleId: `WHOISLEUTH-${String(item.id || 'posture').replace(/[^a-z0-9_-]/giu, '-').slice(0, 64)}`,
         level: String(item.status).toLowerCase() === 'danger' ? 'error' : 'warning',

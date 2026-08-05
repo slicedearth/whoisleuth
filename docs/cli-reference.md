@@ -69,6 +69,8 @@ node bin/whoisleuth.mts http example.com --json
 node bin/whoisleuth.mts tls example.com --json
 node bin/whoisleuth.mts registry-support example.uk --json
 node bin/whoisleuth.mts registry-doctor lookup.json --json
+node bin/whoisleuth.mts registry-cohort saved-lookups.jsonl --json
+node bin/whoisleuth.mts registry-scaffold --profile example-profile --suffix test --scenario registered
 node bin/whoisleuth.mts risk-calibrate calibration.json --json
 node bin/whoisleuth.mts lookalike-calibrate reviewed-candidates.json --json
 node bin/whoisleuth.mts verify-artifact workspace.json --json
@@ -88,6 +90,10 @@ node bin/whoisleuth.mts domain-control domain-control-input.json --json
 node bin/whoisleuth.mts assurance domain-assurance-input.json --json
 node bin/whoisleuth.mts sharing-review response-packet.json --marking amber --recipient-scope organization --purpose 'Reviewed incident handoff' --human-reviewed --personal-data-reviewed --redactions-confirmed --json
 node bin/whoisleuth.mts workflow-plan domain-triage example.test --json
+node bin/whoisleuth.mts workflow-run domain-triage example.test --approve-network --json --output run.json
+node bin/whoisleuth.mts brief lookup.json
+node bin/whoisleuth.mts case-pack cases.json --audience trusted --reviewed --json
+node bin/whoisleuth.mts monitor-once control-manifest.json --previous prior-control.json --junit
 node bin/whoisleuth.mts diff first-lookup.json second-lookup.json --json
 node bin/whoisleuth.mts reconcile office.json mobile.json external.json --json
 node bin/whoisleuth.mts timeline first-observation.json second-observation.json latest-observation.json --json
@@ -194,7 +200,8 @@ so directly from the machine running the CLI. They do not use the hosted login,
 hosted session, or deployment usage controls; upstream providers can see and
 rate-limit the local machine's network address. Offline `discover`, `compare`,
 `page-compare`, `mail-review`, `review-evidence`, `domain-control`, `assurance`,
-`sharing-review`, `workflow-plan`, `diff`, `reconcile`, `timeline`,
+`sharing-review`, `workflow-plan`, `brief`, `case-pack`, `registry-cohort`,
+`registry-scaffold`, `diff`, `reconcile`, `timeline`,
 `risk-calibrate`, `lookalike-calibrate`, `registry-doctor`, `verify-artifact`, `source-report`, `export`,
 `commands`, `completion`, and `manual` operations make no network requests. Commands write
 to stdout unless the analyst deliberately selects a local output file.
@@ -217,6 +224,23 @@ beside the destination, syncs it, and publishes it atomically with mode `0600`.
 An existing destination is refused. `--force` is valid only with `--output` and
 allows an intentional atomic replacement. A failed or cancelled command does
 not publish a partial output file. Output is capped at 32 MiB.
+
+`--config <file> --profile <name>` reads a strict version-1 local configuration
+document of at most 64 KiB. Without `--config`, the path is
+`$XDG_CONFIG_HOME/whoisleuth/config.json`. A profile may contain no more than
+16 safe defaults drawn from `--no-color`, `--summary`, `--verbose`, `--fast`,
+`--concurrency`, `--observer`, and `--vantage`. It cannot supply a target,
+Deep mode, output path, network approval, failure policy, credential, or
+arbitrary argument. Explicit command options override profile defaults from
+the same group.
+
+Lookup, Bulk, and `monitor-once` can emit bounded JUnit XML. Owned-domain
+Posture can emit SARIF only when `--owned-domain` confirms the passive target
+boundary. The reports contain categorical source or posture findings rather
+than raw evidence. Supported network commands accept an explicit comma-
+separated `--fail-on` policy from `source-failure`, `inconclusive`, `danger`,
+and `material-drift`; a match returns the partial-result exit code after the
+normal output is emitted.
 
 `lookup --markdown` and `lookup --html` build the existing normalised evidence
 report directly after one completed domain lookup. They do not start a second
@@ -364,11 +388,11 @@ machine access is not evidence that a domain is unregistered or safe.
 | 130 | The analyst cancelled the command. No partial final result was emitted. |
 
 This release supports `lookup`, `bulk`, `ct-search`, `discover`, `discover-scan`, `posture`,
-`http`, `tls`, `registry-support`, `registry-doctor`, `risk-calibrate`,
+`http`, `tls`, `registry-support`, `registry-doctor`, `registry-cohort`, `registry-scaffold`, `risk-calibrate`,
 `lookalike-calibrate`, `verify-artifact`,
 `inspect-archive`, `sign-artifact`, `verify-signature`, `source-report`,
-`compare`, `page-compare`, `mail-review`, `review-evidence`, `domain-control`,
-`assurance`, `sharing-review`, `workflow-plan`, `diff`, `reconcile`, `timeline`,
+`compare`, `page-compare`, `mail-review`, `review-evidence`, `brief`, `case-pack`, `domain-control`,
+`monitor-once`, `assurance`, `sharing-review`, `workflow-plan`, `workflow-run`, `diff`, `reconcile`, `timeline`,
 `export`, `doctor`, `commands`, `completion`, and `manual`. Additional command families
 are added as separate bounded increments rather than exposing incomplete
 aliases.
@@ -395,10 +419,24 @@ ownership, safety, or maliciousness.
 `registry-doctor [lookup.json]` compares one saved domain Lookup with the same
 reviewed local capability profile. It reports whether RDAP and WHOIS collection
 states align with allowed, permission-required, or unsupported access, counts
-bounded normalised publication fields, and reports whether a registry object
-identifier was observed. A missing identifier is a publication omission, not
-a failed lookup. The command is offline, makes no retry, and cannot establish
-current registry reachability.
+bounded normalised publication fields, and reports publication-quality context
+for object identity, base conformance, redaction metadata, required self links,
+and event consistency. A missing identifier or metadata field is a publication
+omission, not a failed lookup. The command is offline, makes no retry, and
+cannot establish current registry reachability.
+
+`registry-cohort [lookups.json|lookups.jsonl]` aggregates from 1 to 500 saved
+Lookups into suffix and capability-profile cohorts. It retains only target-free
+counts for source alignment and publication-quality states. A cohort with
+fewer than five samples is labelled insufficient rather than treated as a
+quality result, and repeated observations from one environment are not assumed
+representative.
+
+`registry-scaffold --profile <id> --suffix <suffix> --scenario <state>` emits
+one bounded, sanitised synthetic fixture scaffold from the installed registry
+catalogue. The three supported states are `registered`, `not_found`, and
+`inconclusive`. It does not fetch a live response, include a real target, or
+alter the embedded catalogue.
 
 The offline RDAP supplied-evidence review implements the request shape defined
 by RFC 9536 for `resources`, `domains`, `nameservers`, and `entities`. It also
@@ -1044,6 +1082,35 @@ interpret a placeholder as a file path, read an artefact, make a request,
 change a case, or submit evidence. Analysts deliberately run selected commands
 after reviewing their collection boundaries. This provides repeatable
 domain-specific workflows without an arbitrary automation or plugin surface.
+
+## Local handoffs and one-shot monitoring
+
+`brief [lookup.json]` reads one saved Lookup and emits version 2 of the bounded
+`whoisleuth.cli.lookup-brief` contract. It separates retained facts,
+contradictions, incomplete source states, and manual actions. Each action
+states its evidence basis and expected outcome; it does not run the action or
+create a case.
+
+`case-pack [cases.json] --audience <internal|trusted|public> --reviewed` reads a
+browser case export, retains at most 25 normalised cases, applies the selected
+redaction boundary, and emits a browser-importable case collection with a
+canonical SHA-256 digest and redaction manifest. Trusted output removes notes,
+recipient values, and manual-pivot targets. Public output additionally removes
+actions and analyst assertions. The review flag records an explicit choice; it
+does not prove recipient authorisation or factual correctness.
+
+`monitor-once [manifest.json]` performs one bounded Deep control review for at
+most 20 manifest domains with concurrency capped at three. An optional
+`--previous` checkpoint adds local first/last-observed comparison. It is not a
+daemon or scheduler, retains compact normalised observations rather than raw
+payloads, and keeps failed collection incomplete. JSON, JUnit, and explicit
+failure policies are supported.
+
+`workflow-run <recipe> <subject>` executes only concrete steps from the four
+installed fixed recipes. Network steps require `--approve-network` for that
+invocation. Analyst-selection placeholders always pause. A bounded `--resume`
+state must match the exact recipe and subject, cannot add commands or shell
+syntax, and is not evidence that earlier results remain current.
 
 ## Optional local rendered capture
 
