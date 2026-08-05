@@ -72,6 +72,16 @@ import {
   reviewDomainControlManifest,
 } from '../lib/domain-control-manifest.mts';
 import {
+  DOMAIN_CONTROL_FLIGHT_RECORDER_INPUT_SCHEMA,
+  buildDomainControlFlightRecorder,
+  formatDomainControlFlightRecorder,
+} from '../lib/domain-control-flight-recorder.mts';
+import {
+  CLI_DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA,
+  buildCliDomainControlReview,
+  formatCliDomainControlReview,
+} from './domain-control-observations.mts';
+import {
   MAX_ASSURANCE_INPUT_BYTES,
   buildDomainAssurance,
   formatDomainAssurance,
@@ -925,13 +935,22 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
         ? buildDomainControlManifest(parsed, commandContext.now())
         : schema === DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA
           ? reviewDomainControlManifest(parsed, commandContext.now())
-          : null;
+          : schema === CLI_DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA
+            ? buildCliDomainControlReview(input, commandContext.now())
+            : schema === DOMAIN_CONTROL_FLIGHT_RECORDER_INPUT_SCHEMA
+              ? buildDomainControlFlightRecorder(parsed, commandContext.now())
+              : null;
       if (!document) {
-        throw new CliUsageError(`Domain control input must use ${DOMAIN_CONTROL_MANIFEST_INPUT_SCHEMA} or ${DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA}.`);
+        throw new CliUsageError(`Domain control input must use a supported manifest, review, saved-Lookup review, or flight-recorder schema.`);
       }
+      const terminalDocument = schema === CLI_DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA
+        ? formatCliDomainControlReview(document as ReturnType<typeof buildCliDomainControlReview>)
+        : schema === DOMAIN_CONTROL_FLIGHT_RECORDER_INPUT_SCHEMA
+          ? formatDomainControlFlightRecorder(document as ReturnType<typeof buildDomainControlFlightRecorder>)
+          : formatDomainControlResult(document as ReturnType<typeof buildDomainControlManifest> | ReturnType<typeof reviewDomainControlManifest>);
       if (!args.quiet) write(stdout, args.output === 'json'
         ? formatJsonDocument(document)
-        : terminal(formatDomainControlResult(document), args.color));
+        : terminal(terminalDocument, args.color));
       return EXIT_CODES.SUCCESS;
     }
 
