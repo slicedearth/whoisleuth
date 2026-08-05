@@ -13,6 +13,7 @@ import {
   WHOISLEUTH_SOURCE_ISSUES_URL,
   WHOISLEUTH_SOURCE_REPOSITORY_GIT_URL,
 } from '../lib/project-metadata.mts';
+import { MAX_CLI_PACKAGE_ENTRIES } from './cli-package.mts';
 
 type JsonRecord = Record<string, unknown>;
 type WritableLike = { write(value: string): unknown };
@@ -69,7 +70,6 @@ const RUNTIME_DEPENDENCIES = Object.freeze([
   'undici',
 ]);
 const MAX_METADATA_BYTES = 512 * 1024;
-const MAX_PACKAGE_FILES = 250;
 const MAX_UNPACKED_BYTES = 6 * 1024 * 1024;
 const MAX_ERROR_LENGTH = 512;
 const OVERRIDDEN_NPM_ENVIRONMENT_KEYS = new Set([
@@ -237,7 +237,7 @@ export function validatePublishedManifest(value: unknown, expectedVersionValue: 
     throw new TypeError('Published distribution integrity metadata is invalid.');
   }
   validatedTarballUrl(dist.tarball, expectedVersion);
-  const fileCount = boundedInteger(dist.fileCount, 'Published file count', MAX_PACKAGE_FILES);
+  const fileCount = boundedInteger(dist.fileCount, 'Published file count', MAX_CLI_PACKAGE_ENTRIES);
   const unpackedBytes = boundedInteger(dist.unpackedSize, 'Published unpacked bytes', MAX_UNPACKED_BYTES);
 
   const attestations = record(dist.attestations, 'Published attestations');

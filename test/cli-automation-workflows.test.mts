@@ -89,6 +89,13 @@ function savedLookup(
 describe('CLI automation arguments', () => {
   test('parses opt-in output, strict-exit, event, diff, manual, and checkpoint controls', () => {
     assert.deepEqual(parseCliArguments(['manual']), { action: 'manual' });
+    assert.deepEqual(parseCliArguments([
+      'manifest', 'lookup.json', 'comparison.json', '--workflow', 'domain review',
+      '--configuration-digest', `sha256:${'a'.repeat(64)}`, '--json',
+    ]), {
+      action: 'manifest', sources: ['lookup.json', 'comparison.json'], workflow: 'domain review',
+      configurationDigestSha256: `sha256:${'a'.repeat(64)}`, output: 'json', quiet: false, color: true,
+    });
     assert.deepEqual(parseCliArguments(['diff', 'left.json', 'right.json', '--json']), {
       action: 'diff', leftSource: 'left.json', rightSource: 'right.json', output: 'json', quiet: false, color: true,
     });
@@ -100,6 +107,18 @@ describe('CLI automation arguments', () => {
     });
     assert.deepEqual(parseCliArguments(['assurance', 'plan.json', '--json']), {
       action: 'assurance', source: 'plan.json', output: 'json', quiet: false, color: true,
+    });
+    assert.deepEqual(parseCliArguments(['change-packet', 'change.json', '--json']), {
+      action: 'change-packet', source: 'change.json', output: 'json', quiet: false, color: true,
+    });
+    assert.deepEqual(parseCliArguments(['ct-intake', 'events.json', '--json']), {
+      action: 'ct-intake', source: 'events.json', output: 'json', quiet: false, color: true,
+    });
+    assert.deepEqual(parseCliArguments(['map-observations', 'mapping.json', '--json']), {
+      action: 'map-observations', source: 'mapping.json', output: 'json', quiet: false, color: true,
+    });
+    assert.deepEqual(parseCliArguments(['oam-export', 'findings.json', '--json']), {
+      action: 'oam-export', source: 'findings.json', output: 'json', quiet: false, color: true,
     });
     assert.deepEqual(parseCliArguments([
       'sharing-review', 'packet.json', '--marking', 'amber', '--recipient-scope', 'organization',
@@ -115,7 +134,7 @@ describe('CLI automation arguments', () => {
     });
     assert.deepEqual(parseCliArguments(['bulk', '--checkpoint', 'bulk.json', '--resume', '--events']), {
       action: 'bulk', source: null, output: 'terminal', deep: false, quiet: false, color: true, concurrency: 4,
-      checkpoint: 'bulk.json', resume: true, events: true, filter: 'all',
+      checkpoint: 'bulk.json', resume: true, events: true, plan: false, filter: 'all',
     });
     assert.throws(() => parseCliArguments(['lookup', 'example.test', '--events', '--output', 'result.json']), /cannot be combined/u);
     assert.throws(() => parseCliArguments(['lookup', 'example.test', '--force']), /requires --output/u);
@@ -124,6 +143,8 @@ describe('CLI automation arguments', () => {
     assert.throws(() => parseCliArguments(['timeline', 'one.json']), /from 2 to 20/u);
     assert.throws(() => parseCliArguments(['timeline', 'same.json', 'same.json']), /must be different/u);
     assert.throws(() => parseCliArguments(['reconcile', 'one.json']), /from 2 to 5/u);
+    assert.throws(() => parseCliArguments(['manifest', 'one.json']), /requires --workflow/iu);
+    assert.throws(() => parseCliArguments(['manifest', 'one.json', 'one.json', '--workflow', 'review']), /must be different/iu);
   });
 });
 
@@ -162,6 +183,115 @@ describe('offline domain assurance', () => {
     });
     assert.equal(code, EXIT_CODES.PARTIAL_FAILURE);
     assert.equal(JSON.parse(stdout.value()).summary.status, 'blocked');
+  });
+
+  test('assembles a bounded change packet without network collection', async () => {
+    const stdout = capture();
+    let lookupCalled = false;
+    const change = (address: string) => ({
+      schema: 'whoisleuth.domain-change.input', version: 1, domain: 'example.test',
+      authoritySnapshots: [
+        { label: 'Authority A', source: 'fixture', state: 'observed', observedAt: NOW, records: [{ owner: 'example.test', type: 'A', value: address }] },
+        { label: 'Authority B', source: 'fixture', state: 'observed', observedAt: NOW, records: [{ owner: 'example.test', type: 'A', value: address }] },
+      ],
+      resolverSnapshots: [], acmeDependencies: [], certificate: null, hsts: null,
+    });
+    const code = await runCli(['change-packet', 'change.json', '--json'], {
+      stdout: stdout.stream,
+      stderr: capture().stream,
+      now: () => NOW,
+      readArtifactInput: async () => JSON.stringify({
+        schema: 'whoisleuth.domain-change-packet.input', version: 1, domain: 'example.test', reference: 'CHG-42',
+        preChange: change('192.0.2.10'), postChange: change('192.0.2.20'),
+        assurance: {
+          schema: 'whoisleuth.domain-assurance.input', version: 1, kind: 'planned-change', domain: 'example.test',
+          change: {
+            reference: 'CHG-42', startsAt: '2026-08-05T00:00:00Z', endsAt: '2026-08-05T02:00:00Z',
+            milestones: [{ id: 'dns', label: 'DNS published', expectedBy: NOW, evidenceSource: 'fixture', state: 'observed', observedAt: NOW, evidenceReference: 'post:dns' }],
+            rollbackCriteria: [{ id: 'rollback-dns', condition: 'DNS is unavailable', owner: 'Change lead', state: 'not_met' }],
+            postChangeChecks: [{ id: 'post-dns', label: 'DNS agrees', expectedState: 'aligned', evidenceSource: 'fixture', state: 'matched', evidenceReference: 'post:dns' }],
+          },
+        },
+      }),
+      runUnifiedLookup: async () => { lookupCalled = true; },
+    });
+    assert.equal(code, EXIT_CODES.SUCCESS);
+    assert.equal(lookupCalled, false);
+    assert.equal(JSON.parse(stdout.value()).schema, 'whoisleuth.domain-change-packet');
+  });
+});
+
+describe('local certificate event intake', () => {
+  test('emits an import-compatible document without network collection', async () => {
+    const stdout = capture();
+    let lookupCalled = false;
+    const code = await runCli(['ct-intake', 'events.json', '--json'], {
+      stdout: stdout.stream,
+      stderr: capture().stream,
+      now: () => NOW,
+      readArtifactInput: async () => JSON.stringify({
+        schema: 'whoisleuth.ct-event-batch', version: 1,
+        source: { name: 'Fixture source', reference: null, collectedAt: NOW },
+        events: [{
+          logId: 'fixture:1', observedAt: NOW, certificateSha256: 'a'.repeat(64),
+          dnsNames: ['event.example.test'], issuer: null, notAfter: null,
+          completeness: 'complete', limitations: [],
+        }],
+      }),
+      runUnifiedLookup: async () => { lookupCalled = true; },
+    });
+    assert.equal(code, EXIT_CODES.SUCCESS);
+    assert.equal(lookupCalled, false);
+    assert.equal(JSON.parse(stdout.value()).schema, 'whoisleuth.external-findings');
+  });
+
+  test('maps source observations and projects them without collection', async () => {
+    const mappingStdout = capture();
+    const mappedCode = await runCli(['map-observations', 'mapping.json', '--json'], {
+      stdout: mappingStdout.stream,
+      stderr: capture().stream,
+      now: () => NOW,
+      readArtifactInput: async () => JSON.stringify({
+        schema: 'whoisleuth.external-observation-mapping', version: 1,
+        source: { name: 'Fixture source', reference: null, collectedAt: NOW },
+        profile: {
+          id: 'fixture', version: 1, domainField: 'domain', summaryField: 'summary', observedAtField: 'observedAt',
+          referenceField: null, completenessField: null, category: 'other', evidenceClass: 'deployment_observation', limitations: [],
+        },
+        records: [{ domain: 'mapped.example.test', summary: 'Mapped fixture observation', observedAt: NOW }],
+      }),
+    });
+    assert.equal(mappedCode, EXIT_CODES.SUCCESS);
+    const bridgeStdout = capture();
+    const bridgeCode = await runCli(['oam-export', 'findings.json', '--json'], {
+      stdout: bridgeStdout.stream,
+      stderr: capture().stream,
+      now: () => NOW,
+      readArtifactInput: async () => mappingStdout.value(),
+    });
+    assert.equal(bridgeCode, EXIT_CODES.SUCCESS);
+    assert.equal(JSON.parse(bridgeStdout.value()).assets[0]?.type, 'FQDN');
+  });
+});
+
+describe('reproducible investigation manifest', () => {
+  test('reads ordered local artefacts and emits no source paths', async () => {
+    const stdout = capture();
+    let lookupCalled = false;
+    const code = await runCli(['manifest', '/private/lookup.json', '/private/brief.json', '--workflow', 'domain review', '--json'], {
+      stdout: stdout.stream,
+      stderr: capture().stream,
+      now: () => NOW,
+      readDiffInput: async (source) => source.endsWith('lookup.json')
+        ? '{"schema":"whoisleuth.cli.lookup","version":1}'
+        : '{"schema":"whoisleuth.cli.lookup-brief","version":2}',
+      runUnifiedLookup: async () => { lookupCalled = true; },
+    });
+    assert.equal(code, EXIT_CODES.SUCCESS);
+    assert.equal(lookupCalled, false);
+    const document = JSON.parse(stdout.value());
+    assert.equal(document.schema, 'whoisleuth.investigation-manifest');
+    assert.doesNotMatch(stdout.value(), /private|lookup\.json|brief\.json/iu);
   });
 });
 

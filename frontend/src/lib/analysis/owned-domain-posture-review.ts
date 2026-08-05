@@ -308,6 +308,36 @@ export function buildDesiredPostureObservation(report: DomainPostureHttpResponse
   };
 }
 
+export function buildDesiredPostureHistory(
+  observations: readonly DesiredPostureObservation[],
+): ReadonlyArray<Readonly<{
+  observedAt: string;
+  previousObservedAt: string;
+  changedChecks: readonly string[];
+  comparableChecks: number;
+}>> {
+  const ordered = [...observations]
+    .sort((left, right) => Date.parse(left.observedAt) - Date.parse(right.observedAt))
+    .slice(-12);
+  return ordered.slice(1).map((current, index) => {
+    const previous = ordered[index]!;
+    const previousById = new Map(previous.checks.map((check) => [check.id, check]));
+    const changedChecks = current.checks.flatMap((check) => {
+      const prior = previousById.get(check.id);
+      if (!prior) return [];
+      const priorRecords = prior.records.map((value) => value.toLowerCase()).sort();
+      const currentRecords = check.records.map((value) => value.toLowerCase()).sort();
+      return prior.status === check.status && sameRecords(priorRecords, currentRecords) ? [] : [check.id];
+    });
+    return Object.freeze({
+      observedAt: current.observedAt,
+      previousObservedAt: previous.observedAt,
+      changedChecks: Object.freeze(changedChecks),
+      comparableChecks: current.checks.filter((check) => previousById.has(check.id)).length,
+    });
+  });
+}
+
 function previousChanges(
   previous: DesiredPostureObservation | null,
   report: DomainPostureHttpResponse,
@@ -397,7 +427,7 @@ export function buildOwnedDomainPostureReview(
     },
     baseline,
     baselineComparisons: baselineComparisons(baseline, report, nowMs),
-    previousChanges: previousChanges(baseline?.previousObservation || null, report),
+    previousChanges: previousChanges(baseline?.observationHistory?.at(-1) || baseline?.previousObservation || null, report),
     limitations: [
       'The desired-state view organizes the selected Brand Profile and this point-in-time audit. It does not change DNS, registrar, mail, or provider configuration.',
       'An external dependency is a review lead. Unavailable evidence is not proof that a dependency is dangling, claimable, insecure, abandoned, or controlled by another party.',

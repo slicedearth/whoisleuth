@@ -208,7 +208,7 @@ export function buildLookupNetworkDisplay(input: {
   }));
   const delegationAuthorities = records(delegation.authorities).slice(0, 4).map((item) => ({
     nameserver: boundedTechnologyText(item.nameserver, 253),
-    state: ['success', 'lame', 'unreachable'].includes(String(item.state))
+    state: ['success', 'partial', 'lame', 'unreachable'].includes(String(item.state))
       ? String(item.state)
       : 'unreachable',
     addressSource: item.addressSource === 'registry_glue' ? 'Registry glue' : 'Recursive address',
@@ -234,6 +234,30 @@ export function buildLookupNetworkDisplay(input: {
       return Object.values(projection).every((field) => field === null) ? null : projection;
     })(),
   }));
+  const delegationRecordMatrix = records(delegation.recordMatrix).slice(0, 4).map((item) => ({
+    type: boundedTechnologyText(item.type, 16),
+    state: ['aligned', 'different', 'partial', 'insufficient'].includes(String(item.state))
+      ? String(item.state)
+      : 'insufficient',
+    observations: records(item.observations).slice(0, 4).map((observation) => {
+      const suppliedValues = stringList(observation.values).slice(0, 32);
+      const values = suppliedValues
+        .map((value) => boundedTechnologyText(value, 500))
+        .filter(Boolean)
+        .slice(0, 16);
+      const discarded = Number(observation.discarded);
+      return {
+        nameserver: boundedTechnologyText(observation.nameserver, 253),
+        state: ['success', 'not_found', 'partial', 'error', 'not_collected'].includes(String(observation.state))
+          ? String(observation.state)
+          : 'not_collected',
+        values,
+        error: boundedTechnologyText(observation.error, 180),
+        truncated: observation.truncated === true || suppliedValues.length > 16,
+        discarded: Number.isSafeInteger(discarded) && discarded > 0 ? Math.min(discarded, 10_000) : 0,
+      };
+    }),
+  }));
   const dnsDelegation = delegation.delegationHealthVersion === 1
     ? {
         status: statusLabel(show(delegation.status)),
@@ -243,6 +267,7 @@ export function buildLookupNetworkDisplay(input: {
         registryNameservers: stringList(rec(delegation.registry).nameservers).slice(0, 16),
         findings: delegationFindings,
         authorities: delegationAuthorities,
+        recordMatrix: delegationRecordMatrix,
         limitations: stringList(delegation.limitations).slice(0, 8),
       }
     : null;

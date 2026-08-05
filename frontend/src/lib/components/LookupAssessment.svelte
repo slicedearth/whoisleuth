@@ -4,6 +4,7 @@
     scoreTone,
     type OpportunityExplanation,
     type RiskExplanation,
+    type RiskScoreSensitivity,
   } from '$lib/analysis/scoring.ts';
   import { projectScoreFactors } from '$lib/analysis/visualization-models.ts';
 
@@ -22,6 +23,7 @@
     detail,
     confidence,
     risk,
+    riskSensitivity = null,
     opportunity,
     signals,
     trusted,
@@ -29,6 +31,7 @@
     detail: string;
     confidence: string;
     risk: DisplayRiskExplanation | null;
+    riskSensitivity?: RiskScoreSensitivity | null;
     opportunity: OpportunityExplanation | null;
     signals: Array<{ label: string; tone: string; detail?: string }>;
     trusted: string;
@@ -53,15 +56,21 @@
 {#snippet FactorChart(score: ScoreExplanation, label: string)}
   {@const chart = projectScoreFactors(score.factors)}
   {#if chart.factors.length}
-    <div class="factor-chart" role="img" aria-label={`${label} score contribution chart with ${chart.factors.length} non-zero factors`}>
+    <div class="factor-chart" aria-hidden="true">
       <svg viewBox={`0 0 ${chart.width} ${chart.height}`} aria-hidden="true">
         <line x1={chart.zeroX} x2={chart.zeroX} y1="8" y2={chart.height - 8} class="zero-line" />
         {#each chart.factors as factor}
-          <g class:negative={factor.delta < 0} class="factor">
+          <g class:negative={factor.delta < 0} class:zero={factor.delta === 0} class="factor">
             <text x="8" y={factor.y + 12}>{factor.label}</text>
-            <rect x={factor.x} y={factor.y} width={factor.width} height="16" rx="3">
-              <title>{factor.label}: {factor.delta >= 0 ? '+' : ''}{Math.round(factor.delta)}</title>
-            </rect>
+            {#if factor.delta === 0}
+              <circle cx={chart.zeroX} cy={factor.y + 8} r="4" class="zero-marker">
+                <title>{factor.label}: 0</title>
+              </circle>
+            {:else}
+              <rect x={factor.x} y={factor.y} width={factor.width} height="16" rx="3">
+                <title>{factor.label}: {factor.delta >= 0 ? '+' : ''}{Math.round(factor.delta)}</title>
+              </rect>
+            {/if}
             <text
               x={factor.delta < 0 ? factor.x - 7 : factor.x + factor.width + 7}
               y={factor.y + 12}
@@ -119,10 +128,13 @@
           <p class="score-quality">Fixed demonstration score for layout and workflow practice. It was not produced by the live Risk model.</p>
         {:else}
           <p class="score-quality"><strong>Evidence coverage:</strong> {qualitySummary(risk)} · {risk.evidenceQuality.observedFamilies.length} observed scoring families. {risk.evidenceQuality.freshness === 'observed' ? 'Observation time recorded.' : 'Observation time unavailable.'}</p>
+          {#if riskSensitivity?.scenarios.length}
+            <p class="score-quality"><strong>Single-family sensitivity:</strong> the score ranges from {riskSensitivity.minimumScenarioScore} to {riskSensitivity.baselineScore} when each contributing evidence family is removed and the model is recalculated. {riskSensitivity.thresholdState === 'crosses' ? `The ${riskSensitivity.reviewThreshold}-point review threshold depends on combined evidence.` : riskSensitivity.thresholdState === 'stable_above' ? `It stays above the ${riskSensitivity.reviewThreshold}-point review threshold in every scenario.` : 'It is already below the review threshold.'}</p>
+          {/if}
         {/if}
         {#if risk.capped}<p class="score-quality">Raw total {risk.rawScore}; displayed score capped at {risk.score}.</p>{/if}
         {@render FactorChart(risk, 'Risk')}
-        <ul>{#each risk.factors as factor}<li><span>{factor.label}</span><strong>{factor.delta >= 0 ? '+' : ''}{Math.round(factor.delta)}</strong></li>{/each}</ul>
+        <ul class="factor-list">{#each risk.factors as factor}<li><span>{factor.label}</span><strong>{factor.delta >= 0 ? '+' : ''}{Math.round(factor.delta)}</strong></li>{/each}</ul>
       </details>
     {/if}
     {#if opportunity}
@@ -132,7 +144,7 @@
         {#if opportunity.dimensions.length}<dl class="dimensions">{#each opportunity.dimensions as dimension}<div><dt>{dimension.label}</dt><dd>{dimension.contribution >= 0 ? '+' : ''}{dimension.contribution}</dd></div>{/each}</dl>{/if}
         {#if opportunity.capped}<p class="score-quality">Raw total {opportunity.rawScore}; displayed score capped at {opportunity.score}.</p>{/if}
         {@render FactorChart(opportunity, 'Opportunity')}
-        <ul>{#each opportunity.factors as factor}<li><span>{factor.label}</span><strong>{factor.delta >= 0 ? '+' : ''}{Math.round(factor.delta)}</strong></li>{/each}</ul>
+        <ul class="factor-list">{#each opportunity.factors as factor}<li><span>{factor.label}</span><strong>{factor.delta >= 0 ? '+' : ''}{Math.round(factor.delta)}</strong></li>{/each}</ul>
       </details>
     {/if}
   </div>
@@ -152,7 +164,7 @@
   .score.warn b{background:var(--amber)}
   .signals{display:flex;flex-wrap:wrap;gap:6px;margin-top:14px}
   .signals .chip{white-space:normal}
-  .score-details{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;min-width:0;margin-top:12px}
+  .score-details{display:grid;grid-template-columns:minmax(0,1fr);gap:8px;min-width:0;margin-top:12px}
   .score-details details{min-width:0;margin-top:0;overflow:hidden}
   .factor-chart{width:calc(100% - 24px);min-width:0;margin:10px 12px 0;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
   .factor-chart svg{display:block;width:100%;min-width:0;height:auto}
@@ -160,9 +172,10 @@
   .factor text{fill:var(--muted);font-family:var(--mono);font-size:9px}
   .factor rect{fill:rgb(var(--violet-rgb) / .22);stroke:var(--violet)}
   .factor.negative rect{fill:rgb(var(--accent-rgb) / .2);stroke:var(--accent)}
+  .zero-marker{fill:var(--panel);stroke:var(--muted);stroke-width:2}
   .factor .factor-value{fill:var(--text);font-weight:700}
   .factor-limit{margin:7px 12px 0;color:var(--muted);font-size:var(--text-2xs)}
-  .score-details ul{display:grid;gap:6px;margin:10px 12px;padding:0;list-style:none}
+  .score-details ul{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;border:0;list-style:none}
   .score-details li{display:flex;justify-content:space-between;gap:10px;color:var(--muted);font-size:var(--text-xs)}
   .score-details li strong{color:var(--text)}
   .score-quality{margin:10px 12px 0;color:var(--muted);font-size:var(--text-xs);line-height:1.5}
@@ -175,9 +188,9 @@
     .scores{margin-top:12px}
   }
   @media(max-width:650px){
-    .score-details{grid-template-columns:minmax(0,1fr)}
     .scores{display:grid;grid-template-columns:1fr 1fr}
     .score{width:auto}
     .factor-chart{display:none}
+    .score-details ul{position:static;display:grid;width:auto;height:auto;gap:6px;margin:10px 12px;padding:0;overflow:visible;clip:auto;clip-path:none;white-space:normal}
   }
 </style>

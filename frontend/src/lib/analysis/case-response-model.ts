@@ -21,6 +21,8 @@ export const MAX_DECISION_PIN_REFERENCES = 20;
 export const MAX_TRAIL_TARGET_LENGTH = 500;
 export const MAX_ASSERTION_PROVENANCE_LABELS = 20;
 export const MAX_ASSERTION_PROVENANCE_MARKINGS = 12;
+export const CASE_EVIDENCE_RELATION_STANCES = ['supports', 'contradicts', 'unresolved'] as const;
+export type CaseEvidenceRelationStance = typeof CASE_EVIDENCE_RELATION_STANCES[number];
 
 export const CASE_PIN_COMPLETENESS = ['complete', 'partial', 'inconclusive', 'unknown'] as const;
 export type CasePinCompleteness = typeof CASE_PIN_COMPLETENESS[number];
@@ -179,6 +181,10 @@ export type CaseAssertionRecord = {
   statement: string;
   rationale: string | null;
   evidencePinIds: string[];
+  evidenceRelations?: Array<{
+    evidencePinId: string;
+    stance: CaseEvidenceRelationStance;
+  }>;
   state: CaseAssertionState;
   createdAt: string;
   updatedAt: string;
@@ -229,6 +235,7 @@ const ACTION_TYPES = new Set<string>(CASE_ACTION_TYPES);
 const ACTION_STATES = new Set<string>(CASE_ACTION_STATES);
 const ASSERTION_KINDS = new Set<string>(CASE_ASSERTION_KINDS);
 const ASSERTION_STATES = new Set<string>(CASE_ASSERTION_STATES);
+const EVIDENCE_RELATION_STANCES = new Set<string>(CASE_EVIDENCE_RELATION_STANCES);
 const ASSERTION_EXTERNAL_FORMATS = new Set<string>(CASE_ASSERTION_EXTERNAL_FORMATS);
 const ASSERTION_EXTERNAL_ENTITY_TYPES = new Set<string>(CASE_ASSERTION_EXTERNAL_ENTITY_TYPES);
 const TRAIL_KINDS = new Set<string>(CASE_MANUAL_TRAIL_KINDS);
@@ -317,6 +324,30 @@ function uniqueIds(value: unknown, validIds?: ReadonlySet<string>): string[] {
     if (unique.size >= MAX_DECISION_PIN_REFERENCES) break;
   }
   return [...unique];
+}
+
+function normalizeEvidenceRelations(
+  value: unknown,
+  legacyIds: readonly string[],
+  validIds?: ReadonlySet<string>,
+): NonNullable<CaseAssertionRecord['evidenceRelations']> {
+  const output = new Map<string, CaseEvidenceRelationStance>();
+  if (Array.isArray(value)) {
+    for (const raw of value.slice(0, MAX_DECISION_PIN_REFERENCES * 2)) {
+      const item = record(raw);
+      const evidencePinId = typeof item.evidencePinId === 'string' && SAFE_ID_RE.test(item.evidencePinId)
+        ? item.evidencePinId
+        : '';
+      if (!evidencePinId || (validIds && !validIds.has(evidencePinId))) continue;
+      if (typeof item.stance !== 'string' || !EVIDENCE_RELATION_STANCES.has(item.stance)) continue;
+      if (!output.has(evidencePinId)) output.set(evidencePinId, item.stance as CaseEvidenceRelationStance);
+      if (output.size >= MAX_DECISION_PIN_REFERENCES) break;
+    }
+  }
+  if (!output.size) {
+    for (const evidencePinId of legacyIds) output.set(evidencePinId, 'supports');
+  }
+  return [...output].map(([evidencePinId, stance]) => ({ evidencePinId, stance }));
 }
 
 function normalizePin(raw: unknown, fallback: string): CaseEvidencePin | null {
@@ -627,6 +658,8 @@ function normalizeAssertion(
   if (!statement) return null;
   const createdAt = iso(item.createdAt, fallback);
   const provenance = normalizeAssertionProvenance(item.provenance);
+  const legacyIds = uniqueIds(item.evidencePinIds, validPinIds);
+  const evidenceRelations = normalizeEvidenceRelations(item.evidenceRelations, legacyIds, validPinIds);
   return {
     id: safeId(item.id, 'assertion', { statement, createdAt }),
     kind: typeof item.kind === 'string' && ASSERTION_KINDS.has(item.kind)
@@ -634,7 +667,8 @@ function normalizeAssertion(
       : 'hypothesis',
     statement,
     rationale: text(item.rationale, MAX_RESPONSE_RATIONALE_LENGTH) || null,
-    evidencePinIds: uniqueIds(item.evidencePinIds, validPinIds),
+    evidencePinIds: evidenceRelations.map((relation) => relation.evidencePinId),
+    evidenceRelations,
     state: typeof item.state === 'string' && ASSERTION_STATES.has(item.state)
       ? item.state as CaseAssertionState
       : 'open',

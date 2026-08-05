@@ -40,6 +40,44 @@ import {
   CLI_INVESTIGATION_PLAN_VERSION,
 } from '../cli/investigation-plan.mts';
 import {
+  CLI_INVESTIGATION_RUN_SCHEMA,
+  CLI_INVESTIGATION_RUN_VERSION,
+  MAX_INVESTIGATION_RUN_BYTES,
+} from '../cli/investigation-run.mts';
+import {
+  CLI_COLLECTION_PREFLIGHT_SCHEMA,
+  CLI_COLLECTION_PREFLIGHT_VERSION,
+} from '../cli/collection-preflight.mts';
+import {
+  CLI_CONFIG_SCHEMA,
+  CLI_CONFIG_VERSION,
+  MAX_CLI_CONFIG_BYTES,
+} from '../cli/config-profile.mts';
+import {
+  CLI_CASE_PACK_SCHEMA,
+  CLI_CASE_PACK_VERSION,
+  MAX_CASE_PACK_INPUT_BYTES,
+} from '../cli/case-pack.mts';
+import {
+  CLI_DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA,
+  CLI_DOMAIN_CONTROL_REVIEW_SCHEMA,
+  CLI_DOMAIN_CONTROL_REVIEW_VERSION,
+  MAX_DOMAIN_CONTROL_REVIEW_INPUT_BYTES,
+} from '../cli/domain-control-observations.mts';
+import {
+  CLI_DOMAIN_CONTROL_MONITOR_SCHEMA,
+  CLI_DOMAIN_CONTROL_MONITOR_VERSION,
+} from '../cli/domain-control-monitor.mts';
+import {
+  CLI_LOOKUP_BRIEF_SCHEMA,
+  CLI_LOOKUP_BRIEF_VERSION,
+} from '../cli/lookup-brief.mts';
+import {
+  MAX_REGISTRY_COHORT_INPUT_BYTES,
+  REGISTRY_COHORT_SCHEMA,
+  REGISTRY_COHORT_VERSION,
+} from '../cli/registry-cohort.mts';
+import {
   CLI_BULK_CHECKPOINT_SCHEMA,
   CLI_BULK_CHECKPOINT_VERSION,
   MAX_BULK_CHECKPOINT_BYTES,
@@ -75,6 +113,27 @@ import {
   MAX_ASSURANCE_INPUT_BYTES,
 } from '../lib/domain-assurance.mts';
 import {
+  DOMAIN_PORTFOLIO_INPUT_SCHEMA,
+  DOMAIN_PORTFOLIO_REVIEW_SCHEMA,
+  DOMAIN_PORTFOLIO_REVIEW_VERSION,
+} from '../lib/domain-portfolio-review.mts';
+import {
+  DOMAIN_CHANGE_INPUT_SCHEMA,
+  DOMAIN_CHANGE_REVIEW_SCHEMA,
+  DOMAIN_CHANGE_REVIEW_VERSION,
+} from '../lib/domain-change-review.mts';
+import {
+  NAMESERVER_PREFLIGHT_INPUT_SCHEMA,
+  NAMESERVER_PREFLIGHT_REVIEW_SCHEMA,
+  NAMESERVER_PREFLIGHT_REVIEW_VERSION,
+} from '../lib/nameserver-preflight-review.mts';
+import {
+  MAX_ZONE_TEXT_BYTES,
+  ZONE_INTENT_INPUT_SCHEMA,
+  ZONE_INTENT_REVIEW_SCHEMA,
+  ZONE_INTENT_REVIEW_VERSION,
+} from '../lib/zone-intent-review.mts';
+import {
   CLI_PROGRESS_EVENT_SCHEMA,
   CLI_PROGRESS_EVENT_VERSION,
 } from '../cli/progress-events.mts';
@@ -93,6 +152,35 @@ import {
   CLI_DISCOVERY_OBSERVATION_VERSION,
   MAX_DISCOVERY_OBSERVATION_BYTES,
 } from '../cli/discovery-observation-snapshot.mts';
+import {
+  INVESTIGATION_MANIFEST_SCHEMA,
+  INVESTIGATION_MANIFEST_VERSION,
+  MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES,
+} from '../cli/investigation-manifest.mts';
+import {
+  CT_EVENT_BATCH_SCHEMA,
+  CT_EVENT_BATCH_VERSION,
+  MAX_CT_EVENT_INPUT_BYTES,
+} from '../cli/ct-event-intake.mts';
+import {
+  EXTERNAL_OBSERVATION_MAPPING_SCHEMA,
+  EXTERNAL_OBSERVATION_MAPPING_VERSION,
+  MAX_EXTERNAL_OBSERVATION_MAPPING_BYTES,
+} from '../cli/external-observation-mapping.mts';
+import {
+  OPEN_ASSET_MODEL_BRIDGE_SCHEMA,
+  OPEN_ASSET_MODEL_BRIDGE_VERSION,
+} from '../cli/open-asset-model-bridge.mts';
+import {
+  SOURCE_RELIABILITY_REPORT_SCHEMA,
+  SOURCE_RELIABILITY_REPORT_VERSION,
+  MAX_SOURCE_RELIABILITY_INPUT_BYTES,
+} from '../cli/source-reliability.mts';
+import {
+  MAX_OFFLINE_EVIDENCE_INPUT_BYTES,
+  OFFLINE_EVIDENCE_REVIEW_SCHEMA,
+  OFFLINE_EVIDENCE_REVIEW_VERSION,
+} from '../cli/offline-evidence-review.mts';
 import {
   BRAND_PROFILE_SCHEMA,
   BRAND_PROFILE_SCHEMA_VERSION,
@@ -209,6 +297,14 @@ import {
   MAX_EXTERNAL_FINDINGS_IMPORT_BYTES,
 } from '../frontend/src/lib/analysis/external-findings-import.ts';
 import {
+  CERTIFICATE_OBSERVATION_ROWS_SCHEMA,
+  DNS_OBSERVATION_ROWS_SCHEMA,
+  DOMAIN_OBSERVATION_ROWS_SCHEMA,
+  EXTERNAL_FINDING_ROWS_SCHEMA,
+  EXTERNAL_FINDING_ROWS_VERSION,
+  SUPPORTED_OBSERVATION_ROWS_VERSION,
+} from '../frontend/src/lib/analysis/external-findings-converters.ts';
+import {
   MISP_INDICATOR_EXPORT_VERSION,
 } from '../frontend/src/lib/analysis/misp-indicator-export.ts';
 import {
@@ -256,6 +352,27 @@ import {
   DOMAIN_CONTROL_REVIEW_VERSION,
 } from '../lib/domain-control-manifest.mts';
 import {
+  DOMAIN_CONTROL_FLIGHT_RECORDER_INPUT_SCHEMA,
+  DOMAIN_CONTROL_FLIGHT_RECORDER_SCHEMA,
+  DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION,
+} from '../lib/domain-control-flight-recorder.mts';
+import {
+  DOMAIN_CHANGE_PACKET_INPUT_SCHEMA,
+  DOMAIN_CHANGE_PACKET_SCHEMA,
+  DOMAIN_CHANGE_PACKET_VERSION,
+  MAX_DOMAIN_CHANGE_PACKET_INPUT_BYTES,
+} from '../lib/domain-change-packet.mts';
+import {
+  DNS_CONVERGENCE_INPUT_SCHEMA,
+  DNS_CONVERGENCE_REVIEW_SCHEMA,
+  DNS_CONVERGENCE_REVIEW_VERSION,
+} from '../lib/dns-convergence-review.mts';
+import {
+  TRUST_STORE_COMPARISON_INPUT_SCHEMA,
+  TRUST_STORE_COMPARISON_REVIEW_SCHEMA,
+  TRUST_STORE_COMPARISON_REVIEW_VERSION,
+} from '../lib/trust-store-comparison.mts';
+import {
   registryStandardsCoverageSnapshot,
 } from '../lib/registry-capabilities.mts';
 import {
@@ -294,7 +411,7 @@ import {
 
 export const SCHEMA_COMPATIBILITY_INVENTORY_SCHEMA = 'whoisleuth.schema-compatibility-inventory';
 export const SCHEMA_COMPATIBILITY_INVENTORY_VERSION = 1;
-export const MAX_SCHEMA_COMPATIBILITY_ENTRIES = 100;
+export const MAX_SCHEMA_COMPATIBILITY_ENTRIES = 140;
 
 type ContractKind = 'browser_store' | 'tab_store' | 'hosted_store' | 'export' | 'cli_document' | 'derived';
 type FutureVersionBehavior = 'reject' | 'preserve_without_write' | 'discard' | 'not_applicable';
@@ -339,7 +456,7 @@ const standardsCoverage = registryStandardsCoverageSnapshot();
 
 const ENTRIES: SchemaCompatibilityEntry[] = [
   entry({ id: 'browser.cases', kind: 'browser_store', schema: null, currentVersion: CASE_SCHEMA_VERSION, supportedVersions: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], acceptsUnversionedLegacy: true, futureVersionBehavior: 'preserve_without_write', migration: 'normalize_to_current', writeSemantics: 'normalized_rewrite', byteBudget: MAX_CASE_STORE_BYTES, owner: 'frontend/src/lib/analysis/case-model.ts', note: 'Known fields can be read from newer local envelopes, but wrappers block overwrite and downgraded export.' }),
-  entry({ id: 'browser.brand-profiles', kind: 'browser_store', schema: null, currentVersion: BRAND_PROFILE_SCHEMA_VERSION, supportedVersions: [1, 2, 3, 4, 5], acceptsUnversionedLegacy: true, futureVersionBehavior: 'preserve_without_write', migration: 'normalize_to_current', writeSemantics: 'normalized_rewrite', byteBudget: MAX_PROFILE_STORE_BYTES, owner: 'frontend/src/lib/analysis/brand-profile-model.ts', note: 'Version 1 bare arrays and supported profiles normalise to the current bounded store; the schema string belongs to portable exports.' }),
+  entry({ id: 'browser.brand-profiles', kind: 'browser_store', schema: null, currentVersion: BRAND_PROFILE_SCHEMA_VERSION, supportedVersions: [1, 2, 3, 4, 5, 6], acceptsUnversionedLegacy: true, futureVersionBehavior: 'preserve_without_write', migration: 'normalize_to_current', writeSemantics: 'normalized_rewrite', byteBudget: MAX_PROFILE_STORE_BYTES, owner: 'frontend/src/lib/analysis/brand-profile-model.ts', note: 'Version 1 bare arrays and supported profiles normalise to the current bounded store; version 6 adds bounded domain-control planning context and approved change windows.' }),
   entry({ id: 'browser.campaigns', kind: 'browser_store', schema: null, currentVersion: CAMPAIGN_SCHEMA_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: true, futureVersionBehavior: 'preserve_without_write', migration: 'normalize_to_current', writeSemantics: 'normalized_rewrite', byteBudget: MAX_CAMPAIGN_STORE_BYTES, owner: 'frontend/src/lib/analysis/campaign-model.ts', note: 'Bare arrays remain recoverable; explicit future versions are not overwritten; the schema string belongs to portable exports.' }),
   entry({ id: 'browser.watchlists', kind: 'browser_store', schema: WATCHLIST_SCHEMA, currentVersion: WATCHLIST_SCHEMA_VERSION, supportedVersions: [1, 2], acceptsUnversionedLegacy: true, futureVersionBehavior: 'preserve_without_write', migration: 'normalize_to_current', writeSemantics: 'normalized_rewrite', byteBudget: MAX_WATCHLIST_STORE_BYTES, owner: 'frontend/src/lib/analysis/watchlist-store.ts', note: 'Legacy map-shaped stores normalise to the current envelope.' }),
   entry({ id: 'browser.shortlist', kind: 'browser_store', schema: SHORTLIST_SCHEMA, currentVersion: SHORTLIST_SCHEMA_VERSION, supportedVersions: [1, 2, 3], acceptsUnversionedLegacy: true, futureVersionBehavior: 'preserve_without_write', migration: 'normalize_to_current', writeSemantics: 'normalized_rewrite', byteBudget: MAX_SHORTLIST_STORE_BYTES, owner: 'frontend/src/lib/analysis/shortlist-model.ts', note: 'Legacy arrays normalise to the current compact envelope.' }),
@@ -357,14 +474,18 @@ const ENTRIES: SchemaCompatibilityEntry[] = [
   entry({ id: 'hosted.scheduled-monitor-envelope', kind: 'hosted_store', schema: ENVELOPE_SCHEMA, currentVersion: ENVELOPE_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'optimistic_replace', byteBudget: MAX_ENVELOPE_BYTES, owner: 'lib/scheduled-monitor-crypto.mts', note: 'Authenticated encrypted envelope; version and namespace are part of authenticated context.' }),
   entry({ id: 'hosted.scheduled-monitor-delivery', kind: 'hosted_store', schema: SCHEDULED_MONITOR_DELIVERY_SCHEMA, currentVersion: SCHEDULED_MONITOR_DELIVERY_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'ephemeral_replace', byteBudget: null, owner: 'frontend/src/lib/analysis/scheduled-monitor-dispatcher.ts', note: 'Opaque bounded queue message with an allowlisted key set.' }),
   entry({ id: 'export.cases', kind: 'export', schema: null, currentVersion: CASE_SCHEMA_VERSION, supportedVersions: [3, 4, 5, 6, 7, 8, 9, 10], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'normalize_to_current', writeSemantics: 'non_destructive_merge', byteBudget: MAX_CASE_IMPORT_BYTES, owner: 'frontend/src/lib/analysis/case-model.ts', note: 'Non-destructive merge accepts supported case schemas and rejects older or future versions; version 10 adds score-model identity and reviewed reason context.' }),
-  entry({ id: 'export.brand-profiles', kind: 'export', schema: BRAND_PROFILE_SCHEMA, currentVersion: BRAND_PROFILE_SCHEMA_VERSION, supportedVersions: [2, 3, 4, 5], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'normalize_to_current', writeSemantics: 'non_destructive_merge', byteBudget: null, owner: 'frontend/src/lib/analysis/brand-profile-model.ts', note: 'Supported exports merge non-destructively by bounded normalised profile identity.' }),
+  entry({ id: 'export.brand-profiles', kind: 'export', schema: BRAND_PROFILE_SCHEMA, currentVersion: BRAND_PROFILE_SCHEMA_VERSION, supportedVersions: [2, 3, 4, 5, 6], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'normalize_to_current', writeSemantics: 'non_destructive_merge', byteBudget: null, owner: 'frontend/src/lib/analysis/brand-profile-model.ts', note: 'Supported exports merge non-destructively by bounded normalised profile identity.' }),
   entry({ id: 'export.campaigns', kind: 'export', schema: CAMPAIGN_SCHEMA, currentVersion: CAMPAIGN_SCHEMA_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: true, futureVersionBehavior: 'reject', migration: 'normalize_to_current', writeSemantics: 'non_destructive_merge', byteBudget: MAX_CAMPAIGN_IMPORT_BYTES, owner: 'frontend/src/lib/analysis/campaign-model.ts', note: 'Non-destructive merge; unversioned legacy campaign arrays remain accepted.' }),
   entry({ id: 'export.watchlists', kind: 'export', schema: WATCHLIST_SCHEMA, currentVersion: WATCHLIST_SCHEMA_VERSION, supportedVersions: [2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'non_destructive_merge', byteBudget: null, owner: 'frontend/src/lib/analysis/watchlist-store.ts', note: 'Non-destructive collection merge with current schema required.' }),
   entry({ id: 'export.shortlist', kind: 'export', schema: SHORTLIST_SCHEMA, currentVersion: SHORTLIST_SCHEMA_VERSION, supportedVersions: [2, 3], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'normalize_to_current', writeSemantics: 'non_destructive_merge', byteBudget: null, owner: 'frontend/src/lib/analysis/shortlist-model.ts', note: 'Non-destructive domain merge retains schema 2 records while schema 3 adds Opportunity model identity.' }),
   entry({ id: 'export.detection-rules', kind: 'export', schema: DETECTION_RULE_SCHEMA, currentVersion: DETECTION_RULE_SCHEMA_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: true, futureVersionBehavior: 'reject', migration: 'normalize_to_current', writeSemantics: 'non_destructive_merge', byteBudget: MAX_RULE_IMPORT_BYTES, owner: 'frontend/src/lib/analysis/detection-rule-model.ts', note: 'Non-destructive rule merge; imported conditions remain allowlisted and non-executable.' }),
   entry({ id: 'export.case-report', kind: 'export', schema: CASE_REPORT_SCHEMA, currentVersion: CASE_REPORT_SCHEMA_VERSION, supportedVersions: [1, 2, 3, 4, 5, 6], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'frontend/src/lib/analysis/case-report.ts', note: 'Local report output; version 6 adds conservative analyst-derived interoperability tags and remains a non-import persistence contract.' }),
   entry({ id: 'export.case-response-packet', kind: 'export', schema: CASE_RESPONSE_PACKET_SCHEMA, currentVersion: CASE_RESPONSE_PACKET_VERSION, supportedVersions: [1, 2, 3, 4, 5], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'frontend/src/lib/analysis/case-response-packet.ts', note: 'Local reviewed response packet and draft with a bounded preflight summary; no submission or provider side effect.' }),
-  entry({ id: 'export.external-findings', kind: 'export', schema: EXTERNAL_FINDINGS_SCHEMA, currentVersion: EXTERNAL_FINDINGS_VERSION, supportedVersions: [1, 2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'normalize_to_current', writeSemantics: 'non_destructive_merge', byteBudget: MAX_EXTERNAL_FINDINGS_IMPORT_BYTES, owner: 'frontend/src/lib/analysis/external-findings-import.ts', note: 'Strict local findings import. Version 2 distinguishes deployment observations from provider reports; analyst assertions remain a separate case workflow.' }),
+  entry({ id: 'export.external-findings', kind: 'export', schema: EXTERNAL_FINDINGS_SCHEMA, currentVersion: EXTERNAL_FINDINGS_VERSION, supportedVersions: [1, 2, 3], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'normalize_to_current', writeSemantics: 'non_destructive_merge', byteBudget: MAX_EXTERNAL_FINDINGS_IMPORT_BYTES, owner: 'frontend/src/lib/analysis/external-findings-import.ts', note: 'Strict local findings import. Version 3 can retain typed documented observation rows while analyst assertions remain a separate case workflow.' }),
+  entry({ id: 'import.external-finding-rows', kind: 'export', schema: EXTERNAL_FINDING_ROWS_SCHEMA, currentVersion: EXTERNAL_FINDING_ROWS_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: true, futureVersionBehavior: 'reject', migration: 'normalize_to_current', writeSemantics: 'non_destructive_merge', byteBudget: MAX_EXTERNAL_FINDINGS_IMPORT_BYTES, owner: 'frontend/src/lib/analysis/external-findings-converters.ts', note: 'Bounded fixed-column JSON rows converted through the strict findings parser.' }),
+  entry({ id: 'import.domain-observation-rows', kind: 'export', schema: DOMAIN_OBSERVATION_ROWS_SCHEMA, currentVersion: SUPPORTED_OBSERVATION_ROWS_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'normalize_to_current', writeSemantics: 'non_destructive_merge', byteBudget: MAX_EXTERNAL_FINDINGS_IMPORT_BYTES, owner: 'frontend/src/lib/analysis/external-findings-converters.ts', note: 'Typed external domain-state observations retained with source-qualified provenance.' }),
+  entry({ id: 'import.dns-observation-rows', kind: 'export', schema: DNS_OBSERVATION_ROWS_SCHEMA, currentVersion: SUPPORTED_OBSERVATION_ROWS_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'normalize_to_current', writeSemantics: 'non_destructive_merge', byteBudget: MAX_EXTERNAL_FINDINGS_IMPORT_BYTES, owner: 'frontend/src/lib/analysis/external-findings-converters.ts', note: 'Typed external DNS observations; only valid relational values project graph edges.' }),
+  entry({ id: 'import.certificate-observation-rows', kind: 'export', schema: CERTIFICATE_OBSERVATION_ROWS_SCHEMA, currentVersion: SUPPORTED_OBSERVATION_ROWS_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'normalize_to_current', writeSemantics: 'non_destructive_merge', byteBudget: MAX_EXTERNAL_FINDINGS_IMPORT_BYTES, owner: 'frontend/src/lib/analysis/external-findings-converters.ts', note: 'Typed external certificate observations requiring an exact SHA-256 fingerprint.' }),
   entry({ id: 'export.investigation-recipe-summary', kind: 'export', schema: INVESTIGATION_GUIDE_EXPORT_SCHEMA, currentVersion: INVESTIGATION_GUIDE_EXPORT_VERSION, supportedVersions: [1, 2, 3], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: MAX_INVESTIGATION_GUIDE_EXPORT_BYTES, owner: 'frontend/src/lib/analysis/investigation-guide.ts', note: 'Compact analyst workflow metadata, including an optional template identifier, label, and bounded stage-review reasons; raw evidence, notes, credentials, provider responses, and scan results are excluded.' }),
   entry({ id: 'export.investigation-templates', kind: 'export', schema: INVESTIGATION_TEMPLATE_SCHEMA, currentVersion: INVESTIGATION_TEMPLATE_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'non_destructive_merge', byteBudget: MAX_INVESTIGATION_TEMPLATE_IMPORT_BYTES, owner: 'frontend/src/lib/analysis/investigation-template-model.ts', note: 'Portable bounded analyst-authored guide definitions with allowlisted stage identities and request gates.' }),
   entry({ id: 'export.investigation-cacao-profile', kind: 'export', schema: INVESTIGATION_CACAO_SPEC_VERSION, currentVersion: INVESTIGATION_CACAO_PROFILE_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'normalize_to_current', writeSemantics: 'non_destructive_merge', byteBudget: MAX_INVESTIGATION_CACAO_IMPORT_BYTES, owner: 'frontend/src/lib/analysis/investigation-playbook-interchange.ts', note: 'Restricted CACAO 2.0 profile with a connected linear sequence of manual analyst steps; executable commands, branches, targets, credentials, and arbitrary operations are rejected.' }),
@@ -375,7 +496,7 @@ const ENTRIES: SchemaCompatibilityEntry[] = [
   entry({ id: 'export.workspace-archive', kind: 'export', schema: WORKSPACE_ARCHIVE_SCHEMA, currentVersion: WORKSPACE_ARCHIVE_VERSION, supportedVersions: [1, 2, 3, 4, 5], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'normalize_to_current', writeSemantics: 'non_destructive_merge', byteBudget: MAX_WORKSPACE_ARCHIVE_BYTES, owner: 'frontend/src/lib/analysis/workspace-archive.ts', note: 'Manifested local archive with per-section checksums, preview-first import, rollback on browser-store write failure, and backward compatibility with archive versions 1 through 4.' }),
   entry({ id: 'export.encrypted-workspace-archive', kind: 'export', schema: ENCRYPTED_WORKSPACE_ARCHIVE_SCHEMA, currentVersion: ENCRYPTED_WORKSPACE_ARCHIVE_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'non_destructive_merge', byteBudget: MAX_ENCRYPTED_WORKSPACE_ARCHIVE_BYTES, owner: 'frontend/src/lib/analysis/workspace-archive-crypto.ts', note: 'Browser-local PBKDF2 and AES-GCM wrapper around the ordinary checksummed archive; passphrases are never persisted or recoverable.' }),
   entry({ id: 'export.workspace-settings-section', kind: 'export', schema: WORKSPACE_SETTINGS_SCHEMA, currentVersion: WORKSPACE_SETTINGS_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'non_destructive_merge', byteBudget: null, owner: 'frontend/src/lib/analysis/workspace-archive.ts', note: 'Nested archive section limited to the active Brand Profile identifier and dark, light, or system theme preference.' }),
-  entry({ id: 'export.lookup-evidence', kind: 'export', schema: LOOKUP_EVIDENCE_SCHEMA, currentVersion: LOOKUP_EVIDENCE_SCHEMA_VERSION, supportedVersions: [12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'lib/evidence-export.mts', note: 'Full-fidelity normalised lookup package; distinct from compact browser evidence.' }),
+  entry({ id: 'export.lookup-evidence', kind: 'export', schema: LOOKUP_EVIDENCE_SCHEMA, currentVersion: LOOKUP_EVIDENCE_SCHEMA_VERSION, supportedVersions: [12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'lib/evidence-export.mts', note: 'Full-fidelity normalised lookup package; version 25 can include bounded direct-authority A, AAAA, CAA, and MX agreement evidence.' }),
   entry({ id: 'export.domain-control-manifest', kind: 'export', schema: DOMAIN_CONTROL_MANIFEST_SCHEMA, currentVersion: DOMAIN_CONTROL_MANIFEST_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: null, owner: 'lib/domain-control-manifest.mts', note: 'Integrity-protected analyst-authored desired state. Empty fields remain unconfigured and are not absence requirements.' }),
   entry({ id: 'export.defensive-indicators', kind: 'export', schema: null, currentVersion: DEFENSIVE_INDICATOR_EXPORT_VERSION, supportedVersions: [1, 2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'frontend/src/lib/analysis/defensive-indicator-export.ts', note: 'Review-only indicator, provenance-manifest, and rollback formats; never submitted or applied automatically.' }),
   entry({ id: 'export.stix-indicators', kind: 'export', schema: null, currentVersion: STIX_INDICATOR_EXPORT_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'frontend/src/lib/analysis/stix-indicator-export.ts', note: 'STIX 2.1 bundle with direct observations separated from heuristic indicators.' }),
@@ -388,14 +509,39 @@ const ENTRIES: SchemaCompatibilityEntry[] = [
   entry({ id: 'cli.progress-event', kind: 'cli_document', schema: CLI_PROGRESS_EVENT_SCHEMA, currentVersion: CLI_PROGRESS_EVENT_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'cli/progress-events.mts', note: 'Target-free JSONL lifecycle event emitted on standard error only when explicitly requested.' }),
   entry({ id: 'cli.lookup-diff', kind: 'cli_document', schema: CLI_LOOKUP_DIFF_SCHEMA, currentVersion: CLI_LOOKUP_DIFF_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: MAX_SAVED_LOOKUP_INPUT_BYTES, owner: 'cli/lookup-diff.mts', note: 'Offline comparison of two exact-current bounded saved Lookup documents.' }),
   entry({ id: 'cli.lookup-reconciliation', kind: 'cli_document', schema: CLI_LOOKUP_RECONCILIATION_SCHEMA, currentVersion: CLI_LOOKUP_RECONCILIATION_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: MAX_LOOKUP_RECONCILIATION_INPUT_BYTES, owner: 'cli/lookup-reconcile.mts', note: 'Offline reconciliation of two to five same-domain saved observations; labels remain analyst context rather than proof of independent collection.' }),
-  entry({ id: 'cli.registry-doctor', kind: 'cli_document', schema: REGISTRY_DOCTOR_SCHEMA, currentVersion: REGISTRY_DOCTOR_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: MAX_SAVED_LOOKUP_INPUT_BYTES, owner: 'cli/registry-doctor.mts', note: 'Offline compatibility diagnostic comparing saved collection states with the reviewed local registry capability profile.' }),
+  entry({ id: 'cli.registry-doctor', kind: 'cli_document', schema: REGISTRY_DOCTOR_SCHEMA, currentVersion: REGISTRY_DOCTOR_VERSION, supportedVersions: [1, 2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: MAX_SAVED_LOOKUP_INPUT_BYTES, owner: 'cli/registry-doctor.mts', note: 'Offline compatibility diagnostic comparing saved collection states and RDAP publication quality with the reviewed local registry capability profile.' }),
   entry({ id: 'cli.sharing-review', kind: 'cli_document', schema: SHARING_REVIEW_SCHEMA, currentVersion: SHARING_REVIEW_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: MAX_SHARING_REVIEW_BYTES, owner: 'cli/sharing-review.mts', note: 'Redacted offline pre-sharing lint; it emits only bounded schema/version metadata, no content values, and no raw evidence, and does not grant recipient authorisation.' }),
   entry({ id: 'cli.lookalike-calibration-input', kind: 'cli_document', schema: LOOKALIKE_CALIBRATION_INPUT_SCHEMA, currentVersion: LOOKALIKE_CALIBRATION_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: MAX_LOOKALIKE_CALIBRATION_BYTES, owner: 'cli/lookalike-calibration.mts', note: 'Reviewed local candidate dispositions used only for target-free mutation-family yield diagnostics.' }),
   entry({ id: 'cli.lookalike-calibration', kind: 'cli_document', schema: LOOKALIKE_CALIBRATION_SCHEMA, currentVersion: LOOKALIKE_CALIBRATION_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'cli/lookalike-calibration.mts', note: 'Target-free review-yield report that retains no candidate identifiers, domains, notes, or evidence values.' }),
   entry({ id: 'cli.domain-assurance-input', kind: 'cli_document', schema: DOMAIN_ASSURANCE_INPUT_SCHEMA, currentVersion: DOMAIN_ASSURANCE_VERSION, supportedVersions: [1, 2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'normalize_to_current', writeSemantics: 'read_only', byteBudget: MAX_ASSURANCE_INPUT_BYTES, owner: 'lib/domain-assurance.mts', note: 'Bounded analyst-authored planned-change, recovery-dependency, or retirement input; version 2 adds optional bounded custom retirement checks and performs no credentials or provider changes.' }),
   entry({ id: 'cli.domain-assurance', kind: 'cli_document', schema: DOMAIN_ASSURANCE_SCHEMA, currentVersion: DOMAIN_ASSURANCE_VERSION, supportedVersions: [1, 2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'lib/domain-assurance.mts', note: 'Offline assurance review with explicit unknown and incomplete states; version 2 can report bounded analyst-defined retirement checks and performs no collection or configuration change.' }),
   entry({ id: 'cli.domain-control-review', kind: 'cli_document', schema: DOMAIN_CONTROL_REVIEW_SCHEMA, currentVersion: DOMAIN_CONTROL_REVIEW_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: null, owner: 'lib/domain-control-manifest.mts', note: 'Offline desired-state comparison. Only complete separately attributed observations can produce drift.' }),
+  entry({ id: 'cli.zone-intent-input', kind: 'cli_document', schema: ZONE_INTENT_INPUT_SCHEMA, currentVersion: ZONE_INTENT_REVIEW_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: MAX_ZONE_TEXT_BYTES, owner: 'lib/zone-intent-review.mts', note: 'Bounded BIND-subset or normalized-record intent input. Unsupported syntax is rejected and TXT values are reduced to digests.' }),
+  entry({ id: 'cli.zone-intent-review', kind: 'cli_document', schema: ZONE_INTENT_REVIEW_SCHEMA, currentVersion: ZONE_INTENT_REVIEW_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'lib/zone-intent-review.mts', note: 'Offline desired-versus-observed DNS comparison with explicit partial and unsupported states; never applies a DNS change.' }),
+  entry({ id: 'cli.domain-portfolio-input', kind: 'cli_document', schema: DOMAIN_PORTFOLIO_INPUT_SCHEMA, currentVersion: DOMAIN_PORTFOLIO_REVIEW_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: null, owner: 'lib/domain-portfolio-review.mts', note: 'Bounded analyst-supplied portfolio assertions without credentials, contact details, or provider requests.' }),
+  entry({ id: 'cli.domain-portfolio-review', kind: 'cli_document', schema: DOMAIN_PORTFOLIO_REVIEW_SCHEMA, currentVersion: DOMAIN_PORTFOLIO_REVIEW_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'lib/domain-portfolio-review.mts', note: 'Offline concentration, renewal, and recovery-dependency review that preserves analyst-authored provenance.' }),
+  entry({ id: 'cli.domain-change-input', kind: 'cli_document', schema: DOMAIN_CHANGE_INPUT_SCHEMA, currentVersion: DOMAIN_CHANGE_REVIEW_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: null, owner: 'lib/domain-change-review.mts', note: 'Bounded analyst-supplied authority, resolver, ACME, certificate, service, and HSTS observations; TXT values are reduced to digests.' }),
+  entry({ id: 'cli.domain-change-review', kind: 'cli_document', schema: DOMAIN_CHANGE_REVIEW_SCHEMA, currentVersion: DOMAIN_CHANGE_REVIEW_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'lib/domain-change-review.mts', note: 'Offline DNS change gate with explicit record agreement, DNSSEC automation, resolver-divergence, ACME, TLS-continuity, service, and preload context.' }),
+  entry({ id: 'cli.domain-change-packet-input', kind: 'cli_document', schema: DOMAIN_CHANGE_PACKET_INPUT_SCHEMA, currentVersion: DOMAIN_CHANGE_PACKET_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: MAX_DOMAIN_CHANGE_PACKET_INPUT_BYTES, owner: 'lib/domain-change-packet.mts', note: 'Bounded analyst-supplied pre-change, post-change, and planned-change assurance inputs used without new collection.' }),
+  entry({ id: 'cli.domain-change-packet', kind: 'cli_document', schema: DOMAIN_CHANGE_PACKET_SCHEMA, currentVersion: DOMAIN_CHANGE_PACKET_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: null, owner: 'lib/domain-change-packet.mts', note: 'Canonical integrity-protected local change packet whose optional signature authenticates the canonical packet digest, not the truth of its observations.' }),
+  entry({ id: 'cli.dns-convergence-input', kind: 'cli_document', schema: DNS_CONVERGENCE_INPUT_SCHEMA, currentVersion: DNS_CONVERGENCE_REVIEW_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: MAX_OFFLINE_EVIDENCE_INPUT_BYTES, owner: 'lib/dns-convergence-review.mts', note: 'Bounded analyst-supplied expected DNS state and separately attributed observer snapshots; unavailable observations remain explicit.' }),
+  entry({ id: 'cli.dns-convergence-review', kind: 'cli_document', schema: DNS_CONVERGENCE_REVIEW_SCHEMA, currentVersion: DNS_CONVERGENCE_REVIEW_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'lib/dns-convergence-review.mts', note: 'Offline resolver-convergence matrix that separates agreement, divergence, incompleteness, and unavailable observations.' }),
+  entry({ id: 'cli.trust-store-comparison-input', kind: 'cli_document', schema: TRUST_STORE_COMPARISON_INPUT_SCHEMA, currentVersion: TRUST_STORE_COMPARISON_REVIEW_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: MAX_OFFLINE_EVIDENCE_INPUT_BYTES, owner: 'lib/trust-store-comparison.mts', note: 'Bounded analyst-supplied certificate-chain digests and separately attributed trust-store snapshots; certificate bytes and local store contents are excluded.' }),
+  entry({ id: 'cli.trust-store-comparison-review', kind: 'cli_document', schema: TRUST_STORE_COMPARISON_REVIEW_SCHEMA, currentVersion: TRUST_STORE_COMPARISON_REVIEW_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'lib/trust-store-comparison.mts', note: 'Offline exact-fingerprint intersection review; it does not perform certificate path validation or establish browser trust.' }),
+  entry({ id: 'cli.nameserver-preflight-input', kind: 'cli_document', schema: NAMESERVER_PREFLIGHT_INPUT_SCHEMA, currentVersion: NAMESERVER_PREFLIGHT_REVIEW_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: null, owner: 'lib/nameserver-preflight-review.mts', note: 'Bounded intended nameserver set and separately attributed direct-service observations; performs no collection or registry change.' }),
+  entry({ id: 'cli.nameserver-preflight-review', kind: 'cli_document', schema: NAMESERVER_PREFLIGHT_REVIEW_SCHEMA, currentVersion: NAMESERVER_PREFLIGHT_REVIEW_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'lib/nameserver-preflight-review.mts', note: 'Offline undelegated nameserver readiness gate covering authority, served NS set, SOA, public address and in-bailiwick glue evidence.' }),
   entry({ id: 'cli.investigation-plan', kind: 'cli_document', schema: CLI_INVESTIGATION_PLAN_SCHEMA, currentVersion: CLI_INVESTIGATION_PLAN_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'cli/investigation-plan.mts', note: 'Plan-only fixed recipes composed from existing bounded commands; no step, placeholder, script, file, request, case change, or submission is executed.' }),
+  entry({ id: 'cli.investigation-run', kind: 'cli_document', schema: CLI_INVESTIGATION_RUN_SCHEMA, currentVersion: CLI_INVESTIGATION_RUN_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'normalized_rewrite', byteBudget: MAX_INVESTIGATION_RUN_BYTES, owner: 'cli/investigation-run.mts', note: 'Resumable state for installed fixed-recipe steps; network work requires per-run approval and analyst placeholders always pause.' }),
+  entry({ id: 'cli.collection-preflight', kind: 'cli_document', schema: CLI_COLLECTION_PREFLIGHT_SCHEMA, currentVersion: CLI_COLLECTION_PREFLIGHT_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'cli/collection-preflight.mts', note: 'Offline bounded collection-family and disclosure preview that makes no request.' }),
+  entry({ id: 'cli.config', kind: 'cli_document', schema: CLI_CONFIG_SCHEMA, currentVersion: CLI_CONFIG_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: MAX_CLI_CONFIG_BYTES, owner: 'cli/config-profile.mts', note: 'Strict local safe-default profiles; targets, deep mode, output paths, network approvals, failure policies and arbitrary arguments are refused.' }),
+  entry({ id: 'export.cli-case-pack', kind: 'export', schema: CLI_CASE_PACK_SCHEMA, currentVersion: CLI_CASE_PACK_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: MAX_CASE_PACK_INPUT_BYTES, owner: 'cli/case-pack.mts', note: 'Audience-specific reviewed case package with canonical integrity and explicit redaction manifest.' }),
+  entry({ id: 'cli.domain-control-review-input', kind: 'cli_document', schema: CLI_DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA, currentVersion: CLI_DOMAIN_CONTROL_REVIEW_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: MAX_DOMAIN_CONTROL_REVIEW_INPUT_BYTES, owner: 'cli/domain-control-observations.mts', note: 'Bounded desired-state manifest plus saved Lookups converted without new collection.' }),
+  entry({ id: 'cli.domain-control-observation-review', kind: 'cli_document', schema: CLI_DOMAIN_CONTROL_REVIEW_SCHEMA, currentVersion: CLI_DOMAIN_CONTROL_REVIEW_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'cli/domain-control-observations.mts', note: 'Compact source-qualified control observations and desired-state comparison.' }),
+  entry({ id: 'cli.domain-control-monitor', kind: 'cli_document', schema: CLI_DOMAIN_CONTROL_MONITOR_SCHEMA, currentVersion: CLI_DOMAIN_CONTROL_MONITOR_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'normalized_rewrite', byteBudget: null, owner: 'cli/domain-control-monitor.mts', note: 'One-shot bounded control review and optional prior checkpoint; not a daemon or scheduler.' }),
+  entry({ id: 'cli.lookup-brief', kind: 'cli_document', schema: CLI_LOOKUP_BRIEF_SCHEMA, currentVersion: CLI_LOOKUP_BRIEF_VERSION, supportedVersions: [1, 2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: MAX_SAVED_LOOKUP_INPUT_BYTES, owner: 'cli/lookup-brief.mts', note: 'Offline source-aware handoff; version 2 adds structured actions with expected outcomes.' }),
+  entry({ id: 'cli.registry-cohort', kind: 'cli_document', schema: REGISTRY_COHORT_SCHEMA, currentVersion: REGISTRY_COHORT_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: MAX_REGISTRY_COHORT_INPUT_BYTES, owner: 'cli/registry-cohort.mts', note: 'Target-free registry publication-quality cohorts with an explicit minimum sample.' }),
+  entry({ id: 'cli.domain-control-flight-recorder-input', kind: 'cli_document', schema: DOMAIN_CONTROL_FLIGHT_RECORDER_INPUT_SCHEMA, currentVersion: DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: null, owner: 'lib/domain-control-flight-recorder.mts', note: 'Bounded source-qualified control observations and approved change windows.' }),
+  entry({ id: 'cli.domain-control-flight-recorder', kind: 'cli_document', schema: DOMAIN_CONTROL_FLIGHT_RECORDER_SCHEMA, currentVersion: DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'lib/domain-control-flight-recorder.mts', note: 'Offline first/last-observed control history that preserves expected and unexpected changes.' }),
   entry({ id: 'cli.ct-search', kind: 'cli_document', schema: CLI_CT_SEARCH_SCHEMA, currentVersion: CLI_CT_SEARCH_SCHEMA_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'cli/formatters/json.mts', note: 'Certificate log search output.' }),
   entry({ id: 'cli.discover', kind: 'cli_document', schema: CLI_DISCOVER_SCHEMA, currentVersion: CLI_DISCOVER_SCHEMA_VERSION, supportedVersions: [1, 2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'cli/formatters/json.mts', note: 'Candidate discovery document.' }),
   entry({ id: 'cli.discover-item', kind: 'cli_document', schema: CLI_DISCOVER_ITEM_SCHEMA, currentVersion: CLI_DISCOVER_SCHEMA_VERSION, supportedVersions: [1, 2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'cli/formatters/json.mts', note: 'One candidate discovery JSONL item.' }),
@@ -403,6 +549,12 @@ const ENTRIES: SchemaCompatibilityEntry[] = [
   entry({ id: 'cli.discovery-scan-item', kind: 'cli_document', schema: CLI_DISCOVERY_SCAN_ITEM_SCHEMA, currentVersion: CLI_DISCOVERY_SCAN_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'cli/discovery-scan.mts', note: 'One bounded supervised candidate scan JSONL item.' }),
   entry({ id: 'cli.discovery-snapshot', kind: 'cli_document', schema: CLI_DISCOVERY_SNAPSHOT_SCHEMA, currentVersion: CLI_DISCOVERY_SNAPSHOT_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'normalized_rewrite', byteBudget: MAX_DISCOVERY_SNAPSHOT_BYTES, owner: 'cli/discovery-snapshot.mts', note: 'Private local generated-candidate baseline tied to the exact normalised discovery configuration and dictionary digest.' }),
   entry({ id: 'cli.discovery-observation-snapshot', kind: 'cli_document', schema: CLI_DISCOVERY_OBSERVATION_SCHEMA, currentVersion: CLI_DISCOVERY_OBSERVATION_VERSION, supportedVersions: [1, 2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'normalize_to_current', writeSemantics: 'normalized_rewrite', byteBudget: MAX_DISCOVERY_OBSERVATION_BYTES, owner: 'cli/discovery-observation-snapshot.mts', note: 'Private local registration and DNS baseline; version 2 preserves component-specific observation times and migrates version 1 on the next successful write.' }),
+  entry({ id: 'cli.ct-event-batch', kind: 'cli_document', schema: CT_EVENT_BATCH_SCHEMA, currentVersion: CT_EVENT_BATCH_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: MAX_CT_EVENT_INPUT_BYTES, owner: 'cli/ct-event-intake.mts', note: 'Local source-qualified certificate-event intake that emits browser-compatible external findings without contacting a log or retaining certificate bytes.' }),
+  entry({ id: 'cli.investigation-manifest', kind: 'cli_document', schema: INVESTIGATION_MANIFEST_SCHEMA, currentVersion: INVESTIGATION_MANIFEST_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES, owner: 'cli/investigation-manifest.mts', note: 'Path-free manifest of ordered raw and canonical artifact digests; it proves byte identity, not evidence truth or collection independence.' }),
+  entry({ id: 'cli.external-observation-mapping', kind: 'cli_document', schema: EXTERNAL_OBSERVATION_MAPPING_SCHEMA, currentVersion: EXTERNAL_OBSERVATION_MAPPING_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: MAX_EXTERNAL_OBSERVATION_MAPPING_BYTES, owner: 'cli/external-observation-mapping.mts', note: 'Strict analyst-authored mapping of bounded dotted fields into source-qualified browser-compatible findings; arbitrary code and prototype paths are refused.' }),
+  entry({ id: 'cli.open-asset-model-bridge', kind: 'cli_document', schema: OPEN_ASSET_MODEL_BRIDGE_SCHEMA, currentVersion: OPEN_ASSET_MODEL_BRIDGE_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'cli/open-asset-model-bridge.mts', note: 'Loss-aware local projection of strict external findings into a bounded open asset graph while preserving source, time, completeness, and limitations.' }),
+  entry({ id: 'cli.source-reliability-report', kind: 'cli_document', schema: SOURCE_RELIABILITY_REPORT_SCHEMA, currentVersion: SOURCE_RELIABILITY_REPORT_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: MAX_SOURCE_RELIABILITY_INPUT_BYTES, owner: 'cli/source-reliability.mts', note: 'Target-free local aggregation of source states, durations, truncation, and rate limits; reports retain no domains, queries, or raw response data.' }),
+  entry({ id: 'cli.offline-evidence-review', kind: 'cli_document', schema: OFFLINE_EVIDENCE_REVIEW_SCHEMA, currentVersion: OFFLINE_EVIDENCE_REVIEW_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: MAX_OFFLINE_EVIDENCE_INPUT_BYTES, owner: 'cli/offline-evidence-review.mts', note: 'Local wrapper for supported versioned evidence-review inputs; it performs no refresh, transmission, provider request, or configuration change.' }),
   entry({ id: 'cli.posture', kind: 'cli_document', schema: CLI_POSTURE_SCHEMA, currentVersion: CLI_POSTURE_SCHEMA_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'cli/formatters/json.mts', note: 'Owned-domain posture output.' }),
   entry({ id: 'cli.http', kind: 'cli_document', schema: CLI_HTTP_SCHEMA, currentVersion: CLI_HTTP_SCHEMA_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'cli/formatters/json.mts', note: 'Bounded HTTP evidence output.' }),
   entry({ id: 'cli.tls', kind: 'cli_document', schema: CLI_TLS_SCHEMA, currentVersion: CLI_TLS_SCHEMA_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'cli/formatters/json.mts', note: 'Bounded TLS evidence output.' }),

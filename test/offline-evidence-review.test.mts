@@ -25,6 +25,7 @@ describe('offline evidence review command', () => {
         version: 1,
         help: { reverse_search_properties: [{ searchableResourceType: 'domains', relatedResourceType: 'entities', property: 'handle' }] },
         request: { searchableResourceType: 'domains', relatedResourceType: 'entities', property: 'handle', value: 'EXAMPLE' },
+        response: { reverse_search_properties_mapping: [{ property: 'handle', propertyPath: '$.entities[*].handle' }] },
       },
       { schema: 'whoisleuth.dnssec-evidence-input', version: 1, ownerName: 'example.test', delegationSigned: false, dsRecords: [] },
       { schema: 'whoisleuth.tlsa-evidence-input', version: 1, serviceName: '_25._tcp.mx.example.test', dnssecState: 'unavailable', records: [] },
@@ -58,10 +59,53 @@ describe('offline evidence review command', () => {
         },
         query: { name: 'example.test', type: 'DNSKEY' },
       },
+      {
+        schema: 'whoisleuth.zone-intent.input', version: 1, origin: 'example.test',
+        desired: { format: 'records', records: [{ owner: '@', type: 'A', ttl: 300, value: '192.0.2.1' }] },
+        observed: { state: 'observed', source: 'Fixture', observedAt: ISO, records: [{ owner: '@', type: 'A', ttl: 300, value: '192.0.2.1' }] },
+      },
+      {
+        schema: 'whoisleuth.domain-portfolio.input', version: 1, portfolioLabel: 'Fixture',
+        assets: [{
+          domain: 'example.test', criticality: 'standard', registrar: null, registrarAccount: null,
+          expiresAt: null, autoRenew: null, dnsProviders: [], mailProviders: [], certificateProviders: [], recoveryDomains: [], reviewedAt: ISO,
+        }],
+      },
+      {
+        schema: 'whoisleuth.domain-change.input', version: 1, domain: 'example.test',
+        authoritySnapshots: [], resolverSnapshots: [], acmeDependencies: [], certificate: null, hsts: null,
+      },
+      {
+        schema: 'whoisleuth.dns-convergence.input', version: 1, domain: 'example.test', expected: null,
+        snapshots: [
+          { observer: 'Resolver A', source: 'Fixture', observedAt: ISO, state: 'observed', records: [{ owner: '@', type: 'A', value: '192.0.2.1', ttl: 300 }] },
+          { observer: 'Resolver B', source: 'Fixture', observedAt: ISO, state: 'observed', records: [{ owner: '@', type: 'A', value: '192.0.2.1', ttl: 300 }] },
+        ],
+      },
+      {
+        schema: 'whoisleuth.nameserver-preflight.input', version: 1, domain: 'example.test',
+        intendedNameservers: ['ns1.example.test'], observations: [],
+      },
+      {
+        schema: 'whoisleuth.trust-store-comparison.input', version: 1,
+        certificate: {
+          source: 'Fixture TLS evidence', observedAt: ISO, state: 'observed', chainTruncated: false,
+          fingerprintsSha256: ['a'.repeat(64)], runtimeAuthorisation: 'unknown',
+        },
+        stores: [{
+          name: 'Fixture store', version: '1', source: 'Fixture', reviewedAt: ISO,
+          state: 'observed', anchorsSha256: ['b'.repeat(64)],
+        }],
+      },
     ];
     assert.deepEqual(inputs.map((input) => buildOfflineEvidenceReview(JSON.stringify(input), ISO).kind), [
-      'rdap_search', 'dnssec', 'tlsa', 'rpki', 'geoip', 'encrypted_dns',
+      'rdap_search', 'dnssec', 'tlsa', 'rpki', 'geoip', 'encrypted_dns', 'zone_intent', 'domain_portfolio', 'domain_change', 'dns_convergence', 'nameserver_preflight', 'trust_store',
     ]);
+    const rdap = buildOfflineEvidenceReview(JSON.stringify(inputs[0]), ISO).result as {
+      responseInspection: { state: string; mappings: Array<{ state: string }> };
+    };
+    assert.equal(rdap.responseInspection.state, 'complete');
+    assert.equal(rdap.responseInspection.mappings[0]?.state, 'registered');
   });
 
   test('exposes bounded terminal and JSON CLI output', async () => {
@@ -70,6 +114,7 @@ describe('offline evidence review command', () => {
       source: 'evidence.json',
       mmdbSource: null,
       output: 'json',
+      strictExit: false,
       quiet: false,
       color: true,
     });
@@ -90,6 +135,42 @@ describe('offline evidence review command', () => {
     assert.equal(code, EXIT_CODES.SUCCESS);
     assert.equal(JSON.parse(stdout.value()).result.state, 'valid');
     assert.match(formatOfflineEvidenceReview(buildOfflineEvidenceReview(input, ISO)), /State\s+valid/u);
+  });
+
+  test('offers an opt-in CI gate for explicit domain-change and zone-intent review failures', async () => {
+    const domainChange = JSON.stringify({
+      schema: 'whoisleuth.domain-change.input', version: 1, domain: 'example.test',
+      authoritySnapshots: [], resolverSnapshots: [],
+      acmeDependencies: [{ method: 'dns-01', owner: '_acme-challenge.example.test', target: null, provider: null, state: 'unknown' }],
+      certificate: null, hsts: null,
+    });
+    const code = await runCli(['review-evidence', '--json', '--strict-exit'], {
+      stdout: capture().stream,
+      stderr: capture().stream,
+      now: () => ISO,
+      readArtifactInput: async () => domainChange,
+    });
+    assert.equal(code, EXIT_CODES.PARTIAL_FAILURE);
+    const parsed = parseCliArguments(['review-evidence', '--strict-exit']);
+    assert.equal(parsed.action, 'review-evidence');
+    assert.equal(parsed.action === 'review-evidence' && parsed.strictExit, true);
+    assert.throws(() => parseCliArguments(['review-evidence', '--strict-exit', '--strict-exit']), /only once/iu);
+
+    const emptyZone = JSON.stringify({
+      schema: 'whoisleuth.zone-intent.input', version: 1, origin: 'example.test',
+      desired: { format: 'records', records: [] },
+      observed: { state: 'observed', source: 'Fixture', observedAt: ISO, records: [] },
+    });
+    const zoneStdout = capture();
+    const zoneCode = await runCli(['review-evidence', '--strict-exit'], {
+      stdout: zoneStdout.stream,
+      stderr: capture().stream,
+      now: () => ISO,
+      readArtifactInput: async () => emptyZone,
+    });
+    assert.equal(zoneCode, EXIT_CODES.PARTIAL_FAILURE);
+    assert.match(zoneStdout.value(), /State\s+review/u);
+    assert.match(zoneStdout.value(), /Compared\s+0/u);
   });
 
   test('reads an explicitly supplied local MMDB without transmitting the address', async () => {

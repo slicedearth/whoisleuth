@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import { buildOwnedDomainPostureReview } from '../frontend/src/lib/analysis/owned-domain-posture-review.ts';
+import { buildDesiredPostureHistory, buildOwnedDomainPostureReview } from '../frontend/src/lib/analysis/owned-domain-posture-review.ts';
 import type { BrandProfile } from '../frontend/src/lib/analysis/brand-profile-model.ts';
 import type { DomainPostureHttpResponse } from '../frontend/src/lib/analysis/client-response-contracts.ts';
 
@@ -84,6 +84,10 @@ describe('owned-domain posture review', () => {
         tlsSpkiSha256: '',
         registrarLock: 'required' as const,
         renewalReviewAt: '2027-01-01T00:00:00.000Z',
+        zoneIntent: 'active_service' as const,
+        lifecycle: 'active' as const,
+        recoveryDependency: '',
+        approvedChangeWindows: [],
         suppressions: [{ field: 'mx', reason: 'Reviewed mail transition.', expiresAt: null }],
         note: '',
         previousObservation: {
@@ -125,6 +129,10 @@ describe('owned-domain posture review', () => {
         tlsSpkiSha256: '',
         registrarLock: 'unconfigured' as const,
         renewalReviewAt: null,
+        zoneIntent: 'unconfigured' as const,
+        lifecycle: 'active' as const,
+        recoveryDependency: '',
+        approvedChangeWindows: [],
         suppressions: [],
         note: '',
         previousObservation: null,
@@ -139,5 +147,19 @@ describe('owned-domain posture review', () => {
     } satisfies DomainPostureHttpResponse;
     const review = buildOwnedDomainPostureReview(configured, unavailable);
     assert.equal(review.baselineComparisons.find((item) => item.field === 'mx')?.state, 'unknown');
+  });
+
+  test('compares retained posture history only across checks present in both observations', () => {
+    const history = buildDesiredPostureHistory([
+      { observedAt: '2026-05-01T00:00:00.000Z', checks: [{ id: 'mx', status: 'pass', records: ['10 mail.example.test'] }] },
+      { observedAt: '2026-06-01T00:00:00.000Z', checks: [
+        { id: 'mx', status: 'warning', records: ['20 mail.example.test'] },
+        { id: 'dmarc', status: 'pass', records: ['v=DMARC1; p=reject'] },
+      ] },
+    ]);
+
+    assert.equal(history.length, 1);
+    assert.equal(history[0]?.comparableChecks, 1);
+    assert.deepEqual(history[0]?.changedChecks, ['mx']);
   });
 });

@@ -81,6 +81,9 @@ default (see the README), so many lookups return no personal data at all.
   can compare the recursive nameserver view with registry RDAP nameserver and
   glue publication, then send direct NS and SOA queries to at most four
   selected nameservers and two validated public addresses per nameserver.
+  It can additionally query A, AAAA, CAA, and MX once through one selected
+  public address per nameserver, retaining at most sixteen normalised values
+  for each record type.
   Each selected authority can contribute one bounded SOA projection containing
   its primary name, hostmaster, serial, refresh, retry, expire, and minimum TTL
   fields. WHOISleuth compares the retained primary names and serials across
@@ -358,6 +361,17 @@ default (see the README), so many lookups return no personal data at all.
   maliciousness.
   The derived comparison itself is transient and is not added to cases,
   watchlists, profiles, or evidence exports.
+- **Reviewed page-language signals**: a requested deep Lookup can classify a
+  small fixed set of reviewed English, Spanish, French, German, Portuguese,
+  Italian, and Dutch account-pressure phrases in the visible text of the
+  already captured homepage. The bounded tokeniser excludes comments,
+  attributes, scripts, styles, and templates from this classification. Only a
+  fixed language and category label is retained; the matched phrase,
+  surrounding page text, markup, and arbitrary attributes are discarded. A
+  language match is a review cue rather than proof of deception, credential
+  collection, intent, safety, or maliciousness. The existing bounded language
+  observation can contribute only within the capped credential-lure family of
+  Risk model v7 and never affects availability.
 - **Service and transition review**: a deep Lookup can organize already
   collected DNS aliases, nameservers, web routing, mail publication, TLS
   source health, lifecycle statuses, and transfer locks into transient manual
@@ -577,9 +591,14 @@ default (see the README), so many lookups return no personal data at all.
   certificate observation-row conversion, and sanitised web-capture summary
   import happen locally before that ordinary reviewed case import. Row
   conversion reports accepted, rejected, duplicate, and truncated counts
-  without retaining excluded values. Capture summaries retain only normalised
-  domains and HTTP(S) origins, bounded titles, technology labels, request
-  domains, screenshot or DOM-digest plain file names, MIME types, declared
+  without retaining excluded values. Accepted documented observation rows can
+  additionally retain an allowlisted source schema and version, field, bounded
+  value, and, for certificate observations only, bounded issuer and expiry
+  metadata. WHOISleuth keeps that external value source-qualified in the case;
+  only valid direct DNS or certificate relationships can become local graph
+  edges, and none is independently verified. Capture summaries retain only
+  normalised domains and HTTP(S) origins, bounded titles, technology labels,
+  request domains, screenshot or DOM-digest plain file names, MIME types, declared
   sizes, dimensions where applicable, SHA-256 digests, timestamps,
   completeness, limitations, and optional source references. Artefact bytes
   are not imported or independently verified. These schemas reject raw HTML,
@@ -857,6 +876,10 @@ default (see the README), so many lookups return no personal data at all.
   desired nameserver, DS, MX, CAA, TLS issuer, SAN patterns or public-key digest,
   transfer-lock, and renewal-review values; reviewed suppressions; and one
   explicitly selected compact prior posture observation per official domain.
+  It can also retain per-domain zone-intent, lifecycle, recovery-dependency,
+  and bounded approved-change-window context. These planning fields are
+  analyst-authored and do not establish the current state of a registry,
+  provider account, DNS zone, or service.
   Those local values are not sent with a posture request, do not change
   infrastructure, and appear only in deliberate profile, baseline, or
   workspace exports. Incomplete or unsupported public evidence never becomes

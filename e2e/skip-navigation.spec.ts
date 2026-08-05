@@ -38,7 +38,15 @@ test('Console pages expose the same skip target in the light mobile theme', { ta
   const main = page.locator('#main-content');
   await page.keyboard.press('Tab');
   await expect(skipLink).toBeFocused();
-  await expect(skipLink).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+  const panelBackground = await page.evaluate(() => {
+    const probe = document.createElement('div');
+    probe.style.backgroundColor = 'var(--panel)';
+    document.body.append(probe);
+    const value = getComputedStyle(probe).backgroundColor;
+    probe.remove();
+    return value;
+  });
+  await expect(skipLink).toHaveCSS('background-color', panelBackground);
 
   await page.keyboard.press('Enter');
   await expect(page).toHaveURL(/#main-content$/u);

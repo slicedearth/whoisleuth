@@ -198,6 +198,7 @@ test('scans populated Lookup, Bulk, and guided-investigation states', async ({ p
   await page.locator('#query').fill('portal.example.test');
   await page.getByRole('button', { name: 'Run lookup' }).click();
   await expect(page.getByRole('heading', { name: 'registered' })).toBeVisible();
+  await page.getByLabel('Detail').selectOption('standard');
   const registrySource = page.locator('.sources > details').first();
   await registrySource.locator(':scope > summary').click();
   await expect(registrySource).toHaveAttribute('open', '');

@@ -83,13 +83,60 @@ describe('website technology profile', () => {
 
   test('does not infer commerce platforms from ordinary page text or unrelated origins', () => {
     const result = analyze({
-      html: '<main>Migration notes mention Magento, BigCommerce, and WooCommerce.</main>',
+      html: '<main>Migration notes mention Magento, BigCommerce, OpenCart, PrestaShop, and WooCommerce.</main>',
       resourceOrigins: ['https://developer.bigcommerce.com'],
     });
 
     assert.equal(result.findings.find((item) => item.id === 'adobe-commerce-magento'), undefined);
     assert.equal(result.findings.find((item) => item.id === 'bigcommerce'), undefined);
+    assert.equal(result.findings.find((item) => item.id === 'opencart'), undefined);
+    assert.equal(result.findings.find((item) => item.id === 'prestashop'), undefined);
     assert.equal(result.findings.find((item) => item.id === 'woocommerce'), undefined);
+  });
+
+  test('recognises a PrestaShop installation from its default module asset convention', () => {
+    const result = analyze({
+      html: '<link rel="stylesheet" href="/modules/ps_feature/fixture.css">',
+    });
+
+    const item = finding(result, 'prestashop');
+    assert.equal(item.confidence, 'high');
+    assert.deepEqual(item.evidence, [{
+      source: 'static HTML',
+      description: 'Static resource paths use PrestaShop module conventions.',
+    }]);
+    assert.doesNotMatch(JSON.stringify(result), /ps_feature|fixture\.css/u);
+  });
+
+  test('recognises OpenCart routing and default asset conventions without page copy', () => {
+    const result = analyze({
+      html: '<a href="index.php?route=common/home"><img src="image/catalog/opencart-logo.png" alt="Store"></a>',
+    });
+
+    const item = finding(result, 'opencart');
+    assert.equal(item.confidence, 'high');
+    assert.deepEqual(item.evidence, [{
+      source: 'static HTML',
+      description: 'Static markup contains OpenCart routing or default asset conventions.',
+    }]);
+    assert.doesNotMatch(JSON.stringify(result), /common\/home|opencart-logo|Store/u);
+  });
+
+  test('recognises a Netlify request identifier behind another selected server', () => {
+    const result = analyze({
+      httpServer: 'cloudflare',
+      responseHeaders: {
+        'x-nf-request-id': 'bounded-request-marker',
+      },
+    });
+
+    const item = finding(result, 'netlify');
+    assert.equal(item.confidence, 'medium');
+    assert.deepEqual(item.evidence, [{
+      source: 'passive response header',
+      description: 'A Netlify request identifier response header was observed.',
+    }]);
+    assert.doesNotMatch(JSON.stringify(result), /bounded-request-marker/u);
   });
 
   test('does not identify a site-builder platform from an embedded resource origin alone', () => {
@@ -124,6 +171,21 @@ describe('website technology profile', () => {
     assert.doesNotMatch(JSON.stringify(result), /1\.27\.0|private-build/);
   });
 
+  test('recognises the standard cache-node response marker and rejects an obsolete request-id clue', () => {
+    const observed = analyzeWebsiteTechnology({
+      responseHeaders: {
+        'x-served-by': 'cache-control-fixture-CONTROL-SYD, cache-syd12345-SYD',
+      },
+    });
+    const obsolete = analyzeWebsiteTechnology({
+      responseHeaders: { 'x-fastly-request-id': 'private-request-id' },
+    });
+
+    assert.equal(observed.findings.some((finding) => finding.id === 'fastly'), true);
+    assert.equal(obsolete.findings.some((finding) => finding.id === 'fastly'), false);
+    assert.doesNotMatch(JSON.stringify(observed), /cache-syd12345|private-request-id/u);
+  });
+
   test('recognizes allowlisted passive response headers without retaining their values', () => {
     const result = analyze({
       html: '<main>Fixture</main>',
@@ -140,6 +202,21 @@ describe('website technology profile', () => {
     assert.doesNotMatch(JSON.stringify(result), /8\\.4|private-build|private-request-value|unused-private-generator|must-not-be-evaluated/);
   });
 
+  test('recognises the default CMS runtime header without retaining its value', () => {
+    const result = analyze({
+      responseHeaders: {
+        'x-powered-by': 'Craft CMS/5.10.13.1',
+      },
+    });
+
+    assert.deepEqual(result.findings.map((item) => item.id), ['craft-cms']);
+    assert.deepEqual(finding(result, 'craft-cms').evidence, [{
+      source: 'passive response header',
+      description: 'The passive X-Powered-By response header identifies Craft CMS.',
+    }]);
+    assert.doesNotMatch(JSON.stringify(result), /5\.10\.13\.1/u);
+  });
+
   test('requires exact allowlisted header value signatures for runtime indicators', () => {
     const result = analyze({
       html: '<main>Fixture</main>',
@@ -148,6 +225,7 @@ describe('website technology profile', () => {
       },
     });
     assert.equal(result.findings.find((item) => item.id === 'php'), undefined);
+    assert.equal(result.findings.find((item) => item.id === 'craft-cms'), undefined);
   });
 
   test('recognizes an expanded set of generator-declared platforms', () => {
@@ -156,6 +234,7 @@ describe('website technology profile', () => {
       ['TYPO3 CMS 13', 'typo3', 'content management'],
       ['OpenCart 4', 'opencart', 'commerce'],
       ['PrestaShop 9', 'prestashop', 'commerce'],
+      ['Wix.com Website Builder', 'wix', 'site builder'],
       ['Framer 2026', 'framer', 'site builder'],
       ['Weebly', 'weebly', 'site builder'],
       ['Docusaurus v3.8', 'docusaurus', 'static site generator'],

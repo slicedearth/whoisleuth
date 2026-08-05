@@ -220,7 +220,13 @@ test('the registry-support reference remains readable without horizontal overflo
   await expect(page.getByRole('button', { name: 'Toggle navigation' })).toHaveAttribute('aria-expanded', 'false');
 
   const sectionIntros = page.locator('.section-intro');
-  await expect(sectionIntros).toHaveCount(4);
+  await expect(sectionIntros.getByRole('heading')).toHaveText([
+    'Generic TLD RDAP snapshot',
+    'Field-level collection matrix',
+    'Source reliability review',
+    'Inspect a domain or suffix',
+    'Implemented registry profiles',
+  ]);
   await expect(sectionIntros.first()).toHaveCSS('display', 'block');
   for (const heading of await sectionIntros.getByRole('heading').all()) {
     const box = await heading.boundingBox();

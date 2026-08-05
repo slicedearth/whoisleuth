@@ -461,6 +461,15 @@ registrar MFA, recovery-email separation, registry lock, emergency contacts,
 account audit logging, and zone backups. These statements are not inferred
 from public evidence and must be reviewed by the analyst.
 
+The browser-local **Domain Control Centre** organises every official domain
+against the same analyst-authored operating context. A profile can record a
+zone-intent label, lifecycle state, recovery dependency, and bounded approved
+change windows. The summary highlights portfolio concentration, recovery
+dependencies, nameserver-preflight coverage, planned changes, and retirement
+state. These fields are planning context only: they neither change DNS nor
+infer provider control. Approved windows label matching retained changes as
+expected while preserving the underlying observations and their limitations.
+
 An official-site baseline can retain bounded page identity and fingerprint
 data without keeping page HTML, URL paths, query strings, credentials, or
 complete email addresses. Comparison results remain contextual evidence and do
@@ -470,7 +479,10 @@ When an active Brand Profile is available, **Brand mimicry review** organizes
 exact or perceptual favicon relationships, official-domain asset references,
 independent page-component comparisons, credential-surface context, and
 bounded review-language matches. Each cue retains its own method and
-provenance. WHOISleuth does not combine them into a mimicry or maliciousness
+provenance. Reviewed page-language packs cover a small fixed set of English,
+Spanish, French, German, Portuguese, Italian, and Dutch account-pressure
+phrases. A match retains only its fixed language and category label, not the
+matched phrase or surrounding page text. WHOISleuth does not combine them into a mimicry or maliciousness
 score, and common infrastructure, templates, libraries, or analytics can
 produce legitimate relationships.
 
@@ -951,6 +963,11 @@ strict uncompressed WARC response archives, and bounded STIX 2.1 or MISP event
 JSON. Every file is validated and previewed locally before a merge. Generic row
 conversion accepts only domain, category, summary, observation time,
 completeness, limitation, and reference columns.
+Documented domain, DNS, and certificate observation rows additionally retain
+their source schema and typed field, create source-qualified timeline
+sightings, and contribute only valid direct A, AAAA, NS, CNAME, MX, or
+certificate relationships to the local asset graph. Unsupported or malformed
+relationship values remain observations and do not create graph edges.
 The capture schemas accept bounded titles, normalised HTTP(S) origins,
 technology labels, screenshot SHA-256 digests, optional version-2 perceptual
 dHashes, artefact dimensions and sizes, completeness, and limitations;

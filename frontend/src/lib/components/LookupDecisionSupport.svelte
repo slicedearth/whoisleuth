@@ -45,6 +45,7 @@
             <li>
               <a href={action.href}>{action.label}</a>
               <span>{action.reason}</span>
+              <small><strong>Expected outcome:</strong> {action.expectedOutcome}</small>
             </li>
           {/each}
         </ul>
@@ -103,6 +104,7 @@
   .actions li{display:grid;gap:2px}
   .actions a{font:700 var(--text-xs) var(--mono)}
   .actions span,.empty{color:var(--muted);font-size:var(--text-2xs);line-height:1.45}
+  .actions small{color:var(--text);font-size:var(--text-2xs);line-height:1.45}
   details{margin-top:12px;border-top:1px solid var(--border)}
   summary{padding:12px 0;color:var(--text);font:680 var(--text-xs) var(--mono);cursor:pointer}
   summary:focus-visible{outline:2px solid var(--focus);outline-offset:3px}

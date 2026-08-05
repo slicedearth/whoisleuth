@@ -293,8 +293,17 @@
 {/if}
 
 {#if insights.version === 1}
-  <details class="registry-insights card">
-    <summary>Registry interpretation · {display(lifecycle.label)}</summary>
+  <details class="registry-insights evidence-card card" aria-labelledby="registry-interpretation-title">
+    <summary class="evidence-summary">
+      <span class="evidence-summary-row">
+        <span class="evidence-summary-copy">
+          <span class="eyebrow">Derived registration context</span>
+          <span class="evidence-summary-title" id="registry-interpretation-title" role="heading" aria-level="4">Registry interpretation</span>
+          <span class="evidence-summary-detail">Lifecycle, lock, disclosure, publication, and capability context kept separate from source evidence</span>
+        </span>
+        <span class="evidence-status neutral">{display(lifecycle.label)}</span>
+      </span>
+    </summary>
     <div class="insight-grid">
       <article>
         <span>Lifecycle</span>
@@ -465,18 +474,18 @@
   .agreement-glyph{fill:var(--muted);font:750 9px var(--mono);pointer-events:none}
   .agreement-node.state-equal .agreement-marker{fill:color-mix(in srgb,var(--success) 16%,var(--panel));stroke:var(--success)}
   .agreement-node.state-equal .agreement-glyph{fill:var(--success)}
-  .agreement-node.state-different .agreement-marker,.agreement-node.state-partial .agreement-marker{fill:rgb(var(--amber-rgb) / .15);stroke:var(--amber)}
+  .agreement-node.state-different .agreement-marker,.agreement-node.state-partial .agreement-marker{fill:color-mix(in srgb,var(--amber) 15%,var(--panel));stroke:var(--amber)}
   .agreement-node.state-different .agreement-glyph,.agreement-node.state-partial .agreement-glyph{fill:var(--amber)}
-  .agreement-node.state-conflict .agreement-marker{fill:rgb(var(--danger-rgb) / .13);stroke:var(--danger);stroke-width:2}
+  .agreement-node.state-conflict .agreement-marker{fill:color-mix(in srgb,var(--danger) 13%,var(--panel));stroke:var(--danger);stroke-width:2}
   .agreement-node.state-conflict .agreement-glyph{fill:var(--danger)}
-  .agreement-node.state-observed .agreement-marker{fill:rgb(var(--accent-rgb) / .14);stroke:var(--accent)}
+  .agreement-node.state-observed .agreement-marker{fill:color-mix(in srgb,var(--accent) 14%,var(--panel));stroke:var(--accent)}
   .agreement-node.state-observed .agreement-glyph{fill:var(--accent)}
   .agreement-node.state-not_collected .agreement-marker,.agreement-node.state-unavailable .agreement-marker,.agreement-node.state-unknown .agreement-marker{fill:var(--panel);stroke:var(--muted);stroke-dasharray:2 2}
   .matrix-legend{display:flex;flex-wrap:wrap;gap:7px 14px;margin:9px 0 0;padding:0;color:var(--muted);font:650 var(--text-2xs) var(--mono);list-style:none}
   .matrix-legend li{display:flex;align-items:center;gap:6px}.matrix-legend span{display:grid;width:16px;height:16px;place-items:center;border:1px solid var(--border);border-radius:50%;background:var(--panel);font:750 9px var(--mono)}
   .matrix-legend .state-equal span{border-color:var(--success);background:color-mix(in srgb,var(--success) 16%,var(--panel));color:var(--success)}
-  .matrix-legend .state-partial span{border-color:var(--amber);border-radius:0;background:rgb(var(--amber-rgb) / .15);color:var(--amber);clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%)}
-  .matrix-legend .state-conflict span{border-color:var(--danger);background:rgb(var(--danger-rgb) / .13);color:var(--danger);clip-path:polygon(25% 0,75% 0,100% 25%,100% 75%,75% 100%,25% 100%,0 75%,0 25%)}
+  .matrix-legend .state-partial span{border-color:var(--amber);border-radius:0;background:color-mix(in srgb,var(--amber) 15%,var(--panel));color:var(--amber);clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%)}
+  .matrix-legend .state-conflict span{border-color:var(--danger);background:color-mix(in srgb,var(--danger) 13%,var(--panel));color:var(--danger);clip-path:polygon(25% 0,75% 0,100% 25%,100% 75%,75% 100%,25% 100%,0 75%,0 25%)}
   .matrix-legend .state-not_collected span{border-color:var(--muted);border-style:dashed}
   .authority-trace>header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
   .authority-trace h4{margin:2px 0 0;font:700 var(--text-md) var(--mono)}
@@ -495,8 +504,9 @@
   .trace-sources p b{color:var(--text)}
   .trace-sources small{display:block;margin-top:6px}
   .trace-limit{margin:10px 0 0}
-  .registry-insights>summary{color:var(--accent)}
-  .insight-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;padding:0 var(--card-pad) var(--card-pad);background:var(--border)}
+  .registry-insights>summary{border-bottom:1px solid transparent}
+  .registry-insights[open]>summary{border-bottom-color:var(--border)}
+  .insight-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;margin:var(--card-pad);overflow:hidden;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--border)}
   .insight-grid article{min-width:0;padding:12px;background:var(--panel)}
   .insight-grid span,.insight-grid strong,.insight-grid small{display:block;overflow-wrap:anywhere}
   .insight-grid span{color:var(--muted);font:650 var(--text-2xs) var(--mono);text-transform:uppercase}
@@ -559,9 +569,9 @@
     .mobile-agreement-state{color:var(--muted);font:650 var(--text-2xs) var(--mono);text-transform:capitalize}
     .matrix-mobile small{grid-column:1/-1;min-width:0;color:var(--muted);font-size:var(--text-2xs);line-height:1.4;overflow-wrap:anywhere}
     .matrix-mobile .state-equal .mobile-agreement-marker{border-color:var(--success);color:var(--success);background:color-mix(in srgb,var(--success) 16%,var(--panel))}
-    .matrix-mobile .state-different .mobile-agreement-marker,.matrix-mobile .state-partial .mobile-agreement-marker{border-color:var(--amber);border-radius:0;color:var(--amber);background:rgb(var(--amber-rgb) / .15);clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%);line-height:1}
-    .matrix-mobile .state-conflict .mobile-agreement-marker{border-color:var(--danger);color:var(--danger);background:rgb(var(--danger-rgb) / .13);clip-path:polygon(25% 0,75% 0,100% 25%,100% 75%,75% 100%,25% 100%,0 75%,0 25%)}
-    .matrix-mobile .state-observed .mobile-agreement-marker{border-color:var(--accent);border-radius:3px;color:var(--accent);background:rgb(var(--accent-rgb) / .14)}
+    .matrix-mobile .state-different .mobile-agreement-marker,.matrix-mobile .state-partial .mobile-agreement-marker{border-color:var(--amber);border-radius:0;color:var(--amber);background:color-mix(in srgb,var(--amber) 15%,var(--panel));clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%);line-height:1}
+    .matrix-mobile .state-conflict .mobile-agreement-marker{border-color:var(--danger);color:var(--danger);background:color-mix(in srgb,var(--danger) 13%,var(--panel));clip-path:polygon(25% 0,75% 0,100% 25%,100% 75%,75% 100%,25% 100%,0 75%,0 25%)}
+    .matrix-mobile .state-observed .mobile-agreement-marker{border-color:var(--accent);border-radius:3px;color:var(--accent);background:color-mix(in srgb,var(--accent) 14%,var(--panel))}
     .matrix-mobile .state-not_collected .mobile-agreement-marker,.matrix-mobile .state-unavailable .mobile-agreement-marker,.matrix-mobile .state-unknown .mobile-agreement-marker{border-style:dashed}
     .comparison .table-wrap,.publication-comparison .table-wrap{overflow:visible;border-top:0}
     .comparison table,.comparison tbody,.comparison tr,.comparison th[scope='row'],.comparison td,.publication-comparison table,.publication-comparison tbody,.publication-comparison tr,.publication-comparison th[scope='row'],.publication-comparison td{display:block;width:100%}

@@ -124,6 +124,25 @@ test('keeps DNS, HTTP, and TLS display states explicit and bounded', () => {
     dnsEvidence: {
       status: 'partial',
       diagnostics: { https: { status: 'success' }, mx: { status: 'error', error: 'timeout' } },
+      delegation: {
+        delegationHealthVersion: 1,
+        status: 'partial',
+        complete: false,
+        parent: { nameservers: [] },
+        registry: { nameservers: [] },
+        recordMatrix: [{
+          type: 'TXT',
+          state: 'partial',
+          observations: [{
+            nameserver: 'ns1.example.test',
+            state: 'partial',
+            values: ['x'.repeat(600), '\u0000bounded'],
+            error: null,
+            truncated: true,
+            discarded: 3,
+          }],
+        }],
+      },
     },
     dnsRecords: {
       https: [
@@ -170,6 +189,10 @@ test('keeps DNS, HTTP, and TLS display states explicit and bounded', () => {
   assert.equal(network.httpMetadata[0]?.value, 'Observed');
   assert.equal(network.tlsRows.find((row) => row.label === 'Chain trust')?.danger, true);
   assert.equal(network.tlsRows.find((row) => row.label === 'Validity')?.value, 'Expired');
+  assert.equal(network.dnsDelegation?.recordMatrix[0]?.observations[0]?.values[0]?.length, 500);
+  assert.equal(network.dnsDelegation?.recordMatrix[0]?.observations[0]?.values[1], 'bounded');
+  assert.equal(network.dnsDelegation?.recordMatrix[0]?.observations[0]?.truncated, true);
+  assert.equal(network.dnsDelegation?.recordMatrix[0]?.observations[0]?.discarded, 3);
 });
 
 test('keeps registry comparison and source diagnostics separately attributed', () => {

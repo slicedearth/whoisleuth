@@ -67,6 +67,8 @@ whoisleuth bulk domains.txt --csv
 whoisleuth discover example.com --preset common --jsonl
 whoisleuth verify-artifact lookup.json --json
 whoisleuth compare lookup.json --json
+whoisleuth brief lookup.json
+whoisleuth registry-doctor lookup.json --json
 ```
 
 Only one query is accepted by `lookup`; multi-input processing belongs to
@@ -105,13 +107,13 @@ HTTP status, and a bounded explanation.
 | Goal | Commands |
 | --- | --- |
 | Investigate a target | `lookup`, `http`, `tls`, `posture`, `registry-support` |
-| Review many targets | `bulk`, `discover`, `discover-scan`, `ct-search` |
+| Review many targets | `bulk`, `discover`, `discover-scan`, `ct-search`, `ct-intake` |
 | Compare saved evidence | `compare`, `page-compare`, `diff`, `reconcile`, `timeline`, `mail-review` |
-| Review supplied evidence | `review-evidence`, `registry-doctor`, `source-report`, `sharing-review` |
-| Plan and assure changes | `domain-control`, `assurance`, `workflow-plan` |
-| Verify and package evidence | `verify-artifact`, `inspect-archive`, `sign-artifact`, `verify-signature`, `export` |
+| Review supplied evidence | `brief`, `review-evidence`, `registry-doctor`, `registry-cohort`, `source-report`, `sharing-review`, `map-observations` |
+| Plan and assure changes | `domain-control`, `monitor-once`, `assurance`, `change-packet`, `workflow-plan`, `workflow-run` |
+| Verify and package evidence | `case-pack`, `manifest`, `oam-export`, `verify-artifact`, `inspect-archive`, `sign-artifact`, `verify-signature`, `export` |
 | Calibrate offline | `risk-calibrate`, `lookalike-calibrate` |
-| Operate the CLI | `doctor`, `commands`, `completion`, `manual` |
+| Operate the CLI | `doctor`, `registry-scaffold`, `commands`, `completion`, `manual` |
 
 Use focused help for the exact arguments and collection ceiling:
 
@@ -137,6 +139,18 @@ explicit in text, so colour is never the only distinction.
   lifecycle events to stderr.
 - `--strict-exit` treats failures in explicitly requested source families as a
   partial failure while keeping skipped or unsupported sources neutral.
+- `--fail-on` applies explicit `source-failure`, `inconclusive`, `danger`, or
+  `material-drift` automation policy where the selected command supports it.
+- `--junit` emits bounded CI test cases for Lookup, Bulk, and one-shot control
+  reviews; owned-domain Posture can emit `--sarif` only with
+  `--owned-domain`.
+
+`--config <file> --profile <name>` applies a strict version-1 local profile.
+The default path is `$XDG_CONFIG_HOME/whoisleuth/config.json`. Profiles can set
+only presentation mode, Fast collection, bounded concurrency, and observer or
+vantage labels. They cannot add targets, enable Deep collection, select output
+paths, approve network work, or set failure policy. Explicit command options
+override defaults from the same option group.
 
 Every command accepts `--output <file>`. WHOISleuth buffers bounded output,
 creates a private temporary file beside the destination, syncs it, and publishes
@@ -188,6 +202,10 @@ full contracts into the packaged reference.
 
 [Read the local signing and verification contract.](cli-reference.md#optional-evidence-package-signing)
 
+### Reproducible investigation manifest
+
+[Read the ordered, path-free artefact digest contract.](cli-reference.md#reproducible-investigation-manifest)
+
 ### Bulk lookup
 
 [Read Bulk bounds, filters, formats, checkpoints, and cancellation behaviour.](cli-reference.md#bulk-lookup)
@@ -195,6 +213,14 @@ full contracts into the packaged reference.
 ### Certificate Transparency search
 
 [Read the CT query and source-limit contract.](cli-reference.md#certificate-transparency-search)
+
+### Local certificate event intake
+
+[Read the offline, source-qualified event import contract.](cli-reference.md#local-certificate-event-intake)
+
+### Declarative observation interchange
+
+[Read the bounded field-mapping and Open Asset Model bridge contracts.](cli-reference.md#declarative-observation-interchange)
 
 ### Lookalike discovery
 
@@ -230,7 +256,7 @@ full contracts into the packaged reference.
 
 ### Offline supplied-evidence review
 
-[Read the DNSSEC, DANE, and supplied-observation review contract.](cli-reference.md#offline-supplied-evidence-review)
+[Read the DNSSEC, DANE, zone-intent, portfolio, domain-change, and supplied-observation review contract.](cli-reference.md#offline-supplied-evidence-review)
 
 ### Domain control manifests
 
@@ -240,6 +266,10 @@ full contracts into the packaged reference.
 
 [Read planned-change, recovery-dependency, and retirement contracts.](cli-reference.md#domain-assurance-review)
 
+### Domain change assurance packet
+
+[Read the bounded pre-change, post-change, planning, and integrity contract.](cli-reference.md#domain-change-assurance-packet)
+
 ### Pre-sharing review
 
 [Read the local marking, scope, redaction, and integrity preflight.](cli-reference.md#pre-sharing-review)
@@ -247,6 +277,10 @@ full contracts into the packaged reference.
 ### Fixed investigation plans
 
 [Read the plan-only recipe contract and approval gates.](cli-reference.md#fixed-investigation-plans)
+
+### Local handoffs and one-shot monitoring
+
+[Read brief, case-package, fixed-recipe execution, and one-shot control-review contracts.](cli-reference.md#local-handoffs-and-one-shot-monitoring)
 
 ### Optional local rendered capture
 

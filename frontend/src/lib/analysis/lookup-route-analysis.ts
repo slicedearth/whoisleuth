@@ -14,6 +14,7 @@ import { compactHttpObservation } from './http-summary.ts';
 import { analyzeDomainIdn } from './idn-confusables.ts';
 import { buildLookupAssetGraph } from './lookup-asset-graph.ts';
 import { buildLookupClaimReadiness } from './lookup-claim-readiness.ts';
+import { buildLookupEvidenceImpactPlan } from './lookup-evidence-impact.ts';
 import {
   buildLookupDecisionSupport,
   buildLookupEvidenceQualityMatrix,
@@ -38,8 +39,10 @@ import { compareRdapPublications, compareRegistrySources } from './registry-comp
 import {
   explainOpportunityScore,
   explainRiskScore,
+  buildRiskScoreSensitivity,
   type OpportunityExplanation,
   type RiskExplanation,
+  type RiskScoreSensitivity,
 } from './scoring.ts';
 import { entityDisplayName } from './utils.ts';
 
@@ -494,6 +497,7 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
   };
   const opportunity: OpportunityExplanation | null = explainOpportunityScore(scoredAvailability);
   const risk: RiskExplanation | null = explainRiskScore(scoredAvailability);
+  const riskSensitivity: RiskScoreSensitivity | null = buildRiskScoreSensitivity(scoredAvailability);
   const lookupSourceRefreshPlan = buildLookupSourceRefreshPlan(
     evidenceCoverage,
     lookupObservedAt,
@@ -542,6 +546,10 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     timing: lookupTiming,
     observedAt: lookupObservedAt,
     observedAtByEvidence: evidenceObservedAtById,
+  });
+  const lookupEvidenceImpactPlan = buildLookupEvidenceImpactPlan({
+    readiness: lookupClaimReadiness,
+    quality: evidenceQualityMatrix,
   });
   const lookupSummary = buildLookupSummaryModel({
     availability,
@@ -626,6 +634,7 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     externalRiskContext,
     opportunity,
     risk,
+    riskSensitivity,
     outreach,
     abuseRecipientResolution,
     sourceOnlyCount,
@@ -648,6 +657,7 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     lookupSourceRefreshPlan,
     lookupDecisionSupport,
     lookupClaimReadiness,
+    lookupEvidenceImpactPlan,
     evidenceQualityMatrix,
     lookupSummary,
     lookupInvestigationBrief,

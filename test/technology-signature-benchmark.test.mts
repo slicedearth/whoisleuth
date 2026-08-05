@@ -5,6 +5,7 @@ import { describe, test } from 'node:test';
 import {
   TECHNOLOGY_SIGNATURE_FIXTURES,
 } from '../fixtures/technology-signature-fixtures.mts';
+import { TECHNOLOGY_REVIEWED_FIXTURES } from '../fixtures/technology-reviewed-fixtures.mts';
 import {
   MAX_EVIDENCE_PER_TECHNOLOGY,
   TECHNOLOGY_SIGNATURE_CATALOGUE,
@@ -19,7 +20,7 @@ import {
   parseArguments,
 } from '../tools/technology-signature-benchmark.mts';
 
-const GENERATED_AT = '2026-07-28T00:00:00.000Z';
+const GENERATED_AT = '2026-08-05T01:00:00.000Z';
 
 function capture() {
   let value = '';
@@ -47,10 +48,18 @@ describe('technology signature benchmark', () => {
     assert.equal(report.summary.failedFixtures, 0);
     assert.equal(report.summary.lintErrors, 0);
     assert.equal(report.summary.ready, true);
-    assert.equal(report.summary.reviewedFixtures, 0);
+    assert.equal(report.summary.reviewedFixtures, TECHNOLOGY_REVIEWED_FIXTURES.length);
     assert.equal(report.summary.failedReviewedFixtures, 0);
-    assert.equal(report.summary.reviewedSignatureCoverage, 0);
-    assert.equal(report.summary.realWorldCoverageEstablished, false);
+    assert.equal(report.summary.reviewedSignatureCoverage, 40);
+    assert.equal(report.summary.reviewedRepeatCoverage, 5);
+    assert.equal(report.summary.reviewedIndependentRepeatCoverage, 5);
+    assert.equal(report.summary.reviewedEvidenceRuleCoverage, 46);
+    assert.equal(report.summary.reviewedNegativeFixtures, 2);
+    assert.equal(report.summary.passedReviewedNegativeFixtures, 2);
+    assert.equal(report.summary.reviewedMixedFixtures, 29);
+    assert.equal(report.summary.passedReviewedMixedFixtures, 29);
+    assert.equal(report.summary.reviewedDeliberateNonmatches, 109);
+    assert.equal(report.summary.reviewedFalsePositiveMatches, 0);
     assert.equal(report.metrics.positiveCoverage, report.summary.signatures);
     assert.equal(report.metrics.negativeCoverage, report.summary.signatures);
     assert.equal(report.metrics.missedMatches, 0);
@@ -60,10 +69,33 @@ describe('technology signature benchmark', () => {
     assert.equal(report.metrics.falsePositiveRate, 0);
     assert.equal(report.bounds.networkRequests, 0);
     assert.ok(report.bounds.reviewedFixtureLimit > 0);
-    assert.deepEqual(report.reviewedFixtures, []);
+    assert.equal(report.reviewedFixtures.length, TECHNOLOGY_REVIEWED_FIXTURES.length);
     assert.equal(report.reviewedProgramme.staleFixtureIds.length, 0);
-    assert.equal(report.reviewedProgramme.unsampledSignatureIds.length, report.summary.signatures);
-    assert.equal(report.reviewedProgramme.licenseBases['factual-observation'], 0);
+    assert.equal(report.reviewedProgramme.unsampledSignatureIds.length, report.summary.signatures - 40);
+    assert.equal(report.reviewedProgramme.underRepeatedSignatureIds.length, report.summary.signatures - 5);
+    assert.equal(report.reviewedProgramme.underIndependentRepeatSignatureIds.length, report.summary.signatures - 5);
+    assert.equal(report.reviewedProgramme.maturity, 'initial');
+    assert.deepEqual(report.reviewedProgramme.tiers, {
+      initial: true,
+      catalogueSampled: false,
+      repeatSampled: false,
+      evidenceCovered: false,
+      current: false,
+    });
+    assert.equal(report.reviewedProgramme.sampledEvidenceRules, 46);
+    assert.ok(report.reviewedProgramme.totalEvidenceRules > report.reviewedProgramme.sampledEvidenceRules);
+    const reviewedSvelteKit = report.reviewedProgramme.bySignature.sveltekit;
+    assert.ok(reviewedSvelteKit);
+    assert.equal(reviewedSvelteKit.observations, 1);
+    assert.equal(reviewedSvelteKit.independentOrigins, 1);
+    assert.equal(reviewedSvelteKit.independentlyRepeated, false);
+    assert.equal(reviewedSvelteKit.sampledEvidenceRules, 1);
+    assert.equal(report.reviewedProgramme.licenseBases['factual-observation'], 1);
+    assert.equal(report.reviewedProgramme.licenseBases['public-domain'], 1);
+    assert.equal(report.reviewedProgramme.licenseBases['permissively-licensed-source'], 26);
+    assert.equal(report.reviewedProgramme.licenseBases['copyleft-licensed-source'], 9);
+    assert.equal(report.reviewedProgramme.licenseBases['official-demonstration-terms'], 1);
+    assert.equal(report.reviewedProgramme.licenseBases['minimized-with-permission'], 1);
     assert.equal(
       Object.values(report.reviewedProgramme.byCategory).reduce((sum, category) => sum + category.signatures, 0),
       report.summary.signatures,
@@ -87,6 +119,7 @@ describe('technology signature benchmark', () => {
     const serialized = JSON.stringify(report);
     assert.doesNotMatch(serialized, /__NEXT_DATA__|data-mage-init|wixstatic|private-build|WordPress 7\.1/);
     assert.doesNotMatch(serialized, /"resourceOrigins"|"responseHeaders"|"httpServer"|"generator"|"html"|fixture-input/);
+    assert.doesNotMatch(serialized, /(?:npm|git|oci|official):/u);
   });
 
   test('catalogue lint rejects duplicate ids, missing fixtures, invalid confidence, and uncapped evidence', () => {
@@ -126,8 +159,12 @@ describe('technology signature benchmark', () => {
     const output = formatTechnologySignatureBenchmark(report);
     assert.match(output, /technology-signature benchmark/i);
     assert.match(output, /fixtures passed/);
-    assert.match(output, /0\/\d+ signatures sampled/);
-    assert.match(output, /Real-world coverage gate: not established/);
+    assert.match(output, /40\/\d+ signatures sampled/);
+    assert.match(output, /Reviewed negative controls: 2\/2 passed/);
+    assert.match(output, /Reviewed mixed controls: 29\/29 passed/);
+    assert.match(output, /Reviewed false-positive controls: 0\/109/);
+    assert.match(output, /Reviewed corpus maturity: initial/);
+    assert.match(output, /Repeat sampling: 5\/\d+ signatures; independent origins: 5\/\d+; evidence rules: 46\/\d+/);
     assert.match(output, /network requests: 0/);
     assert.deepEqual(parseArguments([]), { json: false, requireReviewed: false });
     assert.deepEqual(parseArguments(['--json']), { json: true, requireReviewed: false });
@@ -155,6 +192,6 @@ describe('technology signature benchmark', () => {
       stderr: stderr.stream,
       now: () => new Date(GENERATED_AT),
     }), 1);
-    assert.match(coverageStdout.value(), /Real-world coverage gate: not established/);
+    assert.match(coverageStdout.value(), /Reviewed corpus maturity: initial/);
   });
 });

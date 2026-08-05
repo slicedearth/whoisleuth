@@ -62,7 +62,12 @@ test('completes the public synthetic workflow without investigation requests or 
   await expect(page.locator('.candidate')).toHaveCount(1);
   await page.getByRole('button', { name: 'Inspect northstar-login.example' }).click();
   await expect(page.getByRole('heading', { name: 'northstar-login.example' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Synthetic evidence topology' })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Synthetic result sections' }).getByRole('link')).toHaveCount(7);
+  await expect(page.locator('.demo-glance dl div').filter({ hasText: 'Evidence checks complete' })).toContainText('8');
+  await expect(page.locator('.demo-glance dl div').filter({ hasText: 'Evidence checks limited' })).toContainText('0');
+  await expect(page.getByRole('heading', { name: '// Advanced' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Where this result came from' })).toBeVisible();
+  await expect(page.locator('a[href="#demo-evidence-registry"]')).toBeVisible();
   const structuredIdentityNodeTitle = page.locator(
     '.source-node[data-source-id="structured-identity"] .source-title-copy',
   );
@@ -76,6 +81,14 @@ test('completes the public synthetic workflow without investigation requests or 
       && text.scrollHeight <= text.clientHeight
     );
   })).toBe(true);
+  await page.getByText('Why the risk score is 78', { exact: true }).click();
+  const desktopFactorChart = page.locator('.factor-chart');
+  await expect(desktopFactorChart).toBeVisible();
+  const assessmentWidth = await page.locator('.availability').evaluate((element) => element.getBoundingClientRect().width);
+  const factorChartWidth = await desktopFactorChart.evaluate((element) => element.getBoundingClientRect().width);
+  expect(factorChartWidth).toBeGreaterThan(assessmentWidth * 0.75);
+  await page.getByText('Why the risk score is 78', { exact: true }).click();
+  await page.getByRole('tab', { name: /^Timeline/ }).click();
   await expect(page.getByRole('heading', { name: 'Observed lifecycle' })).toBeVisible();
   await expect(page.locator('.registry-shape')).not.toHaveCount(0);
   await expect(page.locator('.certificate-shape')).not.toHaveCount(0);
@@ -90,7 +103,6 @@ test('completes the public synthetic workflow without investigation requests or 
   await expect(agreementPlot.locator('.agreement-track')).toHaveCount(3);
   await expect(agreementPlot.locator('.agreement-marker')).toHaveCount(6);
   await expect(agreementPlot.locator('.matrix-cell')).toHaveCount(0);
-  await expect(page.locator('a[href="#demo-evidence-registry"]')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'DNS intelligence' })).toBeVisible();
   await page.locator('.dns-card > summary').click();
   await expect(page.locator('.dns-card').getByText('ns1.shared-example.invalid · serial 2026072701', { exact: true })).toBeVisible();
@@ -147,7 +159,8 @@ test('completes the public synthetic workflow without investigation requests or 
   await expect(registrySources.nth(1).getByText('WHOIS structured data')).toBeVisible();
   const registryInterpretation = page.locator('.registry-insights');
   await expect(registryInterpretation).not.toHaveAttribute('open', '');
-  await expect(registryInterpretation.getByText('Registry interpretation · Registered')).toBeVisible();
+  await expect(registryInterpretation.getByRole('heading', { name: 'Registry interpretation' })).toBeVisible();
+  await expect(registryInterpretation.locator(':scope > summary .evidence-status')).toHaveText('Registered');
   await registryInterpretation.locator(':scope > summary').click();
   await expect(registryInterpretation.getByText('RDAP: redacted · WHOIS: redacted')).toBeVisible();
   await expect(registryInterpretation.getByText('clientTransferProhibited')).toBeVisible();

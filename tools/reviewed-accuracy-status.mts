@@ -57,9 +57,12 @@ const CORPORA: readonly Readonly<{
   Object.freeze({
     key: 'technology-detection',
     label: 'Technology detection',
-    reviewedCases: () => ({ positive: TECHNOLOGY_REVIEWED_FIXTURES.length, benign: 0 }),
-    limitation: 'Synthetic catalogue fixtures do not establish coverage on the wider web.',
-    nextStep: 'Use the existing technology review tool to add minimised, licensed observations.',
+    reviewedCases: () => ({
+      positive: TECHNOLOGY_REVIEWED_FIXTURES.filter((fixture) => fixture.kind !== 'negative').length,
+      benign: TECHNOLOGY_REVIEWED_FIXTURES.filter((fixture) => fixture.kind === 'negative').length,
+    }),
+    limitation: 'The small source- and permission-reviewed reference corpus does not establish coverage on the wider web.',
+    nextStep: 'Add independently reviewed positive and benign reference builds with a documented licence or permission basis, without retaining page content.',
   }),
   Object.freeze({
     key: 'service-deprovision-cues',

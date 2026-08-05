@@ -23,6 +23,20 @@ type RiskExplanation = {
   families: Array<{ id: RiskFamily; contribution: number; cap: number | null }>;
   evidenceQuality: ScoreEvidenceQuality;
 };
+type RiskSensitivityScenario = Readonly<{
+  excludedFamily: RemovableRiskFamily;
+  score: number;
+  difference: number;
+}>;
+type RiskScoreSensitivity = Readonly<{
+  version: 1;
+  baselineScore: number;
+  reviewThreshold: number;
+  minimumScenarioScore: number;
+  thresholdState: 'below' | 'stable_above' | 'crosses';
+  scenarios: readonly RiskSensitivityScenario[];
+  limitations: readonly string[];
+}>;
 type RiskInput = ScoreEvidenceQualityInput & {
   availability?: unknown;
   state?: unknown;
@@ -44,6 +58,7 @@ type RiskInput = ScoreEvidenceQualityInput & {
   privacyProtected?: unknown;
   domainAgeDays?: unknown;
 };
+type RemovableRiskFamily = Exclude<RiskFamily, 'registration' | 'corroboration'>;
 
 const RISK_STATES = new Set(['registered', 'for_sale', 'expiring']);
 const STATE_LABELS: Readonly<Record<string, string>> = Object.freeze({
@@ -70,6 +85,14 @@ const FAMILY_CAPS: Readonly<Partial<Record<RiskFamily, number>>> = Object.freeze
   'external-intelligence': 18,
   'operational-support': 12,
 });
+const REMOVABLE_RISK_FAMILY_MAP: Readonly<Record<RemovableRiskFamily, true>> = Object.freeze({
+  'brand-presentation': true,
+  'credential-lure': true,
+  'domain-resemblance': true,
+  'external-intelligence': true,
+  'operational-support': true,
+});
+const REMOVABLE_RISK_FAMILIES = Object.freeze(Object.keys(REMOVABLE_RISK_FAMILY_MAP) as RemovableRiskFamily[]);
 
 const HIGH_CONTEXT_MUTATIONS = new Set([
   'unicode_homoglyph',
@@ -153,13 +176,14 @@ function scoreQuality(input: RiskInput): ScoreEvidenceQuality {
 
 // Risk prioritizes a registered lookalike/typosquat domain for analyst review.
 // It is a heuristic indicator, never a maliciousness or safety verdict.
-export function explainRiskScore(input: RiskInput): RiskExplanation | null {
+function explainRiskScoreInternal(input: RiskInput, excludedFamily: RiskFamily | null): RiskExplanation | null {
   const state = input.availability ?? input.state;
   if (typeof state !== 'string' || !RISK_STATES.has(state)) return null;
 
   const factors: RiskFactor[] = [];
   const familyTotals = new Map<RiskFamily, number>();
   const add = (family: RiskFamily, label: string, requestedDelta: number): number => {
+    if (family === excludedFamily) return 0;
     const current = familyTotals.get(family) ?? 0;
     const cap = FAMILY_CAPS[family] ?? Number.POSITIVE_INFINITY;
     const delta = Math.max(0, Math.min(requestedDelta, Math.max(0, cap - current)));
@@ -234,6 +258,38 @@ export function explainRiskScore(input: RiskInput): RiskExplanation | null {
   };
 }
 
+export function explainRiskScore(input: RiskInput): RiskExplanation | null {
+  return explainRiskScoreInternal(input, null);
+}
+
+export function buildRiskScoreSensitivity(input: RiskInput): RiskScoreSensitivity | null {
+  const baseline = explainRiskScoreInternal(input, null);
+  if (!baseline) return null;
+  const removableFamilies = REMOVABLE_RISK_FAMILIES
+    .filter((family) => baseline.families.some((item) => item.id === family && item.contribution > 0));
+  const scenarios = removableFamilies.map((excludedFamily) => {
+    const result = explainRiskScoreInternal(input, excludedFamily);
+    const score = result?.score ?? baseline.score;
+    return Object.freeze({ excludedFamily, score, difference: score - baseline.score });
+  }).sort((left, right) => left.score - right.score || left.excludedFamily.localeCompare(right.excludedFamily));
+  const minimumScenarioScore = scenarios[0]?.score ?? baseline.score;
+  const thresholdState = baseline.score < RISK_REVIEW_THRESHOLD
+    ? 'below' as const
+    : minimumScenarioScore < RISK_REVIEW_THRESHOLD ? 'crosses' as const : 'stable_above' as const;
+  return Object.freeze({
+    version: 1 as const,
+    baselineScore: baseline.score,
+    reviewThreshold: RISK_REVIEW_THRESHOLD,
+    minimumScenarioScore,
+    thresholdState,
+    scenarios: Object.freeze(scenarios),
+    limitations: Object.freeze([
+      'Each scenario removes one observed evidence family and recalculates family caps and corroboration; it does not predict missing evidence.',
+      'The sensitivity review qualifies prioritisation only and does not determine maliciousness, safety, ownership, or intent.',
+    ]),
+  });
+}
+
 export function computeRiskScore(input: RiskInput): number | null {
   return explainRiskScore(input)?.score ?? null;
 }
@@ -298,4 +354,4 @@ export function formatScoreBreakdown(explained: RiskExplanation | null, separato
   return parts.join(separator);
 }
 
-export type { RiskExplanation, RiskFactor, RiskFamily, RiskInput };
+export type { RiskExplanation, RiskFactor, RiskFamily, RiskInput, RiskScoreSensitivity, RiskSensitivityScenario };

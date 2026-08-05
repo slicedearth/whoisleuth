@@ -890,7 +890,7 @@ test('risk model v7 exposes capped cross-family corroboration in Bulk triage', a
       availability: {
         applicable: true, domain: 'candidate.example', state: 'registered', confidence: 'high',
         faviconHash: 'a'.repeat(64), externalAssetHosts: ['official.example'],
-        phishingLanguageMatch: 'verify your account', hasPasswordField: true,
+        phishingLanguageMatch: 'Reviewed English account-verification language', hasPasswordField: true,
       },
       diagnostics: { version: 7, rdap: { status: 'complete' }, whois: { status: 'skipped' }, availability: { status: 'complete' } },
     }),

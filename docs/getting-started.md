@@ -220,27 +220,189 @@ fixture with:
 npm run technology:fixture-review -- reviewed-input.json
 ```
 
-The contributor supplies only reviewed factual markers. The tool reconstructs
-a fixed safe subset of recognised static markers and approved shared vendor
-origins, rejects target-bearing or contact material, and verifies the expected
-catalogue result. The checked-in reviewed corpus starts empty, so it makes no
-claim about real-world coverage until reviewed contributions are added.
-The benchmark also reports a 365-day review-age gate, unsampled signature IDs,
-declared licence-basis counts, and reviewed coverage by technology category.
-These maintenance signals cannot turn an empty or narrow corpus into a coverage
-claim and do not trigger live collection.
+To prepare that input from an existing saved Deep CLI lookup without making a
+second request, run:
 
-Use the separate coverage gate when deciding whether the reviewed corpus is
-complete enough to support a catalogue-wide coverage claim:
+```bash
+npm run technology:review-candidate -- saved-deep-lookup.json \
+  --id=reviewed-sveltekit-observation \
+  --expected=sveltekit \
+  --licence-basis=minimized-with-permission \
+  --reviewed-at=2026-08-05T11:00:00.000Z \
+  > reviewed-input.json
+```
+
+The expected identifiers are an explicit analyst confirmation, not labels
+inferred by the tool. Candidate intake requires a complete, successful
+technology observation and rebuilds catalogue-owned markers only. It does not
+copy the saved query, target, page text, raw response values, contacts, or URLs.
+The `minimized-with-permission` value retains the established fixture-contract
+spelling.
+
+Official starter projects and demonstration builds can be reviewed from a
+local, already-built HTML artefact without contacting the deployed site:
+
+```bash
+npm run technology:example-review -- dist/index.html \
+  --id=reviewed-reference-build \
+  --expected=sveltekit \
+  --licence-basis=permissively-licensed-source \
+  --source-reference=npm:example-package \
+  --source-revision=1.2.3 \
+  --source-integrity=sha512-REPLACE_WITH_NPM_INTEGRITY \
+  --source-licence=MIT \
+  --runtime-reference=node@26.4.0 \
+  --build-recipe=official-default-starter \
+  --observed-at=2026-08-05T01:20:00.000Z \
+  --reviewed-at=2026-08-05T01:20:00.000Z
+```
+
+Repository builds use a target-free `git:owner/repository` reference, a full
+commit hash, `official-repository-build`, and no package-integrity option. For
+a benign control, replace `--expected` with `--negative-for`. Negative intake
+is accepted only when the complete local artefact produces no technology
+finding. Output contains a catalogue-owned fixture plus a separate source
+record with the immutable source reference, reviewed licence, build recipe,
+runtime, and artefact digest. It never contains the source HTML, a site URL, or
+the evaluated page text, and fixture evaluation makes zero network requests.
+The output also compares the proposed fixture with the checked-in corpus. For
+each expected signature it distinguishes a first reviewed observation, a new
+independent source origin, and another observation from an origin already in
+the corpus. An existing fixture with the same identifier is excluded from this
+comparison so regenerating a fixture is treated as a replacement, not as extra
+evidence. The context lists fixture identifiers only; it does not copy source
+artefacts or target details.
+Containerised reference builds use `official-container-default` and must add an
+immutable `oci:` image reference containing both its tag and `sha256` digest.
+Small examples reproduced directly from official documentation use
+`official-documentation-example`. A non-container source may still record an
+immutable OCI build environment when a pinned runtime image was needed for a
+reproducible build.
+An official container can also be the reviewed source by using a target-free
+`oci:registry/image` source reference, the explicit tag as its revision, and
+the image digest as source integrity. Add `--http-server` or one recognised
+`--response-header=NAME:VALUE` only when that metadata came from the same local
+capture. These values are reduced to catalogue-owned markers; a separate digest
+binds the original bounded response metadata without retaining it. A required
+database or similar service can be recorded with up to four repeated immutable
+`--supporting-environment` image references.
+The container is a disposable build boundary only; neither its image nor its
+runtime becomes a WHOISleuth production dependency.
+
+A static HTML artefact already committed to a reviewed repository can use
+`reviewed-repository-artifact`, a full commit hash, and no runtime or build
+environment. This mode is limited to repository sources whose licence permits
+local inspection. It records the source commit and artefact digest without
+inventing an unobserved build process or retaining the source page.
+
+When an official demonstration explicitly permits inspection but has no
+reproducible stable build, review a locally saved capture with a target-free
+`official:project/example` source reference, the observation timestamp as its
+revision, `official-public-demonstration`, and no runtime reference:
+
+```bash
+npm run technology:example-review -- local-capture.html \
+  --id=reviewed-official-demonstration \
+  --expected=typo3 \
+  --licence-basis=official-demonstration-terms \
+  --source-reference=official:project/example \
+  --source-revision=2026-08-05T03:52:53.000Z \
+  --source-licence=official-demonstration-terms \
+  --build-recipe=official-public-demonstration \
+  --observed-at=2026-08-05T03:52:53.000Z \
+  --reviewed-at=2026-08-05T03:54:00.000Z
+```
+
+This mode records the artefact and response-metadata digests but does not claim
+an offline build, a disclosed runtime version, or continuing permission. The
+review command still reads only the local capture and makes no network request.
+
+After rebuilding one or more sources, verify their artefact and response
+metadata digests without changing the corpus:
+
+```bash
+npm run technology:source-verify -- local-verification.json
+npm run technology:source-verify -- local-verification.json --require-all
+```
+
+The local manifest uses the following bounded shape:
+
+```json
+{
+  "schema": "whoisleuth.technology-source-verification-manifest",
+  "version": 1,
+  "entries": [
+    {
+      "fixtureId": "reviewed-reference-build",
+      "artifactPath": "/local/path/to/index.html",
+      "httpServer": "ExampleServer/1.2.3"
+    }
+  ]
+}
+```
+
+The verifier reads only the supplied local files, makes no network request,
+writes nothing, and reports fixture identifiers and match states without paths,
+page content, or response values. A mismatch is a review prompt: it never
+rewrites an accepted fixture or treats a changed upstream build as equivalent.
+
+Licence bases distinguish ordinary factual review, explicit local permission,
+public-domain material, permissively or copyleft-licensed local reference
+deployments, and official demonstrations whose applicable terms have been
+reviewed. An accessible public URL is not, by itself, sufficient permission for
+automated inspection. Prefer a locally run official example under its recorded
+licence; review live-demo terms separately before collection. Official
+demonstration provenance retains only a target-free project identifier,
+observation time, selected factual markers, and digests—not the URL or page.
+
+The fixture review tool accepts only reviewed factual markers. It reconstructs
+a fixed safe subset of recognised static markers, passive response headers, and
+approved shared vendor origins, rejects target-bearing or contact material, and
+verifies the expected catalogue result. The checked-in reviewed corpus
+contains only minimised, target-free observations that have passed the
+contribution review. Source- and permission-reviewed reference builds retain
+separate immutable source and artefact digest records, while a benign
+named-technology example acts as a false-positive control. Current local
+examples cover official starter or default builds for Docusaurus, Ghost,
+Next.js, Astro, Nuxt, Gatsby, Hugo, Jekyll, WordPress, WooCommerce, Drupal,
+Joomla, nginx, Apache HTTP Server, Caddy, PHP, Angular, Express, Hexo,
+OpenLiteSpeed, PrestaShop, OpenCart, and Craft CMS, plus an Eleventy benign
+control. A separately reviewed official TYPO3 demonstration contributes only
+its generator and selected-server facts; its page, URL, and content are not
+retained. Licensed static repository artefacts add positive Adobe Commerce and
+Magento, ASP.NET, ASP.NET Web Forms, BigCommerce, Eleventy, Fastly, Framer,
+Microsoft IIS, Squarespace, Vercel, Webflow, Wix, and Amazon CloudFront evidence
+without retaining the exported pages. The deployment-owned observation
+likewise retains only Cloudflare, Netlify, and SvelteKit markers rather than
+redistributed page content. Containerised CMS
+cases use their first-party installation output rather than pretending an
+unconfigured image is a completed website. Mixed controls record both the
+observed CMS, server, and runtime findings and selected competing signatures
+that were absent. The corpus remains small and its partial signature coverage
+must not be generalised to the wider web.
+The benchmark also reports a 365-day review age, unsampled and under-repeated
+signature IDs, independently sourced repetition, sampled evidence rules,
+declared licence-basis counts, and reviewed coverage by technology category.
+Multiple fixtures from the same package, repository, container, demonstration,
+or unbound deployment observation count as repeat observations but only one
+source origin. Its maturity tiers are cumulative: an initial corpus,
+catalogue-wide sampling, two independent source origins per signature, all
+evidence rules sampled, and finally a current corpus with no stale or failing
+observations. These maintenance signals cannot turn an empty or narrow corpus
+into a coverage claim and do not trigger live collection.
+
+Use the separate maintenance gate when a release process requires the highest
+reviewed-corpus tier:
 
 ```bash
 npm run technology:coverage-check
 ```
 
-This command intentionally fails while any catalogue signature lacks a passing,
-minimised contributor-reviewed observation. The ordinary synthetic benchmark
-continues to measure deterministic signature behaviour and collision controls;
-it does not become a proxy for real-world coverage.
+This command intentionally fails until every catalogue signature has passing
+minimised observations from at least two distinct source origins, every evidence
+rule has been sampled, and no observation is stale. The ordinary synthetic
+benchmark continues to measure deterministic signature behaviour and collision
+controls; neither result is a proxy for accuracy on the wider web.
 
 The wider reviewed-accuracy programme keeps technology detection separate from
 lookalike analysis, page comparison, service-deprovision cues, and certificate

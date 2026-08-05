@@ -72,7 +72,7 @@ type TechnologySignatureDescriptor = Readonly<{
   evidence: ReadonlyArray<Readonly<Omit<SignatureEvidence, 'matches'>>>;
 }>;
 
-const TECHNOLOGY_PROFILE_VERSION = 6;
+const TECHNOLOGY_PROFILE_VERSION = 8;
 const MAX_TECHNOLOGY_HTML_CHARS = MAX_STATIC_HTML_CHARS;
 const MAX_TECHNOLOGY_TAG_LENGTH = MAX_TAG_LENGTH;
 const MAX_TECHNOLOGY_FINDINGS = 24;
@@ -104,15 +104,17 @@ function normalizedResourceHosts(value: unknown): Set<string> {
   return hosts;
 }
 
-const PASSIVE_HEADER_NAMES = new Set([
+const PASSIVE_TECHNOLOGY_HEADER_NAMES = Object.freeze([
   'cf-ray',
   'x-drupal-cache',
-  'x-fastly-request-id',
+  'x-served-by',
+  'x-nf-request-id',
   'x-powered-by',
   'x-shopify-stage',
   'x-sorting-hat-podid',
   'x-vercel-id',
-]);
+] as const);
+const PASSIVE_HEADER_NAMES = new Set<string>(PASSIVE_TECHNOLOGY_HEADER_NAMES);
 
 function normalizedResponseHeaders(value: unknown): ReadonlyMap<string, string> {
   const input = value && typeof value === 'object' && !Array.isArray(value)
@@ -221,7 +223,14 @@ const TECHNOLOGY_SIGNATURES: TechnologySignature[] = [
   },
   {
     id: 'craft-cms', name: 'Craft CMS', category: 'content management',
-    evidence: [generatorEvidence(/^craft cms(?:\s|$)/i, 'Generator metadata identifies Craft CMS.')],
+    evidence: [
+      generatorEvidence(/^craft cms(?:\s|$)/i, 'Generator metadata identifies Craft CMS.'),
+      responseHeaderEvidence(
+        'x-powered-by',
+        /(?:^|,\s*)craft cms(?:\s|$|\/)/i,
+        'The passive X-Powered-By response header identifies Craft CMS.',
+      ),
+    ],
   },
   {
     id: 'typo3', name: 'TYPO3 CMS', category: 'content management',
@@ -271,17 +280,26 @@ const TECHNOLOGY_SIGNATURES: TechnologySignature[] = [
   },
   {
     id: 'opencart', name: 'OpenCart', category: 'commerce',
-    evidence: [generatorEvidence(/^opencart(?:\s|$)/i, 'Generator metadata identifies OpenCart.')],
+    evidence: [
+      generatorEvidence(/^opencart(?:\s|$)/i, 'Generator metadata identifies OpenCart.'),
+      htmlEvidence(
+        ['index.php?route=common/home', 'image/catalog/opencart-logo.png'],
+        'Static markup contains OpenCart routing or default asset conventions.',
+      ),
+    ],
   },
   {
     id: 'prestashop', name: 'PrestaShop', category: 'commerce',
-    evidence: [generatorEvidence(/^prestashop(?:\s|$)/i, 'Generator metadata identifies PrestaShop.')],
+    evidence: [
+      generatorEvidence(/^prestashop(?:\s|$)/i, 'Generator metadata identifies PrestaShop.'),
+      htmlEvidence(['/modules/ps_'], 'Static resource paths use PrestaShop module conventions.'),
+    ],
   },
   {
     id: 'wix', name: 'Wix', category: 'site builder',
     requiresNonResourceEvidence: true,
     evidence: [
-      generatorEvidence(/^wix(?:\s|$)/i, 'Generator metadata identifies Wix.'),
+      generatorEvidence(/^wix(?:\.com)?(?:\s|$)/i, 'Generator metadata identifies Wix.'),
       htmlEvidence(['data-mesh-id='], 'Static markup contains a Wix-specific document attribute.', 'medium'),
       resourceEvidence(['static.parastorage.com', 'wixstatic.com'], 'A retained resource origin uses Wix delivery infrastructure.'),
     ],
@@ -389,7 +407,10 @@ const TECHNOLOGY_SIGNATURES: TechnologySignature[] = [
   },
   {
     id: 'netlify', name: 'Netlify', category: 'delivery platform',
-    evidence: [serverEvidence(/^netlify(?:\s|$|\/)/i, 'The selected response server header identifies Netlify.')],
+    evidence: [
+      serverEvidence(/^netlify(?:\s|$|\/)/i, 'The selected response server header identifies Netlify.'),
+      responseHeaderEvidence('x-nf-request-id', null, 'A Netlify request identifier response header was observed.', 'medium'),
+    ],
   },
   {
     id: 'vercel', name: 'Vercel', category: 'delivery platform',
@@ -400,7 +421,12 @@ const TECHNOLOGY_SIGNATURES: TechnologySignature[] = [
   },
   {
     id: 'fastly', name: 'Fastly', category: 'delivery platform',
-    evidence: [responseHeaderEvidence('x-fastly-request-id', null, 'A Fastly request identifier response header was observed.', 'medium')],
+    evidence: [responseHeaderEvidence(
+      'x-served-by',
+      /(?:^|,\s*)cache-[a-z0-9-]+-[a-z]{3}(?:\s*,|$)/i,
+      'The passive X-Served-By response header contains a Fastly cache-node identifier.',
+      'medium',
+    )],
   },
   {
     id: 'nginx', name: 'nginx', category: 'web server',
@@ -515,6 +541,7 @@ export {
   MAX_TECHNOLOGY_FINDINGS,
   MAX_TECHNOLOGY_HTML_CHARS,
   MAX_TECHNOLOGY_TAGS,
+  PASSIVE_TECHNOLOGY_HEADER_NAMES,
   TECHNOLOGY_PROFILE_VERSION,
   TECHNOLOGY_SIGNATURE_CATALOGUE,
   analyzeWebsiteTechnology,

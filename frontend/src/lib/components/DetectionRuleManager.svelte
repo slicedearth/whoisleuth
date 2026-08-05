@@ -9,6 +9,7 @@
     exportDetectionRules,
     importDetectionRules,
     loadDetectionRules,
+    previewDetectionRule,
     MAX_RULE_CONDITIONS,
     MAX_RULE_IMPORT_BYTES,
     MAX_RULE_NAME_LENGTH,
@@ -42,6 +43,12 @@
   const evaluations=$derived(evaluateCasesAgainstRules(records,rules));
   const matchingEvaluations=$derived(evaluations.filter((result)=>result.matchedRules.length));
   const caseById=$derived(new Map(records.map((record)=>[record.id,record])));
+  const draftConditions=$derived(conditions.map((condition)=>({
+    field:condition.field,
+    operator:operatorsForRuleField(condition.field).find((operator)=>operator===condition.operator)??'equals',
+    value:definition(condition.field)?.kind==='number'?Number(condition.value):condition.value,
+  })));
+  const draftPreview=$derived(previewDetectionRule(records,rules,{name,enabled:true,match,conditions:draftConditions,riskDelta:Number(riskDelta),tag}));
 
   function newCondition(){return{field:'availability',operator:'equals',value:'registered'};}
   async function refresh(next?:DetectionRule[]){rules=next??await loadDetectionRules();oncount?.(rules.length);}
@@ -105,6 +112,14 @@
       <button type="button" class="btn" onclick={addCondition} disabled={conditions.length>=MAX_RULE_CONDITIONS}>Add condition</button>
     </fieldset>
     <button class="primary create" type="submit" disabled={!name.trim()}>Create custom rule</button>
+    {#if name.trim() && draftPreview}
+      <aside class="draft-preview" aria-live="polite">
+        <div><strong>Preview only</strong><span>{draftPreview.matchCount} current case match{draftPreview.matchCount===1?'':'es'} · custom contribution +{draftPreview.candidate.riskDelta}</span></div>
+        {#if draftPreview.collisionRuleIds.length}<p class="warning">This draft overlaps {draftPreview.collisionRuleIds.length} existing rule{draftPreview.collisionRuleIds.length===1?'':'s'} by name or conditions.</p>{/if}
+        {#if draftPreview.matchCount}<p>{Object.entries(draftPreview.affectedDispositionCounts).map(([value,count])=>`${count} ${value.replaceAll('_',' ')}`).join(' · ')}</p>{/if}
+        <small>{draftPreview.limitation}</small>
+      </aside>
+    {/if}
   </form>
 </section>
 {#if message}<p class="message" role="status" aria-live="polite">{message}</p>{/if}
@@ -148,7 +163,7 @@
 </section>
 
 <style>
-  .rule-builder{display:grid;gap:16px;padding:18px}.rule>header{display:flex;justify-content:space-between;gap:14px;align-items:start}.rule-builder h2,.test-results h2{margin:0}.rule-builder header p:not(.eyebrow),.rule-limits p,.test-results>p{color:var(--muted);font-size:var(--text-xs);line-height:1.5}.rule>header>div:last-child{display:flex;flex-wrap:wrap;gap:8px}.rule-builder form{display:grid;gap:14px}.rule-fields{display:grid;grid-template-columns:minmax(180px,1.7fr) repeat(3,minmax(130px,1fr));gap:10px}.condition-row label{display:grid;gap:5px;color:var(--muted);font:600 var(--text-2xs) var(--mono)}.rule-fields input,.condition-row input{min-height:var(--control-h)}fieldset{display:grid;gap:10px;margin:0;padding:12px;border:1px solid var(--border);border-radius:var(--radius-sm)}legend{padding:0 6px;color:var(--text);font:700 var(--text-xs) var(--mono)}.condition-row{display:grid;grid-template-columns:1.4fr 1fr 1.2fr auto;gap:8px;align-items:end}.remove-condition{align-self:end}.create{justify-self:start}.message{color:var(--accent);font-size:var(--text-sm)}.rule-limits{margin:12px 0;padding:14px}.rule-limits strong{font-size:var(--text-sm)}.rule-limits p{margin:5px 0 0}.rule-list{display:grid;gap:10px}.rule{display:grid;gap:10px;padding:16px}.rule.disabled{opacity:.62}.rule header>div:first-child{display:grid;gap:3px;min-width:0}.rule header strong{font:700 var(--text-md) var(--mono);overflow-wrap:anywhere}.rule header small,.rule li,.rule footer{color:var(--muted);font-size:var(--text-xs)}.rule ul{display:grid;gap:5px;margin:0;padding-left:18px}.rule footer{display:flex;flex-wrap:wrap;gap:16px;padding-top:9px;border-top:1px solid var(--border)}.rule footer strong{color:var(--text)}.test-results{display:grid;gap:12px;margin-top:12px;padding:16px}.test-results ul{display:grid;gap:8px;margin:0;padding:0;list-style:none}.test-results li{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:10px 11px;border:1px solid var(--border);border-radius:var(--radius-sm)}.test-results li>div:first-child{display:grid;gap:3px;min-width:0}.test-results li strong{font-size:var(--text-sm);overflow-wrap:anywhere}.test-results small{color:var(--muted);font-size:var(--text-2xs);overflow-wrap:anywhere}.scores{display:flex;flex-wrap:wrap;justify-content:end;gap:7px;align-items:center}.scores span{color:var(--muted);font-size:var(--text-2xs);white-space:nowrap}
+  .rule-builder{display:grid;gap:16px;padding:18px}.rule>header{display:flex;justify-content:space-between;gap:14px;align-items:start}.rule-builder h2,.test-results h2{margin:0}.rule-builder header p:not(.eyebrow),.rule-limits p,.test-results>p{color:var(--muted);font-size:var(--text-xs);line-height:1.5}.rule>header>div:last-child{display:flex;flex-wrap:wrap;gap:8px}.rule-builder form{display:grid;gap:14px}.rule-fields{display:grid;grid-template-columns:minmax(180px,1.7fr) repeat(3,minmax(130px,1fr));gap:10px}.condition-row label{display:grid;gap:5px;color:var(--muted);font:600 var(--text-2xs) var(--mono)}.rule-fields input,.condition-row input{min-height:var(--control-h)}fieldset{display:grid;gap:10px;margin:0;padding:12px;border:1px solid var(--border);border-radius:var(--radius-sm)}legend{padding:0 6px;color:var(--text);font:700 var(--text-xs) var(--mono)}.condition-row{display:grid;grid-template-columns:1.4fr 1fr 1.2fr auto;gap:8px;align-items:end}.remove-condition{align-self:end}.create{justify-self:start}.draft-preview{display:grid;gap:5px;padding:11px 12px;border:1px solid color-mix(in srgb,var(--accent) 36%,var(--border));border-radius:var(--radius-sm);background:color-mix(in srgb,var(--accent) 4%,var(--panel-raised))}.draft-preview>div{display:flex;justify-content:space-between;gap:10px}.draft-preview strong{font:700 var(--text-xs) var(--mono)}.draft-preview span,.draft-preview p,.draft-preview small{margin:0;color:var(--muted);font-size:var(--text-2xs);line-height:1.45}.draft-preview .warning{color:var(--amber)}.message{color:var(--accent);font-size:var(--text-sm)}.rule-limits{margin:12px 0;padding:14px}.rule-limits strong{font-size:var(--text-sm)}.rule-limits p{margin:5px 0 0}.rule-list{display:grid;gap:10px}.rule{display:grid;gap:10px;padding:16px}.rule.disabled{opacity:.62}.rule header>div:first-child{display:grid;gap:3px;min-width:0}.rule header strong{font:700 var(--text-md) var(--mono);overflow-wrap:anywhere}.rule header small,.rule li,.rule footer{color:var(--muted);font-size:var(--text-xs)}.rule ul{display:grid;gap:5px;margin:0;padding-left:18px}.rule footer{display:flex;flex-wrap:wrap;gap:16px;padding-top:9px;border-top:1px solid var(--border)}.rule footer strong{color:var(--text)}.test-results{display:grid;gap:12px;margin-top:12px;padding:16px}.test-results ul{display:grid;gap:8px;margin:0;padding:0;list-style:none}.test-results li{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:10px 11px;border:1px solid var(--border);border-radius:var(--radius-sm)}.test-results li>div:first-child{display:grid;gap:3px;min-width:0}.test-results li strong{font-size:var(--text-sm);overflow-wrap:anywhere}.test-results small{color:var(--muted);font-size:var(--text-2xs);overflow-wrap:anywhere}.scores{display:flex;flex-wrap:wrap;justify-content:end;gap:7px;align-items:center}.scores span{color:var(--muted);font-size:var(--text-2xs);white-space:nowrap}
   .pattern-packs{display:grid;gap:12px;margin:12px 0;padding:16px}.pattern-packs>header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}.pattern-packs h2{margin:0;font:700 var(--text-md) var(--mono)}.pattern-packs header p:not(.eyebrow){margin:5px 0 0;color:var(--muted);font-size:var(--text-xs)}.pack-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.pack-grid article{display:grid;gap:7px;min-width:0;padding:12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}.pack-grid article>div{display:flex;justify-content:space-between;gap:8px}.pack-grid strong{font-size:var(--text-sm);overflow-wrap:anywhere}.pack-grid span,.pack-grid p,.pack-grid small{color:var(--muted);font-size:var(--text-2xs);line-height:1.45}.pack-grid p{margin:0}.pack-grid button{justify-self:start;margin-top:auto}
   @media(max-width:850px){.rule-fields{grid-template-columns:1fr 1fr}.condition-row{grid-template-columns:1fr 1fr}.remove-condition{width:100%}}
   @media(max-width:850px){.pack-grid{grid-template-columns:1fr}}

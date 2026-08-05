@@ -4,12 +4,14 @@
     CASE_ACTION_TYPES,
     CASE_ASSERTION_KINDS,
     CASE_ASSERTION_STATES,
+    CASE_EVIDENCE_RELATION_STANCES,
     CASE_MANUAL_TRAIL_KINDS,
     CASE_PIN_COMPLETENESS,
     CASE_SIGHTING_CATEGORIES,
     CASE_SIGHTING_STATES,
     editCase,
     type CaseActionRecord,
+    type CaseEvidenceRelationStance,
     type CaseRecord,
   } from '$lib/cases';
   import {
@@ -61,7 +63,7 @@
   let assertionKind = $state('hypothesis');
   let assertionStatement = $state('');
   let assertionRationale = $state('');
-  let assertionPinIds = $state<string[]>([]);
+  let assertionEvidenceRelations = $state<Array<{ evidencePinId: string; stance: CaseEvidenceRelationStance }>>([]);
   let assertionState = $state('open');
   let trailKind = $state('pivot');
   let trailSummary = $state('');
@@ -177,15 +179,26 @@
         kind: assertionKind,
         statement: assertionStatement,
         rationale: assertionRationale,
-        evidencePinIds: assertionPinIds,
+        evidenceRelations: assertionEvidenceRelations,
         state: assertionState,
       },
     }, `Recorded a structured analyst assertion for ${record.domain}.`);
     assertionKind = 'hypothesis';
     assertionStatement = '';
     assertionRationale = '';
-    assertionPinIds = [];
+    assertionEvidenceRelations = [];
     assertionState = 'open';
+  }
+
+  function assertionEvidenceStance(evidencePinId: string): string {
+    return assertionEvidenceRelations.find((item) => item.evidencePinId === evidencePinId)?.stance ?? '';
+  }
+
+  function setAssertionEvidenceStance(evidencePinId: string, stance: string) {
+    assertionEvidenceRelations = assertionEvidenceRelations.filter((item) => item.evidencePinId !== evidencePinId);
+    if (CASE_EVIDENCE_RELATION_STANCES.includes(stance as CaseEvidenceRelationStance)) {
+      assertionEvidenceRelations = [...assertionEvidenceRelations, { evidencePinId, stance: stance as CaseEvidenceRelationStance }];
+    }
   }
 
   async function setAssertionState(id: string, state: string) {
@@ -476,12 +489,12 @@
       <label class="field">Statement<textarea bind:value={assertionStatement} maxlength="2000" rows="3" required></textarea></label>
       <label class="field">Reasoning or limitation<textarea bind:value={assertionRationale} maxlength="2000" rows="2"></textarea></label>
       {#if record.evidencePins.length}
-        <fieldset class="pin-references"><legend>Supporting evidence pins</legend>{#each record.evidencePins as pin}<label class="choice"><input type="checkbox" checked={assertionPinIds.includes(pin.id)} onchange={(event) => assertionPinIds = event.currentTarget.checked ? [...assertionPinIds, pin.id] : assertionPinIds.filter((id) => id !== pin.id)}><span>{pin.label}</span></label>{/each}</fieldset>
+        <fieldset class="pin-references"><legend>Evidence relationship matrix</legend><p class="notice">Classify how each selected observation relates to this assertion. Unlinked evidence remains available in the case.</p>{#each record.evidencePins as pin}<label class="field"><span>{pin.label}</span><select value={assertionEvidenceStance(pin.id)} onchange={(event) => setAssertionEvidenceStance(pin.id, event.currentTarget.value)}><option value="">Not linked</option>{#each CASE_EVIDENCE_RELATION_STANCES as value}<option {value}>{value}</option>{/each}</select></label>{/each}</fieldset>
       {/if}
       <button class="btn" type="submit">Record assertion</button>
     </form>
     {#if record.assertions.length}
-      <ol class="records">{#each [...record.assertions].reverse() as assertion}<li><strong>{assertion.provenance ? 'external import' : assertion.kind.replaceAll('_', ' ')} · {assertion.state}</strong><p>{assertion.statement}</p>{#if assertion.rationale}<p>{assertion.rationale}</p>{/if}{#if assertion.provenance}<small>{assertion.provenance.format.toUpperCase()} · {assertion.provenance.sourceName}{assertion.provenance.publisher ? ` · ${assertion.provenance.publisher}` : ''}{assertion.provenance.externalId ? ` · ${assertion.provenance.externalId}` : ''}</small><small>File SHA-256 {assertion.provenance.sourceDigestSha256}{assertion.provenance.observedAt ? ` · observed ${assertion.provenance.observedAt}` : ''}</small>{#if assertion.provenance.labels.length || assertion.provenance.markings.length}<small>{[...assertion.provenance.labels, ...assertion.provenance.markings].join(' · ')}</small>{/if}{/if}<small>updated {assertion.updatedAt}{assertion.evidencePinIds.length ? ` · ${assertion.evidencePinIds.length} supporting pin${assertion.evidencePinIds.length === 1 ? '' : 's'}` : ''}</small>{#if assertion.state === 'open'}<button class="btn small" type="button" onclick={() => void setAssertionState(assertion.id, 'resolved')}>Mark resolved</button>{/if}</li>{/each}</ol>
+      <ol class="records">{#each [...record.assertions].reverse() as assertion}<li><strong>{assertion.provenance ? 'external import' : assertion.kind.replaceAll('_', ' ')} · {assertion.state}</strong><p>{assertion.statement}</p>{#if assertion.rationale}<p>{assertion.rationale}</p>{/if}{#if assertion.provenance}<small>{assertion.provenance.format.toUpperCase()} · {assertion.provenance.sourceName}{assertion.provenance.publisher ? ` · ${assertion.provenance.publisher}` : ''}{assertion.provenance.externalId ? ` · ${assertion.provenance.externalId}` : ''}</small><small>File SHA-256 {assertion.provenance.sourceDigestSha256}{assertion.provenance.observedAt ? ` · observed ${assertion.provenance.observedAt}` : ''}</small>{#if assertion.provenance.labels.length || assertion.provenance.markings.length}<small>{[...assertion.provenance.labels, ...assertion.provenance.markings].join(' · ')}</small>{/if}{/if}{#if assertion.evidenceRelations?.length}<small>{assertion.evidenceRelations.filter((item) => item.stance === 'supports').length} supporting · {assertion.evidenceRelations.filter((item) => item.stance === 'contradicts').length} contradicting · {assertion.evidenceRelations.filter((item) => item.stance === 'unresolved').length} unresolved evidence relationship{assertion.evidenceRelations.length === 1 ? '' : 's'}</small>{:else}<small>updated {assertion.updatedAt}{assertion.evidencePinIds.length ? ` · ${assertion.evidencePinIds.length} linked pin${assertion.evidencePinIds.length === 1 ? '' : 's'}` : ''}</small>{/if}{#if assertion.state === 'open'}<button class="btn small" type="button" onclick={() => void setAssertionState(assertion.id, 'resolved')}>Mark resolved</button>{/if}</li>{/each}</ol>
     {/if}
   </details>
 

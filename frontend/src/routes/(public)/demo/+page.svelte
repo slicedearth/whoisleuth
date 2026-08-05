@@ -34,12 +34,14 @@
 
   type View='dashboard'|'brands'|'discover'|'bulk'|'lookup'|'monitor';
   type CandidateFilter='all'|'high'|'related';
+  type DemoVisualView='sources'|'relationships'|'timeline';
 
   let demoState:ReturnType<typeof createSyntheticDemoState>=$state(createSyntheticDemoState());
   let view=$state<View>('dashboard');
   let message=$state('');
   let candidateFilter=$state<CandidateFilter>('all');
   let relatedDomains=$state<string[]>([]);
+  let demoVisualView=$state<DemoVisualView>('sources');
   const selected=$derived(syntheticDemoCandidate(demoState.selectedCandidateId));
   const candidates=$derived(candidateFilter==='high'
     ?SYNTHETIC_DEMO_CANDIDATES.filter((candidate)=>candidate.risk>=70)
@@ -70,6 +72,9 @@
     {id:'technology',label:'Technology',detail:lookupView.technology.status,status:lookupView.technology.status,href:'#demo-evidence-technology',side:'right' as const,glyph:'W',provenance:'derived' as const},
     {id:'assessment',label:'Assessment',detail:`Risk ${selected.risk}`,status:'warning',href:'#demo-assessment',side:'right' as const,glyph:'A',provenance:'derived' as const},
   ]:[]);
+  const lookupEvidenceCheckNodes=$derived(lookupTopologyNodes.filter((node)=>node.id!=='assessment'));
+  const lookupCompleteEvidenceCount=$derived(lookupEvidenceCheckNodes.filter((node)=>String(node.status).toLowerCase()==='success').length);
+  const lookupLimitedEvidenceCount=$derived(lookupEvidenceCheckNodes.length-lookupCompleteEvidenceCount);
   const lookupLifecycleEvents=$derived(selected?[
     {id:'registration',label:'Registered',date:selected.evidence.registry.registeredAt==='Not observed'?null:selected.evidence.registry.registeredAt,detail:selected.evidence.registry.source,kind:'registry' as const},
     {id:'certificate-first-observed',label:'Certificate observed',date:selected.provenance.firstObservedAt,detail:selected.evidence.certificate.source,kind:'certificate' as const},
@@ -153,14 +158,14 @@
   function start(){save({started:true},'Guided synthetic investigation started.');view='brands';}
   function loadProfile(){save({profileReady:true},'Synthetic profile loaded. No production profile was created.');view='discover';}
   function generate(){save({candidatesReady:true},'Loaded three fixed synthetic candidates without making an investigation request.');view='bulk';}
-  function inspect(id:string){save({selectedCandidateId:id,caseReady:false,caseStatus:'new',note:'',followUpReady:false},'Opened bounded fixture evidence.');view='lookup';}
+  function inspect(id:string){save({selectedCandidateId:id,caseReady:false,caseStatus:'new',note:'',followUpReady:false},'Opened bounded fixture evidence.');demoVisualView='sources';view='lookup';}
   function openCase(){save({caseReady:true},'Created an isolated synthetic case in this tab only.');view='monitor';}
   function loadFollowUp(){save({followUpReady:true,caseStatus:'monitoring'},'Loaded a fixed later observation without making an investigation request.');}
   function loadRelated(domains:string[]){relatedDomains=[...domains];candidateFilter='related';message=`Focused ${domains.length} synthetic related domains.`;}
   function updateCase(patch:Record<string,unknown>,announce=true){save(patch,announce?'Synthetic case updated.':undefined);}
   function shortDate(value:string|null){return value?value.slice(0,10):'Not observed';}
   function formatDate(value:string){return value.slice(0,10);}
-  function reset(){demoState=createSyntheticDemoState();view='dashboard';candidateFilter='all';relatedDomains=[];try{sessionStorage.removeItem(SYNTHETIC_DEMO_STORAGE_KEY);message='Synthetic demo reset.';}catch{message='Demo reset in memory, but tab storage could not be cleared. Closing this tab will remove its demo state.';}}
+  function reset(){demoState=createSyntheticDemoState();view='dashboard';candidateFilter='all';relatedDomains=[];demoVisualView='sources';try{sessionStorage.removeItem(SYNTHETIC_DEMO_STORAGE_KEY);message='Synthetic demo reset.';}catch{message='Demo reset in memory, but tab storage could not be cleared. Closing this tab will remove its demo state.';}}
   function exportCase(){const payload=buildSyntheticDemoExport(demoState,new Date().toISOString());const url=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}));const anchor=document.createElement('a');anchor.href=url;anchor.download='whoisleuth-synthetic-demo-case.json';anchor.click();URL.revokeObjectURL(url);message='Synthetic case report created. It is clearly marked as demonstration data.';}
 </script>
 
@@ -230,44 +235,84 @@
 {:else if view==='lookup'&&selected&&lookupView}
   <section class="demo-panel" aria-labelledby="lookup-heading">
     <p class="eyebrow">Lookup · Deep evidence review</p><h2 id="lookup-heading">{selected.domain}</h2>
-    <p>The production Lookup components render the synthetic view model below, including its bounded source map, dated lifecycle summary, and manual acquisition review. The fixed scenario includes the explicitly selected security.txt action. Each source and derived view remains separately attributed, while inconclusive enrichment is never treated as evidence of absence or safety. Long source records and secondary Deep evidence start collapsed with their headings, states, and summaries still visible. Live Lookup can also show analyst-controlled external evidence links; they are omitted here so the public demo cannot send even a fictional target to another site.</p>
+    <p>The synthetic result now follows the same task-centred hierarchy as live Lookup: orient first, review evidence by family, then open relationships, source quality, or case actions only when they help the decision.</p>
     <h3 class="sr-only">Synthetic lookup evidence</h3>
-    <div class="shared-evidence" id="demo-assessment"><LookupAssessment {...lookupView.assessment} /></div>
-    <div class="shared-evidence"><LookupCollectionTiming timing={{
-      version: 1,
-      totalMs: 860,
-      sources: [
-        { source: 'rdap', outcome: 'fulfilled', durationMs: 240, completedAfterMs: 240 },
-        { source: 'whois', outcome: 'fulfilled', durationMs: 620, completedAfterMs: 690 },
-        { source: 'domain_evidence', outcome: 'fulfilled', durationMs: 740, completedAfterMs: 820 },
-        { source: 'network_context', outcome: 'fulfilled', durationMs: 210, completedAfterMs: 860 },
-      ],
-    }} /></div>
-    <div class="shared-evidence visual-summary">
-      <EvidenceTopology
-        id="demo-evidence-topology"
-        title="Synthetic evidence topology"
-        description="Use this bounded map to move between the separately attributed fixture sections below. It makes no request and does not alter source authority."
-        target={{label:selected.domain,detail:'Synthetic domain lookup',status:selected.availability}}
-        nodes={lookupTopologyNodes}
-      />
-    </div>
-    <div class="shared-evidence visual-summary"><LookupLifecycle events={lookupLifecycleEvents} /></div>
-    {#if lookupAcquisitionReview}<div class="shared-evidence"><LookupAcquisitionDueDiligence review={lookupAcquisitionReview} target={selected.domain} observedAt={null} synthetic /></div>{/if}
-    <div class="shared-evidence" id="demo-evidence-registry"><LookupRegistrySources {...lookupView.registry} /></div>
-    <div class="shared-evidence" id="demo-evidence-dns"><LookupDnsEvidence {...lookupView.dns} /></div>
-    <div class="shared-evidence" id="demo-evidence-http"><LookupHttpEvidence {...lookupView.http} /></div>
-    <div class="shared-evidence"><LookupSecurityTxt {...lookupView.securityTxt} /></div>
-    <div class="shared-evidence" id="demo-evidence-structured-identity"><LookupStructuredDataIdentity {...lookupView.structuredIdentity} /></div>
-    <div class="shared-evidence"><LookupCredentialSurfaceProfile {...lookupView.credentialSurface} /></div>
-    <div class="shared-evidence"><LookupSecurityPosture {...lookupView.securityPosture} /></div>
-    <div class="shared-evidence" id="demo-evidence-technology"><LookupTechnologyProfile {...lookupView.technology} /></div>
-    <div class="shared-evidence" id="demo-evidence-tls"><LookupTlsEvidence {...lookupView.tls} /></div>
-    <div class="shared-evidence" id="demo-evidence-sslbl"><LookupSslblEvidence {...demoSslbl} /></div>
-    <div class="shared-evidence" id="demo-evidence-network"><LookupNetworkContext {...lookupView.network} /></div>
-    {#if selected.relationship}<div class="limitation info"><strong>Relationship context</strong><p>{selected.relationship.label} <code>{selected.relationship.value}</code> appears in {selected.relationship.relatedCandidates} synthetic candidates. Shared infrastructure is not proof of common ownership.</p></div>{/if}
-    <div class="limitation"><strong>Interpretation limit</strong><p>These values demonstrate source attribution and explainability only. A live result would still require analyst review.</p></div>
-    <button class="primary" type="button" onclick={openCase}>Open synthetic case in Monitor</button>
+
+    <section class="demo-glance card" aria-labelledby="demo-at-a-glance-title">
+      <div><p class="eyebrow">Start here</p><h3 id="demo-at-a-glance-title">At a glance</h3><p>Registration and website evidence were observed. One higher-priority review cue remains. Each evidence check is one collector or derived check; limited means partial, unavailable, or unknown.</p></div>
+      <dl><div><dt>Registration</dt><dd>{selected.availability}</dd></div><div><dt>Risk priority</dt><dd>{selected.risk}/100</dd></div><div><dt>Evidence checks complete</dt><dd>{lookupCompleteEvidenceCount}</dd></div><div><dt>Evidence checks limited</dt><dd>{lookupLimitedEvidenceCount}</dd></div></dl>
+    </section>
+
+    <nav class="demo-result-nav card" aria-label="Synthetic result sections">
+      <a href="#demo-overview">Overview</a><a href="#demo-registration">Registration</a><a href="#demo-web-dns">Web &amp; DNS</a><a href="#demo-relationships">Relationships &amp; history</a><a href="#demo-source-quality">Source quality</a><a href="#demo-case-response">Case &amp; response</a><a href="#demo-advanced">Advanced</a>
+    </nav>
+
+    <section class="demo-result-section" id="demo-overview" aria-labelledby="demo-overview-title">
+      <h3 id="demo-overview-title">Overview</h3>
+      <p class="section-copy">Use the assessment to prioritise review. Scores are explainable triage aids, not maliciousness or purchase verdicts.</p>
+      <div class="shared-evidence" id="demo-assessment"><LookupAssessment {...lookupView.assessment} /></div>
+    </section>
+
+    <section class="demo-result-section" id="demo-registration" aria-labelledby="demo-registration-title">
+      <h3 id="demo-registration-title">Registration</h3>
+      <p class="section-copy">Compare separately attributed registry and registrar records before treating any field as settled.</p>
+      <div class="shared-evidence" id="demo-evidence-registry"><LookupRegistrySources {...lookupView.registry} /></div>
+      <div class="shared-evidence" id="demo-evidence-network"><LookupNetworkContext {...lookupView.network} /></div>
+    </section>
+
+    <section class="demo-result-section" id="demo-web-dns" aria-labelledby="demo-web-dns-title">
+      <h3 id="demo-web-dns-title">Web &amp; DNS</h3>
+      <p class="section-copy">Review resolution, transport, page identity, technology, mail-facing controls, and security posture together.</p>
+      <div class="shared-evidence" id="demo-evidence-dns"><LookupDnsEvidence {...lookupView.dns} /></div>
+      <div class="shared-evidence" id="demo-evidence-http"><LookupHttpEvidence {...lookupView.http} /></div>
+      <div class="shared-evidence"><LookupSecurityTxt {...lookupView.securityTxt} /></div>
+      <div class="shared-evidence" id="demo-evidence-structured-identity"><LookupStructuredDataIdentity {...lookupView.structuredIdentity} /></div>
+      <div class="shared-evidence"><LookupCredentialSurfaceProfile {...lookupView.credentialSurface} /></div>
+      <div class="shared-evidence"><LookupSecurityPosture {...lookupView.securityPosture} /></div>
+      <div class="shared-evidence" id="demo-evidence-technology"><LookupTechnologyProfile {...lookupView.technology} /></div>
+      <div class="shared-evidence" id="demo-evidence-tls"><LookupTlsEvidence {...lookupView.tls} /></div>
+      <div class="shared-evidence" id="demo-evidence-sslbl"><LookupSslblEvidence {...demoSslbl} /></div>
+    </section>
+
+    <section class="demo-result-section" id="demo-relationships" aria-labelledby="demo-relationships-title">
+      <h3 id="demo-relationships-title">Relationships &amp; history</h3>
+      <p class="section-copy">Switch between provenance, a bounded relationship lead, and dated observations without repeating the same evidence.</p>
+      <div class="demo-visual-switcher card" role="tablist" aria-label="Synthetic relationship and history view">
+        <button type="button" role="tab" aria-selected={demoVisualView==='sources'} class:active={demoVisualView==='sources'} onclick={()=>demoVisualView='sources'}>Sources <span>{lookupTopologyNodes.length}</span></button>
+        <button type="button" role="tab" aria-selected={demoVisualView==='relationships'} class:active={demoVisualView==='relationships'} onclick={()=>demoVisualView='relationships'}>Relationships <span>{selected.relationship?1:0}</span></button>
+        <button type="button" role="tab" aria-selected={demoVisualView==='timeline'} class:active={demoVisualView==='timeline'} onclick={()=>demoVisualView='timeline'}>Timeline <span>{lookupLifecycleEvents.length}</span></button>
+      </div>
+      <div class="demo-visual-panel" role="tabpanel">
+        {#if demoVisualView==='sources'}
+          <div class="shared-evidence visual-summary"><EvidenceTopology id="demo-evidence-topology" title="Where this result came from" description="Jump to separately attributed fixture evidence. Missing or inconclusive sources remain explicit." target={{label:selected.domain,detail:'Synthetic domain lookup',status:selected.availability}} nodes={lookupTopologyNodes} /></div>
+        {:else if demoVisualView==='relationships'}
+          {#if selected.relationship}<div class="limitation info"><strong>Relationship lead</strong><p>{selected.relationship.label} <code>{selected.relationship.value}</code> appears in {selected.relationship.relatedCandidates} synthetic candidates. Shared infrastructure is not proof of common ownership.</p></div>{:else}<div class="limitation info"><strong>No relationship lead in this fixture</strong><p>That absence only describes this fixed dataset.</p></div>{/if}
+        {:else}
+          <div class="shared-evidence visual-summary"><LookupLifecycle events={lookupLifecycleEvents} /></div>
+        {/if}
+      </div>
+    </section>
+
+    <section class="demo-result-section" id="demo-source-quality" aria-labelledby="demo-source-quality-title">
+      <h3 id="demo-source-quality-title">Source quality</h3>
+      <p class="section-copy">Timing and completion states explain what finished, what was limited, and how long collection took.</p>
+      <div class="shared-evidence"><LookupCollectionTiming timing={{version:1,totalMs:860,sources:[{source:'rdap',outcome:'fulfilled',durationMs:240,completedAfterMs:240},{source:'whois',outcome:'fulfilled',durationMs:620,completedAfterMs:690},{source:'domain_evidence',outcome:'fulfilled',durationMs:740,completedAfterMs:820},{source:'network_context',outcome:'fulfilled',durationMs:210,completedAfterMs:860}]}} /></div>
+    </section>
+
+    <section class="demo-result-section" id="demo-case-response" aria-labelledby="demo-case-response-title">
+      <h3 id="demo-case-response-title">Case &amp; response</h3>
+      <p class="section-copy">Separate observed facts, analyst assertions, unknowns, and reviewed next actions before saving or exporting.</p>
+      <div class="limitation info"><strong>Task-specific review</strong><p>This fixture demonstrates the acquisition-review panel. Live Lookup changes the family order for the selected Focus without opening nested evidence automatically.</p></div>
+      {#if lookupAcquisitionReview}<div class="shared-evidence"><LookupAcquisitionDueDiligence review={lookupAcquisitionReview} target={selected.domain} observedAt={null} synthetic /></div>{/if}
+      <div class="limitation"><strong>Interpretation limit</strong><p>These values demonstrate source attribution and explainability only. A live result would still require analyst review.</p></div>
+      <button class="primary" type="button" onclick={openCase}>Open synthetic case in Monitor</button>
+    </section>
+
+    <section class="demo-result-section" id="demo-advanced" aria-labelledby="demo-advanced-title">
+      <h3 id="demo-advanced-title">Advanced</h3>
+      <p class="section-copy">Live Lookup keeps optional provider context, evidence replay, and the bounded raw unified response here. These details support source-level verification but are not required for the first review.</p>
+      <div class="limitation info"><strong>Not reproduced in the public demo</strong><p>The fixture does not invent provider responses or expose a raw payload. Open this family in live Lookup only when you need to trace a normalised finding back to its underlying response.</p></div>
+    </section>
   </section>
 {:else if view==='monitor'&&selected&&caseRecord}
   <section class="demo-panel card" aria-labelledby="monitor-heading">
@@ -298,10 +343,16 @@
   .dashboard-summary,.configuration-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:24px 0}.dashboard-summary article,.configuration-grid article{padding:15px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}.dashboard-summary span,.configuration-grid span{display:block;color:var(--muted);font:700 var(--text-2xs) var(--mono);text-transform:uppercase}.dashboard-summary strong,.configuration-grid strong{display:block;margin-top:7px;overflow-wrap:anywhere}.tool-preview,.preview-list{display:flex;flex-wrap:wrap;gap:8px;margin:24px 0}.tool-preview span,.preview-list span{padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--muted);font-size:var(--text-xs)}
   .shared-profile,.shared-evidence,.shared-timeline{margin-top:18px}.shared-profile{margin-bottom:18px}.shared-evidence+.shared-evidence{margin-top:12px}.visual-summary{scroll-margin-top:92px}
   :global(.shared-evidence[id]){scroll-margin-top:92px}
+  .demo-glance{display:grid;grid-template-columns:minmax(0,1fr) minmax(420px,.9fr);gap:18px;margin-top:22px;padding:var(--card-pad)}.demo-glance h3{margin:2px 0 0;font:700 var(--text-lg) var(--mono)}.demo-glance>div>p:not(.eyebrow){max-width:58ch;margin:7px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.5}.demo-glance dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;margin:0;padding:1px;background:var(--border)}.demo-glance dl div{min-width:0;padding:10px 11px;border:0;background:var(--panel-raised)}.demo-glance dd{color:var(--text);font:700 var(--text-sm) var(--mono)}
+  .demo-result-nav{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:3px;margin:12px 0 0;padding:5px}.demo-result-nav a{display:grid;min-width:0;min-height:44px;place-items:center;padding:7px;border:1px solid transparent;border-radius:var(--radius-sm);color:var(--muted);font:650 var(--text-2xs) var(--mono);line-height:1.3;text-align:center}.demo-result-nav a:hover,.demo-result-nav a:focus-visible{border-color:var(--accent);color:var(--accent);background:rgb(var(--accent-rgb) / .07)}
+  .demo-result-section{margin-top:30px;scroll-margin-top:92px}.demo-result-section>h3{display:flex;gap:8px;align-items:center;margin:0;padding-bottom:9px;border-bottom:1px solid var(--border);font:700 var(--text-lg) var(--mono)}.demo-result-section>h3::before{content:'//';color:var(--muted)}.section-copy{max-width:76ch;margin:8px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.55}
+  .demo-visual-switcher{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;margin-top:13px;padding:5px}.demo-visual-switcher button{display:flex;min-width:0;min-height:44px;align-items:center;justify-content:center;gap:8px;padding:7px 10px;border:1px solid transparent;border-radius:var(--radius-sm);background:transparent;color:var(--muted);font:650 var(--text-xs) var(--mono)}.demo-visual-switcher button span{display:grid;min-width:21px;height:21px;place-items:center;padding:0 5px;border:1px solid var(--border);border-radius:999px;background:var(--panel-raised);color:var(--text);font-size:var(--text-2xs)}.demo-visual-switcher button.active{border-color:var(--accent);background:rgb(var(--accent-rgb) / .07);color:var(--accent)}.demo-visual-panel{min-width:0;margin-top:10px}
   .filter-bar{display:flex;flex-wrap:wrap;gap:8px;margin:20px 0 12px}.filter-bar button.active{border-color:var(--accent2);color:var(--accent2);background:rgb(var(--accent2-rgb) / .08)}.candidate-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.candidate{display:flex;min-width:0;flex-direction:column;padding:18px}.candidate>div{display:flex;align-items:flex-start;flex-direction:column;gap:8px}.candidate code{overflow-wrap:anywhere;font-size:.9rem}.candidate span{color:var(--amber);font:700 var(--text-xs) var(--mono)}.candidate span.high{color:var(--danger)}.candidate ul{padding-left:19px;color:var(--muted);font-size:var(--text-xs);line-height:1.55}.candidate details{margin-bottom:12px}.candidate summary{color:var(--accent);cursor:pointer;font-size:var(--text-xs)}.candidate .provenance{padding:9px;border-left:2px solid var(--border);font-size:var(--text-2xs)}.candidate button{width:100%;margin-top:auto;color:var(--text)}
   .limitation{margin:20px 0;padding:14px;border-left:3px solid var(--amber);background:rgb(var(--amber-rgb) / .04)}.limitation.info{border-left-color:var(--accent)}.limitation p{margin:5px 0 0;color:var(--muted)}
   .case-grid{display:grid;grid-template-columns:minmax(180px,.45fr) minmax(0,1fr);gap:12px;margin-top:22px}.demo-panel label{display:block;color:var(--muted);font-size:var(--text-xs)}.demo-panel select,.demo-panel textarea{display:block;margin-top:7px;padding:10px}.demo-panel textarea{min-height:110px;resize:vertical}.follow-up{margin-top:22px;padding:14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}.follow-up p{margin:0 0 10px}.case-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px}.case-actions .primary{color:var(--primary-text);background:linear-gradient(135deg,var(--primary-start),var(--primary-end))}
   .demo-footer{display:flex;justify-content:space-between;gap:20px;margin-top:45px;padding-top:18px;border-top:1px solid var(--border);color:var(--muted);font-size:var(--text-2xs)}.demo-footer>div{display:flex;align-items:center;gap:10px}.demo-footer p{margin:0}.demo-footer a{color:var(--accent)}
+  @media(max-width:900px){.demo-glance{grid-template-columns:minmax(0,1fr)}.demo-result-nav{grid-template-columns:repeat(3,minmax(0,1fr))}}
   @media(max-width:840px){.demo-steps{grid-template-columns:repeat(3,minmax(0,1fr))}.demo-steps button::after{display:none}.candidate-grid{grid-template-columns:1fr}.dashboard-summary,.configuration-grid{grid-template-columns:1fr}}
-  @media(max-width:760px){.demo-steps{grid-template-columns:repeat(2,minmax(0,1fr))}.demo-steps button{grid-template-columns:27px minmax(0,1fr);min-height:46px}.demo-stage-summary,.demo-actions,.demo-footer,.demo-footer>div{align-items:flex-start;flex-direction:column}.demo-stage-summary{gap:4px}.demo-panel dl,.case-grid{grid-template-columns:1fr}}
+  @media(max-width:760px){.demo-steps{grid-template-columns:repeat(2,minmax(0,1fr))}.demo-steps button{grid-template-columns:27px minmax(0,1fr);min-height:46px}.demo-stage-summary,.demo-actions,.demo-footer,.demo-footer>div{align-items:flex-start;flex-direction:column}.demo-stage-summary{gap:4px}.demo-panel dl,.case-grid{grid-template-columns:1fr}.demo-glance dl{grid-template-columns:repeat(2,minmax(0,1fr))}.demo-result-nav{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  @media(max-width:460px){.demo-visual-switcher{grid-template-columns:minmax(0,1fr)}.demo-glance dl{grid-template-columns:minmax(0,1fr)}}
 </style>

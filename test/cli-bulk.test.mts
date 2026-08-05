@@ -73,6 +73,7 @@ describe('bulk CLI argument parsing', () => {
       checkpoint: null,
       resume: false,
       events: false,
+      plan: false,
       filter: 'all',
     });
   });
@@ -89,6 +90,7 @@ describe('bulk CLI argument parsing', () => {
       checkpoint: null,
       resume: false,
       events: false,
+      plan: false,
       filter: 'all',
     });
   });

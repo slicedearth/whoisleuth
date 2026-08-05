@@ -48,7 +48,7 @@ describe('strict external findings import', () => {
   });
 
   test('rejects future schemas, additional fields, controls, and unsupported categories', () => {
-    assert.throws(() => parseExternalFindingsDocument(document({ schemaVersion: 3 })), /schema version 1 or 2/u);
+    assert.throws(() => parseExternalFindingsDocument(document({ schemaVersion: 4 })), /schema version 1, 2, or 3/u);
     assert.throws(() => parseExternalFindingsDocument({ ...document(), executable: 'no' }), /additional top-level/u);
     assert.throws(() => parseExternalFindingsDocument(document({
       findings: [{ ...document().findings[0], summary: 'bad\u0000value' }],
@@ -83,6 +83,8 @@ describe('strict external findings import', () => {
     assert.equal(record?.disposition, 'false_positive');
     assert.equal(record?.evidencePins[0]?.source, 'Provider report: Local analyst export');
     assert.match(record?.evidencePins[0]?.limitations[0] ?? '', /did not collect or independently verify/u);
+    assert.equal(record?.sightings[0]?.state, 'reported_by_provider');
+    assert.equal(record?.sightings[0]?.evidencePinId, record?.evidencePins[0]?.id);
   });
 
   test('creates missing cases and makes repeated imports idempotent', () => {
@@ -94,5 +96,6 @@ describe('strict external findings import', () => {
     assert.equal(second.findingsAdded, 0);
     assert.equal(second.duplicatesSkipped, 1);
     assert.equal(second.cases[0]?.evidencePins.length, 1);
+    assert.equal(second.cases[0]?.sightings.length, 1);
   });
 });

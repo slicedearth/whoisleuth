@@ -69,6 +69,8 @@ node bin/whoisleuth.mts http example.com --json
 node bin/whoisleuth.mts tls example.com --json
 node bin/whoisleuth.mts registry-support example.uk --json
 node bin/whoisleuth.mts registry-doctor lookup.json --json
+node bin/whoisleuth.mts registry-cohort saved-lookups.jsonl --json
+node bin/whoisleuth.mts registry-scaffold --profile example-profile --suffix test --scenario registered
 node bin/whoisleuth.mts risk-calibrate calibration.json --json
 node bin/whoisleuth.mts lookalike-calibrate reviewed-candidates.json --json
 node bin/whoisleuth.mts verify-artifact workspace.json --json
@@ -78,16 +80,26 @@ node bin/whoisleuth.mts source-report lookup.json --json
 node bin/whoisleuth.mts inspect-archive workspace.json --json
 node bin/whoisleuth.mts inspect-archive workspace.json --search example.invalid --json
 node bin/whoisleuth.mts sign-artifact response-packet.json --private-key-file analyst-private.pem > response-packet.signed.json
+node bin/whoisleuth.mts ct-intake certificate-events.json --json > external-findings.json
+node bin/whoisleuth.mts map-observations observation-mapping.json --json > external-findings.json
+node bin/whoisleuth.mts oam-export external-findings.json --json > asset-bridge.json
+node bin/whoisleuth.mts manifest lookup.json comparison.json --workflow 'domain review' --json > investigation-manifest.json
 node bin/whoisleuth.mts verify-signature response-packet.signed.json --public-key-file analyst-public.pem
 node bin/whoisleuth.mts lookup example.com --deep --json > lookup.json
 node bin/whoisleuth.mts compare lookup.json --json
 node bin/whoisleuth.mts page-compare official.json candidate.json --json
 node bin/whoisleuth.mts mail-review bulk.json --json
 node bin/whoisleuth.mts review-evidence dnssec-evidence.json --json
+node bin/whoisleuth.mts review-evidence trust-store-comparison.json --json
 node bin/whoisleuth.mts domain-control domain-control-input.json --json
 node bin/whoisleuth.mts assurance domain-assurance-input.json --json
+node bin/whoisleuth.mts change-packet domain-change-packet-input.json --json
 node bin/whoisleuth.mts sharing-review response-packet.json --marking amber --recipient-scope organization --purpose 'Reviewed incident handoff' --human-reviewed --personal-data-reviewed --redactions-confirmed --json
 node bin/whoisleuth.mts workflow-plan domain-triage example.test --json
+node bin/whoisleuth.mts workflow-run domain-triage example.test --approve-network --json --output run.json
+node bin/whoisleuth.mts brief lookup.json
+node bin/whoisleuth.mts case-pack cases.json --audience trusted --reviewed --json
+node bin/whoisleuth.mts monitor-once control-manifest.json --previous prior-control.json --junit
 node bin/whoisleuth.mts diff first-lookup.json second-lookup.json --json
 node bin/whoisleuth.mts reconcile office.json mobile.json external.json --json
 node bin/whoisleuth.mts timeline first-observation.json second-observation.json latest-observation.json --json
@@ -193,9 +205,11 @@ Commands that query RDAP, WHOIS, DNS, HTTP, TLS, or Certificate Transparency do
 so directly from the machine running the CLI. They do not use the hosted login,
 hosted session, or deployment usage controls; upstream providers can see and
 rate-limit the local machine's network address. Offline `discover`, `compare`,
-`page-compare`, `mail-review`, `review-evidence`, `domain-control`, `assurance`,
-`sharing-review`, `workflow-plan`, `diff`, `reconcile`, `timeline`,
-`risk-calibrate`, `lookalike-calibrate`, `registry-doctor`, `verify-artifact`, `source-report`, `export`,
+`page-compare`, `mail-review`, `review-evidence`, `domain-control`, `assurance`, `change-packet`,
+`sharing-review`, `workflow-plan`, `brief`, `case-pack`, `registry-cohort`,
+`registry-scaffold`, `diff`, `reconcile`, `timeline`,
+`risk-calibrate`, `lookalike-calibrate`, `registry-doctor`, `verify-artifact`, `source-report`,
+`map-observations`, `oam-export`, `export`,
 `commands`, `completion`, and `manual` operations make no network requests. Commands write
 to stdout unless the analyst deliberately selects a local output file.
 
@@ -217,6 +231,23 @@ beside the destination, syncs it, and publishes it atomically with mode `0600`.
 An existing destination is refused. `--force` is valid only with `--output` and
 allows an intentional atomic replacement. A failed or cancelled command does
 not publish a partial output file. Output is capped at 32 MiB.
+
+`--config <file> --profile <name>` reads a strict version-1 local configuration
+document of at most 64 KiB. Without `--config`, the path is
+`$XDG_CONFIG_HOME/whoisleuth/config.json`. A profile may contain no more than
+16 safe defaults drawn from `--no-color`, `--summary`, `--verbose`, `--fast`,
+`--concurrency`, `--observer`, and `--vantage`. It cannot supply a target,
+Deep mode, output path, network approval, failure policy, credential, or
+arbitrary argument. Explicit command options override profile defaults from
+the same group.
+
+Lookup, Bulk, and `monitor-once` can emit bounded JUnit XML. Owned-domain
+Posture can emit SARIF only when `--owned-domain` confirms the passive target
+boundary. The reports contain categorical source or posture findings rather
+than raw evidence. Supported network commands accept an explicit comma-
+separated `--fail-on` policy from `source-failure`, `inconclusive`, `danger`,
+and `material-drift`; a match returns the partial-result exit code after the
+normal output is emitted.
 
 `lookup --markdown` and `lookup --html` build the existing normalised evidence
 report directly after one completed domain lookup. They do not start a second
@@ -363,12 +394,12 @@ machine access is not evidence that a domain is unregistered or safe.
 | 70 | Unexpected CLI bootstrap failure. |
 | 130 | The analyst cancelled the command. No partial final result was emitted. |
 
-This release supports `lookup`, `bulk`, `ct-search`, `discover`, `discover-scan`, `posture`,
-`http`, `tls`, `registry-support`, `registry-doctor`, `risk-calibrate`,
+This release supports `lookup`, `bulk`, `ct-search`, `ct-intake`, `map-observations`, `oam-export`, `discover`, `discover-scan`, `posture`,
+`http`, `tls`, `registry-support`, `registry-doctor`, `registry-cohort`, `registry-scaffold`, `risk-calibrate`,
 `lookalike-calibrate`, `verify-artifact`,
-`inspect-archive`, `sign-artifact`, `verify-signature`, `source-report`,
-`compare`, `page-compare`, `mail-review`, `review-evidence`, `domain-control`,
-`assurance`, `sharing-review`, `workflow-plan`, `diff`, `reconcile`, `timeline`,
+`inspect-archive`, `manifest`, `sign-artifact`, `verify-signature`, `source-report`,
+`compare`, `page-compare`, `mail-review`, `review-evidence`, `brief`, `case-pack`, `domain-control`,
+`monitor-once`, `assurance`, `change-packet`, `sharing-review`, `workflow-plan`, `workflow-run`, `diff`, `reconcile`, `timeline`,
 `export`, `doctor`, `commands`, `completion`, and `manual`. Additional command families
 are added as separate bounded increments rather than exposing incomplete
 aliases.
@@ -395,10 +426,24 @@ ownership, safety, or maliciousness.
 `registry-doctor [lookup.json]` compares one saved domain Lookup with the same
 reviewed local capability profile. It reports whether RDAP and WHOIS collection
 states align with allowed, permission-required, or unsupported access, counts
-bounded normalised publication fields, and reports whether a registry object
-identifier was observed. A missing identifier is a publication omission, not
-a failed lookup. The command is offline, makes no retry, and cannot establish
-current registry reachability.
+bounded normalised publication fields, and reports publication-quality context
+for object identity, base conformance, redaction metadata, required self links,
+and event consistency. A missing identifier or metadata field is a publication
+omission, not a failed lookup. The command is offline, makes no retry, and
+cannot establish current registry reachability.
+
+`registry-cohort [lookups.json|lookups.jsonl]` aggregates from 1 to 500 saved
+Lookups into suffix and capability-profile cohorts. It retains only target-free
+counts for source alignment and publication-quality states. A cohort with
+fewer than five samples is labelled insufficient rather than treated as a
+quality result, and repeated observations from one environment are not assumed
+representative.
+
+`registry-scaffold --profile <id> --suffix <suffix> --scenario <state>` emits
+one bounded, sanitised synthetic fixture scaffold from the installed registry
+catalogue. The three supported states are `registered`, `not_found`, and
+`inconclusive`. It does not fetch a live response, include a real target, or
+alter the embedded catalogue.
 
 The offline RDAP supplied-evidence review implements the request shape defined
 by RFC 9536 for `resources`, `domains`, `nameservers`, and `entities`. It also
@@ -592,6 +637,23 @@ verification establishes only that the package is internally self-consistent.
 WHOISleuth does not generate, store, recover, rotate, publish, or establish
 trust in signing keys.
 
+## Reproducible investigation manifest
+
+`manifest <artefact.json> [...] --workflow <label>` reads from 1 to 16 ordered
+JSON artefacts and emits `whoisleuth.investigation-manifest` version 1. Each
+entry records its sequence, bounded schema and version metadata, exact UTF-8
+content digest, canonical JSON digest, and byte count. The manifest also records
+the installed CLI version and can include an externally calculated
+`--configuration-digest sha256:...` without copying configuration values.
+
+Source paths, filenames, command-line arguments, and artefact contents are not
+retained. Individual artefacts are capped at 15 MiB and the ordered set at
+32 MiB. The manifest carries its own canonical integrity digest, works with
+`verify-artifact`, and can be passed to `sign-artifact`. Reproduction still
+requires the exact digested artefacts, compatible source services, and any
+separately held configuration; matching digests do not establish observation
+accuracy or freshness.
+
 ## Bulk lookup
 
 `bulk` accepts a newline-delimited file or stdin. It preserves input order,
@@ -641,6 +703,56 @@ the complete bounded structured result in the versioned
 `whoisleuth.cli.ct-search` schema. The certificate-group cap is reported
 separately from the registrable-domain result cap. CT observations do not prove
 that a website is active or malicious.
+
+## Local certificate event intake
+
+`ct-intake [events.json]` reads `whoisleuth.ct-event-batch` version 1 entirely
+offline. Each source-qualified event supplies a log identifier, observation
+time, certificate SHA-256 digest, one or more DNS names, completeness, and
+optional issuer, expiry, and limitations. Unknown fields, malformed names,
+unsupported completeness values, and oversized batches are rejected.
+
+JSON output uses the existing `whoisleuth.external-findings` version 3 contract
+and can be deliberately imported into the browser Console. Wildcard names are
+normalised to their base DNS name, exact event/domain duplicates are removed,
+and deterministic output is capped at 100 findings, 25 domains, and 20 findings
+per domain to match the browser import boundary. Omission is stated in each
+retained finding when the supplied batch exceeds those limits. The command
+makes no request and treats every certificate event as a review lead, not proof
+that the certificate was served, requested, or controlled by the named domain.
+
+## Declarative observation interchange
+
+`map-observations [mapping.json]` reads
+`whoisleuth.external-observation-mapping` version 1 and applies one strict,
+declarative profile to at most 500 local records. The profile selects bounded
+dotted field paths for the domain, summary, observation time, optional
+reference, and optional completeness. It fixes one source, evidence class, and
+finding category for the batch. Profiles cannot contain scripts, templates,
+computed expressions, network endpoints, or executable callbacks. Prototype
+paths and unknown fields are rejected.
+
+The resulting JSON is the existing browser-compatible
+`whoisleuth.external-findings` version 3 contract. It retains source identity,
+observation time, completeness, and limitations, while stating that field
+semantics were not independently verified. Deterministic output is capped at
+100 findings, 25 domains, and 20 findings per domain. The command makes no
+request and never interprets an omitted field as a negative observation.
+
+`oam-export [external-findings.json]` projects that strict findings document
+into `whoisleuth.open-asset-model-bridge` version 1. It uses the documented
+[OWASP Open Asset Model](https://github.com/owasp-amass/open-asset-model)
+vocabulary for bounded `FQDN`, `IPAddress`, and `TLSCertificate` assets plus
+`dns_record` and `san_dns_name` relations. Only typed A, AAAA, and SHA-256
+certificate observations create infrastructure assets or relations. Other
+findings remain represented by their FQDN asset.
+
+This bridge wrapper is not a claim that every receiving implementation accepts
+one universal native serialisation. Receivers must validate the projection
+against their supported model version. WHOISleuth preserves source and
+completeness as discovery metadata, does not invent a confidence score, and
+does not treat an edge as proof of ownership, control, coordination, intent,
+safety, or maliciousness.
 
 ## Lookalike discovery
 
@@ -907,7 +1019,10 @@ Supported input schemas are:
   The command does not retrieve the certificate or negotiate STARTTLS.
 - `whoisleuth.rdap-search-input`: normalises a supplied RDAP search-help
   response and prepares an exact supported reverse-search request without
-  sending it.
+  sending it. If the document also contains a previously obtained `response`,
+  the command checks its bounded property mappings against the reviewed
+  registration and reports omitted or unrecognised mappings without treating
+  the response as authoritative or complete.
 - `whoisleuth.rpki-route-input`: compares a route prefix and origin ASN with a
   bounded analyst-supplied VRP set.
 - `whoisleuth.local-geoip-query`: queries an analyst-supplied bounded prefix
@@ -924,11 +1039,56 @@ Supported input schemas are:
 - `whoisleuth.encrypted-dns-plan-input`: validates an explicitly reviewed
   encrypted-DNS provider contract and prepares a bounded query plan. It does
   not execute the plan.
+- `whoisleuth.zone-intent.input`: parses either a deliberately supported,
+  bounded BIND master-file subset or normalised DNS records and compares it
+  with one separately attributed observation. TXT values are reduced to
+  SHA-256 digests, unsupported directives and records remain rejected, and an
+  incomplete observation never becomes a missing-record conclusion. The
+  review does not contact a resolver or apply a DNS change.
+- `whoisleuth.domain-portfolio.input`: reviews up to 500 analyst-supplied
+  domain inventory rows for exact registrar, DNS, mail, certificate and
+  recovery concentration, renewal-review gaps and internal recovery-domain
+  dependencies. Account labels and provider assignments remain analyst
+  assertions, and the review makes no provider or account request.
+- `whoisleuth.domain-change.input`: compares bounded, separately labelled
+  authority and resolver observations; reviews CDS, CDNSKEY and CSYNC
+  publication consistency; inventories supplied SRV services and ACME
+  dependencies; and records TLS key continuity, stapling, embedded timestamp,
+  and HSTS preload context. TXT values are retained only as SHA-256 digests.
+  The result is an offline review gate, not a DNSSEC validation, preload-list
+  lookup, certificate-authority request, or permission to apply a change.
+- `whoisleuth.dns-convergence.input`: compares the latest supplied observation
+  from at least two labelled resolvers or network vantages. It preserves
+  converged, divergent, unexpected, incomplete, and insufficient record-set
+  states, can compare against optional expected values, and projects a simple
+  observation-time plus TTL cache horizon. It does not query DNS or decide
+  which divergent value is authoritative, and supplied TTLs do not reveal
+  actual cache age or resolver refresh policy.
+- `whoisleuth.nameserver-preflight.input`: reviews an intended nameserver set
+  against separately attributed direct-service observations before a
+  delegation change. It checks authoritative service, the served NS set, SOA
+  evidence, public addresses and in-bailiwick glue readiness without querying
+  DNS, opening a socket or changing registry configuration.
+- `whoisleuth.trust-store-comparison.input`: compares an already-observed,
+  bounded certificate-chain SHA-256 fingerprint set with up to 16
+  analyst-supplied trust-store snapshots. Each snapshot carries its own name,
+  version, source, review time, completeness, and no more than 2,048 anchor
+  fingerprints. Exact intersections, complete non-observations, and
+  inconclusive inputs remain separate. A match does not build or validate a
+  certificate path, and non-observation does not mean a client would reject
+  the chain because served chains commonly omit their root.
 
 The common output is `whoisleuth.cli.offline-evidence-review` version 1. It
 retains the nested result's explicit state and limitations. A locally
 consistent relationship is not converted into a claim about current
 publication, ownership, safety, or maliciousness.
+
+`review-evidence --strict-exit` is an opt-in local automation boundary. It
+returns the partial-failure exit code when an input family exposes an explicit
+failed `gate`, or when a zone-intent comparison is incomplete or contains a
+difference, missing value or unexpected value. Other evidence families retain
+their ordinary exit behaviour; the flag does not invent a pass/fail policy for
+them. JSON is still emitted before the exit status is selected.
 
 ## Domain control manifests
 
@@ -981,6 +1141,22 @@ The versioned input rejects unknown fields and contradictory evidence attached
 to an unfinished check. It stores no credentials, makes no request, and changes
 no registrar, DNS, mail, certificate, or recovery configuration.
 
+## Domain change assurance packet
+
+`change-packet [input.json]` combines one pre-change domain review, one
+post-change domain review, and one planned-change assurance input for the same
+domain. The input uses `whoisleuth.domain-change-packet.input` version 1. The
+command revalidates each nested contract, summarises changed authoritative
+record sets, and emits `whoisleuth.domain-change-packet` version 1 with a
+canonical SHA-256 integrity digest.
+
+The packet is ready only when both supplied observation reviews and the change
+plan pass their own bounded gates. Partial or unavailable evidence remains a
+review reason. Packet assembly performs no collection or configuration change,
+and digest validity does not authenticate the analyst. A reviewed packet can be
+passed to `sign-artifact` when the operator has an independently managed
+Ed25519 signing-key lifecycle.
+
 ## Pre-sharing review
 
 `sharing-review [artifact.json]` performs a redacted local preflight before an
@@ -1011,6 +1187,35 @@ interpret a placeholder as a file path, read an artefact, make a request,
 change a case, or submit evidence. Analysts deliberately run selected commands
 after reviewing their collection boundaries. This provides repeatable
 domain-specific workflows without an arbitrary automation or plugin surface.
+
+## Local handoffs and one-shot monitoring
+
+`brief [lookup.json]` reads one saved Lookup and emits version 2 of the bounded
+`whoisleuth.cli.lookup-brief` contract. It separates retained facts,
+contradictions, incomplete source states, and manual actions. Each action
+states its evidence basis and expected outcome; it does not run the action or
+create a case.
+
+`case-pack [cases.json] --audience <internal|trusted|public> --reviewed` reads a
+browser case export, retains at most 25 normalised cases, applies the selected
+redaction boundary, and emits a browser-importable case collection with a
+canonical SHA-256 digest and redaction manifest. Trusted output removes notes,
+recipient values, and manual-pivot targets. Public output additionally removes
+actions and analyst assertions. The review flag records an explicit choice; it
+does not prove recipient authorisation or factual correctness.
+
+`monitor-once [manifest.json]` performs one bounded Deep control review for at
+most 20 manifest domains with concurrency capped at three. An optional
+`--previous` checkpoint adds local first/last-observed comparison. It is not a
+daemon or scheduler, retains compact normalised observations rather than raw
+payloads, and keeps failed collection incomplete. JSON, JUnit, and explicit
+failure policies are supported.
+
+`workflow-run <recipe> <subject>` executes only concrete steps from the four
+installed fixed recipes. Network steps require `--approve-network` for that
+invocation. Analyst-selection placeholders always pause. A bounded `--resume`
+state must match the exact recipe and subject, cannot add commands or shell
+syntax, and is not evidence that earlier results remain current.
 
 ## Optional local rendered capture
 

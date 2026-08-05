@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-// Converts one contributor-reviewed, already-minimized observation into the
+// Converts one contributor-reviewed, already-minimised observation into the
 // public real-world fixture contract. The output reconstructs only known
 // catalogue markers and shared vendor origins, never copied page content.
 
@@ -11,6 +11,10 @@ import { fileURLToPath } from 'node:url';
 import {
   TECHNOLOGY_REVIEWED_FIXTURE_SCHEMA,
   TECHNOLOGY_REVIEWED_FIXTURE_VERSION,
+  TECHNOLOGY_REVIEW_INPUT_SCHEMA,
+  TECHNOLOGY_REVIEW_INPUT_VERSION,
+  MAX_TECHNOLOGY_REVIEW_IDS,
+  TECHNOLOGY_REVIEW_LICENCE_BASES,
   type TechnologyReviewedFixture,
 } from '../fixtures/technology-reviewed-fixtures.mts';
 import {
@@ -23,6 +27,8 @@ import {
 export const MAX_TECHNOLOGY_REVIEW_INPUT_BYTES = 64 * 1024;
 export const MAX_REVIEWED_MARKUP_BYTES = 8 * 1024;
 export const MAX_REVIEWED_RESOURCE_ORIGINS = 16;
+export const MAX_REVIEWED_RESPONSE_HEADERS = 8;
+export const MAX_REVIEWED_FIXTURE_LABEL_LENGTH = 120;
 
 type UnknownRecord = Record<string, unknown>;
 type WritableLike = { write(value: string): unknown };
@@ -31,11 +37,7 @@ const ID_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
 const CONTROL_RE = /[\u0000-\u001f\u007f]/u;
 const EMAIL_RE = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/iu;
 const IPV4_RE = /(?:^|[^0-9])(?:\d{1,3}\.){3}\d{1,3}(?:[^0-9]|$)/u;
-const LICENSE_BASES = new Set([
-  'factual-observation',
-  'minimized-with-permission',
-  'public-domain',
-]);
+const LICENCE_BASES = new Set<string>(TECHNOLOGY_REVIEW_LICENCE_BASES);
 const SHARED_VENDOR_HOSTS = new Set([
   'cdn.shopify.com',
   'static.parastorage.com',
@@ -63,6 +65,9 @@ const SAFE_MARKERS: ReadonlyArray<Readonly<{ marker: string; output: string }>> 
   { marker: 'cdn11.bigcommerce.com/s-', output: '<link href="https://cdn11.bigcommerce.com/s-fixture/theme.css">' },
   { marker: 'stencil-utils', output: '<script src="/stencil-utils.js"></script>' },
   { marker: '/wp-content/plugins/woocommerce/', output: '<link href="/wp-content/plugins/woocommerce/fixture.css">' },
+  { marker: '/modules/ps_', output: '<link href="/modules/ps_fixture/fixture.css">' },
+  { marker: 'index.php?route=common/home', output: '<a href="index.php?route=common/home"></a>' },
+  { marker: 'image/catalog/opencart-logo.png', output: '<img src="image/catalog/opencart-logo.png" alt="">' },
   { marker: 'data-mesh-id=', output: '<main data-mesh-id="fixture"></main>' },
   { marker: 'squarespace-context', output: '<main data-marker="squarespace-context"></main>' },
   { marker: 'data-wf-page=', output: '<main data-wf-page="fixture"></main>' },
@@ -97,6 +102,7 @@ const REVIEW_INPUT_KEYS = new Set([
   'observedAt',
   'licenseBasis',
   'expectedIds',
+  'negativeFor',
   'input',
 ]);
 const TECHNOLOGY_INPUT_KEYS = new Set([
@@ -104,11 +110,27 @@ const TECHNOLOGY_INPUT_KEYS = new Set([
   'httpServer',
   'html',
   'resourceOrigins',
+  'responseHeaders',
 ]);
 const HEADER_CANONICAL_VALUES: Readonly<Record<string, string>> = Object.freeze({
   cloudfront: 'CloudFront',
   'apache-http-server': 'Apache',
   'microsoft-iis': 'Microsoft-IIS',
+});
+const PASSIVE_HEADER_RECONSTRUCTIONS: Readonly<Record<string, Readonly<Record<string, string>>>> = Object.freeze({
+  'cf-ray': Object.freeze({ cloudflare: 'fixture' }),
+  'x-nf-request-id': Object.freeze({ netlify: 'fixture' }),
+  'x-drupal-cache': Object.freeze({ drupal: 'fixture' }),
+  'x-served-by': Object.freeze({ fastly: 'cache-fixture-FIX' }),
+  'x-powered-by': Object.freeze({
+    'craft-cms': 'Craft CMS',
+    php: 'PHP',
+    aspnet: 'ASP.NET',
+    express: 'Express',
+  }),
+  'x-shopify-stage': Object.freeze({ shopify: 'fixture' }),
+  'x-sorting-hat-podid': Object.freeze({ shopify: 'fixture' }),
+  'x-vercel-id': Object.freeze({ vercel: 'fixture' }),
 });
 
 function record(value: unknown): UnknownRecord | null {
@@ -150,10 +172,10 @@ function normalizeHeader(
   }
   const findings = analyzeWebsiteTechnology({ [field]: header }).findings;
   if (findings.length !== 1) {
-    throw new TypeError(`${label} must produce exactly one recognized catalogue technology before it can be minimized.`);
+    throw new TypeError(`${label} must produce exactly one recognised catalogue technology before it can be minimised.`);
   }
   const finding = findings[0];
-  if (!finding) throw new TypeError(`${label} could not be minimized.`);
+  if (!finding) throw new TypeError(`${label} could not be minimised.`);
   const candidate = HEADER_CANONICAL_VALUES[finding.id] ?? finding.name;
   const reconstructed = analyzeWebsiteTechnology({ [field]: candidate }).findings.map((item) => item.id);
   if (reconstructed.length !== 1 || reconstructed[0] !== finding.id) {
@@ -175,6 +197,23 @@ function normalizeMarkup(value: unknown): string | undefined {
     throw new TypeError('Minimised HTML contains no recognised catalogue marker.');
   }
   return [...new Set(outputs)].join('');
+}
+
+function negativeMarkup(ids: readonly string[]): string {
+  const catalogue = new Map(TECHNOLOGY_SIGNATURE_CATALOGUE.map((item) => [item.id, item.name]));
+  const names = ids.map((id) => catalogue.get(id)).filter((name): name is string => Boolean(name));
+  return `<main>${names.join(' and ')} named in ordinary visible copy without implementation metadata.</main>`;
+}
+
+function reviewedFixtureLabel(expectedIds: readonly string[], negativeFor: readonly string[]): string {
+  const detailed = expectedIds.length
+    ? `Reviewed ${expectedIds.join(' + ')}${negativeFor.length ? ' mixed-control' : ''} fixture`
+    : `Reviewed negative control for ${negativeFor.join(' + ')}`;
+  if (detailed.length <= MAX_REVIEWED_FIXTURE_LABEL_LENGTH) return detailed;
+  if (expectedIds.length) {
+    return `Reviewed ${expectedIds.length}-technology${negativeFor.length ? ' mixed-control' : ' overlap'} fixture`;
+  }
+  return `Reviewed negative control for ${negativeFor.length} technology signatures`;
 }
 
 function normalizeOrigins(value: unknown): string[] {
@@ -210,11 +249,44 @@ function normalizeOrigins(value: unknown): string[] {
   return [...origins].sort();
 }
 
+function normalizeResponseHeaders(value: unknown): Record<string, string> {
+  if (value === undefined || value === null) return {};
+  const headers = record(value);
+  if (!headers || Object.keys(headers).length > MAX_REVIEWED_RESPONSE_HEADERS) {
+    throw new TypeError(`Response headers must be an object containing at most ${MAX_REVIEWED_RESPONSE_HEADERS} passive headers.`);
+  }
+  const output: Record<string, string> = {};
+  for (const [rawName, rawValue] of Object.entries(headers)) {
+    const name = text(rawName, 'Response header name', 64).toLowerCase();
+    const supported = PASSIVE_HEADER_RECONSTRUCTIONS[name];
+    if (!supported) throw new TypeError(`Response header ${name} is not approved for reviewed fixtures.`);
+    const headerValue = text(rawValue, `Response header ${name}`, 240);
+    if (EMAIL_RE.test(headerValue) || IPV4_RE.test(headerValue) || /https?:\/\//iu.test(headerValue)) {
+      throw new TypeError(`Response header ${name} contains target or contact material.`);
+    }
+    const findings = analyzeWebsiteTechnology({ responseHeaders: { [name]: headerValue } }).findings;
+    if (findings.length !== 1) {
+      throw new TypeError(`Response header ${name} must produce exactly one recognised catalogue technology before it can be minimised.`);
+    }
+    const finding = findings[0];
+    const canonical = finding ? supported[finding.id] : undefined;
+    if (!finding || !canonical) {
+      throw new TypeError(`Response header ${name} has no privacy-safe canonical reconstruction.`);
+    }
+    const reconstructed = analyzeWebsiteTechnology({ responseHeaders: { [name]: canonical } }).findings;
+    if (reconstructed.length !== 1 || reconstructed[0]?.id !== finding.id) {
+      throw new TypeError(`Response header ${name} has no stable canonical reconstruction.`);
+    }
+    output[name] = canonical;
+  }
+  return Object.fromEntries(Object.entries(output).sort(([left], [right]) => left.localeCompare(right)));
+}
+
 export function buildReviewedTechnologyFixture(raw: unknown): TechnologyReviewedFixture {
   const source = record(raw);
   const input = record(source?.input);
-  if (!source || source.schema !== 'whoisleuth.technology-fixture-review-input'
-    || source.version !== 1 || !input) {
+  if (!source || source.schema !== TECHNOLOGY_REVIEW_INPUT_SCHEMA
+    || source.version !== TECHNOLOGY_REVIEW_INPUT_VERSION || !input) {
     throw new TypeError('Technology review input uses an unsupported contract.');
   }
   assertExactKeys(source, REVIEW_INPUT_KEYS, 'Technology review input');
@@ -223,30 +295,55 @@ export function buildReviewedTechnologyFixture(raw: unknown): TechnologyReviewed
   if (!ID_RE.test(id)) throw new TypeError('Fixture id must be a lowercase hyphenated identifier.');
   const reviewedAt = timestamp(source.reviewedAt, 'Reviewed time');
   const observedAt = timestamp(source.observedAt, 'Observed time');
-  const licenseBasis = text(source.licenseBasis, 'License basis', 40);
-  if (!LICENSE_BASES.has(licenseBasis)) throw new TypeError('License basis is not supported.');
+  const licenseBasis = text(source.licenseBasis, 'Licence basis', 40);
+  if (!LICENCE_BASES.has(licenseBasis)) throw new TypeError('Licence basis is not supported.');
+  if ((Array.isArray(source.expectedIds) && source.expectedIds.length > MAX_TECHNOLOGY_REVIEW_IDS)
+    || (Array.isArray(source.negativeFor) && source.negativeFor.length > MAX_TECHNOLOGY_REVIEW_IDS)) {
+    throw new TypeError(`Reviewed technology ids must contain at most ${MAX_TECHNOLOGY_REVIEW_IDS} entries.`);
+  }
   const expectedIds = Array.isArray(source.expectedIds)
     ? [...new Set(source.expectedIds.map((value) => text(value, 'Expected technology id', 64).toLowerCase()))].sort()
     : [];
+  const negativeFor = Array.isArray(source.negativeFor)
+    ? [...new Set(source.negativeFor.map((value) => text(value, 'Negative-control technology id', 64).toLowerCase()))].sort()
+    : [];
   const catalogueIds = new Set(TECHNOLOGY_SIGNATURE_CATALOGUE.map((item) => item.id));
-  if (!expectedIds.length || expectedIds.some((expected) => !catalogueIds.has(expected))) {
-    throw new TypeError('Expected technology ids must reference at least one current catalogue entry.');
+  if (expectedIds.some((expected) => !catalogueIds.has(expected))
+    || negativeFor.some((expected) => !catalogueIds.has(expected))) {
+    throw new TypeError('Reviewed technology ids must reference current catalogue entries.');
   }
-  const label = `Reviewed ${expectedIds.join(' + ')} fixture`;
+  if (!expectedIds.length && !negativeFor.length) {
+    throw new TypeError('Reviewed input must declare expected or negative-control technology ids.');
+  }
+  if (expectedIds.some((expected) => negativeFor.includes(expected))) {
+    throw new TypeError('Reviewed input cannot both expect and forbid a technology id.');
+  }
+  const label = reviewedFixtureLabel(expectedIds, negativeFor);
   const generator = normalizeHeader(input.generator, 'Generator value', 'generator');
   const httpServer = normalizeHeader(input.httpServer, 'HTTP server value', 'httpServer');
-  const html = normalizeMarkup(input.html);
+  const html = expectedIds.length
+    ? normalizeMarkup(input.html)
+    : (() => {
+      const supplied = text(input.html, 'Negative-control HTML', MAX_REVIEWED_MARKUP_BYTES);
+      const canonical = negativeMarkup(negativeFor);
+      if (supplied !== canonical) {
+        throw new TypeError('Negative-control HTML must use the catalogue-owned canonical review marker.');
+      }
+      return canonical;
+    })();
   const resourceOrigins = normalizeOrigins(input.resourceOrigins);
+  const responseHeaders = normalizeResponseHeaders(input.responseHeaders);
   const normalizedInput: TechnologyInput = Object.freeze({
     ...(generator ? { generator } : {}),
     ...(httpServer ? { httpServer } : {}),
     ...(html ? { html } : {}),
     ...(resourceOrigins.length ? { resourceOrigins } : {}),
+    ...(Object.keys(responseHeaders).length ? { responseHeaders: Object.freeze(responseHeaders) } : {}),
     observedAt,
   });
   const observedIds = analyzeWebsiteTechnology(normalizedInput).findings.map((finding) => finding.id).sort();
   if (JSON.stringify(observedIds) !== JSON.stringify(expectedIds)) {
-    throw new TypeError(`Minimized evidence observed [${observedIds.join(', ')}] instead of [${expectedIds.join(', ')}].`);
+    throw new TypeError(`Minimised evidence observed [${observedIds.join(', ')}] instead of [${expectedIds.join(', ')}].`);
   }
   return Object.freeze({
     schema: TECHNOLOGY_REVIEWED_FIXTURE_SCHEMA,
@@ -254,10 +351,14 @@ export function buildReviewedTechnologyFixture(raw: unknown): TechnologyReviewed
     catalogueVersion: TECHNOLOGY_PROFILE_VERSION,
     id,
     label,
+    kind: expectedIds.length && negativeFor.length
+      ? 'mixed'
+      : expectedIds.length > 1 ? 'overlap' : expectedIds.length === 1 ? 'positive' : 'negative',
     reviewedAt,
     observedAt,
     licenseBasis: licenseBasis as TechnologyReviewedFixture['licenseBasis'],
     expectedIds: Object.freeze(expectedIds),
+    negativeFor: Object.freeze(negativeFor),
     input: normalizedInput,
     privacy: Object.freeze({
       rawPageRetained: false,
@@ -266,6 +367,8 @@ export function buildReviewedTechnologyFixture(raw: unknown): TechnologyReviewed
     }),
   });
 }
+
+export { negativeMarkup as buildTechnologyNegativeReviewMarkup };
 
 export async function main(
   args = process.argv.slice(2),

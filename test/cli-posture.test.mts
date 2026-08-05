@@ -41,16 +41,16 @@ function postureReport(overrides = {}) {
 describe('posture CLI argument parsing', () => {
   test('accepts terminal defaults and optional selectors', () => {
     assert.deepEqual(parseCliArguments(['posture', 'example.test']), {
-      action: 'posture', domain: 'example.test', output: 'terminal', quiet: false, color: true, selectorText: null, retiredSelectorText: null, mailProfile: 'standard',
+      action: 'posture', domain: 'example.test', output: 'terminal', quiet: false, color: true, selectorText: null, retiredSelectorText: null, mailProfile: 'standard', ownedDomain: false,
     });
     assert.deepEqual(parseCliArguments(['posture', 'example.test', '--selectors', 'one,two', '--retired-selectors', 'old', '--mail-profile', 'defensive-no-mail', '--json', '--no-color']), {
-      action: 'posture', domain: 'example.test', output: 'json', quiet: false, color: false, selectorText: 'one,two', retiredSelectorText: 'old', mailProfile: 'defensive_no_mail',
+      action: 'posture', domain: 'example.test', output: 'json', quiet: false, color: false, selectorText: 'one,two', retiredSelectorText: 'old', mailProfile: 'defensive_no_mail', ownedDomain: false,
     });
   });
 
   test('accepts stdin mode and quiet terminal execution', () => {
     assert.deepEqual(parseCliArguments(['posture', '--quiet']), {
-      action: 'posture', domain: null, output: 'terminal', quiet: true, color: true, selectorText: null, retiredSelectorText: null, mailProfile: 'standard',
+      action: 'posture', domain: null, output: 'terminal', quiet: true, color: true, selectorText: null, retiredSelectorText: null, mailProfile: 'standard', ownedDomain: false,
     });
   });
 
@@ -63,6 +63,7 @@ describe('posture CLI argument parsing', () => {
     assert.throws(() => parseCliArguments(['posture', 'one.test', '--mail-profile', 'future']), /must be/);
     assert.throws(() => parseCliArguments(['posture', 'one.test', '--mail-profile', 'standard', '--mail-profile', 'parked']), /only once/);
     assert.throws(() => parseCliArguments(['posture', 'one.test', '--deep']), /Unknown option/);
+    assert.throws(() => parseCliArguments(['posture', 'one.test', '--sarif']), /requires --owned-domain/);
     assert.throws(() => parseCliArguments(['posture', 'one.test', '--json', '--quiet']), /cannot be combined/);
   });
 });

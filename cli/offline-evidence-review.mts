@@ -5,16 +5,23 @@ import {
   planEncryptedDnsQuery,
 } from '../lib/encrypted-dns-contract.mts';
 import { validateDnssecEvidence } from '../lib/dnssec-evidence-validation.mts';
+import { reviewDomainChange } from '../lib/domain-change-review.mts';
+import { reviewDomainPortfolio } from '../lib/domain-portfolio-review.mts';
+import { reviewNameserverPreflight } from '../lib/nameserver-preflight-review.mts';
 import {
   buildLocalGeoIpDatabase,
   lookupLocalGeoIp,
 } from '../lib/local-geoip-evidence.mts';
 import {
+  inspectRdapReverseSearchResponse,
   normalizeRdapSearchHelp,
   planRdapReverseSearch,
 } from '../lib/rdap-search-workbench.mts';
 import { reviewRpkiRoute } from '../lib/rpki-evidence.mts';
 import { analyzeTlsaEvidence } from '../lib/tlsa-evidence.mts';
+import { reviewZoneIntent } from '../lib/zone-intent-review.mts';
+import { reviewDnsConvergence } from '../lib/dns-convergence-review.mts';
+import { compareTrustStoreEvidence } from '../lib/trust-store-comparison.mts';
 import { CliUsageError } from './errors.mts';
 import { LOCAL_MMDB_QUERY_SCHEMA, reviewLocalMmdb } from './local-mmdb-review.mts';
 
@@ -47,20 +54,24 @@ function parseInput(value: unknown): UnknownRecord {
 
 function buildOfflineEvidenceReview(value: unknown, generatedAt = new Date().toISOString()) {
   const input = parseInput(value);
-  let kind: 'rdap_search' | 'dnssec' | 'tlsa' | 'rpki' | 'geoip' | 'encrypted_dns';
+  let kind: 'rdap_search' | 'dnssec' | 'tlsa' | 'rpki' | 'geoip' | 'encrypted_dns' | 'zone_intent' | 'domain_portfolio' | 'domain_change' | 'dns_convergence' | 'nameserver_preflight' | 'trust_store';
   let result: unknown;
   if (input.schema === 'whoisleuth.rdap-search-input') {
     kind = 'rdap_search';
     const request = record(input.request);
     const help = normalizeRdapSearchHelp(input.help);
+    const plan = planRdapReverseSearch(help, {
+      searchableResourceType: String(request.searchableResourceType ?? ''),
+      relatedResourceType: String(request.relatedResourceType ?? ''),
+      property: String(request.property ?? ''),
+      value: request.value,
+    });
     result = Object.freeze({
       help,
-      plan: planRdapReverseSearch(help, {
-        searchableResourceType: String(request.searchableResourceType ?? ''),
-        relatedResourceType: String(request.relatedResourceType ?? ''),
-        property: String(request.property ?? ''),
-        value: request.value,
-      }),
+      plan,
+      responseInspection: input.response === undefined
+        ? null
+        : inspectRdapReverseSearchResponse(input.response, [request.property]),
     });
   } else if (input.schema === 'whoisleuth.dnssec-evidence-input') {
     kind = 'dnssec';
@@ -100,6 +111,24 @@ function buildOfflineEvidenceReview(value: unknown, generatedAt = new Date().toI
       normalizeEncryptedDnsAdapter(input.adapter),
       { name: query.name, type: query.type },
     );
+  } else if (input.schema === 'whoisleuth.zone-intent.input') {
+    kind = 'zone_intent';
+    result = reviewZoneIntent(input, generatedAt);
+  } else if (input.schema === 'whoisleuth.domain-portfolio.input') {
+    kind = 'domain_portfolio';
+    result = reviewDomainPortfolio(input, generatedAt);
+  } else if (input.schema === 'whoisleuth.domain-change.input') {
+    kind = 'domain_change';
+    result = reviewDomainChange(input, generatedAt);
+  } else if (input.schema === 'whoisleuth.dns-convergence.input') {
+    kind = 'dns_convergence';
+    result = reviewDnsConvergence(input, generatedAt);
+  } else if (input.schema === 'whoisleuth.nameserver-preflight.input') {
+    kind = 'nameserver_preflight';
+    result = reviewNameserverPreflight(input, generatedAt);
+  } else if (input.schema === 'whoisleuth.trust-store-comparison.input') {
+    kind = 'trust_store';
+    result = compareTrustStoreEvidence(input, generatedAt);
   } else {
     throw new CliUsageError('Offline evidence review does not recognise this input schema.');
   }
@@ -137,7 +166,20 @@ async function buildOfflineEvidenceReviewWithLocalResources(
 
 function formatOfflineEvidenceReview(document: ReturnType<typeof buildOfflineEvidenceReview>): string {
   const result = record(document.result);
-  const state = typeof result.state === 'string' ? result.state : 'reviewed';
+  const gate = record(result.gate);
+  const counts = record(result.counts);
+  const count = (value: unknown): number => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : 0;
+  const listLength = (value: unknown): number => Array.isArray(value) ? value.length : 0;
+  const state = typeof result.state === 'string'
+    ? result.state
+    : document.kind === 'zone_intent'
+      ? result.complete === true
+        && ['different', 'missing', 'unexpected', 'incomplete'].every((key) => count(counts[key]) === 0)
+        ? 'aligned'
+        : 'review'
+      : typeof gate.pass === 'boolean'
+        ? gate.pass ? 'ready' : 'review'
+        : document.kind === 'domain_portfolio' ? 'inventory' : 'reviewed';
   const lines = [
     'Offline evidence review',
     `Kind   ${document.kind.replaceAll('_', ' ')}`,
@@ -146,8 +188,41 @@ function formatOfflineEvidenceReview(document: ReturnType<typeof buildOfflineEvi
   if (document.kind === 'rdap_search') {
     const help = record(result.help);
     const plan = record(result.plan);
+    const responseInspection = record(result.responseInspection);
     lines.push(`Help   ${String(help.state ?? 'unavailable').replaceAll('_', ' ')}`);
     lines.push(`Plan   ${String(plan.state ?? 'unavailable').replaceAll('_', ' ')}`);
+    if (result.responseInspection !== null) lines.push(`Result ${String(responseInspection.state ?? 'invalid').replaceAll('_', ' ')}`);
+  } else if (document.kind === 'zone_intent') {
+    const desired = record(result.desired);
+    lines.push(`Desired ${listLength(desired.records)}`);
+    lines.push(`Compared ${listLength(result.comparisons)}`);
+    lines.push(`Aligned ${count(counts.aligned)}`);
+    lines.push(`Changed ${count(counts.different) + count(counts.missing) + count(counts.unexpected)}`);
+    lines.push(`Partial ${count(counts.incomplete)}`);
+    lines.push(`Rejected ${listLength(desired.rejected)}`);
+  } else if (document.kind === 'domain_change') {
+    lines.push(`Authority ${listLength(result.authoritativeRecordMatrix)} rows`);
+    lines.push(`Resolvers ${listLength(result.resolverDivergenceMatrix)} rows`);
+  } else if (document.kind === 'dns_convergence') {
+    lines.push(`Observers ${listLength(result.observers)}`);
+    lines.push(`Snapshots ${listLength(result.snapshots)}`);
+    lines.push(`Record sets ${listLength(result.rows)}`);
+  } else if (document.kind === 'nameserver_preflight') {
+    const rows = Array.isArray(result.rows) ? result.rows : [];
+    lines.push(`Servers ${rows.length}`);
+    lines.push(`Ready  ${rows.filter((item) => record(item).ready === true).length}`);
+  } else if (document.kind === 'trust_store') {
+    lines.push(`Stores ${count(counts.stores)}`);
+    lines.push(`Matched ${count(counts.anchorObserved)}`);
+    lines.push(`Not observed ${count(counts.notObserved)}`);
+    lines.push(`Inconclusive ${count(counts.inconclusive)}`);
+  } else if (document.kind === 'domain_portfolio') {
+    const unknownCounts = record(result.unknownCounts);
+    lines.push(`Assets ${listLength(result.assets)}`);
+    lines.push(`Dependencies ${listLength(result.simulations)}`);
+    lines.push(`Renewals ${listLength(result.renewalQueue)}`);
+    lines.push(`Recovery ${listLength(result.recoveryCycles)}`);
+    lines.push(`Unknown ${Object.values(unknownCounts).reduce<number>((total, value) => total + count(value), 0)}`);
   } else {
     for (const [label, key] of [
       ['Records', 'records'],
@@ -158,6 +233,14 @@ function formatOfflineEvidenceReview(document: ReturnType<typeof buildOfflineEvi
       if (Array.isArray(candidate)) lines.push(`${label.padEnd(7)}${candidate.length}`);
       else if (typeof candidate === 'number') lines.push(`${label.padEnd(7)}${candidate}`);
     }
+  }
+  const reasons = Array.isArray(gate.reasons) ? gate.reasons : [];
+  if (reasons.length) {
+    lines.push('', 'Review reasons:');
+    for (const reason of reasons.slice(0, 8)) {
+      if (typeof reason === 'string') lines.push(`  - ${reason.replace(/[\u0000-\u001f\u007f]+/gu, ' ').trim().slice(0, 240)}`);
+    }
+    if (reasons.length > 8) lines.push(`  - ${reasons.length - 8} more reason(s) omitted.`);
   }
   lines.push('', 'Limitations:');
   for (const limitation of document.limitations) lines.push(`  - ${limitation}`);

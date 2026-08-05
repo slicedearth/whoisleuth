@@ -184,14 +184,16 @@ Deep non-compact Lookup also derives a version-1 `dns_delegation` observation.
 It keeps the recursive NS answer, registry RDAP nameserver/glue publication,
 and direct nameserver answers separately attributed. The collector selects at
 most four nameservers from the bounded parent and registry sets, uses at most
-two validated public addresses for each, and sends only direct NS and SOA
-queries to those addresses. Registry-published glue is preferred; otherwise
+two validated public addresses for each, and sends direct NS and SOA queries
+to those addresses. One selected address per nameserver can additionally
+receive bounded A, AAAA, CAA and MX queries; each retained record set is capped
+at sixteen normalised values. Registry-published glue is preferred; otherwise
 the deployment's recursive resolver supplies candidate addresses. Literal
 addresses are revalidated with the shared private/reserved-address policy
 before use.
 
 The observation reports parent/registry NS agreement, bounded direct
-reachability, selected-authority NS consistency, observed in-bailiwick glue,
+reachability, selected-authority NS and A/AAAA/CAA/MX consistency, observed in-bailiwick glue,
 and the internal consistency of registry DNSSEC fields. Refused or
 not-authoritative responses, unreachable authorities, missing observations,
 and source truncation remain distinct. A direct failure is inconclusive and
@@ -710,10 +712,14 @@ inspection.
 
 ## Evidence export and privacy boundary
 
-Lookup evidence uses schema `whoisleuth.lookup-evidence`, version `24`. It
+Lookup evidence uses schema `whoisleuth.lookup-evidence`, version `25`. It
 contains query context, diagnostics, normalised sources, raw RDAP data, the raw
 WHOIS referral chain, availability analysis, and the source-health-aware
-registry comparison. Version 24 adds bounded generator metadata containing the
+registry comparison. Version 25 can retain the separately attributed,
+bounded A, AAAA, CAA and MX record-set comparison collected directly from
+selected authoritative nameservers during an eligible deep non-compact domain
+Lookup. Direct no-data, partial and failed observations remain distinct and do
+not change availability or Risk. Version 24 adds bounded generator metadata containing the
 WHOISleuth version and stable project URL. The metadata is produced locally and
 does not add analytics, remote assets, or another request. Version 23 can add an exact local SSLBL leaf-certificate
 comparison from an eligible deep non-compact domain Lookup. It retains the
@@ -788,7 +794,7 @@ network registration and bounded reverse-DNS context when collected. ASN
 reports present normalised routing registration fields without inventing
 reverse-DNS evidence. The separate JSON action retains the richer schema
 contract described above.
-When schema-version 17 through 24 JSON retains a supported version-5, version-6, or version-7
+When schema-version 17 through 25 JSON retains a supported version-5, version-6, or version-7
 `diagnostics.registryAccess` object, both readable formats include its bounded
 suffix, WHOIS and RDAP access profiles, and limitation in collection
 diagnostics. This remains collection context only and cannot decide
@@ -796,7 +802,7 @@ registration, availability, ownership, safety, or maliciousness. The readable
 formats also include the bounded observed network registration and its
 origin-host limitation when that source is present.
 
-Schema versions 17 through 24 can also retain the bounded normalised security.txt source
+Schema versions 17 through 25 can also retain the bounded normalised security.txt source
 from an explicitly requested deep Lookup. It excludes the response body and
 does not make publication an authorisation, availability, or Risk signal.
 

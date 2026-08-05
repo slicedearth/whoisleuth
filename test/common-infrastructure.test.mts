@@ -31,6 +31,12 @@ describe('Common-infrastructure catalogue', () => {
     assert.match(COMMON_INFRASTRUCTURE_SNAPSHOT.source.repository, /^https:\/\/github\.com\/MISP\//u);
     assert.match(COMMON_INFRASTRUCTURE_SNAPSHOT.source.commit, /^[0-9a-f]{40}$/u);
     assert.equal(COMMON_INFRASTRUCTURE_SNAPSHOT.source.licence, 'CC0-1.0 OR BSD-2-Clause');
+    assert.deepEqual(COMMON_INFRASTRUCTURE_SNAPSHOT.sources.map((source) => source.id), [
+      'amazon-aws',
+      'cloudflare',
+      'google-gcp',
+      'public-dns-core',
+    ]);
   });
 
   test('qualifies exact IPv4 and IPv6 CIDR matches with provenance and limitations', () => {

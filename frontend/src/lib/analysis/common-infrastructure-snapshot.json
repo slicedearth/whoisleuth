@@ -1,7 +1,7 @@
 {
   "schema": "whoisleuth.common-infrastructure",
   "version": 1,
-  "generatedAt": "2026-07-31T08:41:01.477Z",
+  "generatedAt": "2026-08-04T14:46:04.369Z",
   "source": {
     "project": "MISP warning-lists",
     "repository": "https://github.com/MISP/misp-warninglists",
@@ -4354,7 +4354,7 @@
       "type": "cidr",
       "sourcePath": "https://misp.github.io/misp-warninglists/#format-of-a-warning-list",
       "sourceVersion": 1,
-      "sourceDate": "2026-07-31",
+      "sourceDate": "2026-08-04",
       "sourceDigestSha256": "a6f01c1190e5d2e968a5860cb9445c183e24f3263f0b9a459aa7b00cb2f4cdcf",
       "values": [
         "8.8.4.4/32",

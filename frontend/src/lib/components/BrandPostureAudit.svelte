@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { BrandProfile } from '$lib/brand-profiles';
   import type { DomainPostureHttpResponse } from '$lib/analysis/client-response-contracts';
-  import { buildOwnedDomainPostureReview } from '$lib/analysis/owned-domain-posture-review.ts';
+  import { buildDesiredPostureHistory, buildOwnedDomainPostureReview } from '$lib/analysis/owned-domain-posture-review.ts';
   type AuditResult = { domain: string; report: DomainPostureHttpResponse | null; error: string };
   let { active, disabledReason, auditing, results, audit, retainObservation }: {
     active: BrandProfile;
@@ -34,6 +34,7 @@
             <p class="error">{item.error}</p>
           {:else if item.report}
             {@const review = buildOwnedDomainPostureReview(active, item.report)}
+            {@const retainedHistory = buildDesiredPostureHistory(review.baseline?.observationHistory || (review.baseline?.previousObservation ? [review.baseline.previousObservation] : []))}
             <p class="counts">{item.report.summary.danger || 0} action · {item.report.summary.warning || 0} review · {item.report.summary.pass || 0} pass</p>
             <section class="desired-state" aria-label={`Desired posture for ${item.domain}`}>
               <header>
@@ -79,6 +80,14 @@
                         <li><code>{change.checkId}</code> · {change.state}</li>
                       {/each}
                     </ul>
+                  </details>
+                {/if}
+                {#if review.baseline.observationHistory?.length}
+                  <details class="history">
+                    <summary>Domain control history <strong>{review.baseline.observationHistory.length} retained</strong></summary>
+                    {#if retainedHistory.length}
+                      <ol>{#each [...retainedHistory].reverse() as transition}<li><span>{transition.previousObservedAt} → {transition.observedAt}</span><strong>{transition.changedChecks.length ? `${transition.changedChecks.length} changed` : 'unchanged'}</strong>{#if transition.changedChecks.length}<small>{transition.changedChecks.join(' · ')}</small>{/if}</li>{/each}</ol>
+                    {:else}<p>Retain another completed audit to compare source-attributed posture over time.</p>{/if}
                   </details>
                 {/if}
                 <p class="limitation">Retaining an observation is explicit and local. Incomplete evidence remains unknown and does not replace the desired baseline.</p>
@@ -198,6 +207,7 @@
   .baseline-review>header>div{display:grid;gap:2px}.baseline-review>header span{color:var(--muted);font-size:var(--text-2xs)}
   .baseline-review>p,.baseline-review li{color:var(--muted);font-size:var(--text-xs);line-height:1.5}
   .baseline-review details{font-size:var(--text-xs)}.baseline-review ul{margin-bottom:0;padding-left:20px}
+  .history ol{display:grid;gap:6px;margin:8px 0 0;padding:0;list-style:none}.history li{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:3px 10px;padding:8px;border:1px solid var(--border);border-radius:var(--radius-sm)}.history span,.history small{color:var(--muted);overflow-wrap:anywhere}.history small{grid-column:1/-1}
   .comparison-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
   .comparison-grid article{min-width:0;padding:9px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}
   .comparison-grid article>div{display:flex;justify-content:space-between;gap:8px}.comparison-grid article>div span{color:var(--muted);font:650 var(--text-2xs) var(--mono);text-transform:uppercase}

@@ -32,6 +32,7 @@ export type LookupNextAction = Readonly<{
   id: string;
   label: string;
   reason: string;
+  expectedOutcome: string;
   href: `#${string}`;
   priority: LookupDecisionImportance;
 }>;
@@ -482,6 +483,7 @@ export function buildLookupDecisionSupport(input: Readonly<{
       id: 'review-priority-conflict',
       label: 'Review the highest-priority disagreement',
       reason: firstConflict.title,
+      expectedOutcome: 'Establish which separately attributed observation is current, authoritative, or still unresolved.',
       href: firstConflict.href,
       priority: 'high',
     });
@@ -491,6 +493,7 @@ export function buildLookupDecisionSupport(input: Readonly<{
       id: 'review-refresh-options',
       label: 'Review limited or stale sources',
       reason: `${input.refreshPlan.items.length} deliberate source refresh option${input.refreshPlan.items.length === 1 ? ' is' : 's are'} available.`,
+      expectedOutcome: 'Determine whether the limitation is transient, persistent, or an expected source constraint.',
       href: '#evidence-quality',
       priority: 'medium',
     });
@@ -501,6 +504,7 @@ export function buildLookupDecisionSupport(input: Readonly<{
       id: 'inspect-limited-source',
       label: `Inspect ${firstLimited.label}`,
       reason: `${firstLimited.statusLabel} evidence may limit downstream conclusions.`,
+      expectedOutcome: `Clarify which conclusions ${firstLimited.label} can and cannot support in its current state.`,
       href: '#evidence-quality',
       priority: 'medium',
     });
@@ -510,6 +514,7 @@ export function buildLookupDecisionSupport(input: Readonly<{
       id: 'review-page-identity',
       label: 'Review identity and credential evidence',
       reason: 'Compare declared identity, forms, redirects, and external destinations before making a brand assessment.',
+      expectedOutcome: 'Separate observed identity signals from publisher claims, shared services, and unresolved resemblance leads.',
       href: '#web-evidence',
       priority: 'medium',
     });
@@ -518,6 +523,7 @@ export function buildLookupDecisionSupport(input: Readonly<{
       id: 'review-acquisition-dependencies',
       label: 'Review transfer dependencies',
       reason: 'Registration dates alone do not describe the DNS, mail, certificate, and website services that require transition.',
+      expectedOutcome: 'Identify dependencies that must be retained, transferred, replaced, or deliberately retired.',
       href: '#web-evidence',
       priority: 'medium',
     });
@@ -526,6 +532,7 @@ export function buildLookupDecisionSupport(input: Readonly<{
       id: 'review-owned-posture',
       label: 'Review delegation and posture evidence',
       reason: 'Confirm registry publication, authoritative responses, mail, and certificate state together.',
+      expectedOutcome: 'Identify whether observed control state aligns with the reviewed owned-domain baseline.',
       href: '#web-evidence',
       priority: 'medium',
     });
@@ -535,6 +542,7 @@ export function buildLookupDecisionSupport(input: Readonly<{
       id: 'review-case-handoff',
       label: 'Record or hand off reviewed evidence',
       reason: 'Keep observed facts, hypotheses, unknowns, and analyst decisions separate in the case workflow.',
+      expectedOutcome: 'Preserve a reviewable record of what is known, inferred, unresolved, and recommended next.',
       href: '#case-response',
       priority: 'low',
     });

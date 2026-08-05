@@ -68,6 +68,11 @@ node bin/whoisleuth.mts reconcile office.json mobile.json external.json --json
 node bin/whoisleuth.mts timeline first-observation.json second-observation.json latest-observation.json --json
 node bin/whoisleuth.mts registry-support example.test --json
 node bin/whoisleuth.mts registry-doctor lookup.json --json
+node bin/whoisleuth.mts registry-cohort saved-lookups.jsonl --json
+node bin/whoisleuth.mts brief lookup.json
+node bin/whoisleuth.mts case-pack cases.json --audience trusted --reviewed --json
+node bin/whoisleuth.mts monitor-once control-manifest.json --json
+node bin/whoisleuth.mts workflow-run domain-triage example.test --approve-network --json --output run.json
 node bin/whoisleuth.mts lookalike-calibrate reviewed-candidates.json --json
 node bin/whoisleuth.mts doctor
 node bin/whoisleuth.mts commands --json
@@ -100,6 +105,10 @@ checkpoint. A checkpoint write failure preserves completed output and returns
 the partial-result exit code. Ctrl-C suppresses partial final output and
 returns exit code 130; a second interrupt performs best-effort temporary-file
 cleanup before exiting immediately.
+Strict local profiles can supply only safe presentation, Fast-mode,
+concurrency, and observer defaults; command-line options override them.
+Supported automation commands can emit JUnit or SARIF and apply explicit
+failure policies without changing their collection result.
 
 The offline `timeline` command orders 2 to 20 saved Lookup documents for one
 domain and compares each adjacent observation. It retains observation times and
@@ -114,6 +123,12 @@ non-comparable evidence separate; the labels are context, not proof of
 independence. `registry-doctor`, `assurance`, `sharing-review`, and
 `lookalike-calibrate` add offline compatibility, change/recovery, sharing, and
 review-yield workflows without contacting the hosted application.
+`registry-cohort` aggregates target-free publication-quality counts from saved
+Lookups, while `registry-scaffold` produces a sanitised synthetic contributor
+fixture. `brief` and `case-pack` create bounded local handoffs, `monitor-once`
+runs one explicit control review rather than a daemon, and `workflow-run`
+executes only installed fixed-recipe steps with per-run network approval and
+analyst-selection pauses.
 
 Bulk also supports fixed-column CSV, domain-only or exact-query output,
 registered, inconclusive, and hard-failure output filters, and bounded A, AAAA,

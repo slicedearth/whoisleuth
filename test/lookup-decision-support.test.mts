@@ -108,6 +108,8 @@ test('decision support keeps conflicts separate from incomplete source compariso
   assert.match(support.entries[1]?.detail ?? '', /no disagreement or equivalence conclusion/u);
   assert.ok(support.actions.some((action) => action.id === 'review-priority-conflict'));
   assert.ok(support.actions.some((action) => action.id === 'review-refresh-options'));
+  assert.ok(support.actions.every((action) => action.expectedOutcome.length > 20));
+  assert.match(support.actions.find((action) => action.id === 'review-priority-conflict')?.expectedOutcome ?? '', /authoritative|unresolved/u);
 });
 
 test('decision support does not turn an unsupported WHOIS service into incident uncertainty', () => {

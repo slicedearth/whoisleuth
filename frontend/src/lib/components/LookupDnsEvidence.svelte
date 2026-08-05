@@ -52,6 +52,18 @@
           minttl: number | null;
         } | null;
       }[];
+      recordMatrix: readonly {
+        type: string;
+        state: string;
+        observations: readonly {
+          nameserver: string;
+          state: string;
+          values: readonly string[];
+          error: string;
+          truncated: boolean;
+          discarded: number;
+        }[];
+      }[];
       limitations: readonly string[];
     } | null;
     rehearsalEvidence?: {
@@ -129,6 +141,29 @@
             </div>
           </details>
         {/if}
+        {#if delegation.recordMatrix.length}
+          <details class="authority-detail record-matrix">
+            <summary>Authoritative record agreement</summary>
+            <div>
+              {#each delegation.recordMatrix as row}
+                <article>
+                  <div><strong>{row.type}</strong><span class={`authority-state matrix-${row.state}`}>{row.state}</span></div>
+                  <ul>
+                    {#each row.observations as observation}
+                      <li>
+                        <b>{observation.nameserver}</b>
+                        <span>{observation.values.join(' · ') || (observation.state === 'not_found' ? 'No record observed' : observation.error || observation.state)}</span>
+                        {#if observation.truncated || observation.discarded > 0}
+                          <small>Retained values are incomplete{observation.discarded > 0 ? ` · ${observation.discarded} discarded` : ''}.</small>
+                        {/if}
+                      </li>
+                    {/each}
+                  </ul>
+                </article>
+              {/each}
+            </div>
+          </details>
+        {/if}
         {#if allowRehearsal && domain}
           <DnsChangeRehearsal
             {domain}
@@ -175,12 +210,21 @@
   .authority-detail>summary{padding:9px 11px;cursor:pointer;font:600 var(--text-xs) var(--mono)}
   .authority-detail>div{display:grid;gap:7px;padding:0 8px 8px}
   .authority-detail p{margin:5px 0 0;overflow-wrap:anywhere}
+  .record-matrix ul{display:grid;gap:5px;margin:8px 0 0;padding:0;list-style:none}
+  .record-matrix li{display:grid;grid-template-columns:minmax(100px,.7fr) minmax(0,1.3fr);gap:8px;font-size:var(--text-2xs);line-height:1.5}
+  .record-matrix li b{font-family:var(--mono);overflow-wrap:anywhere}
+  .record-matrix li span{color:var(--muted);overflow-wrap:anywhere}
+  .record-matrix li small{grid-column:2;color:var(--amber);overflow-wrap:anywhere}
+  .matrix-aligned{color:var(--accent)}
+  .matrix-different{color:var(--amber)}
+  .matrix-partial,.matrix-insufficient{color:var(--muted)}
   .soa-detail{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px;margin:8px 0 0}
   .soa-detail div{min-width:0;padding:6px;border:1px solid var(--border);border-radius:var(--radius-sm)}
   .soa-detail dt{color:var(--muted);font:var(--text-2xs) var(--mono)}
   .soa-detail dd{margin:3px 0 0;overflow-wrap:anywhere;font:600 var(--text-2xs) var(--mono)}
   .authority-state.state-success{color:var(--accent)}
+  .authority-state.state-partial{color:var(--amber)}
   .authority-state.state-lame{color:var(--danger)}
   .authority-state.state-unreachable{color:var(--amber)}
-  @media(max-width:640px){.delegation-sources{grid-template-columns:1fr}.soa-detail{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  @media(max-width:640px){.delegation-sources{grid-template-columns:1fr}.soa-detail{grid-template-columns:repeat(2,minmax(0,1fr))}.record-matrix li{grid-template-columns:1fr;gap:2px}.record-matrix li small{grid-column:1}}
 </style>

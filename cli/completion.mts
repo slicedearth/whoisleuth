@@ -1,18 +1,20 @@
 import { CLI_COMMANDS, type CompletionShell } from './arguments.mts';
 import { INVESTIGATION_PLAN_RECIPES } from './investigation-plan.mts';
 
-const COMMON_OPTIONS = Object.freeze(['--help', '--output', '--force']);
+const COMMON_OPTIONS = Object.freeze(['--help', '--output', '--force', '--config', '--profile']);
 const OPTIONS_BY_COMMAND: Readonly<Record<string, readonly string[]>> = Object.freeze({
-  lookup: ['--json', '--markdown', '--html', '--fast', '--deep', '--observer', '--vantage', '--plan', '--summary', '--verbose', '--strict-exit', '--events', '--quiet', '--no-color'],
-  bulk: ['--json', '--jsonl', '--csv', '--domains', '--queries', '--registered-only', '--inconclusive-only', '--errors-only', '--fast', '--deep', '--concurrency', '--checkpoint', '--resume', '--events', '--quiet', '--no-color'],
+  lookup: ['--json', '--junit', '--markdown', '--html', '--fast', '--deep', '--observer', '--vantage', '--plan', '--summary', '--verbose', '--strict-exit', '--fail-on', '--events', '--quiet', '--no-color'],
+  bulk: ['--json', '--jsonl', '--junit', '--csv', '--domains', '--queries', '--registered-only', '--inconclusive-only', '--errors-only', '--fast', '--deep', '--concurrency', '--checkpoint', '--resume', '--events', '--plan', '--fail-on', '--quiet', '--no-color'],
   'ct-search': ['--json', '--quiet', '--no-color'],
   discover: ['--tlds', '--preset', '--families', '--keyboard', '--dictionary', '--snapshot', '--json', '--jsonl', '--domains', '--quiet', '--no-color'],
-  'discover-scan': ['--tlds', '--preset', '--families', '--keyboard', '--dictionary', '--fast', '--deep', '--scan-limit', '--chunk-size', '--concurrency', '--resolver', '--allowlist', '--checkpoint', '--resume', '--observation-snapshot', '--registered-only', '--inconclusive-only', '--acquisition-only', '--suppressed-only', '--events', '--json', '--jsonl', '--csv', '--domains', '--quiet', '--no-color'],
-  posture: ['--selectors', '--retired-selectors', '--mail-profile', '--json', '--quiet', '--no-color'],
+  'discover-scan': ['--tlds', '--preset', '--families', '--keyboard', '--dictionary', '--fast', '--deep', '--scan-limit', '--chunk-size', '--concurrency', '--resolver', '--allowlist', '--checkpoint', '--resume', '--observation-snapshot', '--registered-only', '--inconclusive-only', '--acquisition-only', '--suppressed-only', '--events', '--plan', '--fail-on', '--json', '--jsonl', '--csv', '--domains', '--quiet', '--no-color'],
+  posture: ['--selectors', '--retired-selectors', '--mail-profile', '--json', '--sarif', '--owned-domain', '--quiet', '--no-color'],
   http: ['--json', '--quiet', '--no-color'],
   tls: ['--json', '--quiet', '--no-color'],
   'registry-support': ['--json', '--quiet', '--no-color'],
   'registry-doctor': ['--json', '--quiet', '--no-color'],
+  'registry-cohort': ['--json', '--quiet', '--no-color'],
+  'registry-scaffold': ['--profile', '--suffix', '--scenario'],
   'risk-calibrate': ['--json', '--quiet', '--no-color'],
   'lookalike-calibrate': ['--json', '--quiet', '--no-color'],
   'verify-artifact': ['--passphrase-file', '--json', '--quiet', '--no-color'],
@@ -23,11 +25,15 @@ const OPTIONS_BY_COMMAND: Readonly<Record<string, readonly string[]>> = Object.f
   compare: ['--json', '--quiet', '--no-color'],
   'page-compare': ['--json', '--quiet', '--no-color'],
   'mail-review': ['--json', '--quiet', '--no-color'],
-  'review-evidence': ['--mmdb', '--json', '--quiet', '--no-color'],
+  'review-evidence': ['--mmdb', '--json', '--strict-exit', '--quiet', '--no-color'],
+  brief: ['--json', '--quiet', '--no-color'],
+  'case-pack': ['--audience', '--reviewed', '--json', '--quiet', '--no-color'],
   'domain-control': ['--json', '--quiet', '--no-color'],
+  'monitor-once': ['--previous', '--limit', '--concurrency', '--fail-on', '--json', '--junit', '--quiet', '--no-color'],
   assurance: ['--json', '--quiet', '--no-color'],
   'sharing-review': ['--marking', '--recipient-scope', '--purpose', '--human-reviewed', '--personal-data-reviewed', '--redactions-confirmed', '--json', '--quiet', '--no-color'],
   'workflow-plan': ['--json', '--quiet', '--no-color'],
+  'workflow-run': ['--approve-network', '--resume', '--json', '--quiet', '--no-color'],
   diff: ['--json', '--quiet', '--no-color'],
   reconcile: ['--json', '--quiet', '--no-color'],
   timeline: ['--json', '--quiet', '--no-color'],
@@ -49,6 +55,8 @@ const COMMAND_DESCRIPTIONS: Readonly<Record<string, string>> = Object.freeze({
   tls: 'Inspect one TLS connection',
   'registry-support': 'Explain local registry coverage',
   'registry-doctor': 'Diagnose saved registry collection',
+  'registry-cohort': 'Aggregate target-free registry quality cohorts',
+  'registry-scaffold': 'Create a sanitised registry fixture scaffold',
   'risk-calibrate': 'Replay reviewed Risk labels offline',
   'lookalike-calibrate': 'Summarise reviewed lookalike yield offline',
   'verify-artifact': 'Validate saved evidence offline',
@@ -60,10 +68,14 @@ const COMMAND_DESCRIPTIONS: Readonly<Record<string, string>> = Object.freeze({
   'page-compare': 'Compare saved static page evidence',
   'mail-review': 'Review saved passive mail evidence',
   'review-evidence': 'Review supplied evidence offline',
+  brief: 'Build a decision brief from a saved lookup',
+  'case-pack': 'Build a reviewed case package',
   'domain-control': 'Build or review a domain control manifest',
+  'monitor-once': 'Run one bounded domain control review',
   assurance: 'Review domain change, recovery, or retirement plans',
   'sharing-review': 'Lint an artefact before deliberate sharing',
   'workflow-plan': 'Plan a fixed investigation recipe',
+  'workflow-run': 'Execute approved fixed-recipe steps',
   diff: 'Compare two saved domain lookups',
   reconcile: 'Reconcile independently labelled observations',
   timeline: 'Build same-domain history from saved lookups',
@@ -80,11 +92,13 @@ const VALUE_OPTIONS: Readonly<Record<string, readonly string[]>> = Object.freeze
   '--mail-profile': ['standard', 'defensive-no-mail', 'parked'],
   '--marking': ['clear', 'green', 'amber', 'amber-strict', 'red'],
   '--recipient-scope': ['public', 'community', 'organization', 'named-recipients'],
+  '--audience': ['internal', 'trusted', 'public'],
   '--concurrency': ['1', '2', '3', '4', '5', '6', '7', '8'],
 });
 
 const FILE_OPTIONS = Object.freeze([
   '--checkpoint',
+  '--config',
   '--allowlist',
   '--dictionary',
   '--output',
@@ -93,11 +107,15 @@ const FILE_OPTIONS = Object.freeze([
   '--public-key-file',
   '--snapshot',
   '--observation-snapshot',
+  '--previous',
+  '--resume',
 ]);
 
 const TEXT_OPTIONS = Object.freeze([
   '--families',
   '--resolver',
+  '--fail-on',
+  '--profile',
   '--purpose',
   '--observer',
   '--retired-selectors',
@@ -193,13 +211,16 @@ function fishCompletion(): string {
   const commandLines = CLI_COMMANDS.map((command) => (
     `complete -c whoisleuth -n '__fish_use_subcommand' -a '${command}' -d '${COMMAND_DESCRIPTIONS[command] || command}'`
   ));
-  const optionLines = Object.entries(OPTIONS_BY_COMMAND).flatMap(([command, options]) => (
-    [...COMMON_OPTIONS, ...options].map((option) => {
+  const optionLine = (condition: string, option: string) => {
       const name = option.replace(/^--/u, '');
       const fileValue = FILE_OPTIONS.includes(option);
       const requiresValue = fileValue || [...Object.keys(VALUE_OPTIONS), ...TEXT_OPTIONS].includes(option);
-      return `complete -c whoisleuth -n '__fish_seen_subcommand_from ${command}' -l ${name}${requiresValue ? ' -r' : ''}${fileValue ? ' -F' : ''}`;
-    })
+      return `complete -c whoisleuth -n '${condition}' -l ${name}${requiresValue ? ' -r' : ''}${fileValue ? ' -F' : ''}`;
+  };
+  const commonCondition = `__fish_seen_subcommand_from ${CLI_COMMANDS.join(' ')}`;
+  const commonOptionLines = COMMON_OPTIONS.map((option) => optionLine(commonCondition, option));
+  const optionLines = Object.entries(OPTIONS_BY_COMMAND).flatMap(([command, options]) => (
+    options.map((option) => optionLine(`__fish_seen_subcommand_from ${command}`, option))
   ));
   const valueLines = Object.entries(VALUE_OPTIONS).flatMap(([option, values]) => (
     values.map((value) => `complete -c whoisleuth -n '__fish_prev_arg_in ${option}' -a '${value}'`)
@@ -211,6 +232,7 @@ complete -c whoisleuth -n '__fish_use_subcommand' -l version
 ${commandLines.join('\n')}
 complete -c whoisleuth -n '__fish_seen_subcommand_from completion' -a 'bash zsh fish powershell'
 complete -c whoisleuth -n '__fish_seen_subcommand_from workflow-plan' -a '${INVESTIGATION_PLAN_RECIPES.join(' ')}'
+${commonOptionLines.join('\n')}
 ${optionLines.join('\n')}
 ${valueLines.join('\n')}
 `;

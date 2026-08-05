@@ -11,6 +11,7 @@ import { analyzeCredentialSurfaceProfile } from './credential-surface-profile.mt
 import { analyzeClientBehavior } from './client-behavior-profile.mts';
 import { createObservation } from './observation.mts';
 import { createPageFingerprints } from './page-fingerprints.mts';
+import { detectPageLanguageSignal } from './page-language-signals.mts';
 import { analyzePageRole } from './page-role-profile.mts';
 import { analyzeCspMetaPolicies } from './response-policy.mts';
 import { analyzeStaticHtml } from './static-html-analysis.mts';
@@ -37,7 +38,6 @@ type ResourceReference = { type: ResourceType; value: string };
 type TrackingIdentifier = { type: string; value: string };
 
 const MAX_TITLE_LENGTH = 200;
-const MAX_PHISHING_MATCH_LENGTH = 200;
 const MAX_EXTERNAL_ASSET_HOSTS = 20;
 const MAX_IDENTITY_TAGS = 512;
 const MAX_IDENTITY_TAG_LENGTH = 4096;
@@ -64,14 +64,6 @@ const TITLE_RE = /<title[^>]*>([\s\S]*?)<\/title>/i;
 // A password input is the single strongest static-HTML tell that a page is
 // asking for credentials, regardless of what it claims to be.
 const PASSWORD_FIELD_RE = /<input\b[^>]*\btype\s*=\s*["']?password["']?/i;
-
-// Common urgency/social-engineering phrasing used to pressure a visitor
-// into entering credentials - not exhaustive, and legitimate sites
-// occasionally use similar language too, so this is one signal among
-// several, not a verdict on its own (same framing as FOR_SALE_TEXT_RE in
-// availability.js).
-const PHISHING_LANGUAGE_RE =
-  /(verify your account|confirm your identity|unusual (?:sign-?in|login) activity|account has been (?:suspended|limited|locked|restricted)|your account will be (?:suspended|closed|locked|terminated)|click here to (?:verify|confirm|update|restore)|security alert|immediate action required|re-?activate your account|unauthorized access detected|update your (?:payment|billing) (?:information|details)|confirm your password|your password (?:has expired|will expire soon)|connect your wallet|enter your (?:seed|recovery) phrase|verify your (?:seed|recovery) phrase|enter your private key)/i;
 
 // <img>/<script>/<link> tags loading a resource from an absolute, external
 // URL - a common phishing-kit tell is hotlinking the real brand's own logo/
@@ -611,7 +603,6 @@ function extractPageIdentity(html: string, domain: string, options: HtmlSignalOp
 }
 
 function extractHtmlSignals(html: string, domain: string, options: HtmlSignalOptions = {}) {
-  const phishingMatch = html.match(PHISHING_LANGUAGE_RE);
   const pageIdentity = options.includePageIdentity === false ? null : extractPageIdentity(html, domain, options);
   const includeCredentialSurfaceProfile = pageIdentity && options.includeCredentialSurfaceProfile === true;
   const includeStructuredDataIdentity = pageIdentity && options.includeStructuredDataIdentity !== false;
@@ -619,12 +610,13 @@ function extractHtmlSignals(html: string, domain: string, options: HtmlSignalOpt
   const includeDerivedPageProfiles = Boolean(pageIdentity);
   const baseUrl = resolvedBaseUrl(domain, options.baseUrl);
   const htmlAnalysis = includeCredentialSurfaceProfile || includeStructuredDataIdentity || includeTechnologyProfile || includeDerivedPageProfiles
-    ? analyzeStaticHtml(html, { baseUrl })
+    ? analyzeStaticHtml(html, { baseUrl, includeVisibleText: true })
     : null;
+  const pageLanguageSignal = detectPageLanguageSignal(html, pageIdentity?.documentLanguage, htmlAnalysis ?? undefined);
   return {
     pageTitle: extractPageTitle(html),
     hasPasswordField: PASSWORD_FIELD_RE.test(html),
-    phishingLanguageMatch: phishingMatch ? boundedHtmlText(phishingMatch[0], MAX_PHISHING_MATCH_LENGTH) : null,
+    phishingLanguageMatch: pageLanguageSignal?.label ?? null,
     hasExternalFormAction: pageIdentity
       ? pageIdentity.forms.externalActionOrigins.length > 0
       : null,

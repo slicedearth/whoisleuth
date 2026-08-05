@@ -23,16 +23,16 @@
 
 <section class="presentation card" aria-labelledby="lookup-presentation-title">
   <div>
-    <p class="eyebrow">Presentation only</p>
-    <h3 id="lookup-presentation-title">Evidence view</h3>
+    <p class="eyebrow">Result layout</p>
+    <h3 id="lookup-presentation-title">Choose what to review</h3>
     <p>{densityDetail} These controls do not change collection, source states, Risk, availability, exports, or saved evidence.</p>
   </div>
-  <label>Task
+  <label>Focus
     <select value={task} onchange={(event) => setTask(event.currentTarget.value as LookupTaskView)}>
       {#each LOOKUP_TASK_VIEWS as option}<option value={option.id}>{option.label}</option>{/each}
     </select>
   </label>
-  <label>Density
+  <label>Detail
     <select value={density} onchange={(event) => setDensity(event.currentTarget.value as LookupEvidenceDensity)}>
       {#each LOOKUP_EVIDENCE_DENSITIES as option}<option value={option.id}>{option.label}</option>{/each}
     </select>

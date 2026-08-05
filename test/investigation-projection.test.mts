@@ -203,6 +203,61 @@ describe('typed local investigation projection', () => {
       && item.limitations.some((value) => value.includes('not comparable'))));
   });
 
+  test('projects retained external DNS and certificate observations as traceable direct edges', () => {
+    const evidencePins = [
+      {
+        id: 'pin-ip',
+        field: 'A',
+        category: 'dns',
+        label: 'External DNS finding',
+        value: '192.0.2.44',
+        source: 'Provider report: Reviewed observations',
+        sourceSchema: {
+          collection: 'external_observations',
+          schema: 'whoisleuth.dns-observation-rows',
+          version: 1,
+        },
+        observedAt: EARLY,
+        completeness: 'complete',
+        limitations: ['Imported and not independently verified.'],
+        createdAt: LATE,
+      },
+      {
+        id: 'pin-cert',
+        field: 'fingerprintSha256',
+        category: 'certificate',
+        label: 'External certificate finding',
+        value: SHA_A,
+        source: 'Provider report: Reviewed observations',
+        sourceSchema: {
+          collection: 'external_observations',
+          schema: 'whoisleuth.certificate-observation-rows',
+          version: 1,
+        },
+        observedAt: LATE,
+        completeness: 'partial',
+        limitations: [],
+        createdAt: LATE,
+      },
+    ];
+    const result = buildInvestigationProjection(currentInput({
+      cases: {
+        version: CASE_SCHEMA_VERSION,
+        cases: [caseRecord('case-a', 'observed.invalid', [], { evidencePins })],
+      },
+    }), { generatedAt: LATE });
+
+    assert.equal(entity(result, 'ip_address').canonical, '192.0.2.44');
+    assert.equal(entity(result, 'certificate').canonical, SHA_A);
+    assert.equal(relationship(result, 'domain_resolved_to_ip').classification, 'direct');
+    assert.equal(relationship(result, 'domain_presented_certificate').classification, 'direct');
+    const observations = result.observations.filter((item) => item.kind === 'case_external_observation');
+    assert.equal(observations.length, 2);
+    assert.equal(observations[0]?.schemaVersions.externalObservation, 1);
+    assert.ok(observations.some((item) => item.complete === true));
+    assert.ok(observations.some((item) => item.complete === false));
+  });
+
   test('projects brands, official domains, favicon identity, campaigns, and derived case membership', () => {
     const profile = {
       id: 'brand-a',

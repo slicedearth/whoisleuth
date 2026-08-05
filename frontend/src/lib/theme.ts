@@ -5,7 +5,7 @@ export type ThemePreference = 'dark' | 'light' | 'system';
 export type ResolvedTheme = 'dark' | 'light';
 
 const DARK_THEME_COLOR = '#0f1115';
-const LIGHT_THEME_COLOR = '#edf2f7';
+const LIGHT_THEME_COLOR = '#d4dde7';
 
 export function normalizeThemePreference(value: unknown): ThemePreference {
   return value === 'dark' || value === 'light' ? value : 'system';

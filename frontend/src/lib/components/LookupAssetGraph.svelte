@@ -132,7 +132,7 @@
   .edge-list strong{overflow-wrap:anywhere}
   .edge-list div span{color:var(--accent);font:650 var(--text-2xs) var(--mono)}
   .edge-list p,.edge-list small{margin:0;color:var(--muted);font-size:var(--text-2xs);line-height:1.45;overflow-wrap:anywhere}
-  .edge-list .boundary{width:max-content;padding:2px 6px;border:1px solid var(--border);border-radius:999px;color:var(--cyan);font:650 var(--text-2xs) var(--mono);text-transform:capitalize}
+  .edge-list .boundary{width:max-content;padding:2px 6px;border:1px solid var(--border);border-radius:999px;color:var(--source-network);font:650 var(--text-2xs) var(--mono);text-transform:capitalize}
   .edge-list a{width:max-content;font:650 var(--text-2xs) var(--mono)}
   .limits ul{margin:0;padding-left:18px;color:var(--muted);font-size:var(--text-xs);line-height:1.5}
   .source-ledger>ul{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin:0;padding:0;list-style:none}

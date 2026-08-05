@@ -1,16 +1,14 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
-  import { getContext, onMount } from 'svelte';
+  import { getContext, onMount, tick } from 'svelte';
   import { page } from '$app/state';
-  import AnalystEvidencePivots from '$lib/components/AnalystEvidencePivots.svelte';
-  import EvidenceTopology from '$lib/components/EvidenceTopology.svelte';
   import LocalSectionNav from '$lib/components/LocalSectionNav.svelte';
+  import LookupAtAGlance from '$lib/components/LookupAtAGlance.svelte';
   import LookupAssessment from '$lib/components/LookupAssessment.svelte';
   import LookupAcquisitionDueDiligence from '$lib/components/LookupAcquisitionDueDiligence.svelte';
-  import LookupActivationContext from '$lib/components/LookupActivationContext.svelte';
-  import LookupAssetGraph from '$lib/components/LookupAssetGraph.svelte';
+  import LookupFamilySummary from '$lib/components/LookupFamilySummary.svelte';
   import LookupBrandMimicryReview from '$lib/components/LookupBrandMimicryReview.svelte';
-  import LookupLifecycle from '$lib/components/LookupLifecycle.svelte';
+  import LookupVisualWorkspace, { type LookupVisualView } from '$lib/components/LookupVisualWorkspace.svelte';
   import LookupDecisionSupport from '$lib/components/LookupDecisionSupport.svelte';
   import LookupClaimReadiness from '$lib/components/LookupClaimReadiness.svelte';
   import LookupEvidenceQuality from '$lib/components/LookupEvidenceQuality.svelte';
@@ -78,7 +76,6 @@
   import {
     normalizeLookupEvidenceDensity,
     normalizeLookupTaskView,
-    lookupTaskInitiallyExpands,
     readLookupPresentation,
     writeLookupPresentation,
     type LookupEvidenceDensity,
@@ -110,8 +107,11 @@
   let profile=$state<BrandProfile|null>(null);
   let draftStatus=$state('');
   let caseRecord=$state<CaseRecord|null>(null);let caseNote=$state('');let caseStatus=$state('');
-  let evidenceDensity=$state<LookupEvidenceDensity>('standard');
+  let evidenceDensity=$state<LookupEvidenceDensity>('summary');
+  let expandedResultSections=$state<string[]>([]);
+  let collapsedResultSections=$state<string[]>([]);
   let taskView=$state<LookupTaskView>('general');
+  let visualView=$state<LookupVisualView>('sources');
   let freshnessPolicyMode=$state<'task-default'|'analyst-custom'>('task-default');
   let customFreshnessThresholds=$state<LookupFreshnessThresholds>({registration:30,network:7,web:3});
   const freshnessPolicyInput=$derived<LookupFreshnessPolicyInput|undefined>(freshnessPolicyMode==='analyst-custom'?{id:'analyst-custom',thresholdsDays:customFreshnessThresholds}:undefined);
@@ -195,6 +195,7 @@
   const externalRiskContext=$derived(lookupAnalysis.externalRiskContext);
   const opportunity=$derived(lookupAnalysis.opportunity);
   const risk=$derived(lookupAnalysis.risk);
+  const riskSensitivity=$derived(lookupAnalysis.riskSensitivity);
   const outreach=$derived(lookupAnalysis.outreach);
   const abuseRecipientResolution=$derived(lookupAnalysis.abuseRecipientResolution);
   const sourceOnlyCount=$derived(lookupAnalysis.sourceOnlyCount);
@@ -227,6 +228,7 @@
   const lookupSourceRefreshPlan=$derived(lookupAnalysis.lookupSourceRefreshPlan);
   const lookupDecisionSupport=$derived(lookupAnalysis.lookupDecisionSupport);
   const lookupClaimReadiness=$derived(lookupAnalysis.lookupClaimReadiness);
+  const lookupEvidenceImpactPlan=$derived(lookupAnalysis.lookupEvidenceImpactPlan);
   const evidenceQualityMatrix=$derived(lookupAnalysis.evidenceQualityMatrix);
   const lookupSummary=$derived(lookupAnalysis.lookupSummary);
   const lookupInvestigationBrief=$derived(lookupAnalysis.lookupInvestigationBrief);
@@ -282,11 +284,40 @@
   function cancelLookup(){lookupRequestController.cancel();}
   function setEvidenceDensity(value:LookupEvidenceDensity){
     evidenceDensity=normalizeLookupEvidenceDensity(value);
+    expandedResultSections=[];
+    collapsedResultSections=[];
     writeLookupPresentation(localStorage,{density:evidenceDensity,task:taskView});
+  }
+  function visualViewForTask(value:LookupTaskView):LookupVisualView{
+    if(value==='acquisition'||value==='owned')return 'timeline';
+    if(value==='brand'||value==='incident')return 'relationships';
+    return 'sources';
   }
   function setTaskView(value:LookupTaskView){
     taskView=normalizeLookupTaskView(value);
+    visualView=visualViewForTask(taskView);
     writeLookupPresentation(localStorage,{density:evidenceDensity,task:taskView});
+  }
+  async function showSectionDetail(sectionId:string){
+    expandedResultSections=expandedResultSections.includes(sectionId)
+      ? expandedResultSections
+      : [...expandedResultSections,sectionId];
+    collapsedResultSections=collapsedResultSections.filter((id)=>id!==sectionId);
+    await tick();
+    document.getElementById(sectionId)?.scrollIntoView({block:'start',behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});
+  }
+  async function hideSectionDetail(sectionId:string){
+    expandedResultSections=expandedResultSections.filter((id)=>id!==sectionId);
+    collapsedResultSections=collapsedResultSections.includes(sectionId)
+      ? collapsedResultSections
+      : [...collapsedResultSections,sectionId];
+    await tick();
+    document.getElementById(sectionId)?.scrollIntoView({block:'start',behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});
+  }
+  function sectionDetailVisible(sectionId:string):boolean{
+    return evidenceDensity==='summary'
+      ? expandedResultSections.includes(sectionId)
+      : !collapsedResultSections.includes(sectionId);
   }
   function setFreshnessPolicy(value:{mode:'task-default'|'analyst-custom';thresholdsDays:LookupFreshnessThresholds}){
     freshnessPolicyMode=value.mode;
@@ -297,6 +328,7 @@
     const presentation=readLookupPresentation(localStorage);
     evidenceDensity=presentation.density;
     taskView=presentation.task;
+    visualView=visualViewForTask(taskView);
     const restored=readLookupWorkflowState();
     if(restored){query=restored.query;lookupMode=restored.lookupMode;includeExternalIntelligence=restored.includeExternalIntelligence;includeMalwareHostIntelligence=restored.includeMalwareHostIntelligence;includeMalwareIocIntelligence=restored.includeMalwareIocIntelligence;includeSecurityTxt=restored.includeSecurityTxt;error=restored.error;result=restored.result;}
     const q=page.url.searchParams.get('q');
@@ -355,7 +387,7 @@
       return;
     }
 
-    loading=true;loadingElapsedMs=0;error='';result=null;caseRecord=null;caseNote='';caseStatus='';serviceDependencyScope='';serviceDependencyFalsePositives='';
+    loading=true;loadingElapsedMs=0;error='';result=null;caseRecord=null;caseNote='';caseStatus='';serviceDependencyScope='';serviceDependencyFalsePositives='';expandedResultSections=[];collapsedResultSections=[];
     const target=entries[0];if(!target)return;
     const lookupUrl=buildLookupRequestUrl(target,{
       mode:lookupMode,
@@ -426,32 +458,62 @@
 
     <LocalSectionNav label="Result sections" links={resultSectionLinks()} trackCurrent />
 
-    <div class="evidence-density density-{evidenceDensity}">
+    {#snippet overviewSection()}
     <section class="result-section family-overview" id="overview" aria-labelledby="overview-title">
       <h3 id="overview-title">Overview</h3>
 
-      {#if availability.applicable!==false}
-        <LookupAssessment detail={show(availability.detail||availability.state)} confidence={show(availability.confidence)} {risk} {opportunity} signals={[...lookupSummary.signals]} trusted={String(profileSignals.trusted||'')} />
-      {/if}
-
-      <LookupDecisionSupport
+      <LookupAtAGlance
         support={lookupDecisionSupport}
-        onbriefcopy={copyInvestigationBrief}
-        onbriefhandoff={caseRecord ? recordInvestigationBriefHandoff : null}
+        quality={evidenceQualityMatrix}
+        signals={lookupSummary.signals}
       />
 
-      <LookupClaimReadiness readiness={lookupClaimReadiness} />
-
-      {#if lookupEvidenceDocument}
-        <LookupInvestigationCapsule
-          applicationVersion={__WHOISLEUTH_VERSION__}
-          lookupEvidence={lookupEvidenceDocument}
-          brief={lookupInvestigationBrief}
-          graph={lookupAssetGraph}
-          {caseRecord}
-        />
+      {#if availability.applicable!==false}
+        <LookupAssessment detail={show(availability.detail||availability.state)} confidence={show(availability.confidence)} {risk} {riskSensitivity} {opportunity} signals={[...lookupSummary.signals]} trusted={String(profileSignals.trusted||'')} />
       {/if}
 
+      {#if evidenceDensity!=='summary'}
+        <LookupDecisionSupport
+          support={lookupDecisionSupport}
+          onbriefcopy={copyInvestigationBrief}
+          onbriefhandoff={caseRecord ? recordInvestigationBriefHandoff : null}
+        />
+        <LookupClaimReadiness readiness={lookupClaimReadiness} impact={lookupEvidenceImpactPlan} />
+
+        {#if lookupEvidenceDocument}
+          <LookupInvestigationCapsule
+            applicationVersion={__WHOISLEUTH_VERSION__}
+            lookupEvidence={lookupEvidenceDocument}
+            brief={lookupInvestigationBrief}
+            graph={lookupAssetGraph}
+            {caseRecord}
+          />
+        {/if}
+
+        {#if result?.type==='domain'}
+          <LookupAcquisitionDueDiligence
+            review={acquisitionDueDiligence}
+            target={caseDomain}
+            observedAt={lookupObservedAt}
+          />
+        {/if}
+      {/if}
+    </section>
+    {/snippet}
+
+    {#snippet webSection()}
+    {#if hasWebEvidence}
+    <section class="result-section family-web" id="web-evidence" aria-labelledby="web-evidence-title">
+      <h3 id="web-evidence-title">{result?.type==='domain'?'Web and DNS evidence':'DNS evidence'}</h3>
+      <LookupFamilySummary
+        label={result?.type==='domain'?'Web and DNS evidence':'DNS evidence'}
+        description="Review point-in-time DNS, HTTP, TLS, page identity, technology, and passive posture evidence without merging their source states."
+        metrics={[`${evidenceQualityMatrix.entries.filter((entry)=>['network','web'].includes(entry.category.toLowerCase())).length} source records`, `${evidenceQualityMatrix.entries.filter((entry)=>['network','web'].includes(entry.category.toLowerCase())&&entry.state!=='complete').length} limited`]}
+        expanded={sectionDetailVisible('web-evidence')}
+        onshow={()=>void showSectionDetail('web-evidence')}
+        onhide={()=>void hideSectionDetail('web-evidence')}
+      />
+      {#if sectionDetailVisible('web-evidence')}
       {#if sslbl.sslblVersion===1&&sslbl.verdict==='listed'}
         <aside class="sslbl-review-lead" aria-labelledby="sslbl-review-lead-title">
           <div>
@@ -462,55 +524,7 @@
           <a class="button secondary" href="#evidence-sslbl">Review certificate evidence</a>
         </aside>
       {/if}
-
-      <EvidenceTopology
-        id="lookup-evidence-topology"
-        title="Evidence topology"
-        description="Use this bounded map to jump to separately attributed source and derived-evidence sections. A missing or failed source remains explicit and is not treated as evidence of absence."
-        target={evidenceTopologyTarget}
-        nodes={evidenceTopologyNodes}
-      />
-
-      <LookupAssetGraph graph={lookupAssetGraph} />
-
-      <AnalystEvidencePivots pivots={analystEvidencePivots} />
-
-      <LookupLifecycle events={activationContext.events} />
-
-      {#if result.type==='domain'}
-        <LookupActivationContext context={activationContext} />
-        <LookupAcquisitionDueDiligence
-          review={acquisitionDueDiligence}
-          target={caseDomain}
-          observedAt={lookupObservedAt}
-        />
-      {/if}
-
-      <LookupEvidenceQuality
-        matrix={evidenceQualityMatrix}
-        refreshPlan={lookupSourceRefreshPlan}
-        query={String(result?.query || caseDomain)}
-        depth={lookupEvidenceDepth}
-        timing={lookupTiming}
-        onpolicychange={setFreshnessPolicy}
-      />
-
-      <LookupOverviewFacts facts={[...lookupSummary.facts]} diagnostics={[...lookupSummary.diagnostics]} hasAssessment={availability.applicable!==false} />
-
-      {#if idnAnalysis && (idnAnalysis.hasIdn || idnAnalysis.referenceMatches.length)}
-        <section class="idn-card evidence-card card" aria-labelledby="idn-title">
-          <header class="section-head"><div><p class="eyebrow">Domain identity</p><h4 id="idn-title">IDN and confusable review</h4></div><span>{idnAnalysis.mappingVersion}</span></header>
-          <div class="idn-forms stat-grid"><article><small>Unicode display</small><strong>{idnAnalysis.unicodeDomain}</strong></article><article><small>DNS-safe ASCII</small><strong>{idnAnalysis.asciiDomain}</strong></article><article><small>Writing scripts</small><strong>{idnAnalysis.scripts.join(', ')||'None detected'}</strong></article></div>
-          {#if idnAnalysis.findings.length}<ul class="finding-list">{#each idnAnalysis.findings as finding}<li class="callout {finding.tone==='warning'?'warn':'info'}"><strong>{finding.label}</strong><span>{finding.detail}</span></li>{/each}</ul>{/if}
-          <p class="card-note">Review Unicode and ASCII forms together. These are bounded similarity indicators and do not establish maliciousness.</p>
-        </section>
-      {/if}
-    </section>
-
-    {#if hasWebEvidence}
-    <section class="result-section family-web" id="web-evidence" aria-labelledby="web-evidence-title">
-      <h3 id="web-evidence-title">{result.type==='domain'?'Web and DNS evidence':'DNS evidence'}</h3>
-      {#if result.type==='domain'}
+      {#if result?.type==='domain'}
         <WebsiteSnapshotManager
           domain={caseDomain}
           canSave={!loading&&lookupEvidenceDepth==='deep'&&Boolean(caseDomain)&&technologyProfile.source==='derived'&&securityPosture.source==='derived'}
@@ -542,7 +556,6 @@
           rehearsalEvidence={dnsRehearsalEvidence}
           domain={caseDomain}
           allowRehearsal={result?.type === 'domain'}
-          initiallyExpanded={lookupTaskInitiallyExpands(taskView,'dns')}
           note="Point-in-time resolver evidence. HTTPS service-binding targets, aliases, ports, and address hints are displayed as publication evidence only; WHOISleuth does not follow or connect to them. Shared DNS infrastructure does not prove common ownership or maliciousness."
         /></div>
         {#if serviceDependencyReview}
@@ -558,11 +571,11 @@
       {/if}
 
       {#if httpEvidence.source==='http'}
-        <div class="evidence-component" id="evidence-http"><LookupHttpEvidence status={statusLabel(show(httpEvidence.status))} complete={httpEvidence.complete!==false} rows={networkDisplay.httpRows} crossOriginRedirect={Boolean(httpEvidence.crossOriginRedirect)} httpsDowngrade={Boolean(httpEvidence.httpsDowngrade)} redirects={networkDisplay.httpRedirects} attempts={networkDisplay.httpAttempts} metadata={networkDisplay.httpMetadata} limitations={Array.isArray(httpEvidence.limitations)?httpEvidence.limitations.map(String):[]} initiallyExpanded={lookupTaskInitiallyExpands(taskView,'http')} /></div>
+        <div class="evidence-component" id="evidence-http"><LookupHttpEvidence status={statusLabel(show(httpEvidence.status))} complete={httpEvidence.complete!==false} rows={networkDisplay.httpRows} crossOriginRedirect={Boolean(httpEvidence.crossOriginRedirect)} httpsDowngrade={Boolean(httpEvidence.httpsDowngrade)} redirects={networkDisplay.httpRedirects} attempts={networkDisplay.httpAttempts} metadata={networkDisplay.httpMetadata} limitations={Array.isArray(httpEvidence.limitations)?httpEvidence.limitations.map(String):[]} /></div>
       {/if}
 
       {#if tlsEvidence.source==='tls'}
-        <div class="evidence-component" id="evidence-tls"><LookupTlsEvidence status={statusLabel(show(tlsEvidence.status))} complete={tlsEvidence.complete!==false} rows={networkDisplay.tlsRows} findings={networkDisplay.tlsFindings} leafCertificate={networkDisplay.leafCertificate} alternativeNames={networkDisplay.alternativeNames} alternativeNamesTruncated={Boolean(tlsAltNames.truncated)} chain={networkDisplay.tlsChain} chainTruncated={Boolean(tlsEvidence.chainTruncated)} validationDetails={networkDisplay.tlsValidation} limitations={Array.isArray(tlsEvidence.limitations)?tlsEvidence.limitations.map(String):[]} validFrom={typeof tlsCertificate.validFrom==='string'?tlsCertificate.validFrom:null} validTo={typeof tlsCertificate.validTo==='string'?tlsCertificate.validTo:null} observedAt={lookupObservedAt} initiallyExpanded={lookupTaskInitiallyExpands(taskView,'tls')} /></div>
+        <div class="evidence-component" id="evidence-tls"><LookupTlsEvidence status={statusLabel(show(tlsEvidence.status))} complete={tlsEvidence.complete!==false} rows={networkDisplay.tlsRows} findings={networkDisplay.tlsFindings} leafCertificate={networkDisplay.leafCertificate} alternativeNames={networkDisplay.alternativeNames} alternativeNamesTruncated={Boolean(tlsAltNames.truncated)} chain={networkDisplay.tlsChain} chainTruncated={Boolean(tlsEvidence.chainTruncated)} validationDetails={networkDisplay.tlsValidation} limitations={Array.isArray(tlsEvidence.limitations)?tlsEvidence.limitations.map(String):[]} validFrom={typeof tlsCertificate.validFrom==='string'?tlsCertificate.validFrom:null} validTo={typeof tlsCertificate.validTo==='string'?tlsCertificate.validTo:null} observedAt={lookupObservedAt} /></div>
         <div class="evidence-component"><LookupCertificatePolicyReview review={certificatePolicyReview} /></div>
       {/if}
 
@@ -613,7 +626,6 @@
           trackingIdentifiers={pageDisplay.trackingIdentifiers}
           fingerprints={pageDisplay.fingerprints}
           limitations={stringList(pageIdentity.limitations)}
-          initiallyExpanded={lookupTaskInitiallyExpands(taskView,'page-identity')}
         /></div>
       {/if}
 
@@ -629,7 +641,6 @@
           methods={credentialSurface.methods}
           actions={credentialSurface.actions}
           limitations={pageDisplay.credentialSurfaceLimitations}
-          initiallyExpanded={lookupTaskInitiallyExpands(taskView,'credential-surface')}
         /></div>
       {/if}
 
@@ -640,7 +651,6 @@
           summary={pageDisplay.securityPostureSummary}
           findings={pageDisplay.securityPostureFindings}
           limitations={pageDisplay.securityPostureLimitations}
-          initiallyExpanded={lookupTaskInitiallyExpands(taskView,'security-posture')}
         /></div>
       {/if}
 
@@ -650,7 +660,6 @@
           complete={Boolean(structuredDataIdentity.complete)}
           entities={pageDisplay.structuredIdentities}
           limitations={pageDisplay.structuredIdentityLimitations}
-          initiallyExpanded={lookupTaskInitiallyExpands(taskView,'structured-identity')}
         /></div>
       {/if}
 
@@ -666,7 +675,6 @@
           libraryCatalog={boundedTechnologyText((browserLibraryProfile.catalog as JsonRecord)?.version,80)}
           libraries={pageDisplay.browserLibraries}
           libraryLimitations={pageDisplay.browserLibraryLimitations}
-          initiallyExpanded={lookupTaskInitiallyExpands(taskView,'technology')}
         /></div>
       {/if}
 
@@ -685,20 +693,41 @@
         /></div>
       {/if}
 
-      {#if pageComparison || (profile?.pageBaseline && result.type==='domain')}
-        <div class="evidence-component"><LookupPageComparison comparison={pageDisplay.pageComparison} unavailable={Boolean(!pageComparison&&profile?.pageBaseline&&result.type==='domain')} /></div>
+      {#if pageComparison || (profile?.pageBaseline && result?.type==='domain')}
+        <div class="evidence-component"><LookupPageComparison comparison={pageDisplay.pageComparison} unavailable={Boolean(!pageComparison&&profile?.pageBaseline&&result?.type==='domain')} /></div>
       {/if}
       {#if brandMimicryReview}
         <div class="evidence-component"><LookupBrandMimicryReview review={brandMimicryReview} /></div>
       {/if}
+      {/if}
     </section>
     {/if}
+    {/snippet}
 
+    {#snippet registrySection()}
     <section class="result-section family-registry" id="registry" aria-labelledby="registry-title">
-      <h3 id="registry-title">Registry sources</h3>
+      <h3 id="registry-title">Registration</h3>
 
+      <LookupFamilySummary
+        label="Registration"
+        description="Compare authoritative registry evidence with separately attributed registrar RDAP and WHOIS publications."
+        metrics={[`${comparison.counts.equivalent} equivalent`, `${comparison.counts.conflict} conflicts`, `${sourceOnlyCount+redactedComparisonCount+limitedComparisonCount} limited or source-only`]}
+        expanded={sectionDetailVisible('registry')}
+        onshow={()=>void showSectionDetail('registry')}
+        onhide={()=>void hideSectionDetail('registry')}
+      />
+      {#if sectionDetailVisible('registry')}
       {#if registryAccess.suffix}
         <RegistryAccessNotice access={registryAccess} />
+      {/if}
+
+      {#if idnAnalysis && (idnAnalysis.hasIdn || idnAnalysis.referenceMatches.length)}
+        <section class="idn-card evidence-card card" aria-labelledby="idn-title">
+          <header class="section-head"><div><p class="eyebrow">Domain identity</p><h4 id="idn-title">IDN and confusable review</h4></div><span>{idnAnalysis.mappingVersion}</span></header>
+          <div class="idn-forms stat-grid"><article><small>Unicode display</small><strong>{idnAnalysis.unicodeDomain}</strong></article><article><small>DNS-safe ASCII</small><strong>{idnAnalysis.asciiDomain}</strong></article><article><small>Writing scripts</small><strong>{idnAnalysis.scripts.join(', ')||'None detected'}</strong></article></div>
+          {#if idnAnalysis.findings.length}<ul class="finding-list">{#each idnAnalysis.findings as finding}<li class="callout {finding.tone==='warning'?'warn':'info'}"><strong>{finding.label}</strong><span>{finding.detail}</span></li>{/each}</ul>{/if}
+          <p class="card-note">Review Unicode and ASCII forms together. These are bounded similarity indicators and do not establish maliciousness.</p>
+        </section>
       {/if}
 
       <div class="evidence-component" id="evidence-registry"><LookupRegistrySources
@@ -706,7 +735,7 @@
         comparisonRows={registryDisplay.comparisonRows}
         comparisonHasConflicts={comparison.counts.conflict>0}
         rdapError={rdap.error?String(rdap.error):''}
-        resultType={String(result.type)}
+        resultType={String(result?.type||'')}
         {rdapParsed}
         rdapPartialDetail={registryDisplay.rdapPartialDetail}
         rdapRows={registryDisplay.rdapRows}
@@ -718,7 +747,7 @@
         registrar={registryDisplay.registrarRdap}
       /></div>
 
-      {#if result.type==='domain' && Array.isArray(rdapParsed.redactions) && rdapParsed.redactions.length}
+      {#if result?.type==='domain' && Array.isArray(rdapParsed.redactions) && rdapParsed.redactions.length}
         <div class="evidence-component"><RegistrationDisclosurePlanner
           domain={caseDomain}
           observedAt={lookupObservedAt}
@@ -740,47 +769,141 @@
           fetchedAt={dateTimeAttribute(observedNetworkRdap.fetchedAt)||''}
           rows={pageDisplay.observedNetworkRows}
           limitations={pageDisplay.observedNetworkLimitations}
-          initiallyExpanded={lookupTaskInitiallyExpands(taskView,'network-context')}
         /></div>
       {/if}
+      {/if}
     </section>
+    {/snippet}
 
-    {#if threatIntelligenceProviders.length}
-      <section class="result-section family-network" id="external-intelligence" aria-labelledby="external-intelligence-title">
-        <h3 id="external-intelligence-title">External intelligence</h3>
-        <LookupExternalIntelligence providers={threatIntelligenceProviders} riskContext={externalRiskContext} riskModelVersion={risk?.modelVersion ?? null} showValue={show} {formatDate} />
-      </section>
-    {/if}
+    {#snippet relationshipsSection()}
+    <section class="result-section family-relationships" id="relationships-history" aria-labelledby="relationships-history-title">
+      <h3 id="relationships-history-title">Relationships and history</h3>
+      <LookupFamilySummary
+        label="Relationships and history"
+        description="Inspect source coverage, exact observed relationships, optional passive pivots, and dated lifecycle events in one workspace."
+        metrics={[`${evidenceTopologyNodes.length} mapped sources`, `${lookupAssetGraph.edges.length} relationships`, `${activationContext.events.filter((event)=>Boolean(event.date)).length} dated events`]}
+        expanded={sectionDetailVisible('relationships-history')}
+        onshow={()=>void showSectionDetail('relationships-history')}
+        onhide={()=>void hideSectionDetail('relationships-history')}
+      />
+      {#if sectionDetailVisible('relationships-history')}
+        <LookupVisualWorkspace
+          view={visualView}
+          setview={(value)=>visualView=value}
+          target={evidenceTopologyTarget}
+          nodes={evidenceTopologyNodes}
+          graph={lookupAssetGraph}
+          pivots={analystEvidencePivots}
+          events={activationContext.events}
+          context={result?.type==='domain'?activationContext:null}
+        />
+      {/if}
+    </section>
+    {/snippet}
 
+    {#snippet sourceQualitySection()}
+    <section class="result-section family-quality" id="source-quality" aria-labelledby="source-quality-title">
+      <h3 id="source-quality-title">Source quality</h3>
+      <LookupFamilySummary
+        label="Source quality"
+        description="Review collection completeness, freshness, timing, provenance, and diagnostic routes before relying on a conclusion."
+        metrics={[`${evidenceQualityMatrix.completeCount} complete`, `${evidenceQualityMatrix.limitedCount} limited`, `${evidenceQualityMatrix.entries.length} records`]}
+        expanded={sectionDetailVisible('source-quality')}
+        onshow={()=>void showSectionDetail('source-quality')}
+        onhide={()=>void hideSectionDetail('source-quality')}
+      />
+      {#if sectionDetailVisible('source-quality')}
+        <LookupEvidenceQuality
+          matrix={evidenceQualityMatrix}
+          refreshPlan={lookupSourceRefreshPlan}
+          query={String(result?.query || caseDomain)}
+          depth={lookupEvidenceDepth}
+          timing={lookupTiming}
+          onpolicychange={setFreshnessPolicy}
+        />
+        <LookupOverviewFacts facts={[...lookupSummary.facts]} diagnostics={[...lookupSummary.diagnostics]} hasAssessment={availability.applicable!==false} />
+      {/if}
+    </section>
+    {/snippet}
+
+    {#snippet caseSection()}
     {#if hasCaseSection}
       <section class="result-section family-analyst" id="case-response" aria-labelledby="case-response-title">
         <h3 id="case-response-title">Case and response</h3>
-
+        <LookupFamilySummary
+          label="Case and response"
+          description="Save reviewed evidence, keep analyst assertions separate, and prepare human-reviewed response routes without sending anything automatically."
+          metrics={[caseRecord?'Case saved':'No case saved', `${abuseRecipientResolution.recipients.length} published routes`]}
+          expanded={sectionDetailVisible('case-response')}
+          onshow={()=>void showSectionDetail('case-response')}
+          onhide={()=>void hideSectionDetail('case-response')}
+        />
+        {#if sectionDetailVisible('case-response')}
         <LookupCaseResponse domain={caseDomain} record={caseRecord} note={caseNote} {caseStatus} {draftStatus} {outreach} recipientResolution={abuseRecipientResolution} setNote={(value) => caseNote = value} createCase={openLookupCase} addNote={addLookupNote} recordRecipient={recordAbuseRecipient} {copyDraft} statusLabel={caseStatusLabel} dispositionLabel={caseDispositionLabel} />
         {#if caseRecord && checkpointFacts.length}
           <LookupEvidenceCheckpoint facts={checkpointFacts} pins={caseRecord.evidencePins} onsave={saveEvidenceCheckpoint} />
         {/if}
+        {/if}
       </section>
     {/if}
+    {/snippet}
 
-    <section class="result-section family-raw" id="raw-data" aria-labelledby="raw-data-title">
-      <h3 id="raw-data-title">Raw evidence</h3>
-      <details class="raw card"><summary>Raw unified response</summary><pre>{JSON.stringify(result,null,2)}</pre></details>
+    {#snippet advancedSection()}
+    <section class="result-section family-raw" id="advanced-evidence" aria-labelledby="advanced-evidence-title">
+      <h3 id="advanced-evidence-title">Advanced evidence</h3>
+      <LookupFamilySummary
+        label="Advanced evidence"
+        description="Open optional external intelligence and the bounded unified response only when the investigation requires their additional detail."
+        metrics={[`${threatIntelligenceProviders.length} external providers`, 'Raw response available']}
+        expanded={sectionDetailVisible('advanced-evidence')}
+        onshow={()=>void showSectionDetail('advanced-evidence')}
+        onhide={()=>void hideSectionDetail('advanced-evidence')}
+      />
+      {#if sectionDetailVisible('advanced-evidence')}
+        {#if threatIntelligenceProviders.length}
+          <section class="advanced-block" id="external-intelligence" aria-labelledby="external-intelligence-title">
+            <h4 id="external-intelligence-title">External intelligence</h4>
+            <LookupExternalIntelligence providers={threatIntelligenceProviders} riskContext={externalRiskContext} riskModelVersion={risk?.modelVersion ?? null} showValue={show} {formatDate} />
+          </section>
+        {/if}
+        <section class="advanced-block" id="raw-data" aria-labelledby="raw-data-title">
+          <h4 id="raw-data-title">Raw evidence</h4>
+          <details class="raw card"><summary>Raw unified response</summary><pre>{JSON.stringify(result,null,2)}</pre></details>
+        </section>
+      {/if}
     </section>
+    {/snippet}
+
+    <div class="evidence-density density-{evidenceDensity}">
+      {#each resultSectionLinks() as section (section.href)}
+        {#if section.href==='#overview'}
+          {@render overviewSection()}
+        {:else if section.href==='#registry'}
+          {@render registrySection()}
+        {:else if section.href==='#web-evidence'}
+          {@render webSection()}
+        {:else if section.href==='#relationships-history'}
+          {@render relationshipsSection()}
+        {:else if section.href==='#source-quality'}
+          {@render sourceQualitySection()}
+        {:else if section.href==='#case-response'}
+          {@render caseSection()}
+        {:else if section.href==='#advanced-evidence'}
+          {@render advancedSection()}
+        {/if}
+      {/each}
     </div>
   </section>
 {/if}
 
 <style>
   .result-root{min-width:0;overflow-x:clip;overflow-clip-margin:3px}
-  .evidence-density{display:contents}
-  .density-summary>.result-section:not(.family-overview)>:not(h3){display:none}
-  .density-summary>.result-section:not(.family-overview){min-height:34px;margin-top:14px}
-  .density-summary>.result-section:not(.family-overview)>h3{margin-bottom:0}
+  .evidence-density{display:flow-root}
   .result-section{--section-accent:var(--accent2);margin-top:26px}
   .result-section.family-web{--section-accent:var(--amber)}
   .result-section.family-registry{--section-accent:var(--accent2)}
-  .result-section.family-network{--section-accent:var(--accent)}
+  .result-section.family-relationships{--section-accent:var(--source-network)}
+  .result-section.family-quality{--section-accent:var(--violet)}
   .result-section.family-analyst{--section-accent:var(--violet)}
   .result-section.family-raw{--section-accent:var(--muted)}
   .result-section>h3{display:flex;align-items:center;gap:10px;margin:0 0 12px;color:var(--section-accent);font:700 var(--text-2xs) var(--mono);letter-spacing:.09em;text-transform:uppercase}
@@ -789,7 +912,10 @@
   .result-section>.card,.result-section>.evidence-component{margin-top:12px}
   .result-section>:nth-child(2){margin-top:0}
   .evidence-component[id]{position:relative;scroll-margin-top:var(--local-nav-anchor-offset,88px)}
-  .sslbl-review-lead{display:flex;align-items:center;justify-content:space-between;gap:18px;margin-top:12px;padding:16px;border:1px solid color-mix(in srgb,var(--danger) 42%,var(--border));border-radius:var(--radius);background:color-mix(in srgb,var(--danger) 5%,var(--surface))}
+  .advanced-block{min-width:0;scroll-margin-top:var(--local-nav-anchor-offset,88px)}
+  .advanced-block+.advanced-block{margin-top:14px}
+  .advanced-block>h4{margin:0 0 10px;font:700 var(--text-sm) var(--mono)}
+  .sslbl-review-lead{display:flex;align-items:center;justify-content:space-between;gap:18px;margin-top:12px;padding:16px;border:1px solid color-mix(in srgb,var(--danger) 42%,var(--border));border-radius:var(--radius-md);background:color-mix(in srgb,var(--danger) 5%,var(--surface))}
   .sslbl-review-lead .eyebrow{margin:0 0 5px;color:var(--danger)}
   .sslbl-review-lead h4{margin:0;color:var(--text);font-size:var(--text-sm);line-height:1.35}
   .sslbl-review-lead p:not(.eyebrow){max-width:760px;margin:6px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.55}

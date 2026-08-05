@@ -69,7 +69,7 @@ test('navigation, tool guide, and reference guide use one canonical product voca
 });
 
 test('glossary, FAQ, state, and mistake content is bounded and deterministic', () => {
-  assert.equal(glossaryTerms.length, 54);
+  assert.equal(glossaryTerms.length, 59);
   assert.equal(guideFaqs.length, 21);
   assert.equal(resultStates.length, 9);
   assert.equal(commonMistakes.length, 5);
@@ -80,6 +80,9 @@ test('glossary, FAQ, state, and mistake content is bounded and deterministic', (
   assert.match(glossaryTerms.find((item) => item.term === 'PTR')?.definition || '', /not proof/i);
   assert.match(glossaryTerms.find((item) => item.term === 'SOA')?.definition || '', /primary nameserver/i);
   assert.match(glossaryTerms.find((item) => item.term === 'HTTPS service binding')?.definition || '', /does not follow/i);
+  const lookupDepthAnswer = guideFaqs.find((item) => item.question === 'Should I use Fast or Deep lookup?')?.answer || '';
+  assert.match(lookupDepthAnswer, /For domains, Deep adds SOA/iu);
+  assert.match(lookupDepthAnswer, /public IPs.*PTR names/iu);
   assert.match(glossaryTerms.find((item) => item.term === 'Browser-library advisory match')?.definition || '', /not proof/i);
   assert.match(glossaryTerms.find((item) => item.term === 'EPP status')?.definition || '', /does not guarantee/i);
   assert.match(glossaryTerms.find((item) => item.term === 'Registration disclosure')?.definition || '', /unavailable/i);

@@ -32,9 +32,11 @@
 
   <article class="preview-panel lookup-panel">
     <header><span>Lookup</span><small>{selected.domain}</small></header>
+    <div class="preview-tabs" role="group" aria-label="Lookup result layout preview"><span class="active">At a glance</span><span>Sources</span><span>Timeline</span></div>
     <div class="assessment">
       <div><small>Registration</small><strong>{selected.availability}</strong></div>
       <div><small>Priority</small><strong>{selected.risk}<span>/100</span></strong></div>
+      <div><small>Mapped evidence</small><strong>{topologyNodes.length}<span> sources</span></strong></div>
     </div>
     <EvidenceTopology
       id="homepage-evidence-topology"
@@ -79,7 +81,8 @@
   .candidate-row.selected{border-left-color:var(--accent2);background:rgb(var(--accent2-rgb) / .065)}
   .candidate-row>span{min-width:0}.candidate-row strong,.candidate-row small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .candidate-row strong{font:650 var(--text-xs) var(--mono)}.candidate-row small{margin-top:3px;color:var(--muted);font-size:.62rem}.candidate-row b{color:var(--amber);font:750 .9rem var(--mono)}
-  .assessment{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--border)}
+  .preview-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:3px;padding:6px;border-bottom:1px solid var(--border);background:var(--panel-raised)}.preview-tabs span{min-width:0;padding:6px;border:1px solid transparent;border-radius:var(--radius-sm);color:var(--muted);font:650 .6rem var(--mono);text-align:center}.preview-tabs span.active{border-color:color-mix(in srgb,var(--accent) 55%,var(--border));background:var(--panel);color:var(--accent)}
+  .assessment{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;background:var(--border)}
   .assessment div{display:grid;gap:4px;padding:13px;background:var(--panel)}.assessment small{color:var(--muted);font:var(--text-2xs) var(--mono)}.assessment strong{color:var(--accent2);font:750 1.05rem var(--mono)}.assessment strong span{color:var(--muted);font-size:.62rem}
   .mobile-source-summary{display:none}
   .monitor-panel ol{display:grid;gap:0;margin:0;padding:12px 12px 12px 18px;list-style:none}.monitor-panel li{display:grid;position:relative;grid-template-columns:12px minmax(0,1fr);gap:8px;min-height:49px}.monitor-panel li::before{content:"";position:absolute;top:13px;bottom:-7px;left:4px;width:1px;background:var(--border)}.monitor-panel li:last-child::before{display:none}.monitor-panel li>span{z-index:1;width:9px;height:9px;margin-top:8px;border:2px solid var(--muted);border-radius:50%;background:var(--panel)}.monitor-panel li.changed>span{border-color:var(--accent2);box-shadow:0 0 7px rgb(var(--accent2-rgb) / .4)}.monitor-panel li strong,.monitor-panel li small{display:block}.monitor-panel li strong{font:650 var(--text-xs) var(--mono)}.monitor-panel li small{margin-top:4px;color:var(--muted);font-size:.62rem;line-height:1.35}
@@ -90,6 +93,7 @@
     .lookup-panel{grid-column:auto;grid-row:auto}
     .discover-panel,.monitor-panel{display:none}
     .lookup-panel :global(.evidence-topology){display:none}
+    .assessment{grid-template-columns:repeat(2,minmax(0,1fr))}.assessment div:last-child{grid-column:1 / -1}
     .mobile-source-summary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;margin:0;padding:1px;background:var(--border);list-style:none}
     .mobile-source-summary li{display:flex;min-height:42px;align-items:center;justify-content:space-between;gap:8px;padding:8px 9px;background:var(--panel)}
     .mobile-source-summary li:last-child{grid-column:1 / -1}

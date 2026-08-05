@@ -3,8 +3,9 @@
     LookupClaimReadiness,
     LookupClaimReadinessState,
   } from '$lib/analysis/lookup-claim-readiness.ts';
+  import type { LookupEvidenceImpactPlan } from '$lib/analysis/lookup-evidence-impact.ts';
 
-  let { readiness }: { readiness: LookupClaimReadiness } = $props();
+  let { readiness, impact }: { readiness: LookupClaimReadiness; impact: LookupEvidenceImpactPlan } = $props();
 
   const labels: Readonly<Record<LookupClaimReadinessState, string>> = {
     ready: 'Evidence ready',
@@ -45,6 +46,28 @@
       {/each}
     </ul>
 
+    {#if impact.items.length}
+      <details class="impact-plan">
+        <summary>Plan {impact.items.length} evidence improvement{impact.items.length === 1 ? '' : 's'}</summary>
+        <p class="impact-intro">Prioritised by the statement each step could improve, rather than by the number of sources available.</p>
+        <ul class="impacts">
+          {#each impact.items as item (item.id)}
+            <li>
+              <div class="impact-head">
+                <strong>{item.evidenceLabel}</strong>
+                <span class="mode">{item.mode === 'network_collection' ? 'Network request' : 'Local review'}</span>
+              </div>
+              <p>{item.reason}</p>
+              <p class="effect">{item.expectedEffect}</p>
+              <small>{item.disclosure}</small>
+              <a href={item.href}>Review this evidence path</a>
+            </li>
+          {/each}
+        </ul>
+        <p class="note">{impact.limitation}</p>
+      </details>
+    {/if}
+
     {#if readiness.disagreements.length}
       <details>
         <summary>Why {readiness.disagreements.length} registration difference{readiness.disagreements.length === 1 ? '' : 's'} may exist</summary>
@@ -72,8 +95,8 @@
   .counts{display:flex;flex:0 0 auto;gap:7px}
   .counts span{padding:7px 9px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised);color:var(--muted);font:var(--text-2xs) var(--mono)}
   .counts strong{color:var(--text);font-size:var(--text-sm)}
-  .claims,.diagnostics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:14px 0 0;padding:0;list-style:none}
-  .claims>li,.diagnostics>li{min-width:0;padding:11px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel-raised)}
+  .claims,.diagnostics,.impacts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:14px 0 0;padding:0;list-style:none}
+  .claims>li,.diagnostics>li,.impacts>li{min-width:0;padding:11px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel-raised)}
   .claim-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
   .claim-head strong,.diagnostics strong{font-size:var(--text-xs);line-height:1.4}
   .state{flex:0 0 auto;padding:3px 6px;border:1px solid var(--border);border-radius:999px;color:var(--muted);font:650 var(--text-2xs) var(--mono)}
@@ -89,10 +112,11 @@
   .diagnostics{margin-top:0}
   .diagnostics span{color:var(--muted);font:var(--text-2xs) var(--mono)}
   .note,.limit{margin:9px 0 0;color:var(--muted);font-size:var(--text-2xs);line-height:1.5}
+  .impact-intro{margin:0;color:var(--muted);font-size:var(--text-2xs);line-height:1.5}.impacts{margin-top:9px}.impact-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}.impact-head strong{font-size:var(--text-xs)}.mode{flex:0 0 auto;color:var(--accent);font:650 var(--text-2xs) var(--mono)}.impacts p,.impacts small{display:block;margin:5px 0;color:var(--muted);font-size:var(--text-2xs);line-height:1.45}.impacts .effect{color:var(--text)}.impacts a{font:650 var(--text-2xs) var(--mono)}
   .limit{padding-top:10px;border-top:1px solid var(--border)}
   @media(max-width:760px){
     header{display:grid}
     .counts{width:100%}.counts span{flex:1}
-    .claims,.diagnostics{grid-template-columns:minmax(0,1fr)}
+    .claims,.diagnostics,.impacts{grid-template-columns:minmax(0,1fr)}
   }
 </style>

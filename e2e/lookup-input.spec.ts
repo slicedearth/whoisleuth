@@ -151,6 +151,7 @@ test('deep lookup reports pending elapsed time and final source settle timing', 
   releaseLookup?.();
 
   await expect(page.getByRole('heading', { name: 'registered' })).toBeVisible();
+  await page.getByRole('button', { name: 'Expand Source quality evidence' }).click();
   const coverage = page.getByRole('region', { name: 'Evidence coverage' });
   await expect(coverage).toBeVisible();
   await expect(coverage.getByRole('group', { name: 'Evidence coverage summary' })).toContainText('2.4 s total');
@@ -461,6 +462,7 @@ test('security.txt collection is explicit, separately presented, and mobile safe
   await page.getByRole('button', { name: 'Run lookup' }).click();
   await requestPromise;
 
+  await page.getByRole('button', { name: 'Expand Web and DNS evidence' }).click();
   const disclosure = page.locator('details.security-txt');
   await expect(disclosure).not.toHaveAttribute('open', '');
   await disclosure.locator('summary').click();

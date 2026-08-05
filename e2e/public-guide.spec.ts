@@ -127,8 +127,15 @@ test('public guide explains tasks, result states, glossary terms, and common que
   await expect(practice.getByRole('button', { name: 'Next decision' })).toBeEnabled();
   await expect(page.locator('.tool-guide article')).toHaveCount(5);
   await expect(page.locator('.reference-guide article')).toHaveCount(1);
+  const resultLayout = page.getByRole('article', { name: 'Start with the decision, then open the evidence you need.' });
+  await expect(resultLayout).toBeVisible();
+  await expect(resultLayout.getByText('Relationships and history', { exact: true })).toBeVisible();
+  await expect(resultLayout).toContainText('Each family can be opened or collapsed independently.');
   await expect(page.locator('.state-grid article')).toHaveCount(9);
-  await expect(page.locator('.glossary-grid > div')).toHaveCount(54);
+  await expect(page.locator('.glossary-grid > div')).toHaveCount(59);
+  await expect(page.locator('.glossary-grid').getByText('DANE', { exact: true })).toBeVisible();
+  await expect(page.locator('.glossary-grid').getByText('MTA-STS', { exact: true })).toBeVisible();
+  await expect(page.locator('.glossary-grid').getByText('TLSA', { exact: true })).toBeVisible();
   await expect(page.locator('.glossary-grid').getByText('Browser-library advisory match', { exact: true })).toBeVisible();
   await expect(page.locator('.glossary-grid').getByText('HTTPS service binding', { exact: true })).toBeVisible();
   await expect(page.locator('.glossary-grid').getByText('PTR', { exact: true })).toBeVisible();
@@ -184,6 +191,7 @@ test('homepage and guide remain usable on a narrow mobile viewport', async ({ pa
   await expect(page.getByRole('navigation', { name: 'Guide sections' }).getByRole('link', { name: 'Practice' })).toHaveAttribute('href', '#practice');
   await expect(page.getByRole('navigation', { name: 'Guide sections' }).getByRole('link', { name: 'Reference' })).toHaveAttribute('href', '#reference');
   await expect(page.getByRole('heading', { name: 'Domain investigation terms.' })).toBeVisible();
+  await expect(page.getByRole('article', { name: 'Start with the decision, then open the evidence you need.' })).toBeVisible();
   await expectNoHorizontalOverflow(page);
 });
 

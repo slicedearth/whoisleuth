@@ -10,6 +10,7 @@ import {
   detectionRuleStoreVersion,
   evaluateDetectionRules,
   evaluateRuleSet,
+  previewDetectionRule,
   MAX_CUSTOM_RISK_TOTAL,
   MAX_DETECTION_RULES,
   MAX_RULE_CONDITIONS,
@@ -125,6 +126,25 @@ test('rule-set evaluation is bounded, deterministic and does not mutate inputs',
   const result = evaluateRuleSet(records, [rule()]);
   assert.deepEqual(result.map((item) => item.domain), ['example.invalid', 'two.invalid']);
   assert.deepEqual(records, before);
+});
+
+test('rule preview reports affected dispositions and collisions without changing the rule store', () => {
+  const reviewed = caseRecord({ id: 'reviewed', disposition: 'false_positive' });
+  const unreviewed = caseRecord({ id: 'unreviewed', disposition: 'unreviewed' });
+  const existing = [rule({ id: 'existing', name: 'Existing rule' })];
+  const before = JSON.stringify(existing);
+  const preview = previewDetectionRule([reviewed, unreviewed], existing, {
+    name: 'Draft rule',
+    conditions: existing[0]?.conditions,
+    riskDelta: 4,
+    tag: 'review',
+  });
+  assert.equal(preview?.matchCount, 2);
+  assert.equal(preview?.affectedDispositionCounts.false_positive, 1);
+  assert.equal(preview?.unreviewedMatchCount, 1);
+  assert.deepEqual(preview?.collisionRuleIds, ['existing']);
+  assert.equal(JSON.stringify(existing), before);
+  assert.match(preview?.limitation ?? '', /does not save/u);
 });
 
 test('creates, updates, toggles and caps rules without source mutation', () => {
