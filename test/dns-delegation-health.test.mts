@@ -111,6 +111,42 @@ describe('DNS delegation health', () => {
     assert.equal(result.findings.find((finding) => finding.id === 'authority_record_consistency')?.state, 'warning');
   });
 
+  test('keeps capped or unusable authority values partial instead of reporting false agreement', async () => {
+    const common = Array.from({ length: 16 }, (_, index) => `192.0.2.${index + 1}`);
+    const result = await collectDnsDelegationHealth('example.test', PARENT, {
+      registryEvidence: REGISTRY,
+      queryAuthority: async () => ({
+        nameservers: PARENT.records,
+        soaPrimary: 'ns1.example.test',
+        errorCode: null,
+        error: null,
+      }),
+      queryAuthorityRecords: async ({ nameserver }) => [
+        {
+          type: 'A', state: 'success', error: null,
+          values: [...common, nameserver.startsWith('ns1') ? '203.0.113.250' : '203.0.113.251'],
+        },
+        { type: 'AAAA', state: 'success', values: ['2001:db8::1'], error: null },
+        { type: 'CAA', state: 'success', values: ['\u0000discarded'], error: null },
+        { type: 'MX', state: 'not_found', values: [], error: null },
+      ],
+      observedAt: () => OBSERVED_AT,
+    });
+
+    const addresses = requiredValue(result.recordMatrix.find((row) => row.type === 'A'));
+    assert.equal(addresses.state, 'partial');
+    assert.equal(addresses.observations.every((item) => item.values.length === 16), true);
+    assert.equal(addresses.observations.every((item) => item.truncated && item.discarded === 1), true);
+    assert.equal(result.recordMatrix.find((row) => row.type === 'AAAA')?.state, 'aligned');
+    assert.equal(result.recordMatrix.find((row) => row.type === 'CAA')?.state, 'partial');
+    assert.equal(result.status, 'partial');
+    assert.equal(result.complete, false);
+    assert.equal(result.truncated, true);
+    assert.equal(result.diagnostics.truncatedAuthorityRecordSetCount, 2);
+    assert.equal(result.diagnostics.discardedAuthorityRecordValueCount, 4);
+    assert.equal(result.findings.find((finding) => finding.id === 'authority_record_consistency')?.state, 'unknown');
+  });
+
   test('flags different authoritative SOA serials without treating either answer as absent', async () => {
     const result = await collectDnsDelegationHealth('example.test', PARENT, {
       registryEvidence: REGISTRY,

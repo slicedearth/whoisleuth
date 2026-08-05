@@ -239,14 +239,24 @@ export function buildLookupNetworkDisplay(input: {
     state: ['aligned', 'different', 'partial', 'insufficient'].includes(String(item.state))
       ? String(item.state)
       : 'insufficient',
-    observations: records(item.observations).slice(0, 4).map((observation) => ({
-      nameserver: boundedTechnologyText(observation.nameserver, 253),
-      state: ['success', 'not_found', 'error', 'not_collected'].includes(String(observation.state))
-        ? String(observation.state)
-        : 'not_collected',
-      values: stringList(observation.values).slice(0, 16),
-      error: boundedTechnologyText(observation.error, 180),
-    })),
+    observations: records(item.observations).slice(0, 4).map((observation) => {
+      const suppliedValues = stringList(observation.values).slice(0, 32);
+      const values = suppliedValues
+        .map((value) => boundedTechnologyText(value, 500))
+        .filter(Boolean)
+        .slice(0, 16);
+      const discarded = Number(observation.discarded);
+      return {
+        nameserver: boundedTechnologyText(observation.nameserver, 253),
+        state: ['success', 'not_found', 'partial', 'error', 'not_collected'].includes(String(observation.state))
+          ? String(observation.state)
+          : 'not_collected',
+        values,
+        error: boundedTechnologyText(observation.error, 180),
+        truncated: observation.truncated === true || suppliedValues.length > 16,
+        discarded: Number.isSafeInteger(discarded) && discarded > 0 ? Math.min(discarded, 10_000) : 0,
+      };
+    }),
   }));
   const dnsDelegation = delegation.delegationHealthVersion === 1
     ? {

@@ -34,9 +34,11 @@ type AuthorityQuery = (input: {
 type AuthorityRecordType = 'A' | 'AAAA' | 'CAA' | 'MX';
 type AuthorityRecordSet = {
   type: AuthorityRecordType;
-  state: 'success' | 'not_found' | 'error';
+  state: 'success' | 'not_found' | 'partial' | 'error';
   values: string[];
   error: string | null;
+  truncated?: boolean;
+  discarded?: number;
 };
 type AuthorityRecordQuery = (input: {
   domain: string;
@@ -198,32 +200,60 @@ async function defaultAuthorityQuery(input: {
   };
 }
 
-function normaliseAuthorityValues(type: AuthorityRecordType, value: unknown): string[] {
-  const rows = Array.isArray(value) ? value : [];
+function normaliseAuthorityValueSet(type: AuthorityRecordType, value: unknown) {
+  const input = Array.isArray(value) ? value : [];
+  const rows = input.slice(0, 256);
+  let rejected = input.length - rows.length;
   const values = rows.flatMap((item): string[] => {
     if (type === 'A' || type === 'AAAA') {
       // Returned record data is evidence, not a transport destination. Retain
       // syntactically valid private and reserved addresses while continuing to
       // require public addresses for the direct nameserver connection itself.
       const address = observedAddress(item);
-      return address && net.isIP(address) === (type === 'A' ? 4 : 6) ? [address] : [];
+      if (address && net.isIP(address) === (type === 'A' ? 4 : 6)) return [address];
+      rejected += 1;
+      return [];
     }
     const source = record(item);
     if (type === 'MX') {
       const exchange = hostname(source.exchange);
       const priority = Number(source.priority);
-      return exchange && Number.isSafeInteger(priority) && priority >= 0 && priority <= 65_535
-        ? [`${priority} ${exchange}`]
-        : [];
+      if (exchange && Number.isSafeInteger(priority) && priority >= 0 && priority <= 65_535) return [`${priority} ${exchange}`];
+      rejected += 1;
+      return [];
     }
     const critical = Number(source.critical);
     const properties = ['issue', 'issuewild', 'iodef'].flatMap((key) => {
       const candidate = boundedText(source[key], 500);
       return candidate ? [`${Number.isSafeInteger(critical) && critical >= 0 && critical <= 255 ? critical : 0} ${key} ${candidate}`] : [];
     });
+    if (!properties.length) rejected += 1;
     return properties;
   });
-  return [...new Set(values)].sort().slice(0, MAX_AUTHORITY_RECORD_VALUES);
+  const unique = [...new Set(values)].sort();
+  const overflow = Math.max(0, unique.length - MAX_AUTHORITY_RECORD_VALUES);
+  return {
+    values: unique.slice(0, MAX_AUTHORITY_RECORD_VALUES),
+    truncated: overflow > 0 || input.length > rows.length,
+    discarded: rejected + overflow,
+  };
+}
+
+function normaliseRetainedAuthorityValues(value: unknown) {
+  const input = Array.isArray(value) ? value : [];
+  const rows = input.slice(0, 256);
+  const valid = rows.map((item) => boundedText(item, 500)).filter((item): item is string => item !== null);
+  const unique = [...new Set(valid)].sort();
+  const overflow = Math.max(0, unique.length - MAX_AUTHORITY_RECORD_VALUES);
+  return {
+    values: unique.slice(0, MAX_AUTHORITY_RECORD_VALUES),
+    truncated: overflow > 0 || input.length > rows.length,
+    discarded: input.length - rows.length + (rows.length - valid.length) + overflow,
+  };
+}
+
+function normaliseAuthorityValues(type: AuthorityRecordType, value: unknown): string[] {
+  return normaliseAuthorityValueSet(type, value).values;
 }
 
 async function defaultAuthorityRecordQuery(input: {
@@ -245,11 +275,26 @@ async function defaultAuthorityRecordQuery(input: {
   return Promise.all(queries.map(async ([type, promise]) => {
     try {
       const response = await withTimeout(promise, input.timeoutMs);
-      return { type, state: 'success' as const, values: normaliseAuthorityValues(type, response), error: null };
+      const normalised = normaliseAuthorityValueSet(type, response);
+      return {
+        type,
+        state: normalised.truncated || normalised.discarded > 0
+          ? 'partial' as const
+          : normalised.values.length ? 'success' as const : 'not_found' as const,
+        ...normalised,
+        error: normalised.discarded > 0 && !normalised.values.length ? 'No usable record values were retained.' : null,
+      };
     } catch (error) {
       const code = errorCode(error);
       const missing = code === 'ENODATA' || code === 'ENOTFOUND';
-      return { type, state: missing ? 'not_found' as const : 'error' as const, values: [], error: missing ? null : errorDetail(error) };
+      return {
+        type,
+        state: missing ? 'not_found' as const : 'error' as const,
+        values: [],
+        error: missing ? null : errorDetail(error),
+        truncated: false,
+        discarded: 0,
+      };
     }
   }));
 }
@@ -267,13 +312,15 @@ function authorityRecordMatrix(authorities: readonly {
         state: result?.state ?? 'not_collected',
         values: result?.values ?? [],
         error: result?.error ?? null,
+        truncated: result?.truncated === true,
+        discarded: typeof result?.discarded === 'number' ? result.discarded : 0,
       };
     });
     const complete = observations.filter((item) => item.state === 'success' || item.state === 'not_found');
     const signatures = new Set(complete.map((item) => JSON.stringify(item.values)));
     return {
       type,
-      state: observations.some((item) => item.state === 'error') ? 'partial' as const
+      state: observations.some((item) => item.state === 'error' || item.state === 'partial' || item.truncated || item.discarded > 0) ? 'partial' as const
         : complete.length < 2 ? 'insufficient' as const
           : observations.some((item) => item.state === 'not_collected') ? 'partial' as const
           : signatures.size === 1 ? 'aligned' as const : 'different' as const,
@@ -439,18 +486,36 @@ async function collectDnsDelegationHealth(
         recordSets = (await withTimeout(queryAuthorityRecords({ domain, nameserver, address: recordAddress, timeoutMs }), timeoutMs))
           .filter((item) => ['A', 'AAAA', 'CAA', 'MX'].includes(item.type))
           .slice(0, 4)
-          .map((item) => ({
-            type: item.type,
-            state: item.state,
-            values: [...new Set(item.values.map((value) => boundedText(value, 500)).filter((value): value is string => value !== null))].sort().slice(0, MAX_AUTHORITY_RECORD_VALUES),
-            error: boundedText(item.error, MAX_ERROR_LENGTH),
-          }));
+          .map((item) => {
+            const normalised = normaliseRetainedAuthorityValues(item.values);
+            const suppliedState = ['success', 'not_found', 'partial', 'error'].includes(item.state)
+              ? item.state : 'error';
+            const discarded = normalised.discarded + (typeof item.discarded === 'number' && Number.isSafeInteger(item.discarded) && item.discarded > 0
+              ? Math.min(item.discarded, 10_000) : 0);
+            const truncated = item.truncated === true || normalised.truncated;
+            const partial = suppliedState === 'partial'
+              || truncated
+              || discarded > 0
+              || (suppliedState === 'success' && normalised.values.length === 0)
+              || (suppliedState === 'not_found' && normalised.values.length > 0);
+            return {
+              type: item.type,
+              state: suppliedState === 'error' ? 'error' as const : partial ? 'partial' as const : suppliedState,
+              values: normalised.values,
+              error: boundedText(item.error, MAX_ERROR_LENGTH)
+                ?? (partial && !normalised.values.length ? 'No usable record values were retained.' : null),
+              truncated,
+              discarded,
+            };
+          });
       } catch (error) {
         recordSets = ['A', 'AAAA', 'CAA', 'MX'].map((type) => ({
           type: type as AuthorityRecordType,
           state: 'error' as const,
           values: [],
           error: errorDetail(error),
+          truncated: false,
+          discarded: 0,
         }));
       }
     }
@@ -506,6 +571,7 @@ async function collectDnsDelegationHealth(
     registry.delegationSigned === false && registry.dsRecordCount > 0
   );
   const recordMatrix = authorityRecordMatrix(authorities);
+  const recordCollectionAttempted = authorities.some((authority) => authority.recordSets.length > 0);
   const recordDifferences = recordMatrix.filter((row) => row.state === 'different');
   const recordPartial = recordMatrix.filter((row) => row.state === 'partial');
   const recordInsufficient = recordMatrix.filter((row) => row.state === 'insufficient');
@@ -621,7 +687,7 @@ async function collectDnsDelegationHealth(
     || parentQuery.truncated === true
     || registry.truncated
     || authorities.some((authority) => authority.state !== 'success')
-    || recordPartial.length > 0;
+    || (recordCollectionAttempted && (recordPartial.length > 0 || recordInsufficient.length > 0));
   const status = !candidates.length && parentStatus === 'error'
     ? 'error'
     : collectionIncomplete ? 'partial' : 'success';
@@ -635,7 +701,9 @@ async function collectDnsDelegationHealth(
       source: 'dns_delegation',
       durationMs: Math.max(0, now() - started),
       complete: !collectionIncomplete,
-      truncated: parentQuery.truncated === true || registry.truncated,
+      truncated: parentQuery.truncated === true
+        || registry.truncated
+        || (recordCollectionAttempted && recordMatrix.some((row) => row.observations.some((item) => item.truncated))),
       limitations: [
         'The parent nameserver set is a point-in-time recursive resolver view; registry nameservers and glue come from the separately attributed RDAP publication.',
         'Direct queries use at most four selected nameservers and two validated public addresses per nameserver.',
@@ -651,6 +719,12 @@ async function collectDnsDelegationHealth(
         partialAuthorityCount: partialAuthorities.length,
         lameAuthorityCount: lameAuthorities.length,
         unreachableAuthorityCount: unreachableAuthorities.length,
+        truncatedAuthorityRecordSetCount: recordMatrix.reduce((count, row) => (
+          count + row.observations.filter((item) => item.truncated).length
+        ), 0),
+        discardedAuthorityRecordValueCount: recordMatrix.reduce((count, row) => (
+          count + row.observations.reduce((sum, item) => sum + item.discarded, 0)
+        ), 0),
       },
     }),
     detail: status === 'success'

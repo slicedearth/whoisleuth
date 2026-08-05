@@ -63,6 +63,18 @@ test('deep DNS evidence distinguishes observed records from partial resolver fai
               { nameserver: 'ns1.example', addressSource: 'registry_glue', addresses: ['192.0.2.53'], state: 'success', nameservers: ['ns1.example', 'ns2.example'], soaPrimary: 'ns1.example', attempts: [] },
               { nameserver: 'ns2.example', addressSource: 'recursive_address', addresses: [], state: 'unreachable', nameservers: [], soaPrimary: null, attempts: [] },
             ],
+            recordMatrix: [{
+              type: 'A', state: 'partial', observations: [
+                {
+                  nameserver: 'ns1.example', state: 'partial',
+                  values: ['192.0.2.10', '192.0.2.11'], error: null, truncated: true, discarded: 2,
+                },
+                {
+                  nameserver: 'ns2.example', state: 'error', values: [],
+                  error: 'record query timed out', truncated: false, discarded: 0,
+                },
+              ],
+            }],
             findings: [
               { id: 'parent_registry_ns', label: 'Parent and registry nameservers', state: 'warning', summary: 'Parent view and registry publication differ', detail: 'Parent view: ns1.example, ns2.example. Registry publication: ns1.example, ns3.example.', remediation: 'Confirm the intended delegation before changing nameservers.' },
               { id: 'authority_reachability', label: 'Direct nameserver reachability', state: 'warning', summary: '1 nameserver could not be confirmed', detail: 'Successful: 1. Lame or refused: 0. Unreachable or unresolved: 1.', remediation: 'Restore authoritative service on every delegated nameserver.' },
@@ -93,8 +105,14 @@ test('deep DNS evidence distinguishes observed records from partial resolver fai
   await expect(card.getByRole('heading', { name: 'Authoritative DNS health' })).toBeVisible();
   await expect(card.getByText('Parent view and registry publication differ', { exact: true })).toBeVisible();
   await expect(card.getByText('1 nameserver could not be confirmed', { exact: true })).toBeVisible();
-  await card.getByText('Direct nameserver observations', { exact: true }).click();
-  await expect(card.getByText('ns2.example', { exact: true }).last()).toBeVisible();
+  const directObservations = card.locator('.authority-detail').first();
+  await directObservations.getByText('Direct nameserver observations', { exact: true }).click();
+  await expect(directObservations.getByText('ns2.example', { exact: true })).toBeVisible();
+  await card.getByText('Authoritative record agreement', { exact: true }).click();
+  await expect(card.locator('.record-matrix .matrix-partial')).toHaveText('partial');
+  await expect(card.getByText('192.0.2.10 · 192.0.2.11', { exact: true })).toBeVisible();
+  await expect(card.getByText('Retained values are incomplete · 2 discarded.', { exact: true })).toBeVisible();
+  await expect(card.getByText('record query timed out', { exact: true })).toBeVisible();
   await expect(card.getByText(/does not decide registration availability/i)).toBeVisible();
   await card.getByText('Plan a domain control change', { exact: true }).click();
   await card.getByLabel('Intended nameservers').fill('ns3.example.net\nns4.example.net');

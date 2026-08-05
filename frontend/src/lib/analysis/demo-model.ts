@@ -621,6 +621,8 @@ export function syntheticDemoLookupView(id: string) {
               state: 'success',
               values: ['192.0.2.80'],
               error: '',
+              truncated: false,
+              discarded: 0,
             })),
           },
           {
@@ -631,6 +633,8 @@ export function syntheticDemoLookupView(id: string) {
               state: 'success',
               values: ['10 mail.example.test'],
               error: '',
+              truncated: false,
+              discarded: 0,
             })),
           },
         ],
