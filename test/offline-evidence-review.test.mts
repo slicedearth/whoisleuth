@@ -86,9 +86,20 @@ describe('offline evidence review command', () => {
         schema: 'whoisleuth.nameserver-preflight.input', version: 1, domain: 'example.test',
         intendedNameservers: ['ns1.example.test'], observations: [],
       },
+      {
+        schema: 'whoisleuth.trust-store-comparison.input', version: 1,
+        certificate: {
+          source: 'Fixture TLS evidence', observedAt: ISO, state: 'observed', chainTruncated: false,
+          fingerprintsSha256: ['a'.repeat(64)], runtimeAuthorisation: 'unknown',
+        },
+        stores: [{
+          name: 'Fixture store', version: '1', source: 'Fixture', reviewedAt: ISO,
+          state: 'observed', anchorsSha256: ['b'.repeat(64)],
+        }],
+      },
     ];
     assert.deepEqual(inputs.map((input) => buildOfflineEvidenceReview(JSON.stringify(input), ISO).kind), [
-      'rdap_search', 'dnssec', 'tlsa', 'rpki', 'geoip', 'encrypted_dns', 'zone_intent', 'domain_portfolio', 'domain_change', 'dns_convergence', 'nameserver_preflight',
+      'rdap_search', 'dnssec', 'tlsa', 'rpki', 'geoip', 'encrypted_dns', 'zone_intent', 'domain_portfolio', 'domain_change', 'dns_convergence', 'nameserver_preflight', 'trust_store',
     ]);
     const rdap = buildOfflineEvidenceReview(JSON.stringify(inputs[0]), ISO).result as {
       responseInspection: { state: string; mappings: Array<{ state: string }> };

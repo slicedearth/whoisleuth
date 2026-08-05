@@ -90,6 +90,7 @@ node bin/whoisleuth.mts compare lookup.json --json
 node bin/whoisleuth.mts page-compare official.json candidate.json --json
 node bin/whoisleuth.mts mail-review bulk.json --json
 node bin/whoisleuth.mts review-evidence dnssec-evidence.json --json
+node bin/whoisleuth.mts review-evidence trust-store-comparison.json --json
 node bin/whoisleuth.mts domain-control domain-control-input.json --json
 node bin/whoisleuth.mts assurance domain-assurance-input.json --json
 node bin/whoisleuth.mts change-packet domain-change-packet-input.json --json
@@ -1068,6 +1069,14 @@ Supported input schemas are:
   delegation change. It checks authoritative service, the served NS set, SOA
   evidence, public addresses and in-bailiwick glue readiness without querying
   DNS, opening a socket or changing registry configuration.
+- `whoisleuth.trust-store-comparison.input`: compares an already-observed,
+  bounded certificate-chain SHA-256 fingerprint set with up to 16
+  analyst-supplied trust-store snapshots. Each snapshot carries its own name,
+  version, source, review time, completeness, and no more than 2,048 anchor
+  fingerprints. Exact intersections, complete non-observations, and
+  inconclusive inputs remain separate. A match does not build or validate a
+  certificate path, and non-observation does not mean a client would reject
+  the chain because served chains commonly omit their root.
 
 The common output is `whoisleuth.cli.offline-evidence-review` version 1. It
 retains the nested result's explicit state and limitations. A locally

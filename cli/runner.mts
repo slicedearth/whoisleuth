@@ -196,7 +196,7 @@ Review saved evidence:
   compare            Compare saved registry publications.
   page-compare       Compare saved static page and TLS evidence.
   mail-review        Review saved passive mail exposure evidence.
-  review-evidence    Review supplied DNS, routing, GeoIP, or RDAP evidence offline.
+  review-evidence    Review supplied DNS, routing, GeoIP, RDAP, or trust-store evidence offline.
   brief              Turn one saved Lookup into a bounded decision brief.
   case-pack          Build a reviewed browser-importable case package.
   domain-control     Build or review an integrity-protected desired-state manifest.
@@ -435,7 +435,7 @@ const COMMAND_DETAILS: Readonly<Record<CliCommand, Readonly<{ description: strin
     boundary: 'Review is offline and sends no SMTP traffic. Missing or partial DNS evidence remains inconclusive.',
   },
   'review-evidence': {
-    description: 'Review one versioned DNS, domain-change, routing, GeoIP, or RDAP planning document offline.',
+    description: 'Review one versioned DNS, domain-change, routing, GeoIP, RDAP, or trust-store document offline.',
     example: 'whoisleuth review-evidence domain-change.json --json --strict-exit',
     boundary: 'The command reads only the supplied document. It performs no DNS, RDAP, BGP, GeoIP-provider, TLS, HTTP, certificate-authority, or SMTP request.',
   },

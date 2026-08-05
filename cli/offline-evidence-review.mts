@@ -21,6 +21,7 @@ import { reviewRpkiRoute } from '../lib/rpki-evidence.mts';
 import { analyzeTlsaEvidence } from '../lib/tlsa-evidence.mts';
 import { reviewZoneIntent } from '../lib/zone-intent-review.mts';
 import { reviewDnsConvergence } from '../lib/dns-convergence-review.mts';
+import { compareTrustStoreEvidence } from '../lib/trust-store-comparison.mts';
 import { CliUsageError } from './errors.mts';
 import { LOCAL_MMDB_QUERY_SCHEMA, reviewLocalMmdb } from './local-mmdb-review.mts';
 
@@ -53,7 +54,7 @@ function parseInput(value: unknown): UnknownRecord {
 
 function buildOfflineEvidenceReview(value: unknown, generatedAt = new Date().toISOString()) {
   const input = parseInput(value);
-  let kind: 'rdap_search' | 'dnssec' | 'tlsa' | 'rpki' | 'geoip' | 'encrypted_dns' | 'zone_intent' | 'domain_portfolio' | 'domain_change' | 'dns_convergence' | 'nameserver_preflight';
+  let kind: 'rdap_search' | 'dnssec' | 'tlsa' | 'rpki' | 'geoip' | 'encrypted_dns' | 'zone_intent' | 'domain_portfolio' | 'domain_change' | 'dns_convergence' | 'nameserver_preflight' | 'trust_store';
   let result: unknown;
   if (input.schema === 'whoisleuth.rdap-search-input') {
     kind = 'rdap_search';
@@ -125,6 +126,9 @@ function buildOfflineEvidenceReview(value: unknown, generatedAt = new Date().toI
   } else if (input.schema === 'whoisleuth.nameserver-preflight.input') {
     kind = 'nameserver_preflight';
     result = reviewNameserverPreflight(input, generatedAt);
+  } else if (input.schema === 'whoisleuth.trust-store-comparison.input') {
+    kind = 'trust_store';
+    result = compareTrustStoreEvidence(input, generatedAt);
   } else {
     throw new CliUsageError('Offline evidence review does not recognise this input schema.');
   }
@@ -207,6 +211,11 @@ function formatOfflineEvidenceReview(document: ReturnType<typeof buildOfflineEvi
     const rows = Array.isArray(result.rows) ? result.rows : [];
     lines.push(`Servers ${rows.length}`);
     lines.push(`Ready  ${rows.filter((item) => record(item).ready === true).length}`);
+  } else if (document.kind === 'trust_store') {
+    lines.push(`Stores ${count(counts.stores)}`);
+    lines.push(`Matched ${count(counts.anchorObserved)}`);
+    lines.push(`Not observed ${count(counts.notObserved)}`);
+    lines.push(`Inconclusive ${count(counts.inconclusive)}`);
   } else if (document.kind === 'domain_portfolio') {
     const unknownCounts = record(result.unknownCounts);
     lines.push(`Assets ${listLength(result.assets)}`);
