@@ -110,7 +110,7 @@ HTTP status, and a bounded explanation.
 | Review many targets | `bulk`, `discover`, `discover-scan`, `ct-search` |
 | Compare saved evidence | `compare`, `page-compare`, `diff`, `reconcile`, `timeline`, `mail-review` |
 | Review supplied evidence | `brief`, `review-evidence`, `registry-doctor`, `registry-cohort`, `source-report`, `sharing-review` |
-| Plan and assure changes | `domain-control`, `monitor-once`, `assurance`, `workflow-plan`, `workflow-run` |
+| Plan and assure changes | `domain-control`, `monitor-once`, `assurance`, `change-packet`, `workflow-plan`, `workflow-run` |
 | Verify and package evidence | `case-pack`, `verify-artifact`, `inspect-archive`, `sign-artifact`, `verify-signature`, `export` |
 | Calibrate offline | `risk-calibrate`, `lookalike-calibrate` |
 | Operate the CLI | `doctor`, `registry-scaffold`, `commands`, `completion`, `manual` |
@@ -253,6 +253,10 @@ full contracts into the packaged reference.
 ### Domain assurance review
 
 [Read planned-change, recovery-dependency, and retirement contracts.](cli-reference.md#domain-assurance-review)
+
+### Domain change assurance packet
+
+[Read the bounded pre-change, post-change, planning, and integrity contract.](cli-reference.md#domain-change-assurance-packet)
 
 ### Pre-sharing review
 

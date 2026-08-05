@@ -88,6 +88,7 @@ node bin/whoisleuth.mts mail-review bulk.json --json
 node bin/whoisleuth.mts review-evidence dnssec-evidence.json --json
 node bin/whoisleuth.mts domain-control domain-control-input.json --json
 node bin/whoisleuth.mts assurance domain-assurance-input.json --json
+node bin/whoisleuth.mts change-packet domain-change-packet-input.json --json
 node bin/whoisleuth.mts sharing-review response-packet.json --marking amber --recipient-scope organization --purpose 'Reviewed incident handoff' --human-reviewed --personal-data-reviewed --redactions-confirmed --json
 node bin/whoisleuth.mts workflow-plan domain-triage example.test --json
 node bin/whoisleuth.mts workflow-run domain-triage example.test --approve-network --json --output run.json
@@ -199,7 +200,7 @@ Commands that query RDAP, WHOIS, DNS, HTTP, TLS, or Certificate Transparency do
 so directly from the machine running the CLI. They do not use the hosted login,
 hosted session, or deployment usage controls; upstream providers can see and
 rate-limit the local machine's network address. Offline `discover`, `compare`,
-`page-compare`, `mail-review`, `review-evidence`, `domain-control`, `assurance`,
+`page-compare`, `mail-review`, `review-evidence`, `domain-control`, `assurance`, `change-packet`,
 `sharing-review`, `workflow-plan`, `brief`, `case-pack`, `registry-cohort`,
 `registry-scaffold`, `diff`, `reconcile`, `timeline`,
 `risk-calibrate`, `lookalike-calibrate`, `registry-doctor`, `verify-artifact`, `source-report`, `export`,
@@ -392,7 +393,7 @@ This release supports `lookup`, `bulk`, `ct-search`, `discover`, `discover-scan`
 `lookalike-calibrate`, `verify-artifact`,
 `inspect-archive`, `sign-artifact`, `verify-signature`, `source-report`,
 `compare`, `page-compare`, `mail-review`, `review-evidence`, `brief`, `case-pack`, `domain-control`,
-`monitor-once`, `assurance`, `sharing-review`, `workflow-plan`, `workflow-run`, `diff`, `reconcile`, `timeline`,
+`monitor-once`, `assurance`, `change-packet`, `sharing-review`, `workflow-plan`, `workflow-run`, `diff`, `reconcile`, `timeline`,
 `export`, `doctor`, `commands`, `completion`, and `manual`. Additional command families
 are added as separate bounded increments rather than exposing incomplete
 aliases.
@@ -1051,6 +1052,22 @@ needs-review states and gives every negative state an explicit review reason.
 The versioned input rejects unknown fields and contradictory evidence attached
 to an unfinished check. It stores no credentials, makes no request, and changes
 no registrar, DNS, mail, certificate, or recovery configuration.
+
+## Domain change assurance packet
+
+`change-packet [input.json]` combines one pre-change domain review, one
+post-change domain review, and one planned-change assurance input for the same
+domain. The input uses `whoisleuth.domain-change-packet.input` version 1. The
+command revalidates each nested contract, summarises changed authoritative
+record sets, and emits `whoisleuth.domain-change-packet` version 1 with a
+canonical SHA-256 integrity digest.
+
+The packet is ready only when both supplied observation reviews and the change
+plan pass their own bounded gates. Partial or unavailable evidence remains a
+review reason. Packet assembly performs no collection or configuration change,
+and digest validity does not authenticate the analyst. A reviewed packet can be
+passed to `sign-artifact` when the operator has an independently managed
+Ed25519 signing-key lifecycle.
 
 ## Pre-sharing review
 

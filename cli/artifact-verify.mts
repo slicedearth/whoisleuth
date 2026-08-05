@@ -43,6 +43,10 @@ import {
   verifyDomainControlManifest,
 } from '../lib/domain-control-manifest.mts';
 import {
+  DOMAIN_CHANGE_PACKET_SCHEMA,
+  DOMAIN_CHANGE_PACKET_VERSION,
+} from '../lib/domain-change-packet.mts';
+import {
   INVESTIGATION_CAPSULE_SCHEMA,
   INVESTIGATION_CAPSULE_VERSION,
   verifyInvestigationCapsule,
@@ -103,6 +107,7 @@ const SIGNED_ARTIFACT_VERSIONS: Readonly<Record<string, ReadonlySet<number>>> = 
   [BULK_MAIL_EXPOSURE_SCHEMA]: new Set([BULK_MAIL_EXPOSURE_VERSION]),
   [BULK_REVIEW_MANIFEST_SCHEMA]: new Set([BULK_REVIEW_MANIFEST_VERSION]),
   [DOMAIN_CONTROL_MANIFEST_SCHEMA]: new Set([DOMAIN_CONTROL_MANIFEST_VERSION]),
+  [DOMAIN_CHANGE_PACKET_SCHEMA]: new Set([DOMAIN_CHANGE_PACKET_VERSION]),
 });
 
 function record(value: unknown): UnknownRecord | null {

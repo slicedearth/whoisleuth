@@ -48,6 +48,7 @@ const CLI_COMMANDS = [
   'domain-control',
   'monitor-once',
   'assurance',
+  'change-packet',
   'sharing-review',
   'workflow-plan',
   'workflow-run',
@@ -102,6 +103,7 @@ type CliAction =
   | ({ action: 'domain-control'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'monitor-once'; source: string | null; previousSource: string | null; output: 'terminal' | 'json' | 'junit'; limit: number; concurrency: number; failOn?: readonly CliFailPolicy[] } & TerminalOptions)
   | ({ action: 'assurance'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
+  | ({ action: 'change-packet'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'sharing-review'; source: string | null; output: 'terminal' | 'json'; marking: 'clear' | 'green' | 'amber' | 'amber-strict' | 'red'; recipientScope: 'public' | 'community' | 'organization' | 'named-recipients'; purpose: string; humanReviewed: boolean; personalDataReviewed: boolean; redactionsConfirmed: boolean } & TerminalOptions)
   | ({ action: 'workflow-plan'; recipe: InvestigationPlanRecipe; subject: string; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'workflow-run'; recipe: InvestigationPlanRecipe; subject: string; resumeSource: string | null; approveNetwork: boolean; output: 'terminal' | 'json' } & TerminalOptions)
@@ -218,6 +220,7 @@ function parseCliArgumentsCore(argv: string[]): CliAction {
   if (command === 'domain-control') return parseDomainControlArguments(argv.slice(1));
   if (command === 'monitor-once') return parseMonitorOnceArguments(argv.slice(1));
   if (command === 'assurance') return parseAssuranceArguments(argv.slice(1));
+  if (command === 'change-packet') return parseChangePacketArguments(argv.slice(1));
   if (command === 'sharing-review') return parseSharingReviewArguments(argv.slice(1));
   if (command === 'workflow-plan') return parseWorkflowPlanArguments(argv.slice(1));
   if (command === 'workflow-run') return parseWorkflowRunArguments(argv.slice(1));
@@ -986,6 +989,25 @@ function parseAssuranceArguments(argv: string[]): Extract<CliArguments, { action
   }
   if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
   return { action: 'assurance', source, output, quiet, color };
+}
+
+function parseChangePacketArguments(argv: string[]): Extract<CliArguments, { action: 'change-packet' }> {
+  let source: string | null = null;
+  let output: 'terminal' | 'json' = 'terminal';
+  let quiet = false;
+  let color = true;
+  for (const argument of argv) {
+    if (argument === '--json') {
+      if (output !== 'terminal') throw new CliUsageError('--json may be supplied only once.');
+      output = 'json';
+    } else if (argument === '--quiet') quiet = true;
+    else if (argument === '--no-color') color = false;
+    else if (argument.startsWith('-')) throw new CliUsageError(`Unknown option "${argument}".`);
+    else if (source === null) source = argument;
+    else throw new CliUsageError('change-packet accepts one optional versioned JSON input file.');
+  }
+  if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
+  return { action: 'change-packet', source, output, quiet, color };
 }
 
 function parseSharingReviewArguments(argv: string[]): Extract<CliArguments, { action: 'sharing-review' }> {

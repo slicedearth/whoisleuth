@@ -89,6 +89,11 @@ import {
   buildDomainAssurance,
   formatDomainAssurance,
 } from '../lib/domain-assurance.mts';
+import {
+  MAX_DOMAIN_CHANGE_PACKET_INPUT_BYTES,
+  buildDomainChangePacket,
+  formatDomainChangePacket,
+} from '../lib/domain-change-packet.mts';
 import { buildCliManual } from './manual.mts';
 import { buildInvestigationPlan, formatInvestigationPlan } from './investigation-plan.mts';
 import { formatInvestigationRun, runInvestigationRecipe } from './investigation-run.mts';
@@ -175,6 +180,7 @@ Review saved evidence:
   domain-control     Build or review an integrity-protected desired-state manifest.
   monitor-once       Run one bounded domain-control review and checkpoint.
   assurance          Review change, recovery, concentration, or retirement plans.
+  change-packet      Assemble a digest-protected domain change review packet.
   sharing-review     Lint a reviewed artifact before deliberate sharing.
   workflow-plan      Plan a fixed investigation recipe without executing it.
   workflow-run       Execute resumable approved steps from a fixed recipe.
@@ -240,6 +246,7 @@ const COMMAND_USAGE: Readonly<Record<CliCommand, string>> = Object.freeze({
   'domain-control': 'whoisleuth domain-control [manifest-input.json|review-input.json] [--json] [--quiet] [--no-color]',
   'monitor-once': 'whoisleuth monitor-once [manifest.json] [--previous <snapshot.json>] [--limit <1-20>] [--concurrency <1-3>] [--fail-on <policies>] [--json|--junit] [--quiet] [--no-color]',
   assurance: 'whoisleuth assurance [assurance-input.json] [--json] [--quiet] [--no-color]',
+  'change-packet': 'whoisleuth change-packet [change-packet-input.json] [--json] [--quiet] [--no-color]',
   'sharing-review': 'whoisleuth sharing-review [artifact.json] --marking <level> --recipient-scope <scope> --purpose <text> [--human-reviewed] [--personal-data-reviewed] [--redactions-confirmed] [--json]',
   'workflow-plan': 'whoisleuth workflow-plan <recipe> <domain|brand> [--json] [--quiet] [--no-color]',
   'workflow-run': 'whoisleuth workflow-run <recipe> <domain|brand> [--approve-network] [--resume <state.json>] [--json] [--quiet] [--no-color]',
@@ -410,6 +417,11 @@ const COMMAND_DETAILS: Readonly<Record<CliCommand, Readonly<{ description: strin
     example: 'whoisleuth assurance domain-assurance.json --json',
     boundary: 'The command is offline and treats every provider label, readiness state, and evidence reference as analyst-authored input. It changes no configuration.',
   },
+  'change-packet': {
+    description: 'Assemble pre-change, post-change, and planning evidence into one integrity-protected packet.',
+    example: 'whoisleuth change-packet change-review.json --json',
+    boundary: 'Assembly is offline. Readiness reflects only the supplied bounded evidence and does not authorise or perform a domain change.',
+  },
   'sharing-review': {
     description: 'Lint one reviewed artefact against local integrity, marking, recipient, personal-data, and redaction controls.',
     example: 'whoisleuth sharing-review packet.json --marking amber --recipient-scope organization --purpose "Reviewed incident handoff" --human-reviewed --personal-data-reviewed --redactions-confirmed --json',
@@ -483,6 +495,7 @@ const COMMAND_COLLECTION: Readonly<Record<CliCommand, Readonly<{
   'domain-control': { mode: 'offline', scope: 'Reads one bounded desired-state or review document and performs no collection or configuration change.' },
   'monitor-once': { mode: 'network', scope: 'Runs deep collection for at most 20 manifest domains with concurrency capped at 3.' },
   assurance: { mode: 'offline', scope: 'Reads one versioned plan capped at 2 MiB and makes no request or configuration change.' },
+  'change-packet': { mode: 'offline', scope: 'Reads one versioned packet input capped at 6 MiB and makes no request or configuration change.' },
   'sharing-review': { mode: 'offline', scope: 'Reads one artefact capped at 15 MiB, emits only bounded schema/version metadata and no content values, and performs no transmission.' },
   'workflow-plan': { mode: 'offline', scope: 'Builds a fixed typed recipe and executes none of its network or file steps.' },
   'workflow-run': { mode: 'network', scope: 'Runs only concrete fixed-recipe steps; network collection requires --approve-network and analyst-selection steps always pause.' },
@@ -1166,6 +1179,41 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
         ? formatJsonDocument(document)
         : terminal(formatDomainAssurance(document), args.color));
       return EXIT_CODES.SUCCESS;
+    }
+
+    if (args.action === 'change-packet') {
+      failureLabel = 'Domain change packet';
+      let input: string;
+      try {
+        input = dependencies.readArtifactInput
+          ? await dependencies.readArtifactInput(args.source)
+          : await readSavedLookupInputBounded(args.source
+            ? createReadStream(args.source, { highWaterMark: 64 * 1024 })
+            : dependencies.stdin || process.stdin, {
+              limit: MAX_DOMAIN_CHANGE_PACKET_INPUT_BYTES,
+              label: 'Domain change packet input',
+            });
+      } catch (error) {
+        if (error instanceof CliUsageError) throw error;
+        throw new CliUsageError(`Could not read domain change packet input: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
+      }
+      if (!input.trim()) throw new CliUsageError('change-packet requires one versioned JSON file or a document on stdin.');
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(input);
+      } catch {
+        throw new CliUsageError('Domain change packet input is not valid JSON.');
+      }
+      let document;
+      try {
+        document = await buildDomainChangePacket(parsed, commandContext.now());
+      } catch (error) {
+        throw new CliUsageError(boundedCliErrorMessage(error, 'Domain change packet input is invalid'));
+      }
+      if (!args.quiet) write(stdout, args.output === 'json'
+        ? formatJsonDocument(document)
+        : terminal(formatDomainChangePacket(document), args.color));
+      return document.gate.pass ? EXIT_CODES.SUCCESS : EXIT_CODES.PARTIAL_FAILURE;
     }
 
     if (args.action === 'sharing-review') {

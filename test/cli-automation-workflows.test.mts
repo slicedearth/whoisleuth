@@ -101,6 +101,9 @@ describe('CLI automation arguments', () => {
     assert.deepEqual(parseCliArguments(['assurance', 'plan.json', '--json']), {
       action: 'assurance', source: 'plan.json', output: 'json', quiet: false, color: true,
     });
+    assert.deepEqual(parseCliArguments(['change-packet', 'change.json', '--json']), {
+      action: 'change-packet', source: 'change.json', output: 'json', quiet: false, color: true,
+    });
     assert.deepEqual(parseCliArguments([
       'sharing-review', 'packet.json', '--marking', 'amber', '--recipient-scope', 'organization',
       '--purpose', 'Reviewed handoff', '--human-reviewed', '--personal-data-reviewed', '--redactions-confirmed', '--json',
@@ -162,6 +165,41 @@ describe('offline domain assurance', () => {
     });
     assert.equal(code, EXIT_CODES.PARTIAL_FAILURE);
     assert.equal(JSON.parse(stdout.value()).summary.status, 'blocked');
+  });
+
+  test('assembles a bounded change packet without network collection', async () => {
+    const stdout = capture();
+    let lookupCalled = false;
+    const change = (address: string) => ({
+      schema: 'whoisleuth.domain-change.input', version: 1, domain: 'example.test',
+      authoritySnapshots: [
+        { label: 'Authority A', source: 'fixture', state: 'observed', observedAt: NOW, records: [{ owner: 'example.test', type: 'A', value: address }] },
+        { label: 'Authority B', source: 'fixture', state: 'observed', observedAt: NOW, records: [{ owner: 'example.test', type: 'A', value: address }] },
+      ],
+      resolverSnapshots: [], acmeDependencies: [], certificate: null, hsts: null,
+    });
+    const code = await runCli(['change-packet', 'change.json', '--json'], {
+      stdout: stdout.stream,
+      stderr: capture().stream,
+      now: () => NOW,
+      readArtifactInput: async () => JSON.stringify({
+        schema: 'whoisleuth.domain-change-packet.input', version: 1, domain: 'example.test', reference: 'CHG-42',
+        preChange: change('192.0.2.10'), postChange: change('192.0.2.20'),
+        assurance: {
+          schema: 'whoisleuth.domain-assurance.input', version: 1, kind: 'planned-change', domain: 'example.test',
+          change: {
+            reference: 'CHG-42', startsAt: '2026-08-05T00:00:00Z', endsAt: '2026-08-05T02:00:00Z',
+            milestones: [{ id: 'dns', label: 'DNS published', expectedBy: NOW, evidenceSource: 'fixture', state: 'observed', observedAt: NOW, evidenceReference: 'post:dns' }],
+            rollbackCriteria: [{ id: 'rollback-dns', condition: 'DNS is unavailable', owner: 'Change lead', state: 'not_met' }],
+            postChangeChecks: [{ id: 'post-dns', label: 'DNS agrees', expectedState: 'aligned', evidenceSource: 'fixture', state: 'matched', evidenceReference: 'post:dns' }],
+          },
+        },
+      }),
+      runUnifiedLookup: async () => { lookupCalled = true; },
+    });
+    assert.equal(code, EXIT_CODES.SUCCESS);
+    assert.equal(lookupCalled, false);
+    assert.equal(JSON.parse(stdout.value()).schema, 'whoisleuth.domain-change-packet');
   });
 });
 
