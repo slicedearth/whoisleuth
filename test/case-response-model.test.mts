@@ -172,6 +172,7 @@ describe('case response record normalization', () => {
     const assertion = requiredValue(assertions[0]);
     assert.equal(assertion.kind, 'hypothesis');
     assert.deepEqual(assertion.evidencePinIds, [pin.id]);
+    assert.deepEqual(assertion.evidenceRelations, [{ evidencePinId: pin.id, stance: 'supports' }]);
     const resolved = updateCaseAssertion(assertions, { id: assertion.id, state: 'resolved' }, LATER, new Set([pin.id]));
     assert.equal(requiredValue(resolved[0]).state, 'resolved');
 
@@ -184,6 +185,29 @@ describe('case response record normalization', () => {
     assert.equal(trail.length, 2);
     assert.equal(trail[0]?.kind, 'assertion');
     assert.equal(trail[1]?.kind, 'manual');
+  });
+
+  test('retains explicit supporting, contradicting, and unresolved hypothesis evidence', () => {
+    const pins = [
+      requiredValue(appendCaseEvidencePin([], { label: 'Registration', value: 'Observed' }, NOW)[0]),
+      requiredValue(appendCaseEvidencePin([], { label: 'Hosting', value: 'Different network' }, NOW)[0]),
+      requiredValue(appendCaseEvidencePin([], { label: 'Certificate', value: 'Incomplete' }, NOW)[0]),
+    ];
+    const validIds = new Set(pins.map((pin) => pin.id));
+    const assertions = appendCaseAssertion([], {
+      kind: 'hypothesis',
+      statement: 'The observations may describe related infrastructure.',
+      evidenceRelations: [
+        { evidencePinId: pins[0]?.id, stance: 'supports' },
+        { evidencePinId: pins[1]?.id, stance: 'contradicts' },
+        { evidencePinId: pins[2]?.id, stance: 'unresolved' },
+        { evidencePinId: 'missing-pin', stance: 'supports' },
+      ],
+    }, NOW, validIds);
+
+    const assertion = requiredValue(assertions[0]);
+    assert.deepEqual(assertion.evidenceRelations?.map((item) => item.stance), ['supports', 'contradicts', 'unresolved']);
+    assert.deepEqual(assertion.evidencePinIds, pins.map((pin) => pin.id));
   });
 
   test('keeps deployment, provider, and analyst sighting states source-qualified', () => {

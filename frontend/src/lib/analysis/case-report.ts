@@ -13,6 +13,7 @@ import { caseEvidenceIncomparableReasons, compareCaseEvidence, latestCaseEvidenc
 import type { CaseEvidenceSnapshot, CaseRecord, EvidenceFactor } from './case-model.ts';
 import { httpSecurityHeaderLabel } from './http-summary.ts';
 import { analystInteroperabilityTags } from '../../../../lib/analyst-taxonomy.mts';
+import { CASE_EVIDENCE_RELATION_STANCES } from './case-response-model.ts';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -302,6 +303,7 @@ export function buildCaseReport(
       assertions: caseRecord.assertions.map((item) => ({
         ...item,
         evidencePinIds: [...item.evidencePinIds],
+        ...(item.evidenceRelations ? { evidenceRelations: item.evidenceRelations.map((relation) => ({ ...relation })) } : {}),
         ...(item.provenance ? {
           provenance: {
             ...item.provenance,
@@ -529,6 +531,12 @@ function buildMarkdown(report: CaseReportJson): string {
           if (assertion.provenance.markings.length) lines.push(`  Markings: ${escapeMarkdownInline(assertion.provenance.markings.join(', '))}`);
         }
         if (assertion.evidencePinIds.length) lines.push(`  Evidence pins: ${escapeMarkdownInline(assertion.evidencePinIds.join(', '))}`);
+        if (assertion.evidenceRelations?.length) {
+          for (const stance of CASE_EVIDENCE_RELATION_STANCES) {
+            const pins = assertion.evidenceRelations.filter((item) => item.stance === stance).map((item) => item.evidencePinId);
+            if (pins.length) lines.push(`  ${escapeMarkdownInline(stance)}: ${escapeMarkdownInline(pins.join(', '))}`);
+          }
+        }
       }
       lines.push('');
     }
