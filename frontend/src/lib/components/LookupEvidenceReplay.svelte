@@ -5,11 +5,14 @@
     type LookupEvidenceReplay,
   } from '$lib/analysis/lookup-evidence-replay.ts';
   import LookupAssetGraph from '$lib/components/LookupAssetGraph.svelte';
+  import { buildLookupEvidenceReplayDiff } from '$lib/analysis/lookup-evidence-replay-diff.ts';
 
   let replay = $state<LookupEvidenceReplay | null>(null);
   let status = $state('');
   let loading = $state(false);
   let expectedSha256 = $state('');
+  let comparison = $state<ReturnType<typeof buildLookupEvidenceReplayDiff> | null>(null);
+  let comparisonStatus = $state('');
 
   async function load(event: Event) {
     const control = event.currentTarget as HTMLInputElement;
@@ -18,6 +21,7 @@
     loading = true;
     status = '';
     replay = null;
+    comparison = null;
     try {
       if (file.size > LOOKUP_EVIDENCE_REPLAY_MAX_BYTES) {
         throw new Error('Lookup evidence replay files are limited to 5 MB.');
@@ -32,6 +36,24 @@
       status = cause instanceof Error ? cause.message : 'The evidence file could not be replayed.';
     } finally {
       loading = false;
+      control.value = '';
+    }
+  }
+
+  async function loadComparison(event: Event) {
+    const control = event.currentTarget as HTMLInputElement;
+    const file = control.files?.[0];
+    if (!file || !replay) return;
+    comparisonStatus = '';
+    try {
+      if (file.size > LOOKUP_EVIDENCE_REPLAY_MAX_BYTES) throw new Error('Lookup evidence replay files are limited to 5 MB.');
+      const second = await parseLookupEvidenceReplay(await file.text());
+      comparison = buildLookupEvidenceReplayDiff(replay, second);
+      comparisonStatus = `Compared ${file.name} locally. No source was contacted.`;
+    } catch (cause) {
+      comparison = null;
+      comparisonStatus = cause instanceof Error ? cause.message : 'The second evidence file could not be compared.';
+    } finally {
       control.value = '';
     }
   }
@@ -118,6 +140,18 @@
 
         <LookupAssetGraph graph={replay.graph} />
 
+        <section class="comparison" aria-labelledby="replay-comparison-title">
+          <h3 id="replay-comparison-title">Compare another capture</h3>
+          <p class="note">Choose a second export for the same target. The comparison separates observed value changes from source-quality and application-interpretation differences.</p>
+          <label class="picker"><span>Choose second evidence JSON</span><input type="file" accept="application/json,.json" onchange={loadComparison} /></label>
+          {#if comparisonStatus}<p aria-live="polite">{comparisonStatus}</p>{/if}
+          {#if comparison}
+            <div class="comparison-counts"><span><strong>{comparison.counts.observedChanges}</strong> observed</span><span><strong>{comparison.counts.collectionDifferences}</strong> collection</span><span><strong>{comparison.counts.interpretationDifferences}</strong> interpretation</span></div>
+            <ol>{#each comparison.rows.filter((item) => item.kind !== 'unchanged') as row}<li><div><strong>{row.label}</strong><span>{row.kind.replaceAll('_', ' ')}</span></div><p>{row.left} → {row.right}</p><small>{row.explanation}</small></li>{/each}</ol>
+            {#if !comparison.rows.some((item) => item.kind !== 'unchanged')}<p>No bounded difference was observed in the comparable replay fields.</p>{/if}
+          {/if}
+        </section>
+
         <details class="limits">
           <summary>Replay limitations</summary>
           <ul>{#each replay.limitations as limitation}<li>{limitation}</li>{/each}</ul>
@@ -168,6 +202,7 @@
   .brief p,.brief ul,.brief ol{margin:5px 0 0;color:var(--muted);font-size:var(--text-2xs);line-height:1.5}
   .brief ul,.brief ol{padding-left:17px}
   .limits{border-top:1px solid var(--border)}
+  .comparison{display:grid;gap:8px;padding:11px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}.comparison .picker{width:max-content;margin:0}.comparison-counts{display:flex;flex-wrap:wrap;gap:6px}.comparison-counts span{padding:6px 8px;border:1px solid var(--border);border-radius:999px;color:var(--muted);font-size:var(--text-2xs)}.comparison ol{display:grid;gap:6px;margin:0;padding:0;list-style:none}.comparison li{min-width:0;padding:8px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}.comparison li div{display:flex;justify-content:space-between;gap:8px}.comparison li span{color:var(--cyan);font:650 var(--text-2xs) var(--mono)}.comparison li p,.comparison li small{overflow-wrap:anywhere}.comparison li p{margin:5px 0;font-size:var(--text-xs)}.comparison li small{color:var(--muted)}
   .limits>summary{padding:10px 0;font:680 var(--text-xs) var(--mono);cursor:pointer}
   @media(max-width:760px){
     .source-grid,dl,.brief>div{grid-template-columns:minmax(0,1fr)}
