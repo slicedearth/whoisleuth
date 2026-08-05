@@ -3,6 +3,7 @@
   import { onMount } from 'svelte';
   import PageHeading from '$lib/components/PageHeading.svelte';
   import Pagination from '$lib/components/Pagination.svelte';
+  import SourceReliabilityDashboard from '$lib/components/SourceReliabilityDashboard.svelte';
   import {
     filterRegistrySupportRows,
     inspectRegistrySupport,
@@ -190,6 +191,8 @@
   </div>
   <p class="matrix-note">This matrix describes the current application contract. It does not promise that a registry, registrar, DNS resolver, host, or optional provider will return a value.</p>
 </section>
+
+<SourceReliabilityDashboard />
 
 <section class="inspector-section" aria-labelledby="inspector-title">
   <header class="section-intro">
