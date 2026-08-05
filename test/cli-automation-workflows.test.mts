@@ -89,6 +89,13 @@ function savedLookup(
 describe('CLI automation arguments', () => {
   test('parses opt-in output, strict-exit, event, diff, manual, and checkpoint controls', () => {
     assert.deepEqual(parseCliArguments(['manual']), { action: 'manual' });
+    assert.deepEqual(parseCliArguments([
+      'manifest', 'lookup.json', 'comparison.json', '--workflow', 'domain review',
+      '--configuration-digest', `sha256:${'a'.repeat(64)}`, '--json',
+    ]), {
+      action: 'manifest', sources: ['lookup.json', 'comparison.json'], workflow: 'domain review',
+      configurationDigestSha256: `sha256:${'a'.repeat(64)}`, output: 'json', quiet: false, color: true,
+    });
     assert.deepEqual(parseCliArguments(['diff', 'left.json', 'right.json', '--json']), {
       action: 'diff', leftSource: 'left.json', rightSource: 'right.json', output: 'json', quiet: false, color: true,
     });
@@ -130,6 +137,8 @@ describe('CLI automation arguments', () => {
     assert.throws(() => parseCliArguments(['timeline', 'one.json']), /from 2 to 20/u);
     assert.throws(() => parseCliArguments(['timeline', 'same.json', 'same.json']), /must be different/u);
     assert.throws(() => parseCliArguments(['reconcile', 'one.json']), /from 2 to 5/u);
+    assert.throws(() => parseCliArguments(['manifest', 'one.json']), /requires --workflow/iu);
+    assert.throws(() => parseCliArguments(['manifest', 'one.json', 'one.json', '--workflow', 'review']), /must be different/iu);
   });
 });
 
@@ -228,6 +237,27 @@ describe('local certificate event intake', () => {
     assert.equal(code, EXIT_CODES.SUCCESS);
     assert.equal(lookupCalled, false);
     assert.equal(JSON.parse(stdout.value()).schema, 'whoisleuth.external-findings');
+  });
+});
+
+describe('reproducible investigation manifest', () => {
+  test('reads ordered local artefacts and emits no source paths', async () => {
+    const stdout = capture();
+    let lookupCalled = false;
+    const code = await runCli(['manifest', '/private/lookup.json', '/private/brief.json', '--workflow', 'domain review', '--json'], {
+      stdout: stdout.stream,
+      stderr: capture().stream,
+      now: () => NOW,
+      readDiffInput: async (source) => source.endsWith('lookup.json')
+        ? '{"schema":"whoisleuth.cli.lookup","version":1}'
+        : '{"schema":"whoisleuth.cli.lookup-brief","version":2}',
+      runUnifiedLookup: async () => { lookupCalled = true; },
+    });
+    assert.equal(code, EXIT_CODES.SUCCESS);
+    assert.equal(lookupCalled, false);
+    const document = JSON.parse(stdout.value());
+    assert.equal(document.schema, 'whoisleuth.investigation-manifest');
+    assert.doesNotMatch(stdout.value(), /private|lookup\.json|brief\.json/iu);
   });
 });
 

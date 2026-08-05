@@ -52,6 +52,10 @@ import {
   verifyInvestigationCapsule,
   type InvestigationCapsule,
 } from '../frontend/src/lib/analysis/investigation-capsule.ts';
+import {
+  INVESTIGATION_MANIFEST_SCHEMA,
+  INVESTIGATION_MANIFEST_VERSION,
+} from './investigation-manifest.mts';
 
 export const OFFLINE_ARTIFACT_VERIFICATION_SCHEMA = 'whoisleuth.offline-artifact-verification';
 export const OFFLINE_ARTIFACT_VERIFICATION_VERSION = 1;
@@ -108,6 +112,7 @@ const SIGNED_ARTIFACT_VERSIONS: Readonly<Record<string, ReadonlySet<number>>> = 
   [BULK_REVIEW_MANIFEST_SCHEMA]: new Set([BULK_REVIEW_MANIFEST_VERSION]),
   [DOMAIN_CONTROL_MANIFEST_SCHEMA]: new Set([DOMAIN_CONTROL_MANIFEST_VERSION]),
   [DOMAIN_CHANGE_PACKET_SCHEMA]: new Set([DOMAIN_CHANGE_PACKET_VERSION]),
+  [INVESTIGATION_MANIFEST_SCHEMA]: new Set([INVESTIGATION_MANIFEST_VERSION]),
 });
 
 function record(value: unknown): UnknownRecord | null {

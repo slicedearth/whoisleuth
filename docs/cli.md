@@ -111,7 +111,7 @@ HTTP status, and a bounded explanation.
 | Compare saved evidence | `compare`, `page-compare`, `diff`, `reconcile`, `timeline`, `mail-review` |
 | Review supplied evidence | `brief`, `review-evidence`, `registry-doctor`, `registry-cohort`, `source-report`, `sharing-review` |
 | Plan and assure changes | `domain-control`, `monitor-once`, `assurance`, `change-packet`, `workflow-plan`, `workflow-run` |
-| Verify and package evidence | `case-pack`, `verify-artifact`, `inspect-archive`, `sign-artifact`, `verify-signature`, `export` |
+| Verify and package evidence | `case-pack`, `manifest`, `verify-artifact`, `inspect-archive`, `sign-artifact`, `verify-signature`, `export` |
 | Calibrate offline | `risk-calibrate`, `lookalike-calibrate` |
 | Operate the CLI | `doctor`, `registry-scaffold`, `commands`, `completion`, `manual` |
 
@@ -201,6 +201,10 @@ full contracts into the packaged reference.
 ### Optional evidence-package signing
 
 [Read the local signing and verification contract.](cli-reference.md#optional-evidence-package-signing)
+
+### Reproducible investigation manifest
+
+[Read the ordered, path-free artefact digest contract.](cli-reference.md#reproducible-investigation-manifest)
 
 ### Bulk lookup
 

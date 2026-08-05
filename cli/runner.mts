@@ -96,6 +96,11 @@ import {
 } from '../lib/domain-change-packet.mts';
 import { buildCliManual } from './manual.mts';
 import {
+  MAX_INVESTIGATION_MANIFEST_ARTIFACT_BYTES,
+  buildInvestigationManifest,
+  formatInvestigationManifest,
+} from './investigation-manifest.mts';
+import {
   MAX_CT_EVENT_INPUT_BYTES,
   buildCtEventFindings,
   formatCtEventFindings,
@@ -198,6 +203,7 @@ Review saved evidence:
   verify-artifact    Validate saved evidence or an integrity envelope offline.
 
 Integrity and calibration:
+  manifest           Record ordered artefact and configuration digests.
   sign-artifact      Sign one reviewed packet or manifest locally.
   verify-signature   Verify one signed evidence package locally.
   risk-calibrate     Replay reviewed labels without changing the model.
@@ -224,6 +230,7 @@ const COMMAND_USAGE: Readonly<Record<CliCommand, string>> = Object.freeze({
   doctor: 'whoisleuth doctor [--network] [--json] [--quiet] [--no-color]',
   commands: 'whoisleuth commands [--json] [--quiet] [--no-color]',
   manual: 'whoisleuth manual',
+  manifest: 'whoisleuth manifest <artefact.json> [...] --workflow <label> [--configuration-digest <sha256:digest>] [--json] [--quiet] [--no-color]',
   lookup: 'whoisleuth lookup <domain|IP|ASN> [--json|--junit|--markdown|--html] [--fast|--deep] [--observer <label>] [--vantage <label>] [--plan] [--summary|--verbose] [--strict-exit] [--fail-on <policies>] [--events] [--quiet] [--no-color]',
   bulk: 'whoisleuth bulk [file] [--json|--jsonl|--junit|--csv|--domains|--queries] [--registered-only|--inconclusive-only|--errors-only] [--fast|--deep] [--concurrency <1-8>] [--checkpoint <file> [--resume]] [--events] [--plan] [--fail-on <policies>]',
   'ct-search': 'whoisleuth ct-search <keyword> [--json] [--quiet] [--no-color]',
@@ -283,6 +290,11 @@ const COMMAND_DETAILS: Readonly<Record<CliCommand, Readonly<{ description: strin
     description: 'Print a generated roff manual page for local installation.',
     example: 'whoisleuth manual | man -l -',
     boundary: 'Generation is offline and derives from the same command catalogue as focused help.',
+  },
+  manifest: {
+    description: 'Record an ordered, path-free manifest for up to 16 local JSON artefacts.',
+    example: 'whoisleuth manifest lookup.json comparison.json --workflow "domain review" --json',
+    boundary: 'The command records hashes and bounded schema metadata only. It omits source paths and artefact contents and performs no network collection.',
   },
   lookup: {
     description: 'Collect registration evidence for one domain, IP, or ASN.',
@@ -479,6 +491,7 @@ const COMMAND_COLLECTION: Readonly<Record<CliCommand, Readonly<{
   doctor: { mode: 'network', scope: 'Network access is opt-in with --network and is limited to fixed public DNS, HTTPS, and WHOIS diagnostics.' },
   commands: { mode: 'offline', scope: 'Reads the embedded command catalogue and performs no collection.' },
   manual: { mode: 'offline', scope: 'Builds documentation from the embedded command catalogue.' },
+  manifest: { mode: 'offline', scope: 'Reads 1 to 16 local JSON artefacts capped at 32 MiB in total and retains no source paths.' },
   lookup: { mode: 'network', scope: 'Accepts one target. Fast is the default; deep collection must be selected explicitly.' },
   bulk: { mode: 'network', scope: 'Accepts at most 500 fast or 50 deep targets, with concurrency capped at 8 fast or 3 deep.' },
   'ct-search': { mode: 'network', scope: 'Accepts one bounded search keyword and queries the fixed certificate-transparency source.' },
@@ -659,6 +672,39 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
         usage: COMMAND_USAGE,
         version: VERSION,
       }));
+      return EXIT_CODES.SUCCESS;
+    }
+
+    if (args.action === 'manifest') {
+      failureLabel = 'Investigation manifest';
+      const artifacts: { content: string }[] = [];
+      try {
+        for (const source of args.sources) {
+          const content = dependencies.readDiffInput
+            ? await dependencies.readDiffInput(source)
+            : await readSavedLookupInputBounded(
+              createReadStream(source, { highWaterMark: 64 * 1024 }),
+              { limit: MAX_INVESTIGATION_MANIFEST_ARTIFACT_BYTES, label: 'Manifest artefact input' },
+            );
+          artifacts.push({ content });
+        }
+      } catch (error) {
+        if (error instanceof CliUsageError) throw error;
+        throw new CliUsageError(`Could not read manifest artefact input: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
+      }
+      let document;
+      try {
+        document = await buildInvestigationManifest({
+          workflow: args.workflow,
+          configurationDigestSha256: args.configurationDigestSha256,
+          artifacts,
+        }, commandContext.now(), VERSION);
+      } catch (error) {
+        throw new CliUsageError(boundedCliErrorMessage(error, 'Investigation manifest input is invalid'));
+      }
+      if (!args.quiet) write(stdout, args.output === 'json'
+        ? formatJsonDocument(document)
+        : terminal(formatInvestigationManifest(document), args.color));
       return EXIT_CODES.SUCCESS;
     }
 

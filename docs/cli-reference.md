@@ -81,6 +81,7 @@ node bin/whoisleuth.mts inspect-archive workspace.json --json
 node bin/whoisleuth.mts inspect-archive workspace.json --search example.invalid --json
 node bin/whoisleuth.mts sign-artifact response-packet.json --private-key-file analyst-private.pem > response-packet.signed.json
 node bin/whoisleuth.mts ct-intake certificate-events.json --json > external-findings.json
+node bin/whoisleuth.mts manifest lookup.json comparison.json --workflow 'domain review' --json > investigation-manifest.json
 node bin/whoisleuth.mts verify-signature response-packet.signed.json --public-key-file analyst-public.pem
 node bin/whoisleuth.mts lookup example.com --deep --json > lookup.json
 node bin/whoisleuth.mts compare lookup.json --json
@@ -392,7 +393,7 @@ machine access is not evidence that a domain is unregistered or safe.
 This release supports `lookup`, `bulk`, `ct-search`, `ct-intake`, `discover`, `discover-scan`, `posture`,
 `http`, `tls`, `registry-support`, `registry-doctor`, `registry-cohort`, `registry-scaffold`, `risk-calibrate`,
 `lookalike-calibrate`, `verify-artifact`,
-`inspect-archive`, `sign-artifact`, `verify-signature`, `source-report`,
+`inspect-archive`, `manifest`, `sign-artifact`, `verify-signature`, `source-report`,
 `compare`, `page-compare`, `mail-review`, `review-evidence`, `brief`, `case-pack`, `domain-control`,
 `monitor-once`, `assurance`, `change-packet`, `sharing-review`, `workflow-plan`, `workflow-run`, `diff`, `reconcile`, `timeline`,
 `export`, `doctor`, `commands`, `completion`, and `manual`. Additional command families
@@ -631,6 +632,23 @@ as `signature_valid`; signer trust is separately reported as `trusted_key` or
 verification establishes only that the package is internally self-consistent.
 WHOISleuth does not generate, store, recover, rotate, publish, or establish
 trust in signing keys.
+
+## Reproducible investigation manifest
+
+`manifest <artefact.json> [...] --workflow <label>` reads from 1 to 16 ordered
+JSON artefacts and emits `whoisleuth.investigation-manifest` version 1. Each
+entry records its sequence, bounded schema and version metadata, exact UTF-8
+content digest, canonical JSON digest, and byte count. The manifest also records
+the installed CLI version and can include an externally calculated
+`--configuration-digest sha256:...` without copying configuration values.
+
+Source paths, filenames, command-line arguments, and artefact contents are not
+retained. Individual artefacts are capped at 15 MiB and the ordered set at
+32 MiB. The manifest carries its own canonical integrity digest, works with
+`verify-artifact`, and can be passed to `sign-artifact`. Reproduction still
+requires the exact digested artefacts, compatible source services, and any
+separately held configuration; matching digests do not establish observation
+accuracy or freshness.
 
 ## Bulk lookup
 
