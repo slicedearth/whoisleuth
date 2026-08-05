@@ -56,6 +56,11 @@ import {
   INVESTIGATION_MANIFEST_SCHEMA,
   INVESTIGATION_MANIFEST_VERSION,
 } from './investigation-manifest.mts';
+import {
+  CLI_CASE_PACK_SCHEMA,
+  CLI_CASE_PACK_VERSION,
+  verifyCliCasePack,
+} from './case-pack.mts';
 
 export const OFFLINE_ARTIFACT_VERIFICATION_SCHEMA = 'whoisleuth.offline-artifact-verification';
 export const OFFLINE_ARTIFACT_VERIFICATION_VERSION = 1;
@@ -77,6 +82,7 @@ type ArtifactKind =
   | 'case_response_packet'
   | 'investigation_capsule'
   | 'saved_lookup'
+  | 'cli_case_pack'
   | 'signed_review_artifact';
 type VerificationState = 'verified' | 'envelope_valid' | 'structure_valid';
 type UnknownRecord = Record<string, unknown>;
@@ -165,7 +171,7 @@ function archiveReport(
     artifact: Object.freeze({
       kind: encrypted ? 'encrypted_workspace_archive' : 'workspace_archive',
       schema: WORKSPACE_ARCHIVE_SCHEMA,
-      version: archive.version,
+      version: archive.sourceVersion,
     }),
     state: 'verified',
     valid: true,
@@ -236,6 +242,36 @@ export async function verifyOfflineArtifact(
   options: Readonly<{ passphrase?: string | null }> = {},
 ): Promise<OfflineArtifactVerificationReport> {
   const value = parseJson(raw);
+
+  const casePackPacket = record(value.packet);
+  if (casePackPacket?.schema === CLI_CASE_PACK_SCHEMA) {
+    const verified = verifyCliCasePack(value);
+    return Object.freeze({
+      schema: OFFLINE_ARTIFACT_VERIFICATION_SCHEMA,
+      version: OFFLINE_ARTIFACT_VERIFICATION_VERSION,
+      artifact: Object.freeze({
+        kind: 'cli_case_pack',
+        schema: CLI_CASE_PACK_SCHEMA,
+        version: CLI_CASE_PACK_VERSION,
+      }),
+      state: 'verified',
+      valid: true,
+      checks: Object.freeze({
+        structure: 'verified',
+        contentIntegrity: 'verified',
+        authenticatedEncryption: 'not_applicable',
+      }),
+      summary: Object.freeze({
+        inputBytes: inputBytes(raw),
+        sectionCount: null,
+        recordCount: verified.caseCount,
+        ciphertextBytes: null,
+      }),
+      limitations: Object.freeze([
+        'Case-pack verification detects changes after export and checks the bounded case collection; it does not authenticate the analyst, review decision, source observations, or recipient authorisation.',
+      ]),
+    });
+  }
 
   if (isEncryptedWorkspaceArchive(value)) {
     const inspected = inspectEncryptedWorkspaceArchive(value);

@@ -136,6 +136,7 @@ export async function runEvidenceCommand(
       search: args.search,
       reveal: args.reveal,
       requireMatch: args.requireMatch,
+      expectedContentDigest: args.expectedContentDigest,
     });
     if (!args.quiet) {
       dependencies.stdout.write(

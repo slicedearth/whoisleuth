@@ -12,6 +12,7 @@ export type InspectArchiveArguments = {
   search: string | null;
   reveal: boolean;
   requireMatch: boolean;
+  expectedContentDigest: string | null;
   output: 'terminal' | 'json';
 } & TerminalOptions;
 
@@ -34,6 +35,7 @@ export function parseInspectArchiveArguments(argv: string[]): InspectArchiveArgu
   let search: string | null = null;
   let reveal = false;
   let requireMatch = false;
+  let expectedContentDigest: string | null = null;
   let output: 'terminal' | 'json' = 'terminal';
   let quiet = false;
   let color = true;
@@ -59,6 +61,13 @@ export function parseInspectArchiveArguments(argv: string[]): InspectArchiveArgu
     } else if (argument === '--require-match') {
       if (requireMatch) throw new CliUsageError('--require-match may be supplied only once.');
       requireMatch = true;
+    } else if (argument === '--expect-content-digest') {
+      if (expectedContentDigest !== null) throw new CliUsageError('--expect-content-digest may be supplied only once.');
+      const value = argv[++index];
+      if (!value || !/^sha256:[a-f0-9]{64}$/u.test(value)) {
+        throw new CliUsageError('--expect-content-digest requires sha256 followed by 64 lowercase hexadecimal characters.');
+      }
+      expectedContentDigest = value;
     } else if (argument === '--quiet') quiet = true;
     else if (argument === '--no-color') color = false;
     else if (argument.startsWith('-')) throw new CliUsageError(`Unknown option "${argument}".`);
@@ -75,6 +84,7 @@ export function parseInspectArchiveArguments(argv: string[]): InspectArchiveArgu
     search,
     reveal,
     requireMatch,
+    expectedContentDigest,
     output,
     quiet,
     color,

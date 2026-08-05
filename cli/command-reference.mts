@@ -101,7 +101,7 @@ const COMMAND_USAGE: Readonly<Record<CliCommand, string>> = Object.freeze({
   'risk-calibrate': 'whoisleuth risk-calibrate [dataset.json] [--json] [--quiet] [--no-color]',
   'lookalike-calibrate': 'whoisleuth lookalike-calibrate [dataset.json] [--json] [--quiet] [--no-color]',
   'verify-artifact': 'whoisleuth verify-artifact [artifact.json] [--passphrase-file <file>] [--json] [--quiet] [--no-color]',
-  'inspect-archive': 'whoisleuth inspect-archive [archive.json] [--passphrase-file <file>] [--search <value>] [--require-match] [--reveal] [--json]',
+  'inspect-archive': 'whoisleuth inspect-archive [archive.json] [--passphrase-file <file>] [--search <value>] [--require-match] [--reveal] [--expect-content-digest <sha256:digest>] [--json]',
   'sign-artifact': 'whoisleuth sign-artifact [artifact.json] --private-key-file <file>',
   'verify-signature': 'whoisleuth verify-signature [package.json] [--public-key-file <file>] [--json] [--quiet] [--no-color]',
   'source-report': 'whoisleuth source-report [lookup.json] [--json] [--quiet] [--no-color]',
@@ -243,7 +243,7 @@ const COMMAND_DETAILS: Readonly<Record<CliCommand, CommandDetail>> = Object.free
   'inspect-archive': {
     description: 'Summarise or search one workspace archive with redacted output by default.',
     example: 'whoisleuth inspect-archive workspace.json --search example.test --json',
-    boundary: 'Exact matches require --reveal. The archive is read locally and is never uploaded.',
+    boundary: 'Exact matches require --reveal. Content identity excludes export time and formatting. The archive is read locally and is never uploaded.',
   },
   'sign-artifact': {
     description: 'Sign one reviewed response packet or supported manifest with a local private key.',

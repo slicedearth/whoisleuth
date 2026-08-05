@@ -10,13 +10,14 @@ import {
   WORKSPACE_ARCHIVE_SCHEMA,
   readWorkspaceArchive,
 } from '../frontend/src/lib/analysis/workspace-archive.ts';
+import { canonicalArtifactJson } from '../frontend/src/lib/analysis/artifact-integrity.ts';
 import {
   MAX_OFFLINE_ARTIFACT_BYTES,
   verifyOfflineArtifact,
 } from './artifact-verify.mts';
 
 export const ARCHIVE_INSPECTION_SCHEMA = 'whoisleuth.workspace-archive-inspection';
-export const ARCHIVE_INSPECTION_VERSION = 1;
+export const ARCHIVE_INSPECTION_VERSION = 2;
 export const MAX_ARCHIVE_SEARCH_LENGTH = 253;
 export const MAX_ARCHIVE_SEARCH_MATCHES = 100;
 export const MAX_ARCHIVE_SEARCH_NODES = 100_000;
@@ -36,11 +37,13 @@ export type ArchiveInspectionReport = Readonly<{
     encrypted: boolean;
     schema: typeof WORKSPACE_ARCHIVE_SCHEMA;
     version: number;
+    readerVersion: number;
   }>;
   summary: Readonly<{
     inputBytes: number;
     sectionCount: number;
     recordCount: number;
+    contentDigestSha256: string;
   }>;
   sections: readonly Readonly<{
     id: string;
@@ -72,6 +75,7 @@ const SEARCHABLE_FIELDS = new Set([
   'target',
 ]);
 const CONTROL_RE = /[\u0000-\u001f\u007f]/u;
+const SHA256_DIGEST_RE = /^sha256:[a-f0-9]{64}$/u;
 
 function record(value: unknown): UnknownRecord | null {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -117,6 +121,33 @@ function canonicalSearchValue(value: string): string {
 
 function valueDigest(value: string): string {
   return createHash('sha256').update(value, 'utf8').digest('hex');
+}
+
+function archiveContentDigest(
+  sections: Awaited<ReturnType<typeof readWorkspaceArchive>>['sections'],
+): string {
+  const identity = sections.map((section) => ({
+    id: section.id,
+    schema: section.schema,
+    version: section.version,
+    recordCount: section.recordCount,
+    content: (() => {
+      if (!section.data || typeof section.data !== 'object' || Array.isArray(section.data)) {
+        return section.data;
+      }
+      const { exportedAt: _exportedAt, generatedAt: _generatedAt, ...content } = section.data as Record<string, unknown>;
+      return content;
+    })(),
+  }));
+  return `sha256:${createHash('sha256').update(canonicalArtifactJson(identity), 'utf8').digest('hex')}`;
+}
+
+function expectedContentDigest(value: unknown): string | null {
+  if (value === null || value === undefined || value === '') return null;
+  if (typeof value !== 'string' || !SHA256_DIGEST_RE.test(value)) {
+    throw new TypeError('Expected archive content digest must use the form sha256 followed by 64 lowercase hexadecimal characters.');
+  }
+  return value;
 }
 
 function searchSection(
@@ -171,6 +202,7 @@ export async function inspectWorkspaceArchive(
     search?: string | null;
     reveal?: boolean;
     requireMatch?: boolean;
+    expectedContentDigest?: string | null;
   }> = {},
 ): Promise<ArchiveInspectionReport> {
   const parsed = parseJson(raw);
@@ -185,6 +217,11 @@ export async function inspectWorkspaceArchive(
     ? await decryptWorkspaceArchive(parsed, options.passphrase as string)
     : parsed;
   const archive = await readWorkspaceArchive(archiveValue);
+  const contentDigestSha256 = archiveContentDigest(archive.sections);
+  const expectedDigest = expectedContentDigest(options.expectedContentDigest);
+  if (expectedDigest && expectedDigest !== contentDigestSha256) {
+    throw new TypeError('Workspace archive content digest did not match the expected value.');
+  }
   const search = normalizeSearch(options.search);
   const reveal = options.reveal === true;
   if (reveal && !search) throw new TypeError('--reveal requires --search.');
@@ -206,12 +243,14 @@ export async function inspectWorkspaceArchive(
     archive: Object.freeze({
       encrypted,
       schema: WORKSPACE_ARCHIVE_SCHEMA,
-      version: archive.version,
+      version: archive.sourceVersion,
+      readerVersion: archive.version,
     }),
     summary: Object.freeze({
       inputBytes: Buffer.byteLength(raw, 'utf8'),
       sectionCount: archive.sections.length,
       recordCount: archive.sections.reduce((sum, section) => sum + section.recordCount, 0),
+      contentDigestSha256,
     }),
     sections: Object.freeze(archive.sections.map((section) => Object.freeze({
       id: section.id,
@@ -232,6 +271,7 @@ export async function inspectWorkspaceArchive(
     }),
     limitations: Object.freeze([
       'Inspection validates the archive and reports bounded section metadata without printing retained evidence by default.',
+      'The content digest covers ordered section identities and normalised content after excluding each section export timestamp. Equality detects matching retained archive content but does not authenticate its source or accuracy.',
       'Search checks exact values in a small allowlist of target fields and never searches analyst notes, contacts, or raw evidence.',
       ...(reveal
         ? ['Search values were revealed only because the operator supplied --reveal; handle the output as sensitive evidence.']
@@ -246,6 +286,7 @@ export function formatArchiveInspection(report: ArchiveInspectionReport): string
     `Archive: ${report.archive.encrypted ? 'encrypted' : 'plain'} · v${report.archive.version}`,
     `Sections: ${report.summary.sectionCount}`,
     `Records: ${report.summary.recordCount}`,
+    `Content digest: ${report.summary.contentDigestSha256}`,
   ];
   for (const section of report.sections) {
     lines.push(`${section.label}: ${section.recordCount} records · ${section.status} · ${section.bytes} bytes`);

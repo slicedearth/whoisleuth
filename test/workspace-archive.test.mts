@@ -285,6 +285,7 @@ describe('portable workspace archive', () => {
 
     const parsed = await readWorkspaceArchive(legacy);
     assert.equal(parsed.version, WORKSPACE_ARCHIVE_VERSION);
+    assert.equal(parsed.sourceVersion, 1);
     assert.equal(parsed.sections.length, 8);
     assert.equal(parsed.sections.some((section) => section.id === 'bulkSessions'), false);
     assert.equal(parsed.sections.some((section) => section.id === 'websiteSnapshots'), false);
@@ -309,6 +310,7 @@ describe('portable workspace archive', () => {
 
     const parsed = await readWorkspaceArchive(legacy);
     assert.equal(parsed.version, WORKSPACE_ARCHIVE_VERSION);
+    assert.equal(parsed.sourceVersion, 2);
     assert.equal(parsed.sections.length, 9);
     assert.equal(parsed.sections.some((section) => section.id === 'websiteSnapshots'), false);
     assert.equal(parsed.sections.some((section) => section.id === 'investigationTemplates'), false);
@@ -329,6 +331,7 @@ describe('portable workspace archive', () => {
 
     const parsed = await readWorkspaceArchive(legacy);
     assert.equal(parsed.version, WORKSPACE_ARCHIVE_VERSION);
+    assert.equal(parsed.sourceVersion, 3);
     assert.equal(parsed.sections.length, 10);
     assert.equal(parsed.sections.some((section) => section.id === 'investigationTemplates'), false);
     assert.equal(parsed.sections.some((section) => section.id === 'bulkReview'), false);
@@ -346,6 +349,7 @@ describe('portable workspace archive', () => {
 
     const parsed = await readWorkspaceArchive(legacy);
     assert.equal(parsed.version, WORKSPACE_ARCHIVE_VERSION);
+    assert.equal(parsed.sourceVersion, 4);
     assert.equal(parsed.sections.length, 11);
     assert.equal(parsed.sections.some((section) => section.id === 'bulkReview'), false);
   });

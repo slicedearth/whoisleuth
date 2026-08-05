@@ -16,6 +16,8 @@ import {
 } from '../frontend/src/lib/analysis/workspace-archive-crypto.ts';
 import { sha256ArtifactDigest } from '../frontend/src/lib/analysis/artifact-integrity.ts';
 import { buildInvestigationCapsule } from '../frontend/src/lib/analysis/investigation-capsule.ts';
+import { buildCliCasePack } from '../cli/case-pack.mts';
+import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model.ts';
 
 const PASSPHRASE = 'fixture archive passphrase';
 
@@ -83,6 +85,30 @@ describe('offline artifact verifier', () => {
       verifyOfflineArtifact(JSON.stringify({ ...artifact, generatedAt: '2026-07-16T00:00:00.000Z' })),
       /failed its SHA-256/iu,
     );
+  });
+
+  test('verifies a reviewed CLI case pack before browser import', async () => {
+    const cases = {
+      version: CASE_SCHEMA_VERSION,
+      cases: [{
+        id: 'portable-case', domain: 'portable.invalid', status: 'new', disposition: 'unreviewed',
+        tags: [], notes: [], source: 'lookup', evidenceHistory: [],
+        createdAt: '2026-07-15T00:00:00.000Z', updatedAt: '2026-07-15T00:00:00.000Z',
+      }],
+    };
+    const pack = buildCliCasePack(JSON.stringify(cases), {
+      audience: 'trusted',
+      reviewed: true,
+    }, '2026-07-15T01:00:00.000Z');
+    const report = await verifyOfflineArtifact(JSON.stringify(pack));
+    assert.equal(report.artifact.kind, 'cli_case_pack');
+    assert.equal(report.artifact.schema, 'whoisleuth.cli.case-pack');
+    assert.equal(report.summary.recordCount, 1);
+    assert.equal(report.checks.contentIntegrity, 'verified');
+
+    const changed = structuredClone(pack);
+    changed.cases[0]!.status = 'closed';
+    await assert.rejects(verifyOfflineArtifact(JSON.stringify(changed)), /failed its SHA-256/iu);
   });
 
   test('validates saved Lookup structure without claiming content integrity', async () => {

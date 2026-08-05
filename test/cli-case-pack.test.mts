@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
-import { buildCliCasePack } from '../cli/case-pack.mts';
+import { buildCliCasePack, verifyCliCasePack } from '../cli/case-pack.mts';
 import { runCli } from '../cli/runner.mts';
 import EXIT_CODES from '../cli/exit-codes.mts';
 import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model.ts';
@@ -48,5 +48,13 @@ describe('CLI case pack', () => {
     assert.equal(output.cases.length, 1);
     assert.equal(output.cases[0].actions[0].recipient, '[redacted]');
     assert.doesNotMatch(JSON.stringify(output), /private recipient/u);
+  });
+
+  test('verifies the complete browser hand-off and rejects changed content', () => {
+    const pack = buildCliCasePack(JSON.stringify(exportedCases()), { audience: 'trusted', reviewed: true }, NOW);
+    assert.deepEqual(verifyCliCasePack(pack), { caseCount: 1 });
+    const changed = structuredClone(pack);
+    changed.cases[0]!.domain = 'changed.invalid';
+    assert.throws(() => verifyCliCasePack(changed), /failed its SHA-256/iu);
   });
 });

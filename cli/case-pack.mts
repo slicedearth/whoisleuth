@@ -73,6 +73,48 @@ export function buildCliCasePack(
   });
 }
 
+export function verifyCliCasePack(input: unknown): Readonly<{ caseCount: number }> {
+  const root = input && typeof input === 'object' && !Array.isArray(input)
+    ? input as Record<string, unknown>
+    : null;
+  const packet = root?.packet && typeof root.packet === 'object' && !Array.isArray(root.packet)
+    ? root.packet as Record<string, unknown>
+    : null;
+  const integrity = root?.integrity && typeof root.integrity === 'object' && !Array.isArray(root.integrity)
+    ? root.integrity as Record<string, unknown>
+    : null;
+  if (!root
+    || !packet
+    || packet.schema !== CLI_CASE_PACK_SCHEMA
+    || packet.version !== CLI_CASE_PACK_VERSION
+    || packet.reviewed !== true
+    || !['internal', 'public', 'trusted'].includes(String(packet.audience))
+    || !Array.isArray(packet.reports)
+    || !Array.isArray(root.cases)
+    || root.cases.length < 1
+    || root.cases.length > 25
+    || packet.reports.length !== root.cases.length
+    || typeof root.version !== 'number'
+    || !CASE_IMPORT_VERSIONS.includes(root.version as typeof CASE_IMPORT_VERSIONS[number])
+    || !integrity
+    || integrity.algorithm !== 'SHA-256'
+    || integrity.canonicalization !== 'sorted-json-v1'
+    || typeof integrity.digestSha256 !== 'string'
+    || !/^sha256:[a-f0-9]{64}$/u.test(integrity.digestSha256)) {
+    throw new TypeError('The CLI case pack structure or integrity envelope is invalid.');
+  }
+  const { integrity: _integrity, ...unsigned } = root;
+  const calculated = `sha256:${createHash('sha256').update(canonicalArtifactJson(unsigned)).digest('hex')}`;
+  if (calculated !== integrity.digestSha256) {
+    throw new TypeError('The CLI case pack failed its SHA-256 integrity check.');
+  }
+  const normalised = normalizeCaseStore(root).cases;
+  if (normalised.length !== root.cases.length) {
+    throw new TypeError('The CLI case pack contains an invalid case collection.');
+  }
+  return Object.freeze({ caseCount: normalised.length });
+}
+
 export function formatCliCasePack(document: ReturnType<typeof buildCliCasePack>): string {
   return [
     'Reviewed case pack',

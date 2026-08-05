@@ -47,10 +47,28 @@ describe('offline workspace archive inspection', () => {
     assert.equal(report.archive.encrypted, false);
     assert.ok(report.summary.sectionCount > 0);
     assert.ok(report.summary.recordCount >= 2);
+    assert.match(report.summary.contentDigestSha256, /^sha256:[a-f0-9]{64}$/u);
+    assert.equal(report.archive.version, 5);
+    assert.equal(report.archive.readerVersion, 5);
     assert.equal(report.search.requested, false);
     const terminal = formatArchiveInspection(report);
     assert.doesNotMatch(terminal, new RegExp(DOMAIN, 'u'));
     assert.doesNotMatch(terminal, /private note/iu);
+  });
+
+  test('uses a stable content identity across formatting and enforces an expected digest', async () => {
+    const value = await archive();
+    const compact = await inspectWorkspaceArchive(JSON.stringify(value));
+    const formatted = await inspectWorkspaceArchive(JSON.stringify(value, null, 2), {
+      expectedContentDigest: compact.summary.contentDigestSha256,
+    });
+    assert.equal(formatted.summary.contentDigestSha256, compact.summary.contentDigestSha256);
+    await assert.rejects(
+      inspectWorkspaceArchive(JSON.stringify(value), {
+        expectedContentDigest: `sha256:${'0'.repeat(64)}`,
+      }),
+      /did not match/iu,
+    );
   });
 
   test('searches only exact allowlisted fields and redacts matches by default', async () => {
