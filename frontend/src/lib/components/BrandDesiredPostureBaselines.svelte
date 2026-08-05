@@ -20,6 +20,10 @@
   let tlsSpkiSha256 = $state('');
   let registrarLock = $state<DesiredPostureBaseline['registrarLock']>('unconfigured');
   let renewalReviewAt = $state('');
+  let zoneIntent = $state<DesiredPostureBaseline['zoneIntent']>('unconfigured');
+  let lifecycle = $state<DesiredPostureBaseline['lifecycle']>('active');
+  let recoveryDependency = $state('');
+  let approvedChangeWindows = $state('');
   let suppressions = $state('');
   let note = $state('');
   let message = $state('');
@@ -54,6 +58,28 @@
     return value.map((item) => `${item.field} | ${item.expiresAt?.slice(0, 10) || ''} | ${item.reason}`).join('\n');
   }
 
+  function parseChangeWindows(value: string): DesiredPostureBaseline['approvedChangeWindows'] {
+    const output: DesiredPostureBaseline['approvedChangeWindows'] = [];
+    for (const line of value.split('\n').slice(0, 32)) {
+      const [startsValue = '', endsValue = '', ...summaryParts] = line.split('|');
+      const startsAt = Date.parse(startsValue.trim());
+      const endsAt = Date.parse(endsValue.trim());
+      const summary = summaryParts.join('|').trim().slice(0, 300);
+      if (!Number.isFinite(startsAt) || !Number.isFinite(endsAt) || endsAt <= startsAt || !summary) continue;
+      output.push({
+        startsAt: new Date(startsAt).toISOString(),
+        endsAt: new Date(endsAt).toISOString(),
+        summary,
+      });
+      if (output.length >= 8) break;
+    }
+    return output;
+  }
+
+  function renderChangeWindows(value: DesiredPostureBaseline['approvedChangeWindows']): string {
+    return value.map((item) => `${item.startsAt} | ${item.endsAt} | ${item.summary}`).join('\n');
+  }
+
   function load(domain: string): void {
     selectedDomain = domain;
     const baseline = active.desiredPostureBaselines.find((item) => item.domain === domain);
@@ -66,6 +92,10 @@
     tlsSpkiSha256 = baseline?.tlsSpkiSha256 || '';
     registrarLock = baseline?.registrarLock || 'unconfigured';
     renewalReviewAt = baseline?.renewalReviewAt?.slice(0, 10) || '';
+    zoneIntent = baseline?.zoneIntent || 'unconfigured';
+    lifecycle = baseline?.lifecycle || 'active';
+    recoveryDependency = baseline?.recoveryDependency || '';
+    approvedChangeWindows = renderChangeWindows(baseline?.approvedChangeWindows || []);
     suppressions = renderSuppressions(baseline?.suppressions || []);
     note = baseline?.note || '';
     message = '';
@@ -88,6 +118,10 @@
       renewalReviewAt: renewalReviewAt
         ? new Date(`${renewalReviewAt}T00:00:00.000Z`).toISOString()
         : null,
+      zoneIntent,
+      lifecycle,
+      recoveryDependency: recoveryDependency.trim(),
+      approvedChangeWindows: parseChangeWindows(approvedChangeWindows),
       suppressions: parseSuppressions(suppressions),
       note: note.trim(),
       previousObservation: existing?.previousObservation || null,
@@ -169,7 +203,29 @@
         </select>
       </label>
       <label><span>Renewal review date</span><input type="date" bind:value={renewalReviewAt}></label>
+      <label>
+        <span>Zone intent</span>
+        <select bind:value={zoneIntent}>
+          <option value="unconfigured">Not configured</option>
+          <option value="active_service">Active service</option>
+          <option value="redirect_only">Redirect only</option>
+          <option value="defensive_registration">Defensive registration</option>
+          <option value="parked">Parked</option>
+          <option value="no_service">No service expected</option>
+        </select>
+      </label>
+      <label>
+        <span>Lifecycle</span>
+        <select bind:value={lifecycle}>
+          <option value="active">Active</option>
+          <option value="change_planned">Change planned</option>
+          <option value="retiring">Retiring</option>
+          <option value="retired">Retired</option>
+        </select>
+      </label>
+      <label><span>Recovery dependency</span><input maxlength="200" bind:value={recoveryDependency} placeholder="Reviewed account or service dependency"></label>
     </div>
+    <label class="wide"><span>Approved change windows</span><textarea rows="3" maxlength="8000" bind:value={approvedChangeWindows} placeholder="2026-09-01T00:00:00Z | 2026-09-01T02:00:00Z | Nameserver migration"></textarea><small>One window per line: start | end | reviewed summary. Times must include a timezone. Expected changes remain in retained evidence and are labelled, not removed.</small></label>
     <label class="wide"><span>Suppressions</span><textarea rows="3" maxlength="8000" bind:value={suppressions} placeholder="field | YYYY-MM-DD | reviewed reason"></textarea><small>One reviewed exception per line. Supported fields: nameservers, ds, mx, caa, tls_issuer, tls_san_patterns, tls_spki, registrar_lock, renewal_review.</small></label>
     <label class="wide"><span>Analyst note</span><textarea rows="3" maxlength="2000" bind:value={note}></textarea></label>
     <div class="actions">

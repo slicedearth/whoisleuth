@@ -7,6 +7,7 @@
   import BrandPostureAudit from '$lib/components/BrandPostureAudit.svelte';
   import BrandDesiredPostureBaselines from '$lib/components/BrandDesiredPostureBaselines.svelte';
   import BrandProtectionAttestations from '$lib/components/BrandProtectionAttestations.svelte';
+  import DomainControlCentre from '$lib/components/DomainControlCentre.svelte';
   import MailReportWorkbench from '$lib/components/MailReportWorkbench.svelte';
   import { activeProfileId, deleteProfile, exportProfiles, importProfiles, loadProfiles, MAX_PROFILE_IMPORT_BYTES, parseList, setActiveProfile, upsertProfile, type BrandProfile } from '$lib/brand-profiles';
   import { createPageBaseline, normalizePageBaseline } from '$lib/analysis/page-baseline.ts';
@@ -68,7 +69,7 @@
 
 {#if showForm}<BrandProfileEditor editing={Boolean(editing)} values={editorValues} setValue={setEditorValue} {pageBaseline} {capturingIdentity} disabledReason={siteIdentityReason} {captureSiteIdentity} {save} close={()=>showForm=false} formatDate={baselineDate} />{/if}
 
-{#if active}<BrandPostureAudit {active} disabledReason={postureReason} {auditing} results={auditResults} {audit} {retainObservation} /><BrandDesiredPostureBaselines {active} {saveBaselines} /><BrandProtectionAttestations {active} {saveAttestations} /><MailReportWorkbench {active} />{/if}
+{#if active}<DomainControlCentre {active} /><BrandPostureAudit {active} disabledReason={postureReason} {auditing} results={auditResults} {audit} {retainObservation} /><BrandDesiredPostureBaselines {active} {saveBaselines} /><BrandProtectionAttestations {active} {saveAttestations} /><MailReportWorkbench {active} />{/if}
 
 <style>
   .message{color:var(--accent);font-size:var(--text-sm)}

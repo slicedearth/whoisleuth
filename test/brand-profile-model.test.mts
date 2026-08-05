@@ -130,6 +130,14 @@ test('normalizes bounded desired posture baselines and retained observations', (
       tlsSpkiSha256: 'A'.repeat(64),
       registrarLock: 'required',
       renewalReviewAt: '2026-12-01',
+      zoneIntent: 'active_service',
+      lifecycle: 'change_planned',
+      recoveryDependency: 'Primary registrar account',
+      approvedChangeWindows: [
+        { startsAt: '2026-09-02T02:00:00Z', endsAt: '2026-09-02T03:00:00Z', summary: 'Move nameservers.' },
+        { startsAt: '2026-09-01T02:00:00Z', endsAt: '2026-09-01T03:00:00Z', summary: 'Rotate mail records.' },
+        { startsAt: 'invalid', endsAt: '2026-09-01T03:00:00Z', summary: 'Discard me.' },
+      ],
       suppressions: [
         { field: 'mx', reason: 'Reviewed transition.', expiresAt: '2026-10-01' },
         { field: 'future', reason: 'Discard me.' },
@@ -156,6 +164,10 @@ test('normalizes bounded desired posture baselines and retained observations', (
   assert.deepEqual(baseline.nameservers, ['ns1.example.invalid', 'ns2.example.invalid']);
   assert.deepEqual(baseline.tlsSanPatterns, ['*.example.invalid', 'example.invalid']);
   assert.equal(baseline.tlsSpkiSha256, 'a'.repeat(64));
+  assert.equal(baseline.zoneIntent, 'active_service');
+  assert.equal(baseline.lifecycle, 'change_planned');
+  assert.equal(baseline.recoveryDependency, 'Primary registrar account');
+  assert.deepEqual(baseline.approvedChangeWindows.map((window) => window.summary), ['Rotate mail records.', 'Move nameservers.']);
   assert.deepEqual(baseline.suppressions, [{
     field: 'mx',
     reason: 'Reviewed transition.',
@@ -283,8 +295,8 @@ test('imports reject unrelated and future schemas', () => {
   assert.throws(() => mergeBrandProfiles([], {}), /not a WHOISleuth Brand Profile export/i);
   assert.throws(() => mergeBrandProfiles([], [profile()]), /not a WHOISleuth Brand Profile export/i);
   assert.throws(() => mergeBrandProfiles([], { schema: 'whoisleuth.cases', version: 2, profiles: [] }), /not a WHOISleuth Brand Profile export/);
-  assert.throws(() => mergeBrandProfiles([], { schema: 'whoisleuth.brand-profiles', version: 1, profiles: [] }), /using schema 2, 3, 4, or 5/);
-  assert.throws(() => mergeBrandProfiles([], { schema: 'whoisleuth.brand-profiles', version: BRAND_PROFILE_SCHEMA_VERSION + 1, profiles: [] }), /newer schema 6/);
+  assert.throws(() => mergeBrandProfiles([], { schema: 'whoisleuth.brand-profiles', version: 1, profiles: [] }), /using schema 2, 3, 4, 5, or 6/);
+  assert.throws(() => mergeBrandProfiles([], { schema: 'whoisleuth.brand-profiles', version: BRAND_PROFILE_SCHEMA_VERSION + 1, profiles: [] }), /newer schema 7/);
 });
 
 test('serialized stores stay within a dedicated UTF-8 byte budget', () => {

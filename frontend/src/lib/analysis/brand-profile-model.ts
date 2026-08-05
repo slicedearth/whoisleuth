@@ -8,7 +8,7 @@ import type { PageBaseline } from './page-baseline.ts';
 import { isInformativeFaviconHash } from './utils.ts';
 
 export const BRAND_PROFILE_SCHEMA = 'whoisleuth.brand-profiles';
-export const BRAND_PROFILE_SCHEMA_VERSION = 5;
+export const BRAND_PROFILE_SCHEMA_VERSION = 6;
 export const MAX_PROFILES = 100;
 export const MAX_PROFILE_VALUES = 200;
 export const MAX_PROFILE_VALUE_INPUTS = MAX_PROFILE_VALUES * 4;
@@ -26,6 +26,7 @@ export const MAX_DESIRED_POSTURE_BASELINES = 20;
 export const MAX_DESIRED_POSTURE_RECORDS = 32;
 export const MAX_DESIRED_POSTURE_SUPPRESSIONS = 12;
 export const MAX_DESIRED_POSTURE_OBSERVATIONS = 12;
+export const MAX_DESIRED_POSTURE_CHANGE_WINDOWS = 8;
 
 const SAFE_ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
 const SHA256_RE = /^[a-f0-9]{64}$/i;
@@ -89,6 +90,11 @@ export type DesiredPostureObservation = {
     records: string[];
   }>;
 };
+export type DesiredPostureChangeWindow = {
+  startsAt: string;
+  endsAt: string;
+  summary: string;
+};
 export type DesiredPostureBaseline = {
   version: 1;
   domain: string;
@@ -101,6 +107,10 @@ export type DesiredPostureBaseline = {
   tlsSpkiSha256: string;
   registrarLock: 'required' | 'not_required' | 'unconfigured';
   renewalReviewAt: string | null;
+  zoneIntent: 'active_service' | 'defensive_registration' | 'no_service' | 'parked' | 'redirect_only' | 'unconfigured';
+  lifecycle: 'active' | 'change_planned' | 'retired' | 'retiring';
+  recoveryDependency: string;
+  approvedChangeWindows: DesiredPostureChangeWindow[];
   suppressions: DesiredPostureSuppression[];
   note: string;
   previousObservation: DesiredPostureObservation | null;
@@ -305,6 +315,21 @@ function normalizeDesiredPostureObservationHistory(
     .slice(-MAX_DESIRED_POSTURE_OBSERVATIONS);
 }
 
+function normalizeDesiredPostureChangeWindows(value: unknown): DesiredPostureChangeWindow[] {
+  if (!Array.isArray(value)) return [];
+  const output: DesiredPostureChangeWindow[] = [];
+  for (const item of value.slice(0, MAX_DESIRED_POSTURE_CHANGE_WINDOWS * 4)) {
+    const candidate = record(item);
+    const startsAt = timestamp(candidate.startsAt, null);
+    const endsAt = timestamp(candidate.endsAt, null);
+    const summary = boundedText(candidate.summary, 300);
+    if (!startsAt || !endsAt || Date.parse(endsAt) <= Date.parse(startsAt) || !summary) continue;
+    output.push({ startsAt, endsAt, summary });
+    if (output.length >= MAX_DESIRED_POSTURE_CHANGE_WINDOWS) break;
+  }
+  return output.sort((left, right) => Date.parse(left.startsAt) - Date.parse(right.startsAt));
+}
+
 function normalizeTlsSanPatterns(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   const output = new Set<string>();
@@ -368,6 +393,14 @@ export function normalizeDesiredPostureBaselines(
         ? candidate.registrarLock as DesiredPostureBaseline['registrarLock']
         : 'unconfigured',
       renewalReviewAt: timestamp(candidate.renewalReviewAt, null),
+      zoneIntent: ['active_service', 'defensive_registration', 'no_service', 'parked', 'redirect_only'].includes(String(candidate.zoneIntent))
+        ? candidate.zoneIntent as DesiredPostureBaseline['zoneIntent']
+        : 'unconfigured',
+      lifecycle: ['active', 'change_planned', 'retiring', 'retired'].includes(String(candidate.lifecycle))
+        ? candidate.lifecycle as DesiredPostureBaseline['lifecycle']
+        : 'active',
+      recoveryDependency: boundedText(candidate.recoveryDependency, 200),
+      approvedChangeWindows: normalizeDesiredPostureChangeWindows(candidate.approvedChangeWindows),
       suppressions,
       note: boundedText(candidate.note, MAX_PROFILE_TEXT_LENGTH),
       previousObservation: observationHistory.at(-1) ?? previousObservation,
@@ -493,8 +526,8 @@ export function mergeBrandProfiles(
   if (importedVersion !== null && importedVersion > BRAND_PROFILE_SCHEMA_VERSION) {
     throw new Error(`This Brand Profile file uses newer schema ${importedVersion}. Update the app before importing it.`);
   }
-  if (![2, 3, 4, BRAND_PROFILE_SCHEMA_VERSION].includes(importedVersion ?? 0)) {
-    throw new Error(`Expected a WHOISleuth Brand Profile export using schema 2, 3, 4, or ${BRAND_PROFILE_SCHEMA_VERSION}.`);
+  if (![2, 3, 4, 5, BRAND_PROFILE_SCHEMA_VERSION].includes(importedVersion ?? 0)) {
+    throw new Error(`Expected a WHOISleuth Brand Profile export using schema 2, 3, 4, 5, or ${BRAND_PROFILE_SCHEMA_VERSION}.`);
   }
   const local = normalizeBrandProfileStore(localRaw).profiles;
   const byName = new Map(local.map((profile) => [profile.name.toLowerCase(), profile]));
