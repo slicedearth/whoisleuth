@@ -378,8 +378,13 @@ redistributed page content. Containerised CMS
 cases use their first-party installation output rather than pretending an
 unconfigured image is a completed website. Mixed controls record both the
 observed CMS, server, and runtime findings and selected competing signatures
-that were absent. The corpus remains small and its partial signature coverage
-must not be generalised to the wider web.
+that were absent. The corpus currently contains 78 target-free reviewed
+observations: all 42 signatures have observations from at least two independent
+source origins, all 63 retained evidence rules are sampled, and 231 deliberate
+nonmatches produce no false-positive matches. This satisfies the programme's
+local maturity gates, but the corpus remains small and must not be generalised
+into an accuracy claim about the wider web.
+
 The benchmark also reports a 365-day review age, unsampled and under-repeated
 signature IDs, independently sourced repetition, sampled evidence rules,
 declared licence-basis counts, and reviewed coverage by technology category.
