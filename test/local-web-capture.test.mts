@@ -9,6 +9,7 @@ import zlib from 'node:zlib';
 import type { Browser, Route } from '@playwright/test';
 
 import {
+  MAX_CAPTURE_TRANSFER_BYTES,
   WEB_CAPTURE_MANIFEST_VERSION,
   captureRenderedPage,
   parseCaptureArguments,
@@ -57,11 +58,20 @@ function patternedPng(width = 64, height = 64, flat = false) {
 
 function fakeRoute(url: string) {
   return {
-    request: () => ({ url: () => url, method: () => 'GET' }),
-    continue: async () => {},
-    abort: async () => {},
+    request: () => ({
+      url: () => url,
+      method: () => 'GET',
+      headers: () => ({ accept: 'text/html', cookie: 'must-not-leave-browser=1', authorization: 'Bearer secret' }),
+    }),
+    fulfill: async () => {},
+    abort: async () => { throw new Error('ERR_FAILED'); },
   } as unknown as Route;
 }
+
+const fakeFetchResource = async (url: string) => new Response(
+  url.endsWith('.js?secret=discarded') ? 'void 0;' : '<!doctype html><title>Fixture</title>',
+  { status: 200, headers: { 'content-type': url.includes('.js') ? 'text/javascript' : 'text/html' } },
+);
 
 function fakeBrowser(options: {
   hostname?: string;
@@ -71,12 +81,14 @@ function fakeBrowser(options: {
   visibleText?: string;
   elementCount?: number;
   flatScreenshot?: boolean;
+  onInitScript?: () => void;
 } = {}) {
   let routeHandler: ((route: Route) => Promise<void>) | null = null;
   const page = {
     on: () => {},
     goto: async () => {
       await routeHandler?.(fakeRoute(`https://${options.hostname ?? 'example.test'}/entry?discard=this`));
+      await routeHandler?.(fakeRoute(`https://${options.hostname ?? 'example.test'}/style.css`));
       await routeHandler?.(fakeRoute('https://static.example.test/asset.js?secret=discarded'));
     },
     waitForTimeout: async () => {},
@@ -91,6 +103,7 @@ function fakeBrowser(options: {
     screenshot: async () => patternedPng(64, 64, options.flatScreenshot === true),
   };
   const context = {
+    addInitScript: async () => { options.onInitScript?.(); },
     route: async (_pattern: string, handler: (route: Route) => Promise<void>) => { routeHandler = handler; },
     routeWebSocket: async () => {},
     newPage: async () => page,
@@ -117,12 +130,20 @@ describe('optional local rendered capture package', () => {
   test('writes import-compatible private metadata without retaining DOM text or request paths', async () => {
     const parent = await mkdtemp(path.join(tmpdir(), 'whoisleuth-capture-test-'));
     const destination = path.join(parent, 'capture');
+    let initScriptCalls = 0;
     const resolved: string[] = [];
     try {
       const manifest = await captureRenderedPage({
         targetUrl: 'https://example.test/', outputDirectory: destination, timeoutMs: 5000,
       }, {
-        launchBrowser: async () => fakeBrowser(),
+        launchBrowser: async () => fakeBrowser({ onInitScript: () => { initScriptCalls += 1; } }),
+        fetchResource: async (url, options) => {
+          const headers = new Headers(options.headers);
+          assert.equal(headers.get('cookie'), null);
+          assert.equal(headers.get('authorization'), null);
+          assert.equal(headers.get('accept'), 'text/html');
+          return fakeFetchResource(url);
+        },
         resolveAddresses: async (hostname) => {
           resolved.push(hostname);
           return [{ address: '192.0.2.1', family: 4 }];
@@ -130,7 +151,8 @@ describe('optional local rendered capture package', () => {
         now: () => '2026-08-01T00:00:00.000Z',
       });
       assert.equal(manifest.schemaVersion, WEB_CAPTURE_MANIFEST_VERSION);
-      assert.deepEqual(resolved, ['example.test', 'static.example.test']);
+      assert.equal(initScriptCalls, 1);
+      assert.deepEqual(resolved, ['example.test', 'example.test', 'static.example.test']);
       const capture = manifest.captures[0]!;
       assert.equal(capture.completeness, 'complete');
       assert.equal(capture.artifacts[0]?.perceptualHash?.length, 16);
@@ -142,7 +164,7 @@ describe('optional local rendered capture package', () => {
       assert.equal((await stat(path.join(destination, 'screenshot.png'))).size > 0, true);
       await assert.rejects(() => captureRenderedPage({
         targetUrl: 'https://example.test/', outputDirectory: destination, timeoutMs: 5000,
-      }, { launchBrowser: async () => fakeBrowser(), resolveAddresses: async () => [] }), /EEXIST|ENOTEMPTY|exist/u);
+      }, { launchBrowser: async () => fakeBrowser(), fetchResource: fakeFetchResource, resolveAddresses: async () => [] }), /EEXIST|ENOTEMPTY|exist/u);
     } finally {
       await rm(parent, { recursive: true, force: true });
     }
@@ -157,6 +179,7 @@ describe('optional local rendered capture package', () => {
         targetUrl: 'https://left.example.test/', outputDirectory: leftDirectory, timeoutMs: 5000,
       }, {
         launchBrowser: async () => fakeBrowser({ hostname: 'left.example.test', title: 'Account', visibleText: 'left private text' }),
+        fetchResource: fakeFetchResource,
         resolveAddresses: async () => [{ address: '192.0.2.1', family: 4 }],
         now: () => '2026-08-01T00:00:00.000Z',
       });
@@ -167,6 +190,7 @@ describe('optional local rendered capture package', () => {
           hostname: 'right.example.test', title: 'Account', visibleText: 'right private text',
           structure: 'html body main section form input button', elementCount: 7,
         }),
+        fetchResource: fakeFetchResource,
         resolveAddresses: async () => [{ address: '192.0.2.2', family: 4 }],
         now: () => '2026-08-01T00:05:00.000Z',
       });
@@ -239,6 +263,7 @@ describe('optional local rendered capture package', () => {
       for (const [domain, destination] of captures) {
         await captureRenderedPage({ targetUrl: `https://${domain}/`, outputDirectory: destination, timeoutMs: 5000 }, {
           launchBrowser: async () => fakeBrowser({ hostname: domain, flatScreenshot: true }),
+          fetchResource: fakeFetchResource,
           resolveAddresses: async () => [{ address: '192.0.2.1', family: 4 }],
           now: () => '2026-08-01T00:00:00.000Z',
         });
@@ -252,6 +277,28 @@ describe('optional local rendered capture package', () => {
       assert.equal(comparison.screenshot.hammingDistance, null);
       assert.equal(comparison.screenshot.agreementPercent, null);
       assert.equal(comparison.integrity.left.perceptualHash, true);
+    } finally {
+      await rm(parent, { recursive: true, force: true });
+    }
+  });
+
+  test('fails closed when cumulative response bytes exceed the capture budget', async () => {
+    const parent = await mkdtemp(path.join(tmpdir(), 'whoisleuth-capture-budget-test-'));
+    const destination = path.join(parent, 'capture');
+    try {
+      await assert.rejects(() => captureRenderedPage({
+        targetUrl: 'https://example.test/', outputDirectory: destination, timeoutMs: 5000,
+      }, {
+        launchBrowser: async () => fakeBrowser(),
+        fetchResource: fakeFetchResource,
+        resolveAddresses: async () => [{ address: '192.0.2.1', family: 4 }],
+        readResponse: async () => ({
+          bytes: Buffer.alloc(0),
+          bytesRead: MAX_CAPTURE_TRANSFER_BYTES + 1,
+          truncated: false,
+        }),
+      }), /ERR_FAILED|navigation|aborted|blocked/u);
+      await assert.rejects(() => stat(destination), /ENOENT/u);
     } finally {
       await rm(parent, { recursive: true, force: true });
     }

@@ -399,13 +399,11 @@ async function readTextCapped(res: Response, maxBytes: number, options: CappedTe
     bytesRead,
     ...(hasher ? { sha256: hasher.digest('hex') } : {}),
   });
-  const reader = res.body && res.body.getReader ? res.body.getReader() : null;
-  if (!reader) {
-    const full = Buffer.from(await res.arrayBuffer());
-    const captured = full.subarray(0, maxBytes);
-    hasher?.update(captured);
-    return result(new TextDecoder().decode(captured), full.length > maxBytes, captured.length);
+  if (res.body === null) return result('', false, 0);
+  if (typeof res.body?.getReader !== 'function') {
+    throw new Error('Response body does not expose a bounded readable stream');
   }
+  const reader = res.body.getReader();
 
   const decoder = new TextDecoder();
   let text = '';
@@ -439,12 +437,11 @@ async function readTextCapped(res: Response, maxBytes: number, options: CappedTe
 // text (a favicon image) - collects raw bytes into a Buffer instead of
 // decoding as UTF-8, which would corrupt non-text bytes.
 async function readBytesCapped(res: Response, maxBytes: number) {
-  const reader = res.body && res.body.getReader ? res.body.getReader() : null;
-  if (!reader) {
-    const buf = Buffer.from(await res.arrayBuffer());
-    const bytes = buf.subarray(0, maxBytes);
-    return { bytes, truncated: buf.length > maxBytes, bytesRead: bytes.length };
+  if (res.body === null) return { bytes: Buffer.alloc(0), truncated: false, bytesRead: 0 };
+  if (typeof res.body?.getReader !== 'function') {
+    throw new Error('Response body does not expose a bounded readable stream');
   }
+  const reader = res.body.getReader();
 
   const chunks: Buffer[] = [];
   let received = 0;

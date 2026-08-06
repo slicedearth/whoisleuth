@@ -244,4 +244,23 @@ describe('capped body readers', () => {
     const result = await readTextCapped(new Response('abcd'), 4);
     assert.equal(Object.hasOwn(result, 'sha256'), false);
   });
+
+  test('bodyless responses are empty and non-stream response adapters fail closed', async () => {
+    assert.deepEqual(await readBytesCapped(new Response(null, { status: 204 }), 32), {
+      bytes: Buffer.alloc(0),
+      truncated: false,
+      bytesRead: 0,
+    });
+    let arrayBufferCalled = false;
+    const unboundedAdapter = {
+      body: {},
+      arrayBuffer: async () => {
+        arrayBufferCalled = true;
+        return new ArrayBuffer(1024);
+      },
+    } as unknown as Response;
+    await assert.rejects(() => readTextCapped(unboundedAdapter, 32), /bounded readable stream/u);
+    await assert.rejects(() => readBytesCapped(unboundedAdapter, 32), /bounded readable stream/u);
+    assert.equal(arrayBufferCalled, false);
+  });
 });
