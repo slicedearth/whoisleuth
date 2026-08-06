@@ -42,7 +42,7 @@ describe('reviewed accuracy programme tooling', () => {
     const technology = report.corpora.find((corpus) => corpus.key === 'technology-detection');
     assert.ok(technology);
     assert.equal(technology.readiness, 'limited');
-    assert.equal(technology.reviewedPositiveCases, 52);
+    assert.equal(technology.reviewedPositiveCases, 62);
     assert.equal(technology.reviewedBenignCases, 2);
     assert.ok(report.corpora.filter((corpus) => corpus.key !== 'technology-detection')
       .every((corpus) => corpus.readiness === 'unproven'));
@@ -79,7 +79,7 @@ describe('reviewed accuracy programme tooling', () => {
     const human = writer();
     assert.equal(await statusMain([], { stdout: human.stream }), 0);
     assert.match(human.read(), /Reviewed accuracy status/iu);
-    assert.match(human.read(), /Technology detection: limited \(54 reviewed cases\)/iu);
+    assert.match(human.read(), /Technology detection: limited \(64 reviewed cases\)/iu);
     const json = writer();
     assert.equal(await statusMain(['--json'], { stdout: json.stream }), 0);
     assert.equal((JSON.parse(json.read()) as { schema: string }).schema, REVIEWED_ACCURACY_STATUS_SCHEMA);
