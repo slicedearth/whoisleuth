@@ -319,7 +319,7 @@
               <td data-label="Suffix"><code>.{row.suffixes[0]}</code><small>{registrySupportLabel(row.registryClass)}</small></td>
               <td data-label="Coverage"><span class:documented={row.coverageState === 'access_documented'} class="coverage-badge">{registryCoverageLabel(row.coverageState)}</span></td>
               <td data-label="Registry access"><strong>RDAP</strong><span>{registryAccessLabel(row.rdapAccessProfile)}</span><strong>WHOIS</strong><span>{registryAccessLabel(row.whoisAccessProfile)}</span></td>
-              <td data-label="WHOIS behavior"><strong>{registrySupportLabel(row.whoisQueryProfile)}</strong><span>{registrySupportLabel(row.whoisParserProfile)}</span></td>
+              <td data-label="WHOIS behaviour"><strong>{registrySupportLabel(row.whoisQueryProfile)}</strong><span>{registrySupportLabel(row.whoisParserProfile)}</span></td>
               <td data-label="Profile details">
                 <details>
                   <summary>Review {(row.suffixes[0] ?? 'unknown').toUpperCase()} profile</summary>

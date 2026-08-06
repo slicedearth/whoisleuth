@@ -15,6 +15,7 @@
     embedded = false,
     compact = false,
     headingLevel = 4,
+    onnavigate,
   }: {
     id?: string;
     title?: string;
@@ -24,6 +25,7 @@
     embedded?: boolean;
     compact?: boolean;
     headingLevel?: 2 | 3 | 4;
+    onnavigate?: ((href: string) => void) | undefined;
   } = $props();
 
   let activeNodeId = $state('');
@@ -104,7 +106,12 @@
     return 'search';
   };
   const openNodeHref = (href: string) => {
-    if (href) window.location.hash = href.slice(1);
+    if (!href) return;
+    if (onnavigate) {
+      onnavigate(href);
+      return;
+    }
+    window.location.hash = href.slice(1);
   };
   type PointerStart = { nodeId: string; x: number; y: number };
   let pointerStart: PointerStart | null = null;
@@ -314,7 +321,14 @@
         onfocusout={() => clearActiveNode(node.id)}
       >
         {#if node.href}
-          <a href={node.href}>
+          <a
+            href={node.href}
+            onclick={(event) => {
+              if (!onnavigate) return;
+              event.preventDefault();
+              openNodeHref(node.href);
+            }}
+          >
             <span class="source-glyph" aria-hidden="true">{@render sourceIcon(node.id, node.family)}</span>
             <span class="source-copy"><strong>{node.label}</strong><small>{node.detail || 'No additional source detail'}</small><span class="source-family">{node.family}</span></span>
             <span class="source-state">{statusLabel(node.status)}</span>

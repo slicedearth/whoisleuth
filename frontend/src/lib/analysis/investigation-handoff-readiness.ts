@@ -53,7 +53,7 @@ function openAssertions(assertions: UnknownRecord[], kind: string): number {
 }
 
 /**
- * Summarizes whether retained local case work is ready for a deliberate
+ * Summarises whether retained local case work is ready for a deliberate
  * analyst handoff. It counts typed records only and never turns case state into
  * a finding about the investigated domain.
  */

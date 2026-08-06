@@ -115,6 +115,5 @@ export default async function loginHandler(request: Request): Promise<Response> 
 
 export {
   runLoginFunction,
-  runLoginRequest,
 };
 export type { LoginFunctionConfig };

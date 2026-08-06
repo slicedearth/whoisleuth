@@ -5,6 +5,7 @@ import {
   buildLookupRequestUrl,
   buildLookupResultSectionLinks,
   buildLookupSectionLinks,
+  lookupEvidenceFamilyForHref,
 } from '../frontend/src/lib/analysis/lookup-page-actions.ts';
 
 describe('lookup page actions', () => {
@@ -84,5 +85,25 @@ describe('lookup page actions', () => {
         '#case-response',
       ],
     );
+  });
+
+  test('maps bounded source-map anchors to the evidence family that renders them', () => {
+    assert.equal(lookupEvidenceFamilyForHref('#evidence-registry'), 'registry');
+    assert.equal(lookupEvidenceFamilyForHref('#evidence-network'), 'registry');
+    for (const href of [
+      '#evidence-dns',
+      '#evidence-reverse-dns',
+      '#evidence-http',
+      '#evidence-tls',
+      '#evidence-page',
+      '#evidence-structured-identity',
+      '#evidence-security-txt',
+      '#evidence-technology',
+      '#evidence-posture',
+    ]) {
+      assert.equal(lookupEvidenceFamilyForHref(href), 'web-evidence');
+    }
+    assert.equal(lookupEvidenceFamilyForHref('#advanced-evidence'), null);
+    assert.equal(lookupEvidenceFamilyForHref('https://outside.invalid/'), null);
   });
 });

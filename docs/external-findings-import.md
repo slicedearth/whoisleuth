@@ -38,7 +38,7 @@ content, contact a provider, or submit a report.
       "observedAt": "2026-07-28T00:45:00.000Z",
       "completeness": "partial",
       "limitations": [
-        "Rendered behavior was not retained."
+        "Rendered behaviour was not retained."
       ],
       "reference": "finding-17"
     }

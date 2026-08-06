@@ -1,4 +1,5 @@
 import { registryCapabilityFor, REGISTRY_CAPABILITIES_VERSION } from '../lib/registry-capabilities.mts';
+import { recordOrEmpty } from '../lib/bounded-contract-normalizers.mts';
 import { CliUsageError } from './errors.mts';
 import { parseSavedLookupDocument, type UnknownRecord } from './saved-lookup.mts';
 
@@ -44,10 +45,6 @@ type RegistryDoctorReport = Readonly<{
   recommendations: readonly string[];
   limitations: readonly string[];
 }>;
-
-function record(value: unknown): UnknownRecord {
-  return value && typeof value === 'object' && !Array.isArray(value) ? value as UnknownRecord : {};
-}
 
 function status(value: unknown): string {
   return typeof value === 'string'
@@ -99,11 +96,11 @@ function publicationQuality(parsed: UnknownRecord, rdapStatus: string): Registry
     .find((value): value is string => typeof value === 'string' && Boolean(value.trim()))?.trim() ?? null;
   const declarations = stringArray(parsed.conformance);
   const redactions = Array.isArray(parsed.redactions) ? parsed.redactions.slice(0, 100) : [];
-  const links = Array.isArray(parsed.links) ? parsed.links.slice(0, 100).map(record) : [];
+  const links = Array.isArray(parsed.links) ? parsed.links.slice(0, 100).map(recordOrEmpty) : [];
   const relations = [...new Set(links.flatMap((link) => stringArray(link.rel, 10).length
     ? stringArray(link.rel, 10)
     : typeof link.rel === 'string' ? [link.rel.trim().toLowerCase()] : []).filter(Boolean))];
-  const events = Array.isArray(parsed.events) ? parsed.events.slice(0, 100).map(record) : [];
+  const events = Array.isArray(parsed.events) ? parsed.events.slice(0, 100).map(recordOrEmpty) : [];
   const actionDates = new Map<string, string[]>();
   for (const event of events) {
     const action = typeof event.action === 'string' ? event.action.trim().toLowerCase() : '';
@@ -113,7 +110,7 @@ function publicationQuality(parsed: UnknownRecord, rdapStatus: string): Registry
     dates.push(date);
     actionDates.set(action, dates);
   }
-  const lifecycle = record(parsed.lifecycle);
+  const lifecycle = recordOrEmpty(parsed.lifecycle);
   const lifecycleMappings = [
     ['registration', 'createdDateIso', false],
     ['reregistration', 'reregistrationDateIso', true],
@@ -164,22 +161,22 @@ function buildRegistryDoctorReport(raw: string, generatedAt = new Date().toISOSt
   const document = parseSavedLookupDocument(raw, { label: 'Registry doctor input' });
   const capability = registryCapabilityFor(document.registrableDomain);
   if (!capability) throw new CliUsageError('Registry doctor could not resolve a capability profile for this domain.');
-  const diagnostics = record(document.diagnostics);
-  const rdap = record(document.rdap);
-  const whois = record(document.whois);
-  const rdapParsed = record(rdap.parsed);
-  const whoisParsed = record(whois.parsed);
+  const diagnostics = recordOrEmpty(document.diagnostics);
+  const rdap = recordOrEmpty(document.rdap);
+  const whois = recordOrEmpty(document.whois);
+  const rdapParsed = recordOrEmpty(rdap.parsed);
+  const whoisParsed = recordOrEmpty(whois.parsed);
   const sourceInputs = [
     {
       source: 'rdap' as const,
       expected: capability.rdapAccessProfile === 'iana-bootstrap' ? 'allowed' as const : 'unsupported' as const,
-      observed: status(record(diagnostics.rdap).status),
+      observed: status(recordOrEmpty(diagnostics.rdap).status),
       parsed: rdapParsed,
     },
     {
       source: 'whois' as const,
       expected: expectedWhois(capability.whoisAccessProfile),
-      observed: status(record(diagnostics.whois).status),
+      observed: status(recordOrEmpty(diagnostics.whois).status),
       parsed: whoisParsed,
     },
   ];

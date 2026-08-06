@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { open } from 'node:fs/promises';
 
+import { recordOrNull } from '../lib/bounded-contract-normalizers.mts';
 import type { ClassifiedQuery } from '../lib/classify.mts';
 import type { BulkLookupResult } from './bulk.mts';
 import { CliUsageError } from './errors.mts';
@@ -34,12 +35,6 @@ type BulkCheckpointWriter = Readonly<{
 
 type ClassifyQuery = (query: string) => ClassifiedQuery;
 
-function record(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : null;
-}
-
 function checkpointDigest(queries: readonly string[], deep: boolean): string {
   return createHash('sha256')
     .update(deep ? 'deep\n' : 'fast\n')
@@ -60,7 +55,7 @@ function isBoundedCheckpointJson(value: unknown, depth = 0): boolean {
     return value.length <= MAX_CHECKPOINT_ARRAY_ITEMS
       && value.every((item) => isBoundedCheckpointJson(item, depth + 1));
   }
-  const object = record(value);
+  const object = recordOrNull(value);
   if (!object) return false;
   const entries = Object.entries(object);
   return entries.length <= MAX_CHECKPOINT_OBJECT_KEYS
@@ -68,11 +63,11 @@ function isBoundedCheckpointJson(value: unknown, depth = 0): boolean {
 }
 
 function normalizeCompactResult(value: unknown): Record<string, unknown> | null {
-  const result = record(value);
+  const result = recordOrNull(value);
   if (!result || !isBoundedCheckpointJson(result)) return null;
   const keys = Object.keys(result);
   if (keys.length !== COMPACT_RESULT_KEYS.size || keys.some((key) => !COMPACT_RESULT_KEYS.has(key))) return null;
-  if (!record(result.availability) || !record(result.diagnostics)) return null;
+  if (!recordOrNull(result.availability) || !recordOrNull(result.diagnostics)) return null;
   return result;
 }
 
@@ -81,7 +76,7 @@ function normalizeCheckpointResult(
   queries: readonly string[],
   classifyQuery: ClassifyQuery,
 ): BulkLookupResult | null {
-  const item = record(value);
+  const item = recordOrNull(value);
   const index = item?.index;
   if (!Number.isSafeInteger(index) || Number(index) < 0 || Number(index) >= queries.length) return null;
   const query = queries[Number(index)];
@@ -93,7 +88,7 @@ function normalizeCheckpointResult(
   const result = normalizeCompactResult(item.result);
   if (item.ok !== true || !result) return null;
   const classified = classifyQuery(query);
-  const storedClassified = record(item.classified);
+  const storedClassified = recordOrNull(item.classified);
   if (storedClassified?.type !== classified.type || storedClassified.value !== classified.value) return null;
   return { index: Number(index), query, ok: true, classified, result };
 }
@@ -111,7 +106,7 @@ function parseBulkCheckpoint(
   } catch {
     throw new CliUsageError('Bulk checkpoint must be valid JSON.');
   }
-  const document = record(parsed);
+  const document = recordOrNull(parsed);
   const expectedDigest = checkpointDigest(options.queries, options.deep);
   if (document?.schema !== CLI_BULK_CHECKPOINT_SCHEMA || document.version !== CLI_BULK_CHECKPOINT_VERSION) {
     throw new CliUsageError(`Bulk checkpoint must use ${CLI_BULK_CHECKPOINT_SCHEMA} version ${CLI_BULK_CHECKPOINT_VERSION}.`);

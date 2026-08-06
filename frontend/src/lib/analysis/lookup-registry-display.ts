@@ -85,7 +85,7 @@ function contactIdentity(contact: JsonRecord): string {
 function contactDetails(contact: JsonRecord): string[] {
   return [
     Array.isArray(contact.organizations) && contact.organizations.length
-      ? `Organizations: ${contact.organizations.join(', ')}`
+      ? `Organisations: ${contact.organizations.join(', ')}`
       : null,
     Array.isArray(contact.emails) && contact.emails.length
       ? `Email: ${contact.emails.join(', ')}`

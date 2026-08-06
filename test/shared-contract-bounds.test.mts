@@ -20,6 +20,10 @@ import {
 import { MAX_HTTP_EVIDENCE_REDIRECTS } from '../lib/http-evidence-bounds.mts';
 import { MAX_CANDIDATE_SOURCE_LENGTH } from '../lib/candidate-provenance-bounds.mts';
 import {
+  recordOrEmpty,
+  recordOrNull,
+} from '../lib/bounded-contract-normalizers.mts';
+import {
   WHOISLEUTH_PROJECT_URL,
   WHOISLEUTH_REQUEST_POLICY_URL,
   WHOISLEUTH_SITE_ORIGIN,
@@ -78,6 +82,16 @@ test('candidate collectors and handoffs share the provenance-label bound', () =>
   assert.equal(MAX_CANDIDATE_SOURCE_LENGTH, 253);
   assert.equal(MAX_CT_SOURCE_LENGTH, MAX_CANDIDATE_SOURCE_LENGTH);
   assert.equal(MAX_SOURCE_LENGTH, MAX_CANDIDATE_SOURCE_LENGTH);
+});
+
+test('shared record coercion keeps null and empty-object failure modes explicit', () => {
+  const value = { state: 'observed' };
+  assert.equal(recordOrNull(value), value);
+  assert.equal(recordOrEmpty(value), value);
+  assert.equal(recordOrNull([]), null);
+  assert.deepEqual(recordOrEmpty([]), {});
+  assert.equal(recordOrNull(null), null);
+  assert.deepEqual(recordOrEmpty(null), {});
 });
 
 test('public project URLs derive from one canonical origin', () => {

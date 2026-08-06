@@ -444,6 +444,10 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
     );
   }))).toBe(true);
   const sourceRail = topology.getByRole('list', { name: 'Evidence source status' });
+  const mappedSourceCount = await sourceRail.getByRole('listitem').count();
+  await expect(topology.locator('.topology-summary strong')).toHaveText(String(mappedSourceCount));
+  await expect(page.locator('#relationships-history .metric').filter({ hasText: 'mapped sources' })).toHaveText(`${mappedSourceCount} mapped sources`);
+  await expect(page.getByRole('tab', { name: /^Sources/ }).locator('span')).toHaveText(String(mappedSourceCount));
   await expect(sourceRail.locator('.source-icon')).toHaveCount(await sourceRail.locator('li').count());
   const desktopSourceIcons = topology.locator('.node-source-icon .source-icon');
   await expect(desktopSourceIcons).toHaveCount(await sourceRail.locator('li').count());
@@ -493,9 +497,19 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   await linkedVisualNode.dispatchEvent('pointerup', { pointerId: 1, pointerType: 'touch', clientX: 50, clientY: 20, button: 0 });
   expect(await page.evaluate(() => window.location.hash)).toBe(hashBeforeDrag);
 
+  await page.getByRole('button', { name: 'Collapse Web and DNS evidence' }).click();
+  await expect(page.locator('#evidence-dns')).toHaveCount(0);
   await dnsSource.press('Enter');
   await expect(page).toHaveURL(/#evidence-dns$/);
   await expect(page.locator('#evidence-dns')).toBeInViewport();
+
+  const registrySource = sourceRail.getByRole('link', { name: /Registry RDAP.*success/i });
+  await expect(registrySource).toHaveAttribute('href', '#evidence-registry');
+  await page.getByRole('button', { name: 'Collapse Registration evidence' }).click();
+  await expect(page.locator('#evidence-registry')).toHaveCount(0);
+  await registrySource.press('Enter');
+  await expect(page).toHaveURL(/#evidence-registry$/);
+  await expect(page.locator('#evidence-registry')).toBeInViewport();
 
   await page.getByRole('tab', { name: /^Timeline/ }).click();
   const lifecycle = page.getByRole('region', { name: 'Observed lifecycle' });
@@ -737,6 +751,10 @@ test('Lookup focus and detail controls change presentation without changing evid
   await expect(density).toHaveValue('summary');
   await expect(page.getByRole('heading', { name: 'At a glance' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Expand Advanced evidence' })).toBeVisible();
+  const familyToggle = page.getByRole('button', { name: 'Expand Registration evidence' }).locator('.toggle-icon');
+  await expect(familyToggle).toHaveText('');
+  await expect(familyToggle).toHaveCSS('width', '17px');
+  await expect(familyToggle).toHaveCSS('height', '17px');
   await expect(page.getByRole('heading', { name: 'Raw evidence' })).toHaveCount(0);
 
   await page.getByRole('button', { name: 'Expand Registration evidence' }).click();

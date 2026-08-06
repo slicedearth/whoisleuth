@@ -5,6 +5,23 @@ import {
 } from './lookup-presentation.ts';
 
 type LookupMode = 'fast' | 'deep';
+export type LookupEvidenceFamilyId = 'registry' | 'web-evidence';
+
+const REGISTRY_EVIDENCE_TARGETS = new Set([
+  '#evidence-registry',
+  '#evidence-network',
+]);
+const WEB_EVIDENCE_TARGETS = new Set([
+  '#evidence-dns',
+  '#evidence-reverse-dns',
+  '#evidence-http',
+  '#evidence-tls',
+  '#evidence-page',
+  '#evidence-structured-identity',
+  '#evidence-security-txt',
+  '#evidence-technology',
+  '#evidence-posture',
+]);
 
 type LookupRequestSelection = Readonly<{
   mode: LookupMode;
@@ -55,6 +72,12 @@ export function buildLookupRequestUrl(
     params.set('security_txt', '1');
   }
   return `/api/lookup?${params}`;
+}
+
+export function lookupEvidenceFamilyForHref(href: string): LookupEvidenceFamilyId | null {
+  if (REGISTRY_EVIDENCE_TARGETS.has(href)) return 'registry';
+  if (WEB_EVIDENCE_TARGETS.has(href)) return 'web-evidence';
+  return null;
 }
 
 export function buildLookupSectionLinks(input: {

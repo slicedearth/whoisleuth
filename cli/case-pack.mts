@@ -5,6 +5,7 @@ import { canonicalArtifactJson } from '../frontend/src/lib/analysis/artifact-int
 import { buildCaseReport } from '../frontend/src/lib/analysis/case-report.ts';
 import {
   CASE_IMPORT_VERSIONS,
+  MAX_CASE_IMPORT_BYTES,
   CASE_SCHEMA_VERSION,
   normalizeCaseStore,
   type CaseRecord,
@@ -14,6 +15,7 @@ import { CliUsageError } from './errors.mts';
 export const CLI_CASE_PACK_SCHEMA = 'whoisleuth.cli.case-pack';
 export const CLI_CASE_PACK_VERSION = 1;
 export const MAX_CASE_PACK_INPUT_BYTES = 4 * 1024 * 1024;
+export const MAX_CASE_PACK_CASES = 25;
 export type CasePackAudience = 'internal' | 'public' | 'trusted';
 
 function redactedCase(record: CaseRecord, audience: CasePackAudience): CaseRecord {
@@ -40,8 +42,14 @@ export function buildCliCasePack(
   if (typeof root.version !== 'number' || !CASE_IMPORT_VERSIONS.includes(root.version as typeof CASE_IMPORT_VERSIONS[number]) || !Array.isArray(root.cases)) {
     throw new CliUsageError(`Case-pack input must be a supported WHOISleuth case export through schema ${CASE_SCHEMA_VERSION}.`);
   }
-  const normalised = normalizeCaseStore(root).cases.slice(0, 25);
+  const normalised = normalizeCaseStore(root).cases;
   if (!normalised.length) throw new CliUsageError('Case-pack input did not contain a valid case.');
+  if (normalised.length !== root.cases.length) {
+    throw new CliUsageError('Case-pack input contains an invalid or duplicate case. Correct the browser export before packaging it.');
+  }
+  if (normalised.length > MAX_CASE_PACK_CASES) {
+    throw new CliUsageError(`Case packs are limited to ${MAX_CASE_PACK_CASES} reviewed cases. Export a smaller selected set so no case is silently omitted.`);
+  }
   const cases = normalised.map((item) => redactedCase(item, options.audience));
   const reports = cases.map((item) => buildCaseReport(item, { includeNotes: false, generatedAt }).json);
   const exclusions = options.audience === 'internal'
@@ -63,7 +71,7 @@ export function buildCliCasePack(
     ]),
   });
   const unsigned = { version: CASE_SCHEMA_VERSION, exportedAt: generatedAt, cases, packet };
-  return Object.freeze({
+  const document = Object.freeze({
     ...unsigned,
     integrity: Object.freeze({
       algorithm: 'SHA-256',
@@ -71,6 +79,55 @@ export function buildCliCasePack(
       digestSha256: `sha256:${createHash('sha256').update(canonicalArtifactJson(unsigned)).digest('hex')}`,
     }),
   });
+  if (Buffer.byteLength(JSON.stringify(document), 'utf8') > MAX_CASE_IMPORT_BYTES) {
+    throw new CliUsageError('The generated case pack exceeds the browser 2 MiB import limit. Select fewer cases or a more restrictive audience so no evidence is silently omitted.');
+  }
+  return document;
+}
+
+export function verifyCliCasePack(input: unknown): Readonly<{ caseCount: number }> {
+  const root = input && typeof input === 'object' && !Array.isArray(input)
+    ? input as Record<string, unknown>
+    : null;
+  const packet = root?.packet && typeof root.packet === 'object' && !Array.isArray(root.packet)
+    ? root.packet as Record<string, unknown>
+    : null;
+  const integrity = root?.integrity && typeof root.integrity === 'object' && !Array.isArray(root.integrity)
+    ? root.integrity as Record<string, unknown>
+    : null;
+  if (!root
+    || !packet
+    || packet.schema !== CLI_CASE_PACK_SCHEMA
+    || packet.version !== CLI_CASE_PACK_VERSION
+    || packet.reviewed !== true
+    || !['internal', 'public', 'trusted'].includes(String(packet.audience))
+    || !Array.isArray(packet.reports)
+    || !Array.isArray(root.cases)
+    || root.cases.length < 1
+    || root.cases.length > MAX_CASE_PACK_CASES
+    || packet.reports.length !== root.cases.length
+    || typeof root.version !== 'number'
+    || !CASE_IMPORT_VERSIONS.includes(root.version as typeof CASE_IMPORT_VERSIONS[number])
+    || !integrity
+    || integrity.algorithm !== 'SHA-256'
+    || integrity.canonicalization !== 'sorted-json-v1'
+    || typeof integrity.digestSha256 !== 'string'
+    || !/^sha256:[a-f0-9]{64}$/u.test(integrity.digestSha256)) {
+    throw new TypeError('The CLI case pack structure or integrity envelope is invalid.');
+  }
+  if (Buffer.byteLength(JSON.stringify(root), 'utf8') > MAX_CASE_IMPORT_BYTES) {
+    throw new TypeError('The CLI case pack exceeds the browser import limit.');
+  }
+  const { integrity: _integrity, ...unsigned } = root;
+  const calculated = `sha256:${createHash('sha256').update(canonicalArtifactJson(unsigned)).digest('hex')}`;
+  if (calculated !== integrity.digestSha256) {
+    throw new TypeError('The CLI case pack failed its SHA-256 integrity check.');
+  }
+  const normalised = normalizeCaseStore(root).cases;
+  if (normalised.length !== root.cases.length) {
+    throw new TypeError('The CLI case pack contains an invalid case collection.');
+  }
+  return Object.freeze({ caseCount: normalised.length });
 }
 
 export function formatCliCasePack(document: ReturnType<typeof buildCliCasePack>): string {

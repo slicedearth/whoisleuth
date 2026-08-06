@@ -1,9 +1,29 @@
 import { expect, test } from './fixtures';
 import { expectNoHorizontalOverflow, failBrowserLocalManifestWrites, migrateLegacyBrowserData, readBrowserLocalCollection, requiredValue } from './helpers';
+import { spawnSync } from 'node:child_process';
+import { resolve } from 'node:path';
+import type { ArchiveInspectionReport } from '../cli/archive-inspect.mts';
+import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model';
 import type { WorkspaceArchiveDocument } from '../frontend/src/lib/analysis/workspace-archive';
 import type { EncryptedWorkspaceArchiveEnvelope } from '../frontend/src/lib/analysis/workspace-archive-crypto';
 
 const NOW = '2026-07-14T08:00:00.000Z';
+
+async function runOfflineCliJson<T>(argv: string[], input: unknown): Promise<T> {
+  const { FORCE_COLOR: _forceColor, NO_COLOR: _noColor, ...environment } = process.env;
+  const execution = spawnSync(process.execPath, [
+    resolve(process.cwd(), 'bin/whoisleuth.mts'),
+    ...argv,
+  ], {
+    input: JSON.stringify(input),
+    encoding: 'utf8',
+    maxBuffer: 32 * 1024 * 1024,
+    env: environment,
+  });
+  expect(execution.status, execution.stderr).toBe(0);
+  expect(execution.stderr).toBe('');
+  return JSON.parse(execution.stdout) as T;
+}
 
 function caseRecord(id: string, domain: string, status: string) {
   return {
@@ -360,6 +380,64 @@ test('the dashboard exports one checksummed workspace archive without unrelated 
   expect(content).not.toContain('private.invalid');
   expect(content).not.toContain('wrt_session');
   await expect(page.getByRole('status')).toContainText('Downloaded an unencrypted workspace backup with 12 verified data sections');
+});
+
+test('reviewed case evidence keeps the same workspace content through two CLI and browser hand-offs', {
+  tag: ['@analyst-journey', '@journey-workspace-portability-review'],
+}, async ({ page }) => {
+  const caseExport = {
+    version: CASE_SCHEMA_VERSION,
+    exportedAt: NOW,
+    cases: [caseRecord('round-trip-case', 'round-trip.invalid', 'reviewing')],
+  };
+
+  const firstCasePack = await runOfflineCliJson<Record<string, unknown>>([
+    'case-pack', '--audience', 'trusted', '--reviewed', '--json',
+  ], caseExport);
+
+  await page.goto('/monitor?view=cases');
+  await migrateLegacyBrowserData(page, {}, { clearStorage: true });
+  await page.locator('.case-toolbar input[type="file"]').setInputFiles({
+    name: 'reviewed-case-pack.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(firstCasePack)),
+  });
+  await expect(page.getByRole('status')).toContainText('Imported 1 new');
+  await expect(page.locator('.case-head', { hasText: 'round-trip.invalid' })).toBeVisible();
+
+  await page.goto('/dashboard');
+  const firstWebExport = await downloadWorkspaceArchive(page);
+  const firstArchive = JSON.parse(firstWebExport.content) as WorkspaceArchiveDocument;
+  const firstInspection = await runOfflineCliJson<ArchiveInspectionReport>([
+    'inspect-archive', '--json',
+  ], firstArchive);
+  expect(firstInspection.summary.recordCount).toBeGreaterThanOrEqual(1);
+
+  const secondCasePack = await runOfflineCliJson<Record<string, unknown>>([
+    'case-pack', '--audience', 'trusted', '--reviewed', '--json',
+  ], firstArchive.sections.cases);
+
+  await migrateLegacyBrowserData(page, {}, { clearStorage: true });
+  await page.goto('/monitor?view=cases');
+  await page.locator('.case-toolbar input[type="file"]').setInputFiles({
+    name: 'reviewed-case-pack-second-pass.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(secondCasePack)),
+  });
+  await expect(page.getByRole('status')).toContainText('Imported 1 new');
+  await expect(page.locator('.case-head', { hasText: 'round-trip.invalid' })).toBeVisible();
+
+  await page.goto('/dashboard');
+  const secondWebExport = await downloadWorkspaceArchive(page);
+  const secondArchive = JSON.parse(secondWebExport.content) as WorkspaceArchiveDocument;
+  const secondInspection = await runOfflineCliJson<ArchiveInspectionReport>([
+    'inspect-archive',
+    '--expect-content-digest',
+    firstInspection.summary.contentDigestSha256,
+    '--json',
+  ], secondArchive);
+  expect(secondInspection.summary.contentDigestSha256).toBe(firstInspection.summary.contentDigestSha256);
+  expect(secondArchive.sections.cases.cases).toEqual(firstArchive.sections.cases.cases);
 });
 
 test('the dashboard encrypts and locally unlocks a portable workspace backup', async ({ page }) => {

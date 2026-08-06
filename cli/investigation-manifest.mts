@@ -6,6 +6,7 @@ import {
   sha256ArtifactDigest,
 } from '../frontend/src/lib/analysis/artifact-integrity.ts';
 import {
+  recordOrNull,
   requireBoundedString,
   requireIsoTimestamp,
 } from '../lib/bounded-contract-normalizers.mts';
@@ -21,12 +22,6 @@ const SHA256_RE = /^sha256:[a-f0-9]{64}$/u;
 
 type UnknownRecord = Record<string, unknown>;
 export type InvestigationManifestArtifactInput = Readonly<{ content: string }>;
-
-function record(value: unknown): UnknownRecord | null {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? value as UnknownRecord
-    : null;
-}
 
 function digest(value: string): string {
   return `sha256:${createHash('sha256').update(value, 'utf8').digest('hex')}`;
@@ -74,7 +69,7 @@ export async function buildInvestigationManifest(
     } catch {
       throw new TypeError(`Artifact ${index + 1} must be valid JSON.`);
     }
-    const value = record(parsed);
+    const value = recordOrNull(parsed);
     if (!value) throw new TypeError(`Artifact ${index + 1} must contain one JSON object.`);
     const schema = value.schema === undefined
       ? null

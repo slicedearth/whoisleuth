@@ -196,7 +196,8 @@ full contracts into the packaged reference.
 
 ### Workspace archive inspection
 
-[Read the redacted archive summary and search contract.](cli-reference.md#workspace-archive-inspection)
+[Read the redacted archive summary, stable content-digest, transfer-check, and
+search contract.](cli-reference.md#workspace-archive-inspection)
 
 ### Optional evidence-package signing
 

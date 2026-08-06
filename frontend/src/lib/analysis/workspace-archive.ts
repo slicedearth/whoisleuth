@@ -547,6 +547,7 @@ export async function readWorkspaceArchive(raw: unknown, options: WorkspaceArchi
     }
     throw new Error(`Expected workspace archive schema 1, 2, 3, 4, or ${WORKSPACE_ARCHIVE_VERSION}.`);
   }
+  const sourceVersion = value.version;
   const { bytes } = ensureArchiveBudget(value);
   const manifest = record(value.manifest);
   const sectionValues = record(value.sections);
@@ -599,6 +600,7 @@ export async function readWorkspaceArchive(raw: unknown, options: WorkspaceArchi
   return {
     schema: WORKSPACE_ARCHIVE_SCHEMA,
     version: WORKSPACE_ARCHIVE_VERSION,
+    sourceVersion,
     generatedAt: timestamp(value.generatedAt),
     bytes,
     sections,

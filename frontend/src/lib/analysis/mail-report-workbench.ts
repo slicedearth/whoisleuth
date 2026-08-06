@@ -252,7 +252,7 @@ async function sourceFor(file: ExpandedFile): Promise<MailSource> {
   };
 }
 
-export async function parseDmarcAggregateReport(file: ExpandedFile): Promise<DmarcAggregateReport> {
+async function parseDmarcAggregateReport(file: ExpandedFile): Promise<DmarcAggregateReport> {
   const xml = new TextDecoder('utf-8', { fatal: true }).decode(file.bytes);
   if (/<!DOCTYPE|<!ENTITY/i.test(xml)) throw new TypeError('DMARC XML containing document types or entities is not accepted.');
   if (!/<(?:[A-Za-z_][\w.-]*:)?feedback\b/i.test(xml)) throw new TypeError('The XML does not contain a DMARC feedback report.');
@@ -303,7 +303,7 @@ function reportTimestamp(value: unknown): string | null {
   return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : null;
 }
 
-export async function parseTlsAggregateReport(file: ExpandedFile): Promise<TlsAggregateReport> {
+async function parseTlsAggregateReport(file: ExpandedFile): Promise<TlsAggregateReport> {
   const document: unknown = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(file.bytes));
   const root = object(document);
   const rawPolicies = Array.isArray(root.policies) ? root.policies : [];

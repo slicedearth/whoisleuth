@@ -72,7 +72,9 @@
   import {
     buildLookupRequestUrl,
     buildLookupResultSectionLinks,
+    lookupEvidenceFamilyForHref,
   } from '$lib/analysis/lookup-page-actions.ts';
+  import { projectEvidenceTopology } from '$lib/analysis/evidence-topology.ts';
   import {
     normalizeLookupEvidenceDensity,
     normalizeLookupTaskView,
@@ -234,6 +236,7 @@
   const lookupInvestigationBrief=$derived(lookupAnalysis.lookupInvestigationBrief);
   const lookupEvidenceDocument=$derived(result?buildLookupEvidence(result,{idnAnalysis,applicationVersion:__WHOISLEUTH_VERSION__}):null);
   const evidenceTopologyTarget=$derived(lookupAnalysis.evidenceTopologyTarget);
+  const mappedEvidenceSourceCount=$derived(projectEvidenceTopology(evidenceTopologyTarget,evidenceTopologyNodes).nodes.length);
   const caseEvidence=$derived(lookupAnalysis.caseEvidence);
   const checkpointFacts=$derived(lookupAnalysis.checkpointFacts);
 
@@ -313,6 +316,20 @@
       : [...collapsedResultSections,sectionId];
     await tick();
     document.getElementById(sectionId)?.scrollIntoView({block:'start',behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});
+  }
+  async function navigateToLookupEvidence(href:string){
+    const familyId=lookupEvidenceFamilyForHref(href);
+    if(!familyId)return;
+    expandedResultSections=expandedResultSections.includes(familyId)
+      ? expandedResultSections
+      : [...expandedResultSections,familyId];
+    collapsedResultSections=collapsedResultSections.filter((id)=>id!==familyId);
+    await tick();
+    const targetId=href.slice(1);
+    const target=document.getElementById(targetId);
+    if(!target)return;
+    window.history.replaceState(window.history.state,'',href);
+    target.scrollIntoView({block:'start',behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});
   }
   function sectionDetailVisible(sectionId:string):boolean{
     return evidenceDensity==='summary'
@@ -781,7 +798,7 @@
       <LookupFamilySummary
         label="Relationships and history"
         description="Inspect source coverage, exact observed relationships, optional passive pivots, and dated lifecycle events in one workspace."
-        metrics={[`${evidenceTopologyNodes.length} mapped sources`, `${lookupAssetGraph.edges.length} relationships`, `${activationContext.events.filter((event)=>Boolean(event.date)).length} dated events`]}
+        metrics={[`${mappedEvidenceSourceCount} mapped sources`, `${lookupAssetGraph.edges.length} relationships`, `${activationContext.events.filter((event)=>Boolean(event.date)).length} dated events`]}
         expanded={sectionDetailVisible('relationships-history')}
         onshow={()=>void showSectionDetail('relationships-history')}
         onhide={()=>void hideSectionDetail('relationships-history')}
@@ -796,6 +813,7 @@
           pivots={analystEvidencePivots}
           events={activationContext.events}
           context={result?.type==='domain'?activationContext:null}
+          onnavigate={(href)=>void navigateToLookupEvidence(href)}
         />
       {/if}
     </section>

@@ -194,10 +194,33 @@ describe('CLI argument parsing', () => {
       search: 'review-target.invalid',
       reveal: true,
       requireMatch: false,
+      expectedContentDigest: null,
       output: 'json',
       quiet: false,
       color: true,
     });
+    const expectedDigest = `sha256:${'a'.repeat(64)}`;
+    assert.deepEqual(parseCliArguments([
+      'inspect-archive',
+      'workspace.json',
+      '--expect-content-digest',
+      expectedDigest,
+    ]), {
+      action: 'inspect-archive',
+      source: 'workspace.json',
+      passphraseSource: null,
+      search: null,
+      reveal: false,
+      requireMatch: false,
+      expectedContentDigest: expectedDigest,
+      output: 'terminal',
+      quiet: false,
+      color: true,
+    });
+    assert.throws(
+      () => parseCliArguments(['inspect-archive', '--expect-content-digest', 'sha256:nope']),
+      /64 lowercase hexadecimal/iu,
+    );
     assert.deepEqual(parseCliArguments([
       'sign-artifact',
       'review.json',

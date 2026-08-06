@@ -32,6 +32,7 @@ describe('CLI shell completion', () => {
       assert.match(script, /(?:--checkpoint|-l checkpoint)/u);
       assert.match(script, /(?:--output|-l output)/u);
       assert.match(script, /(?:--summary|-l summary)/u);
+      assert.match(script, /(?:--expect-content-digest|-l expect-content-digest)/u);
       assert.doesNotMatch(script, /https?:\/\//u);
     }
     const bash = buildShellCompletion('bash');

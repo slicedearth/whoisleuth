@@ -558,7 +558,9 @@ establish that a current candidate is malicious or safe.
 evidence contents. Input is capped at 15 MiB. It currently recognises ordinary
 and encrypted workspace archives, case-response packets, acquisition-decision
 exports, domain-comparison exports, Bulk mail-exposure exports, and Bulk review
-manifests. It also verifies the internal digests of a complete investigation
+manifests. Reviewed CLI case packs are checked against their canonical digest,
+bounded browser-importable case collection, audience, and review marker. The
+command also verifies the internal digests of a complete investigation
 capsule, including its evidence, brief, graph, and optional analyst-record
 projections, and that capsule can be passed to `sign-artifact`. It also validates the bounded versioned structure of saved CLI
 Lookup JSON. Because saved Lookup documents do not embed a checksum or
@@ -617,6 +619,17 @@ search are excluded. Unicode domain searches are canonicalized to their
 DNS-safe ASCII form before exact comparison. `--require-match` makes a
 no-match result fail for automation and is valid only with `--search`.
 Traversal, input size, matches, depth, arrays, and strings are bounded.
+
+Version 2 of the inspection report adds a content digest over the ordered
+section identifiers, schema versions, record counts, and normalised section
+content. It deliberately excludes JSON formatting and each section envelope's
+export time, so two separately exported archives with the same retained
+workspace content have the same identity. `--expect-content-digest <sha256:digest>`
+fails when that identity differs, which supports deliberate transfer checks
+without printing records. Matching digests detect equivalent retained content;
+they do not authenticate who created it or establish that its evidence is
+accurate or current. The report separately identifies the source archive
+version and the installed reader version.
 
 ## Optional evidence-package signing
 
@@ -1197,12 +1210,20 @@ states its evidence basis and expected outcome; it does not run the action or
 create a case.
 
 `case-pack [cases.json] --audience <internal|trusted|public> --reviewed` reads a
-browser case export, retains at most 25 normalised cases, applies the selected
+browser case export containing at most 25 normalised cases, applies the selected
 redaction boundary, and emits a browser-importable case collection with a
-canonical SHA-256 digest and redaction manifest. Trusted output removes notes,
+canonical SHA-256 digest and redaction manifest. It refuses an invalid,
+duplicate, larger, or generated package above the browser's 2 MiB import limit
+rather than silently omitting records or evidence. Trusted output removes notes,
 recipient values, and manual-pivot targets. Public output additionally removes
 actions and analyst assertions. The review flag records an explicit choice; it
 does not prove recipient authorisation or factual correctness.
+
+`verify-artifact` recognises the complete case-pack envelope before browser
+import. It checks the canonical digest, supported case-export schema, bounded
+case count, report count, audience and explicit review marker without printing
+case contents. This detects a changed hand-off file but does not authenticate
+the analyst, recipient, source observations, or review decision.
 
 `monitor-once [manifest.json]` performs one bounded Deep control review for at
 most 20 manifest domains with concurrency capped at three. An optional
