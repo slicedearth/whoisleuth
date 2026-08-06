@@ -1,4 +1,5 @@
 import { buildBulkComparisonEvidence } from '../lib/bulk-comparison-evidence.mts';
+import { recordOrEmpty } from '../lib/bounded-contract-normalizers.mts';
 import {
   buildBulkDomainComparison,
   type BulkDomainComparison,
@@ -23,10 +24,6 @@ type LookupDiffOptions = Readonly<{
   domainMode?: 'different' | 'same';
 }>;
 
-function record(value: unknown): UnknownRecord {
-  return value && typeof value === 'object' && !Array.isArray(value) ? value as UnknownRecord : {};
-}
-
 function text(value: unknown, maximum = 300): string | null {
   if (typeof value !== 'string') return null;
   const normalized = value.replace(/[\x00-\x1f\x7f]+/gu, ' ').replace(/\s+/gu, ' ').trim().slice(0, maximum);
@@ -42,14 +39,14 @@ function stringList(value: unknown, maximum = 100): string[] {
 }
 
 function lifecycleValue(parsed: UnknownRecord, field: 'createdDate' | 'expiryDate'): string | null {
-  const lifecycle = record(parsed.lifecycle);
+  const lifecycle = recordOrEmpty(parsed.lifecycle);
   return text(lifecycle[`${field}Iso`] ?? lifecycle[field] ?? parsed[`${field}Iso`] ?? parsed[field], 64);
 }
 
 function registrarLabel(parsed: UnknownRecord): string | null {
   const registrar = parsed.registrar;
   if (typeof registrar === 'string') return text(registrar);
-  const source = record(registrar);
+  const source = recordOrEmpty(registrar);
   return text(source.name ?? source.org ?? source.handle);
 }
 
@@ -65,26 +62,26 @@ function sourceState(value: unknown): 'complete' | 'error' | 'not_found' | 'part
 }
 
 function sourceCoverage(document: SavedLookupDocument, availability: UnknownRecord) {
-  const diagnostics = record(document.diagnostics);
+  const diagnostics = recordOrEmpty(document.diagnostics);
   const entries = [
-    ['rdap', record(diagnostics.rdap).status],
-    ['whois', record(diagnostics.whois).status],
-    ['availability', record(diagnostics.availability).status],
-    ['dns', record(availability.dns).status],
-    ['http', record(availability.http).status],
-    ['tls', record(availability.tls).status],
+    ['rdap', recordOrEmpty(diagnostics.rdap).status],
+    ['whois', recordOrEmpty(diagnostics.whois).status],
+    ['availability', recordOrEmpty(diagnostics.availability).status],
+    ['dns', recordOrEmpty(availability.dns).status],
+    ['http', recordOrEmpty(availability.http).status],
+    ['tls', recordOrEmpty(availability.tls).status],
   ] as const;
   return entries.map(([source, status]) => ({ source, state: sourceState(status) }));
 }
 
 function lookupComparisonInput(document: SavedLookupDocument): UnknownRecord {
-  const availability = record(document.availability);
-  const rdapParsed = record(record(document.rdap).parsed);
-  const whoisParsed = record(record(document.whois).parsed);
+  const availability = recordOrEmpty(document.availability);
+  const rdapParsed = recordOrEmpty(recordOrEmpty(document.rdap).parsed);
+  const whoisParsed = recordOrEmpty(recordOrEmpty(document.whois).parsed);
   const preferredRegistry = Object.keys(rdapParsed).length ? rdapParsed : whoisParsed;
   const relationship = relationshipObservation(availability);
-  const dns = record(availability.dns);
-  const dnsRecords = record(dns.records);
+  const dns = recordOrEmpty(availability.dns);
+  const dnsRecords = recordOrEmpty(dns.records);
   const comparisonEvidence = buildBulkComparisonEvidence(availability);
   return {
     domain: document.registrableDomain,
@@ -113,8 +110,8 @@ function lookupComparisonInput(document: SavedLookupDocument): UnknownRecord {
     faviconMatch: false,
     faviconNearMatch: false,
     reusesOfficialAssets: false,
-    hasPasswordField: record(record(availability.credentialSurfaceProfile).inputs).categories
-      ? Number(record(record(record(availability.credentialSurfaceProfile).inputs).categories).password) > 0
+    hasPasswordField: recordOrEmpty(recordOrEmpty(availability.credentialSurfaceProfile).inputs).categories
+      ? Number(recordOrEmpty(recordOrEmpty(recordOrEmpty(availability.credentialSurfaceProfile).inputs).categories).password) > 0
       : false,
     hasExternalFormAction: null,
     phishingLanguageMatch: null,

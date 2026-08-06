@@ -22,8 +22,5 @@ function abusechAuthKey(env: EnvironmentInput | null | undefined = process.env):
 }
 
 export {
-  MAX_ABUSECH_AUTH_KEY_LENGTH,
-  normalizeAbusechAuthKey,
   abusechAuthKey,
 };
-export type { EnvironmentInput };

@@ -672,5 +672,4 @@ export {
   MAX_TRACKING_IDENTIFIERS,
   extractHtmlSignals,
   extractPageIdentity,
-  extractPageRelationships,
 };

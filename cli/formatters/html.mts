@@ -73,5 +73,5 @@ function formatLookupEvidenceHtml(document: unknown): string {
 `;
 }
 
-export { escapeHtml, formatLookupEvidenceHtml };
+export { formatLookupEvidenceHtml };
 export type { ComparisonField, LookupEvidenceReport, PublicationComparisonField, ReportField, ReportGroup };
