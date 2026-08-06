@@ -73,6 +73,10 @@ const SAFE_MARKERS: ReadonlyArray<Readonly<{ marker: string; output: string }>> 
   { marker: 'data-wf-page=', output: '<main data-wf-page="fixture"></main>' },
   { marker: 'data-wf-site=', output: '<main data-wf-site="fixture"></main>' },
   { marker: 'data-framer-name=', output: '<main data-framer-name="fixture"></main>' },
+  { marker: 'id="wsite-base-style"', output: '<link id="wsite-base-style" href="/fixture.css">' },
+  { marker: "id='wsite-base-style'", output: '<link id="wsite-base-style" href="/fixture.css">' },
+  { marker: 'title="wsite-theme-css"', output: '<link title="wsite-theme-css" href="/fixture.css">' },
+  { marker: "title='wsite-theme-css'", output: '<link title="wsite-theme-css" href="/fixture.css">' },
   { marker: ' ng-version=', output: '<main ng-version="fixture"></main>' },
   { marker: ' name="__viewstate"', output: '<input name="__VIEWSTATE">' },
   { marker: ' id="__viewstate"', output: '<input id="__VIEWSTATE">' },
@@ -113,7 +117,6 @@ const TECHNOLOGY_INPUT_KEYS = new Set([
   'responseHeaders',
 ]);
 const HEADER_CANONICAL_VALUES: Readonly<Record<string, string>> = Object.freeze({
-  cloudfront: 'CloudFront',
   'apache-http-server': 'Apache',
   'microsoft-iis': 'Microsoft-IIS',
 });
