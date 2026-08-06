@@ -360,6 +360,7 @@ test('brand sweep carries the official domain and selected candidates across eve
   await page.locator('.candidate input[type="checkbox"]').nth(0).check();
   await page.locator('.candidate input[type="checkbox"]').nth(1).check();
   await page.getByRole('button', { name: 'Continue to Bulk with 2' }).click();
+  await expect(page).toHaveURL('/bulk?source=discover');
   await expect(currentAction(page)).toContainText('Triage candidates');
   const handedOffGuide = await page.evaluate((key) => JSON.parse(sessionStorage.getItem(key) || 'null'), GUIDE_KEY);
   expect(handedOffGuide.reviewDomains).toEqual(candidates);
