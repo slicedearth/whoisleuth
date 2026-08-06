@@ -10,6 +10,7 @@
     type NavigationItem,
   } from '$lib/workspaces';
   import { CAPABILITY_CONTEXT, fetchCapabilities, type CapabilityReport } from '$lib/capabilities';
+  import { requestJsonCapped, SMALL_JSON_RESPONSE_BYTES } from '$lib/bounded-json-response';
   import CommandPalette from '$lib/components/CommandPalette.svelte';
   import BrandMark from '$lib/components/BrandMark.svelte';
   import ConsoleLoading from '$lib/components/ConsoleLoading.svelte';
@@ -100,9 +101,10 @@
   async function checkSession(){
     session='checking';
     try{
-      const response=await fetch('/api/session',{cache:'no-store'});
+      const { response, body }=await requestJsonCapped('/api/session',{cache:'no-store'},{maximumBytes:SMALL_JSON_RESPONSE_BYTES,timeoutMs:10_000});
       if(!response.ok)throw new Error();
-      const authenticated=(await response.json()).authenticated===true;
+      const record=body&&typeof body==='object'&&!Array.isArray(body)?body as Record<string,unknown>:{};
+      const authenticated=record.authenticated===true;
       if(!authenticated){
         clearConsoleWorkflowState();
         try{await goto(signInTarget(),{replaceState:true});}

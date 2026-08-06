@@ -36,9 +36,15 @@ test('homepage presents plain-language goals, restrained branding, and synthetic
   await expect(previewOverview.getByText('5 sources', { exact: true })).toBeVisible();
   await expect(previewOverview.getByText('Registration and website evidence collected')).toBeVisible();
   await expect(topology).toHaveCount(0);
-  await previewTabs.getByRole('tab', { name: 'Timeline' }).click();
+  const overviewTab = previewTabs.getByRole('tab', { name: 'At a glance' });
+  await overviewTab.focus();
+  await overviewTab.press('End');
+  await expect(previewTabs.getByRole('tab', { name: 'Timeline' })).toBeFocused();
+  await expect(previewTabs.getByRole('tab', { name: 'Timeline' })).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByRole('list', { name: 'Synthetic lookup timeline' })).toBeVisible();
-  await previewTabs.getByRole('tab', { name: 'Sources' }).click();
+  await previewTabs.getByRole('tab', { name: 'Timeline' }).press('ArrowLeft');
+  await expect(previewTabs.getByRole('tab', { name: 'Sources' })).toBeFocused();
+  await expect(previewTabs.getByRole('tab', { name: 'Sources' })).toHaveAttribute('aria-selected', 'true');
   await expect(topology).toBeVisible();
   await expect(page.getByText('Fixed fictional data from the public demo. No live target is contacted.')).toBeVisible();
   await expect(page.locator('.hero-actions').getByRole('link', { name: 'Open console' })).toHaveAttribute('href', '/dashboard');
@@ -110,6 +116,7 @@ test('public resources offer task-specific source boundaries on desktop and mobi
 
 test('public guide explains tasks, result states, glossary terms, and common questions', async ({ page }) => {
   await page.goto('/guide');
+  await expect(page.getByText(/Detailed assessment contains additional decision support, claim readiness, portable hand-off, and acquisition review/i)).toBeVisible();
 
   await expect(page.getByRole('heading', { name: 'Use WHOISleuth with confidence.' })).toBeVisible();
   await expect(page.getByRole('navigation', { name: 'Guide sections' })).toBeVisible();

@@ -381,7 +381,7 @@ function identityEntries(input: Readonly<{
       title: 'The declared canonical origin differs from the observed final origin',
       detail: `${finalHost} served the page while the document declared ${canonicalHost} as canonical.`,
       sources: ['HTTP', 'HTML'],
-      href: '#evidence-page-identity',
+      href: '#evidence-page',
     });
   }
   if (finalHost && openGraphHost && !sameRegistrableScope(finalHost, openGraphHost, registrableDomain)) {
@@ -392,7 +392,7 @@ function identityEntries(input: Readonly<{
       title: 'The Open Graph URL points outside the observed final origin',
       detail: `${finalHost} served the page while Open Graph metadata declared ${openGraphHost}. Publisher metadata is a claim, not identity proof.`,
       sources: ['HTTP', 'HTML'],
-      href: '#evidence-page-identity',
+      href: '#evidence-page',
     });
   }
   return output;

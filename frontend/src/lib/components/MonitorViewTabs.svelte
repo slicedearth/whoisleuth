@@ -20,11 +20,26 @@
     counts: Counts;
     setView: (view: View) => void;
   } = $props();
+
+  function tabKeydown(event: KeyboardEvent) {
+    const current = tabs.findIndex((tab) => tab.view === view);
+    let index = -1;
+    if (event.key === 'ArrowRight') index = (current + 1) % tabs.length;
+    else if (event.key === 'ArrowLeft') index = (current + tabs.length - 1) % tabs.length;
+    else if (event.key === 'Home') index = 0;
+    else if (event.key === 'End') index = tabs.length - 1;
+    const next = tabs[index];
+    if (!next) return;
+    event.preventDefault();
+    setView(next.view);
+    const tablist = (event.currentTarget as HTMLButtonElement).closest('[role="tablist"]');
+    requestAnimationFrame(() => tablist?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[index]?.focus());
+  }
 </script>
 
 <div class="views" role="tablist" aria-label="Monitor views">
   {#each tabs as tab}
-    <button role="tab" id={`tab-${tab.view}`} aria-selected={view === tab.view} aria-controls={`panel-${tab.view}`} class:active={view === tab.view} onclick={() => setView(tab.view)}>{tab.label} <span>{counts[tab.view]}</span></button>
+    <button role="tab" id={`tab-${tab.view}`} aria-selected={view === tab.view} aria-controls="monitor-view-panel" tabindex={view === tab.view ? 0 : -1} class:active={view === tab.view} onclick={() => setView(tab.view)} onkeydown={tabKeydown}>{tab.label} <span>{counts[tab.view]}</span></button>
   {/each}
 </div>
 

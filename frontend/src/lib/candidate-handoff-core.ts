@@ -9,8 +9,8 @@ import { normalizeCtProvenance } from './analysis/ct-results.ts';
 import type { CtProvenance } from './analysis/ct-results.ts';
 import { MAX_CANDIDATE_SOURCE_LENGTH } from '../../../lib/candidate-provenance-bounds.mts';
 
-export const HANDOFF_KEY = 'whoisleuth:candidate-handoff:v1';
-export const HANDOFF_VERSION = 1;
+export const HANDOFF_KEY = 'whoisleuth:candidate-handoff:v2';
+export const HANDOFF_VERSION = 2;
 export const MAX_HANDOFF_CANDIDATES = 2000;
 export const MAX_GENERATED_CONTEXT = 5000;
 export const MAX_MUTATION_TYPES = 30;
@@ -27,6 +27,13 @@ export const HANDOFF_SOURCES = [
   'manual',
 ] as const;
 
+const DISCOVER_HANDOFF_SOURCES = new Set<HandoffSource>([
+  'typosquat',
+  'keyword',
+  'certificate-transparency',
+  'nameserver',
+]);
+
 export type HandoffSource = typeof HANDOFF_SOURCES[number];
 
 export type CertificateTransparencyProvenance = CtProvenance;
@@ -40,10 +47,20 @@ export type Candidate = {
 
 export type CandidateHandoff = {
   version: typeof HANDOFF_VERSION;
+  token: string;
   createdAt: string;
   source: HandoffSource;
   candidates: Candidate[];
   generatedCandidates?: Candidate[];
+  generatedCandidateTotal?: number;
+  generatedCandidatesTruncated?: boolean;
+};
+
+const HANDOFF_TOKEN_RE = /^[0-9a-f]{32}$/u;
+
+export type SerializedCandidateHandoff = {
+  handoff: CandidateHandoff;
+  serialized: string;
 };
 
 function plainRecord(value: unknown): Record<string, unknown> | null {
@@ -54,6 +71,20 @@ function plainRecord(value: unknown): Record<string, unknown> | null {
 
 export function isHandoffSource(value: unknown): value is HandoffSource {
   return typeof value === 'string' && (HANDOFF_SOURCES as readonly string[]).includes(value);
+}
+
+export function handoffMatchesNavigationSource(
+  handoffSource: HandoffSource,
+  navigationSource: string,
+): boolean {
+  return handoffSource === navigationSource
+    || (navigationSource === 'discover' && DISCOVER_HANDOFF_SOURCES.has(handoffSource));
+}
+
+function handoffTimestamp(value: unknown): string | null {
+  if (typeof value !== 'string' || value.length > 64) return null;
+  const milliseconds = Date.parse(value);
+  return Number.isFinite(milliseconds) ? new Date(milliseconds).toISOString() : null;
 }
 
 /**
@@ -106,10 +137,17 @@ export function buildHandoff(
   candidates: readonly unknown[],
   generatedCandidates?: readonly unknown[],
   createdAt?: string,
+  token?: string,
 ): CandidateHandoff {
+  const timestamp = handoffTimestamp(createdAt ?? new Date().toISOString());
+  if (!timestamp) throw new TypeError('Candidate handoff creation time must be a valid timestamp.');
+  if (typeof token !== 'string' || !HANDOFF_TOKEN_RE.test(token)) {
+    throw new TypeError('Candidate handoff token must be a 128-bit lower-case hexadecimal value.');
+  }
   return {
     version: HANDOFF_VERSION,
-    createdAt: createdAt || new Date().toISOString(),
+    token,
+    createdAt: timestamp,
     source,
     candidates: normalizeCandidates(candidates, MAX_HANDOFF_CANDIDATES),
     ...(generatedCandidates
@@ -118,24 +156,101 @@ export function buildHandoff(
   };
 }
 
+function serializeWithinHandoffLimit(handoff: CandidateHandoff): string | null {
+  const serialized = JSON.stringify(handoff);
+  return new TextEncoder().encode(serialized).byteLength <= MAX_CANDIDATE_HANDOFF_SERIALIZED_BYTES
+    ? serialized
+    : null;
+}
+
+/**
+ * Produces a handoff that is guaranteed to survive the parser's byte ceiling.
+ * Selected candidates are atomic: if they cannot fit, the save is refused
+ * rather than silently dropping an analyst selection. Optional generated
+ * coverage context is reduced deterministically from the tail and the
+ * truncation is recorded in the envelope.
+ */
+export function serializeCandidateHandoff(
+  source: HandoffSource,
+  candidates: readonly unknown[],
+  generatedCandidates?: readonly unknown[],
+  createdAt?: string,
+  token?: string,
+): SerializedCandidateHandoff | null {
+  const built = buildHandoff(source, candidates, generatedCandidates, createdAt, token);
+  const generated = built.generatedCandidates;
+  if (!generated?.length) {
+    const serialized = serializeWithinHandoffLimit(built);
+    return serialized ? { handoff: built, serialized } : null;
+  }
+
+  const fullSerialized = serializeWithinHandoffLimit(built);
+  if (fullSerialized) return { handoff: built, serialized: fullSerialized };
+
+  const base: CandidateHandoff = {
+    version: built.version,
+    token: built.token,
+    createdAt: built.createdAt,
+    source: built.source,
+    candidates: built.candidates,
+    generatedCandidateTotal: generated.length,
+    generatedCandidatesTruncated: true,
+  };
+  if (!serializeWithinHandoffLimit({ ...base, generatedCandidates: [] })) return null;
+
+  let lower = 0;
+  let upper = generated.length;
+  let best: SerializedCandidateHandoff | null = null;
+  while (lower <= upper) {
+    const count = Math.floor((lower + upper) / 2);
+    const handoff: CandidateHandoff = {
+      ...base,
+      generatedCandidates: generated.slice(0, count),
+    };
+    const serialized = serializeWithinHandoffLimit(handoff);
+    if (serialized) {
+      best = { handoff, serialized };
+      lower = count + 1;
+    } else {
+      upper = count - 1;
+    }
+  }
+  return best;
+}
+
 /**
  * Validates and re-normalizes an already-parsed handoff value (e.g. from
- * sessionStorage). Returns null for anything that is not a version-1 handoff
+ * sessionStorage). Returns null for anything that is not a current-version handoff
  * with a known source and a candidate array, so a malicious or corrupt store is
- * ignored rather than trusted.
+ * ignored rather than trusted. The opaque token binds the one-use browser
+ * payload to the navigation that deliberately created it.
  */
 export function parseHandoff(parsed: unknown): CandidateHandoff | null {
   const value = plainRecord(parsed);
-  if (!value || value.version !== HANDOFF_VERSION || !Array.isArray(value.candidates) || !isHandoffSource(value.source)) {
+  if (!value || value.version !== HANDOFF_VERSION || !Array.isArray(value.candidates) || !isHandoffSource(value.source)
+    || typeof value.token !== 'string' || !HANDOFF_TOKEN_RE.test(value.token)) {
     return null;
   }
+  const createdAt = handoffTimestamp(value.createdAt);
+  if (!createdAt) return null;
+  const generatedCandidates = value.generatedCandidates
+    ? normalizeCandidates(value.generatedCandidates, MAX_GENERATED_CONTEXT)
+    : undefined;
+  const generatedCandidateTotal = Number.isSafeInteger(value.generatedCandidateTotal)
+    ? Math.max(0, Math.min(MAX_GENERATED_CONTEXT, Number(value.generatedCandidateTotal)))
+    : null;
+  const generatedCandidatesTruncated = value.generatedCandidatesTruncated === true
+    && generatedCandidateTotal !== null
+    && generatedCandidateTotal >= (generatedCandidates?.length ?? 0);
   return {
     version: HANDOFF_VERSION,
-    createdAt: String(value.createdAt || ''),
+    token: value.token,
+    createdAt,
     source: value.source,
     candidates: normalizeCandidates(value.candidates, MAX_HANDOFF_CANDIDATES),
-    ...(value.generatedCandidates
-      ? { generatedCandidates: normalizeCandidates(value.generatedCandidates, MAX_GENERATED_CONTEXT) }
+    ...(generatedCandidates ? { generatedCandidates } : {}),
+    ...(generatedCandidatesTruncated
+      ? { generatedCandidateTotal, generatedCandidatesTruncated: true }
       : {}),
   };
 }

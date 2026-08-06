@@ -72,7 +72,7 @@
 
 <style>
   .entity-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(260px,100%),1fr));gap:10px}
-  article{min-width:0;padding:12px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--surface-soft)}
+  article{min-width:0;padding:12px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel-raised)}
   .entity-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
   h5{min-width:0;margin:0;color:var(--text);font-size:var(--text-sm);overflow-wrap:anywhere}
   .entity-head span{flex:0 0 auto;color:var(--accent);font-size:var(--text-2xs);text-align:right;text-transform:none;letter-spacing:.04em}

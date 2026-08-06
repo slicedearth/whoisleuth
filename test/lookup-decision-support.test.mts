@@ -174,7 +174,7 @@ test('identity inconsistencies are bounded review leads with direct evidence lin
       'page-open-graph-origin',
     ],
   );
-  assert.equal(support.entries.find((entry) => entry.id === 'page-open-graph-origin')?.href, '#evidence-page-identity');
+  assert.equal(support.entries.find((entry) => entry.id === 'page-open-graph-origin')?.href, '#evidence-page');
 });
 
 test('certificate policy differences remain review leads while incomplete policy remains uncertain', () => {

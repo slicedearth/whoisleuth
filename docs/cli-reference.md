@@ -330,7 +330,8 @@ delivery observed by the caller.
 
 Pressing Ctrl-C asks an in-flight Lookup or Bulk run to stop, suppresses any
 partial final result, flushes an enabled Bulk checkpoint, and exits with code
-130. Already started network operations remain subject to their existing hard
+130. SIGTERM follows the same graceful cleanup path and exits with code 143.
+Already started network operations remain subject to their existing hard
 timeouts while the shared in-process API unwinds; the executable terminates
 after CLI cleanup. A second Ctrl-C removes any known unpublished temporary
 output file on a best-effort basis before exiting immediately.
@@ -338,10 +339,22 @@ output file on a best-effort basis before exiting immediately.
 Bulk can persist compact progress with `--checkpoint <file>`. A new checkpoint
 is private, bounded to 16 MiB, versioned, and tied to the exact ordered input
 and scan mode by SHA-256. It stores only compact per-item results, never full
-Lookup responses. Reusing the same path is refused unless `--resume` is also
+Lookup responses. Checkpoint schema 2 records a nullable per-row observation
+time. Schema 1 remains readable, but its resumed rows keep observation time
+unknown rather than inheriting the resume time. Reusing the same path is
+refused unless `--resume` is also
 specified. Resume revalidates the complete untrusted document and skips only
 the exact completed rows; changed input, mode, schema, digest, or malformed
 results fail closed.
+
+Bulk JSON, JSONL, and item documents use schema version 3. Each row includes
+`observedAt` and a `collectionOrigin` of `current_run` or
+`resumed_checkpoint`; the top-level `generatedAt` remains the report creation
+time. HTTP JSON uses schema version 2 and adds the explicit `assessment` field.
+The legacy `activityStatus` field remains for compatibility, but is `null`
+when collection is inconclusive rather than labelling the target unreachable.
+Consumers should use `assessment`; older version-1 `unreachable` values remain
+historical inconclusive labels, not proof that a target cannot be reached.
 
 If checkpoint persistence fails after collection, WHOISleuth still emits the
 completed final result, reports the checkpoint limitation, and exits with code
@@ -393,6 +406,7 @@ machine access is not evidence that a domain is unregistered or safe.
 | 4 | A bounded operation completed partially, such as Bulk item failures or failed explicit Doctor network checks. |
 | 70 | Unexpected CLI bootstrap failure. |
 | 130 | The analyst cancelled the command. No partial final result was emitted. |
+| 143 | The process received SIGTERM. No partial final result was emitted. |
 
 This release supports `lookup`, `bulk`, `ct-search`, `ct-intake`, `map-observations`, `oam-export`, `discover`, `discover-scan`, `posture`,
 `http`, `tls`, `registry-support`, `registry-doctor`, `registry-cohort`, `registry-scaffold`, `risk-calibrate`,

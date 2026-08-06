@@ -181,7 +181,7 @@
   .intro{max-width:820px;margin:12px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.5}
   .scope-control{display:grid;gap:6px;max-width:760px;padding:10px 11px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}
   .scope-control>span{font:700 var(--text-xs) var(--mono)}
-  .scope-control>span small{margin-left:6px;color:var(--muted);font:var(--text-2xs) var(--sans)}
+  .scope-control>span small{margin-left:6px;color:var(--muted);font:var(--text-2xs) var(--font-sans)}
   .scope-control textarea{min-width:0;width:100%;resize:vertical;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised);color:var(--text);font:var(--text-xs) var(--mono);line-height:1.5;padding:8px}
   .scope-control textarea:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
   .scope-control>small{color:var(--muted);font-size:var(--text-2xs);line-height:1.45}
@@ -194,7 +194,7 @@
   article.attention header strong{color:var(--amber)}
   article code{display:block;margin-top:7px;color:var(--text);font-size:var(--text-xs);overflow-wrap:anywhere}
   article p{margin:6px 0 0;color:var(--muted);font-size:var(--text-2xs);line-height:1.45}
-  article p.classification{color:var(--accent-soft);font-weight:700}
+  article p.classification{color:var(--accent);font-weight:700}
   article p.scope-state{color:var(--amber);font-family:var(--mono);text-transform:uppercase}
   article p.scope-state.scope-match{color:var(--source-network)}
   article small{display:block;margin-top:7px;color:var(--muted);font:var(--text-2xs) var(--mono)}

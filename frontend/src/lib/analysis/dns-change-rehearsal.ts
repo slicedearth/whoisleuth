@@ -135,29 +135,6 @@ function boundedLine(value: unknown, maximum = 500): string {
   return value.replace(/\s+/gu, ' ').trim().slice(0, maximum);
 }
 
-function boundedRecordLines(value: string | readonly unknown[] | undefined): string[] {
-  const values: readonly unknown[] = typeof value === 'string'
-    ? value.split(/\r?\n/u)
-    : Array.isArray(value)
-      ? value
-      : [];
-  return [...new Set(values
-    .slice(0, MAX_REHEARSAL_RECORDS * 3)
-    .map((item) => {
-      if (typeof item === 'string') return boundedLine(item);
-      const candidate = record(item);
-      return boundedLine(
-        candidate.value
-        ?? candidate.record
-        ?? candidate.raw
-        ?? '',
-      );
-    })
-    .filter(Boolean))]
-    .sort()
-    .slice(0, MAX_REHEARSAL_RECORDS);
-}
-
 function dsRecords(value: string | readonly unknown[] | undefined): string[] {
   const values: readonly unknown[] = typeof value === 'string'
     ? value.split(/\r?\n/u)

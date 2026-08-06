@@ -1,7 +1,5 @@
-import { readFile } from 'node:fs/promises';
 import { expect, test } from './fixtures';
-import { boundingBox, expectNoHorizontalOverflow, migrateLegacyBrowserData, readBrowserLocalCollection, requiredValue, runBulkScan } from './helpers';
-import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model';
+import { expectNoHorizontalOverflow, migrateLegacyBrowserData, readBrowserLocalCollection } from './helpers';
 
 // Every domain here is a local/invalid value (RFC 2606 .invalid, or dotless
 // bad-domain-* that classifyQuery rejects with a 400). Case features are
@@ -194,12 +192,14 @@ test.describe('accessible cross-case relationship table', () => {
     const pagination = page.getByRole('navigation', { name: 'Case relationship pages' });
     await expect(table.getByRole('row')).toHaveCount(51);
     await expect(pagination).toContainText('Page 1 of 2');
-    await expect(pagination.getByRole('button', { name: 'Previous' })).toBeDisabled();
+    await expect(pagination.getByRole('button', { name: 'Previous' })).toHaveAttribute('aria-disabled', 'true');
 
-    await pagination.getByRole('button', { name: 'Next' }).click();
+    const nextPage = pagination.getByRole('button', { name: 'Next' });
+    await nextPage.click();
+    await expect(nextPage).toBeFocused();
     await expect(table.getByRole('row')).toHaveCount(3);
     await expect(pagination).toContainText('Page 2 of 2');
-    await expect(pagination.getByRole('button', { name: 'Next' })).toBeDisabled();
+    await expect(nextPage).toHaveAttribute('aria-disabled', 'true');
     await expect(page.locator('.result-count')).toContainText('Showing 51–52 of 52 matching relationships');
     await expect(page.locator('.relationship-workspace')).not.toContainText('Partial result');
     await expectNoHorizontalOverflow(page);

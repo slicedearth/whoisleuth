@@ -139,8 +139,13 @@ test('lookalike generation discloses its limits and paginates every retained can
 
   const pagination = page.getByRole('navigation', { name: 'Discover candidate pages' });
   await expect(pagination).toContainText('Page 1 of 20');
-  await expect(pagination.getByRole('button', { name: 'Previous' })).toBeDisabled();
-  await pagination.getByRole('button', { name: 'Next' }).click();
+  const previousPage = pagination.getByRole('button', { name: 'Previous' });
+  const nextPage = pagination.getByRole('button', { name: 'Next' });
+  await expect(previousPage).toHaveAttribute('aria-disabled', 'true');
+  await previousPage.focus();
+  await expect(previousPage).toBeFocused();
+  await nextPage.click();
+  await expect(nextPage).toBeFocused();
   await expect(pagination).toContainText('Page 2 of 20');
   await expect(page.locator('.candidate')).toHaveCount(100);
   await expect(page.getByRole('status').filter({ hasText: 'Showing 101–200 of 2000 matching candidates' })).toBeVisible();
@@ -167,10 +172,10 @@ test('lookalike presets expose a live upper-bound estimate and clear stale resul
   const impersonation = page.getByRole('button', { name: /^Impersonation\b/u });
   await expect(allFamilies).toHaveAttribute('aria-pressed', 'true');
 
-  await page.getByRole('textbox', { name: 'Brand or domain' }).fill('acme.com');
+  await page.getByRole('textbox', { name: 'Brand or domain' }).fill('acme.test');
   await page.getByRole('textbox', { name: 'TLDs' }).fill('com, net, org');
   await expect(page.locator('.generation-estimate')).toContainText('Estimated maximum before validation and deduplication');
-  await expect(page.locator('.generation-estimate')).toContainText('across 3 TLDs');
+  await expect(page.locator('.generation-estimate')).toContainText('across 4 TLDs');
 
   await page.getByRole('button', { name: 'Generate candidates' }).click();
   await expect(page.locator('.candidate')).not.toHaveCount(0);
@@ -358,7 +363,7 @@ test('custom family mode generates only the analyst-selected mutation families',
   for (const checkbox of await familyCheckboxes.all()) await checkbox.uncheck();
   await expect(page.getByText('Select at least one family before generating candidates.')).toBeVisible();
 
-  await page.getByRole('textbox', { name: 'Brand or domain' }).fill('acme.com');
+  await page.getByRole('textbox', { name: 'Brand or domain' }).fill('acme.test');
   await page.getByRole('button', { name: 'Generate candidates' }).click();
   await expect(page.getByRole('alert')).toContainText('Select at least one custom mutation family');
 
@@ -367,10 +372,10 @@ test('custom family mode generates only the analyst-selected mutation families',
   await page.getByRole('button', { name: 'Generate candidates' }).click();
 
   await expect(page.locator('.candidate').filter({
-    has: page.locator('strong', { hasText: /^acmes\.com$/ }),
+    has: page.locator('strong', { hasText: /^acmes\.test$/ }),
   })).toContainText('Plural form');
   await expect(page.locator('.candidate').filter({
-    has: page.locator('strong', { hasText: /^acmecom\.com$/ }),
+    has: page.locator('strong', { hasText: /^acmetest\.test$/ }),
   })).toContainText('TLD embedded in label');
   await expect(page.locator('.candidate strong', { hasText: /^acm\.com$/ })).toHaveCount(0);
   await expect(page.getByRole('combobox', { name: 'Mutation family' }).locator('option')).toHaveCount(3);
@@ -435,7 +440,7 @@ test('lookalike generation rejects ambiguous dotted input and invalid mutation l
 });
 
 test('domain seeds expand across selected TLDs with combined provenance', async ({ page }) => {
-  await page.getByRole('textbox', { name: 'Brand or domain' }).fill('acme.com');
+  await page.getByRole('textbox', { name: 'Brand or domain' }).fill('acme.test');
   await page.getByRole('textbox', { name: 'TLDs' }).fill('com, net');
   await page.getByRole('button', { name: 'Generate candidates' }).click();
   await page.getByRole('combobox', { name: 'Candidate sort' }).selectOption('generated');
@@ -444,12 +449,14 @@ test('domain seeds expand across selected TLDs with combined provenance', async 
     has: page.locator('strong', { hasText: /^acme\.net$/ }),
   });
   await expect(exactSubstitution).toContainText('Selected TLD substitution');
+  await page.getByRole('textbox', { name: 'Filter candidates' }).fill('acm.net');
   const combined = page.locator('.candidate').filter({
     has: page.locator('strong', { hasText: /^acm\.net$/ }),
   });
   await expect(combined).toContainText('Character omission');
   await expect(combined).toContainText('Selected TLD substitution');
-  await expect(page.locator('.candidate strong', { hasText: /^acme\.com$/ })).toHaveCount(0);
+  await page.getByRole('textbox', { name: 'Filter candidates' }).fill('acme.test');
+  await expect(page.locator('.candidate strong', { hasText: /^acme\.test$/ })).toHaveCount(0);
 });
 
 test('name-idea generation refuses labels that exceed DNS bounds', async ({ page }) => {

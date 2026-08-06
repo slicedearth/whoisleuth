@@ -301,7 +301,7 @@
   .file-btn{justify-self:start}
   .preview{display:grid;gap:10px;padding:12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
   .preview header{display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:8px}
-  .preview h3{margin:0;font-size:var(--text-base)}
+  .preview h3{margin:0;font-size:var(--text-md)}
   .preview header>span{color:var(--muted);font:650 var(--text-2xs) var(--mono)}
   .preview ul{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin:0;padding:0;list-style:none}
   .preview li{min-width:0;padding:9px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}

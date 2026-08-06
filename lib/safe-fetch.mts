@@ -158,51 +158,50 @@ function isPrivateIpv6(ip: string): boolean {
   if (groups.slice(0, 7).every((g) => g === '0000') && g7 === '0001') return true; // ::1 (loopback)
   if (g0.startsWith('ff')) return true; // multicast ff00::/8
 
-  // IPv4-mapped (::ffff:0:0/96) and the deprecated IPv4-compatible
-  // (::0:0/96) forms both put the embedded address in the last two groups -
-  // checked on the canonical expanded form above, so it doesn't matter
-  // whether the address was originally written in dotted-decimal or hex.
-  if ([g0, g1, g2, g3, g4].every((g) => g === '0000') && (g5 === 'ffff' || g5 === '0000')) {
+  // IPv4-mapped addresses put the embedded address in the last two groups.
+  // Accept only a mapped public IPv4 target. The deprecated IPv4-compatible
+  // form is rejected below rather than treated as a routable IPv6 address.
+  if ([g0, g1, g2, g3, g4].every((g) => g === '0000') && g5 === 'ffff') {
     const embedded = groupsToIpv4(g6, g7);
     if (embedded && isPrivateIpv4(embedded)) return true;
+    if (embedded) return false;
   }
+  if ([g0, g1, g2, g3, g4, g5].every((g) => g === '0000')) return true;
   // NAT64 well-known prefix (64:ff9b::/96) - same tail embedding, different
   // prefix; some IPv6-only networks synthesize these to reach IPv4 hosts.
   if (g0 === '0064' && g1 === 'ff9b' && [g2, g3, g4, g5].every((g) => g === '0000')) {
     const embedded = groupsToIpv4(g6, g7);
     if (embedded && isPrivateIpv4(embedded)) return true;
+    if (embedded) return false;
   }
   // RFC 8215 local-use NAT64 prefix (64:ff9b:1::/48). Unlike the well-known
   // /96 above, operators may choose how IPv4 bits are embedded within this
   // larger prefix. The whole range is non-global by definition, so reject it
   // rather than attempting to decode one layout and leaving others open.
   if (g0 === '0064' && g1 === 'ff9b' && g2 === '0001') return true;
-  // 6to4 (2002::/16) - the embedded IPv4 lives in groups 1-2, not the tail.
-  if (g0 === '2002') {
-    const embedded = groupsToIpv4(g1, g2);
-    if (embedded && isPrivateIpv4(embedded)) return true;
-  }
-
-  // Teredo (2001:0000::/32) carries both a server IPv4 address and an
-  // obfuscated client IPv4 address. Decode both so a transition address
-  // cannot smuggle a private/loopback target past the IPv4 guard.
-  if (g0 === '2001' && g1 === '0000') {
-    const server = groupsToIpv4(g2, g3);
-    const client = groupsToIpv4(
-      ((~parseInt(g6, 16)) & 0xffff).toString(16),
-      ((~parseInt(g7, 16)) & 0xffff).toString(16)
-    );
-    if ((server && isPrivateIpv4(server)) || (client && isPrivateIpv4(client))) return true;
-  }
+  // Deprecated transition mechanisms are not direct global-unicast targets.
+  // Reject their entire ranges instead of attempting to classify embedded
+  // addresses whose relays and routing behaviour are outside this boundary.
+  if (g0 === '2002') return true; // 6to4 2002::/16
+  if (g0 === '2001' && g1 === '0000') return true; // Teredo 2001::/32
 
   if (/^fe[89ab][0-9a-f]$/.test(g0)) return true; // link-local fe80::/10
   if (/^fe[cdef][0-9a-f]$/.test(g0)) return true; // deprecated site-local fec0::/10
   if (/^f[cd][0-9a-f]{2}$/.test(g0)) return true; // unique local fc00::/7
   if (g0 === '0100' && [g1, g2, g3].every((g) => g === '0000')) return true; // discard-only 100::/64
   if (g0 === '2001' && g1 === '0db8') return true; // documentation 2001:db8::/32
+  if (g0 === '3fff' && parseInt(g1, 16) <= 0x0fff) return true; // documentation 3fff::/20
   if (g0 === '2001' && g1 === '0002' && g2 === '0000') return true; // benchmarking 2001:2::/48
   if (g0 === '2001' && /^00[1-2][0-9a-f]$/.test(g1)) return true; // ORCHID/ORCHIDv2
-  return false;
+
+  // Ordinary publicly routed IPv6 unicast addresses are allocated from
+  // 2000::/3. Treat everything outside that allocation as reserved unless it
+  // matched one of the explicitly supported public transition forms above.
+  // An allow-list boundary is intentional here: newly written or unassigned
+  // address space must not silently become an outbound SSRF target merely
+  // because it was absent from this file's special-purpose exclusions.
+  const firstGroup = parseInt(g0, 16);
+  return !Number.isInteger(firstGroup) || firstGroup < 0x2000 || firstGroup > 0x3fff;
 }
 
 function isPrivateAddress(ip: string): boolean {

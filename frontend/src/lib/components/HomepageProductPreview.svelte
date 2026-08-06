@@ -22,6 +22,21 @@
     { id: 'certificate', label: 'Certificate', detail: selected.evidence.certificate.status, status: 'success', side: 'right' as const, glyph: 'T', family: 'web' as const },
     { id: 'analysis', label: 'Risk signals', detail: 'Explainable review cues', status: 'warning', side: 'right' as const, provenance: 'derived' as const, glyph: 'A' },
   ];
+
+  function previewTabKeydown(event: KeyboardEvent) {
+    const current = previewTabs.findIndex((tab) => tab.id === previewView);
+    let index = -1;
+    if (event.key === 'ArrowRight') index = (current + 1) % previewTabs.length;
+    else if (event.key === 'ArrowLeft') index = (current + previewTabs.length - 1) % previewTabs.length;
+    else if (event.key === 'Home') index = 0;
+    else if (event.key === 'End') index = previewTabs.length - 1;
+    const next = previewTabs[index];
+    if (!next) return;
+    event.preventDefault();
+    previewView = next.id;
+    const tablist = (event.currentTarget as HTMLButtonElement).closest('[role="tablist"]');
+    requestAnimationFrame(() => tablist?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[index]?.focus());
+  }
 </script>
 
 <section class="product-preview" aria-label="Synthetic WHOISleuth console preview">
@@ -47,8 +62,10 @@
           role="tab"
           aria-selected={previewView === tab.id}
           aria-controls="homepage-preview-panel"
+          tabindex={previewView === tab.id ? 0 : -1}
           class:active={previewView === tab.id}
           onclick={() => previewView = tab.id}
+          onkeydown={previewTabKeydown}
         >{tab.label}</button>
       {/each}
     </div>

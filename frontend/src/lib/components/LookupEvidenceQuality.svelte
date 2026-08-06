@@ -145,7 +145,7 @@
 {/if}
 
 <style>
-  .quality{min-width:0;padding:var(--card-pad);scroll-margin-top:calc(var(--anchor-offset) + 12px)}
+  .quality{min-width:0;padding:var(--card-pad);scroll-margin-top:calc(var(--local-nav-anchor-offset, 72px) + 12px)}
   header{display:flex;align-items:flex-start;justify-content:space-between;gap:18px}
   header h4{margin:2px 0 0;font:700 var(--text-lg) var(--mono)}
   header p:not(.eyebrow){max-width:720px;margin:6px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.5}
@@ -157,7 +157,7 @@
   summary{padding:12px 0;color:var(--text);font:680 var(--text-xs) var(--mono);cursor:pointer}
   summary:focus-visible{outline:2px solid var(--focus);outline-offset:3px}
   .timing-detail summary{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
-  .timing-detail summary small{color:var(--muted);font:500 var(--text-2xs) var(--sans);text-align:right}
+  .timing-detail summary small{color:var(--muted);font:500 var(--text-2xs) var(--font-sans);text-align:right}
   .matrix{display:grid;gap:7px}
   .matrix-head,.quality-row{display:grid;grid-template-columns:minmax(150px,1.25fr) minmax(92px,.65fr) minmax(155px,1fr) minmax(120px,.8fr) minmax(180px,1.25fr);gap:9px;align-items:start}
   .matrix-head{padding:0 10px;color:var(--muted);font:650 var(--text-2xs) var(--mono);text-transform:uppercase}

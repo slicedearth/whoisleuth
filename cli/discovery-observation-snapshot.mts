@@ -1,11 +1,11 @@
 import { createHash } from 'node:crypto';
-import { open } from 'node:fs/promises';
 
 import type { BulkLookupResult } from './bulk.mts';
 import { availabilityState, bulkDnsSummary } from './bulk-output.mts';
-import { CliUsageError } from './errors.mts';
+import { boundedCliInputError, CliUsageError } from './errors.mts';
 import { writePrivateFile } from './output-file.mts';
 import { isValidAsciiDomainName } from '../lib/hostname.mts';
+import { readBoundedRegularTextFile } from '../lib/bounded-file.mts';
 
 export const CLI_DISCOVERY_OBSERVATION_SCHEMA = 'whoisleuth.cli.discovery-observation-snapshot';
 export const CLI_DISCOVERY_OBSERVATION_VERSION = 2;
@@ -186,19 +186,14 @@ function parseObservationSnapshot(text: string, expectedDigest: string): Snapsho
 
 async function readExisting(path: string): Promise<string | null> {
   try {
-    const handle = await open(path, 'r');
-    try {
-      const metadata = await handle.stat();
-      if (!metadata.isFile() || metadata.size > MAX_DISCOVERY_OBSERVATION_BYTES) {
-        throw new CliUsageError(`Discovery observation snapshots are limited to ${MAX_DISCOVERY_OBSERVATION_BYTES} bytes.`);
-      }
-      return await handle.readFile({ encoding: 'utf8' });
-    } finally {
-      await handle.close();
-    }
+    return await readBoundedRegularTextFile(path, {
+      maximumBytes: MAX_DISCOVERY_OBSERVATION_BYTES,
+      label: 'Discovery observation snapshot',
+      allowSymbolicLink: true,
+    });
   } catch (error) {
     if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') return null;
-    throw error;
+    throw boundedCliInputError(error, 'Discovery observation snapshot');
   }
 }
 

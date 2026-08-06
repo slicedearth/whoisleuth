@@ -1,8 +1,5 @@
 import { expect, test } from './fixtures';
-import { boundingBox, expandLookupFamilies, expectNoHorizontalOverflow, migrateLegacyBrowserData, readBrowserLocalCollection } from './helpers';
-import { readFile } from 'node:fs/promises';
-import { TEST_SITE_PASSWORD } from './constants';
-import { ACTIVE_PROFILE_KEY } from '../frontend/src/lib/brand-profiles';
+import { expandLookupFamilies, expectNoHorizontalOverflow, migrateLegacyBrowserData, readBrowserLocalCollection } from './helpers';
 
 // Every value here is deliberately dotless (no TLD), so classifyQuery on the
 // server rejects it with a 400 before any RDAP/WHOIS/DNS call - these tests

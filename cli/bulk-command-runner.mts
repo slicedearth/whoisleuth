@@ -9,6 +9,7 @@ import {
   parseBulkQueries,
   readTextStreamBounded,
   runBulkLookups,
+  type BulkLookupResult,
 } from './bulk.mts';
 import { formatBulkCsv, formatBulkDomainList, formatBulkQueryList, selectBulkItems } from './bulk-output.mts';
 import { boundedCliErrorMessage, CliUsageError } from './errors.mts';
@@ -42,7 +43,7 @@ async function runBulkCommand(
       ? await dependencies.readBulkInput(args.source)
       : await readTextStreamBounded(args.source
         ? createReadStream(args.source, { highWaterMark: 64 * 1024 })
-        : dependencies.stdin || process.stdin, MAX_BULK_INPUT_BYTES);
+        : dependencies.stdin || process.stdin, MAX_BULK_INPUT_BYTES, dependencies.signal);
   } catch (error) {
     if (error instanceof CliUsageError) throw error;
     throw new CliUsageError(`Could not read bulk input: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
@@ -71,6 +72,8 @@ async function runBulkCommand(
     : null;
   const indicator = context.beginProgress(`Collecting 0 of ${parsed.queries.length} targets`);
   let completed = checkpoint?.initialResults.length || 0;
+  const resumedItems = new Map((checkpoint?.initialResults ?? []).map((item) => [item.index, item]));
+  const settledItems = new Map<number, BulkLookupResult>();
   if (completed) indicator.update(`Resumed ${completed} of ${parsed.queries.length} targets`);
   let items: Awaited<ReturnType<typeof runBulkLookups>>;
   let checkpointFailure: unknown = null;
@@ -83,11 +86,22 @@ async function runBulkCommand(
       ...(checkpoint ? { initialResults: checkpoint.initialResults } : {}),
       ...(dependencies.signal ? { signal: dependencies.signal } : {}),
       onItemSettled: (item) => {
+        const observed = {
+          ...item,
+          observedAt: context.now(),
+          collectionOrigin: 'current_run' as const,
+        };
+        settledItems.set(item.index, observed);
         completed += 1;
         indicator.update(`Collected ${completed} of ${parsed.queries.length} targets`);
         eventProgress.emit({ event: 'item_settled', index: item.index, ok: item.ok });
-        checkpoint?.record(item);
+        checkpoint?.record(observed);
       },
+    });
+    items = items.map((item) => resumedItems.get(item.index) ?? settledItems.get(item.index) ?? {
+      ...item,
+      observedAt: null,
+      collectionOrigin: 'current_run' as const,
     });
   } finally {
     context.endProgress();

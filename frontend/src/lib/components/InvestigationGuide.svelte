@@ -688,7 +688,7 @@
       </article>
     {/if}
 
-    <button class="plan-toggle btn" type="button" aria-expanded={planOpen} aria-controls="investigation-plan" onclick={() => planOpen = !planOpen}>{planOpen ? 'Hide full plan' : `Show full plan (${stages.length} steps)`}</button>
+    <button class="plan-toggle btn" type="button" aria-expanded={planOpen} aria-controls={planOpen?'investigation-plan':undefined} onclick={() => planOpen = !planOpen}>{planOpen ? 'Hide full plan' : `Show full plan (${stages.length} steps)`}</button>
 
     {#if planOpen}
       <ol id="investigation-plan" aria-label="Investigation guide steps">
@@ -775,7 +775,7 @@
   .context-tray div{display:block;min-width:0;padding:8px 9px;background:var(--surface)}
   .context-tray dt,.context-tray dd{display:block}
   .context-tray dd{margin:3px 0 0;overflow-wrap:anywhere}
-  .local-context-error{margin:8px 0 0;color:var(--warning);font-size:var(--text-2xs);line-height:1.45}
+  .local-context-error{margin:8px 0 0;color:var(--amber);font-size:var(--text-2xs);line-height:1.45}
   .current-action{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(250px,.85fr);gap:18px;align-items:start;margin-top:13px;padding:16px;border:1px solid rgb(var(--accent-rgb) / .5);border-radius:var(--radius-md);background:rgb(var(--accent-rgb) / .07);scroll-margin-top:88px}
   .step-number{margin:0;color:var(--accent);font:700 var(--text-2xs) var(--mono);text-transform:uppercase}
   .action-copy h2{margin:4px 0 5px;font:700 var(--text-md) var(--mono)}
@@ -799,11 +799,11 @@
   .request-actions,.outcome-actions{display:flex;flex-wrap:wrap;gap:6px}
   .outcome-actions{margin-top:2px;padding-top:9px;border-top:1px solid var(--border)}
   .outcome-actions>span{flex:1 0 100%;color:var(--muted);font:700 var(--text-2xs) var(--mono)}
-  .outcome-review{display:grid;gap:7px;padding:10px;border:1px solid var(--warning);border-radius:var(--radius-sm);background:var(--surface)}
+  .outcome-review{display:grid;gap:7px;padding:10px;border:1px solid var(--amber);border-radius:var(--radius-sm);background:var(--surface)}
   .outcome-review label{font:700 var(--text-2xs) var(--mono)}
   .outcome-review textarea{width:100%;min-height:74px;resize:vertical}
   .outcome-review>small{color:var(--muted);font-size:var(--text-2xs);line-height:1.4}
-  .handoff-readiness{display:grid;gap:8px;padding:11px;border:1px solid var(--warning);border-radius:var(--radius-sm);background:var(--surface)}
+  .handoff-readiness{display:grid;gap:8px;padding:11px;border:1px solid var(--amber);border-radius:var(--radius-sm);background:var(--surface)}
   .handoff-readiness.ready{border-color:var(--accent)}
   .handoff-readiness.unavailable{border-color:var(--border)}
   .handoff-readiness>div>span,.handoff-readiness>div>strong{display:block}
@@ -811,7 +811,7 @@
   .handoff-readiness>div>strong{margin-top:2px;font:700 var(--text-xs) var(--mono)}
   .handoff-readiness ul{display:grid;gap:6px;margin:0;padding:0;list-style:none}
   .handoff-readiness li{display:grid;grid-template-columns:auto minmax(0,1fr);gap:7px;color:var(--accent)}
-  .handoff-readiness li.caution{color:var(--warning)}
+  .handoff-readiness li.caution{color:var(--amber)}
   .handoff-readiness li.block{color:var(--danger)}
   .handoff-readiness li>span:first-child{font:700 var(--text-xs) var(--mono)}
   .handoff-readiness li strong,.handoff-readiness li small{display:block}
@@ -839,7 +839,7 @@
   .stage-state{color:var(--muted);font:700 var(--text-2xs) var(--mono);text-align:right}
   #investigation-plan>li.current{border-color:var(--accent);box-shadow:inset 3px 0 0 var(--accent)}
   #investigation-plan>li.current .stage-state,#investigation-plan>li.complete .stage-state{color:var(--accent)}
-  #investigation-plan>li.partial .stage-state{color:var(--warning)}
+  #investigation-plan>li.partial .stage-state{color:var(--amber)}
   .stage-body{padding:0 12px 12px}
   dl{display:grid;gap:7px;margin:0 0 12px;padding-top:12px;border-top:1px solid var(--border)}
   dl div{display:grid;grid-template-columns:105px minmax(0,1fr);gap:8px}
@@ -856,7 +856,7 @@
   .target-edit input{min-width:0}
   .target-edit>p{grid-column:1 / -1;margin:0;color:var(--muted);font-size:var(--text-2xs);line-height:1.4}
   .target-edit .request-actions{grid-column:1 / -1}
-  .context-error{margin:0 10px 10px;color:var(--warning);font-size:var(--text-2xs);line-height:1.4}
+  .context-error{margin:0 10px 10px;color:var(--amber);font-size:var(--text-2xs);line-height:1.4}
   .boundary{margin:9px 0 0;color:var(--muted);font-size:var(--text-2xs);line-height:1.45}
   .guide-return{position:fixed;right:18px;bottom:18px;z-index:35;display:grid;visibility:hidden;max-width:min(320px,calc(100vw - 36px));padding:10px 13px;border:1px solid rgb(var(--accent-rgb) / .7);border-radius:var(--radius-md);background:var(--surface);box-shadow:0 10px 34px rgb(var(--shadow-rgb) / .28);color:var(--text);font-family:var(--mono);text-align:left;opacity:0;pointer-events:none}
   .guide-return.available{visibility:visible;opacity:1;pointer-events:auto}

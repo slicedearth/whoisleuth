@@ -42,6 +42,7 @@ type Snapshot = Readonly<{
   }>;
   entryCount: number;
   sources: readonly Source[];
+  excludedSources: readonly never[];
   limitations: readonly string[];
 }>;
 
@@ -49,6 +50,13 @@ const IPV4_RE = /^\d{1,3}(?:\.\d{1,3}){3}$/u;
 const IPV6_RE = /^[0-9a-f:.]+$/iu;
 const SHA256_RE = /^[0-9a-f]{64}$/u;
 const COMMIT_RE = /^[0-9a-f]{40}$/u;
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/u;
+const EXPECTED_SOURCES: ReadonlyMap<string, CommonInfrastructureCategory> = new Map([
+  ['amazon-aws', 'cloud_platform'],
+  ['cloudflare', 'cdn_edge'],
+  ['google-gcp', 'cloud_platform'],
+  ['public-dns-core', 'public_resolver'],
+] as const);
 
 function record(value: unknown): JsonRecord | null {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -121,7 +129,23 @@ function inCidr(address: string, cidr: string): boolean {
   return (addressValue & mask) === (rangeValue & mask);
 }
 
-function parseSnapshot(value: unknown): Snapshot {
+function validDate(value: unknown): value is string {
+  if (typeof value !== 'string' || !DATE_RE.test(value)) return false;
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}
+
+function validCidr(value: unknown): value is string {
+  if (typeof value !== 'string' || value.length > 96) return false;
+  const [address, prefixText, ...rest] = value.split('/');
+  if (rest.length || !address || !prefixText || !/^\d{1,3}$/u.test(prefixText)) return false;
+  const prefix = Number(prefixText);
+  return canonicalIpv4(address) !== null
+    ? prefix <= 32
+    : canonicalIpv6(address) !== null && prefix <= 128;
+}
+
+export function parseCommonInfrastructureSnapshot(value: unknown): Snapshot {
   const source = record(value);
   const sourceMeta = record(source?.source);
   const sourceCommit = typeof sourceMeta?.commit === 'string' ? sourceMeta.commit : '';
@@ -129,6 +153,9 @@ function parseSnapshot(value: unknown): Snapshot {
     || source.version !== 1
     || typeof source.generatedAt !== 'string'
     || !Array.isArray(source.sources)
+    || source.sources.length !== EXPECTED_SOURCES.size
+    || !Array.isArray(source.excludedSources)
+    || source.excludedSources.length !== 0
     || !Number.isSafeInteger(source.entryCount)
     || !sourceMeta
     || typeof sourceMeta.project !== 'string'
@@ -138,33 +165,42 @@ function parseSnapshot(value: unknown): Snapshot {
     throw new TypeError('Common-infrastructure snapshot has an unsupported contract.');
   }
   const sources: Source[] = [];
+  const seenSourceIds = new Set<string>();
   let entryCount = 0;
-  for (const rawSource of source.sources.slice(0, 16)) {
+  for (const rawSource of source.sources) {
     const item = record(rawSource);
     const category = item?.category;
+    const id = typeof item?.id === 'string' ? item.id : '';
+    const expectedCategory = EXPECTED_SOURCES.get(id);
     const digest = typeof item?.sourceDigestSha256 === 'string' ? item.sourceDigestSha256 : '';
     if (!item
-      || typeof item.id !== 'string'
+      || !EXPECTED_SOURCES.has(id)
+      || seenSourceIds.has(id)
       || typeof item.label !== 'string'
-      || (category !== 'cdn_edge' && category !== 'cloud_platform' && category !== 'public_resolver')
-      || typeof item.sourceDate !== 'string'
+      || expectedCategory === undefined
+      || category !== expectedCategory
+      || !validDate(item.sourceDate)
       || !SHA256_RE.test(digest)
       || !Array.isArray(item.values)
       || item.values.length > 20_000
-      || !item.values.every((entry) => typeof entry === 'string' && entry.length <= 96)) {
+      || !item.values.every(validCidr)
+      || new Set(item.values).size !== item.values.length) {
       throw new TypeError('Common-infrastructure source has an invalid contract.');
     }
+    seenSourceIds.add(id);
     sources.push({
-      id: item.id,
+      id,
       label: item.label,
-      category,
+      category: expectedCategory,
       sourceDate: item.sourceDate,
       sourceDigestSha256: digest,
       values: item.values,
     });
     entryCount += item.values.length;
   }
-  if (entryCount !== source.entryCount || entryCount > 20_000) {
+  if (seenSourceIds.size !== EXPECTED_SOURCES.size
+    || entryCount !== source.entryCount
+    || entryCount > 20_000) {
     throw new TypeError('Common-infrastructure snapshot entry count is inconsistent.');
   }
   return {
@@ -179,13 +215,14 @@ function parseSnapshot(value: unknown): Snapshot {
     },
     entryCount,
     sources,
+    excludedSources: [],
     limitations: Array.isArray(source.limitations)
       ? source.limitations.filter((item): item is string => typeof item === 'string').slice(0, 8)
       : [],
   };
 }
 
-export const COMMON_INFRASTRUCTURE_SNAPSHOT = Object.freeze(parseSnapshot(snapshotValue));
+export const COMMON_INFRASTRUCTURE_SNAPSHOT = Object.freeze(parseCommonInfrastructureSnapshot(snapshotValue));
 
 export function classifyCommonInfrastructureAddress(value: unknown): CommonInfrastructureMatch[] {
   const address = canonicalIpv4(value) ?? canonicalIpv6(value);

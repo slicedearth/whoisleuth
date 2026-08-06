@@ -34,12 +34,6 @@ async function allowAndOpen(page: import('@playwright/test').Page, tool: 'Discov
   await action.getByRole('button', { name: `Allow and open ${tool}` }).click();
 }
 
-async function returnToGuide(page: import('@playwright/test').Page, step: string) {
-  const action = currentAction(page);
-  await action.scrollIntoViewIfNeeded();
-  await expect(action).toContainText(step);
-}
-
 async function markReviewed(page: import('@playwright/test').Page, step: string) {
   await useGuideReturn(page, step);
   await currentAction(page).getByRole('button', { name: 'Mark reviewed' }).click();
@@ -360,7 +354,7 @@ test('brand sweep carries the official domain and selected candidates across eve
   await page.locator('.candidate input[type="checkbox"]').nth(0).check();
   await page.locator('.candidate input[type="checkbox"]').nth(1).check();
   await page.getByRole('button', { name: 'Continue to Bulk with 2' }).click();
-  await expect(page).toHaveURL('/bulk?source=discover');
+  await expect(page).toHaveURL(/\/bulk\?source=discover&handoff=[0-9a-f]{32}$/u);
   await expect(currentAction(page)).toContainText('Triage candidates');
   const handedOffGuide = await page.evaluate((key) => JSON.parse(sessionStorage.getItem(key) || 'null'), GUIDE_KEY);
   expect(handedOffGuide.reviewDomains).toEqual(candidates);
@@ -374,7 +368,7 @@ test('brand sweep carries the official domain and selected candidates across eve
   const candidateSelectionLink = currentAction(page).getByRole('link', { name: 'Choose a Bulk candidate' });
   await expect(candidateSelectionLink).toHaveAttribute('href', '#results');
   await candidateSelectionLink.click();
-  await expect(page).toHaveURL('/bulk?source=discover#results');
+  await expect(page).toHaveURL(/\/bulk\?source=discover&handoff=[0-9a-f]{32}#results$/u);
   await expect(page.locator('#results')).toBeInViewport();
   const reviewCockpit = page.getByRole('region', { name: 'Bulk review cockpit' });
   await expect(reviewCockpit.getByRole('heading', { name: primaryCandidate })).toBeVisible();

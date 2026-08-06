@@ -191,7 +191,7 @@
   .type-badge{color:var(--accent2);font:700 var(--text-2xs) var(--mono);letter-spacing:.05em;text-transform:uppercase}
   h3{margin:4px 0 0;overflow-wrap:anywhere;font:700 var(--text-md) var(--mono)}
   .evidence-state{flex:none;border:1px solid var(--success);border-radius:999px;padding:3px 7px;color:var(--success);font:700 var(--text-2xs) var(--mono)}
-  .evidence-state.partial{border-color:var(--warning);color:var(--warning)}
+  .evidence-state.partial{border-color:var(--amber);color:var(--amber)}
   dl{display:grid;gap:6px;margin:13px 0 0}
   dl>div{display:grid;grid-template-columns:100px minmax(0,1fr);gap:9px}
   dt{color:var(--muted);font:700 var(--text-2xs) var(--mono);text-transform:uppercase}

@@ -17,18 +17,25 @@ type RdapFetch = (
   timeoutMs: number,
 ) => Promise<RdapFetchResult>;
 
+type RdapTransportDependencies = Readonly<{
+  fetch?: typeof safeFetch;
+  fetchDetailed?: typeof safeFetchDetailed;
+  readText?: typeof readTextCapped;
+}>;
+
 const MAX_RDAP_BYTES = 2000000;
 
 async function fetchRdapWithTimeout(
   url: string,
   options: RequestInit,
   timeoutMs: number,
+  dependencies: RdapTransportDependencies = {},
 ): Promise<RdapFetchResult> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const response = await safeFetch(url, { ...options, signal: controller.signal });
-    const { text, truncated } = await readTextCapped(response, MAX_RDAP_BYTES);
+    const response = await (dependencies.fetch ?? safeFetch)(url, { ...options, signal: controller.signal });
+    const { text, truncated } = await (dependencies.readText ?? readTextCapped)(response, MAX_RDAP_BYTES);
     if (truncated) throw new Error(`Response from ${url} exceeded ${MAX_RDAP_BYTES} bytes`);
     return { status: response.status, ok: response.ok, text };
   } finally {
@@ -40,12 +47,13 @@ async function fetchRdapDetailedWithTimeout(
   url: string,
   options: RequestInit,
   timeoutMs: number,
+  dependencies: RdapTransportDependencies = {},
 ): Promise<RdapFetchResult> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const result = await safeFetchDetailed(url, { ...options, signal: controller.signal });
-    const { text, truncated } = await readTextCapped(result.response, MAX_RDAP_BYTES);
+    const result = await (dependencies.fetchDetailed ?? safeFetchDetailed)(url, { ...options, signal: controller.signal });
+    const { text, truncated } = await (dependencies.readText ?? readTextCapped)(result.response, MAX_RDAP_BYTES);
     if (truncated) throw new Error(`Response from ${url} exceeded ${MAX_RDAP_BYTES} bytes`);
     return {
       status: result.response.status,

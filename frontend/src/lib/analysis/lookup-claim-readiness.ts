@@ -217,7 +217,7 @@ export function buildLookupClaimReadiness(input: Readonly<{
         conclusion: 'Whether reviewed brand context and page identity evidence support a bounded resemblance assessment.',
         requirements: [{ id: 'page-identity', label: 'Page identity observation' }],
         coverage,
-        href: '#evidence-page-identity',
+        href: '#evidence-page',
         additionalReady: input.hasActiveProfile === true,
         additionalMissing: 'Reviewed Brand Profile',
       }));

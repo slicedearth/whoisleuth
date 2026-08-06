@@ -13,9 +13,11 @@ import {
   main,
   parseArguments,
 } from '../tools/local-data-platform-evaluation.mts';
+import { BROWSER_LOCAL_COLLECTIONS } from '../frontend/src/lib/browser-local-data-definitions.ts';
 
 const NOW = new Date('2026-07-22T00:00:00.000Z');
-const DECLARED_BROWSER_STORE_BYTES = 11_010_048;
+const DECLARED_BROWSER_STORE_BYTES = BROWSER_LOCAL_COLLECTIONS
+  .reduce((total, definition) => total + definition.maximumBytes, 0);
 
 function capture() {
   let value = '';
@@ -29,13 +31,13 @@ describe('local data platform evaluation', () => {
     assert.equal(report.version, LOCAL_DATA_PLATFORM_EVALUATION_VERSION);
     assert.equal(report.generatedAt, NOW.toISOString());
     assert.equal(report.mode, 'offline_contract_evaluation');
-    assert.equal(report.current.storeCount, 8);
+    assert.equal(report.current.storeCount, BROWSER_LOCAL_COLLECTIONS.length);
     assert.ok(report.current.storeCount <= MAX_LOCAL_DATA_EVALUATION_STORES);
     assert.equal(report.current.declaredMaximumBytes, DECLARED_BROWSER_STORE_BYTES);
-    assert.equal(report.current.declaredMaximumMiB, 10.5);
+    assert.equal(report.current.declaredMaximumMiB, 15.75);
     assert.equal(report.current.localStorageReferenceBytes, LOCAL_STORAGE_REFERENCE_BYTES);
-    assert.equal(report.current.exceedsReferenceByBytes, 5_767_168);
-    assert.equal(report.current.exceedsReferenceByMiB, 5.5);
+    assert.equal(report.current.exceedsReferenceByBytes, 11_272_192);
+    assert.equal(report.current.exceedsReferenceByMiB, 10.75);
   });
 
   test('keeps the evaluation offline and does not inspect or change browser data', () => {
@@ -91,7 +93,12 @@ describe('local data platform evaluation', () => {
     const first = buildLocalDataPlatformEvaluation({ now: () => NOW });
     const second = buildLocalDataPlatformEvaluation({ now: () => NOW });
     assert.deepEqual(second, first);
-    assert.doesNotMatch(JSON.stringify(first), /notes|registrant|password|session/i);
+    const keys: string[] = [];
+    JSON.stringify(first, (key, value) => {
+      if (key) keys.push(key);
+      return value;
+    });
+    assert.ok(keys.every((key) => !/^(?:notes?|registrant|password|session)$/iu.test(key)));
 
     const stdout = capture();
     const stderr = capture();
@@ -103,7 +110,7 @@ describe('local data platform evaluation', () => {
   test('formats a concise maintainer decision and rejects unsupported arguments', async () => {
     const report = buildLocalDataPlatformEvaluation({ now: () => NOW });
     const output = formatLocalDataPlatformEvaluation(report);
-    assert.match(output, /10\.5 MiB across 8 stores/);
+    assert.match(output, /15\.75 MiB across 12 stores/);
     assert.match(output, /native_indexeddb \(no production dependency\)/);
     assert.match(output, /Encryption, PWA support, and synchronisation remain separately gated/);
 

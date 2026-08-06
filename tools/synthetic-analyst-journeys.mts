@@ -4,7 +4,6 @@
 // results describe fixture-bound workflow regression evidence only.
 
 import { createHash } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -17,6 +16,7 @@ import {
   type SyntheticAnalystDevice,
   type SyntheticEvidenceState,
 } from '../fixtures/synthetic-analyst-journeys.mts';
+import { readBoundedRegularFile } from '../lib/bounded-file.mts';
 
 export const SYNTHETIC_ANALYST_RESULT_SCHEMA = 'whoisleuth.synthetic-analyst-result';
 export const SYNTHETIC_ANALYST_REPORT_SCHEMA = 'whoisleuth.synthetic-analyst-report';
@@ -279,10 +279,12 @@ export async function main(
     if (args.length !== 1 || !args[0] || args[0].startsWith('-')) {
       throw new TypeError('Usage: node tools/synthetic-analyst-journeys.mts --plan | --template=JOURNEY:desktop|mobile | RESULTS.json');
     }
-    const raw = await readFile(args[0]);
-    if (raw.byteLength === 0 || raw.byteLength > MAX_SYNTHETIC_ANALYST_INPUT_BYTES) {
-      throw new TypeError(`Synthetic analyst input must be between 1 byte and ${MAX_SYNTHETIC_ANALYST_INPUT_BYTES} bytes.`);
-    }
+    const raw = await readBoundedRegularFile(args[0], {
+      allowSymbolicLink: true,
+      maximumBytes: MAX_SYNTHETIC_ANALYST_INPUT_BYTES,
+      minimumBytes: 1,
+      label: 'Synthetic analyst input',
+    });
     let parsed: unknown;
     try {
       parsed = JSON.parse(raw.toString('utf8')) as unknown;

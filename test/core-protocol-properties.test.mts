@@ -55,14 +55,14 @@ function compressIpv6(groups: readonly number[]): string {
 }
 
 describe('core protocol property coverage', () => {
-  test('matches the explicit IPv4 special-purpose range table and embedded forms', () => {
+  test('matches the IPv4 range table while rejecting unsafe transition forms', () => {
     fc.assert(fc.property(ipv4Bytes, (bytes) => {
       const expected = referencePrivateIpv4(bytes);
       const [high, low] = ipv4HexGroups(bytes);
       assert.equal(isPrivateAddress(ipv4String(bytes)), expected);
       assert.equal(isPrivateAddress(`::ffff:${high}:${low}`), expected);
       assert.equal(isPrivateAddress(`64:ff9b::${high}:${low}`), expected);
-      assert.equal(isPrivateAddress(`2002:${high}:${low}::`), expected);
+      assert.equal(isPrivateAddress(`2002:${high}:${low}::`), true);
     }), fastCheckParameters(500));
   });
 
@@ -76,17 +76,14 @@ describe('core protocol property coverage', () => {
     ), fastCheckParameters(300));
   });
 
-  test('decodes both embedded Teredo addresses before allowing a target', () => {
+  test('rejects Teredo regardless of its embedded addresses', () => {
     fc.assert(fc.property(ipv4Bytes, ipv4Bytes, (server, client) => {
       const [serverHigh, serverLow] = ipv4HexGroups(server);
       const [clientHigh, clientLow] = ipv4HexGroups(client);
       const obfuscatedHigh = ((~Number.parseInt(clientHigh, 16)) & 0xffff).toString(16);
       const obfuscatedLow = ((~Number.parseInt(clientLow, 16)) & 0xffff).toString(16);
       const teredo = `2001:0000:${serverHigh}:${serverLow}:0000:ffff:${obfuscatedHigh}:${obfuscatedLow}`;
-      assert.equal(
-        isPrivateAddress(teredo),
-        referencePrivateIpv4(server) || referencePrivateIpv4(client),
-      );
+      assert.equal(isPrivateAddress(teredo), true);
     }), fastCheckParameters(300));
   });
 

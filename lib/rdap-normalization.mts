@@ -7,8 +7,6 @@ import {
   type LooseRdapRecord,
   type NormalizedRdapDsData,
   type NormalizedRdapEvent,
-  type NormalizedRdapLink,
-  type NormalizedRdapPublicId,
   type NormalizedRdapRecord,
   type NormalizedRdapRecordFor,
   type NormalizedRdapRedaction,

@@ -7,6 +7,7 @@ import {
   normalizeRdapNameserver,
   normalizeRdapNameserverSearchPayload,
   normalizeRdapRegistryScope,
+  searchRdapNameserver,
   searchRdapNameserverFromBases,
 } from '../lib/rdap-nameserver-search.mts';
 import { normalizeRdapNameserverSearchResponse } from '../frontend/src/lib/analysis/rdap-nameserver-search.ts';
@@ -132,6 +133,26 @@ describe('registry-scoped RDAP nameserver search', () => {
     assert.equal(malformedMatches.state, 'partial');
     assert.equal(malformedMatches.resultCount, 0);
     assert.equal(malformedMatches.omittedInvalid, 1);
+  });
+
+  test('enforces registry RDAP admission before bootstrap or transport work', async () => {
+    let bootstrapCalls = 0;
+    let transportCalls = 0;
+    const response = await searchRdapNameserver('ns1.infra.example', 'ch', {
+      now: () => NOW,
+      findBases: async () => {
+        bootstrapCalls += 1;
+        return ['https://registry.example/rdap'];
+      },
+      fetchUpstream: async () => {
+        transportCalls += 1;
+        return { status: 200, ok: true, text: searchPayload([]) };
+      },
+    });
+    assert.equal(response.state, 'unsupported');
+    assert.equal(response.source.endpoint, null);
+    assert.equal(bootstrapCalls, 0);
+    assert.equal(transportCalls, 0);
   });
 
   test('browser normalization rejects malformed or unscoped payloads', () => {

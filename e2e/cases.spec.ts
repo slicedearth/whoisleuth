@@ -2,15 +2,27 @@ import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { gzipSync, zipSync } from 'fflate';
 import { expect, test } from './fixtures';
-import { boundingBox, expectNoHorizontalOverflow, migrateLegacyBrowserData, readBrowserLocalCollection, requiredValue, runBulkScan } from './helpers';
-import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model';
+import { expectNoHorizontalOverflow, migrateLegacyBrowserData, readBrowserLocalCollection, requiredValue, runBulkScan } from './helpers';
 
 // Every domain here is a local/invalid value (RFC 2606 .invalid, or dotless
 // bad-domain-* that classifyQuery rejects with a 400). Case features are
 // entirely browser-local: creating and editing a case never reaches an
 // upstream service, and the shared fixture's network guard enforces that.
 
-import { caseRecord, createCase, openCasesView, openSeededTimelineCase, snapshot } from './case-test-fixtures';
+import { caseRecord, createCase, openCasesView, snapshot } from './case-test-fixtures';
+
+test('Monitor views support roving keyboard navigation', async ({ page }) => {
+  await page.goto('/monitor');
+  const tabs = page.getByRole('tablist', { name: 'Monitor views' });
+  const inbox = tabs.getByRole('tab', { name: /^Inbox/ });
+  await inbox.focus();
+  await inbox.press('ArrowRight');
+  await expect(tabs.getByRole('tab', { name: /^Timeline/ })).toBeFocused();
+  await expect(tabs.getByRole('tab', { name: /^Timeline/ })).toHaveAttribute('aria-selected', 'true');
+  await tabs.getByRole('tab', { name: /^Timeline/ }).press('End');
+  await expect(tabs.getByRole('tab', { name: /^Watchlists/ })).toBeFocused();
+  await expect(tabs.getByRole('tab', { name: /^Watchlists/ })).toHaveAttribute('aria-selected', 'true');
+});
 
 
 test('a case created from Monitor persists across a reload', async ({ page }) => {

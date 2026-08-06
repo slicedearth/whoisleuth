@@ -33,6 +33,17 @@ describe('CLI configuration profiles', () => {
     assert.throws(() => parseProfileDocument(JSON.stringify({ schema: CLI_CONFIG_SCHEMA, version: 1, profiles: { careful: { arguments: ['--fast'], token: 'secret' } } })), /unsupported field/iu);
   });
 
+  test('leaves registry scaffold capability profiles under command ownership', async () => {
+    assert.deepEqual(
+      await resolveCliProfileArguments(['registry-scaffold', '.example', '--profile', 'rdap-only']),
+      ['registry-scaffold', '.example', '--profile', 'rdap-only'],
+    );
+    await assert.rejects(
+      resolveCliProfileArguments(['registry-scaffold', '.example', '--config', 'defaults.json']),
+      /does not accept global CLI configuration/iu,
+    );
+  });
+
   test('requires a valid named profile and matching version', async () => {
     await assert.rejects(() => resolveCliProfileArguments(['lookup', '--profile', 'missing', 'example.test'], { readConfig: async () => configuration() }), /was not found/iu);
     assert.throws(() => parseProfileDocument(JSON.stringify({ schema: CLI_CONFIG_SCHEMA, version: 2, profiles: {} })), /version 1/iu);

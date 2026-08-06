@@ -3,23 +3,25 @@
 // Offline verifier for two operator-produced staging evidence summaries. It
 // never performs a request and rejects extra fields that could retain targets.
 
-import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
   qualifyLookupProgressStagingEvidence,
 } from '../lib/lookup-progress-staging-evidence.mts';
+import { readBoundedRegularFile } from '../lib/bounded-file.mts';
 
 type WritableLike = { write(value: string): unknown };
 
 export const MAX_LOOKUP_PROGRESS_STAGING_FILE_BYTES = 64 * 1024;
 
 async function readEvidence(file: string): Promise<unknown> {
-  const content = await readFile(file);
-  if (content.byteLength === 0 || content.byteLength > MAX_LOOKUP_PROGRESS_STAGING_FILE_BYTES) {
-    throw new TypeError(`Staging evidence files must be between 1 and ${MAX_LOOKUP_PROGRESS_STAGING_FILE_BYTES} bytes.`);
-  }
+  const content = await readBoundedRegularFile(file, {
+    allowSymbolicLink: true,
+    maximumBytes: MAX_LOOKUP_PROGRESS_STAGING_FILE_BYTES,
+    minimumBytes: 1,
+    label: 'Staging evidence file',
+  });
   try {
     return JSON.parse(content.toString('utf8')) as unknown;
   } catch {

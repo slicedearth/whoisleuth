@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -567,6 +568,8 @@ describe('resumable Bulk checkpoints', () => {
       const checkpointText = await readFile(path, 'utf8');
       const checkpoint = parseBulkCheckpoint(checkpointText, { queries, deep: false, classifyQuery: classifiedDomain });
       assert.deepEqual(checkpoint.results.map((item) => item.query), ['one.example']);
+      assert.equal(checkpoint.version, 2);
+      assert.equal(checkpoint.results[0]?.observedAt, NOW);
 
       const fullResponse = JSON.parse(checkpointText);
       fullResponse.results[0].result.rdap = { raw: 'not compact evidence' };
@@ -588,6 +591,7 @@ describe('resumable Bulk checkpoints', () => {
 
       const resumed = await createBulkCheckpointWriter({ path, queries, deep: false, resume: true, classifyQuery: classifiedDomain, now: () => NOW });
       assert.deepEqual(resumed.initialResults.map((item) => item.query), ['one.example']);
+      assert.equal(resumed.initialResults[0]?.collectionOrigin, 'resumed_checkpoint');
       await assert.rejects(
         createBulkCheckpointWriter({ path, queries: ['changed.example'], deep: false, resume: true, classifyQuery: classifiedDomain }),
         /does not match/u,
@@ -610,6 +614,78 @@ describe('resumable Bulk checkpoints', () => {
         result: lookupResult('one.example'),
       });
       await assert.rejects(malformed.flush(), /not a bounded compact lookup result/u);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  test('migrates legacy checkpoint rows without inventing observation time', () => {
+    const queries = ['legacy.example'];
+    const legacy = {
+      schema: 'whoisleuth.cli.bulk-checkpoint',
+      version: 1,
+      mode: 'fast',
+      inputDigestSha256: createHash('sha256').update('fast\n').update(queries.join('\n')).digest('hex'),
+      queryCount: 1,
+      startedAt: '2026-08-01T00:00:00.000Z',
+      updatedAt: '2026-08-01T00:01:00.000Z',
+      results: [{
+        index: 0,
+        query: queries[0],
+        ok: true,
+        classified: classifiedDomain(queries[0]!),
+        result: {
+          availability: lookupResult(queries[0]!).availability,
+          diagnostics: lookupResult(queries[0]!).diagnostics,
+        },
+      }],
+    };
+    const parsed = parseBulkCheckpoint(JSON.stringify(legacy), {
+      queries,
+      deep: false,
+      classifyQuery: classifiedDomain,
+    });
+    assert.equal(parsed.results[0]?.observedAt, null);
+    assert.equal(parsed.results[0]?.collectionOrigin, 'resumed_checkpoint');
+  });
+
+  test('coalesces settlement bursts into one active write and one follow-up', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'whoisleuth-cli-checkpoint-coalesce-'));
+    const path = join(directory, 'bulk.json');
+    const queries = Array.from({ length: 100 }, (_, index) => `item-${index}.example`);
+    let releaseFirstWrite: (() => void) | undefined;
+    let writes = 0;
+    try {
+      const writer = await createBulkCheckpointWriter({
+        path,
+        queries,
+        deep: false,
+        resume: false,
+        classifyQuery: classifiedDomain,
+        now: () => NOW,
+        writeFile: async () => {
+          writes += 1;
+          if (writes === 1) await new Promise<void>((resolve) => { releaseFirstWrite = resolve; });
+          return path;
+        },
+      });
+      await new Promise<void>((resolve) => { setImmediate(resolve); });
+      for (let index = 0; index < queries.length; index += 1) {
+        const query = queries[index]!;
+        writer.record({
+          index,
+          query,
+          ok: true,
+          classified: classifiedDomain(query),
+          result: {
+            availability: lookupResult(query).availability,
+            diagnostics: lookupResult(query).diagnostics,
+          },
+        });
+      }
+      releaseFirstWrite?.();
+      await writer.flush();
+      assert.equal(writes, 2);
     } finally {
       await rm(directory, { recursive: true, force: true });
     }

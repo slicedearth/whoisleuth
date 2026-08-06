@@ -5,13 +5,21 @@ import {
 } from './lookup-presentation.ts';
 
 type LookupMode = 'fast' | 'deep';
-export type LookupEvidenceFamilyId = 'registry' | 'web-evidence';
+export type LookupEvidenceFamilyId =
+  | 'overview'
+  | 'registry'
+  | 'web-evidence'
+  | 'relationships-history'
+  | 'source-quality'
+  | 'case-response'
+  | 'advanced-evidence';
 
 const REGISTRY_EVIDENCE_TARGETS = new Set([
   '#evidence-registry',
   '#evidence-network',
 ]);
 const WEB_EVIDENCE_TARGETS = new Set([
+  '#web-evidence',
   '#evidence-dns',
   '#evidence-reverse-dns',
   '#evidence-http',
@@ -21,7 +29,16 @@ const WEB_EVIDENCE_TARGETS = new Set([
   '#evidence-security-txt',
   '#evidence-technology',
   '#evidence-posture',
+  '#evidence-certificate-policy',
+  '#evidence-credential-surface',
+  '#evidence-page-role',
+  '#evidence-sslbl',
 ]);
+
+const LOOKUP_EVIDENCE_TARGET_ALIASES: Readonly<Record<string, string>> = Object.freeze({
+  '#evidence-network-context': '#evidence-network',
+  '#evidence-page-identity': '#evidence-page',
+});
 
 type LookupRequestSelection = Readonly<{
   mode: LookupMode;
@@ -75,9 +92,21 @@ export function buildLookupRequestUrl(
 }
 
 export function lookupEvidenceFamilyForHref(href: string): LookupEvidenceFamilyId | null {
-  if (REGISTRY_EVIDENCE_TARGETS.has(href)) return 'registry';
-  if (WEB_EVIDENCE_TARGETS.has(href)) return 'web-evidence';
+  const normalized = lookupEvidenceTargetForHref(href);
+  if (normalized === '#overview') return 'overview';
+  if (normalized === '#registry' || REGISTRY_EVIDENCE_TARGETS.has(normalized)) return 'registry';
+  if (WEB_EVIDENCE_TARGETS.has(normalized)) return 'web-evidence';
+  if (normalized === '#relationships-history') return 'relationships-history';
+  if (normalized === '#source-quality' || normalized === '#evidence-quality') return 'source-quality';
+  if (normalized === '#case-response') return 'case-response';
+  if (['#advanced-evidence', '#external-intelligence', '#raw-data'].includes(normalized)) return 'advanced-evidence';
   return null;
+}
+
+export function lookupEvidenceTargetForHref(href: string): string {
+  return Object.hasOwn(LOOKUP_EVIDENCE_TARGET_ALIASES, href)
+    ? LOOKUP_EVIDENCE_TARGET_ALIASES[href] ?? href
+    : href;
 }
 
 export function buildLookupSectionLinks(input: {

@@ -42,8 +42,8 @@ test('keeps complete, limited, failed, and pending Bulk outcomes distinct', () =
     { status: 'complete', sourceCoverage: [{ source: 'whois', state: 'partial' }] },
     { status: 'error', sourceCoverage: [{ source: 'lookup', state: 'error' }] },
     { status: 'complete', sourceCoverage: [{ source: 'dns', state: 'unavailable' }] },
-    { domain: 'candidate.dev', status: 'complete', sourceCoverage: [{ source: 'whois', state: 'unsupported' }] },
-    { domain: 'candidate.com', status: 'complete', sourceCoverage: [{ source: 'whois', state: 'unsupported' }] },
+    { domain: 'example.dev', status: 'complete', sourceCoverage: [{ source: 'whois', state: 'unsupported' }] },
+    { domain: 'example.com', status: 'complete', sourceCoverage: [{ source: 'whois', state: 'unsupported' }] },
   ], 8), {
     settled: 6,
     complete: 2,

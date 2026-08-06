@@ -12,7 +12,6 @@ import {
 import {
   buildWhoisChain,
   buildWhoisChainUncached,
-  type WhoisChain,
 } from './whois-chain.mts';
 import {
   analyzeWhoisChainAuthority,

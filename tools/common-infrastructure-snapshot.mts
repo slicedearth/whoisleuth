@@ -1,10 +1,12 @@
 #!/usr/bin/env node
 
 import { createHash } from 'node:crypto';
-import { readFile, writeFile } from 'node:fs/promises';
 import { isIP } from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import { writePrivateFile } from '../cli/output-file.mts';
+import { readBoundedRegularTextFile } from '../lib/bounded-file.mts';
 
 type JsonRecord = Record<string, unknown>;
 type WritableLike = { write(value: string): unknown };
@@ -98,13 +100,6 @@ function record(value: unknown, label: string): JsonRecord {
   return value as JsonRecord;
 }
 
-function boundedText(value: unknown, label: string, maximum: number): string {
-  if (typeof value !== 'string' || !value || value.length > maximum || CONTROL_RE.test(value)) {
-    throw new TypeError(`${label} must be bounded text.`);
-  }
-  return value;
-}
-
 function sourceDate(value: unknown): string {
   const version = Number(value);
   const text = String(version);
@@ -112,7 +107,8 @@ function sourceDate(value: unknown): string {
     throw new TypeError('Warning-list version must be a YYYYMMDD integer.');
   }
   const date = `${text.slice(0, 4)}-${text.slice(4, 6)}-${text.slice(6, 8)}`;
-  if (Number.isNaN(Date.parse(`${date}T00:00:00.000Z`))) {
+  const parsed = new Date(`${date}T00:00:00.000Z`);
+  if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== date) {
     throw new TypeError('Warning-list version is not a valid date.');
   }
   return date;
@@ -205,23 +201,15 @@ export async function buildCommonInfrastructureSnapshot(
   const fetchImpl = options.fetchImpl ?? fetch;
   const now = options.now?.() ?? new Date();
   const sources: SourceSnapshot[] = [];
-  const excludedSources: Array<{ id: string; reason: string }> = [];
 
   for (const definition of SOURCE_DEFINITIONS) {
     const url = `https://raw.githubusercontent.com/MISP/misp-warninglists/${commit}/lists/${definition.list}/list.json`;
-    try {
-      const response = await fetchImpl(url, {
-        headers: { accept: 'application/json', 'user-agent': 'WHOISleuth catalogue maintenance' },
-        signal: AbortSignal.timeout(10_000),
-      });
-      const text = await boundedResponseText(response, MAX_SOURCE_BYTES);
-      sources.push(parseSource(definition, text, now));
-    } catch (error) {
-      excludedSources.push({
-        id: definition.id,
-        reason: error instanceof Error ? error.message.slice(0, 240) : 'Source validation failed.',
-      });
-    }
+    const response = await fetchImpl(url, {
+      headers: { accept: 'application/json', 'user-agent': 'WHOISleuth catalogue maintenance' },
+      signal: AbortSignal.timeout(10_000),
+    });
+    const text = await boundedResponseText(response, MAX_SOURCE_BYTES);
+    sources.push(parseSource(definition, text, now));
   }
 
   const publicResolverProjection = JSON.stringify(REVIEWED_PUBLIC_RESOLVERS);
@@ -255,7 +243,7 @@ export async function buildCommonInfrastructureSnapshot(
     maximumEntries: MAX_SNAPSHOT_ENTRIES,
     entryCount,
     sources: Object.freeze(sources),
-    excludedSources: Object.freeze(excludedSources.map((item) => Object.freeze({ ...item }))),
+    excludedSources: Object.freeze([]),
     limitations: Object.freeze([
       'A match identifies an address range published as shared cloud or delivery infrastructure. It does not identify the origin host, tenant, account, operator, ownership, intent, safety, or maliciousness.',
       'Non-matches are inconclusive because the catalogue is deliberately bounded and does not cover every provider, product, address, hosting service, resolver, or historical allocation.',
@@ -297,16 +285,38 @@ export async function main(args = process.argv.slice(2), options: MainOptions = 
     }
     const outputPath = path.join(root, SNAPSHOT_PATH);
     if (checkOnly) {
-      const retained = await readFile(outputPath, 'utf8');
+      const retained = await readBoundedRegularTextFile(outputPath, {
+        maximumBytes: MAX_SNAPSHOT_BYTES,
+        minimumBytes: 1,
+        label: 'Retained Common-infrastructure snapshot',
+      });
       const retainedSnapshot = record(JSON.parse(retained), 'Retained Common-infrastructure snapshot');
-      if (retainedSnapshot.source === undefined
-        || record(retainedSnapshot.source, 'Retained snapshot source').commit !== commit) {
-        throw new TypeError('Retained Common-infrastructure snapshot uses a different upstream commit.');
+      const retainedSource = retainedSnapshot.source === undefined
+        ? null
+        : record(retainedSnapshot.source, 'Retained snapshot source');
+      const retainedSources = Array.isArray(retainedSnapshot.sources) ? retainedSnapshot.sources : [];
+      const expectedSources = snapshot.sources.map((source) => ({
+        id: source.id,
+        digest: source.sourceDigestSha256,
+        count: source.values.length,
+      }));
+      const actualSources = retainedSources.map((source, index) => {
+        const value = record(source, `Retained source ${index + 1}`);
+        return {
+          id: value.id,
+          digest: value.sourceDigestSha256,
+          count: Array.isArray(value.values) ? value.values.length : -1,
+        };
+      });
+      if (retainedSource?.commit !== commit
+        || retainedSnapshot.entryCount !== snapshot.entryCount
+        || JSON.stringify(actualSources) !== JSON.stringify(expectedSources)) {
+        throw new TypeError('Retained Common-infrastructure snapshot differs from the fully validated source set.');
       }
       stdout.write(`Validated ${snapshot.entryCount} current Common-infrastructure entries without replacing the retained snapshot.\n`);
       return 0;
     }
-    await writeFile(outputPath, output, 'utf8');
+    await writePrivateFile(outputPath, output, { force: true });
     stdout.write(`Updated ${SNAPSHOT_PATH} with ${snapshot.entryCount} entries from ${sourcesSummary(snapshot)}.\n`);
     return 0;
   } catch (error) {

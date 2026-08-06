@@ -93,7 +93,7 @@ function buildCliLookupReconciliation(
     label: `Lookup reconciliation observation ${index + 1}`,
   }));
   const domain = documents[0]?.registrableDomain;
-  if (!domain || documents.some((document) => document.registrableDomain !== domain)) {
+  if (!domain || documents.some((candidate) => candidate.registrableDomain !== domain)) {
     throw new CliUsageError('Lookup reconciliation requires observations for one domain.');
   }
 

@@ -139,7 +139,7 @@ function requireOnlyKeys(value: UnknownRecord, allowlist: ReadonlySet<string>, l
 
 export function buildCacaoInvestigationPlaybook(
   raw: unknown,
-  generatedAt = new Date().toISOString(),
+  _generatedAt = new Date().toISOString(),
 ): UnknownRecord {
   const template = normalizeInvestigationTemplate(raw);
   if (!template) throw new Error('A valid investigation template is required.');

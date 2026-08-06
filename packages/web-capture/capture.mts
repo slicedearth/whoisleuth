@@ -270,6 +270,8 @@ async function installRequestBoundary(
   let responseByteLimitReached = false;
   let transferredBytes = 0;
   let reservedTransferBytes = 0;
+  let acceptingRequests = true;
+  const pendingRequests = new Set<Promise<void>>();
 
   const reserveResponseBytes = (): number => {
     const remaining = MAX_CAPTURE_TRANSFER_BYTES - transferredBytes - reservedTransferBytes;
@@ -285,11 +287,11 @@ async function installRequestBoundary(
     blockedRequestCount += 1;
     await webSocket.close({ code: 1008, reason: 'WHOISleuth local capture blocks WebSockets' });
   });
-  await context.route('**/*', async (route: Route) => {
+  const handleRoute = async (route: Route) => {
     requestCount += 1;
     if (requestCount > MAX_CAPTURE_REQUESTS) {
       blockedRequestCount += 1;
-      await route.abort('blockedbyclient');
+      await route.abort('blockedbyclient').catch(() => {});
       return;
     }
     try {
@@ -357,19 +359,53 @@ async function installRequestBoundary(
       });
     } catch {
       blockedRequestCount += 1;
-      await route.abort('blockedbyclient');
+      await route.abort('blockedbyclient').catch(() => {});
     }
+  };
+  await context.route('**/*', (route: Route) => {
+    if (!acceptingRequests) {
+      requestCount += 1;
+      blockedRequestCount += 1;
+      const refusal = route.abort('blockedbyclient').catch(() => {});
+      pendingRequests.add(refusal);
+      void refusal.then(
+        () => pendingRequests.delete(refusal),
+        () => pendingRequests.delete(refusal),
+      );
+      return refusal;
+    }
+    const pending = handleRoute(route);
+    pendingRequests.add(pending);
+    // Do not use an unobserved promise returned by finally(): a rejected route
+    // would create a second rejected promise and can terminate the CLI under
+    // strict unhandled-rejection handling.
+    void pending.then(
+      () => pendingRequests.delete(pending),
+      () => pendingRequests.delete(pending),
+    );
+    return pending;
   });
   page.on('download', (download) => { void download.cancel(); });
   return {
-    requestHosts,
-    stats: () => ({
-      requestCount,
-      blockedRequestCount,
-      hostLimitReached,
-      responseByteLimitReached,
-      transferredBytes,
-    }),
+    beginSeal() {
+      acceptingRequests = false;
+    },
+    async seal() {
+      acceptingRequests = false;
+      while (pendingRequests.size > 0) {
+        await Promise.allSettled([...pendingRequests]);
+      }
+      return {
+        requestHosts: [...requestHosts].sort().slice(0, MAX_CAPTURE_HOSTS),
+        stats: {
+          requestCount,
+          blockedRequestCount,
+          hostLimitReached,
+          responseByteLimitReached,
+          transferredBytes,
+        },
+      };
+    },
   };
 }
 
@@ -442,6 +478,16 @@ export async function captureRenderedPage(
       throw new Error('Rendered screenshot is empty or exceeds the 10 MiB artefact bound.');
     }
     const capturedAt = dependencies.now?.() ?? new Date().toISOString();
+    // Stop the page and its disposable context before sealing request
+    // accounting. This prevents late browser activity from appearing after
+    // the completeness snapshot while admitted routes are still settled.
+    requestBoundary.beginSeal();
+    await page.close({ runBeforeUnload: false }).catch(() => {});
+    // A failed context close invalidates the claim that no further browser
+    // request can alter the final completeness state, so fail the capture.
+    await context.close();
+    const sealedBoundary = await requestBoundary.seal();
+    const requestStats = sealedBoundary.stats;
     const domDigest = {
       schema: WEB_CAPTURE_DOM_DIGEST_SCHEMA,
       version: WEB_CAPTURE_DOM_DIGEST_VERSION,
@@ -464,7 +510,6 @@ export async function captureRenderedPage(
     const domName = 'dom-digest.json';
     await privateWrite(path.join(temporaryDirectory, screenshotName), screenshotBuffer);
     await privateWrite(path.join(temporaryDirectory, domName), domBytes);
-    const requestStats = requestBoundary.stats();
     const limitations = [
       'Rendered collection executed page JavaScript in a disposable browser context and may have disclosed the target to its public resource operators.',
       'Downloads, service workers, WebSockets, WebRTC, WebTransport, non-read methods, non-HTTP(S), credentialed, non-default-port, private-address, excess-host, excess-request, excess-response, and excess-transfer traffic was blocked.',
@@ -482,7 +527,7 @@ export async function captureRenderedPage(
         completeness: requestStats.blockedRequestCount || dom.structureTruncated || dom.textTruncated ? 'partial' : 'complete',
         limitations,
         page: { title: title || null, finalOrigin: finalUrl.origin.toLowerCase() },
-        requestDomains: [...requestBoundary.requestHosts].sort().slice(0, MAX_CAPTURE_HOSTS),
+        requestDomains: sealedBoundary.requestHosts,
         technologies: [],
         artifacts: [{
           kind: 'screenshot', fileName: screenshotName, mimeType: 'image/png',

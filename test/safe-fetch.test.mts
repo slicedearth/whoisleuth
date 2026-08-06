@@ -83,15 +83,21 @@ describe('IPv6', () => {
   test('rejects the entire RFC 8215 local-use NAT64 prefix', () => {
     assert.equal(isPrivateAddress('64:ff9b:1::a00:1'), true);
     assert.equal(isPrivateAddress('64:ff9b:1:ffff::808:808'), true);
-    assert.equal(isPrivateAddress('64:ff9b:2::1'), false);
+    assert.equal(isPrivateAddress('64:ff9b:2::1'), true);
+  });
+
+  test('flags IPv4-translated addresses and unassigned IPv6 space', () => {
+    assert.equal(isPrivateAddress('::ffff:0:127.0.0.1'), true);
+    assert.equal(isPrivateAddress('0::ffff:0:127.0.0.1'), true);
+    assert.equal(isPrivateAddress('4000::1'), true);
   });
 
   test('flags a 6to4 address embedding a loopback IPv4 payload', () => {
     assert.equal(isPrivateAddress('2002:7f00:0001::'), true);
   });
 
-  test('does not flag a 6to4 address embedding a public IPv4 payload', () => {
-    assert.equal(isPrivateAddress('2002:0808:0808::'), false);
+  test('rejects 6to4 even when it embeds a public IPv4 payload', () => {
+    assert.equal(isPrivateAddress('2002:0808:0808::'), true);
   });
 
   test('flags link-local and unique-local ranges', () => {
@@ -111,13 +117,15 @@ describe('IPv6', () => {
     assert.equal(isPrivateAddress('2001:20::1'), true); // ORCHIDv2
   });
 
-  test('decodes private IPv4 targets embedded in Teredo addresses', () => {
-    // Server 8.8.8.8, client 127.0.0.1 (client groups are bitwise-obfuscated).
+  test('rejects the entire deprecated Teredo range', () => {
     assert.equal(isPrivateAddress('2001:0000:0808:0808:0000:ffff:80ff:fffe'), true);
-    // Private Teredo server with an otherwise public embedded client.
     assert.equal(isPrivateAddress('2001:0000:7f00:0001:0000:ffff:f7f7:f7f7'), true);
-    // Both embedded IPv4 values are public.
-    assert.equal(isPrivateAddress('2001:0000:0808:0808:0000:ffff:f7f7:f7f7'), false);
+    assert.equal(isPrivateAddress('2001:0000:0808:0808:0000:ffff:f7f7:f7f7'), true);
+  });
+
+  test('rejects current IPv6 documentation ranges', () => {
+    assert.equal(isPrivateAddress('3fff::1'), true);
+    assert.equal(isPrivateAddress('3fff:0fff:ffff::1'), true);
   });
 
   test('does not flag an ordinary public IPv6 address', () => {

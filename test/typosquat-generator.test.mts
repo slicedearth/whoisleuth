@@ -13,41 +13,41 @@ describe('provenance-aware typosquat generation', () => {
   });
 
   test('records source domain and candidate TLD', () => {
-    const candidate = generator.generateTyposquatCandidates('acme.com', []).find((item) => item.domain === 'acm.com');
+    const candidate = generator.generateTyposquatCandidates('acme.invalid', []).find((item) => item.domain === 'acm.invalid');
     assert.deepEqual(candidate, {
-      domain: 'acm.com',
-      source: 'acme.com',
-      tld: 'com',
+      domain: 'acm.invalid',
+      source: 'acme.invalid',
+      tld: 'invalid',
       mutationTypes: ['character_omission'],
     });
   });
 
   test('tracks same-name TLD typos separately', () => {
-    const candidate = requiredValue(generator.generateTyposquatCandidates('acme.com', []).find((item) => item.domain === 'acme.cm'));
+    const candidate = requiredValue(generator.generateTyposquatCandidates('example.com', []).find((item) => item.domain === 'example.cm'));
     assert.deepEqual(candidate.mutationTypes, ['tld_typo']);
     assert.equal(candidate.tld, 'cm');
   });
 
   test('expands a domain seed across selected alternate TLDs', () => {
-    const candidates = generator.generateTyposquatCandidates('acme.com', ['com', 'net', 'org']);
-    assert.deepEqual(candidates.find((candidate) => candidate.domain === 'acme.net'), {
-      domain: 'acme.net',
-      source: 'acme.com',
-      tld: 'net',
+    const candidates = generator.generateTyposquatCandidates('acme.invalid', ['invalid', 'test', 'example']);
+    assert.deepEqual(candidates.find((candidate) => candidate.domain === 'acme.test'), {
+      domain: 'acme.test',
+      source: 'acme.invalid',
+      tld: 'test',
       mutationTypes: ['tld_substitution'],
     });
-    assert.equal(candidates.some((candidate) => candidate.domain === 'acme.com'), false);
+    assert.equal(candidates.some((candidate) => candidate.domain === 'acme.invalid'), false);
   });
 
   test('retains both label and TLD mutation provenance when both change', () => {
-    const candidate = requiredValue(generator.generateTyposquatCandidates('acme.com', ['net'])
-      .find((item) => item.domain === 'acm.net'));
+    const candidate = requiredValue(generator.generateTyposquatCandidates('acme.invalid', ['test'])
+      .find((item) => item.domain === 'acm.test'));
     assert.deepEqual(candidate.mutationTypes, ['character_omission', 'tld_substitution']);
   });
 
   test('merges selected substitutions with same-name TLD typo provenance', () => {
-    const candidate = requiredValue(generator.generateTyposquatCandidates('acme.com', ['co'])
-      .find((item) => item.domain === 'acme.co'));
+    const candidate = requiredValue(generator.generateTyposquatCandidates('example.com', ['co'])
+      .find((item) => item.domain === 'example.co'));
     assert.deepEqual(candidate.mutationTypes, ['tld_typo', 'tld_substitution']);
   });
 
@@ -55,7 +55,7 @@ describe('provenance-aware typosquat generation', () => {
     const fallbackTlds = Array.from({ length: generator.MAX_GENERATION_TLDS }, (_, index) =>
       `${String.fromCharCode(97 + Math.floor(index / 26))}${String.fromCharCode(97 + (index % 26))}`,
     );
-    const result = generator.generateTyposquatCandidateSet('acme.com', fallbackTlds);
+    const result = generator.generateTyposquatCandidateSet('acme.invalid', fallbackTlds);
     const substitutionTlds = new Set(result.candidates
       .filter((candidate) => candidate.mutationTypes.includes('tld_substitution'))
       .map((candidate) => candidate.tld));
@@ -218,8 +218,8 @@ describe('provenance-aware typosquat generation', () => {
   });
 
   test('inserts hyphens only at valid internal label boundaries', () => {
-    const result = generator.generateTyposquatCandidateSet('acme.com', [], { preset: 'common' });
-    for (const domain of ['a-cme.com', 'ac-me.com', 'acm-e.com']) {
+    const result = generator.generateTyposquatCandidateSet('acme.invalid', [], { preset: 'common' });
+    for (const domain of ['a-cme.invalid', 'ac-me.invalid', 'acm-e.invalid']) {
       assert.deepEqual(result.candidates.find((candidate) => candidate.domain === domain)?.mutationTypes, ['hyphenation']);
     }
     assert.equal(result.candidates.some((candidate) => candidate.domain.startsWith('-.')), false);
@@ -227,8 +227,8 @@ describe('provenance-aware typosquat generation', () => {
   });
 
   test('adds bounded suffix and word-boundary characters with explicit provenance', () => {
-    const result = generator.generateTyposquatCandidateSet('acme-pay.com', [], { preset: 'common' });
-    for (const domain of ['acme-pay0.com', 'acmea-pay.com']) {
+    const result = generator.generateTyposquatCandidateSet('acme-pay.invalid', [], { preset: 'common' });
+    for (const domain of ['acme-pay0.invalid', 'acmea-pay.invalid']) {
       assert.ok(result.candidates.some((candidate) =>
         candidate.domain === domain && candidate.mutationTypes.includes('character_addition')));
     }
@@ -236,18 +236,18 @@ describe('provenance-aware typosquat generation', () => {
   });
 
   test('generates conservative plural, TLD-embedded, and WWW-style forms', () => {
-    const result = generator.generateTyposquatCandidateSet('acme-shop.net', ['net', 'org'], { preset: 'common' });
+    const result = generator.generateTyposquatCandidateSet('acme-shop.invalid', ['invalid', 'test'], { preset: 'common' });
     for (const [domain, mutationType] of [
-      ['acme-shops.net', 'pluralization'],
-      ['acmeshops.net', 'pluralization'],
-      ['acme-shopnet.net', 'tld_embedding'],
-      ['acme-shop-net.net', 'tld_embedding'],
-      ['www-acme-shop.net', 'www_prefix'],
+      ['acme-shops.invalid', 'pluralization'],
+      ['acmeshops.invalid', 'pluralization'],
+      ['acme-shopinvalid.invalid', 'tld_embedding'],
+      ['acme-shop-invalid.invalid', 'tld_embedding'],
+      ['www-acme-shop.invalid', 'www_prefix'],
     ]) {
       assert.ok(result.candidates.some((candidate) =>
         candidate.domain === domain && candidate.mutationTypes.includes(requiredValue(mutationType))), requiredValue(domain));
     }
-    assert.equal(result.candidates.some((candidate) => candidate.domain.endsWith('.com')), false);
+    assert.equal(result.candidates.some((candidate) => candidate.domain.endsWith('.example')), false);
   });
 
   test('prioritizes analyst dictionary terms fairly when the global cap applies', () => {
@@ -265,33 +265,33 @@ describe('provenance-aware typosquat generation', () => {
   });
 
   test('removes one or all existing separators with explicit provenance', () => {
-    const result = generator.generateTyposquatCandidateSet('acme-pay-login.com', [], { preset: 'common' });
+    const result = generator.generateTyposquatCandidateSet('acme-pay-login.invalid', [], { preset: 'common' });
     assert.ok(result.candidates.some((candidate) =>
-      candidate.domain === 'acmepaylogin.com' && candidate.mutationTypes.includes('separator_omission')));
+      candidate.domain === 'acmepaylogin.invalid' && candidate.mutationTypes.includes('separator_omission')));
     assert.ok(result.candidates.some((candidate) =>
-      candidate.domain === 'acmepay-login.com' && candidate.mutationTypes.includes('separator_omission')));
+      candidate.domain === 'acmepay-login.invalid' && candidate.mutationTypes.includes('separator_omission')));
     assert.ok(result.candidates.some((candidate) =>
-      candidate.domain === 'acme-paylogin.com' && candidate.mutationTypes.includes('separator_omission')));
+      candidate.domain === 'acme-paylogin.invalid' && candidate.mutationTypes.includes('separator_omission')));
   });
 
   test('preserves bounded word boundaries and generates deterministic reordered forms', () => {
-    const result = generator.generateTyposquatCandidateSet('Acme Pay', ['com'], { preset: 'common' });
-    assert.deepEqual(result.candidates.find((candidate) => candidate.domain === 'acme-pay.com'), {
-      domain: 'acme-pay.com',
+    const result = generator.generateTyposquatCandidateSet('Acme Pay', ['invalid'], { preset: 'common' });
+    assert.deepEqual(result.candidates.find((candidate) => candidate.domain === 'acme-pay.invalid'), {
+      domain: 'acme-pay.invalid',
       source: 'acmepay',
-      tld: 'com',
+      tld: 'invalid',
       mutationTypes: ['hyphenation'],
     });
-    for (const domain of ['payacme.com', 'pay-acme.com']) {
+    for (const domain of ['payacme.invalid', 'pay-acme.invalid']) {
       assert.deepEqual(result.candidates.find((candidate) => candidate.domain === domain)?.mutationTypes, ['word_reordering']);
     }
   });
 
   test('reorders hyphenated domain tokens without mislabelling the original order', () => {
-    const result = generator.generateTyposquatCandidateSet('acme-pay.com', [], { preset: 'common' });
+    const result = generator.generateTyposquatCandidateSet('acme-pay.invalid', [], { preset: 'common' });
     assert.ok(result.candidates.some((candidate) =>
-      candidate.domain === 'pay-acme.com' && candidate.mutationTypes.includes('word_reordering')));
-    const joinedOriginal = result.candidates.find((candidate) => candidate.domain === 'acmepay.com');
+      candidate.domain === 'pay-acme.invalid' && candidate.mutationTypes.includes('word_reordering')));
+    const joinedOriginal = result.candidates.find((candidate) => candidate.domain === 'acmepay.invalid');
     assert.ok(joinedOriginal);
     assert.ok(joinedOriginal.mutationTypes.includes('separator_omission'));
     assert.equal(joinedOriginal.mutationTypes.includes('word_reordering'), false);
@@ -305,22 +305,22 @@ describe('provenance-aware typosquat generation', () => {
   });
 
   test('multi-word estimates remain an upper bound for generated separator forms', () => {
-    for (const input of ['Acme Pay', 'acme-pay.com', 'one two three four']) {
-      const estimate = generator.estimateTyposquatCandidateCount(input, ['com'], { preset: 'common' });
-      const result = generator.generateTyposquatCandidateSet(input, ['com'], { preset: 'common' });
+    for (const input of ['Acme Pay', 'acme-pay.invalid', 'one two three four']) {
+      const estimate = generator.estimateTyposquatCandidateCount(input, ['invalid'], { preset: 'common' });
+      const result = generator.generateTyposquatCandidateSet(input, ['invalid'], { preset: 'common' });
       assert.ok(estimate.estimatedMaximum >= result.candidates.length, input);
     }
   });
 
   test('generates a bounded curated set of joined and hyphenated impersonation terms', () => {
-    const result = generator.generateTyposquatCandidateSet('acme.com', [], { preset: 'impersonation' });
+    const result = generator.generateTyposquatCandidateSet('acme.invalid', [], { preset: 'impersonation' });
     const dictionaryCandidates = result.candidates.filter((candidate) => candidate.mutationTypes.includes('dictionary'));
     assert.equal(dictionaryCandidates.length, 100);
     for (const domain of [
-      'signin-acme.com',
-      'acmehelpdesk.com',
-      'password-reset-acme.com',
-      'acme-account-recovery.com',
+      'signin-acme.invalid',
+      'acmehelpdesk.invalid',
+      'password-reset-acme.invalid',
+      'acme-account-recovery.invalid',
     ]) {
       assert.ok(dictionaryCandidates.some((candidate) => candidate.domain === domain), domain);
     }
@@ -329,9 +329,9 @@ describe('provenance-aware typosquat generation', () => {
 
   test('keeps expanded dictionary generation deterministic and inside its estimate', () => {
     const options = { preset: 'impersonation' };
-    const first = generator.generateTyposquatCandidateSet('acme.com', ['com', 'net'], options);
-    const second = generator.generateTyposquatCandidateSet('acme.com', ['com', 'net'], options);
-    const estimate = generator.estimateTyposquatCandidateCount('acme.com', ['com', 'net'], options);
+    const first = generator.generateTyposquatCandidateSet('acme.invalid', ['invalid', 'test'], options);
+    const second = generator.generateTyposquatCandidateSet('acme.invalid', ['invalid', 'test'], options);
+    const estimate = generator.estimateTyposquatCandidateCount('acme.invalid', ['invalid', 'test'], options);
     assert.deepEqual(second, first);
     assert.ok(estimate.estimatedMaximum >= first.candidates.length);
     assert.equal(estimate.mayReachLimit, false);
@@ -341,14 +341,14 @@ describe('provenance-aware typosquat generation', () => {
     const dictionaryTerms = ['invoice', 'Support', 'invoice', 'bad value!', 7];
     const before = structuredClone(dictionaryTerms);
     const options = { preset: 'impersonation', dictionaryTerms };
-    const result = generator.generateTyposquatCandidateSet('acme.com', [], options);
+    const result = generator.generateTyposquatCandidateSet('acme.invalid', [], options);
     assert.ok(result.candidates.some((candidate) =>
-      candidate.domain === 'invoice-acme.com' && candidate.mutationTypes.includes('dictionary')));
+      candidate.domain === 'invoice-acme.invalid' && candidate.mutationTypes.includes('dictionary')));
     assert.ok(result.candidates.some((candidate) =>
-      candidate.domain === 'acmesupport.com' && candidate.mutationTypes.includes('dictionary')));
+      candidate.domain === 'acmesupport.invalid' && candidate.mutationTypes.includes('dictionary')));
     assert.equal(result.candidates.some((candidate) => candidate.domain.includes('bad value')), false);
     assert.deepEqual(dictionaryTerms, before);
-    assert.ok(generator.estimateTyposquatCandidateCount('acme.com', [], options).estimatedMaximum >= result.candidates.length);
+    assert.ok(generator.estimateTyposquatCandidateCount('acme.invalid', [], options).estimatedMaximum >= result.candidates.length);
   });
 
   test('replaces only the first or last explicit token with analyst dictionary terms', () => {
@@ -406,7 +406,7 @@ describe('provenance-aware typosquat generation', () => {
     assert.equal(normalized.values.length, generator.MAX_CUSTOM_DICTIONARY_TERMS);
     assert.equal(normalized.truncated, true);
     assert.equal(normalized.rejectedCount, 0);
-    const result = generator.generateTyposquatCandidateSet('acme.com', [], {
+    const result = generator.generateTyposquatCandidateSet('acme.invalid', [], {
       preset: 'impersonation',
       dictionaryTerms: terms,
     });
@@ -427,8 +427,8 @@ describe('provenance-aware typosquat generation', () => {
   });
 
   test('keeps every standard mutation family as the explicit and implicit default', () => {
-    const implicit = generator.generateTyposquatCandidateSet('acme.com', ['com', 'net']);
-    const explicit = generator.generateTyposquatCandidateSet('acme.com', ['com', 'net'], {
+    const implicit = generator.generateTyposquatCandidateSet('acme.invalid', ['invalid', 'test']);
+    const explicit = generator.generateTyposquatCandidateSet('acme.invalid', ['invalid', 'test'], {
       preset: 'all',
       keyboardLayout: 'qwerty',
     });
@@ -447,20 +447,20 @@ describe('provenance-aware typosquat generation', () => {
       preset: 'custom',
       mutationTypes: ['pluralization', 'tld_embedding', 'pluralization', 'unknown', 7],
     };
-    const result = generator.generateTyposquatCandidateSet('acme.com', ['com', 'net'], options);
+    const result = generator.generateTyposquatCandidateSet('acme.invalid', ['invalid', 'test'], options);
     assert.deepEqual(generator.normalizeMutationFamilyIds(options.mutationTypes), ['pluralization', 'tld_embedding']);
     assert.deepEqual(
       [...new Set(result.candidates.flatMap((candidate) => candidate.mutationTypes))].sort(),
       ['pluralization', 'tld_embedding'],
     );
-    assert.ok(result.candidates.some((candidate) => candidate.domain === 'acmes.com'));
-    assert.ok(result.candidates.some((candidate) => candidate.domain === 'acmecom.com'));
-    assert.equal(result.candidates.some((candidate) => candidate.domain === 'acme.net'), false);
-    assert.equal(generator.estimateTyposquatCandidateCount('acme.com', ['com', 'net'], options).preset, 'custom');
+    assert.ok(result.candidates.some((candidate) => candidate.domain === 'acmes.invalid'));
+    assert.ok(result.candidates.some((candidate) => candidate.domain === 'acmeinvalid.invalid'));
+    assert.equal(result.candidates.some((candidate) => candidate.domain === 'acme.test'), false);
+    assert.equal(generator.estimateTyposquatCandidateCount('acme.invalid', ['invalid', 'test'], options).preset, 'custom');
   });
 
   test('empty custom family selection returns no candidates without inventing a fallback', () => {
-    const result = generator.generateTyposquatCandidateSet('acme.com', ['com'], {
+    const result = generator.generateTyposquatCandidateSet('acme.invalid', ['invalid'], {
       preset: 'custom',
       mutationTypes: [],
     });
@@ -469,7 +469,7 @@ describe('provenance-aware typosquat generation', () => {
   });
 
   test('common-edits preset excludes impersonation and keyboard-insertion families', () => {
-    const result = generator.generateTyposquatCandidateSet('acme.com', ['com', 'net'], { preset: 'common' });
+    const result = generator.generateTyposquatCandidateSet('acme.invalid', ['invalid', 'test'], { preset: 'common' });
     const mutationTypes = new Set(result.candidates.flatMap((candidate) => candidate.mutationTypes));
     assert.ok(mutationTypes.has('character_omission'));
     assert.ok(mutationTypes.has('bitsquatting'));
@@ -480,11 +480,11 @@ describe('provenance-aware typosquat generation', () => {
     assert.equal(mutationTypes.has('unicode_whole_label'), false);
     assert.equal(mutationTypes.has('unicode_homoglyph_depth_2'), false);
     assert.equal(mutationTypes.has('keyboard_insertion'), false);
-    assert.equal(result.candidates.some((candidate) => candidate.domain === 'loginacme.com'), false);
+    assert.equal(result.candidates.some((candidate) => candidate.domain === 'loginacme.invalid'), false);
   });
 
   test('impersonation preset excludes ordinary character-edit families', () => {
-    const result = generator.generateTyposquatCandidateSet('acme.com', ['com', 'net'], { preset: 'impersonation' });
+    const result = generator.generateTyposquatCandidateSet('acme.invalid', ['invalid', 'test'], { preset: 'impersonation' });
     const mutationTypes = new Set(result.candidates.flatMap((candidate) => candidate.mutationTypes));
     assert.ok(mutationTypes.has('dictionary'));
     assert.ok(mutationTypes.has('unicode_homoglyph'));
@@ -494,13 +494,13 @@ describe('provenance-aware typosquat generation', () => {
     assert.equal(mutationTypes.has('character_omission'), false);
     assert.equal(mutationTypes.has('keyboard_substitution'), false);
     assert.equal(mutationTypes.has('bitsquatting'), false);
-    assert.ok(result.candidates.some((candidate) => candidate.domain === 'loginacme.com'));
-    assert.equal(result.candidates.some((candidate) => candidate.domain === 'acm.com'), false);
+    assert.ok(result.candidates.some((candidate) => candidate.domain === 'loginacme.invalid'));
+    assert.equal(result.candidates.some((candidate) => candidate.domain === 'acm.invalid'), false);
   });
 
   test('unknown presets fall back to the established all-family result', () => {
-    const expected = generator.generateTyposquatCandidateSet('acme.com', ['com', 'net']);
-    const result = generator.generateTyposquatCandidateSet('acme.com', ['com', 'net'], { preset: 'not-a-preset' });
+    const expected = generator.generateTyposquatCandidateSet('acme.invalid', ['invalid', 'test']);
+    const result = generator.generateTyposquatCandidateSet('acme.invalid', ['invalid', 'test'], { preset: 'not-a-preset' });
     assert.deepEqual(result, expected);
   });
 
@@ -597,21 +597,21 @@ describe('provenance-aware typosquat generation', () => {
   test('estimate is a deterministic upper bound for every preset', () => {
     for (const preset of Object.keys(generator.GENERATION_PRESETS)) {
       for (const keyboardLayout of Object.keys(generator.KEYBOARD_LAYOUTS)) {
-        const tlds = ['com', 'net', 'org'];
+        const tlds = ['invalid', 'test', 'example'];
         const before = structuredClone(tlds);
         const options = {
           preset,
           keyboardLayout,
           ...(preset === 'custom' ? { mutationTypes: generator.MUTATION_FAMILY_IDS } : {}),
         };
-        const estimate = generator.estimateTyposquatCandidateCount('acme.com', tlds, options);
-        const result = generator.generateTyposquatCandidateSet('acme.com', tlds, options);
+        const estimate = generator.estimateTyposquatCandidateCount('acme.invalid', tlds, options);
+        const result = generator.generateTyposquatCandidateSet('acme.invalid', tlds, options);
         assert.equal(estimate.inputValid, true);
         assert.equal(estimate.preset, preset);
         assert.equal(estimate.tldCount, 3);
         assert.ok(estimate.estimatedMaximum >= result.candidates.length);
         assert.ok(estimate.estimatedMaximum <= generator.MAX_GENERATED_CANDIDATES);
-        assert.deepEqual(generator.estimateTyposquatCandidateCount('acme.com', tlds, options), estimate);
+        assert.deepEqual(generator.estimateTyposquatCandidateCount('acme.invalid', tlds, options), estimate);
         assert.deepEqual(tlds, before);
       }
     }

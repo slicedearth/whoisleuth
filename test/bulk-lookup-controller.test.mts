@@ -64,7 +64,10 @@ describe('Bulk lookup request controller', () => {
 
   it('retries bounded rate limits and accepts an eventual result', async () => {
     const queue = [
-      response({ error: 'Slow down' }, 429, { 'Retry-After': '4' }),
+      new Response('<h1>Rate limited by proxy</h1>', {
+        status: 429,
+        headers: { 'content-type': 'text/html', 'Retry-After': '4' },
+      }),
       response({ error: 'Still busy' }, 429, { 'Retry-After': '60' }),
       response(compactResponse()),
     ];

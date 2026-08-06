@@ -10,6 +10,10 @@ import {
 } from './analysis/scheduled-monitor-model.ts';
 import { normalizeWatchlistEntry } from './analysis/watchlist-history.ts';
 import type { WatchlistEntry } from './watchlists.ts';
+import {
+  requestJsonCapped,
+  STANDARD_JSON_RESPONSE_BYTES,
+} from './bounded-json-response.ts';
 
 export type ScheduledWatchlistStatus = typeof SCHEDULED_WATCHLIST_STATUSES[number];
 export type ScheduledWatchlist = {
@@ -228,20 +232,16 @@ export function normalizeScheduledMonitoringResponse(value: unknown): ScheduledM
   return { state, capacity, action, id };
 }
 
-async function responseError(response: Response): Promise<Error> {
-  try {
-    const body = record(await response.json());
-    const message = boundedText(body?.error, 300);
-    if (message) return new Error(message);
-  } catch {
-    // A malformed error body is reported through the stable fallback below.
-  }
+function responseError(response: Response, raw: unknown): Error {
+  const body = record(raw);
+  const message = boundedText(body?.error, 300);
+  if (message) return new Error(message);
   return new Error(`Hosted monitoring request failed (${response.status}).`);
 }
 
-async function parseResponse(response: Response): Promise<ScheduledMonitoringResponse> {
-  if (!response.ok) throw await responseError(response);
-  const normalized = normalizeScheduledMonitoringResponse(await response.json());
+function parseResponse(response: Response, body: unknown): ScheduledMonitoringResponse {
+  if (!response.ok) throw responseError(response, body);
+  const normalized = normalizeScheduledMonitoringResponse(body);
   if (!normalized) throw new Error('Hosted monitoring returned an invalid response.');
   return normalized;
 }
@@ -249,21 +249,31 @@ async function parseResponse(response: Response): Promise<ScheduledMonitoringRes
 export async function fetchScheduledMonitoring(
   fetcher: typeof fetch = fetch,
 ): Promise<ScheduledMonitoringResponse> {
-  return parseResponse(await fetcher(ENDPOINT, {
+  const result = await requestJsonCapped(ENDPOINT, {
     credentials: 'same-origin',
     cache: 'no-store',
-  }));
+  }, {
+    fetchImpl: fetcher,
+    maximumBytes: STANDARD_JSON_RESPONSE_BYTES,
+    timeoutMs: 20_000,
+  });
+  return parseResponse(result.response, result.body);
 }
 
 export async function mutateScheduledMonitoring(
   command: ScheduledMonitoringCommand,
   fetcher: typeof fetch = fetch,
 ): Promise<ScheduledMonitoringResponse> {
-  return parseResponse(await fetcher(ENDPOINT, {
+  const result = await requestJsonCapped(ENDPOINT, {
     method: 'POST',
     credentials: 'same-origin',
     cache: 'no-store',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(command),
-  }));
+  }, {
+    fetchImpl: fetcher,
+    maximumBytes: STANDARD_JSON_RESPONSE_BYTES,
+    timeoutMs: 20_000,
+  });
+  return parseResponse(result.response, result.body);
 }

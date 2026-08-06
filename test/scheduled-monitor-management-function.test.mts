@@ -188,6 +188,28 @@ test('the published web boundary preserves authenticated management behavior', a
   assert.equal(constructions, 1);
 });
 
+test('the web boundary rejects an unauthenticated request before reading its body', async () => {
+  const neverEndingBody = new ReadableStream<Uint8Array>({
+    pull: () => new Promise<void>(() => {}),
+  });
+  const request = new Request('https://console.example/api/scheduled-monitor', {
+    method: 'POST',
+    body: neverEndingBody,
+    // @ts-expect-error Node's streamed Request body requires its runtime-specific duplex option.
+    duplex: 'half',
+  });
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  const outcome = await Promise.race([
+    runScheduledMonitorManagementRequest(request, { deploy: { published: true } }),
+    new Promise<'timed-out'>((resolve) => {
+      timeout = setTimeout(() => resolve('timed-out'), 100);
+    }),
+  ]);
+  if (timeout) clearTimeout(timeout);
+  assert.notEqual(outcome, 'timed-out');
+  assert.equal((outcome as Response).status, 401);
+});
+
 test('the web boundary caps declared and streamed request bodies before Blob construction', async () => {
   const declared = await runScheduledMonitorManagementRequest(new Request(
     'https://console.example/api/scheduled-monitor',

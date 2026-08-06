@@ -1,5 +1,7 @@
 # Privacy Notice
 
+Last updated: 6 August 2026.
+
 This notice describes the public WHOISleuth deployment and is also a template
 for self-hosted operators to adapt when their configuration, hosting, enabled
 providers, retention, or contact routes differ.
@@ -32,6 +34,17 @@ default (see the README), so many lookups return no personal data at all.
   candidates continue to Bulk, only the resulting domain names and bounded
   mutation provenance follow the normal lookup path; the original dictionary
   list does not.
+- **One-use candidate handoff**: when an analyst deliberately sends generated
+  or Certificate Transparency candidates to Bulk, the current tab can retain
+  up to 2,000 selected domains and bounded provenance for up to 5,000 generated
+  candidates, capped at 4 MiB. The record can include the originating tool,
+  mutation families, and bounded Certificate Transparency hostnames,
+  observation times, and counts. It is stored in `sessionStorage` under
+  `whoisleuth:candidate-handoff:v2` with a random one-use token. Bulk accepts it
+  only when both the explicit navigation source and token match, then removes it immediately;
+  direct or mismatched navigation does not apply the retained provenance. The
+  handoff is not uploaded or included in a workspace archive, and closing the
+  tab or clearing site data removes any unconsumed record.
 - **Registry-scoped nameserver search**: when an analyst explicitly enters a
   nameserver and one registry suffix in Discover, the deployment selects that
   registry through IANA RDAP bootstrap data and sends the nameserver in a
@@ -69,11 +82,14 @@ default (see the README), so many lookups return no personal data at all.
   endpoint address and perform one logical IP RDAP enrichment through the
   existing bounded safe-fetch and cache boundary. The transient result keeps a
   separately attributed network name and holder, handle, bounded CIDRs, address
-  range, country, network type, database freshness, and source provenance. Raw
-  IP RDAP data and published network contacts are excluded from this summary.
-  It can be displayed and deliberately exported, but it is not copied into
-  compact Bulk responses, cases, watchlists, profiles, or monitoring state and
-  never affects availability or Risk. The underlying public IP RDAP response is
+  range, country, network type, database freshness, source provenance, and up
+  to six published abuse-role email or phone routes. Raw IP RDAP data and other
+  contact roles are excluded from this summary. Routes are excluded from
+  ordinary readable and evidence exports. A selected route can be copied into
+  a browser-local case action only after analyst review and can then appear in
+  a deliberately generated response packet. The result is not copied into
+  compact Bulk responses, watchlists, profiles, or monitoring state and never
+  affects availability or Risk. The underlying public IP RDAP response is
   briefly cached in server memory like other RDAP responses. The selected
   address can belong to a CDN, proxy, load balancer, or shared edge and is not
   proof of an origin host, hosting control, ownership, intent, or maliciousness.
@@ -258,11 +274,12 @@ default (see the README), so many lookups return no personal data at all.
   shortlist, download, and archive actions remain the only ways those tools
   retain or export selected evidence.
 - **Lookup presentation preference**: Lookup separately stores only the selected
-  evidence density and task view in `localStorage` under
-  `whoisleuth:lookup-presentation:v1`. The value has a 1 KiB pre-parse ceiling,
-  contains no target or evidence, and is not included in workspace archives.
-  Clearing site data removes it. Lookup form values and results remain subject
-  to the transient rule above and are not added to this preference.
+  task view in `localStorage` under `whoisleuth:lookup-presentation:v1`. Older
+  records that also contain the retired detail preference remain readable, but
+  that field is ignored. The value has a 1 KiB pre-parse ceiling, contains no
+  target or evidence, and is not included in workspace archives. Clearing site
+  data removes it. Lookup form values and results remain subject to the
+  transient rule above and are not added to this preference.
 - **Guided investigations**: an authenticated user can optionally start a standard
   brand-sweep, infrastructure-pivot, or new-domain-triage guide for one canonical
   domain, or a bounded analyst-authored template derived from one of those
@@ -476,7 +493,8 @@ default (see the README), so many lookups return no personal data at all.
   Lookup evidence export.
 - **Brand Profiles / Shortlist / Watchlist / Cases / Campaigns / Certificate
   search history / Custom rules / Retained relationship observations / Saved
-  Bulk sessions / Website profile snapshots / Investigation templates**: saved
+  Bulk sessions / Website profile snapshots / Investigation templates / Bulk
+  review state**: the twelve browser-local collections are saved
   as bounded records in your own browser's IndexedDB database, not on the
   server, and visible to whoever can use that browser profile. On the first
   authenticated load after this storage change, WHOISleuth normalises
@@ -498,6 +516,13 @@ default (see the README), so many lookups return no personal data at all.
   registrant and abuse contacts, and Certificate Transparency rows. Saving and
   loading make no network request; an explicit resume sends only domains that
   had no settled row through the selected Bulk mode.
+  Saved session schema 3 adds the optional compact comparison envelope.
+  Schema 1 and 2 sessions remain readable without inventing those later fields.
+  Bulk review state retains up to 24 named filter and sorting presets and up to
+  1,900 per-domain review states, with record timestamps, in a 512 KiB store.
+  It does not copy Bulk evidence rows or source payloads. Review views and queue
+  state are included in deliberate workspace archives and can be removed from
+  Bulk or by clearing site data.
   Compact Deep rows and saved Bulk sessions can retain one nullable null-MX
   observation alongside the existing MX, SPF, and DMARC booleans. The local
   lookalike mail-exposure review uses those bounded fields, source coverage,
@@ -731,8 +756,11 @@ default (see the README), so many lookups return no personal data at all.
   deliberate unified workspace archive can contain cases and their analyst
   notes, campaigns, Brand Profiles, watchlists, shortlist entries, custom
   detection rules, retained relationship observations, compact saved Bulk
-  sessions, website profile snapshots, investigation templates, active-profile
-  selection, and theme preference. It uses a versioned manifest with
+  sessions, website profile snapshots, investigation templates, Bulk review
+  state, active-profile selection, and theme preference. Archive version 3
+  added website-profile snapshots, version 4 added investigation templates,
+  and version 5 added Bulk review state. Versions 1 through 4 remain readable
+  without inventing missing later sections. It uses a versioned manifest with
   per-section SHA-256
   checksums, previews conflicts before a non-destructive merge, and excludes
   login sessions, passwords, API credentials, hosted-monitor encryption keys, raw
@@ -787,8 +815,11 @@ default (see the README), so many lookups return no personal data at all.
   queries, classifications, bounded errors, and compact per-query results. They
   do not contain full Lookup responses, but they can still identify the targets
   investigated and remain under the operator's retention and deletion control.
-  Resume validates the entire checkpoint and requires the exact original input
-  and scan mode. Direct Markdown and HTML reports use the same normalised
+  Checkpoint schema 2 preserves each current row's nullable observation time;
+  legacy schema-1 rows remain readable with unknown observation time instead of
+  inheriting the resume time. Bulk machine output schema 3 separately labels
+  current and resumed rows. Resume validates the entire checkpoint and requires
+  the exact original input and scan mode. Direct Markdown and HTML reports use the same normalised
   evidence projection as the existing export command. Saved-Lookup diff reads
   two local current-schema domain documents and emits a bounded comparison
   without contacting either target. Optional versioned progress events contain

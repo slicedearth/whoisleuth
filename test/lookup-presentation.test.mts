@@ -3,7 +3,6 @@ import test from 'node:test';
 
 import {
   MAX_LOOKUP_PRESENTATION_SERIALIZED_BYTES,
-  normalizeLookupEvidenceDensity,
   normalizeLookupTaskView,
   prioritizeLookupSectionLinks,
   readLookupPresentation,
@@ -21,8 +20,6 @@ const links = [
 ];
 
 test('normalizes persisted presentation settings to conservative defaults', () => {
-  assert.equal(normalizeLookupEvidenceDensity('summary'), 'summary');
-  assert.equal(normalizeLookupEvidenceDensity('invalid'), 'summary');
   assert.equal(normalizeLookupTaskView('incident'), 'incident');
   assert.equal(normalizeLookupTaskView({}), 'general');
 });
@@ -50,15 +47,18 @@ test('reads and writes a bounded versioned browser presentation preference', () 
       stored = value;
     },
   };
-  writeLookupPresentation(storage, { density: 'full', task: 'brand' });
-  assert.deepEqual(readLookupPresentation(storage), { density: 'full', task: 'brand' });
+  writeLookupPresentation(storage, { task: 'brand' });
+  assert.deepEqual(readLookupPresentation(storage), { task: 'brand' });
+
+  stored = JSON.stringify({ version: 1, density: 'full', task: 'incident' });
+  assert.deepEqual(readLookupPresentation(storage), { task: 'incident' });
 
   stored = JSON.stringify({ version: 2, density: 'summary', task: 'owned' });
-  assert.deepEqual(readLookupPresentation(storage), { density: 'summary', task: 'general' });
+  assert.deepEqual(readLookupPresentation(storage), { task: 'general' });
 
   stored = '{"broken"';
-  assert.deepEqual(readLookupPresentation(storage), { density: 'summary', task: 'general' });
+  assert.deepEqual(readLookupPresentation(storage), { task: 'general' });
 
   stored = 'x'.repeat(MAX_LOOKUP_PRESENTATION_SERIALIZED_BYTES + 1);
-  assert.deepEqual(readLookupPresentation(storage), { density: 'summary', task: 'general' });
+  assert.deepEqual(readLookupPresentation(storage), { task: 'general' });
 });

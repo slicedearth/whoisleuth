@@ -129,7 +129,7 @@
 
 <style>
   .technology-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(260px,100%),1fr));gap:10px}
-  .technology-grid article{min-width:0;padding:12px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--surface-soft)}
+  .technology-grid article{min-width:0;padding:12px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel-raised)}
   .finding-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
   .finding-head h5{min-width:0;margin:0;color:var(--text);font-size:var(--text-sm);overflow-wrap:anywhere}
   .confidence{flex:0 0 auto;color:var(--accent);font-size:var(--text-2xs);text-transform:uppercase;letter-spacing:.05em}
@@ -146,9 +146,9 @@
   .library-heading h5{margin:0;color:var(--text);font-size:var(--text-sm)}
   .library-heading p:not(.eyebrow){margin:4px 0 0;color:var(--muted);font-size:var(--text-xs)}
   .library-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(280px,100%),1fr));gap:10px;margin-top:12px}
-  .library-grid article{min-width:0;padding:12px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--surface-soft)}
+  .library-grid article{min-width:0;padding:12px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel-raised)}
   .library-grid h6{min-width:0;margin:0;color:var(--text);font-size:var(--text-sm);overflow-wrap:anywhere}
-  .library-grid h6 span{color:var(--muted);font-family:var(--font-mono);font-size:var(--text-xs);font-weight:500}
+  .library-grid h6 span{color:var(--muted);font-family:var(--mono);font-size:var(--text-xs);font-weight:500}
   .advisory,.catalog-neutral{flex:0 0 auto;border:1px solid rgb(var(--amber-rgb) / .4);border-radius:999px;padding:2px 7px;color:var(--amber);background:rgb(var(--amber-rgb) / .05);font-size:var(--text-2xs);font-weight:700;text-transform:uppercase;letter-spacing:.04em}
   .advisory.high,.advisory.critical{border-color:rgb(var(--danger-rgb) / .4);color:var(--danger);background:rgb(var(--danger-rgb) / .05)}
   .catalog-neutral{border-color:var(--border);color:var(--muted);background:var(--surface)}

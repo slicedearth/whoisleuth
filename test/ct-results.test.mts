@@ -120,17 +120,17 @@ describe('structured response', () => {
     const result = normalizeCtResponse(
       {
         matches: [
-          match({ domain: 'older.com', lastObservedAt: '2026-01-01T00:00:00Z' }),
-          match({ domain: 'newer.com', lastObservedAt: '2026-09-01T00:00:00Z' }),
-          match({ domain: 'zeta.com', lastObservedAt: null, firstObservedAt: null }),
-          match({ domain: 'alpha.com', lastObservedAt: null, firstObservedAt: null }),
+          match({ domain: 'older.example', lastObservedAt: '2026-01-01T00:00:00Z' }),
+          match({ domain: 'newer.example', lastObservedAt: '2026-09-01T00:00:00Z' }),
+          match({ domain: 'zeta.example', lastObservedAt: null, firstObservedAt: null }),
+          match({ domain: 'alpha.example', lastObservedAt: null, firstObservedAt: null }),
         ],
       },
       'src',
     );
     assert.deepStrictEqual(
       result.candidates.map((c) => c.domain),
-      ['newer.com', 'older.com', 'alpha.com', 'zeta.com'],
+      ['newer.example', 'older.example', 'alpha.example', 'zeta.example'],
     );
   });
 

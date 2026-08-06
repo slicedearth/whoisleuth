@@ -8,11 +8,12 @@
 
 import { createHash } from 'node:crypto';
 import { Buffer } from 'node:buffer';
-import { readFile, writeFile } from 'node:fs/promises';
+import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { SSLBL_CERTIFICATE_SNAPSHOT } from '../lib/sslbl-certificates.generated.mts';
+import { readBoundedRegularTextFile } from '../lib/bounded-file.mts';
 
 export const SSLBL_SOURCE_URL = 'https://sslbl.abuse.ch/blacklist/sslblacklist.csv';
 export const SSLBL_SNAPSHOT_SCHEMA = 'whoisleuth.sslbl-certificate-snapshot';
@@ -255,7 +256,12 @@ export async function main(
 ): Promise<number> {
   try {
     const options = parseSslblSnapshotArguments(args);
-    const raw = await readFile(options.input, 'utf8');
+    const raw = await readBoundedRegularTextFile(options.input, {
+      allowSymbolicLink: true,
+      maximumBytes: MAX_SSLBL_SOURCE_BYTES,
+      minimumBytes: 1,
+      label: 'SSLBL source',
+    });
     const snapshot = parseSslblCertificateCsv(raw);
     const assessment = assessSslblSnapshotUpdate(snapshot, options.generatedAt, {
       allowLargeShrink: options.allowLargeShrink,

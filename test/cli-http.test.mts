@@ -129,7 +129,8 @@ describe('HTTP CLI result normalization', () => {
       http: httpObservation({ status: 'error', complete: false, response: null, finalUrl: null }),
     }));
     assert.equal(result.probeStatus, 'inconclusive');
-    assert.equal(result.activityStatus, 'unreachable');
+    assert.equal(result.assessment, 'inconclusive');
+    assert.equal(result.activityStatus, null);
     assert.ok(result.http);
     assert.equal(result.http.status, 'error');
   });
@@ -137,7 +138,8 @@ describe('HTTP CLI result normalization', () => {
   test('unknown probe shapes fail closed to an inconclusive content-free result', () => {
     const result = buildHttpProbeResult('example.test', { status: 'unexpected', text: 'secret', http: ['invalid'] });
     assert.equal(result.probeStatus, 'inconclusive');
-    assert.equal(result.activityStatus, 'unreachable');
+    assert.equal(result.assessment, 'inconclusive');
+    assert.equal(result.activityStatus, null);
     assert.equal(result.http, null);
     assert.equal(JSON.stringify(result).includes('secret'), false);
   });
@@ -149,7 +151,7 @@ describe('HTTP CLI output', () => {
     const before = structuredClone(result);
     const document = buildCliHttpDocument('EXAMPLE.test', result, '2026-07-14T04:00:00.000Z');
     assert.equal(document.schema, 'whoisleuth.cli.http');
-    assert.equal(document.version, 1);
+    assert.equal(document.version, 2);
     assert.equal(document.generatedAt, '2026-07-14T04:00:00.000Z');
     assert.equal(document.requestedDomain, 'EXAMPLE.test');
     assert.deepEqual(result, before);
@@ -158,13 +160,24 @@ describe('HTTP CLI output', () => {
   test('terminal output exposes response, attempts, completeness, hash, and header presence', () => {
     const output = formatTerminalHttp(buildCliHttpDocument('example.test', buildHttpProbeResult('example.test', homepageProbe())));
     assert.match(output, /Probe\s+Fetched/);
-    assert.match(output, /Activity\s+Active/);
+    assert.match(output, /Assessment\s+Active/);
+    assert.doesNotMatch(output, /Activity\s+/);
     assert.match(output, /HTTP status\s+200/);
     assert.match(output, /Final URL\s+https:\/\/www\.example\.test\/home/);
     assert.match(output, /strictTransportSecurity, contentSecurityPolicy, xContentTypeOptions/);
     assert.match(output, /sha256:a{64} \(complete-body\)/);
     assert.match(output, /Attempt\s+https:\/\/example\.test\/: HTTP 200/);
     assert.match(output, /Limitation\s+URL query strings were omitted/);
+  });
+
+  test('terminal output keeps failed dual-scheme collection inconclusive', () => {
+    const result = buildHttpProbeResult('example.test', homepageProbe({
+      status: 'inconclusive',
+      http: httpObservation({ status: 'error', complete: false, response: null, finalUrl: null }),
+    }));
+    const output = formatTerminalHttp(buildCliHttpDocument('example.test', result));
+    assert.match(output, /Assessment\s+Inconclusive/iu);
+    assert.doesNotMatch(output, /Unreachable/iu);
   });
 
   test('terminal output remains explicit when no response was obtained', () => {

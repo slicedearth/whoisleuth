@@ -58,7 +58,7 @@ const CLAIM_DEPENDENCIES: Readonly<Record<string, readonly Dependency[]>> = Obje
     { label: 'TLS observation', evidenceId: 'tls', mode: 'network_collection', href: '#evidence-tls' },
   ),
   'brand-resemblance': dependencyList(
-    { label: 'Page identity observation', evidenceId: 'page-identity', mode: 'network_collection', href: '#evidence-page-identity' },
+    { label: 'Page identity observation', evidenceId: 'page-identity', mode: 'network_collection', href: '#evidence-page' },
     { label: 'Reviewed Brand Profile', evidenceId: null, mode: 'local_review', href: '#case-response' },
   ),
   'controlled-change': dependencyList(
@@ -67,7 +67,7 @@ const CLAIM_DEPENDENCIES: Readonly<Record<string, readonly Dependency[]>> = Obje
   ),
   'incident-response': dependencyList(
     { label: 'HTTP observation', evidenceId: 'http', mode: 'network_collection', href: '#evidence-http' },
-    { label: 'Page identity observation', evidenceId: 'page-identity', mode: 'network_collection', href: '#evidence-page-identity' },
+    { label: 'Page identity observation', evidenceId: 'page-identity', mode: 'network_collection', href: '#evidence-page' },
     { label: 'Reviewed case and recipient route', evidenceId: null, mode: 'local_review', href: '#case-response' },
   ),
   'network-context': dependencyList(

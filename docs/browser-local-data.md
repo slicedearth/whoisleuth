@@ -24,19 +24,20 @@ The owning browser-store models declare these independent serialised ceilings:
 | Saved Bulk sessions | IndexedDB | 4 MiB |
 | Website profile snapshots | IndexedDB | 0.5 MiB |
 | Investigation templates | IndexedDB | 0.25 MiB |
+| Bulk review views and queue state | IndexedDB | 0.5 MiB |
 
-The combined declared ceiling is 15.25 MiB. These are safety limits rather than
+The combined declared ceiling is 15.75 MiB. These are safety limits rather than
 expected usage, and a browser may enforce a different origin quota. However,
 the aggregate exceeds the 5 MiB planning reference used by the former
 local-storage design. The model ceilings still apply in IndexedDB so changing
 the backend does not make any collection unbounded.
 
-Saved Bulk session schema 2 adds an optional compact comparison envelope to
+Saved Bulk session schema 3 adds an optional compact comparison envelope to
 each settled Deep row. It retains at most 12 normalised technology identifiers,
 a bounded TLS issuer label, an exact SPKI SHA-256 fingerprint, and independent
-source states. Schema 1 remains readable and is normalised without inventing
-the fields. The envelope does not contain raw page, script, certificate, TLS,
-WHOIS, RDAP, or contact data.
+source states. Schemas 1 and 2 remain readable and are normalised without
+inventing the fields. The envelope does not contain raw page, script,
+certificate, TLS, WHOIS, RDAP, or contact data.
 
 Investigation search still builds a disposable bounded projection from cases,
 campaigns, Brand Profiles, and analyst-selected relationship observations.
@@ -175,7 +176,7 @@ The threat model is deliberately narrow:
 - it does not protect the active plaintext IndexedDB workspace, an unlocked
   Console, a compromised same-origin page, a malicious browser extension,
   device malware, a keylogger, or a weak or reused passphrase; and
-- unencrypted archive versions 1 through 3 remain importable, without inventing
+- unencrypted archive versions 1 through 5 remain importable, without inventing
   sections that those formats did not contain, and an unencrypted current
   archive can still be downloaded through a separately labelled compatibility
   action.

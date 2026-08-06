@@ -200,7 +200,7 @@
   .desired-groups{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
   .desired-groups article{min-width:0;padding:9px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}
   .desired-groups article>div{display:flex;justify-content:space-between;gap:8px}.desired-groups article>div span{color:var(--muted);font:650 var(--text-2xs) var(--mono);text-transform:uppercase}
-  .desired-groups article.state-action>div span{color:var(--danger)}.desired-groups article.state-review>div span{color:var(--warning)}.desired-groups article.state-aligned>div span{color:var(--accent2)}
+  .desired-groups article.state-action>div span{color:var(--danger)}.desired-groups article.state-review>div span{color:var(--amber)}.desired-groups article.state-aligned>div span{color:var(--accent2)}
   .desired-groups p,.desired-groups small{color:var(--muted);font-size:var(--text-2xs);line-height:1.45}.desired-groups p{margin:5px 0}.desired-groups small{overflow-wrap:anywhere}
   .baseline-review{display:grid;gap:10px;margin-top:12px;padding:12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
   .baseline-review>header{display:flex;align-items:start;justify-content:space-between;gap:10px}
@@ -211,13 +211,13 @@
   .comparison-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
   .comparison-grid article{min-width:0;padding:9px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}
   .comparison-grid article>div{display:flex;justify-content:space-between;gap:8px}.comparison-grid article>div span{color:var(--muted);font:650 var(--text-2xs) var(--mono);text-transform:uppercase}
-  .comparison-grid article.comparison-drift>div span{color:var(--danger)}.comparison-grid article.comparison-suppressed>div span{color:var(--warning)}.comparison-grid article.comparison-aligned>div span{color:var(--accent2)}
+  .comparison-grid article.comparison-drift>div span{color:var(--danger)}.comparison-grid article.comparison-suppressed>div span{color:var(--amber)}.comparison-grid article.comparison-aligned>div span{color:var(--accent2)}
   .comparison-grid p,.comparison-grid small{display:block;color:var(--muted);font-size:var(--text-2xs);line-height:1.45;overflow-wrap:anywhere}.comparison-grid p{margin:5px 0}
   .dependency-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin-top:10px}
   .dependency-grid article{min-width:0;padding:9px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}
   .dependency-grid article>span,.dependency-grid article>small{display:block;margin-top:3px;color:var(--muted);font:var(--text-2xs) var(--mono);overflow-wrap:anywhere}
   .dependency-grid article>p{margin:5px 0;color:var(--muted);font-size:var(--text-2xs);overflow-wrap:anywhere}
-  .dependency-grid article>small.needs-evidence{color:var(--warning)}
+  .dependency-grid article>small.needs-evidence{color:var(--amber)}
   @media(max-width:750px){.checks{grid-template-columns:1fr}.audit .section-head{display:block}.audit .section-head button{margin-top:12px}}
   @media(max-width:620px){.desired-groups,.dependency-grid,.comparison-grid{grid-template-columns:1fr}.baseline-review>header{display:grid}}
 </style>

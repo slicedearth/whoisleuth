@@ -29,11 +29,13 @@
     message = '';
     const previous = [...results].reverse().find((result) => result.id === item.id);
     const outcome = await requestLookupSourceRefresh(item, query, depth, {
-      supersedesObservedAt: previous?.observedAt || item.supersedesObservedAt,
+      supersedesObservedAt: previous?.observedAt || previous?.supersedesObservedAt || item.supersedesObservedAt,
     });
     if (outcome.ok) {
       ledger = mergeLookupSourceRefreshLedger(ledger, outcome.value);
-      message = `${item.label} refreshed in a separate versioned chain. The original Lookup evidence was not changed.`;
+      message = outcome.value.state === 'unavailable'
+        ? `${item.label} was attempted in a separate versioned chain, but no new observation was recorded. The original Lookup evidence was not changed.`
+        : `${item.label} refreshed in a separate versioned chain. The original Lookup evidence was not changed.`;
     } else {
       message = outcome.message;
     }
@@ -71,12 +73,12 @@
           <li>
             <span class={`state state-${result.state}`}>{result.state}</span>
             <p><strong>{result.id.replaceAll('_', ' ')}</strong> · {result.detail}</p>
-            <small>Received {formatted(result.observedAt)} · supersedes {result.supersedesObservedAt ? formatted(result.supersedesObservedAt) : 'no earlier observation'} · transient only</small>
+            <small>{result.observedAt ? `Observed ${formatted(result.observedAt)}` : `Attempted ${formatted(result.attemptedAt)} · no new observation`} · supersedes {result.supersedesObservedAt ? formatted(result.supersedesObservedAt) : 'no earlier observation'} · transient only</small>
           </li>
         {/each}
       </ul>
     {/if}
-    {#if message}<p class="message" role="status">{message}</p>{/if}
+    <p class="message refresh-status" role="status" aria-live="polite" aria-atomic="true">{message}</p>
     {#if ledger?.truncated}<p class="message">Older transient refresh entries were dropped at the local history bound.</p>{/if}
     <ul class="limitations">{#each plan.limitations as limitation}<li>{limitation}</li>{/each}</ul>
   </section>
@@ -101,5 +103,6 @@
   .state-limited{color:var(--amber)}
   .state-unavailable{color:var(--danger)}
   .limitations{margin:0;padding-left:18px}
+  .refresh-status:empty{min-height:0;margin:0}
   @media(max-width:760px){.refresh-actions{grid-template-columns:1fr}}
 </style>

@@ -81,6 +81,7 @@ test('summarizes a separate WHOIS refresh without retaining its raw response', a
       state: 'complete',
       detail: 'WHOIS returned a complete 2-hop referral chain.',
       observedAt: NOW,
+      attemptedAt: NOW,
       reason: 'limited',
       evidenceIds: ['whois'],
       supersedesObservedAt: NOW,
@@ -143,9 +144,23 @@ test('keeps failed source refreshes explicit and bounded', async () => {
   ]), NOW, NOW).items[0];
   assert.ok(plan);
   const outcome = await requestLookupSourceRefresh(plan, 'example.test', 'deep', {
-    fetchImpl: async () => new Response(JSON.stringify({ error: 'Registry source unavailable' }), { status: 503 }),
+    now: () => NOW,
+    fetchImpl: async () => new Response(JSON.stringify({ error: 'Registry source unavailable' }), {
+      status: 503,
+      headers: { 'content-type': 'application/json' },
+    }),
   });
-  assert.deepEqual(outcome, { ok: false, message: 'Registry source unavailable' });
+  assert.deepEqual(outcome, { ok: true, value: {
+    version: 1,
+    id: 'rdap',
+    state: 'unavailable',
+    detail: 'Registry source unavailable',
+    observedAt: null,
+    attemptedAt: NOW,
+    reason: 'limited',
+    evidenceIds: ['rdap'],
+    supersedesObservedAt: NOW,
+  } });
 });
 
 test('rejects oversized source refresh bodies before retaining raw content', async () => {
@@ -154,12 +169,16 @@ test('rejects oversized source refresh bodies before retaining raw content', asy
   ]), NOW, NOW).items[0];
   assert.ok(plan);
   const outcome = await requestLookupSourceRefresh(plan, 'example.test', 'deep', {
+    now: () => NOW,
     fetchImpl: async () => new Response('oversized', {
       status: 200,
       headers: { 'content-length': String(2 * 1024 * 1024 + 1) },
     }),
   });
-  assert.deepEqual(outcome, { ok: false, message: 'Source refresh returned an oversized response.' });
+  assert.equal(outcome.ok && outcome.value.state, 'unavailable');
+  assert.equal(outcome.ok && outcome.value.observedAt, null);
+  assert.equal(outcome.ok && outcome.value.attemptedAt, NOW);
+  assert.match(outcome.ok ? outcome.value.detail : '', /exceeded the local limit/iu);
 });
 
 test('merges repeated refreshes into a bounded versioned chain without changing the unified result', () => {
@@ -169,6 +188,7 @@ test('merges repeated refreshes into a bounded versioned chain without changing 
     state: 'limited' as const,
     detail: 'First refresh.',
     observedAt: '2026-07-30T00:01:00.000Z',
+    attemptedAt: '2026-07-30T00:01:00.000Z',
     reason: 'limited' as const,
     evidenceIds: ['rdap'],
     supersedesObservedAt: NOW,
@@ -178,6 +198,7 @@ test('merges repeated refreshes into a bounded versioned chain without changing 
     state: 'complete' as const,
     detail: 'Second refresh.',
     observedAt: '2026-07-30T00:02:00.000Z',
+    attemptedAt: '2026-07-30T00:02:00.000Z',
     supersedesObservedAt: first.observedAt,
   };
   const ledger = mergeLookupSourceRefreshLedger(

@@ -83,6 +83,6 @@
   .capsule label.disabled{color:var(--muted)}
   .caution{color:var(--amber);font-size:var(--text-xs)}
   .actions{margin-top:12px}
-  .status{color:var(--green)}
+  .status{color:var(--success)}
   @media(max-width:650px){.actions button{width:100%}}
 </style>

@@ -114,10 +114,7 @@ function requestTooLargeResponse() {
   }, NO_STORE_HEADERS);
 }
 
-async function runScheduledMonitorManagementFunction(
-  event: NetlifyFunctionEvent,
-  options: ManagementFunctionOptions = {},
-) {
+function scheduledMonitorManagementAdmission(event: NetlifyFunctionEvent) {
   if (event.httpMethod !== 'GET' && event.httpMethod !== 'POST') {
     return json(405, {
       error: 'Method not allowed',
@@ -142,7 +139,13 @@ async function runScheduledMonitorManagementFunction(
       'Retry-After': String(rate.retryAfterSeconds),
     });
   }
+  return null;
+}
 
+async function executeScheduledMonitorManagementFunction(
+  event: NetlifyFunctionEvent,
+  options: ManagementFunctionOptions = {},
+) {
   try {
     let command: unknown;
     if (event.httpMethod === 'POST') {
@@ -171,6 +174,14 @@ async function runScheduledMonitorManagementFunction(
   }
 }
 
+async function runScheduledMonitorManagementFunction(
+  event: NetlifyFunctionEvent,
+  options: ManagementFunctionOptions = {},
+) {
+  const rejected = scheduledMonitorManagementAdmission(event);
+  return rejected ?? executeScheduledMonitorManagementFunction(event, options);
+}
+
 async function runScheduledMonitorManagementRequest(
   request: Request,
   context: ManagementRequestContext = {},
@@ -183,6 +194,13 @@ async function runScheduledMonitorManagementRequest(
   if (context.deploy?.published !== true) {
     return netlifyJsonToResponse(nonPublishedDeployResponse());
   }
+  const headerEvent: NetlifyFunctionEvent = {
+    httpMethod: request.method,
+    headers: Object.fromEntries(request.headers.entries()),
+    body: null,
+  };
+  const rejected = scheduledMonitorManagementAdmission(headerEvent);
+  if (rejected) return netlifyJsonToResponse(rejected);
   const bodyResult = request.method === 'POST'
     ? await readRequestTextCapped(request, MAX_SCHEDULED_MONITOR_MANAGEMENT_BODY_BYTES)
     : { status: 'ok' as const, body: '' };
@@ -196,11 +214,10 @@ async function runScheduledMonitorManagementRequest(
     }, NO_STORE_HEADERS));
   }
   const event: NetlifyFunctionEvent = {
-    httpMethod: request.method,
-    headers: Object.fromEntries(request.headers.entries()),
+    ...headerEvent,
     body: request.method === 'POST' ? bodyResult.body : null,
   };
-  return netlifyJsonToResponse(await runScheduledMonitorManagementFunction(event, options));
+  return netlifyJsonToResponse(await executeScheduledMonitorManagementFunction(event, options));
 }
 
 export default async function scheduledMonitorManagementHandler(

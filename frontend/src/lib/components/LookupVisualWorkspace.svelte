@@ -45,6 +45,21 @@
     { id: 'relationships' as const, label: 'Relationships', count: graph.edges.length },
     { id: 'timeline' as const, label: 'Timeline', count: datedEventCount },
   ]);
+
+  function tabKeydown(event: KeyboardEvent) {
+    const current = options.findIndex((option) => option.id === view);
+    let index = -1;
+    if (event.key === 'ArrowRight') index = (current + 1) % options.length;
+    else if (event.key === 'ArrowLeft') index = (current + options.length - 1) % options.length;
+    else if (event.key === 'Home') index = 0;
+    else if (event.key === 'End') index = options.length - 1;
+    const next = options[index];
+    if (!next) return;
+    event.preventDefault();
+    setview(next.id);
+    const tablist = (event.currentTarget as HTMLButtonElement).closest('[role="tablist"]');
+    requestAnimationFrame(() => tablist?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[index]?.focus());
+  }
 </script>
 
 <div class="visual-workspace">
@@ -57,18 +72,21 @@
     <div class="visual-tabs" role="tablist" aria-label="Relationship and history view">
       {#each options as option}
         <button
+          id={`lookup-visual-tab-${option.id}`}
           type="button"
           role="tab"
           aria-selected={view === option.id}
-          aria-controls={`lookup-visual-${option.id}`}
+          aria-controls="lookup-visual-panel"
+          tabindex={view === option.id ? 0 : -1}
           class:active={view === option.id}
           onclick={() => setview(option.id)}
+          onkeydown={tabKeydown}
         >{option.label}<span>{option.count}</span></button>
       {/each}
     </div>
   </div>
 
-  <div id={`lookup-visual-${view}`} class="visual-panel" role="tabpanel" aria-labelledby="lookup-visual-workspace-title">
+  <div id="lookup-visual-panel" class="visual-panel" role="tabpanel" aria-labelledby={`lookup-visual-tab-${view}`}>
     {#if view === 'sources'}
       <EvidenceTopology
         id="lookup-evidence-topology"
@@ -79,7 +97,7 @@
         {onnavigate}
       />
     {:else if view === 'relationships'}
-      <LookupAssetGraph {graph} />
+      <LookupAssetGraph {graph} headingId="lookup-asset-graph-title" />
       <AnalystEvidencePivots {pivots} />
     {:else}
       <LookupLifecycle {events} />

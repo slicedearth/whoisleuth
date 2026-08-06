@@ -72,7 +72,7 @@
 <style>
   .posture-summary .review strong{color:var(--amber)}
   .posture-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(280px,100%),1fr));gap:10px;margin-top:14px}
-  .posture-grid>article{min-width:0;padding:12px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--surface-soft)}
+  .posture-grid>article{min-width:0;padding:12px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel-raised)}
   .posture-grid>article.review{border-color:color-mix(in srgb,var(--amber) 45%,var(--border))}
   .posture-grid>article.configured{border-color:color-mix(in srgb,var(--success) 34%,var(--border))}
   .finding-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}

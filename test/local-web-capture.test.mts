@@ -58,7 +58,7 @@ function patternedPng(width = 64, height = 64, flat = false) {
   ]);
 }
 
-function fakeRoute(url: string) {
+function fakeRoute(url: string, options: { rejectAbort?: boolean } = {}) {
   let aborted = false;
   const route = {
     request: () => ({
@@ -67,7 +67,10 @@ function fakeRoute(url: string) {
       headers: () => ({ accept: 'text/html', cookie: 'must-not-leave-browser=1', authorization: 'Bearer secret' }),
     }),
     fulfill: async () => {},
-    abort: async () => { aborted = true; },
+    abort: async () => {
+      aborted = true;
+      if (options.rejectAbort) throw new Error('route already closed');
+    },
   } as unknown as Route;
   return { route, wasAborted: () => aborted };
 }
@@ -88,6 +91,9 @@ function fakeBrowser(options: {
   onInitScript?: () => void;
   subresourceUrls?: string[];
   concurrentSubresources?: boolean;
+  detachedSubresources?: boolean;
+  closeSubresourceUrl?: string;
+  rejectCloseSubresourceAbort?: boolean;
 } = {}) {
   let routeHandler: ((route: Route) => Promise<void>) | null = null;
   const page = {
@@ -106,7 +112,9 @@ function fakeBrowser(options: {
         const request = fakeRoute(url);
         await handleRoute(request.route);
       };
-      if (options.concurrentSubresources) {
+      if (options.detachedSubresources) {
+        for (const url of subresources) void handleSubresource(url);
+      } else if (options.concurrentSubresources) {
         await Promise.all(subresources.map(handleSubresource));
       } else {
         for (const url of subresources) await handleSubresource(url);
@@ -122,12 +130,23 @@ function fakeBrowser(options: {
       elementCount: options.elementCount ?? 6, formCount: 1, inputCount: 2, scriptCount: 0, imageCount: 0,
     }),
     screenshot: async () => patternedPng(64, 64, options.flatScreenshot === true),
+    close: async () => {},
   };
   const context = {
     addInitScript: async () => { options.onInitScript?.(); },
     route: async (_pattern: string, handler: (route: Route) => Promise<void>) => { routeHandler = handler; },
     routeWebSocket: async () => {},
     newPage: async () => page,
+    close: async () => {
+      if (!routeHandler || !options.closeSubresourceUrl) return;
+      const request = fakeRoute(options.closeSubresourceUrl, {
+        ...(options.rejectCloseSubresourceAbort === undefined
+          ? {}
+          : { rejectAbort: options.rejectCloseSubresourceAbort }),
+      });
+      await routeHandler(request.route);
+      assert.equal(request.wasAborted(), true);
+    },
   };
   return {
     newContext: async () => context,
@@ -358,6 +377,54 @@ describe('optional local rendered capture package', () => {
       assert.equal(allowances.every((value) => value <= MAX_CAPTURE_RESPONSE_BYTES), true);
       assert.equal(allowances.includes(MAX_CAPTURE_RESPONSE_BYTES - 1), true);
       assert.equal(manifest.captures[0]?.completeness, 'partial');
+    } finally {
+      await rm(parent, { recursive: true, force: true });
+    }
+  });
+
+  test('waits for already-admitted late requests before finalising completeness', async () => {
+    const parent = await mkdtemp(path.join(tmpdir(), 'whoisleuth-capture-late-request-test-'));
+    const destination = path.join(parent, 'capture');
+    try {
+      const manifest = await captureRenderedPage({
+        targetUrl: 'https://example.test/', outputDirectory: destination, timeoutMs: 5000,
+      }, {
+        launchBrowser: async () => fakeBrowser({
+          detachedSubresources: true,
+          subresourceUrls: ['https://static.example.test/late.js'],
+        }),
+        fetchResource: async (url) => new Response('', { status: 200, headers: { 'x-fixture-url': url } }),
+        resolveAddresses: async () => [{ address: '192.0.2.1', family: 4 }],
+        readResponse: async (response) => {
+          await new Promise<void>((resolvePromise) => { setTimeout(resolvePromise, 20); });
+          const late = response.headers.get('x-fixture-url')?.includes('/late.js') === true;
+          return { bytes: Buffer.alloc(0), bytesRead: late ? 1 : 0, truncated: late };
+        },
+      });
+      assert.equal(manifest.captures[0]?.completeness, 'partial');
+      assert.deepEqual(manifest.captures[0]?.requestDomains, ['example.test', 'static.example.test']);
+    } finally {
+      await rm(parent, { recursive: true, force: true });
+    }
+  });
+
+  test('counts and settles a request emitted while the browser context is closing', async () => {
+    const parent = await mkdtemp(path.join(tmpdir(), 'whoisleuth-capture-seal-test-'));
+    const destination = path.join(parent, 'capture');
+    try {
+      const manifest = await captureRenderedPage({
+        targetUrl: 'https://example.test/', outputDirectory: destination, timeoutMs: 5000,
+      }, {
+        launchBrowser: async () => fakeBrowser({
+          closeSubresourceUrl: 'https://late.example.test/after-seal.js',
+          rejectCloseSubresourceAbort: true,
+        }),
+        fetchResource: fakeFetchResource,
+        resolveAddresses: async () => [{ address: '192.0.2.1', family: 4 }],
+      });
+
+      assert.equal(manifest.captures[0]?.completeness, 'partial');
+      assert.equal(manifest.captures[0]?.requestDomains.includes('late.example.test'), false);
     } finally {
       await rm(parent, { recursive: true, force: true });
     }

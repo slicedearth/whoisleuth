@@ -3,7 +3,10 @@ type HttpProbeInput = unknown;
 type HttpProbeResult = {
   domain: string;
   probeStatus: 'fetched' | 'responded' | 'inconclusive';
-  activityStatus: 'active' | 'unreachable';
+  assessment: 'active' | 'inconclusive';
+  // Retained for schema-version migration compatibility. Consumers should use
+  // assessment, which does not imply that an inconclusive target is unreachable.
+  activityStatus: 'active' | null;
   detail: string | null;
   http: Record<string, unknown> | null;
 };
@@ -32,7 +35,8 @@ function buildHttpProbeResult(
   return {
     domain,
     probeStatus: status,
-    activityStatus: status === 'fetched' || status === 'responded' ? 'active' : 'unreachable',
+    assessment: status === 'fetched' || status === 'responded' ? 'active' : 'inconclusive',
+    activityStatus: status === 'fetched' || status === 'responded' ? 'active' : null,
     detail: boundedDetail(input.detail),
     http: input.http && typeof input.http === 'object' && !Array.isArray(input.http)
       ? input.http as Record<string, unknown>

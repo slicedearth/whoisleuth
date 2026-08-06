@@ -21,4 +21,15 @@ function boundedCliErrorMessage(error: unknown, fallback = 'Unexpected command f
     .slice(0, MAX_CLI_ERROR_MESSAGE_LENGTH) || fallback;
 }
 
-export { CliUsageError, MAX_CLI_ERROR_MESSAGE_LENGTH, boundedCliErrorMessage };
+function boundedCliInputError(error: unknown, label: string): CliUsageError {
+  if (error instanceof CliUsageError) return error;
+  const safeLabel = label.replace(/[^A-Za-z0-9 ()_-]+/gu, '').trim().slice(0, 80) || 'Input';
+  return new CliUsageError(`${safeLabel} could not be read as a bounded regular file.`);
+}
+
+export {
+  CliUsageError,
+  MAX_CLI_ERROR_MESSAGE_LENGTH,
+  boundedCliErrorMessage,
+  boundedCliInputError,
+};

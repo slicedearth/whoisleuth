@@ -248,7 +248,7 @@
     .mobile-collapsed{display:none!important}
     .results-status{align-items:stretch;flex-direction:column;gap:7px}
     .results-status .btn{width:100%}
-    .selection-actions{position:sticky;z-index:5;bottom:8px;padding:10px;box-shadow:var(--shadow-md)}
+    .selection-actions{position:sticky;z-index:5;bottom:8px;padding:10px;box-shadow:0 12px 30px rgb(var(--shadow-rgb) / .2)}
     .selection-summary{align-items:center}
     .mobile-selection-toggle{display:block;flex:0 0 auto}
     .action-row{display:grid;grid-template-columns:1fr}

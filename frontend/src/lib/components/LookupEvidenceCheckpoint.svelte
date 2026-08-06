@@ -152,7 +152,7 @@
 <style>
   .checkpoint{display:grid;gap:12px;padding:var(--card-pad)}
   header{display:flex;align-items:flex-start;justify-content:space-between;gap:14px}
-  h4,header p{margin:0}h4{margin-top:3px;font:700 var(--text-base) var(--mono)}
+  h4,header p{margin:0}h4{margin-top:3px;font:700 var(--text-md) var(--mono)}
   header p:not(.eyebrow){max-width:760px;margin-top:6px;color:var(--muted);font-size:var(--text-xs);line-height:1.5}
   .fact-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
   .fact-grid label{display:flex;gap:9px;min-width:0;padding:9px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel);cursor:pointer}

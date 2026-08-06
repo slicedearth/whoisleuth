@@ -3,6 +3,7 @@ import {
   parseLookupHttpResponse,
   type LookupHttpResponse,
 } from './lookup-response-contract.mts';
+import { LARGE_JSON_RESPONSE_BYTES, readJsonResponseCapped } from './bounded-json-response.mts';
 
 const LOOKUP_CLIENT_TIMEOUT_MS = 40_000;
 
@@ -59,7 +60,16 @@ async function requestLookup(
     if (controller.signal.aborted) throw new DOMException('Aborted', 'AbortError');
     const response = await fetchImpl(url, { signal: controller.signal });
     if (controller.signal.aborted) throw new DOMException('Aborted', 'AbortError');
-    const body: unknown = await response.json().catch(() => ({}));
+    let body: unknown;
+    try {
+      body = await readJsonResponseCapped(response, LARGE_JSON_RESPONSE_BYTES);
+    } catch (cause) {
+      // Preserve the HTTP status when an adapter supplies a malformed bounded
+      // error page, but never turn an unreadable successful response into a
+      // merely invalid application envelope.
+      if (!response.ok) body = null;
+      else throw cause;
+    }
     if (!response.ok) {
       return {
         ok: false,

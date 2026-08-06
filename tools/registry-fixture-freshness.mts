@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 
 import { createHash } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -15,6 +14,7 @@ import {
   registryCompatibilityMatrix,
   type RegistryCompatibilityRow,
 } from '../lib/registry-capabilities.mts';
+import { readBoundedRegularFile } from '../lib/bounded-file.mts';
 
 type FreshnessState = 'current' | 'stale' | 'changed' | 'inconclusive';
 type ReadFixture = (absolutePath: string) => Promise<Uint8Array>;
@@ -143,11 +143,11 @@ export async function buildRegistryFixtureFreshnessReport(options: FreshnessOpti
     throw new RangeError(`Registry capabilities exceeded ${MAX_REGISTRY_FIXTURE_PROFILES} rows.`);
   }
   const readFixture = options.readFixture || (async (absolutePath: string) => {
-    const value = await readFile(absolutePath);
-    if (value.byteLength > MAX_REGISTRY_FIXTURE_BYTES) {
-      throw new RangeError(`Registry fixture file exceeded ${MAX_REGISTRY_FIXTURE_BYTES} bytes.`);
-    }
-    return value;
+    return readBoundedRegularFile(absolutePath, {
+      allowSymbolicLink: true,
+      maximumBytes: MAX_REGISTRY_FIXTURE_BYTES,
+      label: 'Registry fixture file',
+    });
   });
 
   const files = [];

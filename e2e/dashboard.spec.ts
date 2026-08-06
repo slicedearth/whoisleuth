@@ -268,7 +268,7 @@ test('the focused comparison handoff requires exactly two domains and opens Bulk
   await page.getByLabel('First domain').fill('first.example');
   await page.getByLabel('Second domain').fill('second.example');
   await page.getByRole('button', { name: 'Load comparison' }).click();
-  await expect(page).toHaveURL('/bulk?source=manual#domains');
+  await expect(page).toHaveURL(/\/bulk\?source=manual&handoff=[0-9a-f]{32}#domains$/u);
   await expect(page.locator('#domains')).toHaveValue('first.example\nsecond.example');
   await expect(page.getByText('Loaded 2 candidates from manual.')).toBeVisible();
   await expect(page.getByRole('button', { name: /^Scan 2 domains/ })).toBeEnabled();

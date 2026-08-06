@@ -14,9 +14,9 @@ import {
 } from './rdap-normalization.mts';
 import { rdapAttempt } from './rdap-attempts.mts';
 import { fetchRdapWithTimeout, type RdapFetch } from './rdap-transport.mts';
+import { registryServiceAdmissionFor } from './registry-capabilities.mts';
 import type {
   LooseRdapRecord,
-  NormalizedRdapDomainRecord,
   NormalizedRdapTextBlock,
   RdapAttempt,
 } from './rdap-types.mts';
@@ -91,6 +91,7 @@ type NameserverSearchResult = {
 
 type SearchOptions = {
   fetchUpstream?: RdapFetch;
+  findBases?: typeof findRdapBases;
   now?: () => number;
 };
 
@@ -375,20 +376,31 @@ export async function searchRdapNameserverFromBases(
 export async function searchRdapNameserver(
   nameserverInput: unknown,
   registryScopeInput: unknown,
+  options: SearchOptions = {},
 ): Promise<NameserverSearchResult> {
   const nameserver = normalizeRdapNameserver(nameserverInput);
   const registryScope = normalizeRdapRegistryScope(registryScopeInput);
+  const now = options.now ?? Date.now;
+  const admission = registryServiceAdmissionFor(`scope.${registryScope}`, 'rdap');
+  if (admission?.allowed === false) {
+    return result('unsupported', nameserver, registryScope, new Date(now()).toISOString(), {
+      endpoint: null,
+      transportSecurity: null,
+      status: null,
+      attempts: [],
+    });
+  }
   return cached(`rdap-nameserver-search:${registryScope}:${nameserver}`, async () => {
-    const bases = await findRdapBases('domain', `scope.${registryScope}`);
+    const bases = await (options.findBases ?? findRdapBases)('domain', `scope.${registryScope}`);
     if (bases.length === 0) {
-      return result('unavailable', nameserver, registryScope, new Date().toISOString(), {
+      return result('unavailable', nameserver, registryScope, new Date(now()).toISOString(), {
         endpoint: null,
         transportSecurity: null,
         status: null,
         attempts: [],
       });
     }
-    return searchRdapNameserverFromBases(nameserver, registryScope, bases);
+    return searchRdapNameserverFromBases(nameserver, registryScope, bases, options);
   });
 }
 

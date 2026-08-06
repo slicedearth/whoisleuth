@@ -108,10 +108,7 @@ function sourceState(value: JsonRecord): string {
   ).replaceAll('_', ' ');
 }
 
-function source(
-  descriptor: SourceDescriptor,
-  exportedAt: string,
-): LookupEvidenceReplaySource {
+function source(descriptor: SourceDescriptor): LookupEvidenceReplaySource {
   const value = record(descriptor.value);
   const state = sourceState(value);
   return {
@@ -260,7 +257,7 @@ export async function parseLookupEvidenceReplay(
     { id: 'sslbl', label: 'SSLBL snapshot comparison', value: sources.sslbl },
   ];
   const replaySources = sourceDescriptors
-    .map((item) => source(item, exportedAt))
+    .map((item) => source(item))
     .slice(0, MAX_SOURCES);
 
   const facts: LookupEvidenceReplayFact[] = [];

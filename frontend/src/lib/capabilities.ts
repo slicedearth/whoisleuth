@@ -1,3 +1,8 @@
+import {
+  requestJsonCapped,
+  SMALL_JSON_RESPONSE_BYTES,
+} from './bounded-json-response.ts';
+
 export type CapabilityStatus = 'supported' | 'disabled' | 'unavailable' | 'local_only';
 export type Capability = {
   id: string;
@@ -200,9 +205,15 @@ export function normalizeCapabilities(raw: unknown): CapabilityReport | null {
 
 export async function fetchCapabilities(fetcher: typeof fetch = fetch): Promise<CapabilityReport | null> {
   try {
-    const response = await fetcher('/api/capabilities');
+    const { response, body } = await requestJsonCapped('/api/capabilities', {
+      cache: 'no-store',
+    }, {
+      fetchImpl: fetcher,
+      maximumBytes: SMALL_JSON_RESPONSE_BYTES,
+      timeoutMs: 10_000,
+    });
     if (!response.ok) return null;
-    return normalizeCapabilities(await response.json());
+    return normalizeCapabilities(body);
   } catch {
     return null;
   }

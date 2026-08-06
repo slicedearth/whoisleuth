@@ -83,7 +83,7 @@ test('watchlist history filters material changes and hands retained domains back
   await expect(history).toHaveCount(0);
 
   await page.getByRole('row', { name: /Priority/ }).getByRole('button', { name: 'Rescan in Bulk' }).click();
-  await expect(page).toHaveURL(/\/bulk\?source=watchlist$/);
+  await expect(page).toHaveURL(/\/bulk\?source=watchlist&handoff=[0-9a-f]{32}$/u);
   await expect(page.getByLabel('Domains')).toHaveValue('priority.invalid');
 });
 

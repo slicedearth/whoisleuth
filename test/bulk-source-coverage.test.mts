@@ -16,11 +16,11 @@ describe('authority-aware Bulk source coverage', () => {
       { source: 'rdap', state: 'complete' },
       unsupportedWhois,
     ];
-    assert.equal(isExpectedUnsupportedBulkSource('candidate.dev', unsupportedWhois), true);
-    assert.equal(classifyBulkSourceCoverage('candidate.dev', coverage), 'complete');
-    assert.deepEqual(limitedBulkSources('candidate.dev', coverage), []);
+    assert.equal(isExpectedUnsupportedBulkSource('example.dev', unsupportedWhois), true);
+    assert.equal(classifyBulkSourceCoverage('example.dev', coverage), 'complete');
+    assert.deepEqual(limitedBulkSources('example.dev', coverage), []);
     assert.equal(
-      describeBulkSourceCoverage('candidate.dev', unsupportedWhois),
+      describeBulkSourceCoverage('example.dev', unsupportedWhois),
       'whois: unsupported (no IANA-published service)',
     );
   });
@@ -30,26 +30,26 @@ describe('authority-aware Bulk source coverage', () => {
       { source: 'rdap', state: 'complete' },
       unsupportedWhois,
     ];
-    assert.equal(isExpectedUnsupportedBulkSource('candidate.com', unsupportedWhois), false);
-    assert.equal(classifyBulkSourceCoverage('candidate.com', coverage), 'limited');
-    assert.deepEqual(limitedBulkSources('candidate.com', coverage), ['whois']);
+    assert.equal(isExpectedUnsupportedBulkSource('example.com', unsupportedWhois), false);
+    assert.equal(classifyBulkSourceCoverage('example.com', coverage), 'limited');
+    assert.deepEqual(limitedBulkSources('example.com', coverage), ['whois']);
   });
 
   test('preserves unavailable, partial and skipped interpretation boundaries', () => {
-    assert.equal(classifyBulkSourceCoverage('candidate.dev', []), 'unrecorded');
-    assert.deepEqual(limitedBulkSources('candidate.dev', [
+    assert.equal(classifyBulkSourceCoverage('example.dev', []), 'unrecorded');
+    assert.deepEqual(limitedBulkSources('example.dev', [
       { source: 'dns', state: 'unavailable' },
       { source: 'rdap', state: 'partial' },
       { source: 'whois', state: 'skipped' },
     ]), ['dns', 'rdap']);
-    assert.deepEqual(limitedBulkSources('candidate.dev', [
+    assert.deepEqual(limitedBulkSources('example.dev', [
       { source: 'whois', state: 'skipped' },
     ]), []);
   });
 
   test('fails closed for malformed domains and bounded source entries', () => {
     assert.equal(classifyBulkSourceCoverage('not a domain', [unsupportedWhois]), 'limited');
-    assert.equal(classifyBulkSourceCoverage('candidate.dev', [{ source: 'whois', state: 'error' }]), 'limited');
-    assert.equal(classifyBulkSourceCoverage('candidate.dev', [{ source: '\u0000whois', state: 'unsupported' }]), 'unrecorded');
+    assert.equal(classifyBulkSourceCoverage('example.dev', [{ source: 'whois', state: 'error' }]), 'limited');
+    assert.equal(classifyBulkSourceCoverage('example.dev', [{ source: '\u0000whois', state: 'unsupported' }]), 'unrecorded');
   });
 });

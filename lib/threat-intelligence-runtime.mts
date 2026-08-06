@@ -12,7 +12,6 @@ import {
 } from './threat-intelligence-definition-registry.mts';
 import {
   boundedHttpsUrl,
-  boundedInteger,
   boundedString,
   isRecord,
   isoTimestamp,
@@ -43,9 +42,7 @@ import type {
   CuratedConnectorTarget,
   CuratedConnectorTargetExposure,
   ThreatIntelligenceCapability,
-  ThreatIntelligenceCaching,
   ThreatIntelligenceCategory,
-  ThreatIntelligenceCommercialUse,
   ThreatIntelligenceConfidence,
   ThreatIntelligenceFinding,
   ThreatIntelligenceProviderDefinition,
@@ -53,15 +50,12 @@ import type {
   ThreatIntelligenceProviderMatrixEntry,
   ThreatIntelligenceProviderTargets,
   ThreatIntelligenceProviderTerms,
-  ThreatIntelligenceQueryRetention,
-  ThreatIntelligenceRedistribution,
   ThreatIntelligenceResult,
   ThreatIntelligenceResultState,
   ThreatIntelligenceSeverity,
   ThreatIntelligenceTarget,
   ThreatIntelligenceTargetExposure,
   ThreatIntelligenceTargetType,
-  ThreatIntelligenceAttribution,
 } from './threat-intelligence-types.mts';
 
 const THREAT_INTELLIGENCE_CONTRACT_VERSION = 1;
@@ -142,7 +136,6 @@ const CONNECTOR_RELATIONSHIP_ENDPOINTS: Readonly<Record<
 
 // createObservation() retains at most 40 source characters, so provider IDs use
 // the same ceiling and can never be truncated at the provenance boundary.
-const MAX_PROVIDER_ID_LENGTH = 40;
 const MAX_PROVIDER_LABEL_LENGTH = 100;
 const MAX_DETAIL_LENGTH = 500;
 const MAX_FINDING_ID_LENGTH = 160;

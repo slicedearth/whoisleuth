@@ -16,6 +16,7 @@
     profileName,
     handoffCount,
     handoffSource,
+    handoffContextTruncated,
     input,
     setInput,
     mode,
@@ -44,6 +45,7 @@
     profileName: string;
     handoffCount: number;
     handoffSource: string;
+    handoffContextTruncated: boolean;
     input: string;
     setInput: (value: string) => void;
     mode: ScanMode;
@@ -80,7 +82,7 @@
   {#if lookupDisabledReason}<p class="feature-disabled" role="note">{lookupDisabledReason}</p>{/if}
   {#if !lookupDisabledReason && scanLimitations.length}<p class="feature-disabled" role="note">Some {mode} scan sources are disabled by deployment policy: {scanLimitations.join(', ')}. {mode === 'deep' ? 'Saved evidence will not claim a complete deep scan.' : 'Results will identify unevaluated evidence.'}</p>{/if}
   {#if profileName}<p class="profile-context">Active profile: <strong>{profileName}</strong>. Official, partner, and allowlisted domains remain visible but are excluded from high-risk triage and Monitor saves.</p>{/if}
-  {#if handoffSource}<p class="handoff">Loaded {handoffCount} candidate{handoffCount === 1 ? '' : 's'} from {handoffSource}.</p>{/if}
+  {#if handoffSource}<p class="handoff">Loaded {handoffCount} candidate{handoffCount === 1 ? '' : 's'} from {handoffSource}.{#if handoffContextTruncated} Generated coverage context was capped to fit browser tab storage; selected candidates were retained in full.{/if}</p>{/if}
   <div class="queue-label"><label class="queue-title" for="domains">Domains</label><label class="btn small file-btn">Import CSV or text<input type="file" accept=".csv,.txt,text/csv,text/plain" onchange={importDomainFile} disabled={running}></label></div>
   <textarea id="domains" value={input} oninput={(event) => setInput(event.currentTarget.value)} disabled={running} placeholder="example.com&#10;example.net"></textarea>
   <p class="input-help">Paste newline, comma, semicolon, or tab-separated entries. CSV files may include a named domain column. One {mode === 'deep' ? 'Deep' : 'Fast'} job is limited to {queryLimit} unique domains.{#if duplicateCount} {duplicateCount} duplicate{duplicateCount === 1 ? '' : 's'} removed.{/if}</p>

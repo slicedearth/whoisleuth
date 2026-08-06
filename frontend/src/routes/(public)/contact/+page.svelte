@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { requestJsonCapped, SMALL_JSON_RESPONSE_BYTES } from '$lib/bounded-json-response';
   import PageHeading from '$lib/components/PageHeading.svelte';
   import PublicSeo from '$lib/components/PublicSeo.svelte';
   import { normalizeContactAddress } from '../../../../../lib/contact-address.mts';
@@ -107,8 +108,10 @@
     loading = true;
     error = '';
     try {
-      const response = await fetch('/api/contact-route', { cache: 'no-store' });
-      const payload: unknown = await response.json();
+      const { response, body: payload } = await requestJsonCapped('/api/contact-route', { cache: 'no-store' }, {
+        maximumBytes: SMALL_JSON_RESPONSE_BYTES,
+        timeoutMs: 15_000,
+      });
       const record = payload && typeof payload === 'object' && !Array.isArray(payload)
         ? payload as Record<string, unknown>
         : {};
@@ -161,12 +164,14 @@
     resolvedRoute = '';
     mailtoHref = '';
     try {
-      const response = await fetch('/api/contact-route', {
+      const { response, body: payload } = await requestJsonCapped('/api/contact-route', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ category, token: challengeToken }),
+      }, {
+        maximumBytes: SMALL_JSON_RESPONSE_BYTES,
+        timeoutMs: 20_000,
       });
-      const payload: unknown = await response.json();
       const record = payload && typeof payload === 'object' && !Array.isArray(payload)
         ? payload as Record<string, unknown>
         : {};
@@ -271,7 +276,7 @@
   .contact-form,.contact-notes{padding:clamp(18px,3vw,28px)}
   .contact-form{display:grid;gap:16px}
   label{display:grid;gap:7px;color:var(--text);font:700 var(--text-xs) var(--mono)}
-  input,select,textarea{width:100%;font-family:var(--sans)}
+  input,select,textarea{width:100%;font-family:var(--font-sans)}
   textarea{resize:vertical;line-height:1.55}
   label small{color:var(--muted);font:var(--text-2xs) var(--mono);text-align:right}
   .privacy-boundary{padding:13px 14px;border:1px solid color-mix(in srgb,var(--accent) 34%,var(--border));border-radius:var(--radius-sm);background:rgb(var(--accent-rgb) / .055)}

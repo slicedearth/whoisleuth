@@ -5,7 +5,6 @@
 // so the report can guide UX work without becoming product analytics.
 
 import { createHash } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -14,6 +13,7 @@ import {
   FIRST_USE_STUDY_TASK_SCHEMA,
   FIRST_USE_STUDY_TASK_VERSION,
 } from '../fixtures/first-use-analyst-study-tasks.mts';
+import { readBoundedRegularFile } from '../lib/bounded-file.mts';
 
 export const FIRST_USE_STUDY_SESSION_SCHEMA = 'whoisleuth.first-use-study-session';
 export const FIRST_USE_STUDY_REPORT_SCHEMA = 'whoisleuth.first-use-study-report';
@@ -297,10 +297,12 @@ export async function main(
     if (args.length !== 1 || !args[0] || args[0].startsWith('-')) {
       throw new TypeError('Usage: node tools/first-use-analyst-study.mts SESSIONS.json | --template=desktop | --template=mobile');
     }
-    const raw = await readFile(args[0]);
-    if (raw.byteLength === 0 || raw.byteLength > MAX_FIRST_USE_STUDY_INPUT_BYTES) {
-      throw new TypeError(`Study input must be between 1 byte and ${MAX_FIRST_USE_STUDY_INPUT_BYTES} bytes.`);
-    }
+    const raw = await readBoundedRegularFile(args[0], {
+      allowSymbolicLink: true,
+      maximumBytes: MAX_FIRST_USE_STUDY_INPUT_BYTES,
+      minimumBytes: 1,
+      label: 'Study input',
+    });
     let parsed: unknown;
     try {
       parsed = JSON.parse(raw.toString('utf8')) as unknown;

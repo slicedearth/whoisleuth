@@ -6,6 +6,7 @@ import {
   buildLookupResultSectionLinks,
   buildLookupSectionLinks,
   lookupEvidenceFamilyForHref,
+  lookupEvidenceTargetForHref,
 } from '../frontend/src/lib/analysis/lookup-page-actions.ts';
 
 describe('lookup page actions', () => {
@@ -100,10 +101,15 @@ describe('lookup page actions', () => {
       '#evidence-security-txt',
       '#evidence-technology',
       '#evidence-posture',
+      '#evidence-certificate-policy',
     ]) {
       assert.equal(lookupEvidenceFamilyForHref(href), 'web-evidence');
     }
-    assert.equal(lookupEvidenceFamilyForHref('#advanced-evidence'), null);
+    assert.equal(lookupEvidenceFamilyForHref('#evidence-quality'), 'source-quality');
+    assert.equal(lookupEvidenceFamilyForHref('#case-response'), 'case-response');
+    assert.equal(lookupEvidenceFamilyForHref('#advanced-evidence'), 'advanced-evidence');
+    assert.equal(lookupEvidenceTargetForHref('#evidence-page-identity'), '#evidence-page');
+    assert.equal(lookupEvidenceTargetForHref('#evidence-network-context'), '#evidence-network');
     assert.equal(lookupEvidenceFamilyForHref('https://outside.invalid/'), null);
   });
 });

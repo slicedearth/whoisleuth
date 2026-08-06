@@ -17,9 +17,10 @@ export function buildRegistryFixtureScaffold(
   if (!SAFE_ID_RE.test(profileId)) throw new TypeError('The capability profile is invalid.');
   if (!SAFE_SUFFIX_RE.test(suffix)) throw new TypeError('The suffix is invalid.');
   if (!SCENARIOS.has(scenario)) throw new TypeError('Scenario must be registered, not_found, or inconclusive.');
-  const profile = registryCompatibilityMatrix().find((item) => item.id === profileId);
-  if (!profile) throw new TypeError('The capability profile is not present in the registry catalogue.');
-  if (!profile.suffixes.includes(suffix)) throw new TypeError(`The capability profile does not cover .${suffix}.`);
+  const matchingProfiles = registryCompatibilityMatrix().filter((item) => item.id === profileId);
+  if (!matchingProfiles.length) throw new TypeError('The capability profile is not present in the registry catalogue.');
+  const profile = matchingProfiles.find((item) => item.suffixes.includes(suffix));
+  if (!profile) throw new TypeError(`The capability profile does not cover .${suffix}.`);
 
   const domain = `EXAMPLE.${suffix.toUpperCase()}`;
   const response = scenario === 'registered'

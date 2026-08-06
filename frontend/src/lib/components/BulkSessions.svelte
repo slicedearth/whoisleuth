@@ -154,11 +154,11 @@
   .section-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
   .section-heading h2,.section-heading p{margin:0}
   .section-heading>div>p:last-child{margin-top:6px;color:var(--muted);max-width:75ch}
-  .eyebrow{font:var(--label-font);color:var(--accent);text-transform:uppercase;letter-spacing:.1em}
+  .eyebrow{font:650 var(--text-2xs) var(--mono);color:var(--accent);text-transform:uppercase;letter-spacing:.1em}
   .save-row{display:grid;grid-template-columns:minmax(220px,1fr) auto;align-items:end;gap:12px;margin-top:18px}
   label{display:grid;gap:6px;font-size:var(--text-sm);font-weight:650}
   input,select{width:100%}
-  .session-status{color:var(--warning);margin:10px 0 0}
+  .session-status{color:var(--amber);margin:10px 0 0}
   .session-list{display:grid;gap:10px;margin-top:18px}
   article{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;background:var(--panel-raised)}
   article.current{border-color:var(--accent)}
