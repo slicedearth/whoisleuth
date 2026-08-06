@@ -6,6 +6,7 @@ import {
   serializeBrandProfileStore,
   MAX_PROFILES,
   MAX_PROFILE_VALUES,
+  normalizeBrandProfileId,
 } from './analysis/brand-profile-model.ts';
 import type {
   DesiredPostureBaseline,
@@ -65,14 +66,21 @@ export async function writeProfiles(profiles: BrandProfile[]): Promise<void> {
 }
 
 export function activeProfileId() {
-  return localStorage.getItem(ACTIVE_PROFILE_KEY) || '';
+  try {
+    return normalizeBrandProfileId(localStorage.getItem(ACTIVE_PROFILE_KEY)) || '';
+  } catch {
+    return '';
+  }
 }
 
 export function setActiveProfile(profileId: string) {
   try {
-    if (profileId) localStorage.setItem(ACTIVE_PROFILE_KEY, profileId);
+    const normalized = normalizeBrandProfileId(profileId);
+    if (profileId && !normalized) throw new Error('Active profile identifier is invalid.');
+    if (normalized) localStorage.setItem(ACTIVE_PROFILE_KEY, normalized);
     else localStorage.removeItem(ACTIVE_PROFILE_KEY);
-  } catch {
+  } catch (cause) {
+    if (cause instanceof Error && cause.message === 'Active profile identifier is invalid.') throw cause;
     throw new Error('Could not set the active profile. Browser storage may be full or unavailable.');
   }
 }

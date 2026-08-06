@@ -16,6 +16,7 @@ export const MAX_GENERATED_CONTEXT = 5000;
 export const MAX_MUTATION_TYPES = 30;
 export const MAX_MUTATION_TYPE_LENGTH = 80;
 export const MAX_SOURCE_LENGTH = MAX_CANDIDATE_SOURCE_LENGTH;
+export const MAX_CANDIDATE_HANDOFF_SERIALIZED_BYTES = 4 * 1024 * 1024;
 
 export const HANDOFF_SOURCES = [
   'typosquat',
@@ -137,4 +138,16 @@ export function parseHandoff(parsed: unknown): CandidateHandoff | null {
       ? { generatedCandidates: normalizeCandidates(value.generatedCandidates, MAX_GENERATED_CONTEXT) }
       : {}),
   };
+}
+
+/** Applies a byte ceiling before parsing browser-controlled tab state. */
+export function parseSerializedHandoff(serialized: unknown): CandidateHandoff | null {
+  if (typeof serialized !== 'string' || !serialized) return null;
+  if (serialized.length > MAX_CANDIDATE_HANDOFF_SERIALIZED_BYTES) return null;
+  if (new TextEncoder().encode(serialized).byteLength > MAX_CANDIDATE_HANDOFF_SERIALIZED_BYTES) return null;
+  try {
+    return parseHandoff(JSON.parse(serialized));
+  } catch {
+    return null;
+  }
 }

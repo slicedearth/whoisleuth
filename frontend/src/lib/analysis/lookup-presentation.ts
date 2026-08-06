@@ -9,6 +9,7 @@ export type LookupPresentationState = Readonly<{
 export type LookupPresentationStorage = Pick<Storage, 'getItem' | 'setItem'>;
 
 export const LOOKUP_PRESENTATION_STORAGE_KEY = 'whoisleuth:lookup-presentation:v1';
+export const MAX_LOOKUP_PRESENTATION_SERIALIZED_BYTES = 1_024;
 
 export const LOOKUP_EVIDENCE_DENSITIES = Object.freeze([
   Object.freeze({ id: 'summary' as const, label: 'Essentials', detail: 'A compact assessment, key observations, unresolved evidence, and one summary for each evidence family.' }),
@@ -43,7 +44,13 @@ export function readLookupPresentation(
   storage: Pick<LookupPresentationStorage, 'getItem'>,
 ): LookupPresentationState {
   try {
-    const stored = JSON.parse(storage.getItem(LOOKUP_PRESENTATION_STORAGE_KEY) || 'null') as {
+    const serialized = storage.getItem(LOOKUP_PRESENTATION_STORAGE_KEY);
+    if (serialized === null
+      || serialized.length > MAX_LOOKUP_PRESENTATION_SERIALIZED_BYTES
+      || new TextEncoder().encode(serialized).byteLength > MAX_LOOKUP_PRESENTATION_SERIALIZED_BYTES) {
+      return { density: 'summary', task: 'general' };
+    }
+    const stored = JSON.parse(serialized) as {
       version?: unknown;
       density?: unknown;
       task?: unknown;

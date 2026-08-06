@@ -169,6 +169,18 @@ describe('strict domain validation against hostile sessionStorage payloads', () 
     assert.equal(core.parseHandoff({ version: 1, source: 'manual', candidates: 'x' }), null);
   });
 
+  test('rejects malformed and oversized serialized tab values before normalization', () => {
+    assert.equal(core.parseSerializedHandoff('{broken'), null);
+    assert.equal(
+      core.parseSerializedHandoff('x'.repeat(core.MAX_CANDIDATE_HANDOFF_SERIALIZED_BYTES + 1)),
+      null,
+    );
+    const valid = JSON.stringify(core.buildHandoff('manual', [{
+      domain: 'ok.example', source: 'manual', mutationTypes: [],
+    }], undefined, '2026-07-12T00:00:00.000Z'));
+    assert.equal(core.parseSerializedHandoff(valid)?.candidates[0]?.domain, 'ok.example');
+  });
+
   test('candidate input processing is bounded by the handoff limit', () => {
     const many = [];
     for (let i = 0; i < core.MAX_HANDOFF_CANDIDATES + 50; i++) many.push({ domain: `d${i}.example`, source: 's', mutationTypes: [] });

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  MAX_LOOKUP_PRESENTATION_SERIALIZED_BYTES,
   normalizeLookupEvidenceDensity,
   normalizeLookupTaskView,
   prioritizeLookupSectionLinks,
@@ -56,5 +57,8 @@ test('reads and writes a bounded versioned browser presentation preference', () 
   assert.deepEqual(readLookupPresentation(storage), { density: 'summary', task: 'general' });
 
   stored = '{"broken"';
+  assert.deepEqual(readLookupPresentation(storage), { density: 'summary', task: 'general' });
+
+  stored = 'x'.repeat(MAX_LOOKUP_PRESENTATION_SERIALIZED_BYTES + 1);
   assert.deepEqual(readLookupPresentation(storage), { density: 'summary', task: 'general' });
 });

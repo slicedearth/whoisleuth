@@ -164,7 +164,7 @@ function boundedText(value: unknown, maximum: number = MAX_PROFILE_TEXT_LENGTH):
   return value.slice(0, maximum * 4).replace(/\s+/g, ' ').trim().slice(0, maximum).trim();
 }
 
-function safeId(value: unknown): string | null {
+export function normalizeBrandProfileId(value: unknown): string | null {
   return typeof value === 'string' && SAFE_ID_RE.test(value) ? value : null;
 }
 
@@ -436,7 +436,9 @@ export function normalizeBrandProfile(
   const pageBaseline = candidateBaseline && officialDomains.includes(candidateBaseline.domain)
     ? candidateBaseline
     : null;
-  const profileId = safeId(existing?.id) || safeId(value.id) || (typeof options.makeId === 'function' ? safeId(options.makeId()) : null);
+  const profileId = normalizeBrandProfileId(existing?.id)
+    || normalizeBrandProfileId(value.id)
+    || (typeof options.makeId === 'function' ? normalizeBrandProfileId(options.makeId()) : null);
   const name = boundedText(value.name, MAX_PROFILE_NAME_LENGTH);
   if (!profileId || !name) return null;
   const createdAt = timestamp(existing?.createdAt, null) || timestamp(value.createdAt, now);

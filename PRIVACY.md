@@ -257,6 +257,12 @@ default (see the README), so many lookups return no personal data at all.
   a full reload, or closing the tab clears it. Deliberate case, watchlist,
   shortlist, download, and archive actions remain the only ways those tools
   retain or export selected evidence.
+- **Lookup presentation preference**: Lookup separately stores only the selected
+  evidence density and task view in `localStorage` under
+  `whoisleuth:lookup-presentation:v1`. The value has a 1 KiB pre-parse ceiling,
+  contains no target or evidence, and is not included in workspace archives.
+  Clearing site data removes it. Lookup form values and results remain subject
+  to the transient rule above and are not added to this preference.
 - **Guided investigations**: an authenticated user can optionally start a standard
   brand-sweep, infrastructure-pivot, or new-domain-triage guide for one canonical
   domain, or a bounded analyst-authored template derived from one of those

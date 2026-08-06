@@ -1,4 +1,4 @@
-import { buildHandoff, parseHandoff, HANDOFF_KEY } from './candidate-handoff-core.ts';
+import { buildHandoff, parseSerializedHandoff, HANDOFF_KEY } from './candidate-handoff-core.ts';
 import type {
   Candidate,
   CandidateHandoff,
@@ -16,7 +16,7 @@ export function saveCandidateHandoff(source: CandidateHandoff['source'], candida
 
 export function loadCandidateHandoff(): CandidateHandoff | null {
   try {
-    return parseHandoff(JSON.parse(sessionStorage.getItem(HANDOFF_KEY) || 'null'));
+    return parseSerializedHandoff(sessionStorage.getItem(HANDOFF_KEY));
   } catch {
     return null;
   }

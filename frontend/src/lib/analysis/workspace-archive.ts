@@ -15,6 +15,7 @@ import {
   BRAND_PROFILE_SCHEMA_VERSION,
   buildBrandProfileExport,
   mergeBrandProfiles,
+  normalizeBrandProfileId,
 } from './brand-profile-model.ts';
 import type { BrandProfile } from './brand-profile-model.ts';
 import {
@@ -224,7 +225,6 @@ interface WorkspaceSectionDefinition {
 }
 
 const CONTROL_RE = /[\x00-\x1f\x7f]/;
-const SAFE_ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
 const CHECKSUM_RE = /^sha256:[a-f0-9]{64}$/;
 
 function record(value: unknown): UnknownRecord | null {
@@ -289,9 +289,7 @@ async function checksum(value: unknown, cryptoProvider: WorkspaceArchiveOptions[
 
 function settingsDocument(input: NormalizedWorkspaceInput): WorkspaceSettingsDocument {
   const profiles = Array.isArray(input.brandProfiles) ? input.brandProfiles : [];
-  const requestedProfileId = typeof input.settings?.activeProfileId === 'string' && SAFE_ID_RE.test(input.settings.activeProfileId)
-    ? input.settings.activeProfileId
-    : '';
+  const requestedProfileId = normalizeBrandProfileId(input.settings?.activeProfileId) || '';
   const activeProfileId = profiles.some((profile) => profile?.id === requestedProfileId)
     ? requestedProfileId
     : '';
@@ -616,8 +614,7 @@ function settingsPreview(
   mergedProfiles: BrandProfile[],
 ): WorkspaceMergeResult {
   const value = record(data) || {};
-  const requestedProfileId = typeof value.activeProfileId === 'string' ? value.activeProfileId : '';
-  const activeProfileId = SAFE_ID_RE.test(requestedProfileId) ? requestedProfileId : '';
+  const activeProfileId = normalizeBrandProfileId(value.activeProfileId) || '';
   const theme = normalizeTheme(value.theme);
   let skipped = 0;
   if (activeProfileId && !mergedProfiles.some((profile) => profile?.id === activeProfileId)) skipped++;

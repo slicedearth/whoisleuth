@@ -57,3 +57,16 @@ test('a large insert evicts the oldest entry to stay under the byte budget', asy
   await cached('lookup-cache-test:evict-check:early', earlyFactory);
   assert.equal(earlyFactoryCalls, 2, 'the early small entry should have been evicted (byte budget), then re-fetched');
 });
+
+test('a value whose byte size cannot be measured is returned but never retained', async () => {
+  let calls = 0;
+  const cyclic: { self?: unknown } = {};
+  cyclic.self = cyclic;
+  const factory = async () => {
+    calls += 1;
+    return cyclic;
+  };
+  assert.equal(await cached('lookup-cache-test:cyclic', factory), cyclic);
+  assert.equal(await cached('lookup-cache-test:cyclic', factory), cyclic);
+  assert.equal(calls, 2);
+});
