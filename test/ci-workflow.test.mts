@@ -86,6 +86,7 @@ describe('continuous integration workflow', () => {
     for (const command of [
       'npm run release:check',
       'npm run licenses:check',
+      'npm run technology:coverage-check',
       'npm audit --omit=dev',
       'npm run test:coverage',
       'npm run typecheck',

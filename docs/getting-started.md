@@ -396,8 +396,8 @@ evidence rules sampled, and finally a current corpus with no stale or failing
 observations. These maintenance signals cannot turn an empty or narrow corpus
 into a coverage claim and do not trigger live collection.
 
-Use the separate maintenance gate when a release process requires the highest
-reviewed-corpus tier:
+The required CI quality lane and local release review use the separate
+maintenance gate for the highest reviewed-corpus tier:
 
 ```bash
 npm run technology:coverage-check
