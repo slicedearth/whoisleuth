@@ -97,7 +97,7 @@
 <section id="results" class="guide-section" aria-labelledby="results-title">
   <div class="section-intro"><p class="eyebrow">Read the result</p><h2 id="results-title">Source health is part of the evidence.</h2><p>Registration status is authority-aware. DNS, certificates, websites and external intelligence add context, but do not override an authoritative registry answer.</p></div>
   <article class="result-layout card" aria-labelledby="result-layout-title">
-    <div><p class="eyebrow">Lookup layout</p><h3 id="result-layout-title">Start with the decision, then open the evidence you need.</h3><p>At a glance summarises the decision support and collection quality. Focus changes the order of evidence families for a general, brand, acquisition, incident-response or owned-domain review. Detail changes only presentation: Essentials stays compact, while Evidence and All evidence reveal more of the same collected result.</p></div>
+    <div><p class="eyebrow">Lookup layout</p><h3 id="result-layout-title">Start with the decision, then open the evidence you need.</h3><p>At a glance summarises the decision support and collection quality. Focus changes the order of evidence families for a general, brand, acquisition, incident-response or owned-domain review. Detail changes only presentation: every mode starts with families collapsed, while Evidence and All evidence make more of the same collected result available when opened.</p></div>
     <ol>
       <li><strong>Registration</strong><span>Compare registry, registrar RDAP and WHOIS without merging their authority.</span></li>
       <li><strong>Web and DNS</strong><span>Review point-in-time DNS, HTTP, TLS, page, technology and posture evidence.</span></li>

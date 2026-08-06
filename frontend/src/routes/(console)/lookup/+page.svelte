@@ -111,7 +111,6 @@
   let caseRecord=$state<CaseRecord|null>(null);let caseNote=$state('');let caseStatus=$state('');
   let evidenceDensity=$state<LookupEvidenceDensity>('summary');
   let expandedResultSections=$state<string[]>([]);
-  let collapsedResultSections=$state<string[]>([]);
   let taskView=$state<LookupTaskView>('general');
   let visualView=$state<LookupVisualView>('sources');
   let freshnessPolicyMode=$state<'task-default'|'analyst-custom'>('task-default');
@@ -288,7 +287,6 @@
   function setEvidenceDensity(value:LookupEvidenceDensity){
     evidenceDensity=normalizeLookupEvidenceDensity(value);
     expandedResultSections=[];
-    collapsedResultSections=[];
     writeLookupPresentation(localStorage,{density:evidenceDensity,task:taskView});
   }
   function visualViewForTask(value:LookupTaskView):LookupVisualView{
@@ -305,17 +303,43 @@
     expandedResultSections=expandedResultSections.includes(sectionId)
       ? expandedResultSections
       : [...expandedResultSections,sectionId];
-    collapsedResultSections=collapsedResultSections.filter((id)=>id!==sectionId);
     await tick();
     document.getElementById(sectionId)?.scrollIntoView({block:'start',behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});
   }
   async function hideSectionDetail(sectionId:string){
     expandedResultSections=expandedResultSections.filter((id)=>id!==sectionId);
-    collapsedResultSections=collapsedResultSections.includes(sectionId)
-      ? collapsedResultSections
-      : [...collapsedResultSections,sectionId];
     await tick();
     document.getElementById(sectionId)?.scrollIntoView({block:'start',behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});
+  }
+  function expandableResultSectionIds():string[]{
+    return resultSectionLinks()
+      .map((section)=>section.href.slice(1))
+      .filter((sectionId)=>sectionId!=='overview');
+  }
+  function expandAllSectionDetails(){
+    expandedResultSections=expandableResultSectionIds();
+  }
+  function collapseAllSectionDetails(){
+    expandedResultSections=[];
+  }
+  function allSectionDetailsVisible():boolean{
+    const sectionIds=expandableResultSectionIds();
+    return sectionIds.length>0&&sectionIds.every((sectionId)=>expandedResultSections.includes(sectionId));
+  }
+  function anySectionDetailsVisible():boolean{
+    return expandableResultSectionIds().some((sectionId)=>expandedResultSections.includes(sectionId));
+  }
+  async function navigateToResultSection(href:string){
+    const sectionId=href.startsWith('#')?href.slice(1):'';
+    if(!sectionId)return;
+    if(sectionId!=='overview'&&!expandedResultSections.includes(sectionId)){
+      expandedResultSections=[...expandedResultSections,sectionId];
+    }
+    await tick();
+    const target=document.getElementById(sectionId);
+    if(!target)return;
+    window.history.replaceState(window.history.state,'',href);
+    target.scrollIntoView({block:'start',behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});
   }
   async function navigateToLookupEvidence(href:string){
     const familyId=lookupEvidenceFamilyForHref(href);
@@ -323,7 +347,6 @@
     expandedResultSections=expandedResultSections.includes(familyId)
       ? expandedResultSections
       : [...expandedResultSections,familyId];
-    collapsedResultSections=collapsedResultSections.filter((id)=>id!==familyId);
     await tick();
     const targetId=href.slice(1);
     const target=document.getElementById(targetId);
@@ -332,9 +355,7 @@
     target.scrollIntoView({block:'start',behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});
   }
   function sectionDetailVisible(sectionId:string):boolean{
-    return evidenceDensity==='summary'
-      ? expandedResultSections.includes(sectionId)
-      : !collapsedResultSections.includes(sectionId);
+    return expandedResultSections.includes(sectionId);
   }
   function setFreshnessPolicy(value:{mode:'task-default'|'analyst-custom';thresholdsDays:LookupFreshnessThresholds}){
     freshnessPolicyMode=value.mode;
@@ -404,7 +425,7 @@
       return;
     }
 
-    loading=true;loadingElapsedMs=0;error='';result=null;caseRecord=null;caseNote='';caseStatus='';serviceDependencyScope='';serviceDependencyFalsePositives='';expandedResultSections=[];collapsedResultSections=[];
+    loading=true;loadingElapsedMs=0;error='';result=null;caseRecord=null;caseNote='';caseStatus='';serviceDependencyScope='';serviceDependencyFalsePositives='';expandedResultSections=[];
     const target=entries[0];if(!target)return;
     const lookupUrl=buildLookupRequestUrl(target,{
       mode:lookupMode,
@@ -471,9 +492,18 @@
   <section class="result-root" id="result">
     <LookupResultHeader title={show(result.registrableDomain||result.query)} state={show(availability.state)} isSubdomain={Boolean(result.isSubdomain)} registrableDomain={show(result.registrableDomain)} inputHostname={show(result.inputHostname)} onExport={downloadEvidence} onReportExport={downloadReadableReport} onBriefExport={downloadInvestigationBrief} />
 
-    <LookupPresentationControls density={evidenceDensity} task={taskView} setDensity={setEvidenceDensity} setTask={setTaskView} />
+    <LookupPresentationControls
+      density={evidenceDensity}
+      task={taskView}
+      allSectionsExpanded={allSectionDetailsVisible()}
+      anySectionsExpanded={anySectionDetailsVisible()}
+      setDensity={setEvidenceDensity}
+      setTask={setTaskView}
+      expandAll={expandAllSectionDetails}
+      collapseAll={collapseAllSectionDetails}
+    />
 
-    <LocalSectionNav label="Result sections" links={resultSectionLinks()} trackCurrent />
+    <LocalSectionNav label="Result sections" links={resultSectionLinks()} trackCurrent onnavigate={(href)=>void navigateToResultSection(href)} />
 
     {#snippet overviewSection()}
     <section class="result-section family-overview" id="overview" aria-labelledby="overview-title">
@@ -918,11 +948,11 @@
   .result-root{min-width:0;overflow-x:clip;overflow-clip-margin:3px}
   .evidence-density{display:flow-root}
   .result-section{--section-accent:var(--accent2);margin-top:26px}
-  .result-section.family-web{--section-accent:var(--amber)}
-  .result-section.family-registry{--section-accent:var(--accent2)}
-  .result-section.family-relationships{--section-accent:var(--source-network)}
-  .result-section.family-quality{--section-accent:var(--violet)}
-  .result-section.family-analyst{--section-accent:var(--violet)}
+  .result-section.family-web{--section-accent:var(--evidence-web)}
+  .result-section.family-registry{--section-accent:var(--evidence-registry)}
+  .result-section.family-relationships{--section-accent:var(--evidence-network)}
+  .result-section.family-quality{--section-accent:var(--evidence-derived)}
+  .result-section.family-analyst{--section-accent:var(--evidence-analyst)}
   .result-section.family-raw{--section-accent:var(--muted)}
   .result-section>h3{display:flex;align-items:center;gap:10px;margin:0 0 12px;color:var(--section-accent);font:700 var(--text-2xs) var(--mono);letter-spacing:.09em;text-transform:uppercase}
   .result-section>h3::before{content:"//";color:var(--muted)}

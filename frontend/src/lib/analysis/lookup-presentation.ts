@@ -13,8 +13,8 @@ export const MAX_LOOKUP_PRESENTATION_SERIALIZED_BYTES = 1_024;
 
 export const LOOKUP_EVIDENCE_DENSITIES = Object.freeze([
   Object.freeze({ id: 'summary' as const, label: 'Essentials', detail: 'A compact assessment, key observations, unresolved evidence, and one summary for each evidence family.' }),
-  Object.freeze({ id: 'standard' as const, label: 'Evidence', detail: 'Settled evidence is grouped by task while source detail and raw evidence stay collapsed until you inspect them.' }),
-  Object.freeze({ id: 'full' as const, label: 'All evidence', detail: 'Every settled evidence family remains available, including advanced and bounded raw evidence.' }),
+  Object.freeze({ id: 'standard' as const, label: 'Evidence', detail: 'Settled evidence is grouped by task and remains collapsed until you choose a family to inspect.' }),
+  Object.freeze({ id: 'full' as const, label: 'All evidence', detail: 'Every settled evidence family remains available, including advanced and bounded raw evidence, while each family stays collapsed until opened.' }),
 ]);
 
 export const LOOKUP_TASK_VIEWS = Object.freeze([

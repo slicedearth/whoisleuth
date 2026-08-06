@@ -1,7 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import type { Page, TestInfo } from '@playwright/test';
 import { expect, test } from './fixtures';
-import { runBulkScan, useTheme } from './helpers';
+import { expandLookupFamilies, runBulkScan, useTheme } from './helpers';
 
 const WCAG_TAGS = ['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa'];
 const REQUIRED_MANUAL_RULES = new Set([
@@ -199,6 +199,7 @@ test('scans populated Lookup, Bulk, and guided-investigation states', async ({ p
   await page.getByRole('button', { name: 'Run lookup' }).click();
   await expect(page.getByRole('heading', { name: 'registered' })).toBeVisible();
   await page.getByLabel('Detail').selectOption('standard');
+  await expandLookupFamilies(page);
   const registrySource = page.locator('.sources > details').first();
   await registrySource.locator(':scope > summary').click();
   await expect(registrySource).toHaveAttribute('open', '');

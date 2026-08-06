@@ -24,6 +24,11 @@
   --amber-rgb: 242 184 75;
   --violet: #b89cff;
   --violet-rgb: 184 156 255;
+  --evidence-registry: #c28cff;
+  --evidence-network: #5eb3ff;
+  --evidence-web: #f08ec2;
+  --evidence-derived: #63d7d4;
+  --evidence-analyst: #c5d0df;
   --overlay-rgb: 255 255 255;
   --shadow-rgb: 0 0 0;
   --card-shadow-alpha: .22;
@@ -98,6 +103,11 @@
   --amber-rgb: 102 73 0;
   --violet: #563487;
   --violet-rgb: 86 52 135;
+  --evidence-registry: #603386;
+  --evidence-network: #004f82;
+  --evidence-web: #84265f;
+  --evidence-derived: #00636d;
+  --evidence-analyst: #39485a;
   --overlay-rgb: 15 23 42;
   --shadow-rgb: 38 56 77;
   --card-shadow-alpha: .14;
