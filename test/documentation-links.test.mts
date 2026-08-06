@@ -8,12 +8,24 @@ import { fileURLToPath } from 'node:url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
 const DOCS_DIRECTORY = join(ROOT, 'docs');
+const PACKAGES_DIRECTORY = join(ROOT, 'packages');
+const PUBLIC_ROOT_DOCUMENTS = [
+  'PRIVACY.md',
+  'README.md',
+  'SECURITY.md',
+  'TRADEMARKS.md',
+];
 const DOCUMENTATION_FILES = [
-  join(ROOT, 'README.md'),
+  ...PUBLIC_ROOT_DOCUMENTS.map((name) => join(ROOT, name)),
   ...readdirSync(DOCS_DIRECTORY)
     .filter((name) => extname(name).toLowerCase() === '.md')
     .sort()
     .map((name) => join(DOCS_DIRECTORY, name)),
+  ...readdirSync(PACKAGES_DIRECTORY, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => join(PACKAGES_DIRECTORY, entry.name, 'README.md'))
+    .filter(existsSync)
+    .sort(),
 ];
 const REQUIRED_GUIDES = [
   'docs/application-guide.md',
@@ -70,11 +82,17 @@ function markdownHeadingAnchors(file: string): Set<string> {
 function localMarkdownLinks(file: string): Array<{ lineNumber: number; target: string }> {
   const links: Array<{ lineNumber: number; target: string }> = [];
   const linkPattern = /!?\[[^\]]*]\(\s*<?([^)\s>]+)>?(?:\s+["'][^)]*["'])?\s*\)/g;
+  const htmlAttributePattern = /\b(?:href|src)\s*=\s*["']([^"']+)["']/gi;
 
   for (const { line, lineNumber } of sourceLinesOutsideFences(readFileSync(file, 'utf8'))) {
     for (const match of line.matchAll(linkPattern)) {
       const target = requiredValue(match[1]);
-      if (/^(?:https?:|mailto:)/i.test(target) || target.startsWith('/')) continue;
+      if (/^(?:https?:|mailto:|data:)/i.test(target) || target.startsWith('/')) continue;
+      links.push({ lineNumber, target });
+    }
+    for (const match of line.matchAll(htmlAttributePattern)) {
+      const target = requiredValue(match[1]);
+      if (/^(?:https?:|mailto:|data:)/i.test(target) || target.startsWith('/')) continue;
       links.push({ lineNumber, target });
     }
   }
@@ -86,6 +104,8 @@ describe('documentation links', () => {
   test('keeps the operator and application guides in the documentation set', () => {
     const documented = new Set(DOCUMENTATION_FILES.map((file) => relative(ROOT, file)));
     for (const guide of REQUIRED_GUIDES) assert.equal(documented.has(guide), true, `${guide} is not covered`);
+    for (const document of PUBLIC_ROOT_DOCUMENTS) assert.equal(documented.has(document), true, `${document} is not covered`);
+    assert.equal([...documented].some((file) => /^packages\/[^/]+\/README\.md$/u.test(file)), true);
   });
 
   test('resolves local paths and Markdown heading fragments', () => {
