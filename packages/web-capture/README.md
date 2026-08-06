@@ -30,10 +30,14 @@ Collection executes page JavaScript and sends the target plus its public
 subresource hostnames to their operators. It accepts at most 100 HTTP(S)
 requests and 30 request hostnames, blocks credentials, non-default ports,
 service workers, downloads, WebSockets, WebRTC, WebTransport, non-HTTP
-protocols, and hosts resolving to private or reserved addresses. Every allowed
-request uses the shared connection-pinned
+protocols, and hosts resolving to private or reserved addresses. The hostname
+bound applies to browser-requested hosts even when resolution or response
+collection fails, and those admitted hosts remain visible in the manifest.
+Every allowed request uses the shared connection-pinned
 transport before its bounded response is supplied to the disposable browser.
 Cookies, authorisation headers, and request bodies are not forwarded. Each
-response is capped at 4 MiB and the capture is capped at 24 MiB of response
-data. Run this package only for targets you are authorised to render, inside a
-disposable and network-restricted environment when the target is untrusted.
+response body is read up to 4 MiB, with concurrent reads reserving from one
+shared 24 MiB application-level response-body budget. Lower-level transport
+buffering is outside that byte budget. Run this package only for targets you
+are authorised to render, inside a disposable and network-restricted
+environment when the target is untrusted.

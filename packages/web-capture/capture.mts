@@ -263,12 +263,24 @@ async function installRequestBoundary(
   readResponse: typeof readBytesCapped,
   timeoutMs: number,
 ) {
-  const checkedHosts = new Set<string>();
+  const requestHosts = new Set<string>();
   let requestCount = 0;
   let blockedRequestCount = 0;
   let hostLimitReached = false;
   let responseByteLimitReached = false;
   let transferredBytes = 0;
+  let reservedTransferBytes = 0;
+
+  const reserveResponseBytes = (): number => {
+    const remaining = MAX_CAPTURE_TRANSFER_BYTES - transferredBytes - reservedTransferBytes;
+    const allowance = Math.min(MAX_CAPTURE_RESPONSE_BYTES, Math.max(0, remaining));
+    reservedTransferBytes += allowance;
+    return allowance;
+  };
+  const settleResponseBytes = (allowance: number, bytesRead: number): void => {
+    reservedTransferBytes -= allowance;
+    transferredBytes += Math.min(allowance, Math.max(0, bytesRead));
+  };
   await context.routeWebSocket('**/*', async (webSocket) => {
     blockedRequestCount += 1;
     await webSocket.close({ code: 1008, reason: 'WHOISleuth local capture blocks WebSockets' });
@@ -286,11 +298,15 @@ async function installRequestBoundary(
       }
       const parsed = captureUrl(route.request().url());
       const hostname = parsed.hostname.toLowerCase().replace(/\.$/u, '');
-      if (!checkedHosts.has(hostname)) {
-        if (checkedHosts.size >= MAX_CAPTURE_HOSTS) {
+      if (!requestHosts.has(hostname)) {
+        if (requestHosts.size >= MAX_CAPTURE_HOSTS) {
           hostLimitReached = true;
           throw new Error('request-host limit reached');
         }
+        // Admit a new browser-requested hostname synchronously. Route handlers
+        // may overlap, so delaying this reservation until after DNS or response
+        // work would let concurrent or refused requests bypass the host bound.
+        requestHosts.add(hostname);
       }
       // Resolve on every request rather than only the first request for a host.
       // The exact validated records are then injected into safeFetchDetailed,
@@ -305,13 +321,35 @@ async function installRequestBoundary(
       }, addresses);
       const body = method === 'HEAD'
         ? { bytes: Buffer.alloc(0), bytesRead: 0, truncated: false }
-        : await readResponse(response, MAX_CAPTURE_RESPONSE_BYTES);
-      if (body.truncated || transferredBytes + body.bytesRead > MAX_CAPTURE_TRANSFER_BYTES) {
+        : await (async () => {
+            const allowance = reserveResponseBytes();
+            if (allowance <= 0) {
+              responseByteLimitReached = true;
+              await response.body?.cancel().catch(() => {});
+              throw new Error('response byte limit reached');
+            }
+            let settled = false;
+            try {
+              const value = await readResponse(response, allowance);
+              const validBytesRead = Number.isSafeInteger(value.bytesRead)
+                && value.bytesRead >= 0
+                && value.bytesRead <= allowance;
+              // A truncated or malformed reader result is conservatively
+              // charged for its complete reservation. This prevents refused
+              // responses from resetting the shared capture budget.
+              settleResponseBytes(allowance, value.truncated || !validBytesRead ? allowance : value.bytesRead);
+              settled = true;
+              if (!validBytesRead) throw new Error('response byte accounting was invalid');
+              return value;
+            } catch (error) {
+              if (!settled) settleResponseBytes(allowance, allowance);
+              throw error;
+            }
+          })();
+      if (body.truncated) {
         responseByteLimitReached = true;
         throw new Error('response byte limit reached');
       }
-      transferredBytes += body.bytesRead;
-      checkedHosts.add(hostname);
       await route.fulfill({
         status: response.status,
         headers: responseHeaders(response),
@@ -324,7 +362,7 @@ async function installRequestBoundary(
   });
   page.on('download', (download) => { void download.cancel(); });
   return {
-    checkedHosts,
+    requestHosts,
     stats: () => ({
       requestCount,
       blockedRequestCount,
@@ -431,7 +469,7 @@ export async function captureRenderedPage(
       'Rendered collection executed page JavaScript in a disposable browser context and may have disclosed the target to its public resource operators.',
       'Downloads, service workers, WebSockets, WebRTC, WebTransport, non-read methods, non-HTTP(S), credentialed, non-default-port, private-address, excess-host, excess-request, excess-response, and excess-transfer traffic was blocked.',
       'Each request was resolved and connection-pinned by the shared safe-fetch transport before its bounded response was supplied to the disposable browser; cookies, authorisation headers, and request bodies were not forwarded.',
-      `Each response was capped at ${MAX_CAPTURE_RESPONSE_BYTES} bytes and the capture was capped at ${MAX_CAPTURE_TRANSFER_BYTES} transferred response bytes.`,
+      `Each response body was read up to ${MAX_CAPTURE_RESPONSE_BYTES} bytes and the collector processed at most ${MAX_CAPTURE_TRANSFER_BYTES} response-body bytes across the capture; lower-level transport buffering is outside this application-level bound.`,
       'The screenshot perceptual hash is an investigative similarity signal and does not establish copying, ownership, intent, safety, or maliciousness.',
     ];
     const manifest = {
@@ -444,7 +482,7 @@ export async function captureRenderedPage(
         completeness: requestStats.blockedRequestCount || dom.structureTruncated || dom.textTruncated ? 'partial' : 'complete',
         limitations,
         page: { title: title || null, finalOrigin: finalUrl.origin.toLowerCase() },
-        requestDomains: [...requestBoundary.checkedHosts].sort().slice(0, MAX_CAPTURE_HOSTS),
+        requestDomains: [...requestBoundary.requestHosts].sort().slice(0, MAX_CAPTURE_HOSTS),
         technologies: [],
         artifacts: [{
           kind: 'screenshot', fileName: screenshotName, mimeType: 'image/png',

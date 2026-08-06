@@ -9,6 +9,8 @@ import zlib from 'node:zlib';
 import type { Browser, Route } from '@playwright/test';
 
 import {
+  MAX_CAPTURE_HOSTS,
+  MAX_CAPTURE_RESPONSE_BYTES,
   MAX_CAPTURE_TRANSFER_BYTES,
   WEB_CAPTURE_MANIFEST_VERSION,
   captureRenderedPage,
@@ -57,15 +59,17 @@ function patternedPng(width = 64, height = 64, flat = false) {
 }
 
 function fakeRoute(url: string) {
-  return {
+  let aborted = false;
+  const route = {
     request: () => ({
       url: () => url,
       method: () => 'GET',
       headers: () => ({ accept: 'text/html', cookie: 'must-not-leave-browser=1', authorization: 'Bearer secret' }),
     }),
     fulfill: async () => {},
-    abort: async () => { throw new Error('ERR_FAILED'); },
+    abort: async () => { aborted = true; },
   } as unknown as Route;
+  return { route, wasAborted: () => aborted };
 }
 
 const fakeFetchResource = async (url: string) => new Response(
@@ -82,14 +86,31 @@ function fakeBrowser(options: {
   elementCount?: number;
   flatScreenshot?: boolean;
   onInitScript?: () => void;
+  subresourceUrls?: string[];
+  concurrentSubresources?: boolean;
 } = {}) {
   let routeHandler: ((route: Route) => Promise<void>) | null = null;
   const page = {
     on: () => {},
     goto: async () => {
-      await routeHandler?.(fakeRoute(`https://${options.hostname ?? 'example.test'}/entry?discard=this`));
-      await routeHandler?.(fakeRoute(`https://${options.hostname ?? 'example.test'}/style.css`));
-      await routeHandler?.(fakeRoute('https://static.example.test/asset.js?secret=discarded'));
+      if (!routeHandler) return;
+      const handleRoute = routeHandler;
+      const mainRequest = fakeRoute(`https://${options.hostname ?? 'example.test'}/entry?discard=this`);
+      await handleRoute(mainRequest.route);
+      if (mainRequest.wasAborted()) throw new Error('navigation aborted');
+      const subresources = options.subresourceUrls ?? [
+        `https://${options.hostname ?? 'example.test'}/style.css`,
+        'https://static.example.test/asset.js?secret=discarded',
+      ];
+      const handleSubresource = async (url: string) => {
+        const request = fakeRoute(url);
+        await handleRoute(request.route);
+      };
+      if (options.concurrentSubresources) {
+        await Promise.all(subresources.map(handleSubresource));
+      } else {
+        for (const url of subresources) await handleSubresource(url);
+      }
     },
     waitForTimeout: async () => {},
     url: () => options.finalUrl ?? `https://${options.hostname ?? 'example.test'}/final?private=value`,
@@ -282,7 +303,100 @@ describe('optional local rendered capture package', () => {
     }
   });
 
-  test('fails closed when cumulative response bytes exceed the capture budget', async () => {
+  test('charges refused subresources against the shared response-body budget', async () => {
+    const parent = await mkdtemp(path.join(tmpdir(), 'whoisleuth-capture-refused-budget-test-'));
+    const destination = path.join(parent, 'capture');
+    const consumed: number[] = [];
+    try {
+      const manifest = await captureRenderedPage({
+        targetUrl: 'https://example.test/', outputDirectory: destination, timeoutMs: 5000,
+      }, {
+        launchBrowser: async () => fakeBrowser({
+          subresourceUrls: Array.from({ length: 12 }, (_, index) => `https://static.example.test/asset-${index}.js`),
+        }),
+        fetchResource: async (url) => new Response('', { status: 200, headers: { 'x-fixture-url': url } }),
+        resolveAddresses: async () => [{ address: '192.0.2.1', family: 4 }],
+        readResponse: async (response, maximum) => {
+          const mainDocument = response.headers.get('x-fixture-url')?.includes('/entry?') === true;
+          const bytesRead = mainDocument ? 1 : maximum;
+          consumed.push(bytesRead);
+          return { bytes: Buffer.alloc(0), bytesRead, truncated: !mainDocument };
+        },
+      });
+      assert.equal(consumed.reduce((total, value) => total + value, 0), MAX_CAPTURE_TRANSFER_BYTES);
+      assert.equal(Math.max(...consumed), MAX_CAPTURE_RESPONSE_BYTES);
+      assert.equal(consumed.includes(MAX_CAPTURE_RESPONSE_BYTES - 1), true);
+      assert.equal(manifest.captures[0]?.completeness, 'partial');
+      assert.match(manifest.captures[0]?.limitations.join(' ') ?? '', /processed at most .* response-body bytes/u);
+    } finally {
+      await rm(parent, { recursive: true, force: true });
+    }
+  });
+
+  test('reserves one cumulative allowance across concurrent response reads', async () => {
+    const parent = await mkdtemp(path.join(tmpdir(), 'whoisleuth-capture-concurrent-budget-test-'));
+    const destination = path.join(parent, 'capture');
+    const allowances: number[] = [];
+    try {
+      const manifest = await captureRenderedPage({
+        targetUrl: 'https://example.test/', outputDirectory: destination, timeoutMs: 5000,
+      }, {
+        launchBrowser: async () => fakeBrowser({
+          concurrentSubresources: true,
+          subresourceUrls: Array.from({ length: 12 }, (_, index) => `https://static.example.test/asset-${index}.js`),
+        }),
+        fetchResource: async (url) => new Response('', { status: 200, headers: { 'x-fixture-url': url } }),
+        resolveAddresses: async () => [{ address: '192.0.2.1', family: 4 }],
+        readResponse: async (response, maximum) => {
+          const mainDocument = response.headers.get('x-fixture-url')?.includes('/entry?') === true;
+          allowances.push(mainDocument ? 1 : maximum);
+          await new Promise<void>((resolvePromise) => { setImmediate(resolvePromise); });
+          return { bytes: Buffer.alloc(0), bytesRead: mainDocument ? 1 : maximum, truncated: false };
+        },
+      });
+      assert.equal(allowances.reduce((total, value) => total + value, 0), MAX_CAPTURE_TRANSFER_BYTES);
+      assert.equal(allowances.every((value) => value <= MAX_CAPTURE_RESPONSE_BYTES), true);
+      assert.equal(allowances.includes(MAX_CAPTURE_RESPONSE_BYTES - 1), true);
+      assert.equal(manifest.captures[0]?.completeness, 'partial');
+    } finally {
+      await rm(parent, { recursive: true, force: true });
+    }
+  });
+
+  test('bounds and records browser-requested hosts even when their bodies are refused', async () => {
+    const parent = await mkdtemp(path.join(tmpdir(), 'whoisleuth-capture-host-budget-test-'));
+    const destination = path.join(parent, 'capture');
+    const resolved = new Set<string>();
+    try {
+      const manifest = await captureRenderedPage({
+        targetUrl: 'https://entry.example.test/', outputDirectory: destination, timeoutMs: 5000,
+      }, {
+        launchBrowser: async () => fakeBrowser({
+          hostname: 'entry.example.test',
+          subresourceUrls: Array.from({ length: 40 }, (_, index) => `https://asset-${index}.example.test/script.js`),
+        }),
+        fetchResource: async (url) => new Response('', { status: 200, headers: { 'x-fixture-url': url } }),
+        resolveAddresses: async (hostname) => {
+          resolved.add(hostname);
+          return [{ address: '192.0.2.1', family: 4 }];
+        },
+        readResponse: async (response, maximum) => {
+          const mainDocument = response.headers.get('x-fixture-url')?.includes('/entry?') === true;
+          return { bytes: Buffer.alloc(0), bytesRead: mainDocument ? 1 : maximum, truncated: !mainDocument };
+        },
+      });
+      const requestDomains = manifest.captures[0]?.requestDomains ?? [];
+      assert.equal(resolved.size, MAX_CAPTURE_HOSTS);
+      assert.equal(requestDomains.length, MAX_CAPTURE_HOSTS);
+      assert.equal(requestDomains.includes('asset-0.example.test'), true);
+      assert.equal(requestDomains.includes(`asset-${MAX_CAPTURE_HOSTS}.example.test`), false);
+      assert.equal(manifest.captures[0]?.completeness, 'partial');
+    } finally {
+      await rm(parent, { recursive: true, force: true });
+    }
+  });
+
+  test('fails closed when the main response reports invalid byte accounting', async () => {
     const parent = await mkdtemp(path.join(tmpdir(), 'whoisleuth-capture-budget-test-'));
     const destination = path.join(parent, 'capture');
     try {
@@ -297,7 +411,7 @@ describe('optional local rendered capture package', () => {
           bytesRead: MAX_CAPTURE_TRANSFER_BYTES + 1,
           truncated: false,
         }),
-      }), /ERR_FAILED|navigation|aborted|blocked/u);
+      }), /navigation|aborted|blocked/u);
       await assert.rejects(() => stat(destination), /ENOENT/u);
     } finally {
       await rm(parent, { recursive: true, force: true });
