@@ -117,6 +117,7 @@ describe('reviewed technology reference-build intake', () => {
         runtimeReference: null,
         buildRecipe: 'reviewed-repository-artifact',
       },
+      { fixtures: [], sources: [] },
     );
     assert.deepEqual(first.provenanceContext.firstObservedExpectedIds, ['shopify']);
     assert.deepEqual(first.provenanceContext.independentSourceOriginExpectedIds, []);

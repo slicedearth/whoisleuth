@@ -144,6 +144,17 @@ describe('website technology profile', () => {
     assert.equal(result.findings.find((item) => item.id === 'wix'), undefined);
   });
 
+  test('recognises Weebly theme attributes alongside its bounded resource origin', () => {
+    const result = analyze({
+      html: '<link id="wsite-base-style" href="/css/sites.css">',
+      resourceOrigins: ['https://static.editmysite.com'],
+    });
+    const item = finding(result, 'weebly');
+    assert.equal(item.confidence, 'high');
+    assert.deepEqual(item.evidence.map((entry) => entry.source), ['static HTML', 'resource origin']);
+    assert.doesNotMatch(JSON.stringify(result), /wsite-base-style|static\.editmysite/u);
+  });
+
   test('recognizes bounded static framework markers case-insensitively', () => {
     const result = analyze({ html: `
       <script id="__NEXT_DATA__"></script>

@@ -72,7 +72,7 @@ type TechnologySignatureDescriptor = Readonly<{
   evidence: ReadonlyArray<Readonly<Omit<SignatureEvidence, 'matches'>>>;
 }>;
 
-const TECHNOLOGY_PROFILE_VERSION = 8;
+const TECHNOLOGY_PROFILE_VERSION = 9;
 const MAX_TECHNOLOGY_HTML_CHARS = MAX_STATIC_HTML_CHARS;
 const MAX_TECHNOLOGY_TAG_LENGTH = MAX_TAG_LENGTH;
 const MAX_TECHNOLOGY_FINDINGS = 24;
@@ -334,6 +334,10 @@ const TECHNOLOGY_SIGNATURES: TechnologySignature[] = [
     requiresNonResourceEvidence: true,
     evidence: [
       generatorEvidence(/^weebly(?:\s|$)/i, 'Generator metadata identifies Weebly.'),
+      htmlEvidence(
+        ['id="wsite-base-style"', "id='wsite-base-style'", 'title="wsite-theme-css"', "title='wsite-theme-css'"],
+        'Static markup contains Weebly-specific theme attributes.',
+      ),
       resourceEvidence(['editmysite.com'], 'A retained resource origin uses Weebly delivery infrastructure.'),
     ],
   },
