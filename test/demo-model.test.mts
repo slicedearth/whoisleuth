@@ -4,7 +4,8 @@ import { describe, test } from 'node:test';
 
 import {
   buildSyntheticDemoExport, createSyntheticDemoState, MAX_SYNTHETIC_DEMO_NOTE_LENGTH,
-  normalizeSyntheticDemoState, SYNTHETIC_DEMO_CANDIDATES, SYNTHETIC_DEMO_EXPORT_SCHEMA,
+  MAX_SYNTHETIC_DEMO_SERIALIZED_BYTES, normalizeSyntheticDemoState, parseSyntheticDemoState,
+  SYNTHETIC_DEMO_CANDIDATES, SYNTHETIC_DEMO_EXPORT_SCHEMA,
   SYNTHETIC_DEMO_EXPORT_VERSION, SYNTHETIC_DEMO_PROFILE, SYNTHETIC_DEMO_STAGES,
   syntheticDemoCandidate, syntheticDemoCaseRecord, syntheticDemoLookupView,
   syntheticDemoRelationshipGroups, syntheticDemoStage, syntheticDemoTimeline,
@@ -22,6 +23,13 @@ describe('synthetic demo state', () => {
   test('rejects malformed and future state envelopes', () => {
     assert.deepEqual(normalizeSyntheticDemoState(null), createSyntheticDemoState());
     assert.deepEqual(normalizeSyntheticDemoState({ version: 2, profileReady: true }), createSyntheticDemoState());
+  });
+
+  test('bounds serialized tab state before parsing', () => {
+    assert.equal(parseSyntheticDemoState('{broken'), null);
+    assert.equal(parseSyntheticDemoState(JSON.stringify({ version: 2 })), null);
+    assert.equal(parseSyntheticDemoState('x'.repeat(MAX_SYNTHETIC_DEMO_SERIALIZED_BYTES + 1)), null);
+    assert.equal(parseSyntheticDemoState(JSON.stringify(completeState()))?.caseReady, true);
   });
 
   test('enforces stage dependencies and known candidate ids', () => {

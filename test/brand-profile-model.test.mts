@@ -14,6 +14,7 @@ import {
   MAX_PROFILE_VALUES,
   mergeBrandProfiles,
   normalizeBrandProfile,
+  normalizeBrandProfileId,
   normalizeBrandProfileStore,
   normalizeDkimSelectors,
   normalizeProtectionAttestations,
@@ -237,6 +238,9 @@ test('requires a bounded safe id and usable name', () => {
   const generated = normalizeBrandProfile(profile({ id: '../bad' }), { makeId: () => 'generated-id' });
   assert.ok(generated);
   assert.equal(generated.id, 'generated-id');
+  assert.equal(normalizeBrandProfileId('profile_1-accepted'), 'profile_1-accepted');
+  assert.equal(normalizeBrandProfileId('x'.repeat(129)), null);
+  assert.equal(normalizeBrandProfileId('profile/invalid'), null);
 });
 
 test('preserves existing identity and creation time while touching updates', () => {

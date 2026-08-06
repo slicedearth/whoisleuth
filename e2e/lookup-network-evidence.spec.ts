@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures';
-import { boundingBox, expectNoHorizontalOverflow, migrateLegacyBrowserData, readBrowserLocalCollection } from './helpers';
+import { boundingBox, expandLookupFamilies, expectNoHorizontalOverflow, migrateLegacyBrowserData, readBrowserLocalCollection } from './helpers';
 import { readFile } from 'node:fs/promises';
 import { TEST_SITE_PASSWORD } from './constants';
 import { ACTIVE_PROFILE_KEY } from '../frontend/src/lib/brand-profiles';
@@ -96,6 +96,7 @@ test('deep DNS evidence distinguishes observed records from partial resolver fai
 
   await page.locator('#query').fill('dns-evidence.test');
   await page.getByRole('button', { name: 'Run lookup' }).click();
+  await expandLookupFamilies(page);
   const card = page.locator('.dns-card');
   await expect(card).not.toHaveAttribute('open', '');
   await expect(card.getByRole('heading', { name: 'DNS intelligence' })).toBeVisible();
@@ -347,6 +348,7 @@ test('HTTP intelligence presents bounded redirect provenance and response metada
 
   await page.locator('#query').fill('http-evidence.test');
   await page.getByRole('button', { name: 'Run lookup' }).click();
+  await expandLookupFamilies(page);
   const sslblReviewLead = page.getByRole('complementary', { name: 'The observed leaf certificate matched the local SSLBL snapshot' });
   await expect(sslblReviewLead).toBeVisible();
   await expect(sslblReviewLead).toContainText('does not change Risk scoring');
@@ -568,6 +570,7 @@ test('completed technology analysis distinguishes an unmatched catalogue from so
 
   await page.locator('#query').fill('unmatched-technology.test');
   await page.getByRole('button', { name: 'Run lookup' }).click();
+  await expandLookupFamilies(page);
 
   const technologyCard = page.locator('.technology-card');
   await expect(technologyCard.locator(':scope > summary .evidence-status')).toHaveText('No recognised matches');
@@ -627,6 +630,7 @@ test('TLS intelligence presents one-connection certificate evidence without narr
 
   await page.locator('#query').fill('tls-evidence.test');
   await page.getByRole('button', { name: 'Run lookup' }).click();
+  await expandLookupFamilies(page);
   const card = page.locator('.tls-card');
   await expect(card).not.toHaveAttribute('open', '');
   await expect(card.getByRole('heading', { name: 'TLS and certificate intelligence' })).toBeVisible();
@@ -692,6 +696,7 @@ test('IP results use network-specific RDAP labels instead of domain fields', asy
 
   await page.locator('#query').fill('192.0.2.1');
   await page.getByRole('button', { name: 'Run lookup' }).click();
+  await expandLookupFamilies(page);
   const rdapSection = page.locator('.sources > details').first();
   await expect(rdapSection).not.toHaveAttribute('open', '');
   await rdapSection.locator(':scope > summary').click();
@@ -738,6 +743,7 @@ test('ASN results retain allocation status and lifecycle metadata at narrow widt
 
   await page.locator('#query').fill('AS64496');
   await page.getByRole('button', { name: 'Run lookup' }).click();
+  await expandLookupFamilies(page);
   const rdapSection = page.locator('.sources > details').first();
   await expect(rdapSection).not.toHaveAttribute('open', '');
   await rdapSection.locator(':scope > summary').click();

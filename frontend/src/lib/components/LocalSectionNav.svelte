@@ -5,10 +5,12 @@
     label,
     links,
     trackCurrent = false,
+    onnavigate,
   }: {
     label: string;
     links: Array<{ href: `#${string}`; label: string }>;
     trackCurrent?: boolean;
+    onnavigate?: (href: `#${string}`) => void;
   } = $props();
 
   let activeHref = $state('');
@@ -55,8 +57,20 @@
   function jumpToSection(event: Event) {
     const href = (event.currentTarget as HTMLSelectElement).value;
     if (!href.startsWith('#')) return;
+    const sectionHref = href as `#${string}`;
+    selectHref(sectionHref);
+    if (onnavigate) {
+      onnavigate(sectionHref);
+      return;
+    }
+    window.location.hash = sectionHref.slice(1);
+  }
+
+  function activateLink(event: MouseEvent, href: `#${string}`) {
     selectHref(href);
-    window.location.hash = href.slice(1);
+    if (!onnavigate || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    onnavigate(href);
   }
 
   onMount(() => {
@@ -113,7 +127,7 @@
         use:registerLink={link.href}
         class:active={trackCurrent && activeHref === link.href}
         aria-current={trackCurrent && activeHref === link.href ? 'location' : undefined}
-        onclick={() => selectHref(link.href)}
+        onclick={(event) => activateLink(event, link.href)}
       >{link.label}</a>
     {/each}
   </nav>

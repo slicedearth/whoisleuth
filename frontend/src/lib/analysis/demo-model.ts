@@ -16,6 +16,7 @@ export const SYNTHETIC_DEMO_EXPORT_VERSION = 5;
 export const SYNTHETIC_DEMO_STORAGE_KEY = 'whoisleuth:synthetic-demo:v1';
 export const SYNTHETIC_DEMO_EXPORT_SCHEMA = 'whoisleuth.synthetic-demo-case';
 export const MAX_SYNTHETIC_DEMO_NOTE_LENGTH = 800;
+export const MAX_SYNTHETIC_DEMO_SERIALIZED_BYTES = 4_096;
 
 export const SYNTHETIC_DEMO_STAGES = [
   Object.freeze({ id: 'dashboard', label: '1. Dashboard' }),
@@ -363,6 +364,21 @@ export function normalizeSyntheticDemoState(value: unknown): SyntheticDemoState 
     note: caseReady ? boundedNote(record.note) : '',
     followUpReady: caseReady && record.followUpReady === true,
   };
+}
+
+export function parseSyntheticDemoState(serialized: unknown): SyntheticDemoState | null {
+  if (typeof serialized !== 'string' || !serialized) return null;
+  if (serialized.length > MAX_SYNTHETIC_DEMO_SERIALIZED_BYTES) return null;
+  if (new TextEncoder().encode(serialized).byteLength > MAX_SYNTHETIC_DEMO_SERIALIZED_BYTES) return null;
+  try {
+    const parsed: unknown = JSON.parse(serialized);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)
+      || !('version' in parsed)
+      || (parsed as { version?: unknown }).version !== SYNTHETIC_DEMO_VERSION) return null;
+    return normalizeSyntheticDemoState(parsed);
+  } catch {
+    return null;
+  }
 }
 
 export function syntheticDemoCandidate(id: string): SyntheticDemoCandidate | null {

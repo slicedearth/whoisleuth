@@ -1255,12 +1255,17 @@ text, and a version-2 `whoisleuth.web-capture-manifest` compatible with the
 Cases importer. Version-1 manifests remain importable.
 
 Rendered capture executes page JavaScript. It caps HTTP(S) requests and request
-hostnames, blocks downloads, service workers, WebSockets, non-read methods,
-credentials, non-default ports, and private or reserved addresses, and retains
+hostnames, blocks downloads, service workers, WebSockets, WebRTC, WebTransport,
+non-read methods, credentials, non-default ports, and private or reserved
+addresses, and retains
 no request path, query, headers, bodies, cookies, credentials, DOM markup, or
-page text. The browser connection is not pinned to the address checked before
-each hostname's first request, so DNS rebinding remains a residual risk. Use a
-disposable network-restricted environment for untrusted targets.
+page text. Every browser request is intercepted, its hostname is resolved again,
+and the bounded response is fetched through WHOISleuth's public-address-pinned
+transport. Individual responses are capped at 4 MiB and all fetched response
+bodies together are capped at 24 MiB. Redirect destinations pass through the
+same interception and validation before collection continues. Use a disposable
+network-restricted environment for untrusted targets because rendered page code
+still executes inside the isolated browser process.
 
 The separate offline comparison command accepts two selected version-2 local
 capture manifests. It first verifies each referenced screenshot and DOM digest

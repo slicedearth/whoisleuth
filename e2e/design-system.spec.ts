@@ -389,6 +389,10 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
 
   const controls = page.getByRole('region', { name: 'Choose what to review' });
   await controls.getByLabel('Detail').selectOption('standard');
+  const visibility = controls.getByRole('group', { name: 'Evidence family visibility' });
+  await expect(visibility.getByRole('button', { name: 'Collapse all' })).toBeDisabled();
+  await visibility.getByRole('button', { name: 'Expand all' }).click();
+  await expect(visibility.getByRole('button', { name: 'Expand all' })).toBeDisabled();
 
   const localNav = page.getByRole('navigation', { name: 'Result sections' });
   await expect(localNav).toBeVisible();
@@ -404,6 +408,9 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   await expect(page.getByRole('heading', { name: /Registration$/ })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Raw evidence' })).toBeVisible();
   await expect(page.getByLabel('Source diagnostics')).toContainText('rdap');
+  const sourceQualityColour = await page.locator('#source-quality-title').evaluate((heading) => getComputedStyle(heading).color);
+  const caseResponseColour = await page.locator('#case-response-title').evaluate((heading) => getComputedStyle(heading).color);
+  expect(caseResponseColour).not.toBe(sourceQualityColour);
 
   // The D3-backed visual is paired with a complete, keyboard-operable source
   // rail. It does not replace the detailed source sections.
@@ -416,8 +423,19 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   await expect(visualKey).toContainText('Web');
   await expect(visualKey).toContainText('Derived');
   await expect(visualKey).toContainText('Analyst');
-  await expect(visualKey).toContainText('Colour distinguishes each source');
+  await expect(visualKey).toContainText('Colour, shape, and icon identify each source family');
   await expect(visualKey).toContainText('Dot and label show source state');
+  for (const [family, sectionTitleId] of [
+    ['registry', 'registry-title'],
+    ['network', 'relationships-history-title'],
+    ['web', 'web-evidence-title'],
+    ['derived', 'source-quality-title'],
+    ['analyst', 'case-response-title'],
+  ] as const) {
+    const keyColour = await visualKey.locator(`.key-item.family-${family} i`).evaluate((key) => getComputedStyle(key).borderColor);
+    const sectionColour = await page.locator(`#${sectionTitleId}`).evaluate((heading) => getComputedStyle(heading).color);
+    expect(keyColour).toBe(sectionColour);
+  }
   const topologyCopies = topology.locator('foreignObject.node-copy');
   await expect(topologyCopies.first()).toBeVisible();
   expect(await topologyCopies.evaluateAll((copies) => copies.every((copy) => {
@@ -458,13 +476,26 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
       return element ? getComputedStyle(element)[property] : '';
     };
     return {
-      sourceStrokes: [...region.querySelectorAll<SVGElement>('.source-node .node-surface')]
-        .map((element) => getComputedStyle(element).stroke),
+      sourceFamilies: [...region.querySelectorAll<SVGGElement>('.source-node')]
+        .map((node) => ({
+          family: [...node.classList].find((name) => name.startsWith('family-')) ?? '',
+          stroke: getComputedStyle(node.querySelector<SVGElement>('.node-surface')!).stroke,
+          icon: getComputedStyle(node.querySelector<SVGElement>('.source-icon')!).color,
+        })),
+      keyColours: [...region.querySelectorAll<HTMLElement>('.key-item')]
+        .map((element) => getComputedStyle(element.querySelector<HTMLElement>('i')!).borderColor),
       successFill: styleValue('.source-node.state-success .status-dot', 'fill'),
       partialFill: styleValue('.source-node.state-partial .status-dot', 'fill'),
     };
   });
-  expect(new Set(topologyPalette.sourceStrokes).size).toBe(topologyPalette.sourceStrokes.length);
+  const familyColours = new Map<string, { stroke: string; icon: string }>();
+  for (const source of topologyPalette.sourceFamilies) {
+    const existing = familyColours.get(source.family);
+    if (existing) expect(source).toEqual({ family: source.family, ...existing });
+    else familyColours.set(source.family, { stroke: source.stroke, icon: source.icon });
+  }
+  expect(new Set([...familyColours.values()].map((value) => value.icon)).size).toBe(familyColours.size);
+  expect(new Set(topologyPalette.keyColours).size).toBe(topologyPalette.keyColours.length);
   expect(topologyPalette.successFill).not.toBe(topologyPalette.partialFill);
   expect(await desktopSourceIcons.evaluateAll((icons) => icons.every((icon) => {
     const iconRect = icon.getBoundingClientRect();
@@ -764,6 +795,13 @@ test('Lookup focus and detail controls change presentation without changing evid
   await expect(page.locator('#evidence-registry')).toHaveCount(0);
 
   await density.selectOption('standard');
+  const visibility = controls.getByRole('group', { name: 'Evidence family visibility' });
+  await expect(page.getByRole('heading', { name: 'Raw evidence' })).toHaveCount(0);
+  await expect(visibility.getByRole('button', { name: 'Collapse all' })).toBeDisabled();
+  await localNav.getByRole('link', { name: 'Web & DNS' }).click();
+  await expect(page.locator('#evidence-dns')).toBeVisible();
+  await expect(page).toHaveURL(/#web-evidence$/);
+  await visibility.getByRole('button', { name: 'Expand all' }).click();
   await expect(page.getByRole('heading', { name: 'Raw evidence' })).toBeVisible();
   await expect(page.locator('#raw-data details')).toBeVisible();
   await expect(page.locator('#raw-data details')).toHaveJSProperty('open', false);
@@ -773,6 +811,8 @@ test('Lookup focus and detail controls change presentation without changing evid
   await expect(page.locator('#evidence-registry')).toBeVisible();
 
   await density.selectOption('full');
+  await expect(page.getByRole('heading', { name: 'Raw evidence' })).toHaveCount(0);
+  await visibility.getByRole('button', { name: 'Expand all' }).click();
   await expect(page.locator('#raw-data details')).toBeVisible();
   await expect(page.locator('#evidence-dns > details')).toHaveJSProperty('open', false);
   await task.selectOption('acquisition');

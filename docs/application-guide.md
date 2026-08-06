@@ -75,14 +75,17 @@ describes planned source families rather than promising an exact request count:
 redirects, referrals, source eligibility, and bounded retries can change the
 number of requests that actually run.
 
-The primary assessment, source health, and material registration conflicts
-remain expanded. Long RDAP and WHOIS records and secondary DNS, HTTP, page,
-passive-posture, technology, TLS, and observed-network cards start collapsed.
-Their state and summary remain visible. Selecting an acquisition, brand,
-incident-response, or owned-domain task opens the most relevant settled
-evidence cards and reorders the section navigation without changing collection
-or hiding any source. Expand a section before relying on its evidence,
-collection time, or limitations.
+The Overview and At a glance assessment remain visible. Every top-level
+evidence family starts collapsed in Essentials, Evidence, and All evidence;
+its bounded summary, source count, and limitation count remain visible. Open a
+family directly, follow a section or source-map link to reveal its destination,
+or use **Expand all** and **Collapse all**. Long RDAP and WHOIS records and
+secondary DNS, HTTP, page, passive-posture, technology, TLS, and
+observed-network cards remain separately collapsed inside an open family.
+Selecting an acquisition, brand, incident-response, or owned-domain task
+reorders the section navigation without changing collection, automatically
+opening evidence, or hiding any source. Expand a section before relying on its
+evidence, collection time, or limitations.
 
 The Registry interpretation panel classifies bounded `rdapConformance`
 declarations already returned by registry and registrar RDAP. Recognised,
@@ -133,17 +136,17 @@ and omit this timing object.
 
 Once a result is available, the sticky section rail tracks the current
 evidence group. The topology uses separate visual families for registry,
-network, web, derived, and analyst evidence, with an adjacent key. Shapes and
-icons identify those families, while a stable distinct colour marks each source
-inside the topology. Evidence cards retain neutral borders and headings so the
-source palette does not compete with the content. The palette uses cyan, blue,
-violet, magenta, and cool neutral tones with deliberately varied lightness.
-Red, amber, and green remain exclusive to semantic status. Source state remains
-a separate dot and text label, so colour does not replace success, partial,
-unavailable, or error semantics. Each relationship also points to a bounded
-source-ledger entry carrying the source label, section anchor, observation time,
-completeness, and limitations. This supports traceability without copying raw
-responses into the graph.
+network, web, derived, and analyst evidence, with an adjacent key. Colour,
+shape, and icon identify those families consistently; sources in the same
+family deliberately share an accent. The corresponding Registration,
+Relationships and history, Web and DNS, Source quality, and Case and response
+section headings use the same family accents. Red, amber, and green remain
+exclusive to semantic status. Source state remains a separate dot and text
+label, so colour does not replace success, partial, unavailable, or error
+semantics. Each relationship also points to a bounded source-ledger entry
+carrying the source label, section anchor, observation time, completeness, and
+limitations. This supports traceability without copying raw responses into the
+graph.
 
 Risk and Opportunity cards show signed factor bars beside their exact factor
 lists. Domain results can also show a connected registration-source agreement

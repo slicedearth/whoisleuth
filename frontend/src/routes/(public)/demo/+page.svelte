@@ -25,8 +25,8 @@
   import PublicSeo from '$lib/components/PublicSeo.svelte';
   import {
     buildSyntheticDemoExport, createSyntheticDemoState, MAX_SYNTHETIC_DEMO_NOTE_LENGTH,
-    normalizeSyntheticDemoState, SYNTHETIC_DEMO_CANDIDATES, SYNTHETIC_DEMO_PROFILE,
-    SYNTHETIC_DEMO_STAGES, SYNTHETIC_DEMO_STORAGE_KEY, SYNTHETIC_DEMO_VERSION,
+    normalizeSyntheticDemoState, parseSyntheticDemoState, SYNTHETIC_DEMO_CANDIDATES, SYNTHETIC_DEMO_PROFILE,
+    SYNTHETIC_DEMO_STAGES, SYNTHETIC_DEMO_STORAGE_KEY,
     syntheticDemoCandidate, syntheticDemoCaseRecord, syntheticDemoLookupView,
     syntheticDemoRelationshipGroups, syntheticDemoStage, syntheticDemoTimeline,
   } from '$lib/analysis/demo-model.ts';
@@ -121,11 +121,9 @@
     let stored:string|null;
     try{stored=sessionStorage.getItem(SYNTHETIC_DEMO_STORAGE_KEY);}catch{demoState=createSyntheticDemoState();message='Tab storage is unavailable. Demo progress will last only until this page closes.';return;}
     if(!stored)return;
-    try{
-      const parsed:unknown=JSON.parse(stored);
-      if(!parsed||typeof parsed!=='object'||Array.isArray(parsed)||!('version' in parsed)||(parsed as {version?:unknown}).version!==SYNTHETIC_DEMO_VERSION)throw new Error('Unsupported demo state');
-      demoState=normalizeSyntheticDemoState(parsed);view=syntheticDemoStage(demoState) as View;
-    }catch{
+    const parsed=parseSyntheticDemoState(stored);
+    if(parsed){demoState=parsed;view=syntheticDemoStage(demoState) as View;}
+    else{
       demoState=createSyntheticDemoState();view='dashboard';
       try{sessionStorage.removeItem(SYNTHETIC_DEMO_STORAGE_KEY);message='Stored demo progress was invalid or unsupported and has been reset.';}catch{message='Stored demo progress was invalid and could not be cleared. Closing this tab will remove it.';}
     }

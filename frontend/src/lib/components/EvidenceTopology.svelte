@@ -28,49 +28,19 @@
     onnavigate?: ((href: string) => void) | undefined;
   } = $props();
 
-  let activeNodeId = $state('');
+  let hoveredNodeId = $state('');
+  let focusedNodeId = $state('');
+  const activeNodeId = $derived(focusedNodeId || hoveredNodeId);
   const graph = $derived(projectEvidenceTopology(target, nodes));
   const statusLabel = (value: string) => value.replaceAll('_', ' ');
-  const SOURCE_COLOUR_PALETTE = [
-    'var(--source-registry)',
-    'var(--source-registrar)',
-    'var(--source-whois)',
-    'var(--source-network)',
-    'var(--source-dns)',
-    'var(--source-reverse-dns)',
-    'var(--source-http)',
-    'var(--source-tls)',
-    'var(--source-page)',
-    'var(--source-structured)',
-    'var(--source-security)',
-    'var(--source-technology)',
-  ] as const;
-  const SOURCE_COLOURS: Readonly<Record<string, string>> = Object.freeze({
-    'registry-rdap': 'var(--source-registry)',
-    registry: 'var(--source-registry)',
-    'registrar-rdap': 'var(--source-registrar)',
-    whois: 'var(--source-whois)',
-    network: 'var(--source-network)',
-    dns: 'var(--source-dns)',
-    'reverse-dns': 'var(--source-reverse-dns)',
-    http: 'var(--source-http)',
-    website: 'var(--source-http)',
-    tls: 'var(--source-tls)',
-    certificate: 'var(--source-tls)',
-    page: 'var(--source-page)',
-    'structured-identity': 'var(--source-structured)',
-    'security-txt': 'var(--source-security)',
-    sslbl: 'var(--source-security)',
-    technology: 'var(--source-technology)',
-    posture: 'var(--source-posture)',
-    analysis: 'var(--source-assessment)',
-    assessment: 'var(--source-assessment)',
+  const FAMILY_COLOURS: Readonly<Record<string, string>> = Object.freeze({
+    registry: 'var(--evidence-registry)',
+    network: 'var(--evidence-network)',
+    web: 'var(--evidence-web)',
+    derived: 'var(--evidence-derived)',
+    analyst: 'var(--evidence-analyst)',
   });
-  const sourceColour = (sourceId: string, index: number): string => (
-    SOURCE_COLOURS[sourceId]
-    ?? SOURCE_COLOUR_PALETTE[index % SOURCE_COLOUR_PALETTE.length]
-    ?? 'var(--source-registry)'
-  );
+  const sourceColour = (family: string): string => FAMILY_COLOURS[family] ?? 'var(--muted)';
   const wrapsSourceLabel = (label: string): boolean => label.length > 15 && label.includes(' ');
   const chamferedPoints = (node: { x: number; y: number; width: number; height: number }) => {
     const cut = 9;
@@ -85,11 +55,17 @@
       `${node.x},${node.y + cut}`,
     ].join(' ');
   };
-  const setActiveNode = (nodeId: string) => {
-    activeNodeId = nodeId;
+  const setHoveredNode = (nodeId: string) => {
+    hoveredNodeId = nodeId;
   };
-  const clearActiveNode = (nodeId: string) => {
-    if (activeNodeId === nodeId) activeNodeId = '';
+  const clearHoveredNode = (nodeId: string) => {
+    if (hoveredNodeId === nodeId) hoveredNodeId = '';
+  };
+  const setFocusedNode = (nodeId: string) => {
+    focusedNodeId = nodeId;
+  };
+  const clearFocusedNode = (nodeId: string) => {
+    if (focusedNodeId === nodeId) focusedNodeId = '';
   };
   const sourceIconName = (sourceId: string): IntelligenceIconName => {
     if (sourceId === 'registry-rdap' || sourceId === 'registry') return 'registry';
@@ -177,7 +153,7 @@
 
   {#if !compact}
     <div class="visual-key" role="group" aria-label="Evidence topology visual key">
-      <span class="key-intro"><i class="source-spectrum" aria-hidden="true"></i>Colour distinguishes each source; shape and icon identify its family:</span>
+      <span class="key-intro"><i class="source-spectrum" aria-hidden="true"></i>Colour, shape, and icon identify each source family:</span>
       <span class="key-item family-registry"><i aria-hidden="true"></i>Registry</span>
       <span class="key-item family-network"><i aria-hidden="true"></i>Network</span>
       <span class="key-item family-web"><i aria-hidden="true"></i>Web</span>
@@ -240,12 +216,12 @@
       </g>
 
       <g class="source-nodes">
-        {#each graph.nodes as node, index (node.id)}
+        {#each graph.nodes as node (node.id)}
           <g
             role="presentation"
             class:linked={Boolean(node.href)}
-            onmouseenter={() => setActiveNode(node.id)}
-            onmouseleave={() => clearActiveNode(node.id)}
+            onmouseenter={() => setHoveredNode(node.id)}
+            onmouseleave={() => clearHoveredNode(node.id)}
             onpointerdown={(event) => startNodePointer(event, node.id, node.href)}
             onpointermove={moveNodePointer}
             onpointerup={(event) => finishNodePointer(event, node.id, node.href)}
@@ -256,7 +232,7 @@
               class:active={activeNodeId === node.id}
               class:dimmed={Boolean(activeNodeId) && activeNodeId !== node.id}
               data-source-id={node.id}
-              style={`--source-color:${sourceColour(node.id, index)}`}
+              style={`--source-color:${sourceColour(node.family)}`}
             >
               <title>{node.label}: {node.detail || statusLabel(node.status)}</title>
               {#if node.family === 'network' || node.family === 'derived'}
@@ -309,16 +285,16 @@
   </div>
 
   <ol class="source-rail" aria-label="Evidence source status">
-    {#each graph.nodes as node, index (node.id)}
+    {#each graph.nodes as node (node.id)}
       <li
         class={`family-${node.family} state-${node.status}`}
         class:active={activeNodeId === node.id}
         data-source-id={node.id}
-        style={`--source-color:${sourceColour(node.id, index)}`}
-        onmouseenter={() => setActiveNode(node.id)}
-        onmouseleave={() => clearActiveNode(node.id)}
-        onfocusin={() => setActiveNode(node.id)}
-        onfocusout={() => clearActiveNode(node.id)}
+        style={`--source-color:${sourceColour(node.family)}`}
+        onmouseenter={() => setHoveredNode(node.id)}
+        onmouseleave={() => clearHoveredNode(node.id)}
+        onfocusin={() => setFocusedNode(node.id)}
+        onfocusout={() => clearFocusedNode(node.id)}
       >
         {#if node.href}
           <a
@@ -362,10 +338,14 @@
   .topology-summary span{color:var(--muted);font:var(--text-2xs) var(--mono);text-transform:uppercase}
   .visual-key{display:flex;flex-wrap:wrap;align-items:center;gap:5px 10px;margin-top:13px;color:var(--muted);font:var(--text-2xs) var(--mono)}
   .key-intro{display:inline-flex;flex:0 0 auto;align-items:center;gap:6px}
-  .source-spectrum{display:inline-block;width:28px;height:7px;border-radius:999px;background:linear-gradient(90deg,var(--source-registry),var(--source-http),var(--source-whois),var(--source-network),var(--source-structured))}
+  .source-spectrum{display:inline-block;width:28px;height:7px;border-radius:999px;background:linear-gradient(90deg,var(--evidence-registry),var(--evidence-network),var(--evidence-web),var(--evidence-derived),var(--evidence-analyst))}
   .key-item,.key-state{display:inline-flex;align-items:center;gap:5px}
   .key-item{--key-color:var(--muted)}
-  .key-item.family-analyst{--key-color:var(--text)}
+  .key-item.family-registry{--key-color:var(--evidence-registry)}
+  .key-item.family-network{--key-color:var(--evidence-network)}
+  .key-item.family-web{--key-color:var(--evidence-web)}
+  .key-item.family-derived{--key-color:var(--evidence-derived)}
+  .key-item.family-analyst{--key-color:var(--evidence-analyst)}
   .key-item i{display:inline-block;width:12px;height:9px;border:1.5px solid var(--key-color);border-radius:2px;background:color-mix(in srgb,var(--key-color) 7%,transparent)}
   .key-item.family-network i{clip-path:polygon(24% 0,76% 0,100% 50%,76% 100%,24% 100%,0 50%)}
   .key-item.family-web i{border-radius:999px}

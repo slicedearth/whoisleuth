@@ -51,13 +51,12 @@ const LICENCE_BASES = new Set<TechnologyReviewLicenceBasis>(TECHNOLOGY_REVIEW_LI
 
 const GENERATOR_VALUES: Readonly<Record<string, string>> = Object.freeze({
   wordpress: 'WordPress', drupal: 'Drupal', joomla: 'Joomla', ghost: 'Ghost',
-  'craft-cms': 'Craft CMS', typo3: 'TYPO3 CMS', opencart: 'OpenCart',
-  prestashop: 'PrestaShop', wix: 'Wix', squarespace: 'Squarespace',
-  webflow: 'Webflow', framer: 'Framer', weebly: 'Weebly', hugo: 'Hugo', jekyll: 'Jekyll',
+  typo3: 'TYPO3 CMS', wix: 'Wix', squarespace: 'Squarespace',
+  webflow: 'Webflow', framer: 'Framer', hugo: 'Hugo', jekyll: 'Jekyll',
   docusaurus: 'Docusaurus', eleventy: 'Eleventy', hexo: 'Hexo',
 });
 const SERVER_VALUES: Readonly<Record<string, string>> = Object.freeze({
-  cloudflare: 'Cloudflare', cloudfront: 'CloudFront', netlify: 'Netlify',
+  cloudflare: 'Cloudflare', netlify: 'Netlify',
   vercel: 'Vercel', nginx: 'nginx', 'apache-http-server': 'Apache',
   'microsoft-iis': 'Microsoft-IIS', litespeed: 'LiteSpeed', caddy: 'Caddy',
 });
@@ -75,6 +74,7 @@ const STATIC_MARKUP: Readonly<Record<string, string>> = Object.freeze({
   squarespace: '<main data-marker="squarespace-context"></main>',
   webflow: '<main data-wf-page="fixture"></main>',
   framer: '<main data-framer-name="fixture"></main>',
+  weebly: '<link id="wsite-base-style" href="/fixture.css">',
   angular: '<main ng-version="fixture"></main>',
   'aspnet-web-forms': '<input name="__VIEWSTATE">',
   nextjs: '<script id="__NEXT_DATA__"></script>',

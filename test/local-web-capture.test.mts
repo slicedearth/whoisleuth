@@ -9,6 +9,9 @@ import zlib from 'node:zlib';
 import type { Browser, Route } from '@playwright/test';
 
 import {
+  MAX_CAPTURE_HOSTS,
+  MAX_CAPTURE_RESPONSE_BYTES,
+  MAX_CAPTURE_TRANSFER_BYTES,
   WEB_CAPTURE_MANIFEST_VERSION,
   captureRenderedPage,
   parseCaptureArguments,
@@ -56,12 +59,23 @@ function patternedPng(width = 64, height = 64, flat = false) {
 }
 
 function fakeRoute(url: string) {
-  return {
-    request: () => ({ url: () => url, method: () => 'GET' }),
-    continue: async () => {},
-    abort: async () => {},
+  let aborted = false;
+  const route = {
+    request: () => ({
+      url: () => url,
+      method: () => 'GET',
+      headers: () => ({ accept: 'text/html', cookie: 'must-not-leave-browser=1', authorization: 'Bearer secret' }),
+    }),
+    fulfill: async () => {},
+    abort: async () => { aborted = true; },
   } as unknown as Route;
+  return { route, wasAborted: () => aborted };
 }
+
+const fakeFetchResource = async (url: string) => new Response(
+  url.endsWith('.js?secret=discarded') ? 'void 0;' : '<!doctype html><title>Fixture</title>',
+  { status: 200, headers: { 'content-type': url.includes('.js') ? 'text/javascript' : 'text/html' } },
+);
 
 function fakeBrowser(options: {
   hostname?: string;
@@ -71,13 +85,32 @@ function fakeBrowser(options: {
   visibleText?: string;
   elementCount?: number;
   flatScreenshot?: boolean;
+  onInitScript?: () => void;
+  subresourceUrls?: string[];
+  concurrentSubresources?: boolean;
 } = {}) {
   let routeHandler: ((route: Route) => Promise<void>) | null = null;
   const page = {
     on: () => {},
     goto: async () => {
-      await routeHandler?.(fakeRoute(`https://${options.hostname ?? 'example.test'}/entry?discard=this`));
-      await routeHandler?.(fakeRoute('https://static.example.test/asset.js?secret=discarded'));
+      if (!routeHandler) return;
+      const handleRoute = routeHandler;
+      const mainRequest = fakeRoute(`https://${options.hostname ?? 'example.test'}/entry?discard=this`);
+      await handleRoute(mainRequest.route);
+      if (mainRequest.wasAborted()) throw new Error('navigation aborted');
+      const subresources = options.subresourceUrls ?? [
+        `https://${options.hostname ?? 'example.test'}/style.css`,
+        'https://static.example.test/asset.js?secret=discarded',
+      ];
+      const handleSubresource = async (url: string) => {
+        const request = fakeRoute(url);
+        await handleRoute(request.route);
+      };
+      if (options.concurrentSubresources) {
+        await Promise.all(subresources.map(handleSubresource));
+      } else {
+        for (const url of subresources) await handleSubresource(url);
+      }
     },
     waitForTimeout: async () => {},
     url: () => options.finalUrl ?? `https://${options.hostname ?? 'example.test'}/final?private=value`,
@@ -91,6 +124,7 @@ function fakeBrowser(options: {
     screenshot: async () => patternedPng(64, 64, options.flatScreenshot === true),
   };
   const context = {
+    addInitScript: async () => { options.onInitScript?.(); },
     route: async (_pattern: string, handler: (route: Route) => Promise<void>) => { routeHandler = handler; },
     routeWebSocket: async () => {},
     newPage: async () => page,
@@ -117,12 +151,20 @@ describe('optional local rendered capture package', () => {
   test('writes import-compatible private metadata without retaining DOM text or request paths', async () => {
     const parent = await mkdtemp(path.join(tmpdir(), 'whoisleuth-capture-test-'));
     const destination = path.join(parent, 'capture');
+    let initScriptCalls = 0;
     const resolved: string[] = [];
     try {
       const manifest = await captureRenderedPage({
         targetUrl: 'https://example.test/', outputDirectory: destination, timeoutMs: 5000,
       }, {
-        launchBrowser: async () => fakeBrowser(),
+        launchBrowser: async () => fakeBrowser({ onInitScript: () => { initScriptCalls += 1; } }),
+        fetchResource: async (url, options) => {
+          const headers = new Headers(options.headers);
+          assert.equal(headers.get('cookie'), null);
+          assert.equal(headers.get('authorization'), null);
+          assert.equal(headers.get('accept'), 'text/html');
+          return fakeFetchResource(url);
+        },
         resolveAddresses: async (hostname) => {
           resolved.push(hostname);
           return [{ address: '192.0.2.1', family: 4 }];
@@ -130,7 +172,8 @@ describe('optional local rendered capture package', () => {
         now: () => '2026-08-01T00:00:00.000Z',
       });
       assert.equal(manifest.schemaVersion, WEB_CAPTURE_MANIFEST_VERSION);
-      assert.deepEqual(resolved, ['example.test', 'static.example.test']);
+      assert.equal(initScriptCalls, 1);
+      assert.deepEqual(resolved, ['example.test', 'example.test', 'static.example.test']);
       const capture = manifest.captures[0]!;
       assert.equal(capture.completeness, 'complete');
       assert.equal(capture.artifacts[0]?.perceptualHash?.length, 16);
@@ -142,7 +185,7 @@ describe('optional local rendered capture package', () => {
       assert.equal((await stat(path.join(destination, 'screenshot.png'))).size > 0, true);
       await assert.rejects(() => captureRenderedPage({
         targetUrl: 'https://example.test/', outputDirectory: destination, timeoutMs: 5000,
-      }, { launchBrowser: async () => fakeBrowser(), resolveAddresses: async () => [] }), /EEXIST|ENOTEMPTY|exist/u);
+      }, { launchBrowser: async () => fakeBrowser(), fetchResource: fakeFetchResource, resolveAddresses: async () => [] }), /EEXIST|ENOTEMPTY|exist/u);
     } finally {
       await rm(parent, { recursive: true, force: true });
     }
@@ -157,6 +200,7 @@ describe('optional local rendered capture package', () => {
         targetUrl: 'https://left.example.test/', outputDirectory: leftDirectory, timeoutMs: 5000,
       }, {
         launchBrowser: async () => fakeBrowser({ hostname: 'left.example.test', title: 'Account', visibleText: 'left private text' }),
+        fetchResource: fakeFetchResource,
         resolveAddresses: async () => [{ address: '192.0.2.1', family: 4 }],
         now: () => '2026-08-01T00:00:00.000Z',
       });
@@ -167,6 +211,7 @@ describe('optional local rendered capture package', () => {
           hostname: 'right.example.test', title: 'Account', visibleText: 'right private text',
           structure: 'html body main section form input button', elementCount: 7,
         }),
+        fetchResource: fakeFetchResource,
         resolveAddresses: async () => [{ address: '192.0.2.2', family: 4 }],
         now: () => '2026-08-01T00:05:00.000Z',
       });
@@ -239,6 +284,7 @@ describe('optional local rendered capture package', () => {
       for (const [domain, destination] of captures) {
         await captureRenderedPage({ targetUrl: `https://${domain}/`, outputDirectory: destination, timeoutMs: 5000 }, {
           launchBrowser: async () => fakeBrowser({ hostname: domain, flatScreenshot: true }),
+          fetchResource: fakeFetchResource,
           resolveAddresses: async () => [{ address: '192.0.2.1', family: 4 }],
           now: () => '2026-08-01T00:00:00.000Z',
         });
@@ -252,6 +298,121 @@ describe('optional local rendered capture package', () => {
       assert.equal(comparison.screenshot.hammingDistance, null);
       assert.equal(comparison.screenshot.agreementPercent, null);
       assert.equal(comparison.integrity.left.perceptualHash, true);
+    } finally {
+      await rm(parent, { recursive: true, force: true });
+    }
+  });
+
+  test('charges refused subresources against the shared response-body budget', async () => {
+    const parent = await mkdtemp(path.join(tmpdir(), 'whoisleuth-capture-refused-budget-test-'));
+    const destination = path.join(parent, 'capture');
+    const consumed: number[] = [];
+    try {
+      const manifest = await captureRenderedPage({
+        targetUrl: 'https://example.test/', outputDirectory: destination, timeoutMs: 5000,
+      }, {
+        launchBrowser: async () => fakeBrowser({
+          subresourceUrls: Array.from({ length: 12 }, (_, index) => `https://static.example.test/asset-${index}.js`),
+        }),
+        fetchResource: async (url) => new Response('', { status: 200, headers: { 'x-fixture-url': url } }),
+        resolveAddresses: async () => [{ address: '192.0.2.1', family: 4 }],
+        readResponse: async (response, maximum) => {
+          const mainDocument = response.headers.get('x-fixture-url')?.includes('/entry?') === true;
+          const bytesRead = mainDocument ? 1 : maximum;
+          consumed.push(bytesRead);
+          return { bytes: Buffer.alloc(0), bytesRead, truncated: !mainDocument };
+        },
+      });
+      assert.equal(consumed.reduce((total, value) => total + value, 0), MAX_CAPTURE_TRANSFER_BYTES);
+      assert.equal(Math.max(...consumed), MAX_CAPTURE_RESPONSE_BYTES);
+      assert.equal(consumed.includes(MAX_CAPTURE_RESPONSE_BYTES - 1), true);
+      assert.equal(manifest.captures[0]?.completeness, 'partial');
+      assert.match(manifest.captures[0]?.limitations.join(' ') ?? '', /processed at most .* response-body bytes/u);
+    } finally {
+      await rm(parent, { recursive: true, force: true });
+    }
+  });
+
+  test('reserves one cumulative allowance across concurrent response reads', async () => {
+    const parent = await mkdtemp(path.join(tmpdir(), 'whoisleuth-capture-concurrent-budget-test-'));
+    const destination = path.join(parent, 'capture');
+    const allowances: number[] = [];
+    try {
+      const manifest = await captureRenderedPage({
+        targetUrl: 'https://example.test/', outputDirectory: destination, timeoutMs: 5000,
+      }, {
+        launchBrowser: async () => fakeBrowser({
+          concurrentSubresources: true,
+          subresourceUrls: Array.from({ length: 12 }, (_, index) => `https://static.example.test/asset-${index}.js`),
+        }),
+        fetchResource: async (url) => new Response('', { status: 200, headers: { 'x-fixture-url': url } }),
+        resolveAddresses: async () => [{ address: '192.0.2.1', family: 4 }],
+        readResponse: async (response, maximum) => {
+          const mainDocument = response.headers.get('x-fixture-url')?.includes('/entry?') === true;
+          allowances.push(mainDocument ? 1 : maximum);
+          await new Promise<void>((resolvePromise) => { setImmediate(resolvePromise); });
+          return { bytes: Buffer.alloc(0), bytesRead: mainDocument ? 1 : maximum, truncated: false };
+        },
+      });
+      assert.equal(allowances.reduce((total, value) => total + value, 0), MAX_CAPTURE_TRANSFER_BYTES);
+      assert.equal(allowances.every((value) => value <= MAX_CAPTURE_RESPONSE_BYTES), true);
+      assert.equal(allowances.includes(MAX_CAPTURE_RESPONSE_BYTES - 1), true);
+      assert.equal(manifest.captures[0]?.completeness, 'partial');
+    } finally {
+      await rm(parent, { recursive: true, force: true });
+    }
+  });
+
+  test('bounds and records browser-requested hosts even when their bodies are refused', async () => {
+    const parent = await mkdtemp(path.join(tmpdir(), 'whoisleuth-capture-host-budget-test-'));
+    const destination = path.join(parent, 'capture');
+    const resolved = new Set<string>();
+    try {
+      const manifest = await captureRenderedPage({
+        targetUrl: 'https://entry.example.test/', outputDirectory: destination, timeoutMs: 5000,
+      }, {
+        launchBrowser: async () => fakeBrowser({
+          hostname: 'entry.example.test',
+          subresourceUrls: Array.from({ length: 40 }, (_, index) => `https://asset-${index}.example.test/script.js`),
+        }),
+        fetchResource: async (url) => new Response('', { status: 200, headers: { 'x-fixture-url': url } }),
+        resolveAddresses: async (hostname) => {
+          resolved.add(hostname);
+          return [{ address: '192.0.2.1', family: 4 }];
+        },
+        readResponse: async (response, maximum) => {
+          const mainDocument = response.headers.get('x-fixture-url')?.includes('/entry?') === true;
+          return { bytes: Buffer.alloc(0), bytesRead: mainDocument ? 1 : maximum, truncated: !mainDocument };
+        },
+      });
+      const requestDomains = manifest.captures[0]?.requestDomains ?? [];
+      assert.equal(resolved.size, MAX_CAPTURE_HOSTS);
+      assert.equal(requestDomains.length, MAX_CAPTURE_HOSTS);
+      assert.equal(requestDomains.includes('asset-0.example.test'), true);
+      assert.equal(requestDomains.includes(`asset-${MAX_CAPTURE_HOSTS}.example.test`), false);
+      assert.equal(manifest.captures[0]?.completeness, 'partial');
+    } finally {
+      await rm(parent, { recursive: true, force: true });
+    }
+  });
+
+  test('fails closed when the main response reports invalid byte accounting', async () => {
+    const parent = await mkdtemp(path.join(tmpdir(), 'whoisleuth-capture-budget-test-'));
+    const destination = path.join(parent, 'capture');
+    try {
+      await assert.rejects(() => captureRenderedPage({
+        targetUrl: 'https://example.test/', outputDirectory: destination, timeoutMs: 5000,
+      }, {
+        launchBrowser: async () => fakeBrowser(),
+        fetchResource: fakeFetchResource,
+        resolveAddresses: async () => [{ address: '192.0.2.1', family: 4 }],
+        readResponse: async () => ({
+          bytes: Buffer.alloc(0),
+          bytesRead: MAX_CAPTURE_TRANSFER_BYTES + 1,
+          truncated: false,
+        }),
+      }), /navigation|aborted|blocked/u);
+      await assert.rejects(() => stat(destination), /ENOENT/u);
     } finally {
       await rm(parent, { recursive: true, force: true });
     }

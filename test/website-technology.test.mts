@@ -144,6 +144,17 @@ describe('website technology profile', () => {
     assert.equal(result.findings.find((item) => item.id === 'wix'), undefined);
   });
 
+  test('recognises Weebly theme attributes alongside its bounded resource origin', () => {
+    const result = analyze({
+      html: '<link id="wsite-base-style" href="/css/sites.css">',
+      resourceOrigins: ['https://static.editmysite.com'],
+    });
+    const item = finding(result, 'weebly');
+    assert.equal(item.confidence, 'high');
+    assert.deepEqual(item.evidence.map((entry) => entry.source), ['static HTML', 'resource origin']);
+    assert.doesNotMatch(JSON.stringify(result), /wsite-base-style|static\.editmysite/u);
+  });
+
   test('recognizes bounded static framework markers case-insensitively', () => {
     const result = analyze({ html: `
       <script id="__NEXT_DATA__"></script>
@@ -230,13 +241,9 @@ describe('website technology profile', () => {
 
   test('recognizes an expanded set of generator-declared platforms', () => {
     const cases = [
-      ['Craft CMS 5.0', 'craft-cms', 'content management'],
       ['TYPO3 CMS 13', 'typo3', 'content management'],
-      ['OpenCart 4', 'opencart', 'commerce'],
-      ['PrestaShop 9', 'prestashop', 'commerce'],
       ['Wix.com Website Builder', 'wix', 'site builder'],
       ['Framer 2026', 'framer', 'site builder'],
-      ['Weebly', 'weebly', 'site builder'],
       ['Docusaurus v3.8', 'docusaurus', 'static site generator'],
       ['Eleventy v3', 'eleventy', 'static site generator'],
       ['11ty 3.1', 'eleventy', 'static site generator'],
@@ -301,10 +308,7 @@ describe('website technology profile', () => {
     ]);
   });
 
-  test('recognizes CloudFront from selected server or retained resource evidence', () => {
-    const serverResult = analyze({ httpServer: 'CloudFront' });
-    assert.equal(finding(serverResult, 'cloudfront').confidence, 'high');
-
+  test('recognizes CloudFront from retained resource evidence', () => {
     const resourceResult = analyze({ resourceOrigins: ['https://assets.fixture.cloudfront.net'] });
     assert.equal(finding(resourceResult, 'cloudfront').confidence, 'medium');
   });

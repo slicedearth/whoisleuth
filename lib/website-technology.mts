@@ -72,7 +72,7 @@ type TechnologySignatureDescriptor = Readonly<{
   evidence: ReadonlyArray<Readonly<Omit<SignatureEvidence, 'matches'>>>;
 }>;
 
-const TECHNOLOGY_PROFILE_VERSION = 8;
+const TECHNOLOGY_PROFILE_VERSION = 10;
 const MAX_TECHNOLOGY_HTML_CHARS = MAX_STATIC_HTML_CHARS;
 const MAX_TECHNOLOGY_TAG_LENGTH = MAX_TAG_LENGTH;
 const MAX_TECHNOLOGY_FINDINGS = 24;
@@ -224,7 +224,6 @@ const TECHNOLOGY_SIGNATURES: TechnologySignature[] = [
   {
     id: 'craft-cms', name: 'Craft CMS', category: 'content management',
     evidence: [
-      generatorEvidence(/^craft cms(?:\s|$)/i, 'Generator metadata identifies Craft CMS.'),
       responseHeaderEvidence(
         'x-powered-by',
         /(?:^|,\s*)craft cms(?:\s|$|\/)/i,
@@ -281,7 +280,6 @@ const TECHNOLOGY_SIGNATURES: TechnologySignature[] = [
   {
     id: 'opencart', name: 'OpenCart', category: 'commerce',
     evidence: [
-      generatorEvidence(/^opencart(?:\s|$)/i, 'Generator metadata identifies OpenCart.'),
       htmlEvidence(
         ['index.php?route=common/home', 'image/catalog/opencart-logo.png'],
         'Static markup contains OpenCart routing or default asset conventions.',
@@ -291,7 +289,6 @@ const TECHNOLOGY_SIGNATURES: TechnologySignature[] = [
   {
     id: 'prestashop', name: 'PrestaShop', category: 'commerce',
     evidence: [
-      generatorEvidence(/^prestashop(?:\s|$)/i, 'Generator metadata identifies PrestaShop.'),
       htmlEvidence(['/modules/ps_'], 'Static resource paths use PrestaShop module conventions.'),
     ],
   },
@@ -333,7 +330,10 @@ const TECHNOLOGY_SIGNATURES: TechnologySignature[] = [
     id: 'weebly', name: 'Weebly', category: 'site builder',
     requiresNonResourceEvidence: true,
     evidence: [
-      generatorEvidence(/^weebly(?:\s|$)/i, 'Generator metadata identifies Weebly.'),
+      htmlEvidence(
+        ['id="wsite-base-style"', "id='wsite-base-style'", 'title="wsite-theme-css"', "title='wsite-theme-css'"],
+        'Static markup contains Weebly-specific theme attributes.',
+      ),
       resourceEvidence(['editmysite.com'], 'A retained resource origin uses Weebly delivery infrastructure.'),
     ],
   },
@@ -401,7 +401,6 @@ const TECHNOLOGY_SIGNATURES: TechnologySignature[] = [
   {
     id: 'cloudfront', name: 'Amazon CloudFront', category: 'delivery platform',
     evidence: [
-      serverEvidence(/^cloudfront(?:\s|$|\/)/i, 'The selected response server header identifies Amazon CloudFront.'),
       resourceEvidence(['cloudfront.net'], 'A retained resource origin uses Amazon CloudFront delivery infrastructure.'),
     ],
   },

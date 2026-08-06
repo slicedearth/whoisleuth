@@ -29,10 +29,15 @@ combined similarity or maliciousness score.
 Collection executes page JavaScript and sends the target plus its public
 subresource hostnames to their operators. It accepts at most 100 HTTP(S)
 requests and 30 request hostnames, blocks credentials, non-default ports,
-service workers, downloads, non-HTTP protocols, and hosts resolving to
-private or reserved addresses. Each hostname is checked before its first
-request, but Playwright controls the browser connection and does not expose
-WHOISleuth's normal IP-pinned transport. DNS rebinding therefore remains a
-documented residual risk. Run this package only for targets you are authorised
-to render, inside a disposable and network-restricted environment when the
-target is untrusted.
+service workers, downloads, WebSockets, WebRTC, WebTransport, non-HTTP
+protocols, and hosts resolving to private or reserved addresses. The hostname
+bound applies to browser-requested hosts even when resolution or response
+collection fails, and those admitted hosts remain visible in the manifest.
+Every allowed request uses the shared connection-pinned
+transport before its bounded response is supplied to the disposable browser.
+Cookies, authorisation headers, and request bodies are not forwarded. Each
+response body is read up to 4 MiB, with concurrent reads reserving from one
+shared 24 MiB application-level response-body budget. Lower-level transport
+buffering is outside that byte budget. Run this package only for targets you
+are authorised to render, inside a disposable and network-restricted
+environment when the target is untrusted.

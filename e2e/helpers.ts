@@ -63,6 +63,14 @@ export async function expectNoHorizontalOverflow(page: Page) {
   ).toBeLessThanOrEqual(overflow.clientWidth + OVERFLOW_TOLERANCE_PX);
 }
 
+export async function expandLookupFamilies(page: Page): Promise<void> {
+  const expandAll = page
+    .getByRole('group', { name: 'Evidence family visibility' })
+    .getByRole('button', { name: 'Expand all' });
+  await expect(expandAll).toBeEnabled();
+  await expandAll.click();
+}
+
 export async function expectNoHorizontalScrollContainers(locator: Locator) {
   const offenders = await locator.evaluate((root) => {
     const elements = root instanceof HTMLElement

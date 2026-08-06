@@ -54,7 +54,7 @@ afterEach(async () => {
 describe('reviewed technology reference-build intake', () => {
   test('derives a target-free positive fixture and separately verifiable provenance', () => {
     const html = '<!doctype html><html><head><meta name="generator" content="Docusaurus v3.10.2"></head><body>Reference wording</body></html>';
-    const result = buildTechnologyExampleReview(html, positiveOptions);
+    const result = buildTechnologyExampleReview(html, positiveOptions, { fixtures: [], sources: [] });
     assert.equal(result.schema, TECHNOLOGY_EXAMPLE_REVIEW_SCHEMA);
     assert.equal(result.version, TECHNOLOGY_EXAMPLE_REVIEW_VERSION);
     assert.equal(result.fixture.kind, 'positive');
@@ -117,6 +117,7 @@ describe('reviewed technology reference-build intake', () => {
         runtimeReference: null,
         buildRecipe: 'reviewed-repository-artifact',
       },
+      { fixtures: [], sources: [] },
     );
     assert.deepEqual(first.provenanceContext.firstObservedExpectedIds, ['shopify']);
     assert.deepEqual(first.provenanceContext.independentSourceOriginExpectedIds, []);

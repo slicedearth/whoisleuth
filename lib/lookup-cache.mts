@@ -50,11 +50,11 @@ let nextSweepAt = 0;
 // Approximate, not exact (doesn't account for JS object/string overhead) -
 // good enough for a soft memory ceiling, and cheap since it only runs once
 // per cache write, not per read.
-function approxByteSize(value: unknown): number {
+function approxByteSize(value: unknown): number | null {
   try {
     return Buffer.byteLength(JSON.stringify(value));
   } catch {
-    return 0;
+    return null;
   }
 }
 
@@ -88,6 +88,9 @@ function setCached(key: string, value: unknown): void {
   sweepExpiredEntries(Date.now());
   deleteEntry(key); // avoid double-counting bytes if this key is already cached
   const size = approxByteSize(value);
+  // A value whose serialized size cannot be measured cannot participate in a
+  // byte-bounded cache. Return it to the current caller without retaining it.
+  if (size === null) return;
   store.set(key, { value, expiresAt: Date.now() + TTL_MS, size });
   totalBytes += size;
   while (store.size > 0 && (store.size > MAX_ENTRIES || totalBytes > MAX_TOTAL_BYTES)) {

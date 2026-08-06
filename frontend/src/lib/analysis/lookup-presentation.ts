@@ -9,11 +9,12 @@ export type LookupPresentationState = Readonly<{
 export type LookupPresentationStorage = Pick<Storage, 'getItem' | 'setItem'>;
 
 export const LOOKUP_PRESENTATION_STORAGE_KEY = 'whoisleuth:lookup-presentation:v1';
+export const MAX_LOOKUP_PRESENTATION_SERIALIZED_BYTES = 1_024;
 
 export const LOOKUP_EVIDENCE_DENSITIES = Object.freeze([
   Object.freeze({ id: 'summary' as const, label: 'Essentials', detail: 'A compact assessment, key observations, unresolved evidence, and one summary for each evidence family.' }),
-  Object.freeze({ id: 'standard' as const, label: 'Evidence', detail: 'Settled evidence is grouped by task while source detail and raw evidence stay collapsed until you inspect them.' }),
-  Object.freeze({ id: 'full' as const, label: 'All evidence', detail: 'Every settled evidence family remains available, including advanced and bounded raw evidence.' }),
+  Object.freeze({ id: 'standard' as const, label: 'Evidence', detail: 'Settled evidence is grouped by task and remains collapsed until you choose a family to inspect.' }),
+  Object.freeze({ id: 'full' as const, label: 'All evidence', detail: 'Every settled evidence family remains available, including advanced and bounded raw evidence, while each family stays collapsed until opened.' }),
 ]);
 
 export const LOOKUP_TASK_VIEWS = Object.freeze([
@@ -43,7 +44,13 @@ export function readLookupPresentation(
   storage: Pick<LookupPresentationStorage, 'getItem'>,
 ): LookupPresentationState {
   try {
-    const stored = JSON.parse(storage.getItem(LOOKUP_PRESENTATION_STORAGE_KEY) || 'null') as {
+    const serialized = storage.getItem(LOOKUP_PRESENTATION_STORAGE_KEY);
+    if (serialized === null
+      || serialized.length > MAX_LOOKUP_PRESENTATION_SERIALIZED_BYTES
+      || new TextEncoder().encode(serialized).byteLength > MAX_LOOKUP_PRESENTATION_SERIALIZED_BYTES) {
+      return { density: 'summary', task: 'general' };
+    }
+    const stored = JSON.parse(serialized) as {
       version?: unknown;
       density?: unknown;
       task?: unknown;

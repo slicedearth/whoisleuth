@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures';
-import { boundingBox, expectNoHorizontalOverflow, migrateLegacyBrowserData, readBrowserLocalCollection } from './helpers';
+import { boundingBox, expandLookupFamilies, expectNoHorizontalOverflow, migrateLegacyBrowserData, readBrowserLocalCollection } from './helpers';
 import { readFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { TEST_SITE_PASSWORD } from './constants';
@@ -69,6 +69,7 @@ test('bounded RDAP contact roles and repeated channels render in Lookup', async 
 
   await page.locator('#query').fill('example.com');
   await page.getByRole('button', { name: 'Run lookup' }).click();
+  await expandLookupFamilies(page);
   const rdapSection = page.locator('.sources > details').first();
   await expect(rdapSection).not.toHaveAttribute('open', '');
   await expect(rdapSection.getByText('Published contacts · 2 roles')).toBeHidden();
@@ -206,6 +207,7 @@ test('deep Lookup presents registrar and observed network RDAP as separate sourc
 
   await page.locator('#query').fill('registrar-source.example');
   await page.getByRole('button', { name: 'Run lookup' }).click();
+  await expandLookupFamilies(page);
 
   const evidenceQuality = page.locator('#evidence-quality');
   await evidenceQuality.locator(':scope > details').first().locator(':scope > summary').click();
@@ -377,6 +379,7 @@ test('registrar RDAP unsupported and error states remain neutral source rows', a
     }));
     await page.locator('#query').fill(`${state.status}.example`);
     await page.getByRole('button', { name: 'Run lookup' }).click();
+    await expandLookupFamilies(page);
     await expect(page.getByRole('heading', { name: `${state.status}.example`, exact: true })).toBeVisible();
     const section = page.locator('details.registrar-rdap');
     const summary = section.locator(':scope > summary');
@@ -428,6 +431,7 @@ test('registry access constraints remain neutral, explicit, and mobile-safe', as
 
   await page.locator('#query').fill('example.es');
   await page.getByRole('button', { name: 'Run lookup' }).click();
+  await expandLookupFamilies(page);
   const notice = page.getByRole('region', { name: '.ES collection constraints' });
   await expect(notice.getByText('Restricted access')).toBeVisible();
   await expect(notice.getByText('Source-IP authorisation required')).toBeVisible();
@@ -435,6 +439,7 @@ test('registry access constraints remain neutral, explicit, and mobile-safe', as
 
   await page.locator('#query').fill('example.ch');
   await page.getByRole('button', { name: 'Run lookup' }).click();
+  await expandLookupFamilies(page);
   const chNotice = page.getByRole('region', { name: '.CH collection constraints' });
   await expect(chNotice.getByText('Restricted access')).toBeVisible();
   await expect(chNotice.getByText('Registry policy restricted')).toBeVisible();
@@ -442,6 +447,7 @@ test('registry access constraints remain neutral, explicit, and mobile-safe', as
 
   await page.locator('#query').fill('example.vn');
   await page.getByRole('button', { name: 'Run lookup' }).click();
+  await expandLookupFamilies(page);
   const vnNotice = page.getByRole('region', { name: '.VN collection constraints' });
   await expect(vnNotice.getByText('No IANA service')).toBeVisible();
   await expect(vnNotice.getByText('No service published by IANA')).toHaveCount(2);
@@ -449,6 +455,7 @@ test('registry access constraints remain neutral, explicit, and mobile-safe', as
 
   await page.locator('#query').fill('example.dev');
   await page.getByRole('button', { name: 'Run lookup' }).click();
+  await expandLookupFamilies(page);
   const devNotice = page.getByRole('region', { name: '.DEV collection constraints' });
   await expect(devNotice.getByText('RDAP only')).toBeVisible();
   await expect(devNotice.getByText(/WHOIS absence is expected and does not make the lookup incomplete/i)).toBeVisible();
@@ -556,6 +563,7 @@ test('optional external intelligence searches are explicit, attributed, and mobi
   await iocOption.check();
   await page.locator('#query').fill('archive-review.example');
   await page.getByRole('button', { name: 'Run lookup' }).click();
+  await expandLookupFamilies(page);
 
   const section = page.locator('.threat-intelligence');
   await expect(section.getByRole('heading', { name: 'Archived provider verdicts' })).toBeVisible();
@@ -603,6 +611,7 @@ test('a Lookup case stores the registrar name rather than stringifying its entit
 
   await page.locator('#query').fill('example.com');
   await page.getByRole('button', { name: 'Run lookup' }).click();
+  await expandLookupFamilies(page);
   await page.getByRole('button', { name: 'Create case' }).click();
 
   const registrar = (await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).records[0]?.value?.evidenceHistory?.[0]?.registrar;
@@ -645,6 +654,7 @@ test('published response routes can be recorded in a local case with their prove
 
   await page.locator('#query').fill('response-route.invalid');
   await page.getByRole('button', { name: 'Run lookup' }).click();
+  await expandLookupFamilies(page);
   const response = page.locator('section.response');
   await expect(response.getByRole('heading', { name: 'Published routes and reviewed drafts' })).toBeVisible();
   await expect(response).toContainText('abuse@example.test');
@@ -719,6 +729,7 @@ test('bounded WHOIS lifecycle and role-based contacts render in Lookup', async (
   const runLookup = page.getByRole('button', { name: 'Run lookup' });
   await runLookup.click();
   await expect(runLookup).toBeEnabled();
+  await expandLookupFamilies(page);
   const whoisSection = page.locator('.sources > details').nth(1);
   await expect(whoisSection).not.toHaveAttribute('open', '');
   await expect(whoisSection.getByText('Published contacts · 2 roles · capped')).toBeHidden();
@@ -760,6 +771,7 @@ test('IDN review shows Unicode and ASCII together with cautious profile similari
 
   await page.locator('#query').fill('xn--smple-4ve.example');
   await page.getByRole('button', { name: 'Run lookup' }).click();
+  await expandLookupFamilies(page);
   const card = page.locator('.idn-card');
   await expect(card.getByRole('heading', { name: 'IDN and confusable review' })).toBeVisible();
   await expect(card.getByText('tr39-17.0.0-bounded-ascii-v3', { exact: true })).toBeVisible();

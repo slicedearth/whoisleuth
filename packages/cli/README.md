@@ -90,8 +90,8 @@ and disclosures without making a network request. `commands --json` exposes the
 installed command contracts for local wrappers without running collection.
 Focused command help and the generated manual label every operation as offline
 or networked and state its target, input, and concurrency boundaries. The
-packaged [dual-use disclosure](DISCLOSURE) defines the supported defensive use
-of those capabilities.
+packaged [dual-use disclosure](https://github.com/slicedearth/whois-rdap-tool/blob/main/DISCLOSURE)
+defines the supported defensive use of those capabilities.
 
 Interactive output uses restrained semantic colour, width-aware wrapping, and
 stderr-only progress for slower collection. Redirected and machine-readable

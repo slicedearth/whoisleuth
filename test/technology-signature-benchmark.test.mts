@@ -50,15 +50,15 @@ describe('technology signature benchmark', () => {
     assert.equal(report.summary.ready, true);
     assert.equal(report.summary.reviewedFixtures, TECHNOLOGY_REVIEWED_FIXTURES.length);
     assert.equal(report.summary.failedReviewedFixtures, 0);
-    assert.equal(report.summary.reviewedSignatureCoverage, 40);
-    assert.equal(report.summary.reviewedRepeatCoverage, 5);
-    assert.equal(report.summary.reviewedIndependentRepeatCoverage, 5);
-    assert.equal(report.summary.reviewedEvidenceRuleCoverage, 46);
+    assert.equal(report.summary.reviewedSignatureCoverage, 42);
+    assert.equal(report.summary.reviewedRepeatCoverage, 42);
+    assert.equal(report.summary.reviewedIndependentRepeatCoverage, 42);
+    assert.equal(report.summary.reviewedEvidenceRuleCoverage, 63);
     assert.equal(report.summary.reviewedNegativeFixtures, 2);
     assert.equal(report.summary.passedReviewedNegativeFixtures, 2);
-    assert.equal(report.summary.reviewedMixedFixtures, 29);
-    assert.equal(report.summary.passedReviewedMixedFixtures, 29);
-    assert.equal(report.summary.reviewedDeliberateNonmatches, 109);
+    assert.equal(report.summary.reviewedMixedFixtures, 67);
+    assert.equal(report.summary.passedReviewedMixedFixtures, 67);
+    assert.equal(report.summary.reviewedDeliberateNonmatches, 231);
     assert.equal(report.summary.reviewedFalsePositiveMatches, 0);
     assert.equal(report.metrics.positiveCoverage, report.summary.signatures);
     assert.equal(report.metrics.negativeCoverage, report.summary.signatures);
@@ -71,36 +71,37 @@ describe('technology signature benchmark', () => {
     assert.ok(report.bounds.reviewedFixtureLimit > 0);
     assert.equal(report.reviewedFixtures.length, TECHNOLOGY_REVIEWED_FIXTURES.length);
     assert.equal(report.reviewedProgramme.staleFixtureIds.length, 0);
-    assert.equal(report.reviewedProgramme.unsampledSignatureIds.length, report.summary.signatures - 40);
-    assert.equal(report.reviewedProgramme.underRepeatedSignatureIds.length, report.summary.signatures - 5);
-    assert.equal(report.reviewedProgramme.underIndependentRepeatSignatureIds.length, report.summary.signatures - 5);
-    assert.equal(report.reviewedProgramme.maturity, 'initial');
+    assert.equal(report.reviewedProgramme.unsampledSignatureIds.length, 0);
+    assert.deepEqual(report.reviewedProgramme.underRepeatedSignatureIds, []);
+    assert.deepEqual(report.reviewedProgramme.underIndependentRepeatSignatureIds, []);
+    assert.deepEqual(report.reviewedProgramme.unsampledEvidenceRuleIds, []);
+    assert.equal(report.reviewedProgramme.maturity, 'current');
     assert.deepEqual(report.reviewedProgramme.tiers, {
       initial: true,
-      catalogueSampled: false,
-      repeatSampled: false,
-      evidenceCovered: false,
-      current: false,
+      catalogueSampled: true,
+      repeatSampled: true,
+      evidenceCovered: true,
+      current: true,
     });
-    assert.equal(report.reviewedProgramme.sampledEvidenceRules, 46);
-    assert.ok(report.reviewedProgramme.totalEvidenceRules > report.reviewedProgramme.sampledEvidenceRules);
+    assert.equal(report.reviewedProgramme.sampledEvidenceRules, 63);
+    assert.equal(report.reviewedProgramme.totalEvidenceRules, 63);
     const reviewedSvelteKit = report.reviewedProgramme.bySignature.sveltekit;
     assert.ok(reviewedSvelteKit);
-    assert.equal(reviewedSvelteKit.observations, 1);
-    assert.equal(reviewedSvelteKit.independentOrigins, 1);
-    assert.equal(reviewedSvelteKit.independentlyRepeated, false);
-    assert.equal(reviewedSvelteKit.sampledEvidenceRules, 1);
+    assert.equal(reviewedSvelteKit.observations, 2);
+    assert.equal(reviewedSvelteKit.independentOrigins, 2);
+    assert.equal(reviewedSvelteKit.independentlyRepeated, true);
+    assert.equal(reviewedSvelteKit.sampledEvidenceRules, 2);
     assert.equal(report.reviewedProgramme.licenseBases['factual-observation'], 1);
-    assert.equal(report.reviewedProgramme.licenseBases['public-domain'], 1);
-    assert.equal(report.reviewedProgramme.licenseBases['permissively-licensed-source'], 26);
-    assert.equal(report.reviewedProgramme.licenseBases['copyleft-licensed-source'], 9);
-    assert.equal(report.reviewedProgramme.licenseBases['official-demonstration-terms'], 1);
+    assert.equal(report.reviewedProgramme.licenseBases['public-domain'], 2);
+    assert.equal(report.reviewedProgramme.licenseBases['permissively-licensed-source'], 52);
+    assert.equal(report.reviewedProgramme.licenseBases['copyleft-licensed-source'], 18);
+    assert.equal(report.reviewedProgramme.licenseBases['official-demonstration-terms'], 4);
     assert.equal(report.reviewedProgramme.licenseBases['minimized-with-permission'], 1);
     assert.equal(
       Object.values(report.reviewedProgramme.byCategory).reduce((sum, category) => sum + category.signatures, 0),
       report.summary.signatures,
     );
-    assert.match(report.reviewedProgramme.nextAction, /contributor-reviewed/u);
+    assert.match(report.reviewedProgramme.nextAction, /maintain the current reviewed corpus/iu);
     assert.equal(
       Object.values(report.metrics.byCategory).reduce((sum, category) => sum + category.signatures, 0),
       report.summary.signatures,
@@ -159,12 +160,12 @@ describe('technology signature benchmark', () => {
     const output = formatTechnologySignatureBenchmark(report);
     assert.match(output, /technology-signature benchmark/i);
     assert.match(output, /fixtures passed/);
-    assert.match(output, /40\/\d+ signatures sampled/);
+    assert.match(output, /42\/42 signatures sampled/);
     assert.match(output, /Reviewed negative controls: 2\/2 passed/);
-    assert.match(output, /Reviewed mixed controls: 29\/29 passed/);
-    assert.match(output, /Reviewed false-positive controls: 0\/109/);
-    assert.match(output, /Reviewed corpus maturity: initial/);
-    assert.match(output, /Repeat sampling: 5\/\d+ signatures; independent origins: 5\/\d+; evidence rules: 46\/\d+/);
+    assert.match(output, /Reviewed mixed controls: 67\/67 passed/);
+    assert.match(output, /Reviewed false-positive controls: 0\/231/);
+    assert.match(output, /Reviewed corpus maturity: current/);
+    assert.match(output, /Repeat sampling: 42\/42 signatures; independent origins: 42\/42; evidence rules: 63\/63/);
     assert.match(output, /network requests: 0/);
     assert.deepEqual(parseArguments([]), { json: false, requireReviewed: false });
     assert.deepEqual(parseArguments(['--json']), { json: true, requireReviewed: false });
@@ -191,7 +192,7 @@ describe('technology signature benchmark', () => {
       stdout: coverageStdout.stream,
       stderr: stderr.stream,
       now: () => new Date(GENERATED_AT),
-    }), 1);
-    assert.match(coverageStdout.value(), /Reviewed corpus maturity: initial/);
+    }), 0);
+    assert.match(coverageStdout.value(), /Reviewed corpus maturity: current/);
   });
 });

@@ -4,8 +4,9 @@ import path from 'node:path';
 
 import type { Browser, BrowserContext, Page, Route } from '@playwright/test';
 
+import { WHOISLEUTH_USER_AGENT } from '../../lib/outbound-identity.mts';
 import { imagePerceptualHash } from '../../lib/perceptual-hash.mts';
-import { resolvePublicAddresses } from '../../lib/safe-fetch.mts';
+import { readBytesCapped, resolvePublicAddresses, safeFetchDetailed } from '../../lib/safe-fetch.mts';
 import {
   MAX_WEB_CAPTURE_DOM_DIGEST_BYTES,
   MAX_WEB_CAPTURE_MANIFEST_BYTES,
@@ -28,7 +29,16 @@ export const MAX_CAPTURE_REQUESTS = 100;
 export const MAX_CAPTURE_HOSTS = 30;
 export const MAX_CAPTURE_URL_LENGTH = 2048;
 export const MAX_CAPTURE_TIMEOUT_MS = 30_000;
+export const MAX_CAPTURE_RESPONSE_BYTES = 4 * 1024 * 1024;
+export const MAX_CAPTURE_TRANSFER_BYTES = 24 * 1024 * 1024;
 export const VIEWPORT = Object.freeze({ width: 1024, height: 768 });
+
+type PublicAddressRecord = Readonly<{ address: string; family: number }>;
+type CaptureFetchResource = (
+  url: string,
+  options: RequestInit,
+  addresses: readonly PublicAddressRecord[],
+) => Promise<Response>;
 
 type CaptureArguments = Readonly<{
   targetUrl: string;
@@ -39,6 +49,8 @@ type CaptureArguments = Readonly<{
 type CaptureDependencies = Readonly<{
   launchBrowser(): Promise<Browser>;
   resolveAddresses?: typeof resolvePublicAddresses;
+  fetchResource?: CaptureFetchResource;
+  readResponse?: typeof readBytesCapped;
   now?: () => string;
 }>;
 
@@ -170,15 +182,105 @@ async function privateWrite(filePath: string, value: string | Buffer): Promise<v
   await writeFile(filePath, value, { flag: 'wx', mode: 0o600 });
 }
 
+const REQUEST_HEADER_ALLOWLIST = Object.freeze([
+  'accept',
+  'accept-language',
+  'range',
+] as const);
+
+const RESPONSE_HEADER_ALLOWLIST = Object.freeze([
+  'accept-ranges',
+  'access-control-allow-credentials',
+  'access-control-allow-headers',
+  'access-control-allow-methods',
+  'access-control-allow-origin',
+  'cache-control',
+  'content-language',
+  'content-security-policy',
+  'content-security-policy-report-only',
+  'content-type',
+  'cross-origin-embedder-policy',
+  'cross-origin-opener-policy',
+  'cross-origin-resource-policy',
+  'etag',
+  'expires',
+  'last-modified',
+  'location',
+  'permissions-policy',
+  'referrer-policy',
+  'timing-allow-origin',
+  'vary',
+  'x-content-type-options',
+] as const);
+
+function boundedHeader(value: unknown): string | null {
+  if (typeof value !== 'string' || value.length > 2_048 || /[\u0000-\u0008\u000a-\u001f\u007f]/u.test(value)) return null;
+  return value;
+}
+
+function requestHeaders(route: Route): Record<string, string> {
+  const source = route.request().headers();
+  const headers: Record<string, string> = { 'User-Agent': WHOISLEUTH_USER_AGENT };
+  for (const name of REQUEST_HEADER_ALLOWLIST) {
+    const value = boundedHeader(source[name]);
+    if (value !== null) headers[name] = value;
+  }
+  return headers;
+}
+
+function responseHeaders(response: Response): Record<string, string> {
+  const headers: Record<string, string> = {};
+  for (const name of RESPONSE_HEADER_ALLOWLIST) {
+    const value = boundedHeader(response.headers.get(name));
+    if (value !== null) headers[name] = value;
+  }
+  return headers;
+}
+
+async function defaultFetchResource(
+  url: string,
+  options: RequestInit,
+  addresses: readonly PublicAddressRecord[],
+): Promise<Response> {
+  const expectedHostname = new URL(url).hostname.toLowerCase().replace(/\.$/u, '');
+  const result = await safeFetchDetailed(url, options, {
+    maxRedirects: 0,
+    resolvePublicAddresses: async (hostname) => {
+      if (hostname.toLowerCase().replace(/\.$/u, '') !== expectedHostname) {
+        throw new Error('Rendered capture refused an unexpected redirect hostname.');
+      }
+      return [...addresses];
+    },
+  });
+  return result.response;
+}
+
 async function installRequestBoundary(
   context: BrowserContext,
   page: Page,
   resolveAddresses: typeof resolvePublicAddresses,
+  fetchResource: CaptureFetchResource,
+  readResponse: typeof readBytesCapped,
+  timeoutMs: number,
 ) {
-  const checkedHosts = new Set<string>();
+  const requestHosts = new Set<string>();
   let requestCount = 0;
   let blockedRequestCount = 0;
   let hostLimitReached = false;
+  let responseByteLimitReached = false;
+  let transferredBytes = 0;
+  let reservedTransferBytes = 0;
+
+  const reserveResponseBytes = (): number => {
+    const remaining = MAX_CAPTURE_TRANSFER_BYTES - transferredBytes - reservedTransferBytes;
+    const allowance = Math.min(MAX_CAPTURE_RESPONSE_BYTES, Math.max(0, remaining));
+    reservedTransferBytes += allowance;
+    return allowance;
+  };
+  const settleResponseBytes = (allowance: number, bytesRead: number): void => {
+    reservedTransferBytes -= allowance;
+    transferredBytes += Math.min(allowance, Math.max(0, bytesRead));
+  };
   await context.routeWebSocket('**/*', async (webSocket) => {
     blockedRequestCount += 1;
     await webSocket.close({ code: 1008, reason: 'WHOISleuth local capture blocks WebSockets' });
@@ -196,15 +298,63 @@ async function installRequestBoundary(
       }
       const parsed = captureUrl(route.request().url());
       const hostname = parsed.hostname.toLowerCase().replace(/\.$/u, '');
-      if (!checkedHosts.has(hostname)) {
-        if (checkedHosts.size >= MAX_CAPTURE_HOSTS) {
+      if (!requestHosts.has(hostname)) {
+        if (requestHosts.size >= MAX_CAPTURE_HOSTS) {
           hostLimitReached = true;
           throw new Error('request-host limit reached');
         }
-        await resolveAddresses(hostname);
-        checkedHosts.add(hostname);
+        // Admit a new browser-requested hostname synchronously. Route handlers
+        // may overlap, so delaying this reservation until after DNS or response
+        // work would let concurrent or refused requests bypass the host bound.
+        requestHosts.add(hostname);
       }
-      await route.continue();
+      // Resolve on every request rather than only the first request for a host.
+      // The exact validated records are then injected into safeFetchDetailed,
+      // so the request cannot perform a second attacker-controlled DNS lookup.
+      const addresses = await resolveAddresses(hostname);
+      const method = route.request().method();
+      const response = await fetchResource(parsed.toString(), {
+        method,
+        headers: requestHeaders(route),
+        redirect: 'manual',
+        signal: AbortSignal.timeout(Math.min(timeoutMs, 10_000)),
+      }, addresses);
+      const body = method === 'HEAD'
+        ? { bytes: Buffer.alloc(0), bytesRead: 0, truncated: false }
+        : await (async () => {
+            const allowance = reserveResponseBytes();
+            if (allowance <= 0) {
+              responseByteLimitReached = true;
+              await response.body?.cancel().catch(() => {});
+              throw new Error('response byte limit reached');
+            }
+            let settled = false;
+            try {
+              const value = await readResponse(response, allowance);
+              const validBytesRead = Number.isSafeInteger(value.bytesRead)
+                && value.bytesRead >= 0
+                && value.bytesRead <= allowance;
+              // A truncated or malformed reader result is conservatively
+              // charged for its complete reservation. This prevents refused
+              // responses from resetting the shared capture budget.
+              settleResponseBytes(allowance, value.truncated || !validBytesRead ? allowance : value.bytesRead);
+              settled = true;
+              if (!validBytesRead) throw new Error('response byte accounting was invalid');
+              return value;
+            } catch (error) {
+              if (!settled) settleResponseBytes(allowance, allowance);
+              throw error;
+            }
+          })();
+      if (body.truncated) {
+        responseByteLimitReached = true;
+        throw new Error('response byte limit reached');
+      }
+      await route.fulfill({
+        status: response.status,
+        headers: responseHeaders(response),
+        body: body.bytes,
+      });
     } catch {
       blockedRequestCount += 1;
       await route.abort('blockedbyclient');
@@ -212,9 +362,36 @@ async function installRequestBoundary(
   });
   page.on('download', (download) => { void download.cancel(); });
   return {
-    checkedHosts,
-    stats: () => ({ requestCount, blockedRequestCount, hostLimitReached }),
+    requestHosts,
+    stats: () => ({
+      requestCount,
+      blockedRequestCount,
+      hostLimitReached,
+      responseByteLimitReached,
+      transferredBytes,
+    }),
   };
+}
+
+async function disableBrowserOnlyNetworkApis(context: BrowserContext): Promise<void> {
+  await context.addInitScript(() => {
+    // Playwright routing covers browser HTTP(S) requests and WebSockets are
+    // blocked separately. These APIs can otherwise establish browser-managed
+    // transports that do not pass through the pinned HTTP(S) collector.
+    for (const name of ['RTCPeerConnection', 'webkitRTCPeerConnection', 'WebTransport']) {
+      try {
+        Object.defineProperty(globalThis, name, {
+          value: undefined,
+          configurable: false,
+          enumerable: false,
+          writable: false,
+        });
+      } catch {
+        // A browser that exposes a non-configurable implementation remains
+        // covered by the disposable, network-restricted execution requirement.
+      }
+    }
+  });
 }
 
 export async function captureRenderedPage(
@@ -244,11 +421,15 @@ export async function captureRenderedPage(
       ignoreHTTPSErrors: false,
       javaScriptEnabled: true,
     });
+    await disableBrowserOnlyNetworkApis(context);
     const page = await context.newPage();
     const requestBoundary = await installRequestBoundary(
       context,
       page,
       dependencies.resolveAddresses ?? resolvePublicAddresses,
+      dependencies.fetchResource ?? defaultFetchResource,
+      dependencies.readResponse ?? readBytesCapped,
+      argumentsValue.timeoutMs,
     );
     await page.goto(target.toString(), { waitUntil: 'domcontentloaded', timeout: argumentsValue.timeoutMs });
     await page.waitForTimeout(Math.min(750, Math.max(100, Math.round(argumentsValue.timeoutMs / 20))));
@@ -286,8 +467,9 @@ export async function captureRenderedPage(
     const requestStats = requestBoundary.stats();
     const limitations = [
       'Rendered collection executed page JavaScript in a disposable browser context and may have disclosed the target to its public resource operators.',
-      'Downloads, service workers, WebSockets, non-read methods, non-HTTP(S), credentialed, non-default-port, private-address, excess-host, and excess-request traffic was blocked.',
-      'Each request hostname was checked for public addresses before first use, but Playwright did not pin the browser connection to the validated address, so DNS rebinding remains a residual risk.',
+      'Downloads, service workers, WebSockets, WebRTC, WebTransport, non-read methods, non-HTTP(S), credentialed, non-default-port, private-address, excess-host, excess-request, excess-response, and excess-transfer traffic was blocked.',
+      'Each request was resolved and connection-pinned by the shared safe-fetch transport before its bounded response was supplied to the disposable browser; cookies, authorisation headers, and request bodies were not forwarded.',
+      `Each response body was read up to ${MAX_CAPTURE_RESPONSE_BYTES} bytes and the collector processed at most ${MAX_CAPTURE_TRANSFER_BYTES} response-body bytes across the capture; lower-level transport buffering is outside this application-level bound.`,
       'The screenshot perceptual hash is an investigative similarity signal and does not establish copying, ownership, intent, safety, or maliciousness.',
     ];
     const manifest = {
@@ -300,7 +482,7 @@ export async function captureRenderedPage(
         completeness: requestStats.blockedRequestCount || dom.structureTruncated || dom.textTruncated ? 'partial' : 'complete',
         limitations,
         page: { title: title || null, finalOrigin: finalUrl.origin.toLowerCase() },
-        requestDomains: [...requestBoundary.checkedHosts].sort().slice(0, MAX_CAPTURE_HOSTS),
+        requestDomains: [...requestBoundary.requestHosts].sort().slice(0, MAX_CAPTURE_HOSTS),
         technologies: [],
         artifacts: [{
           kind: 'screenshot', fileName: screenshotName, mimeType: 'image/png',
