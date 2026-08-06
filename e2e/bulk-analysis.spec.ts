@@ -239,6 +239,11 @@ test('keeps an expected missing registry protocol out of limited Bulk outcomes',
 });
 
 test('supports focused review and an evidence-qualified two-domain comparison', async ({ page }) => {
+  // This scenario deliberately covers IndexedDB writes, two downloads, the
+  // desktop workbench, and its final mobile disclosure state in one retained
+  // workflow. Give that integration path the suite's established slow budget
+  // rather than letting parallel browser load consume its final assertions.
+  test.slow();
   await page.route('**/api/lookup?*', async (route) => {
     const domain = new URL(route.request().url()).searchParams.get('q') || '';
     const left = domain.startsWith('left');
