@@ -7,6 +7,7 @@ import {
   buildCtEventFindings,
 } from '../cli/ct-event-intake.mts';
 import { parseExternalFindingsDocument } from '../frontend/src/lib/analysis/external-findings-import.ts';
+import { mergeExternalFindingsIntoCases } from '../frontend/src/lib/analysis/external-findings-import.ts';
 
 const NOW = '2026-08-05T07:00:00.000Z';
 
@@ -42,7 +43,27 @@ describe('certificate event intake', () => {
     assert.deepEqual(parsed.findings.map((finding) => finding.domain), ['api.example.test', 'portal.example.test']);
     assert.equal(parsed.findings[0]?.evidenceClass, 'deployment_observation');
     assert.equal(parsed.findings[0]?.structuredObservation?.sourceSchema, 'whoisleuth.certificate-observation-rows');
+    assert.equal(parsed.findings[0]?.structuredObservation?.dnsNameCount, 2);
+    assert.equal(parsed.findings[0]?.structuredObservation?.namesComplete, true);
+    assert.match(parsed.findings[0]?.structuredObservation?.eventId ?? '', /^[a-f0-9]{64}$/u);
     assert.match(parsed.findings[0]?.limitations.join(' ') ?? '', /not proof/iu);
+
+    const merged = mergeExternalFindingsIntoCases([], parsed, NOW);
+    const retained = merged.cases.find((item) => item.domain === 'api.example.test')?.evidencePins[0]?.certificateObservation;
+    assert.equal(retained?.issuer, 'Fixture issuer');
+    assert.equal(retained?.dnsNameCount, 2);
+    assert.equal(retained?.namesComplete, true);
+    assert.equal(retained?.certificateSha256, event(1).certificateSha256);
+  });
+
+  test('marks retained certificate names incomplete when browser import bounds omit members', () => {
+    const names = Array.from({ length: 30 }, (_, index) => `host-${String(index).padStart(2, '0')}.example.test`);
+    const parsed = parseExternalFindingsDocument(buildCtEventFindings(batch([event(8, names)])));
+    assert.equal(parsed.findings.length, MAX_CT_EXTERNAL_DOMAINS);
+    assert.equal(new Set(parsed.findings.map((finding) => finding.structuredObservation?.eventId)).size, 1);
+    assert.ok(parsed.findings.every((finding) => finding.structuredObservation?.dnsNameCount === names.length));
+    assert.ok(parsed.findings.every((finding) => finding.structuredObservation?.namesComplete === false));
+    assert.match(parsed.findings[0]?.limitations.join(' ') ?? '', /did not retain every DNS name/iu);
   });
 
   test('deduplicates events and respects browser domain and per-domain import ceilings', () => {

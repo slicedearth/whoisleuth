@@ -266,7 +266,7 @@ describe('schema compatibility inventory', () => {
     assert.equal(byId(inventory, 'cli.web-capture-comparison').currentVersion, WEB_CAPTURE_COMPARISON_VERSION);
     assert.deepEqual(byId(inventory, 'export.lookup-evidence').supportedVersions, [12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25]);
     assert.deepEqual(byId(inventory, 'export.synthetic-demo').supportedVersions, [2, 3, 4, 5]);
-    assert.deepEqual(byId(inventory, 'export.external-findings').supportedVersions, [1, 2, 3]);
+    assert.deepEqual(byId(inventory, 'export.external-findings').supportedVersions, [1, 2, 3, 4]);
     assert.equal(byId(inventory, 'import.external-finding-rows').schema, 'whoisleuth.external-finding-rows');
     assert.equal(byId(inventory, 'import.domain-observation-rows').schema, 'whoisleuth.domain-observation-rows');
     assert.equal(byId(inventory, 'import.dns-observation-rows').schema, 'whoisleuth.dns-observation-rows');

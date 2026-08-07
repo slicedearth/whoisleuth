@@ -6,7 +6,7 @@ import {
 } from './case-model.ts';
 
 export const EXTERNAL_FINDINGS_SCHEMA = 'whoisleuth.external-findings';
-export const EXTERNAL_FINDINGS_VERSION = 3;
+export const EXTERNAL_FINDINGS_VERSION = 4;
 export const MAX_EXTERNAL_FINDINGS_IMPORT_BYTES = 384 * 1024;
 export const MAX_EXTERNAL_FINDINGS = 100;
 export const MAX_EXTERNAL_FINDINGS_PER_DOMAIN = 20;
@@ -34,6 +34,11 @@ export type ExternalFindingStructuredObservation = Readonly<{
   value: string;
   issuer: string | null;
   notAfter: string | null;
+  eventId: string | null;
+  logId: string | null;
+  certificateSha256: string | null;
+  dnsNameCount: number | null;
+  namesComplete: boolean | null;
 }>;
 
 export type ExternalFinding = Readonly<{
@@ -90,12 +95,18 @@ const STRUCTURED_OBSERVATION_KEYS = new Set([
   'value',
   'issuer',
   'notAfter',
+  'eventId',
+  'logId',
+  'certificateSha256',
+  'dnsNameCount',
+  'namesComplete',
 ]);
 const STRUCTURED_OBSERVATION_SCHEMAS = new Set([
   'whoisleuth.domain-observation-rows',
   'whoisleuth.dns-observation-rows',
   'whoisleuth.certificate-observation-rows',
 ]);
+const SHA256_RE = /^[a-f0-9]{64}$/u;
 
 function record(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -142,7 +153,7 @@ function limitations(value: unknown, index: number): string[] {
   return [...unique];
 }
 
-function structuredObservation(value: unknown, index: number): ExternalFindingStructuredObservation | null {
+function structuredObservation(value: unknown, index: number, documentVersion: number): ExternalFindingStructuredObservation | null {
   if (value === undefined || value === null) return null;
   const item = record(value);
   if (!item || !hasOnlyKeys(item, STRUCTURED_OBSERVATION_KEYS)) {
@@ -162,6 +173,35 @@ function structuredObservation(value: unknown, index: number): ExternalFindingSt
   if (!certificateSchema && (issuer !== null || notAfter !== null)) {
     throw new Error(`Finding ${index + 1} non-certificate observation cannot declare certificate metadata.`);
   }
+  const declaresEventMetadata = ['eventId', 'logId', 'certificateSha256', 'dnsNameCount', 'namesComplete']
+    .some((key) => item[key] !== undefined && item[key] !== null);
+  let eventId: string | null = null;
+  let logId: string | null = null;
+  let certificateSha256: string | null = null;
+  let dnsNameCount: number | null = null;
+  let namesComplete: boolean | null = null;
+  if (declaresEventMetadata) {
+    if (!certificateSchema || documentVersion < 4) {
+      throw new Error(`Finding ${index + 1} certificate-event metadata requires external-findings schema version 4.`);
+    }
+    eventId = requiredText(item.eventId, 64, `Finding ${index + 1} certificate event id`);
+    if (!/^[A-Za-z0-9_-]{1,64}$/u.test(eventId)) {
+      throw new Error(`Finding ${index + 1} certificate event id is invalid.`);
+    }
+    logId = requiredText(item.logId, 200, `Finding ${index + 1} certificate log id`);
+    certificateSha256 = requiredText(item.certificateSha256, 64, `Finding ${index + 1} certificate digest`).toLowerCase();
+    if (!SHA256_RE.test(certificateSha256) || certificateSha256 !== observationValue.toLowerCase()) {
+      throw new Error(`Finding ${index + 1} certificate event digest must match the structured observation value.`);
+    }
+    if (!Number.isSafeInteger(item.dnsNameCount) || Number(item.dnsNameCount) < 1 || Number(item.dnsNameCount) > 100) {
+      throw new Error(`Finding ${index + 1} certificate DNS name count is invalid.`);
+    }
+    dnsNameCount = Number(item.dnsNameCount);
+    if (typeof item.namesComplete !== 'boolean') {
+      throw new Error(`Finding ${index + 1} certificate name completeness is invalid.`);
+    }
+    namesComplete = item.namesComplete;
+  }
   return {
     sourceSchema: item.sourceSchema as ExternalFindingStructuredObservation['sourceSchema'],
     sourceVersion: 1,
@@ -169,6 +209,11 @@ function structuredObservation(value: unknown, index: number): ExternalFindingSt
     value: observationValue,
     issuer,
     notAfter,
+    eventId,
+    logId,
+    certificateSha256,
+    dnsNameCount,
+    namesComplete,
   };
 }
 
@@ -181,6 +226,7 @@ function findingKey(finding: ExternalFinding, sourceName: string): string {
     finding.observedAt,
     finding.completeness,
     sourceName,
+    finding.structuredObservation?.eventId ?? '',
   ].join('\u0000');
 }
 
@@ -191,9 +237,9 @@ export function parseExternalFindingsDocument(value: unknown): ExternalFindingsD
   }
   if (
     root.schema !== EXTERNAL_FINDINGS_SCHEMA
-    || ![1, 2, EXTERNAL_FINDINGS_VERSION].includes(Number(root.schemaVersion))
+    || ![1, 2, 3, EXTERNAL_FINDINGS_VERSION].includes(Number(root.schemaVersion))
   ) {
-    throw new Error(`External findings must use ${EXTERNAL_FINDINGS_SCHEMA} schema version 1, 2, or ${EXTERNAL_FINDINGS_VERSION}.`);
+    throw new Error(`External findings must use ${EXTERNAL_FINDINGS_SCHEMA} schema version 1, 2, 3, or ${EXTERNAL_FINDINGS_VERSION}.`);
   }
   const sourceValue = record(root.source);
   if (!sourceValue || !hasOnlyKeys(sourceValue, SOURCE_KEYS)) {
@@ -240,7 +286,7 @@ export function parseExternalFindingsDocument(value: unknown): ExternalFindingsD
       completeness: item.completeness as ExternalFinding['completeness'],
       limitations: limitations(item.limitations, index),
       reference: optionalText(item.reference, 500, `Finding ${index + 1} reference`),
-      structuredObservation: structuredObservation(item.structuredObservation, index),
+      structuredObservation: structuredObservation(item.structuredObservation, index, Number(root.schemaVersion)),
     };
     const key = findingKey(finding, source.name);
     if (seen.has(key)) continue;
@@ -293,6 +339,7 @@ function existingPinKey(recordValue: CaseRecord, finding: ExternalFinding, sourc
       && pin.sourceSchema?.collection === 'external_observations'
       && pin.sourceSchema.schema === observation.sourceSchema
       && pin.sourceSchema.version === observation.sourceVersion
+      && (observation.eventId === null || pin.certificateObservation?.eventId === observation.eventId)
     ))
   )) ? findingKey(finding, sourceName) : '';
 }
@@ -300,6 +347,21 @@ function existingPinKey(recordValue: CaseRecord, finding: ExternalFinding, sourc
 function structuredPinFields(finding: ExternalFinding): Record<string, unknown> {
   const observation = finding.structuredObservation;
   if (!observation) return {};
+  const certificateObservation = observation.eventId
+    && observation.logId
+    && observation.certificateSha256
+    && observation.dnsNameCount !== null
+    && observation.namesComplete !== null
+    ? {
+        eventId: observation.eventId,
+        logId: observation.logId,
+        certificateSha256: observation.certificateSha256,
+        issuer: observation.issuer,
+        notAfter: observation.notAfter,
+        dnsNameCount: observation.dnsNameCount,
+        namesComplete: observation.namesComplete,
+      }
+    : null;
   return {
     field: observation.field,
     category: finding.category,
@@ -308,6 +370,7 @@ function structuredPinFields(finding: ExternalFinding): Record<string, unknown> 
       schema: observation.sourceSchema,
       version: observation.sourceVersion,
     },
+    certificateObservation,
   };
 }
 

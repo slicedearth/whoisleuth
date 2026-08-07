@@ -468,6 +468,13 @@ registrar MFA, recovery-email separation, registry lock, emergency contacts,
 account audit logging, and zone backups. These statements are not inferred
 from public evidence and must be reviewed by the analyst.
 
+Imported certificate events that retain bounded event identity, issuer, expiry,
+DNS-name count, and name-completeness metadata can be replayed on the Brands
+page against the profile's reviewed issuer and certificate-name expectations.
+The replay uses browser-local cases only and makes no request. Incomplete events
+remain indeterminate, and a difference is a review lead rather than evidence of
+improper issuance, compromise, ownership, or control.
+
 The browser-local **Domain Control Centre** organises every official domain
 against the same analyst-authored operating context. A profile can record a
 zone-intent label, lifecycle state, recovery dependency, and bounded approved

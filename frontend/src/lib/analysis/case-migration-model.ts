@@ -166,7 +166,9 @@ function extractImportPatch(raw: unknown, importedVersion: number): ImportPatch 
   const importFallback = isoOrNull(record.updatedAt) || isoOrNull(record.createdAt) || null;
   const normalizedFallback = importFallback || '1970-01-01T00:00:00.000Z';
   const rawEvidence = Array.isArray(record.evidenceHistory) ? record.evidenceHistory : [];
-  const evidencePins = normalizeCaseEvidencePins(record.evidencePins, normalizedFallback);
+  const evidencePins = normalizeCaseEvidencePins(record.evidencePins, normalizedFallback, {
+    allowCertificateObservation: importedVersion >= 11,
+  });
   const pinIds = new Set(evidencePins.map((item) => item.id));
   const actions = normalizeCaseActions(record.actions, normalizedFallback);
   const assertions = normalizeCaseAssertions(record.assertions, normalizedFallback, pinIds);

@@ -544,6 +544,14 @@ default (see the README), so many lookups return no personal data at all.
   and an artefact digest. WHOISleuth does not authenticate the report sender,
   contact a reporting provider, perform DNS or SMTP collection, or treat an
   imported outcome as current domain safety or sender intent.
+  Imported certificate events can additionally retain a deterministic event
+  identifier, bounded source-log label, certificate digest, optional issuer and
+  expiry, supplied DNS-name count, and whether every supplied name survived the
+  existing case-import bounds. The Brands page compares that browser-local,
+  source-qualified metadata with reviewed issuer and certificate-name
+  expectations without making another request or retaining certificate bytes.
+  Partial events remain indeterminate; the comparison is not evidence of
+  improper issuance, deployment, ownership, control, compromise, or intent.
   Website profile snapshots are retained only after an analyst explicitly
   saves a completed Deep Lookup. Each bounded record contains the canonical
   domain, observation and save times, collection completeness and truncation,

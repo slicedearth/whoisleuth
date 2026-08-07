@@ -18,12 +18,12 @@ limitations remain attached to a separately labelled evidence pin. WHOISleuth do
 change the case's analyst status or disposition, fetch a reference, execute
 content, contact a provider, or submit a report.
 
-## Version 3 schema
+## Version 4 schema
 
 ```json
 {
   "schema": "whoisleuth.external-findings",
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "source": {
     "name": "Local analyst export",
     "reference": "offline review",
@@ -73,7 +73,7 @@ Additional properties, unsupported categories or completeness states, invalid
 domains or dates, control characters, empty findings, and future schema
 versions reject the whole document.
 
-Versions 1 and 2 remain readable and normalise to version 3. Because version 1 did
+Versions 1 through 3 remain readable and normalise to version 4. Because version 1 did
 not distinguish provenance classes, its findings become `provider_report`
 rather than being upgraded to first-party observations. Analyst hypotheses and
 conclusions do not belong in this findings schema; use the separate case
@@ -109,6 +109,17 @@ local asset graph. Other supported record types remain typed observations
 without an invented relationship. The original narrative pin remains visible
 for review, and every projected edge says that this browser session did not
 independently collect the observation.
+
+Version 4 can additionally retain an all-or-nothing certificate-event metadata
+record produced by `ct-intake`: a deterministic event id, bounded log id,
+certificate SHA-256 digest, optional issuer and expiry, original DNS-name count,
+and a completeness flag for the retained name set. The digest must match the
+structured observation value, non-certificate observations cannot carry the
+metadata, and older documents cannot smuggle the newer fields. Cases retain
+the metadata only on typed certificate pins. The Brands page can replay those
+retained events against reviewed issuer and SAN expectations without another
+request. Partial or omitted name sets remain indeterminate, and certificate
+digests are never compared with expected public-key digests.
 
 ## Sanitised capture artefact manifest
 

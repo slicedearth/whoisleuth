@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { domainToASCII } from 'node:url';
 
 import {
@@ -29,6 +30,16 @@ const EVENT_KEYS = new Set([
   'limitations',
 ]);
 const SHA256_RE = /^[a-f0-9]{64}$/u;
+
+function eventId(logId: string, certificateSha256: string, observedAt: string): string {
+  return createHash('sha256')
+    .update(logId)
+    .update('\u0000')
+    .update(certificateSha256)
+    .update('\u0000')
+    .update(observedAt)
+    .digest('hex');
+}
 
 function optionalText(value: unknown, label: string, maximum: number): string | null {
   if (value === undefined || value === null || value === '') return null;
@@ -88,6 +99,7 @@ export function buildCtEventFindings(inputRaw: unknown) {
       throw new TypeError(`events[${eventIndex}].completeness must be complete or partial.`);
     }
     const limitations = boundedLimitations(event.limitations, `events[${eventIndex}].limitations`);
+    const retainedEventId = eventId(logId, certificateSha256, observedAt);
     return names.map((name) => ({
       domain: name,
       category: 'certificate' as const,
@@ -104,6 +116,11 @@ export function buildCtEventFindings(inputRaw: unknown) {
         value: certificateSha256,
         issuer,
         notAfter,
+        eventId: retainedEventId,
+        logId,
+        certificateSha256,
+        dnsNameCount: names.length,
+        namesComplete: completeness === 'complete',
       },
     }));
   });
@@ -113,7 +130,7 @@ export function buildCtEventFindings(inputRaw: unknown) {
       || left.observedAt.localeCompare(right.observedAt)
       || left.structuredObservation.value.localeCompare(right.structuredObservation.value))
     .filter((item) => {
-      const key = `${item.domain}\u0000${item.observedAt}\u0000${item.structuredObservation.value}`;
+      const key = `${item.domain}\u0000${item.observedAt}\u0000${item.structuredObservation.value}\u0000${item.structuredObservation.eventId}`;
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
@@ -131,17 +148,31 @@ export function buildCtEventFindings(inputRaw: unknown) {
     if (selected.length >= MAX_CT_EXTERNAL_FINDINGS) break;
   }
   const truncated = selected.length < unique.length;
+  const selectedNamesByEvent = new Map<string, number>();
+  for (const finding of selected) {
+    const retainedEventId = finding.structuredObservation.eventId;
+    selectedNamesByEvent.set(retainedEventId, (selectedNamesByEvent.get(retainedEventId) ?? 0) + 1);
+  }
   const findings = selected.map((finding) => Object.freeze({
     ...finding,
+    structuredObservation: Object.freeze({
+      ...finding.structuredObservation,
+      namesComplete: finding.structuredObservation.namesComplete
+        && selectedNamesByEvent.get(finding.structuredObservation.eventId) === finding.structuredObservation.dnsNameCount,
+    }),
     limitations: Object.freeze([
       ...finding.limitations,
       'The supplied event is an observation, not proof that the certificate was served by the named domain or that the domain operator requested it.',
+      ...(finding.structuredObservation.namesComplete
+        && selectedNamesByEvent.get(finding.structuredObservation.eventId) !== finding.structuredObservation.dnsNameCount
+        ? ['The bounded import did not retain every DNS name from this certificate event.']
+        : []),
       ...(truncated ? [`The batch contained ${unique.length} unique domain observations; this import preserves the first ${MAX_CT_EXTERNAL_FINDINGS} in deterministic order.`] : []),
     ].slice(0, 8)),
   }));
   return Object.freeze({
     schema: 'whoisleuth.external-findings' as const,
-    schemaVersion: 3 as const,
+    schemaVersion: 4 as const,
     source,
     findings: Object.freeze(findings),
   });

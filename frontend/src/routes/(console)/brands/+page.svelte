@@ -6,11 +6,13 @@
   import BrandProfileEditor from '$lib/components/BrandProfileEditor.svelte';
   import BrandPostureAudit from '$lib/components/BrandPostureAudit.svelte';
   import BrandDesiredPostureBaselines from '$lib/components/BrandDesiredPostureBaselines.svelte';
+  import BrandCertificateEventReplay from '$lib/components/BrandCertificateEventReplay.svelte';
   import BrandProtectionAttestations from '$lib/components/BrandProtectionAttestations.svelte';
   import DomainControlCentre from '$lib/components/DomainControlCentre.svelte';
   import MailReportWorkbench from '$lib/components/MailReportWorkbench.svelte';
   import { activeProfileId, deleteProfile, exportProfiles, importProfiles, loadProfiles, MAX_PROFILE_IMPORT_BYTES, parseList, setActiveProfile, upsertProfile, type BrandProfile } from '$lib/brand-profiles';
   import { createPageBaseline, normalizePageBaseline } from '$lib/analysis/page-baseline.ts';
+  import { loadCases, type CaseRecord } from '$lib/cases';
   import type { DesiredPostureBaseline, ProtectionAttestation } from '$lib/analysis/brand-profile-model.ts';
   import { buildDesiredPostureObservation } from '$lib/analysis/owned-domain-posture-review.ts';
   import {
@@ -24,6 +26,8 @@
   type AuditResult={domain:string;report:DomainPostureHttpResponse|null;error:string};
   type EditorField='name'|'official'|'products'|'tlds'|'partners'|'allowDomains'|'allowRegistrars'|'selectors'|'retiredSelectors'|'mailProtectionProfile'|'trademarkOwner'|'trademarkRegistration'|'faviconHash';
   let profiles=$state<BrandProfile[]>([]);let activeId=$state('');let editing=$state('');let showForm=$state(false);let message=$state('');let auditing=$state(false);let auditResults=$state<AuditResult[]>([]);
+  let cases=$state<CaseRecord[]>([]);
+  let certificateReplayUnavailable=$state(false);
   let name=$state(''),official=$state(''),products=$state(''),tlds=$state('com, net, org'),partners=$state(''),allowDomains=$state(''),allowRegistrars=$state(''),selectors=$state(''),retiredSelectors=$state(''),mailProtectionProfile=$state('standard'),trademarkOwner=$state(''),trademarkRegistration=$state(''),faviconHash=$state(''),faviconPHash=$state('');
   let pageBaseline=$state<ReturnType<typeof normalizePageBaseline>>(null),capturingIdentity=$state(false);
   const capabilityReport=getContext<CapabilityGetter>(CAPABILITY_CONTEXT);
@@ -50,6 +54,7 @@
   async function download(){try{await exportProfiles();message='Exported the Brand Profile collection.';}catch(cause){message=cause instanceof Error?cause.message:'Could not export profiles.';}}
   onMount(()=>{void (async()=>{
     await refresh();
+    try{cases=await loadCases();certificateReplayUnavailable=false;}catch{cases=[];certificateReplayUnavailable=true;}
     const guideDomain=parseList(page.url.searchParams.get('domain')||'',true)[0]||'';
     if(page.url.searchParams.get('new')==='1'&&guideDomain){
       clearForm(guideDomain);
@@ -70,7 +75,7 @@
 
 {#if showForm}<BrandProfileEditor editing={Boolean(editing)} values={editorValues} setValue={setEditorValue} {pageBaseline} {capturingIdentity} disabledReason={siteIdentityReason} {captureSiteIdentity} {save} close={()=>showForm=false} formatDate={baselineDate} />{/if}
 
-{#if active}<DomainControlCentre {active} /><BrandPostureAudit {active} disabledReason={postureReason} {auditing} results={auditResults} {audit} {retainObservation} /><BrandDesiredPostureBaselines {active} {saveBaselines} /><BrandProtectionAttestations {active} {saveAttestations} /><MailReportWorkbench {active} />{/if}
+{#if active}<DomainControlCentre {active} /><BrandPostureAudit {active} disabledReason={postureReason} {auditing} results={auditResults} {audit} {retainObservation} /><BrandDesiredPostureBaselines {active} {saveBaselines} /><BrandCertificateEventReplay {active} {cases} unavailable={certificateReplayUnavailable} /><BrandProtectionAttestations {active} {saveAttestations} /><MailReportWorkbench {active} />{/if}
 
 <style>
   .message{color:var(--accent);font-size:var(--text-sm)}

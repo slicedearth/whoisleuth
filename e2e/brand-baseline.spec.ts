@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures';
-import { failBrowserLocalManifestWrites, migrateLegacyBrowserData, readBrowserLocalCollection, requiredValue } from './helpers';
+import { expectNoHorizontalOverflow, failBrowserLocalManifestWrites, migrateLegacyBrowserData, readBrowserLocalCollection, requiredValue } from './helpers';
 
 const PROFILES_KEY = 'whois-rdap-brand-profiles-v1';
 const ACTIVE_KEY = 'whois-rdap-active-brand-profile-v1';
@@ -319,6 +319,68 @@ test('official-site baseline controls fit a narrow mobile viewport without horiz
   expect(buttonBox).not.toBeNull();
   expect(buttonBox!.x).toBeGreaterThanOrEqual(box!.x);
   expect(buttonBox!.x + buttonBox!.width).toBeLessThanOrEqual(box!.x + box!.width);
+});
+
+test('retained certificate events replay reviewed expectations without mobile overflow', async ({ page }) => {
+  await page.goto('/brands');
+  const profile = {
+    ...profileFixture(),
+    officialDomains: ['stored.example'],
+    desiredPostureBaselines: [{
+      domain: 'stored.example',
+      tlsIssuer: 'Fixture issuer',
+      tlsSanPatterns: ['stored.example'],
+      updatedAt: ISO,
+    }],
+  };
+  await migrateLegacyBrowserData(page, {
+    [PROFILES_KEY]: [profile],
+    [ACTIVE_KEY]: 'profile-1',
+    'whois-rdap-cases-v1': {
+      version: 11,
+      cases: [{
+        id: 'case-certificate-event',
+        domain: 'stored.example',
+        status: 'reviewing',
+        disposition: 'unreviewed',
+        source: 'import',
+        evidencePins: [{
+          id: 'pin-certificate-event',
+          label: 'External certificate finding',
+          value: SHA_A,
+          field: 'certificateSha256',
+          category: 'certificate',
+          source: 'Deployment observation: Fixture feed',
+          sourceSchema: { collection: 'external_observations', schema: 'whoisleuth.certificate-observation-rows', version: 1 },
+          observedAt: ISO,
+          completeness: 'complete',
+          certificateObservation: {
+            eventId: SHA_B,
+            logId: 'fixture-log',
+            certificateSha256: SHA_A,
+            issuer: 'Fixture issuer',
+            notAfter: '2026-12-01T00:00:00.000Z',
+            dnsNameCount: 1,
+            namesComplete: true,
+          },
+          limitations: [],
+          createdAt: ISO,
+        }],
+        createdAt: ISO,
+        updatedAt: ISO,
+      }],
+    },
+  });
+
+  const replay = page.getByRole('region', { name: 'Certificate expectation replay' });
+  await expect(replay).toContainText('1 retained event');
+  await expect(replay).toContainText('Aligned');
+  await replay.getByText(/Certificate …/u).click();
+  await expect(replay).toContainText('The retained event matches the reviewed expectation.');
+  await expect(replay.getByRole('link', { name: 'stored.example' })).toHaveAttribute('href', /view=cases/);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expectNoHorizontalOverflow(page);
 });
 
 test('a future Brand Profile schema is never overwritten by an older app', async ({ page }) => {

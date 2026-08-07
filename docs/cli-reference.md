@@ -742,12 +742,17 @@ time, certificate SHA-256 digest, one or more DNS names, completeness, and
 optional issuer, expiry, and limitations. Unknown fields, malformed names,
 unsupported completeness values, and oversized batches are rejected.
 
-JSON output uses the existing `whoisleuth.external-findings` version 3 contract
+JSON output uses the existing `whoisleuth.external-findings` version 4 contract
 and can be deliberately imported into the browser Console. Wildcard names are
 normalised to their base DNS name, exact event/domain duplicates are removed,
 and deterministic output is capped at 100 findings, 25 domains, and 20 findings
 per domain to match the browser import boundary. Omission is stated in each
 retained finding when the supplied batch exceeds those limits. The command
+makes a deterministic event identifier and preserves the supplied log id,
+certificate digest, issuer, expiry, original DNS-name count, and whether the
+bounded import retained the complete supplied name set. This metadata lets the
+browser replay reviewed issuer and certificate-name expectations without
+mistaking an omitted name for a mismatch. The command
 makes no request and treats every certificate event as a review lead, not proof
 that the certificate was served, requested, or controlled by the named domain.
 
@@ -763,7 +768,7 @@ computed expressions, network endpoints, or executable callbacks. Prototype
 paths and unknown fields are rejected.
 
 The resulting JSON is the existing browser-compatible
-`whoisleuth.external-findings` version 3 contract. It retains source identity,
+`whoisleuth.external-findings` version 4 contract. It retains source identity,
 observation time, completeness, and limitations, while stating that field
 semantics were not independently verified. Deterministic output is capped at
 100 findings, 25 domains, and 20 findings per domain. The command makes no

@@ -192,7 +192,25 @@ describe('named investigation branches', () => {
       version: 10,
       cases: [{
         domain: 'legacy-branch.example',
-        evidencePins: [{ id: 'pin-legacy', label: 'Legacy pin', value: 'retained', source: 'import', createdAt: ISO }],
+        evidencePins: [{
+          id: 'pin-legacy',
+          label: 'Legacy pin',
+          value: 'a'.repeat(64),
+          field: 'certificateSha256',
+          category: 'certificate',
+          source: 'import',
+          sourceSchema: { collection: 'external_observations', schema: 'whoisleuth.certificate-observation-rows', version: 1 },
+          certificateObservation: {
+            eventId: 'b'.repeat(64),
+            logId: 'fixture-log',
+            certificateSha256: 'a'.repeat(64),
+            issuer: 'Fixture issuer',
+            notAfter: null,
+            dnsNameCount: 1,
+            namesComplete: true,
+          },
+          createdAt: ISO,
+        }],
         branches: [{ id: 'branch-smuggled', name: 'Should not import', evidencePinIds: ['pin-legacy'], createdAt: ISO, updatedAt: ISO }],
         createdAt: ISO,
         updatedAt: ISO,
@@ -200,6 +218,42 @@ describe('named investigation branches', () => {
     });
     assert.deepEqual(imported.cases[0]?.branches, []);
     assert.equal(imported.cases[0]?.evidencePins.length, 1);
+    assert.equal(imported.cases[0]?.evidencePins[0]?.certificateObservation, null);
+  });
+
+  test('retains valid schema 11 certificate-event metadata without accepting mismatched digests', () => {
+    const certificateObservation = {
+      eventId: 'b'.repeat(64),
+      logId: 'fixture-log',
+      certificateSha256: 'a'.repeat(64),
+      issuer: 'Fixture issuer',
+      notAfter: '2026-12-01T00:00:00.000Z',
+      dnsNameCount: 3,
+      namesComplete: true,
+    };
+    const makeCase = (metadata: unknown) => ({
+      domain: 'certificate-event.example',
+      evidencePins: [{
+        id: 'pin-event',
+        label: 'Certificate event',
+        value: 'a'.repeat(64),
+        field: 'certificateSha256',
+        category: 'certificate',
+        source: 'import',
+        sourceSchema: { collection: 'external_observations', schema: 'whoisleuth.certificate-observation-rows', version: 1 },
+        certificateObservation: metadata,
+        createdAt: ISO,
+      }],
+      createdAt: ISO,
+      updatedAt: ISO,
+    });
+    const retained = model.mergeCases([], caseExport([makeCase(certificateObservation)]));
+    assert.deepEqual(retained.cases[0]?.evidencePins[0]?.certificateObservation, certificateObservation);
+    const mismatched = model.mergeCases([], caseExport([makeCase({
+      ...certificateObservation,
+      certificateSha256: 'c'.repeat(64),
+    })]));
+    assert.equal(mismatched.cases[0]?.evidencePins[0]?.certificateObservation, null);
   });
 });
 
