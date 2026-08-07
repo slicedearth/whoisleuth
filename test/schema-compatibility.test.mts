@@ -29,6 +29,12 @@ import {
   CAMPAIGN_SCHEMA_VERSION,
 } from '../frontend/src/lib/analysis/campaign-model.ts';
 import {
+  buildCampaignTemporalExport,
+  buildCampaignTemporalReview,
+  CAMPAIGN_TEMPORAL_REVIEW_SCHEMA,
+  CAMPAIGN_TEMPORAL_REVIEW_VERSION,
+} from '../frontend/src/lib/analysis/campaign-temporal-review.ts';
+import {
   buildCaseReport,
   CASE_REPORT_SCHEMA,
   CASE_REPORT_SCHEMA_VERSION,
@@ -192,7 +198,7 @@ describe('schema compatibility inventory', () => {
     assert.equal(inventory.schema, SCHEMA_COMPATIBILITY_INVENTORY_SCHEMA);
     assert.equal(inventory.version, SCHEMA_COMPATIBILITY_INVENTORY_VERSION);
     assert.equal(inventory.generatedAt, NOW);
-    assert.equal(inventory.entries.length, 121);
+    assert.equal(inventory.entries.length, 122);
     assert.deepEqual(new Set(inventory.entries.map((entry) => entry.kind)), new Set([
       'browser_store', 'tab_store', 'hosted_store', 'export', 'cli_document', 'derived',
     ]));
@@ -378,12 +384,17 @@ describe('schema compatibility inventory', () => {
     assert.throws(() => validateSchemaCompatibilityEntries(writeSemantics), /compatibility metadata/i);
   });
 
-  test('binds browser export entries to the schemas emitted by their real builders', () => {
+  test('binds browser export entries to the schemas emitted by their real builders', async () => {
     const inventory = buildSchemaCompatibilityInventory({ generatedAt: NOW });
     const fixtures: Array<readonly [string, unknown, string | null, number]> = [
       ['export.cases', buildCaseExport([], NOW), null, CASE_SCHEMA_VERSION],
       ['export.brand-profiles', buildBrandProfileExport([], NOW), BRAND_PROFILE_SCHEMA, BRAND_PROFILE_SCHEMA_VERSION],
       ['export.campaigns', buildCampaignExport([], NOW), CAMPAIGN_SCHEMA, CAMPAIGN_SCHEMA_VERSION],
+      ['export.campaign-temporal-review', await buildCampaignTemporalExport(
+        { id: 'campaign-fixture', name: 'Schema fixture', domains: [] },
+        buildCampaignTemporalReview([], []),
+        NOW,
+      ), CAMPAIGN_TEMPORAL_REVIEW_SCHEMA, CAMPAIGN_TEMPORAL_REVIEW_VERSION],
       ['export.watchlists', buildWatchlistExport({}, NOW), WATCHLIST_SCHEMA, WATCHLIST_SCHEMA_VERSION],
       ['export.shortlist', buildShortlistExport([], NOW), SHORTLIST_SCHEMA, SHORTLIST_SCHEMA_VERSION],
       ['export.detection-rules', buildDetectionRuleExport([], NOW), DETECTION_RULE_SCHEMA, DETECTION_RULE_SCHEMA_VERSION],

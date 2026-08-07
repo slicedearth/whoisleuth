@@ -26,6 +26,18 @@ test.describe('browser-local campaigns', () => {
       caseRecord({
         id: 'member-one',
         domain: 'member-one.invalid',
+        evidencePins: [{
+          id: 'pin-mail-route',
+          field: 'dns.mx',
+          category: 'dns',
+          label: 'Mail route',
+          value: 'mail.member-one.invalid',
+          source: 'Lookup checkpoint',
+          sourceSchema: { collection: 'lookup_result', schema: 'whoisleuth.lookup-evidence', version: 3 },
+          observedAt: '2026-06-01T00:00:00.000Z',
+          completeness: 'complete',
+          createdAt: '2026-06-01T00:00:00.000Z',
+        }],
         evidenceHistory: [snapshot({
           hasPasswordField: true,
           hasMx: true,
@@ -55,6 +67,10 @@ test.describe('browser-local campaigns', () => {
     await expect(reviewSummary.locator('article', { hasText: 'Official identity relationship' })).toContainText('1');
     await expect(reviewSummary.locator('article', { hasText: 'Redirect or transport review' })).toContainText('1');
     await expect(reviewSummary.locator('article', { hasText: 'Mail exchanger observed' })).toContainText('1');
+    const sourceSequence = page.getByRole('region', { name: 'Retained source sequence' });
+    await expect(sourceSequence).toContainText('Mail');
+    await expect(sourceSequence).toContainText('member-one.invalid');
+    await expect(sourceSequence).toContainText('1/1 observed');
 
     await page.reload();
     await page.getByRole('tab', { name: /Campaigns/ }).click();
@@ -122,6 +138,7 @@ test.describe('browser-local campaigns', () => {
     await page.getByRole('button', { name: 'Create campaign' }).click();
     await page.locator('.add-case select').selectOption('long-mobile-campaign-member.invalid');
     await page.getByRole('button', { name: 'Add case' }).click();
+    await expect(page.getByRole('region', { name: 'Retained source sequence' })).toContainText('No source-qualified pins or sightings');
     await expectNoHorizontalOverflow(page);
   });
 });

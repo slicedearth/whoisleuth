@@ -561,6 +561,13 @@ Monitor contains Cases, Campaigns, Relationships, and Watchlists.
   visible. Cue overlap is expected and the projection is not a score,
   ownership claim, campaign-attribution finding, or maliciousness
   determination.
+  It can also arrange source-qualified evidence pins and reviewed sightings
+  into a retained source sequence across registration, certificate
+  publication, DNS, TLS, website, and mail families. Missing family coverage
+  stays explicit. These are first and last times retained by the local cases,
+  not global first-seen or service-activation dates. A deliberate local JSON
+  export carries the bounded sequence, interpretation limits, and a SHA-256
+  integrity digest without changing campaign or case storage.
 - **Relationships** review analyst-selected Bulk observations and project
   typed, provenance-backed links across those records, stored case evidence,
   and campaign membership without another network request. The Evidence

@@ -86,6 +86,8 @@ export interface CaseOverrides {
   disposition?: string;
   source?: string;
   evidenceHistory?: ReturnType<typeof snapshot>[];
+  evidencePins?: unknown[];
+  sightings?: unknown[];
   createdAt?: string;
   updatedAt?: string;
   notes?: Array<{ createdAt: string; body: string }>;
@@ -101,6 +103,8 @@ export function caseRecord(overrides: CaseOverrides = {}) {
     notes: overrides.notes ?? [],
     source: overrides.source ?? 'lookup',
     evidenceHistory: overrides.evidenceHistory ?? [],
+    evidencePins: overrides.evidencePins ?? [],
+    sightings: overrides.sightings ?? [],
     createdAt: overrides.createdAt ?? '2026-06-01T00:00:00.000Z',
     updatedAt: overrides.updatedAt ?? '2026-06-01T00:00:00.000Z',
   };

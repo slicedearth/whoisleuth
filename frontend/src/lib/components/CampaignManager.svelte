@@ -1,8 +1,10 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import Pagination from '$lib/components/Pagination.svelte';
+  import CampaignTemporalReview from '$lib/components/CampaignTemporalReview.svelte';
   import type { CaseRecord } from '$lib/cases';
   import { buildCampaignReviewSummary } from '$lib/analysis/campaign-review-summary.ts';
+  import { buildCampaignTemporalReview } from '$lib/analysis/campaign-temporal-review.ts';
   import {
     addCampaignDomain,
     createCampaign,
@@ -40,6 +42,7 @@
   const currentMemberPage=$derived(Math.min(memberPage,memberPageCount));
   const pagedMembers=$derived((expanded?.domains??[]).slice((currentMemberPage-1)*MEMBER_PAGE_SIZE,currentMemberPage*MEMBER_PAGE_SIZE));
   const reviewSummary=$derived(buildCampaignReviewSummary(expanded?.domains??[],records));
+  const temporalReview=$derived(buildCampaignTemporalReview(expanded?.domains??[],records));
 
   function setPage(value:number){page=Math.min(pageCount,Math.max(1,Math.trunc(value)));}
   function setMemberPage(value:number){memberPage=Math.min(memberPageCount,Math.max(1,Math.trunc(value)));}
@@ -151,6 +154,8 @@
               </div>
               <details><summary>Interpretation limits</summary><ul>{#each reviewSummary.limitations as limitation}<li>{limitation}</li>{/each}</ul></details>
             </section>
+
+            <CampaignTemporalReview campaign={campaign} review={temporalReview} onmessage={(value)=>message=value} />
 
             <form class="add-case" onsubmit={(event)=>{event.preventDefault();add(campaign);}}>
               <label for={`campaign-case-${campaign.id}`}>Add an existing case</label>
