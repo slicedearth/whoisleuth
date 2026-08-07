@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import type { LookupEvidenceQualityMatrix } from '$lib/analysis/lookup-decision-support.ts';
   import { formatCollectionDuration } from '$lib/analysis/lookup-display-shared.ts';
   import type { LookupTiming } from '$lib/analysis/lookup-response.ts';
@@ -22,10 +23,11 @@
     onpolicychange: (value: { mode: 'task-default' | 'analyst-custom'; thresholdsDays: LookupFreshnessThresholds }) => void;
   } = $props();
 
-  let policyMode = $state<'task-default' | 'analyst-custom'>('task-default');
-  let registrationDays = $state(30);
-  let networkDays = $state(7);
-  let webDays = $state(3);
+  const initialFreshnessPolicy = untrack(() => refreshPlan.freshnessPolicy);
+  let policyMode = $state<'task-default' | 'analyst-custom'>(initialFreshnessPolicy.id === 'analyst-custom' ? 'analyst-custom' : 'task-default');
+  let registrationDays = $state(initialFreshnessPolicy.thresholdsDays.registration);
+  let networkDays = $state(initialFreshnessPolicy.thresholdsDays.network);
+  let webDays = $state(initialFreshnessPolicy.thresholdsDays.web);
 
   function boundedDays(value: number, fallback: number): number {
     return Number.isFinite(value) ? Math.max(1, Math.min(365, Math.round(value))) : fallback;

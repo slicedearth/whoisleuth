@@ -265,6 +265,22 @@ export async function failBrowserLocalReads(page: Page) {
   });
 }
 
+export async function failBrowserLocalCollectionReads(
+  page: Page,
+  collection: BrowserLocalCollectionId,
+) {
+  const installFailure = (collectionId: BrowserLocalCollectionId) => {
+    const originalGet = IDBObjectStore.prototype.get;
+    IDBObjectStore.prototype.get = function get(query: IDBValidKey | IDBKeyRange) {
+      if (this.name === 'manifests' && query === collectionId) {
+        throw new DOMException(`Browser-local ${collectionId} reads are unavailable`, 'InvalidStateError');
+      }
+      return originalGet.call(this, query);
+    };
+  };
+  await page.evaluate(installFailure, collection);
+}
+
 // Computed content of a pseudo-element - used to check the CSS-only
 // data-label treatment that only applies to Bulk's stacked mobile cards.
 export async function pseudoContent(locator: Locator, pseudo: '::before' | '::after') {

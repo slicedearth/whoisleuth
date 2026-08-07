@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures';
-import { expectNoHorizontalOverflow, migrateLegacyBrowserData, readBrowserLocalCollection } from './helpers';
+import { expectNoHorizontalOverflow, failBrowserLocalCollectionReads, migrateLegacyBrowserData, readBrowserLocalCollection } from './helpers';
 
 // Every domain here is a local/invalid value (RFC 2606 .invalid, or dotless
 // bad-domain-* that classifyQuery rejects with a 400). Case features are
@@ -71,6 +71,10 @@ test.describe('browser-local campaigns', () => {
     await expect(sourceSequence).toContainText('Mail');
     await expect(sourceSequence).toContainText('member-one.invalid');
     await expect(sourceSequence).toContainText('1/1 observed');
+
+    await page.getByRole('tab', { name: /Cases/ }).click();
+    await page.getByRole('tab', { name: /Campaigns/ }).click();
+    await expect(page.locator('.campaign-head', { hasText: 'Credential cluster' })).toBeVisible();
 
     await page.reload();
     await page.getByRole('tab', { name: /Campaigns/ }).click();
@@ -191,6 +195,32 @@ test.describe('accessible cross-case relationship table', () => {
     await page.getByRole('button', { name: 'Open charlie-table.invalid' }).click();
     await expect(page.getByRole('tab', { name: /Cases/ })).toHaveAttribute('aria-selected', 'true');
     await expect(page.locator('.case-head', { hasText: 'charlie-table.invalid' })).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  test('keeps successful relationship context visible when campaigns cannot load', async ({ page }) => {
+    await page.goto('/monitor');
+    await migrateLegacyBrowserData(page, {
+      'whois-rdap-cases-v1': {
+        version: 2,
+        cases: [
+          caseRecord({ id: 'partial-a', domain: 'partial-a.invalid', evidenceHistory: [snapshot({ nameservers: ['ns.partial.invalid'] })] }),
+          caseRecord({ id: 'partial-b', domain: 'partial-b.invalid', evidenceHistory: [snapshot({ nameservers: ['ns.partial.invalid'] })] }),
+        ],
+      },
+    });
+    await expect(page.getByRole('tab', { name: /Cases 2/ })).toBeVisible();
+    await failBrowserLocalCollectionReads(page, 'campaigns');
+    const navigation = page.locator('#console-navigation');
+    await navigation.getByRole('link', { name: /^Dashboard/u }).click();
+    await navigation.getByRole('link', { name: /^Monitor/u }).click();
+    await page.getByRole('tab', { name: /Relationships/ }).click();
+
+    await expect(page.locator('.local-context-status')).toContainText('campaigns');
+    await expect(page.locator('.local-context-status')).toContainText('Successfully loaded collections remain available');
+    const table = page.getByRole('table', { name: 'Cross-case relationships from retained browser-local investigation evidence' });
+    await expect(table).toContainText('Shared nameserver set');
+    await expect(table).toContainText('partial-a.invalid');
+    await expect(table).toContainText('partial-b.invalid');
   });
 
   test('paginates every retained relationship and resets the page when filtering', async ({ page }) => {

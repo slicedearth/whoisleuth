@@ -177,24 +177,11 @@ async function readStdinBounded(
   limit = MAX_STDIN_BYTES,
   signal?: AbortSignal,
 ): Promise<string> {
-  if (!stream || stream.isTTY) return '';
-  const abort = () => stream.destroy?.(new DOMException('Aborted', 'AbortError'));
-  if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
-  signal?.addEventListener('abort', abort, { once: true });
-  const chunks: Buffer[] = [];
-  let total = 0;
-  try {
-    for await (const chunk of stream as AsyncIterable<unknown>) {
-      if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
-      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as Uint8Array);
-      total += buffer.length;
-      if (total > limit) throw new CliUsageError(`Standard input is limited to ${limit} bytes.`);
-      chunks.push(buffer);
-    }
-  } finally {
-    signal?.removeEventListener('abort', abort);
-  }
-  const text = Buffer.concat(chunks).toString('utf8').trim();
+  const text = (await readCliTextInput(null, stream, {
+    maximumBytes: limit,
+    label: 'Standard input',
+    ...(signal ? { signal } : {}),
+  })).trim();
   const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
   if (lines.length > 1) throw new CliUsageError('Single-value commands accept one stdin line. Use the bulk command for multiple inputs.');
   return lines[0] || '';

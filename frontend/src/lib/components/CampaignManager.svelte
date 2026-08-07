@@ -18,7 +18,7 @@
     type CampaignRecord,
   } from '$lib/campaigns';
 
-  let { records, onselect, oncount, focusId = '' }:{records:CaseRecord[];onselect?:(record:CaseRecord)=>void;oncount?:(count:number)=>void;focusId?:string}=$props();
+  let { records, initialCampaigns = [], onselect, oncount, onchange, focusId = '' }:{records:CaseRecord[];initialCampaigns?:CampaignRecord[];onselect?:(record:CaseRecord)=>void;oncount?:(count:number)=>void;onchange?:(campaigns:CampaignRecord[])=>void;focusId?:string}=$props();
   let campaigns=$state<CampaignRecord[]>([]);
   let expandedId=$state('');
   let newName=$state('');
@@ -54,6 +54,7 @@
     campaigns=next??await loadCampaigns();
     if(expandedId&&!campaigns.some((campaign)=>campaign.id===expandedId))expandedId='';
     oncount?.(campaigns.length);
+    onchange?.(campaigns);
   }
   function open(campaign:CampaignRecord){
     if(expandedId===campaign.id){expandedId='';return;}
@@ -90,7 +91,8 @@
   function openCase(domain:string){const record=caseByDomain.get(domain);if(record)onselect?.(record);}
 
   onMount(()=>{void (async()=>{
-    await refresh();
+    campaigns=initialCampaigns;
+    oncount?.(campaigns.length);
     const focused=focusId?campaigns.find((campaign)=>campaign.id===focusId):null;
     if(focused)open(focused);
   })();});

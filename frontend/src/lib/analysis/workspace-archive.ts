@@ -582,6 +582,23 @@ export async function readWorkspaceArchive(raw: unknown, options: WorkspaceArchi
     if (await checksum(data, options.cryptoProvider) !== entry.checksum) {
       throw new Error(`${entry.id} failed its archive checksum check.`);
     }
+    const embedded = record(data);
+    const embeddedVersion = embedded?.version;
+    const embeddedSchema = embedded && Object.prototype.hasOwnProperty.call(embedded, 'schema')
+      ? embedded.schema
+      : null;
+    if (
+      !embedded
+      || typeof embeddedVersion !== 'number'
+      || !Number.isSafeInteger(embeddedVersion)
+      || embeddedVersion < 1
+      || embeddedVersion > 1000
+      || (embeddedSchema !== null && typeof embeddedSchema !== 'string')
+      || embeddedVersion !== entry.version
+      || embeddedSchema !== entry.schema
+    ) {
+      throw new Error(`${entry.id} section contract does not match its archive manifest.`);
+    }
     const definition = DEFINITION_BY_ID.get(entry.id);
     let status: WorkspaceArchiveSectionStatus = 'ready';
     let reason = '';

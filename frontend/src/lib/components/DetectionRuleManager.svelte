@@ -31,7 +31,7 @@
     type StaticPagePatternPack,
   } from '$lib/analysis/static-page-pattern-packs.ts';
 
-  let { records, onselect, oncount }:{records:CaseRecord[];onselect?:(record:CaseRecord)=>void;oncount?:(count:number)=>void}=$props();
+  let { records, initialRules = [], onselect, oncount, onchange }:{records:CaseRecord[];initialRules?:DetectionRule[];onselect?:(record:CaseRecord)=>void;oncount?:(count:number)=>void;onchange?:(rules:DetectionRule[])=>void}=$props();
   let rules=$state<DetectionRule[]>([]);
   let name=$state('');
   let riskDelta=$state(0);
@@ -51,7 +51,7 @@
   const draftPreview=$derived(previewDetectionRule(records,rules,{name,enabled:true,match,conditions:draftConditions,riskDelta:Number(riskDelta),tag}));
 
   function newCondition(){return{field:'availability',operator:'equals',value:'registered'};}
-  async function refresh(next?:DetectionRule[]){rules=next??await loadDetectionRules();oncount?.(rules.length);}
+  async function refresh(next?:DetectionRule[]){rules=next??await loadDetectionRules();oncount?.(rules.length);onchange?.(rules);}
   function definition(field:string){return ruleFieldDefinition(field) as null|{value:string;label:string;kind:string;values?:string[]};}
   function operatorLabel(value:string){return({equals:'equals',at_least:'at least',at_most:'at most',contains:'contains',present:'is present'} as Record<string,string>)[value]??value;}
   function updateField(index:number,value:string){const operator=operatorsForRuleField(value)[0]??'equals';const item={field:value,operator,value:operator==='present'?'true':definition(value)?.kind==='boolean'?'true':definition(value)?.values?.[0]??''};conditions=conditions.map((condition,i)=>i===index?item:condition);}
@@ -81,7 +81,7 @@
   function conditionLabel(condition:DetectionRuleCondition){const field=definition(condition.field)?.label??condition.field;return condition.operator==='present'?`${field} is present`:`${field} ${operatorLabel(condition.operator)} ${String(condition.value)}`;}
   function openCase(caseId:string){const record=caseById.get(caseId);if(record)onselect?.(record);}
 
-  onMount(()=>{void refresh();});
+  onMount(()=>{rules=initialRules;oncount?.(rules.length);});
 </script>
 
 <section class="rule-builder card">

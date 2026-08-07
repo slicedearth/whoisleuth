@@ -160,6 +160,9 @@ test('deep lookup reports pending elapsed time and final source settle timing', 
   await expect(coverage).toContainText('WHOIS');
   await expect(coverage).toContainText('A bounded homepage request covering redirects, response metadata, and a capped body prefix.');
   await expect(coverage).toContainText('2.0 s');
+  const sourceQualityTable = coverage.getByRole('table', { name: 'Source quality and freshness' });
+  await expect(sourceQualityTable).toHaveAttribute('aria-colcount', '5');
+  await expect(sourceQualityTable.getByRole('row').first().getByRole('columnheader')).toHaveCount(5);
   const diagnostics = coverage.locator('details.timing-detail');
   await expect(diagnostics).not.toHaveAttribute('open', '');
   await expect(diagnostics.locator('.summary-arrow')).toHaveText('›');
@@ -342,6 +345,31 @@ test('keeps the current Lookup form and result during console navigation only', 
   await page.reload();
   await expect(page.locator('#query')).toHaveValue('');
   await expect(page.locator('#result')).toHaveCount(0);
+});
+
+test('a malformed public session response does not clear the current Lookup form', async ({ page }) => {
+  await page.locator('#query').fill('retained-session-state.example');
+  let unavailableChecks = 0;
+  const unavailableSession = async (route: import('@playwright/test').Route) => {
+    unavailableChecks += 1;
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ unexpected: 'session shape' }),
+    });
+  };
+  await page.route('**/api/session', unavailableSession);
+  await page.getByRole('button', { name: 'Open command palette' }).click();
+  await page.getByLabel('Search pages').fill('Public homepage');
+  await page.getByRole('option', { name: /Public homepage/u }).click();
+  await expect(page).toHaveURL('/');
+  await expect.poll(() => unavailableChecks).toBeGreaterThan(0);
+  await page.unroute('**/api/session', unavailableSession);
+
+  await page.locator('.public-header').getByRole('link', { name: 'Open console' }).click();
+  await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
+  await page.locator('#console-navigation').getByRole('link', { name: /^Lookup/u }).click();
+  await expect(page.locator('#query')).toHaveValue('retained-session-state.example');
 });
 
 test('clears transient Lookup state when signing out through the Console', async ({ page }) => {

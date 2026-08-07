@@ -528,6 +528,7 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     coverage: evidenceCoverage,
     decisionSupport: lookupDecisionSupport,
     availabilityState: availability.state,
+    availabilitySource: availability.source,
     hasActiveProfile: Boolean(profile),
     hasCaseSection,
     responseRecipientCount: abuseRecipientResolution.recipients.length,

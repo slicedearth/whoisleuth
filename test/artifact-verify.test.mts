@@ -48,12 +48,42 @@ describe('offline artifact verifier', () => {
     }));
     const cases = archive.manifest.sections.find((section) => section.id === 'cases');
     assert.ok(cases);
+    Reflect.set(archive.sections.cases, 'version', 999);
     cases.version = 999;
+    cases.bytes = new TextEncoder().encode(JSON.stringify(archive.sections.cases)).byteLength;
+    cases.checksum = await sha256ArtifactDigest(archive.sections.cases);
     const report = await verifyOfflineArtifact(JSON.stringify(archive));
     assert.equal(report.state, 'verified');
     assert.equal(report.valid, true);
     assert.equal(report.summary.unsupportedSectionCount, 1);
     assert.match(report.limitations.join(' '), /cannot be imported/iu);
+  });
+
+  test('keeps integrity valid while reporting malformed ordinary and encrypted workspace records as partially importable', async () => {
+    const archive = structuredClone(await buildWorkspaceArchive({}, {
+      generatedAt: '2026-07-15T00:00:00.000Z',
+    }));
+    const profiles = archive.manifest.sections.find((section) => section.id === 'brandProfiles');
+    assert.ok(profiles);
+    Reflect.set(archive.sections.brandProfiles, 'profiles', [{ secret: 'must-not-appear' }]);
+    profiles.recordCount = 1;
+    archive.manifest.totalRecords += 1;
+    profiles.bytes = new TextEncoder().encode(JSON.stringify(archive.sections.brandProfiles)).byteLength;
+    profiles.checksum = await sha256ArtifactDigest(archive.sections.brandProfiles);
+
+    const ordinary = await verifyOfflineArtifact(JSON.stringify(archive));
+    assert.equal(ordinary.valid, true);
+    assert.equal(ordinary.summary.fullyImportable, false);
+    assert.equal(ordinary.summary.skippedRecordCount, 1);
+    assert.equal(ordinary.summary.unsupportedSectionCount, 0);
+    assert.doesNotMatch(JSON.stringify(ordinary), /must-not-appear/iu);
+
+    const encrypted = await encryptWorkspaceArchive(archive, PASSPHRASE);
+    const decrypted = await verifyOfflineArtifact(JSON.stringify(encrypted), { passphrase: PASSPHRASE });
+    assert.equal(decrypted.valid, true);
+    assert.equal(decrypted.summary.fullyImportable, false);
+    assert.equal(decrypted.summary.skippedRecordCount, 1);
+    assert.doesNotMatch(JSON.stringify(decrypted), /must-not-appear|fixture archive passphrase/iu);
   });
 
   test('distinguishes structural envelope inspection from authenticated decryption', async () => {

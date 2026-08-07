@@ -35,6 +35,7 @@
 
   let counts = $state({ cases: 0, openCases: 0, watchlists: 0, profiles: 0 });
   let investigationIndex = $state<InvestigationSearchIndex | null>(null);
+  let summaryPending = $state(true);
   let summaryError = $state('');
   let guideDomain = $state('');
   let guideRecipeId = $state<InvestigationRecipeId>('new_domain_triage');
@@ -48,6 +49,7 @@
   const compatibleTemplates = $derived(templates.filter((template) => template.recipeId === guideRecipeId));
 
   async function refreshLocalSummary() {
+    summaryPending = true;
     summaryError = '';
     try {
       const [cases, watchlists, profiles, searchIndex, savedTemplates] = await Promise.all([
@@ -69,6 +71,8 @@
       summaryError = 'Saved-work counts and local search could not be refreshed. Reload the Dashboard to try again.';
       investigationIndex ??= unavailableInvestigationSearchIndex(summaryError);
       if (!isExpectedBrowserLocalDataFailure(cause)) throw cause;
+    } finally {
+      summaryPending = false;
     }
   }
 
@@ -135,7 +139,7 @@
   </div>
 </section>
 
-<section class="dashboard-section" aria-labelledby="local-summary-title">
+<section class="dashboard-section" aria-labelledby="local-summary-title" aria-busy={summaryPending}>
   <div class="section-intro">
     <p class="eyebrow">Saved in this browser</p>
     <h2 id="local-summary-title">Continue saved work</h2>

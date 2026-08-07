@@ -57,6 +57,7 @@
     selectInvestigationGuideReviewDomains,
     updateInvestigationGuideOutcome,
   } from '$lib/investigation-guide';
+  import { unavailableLocalContextLabels } from '$lib/local-context-load.ts';
 
   type Mode = 'typosquat' | 'keyword' | 'certificate-transparency' | 'nameserver';
   type GenerationPresetId = 'common' | 'impersonation' | 'all' | 'custom';
@@ -75,6 +76,7 @@
   let generatedContext = $state<Candidate[]>([]);
   let selected = $state<Set<string>>(new Set());
   let status = $state('');
+  let localContextStatus = $state('');
   let error = $state('');
   let searching = $state(false);
   let filter = $state('');
@@ -192,9 +194,8 @@
     const [profileResult,historyResult]=await Promise.allSettled([activeProfile(),loadCtHistory()]);
     if(profileResult.status==='fulfilled')profile=profileResult.value;
     if(historyResult.status==='fulfilled')ctHistory=historyResult.value;
-    if(profileResult.status==='rejected'||historyResult.status==='rejected'){
-      status='Some browser-local profile or certificate-history context could not be loaded. Candidate generation and guided routes remain available; reload to retry.';
-    }
+    const unavailable=unavailableLocalContextLabels([profileResult,historyResult],['profile','certificate history']);
+    if(unavailable.length)localContextStatus=`Some browser-local context could not be loaded (${unavailable.join(', ')}). Candidate generation remains available; reload to retry the missing context.`;
     if (candidates.length) candidateMetadata = buildCandidateMetadata(candidates);
     const guidedDomain = normalizeInvestigationGuideDomain(new URL(window.location.href).searchParams.get('q'));
     if (guidedDomain) seed = guidedDomain;
@@ -728,6 +729,7 @@
   {#if mode==='certificate-transparency'}<p class="generation-limits" id="ct-query-guidance">Search public certificate names using a keyword of up to {MAX_CT_QUERY_LENGTH} characters. This does not submit the target for a live website scan.</p>{/if}
   {#if mode==='nameserver'}<p class="generation-limits" id="rdap-search-guidance">Search one IANA-selected registry for domains it reports against this nameserver. The result is a bounded lower bound for that suffix, not a global reverse-nameserver inventory.</p>{/if}
   {#if mode==='keyword'}<p class="generation-limits" id="generation-limits">Generation is bounded to {MAX_GENERATION_TLDS} TLDs, {MAX_NAME_VARIANTS.toLocaleString()} label variants, and {MAX_GENERATED_CANDIDATES.toLocaleString()} candidates per run.</p>{/if}
+  {#if localContextStatus}<p class="local-context-status" role="status">{localContextStatus}</p>{/if}
   {#if error}<p class="error" role="alert">{error}</p>{:else if status}<p class="status" role="status" aria-live="polite">{status}</p>{/if}
   {#if ctHistoryNotice}<p class="ct-history-notice" role="status">{ctHistoryNotice}</p>{/if}
   {#if mode==='certificate-transparency' && ctHistory.entries.length}
@@ -795,6 +797,7 @@
   .fields{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(160px,.7fr) auto;gap:10px;align-items:end}
   .generation-limits{margin:10px 0 0;color:var(--muted);font-size:var(--text-xs)}
   .ct-history-notice{color:var(--amber);font-size:var(--text-xs)}
+  .local-context-status{color:var(--amber);font-size:var(--text-sm)}
   .rdap-search-summary{display:grid;gap:4px;margin-top:14px;padding:12px;border:1px solid rgb(var(--accent2-rgb) / .28);border-radius:var(--radius-md);background:rgb(var(--accent2-rgb) / .04);font-size:var(--text-xs)}
   .rdap-search-summary strong{color:var(--text)}
   .rdap-search-summary span,.rdap-search-summary p{color:var(--muted)}

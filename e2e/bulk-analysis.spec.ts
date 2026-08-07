@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { expect, test } from './fixtures';
-import { boundingBox, expectNoHorizontalOverflow, expectNoHorizontalScrollContainers, failBrowserLocalReads, migrateLegacyBrowserData, pseudoContent, readBrowserLocalCollection, runBulkScan } from './helpers';
+import { boundingBox, expectNoHorizontalOverflow, expectNoHorizontalScrollContainers, failBrowserLocalCollectionReads, failBrowserLocalReads, migrateLegacyBrowserData, pseudoContent, readBrowserLocalCollection, runBulkScan } from './helpers';
 
 // Default fixtures use dotless values so classifyQuery rejects them before
 // any upstream work. Tests that need completed result data install an explicit
@@ -66,7 +66,35 @@ test('keeps the Bulk queue available when browser-local context cannot be loaded
   await navigation.getByRole('link', { name: /^Dashboard/u }).click();
   await navigation.getByRole('link', { name: /^Bulk/u }).click();
 
-  await expect(page.locator('.local-context-status')).toContainText('browser-local profile, shortlist, case, relationship, or saved-session context could not be loaded');
+  await expect(page.locator('.local-context-status')).toContainText('Some browser-local context could not be loaded');
+  await expect(page.locator('.local-context-status')).toContainText('review-queue');
+  await expect(page.locator('#domains')).toBeEditable();
+});
+
+test('retains successfully loaded Bulk context when one collection is unavailable', async ({ page }) => {
+  await page.route('**/api/lookup?*', async (route) => {
+    const domain = new URL(route.request().url()).searchParams.get('q') || '';
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        availability: { applicable: true, domain, state: 'registered', confidence: 'high' },
+        diagnostics: { version: 7, rdap: { status: 'complete' }, whois: { status: 'skipped' }, availability: { status: 'complete' } },
+      }),
+    });
+  });
+  await runBulkScan(page, ['retained-context.example']);
+  await page.getByLabel('Session name').fill('Retained partial context');
+  await page.getByRole('button', { name: 'Save current session' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Saved Retained partial context.' })).toBeVisible();
+
+  await failBrowserLocalCollectionReads(page, 'brand_profiles');
+  const navigation = page.locator('#console-navigation');
+  await navigation.getByRole('link', { name: /^Dashboard/u }).click();
+  await navigation.getByRole('link', { name: /^Bulk/u }).click();
+  await expect(page.locator('.local-context-status')).toContainText('profile');
+  await expect(page.locator('.local-context-status')).toContainText('Successfully loaded collections remain available');
+  await expect(page.getByRole('heading', { name: 'Retained partial context' })).toBeVisible();
   await expect(page.locator('#domains')).toBeEditable();
 });
 

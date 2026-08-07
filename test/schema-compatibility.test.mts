@@ -17,6 +17,7 @@ import {
   BRAND_PROFILE_SCHEMA,
   BRAND_PROFILE_SCHEMA_VERSION,
   brandProfileStoreVersion,
+  SUPPORTED_BRAND_PROFILE_SCHEMA_VERSIONS,
 } from '../frontend/src/lib/analysis/brand-profile-model.ts';
 import {
   BULK_REVIEW_SCHEMA,
@@ -53,6 +54,7 @@ import {
   MAX_WEBSITE_SNAPSHOT_STORE_BYTES,
   WEBSITE_SNAPSHOT_SCHEMA,
   WEBSITE_SNAPSHOT_SCHEMA_VERSION,
+  SUPPORTED_WEBSITE_SNAPSHOT_SCHEMA_VERSIONS,
 } from '../frontend/src/lib/analysis/website-snapshot-model.ts';
 import {
   MAX_WORKSPACE_ARCHIVE_BYTES,
@@ -68,6 +70,7 @@ import {
 } from '../frontend/src/lib/analysis/workspace-archive-crypto.ts';
 import {
   buildCaseExport,
+  CASE_IMPORT_VERSIONS,
   CASE_SCHEMA_VERSION,
 } from '../frontend/src/lib/analysis/case-model.ts';
 import {
@@ -458,6 +461,9 @@ describe('schema compatibility inventory', () => {
     assert.deepEqual(byId(inventory, 'export.brand-profiles').supportedVersions, [2, 3, 4, 5, 6]);
     assert.deepEqual(byId(inventory, 'export.watchlists').supportedVersions, [2]);
     assert.deepEqual(byId(inventory, 'export.shortlist').supportedVersions, [2, 3]);
+    assert.deepEqual(byId(inventory, 'export.cases').supportedVersions, [...CASE_IMPORT_VERSIONS]);
+    assert.deepEqual(byId(inventory, 'export.brand-profiles').supportedVersions, [...SUPPORTED_BRAND_PROFILE_SCHEMA_VERSIONS]);
+    assert.deepEqual(byId(inventory, 'browser.website-snapshots').supportedVersions, [...SUPPORTED_WEBSITE_SNAPSHOT_SCHEMA_VERSIONS]);
   });
 
   test('formats a deterministic maintainer report without absolute paths or user data', () => {

@@ -41,6 +41,7 @@ test('claim readiness keeps evidence sufficiency separate for each statement', (
     coverage: ledger({ availability: 'complete', rdap: 'complete', dns: 'partial', http: 'complete', tls: 'complete' }),
     decisionSupport,
     availabilityState: 'registered',
+    availabilitySource: 'rdap',
   });
   assert.equal(readiness.entries.find((entry) => entry.id === 'registration-state')?.state, 'ready');
   assert.equal(readiness.entries.find((entry) => entry.id === 'current-web-observation')?.state, 'ready');
@@ -83,9 +84,9 @@ test('registration disagreements produce bounded hypotheses without claiming a c
 });
 
 test('registration readiness follows the authority-aware decision for WHOIS-only and RDAP-only registries', () => {
-  for (const registrationSources of [
-    { availability: 'complete', whois: 'complete', rdap: 'unsupported', dns: 'complete' },
-    { availability: 'complete', whois: 'unsupported', rdap: 'complete', dns: 'complete' },
+  for (const [availabilitySource, registrationSources] of [
+    ['whois', { availability: 'complete', whois: 'complete', rdap: 'unsupported', dns: 'complete' }],
+    ['rdap', { availability: 'complete', whois: 'unsupported', rdap: 'complete', dns: 'complete' }],
   ] as const) {
     const readiness = buildLookupClaimReadiness({
       targetType: 'domain',
@@ -93,11 +94,26 @@ test('registration readiness follows the authority-aware decision for WHOIS-only
       coverage: ledger(registrationSources),
       decisionSupport,
       availabilityState: 'registered',
+      availabilitySource,
     });
     assert.equal(readiness.entries.find((entry) => entry.id === 'registration-state')?.state, 'ready');
     assert.equal(readiness.entries.find((entry) => entry.id === 'controlled-change')?.state, 'ready');
     assert.deepEqual(readiness.entries.find((entry) => entry.id === 'registration-state')?.requiredEvidence, ['Authority-aware availability decision']);
   }
+});
+
+test('controlled-change readiness requires registry control evidence selected by the authority decision', () => {
+  const readiness = buildLookupClaimReadiness({
+    targetType: 'domain',
+    task: 'owned',
+    coverage: ledger({ availability: 'complete', rdap: 'unsupported', whois: 'unsupported', dns: 'complete' }),
+    decisionSupport,
+    availabilityState: 'registered',
+    availabilitySource: 'dns_delegation',
+  });
+  const controlled = readiness.entries.find((entry) => entry.id === 'controlled-change');
+  assert.equal(controlled?.state, 'limited');
+  assert.ok(controlled?.missingEvidence.includes('Registry control evidence selected by the availability authority'));
 });
 
 test('registration sources cannot bypass an incomplete or unsettled authority decision', () => {

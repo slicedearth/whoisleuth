@@ -30,15 +30,16 @@
   import { buildCaseRelationshipClusters } from '$lib/analysis/case-relationship-clusters.ts';
   import { buildCaseDecisionQualityReport } from '$lib/analysis/case-decision-quality.ts';
   import { parseDomainInput } from '$lib/analysis/utils.ts';
-  import { loadLocalCaseInvestigationProjection } from '$lib/investigation-search';
+  import { buildInvestigationProjection } from '$lib/analysis/investigation-projection.ts';
   import { deleteWatchlist, exportWatchlists, importWatchlists, loadWatchlists, MAX_WATCHLIST_IMPORT_BYTES, writeWatchlists, type WatchlistEntry, type Watchlists } from '$lib/watchlists';
   import {
     addCaseNote, CASE_DISPOSITIONS, CASE_STATUSES, deleteCase, dispositionLabel, editCase, exportCases,
     exportRiskCalibrationDataset, importCases, loadCases, MAX_CASE_IMPORT_BYTES, openCase,
     previewRiskCalibrationDataset, statusLabel, type CaseRecord, type RiskCalibrationExportPreview
   } from '$lib/cases';
-  import { loadCampaigns } from '$lib/campaigns';
-  import { loadDetectionRules } from '$lib/detection-rules';
+  import { loadCampaigns, type CampaignRecord } from '$lib/campaigns';
+  import { loadDetectionRules, type DetectionRule } from '$lib/detection-rules';
+  import { unavailableLocalContextLabels } from '$lib/local-context-load.ts';
   import {
     deleteRelationshipObservation,
     loadRelationshipObservations,
@@ -95,10 +96,13 @@
   const decisionQuality=$derived(buildCaseDecisionQualityReport(cases));
   let casePage=$state(1);
   let campaignCount=$state(0);
+  let campaigns=$state<CampaignRecord[]>([]);
   let investigationProjection=$state<unknown>(null);
   let retainedRelationships=$state<RelationshipObservation[]>([]);
   const retainedTimeline=$derived(buildRetainedEvidenceTimeline({cases,bulkSessions,watchlists,relationships:retainedRelationships,websiteSnapshots}));
   let customRuleCount=$state(0);
+  let detectionRules=$state<DetectionRule[]>([]);
+  let localContextStatus=$state('');
   const relationshipSummary=$derived(buildInvestigationCaseRelationships(investigationProjection));
   const relationshipClusters=$derived(buildCaseRelationshipClusters(relationshipSummary));
   const relationshipCount=$derived(relationshipSummary.groups.length+retainedRelationships.length+websiteProfileClusters.clusters.length);
@@ -128,7 +132,7 @@
   const pagedCases=$derived(filteredCases.slice((currentCasePage-1)*CASE_PAGE_SIZE,currentCasePage*CASE_PAGE_SIZE));
   function setCasePage(value:number){casePage=Math.min(casePageCount,Math.max(1,Math.trunc(value)));}
   function showCasePage(record:CaseRecord){const index=filteredCases.findIndex(item=>item.id===record.id);if(index>=0)casePage=Math.floor(index/CASE_PAGE_SIZE)+1;}
-  async function refreshRelationships(){investigationProjection=await loadLocalCaseInvestigationProjection();}
+  function refreshRelationships(){investigationProjection=buildInvestigationProjection({cases,campaigns,relationshipObservations:retainedRelationships});}
   async function refreshRetainedRelationships(){retainedRelationships=await loadRelationshipObservations();}
   async function removeRetainedRelationship(record:RelationshipObservation){
     if(!confirm(`Delete the retained ${record.label.toLowerCase()} observation for ${record.domains.length} domain${record.domains.length===1?'':'s'}?`))return;
@@ -204,15 +208,20 @@
 
   onMount(()=>{void (async()=>{
     const initialLoads=await Promise.allSettled([
-      refresh(),refreshCases(),refreshRetainedRelationships(),
-      loadBulkSessions().then((records)=>{bulkSessions=records;}),
-      loadWebsiteSnapshots().then((records)=>{websiteSnapshots=records;}),
-      loadCampaigns().then((records)=>{campaignCount=records.length;}),
-      loadDetectionRules().then((records)=>{customRuleCount=records.length;}),
+      loadWatchlists(),loadCases(),loadRelationshipObservations(),loadBulkSessions(),
+      loadWebsiteSnapshots(),loadCampaigns(),loadDetectionRules(),
     ]);
-    if(initialLoads.some((result)=>result.status==='rejected')){
-      caseMessage='Some browser-local watchlist, case, campaign, relationship, Bulk-session, website-profile, or rule context could not be loaded. Navigation remains available; reload to retry the missing context.';
-    }
+    const [watchlistResult,caseResult,relationshipResult,bulkResult,websiteResult,campaignResult,ruleResult]=initialLoads;
+    if(watchlistResult.status==='fulfilled'){watchlists=watchlistResult.value;if(selected&&!watchlists[selected])selected='';}
+    if(caseResult.status==='fulfilled')cases=caseResult.value;
+    if(relationshipResult.status==='fulfilled')retainedRelationships=relationshipResult.value;
+    if(bulkResult.status==='fulfilled')bulkSessions=bulkResult.value;
+    if(websiteResult.status==='fulfilled')websiteSnapshots=websiteResult.value;
+    if(campaignResult.status==='fulfilled'){campaigns=campaignResult.value;campaignCount=campaigns.length;}
+    if(ruleResult.status==='fulfilled'){detectionRules=ruleResult.value;customRuleCount=detectionRules.length;}
+    refreshRelationships();
+    const unavailable=unavailableLocalContextLabels(initialLoads,['watchlists','cases','retained relationships','Bulk sessions','website profiles','campaigns','rules']);
+    if(unavailable.length)localContextStatus=`Some browser-local context could not be loaded (${unavailable.join(', ')}). Successfully loaded collections remain available; reload to retry the missing context.`;
     const focus=page.url.searchParams.get('case');
     if(focus){view='cases';const target=cases.find(record=>record.id===focus);if(target){showCasePage(target);expandedId=focus;tagDraft=target.tags.join(', ');await tick();const workspace=document.getElementById(`case-response-${target.id}`);if(page.url.hash===`#case-response-${encodeURIComponent(target.id)}`&&workspace){workspace.scrollIntoView({block:'start'});workspace.focus({preventScroll:true});}else await focusCase(target);}}
     else if(page.url.searchParams.get('view')==='inbox')view='inbox';
@@ -249,6 +258,7 @@
 <PageHeading eyebrow="Track findings" title="Monitor" description="Review retained work, organise cases, inspect relationships, and compare watchlist changes over time." />
 
 <MonitorViewTabs {view} counts={{inbox:reviewInbox.counts.all,timeline:retainedTimeline.counts.all,cases:cases.length,campaigns:campaignCount,relationships:relationshipCount,rules:customRuleCount,watchlists:names.length}} setView={(value)=>view=value} />
+{#if localContextStatus}<p class="local-context-status" role="status">{localContextStatus}</p>{/if}
 
 {#if view==='inbox'}
 <div id="monitor-view-panel" role="tabpanel" aria-labelledby="tab-inbox">
@@ -267,7 +277,7 @@
 
 {#if view==='campaigns'}
 <div id="monitor-view-panel" role="tabpanel" aria-labelledby="tab-campaigns">
-  <CampaignManager records={cases} focusId={page.url.searchParams.get('campaign') || ''} onselect={openRelatedCase} oncount={(count)=>{campaignCount=count;refreshRelationships();}} />
+  <CampaignManager records={cases} initialCampaigns={campaigns} focusId={page.url.searchParams.get('campaign') || ''} onselect={openRelatedCase} oncount={(count)=>campaignCount=count} onchange={(nextCampaigns)=>{campaigns=nextCampaigns;refreshRelationships();}} />
 </div>
 {/if}
 
@@ -287,7 +297,7 @@
 
 {#if view==='rules'}
 <div id="monitor-view-panel" role="tabpanel" aria-labelledby="tab-rules">
-  <DetectionRuleManager records={cases} onselect={openRelatedCase} oncount={(count)=>customRuleCount=count} />
+  <DetectionRuleManager records={cases} initialRules={detectionRules} onselect={openRelatedCase} oncount={(count)=>customRuleCount=count} onchange={(nextRules)=>detectionRules=nextRules} />
 </div>
 {/if}
 
@@ -326,4 +336,5 @@
 <style>
   :global(#watchlist-activity){margin-bottom:16px}
   .case-message{margin:12px 2px;color:var(--accent);font-size:var(--text-sm)}
+  .local-context-status{margin:12px 2px;color:var(--amber);font-size:var(--text-sm)}
 </style>

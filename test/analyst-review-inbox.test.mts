@@ -91,6 +91,7 @@ describe('analyst review inbox', () => {
     assert.equal(inbox.items[0]?.kind, 'case_action');
     assert.equal(inbox.items.find((item) => item.kind === 'watchlist_change')?.completeness, 'partial');
     assert.equal(inbox.items.find((item) => item.kind === 'case')?.completeness, 'inconclusive');
+    assert.equal(inbox.items.find((item) => item.kind === 'bulk_session')?.href, '/bulk#bulk-sessions-title');
   });
 
   test('projects explicit case evidence gaps without inventing missing facts', () => {

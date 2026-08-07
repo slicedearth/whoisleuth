@@ -68,7 +68,7 @@
   import { CAPABILITY_CONTEXT, disabledCapabilities, disabledCapability, type CapabilityGetter } from '$lib/capabilities';
   import { readBulkWorkflowState, writeBulkWorkflowState } from '$lib/console-workflow-state.ts';
   import { loadInvestigationGuide, selectInvestigationGuideFocusDomain, selectInvestigationGuideReviewDomains } from '$lib/investigation-guide';
-  import { isExpectedBrowserLocalDataFailure } from '$lib/browser-local-data.ts';
+  import { unavailableLocalContextLabels } from '$lib/local-context-load.ts';
   import {
     deleteBulkSession,
     exportBulkSessions,
@@ -202,14 +202,16 @@
     handoff=handoffNavigation&&handoffToken?consumeCandidateHandoff(handoffToken,handoffSource):null;
     if(handoffNavigation&&handoff)input=handoff.candidates.map(c=>c.domain).join('\n');
     else if(investigationTarget&&!restored){input=investigationTarget;results=[];completed=0;total=0;status='Loaded the guided-investigation target. Add only relevant comparison domains before scanning.';}
-    try{
-      let retained;
-      [profile,shortlist,cases,retained,bulkSessions,bulkReviewStore]=await Promise.all([activeProfile(),loadShortlist(),loadCases(),loadRelationshipObservations(),loadBulkSessions(),loadBulkReviewStore()]);
-      retainedRelationshipIds=new Set(retained.map((item)=>item.id));
-    }catch(cause){
-      localContextStatus='Some browser-local profile, shortlist, case, relationship, or saved-session context could not be loaded, including saved review-queue state. Scan results and restored queue state remain available; reload to retry the saved context.';
-      if(!isExpectedBrowserLocalDataFailure(cause))throw cause;
-    }
+    const loadResults=await Promise.allSettled([activeProfile(),loadShortlist(),loadCases(),loadRelationshipObservations(),loadBulkSessions(),loadBulkReviewStore()]);
+    const [profileResult,shortlistResult,caseResult,relationshipResult,sessionResult,reviewResult]=loadResults;
+    if(profileResult.status==='fulfilled')profile=profileResult.value;
+    if(shortlistResult.status==='fulfilled')shortlist=shortlistResult.value;
+    if(caseResult.status==='fulfilled')cases=caseResult.value;
+    if(relationshipResult.status==='fulfilled')retainedRelationshipIds=new Set(relationshipResult.value.map((item)=>item.id));
+    if(sessionResult.status==='fulfilled')bulkSessions=sessionResult.value;
+    if(reviewResult.status==='fulfilled')bulkReviewStore=reviewResult.value;
+    const unavailable=unavailableLocalContextLabels(loadResults,['profile','shortlist','case','relationship','saved-session','review-queue']);
+    if(unavailable.length)localContextStatus=`Some browser-local context could not be loaded (${unavailable.join(', ')}). Successfully loaded collections remain available; reload to retry the missing context.`;
   }
 
   onMount(()=>{

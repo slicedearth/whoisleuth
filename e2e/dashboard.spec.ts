@@ -4,6 +4,7 @@ import { spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import type { ArchiveInspectionReport } from '../cli/archive-inspect.mts';
 import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model';
+import { sha256ArtifactDigest } from '../frontend/src/lib/analysis/artifact-integrity';
 import type { WorkspaceArchiveDocument } from '../frontend/src/lib/analysis/workspace-archive';
 import type { EncryptedWorkspaceArchiveEnvelope } from '../frontend/src/lib/analysis/workspace-archive-crypto';
 
@@ -537,7 +538,10 @@ test('workspace archive import reports future sections and rolls back an interru
   const future = JSON.parse(content) as WorkspaceArchiveDocument;
   const futureWatchlistManifest = future.manifest.sections.find((section) => section.id === 'watchlists');
   if (!futureWatchlistManifest) throw new Error('The workspace fixture is missing its watchlists manifest.');
+  Reflect.set(future.sections.watchlists, 'version', 999);
   futureWatchlistManifest.version = 999;
+  futureWatchlistManifest.bytes = new TextEncoder().encode(JSON.stringify(future.sections.watchlists)).byteLength;
+  futureWatchlistManifest.checksum = await sha256ArtifactDigest(future.sections.watchlists);
   await page.getByLabel('Review backup file').setInputFiles({ name: 'future.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(future)) });
   const futureWatchlists = page.locator('.preview li', { hasText: 'Watchlists' });
   await expect(futureWatchlists).toContainText('Unsupported');
@@ -562,4 +566,40 @@ test('workspace archive import reports future sections and rolls back an interru
   await expect(page.getByRole('status')).toContainText('No archive changes were kept');
   const domains = (await readBrowserLocalCollection(page, 'cases')).records.map((record) => record.value.domain);
   expect(domains).toEqual(['rollback.invalid']);
+});
+
+test('workspace rollback preserves a settings value changed after the import begins', async ({ page }) => {
+  await page.goto('/dashboard');
+  await seedArchiveWorkspace(page);
+  const { content } = await downloadWorkspaceArchive(page);
+  await migrateLegacyBrowserData(page, {
+    'whois-rdap-cases-v1': { version: 2, cases: [{
+      id: 'settings-rollback-case', domain: 'settings-rollback.invalid', status: 'new', disposition: 'unreviewed', tags: [], notes: [],
+      source: 'manual', evidenceHistory: [], createdAt: NOW, updatedAt: NOW,
+    }] },
+    'whoisleuth:theme:v1': 'dark',
+  }, { clearStorage: true });
+  await page.getByLabel('Review backup file').setInputFiles({ name: 'workspace.json', mimeType: 'application/json', buffer: Buffer.from(content) });
+  const preview = page.locator('.preview');
+  for (const checkbox of await preview.getByRole('checkbox').all()) {
+    if (await checkbox.isChecked()) await checkbox.uncheck();
+  }
+  await preview.locator('li', { hasText: 'Cases' }).getByRole('checkbox').check();
+  await preview.locator('li', { hasText: 'Workspace settings' }).getByRole('checkbox').check();
+  await page.evaluate(() => {
+    const originalSetItem = Storage.prototype.setItem;
+    Storage.prototype.setItem = function setItem(key: string, value: string) {
+      if (key === 'whoisleuth:theme:v1' && value === 'light') {
+        originalSetItem.call(this, key, 'system');
+        throw new DOMException('A concurrent settings update won the import race.', 'QuotaExceededError');
+      }
+      originalSetItem.call(this, key, value);
+    };
+  });
+  await preview.getByRole('button', { name: 'Add selected data' }).click();
+
+  await expect(page.getByRole('status')).toContainText('could not be fully restored');
+  expect(await page.evaluate(() => localStorage.getItem('whoisleuth:theme:v1'))).toBe('system');
+  const domains = (await readBrowserLocalCollection(page, 'cases')).records.map((record) => record.value.domain);
+  expect(domains).toEqual(['settings-rollback.invalid']);
 });

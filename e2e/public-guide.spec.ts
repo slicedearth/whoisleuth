@@ -80,19 +80,28 @@ test('homepage presents plain-language goals, restrained branding, and synthetic
   const sourceStateColors = await sourceSummary.evaluate((summary) => {
     const warning = summary.querySelector('.state-warning strong');
     const success = summary.querySelector('.state-success strong');
+    const unavailable = summary.querySelector('.state-unavailable strong');
     const reference = document.createElement('span');
     reference.style.color = 'var(--amber)';
+    const mutedReference = document.createElement('span');
+    mutedReference.style.color = 'var(--muted)';
     document.body.append(reference);
+    document.body.append(mutedReference);
     const colors = {
       warning: warning ? getComputedStyle(warning).color : '',
       success: success ? getComputedStyle(success).color : '',
+      unavailable: unavailable ? getComputedStyle(unavailable).color : '',
       amber: getComputedStyle(reference).color,
+      muted: getComputedStyle(mutedReference).color,
     };
     reference.remove();
+    mutedReference.remove();
     return colors;
   });
   expect(sourceStateColors.warning).toBe(sourceStateColors.amber);
   expect(sourceStateColors.warning).not.toBe(sourceStateColors.success);
+  expect(sourceStateColors.unavailable).toBe(sourceStateColors.muted);
+  expect(sourceStateColors.unavailable).not.toBe(sourceStateColors.warning);
   await expectNoHorizontalOverflow(page);
 });
 

@@ -599,7 +599,9 @@ envelope is structurally valid; it reports `envelope_valid` and explicitly
 leaves authenticated encryption and inner checksums unchecked.
 Checksum validity is reported separately from importability. A checksum-valid
 archive can therefore list unsupported sections when it contains a section
-schema this version cannot restore; inspect those counts before importing.
+schema this version cannot restore, or skipped and pruned records when a
+supported section cannot be restored completely; inspect those counts before
+importing.
 
 Supplying a separate passphrase file, capped at 1 KiB, allows authenticated
 decryption followed by the ordinary workspace checks. The passphrase is never
@@ -620,6 +622,11 @@ treated as a current passport.
 Output is metadata-only: registered schema and version, verification state,
 bounded counts, browser import/export support, CLI read/write/verify support,
 semantic fidelity, and fixed preserved or excluded field-group identifiers.
+For workspace archives, checksum validity and complete browser importability are
+reported separately. A checksum-valid archive with a newer inner section stays
+verified for integrity while its fidelity is withheld and importability is
+reported as partial. The same partial state applies when browser preview would
+block a section, skip a malformed record, or prune data to a collection bound.
 It never echoes a target, contact, note, evidence value, passphrase, arbitrary
 unknown schema string, or encrypted content. A separate `--passphrase-file`
 can authenticate an encrypted workspace; without it, only the envelope is

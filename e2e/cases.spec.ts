@@ -95,6 +95,39 @@ test('the evidence-gap inbox filters and dismisses a stale failed source on mobi
   await expectNoHorizontalOverflow(page);
 });
 
+test('the mobile review inbox reveals and focuses a saved Bulk session', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/monitor');
+  await migrateLegacyBrowserData(page, {
+    'whoisleuth-bulk-sessions-v1': {
+      schema: 'whoisleuth.bulk-sessions',
+      version: 3,
+      sessions: [{
+        id: 'inbox-partial-session',
+        name: 'Incomplete review',
+        mode: 'fast',
+        state: 'partial',
+        inputDigest: `sha256:${'a'.repeat(64)}`,
+        domains: ['pending.invalid'],
+        results: [],
+        startedAt: '2026-08-07T00:00:00.000Z',
+        updatedAt: '2026-08-07T00:00:00.000Z',
+        completedAt: null,
+      }],
+    },
+  });
+
+  const item = page.locator('.review-inbox .items li', { hasText: 'Continue Incomplete review' });
+  await item.getByRole('link', { name: 'Review' }).click();
+
+  await expect(page).toHaveURL(/\/bulk#bulk-sessions-title$/u);
+  await expect(page.getByRole('button', { name: /Workspace tools/u })).toHaveAttribute('aria-expanded', 'true');
+  const title = page.getByRole('heading', { name: 'Saved Bulk sessions' });
+  await expect(title).toBeVisible();
+  await expect(title).toBeFocused();
+  await expectNoHorizontalOverflow(page);
+});
+
 test('status and disposition edits persist across a reload', async ({ page }) => {
   await openCasesView(page);
   await createCase(page, 'triage.invalid');
@@ -416,6 +449,10 @@ test('custom rules persist, can be disabled, and export a versioned safe schema'
   await page.getByRole('button', { name: 'Create custom rule' }).click();
   const customRules = page.getByRole('region', { name: 'Custom detection rules' });
   await expect(customRules.getByRole('article').filter({ hasText: 'Registered domains' })).toBeVisible();
+
+  await page.getByRole('tab', { name: /Cases/ }).click();
+  await page.getByRole('tab', { name: /Custom rules/ }).click();
+  await expect(page.getByRole('region', { name: 'Custom detection rules' }).getByRole('article').filter({ hasText: 'Registered domains' })).toBeVisible();
 
   await page.reload({ waitUntil: 'domcontentloaded' });
   const customRulesTab = page.getByRole('tab', { name: /Custom rules/ });

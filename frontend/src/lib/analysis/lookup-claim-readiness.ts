@@ -174,6 +174,7 @@ export function buildLookupClaimReadiness(input: Readonly<{
   coverage: EvidenceCoverageLedger;
   decisionSupport: LookupDecisionSupport;
   availabilityState?: unknown;
+  availabilitySource?: unknown;
   hasActiveProfile?: boolean;
   hasCaseSection?: boolean;
   responseRecipientCount?: number;
@@ -188,6 +189,12 @@ export function buildLookupClaimReadiness(input: Readonly<{
   const coverage = new Map(input.coverage.entries.map((entry) => [entry.id, entry]));
   const targetType = text(input.targetType, 20);
   const registrationRequirements = [{ id: 'availability', label: 'Authority-aware availability decision' }] as const;
+  const availabilitySource = text(input.availabilitySource, 24).toLowerCase();
+  const controlledRegistrationRequirements = availabilitySource === 'rdap'
+    ? [{ id: 'rdap', label: 'Registry RDAP evidence' }] as const
+    : availabilitySource === 'whois'
+      ? [{ id: 'whois', label: 'Registry WHOIS evidence' }] as const
+      : [] as const;
   const webRequirements = [{ id: 'http', label: 'HTTP observation' }, { id: 'tls', label: 'TLS observation' }] as const;
   const entries: LookupClaimReadinessEntry[] = [];
 
@@ -227,9 +234,11 @@ export function buildLookupClaimReadiness(input: Readonly<{
         id: 'controlled-change',
         label: 'Controlled-change planning',
         conclusion: 'Whether registration and DNS evidence are complete enough to prepare a reviewed change plan.',
-        requirements: [...registrationRequirements, { id: 'dns', label: 'DNS observation' }],
+        requirements: [...registrationRequirements, ...controlledRegistrationRequirements, { id: 'dns', label: 'DNS observation' }],
         coverage,
         href: '#evidence-dns',
+        additionalReady: controlledRegistrationRequirements.length > 0,
+        additionalMissing: 'Registry control evidence selected by the availability authority',
       }));
     }
     if (input.task === 'incident') {

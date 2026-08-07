@@ -49,7 +49,7 @@ import {
   BULK_REVIEW_COLLECTION,
 } from './browser-local-data-definitions.ts';
 import type { AnyLocalDataCollectionDefinition } from './browser-local-data.ts';
-import { guardedWorkspaceRollback } from './analysis/workspace-rollback.ts';
+import { guardedWorkspaceRollback, guardedWorkspaceSettingsRollback } from './analysis/workspace-rollback.ts';
 
 export { MAX_WORKSPACE_ARCHIVE_BYTES } from './analysis/workspace-archive.ts';
 export {
@@ -171,27 +171,40 @@ function snapshotSettings() {
   }
 }
 
-function restoreSettings(snapshot: Map<string, string | null>) {
-  for (const [key, value] of snapshot) {
-    if (localStorage.getItem(key) === value) continue;
+function restoreSettings(snapshot: Map<string, string | null>, applied: Map<string, string | null>): boolean {
+  const current = snapshotSettings();
+  const rollback = guardedWorkspaceSettingsRollback(current, applied, snapshot);
+  for (const [key, value] of rollback.settings) {
+    if (current.get(key) === value) continue;
     if (value === null) localStorage.removeItem(key);
     else localStorage.setItem(key, value);
   }
-  const theme = normalizeThemePreference(snapshot.get(THEME_STORAGE_KEY));
+  const theme = normalizeThemePreference(rollback.settings.get(THEME_STORAGE_KEY));
   applyThemePreference(theme);
   window.dispatchEvent(new CustomEvent(THEME_CHANGE_EVENT, { detail: theme }));
+  return rollback.fullyRestored;
 }
 
-async function applySettings(section: WorkspaceArchivePreviewSection): Promise<Omit<WorkspaceImportSummary, 'id'>> {
+async function applySettings(
+  section: WorkspaceArchivePreviewSection,
+  beforeWrite: (settings: Map<string, string | null>) => void,
+): Promise<Omit<WorkspaceImportSummary, 'id'>> {
   const settings = section.normalizedSettings;
   const theme = normalizeThemePreference(settings?.theme);
+  const requestedProfileId = settings?.activeProfileId ?? '';
+  const profiles = requestedProfileId ? await loadProfiles() : [];
+  const activeProfileAvailable = Boolean(requestedProfileId && profiles.some((profile) => profile.id === requestedProfileId));
+  const applied = new Map<string, string | null>([[THEME_STORAGE_KEY, theme]]);
+  if (activeProfileAvailable) applied.set(ACTIVE_PROFILE_KEY, requestedProfileId);
+  else if (!requestedProfileId) applied.set(ACTIVE_PROFILE_KEY, null);
+  beforeWrite(applied);
   if (!setThemePreference(theme)) throw new Error('Could not save the imported theme preference. Browser storage may be full or unavailable.');
-  if (settings?.activeProfileId && (await loadProfiles()).some((profile) => profile.id === settings.activeProfileId)) {
-    setActiveProfile(settings.activeProfileId);
+  if (activeProfileAvailable) {
+    setActiveProfile(requestedProfileId);
     return { added: 0, updated: section.updated, skipped: 0, pruned: 0 };
   }
-  if (!settings?.activeProfileId) setActiveProfile('');
-  return { added: 0, updated: section.updated, skipped: settings?.activeProfileId ? 1 : 0, pruned: 0 };
+  if (!requestedProfileId) setActiveProfile('');
+  return { added: 0, updated: section.updated, skipped: requestedProfileId ? 1 : 0, pruned: 0 };
 }
 
 /** Revalidates the archive, then applies only selected ready sections. */
@@ -221,6 +234,7 @@ export async function mergeLocalWorkspaceArchive(raw: unknown, selectedIds: stri
   let results: WorkspaceImportSummary[] = [];
   let previousDocuments = new Map<string, unknown>();
   let appliedDocuments = new Map<string, unknown>();
+  let appliedSettings = new Map<string, string | null>();
   let dataApplied = false;
   try {
     if (definitions.length) {
@@ -286,10 +300,11 @@ export async function mergeLocalWorkspaceArchive(raw: unknown, selectedIds: stri
     }
     const settingsSection = sections.find((section) => section.id === 'settings');
     if (settingsSection) {
-      const result = await applySettings(settingsSection);
+      const result = await applySettings(settingsSection, (settings) => { appliedSettings = settings; });
       results.push({ id: settingsSection.id, added: result.added ?? 0, updated: result.updated ?? 0, skipped: result.skipped ?? 0, pruned: result.pruned ?? 0 });
     }
   } catch (cause) {
+    let fullyRestored = true;
     try {
       if (dataApplied && definitions.length && previousDocuments.size) {
         await (await browserLocalDataProvider()).updateMany(definitions, (documents) => ({
@@ -297,8 +312,15 @@ export async function mergeLocalWorkspaceArchive(raw: unknown, selectedIds: stri
           result: undefined,
         }));
       }
-      restoreSettings(settingsSnapshot);
     } catch {
+      fullyRestored = false;
+    }
+    try {
+      if (appliedSettings.size && !restoreSettings(settingsSnapshot, appliedSettings)) fullyRestored = false;
+    } catch {
+      fullyRestored = false;
+    }
+    if (!fullyRestored) {
       throw new Error('Workspace import failed and the previous browser-local state could not be fully restored. Reload before making further changes.');
     }
     throw new Error(`Workspace import failed. No archive changes were kept. ${cause instanceof Error ? cause.message : ''}`.trim());

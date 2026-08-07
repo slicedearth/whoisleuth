@@ -37,6 +37,7 @@ export type InterchangeFidelityReport = Readonly<{
     preservedFieldGroups: readonly string[];
     excludedFieldGroups: readonly string[];
     futureVersionBehaviour: 'reject' | null;
+    fullyImportable: boolean | null;
   }>;
   summary: Readonly<{
     inputBytes: number;
@@ -46,6 +47,8 @@ export type InterchangeFidelityReport = Readonly<{
     acceptedRecordCount: number | null;
     skippedRecordCount: number | null;
     unsupportedSectionCount: number | null;
+    blockedSectionCount: number | null;
+    prunedRecordCount: number | null;
   }>;
   limitations: readonly string[];
 }>;
@@ -137,10 +140,12 @@ export async function buildInterchangeFidelityReport(
       preservedFieldGroups: Object.freeze([]),
       excludedFieldGroups: Object.freeze([]),
       futureVersionBehaviour: null,
+      fullyImportable: null,
     }),
     summary: Object.freeze({
       inputBytes, recordCount: null, sectionCount: null, encryptedContentVerified: null,
       acceptedRecordCount: null, skippedRecordCount: null, unsupportedSectionCount: null,
+      blockedSectionCount: null, prunedRecordCount: null,
     }),
     limitations: Object.freeze([
       'The file did not match a registered interchange contract. Its supplied schema text and contents are not echoed.',
@@ -158,6 +163,9 @@ export async function buildInterchangeFidelityReport(
   let acceptedRecordCount: number | null = null;
   let skippedRecordCount: number | null = null;
   let unsupportedSectionCount: number | null = null;
+  let blockedSectionCount: number | null = null;
+  let prunedRecordCount: number | null = null;
+  let fullyImportable: boolean | null = null;
 
   if (supported && contract.fidelity !== 'unsupported') {
     try {
@@ -176,7 +184,13 @@ export async function buildInterchangeFidelityReport(
         sectionCount = verification.summary.sectionCount;
         const unsupportedSections = verification.summary.unsupportedSectionCount ?? 0;
         unsupportedSectionCount = unsupportedSections;
-        if (unsupportedSections > 0) valid = false;
+        blockedSectionCount = verification.summary.blockedSectionCount ?? null;
+        skippedRecordCount = verification.summary.skippedRecordCount ?? skippedRecordCount;
+        prunedRecordCount = verification.summary.prunedRecordCount ?? null;
+        if (verification.summary.fullyImportable !== undefined
+          && verification.summary.fullyImportable !== null) {
+          fullyImportable = verification.valid && verification.summary.fullyImportable;
+        }
         if (contract.id === 'encrypted_workspace') encryptedContentVerified = verification.state === 'verified';
       }
     } catch {
@@ -185,9 +199,10 @@ export async function buildInterchangeFidelityReport(
     }
   }
 
+  const fidelityEligible = valid && fullyImportable !== false;
   const fidelity: InterchangeFidelity = !supported
     ? 'unsupported'
-    : valid
+    : fidelityEligible
       ? contract.fidelity
       : contract.fidelity === 'unsupported'
         ? 'unsupported'
@@ -206,10 +221,12 @@ export async function buildInterchangeFidelityReport(
       preservedFieldGroups: contract.preservedFieldGroups,
       excludedFieldGroups: contract.excludedFieldGroups,
       futureVersionBehaviour: contract.futureVersionBehaviour,
+      fullyImportable,
     }),
     summary: Object.freeze({
       inputBytes, recordCount, sectionCount, encryptedContentVerified,
       acceptedRecordCount, skippedRecordCount, unsupportedSectionCount,
+      blockedSectionCount, prunedRecordCount,
     }),
     limitations: Object.freeze([
       'Compatibility describes declared field groups and supported operations, not byte-for-byte equality or evidence truth.',
@@ -229,6 +246,7 @@ export function formatInterchangeFidelityReport(report: InterchangeFidelityRepor
     `Version        ${report.artifact.version ?? 'unavailable'}${report.artifact.versionSupported ? '' : ' (unsupported)'}`,
     `Verification   ${report.verification.state}`,
     `Fidelity       ${report.compatibility.fidelity}`,
+    ...(report.compatibility.fullyImportable === null ? [] : [`Importability  ${report.compatibility.fullyImportable ? 'complete' : 'partial'}`]),
     `Browser        import ${browser?.import ?? 'unknown'} · export ${browser?.export ?? 'unknown'}`,
     `CLI            read ${cli?.read ?? 'unknown'} · write ${cli?.write ?? 'unknown'} · verify ${cli?.verify ?? 'unknown'}`,
     `Records        ${report.summary.recordCount ?? 'not disclosed'}`,
@@ -236,6 +254,8 @@ export function formatInterchangeFidelityReport(report: InterchangeFidelityRepor
     ...(report.summary.acceptedRecordCount === null ? [] : [`Accepted       ${report.summary.acceptedRecordCount}`]),
     ...(report.summary.skippedRecordCount === null ? [] : [`Skipped        ${report.summary.skippedRecordCount}`]),
     ...(report.summary.unsupportedSectionCount === null ? [] : [`Unsupported    ${report.summary.unsupportedSectionCount}`]),
+    ...(report.summary.blockedSectionCount === null ? [] : [`Blocked        ${report.summary.blockedSectionCount}`]),
+    ...(report.summary.prunedRecordCount === null ? [] : [`Pruned         ${report.summary.prunedRecordCount}`]),
     '',
     `Preserved      ${report.compatibility.preservedFieldGroups.join(', ') || 'none declared'}`,
     `Excluded       ${report.compatibility.excludedFieldGroups.join(', ') || 'none declared'}`,

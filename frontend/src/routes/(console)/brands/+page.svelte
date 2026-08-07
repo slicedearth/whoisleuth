@@ -14,6 +14,7 @@
   import { activeProfileId, deleteProfile, exportProfiles, importProfiles, loadProfiles, MAX_PROFILE_IMPORT_BYTES, parseList, setActiveProfile, upsertProfile, type BrandProfile } from '$lib/brand-profiles';
   import { createPageBaseline, normalizePageBaseline } from '$lib/analysis/page-baseline.ts';
   import { loadCases, type CaseRecord } from '$lib/cases';
+  import { unavailableLocalContextLabels } from '$lib/local-context-load.ts';
   import type { DesiredPostureBaseline, ProtectionAttestation } from '$lib/analysis/brand-profile-model.ts';
   import { buildDesiredPostureObservation } from '$lib/analysis/owned-domain-posture-review.ts';
   import {
@@ -28,6 +29,7 @@
   type EditorField='name'|'official'|'products'|'tlds'|'partners'|'allowDomains'|'allowRegistrars'|'selectors'|'retiredSelectors'|'mailProtectionProfile'|'trademarkOwner'|'trademarkRegistration'|'faviconHash';
   let profiles=$state<BrandProfile[]>([]);let activeId=$state('');let editing=$state('');let showForm=$state(false);let message=$state('');let auditing=$state(false);let auditResults=$state<AuditResult[]>([]);
   let cases=$state<CaseRecord[]>([]);
+  let localContextStatus=$state('');
   let certificateReplayUnavailable=$state(false);
   let name=$state(''),official=$state(''),products=$state(''),tlds=$state('com, net, org'),partners=$state(''),allowDomains=$state(''),allowRegistrars=$state(''),selectors=$state(''),retiredSelectors=$state(''),mailProtectionProfile=$state('standard'),trademarkOwner=$state(''),trademarkRegistration=$state(''),faviconHash=$state(''),faviconPHash=$state('');
   let pageBaseline=$state<ReturnType<typeof normalizePageBaseline>>(null),capturingIdentity=$state(false);
@@ -56,9 +58,10 @@
   async function download(){try{await exportProfiles();message='Exported the Brand Profile collection.';}catch(cause){message=cause instanceof Error?cause.message:'Could not export profiles.';}}
   onMount(()=>{void (async()=>{
     const [profileResult,caseResult]=await Promise.allSettled([refresh(),loadCases()]);
-    if(profileResult.status==='rejected')message='Browser-local Brand Profiles could not be loaded. Route actions remain available; reload to retry.';
     if(caseResult.status==='fulfilled'){cases=caseResult.value;certificateReplayUnavailable=false;}
-    else{cases=[];certificateReplayUnavailable=true;message=message||'Browser-local cases could not be loaded. Certificate replay is unavailable; reload to retry.';}
+    else{cases=[];certificateReplayUnavailable=true;}
+    const unavailable=unavailableLocalContextLabels([profileResult,caseResult],['Brand Profiles','cases']);
+    if(unavailable.length)localContextStatus=`Some browser-local context could not be loaded (${unavailable.join(', ')}). Successfully loaded collections remain available; reload to retry the missing context.`;
     const guideDomain=parseList(page.url.searchParams.get('domain')||'',true)[0]||'';
     if(page.url.searchParams.get('new')==='1'&&guideDomain){
       clearForm(guideDomain);
@@ -74,6 +77,7 @@
 
 <svelte:head><title>Brands · WHOISleuth</title></svelte:head>
 <PageHeading eyebrow="Protect" title="Brands" description="Define official domains, trusted partners, allowlists, and security posture checks."><div class="top-actions toolbar"><button id="new-brand-profile" class="primary" onclick={()=>clearForm()}>New profile</button><button class="btn" onclick={download} disabled={!profiles.length}>Export JSON</button><label class="btn file-btn">Import JSON<input type="file" accept="application/json,.json" onchange={importFile}></label></div></PageHeading>
+{#if localContextStatus}<p class="local-context-status" role="status">{localContextStatus}</p>{/if}
 {#if message}<p class="message" role="status" aria-live="polite">{message}</p>{/if}
 <BrandProfileList {profiles} {activeId} focusId={page.url.searchParams.get('profile') || ''} {activate} {edit} {remove} formatDate={baselineDate} />
 
@@ -83,6 +87,7 @@
 
 <style>
   .message{color:var(--accent);font-size:var(--text-sm)}
+  .local-context-status{color:var(--amber);font-size:var(--text-sm)}
   @media(max-width:750px){
     .top-actions{margin-top:14px}
   }

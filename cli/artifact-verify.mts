@@ -29,6 +29,7 @@ import {
 } from '../frontend/src/lib/analysis/workspace-archive-crypto.ts';
 import {
   WORKSPACE_ARCHIVE_SCHEMA,
+  previewWorkspaceArchive,
   readWorkspaceArchive,
 } from '../frontend/src/lib/analysis/workspace-archive.ts';
 import { sha256ArtifactDigest } from '../frontend/src/lib/analysis/artifact-integrity.ts';
@@ -109,6 +110,10 @@ export type OfflineArtifactVerificationReport = Readonly<{
     ciphertextBytes: number | null;
     readySectionCount?: number | null;
     unsupportedSectionCount?: number | null;
+    blockedSectionCount?: number | null;
+    skippedRecordCount?: number | null;
+    prunedRecordCount?: number | null;
+    fullyImportable?: boolean | null;
   }>;
   limitations: readonly string[];
 }>;
@@ -161,14 +166,23 @@ function inputBytes(raw: string): number {
   return Buffer.byteLength(raw, 'utf8');
 }
 
-function archiveReport(
+async function archiveReport(
   raw: string,
+  source: unknown,
   archive: Awaited<ReturnType<typeof readWorkspaceArchive>>,
   encrypted: boolean,
   ciphertextBytes: number | null,
-): OfflineArtifactVerificationReport {
-  const readySectionCount = archive.sections.filter((section) => section.status === 'ready').length;
-  const unsupportedSectionCount = archive.sections.length - readySectionCount;
+): Promise<OfflineArtifactVerificationReport> {
+  const preview = await previewWorkspaceArchive(source, {});
+  const readySectionCount = preview.sections.filter((section) => section.status === 'ready').length;
+  const unsupportedSectionCount = preview.sections.filter((section) => section.status === 'unsupported').length;
+  const blockedSectionCount = preview.sections.filter((section) => section.status === 'blocked').length;
+  const skippedRecordCount = preview.sections.reduce((sum, section) => sum + section.skipped, 0);
+  const prunedRecordCount = preview.sections.reduce((sum, section) => sum + (section.pruned ?? 0), 0);
+  const fullyImportable = unsupportedSectionCount === 0
+    && blockedSectionCount === 0
+    && skippedRecordCount === 0
+    && prunedRecordCount === 0;
   return Object.freeze({
     schema: OFFLINE_ARTIFACT_VERIFICATION_SCHEMA,
     version: OFFLINE_ARTIFACT_VERIFICATION_VERSION,
@@ -191,11 +205,15 @@ function archiveReport(
       ciphertextBytes,
       readySectionCount,
       unsupportedSectionCount,
+      blockedSectionCount,
+      skippedRecordCount,
+      prunedRecordCount,
+      fullyImportable,
     }),
     limitations: Object.freeze([
       'Verification checks the retained file against its declared versioned integrity contract; it does not establish that the original observations were accurate or remain current.',
-      ...(unsupportedSectionCount
-        ? ['One or more integrity-valid archive sections cannot be imported by this version. Inspect the archive before selecting data to restore.']
+      ...(!fullyImportable
+        ? ['One or more integrity-valid archive sections cannot be imported completely by this version. Inspect the archive before selecting data to restore.']
         : []),
     ]),
   });
@@ -314,13 +332,13 @@ export async function verifyOfflineArtifact(
     }
     const decrypted = await decryptWorkspaceArchive(value, options.passphrase);
     const archive = await readWorkspaceArchive(decrypted);
-    return archiveReport(raw, archive, true, inspected.ciphertextBytes);
+    return archiveReport(raw, decrypted, archive, true, inspected.ciphertextBytes);
   }
 
   const schema = typeof value.schema === 'string' ? value.schema : '';
   const version = artifactVersion(value);
   if (schema === WORKSPACE_ARCHIVE_SCHEMA) {
-    return archiveReport(raw, await readWorkspaceArchive(value), false, null);
+    return archiveReport(raw, value, await readWorkspaceArchive(value), false, null);
   }
 
   if (schema === CASE_RESPONSE_PACKET_SCHEMA) {
@@ -435,6 +453,18 @@ export function formatOfflineArtifactVerification(
   }
   if (report.summary.unsupportedSectionCount !== undefined && report.summary.unsupportedSectionCount !== null) {
     lines.push(`Unsupported sections: ${report.summary.unsupportedSectionCount}`);
+  }
+  if (report.summary.blockedSectionCount !== undefined && report.summary.blockedSectionCount !== null) {
+    lines.push(`Blocked sections: ${report.summary.blockedSectionCount}`);
+  }
+  if (report.summary.skippedRecordCount !== undefined && report.summary.skippedRecordCount !== null) {
+    lines.push(`Skipped records: ${report.summary.skippedRecordCount}`);
+  }
+  if (report.summary.prunedRecordCount !== undefined && report.summary.prunedRecordCount !== null) {
+    lines.push(`Pruned records: ${report.summary.prunedRecordCount}`);
+  }
+  if (report.summary.fullyImportable !== undefined && report.summary.fullyImportable !== null) {
+    lines.push(`Importability: ${report.summary.fullyImportable ? 'complete' : 'partial'}`);
   }
   for (const limitation of report.limitations) lines.push(`Limitation: ${limitation}`);
   return `${lines.join('\n')}\n`;

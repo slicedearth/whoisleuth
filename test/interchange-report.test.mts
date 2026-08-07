@@ -5,17 +5,20 @@ import {
   buildInterchangeFidelityReport,
   formatInterchangeFidelityReport,
 } from '../cli/interchange-report.mts';
-import { buildCliCasePack } from '../cli/case-pack.mts';
+import { buildCliCasePack, CLI_CASE_PACK_VERSION } from '../cli/case-pack.mts';
 import { runCli } from '../cli/runner.mts';
 import EXIT_CODES from '../cli/exit-codes.mts';
-import { buildBrandProfileExport } from '../frontend/src/lib/analysis/brand-profile-model.ts';
-import { buildWorkspaceArchive } from '../frontend/src/lib/analysis/workspace-archive.ts';
-import { encryptWorkspaceArchive } from '../frontend/src/lib/analysis/workspace-archive-crypto.ts';
+import { buildBrandProfileExport, SUPPORTED_BRAND_PROFILE_SCHEMA_VERSIONS } from '../frontend/src/lib/analysis/brand-profile-model.ts';
+import { buildWorkspaceArchive, SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS } from '../frontend/src/lib/analysis/workspace-archive.ts';
+import { encryptWorkspaceArchive, ENCRYPTED_WORKSPACE_ARCHIVE_VERSION } from '../frontend/src/lib/analysis/workspace-archive-crypto.ts';
+import { DOMAIN_CONTROL_PASSPORT_VERSION } from '../frontend/src/lib/analysis/domain-control-manifest-core.ts';
+import { sha256ArtifactDigest } from '../frontend/src/lib/analysis/artifact-integrity.ts';
 import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model.ts';
 import {
   buildDomainControlManifest,
   DOMAIN_CONTROL_MANIFEST_INPUT_SCHEMA,
 } from '../lib/domain-control-manifest.mts';
+import { interchangeContractFor } from '../lib/interchange-fidelity-registry.mts';
 
 const NOW = '2026-08-07T00:00:00.000Z';
 const PASSPHRASE = 'fixture archive passphrase';
@@ -59,6 +62,14 @@ function casePack() {
 }
 
 describe('interchange fidelity report', () => {
+  test('keeps portable contract versions bound to their authoritative owners', () => {
+    assert.deepEqual(interchangeContractFor('domain_control_passport').versions, [DOMAIN_CONTROL_PASSPORT_VERSION]);
+    assert.deepEqual(interchangeContractFor('brand_profiles').versions, [...SUPPORTED_BRAND_PROFILE_SCHEMA_VERSIONS]);
+    assert.deepEqual(interchangeContractFor('workspace').versions, [...SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS]);
+    assert.deepEqual(interchangeContractFor('encrypted_workspace').versions, [ENCRYPTED_WORKSPACE_ARCHIVE_VERSION]);
+    assert.deepEqual(interchangeContractFor('case_pack').versions, [CLI_CASE_PACK_VERSION]);
+  });
+
   test('reports exact browser and CLI passport compatibility without values', async () => {
     const report = await buildInterchangeFidelityReport(JSON.stringify(passport()), { generatedAt: NOW });
     assert.equal(report.artifact.id, 'domain_control_passport');
@@ -124,12 +135,45 @@ describe('interchange fidelity report', () => {
     const workspace = structuredClone(await buildWorkspaceArchive({}, { generatedAt: NOW }));
     const cases = workspace.manifest.sections.find((section) => section.id === 'cases');
     assert.ok(cases);
+    Reflect.set(workspace.sections.cases, 'version', 999);
     cases.version = 999;
+    cases.bytes = new TextEncoder().encode(JSON.stringify(workspace.sections.cases)).byteLength;
+    cases.checksum = await sha256ArtifactDigest(workspace.sections.cases);
     const report = await buildInterchangeFidelityReport(JSON.stringify(workspace), { generatedAt: NOW });
     assert.equal(report.verification.state, 'verified');
-    assert.equal(report.verification.valid, false);
+    assert.equal(report.verification.valid, true);
+    assert.equal(report.compatibility.fullyImportable, false);
     assert.equal(report.summary.unsupportedSectionCount, 1);
     assert.equal(report.compatibility.fidelity, 'not_verified');
+  });
+
+  test('withholds workspace fidelity when a supported section would skip malformed records', async () => {
+    const workspace = structuredClone(await buildWorkspaceArchive({}, { generatedAt: NOW }));
+    const profiles = workspace.manifest.sections.find((section) => section.id === 'brandProfiles');
+    assert.ok(profiles);
+    Reflect.set(workspace.sections.brandProfiles, 'profiles', [{ secret: 'private-malformed-profile' }]);
+    profiles.recordCount = 1;
+    workspace.manifest.totalRecords += 1;
+    profiles.bytes = new TextEncoder().encode(JSON.stringify(workspace.sections.brandProfiles)).byteLength;
+    profiles.checksum = await sha256ArtifactDigest(workspace.sections.brandProfiles);
+
+    const report = await buildInterchangeFidelityReport(JSON.stringify(workspace), { generatedAt: NOW });
+    assert.equal(report.verification.valid, true);
+    assert.equal(report.compatibility.fullyImportable, false);
+    assert.equal(report.compatibility.fidelity, 'not_verified');
+    assert.equal(report.summary.skippedRecordCount, 1);
+    assert.equal(report.summary.unsupportedSectionCount, 0);
+    assert.doesNotMatch(JSON.stringify(report), /private-malformed-profile/iu);
+
+    const encrypted = await encryptWorkspaceArchive(workspace, PASSPHRASE);
+    const encryptedReport = await buildInterchangeFidelityReport(JSON.stringify(encrypted), {
+      generatedAt: NOW,
+      passphrase: PASSPHRASE,
+    });
+    assert.equal(encryptedReport.verification.valid, true);
+    assert.equal(encryptedReport.compatibility.fullyImportable, false);
+    assert.equal(encryptedReport.summary.skippedRecordCount, 1);
+    assert.equal(encryptedReport.compatibility.fidelity, 'not_verified');
   });
 
   test('separates encrypted-envelope inspection from authenticated verification', async () => {

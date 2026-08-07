@@ -1,5 +1,9 @@
 import { expect, test } from './fixtures';
 import { expectNoHorizontalOverflow, failBrowserLocalManifestWrites, migrateLegacyBrowserData, readBrowserLocalCollection, requiredValue } from './helpers';
+import {
+  buildDomainControlManifest,
+  DOMAIN_CONTROL_MANIFEST_INPUT_SCHEMA,
+} from '../lib/domain-control-manifest.mts';
 
 const PROFILES_KEY = 'whois-rdap-brand-profiles-v1';
 const ACTIVE_KEY = 'whois-rdap-active-brand-profile-v1';
@@ -428,6 +432,51 @@ test('exports and locally verifies a selective domain-control passport on deskto
 
   await page.setViewportSize({ width: 390, height: 844 });
   await expectNoHorizontalOverflow(page);
+});
+
+test('requires an explicit official-domain choice before enabling new-domain passport fields', async ({ page }) => {
+  await page.goto('/brands');
+  await migrateLegacyBrowserData(page, {
+    [PROFILES_KEY]: [profileFixture()],
+    [ACTIVE_KEY]: 'profile-1',
+  });
+  const passport = buildDomainControlManifest({
+    schema: DOMAIN_CONTROL_MANIFEST_INPUT_SCHEMA,
+    version: 1,
+    expiresAt: '2026-09-13T04:05:06.000Z',
+    entries: [{
+      domain: 'new-control.example',
+      nameservers: ['ns1.new-control.example'],
+      ds: [],
+      mx: [],
+      caa: [],
+      tlsIssuer: null,
+      tlsSpkiSha256: null,
+      registrarLock: null,
+      renewalReviewAt: null,
+      note: null,
+    }],
+  }, ISO);
+  const region = page.getByRole('region', { name: 'Domain-control passport' });
+  await region.getByLabel('Review passport').setInputFiles({
+    name: 'new-domain-passport.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(passport)),
+  });
+  const entry = region.locator('fieldset', { hasText: 'new-control.example' });
+  const addDomain = entry.getByRole('checkbox', { name: 'Add as an official domain' });
+  const entrySelection = entry.locator('legend').getByRole('checkbox');
+  const nameservers = entry.getByRole('checkbox', { name: 'Nameservers' });
+  await expect(entrySelection).not.toBeChecked();
+  await expect(nameservers).toBeDisabled();
+
+  await addDomain.check();
+  await expect(entrySelection).toBeChecked();
+  await expect(nameservers).toBeEnabled();
+  await addDomain.uncheck();
+  await expect(entrySelection).not.toBeChecked();
+  await expect(nameservers).toBeDisabled();
+  await expect(region.getByRole('button', { name: 'Import selected fields' })).toBeDisabled();
 });
 
 test('a future Brand Profile schema is never overwritten by an older app', async ({ page }) => {

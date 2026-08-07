@@ -631,6 +631,12 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   await expect(coverage).toContainText('WHOIS');
   await expect(coverage).toContainText('DNS');
   await expect(coverage).toContainText('Missing, failed, stale, unsupported, and not-found evidence remains distinct');
+  const sourceQualityTable = coverage.getByRole('table', { name: 'Source quality and freshness' });
+  await expect(sourceQualityTable).toHaveAttribute('aria-colcount', '5');
+  await expect(sourceQualityTable.getByRole('row').first().getByRole('columnheader')).toHaveCount(5);
+  const limitationCell = sourceQualityTable.getByRole('cell', { name: 'Limitations for Reverse DNS' });
+  await expect(limitationCell).toHaveAttribute('aria-colspan', '5');
+  await expect(limitationCell).toContainText('PTR context does not prove hosting control.');
   for (const label of ['Registry RDAP', 'WHOIS', 'Availability decision', 'Registrar RDAP']) {
     const state = coverage.locator('.source strong')
       .filter({ hasText: new RegExp(`^${label}$`, 'u') })
@@ -651,6 +657,13 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   await coverage.getByLabel('Registration days').blur();
   await expect(coverage).toContainText('Freshness policy · analyst-defined');
   await expect(coverage).toContainText('Thresholds organise source-refresh suggestions');
+
+  await page.getByRole('button', { name: 'Collapse Source quality evidence' }).click();
+  await page.getByRole('button', { name: 'Expand Source quality evidence' }).click();
+  await coverage.getByText(/Review \d+ source and analysis records/u).click();
+  await coverage.getByText(/Freshness policy/u).click();
+  await expect(coverage.getByLabel('Policy')).toHaveValue('analyst-custom');
+  await expect(coverage.getByLabel('Registration days')).toHaveValue('10');
 
   const registrationFact = page.locator('.summaries article').filter({ hasText: 'Registration' }).first();
   await registrationFact.getByText('Inspect evidence').click();

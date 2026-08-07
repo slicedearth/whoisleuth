@@ -441,9 +441,7 @@ describe('portable workspace archive', () => {
 
   test('reports a future section as unsupported without reinterpreting it', async () => {
     const archive = await buildWorkspaceArchive(input(), { generatedAt: NOW });
-    const watchlists = archive.manifest.sections.find((section) => section.id === 'watchlists');
-    assert.ok(watchlists);
-    watchlists.version = 999;
+    await retargetSectionVersion(archive, 'watchlists', 999);
     const preview = await previewWorkspaceArchive(archive, emptyInput());
     const section = preview.sections.find((item) => item.id === 'watchlists');
 
@@ -452,6 +450,31 @@ describe('portable workspace archive', () => {
     assert.match(section.reason, /newer schema 999/);
     assert.equal(section.selected, false);
     assert.equal(preview.unsupportedCount, 1);
+  });
+
+  test('binds every checksummed section contract to its manifest declaration', async () => {
+    const manifestAhead = await buildWorkspaceArchive(input(), { generatedAt: NOW });
+    const casesEntry = manifestAhead.manifest.sections.find((section) => section.id === 'cases');
+    assert.ok(casesEntry);
+    casesEntry.version = 999;
+    await assert.rejects(readWorkspaceArchive(manifestAhead), /section contract does not match/iu);
+
+    const sectionAhead = await buildWorkspaceArchive(input(), { generatedAt: NOW });
+    Reflect.set(sectionAhead.sections.cases, 'version', 999);
+    const sectionAheadEntry = sectionAhead.manifest.sections.find((section) => section.id === 'cases');
+    assert.ok(sectionAheadEntry);
+    sectionAheadEntry.bytes = new TextEncoder().encode(JSON.stringify(sectionAhead.sections.cases)).byteLength;
+    sectionAheadEntry.checksum = await sha256ArtifactDigest(sectionAhead.sections.cases);
+    await assert.rejects(readWorkspaceArchive(sectionAhead), /section contract does not match/iu);
+
+    const schemaMismatch = await buildWorkspaceArchive(input(), { generatedAt: NOW });
+    const watchlistDocument = recordValue(schemaMismatch.sections.watchlists);
+    Reflect.set(watchlistDocument, 'schema', 'whoisleuth.other-contract');
+    const watchlistEntry = schemaMismatch.manifest.sections.find((section) => section.id === 'watchlists');
+    assert.ok(watchlistEntry);
+    watchlistEntry.bytes = new TextEncoder().encode(JSON.stringify(watchlistDocument)).byteLength;
+    watchlistEntry.checksum = await sha256ArtifactDigest(watchlistDocument);
+    await assert.rejects(readWorkspaceArchive(schemaMismatch), /section contract does not match/iu);
   });
 
   test('reports a checksummed unknown section rather than applying it', async () => {

@@ -59,6 +59,7 @@
   function toggleAdd(domain: string, checked: boolean): void {
     addDomains = toggle(addDomains, domain, checked);
     if (checked) selectedImports = toggle(selectedImports, domain, true);
+    else selectedImports = toggle(selectedImports, domain, false);
   }
 
   function toggleField(domain: string, field: DomainControlPassportField, checked: boolean): void {
@@ -192,6 +193,7 @@
       <header><div><p class="eyebrow">Verified locally</p><h3>Import preview</h3></div><p>Expires {new Date(imported.expiresAt).toLocaleDateString('en-AU')}</p></header>
       {#each imported.entries as entry}
         {@const isOfficial = active.officialDomains.includes(entry.domain)}
+        {@const importEligible = isOfficial || addDomains.includes(entry.domain)}
         {@const configuredFields = passportConfiguredFields(entry)}
         <fieldset>
           <legend><label><input type="checkbox" checked={selectedImports.includes(entry.domain)} onchange={(event) => toggleImport(entry.domain, event.currentTarget.checked)}> <span>{entry.domain}</span></label></legend>
@@ -201,7 +203,7 @@
           <div class="field-grid">
             {#each DOMAIN_CONTROL_PASSPORT_FIELDS as field}
               <label class:unavailable={!configuredFields.includes(field)}>
-                <input type="checkbox" disabled={!configuredFields.includes(field) || !selectedImports.includes(entry.domain)} checked={(importFields[entry.domain] ?? []).includes(field)} onchange={(event) => toggleField(entry.domain, field, event.currentTarget.checked)}>
+                <input type="checkbox" disabled={!configuredFields.includes(field) || !selectedImports.includes(entry.domain) || !importEligible} checked={(importFields[entry.domain] ?? []).includes(field)} onchange={(event) => toggleField(entry.domain, field, event.currentTarget.checked)}>
                 <span>{fieldLabels[field]}</span>
                 <small>{configuredFields.includes(field) ? 'Configured in passport' : 'Not configured; destination remains unchanged'}</small>
               </label>

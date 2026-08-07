@@ -10,6 +10,7 @@ type RecipeLabel = 'Brand sweep' | 'Infrastructure pivot' | 'New-domain triage';
 
 async function startRecipe(page: import('@playwright/test').Page, recipe: RecipeLabel = 'New-domain triage') {
   await page.goto('/dashboard');
+  await expect(page.locator('section[aria-labelledby="local-summary-title"]')).toHaveAttribute('aria-busy', 'false');
   await page.getByRole('combobox', { name: 'Guide' }).selectOption({ label: recipe });
   const targetLabel = recipe === 'Brand sweep' ? 'Official domain' : recipe === 'Infrastructure pivot' ? 'Starting domain' : 'Domain';
   await page.getByRole('textbox', { name: targetLabel, exact: true }).fill('Portal.Example.Test.');
