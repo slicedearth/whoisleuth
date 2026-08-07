@@ -1096,6 +1096,11 @@ checksums without displaying evidence. An encrypted archive requires a separate
 passphrase file before the command can authenticate its ciphertext and inspect
 the inner checksums; without one, only the envelope is checked. See
 [offline artefact verification](cli-reference.md#offline-artefact-verification).
+The separate metadata-only
+[interchange fidelity report](cli-reference.md#interchange-fidelity-report)
+states which field groups a recognised archive, passport, profile export, or
+case pack preserves or deliberately excludes. It does not print stored values
+or imply that two different formats are lossless.
 
 ## Reports and exports
 

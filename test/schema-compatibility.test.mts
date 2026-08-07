@@ -198,7 +198,7 @@ describe('schema compatibility inventory', () => {
     assert.equal(inventory.schema, SCHEMA_COMPATIBILITY_INVENTORY_SCHEMA);
     assert.equal(inventory.version, SCHEMA_COMPATIBILITY_INVENTORY_VERSION);
     assert.equal(inventory.generatedAt, NOW);
-    assert.equal(inventory.entries.length, 122);
+    assert.equal(inventory.entries.length, 123);
     assert.deepEqual(new Set(inventory.entries.map((entry) => entry.kind)), new Set([
       'browser_store', 'tab_store', 'hosted_store', 'export', 'cli_document', 'derived',
     ]));
@@ -227,6 +227,7 @@ describe('schema compatibility inventory', () => {
     assert.equal(byId(inventory, 'cli.collection-preflight').schema, 'whoisleuth.cli.collection-preflight');
     assert.equal(byId(inventory, 'cli.config').schema, 'whoisleuth.cli.config');
     assert.equal(byId(inventory, 'export.cli-case-pack').schema, 'whoisleuth.cli.case-pack');
+    assert.equal(byId(inventory, 'cli.interchange-fidelity-report').schema, 'whoisleuth.interchange-fidelity-report');
     assert.equal(byId(inventory, 'cli.domain-control-review-input').schema, 'whoisleuth.cli.domain-control-review-input');
     assert.equal(byId(inventory, 'cli.domain-control-observation-review').schema, 'whoisleuth.cli.domain-control-review');
     assert.equal(byId(inventory, 'cli.domain-control-monitor').schema, 'whoisleuth.cli.domain-control-monitor');

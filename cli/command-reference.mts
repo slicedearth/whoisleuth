@@ -53,6 +53,7 @@ Review saved evidence:
   export             Convert a saved lookup into an evidence report.
   inspect-archive    Inspect a workspace archive, redacted by default.
   verify-artifact    Validate saved evidence or an integrity envelope offline.
+  interchange-report Report preserved and excluded field groups offline.
 
 Integrity and calibration:
   manifest           Record ordered artefact and configuration digests.
@@ -101,6 +102,7 @@ const COMMAND_USAGE: Readonly<Record<CliCommand, string>> = Object.freeze({
   'risk-calibrate': 'whoisleuth risk-calibrate [dataset.json] [--json] [--quiet] [--no-color]',
   'lookalike-calibrate': 'whoisleuth lookalike-calibrate [dataset.json] [--json] [--quiet] [--no-color]',
   'verify-artifact': 'whoisleuth verify-artifact [artifact.json] [--passphrase-file <file>] [--json] [--quiet] [--no-color]',
+  'interchange-report': 'whoisleuth interchange-report [artifact.json] [--passphrase-file <file>] [--json] [--quiet] [--no-color]',
   'inspect-archive': 'whoisleuth inspect-archive [archive.json] [--passphrase-file <file>] [--search <value>] [--require-match] [--reveal] [--expect-content-digest <sha256:digest>] [--json]',
   'sign-artifact': 'whoisleuth sign-artifact [artifact.json] --private-key-file <file>',
   'verify-signature': 'whoisleuth verify-signature [package.json] [--public-key-file <file>] [--json] [--quiet] [--no-color]',
@@ -240,6 +242,11 @@ const COMMAND_DETAILS: Readonly<Record<CliCommand, CommandDetail>> = Object.free
     example: 'whoisleuth verify-artifact workspace.json --json',
     boundary: 'Verification is offline and redacted. Encrypted archives require an explicitly supplied passphrase file.',
   },
+  'interchange-report': {
+    description: 'Report what one recognised portable artefact preserves, excludes, and supports across browser and CLI workflows.',
+    example: 'whoisleuth interchange-report workspace.json --json',
+    boundary: 'The report is offline and metadata-only. It does not echo targets, contacts, notes, passphrases, evidence values, or an unrecognised schema string.',
+  },
   'inspect-archive': {
     description: 'Summarise or search one workspace archive with redacted output by default.',
     example: 'whoisleuth inspect-archive workspace.json --search example.test --json',
@@ -371,6 +378,7 @@ const COMMAND_COLLECTION: Readonly<Record<CliCommand, CommandCollection>> = Obje
   'risk-calibrate': { mode: 'offline', scope: 'Reads one bounded reviewed-label dataset and changes no model or evidence.' },
   'lookalike-calibrate': { mode: 'offline', scope: 'Reads at most 5,000 reviewed candidate labels from one dataset capped at 2 MiB.' },
   'verify-artifact': { mode: 'offline', scope: 'Reads one selected bounded archive, packet, manifest, or saved Lookup document.' },
+  'interchange-report': { mode: 'offline', scope: 'Reads one selected bounded portable artefact and emits fixed compatibility metadata only.' },
   'inspect-archive': { mode: 'offline', scope: 'Reads one selected bounded workspace archive with redacted output by default.' },
   'sign-artifact': { mode: 'offline', scope: 'Reads one selected artefact and one local private key without transmitting either.' },
   'verify-signature': { mode: 'offline', scope: 'Reads one selected signed package and optional local public key.' },

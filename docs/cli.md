@@ -66,6 +66,7 @@ saved result without sending it anywhere:
 whoisleuth bulk domains.txt --csv
 whoisleuth discover example.com --preset common --jsonl
 whoisleuth verify-artifact lookup.json --json
+whoisleuth interchange-report workspace.json --json
 whoisleuth compare lookup.json --json
 whoisleuth brief lookup.json
 whoisleuth registry-doctor lookup.json --json
@@ -111,7 +112,7 @@ HTTP status, and a bounded explanation.
 | Compare saved evidence | `compare`, `page-compare`, `diff`, `reconcile`, `timeline`, `mail-review` |
 | Review supplied evidence | `brief`, `review-evidence`, `registry-doctor`, `registry-cohort`, `source-report`, `sharing-review`, `map-observations` |
 | Plan and assure changes | `domain-control`, `monitor-once`, `assurance`, `change-packet`, `workflow-plan`, `workflow-run` |
-| Verify and package evidence | `case-pack`, `manifest`, `oam-export`, `verify-artifact`, `inspect-archive`, `sign-artifact`, `verify-signature`, `export` |
+| Verify and package evidence | `case-pack`, `manifest`, `oam-export`, `verify-artifact`, `interchange-report`, `inspect-archive`, `sign-artifact`, `verify-signature`, `export` |
 | Calibrate offline | `risk-calibrate`, `lookalike-calibrate` |
 | Operate the CLI | `doctor`, `registry-scaffold`, `commands`, `completion`, `manual` |
 

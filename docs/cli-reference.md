@@ -598,6 +598,26 @@ accepted as a command-line value, printed, or retained. Verification detects
 changes against the artefact's declared contract; it does not authenticate the
 analyst or establish that an observation was accurate or remains current.
 
+## Interchange fidelity report
+
+`interchange-report [artifact.json]` explains what one recognised portable
+artefact preserves, excludes, and supports in browser and CLI workflows. It
+recognises domain-control passports, Brand Profile exports from versions 2
+through 6, workspace archives from versions 1 through 5, encrypted workspace
+envelopes, reviewed CLI case packs, and the retired one-way desired-baseline
+export. The retired export is identified as unsupported rather than silently
+treated as a current passport.
+
+Output is metadata-only: registered schema and version, verification state,
+bounded counts, browser import/export support, CLI read/write/verify support,
+semantic fidelity, and fixed preserved or excluded field-group identifiers.
+It never echoes a target, contact, note, evidence value, passphrase, arbitrary
+unknown schema string, or encrypted content. A separate `--passphrase-file`
+can authenticate an encrypted workspace; without it, only the envelope is
+reported as valid. “Semantic exact after normalisation” does not mean byte
+identity, current evidence, or a successful round trip through an unrelated
+format.
+
 ## Privacy-safe source reliability report
 
 `source-report` summarises source states, durations, truncation, and rate-limit

@@ -39,6 +39,7 @@ const CLI_COMMANDS = [
   'risk-calibrate',
   'lookalike-calibrate',
   'verify-artifact',
+  'interchange-report',
   'inspect-archive',
   'sign-artifact',
   'verify-signature',
@@ -98,6 +99,7 @@ type CliAction =
   | ({ action: 'risk-calibrate'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'lookalike-calibrate'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'verify-artifact'; source: string | null; passphraseSource: string | null; output: 'terminal' | 'json' } & TerminalOptions)
+  | ({ action: 'interchange-report'; source: string | null; passphraseSource: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | InspectArchiveArguments
   | SignArtifactArguments
   | VerifySignatureArguments
@@ -219,6 +221,7 @@ function parseCliArgumentsCore(argv: string[]): CliAction {
   if (command === 'risk-calibrate') return parseRiskCalibrateArguments(argv.slice(1));
   if (command === 'lookalike-calibrate') return parseLookalikeCalibrateArguments(argv.slice(1));
   if (command === 'verify-artifact') return parseVerifyArtifactArguments(argv.slice(1));
+  if (command === 'interchange-report') return parseInterchangeReportArguments(argv.slice(1));
   if (command === 'inspect-archive') return parseInspectArchiveArguments(argv.slice(1));
   if (command === 'sign-artifact') return parseSignArtifactArguments(argv.slice(1));
   if (command === 'verify-signature') return parseVerifySignatureArguments(argv.slice(1));
@@ -1242,6 +1245,33 @@ function parseVerifyArtifactArguments(argv: string[]): Extract<CliArguments, { a
   }
   if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
   return { action: 'verify-artifact', source, passphraseSource, output, quiet, color };
+}
+
+function parseInterchangeReportArguments(argv: string[]): Extract<CliArguments, { action: 'interchange-report' }> {
+  let source: string | null = null;
+  let passphraseSource: string | null = null;
+  let output: 'terminal' | 'json' = 'terminal';
+  let quiet = false;
+  let color = true;
+  for (let index = 0; index < argv.length; index++) {
+    const argument = argv[index];
+    if (argument === undefined) break;
+    if (argument === '--json') {
+      if (output !== 'terminal') throw new CliUsageError('--json may be supplied only once.');
+      output = 'json';
+    } else if (argument === '--passphrase-file') {
+      if (passphraseSource !== null) throw new CliUsageError('--passphrase-file may be supplied only once.');
+      const value = argv[++index];
+      if (!value || value.startsWith('-')) throw new CliUsageError('--passphrase-file requires one bounded UTF-8 file.');
+      passphraseSource = value;
+    } else if (argument === '--quiet') quiet = true;
+    else if (argument === '--no-color') color = false;
+    else if (argument.startsWith('-')) throw new CliUsageError(`Unknown option "${argument}".`);
+    else if (source === null) source = argument;
+    else throw new CliUsageError('interchange-report accepts one optional JSON file. Otherwise pipe one artefact on stdin.');
+  }
+  if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
+  return { action: 'interchange-report', source, passphraseSource, output, quiet, color };
 }
 
 function parseSourceReportArguments(argv: string[]): Extract<CliArguments, { action: 'source-report' }> {

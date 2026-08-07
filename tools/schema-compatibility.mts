@@ -57,6 +57,12 @@ import {
   MAX_CASE_PACK_INPUT_BYTES,
 } from '../cli/case-pack.mts';
 import {
+  INTERCHANGE_FIDELITY_REPORT_SCHEMA,
+  INTERCHANGE_FIDELITY_REPORT_VERSION,
+  MAX_INTERCHANGE_REPORT_BYTES,
+} from '../cli/interchange-report.mts';
+import { INTERCHANGE_ARTIFACT_CONTRACTS } from '../lib/interchange-fidelity-registry.mts';
+import {
   CLI_DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA,
   CLI_DOMAIN_CONTROL_REVIEW_SCHEMA,
   CLI_DOMAIN_CONTROL_REVIEW_VERSION,
@@ -540,6 +546,7 @@ const ENTRIES: SchemaCompatibilityEntry[] = [
   entry({ id: 'cli.collection-preflight', kind: 'cli_document', schema: CLI_COLLECTION_PREFLIGHT_SCHEMA, currentVersion: CLI_COLLECTION_PREFLIGHT_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'cli/collection-preflight.mts', note: 'Offline bounded collection-family and disclosure preview that makes no request.' }),
   entry({ id: 'cli.config', kind: 'cli_document', schema: CLI_CONFIG_SCHEMA, currentVersion: CLI_CONFIG_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: MAX_CLI_CONFIG_BYTES, owner: 'cli/config-profile.mts', note: 'Strict local safe-default profiles; targets, deep mode, output paths, network approvals, failure policies and arbitrary arguments are refused.' }),
   entry({ id: 'export.cli-case-pack', kind: 'export', schema: CLI_CASE_PACK_SCHEMA, currentVersion: CLI_CASE_PACK_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: MAX_CASE_PACK_INPUT_BYTES, owner: 'cli/case-pack.mts', note: 'Audience-specific reviewed case package with canonical integrity and explicit redaction manifest.' }),
+  entry({ id: 'cli.interchange-fidelity-report', kind: 'cli_document', schema: INTERCHANGE_FIDELITY_REPORT_SCHEMA, currentVersion: INTERCHANGE_FIDELITY_REPORT_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: MAX_INTERCHANGE_REPORT_BYTES, owner: 'cli/interchange-report.mts', note: 'Metadata-only compatibility report backed by the runtime interchange registry; targets, contacts, notes, passphrases, evidence values, and unknown schema text are excluded.' }),
   entry({ id: 'cli.domain-control-review-input', kind: 'cli_document', schema: CLI_DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA, currentVersion: CLI_DOMAIN_CONTROL_REVIEW_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: MAX_DOMAIN_CONTROL_REVIEW_INPUT_BYTES, owner: 'cli/domain-control-observations.mts', note: 'Bounded desired-state manifest plus saved Lookups converted without new collection.' }),
   entry({ id: 'cli.domain-control-observation-review', kind: 'cli_document', schema: CLI_DOMAIN_CONTROL_REVIEW_SCHEMA, currentVersion: CLI_DOMAIN_CONTROL_REVIEW_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'cli/domain-control-observations.mts', note: 'Compact source-qualified control observations and desired-state comparison.' }),
   entry({ id: 'cli.domain-control-monitor', kind: 'cli_document', schema: CLI_DOMAIN_CONTROL_MONITOR_SCHEMA, currentVersion: CLI_DOMAIN_CONTROL_MONITOR_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'normalized_rewrite', byteBudget: null, owner: 'cli/domain-control-monitor.mts', note: 'One-shot bounded control review and optional prior checkpoint; not a daemon or scheduler.' }),
@@ -643,6 +650,16 @@ function buildSchemaCompatibilityInventory(
   options: { generatedAt?: string } = {},
 ): SchemaCompatibilityInventory {
   validateSchemaCompatibilityEntries(ENTRIES);
+  for (const contract of INTERCHANGE_ARTIFACT_CONTRACTS.filter((item) => item.id !== 'legacy_desired_baseline')) {
+    const declared = ENTRIES.find((item) => item.schema === contract.schema);
+    if (
+      !declared
+      || contract.versions.length !== declared.supportedVersions.length
+      || contract.versions.some((version) => !declared.supportedVersions.includes(version))
+    ) {
+      throw new Error(`Interchange contract ${contract.id} is not covered by the schema compatibility inventory.`);
+    }
+  }
   return {
     schema: SCHEMA_COMPATIBILITY_INVENTORY_SCHEMA,
     version: SCHEMA_COMPATIBILITY_INVENTORY_VERSION,

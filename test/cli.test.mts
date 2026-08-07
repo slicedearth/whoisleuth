@@ -180,6 +180,32 @@ describe('CLI argument parsing', () => {
     );
   });
 
+  test('parses metadata-only interchange fidelity inputs', () => {
+    assert.deepEqual(parseCliArguments([
+      'interchange-report',
+      'workspace.json',
+      '--passphrase-file',
+      'passphrase.txt',
+      '--json',
+      '--no-color',
+    ]), {
+      action: 'interchange-report',
+      source: 'workspace.json',
+      passphraseSource: 'passphrase.txt',
+      output: 'json',
+      quiet: false,
+      color: false,
+    });
+    assert.throws(
+      () => parseCliArguments(['interchange-report', '--passphrase-file']),
+      /requires one bounded UTF-8 file/u,
+    );
+    assert.throws(
+      () => parseCliArguments(['interchange-report', 'one.json', 'two.json']),
+      /accepts one optional JSON file/u,
+    );
+  });
+
   test('parses redacted archive inspection and explicit evidence-signing inputs', () => {
     assert.deepEqual(parseCliArguments([
       'inspect-archive',

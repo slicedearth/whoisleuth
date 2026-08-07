@@ -143,6 +143,10 @@ import {
   verifyOfflineArtifact,
 } from './artifact-verify.mts';
 import {
+  buildInterchangeFidelityReport,
+  formatInterchangeFidelityReport,
+} from './interchange-report.mts';
+import {
   MAX_SOURCE_RELIABILITY_INPUT_BYTES,
   buildSourceReliabilityReport,
   formatSourceReliabilityReport,
@@ -266,6 +270,25 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
         ? await dependencies.readStdin()
         : await readStdinBounded(dependencies.stdin || process.stdin, MAX_STDIN_BYTES, dependencies.signal)
     );
+    const readPassphraseSource = async (source: string): Promise<string> => {
+      let passphraseText: string;
+      try {
+        passphraseText = dependencies.readPassphraseFile
+          ? await dependencies.readPassphraseFile(source)
+          : await readSavedLookupInputBounded(
+            createReadStream(source, { highWaterMark: MAX_OFFLINE_PASSPHRASE_FILE_BYTES }),
+            { limit: MAX_OFFLINE_PASSPHRASE_FILE_BYTES, label: 'Passphrase file' },
+          );
+      } catch (error) {
+        if (error instanceof CliUsageError) throw error;
+        throw new CliUsageError(`Could not read passphrase file: ${boundedCliErrorMessage(error, 'File could not be read')}`);
+      }
+      const passphrase = passphraseText.replace(/\r?\n$/u, '');
+      if (!passphrase || /[\r\n\u0000]/u.test(passphrase)) {
+        throw new CliUsageError('Passphrase file must contain exactly one non-empty UTF-8 line.');
+      }
+      return passphrase;
+    };
     const commandContext: CliCommandContext = Object.freeze({
       stdout,
       stderr,
@@ -565,28 +588,7 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
       }
       if (!input.trim()) throw new CliUsageError('verify-artifact requires one JSON file or an artefact on stdin.');
 
-      let passphrase: string | null = null;
-      if (args.passphraseSource) {
-        let passphraseText: string;
-        try {
-          passphraseText = dependencies.readPassphraseFile
-            ? await dependencies.readPassphraseFile(args.passphraseSource)
-            : await readSavedLookupInputBounded(
-              createReadStream(args.passphraseSource, { highWaterMark: MAX_OFFLINE_PASSPHRASE_FILE_BYTES }),
-              {
-                limit: MAX_OFFLINE_PASSPHRASE_FILE_BYTES,
-                label: 'Passphrase file',
-              },
-            );
-        } catch (error) {
-          if (error instanceof CliUsageError) throw error;
-          throw new CliUsageError(`Could not read passphrase file: ${boundedCliErrorMessage(error, 'File could not be read')}`);
-        }
-        passphrase = passphraseText.replace(/\r?\n$/u, '');
-        if (!passphrase || /[\r\n\u0000]/u.test(passphrase)) {
-          throw new CliUsageError('Passphrase file must contain exactly one non-empty UTF-8 line.');
-        }
-      }
+      const passphrase = args.passphraseSource ? await readPassphraseSource(args.passphraseSource) : null;
 
       const report = await verifyOfflineArtifact(input, { passphrase });
       if (!args.quiet) {
@@ -594,6 +596,34 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
           ? formatJsonDocument(report)
           : terminal(formatOfflineArtifactVerification(report), args.color));
       }
+      return EXIT_CODES.SUCCESS;
+    }
+
+    if (args.action === 'interchange-report') {
+      failureLabel = 'Interchange fidelity report';
+      let input: string;
+      try {
+        input = dependencies.readArtifactInput
+          ? await dependencies.readArtifactInput(args.source)
+          : await readSavedLookupInputBounded(args.source
+            ? createReadStream(args.source, { highWaterMark: 64 * 1024 })
+            : dependencies.stdin || process.stdin, {
+              limit: MAX_OFFLINE_ARTIFACT_BYTES,
+              label: 'Interchange input',
+            });
+      } catch (error) {
+        if (error instanceof CliUsageError) throw error;
+        throw new CliUsageError(`Could not read interchange input: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
+      }
+      if (!input.trim()) throw new CliUsageError('interchange-report requires one JSON file or an artefact on stdin.');
+      const passphrase = args.passphraseSource ? await readPassphraseSource(args.passphraseSource) : null;
+      const report = await buildInterchangeFidelityReport(input, {
+        generatedAt: commandContext.now(),
+        passphrase,
+      });
+      if (!args.quiet) write(stdout, args.output === 'json'
+        ? formatJsonDocument(report)
+        : terminal(formatInterchangeFidelityReport(report), args.color));
       return EXIT_CODES.SUCCESS;
     }
 
