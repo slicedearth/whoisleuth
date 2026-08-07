@@ -11,7 +11,7 @@ import {
 // this only gates whether a WHOIS/RDAP-sourced string is safe to drop into a
 // mailto: URI as the recipient, not a general email validator. mailto:
 // treats a comma as an additional-recipient separator (RFC 6068), so a
-// registrant/abuse-contact field containing e.g. "victim@x.com,cc@evil.com"
+// registrant/abuse-contact field containing e.g. "person@example.test,cc@hostile.example"
 // would silently add a second recipient to the outreach/abuse draft the user
 // opens - rejecting anything outside a single plain address closes that off.
 const SIMPLE_EMAIL_RE = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;

@@ -30,7 +30,7 @@ automated verdicts.
 </p>
 
 <p align="center">
-  <a href="https://whoisleuth.com/demo"><img src="docs/assets/whoisleuth-homepage.png" width="960" alt="WHOISleuth public homepage showing a fictional domain investigation workflow" /></a>
+  <a href="https://whoisleuth.com/demo"><img src="docs/assets/whoisleuth-homepage.jpg" width="960" alt="WHOISleuth public homepage showing a fictional domain investigation workflow" /></a>
 </p>
 
 The demo uses fixed fictional evidence on reserved domains. Its six-stage

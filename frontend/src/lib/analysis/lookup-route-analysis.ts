@@ -88,7 +88,6 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     rdap,
     registrarRdap,
     registrarRdapParsed,
-    whois,
     rdapParsed,
     whoisParsed,
     diagnostics,

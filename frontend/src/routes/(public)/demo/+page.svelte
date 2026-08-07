@@ -42,6 +42,7 @@
   let candidateFilter=$state<CandidateFilter>('all');
   let relatedDomains=$state<string[]>([]);
   let demoVisualView=$state<DemoVisualView>('sources');
+  const demoVisualTabs:readonly DemoVisualView[]=['sources','relationships','timeline'];
   const selected=$derived(syntheticDemoCandidate(demoState.selectedCandidateId));
   const candidates=$derived(candidateFilter==='high'
     ?SYNTHETIC_DEMO_CANDIDATES.filter((candidate)=>candidate.risk>=70)
@@ -49,6 +50,18 @@
       ?SYNTHETIC_DEMO_CANDIDATES.filter((candidate)=>relatedDomains.includes(candidate.domain))
       :SYNTHETIC_DEMO_CANDIDATES);
   const lookupView=$derived(selected?syntheticDemoLookupView(selected.id):null);
+
+  function demoVisualTabKeydown(event:KeyboardEvent){
+    const current=demoVisualTabs.indexOf(demoVisualView);let index=-1;
+    if(event.key==='ArrowRight')index=(current+1)%demoVisualTabs.length;
+    else if(event.key==='ArrowLeft')index=(current+demoVisualTabs.length-1)%demoVisualTabs.length;
+    else if(event.key==='Home')index=0;
+    else if(event.key==='End')index=demoVisualTabs.length-1;
+    const next=demoVisualTabs[index];if(!next)return;
+    event.preventDefault();demoVisualView=next;
+    const tablist=(event.currentTarget as HTMLButtonElement).closest('[role="tablist"]');
+    requestAnimationFrame(()=>tablist?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[index]?.focus());
+  }
   const demoSslbl=Object.freeze({
     status:'success',verdict:'not_listed',complete:true,
     detail:'The synthetic leaf certificate fingerprint was not present in the fixture snapshot.',
@@ -233,7 +246,7 @@
 {:else if view==='lookup'&&selected&&lookupView}
   <section class="demo-panel" aria-labelledby="lookup-heading">
     <p class="eyebrow">Lookup · Deep evidence review</p><h2 id="lookup-heading">{selected.domain}</h2>
-    <p>The synthetic result now follows the same task-centred hierarchy as live Lookup: orient first, review evidence by family, then open relationships, source quality, or case actions only when they help the decision.</p>
+    <p>This flattened narrative preview keeps every synthetic evidence family visible for demonstration. Live Lookup follows the same section order but starts most family details collapsed so an analyst can open only what supports the current decision.</p>
     <h3 class="sr-only">Synthetic lookup evidence</h3>
 
     <section class="demo-glance card" aria-labelledby="demo-at-a-glance-title">
@@ -276,11 +289,11 @@
       <h3 id="demo-relationships-title">Relationships &amp; history</h3>
       <p class="section-copy">Switch between provenance, a bounded relationship lead, and dated observations without repeating the same evidence.</p>
       <div class="demo-visual-switcher card" role="tablist" aria-label="Synthetic relationship and history view">
-        <button type="button" role="tab" aria-selected={demoVisualView==='sources'} class:active={demoVisualView==='sources'} onclick={()=>demoVisualView='sources'}>Sources <span>{lookupTopologyNodes.length}</span></button>
-        <button type="button" role="tab" aria-selected={demoVisualView==='relationships'} class:active={demoVisualView==='relationships'} onclick={()=>demoVisualView='relationships'}>Relationships <span>{selected.relationship?1:0}</span></button>
-        <button type="button" role="tab" aria-selected={demoVisualView==='timeline'} class:active={demoVisualView==='timeline'} onclick={()=>demoVisualView='timeline'}>Timeline <span>{lookupLifecycleEvents.length}</span></button>
+        <button id="demo-visual-tab-sources" type="button" role="tab" aria-selected={demoVisualView==='sources'} aria-controls="demo-visual-panel" tabindex={demoVisualView==='sources'?0:-1} class:active={demoVisualView==='sources'} onclick={()=>demoVisualView='sources'} onkeydown={demoVisualTabKeydown}>Sources <span>{lookupTopologyNodes.length}</span></button>
+        <button id="demo-visual-tab-relationships" type="button" role="tab" aria-selected={demoVisualView==='relationships'} aria-controls="demo-visual-panel" tabindex={demoVisualView==='relationships'?0:-1} class:active={demoVisualView==='relationships'} onclick={()=>demoVisualView='relationships'} onkeydown={demoVisualTabKeydown}>Relationships <span>{selected.relationship?1:0}</span></button>
+        <button id="demo-visual-tab-timeline" type="button" role="tab" aria-selected={demoVisualView==='timeline'} aria-controls="demo-visual-panel" tabindex={demoVisualView==='timeline'?0:-1} class:active={demoVisualView==='timeline'} onclick={()=>demoVisualView='timeline'} onkeydown={demoVisualTabKeydown}>Timeline <span>{lookupLifecycleEvents.length}</span></button>
       </div>
-      <div class="demo-visual-panel" role="tabpanel">
+      <div id="demo-visual-panel" class="demo-visual-panel" role="tabpanel" aria-labelledby={`demo-visual-tab-${demoVisualView}`}>
         {#if demoVisualView==='sources'}
           <div class="shared-evidence visual-summary"><EvidenceTopology id="demo-evidence-topology" title="Where this result came from" description="Jump to separately attributed fixture evidence. Missing or inconclusive sources remain explicit." target={{label:selected.domain,detail:'Synthetic domain lookup',status:selected.availability}} nodes={lookupTopologyNodes} /></div>
         {:else if demoVisualView==='relationships'}
@@ -300,7 +313,7 @@
     <section class="demo-result-section" id="demo-case-response" aria-labelledby="demo-case-response-title">
       <h3 id="demo-case-response-title">Case &amp; response</h3>
       <p class="section-copy">Separate observed facts, analyst assertions, unknowns, and reviewed next actions before saving or exporting.</p>
-      <div class="limitation info"><strong>Task-specific review</strong><p>This fixture demonstrates the acquisition-review panel. Live Lookup changes the family order for the selected Focus without opening nested evidence automatically.</p></div>
+      <div class="limitation info"><strong>Task-specific review</strong><p>This flattened fixture places acquisition review beside the case hand-off so the complete narrative stays visible. Live Lookup places it under Detailed assessment and does not open nested evidence automatically.</p></div>
       {#if lookupAcquisitionReview}<div class="shared-evidence"><LookupAcquisitionDueDiligence review={lookupAcquisitionReview} target={selected.domain} observedAt={null} synthetic /></div>{/if}
       <div class="limitation"><strong>Interpretation limit</strong><p>These values demonstrate source attribution and explainability only. A live result would still require analyst review.</p></div>
       <button class="primary" type="button" onclick={openCase}>Open synthetic case in Monitor</button>

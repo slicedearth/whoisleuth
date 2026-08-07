@@ -1,6 +1,6 @@
 {
   "name": "whoisleuth",
-  "version": "1.44.0",
+  "version": "1.45.0",
   "private": true,
   "license": "AGPL-3.0-only",
   "description": "Open-source, local-first domain intelligence and brand-protection console for WHOIS, RDAP, DNS, certificate transparency, lookalike domains, and web evidence.",
@@ -22,7 +22,7 @@
   "scripts": {
     "start": "npm run build && node server.mts",
     "test": "node --test",
-    "test:coverage": "node --test --experimental-test-coverage --test-coverage-include=\"lib/**/*.mts\" --test-coverage-include=\"cli/**/*.mts\" --test-coverage-include=\"frontend/src/lib/**/*.ts\" --test-coverage-include=\"netlify/functions/**/*.mts\" --test-coverage-include=\"server.mts\" --test-reporter=spec --test-reporter-destination=stdout --test-reporter=lcov --test-reporter-destination=test-coverage.lcov",
+    "test:coverage": "node --test --experimental-test-coverage --test-coverage-lines=90 --test-coverage-branches=75 --test-coverage-functions=85 --test-coverage-include=\"lib/**/*.mts\" --test-coverage-include=\"cli/**/*.mts\" --test-coverage-include=\"frontend/src/lib/**/*.ts\" --test-coverage-include=\"netlify/functions/**/*.mts\" --test-coverage-include=\"server.mts\" --test-reporter=spec --test-reporter-destination=stdout --test-reporter=lcov --test-reporter-destination=test-coverage.lcov",
     "test:properties": "node --test test/core-protocol-properties.test.mts test/evidence-quality-properties.test.mts test/browser-library-profile.test.mts test/service-binding-dns.test.mts test/model-contract-properties.test.mts",
     "test:profile": "node --test --test-reporter=spec --test-reporter-destination=stderr --test-reporter=./tools/test-duration-reporter.mts --test-reporter-destination=stdout",
     "typecheck": "npm run sync --workspace=frontend && tsc --noEmit -p tsconfig.json && tsc --noEmit -p frontend/analysis-tsconfig.json && tsc --noEmit -p frontend/tsconfig.json && tsc --noEmit -p e2e/tsconfig.json && tsc --noEmit -p test/tsconfig.json",
@@ -81,6 +81,7 @@
     "licenses:update": "node tools/third-party-notices.mts --write",
     "providers:policy-check": "node tools/provider-policy-freshness.mts",
     "security:codeql": "node tools/local-codeql.mts",
+    "security:staged": "node tools/staged-secret-check.mts",
     "security:retire": "retire --path frontend/build --severity high --outputformat text"
   },
   "engines": {

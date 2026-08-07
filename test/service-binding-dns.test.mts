@@ -295,12 +295,12 @@ test('property checks keep arbitrary DNS input deterministic, bounded, and termi
         assert.ok(error.message.length <= 180);
       }
     },
-  ), fastCheckParameters(600, 9_460));
+  ), fastCheckParameters(600));
 });
 
 test('property checks format all 16-byte IPv6 hints as valid addresses', () => {
   fc.assert(fc.property(
     fc.uint8Array({ minLength: 16, maxLength: 16 }),
     (bytes: Uint8Array) => assert.equal(net.isIP(formatIpv6(Buffer.from(bytes))), 6),
-  ), fastCheckParameters(600, 5_952));
+  ), fastCheckParameters(600));
 });

@@ -225,7 +225,7 @@ provider request or persisted write. Result links are passive pivots into the
 exact retained case, campaign, Brand Profile, or relationship observation where
 one exists.
 
-The independent browser-store ceilings total 10.5 MiB, which is greater than
+The 12 independent browser-store ceilings total 15.75 MiB, which is greater than
 the 5 MiB local-storage planning reference used by the former design. The
 maintainer-run `npm run platform:local-data` command derives that total from the
 owning constants without reading user data. The native provider preserves those

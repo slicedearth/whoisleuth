@@ -462,7 +462,7 @@ function formatTerminalHttp(document: TerminalRecord): string {
   const lines = [
     `Domain         ${safeTerminalValue(document.domain)}`,
     `Probe          ${titleCase(document.probeStatus)}`,
-    `Activity       ${titleCase(document.activityStatus)}`,
+    `Assessment     ${titleCase(document.assessment ?? document.activityStatus)}`,
     `Evidence       ${titleCase(http.status)}`,
     `Final URL      ${safeTerminalValue(http.finalUrl)}`,
     `HTTP status    ${safeTerminalValue(response.status)}`,

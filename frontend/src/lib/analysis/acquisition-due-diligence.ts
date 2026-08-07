@@ -242,7 +242,7 @@ function sourceComplete(evidence: UnknownRecord): boolean {
 }
 
 function transitionDependencies(
-  availability: UnknownRecord,
+  _availability: UnknownRecord,
   activation: UnknownRecord,
   dnsEvidence: UnknownRecord,
   dnsRecords: UnknownRecord,

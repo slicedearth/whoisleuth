@@ -24,7 +24,7 @@ type VersionedTextStore = {
   ) => Promise<boolean>;
 };
 
-type ScheduledMonitorUpdate<State, Result> = {
+type ScheduledMonitorUpdate<Result> = {
   state: unknown;
   result: Result;
   changed?: boolean;
@@ -80,11 +80,11 @@ function normalizeSnapshot(value: unknown): VersionedTextSnapshot {
   return { value: snapshot.value, version: snapshot.version } as VersionedTextSnapshot;
 }
 
-function normalizeUpdate<State, Result>(value: unknown): ScheduledMonitorUpdate<State, Result> {
+function normalizeUpdate<Result>(value: unknown): ScheduledMonitorUpdate<Result> {
   if (!value || typeof value !== 'object' || Array.isArray(value) || !Object.hasOwn(value, 'state')) {
     throw new Error('Scheduled monitoring update did not return a state.');
   }
-  const update = value as ScheduledMonitorUpdate<State, Result>;
+  const update = value as ScheduledMonitorUpdate<Result>;
   if (update.changed !== undefined && typeof update.changed !== 'boolean') {
     throw new Error('Scheduled monitoring update returned an invalid changed flag.');
   }
@@ -133,12 +133,12 @@ class ScheduledMonitorRepository<State> {
   }
 
   async update<Result>(
-    mutator: (state: State) => ScheduledMonitorUpdate<State, Result> | Promise<ScheduledMonitorUpdate<State, Result>>,
+    mutator: (state: State) => ScheduledMonitorUpdate<Result> | Promise<ScheduledMonitorUpdate<Result>>,
   ): Promise<{ state: State; result: Result }> {
     if (typeof mutator !== 'function') throw new Error('A scheduled monitoring state update is required.');
     for (let attempt = 0; attempt < MAX_UPDATE_ATTEMPTS; attempt += 1) {
       const current = await this.snapshot();
-      const outcome = normalizeUpdate<State, Result>(await mutator(structuredClone(current.state)));
+      const outcome = normalizeUpdate<Result>(await mutator(structuredClone(current.state)));
       if (outcome.changed === false) return { state: current.state, result: outcome.result };
       const state = this.normalizeState(outcome.state);
       const encrypted = encryptScheduledMonitorState(state, this.encryptionKey, this.namespace);

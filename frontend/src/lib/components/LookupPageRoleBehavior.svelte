@@ -105,18 +105,18 @@
 
 <style>
   .evidence-body{display:grid;gap:18px}
-  .evidence-body section+section{padding-top:18px;border-top:1px solid var(--line)}
+  .evidence-body section+section{padding-top:18px;border-top:1px solid var(--border)}
   .section-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:10px}
   .section-heading h5{margin:2px 0 0;font-size:var(--text-sm)}
-  .profile-count{display:grid;min-width:28px;height:28px;place-items:center;border:1px solid var(--line);border-radius:999px;color:var(--accent);font:700 var(--text-xs)/1 var(--mono)}
+  .profile-count{display:grid;min-width:28px;height:28px;place-items:center;border:1px solid var(--border);border-radius:999px;color:var(--accent);font:700 var(--text-xs)/1 var(--mono)}
   .role-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px}
-  .role-grid article{padding:12px;border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--surface-soft)}
+  .role-grid article{padding:12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
   .role-grid .role-label{display:block;color:var(--text);font-weight:700}
   .role-grid strong{display:block;margin-top:3px;color:var(--accent);font:600 var(--text-2xs)/1.4 var(--mono);text-transform:uppercase;letter-spacing:.06em}
   .role-grid ul{margin:8px 0 0;padding-left:17px;color:var(--muted);font-size:var(--text-xs);line-height:1.5}
   .script-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
   .indicator-list{display:grid;gap:8px;margin:12px 0 0;padding:0;list-style:none}
-  .indicator-list li{display:grid;grid-template-columns:minmax(160px,.55fr) minmax(0,1fr);gap:12px;padding:10px 12px;border-left:2px solid var(--accent);background:var(--surface-soft)}
+  .indicator-list li{display:grid;grid-template-columns:minmax(160px,.55fr) minmax(0,1fr);gap:12px;padding:10px 12px;border-left:2px solid var(--accent);background:var(--panel-raised)}
   .indicator-list strong,.indicator-list small{display:block}
   .indicator-list small{margin-top:3px;color:var(--muted);font:var(--text-2xs)/1.4 var(--mono);text-transform:uppercase}
   .indicator-list p{margin:0;color:var(--muted);font-size:var(--text-xs);line-height:1.5}

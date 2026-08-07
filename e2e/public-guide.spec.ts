@@ -24,6 +24,9 @@ test('homepage presents plain-language goals, restrained branding, and synthetic
   const goalBorders = await goalCards.evaluateAll((cards) => cards.map((card) => getComputedStyle(card).borderColor));
   expect(new Set(goalBorders).size).toBe(1);
   await expect(page.locator('.product-preview .preview-panel')).toHaveCount(3);
+  const candidateButtons = page.locator('.discover-panel .candidate-row');
+  await expect(candidateButtons).toHaveCount(3);
+  await expect(page.getByRole('button', { name: 'Show northstar-login.example in the preview' })).toHaveAttribute('aria-pressed', 'true');
   const previewTabs = page.getByRole('tablist', { name: 'Lookup result layout preview' });
   await expect(previewTabs.getByRole('tab', { name: 'Sources' })).toHaveAttribute('aria-selected', 'true');
   const topology = page.getByRole('region', { name: 'Where this result comes from' });
@@ -31,14 +34,32 @@ test('homepage presents plain-language goals, restrained branding, and synthetic
   await expect(topology.locator('#homepage-evidence-topology-title')).toHaveCSS('clip-path', 'inset(50%)');
   await expect(topology.getByRole('img', { name: 'Where this result comes from visual overview' })).toBeVisible();
   await expect(topology.getByRole('list', { name: 'Evidence source status' }).getByRole('listitem')).toHaveCount(5);
+  await page.getByRole('button', { name: 'Show northstarr.example in the preview' }).click();
+  await expect(page.getByRole('button', { name: 'Show northstarr.example in the preview' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('.lookup-panel > header small')).toHaveText('northstarr.example');
+  await expect(topology).toContainText('northstarr.example');
+  await expect(topology).toContainText('Synthetic parked page');
+  await expect(page.locator('.monitor-panel')).toContainText('Watch for material change');
   await previewTabs.getByRole('tab', { name: 'At a glance' }).click();
   const previewOverview = page.getByRole('tabpanel', { name: 'At a glance' });
   await expect(previewOverview.getByText('5 sources', { exact: true })).toBeVisible();
-  await expect(previewOverview.getByText('Registration and website evidence collected')).toBeVisible();
+  await expect(previewOverview.getByText('34/100', { exact: true })).toBeVisible();
+  await expect(previewOverview.getByText('Character edit', { exact: true })).toBeVisible();
+  await expect(previewOverview.getByText('Parked page pattern', { exact: true })).toBeVisible();
   await expect(topology).toHaveCount(0);
-  await previewTabs.getByRole('tab', { name: 'Timeline' }).click();
-  await expect(page.getByRole('list', { name: 'Synthetic lookup timeline' })).toBeVisible();
-  await previewTabs.getByRole('tab', { name: 'Sources' }).click();
+  const overviewTab = previewTabs.getByRole('tab', { name: 'At a glance' });
+  await overviewTab.focus();
+  await overviewTab.press('End');
+  await expect(previewTabs.getByRole('tab', { name: 'Timeline' })).toBeFocused();
+  await expect(previewTabs.getByRole('tab', { name: 'Timeline' })).toHaveAttribute('aria-selected', 'true');
+  const lookupTimeline = page.getByRole('list', { name: 'Synthetic lookup timeline' });
+  await expect(lookupTimeline).toBeVisible();
+  await expect(lookupTimeline.getByText('Material change', { exact: true })).toBeVisible();
+  await expect(lookupTimeline.getByText(/changed fields · Website activity/)).toBeVisible();
+  await expect(page.locator('.monitor-panel ol')).toHaveCount(0);
+  await previewTabs.getByRole('tab', { name: 'Timeline' }).press('ArrowLeft');
+  await expect(previewTabs.getByRole('tab', { name: 'Sources' })).toBeFocused();
+  await expect(previewTabs.getByRole('tab', { name: 'Sources' })).toHaveAttribute('aria-selected', 'true');
   await expect(topology).toBeVisible();
   await expect(page.getByText('Fixed fictional data from the public demo. No live target is contacted.')).toBeVisible();
   await expect(page.locator('.hero-actions').getByRole('link', { name: 'Open console' })).toHaveAttribute('href', '/dashboard');
@@ -47,9 +68,15 @@ test('homepage presents plain-language goals, restrained branding, and synthetic
   await expect(page.getByRole('link', { name: 'Browse all domain investigation resources' })).toHaveAttribute('href', '/resources');
 
   await page.setViewportSize({ width: 390, height: 844 });
+  const mobileDomainPicker = page.getByLabel('Example domain');
+  await expect(mobileDomainPicker).toBeVisible();
+  await mobileDomainPicker.selectOption('alternate-tld');
+  await expect(page.locator('.lookup-panel > header small')).toHaveText('northstar.invalid');
   await previewTabs.getByRole('tab', { name: 'Sources' }).click();
   const sourceSummary = page.locator('.mobile-source-summary');
   await expect(sourceSummary).toBeVisible();
+  await expect(sourceSummary.locator('.state-inconclusive', { hasText: 'Registry' })).toBeVisible();
+  await expect(sourceSummary.locator('.state-unavailable')).toHaveCount(2);
   const sourceStateColors = await sourceSummary.evaluate((summary) => {
     const warning = summary.querySelector('.state-warning strong');
     const success = summary.querySelector('.state-success strong');
@@ -110,6 +137,7 @@ test('public resources offer task-specific source boundaries on desktop and mobi
 
 test('public guide explains tasks, result states, glossary terms, and common questions', async ({ page }) => {
   await page.goto('/guide');
+  await expect(page.getByText(/Detailed assessment contains additional decision support, claim readiness, portable hand-off, and acquisition review/i)).toBeVisible();
 
   await expect(page.getByRole('heading', { name: 'Use WHOISleuth with confidence.' })).toBeVisible();
   await expect(page.getByRole('navigation', { name: 'Guide sections' })).toBeVisible();

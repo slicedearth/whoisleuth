@@ -3,7 +3,8 @@ import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
+import { spawn, spawnSync } from 'node:child_process';
 import { Readable, Writable } from 'node:stream';
 
 import { parseCliArguments } from '../cli/arguments.mts';
@@ -394,6 +395,26 @@ test('machine document and terminal formatter preserve explicit source states', 
   assert.equal(document.generatedAt, '2026-07-14T00:00:00.000Z');
 });
 
+test('machine document metadata cannot be replaced by upstream result fields', () => {
+  const document = buildCliLookupDocument(
+    'example.test',
+    classifiedDomain('example.test'),
+    lookupResult({
+      schema: 'untrusted.schema',
+      version: 999,
+      generatedAt: 'invalid',
+      query: 'different.test',
+      type: 'url',
+    }),
+    '2026-07-14T00:00:00.000Z',
+  );
+  assert.equal(document.schema, 'whoisleuth.cli.lookup');
+  assert.equal(document.version, 1);
+  assert.equal(document.generatedAt, '2026-07-14T00:00:00.000Z');
+  assert.equal(document.query, 'example.test');
+  assert.equal(document.type, 'domain');
+});
+
 test('terminal lookup groups evidence and supports concise and diagnostic detail levels', () => {
   const document = buildCliLookupDocument(
     'example.test',
@@ -720,4 +741,84 @@ test('repository source exposes an executable local CLI entry point', () => {
   assert.match(result.stdout, /Licensed under AGPL-3\.0-only/);
   assert.match(result.stdout, /Source and licence: https:\/\/github\.com\/slicedearth\/whoisleuth/);
   assert.equal(result.stderr, '');
+
+  const invalidProfile = spawnSync(process.execPath, [
+    entryPoint,
+    '--config',
+    path.join(root, 'fixtures', 'missing-cli-profile.json'),
+    'lookup',
+    'example.test',
+  ], { encoding: 'utf8' });
+  assert.equal(invalidProfile.status, EXIT_CODES.USAGE);
+  assert.match(invalidProfile.stderr, /^Usage error:/u);
+
+  const emptyConfigHome = fs.mkdtempSync(path.join(tmpdir(), 'whoisleuth-cli-config-'));
+  try {
+    const scaffold = spawnSync(process.execPath, [
+      entryPoint,
+      'registry-scaffold',
+      '--profile',
+      'nic-io-colon',
+      '--suffix',
+      'io',
+      '--scenario',
+      'registered',
+    ], {
+      encoding: 'utf8',
+      env: { ...process.env, XDG_CONFIG_HOME: emptyConfigHome },
+    });
+    assert.equal(scaffold.status, EXIT_CODES.SUCCESS);
+    assert.match(scaffold.stdout, /EXAMPLE\.IO/u);
+    assert.equal(scaffold.stderr, '');
+  } finally {
+    fs.rmSync(emptyConfigHome, { recursive: true, force: true });
+  }
+});
+
+test('repository CLI handles service termination while waiting for standard input', async () => {
+  const entryPoint = path.join(__dirname, '..', 'bin/whoisleuth.mts');
+  const readinessModule = `data:text/javascript,${encodeURIComponent(`
+    const timer = setInterval(() => {
+      if (process.listenerCount('SIGTERM') > 0) {
+        clearInterval(timer);
+        process.send?.({ type: 'ready' });
+      }
+    }, 5);
+    timer.unref();
+  `)}`;
+  const child = spawn(process.execPath, ['--import', readinessModule, entryPoint, 'lookup'], {
+    stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
+  });
+  assert.ok(child.stdout);
+  assert.ok(child.stderr);
+  let stdout = '';
+  let stderr = '';
+  child.stdout.setEncoding('utf8').on('data', (chunk) => { stdout += chunk; });
+  child.stderr.setEncoding('utf8').on('data', (chunk) => { stderr += chunk; });
+  await new Promise<void>((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      child.kill('SIGKILL');
+      reject(new Error('CLI did not become ready for SIGTERM.'));
+    }, 3_000);
+    child.once('message', (message) => {
+      if (!message || typeof message !== 'object' || !('type' in message) || message.type !== 'ready') return;
+      clearTimeout(timeout);
+      resolve();
+    });
+  });
+  const settled = new Promise<number | null>((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      child.kill('SIGKILL');
+      reject(new Error('CLI did not settle after SIGTERM.'));
+    }, 3_000);
+    child.once('exit', (exitCode) => {
+      clearTimeout(timeout);
+      resolve(exitCode);
+    });
+  });
+  child.kill('SIGTERM');
+  const code = await settled;
+  assert.equal(code, 143);
+  assert.equal(stdout, '');
+  assert.equal(stderr, 'Cancelled by analyst.\n');
 });

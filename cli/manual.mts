@@ -42,7 +42,7 @@ ${commands}
 .SH OUTPUT
 Human-readable output is the default. Versioned JSON and JSONL are available where documented. Diagnostics and optional progress events are written to standard error. Use --output with an optional --force flag for atomic private file output.
 .SH EXIT STATUS
-0 indicates command completion, 2 invalid usage, 3 a collection or comparison failure, 4 an explicitly detected partial result, 70 an internal bootstrap failure, and 130 analyst cancellation.
+0 indicates command completion, 2 invalid usage, 3 a collection or comparison failure, 4 an explicitly detected partial result, 70 an internal bootstrap failure, 130 analyst cancellation, and 143 service termination.
 .SH PRIVACY
 Network commands disclose the target to the directly queried upstream services. Offline commands do not make network requests. Output files are created with private permissions and are never uploaded by the CLI.
 .SH LICENSE

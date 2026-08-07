@@ -4,6 +4,7 @@
   import { onMount } from 'svelte';
   import BrandMark from '$lib/components/BrandMark.svelte';
   import PublicSeo from '$lib/components/PublicSeo.svelte';
+  import { requestJsonCapped, SMALL_JSON_RESPONSE_BYTES } from '$lib/bounded-json-response';
   import { protectedDestinations } from '$lib/workspaces';
 
   let password=$state('');
@@ -22,8 +23,9 @@
   async function checkSession(){
     checking=true;
     try{
-      const response=await fetch('/api/session',{cache:'no-store'});
-      if(response.ok&&(await response.json()).authenticated===true){await goto(returnTarget(),{replaceState:true});return;}
+      const { response, body }=await requestJsonCapped('/api/session',{cache:'no-store'},{maximumBytes:SMALL_JSON_RESPONSE_BYTES,timeoutMs:10_000});
+      const record=body&&typeof body==='object'&&!Array.isArray(body)?body as Record<string,unknown>:{};
+      if(response.ok&&record.authenticated===true){await goto(returnTarget(),{replaceState:true});return;}
     }catch{
       error='The session service could not be reached. You can still try to sign in.';
     }finally{checking=false;}
@@ -32,9 +34,9 @@
   async function login(event:SubmitEvent){
     event.preventDefault();busy=true;error='';
     try{
-      const response=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password})});
-      const body=await response.json().catch(()=>({}));
-      if(!response.ok)throw new Error(body.error||'Sign-in failed');
+      const { response, body }=await requestJsonCapped('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password})},{maximumBytes:SMALL_JSON_RESPONSE_BYTES,timeoutMs:15_000});
+      const record=body&&typeof body==='object'&&!Array.isArray(body)?body as Record<string,unknown>:{};
+      if(!response.ok)throw new Error(typeof record.error==='string'?record.error:'Sign-in failed');
       password='';
       await goto(returnTarget(),{replaceState:true});
     }catch(cause){error=cause instanceof Error?cause.message:'Sign-in failed';}

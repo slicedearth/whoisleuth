@@ -1,10 +1,10 @@
 import { createHash } from 'node:crypto';
 import { isIP } from 'node:net';
-import { lstat, readFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { hammingDistanceHex, imagePerceptualHash } from '../../lib/perceptual-hash.mts';
 import { isValidAsciiHostname } from '../../lib/hostname.mts';
+import { readBoundedRegularFile } from '../../lib/bounded-file.mts';
 import {
   MAX_WEB_CAPTURE_MANIFEST_BYTES,
   MAX_WEB_CAPTURE_DOM_DIGEST_BYTES,
@@ -291,14 +291,12 @@ function parseDomDigest(value: unknown, expectedDomain: string, expectedCaptured
 }
 
 async function boundedFile(filePath: string, maximumBytes: number, expectedBytes: number | null, label: string): Promise<Buffer> {
-  const metadata = await lstat(filePath);
-  if (!metadata.isFile() || metadata.isSymbolicLink() || metadata.size <= 0 || metadata.size > maximumBytes) {
-    throw new Error(`${label} must be a regular bounded file.`);
-  }
-  if (expectedBytes !== null && metadata.size !== expectedBytes) throw new Error(`${label} size does not match its manifest.`);
-  const value = await readFile(filePath);
-  if (value.length !== metadata.size) throw new Error(`${label} changed while it was being read.`);
-  return value;
+  return readBoundedRegularFile(filePath, {
+    maximumBytes,
+    minimumBytes: 1,
+    expectedBytes,
+    label,
+  });
 }
 
 function sha256(value: Buffer): string {

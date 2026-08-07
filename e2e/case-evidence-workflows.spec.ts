@@ -1,6 +1,5 @@
-import { readFile } from 'node:fs/promises';
 import { expect, test } from './fixtures';
-import { boundingBox, expectNoHorizontalOverflow, migrateLegacyBrowserData, readBrowserLocalCollection, requiredValue, runBulkScan } from './helpers';
+import { boundingBox, expectNoHorizontalOverflow } from './helpers';
 import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model';
 import { CASE_REPORT_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-report';
 

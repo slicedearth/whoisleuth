@@ -5,6 +5,8 @@ import { describe, test } from 'node:test';
 import fc from 'fast-check';
 
 import {
+  MAX_INLINE_LIBRARY_SCAN_CHARS,
+  MAX_INLINE_LIBRARY_SCAN_TOTAL_CHARS,
   MAX_INLINE_SCRIPT_CHARS,
   MAX_INLINE_SCRIPT_TOTAL_CHARS,
   MAX_LIBRARY_FINDINGS,
@@ -125,6 +127,46 @@ describe('bounded browser-library profile', () => {
         assert.ok(scriptsExamined <= MAX_SCRIPT_ELEMENTS);
       }
     }
+  });
+
+  test('bounds adversarial inline-signature work while retaining full-content hash coverage', () => {
+    const startedAt = performance.now();
+    const profile = analyzeBrowserLibraries({
+      html: `<script>${'/'.repeat(MAX_INLINE_SCRIPT_CHARS)}</script>`,
+      observedAt: OBSERVED_AT,
+    });
+    const elapsedMs = performance.now() - startedAt;
+
+    assert.equal(profile.status, 'partial');
+    assert.equal(profile.complete, false);
+    assert.equal(
+      profile.diagnostics.inlineSignatureCharactersExamined,
+      MAX_INLINE_LIBRARY_SCAN_CHARS,
+    );
+    assert.ok(
+      Number(profile.diagnostics.inlineSignatureCharactersExamined)
+        <= MAX_INLINE_LIBRARY_SCAN_TOTAL_CHARS,
+    );
+    assert.match(profile.limitations.join(' '), /deterministic .* cumulative sample/i);
+    assert.ok(elapsedMs < 1_500, `bounded inline analysis took ${elapsedMs.toFixed(1)} ms`);
+  });
+
+  test('shares the inline-signature ceiling across scripts without losing head and tail evidence', () => {
+    const filler = 'x'.repeat(MAX_INLINE_LIBRARY_SCAN_CHARS - 64);
+    const profile = analyzeBrowserLibraries({
+      html: Array.from(
+        { length: 6 },
+        (_, index) => `<script>/*! jQuery v3.7.${index} */${filler}/*! jQuery v3.6.${index} */</script>`,
+      ).join(''),
+      observedAt: OBSERVED_AT,
+    });
+
+    assert.equal(profile.status, 'partial');
+    assert.equal(
+      profile.diagnostics.inlineSignatureCharactersExamined,
+      MAX_INLINE_LIBRARY_SCAN_TOTAL_CHARS,
+    );
+    assert.ok(profile.findings.some(({ id }) => id === 'jquery'));
   });
 
   test('never throws or echoes arbitrary bounded HTML', () => {

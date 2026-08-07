@@ -76,7 +76,7 @@
       <input bind:value={expectedSha256} maxlength="64" inputmode="text" autocomplete="off" spellcheck="false" placeholder="Paste a trusted 64-character checksum before choosing the file" />
     </label>
     <p class="note">The file stays in this browser tab. Replay validates schema, nesting and entry bounds, calculates the file digest, optionally verifies a trusted checksum, and renders bounded normalised facts only.</p>
-    {#if status}<p class:loaded={Boolean(replay)} aria-live="polite">{status}</p>{/if}
+    <p class="replay-status" class:loaded={Boolean(replay)} role="status" aria-live="polite" aria-atomic="true">{status}</p>
 
     {#if replay}
       <section class="replay-result" aria-labelledby="replay-title">
@@ -138,13 +138,13 @@
           </div>
         </section>
 
-        <LookupAssetGraph graph={replay.graph} />
+        <LookupAssetGraph graph={replay.graph} headingId="replay-asset-graph-title" evidenceLinks={false} />
 
         <section class="comparison" aria-labelledby="replay-comparison-title">
           <h3 id="replay-comparison-title">Compare another capture</h3>
           <p class="note">Choose a second export for the same target. The comparison separates observed value changes from source-quality and application-interpretation differences.</p>
           <label class="picker"><span>Choose second evidence JSON</span><input type="file" accept="application/json,.json" onchange={loadComparison} /></label>
-          {#if comparisonStatus}<p aria-live="polite">{comparisonStatus}</p>{/if}
+          <p class="comparison-status" role="status" aria-live="polite" aria-atomic="true">{comparisonStatus}</p>
           {#if comparison}
             <div class="comparison-counts"><span><strong>{comparison.counts.observedChanges}</strong> observed</span><span><strong>{comparison.counts.collectionDifferences}</strong> collection</span><span><strong>{comparison.counts.interpretationDifferences}</strong> interpretation</span></div>
             <ol>{#each comparison.rows.filter((item) => item.kind !== 'unchanged') as row}<li><div><strong>{row.label}</strong><span>{row.kind.replaceAll('_', ' ')}</span></div><p>{row.left} → {row.right}</p><small>{row.explanation}</small></li>{/each}</ol>
@@ -174,7 +174,8 @@
   .picker input{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
   .checksum{display:grid;gap:5px;max-width:760px;margin-top:10px}.checksum span{color:var(--muted);font:650 var(--text-2xs) var(--mono)}.checksum small{font-weight:500}.checksum input{width:100%;font-family:var(--mono)}
   .note{max-width:760px;margin:9px 0}
-  .loaded{color:var(--good)}
+  .loaded{color:var(--success)}
+  .replay-status:empty,.comparison-status:empty{min-height:0;margin:0}
   .replay-result{display:grid;gap:12px;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)}
   .replay-result>header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
   h2{margin:2px 0 0;font-size:var(--text-lg);overflow-wrap:anywhere}
@@ -193,7 +194,7 @@
   dt{color:var(--muted);font-size:var(--text-2xs)}
   dd{margin:0;font-size:var(--text-xs);overflow-wrap:anywhere}
   dd small{display:block;margin-top:3px;color:var(--muted)}
-  aside{padding:10px;border:1px solid color-mix(in srgb,var(--warn) 42%,var(--border));border-radius:var(--radius-sm);background:var(--warn-bg)}
+  aside{padding:10px;border:1px solid color-mix(in srgb,var(--amber) 42%,var(--border));border-radius:var(--radius-sm);background:rgb(var(--amber-rgb) / .08)}
   aside ul,.limits ul{margin:7px 0 0;padding-left:18px;font-size:var(--text-xs);line-height:1.5}
   .brief{display:grid;gap:8px}
   .brief>div{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}

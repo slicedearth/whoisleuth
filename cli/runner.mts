@@ -159,7 +159,6 @@ import {
   formatLookalikeCalibration,
 } from './lookalike-calibration.mts';
 import { MAX_SAVED_LOOKUP_INPUT_BYTES, readSavedLookupInputBounded } from './saved-lookup.mts';
-import type { UnknownRecord } from './saved-lookup.mts';
 import {
   presentTerminalOutput,
   terminalPresentation,
@@ -174,15 +173,24 @@ const MAX_STDIN_BYTES = 4096;
 async function readStdinBounded(
   stream: BoundedTextStream | null | undefined,
   limit = MAX_STDIN_BYTES,
+  signal?: AbortSignal,
 ): Promise<string> {
   if (!stream || stream.isTTY) return '';
+  const abort = () => stream.destroy?.(new DOMException('Aborted', 'AbortError'));
+  if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+  signal?.addEventListener('abort', abort, { once: true });
   const chunks: Buffer[] = [];
   let total = 0;
-  for await (const chunk of stream as AsyncIterable<unknown>) {
-    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as Uint8Array);
-    total += buffer.length;
-    if (total > limit) throw new CliUsageError(`Standard input is limited to ${limit} bytes.`);
-    chunks.push(buffer);
+  try {
+    for await (const chunk of stream as AsyncIterable<unknown>) {
+      if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as Uint8Array);
+      total += buffer.length;
+      if (total > limit) throw new CliUsageError(`Standard input is limited to ${limit} bytes.`);
+      chunks.push(buffer);
+    }
+  } finally {
+    signal?.removeEventListener('abort', abort);
   }
   const text = Buffer.concat(chunks).toString('utf8').trim();
   const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
@@ -256,7 +264,7 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
     const readSingleInput = async (): Promise<string> => (
       dependencies.readStdin
         ? await dependencies.readStdin()
-        : await readStdinBounded(dependencies.stdin || process.stdin)
+        : await readStdinBounded(dependencies.stdin || process.stdin, MAX_STDIN_BYTES, dependencies.signal)
     );
     const commandContext: CliCommandContext = Object.freeze({
       stdout,
@@ -406,7 +414,11 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
 
     if (args.action === 'registry-support') {
       failureLabel = 'Registry support';
-      const readInput = dependencies.readStdin || (() => readStdinBounded(dependencies.stdin || process.stdin));
+      const readInput = dependencies.readStdin || (() => readStdinBounded(
+        dependencies.stdin || process.stdin,
+        MAX_STDIN_BYTES,
+        dependencies.signal,
+      ));
       const requestedInput = args.target || await readInput();
       if (!requestedInput) throw new CliUsageError('registry-support requires one domain or suffix as an argument or on stdin.');
       const lookupCapability = dependencies.registryCapabilityFor || registryCapabilityFor;

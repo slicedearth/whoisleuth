@@ -257,12 +257,14 @@ describe('bulk output and runner', () => {
     const metadata = { deep: false, duplicates: 2, generatedAt: '2026-07-14T00:00:00.000Z' };
     const document = buildCliBulkDocument(items, metadata);
     assert.equal(document.schema, 'whoisleuth.cli.bulk');
-    assert.equal(document.version, 2);
+    assert.equal(document.version, 3);
     assert.deepEqual(document.summary, { collected: 2, matched: 2, succeeded: 1, failed: 1, duplicatesRemoved: 2 });
     assert.deepEqual(arrayValue(document.results).map((item) => recordValue(item).query), ['one.test', 'bad']);
     const lines = formatJsonLines(items, metadata).trim().split('\n').map((line) => JSON.parse(line));
     assert.deepEqual(lines.map((item) => item.schema), ['whoisleuth.cli.bulk.item', 'whoisleuth.cli.bulk.item']);
     assert.ok(lines.every((item) => item.generatedAt === metadata.generatedAt));
+    assert.ok(lines.every((item) => item.observedAt === null));
+    assert.equal(formatJsonLines([], metadata), '');
   });
 
   test('terminal output presents each state and a compact summary', () => {

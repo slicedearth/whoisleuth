@@ -75,7 +75,7 @@
 {/if}
 
 <style>
-  .undo-toast,.undo-outcome{position:fixed;right:20px;bottom:20px;z-index:75;max-width:min(440px,calc(100vw - 32px));border:1px solid color-mix(in srgb,var(--accent) 48%,var(--border));border-radius:var(--radius-md);background:color-mix(in srgb,var(--panel-raised) 96%,transparent);box-shadow:var(--shadow-lg);backdrop-filter:blur(12px)}
+  .undo-toast,.undo-outcome{position:fixed;right:20px;bottom:20px;z-index:75;max-width:min(440px,calc(100vw - 32px));border:1px solid color-mix(in srgb,var(--accent) 48%,var(--border));border-radius:var(--radius-md);background:color-mix(in srgb,var(--panel-raised) 96%,transparent);box-shadow:0 18px 48px rgb(var(--shadow-rgb) / .24);backdrop-filter:blur(12px)}
   .undo-toast{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:12px;padding:12px 12px 12px 14px}
   .undo-toast div{display:grid;min-width:0;gap:2px}.undo-toast strong{font-size:var(--text-sm)}.undo-toast span{overflow:hidden;color:var(--text);font:650 var(--text-xs) var(--mono);text-overflow:ellipsis;white-space:nowrap}.undo-toast small{color:var(--muted);font-size:var(--text-2xs)}
   button{min-height:34px}.undo{padding:0 11px;border:1px solid var(--accent);border-radius:var(--radius-sm);background:rgb(var(--accent-rgb) / .1);color:var(--accent);font:700 var(--text-xs) var(--mono);cursor:pointer}.dismiss{width:34px;padding:0;border:0;background:none;color:var(--muted);font-size:1.3rem;cursor:pointer}

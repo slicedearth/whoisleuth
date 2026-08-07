@@ -74,7 +74,7 @@ describe('domain classification', () => {
   });
 
   test('punycode-encodes an internationalized domain name', () => {
-    assert.equal(classifyQuery('münchen.de').value, 'xn--mnchen-3ya.de');
+    assert.equal(classifyQuery('münchen.example').value, 'xn--mnchen-3ya.example');
   });
 
   test('resolves a multi-level public suffix to the registrable domain', () => {

@@ -3,6 +3,10 @@ import {
   parseCompactLookupHttpResponse,
   type CompactLookupHttpResponse,
 } from './lookup-response.ts';
+import {
+  requestJsonCapped,
+  STANDARD_JSON_RESPONSE_BYTES,
+} from '../bounded-json-response.ts';
 
 export type BulkLookupMode = 'deep' | 'fast';
 
@@ -16,6 +20,7 @@ type BulkLookupWait = (delayMs: number, signal: AbortSignal) => Promise<void>;
 export const BULK_LOOKUP_RETRY_ATTEMPTS = 3;
 export const BULK_LOOKUP_DEFAULT_RETRY_DELAY_MS = 2_000;
 export const BULK_LOOKUP_MAX_RETRY_DELAY_MS = 30_000;
+export const BULK_LOOKUP_REQUEST_TIMEOUT_MS = 40_000;
 
 export function bulkLookupRetryDelayMs(
   value: string | null,
@@ -70,17 +75,22 @@ export async function fetchCompactBulkLookup(
   const wait = options.wait ?? waitForBulkLookupRetry;
   const now = options.now ?? Date.now;
   const url = `/api/lookup?q=${encodeURIComponent(domain)}&fast=${mode === 'fast' ? '1' : '0'}&compact=1`;
-  let response = await fetcher(url, { signal });
+  const request = () => requestJsonCapped(url, { signal }, {
+    maximumBytes: STANDARD_JSON_RESPONSE_BYTES,
+    timeoutMs: BULK_LOOKUP_REQUEST_TIMEOUT_MS,
+    fetchImpl: (input, init) => fetcher(String(input), { signal: init?.signal ?? signal }),
+  });
+  let result = await request();
   for (
     let attempt = 0;
-    response.status === 429 && attempt < BULK_LOOKUP_RETRY_ATTEMPTS;
+    result.response.status === 429 && attempt < BULK_LOOKUP_RETRY_ATTEMPTS;
     attempt += 1
   ) {
-    const delayMs = bulkLookupRetryDelayMs(response.headers.get('Retry-After'), now());
+    const delayMs = bulkLookupRetryDelayMs(result.response.headers.get('Retry-After'), now());
     await wait(delayMs, signal);
-    response = await fetcher(url, { signal });
+    result = await request();
   }
-  const body: unknown = await response.json().catch(() => ({}));
+  const { response, body } = result;
   if (!response.ok) throw new Error(lookupHttpErrorMessage(body, response.status));
   const parsed = parseCompactLookupHttpResponse(body, domain);
   if (!parsed.ok) throw new Error(parsed.error);

@@ -73,14 +73,13 @@
     buildLookupRequestUrl,
     buildLookupResultSectionLinks,
     lookupEvidenceFamilyForHref,
+    lookupEvidenceTargetForHref,
   } from '$lib/analysis/lookup-page-actions.ts';
   import { projectEvidenceTopology } from '$lib/analysis/evidence-topology.ts';
   import {
-    normalizeLookupEvidenceDensity,
     normalizeLookupTaskView,
     readLookupPresentation,
     writeLookupPresentation,
-    type LookupEvidenceDensity,
     type LookupTaskView,
   } from '$lib/analysis/lookup-presentation.ts';
   import { buildLookupWebsiteSnapshot } from '$lib/analysis/lookup-snapshot-input.ts';
@@ -109,8 +108,8 @@
   let profile=$state<BrandProfile|null>(null);
   let draftStatus=$state('');
   let caseRecord=$state<CaseRecord|null>(null);let caseNote=$state('');let caseStatus=$state('');
-  let evidenceDensity=$state<LookupEvidenceDensity>('summary');
   let expandedResultSections=$state<string[]>([]);
+  let detailedAssessmentOpen=$state(false);
   let taskView=$state<LookupTaskView>('general');
   let visualView=$state<LookupVisualView>('sources');
   let freshnessPolicyMode=$state<'task-default'|'analyst-custom'>('task-default');
@@ -284,11 +283,6 @@
     caseStatus=next.status;
   }
   function cancelLookup(){lookupRequestController.cancel();}
-  function setEvidenceDensity(value:LookupEvidenceDensity){
-    evidenceDensity=normalizeLookupEvidenceDensity(value);
-    expandedResultSections=[];
-    writeLookupPresentation(localStorage,{density:evidenceDensity,task:taskView});
-  }
   function visualViewForTask(value:LookupTaskView):LookupVisualView{
     if(value==='acquisition'||value==='owned')return 'timeline';
     if(value==='brand'||value==='incident')return 'relationships';
@@ -297,7 +291,7 @@
   function setTaskView(value:LookupTaskView){
     taskView=normalizeLookupTaskView(value);
     visualView=visualViewForTask(taskView);
-    writeLookupPresentation(localStorage,{density:evidenceDensity,task:taskView});
+    writeLookupPresentation(localStorage,{task:taskView});
   }
   async function showSectionDetail(sectionId:string){
     expandedResultSections=expandedResultSections.includes(sectionId)
@@ -344,15 +338,35 @@
   async function navigateToLookupEvidence(href:string){
     const familyId=lookupEvidenceFamilyForHref(href);
     if(!familyId)return;
-    expandedResultSections=expandedResultSections.includes(familyId)
+    expandedResultSections=familyId==='overview'||expandedResultSections.includes(familyId)
       ? expandedResultSections
       : [...expandedResultSections,familyId];
     await tick();
-    const targetId=href.slice(1);
+    const normalizedHref=lookupEvidenceTargetForHref(href);
+    const targetId=normalizedHref.slice(1);
     const target=document.getElementById(targetId);
     if(!target)return;
-    window.history.replaceState(window.history.state,'',href);
+    window.history.replaceState(window.history.state,'',normalizedHref);
     target.scrollIntoView({block:'start',behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});
+  }
+  function handleLookupEvidenceLink(event:MouseEvent){
+    if(event.defaultPrevented||event.button!==0||event.metaKey||event.ctrlKey||event.shiftKey||event.altKey)return;
+    const origin=event.target;
+    if(!(origin instanceof Element))return;
+    const anchor=origin.closest<HTMLAnchorElement>('a[href^="#"]');
+    if(!anchor)return;
+    const href=anchor.getAttribute('href')||'';
+    if(!lookupEvidenceFamilyForHref(href))return;
+    event.preventDefault();
+    void navigateToLookupEvidence(href);
+  }
+  function evidenceLinkNavigation(node:HTMLElement){
+    node.addEventListener('click',handleLookupEvidenceLink);
+    return {destroy:()=>node.removeEventListener('click',handleLookupEvidenceLink)};
+  }
+  function navigateToCurrentLookupHash(){
+    const href=window.location.hash;
+    if(result&&lookupEvidenceFamilyForHref(href))void navigateToLookupEvidence(href);
   }
   function sectionDetailVisible(sectionId:string):boolean{
     return expandedResultSections.includes(sectionId);
@@ -364,7 +378,6 @@
   onMount(()=>{
     pageActive=true;
     const presentation=readLookupPresentation(localStorage);
-    evidenceDensity=presentation.density;
     taskView=presentation.task;
     visualView=visualViewForTask(taskView);
     const restored=readLookupWorkflowState();
@@ -376,9 +389,12 @@
     if(q&&(targetChanged||depthChanged)){query=q;result=null;error='';}
     else if(q)query=q;
     if(requestedDepth==='fast'||requestedDepth==='deep')lookupMode=requestedDepth;
+    window.addEventListener('hashchange',navigateToCurrentLookupHash);
+    if(result)requestAnimationFrame(navigateToCurrentLookupHash);
     void (async()=>{await refreshProfileContext();if(result)await refreshCase();})();
     return()=>{
       pageActive=false;
+      window.removeEventListener('hashchange',navigateToCurrentLookupHash);
       lookupRequestController.dispose();
       writeLookupWorkflowState({query,lookupMode,includeExternalIntelligence,includeMalwareHostIntelligence,includeMalwareIocIntelligence,includeSecurityTxt,error,result});
     };
@@ -420,12 +436,13 @@
     if(!entries.length||loading)return;
     if(entries.length>1){
       result=null;error='';
-      saveCandidateHandoff('manual',entries.slice(0,2000).map(domain=>({domain:domain.toLowerCase(),source:'manual input',mutationTypes:[]})));
-      await goto('/bulk?source=lookup');
+      const handoffResult=saveCandidateHandoff('manual',entries.slice(0,2000).map(domain=>({domain:domain.toLowerCase(),source:'manual input',mutationTypes:[]})));
+      if(!handoffResult.saved){error='This browser could not retain the selected domains for Bulk. Check site-storage access and try again.';return;}
+      await goto(`/bulk?source=manual&handoff=${handoffResult.token}`);
       return;
     }
 
-    loading=true;loadingElapsedMs=0;error='';result=null;caseRecord=null;caseNote='';caseStatus='';serviceDependencyScope='';serviceDependencyFalsePositives='';expandedResultSections=[];
+    loading=true;loadingElapsedMs=0;error='';result=null;caseRecord=null;caseNote='';caseStatus='';serviceDependencyScope='';serviceDependencyFalsePositives='';expandedResultSections=[];detailedAssessmentOpen=false;
     const target=entries[0];if(!target)return;
     const lookupUrl=buildLookupRequestUrl(target,{
       mode:lookupMode,
@@ -451,7 +468,10 @@
       if(!outcome.ok){error=outcome.message;return;}
       result=outcome.value;
       await refreshCase();
-      requestAnimationFrame(()=>document.querySelector('#result')?.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'}));
+      requestAnimationFrame(()=>{
+        if(window.location.hash&&lookupEvidenceFamilyForHref(window.location.hash))navigateToCurrentLookupHash();
+        else document.querySelector('#result')?.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'});
+      });
     }catch{
       if(pageActive)error='Lookup request could not be prepared.';
     }finally{
@@ -489,15 +509,13 @@
 <LookupEvidenceReplay />
 
 {#if result}
-  <section class="result-root" id="result">
+  <section class="result-root" id="result" use:evidenceLinkNavigation>
     <LookupResultHeader title={show(result.registrableDomain||result.query)} state={show(availability.state)} isSubdomain={Boolean(result.isSubdomain)} registrableDomain={show(result.registrableDomain)} inputHostname={show(result.inputHostname)} onExport={downloadEvidence} onReportExport={downloadReadableReport} onBriefExport={downloadInvestigationBrief} />
 
     <LookupPresentationControls
-      density={evidenceDensity}
       task={taskView}
       allSectionsExpanded={allSectionDetailsVisible()}
       anySectionsExpanded={anySectionDetailsVisible()}
-      setDensity={setEvidenceDensity}
       setTask={setTaskView}
       expandAll={expandAllSectionDetails}
       collapseAll={collapseAllSectionDetails}
@@ -519,7 +537,12 @@
         <LookupAssessment detail={show(availability.detail||availability.state)} confidence={show(availability.confidence)} {risk} {riskSensitivity} {opportunity} signals={[...lookupSummary.signals]} trusted={String(profileSignals.trusted||'')} />
       {/if}
 
-      {#if evidenceDensity!=='summary'}
+      <details class="detailed-assessment card" bind:open={detailedAssessmentOpen}>
+        <summary>
+          <span><strong>Detailed assessment</strong><small>Decision support, claim readiness, portable hand-off, and acquisition review</small></span>
+          <span>{detailedAssessmentOpen?'Close assessment':'Open assessment'}</span>
+        </summary>
+        <div class="detailed-assessment-body">
         <LookupDecisionSupport
           support={lookupDecisionSupport}
           onbriefcopy={copyInvestigationBrief}
@@ -544,7 +567,8 @@
             observedAt={lookupObservedAt}
           />
         {/if}
-      {/if}
+        </div>
+      </details>
     </section>
     {/snippet}
 
@@ -581,6 +605,7 @@
 
       {#if reverseDns.source==='reverse_dns'}
         <div class="evidence-component" id="evidence-reverse-dns"><LookupDnsEvidence
+          headingId="reverse-dns-title"
           title="Reverse DNS context"
           summaryDetail="Expand for PTR names, provenance, and limitations"
           status={show(reverseDns.status)}
@@ -594,6 +619,7 @@
 
       {#if dnsEvidence.source==='dns'}
         <div class="evidence-component" id="evidence-dns"><LookupDnsEvidence
+          headingId="dns-title"
           status={show(dnsEvidence.status)}
           complete={dnsEvidence.complete!==false}
           rows={networkDisplay.dnsRows}
@@ -922,7 +948,7 @@
     </section>
     {/snippet}
 
-    <div class="evidence-density density-{evidenceDensity}">
+    <div class="evidence-sections">
       {#each resultSectionLinks() as section (section.href)}
         {#if section.href==='#overview'}
           {@render overviewSection()}
@@ -946,7 +972,18 @@
 
 <style>
   .result-root{min-width:0;overflow-x:clip;overflow-clip-margin:3px}
-  .evidence-density{display:flow-root}
+  .evidence-sections{display:flow-root}
+  .detailed-assessment{margin-top:12px;padding:0;overflow:hidden}
+  .detailed-assessment>summary{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:14px;cursor:pointer;list-style:none}
+  .detailed-assessment>summary::-webkit-details-marker{display:none}
+  .detailed-assessment>summary span:first-child{display:grid;gap:4px;min-width:0}
+  .detailed-assessment>summary strong{color:var(--text);font:700 var(--text-sm) var(--mono)}
+  .detailed-assessment>summary small{color:var(--muted);font-size:var(--text-xs);line-height:1.45}
+  .detailed-assessment>summary span:last-child{flex:0 0 auto;color:var(--accent);font:700 var(--text-2xs) var(--mono);text-transform:uppercase}
+  .detailed-assessment>summary span:last-child::before{content:'+';display:inline-block;width:1.2em}
+  .detailed-assessment[open]>summary{border-bottom:1px solid var(--border);background:var(--panel-raised)}
+  .detailed-assessment[open]>summary span:last-child::before{content:'−'}
+  .detailed-assessment-body{padding:0 14px 14px}
   .result-section{--section-accent:var(--accent2);margin-top:26px}
   .result-section.family-web{--section-accent:var(--evidence-web)}
   .result-section.family-registry{--section-accent:var(--evidence-registry)}
@@ -984,6 +1021,7 @@
   .raw pre{max-height:520px;overflow:auto;margin:0;padding:var(--card-pad);border-top:1px solid var(--border);font-size:var(--text-xs)}
 
   @media(max-width:700px){
+    .detailed-assessment>summary{align-items:flex-start;flex-direction:column;gap:10px}
     .sslbl-review-lead{align-items:stretch;flex-direction:column}
     .sslbl-review-lead .button{width:100%}
   }

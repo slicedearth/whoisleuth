@@ -2,30 +2,7 @@
 
 import { fileURLToPath } from 'node:url';
 
-import {
-  MAX_PROFILE_STORE_BYTES,
-} from '../frontend/src/lib/analysis/brand-profile-model.ts';
-import {
-  MAX_CAMPAIGN_STORE_BYTES,
-} from '../frontend/src/lib/analysis/campaign-model.ts';
-import {
-  MAX_CASE_STORE_BYTES,
-} from '../frontend/src/lib/analysis/case-model.ts';
-import {
-  MAX_CT_HISTORY_STORE_BYTES,
-} from '../frontend/src/lib/analysis/ct-history.ts';
-import {
-  MAX_RULE_STORE_BYTES,
-} from '../frontend/src/lib/analysis/detection-rule-model.ts';
-import {
-  MAX_RELATIONSHIP_OBSERVATION_STORE_BYTES,
-} from '../frontend/src/lib/analysis/relationship-observation-model.ts';
-import {
-  MAX_SHORTLIST_STORE_BYTES,
-} from '../frontend/src/lib/analysis/shortlist-model.ts';
-import {
-  MAX_WATCHLIST_STORE_BYTES,
-} from '../frontend/src/lib/analysis/watchlist-store.ts';
+import { BROWSER_LOCAL_COLLECTIONS } from '../frontend/src/lib/browser-local-data-definitions.ts';
 
 type WritableLike = { write(value: string): unknown };
 type MainOptions = Readonly<{
@@ -59,16 +36,13 @@ export const MAX_LOCAL_DATA_EVALUATION_STORES = 16;
 export const MAX_LOCAL_DATA_EVALUATION_CANDIDATES = 8;
 export const MAX_LOCAL_DATA_EVALUATION_DETAIL_LENGTH = 320;
 
-const CURRENT_STORES = Object.freeze<StoreAssessment[]>([
-  Object.freeze({ id: 'cases', label: 'Cases', maximumBytes: MAX_CASE_STORE_BYTES, access: 'keyed_records', backend: 'indexedDB' }),
-  Object.freeze({ id: 'watchlists', label: 'Watchlists', maximumBytes: MAX_WATCHLIST_STORE_BYTES, access: 'keyed_records', backend: 'indexedDB' }),
-  Object.freeze({ id: 'brand_profiles', label: 'Brand Profiles', maximumBytes: MAX_PROFILE_STORE_BYTES, access: 'keyed_records', backend: 'indexedDB' }),
-  Object.freeze({ id: 'campaigns', label: 'Campaigns', maximumBytes: MAX_CAMPAIGN_STORE_BYTES, access: 'keyed_records', backend: 'indexedDB' }),
-  Object.freeze({ id: 'shortlist', label: 'Shortlist', maximumBytes: MAX_SHORTLIST_STORE_BYTES, access: 'keyed_records', backend: 'indexedDB' }),
-  Object.freeze({ id: 'ct_history', label: 'Certificate Transparency history', maximumBytes: MAX_CT_HISTORY_STORE_BYTES, access: 'keyed_records', backend: 'indexedDB' }),
-  Object.freeze({ id: 'detection_rules', label: 'Detection rules', maximumBytes: MAX_RULE_STORE_BYTES, access: 'keyed_records', backend: 'indexedDB' }),
-  Object.freeze({ id: 'relationship_observations', label: 'Retained relationship observations', maximumBytes: MAX_RELATIONSHIP_OBSERVATION_STORE_BYTES, access: 'keyed_records', backend: 'indexedDB' }),
-]);
+const CURRENT_STORES = Object.freeze<StoreAssessment[]>(BROWSER_LOCAL_COLLECTIONS.map((definition) => Object.freeze({
+  id: definition.id,
+  label: definition.label,
+  maximumBytes: definition.maximumBytes,
+  access: 'keyed_records',
+  backend: 'indexedDB',
+})));
 
 const CANDIDATES = Object.freeze<CandidateAssessment[]>([
   Object.freeze({

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { createRequire } from 'node:module';
+import EXIT_CODES from '../cli/exit-codes.mts';
 
 for (const stream of [process.stdout, process.stderr]) {
   stream.on('error', (error: NodeJS.ErrnoException) => {
@@ -31,32 +32,43 @@ if (argv.length === 1 && (argv[0] === '--version' || argv[0] === '-V')) {
     resolvedArgv = await configModule.resolveCliProfileArguments(argv);
   } catch (error) {
     process.stderr.write(`Usage error: ${errorsModule.boundedCliErrorMessage(error, 'Invalid CLI profile')}\n`);
-    process.exitCode = 64;
+    process.exitCode = EXIT_CODES.USAGE;
     resolvedArgv = [];
   }
   const cancellation = new AbortController();
   let interruptionCount = 0;
-  const interrupt = () => {
+  let requestedExitCode = 130;
+  const interrupt = (signal: 'SIGINT' | 'SIGTERM') => {
     interruptionCount += 1;
-    if (interruptionCount === 1) cancellation.abort(new DOMException('Aborted', 'AbortError'));
+    if (interruptionCount === 1) {
+      requestedExitCode = signal === 'SIGTERM' ? 143 : 130;
+      cancellation.abort(new DOMException('Aborted', 'AbortError'));
+    }
     else {
       outputModule.cleanupPendingOutputFilesSync();
-      process.exit(130);
+      process.exit(requestedExitCode);
     }
   };
-  process.on('SIGINT', interrupt);
+  const onSigint = () => interrupt('SIGINT');
+  const onSigterm = () => interrupt('SIGTERM');
+  process.on('SIGINT', onSigint);
+  process.on('SIGTERM', onSigterm);
 
-  const execution = resolvedArgv.length ? runnerModule.runCli(resolvedArgv, { signal: cancellation.signal }) : Promise.resolve(process.exitCode || 64);
+  const execution = resolvedArgv.length
+    ? runnerModule.runCli(resolvedArgv, { signal: cancellation.signal })
+    : Promise.resolve(process.exitCode || EXIT_CODES.USAGE);
   execution.then((code) => {
     if (code === 130) {
-      process.removeListener('SIGINT', interrupt);
-      process.exit(130);
+      process.removeListener('SIGINT', onSigint);
+      process.removeListener('SIGTERM', onSigterm);
+      process.exit(requestedExitCode);
     }
     process.exitCode = code;
   }).catch((error: unknown) => {
     process.stderr.write(`Internal CLI error: ${errorsModule.boundedCliErrorMessage(error)}\n`);
     process.exitCode = 70;
   }).finally(() => {
-    process.removeListener('SIGINT', interrupt);
+    process.removeListener('SIGINT', onSigint);
+    process.removeListener('SIGTERM', onSigterm);
   });
 }

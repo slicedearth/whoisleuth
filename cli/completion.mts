@@ -1,11 +1,15 @@
-import { CLI_COMMANDS, type CompletionShell } from './arguments.mts';
+import { CLI_COMMANDS, type CliCommand, type CompletionShell } from './arguments.mts';
 import { INVESTIGATION_PLAN_RECIPES } from './investigation-plan.mts';
 
 const COMMON_OPTIONS = Object.freeze(['--help', '--output', '--force', '--config', '--profile']);
-const OPTIONS_BY_COMMAND: Readonly<Record<string, readonly string[]>> = Object.freeze({
+const OPTIONS_BY_COMMAND: Readonly<Record<CliCommand, readonly string[]>> = Object.freeze({
+  manifest: ['--workflow', '--configuration-digest', '--json', '--quiet', '--no-color'],
+  'map-observations': ['--json', '--quiet', '--no-color'],
+  'oam-export': ['--json', '--quiet', '--no-color'],
   lookup: ['--json', '--junit', '--markdown', '--html', '--fast', '--deep', '--observer', '--vantage', '--plan', '--summary', '--verbose', '--strict-exit', '--fail-on', '--events', '--quiet', '--no-color'],
   bulk: ['--json', '--jsonl', '--junit', '--csv', '--domains', '--queries', '--registered-only', '--inconclusive-only', '--errors-only', '--fast', '--deep', '--concurrency', '--checkpoint', '--resume', '--events', '--plan', '--fail-on', '--quiet', '--no-color'],
   'ct-search': ['--json', '--quiet', '--no-color'],
+  'ct-intake': ['--json', '--quiet', '--no-color'],
   discover: ['--tlds', '--preset', '--families', '--keyboard', '--dictionary', '--snapshot', '--json', '--jsonl', '--domains', '--quiet', '--no-color'],
   'discover-scan': ['--tlds', '--preset', '--families', '--keyboard', '--dictionary', '--fast', '--deep', '--scan-limit', '--chunk-size', '--concurrency', '--resolver', '--allowlist', '--checkpoint', '--resume', '--observation-snapshot', '--registered-only', '--inconclusive-only', '--acquisition-only', '--suppressed-only', '--events', '--plan', '--fail-on', '--json', '--jsonl', '--csv', '--domains', '--quiet', '--no-color'],
   posture: ['--selectors', '--retired-selectors', '--mail-profile', '--json', '--sarif', '--owned-domain', '--quiet', '--no-color'],
@@ -31,6 +35,7 @@ const OPTIONS_BY_COMMAND: Readonly<Record<string, readonly string[]>> = Object.f
   'domain-control': ['--json', '--quiet', '--no-color'],
   'monitor-once': ['--previous', '--limit', '--concurrency', '--fail-on', '--json', '--junit', '--quiet', '--no-color'],
   assurance: ['--json', '--quiet', '--no-color'],
+  'change-packet': ['--json', '--quiet', '--no-color'],
   'sharing-review': ['--marking', '--recipient-scope', '--purpose', '--human-reviewed', '--personal-data-reviewed', '--redactions-confirmed', '--json', '--quiet', '--no-color'],
   'workflow-plan': ['--json', '--quiet', '--no-color'],
   'workflow-run': ['--approve-network', '--resume', '--json', '--quiet', '--no-color'],
@@ -44,10 +49,14 @@ const OPTIONS_BY_COMMAND: Readonly<Record<string, readonly string[]>> = Object.f
   manual: [],
 });
 
-const COMMAND_DESCRIPTIONS: Readonly<Record<string, string>> = Object.freeze({
+const COMMAND_DESCRIPTIONS: Readonly<Record<CliCommand, string>> = Object.freeze({
+  manifest: 'Build an evidence manifest offline',
+  'map-observations': 'Normalise passive DNS observations offline',
+  'oam-export': 'Export an observation-archive map offline',
   lookup: 'Collect one domain, IP, or ASN',
   bulk: 'Run bounded multi-target collection',
   'ct-search': 'Search certificate observations',
+  'ct-intake': 'Normalise certificate observations offline',
   discover: 'Generate lookalike candidates offline',
   'discover-scan': 'Collect a supervised candidate review queue',
   posture: 'Review DNS and mail posture',
@@ -73,6 +82,7 @@ const COMMAND_DESCRIPTIONS: Readonly<Record<string, string>> = Object.freeze({
   'domain-control': 'Build or review a domain control manifest',
   'monitor-once': 'Run one bounded domain control review',
   assurance: 'Review domain change, recovery, or retirement plans',
+  'change-packet': 'Build a reviewed change packet offline',
   'sharing-review': 'Lint an artefact before deliberate sharing',
   'workflow-plan': 'Plan a fixed investigation recipe',
   'workflow-run': 'Execute approved fixed-recipe steps',
@@ -111,6 +121,14 @@ const FILE_OPTIONS = Object.freeze([
   '--resume',
 ]);
 
+const FILE_POSITIONAL_COMMANDS = new Set<CliCommand>([
+  'manifest',
+  'map-observations',
+  'oam-export',
+  'ct-intake',
+  'change-packet',
+]);
+
 const TEXT_OPTIONS = Object.freeze([
   '--families',
   '--resolver',
@@ -126,8 +144,8 @@ const TEXT_OPTIONS = Object.freeze([
   '--vantage',
 ]);
 
-function commandOptions(command: string): string {
-  return [...COMMON_OPTIONS, ...(OPTIONS_BY_COMMAND[command] || [])].join(' ');
+function commandOptions(command: CliCommand): string {
+  return [...COMMON_OPTIONS, ...OPTIONS_BY_COMMAND[command]].join(' ');
 }
 
 function bashCompletion(): string {
@@ -159,6 +177,9 @@ ${valueCases}
   case "\${command}" in
 ${cases}
     *) options="--help" ;;
+  esac
+  case " ${[...FILE_POSITIONAL_COMMANDS].join(' ')} " in
+    *" \${command} "*) [[ "\${current}" != -* ]] && COMPREPLY=( $(compgen -f -- "\${current}") ) && return ;;
   esac
   COMPREPLY=( $(compgen -W "\${options}" -- "\${current}") )
 }
@@ -198,6 +219,10 @@ ${valueCases}
 ${cases}
     *) options=(--help) ;;
   esac
+  if [[ " ${[...FILE_POSITIONAL_COMMANDS].join(' ')} " == *" \${command} "* && "\${words[CURRENT]}" != -* ]]; then
+    _files
+    return
+  fi
   compadd -- \${options[@]}
 }
 if [[ "\${funcstack[1]}" == "_whoisleuth" ]]; then
@@ -210,7 +235,7 @@ fi
 
 function fishCompletion(): string {
   const commandLines = CLI_COMMANDS.map((command) => (
-    `complete -c whoisleuth -n '__fish_use_subcommand' -a '${command}' -d '${COMMAND_DESCRIPTIONS[command] || command}'`
+    `complete -c whoisleuth -n '__fish_use_subcommand' -a '${command}' -d '${COMMAND_DESCRIPTIONS[command]}'${FILE_POSITIONAL_COMMANDS.has(command) ? ' -F' : ''}`
   ));
   const optionLine = (condition: string, option: string) => {
       const name = option.replace(/^--/u, '');
@@ -242,7 +267,7 @@ ${valueLines.join('\n')}
 function powershellCompletion(): string {
   const commandOptions = Object.fromEntries(CLI_COMMANDS.map((command) => [
     command,
-    [...COMMON_OPTIONS, ...(OPTIONS_BY_COMMAND[command] || [])],
+    [...COMMON_OPTIONS, ...OPTIONS_BY_COMMAND[command]],
   ]));
   return `# WHOISleuth PowerShell completion
 Register-ArgumentCompleter -Native -CommandName whoisleuth -ScriptBlock {
@@ -256,9 +281,16 @@ ${Object.entries(VALUE_OPTIONS).map(([option, values]) => `    '${option}' = @($
     'completion' = @('bash', 'zsh', 'fish', 'powershell')
     'workflow-plan' = @(${INVESTIGATION_PLAN_RECIPES.map((value) => `'${value}'`).join(', ')})
   }
+  $fileCommands = @(${[...FILE_POSITIONAL_COMMANDS].map((command) => `'${command}'`).join(', ')})
   $elements = @($commandAst.CommandElements | ForEach-Object { $_.Extent.Text })
   $command = if ($elements.Count -gt 1) { $elements[1] } else { '' }
   $previous = if ($elements.Count -gt 1) { $elements[$elements.Count - 1] } else { '' }
+  if ($fileCommands -contains $command -and -not $wordToComplete.StartsWith('-')) {
+    Get-ChildItem -Path "${'$'}wordToComplete*" -File -ErrorAction SilentlyContinue | ForEach-Object {
+      [System.Management.Automation.CompletionResult]::new($_.FullName, $_.Name, 'ProviderItem', $_.FullName)
+    }
+    return
+  }
   $candidates = if ($elements.Count -le 2) {
     @($commands) + @('--help', '--version')
   } elseif ($command -eq 'completion' -and $elements.Count -le 3) {

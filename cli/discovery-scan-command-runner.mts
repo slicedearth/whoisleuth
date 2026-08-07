@@ -5,6 +5,7 @@ import { normalizeSelectedDnsResolvers } from '../lib/dns-resolver-selection.mts
 import { runUnifiedLookup } from '../lib/lookup.mts';
 import type { CliArguments } from './arguments.mts';
 import { createBulkCheckpointWriter } from './bulk-checkpoint.mts';
+import type { BulkLookupResult } from './bulk.mts';
 import {
   buildDiscoveryScanDocument,
   formatDiscoveryScanCsv,
@@ -95,6 +96,8 @@ async function runDiscoveryScanCommand(
     : null;
   const indicator = context.beginProgress(`Collecting 0 of ${queries.length} generated candidates`);
   let completed = checkpoint?.initialResults.length || 0;
+  const resumedItems = new Map((checkpoint?.initialResults ?? []).map((item) => [item.index, item]));
+  const settledItems = new Map<number, BulkLookupResult>();
   if (completed) indicator.update(`Resumed ${completed} of ${queries.length} generated candidates`);
   let checkpointFailure: unknown = null;
   let items;
@@ -109,11 +112,22 @@ async function runDiscoveryScanCommand(
       ...(checkpoint ? { initialResults: checkpoint.initialResults } : {}),
       ...(dependencies.signal ? { signal: dependencies.signal } : {}),
       onItemSettled: (item) => {
+        const observed = {
+          ...item,
+          observedAt: context.now(),
+          collectionOrigin: 'current_run' as const,
+        };
+        settledItems.set(item.index, observed);
         completed += 1;
         indicator.update(`Collected ${completed} of ${queries.length} generated candidates`);
         eventProgress.emit({ event: 'item_settled', index: item.index, ok: item.ok });
-        checkpoint?.record(item);
+        checkpoint?.record(observed);
       },
+    });
+    items = items.map((item) => resumedItems.get(item.index) ?? settledItems.get(item.index) ?? {
+      ...item,
+      observedAt: null,
+      collectionOrigin: 'current_run' as const,
     });
   } finally {
     context.endProgress();

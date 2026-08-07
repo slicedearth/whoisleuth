@@ -7,7 +7,15 @@
     type LookupAssetGraphLens,
   } from '$lib/analysis/lookup-asset-graph.ts';
 
-  let { graph }: { graph: LookupAssetGraph } = $props();
+  let {
+    graph,
+    headingId = 'lookup-asset-graph-title',
+    evidenceLinks = true,
+  }: {
+    graph: LookupAssetGraph;
+    headingId?: string;
+    evidenceLinks?: boolean;
+  } = $props();
 
   let lens = $state<LookupAssetGraphLens>('all');
   const projection = $derived(projectLookupAssetGraph(graph, lens));
@@ -25,11 +33,11 @@
 </script>
 
 {#if graph.nodes.length > 1 && graph.edges.length}
-  <section class="asset-graph card" aria-labelledby="asset-graph-title">
+  <section class="asset-graph card" aria-labelledby={headingId}>
     <header>
       <div>
         <p class="eyebrow">Observed assets and dependencies</p>
-        <h4 id="asset-graph-title">Evidence graph</h4>
+        <h4 id={headingId}>Evidence graph</h4>
         <p>Change lenses to examine the same separately attributed evidence without starting another request.</p>
       </div>
       {#if graph.truncated}<span class="partial">Partial graph</span>{/if}
@@ -81,7 +89,7 @@
               <p>{edge.sourceLabel}{edge.observedAt ? ` · ${new Date(edge.observedAt).toLocaleString()}` : ''} · {edge.completeness}</p>
               {#if edge.boundary}<p class="boundary">{edge.boundary.replaceAll('_', ' ')}</p>{/if}
               {#if edge.limitations.length}<small>{edge.limitations.join(' ')}</small>{/if}
-              <a href={edge.href}>Open source evidence</a>
+              {#if evidenceLinks}<a href={edge.href}>Open source evidence</a>{/if}
             </li>
           {/each}
         </ul>
@@ -94,7 +102,7 @@
               <div><strong>{source.label}</strong><span class:partial-source={source.completeness !== 'complete'}>{source.completeness}</span></div>
               <p>{source.observedAt ? new Date(source.observedAt).toLocaleString() : 'Observation time unavailable'}</p>
               {#if source.limitations.length}<small>{source.limitations.join(' ')}</small>{/if}
-              <a href={source.href}>Open attributed evidence</a>
+              {#if evidenceLinks}<a href={source.href}>Open attributed evidence</a>{/if}
             </li>
           {/each}
         </ul>

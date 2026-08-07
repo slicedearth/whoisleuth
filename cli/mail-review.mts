@@ -137,12 +137,12 @@ function parseInput(textValue: unknown): UnknownRecord[] {
   try {
     const parsed = JSON.parse(textInput);
     const document = record(parsed);
-    if (document.schema === 'whoisleuth.cli.bulk' && document.version === 2 && Array.isArray(document.results)) {
+    if (document.schema === 'whoisleuth.cli.bulk' && [2, 3].includes(Number(document.version)) && Array.isArray(document.results)) {
       values = document.results;
-    } else if (document.schema === 'whoisleuth.cli.bulk.item' && document.version === 2) {
+    } else if (document.schema === 'whoisleuth.cli.bulk.item' && [2, 3].includes(Number(document.version))) {
       values = [document];
     } else {
-      throw new CliUsageError('Mail review requires WHOISleuth Bulk JSON schema version 2.');
+      throw new CliUsageError('Mail review requires WHOISleuth Bulk JSON schema version 2 or 3.');
     }
   } catch (error) {
     if (error instanceof CliUsageError) throw error;
@@ -156,8 +156,8 @@ function parseInput(textValue: unknown): UnknownRecord[] {
     throw new CliUsageError(`Mail review supports between 1 and ${MAX_MAIL_REVIEW_ROWS} Bulk rows.`);
   }
   const rows = values.map((value) => record(value));
-  if (rows.some((value) => value.schema !== 'whoisleuth.cli.bulk.item' || value.version !== 2)) {
-    throw new CliUsageError('Every Mail review row must use WHOISleuth Bulk item schema version 2.');
+  if (rows.some((value) => value.schema !== 'whoisleuth.cli.bulk.item' || ![2, 3].includes(Number(value.version)))) {
+    throw new CliUsageError('Every Mail review row must use WHOISleuth Bulk item schema version 2 or 3.');
   }
   return rows;
 }

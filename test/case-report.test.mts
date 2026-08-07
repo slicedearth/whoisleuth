@@ -454,10 +454,10 @@ describe('Markdown escaping', () => {
   });
 
   test('escapes link syntax in tags', () => {
-    const rec = caseRecord({ tags: ['[phishing](https://evil.com)'] });
+    const rec = caseRecord({ tags: ['[phishing](https://hostile.example)'] });
     const { markdown } = caseReport.buildCaseReport(rec, { generatedAt: ISO });
 
-    assert.equal(markdown.includes('(https://evil.com)'), false);
+    assert.equal(markdown.includes('(https://hostile.example)'), false);
     assert.ok(markdown.includes('\\[phishing\\]'));
   });
 

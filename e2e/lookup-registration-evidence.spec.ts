@@ -1,9 +1,7 @@
 import { expect, test } from './fixtures';
-import { boundingBox, expandLookupFamilies, expectNoHorizontalOverflow, migrateLegacyBrowserData, readBrowserLocalCollection } from './helpers';
+import { expandLookupFamilies, expectNoHorizontalOverflow, migrateLegacyBrowserData, readBrowserLocalCollection } from './helpers';
 import { readFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
-import { TEST_SITE_PASSWORD } from './constants';
-import { ACTIVE_PROFILE_KEY } from '../frontend/src/lib/brand-profiles';
 
 const packageVersion = (JSON.parse(readFileSync('package.json', 'utf8')) as { version: string }).version;
 
@@ -92,6 +90,7 @@ test('bounded RDAP contact roles and repeated channels render in Lookup', async 
   await expect(page.getByText('Phone: +61 1, +61 2')).toBeVisible();
   await expect(page.getByText('Email: abuse@example.com')).toBeVisible();
   await expect(page.getByText(/attempts: rate limited → success/)).toBeVisible();
+  await page.locator('details.detailed-assessment > summary').click();
   const capsule = page.locator('details.capsule');
   await expect(capsule.getByText('Portable investigation capsule')).toBeVisible();
   await capsule.locator(':scope > summary').click();
@@ -343,7 +342,7 @@ test('deep Lookup presents registrar and observed network RDAP as separate sourc
   await checkpoint.getByRole('checkbox', { name: /Registrar/u }).check();
   await checkpoint.getByRole('checkbox', { name: /Registration statuses/u }).check();
   await checkpoint.getByRole('button', { name: 'Save 2 checkpoint facts' }).click();
-  await expect(page.getByRole('status')).toContainText('Saved 2 analyst-selected checkpoint facts');
+  await expect(page.locator('.case-status')).toContainText('Saved 2 analyst-selected checkpoint facts');
   await checkpoint.getByText(/Compare with latest saved checkpoint/u).click();
   await expect(checkpoint).toContainText('equal');
   await checkpoint.getByRole('checkbox', { name: /Plan an acquisition transition/u }).check();
@@ -351,7 +350,7 @@ test('deep Lookup presents registrar and observed network RDAP as separate sourc
   await checkpoint.getByRole('checkbox', { name: /Registration statuses/u }).check();
   await checkpoint.getByLabel('Transition expectation for Registration statuses').selectOption('change');
   await checkpoint.getByRole('button', { name: 'Save 2 checkpoint facts' }).click();
-  await expect(page.getByRole('status')).toContainText('with a reviewed transition plan');
+  await expect(page.locator('.case-status')).toContainText('with a reviewed transition plan');
   await expect(checkpoint.getByRole('heading', { name: 'Reviewed transition plan' })).toBeVisible();
   await expect(checkpoint).toContainText('verified preserved');
   await expect(checkpoint).toContainText('change not observed');

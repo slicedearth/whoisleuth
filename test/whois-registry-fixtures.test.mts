@@ -75,6 +75,34 @@ describe('WHOIS registry compatibility fixtures', () => {
     });
   }
 
+  test('keeps every registered parser family inconclusive when the authoritative response is rate-limited', () => {
+    const registeredFixtures = fixtures.filter((fixture) => fixture.scenario === 'registered');
+    assert.ok(registeredFixtures.length > 100);
+
+    for (const fixture of registeredFixtures) {
+      const parsed = parseWhoisChain(fixture.chain.map((hop, index) => index === 0
+        ? hop
+        : { ...hop, response: '% Rate limit exceeded. Try again later.\n' }));
+      assert.equal(parsed.registrationStatus, 'inconclusive', fixture.capabilityProfile);
+      assert.equal(parsed.notFound, false, fixture.capabilityProfile);
+      assert.equal(parsed.chainStatus, 'partial', fixture.capabilityProfile);
+    }
+  });
+
+  test('keeps every registered parser family inconclusive for malformed authoritative fields', () => {
+    const registeredFixtures = fixtures.filter((fixture) => fixture.scenario === 'registered');
+    assert.ok(registeredFixtures.length > 100);
+
+    for (const fixture of registeredFixtures) {
+      const parsed = parseWhoisChain(fixture.chain.map((hop, index) => index === 0
+        ? hop
+        : { ...hop, response: '\u0000 malformed\nDomain Name:\n' }));
+      assert.equal(parsed.registrationStatus, 'inconclusive', fixture.capabilityProfile);
+      assert.equal(parsed.notFound, false, fixture.capabilityProfile);
+      assert.equal(parsed.chainStatus, 'partial', fixture.capabilityProfile);
+    }
+  });
+
   test('covers the version eleven authoritative-negative ccTLD batch', () => {
     const expectedProfiles = [
       'afnic-colon',

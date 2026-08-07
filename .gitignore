@@ -1,4 +1,11 @@
 node_modules/
+.env
+.env.*
+!.env.example
+.netlify/
+.whoisleuth-private/
+*.private-key
+*.passphrase
 frontend/.svelte-kit/
 frontend/build/
 *.log

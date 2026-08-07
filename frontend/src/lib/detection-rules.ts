@@ -17,7 +17,6 @@ import type { CaseRecord } from './cases.ts';
 import type {
   DetectionRule,
   DetectionRuleEvaluation,
-  RuleCondition as DetectionRuleCondition,
 } from './analysis/detection-rule-model.ts';
 
 export {

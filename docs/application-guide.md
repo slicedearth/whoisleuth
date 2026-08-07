@@ -75,11 +75,12 @@ describes planned source families rather than promising an exact request count:
 redirects, referrals, source eligibility, and bounded retries can change the
 number of requests that actually run.
 
-The Overview and At a glance assessment remain visible. Every top-level
-evidence family starts collapsed in Essentials, Evidence, and All evidence;
-its bounded summary, source count, and limitation count remain visible. Open a
-family directly, follow a section or source-map link to reveal its destination,
-or use **Expand all** and **Collapse all**. Long RDAP and WHOIS records and
+The Overview and At a glance assessment remain visible. Open **Detailed
+assessment** when you need decision support, claim readiness, a portable
+hand-off, or acquisition review. Every top-level evidence family starts
+collapsed; its bounded summary, source count, and limitation count remain
+visible. Open a family directly, follow a section or source-map link to reveal
+its destination, or use **Expand all** and **Collapse all**. Long RDAP and WHOIS records and
 secondary DNS, HTTP, page, passive-posture, technology, TLS, and
 observed-network cards remain separately collapsed inside an open family.
 Selecting an acquisition, brand, incident-response, or owned-domain task
@@ -354,9 +355,9 @@ two-domain workspace, peer-outlier review, saved-session change summary, and
 CSV export can use those fields without another request. Empty or incomplete
 fields retain their source state and are not treated as evidence of absence.
 The complete technology evidence, certificate profile, page markup, script
-references, and raw TLS material remain excluded. Saved session schema 2 adds
-this envelope; schema 1 sessions remain readable and show the new fields as
-not recorded.
+references, and raw TLS material remain excluded. Saved session schema 3 adds
+this envelope; schema 1 and 2 sessions remain readable and show the new fields
+as not recorded.
 
 The peer-outlier matrix derives a per-dimension cohort baseline only from rows
 with comparable evidence. It reports baseline share, strong, moderate, or

@@ -3,6 +3,10 @@ import type {
   EvidenceCoverageLedger,
 } from './evidence-coverage-ledger.ts';
 import type { LookupTaskView } from './lookup-presentation.ts';
+import {
+  BoundedJsonResponseError,
+  requestJsonCapped,
+} from '../bounded-json-response.ts';
 
 export const LOOKUP_SOURCE_REFRESH_VERSION = 1 as const;
 export const LOOKUP_SOURCE_STALE_AFTER_DAYS = 7;
@@ -55,7 +59,8 @@ export type LookupSourceRefreshResult = Readonly<{
   id: LookupSourceRefreshId;
   state: 'complete' | 'limited' | 'unavailable';
   detail: string;
-  observedAt: string;
+  observedAt: string | null;
+  attemptedAt: string;
   reason: LookupSourceRefreshPlanItem['reason'];
   evidenceIds: readonly string[];
   supersedesObservedAt: string | null;
@@ -235,41 +240,6 @@ function record(value: unknown): Record<string, unknown> {
     : {};
 }
 
-async function boundedJson(response: Response): Promise<unknown> {
-  const declaredLength = Number(response.headers.get('content-length'));
-  if (Number.isFinite(declaredLength) && declaredLength > MAX_LOOKUP_SOURCE_REFRESH_BYTES) {
-    throw new Error('oversized');
-  }
-  if (!response.body) return {};
-  const reader = response.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      if (!value) continue;
-      total += value.byteLength;
-      if (total > MAX_LOOKUP_SOURCE_REFRESH_BYTES) throw new Error('oversized');
-      chunks.push(value);
-    }
-  } finally {
-    if (total > MAX_LOOKUP_SOURCE_REFRESH_BYTES) await reader.cancel().catch(() => {});
-    reader.releaseLock();
-  }
-  const bytes = new Uint8Array(total);
-  let offset = 0;
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  try {
-    return JSON.parse(new TextDecoder().decode(bytes));
-  } catch {
-    return {};
-  }
-}
-
 function text(value: unknown, maximum = 180): string {
   return String(value ?? '')
     .replace(/[\u0000-\u001f\u007f]+/gu, ' ')
@@ -289,6 +259,7 @@ function summarizeSource(
     version: LOOKUP_SOURCE_REFRESH_VERSION,
     id: plan.id,
     observedAt,
+    attemptedAt: observedAt,
     reason: plan.reason,
     evidenceIds: plan.evidenceIds.slice(0, 12),
     supersedesObservedAt,
@@ -303,7 +274,6 @@ function summarizeSource(
       detail: complete
         ? `Registry RDAP returned a validated ${upstreamStatus} response.`
         : `Registry RDAP returned ${Number.isFinite(upstreamStatus) ? `HTTP ${upstreamStatus}` : 'no complete structured record'}.`,
-      observedAt,
     };
   }
   if (plan.id === 'whois') {
@@ -316,7 +286,6 @@ function summarizeSource(
       detail: complete
         ? `WHOIS returned a complete ${chain.length}-hop referral chain.`
         : `WHOIS returned ${chain.length} hop${chain.length === 1 ? '' : 's'} with ${chainStatus || 'unknown'} chain status.`,
-      observedAt,
     };
   }
   const state = text(body.state, 40) || 'unknown';
@@ -329,7 +298,25 @@ function summarizeSource(
     ...base,
     state: complete ? 'complete' : 'limited',
     detail: `Domain evidence returned ${state}${sourceStates.length ? `; DNS, HTTP, and TLS states: ${sourceStates.join(', ')}` : ''}.`,
-    observedAt,
+  };
+}
+
+function unavailableRefreshResult(
+  plan: LookupSourceRefreshPlanItem,
+  attemptedAt: string,
+  supersedesObservedAt: string | null,
+  detail: string,
+): LookupSourceRefreshResult {
+  return {
+    version: LOOKUP_SOURCE_REFRESH_VERSION,
+    id: plan.id,
+    state: 'unavailable',
+    detail,
+    observedAt: null,
+    attemptedAt,
+    reason: plan.reason,
+    evidenceIds: plan.evidenceIds.slice(0, 12),
+    supersedesObservedAt,
   };
 }
 
@@ -349,19 +336,29 @@ export async function requestLookupSourceRefresh(
   const timeoutMs = Number.isFinite(options.timeoutMs)
     ? Math.max(1, Math.min(LOOKUP_SOURCE_REFRESH_TIMEOUT_MS, Math.round(Number(options.timeoutMs))))
     : LOOKUP_SOURCE_REFRESH_TIMEOUT_MS;
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort('timeout'), timeoutMs);
+  const attemptedAt = options.now?.() ?? new Date().toISOString();
+  const supersedesObservedAt = options.supersedesObservedAt === undefined
+    ? plan.supersedesObservedAt
+    : options.supersedesObservedAt;
   try {
     const url = `${plan.endpoint}?q=${encodeURIComponent(normalizedQuery)}${plan.id === 'availability' && depth === 'fast' ? '&fast=true' : ''}`;
-    const response = await (options.fetchImpl ?? fetch)(url, {
+    const { response, body: rawBody } = await requestJsonCapped(url, {
       credentials: 'same-origin',
-      signal: controller.signal,
+    }, {
+      ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
+      maximumBytes: MAX_LOOKUP_SOURCE_REFRESH_BYTES,
+      timeoutMs,
     });
-    const body = record(await boundedJson(response));
+    const body = record(rawBody);
     if (!response.ok) {
       return {
-        ok: false,
-        message: text(body.error, 240) || `Source refresh failed with HTTP ${response.status}.`,
+        ok: true,
+        value: unavailableRefreshResult(
+          plan,
+          attemptedAt,
+          supersedesObservedAt,
+          text(body.error, 240) || `The source returned HTTP ${response.status}; no new observation was recorded.`,
+        ),
       };
     }
     if (Object.keys(body).length > MAX_LOOKUP_SOURCE_REFRESH_KEYS) {
@@ -372,23 +369,26 @@ export async function requestLookupSourceRefresh(
       value: summarizeSource(
         plan,
         body,
-        options.now?.() ?? new Date().toISOString(),
+        attemptedAt,
         depth,
-        options.supersedesObservedAt === undefined
-          ? plan.supersedesObservedAt
-          : options.supersedesObservedAt,
+        supersedesObservedAt,
       ),
     };
   } catch (cause) {
-    if (cause instanceof Error && cause.message === 'oversized') {
-      return { ok: false, message: 'Source refresh returned an oversized response.' };
+    if (cause instanceof BoundedJsonResponseError && cause.code === 'response_too_large') {
+      return { ok: true, value: unavailableRefreshResult(plan, attemptedAt, supersedesObservedAt, 'The source response exceeded the local limit; no new observation was recorded.') };
     }
     return {
-      ok: false,
-      message: controller.signal.aborted ? 'Source refresh timed out.' : 'Source refresh could not be completed.',
+      ok: true,
+      value: unavailableRefreshResult(
+        plan,
+        attemptedAt,
+        supersedesObservedAt,
+        cause instanceof BoundedJsonResponseError && cause.code === 'timeout'
+          ? 'The source refresh timed out; no new observation was recorded.'
+          : 'The source refresh could not be completed; no new observation was recorded.',
+      ),
     };
-  } finally {
-    clearTimeout(timeout);
   }
 }
 
@@ -402,10 +402,10 @@ export function mergeLookupSourceRefreshLedger(
   ];
   const byObservation = new Map<string, LookupSourceRefreshResult>();
   for (const entry of candidates.slice(-MAX_LOOKUP_SOURCE_REFRESH_HISTORY * 4)) {
-    byObservation.set(`${entry.id}:${entry.observedAt}`, entry);
+    byObservation.set(`${entry.id}:${entry.attemptedAt}`, entry);
   }
   const ordered = [...byObservation.values()]
-    .sort((left, right) => Date.parse(left.observedAt) - Date.parse(right.observedAt));
+    .sort((left, right) => Date.parse(left.attemptedAt) - Date.parse(right.attemptedAt));
   const truncated = Boolean(current?.truncated)
     || ordered.length > MAX_LOOKUP_SOURCE_REFRESH_HISTORY
     || candidates.length > MAX_LOOKUP_SOURCE_REFRESH_HISTORY;

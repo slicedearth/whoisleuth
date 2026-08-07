@@ -13,11 +13,11 @@ const CLI_HTTP_SCHEMA = 'whoisleuth.cli.http';
 const CLI_TLS_SCHEMA = 'whoisleuth.cli.tls';
 const CLI_COMPARE_SCHEMA = 'whoisleuth.cli.compare';
 const CLI_LOOKUP_SCHEMA_VERSION = 1;
-const CLI_BULK_SCHEMA_VERSION = 2;
+const CLI_BULK_SCHEMA_VERSION = 3;
 const CLI_CT_SEARCH_SCHEMA_VERSION = 1;
 const CLI_DISCOVER_SCHEMA_VERSION = 2;
 const CLI_POSTURE_SCHEMA_VERSION = 1;
-const CLI_HTTP_SCHEMA_VERSION = 1;
+const CLI_HTTP_SCHEMA_VERSION = 2;
 const CLI_TLS_SCHEMA_VERSION = 1;
 const CLI_COMPARE_SCHEMA_VERSION = 3;
 
@@ -67,6 +67,7 @@ function buildCliLookupDocument(
     ? collectionContext.vantageLabel
     : null;
   return {
+    ...result,
     schema: CLI_LOOKUP_SCHEMA,
     version: CLI_LOOKUP_SCHEMA_VERSION,
     generatedAt,
@@ -82,7 +83,6 @@ function buildCliLookupDocument(
         ...(vantageLabel ? { vantageLabel } : {}),
       },
     } : {}),
-    ...result,
   };
 }
 
@@ -171,15 +171,21 @@ function buildCliCompareDocument(result: UnknownRecord, generatedAt = new Date()
 }
 
 function bulkJsonItem(item: BulkLookupResult, metadata: BulkMetadata): UnknownRecord {
+  const provenance = {
+    observedAt: item.observedAt ?? null,
+    collectionOrigin: item.collectionOrigin ?? 'current_run',
+  };
   if (!item.ok) {
     return {
       schema: CLI_BULK_ITEM_SCHEMA, version: CLI_BULK_SCHEMA_VERSION, generatedAt: metadata.generatedAt,
+      ...provenance,
       index: item.index, query: item.query, ok: false, error: item.error,
     };
   }
   const result = item.result as UnknownRecord;
   return {
     schema: CLI_BULK_ITEM_SCHEMA, version: CLI_BULK_SCHEMA_VERSION, generatedAt: metadata.generatedAt,
+    ...provenance,
     index: item.index, query: item.query, ok: true,
     type: item.classified.type,
     inputHostname: item.classified.inputHostname,
@@ -210,7 +216,9 @@ function buildCliBulkDocument(items: BulkLookupResult[], metadata: BulkMetadata)
 }
 
 function formatJsonLines(items: BulkLookupResult[], metadata: BulkMetadata): string {
-  return `${items.map((item) => JSON.stringify(bulkJsonItem(item, metadata))).join('\n')}\n`;
+  return items.length
+    ? `${items.map((item) => JSON.stringify(bulkJsonItem(item, metadata))).join('\n')}\n`
+    : '';
 }
 
 export {

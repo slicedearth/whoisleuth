@@ -245,8 +245,14 @@ export async function buildIncrementalLookupQualificationReport() {
 export async function main(
   output: WritableLike = process.stdout,
   errors: WritableLike = process.stderr,
+  args: readonly string[] = process.argv.slice(2),
 ): Promise<number> {
   try {
+    if (args.length === 1 && args[0] === '--help') {
+      output.write('Usage: npm run lookup:transport-qualify\n');
+      return 0;
+    }
+    if (args.length) throw new TypeError('lookup:transport-qualify does not accept arguments. Use --help for usage.');
     const report = await buildIncrementalLookupQualificationReport();
     output.write(`${JSON.stringify(report, null, 2)}\n`);
     return report.ready ? 0 : 1;

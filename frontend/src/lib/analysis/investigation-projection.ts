@@ -6,7 +6,6 @@ import {
   CASE_SCHEMA_VERSION,
   MAX_CASES,
   normalizeCaseStore,
-  normalizeDomain,
 } from './case-model.ts';
 import {
   BRAND_PROFILE_SCHEMA_VERSION,
@@ -19,7 +18,6 @@ import {
   normalizeCampaignStore,
 } from './campaign-model.ts';
 import {
-  MAX_NAMESERVERS_PER_ROW,
   MAX_RELATIONSHIP_ROWS,
   RELATIONSHIP_EVIDENCE_VERSION,
 } from './relationship-evidence.ts';

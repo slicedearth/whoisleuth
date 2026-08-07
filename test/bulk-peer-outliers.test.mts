@@ -186,21 +186,21 @@ test('source-coverage outliers ignore expected unpublished registry protocols', 
     row('one.example'),
     row('two.example'),
     row('three.example'),
-    row('candidate.dev', {
+    row('example.dev', {
       sourceCoverage: [
         { source: 'rdap', state: 'complete' },
         { source: 'whois', state: 'unsupported' },
       ],
     }),
-    row('candidate.com', {
+    row('example.com', {
       sourceCoverage: [
         { source: 'rdap', state: 'complete' },
         { source: 'whois', state: 'unsupported' },
       ],
     }),
   ]);
-  const expectedAbsence = matrix.rows.find((item) => item.domain === 'candidate.dev');
-  const unexpectedAbsence = matrix.rows.find((item) => item.domain === 'candidate.com');
+  const expectedAbsence = matrix.rows.find((item) => item.domain === 'example.dev');
+  const unexpectedAbsence = matrix.rows.find((item) => item.domain === 'example.com');
   assert.equal(expectedAbsence?.findings.some((finding) => finding.dimension === 'source_coverage') ?? false, false);
   assert.equal(
     unexpectedAbsence?.findings.find((finding) => finding.dimension === 'source_coverage')?.value,

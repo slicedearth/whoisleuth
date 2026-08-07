@@ -6,9 +6,23 @@ import {
 } from '../lib/lookup-progress-qualification.mts';
 import {
   buildIncrementalLookupQualificationReport,
+  main,
 } from '../tools/incremental-lookup-qualification.mts';
 
 describe('incremental Lookup production-qualification harness', () => {
+  test('handles help and rejects unexpected command-line arguments', async () => {
+    const output: string[] = [];
+    const errors: string[] = [];
+    const writable = (values: string[]) => ({ write(value: string) { values.push(value); } });
+    assert.equal(await main(writable(output), writable(errors), ['--help']), 0);
+    assert.match(output.join(''), /^Usage:/u);
+    assert.equal(errors.join(''), '');
+    output.length = 0;
+    assert.equal(await main(writable(output), writable(errors), ['unexpected']), 2);
+    assert.equal(output.join(''), '');
+    assert.match(errors.join(''), /does not accept arguments/iu);
+  });
+
   test('exercises all offline failure modes while keeping production adapters disabled', async () => {
     const report = await buildIncrementalLookupQualificationReport();
     assert.equal(report.ready, true);

@@ -214,13 +214,13 @@ describe('Bulk evidence review workflow', () => {
 
   test('does not retry a registry protocol that is authoritatively not published', () => {
     const plan = buildBulkRetryPlan([
-      result('candidate.dev', {
+      result('example.dev', {
         sourceCoverage: [
           { source: 'rdap', state: 'complete' },
           { source: 'whois', state: 'unsupported' },
         ],
       }),
-      result('candidate.com', {
+      result('example.com', {
         sourceCoverage: [
           { source: 'rdap', state: 'complete' },
           { source: 'whois', state: 'unsupported' },
@@ -228,7 +228,7 @@ describe('Bulk evidence review workflow', () => {
       }),
     ], 'deep', GENERATED_AT, Date.parse(GENERATED_AT));
     assert.equal(plan.lookupRequests, 1);
-    assert.equal(plan.rows[0]?.domain, 'candidate.com');
+    assert.equal(plan.rows[0]?.domain, 'example.com');
     assert.deepEqual(plan.rows[0]?.limitedSources, ['whois']);
   });
 

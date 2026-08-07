@@ -49,6 +49,8 @@ describe('CLI package boundary', () => {
     assert.match(readFileSync(join(__dirname, '..', 'SECURITY.md'), 'utf8'), /private vulnerability reporting/u);
     assert.match(packageReadme, /npm install --global --ignore-scripts @slicedearth\/whoisleuth-cli/u);
     assert.match(packageReadme, /WHOISleuth does not require them/u);
+    assert.match(packageReadme, /github\.com\/slicedearth\/whoisleuth\/blob\/main\/DISCLOSURE/u);
+    assert.doesNotMatch(packageReadme, /whois-rdap-tool/u);
   });
 
   test('keeps the source CLI entry point executable for repository use', () => {

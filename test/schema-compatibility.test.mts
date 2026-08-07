@@ -228,8 +228,11 @@ describe('schema compatibility inventory', () => {
     assert.equal(byId(inventory, 'cli.registry-cohort').schema, 'whoisleuth.cli.registry-cohort');
     assert.equal(byId(inventory, 'cli.domain-control-flight-recorder-input').schema, 'whoisleuth.domain-control-flight-recorder.input');
     assert.equal(byId(inventory, 'cli.domain-control-flight-recorder').schema, 'whoisleuth.domain-control-flight-recorder');
-    assert.deepEqual(byId(inventory, 'cli.bulk').supportedVersions, [1, 2]);
-    assert.deepEqual(byId(inventory, 'cli.bulk-item').supportedVersions, [1, 2]);
+    assert.deepEqual(byId(inventory, 'tab.candidate-handoff').supportedVersions, [2]);
+    assert.deepEqual(byId(inventory, 'cli.bulk').supportedVersions, [1, 2, 3]);
+    assert.deepEqual(byId(inventory, 'cli.bulk-item').supportedVersions, [1, 2, 3]);
+    assert.deepEqual(byId(inventory, 'cli.bulk-checkpoint').supportedVersions, [1, 2]);
+    assert.deepEqual(byId(inventory, 'cli.http').supportedVersions, [1, 2]);
     assert.equal(byId(inventory, 'cli.discovery-scan').schema, CLI_DISCOVERY_SCAN_SCHEMA);
     assert.equal(byId(inventory, 'cli.discovery-scan-item').schema, CLI_DISCOVERY_SCAN_ITEM_SCHEMA);
     assert.equal(byId(inventory, 'cli.discovery-scan').currentVersion, CLI_DISCOVERY_SCAN_VERSION);

@@ -5,6 +5,7 @@
 // are treated as untrusted inputs and are not retained in the result.
 
 import { createHash } from 'node:crypto';
+import { Worker } from 'node:worker_threads';
 
 import { RETIRE_BROWSER_CATALOG } from './generated/retire-browser-catalog.mts';
 import { CISA_KEV_CATALOG } from './generated/cisa-kev-catalog.mts';
@@ -57,6 +58,15 @@ type DetectedComponent = {
   detections: Set<DetectionMethod>;
 };
 
+// Catalogue expressions are reviewed third-party inputs. Keep every individual
+// regular-expression evaluation and the aggregate inline-signature work small
+// enough that a target-controlled script cannot monopolise the Node event loop.
+// Full-content hashes still use the complete already-capped script body.
+const MAX_INLINE_LIBRARY_SCAN_CHARS = 1_024;
+const MAX_INLINE_LIBRARY_SCAN_TOTAL_CHARS = 4_096;
+const MAX_INLINE_LIBRARY_SCAN_MS = 750;
+const MAX_INLINE_LIBRARY_WORKER_BYTES = 64 * 1024;
+
 const BROWSER_LIBRARY_PROFILE_VERSION = 2;
 const MAX_LIBRARY_HTML_CHARS = MAX_STATIC_HTML_CHARS;
 const MAX_LIBRARY_FINDINGS = 16;
@@ -78,6 +88,71 @@ const SEVERITY_WEIGHT: Readonly<Record<Severity, number>> = Object.freeze({
 });
 const CATALOG_COMPONENTS = RETIRE_BROWSER_CATALOG.components as UnknownRecord;
 const KNOWN_EXPLOITED_IDENTIFIERS = new Set<string>(CISA_KEV_CATALOG.identifiers);
+
+const INLINE_EXTRACTOR_CATALOGUE = Object.freeze(Object.entries(CATALOG_COMPONENTS).map(([component, value]) => {
+  const extractors = record((record(value) as CatalogComponent).extractors);
+  return Object.freeze({
+    component,
+    patterns: Object.freeze((Array.isArray(extractors.filecontent) ? extractors.filecontent : [])
+      .filter((pattern): pattern is string => typeof pattern === 'string' && pattern.length > 0 && pattern.length <= 2_048)
+      .slice(0, 64)),
+    replacements: Object.freeze((Array.isArray(extractors.filecontentreplace) ? extractors.filecontentreplace : [])
+      .filter((pattern): pattern is string => typeof pattern === 'string' && pattern.length > 0 && pattern.length <= 2_048)
+      .slice(0, 64)),
+  });
+}));
+
+const INLINE_REGEX_WORKER_SOURCE = String.raw`
+const { parentPort, workerData } = require('node:worker_threads');
+const versions = /^[0-9][0-9.a-z_-]{0,63}$/i;
+parentPort.on('message', (job) => {
+  const control = new Int32Array(job.control);
+  const output = new Uint8Array(job.output);
+  const matches = [];
+  const add = (component, version) => {
+    const normalized = String(version).replace(/(?:\.|-)?min$/i, '').slice(0, 64);
+    if (versions.test(normalized) && matches.length < 64) matches.push([component, normalized]);
+  };
+  try {
+    for (const entry of workerData.catalogue) {
+      for (const pattern of entry.patterns) {
+        let expression;
+        try { expression = new RegExp(pattern, 'g'); } catch { continue; }
+        let match;
+        let count = 0;
+        while ((match = expression.exec(job.value)) && count < 4) {
+          if (typeof match[1] === 'string') add(entry.component, match[1]);
+          if (match[0] === '') expression.lastIndex += 1;
+          count += 1;
+        }
+      }
+      for (const descriptorValue of entry.replacements) {
+        const descriptor = /^\/(.*[^\\])\/([^/]+)\/$/.exec(descriptorValue);
+        if (!descriptor || !descriptor[1]) continue;
+        let expression;
+        try { expression = new RegExp(descriptor[1], 'g'); } catch { continue; }
+        let match;
+        let count = 0;
+        while ((match = expression.exec(job.value)) && count < 4) {
+          let replaced = match[0];
+          try { replaced = match[0].replace(new RegExp(descriptor[1]), descriptor[2]); } catch { break; }
+          add(entry.component, replaced);
+          if (match[0] === '') expression.lastIndex += 1;
+          count += 1;
+        }
+      }
+    }
+    const encoded = Buffer.from(JSON.stringify(matches));
+    if (encoded.length > output.length) Atomics.store(control, 0, -2);
+    else { output.set(encoded); Atomics.store(control, 0, encoded.length); }
+  } catch {
+    Atomics.store(control, 0, -1);
+  }
+  Atomics.notify(control, 0);
+});
+`;
+
+let inlineRegexWorker: Worker | null = null;
 
 function record(value: unknown): UnknownRecord {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -151,28 +226,6 @@ function matchPattern(pattern: unknown, value: string): string[] {
   return matches;
 }
 
-function matchReplacementPattern(pattern: unknown, value: string): string[] {
-  if (typeof pattern !== 'string' || pattern.length === 0 || pattern.length > 2_048) return [];
-  const descriptor = /^\/(.*[^\\])\/([^/]+)\/$/.exec(pattern);
-  const expressionSource = descriptor?.[1];
-  const replacement = descriptor?.[2];
-  if (!expressionSource || replacement === undefined) return [];
-  let expression: RegExp;
-  try {
-    expression = new RegExp(expressionSource, 'g');
-  } catch {
-    return [];
-  }
-  const matches: string[] = [];
-  let match: RegExpExecArray | null;
-  while ((match = expression.exec(value)) && matches.length < MAX_MATCHES_PER_PATTERN) {
-    const replaced = match[0].replace(new RegExp(expressionSource), replacement).replace(/(?:\.|-)?min$/i, '');
-    if (VERSION_RE.test(replaced)) matches.push(replaced);
-    if (match[0] === '') expression.lastIndex += 1;
-  }
-  return matches;
-}
-
 function addDetected(
   detected: Map<string, DetectedComponent>,
   component: string,
@@ -193,7 +246,7 @@ function addDetected(
 
 function scanExtractor(
   detected: Map<string, DetectedComponent>,
-  extractorName: 'uri' | 'filename' | 'filecontent',
+  extractorName: 'uri' | 'filename',
   value: string,
   method: DetectionMethod,
 ): void {
@@ -226,28 +279,98 @@ function scanFilename(
   }
 }
 
+function scanInlineSignatures(
+  detected: Map<string, DetectedComponent>,
+  value: string,
+): Readonly<{ timedOut: boolean; unavailable: boolean }> {
+  if (!value) return { timedOut: false, unavailable: false };
+  const controlBuffer = new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT);
+  const outputBuffer = new SharedArrayBuffer(MAX_INLINE_LIBRARY_WORKER_BYTES);
+  const control = new Int32Array(controlBuffer);
+  try {
+    if (!inlineRegexWorker) {
+      const createdWorker = new Worker(INLINE_REGEX_WORKER_SOURCE, {
+        eval: true,
+        workerData: { catalogue: INLINE_EXTRACTOR_CATALOGUE },
+      });
+      inlineRegexWorker = createdWorker;
+      createdWorker.unref();
+      createdWorker.once('exit', () => {
+        if (inlineRegexWorker === createdWorker) inlineRegexWorker = null;
+      });
+      createdWorker.once('error', () => {
+        if (inlineRegexWorker === createdWorker) inlineRegexWorker = null;
+      });
+    }
+    inlineRegexWorker.postMessage({ value, control: controlBuffer, output: outputBuffer });
+  } catch {
+    void inlineRegexWorker?.terminate().catch(() => {});
+    inlineRegexWorker = null;
+    return { timedOut: false, unavailable: true };
+  }
+
+  const wait = Atomics.wait(control, 0, 0, MAX_INLINE_LIBRARY_SCAN_MS);
+  const length = Atomics.load(control, 0);
+  if (wait === 'timed-out') {
+    void inlineRegexWorker?.terminate().catch(() => {});
+    inlineRegexWorker = null;
+    return { timedOut: true, unavailable: false };
+  }
+  if (length < 1 || length > MAX_INLINE_LIBRARY_WORKER_BYTES) {
+    return { timedOut: false, unavailable: true };
+  }
+  try {
+    const parsed: unknown = JSON.parse(Buffer.from(
+      new Uint8Array(outputBuffer, 0, length),
+    ).toString('utf8'));
+    if (!Array.isArray(parsed)) return { timedOut: false, unavailable: true };
+    for (const item of parsed.slice(0, MAX_LIBRARY_FINDINGS * 4)) {
+      if (!Array.isArray(item) || item.length !== 2) continue;
+      const [component, version] = item;
+      if (typeof component === 'string' && typeof version === 'string') {
+        addDetected(detected, component, version, 'inline signature');
+      }
+    }
+    return { timedOut: false, unavailable: false };
+  } catch {
+    return { timedOut: false, unavailable: true };
+  }
+}
+
 function scanInlineContent(
   detected: Map<string, DetectedComponent>,
   content: string,
-): void {
+  maximumSignatureCharacters: number,
+): Readonly<{
+  charactersExamined: number;
+  truncated: boolean;
+  signatureContent: string;
+}> {
   const normalized = content.replace(/\r\n?|\n/g, '\n');
   const digest = createHash('sha1').update(normalized).digest('hex');
-  scanExtractor(detected, 'filecontent', normalized, 'inline signature');
-
+  const retainedCharacters = Math.max(0, Math.min(
+    MAX_INLINE_LIBRARY_SCAN_CHARS,
+    maximumSignatureCharacters,
+    normalized.length,
+  ));
+  const headCharacters = Math.ceil(retainedCharacters / 2);
+  const tailCharacters = retainedCharacters - headCharacters;
+  const signatureContent = retainedCharacters === 0
+    ? ''
+    : normalized.length <= retainedCharacters
+      ? normalized
+      : `${normalized.slice(0, headCharacters)}${tailCharacters ? normalized.slice(-tailCharacters) : ''}`;
   for (const [componentName, rawComponent] of Object.entries(CATALOG_COMPONENTS)) {
-    const component = record(rawComponent) as CatalogComponent;
-    const extractors = record(component.extractors);
-    const replacementPatterns = Array.isArray(extractors.filecontentreplace) ? extractors.filecontentreplace : [];
-    for (const pattern of replacementPatterns.slice(0, 64)) {
-      for (const version of matchReplacementPattern(pattern, normalized)) {
-        addDetected(detected, componentName, version, 'inline signature');
-      }
-    }
-
+    const extractors = record((record(rawComponent) as CatalogComponent).extractors);
     const hashes = record(extractors.hashes);
     const version = hashes[digest];
     if (typeof version === 'string') addDetected(detected, componentName, version, 'inline hash');
   }
+  return {
+    charactersExamined: retainedCharacters,
+    truncated: retainedCharacters < normalized.length,
+    signatureContent,
+  };
 }
 
 function severity(value: unknown): Severity | null {
@@ -305,6 +428,9 @@ function analyzeBrowserLibraries(input: BrowserLibraryProfileInput = {}) {
   const detected = new Map<string, DetectedComponent>();
   let referencesExamined = 0;
   let inlineScriptsExamined = 0;
+  let inlineSignatureCharactersExamined = 0;
+  let inlineSignatureLimitReached = false;
+  const inlineSignatureSamples: string[] = [];
 
   for (const script of htmlAnalysis.scripts) {
     if (script.reference) {
@@ -313,9 +439,15 @@ function analyzeBrowserLibraries(input: BrowserLibraryProfileInput = {}) {
       scanFilename(detected, script.reference);
     } else if (script.inlineContent && script.mediaType !== 'application/ld+json') {
       inlineScriptsExamined += 1;
-      scanInlineContent(detected, script.inlineContent);
+      const remaining = Math.max(0, MAX_INLINE_LIBRARY_SCAN_TOTAL_CHARS - inlineSignatureCharactersExamined);
+      const signatureScan = scanInlineContent(detected, script.inlineContent, remaining);
+      inlineSignatureCharactersExamined += signatureScan.charactersExamined;
+      inlineSignatureLimitReached ||= signatureScan.truncated;
+      if (signatureScan.signatureContent) inlineSignatureSamples.push(signatureScan.signatureContent);
     }
   }
+  const inlineSignatureResult = scanInlineSignatures(detected, inlineSignatureSamples.join('\u0000'));
+  const inlineSignatureUnavailable = inlineSignatureResult.timedOut || inlineSignatureResult.unavailable;
 
   const allFindings = [...detected.values()]
     .map(findingFromDetection)
@@ -332,6 +464,8 @@ function analyzeBrowserLibraries(input: BrowserLibraryProfileInput = {}) {
     || htmlAnalysis.tagLimitReached
     || htmlAnalysis.scriptLimitReached
     || htmlAnalysis.inlineLimitReached
+    || inlineSignatureLimitReached
+    || inlineSignatureUnavailable
     || findingLimitReached;
   const limitations = [
     'Library versions are inferred from passive static signatures and may be absent, transformed, or misleading.',
@@ -344,6 +478,9 @@ function analyzeBrowserLibraries(input: BrowserLibraryProfileInput = {}) {
   if (htmlAnalysis.tagLimitReached) limitations.push('Static HTML tokenization reached its tag or attribute boundary.');
   if (htmlAnalysis.scriptLimitReached) limitations.push(`Only the first ${MAX_SCRIPT_ELEMENTS} script elements were evaluated.`);
   if (htmlAnalysis.inlineLimitReached) limitations.push(`Inline script evaluation reached its ${MAX_INLINE_SCRIPT_TOTAL_CHARS}-character cumulative boundary.`);
+  if (inlineSignatureLimitReached) limitations.push(`Passive library signature matching evaluated a deterministic ${MAX_INLINE_LIBRARY_SCAN_TOTAL_CHARS}-character cumulative sample across inline scripts; full-content hashes still used the complete bounded script content.`);
+  if (inlineSignatureResult.timedOut) limitations.push(`Passive library signature matching exceeded its ${MAX_INLINE_LIBRARY_SCAN_MS} ms isolated-worker deadline; hash evidence was still evaluated.`);
+  if (inlineSignatureResult.unavailable) limitations.push('Passive library signature matching was unavailable in its isolated worker; hash evidence was still evaluated.');
   if (findingLimitReached) limitations.push(`Only the first ${MAX_LIBRARY_FINDINGS} library findings were retained.`);
 
   return {
@@ -371,6 +508,9 @@ function analyzeBrowserLibraries(input: BrowserLibraryProfileInput = {}) {
         referencesExamined,
         inlineScriptsExamined,
         inlineCharactersExamined: htmlAnalysis.inlineCharactersExamined,
+        inlineSignatureCharactersExamined,
+        inlineSignatureTimedOut: inlineSignatureResult.timedOut,
+        inlineSignatureUnavailable: inlineSignatureResult.unavailable,
         catalogComponents: Object.keys(CATALOG_COMPONENTS).length,
         findings: allFindings.length,
         advisoryMatches: allFindings.reduce((sum, finding) => sum + finding.advisoryCount, 0),
@@ -385,6 +525,8 @@ export {
   BROWSER_LIBRARY_PROFILE_VERSION,
   MAX_INLINE_SCRIPT_CHARS,
   MAX_INLINE_SCRIPT_TOTAL_CHARS,
+  MAX_INLINE_LIBRARY_SCAN_CHARS,
+  MAX_INLINE_LIBRARY_SCAN_TOTAL_CHARS,
   MAX_LIBRARY_FINDINGS,
   MAX_LIBRARY_HTML_CHARS,
   MAX_SCRIPT_ELEMENTS,

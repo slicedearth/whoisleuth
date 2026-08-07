@@ -12,6 +12,7 @@
     domain = '',
     allowRehearsal = false,
     initiallyExpanded = false,
+    headingId = 'dns-title',
     title = 'DNS intelligence',
     summaryDetail = 'Expand for observed records, provenance, and limitations',
     note = 'Point-in-time resolver evidence. Shared DNS infrastructure can connect investigations but does not prove common ownership or maliciousness.',
@@ -78,16 +79,17 @@
     domain?: string;
     allowRehearsal?: boolean;
     initiallyExpanded?: boolean;
+    headingId?: string;
     title?: string;
     summaryDetail?: string;
     note?: string;
   } = $props();
 </script>
 
-<details class="dns-card evidence-card card" aria-labelledby="dns-title" open={initiallyExpanded}>
+<details class="dns-card evidence-card card" aria-labelledby={headingId} open={initiallyExpanded}>
   <summary class="evidence-summary">
     <span class="evidence-summary-row">
-      <span class="evidence-summary-copy"><span class="eyebrow">Deep-scan evidence</span><span class="evidence-summary-title" id="dns-title" role="heading" aria-level="4">{title}</span><span class="evidence-summary-detail">{summaryDetail}</span></span>
+      <span class="evidence-summary-copy"><span class="eyebrow">Deep-scan evidence</span><span class="evidence-summary-title" id={headingId} role="heading" aria-level="4">{title}</span><span class="evidence-summary-detail">{summaryDetail}</span></span>
       <span class="evidence-status {evidenceStatusTone(status, { complete })}">{status}</span>
     </span>
   </summary>

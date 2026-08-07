@@ -10,6 +10,7 @@ import {
   moduleDigest,
   parseArguments,
   projectRepository,
+  qualifyRepositoryExpressions,
   renderModule,
 } from '../tools/retire-browser-catalog.mts';
 
@@ -58,6 +59,16 @@ describe('pinned browser-library catalogue projection', () => {
     assert.equal(vulnerabilities.length, 128);
     assert.equal(renderModule(projected), renderModule(projectRepository(fixtureRepository(130))));
     assert.doesNotMatch(renderModule(projected), /129/);
+  });
+
+  test('qualifies retained expressions in an isolated bounded worker', () => {
+    assert.doesNotThrow(() => qualifyRepositoryExpressions(projectRepository(fixtureRepository())));
+    assert.throws(() => qualifyRepositoryExpressions(projectRepository({
+      fixture: {
+        extractors: { filecontent: ['^(a+)+$'] },
+        vulnerabilities: [],
+      },
+    }), { timeoutMs: 100 }), /isolated time limit/iu);
   });
 
   test('requires one explicit source and either check or write mode', () => {

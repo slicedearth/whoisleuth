@@ -279,7 +279,7 @@ app.get('/api/session', (req: RequestLike, res: ResponseLike) => {
   res.json({ authenticated: isValidSessionToken(cookies[COOKIE_NAME]) });
 });
 
-app.get('/api/capabilities', requireAuth, (req: RequestLike, res: ResponseLike) => {
+app.get('/api/capabilities', requireAuth, (_req: RequestLike, res: ResponseLike) => {
   res.json(capabilityReport('express'));
 });
 

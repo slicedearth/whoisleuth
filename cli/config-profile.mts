@@ -1,9 +1,9 @@
 import { Buffer } from 'node:buffer';
-import { open } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 
 import { CliUsageError } from './errors.mts';
+import { readBoundedRegularTextFile } from '../lib/bounded-file.mts';
 
 export const CLI_CONFIG_SCHEMA = 'whoisleuth.cli.config';
 export const CLI_CONFIG_VERSION = 1;
@@ -91,14 +91,11 @@ function parseProfileDocument(input: string): ProfileDocument {
 }
 
 async function readConfigFile(path: string): Promise<string> {
-  const handle = await open(path, 'r');
-  try {
-    const metadata = await handle.stat();
-    if (metadata.size > MAX_CLI_CONFIG_BYTES) throw new CliUsageError('CLI configuration is limited to 64 KiB.');
-    return await handle.readFile({ encoding: 'utf8' });
-  } finally {
-    await handle.close();
-  }
+  return readBoundedRegularTextFile(path, {
+    maximumBytes: MAX_CLI_CONFIG_BYTES,
+    label: 'CLI configuration',
+    allowSymbolicLink: true,
+  });
 }
 
 function suppliedGroups(argumentsList: readonly string[]): Set<string> {
@@ -119,6 +116,14 @@ export async function resolveCliProfileArguments(
     readConfig?: (path: string) => Promise<string>;
   }> = {},
 ): Promise<string[]> {
+  // registry-scaffold owns --profile as the capability template to generate.
+  // Do not reinterpret it as a global CLI-default profile.
+  if (argv[0] === 'registry-scaffold') {
+    if (argv.includes('--config')) {
+      throw new CliUsageError('registry-scaffold does not accept global CLI configuration options.');
+    }
+    return [...argv];
+  }
   const retained: string[] = [];
   let configPath: string | null = null;
   let profileName: string | null = null;
@@ -145,7 +150,7 @@ export async function resolveCliProfileArguments(
   let input: string;
   try { input = await (options.readConfig || readConfigFile)(selectedPath); } catch (error) {
     if (error instanceof CliUsageError) throw error;
-    throw new CliUsageError(`Could not read CLI configuration from ${selectedPath}.`);
+    throw new CliUsageError('CLI configuration could not be read as a bounded regular file.');
   }
   const document = parseProfileDocument(input);
   const selectedName = profileName || document.defaultProfile;

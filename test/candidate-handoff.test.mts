@@ -3,11 +3,13 @@ import assert from 'node:assert/strict';
 import * as core from '../frontend/src/lib/candidate-handoff-core.ts';
 import { requiredValue } from './value-assertions.mts';
 
+const HANDOFF_ID = '0123456789abcdef0123456789abcdef';
+
 // Tests the framework-neutral handoff core directly without requiring browser
-// sessionStorage. buildHandoff is exactly what saveCandidateHandoff serializes;
-// parseHandoff is exactly what loadCandidateHandoff runs on the raw sessionStorage
-// value, so passing a hand-built object to parseHandoff models a hostile payload
-// written straight into sessionStorage.
+// sessionStorage. serializeCandidateHandoff is exactly what
+// saveCandidateHandoff persists; parseSerializedHandoff is exactly what the
+// loader applies, so the round-trip covers both byte admission and schema
+// normalisation.
 // Models the full save -> sessionStorage -> load path.
 type NonEmptyHandoff = Omit<core.CandidateHandoff, 'candidates'> & {
   candidates: [core.Candidate, ...core.Candidate[]];
@@ -18,8 +20,14 @@ function roundTrip(
   candidates: readonly unknown[],
   generated?: readonly unknown[],
 ): NonEmptyHandoff {
-  const stored = JSON.parse(JSON.stringify(core.buildHandoff(source, candidates, generated, '2026-07-12T00:00:00.000Z')));
-  const loaded = requiredValue(core.parseHandoff(stored));
+  const stored = requiredValue(core.serializeCandidateHandoff(
+    source,
+    candidates,
+    generated,
+    '2026-07-12T00:00:00.000Z',
+    HANDOFF_ID,
+  ));
+  const loaded = requiredValue(core.parseSerializedHandoff(stored.serialized));
   assert.ok(loaded.candidates.length > 0);
   return loaded as NonEmptyHandoff;
 }
@@ -40,9 +48,18 @@ function ctCandidate(overrides: Record<string, unknown> = {}) {
 }
 
 describe('candidate handoff CT provenance', () => {
+  test('binds direct handoffs exactly while admitting reviewed Discover sources through the shared route', () => {
+    assert.equal(core.handoffMatchesNavigationSource('manual', 'manual'), true);
+    assert.equal(core.handoffMatchesNavigationSource('manual', 'discover'), false);
+    assert.equal(core.handoffMatchesNavigationSource('nameserver', 'discover'), true);
+    assert.equal(core.handoffMatchesNavigationSource('certificate-transparency', 'discover'), true);
+    assert.equal(core.handoffMatchesNavigationSource('typosquat', 'keyword'), false);
+  });
+
   test('optional CT metadata round-trips through save/load', () => {
     const loaded = roundTrip('certificate-transparency', [ctCandidate()]);
-    assert.equal(loaded.version, 1);
+    assert.equal(loaded.version, 2);
+    assert.equal(loaded.token, HANDOFF_ID);
     assert.equal(loaded.candidates.length, 1);
     const ct = requiredValue(loaded.candidates[0].certificateTransparency);
     assert.deepStrictEqual(ct.hostnames, ['a.example.com', 'login.example.com']);
@@ -51,7 +68,7 @@ describe('candidate handoff CT provenance', () => {
     assert.equal(ct.certificateCount, 3);
   });
 
-  test('version-1 candidate without CT metadata round-trips unchanged', () => {
+  test('candidate without CT metadata round-trips unchanged', () => {
     const loaded = roundTrip('typosquat', [{ domain: 'plain.example', source: 'seed', mutationTypes: ['keyword'] }]);
     assert.equal(loaded.candidates.length, 1);
     assert.equal('certificateTransparency' in loaded.candidates[0], false);
@@ -72,7 +89,7 @@ describe('candidate handoff CT provenance', () => {
   test('unknown nested keys are removed on save', () => {
     const stored = core.buildHandoff('certificate-transparency', [
       ctCandidate({ certificateTransparency: { hostnames: ['a.example.com'], firstObservedAt: null, lastObservedAt: null, certificateCount: 1, junk: 'x' } }),
-    ]);
+    ], undefined, undefined, HANDOFF_ID);
     assert.deepStrictEqual(Object.keys(requiredValue(requiredValue(stored.candidates[0]).certificateTransparency)).sort(), [
       'certificateCount', 'firstObservedAt', 'hostnames', 'lastObservedAt',
     ]);
@@ -126,11 +143,11 @@ describe('strict domain validation against hostile sessionStorage payloads', () 
   // loaded (parseHandoff). Strict normalization must drop or canonicalize it.
   test('whitespace, control-character, and separator domains are dropped', () => {
     const stored = {
-      version: 1, createdAt: '2026-07-12T00:00:00.000Z', source: 'manual',
+      version: 2, token: HANDOFF_ID, createdAt: '2026-07-12T00:00:00.000Z', source: 'manual',
       candidates: [
-        { domain: 'ev il.com', source: 's', mutationTypes: [] },
-        { domain: 'evil\x00.com', source: 's', mutationTypes: [] },
-        { domain: 'a\tb.com', source: 's', mutationTypes: [] },
+        { domain: 'ev il.example', source: 's', mutationTypes: [] },
+        { domain: 'bad\x00.example', source: 's', mutationTypes: [] },
+        { domain: 'a\tb.example', source: 's', mutationTypes: [] },
         { domain: 'good.example', source: 's', mutationTypes: [] },
       ],
     };
@@ -140,16 +157,16 @@ describe('strict domain validation against hostile sessionStorage payloads', () 
 
   test('a URL/path payload is canonicalized to its bare hostname', () => {
     const stored = {
-      version: 1, createdAt: '2026-07-12T00:00:00.000Z', source: 'manual',
-      candidates: [{ domain: 'https://evil.example.com/login?x=1', source: 's', mutationTypes: [] }],
+      version: 2, token: HANDOFF_ID, createdAt: '2026-07-12T00:00:00.000Z', source: 'manual',
+      candidates: [{ domain: 'https://unsafe.example/login?x=1', source: 's', mutationTypes: [] }],
     };
     const loaded = requiredValue(core.parseHandoff(stored));
-    assert.deepStrictEqual(loaded.candidates.map((c) => c.domain), ['evil.example.com']);
+    assert.deepStrictEqual(loaded.candidates.map((c) => c.domain), ['unsafe.example']);
   });
 
   test('invalid labels, undotted names, and IPs are dropped', () => {
     const stored = {
-      version: 1, createdAt: '2026-07-12T00:00:00.000Z', source: 'manual',
+      version: 2, token: HANDOFF_ID, createdAt: '2026-07-12T00:00:00.000Z', source: 'manual',
       candidates: [
         { domain: '-bad.example', source: 's', mutationTypes: [] },
         { domain: 'bad-.example', source: 's', mutationTypes: [] },
@@ -162,11 +179,13 @@ describe('strict domain validation against hostile sessionStorage payloads', () 
     assert.deepStrictEqual(loaded.candidates.map((c) => c.domain), ['ok.example']);
   });
 
-  test('parseHandoff rejects non-v1, bad-source, and non-array payloads', () => {
+  test('parseHandoff rejects unsupported, unbound, bad-source, and non-array payloads', () => {
     assert.equal(core.parseHandoff(null), null);
-    assert.equal(core.parseHandoff({ version: 2, source: 'manual', candidates: [] }), null);
-    assert.equal(core.parseHandoff({ version: 1, source: 'nope', candidates: [] }), null);
-    assert.equal(core.parseHandoff({ version: 1, source: 'manual', candidates: 'x' }), null);
+    assert.equal(core.parseHandoff({ version: 1, token: HANDOFF_ID, source: 'manual', candidates: [] }), null);
+    assert.equal(core.parseHandoff({ version: 2, token: 'bad', source: 'manual', candidates: [] }), null);
+    assert.equal(core.parseHandoff({ version: 2, token: HANDOFF_ID, source: 'nope', candidates: [] }), null);
+    assert.equal(core.parseHandoff({ version: 2, token: HANDOFF_ID, source: 'manual', candidates: 'x' }), null);
+    assert.equal(core.parseHandoff({ version: 2, token: HANDOFF_ID, createdAt: 'not-a-date', source: 'manual', candidates: [] }), null);
   });
 
   test('rejects malformed and oversized serialized tab values before normalization', () => {
@@ -177,14 +196,54 @@ describe('strict domain validation against hostile sessionStorage payloads', () 
     );
     const valid = JSON.stringify(core.buildHandoff('manual', [{
       domain: 'ok.example', source: 'manual', mutationTypes: [],
-    }], undefined, '2026-07-12T00:00:00.000Z'));
+    }], undefined, '2026-07-12T00:00:00.000Z', HANDOFF_ID));
     assert.equal(core.parseSerializedHandoff(valid)?.candidates[0]?.domain, 'ok.example');
   });
 
   test('candidate input processing is bounded by the handoff limit', () => {
     const many = [];
     for (let i = 0; i < core.MAX_HANDOFF_CANDIDATES + 50; i++) many.push({ domain: `d${i}.example`, source: 's', mutationTypes: [] });
-    const stored = core.buildHandoff('manual', many, undefined, '2026-07-12T00:00:00.000Z');
+    const stored = core.buildHandoff('manual', many, undefined, '2026-07-12T00:00:00.000Z', HANDOFF_ID);
     assert.equal(stored.candidates.length, core.MAX_HANDOFF_CANDIDATES);
+  });
+
+  test('caps optional generated context so the saved envelope always round-trips', () => {
+    const candidates = [{ domain: 'selected.example', source: 'manual', mutationTypes: [] }];
+    const generated = Array.from({ length: core.MAX_GENERATED_CONTEXT }, (_, index) => ({
+      domain: `generated-${index}.example`,
+      source: 'x'.repeat(core.MAX_SOURCE_LENGTH),
+      mutationTypes: Array.from({ length: core.MAX_MUTATION_TYPES }, (_value, typeIndex) => `type-${typeIndex}-${'x'.repeat(60)}`),
+    }));
+    const stored = requiredValue(core.serializeCandidateHandoff(
+      'typosquat',
+      candidates,
+      generated,
+      '2026-07-12T00:00:00.000Z',
+      HANDOFF_ID,
+    ));
+    assert.ok(new TextEncoder().encode(stored.serialized).byteLength <= core.MAX_CANDIDATE_HANDOFF_SERIALIZED_BYTES);
+    assert.equal(stored.handoff.candidates.length, 1);
+    assert.equal(stored.handoff.generatedCandidatesTruncated, true);
+    assert.equal(stored.handoff.generatedCandidateTotal, core.MAX_GENERATED_CONTEXT);
+    assert.ok((stored.handoff.generatedCandidates?.length ?? 0) < core.MAX_GENERATED_CONTEXT);
+    const loaded = requiredValue(core.parseSerializedHandoff(stored.serialized));
+    assert.equal(loaded.candidates[0]?.domain, 'selected.example');
+    assert.equal(loaded.generatedCandidatesTruncated, true);
+    assert.equal(loaded.generatedCandidateTotal, core.MAX_GENERATED_CONTEXT);
+  });
+
+  test('refuses a save when selected candidates alone exceed the byte ceiling', () => {
+    const candidates = Array.from({ length: core.MAX_HANDOFF_CANDIDATES }, (_, index) => ({
+      domain: `selected-${index}.example`,
+      source: 'x'.repeat(core.MAX_SOURCE_LENGTH),
+      mutationTypes: Array.from({ length: core.MAX_MUTATION_TYPES }, (_value, typeIndex) => `type-${typeIndex}-${'x'.repeat(60)}`),
+    }));
+    assert.equal(core.serializeCandidateHandoff(
+      'manual',
+      candidates,
+      undefined,
+      '2026-07-12T00:00:00.000Z',
+      HANDOFF_ID,
+    ), null);
   });
 });

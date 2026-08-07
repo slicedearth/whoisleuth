@@ -202,7 +202,7 @@
   .snapshot-manager>p{color:var(--muted);font-size:var(--text-xs);line-height:1.55}
   .comparison-controls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-top:12px}
   .comparison{margin-top:10px;padding:12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface)}
-  .comparison.incomparable{border-color:var(--warning)}
+  .comparison.incomparable{border-color:var(--amber)}
   .comparison ul,.saved-list{display:grid;gap:6px;margin:9px 0 0;padding:0;list-style:none}
   .comparison li{display:grid;grid-template-columns:auto minmax(0,1fr);gap:3px 8px}
   .comparison li span{color:var(--accent);font:700 var(--text-2xs) var(--mono);text-transform:uppercase}

@@ -1,6 +1,5 @@
 import { expect, test } from './fixtures';
-import { boundingBox, expectNoHorizontalOverflow, migrateLegacyBrowserData, readBrowserLocalCollection } from './helpers';
-import { readFile } from 'node:fs/promises';
+import { boundingBox, expectNoHorizontalOverflow } from './helpers';
 import { TEST_SITE_PASSWORD } from './constants';
 import { ACTIVE_PROFILE_KEY } from '../frontend/src/lib/brand-profiles';
 

@@ -118,12 +118,21 @@ function sectionedLookupFixture(domain: string) {
         },
       },
     },
+    reverseDns: {
+      version: 1, status: 'success', source: 'reverse_dns',
+      observedAt: '2026-07-13T00:00:00.000Z', scanMode: 'deep',
+      durationMs: 8, complete: true, truncated: false,
+      limitations: ['PTR context does not prove hosting control.'],
+      diagnostics: { ptr: { status: 'success', answerCount: 1 } },
+      records: { ptr: [`edge.${domain}`] },
+    },
     rdap: { upstreamStatus: 200, parsed: { domain, entitiesByRole: {}, lifecycle: { updatedDateIso: '2026-06-10T00:00:00.000Z' } } },
     whois: { parsed: {}, chain: [] },
     diagnostics: {
       rdap: { status: 'success', endpoint: 'https://rdap.example.test' },
       whois: { status: 'partial' },
       availability: { status: 'complete' },
+      reverseDns: { status: 'success' },
     },
     registryInsights: {
       version: 1,
@@ -388,7 +397,6 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   await page.getByRole('button', { name: 'Run lookup' }).click();
 
   const controls = page.getByRole('region', { name: 'Choose what to review' });
-  await controls.getByLabel('Detail').selectOption('standard');
   const visibility = controls.getByRole('group', { name: 'Evidence family visibility' });
   await expect(visibility.getByRole('button', { name: 'Collapse all' })).toBeDisabled();
   await visibility.getByRole('button', { name: 'Expand all' }).click();
@@ -467,6 +475,8 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   await expect(page.locator('#relationships-history .metric').filter({ hasText: 'mapped sources' })).toHaveText(`${mappedSourceCount} mapped sources`);
   await expect(page.getByRole('tab', { name: /^Sources/ }).locator('span')).toHaveText(String(mappedSourceCount));
   await expect(sourceRail.locator('.source-icon')).toHaveCount(await sourceRail.locator('li').count());
+  await expect(page.locator('[id="dns-title"]')).toHaveCount(1);
+  await expect(page.locator('[id="reverse-dns-title"]')).toHaveCount(1);
   const desktopSourceIcons = topology.locator('.node-source-icon .source-icon');
   await expect(desktopSourceIcons).toHaveCount(await sourceRail.locator('li').count());
   await expect(desktopSourceIcons.first()).toBeVisible();
@@ -521,6 +531,16 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   await expect(topology.locator('.source-node.family-network.active')).toHaveCount(1);
   await expect(topology.locator('.topology-edges path.active')).toHaveCount(1);
 
+  const visualTabs = page.getByRole('tablist', { name: 'Relationship and history view' });
+  const sourcesTab = visualTabs.getByRole('tab', { name: /^Sources/ });
+  await sourcesTab.focus();
+  await sourcesTab.press('ArrowRight');
+  await expect(visualTabs.getByRole('tab', { name: /^Relationships/ })).toBeFocused();
+  await expect(visualTabs.getByRole('tab', { name: /^Relationships/ })).toHaveAttribute('aria-selected', 'true');
+  await visualTabs.getByRole('tab', { name: /^Relationships/ }).press('Home');
+  await expect(sourcesTab).toBeFocused();
+  await expect(sourcesTab).toHaveAttribute('aria-selected', 'true');
+
   const linkedVisualNode = topology.locator('.source-nodes > g.linked').first();
   const hashBeforeDrag = await page.evaluate(() => window.location.hash);
   await linkedVisualNode.dispatchEvent('pointerdown', { pointerId: 1, pointerType: 'touch', clientX: 20, clientY: 20, button: 0 });
@@ -531,6 +551,15 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   await page.getByRole('button', { name: 'Collapse Web and DNS evidence' }).click();
   await expect(page.locator('#evidence-dns')).toHaveCount(0);
   await dnsSource.press('Enter');
+  await expect(page).toHaveURL(/#evidence-dns$/);
+  await expect(page.locator('#evidence-dns')).toBeInViewport();
+
+  await page.getByRole('button', { name: 'Collapse Web and DNS evidence' }).click();
+  await expect(page.locator('#evidence-dns')).toHaveCount(0);
+  await page.evaluate(() => {
+    window.history.replaceState(window.history.state, '', window.location.pathname);
+    window.location.hash = '#evidence-dns';
+  });
   await expect(page).toHaveURL(/#evidence-dns$/);
   await expect(page.locator('#evidence-dns')).toBeInViewport();
 
@@ -563,6 +592,9 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   await expect(activationContext).toContainText('Mail state inconclusive');
   await expect(activationContext).toContainText('Cross-layer timing inconclusive');
 
+  const detailedAssessment = page.locator('details.detailed-assessment');
+  await detailedAssessment.locator(':scope > summary').click();
+  await expect(detailedAssessment).toHaveAttribute('open', '');
   const acquisitionReview = page.locator('details.acquisition');
   await expect(acquisitionReview).toContainText('Acquisition due diligence');
   await expect(acquisitionReview).not.toHaveAttribute('open', '');
@@ -621,7 +653,7 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   await expect(registryLink).toHaveAttribute('aria-current', 'location');
 
   // The DNS status stays visible while its detailed warning is disclosed on demand.
-  const dnsCard = page.locator('.dns-card');
+  const dnsCard = page.getByLabel('DNS intelligence');
   await expect(dnsCard.locator(':scope > summary .evidence-status')).toHaveText('partial');
   await expect(page.getByText(/A resolver failure is not evidence that a record is absent/)).toBeHidden();
   await dnsCard.locator(':scope > summary').click();
@@ -763,7 +795,7 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   expect(download.suggestedFilename()).toMatch(/^whoisleuth-evidence-sectioned-result\.invalid-.+\.json$/);
 });
 
-test('Lookup focus and detail controls change presentation without changing evidence', async ({ page }) => {
+test('Lookup focus and disclosure controls change presentation without changing evidence', async ({ page }) => {
   const domain = 'presentation-options.invalid';
   await page.route('**/api/lookup?*', (route) => route.fulfill({
     status: 200,
@@ -776,11 +808,18 @@ test('Lookup focus and detail controls change presentation without changing evid
 
   const controls = page.getByRole('region', { name: 'Choose what to review' });
   const task = controls.getByLabel('Focus');
-  const density = controls.getByLabel('Detail');
   const localNav = page.getByRole('navigation', { name: 'Result sections' });
   await expect(task).toHaveValue('general');
-  await expect(density).toHaveValue('summary');
+  await expect(controls.getByLabel('Detail')).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'At a glance' })).toBeVisible();
+  const detailedAssessment = page.locator('details.detailed-assessment');
+  await expect(detailedAssessment).not.toHaveAttribute('open', '');
+  await expect(page.getByRole('heading', { name: 'What the current evidence can support' })).toBeHidden();
+  await page.getByText('Open assessment', { exact: true }).click();
+  await expect(detailedAssessment).toHaveAttribute('open', '');
+  await expect(page.getByRole('heading', { name: 'What the current evidence can support' })).toBeVisible();
+  await page.getByText('Close assessment', { exact: true }).click();
+  await expect(detailedAssessment).not.toHaveAttribute('open', '');
   await expect(page.getByRole('button', { name: 'Expand Advanced evidence' })).toBeVisible();
   const familyToggle = page.getByRole('button', { name: 'Expand Registration evidence' }).locator('.toggle-icon');
   await expect(familyToggle).toHaveText('');
@@ -789,12 +828,10 @@ test('Lookup focus and detail controls change presentation without changing evid
   await expect(page.getByRole('heading', { name: 'Raw evidence' })).toHaveCount(0);
 
   await page.getByRole('button', { name: 'Expand Registration evidence' }).click();
-  await expect(density).toHaveValue('summary');
   await expect(page.locator('#evidence-registry')).toBeVisible();
   await page.getByRole('button', { name: 'Collapse Registration evidence' }).click();
   await expect(page.locator('#evidence-registry')).toHaveCount(0);
 
-  await density.selectOption('standard');
   const visibility = controls.getByRole('group', { name: 'Evidence family visibility' });
   await expect(page.getByRole('heading', { name: 'Raw evidence' })).toHaveCount(0);
   await expect(visibility.getByRole('button', { name: 'Collapse all' })).toBeDisabled();
@@ -810,10 +847,6 @@ test('Lookup focus and detail controls change presentation without changing evid
   await page.getByRole('button', { name: 'Expand Registration evidence' }).click();
   await expect(page.locator('#evidence-registry')).toBeVisible();
 
-  await density.selectOption('full');
-  await expect(page.getByRole('heading', { name: 'Raw evidence' })).toHaveCount(0);
-  await visibility.getByRole('button', { name: 'Expand all' }).click();
-  await expect(page.locator('#raw-data details')).toBeVisible();
   await expect(page.locator('#evidence-dns > details')).toHaveJSProperty('open', false);
   await task.selectOption('acquisition');
   await expect(page.locator('#evidence-dns > details')).toHaveJSProperty('open', false);
@@ -827,7 +860,7 @@ test('Lookup focus and detail controls change presentation without changing evid
     'Advanced',
   ]);
 
-  await density.selectOption('summary');
+  await visibility.getByRole('button', { name: 'Collapse all' }).click();
   await expect(page.getByRole('button', { name: 'Expand Registration evidence' })).toBeVisible();
   await expect(page.locator('#evidence-registry')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Expand Source quality evidence' })).toBeVisible();
@@ -838,7 +871,7 @@ test('Lookup focus and detail controls change presentation without changing evid
   await page.locator('#query').fill(domain);
   await page.getByRole('button', { name: 'Run lookup' }).click();
   await expect(page.getByRole('region', { name: 'Choose what to review' }).getByLabel('Focus')).toHaveValue('acquisition');
-  await expect(page.getByRole('region', { name: 'Choose what to review' }).getByLabel('Detail')).toHaveValue('summary');
+  await expect(page.getByRole('region', { name: 'Choose what to review' }).getByLabel('Detail')).toHaveCount(0);
 });
 
 test('primary, secondary, and destructive actions are visually distinct', async ({ page }) => {

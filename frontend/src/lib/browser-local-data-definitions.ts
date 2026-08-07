@@ -78,7 +78,6 @@ import {
   MAX_BULK_SESSIONS,
   MAX_BULK_SESSION_STORE_BYTES,
   bulkSessionStoreVersion,
-  enforceBulkSessionStoreBudget,
   normalizeBulkSessionStore,
   serializeBulkSessionStore,
 } from './analysis/bulk-session-model.ts';

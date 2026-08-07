@@ -110,6 +110,6 @@
     .ct-trend-summary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;margin:0;background:var(--border)}
     .ct-trend-summary div{min-width:0;padding:10px;background:var(--panel-raised)}
     .ct-trend-summary dt{color:var(--muted);font:600 var(--text-2xs) var(--mono);text-transform:uppercase;letter-spacing:.06em}
-    .ct-trend-summary dd{margin:3px 0 0;color:var(--text);font:700 var(--text-base) var(--mono)}
+    .ct-trend-summary dd{margin:3px 0 0;color:var(--text);font:700 var(--text-md) var(--mono)}
   }
 </style>

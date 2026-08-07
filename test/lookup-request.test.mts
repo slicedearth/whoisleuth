@@ -7,6 +7,7 @@ import {
 } from '../frontend/src/lib/analysis/lookup-request.ts';
 import type { LookupRequestOptions } from '../lib/lookup-request.mts';
 import type { LookupHttpResponse } from '../lib/lookup-response-contract.mts';
+import { LARGE_JSON_RESPONSE_BYTES } from '../lib/bounded-json-response.mts';
 
 type FetchImplementation = NonNullable<LookupRequestOptions['fetchImpl']>;
 
@@ -118,6 +119,17 @@ describe('Lookup browser request boundary', () => {
       fetchImpl: async () => { throw new Error('local path and upstream internals'); },
     });
     assert.deepEqual(failed, {
+      ok: false,
+      kind: 'network',
+      message: 'Lookup request could not be completed.',
+    });
+
+    const oversized = await requestLookup('/api/lookup?q=example.test', {
+      fetchImpl: async () => new Response('{}', {
+        headers: { 'content-length': String(LARGE_JSON_RESPONSE_BYTES + 1) },
+      }),
+    });
+    assert.deepEqual(oversized, {
       ok: false,
       kind: 'network',
       message: 'Lookup request could not be completed.',

@@ -223,7 +223,7 @@ test('keeps an expected missing registry protocol out of limited Bulk outcomes',
     });
   });
   await page.getByLabel('Scan mode').selectOption('deep');
-  await runBulkScan(page, ['candidate.dev', 'candidate.com']);
+  await runBulkScan(page, ['example.dev', 'example.com']);
 
   const outcomes = page.locator('.outcomes');
   await expect(outcomes.locator('div', { hasText: 'Complete' })).toContainText('1');
@@ -235,10 +235,15 @@ test('keeps an expected missing registry protocol out of limited Bulk outcomes',
 
   await page.getByLabel('Source coverage').selectOption('limited');
   await expect(page.locator('.results-table tbody tr')).toHaveCount(1);
-  await expect(page.locator('.results-table tbody tr')).toContainText('candidate.com');
+  await expect(page.locator('.results-table tbody tr')).toContainText('example.com');
 });
 
 test('supports focused review and an evidence-qualified two-domain comparison', async ({ page }) => {
+  // This scenario deliberately covers IndexedDB writes, two downloads, the
+  // desktop workbench, and its final mobile disclosure state in one retained
+  // workflow. Give that integration path the suite's established slow budget
+  // rather than letting parallel browser load consume its final assertions.
+  test.slow();
   await page.route('**/api/lookup?*', async (route) => {
     const domain = new URL(route.request().url()).searchParams.get('q') || '';
     const left = domain.startsWith('left');
@@ -811,16 +816,21 @@ test('a 101-result scan paginates 100 then 1, and Previous/Next update the page'
 
   await expect(page.locator('.results-table tbody tr')).toHaveCount(100);
   await expect(pagination).toContainText('Page 1 of 2');
-  await expect(previousButton).toBeDisabled();
-  await expect(nextButton).toBeEnabled();
+  await expect(previousButton).toHaveAttribute('aria-disabled', 'true');
+  await expect(nextButton).toHaveAttribute('aria-disabled', 'false');
+  await previousButton.focus();
+  await expect(previousButton).toBeFocused();
+  await expect(pagination).toContainText('Page 1 of 2');
 
   await nextButton.click();
+  await expect(nextButton).toBeFocused();
   await expect(page.locator('.results-table tbody tr')).toHaveCount(1);
   await expect(pagination).toContainText('Page 2 of 2');
-  await expect(nextButton).toBeDisabled();
-  await expect(previousButton).toBeEnabled();
+  await expect(nextButton).toHaveAttribute('aria-disabled', 'true');
+  await expect(previousButton).toHaveAttribute('aria-disabled', 'false');
 
   await previousButton.click();
+  await expect(previousButton).toBeFocused();
   await expect(page.locator('.results-table tbody tr')).toHaveCount(100);
   await expect(pagination).toContainText('Page 1 of 2');
 });
@@ -871,18 +881,21 @@ test('risk model v7 exposes capped cross-family corroboration in Bulk triage', a
     trademarkOwner: '', trademarkRegistration: '', officialFaviconHash: 'a'.repeat(64), officialFaviconPHash: '', pageBaseline: null,
     createdAt: '2026-07-13T00:00:00.000Z', updatedAt: '2026-07-13T00:00:00.000Z',
   };
-  await page.evaluate(() => {
-    sessionStorage.setItem('whoisleuth:candidate-handoff:v1', JSON.stringify({
-      version: 1,
-      createdAt: '2026-07-13T00:00:00.000Z',
-      source: 'typosquat',
-      candidates: [{ domain: 'candidate.example', source: 'official.example', mutationTypes: ['dictionary'] }],
-    }));
-  });
   await migrateLegacyBrowserData(page, {
     'whois-rdap-brand-profiles-v1': [profile],
     'whois-rdap-active-brand-profile-v1': profile.id,
   });
+  const handoffToken = '0123456789abcdef0123456789abcdef';
+  await page.evaluate((token) => {
+    sessionStorage.setItem('whoisleuth:candidate-handoff:v2', JSON.stringify({
+      version: 2,
+      token,
+      createdAt: '2026-07-13T00:00:00.000Z',
+      source: 'typosquat',
+      candidates: [{ domain: 'candidate.example', source: 'official.example', mutationTypes: ['dictionary'] }],
+    }));
+  }, handoffToken);
+  await page.goto(`/bulk?source=typosquat&handoff=${handoffToken}`);
   await page.route('**/api/lookup?*', async (route) => route.fulfill({
     status: 200,
     contentType: 'application/json',
@@ -1060,9 +1073,11 @@ test('deep results present bounded relationship evidence including exact native 
 });
 
 test('candidate handoff presents defensive coverage actions and export', async ({ page }) => {
-  await page.evaluate(() => {
-    sessionStorage.setItem('whoisleuth:candidate-handoff:v1', JSON.stringify({
-      version: 1,
+  const handoffToken = 'fedcba9876543210fedcba9876543210';
+  await page.evaluate((token) => {
+    sessionStorage.setItem('whoisleuth:candidate-handoff:v2', JSON.stringify({
+      version: 2,
+      token,
       createdAt: '2026-07-16T00:00:00.000Z',
       source: 'typosquat',
       candidates: [
@@ -1070,8 +1085,8 @@ test('candidate handoff presents defensive coverage actions and export', async (
         { domain: 'secure-example.example', source: 'official.example', mutationTypes: ['dictionary'] },
       ],
     }));
-  });
-  await page.reload();
+  }, handoffToken);
+  await page.goto(`/bulk?source=typosquat&handoff=${handoffToken}`);
   await page.route('**/api/lookup?*', async (route) => {
     const domain = new URL(route.request().url()).searchParams.get('q') || '';
     await route.fulfill({

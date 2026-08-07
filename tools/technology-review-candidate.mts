@@ -4,7 +4,6 @@
 // lookup into target-free review input. It reconstructs catalogue-owned
 // markers and never copies the query, target, page text, or raw headers.
 
-import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -26,6 +25,7 @@ import {
   type TechnologyEvidence,
   type TechnologyInput,
 } from '../lib/website-technology.mts';
+import { readBoundedRegularFile } from '../lib/bounded-file.mts';
 
 type UnknownRecord = Record<string, unknown>;
 type WritableLike = { write(value: string): unknown };
@@ -310,10 +310,12 @@ export async function main(
 ): Promise<number> {
   try {
     const { inputPath, ...options } = parseArguments(args);
-    const raw = await readFile(inputPath);
-    if (!raw.byteLength || raw.byteLength > MAX_SAVED_LOOKUP_INPUT_BYTES) {
-      throw new TypeError(`Saved lookup input must be between 1 byte and ${MAX_SAVED_LOOKUP_INPUT_BYTES} bytes.`);
-    }
+    const raw = await readBoundedRegularFile(inputPath, {
+      allowSymbolicLink: true,
+      maximumBytes: MAX_SAVED_LOOKUP_INPUT_BYTES,
+      minimumBytes: 1,
+      label: 'Saved lookup input',
+    });
     const document = parseSavedLookupDocument(raw.toString('utf8'));
     output.write(`${JSON.stringify(buildTechnologyReviewCandidate(document, options), null, 2)}\n`);
     return 0;

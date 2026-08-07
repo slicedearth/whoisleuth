@@ -15,7 +15,7 @@ function firstLabel(result: ReturnType<typeof analysis>) {
 describe('punycode decoding and dual domain representation', () => {
   test('decodes a known internationalized label without a runtime dependency', () => {
     assert.equal(idn.decodePunycodeLabel('mnchen-3ya'), 'münchen');
-    assert.equal(idn.unicodeDomainFromAscii('xn--mnchen-3ya.de'), 'münchen.de');
+    assert.equal(idn.unicodeDomainFromAscii('xn--mnchen-3ya.example'), 'münchen.example');
   });
 
   test('matches the platform IDNA conversion for representative non-Latin labels', () => {

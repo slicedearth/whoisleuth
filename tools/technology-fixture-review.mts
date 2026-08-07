@@ -4,7 +4,6 @@
 // public real-world fixture contract. The output reconstructs only known
 // catalogue markers and shared vendor origins, never copied page content.
 
-import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -23,6 +22,7 @@ import {
   analyzeWebsiteTechnology,
   type TechnologyInput,
 } from '../lib/website-technology.mts';
+import { readBoundedRegularFile } from '../lib/bounded-file.mts';
 
 export const MAX_TECHNOLOGY_REVIEW_INPUT_BYTES = 64 * 1024;
 export const MAX_REVIEWED_MARKUP_BYTES = 8 * 1024;
@@ -382,10 +382,12 @@ export async function main(
     if (args.length !== 1 || !args[0] || args[0].startsWith('-')) {
       throw new TypeError('Usage: node tools/technology-fixture-review.mts INPUT.json');
     }
-    const raw = await readFile(args[0]);
-    if (raw.byteLength === 0 || raw.byteLength > MAX_TECHNOLOGY_REVIEW_INPUT_BYTES) {
-      throw new TypeError(`Technology review input must be between 1 byte and ${MAX_TECHNOLOGY_REVIEW_INPUT_BYTES} bytes.`);
-    }
+    const raw = await readBoundedRegularFile(args[0], {
+      allowSymbolicLink: true,
+      maximumBytes: MAX_TECHNOLOGY_REVIEW_INPUT_BYTES,
+      minimumBytes: 1,
+      label: 'Technology review input',
+    });
     let parsed: unknown;
     try {
       parsed = JSON.parse(raw.toString('utf8')) as unknown;

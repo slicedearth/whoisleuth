@@ -28,6 +28,11 @@
   } from '$lib/analysis/typosquat-generator.ts';
   import { activeProfile, isDomainAllowlisted, type BrandProfile } from '$lib/brand-profiles';
   import { saveCandidateHandoff, type Candidate } from '$lib/candidate-handoff';
+  import {
+    LARGE_JSON_RESPONSE_BYTES,
+    requestJsonCapped,
+    STANDARD_JSON_RESPONSE_BYTES,
+  } from '$lib/bounded-json-response';
   import { normalizeCtResponse, ctCandidateMatchesFilter, type CtCertificateGroup } from '$lib/analysis/ct-results.ts';
   import {
     candidateReviewCues as buildCandidateReviewCues,
@@ -368,7 +373,7 @@
   }
 
   function selectMode(next:Mode){cancelHostedSearch();mode=next;candidates=[];generatedContext=[];selected=new Set();candidateMetadata=new Map();status='';error='';ctResultKind=null;ctCertificateGroups=[];ctCertificateGroupsTruncated=false;rdapSearchSummary=null;resetCandidateView();resetCtComparison();}
-  function tabKeydown(event:KeyboardEvent){const order:Mode[]=['typosquat','keyword','certificate-transparency','nameserver'];const current=order.indexOf(mode);let index=-1;if(event.key==='ArrowRight')index=(current+1)%order.length;else if(event.key==='ArrowLeft')index=(current+order.length-1)%order.length;else if(event.key==='Home')index=0;else if(event.key==='End')index=order.length-1;if(index<0)return;const nextMode=order[index];if(!nextMode)return;event.preventDefault();selectMode(nextMode);requestAnimationFrame(()=>document.querySelectorAll<HTMLButtonElement>('[role="tab"]')[index]?.focus());}
+  function tabKeydown(event:KeyboardEvent){const order:Mode[]=['typosquat','keyword','certificate-transparency','nameserver'];const current=order.indexOf(mode);let index=-1;if(event.key==='ArrowRight')index=(current+1)%order.length;else if(event.key==='ArrowLeft')index=(current+order.length-1)%order.length;else if(event.key==='Home')index=0;else if(event.key==='End')index=order.length-1;if(index<0)return;const nextMode=order[index];if(!nextMode)return;event.preventDefault();selectMode(nextMode);const tablist=(event.currentTarget as HTMLButtonElement).closest('[role="tablist"]');requestAnimationFrame(()=>tablist?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[index]?.focus());}
 
   function generate() {
     cancelHostedSearch(); ctResultKind = null; ctCertificateGroups = []; ctCertificateGroupsTruncated = false; rdapSearchSummary = null; resetCtComparison();
@@ -431,8 +436,14 @@
     ctCertificateGroupsTruncated = false;
     searching = true; error = ''; status = 'Searching Certificate Transparency logs…'; resetCtComparison();
     try {
-      const response = await fetch(`/api/ct-search?q=${encodeURIComponent(query)}`, { signal: controller.signal });
-      const body = await response.json().catch(() => ({})) as Record<string, unknown>;
+      const { response, body: rawBody } = await requestJsonCapped(
+        `/api/ct-search?q=${encodeURIComponent(query)}`,
+        { signal: controller.signal },
+        { maximumBytes: LARGE_JSON_RESPONSE_BYTES, timeoutMs: 40_000 },
+      );
+      const body = rawBody && typeof rawBody === 'object' && !Array.isArray(rawBody)
+        ? rawBody as Record<string, unknown>
+        : {};
       if (token !== searchToken) return; // a newer search or a mode switch superseded this one
       if (!response.ok) throw new Error((body.error as string) || `Search failed (${response.status})`);
       const { candidates: next, certificateGroups, certificateGroupsTruncated, certCount, truncated } = normalizeCtResponse(body, query);
@@ -500,10 +511,11 @@
     rdapSearchSummary = null;
     resetCtComparison();
     try {
-      const response = await fetch(`/api/rdap-nameserver-search?nameserver=${encodeURIComponent(nameserver)}&scope=${encodeURIComponent(scope)}`, {
-        signal: controller.signal,
-      });
-      const body: unknown = await response.json().catch(() => ({}));
+      const { response, body } = await requestJsonCapped(
+        `/api/rdap-nameserver-search?nameserver=${encodeURIComponent(nameserver)}&scope=${encodeURIComponent(scope)}`,
+        { signal: controller.signal },
+        { maximumBytes: STANDARD_JSON_RESPONSE_BYTES, timeoutMs: 40_000 },
+      );
       if (token !== searchToken) return;
       if (!response.ok) {
         const message = body && typeof body === 'object' && !Array.isArray(body)
@@ -642,7 +654,13 @@
 
   async function sendToBulk() {
     if (!selectedCandidates.length) return;
-    saveCandidateHandoff(mode, selectedCandidates, generatedContext);
+    const handoffResult = saveCandidateHandoff(mode, selectedCandidates, generatedContext);
+    if (!handoffResult.saved) {
+      error = handoffResult.reason === 'too_large'
+        ? 'The selected candidates are too large to transfer safely. Reduce the selection and try again.'
+        : 'This browser could not retain the selected candidates for Bulk. Check site-storage access and try again.';
+      return;
+    }
     const guide = loadInvestigationGuide();
     const discoverStage = guide?.stages.find((stage) => stage.id === 'discover');
     if (guide?.recipeId === 'brand_sweep' && discoverStage?.outcome === 'pending') {
@@ -654,7 +672,7 @@
         && retainedGuide.reviewDomainsTruncated === (selectedDomains.length > MAX_INVESTIGATION_GUIDE_REVIEW_DOMAINS);
       if (retainedSelectionMatches) updateInvestigationGuideOutcome('discover', 'complete');
     }
-    await goto('/bulk?source=discover');
+    await goto(`/bulk?source=discover&handoff=${handoffResult.token}`);
   }
 </script>
 
@@ -666,11 +684,12 @@
   {#if mode==='nameserver'&&rdapSearchDisabled}<p class="feature-disabled" role="note">{rdapSearchDisabled.reason||'RDAP nameserver search is disabled by deployment policy.'}</p>{/if}
   {#if profile&&mode!=='nameserver'}<div class="profile-context"><span>Active profile: <strong>{profile.name}</strong></span><button class="btn small" onclick={useProfile}>Use profile defaults</button></div>{/if}
   <div class="modes" role="tablist" aria-label="Discovery method">
-    <button role="tab" aria-selected={mode==='typosquat'} tabindex={mode==='typosquat'?0:-1} class:active={mode==='typosquat'} onclick={()=>selectMode('typosquat')} onkeydown={tabKeydown}>Lookalikes</button>
-    <button role="tab" aria-selected={mode==='keyword'} tabindex={mode==='keyword'?0:-1} class:active={mode==='keyword'} onclick={()=>selectMode('keyword')} onkeydown={tabKeydown}>Name ideas</button>
-    <button role="tab" aria-selected={mode==='certificate-transparency'} tabindex={mode==='certificate-transparency'?0:-1} class:active={mode==='certificate-transparency'} onclick={()=>selectMode('certificate-transparency')} onkeydown={tabKeydown}>Certificates</button>
-    <button role="tab" aria-selected={mode==='nameserver'} tabindex={mode==='nameserver'?0:-1} class:active={mode==='nameserver'} onclick={()=>selectMode('nameserver')} onkeydown={tabKeydown}>Nameservers</button>
+    <button id="discovery-tab-typosquat" role="tab" aria-controls="discovery-method-panel" aria-selected={mode==='typosquat'} tabindex={mode==='typosquat'?0:-1} class:active={mode==='typosquat'} onclick={()=>selectMode('typosquat')} onkeydown={tabKeydown}>Lookalikes</button>
+    <button id="discovery-tab-keyword" role="tab" aria-controls="discovery-method-panel" aria-selected={mode==='keyword'} tabindex={mode==='keyword'?0:-1} class:active={mode==='keyword'} onclick={()=>selectMode('keyword')} onkeydown={tabKeydown}>Name ideas</button>
+    <button id="discovery-tab-certificate-transparency" role="tab" aria-controls="discovery-method-panel" aria-selected={mode==='certificate-transparency'} tabindex={mode==='certificate-transparency'?0:-1} class:active={mode==='certificate-transparency'} onclick={()=>selectMode('certificate-transparency')} onkeydown={tabKeydown}>Certificates</button>
+    <button id="discovery-tab-nameserver" role="tab" aria-controls="discovery-method-panel" aria-selected={mode==='nameserver'} tabindex={mode==='nameserver'?0:-1} class:active={mode==='nameserver'} onclick={()=>selectMode('nameserver')} onkeydown={tabKeydown}>Nameservers</button>
   </div>
+  <div id="discovery-method-panel" role="tabpanel" aria-labelledby={`discovery-tab-${mode}`}>
   <div class="fields">
     <label class="field">{mode==='keyword' ? 'Keyword' : mode==='certificate-transparency' ? 'Certificate-log keyword' : mode==='nameserver' ? 'Nameserver hostname' : 'Brand or domain'}<input id="discovery-seed" bind:value={seed} maxlength={mode==='certificate-transparency'?MAX_CT_QUERY_LENGTH:mode==='nameserver'?253:MAX_GENERATION_INPUT_LENGTH} aria-describedby={mode==='certificate-transparency'?'ct-query-guidance':mode==='nameserver'?'rdap-search-guidance':undefined} placeholder={mode==='typosquat'?'example.com':mode==='nameserver'?'ns1.example.net':'Example brand'}></label>
     {#if mode==='nameserver'}<label class="field">Registry suffix<input bind:value={registryScope} maxlength="63" aria-describedby="rdap-search-guidance" placeholder="com"></label>{:else if mode!=='certificate-transparency'}<label class="field">TLDs<input bind:value={tldText} maxlength={maxTldTextLength} aria-describedby="generation-limits" placeholder="com, net, org"></label>{/if}
@@ -716,6 +735,7 @@
       <p>{rdapSearchSummary.limitations[0] || 'This result is limited to the selected registry.'}</p>
     </div>
   {/if}
+  </div>
 </section>
 
 {#if mode==='certificate-transparency' && ctCertificateGroups.length}

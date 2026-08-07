@@ -6,6 +6,7 @@
   import SiteFooter from '$lib/components/SiteFooter.svelte';
   import ThemeSelector from '$lib/components/ThemeSelector.svelte';
   import { clearConsoleWorkflowState } from '$lib/console-workflow-state';
+  import { requestJsonCapped, SMALL_JSON_RESPONSE_BYTES } from '$lib/bounded-json-response';
   import {
     PUBLIC_SESSION_CONTEXT,
     type PublicSessionState,
@@ -21,8 +22,9 @@
 
   async function checkSession(){
     try{
-      const response=await fetch('/api/session',{cache:'no-store'});
-      session=response.ok&&(await response.json()).authenticated===true?'authenticated':'anonymous';
+      const { response, body }=await requestJsonCapped('/api/session',{cache:'no-store'},{maximumBytes:SMALL_JSON_RESPONSE_BYTES,timeoutMs:10_000});
+      const record=body&&typeof body==='object'&&!Array.isArray(body)?body as Record<string,unknown>:{};
+      session=response.ok&&record.authenticated===true?'authenticated':'anonymous';
       if(session==='anonymous')clearConsoleWorkflowState();
     }catch{
       session='anonymous';

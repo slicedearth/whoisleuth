@@ -88,7 +88,7 @@
   .filters{display:grid;grid-template-columns:minmax(0,2fr) minmax(180px,1fr);gap:10px;margin-top:16px}
   .coverage,.empty{color:var(--muted);font-size:var(--text-xs);line-height:1.5}
   .cluster-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-top:12px}
-  .cluster-grid>article{min-width:0;padding:13px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface-soft)}
+  .cluster-grid>article{min-width:0;padding:13px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
   .cluster-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
   .cluster-head span{color:var(--accent2);font:700 var(--text-2xs) var(--mono);text-transform:uppercase}
   .cluster-head h3{margin:3px 0 2px;overflow-wrap:anywhere;font:700 var(--text-sm) var(--mono)}

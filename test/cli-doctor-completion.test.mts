@@ -2,7 +2,7 @@ import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 
-import { parseCliArguments } from '../cli/arguments.mts';
+import { CLI_COMMANDS, parseCliArguments } from '../cli/arguments.mts';
 import { buildShellCompletion } from '../cli/completion.mts';
 import { buildDoctorReport, formatDoctorReport } from '../cli/doctor.mts';
 import EXIT_CODES from '../cli/exit-codes.mts';
@@ -66,6 +66,29 @@ describe('CLI shell completion', () => {
     for (const shell of ['bash', 'zsh', 'fish', 'powershell'] as const) {
       assert.doesNotMatch(buildShellCompletion(shell), /(?:--preset|-a) ['"]?custom/u);
     }
+  });
+
+  test('covers every installed command and the offline positional-file commands', () => {
+    const scripts: readonly [string, string, string, string] = [
+      buildShellCompletion('bash'),
+      buildShellCompletion('zsh'),
+      buildShellCompletion('fish'),
+      buildShellCompletion('powershell'),
+    ];
+    for (const command of CLI_COMMANDS) {
+      for (const script of scripts) assert.match(script, new RegExp(`\\b${command}\\b`, 'u'));
+    }
+    for (const command of ['manifest', 'map-observations', 'oam-export', 'ct-intake', 'change-packet']) {
+      assert.match(scripts[0], new RegExp(`\\b${command}\\b`, 'u'));
+      assert.match(scripts[1], new RegExp(`\\b${command}\\b`, 'u'));
+      assert.match(scripts[2], new RegExp(`\\b${command}\\b`, 'u'));
+      assert.match(scripts[3], new RegExp(`\\b${command}\\b`, 'u'));
+    }
+    assert.match(scripts[0], /manifest\) options="[^"]*--workflow/u);
+    assert.match(scripts[1], /manifest\) options=\([^)]*--workflow/u);
+    assert.match(scripts[2], /__fish_seen_subcommand_from manifest[^\n]*-l workflow/u);
+    assert.match(scripts[3], /'manifest' = @\([^)]*'--workflow'/u);
+    assert.match(scripts[3], /\$fileCommands = @\([^)]*'manifest'/u);
   });
 
   test('runner writes only the selected script to stdout', async () => {

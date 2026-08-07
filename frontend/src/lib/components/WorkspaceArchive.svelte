@@ -143,7 +143,7 @@
       <p>Download supported work from this browser, or review a previous backup before adding it here.</p>
     </div>
     <div class="top-actions toolbar">
-      <button class="primary" type="button" onclick={()=>showEncryptionForm=!showEncryptionForm} aria-expanded={showEncryptionForm} aria-controls="workspace-encryption-form" disabled={busy}>Download encrypted backup</button>
+      <button class="primary" type="button" onclick={()=>showEncryptionForm=!showEncryptionForm} aria-expanded={showEncryptionForm} aria-controls={showEncryptionForm?'workspace-encryption-form':undefined} disabled={busy}>Download encrypted backup</button>
       <label class="btn file-btn" class:disabled={busy}>Review backup file<input type="file" accept="application/json,.json" onchange={chooseFile} disabled={busy}></label>
     </div>
   </header>

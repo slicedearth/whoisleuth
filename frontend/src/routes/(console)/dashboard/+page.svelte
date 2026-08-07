@@ -95,12 +95,16 @@
       compareError = 'Enter two different valid domains without URLs, paths, or ports.';
       return;
     }
-    saveCandidateHandoff('manual', parsed.entries.map((domain) => ({
+    const handoffResult = saveCandidateHandoff('manual', parsed.entries.map((domain) => ({
       domain,
       source: 'analyst comparison',
       mutationTypes: [],
     })));
-    await goto('/bulk?source=manual#domains');
+    if (!handoffResult.saved) {
+      compareError = 'This browser could not retain the comparison targets for Bulk. Check site-storage access and try again.';
+      return;
+    }
+    await goto(`/bulk?source=manual&handoff=${handoffResult.token}#domains`);
   }
 </script>
 
@@ -212,7 +216,7 @@
 <WorkspaceArchive onimport={refreshLocalSummary} />
 
 <style>
-  .summary-error{margin:14px 0 0;color:var(--warning);font-size:var(--text-sm)}
+  .summary-error{margin:14px 0 0;color:var(--amber);font-size:var(--text-sm)}
   .summary-error:empty{display:none}
   .guide-launcher{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(280px,.8fr);gap:24px;margin-top:28px;padding:21px}
   .guide-launcher h2{margin:4px 0 7px;font:700 var(--text-lg) var(--mono)}

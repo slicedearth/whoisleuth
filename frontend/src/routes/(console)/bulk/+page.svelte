@@ -19,7 +19,7 @@
   import BulkMobileDisclosure from '$lib/components/BulkMobileDisclosure.svelte';
   import PageHeading from '$lib/components/PageHeading.svelte';
   import { activeProfile, isDomainAllowlisted, profileDomainKind, type BrandProfile } from '$lib/brand-profiles';
-  import { loadCandidateHandoff, type Candidate, type CandidateHandoff, type CertificateTransparencyProvenance } from '$lib/candidate-handoff';
+  import { consumeCandidateHandoff, type Candidate, type CandidateHandoff, type CertificateTransparencyProvenance } from '$lib/candidate-handoff';
   import { clearShortlist, exportShortlist, importShortlist, loadShortlist, MAX_SHORTLIST_IMPORT_BYTES, setShortlistSelection, toggleShortlist, type ShortlistRecord } from '$lib/shortlist';
   import { CASE_DISPOSITIONS, dispositionLabel, editCase, loadCases, openCase, type CaseRecord } from '$lib/cases';
   import { saveWatchlist } from '$lib/watchlists';
@@ -197,7 +197,9 @@
   const coverage=$derived.by(()=>{if(!handoff||!['typosquat','keyword'].includes(handoff.source))return null;const generated=handoff.generatedCandidates||handoff.candidates;const trusted=new Set(generated.filter(candidate=>isDomainAllowlisted(candidate.domain,profile)).map(candidate=>candidate.domain));return buildCoverageReport(results.map(row=>({...row.saved,domain:row.domain,availability:row.availability,mutationTypes:row.mutationTypes})),generated,trusted,mutationLabels);});
 
   async function initializeLocalContext(handoffNavigation:boolean,investigationTarget:string,restored:ReturnType<typeof readBulkWorkflowState<ScanResult>>){
-    handoff=loadCandidateHandoff();
+    const handoffToken=routePage.url.searchParams.get('handoff')||'';
+    const handoffSource=routePage.url.searchParams.get('source')||'';
+    handoff=handoffNavigation&&handoffToken?consumeCandidateHandoff(handoffToken,handoffSource):null;
     if(handoffNavigation&&handoff)input=handoff.candidates.map(c=>c.domain).join('\n');
     else if(investigationTarget&&!restored){input=investigationTarget;results=[];completed=0;total=0;status='Loaded the guided-investigation target. Add only relevant comparison domains before scanning.';}
     try{
@@ -211,7 +213,7 @@
   }
 
   onMount(()=>{
-    const handoffNavigation=routePage.url.searchParams.has('source');
+    const handoffNavigation=routePage.url.searchParams.has('source')&&routePage.url.searchParams.has('handoff');
     const investigationTarget=parseDomainInput(routePage.url.searchParams.get('investigation')||'').entries[0]||'';
     const activeGuide=investigationTarget?loadInvestigationGuide():null;
     const guideContext=investigationTarget&&activeGuide?.domain===investigationTarget?`${activeGuide.recipeId}\u0000${activeGuide.domain}\u0000${activeGuide.createdAt}`:investigationTarget?`target\u0000${investigationTarget}`:'';
@@ -404,6 +406,7 @@
   profileName={profile?.name||''}
   handoffCount={handoff?.candidates.length||0}
   handoffSource={handoff?.source.replaceAll('-',' ')||''}
+  handoffContextTruncated={handoff?.generatedCandidatesTruncated===true}
   {input}
   setInput={(value)=>input=value}
   {mode}
@@ -648,7 +651,7 @@
 <BulkShortlist domains={shortlist.map((item)=>item.domain)} status={shortlistStatus} {loadShortlisted} {downloadShortlist} {importShortlistFile} {removeAllShortlisted} />
 
 <style>
-  .local-context-status{margin:12px 0 0;color:var(--warning);font-size:var(--text-sm)}
+  .local-context-status{margin:12px 0 0;color:var(--amber);font-size:var(--text-sm)}
   .local-context-status:empty{display:none}
   .bulk-workspace-shell,.bulk-workspace-content,.mobile-result-panel{display:contents}
   .mobile-workspace-toggle,.mobile-result-switcher{display:none}
@@ -664,7 +667,7 @@
     .mobile-workspace-toggle span:last-child{flex:0 0 auto;color:var(--accent);font:700 var(--text-lg) var(--mono)}
     .bulk-workspace-content{display:block}
     .bulk-workspace-content.mobile-collapsed{display:none}
-    .mobile-result-switcher{position:sticky;z-index:6;top:calc(var(--console-mobile-toolbar-height,0px) + 8px);display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;margin:12px 0;padding:4px;border:1px solid var(--border);border-radius:var(--radius-md);background:color-mix(in srgb,var(--panel) 94%,transparent);box-shadow:var(--shadow-sm);backdrop-filter:blur(10px)}
+    .mobile-result-switcher{position:sticky;z-index:6;top:calc(var(--console-mobile-toolbar-height,0px) + 8px);display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;margin:12px 0;padding:4px;border:1px solid var(--border);border-radius:var(--radius-md);background:color-mix(in srgb,var(--panel) 94%,transparent);box-shadow:0 8px 24px rgb(var(--shadow-rgb) / .18);backdrop-filter:blur(10px)}
     .mobile-result-switcher button{min-width:0;min-height:36px;padding:6px 8px;border:0;border-radius:var(--radius-sm);background:transparent;color:var(--muted);font:700 var(--text-xs) var(--mono)}
     .mobile-result-switcher button[aria-pressed='true']{background:rgb(var(--accent-rgb) / .12);color:var(--accent)}
     .mobile-result-panel{display:none}

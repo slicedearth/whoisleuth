@@ -183,7 +183,7 @@ describe('provider-neutral scheduled monitoring repository', () => {
 
     const repo = repository();
     await assert.rejects(
-      repo.update(() => null as unknown as ScheduledMonitorUpdate<MonitorState, null>),
+      repo.update(() => null as unknown as ScheduledMonitorUpdate<null>),
       /did not return a state/i,
     );
     await assert.rejects(

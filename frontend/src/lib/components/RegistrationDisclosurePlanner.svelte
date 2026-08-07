@@ -207,9 +207,9 @@
   .preflight ul{display:grid;gap:7px;margin:10px 0 0;padding:0;list-style:none}
   .preflight li{display:grid;grid-template-columns:minmax(145px,.45fr) minmax(0,1fr);gap:10px;padding-top:7px;border-top:1px solid var(--border);line-height:1.45}
   .preflight li span{color:var(--muted)}
-  .preflight li[data-state='block'] strong{color:var(--red)}
+  .preflight li[data-state='block'] strong{color:var(--danger)}
   .preflight li[data-state='caution'] strong{color:var(--amber)}
   .actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
-  .success{color:var(--green)}
+  .success{color:var(--success)}
   @media(max-width:680px){.form-grid,.field-options{grid-template-columns:1fr}.wide{grid-column:auto}.preflight li{grid-template-columns:1fr;gap:3px}.actions>*{width:100%;justify-content:center}}
 </style>

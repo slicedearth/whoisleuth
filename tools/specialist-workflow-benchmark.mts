@@ -57,13 +57,6 @@ type BenchmarkScenario = Readonly<{
   failuresTruncated: boolean;
 }>;
 type ScenarioResult<T> = Readonly<{ scenario: BenchmarkScenario; metrics: T }>;
-type WhoisFixture = Readonly<{
-  name: string;
-  capabilityProfile: string;
-  scenario: string;
-  chain: unknown[];
-  expected: Record<string, unknown>;
-}>;
 type BenchmarkOptions = Readonly<{ now?: () => Date }>;
 type BenchmarkMainOptions = BenchmarkOptions & Readonly<{
   stdout?: WritableLike;

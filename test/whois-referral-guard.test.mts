@@ -27,6 +27,11 @@ describe('referral target validation', () => {
     await assert.rejects(() => whoisQuery('::ffff:7f00:1', 'example.com'), /private\/reserved address/);
   });
 
+  test('refuses IPv4-translated loopback and unassigned IPv6 referral targets', async () => {
+    await assert.rejects(() => whoisQuery('::ffff:0:127.0.0.1', 'example.com'), /private\/reserved address/);
+    await assert.rejects(() => whoisQuery('4000::1', 'example.com'), /private\/reserved address/);
+  });
+
   // Deliberately not asserting a *successful* connection to a real public
   // WHOIS server here - that would make this test dependent on network
   // access and an upstream service being reachable/fast in CI. The

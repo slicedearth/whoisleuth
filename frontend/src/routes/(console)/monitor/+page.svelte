@@ -82,7 +82,7 @@
   async function remove(name:string){if(!confirm(`Delete watchlist "${name}" and its history?`))return;try{await deleteWatchlist(name);await refresh();message=`Deleted "${name}".`;}catch(cause){message=cause instanceof Error?cause.message:'Could not delete watchlist.';}}
   async function clearAll(){if(!names.length||!confirm('Delete every saved watchlist and its history?'))return;try{await writeWatchlists({});await refresh();message='Cleared all watchlists.';}catch(cause){message=cause instanceof Error?cause.message:'Could not clear watchlists.';}}
   async function downloadWatchlists(){try{await exportWatchlists();}catch(cause){message=cause instanceof Error?cause.message:'Could not export watchlists.';}}
-  async function rescan(name:string){const current=watchlists[name];if(!current)return;const candidates=current.results.map(record=>({domain:String(record.domain),source:name,mutationTypes:Array.isArray(record.mutationTypes)?record.mutationTypes:[]}));saveCandidateHandoff('watchlist',candidates);await goto('/bulk?source=watchlist');}
+  async function rescan(name:string){const current=watchlists[name];if(!current)return;const candidates=current.results.map(record=>({domain:String(record.domain),source:name,mutationTypes:Array.isArray(record.mutationTypes)?record.mutationTypes:[]}));const handoffResult=saveCandidateHandoff('watchlist',candidates);if(!handoffResult.saved){message='This browser could not retain the watchlist candidates for Bulk. Check site-storage access and try again.';return;}await goto(`/bulk?source=watchlist&handoff=${handoffResult.token}`);}
   async function importFile(event:Event){const input=event.currentTarget as HTMLInputElement;const file=input.files?.[0];if(!file)return;try{if(file.size>MAX_WATCHLIST_IMPORT_BYTES)throw new Error('Watchlist imports are limited to 2 MB.');const result=await importWatchlists(JSON.parse(await file.text()));const skipped=result.skipped?`; skipped ${result.skipped} invalid or over-limit watchlist${result.skipped===1?'':'s'}`:'';message=`Imported ${result.added} new and ${result.updated} updated watchlists${skipped}.`;await refresh();}catch(cause){message=cause instanceof Error?cause.message:'Import failed';}finally{input.value='';}}
   async function restoreHostedWatchlist(name:string,hostedEntry:WatchlistEntry){const all=await loadWatchlists();const existing=Object.keys(all).find(candidate=>candidate.toLowerCase()===name.toLowerCase());if(existing&&existing!==name)delete all[existing];Object.defineProperty(all,name,{value:hostedEntry,writable:true,enumerable:true,configurable:true});await writeWatchlists(all);await refresh();}
 
@@ -242,7 +242,7 @@
 <MonitorViewTabs {view} counts={{inbox:reviewInbox.counts.all,timeline:retainedTimeline.counts.all,cases:cases.length,campaigns:campaignCount,relationships:relationshipCount,rules:customRuleCount,watchlists:names.length}} setView={(value)=>view=value} />
 
 {#if view==='inbox'}
-<div id="panel-inbox" role="tabpanel" aria-labelledby="tab-inbox">
+<div id="monitor-view-panel" role="tabpanel" aria-labelledby="tab-inbox">
   <AnalystReviewInbox inbox={reviewInbox} ondismiss={dismissEvidenceGap} />
   <CaseDecisionQuality report={decisionQuality} />
   {#if caseMessage}<p class="case-message" role="status" aria-live="polite">{caseMessage}</p>{/if}
@@ -251,19 +251,19 @@
 {/if}
 
 {#if view==='timeline'}
-<div id="panel-timeline" role="tabpanel" aria-labelledby="tab-timeline">
+<div id="monitor-view-panel" role="tabpanel" aria-labelledby="tab-timeline">
   <RetainedEvidenceTimeline timeline={retainedTimeline} />
 </div>
 {/if}
 
 {#if view==='campaigns'}
-<div id="panel-campaigns" role="tabpanel" aria-labelledby="tab-campaigns">
+<div id="monitor-view-panel" role="tabpanel" aria-labelledby="tab-campaigns">
   <CampaignManager records={cases} focusId={page.url.searchParams.get('campaign') || ''} onselect={openRelatedCase} oncount={(count)=>{campaignCount=count;refreshRelationships();}} />
 </div>
 {/if}
 
 {#if view==='relationships'}
-<div id="panel-relationships" role="tabpanel" aria-labelledby="tab-relationships">
+<div id="monitor-view-panel" role="tabpanel" aria-labelledby="tab-relationships">
   <WebsiteProfileClusters summary={websiteProfileClusters} onpin={recordWebsiteClusterLead} />
   <RetainedRelationshipObservations
     records={retainedRelationships}
@@ -277,13 +277,13 @@
 {/if}
 
 {#if view==='rules'}
-<div id="panel-rules" role="tabpanel" aria-labelledby="tab-rules">
+<div id="monitor-view-panel" role="tabpanel" aria-labelledby="tab-rules">
   <DetectionRuleManager records={cases} onselect={openRelatedCase} oncount={(count)=>customRuleCount=count} />
 </div>
 {/if}
 
 {#if view==='cases'}
-<div id="panel-cases" role="tabpanel" aria-labelledby="tab-cases">
+<div id="monitor-view-panel" role="tabpanel" aria-labelledby="tab-cases">
   {#if guidedDomains.length}<GuidedCaseQueue domains={guidedDomains} existingDomains={existingCaseDomains} truncated={guidedDomainsTruncated} openDomain={openGuidedCase} />{/if}
   <CaseWorkspaceToolbar domain={newDomain} setDomain={(value)=>newDomain=value} {trackDomain} caseCount={cases.length} calibrationSelectedCount={calibrationCaseIds.length} {downloadCases} {reviewCalibrationDataset} {importCaseFile} message={caseMessage} />
   {#if calibrationReview}
@@ -307,7 +307,7 @@
 {/if}
 
 {#if view==='watchlists'}
-<div id="panel-watchlists" role="tabpanel" aria-labelledby="tab-watchlists">
+<div id="monitor-view-panel" role="tabpanel" aria-labelledby="tab-watchlists">
   <MonitorActivityHeatmap events={watchlistActivity} />
   <WatchlistWorkspace {watchlists} {names} {entry} {selected} setSelected={(value)=>selected=value} {history} {changedOnly} setChangedOnly={(value)=>changedOnly=value} {message} {downloadWatchlists} {importFile} {clearAll} {rescan} {remove} openCase={openWatchlistCase} formatDate={date} />
   <HostedWatchlistManager capability={scheduledCapability} localWatchlists={watchlists} localNames={names} restoreHosted={restoreHostedWatchlist} formatDate={date} />

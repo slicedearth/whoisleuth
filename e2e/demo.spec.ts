@@ -62,6 +62,7 @@ test('completes the public synthetic workflow without investigation requests or 
   await expect(page.locator('.candidate')).toHaveCount(1);
   await page.getByRole('button', { name: 'Inspect northstar-login.example' }).click();
   await expect(page.getByRole('heading', { name: 'northstar-login.example' })).toBeVisible();
+  await expect(page.getByText(/flattened narrative preview keeps every synthetic evidence family visible/i)).toBeVisible();
   await expect(page.getByRole('navigation', { name: 'Synthetic result sections' }).getByRole('link')).toHaveCount(7);
   await expect(page.locator('.demo-glance dl div').filter({ hasText: 'Evidence checks complete' })).toContainText('8');
   await expect(page.locator('.demo-glance dl div').filter({ hasText: 'Evidence checks limited' })).toContainText('0');
@@ -88,7 +89,12 @@ test('completes the public synthetic workflow without investigation requests or 
   const factorChartWidth = await desktopFactorChart.evaluate((element) => element.getBoundingClientRect().width);
   expect(factorChartWidth).toBeGreaterThan(assessmentWidth * 0.75);
   await page.getByText('Why the risk score is 78', { exact: true }).click();
-  await page.getByRole('tab', { name: /^Timeline/ }).click();
+  const demoVisualTabs = page.getByRole('tablist', { name: 'Synthetic relationship and history view' });
+  const demoSourcesTab = demoVisualTabs.getByRole('tab', { name: /^Sources/ });
+  await demoSourcesTab.focus();
+  await demoSourcesTab.press('End');
+  await expect(demoVisualTabs.getByRole('tab', { name: /^Timeline/ })).toBeFocused();
+  await expect(demoVisualTabs.getByRole('tab', { name: /^Timeline/ })).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByRole('heading', { name: 'Observed lifecycle' })).toBeVisible();
   await expect(page.locator('.registry-shape')).not.toHaveCount(0);
   await expect(page.locator('.certificate-shape')).not.toHaveCount(0);

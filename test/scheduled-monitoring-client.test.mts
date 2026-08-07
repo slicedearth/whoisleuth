@@ -161,10 +161,11 @@ test('GET and POST use the canonical same-origin no-store endpoint contract', as
     action: 'create', name: 'Priority domains', entry: entry(), intervalHours: 24,
   }, fetcher);
 
-  assert.deepEqual(required(calls[0]), {
-    url: '/api/scheduled-monitor',
-    options: { credentials: 'same-origin', cache: 'no-store' },
-  });
+  const get = required(calls[0]);
+  assert.equal(get.url, '/api/scheduled-monitor');
+  assert.equal(get.options.credentials, 'same-origin');
+  assert.equal(get.options.cache, 'no-store');
+  assert.ok(get.options.signal, 'the bounded response reader must be able to abort the request');
   const post = required(calls[1]);
   assert.equal(post.url, '/api/scheduled-monitor');
   assert.equal(post.options.method, 'POST');
@@ -181,7 +182,7 @@ test('GET and POST use the canonical same-origin no-store endpoint contract', as
 test('bounds server error text and rejects malformed successful responses', async () => {
   await assert.rejects(fetchScheduledMonitoring(async () => new Response(JSON.stringify({
     error: 'Expected management failure',
-  }), { status: 409 })), /Expected management failure/);
+  }), { status: 409, headers: { 'content-type': 'application/json' } })), /Expected management failure/);
   await assert.rejects(fetchScheduledMonitoring(async () => new Response(JSON.stringify({
     error: `bad\n${'x'.repeat(500)}`,
   }), { status: 503 })), /Hosted monitoring request failed \(503\)/);

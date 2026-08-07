@@ -168,6 +168,7 @@ commands do not publish partial files. Output is capped at 32 MiB.
 | 4 | A bounded operation completed partially. |
 | 70 | Unexpected CLI bootstrap failure. |
 | 130 | The analyst cancelled the command; no partial final result was emitted. |
+| 143 | The process received SIGTERM; no partial final result was emitted. |
 
 ## Detailed command reference
 

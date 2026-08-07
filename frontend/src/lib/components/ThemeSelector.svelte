@@ -150,7 +150,7 @@
   .theme-symbol{width:18px;height:18px;flex:0 0 auto;overflow:visible;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
   .theme-symbol .moon-star{fill:currentColor;stroke:none}
   .chevron{width:6px;height:6px;flex:0 0 auto;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:translateY(-2px) rotate(45deg)}
-  .theme-options{display:grid;position:absolute;top:var(--theme-options-top,calc(100% + 6px));bottom:var(--theme-options-bottom,auto);left:0;z-index:100;box-sizing:border-box;width:100%;min-width:0;gap:2px;padding:4px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);background:var(--panel);box-shadow:var(--shadow-float)}
+  .theme-options{display:grid;position:absolute;top:var(--theme-options-top,calc(100% + 6px));bottom:var(--theme-options-bottom,auto);left:0;z-index:100;box-sizing:border-box;width:100%;min-width:0;gap:2px;padding:4px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);background:var(--panel);box-shadow:0 12px 32px rgb(var(--shadow-rgb) / .24)}
   .theme-option{display:inline-flex;width:100%;min-height:34px;align-items:center;justify-content:center;padding:0;border:0;border-radius:4px;background:transparent;color:var(--text);font:700 var(--text-2xs) var(--mono)}
   .theme-option:hover,.theme-option:focus-visible,.theme-option.selected{background:rgb(var(--accent-rgb) / .11);color:var(--accent)}
   .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}

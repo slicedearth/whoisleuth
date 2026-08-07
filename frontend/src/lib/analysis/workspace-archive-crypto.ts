@@ -5,7 +5,6 @@
 import {
   MAX_WORKSPACE_ARCHIVE_BYTES,
   WORKSPACE_ARCHIVE_SCHEMA,
-  WORKSPACE_ARCHIVE_VERSION,
   isSupportedWorkspaceArchiveVersion,
   readWorkspaceArchive,
 } from './workspace-archive.ts';
@@ -63,10 +62,6 @@ function record(value: unknown): UnknownRecord | null {
 function hasExactKeys(value: UnknownRecord, expected: readonly string[]): boolean {
   const keys = Object.keys(value);
   return keys.length === expected.length && keys.every((key) => expected.includes(key));
-}
-
-function byteLength(value: string): number {
-  return encoder.encode(value).byteLength;
 }
 
 function arrayBuffer(bytes: Uint8Array): ArrayBuffer {

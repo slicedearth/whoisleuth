@@ -1,15 +1,21 @@
 import assert from 'node:assert/strict';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { describe, test } from 'node:test';
 
 import {
   buildCommonInfrastructureSnapshot,
   FRESHNESS_DAYS,
   MAX_SOURCE_BYTES,
+  main,
   parseArguments,
+  SNAPSHOT_PATH,
 } from '../tools/common-infrastructure-snapshot.mts';
 import {
   classifyCommonInfrastructureAddress,
   COMMON_INFRASTRUCTURE_SNAPSHOT,
+  parseCommonInfrastructureSnapshot,
 } from '../frontend/src/lib/analysis/common-infrastructure.ts';
 
 function warningList(version: number, list: string[]) {
@@ -67,10 +73,10 @@ describe('Common-infrastructure catalogue', () => {
     assert.deepEqual(classifyCommonInfrastructureAddress('2001:db8::1'), []);
   });
 
-  test('builds only fresh exact-CIDR sources and records rejected sources', async () => {
+  test('builds only when every required exact-CIDR source is fresh and valid', async () => {
     const bodies = [
       warningList(20260720, ['198.18.0.0/24']),
-      warningList(20240101, ['198.19.0.0/24']),
+      warningList(20260720, ['198.19.0.0/24']),
       warningList(20260720, ['2001:4860::/32']),
     ];
     let calls = 0;
@@ -82,23 +88,124 @@ describe('Common-infrastructure catalogue', () => {
       }),
     });
 
-    assert.equal(snapshot.sources.length, 3);
-    assert.equal(snapshot.excludedSources.length, 1);
-    assert.match(snapshot.excludedSources[0]?.reason ?? '', new RegExp(`${FRESHNESS_DAYS}-day freshness`, 'u'));
-    assert.equal(snapshot.entryCount, 8);
+    assert.equal(snapshot.sources.length, 4);
+    assert.deepEqual(snapshot.excludedSources, []);
+    assert.equal(snapshot.entryCount, 9);
+
+    await assert.rejects(
+      buildCommonInfrastructureSnapshot('a'.repeat(40), {
+        now: () => new Date('2026-07-31T00:00:00.000Z'),
+        fetchImpl: async () => new Response(warningList(20240101, ['198.19.0.0/24'])),
+      }),
+      new RegExp(`${FRESHNESS_DAYS}-day freshness`, 'u'),
+    );
+
+    await assert.rejects(
+      buildCommonInfrastructureSnapshot('a'.repeat(40), {
+        now: () => new Date('2026-03-01T00:00:00.000Z'),
+        fetchImpl: async () => new Response(warningList(20260231, ['198.19.0.0/24'])),
+      }),
+      /not a valid date/iu,
+    );
   });
 
   test('rejects oversized responses before parsing', async () => {
-    const snapshot = await buildCommonInfrastructureSnapshot('b'.repeat(40), {
-      now: () => new Date('2026-07-31T00:00:00.000Z'),
-      fetchImpl: async () => new Response('{}', {
-        status: 200,
-        headers: { 'content-length': String(MAX_SOURCE_BYTES + 1) },
+    await assert.rejects(
+      buildCommonInfrastructureSnapshot('b'.repeat(40), {
+        now: () => new Date('2026-07-31T00:00:00.000Z'),
+        fetchImpl: async () => new Response('{}', {
+          status: 200,
+          headers: { 'content-length': String(MAX_SOURCE_BYTES + 1) },
+        }),
       }),
-    });
-    assert.deepEqual(snapshot.sources.map((source) => source.id), ['public-dns-core']);
-    assert.equal(snapshot.excludedSources.length, 3);
-    assert.ok(snapshot.excludedSources.every((item) => /exceeds its byte limit/iu.test(item.reason)));
+      /exceeds its byte limit/iu,
+    );
+  });
+
+  test('fails closed when any required upstream source cannot be validated', async () => {
+    let calls = 0;
+    await assert.rejects(
+      buildCommonInfrastructureSnapshot('b'.repeat(40), {
+        now: () => new Date('2026-07-31T00:00:00.000Z'),
+        fetchImpl: async () => {
+          calls += 1;
+          return calls === 2
+            ? new Response('temporarily unavailable', { status: 503 })
+            : new Response(warningList(20260720, ['198.18.0.0/24']));
+        },
+      }),
+      /HTTP 503/iu,
+    );
+    assert.equal(calls, 2);
+  });
+
+  test('check-only compares the complete retained source set rather than only the commit', async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'whoisleuth-common-infrastructure-'));
+    const outputPath = path.join(directory, SNAPSHOT_PATH);
+    const bodies = [
+      warningList(20260720, ['198.18.0.0/24']),
+      warningList(20260720, ['198.19.0.0/24']),
+      warningList(20260720, ['2001:4860::/32']),
+    ];
+    const buildOptions = () => {
+      let calls = 0;
+      return {
+        now: () => new Date('2026-07-31T00:00:00.000Z'),
+        fetchImpl: async () => new Response(bodies[calls++] ?? '', { status: 200 }),
+      };
+    };
+    try {
+      const snapshot = await buildCommonInfrastructureSnapshot('c'.repeat(40), buildOptions());
+      await mkdir(path.dirname(outputPath), { recursive: true });
+      await writeFile(outputPath, `${JSON.stringify(snapshot, null, 2)}\n`, 'utf8');
+      assert.equal(await main(['--commit', 'c'.repeat(40), '--check-only'], {
+        repositoryRoot: directory,
+        ...buildOptions(),
+        stdout: { write: () => true },
+        stderr: { write: () => true },
+      }), 0);
+
+      const changed = structuredClone(snapshot);
+      const firstSource = changed.sources[0];
+      assert.ok(firstSource);
+      Object.assign(firstSource, { sourceDigestSha256: '0'.repeat(64) });
+      await writeFile(outputPath, `${JSON.stringify(changed, null, 2)}\n`, 'utf8');
+      assert.equal(await main(['--commit', 'c'.repeat(40), '--check-only'], {
+        repositoryRoot: directory,
+        ...buildOptions(),
+        stdout: { write: () => true },
+        stderr: { write: () => true },
+      }), 1);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  test('rejects incomplete, duplicated, malformed, and partially excluded retained snapshots', () => {
+    const snapshot = structuredClone(COMMON_INFRASTRUCTURE_SNAPSHOT) as Record<string, unknown>;
+    const sources = snapshot.sources as Array<Record<string, unknown>>;
+    assert.throws(
+      () => parseCommonInfrastructureSnapshot({ ...snapshot, sources: sources.slice(1) }),
+      /unsupported contract|entry count/iu,
+    );
+    assert.throws(
+      () => parseCommonInfrastructureSnapshot({ ...snapshot, sources: [sources[0], sources[0], ...sources.slice(2)] }),
+      /invalid contract/iu,
+    );
+    assert.throws(
+      () => parseCommonInfrastructureSnapshot({ ...snapshot, excludedSources: [{ id: 'missing' }] }),
+      /unsupported contract/iu,
+    );
+    const malformed = structuredClone(snapshot) as Record<string, unknown>;
+    const malformedSources = malformed.sources as Array<Record<string, unknown>>;
+    malformedSources[0] = { ...malformedSources[0], sourceDate: '2026-02-31' };
+    assert.throws(() => parseCommonInfrastructureSnapshot(malformed), /invalid contract/iu);
+    const invalidCidr = structuredClone(snapshot) as Record<string, unknown>;
+    const invalidSources = invalidCidr.sources as Array<Record<string, unknown>>;
+    invalidSources[0] = { ...invalidSources[0], values: ['999.1.1.1/24'] };
+    invalidCidr.entryCount = 1 + invalidSources.slice(1)
+      .reduce((total, source) => total + (source.values as unknown[]).length, 0);
+    assert.throws(() => parseCommonInfrastructureSnapshot(invalidCidr), /invalid contract/iu);
   });
 
   test('parses explicit maintenance arguments without accepting moving refs', () => {

@@ -12,16 +12,16 @@ describe('isValidEmailAddress', () => {
   });
 
   test('rejects a comma-separated address list (mailto: additional-recipient injection)', () => {
-    assert.equal(utils.isValidEmailAddress('victim@example.com,attacker@evil.com'), false);
+    assert.equal(utils.isValidEmailAddress('person@example.test,attacker@hostile.example'), false);
   });
 
   test('rejects an embedded mailto: query string (header/param injection)', () => {
-    assert.equal(utils.isValidEmailAddress('victim@example.com?bcc=attacker@evil.com'), false);
+    assert.equal(utils.isValidEmailAddress('person@example.test?bcc=attacker@hostile.example'), false);
     assert.equal(utils.isValidEmailAddress('victim@example.com&subject=x'), false);
   });
 
   test('rejects embedded whitespace/control characters', () => {
-    assert.equal(utils.isValidEmailAddress('victim@example.com\nBcc: attacker@evil.com'), false);
+    assert.equal(utils.isValidEmailAddress('person@example.test\nBcc: attacker@hostile.example'), false);
     assert.equal(utils.isValidEmailAddress('victim @example.com'), false);
   });
 

@@ -1,7 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import type { Page, TestInfo } from '@playwright/test';
 import { expect, test } from './fixtures';
-import { expandLookupFamilies, runBulkScan, useTheme } from './helpers';
+import { runBulkScan, useTheme } from './helpers';
 
 const WCAG_TAGS = ['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa'];
 const REQUIRED_MANUAL_RULES = new Set([
@@ -9,6 +9,51 @@ const REQUIRED_MANUAL_RULES = new Set([
   'aria-valid-attr-value',
   'link-in-text-block',
 ]);
+const REVIEWED_INCOMPLETE_RULES_BY_STATE: Readonly<Record<string, readonly string[]>> = Object.freeze({
+  'public-initial-dark-desktop': ['color-contrast'],
+  'public-resource-dark-desktop': ['color-contrast'],
+  'public-error-dark-desktop': ['color-contrast'],
+  'public-populated-expanded-light-mobile': ['color-contrast'],
+  'public-contact-unavailable-dark-mobile': ['color-contrast'],
+  'public-guide-dark-mobile': ['color-contrast'],
+  'public-privacy-dark-mobile': ['color-contrast'],
+  'public-resources-dark-mobile': ['color-contrast'],
+  'public-terms-dark-mobile': ['color-contrast'],
+  'public-request-policy-dark-mobile': ['color-contrast'],
+  'console-initial-light-desktop': ['color-contrast'],
+  'console-brands-initial-light-desktop': ['color-contrast'],
+  'console-discover-initial-light-desktop': ['color-contrast'],
+  'console-monitor-initial-light-desktop': ['color-contrast'],
+  'console-drawer-dark-mobile': ['color-contrast', 'skip-link'],
+  'console-registry-support-expanded-dark-mobile': ['color-contrast'],
+  'console-lookup-populated-expanded-dark-desktop': ['color-contrast'],
+  'console-bulk-populated-light-mobile': ['color-contrast'],
+  'console-guided-investigation-request-review-light-desktop': ['color-contrast'],
+  'public-login-dark-mobile': ['color-contrast'],
+});
+
+async function expectResolvedDocumentReferences(page: Page, state: string) {
+  const integrity = await page.evaluate(() => {
+    const duplicateIds = [...document.querySelectorAll<HTMLElement>('[id]')]
+      .map((element) => element.id)
+      .filter((id, index, ids) => id && ids.indexOf(id) !== index)
+      .filter((id, index, ids) => ids.indexOf(id) === index);
+    const missingReferences: string[] = [];
+    for (const element of document.querySelectorAll<HTMLElement>('[aria-controls],[aria-labelledby],[aria-describedby]')) {
+      for (const attribute of ['aria-controls', 'aria-labelledby', 'aria-describedby']) {
+        const references = element.getAttribute(attribute)?.trim().split(/\s+/u).filter(Boolean) ?? [];
+        for (const reference of references) {
+          if (!document.getElementById(reference)) {
+            missingReferences.push(`${element.tagName.toLowerCase()}[${attribute}] -> #${reference}`);
+          }
+        }
+      }
+    }
+    return { duplicateIds, missingReferences };
+  });
+  expect(integrity.duplicateIds, `${state} contained duplicate document IDs`).toEqual([]);
+  expect(integrity.missingReferences, `${state} contained unresolved accessibility references`).toEqual([]);
+}
 
 async function expectNoAccessibilityViolations(page: Page, testInfo: TestInfo, state: string) {
   const startedAt = Date.now();
@@ -17,6 +62,12 @@ async function expectNoAccessibilityViolations(page: Page, testInfo: TestInfo, s
     .options({ rules: { 'target-size': { enabled: true } } })
     .analyze();
   const durationMs = Date.now() - startedAt;
+  const reviewedIncompleteRules = REVIEWED_INCOMPLETE_RULES_BY_STATE[state];
+  expect(reviewedIncompleteRules, `${state} has no reviewed incomplete-rule contract`).toBeDefined();
+  expect(
+    results.incomplete.map((result) => result.id).sort(),
+    `${state} changed its reviewed incomplete accessibility rules`,
+  ).toEqual([...(reviewedIncompleteRules ?? [])].sort());
   await testInfo.attach(`axe-${state}.json`, {
     body: JSON.stringify({
       state,
@@ -38,6 +89,7 @@ async function expectNoAccessibilityViolations(page: Page, testInfo: TestInfo, s
     unresolvedRequiredRules,
     `${state} left required accessibility rules unresolved`,
   ).toEqual([]);
+  await expectResolvedDocumentReferences(page, state);
 }
 
 async function expectSequentialHeadingOrder(page: Page, state: string) {
@@ -160,6 +212,9 @@ test('scans public policy and protected-contact routes', async ({ page }, testIn
 
   for (const [route, state] of [
     ['/contact', 'public-contact-unavailable-dark-mobile'],
+    ['/guide', 'public-guide-dark-mobile'],
+    ['/privacy', 'public-privacy-dark-mobile'],
+    ['/resources', 'public-resources-dark-mobile'],
     ['/terms', 'public-terms-dark-mobile'],
     ['/request-policy', 'public-request-policy-dark-mobile'],
   ] as const) {
@@ -175,6 +230,15 @@ test('scans authenticated desktop and expanded mobile drawer states', async ({ p
   await page.goto('/dashboard');
   await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
   await expectNoAccessibilityViolations(page, testInfo, 'console-initial-light-desktop');
+
+  for (const [route, state] of [
+    ['/brands', 'console-brands-initial-light-desktop'],
+    ['/discover', 'console-discover-initial-light-desktop'],
+    ['/monitor', 'console-monitor-initial-light-desktop'],
+  ] as const) {
+    await page.goto(route);
+    await expectNoAccessibilityViolations(page, testInfo, state);
+  }
 
   await useTheme(page, 'dark');
   await page.setViewportSize({ width: 390, height: 844 });
@@ -198,8 +262,18 @@ test('scans populated Lookup, Bulk, and guided-investigation states', async ({ p
   await page.locator('#query').fill('portal.example.test');
   await page.getByRole('button', { name: 'Run lookup' }).click();
   await expect(page.getByRole('heading', { name: 'registered' })).toBeVisible();
-  await page.getByLabel('Detail').selectOption('standard');
-  await expandLookupFamilies(page);
+  const visibility = page.getByRole('group', { name: 'Evidence family visibility' });
+  const collapseAll = visibility.getByRole('button', { name: 'Collapse all' });
+  const expandAll = visibility.getByRole('button', { name: 'Expand all' });
+  await expect(collapseAll).toHaveAttribute('aria-disabled', 'true');
+  await expandAll.click();
+  await expect(expandAll).toBeFocused();
+  await expect(expandAll).toHaveAttribute('aria-disabled', 'true');
+  await collapseAll.click();
+  await expect(collapseAll).toBeFocused();
+  await expect(collapseAll).toHaveAttribute('aria-disabled', 'true');
+  await expandAll.click();
+  await page.locator('details.detailed-assessment > summary').click();
   const registrySource = page.locator('.sources > details').first();
   await registrySource.locator(':scope > summary').click();
   await expect(registrySource).toHaveAttribute('open', '');
@@ -220,4 +294,17 @@ test('scans populated Lookup, Bulk, and guided-investigation states', async ({ p
   await currentAction.getByRole('button', { name: 'Review requests' }).click();
   await expect(currentAction.getByRole('region', { name: /Review requests for/ })).toBeVisible();
   await expectNoAccessibilityViolations(page, testInfo, 'console-guided-investigation-request-review-light-desktop');
+});
+
+test.describe('anonymous login accessibility', () => {
+  test.use({ storageState: { cookies: [], origins: [] } });
+
+  test('scans the unauthenticated login form', async ({ page }, testInfo) => {
+    await useTheme(page, 'dark');
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/login');
+    await expect(page.getByRole('heading', { name: 'Console sign-in' })).toBeVisible();
+    await expectNoAccessibilityViolations(page, testInfo, 'public-login-dark-mobile');
+    await expectSequentialHeadingOrder(page, 'public login');
+  });
 });

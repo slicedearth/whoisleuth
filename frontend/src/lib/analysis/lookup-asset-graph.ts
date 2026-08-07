@@ -514,7 +514,7 @@ export function buildLookupAssetGraph(input: Readonly<{
       completeness: sourceCompleteness(networkContext),
       limitations: limitations(networkContext.limitations),
       lenses: ['all'],
-      href: '#evidence-network-context',
+      href: '#evidence-network',
     });
   }
   const networkLabel = text(network.name || network.holder || network.handle, 180);
@@ -532,7 +532,7 @@ export function buildLookupAssetGraph(input: Readonly<{
       completeness: sourceCompleteness(networkContext),
       limitations: limitations(networkContext.limitations),
       lenses: ['all'],
-      href: '#evidence-network-context',
+      href: '#evidence-network',
     });
   }
   for (const cidr of textList(network.cidrs, 8)) {
@@ -549,7 +549,7 @@ export function buildLookupAssetGraph(input: Readonly<{
         completeness: sourceCompleteness(networkContext),
         limitations: limitations(networkContext.limitations),
         lenses: ['all'],
-        href: '#evidence-network-context',
+        href: '#evidence-network',
       });
     }
   }
@@ -588,7 +588,7 @@ export function buildLookupAssetGraph(input: Readonly<{
         completeness: sourceCompleteness(input.pageIdentity),
         limitations: limitations(record(input.pageIdentity).limitations),
         lenses: ['identity'],
-        href: '#evidence-page-identity',
+        href: '#evidence-page',
         boundary: trustBoundary(canonicalHost, finalHost || target),
       },
       'Publisher-declared canonical origin',
@@ -608,7 +608,7 @@ export function buildLookupAssetGraph(input: Readonly<{
         completeness: sourceCompleteness(input.pageIdentity),
         limitations: limitations(record(input.pageIdentity).limitations),
         lenses: ['identity'],
-        href: '#evidence-page-identity',
+        href: '#evidence-page',
         boundary: trustBoundary(openGraphHost, finalHost || target),
       },
       'Publisher-declared Open Graph origin',
@@ -629,7 +629,7 @@ export function buildLookupAssetGraph(input: Readonly<{
           completeness: sourceCompleteness(input.pageIdentity),
           limitations: ['A declared form action does not prove that a user submitted data or that the endpoint received it.'],
           lenses: ['identity'],
-          href: '#evidence-page-identity',
+          href: '#evidence-page',
           boundary: trustBoundary(host, finalHost || target),
         },
         'External form-action origin',
@@ -651,7 +651,7 @@ export function buildLookupAssetGraph(input: Readonly<{
           completeness: sourceCompleteness(input.pageIdentity),
           limitations: ['A static resource reference does not prove that a browser loaded the resource or disclosed data to it.'],
           lenses: ['identity'],
-          href: '#evidence-page-identity',
+          href: '#evidence-page',
           boundary: trustBoundary(host, finalHost || target),
         },
         'External resource origin',
@@ -673,7 +673,7 @@ export function buildLookupAssetGraph(input: Readonly<{
           completeness: sourceCompleteness(input.pageIdentity),
           limitations: ['A shared identifier is a relationship lead and does not establish common ownership or control.'],
           lenses: ['identity'],
-          href: '#evidence-page-identity',
+          href: '#evidence-page',
         },
         text(identifier.type, 80),
         identitySource,

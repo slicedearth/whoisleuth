@@ -8,7 +8,6 @@ import {
   RELATIONSHIP_OBSERVATION_ADAPTER_ID,
   adaptRelationshipObservationsToEnvelope,
   observationEnvelopeId,
-  readObservationEnvelopeDocument,
 } from '../frontend/src/lib/analysis/observation-envelope.ts';
 import { RELATIONSHIP_EVIDENCE_VERSION } from '../frontend/src/lib/analysis/relationship-evidence.ts';
 import {
@@ -131,43 +130,4 @@ describe('incremental browser-local observation envelope', () => {
     assert.match(future.detail, /newer than supported/iu);
   });
 
-  test('reads a current envelope and keeps absent, malformed, future, and cyclic inputs distinct', () => {
-    const adapted = adaptRelationshipObservationsToEnvelope(
-      currentSource([retainedIp()]),
-      { generatedAt: GENERATED_AT },
-    );
-    assert.equal(adapted.state, 'ready');
-    const current = readObservationEnvelopeDocument(adapted.document);
-    assert.equal(current.state, 'ready');
-    assert.deepEqual(current.document, adapted.document);
-    assert.notEqual(current.document, adapted.document);
-
-    assert.equal(readObservationEnvelopeDocument(null).state, 'absent');
-    assert.equal(readObservationEnvelopeDocument({ schema: 'wrong', version: 1 }).state, 'invalid');
-    assert.equal(readObservationEnvelopeDocument({
-      ...adapted.document,
-      version: OBSERVATION_ENVELOPE_VERSION + 1,
-    }).state, 'unsupported');
-
-    const cyclic: Record<string, unknown> = {
-      schema: OBSERVATION_ENVELOPE_SCHEMA,
-      version: OBSERVATION_ENVELOPE_VERSION,
-    };
-    cyclic.self = cyclic;
-    assert.doesNotThrow(() => readObservationEnvelopeDocument(cyclic));
-    assert.equal(readObservationEnvelopeDocument(cyclic).state, 'invalid');
-  });
-
-  test('rejects a structurally corrupted envelope instead of indexing unknown records', () => {
-    const adapted = adaptRelationshipObservationsToEnvelope(
-      currentSource([retainedIp()]),
-      { generatedAt: GENERATED_AT },
-    );
-    assert.equal(adapted.state, 'ready');
-    const corrupted = structuredClone(adapted.document) as unknown as Record<string, unknown>;
-    const entities = corrupted.entities as Array<Record<string, unknown>>;
-    assert.ok(entities[0]);
-    entities[0].canonical = 'bad\ncanonical';
-    assert.equal(readObservationEnvelopeDocument(corrupted).state, 'invalid');
-  });
 });

@@ -90,7 +90,7 @@ and disclosures without making a network request. `commands --json` exposes the
 installed command contracts for local wrappers without running collection.
 Focused command help and the generated manual label every operation as offline
 or networked and state its target, input, and concurrency boundaries. The
-packaged [dual-use disclosure](https://github.com/slicedearth/whois-rdap-tool/blob/main/DISCLOSURE)
+packaged [dual-use disclosure](https://github.com/slicedearth/whoisleuth/blob/main/DISCLOSURE)
 defines the supported defensive use of those capabilities.
 
 Interactive output uses restrained semantic colour, width-aware wrapping, and
@@ -101,9 +101,13 @@ offline unless `--network` is explicitly supplied, and completion scripts are
 printed without modifying shell configuration. Commands can use atomic private
 `--output` files, Lookup can emit strict automation exits and target-free
 versioned progress events, and Bulk can resume an exact validated compact
-checkpoint. A checkpoint write failure preserves completed output and returns
+checkpoint. Checkpoint schema 2 preserves each current row's observation time;
+legacy schema-1 rows remain readable with unknown observation time rather than
+being restamped on resume. Bulk machine output schema 3 distinguishes current
+and resumed rows. A checkpoint write failure preserves completed output and returns
 the partial-result exit code. Ctrl-C suppresses partial final output and
-returns exit code 130; a second interrupt performs best-effort temporary-file
+returns exit code 130. SIGTERM uses the same graceful cleanup path and returns
+143; a second interrupt performs best-effort temporary-file
 cleanup before exiting immediately.
 Strict local profiles can supply only safe presentation, Fast-mode,
 concurrency, and observer defaults; command-line options override them.

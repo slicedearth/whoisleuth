@@ -11,6 +11,7 @@ const MAX_BULK_INPUT_BYTES = 1024 * 1024;
 
 type BoundedTextStream = {
   isTTY?: boolean;
+  destroy?: (error?: Error) => unknown;
   [Symbol.asyncIterator]?: () => AsyncIterator<unknown>;
 };
 
@@ -34,6 +35,8 @@ type BulkLookupSuccess = {
   ok: true;
   classified: ClassifiedQuery;
   result: unknown;
+  observedAt?: string | null;
+  collectionOrigin?: 'current_run' | 'resumed_checkpoint';
 };
 
 type BulkLookupFailure = {
@@ -41,6 +44,8 @@ type BulkLookupFailure = {
   query: string;
   ok: false;
   error: string;
+  observedAt?: string | null;
+  collectionOrigin?: 'current_run' | 'resumed_checkpoint';
 };
 
 type BulkLookupResult = BulkLookupSuccess | BulkLookupFailure;
@@ -48,15 +53,24 @@ type BulkLookupResult = BulkLookupSuccess | BulkLookupFailure;
 async function readTextStreamBounded(
   stream: BoundedTextStream | null | undefined,
   limit = MAX_BULK_INPUT_BYTES,
+  signal?: AbortSignal,
 ): Promise<string> {
   if (!stream || stream.isTTY) return '';
+  const abort = () => stream.destroy?.(new DOMException('Aborted', 'AbortError'));
+  if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+  signal?.addEventListener('abort', abort, { once: true });
   const chunks: Buffer[] = [];
   let total = 0;
-  for await (const chunk of stream as AsyncIterable<unknown>) {
-    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as Uint8Array);
-    total += buffer.length;
-    if (total > limit) throw new CliUsageError(`Bulk input is limited to ${limit} bytes.`);
-    chunks.push(buffer);
+  try {
+    for await (const chunk of stream as AsyncIterable<unknown>) {
+      if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as Uint8Array);
+      total += buffer.length;
+      if (total > limit) throw new CliUsageError(`Bulk input is limited to ${limit} bytes.`);
+      chunks.push(buffer);
+    }
+  } finally {
+    signal?.removeEventListener('abort', abort);
   }
   return Buffer.concat(chunks).toString('utf8');
 }
