@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, untrack } from 'svelte';
+  import { untrack } from 'svelte';
   import Pagination from '$lib/components/Pagination.svelte';
   import CampaignTemporalReview from '$lib/components/CampaignTemporalReview.svelte';
   import type { CaseRecord } from '$lib/cases';
@@ -28,6 +28,7 @@
   let message=$state('');
   let page=$state(1);
   let memberPage=$state(1);
+  let appliedFocusId=$state('');
 
   const PAGE_SIZE=10;
   const MEMBER_PAGE_SIZE=25;
@@ -51,10 +52,17 @@
   $effect(()=>{if(memberPage>memberPageCount)memberPage=memberPageCount;});
   $effect(()=>{
     const next=initialCampaigns;
+    const requestedFocusId=focusId;
     const reportCount=oncount;
     untrack(()=>{
       campaigns=next;
       reportCount?.(next.length);
+      if(!requestedFocusId){appliedFocusId='';return;}
+      if(requestedFocusId===appliedFocusId)return;
+      const focused=next.find((campaign)=>campaign.id===requestedFocusId);
+      if(!focused)return;
+      open(focused);
+      appliedFocusId=requestedFocusId;
     });
   });
 
@@ -98,10 +106,6 @@
   }
   function openCase(domain:string){const record=caseByDomain.get(domain);if(record)onselect?.(record);}
 
-  onMount(()=>{void (async()=>{
-    const focused=focusId?campaigns.find((campaign)=>campaign.id===focusId):null;
-    if(focused)open(focused);
-  })();});
 </script>
 
 <section class="campaign-toolbar card">

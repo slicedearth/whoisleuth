@@ -85,7 +85,7 @@ test.describe('browser-local campaigns', () => {
     await expect(page.locator('.case-head', { hasText: 'member-one.invalid' })).toHaveAttribute('aria-expanded', 'true');
   });
 
-  test('shows saved campaigns when the tab opens before browser-local loading finishes', async ({ page }) => {
+  test('shows and focuses a saved campaign when the tab opens before browser-local loading finishes', async ({ page }) => {
     await page.goto('/dashboard');
     await migrateLegacyBrowserData(page, {
       'whoisleuth-campaigns-v1': { version: 1, campaigns: [{
@@ -97,11 +97,17 @@ test.describe('browser-local campaigns', () => {
         updatedAt: '2026-08-07T00:00:00.000Z',
       }] },
     });
-    await holdBrowserLocalReads(page);
-    await page.getByRole('link', { name: /Monitor/ }).first().click();
+    await holdBrowserLocalReads(page, 3_000);
+    const monitorLink = page.getByRole('link', { name: /Monitor/ }).first();
+    await monitorLink.evaluate((link) => {
+      link.setAttribute('href', '/monitor?view=campaigns&campaign=delayed-campaign');
+    });
+    await monitorLink.click();
     await page.getByRole('tab', { name: /Campaigns/ }).click();
 
-    await expect(page.locator('.campaign-head', { hasText: 'Delayed campaign' })).toBeVisible();
+    const campaign = page.locator('.campaign-head', { hasText: 'Delayed campaign' });
+    await expect(campaign).toBeVisible();
+    await expect(campaign).toHaveAttribute('aria-expanded', 'true');
   });
 
   test('campaign export contains membership metadata but no case evidence or notes', async ({ page }) => {
