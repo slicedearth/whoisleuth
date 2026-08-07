@@ -1144,6 +1144,14 @@ input and verification reject unknown fields, and verification rejects
 non-canonical content rather than returning a shape that differs from the
 normalised contract covered by the digest.
 
+The same version-one manifest is the browser Console's domain-control passport
+format. A deliberately selected passport can move the supported desired-state
+subset between Brand Profiles and the CLI without copying profile identity,
+notes, observations, change windows, suppressions, or other browser-only
+planning. Browser import verifies the digest and presents a field-level,
+non-destructive preview. A manifest remains an analyst-authored expectation in
+either runtime; interoperability does not make it observed evidence.
+
 A review input uses `whoisleuth.domain-control-review-input` version 1 and
 contains one manifest plus separately attributed observations. Only a complete
 `observed` field may produce `drift`. Partial, unavailable, unsupported, and

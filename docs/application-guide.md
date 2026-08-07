@@ -1036,8 +1036,18 @@ unknown, unsupported, suppressed, or not configured. The analyst must
 explicitly retain an audit before it becomes the previous comparison point.
 Suppressions require a reason and can expire. Desired state and retained
 observations are included in deliberate Brand Profile, workspace, or
-single-baseline exports; they are never applied to registrar, DNS, mail, or
-certificate-provider accounts.
+domain-control passport exports; they are never applied to registrar, DNS,
+mail, or certificate-provider accounts.
+
+A domain-control passport contains only explicitly selected official-domain
+nameserver, DS, MX, CAA, TLS issuer or public-key, transfer-lock, and
+renewal-review expectations. It omits profile identity, brands, contacts,
+notes, retained observations, change windows, suppressions, and other
+browser-only planning. The browser verifies its canonical SHA-256 digest
+before showing a field-level import preview. Imports require explicit domain
+and field selection, never delete a destination value by omission, and require
+separate confirmation before adding a new official domain. The same
+version-one manifest can be verified and reviewed by the CLI.
 
 ## Browser-local storage and archives
 

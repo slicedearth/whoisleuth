@@ -142,26 +142,6 @@
     message = `Removed the desired posture baseline for ${selectedDomain}.`;
   }
 
-  function exportBaseline(): void {
-    const baseline = active.desiredPostureBaselines.find((item) => item.domain === selectedDomain);
-    if (!baseline) return;
-    const document = {
-      schema: 'whoisleuth.desired-posture-baseline',
-      schemaVersion: 1,
-      exportedAt: new Date().toISOString(),
-      profile: { id: active.id, name: active.name },
-      baseline,
-      limitation: 'This file contains analyst-authored desired state and an optional retained observation. It is not a live audit result.',
-    };
-    const blob = new Blob([`${JSON.stringify(document, null, 2)}\n`], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const anchor = globalThis.document.createElement('a');
-    anchor.href = url;
-    anchor.download = `${selectedDomain}-desired-posture.json`;
-    anchor.click();
-    URL.revokeObjectURL(url);
-  }
-
   $effect(() => {
     const fallback = active.officialDomains.includes(selectedDomain)
       ? selectedDomain
@@ -230,7 +210,6 @@
     <label class="wide"><span>Analyst note</span><textarea rows="3" maxlength="2000" bind:value={note}></textarea></label>
     <div class="actions">
       <button class="primary" onclick={save}>Save baseline</button>
-      <button class="btn" onclick={exportBaseline} disabled={!active.desiredPostureBaselines.some((item) => item.domain === selectedDomain)}>Export baseline</button>
       <button class="btn danger-action" onclick={remove} disabled={!active.desiredPostureBaselines.some((item) => item.domain === selectedDomain)}>Remove</button>
     </div>
     {#if message}<p class="message" role="status">{message}</p>{/if}

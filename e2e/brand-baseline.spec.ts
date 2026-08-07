@@ -383,6 +383,53 @@ test('retained certificate events replay reviewed expectations without mobile ov
   await expectNoHorizontalOverflow(page);
 });
 
+test('exports and locally verifies a selective domain-control passport on desktop and mobile', async ({ page }) => {
+  await page.goto('/brands');
+  await migrateLegacyBrowserData(page, {
+    [PROFILES_KEY]: [{
+      ...profileFixture(),
+      desiredPostureBaselines: [{
+        version: 1,
+        domain: 'stored.example',
+        nameservers: ['ns1.stored.example'],
+        mx: ['10 mail.stored.example'],
+        caa: ['0 issue "ca.example"'],
+        tlsIssuer: 'Fixture issuer',
+        tlsSanPatterns: ['*.stored.example'],
+        recoveryDependency: 'must-not-export',
+        note: 'must-not-export',
+        lifecycle: 'change_planned',
+        updatedAt: ISO,
+      }],
+    }],
+    [ACTIVE_KEY]: 'profile-1',
+  });
+
+  const passport = page.getByRole('region', { name: 'Domain-control passport' });
+  await expect(passport).toContainText('stored.example');
+  const downloadPromise = page.waitForEvent('download');
+  await passport.getByRole('button', { name: 'Export passport' }).click();
+  const download = await downloadPromise;
+  const path = await download.path();
+  expect(path).not.toBeNull();
+  const content = await download.createReadStream().then(async (stream) => {
+    const chunks: Buffer[] = [];
+    for await (const chunk of stream) chunks.push(Buffer.from(chunk));
+    return Buffer.concat(chunks).toString('utf8');
+  });
+  expect(content).toContain('whoisleuth.domain-control-manifest');
+  expect(content).toContain('10 mail.stored.example');
+  expect(content).not.toMatch(/must-not-export|Stored Brand|change_planned/iu);
+
+  await passport.getByLabel('Review passport').setInputFiles(path!);
+  await expect(passport).toContainText('Verified 1 passport entry');
+  await expect(passport.getByRole('heading', { name: 'Import preview' })).toBeVisible();
+  await expect(passport.getByText('Not configured; destination remains unchanged').first()).toBeVisible();
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expectNoHorizontalOverflow(page);
+});
+
 test('a future Brand Profile schema is never overwritten by an older app', async ({ page }) => {
   await cleanBrandStorage(page);
   const future = { version: 99, profiles: [{ future: true }] };
