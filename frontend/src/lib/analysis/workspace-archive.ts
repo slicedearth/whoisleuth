@@ -5,6 +5,7 @@
 import {
   buildCaseExport,
   CASE_SCHEMA_VERSION,
+  CASE_IMPORT_VERSIONS,
   enforceStoreBudget,
   mergeCases,
 } from './case-model.ts';
@@ -220,6 +221,7 @@ interface WorkspaceSectionDefinition {
   label: string;
   schema: string | null;
   version: number;
+  supportedVersions?: readonly number[];
   count: (data: unknown) => number;
   merge: ((local: NormalizedWorkspaceInput, data: unknown, now: string | null) => WorkspaceMergeResult) | null;
 }
@@ -335,6 +337,7 @@ function objectCount(data: unknown, key: string): number {
 const SECTION_DEFINITIONS: readonly WorkspaceSectionDefinition[] = [
   {
     id: 'cases', label: 'Cases', schema: null, version: CASE_SCHEMA_VERSION,
+    supportedVersions: CASE_IMPORT_VERSIONS,
     count: (data) => arrayCount(data, 'cases'),
     merge: (local, data) => {
       const result = mergeCases(local.cases, data);
@@ -577,7 +580,7 @@ export async function readWorkspaceArchive(raw: unknown, options: WorkspaceArchi
     if (!definition) {
       status = 'unsupported';
       reason = 'This app does not recognise the archive section.';
-    } else if (entry.version !== definition.version || entry.schema !== definition.schema) {
+    } else if (!(definition.supportedVersions ?? [definition.version]).includes(entry.version) || entry.schema !== definition.schema) {
       status = 'unsupported';
       reason = entry.version > definition.version
         ? `This section uses newer schema ${entry.version}.`

@@ -27,6 +27,7 @@ function redactedCase(record: CaseRecord, audience: CasePackAudience): CaseRecor
     actions: audience === 'public' ? [] : record.actions.map((item) => ({ ...item, recipient: '[redacted]' })),
     manualTrail: record.manualTrail.map((item) => ({ ...item, target: null })),
     assertions: audience === 'public' ? [] : structuredClone(record.assertions),
+    branches: audience === 'public' ? [] : structuredClone(record.branches ?? []),
   };
 }
 
@@ -61,7 +62,7 @@ export function buildCliCasePack(
     ? ['Raw upstream payloads and credentials are outside the case schema.']
     : options.audience === 'trusted'
       ? ['Case notes', 'Recipient values', 'Manual trail targets', 'Raw upstream payloads and credentials']
-      : ['Case notes', 'Actions and recipient values', 'Analyst assertions', 'Manual trail targets', 'Raw upstream payloads and credentials'];
+      : ['Case notes', 'Actions and recipient values', 'Analyst assertions', 'Investigation branches', 'Manual trail targets', 'Raw upstream payloads and credentials'];
   const packet = Object.freeze({
     schema: CLI_CASE_PACK_SCHEMA,
     version: CLI_CASE_PACK_VERSION,

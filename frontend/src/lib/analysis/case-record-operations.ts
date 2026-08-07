@@ -46,6 +46,12 @@ import {
 import {
   normalizeEvidenceHistory,
 } from './case-evidence-model.ts';
+import {
+  appendCaseInvestigationBranch,
+  caseInvestigationBranchReferences,
+  normalizeCaseInvestigationBranches,
+  updateCaseInvestigationBranch,
+} from './case-investigation-branch-model.ts';
 
 // ---------------------------------------------------------------------------
 // Case normalization
@@ -98,6 +104,9 @@ export function normalizeCase(
   const updatedAt = isoOrNow(record.updatedAt, now);
   const evidencePins = normalizeCaseEvidencePins(record.evidencePins, updatedAt);
   const pinIds = new Set(evidencePins.map((item) => item.id));
+  const actions = normalizeCaseActions(record.actions, updatedAt);
+  const assertions = normalizeCaseAssertions(record.assertions, updatedAt, pinIds);
+  const branchReferences = caseInvestigationBranchReferences({ evidencePins, actions, assertions });
   return {
     id: existing ? existing.id : safeId(record.id) || deterministicId(domain),
     domain,
@@ -110,10 +119,11 @@ export function normalizeCase(
     evidenceHistory: normalizeCaseEvidence(record, createdAt, updatedAt, now),
     evidencePins,
     decisions: normalizeCaseDecisions(record.decisions, updatedAt, pinIds),
-    actions: normalizeCaseActions(record.actions, updatedAt),
-    assertions: normalizeCaseAssertions(record.assertions, updatedAt, pinIds),
+    actions,
+    assertions,
     manualTrail: normalizeCaseManualTrail(record.manualTrail, updatedAt),
     sightings: normalizeCaseSightings(record.sightings, updatedAt, pinIds),
+    branches: normalizeCaseInvestigationBranches(record.branches, updatedAt, branchReferences),
     createdAt,
     updatedAt,
   };
@@ -136,6 +146,13 @@ export function createCase(input: CaseInput, nowIso?: string): CaseRecord {
       ? appendCaseEvidencePin([], input.evidencePin, now)
       : [];
   const pinIds = new Set(evidencePins.map((item) => item.id));
+  const actions = input.action !== undefined
+    ? appendCaseAction([], input.action, now)
+    : [];
+  const assertions = input.assertion !== undefined
+    ? appendCaseAssertion([], input.assertion, now)
+    : [];
+  const branchReferences = caseInvestigationBranchReferences({ evidencePins, actions, assertions });
   return {
     id: makeId(),
     domain,
@@ -153,17 +170,16 @@ export function createCase(input: CaseInput, nowIso?: string): CaseRecord {
     decisions: input.decision !== undefined
       ? appendCaseDecision([], input.decision, now)
       : [],
-    actions: input.action !== undefined
-      ? appendCaseAction([], input.action, now)
-      : [],
-    assertions: input.assertion !== undefined
-      ? appendCaseAssertion([], input.assertion, now)
-      : [],
+    actions,
+    assertions,
     manualTrail: input.trailEvent !== undefined
       ? appendCaseManualTrailEvent([], input.trailEvent, now)
       : [],
     sightings: input.sighting !== undefined
       ? appendCaseSighting([], input.sighting, now, pinIds)
+      : [],
+    branches: input.branch !== undefined
+      ? appendCaseInvestigationBranch([], input.branch, now, branchReferences)
       : [],
     createdAt: now,
     updatedAt: now,
@@ -258,6 +274,14 @@ export function updateCase(
   if (patch.assertionUpdate !== undefined) {
     assertions = updateCaseAssertion(assertions, patch.assertionUpdate, now, pinIds);
   }
+  const branchReferences = caseInvestigationBranchReferences({ evidencePins, actions, assertions });
+  let branches = normalizeCaseInvestigationBranches(current.branches ?? [], current.updatedAt, branchReferences);
+  if (patch.branch !== undefined) {
+    branches = appendCaseInvestigationBranch(branches, patch.branch, now, branchReferences);
+  }
+  if (patch.branchUpdate !== undefined) {
+    branches = updateCaseInvestigationBranch(branches, patch.branchUpdate, now, branchReferences);
+  }
   let manualTrail = current.manualTrail;
   if (patch.trailEvent !== undefined) {
     manualTrail = appendCaseManualTrailEvent(current.manualTrail, patch.trailEvent, now);
@@ -282,6 +306,7 @@ export function updateCase(
     assertions,
     manualTrail,
     sightings,
+    branches,
     notes,
     updatedAt: now,
   };

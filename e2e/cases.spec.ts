@@ -501,6 +501,15 @@ test('reviewed response records persist and produce a local non-submitted packet
   await action.getByRole('button', { name: 'Record action' }).click();
   await expect(workspace).toContainText('registrar report · planned');
 
+  const branch = workspace.locator('details', { hasText: 'Group evidence and decisions into investigation branches' });
+  await branch.getByText('Group evidence and decisions into investigation branches', { exact: true }).click();
+  await branch.getByLabel('Branch name').fill('Registrar response path');
+  await branch.getByRole('checkbox', { name: 'Observed credential form' }).check();
+  await branch.getByRole('checkbox', { name: /registrar report.*Registrar abuse desk/iu }).check();
+  await branch.getByRole('button', { name: 'Create branch' }).click();
+  await expect(branch).toContainText('Registrar response path');
+  await expect(branch).toContainText('1 pin · 0 checkpoints · 0 assertions · 1 action');
+
   const packet = workspace.locator('details', { hasText: 'Prepare a reviewed abuse evidence packet' });
   await packet.getByText('Prepare a reviewed abuse evidence packet', { exact: true }).click();
   await expect(packet.getByLabel('Audience profile')).toHaveValue('internal_soc');
@@ -563,7 +572,8 @@ test('reviewed response records persist and produce a local non-submitted packet
   await page.reload();
   await page.getByRole('tab', { name: /Cases/ }).click();
   await page.locator('.case-head', { hasText: 'response.invalid' }).click();
-  await expect(page.locator('.response-workspace')).toContainText('1 pin · 0 sightings · 1 decision · 0 assertions · 1 action');
+  await expect(page.locator('.response-workspace')).toContainText('1 pin · 0 sightings · 1 decision · 0 assertions · 1 action · 1 branch');
+  await expect(page.locator('.response-workspace')).toContainText('Registrar response path');
 });
 
 test('external findings require a validated preview before creating local evidence pins', async ({ page }) => {

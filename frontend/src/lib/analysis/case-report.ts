@@ -25,7 +25,7 @@ import { CASE_EVIDENCE_RELATION_STANCES } from './case-response-model.ts';
 // ---------------------------------------------------------------------------
 
 export const CASE_REPORT_SCHEMA = 'whoisleuth.case-report';
-export const CASE_REPORT_SCHEMA_VERSION = 6;
+export const CASE_REPORT_SCHEMA_VERSION = 7;
 
 const LIMITATIONS_TEXT = [
   'This report contains normalised browser-local observations from WHOISleuth analyst cases.',
@@ -92,6 +92,7 @@ type CaseReportJson = {
     assertions: CaseRecord['assertions'];
     manualTrail: CaseRecord['manualTrail'];
     sightings: CaseRecord['sightings'];
+    branches: NonNullable<CaseRecord['branches']>;
   };
   limitations: string;
 };
@@ -323,6 +324,13 @@ export function buildCaseReport(
       })),
       manualTrail: caseRecord.manualTrail.map((item) => ({ ...item })),
       sightings: caseRecord.sightings.map((item) => ({ ...item, limitations: [...item.limitations] })),
+      branches: (caseRecord.branches ?? []).map((item) => ({
+        ...item,
+        evidencePinIds: [...item.evidencePinIds],
+        checkpointIds: [...item.checkpointIds],
+        assertionIds: [...item.assertionIds],
+        actionIds: [...item.actionIds],
+      })),
     },
     limitations: LIMITATIONS_TEXT,
   };
@@ -494,7 +502,7 @@ function buildMarkdown(report: CaseReportJson, includeAttribution: boolean): str
   lines.push('## Analyst Decision Packet');
   lines.push('');
   const response = report.analystResponse;
-  if (!response.evidencePins.length && !response.sightings.length && !response.decisions.length && !response.actions.length && !response.assertions.length && !response.manualTrail.length) {
+  if (!response.evidencePins.length && !response.sightings.length && !response.decisions.length && !response.actions.length && !response.assertions.length && !response.manualTrail.length && !response.branches.length) {
     lines.push('No evidence pins, source-qualified sightings, structured assertions, decision records, case actions, or manual investigation steps recorded.');
     lines.push('');
   } else {
@@ -569,6 +577,14 @@ function buildMarkdown(report: CaseReportJson, includeAttribution: boolean): str
       if (action.reference) lines.push(`  Reference: ${escapeMarkdownInline(action.reference)}`);
       if (action.outcome) lines.push(`  Outcome: ${escapeMarkdownInline(action.outcome)}`);
       if (action.contactLimitations.length) lines.push(`  Contact limitations: ${escapeMarkdownInline(action.contactLimitations.join('; '))}`);
+    }
+    lines.push('');
+    lines.push('### Investigation branches');
+    lines.push('');
+    if (!response.branches.length) lines.push('No named investigation branches recorded.');
+    for (const branch of response.branches) {
+      lines.push(`- **${escapeMarkdownInline(branch.name)}** (${escapeMarkdownInline(branch.state)}; updated ${escapeMarkdownInline(branch.updatedAt)})`);
+      lines.push(`  References: ${branch.evidencePinIds.length} evidence pins; ${branch.checkpointIds.length} checkpoints; ${branch.assertionIds.length} assertions; ${branch.actionIds.length} actions.`);
     }
     lines.push('');
     lines.push('### Explicit investigation trail');

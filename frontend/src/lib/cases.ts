@@ -63,6 +63,10 @@ export {
   CASE_SIGHTING_STATES,
 } from './analysis/case-response-model.ts';
 export {
+  CASE_INVESTIGATION_BRANCH_STATES,
+  MAX_CASE_INVESTIGATION_BRANCHES,
+} from './analysis/case-investigation-branch-model.ts';
+export {
   EXTERNAL_FINDING_CATEGORIES,
   EXTERNAL_FINDINGS_SCHEMA,
   EXTERNAL_FINDINGS_VERSION,
@@ -85,6 +89,10 @@ export type {
   CaseSightingRecord,
   CaseTransitionExpectation,
 } from './analysis/case-response-model.ts';
+export type {
+  CaseInvestigationBranch,
+  CaseInvestigationBranchState,
+} from './analysis/case-investigation-branch-model.ts';
 export type {
   CaseEvidenceSnapshot,
   CaseInput,

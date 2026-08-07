@@ -553,6 +553,10 @@ Monitor contains Cases, Campaigns, Relationships, and Watchlists.
   states become separately attributed observations, while every state remains
   a note so not-reproduced or expired reviews cannot erase earlier evidence.
   The export does not publish or transmit the bundle.
+  Up to eight named investigation branches can group references to retained
+  pins, checkpoints, assertions, and actions without copying or changing the
+  referenced material. Branches are analyst organisation aids, remain active
+  or resolved independently, and do not establish that a hypothesis is true.
 - **Campaigns** group existing case domains without duplicating their evidence
   or implying attribution. An expanded campaign projects bounded counts for
   password fields, official-identity relationships, redirect or transport

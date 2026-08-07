@@ -12,6 +12,7 @@ import {
   readWorkspaceArchive,
 } from '../frontend/src/lib/analysis/workspace-archive.ts';
 import { createRelationshipObservation } from '../frontend/src/lib/analysis/relationship-observation-model.ts';
+import { sha256ArtifactDigest } from '../frontend/src/lib/analysis/artifact-integrity.ts';
 
 const NOW = '2026-07-19T02:00:00.000Z';
 
@@ -262,6 +263,21 @@ describe('portable workspace archive', () => {
     assert.equal(cases.recordCount, 1);
     assert.equal(relationships.recordCount, 1);
     assert.ok(parsed.bytes > 0 && parsed.bytes < MAX_WORKSPACE_ARCHIVE_BYTES);
+  });
+
+  test('keeps a schema 10 case section readable after the case schema advances', async () => {
+    const archive = structuredClone(await buildWorkspaceArchive(input(), { generatedAt: NOW }));
+    const entry = archive.manifest.sections.find((section) => section.id === 'cases');
+    assert.ok(entry);
+    Reflect.set(archive.sections.cases, 'version', 10);
+    entry.version = 10;
+    entry.bytes = new TextEncoder().encode(JSON.stringify(archive.sections.cases)).byteLength;
+    entry.checksum = await sha256ArtifactDigest(archive.sections.cases);
+    const parsed = await readWorkspaceArchive(archive);
+    const cases = parsed.sections.find((section) => section.id === 'cases');
+    assert.equal(cases?.status, 'ready');
+    const preview = await previewWorkspaceArchive(archive, emptyInput());
+    assert.equal(preview.sections.find((section) => section.id === 'cases')?.status, 'ready');
   });
 
   test('keeps version 1 archives readable without inventing newer saved-data sections', async () => {

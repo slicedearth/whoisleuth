@@ -1233,7 +1233,9 @@ canonical SHA-256 digest and redaction manifest. It refuses an invalid,
 duplicate, larger, or generated package above the browser's 2 MiB import limit
 rather than silently omitting records or evidence. Trusted output removes notes,
 recipient values, and manual-pivot targets. Public output additionally removes
-actions and analyst assertions. The review flag records an explicit choice; it
+actions, analyst assertions, and named investigation branches so their labels
+and now-dangling analyst references cannot cross the public boundary. Trusted
+output retains branch references while redacting action recipients. The review flag records an explicit choice; it
 does not prove recipient authorisation or factual correctness.
 
 `verify-artifact` recognises the complete case-pack envelope before browser

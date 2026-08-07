@@ -25,6 +25,12 @@ import {
   type CaseStore,
 } from './case-record-model.ts';
 import {
+  caseInvestigationBranchReferences,
+  mergeCaseInvestigationBranches,
+  normalizeCaseInvestigationBranches,
+  type CaseInvestigationBranch,
+} from './case-investigation-branch-model.ts';
+import {
   mergeCaseActions,
   mergeCaseAssertions,
   mergeCaseDecisions,
@@ -65,6 +71,7 @@ type ImportPatch = {
   assertions: CaseAssertionRecord[];
   manualTrail: CaseManualTrailEvent[];
   sightings: CaseSightingRecord[];
+  branches: CaseInvestigationBranch[];
   tags: string[];
   notes: CaseNote[];
   createdAt: string | null;
@@ -152,7 +159,7 @@ function importScalar(value: unknown, valid: Set<string>): string | undefined {
  * @param {unknown} raw
  * @returns {ImportPatch | null}
  */
-function extractImportPatch(raw: unknown): ImportPatch | null {
+function extractImportPatch(raw: unknown, importedVersion: number): ImportPatch | null {
   const record = objectRecord(raw);
   const domain = normalizeDomain(record.domain);
   if (!domain) return null;
@@ -161,6 +168,9 @@ function extractImportPatch(raw: unknown): ImportPatch | null {
   const rawEvidence = Array.isArray(record.evidenceHistory) ? record.evidenceHistory : [];
   const evidencePins = normalizeCaseEvidencePins(record.evidencePins, normalizedFallback);
   const pinIds = new Set(evidencePins.map((item) => item.id));
+  const actions = normalizeCaseActions(record.actions, normalizedFallback);
+  const assertions = normalizeCaseAssertions(record.assertions, normalizedFallback, pinIds);
+  const branchReferences = caseInvestigationBranchReferences({ evidencePins, actions, assertions });
   return {
     domain,
     rawId: typeof record.id === 'string' ? record.id : null,
@@ -173,10 +183,13 @@ function extractImportPatch(raw: unknown): ImportPatch | null {
     evidenceHistory: normalizeEvidenceHistory(rawEvidence, { source: 'import', fallback: importFallback }),
     evidencePins,
     decisions: normalizeCaseDecisions(record.decisions, normalizedFallback, pinIds),
-    actions: normalizeCaseActions(record.actions, normalizedFallback),
-    assertions: normalizeCaseAssertions(record.assertions, normalizedFallback, pinIds),
+    actions,
+    assertions,
     manualTrail: normalizeCaseManualTrail(record.manualTrail, normalizedFallback),
     sightings: normalizeCaseSightings(record.sightings, normalizedFallback, pinIds),
+    branches: importedVersion >= 11
+      ? normalizeCaseInvestigationBranches(record.branches, normalizedFallback, branchReferences)
+      : [],
     tags: normalizeTags(record.tags),
     // Imported notes fall back only to the imported record's own timestamps
     // (never "now"), so a timestamp-less note gets a stable, deterministic time
@@ -227,6 +240,7 @@ function caseFromPatch(patch: ImportPatch, now: string): CaseRecord {
     assertions: patch.assertions,
     manualTrail: patch.manualTrail,
     sightings: patch.sightings,
+    branches: patch.branches,
     createdAt: patch.createdAt || patch.updatedAt || now,
     updatedAt: patch.updatedAt || patch.createdAt || now,
   };
@@ -246,6 +260,9 @@ function applyImportPatch(local: CaseRecord, patch: ImportPatch): CaseRecord {
   const fallback = patch.updatedAt || local.updatedAt;
   const evidencePins = mergeCaseEvidencePins(local.evidencePins, patch.evidencePins, fallback);
   const pinIds = new Set(evidencePins.map((item) => item.id));
+  const actions = mergeCaseActions(local.actions, patch.actions, fallback);
+  const assertions = mergeCaseAssertions(local.assertions, patch.assertions, fallback, pinIds);
+  const branchReferences = caseInvestigationBranchReferences({ evidencePins, actions, assertions });
   return {
     ...local,
     status: patch.status !== undefined && importNewer ? patch.status : local.status,
@@ -255,10 +272,11 @@ function applyImportPatch(local: CaseRecord, patch: ImportPatch): CaseRecord {
     evidenceHistory: mergeEvidenceHistories(local.evidenceHistory, patch.evidenceHistory),
     evidencePins,
     decisions: mergeCaseDecisions(local.decisions, patch.decisions, fallback, pinIds),
-    actions: mergeCaseActions(local.actions, patch.actions, fallback),
-    assertions: mergeCaseAssertions(local.assertions, patch.assertions, fallback, pinIds),
+    actions,
+    assertions,
     manualTrail: mergeCaseManualTrail(local.manualTrail, patch.manualTrail, fallback),
     sightings: mergeCaseSightings(local.sightings, patch.sightings, fallback, pinIds),
+    branches: mergeCaseInvestigationBranches(local.branches ?? [], patch.branches, fallback, branchReferences),
     tags: normalizeTags([...local.tags, ...patch.tags]),
     notes: unionNotes(local.notes, patch.notes),
     createdAt: patch.createdAt && Date.parse(patch.createdAt) < Date.parse(local.createdAt) ? patch.createdAt : local.createdAt,
@@ -294,12 +312,13 @@ export function mergeCases(
   if (importedVersion !== null && Number.isInteger(importedVersion) && importedVersion > CASE_SCHEMA_VERSION) {
     throw new Error(`This case file was exported by a newer version of WHOISleuth (schema ${importedVersion}). Update the app before importing it.`);
   }
-  if (!CASE_IMPORT_VERSIONS.includes(importedVersion as 3 | 4 | 5 | 6 | 7 | 8 | 9 | typeof CASE_SCHEMA_VERSION)
+  if (!CASE_IMPORT_VERSIONS.includes(importedVersion as typeof CASE_IMPORT_VERSIONS[number])
     || !importedRaw || typeof importedRaw !== 'object'
     || !Array.isArray(objectRecord(importedRaw).cases)) {
     throw new Error(`Expected a WHOISleuth case export using schema ${CASE_IMPORT_VERSIONS.join(' or ')}.`);
   }
   const local = normalizeCaseStore(localCases).cases;
+  const supportedImportedVersion = importedVersion ?? 0;
   const byDomain = new Map(local.map((item) => [item.domain, item]));
   const usedIds = new Set(local.map((item) => item.id));
   let added = 0;
@@ -307,7 +326,7 @@ export function mergeCases(
   let skipped = 0;
   const now = new Date().toISOString();
   for (const item of asCaseList(importedRaw)) {
-    const patch = extractImportPatch(item);
+    const patch = extractImportPatch(item, supportedImportedVersion);
     if (!patch) {
       skipped += 1;
       continue;

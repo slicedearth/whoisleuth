@@ -6,3 +6,4 @@ export * from './case-record-contracts.ts';
 export * from './case-record-core.ts';
 export * from './case-evidence-model.ts';
 export * from './case-record-operations.ts';
+export * from './case-investigation-branch-model.ts';

@@ -20,7 +20,9 @@ function exportedCases() {
       notes: [{ id: 'note-1', body: 'private analyst note', createdAt: NOW }], source: 'lookup', evidenceHistory: [], evidencePins: [], decisions: [],
       actions: [{ id: 'action-1', type: 'network_hosting_report', recipient: 'private recipient', contactSource: 'manual', contactLimitations: [], dueAt: null, state: 'planned', reference: null, followUpAt: null, outcome: null, createdAt: NOW, updatedAt: NOW }],
       assertions: [{ id: 'assertion-1', kind: 'hypothesis', statement: 'Needs review', rationale: null, evidencePinIds: [], evidenceRelations: [], state: 'open', createdAt: NOW, updatedAt: NOW }],
-      manualTrail: [{ id: 'trail-1', kind: 'pivot', summary: 'Reviewed related host', target: 'private target', createdAt: NOW }], sightings: [], createdAt: NOW, updatedAt: NOW,
+      manualTrail: [{ id: 'trail-1', kind: 'pivot', summary: 'Reviewed related host', target: 'private target', createdAt: NOW }], sightings: [],
+      branches: [{ id: 'branch-1', name: 'Private branch name', state: 'active', evidencePinIds: [], checkpointIds: [], assertionIds: ['assertion-1'], actionIds: ['action-1'], createdAt: NOW, updatedAt: NOW }],
+      createdAt: NOW, updatedAt: NOW,
     }],
   };
 }
@@ -34,9 +36,10 @@ describe('CLI case pack', () => {
     assert.deepEqual(pack.cases[0]?.notes, []);
     assert.deepEqual(pack.cases[0]?.actions, []);
     assert.deepEqual(pack.cases[0]?.assertions, []);
+    assert.deepEqual(pack.cases[0]?.branches, []);
     assert.equal(pack.cases[0]?.manualTrail[0]?.target, null);
     assert.match(pack.integrity.digestSha256, /^sha256:[a-f0-9]{64}$/u);
-    assert.doesNotMatch(JSON.stringify(pack), /private analyst note|private recipient|private target/u);
+    assert.doesNotMatch(JSON.stringify(pack), /private analyst note|private recipient|private target|Private branch name/u);
   });
 
   test('emits a browser-importable top-level case collection', async () => {
@@ -51,6 +54,7 @@ describe('CLI case pack', () => {
     assert.equal(output.packet.schema, 'whoisleuth.cli.case-pack');
     assert.equal(output.cases.length, 1);
     assert.equal(output.cases[0].actions[0].recipient, '[redacted]');
+    assert.equal(output.cases[0].branches[0].name, 'Private branch name');
     assert.doesNotMatch(JSON.stringify(output), /private recipient/u);
   });
 

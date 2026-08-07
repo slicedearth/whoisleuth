@@ -30,6 +30,7 @@
     type ResponseContactKind,
     type ResponsePacketProfileId,
   } from '$lib/analysis/case-response-packet.ts';
+  import CaseInvestigationBranches from '$lib/components/CaseInvestigationBranches.svelte';
 
   let {
     record,
@@ -386,7 +387,7 @@
 <section id={`case-response-${record.id}`} class="response-workspace" aria-labelledby={`response-title-${record.id}`} tabindex="-1">
   <header>
     <div><p class="eyebrow">Reviewed response</p><h3 id={`response-title-${record.id}`}>Evidence, reasoning, and actions</h3></div>
-    <span>{countLabel(record.evidencePins.length, 'pin')} · {countLabel(record.sightings.length, 'sighting')} · {countLabel(record.decisions.length, 'decision')} · {countLabel(record.assertions.length, 'assertion')} · {countLabel(record.actions.length, 'action')}</span>
+    <span>{countLabel(record.evidencePins.length, 'pin')} · {countLabel(record.sightings.length, 'sighting')} · {countLabel(record.decisions.length, 'decision')} · {countLabel(record.assertions.length, 'assertion')} · {countLabel(record.actions.length, 'action')} · {countLabel(record.branches?.length ?? 0, 'branch')}</span>
   </header>
   {#if actionSummary.total}
     <div class="action-summary" role="group" aria-label="Case action outcome summary">
@@ -497,6 +498,8 @@
       <ol class="records">{#each [...record.assertions].reverse() as assertion}<li><strong>{assertion.provenance ? 'external import' : assertion.kind.replaceAll('_', ' ')} · {assertion.state}</strong><p>{assertion.statement}</p>{#if assertion.rationale}<p>{assertion.rationale}</p>{/if}{#if assertion.provenance}<small>{assertion.provenance.format.toUpperCase()} · {assertion.provenance.sourceName}{assertion.provenance.publisher ? ` · ${assertion.provenance.publisher}` : ''}{assertion.provenance.externalId ? ` · ${assertion.provenance.externalId}` : ''}</small><small>File SHA-256 {assertion.provenance.sourceDigestSha256}{assertion.provenance.observedAt ? ` · observed ${assertion.provenance.observedAt}` : ''}</small>{#if assertion.provenance.labels.length || assertion.provenance.markings.length}<small>{[...assertion.provenance.labels, ...assertion.provenance.markings].join(' · ')}</small>{/if}{/if}{#if assertion.evidenceRelations?.length}<small>{assertion.evidenceRelations.filter((item) => item.stance === 'supports').length} supporting · {assertion.evidenceRelations.filter((item) => item.stance === 'contradicts').length} contradicting · {assertion.evidenceRelations.filter((item) => item.stance === 'unresolved').length} unresolved evidence relationship{assertion.evidenceRelations.length === 1 ? '' : 's'}</small>{:else}<small>updated {assertion.updatedAt}{assertion.evidencePinIds.length ? ` · ${assertion.evidencePinIds.length} linked pin${assertion.evidencePinIds.length === 1 ? '' : 's'}` : ''}</small>{/if}{#if assertion.state === 'open'}<button class="btn small" type="button" onclick={() => void setAssertionState(assertion.id, 'resolved')}>Mark resolved</button>{/if}</li>{/each}</ol>
     {/if}
   </details>
+
+  <CaseInvestigationBranches {record} {onsaved} {onmessage} />
 
   <details>
     <summary>Record and review the investigation trail</summary>

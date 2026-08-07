@@ -146,6 +146,63 @@ describe('case creation and updates', () => {
   });
 });
 
+describe('named investigation branches', () => {
+  test('retains bounded reference-only branches and supports explicit resolution', () => {
+    const opened = model.openOrCreateCase([], { domain: 'branch.example' }, ISO);
+    const pinned = model.updateCase(opened.cases, opened.record.id, {
+      evidencePin: { label: 'Observed route', value: '192.0.2.10', source: 'reviewed evidence' },
+    }, LATER);
+    const pin = requiredValue(pinned.record.evidencePins[0]);
+    const branched = model.updateCase(pinned.cases, opened.record.id, {
+      branch: { name: 'Shared infrastructure explanation', evidencePinIds: [pin.id, 'missing'] },
+    }, LATEST);
+    const branch = requiredValue(branched.record.branches?.[0]);
+    assert.equal(branch.name, 'Shared infrastructure explanation');
+    assert.deepEqual(branch.evidencePinIds, [pin.id]);
+    assert.equal(branch.state, 'active');
+    const resolved = model.updateCase(branched.cases, opened.record.id, {
+      branchUpdate: { id: branch.id, state: 'resolved' },
+    }, NOW);
+    assert.equal(resolved.record.branches?.[0]?.state, 'resolved');
+    assert.equal(resolved.record.branches?.[0]?.updatedAt, NOW);
+  });
+
+  test('rejects empty, dangling, and over-capacity branches', () => {
+    const opened = model.openOrCreateCase([], { domain: 'branch-limits.example' }, ISO);
+    assert.throws(() => model.updateCase(opened.cases, opened.record.id, {
+      branch: { name: 'No valid references', evidencePinIds: ['missing'] },
+    }, LATER), /at least one valid case reference/iu);
+    const pinned = model.updateCase(opened.cases, opened.record.id, {
+      evidencePin: { label: 'Observed route', value: '192.0.2.20', source: 'reviewed evidence' },
+    }, LATER);
+    let cases = pinned.cases;
+    const pinId = requiredValue(pinned.record.evidencePins[0]).id;
+    for (let index = 0; index < model.MAX_CASE_INVESTIGATION_BRANCHES; index += 1) {
+      cases = model.updateCase(cases, opened.record.id, {
+        branch: { name: `Branch ${index}`, evidencePinIds: [pinId] },
+      }, LATEST).cases;
+    }
+    assert.throws(() => model.updateCase(cases, opened.record.id, {
+      branch: { name: 'One too many', evidencePinIds: [pinId] },
+    }, NOW), /limited to 8 investigation branches/iu);
+  });
+
+  test('migrates schema 10 without accepting schema 11-only branch fields', () => {
+    const imported = model.mergeCases([], {
+      version: 10,
+      cases: [{
+        domain: 'legacy-branch.example',
+        evidencePins: [{ id: 'pin-legacy', label: 'Legacy pin', value: 'retained', source: 'import', createdAt: ISO }],
+        branches: [{ id: 'branch-smuggled', name: 'Should not import', evidencePinIds: ['pin-legacy'], createdAt: ISO, updatedAt: ISO }],
+        createdAt: ISO,
+        updatedAt: ISO,
+      }],
+    });
+    assert.deepEqual(imported.cases[0]?.branches, []);
+    assert.equal(imported.cases[0]?.evidencePins.length, 1);
+  });
+});
+
 describe('duplicate-domain handling', () => {
   test('openOrCreateCase opens the existing case instead of duplicating', () => {
     const first = model.openOrCreateCase([], { domain: 'dup.example' }, ISO);
