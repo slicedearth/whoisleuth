@@ -297,7 +297,7 @@ function bulkItems(sessions: readonly BulkSession[], nowIso: string): AnalystRev
       dueAt: null,
       completeness: 'partial',
       nextAction: 'resume',
-      href: '/bulk#saved-sessions',
+      href: '/bulk#bulk-sessions-title',
       retryHref: null,
       caseId: null,
       dismissalTarget: null,

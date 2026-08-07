@@ -1,12 +1,9 @@
 import { createHash } from 'node:crypto';
-import { createReadStream } from 'node:fs';
-
 import type { CliArguments } from './arguments.mts';
 import {
   DEFAULT_DISCOVERY_TLDS,
   MAX_DISCOVERY_DICTIONARY_BYTES,
   normalizeDiscoveryTlds,
-  readDiscoveryDictionaryBounded,
 } from './discover.mts';
 import { boundedCliErrorMessage, CliUsageError } from './errors.mts';
 import type { CliCommandContext, CliDependencies } from './runner-types.mts';
@@ -50,10 +47,7 @@ async function generateDiscoveryCandidates(
     try {
       dictionaryText = dependencies.readDiscoveryDictionary
         ? await dependencies.readDiscoveryDictionary(args.dictionarySource)
-        : await readDiscoveryDictionaryBounded(
-          createReadStream(args.dictionarySource, { highWaterMark: MAX_DISCOVERY_DICTIONARY_BYTES }),
-          MAX_DISCOVERY_DICTIONARY_BYTES,
-        );
+        : await context.readInput(args.dictionarySource, MAX_DISCOVERY_DICTIONARY_BYTES, 'Discovery dictionary');
     } catch (error) {
       if (error instanceof CliUsageError) throw error;
       throw new CliUsageError(`Could not read discovery dictionary: ${boundedCliErrorMessage(error, 'Input could not be read')}`);

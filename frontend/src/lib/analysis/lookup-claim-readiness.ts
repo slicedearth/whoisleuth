@@ -187,7 +187,7 @@ export function buildLookupClaimReadiness(input: Readonly<{
 }>): LookupClaimReadiness {
   const coverage = new Map(input.coverage.entries.map((entry) => [entry.id, entry]));
   const targetType = text(input.targetType, 20);
-  const registrationRequirements = [{ id: 'rdap', label: 'Authoritative registry evidence' }] as const;
+  const registrationRequirements = [{ id: 'availability', label: 'Authority-aware availability decision' }] as const;
   const webRequirements = [{ id: 'http', label: 'HTTP observation' }, { id: 'tls', label: 'TLS observation' }] as const;
   const entries: LookupClaimReadinessEntry[] = [];
 

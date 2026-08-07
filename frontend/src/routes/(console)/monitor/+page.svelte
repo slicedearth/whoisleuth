@@ -203,7 +203,16 @@
   async function importCaseFile(event:Event){const input=event.currentTarget as HTMLInputElement;const file=input.files?.[0];if(!file)return;try{if(file.size>MAX_CASE_IMPORT_BYTES)throw new Error('Case imports are limited to 2 MB.');const result=await importCases(JSON.parse(await file.text()));await refreshCases();caseMessage=`Imported ${result.added} new and ${result.updated} merged cases${result.skipped?`; skipped ${result.skipped} invalid or over-limit record${result.skipped===1?'':'s'}`:''}${prunedNote(result.pruned)}.`;}catch(cause){caseMessage=cause instanceof Error?cause.message:'Case import failed';}finally{input.value='';}}
 
   onMount(()=>{void (async()=>{
-    await Promise.all([refresh(),refreshCases(),refreshRetainedRelationships(),loadBulkSessions().then((records)=>{bulkSessions=records;}),loadWebsiteSnapshots().then((records)=>{websiteSnapshots=records;})]);[campaignCount,customRuleCount]=await Promise.all([loadCampaigns().then(records=>records.length),loadDetectionRules().then(records=>records.length)]);
+    const initialLoads=await Promise.allSettled([
+      refresh(),refreshCases(),refreshRetainedRelationships(),
+      loadBulkSessions().then((records)=>{bulkSessions=records;}),
+      loadWebsiteSnapshots().then((records)=>{websiteSnapshots=records;}),
+      loadCampaigns().then((records)=>{campaignCount=records.length;}),
+      loadDetectionRules().then((records)=>{customRuleCount=records.length;}),
+    ]);
+    if(initialLoads.some((result)=>result.status==='rejected')){
+      caseMessage='Some browser-local watchlist, case, campaign, relationship, Bulk-session, website-profile, or rule context could not be loaded. Navigation remains available; reload to retry the missing context.';
+    }
     const focus=page.url.searchParams.get('case');
     if(focus){view='cases';const target=cases.find(record=>record.id===focus);if(target){showCasePage(target);expandedId=focus;tagDraft=target.tags.join(', ');await tick();const workspace=document.getElementById(`case-response-${target.id}`);if(page.url.hash===`#case-response-${encodeURIComponent(target.id)}`&&workspace){workspace.scrollIntoView({block:'start'});workspace.focus({preventScroll:true});}else await focusCase(target);}}
     else if(page.url.searchParams.get('view')==='inbox')view='inbox';

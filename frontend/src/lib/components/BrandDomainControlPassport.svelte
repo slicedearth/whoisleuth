@@ -37,6 +37,11 @@
   let importFields = $state<Record<string, DomainControlPassportField[]>>({});
   let busy = $state(false);
   let message = $state('');
+  const importReady = $derived(Boolean(imported?.entries.some((entry) =>
+    selectedImports.includes(entry.domain)
+      && (active.officialDomains.includes(entry.domain) || addDomains.includes(entry.domain))
+      && (importFields[entry.domain] ?? []).length > 0
+  )));
 
   function toggle(values: readonly string[], value: string, checked: boolean): string[] {
     return checked ? [...new Set([...values, value])] : values.filter((item) => item !== value);
@@ -48,10 +53,12 @@
 
   function toggleImport(domain: string, checked: boolean): void {
     selectedImports = toggle(selectedImports, domain, checked);
+    if (!checked) addDomains = addDomains.filter((item) => item !== domain);
   }
 
   function toggleAdd(domain: string, checked: boolean): void {
     addDomains = toggle(addDomains, domain, checked);
+    if (checked) selectedImports = toggle(selectedImports, domain, true);
   }
 
   function toggleField(domain: string, field: DomainControlPassportField, checked: boolean): void {
@@ -202,7 +209,7 @@
           </div>
         </fieldset>
       {/each}
-      <button class="primary" type="button" onclick={applyImport} disabled={busy}>Import selected fields</button>
+      <button class="primary" type="button" onclick={applyImport} disabled={busy || !importReady}>Import selected fields</button>
     </div>
   {/if}
 

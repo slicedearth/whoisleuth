@@ -3,10 +3,17 @@ import { describe, test } from 'node:test';
 
 import { parseCliArguments } from '../cli/arguments.mts';
 import { runInvestigationRecipe } from '../cli/investigation-run.mts';
+import { buildInvestigationPlan } from '../cli/investigation-plan.mts';
 import { runCli } from '../cli/runner.mts';
 import EXIT_CODES from '../cli/exit-codes.mts';
 
 const NOW = '2026-08-05T05:00:00.000Z';
+
+function commandOutput(recipe: Parameters<typeof buildInvestigationPlan>[0], subject: string, command: string) {
+  const step = buildInvestigationPlan(recipe, subject, NOW).steps.find((item) => item.command === command);
+  assert.ok(step);
+  return JSON.stringify({ schema: step.produces });
+}
 
 describe('fixed investigation execution', () => {
   test('pauses before network collection without approval', async () => {
@@ -24,7 +31,7 @@ describe('fixed investigation execution', () => {
     const calls: string[] = [];
     const result = await runInvestigationRecipe('lookalike-review', 'Example Brand', {
       approveNetwork: true, resumeInput: null, generatedAt: NOW,
-      execute: async (command) => { calls.push(command); return { exitCode: 0, stdout: JSON.stringify({ schema: `test.${command}` }) }; },
+      execute: async (command) => { calls.push(command); return { exitCode: 0, stdout: commandOutput('lookalike-review', 'Example Brand', command) }; },
     });
     assert.deepEqual(calls, ['discover', 'discover-scan']);
     assert.equal(result.state, 'awaiting_analyst_selection');
@@ -35,12 +42,12 @@ describe('fixed investigation execution', () => {
   test('resumes a matching checkpoint without repeating completed steps', async () => {
     const first = await runInvestigationRecipe('lookalike-review', 'Example Brand', {
       approveNetwork: false, resumeInput: null, generatedAt: NOW,
-      execute: async (command) => ({ exitCode: 0, stdout: JSON.stringify({ command }) }),
+      execute: async (command) => ({ exitCode: 0, stdout: commandOutput('lookalike-review', 'Example Brand', command) }),
     });
     const calls: string[] = [];
     const resumed = await runInvestigationRecipe('lookalike-review', 'Example Brand', {
       approveNetwork: true, resumeInput: JSON.stringify(first), generatedAt: NOW,
-      execute: async (command) => { calls.push(command); return { exitCode: 0, stdout: '{}' }; },
+      execute: async (command) => { calls.push(command); return { exitCode: 0, stdout: commandOutput('lookalike-review', 'Example Brand', command) }; },
     });
     assert.deepEqual(calls, ['discover-scan']);
     assert.equal(resumed.completedSteps.length, 2);
@@ -67,5 +74,65 @@ describe('fixed investigation execution', () => {
     await assert.rejects(() => runInvestigationRecipe('domain-triage', 'example.test', {
       approveNetwork: false, resumeInput: JSON.stringify(invalid), generatedAt: NOW, execute: async () => ({ exitCode: 0, stdout: '{}' }),
     }), /must match/iu);
+  });
+
+  test('rejects forged, duplicate, out-of-order, and wrong-schema resume steps without execution', async () => {
+    const plan = buildInvestigationPlan('lookalike-review', 'Example Brand', NOW);
+    const validStep = {
+      ...plan.steps[0],
+      exitCode: 0,
+      result: { schema: plan.steps[0]?.produces },
+    };
+    const variants = [
+      [{ ...validStep, command: 'lookup' }],
+      [{ ...validStep, arguments: ['--forged'] }],
+      [{ ...validStep, mode: 'network' }],
+      [{ ...validStep, id: plan.steps[1]?.id }],
+      [validStep, validStep],
+      [{ ...validStep, result: { schema: 'whoisleuth.unexpected' } }],
+    ];
+    for (const completedSteps of variants) {
+      let executed = 0;
+      await assert.rejects(() => runInvestigationRecipe('lookalike-review', 'Example Brand', {
+        approveNetwork: true,
+        resumeInput: JSON.stringify({
+          schema: 'whoisleuth.cli.investigation-run', version: 1,
+          recipe: 'lookalike-review', subject: 'example brand', completedSteps,
+        }),
+        generatedAt: NOW,
+        execute: async () => { executed += 1; return { exitCode: 0, stdout: '{}' }; },
+      }), /fixed recipe|unexpected command contract/iu);
+      assert.equal(executed, 0);
+    }
+  });
+
+  test('retries a final failed checkpoint step and rejects a failed non-final step', async () => {
+    const plan = buildInvestigationPlan('lookalike-review', 'Example Brand', NOW);
+    const failed = { ...plan.steps[0], exitCode: 1, result: { schema: 'failure' } };
+    const resumeRoot = {
+      schema: 'whoisleuth.cli.investigation-run', version: 1,
+      recipe: 'lookalike-review', subject: 'example brand', completedSteps: [failed],
+    };
+    const calls: string[] = [];
+    const resumed = await runInvestigationRecipe('lookalike-review', 'Example Brand', {
+      approveNetwork: false, resumeInput: JSON.stringify(resumeRoot), generatedAt: NOW,
+      execute: async (command) => { calls.push(command); return { exitCode: 2, stdout: commandOutput('lookalike-review', 'Example Brand', command) }; },
+    });
+    assert.deepEqual(calls, ['discover']);
+    assert.equal(resumed.completedSteps[0]?.exitCode, 2);
+
+    await assert.rejects(() => runInvestigationRecipe('lookalike-review', 'Example Brand', {
+      approveNetwork: false,
+      resumeInput: JSON.stringify({ ...resumeRoot, completedSteps: [failed, { ...plan.steps[1], exitCode: 1, result: {} }] }),
+      generatedAt: NOW,
+      execute: async () => ({ exitCode: 0, stdout: '{}' }),
+    }), /final retained step/iu);
+  });
+
+  test('rejects successful command output from an unexpected contract', async () => {
+    await assert.rejects(() => runInvestigationRecipe('lookalike-review', 'Example Brand', {
+      approveNetwork: false, resumeInput: null, generatedAt: NOW,
+      execute: async () => ({ exitCode: 0, stdout: JSON.stringify({ schema: 'whoisleuth.unexpected' }) }),
+    }), /unexpected command contract/iu);
   });
 });

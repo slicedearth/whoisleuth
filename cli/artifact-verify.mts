@@ -107,6 +107,8 @@ export type OfflineArtifactVerificationReport = Readonly<{
     sectionCount: number | null;
     recordCount: number | null;
     ciphertextBytes: number | null;
+    readySectionCount?: number | null;
+    unsupportedSectionCount?: number | null;
   }>;
   limitations: readonly string[];
 }>;
@@ -165,6 +167,8 @@ function archiveReport(
   encrypted: boolean,
   ciphertextBytes: number | null,
 ): OfflineArtifactVerificationReport {
+  const readySectionCount = archive.sections.filter((section) => section.status === 'ready').length;
+  const unsupportedSectionCount = archive.sections.length - readySectionCount;
   return Object.freeze({
     schema: OFFLINE_ARTIFACT_VERIFICATION_SCHEMA,
     version: OFFLINE_ARTIFACT_VERIFICATION_VERSION,
@@ -185,9 +189,14 @@ function archiveReport(
       sectionCount: archive.sections.length,
       recordCount: archive.sections.reduce((sum, section) => sum + section.recordCount, 0),
       ciphertextBytes,
+      readySectionCount,
+      unsupportedSectionCount,
     }),
     limitations: Object.freeze([
       'Verification checks the retained file against its declared versioned integrity contract; it does not establish that the original observations were accurate or remain current.',
+      ...(unsupportedSectionCount
+        ? ['One or more integrity-valid archive sections cannot be imported by this version. Inspect the archive before selecting data to restore.']
+        : []),
     ]),
   });
 }
@@ -421,6 +430,12 @@ export function formatOfflineArtifactVerification(
   if (report.summary.sectionCount !== null) lines.push(`Sections: ${report.summary.sectionCount}`);
   if (report.summary.recordCount !== null) lines.push(`Records: ${report.summary.recordCount}`);
   if (report.summary.ciphertextBytes !== null) lines.push(`Ciphertext bytes: ${report.summary.ciphertextBytes}`);
+  if (report.summary.readySectionCount !== undefined && report.summary.readySectionCount !== null) {
+    lines.push(`Import-ready sections: ${report.summary.readySectionCount}`);
+  }
+  if (report.summary.unsupportedSectionCount !== undefined && report.summary.unsupportedSectionCount !== null) {
+    lines.push(`Unsupported sections: ${report.summary.unsupportedSectionCount}`);
+  }
   for (const limitation of report.limitations) lines.push(`Limitation: ${limitation}`);
   return `${lines.join('\n')}\n`;
 }

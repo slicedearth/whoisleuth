@@ -229,6 +229,24 @@ function emptyInput(): WorkspaceFixture {
   };
 }
 
+async function retargetSectionVersion(archive: Awaited<ReturnType<typeof buildWorkspaceArchive>>, id: string, version: number): Promise<void> {
+  const entry = archive.manifest.sections.find((section) => section.id === id);
+  assert.ok(entry);
+  const section = recordValue(archive.sections[id as keyof typeof archive.sections]);
+  Reflect.set(section, 'version', version);
+  entry.version = version;
+  entry.bytes = new TextEncoder().encode(JSON.stringify(section)).byteLength;
+  entry.checksum = await sha256ArtifactDigest(section);
+}
+
+function removeSections(archive: Awaited<ReturnType<typeof buildWorkspaceArchive>>, ids: readonly string[]): void {
+  const removed = archive.manifest.sections.filter((section) => ids.includes(section.id));
+  archive.manifest.sections = archive.manifest.sections.filter((section) => !ids.includes(section.id));
+  archive.manifest.sectionCount -= removed.length;
+  archive.manifest.totalRecords -= removed.reduce((sum, section) => sum + section.recordCount, 0);
+  for (const id of ids) Reflect.deleteProperty(archive.sections, id);
+}
+
 describe('portable workspace archive', () => {
   test('builds a deterministic versioned manifest for every supported section', async () => {
     const source = input();
@@ -278,6 +296,28 @@ describe('portable workspace archive', () => {
     assert.equal(cases?.status, 'ready');
     const preview = await previewWorkspaceArchive(archive, emptyInput());
     assert.equal(preview.sections.find((section) => section.id === 'cases')?.status, 'ready');
+  });
+
+  test('restores the inner section contracts emitted by every historical archive envelope', async () => {
+    const fixtures = [
+      { version: 1, versions: { cases: 2, brandProfiles: 2, shortlist: 2 }, remove: ['bulkSessions', 'websiteSnapshots', 'investigationTemplates', 'bulkReview'] },
+      { version: 2, versions: { cases: 3, brandProfiles: 3, shortlist: 2, bulkSessions: 1 }, remove: ['websiteSnapshots', 'investigationTemplates', 'bulkReview'] },
+      { version: 3, versions: { cases: 3, brandProfiles: 3, shortlist: 2, bulkSessions: 1, websiteSnapshots: 1 }, remove: ['investigationTemplates', 'bulkReview'] },
+      { version: 4, versions: { cases: 3, brandProfiles: 3, shortlist: 2, bulkSessions: 1, websiteSnapshots: 1 }, remove: ['bulkReview'] },
+      { version: 5, versions: { cases: 4, brandProfiles: 3, shortlist: 2, bulkSessions: 1, websiteSnapshots: 1 }, remove: [] },
+    ] as const;
+    for (const fixture of fixtures) {
+      const archive = structuredClone(await buildWorkspaceArchive(input(), { generatedAt: NOW }));
+      Reflect.set(archive, 'version', fixture.version);
+      removeSections(archive, fixture.remove);
+      for (const [id, version] of Object.entries(fixture.versions)) await retargetSectionVersion(archive, id, version);
+      const parsed = await readWorkspaceArchive(archive);
+      assert.equal(parsed.sourceVersion, fixture.version);
+      assert.equal(parsed.sections.every((section) => section.status === 'ready'), true);
+      const preview = await previewWorkspaceArchive(archive, emptyInput());
+      assert.equal(preview.unsupportedCount, 0);
+      assert.equal(preview.sections.every((section) => section.status === 'ready'), true);
+    }
   });
 
   test('keeps version 1 archives readable without inventing newer saved-data sections', async () => {

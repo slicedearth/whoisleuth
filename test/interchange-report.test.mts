@@ -95,6 +95,43 @@ describe('interchange fidelity report', () => {
     assert.doesNotMatch(JSON.stringify(packReport), /private-case|private note/iu);
   });
 
+  test('uses the Brand Profile importer to reject malformed or partially skipped rows', async () => {
+    const malformed = await buildInterchangeFidelityReport(JSON.stringify({
+      schema: 'whoisleuth.brand-profiles', version: 6, exportedAt: NOW,
+      profiles: [{ secret: 'private-value' }],
+    }), { generatedAt: NOW });
+    assert.equal(malformed.verification.valid, false);
+    assert.equal(malformed.compatibility.fidelity, 'not_verified');
+    assert.equal(malformed.summary.acceptedRecordCount, 0);
+    assert.equal(malformed.summary.skippedRecordCount, 1);
+    assert.doesNotMatch(JSON.stringify(malformed), /private-value/iu);
+
+    const mixed = await buildInterchangeFidelityReport(JSON.stringify({
+      ...buildBrandProfileExport([], NOW),
+      profiles: [{
+        id: 'valid-profile', name: 'Valid profile', officialDomains: [], productNames: [], tlds: [],
+        approvedPartnerDomains: [], allowlistedDomains: [], allowlistedRegistrars: [], dkimSelectors: [],
+        trademarkOwner: '', trademarkRegistration: '', officialFaviconHash: '', officialFaviconPHash: '',
+        pageBaseline: null, createdAt: NOW, updatedAt: NOW,
+      }, { invalid: true }],
+    }), { generatedAt: NOW });
+    assert.equal(mixed.summary.acceptedRecordCount, 1);
+    assert.equal(mixed.summary.skippedRecordCount, 1);
+    assert.equal(mixed.verification.valid, false);
+  });
+
+  test('separates archive checksum validity from section importability', async () => {
+    const workspace = structuredClone(await buildWorkspaceArchive({}, { generatedAt: NOW }));
+    const cases = workspace.manifest.sections.find((section) => section.id === 'cases');
+    assert.ok(cases);
+    cases.version = 999;
+    const report = await buildInterchangeFidelityReport(JSON.stringify(workspace), { generatedAt: NOW });
+    assert.equal(report.verification.state, 'verified');
+    assert.equal(report.verification.valid, false);
+    assert.equal(report.summary.unsupportedSectionCount, 1);
+    assert.equal(report.compatibility.fidelity, 'not_verified');
+  });
+
   test('separates encrypted-envelope inspection from authenticated verification', async () => {
     const workspace = await buildWorkspaceArchive({}, { generatedAt: NOW });
     const encrypted = await encryptWorkspaceArchive(workspace, PASSPHRASE);

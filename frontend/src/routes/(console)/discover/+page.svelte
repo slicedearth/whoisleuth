@@ -189,7 +189,12 @@
   );
 
   onMount(() => {void (async()=>{
-    [profile,ctHistory] = await Promise.all([activeProfile(),loadCtHistory()]);
+    const [profileResult,historyResult]=await Promise.allSettled([activeProfile(),loadCtHistory()]);
+    if(profileResult.status==='fulfilled')profile=profileResult.value;
+    if(historyResult.status==='fulfilled')ctHistory=historyResult.value;
+    if(profileResult.status==='rejected'||historyResult.status==='rejected'){
+      status='Some browser-local profile or certificate-history context could not be loaded. Candidate generation and guided routes remain available; reload to retry.';
+    }
     if (candidates.length) candidateMetadata = buildCandidateMetadata(candidates);
     const guidedDomain = normalizeInvestigationGuideDomain(new URL(window.location.href).searchParams.get('q'));
     if (guidedDomain) seed = guidedDomain;

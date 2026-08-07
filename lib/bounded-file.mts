@@ -9,6 +9,7 @@ type BoundedFileOptions = Readonly<{
   expectedBytes?: number | null;
   label?: string;
   allowSymbolicLink?: boolean;
+  signal?: AbortSignal;
 }>;
 
 type BoundedFileDependencies = Readonly<{
@@ -19,6 +20,13 @@ function boundedSize(value: unknown, fallback: number): number {
   return Number.isSafeInteger(value) && Number(value) >= 0 && Number(value) <= MAX_BOUNDED_FILE_BYTES
     ? Number(value)
     : fallback;
+}
+
+function throwIfAborted(signal: AbortSignal | undefined): void {
+  if (!signal?.aborted) return;
+  throw signal.reason instanceof Error
+    ? signal.reason
+    : new DOMException('The operation was aborted.', 'AbortError');
 }
 
 export async function readBoundedRegularFile(
@@ -38,6 +46,7 @@ export async function readBoundedRegularFile(
   if (expectedBytes !== null && (expectedBytes < minimumBytes || expectedBytes > maximumBytes)) {
     throw new TypeError(`${label} expected size is outside its byte boundary.`);
   }
+  throwIfAborted(options.signal);
 
   // Non-blocking open prevents a named pipe from stalling the process before
   // the descriptor can be classified. Final-component symlinks remain denied
@@ -48,7 +57,9 @@ export async function readBoundedRegularFile(
     | (options.allowSymbolicLink ? 0 : constants.O_NOFOLLOW);
   const handle = await (dependencies.openFile ?? open)(filePath, flags);
   try {
+    throwIfAborted(options.signal);
     const before = await handle.stat();
+    throwIfAborted(options.signal);
     if (!before.isFile()) throw new TypeError(`${label} must be a regular file.`);
     if (before.size < minimumBytes) throw new TypeError(`${label} is smaller than its ${minimumBytes}-byte minimum.`);
     if (before.size > maximumBytes) throw new TypeError(`${label} exceeds its ${maximumBytes}-byte maximum.`);
@@ -62,11 +73,14 @@ export async function readBoundedRegularFile(
     const storage = Buffer.allocUnsafe(Math.min(maximumBytes + 1, before.size + 1));
     let offset = 0;
     while (offset < storage.length) {
+      throwIfAborted(options.signal);
       const { bytesRead } = await handle.read(storage, offset, storage.length - offset, null);
       if (bytesRead === 0) break;
       offset += bytesRead;
     }
+    throwIfAborted(options.signal);
     const after = await handle.stat();
+    throwIfAborted(options.signal);
     if (
       offset > maximumBytes
       || after.size !== before.size

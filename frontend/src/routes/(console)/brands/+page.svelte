@@ -55,8 +55,10 @@
   async function importFile(event:Event){const input=event.currentTarget as HTMLInputElement,file=input.files?.[0];if(!file)return;try{if(file.size>MAX_PROFILE_IMPORT_BYTES)throw new Error('Profile imports are limited to 2 MB.');const result=await importProfiles(JSON.parse(await file.text()));const skipped=result.skipped?`; skipped ${result.skipped} invalid or over-limit profile${result.skipped===1?'':'s'}`:'';message=`Imported ${result.added} new and ${result.updated} updated profiles${skipped}.`;await refresh();}catch(cause){message=cause instanceof Error?cause.message:'Import failed';}finally{input.value='';}}
   async function download(){try{await exportProfiles();message='Exported the Brand Profile collection.';}catch(cause){message=cause instanceof Error?cause.message:'Could not export profiles.';}}
   onMount(()=>{void (async()=>{
-    await refresh();
-    try{cases=await loadCases();certificateReplayUnavailable=false;}catch{cases=[];certificateReplayUnavailable=true;}
+    const [profileResult,caseResult]=await Promise.allSettled([refresh(),loadCases()]);
+    if(profileResult.status==='rejected')message='Browser-local Brand Profiles could not be loaded. Route actions remain available; reload to retry.';
+    if(caseResult.status==='fulfilled'){cases=caseResult.value;certificateReplayUnavailable=false;}
+    else{cases=[];certificateReplayUnavailable=true;message=message||'Browser-local cases could not be loaded. Certificate replay is unavailable; reload to retry.';}
     const guideDomain=parseList(page.url.searchParams.get('domain')||'',true)[0]||'';
     if(page.url.searchParams.get('new')==='1'&&guideDomain){
       clearForm(guideDomain);

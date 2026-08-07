@@ -9,6 +9,7 @@
   import { requestJsonCapped, SMALL_JSON_RESPONSE_BYTES } from '$lib/bounded-json-response';
   import {
     PUBLIC_SESSION_CONTEXT,
+    classifyPublicSessionResponse,
     type PublicSessionState,
   } from '$lib/public-session';
 
@@ -23,12 +24,10 @@
   async function checkSession(){
     try{
       const { response, body }=await requestJsonCapped('/api/session',{cache:'no-store'},{maximumBytes:SMALL_JSON_RESPONSE_BYTES,timeoutMs:10_000});
-      const record=body&&typeof body==='object'&&!Array.isArray(body)?body as Record<string,unknown>:{};
-      session=response.ok&&record.authenticated===true?'authenticated':'anonymous';
+      session=classifyPublicSessionResponse(response.ok,body);
       if(session==='anonymous')clearConsoleWorkflowState();
     }catch{
-      session='anonymous';
-      clearConsoleWorkflowState();
+      session='unavailable';
     }
   }
 
@@ -59,7 +58,7 @@
       <a class="overview-link" class:active={page.url.pathname==='/' } aria-current={page.url.pathname==='/'?'page':undefined} href="/">Overview</a>
       <a class:active={page.url.pathname==='/demo'} aria-current={page.url.pathname==='/demo'?'page':undefined} href="/demo">Demo</a>
       <ThemeSelector />
-      <a class="console-link" class:active={page.url.pathname==='/login'} aria-current={page.url.pathname==='/login'?'page':undefined} aria-label="Open console" href={session==='authenticated'?'/dashboard':'/login'}><span class="console-label-full" aria-hidden="true">Open console</span><span class="console-label-short" aria-hidden="true">Console</span></a>
+      <a class="console-link" class:active={page.url.pathname==='/login'} aria-current={page.url.pathname==='/login'?'page':undefined} aria-label="Open console" href={session==='anonymous'?'/login':'/dashboard'}><span class="console-label-full" aria-hidden="true">Open console</span><span class="console-label-short" aria-hidden="true">Console</span></a>
       {#if session==='authenticated'}<button class="sign-out" type="button" disabled={signingOut} onclick={logout}>{signingOut?'Signing out…':'Sign out'}</button>{/if}
       {#if logoutError}<span class="session-error" role="status">{logoutError}</span>{/if}
     </nav>

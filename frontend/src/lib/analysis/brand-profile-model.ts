@@ -9,6 +9,7 @@ import { isInformativeFaviconHash } from './utils.ts';
 
 export const BRAND_PROFILE_SCHEMA = 'whoisleuth.brand-profiles';
 export const BRAND_PROFILE_SCHEMA_VERSION = 6;
+export const SUPPORTED_BRAND_PROFILE_SCHEMA_VERSIONS = Object.freeze([2, 3, 4, 5, BRAND_PROFILE_SCHEMA_VERSION]);
 export const MAX_PROFILES = 100;
 export const MAX_PROFILE_VALUES = 200;
 export const MAX_PROFILE_VALUE_INPUTS = MAX_PROFILE_VALUES * 4;
@@ -528,8 +529,8 @@ export function mergeBrandProfiles(
   if (importedVersion !== null && importedVersion > BRAND_PROFILE_SCHEMA_VERSION) {
     throw new Error(`This Brand Profile file uses newer schema ${importedVersion}. Update the app before importing it.`);
   }
-  if (![2, 3, 4, 5, BRAND_PROFILE_SCHEMA_VERSION].includes(importedVersion ?? 0)) {
-    throw new Error(`Expected a WHOISleuth Brand Profile export using schema 2, 3, 4, 5, or ${BRAND_PROFILE_SCHEMA_VERSION}.`);
+  if (!SUPPORTED_BRAND_PROFILE_SCHEMA_VERSIONS.includes(importedVersion ?? 0)) {
+    throw new Error(`Expected a WHOISleuth Brand Profile export using schema ${SUPPORTED_BRAND_PROFILE_SCHEMA_VERSIONS.join(', ').replace(/, ([^,]+)$/u, ', or $1')}.`);
   }
   const local = normalizeBrandProfileStore(localRaw).profiles;
   const byName = new Map(local.map((profile) => [profile.name.toLowerCase(), profile]));

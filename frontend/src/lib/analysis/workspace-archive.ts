@@ -14,6 +14,7 @@ import {
   assertBrandProfileStoreBudget,
   BRAND_PROFILE_SCHEMA,
   BRAND_PROFILE_SCHEMA_VERSION,
+  SUPPORTED_BRAND_PROFILE_SCHEMA_VERSIONS,
   buildBrandProfileExport,
   mergeBrandProfiles,
   normalizeBrandProfileId,
@@ -39,6 +40,7 @@ import {
   mergeShortlistStores,
   SHORTLIST_SCHEMA,
   SHORTLIST_SCHEMA_VERSION,
+  SUPPORTED_SHORTLIST_SCHEMA_VERSIONS,
 } from './shortlist-model.ts';
 import {
   assertDetectionRuleStoreBudget,
@@ -56,6 +58,7 @@ import {
 import {
   BULK_SESSION_SCHEMA,
   BULK_SESSION_SCHEMA_VERSION,
+  SUPPORTED_BULK_SESSION_SCHEMA_VERSIONS,
   buildBulkSessionExport,
   enforceBulkSessionStoreBudget,
   mergeBulkSessions,
@@ -63,6 +66,7 @@ import {
 import {
   WEBSITE_SNAPSHOT_SCHEMA,
   WEBSITE_SNAPSHOT_SCHEMA_VERSION,
+  SUPPORTED_WEBSITE_SNAPSHOT_SCHEMA_VERSIONS,
   buildWebsiteSnapshotExport,
   mergeWebsiteSnapshots,
 } from './website-snapshot-model.ts';
@@ -355,6 +359,7 @@ const SECTION_DEFINITIONS: readonly WorkspaceSectionDefinition[] = [
   },
   {
     id: 'brandProfiles', label: 'Brand profiles', schema: BRAND_PROFILE_SCHEMA, version: BRAND_PROFILE_SCHEMA_VERSION,
+    supportedVersions: SUPPORTED_BRAND_PROFILE_SCHEMA_VERSIONS,
     count: (data) => arrayCount(data, 'profiles'),
     merge: (local, data, now) => {
       const result = mergeBrandProfiles(local.brandProfiles, data, { nowIso: now });
@@ -371,6 +376,7 @@ const SECTION_DEFINITIONS: readonly WorkspaceSectionDefinition[] = [
   },
   {
     id: 'shortlist', label: 'Shortlist', schema: SHORTLIST_SCHEMA, version: SHORTLIST_SCHEMA_VERSION,
+    supportedVersions: SUPPORTED_SHORTLIST_SCHEMA_VERSIONS,
     count: (data) => arrayCount(data, 'entries'),
     merge: (local, data) => {
       const result = mergeShortlistStores(local.shortlist, data);
@@ -398,6 +404,7 @@ const SECTION_DEFINITIONS: readonly WorkspaceSectionDefinition[] = [
     label: 'Saved Bulk sessions',
     schema: BULK_SESSION_SCHEMA,
     version: BULK_SESSION_SCHEMA_VERSION,
+    supportedVersions: SUPPORTED_BULK_SESSION_SCHEMA_VERSIONS,
     count: (data) => arrayCount(data, 'sessions'),
     merge: (local, data) => {
       const result = mergeBulkSessions(local.bulkSessions, data);
@@ -410,6 +417,7 @@ const SECTION_DEFINITIONS: readonly WorkspaceSectionDefinition[] = [
     label: 'Website profile snapshots',
     schema: WEBSITE_SNAPSHOT_SCHEMA,
     version: WEBSITE_SNAPSHOT_SCHEMA_VERSION,
+    supportedVersions: SUPPORTED_WEBSITE_SNAPSHOT_SCHEMA_VERSIONS,
     count: (data) => arrayCount(data, 'snapshots'),
     merge: (local, data) => mergeWebsiteSnapshots(local.websiteSnapshots, data),
   },

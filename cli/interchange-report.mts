@@ -6,6 +6,7 @@ import {
   type InterchangeFidelity,
 } from '../lib/interchange-fidelity-registry.mts';
 import { verifyOfflineArtifact } from './artifact-verify.mts';
+import { mergeBrandProfiles } from '../frontend/src/lib/analysis/brand-profile-model.ts';
 
 export const INTERCHANGE_FIDELITY_REPORT_SCHEMA = 'whoisleuth.interchange-fidelity-report';
 export const INTERCHANGE_FIDELITY_REPORT_VERSION = 1;
@@ -42,6 +43,9 @@ export type InterchangeFidelityReport = Readonly<{
     recordCount: number | null;
     sectionCount: number | null;
     encryptedContentVerified: boolean | null;
+    acceptedRecordCount: number | null;
+    skippedRecordCount: number | null;
+    unsupportedSectionCount: number | null;
   }>;
   limitations: readonly string[];
 }>;
@@ -95,18 +99,20 @@ function timestamp(value: unknown): string {
   return new Date(parsed).toISOString();
 }
 
-function validateBrandProfileExport(value: UnknownRecord): number {
+function validateBrandProfileExport(value: UnknownRecord): Readonly<{ accepted: number; skipped: number }> {
   const profiles = value.profiles;
   if (!Array.isArray(profiles) || profiles.length > 100) {
     throw new TypeError('Brand Profile export does not contain a bounded profiles collection.');
   }
-  if (profiles.some((profile) => record(profile) === null)) {
-    throw new TypeError('Brand Profile export contains an invalid profile record.');
-  }
   if (typeof value.exportedAt !== 'string' || value.exportedAt.length > 64 || !Number.isFinite(Date.parse(value.exportedAt))) {
     throw new TypeError('Brand Profile export time is invalid.');
   }
-  return profiles.length;
+  let nextId = 0;
+  const result = mergeBrandProfiles([], value, {
+    nowIso: new Date(Date.parse(value.exportedAt)).toISOString(),
+    makeId: () => `interchange-profile-${++nextId}`,
+  });
+  return Object.freeze({ accepted: result.profiles.length, skipped: result.skipped });
 }
 
 export async function buildInterchangeFidelityReport(
@@ -132,7 +138,10 @@ export async function buildInterchangeFidelityReport(
       excludedFieldGroups: Object.freeze([]),
       futureVersionBehaviour: null,
     }),
-    summary: Object.freeze({ inputBytes, recordCount: null, sectionCount: null, encryptedContentVerified: null }),
+    summary: Object.freeze({
+      inputBytes, recordCount: null, sectionCount: null, encryptedContentVerified: null,
+      acceptedRecordCount: null, skippedRecordCount: null, unsupportedSectionCount: null,
+    }),
     limitations: Object.freeze([
       'The file did not match a registered interchange contract. Its supplied schema text and contents are not echoed.',
       'This report makes no request and does not establish that evidence is accurate, current, complete, or safe to share.',
@@ -146,19 +155,28 @@ export async function buildInterchangeFidelityReport(
   let recordCount: number | null = null;
   let sectionCount: number | null = null;
   let encryptedContentVerified: boolean | null = contract.id === 'encrypted_workspace' ? false : null;
+  let acceptedRecordCount: number | null = null;
+  let skippedRecordCount: number | null = null;
+  let unsupportedSectionCount: number | null = null;
 
   if (supported && contract.fidelity !== 'unsupported') {
     try {
       if (contract.id === 'brand_profiles') {
-        recordCount = validateBrandProfileExport(value);
-        verificationState = 'structure_valid';
-        valid = true;
+        const validation = validateBrandProfileExport(value);
+        recordCount = validation.accepted;
+        acceptedRecordCount = validation.accepted;
+        skippedRecordCount = validation.skipped;
+        verificationState = validation.skipped === 0 ? 'structure_valid' : 'not_verified';
+        valid = validation.skipped === 0;
       } else {
         const verification = await verifyOfflineArtifact(raw, { passphrase: options.passphrase ?? null });
         verificationState = verification.state;
         valid = verification.valid;
         recordCount = verification.summary.recordCount;
         sectionCount = verification.summary.sectionCount;
+        const unsupportedSections = verification.summary.unsupportedSectionCount ?? 0;
+        unsupportedSectionCount = unsupportedSections;
+        if (unsupportedSections > 0) valid = false;
         if (contract.id === 'encrypted_workspace') encryptedContentVerified = verification.state === 'verified';
       }
     } catch {
@@ -189,7 +207,10 @@ export async function buildInterchangeFidelityReport(
       excludedFieldGroups: contract.excludedFieldGroups,
       futureVersionBehaviour: contract.futureVersionBehaviour,
     }),
-    summary: Object.freeze({ inputBytes, recordCount, sectionCount, encryptedContentVerified }),
+    summary: Object.freeze({
+      inputBytes, recordCount, sectionCount, encryptedContentVerified,
+      acceptedRecordCount, skippedRecordCount, unsupportedSectionCount,
+    }),
     limitations: Object.freeze([
       'Compatibility describes declared field groups and supported operations, not byte-for-byte equality or evidence truth.',
       'The report emits only registered metadata, counts, and fixed field-group identifiers. Targets, notes, contacts, passphrases, and evidence values are not included.',
@@ -212,6 +233,9 @@ export function formatInterchangeFidelityReport(report: InterchangeFidelityRepor
     `CLI            read ${cli?.read ?? 'unknown'} · write ${cli?.write ?? 'unknown'} · verify ${cli?.verify ?? 'unknown'}`,
     `Records        ${report.summary.recordCount ?? 'not disclosed'}`,
     `Sections       ${report.summary.sectionCount ?? 'not disclosed'}`,
+    ...(report.summary.acceptedRecordCount === null ? [] : [`Accepted       ${report.summary.acceptedRecordCount}`]),
+    ...(report.summary.skippedRecordCount === null ? [] : [`Skipped        ${report.summary.skippedRecordCount}`]),
+    ...(report.summary.unsupportedSectionCount === null ? [] : [`Unsupported    ${report.summary.unsupportedSectionCount}`]),
     '',
     `Preserved      ${report.compatibility.preservedFieldGroups.join(', ') || 'none declared'}`,
     `Excluded       ${report.compatibility.excludedFieldGroups.join(', ') || 'none declared'}`,

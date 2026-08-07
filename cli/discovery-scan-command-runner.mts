@@ -1,5 +1,3 @@
-import { createReadStream } from 'node:fs';
-
 import { classifyQuery } from '../lib/classify.mts';
 import { normalizeSelectedDnsResolvers } from '../lib/dns-resolver-selection.mts';
 import { runUnifiedLookup } from '../lib/lookup.mts';
@@ -13,7 +11,6 @@ import {
   formatDiscoveryScanJsonLines,
   formatTerminalDiscoveryScan,
   parseDiscoveryScanAllowlist,
-  readDiscoveryScanListBounded,
   runDiscoveryScanChunks,
 } from './discovery-scan.mts';
 import { updateDiscoveryObservationSnapshot } from './discovery-observation-snapshot.mts';
@@ -31,13 +28,14 @@ type DiscoveryScanArguments = Extract<CliArguments, { action: 'discover-scan' }>
 async function readAllowlist(
   source: string | null,
   dependencies: CliDependencies,
+  context: CliCommandContext,
   classify: typeof classifyQuery,
 ): Promise<Set<string>> {
   if (!source) return new Set<string>();
   try {
     const text = dependencies.readDiscoveryAllowlist
       ? await dependencies.readDiscoveryAllowlist(source)
-      : await readDiscoveryScanListBounded(createReadStream(source, { highWaterMark: 64 * 1024 }));
+      : await context.readInput(source, 64 * 1024, 'Discovery scan allowlist');
     return parseDiscoveryScanAllowlist(text, classify);
   } catch (error) {
     if (error instanceof CliUsageError) throw error;
@@ -82,7 +80,7 @@ async function runDiscoveryScanCommand(
       throw new CliUsageError(boundedCliErrorMessage(error, 'Invalid DNS resolver selection'));
     }
   }
-  const allowlist = await readAllowlist(args.allowlistSource, dependencies, classify);
+  const allowlist = await readAllowlist(args.allowlistSource, dependencies, context, classify);
   const checkpointWriter = dependencies.createBulkCheckpointWriter || createBulkCheckpointWriter;
   const checkpoint = args.checkpoint
     ? await checkpointWriter({

@@ -10,7 +10,7 @@ import { ANALYST_REVIEW_REASONS } from '../../../../lib/analyst-taxonomy.mts';
 import type { CaseInvestigationBranch } from './case-investigation-branch-model.ts';
 
 export const CASE_SCHEMA_VERSION = 11;
-export const CASE_IMPORT_VERSIONS = [3, 4, 5, 6, 7, 8, 9, 10, CASE_SCHEMA_VERSION] as const;
+export const CASE_IMPORT_VERSIONS = [2, 3, 4, 5, 6, 7, 8, 9, 10, CASE_SCHEMA_VERSION] as const;
 export const MAX_CASES = 500;
 export const MAX_NOTES_PER_CASE = 50;
 export const MAX_NOTE_LENGTH = 2000;

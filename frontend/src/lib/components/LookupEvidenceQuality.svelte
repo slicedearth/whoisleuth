@@ -73,7 +73,7 @@
 
     <details>
       <summary>Review {matrix.entries.length} source and analysis records</summary>
-      <div class="matrix" role="table" aria-label="Source quality and freshness">
+      <div class="matrix" role="table" aria-label="Source quality and freshness" aria-colcount="5">
         <div class="matrix-head" role="row">
           <span role="columnheader">Source</span>
           <span role="columnheader">State</span>
@@ -82,7 +82,8 @@
           <span role="columnheader">Supports</span>
         </div>
         {#each matrix.entries as entry (entry.id)}
-          <div class="quality-row" class:limited={entry.state === 'partial' || entry.state === 'unavailable' || entry.state === 'unknown'} role="row">
+          <div class="quality-record" class:limited={entry.state === 'partial' || entry.state === 'unavailable' || entry.state === 'unknown'} role="rowgroup">
+          <div class="quality-row" role="row">
             <div class="source" role="cell">
               <small>{entry.category}</small>
               <strong>{entry.label}</strong>
@@ -108,12 +109,15 @@
             <div class="supports" role="cell">
               {entry.supports.length ? entry.supports.join(', ') : 'Source-specific evidence'}
             </div>
-            {#if entry.limitations.length}
-              <div class="limitations" role="cell">
+          </div>
+          {#if entry.limitations.length}
+            <div class="limitations-row" role="row">
+              <div class="limitations" role="cell" aria-colspan="5" aria-label={`Limitations for ${entry.label}`}>
                 <strong>Limitations</strong>
                 <ul>{#each entry.limitations as limitation}<li>{limitation}</li>{/each}</ul>
               </div>
-            {/if}
+            </div>
+          {/if}
           </div>
         {/each}
       </div>
@@ -130,7 +134,7 @@
             <p>Registration {refreshPlan.freshnessPolicy.thresholdsDays.registration} days · network {refreshPlan.freshnessPolicy.thresholdsDays.network} days · web {refreshPlan.freshnessPolicy.thresholdsDays.web} days.</p>
           {/if}
         </div>
-        <p class="note">Thresholds organise review and source-refresh suggestions for this result only. They are not saved and do not make older evidence false or newer evidence complete.</p>
+        <p class="note">Thresholds organise source-refresh suggestions for results in this open Lookup page. They are not retained in browser-local storage. A deliberately downloaded investigation brief records the policy used. Thresholds do not make older evidence false or newer evidence complete.</p>
       </details>
       <LookupSourceRefresh plan={refreshPlan} {query} {depth} />
     </details>
@@ -171,8 +175,9 @@
   .matrix{display:grid;gap:7px}
   .matrix-head,.quality-row{display:grid;grid-template-columns:minmax(150px,1.25fr) minmax(92px,.65fr) minmax(155px,1fr) minmax(120px,.8fr) minmax(180px,1.25fr);gap:9px;align-items:start}
   .matrix-head{padding:0 10px;color:var(--muted);font:650 var(--text-2xs) var(--mono);text-transform:uppercase}
-  .quality-row{min-width:0;padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
-  .quality-row.limited{border-color:color-mix(in srgb,var(--amber) 38%,var(--border))}
+  .quality-record{min-width:0;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised);overflow:hidden}
+  .quality-row{min-width:0;padding:10px}
+  .quality-record.limited{border-color:color-mix(in srgb,var(--amber) 38%,var(--border))}
   .source,.observed,.timing{display:grid;gap:2px;min-width:0}
   .source small,.observed small,.timing small{color:var(--muted);font:var(--text-2xs) var(--mono)}
   .source small{text-transform:uppercase}
@@ -187,7 +192,7 @@
   .truncated{display:block;width:max-content;margin-top:5px;color:var(--amber);font:650 var(--text-2xs) var(--mono)}
   .observed span,.timing span,.supports{color:var(--text);font-size:var(--text-2xs);line-height:1.45;overflow-wrap:anywhere}
   .timing span.rejected{color:var(--danger)}
-  .limitations{grid-column:1/-1;padding-top:8px;border-top:1px solid var(--border);color:var(--muted);font-size:var(--text-2xs)}
+  .limitations{padding:8px 10px;border-top:1px solid var(--border);color:var(--muted);font-size:var(--text-2xs)}
   .limitations strong{font:650 var(--text-2xs) var(--mono);text-transform:uppercase}
   .limitations ul{margin:5px 0 0;padding-left:17px;line-height:1.45}
   .note{margin:9px 0 0;color:var(--muted);font-size:var(--text-2xs);line-height:1.5}
@@ -210,7 +215,7 @@
   }
   @media(max-width:480px){
     .quality-row{grid-template-columns:minmax(0,1fr)}
-    .supports,.limitations{grid-column:1}
+    .supports{grid-column:1}
     .policy-form{grid-template-columns:minmax(0,1fr)}
     .policy-form p{grid-column:1}
   }

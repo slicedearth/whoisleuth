@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { open } from 'node:fs/promises';
+import { lstat } from 'node:fs/promises';
 
 import { recordOrNull } from '../lib/bounded-contract-normalizers.mts';
 import { readBoundedRegularTextFile } from '../lib/bounded-file.mts';
@@ -165,8 +165,7 @@ async function readCheckpointFile(path: string): Promise<string> {
 
 async function checkpointFileExists(path: string): Promise<boolean> {
   try {
-    const handle = await open(path, 'r');
-    await handle.close();
+    await lstat(path);
     return true;
   } catch (error) {
     const code = error && typeof error === 'object' && 'code' in error ? error.code : null;

@@ -95,6 +95,7 @@ type CliCommandContext = Readonly<{
   writeStdout(value: string): void;
   writeStderr(value: string): void;
   readSingleInput(): Promise<string>;
+  readInput(source: string | null | undefined, maximumBytes: number, label: string): Promise<string>;
   now(): string;
   beginProgress(message: string): TerminalProgress;
   endProgress(): void;

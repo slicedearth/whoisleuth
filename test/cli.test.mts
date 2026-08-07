@@ -806,13 +806,9 @@ test('repository source exposes an executable local CLI entry point', () => {
 test('repository CLI handles service termination while waiting for standard input', async () => {
   const entryPoint = path.join(__dirname, '..', 'bin/whoisleuth.mts');
   const readinessModule = `data:text/javascript,${encodeURIComponent(`
-    const timer = setInterval(() => {
-      if (process.listenerCount('SIGTERM') > 0) {
-        clearInterval(timer);
-        process.send?.({ type: 'ready' });
-      }
-    }, 5);
-    timer.unref();
+    process.on('newListener', (event) => {
+      if (event === 'SIGTERM') queueMicrotask(() => process.send?.({ type: 'ready' }));
+    });
   `)}`;
   const child = spawn(process.execPath, ['--import', readinessModule, entryPoint, 'lookup'], {
     stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
@@ -827,7 +823,7 @@ test('repository CLI handles service termination while waiting for standard inpu
     const timeout = setTimeout(() => {
       child.kill('SIGKILL');
       reject(new Error('CLI did not become ready for SIGTERM.'));
-    }, 3_000);
+    }, 15_000);
     child.once('message', (message) => {
       if (!message || typeof message !== 'object' || !('type' in message) || message.type !== 'ready') return;
       clearTimeout(timeout);

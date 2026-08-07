@@ -1057,14 +1057,16 @@ describe('rejects unsupported future-schema imports', () => {
 
   test('imports current and supported legacy case envelopes only', () => {
     const local = localCases();
-    assert.throws(() => model.mergeCases(local, [{ domain: 'bare.example', updatedAt: ISO }]), /schema 3 or 4 or 5/u);
-    assert.throws(() => model.mergeCases(local, { version: 2, cases: [{ domain: 'v2.example', updatedAt: ISO }] }), /schema 3 or 4 or 5/u);
+    assert.throws(() => model.mergeCases(local, [{ domain: 'bare.example', updatedAt: ISO }]), /schema 2 or 3 or 4/u);
+    assert.equal(model.mergeCases(local, { version: 2, cases: [{ domain: 'v2.example', updatedAt: ISO }] }).added, 1);
     assert.equal(model.mergeCases(local, { version: 3, cases: [{ domain: 'v3.example', updatedAt: ISO }] }).added, 1);
     assert.equal(model.mergeCases(local, { version: 4, cases: [{ domain: 'v4.example', updatedAt: ISO }] }).added, 1);
     assert.equal(model.mergeCases(local, { version: 5, cases: [{ domain: 'v5.example', updatedAt: ISO }] }).added, 1);
     assert.equal(model.mergeCases(local, { version: 6, cases: [{ domain: 'v6.example', updatedAt: ISO }] }).added, 1);
     assert.equal(model.mergeCases(local, { version: 7, cases: [{ domain: 'v7.example', updatedAt: ISO }] }).added, 1);
     assert.equal(model.mergeCases(local, { version: 8, cases: [{ domain: 'v8.example', updatedAt: ISO }] }).added, 1);
+    assert.equal(model.mergeCases(local, { version: 9, cases: [{ domain: 'v9.example', updatedAt: ISO }] }).added, 1);
+    assert.equal(model.mergeCases(local, { version: 10, cases: [{ domain: 'v10.example', updatedAt: ISO }] }).added, 1);
     assert.equal(model.mergeCases(local, { version: model.CASE_SCHEMA_VERSION, cases: [{ domain: 'current.example', updatedAt: ISO }] }).added, 1);
   });
 });

@@ -1,5 +1,3 @@
-import { createReadStream } from 'node:fs';
-
 import {
   MAX_OFFLINE_ARTIFACT_BYTES,
   MAX_OFFLINE_PASSPHRASE_FILE_BYTES,
@@ -22,9 +20,7 @@ import type {
 import { boundedCliErrorMessage, CliUsageError } from './errors.mts';
 import EXIT_CODES from './exit-codes.mts';
 import { formatJsonDocument } from './formatters/json.mts';
-import {
-  readSavedLookupInputBounded,
-} from './saved-lookup.mts';
+import { readCliTextInput } from './input.mts';
 import type { BoundedTextStream } from './bulk.mts';
 
 type WritableLike = { write(value: string): unknown };
@@ -40,6 +36,7 @@ export type EvidenceCommandDependencies = Readonly<{
   readPrivateKeyFile: ((source: string) => string | Promise<string>) | undefined;
   readPublicKeyFile: ((source: string) => string | Promise<string>) | undefined;
   now: (() => string) | undefined;
+  signal: AbortSignal | undefined;
 }>;
 
 export function isEvidenceCommand(
@@ -66,12 +63,11 @@ async function readArtifact(
   try {
     return dependencies.readArtifactInput
       ? await dependencies.readArtifactInput(source)
-      : await readSavedLookupInputBounded(source
-        ? createReadStream(source, { highWaterMark: 64 * 1024 })
-        : dependencies.stdin, {
-          limit: MAX_OFFLINE_ARTIFACT_BYTES,
-          label,
-        });
+      : await readCliTextInput(source, dependencies.stdin, {
+        maximumBytes: MAX_OFFLINE_ARTIFACT_BYTES,
+        label,
+        ...(dependencies.signal ? { signal: dependencies.signal } : {}),
+      });
   } catch (error) {
     if (error instanceof CliUsageError) throw error;
     throw new CliUsageError(
@@ -84,14 +80,16 @@ async function readKey(
   source: string,
   label: string,
   injected: ((source: string) => string | Promise<string>) | undefined,
+  dependencies: EvidenceCommandDependencies,
 ): Promise<string> {
   try {
     return injected
       ? await injected(source)
-      : await readSavedLookupInputBounded(
-        createReadStream(source, { highWaterMark: MAX_SIGNING_KEY_FILE_BYTES }),
-        { limit: MAX_SIGNING_KEY_FILE_BYTES, label },
-      );
+      : await readCliTextInput(source, dependencies.stdin, {
+        maximumBytes: MAX_SIGNING_KEY_FILE_BYTES,
+        label,
+        ...(dependencies.signal ? { signal: dependencies.signal } : {}),
+      });
   } catch (error) {
     if (error instanceof CliUsageError) throw error;
     throw new CliUsageError(
@@ -106,10 +104,11 @@ async function readPassphrase(
 ): Promise<string> {
   const passphraseText = dependencies.readPassphraseFile
     ? await dependencies.readPassphraseFile(source)
-    : await readSavedLookupInputBounded(
-      createReadStream(source, { highWaterMark: MAX_OFFLINE_PASSPHRASE_FILE_BYTES }),
-      { limit: MAX_OFFLINE_PASSPHRASE_FILE_BYTES, label: 'Passphrase file' },
-    );
+    : await readCliTextInput(source, dependencies.stdin, {
+      maximumBytes: MAX_OFFLINE_PASSPHRASE_FILE_BYTES,
+      label: 'Passphrase file',
+      ...(dependencies.signal ? { signal: dependencies.signal } : {}),
+    });
   const passphrase = passphraseText.replace(/\r?\n$/u, '');
   if (!passphrase || /[\r\n\u0000]/u.test(passphrase)) {
     throw new CliUsageError('Passphrase file must contain exactly one non-empty UTF-8 line.');
@@ -159,6 +158,7 @@ export async function runEvidenceCommand(
       args.privateKeySource,
       'Private key file',
       dependencies.readPrivateKeyFile,
+      dependencies,
     );
     const signed = await signEvidencePackage(
       input,
@@ -180,6 +180,7 @@ export async function runEvidenceCommand(
       args.publicKeySource,
       'Public key file',
       dependencies.readPublicKeyFile,
+      dependencies,
     )
     : null;
   const report = await verifyEvidencePackageSignature(input, publicKey);

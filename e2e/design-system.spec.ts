@@ -650,7 +650,7 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   await coverage.getByLabel('Registration days').fill('10');
   await coverage.getByLabel('Registration days').blur();
   await expect(coverage).toContainText('Freshness policy · analyst-defined');
-  await expect(coverage).toContainText('Thresholds organise review');
+  await expect(coverage).toContainText('Thresholds organise source-refresh suggestions');
 
   const registrationFact = page.locator('.summaries article').filter({ hasText: 'Registration' }).first();
   await registrationFact.getByText('Inspect evidence').click();

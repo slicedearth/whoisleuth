@@ -213,6 +213,12 @@ rate-limit the local machine's network address. Offline `discover`, `compare`,
 `commands`, `completion`, and `manual` operations make no network requests. Commands write
 to stdout unless the analyst deliberately selects a local output file.
 
+Path operands are opened through one bounded regular-file boundary. Named
+pipes, devices and directories are refused without waiting for a writer;
+symbolic links to regular analyst-selected files remain supported. Standard
+input is the only intentional streaming input and observes the same command
+byte limit and cancellation signal.
+
 ## Output
 
 Human-readable terminal output is the default. On an interactive terminal it
@@ -591,6 +597,9 @@ supported signed review artefact, it validates the declared SHA-256 digest. An
 encrypted archive without `--passphrase-file` can establish only that the
 envelope is structurally valid; it reports `envelope_valid` and explicitly
 leaves authenticated encryption and inner checksums unchecked.
+Checksum validity is reported separately from importability. A checksum-valid
+archive can therefore list unsupported sections when it contains a section
+schema this version cannot restore; inspect those counts before importing.
 
 Supplying a separate passphrase file, capped at 1 KiB, allows authenticated
 decryption followed by the ordinary workspace checks. The passphrase is never
@@ -1288,7 +1297,10 @@ failure policies are supported.
 installed fixed recipes. Network steps require `--approve-network` for that
 invocation. Analyst-selection placeholders always pause. A bounded `--resume`
 state must match the exact recipe and subject, cannot add commands or shell
-syntax, and is not evidence that earlier results remain current.
+syntax, and is not evidence that earlier results remain current. Retained
+successful steps must form an exact contiguous prefix of the installed recipe,
+including command, ordered arguments, mode and output schema. A final failed
+step is retried rather than trusted as completed.
 
 ## Optional local rendered capture
 

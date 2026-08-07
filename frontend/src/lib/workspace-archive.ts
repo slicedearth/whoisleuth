@@ -49,6 +49,7 @@ import {
   BULK_REVIEW_COLLECTION,
 } from './browser-local-data-definitions.ts';
 import type { AnyLocalDataCollectionDefinition } from './browser-local-data.ts';
+import { guardedWorkspaceRollback } from './analysis/workspace-rollback.ts';
 
 export { MAX_WORKSPACE_ARCHIVE_BYTES } from './analysis/workspace-archive.ts';
 export {
@@ -219,6 +220,8 @@ export async function mergeLocalWorkspaceArchive(raw: unknown, selectedIds: stri
     .filter((definition): definition is AnyLocalDataCollectionDefinition => Boolean(definition));
   let results: WorkspaceImportSummary[] = [];
   let previousDocuments = new Map<string, unknown>();
+  let appliedDocuments = new Map<string, unknown>();
+  let dataApplied = false;
   try {
     if (definitions.length) {
       results = await (await browserLocalDataProvider()).updateMany(definitions, (documents) => {
@@ -276,8 +279,10 @@ export async function mergeLocalWorkspaceArchive(raw: unknown, selectedIds: stri
             summaries.push(importSummary(section.id, result));
           } else continue;
         }
+        appliedDocuments = new Map(next);
         return { documents: next, result: summaries };
       });
+      dataApplied = true;
     }
     const settingsSection = sections.find((section) => section.id === 'settings');
     if (settingsSection) {
@@ -286,8 +291,11 @@ export async function mergeLocalWorkspaceArchive(raw: unknown, selectedIds: stri
     }
   } catch (cause) {
     try {
-      if (definitions.length && previousDocuments.size) {
-        await (await browserLocalDataProvider()).updateMany(definitions, () => ({ documents: previousDocuments, result: undefined }));
+      if (dataApplied && definitions.length && previousDocuments.size) {
+        await (await browserLocalDataProvider()).updateMany(definitions, (documents) => ({
+          documents: guardedWorkspaceRollback(definitions, documents, appliedDocuments, previousDocuments),
+          result: undefined,
+        }));
       }
       restoreSettings(settingsSnapshot);
     } catch {

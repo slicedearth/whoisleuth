@@ -214,6 +214,7 @@
     .mobile-source-summary strong{color:var(--muted);font:700 .5rem var(--mono);text-transform:uppercase}
     .mobile-source-summary .state-success strong{color:var(--accent2)}
     .mobile-source-summary .state-warning strong,.mobile-source-summary .state-partial strong,.mobile-source-summary .state-inconclusive strong{color:var(--amber)}
-    .mobile-source-summary .state-error strong,.mobile-source-summary .state-unavailable strong{color:var(--danger)}
+    .mobile-source-summary .state-error strong{color:var(--danger)}
+    .mobile-source-summary .state-unavailable strong{color:var(--muted)}
   }
 </style>

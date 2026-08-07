@@ -36,9 +36,24 @@ describe('offline artifact verifier', () => {
     assert.equal(report.state, 'verified');
     assert.equal(report.checks.contentIntegrity, 'verified');
     assert.ok((report.summary.sectionCount ?? 0) > 0);
+    assert.equal(report.summary.unsupportedSectionCount, 0);
     const terminal = formatOfflineArtifactVerification(report);
     assert.doesNotMatch(terminal, /fixture archive passphrase/u);
     assert.doesNotMatch(terminal, /"cases"/u);
+  });
+
+  test('reports integrity-valid archive sections that this version cannot import', async () => {
+    const archive = structuredClone(await buildWorkspaceArchive({}, {
+      generatedAt: '2026-07-15T00:00:00.000Z',
+    }));
+    const cases = archive.manifest.sections.find((section) => section.id === 'cases');
+    assert.ok(cases);
+    cases.version = 999;
+    const report = await verifyOfflineArtifact(JSON.stringify(archive));
+    assert.equal(report.state, 'verified');
+    assert.equal(report.valid, true);
+    assert.equal(report.summary.unsupportedSectionCount, 1);
+    assert.match(report.limitations.join(' '), /cannot be imported/iu);
   });
 
   test('distinguishes structural envelope inspection from authenticated decryption', async () => {

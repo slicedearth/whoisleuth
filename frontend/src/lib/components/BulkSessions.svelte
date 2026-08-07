@@ -60,7 +60,7 @@
   <div class="section-heading">
     <div>
       <p class="eyebrow">Browser-local workspace</p>
-      <h2 id="bulk-sessions-title">Saved Bulk sessions</h2>
+      <h2 id="bulk-sessions-title" tabindex="-1">Saved Bulk sessions</h2>
       <p>Save compact results and source states so an incomplete investigation can be resumed or compared later. Raw source payloads and contact records are excluded.</p>
     </div>
     {#if sessions.length}<button type="button" class="secondary" onclick={exportSessions}>Export sessions</button>{/if}

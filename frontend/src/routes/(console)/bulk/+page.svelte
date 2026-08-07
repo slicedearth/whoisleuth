@@ -1,7 +1,7 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { page as routePage } from '$app/state';
-  import { getContext, onMount } from 'svelte';
+  import { getContext, onMount, tick } from 'svelte';
   import BulkResultsTable from '$lib/components/BulkResultsTable.svelte';
   import BulkCoverage from '$lib/components/BulkCoverage.svelte';
   import BulkGroupSummary from '$lib/components/BulkGroupSummary.svelte';
@@ -220,7 +220,14 @@
     const candidateState=handoffNavigation?null:readBulkWorkflowState<ScanResult>();
     const restored=candidateState&&(!investigationTarget||candidateState.guideContext===guideContext)?candidateState:null;
     if(restored){input=restored.input;mode=restored.mode;pacing=normalizeBulkPacing(restored.pacing);completed=restored.completed;total=restored.total;results=restored.results;filter=restored.filter;mutationFilter=restored.mutationFilter;signalFilters=new Set(restored.signalFilters);sourceFilter=restored.sourceFilter||'';lifecycleFilter=restored.lifecycleFilter||'';ageFilter=restored.ageFilter||'';mailFilter=restored.mailFilter||'';registrarFilter=restored.registrarFilter||'';caseDispositionFilter=restored.caseDispositionFilter||'';groupBy=restored.groupBy||'';sortKey=restored.sortKey;sortDirection=restored.sortDirection;page=restored.page;status=restored.status;indicatorFormat=restored.indicatorFormat;indicatorWildcards=restored.indicatorWildcards===true;watchlistName=restored.watchlistName;}
-    void initializeLocalContext(handoffNavigation,investigationTarget,restored);
+    void initializeLocalContext(handoffNavigation,investigationTarget,restored).finally(async()=>{
+      if(routePage.url.hash!=='#bulk-sessions-title')return;
+      workspaceToolsOpen=true;
+      await tick();
+      const target=document.getElementById('bulk-sessions-title');
+      target?.scrollIntoView({block:'start'});
+      target?.focus({preventScroll:true});
+    });
     return()=>{
       resume();
       controller?.abort();
