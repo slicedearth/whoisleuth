@@ -126,11 +126,20 @@ function sectionedLookupFixture(domain: string) {
       diagnostics: { ptr: { status: 'success', answerCount: 1 } },
       records: { ptr: [`edge.${domain}`] },
     },
-    rdap: { upstreamStatus: 200, parsed: { domain, entitiesByRole: {}, lifecycle: { updatedDateIso: '2026-06-10T00:00:00.000Z' } } },
+    rdap: {
+      upstreamStatus: 200,
+      parsed: { domain, entitiesByRole: {}, lifecycle: { updatedDateIso: '2026-06-10T00:00:00.000Z' } },
+      registrarRdap: {
+        status: 'success',
+        endpoint: 'https://registrar.example.test/domain/sectioned-result.invalid',
+        fetchedAt: '2026-07-13T00:00:00.000Z',
+        parsed: { domain, entitiesByRole: {} },
+      },
+    },
     whois: { parsed: {}, chain: [] },
     diagnostics: {
-      rdap: { status: 'success', endpoint: 'https://rdap.example.test' },
-      whois: { status: 'partial' },
+      rdap: { status: 'success', endpoint: 'https://rdap.example.test', registrar: { status: 'success' } },
+      whois: { status: 'success' },
       availability: { status: 'complete' },
       reverseDns: { status: 'success' },
     },
@@ -144,7 +153,7 @@ function sectionedLookupFixture(domain: string) {
       },
       publications: [
         { source: 'registry_rdap', state: 'complete' },
-        { source: 'whois', state: 'partial' },
+        { source: 'whois', state: 'complete' },
       ],
       contactDisclosure: {
         registryRdap: { state: 'redacted' },
@@ -523,7 +532,7 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
     );
   }))).toBe(true);
   await expect(sourceRail.getByRole('link', { name: /Registry RDAP.*success/i })).toHaveAttribute('href', '#evidence-registry');
-  await expect(sourceRail.getByRole('link', { name: /WHOIS.*partial/i })).toHaveAttribute('href', '#evidence-registry');
+  await expect(sourceRail.getByRole('link', { name: /WHOIS.*success/i })).toHaveAttribute('href', '#evidence-registry');
   const dnsSource = sourceRail.getByRole('link', { name: /DNS.*partial/i });
   await expect(dnsSource).toHaveAttribute('href', '#evidence-dns');
   await dnsSource.focus();
@@ -622,6 +631,20 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   await expect(coverage).toContainText('WHOIS');
   await expect(coverage).toContainText('DNS');
   await expect(coverage).toContainText('Missing, failed, stale, unsupported, and not-found evidence remains distinct');
+  for (const label of ['Registry RDAP', 'WHOIS', 'Availability decision', 'Registrar RDAP']) {
+    const state = coverage.locator('.source strong')
+      .filter({ hasText: new RegExp(`^${label}$`, 'u') })
+      .locator('xpath=../..')
+      .locator('.state-complete');
+    await expect(state).toHaveClass(/registration-source/u);
+    const colours = await state.evaluate((element) => ({
+      actual: getComputedStyle(element).color,
+      expected: getComputedStyle(document.documentElement).getPropertyValue('--text').trim(),
+    }));
+    expect(colours.actual).toBe(colours.expected.startsWith('#')
+      ? `rgb(${Number.parseInt(colours.expected.slice(1, 3), 16)}, ${Number.parseInt(colours.expected.slice(3, 5), 16)}, ${Number.parseInt(colours.expected.slice(5, 7), 16)})`
+      : colours.expected);
+  }
   await coverage.getByText(/Freshness policy/u).click();
   await coverage.getByLabel('Policy').selectOption('analyst-custom');
   await coverage.getByLabel('Registration days').fill('10');
@@ -664,18 +687,33 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   const redirectDisclosure = httpCard.getByText('Redirect chain · 1 hop');
   await redirectDisclosure.click();
   await expect(httpCard.getByRole('img', { name: 'HTTP redirect path with 1 hop' })).toBeVisible();
+  const dependencyReview = page.locator('details.dependency-review');
+  await dependencyReview.locator(':scope > summary').click();
+  await expect(dependencyReview.getByText('within domain', { exact: true }).first()).toBeVisible();
 
   for (const size of [
     { width: 1920, height: 1080 },
     { width: 1440, height: 900 },
     { width: 1024, height: 768 },
     { width: 768, height: 1024 },
+    { width: 700, height: 900 },
     { width: 430, height: 932 },
     { width: 393, height: 852 },
     { width: 320, height: 640 },
   ]) {
     await page.setViewportSize(size);
     await expectNoHorizontalOverflow(page);
+
+    const redirectPath = httpCard.locator('.redirect-path');
+    if (size.width <= 720) {
+      await expect(redirectPath.locator('.redirect-mobile')).toBeVisible();
+      await expect(httpCard.locator('.disclosure > ol')).toBeHidden();
+      const redirectWidth = await redirectPath.evaluate((element) => ({
+        client: element.clientWidth,
+        scroll: element.scrollWidth,
+      }));
+      expect(redirectWidth.scroll).toBeLessThanOrEqual(redirectWidth.client);
+    }
 
     await page.getByRole('tab', { name: /^Sources/ }).click();
     const topologyGraphic = topology.getByRole('img', { name: 'Where this result came from visual overview' });
@@ -713,7 +751,7 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
 
     await page.getByRole('tab', { name: /^Timeline/ }).click();
     const lifecycleGraphic = lifecycle.getByRole('img', { name: 'Chronological lookup lifecycle overview' });
-    if (size.width > 700) {
+    if (size.width > 620) {
       await expect(lifecycleGraphic).toBeVisible();
       const graphicBox = await boundingBox(lifecycleGraphic);
       const panelBox = await boundingBox(lifecycle);

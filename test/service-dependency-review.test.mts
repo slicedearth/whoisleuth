@@ -194,8 +194,47 @@ describe('service dependency review projection', () => {
       ['MX', 'mail.external.test', 'unsupported'],
       ['HTTP', 'active.service.test', 'active'],
     ]);
+    assert.deepEqual(review.dependencies.slice(3, 5).map((item) => item.qualification), [
+      'not_applicable',
+      'not_applicable',
+    ]);
+    assert.deepEqual(review.dependencies.slice(3, 5).map((item) => item.state), [
+      'unsupported',
+      'unsupported',
+    ]);
     assert.match(review.limitations.join(' '), /None establishes dangling status/u);
     assert.doesNotMatch(JSON.stringify(review), /token=secret/u);
+  });
+
+  test('keeps nameserver and mail observations outside hosted-service qualification even when a suffix matches', () => {
+    const review = buildServiceDependencyReview({
+      domain: 'example.test',
+      signatures: [{
+        id: 'broad-fixture',
+        label: 'Broad fixture service',
+        targetSuffixes: ['external.test'],
+      }],
+      dnsEvidence: {
+        source: 'dns',
+        complete: true,
+        diagnostics: {
+          cname: { status: 'not_found' },
+          https: { status: 'not_found' },
+          ns: { status: 'success' },
+          mx: { status: 'success' },
+        },
+      },
+      dnsRecords: {
+        ns: ['ns.external.test'],
+        mx: [{ priority: 10, exchange: 'mail.external.test' }],
+      },
+    });
+
+    assert.ok(review);
+    assert.deepEqual(review.dependencies.map((item) => [item.recordType, item.state, item.qualification]), [
+      ['NS', 'unsupported', 'not_applicable'],
+      ['MX', 'unsupported', 'not_applicable'],
+    ]);
   });
 
   test('qualifies exact passive deprovision cues, stale observations, and incomplete evidence conservatively', () => {

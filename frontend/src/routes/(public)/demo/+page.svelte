@@ -306,7 +306,7 @@
 
     <section class="demo-result-section" id="demo-source-quality" aria-labelledby="demo-source-quality-title">
       <h3 id="demo-source-quality-title">Source quality</h3>
-      <p class="section-copy">Timing and completion states explain what finished, what was limited, and how long collection took.</p>
+      <p class="section-copy">This fixed timing view shows how collection branches can overlap. Live Lookup also lists every source state, observation time, freshness result, limitation, and refresh path.</p>
       <div class="shared-evidence"><LookupCollectionTiming timing={{version:1,totalMs:860,sources:[{source:'rdap',outcome:'fulfilled',durationMs:240,completedAfterMs:240},{source:'whois',outcome:'fulfilled',durationMs:620,completedAfterMs:690},{source:'domain_evidence',outcome:'fulfilled',durationMs:740,completedAfterMs:820},{source:'network_context',outcome:'fulfilled',durationMs:210,completedAfterMs:860}]}} /></div>
     </section>
 

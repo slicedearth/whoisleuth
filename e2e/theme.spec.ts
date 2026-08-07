@@ -29,9 +29,11 @@ test('the default system preference follows the operating-system colour scheme',
   await expect(trigger).toHaveAttribute('title', 'System theme');
   await expect(trigger.locator('.theme-trigger-label')).toHaveText('Theme');
   await expect(trigger.locator('[data-theme-symbol="system"]')).toBeVisible();
-  await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#d4dde7');
-  await expect(page.locator('.hero-preview .lookup-panel')).toHaveCSS('background-color', 'rgb(243, 246, 249)');
+  await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#f6f9ff');
+  await expect(page.locator('.hero-preview .lookup-panel')).toHaveCSS('background-color', 'rgb(255, 255, 255)');
   await expect(page.locator('.hero-preview .preview-note')).toHaveCSS('color', 'rgb(51, 75, 100)');
+  await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(246, 249, 255)');
+  await expect(page.locator('.hero-preview .lookup-panel')).toHaveCSS('border-color', 'rgb(123, 146, 170)');
 
   await page.emulateMedia({ colorScheme: 'dark' });
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
@@ -52,8 +54,8 @@ test('light preference applies before reload and persists across public pages', 
 
   await chooseTheme(page, 'Light');
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
-  await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#d4dde7');
-  await expect(page.locator('.hero-preview .lookup-panel')).toHaveCSS('background-color', 'rgb(243, 246, 249)');
+  await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#f6f9ff');
+  await expect(page.locator('.hero-preview .lookup-panel')).toHaveCSS('background-color', 'rgb(255, 255, 255)');
   await expect.poll(() => page.evaluate((key) => localStorage.getItem(key), STORAGE_KEY)).toBe('light');
 
   await page.goto('/demo');

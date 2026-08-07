@@ -504,8 +504,10 @@ Exact matches against three bounded passive page-title phrases can add a
 collision-prone deprovision cue, while evidence older than 30 days is labelled
 stale and incomplete DNS stays inconclusive. Analysts can optionally enter reviewed expected targets or parent
 namespaces and exact reviewed false-positive targets for the current Lookup
-view; neither input is retained. Candidate, unresolved, active, unsupported,
-and false-positive labels remain manual review states. “Active” means only
+view; neither input is retained. Candidate, unresolved, active, not-classified,
+within-domain, and false-positive labels remain manual review states. Nameserver
+and mail-server dependencies are kept as observed infrastructure but are not
+qualified by the hosted-service deprovisioning catalogue. “Active” means only
 that the target also appeared in the already-observed final HTTP navigation
 chain. WHOISleuth does not follow targets, query provider accounts, test
 claimability, or label a service dangling or vulnerable. A catalogue, scope,

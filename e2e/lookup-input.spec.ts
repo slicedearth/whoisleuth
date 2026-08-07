@@ -162,7 +162,10 @@ test('deep lookup reports pending elapsed time and final source settle timing', 
   await expect(coverage).toContainText('2.0 s');
   const diagnostics = coverage.locator('details.timing-detail');
   await expect(diagnostics).not.toHaveAttribute('open', '');
-  await diagnostics.getByText('Request diagnostics', { exact: true }).click();
+  await expect(diagnostics.locator('.summary-arrow')).toHaveText('›');
+  await diagnostics.locator(':scope > summary').focus();
+  await diagnostics.locator(':scope > summary').press('Enter');
+  await expect(diagnostics).toHaveAttribute('open', '');
   await expect(diagnostics.getByRole('heading', { name: 'Collection timing' })).toBeVisible();
   await expect(diagnostics.getByRole('img', { name: 'Overlapping collection timing for 3 source branches' })).toBeVisible();
   const timingSummary = diagnostics.locator('.timing-summary');

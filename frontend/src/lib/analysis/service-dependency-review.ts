@@ -290,7 +290,7 @@ function dependency(
   const signature = serviceSignature(target, signatures);
   const state: ServiceDependencyState = falsePositiveTargets.has(target)
     ? 'false_positive'
-    : targetRelation === 'in_domain' || !signature
+    : targetRelation === 'in_domain' || recordType === 'NS' || recordType === 'MX' || !signature
       ? 'unsupported'
       : scope === 'authorized' && activeTargets.has(target)
         ? 'active'
@@ -300,7 +300,10 @@ function dependency(
   const matchesDeprovisionTitle = Boolean(
     signature?.deprovisionPageTitles?.some((title) => title === pageTitle),
   );
-  const qualification: ServiceDependencyQualification = state === 'false_positive' || targetRelation === 'in_domain'
+  const qualification: ServiceDependencyQualification = state === 'false_positive'
+    || targetRelation === 'in_domain'
+    || recordType === 'NS'
+    || recordType === 'MX'
     ? 'not_applicable'
     : !complete
       ? 'inconclusive'
@@ -321,7 +324,7 @@ function dependency(
           ? 'The retained observation is older than the fixed 30-day review threshold and requires a fresh explicit lookup.'
           : qualification === 'inconclusive'
             ? 'The retained DNS observation is incomplete, so dependency classification remains inconclusive.'
-            : 'No provider qualification is applied to this in-domain or analyst-excluded target.';
+            : 'The hosted-service deprovisioning catalogue does not qualify this in-domain, analyst-excluded, nameserver, or mail target.';
   return {
     id: `${recordType.toLowerCase()}:${target}`,
     recordType,
@@ -607,7 +610,7 @@ export function buildServiceDependencyReview(input: Readonly<{
     authorizedScope,
     nextSteps: dependencies.length
       ? [
-          'Resolve each observed alias target independently immediately before changing DNS or hosting.',
+          'Resolve each observed dependency target independently immediately before changing DNS or hosting.',
           'Confirm the target is assigned in the expected provider account or service control plane.',
           'Remove or replace stale aliases only after preserving evidence and validating the intended service owner.',
           'Repeat the check after DNS changes because resolver evidence is point in time and may be cached.',
@@ -623,7 +626,7 @@ export function buildServiceDependencyReview(input: Readonly<{
       'Service-family signatures and analyst-entered scope are local comparison aids only; neither establishes provider configuration, account ownership, authorisation, abandonment, or claimability.',
       `The fixed service catalogue contains ${signatures.length} reviewed families. ${catalogues.length ? 'Matching rows show their family and qualification.' : 'No observed target matched it.'}`,
       'Exact passive page-title matches are collision-prone review cues and never prove deprovisioning, claimability, or service state.',
-      'Candidate, unresolved, active, unsupported, and false-positive labels organise manual review only. None establishes dangling status, vulnerability, claimability, ownership, control, safety, or maliciousness.',
+      'Candidate, unresolved, active, not-classified, and false-positive labels organise manual review only. None establishes dangling status, vulnerability, claimability, ownership, control, safety, or maliciousness.',
       'No observed dependency in complete point-in-time evidence is not a general security finding and does not cover uncollected provider account state.',
       ...(dnsEvidence.truncated === true ? ['The DNS observation was capped, so additional dependencies may not be represented.'] : []),
     ],
