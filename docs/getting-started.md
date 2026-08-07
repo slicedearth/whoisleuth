@@ -187,8 +187,10 @@ npm run benchmark:workflow -- --json
 
 Runs a deterministic offline regression benchmark across checked-in registry
 fixtures, candidate generation, partial-source handling, relationships,
-detection rules, graph limits, and workspace archive round trips. It is not a
-live coverage or production-performance benchmark.
+detection rules, decision-to-evidence linkage, graph limits, and workspace
+archive round trips. The decision-quality corpus exercises every current
+consistency warning alongside a fully linked control case. It is not a live
+coverage, substantive analyst judgement, or production-performance benchmark.
 
 ### Technology-signature benchmark
 

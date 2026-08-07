@@ -41,6 +41,8 @@ import {
   readWorkspaceArchive,
   WORKSPACE_ARCHIVE_SECTION_IDS,
 } from '../frontend/src/lib/analysis/workspace-archive.ts';
+import { buildCaseDecisionQualityReport } from '../frontend/src/lib/analysis/case-decision-quality.ts';
+import { normalizeCase } from '../frontend/src/lib/analysis/case-model.ts';
 import WHOIS_FIXTURES from '../fixtures/whois-registry-fixtures.mts';
 
 type WritableLike = { write(value: string): unknown };
@@ -65,7 +67,7 @@ type BenchmarkMainOptions = BenchmarkOptions & Readonly<{
 
 export const SPECIALIST_WORKFLOW_BENCHMARK_SCHEMA = 'whoisleuth.specialist-workflow-benchmark';
 export const SPECIALIST_WORKFLOW_BENCHMARK_VERSION = 1;
-export const MAX_SPECIALIST_WORKFLOW_SCENARIOS = 8;
+export const MAX_SPECIALIST_WORKFLOW_SCENARIOS = 9;
 export const MAX_SPECIALIST_WORKFLOW_FAILURES = 12;
 export const MAX_SPECIALIST_WORKFLOW_DETAIL_LENGTH = 320;
 export const MAX_SPECIALIST_WORKFLOW_REGISTRY_FIXTURES = 500;
@@ -430,6 +432,69 @@ function benignInfrastructureScenario(): ScenarioResult<Record<string, unknown>>
   ], metrics, 'Shared hosting and DNS remained visible as pivots without becoming ownership, intent, or maliciousness findings.');
 }
 
+function decisionQualityScenario(): ScenarioResult<Record<string, unknown>> {
+  const unsupported = [
+    caseRecord('decision-a', 'decision-a.invalid', [snapshot()], {
+      disposition: 'expected',
+      decisions: [{ id: 'decision-a', summary: 'Reviewed', rationale: 'Controlled fixture rationale', evidencePinIds: [], createdAt: EARLIER }],
+      assertions: [{ id: 'assertion-a', kind: 'hypothesis', statement: 'Controlled fixture hypothesis', evidencePinIds: [], state: 'open', createdAt: EARLIER, updatedAt: EARLIER }],
+    }),
+    caseRecord('decision-b', 'decision-b.invalid', [snapshot()], {
+      disposition: 'suspicious',
+      decisions: [{ id: 'decision-b', summary: 'Reviewed', rationale: 'Controlled fixture rationale', evidencePinIds: [], createdAt: EARLIER }],
+      assertions: [{ id: 'assertion-b', kind: 'verified_fact', statement: 'Controlled fixture statement', evidencePinIds: [], state: 'open', createdAt: EARLIER, updatedAt: EARLIER }],
+    }),
+  ].map((item) => normalizeCase(item, undefined, OBSERVED_AT)).filter((item) => item !== null);
+  const supported = normalizeCase(caseRecord('decision-control', 'decision-control.invalid', [snapshot({
+    nameservers: ['ns.control.invalid'],
+  })], {
+    disposition: 'expected',
+    reviewReasonCode: 'authorized_or_owned',
+    evidencePins: [{
+      id: 'pin-control',
+      field: 'registration.availability',
+      category: 'registration',
+      label: 'Registration state',
+      value: 'registered',
+      source: 'rdap',
+      sourceState: 'success',
+      observedAt: OBSERVED_AT,
+      collectionDepth: 'deep',
+      completeness: 'complete',
+      truncated: false,
+      limitations: [],
+      createdAt: OBSERVED_AT,
+    }],
+    decisions: [{ id: 'decision-control', summary: 'Reviewed', rationale: 'Controlled fixture rationale', evidencePinIds: ['pin-control'], createdAt: OBSERVED_AT }],
+    assertions: [{ id: 'assertion-control', kind: 'verified_fact', statement: 'Controlled fixture statement', evidencePinIds: ['pin-control'], state: 'closed', createdAt: OBSERVED_AT, updatedAt: OBSERVED_AT }],
+  }), undefined, OBSERVED_AT);
+  const records = supported ? [...unsupported, supported] : unsupported;
+  const report = buildCaseDecisionQualityReport(records);
+  const findingCaseIds = new Set(report.findings.flatMap((finding) => finding.caseIds));
+  const expectedCounts = Object.freeze({
+    inconsistent_disposition: 1,
+    disposition_without_reason: 2,
+    decision_without_evidence: 2,
+    assertion_without_evidence: 2,
+    assertion_predates_evidence: 2,
+  });
+  const metrics = Object.freeze({
+    casesEvaluated: report.caseCount,
+    findingCount: report.findingCount,
+    findingKindsExercised: Object.values(report.counts).filter((count) => count > 0).length,
+    cleanControlFindings: report.findings.filter((finding) => finding.caseIds.includes('decision-control')).length,
+    counts: report.counts,
+    truncated: report.truncated,
+  });
+  return scenario('decision-quality-corpus', 'workflow', 'Decision-quality evidence linkage', [
+    { pass: report.caseCount === 3, failure: 'The decision-quality corpus did not retain all three bounded cases.' },
+    { pass: isDeepStrictEqual(report.counts, expectedCounts), failure: 'The decision-quality finding families or counts drifted from the reviewed corpus.' },
+    { pass: !findingCaseIds.has('decision-control'), failure: 'The fully linked control case produced a decision-quality finding.' },
+    { pass: report.truncated === false, failure: 'The bounded decision-quality corpus was unexpectedly truncated.' },
+    { pass: /does not decide/iu.test(report.limitation), failure: 'The decision-quality report lost its non-decisive limitation.' },
+  ], metrics, 'Every decision-quality finding family was exercised while the fully linked control case remained clear.');
+}
+
 function graphTruncationScenario(): ScenarioResult<Record<string, unknown>> {
   const records: Record<string, unknown>[] = [];
   for (let index = 0; index < MAX_RELATIONSHIP_GRAPH_RELATIONSHIPS + 1; index += 1) {
@@ -489,6 +554,7 @@ export async function buildSpecialistWorkflowBenchmark(options: BenchmarkOptions
     ['relationship-provenance', 'relationships', 'Relationship provenance completeness', relationshipProvenanceScenario],
     ['detection-rule-replay', 'detection', 'Labelled detection-rule replay', detectionRuleScenario],
     ['benign-shared-infrastructure', 'relationships', 'Benign shared-infrastructure controls', benignInfrastructureScenario],
+    ['decision-quality-corpus', 'workflow', 'Decision-quality evidence linkage', decisionQualityScenario],
     ['graph-truncation', 'relationships', 'Bounded graph truncation', graphTruncationScenario],
   ] as const) {
     try {
@@ -516,6 +582,7 @@ export async function buildSpecialistWorkflowBenchmark(options: BenchmarkOptions
     relationshipProvenance: metricsByScenario.get('relationship-provenance') || {},
     ruleReplay: metricsByScenario.get('detection-rule-replay') || {},
     benignSharedInfrastructure: metricsByScenario.get('benign-shared-infrastructure') || {},
+    decisionQuality: metricsByScenario.get('decision-quality-corpus') || {},
     graphTruncation: metricsByScenario.get('graph-truncation') || {},
     exportCompatibility: metricsByScenario.get('export-compatibility') || {},
     workflow: Object.freeze({
