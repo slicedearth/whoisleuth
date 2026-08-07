@@ -98,6 +98,13 @@ document, and cannot establish that the operator supports or authorises the
 query. An individual response that omits the declaration is not treated as
 proof that the server does not support it.
 
+When the reviewed registry catalogue documents that ordinary WHOIS or RDAP
+collection is unavailable or restricted, the Registry access notice can offer
+the official registry's manual lookup page. Opening it is a deliberate external
+navigation: WHOISleuth does not append the current domain, fetch the page, or
+treat anything displayed there as collected evidence. Enter and submit the
+domain on the registry site only when that registry's conditions permit it.
+
 During collection, Lookup identifies the requested source families and shows
 elapsed time plus a 40-second browser deadline. Every core Express and Netlify
 deployment currently uses one buffered response and keeps each source pending
@@ -341,6 +348,12 @@ targets. The Standard pacing option runs at most eight Fast or three Deep
 lookups concurrently; Gentle and Balanced apply lower pressure. These are
 per-job safety and resource ceilings, not authorisation to scan domains. Each
 target remains subject to deployment, provider, and source limits.
+
+For reviewed suffix profiles that document an official manual registry lookup,
+the focused Bulk review shows that link for the current row. The link is derived
+locally from the catalogue, adds no compact response field or network request,
+and does not append the domain. Any lookup on the registry site remains a
+separate analyst action under that registry's conditions.
 
 Bulk sessions are saved only when the analyst names and saves the current
 investigation. Each bounded browser-local session retains the input domain

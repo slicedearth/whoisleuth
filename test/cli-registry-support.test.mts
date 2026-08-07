@@ -40,6 +40,7 @@ function fixtureCapability(
     fixtureScenarios: ['registered', 'not_found'],
     verificationFiles: ['fixtures/registry.test.js'],
     documentationUrls: ['https://www.iana.org/domains/root/db/test.html'],
+    officialLookupUrl: null,
     limitation: 'Fixture coverage does not prove current reachability.',
     explicitSuffixProfile: true,
   };
@@ -72,10 +73,11 @@ describe('versioned registry-support document', () => {
       fixtureScenarios: Array.from({ length: MAX_REGISTRY_SUPPORT_REFERENCES + 5 }, (_, index) => `state_${index}`),
       verificationFiles: ['/absolute/private', '../outside', 'fixtures/safe.test.js'],
       documentationUrls: ['http://insecure.invalid/', 'https://docs.example.test/reference', 'not a URL'],
+      officialLookupUrl: 'javascript:alert(1)',
     });
     const document = buildRegistrySupportDocument('example.test', capability, 5, '2026-07-17T00:00:00.000Z');
     assert.equal(document.schema, 'whoisleuth.cli.registry-support');
-    assert.equal(document.version, 3);
+    assert.equal(document.version, 4);
     assert.equal(document.catalogueVersion, 5);
     assert.deepEqual(document.standardsCoverage.genericAndRestricted, {
       total: 1114,
@@ -85,6 +87,7 @@ describe('versioned registry-support document', () => {
     assert.equal(document.verification.fixtureScenarios.length, MAX_REGISTRY_SUPPORT_REFERENCES);
     assert.deepEqual(document.verification.files, ['fixtures/safe.test.js']);
     assert.deepEqual(document.verification.documentationUrls, ['https://docs.example.test/reference']);
+    assert.equal(document.profile.officialLookupUrl, null);
     assert.ok(document.limitation.length <= MAX_REGISTRY_SUPPORT_TEXT_LENGTH);
     assert.doesNotMatch(JSON.stringify(document), /must not escape|absolute\/private|insecure\.invalid/);
   });
@@ -109,7 +112,7 @@ describe('registry-support runner', () => {
     assert.equal(stderr.value(), '');
     assert.equal(lookupCalled, false);
     const document = JSON.parse(stdout.value());
-    assert.equal(document.catalogueVersion, 28);
+    assert.equal(document.catalogueVersion, 29);
     assert.equal(document.suffix, 'uk');
     assert.equal(document.profile.explicitSuffixProfile, true);
     assert.equal(document.profile.coverageState, 'fixture_verified');
@@ -159,6 +162,7 @@ describe('registry-support runner', () => {
     assert.equal(code, EXIT_CODES.SUCCESS);
     assert.match(stdout.value(), /Suffix\s+\.ch/);
     assert.match(stdout.value(), /Registry policy restricted/);
+    assert.match(stdout.value(), /Official lookup https:\/\/www\.nic\.ch\/whois\//);
     assert.match(stdout.value(), /missing registry data is not evidence/i);
   });
 

@@ -28,6 +28,7 @@ type RegistryCapability = {
   fixtureScenarios: string[];
   verificationFiles: string[];
   documentationUrls: string[];
+  officialLookupUrl: string | null;
   limitation: string;
 };
 
@@ -77,7 +78,7 @@ type RegistryCapabilitySeed = Pick<
   'id' | 'suffixes' | 'registryClass' | 'whoisParserProfile' | 'fixtureScenarios'
 >>;
 
-const REGISTRY_CAPABILITIES_VERSION = 28;
+const REGISTRY_CAPABILITIES_VERSION = 29;
 const MAX_CAPABILITY_INPUT_LENGTH = 253;
 
 const REGISTRY_STANDARDS_COVERAGE_SNAPSHOT = Object.freeze({
@@ -249,6 +250,7 @@ const DEFAULT_CAPABILITY = freezeCapability({
   fixtureScenarios: ['registered', 'not_found', 'rate_limited'],
   verificationFiles: ['fixtures/whois-registry-fixtures.mts'],
   documentationUrls: [],
+  officialLookupUrl: null,
   limitation: DISCOVERY_LIMITATION,
 });
 
@@ -347,6 +349,7 @@ const EXPLICIT_CAPABILITY_SEEDS: RegistryCapabilitySeed[] = [
       'https://www.iana.org/domains/root/db/ch.html',
       'https://www.iana.org/domains/root/db/li.html',
     ],
+    officialLookupUrl: 'https://www.nic.ch/whois/',
     limitation: SWITCH_ACCESS_LIMITATION,
   },
   {
@@ -731,9 +734,11 @@ const EXPLICIT_CAPABILITY_SEEDS: RegistryCapabilitySeed[] = [
     coverageState: 'access_documented', whoisAccessProfile: 'source-ip-authorization-required',
     rdapAccessProfile: 'no-iana-service', verificationFiles: [],
     documentationUrls: [
+      'https://www.dominios.es/es',
       'https://www.iana.org/domains/root/db/es.html',
       'https://www.dominios.es/es/sobre-dominios/valores-anadidos/whois-43',
     ],
+    officialLookupUrl: 'https://www.dominios.es/es',
     limitation: ES_ACCESS_LIMITATION,
   },
   {
@@ -752,7 +757,11 @@ const EXPLICIT_CAPABILITY_SEEDS: RegistryCapabilitySeed[] = [
     whoisParserProfile: 'generic-colon', fixtureScenarios: [],
     coverageState: 'access_documented', whoisAccessProfile: 'no-iana-service',
     rdapAccessProfile: 'no-iana-service', verificationFiles: [],
-    documentationUrls: ['https://www.iana.org/domains/root/db/gt.html'],
+    documentationUrls: [
+      'https://www.gt/sitio/',
+      'https://www.iana.org/domains/root/db/gt.html',
+    ],
+    officialLookupUrl: 'https://www.gt/sitio/',
     limitation: 'IANA publishes no RDAP service or domain WHOIS service for this suffix. WHOISleuth does not automate the registry website.',
   },
   {
@@ -1253,6 +1262,7 @@ const EXPLICIT_CAPABILITY_SEEDS: RegistryCapabilitySeed[] = [
       'https://www.iana.org/domains/root/db/vn.html',
       'https://whois.vnnic.vn/',
     ],
+    officialLookupUrl: 'https://whois.vnnic.vn/',
     limitation: VN_ACCESS_LIMITATION,
   },
 ];
@@ -1282,6 +1292,7 @@ const EXPLICIT_CAPABILITIES = EXPLICIT_CAPABILITY_SEEDS.map((entry) => {
     coverageState: entry.coverageState || 'fixture_verified',
     verificationFiles: entry.verificationFiles || ['fixtures/whois-registry-fixtures.mts'],
     documentationUrls: entry.documentationUrls || [],
+    officialLookupUrl: entry.officialLookupUrl || null,
     limitation: entry.limitation || (rdapAccessProfile === 'no-iana-service'
       ? WHOIS_ONLY_FIXTURE_LIMITATION
       : FIXTURE_LIMITATION),

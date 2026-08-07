@@ -25,7 +25,7 @@ test('the registry-support catalogue filters locally and retains explicit interp
 
   await page.goto('/registry-support');
 
-  await expect(page.getByText('Catalogue v28')).toBeVisible();
+  await expect(page.getByText('Catalogue v29')).toBeVisible();
   await expect(page.locator('.summary-grid article').filter({ hasText: 'Explicit suffixes' }).locator('strong')).toHaveText('335');
   await expect(page.locator('.catalogue-section tbody tr')).toHaveCount(50);
   await expect(page.locator('.result-count')).toContainText('Showing 1–50 of 335 matching profiles (335 total)');
@@ -145,6 +145,14 @@ test('the local inspector explains explicit and generic suffix support without a
   await expect(result).toContainText('Explicit suffix profile');
   await expect(result).toContainText('Sponsored');
   await expect(result).toContainText('No service published by IANA');
+
+  await input.fill('.gt');
+  await inspectButton.click();
+  const officialLookup = result.getByRole('link', { name: /Open official registry lookup/ });
+  await expect(officialLookup).toHaveAttribute('href', 'https://www.gt/sitio/');
+  await expect(officialLookup).toHaveAttribute('target', '_blank');
+  await expect(officialLookup).toHaveAttribute('rel', /\bnoreferrer\b/);
+  await expect(result).toContainText('The inspected domain is not appended to the link');
 
   await input.fill('portal.example.uk');
   await inspectButton.click();

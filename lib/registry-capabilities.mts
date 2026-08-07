@@ -119,6 +119,9 @@ function registryAccessDiagnosticFor(value: unknown) {
     coverageState: capability.coverageState,
     whoisAccessProfile: capability.whoisAccessProfile,
     rdapAccessProfile: capability.rdapAccessProfile,
+    ...(capability.officialLookupUrl
+      ? { officialLookupUrl: capability.officialLookupUrl }
+      : {}),
     limitation: capability.limitation,
     authority: 'context_only' as const,
   };

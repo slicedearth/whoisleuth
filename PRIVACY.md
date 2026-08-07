@@ -64,6 +64,14 @@ default (see the README), so many lookups return no personal data at all.
   roles. Bulk, watchlist, and case data retain only the existing compact
   primary-contact fields; these expanded contact inventories are not copied
   into browser-local investigation stores.
+- **Official registry lookup links**: for individually reviewed suffixes where
+  ordinary WHOIS or RDAP collection is unavailable or restricted, the Lookup,
+  focused Bulk review, and Registry support views can show an HTTPS link to the
+  registry's official browser lookup. WHOISleuth does not fetch or scrape that
+  page and does not append the investigated domain to the link. Opening it is
+  deliberate browser navigation to the registry; entering or submitting a
+  domain there is then governed by that registry's own privacy and
+  request-handling terms.
 - **Registrar RDAP in deep Lookup**: when a registry RDAP object publishes a
   complete HTTPS link for the same domain at the sponsoring registrar, a deep
   non-compact Lookup can relay that one public registrar object as a separately

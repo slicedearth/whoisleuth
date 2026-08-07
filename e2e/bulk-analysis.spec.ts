@@ -230,6 +230,7 @@ test('filters, groups, and selected-only actions use compact observed evidence',
 test('keeps an expected missing registry protocol out of limited Bulk outcomes', async ({ page }) => {
   await page.route('**/api/lookup?*', async (route) => {
     const domain = new URL(route.request().url()).searchParams.get('q') || '';
+    const hasNoMachineRegistryService = domain.endsWith('.gt');
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -243,7 +244,7 @@ test('keeps an expected missing registry protocol out of limited Bulk outcomes',
         },
         diagnostics: {
           version: 7,
-          rdap: { status: 'complete' },
+          rdap: { status: hasNoMachineRegistryService ? 'unsupported' : 'complete' },
           whois: { status: 'unsupported' },
           availability: { status: 'complete' },
         },
@@ -251,17 +252,23 @@ test('keeps an expected missing registry protocol out of limited Bulk outcomes',
     });
   });
   await page.getByLabel('Scan mode').selectOption('deep');
-  await runBulkScan(page, ['example.dev', 'example.com']);
+  await runBulkScan(page, ['example.dev', 'example.gt', 'example.com']);
 
   const outcomes = page.locator('.outcomes');
-  await expect(outcomes.locator('div', { hasText: 'Complete' })).toContainText('1');
+  await expect(outcomes.locator('div', { hasText: 'Complete' })).toContainText('2');
   await expect(outcomes.locator('div', { hasText: 'Limited' })).toContainText('1');
-  await page.getByLabel('Source coverage').selectOption('complete');
+  const sourceCoverage = page.getByRole('combobox', { name: 'Source coverage', exact: true });
+  await sourceCoverage.selectOption('complete');
   await expect(page.getByRole('region', { name: 'Bulk review cockpit' })).toContainText(
     'whois: unsupported (no IANA-published service)',
   );
+  await page.getByRole('button', { name: 'Next unresolved' }).click();
+  const officialLookup = page.getByRole('region', { name: 'Bulk review cockpit' }).getByRole('link', { name: /Open official registry lookup/ });
+  await expect(officialLookup).toHaveAttribute('href', 'https://www.gt/sitio/');
+  await expect(officialLookup).toHaveAttribute('rel', /\bnoreferrer\b/);
+  await expect(page.getByRole('region', { name: 'Bulk review cockpit' })).toContainText('The domain is not added to this link');
 
-  await page.getByLabel('Source coverage').selectOption('limited');
+  await sourceCoverage.selectOption('limited');
   await expect(page.locator('.results-table tbody tr')).toHaveCount(1);
   await expect(page.locator('.results-table tbody tr')).toContainText('example.com');
 });

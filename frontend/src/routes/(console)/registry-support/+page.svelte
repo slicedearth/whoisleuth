@@ -13,6 +13,7 @@
     registryServiceCoverageLabel,
     registrySupportCatalogue,
     registrySupportLabel,
+    safeOfficialRegistryLookupUrl,
     sortRegistrySupportRows,
   } from '$lib/analysis/registry-support.ts';
   import {
@@ -219,6 +220,7 @@
         <section class="empty-state card"><h3>Unsupported input format</h3><p>Enter one bounded DNS hostname or suffix without a URL, path, port, or control character.</p></section>
       {:else}
         {@const profile = inspection.profile}
+        {@const officialLookupUrl = safeOfficialRegistryLookupUrl(profile.officialLookupUrl)}
         <article class="inspection-card card">
           <header>
             <div><p class="eyebrow">{profile.explicitSuffixProfile ? 'Explicit suffix profile' : 'Generic fallback'}</p><h3>.{profile.suffixes[0]}</h3></div>
@@ -239,6 +241,12 @@
             <div class="inspection-handoff">
               <a class="btn" href="#registry-catalogue" onclick={() => showInspectedProfile(profile.suffixes[0])}>Show in catalogue</a>
               <span>Apply the exact suffix filter and review its fixture and documentation references.</span>
+            </div>
+          {/if}
+          {#if officialLookupUrl}
+            <div class="inspection-handoff official-lookup">
+              <a class="btn" href={officialLookupUrl} target="_blank" rel="noopener noreferrer">Open official registry lookup<span class="sr-only"> (opens in a new tab)</span></a>
+              <span>The inspected domain is not appended to the link; enter it on the registry site if you continue.</span>
             </div>
           {/if}
           <p class="limitation"><strong>Limitation:</strong> {profile.limitation}</p>
@@ -315,6 +323,7 @@
         <thead><tr><th>Suffix</th><th>Coverage</th><th>Registry access</th><th>WHOIS behaviour</th><th>Profile details</th></tr></thead>
         <tbody>
           {#each visibleRows as row}
+            {@const officialLookupUrl = safeOfficialRegistryLookupUrl(row.officialLookupUrl)}
             <tr>
               <td data-label="Suffix"><code>.{row.suffixes[0]}</code><small>{registrySupportLabel(row.registryClass)}</small></td>
               <td data-label="Coverage"><span class:documented={row.coverageState === 'access_documented'} class="coverage-badge">{registryCoverageLabel(row.coverageState)}</span></td>
@@ -331,6 +340,7 @@
                       <div><dt>Fixture states</dt><dd>{row.fixtureScenarios.length ? row.fixtureScenarios.map(registrySupportLabel).join(', ') : 'None documented'}</dd></div>
                     </dl>
                     {#if row.verificationFiles.length}<div><h3>Verified by</h3>{#each row.verificationFiles as file}<code class="reference">{file}</code>{/each}</div>{/if}
+                    {#if officialLookupUrl}<div><h3>Manual lookup</h3><a href={officialLookupUrl} target="_blank" rel="noopener noreferrer">Open the official registry lookup<span class="sr-only"> (opens in a new tab)</span></a></div>{/if}
                     {#if row.documentationUrls.length}<div><h3>Documentation</h3><ul>{#each row.documentationUrls as url}<li><a href={url} target="_blank" rel="noopener noreferrer">{new URL(url).hostname}<span class="sr-only"> (opens in a new tab)</span></a></li>{/each}</ul></div>{/if}
                     <p class="limitation"><strong>Limitation:</strong> {row.limitation}</p>
                   </div>
@@ -367,6 +377,7 @@
   .section-intro{max-width:840px;margin-bottom:14px}.section-intro h2{margin:3px 0 0;font:700 1.15rem var(--mono)}.section-intro>p:not(.eyebrow){margin:7px 0 0;color:var(--muted);font-size:var(--text-sm);line-height:1.55}
   .inspector-form{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:end;padding:15px}.inspector-form label{display:grid;gap:6px;color:var(--muted);font:600 var(--text-xs) var(--mono)}.inspector-form input{width:100%;min-height:var(--control-h)}.inspector-actions{display:flex;flex-wrap:wrap;gap:8px}.inspection-output{margin-top:10px}.inspection-card{display:grid;gap:14px;padding:18px}.inspection-card>header{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:start;justify-content:space-between}.inspection-card h3{margin:3px 0 0;color:var(--accent);font:750 1.25rem var(--mono)}.inspection-card dl{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:0}.inspection-card dl>div{min-width:0;padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface)}.inspection-card dt{color:var(--muted);font:600 var(--text-2xs) var(--mono);text-transform:uppercase}.inspection-card dd{margin:5px 0 0;overflow-wrap:anywhere}.no-inference{margin:0;color:var(--muted);font-size:var(--text-xs);line-height:1.5}
   .inspection-handoff{display:flex;flex-wrap:wrap;align-items:center;gap:9px}.inspection-handoff span{color:var(--muted);font-size:var(--text-xs);line-height:1.45}
+  .official-lookup{padding-top:12px;border-top:1px solid var(--border)}
   .filters{display:flex;min-width:0;flex-wrap:wrap;gap:12px;align-items:end;padding:15px}
   .filters legend{padding:0 5px;color:var(--muted);font:600 var(--text-2xs) var(--mono)}
   .filters label{display:grid;gap:6px;color:var(--muted);font:600 var(--text-xs) var(--mono)}

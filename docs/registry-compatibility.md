@@ -37,7 +37,7 @@ registration or availability.
 
 Generic TLDs use live IANA RDAP bootstrap discovery and shared bounded RDAP
 parsing. WHOISleuth does not create a duplicate parser profile for each suffix.
-The version 28 catalogue includes an official-source snapshot verified on 28
+The version 29 catalogue includes an official-source snapshot verified on 28
 July 2026: all 1,114 current generic and generic-restricted TLDs were present in
 the IANA RDAP bootstrap, as were 12 of 14 sponsored TLDs. `.edu` and `.mil` are
 the sponsored exceptions, while the infrastructure suffix `.arpa` has no RDAP
@@ -53,7 +53,18 @@ unsupported WHOIS source remains visible as access context but does not create
 an incident-response uncertainty or imply that an analyst should find a WHOIS
 record that the registry does not publish.
 
-The version 28 explicit matrix is:
+Version 29 adds reviewed manual hand-offs where the catalogue already documents
+that normal machine collection is unavailable or restricted. Deep Lookup,
+focused Bulk review, and the Registry support reference can link analysts to
+the official browser lookup for `.ch`, `.li`, `.es`, `.gt`, and `.vn`. The
+destination never receives the investigated domain from WHOISleuth: the analyst
+opens the registry page and chooses whether to enter it there. These links are
+separately identified from machine endpoints, are never fetched or scraped by
+WHOISleuth, and do not change source status, availability, scoring, or stored
+evidence. Other unsupported suffixes keep no manual link until an official
+lookup is individually reviewed.
+
+The version 29 explicit matrix is:
 
 | Suffix | Current WHOIS parser or access profile | Coverage |
 | --- | --- | --- |
@@ -156,7 +167,7 @@ The version 28 explicit matrix is:
 | `.gq` | IANA publishes a WHOIS referral, but response behaviour is not fixture verified and IANA publishes no RDAP service | Access documented |
 | `.gr` | IANA publishes no domain WHOIS or RDAP service | Access documented |
 | `.gs` | Authoritative no-object response with separate RDAP availability; registered-field parsing is not claimed | Not found |
-| `.gt` | IANA publishes no domain WHOIS or RDAP service; the registry website is not automated | Access documented |
+| `.gt` | IANA publishes no domain WHOIS or RDAP service; an official manual registry lookup is linked but not automated | Access documented |
 | `.gu` | IANA publishes no domain WHOIS or RDAP service | Access documented |
 | `.gw` | IANA publishes no domain WHOIS or RDAP service | Access documented |
 | `.gy` | Standard colon fields with registry identity, lifecycle, registrar, status, DNSSEC, and nameservers; IANA RDAP is also available | Registered |
@@ -601,6 +612,8 @@ registry can deny ordinary clients and direct them to its
 automated [Domain Check](https://www.nic.ch/whois/domaincheck/) on port 4343;
 WHOISleuth does not replace IANA's referral with that non-standard endpoint or
 scrape the browser lookup, and IANA publishes no RDAP service for the suffix.
+The reviewed browser link is offered only as a deliberate manual hand-off and
+does not include the investigated domain.
 The catalogue therefore records the policy
 restriction without claiming fixture verification, and a denied or absent
 response remains inconclusive.
@@ -621,7 +634,8 @@ requires the querying source IP to be registered in advance and applies strict
 rate limits. The [IANA `.vn` delegation record](https://www.iana.org/domains/root/db/vn.html)
 publishes neither domain WHOIS nor RDAP; VNNIC provides an
 [official browser lookup](https://whois.vnnic.vn/) that is deliberately not
-scraped or treated as a machine endpoint. These access states explain missing
+scraped or treated as a machine endpoint. The Console links that page without
+appending the investigated domain. These access states explain missing
 registry evidence but do not establish that a domain is unregistered or safe.
 
 Version 14 adds twelve suffix-correct profiles from independently verified

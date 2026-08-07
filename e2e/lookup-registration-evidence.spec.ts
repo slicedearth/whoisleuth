@@ -406,7 +406,13 @@ test('registrar RDAP unsupported and error states remain neutral source rows', a
 test('registry access constraints remain neutral, explicit, and mobile-safe', async ({ page }) => {
   await page.route('**/api/lookup?*', async (route) => {
     const query = new URL(route.request().url()).searchParams.get('q') || '';
-    const suffix = query.endsWith('.vn') ? 'vn' : query.endsWith('.ch') ? 'ch' : query.endsWith('.dev') ? 'dev' : 'es';
+    const suffix = query.endsWith('.vn')
+      ? 'vn'
+      : query.endsWith('.ch')
+        ? 'ch'
+        : query.endsWith('.gt')
+          ? 'gt'
+          : query.endsWith('.dev') ? 'dev' : 'es';
     const isEs = suffix === 'es';
     const isCh = suffix === 'ch';
     const isDev = suffix === 'dev';
@@ -426,8 +432,17 @@ test('registry access constraints remain neutral, explicit, and mobile-safe', as
               ? 'source-ip-authorization-required'
               : isCh ? 'registry-policy-restricted' : 'no-iana-service',
             rdapAccessProfile: isDev ? 'iana-bootstrap' : 'no-iana-service', authority: 'context_only',
+            ...(isEs
+              ? { officialLookupUrl: 'https://www.dominios.es/es' }
+              : isCh
+                ? { officialLookupUrl: 'https://www.nic.ch/whois/' }
+                : suffix === 'vn'
+                  ? { officialLookupUrl: 'https://whois.vnnic.vn/' }
+                  : suffix === 'gt'
+                    ? { officialLookupUrl: 'https://www.gt/sitio/' }
+                    : {}),
             limitation: isEs
-              ? 'The registry WHOIS service requires advance source-IP authorization. A failed or unavailable query is not evidence that the domain is unregistered.'
+              ? 'The registry WHOIS service requires advance source-IP authorisation. A failed or unavailable query is not evidence that the domain is unregistered.'
               : isCh
                 ? 'The registry may restrict ordinary port-43 clients and direct them to its official lookup. Its non-standard-port Domain Check is not integrated, and IANA publishes no RDAP service. Missing registry data is not evidence that the domain is unregistered.'
                 : isDev
@@ -463,6 +478,17 @@ test('registry access constraints remain neutral, explicit, and mobile-safe', as
   await expect(vnNotice.getByText('No IANA service')).toBeVisible();
   await expect(vnNotice.getByText('No service published by IANA')).toHaveCount(2);
   await expect(vnNotice.getByText(/official browser lookup is not integrated/i)).toBeVisible();
+  await expect(vnNotice.getByRole('link', { name: /Open official .VN registry lookup/ })).toHaveAttribute('href', 'https://whois.vnnic.vn/');
+
+  await page.locator('#query').fill('example.gt');
+  await page.getByRole('button', { name: 'Run lookup' }).click();
+  await expandLookupFamilies(page);
+  const gtNotice = page.getByRole('region', { name: '.GT collection constraints' });
+  const gtLookup = gtNotice.getByRole('link', { name: /Open official .GT registry lookup/ });
+  await expect(gtLookup).toHaveAttribute('href', 'https://www.gt/sitio/');
+  await expect(gtLookup).toHaveAttribute('target', '_blank');
+  await expect(gtLookup).toHaveAttribute('rel', /\bnoreferrer\b/);
+  await expect(gtNotice.getByText(/domain is not added to this link/i)).toBeVisible();
 
   await page.locator('#query').fill('example.dev');
   await page.getByRole('button', { name: 'Run lookup' }).click();

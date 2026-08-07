@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { safeOfficialRegistryLookupUrl } from '$lib/analysis/registry-support.ts';
+
   let { access }: { access: Record<string, unknown> } = $props();
 
   const text = (value: unknown) => typeof value === 'string' ? value : '';
@@ -18,6 +20,7 @@
   const whoisRestricted = $derived(['source-ip-authorization-required', 'registry-policy-restricted'].includes(whoisAccess));
   const hasWhoisPath = $derived(whoisAccess !== 'no-iana-service');
   const hasRdapPath = $derived(rdapAccess !== 'no-iana-service');
+  const officialLookupUrl = $derived(safeOfficialRegistryLookupUrl(access.officialLookupUrl));
   const expectedConstraint = $derived(!whoisRestricted);
   const stateLabel = $derived(whoisRestricted
     ? 'Restricted access'
@@ -55,6 +58,15 @@
     <div><dt>RDAP</dt><dd>{rdapLabel}</dd></div>
   </dl>
   <p class="guidance">{sourceGuidance}</p>
+  {#if officialLookupUrl}
+    <div class="manual-lookup">
+      <a class="btn" href={officialLookupUrl} target="_blank" rel="noopener noreferrer">
+        Open official .{suffix} registry lookup
+        <span class="sr-only"> (opens in a new tab)</span>
+      </a>
+      <p>The domain is not added to this link. Enter it on the registry site if you choose to continue.</p>
+    </div>
+  {/if}
   <p class="note">This is access-policy context only. It does not decide registration, availability, safety, or maliciousness.</p>
 </section>
 
@@ -71,6 +83,7 @@
   dt{color:var(--muted);font:700 var(--text-2xs) var(--mono);letter-spacing:.05em;text-transform:uppercase}
   dd{margin:4px 0 0;color:var(--text);font-size:var(--text-xs);line-height:1.4;overflow-wrap:anywhere}
   .guidance{color:var(--text)}
+  .manual-lookup{display:flex;flex-wrap:wrap;align-items:center;gap:9px;margin-top:14px}.manual-lookup p{flex:1 1 260px;margin:0}.manual-lookup .btn{min-height:var(--control-h);text-decoration:none}.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
   .note{color:var(--muted)}
   @media(max-width:520px){header{display:block}.badge{display:inline-block;margin-top:9px}dl{grid-template-columns:1fr}}
 </style>

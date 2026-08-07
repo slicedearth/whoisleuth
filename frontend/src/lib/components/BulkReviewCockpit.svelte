@@ -1,5 +1,6 @@
 <script lang="ts">
   import { describeBulkSourceCoverage } from '$lib/analysis/bulk-source-coverage.ts';
+  import { officialRegistryLookupFor } from '$lib/analysis/registry-support.ts';
   import {
     nextBulkReviewIndex,
     type BulkReviewCockpitRow,
@@ -41,6 +42,7 @@
   let enabled = $state(false);
   let cursor = $state(0);
   const current = $derived(rows[cursor] ?? null);
+  const officialLookupUrl = $derived(current ? officialRegistryLookupFor(current.domain) : null);
   const unresolved = $derived(rows.filter((row) => row.reviewState !== 'reviewed' && row.reviewState !== 'deferred').length);
 
   $effect(() => {
@@ -98,6 +100,12 @@
         <div><dt>Source coverage</dt><dd>{current.sourceCoverage.map((item) => describeBulkSourceCoverage(current.domain, item)).join(' · ') || 'Not recorded'}</dd></div>
         {#if current.error}<div><dt>Collection error</dt><dd class="error">{current.error}</dd></div>{/if}
       </dl>
+      {#if officialLookupUrl}
+        <div class="manual-lookup">
+          <a class="btn" href={officialLookupUrl} target="_blank" rel="noopener noreferrer">Open official registry lookup<span class="sr-only"> (opens in a new tab)</span></a>
+          <span>The domain is not added to this link. Enter it on the registry site if you choose to continue.</span>
+        </div>
+      {/if}
       <div class="navigation">
         <button class="btn" type="button" aria-keyshortcuts="Alt+ArrowLeft" onclick={() => move(-1)}>Previous unresolved</button>
         <button class="btn" type="button" aria-keyshortcuts="Alt+ArrowRight" onclick={() => move(1)}>Next unresolved</button>
@@ -191,6 +199,7 @@
   dt{color:var(--muted);font:650 var(--text-2xs) var(--mono);text-transform:uppercase}
   dd{margin:3px 0 0;font-size:var(--text-xs);line-height:1.45;overflow-wrap:anywhere}
   dd.error{color:var(--danger)}
+  .manual-lookup{display:flex;flex-wrap:wrap;align-items:center;gap:9px;margin-top:11px;padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}.manual-lookup>span{flex:1 1 260px;color:var(--muted);font-size:var(--text-2xs);line-height:1.45}.manual-lookup .btn{flex:0 0 auto;text-decoration:none}.sr-only{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
   .navigation,.actions{display:flex;flex-wrap:wrap;gap:7px;margin-top:11px}
   .actions .accent{border-color:color-mix(in srgb,var(--accent) 50%,var(--border));color:var(--accent)}
   .handoffs{display:grid;grid-template-columns:minmax(180px,.75fr) minmax(220px,1fr) auto;gap:8px;align-items:end;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)}
