@@ -95,6 +95,11 @@ describe('external observation mapping and asset bridge', () => {
           sourceSchema: 'whoisleuth.dns-observation-rows' as const,
           field: 'TXT',
           value: '192.0.2.1',
+          eventId: null,
+          logId: null,
+          certificateSha256: null,
+          dnsNameCount: null,
+          namesComplete: null,
         },
       } : finding),
     };

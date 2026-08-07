@@ -170,6 +170,9 @@ function structuredObservation(value: unknown, index: number, documentVersion: n
   const issuer = optionalText(item.issuer, 160, `Finding ${index + 1} certificate issuer`);
   const notAfter = iso(item.notAfter, `Finding ${index + 1} certificate expiry`, true);
   const certificateSchema = item.sourceSchema === 'whoisleuth.certificate-observation-rows';
+  if (certificateSchema && (field === 'certificateSha256' || field === 'fingerprintSha256') && !SHA256_RE.test(observationValue.toLowerCase())) {
+    throw new Error(`Finding ${index + 1} certificate observation value must be a SHA-256 hexadecimal digest.`);
+  }
   if (!certificateSchema && (issuer !== null || notAfter !== null)) {
     throw new Error(`Finding ${index + 1} non-certificate observation cannot declare certificate metadata.`);
   }
@@ -190,7 +193,10 @@ function structuredObservation(value: unknown, index: number, documentVersion: n
     }
     logId = requiredText(item.logId, 200, `Finding ${index + 1} certificate log id`);
     certificateSha256 = requiredText(item.certificateSha256, 64, `Finding ${index + 1} certificate digest`).toLowerCase();
-    if (!SHA256_RE.test(certificateSha256) || certificateSha256 !== observationValue.toLowerCase()) {
+    if (!SHA256_RE.test(certificateSha256)) {
+      throw new Error(`Finding ${index + 1} certificate event digest must be a SHA-256 hexadecimal digest.`);
+    }
+    if (certificateSha256 !== observationValue.toLowerCase()) {
       throw new Error(`Finding ${index + 1} certificate event digest must match the structured observation value.`);
     }
     if (!Number.isSafeInteger(item.dnsNameCount) || Number(item.dnsNameCount) < 1 || Number(item.dnsNameCount) > 100) {

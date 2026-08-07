@@ -222,14 +222,14 @@
   .expiry{display:flex;align-items:center;gap:10px;margin:12px 0}
   .expiry span{color:var(--muted);font-size:var(--text-xs);font-weight:700}
   .expiry select{width:auto}
-  .preview{border-top:1px solid var(--line);margin-top:20px;padding-top:18px}
+  .preview{border-top:1px solid var(--border);margin-top:20px;padding-top:18px}
   .preview>header{display:flex;align-items:start;justify-content:space-between;gap:12px}
   .preview>header>p{color:var(--muted);font-size:var(--text-xs)}
-  fieldset{border:1px solid var(--line);border-radius:var(--radius);margin:14px 0;padding:14px;min-width:0}
+  fieldset{border:1px solid var(--border);border-radius:var(--radius-md);margin:14px 0;padding:14px;min-width:0}
   legend{padding:0 6px;font-weight:800}
-  .add-domain{color:var(--warning);font-size:var(--text-xs);margin-bottom:12px}
+  .add-domain{color:var(--amber);font-size:var(--text-xs);margin-bottom:12px}
   .field-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
-  .field-grid label{border:1px solid var(--line);border-radius:var(--radius-sm);display:grid;grid-template-columns:auto 1fr;gap:2px 8px;padding:10px;min-width:0}
+  .field-grid label{border:1px solid var(--border);border-radius:var(--radius-sm);display:grid;grid-template-columns:auto 1fr;gap:2px 8px;padding:10px;min-width:0}
   .field-grid input{grid-row:1 / span 2}
   .field-grid span{font-size:var(--text-xs);font-weight:700}
   .field-grid small{color:var(--muted);font-size:var(--text-2xs);line-height:1.35}
