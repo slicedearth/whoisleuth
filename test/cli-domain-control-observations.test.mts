@@ -56,6 +56,8 @@ describe('CLI domain-control observations', () => {
     assert.equal(observation.domain, 'example.test');
     assert.deepEqual(observation.fields.find((field) => field.id === 'delegated_nameservers')?.values, ['ns1.example.test']);
     assert.deepEqual(observation.fields.find((field) => field.id === 'mail_exchangers')?.values, ['10 mail.example.test']);
+    assert.deepEqual(observation.fields.find((field) => field.id === 'caa_policy')?.values, ['0 issue ca.example']);
+    assert.deepEqual(observation.fields.find((field) => field.id === 'delegation_ds')?.values, ['12345 13 2 abcdef']);
     assert.deepEqual(observation.fields.find((field) => field.id === 'tls_public_key')?.values, ['b'.repeat(64)]);
     assert.doesNotMatch(JSON.stringify(observation), /raw|query/iu);
   });
@@ -71,6 +73,10 @@ describe('CLI domain-control observations', () => {
     }), observedAt);
 
     assert.equal(report.review.state, 'aligned');
+    const comparisons = report.review.domains[0]?.comparisons ?? [];
+    assert.equal(comparisons.find((item) => item.field === 'mx')?.state, 'aligned');
+    assert.equal(comparisons.find((item) => item.field === 'caa')?.state, 'aligned');
+    assert.equal(comparisons.find((item) => item.field === 'ds')?.state, 'aligned');
     assert.equal(report.input.lookupsReceived, 2);
     assert.equal(report.input.latestDomainObservations, 1);
     assert.equal(report.input.ignoredHistoricalLookups, 1);
