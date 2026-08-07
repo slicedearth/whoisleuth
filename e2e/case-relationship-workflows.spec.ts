@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures';
-import { expectNoHorizontalOverflow, failBrowserLocalCollectionReads, migrateLegacyBrowserData, readBrowserLocalCollection } from './helpers';
+import { expectNoHorizontalOverflow, failBrowserLocalCollectionReads, holdBrowserLocalReads, migrateLegacyBrowserData, readBrowserLocalCollection } from './helpers';
 
 // Every domain here is a local/invalid value (RFC 2606 .invalid, or dotless
 // bad-domain-* that classifyQuery rejects with a 400). Case features are
@@ -83,6 +83,25 @@ test.describe('browser-local campaigns', () => {
     await page.getByRole('button', { name: 'Open case' }).click();
     await expect(page.getByRole('tab', { name: /Cases/ })).toHaveAttribute('aria-selected', 'true');
     await expect(page.locator('.case-head', { hasText: 'member-one.invalid' })).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  test('shows saved campaigns when the tab opens before browser-local loading finishes', async ({ page }) => {
+    await page.goto('/dashboard');
+    await migrateLegacyBrowserData(page, {
+      'whoisleuth-campaigns-v1': { version: 1, campaigns: [{
+        id: 'delayed-campaign',
+        name: 'Delayed campaign',
+        description: '',
+        domains: [],
+        createdAt: '2026-08-07T00:00:00.000Z',
+        updatedAt: '2026-08-07T00:00:00.000Z',
+      }] },
+    });
+    await holdBrowserLocalReads(page);
+    await page.getByRole('link', { name: /Monitor/ }).first().click();
+    await page.getByRole('tab', { name: /Campaigns/ }).click();
+
+    await expect(page.locator('.campaign-head', { hasText: 'Delayed campaign' })).toBeVisible();
   });
 
   test('campaign export contains membership metadata but no case evidence or notes', async ({ page }) => {

@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { gzipSync, zipSync } from 'fflate';
 import { expect, test } from './fixtures';
-import { expectNoHorizontalOverflow, migrateLegacyBrowserData, readBrowserLocalCollection, requiredValue, runBulkScan } from './helpers';
+import { expectNoHorizontalOverflow, holdBrowserLocalReads, migrateLegacyBrowserData, readBrowserLocalCollection, requiredValue, runBulkScan } from './helpers';
 
 // Every domain here is a local/invalid value (RFC 2606 .invalid, or dotless
 // bad-domain-* that classifyQuery rejects with a 400). Case features are
@@ -440,6 +440,30 @@ test('custom detection rules evaluate existing cases without rewriting built-in 
     'The saved case evidence fixture is missing.',
   ).riskScore;
   expect(storedScore).toBe(65);
+});
+
+test('shows saved custom rules when the tab opens before browser-local loading finishes', async ({ page }) => {
+  await page.goto('/dashboard');
+  await migrateLegacyBrowserData(page, {
+    'whoisleuth-detection-rules-v1': {
+      version: 1,
+      rules: [{
+        id: 'delayed-rule',
+        name: 'Delayed custom rule',
+        enabled: true,
+        match: 'all',
+        conditions: [{ field: 'status', operator: 'equals', value: 'new' }],
+        riskDelta: 0,
+        tag: '',
+      }],
+    },
+  });
+  await holdBrowserLocalReads(page);
+  await page.getByRole('link', { name: /Monitor/ }).first().click();
+  await page.getByRole('tab', { name: /Custom rules/ }).click();
+
+  await expect(page.getByRole('region', { name: 'Custom detection rules' })
+    .getByRole('article').filter({ hasText: 'Delayed custom rule' })).toBeVisible();
 });
 
 test('custom rules persist, can be disabled, and export a versioned safe schema', async ({ page }) => {

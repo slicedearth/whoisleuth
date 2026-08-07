@@ -281,6 +281,33 @@ export async function failBrowserLocalCollectionReads(
   await page.evaluate(installFailure, collection);
 }
 
+export async function holdBrowserLocalReads(page: Page, delayMs = 750) {
+  await page.evaluate(({ databaseName, delay }) => new Promise<void>((resolve, reject) => {
+    const openRequest = indexedDB.open(databaseName);
+    openRequest.onerror = () => reject(openRequest.error);
+    openRequest.onsuccess = () => {
+      const database = openRequest.result;
+      const transaction = database.transaction('manifests', 'readwrite');
+      const store = transaction.objectStore('manifests');
+      const releaseAt = performance.now() + delay;
+      let started = false;
+      const keepAlive = () => {
+        const request = store.get('__playwright_read_hold__');
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => {
+          if (!started) {
+            started = true;
+            resolve();
+          }
+          if (performance.now() < releaseAt) keepAlive();
+          else database.close();
+        };
+      };
+      keepAlive();
+    };
+  }), { databaseName: LOCAL_DATA_DATABASE_NAME, delay: delayMs });
+}
+
 // Computed content of a pseudo-element - used to check the CSS-only
 // data-label treatment that only applies to Bulk's stacked mobile cards.
 export async function pseudoContent(locator: Locator, pseudo: '::before' | '::after') {

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import Pagination from '$lib/components/Pagination.svelte';
   import CampaignTemporalReview from '$lib/components/CampaignTemporalReview.svelte';
   import type { CaseRecord } from '$lib/cases';
@@ -49,6 +49,14 @@
   function showCampaign(id:string){const index=campaigns.findIndex((campaign)=>campaign.id===id);if(index>=0)page=Math.floor(index/PAGE_SIZE)+1;}
   $effect(()=>{if(page>pageCount)page=pageCount;});
   $effect(()=>{if(memberPage>memberPageCount)memberPage=memberPageCount;});
+  $effect(()=>{
+    const next=initialCampaigns;
+    const reportCount=oncount;
+    untrack(()=>{
+      campaigns=next;
+      reportCount?.(next.length);
+    });
+  });
 
   async function refresh(next?:CampaignRecord[]){
     campaigns=next??await loadCampaigns();
@@ -91,8 +99,6 @@
   function openCase(domain:string){const record=caseByDomain.get(domain);if(record)onselect?.(record);}
 
   onMount(()=>{void (async()=>{
-    campaigns=initialCampaigns;
-    oncount?.(campaigns.length);
     const focused=focusId?campaigns.find((campaign)=>campaign.id===focusId):null;
     if(focused)open(focused);
   })();});

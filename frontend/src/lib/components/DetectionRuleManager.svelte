@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { untrack } from 'svelte';
   import type { CaseRecord } from '$lib/cases';
   import {
     createDetectionRule,
@@ -81,7 +81,14 @@
   function conditionLabel(condition:DetectionRuleCondition){const field=definition(condition.field)?.label??condition.field;return condition.operator==='present'?`${field} is present`:`${field} ${operatorLabel(condition.operator)} ${String(condition.value)}`;}
   function openCase(caseId:string){const record=caseById.get(caseId);if(record)onselect?.(record);}
 
-  onMount(()=>{rules=initialRules;oncount?.(rules.length);});
+  $effect(()=>{
+    const next=initialRules;
+    const reportCount=oncount;
+    untrack(()=>{
+      rules=next;
+      reportCount?.(next.length);
+    });
+  });
 </script>
 
 <section class="rule-builder card">
