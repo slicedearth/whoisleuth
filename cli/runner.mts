@@ -1155,9 +1155,9 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
       const now = dependencies.now ? dependencies.now() : new Date().toISOString();
       const document = buildCliEvidenceExport(input, evidenceModule, now);
       const output = args.format === 'markdown'
-        ? formatLookupEvidenceMarkdown(document)
+        ? formatLookupEvidenceMarkdown(document, { includeAttribution: args.includeAttribution })
         : args.format === 'html'
-          ? formatLookupEvidenceHtml(document)
+          ? formatLookupEvidenceHtml(document, { includeAttribution: args.includeAttribution })
           : formatCliEvidenceExport(document, args.compact);
       write(stdout, output);
       return EXIT_CODES.SUCCESS;

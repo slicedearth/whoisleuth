@@ -252,7 +252,10 @@ normal output is emitted.
 `lookup --markdown` and `lookup --html` build the existing normalised evidence
 report directly after one completed domain lookup. They do not start a second
 collection. These report formats reject IP and ASN inputs before collection;
-JSON and terminal output remain available for those query types.
+JSON and terminal output remain available for those query types. Both readable
+formats include a fixed local generator footer by default. `--no-attribution`
+removes that presentation-only footer without changing evidence-source
+attribution, generator metadata in JSON, or collection behaviour.
 
 Lookup terminal output supports three detail levels. The standard view keeps
 the normal bounded evidence summary. `--summary` keeps the source states and
@@ -1301,7 +1304,9 @@ stdout, so use ordinary shell redirection when a file is wanted. Pretty JSON is
 the default; `--compact` emits one compact JSON line for pipeline use, while
 `--markdown` produces a readable source-attributed summary and `--html`
 produces a self-contained printable report. Compact, Markdown, and HTML output
-are mutually exclusive.
+are mutually exclusive. Markdown and HTML include the fixed generator footer
+by default; `--no-attribution` removes only that footer and is rejected for
+JSON output.
 
 The saved input is capped at 8 MiB and revalidated using the same schema,
 source-status, parsed-data, scalar, list, and event boundaries as `compare`.

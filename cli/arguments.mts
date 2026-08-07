@@ -82,7 +82,7 @@ type CliAction =
   | ({ action: 'map-observations'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'oam-export'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'doctor'; network: boolean; output: 'terminal' | 'json' } & TerminalOptions)
-  | ({ action: 'lookup'; query: string | null; output: 'terminal' | 'json' | 'markdown' | 'html' | 'junit'; deep: boolean; detail: LookupDetail; strictExit: boolean; events: boolean; plan: boolean; observerLabel: string | null; vantageLabel: string | null; failOn?: readonly CliFailPolicy[] } & TerminalOptions)
+  | ({ action: 'lookup'; query: string | null; output: 'terminal' | 'json' | 'markdown' | 'html' | 'junit'; deep: boolean; detail: LookupDetail; strictExit: boolean; events: boolean; plan: boolean; includeAttribution: boolean; observerLabel: string | null; vantageLabel: string | null; failOn?: readonly CliFailPolicy[] } & TerminalOptions)
   | ({ action: 'bulk'; source: string | null; output: 'terminal' | 'json' | 'jsonl' | 'csv' | 'domains' | 'queries' | 'junit'; deep: boolean; concurrency: number; checkpoint: string | null; resume: boolean; events: boolean; plan: boolean; filter: 'all' | 'registered' | 'inconclusive' | 'errors'; failOn?: readonly CliFailPolicy[] } & TerminalOptions)
   | ({ action: 'ct-search'; keyword: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'ct-intake'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
@@ -118,7 +118,7 @@ type CliAction =
   | ({ action: 'diff'; leftSource: string; rightSource: string; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'reconcile'; sources: readonly string[]; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'timeline'; sources: readonly string[]; output: 'terminal' | 'json' } & TerminalOptions)
-  | { action: 'export'; source: string | null; format: 'json' | 'markdown' | 'html'; compact: boolean };
+  | { action: 'export'; source: string | null; format: 'json' | 'markdown' | 'html'; compact: boolean; includeAttribution: boolean };
 type CliArguments = CliAction & FileOutputOptions;
 
 type ExtractedFileOutput = {
@@ -251,6 +251,7 @@ function parseCliArgumentsCore(argv: string[]): CliAction {
   let strictExit = false;
   let events = false;
   let plan = false;
+  let includeAttribution = true;
   let failOn: CliFailPolicy[] | null = null;
   let observerLabel: string | null = null;
   let vantageLabel: string | null = null;
@@ -288,6 +289,9 @@ function parseCliArgumentsCore(argv: string[]): CliAction {
     } else if (argument === '--plan') {
       if (plan) throw new CliUsageError('--plan may be supplied only once.');
       plan = true;
+    } else if (argument === '--no-attribution') {
+      if (!includeAttribution) throw new CliUsageError('--no-attribution may be supplied only once.');
+      includeAttribution = false;
     } else if (argument === '--fail-on') {
       if (failOn !== null) throw new CliUsageError('--fail-on may be supplied only once.');
       failOn = parseCliFailPolicies(lookupArguments[++index]);
@@ -310,11 +314,14 @@ function parseCliArgumentsCore(argv: string[]): CliAction {
   }
   if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
   if (detailSet && output !== 'terminal') throw new CliUsageError('--summary and --verbose apply only to terminal output.');
+  if (!includeAttribution && output !== 'markdown' && output !== 'html') {
+    throw new CliUsageError('--no-attribution applies only to Markdown or HTML reports.');
+  }
   if (plan && !['terminal', 'json'].includes(output)) throw new CliUsageError('--plan supports terminal or JSON output only.');
   if (plan && (detailSet || strictExit || events || quiet || failOn !== null)) {
     throw new CliUsageError('--plan cannot be combined with detail, strict-exit, event, or quiet options.');
   }
-  return { action: 'lookup', query, output, deep, detail, strictExit, events, plan, observerLabel, vantageLabel, quiet, color, ...(failOn ? { failOn } : {}) };
+  return { action: 'lookup', query, output, deep, detail, strictExit, events, plan, includeAttribution, observerLabel, vantageLabel, quiet, color, ...(failOn ? { failOn } : {}) };
 }
 
 function parseCompletionArguments(argv: string[]): Extract<CliArguments, { action: 'completion' }> {
@@ -1248,11 +1255,15 @@ function parseSourceReportArguments(argv: string[]): Extract<CliArguments, { act
 function parseExportArguments(argv: string[]): Extract<CliArguments, { action: 'export' }> {
   let source: string | null = null;
   let compact = false;
+  let includeAttribution = true;
   let format: 'json' | 'markdown' | 'html' = 'json';
   for (const argument of argv) {
     if (argument === '--compact') {
       if (compact) throw new CliUsageError('--compact may be supplied only once.');
       compact = true;
+    } else if (argument === '--no-attribution') {
+      if (!includeAttribution) throw new CliUsageError('--no-attribution may be supplied only once.');
+      includeAttribution = false;
     } else if (argument === '--markdown' || argument === '--html') {
       if (format !== 'json') throw new CliUsageError('Choose only one evidence export format.');
       format = argument === '--markdown' ? 'markdown' : 'html';
@@ -1261,7 +1272,8 @@ function parseExportArguments(argv: string[]): Extract<CliArguments, { action: '
     else throw new CliUsageError('export accepts one optional lookup JSON file. Otherwise pipe one lookup document on stdin.');
   }
   if (compact && format !== 'json') throw new CliUsageError('--compact applies to JSON export and cannot be combined with --markdown or --html.');
-  return { action: 'export', source, format, compact };
+  if (!includeAttribution && format === 'json') throw new CliUsageError('--no-attribution applies only to Markdown or HTML reports.');
+  return { action: 'export', source, format, compact, includeAttribution };
 }
 
 export { CLI_COMMANDS, CliUsageError, MAX_CLI_ARGUMENTS, MAX_CLI_ARGUMENT_LENGTH, parseCliArguments };

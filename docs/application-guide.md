@@ -191,6 +191,9 @@ registration evidence. Each report preserves source health, collection time,
 partial states, and limitations while deliberately excluding raw RDAP and
 WHOIS responses, expanded contacts, provider payloads, scripts, and remote
 assets.
+Readable Lookup reports include a quiet WHOISleuth version and source footer by
+default. The browser export control can omit that presentation footer without
+changing the evidence, source-health states, or limitations in the report.
 
 **Download brief** creates a shorter deterministic decision packet from the
 current task view. It keeps verified normalised facts, explicit
@@ -1071,7 +1074,10 @@ workflow they can contain public registration contacts, analyst notes, source
 observations, or compact case history.
 
 - Use a Lookup Markdown report for a bounded readable domain, IP, or ASN
-  summary. It omits raw registration payloads and expanded contacts.
+  summary. It omits raw registration payloads and expanded contacts. A quiet
+  generator footer is included by default and can be omitted from the readable
+  presentation; structured JSON evidence always retains bounded generator
+  metadata for provenance.
 - Use the Lookup JSON evidence package when complete captured source material
   is required, and treat it as potentially containing public contact data.
 - Use the portable investigation capsule when a recipient needs one manifest

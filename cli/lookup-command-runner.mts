@@ -101,8 +101,8 @@ async function runLookupCommand(
       const evidenceModule = await loadEvidence();
       const report = buildCliEvidenceExport(JSON.stringify(document), evidenceModule, now);
       context.writeStdout(args.output === 'markdown'
-        ? formatLookupEvidenceMarkdown(report)
-        : formatLookupEvidenceHtml(report));
+        ? formatLookupEvidenceMarkdown(report, { includeAttribution: args.includeAttribution })
+        : formatLookupEvidenceHtml(report, { includeAttribution: args.includeAttribution }));
     } else {
       context.writeStdout(context.terminal(formatTerminalLookup(document, { detail: args.detail }), args.color));
     }

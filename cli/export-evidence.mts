@@ -1,8 +1,7 @@
-import { createRequire } from 'node:module';
-
 import { projectCliLookupComparisonInput } from './compare.mts';
 import { parseSavedLookupDocument } from './saved-lookup.mts';
 import type { UnknownRecord } from './saved-lookup.mts';
+import { WHOISLEUTH_APPLICATION_VERSION } from '../lib/application-version.mts';
 
 type EvidenceModule = {
   LOOKUP_EVIDENCE_SCHEMA: unknown;
@@ -13,8 +12,7 @@ type EvidenceModule = {
   ) => unknown;
 };
 
-const require = createRequire(import.meta.url);
-const { version: APPLICATION_VERSION } = require('../package.json') as { version: string };
+const APPLICATION_VERSION = WHOISLEUTH_APPLICATION_VERSION;
 
 function objectOrNull(value: unknown): UnknownRecord | null {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as UnknownRecord : null;

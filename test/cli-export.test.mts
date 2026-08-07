@@ -160,16 +160,19 @@ async function evidenceModule() {
 describe('evidence export CLI arguments', () => {
   test('accepts an optional file, stdin, and compact output', () => {
     assert.deepEqual(parseCliArguments(['export', 'lookup.json']), {
-      action: 'export', source: 'lookup.json', format: 'json', compact: false,
+      action: 'export', source: 'lookup.json', format: 'json', compact: false, includeAttribution: true,
     });
     assert.deepEqual(parseCliArguments(['export', '--compact']), {
-      action: 'export', source: null, format: 'json', compact: true,
+      action: 'export', source: null, format: 'json', compact: true, includeAttribution: true,
     });
     assert.deepEqual(parseCliArguments(['export', 'lookup.json', '--markdown']), {
-      action: 'export', source: 'lookup.json', format: 'markdown', compact: false,
+      action: 'export', source: 'lookup.json', format: 'markdown', compact: false, includeAttribution: true,
     });
     assert.deepEqual(parseCliArguments(['export', '--html', 'lookup.json']), {
-      action: 'export', source: 'lookup.json', format: 'html', compact: false,
+      action: 'export', source: 'lookup.json', format: 'html', compact: false, includeAttribution: true,
+    });
+    assert.deepEqual(parseCliArguments(['export', '--markdown', '--no-attribution']), {
+      action: 'export', source: null, format: 'markdown', compact: false, includeAttribution: false,
     });
   });
 
@@ -180,6 +183,8 @@ describe('evidence export CLI arguments', () => {
     assert.throws(() => parseCliArguments(['export', '--markdown', '--html']), /only one evidence export format/);
     assert.throws(() => parseCliArguments(['export', '--markdown', '--compact']), /cannot be combined/);
     assert.throws(() => parseCliArguments(['export', '--html', '--compact']), /cannot be combined/);
+    assert.throws(() => parseCliArguments(['export', '--no-attribution']), /only to Markdown or HTML/);
+    assert.throws(() => parseCliArguments(['export', '--markdown', '--no-attribution', '--no-attribution']), /only once/);
     assert.throws(() => parseCliArguments(['export', '--json']), /Unknown option/);
     assert.throws(() => parseCliArguments(['export', '--quiet']), /Unknown option/);
   });
@@ -419,7 +424,18 @@ describe('lookup evidence HTML rendering', () => {
     assert.doesNotMatch(html, /<a\b/i);
     assert.doesNotMatch(html, /publicContact|Registrant Email|privateNestedValue|private-registrar/);
     assert.doesNotMatch(html, /Registry access suffix/);
+    assert.ok(html.includes(`Generated with WHOISleuth ${APPLICATION_VERSION}`));
     assert.equal(html.endsWith('\n'), true);
+  });
+
+  test('omits only the presentation footer when requested', async () => {
+    const result = buildCliEvidenceExport(JSON.stringify(savedLookup()), await evidenceModule());
+    const markdown = formatLookupEvidenceMarkdown(result, { includeAttribution: false });
+    const html = formatLookupEvidenceHtml(result, { includeAttribution: false });
+    assert.doesNotMatch(markdown, /Generated with WHOISleuth/u);
+    assert.doesNotMatch(html, /Generated with WHOISleuth/u);
+    assert.ok(markdown.includes(`**Generator:** WHOISleuth ${APPLICATION_VERSION.replaceAll('.', '\\.')}`));
+    assert.ok(html.includes(`<dt>Generator</dt><dd>WHOISleuth ${APPLICATION_VERSION}</dd>`));
   });
 
   test('renders registry access context as escaped static HTML diagnostics', async () => {

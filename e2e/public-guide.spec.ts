@@ -65,7 +65,7 @@ test('homepage presents plain-language goals, restrained branding, and synthetic
   await expect(page.locator('.hero-actions').getByRole('link', { name: 'Open console' })).toHaveAttribute('href', '/dashboard');
   await expect(page.getByRole('link', { name: 'Sign in to investigate' })).toHaveCount(0);
   await expect(page.locator('.learn article')).toHaveCount(4);
-  await expect(page.getByRole('link', { name: 'Browse all domain investigation resources' })).toHaveAttribute('href', '/resources');
+  await expect(page.getByRole('link', { name: 'Browse the topic library' })).toHaveAttribute('href', '/resources');
 
   await page.setViewportSize({ width: 390, height: 844 });
   const mobileDomainPicker = page.getByLabel('Example domain');
@@ -242,7 +242,7 @@ test('public footer keeps an even compact rhythm on mobile', async ({ page }) =>
   const footer = page.locator('footer.site-footer');
   const links = footer.locator('.footer-links a');
   await expect(footer).toBeVisible();
-  await expect(links).toHaveCount(7);
+  await expect(links).toHaveCount(6);
 
   const linkLayout = await links.evaluateAll((elements) => elements.map((element) => {
     const box = element.getBoundingClientRect();
@@ -267,12 +267,12 @@ test('public footer keeps an even compact rhythm on mobile', async ({ page }) =>
   await expectNoHorizontalOverflow(page);
 });
 
-test('authenticated console groups the guide and registry support under Reference', async ({ page }) => {
+test('authenticated console groups learning and registry support under Reference', async ({ page }) => {
   await page.goto('/lookup');
   await expect(page.getByText('Domain intelligence console', { exact: true })).toBeVisible();
   await expect(page.getByRole('navigation', { name: 'Console' })).toBeVisible();
   const reference = page.getByRole('navigation', { name: 'Reference' });
-  await expect(reference.getByRole('link', { name: /Guide/ })).toHaveAttribute('href', '/guide');
+  await expect(reference.getByRole('link', { name: /Learn/ })).toHaveAttribute('href', '/guide');
   await expect(reference.getByRole('link', { name: /Registry support/ })).toHaveAttribute('href', '/registry-support');
   await expect(page.getByRole('navigation', { name: 'Console' }).getByRole('link', { name: /Registry support/ })).toHaveCount(0);
 });

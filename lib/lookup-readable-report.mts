@@ -3,6 +3,10 @@ import { formatLookupEvidenceMarkdown } from './evidence-report-markdown.mts';
 import { buildRegistryInsights } from './registry-insights.mts';
 import { WHOISLEUTH_SOURCE_REPOSITORY_URL } from './project-metadata.mts';
 import {
+  buildPortableGeneratorMetadata,
+  portableGeneratorAttribution,
+} from './portable-generator.mts';
+import {
   createLookupViewModel,
   isJsonObject,
   type JsonObject,
@@ -15,6 +19,7 @@ export const MAX_LOOKUP_READABLE_REPORT_BYTES = 64 * 1024;
 type LookupReadableReportOptions = {
   applicationVersion?: unknown;
   generatedAt?: string;
+  includeAttribution?: boolean;
   risk?: unknown;
 };
 
@@ -384,7 +389,12 @@ function buildLookupReadableReport(
   const generatedAt = generatedTimestamp(options.generatedAt);
   const projected = projectedLookup(response);
   if (response.type !== 'domain') {
-    const markdown = formatNetworkIdentifierReadableReport(projected, generatedAt, options.applicationVersion);
+    const markdown = formatNetworkIdentifierReadableReport(
+      projected,
+      generatedAt,
+      options.applicationVersion,
+      options.includeAttribution !== false,
+    );
     if (new TextEncoder().encode(markdown).byteLength > MAX_LOOKUP_READABLE_REPORT_BYTES) {
       throw new RangeError('Readable Lookup report exceeded its byte limit.');
     }
@@ -400,6 +410,9 @@ function buildLookupReadableReport(
     ? projectedRdap.registrarRdap
     : null;
   const markdown = formatLookupEvidenceMarkdown(evidence, {
+    ...(options.includeAttribution === undefined
+      ? {}
+      : { includeAttribution: options.includeAttribution }),
     risk: options.risk,
     registrarRdap,
   });
@@ -442,6 +455,7 @@ function formatNetworkIdentifierReadableReport(
   projectedRaw: Record<string, unknown>,
   generatedAt: string,
   applicationVersion: unknown,
+  includeAttribution: boolean,
 ): string {
   const projected = projectedRaw as JsonObject;
   const type = typeof projected.type === 'string' ? projected.type : 'network';
@@ -520,8 +534,16 @@ function formatNetworkIdentifierReadableReport(
     '- Public registration and routing identifiers describe published allocation context. They do not prove ownership, current control, hosting responsibility, intent, safety, or maliciousness.',
     '- Reverse DNS names are operator-published context. They do not prove identity, hosting control, or a forward-confirmed relationship.',
     '- The report projects only bounded normalised fields already collected by Lookup and makes no additional request.',
-    '',
   );
+  if (includeAttribution) {
+    lines.push(
+      '',
+      '---',
+      '',
+      portableGeneratorAttribution(buildPortableGeneratorMetadata(applicationVersion)),
+    );
+  }
+  lines.push('');
   return lines.join('\n');
 }
 

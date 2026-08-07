@@ -44,11 +44,11 @@ function classifiedDomain(value: string, inputHostname = value): ClassifiedQuery
 
 describe('CLI argument parsing', () => {
   test('defaults lookup to fast terminal output', () => {
-    assert.deepEqual(parseCliArguments(['lookup', 'example.com']), { action: 'lookup', query: 'example.com', output: 'terminal', deep: false, detail: 'standard', strictExit: false, events: false, plan: false, observerLabel: null, vantageLabel: null, quiet: false, color: true });
+    assert.deepEqual(parseCliArguments(['lookup', 'example.com']), { action: 'lookup', query: 'example.com', output: 'terminal', deep: false, detail: 'standard', strictExit: false, events: false, plan: false, includeAttribution: true, observerLabel: null, vantageLabel: null, quiet: false, color: true });
   });
 
   test('accepts explicit deep JSON output and bounded stdin mode', () => {
-    assert.deepEqual(parseCliArguments(['lookup', '--deep', '--json', '--no-color']), { action: 'lookup', query: null, output: 'json', deep: true, detail: 'standard', strictExit: false, events: false, plan: false, observerLabel: null, vantageLabel: null, quiet: false, color: false });
+    assert.deepEqual(parseCliArguments(['lookup', '--deep', '--json', '--no-color']), { action: 'lookup', query: null, output: 'json', deep: true, detail: 'standard', strictExit: false, events: false, plan: false, includeAttribution: true, observerLabel: null, vantageLabel: null, quiet: false, color: false });
   });
 
   test('rejects unknown commands, options, conflicting modes, and multiple queries', () => {
@@ -73,6 +73,7 @@ describe('CLI argument parsing', () => {
       strictExit: false,
       events: false,
       plan: false,
+      includeAttribution: true,
       observerLabel: null,
       vantageLabel: null,
       quiet: false,
@@ -87,6 +88,7 @@ describe('CLI argument parsing', () => {
       strictExit: false,
       events: false,
       plan: false,
+      includeAttribution: true,
       observerLabel: null,
       vantageLabel: null,
       quiet: false,

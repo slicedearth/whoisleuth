@@ -1,7 +1,6 @@
 import { compareRdapPublications, compareRegistrySources } from './registry-comparison.mts';
 import { buildRegistryInsights } from './registry-insights.mts';
-import { WHOISLEUTH_SOURCE_REPOSITORY_URL } from './project-metadata.mts';
-import { normalizeBoundedSemanticVersion } from './semantic-version.mts';
+import { buildPortableGeneratorMetadata } from './portable-generator.mts';
 
 export const LOOKUP_EVIDENCE_SCHEMA = 'whoisleuth.lookup-evidence';
 export const LOOKUP_EVIDENCE_SCHEMA_VERSION = 25;
@@ -46,14 +45,6 @@ function boundedTimestamp(value: unknown): string | null {
   if (!text) return null;
   const time = Date.parse(text);
   return Number.isFinite(time) ? new Date(time).toISOString() : null;
-}
-
-function boundedSemanticVersion(value: unknown): string | null {
-  try {
-    return normalizeBoundedSemanticVersion(value, 'Evidence application');
-  } catch {
-    return null;
-  }
 }
 
 function boundedEndpoint(value: unknown): string | null {
@@ -416,11 +407,7 @@ export function buildLookupEvidence(response: unknown, options: LookupEvidenceOp
     schema: LOOKUP_EVIDENCE_SCHEMA,
     schemaVersion: LOOKUP_EVIDENCE_SCHEMA_VERSION,
     generatedAt,
-    application: {
-      name: 'WHOISleuth',
-      version: boundedSemanticVersion(applicationVersion),
-      projectUrl: WHOISLEUTH_SOURCE_REPOSITORY_URL,
-    },
+    application: buildPortableGeneratorMetadata(applicationVersion),
     query: {
       submitted: body.query || null,
       type: body.type || null,

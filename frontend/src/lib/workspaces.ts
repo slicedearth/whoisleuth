@@ -75,10 +75,10 @@ export const referenceResources = [
 export const publicResources = [
   {
     href: '/guide',
-    label: 'Guide',
-    detail: 'Learn how to investigate domains and interpret results',
+    label: 'Learn',
+    detail: 'Start with the guide, glossary, practice, and topic library',
     icon: 'page',
-    keywords: ['help', 'documentation', 'glossary', 'faq'],
+    keywords: ['guide', 'help', 'documentation', 'glossary', 'faq', 'resources'],
   },
 ] satisfies NavigationItem[];
 

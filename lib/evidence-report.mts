@@ -1,4 +1,8 @@
 import { registryAccessProfileLabel } from './registry-access.mts';
+import {
+  buildPortableGeneratorMetadata,
+  portableGeneratorAttribution,
+} from './portable-generator.mts';
 
 const MAX_REPORT_VALUE_LENGTH = 300;
 const MAX_REPORT_LIST_ITEMS = 50;
@@ -10,7 +14,11 @@ type ReportField = { label: string; value: string };
 type ReportGroup = { title: string; fields: ReportField[] };
 type ComparisonField = { label: string; status: string; rdap: string; whois: string };
 type PublicationComparisonField = { label: string; status: string; registry: string; registrar: string };
-type LookupEvidenceReportOptions = { registrarRdap?: unknown; risk?: unknown };
+type LookupEvidenceReportOptions = {
+  includeAttribution?: boolean;
+  registrarRdap?: unknown;
+  risk?: unknown;
+};
 type LookupEvidenceReport = {
   title: string;
   notice: string;
@@ -24,6 +32,7 @@ type LookupEvidenceReport = {
   networkGroups: ReportGroup[];
   diagnostics: ReportField[];
   limitations: string[];
+  attribution: string | null;
 };
 
 function objectOrEmpty(value: unknown): UnknownRecord {
@@ -118,6 +127,7 @@ function buildLookupEvidenceReport(
 ): LookupEvidenceReport {
   const report = objectOrEmpty(document);
   const application = objectOrEmpty(report.application);
+  const generator = buildPortableGeneratorMetadata(application.version);
   const query = objectOrEmpty(report.query);
   const diagnostics = objectOrEmpty(report.diagnostics);
   const rdapDiagnostics = objectOrEmpty(diagnostics.rdap);
@@ -420,6 +430,9 @@ function buildLookupEvidenceReport(
         'Registry access constraints describe collection reachability only. They do not decide registration, availability, ownership, safety, or maliciousness.',
       ] : []),
     ],
+    attribution: options.includeAttribution === false
+      ? null
+      : portableGeneratorAttribution(generator),
   };
 }
 

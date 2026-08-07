@@ -13,6 +13,11 @@ import { caseEvidenceIncomparableReasons, compareCaseEvidence, latestCaseEvidenc
 import type { CaseEvidenceSnapshot, CaseRecord, EvidenceFactor } from './case-model.ts';
 import { httpSecurityHeaderLabel } from './http-summary.ts';
 import { analystInteroperabilityTags } from '../../../../lib/analyst-taxonomy.mts';
+import {
+  buildPortableGeneratorMetadata,
+  portableGeneratorAttribution,
+  type PortableGeneratorMetadata,
+} from '../../../../lib/portable-generator.mts';
 import { CASE_EVIDENCE_RELATION_STANCES } from './case-response-model.ts';
 
 // ---------------------------------------------------------------------------
@@ -21,8 +26,6 @@ import { CASE_EVIDENCE_RELATION_STANCES } from './case-response-model.ts';
 
 export const CASE_REPORT_SCHEMA = 'whoisleuth.case-report';
 export const CASE_REPORT_SCHEMA_VERSION = 6;
-
-const APPLICATION_NAME = 'WHOISleuth';
 
 const LIMITATIONS_TEXT = [
   'This report contains normalised browser-local observations from WHOISleuth analyst cases.',
@@ -45,7 +48,12 @@ const LIMITATIONS_TEXT = [
  * @param {string} text
  * @returns {string}
  */
-type ReportOptions = { includeNotes?: boolean; generatedAt?: string };
+type ReportOptions = {
+  applicationVersion?: unknown;
+  generatedAt?: string;
+  includeAttribution?: boolean;
+  includeNotes?: boolean;
+};
 type ReportReason = 'opportunity-model' | 'scan-depth' | 'risk-model' | 'other';
 type ReportChange = ReturnType<typeof compareCaseEvidence>[number];
 type ReportTimelineEntry = {
@@ -60,7 +68,7 @@ type CaseReportJson = {
   schema: typeof CASE_REPORT_SCHEMA;
   schemaVersion: typeof CASE_REPORT_SCHEMA_VERSION;
   generatedAt: string;
-  application: { name: string };
+  application: PortableGeneratorMetadata;
   case: {
     id: string;
     domain: string;
@@ -225,6 +233,7 @@ export function buildCaseReport(
   const { generatedAt } = options;
   const includeNotes = options.includeNotes === true;
   const now = generatedAt || new Date().toISOString();
+  const generator = buildPortableGeneratorMetadata(options.applicationVersion);
 
   // --- Build JSON report ---
 
@@ -279,7 +288,7 @@ export function buildCaseReport(
     schema: CASE_REPORT_SCHEMA,
     schemaVersion: CASE_REPORT_SCHEMA_VERSION,
     generatedAt: now,
-    application: { name: APPLICATION_NAME },
+    application: generator,
     case: {
       id: caseRecord.id,
       domain: caseRecord.domain,
@@ -320,7 +329,7 @@ export function buildCaseReport(
 
   // --- Build Markdown ---
 
-  const md = buildMarkdown(json);
+  const md = buildMarkdown(json, options.includeAttribution !== false);
 
   return { json, markdown: md };
 }
@@ -334,7 +343,7 @@ export function buildCaseReport(
  * @param {object} report
  * @returns {string}
  */
-function buildMarkdown(report: CaseReportJson): string {
+function buildMarkdown(report: CaseReportJson, includeAttribution: boolean): string {
   const lines: string[] = [];
 
   // Title
@@ -593,6 +602,11 @@ function buildMarkdown(report: CaseReportJson): string {
   lines.push('');
   lines.push(LIMITATIONS_TEXT);
   lines.push('');
+
+  if (includeAttribution) {
+    lines.push(portableGeneratorAttribution(report.application));
+    lines.push('');
+  }
 
   return lines.join('\n');
 }

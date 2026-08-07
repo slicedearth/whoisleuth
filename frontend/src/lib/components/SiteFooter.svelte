@@ -15,8 +15,7 @@
     <p>WHOISleuth {__WHOISLEUTH_VERSION__} · build {revisionLabel} · © 2026 <a href="https://github.com/slicedearth" target="_blank" rel="noopener">slicedearth</a></p>
     <nav class="footer-links" aria-label="Footer">
       <a href={sourceHref} target="_blank" rel="noopener">Source and licence</a>
-      <a href="/resources">Learn</a>
-      <a href="/guide">Guide</a>
+      <a href="/guide">Learn</a>
       <a href="/privacy">Privacy</a>
       <a href="/terms">Terms</a>
       <a href="/request-policy">Requests</a>

@@ -78,6 +78,9 @@ function formatLookupEvidenceMarkdown(
   appendFields(lines, report.diagnostics);
   lines.push('', '## Limitations', '');
   for (const limitation of report.limitations) lines.push(`- ${limitation}`);
+  if (report.attribution) {
+    lines.push('', '---', '', report.attribution);
+  }
   lines.push('');
   return lines.join('\n');
 }

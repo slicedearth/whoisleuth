@@ -328,6 +328,18 @@ test('deep Lookup presents registrar and observed network RDAP as separate sourc
   expect(report).toContain('## Registry / registrar RDAP comparison');
   expect(report).toContain('Example network holder');
   expect(report).toContain('Risk score:');
+  expect(report).toContain(`Generated with WHOISleuth ${packageVersion}`);
+
+  const reportWithoutFooterPromise = page.waitForEvent('download');
+  await page.locator('.export-menu > summary').click();
+  await page.getByLabel('Include generator footer').uncheck();
+  await page.getByRole('button', { name: 'Download report' }).click();
+  const reportWithoutFooter = await reportWithoutFooterPromise;
+  const reportWithoutFooterPath = await reportWithoutFooter.path();
+  expect(reportWithoutFooterPath).not.toBeNull();
+  const reportWithoutFooterText = await readFile(reportWithoutFooterPath!, 'utf8');
+  expect(reportWithoutFooterText).toContain(`**Generator:** WHOISleuth ${packageVersion.replaceAll('.', '\\.')}`);
+  expect(reportWithoutFooterText).not.toContain('Generated with WHOISleuth');
   expect(report).toContain('heuristic review priority');
   expect(report).not.toContain('registrar-object-handle');
   expect(report).not.toContain('abuse@registrar.example');

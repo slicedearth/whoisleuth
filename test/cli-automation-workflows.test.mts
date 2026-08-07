@@ -131,7 +131,7 @@ describe('CLI automation arguments', () => {
     });
     assert.deepEqual(parseCliArguments(['lookup', 'example.test', '--strict-exit', '--output', 'result.json', '--force']), {
       action: 'lookup', query: 'example.test', output: 'terminal', deep: false, detail: 'standard', strictExit: true,
-      events: false, plan: false, observerLabel: null, vantageLabel: null, quiet: false, color: true, destination: 'result.json', force: true,
+      events: false, plan: false, includeAttribution: true, observerLabel: null, vantageLabel: null, quiet: false, color: true, destination: 'result.json', force: true,
     });
     assert.deepEqual(parseCliArguments(['bulk', '--checkpoint', 'bulk.json', '--resume', '--events']), {
       action: 'bulk', source: null, output: 'terminal', deep: false, quiet: false, color: true, concurrency: 4,
@@ -433,8 +433,24 @@ describe('direct reports and saved Lookup diff', () => {
       });
       assert.equal(code, EXIT_CODES.SUCCESS);
       assert.match(stdout.value(), new RegExp(marker.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&'), 'u'));
+      assert.match(stdout.value(), /Generated with WHOISleuth/u);
       assert.doesNotMatch(stdout.value(), /raw response|authorization header/iu);
     }
+  });
+
+  test('can omit only the direct report generator footer', async () => {
+    const stdout = capture();
+    const code = await runCli(['lookup', 'example.test', '--markdown', '--no-attribution'], {
+      stdout: stdout.stream,
+      stderr: capture().stream,
+      now: () => NOW,
+      classifyQuery: () => classifiedDomain('example.test'),
+      runUnifiedLookup: async () => lookupResult('example.test'),
+    });
+
+    assert.equal(code, EXIT_CODES.SUCCESS);
+    assert.match(stdout.value(), /\*\*Generator:\*\* WHOISleuth/u);
+    assert.doesNotMatch(stdout.value(), /Generated with WHOISleuth/u);
   });
 
   test('rejects a direct report for non-domain input before collection starts', async () => {

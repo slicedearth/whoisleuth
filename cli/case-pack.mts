@@ -3,6 +3,7 @@ import { Buffer } from 'node:buffer';
 
 import { canonicalArtifactJson } from '../frontend/src/lib/analysis/artifact-integrity.ts';
 import { buildCaseReport } from '../frontend/src/lib/analysis/case-report.ts';
+import { WHOISLEUTH_APPLICATION_VERSION } from '../lib/application-version.mts';
 import {
   CASE_IMPORT_VERSIONS,
   MAX_CASE_IMPORT_BYTES,
@@ -51,7 +52,11 @@ export function buildCliCasePack(
     throw new CliUsageError(`Case packs are limited to ${MAX_CASE_PACK_CASES} reviewed cases. Export a smaller selected set so no case is silently omitted.`);
   }
   const cases = normalised.map((item) => redactedCase(item, options.audience));
-  const reports = cases.map((item) => buildCaseReport(item, { includeNotes: false, generatedAt }).json);
+  const reports = cases.map((item) => buildCaseReport(item, {
+    applicationVersion: WHOISLEUTH_APPLICATION_VERSION,
+    includeNotes: false,
+    generatedAt,
+  }).json);
   const exclusions = options.audience === 'internal'
     ? ['Raw upstream payloads and credentials are outside the case schema.']
     : options.audience === 'trusted'

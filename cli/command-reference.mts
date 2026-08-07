@@ -85,7 +85,7 @@ const COMMAND_USAGE: Readonly<Record<CliCommand, string>> = Object.freeze({
   manifest: 'whoisleuth manifest <artefact.json> [...] --workflow <label> [--configuration-digest <sha256:digest>] [--json] [--quiet] [--no-color]',
   'map-observations': 'whoisleuth map-observations [mapping.json] [--json] [--quiet] [--no-color]',
   'oam-export': 'whoisleuth oam-export [external-findings.json] [--json] [--quiet] [--no-color]',
-  lookup: 'whoisleuth lookup <domain|IP|ASN> [--json|--junit|--markdown|--html] [--fast|--deep] [--observer <label>] [--vantage <label>] [--plan] [--summary|--verbose] [--strict-exit] [--fail-on <policies>] [--events] [--quiet] [--no-color]',
+  lookup: 'whoisleuth lookup <domain|IP|ASN> [--json|--junit|--markdown|--html] [--no-attribution] [--fast|--deep] [--observer <label>] [--vantage <label>] [--plan] [--summary|--verbose] [--strict-exit] [--fail-on <policies>] [--events] [--quiet] [--no-color]',
   bulk: 'whoisleuth bulk [file] [--json|--jsonl|--junit|--csv|--domains|--queries] [--registered-only|--inconclusive-only|--errors-only] [--fast|--deep] [--concurrency <1-8>] [--checkpoint <file> [--resume]] [--events] [--plan] [--fail-on <policies>]',
   'ct-search': 'whoisleuth ct-search <keyword> [--json] [--quiet] [--no-color]',
   'ct-intake': 'whoisleuth ct-intake [events.json] [--json] [--quiet] [--no-color]',
@@ -121,7 +121,7 @@ const COMMAND_USAGE: Readonly<Record<CliCommand, string>> = Object.freeze({
   diff: 'whoisleuth diff <left.json> <right.json> [--json] [--quiet] [--no-color]',
   reconcile: 'whoisleuth reconcile <observation.json> <observation.json> [...] [--json] [--quiet] [--no-color]',
   timeline: 'whoisleuth timeline <observation.json> <observation.json> [...] [--json] [--quiet] [--no-color]',
-  export: 'whoisleuth export [lookup.json] [--markdown|--html|--compact]',
+  export: 'whoisleuth export [lookup.json] [--markdown|--html|--compact] [--no-attribution]',
 });
 
 const COMMAND_DETAILS: Readonly<Record<CliCommand, CommandDetail>> = Object.freeze({
@@ -343,7 +343,7 @@ const COMMAND_DETAILS: Readonly<Record<CliCommand, CommandDetail>> = Object.free
   export: {
     description: 'Convert one saved lookup into a versioned evidence report.',
     example: 'whoisleuth export lookup.json --markdown',
-    boundary: 'Exports preserve source attribution and limitations. Compact output intentionally omits raw registry payloads.',
+    boundary: 'Exports preserve evidence-source attribution and limitations. Markdown and HTML include a presentation-only generator footer unless --no-attribution is selected; JSON retains bounded generator provenance. Compact output intentionally omits raw registry payloads.',
   },
 });
 

@@ -92,6 +92,8 @@ describe('buildCaseReport JSON', () => {
     assert.equal(json.schemaVersion, 6);
     assert.equal(json.generatedAt, ISO);
     assert.equal(json.application.name, 'WHOISleuth');
+    assert.equal(json.application.version, null);
+    assert.equal(json.application.projectUrl, 'https://github.com/slicedearth/whoisleuth');
     assert.equal(json.case.id, 'case-1');
     assert.equal(json.case.domain, 'test.invalid');
     assert.equal(json.case.notesIncluded, false);
@@ -413,6 +415,22 @@ describe('buildCaseReport Markdown', () => {
 
     assert.ok(markdown.includes('## Limitations & Provenance'));
     assert.ok(markdown.includes('normalised browser-local observations'));
+    assert.ok(markdown.includes('Generated with WHOISleuth'));
+  });
+
+  test('uses bounded generator provenance while allowing the Markdown footer to be omitted', () => {
+    const rec = caseRecord();
+    const { json, markdown } = caseReport.buildCaseReport(rec, {
+      applicationVersion: '1.45.0',
+      generatedAt: ISO,
+      includeAttribution: false,
+    });
+    assert.deepEqual(json.application, {
+      name: 'WHOISleuth',
+      version: '1.45.0',
+      projectUrl: 'https://github.com/slicedearth/whoisleuth',
+    });
+    assert.doesNotMatch(markdown, /Generated with WHOISleuth/u);
   });
 
   test('notes excluded by default in markdown', () => {

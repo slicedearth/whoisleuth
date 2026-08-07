@@ -27,7 +27,7 @@
 />
 
 <header class="resource-hero">
-  <p class="eyebrow">Learn by investigation task</p>
+  <p class="eyebrow">Topic library</p>
   <h1>Understand the evidence before using the result.</h1>
   <p>Each guide explains what a source can answer, where it can fail, and how WHOISleuth keeps the conclusion narrower than the available evidence.</p>
   <div><a class="primary" href="/demo">Try the synthetic demo</a><PublicConsoleCta /></div>
