@@ -290,6 +290,149 @@ test('navigation away aborts the browser wait without restoring a late result', 
   await expect(page.getByRole('alert')).toHaveCount(0);
 });
 
+test('effective same-route URL changes invalidate held work while task and hash changes do not', async ({ page }) => {
+  const releases = new Map<string, () => void>();
+  const gates = new Map<string, Promise<void>>();
+  const gateFor = (target: string) => {
+    const gate = new Promise<void>((resolve) => releases.set(target, resolve));
+    gates.set(target, gate);
+  };
+  gateFor('task-only.example.test');
+  gateFor('stale-route.example.test');
+  await page.route('**/api/lookup?*', async (route) => {
+    const target = new URL(route.request().url()).searchParams.get('q') || '';
+    await gates.get(target);
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        query: target,
+        type: 'domain',
+        registrableDomain: target,
+        availability: { applicable: true, state: 'registered', confidence: 'high', domain: target },
+        rdap: { parsed: {} },
+        whois: { parsed: {}, chain: [] },
+        diagnostics: { rdap: { status: 'success' }, whois: { status: 'complete' }, availability: { status: 'complete' } },
+      }),
+    }).catch(() => {});
+  });
+  const navigate = async (href: string) => {
+    await page.evaluate((destination) => {
+      const link = document.createElement('a');
+      link.href = destination;
+      link.textContent = 'Same-route fixture link';
+      document.body.append(link);
+      link.click();
+    }, href);
+    await expect.poll(() => `${new URL(page.url()).pathname}${new URL(page.url()).search}`).toBe(href);
+  };
+
+  await page.locator('#query').fill('task-only.example.test');
+  await page.getByRole('button', { name: 'Run lookup' }).click();
+  await navigate('/lookup?task=brand');
+  await page.evaluate(() => { window.location.hash = 'query'; });
+  await expect(page.getByRole('button', { name: 'Cancel lookup' })).toBeVisible();
+  releases.get('task-only.example.test')?.();
+  await expect(page.locator('#result')).toBeVisible();
+
+  await navigate('/lookup?q=stale-route.example.test&depth=deep');
+  await page.getByRole('button', { name: 'Run lookup' }).click();
+  await expect(page.getByRole('button', { name: 'Cancel lookup' })).toBeVisible();
+  await navigate('/lookup?q=replacement.example.test&depth=fast');
+  await expect(page.locator('#query')).toHaveValue('replacement.example.test');
+  await page.goBack();
+  await expect(page.locator('#query')).toHaveValue('stale-route.example.test');
+  releases.get('stale-route.example.test')?.();
+  await expect(page.locator('#result')).toHaveCount(0);
+  await expect(page.getByRole('alert')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Run lookup' })).toBeEnabled();
+});
+
+for (const action of ['edit', 'clear'] as const) {
+test(`query ${action} invalidates a response while browser-local case context is still loading`, async ({ page }) => {
+  await page.evaluate(() => {
+    const state = window as typeof window & {
+      __delayNextCaseRead?: boolean;
+      __releaseCaseRead?: () => void;
+    };
+    state.__delayNextCaseRead = false;
+    const originalGet = IDBObjectStore.prototype.get;
+    IDBObjectStore.prototype.get = function delayedCaseManifestGet(query: IDBValidKey | IDBKeyRange) {
+      const request = originalGet.call(this, query);
+      if (this.name !== 'manifests' || query !== 'cases' || !state.__delayNextCaseRead) return request;
+      state.__delayNextCaseRead = false;
+      let release = () => {};
+      const gate = new Promise<void>((resolve) => { release = resolve; });
+      state.__releaseCaseRead = release;
+      let proxy: IDBRequest;
+      proxy = new Proxy(request, {
+        get(target, property) {
+          return Reflect.get(target, property, target);
+        },
+        set(target, property, value) {
+          if (property === 'onsuccess' && typeof value === 'function') {
+            target.onsuccess = (event) => { void gate.then(() => value.call(proxy, event)); };
+            return true;
+          }
+          return Reflect.set(target, property, value, target);
+        },
+      });
+      return proxy;
+    };
+  });
+  await page.route('**/api/lookup?*', async (route) => {
+    const target = new URL(route.request().url()).searchParams.get('q') || '';
+    await page.evaluate(() => {
+      const state = window as typeof window & {
+        __delayNextCaseRead?: boolean;
+        __releaseCaseRead?: () => void;
+      };
+      state.__delayNextCaseRead = true;
+      delete state.__releaseCaseRead;
+    });
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        query: target,
+        type: 'domain',
+        registrableDomain: target,
+        availability: { applicable: true, state: 'registered', confidence: 'high', domain: target },
+        rdap: { parsed: {} },
+        whois: { parsed: {}, chain: [] },
+        diagnostics: { rdap: { status: 'success' }, whois: { status: 'complete' }, availability: { status: 'complete' } },
+      }),
+    });
+  });
+
+  const target = `${action}-during-case-read.example.test`;
+  const query = page.locator('#query');
+  const response = page.waitForResponse((candidate) => (
+    new URL(candidate.url()).pathname === '/api/lookup'
+    && new URL(candidate.url()).searchParams.get('q') === target
+  ));
+  await query.fill(target);
+  await page.getByRole('button', { name: 'Run lookup' }).click();
+  await response;
+  await expect.poll(() => page.evaluate(() => (
+    typeof (window as typeof window & { __releaseCaseRead?: () => void }).__releaseCaseRead
+  ))).toBe('function');
+
+  if (action === 'edit') await query.fill('replacement-after-response.example.test');
+  else await page.getByRole('button', { name: 'Clear query' }).click();
+  await page.evaluate(() => {
+    const state = window as typeof window & { __releaseCaseRead?: () => void };
+    state.__releaseCaseRead?.();
+    delete state.__releaseCaseRead;
+  });
+
+  await expect(page.locator('#result')).toHaveCount(0);
+  await expect(page.getByRole('alert')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Cancel lookup' })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: target })).toHaveCount(0);
+});
+}
+
 test.describe('lookup timeout presentation', () => {
   test.use({ allowExpectedLookup504Noise: true });
 

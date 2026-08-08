@@ -76,6 +76,13 @@ class LookupRequestController {
     this.#activeController?.abort('user_cancelled');
   }
 
+  invalidate(): void {
+    this.#sequence += 1;
+    this.#activeController?.abort('superseded');
+    this.#activeController = null;
+    this.#clearProgressTimer();
+  }
+
   dispose(): void {
     this.#disposed = true;
     this.#sequence += 1;

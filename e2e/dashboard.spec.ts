@@ -243,13 +243,16 @@ test('the Dashboard presents task lanes without duplicating the sidebar labels',
   await expect(page.getByRole('heading', { name: 'Continue saved work' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Follow a guided investigation' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Back up or move saved work' })).toBeVisible();
-  await expect(page.locator('.quick-card')).toHaveCount(5);
-  await expect(page.locator('.quick-card .quick-icon svg')).toHaveCount(5);
+  await expect(page.locator('.quick-card')).toHaveCount(4);
+  await expect(page.locator('.quick-card .quick-icon svg')).toHaveCount(4);
   await expect(page.locator('.quick-card', { hasText: 'Investigate a target' }).locator('.quick-icon svg')).toHaveAttribute('data-icon', 'lookup');
   await expect(page.locator('.quick-card', { hasText: 'Protect owned domains' }).locator('.quick-icon svg')).toHaveAttribute('data-icon', 'brand');
   await expect(page.locator('.quick-card', { hasText: 'Review candidates' }).locator('.quick-icon svg')).toHaveAttribute('data-icon', 'bulk');
   await expect(page.locator('.quick-card', { hasText: 'Assess acquisition' }).locator('.quick-icon svg')).toHaveAttribute('data-icon', 'registry');
-  await expect(page.locator('.quick-card', { hasText: 'Continue case work' }).locator('.quick-icon svg')).toHaveAttribute('data-icon', 'case');
+  await expect(page.locator('.quick-card', { hasText: 'Protect owned domains' })).toHaveAttribute('href', '/brands');
+  await expect(page.locator('.quick-card', { hasText: 'Review candidates' })).toHaveAttribute('href', '/bulk');
+  await expect(page.locator('.quick-card', { hasText: 'Assess acquisition' })).toHaveAttribute('href', '/lookup?depth=deep&task=acquisition#query');
+  await expect(page.locator('.quick-card', { hasText: 'Continue case work' })).toHaveCount(0);
   await expect(page.locator('.workspace-card')).toHaveCount(0);
   await expect(page.locator('.summary-card .summary-icon svg')).toHaveCount(3);
   await expect(page.locator('.summary-card', { hasText: 'Open cases' })).toHaveAttribute('href', '/monitor?view=cases');
@@ -258,22 +261,41 @@ test('the Dashboard presents task lanes without duplicating the sidebar labels',
   await expect(page.getByRole('link', { name: /Read the guide/ })).toHaveAttribute('href', '/guide');
   await expect(page.getByRole('combobox', { name: 'Guide' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Start guide' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Compare two domains' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Compare two domains' })).toHaveCount(0);
+  await expect(page.getByLabel('First domain')).toHaveCount(0);
   await expect(page.getByText('Start recipe', { exact: true })).toHaveCount(0);
   await expect(page.getByText('indexed entities', { exact: false })).toHaveCount(0);
   await expect(page.getByText('Investigation tools', { exact: true })).toHaveCount(0);
 });
 
-test('the focused comparison handoff requires exactly two domains and opens Bulk without running it', async ({ page }) => {
+test('the Console navigation exposes semantic groups without changing link order or mobile keyboard access', async ({ page }) => {
   await page.goto('/dashboard');
-  await page.getByLabel('First domain').fill('first.example');
-  await page.getByLabel('Second domain').fill('second.example');
-  await page.getByRole('button', { name: 'Load comparison' }).click();
-  await expect(page).toHaveURL(/\/bulk\?source=manual&handoff=[0-9a-f]{32}#domains$/u);
-  await expect(page.locator('#domains')).toHaveValue('first.example\nsecond.example');
-  await expect(page.getByText('Loaded 2 candidates from manual.')).toBeVisible();
-  await expect(page.getByRole('button', { name: /^Scan 2 domains/ })).toBeEnabled();
-  await expect(page.locator('.results-table')).toHaveCount(0);
+  const consoleNavigation = page.getByRole('navigation', { name: 'Console' });
+  const start = consoleNavigation.getByRole('group', { name: 'Start' });
+  const investigate = consoleNavigation.getByRole('group', { name: 'Investigate' });
+  const protect = consoleNavigation.getByRole('group', { name: 'Protect & review' });
+  await expect(start.getByRole('link')).toHaveCount(1);
+  await expect(investigate.getByRole('link')).toHaveCount(3);
+  await expect(protect.getByRole('link')).toHaveCount(2);
+  await expect(consoleNavigation.getByRole('link').evaluateAll((links) => links.map((link) => link.getAttribute('href')))).resolves.toEqual([
+    '/dashboard', '/lookup', '/discover', '/bulk', '/monitor', '/brands',
+  ]);
+
+  await investigate.getByRole('link', { name: /^Lookup/ }).focus();
+  await page.keyboard.press('Tab');
+  await expect(investigate.getByRole('link', { name: /^Discover/ })).toBeFocused();
+
+  await page.setViewportSize({ width: 320, height: 700 });
+  await page.getByRole('button', { name: 'Toggle navigation' }).click();
+  await expect(start).toBeVisible();
+  await expect(investigate).toBeVisible();
+  await expect(protect).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('button', { name: 'Toggle navigation' })).toHaveAttribute('aria-expanded', 'false');
+  for (const width of [320, 360, 390]) {
+    await page.setViewportSize({ width, height: 700 });
+    await expectNoHorizontalOverflow(page);
+  }
 });
 
 test('the privacy-safe browser handoff previews exact third-party disclosure before opening', async ({ page }) => {

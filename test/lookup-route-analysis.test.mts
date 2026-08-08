@@ -77,6 +77,7 @@ describe('Lookup route analysis', () => {
       lookupView: createLookupViewModel(result),
       profile: null,
       task: 'general',
+      completedLookupDepth: 'fast',
     });
 
     assert.equal(analysis.caseDomain, 'example.test');
@@ -105,6 +106,7 @@ describe('Lookup route analysis', () => {
       lookupView: createLookupViewModel(result),
       profile: null,
       task: 'incident',
+      completedLookupDepth: 'deep',
     });
 
     assert.deepEqual(analysis.comparison.fields, []);
@@ -142,9 +144,108 @@ describe('Lookup route analysis', () => {
       lookupView: createLookupViewModel(result),
       profile: null,
       task: 'general',
+      completedLookupDepth: 'deep',
     });
 
     assert.equal(analysis.lookupObservedAt, '2026-07-01T01:06:00.000Z');
     assert.equal(analysis.evidenceObservedAtById['external-urlscan_search'], '2026-07-01T01:06:00.000Z');
+  });
+
+  test('requires an explicit observed source state before presenting task actions', () => {
+    const taskActionIds = new Set([
+      'review-acquisition-dependencies',
+      'review-owned-posture',
+      'review-page-identity',
+    ]);
+    for (const status of [undefined, '', 'pending', 123]) {
+      const sourceStatus = status === undefined ? {} : { status };
+      const result = response({
+        availability: {
+          applicable: true,
+          domain: 'example.test',
+          state: 'registered',
+          confidence: 'high',
+          deepScanComplete: true,
+          dns: { source: 'dns', ...sourceStatus },
+          http: { source: 'http', ...sourceStatus },
+          tls: { source: 'tls', ...sourceStatus },
+          pageIdentity: { source: 'html', ...sourceStatus },
+          credentialSurfaceProfile: { source: 'html', ...sourceStatus },
+          securityPosture: { source: 'derived', ...sourceStatus },
+        },
+      });
+      for (const task of ['acquisition', 'brand', 'owned'] as const) {
+        const analysis = buildLookupRouteAnalysis({
+          result,
+          lookupView: createLookupViewModel(result),
+          profile: null,
+          task,
+          completedLookupDepth: 'deep',
+        });
+        assert.equal(
+          analysis.lookupDecisionSupport.actions.some((action) => taskActionIds.has(action.id)),
+          false,
+          `${task} ${String(status)}`,
+        );
+      }
+    }
+
+    for (const status of ['success', 'partial']) {
+      const result = response({
+        availability: {
+          applicable: true,
+          domain: 'example.test',
+          state: 'registered',
+          confidence: 'high',
+          deepScanComplete: true,
+          dns: { source: 'dns', status },
+          pageIdentity: { source: 'html', status },
+          securityPosture: { source: 'derived', status },
+        },
+      });
+      for (const [task, expectedAction] of [
+        ['acquisition', 'review-acquisition-dependencies'],
+        ['brand', 'review-page-identity'],
+        ['owned', 'review-owned-posture'],
+      ] as const) {
+        const analysis = buildLookupRouteAnalysis({
+          result,
+          lookupView: createLookupViewModel(result),
+          profile: null,
+          task,
+          completedLookupDepth: 'deep',
+        });
+        assert.ok(analysis.lookupDecisionSupport.actions.some((action) => action.id === expectedAction));
+      }
+    }
+  });
+
+  test('uses the completed request depth for generic targets without inferring from availability', () => {
+    for (const type of ['ipv4', 'asn'] as const) {
+      const query = type === 'ipv4' ? '192.0.2.10' : 'AS64497';
+      const {
+        registrableDomain: _registrableDomain,
+        inputHostname: _inputHostname,
+        isSubdomain: _isSubdomain,
+        ...base
+      } = response();
+      const result: LookupHttpResponse = {
+        ...base,
+        query,
+        type,
+        availability: { applicable: false, state: 'unknown' },
+      };
+      for (const completedLookupDepth of ['fast', 'deep'] as const) {
+        const analysis = buildLookupRouteAnalysis({
+          result,
+          lookupView: createLookupViewModel(result),
+          profile: null,
+          task: 'general',
+          completedLookupDepth,
+        });
+        assert.equal(analysis.lookupEvidenceDepth, completedLookupDepth, `${type} ${completedLookupDepth}`);
+        assert.equal(analysis.evidenceTopologyTarget.detail, `${type} · ${completedLookupDepth} lookup`);
+      }
+    }
   });
 });

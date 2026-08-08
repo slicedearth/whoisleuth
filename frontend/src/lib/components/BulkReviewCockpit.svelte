@@ -94,7 +94,7 @@
       </div>
       <dl>
         <div><dt>Registration</dt><dd>{current.availability} · {current.confidence} confidence</dd></div>
-        <div><dt>Risk / opportunity</dt><dd>{current.risk ?? '—'} / {current.opportunity ?? '—'}</dd></div>
+        <div><dt>Risk</dt><dd>{current.risk ?? '—'}</dd></div>
         <div><dt>Website</dt><dd>{current.activity}</dd></div>
         <div><dt>Registrar</dt><dd>{current.registrar}</dd></div>
         <div><dt>Source coverage</dt><dd>{current.sourceCoverage.map((item) => describeBulkSourceCoverage(current.domain, item)).join(' · ') || 'Not recorded'}</dd></div>

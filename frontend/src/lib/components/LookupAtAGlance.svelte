@@ -3,6 +3,7 @@
     LookupDecisionSupport,
     LookupEvidenceQualityMatrix,
   } from '$lib/analysis/lookup-decision-support.ts';
+  import { projectLookupNextActions } from '$lib/analysis/lookup-decision-support.ts';
   import type { LookupSummarySignal } from '$lib/analysis/lookup-summary-model.ts';
 
   let {
@@ -19,7 +20,7 @@
     const priority = signals.filter((signal) => signal.tone !== 'neutral');
     return (priority.length ? priority : signals).slice(0, 4);
   });
-  const nextAction = $derived(support.actions[0] ?? null);
+  const nextActions = $derived(projectLookupNextActions(support.actions, support.guidance.task));
 </script>
 
 <section class="at-a-glance card" aria-labelledby="lookup-at-a-glance-title">
@@ -56,13 +57,17 @@
     </section>
 
     <section aria-labelledby="lookup-next-review-title">
-      <h5 id="lookup-next-review-title">Recommended next review</h5>
-      {#if nextAction}
-        <a class="next-action" href={nextAction.href}>
-          <strong>{nextAction.label}</strong>
-          <span>{nextAction.reason}</span>
-          <small>{nextAction.expectedOutcome}</small>
-        </a>
+      <h5 id="lookup-next-review-title">Recommended next reviews</h5>
+      {#if nextActions.length}
+        <div class="next-actions">
+          {#each nextActions as nextAction (nextAction.id)}
+            <a class="next-action" href={nextAction.href}>
+              <strong>{nextAction.label}</strong>
+              <span>{nextAction.reason}</span>
+              <small>{nextAction.expectedOutcome}</small>
+            </a>
+          {/each}
+        </div>
       {:else}
         <p class="empty">No contextual action is available from the settled evidence. Review source coverage and freshness next.</p>
       {/if}
@@ -93,6 +98,7 @@
   .signals strong{color:var(--text);font-size:var(--text-xs)}
   .signals small{margin-top:2px;color:var(--muted)}
   .next-action{display:grid;gap:4px;padding:10px;border-left:2px solid var(--accent);background:color-mix(in srgb,var(--accent) 5%,transparent)}
+  .next-actions{display:grid;gap:7px}
   .next-action strong{color:var(--text);font:700 var(--text-xs) var(--mono)}
   .next-action span,.next-action small{color:var(--muted);font-size:var(--text-2xs);line-height:1.45}
   .next-action small{color:var(--text)}

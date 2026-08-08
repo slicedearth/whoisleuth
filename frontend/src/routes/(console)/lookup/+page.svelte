@@ -18,6 +18,7 @@
   import LookupDnsEvidence from '$lib/components/LookupDnsEvidence.svelte';
   import LookupExternalIntelligence from '$lib/components/LookupExternalIntelligence.svelte';
   import LookupForm from '$lib/components/LookupForm.svelte';
+  import LookupSavedContextPreview from '$lib/components/LookupSavedContextPreview.svelte';
   import LookupHttpEvidence from '$lib/components/LookupHttpEvidence.svelte';
   import LookupInvestigationCapsule from '$lib/components/LookupInvestigationCapsule.svelte';
   import LookupNetworkContext from '$lib/components/LookupNetworkContext.svelte';
@@ -78,7 +79,9 @@
   import { projectEvidenceTopology } from '$lib/analysis/evidence-topology.ts';
   import {
     normalizeLookupTaskView,
+    lookupResultDepth,
     readLookupPresentation,
+    reconcileLookupUrlState,
     writeLookupPresentation,
     type LookupTaskView,
   } from '$lib/analysis/lookup-presentation.ts';
@@ -106,12 +109,14 @@
   let error=$state('');
   let result=$state<LookupHttpResponse|null>(null);
   let completedLookupTarget=$state('');
+  let completedLookupDepth=$state<LookupMode|null>(null);
   let profile=$state<BrandProfile|null>(null);
   let draftStatus=$state('');
   let caseRecord=$state<CaseRecord|null>(null);let caseNote=$state('');let caseStatus=$state('');
   let expandedResultSections=$state<string[]>([]);
   let detailedAssessmentOpen=$state(false);
   let taskView=$state<LookupTaskView>('general');
+  let preferredTaskView=$state<LookupTaskView>('general');
   let visualView=$state<LookupVisualView>('sources');
   let freshnessPolicyMode=$state<'task-default'|'analyst-custom'>('task-default');
   let customFreshnessThresholds=$state<LookupFreshnessThresholds>({registration:30,network:7,web:3});
@@ -119,6 +124,9 @@
   let serviceDependencyScope=$state('');
   let serviceDependencyFalsePositives=$state('');
   let pageActive=false;
+  let urlReconciliationReady=$state(false);
+  let lastReconciledUrl=$state('');
+  let lookupRevision=0;
   const lookupRequestController=new LookupRequestController();
   const lookupCaseController=new LookupCaseController();
   const capabilityReport=getContext<CapabilityGetter>(CAPABILITY_CONTEXT);
@@ -180,6 +188,7 @@
     lookupView,
     profile,
     task:taskView,
+    completedLookupDepth,
     ...(freshnessPolicyInput?{freshnessPolicy:freshnessPolicyInput}:{}),
   }));
   const lookupEvidenceDepth=$derived(lookupAnalysis.lookupEvidenceDepth);
@@ -243,8 +252,10 @@
     try{profile=await activeProfile();}
     catch{profile=null;}
   }
-  async function refreshCase(){
-    const next=await lookupCaseController.refresh(caseDomain);
+  async function refreshCase(expectedRevision:number|null=null){
+    const requestedDomain=caseDomain;
+    const next=await lookupCaseController.refresh(requestedDomain);
+    if(expectedRevision!==null&&(expectedRevision!==lookupRevision||caseDomain!==requestedDomain))return;
     caseRecord=next.record;
     caseStatus=next.status;
   }
@@ -291,9 +302,62 @@
   }
   function setTaskView(value:LookupTaskView){
     taskView=normalizeLookupTaskView(value);
+    preferredTaskView=taskView;
     visualView=visualViewForTask(taskView);
     writeLookupPresentation(localStorage,{task:taskView});
   }
+  function lookupUrlSignature(url:URL):string{return `${url.pathname}${url.search}`;}
+  function invalidateLookupForInputChange(){
+    lookupRevision+=1;
+    lookupRequestController.invalidate();
+    loading=false;
+    loadingElapsedMs=0;
+  }
+  function clearCompletedLookupContext(){
+    result=null;
+    completedLookupTarget='';
+    completedLookupDepth=null;
+    caseRecord=null;
+    caseNote='';
+    caseStatus='';
+    expandedResultSections=[];
+    detailedAssessmentOpen=false;
+  }
+  function handleLookupQueryChange(value:string){
+    query=value;
+    if(!loading)return;
+    invalidateLookupForInputChange();
+    clearCompletedLookupContext();
+    error='';
+  }
+  function applyLookupUrl(url:URL){
+    const next=reconcileLookupUrlState({
+      query,
+      depth:lookupMode,
+      task:taskView,
+      result,
+      completedTarget:completedLookupTarget,
+      error,
+      retainedResultDepth:result?completedLookupDepth??lookupResultDepth(result):null,
+    },url.searchParams,preferredTaskView);
+    const lookupInputChanged=next.query!==query||next.depth!==lookupMode;
+    const clearedResult=Boolean(result&&!next.result);
+    if(lookupInputChanged||clearedResult)invalidateLookupForInputChange();
+    query=next.query;
+    lookupMode=next.depth;
+    taskView=next.task;
+    visualView=visualViewForTask(taskView);
+    result=next.result;
+    completedLookupTarget=next.completedTarget;
+    error=next.error;
+    if(clearedResult)clearCompletedLookupContext();
+    lastReconciledUrl=lookupUrlSignature(url);
+  }
+  $effect(()=>{
+    const signature=lookupUrlSignature(page.url);
+    if(!urlReconciliationReady||signature===lastReconciledUrl)return;
+    applyLookupUrl(page.url);
+  });
   async function showSectionDetail(sectionId:string){
     expandedResultSections=expandedResultSections.includes(sectionId)
       ? expandedResultSections
@@ -379,25 +443,30 @@
   onMount(()=>{
     pageActive=true;
     const presentation=readLookupPresentation(localStorage);
-    taskView=presentation.task;
-    visualView=visualViewForTask(taskView);
+    preferredTaskView=presentation.task;
     const restored=readLookupWorkflowState();
-    if(restored){query=restored.query;lookupMode=restored.lookupMode;includeExternalIntelligence=restored.includeExternalIntelligence;includeMalwareHostIntelligence=restored.includeMalwareHostIntelligence;includeMalwareIocIntelligence=restored.includeMalwareIocIntelligence;includeSecurityTxt=restored.includeSecurityTxt;error=restored.error;result=restored.result;completedLookupTarget=restored.result?restored.completedTarget:'';}
-    const q=page.url.searchParams.get('q');
-    const requestedDepth=page.url.searchParams.get('depth');
-    const targetChanged=Boolean(q&&q!==query);
-    const depthChanged=Boolean(requestedDepth&&(requestedDepth==='fast'||requestedDepth==='deep')&&requestedDepth!==lookupMode);
-    if(q&&(targetChanged||depthChanged)){query=q;result=null;completedLookupTarget='';error='';}
-    else if(q)query=q;
-    if(requestedDepth==='fast'||requestedDepth==='deep')lookupMode=requestedDepth;
+    if(restored){
+      query=restored.query;lookupMode=restored.lookupMode;includeExternalIntelligence=restored.includeExternalIntelligence;includeMalwareHostIntelligence=restored.includeMalwareHostIntelligence;includeMalwareIocIntelligence=restored.includeMalwareIocIntelligence;includeSecurityTxt=restored.includeSecurityTxt;
+      const restoredDepth=restored.result
+        ? (restored.completedLookupDepth==='fast'||restored.completedLookupDepth==='deep'
+            ? restored.completedLookupDepth
+            : lookupResultDepth(restored.result))
+        : null;
+      result=restored.result&&restoredDepth?restored.result:null;
+      completedLookupTarget=result?restored.completedTarget:'';
+      completedLookupDepth=result?restoredDepth:null;
+      error=restored.result&&!restoredDepth?'':restored.error;
+    }
+    applyLookupUrl(page.url);
+    urlReconciliationReady=true;
     window.addEventListener('hashchange',navigateToCurrentLookupHash);
     if(result)requestAnimationFrame(navigateToCurrentLookupHash);
-    void (async()=>{await refreshProfileContext();if(result)await refreshCase();})();
+    void (async()=>{await refreshProfileContext();if(result)await refreshCase(lookupRevision);})();
     return()=>{
       pageActive=false;
       window.removeEventListener('hashchange',navigateToCurrentLookupHash);
       lookupRequestController.dispose();
-      writeLookupWorkflowState({query,completedTarget:completedLookupTarget,lookupMode,includeExternalIntelligence,includeMalwareHostIntelligence,includeMalwareIocIntelligence,includeSecurityTxt,error,result});
+      writeLookupWorkflowState({query,completedTarget:completedLookupTarget,completedLookupDepth,lookupMode,includeExternalIntelligence,includeMalwareHostIntelligence,includeMalwareIocIntelligence,includeSecurityTxt,error,result});
     };
   });
 
@@ -443,8 +512,10 @@
       return;
     }
 
-    loading=true;loadingElapsedMs=0;error='';result=null;completedLookupTarget='';caseRecord=null;caseNote='';caseStatus='';serviceDependencyScope='';serviceDependencyFalsePositives='';expandedResultSections=[];detailedAssessmentOpen=false;
+    loading=true;loadingElapsedMs=0;error='';result=null;completedLookupTarget='';completedLookupDepth=null;caseRecord=null;caseNote='';caseStatus='';serviceDependencyScope='';serviceDependencyFalsePositives='';expandedResultSections=[];detailedAssessmentOpen=false;
     const target=entries[0];if(!target)return;
+    const requestedLookupMode=lookupMode;
+    const requestRevision=++lookupRevision;
     const lookupUrl=buildLookupRequestUrl(target,{
       mode:lookupMode,
       includeExternalIntelligence,
@@ -464,19 +535,20 @@
         (elapsedMs)=>{loadingElapsedMs=elapsedMs;},
         refreshProfileContext,
       );
-      if(completed.state==='stale'||!pageActive)return;
+      if(completed.state==='stale'||!pageActive||requestRevision!==lookupRevision||entries[0]!==target||lookupMode!==requestedLookupMode)return;
       const outcome=completed.outcome;
       if(!outcome.ok){error=outcome.message;return;}
-      result=outcome.value;completedLookupTarget=target;
-      await refreshCase();
+      result=outcome.value;completedLookupTarget=target;completedLookupDepth=requestedLookupMode;
+      await refreshCase(requestRevision);
+      if(!pageActive||requestRevision!==lookupRevision||entries[0]!==target||lookupMode!==requestedLookupMode)return;
       requestAnimationFrame(()=>{
         if(window.location.hash&&lookupEvidenceFamilyForHref(window.location.hash))navigateToCurrentLookupHash();
         else document.querySelector('#result')?.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'});
       });
     }catch{
-      if(pageActive)error='Lookup request could not be prepared.';
+      if(pageActive&&requestRevision===lookupRevision)error='Lookup request could not be prepared.';
     }finally{
-      if(pageActive)loading=false;
+      if(pageActive&&requestRevision===lookupRevision)loading=false;
     }
   }
 </script>
@@ -505,7 +577,10 @@
   {error}
   onsubmit={submit}
   oncancel={cancelLookup}
+  onquerychange={handleLookupQueryChange}
 />
+
+<LookupSavedContextPreview {query} />
 
 <LookupEvidenceReplay />
 
@@ -535,7 +610,7 @@
       />
 
       {#if availability.applicable!==false}
-        <LookupAssessment detail={show(availability.detail||availability.state)} confidence={show(availability.confidence)} {risk} {riskSensitivity} {opportunity} signals={[...lookupSummary.signals]} trusted={String(profileSignals.trusted||'')} />
+        <LookupAssessment detail={show(availability.detail||availability.state)} confidence={show(availability.confidence)} {risk} {riskSensitivity} {opportunity} signals={[...lookupSummary.signals]} trusted={String(profileSignals.trusted||'')} task={taskView} />
       {/if}
 
       <details class="detailed-assessment card" bind:open={detailedAssessmentOpen}>

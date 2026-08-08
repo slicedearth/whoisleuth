@@ -98,4 +98,30 @@ describe('Lookup request controller', () => {
       { state: 'stale' },
     );
   });
+
+  test('input invalidation aborts work and suppresses a late response without disposing the controller', async () => {
+    const pending = deferred<LookupRequestOutcome>();
+    let suppliedSignal: AbortSignal | undefined;
+    const controller = new LookupRequestController({
+      request: (url, options) => {
+        suppliedSignal = options.signal;
+        return url.includes('second.example.test')
+          ? Promise.resolve({ ok: true, value: validResponse('second.example.test') })
+          : pending.promise;
+      },
+    });
+
+    const run = controller.run('/api/lookup?q=first.example.test&fast=1', () => {});
+    await Promise.resolve();
+    controller.invalidate();
+    pending.resolve({ ok: true, value: validResponse('first.example.test') });
+
+    assert.ok(suppliedSignal);
+    assert.equal(suppliedSignal.aborted, true);
+    assert.deepEqual(await run, { state: 'stale' });
+
+    const next = await controller.run('/api/lookup?q=second.example.test&fast=1', () => {});
+    assert.deepEqual(next, { state: 'complete', outcome: { ok: true, value: validResponse('second.example.test') } });
+    controller.dispose();
+  });
 });

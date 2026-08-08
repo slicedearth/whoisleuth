@@ -50,6 +50,7 @@ function result(domain = 'priority.invalid', overrides: Record<string, unknown> 
     hasExternalFormAction: true,
     phishingLanguageMatch: null,
     riskModelVersion: 5,
+    opportunityModelVersion: 2,
     riskFactors: [{ label: 'Credential input observed', points: 15 }],
     dns: {
       status: 'success',
@@ -158,6 +159,8 @@ describe('saved Bulk sessions', () => {
       'web-framework',
     ]);
     assert.equal(normalized.results[0]?.comparisonEvidence?.tls.issuerLabel, 'Example Issuing CA');
+    assert.equal(normalized.results[0]?.opportunity, 20);
+    assert.equal(normalized.results[0]?.opportunityModelVersion, 2);
     assert.equal(Object.prototype.hasOwnProperty.call(normalized.results[0] || {}, 'registrant'), false);
     assert.equal(JSON.stringify(normalized).includes('private@priority.invalid'), false);
   });
@@ -236,9 +239,13 @@ describe('saved Bulk sessions', () => {
     const exported = buildBulkSessionExport([session()]);
     assert.equal(exported.schema, BULK_SESSION_SCHEMA);
     assert.equal(exported.version, BULK_SESSION_SCHEMA_VERSION);
+    assert.equal(exported.sessions[0]?.results[0]?.opportunity, 20);
+    assert.equal(exported.sessions[0]?.results[0]?.opportunityModelVersion, 2);
     const merged = mergeBulkSessions([], exported);
     assert.equal(merged.added, 1);
     assert.equal(merged.sessions.length, 1);
+    assert.equal(merged.sessions[0]?.results[0]?.opportunity, 20);
+    assert.equal(merged.sessions[0]?.results[0]?.opportunityModelVersion, 2);
     assert.equal(mergeBulkSessions([], { ...exported, version: 1 }).added, 1);
     assert.equal(mergeBulkSessions([], { ...exported, version: 2 }).added, 1);
     assert.throws(

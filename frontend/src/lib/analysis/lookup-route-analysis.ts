@@ -18,6 +18,7 @@ import { buildLookupEvidenceImpactPlan } from './lookup-evidence-impact.ts';
 import {
   buildLookupDecisionSupport,
   buildLookupEvidenceQualityMatrix,
+  type LookupTaskEvidenceKind,
 } from './lookup-decision-support.ts';
 import {
   buildLookupLifecycleDates,
@@ -29,7 +30,7 @@ import {
   show,
 } from './lookup-display-model.ts';
 import { buildLookupInvestigationBrief } from './lookup-investigation-brief.ts';
-import type { LookupTaskView } from './lookup-presentation.ts';
+import type { LookupDepth, LookupTaskView } from './lookup-presentation.ts';
 import type { LookupHttpResponse, LookupViewModel } from './lookup-response.ts';
 import { buildLookupSourceRefreshPlan, type LookupFreshnessPolicyInput } from './lookup-source-refresh.ts';
 import { buildLookupSummaryModel } from './lookup-summary-model.ts';
@@ -51,6 +52,7 @@ export interface LookupRouteAnalysisInput {
   lookupView: LookupViewModel;
   profile: BrandProfile | null;
   task: LookupTaskView;
+  completedLookupDepth: LookupDepth | null;
   freshnessPolicy?: LookupFreshnessPolicyInput;
 }
 
@@ -71,6 +73,14 @@ function pageBaselineRiskMatch(comparison: ReturnType<typeof comparePageBaseline
 function hasPublicRegistrantContact(value: unknown): boolean {
   const contact = rec(value);
   return ['email', 'url'].some((key) => typeof contact[key] === 'string' && String(contact[key]).trim().length > 0);
+}
+
+const OBSERVED_TASK_SOURCE_STATES = new Set(['success', 'partial']);
+
+function retainsTaskEvidence(source: unknown, expected: string, state: unknown): boolean {
+  if (source !== expected) return false;
+  const normalizedState = String(state ?? '').trim().toLowerCase().replace(/[\s-]+/gu, '_');
+  return OBSERVED_TASK_SOURCE_STATES.has(normalizedState);
 }
 
 export function latestLookupTimestamp(...values: unknown[]): string | null {
@@ -143,7 +153,10 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
   const whoisContactsByRole = rec(whoisParsed.contactsByRole);
   const rdapDiagnostic = rec(diagnostics.rdap);
   const whoisDiagnostic = rec(diagnostics.whois);
-  const lookupEvidenceDepth: 'fast' | 'deep' = availability.deepScanComplete === false ? 'fast' : 'deep';
+  // Results are labelled and scored from the exact request that completed.
+  // Null is possible only before a result exists or for an old ambiguous
+  // in-memory workflow, where the conservative Fast contract is used.
+  const lookupEvidenceDepth: LookupDepth = input.completedLookupDepth ?? 'fast';
   const lookupObservedAt = latestLookupTimestamp(
     result?.observedAt,
     result?.fetchedAt,
@@ -356,6 +369,23 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     || securityTxt.securityTxtVersion === 1
     || Boolean(pageComparison)
     || Boolean(profile?.pageBaseline && result?.type === 'domain');
+  const lookupTaskEvidence: LookupTaskEvidenceKind[] = [];
+  if (retainsTaskEvidence(reverseDns.source, 'reverse_dns', reverseDns.status)) lookupTaskEvidence.push('ptr');
+  if (result?.type === 'domain') {
+    const hasDnsTaskEvidence = retainsTaskEvidence(dnsEvidence.source, 'dns', dnsEvidence.status);
+    const hasHttpTaskEvidence = retainsTaskEvidence(httpEvidence.source, 'http', httpEvidence.status);
+    const hasPageTaskEvidence = retainsTaskEvidence(pageIdentity.source, 'html', pageIdentity.status);
+    if (hasDnsTaskEvidence) lookupTaskEvidence.push('dns', 'delegation', 'mail', 'dependency');
+    if (hasHttpTaskEvidence) lookupTaskEvidence.push('http', 'dependency');
+    if (retainsTaskEvidence(tlsEvidence.source, 'tls', tlsEvidence.status)) lookupTaskEvidence.push('tls');
+    if (hasPageTaskEvidence) lookupTaskEvidence.push('page', 'identity', 'dependency');
+    if (retainsTaskEvidence(credentialSurfaceProfile.source, 'html', credentialSurfaceProfile.status)) lookupTaskEvidence.push('form');
+    if (hasHttpTaskEvidence && records(httpEvidence.redirects).length) lookupTaskEvidence.push('redirect');
+    if (hasPageTaskEvidence && (records(pageResources.externalOrigins).length || Number(pageResources.count) > 0)) {
+      lookupTaskEvidence.push('dependency');
+    }
+    if (retainsTaskEvidence(securityPosture.source, 'derived', securityPosture.status)) lookupTaskEvidence.push('posture');
+  }
   const hasCaseSection = Boolean(caseDomain) || Boolean(outreach) || abuseRecipientResolution.recipients.length > 0;
   const evidenceTopologyNodes = buildLookupEvidenceTopologyNodes({
     targetType: result?.type,
@@ -520,6 +550,8 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     openGraphUrl: pageOpenGraphUrl.url,
     tlsAuthorization,
     certificatePolicyReview,
+    targetType: result?.type,
+    availableEvidence: lookupTaskEvidence,
     hasCaseSection,
   });
   const lookupClaimReadiness = buildLookupClaimReadiness({

@@ -510,6 +510,7 @@ test('a malformed successful response remains an explicit failure in exports and
   expect(csv).toContain('malformed-response.example');
   expect(csv).toContain('Bulk lookup returned an invalid response.');
   expect(csv).not.toContain('malformed-response.example,,,,,unknown');
+  expect(csv.split('\n')[0]).toContain('opportunity,opportunity_model_version');
 
   await page.getByLabel('Watchlist name').fill('Invalid response audit');
   await page.getByRole('button', { name: 'Save to Monitor' }).click();
@@ -828,13 +829,17 @@ test('results become labelled stacked cards at mobile width, with compact and fu
   const row = page.locator('.results-table tbody tr').first();
   const rowBox = await boundingBox(row);
 
-  const compactLabels = ['Registration', 'Risk', 'Opportunity'];
+  const compactLabels = ['Registration', 'Risk'];
   for (const label of compactLabels) {
     const cell = row.locator(`td[data-label="${label}"]`);
     const cellBox = await boundingBox(cell);
     expect(cellBox.width, `${label} should be compact`).toBeLessThan(rowBox.width * 0.5);
     expect(await pseudoContent(cell, '::before')).toContain(label);
   }
+  await expect(row.locator('td[data-label="Opportunity"]')).toHaveCount(0);
+  await expect(page.getByLabel('Mobile result sort').locator('option[value="opportunity"]')).toHaveCount(0);
+  await expect(page.getByLabel('Desktop result sort').locator('option[value="opportunity"]')).toHaveCount(0);
+  await expect(page.locator('.cockpit').getByText('Opportunity', { exact: true })).toHaveCount(0);
 
   const collapsedLabels = ['Website', 'Registrar', 'Mutation', 'Actions'];
   for (const label of collapsedLabels) {

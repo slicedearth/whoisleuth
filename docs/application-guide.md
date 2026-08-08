@@ -33,7 +33,7 @@ start a lookup or submit a target to another service.
 
 Dashboard is the landing page inside the signed-in Console. It provides:
 
-- starting points for the five investigation tools;
+- four task-focused starts for Lookup, Brands, Bulk, and acquisition review;
 - bounded counts from browser-local cases, watchlists, and Brand Profiles;
 - a disposable search across known case, campaign, and profile fields;
 - guided investigations for a brand sweep, infrastructure pivot, or new-domain
@@ -45,6 +45,11 @@ While the Console opens, it distinguishes session confirmation, browser-local
 workspace preparation, and destination loading. Those phases describe the
 current boundary only; they do not imply that an evidence source has been
 queried or completed.
+
+Console navigation keeps the existing destinations and URLs while grouping
+them as **Start**, **Investigate**, and **Protect & review**. Dashboard no
+longer repeats case management or the two-domain Bulk form; saved cases remain
+available through the local summary and Monitor.
 
 Search does not contact a provider or create a persistent index. An empty
 result means only that the bounded local projection had no match.
@@ -75,8 +80,9 @@ describes planned source families rather than promising an exact request count:
 redirects, referrals, source eligibility, and bounded retries can change the
 number of requests that actually run.
 
-The Overview and At a glance assessment remain visible. Open **Detailed
-assessment** when you need decision support, claim readiness, a portable
+The Overview and At a glance assessment remain visible. At a glance shows at
+most three task-aware next actions. Open **Detailed assessment** when you need
+the task questions, claim readiness, a portable
 hand-off, or acquisition review. Every top-level evidence family starts
 collapsed; its bounded summary, source count, and limitation count remain
 visible. Open a family directly, follow a section or source-map link to reveal
@@ -87,6 +93,20 @@ Selecting an acquisition, brand, incident-response, or owned-domain task
 reorders the section navigation without changing collection, automatically
 opening evidence, or hiding any source. Expand a section before relying on its
 evidence, collection time, or limitations.
+
+Dashboard's acquisition start supplies a strict in-memory `task=acquisition`
+presentation context and requests Deep mode. The task value is not sent with a
+lookup, retained in workflow state, or used to replace an existing depth choice
+when no valid depth is supplied. Other or malformed task values are ignored.
+
+Before starting a check, **Preview saved context for this target** can be opened
+deliberately to search a disposable bounded projection of cases, campaigns,
+Brand Profiles, and retained relationship observations already in this
+browser. The preview's disposable search projection and its additional store
+reads start only after it is opened,
+shows at most three matches, and reports partial or unavailable local coverage.
+It makes no provider request, writes nothing, and an empty local match is not
+evidence of absence elsewhere.
 
 The Registry interpretation panel classifies bounded `rdapConformance`
 declarations already returned by registry and registrar RDAP. Recognised,
@@ -157,7 +177,9 @@ limitations. This supports traceability without copying raw responses into the
 graph.
 
 Risk and Opportunity cards show signed factor bars beside their exact factor
-lists. Domain results can also show pairwise registration-source agreement
+lists. Acquisition review presents Opportunity first; every other task presents
+Risk first. The values, factors, and model versions do not change. Domain
+results can also show pairwise registration-source agreement
 lanes, certificate validity and chain summary, and a bounded service and
 technology map. Each agreement lane represents one actual comparison, so a
 field compared in two source pairs is never merged or overwritten. The exact
@@ -344,6 +366,11 @@ Bulk checks each canonical domain through a separate bounded Lookup request.
 It supports pasted domains, text files, common delimited files, and handoffs
 from Discover. Results can be filtered and sorted without changing the saved or
 exported scan data.
+
+The Bulk review interface presents Risk and exact source evidence without an
+Opportunity column, sort choice, or cockpit value. Existing compact
+Opportunity values and model versions remain unchanged in saved-session and CSV
+compatibility contracts; hiding them is presentation-only.
 
 One browser or CLI Bulk job accepts at most 500 Fast targets or 50 Deep
 targets. The Standard pacing option runs at most eight Fast or three Deep

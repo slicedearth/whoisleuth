@@ -153,6 +153,25 @@ test('dashboard preserves fulfilled counts and search when one local collection 
   await expect(page.getByRole('link', { name: 'Open case', exact: true })).toBeVisible();
 });
 
+test('dashboard search retains matches and discloses one unavailable search provider through no-match states', async ({ page }) => {
+  await seedInvestigationStores(page);
+  await page.locator('#console-navigation').getByRole('link', { name: /^Bulk/u }).click();
+  await failBrowserLocalCollectionReads(page, 'campaigns');
+  await page.locator('#console-navigation').getByRole('link', { name: /^Dashboard/u }).click();
+
+  const search = page.getByRole('searchbox', { name: 'Search saved work' });
+  await search.fill('candidate.invalid');
+  await expect(page.getByRole('link', { name: 'Open case', exact: true })).toBeVisible();
+  const warning = page.locator('.source-warning');
+  await expect(warning.locator('summary')).toContainText('1 saved-data warning');
+  await warning.locator('summary').click();
+  await expect(warning.getByText(/Campaigns: unavailable in browser-local storage and not searched/u)).toBeVisible();
+
+  await search.fill('not-retained.invalid');
+  await expect(page.getByRole('status').filter({ hasText: 'Nothing saved in this browser matched' })).toBeVisible();
+  await expect(warning.getByText(/Campaigns: unavailable in browser-local storage and not searched/u)).toBeVisible();
+});
+
 test('dashboard distinguishes unavailable templates from an empty template collection', async ({ page }) => {
   await page.goto('/bulk');
   await expect(page.locator('#domains')).toBeEditable();

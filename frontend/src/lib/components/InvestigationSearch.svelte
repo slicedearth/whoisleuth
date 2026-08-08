@@ -16,7 +16,7 @@
   const sourceWarnings = $derived.by(() => {
     if (!index) return [] as Array<[string, InvestigationSearchSourceSummary]>;
     return (Object.entries(index.sources) as Array<[string, InvestigationSearchSourceSummary]>)
-      .filter(([, source]) => source.state === 'invalid' || source.state === 'unsupported');
+      .filter(([, source]) => source.state === 'invalid' || source.state === 'unsupported' || source.state === 'unavailable');
   });
 
   const typeLabels: Record<InvestigationSearchResult['entityType'], string> = {
@@ -128,7 +128,11 @@
         <summary>{sourceWarnings.length} saved-data warning{sourceWarnings.length === 1 ? '' : 's'}</summary>
         <ul>
           {#each sourceWarnings as [store, source]}
-            <li>{storeLabels[store] || store}: {source.state === 'unsupported' ? 'created by a newer version and not searched' : 'could not be read safely'}.</li>
+            <li>{storeLabels[store] || store}: {source.state === 'unsupported'
+              ? 'created by a newer version and not searched'
+              : source.state === 'unavailable'
+                ? 'unavailable in browser-local storage and not searched'
+                : 'could not be read safely'}.</li>
           {/each}
         </ul>
       </details>

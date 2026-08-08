@@ -146,7 +146,7 @@ test('public resources offer task-specific source boundaries on desktop and mobi
 
 test('public guide explains tasks, result states, glossary terms, and common questions', async ({ page }) => {
   await page.goto('/guide');
-  await expect(page.getByText(/Detailed assessment contains additional decision support, claim readiness, portable hand-off, and acquisition review/i)).toBeVisible();
+  await expect(page.getByText(/Detailed assessment adds questions, claim readiness, portable hand-off, and acquisition review/i)).toBeVisible();
 
   await expect(page.getByRole('heading', { name: 'Use WHOISleuth with confidence.' })).toBeVisible();
   await expect(page.getByRole('navigation', { name: 'Guide sections' })).toBeVisible();

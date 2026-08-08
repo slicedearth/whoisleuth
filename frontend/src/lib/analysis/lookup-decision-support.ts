@@ -9,6 +9,19 @@ import type { LookupTiming, LookupTimingSource } from './lookup-response.ts';
 
 export type LookupDecisionState = 'conflict' | 'uncertain';
 export type LookupDecisionImportance = 'high' | 'medium' | 'low';
+export type LookupTaskEvidenceKind =
+  | 'delegation'
+  | 'dependency'
+  | 'dns'
+  | 'form'
+  | 'http'
+  | 'identity'
+  | 'mail'
+  | 'page'
+  | 'posture'
+  | 'ptr'
+  | 'redirect'
+  | 'tls';
 
 export type LookupTaskGuidance = Readonly<{
   task: LookupTaskView;
@@ -84,6 +97,23 @@ const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/gu;
 const MAX_TEXT = 320;
 const MAX_ENTRIES = 24;
 const MAX_ACTIONS = 6;
+export const MAX_LOOKUP_PRESENTED_ACTIONS = 3;
+const LOOKUP_TASK_EVIDENCE_KINDS = new Set<LookupTaskEvidenceKind>([
+  'delegation', 'dependency', 'dns', 'form', 'http', 'identity', 'mail', 'page',
+  'posture', 'ptr', 'redirect', 'tls',
+]);
+
+const TASK_ACTION_ID: Readonly<Partial<Record<LookupTaskView, string>>> = Object.freeze({
+  acquisition: 'review-acquisition-dependencies',
+  brand: 'review-page-identity',
+  owned: 'review-owned-posture',
+});
+
+const ACTION_PRIORITY: Readonly<Record<LookupNextAction['priority'], number>> = Object.freeze({
+  high: 0,
+  medium: 1,
+  low: 2,
+});
 
 const TASK_GUIDANCE: Readonly<Record<LookupTaskView, Omit<LookupTaskGuidance, 'task'>>> = Object.freeze({
   general: Object.freeze({
@@ -449,10 +479,45 @@ function prioritizeEntries(
   return [...entries].sort((left, right) => {
     const leftBoost = taskBoost[task].some((prefix) => left.id.startsWith(prefix)) ? -1 : 0;
     const rightBoost = taskBoost[task].some((prefix) => right.id.startsWith(prefix)) ? -1 : 0;
-    return leftBoost - rightBoost
-      || importance[left.importance] - importance[right.importance]
+    return importance[left.importance] - importance[right.importance]
+      || leftBoost - rightBoost
       || left.title.localeCompare(right.title);
   }).slice(0, 16);
+}
+
+function normalizedTaskEvidenceKinds(values: readonly unknown[] | undefined): Set<LookupTaskEvidenceKind> {
+  return new Set((values ?? [])
+    .slice(0, 24)
+    .filter((value): value is LookupTaskEvidenceKind => (
+      typeof value === 'string' && LOOKUP_TASK_EVIDENCE_KINDS.has(value as LookupTaskEvidenceKind)
+    )));
+}
+
+function supportsDecisionDestination(
+  href: LookupDecisionEntry['href'],
+  evidence: ReadonlySet<LookupTaskEvidenceKind>,
+): boolean {
+  if (href === '#evidence-tls') return evidence.has('tls');
+  if (href === '#evidence-http') return evidence.has('http') || evidence.has('redirect');
+  if (href === '#evidence-page') {
+    return evidence.has('page') || evidence.has('identity') || evidence.has('form');
+  }
+  if (href === '#evidence-certificate-policy') return evidence.has('tls') || evidence.has('dns');
+  return true;
+}
+
+function supportsTaskAction(
+  task: LookupTaskView,
+  targetType: unknown,
+  evidence: ReadonlySet<LookupTaskEvidenceKind>,
+): boolean {
+  if (targetType !== 'domain') return false;
+  const requiredKinds: Readonly<Partial<Record<LookupTaskView, readonly LookupTaskEvidenceKind[]>>> = {
+    acquisition: ['dns', 'mail', 'tls', 'http', 'page', 'dependency'],
+    brand: ['page', 'identity', 'form', 'redirect'],
+    owned: ['delegation', 'mail', 'tls', 'posture'],
+  };
+  return requiredKinds[task]?.some((kind) => evidence.has(kind)) ?? false;
 }
 
 export function buildLookupDecisionSupport(input: Readonly<{
@@ -468,8 +533,11 @@ export function buildLookupDecisionSupport(input: Readonly<{
   openGraphUrl?: unknown;
   tlsAuthorization?: unknown;
   certificatePolicyReview?: unknown;
+  targetType?: unknown;
+  availableEvidence?: readonly unknown[];
   hasCaseSection?: boolean;
 }>): LookupDecisionSupport {
+  const availableEvidence = normalizedTaskEvidenceKinds(input.availableEvidence);
   const entries = prioritizeEntries([
     ...comparisonEntries(input.registryComparison, 'registry-whois'),
     ...comparisonEntries(input.registrarPublicationComparison, 'registry-registrar'),
@@ -477,7 +545,8 @@ export function buildLookupDecisionSupport(input: Readonly<{
     ...certificatePolicyEntries(input.certificatePolicyReview),
   ], input.task);
   const actions: LookupNextAction[] = [];
-  const firstConflict = entries.find((entry) => entry.state === 'conflict');
+  const firstConflict = entries.find((entry) => entry.state === 'conflict'
+    && supportsDecisionDestination(entry.href, availableEvidence));
   if (firstConflict) {
     actions.push({
       id: 'review-priority-conflict',
@@ -509,7 +578,7 @@ export function buildLookupDecisionSupport(input: Readonly<{
       priority: 'medium',
     });
   }
-  if (input.task === 'brand') {
+  if (supportsTaskAction(input.task, input.targetType, availableEvidence) && input.task === 'brand') {
     actions.push({
       id: 'review-page-identity',
       label: 'Review identity and credential evidence',
@@ -518,7 +587,7 @@ export function buildLookupDecisionSupport(input: Readonly<{
       href: '#web-evidence',
       priority: 'medium',
     });
-  } else if (input.task === 'acquisition') {
+  } else if (supportsTaskAction(input.task, input.targetType, availableEvidence) && input.task === 'acquisition') {
     actions.push({
       id: 'review-acquisition-dependencies',
       label: 'Review transfer dependencies',
@@ -527,7 +596,7 @@ export function buildLookupDecisionSupport(input: Readonly<{
       href: '#web-evidence',
       priority: 'medium',
     });
-  } else if (input.task === 'owned') {
+  } else if (supportsTaskAction(input.task, input.targetType, availableEvidence) && input.task === 'owned') {
     actions.push({
       id: 'review-owned-posture',
       label: 'Review delegation and posture evidence',
@@ -558,6 +627,23 @@ export function buildLookupDecisionSupport(input: Readonly<{
       uncertainties: entries.filter((entry) => entry.state === 'uncertain').length,
     },
   };
+}
+
+export function projectLookupNextActions(
+  actions: readonly LookupNextAction[],
+  task: LookupTaskView,
+): LookupNextAction[] {
+  const taskActionId = TASK_ACTION_ID[task];
+  return actions
+    .slice(0, MAX_ACTIONS)
+    .map((action, index) => ({ action, index }))
+    .sort((left, right) => (
+      ACTION_PRIORITY[left.action.priority] - ACTION_PRIORITY[right.action.priority]
+      || Number(right.action.id === taskActionId) - Number(left.action.id === taskActionId)
+      || left.index - right.index
+    ))
+    .slice(0, MAX_LOOKUP_PRESENTED_ACTIONS)
+    .map(({ action }) => action);
 }
 
 function timingByEvidence(timing: LookupTiming | null): Map<string, LookupTiming['sources'][number]> {

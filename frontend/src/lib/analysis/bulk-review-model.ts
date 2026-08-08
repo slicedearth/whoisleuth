@@ -1,4 +1,5 @@
 import { normalizeDomain } from './case-model.ts';
+import { normalizeBulkPresentationSortKey } from './bulk-sort.ts';
 import type { BulkSortDirection, BulkSortKey } from './bulk-sort.ts';
 
 export const BULK_REVIEW_SCHEMA = 'whoisleuth.bulk-review';
@@ -102,7 +103,7 @@ function normalizeView(raw: unknown): BulkReviewPresetView {
     ? [...new Set(value.signalFilters.filter((item): item is string => typeof item === 'string' && SIGNAL_FILTERS.has(item)))].slice(0, SIGNAL_FILTERS.size)
     : [];
   const sortKey = typeof value.sortKey === 'string' && SORT_KEYS.has(value.sortKey as BulkSortKey)
-    ? value.sortKey as BulkSortKey
+    ? normalizeBulkPresentationSortKey(value.sortKey as BulkSortKey)
     : 'risk';
   return {
     primaryFilter: setValue(value.primaryFilter, PRIMARY_FILTERS, 'all'),

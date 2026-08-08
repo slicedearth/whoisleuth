@@ -10,6 +10,7 @@ import {
   MAX_RECENT_INVESTIGATION_RESULTS,
   MAX_INVESTIGATION_SEARCH_RESULTS,
   MAX_INVESTIGATION_SEARCH_TOKENS,
+  markInvestigationSearchSourcesUnavailable,
   recentInvestigationResults,
   searchInvestigationIndex,
   unavailableInvestigationSearchIndex,
@@ -95,6 +96,16 @@ describe('local investigation search index', () => {
     assert.deepEqual(searchInvestigationIndex(index, ''), {
       state: 'idle', query: '', results: [], totalMatches: 0, truncated: false, detail: '',
     });
+  });
+
+  test('keeps fulfilled search results while marking a rejected source unavailable', () => {
+    const index = markInvestigationSearchSourcesUnavailable(indexFor(projectionInput({
+      cases: { version: CASE_SCHEMA_VERSION, cases: [caseRecord('case-available', 'available.invalid')] },
+    })), ['campaigns']);
+    assert.equal(index.state, 'ready');
+    assert.equal(index.sources.campaigns.state, 'unavailable');
+    assert.equal(searchInvestigationIndex(index, 'available.invalid').state, 'results');
+    assert.equal(searchInvestigationIndex(index, 'not-retained.invalid').state, 'no_matches');
   });
 
   test('ranks exact canonical domains ahead of prefix and substring matches', () => {

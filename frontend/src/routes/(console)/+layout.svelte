@@ -3,7 +3,7 @@
   import { page } from '$app/state';
   import { onMount, setContext, tick, type Component } from 'svelte';
   import {
-    consoleNavigation,
+    consoleNavigationGroups,
     protectedDestinations,
     publicHomepage,
     referenceNavigation,
@@ -45,7 +45,9 @@
     group: string;
   };
   const consoleCommands: ConsoleCommand[] = [
-    ...consoleNavigation.map((item) => ({ ...item, group: 'Console' })),
+    ...consoleNavigationGroups.flatMap((navigationGroup) => (
+      navigationGroup.items.map((item) => ({ ...item, group: navigationGroup.label }))
+    )),
     ...referenceNavigation.map((item) => ({ ...item, group: 'Reference' })),
     { ...publicHomepage, group: 'Public' },
   ];
@@ -251,7 +253,14 @@
       <div class="terminal-strip" aria-hidden="true"><span class="prompt-sigil">❯</span><span>guest@whoisleuth / console</span></div>
       <button class="navigation-drawer-close" type="button" aria-label="Close navigation" onclick={()=>void closeNavigation()}>×</button>
       <a class="brand" href="/dashboard"><span class="mark"><BrandMark /></span><span><strong>WHOISleuth</strong><small>Domain intelligence console</small></span></a>
-      <nav aria-label="Console"><p class="eyebrow">Console</p>{#each consoleNavigation as item}<a class:active={page.url.pathname===item.href} aria-current={page.url.pathname===item.href?'page':undefined} href={item.href} onclick={()=>navOpen=false}><strong>{item.label}</strong><small>{item.detail}</small></a>{/each}</nav>
+      <nav aria-label="Console">
+        {#each consoleNavigationGroups as navigationGroup}
+          <div class="console-nav-group" role="group" aria-labelledby={`console-group-${navigationGroup.label.toLowerCase().replaceAll(' ', '-').replace('&', 'and')}`}>
+            <p class="eyebrow" id={`console-group-${navigationGroup.label.toLowerCase().replaceAll(' ', '-').replace('&', 'and')}`}>{navigationGroup.label}</p>
+            {#each navigationGroup.items as item}<a class:active={page.url.pathname===item.href} aria-current={page.url.pathname===item.href?'page':undefined} href={item.href} onclick={()=>navOpen=false}><strong>{item.label}</strong><small>{item.detail}</small></a>{/each}
+          </div>
+        {/each}
+      </nav>
       <nav class="reference-nav" aria-label="Reference"><p class="eyebrow">Reference</p>{#each referenceNavigation as item}<a class:active={page.url.pathname===item.href} aria-current={page.url.pathname===item.href?'page':undefined} href={item.href} onclick={()=>navOpen=false}><strong>{item.label}</strong><small>{item.detail}</small></a>{/each}</nav>
       <div class="session"><ThemeSelector /><div class="session-row"><span role="note" title={capabilityStatusDetail()} aria-label={capabilityStatusDetail()}>{capabilityStatus()}</span></div></div>
     </aside>
@@ -266,6 +275,7 @@
   .login-links{display:flex;justify-content:center;gap:8px;margin:18px 0 0;color:var(--muted);font-size:var(--text-xs)}
   .login-links a{color:var(--accent)}
   .reference-nav{margin-top:18px;padding-top:14px;border-top:1px solid var(--border)}
+  .console-nav-group+.console-nav-group{margin-top:18px;padding-top:14px;border-top:1px solid var(--border)}
   .command-trigger{display:flex;min-height:34px;align-items:center;gap:7px;padding:0 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel);color:var(--muted);font:650 var(--text-2xs) var(--mono);white-space:nowrap}
   .command-trigger:hover,.command-trigger:focus-visible{border-color:var(--accent);color:var(--accent);background:rgb(var(--accent-rgb) / .07)}
   .command-trigger span{padding:2px 4px;border:1px solid var(--border);border-radius:4px;color:var(--text);font:inherit}

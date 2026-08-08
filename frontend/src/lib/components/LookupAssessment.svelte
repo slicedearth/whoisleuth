@@ -7,6 +7,7 @@
     type RiskScoreSensitivity,
   } from '$lib/analysis/scoring.ts';
   import { projectScoreFactors } from '$lib/analysis/visualization-models.ts';
+  import type { LookupTaskView } from '$lib/analysis/lookup-presentation.ts';
 
   type SyntheticRiskExplanation = Readonly<{
     synthetic: true;
@@ -18,6 +19,7 @@
   }>;
   type DisplayRiskExplanation = RiskExplanation | SyntheticRiskExplanation;
   type ScoreExplanation = OpportunityExplanation | DisplayRiskExplanation;
+  type ScoreHierarchy = 'primary' | 'secondary';
 
   let {
     detail,
@@ -27,6 +29,7 @@
     opportunity,
     signals,
     trusted,
+    task = 'general',
   }: {
     detail: string;
     confidence: string;
@@ -35,6 +38,7 @@
     opportunity: OpportunityExplanation | null;
     signals: Array<{ label: string; tone: string; detail?: string }>;
     trusted: string;
+    task?: LookupTaskView;
   } = $props();
 
   function scoreTitle(score: ScoreExplanation) {
@@ -50,6 +54,10 @@
 
   function isSynthetic(score: ScoreExplanation): score is SyntheticRiskExplanation {
     return 'synthetic' in score && score.synthetic === true;
+  }
+
+  function hierarchyLabel(value: ScoreHierarchy): string {
+    return value === 'primary' ? 'Primary' : 'Secondary';
   }
 </script>
 
@@ -85,6 +93,56 @@
   {/if}
 {/snippet}
 
+{#snippet RiskScore(hierarchy: ScoreHierarchy)}
+  {#if risk}
+    <div class="score score-{hierarchy} {riskTone(risk.score)}" data-score-hierarchy={hierarchy} role="group" aria-label={`${hierarchyLabel(hierarchy)} assessment: Risk score ${risk.score}`} title={scoreTitle(risk)}>
+      <span>Risk</span><strong>{risk.score}</strong><i><b style:width={`${risk.score}%`}></b></i>
+      <small><em>{hierarchyLabel(hierarchy)}</em> · {isSynthetic(risk) ? 'Synthetic fixture' : `v${risk.modelVersion} · ${risk.evidenceQuality.state}`}</small>
+    </div>
+  {/if}
+{/snippet}
+
+{#snippet OpportunityScore(hierarchy: ScoreHierarchy)}
+  {#if opportunity}
+    <div class="score score-{hierarchy} {scoreTone(opportunity.score)}" data-score-hierarchy={hierarchy} role="group" aria-label={`${hierarchyLabel(hierarchy)} assessment: Opportunity score ${opportunity.score}`} title={scoreTitle(opportunity)}>
+      <span>Opportunity</span><strong>{opportunity.score}</strong><i><b style:width={`${opportunity.score}%`}></b></i>
+      <small><em>{hierarchyLabel(hierarchy)}</em> · v{opportunity.modelVersion} · {opportunity.evidenceQuality.state}</small>
+    </div>
+  {/if}
+{/snippet}
+
+{#snippet RiskDetails(hierarchy: ScoreHierarchy)}
+  {#if risk}
+    <details class="disclosure score-detail score-detail-{hierarchy}" data-score-hierarchy={hierarchy} aria-label={`${hierarchyLabel(hierarchy)} Risk score explanation`}>
+      <summary>Why the risk score is {risk.score}</summary>
+      {#if isSynthetic(risk)}
+        <p class="score-quality">Fixed demonstration score for layout and workflow practice. It was not produced by the live Risk model.</p>
+      {:else}
+        <p class="score-quality"><strong>Evidence coverage:</strong> {qualitySummary(risk)} · {risk.evidenceQuality.observedFamilies.length} observed scoring families. {risk.evidenceQuality.freshness === 'observed' ? 'Observation time recorded.' : 'Observation time unavailable.'}</p>
+        {#if riskSensitivity?.scenarios.length}
+          <p class="score-quality"><strong>Single-family sensitivity:</strong> the score ranges from {riskSensitivity.minimumScenarioScore} to {riskSensitivity.baselineScore} when each contributing evidence family is removed and the model is recalculated. {riskSensitivity.thresholdState === 'crosses' ? `The ${riskSensitivity.reviewThreshold}-point review threshold depends on combined evidence.` : riskSensitivity.thresholdState === 'stable_above' ? `It stays above the ${riskSensitivity.reviewThreshold}-point review threshold in every scenario.` : 'It is already below the review threshold.'}</p>
+        {/if}
+      {/if}
+      {#if risk.capped}<p class="score-quality">Raw total {risk.rawScore}; displayed score capped at {risk.score}.</p>{/if}
+      {@render FactorChart(risk, 'Risk')}
+      <ul class="factor-list">{#each risk.factors as factor}<li><span>{factor.label}</span><strong>{factor.delta >= 0 ? '+' : ''}{Math.round(factor.delta)}</strong></li>{/each}</ul>
+    </details>
+  {/if}
+{/snippet}
+
+{#snippet OpportunityDetails(hierarchy: ScoreHierarchy)}
+  {#if opportunity}
+    <details class="disclosure score-detail score-detail-{hierarchy}" data-score-hierarchy={hierarchy} aria-label={`${hierarchyLabel(hierarchy)} Opportunity score explanation`}>
+      <summary>Why the opportunity score is {opportunity.score}</summary>
+      <p class="score-quality"><strong>Evidence coverage:</strong> {qualitySummary(opportunity)}. This estimates acquisition readiness, not value or eventual availability.</p>
+      {#if opportunity.dimensions.length}<dl class="dimensions">{#each opportunity.dimensions as dimension}<div><dt>{dimension.label}</dt><dd>{dimension.contribution >= 0 ? '+' : ''}{dimension.contribution}</dd></div>{/each}</dl>{/if}
+      {#if opportunity.capped}<p class="score-quality">Raw total {opportunity.rawScore}; displayed score capped at {opportunity.score}.</p>{/if}
+      {@render FactorChart(opportunity, 'Opportunity')}
+      <ul class="factor-list">{#each opportunity.factors as factor}<li><span>{factor.label}</span><strong>{factor.delta >= 0 ? '+' : ''}{Math.round(factor.delta)}</strong></li>{/each}</ul>
+    </details>
+  {/if}
+{/snippet}
+
 <section class="availability card">
   <header class="section-head">
     <div>
@@ -93,17 +151,12 @@
       <p>{confidence} confidence</p>
     </div>
     <div class="scores">
-      {#if risk}
-        <div class="score {riskTone(risk.score)}" title={scoreTitle(risk)}>
-          <span>Risk</span><strong>{risk.score}</strong><i><b style:width={`${risk.score}%`}></b></i>
-          <small>{isSynthetic(risk) ? 'Synthetic fixture' : `v${risk.modelVersion} · ${risk.evidenceQuality.state}`}</small>
-        </div>
-      {/if}
-      {#if opportunity}
-        <div class="score {scoreTone(opportunity.score)}" title={scoreTitle(opportunity)}>
-          <span>Opportunity</span><strong>{opportunity.score}</strong><i><b style:width={`${opportunity.score}%`}></b></i>
-          <small>v{opportunity.modelVersion} · {opportunity.evidenceQuality.state}</small>
-        </div>
+      {#if task === 'acquisition'}
+        {@render OpportunityScore('primary')}
+        {@render RiskScore('secondary')}
+      {:else}
+        {@render RiskScore('primary')}
+        {@render OpportunityScore('secondary')}
       {/if}
     </div>
   </header>
@@ -121,31 +174,12 @@
   {/if}
 
   <div class="score-details">
-    {#if risk}
-      <details class="disclosure">
-        <summary>Why the risk score is {risk.score}</summary>
-        {#if isSynthetic(risk)}
-          <p class="score-quality">Fixed demonstration score for layout and workflow practice. It was not produced by the live Risk model.</p>
-        {:else}
-          <p class="score-quality"><strong>Evidence coverage:</strong> {qualitySummary(risk)} · {risk.evidenceQuality.observedFamilies.length} observed scoring families. {risk.evidenceQuality.freshness === 'observed' ? 'Observation time recorded.' : 'Observation time unavailable.'}</p>
-          {#if riskSensitivity?.scenarios.length}
-            <p class="score-quality"><strong>Single-family sensitivity:</strong> the score ranges from {riskSensitivity.minimumScenarioScore} to {riskSensitivity.baselineScore} when each contributing evidence family is removed and the model is recalculated. {riskSensitivity.thresholdState === 'crosses' ? `The ${riskSensitivity.reviewThreshold}-point review threshold depends on combined evidence.` : riskSensitivity.thresholdState === 'stable_above' ? `It stays above the ${riskSensitivity.reviewThreshold}-point review threshold in every scenario.` : 'It is already below the review threshold.'}</p>
-          {/if}
-        {/if}
-        {#if risk.capped}<p class="score-quality">Raw total {risk.rawScore}; displayed score capped at {risk.score}.</p>{/if}
-        {@render FactorChart(risk, 'Risk')}
-        <ul class="factor-list">{#each risk.factors as factor}<li><span>{factor.label}</span><strong>{factor.delta >= 0 ? '+' : ''}{Math.round(factor.delta)}</strong></li>{/each}</ul>
-      </details>
-    {/if}
-    {#if opportunity}
-      <details class="disclosure">
-        <summary>Why the opportunity score is {opportunity.score}</summary>
-        <p class="score-quality"><strong>Evidence coverage:</strong> {qualitySummary(opportunity)}. This estimates acquisition readiness, not value or eventual availability.</p>
-        {#if opportunity.dimensions.length}<dl class="dimensions">{#each opportunity.dimensions as dimension}<div><dt>{dimension.label}</dt><dd>{dimension.contribution >= 0 ? '+' : ''}{dimension.contribution}</dd></div>{/each}</dl>{/if}
-        {#if opportunity.capped}<p class="score-quality">Raw total {opportunity.rawScore}; displayed score capped at {opportunity.score}.</p>{/if}
-        {@render FactorChart(opportunity, 'Opportunity')}
-        <ul class="factor-list">{#each opportunity.factors as factor}<li><span>{factor.label}</span><strong>{factor.delta >= 0 ? '+' : ''}{Math.round(factor.delta)}</strong></li>{/each}</ul>
-      </details>
+    {#if task === 'acquisition'}
+      {@render OpportunityDetails('primary')}
+      {@render RiskDetails('secondary')}
+    {:else}
+      {@render RiskDetails('primary')}
+      {@render OpportunityDetails('secondary')}
     {/if}
   </div>
 </section>
@@ -155,7 +189,9 @@
   .availability h4{margin:0;font-size:1.05rem}
   .scores{display:flex;gap:9px}
   .score{display:grid;grid-template-columns:1fr auto;gap:3px;width:150px;padding:9px 10px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel)}
+  .score-primary{border-color:var(--accent2);background:var(--panel-raised)}
   .score span{font:600 var(--text-2xs) var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+  .score small em{color:var(--text);font-style:normal}
   .score strong{font-size:1.05rem}
   .score i{grid-column:1/-1;height:5px;overflow:hidden;border-radius:99px;background:var(--border)}
   .score b{display:block;height:100%;background:var(--accent)}
@@ -166,6 +202,7 @@
   .signals .chip{white-space:normal}
   .score-details{display:grid;grid-template-columns:minmax(0,1fr);gap:8px;min-width:0;margin-top:12px}
   .score-details details{min-width:0;margin-top:0;overflow:hidden}
+  .score-detail-primary{border-inline-start:3px solid var(--accent2)}
   .factor-chart{width:calc(100% - 24px);min-width:0;margin:10px 12px 0;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
   .factor-chart svg{display:block;width:100%;min-width:0;height:auto}
   .zero-line{stroke:var(--border-strong);stroke-width:1.5}

@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
   buildLookupDecisionSupport,
   buildLookupEvidenceQualityMatrix,
+  projectLookupNextActions,
 } from '../frontend/src/lib/analysis/lookup-decision-support.ts';
 import type { EvidenceCoverageLedger } from '../frontend/src/lib/analysis/evidence-coverage-ledger.ts';
 import type { LookupSourceRefreshPlan } from '../frontend/src/lib/analysis/lookup-source-refresh.ts';
@@ -98,6 +99,8 @@ test('decision support keeps conflicts separate from incomplete source compariso
     finalUrl: 'https://example.test/',
     canonicalUrl: 'https://example.test/',
     tlsAuthorization: { authorized: true },
+    targetType: 'domain',
+    availableEvidence: ['dns', 'delegation', 'mail', 'dependency'],
     hasCaseSection: true,
   });
 
@@ -108,6 +111,13 @@ test('decision support keeps conflicts separate from incomplete source compariso
   assert.match(support.entries[1]?.detail ?? '', /no disagreement or equivalence conclusion/u);
   assert.ok(support.actions.some((action) => action.id === 'review-priority-conflict'));
   assert.ok(support.actions.some((action) => action.id === 'review-refresh-options'));
+  assert.ok(support.actions.length <= 6);
+  const presentedActions = projectLookupNextActions(support.actions, 'acquisition');
+  assert.deepEqual(
+    presentedActions.slice(0, 2).map((action) => action.id),
+    ['review-priority-conflict', 'review-acquisition-dependencies'],
+  );
+  assert.ok(presentedActions.length <= 3);
   assert.ok(support.actions.every((action) => action.expectedOutcome.length > 20));
   assert.match(support.actions.find((action) => action.id === 'review-priority-conflict')?.expectedOutcome ?? '', /authoritative|unresolved/u);
 });
@@ -143,6 +153,8 @@ test('decision support does not turn an unsupported WHOIS service into incident 
       }],
     },
     registrarPublicationComparison: { fields: [] },
+    targetType: 'domain',
+    availableEvidence: [],
   });
 
   assert.equal(support.counts.uncertainties, 0);
@@ -163,6 +175,8 @@ test('identity inconsistencies are bounded review leads with direct evidence lin
     canonicalUrl: 'https://canonical.example/',
     openGraphUrl: 'https://social.example/',
     tlsAuthorization: { authorized: false, error: 'Hostname mismatch' },
+    targetType: 'domain',
+    availableEvidence: ['tls', 'http', 'redirect', 'page', 'identity'],
   });
 
   assert.deepEqual(
@@ -197,12 +211,129 @@ test('certificate policy differences remain review leads while incomplete policy
         sources: ['DNS', 'TLS certificate'],
       }],
     },
+    targetType: 'domain',
+    availableEvidence: ['dns', 'tls'],
   });
   assert.equal(support.entries.find((entry) => entry.id === 'certificate-policy-expected_spki')?.state, 'conflict');
   assert.equal(support.entries.find((entry) => entry.id === 'certificate-policy-caa')?.state, 'uncertain');
   assert.ok(support.entries
     .filter((entry) => entry.id.startsWith('certificate-policy-'))
     .every((entry) => entry.href === '#evidence-certificate-policy'));
+});
+
+test('task actions require exact retained evidence and a domain destination', () => {
+  const taskActionIds = new Set([
+    'review-page-identity',
+    'review-acquisition-dependencies',
+    'review-owned-posture',
+  ]);
+  const expectedTaskAction = {
+    general: null,
+    acquisition: 'review-acquisition-dependencies',
+    brand: 'review-page-identity',
+    incident: null,
+    owned: 'review-owned-posture',
+  } as const;
+  const tasks = ['general', 'acquisition', 'brand', 'incident', 'owned'] as const;
+  for (const task of tasks) {
+    const common = {
+      task,
+      coverage,
+      refreshPlan: { ...refreshPlan, items: [] },
+      registryComparison: { fields: [] },
+      registrarPublicationComparison: { fields: [] },
+      requestedHost: 'target.example.test',
+      registrableDomain: 'target.example.test',
+      finalUrl: 'https://different.example.test/',
+      targetType: 'domain',
+      hasCaseSection: true,
+    };
+    const withoutSupportedEvidence = buildLookupDecisionSupport({ ...common, availableEvidence: [] });
+    assert.equal(withoutSupportedEvidence.actions.some((action) => taskActionIds.has(action.id)), false, task);
+    assert.equal(withoutSupportedEvidence.actions.some((action) => action.href === '#web-evidence'), false, task);
+    assert.ok(withoutSupportedEvidence.actions.every((action) => ['inspect-limited-source', 'review-case-handoff'].includes(action.id)), task);
+
+    const evidenceByTask = {
+      general: ['page'],
+      acquisition: ['dns'],
+      brand: ['identity'],
+      incident: ['http'],
+      owned: ['delegation'],
+    } as const;
+    const withSupportedEvidence = buildLookupDecisionSupport({
+      ...common,
+      availableEvidence: evidenceByTask[task],
+    });
+    const expected = expectedTaskAction[task];
+    assert.equal(withSupportedEvidence.actions.some((action) => taskActionIds.has(action.id)), expected !== null, task);
+    if (expected) assert.ok(withSupportedEvidence.actions.some((action) => action.id === expected), task);
+  }
+
+  for (const task of tasks) {
+    const base = {
+      task,
+      coverage,
+      refreshPlan: { ...refreshPlan, items: [] },
+      registryComparison: { fields: [] },
+      registrarPublicationComparison: { fields: [] },
+    };
+    const ptrOnly = buildLookupDecisionSupport({
+      ...base,
+      targetType: 'ipv4',
+      availableEvidence: ['ptr'],
+    });
+    assert.equal(ptrOnly.actions.some((action) => taskActionIds.has(action.id)), false, `${task} PTR`);
+    const nonDomainWithWeb = buildLookupDecisionSupport({
+      ...base,
+      targetType: 'asn',
+      availableEvidence: ['dns', 'delegation', 'page', 'tls'],
+    });
+    assert.equal(nonDomainWithWeb.actions.some((action) => taskActionIds.has(action.id)), false, `${task} non-domain`);
+  }
+
+  const dnsOnly = (task: 'acquisition' | 'brand' | 'owned') => buildLookupDecisionSupport({
+    task,
+    coverage,
+    refreshPlan: { ...refreshPlan, items: [] },
+    registryComparison: { fields: [] },
+    registrarPublicationComparison: { fields: [] },
+    targetType: 'domain',
+    availableEvidence: ['dns', 'delegation'],
+  });
+  assert.ok(dnsOnly('acquisition').actions.some((action) => action.id === 'review-acquisition-dependencies'));
+  assert.equal(dnsOnly('brand').actions.some((action) => taskActionIds.has(action.id)), false);
+  assert.ok(dnsOnly('owned').actions.some((action) => action.id === 'review-owned-posture'));
+});
+
+test('importance outranks task affinity and unavailable web destinations are not recommended', () => {
+  const base = {
+    task: 'brand' as const,
+    coverage,
+    refreshPlan: { ...refreshPlan, items: [] },
+    registryComparison: {
+      fields: [{
+        label: 'Registrar',
+        status: 'conflict',
+        rdapDisplay: 'Registrar One',
+        whoisDisplay: 'Registrar Two',
+      }],
+    },
+    registrarPublicationComparison: { fields: [] },
+    requestedHost: 'example.test',
+    registrableDomain: 'example.test',
+    finalUrl: 'https://example.test/',
+    openGraphUrl: 'https://outside.example/',
+    targetType: 'domain',
+  };
+  const noPageEvidence = buildLookupDecisionSupport({ ...base, availableEvidence: ['dns'] });
+  assert.equal(noPageEvidence.entries[0]?.importance, 'high');
+  assert.match(noPageEvidence.entries[0]?.title ?? '', /Registrar differs/u);
+  assert.equal(noPageEvidence.actions[0]?.href, '#registry');
+  assert.equal(noPageEvidence.actions.some((action) => action.href === '#evidence-page'), false);
+
+  const withPageEvidence = buildLookupDecisionSupport({ ...base, availableEvidence: ['page'] });
+  assert.equal(withPageEvidence.entries[0]?.importance, 'high');
+  assert.equal(withPageEvidence.actions[0]?.href, '#registry');
 });
 
 test('quality matrix joins coverage, timing, freshness, refresh, and downstream use', () => {

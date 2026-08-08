@@ -7,6 +7,43 @@
 // by spreadsheets). Documented so importers can split on it deterministically.
 export const CT_HOSTNAME_CSV_DELIMITER = '|';
 
+export const BULK_SCORE_CSV_HEADERS = Object.freeze([
+  'risk',
+  'risk_model_version',
+  'risk_factors',
+  'opportunity',
+  'opportunity_model_version',
+] as const);
+
+export type BulkScoreCsvInput = Readonly<{
+  risk?: number | null;
+  opportunity?: number | null;
+  saved?: Readonly<{
+    riskModelVersion?: number | null;
+    opportunityModelVersion?: number | null;
+    riskFactors?: readonly Readonly<{ label: string; points: number }>[];
+  }>;
+}>;
+
+export type BulkScoreCsvFields = [number | '', number | '', string, number | '', number | ''];
+
+/** Keeps the retained score/model cells aligned even when Opportunity is hidden in Bulk's UI. */
+export function bulkScoreCsvFields(result: BulkScoreCsvInput): BulkScoreCsvFields {
+  return [
+    typeof result.risk === 'number' && Number.isFinite(result.risk) ? result.risk : '',
+    typeof result.saved?.riskModelVersion === 'number' && Number.isFinite(result.saved.riskModelVersion)
+      ? result.saved.riskModelVersion
+      : '',
+    result.saved?.riskFactors?.map((factor) => (
+      `${factor.label} ${Number(factor.points) >= 0 ? '+' : ''}${factor.points}`
+    )).join('; ') || '',
+    typeof result.opportunity === 'number' && Number.isFinite(result.opportunity) ? result.opportunity : '',
+    typeof result.saved?.opportunityModelVersion === 'number' && Number.isFinite(result.saved.opportunityModelVersion)
+      ? result.saved.opportunityModelVersion
+      : '',
+  ];
+}
+
 export type CertificateTransparencyCsvInput = {
   firstObservedAt?: string | null;
   lastObservedAt?: string | null;
