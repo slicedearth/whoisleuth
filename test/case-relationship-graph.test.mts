@@ -16,7 +16,9 @@ import {
 } from '../frontend/src/lib/analysis/case-relationship-graph.ts';
 import {
   buildCaseRelationships,
+  CASE_RELATIONSHIP_QUERY_DEFAULTS,
   CASE_RELATIONSHIP_VERSION,
+  caseRelationshipGroupId,
   type CaseRelationshipGroup,
   type CaseRelationshipSummary,
 } from '../frontend/src/lib/analysis/case-relationships.ts';
@@ -46,7 +48,7 @@ describe('case relationship graph projection', () => {
     assert.deepEqual(graph.edges, []);
     assert.equal(graph.totalRelationships, 0);
     assert.equal(graph.matchingRelationships, 0);
-    assert.deepEqual(graph.filters, { type: 'all' });
+    assert.deepEqual(graph.filters, CASE_RELATIONSHIP_QUERY_DEFAULTS);
     assert.deepEqual(graph.view, {
       version: CASE_RELATIONSHIP_GRAPH_VIEW_VERSION,
       focusId: '',
@@ -68,7 +70,7 @@ describe('case relationship graph projection', () => {
     assert.equal(graph.relationshipNodes.length, 1);
     assert.equal(requiredValue(graph.relationshipNodes[0]).type, 'http_final_origin');
     assert.equal(graph.truncated, false);
-    assert.deepEqual(graph.filters, { type: 'http_final_origin' });
+    assert.deepEqual(graph.filters, { ...CASE_RELATIONSHIP_QUERY_DEFAULTS, type: 'http_final_origin' });
   });
 
   test('projects deterministic case and relationship nodes with evidence-backed edges', () => {
@@ -114,6 +116,40 @@ describe('case relationship graph projection', () => {
     assert.equal(graph.caseNodes.length, MAX_RELATIONSHIP_GRAPH_CASES);
     assert.ok(graph.relationshipNodes.every((node) => graph.edges.filter((edge) => edge.relationshipId === node.id).length === 2));
     assert.equal(graph.truncated, true);
+  });
+
+  test('reserves one bounded graph slot for a selected matching relationship outside the ordinary sample', () => {
+    const members = Array.from({ length: MAX_RELATIONSHIP_GRAPH_CASES }, (_, index) => ({
+      id: `case-${index}`,
+      domain: `case-${index}.invalid`,
+    }));
+    const groups: CaseRelationshipGroup[] = Array.from({ length: MAX_RELATIONSHIP_GRAPH_RELATIONSHIPS + 1 }, (_, index) => ({
+      type: 'nameserver_set',
+      label: 'Shared nameserver set',
+      method: 'Exact fixture',
+      value: `ns-${String(index).padStart(2, '0')}.invalid`,
+      cases: members,
+      description: 'Fixture relationship.',
+    }));
+    const summary: CaseRelationshipSummary = {
+      version: CASE_RELATIONSHIP_VERSION,
+      groups,
+      truncated: false,
+      limitations: [],
+    };
+    const selectedRelationshipId = caseRelationshipGroupId(requiredValue(groups.at(-1)));
+    const graph = projectCaseRelationshipGraph(summary, { selectedRelationshipId });
+
+    assert.equal(graph.relationshipNodes.length, MAX_RELATIONSHIP_GRAPH_RELATIONSHIPS);
+    assert.equal(graph.caseNodes.length, MAX_RELATIONSHIP_GRAPH_CASES);
+    assert.equal(graph.edges.length, MAX_RELATIONSHIP_GRAPH_EDGES);
+    assert.equal(graph.edges.filter((edge) => edge.relationshipId === selectedRelationshipId).length, 2);
+    assert.equal(graph.relationshipNodes.some((node) => node.id === selectedRelationshipId), true);
+    assert.equal(graph.relationshipNodes.some((node) => node.id === caseRelationshipGroupId(requiredValue(groups[11]))), false);
+    assert.equal(graph.truncated, true);
+
+    const ordinary = projectCaseRelationshipGraph(summary, { selectedRelationshipId: 'relationship:unsafe value' });
+    assert.equal(ordinary.relationshipNodes.some((node) => node.id === selectedRelationshipId), false);
   });
 
   test('caps dense edges and discloses the partial overview', () => {
@@ -199,7 +235,7 @@ describe('case relationship graph projection', () => {
     const nameserver = full.relationshipNodes.find((node) => node.type === 'nameserver_set');
     assert.ok(alpha);
     assert.ok(nameserver);
-    assert.equal(nameserver.id, 'relationship:nameserver_set:ns.shared.invalid');
+    assert.equal(nameserver.id, caseRelationshipGroupId(requiredValue(summary.groups.find((group) => group.type === 'nameserver_set'))));
 
     const focused = projectCaseRelationshipGraph(summary, { focusId: alpha.id, oneHop: true });
     assert.deepEqual(focused.caseNodes.map((node) => node.caseId), ['alpha']);

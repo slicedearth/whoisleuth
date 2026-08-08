@@ -20,8 +20,7 @@
   import WebsiteProfileClusters from '$lib/components/WebsiteProfileClusters.svelte';
   import { saveCandidateHandoff } from '$lib/candidate-handoff';
   import CampaignManager from '$lib/components/CampaignManager.svelte';
-  import CaseRelationshipTable from '$lib/components/CaseRelationshipTable.svelte';
-  import CaseRelationshipGraph from '$lib/components/CaseRelationshipGraph.svelte';
+  import CaseRelationshipWorkspace from '$lib/components/CaseRelationshipWorkspace.svelte';
   import CaseRelationshipClusters from '$lib/components/CaseRelationshipClusters.svelte';
   import { registerAnalystUndo } from '$lib/analyst-undo';
   import DetectionRuleManager from '$lib/components/DetectionRuleManager.svelte';
@@ -290,8 +289,7 @@
     ondelete={removeRetainedRelationship}
   />
   <CaseRelationshipClusters summary={relationshipClusters} />
-  <CaseRelationshipGraph records={cases} summary={relationshipSummary} onselect={openRelatedCase} />
-  <CaseRelationshipTable records={cases} summary={relationshipSummary} onselect={openRelatedCase} />
+  <CaseRelationshipWorkspace records={cases} summary={relationshipSummary} onselect={openRelatedCase} />
 </div>
 {/if}
 

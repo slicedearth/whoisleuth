@@ -615,6 +615,17 @@ Monitor contains Cases, Campaigns, Relationships, and Watchlists.
   selected cluster as a separately typed analyst assertion in one case.
   Common software, services, templates, placeholders, trackers, and copied
   content mean these groups are pivots rather than attribution.
+  The relationship graph and exact table share one transient relationship,
+  source, retained-period, completeness, and case-or-campaign filter set. A
+  relationship selected with the graph or an **Inspect relationship** table
+  control is reflected in both views whenever the table's private search
+  includes that relationship; inspecting a table-only relationship reserves
+  one slot in the bounded graph overview without increasing its limits. Table
+  search, sort, direction, and page remain private view controls.
+  These filters, the selected relationship, graph focus, pins, hides, and
+  comparison group are not saved to the URL or browser-local records. Graph
+  downloads continue to export the bounded evidence matching the common
+  filters, while excluding selection and private table-view state.
   Split, merge, label, and dismiss controls alter only the current review view;
   export the reviewed view if it needs to be retained.
 - **Watchlists** retain bounded material-change timelines and can be rescanned
