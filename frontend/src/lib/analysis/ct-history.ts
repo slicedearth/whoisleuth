@@ -5,9 +5,10 @@
 
 import { normalizeDomain } from './case-model.ts';
 
-export const CT_HISTORY_SCHEMA_VERSION = 1;
+export const CT_HISTORY_SCHEMA_VERSION = 2;
 export const MAX_CT_HISTORY_SEARCHES = 30;
 export const MAX_CT_HISTORY_EVENTS = 20;
+export const MAX_CT_HISTORY_DISCARDED_CHECKS = 1_000_000;
 export const MAX_CT_HISTORY_DOMAINS = 500;
 export const MAX_CT_HISTORY_NEW_DOMAINS = 100;
 export const MAX_CT_HISTORY_QUERY_LENGTH = 200;
@@ -30,6 +31,9 @@ export type CtHistoryEntry = {
   updatedAt: string;
   domains: string[];
   history: CtHistoryEvent[];
+  discardedCheckCount: number;
+  discardedCheckCountKnown: boolean;
+  discardedCheckCountCapped: boolean;
 };
 
 export type CtHistoryStore = {
@@ -93,19 +97,61 @@ function normalizeEvent(raw: unknown): CtHistoryEvent | null {
   };
 }
 
-function normalizeEntry(raw: unknown): CtHistoryEntry | null {
+type CtHistoryRetention = Pick<
+  CtHistoryEntry,
+  'discardedCheckCount' | 'discardedCheckCountKnown' | 'discardedCheckCountCapped'
+>;
+
+function normalizedRetention(entry: Record<string, unknown>, sourceVersion: number | null): CtHistoryRetention {
+  const rawCount = entry.discardedCheckCount;
+  const validCount = typeof rawCount === 'number' && Number.isFinite(rawCount) && rawCount >= 0
+    ? Math.floor(rawCount)
+    : 0;
+  return {
+    discardedCheckCount: Math.min(validCount, MAX_CT_HISTORY_DISCARDED_CHECKS),
+    // Schema 1 had no pruning provenance. Preserve that uncertainty instead
+    // of silently treating a full legacy array as proof that nothing was lost.
+    discardedCheckCountKnown: sourceVersion === CT_HISTORY_SCHEMA_VERSION
+      && entry.discardedCheckCountKnown === true,
+    discardedCheckCountCapped: entry.discardedCheckCountCapped === true
+      || validCount > MAX_CT_HISTORY_DISCARDED_CHECKS,
+  };
+}
+
+function addDiscardedChecks(retention: CtHistoryRetention, count: number): CtHistoryRetention {
+  const increment = Math.max(0, Math.floor(count));
+  const next = retention.discardedCheckCount + increment;
+  return {
+    discardedCheckCount: Math.min(next, MAX_CT_HISTORY_DISCARDED_CHECKS),
+    discardedCheckCountKnown: retention.discardedCheckCountKnown,
+    discardedCheckCountCapped: retention.discardedCheckCountCapped
+      || next > MAX_CT_HISTORY_DISCARDED_CHECKS,
+  };
+}
+
+function normalizeEntry(raw: unknown, sourceVersion: number | null): CtHistoryEntry | null {
   const entry = plainRecord(raw);
   if (!entry) return null;
   const query = normalizeCtHistoryQuery(entry.query);
   if (!query) return null;
   const baselineAt = normalizeTimestamp(entry.baselineAt);
   const domains = baselineAt ? normalizeDomains(entry.domains, MAX_CT_HISTORY_DOMAINS) : [];
-  const history = Array.isArray(entry.history)
-    ? entry.history.map(normalizeEvent).filter((event) => event !== null).sort((a, b) => a.checkedAt.localeCompare(b.checkedAt)).slice(-MAX_CT_HISTORY_EVENTS)
-    : [];
+  const rawHistory = Array.isArray(entry.history) ? entry.history : [];
+  const historyInputs = rawHistory.slice(-MAX_CT_HISTORY_EVENTS * 4);
+  const normalizedHistory = historyInputs
+    .map(normalizeEvent)
+    .filter((event) => event !== null)
+    .sort((a, b) => a.checkedAt.localeCompare(b.checkedAt));
+  const history = normalizedHistory.slice(-MAX_CT_HISTORY_EVENTS);
+  const discardedDuringNormalization = Math.max(0, rawHistory.length - historyInputs.length)
+    + Math.max(0, normalizedHistory.length - history.length);
+  const retention = addDiscardedChecks(
+    normalizedRetention(entry, sourceVersion),
+    discardedDuringNormalization,
+  );
   const updatedAt = normalizeTimestamp(entry.updatedAt) || history.at(-1)?.checkedAt || baselineAt;
   if (!updatedAt) return null;
-  return { query, baselineAt, updatedAt, domains, history };
+  return { query, baselineAt, updatedAt, domains, history, ...retention };
 }
 
 /**
@@ -116,10 +162,11 @@ function normalizeEntry(raw: unknown): CtHistoryEntry | null {
  */
 export function normalizeCtHistoryStore(raw: unknown): CtHistoryStore {
   const value = plainRecord(raw) || {};
+  const sourceVersion = ctHistoryStoreVersion(value);
   const entries = Array.isArray(value.entries) ? value.entries.slice(0, MAX_CT_HISTORY_SEARCHES * 4) : [];
   const byQuery = new Map<string, CtHistoryEntry>();
   for (const candidate of entries) {
-    const entry = normalizeEntry(candidate);
+    const entry = normalizeEntry(candidate, sourceVersion);
     if (!entry) continue;
     const existing = byQuery.get(entry.query);
     if (!existing || entry.updatedAt > existing.updatedAt) byQuery.set(entry.query, entry);
@@ -166,11 +213,12 @@ function enforceNormalizedCtHistoryBudget(store: CtHistoryStore): CtHistoryStore
       if (entry && entry.history.length > 1) {
         const removed = entry.history[0];
         if (!removed) continue;
-        // Removing one member from a multi-member JSON array also removes one
-        // comma, so the byte accounting remains exact without reserializing
-        // the complete bounded store on every iteration.
-        storeBytes -= serializedBytes(removed) + 1;
         entry.history.shift();
+        Object.assign(entry, addDiscardedChecks(entry, 1));
+        // The persisted discard counter can grow by a digit as the event is
+        // removed, so remeasure this already-bounded store instead of relying
+        // on subtraction that would omit the provenance metadata change.
+        storeBytes = serializedBytes(store);
         changed = true;
       }
     }
@@ -246,12 +294,20 @@ export function recordCtHistorySearch(
     newDomains: allNewDomains.slice(0, MAX_CT_HISTORY_NEW_DOMAINS),
     truncated,
   };
+  const combinedHistory = [...(existing?.history || []), event];
+  const discardedByEventLimit = Math.max(0, combinedHistory.length - MAX_CT_HISTORY_EVENTS);
+  const retention = addDiscardedChecks(existing ?? {
+    discardedCheckCount: 0,
+    discardedCheckCountKnown: true,
+    discardedCheckCountCapped: false,
+  }, discardedByEventLimit);
   const entry = {
     query,
     baselineAt: truncated ? existing?.baselineAt || null : checkedAt,
     updatedAt: checkedAt,
     domains: truncated ? existing?.domains || [] : currentDomains,
-    history: [...(existing?.history || []), event].slice(-MAX_CT_HISTORY_EVENTS),
+    history: combinedHistory.slice(-MAX_CT_HISTORY_EVENTS),
+    ...retention,
   };
   const nextStore = enforceNormalizedCtHistoryBudget({
     version: CT_HISTORY_SCHEMA_VERSION,

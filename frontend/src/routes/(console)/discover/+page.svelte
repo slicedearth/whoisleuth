@@ -87,7 +87,7 @@
   let profile = $state<BrandProfile|null>(null);
   // Whether the current candidate set came from structured CT provenance.
   let ctResultKind = $state<'structured'|null>(null);
-  let ctHistory = $state<CtHistoryStore>({ version: 1, entries: [] });
+  let ctHistory = $state<CtHistoryStore>({ version: 2, entries: [] });
   let ctNewDomains = $state<Set<string>>(new Set());
   let ctPreviousCheckedAt = $state<string|null>(null);
   let ctNewOnly = $state(false);
@@ -259,6 +259,9 @@
       checkCount: entry.history.length,
       updatedLabel: historyDate(entry.updatedAt),
       latestNewCount: entry.history.at(-1)?.newCount || 0,
+      discardedCheckCount: entry.discardedCheckCount,
+      discardedCheckCountKnown: entry.discardedCheckCountKnown,
+      discardedCheckCountCapped: entry.discardedCheckCountCapped,
       checks: [...entry.history].reverse().map((event) => ({
         checkedAt: event.checkedAt,
         checkedLabel: historyDate(event.checkedAt),

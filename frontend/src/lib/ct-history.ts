@@ -24,9 +24,12 @@ export interface CtHistoryEntry {
   updatedAt: string;
   domains: string[];
   history: CtHistoryEvent[];
+  discardedCheckCount: number;
+  discardedCheckCountKnown: boolean;
+  discardedCheckCountCapped: boolean;
 }
 
-export interface CtHistoryStore { version: 1; entries: CtHistoryEntry[] }
+export interface CtHistoryStore { version: 2; entries: CtHistoryEntry[] }
 export interface CtHistoryComparison {
   query: string;
   hasBaseline: boolean;

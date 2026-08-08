@@ -8,6 +8,7 @@ import {
   MAX_TRIAGE_PLOT_POINTS,
   MAX_COLLECTION_TIMING_SOURCES,
   MAX_SCORE_FACTORS,
+  MAX_VISUAL_MATRIX_CELLS,
   MAX_VISUAL_MATRIX_ROWS,
   MAX_FORCE_GRAPH_NODES,
   MAX_FORCE_GRAPH_LINKS,
@@ -162,7 +163,7 @@ describe('bounded visualization models', () => {
     assert.ok((negative?.x ?? 0) < projected.zeroX);
   });
 
-  test('normalizes source-agreement states and caps matrix rows and columns', () => {
+  test('preserves exact source-agreement states, derives tones, and caps rows and columns', () => {
     const projected = projectEvidenceMatrix(
       ['Registry', 'Registrar', 'WHOIS', 'Page', 'DNS', 'TLS', 'Ignored'],
       Array.from({ length: 30 }, (_, index) => ({
@@ -178,9 +179,63 @@ describe('bounded visualization models', () => {
     assert.equal(projected.columns.length, 6);
     assert.equal(projected.rows.length, MAX_VISUAL_MATRIX_ROWS);
     assert.equal(projected.truncated, true);
-    assert.equal(requiredValue(projected.rows[0]).cells[0]?.state, 'equal');
-    assert.equal(requiredValue(projected.rows[0]).cells[2]?.state, 'unavailable');
-    assert.equal(requiredValue(projected.rows[1]).cells[0]?.state, 'partial');
+    assert.equal(requiredValue(projected.rows[0]).cells[0]?.state, 'equivalent');
+    assert.equal(requiredValue(projected.rows[0]).cells[0]?.tone, 'equal');
+    assert.equal(requiredValue(projected.rows[0]).cells[2]?.state, 'failed');
+    assert.equal(requiredValue(projected.rows[0]).cells[2]?.tone, 'unavailable');
+    assert.equal(requiredValue(projected.rows[1]).cells[0]?.state, 'missing');
+    assert.equal(requiredValue(projected.rows[1]).cells[0]?.tone, 'partial');
+  });
+
+  test('rejects duplicate publication cells within one source-pair lane', () => {
+    const projected = projectEvidenceMatrix(['Registry RDAP', 'WHOIS'], [{
+      id: 'registrar-comparisons',
+      label: 'Registrar',
+      cells: [
+        { column: 'Registry RDAP', state: 'value', tone: 'equal', detail: 'First publication' },
+        { column: 'Registry RDAP', state: 'incomplete', tone: 'partial', detail: 'Second publication' },
+        { column: 'WHOIS', state: 'unavailable', tone: 'unavailable' },
+      ],
+    }]);
+
+    const row = requiredValue(projected.rows[0]);
+    assert.equal(row.cells.length, 2);
+    assert.deepEqual(row.cells.map((cell) => cell.state), ['value', 'unavailable']);
+    assert.equal(projected.discarded.cellInputs, 1);
+    assert.equal(projected.truncated, true);
+    assert.equal(row.cells[0]?.width, projected.columns[0]?.width);
+  });
+
+  test('strictly bounds adversarial matrix cell and row overflow', () => {
+    const duplicateCells = Array.from({ length: 10_000 }, (_, index) => ({
+      column: 'Registry RDAP',
+      state: index === 0 ? 'value' : 'incomplete',
+      detail: `Publication ${index}`,
+    }));
+    const duplicateProjection = projectEvidenceMatrix(['Registry RDAP', 'WHOIS'], [{
+      id: 'overflow',
+      label: 'Overflow',
+      sparse: true,
+      cells: duplicateCells,
+    }]);
+    assert.equal(duplicateProjection.projectedCellCount, 1);
+    assert.equal(duplicateProjection.discarded.cellInputs, 9_999);
+    assert.equal(requiredValue(duplicateProjection.rows[0]).cells[0]?.state, 'value');
+    assert.ok((requiredValue(duplicateProjection.rows[0]).cells[0]?.width ?? 0) > 1);
+
+    const fullProjection = projectEvidenceMatrix(
+      ['One', 'Two', 'Three', 'Four', 'Five', 'Six'],
+      Array.from({ length: 10_000 }, (_, index) => ({
+        id: `row-${index}`,
+        label: `Row ${index}`,
+        cells: [],
+      })),
+    );
+    assert.equal(fullProjection.rows.length, MAX_VISUAL_MATRIX_ROWS);
+    assert.equal(fullProjection.projectedCellCount, MAX_VISUAL_MATRIX_CELLS);
+    assert.ok(fullProjection.rows.flatMap((row) => row.cells).every((cell) => cell.width > 1));
+    assert.equal(fullProjection.discarded.rowInputs, 10_000 - MAX_VISUAL_MATRIX_ROWS);
+    assert.equal(fullProjection.truncated, true);
   });
 
   test('creates a deterministic bounded force layout without mutating caller inputs', () => {
@@ -361,12 +416,54 @@ describe('bounded visualization models', () => {
     assert.equal(projected.truncated, true);
     assert.equal(requiredValue(projected.points.at(-1)).total, 28);
     assert.deepEqual(projected.summary, {
-      firstTotal: 5,
-      latestTotal: 28,
-      peakTotal: 28,
-      newlyObserved: 24,
+      first: { value: 5, lowerBound: false, label: '5' },
+      latest: { value: 28, lowerBound: false, label: '28' },
+      peak: { value: 28, lowerBound: true, label: 'At least 28' },
+      newlyObserved: { value: 24, lowerBound: true, label: 'At least 24' },
       partialChecks: 1,
     });
+    assert.equal(projected.segments.some((segment) => (
+      segment.fromId === 'check-20' || segment.toId === 'check-20'
+    )), false);
+    assert.equal(projected.spacing, 'elapsed_time');
+  });
+
+  test('qualifies capped trend endpoints and summaries without inventing adjacent slopes', () => {
+    const projected = projectTrendPoints([
+      { id: 'capped-first', date: '2026-01-01T00:00:00Z', total: 3, added: 0, partial: true },
+      { id: 'complete-a', date: '2026-01-02T00:00:00Z', total: 5, added: 1 },
+      { id: 'complete-b', date: '2026-01-03T00:00:00Z', total: 6, added: 2 },
+      { id: 'capped-latest', date: '2026-01-04T00:00:00Z', total: 4, added: 0, partial: true },
+    ]);
+
+    assert.deepEqual(
+      projected.segments.map(({ fromId, toId }) => [fromId, toId]),
+      [['complete-a', 'complete-b']],
+    );
+    assert.deepEqual(projected.summary, {
+      first: { value: 3, lowerBound: true, label: 'At least 3' },
+      latest: { value: 4, lowerBound: true, label: 'At least 4' },
+      peak: { value: 6, lowerBound: true, label: 'At least 6' },
+      newlyObserved: { value: 3, lowerBound: true, label: 'At least 3' },
+      partialChecks: 2,
+    });
+  });
+
+  test('positions certificate-search checks by elapsed time rather than sequence', () => {
+    const projected = projectTrendPoints([
+      { id: 'first', date: '2026-01-01T00:00:00Z', total: 1, added: 0 },
+      { id: 'near', date: '2026-01-02T00:00:00Z', total: 2, added: 1 },
+      { id: 'far', date: '2026-01-11T00:00:00Z', total: 3, added: 1 },
+    ]);
+    const [first, near, far] = projected.points;
+
+    assert.ok(first && near && far);
+    assert.ok(near.x - first.x < far.x - near.x);
+    assert.equal(projected.elapsed.milliseconds, 10 * 24 * 60 * 60 * 1_000);
+    assert.deepEqual(
+      projected.segments.map(({ fromId, toId }) => [fromId, toId]),
+      [['first', 'near'], ['near', 'far']],
+    );
   });
 
   test('caps retained-monitor events and evidence lanes without erasing zero-change cells', () => {

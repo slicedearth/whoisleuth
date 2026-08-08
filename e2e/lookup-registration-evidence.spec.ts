@@ -214,14 +214,34 @@ test('deep Lookup presents registrar and observed network RDAP as separate sourc
 
   const agreementMatrix = page.locator('.agreement-matrix');
   await expect(agreementMatrix.locator('title').filter({
-    hasText: 'Registry object ID, Registry RDAP: Source-only value: registry-object-handle',
+    hasText: 'Registry object ID, Registry RDAP ↔ WHOIS, Registry RDAP: source state value',
   })).toHaveCount(1);
   await expect(agreementMatrix.locator('title').filter({
-    hasText: 'Registry object ID, Registrar RDAP: not collected',
+    hasText: 'Registry object ID, Registry RDAP ↔ WHOIS, WHOIS: source state incomplete',
   })).toHaveCount(1);
   await expect(agreementMatrix.locator('title').filter({
-    hasText: 'Registry object ID, WHOIS: Incomplete / redacted',
-  })).toHaveCount(1);
+    hasText: 'Registry object ID, Registry RDAP ↔ Registrar RDAP',
+  })).toHaveCount(0);
+  const exactAgreement = agreementMatrix.getByRole('table', { name: 'Exact pairwise registration publication comparisons' });
+  await expect(exactAgreement.getByRole('row', { name: /Registry object ID Registry RDAP ↔ WHOIS/u })).toContainText('Source state value');
+  await expect(exactAgreement.getByRole('row', { name: /Registry object ID Registry RDAP ↔ WHOIS/u })).toContainText('Source state incomplete');
+  await expect(agreementMatrix.locator('title').filter({ hasText: 'Expires, Registry RDAP ↔ WHOIS' })).toHaveCount(2);
+  await expect(agreementMatrix.locator('title').filter({ hasText: 'Expires, Registry RDAP ↔ Registrar RDAP' })).toHaveCount(2);
+  const whoisExpiryLane = exactAgreement.getByRole('row', { name: /Expires Registry RDAP ↔ WHOIS/u });
+  const registrarExpiryLane = exactAgreement.getByRole('row', { name: /Expires Registry RDAP ↔ Registrar RDAP/u });
+  await expect(whoisExpiryLane).toContainText('2030-01-01T00:00:00Z');
+  await expect(whoisExpiryLane).toContainText('Not observed (partial source)');
+  await expect(whoisExpiryLane.getByText('value', { exact: true })).toHaveCount(1);
+  await expect(whoisExpiryLane.getByText('incomplete', { exact: true })).toHaveCount(1);
+  await expect(registrarExpiryLane).toContainText('2030-01-01T00:00:00Z');
+  await expect(registrarExpiryLane).toContainText('2031-01-01');
+  await expect(registrarExpiryLane.getByText('value', { exact: true })).toHaveCount(2);
+  await expect(registrarExpiryLane.getByText('conflict', { exact: true })).toHaveCount(1);
+  const observedPlotMarker = agreementMatrix.locator('.agreement-node.state-observed rect').first();
+  await expect(observedPlotMarker).toBeVisible();
+  const observedLegendMarker = agreementMatrix.locator('.matrix-legend .state-observed span');
+  await expect(observedLegendMarker).toBeVisible();
+  expect(await observedLegendMarker.evaluate((element) => getComputedStyle(element).borderRadius)).toBe('3px');
 
   await page.getByRole('tab', { name: /^Relationships/ }).click();
   const analystPivots = page.locator('details.analyst-pivots');
@@ -399,6 +419,13 @@ test('registrar RDAP unsupported and error states remain neutral source rows', a
     await summary.press('Enter');
     await expect(section).toHaveAttribute('open', '');
     await expect(section.getByText(state.detail, { exact: true })).toBeVisible();
+    const agreementMatrix = page.locator('.agreement-matrix');
+    const unavailablePlotMarker = agreementMatrix.locator('.agreement-node.state-unavailable circle').first();
+    await expect(unavailablePlotMarker).toBeVisible();
+    expect(await unavailablePlotMarker.evaluate((element) => getComputedStyle(element).strokeDasharray)).not.toBe('none');
+    const unavailableLegendMarker = agreementMatrix.locator('.matrix-legend .state-unavailable span');
+    await expect(unavailableLegendMarker).toBeVisible();
+    expect(await unavailableLegendMarker.evaluate((element) => getComputedStyle(element).borderStyle)).toBe('dashed');
     await page.unroute('**/api/lookup?*');
   }
 });

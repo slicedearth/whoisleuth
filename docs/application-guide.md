@@ -157,10 +157,12 @@ limitations. This supports traceability without copying raw responses into the
 graph.
 
 Risk and Opportunity cards show signed factor bars beside their exact factor
-lists. Domain results can also show a connected registration-source agreement
-plot, certificate validity and chain summary, and a bounded service and
-technology map. The agreement plot joins each compared field across
-publications and uses shape, glyph, and state colour together. Observed
+lists. Domain results can also show pairwise registration-source agreement
+lanes, certificate validity and chain summary, and a bounded service and
+technology map. Each agreement lane represents one actual comparison, so a
+field compared in two source pairs is never merged or overwritten. The exact
+source state and value remain in the adjacent table while shape, glyph, and
+state colour provide secondary visual styling. Observed
 lifecycle events use individual colours while their shapes retain the event
 family. These visuals use only evidence already present in the response.
 Source tables, status labels, collection times, provenance, and limitations

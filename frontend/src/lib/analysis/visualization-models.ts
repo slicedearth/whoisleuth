@@ -18,12 +18,14 @@ export type {
   ForceGraphNodeInput,
 } from './visualization-force-graph.ts';
 export {
+  MAX_VISUAL_MATRIX_CELLS,
   MAX_VISUAL_MATRIX_COLUMNS,
   MAX_VISUAL_MATRIX_ROWS,
   projectEvidenceMatrix,
 } from './visualization-matrix.ts';
 export type {
   MatrixCellState,
+  MatrixCellTone,
   MatrixInput,
 } from './visualization-matrix.ts';
 export {

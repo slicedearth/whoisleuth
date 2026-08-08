@@ -32,6 +32,12 @@ the aggregate exceeds the 5 MiB planning reference used by the former
 local-storage design. The model ceilings still apply in IndexedDB so changing
 the backend does not make any collection unbounded.
 
+Certificate Transparency history schema 2 records a bounded per-query count
+when older check summaries are discarded by the event or byte limit. Reaching
+the 20-check capacity is therefore distinct from confirmed pruning. Schema 1
+records remain readable and migrate non-destructively with earlier pruning
+certainty marked unknown rather than invented as zero.
+
 Saved Bulk session schema 3 adds an optional compact comparison envelope to
 each settled Deep row. It retains at most 12 normalised technology identifiers,
 a bounded TLS issuer label, an exact SPKI SHA-256 fingerprint, and independent

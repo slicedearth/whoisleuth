@@ -104,7 +104,7 @@ test('completes the public synthetic workflow without investigation requests or 
   await expect(timingSummary).toContainText('Domain evidence');
   await expect(timingSummary).toContainText('Network context');
   await expect(timingSummary).toContainText('None observed');
-  const agreementPlot = page.getByRole('img', { name: 'Registration agreement plot with 3 fields' });
+  const agreementPlot = page.getByRole('img', { name: 'Pairwise registration agreement plot with 3 source comparison lanes' });
   await expect(agreementPlot).toBeVisible();
   await expect(agreementPlot.locator('.agreement-track')).toHaveCount(3);
   await expect(agreementPlot.locator('.agreement-marker')).toHaveCount(6);
@@ -254,10 +254,10 @@ test('keeps the public demo usable without mobile overflow', async ({ page }) =>
   await expect(page.locator('.score-details details[open] li')).not.toHaveCount(0);
   await expectNoHorizontalOverflow(page);
   await expect(page.locator('.matrix-frame')).toBeHidden();
-  const mobileAgreement = page.getByRole('group', { name: 'Registration agreement for 3 fields' });
+  const mobileAgreement = page.getByRole('table', { name: 'Exact pairwise registration publication comparisons' });
   await expect(mobileAgreement).toBeVisible();
-  await expect(mobileAgreement.locator('article')).toHaveCount(3);
-  await expect(mobileAgreement.locator('li')).toHaveCount(6);
+  await expect(mobileAgreement.locator('tbody tr')).toHaveCount(3);
+  await expect(mobileAgreement.getByText('Source state value')).toHaveCount(6);
   await expect(page.locator('.matrix-legend')).toContainText('Source conflict');
   await expect(page.locator('.matrix-legend')).toContainText('Source-only value');
   await expect(page.locator('.matrix-legend')).toContainText('Incomplete / redacted');

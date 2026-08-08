@@ -34,6 +34,7 @@ function record(
 describe('CT search baselines', () => {
   test('the first complete search creates a baseline without marking everything new', () => {
     const result = record(null, 'Example Brand', ['b.example', 'a.example'], FIRST);
+    assert.equal(result.store.version, history.CT_HISTORY_SCHEMA_VERSION);
     assert.equal(result.comparison.hasBaseline, false);
     assert.equal(result.comparison.newCount, 0);
     assert.equal(result.comparison.baselineUpdated, true);
@@ -92,12 +93,25 @@ describe('CT search baselines', () => {
 describe('CT history retention and recovery', () => {
   test('per-query check history keeps only the newest bounded events', () => {
     let store: NonEmptyStore | null = null;
-    for (let index = 0; index < history.MAX_CT_HISTORY_EVENTS + 3; index++) {
+    for (let index = 0; index < history.MAX_CT_HISTORY_EVENTS; index++) {
       store = record(store, 'example', [`d${index}.example`], new Date(Date.UTC(2026, 0, index + 1)).toISOString()).store;
     }
-    const events = requiredValue(store).entries[0].history;
+    const atCapacity = requiredValue(store).entries[0];
+    assert.equal(atCapacity.history.length, history.MAX_CT_HISTORY_EVENTS);
+    assert.equal(atCapacity.discardedCheckCount, 0);
+    assert.equal(atCapacity.discardedCheckCountKnown, true);
+    assert.equal(atCapacity.discardedCheckCountCapped, false);
+
+    for (let index = history.MAX_CT_HISTORY_EVENTS; index < history.MAX_CT_HISTORY_EVENTS + 3; index++) {
+      store = record(store, 'example', [`d${index}.example`], new Date(Date.UTC(2026, 0, index + 1)).toISOString()).store;
+    }
+    const entry = requiredValue(store).entries[0];
+    const events = entry.history;
     assert.equal(events.length, history.MAX_CT_HISTORY_EVENTS);
     assert.equal(requiredValue(events.at(-1)).checkedAt, new Date(Date.UTC(2026, 0, history.MAX_CT_HISTORY_EVENTS + 3)).toISOString());
+    assert.equal(entry.discardedCheckCount, 3);
+    assert.equal(entry.discardedCheckCountKnown, true);
+    assert.equal(entry.discardedCheckCountCapped, false);
   });
 
   test('the store keeps only the most recently updated search queries', () => {
@@ -123,7 +137,16 @@ describe('CT history retention and recovery', () => {
     }));
     assert.equal(store.entries.length, 1);
     assert.deepStrictEqual(store.entries[0].domains, ['a.example']);
-    assert.deepStrictEqual(Object.keys(store.entries[0]).sort(), ['baselineAt', 'domains', 'history', 'query', 'updatedAt']);
+    assert.deepStrictEqual(Object.keys(store.entries[0]).sort(), [
+      'baselineAt',
+      'discardedCheckCount',
+      'discardedCheckCountCapped',
+      'discardedCheckCountKnown',
+      'domains',
+      'history',
+      'query',
+      'updatedAt',
+    ]);
     assert.deepStrictEqual(Object.keys(requiredValue(requiredValue(store.entries[0]).history[0])).sort(), ['certificateCount', 'checkedAt', 'newCount', 'newDomains', 'resultCount', 'truncated']);
   });
 
@@ -143,10 +166,43 @@ describe('CT history retention and recovery', () => {
     assert.deepStrictEqual(remaining.entries.map((entry) => entry.query), ['two']);
   });
 
-  test('future schema versions can be detected by the storage wrapper', () => {
-    assert.equal(history.ctHistoryStoreVersion({ version: 2 }), 2);
-    assert.equal(history.ctHistoryStoreVersion({ version: '2' }), null);
+  test('schema 1 migrates without inventing pruning certainty', () => {
+    const migrated = nonEmptyStore(history.normalizeCtHistoryStore({
+      version: 1,
+      entries: [{
+        query: 'example',
+        baselineAt: FIRST,
+        updatedAt: FIRST,
+        domains: ['a.example'],
+        history: [{ checkedAt: FIRST, resultCount: 1 }],
+      }],
+    }));
+    assert.equal(migrated.version, 2);
+    assert.equal(migrated.entries[0].discardedCheckCount, 0);
+    assert.equal(migrated.entries[0].discardedCheckCountKnown, false);
+    assert.equal(migrated.entries[0].discardedCheckCountCapped, false);
+  });
+
+  test('future schema versions and bounded discarded counts remain explicit', () => {
+    assert.equal(history.ctHistoryStoreVersion({ version: 3 }), 3);
+    assert.equal(history.ctHistoryStoreVersion({ version: '3' }), null);
     assert.equal(history.ctHistoryStoreVersion(null), null);
+
+    const normalized = nonEmptyStore(history.normalizeCtHistoryStore({
+      version: 2,
+      entries: [{
+        query: 'example',
+        baselineAt: FIRST,
+        updatedAt: FIRST,
+        domains: ['a.example'],
+        history: [{ checkedAt: FIRST, resultCount: 1 }],
+        discardedCheckCount: history.MAX_CT_HISTORY_DISCARDED_CHECKS + 10,
+        discardedCheckCountKnown: true,
+      }],
+    }));
+    assert.equal(normalized.entries[0].discardedCheckCount, history.MAX_CT_HISTORY_DISCARDED_CHECKS);
+    assert.equal(normalized.entries[0].discardedCheckCountKnown, true);
+    assert.equal(normalized.entries[0].discardedCheckCountCapped, true);
   });
 
   test('new-domain details are bounded while the full count is retained', () => {

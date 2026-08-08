@@ -131,7 +131,7 @@ export function buildLookupRegistryDisplay(input: {
     registrarRdapParsed,
     registrarPublicationComparison,
   } = input;
-  const matrixState = (sourceState: string | undefined, comparisonStatus: string): string => {
+  const matrixTone = (sourceState: string | undefined, comparisonStatus: string): string => {
     if (sourceState === 'value') {
       if (comparisonStatus === 'equivalent') return 'equal';
       if (comparisonStatus === 'conflict') return 'conflict';
@@ -147,8 +147,10 @@ export function buildLookupRegistryDisplay(input: {
     rdapValue: field.rdapDisplay,
     whoisValue: field.whoisDisplay,
     status: field.status,
-    rdapMatrixState: matrixState(field.rdapState, field.status),
-    whoisMatrixState: matrixState(field.whoisState, field.status),
+    rdapState: field.rdapState || 'unknown',
+    whoisState: field.whoisState || 'unknown',
+    rdapMatrixTone: matrixTone(field.rdapState, field.status),
+    whoisMatrixTone: matrixTone(field.whoisState, field.status),
     assessment: assessment(field.status),
     tone:
       field.status === 'conflict'
@@ -166,8 +168,10 @@ export function buildLookupRegistryDisplay(input: {
     registryValue: field.registryDisplay,
     registrarValue: field.registrarDisplay,
     status: field.status,
-    registryMatrixState: matrixState(field.registryState, field.status),
-    registrarMatrixState: matrixState(field.registrarState, field.status),
+    registryState: field.registryState || 'unknown',
+    registrarState: field.registrarState || 'unknown',
+    registryMatrixTone: matrixTone(field.registryState, field.status),
+    registrarMatrixTone: matrixTone(field.registrarState, field.status),
     assessment: publicationAssessment(field.status),
     tone:
       field.status === 'conflict'
