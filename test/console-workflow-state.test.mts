@@ -10,7 +10,7 @@ import {
 } from '../frontend/src/lib/console-workflow-state.ts';
 
 const lookupState = Object.freeze({
-  query: 'example.test', lookupMode: 'deep', includeExternalIntelligence: false,
+  query: 'example.test', completedTarget: '', lookupMode: 'deep', includeExternalIntelligence: false,
   includeMalwareHostIntelligence: false, includeMalwareIocIntelligence: false,
   includeSecurityTxt: false, error: '', result: null,
 });

@@ -90,7 +90,7 @@ test('completes the public synthetic workflow without investigation requests or 
   expect(factorChartWidth).toBeGreaterThan(assessmentWidth * 0.75);
   await page.getByText('Why the risk score is 78', { exact: true }).click();
   const demoVisualTabs = page.getByRole('tablist', { name: 'Synthetic relationship and history view' });
-  const demoSourcesTab = demoVisualTabs.getByRole('tab', { name: /^Sources/ });
+  const demoSourcesTab = demoVisualTabs.getByRole('tab', { name: /^Evidence/ });
   await demoSourcesTab.focus();
   await demoSourcesTab.press('End');
   await expect(demoVisualTabs.getByRole('tab', { name: /^Timeline/ })).toBeFocused();

@@ -12,6 +12,7 @@ export type LookupMode = 'fast' | 'deep';
 
 export type LookupWorkflowState = {
   query: string;
+  completedTarget: string;
   lookupMode: LookupMode;
   includeExternalIntelligence: boolean;
   includeMalwareHostIntelligence: boolean;

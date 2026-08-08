@@ -8,8 +8,10 @@
   import InvestigationTemplateManager from '$lib/components/InvestigationTemplateManager.svelte';
   import BrowserLookupHandoff from '$lib/components/BrowserLookupHandoff.svelte';
   import { loadProfiles } from '$lib/brand-profiles';
+  import { loadCampaigns } from '$lib/campaigns';
   import { loadCases } from '$lib/cases';
-  import { loadLocalInvestigationSearchIndex } from '$lib/investigation-search';
+  import { buildLocalInvestigationSearchIndex } from '$lib/investigation-search';
+  import { loadRelationshipObservations } from '$lib/relationship-observations';
   import { loadWatchlists } from '$lib/watchlists';
   import {
     investigationRecipes,
@@ -33,7 +35,9 @@
     { href: '/monitor?view=cases', label: 'Continue case work', detail: 'Return to retained evidence, decisions, response actions, and follow-up dates.', icon: 'case' },
   ];
 
-  let counts = $state({ cases: 0, openCases: 0, watchlists: 0, profiles: 0 });
+  type LocalCounts = { cases: number | null; openCases: number | null; watchlists: number | null; profiles: number | null };
+
+  let counts = $state<LocalCounts>({ cases: null, openCases: null, watchlists: null, profiles: null });
   let investigationIndex = $state<InvestigationSearchIndex | null>(null);
   let summaryPending = $state(true);
   let summaryError = $state('');
@@ -41,6 +45,7 @@
   let guideRecipeId = $state<InvestigationRecipeId>('new_domain_triage');
   let guideTemplateId = $state('');
   let templates = $state<InvestigationTemplate[]>([]);
+  let templateLoadState = $state<'loading' | 'ready' | 'unavailable'>('loading');
   let guideError = $state('');
   let compareLeft = $state('');
   let compareRight = $state('');
@@ -50,30 +55,66 @@
 
   async function refreshLocalSummary() {
     summaryPending = true;
+    templateLoadState = 'loading';
     summaryError = '';
-    try {
-      const [cases, watchlists, profiles, searchIndex, savedTemplates] = await Promise.all([
+    const results = await Promise.allSettled([
         loadCases(),
         loadWatchlists(),
         loadProfiles(),
-        loadLocalInvestigationSearchIndex(),
+        loadCampaigns(),
+        loadRelationshipObservations(),
         loadInvestigationTemplates(),
       ]);
-      counts = {
-        cases: cases.length,
-        openCases: cases.filter((record) => record.status !== 'resolved').length,
-        watchlists: Object.keys(watchlists).length,
-        profiles: profiles.length,
-      };
-      investigationIndex = searchIndex;
-      templates = savedTemplates;
-    } catch (cause) {
-      summaryError = 'Saved-work counts and local search could not be refreshed. Reload the Dashboard to try again.';
-      investigationIndex ??= unavailableInvestigationSearchIndex(summaryError);
-      if (!isExpectedBrowserLocalDataFailure(cause)) throw cause;
-    } finally {
-      summaryPending = false;
+    summaryPending = false;
+    const [caseResult, watchlistResult, profileResult, campaignResult, relationshipResult, templateResult] = results;
+    const expectedFailures = results
+      .filter((result): result is PromiseRejectedResult => result.status === 'rejected')
+      .filter((result) => isExpectedBrowserLocalDataFailure(result.reason));
+    const unexpectedFailure = results.find((result): result is PromiseRejectedResult =>
+      result.status === 'rejected' && !isExpectedBrowserLocalDataFailure(result.reason));
+
+    counts = {
+      cases: caseResult?.status === 'fulfilled' ? caseResult.value.length : null,
+      openCases: caseResult?.status === 'fulfilled' ? caseResult.value.filter((record) => record.status !== 'resolved').length : null,
+      watchlists: watchlistResult?.status === 'fulfilled' ? Object.keys(watchlistResult.value).length : null,
+      profiles: profileResult?.status === 'fulfilled' ? profileResult.value.length : null,
+    };
+    if (templateResult?.status === 'fulfilled') {
+      templates = templateResult.value;
+      templateLoadState = 'ready';
+    } else {
+      templateLoadState = 'unavailable';
+      guideTemplateId = '';
     }
+
+    if (
+      caseResult?.status === 'fulfilled'
+      && campaignResult?.status === 'fulfilled'
+      && profileResult?.status === 'fulfilled'
+      && relationshipResult?.status === 'fulfilled'
+    ) {
+      investigationIndex = buildLocalInvestigationSearchIndex({
+        cases: caseResult.value,
+        campaigns: campaignResult.value,
+        brandProfiles: profileResult.value,
+        relationshipObservations: relationshipResult.value,
+      });
+    } else {
+      investigationIndex = unavailableInvestigationSearchIndex('Saved-work search is unavailable because one or more required browser-local collections could not be read.');
+    }
+    if (expectedFailures.length > 0) {
+      summaryError = 'Some browser-local collections are unavailable. Available saved work is still shown below.';
+    }
+    if (unexpectedFailure) throw unexpectedFailure.reason;
+  }
+
+  function countText(value: number | null): string {
+    return value === null ? (summaryPending ? 'Loading' : 'Unavailable') : String(value);
+  }
+
+  function countDetail(value: number | null, ready: string, unavailable: string): string {
+    if (value !== null) return ready;
+    return summaryPending ? 'Loading browser-local count' : unavailable;
   }
 
   onMount(()=>{
@@ -147,13 +188,13 @@
   </div>
   <div class="local-grid">
     <a class="summary-card card" href="/monitor?view=cases">
-      <span class="summary-icon" aria-hidden="true"><IntelligenceIcon name="case" size={19} /></span><span class="summary-label">Open cases</span><strong>{counts.openCases}</strong><p>{counts.cases} total saved case{counts.cases === 1 ? '' : 's'}</p>
+      <span class="summary-icon" aria-hidden="true"><IntelligenceIcon name="case" size={19} /></span><span class="summary-label">Open cases</span><strong>{countText(counts.openCases)}</strong><p>{countDetail(counts.cases, `${counts.cases} total saved case${counts.cases === 1 ? '' : 's'}`, 'Case count unavailable')}</p>
     </a>
     <a class="summary-card card" href="/monitor?view=watchlists">
-      <span class="summary-icon" aria-hidden="true"><IntelligenceIcon name="watchlist" size={19} /></span><span class="summary-label">Watchlists</span><strong>{counts.watchlists}</strong><p>Saved change-tracking list{counts.watchlists === 1 ? '' : 's'}</p>
+      <span class="summary-icon" aria-hidden="true"><IntelligenceIcon name="watchlist" size={19} /></span><span class="summary-label">Watchlists</span><strong>{countText(counts.watchlists)}</strong><p>{countDetail(counts.watchlists, `Saved change-tracking list${counts.watchlists === 1 ? '' : 's'}`, 'Watchlist count unavailable')}</p>
     </a>
     <a class="summary-card card" href="/brands">
-      <span class="summary-icon" aria-hidden="true"><IntelligenceIcon name="brand" size={19} /></span><span class="summary-label">Brand profiles</span><strong>{counts.profiles}</strong><p>Saved analysis profile{counts.profiles === 1 ? '' : 's'}</p>
+      <span class="summary-icon" aria-hidden="true"><IntelligenceIcon name="brand" size={19} /></span><span class="summary-label">Brand profiles</span><strong>{countText(counts.profiles)}</strong><p>{countDetail(counts.profiles, `Saved analysis profile${counts.profiles === 1 ? '' : 's'}`, 'Profile count unavailable')}</p>
     </a>
   </div>
   <p class="summary-error" role="status">{summaryError}</p>
@@ -198,13 +239,13 @@
     </select>
     <p class="recipe-detail">{selectedRecipe?.summary ?? ''}</p>
     <label for="guide-template">Template</label>
-    <select id="guide-template" bind:value={guideTemplateId}>
+    <select id="guide-template" bind:value={guideTemplateId} disabled={templateLoadState !== 'ready'}>
       <option value="">Standard guide</option>
       {#each compatibleTemplates as template}
         <option value={template.id}>{template.label}</option>
       {/each}
     </select>
-    <p class="recipe-detail">{guideTemplateId ? 'Uses your saved local labels, guidance, included steps, and additional approval gates.' : 'Uses the reviewed standard steps.'}</p>
+    <p class="recipe-detail">{templateLoadState === 'unavailable' ? 'Saved templates are unavailable; the reviewed standard steps remain available.' : guideTemplateId ? 'Uses your saved local labels, guidance, included steps, and additional approval gates.' : 'Uses the reviewed standard steps.'}</p>
     <label for="guide-domain">{selectedRecipe?.targetLabel ?? 'Domain'}</label>
     <div class="guide-input">
       <input id="guide-domain" bind:value={guideDomain} maxlength="253" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="example.test">
@@ -215,7 +256,7 @@
   </form>
 </section>
 
-<InvestigationTemplateManager {templates} onchange={(value) => { templates = value; if (!value.some((item) => item.id === guideTemplateId)) guideTemplateId = ''; }} />
+<InvestigationTemplateManager {templates} loadState={templateLoadState} onchange={(value) => { templates = value; if (!value.some((item) => item.id === guideTemplateId)) guideTemplateId = ''; }} />
 
 <WorkspaceArchive onimport={refreshLocalSummary} />
 

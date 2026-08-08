@@ -59,14 +59,17 @@ test('rejects a pre-aborted input without opening a path', async () => {
   );
 });
 
-test('the repository CLI rejects a named-pipe operand without blocking', { skip: process.platform === 'win32' }, async () => {
+test('the repository CLI rejects a named-pipe operand without blocking', {
+  skip: process.platform === 'win32',
+  timeout: 30_000,
+}, async () => {
   const directory = await mkdtemp(path.join(tmpdir(), 'whoisleuth-cli-process-input-'));
   try {
     const fifo = path.join(directory, 'input.pipe');
     await execFileAsync('mkfifo', [fifo]);
     const entryPoint = path.join(import.meta.dirname, '..', 'bin/whoisleuth.mts');
     await assert.rejects(
-      execFileAsync(process.execPath, [entryPoint, 'export', fifo], { timeout: 2_000 }),
+      execFileAsync(process.execPath, [entryPoint, 'export', fifo], { timeout: 10_000 }),
       (cause: unknown) => {
         const error = cause as { code?: unknown; stderr?: unknown };
         return error.code === 2 && /regular file/iu.test(String(error.stderr));

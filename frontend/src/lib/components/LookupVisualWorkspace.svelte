@@ -39,9 +39,9 @@
   } = $props();
 
   const datedEventCount = $derived(events.filter((event) => typeof event.date === 'string' && Number.isFinite(Date.parse(event.date))).length);
-  const mappedSourceCount = $derived(projectEvidenceTopology(target, nodes).nodes.length);
+  const mappedEvidenceCount = $derived(projectEvidenceTopology(target, nodes).nodes.length);
   const options = $derived([
-    { id: 'sources' as const, label: 'Sources', count: mappedSourceCount },
+    { id: 'sources' as const, label: 'Evidence', count: mappedEvidenceCount },
     { id: 'relationships' as const, label: 'Relationships', count: graph.edges.length },
     { id: 'timeline' as const, label: 'Timeline', count: datedEventCount },
   ]);

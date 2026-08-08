@@ -6,7 +6,6 @@
 // without making a network request.
 
 import { createHash } from 'node:crypto';
-import { open } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -25,6 +24,7 @@ import {
   type TechnologyReviewedSource,
 } from '../fixtures/technology-reviewed-sources.mts';
 import { extractHtmlSignals } from '../lib/html-signals.mts';
+import { readBoundedRegularFile } from '../lib/bounded-file.mts';
 import { normalizeBoundedSemanticVersion } from '../lib/semantic-version.mts';
 import {
   PASSIVE_TECHNOLOGY_HEADER_NAMES,
@@ -500,20 +500,23 @@ export function parseArguments(args: readonly string[]): ExampleReviewArguments 
 }
 
 async function readBoundedHtml(inputPath: string): Promise<string> {
-  const handle = await open(inputPath, 'r');
   try {
-    const buffer = Buffer.alloc(MAX_TECHNOLOGY_EXAMPLE_HTML_BYTES + 1);
-    const { bytesRead } = await handle.read(buffer, 0, buffer.byteLength, 0);
-    if (!bytesRead || bytesRead > MAX_TECHNOLOGY_EXAMPLE_HTML_BYTES) {
-      throw new TypeError(`Reference HTML must be between 1 byte and ${MAX_TECHNOLOGY_EXAMPLE_HTML_BYTES} bytes.`);
-    }
+    const buffer = await readBoundedRegularFile(inputPath, {
+      minimumBytes: 1,
+      maximumBytes: MAX_TECHNOLOGY_EXAMPLE_HTML_BYTES,
+      label: 'Reference HTML',
+      allowSymbolicLink: true,
+    });
     try {
-      return new TextDecoder('utf-8', { fatal: true }).decode(buffer.subarray(0, bytesRead));
+      return new TextDecoder('utf-8', { fatal: true }).decode(buffer);
     } catch {
       throw new TypeError('Reference HTML must use valid UTF-8 encoding.');
     }
-  } finally {
-    await handle.close();
+  } catch (error) {
+    if (error instanceof TypeError && /smaller than|exceeds/iu.test(error.message)) {
+      throw new TypeError(`Reference HTML must be between 1 byte and ${MAX_TECHNOLOGY_EXAMPLE_HTML_BYTES} bytes.`);
+    }
+    throw error;
   }
 }
 

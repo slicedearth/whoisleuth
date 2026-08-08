@@ -1,7 +1,8 @@
 import { createHash } from 'node:crypto';
-import { readFile, stat, writeFile } from 'node:fs/promises';
+import { writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { readBoundedRegularFile } from '../lib/bounded-file.mts';
 
 const SOURCE_VERSION = '2026.08.03';
 const SOURCE_RELEASED_AT = '2026-08-03T18:55:09.067Z';
@@ -42,11 +43,16 @@ function parseArguments(args: readonly string[]): { mode: CatalogMode; source: s
 }
 
 async function readBoundedText(filename: string, maxBytes: number): Promise<string> {
-  const metadata = await stat(filename);
-  if (!metadata.isFile() || metadata.size > maxBytes) {
+  try {
+    return (await readBoundedRegularFile(filename, {
+      minimumBytes: 1,
+      maximumBytes: maxBytes,
+      label: 'Pinned KEV source',
+      allowSymbolicLink: true,
+    })).toString('utf8');
+  } catch {
     throw new TypeError(`${filename} is missing or exceeds its byte limit.`);
   }
-  return readFile(filename, 'utf8');
 }
 
 function projectCatalogue(value: unknown, expectedVersion: string, expectedReleasedAt: string): string[] {

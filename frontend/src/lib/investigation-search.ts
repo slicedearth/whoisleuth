@@ -11,6 +11,14 @@ import {
   type InvestigationSearchIndex,
 } from './analysis/investigation-search.ts';
 import type { InvestigationProjection } from './analysis/investigation-projection.ts';
+import type { InvestigationProjectionInput } from './analysis/investigation-projection.ts';
+
+/** Builds the disposable index from already loaded browser-local collections. */
+export function buildLocalInvestigationSearchIndex(
+  collections: InvestigationProjectionInput,
+): InvestigationSearchIndex {
+  return buildInvestigationSearchIndex(buildInvestigationProjection(collections));
+}
 
 /** Builds a disposable projection from the current browser's bounded stores. */
 export async function loadLocalInvestigationProjection(): Promise<InvestigationProjection> {
@@ -26,23 +34,4 @@ export async function loadLocalInvestigationProjection(): Promise<InvestigationP
     brandProfiles,
     relationshipObservations,
   });
-}
-
-/** Builds the relationship workspace projection without unrelated profile data. */
-export async function loadLocalCaseInvestigationProjection(): Promise<InvestigationProjection> {
-  const [cases, campaigns, relationshipObservations] = await Promise.all([
-    loadCases(),
-    loadCampaigns(),
-    loadRelationshipObservations(),
-  ]);
-  return buildInvestigationProjection({
-    cases,
-    campaigns,
-    relationshipObservations,
-  });
-}
-
-/** Builds a disposable in-memory index from the current browser's local stores. */
-export async function loadLocalInvestigationSearchIndex(): Promise<InvestigationSearchIndex> {
-  return buildInvestigationSearchIndex(await loadLocalInvestigationProjection());
 }

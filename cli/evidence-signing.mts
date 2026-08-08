@@ -16,6 +16,8 @@ import {
 
 export const SIGNED_EVIDENCE_PACKAGE_SCHEMA = 'whoisleuth.signed-evidence-package';
 export const SIGNED_EVIDENCE_PACKAGE_VERSION = 1;
+export const EVIDENCE_SIGNATURE_VERIFICATION_SCHEMA = 'whoisleuth.evidence-signature-verification';
+export const EVIDENCE_SIGNATURE_VERIFICATION_VERSION = 1;
 export const EVIDENCE_SIGNATURE_ALGORITHM = 'Ed25519';
 export const EVIDENCE_SIGNATURE_CANONICALIZATION = 'sorted-json-v1';
 export const MAX_SIGNING_KEY_FILE_BYTES = 16 * 1024;
@@ -37,8 +39,8 @@ export type SignedEvidencePackage = SignedPayload & Readonly<{
   }>;
 }>;
 export type EvidenceSignatureVerification = Readonly<{
-  schema: 'whoisleuth.evidence-signature-verification';
-  version: 1;
+  schema: typeof EVIDENCE_SIGNATURE_VERIFICATION_SCHEMA;
+  version: typeof EVIDENCE_SIGNATURE_VERIFICATION_VERSION;
   valid: true;
   state: 'signature_valid';
   signerTrust: 'trusted_key' | 'embedded_key_only';
@@ -239,8 +241,8 @@ export async function verifyEvidencePackageSignature(
     if (!publicKeyMatched) throw new TypeError('Signed evidence package does not match the trusted public key.');
   }
   return Object.freeze({
-    schema: 'whoisleuth.evidence-signature-verification',
-    version: 1,
+    schema: EVIDENCE_SIGNATURE_VERIFICATION_SCHEMA,
+    version: EVIDENCE_SIGNATURE_VERIFICATION_VERSION,
     valid: true,
     state: 'signature_valid',
     signerTrust: trustedPublicKeyPem ? 'trusted_key' : 'embedded_key_only',

@@ -1,10 +1,28 @@
 <script lang="ts">
-  import { safeOfficialRegistryLookupUrl } from '$lib/analysis/registry-support.ts';
+  import { officialRegistryLookupFor } from '$lib/analysis/registry-support.ts';
 
-  let { access }: { access: Record<string, unknown> } = $props();
+  let { access, lookupTarget }: { access: Record<string, unknown>; lookupTarget: string } = $props();
 
   const text = (value: unknown) => typeof value === 'string' ? value : '';
-  const suffix = $derived(text(access.suffix).toUpperCase());
+  const normalisedSuffix = $derived((() => {
+    const value = text(access.suffix).trim().toLowerCase().replace(/^\./u, '');
+    return /^[a-z0-9-]{1,63}$/u.test(value) ? value : '';
+  })());
+  const expectedSuffix = $derived((() => {
+    const supplied = text(lookupTarget).trim();
+    if (!supplied || supplied.length > 2048) return '';
+    let hostname = supplied;
+    try {
+      hostname = new URL(/^[a-z][a-z\d+.-]*:\/\//iu.test(supplied) ? supplied : `https://${supplied}`).hostname;
+    } catch {
+      return '';
+    }
+    const labels = hostname.toLowerCase().replace(/\.+$/u, '').split('.');
+    const value = labels.at(-1) ?? '';
+    return /^[a-z0-9-]{1,63}$/u.test(value) ? value : '';
+  })());
+  const accessMatchesTarget = $derived(Boolean(expectedSuffix && expectedSuffix === normalisedSuffix));
+  const suffix = $derived(normalisedSuffix.toUpperCase());
   const whoisAccess = $derived(text(access.whoisAccessProfile));
   const rdapAccess = $derived(text(access.rdapAccessProfile));
   const whoisLabel = $derived(whoisAccess === 'source-ip-authorization-required'
@@ -20,7 +38,9 @@
   const whoisRestricted = $derived(['source-ip-authorization-required', 'registry-policy-restricted'].includes(whoisAccess));
   const hasWhoisPath = $derived(whoisAccess !== 'no-iana-service');
   const hasRdapPath = $derived(rdapAccess !== 'no-iana-service');
-  const officialLookupUrl = $derived(safeOfficialRegistryLookupUrl(access.officialLookupUrl));
+  // Navigation is always derived from the locally reviewed catalogue. The
+  // response field remains evidence context and cannot choose a destination.
+  const officialLookupUrl = $derived(accessMatchesTarget ? officialRegistryLookupFor(expectedSuffix) : null);
   const expectedConstraint = $derived(!whoisRestricted);
   const stateLabel = $derived(whoisRestricted
     ? 'Restricted access'
@@ -44,11 +64,12 @@
           : 'Review the stated collection constraint before interpreting missing registry evidence.');
 </script>
 
+{#if accessMatchesTarget}
 <section class="registry-access card" class:expected={expectedConstraint} aria-labelledby="registry-access-title">
   <header>
     <div>
       <p class="eyebrow">Registry access</p>
-      <h4 id="registry-access-title">.{suffix} collection constraints</h4>
+      <h4 id="registry-access-title">{suffix ? `.${suffix} collection constraints` : 'Registry collection constraints'}</h4>
     </div>
     <span class="badge">{stateLabel}</span>
   </header>
@@ -69,6 +90,7 @@
   {/if}
   <p class="note">This is access-policy context only. It does not decide registration, availability, safety, or maliciousness.</p>
 </section>
+{/if}
 
 <style>
   .registry-access{padding:var(--card-pad);border-color:color-mix(in srgb,var(--amber) 38%,var(--border));background:color-mix(in srgb,var(--panel) 94%,var(--amber))}

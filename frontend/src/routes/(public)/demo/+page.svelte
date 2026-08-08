@@ -34,15 +34,15 @@
 
   type View='dashboard'|'brands'|'discover'|'bulk'|'lookup'|'monitor';
   type CandidateFilter='all'|'high'|'related';
-  type DemoVisualView='sources'|'relationships'|'timeline';
+  type DemoVisualView='evidence'|'relationships'|'timeline';
 
   let demoState:ReturnType<typeof createSyntheticDemoState>=$state(createSyntheticDemoState());
   let view=$state<View>('dashboard');
   let message=$state('');
   let candidateFilter=$state<CandidateFilter>('all');
   let relatedDomains=$state<string[]>([]);
-  let demoVisualView=$state<DemoVisualView>('sources');
-  const demoVisualTabs:readonly DemoVisualView[]=['sources','relationships','timeline'];
+  let demoVisualView=$state<DemoVisualView>('evidence');
+  const demoVisualTabs:readonly DemoVisualView[]=['evidence','relationships','timeline'];
   const selected=$derived(syntheticDemoCandidate(demoState.selectedCandidateId));
   const candidates=$derived(candidateFilter==='high'
     ?SYNTHETIC_DEMO_CANDIDATES.filter((candidate)=>candidate.risk>=70)
@@ -169,14 +169,14 @@
   function start(){save({started:true},'Guided synthetic investigation started.');view='brands';}
   function loadProfile(){save({profileReady:true},'Synthetic profile loaded. No production profile was created.');view='discover';}
   function generate(){save({candidatesReady:true},'Loaded three fixed synthetic candidates without making an investigation request.');view='bulk';}
-  function inspect(id:string){save({selectedCandidateId:id,caseReady:false,caseStatus:'new',note:'',followUpReady:false},'Opened bounded fixture evidence.');demoVisualView='sources';view='lookup';}
+  function inspect(id:string){save({selectedCandidateId:id,caseReady:false,caseStatus:'new',note:'',followUpReady:false},'Opened bounded fixture evidence.');demoVisualView='evidence';view='lookup';}
   function openCase(){save({caseReady:true},'Created an isolated synthetic case in this tab only.');view='monitor';}
   function loadFollowUp(){save({followUpReady:true,caseStatus:'monitoring'},'Loaded a fixed later observation without making an investigation request.');}
   function loadRelated(domains:string[]){relatedDomains=[...domains];candidateFilter='related';message=`Focused ${domains.length} synthetic related domains.`;}
   function updateCase(patch:Record<string,unknown>,announce=true){save(patch,announce?'Synthetic case updated.':undefined);}
   function shortDate(value:string|null){return value?value.slice(0,10):'Not observed';}
   function formatDate(value:string){return value.slice(0,10);}
-  function reset(){demoState=createSyntheticDemoState();view='dashboard';candidateFilter='all';relatedDomains=[];demoVisualView='sources';try{sessionStorage.removeItem(SYNTHETIC_DEMO_STORAGE_KEY);message='Synthetic demo reset.';}catch{message='Demo reset in memory, but tab storage could not be cleared. Closing this tab will remove its demo state.';}}
+  function reset(){demoState=createSyntheticDemoState();view='dashboard';candidateFilter='all';relatedDomains=[];demoVisualView='evidence';try{sessionStorage.removeItem(SYNTHETIC_DEMO_STORAGE_KEY);message='Synthetic demo reset.';}catch{message='Demo reset in memory, but tab storage could not be cleared. Closing this tab will remove its demo state.';}}
   function exportCase(){const payload=buildSyntheticDemoExport(demoState,new Date().toISOString());const url=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}));const anchor=document.createElement('a');anchor.href=url;anchor.download='whoisleuth-synthetic-demo-case.json';anchor.click();URL.revokeObjectURL(url);message='Synthetic case report created. It is clearly marked as demonstration data.';}
 </script>
 
@@ -287,14 +287,14 @@
 
     <section class="demo-result-section" id="demo-relationships" aria-labelledby="demo-relationships-title">
       <h3 id="demo-relationships-title">Relationships &amp; history</h3>
-      <p class="section-copy">Switch between provenance, a bounded relationship lead, and dated observations without repeating the same evidence.</p>
+      <p class="section-copy">Switch between attributed evidence, a bounded relationship lead, and dated observations without repeating the same evidence.</p>
       <div class="demo-visual-switcher card" role="tablist" aria-label="Synthetic relationship and history view">
-        <button id="demo-visual-tab-sources" type="button" role="tab" aria-selected={demoVisualView==='sources'} aria-controls="demo-visual-panel" tabindex={demoVisualView==='sources'?0:-1} class:active={demoVisualView==='sources'} onclick={()=>demoVisualView='sources'} onkeydown={demoVisualTabKeydown}>Sources <span>{lookupTopologyNodes.length}</span></button>
+        <button id="demo-visual-tab-evidence" type="button" role="tab" aria-selected={demoVisualView==='evidence'} aria-controls="demo-visual-panel" tabindex={demoVisualView==='evidence'?0:-1} class:active={demoVisualView==='evidence'} onclick={()=>demoVisualView='evidence'} onkeydown={demoVisualTabKeydown}>Evidence <span>{lookupTopologyNodes.length}</span></button>
         <button id="demo-visual-tab-relationships" type="button" role="tab" aria-selected={demoVisualView==='relationships'} aria-controls="demo-visual-panel" tabindex={demoVisualView==='relationships'?0:-1} class:active={demoVisualView==='relationships'} onclick={()=>demoVisualView='relationships'} onkeydown={demoVisualTabKeydown}>Relationships <span>{selected.relationship?1:0}</span></button>
         <button id="demo-visual-tab-timeline" type="button" role="tab" aria-selected={demoVisualView==='timeline'} aria-controls="demo-visual-panel" tabindex={demoVisualView==='timeline'?0:-1} class:active={demoVisualView==='timeline'} onclick={()=>demoVisualView='timeline'} onkeydown={demoVisualTabKeydown}>Timeline <span>{lookupLifecycleEvents.length}</span></button>
       </div>
       <div id="demo-visual-panel" class="demo-visual-panel" role="tabpanel" aria-labelledby={`demo-visual-tab-${demoVisualView}`}>
-        {#if demoVisualView==='sources'}
+        {#if demoVisualView==='evidence'}
           <div class="shared-evidence visual-summary"><EvidenceTopology id="demo-evidence-topology" title="Where this result came from" description="Jump to separately attributed fixture evidence. Missing or inconclusive sources remain explicit." target={{label:selected.domain,detail:'Synthetic domain lookup',status:selected.availability}} nodes={lookupTopologyNodes} /></div>
         {:else if demoVisualView==='relationships'}
           {#if selected.relationship}<div class="limitation info"><strong>Relationship lead</strong><p>{selected.relationship.label} <code>{selected.relationship.value}</code> appears in {selected.relationship.relatedCandidates} synthetic candidates. Shared infrastructure is not proof of common ownership.</p></div>{:else}<div class="limitation info"><strong>No relationship lead in this fixture</strong><p>That absence only describes this fixed dataset.</p></div>{/if}

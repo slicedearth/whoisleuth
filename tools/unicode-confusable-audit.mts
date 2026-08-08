@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 
-import { readFile, stat, writeFile } from 'node:fs/promises';
+import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { domainToASCII, fileURLToPath } from 'node:url';
+import { readBoundedRegularFile } from '../lib/bounded-file.mts';
 
 import {
   GENERATED_CONFUSABLE_GROUPS,
@@ -331,11 +332,16 @@ export function parseArguments(args: readonly string[]): AuditArguments {
 }
 
 async function readBoundedSource(filename: string): Promise<string> {
-  const metadata = await stat(filename);
-  if (!metadata.isFile() || metadata.size === 0 || metadata.size > MAX_CONFUSABLE_SOURCE_BYTES) {
+  try {
+    return (await readBoundedRegularFile(filename, {
+      minimumBytes: 1,
+      maximumBytes: MAX_CONFUSABLE_SOURCE_BYTES,
+      label: 'Unicode confusables source',
+      allowSymbolicLink: true,
+    })).toString('utf8');
+  } catch {
     throw new TypeError('Unicode confusables source is missing or exceeds the byte limit.');
   }
-  return readFile(filename, 'utf8');
 }
 
 function checkedInProjectionShape() {

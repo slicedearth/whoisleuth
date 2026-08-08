@@ -1,8 +1,9 @@
 import { createHash } from 'node:crypto';
-import { readFile, stat, writeFile } from 'node:fs/promises';
+import { writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Worker } from 'node:worker_threads';
+import { readBoundedRegularFile } from '../lib/bounded-file.mts';
 
 import * as retire from 'retire';
 
@@ -231,11 +232,16 @@ function parseArguments(args: readonly string[]): { mode: CatalogMode; source: s
 }
 
 async function readBoundedText(filename: string, maxBytes: number): Promise<string> {
-  const metadata = await stat(filename);
-  if (!metadata.isFile() || metadata.size > maxBytes) {
+  try {
+    return (await readBoundedRegularFile(filename, {
+      minimumBytes: 1,
+      maximumBytes: maxBytes,
+      label: 'Pinned browser-library source',
+      allowSymbolicLink: true,
+    })).toString('utf8');
+  } catch {
     throw new TypeError(`${filename} is missing or exceeds its byte limit.`);
   }
-  return readFile(filename, 'utf8');
 }
 
 function projectSource(sourceText: string): UnknownRecord {

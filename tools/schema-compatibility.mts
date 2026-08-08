@@ -18,6 +18,36 @@ import {
   CLI_TLS_SCHEMA,
   CLI_TLS_SCHEMA_VERSION,
 } from '../cli/formatters/json.mts';
+import { DOCTOR_SCHEMA, DOCTOR_VERSION } from '../cli/doctor.mts';
+import {
+  CLI_COMMAND_CATALOGUE_SCHEMA,
+  CLI_COMMAND_CATALOGUE_VERSION,
+} from '../cli/command-catalogue.mts';
+import { CLI_LOOKUP_PLAN_SCHEMA, CLI_LOOKUP_PLAN_VERSION } from '../cli/lookup-plan.mts';
+import {
+  CLI_LOOKUP_TIMELINE_SCHEMA,
+  CLI_LOOKUP_TIMELINE_VERSION,
+  MAX_LOOKUP_TIMELINE_INPUT_BYTES,
+} from '../cli/lookup-timeline.mts';
+import {
+  CLI_MAIL_REVIEW_SCHEMA,
+  CLI_MAIL_REVIEW_VERSION,
+  MAX_MAIL_REVIEW_INPUT_BYTES,
+} from '../cli/mail-review.mts';
+import { CLI_PAGE_COMPARE_SCHEMA, CLI_PAGE_COMPARE_VERSION } from '../cli/page-compare.mts';
+import { ARCHIVE_INSPECTION_SCHEMA, ARCHIVE_INSPECTION_VERSION } from '../cli/archive-inspect.mts';
+import {
+  MAX_OFFLINE_ARTIFACT_BYTES,
+  OFFLINE_ARTIFACT_VERIFICATION_SCHEMA,
+  OFFLINE_ARTIFACT_VERIFICATION_VERSION,
+} from '../cli/artifact-verify.mts';
+import {
+  EVIDENCE_SIGNATURE_VERIFICATION_SCHEMA,
+  EVIDENCE_SIGNATURE_VERIFICATION_VERSION,
+  SIGNED_EVIDENCE_PACKAGE_SCHEMA,
+  SIGNED_EVIDENCE_PACKAGE_VERSION,
+} from '../cli/evidence-signing.mts';
+import { LOCAL_MMDB_QUERY_SCHEMA, LOCAL_MMDB_QUERY_VERSION } from '../cli/local-mmdb-review.mts';
 import {
   REGISTRY_STANDARDS_COVERAGE_SCHEMA,
   REGISTRY_SUPPORT_SCHEMA,
@@ -181,9 +211,16 @@ import {
   MAX_SOURCE_RELIABILITY_INPUT_BYTES,
 } from '../cli/source-reliability.mts';
 import {
+  DNSSEC_EVIDENCE_INPUT_SCHEMA,
+  ENCRYPTED_DNS_PLAN_INPUT_SCHEMA,
+  LOCAL_GEOIP_QUERY_SCHEMA,
   MAX_OFFLINE_EVIDENCE_INPUT_BYTES,
+  OFFLINE_EVIDENCE_INPUT_VERSION,
   OFFLINE_EVIDENCE_REVIEW_SCHEMA,
   OFFLINE_EVIDENCE_REVIEW_VERSION,
+  RDAP_SEARCH_INPUT_SCHEMA,
+  RPKI_ROUTE_INPUT_SCHEMA,
+  TLSA_EVIDENCE_INPUT_SCHEMA,
 } from '../cli/offline-evidence-review.mts';
 import {
   BRAND_PROFILE_SCHEMA,
@@ -517,6 +554,23 @@ const ENTRIES: SchemaCompatibilityEntry[] = [
   entry({ id: 'export.misp-indicators', kind: 'export', schema: null, currentVersion: MISP_INDICATOR_EXPORT_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'frontend/src/lib/analysis/misp-indicator-export.ts', note: 'Unpublished, non-IDS, non-correlating event for reviewed import.' }),
   entry({ id: 'export.synthetic-demo', kind: 'export', schema: SYNTHETIC_DEMO_EXPORT_SCHEMA, currentVersion: SYNTHETIC_DEMO_EXPORT_VERSION, supportedVersions: [2, 3, 4, 5], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'frontend/src/lib/analysis/demo-model.ts', note: 'Explicitly synthetic fixed-fixture package, never live evidence.' }),
   entry({ id: 'cli.lookup', kind: 'cli_document', schema: CLI_LOOKUP_SCHEMA, currentVersion: CLI_LOOKUP_SCHEMA_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: MAX_SAVED_LOOKUP_INPUT_BYTES, owner: 'cli/formatters/json.mts', note: 'Saved domain lookups are parsed for compare and evidence export only at the exact current version.' }),
+  entry({ id: 'cli.doctor', kind: 'cli_document', schema: DOCTOR_SCHEMA, currentVersion: DOCTOR_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'cli/doctor.mts', note: 'Bounded runtime and optional explicitly approved network-diagnostic report; normal operation remains offline.' }),
+  entry({ id: 'cli.command-catalogue', kind: 'cli_document', schema: CLI_COMMAND_CATALOGUE_SCHEMA, currentVersion: CLI_COMMAND_CATALOGUE_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'cli/command-catalogue.mts', note: 'Installed command, usage, collection-mode, and boundary catalogue without target or evidence values.' }),
+  entry({ id: 'cli.lookup-plan', kind: 'cli_document', schema: CLI_LOOKUP_PLAN_SCHEMA, currentVersion: CLI_LOOKUP_PLAN_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'cli/lookup-plan.mts', note: 'Request-free preview of the sources and disclosures associated with an analyst-selected lookup mode.' }),
+  entry({ id: 'cli.lookup-timeline', kind: 'cli_document', schema: CLI_LOOKUP_TIMELINE_SCHEMA, currentVersion: CLI_LOOKUP_TIMELINE_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: MAX_LOOKUP_TIMELINE_INPUT_BYTES, owner: 'cli/lookup-timeline.mts', note: 'Offline chronological comparison of bounded same-domain saved observations; missing fields and unavailable evidence remain explicit.' }),
+  entry({ id: 'cli.mail-review', kind: 'cli_document', schema: CLI_MAIL_REVIEW_SCHEMA, currentVersion: CLI_MAIL_REVIEW_VERSION, supportedVersions: [2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: MAX_MAIL_REVIEW_INPUT_BYTES, owner: 'cli/mail-review.mts', note: 'Offline passive mail and DANE review over bounded saved lookup inputs; it makes no SMTP connection.' }),
+  entry({ id: 'cli.page-compare', kind: 'cli_document', schema: CLI_PAGE_COMPARE_SCHEMA, currentVersion: CLI_PAGE_COMPARE_VERSION, supportedVersions: [2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: MAX_SAVED_LOOKUP_INPUT_BYTES, owner: 'cli/page-compare.mts', note: 'Offline comparison of two bounded deep-lookup page identity, technology, favicon, TLS, and response observations.' }),
+  entry({ id: 'cli.workspace-archive-inspection', kind: 'cli_document', schema: ARCHIVE_INSPECTION_SCHEMA, currentVersion: ARCHIVE_INSPECTION_VERSION, supportedVersions: [2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: MAX_OFFLINE_ARTIFACT_BYTES, owner: 'cli/archive-inspect.mts', note: 'Offline bounded archive summary and deliberate redacted search report; it does not reveal retained values unless explicitly requested.' }),
+  entry({ id: 'cli.offline-artifact-verification', kind: 'cli_document', schema: OFFLINE_ARTIFACT_VERIFICATION_SCHEMA, currentVersion: OFFLINE_ARTIFACT_VERIFICATION_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: MAX_OFFLINE_ARTIFACT_BYTES, owner: 'cli/artifact-verify.mts', note: 'Integrity and structure report for one supported local artefact; verification remains distinct from evidence truth and full browser importability.' }),
+  entry({ id: 'cli.signed-evidence-package', kind: 'cli_document', schema: SIGNED_EVIDENCE_PACKAGE_SCHEMA, currentVersion: SIGNED_EVIDENCE_PACKAGE_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: MAX_OFFLINE_ARTIFACT_BYTES, owner: 'cli/evidence-signing.mts', note: 'Locally signed canonical review artefact with an embedded Ed25519 public key; signer trust still requires a separately authenticated key path.' }),
+  entry({ id: 'cli.evidence-signature-verification', kind: 'cli_document', schema: EVIDENCE_SIGNATURE_VERIFICATION_SCHEMA, currentVersion: EVIDENCE_SIGNATURE_VERIFICATION_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: MAX_OFFLINE_ARTIFACT_BYTES, owner: 'cli/evidence-signing.mts', note: 'Local signature verification report that separates cryptographic validity from signer identity and evidence accuracy.' }),
+  entry({ id: 'cli.local-mmdb-query-input', kind: 'cli_document', schema: LOCAL_MMDB_QUERY_SCHEMA, currentVersion: LOCAL_MMDB_QUERY_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: MAX_OFFLINE_EVIDENCE_INPUT_BYTES, owner: 'cli/local-mmdb-review.mts', note: 'Local analyst-supplied address and database provenance metadata; the database and address are not transmitted.' }),
+  entry({ id: 'cli.rdap-search-input', kind: 'cli_document', schema: RDAP_SEARCH_INPUT_SCHEMA, currentVersion: OFFLINE_EVIDENCE_INPUT_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: MAX_OFFLINE_EVIDENCE_INPUT_BYTES, owner: 'cli/offline-evidence-review.mts', note: 'Offline RDAP search help, request plan and optional retained response inspection input.' }),
+  entry({ id: 'cli.dnssec-evidence-input', kind: 'cli_document', schema: DNSSEC_EVIDENCE_INPUT_SCHEMA, currentVersion: OFFLINE_EVIDENCE_INPUT_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: MAX_OFFLINE_EVIDENCE_INPUT_BYTES, owner: 'cli/offline-evidence-review.mts', note: 'Offline source-qualified DNSSEC evidence input; it does not perform validation requests.' }),
+  entry({ id: 'cli.tlsa-evidence-input', kind: 'cli_document', schema: TLSA_EVIDENCE_INPUT_SCHEMA, currentVersion: OFFLINE_EVIDENCE_INPUT_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: MAX_OFFLINE_EVIDENCE_INPUT_BYTES, owner: 'cli/offline-evidence-review.mts', note: 'Offline TLSA and certificate-material review input; unsupported or incomplete chains remain explicit.' }),
+  entry({ id: 'cli.rpki-route-input', kind: 'cli_document', schema: RPKI_ROUTE_INPUT_SCHEMA, currentVersion: OFFLINE_EVIDENCE_INPUT_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: MAX_OFFLINE_EVIDENCE_INPUT_BYTES, owner: 'cli/offline-evidence-review.mts', note: 'Offline route-origin and analyst-supplied authorisation evidence input.' }),
+  entry({ id: 'cli.local-geoip-query-input', kind: 'cli_document', schema: LOCAL_GEOIP_QUERY_SCHEMA, currentVersion: OFFLINE_EVIDENCE_INPUT_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: MAX_OFFLINE_EVIDENCE_INPUT_BYTES, owner: 'cli/offline-evidence-review.mts', note: 'Offline query against an analyst-supplied bounded local GeoIP evidence document.' }),
+  entry({ id: 'cli.encrypted-dns-plan-input', kind: 'cli_document', schema: ENCRYPTED_DNS_PLAN_INPUT_SCHEMA, currentVersion: OFFLINE_EVIDENCE_INPUT_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: MAX_OFFLINE_EVIDENCE_INPUT_BYTES, owner: 'cli/offline-evidence-review.mts', note: 'Request-free encrypted-DNS adapter and query-plan input; it does not send a DNS request.' }),
   entry({ id: 'cli.bulk', kind: 'cli_document', schema: CLI_BULK_SCHEMA, currentVersion: CLI_BULK_SCHEMA_VERSION, supportedVersions: [1, 2, 3], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'cli/formatters/json.mts', note: 'Bounded Bulk result document; version 2 added compact DNS and passive mail summaries, and version 3 separates report generation time from nullable per-item observation time and collection origin.' }),
   entry({ id: 'cli.bulk-item', kind: 'cli_document', schema: CLI_BULK_ITEM_SCHEMA, currentVersion: CLI_BULK_SCHEMA_VERSION, supportedVersions: [1, 2, 3], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'cli/formatters/json.mts', note: 'One bounded Bulk JSONL or document item; version 3 preserves nullable per-item observation time and distinguishes current collection from checkpoint restoration.' }),
   entry({ id: 'cli.bulk-checkpoint', kind: 'cli_document', schema: CLI_BULK_CHECKPOINT_SCHEMA, currentVersion: CLI_BULK_CHECKPOINT_VERSION, supportedVersions: [1, 2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'normalize_to_current', writeSemantics: 'normalized_rewrite', byteBudget: MAX_BULK_CHECKPOINT_BYTES, owner: 'cli/bulk-checkpoint.mts', note: 'Private local compact Bulk checkpoint tied to the exact ordered input digest and scan mode; version 2 preserves nullable per-item observation time while schema-1 rows migrate without inventing one.' }),

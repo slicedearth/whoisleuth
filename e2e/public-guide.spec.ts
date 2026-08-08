@@ -28,12 +28,12 @@ test('homepage presents plain-language goals, restrained branding, and synthetic
   await expect(candidateButtons).toHaveCount(3);
   await expect(page.getByRole('button', { name: 'Show northstar-login.example in the preview' })).toHaveAttribute('aria-pressed', 'true');
   const previewTabs = page.getByRole('tablist', { name: 'Lookup result layout preview' });
-  await expect(previewTabs.getByRole('tab', { name: 'Sources' })).toHaveAttribute('aria-selected', 'true');
+  await expect(previewTabs.getByRole('tab', { name: 'Evidence' })).toHaveAttribute('aria-selected', 'true');
   const topology = page.getByRole('region', { name: 'Where this result comes from' });
   await expect(topology).toBeVisible();
   await expect(topology.locator('#homepage-evidence-topology-title')).toHaveCSS('clip-path', 'inset(50%)');
   await expect(topology.getByRole('img', { name: 'Where this result comes from visual overview' })).toBeVisible();
-  await expect(topology.getByRole('list', { name: 'Evidence source status' }).getByRole('listitem')).toHaveCount(5);
+  await expect(topology.getByRole('list', { name: 'Evidence item status' }).getByRole('listitem')).toHaveCount(5);
   await page.getByRole('button', { name: 'Show northstarr.example in the preview' }).click();
   await expect(page.getByRole('button', { name: 'Show northstarr.example in the preview' })).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('.lookup-panel > header small')).toHaveText('northstarr.example');
@@ -42,7 +42,7 @@ test('homepage presents plain-language goals, restrained branding, and synthetic
   await expect(page.locator('.monitor-panel')).toContainText('Watch for material change');
   await previewTabs.getByRole('tab', { name: 'At a glance' }).click();
   const previewOverview = page.getByRole('tabpanel', { name: 'At a glance' });
-  await expect(previewOverview.getByText('5 sources', { exact: true })).toBeVisible();
+  await expect(previewOverview.getByText('4 sources + 1 derived', { exact: true })).toBeVisible();
   await expect(previewOverview.getByText('34/100', { exact: true })).toBeVisible();
   await expect(previewOverview.getByText('Character edit', { exact: true })).toBeVisible();
   await expect(previewOverview.getByText('Parked page pattern', { exact: true })).toBeVisible();
@@ -58,8 +58,8 @@ test('homepage presents plain-language goals, restrained branding, and synthetic
   await expect(lookupTimeline.getByText(/changed fields · Website activity/)).toBeVisible();
   await expect(page.locator('.monitor-panel ol')).toHaveCount(0);
   await previewTabs.getByRole('tab', { name: 'Timeline' }).press('ArrowLeft');
-  await expect(previewTabs.getByRole('tab', { name: 'Sources' })).toBeFocused();
-  await expect(previewTabs.getByRole('tab', { name: 'Sources' })).toHaveAttribute('aria-selected', 'true');
+  await expect(previewTabs.getByRole('tab', { name: 'Evidence' })).toBeFocused();
+  await expect(previewTabs.getByRole('tab', { name: 'Evidence' })).toHaveAttribute('aria-selected', 'true');
   await expect(topology).toBeVisible();
   await expect(page.getByText('Fixed fictional data from the public demo. No live target is contacted.')).toBeVisible();
   await expect(page.locator('.hero-actions').getByRole('link', { name: 'Open console' })).toHaveAttribute('href', '/dashboard');
@@ -72,7 +72,7 @@ test('homepage presents plain-language goals, restrained branding, and synthetic
   await expect(mobileDomainPicker).toBeVisible();
   await mobileDomainPicker.selectOption('alternate-tld');
   await expect(page.locator('.lookup-panel > header small')).toHaveText('northstar.invalid');
-  await previewTabs.getByRole('tab', { name: 'Sources' }).click();
+  await previewTabs.getByRole('tab', { name: 'Evidence' }).click();
   const sourceSummary = page.locator('.mobile-source-summary');
   await expect(sourceSummary).toBeVisible();
   await expect(sourceSummary.locator('.state-inconclusive', { hasText: 'Registry' })).toBeVisible();

@@ -124,4 +124,27 @@ describe('Lookup route analysis', () => {
     );
     assert.equal(latestLookupTimestamp(undefined, 'invalid'), null);
   });
+
+  test('uses the provider observation envelope for external-intelligence freshness', () => {
+    const result = response({
+      observedAt: '2026-07-01T01:00:00.000Z',
+      threatIntelligence: {
+        providers: [{
+          provider: { id: 'urlscan_search', label: 'Archived provider' },
+          state: 'not_found',
+          findings: [],
+          observation: { observedAt: '2026-07-01T01:06:00.000Z', limitations: [] },
+        }],
+      },
+    });
+    const analysis = buildLookupRouteAnalysis({
+      result,
+      lookupView: createLookupViewModel(result),
+      profile: null,
+      task: 'general',
+    });
+
+    assert.equal(analysis.lookupObservedAt, '2026-07-01T01:06:00.000Z');
+    assert.equal(analysis.evidenceObservedAtById['external-urlscan_search'], '2026-07-01T01:06:00.000Z');
+  });
 });

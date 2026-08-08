@@ -180,7 +180,8 @@
   ):null);
   const retryCandidates=$derived(selectedRows.length?selectedRows:filtered);
   const retryPlan=$derived(buildBulkRetryPlan(retryCandidates.map(toBulkSessionResult),mode,scanStartedAt));
-  const cockpitRows=$derived<BulkReviewCockpitRow[]>(filtered.map((row)=>{const caseRecord=caseByDomain.get(row.domain)||null;return{resultIndex:results.indexOf(row),domain:row.domain,availability:row.availability,confidence:row.confidence,risk:row.risk,opportunity:row.opportunity,activity:row.activity,registrar:row.registrar,reviewState:bulkReviewStateByDomain.get(row.domain)||'unreviewed',shortlisted:shortlistedDomains.has(row.domain),trusted:Boolean(row.trusted),sourceCoverage:row.sourceCoverage,error:row.error,caseRecord:caseRecord?{id:caseRecord.id,disposition:caseRecord.disposition}:null};}));
+  const resultIndexByRow=$derived(new Map(results.map((row,index)=>[row,index])));
+  const cockpitRows=$derived<BulkReviewCockpitRow[]>(filtered.map((row)=>{const caseRecord=caseByDomain.get(row.domain)||null;return{resultIndex:resultIndexByRow.get(row)??-1,domain:row.domain,availability:row.availability,confidence:row.confidence,risk:row.risk,opportunity:row.opportunity,activity:row.activity,registrar:row.registrar,reviewState:bulkReviewStateByDomain.get(row.domain)||'unreviewed',shortlisted:shortlistedDomains.has(row.domain),trusted:Boolean(row.trusted),sourceCoverage:row.sourceCoverage,error:row.error,caseRecord:caseRecord?{id:caseRecord.id,disposition:caseRecord.disposition}:null};}));
   const counts=$derived(countBulkRouteFilters(results));
   const pageCount=$derived(Math.max(1,Math.ceil(filtered.length/PAGE_SIZE)));
   const currentPage=$derived(Math.min(page,pageCount));

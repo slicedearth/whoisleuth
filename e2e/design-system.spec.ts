@@ -440,8 +440,8 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   await expect(visualKey).toContainText('Web');
   await expect(visualKey).toContainText('Derived');
   await expect(visualKey).toContainText('Analyst');
-  await expect(visualKey).toContainText('Colour, shape, and icon identify each source family');
-  await expect(visualKey).toContainText('Dot and label show source state');
+  await expect(visualKey).toContainText('Colour, shape, and icon identify each evidence family');
+  await expect(visualKey).toContainText('Dot and label show evidence state');
   for (const [family, sectionTitleId] of [
     ['registry', 'registry-title'],
     ['network', 'relationships-history-title'],
@@ -478,11 +478,14 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
           && styles.whiteSpace === 'nowrap')
     );
   }))).toBe(true);
-  const sourceRail = topology.getByRole('list', { name: 'Evidence source status' });
-  const mappedSourceCount = await sourceRail.getByRole('listitem').count();
-  await expect(topology.locator('.topology-summary strong')).toHaveText(String(mappedSourceCount));
-  await expect(page.locator('#relationships-history .metric').filter({ hasText: 'mapped sources' })).toHaveText(`${mappedSourceCount} mapped sources`);
-  await expect(page.getByRole('tab', { name: /^Sources/ }).locator('span')).toHaveText(String(mappedSourceCount));
+  const sourceRail = topology.getByRole('list', { name: 'Evidence item status' });
+  const mappedEvidenceCount = await sourceRail.getByRole('listitem').count();
+  const derivedCount = await sourceRail.locator('.family-derived').count();
+  const directCount = mappedEvidenceCount - derivedCount;
+  await expect(topology.locator('.topology-summary strong')).toHaveText(String(mappedEvidenceCount));
+  await expect(page.locator('#relationships-history .metric').filter({ hasText: 'mapped direct sources' })).toHaveText(`${directCount} mapped direct sources`);
+  await expect(page.locator('#relationships-history .metric').filter({ hasText: 'mapped derived analyses' })).toHaveText(`${derivedCount} mapped derived analyses`);
+  await expect(page.getByRole('tab', { name: /^Evidence/ }).locator('span')).toHaveText(String(mappedEvidenceCount));
   await expect(sourceRail.locator('.source-icon')).toHaveCount(await sourceRail.locator('li').count());
   await expect(page.locator('[id="dns-title"]')).toHaveCount(1);
   await expect(page.locator('[id="reverse-dns-title"]')).toHaveCount(1);
@@ -541,7 +544,7 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   await expect(topology.locator('.topology-edges path.active')).toHaveCount(1);
 
   const visualTabs = page.getByRole('tablist', { name: 'Relationship and history view' });
-  const sourcesTab = visualTabs.getByRole('tab', { name: /^Sources/ });
+  const sourcesTab = visualTabs.getByRole('tab', { name: /^Evidence/ });
   await sourcesTab.focus();
   await sourcesTab.press('ArrowRight');
   await expect(visualTabs.getByRole('tab', { name: /^Relationships/ })).toBeFocused();
@@ -728,7 +731,7 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
       expect(redirectWidth.scroll).toBeLessThanOrEqual(redirectWidth.client);
     }
 
-    await page.getByRole('tab', { name: /^Sources/ }).click();
+    await page.getByRole('tab', { name: /^Evidence/ }).click();
     const topologyGraphic = topology.getByRole('img', { name: 'Where this result came from visual overview' });
     if (size.width > 700) {
       await expect(topologyGraphic).toBeVisible();
@@ -780,7 +783,7 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
 
   // The desktop source graph becomes a connected, full-width source map on
   // narrow screens instead of shrinking every label into the wide SVG.
-  await page.getByRole('tab', { name: /^Sources/ }).click();
+  await page.getByRole('tab', { name: /^Evidence/ }).click();
   await expect(topology.getByRole('img', { name: 'Where this result came from visual overview' })).toBeHidden();
   await expect(topology.locator('.mobile-target')).toBeVisible();
   await expect(sourceRail.locator('.source-copy small').first()).toBeVisible();
@@ -972,6 +975,7 @@ test('long untrusted values wrap inside result tiles without page overflow', asy
 });
 
 test('every public and protected page renders without page-level overflow at narrow and wide widths', async ({ page }) => {
+  test.slow();
   for (const path of ['/', ...protectedDestinations.map(({ href }) => href), '/privacy']) {
     await page.goto(path);
     for (const size of [

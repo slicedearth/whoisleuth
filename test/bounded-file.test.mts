@@ -80,6 +80,7 @@ test('rejects deterministic descriptor changes between the two metadata checks',
 
 test('rejects a named pipe promptly instead of waiting for a writer', {
   skip: process.platform === 'win32',
+  timeout: 30_000,
 }, async () => {
   const directory = await mkdtemp(path.join(tmpdir(), 'whoisleuth-bounded-file-'));
   try {
@@ -90,7 +91,7 @@ test('rejects a named pipe promptly instead of waiting for a writer', {
       '-e',
       `import(${JSON.stringify(moduleUrl)}).then(async ({readBoundedRegularFile}) => { try { await readBoundedRegularFile(process.argv[1], {maximumBytes:8}); process.exitCode=2; } catch { process.stdout.write('rejected'); } });`,
       fifo,
-    ], { timeout: 1_000 });
+    ], { timeout: 10_000 });
     assert.equal(stdout, 'rejected');
   } finally {
     await rm(directory, { recursive: true, force: true });

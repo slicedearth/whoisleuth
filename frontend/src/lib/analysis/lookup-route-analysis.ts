@@ -163,7 +163,7 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     securityPosture.observedAt,
     securityTxt.observedAt,
     sslbl.observedAt,
-    threatIntelligenceProviders.map((provider) => rec(provider).observedAt),
+    threatIntelligenceProviders.map((provider) => rec(rec(provider).observation).observedAt),
   );
   const evidenceObservedAtById: Record<string, unknown> = {
     rdap: rdapDiagnostic.fetchedAt,
@@ -187,7 +187,7 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     const provider = rec(providerValue);
     const identity = rec(provider.provider);
     const id = String(identity.id || '').trim();
-    if (id) evidenceObservedAtById[`external-${id}`] = provider.observedAt;
+    if (id) evidenceObservedAtById[`external-${id}`] = rec(provider.observation).observedAt;
   }
   const populatedWhoisRoles = whoisRoleOrder.filter((role) => records(whoisContactsByRole[role]).length > 0);
   const comparison = result?.type === 'domain'

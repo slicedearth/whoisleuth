@@ -28,6 +28,13 @@ import { LOCAL_MMDB_QUERY_SCHEMA, reviewLocalMmdb } from './local-mmdb-review.mt
 const OFFLINE_EVIDENCE_REVIEW_SCHEMA = 'whoisleuth.cli.offline-evidence-review';
 const OFFLINE_EVIDENCE_REVIEW_VERSION = 1;
 const MAX_OFFLINE_EVIDENCE_INPUT_BYTES = 16 * 1024 * 1024;
+const RDAP_SEARCH_INPUT_SCHEMA = 'whoisleuth.rdap-search-input';
+const DNSSEC_EVIDENCE_INPUT_SCHEMA = 'whoisleuth.dnssec-evidence-input';
+const TLSA_EVIDENCE_INPUT_SCHEMA = 'whoisleuth.tlsa-evidence-input';
+const RPKI_ROUTE_INPUT_SCHEMA = 'whoisleuth.rpki-route-input';
+const LOCAL_GEOIP_QUERY_SCHEMA = 'whoisleuth.local-geoip-query';
+const ENCRYPTED_DNS_PLAN_INPUT_SCHEMA = 'whoisleuth.encrypted-dns-plan-input';
+const OFFLINE_EVIDENCE_INPUT_VERSION = 1;
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -56,7 +63,7 @@ function buildOfflineEvidenceReview(value: unknown, generatedAt = new Date().toI
   const input = parseInput(value);
   let kind: 'rdap_search' | 'dnssec' | 'tlsa' | 'rpki' | 'geoip' | 'encrypted_dns' | 'zone_intent' | 'domain_portfolio' | 'domain_change' | 'dns_convergence' | 'nameserver_preflight' | 'trust_store';
   let result: unknown;
-  if (input.schema === 'whoisleuth.rdap-search-input') {
+  if (input.schema === RDAP_SEARCH_INPUT_SCHEMA) {
     kind = 'rdap_search';
     const request = record(input.request);
     const help = normalizeRdapSearchHelp(input.help);
@@ -73,7 +80,7 @@ function buildOfflineEvidenceReview(value: unknown, generatedAt = new Date().toI
         ? null
         : inspectRdapReverseSearchResponse(input.response, [request.property]),
     });
-  } else if (input.schema === 'whoisleuth.dnssec-evidence-input') {
+  } else if (input.schema === DNSSEC_EVIDENCE_INPUT_SCHEMA) {
     kind = 'dnssec';
     result = validateDnssecEvidence({
       ownerName: input.ownerName,
@@ -83,7 +90,7 @@ function buildOfflineEvidenceReview(value: unknown, generatedAt = new Date().toI
       rrSigRecords: input.rrSigRecords,
       observedAt: input.observedAt,
     });
-  } else if (input.schema === 'whoisleuth.tlsa-evidence-input') {
+  } else if (input.schema === TLSA_EVIDENCE_INPUT_SCHEMA) {
     kind = 'tlsa';
     result = analyzeTlsaEvidence({
       serviceName: input.serviceName,
@@ -94,17 +101,17 @@ function buildOfflineEvidenceReview(value: unknown, generatedAt = new Date().toI
       spkiDerBase64: input.spkiDerBase64,
       authorityMaterials: input.authorityMaterials,
     });
-  } else if (input.schema === 'whoisleuth.rpki-route-input') {
+  } else if (input.schema === RPKI_ROUTE_INPUT_SCHEMA) {
     kind = 'rpki';
     result = reviewRpkiRoute({
       routePrefix: input.routePrefix,
       originAsn: input.originAsn,
       authorizations: input.authorizations,
     });
-  } else if (input.schema === 'whoisleuth.local-geoip-query') {
+  } else if (input.schema === LOCAL_GEOIP_QUERY_SCHEMA) {
     kind = 'geoip';
     result = lookupLocalGeoIp(buildLocalGeoIpDatabase(input.database), input.address);
-  } else if (input.schema === 'whoisleuth.encrypted-dns-plan-input') {
+  } else if (input.schema === ENCRYPTED_DNS_PLAN_INPUT_SCHEMA) {
     kind = 'encrypted_dns';
     const query = record(input.query);
     result = planEncryptedDnsQuery(
@@ -252,9 +259,16 @@ function formatOfflineEvidenceReview(document: ReturnType<typeof buildOfflineEvi
 }
 
 export {
+  DNSSEC_EVIDENCE_INPUT_SCHEMA,
+  ENCRYPTED_DNS_PLAN_INPUT_SCHEMA,
+  LOCAL_GEOIP_QUERY_SCHEMA,
   MAX_OFFLINE_EVIDENCE_INPUT_BYTES,
+  OFFLINE_EVIDENCE_INPUT_VERSION,
   OFFLINE_EVIDENCE_REVIEW_SCHEMA,
   OFFLINE_EVIDENCE_REVIEW_VERSION,
+  RDAP_SEARCH_INPUT_SCHEMA,
+  RPKI_ROUTE_INPUT_SCHEMA,
+  TLSA_EVIDENCE_INPUT_SCHEMA,
   buildOfflineEvidenceReview,
   buildOfflineEvidenceReviewWithLocalResources,
   formatOfflineEvidenceReview,

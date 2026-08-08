@@ -7,6 +7,10 @@
 import { createObservation } from './observation.mts';
 import type { ObservationStatus } from './observation.mts';
 import {
+  THREAT_INTELLIGENCE_CATEGORIES,
+  THREAT_INTELLIGENCE_RESULT_STATES,
+} from './threat-intelligence-types.mts';
+import {
   assertCuratedConnectorDefinition,
   assertThreatIntelligenceProvider,
 } from './threat-intelligence-definition-registry.mts';
@@ -62,16 +66,7 @@ const THREAT_INTELLIGENCE_CONTRACT_VERSION = 1;
 const THREAT_INTELLIGENCE_SCHEMA = 'whoisleuth.threat-intelligence-result';
 const CURATED_CONNECTOR_CONTRACT_VERSION = 1;
 const CURATED_CONNECTOR_RESULT_SCHEMA = 'whoisleuth.curated-connector-result';
-const RESULT_STATES = new Set<ThreatIntelligenceResultState>([
-  'success',
-  'partial',
-  'not_found',
-  'unsupported',
-  'skipped',
-  'rate_limited',
-  'unavailable',
-  'error',
-]);
+const RESULT_STATES = new Set<ThreatIntelligenceResultState>(THREAT_INTELLIGENCE_RESULT_STATES);
 const TERMINAL_STATES_WITHOUT_FINDINGS = new Set<ThreatIntelligenceResultState>([
   'not_found',
   'unsupported',
@@ -80,7 +75,7 @@ const TERMINAL_STATES_WITHOUT_FINDINGS = new Set<ThreatIntelligenceResultState>(
   'unavailable',
   'error',
 ]);
-const CATEGORIES = new Set<ThreatIntelligenceCategory>(['phishing', 'malware', 'spam', 'suspicious', 'abuse', 'unknown']);
+const CATEGORIES = new Set<ThreatIntelligenceCategory>(THREAT_INTELLIGENCE_CATEGORIES);
 const SEVERITIES = new Set<ThreatIntelligenceSeverity>(['critical', 'high', 'medium', 'low', 'unknown']);
 const CONFIDENCES = new Set<ThreatIntelligenceConfidence>(['high', 'medium', 'low', 'unknown']);
 const CONNECTOR_RELATIONSHIP_TYPES = new Set<CuratedConnectorRelationshipType>([

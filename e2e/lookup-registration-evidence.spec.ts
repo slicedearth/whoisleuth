@@ -406,7 +406,11 @@ test('registrar RDAP unsupported and error states remain neutral source rows', a
 test('registry access constraints remain neutral, explicit, and mobile-safe', async ({ page }) => {
   await page.route('**/api/lookup?*', async (route) => {
     const query = new URL(route.request().url()).searchParams.get('q') || '';
-    const suffix = query.endsWith('.vn')
+    const suffix = query === 'mismatch.dev'
+      ? 'gt'
+      : query.endsWith('.unknown')
+      ? 'unknown'
+      : query.endsWith('.vn')
       ? 'vn'
       : query.endsWith('.ch')
         ? 'ch'
@@ -439,7 +443,7 @@ test('registry access constraints remain neutral, explicit, and mobile-safe', as
                 : suffix === 'vn'
                   ? { officialLookupUrl: 'https://whois.vnnic.vn/' }
                   : suffix === 'gt'
-                    ? { officialLookupUrl: 'https://www.gt/sitio/' }
+                    ? { officialLookupUrl: 'https://unrelated.invalid/not-the-registry' }
                     : {}),
             limitation: isEs
               ? 'The registry WHOIS service requires advance source-IP authorisation. A failed or unavailable query is not evidence that the domain is unregistered.'
@@ -489,6 +493,25 @@ test('registry access constraints remain neutral, explicit, and mobile-safe', as
   await expect(gtLookup).toHaveAttribute('target', '_blank');
   await expect(gtLookup).toHaveAttribute('rel', /\bnoreferrer\b/);
   await expect(gtNotice.getByText(/domain is not added to this link/i)).toBeVisible();
+
+  await page.locator('#query').fill('example.dev');
+  await page.locator('#console-navigation').getByRole('link', { name: /^Dashboard/u }).click();
+  await page.locator('#console-navigation').getByRole('link', { name: /^Lookup/u }).click();
+  await expandLookupFamilies(page);
+  await expect(page.getByRole('region', { name: '.GT collection constraints' })
+    .getByRole('link', { name: /Open official .GT registry lookup/ })).toHaveAttribute('href', 'https://www.gt/sitio/');
+
+  await page.locator('#query').fill('mismatch.dev');
+  await page.getByRole('button', { name: 'Run lookup' }).click();
+  await expandLookupFamilies(page);
+  await expect(page.getByRole('region', { name: '.GT collection constraints' })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: /Open official .* registry lookup/ })).toHaveCount(0);
+
+  await page.locator('#query').fill('example.unknown');
+  await page.getByRole('button', { name: 'Run lookup' }).click();
+  await expandLookupFamilies(page);
+  const unknownNotice = page.getByRole('region', { name: '.UNKNOWN collection constraints' });
+  await expect(unknownNotice.getByRole('link', { name: /official .* registry lookup/i })).toHaveCount(0);
 
   await page.locator('#query').fill('example.dev');
   await page.getByRole('button', { name: 'Run lookup' }).click();
@@ -544,7 +567,7 @@ test('optional external intelligence searches are explicit, attributed, and mobi
               id: '11111111-1111-4111-8111-111111111111', category: 'phishing',
               providerVerdict: 'malicious verdict match', detail: 'Archived scan page title: Fixture sign-in',
               lastObservedAt: '2026-07-14T01:02:03.000Z',
-              referenceUrl: 'https://provider.invalid/result/11111111-1111-4111-8111-111111111111/',
+              referenceUrl: 'https://urlscan.io/result/11111111-1111-4111-8111-111111111111/',
             }],
             observation: {
               observedAt: '2026-07-15T01:02:03.000Z',
@@ -553,13 +576,13 @@ test('optional external intelligence searches are explicit, attributed, and mobi
           }, {
             provider: { id: 'urlhaus_host', label: 'Fixture malware-host records' },
             target: { type: 'domain', value: 'archive-review.example', exposure: 'registrable_domain' },
-            state: 'success', detail: 'Found one bounded malware-distribution record.',
+            state: 'partial', detail: 'Found one bounded malware-distribution record before the provider result limit.',
             findings: [{
               id: '123456', category: 'malware',
               providerVerdict: 'malware distribution · online',
               detail: 'The provider labels an archived malware-distribution URL on this host as online.',
               lastObservedAt: '2026-07-13T01:02:03.000Z',
-              referenceUrl: 'https://provider.invalid/result/123456/',
+              referenceUrl: 'https://urlhaus.abuse.ch/url/123456/',
             }],
             observation: {
               observedAt: '2026-07-15T01:02:03.000Z',
@@ -568,14 +591,8 @@ test('optional external intelligence searches are explicit, attributed, and mobi
           }, {
             provider: { id: 'threatfox_domain_ioc', label: 'Fixture malware-IOC records' },
             target: { type: 'domain', value: 'archive-review.example', exposure: 'registrable_domain' },
-            state: 'success', detail: 'Found one retained malware-IOC record.',
-            findings: [{
-              id: '654321', category: 'malware',
-              providerVerdict: 'Botnet command and control · Fixture family',
-              detail: 'The provider associates this domain with botnet command and control.',
-              lastObservedAt: '2026-07-12T01:02:03.000Z',
-              referenceUrl: 'https://provider.invalid/result/654321/',
-            }],
+            state: 'skipped', detail: 'The optional source was not queried for this fixture.',
+            findings: [],
             observation: {
               observedAt: '2026-07-15T01:02:03.000Z',
               limitations: ['The provider retains malware-associated indicators for a limited period.'],
@@ -604,9 +621,12 @@ test('optional external intelligence searches are explicit, attributed, and mobi
 
   const section = page.locator('.threat-intelligence');
   await expect(section.getByRole('heading', { name: 'Archived provider verdicts' })).toBeVisible();
-  await expect(section.getByText('Fixture archived verdicts', { exact: true })).toBeVisible();
-  await expect(section.getByText('Fixture malware-host records', { exact: true })).toBeVisible();
-  await expect(section.getByText('Fixture malware-IOC records', { exact: true })).toBeVisible();
+  await expect(section.getByText('URLscan archived verdicts', { exact: true })).toBeVisible();
+  await expect(section.getByText('URLhaus malware-host records', { exact: true })).toBeVisible();
+  await expect(section.getByText('ThreatFox malware IOCs', { exact: true })).toBeVisible();
+  await expect(section.locator('article').filter({ hasText: 'URLscan archived verdicts' }).locator('.chip')).toHaveClass(/\binfo\b/);
+  await expect(section.locator('article').filter({ hasText: 'URLhaus malware-host records' }).locator('.chip')).toHaveClass(/\bwarn\b/);
+  await expect(section.locator('article').filter({ hasText: 'ThreatFox malware IOCs' }).locator('.chip')).not.toHaveClass(/\b(?:info|warn|danger)\b/u);
   await expect(section.getByText(/never affect availability/i)).toBeVisible();
   await expect(section.getByText(/2 independent publisher families contributed \+18 under model v7/i)).toBeVisible();
   const riskExplanation = page.getByText('Why the risk score is 24', { exact: true });
@@ -617,9 +637,9 @@ test('optional external intelligence searches are explicit, attributed, and mobi
   const exactRiskFactors = page.locator('.score-details details').first().locator('.factor-list');
   await expect(exactRiskFactors).toHaveCSS('clip-path', 'inset(50%)');
   await expect(section.getByText('phishing', { exact: true })).toBeVisible();
-  await expect(section.getByText('malware', { exact: true })).toHaveCount(2);
+  await expect(section.getByText('malware', { exact: true })).toHaveCount(1);
   for (const link of await section.getByRole('link', { name: 'View attributed provider record' }).all()) {
-    await expect(link).toHaveAttribute('rel', 'noopener');
+    await expect(link).toHaveAttribute('rel', 'noopener noreferrer');
   }
 
   await page.setViewportSize({ width: 360, height: 780 });

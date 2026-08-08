@@ -105,6 +105,7 @@
   let includeSecurityTxt=$state(false);
   let error=$state('');
   let result=$state<LookupHttpResponse|null>(null);
+  let completedLookupTarget=$state('');
   let profile=$state<BrandProfile|null>(null);
   let draftStatus=$state('');
   let caseRecord=$state<CaseRecord|null>(null);let caseNote=$state('');let caseStatus=$state('');
@@ -234,7 +235,7 @@
   const lookupInvestigationBrief=$derived(lookupAnalysis.lookupInvestigationBrief);
   const lookupEvidenceDocument=$derived(result?buildLookupEvidence(result,{idnAnalysis,applicationVersion:__WHOISLEUTH_VERSION__}):null);
   const evidenceTopologyTarget=$derived(lookupAnalysis.evidenceTopologyTarget);
-  const mappedEvidenceSourceCount=$derived(projectEvidenceTopology(evidenceTopologyTarget,evidenceTopologyNodes).nodes.length);
+  const evidenceTopologyProjection=$derived(projectEvidenceTopology(evidenceTopologyTarget,evidenceTopologyNodes));
   const caseEvidence=$derived(lookupAnalysis.caseEvidence);
   const checkpointFacts=$derived(lookupAnalysis.checkpointFacts);
 
@@ -381,12 +382,12 @@
     taskView=presentation.task;
     visualView=visualViewForTask(taskView);
     const restored=readLookupWorkflowState();
-    if(restored){query=restored.query;lookupMode=restored.lookupMode;includeExternalIntelligence=restored.includeExternalIntelligence;includeMalwareHostIntelligence=restored.includeMalwareHostIntelligence;includeMalwareIocIntelligence=restored.includeMalwareIocIntelligence;includeSecurityTxt=restored.includeSecurityTxt;error=restored.error;result=restored.result;}
+    if(restored){query=restored.query;lookupMode=restored.lookupMode;includeExternalIntelligence=restored.includeExternalIntelligence;includeMalwareHostIntelligence=restored.includeMalwareHostIntelligence;includeMalwareIocIntelligence=restored.includeMalwareIocIntelligence;includeSecurityTxt=restored.includeSecurityTxt;error=restored.error;result=restored.result;completedLookupTarget=restored.result?restored.completedTarget:'';}
     const q=page.url.searchParams.get('q');
     const requestedDepth=page.url.searchParams.get('depth');
     const targetChanged=Boolean(q&&q!==query);
     const depthChanged=Boolean(requestedDepth&&(requestedDepth==='fast'||requestedDepth==='deep')&&requestedDepth!==lookupMode);
-    if(q&&(targetChanged||depthChanged)){query=q;result=null;error='';}
+    if(q&&(targetChanged||depthChanged)){query=q;result=null;completedLookupTarget='';error='';}
     else if(q)query=q;
     if(requestedDepth==='fast'||requestedDepth==='deep')lookupMode=requestedDepth;
     window.addEventListener('hashchange',navigateToCurrentLookupHash);
@@ -396,7 +397,7 @@
       pageActive=false;
       window.removeEventListener('hashchange',navigateToCurrentLookupHash);
       lookupRequestController.dispose();
-      writeLookupWorkflowState({query,lookupMode,includeExternalIntelligence,includeMalwareHostIntelligence,includeMalwareIocIntelligence,includeSecurityTxt,error,result});
+      writeLookupWorkflowState({query,completedTarget:completedLookupTarget,lookupMode,includeExternalIntelligence,includeMalwareHostIntelligence,includeMalwareIocIntelligence,includeSecurityTxt,error,result});
     };
   });
 
@@ -442,7 +443,7 @@
       return;
     }
 
-    loading=true;loadingElapsedMs=0;error='';result=null;caseRecord=null;caseNote='';caseStatus='';serviceDependencyScope='';serviceDependencyFalsePositives='';expandedResultSections=[];detailedAssessmentOpen=false;
+    loading=true;loadingElapsedMs=0;error='';result=null;completedLookupTarget='';caseRecord=null;caseNote='';caseStatus='';serviceDependencyScope='';serviceDependencyFalsePositives='';expandedResultSections=[];detailedAssessmentOpen=false;
     const target=entries[0];if(!target)return;
     const lookupUrl=buildLookupRequestUrl(target,{
       mode:lookupMode,
@@ -466,7 +467,7 @@
       if(completed.state==='stale'||!pageActive)return;
       const outcome=completed.outcome;
       if(!outcome.ok){error=outcome.message;return;}
-      result=outcome.value;
+      result=outcome.value;completedLookupTarget=target;
       await refreshCase();
       requestAnimationFrame(()=>{
         if(window.location.hash&&lookupEvidenceFamilyForHref(window.location.hash))navigateToCurrentLookupHash();
@@ -791,7 +792,7 @@
       />
       {#if sectionDetailVisible('registry')}
       {#if registryAccess.suffix}
-        <RegistryAccessNotice access={registryAccess} />
+        <RegistryAccessNotice access={registryAccess} lookupTarget={completedLookupTarget} />
       {/if}
 
       {#if idnAnalysis && (idnAnalysis.hasIdn || idnAnalysis.referenceMatches.length)}
@@ -854,7 +855,7 @@
       <LookupFamilySummary
         label="Relationships and history"
         description="Inspect source coverage, exact observed relationships, optional passive pivots, and dated lifecycle events in one workspace."
-        metrics={[`${mappedEvidenceSourceCount} mapped sources`, `${lookupAssetGraph.edges.length} relationships`, `${activationContext.events.filter((event)=>Boolean(event.date)).length} dated events`]}
+        metrics={[`${evidenceTopologyProjection.provenanceCounts.direct} mapped direct sources`, `${evidenceTopologyProjection.provenanceCounts.derived} mapped derived analyses`, `${lookupAssetGraph.edges.length} relationships`, `${activationContext.events.filter((event)=>Boolean(event.date)).length} dated events`]}
         expanded={sectionDetailVisible('relationships-history')}
         onshow={()=>void showSectionDetail('relationships-history')}
         onhide={()=>void hideSectionDetail('relationships-history')}

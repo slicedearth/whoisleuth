@@ -73,7 +73,7 @@ export const toolGuides: readonly GuideEntry[] = Object.freeze([
 ]);
 
 export const referenceGuides: readonly GuideEntry[] = Object.freeze([
-  Object.freeze({ id: 'registry-support', name: 'Registry support', useWhen: 'You want to know how a domain ending is handled or which fields each lookup profile attempts before relying on a result.', input: 'Filter the field-level matrix by target type, or search for a domain ending such as com or au.', result: 'The matrix compares Fast, Bulk Deep, and single Deep field collection. The catalogue separately shows tested WHOIS parsing, query rules, and known RDAP access limits.', next: 'Treat a conditional or limited field as a source or collection constraint, not evidence that a value is absent or that a domain is available.' }),
+  Object.freeze({ id: 'registry-support', name: 'Registry support', useWhen: 'You want to know how a domain ending is handled or which fields each lookup profile attempts before relying on a result.', input: 'Filter the field-level matrix by target type, or search for a domain ending such as com or au.', result: 'The matrix compares Fast, Bulk Deep, and single Deep field collection. The catalogue separately shows tested WHOIS parsing, query rules, known RDAP access limits, and a reviewed official registry lookup link where no machine-readable service is available.', next: 'Treat a conditional or limited field as a source or collection constraint, not evidence that a value is absent or that a domain is available. Official registry links require a deliberate handoff and never receive the target automatically.' }),
 ]);
 
 export const resultStates: readonly GuideDefinition[] = Object.freeze([

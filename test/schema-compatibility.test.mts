@@ -1,5 +1,6 @@
 import { requiredValue } from './value-assertions.mts';
 import assert from 'node:assert/strict';
+import { readdir, readFile } from 'node:fs/promises';
 import { describe, test } from 'node:test';
 
 import {
@@ -100,6 +101,12 @@ import {
   buildCliPostureDocument,
   buildCliTlsDocument,
 } from '../cli/formatters/json.mts';
+import { DOCTOR_SCHEMA, DOCTOR_VERSION } from '../cli/doctor.mts';
+import { CLI_COMMAND_CATALOGUE_SCHEMA, CLI_COMMAND_CATALOGUE_VERSION } from '../cli/command-catalogue.mts';
+import { CLI_LOOKUP_PLAN_SCHEMA, CLI_LOOKUP_PLAN_VERSION } from '../cli/lookup-plan.mts';
+import { CLI_LOOKUP_TIMELINE_SCHEMA, CLI_LOOKUP_TIMELINE_VERSION } from '../cli/lookup-timeline.mts';
+import { CLI_MAIL_REVIEW_SCHEMA, CLI_MAIL_REVIEW_VERSION } from '../cli/mail-review.mts';
+import { CLI_PAGE_COMPARE_SCHEMA, CLI_PAGE_COMPARE_VERSION } from '../cli/page-compare.mts';
 import {
   CLI_DISCOVERY_SCAN_ITEM_SCHEMA,
   CLI_DISCOVERY_SCAN_SCHEMA,
@@ -201,7 +208,7 @@ describe('schema compatibility inventory', () => {
     assert.equal(inventory.schema, SCHEMA_COMPATIBILITY_INVENTORY_SCHEMA);
     assert.equal(inventory.version, SCHEMA_COMPATIBILITY_INVENTORY_VERSION);
     assert.equal(inventory.generatedAt, NOW);
-    assert.equal(inventory.entries.length, 123);
+    assert.equal(inventory.entries.length, 140);
     assert.deepEqual(new Set(inventory.entries.map((entry) => entry.kind)), new Set([
       'browser_store', 'tab_store', 'hosted_store', 'export', 'cli_document', 'derived',
     ]));
@@ -212,6 +219,17 @@ describe('schema compatibility inventory', () => {
     assert.equal(byId(inventory, 'cli.bulk-checkpoint').schema, 'whoisleuth.cli.bulk-checkpoint');
     assert.equal(byId(inventory, 'cli.progress-event').schema, 'whoisleuth.cli.progress');
     assert.equal(byId(inventory, 'cli.lookup-diff').schema, 'whoisleuth.cli.lookup-diff');
+    for (const [id, schema, version] of [
+      ['cli.doctor', DOCTOR_SCHEMA, DOCTOR_VERSION],
+      ['cli.command-catalogue', CLI_COMMAND_CATALOGUE_SCHEMA, CLI_COMMAND_CATALOGUE_VERSION],
+      ['cli.lookup-plan', CLI_LOOKUP_PLAN_SCHEMA, CLI_LOOKUP_PLAN_VERSION],
+      ['cli.lookup-timeline', CLI_LOOKUP_TIMELINE_SCHEMA, CLI_LOOKUP_TIMELINE_VERSION],
+      ['cli.mail-review', CLI_MAIL_REVIEW_SCHEMA, CLI_MAIL_REVIEW_VERSION],
+      ['cli.page-compare', CLI_PAGE_COMPARE_SCHEMA, CLI_PAGE_COMPARE_VERSION],
+    ] as const) {
+      assert.equal(byId(inventory, id).schema, schema);
+      assert.equal(byId(inventory, id).currentVersion, version);
+    }
     assert.equal(byId(inventory, 'cli.lookup-reconciliation').schema, 'whoisleuth.cli.lookup-reconciliation');
     assert.equal(byId(inventory, 'cli.registry-doctor').schema, 'whoisleuth.cli.registry-doctor');
     assert.equal(byId(inventory, 'cli.sharing-review').schema, 'whoisleuth.cli.sharing-review');
@@ -336,6 +354,22 @@ describe('schema compatibility inventory', () => {
     assert.equal(byId(inventory, 'export.bulk-review').schema, BULK_REVIEW_SCHEMA);
     assert.equal(byId(inventory, 'export.bulk-review').currentVersion, BULK_REVIEW_SCHEMA_VERSION);
     assert.equal(byId(inventory, 'export.bulk-review').byteBudget, MAX_BULK_REVIEW_STORE_BYTES);
+  });
+
+  test('accounts for every public CLI JSON schema literal', async () => {
+    const inventory = buildSchemaCompatibilityInventory({ generatedAt: NOW });
+    const listed = new Set(inventory.entries.flatMap((entry) => entry.schema ? [entry.schema] : []));
+    const filenames = (await readdir('cli', { recursive: true }))
+      .filter((filename) => filename.endsWith('.mts'));
+    const discovered = new Set<string>();
+    for (const filename of filenames) {
+      const source = await readFile(`cli/${filename}`, 'utf8');
+      for (const match of source.matchAll(/['"](whoisleuth\.[a-z0-9.-]+)['"]/gu)) {
+        const schema = match[1];
+        if (schema && !['whoisleuth.mjs', 'whoisleuth.mts'].includes(schema)) discovered.add(schema);
+      }
+    }
+    assert.deepEqual([...discovered].filter((schema) => !listed.has(schema)), []);
   });
 
   test('returns a fresh non-mutating document for each report build', () => {
