@@ -53,6 +53,16 @@ describe('evidence topology projection', () => {
     assert.ok(graph.nodes.every((node) => node.family === 'registry'));
   });
 
+  test('does not describe wholly invalid bounded candidates as hidden evidence', () => {
+    const graph = projectEvidenceTopology(
+      { label: 'example.test' },
+      Array.from({ length: MAX_EVIDENCE_TOPOLOGY_NODES * 4 + 1 }, () => ({ id: '', label: '' })),
+    );
+
+    assert.equal(graph.nodes.length, 0);
+    assert.equal(graph.truncated, false);
+  });
+
   test('reserves bounded map space for every represented evidence family', () => {
     const direct = Array.from({ length: MAX_EVIDENCE_TOPOLOGY_NODES + 1 }, (_, index): EvidenceTopologyInput => ({
       id: `direct-${index}`,

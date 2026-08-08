@@ -576,11 +576,18 @@ function createLookupViewModel(response: LookupHttpResponse | null): LookupViewM
   const securityTxt = record(response?.securityTxt);
   const sslbl = record(response?.sslbl);
   const threatIntelligence = record(response?.threatIntelligence);
+  const seenThreatIntelligenceProviders = new Set<string>();
   const providers = Array.isArray(threatIntelligence.providers)
     ? threatIntelligence.providers
         .slice(0, MAX_THREAT_INTELLIGENCE_PROVIDERS * 2)
         .map(normalizeThreatProvider)
         .filter((provider): provider is JsonObject => provider !== null)
+        .filter((provider) => {
+          const providerId = String(record(provider.provider).id || '');
+          if (!providerId || seenThreatIntelligenceProviders.has(providerId)) return false;
+          seenThreatIntelligenceProviders.add(providerId);
+          return true;
+        })
         .slice(0, MAX_THREAT_INTELLIGENCE_PROVIDERS)
     : [];
   const dnsEvidence = record(availability.dns);

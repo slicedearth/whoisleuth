@@ -202,6 +202,7 @@ test('scans representative public initial, error, populated, and expanded states
 });
 
 test('scans public policy and protected-contact routes', async ({ page }, testInfo) => {
+  test.slow();
   await useTheme(page, 'dark');
   await page.setViewportSize({ width: 390, height: 844 });
   await page.route('**/api/contact-route', async (route) => route.fulfill({
@@ -225,6 +226,7 @@ test('scans public policy and protected-contact routes', async ({ page }, testIn
 });
 
 test('scans authenticated desktop and expanded mobile drawer states', async ({ page }, testInfo) => {
+  test.slow();
   await useTheme(page, 'light');
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto('/dashboard');

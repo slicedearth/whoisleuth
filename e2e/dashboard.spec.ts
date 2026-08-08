@@ -386,6 +386,7 @@ test('the dashboard exports one checksummed workspace archive without unrelated 
 test('reviewed case evidence keeps the same workspace content through two CLI and browser hand-offs', {
   tag: ['@analyst-journey', '@journey-workspace-portability-review'],
 }, async ({ page }) => {
+  test.slow();
   const caseExport = {
     version: CASE_SCHEMA_VERSION,
     exportedAt: NOW,

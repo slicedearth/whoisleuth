@@ -214,14 +214,15 @@ export async function readBrowserLocalCollection<Collection extends BrowserLocal
 export async function migrateLegacyBrowserData(
   page: Page,
   entries: Record<string, LegacyStorageValue>,
-  options: Readonly<{ clearStorage?: boolean }> = {},
+  options: Readonly<{ clearStorage?: boolean; destination?: string }> = {},
 ) {
-  const current = new URL(page.url());
-  const destination = `${current.pathname}${current.search}${current.hash}`;
-  // Use a full document navigation before deleting the database. That closes
-  // the console document and its live IndexedDB connection, so the fixture
-  // cannot trigger transient "connection is closing" errors in page code.
-  await page.goto('/');
+  const current = options.destination ? null : new URL(page.url());
+  const destination = options.destination
+    ?? `${current?.pathname ?? '/'}${current?.search ?? ''}${current?.hash ?? ''}`;
+  // Use a static same-origin document before deleting the database. That
+  // closes any live IndexedDB connection without starting another application
+  // session or storage load that the fixture would immediately abort.
+  await page.goto('/robots.txt');
   await page.evaluate(async ({ databaseName, values, clearStorage }) => {
     await new Promise<void>((resolve, reject) => {
       const request = indexedDB.deleteDatabase(databaseName);

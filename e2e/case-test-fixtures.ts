@@ -115,10 +115,9 @@ export async function openSeededTimelineCase(
   domain: string,
   records: ReturnType<typeof caseRecord>[],
 ) {
-  await page.goto('/monitor');
   await migrateLegacyBrowserData(page, {
     'whois-rdap-cases-v1': { version: 2, cases: records },
-  });
+  }, { destination: '/monitor' });
   await page.getByRole('tab', { name: /Cases/ }).click();
   await page.locator('.case-head', { hasText: domain }).click();
 }

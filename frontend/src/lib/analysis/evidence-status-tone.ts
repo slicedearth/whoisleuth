@@ -1,11 +1,35 @@
 export type EvidenceStatusTone = 'complete' | 'partial' | 'error' | 'neutral';
 
-const ERROR_STATES = new Set(['error', 'failed', 'failure', 'conflict', 'rejected']);
+const COMPLETE_STATES = new Set([
+  'success',
+  'complete',
+  'completed',
+  'supported',
+  'observed',
+  'registered',
+  'available',
+]);
+const ERROR_STATES = new Set([
+  'error',
+  'failed',
+  'failure',
+  'conflict',
+  'rejected',
+  'invalid response',
+  'invalid_response',
+  'network error',
+  'network_error',
+  'timeout',
+]);
 const PARTIAL_STATES = new Set([
   'partial',
   'warning',
   'review',
   'inconclusive',
+  'incomplete',
+  'limited',
+  'stale',
+  'truncated',
   'rate limited',
   'rate_limited',
 ]);
@@ -18,9 +42,12 @@ const NEUTRAL_STATES = new Set([
   'not_found',
   'not collected',
   'not_collected',
+  'not applicable',
+  'not_applicable',
   'unknown',
   'not evaluated',
   'not_evaluated',
+  'omitted',
 ]);
 
 function normalizedStatus(value: unknown): string {
@@ -36,5 +63,5 @@ export function evidenceStatusTone(
   if (ERROR_STATES.has(normalized)) return 'error';
   if (NEUTRAL_STATES.has(normalized) || !normalized) return 'neutral';
   if (PARTIAL_STATES.has(normalized) || options.complete === false) return 'partial';
-  return 'complete';
+  return COMPLETE_STATES.has(normalized) ? 'complete' : 'neutral';
 }

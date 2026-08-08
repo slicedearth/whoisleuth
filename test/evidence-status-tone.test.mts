@@ -3,23 +3,26 @@ import test from 'node:test';
 import { evidenceStatusTone } from '../frontend/src/lib/analysis/evidence-status-tone.ts';
 
 test('maps successful evidence states without turning incomplete collection green', () => {
-  assert.equal(evidenceStatusTone('success', { complete: true }), 'complete');
-  assert.equal(evidenceStatusTone('observed', { complete: true }), 'complete');
+  for (const state of ['success', 'complete', 'completed', 'supported', 'observed', 'registered', 'available']) {
+    assert.equal(evidenceStatusTone(state, { complete: true }), 'complete', state);
+  }
   assert.equal(evidenceStatusTone('success', { complete: false }), 'partial');
-  assert.equal(evidenceStatusTone('partial', { complete: true }), 'partial');
-  assert.equal(evidenceStatusTone('rate_limited'), 'partial');
+  for (const state of ['partial', 'warning', 'review', 'inconclusive', 'incomplete', 'limited', 'stale', 'truncated', 'rate_limited']) {
+    assert.equal(evidenceStatusTone(state, { complete: true }), 'partial', state);
+  }
 });
 
 test('keeps unavailable and unmatched states visually neutral', () => {
-  assert.equal(evidenceStatusTone('unavailable'), 'neutral');
-  assert.equal(evidenceStatusTone('not found'), 'neutral');
-  assert.equal(evidenceStatusTone('unsupported'), 'neutral');
+  for (const state of ['unavailable', 'not found', 'unsupported', 'not applicable', 'skipped', 'disabled', 'omitted']) {
+    assert.equal(evidenceStatusTone(state), 'neutral', state);
+  }
   assert.equal(evidenceStatusTone('success', { neutral: true }), 'neutral');
   assert.equal(evidenceStatusTone(''), 'neutral');
+  assert.equal(evidenceStatusTone('future source state'), 'neutral');
 });
 
 test('reserves the error tone for explicit collection failures', () => {
-  assert.equal(evidenceStatusTone('error'), 'error');
-  assert.equal(evidenceStatusTone('failed'), 'error');
-  assert.equal(evidenceStatusTone('conflict'), 'error');
+  for (const state of ['error', 'failed', 'conflict', 'invalid_response', 'network error', 'timeout']) {
+    assert.equal(evidenceStatusTone(state), 'error', state);
+  }
 });

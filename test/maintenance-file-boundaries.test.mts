@@ -25,16 +25,20 @@ async function namedPipe(): Promise<string> {
 
 async function runTool(script: string, args: readonly string[]): Promise<{
   code: number | null;
+  stdout: string;
   stderr: string;
   timedOut: boolean;
 }> {
   return await new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [script, ...args], {
       cwd: process.cwd(),
-      stdio: ['ignore', 'ignore', 'pipe'],
+      stdio: ['ignore', 'pipe', 'pipe'],
     });
+    let stdout = '';
     let stderr = '';
     let timedOut = false;
+    child.stdout.setEncoding('utf8');
+    child.stdout.on('data', (chunk: string) => { stdout += chunk; });
     child.stderr.setEncoding('utf8');
     child.stderr.on('data', (chunk: string) => { stderr += chunk; });
     child.on('error', reject);
@@ -44,7 +48,7 @@ async function runTool(script: string, args: readonly string[]): Promise<{
     }, 10_000);
     child.on('close', (code) => {
       clearTimeout(timeout);
-      resolve({ code, stderr, timedOut });
+      resolve({ code, stdout, stderr, timedOut });
     });
   });
 }
@@ -97,5 +101,14 @@ describe('maintainer tool file boundaries', () => {
       databaseVersion: '1',
       license: 'Test fixture',
     }, pipe), /must be a file/iu);
+  });
+
+  test('summarises an unavailable non-regular browser result without blocking', { timeout: 30_000 }, async () => {
+    const pipe = await namedPipe();
+    const result = await runTool('tools/playwright-results-summary.mts', [pipe]);
+    assert.equal(result.timedOut, false);
+    assert.equal(result.code, 0);
+    assert.match(result.stdout, /Result data was unavailable/iu);
+    assert.match(result.stdout, /regular file/iu);
   });
 });

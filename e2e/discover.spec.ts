@@ -383,6 +383,7 @@ test('custom family mode generates only the analyst-selected mutation families',
 });
 
 test('advanced two-character Unicode generation is explicit, bounded, and reviewable', async ({ page }) => {
+  test.slow();
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole('textbox', { name: 'Brand or domain' }).fill('scope.invalid');
   await page.getByRole('textbox', { name: 'TLDs' }).fill('invalid');

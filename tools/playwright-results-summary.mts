@@ -1,10 +1,10 @@
 import {
   appendFileSync,
-  readFileSync,
-  statSync,
 } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+
+import { readBoundedRegularTextFile } from '../lib/bounded-file.mts';
 
 const MAX_RESULTS_BYTES = 64 * 1024 * 1024;
 const MAX_TEST_RESULTS = 4_000;
@@ -212,13 +212,20 @@ export function renderPlaywrightResultSummary(summary: PlaywrightResultSummary):
   return `${lines.join('\n')}\n`;
 }
 
-function main(): void {
+async function main(): Promise<void> {
   const resultPath = process.argv[2] || 'playwright-results.json';
   let output: string;
   try {
-    const size = statSync(resultPath).size;
-    if (size > MAX_RESULTS_BYTES) throw new Error('Playwright result data exceeds the 64 MiB diagnostic limit.');
-    const parsed: unknown = JSON.parse(readFileSync(resultPath, 'utf8'));
+    const source = await readBoundedRegularTextFile(resultPath, {
+      maximumBytes: MAX_RESULTS_BYTES,
+      minimumBytes: 1,
+      label: 'Playwright result data',
+      // The path is selected by a maintainer or CI workflow. Preserve support
+      // for workspace symlinks while the opened target remains a stable,
+      // bounded regular file.
+      allowSymbolicLink: true,
+    });
+    const parsed: unknown = JSON.parse(source);
     output = renderPlaywrightResultSummary(summarizePlaywrightResults(
       parsed,
       process.env.WHOISLEUTH_PLAYWRIGHT_RUN_LABEL,
@@ -233,4 +240,4 @@ function main(): void {
 }
 
 const entryPoint = process.argv[1];
-if (entryPoint && pathToFileURL(entryPoint).href === import.meta.url) main();
+if (entryPoint && pathToFileURL(entryPoint).href === import.meta.url) await main();

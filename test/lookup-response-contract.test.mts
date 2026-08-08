@@ -240,7 +240,7 @@ describe('Lookup HTTP response contract', () => {
     assert.deepEqual(raw, before);
   });
 
-  test('bounds and filters provider records in the view model while preserving raw evidence', () => {
+  test('bounds, filters, and de-duplicates provider records while preserving raw evidence', () => {
     const providerIds = ['urlscan_search', 'urlhaus_host', 'threatfox_domain_ioc'] as const;
     const providers: unknown[] = Array.from(
       { length: MAX_THREAT_INTELLIGENCE_PROVIDERS + 4 },
@@ -258,10 +258,33 @@ describe('Lookup HTTP response contract', () => {
     assert.equal(parsed.ok, true);
 
     const view = createLookupViewModel(parsed.value);
-    assert.equal(view.threatIntelligenceProviders.length, MAX_THREAT_INTELLIGENCE_PROVIDERS);
-    assert.equal(recordValue(requiredValue(view.threatIntelligenceProviders[0]).provider).id, 'urlscan_search');
-    assert.equal(recordValue(view.threatIntelligenceProviders.at(-1)?.provider).id, 'urlscan_search');
+    assert.deepEqual(
+      view.threatIntelligenceProviders.map((provider) => recordValue(provider.provider).id),
+      [...providerIds],
+    );
     assert.equal(threatIntelligence.providers.length, MAX_THREAT_INTELLIGENCE_PROVIDERS + 6);
+  });
+
+  test('keeps only the first separately attributed record for each provider', () => {
+    const provider = (detail: string) => ({
+      provider: { id: 'urlhaus_host', label: 'Untrusted wire label' },
+      state: 'not_found',
+      detail,
+      findings: [],
+      observation: { observedAt: '2026-07-01T00:00:00.000Z', limitations: [] },
+    });
+    const parsed = parseLookupHttpResponse(response({
+      threatIntelligence: { version: 1, providers: [provider('First'), provider('Second'), provider('Third')] },
+    }));
+    assert.equal(parsed.ok, true);
+
+    const view = createLookupViewModel(parsed.value);
+    assert.equal(view.threatIntelligenceProviders.length, 1);
+    assert.equal(view.threatIntelligenceProviders[0]?.detail, 'First');
+    assert.equal(
+      recordValue(view.threatIntelligenceProviders[0]?.provider).label,
+      'URLhaus malware-host records',
+    );
   });
 
   test('bounds nested provider evidence and permits only attributed HTTPS record links', () => {
@@ -305,29 +328,46 @@ describe('Lookup HTTP response contract', () => {
 
   test('retains every explicit provider result state without inventing disabled evidence', () => {
     const states = [...THREAT_INTELLIGENCE_RESULT_STATES];
-    const providers: Record<string, unknown>[] = states.map((state, index) => ({
-      provider: { id: 'urlscan_search', label: `Provider ${index}` },
-      state,
-      findings: state === 'partial' ? [{ id: 'bounded', category: 'suspicious', detail: 'Retained partial finding' }] : [],
-      observation: {
-        observedAt: `2026-07-01T00:0${index}:00.000Z`,
-        limitations: state === 'partial' ? ['The provider result was truncated.'] : [],
+    for (const [index, state] of states.entries()) {
+      const parsed = parseLookupHttpResponse(response({
+        threatIntelligence: {
+          version: 1,
+          providers: [{
+            provider: { id: 'urlscan_search', label: `Provider ${index}` },
+            state,
+            findings: state === 'partial'
+              ? [{ id: 'bounded', category: 'suspicious', detail: 'Retained partial finding' }]
+              : [],
+            observation: {
+              observedAt: `2026-07-01T00:0${index}:00.000Z`,
+              limitations: state === 'partial' ? ['The provider result was truncated.'] : [],
+            },
+          }],
+        },
+      }));
+      assert.equal(parsed.ok, true);
+
+      const provider = requiredValue(createLookupViewModel(parsed.value).threatIntelligenceProviders[0]);
+      assert.equal(provider.state, state);
+      if (state === 'partial') {
+        assert.equal(recordValue(arrayValue(provider.findings)[0]).detail, 'Retained partial finding');
+        assert.deepEqual(arrayValue(recordValue(provider.observation).limitations), ['The provider result was truncated.']);
+      }
+    }
+
+    const invalid = parseLookupHttpResponse(response({
+      threatIntelligence: {
+        version: 1,
+        providers: [{
+          provider: { id: 'urlscan_search', label: 'Invalid state' },
+          state: 'disabled',
+          findings: [],
+          observation: { observedAt: '2026-07-01T00:09:00.000Z', limitations: [] },
+        }],
       },
     }));
-    providers.push({
-      provider: { id: 'urlscan_search', label: 'Invalid state' },
-      state: 'disabled',
-      findings: [],
-      observation: { observedAt: '2026-07-01T00:09:00.000Z', limitations: [] },
-    });
-    const parsed = parseLookupHttpResponse(response({ threatIntelligence: { version: 1, providers } }));
-    assert.equal(parsed.ok, true);
-
-    const view = createLookupViewModel(parsed.value);
-    assert.deepEqual(view.threatIntelligenceProviders.map((provider) => provider.state), states);
-    const partial = requiredValue(view.threatIntelligenceProviders[1]);
-    assert.equal(recordValue(arrayValue(partial.findings)[0]).detail, 'Retained partial finding');
-    assert.deepEqual(arrayValue(recordValue(partial.observation).limitations), ['The provider result was truncated.']);
+    assert.equal(invalid.ok, true);
+    assert.deepEqual(createLookupViewModel(invalid.value).threatIntelligenceProviders, []);
   });
 
   test('builds the same additive HTTP envelope for domain and non-domain results', () => {

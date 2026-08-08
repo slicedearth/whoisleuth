@@ -485,6 +485,7 @@ export function projectEvidenceTopology(targetInput: EvidenceTopologyTarget, raw
     edges,
     counts,
     provenanceCounts,
-    truncated: candidates.length > candidateLimit || normalized.length > accepted.length,
+    truncated: accepted.length > 0
+      && (candidates.length > candidateLimit || normalized.length > accepted.length),
   };
 }
