@@ -5,7 +5,6 @@
   import BulkResultsTable from '$lib/components/BulkResultsTable.svelte';
   import BulkCoverage from '$lib/components/BulkCoverage.svelte';
   import BulkGroupSummary from '$lib/components/BulkGroupSummary.svelte';
-  import BulkTriagePlot from '$lib/components/BulkTriagePlot.svelte';
   import BulkRelationships from '$lib/components/BulkRelationships.svelte';
   import BulkScanQueue from '$lib/components/BulkScanQueue.svelte';
   import BulkShortlist from '$lib/components/BulkShortlist.svelte';
@@ -317,7 +316,7 @@
   async function copyDraft(text:string,label:string){try{await navigator.clipboard.writeText(text);draftStatus=`Copied ${label} to the clipboard.`;}catch{draftStatus='Clipboard access was unavailable. Use the email draft link instead.';}}
   async function importShortlistFile(event:Event){const input=event.currentTarget as HTMLInputElement,file=input.files?.[0];if(!file)return;try{if(file.size>MAX_SHORTLIST_IMPORT_BYTES)throw new Error('Shortlist imports are limited to 2 MB.');const result=await importShortlist(JSON.parse(await file.text()));shortlist=await loadShortlist();const skipped=result.skipped?`; skipped ${result.skipped} invalid, duplicate, or over-limit entr${result.skipped===1?'y':'ies'}`:'';shortlistStatus=`Imported ${result.added} new and ${result.updated} updated shortlist entries${skipped}.`;}catch(cause){shortlistStatus=cause instanceof Error?cause.message:'Shortlist import failed';}finally{input.value='';}}
   async function importDomainFile(event:Event){const control=event.currentTarget as HTMLInputElement,file=control.files?.[0];if(!file)return;try{if(file.size>MAX_DOMAIN_IMPORT_BYTES)throw new Error('Domain-list imports are limited to 2 MB.');const parsed=parseDomainInput(await file.text());if(!parsed.entries.length)throw new Error('No domain entries were found in that file.');input=parsed.entries.join('\n');status=`Loaded ${parsed.entries.length} unique entries from ${file.name}${parsed.usedHeader?' using its domain column':''}${parsed.duplicates?`; removed ${parsed.duplicates} duplicate${parsed.duplicates===1?'':'s'}`:''}.`;}catch(cause){status=cause instanceof Error?cause.message:'Could not import the domain list.';}finally{control.value='';}}
-  function exportCoverage(){if(!coverage)return;const rows=[['dimension','group','total','protected','registered','available','unknown','coverage_percent','priority','action','rationale'],...coverage.mutationGroups.map((group)=>['mutation',group.label,group.total,group.protected,group.registered,group.available,group.unknown,group.coveragePercent,'','','']),...coverage.tldGroups.map((group)=>['tld',group.label,group.total,group.protected,group.registered,group.available,group.unknown,group.coveragePercent,'','','']),...coverage.plan.map((row)=>['candidate',row.domain,'','','','','','',row.priority,row.actionLabel,row.rationale])];const url=URL.createObjectURL(new Blob([rowsToCsv(rows)],{type:'text/csv'}));const anchor=document.createElement('a');anchor.href=url;anchor.download=`defensive-registration-coverage-${new Date().toISOString().slice(0,10)}.csv`;anchor.click();URL.revokeObjectURL(url);}
+  function exportCoverage(){if(!coverage)return;const rows=[['dimension','group','total','registered','available','unknown','profile_listed_overlapping','profile_listed_share','domain','outcome','profile_listed','priority','action','rationale'],...coverage.mutationGroups.map((group)=>['mutation',group.label,group.total,group.registered,group.available,group.unknown,group.profileListed,group.profileListedShare,'','','','','','']),...coverage.tldGroups.map((group)=>['tld',group.label,group.total,group.registered,group.available,group.unknown,group.profileListed,group.profileListedShare,'','','','','','']),...coverage.plan.map((row)=>['candidate','','','','','','','',row.domain,row.status,row.profileListed?'true':'false',row.priority,row.actionLabel,row.rationale])];const url=URL.createObjectURL(new Blob([rowsToCsv(rows)],{type:'text/csv'}));const anchor=document.createElement('a');anchor.href=url;anchor.download=`defensive-registration-profile-listing-${new Date().toISOString().slice(0,10)}.csv`;anchor.click();URL.revokeObjectURL(url);}
   function exportPeerOutliers(){const exported=buildBulkPeerOutlierExport(peerOutlierMatrix,new Date().toISOString());downloadText(exported.content,exported.filename,'text/csv');}
   async function waitWhilePaused(){if(!paused)return;await new Promise<void>(resolve=>pauseResolvers.push(resolve));}
   function resume(){paused=false;for(const resolve of pauseResolvers.splice(0))resolve();}
@@ -591,18 +590,6 @@
     </div>
 
     <div id="bulk-analysis-panel" class:mobile-view-active={mobileResultView==='analysis'} class="mobile-result-panel analysis-result-panel">
-      <BulkMobileDisclosure title="Result distribution" description="Compare risk and opportunity across the filtered set.">
-        <BulkTriagePlot
-          points={filtered.map((row)=>({
-            domain:row.domain,
-            risk:row.risk,
-            opportunity:row.opportunity,
-            availability:row.availability,
-            trusted:Boolean(row.trusted),
-          }))}
-          matchedCount={filtered.length}
-        />
-      </BulkMobileDisclosure>
       <BulkMobileDisclosure title="Mail exposure" description="Review observed mail and authentication posture.">
         <BulkMailExposureReview
           report={mailExposureReport}
@@ -651,7 +638,7 @@
       </BulkMobileDisclosure>
     {/if}
     {#if coverage}
-      <BulkMobileDisclosure title="Defensive coverage" description="Review generated candidate coverage and gaps.">
+      <BulkMobileDisclosure title="Profile listing" description="Review which generated candidates are listed in the active profile and which need evidence review.">
         <BulkCoverage {coverage} {exportCoverage} {loadDomains} />
       </BulkMobileDisclosure>
     {/if}
@@ -667,7 +654,6 @@
   .mobile-workspace-toggle,.mobile-result-switcher{display:none}
   .triage{padding:var(--card-pad)}
   .triage{margin-top:16px}
-  .triage :global(#bulk-triage-plot){margin:16px 0}
   @media(max-width:700px){
     .bulk-workspace-shell{display:block;margin-top:16px}
     .mobile-workspace-toggle{display:flex;width:100%;min-width:0;align-items:center;justify-content:space-between;gap:12px;padding:12px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel-raised);color:var(--text);text-align:left}

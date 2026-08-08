@@ -43,10 +43,9 @@ export type {
 } from './visualization-time-series.ts';
 
 export const MAX_REDIRECT_NODES = 9;
-export const MAX_TRIAGE_PLOT_POINTS = 300;
 export const WATCHLIST_ACTIVITY_DAYS = 28;
 export const MAX_SCORE_FACTORS = 16;
-export const MAX_COVERAGE_BAR_GROUPS = 18;
+export const MAX_PROFILE_LISTING_BAR_GROUPS = 18;
 export const MAX_MONITOR_TIMELINE_EVENTS = 12;
 export const MAX_MONITOR_TIMELINE_LANES = 6;
 
@@ -55,14 +54,6 @@ export type RedirectInput = {
   from: string;
   to: string;
   queryOmitted?: boolean;
-};
-
-export type TriagePointInput = {
-  domain: string;
-  risk: number | null;
-  opportunity: number | null;
-  availability?: string;
-  trusted?: boolean;
 };
 
 export type WatchlistActivityInput = {
@@ -77,10 +68,10 @@ export type ScoreFactorInput = {
   delta: number;
 };
 
-export type CoverageBarInput = {
+export type ProfileListingBarInput = {
   id: string;
   label: string;
-  protected: number;
+  profileListed: number;
   registered: number;
   available: number;
   unknown: number;
@@ -102,12 +93,6 @@ export type CertificateValidityInput = {
   validTo: string | null | undefined;
   observedAt?: string | null | undefined;
 };
-
-function boundedScore(value: unknown) {
-  if (value === null || value === undefined || value === '') return null;
-  const score = Number(value);
-  return Number.isFinite(score) ? Math.max(0, Math.min(100, score)) : null;
-}
 
 function redirectLabel(value: unknown) {
   const text = boundedText(value, 320);
@@ -169,74 +154,21 @@ export function projectRedirectPath(rawRedirects: RedirectInput[]) {
   };
 }
 
-function deterministicSample<T>(items: T[], limit: number): T[] {
-  const boundedLimit = Number.isFinite(limit) ? Math.max(0, Math.floor(limit)) : 0;
-  if (boundedLimit === 0) return [];
-  if (items.length <= boundedLimit) return items;
-  if (boundedLimit === 1) return items.slice(0, 1);
-  return Array.from({ length: boundedLimit }, (_, index) => {
-    const sourceIndex = Math.round(index * (items.length - 1) / (boundedLimit - 1));
-    return items[sourceIndex];
-  }).filter((item): item is T => item !== undefined);
-}
-
-export function projectTriagePoints(rawPoints: TriagePointInput[]) {
-  const eligible = (Array.isArray(rawPoints) ? rawPoints : [])
-    .map((point) => ({
-      domain: boundedText(point?.domain, 253).toLowerCase(),
-      risk: boundedScore(point?.risk),
-      opportunity: boundedScore(point?.opportunity),
-      availability: boundedText(point?.availability, 30).toLowerCase() || 'unknown',
-      trusted: Boolean(point?.trusted),
-    }))
-    .filter((point) => point.domain && point.risk !== null && point.opportunity !== null)
-    .sort((a, b) => a.domain.localeCompare(b.domain));
-  const sampled = deterministicSample(eligible, MAX_TRIAGE_PLOT_POINTS);
-  const quadrants = eligible.reduce((counts, point) => {
-    if ((point.risk as number) >= 50) {
-      if ((point.opportunity as number) >= 50) counts.priorityReview += 1;
-      else counts.riskLedReview += 1;
-    } else if ((point.opportunity as number) >= 50) {
-      counts.availableReview += 1;
-    } else {
-      counts.lowerScores += 1;
-    }
-    return counts;
-  }, {
-    availableReview: 0,
-    priorityReview: 0,
-    lowerScores: 0,
-    riskLedReview: 0,
-  });
-  const x = scaleLinear().domain([0, 100]).range([58, 842]).clamp(true);
-  const y = scaleLinear().domain([0, 100]).range([308, 28]).clamp(true);
-  const points = sampled.map((point) => ({
-    ...point,
-    risk: point.risk as number,
-    opportunity: point.opportunity as number,
-    x: x(point.risk as number),
-    y: y(point.opportunity as number),
-    tone: point.trusted
-      ? 'trusted'
-      : point.availability === 'available'
-        ? 'available'
-        : point.availability === 'error'
-          ? 'error'
-          : 'registered',
-  }));
-  return {
-    width: 900,
-    height: 360,
-    points,
-    eligibleCount: eligible.length,
-    omittedCount: Math.max(0, (Array.isArray(rawPoints) ? rawPoints.length : 0) - eligible.length),
-    sampled: eligible.length > sampled.length,
-    quadrants,
-  };
-}
-
 function utcDayKey(milliseconds: number) {
   return new Date(milliseconds).toISOString().slice(0, 10);
+}
+
+function utcWeekLabel(startMilliseconds: number, endMilliseconds: number) {
+  const start = new Date(startMilliseconds);
+  const end = new Date(endMilliseconds);
+  const startDay = start.getUTCDate();
+  const endDay = end.getUTCDate();
+  const startMonth = start.toLocaleDateString('en-AU', { month: 'short', timeZone: 'UTC' });
+  const endMonth = end.toLocaleDateString('en-AU', { month: 'short', timeZone: 'UTC' });
+  const endYear = end.getUTCFullYear();
+  return startMonth === endMonth
+    ? `${startDay}–${endDay} ${endMonth} ${endYear}`
+    : `${startDay} ${startMonth}–${endDay} ${endMonth} ${endYear}`;
 }
 
 export function projectWatchlistActivity(rawEvents: WatchlistActivityInput[]) {
@@ -251,7 +183,19 @@ export function projectWatchlistActivity(rawEvents: WatchlistActivityInput[]) {
     })
     .filter((event): event is NonNullable<typeof event> => Boolean(event));
   if (!valid.length) {
-    return { width: 620, height: 190, days: [], maxChanges: 0, totalChecks: 0, totalChanges: 0 };
+    return {
+      width: 660,
+      height: 235,
+      days: [],
+      weekdayLabels: [],
+      weekLabels: [],
+      timeBasis: 'UTC calendar days' as const,
+      windowStart: null,
+      windowEnd: null,
+      maxChanges: 0,
+      totalChecks: 0,
+      totalChanges: 0,
+    };
   }
   const latest = Math.max(...valid.map((event) => event.milliseconds));
   const latestDay = Date.UTC(
@@ -274,8 +218,8 @@ export function projectWatchlistActivity(rawEvents: WatchlistActivityInput[]) {
     current.conclusive += event.conclusiveCount;
     byDay.set(key, current);
   }
-  const weekScale = scaleBand<number>().domain([0, 1, 2, 3]).range([72, 580]).padding(0.12);
-  const dayScale = scaleBand<number>().domain([0, 1, 2, 3, 4, 5, 6]).range([26, 165]).padding(0.12);
+  const weekScale = scaleBand<number>().domain([0, 1, 2, 3]).range([92, 638]).padding(0.12);
+  const dayScale = scaleBand<number>().domain([0, 1, 2, 3, 4, 5, 6]).range([42, 190]).padding(0.12);
   const dayWidth = weekScale.bandwidth();
   const dayHeight = dayScale.bandwidth();
   const days = Array.from({ length: WATCHLIST_ACTIVITY_DAYS }, (_, index) => {
@@ -294,10 +238,31 @@ export function projectWatchlistActivity(rawEvents: WatchlistActivityInput[]) {
       ...activity,
     };
   });
+  const weekdayLabels = Array.from({ length: 7 }, (_, index) => ({
+    index,
+    label: new Date(start + index * 86_400_000).toLocaleDateString('en-AU', { weekday: 'short', timeZone: 'UTC' }),
+    y: (dayScale(index) ?? 0) + dayHeight / 2 + 3,
+  }));
+  const weekLabels = Array.from({ length: 4 }, (_, index) => {
+    const weekStart = start + index * 7 * 86_400_000;
+    const weekEnd = weekStart + 6 * 86_400_000;
+    return {
+      index,
+      label: utcWeekLabel(weekStart, weekEnd),
+      startDate: utcDayKey(weekStart),
+      endDate: utcDayKey(weekEnd),
+      x: (weekScale(index) ?? 0) + dayWidth / 2,
+    };
+  });
   return {
-    width: 620,
-    height: 190,
+    width: 660,
+    height: 235,
     days,
+    weekdayLabels,
+    weekLabels,
+    timeBasis: 'UTC calendar days' as const,
+    windowStart: utcDayKey(start),
+    windowEnd: utcDayKey(latestDay),
     maxChanges: Math.max(0, ...days.map((day) => day.changes)),
     totalChecks: windowEvents.length,
     totalChanges: windowEvents.reduce((sum, event) => sum + event.changeCount, 0),
@@ -334,34 +299,35 @@ export function projectScoreFactors(rawFactors: readonly ScoreFactorInput[]) {
   };
 }
 
-export function projectCoverageBars(rawGroups: readonly CoverageBarInput[]) {
+export function projectProfileListingBars(rawGroups: readonly ProfileListingBarInput[]) {
   const candidates = (Array.isArray(rawGroups) ? rawGroups : [])
     .map((group, index) => {
-      const values = {
-        protected: Math.trunc(boundedNumber(group?.protected, 0, 100_000)),
+      const outcomes = {
         registered: Math.trunc(boundedNumber(group?.registered, 0, 100_000)),
         available: Math.trunc(boundedNumber(group?.available, 0, 100_000)),
         unknown: Math.trunc(boundedNumber(group?.unknown, 0, 100_000)),
       };
+      const total = Object.values(outcomes).reduce((sum, value) => sum + value, 0);
       return {
         id: boundedId(group?.id) || `group-${index}`,
         label: boundedText(group?.label, 56) || `Group ${index + 1}`,
-        ...values,
-        total: Object.values(values).reduce((sum, value) => sum + value, 0),
+        ...outcomes,
+        total,
+        profileListed: Math.min(total, Math.trunc(boundedNumber(group?.profileListed, 0, 100_000))),
       };
     })
     .filter((group) => group.total > 0)
     .sort((a, b) => b.total - a.total || a.label.localeCompare(b.label));
-  const groups = candidates.slice(0, MAX_COVERAGE_BAR_GROUPS);
+  const groups = candidates.slice(0, MAX_PROFILE_LISTING_BAR_GROUPS);
   const maximum = Math.max(1, ...groups.map((group) => group.total));
   const x = scaleLinear().domain([0, maximum]).range([210, 860]).clamp(true);
-  const rowHeight = 31;
+  const rowHeight = 40;
   return {
     width: 900,
     height: Math.max(76, 40 + groups.length * rowHeight),
     groups: groups.map((group, index) => {
       let offset = 0;
-      const segments = (['protected', 'registered', 'available', 'unknown'] as const).map((state) => {
+      const segments = (['registered', 'available', 'unknown'] as const).map((state) => {
         const value = group[state];
         const start = offset;
         offset += value;

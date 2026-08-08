@@ -16,8 +16,8 @@
     eyebrow: string;
     title: string;
     description: string;
-    metric?: string | number;
-    metricLabel?: string;
+    metric?: string | number | undefined;
+    metricLabel?: string | undefined;
     compact?: boolean;
     headingLevel?: 3 | 4;
     children: Snippet;

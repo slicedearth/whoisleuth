@@ -1,5 +1,22 @@
 import { expect, test } from './fixtures';
 import { expectNoHorizontalOverflow } from './helpers';
+import { buildSourceReliabilityReport } from '../cli/source-reliability.mts';
+
+const SOURCE_REPORT_TIME = '2026-08-05T10:00:00.000Z';
+
+function sourceReportLookup(state: 'success' | 'error', durationMs: number) {
+  return {
+    schema: 'whoisleuth.cli.lookup', version: 1, generatedAt: SOURCE_REPORT_TIME, mode: 'deep',
+    diagnostics: {
+      rdap: { status: state },
+      timing: { version: 1, sources: [{ source: 'rdap', durationMs }] },
+    },
+    availability: {
+      version: 1, status: state, source: 'rdap', observedAt: SOURCE_REPORT_TIME,
+      complete: state === 'success', truncated: false, limitations: [], durationMs,
+    },
+  };
+}
 
 test('the Dashboard and console navigation expose the registry-support reference', async ({ page }) => {
   await page.goto('/dashboard');
@@ -103,6 +120,32 @@ test('the registry-support catalogue filters locally and retains explicit interp
   await expect(page.getByRole('button', { name: 'Reset view' })).toBeDisabled();
   await expect(page.getByRole('heading', { name: 'Coverage is not live registry status.' })).toBeVisible();
   expect(unexpectedApiRequests).toEqual([]);
+});
+
+test('the source review keeps exact rates without a decorative rate strip', async ({ page }) => {
+  const report = buildSourceReliabilityReport(JSON.stringify([
+    sourceReportLookup('error', 900),
+    sourceReportLookup('success', 200),
+    sourceReportLookup('success', 220),
+    sourceReportLookup('success', 240),
+    sourceReportLookup('success', 260),
+    sourceReportLookup('success', 280),
+  ]), SOURCE_REPORT_TIME);
+  await page.goto('/registry-support');
+  await page.locator('.report-picker input[type="file"]').setInputFiles({
+    name: 'source-report.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(report)),
+  });
+
+  const rdap = page.locator('.source-card').filter({ has: page.getByRole('heading', { name: 'Rdap' }) });
+  await expect(rdap.locator('dl > div').filter({ hasText: 'Failure' })).toContainText('17%');
+  await expect(rdap.locator('dl > div').filter({ hasText: 'p95 duration' })).toContainText('900 ms');
+  await expect(page.locator('.rate-strip')).toHaveCount(0);
+
+  await page.setViewportSize({ width: 320, height: 700 });
+  await expect(rdap).toBeVisible();
+  await expectNoHorizontalOverflow(page);
 });
 
 test('profile details preserve provenance and safe external-link behavior', async ({ page }) => {

@@ -5,14 +5,13 @@ import { describe, test } from 'node:test';
 import {
   MAX_LIFECYCLE_EVENTS,
   MAX_REDIRECT_NODES,
-  MAX_TRIAGE_PLOT_POINTS,
   MAX_COLLECTION_TIMING_SOURCES,
   MAX_SCORE_FACTORS,
   MAX_VISUAL_MATRIX_CELLS,
   MAX_VISUAL_MATRIX_ROWS,
   MAX_FORCE_GRAPH_NODES,
   MAX_FORCE_GRAPH_LINKS,
-  MAX_COVERAGE_BAR_GROUPS,
+  MAX_PROFILE_LISTING_BAR_GROUPS,
   MAX_TREND_POINTS,
   MAX_MONITOR_TIMELINE_EVENTS,
   MAX_MONITOR_TIMELINE_LANES,
@@ -20,14 +19,13 @@ import {
   projectBoundedForceGraph,
   projectCertificateValidity,
   projectCollectionTiming,
-  projectCoverageBars,
+  projectProfileListingBars,
   projectEvidenceMatrix,
   projectLifecycleEvents,
   projectMonitorTimeline,
   projectRedirectPath,
   projectScoreFactors,
   projectTrendPoints,
-  projectTriagePoints,
   projectWatchlistActivity,
 } from '../frontend/src/lib/analysis/visualization-models.ts';
 import type {
@@ -71,30 +69,6 @@ describe('bounded visualization models', () => {
     assert.ok(projected.edges.every((edge) => edge.toX > edge.fromX));
   });
 
-  test('uses a deterministic capped triage sample and keeps incomplete scores explicit', () => {
-    const points = [
-      { domain: 'incomplete.example', risk: 40, opportunity: null, availability: 'registered' },
-      ...Array.from({ length: MAX_TRIAGE_PLOT_POINTS + 25 }, (_, index) => ({
-        domain: `candidate-${String(index).padStart(3, '0')}.example`,
-        risk: index % 101,
-        opportunity: 100 - (index % 101),
-        availability: index % 2 ? 'registered' : 'available',
-        trusted: index === 8,
-      })),
-    ];
-    const first = projectTriagePoints(points);
-    const second = projectTriagePoints([...points].reverse());
-
-    assert.equal(first.points.length, MAX_TRIAGE_PLOT_POINTS);
-    assert.equal(first.sampled, true);
-    assert.equal(first.omittedCount, 1);
-    assert.deepEqual(first, second);
-    assert.equal(Object.values(first.quadrants).reduce((total, count) => total + count, 0), first.eligibleCount);
-    assert.equal(first.quadrants.priorityReview > 0, true);
-    assert.equal(first.quadrants.riskLedReview > 0, true);
-    assert.ok(first.points.every((point) => point.x >= 58 && point.x <= 842 && point.y >= 28 && point.y <= 308));
-  });
-
   test('aggregates retained watchlist checks into a fixed 28-day activity window', () => {
     const projected = projectWatchlistActivity([
       { checkedAt: '2026-05-01T01:00:00Z', changeCount: 100, resultCount: 100, conclusiveCount: 100 },
@@ -108,6 +82,16 @@ describe('bounded visualization models', () => {
     assert.equal(projected.totalChecks, 3);
     assert.equal(projected.totalChanges, 8);
     assert.equal(projected.maxChanges, 5);
+    assert.equal(projected.timeBasis, 'UTC calendar days');
+    assert.equal(projected.windowStart, '2026-06-07');
+    assert.equal(projected.windowEnd, '2026-07-04');
+    assert.deepEqual(projected.weekdayLabels.map((item) => item.label), ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']);
+    assert.deepEqual(projected.weekLabels.map((item) => [item.startDate, item.endDate]), [
+      ['2026-06-07', '2026-06-13'],
+      ['2026-06-14', '2026-06-20'],
+      ['2026-06-21', '2026-06-27'],
+      ['2026-06-28', '2026-07-04'],
+    ]);
     const firstDay = projected.days.find((day) => day.date === '2026-07-01');
     assert.ok(firstDay);
     assert.equal(firstDay?.checks, 2);
@@ -384,20 +368,22 @@ describe('bounded visualization models', () => {
     );
   });
 
-  test('projects capped defensive-coverage bars while preserving exact counts', () => {
-    const projected = projectCoverageBars(Array.from({ length: 22 }, (_, index) => ({
+  test('projects capped outcome bars while keeping overlapping profile membership separate', () => {
+    const projected = projectProfileListingBars(Array.from({ length: 22 }, (_, index) => ({
       id: `group-${index}`,
       label: `Group ${index}`,
-      protected: index,
+      profileListed: index,
       registered: 2,
       available: 3,
       unknown: 1,
     })));
 
-    assert.equal(projected.groups.length, MAX_COVERAGE_BAR_GROUPS);
+    assert.equal(projected.groups.length, MAX_PROFILE_LISTING_BAR_GROUPS);
     assert.equal(projected.truncated, true);
     assert.ok(projected.groups.every((group) =>
       group.segments.reduce((total, segment) => total + segment.value, 0) === group.total));
+    assert.ok(projected.groups.every((group) => group.segments.map((segment) => segment.state).join(',') === 'registered,available,unknown'));
+    assert.ok(projected.groups.every((group) => group.profileListed <= group.total));
   });
 
   test('orders and caps certificate-search trend points', () => {

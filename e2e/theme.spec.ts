@@ -18,6 +18,38 @@ async function clearThemePreference(page: import('@playwright/test').Page) {
   }, STORAGE_KEY);
 }
 
+async function sourceTokenContrast(page: import('@playwright/test').Page, family: 'registry' | 'network' | 'technology') {
+  return page.evaluate((sourceFamily) => {
+    const parseColour = (value: string): [number, number, number] => {
+      const channels = value.match(/[\d.]+/gu)?.slice(0, 3).map(Number);
+      if (!channels || channels.length !== 3) throw new Error(`Could not parse computed colour ${value}.`);
+      return channels as [number, number, number];
+    };
+    const luminance = (colour: string) => {
+      const channels = parseColour(colour).map((channel) => {
+        const normalised = channel / 255;
+        return normalised <= 0.04045 ? normalised / 12.92 : ((normalised + 0.055) / 1.055) ** 2.4;
+      });
+      return 0.2126 * (channels[0] ?? 0) + 0.7152 * (channels[1] ?? 0) + 0.0722 * (channels[2] ?? 0);
+    };
+    const ratio = (foreground: string, background: string) => {
+      const values = [luminance(foreground), luminance(background)].sort((left, right) => right - left);
+      return ((values[0] ?? 0) + 0.05) / ((values[1] ?? 0) + 0.05);
+    };
+    const sample = document.createElement('span');
+    document.body.append(sample);
+    const resolveColour = (token: string) => {
+      sample.style.color = `var(${token})`;
+      return getComputedStyle(sample).color;
+    };
+    const panel = resolveColour('--panel');
+    const text = resolveColour(`--source-${sourceFamily}-text`);
+    const stroke = resolveColour(`--source-${sourceFamily}-stroke`);
+    sample.remove();
+    return { text, stroke, textRatio: ratio(text, panel), strokeRatio: ratio(stroke, panel) };
+  }, family);
+}
+
 test('the default system preference follows the operating-system colour scheme', async ({ page }) => {
   await clearThemePreference(page);
   await page.emulateMedia({ colorScheme: 'light' });
@@ -63,6 +95,21 @@ test('light preference applies before reload and persists across public pages', 
   const trigger = page.getByRole('button', { name: 'Colour theme, Light selected' });
   await expect(trigger.locator('[data-theme-symbol="light"]')).toBeVisible();
   await expect(trigger).not.toContainText('Light');
+});
+
+test('source text and graph stroke tokens stay distinct and contrast-safe in both themes', async ({ page }) => {
+  await clearThemePreference(page);
+  await page.goto('/');
+
+  for (const theme of ['Dark', 'Light'] as const) {
+    await chooseTheme(page, theme);
+    for (const family of ['registry', 'network', 'technology'] as const) {
+      const contrast = await sourceTokenContrast(page, family);
+      expect(contrast.text).not.toBe(contrast.stroke);
+      expect(contrast.textRatio).toBeGreaterThanOrEqual(4.5);
+      expect(contrast.strokeRatio).toBeGreaterThanOrEqual(3);
+    }
+  }
 });
 
 test('system preference follows operating-system colour-scheme changes', async ({ page }) => {

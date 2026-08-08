@@ -144,7 +144,7 @@ test('keeps mobile Bulk review focused while making secondary tools discoverable
   await expect(websiteCell).toBeVisible();
 
   await resultView.getByRole('button', { name: 'Analysis', exact: true }).click();
-  await expect(page.getByRole('button', { name: /Result distribution/u })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Result distribution/u })).toHaveCount(0);
   await expect(page.getByRole('region', { name: 'Lookalike mail exposure' })).toBeHidden();
   const mailExposureToggle = page.getByRole('button', { name: /Mail exposure/u });
   await mailExposureToggle.click();
@@ -567,22 +567,9 @@ test('sorts complete results by registration, confidence, website, registrar, an
 
   await runBulkScan(page, ['charlie.example', 'alpha.example', 'bravo.example']);
   const domains = () => page.locator('.results-table tbody td[data-label="Domain"] strong').allTextContents();
-  const triagePlot = page.getByRole('region', { name: 'Risk and opportunity matrix' });
-  await expect(triagePlot).toBeVisible();
-  await expect(triagePlot.getByRole('img', { name: /2 filtered domains plotted/ })).toBeVisible();
-  const quadrantSummary = triagePlot.getByLabel('Risk and opportunity quadrant counts');
-  await expect(quadrantSummary).toBeVisible();
-  await expect(quadrantSummary.locator('dt')).toHaveText([
-    'Available / review',
-    'Priority review',
-    'Lower scores',
-    'Risk-led review',
-  ]);
-  expect(
-    (await quadrantSummary.locator('dd').allTextContents())
-      .map(Number)
-      .reduce((total, count) => total + count, 0),
-  ).toBe(2);
+  await expect(page.getByRole('region', { name: 'Risk and opportunity matrix' })).toHaveCount(0);
+  await expect(page.locator('#bulk-triage-plot')).toHaveCount(0);
+  await expect(page.locator('.results-table tbody tr')).toHaveCount(3);
 
   await page.getByLabel('Desktop result sort').selectOption('registrar');
   await expect.poll(domains).toEqual(['alpha.example', 'bravo.example', 'charlie.example']);
@@ -1132,7 +1119,17 @@ test('deep results present bounded relationship evidence including exact native 
   await expect(focusedRetained.getByRole('heading', { name: 'No retained relationship observations' })).toBeVisible();
 });
 
-test('candidate handoff presents defensive coverage actions and export', async ({ page }) => {
+test('candidate handoff presents profile-listed actions, limitations, and export', async ({ page }) => {
+  const profile = {
+    id: 'listing-profile', name: 'Listing profile', officialDomains: ['official.example'], productNames: [], tlds: ['example'],
+    approvedPartnerDomains: [], allowlistedDomains: ['secure-example.example'], allowlistedRegistrars: [], dkimSelectors: [],
+    trademarkOwner: '', trademarkRegistration: '', officialFaviconHash: '', officialFaviconPHash: '', pageBaseline: null,
+    createdAt: '2026-07-16T00:00:00.000Z', updatedAt: '2026-07-16T00:00:00.000Z',
+  };
+  await migrateLegacyBrowserData(page, {
+    'whois-rdap-brand-profiles-v1': [profile],
+    'whois-rdap-active-brand-profile-v1': profile.id,
+  }, { destination: '/bulk' });
   const handoffToken = 'fedcba9876543210fedcba9876543210';
   await page.evaluate((token) => {
     sessionStorage.setItem('whoisleuth:candidate-handoff:v2', JSON.stringify({
@@ -1166,28 +1163,44 @@ test('candidate handoff presents defensive coverage actions and export', async (
 
   await runBulkScan(page, ['login-example.example', 'secure-example.example']);
   const coverage = page.locator('section.coverage');
-  await expect(coverage.getByRole('heading', { name: 'Coverage · 0%' })).toBeVisible();
+  await expect(coverage.getByRole('heading', { name: 'Profile-listed share · 50%' })).toBeVisible();
+  await expect(coverage).toContainText('Profile-listed is an overlapping local profile-membership count, separate from the retained registration outcome.');
   await expect(coverage).toContainText('Generated 2');
   await expect(coverage).toContainText('Registered 1');
   await expect(coverage).toContainText('Available 1');
+  await expect(coverage).toContainText('Profile-listed 1 · overlaps outcomes');
+  await expect(coverage).toContainText('Registered, available, and unknown partition the generated candidates.');
   await expect(coverage.getByRole('cell', { name: 'Impersonation term', exact: true }).first()).toBeVisible();
-  await expect(coverage.getByRole('img', { name: 'Mutation-family coverage. Exact counts are in the following table.' })).toBeVisible();
-  await expect(coverage.getByRole('img', { name: 'TLD coverage. Exact counts are in the following table.' })).toBeVisible();
+  await expect(coverage.getByRole('img', { name: /Mutation-family profile listing.*Registration outcomes form each stacked bar/ })).toBeVisible();
+  await expect(coverage.getByRole('img', { name: /TLD profile listing.*Registration outcomes form each stacked bar/ })).toBeVisible();
+  await expect(coverage.locator('.state-profileListed')).toHaveCount(0);
+  await expect(coverage.locator('.profile-listing-marker')).toHaveCount(2);
+  const mutationRow = coverage.locator('.coverage-tables > div').first().locator('tbody tr').first();
+  await expect(mutationRow.locator('td[data-label="Group"]')).toHaveText('Impersonation term');
+  await expect(mutationRow.locator('td[data-label="Profile-listed (overlap)"]')).toHaveText('1');
+
+  const plan = coverage.locator('details.coverage-plan');
+  await plan.locator(':scope > summary').click();
+  const listedAvailable = plan.locator('article', { hasText: 'secure-example.example' });
+  await expect(listedAvailable).toContainText('P1');
+  await expect(listedAvailable).toContainText('Review defensive acquisition · Available · Profile-listed');
 
   const downloadPromise = page.waitForEvent('download');
-  await coverage.getByRole('button', { name: 'Export coverage CSV' }).click();
+  await coverage.getByRole('button', { name: 'Export profile listing CSV' }).click();
   const download = await downloadPromise;
-  expect(download.suggestedFilename()).toMatch(/^defensive-registration-coverage-\d{4}-\d{2}-\d{2}\.csv$/);
+  expect(download.suggestedFilename()).toMatch(/^defensive-registration-profile-listing-\d{4}-\d{2}-\d{2}\.csv$/);
   const path = await download.path();
   expect(path).not.toBeNull();
   const content = await readFile(path!, 'utf8');
-  expect(content).toContain('mutation,Impersonation term,2,0,1,1,0,0');
+  expect(content).toContain('dimension,group,total,registered,available,unknown,profile_listed_overlapping,profile_listed_share,domain,outcome,profile_listed,priority,action,rationale');
+  expect(content).toContain('mutation,Impersonation term,2,1,1,0,1,50');
+  expect(content).toContain('candidate,,,,,,,,secure-example.example,available,true,P1,Review defensive acquisition');
 
-  await coverage.getByRole('button', { name: 'Load gaps' }).first().click();
+  await coverage.getByRole('button', { name: 'Load group' }).first().click();
   await expect(page.locator('#domains')).toHaveValue('login-example.example\nsecure-example.example');
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole('group', { name: 'Bulk result view' }).getByRole('button', { name: 'Analysis', exact: true }).click();
-  await page.getByRole('button', { name: /Defensive coverage/u }).click();
+  await page.getByRole('button', { name: /Profile listing/u }).click();
   await expectNoHorizontalOverflow(page);
   await expectNoHorizontalScrollContainers(coverage);
 });

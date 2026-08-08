@@ -65,8 +65,13 @@ test('watchlist history filters material changes and hands retained domains back
 
   const activity = page.getByRole('region', { name: 'Watchlist activity' });
   await expect(activity).toBeVisible();
-  await expect(activity.getByRole('img', { name: '2 retained watchlist checks with 1 material changes' })).toBeVisible();
-  await expect(activity.getByRole('list', { name: 'Retained watchlist activity by day' })).toContainText(/14 Jul/);
+  await expect(activity.getByRole('img', { name: /2 retained watchlist checks with 1 material changes from 2026-06-17 through 2026-07-14, grouped by UTC calendar day/u })).toBeVisible();
+  await expect(activity).toContainText('Rows are UTC weekdays and columns are consecutive seven-day blocks');
+  await expect(activity.locator('.day-label')).toHaveCount(7);
+  await expect(activity.locator('.week-label')).toHaveCount(4);
+  await expect(activity.locator('g[data-state="changed"]')).toHaveCount(1);
+  await expect(activity.locator('g[data-state="checked"]')).toHaveCount(1);
+  await expect(activity.getByRole('list', { name: 'Retained watchlist activity by UTC day' })).toContainText(/14 July UTC/u);
 
   await page.getByRole('row', { name: /Priority/ }).getByRole('button', { name: 'History' }).click();
   const history = page.locator('.history');

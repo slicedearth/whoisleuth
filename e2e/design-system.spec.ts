@@ -589,14 +589,27 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   await expect(lifecycle.getByRole('img', { name: 'Chronological lookup lifecycle overview' })).toBeVisible();
   const lifecycleEventList = lifecycle.locator('ol[aria-label="Lookup lifecycle events"]');
   await expect(lifecycleEventList).toContainText('Domain created');
-  await expect(lifecycleEventList).toHaveCSS('clip-path', 'inset(50%)');
-  const lifecycleColours = await lifecycle.locator('g.event').evaluateAll((events) => (
-    events.map((event) => getComputedStyle(event).getPropertyValue('--event-color').trim())
+  await expect(lifecycle.locator('.visual-fallback')).toHaveCSS('clip-path', 'inset(50%)');
+  const lifecycleTokens = await lifecycle.locator('g.event').evaluateAll((events) => (
+    events.map((event) => ({
+      kind: event.getAttribute('data-kind'),
+      colour: getComputedStyle(event).getPropertyValue('--event-color').trim(),
+    }))
   ));
-  expect(new Set(lifecycleColours).size).toBe(lifecycleColours.length);
-  await expect(lifecycle.locator('.event-shape')).toHaveCount(lifecycleColours.length);
+  const colourByKind = new Map<string | null, string>();
+  for (const event of lifecycleTokens) {
+    expect(event.colour).not.toBe('');
+    expect(colourByKind.get(event.kind) ?? event.colour).toBe(event.colour);
+    colourByKind.set(event.kind, event.colour);
+  }
+  expect([...colourByKind.keys()].sort()).toEqual(['observation', 'registry']);
+  expect(new Set(colourByKind.values()).size).toBe(colourByKind.size);
+  await expect(lifecycle.locator('.event-shape')).toHaveCount(lifecycleTokens.length);
   await expect(lifecycle.locator('.registry-shape')).toHaveCount(3);
   await expect(lifecycle.locator('.observation-shape')).toHaveCount(1);
+  await expect(lifecycle.locator('.visual-legend .shape-circle')).toHaveCount(1);
+  await expect(lifecycle.locator('.visual-legend .shape-diamond')).toHaveCount(1);
+  await expect(lifecycle.locator('.visual-legend .shape-square')).toHaveCount(1);
 
   const activationContext = page.getByRole('region', { name: 'Observed service relationship' });
   await expect(activationContext).toBeVisible();

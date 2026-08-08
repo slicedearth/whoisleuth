@@ -159,11 +159,11 @@
   }
   type PlotCell = { x: number; width: number };
   const PUBLICATION_COLOURS: Readonly<Record<string, string>> = Object.freeze({
-    'Registry RDAP': 'var(--source-registry)',
-    'Registrar RDAP': 'var(--source-registrar)',
-    WHOIS: 'var(--source-whois)',
+    'Registry RDAP': 'var(--source-registry-stroke)',
+    'Registrar RDAP': 'var(--source-registrar-stroke)',
+    WHOIS: 'var(--source-whois-stroke)',
   });
-  const publicationColour = (source: string): string => PUBLICATION_COLOURS[source] ?? 'var(--source-structured)';
+  const publicationColour = (source: string): string => PUBLICATION_COLOURS[source] ?? 'var(--source-structured-stroke)';
   const markerX = (cell: PlotCell): number => cell.x + cell.width / 2;
   const trackStart = (cells: readonly PlotCell[]): number => cells[0] ? markerX(cells[0]) : 250;
   const trackEnd = (cells: readonly PlotCell[]): number => {

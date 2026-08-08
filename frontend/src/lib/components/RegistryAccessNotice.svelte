@@ -94,12 +94,12 @@
 
 <style>
   .registry-access{padding:var(--card-pad);border-color:color-mix(in srgb,var(--amber) 38%,var(--border));background:color-mix(in srgb,var(--panel) 94%,var(--amber))}
-  .registry-access.expected{border-color:color-mix(in srgb,var(--source-registry) 46%,var(--border));background:color-mix(in srgb,var(--panel) 96%,var(--source-registry))}
+  .registry-access.expected{border-color:color-mix(in srgb,var(--source-registry-stroke) 46%,var(--border));background:color-mix(in srgb,var(--panel) 96%,var(--source-registry-stroke))}
   header{display:flex;align-items:flex-start;justify-content:space-between;gap:14px}
   h4{margin:2px 0 0;font-size:var(--text-sm);overflow-wrap:anywhere}
   p{margin:12px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.55}
   .badge{flex:0 0 auto;border:1px solid color-mix(in srgb,var(--amber) 45%,var(--border));border-radius:999px;padding:4px 8px;color:var(--amber);font:700 var(--text-2xs) var(--mono);letter-spacing:.04em;text-transform:uppercase}
-  .expected .badge{border-color:color-mix(in srgb,var(--source-registry) 55%,var(--border));color:var(--source-registry)}
+  .expected .badge{border-color:color-mix(in srgb,var(--source-registry-stroke) 55%,var(--border));color:var(--source-registry-text)}
   dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:14px 0 0}
   dl div{min-width:0;border:1px solid var(--border);border-radius:var(--radius-sm);padding:9px 10px;background:var(--panel-raised)}
   dt{color:var(--muted);font:700 var(--text-2xs) var(--mono);letter-spacing:.05em;text-transform:uppercase}

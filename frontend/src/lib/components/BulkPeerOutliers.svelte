@@ -151,7 +151,7 @@
   .row-list code{min-width:0;color:var(--text);font-size:var(--text-2xs);overflow-wrap:anywhere}
   .row-list li span,.empty{min-width:0;color:var(--muted);font-size:var(--text-2xs);line-height:1.45;overflow-wrap:anywhere}
   .row-list li .finding-strength{width:max-content;padding:2px 6px;border:1px solid color-mix(in srgb,var(--violet) 38%,var(--border));border-radius:999px;color:var(--violet);font:650 var(--text-2xs) var(--mono);text-transform:capitalize}
-  .row-list li .finding-strength[data-strength='strong']{border-color:color-mix(in srgb,var(--source-network) 42%,var(--border));color:var(--source-network)}
+  .row-list li .finding-strength[data-strength='strong']{border-color:color-mix(in srgb,var(--source-network-stroke) 42%,var(--border));color:var(--source-network-text)}
   details{margin-top:12px;border-top:1px solid var(--border)}
   summary{padding:11px 0;color:var(--text);font:680 var(--text-xs) var(--mono);cursor:pointer}
   summary:focus-visible{outline:2px solid var(--focus);outline-offset:3px}

@@ -71,6 +71,20 @@ test.describe('browser-local campaigns', () => {
     await expect(sourceSequence).toContainText('Mail');
     await expect(sourceSequence).toContainText('member-one.invalid');
     await expect(sourceSequence).toContainText('1/1 observed');
+    const mailCoverage = sourceSequence.locator('.coverage article[data-layer="mail"]');
+    const mailEvent = sourceSequence.locator('.sequence li[data-layer="mail"]');
+    await expect(mailCoverage).toBeVisible();
+    await expect(mailEvent).toBeVisible();
+    const mailColours = await mailCoverage.evaluate((coverageCard) => {
+      const event = coverageCard.closest('.temporal-review')?.querySelector('.sequence li[data-layer="mail"]');
+      const marker = event?.querySelector('.marker');
+      return {
+        coverage: getComputedStyle(coverageCard).borderLeftColor,
+        marker: marker ? getComputedStyle(marker).backgroundColor : '',
+      };
+    });
+    expect(mailColours.coverage).toBe(mailColours.marker);
+    expect(mailColours.coverage).not.toBe('');
 
     await page.getByRole('tab', { name: /Cases/ }).click();
     await page.getByRole('tab', { name: /Campaigns/ }).click();

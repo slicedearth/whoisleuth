@@ -205,7 +205,7 @@
   article p{margin:6px 0 0;color:var(--muted);font-size:var(--text-2xs);line-height:1.45}
   article p.classification{color:var(--accent);font-weight:700}
   article p.scope-state{color:var(--amber);font-family:var(--mono);text-transform:uppercase}
-  article p.scope-state.scope-match{color:var(--source-network)}
+  article p.scope-state.scope-match{color:var(--source-network-text)}
   article small{display:block;margin-top:7px;color:var(--muted);font:var(--text-2xs) var(--mono)}
   .signature-context{margin-top:7px;padding-top:7px;border-top:1px solid var(--border)}
   .signature-context>summary{cursor:pointer;color:var(--muted);font:650 var(--text-2xs) var(--mono)}

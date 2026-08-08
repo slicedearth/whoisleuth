@@ -425,14 +425,18 @@ browser workspace contain it. The resulting focused, shared, widespread, or
 limited-sample label describes only this local collection. It is not an
 internet-wide rarity estimate and does not strengthen an attribution claim.
 
-Defensive registration coverage groups a generated scan by mutation family and
-domain ending. It distinguishes protected or allowlisted domains, registered
-exposures, available gaps, and unknown results without making extra requests.
-Stacked bars summarise the same exact counts retained in the accompanying
-tables. A deterministic next-action plan places available and unresolved rows
-first, followed by registered candidates and profile-protected names. Its P1
-through P3 labels describe review order only; they are not a risk or
-maliciousness score. The CSV export includes the complete bounded plan.
+The defensive-registration profile listing groups a generated scan by mutation
+family and domain ending. Registered, available, and unknown are mutually
+exclusive retained registration outcomes. The profile-listed count is a
+separate, overlapping local classification that can accompany any outcome; it
+does not establish protection, ownership, or control. Stacked bars summarise
+only the registration outcomes, while the profile-listed count is shown beside
+them and retained in the exact table. A deterministic next-action plan places
+available and unresolved rows first, followed by registered candidates,
+regardless of profile membership. Its P1 and P2 labels describe review order
+only; they are not a risk or maliciousness score. The CSV export includes the
+complete bounded plan, each candidate's outcome and profile-listed flag, and
+the overlapping profile-listed share.
 
 Discover can optionally compare Unicode candidates with one analyst-selected
 RFC 7940 LGR XML file. The file stays in the current browser tab, is capped at
@@ -442,9 +446,9 @@ review reports whether candidate code points appear in the imported table for
 the analyst-entered suffix. It does not evaluate contextual rules, variant
 dispositions, eligibility, price, live acceptance, or availability, so
 "listed by table" is never presented as registrable.
-The two-domain workspace similarly adds a field matrix while preserving
+The two-domain workspace presents the exact delta and table while preserving
 source state, values, evidence links, conflicts, one-sided evidence, and
-limitations in its table.
+limitations.
 
 ### Brands
 
