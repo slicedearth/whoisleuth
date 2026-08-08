@@ -108,7 +108,7 @@
           <h3>Normalised facts</h3>
           <dl>
             {#each replay.facts as fact}
-              <div><dt>{fact.label}</dt><dd>{fact.value}<small>{fact.source}</small></dd></div>
+              <div><dt>{fact.label}</dt><dd>{fact.value}<small>{fact.source} · {fact.sourceState}{fact.sourceComplete === false ? ' · incomplete' : ''}</small></dd></div>
             {/each}
           </dl>
         {/if}

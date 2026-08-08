@@ -20,9 +20,13 @@ export type LookupEvidenceReplaySource = Readonly<{
 }>;
 
 export type LookupEvidenceReplayFact = Readonly<{
+  id: string;
   label: string;
   value: string;
+  sourceId: string;
   source: string;
+  sourceState: string;
+  sourceComplete: boolean | null;
 }>;
 
 export type LookupEvidenceReplay = Readonly<{
@@ -126,21 +130,39 @@ function source(descriptor: SourceDescriptor): LookupEvidenceReplaySource {
   };
 }
 
-function addFact(
-  output: LookupEvidenceReplayFact[],
-  label: string,
-  value: unknown,
-  sourceLabel: string,
-): void {
-  if (output.length >= MAX_FACTS) return;
+function factValue(value: unknown): string {
   let normalized = '';
   if (Array.isArray(value)) normalized = stringList(value, 12, 160).join(', ');
   else if (value && typeof value === 'object') {
     const item = record(value);
     normalized = text(item.name ?? item.org ?? item.handle ?? item.value, 300);
   } else normalized = text(value, 300);
-  if (!normalized) return;
-  output.push({ label, value: normalized, source: sourceLabel });
+  return normalized;
+}
+
+function addFact(
+  output: LookupEvidenceReplayFact[],
+  id: string,
+  label: string,
+  candidates: readonly Readonly<{ value: unknown; sourceId: string }>[],
+  sources: ReadonlyMap<string, LookupEvidenceReplaySource>,
+): void {
+  if (output.length >= MAX_FACTS) return;
+  for (const candidate of candidates) {
+    const value = factValue(candidate.value);
+    const source = sources.get(candidate.sourceId);
+    if (!value || !source) continue;
+    output.push({
+      id,
+      label,
+      value,
+      sourceId: source.id,
+      source: source.label,
+      sourceState: source.state,
+      sourceComplete: source.complete,
+    });
+    return;
+  }
 }
 
 function lifecycleValue(parsed: JsonRecord, key: string): unknown {
@@ -243,6 +265,7 @@ export async function parseLookupEvidenceReplay(
   const securityPosture = record(availability.securityPosture);
   const structuredDataIdentity = record(availability.structuredDataIdentity);
   const sourceDescriptors: SourceDescriptor[] = [
+    { id: 'submitted-query', label: 'Submitted query', value: { state: 'provided', complete: true, observedAt: exportedAt } },
     { id: 'rdap', label: 'Registry RDAP', value: rdap, fallbackObservedAt: record(diagnostics.rdap).fetchedAt },
     { id: 'whois', label: 'WHOIS', value: whois, fallbackObservedAt: record(diagnostics.whois).queriedAt },
     { id: 'reverse-dns', label: 'Reverse DNS', value: sources.reverseDns },
@@ -259,29 +282,47 @@ export async function parseLookupEvidenceReplay(
   const replaySources = sourceDescriptors
     .map((item) => source(item))
     .slice(0, MAX_SOURCES);
+  const replaySourcesById = new Map(replaySources.map((item) => [item.id, item]));
 
   const facts: LookupEvidenceReplayFact[] = [];
-  addFact(facts, 'Domain', rdapParsed.domain ?? whoisParsed.domain ?? query.registrableDomain ?? query.submitted, 'Registration');
-  addFact(facts, 'Registrar', rdapParsed.registrar ?? whoisParsed.registrar, 'Registry RDAP / WHOIS');
-  addFact(facts, 'Created', lifecycleValue(rdapParsed, 'created') ?? lifecycleValue(whoisParsed, 'created'), 'Registry RDAP / WHOIS');
-  addFact(facts, 'Expires', lifecycleValue(rdapParsed, 'expires') ?? lifecycleValue(whoisParsed, 'expires'), 'Registry RDAP / WHOIS');
-  addFact(facts, 'Nameservers', rdapParsed.nameservers ?? whoisParsed.nameservers ?? availability.nameservers, 'Registration / DNS');
-  addFact(facts, 'Website activity', availability.activityStatus, 'HTTP');
-  addFact(facts, 'Final website URL', http.finalUrl ?? record(http.response).finalUrl, 'HTTP');
-  addFact(facts, 'Connected address', tls.connectedAddress, 'TLS');
-  addFact(facts, 'Certificate fingerprint', record(tls.certificate).fingerprintSha256, 'TLS');
-  addFact(facts, 'Page title', pageIdentity.title ?? availability.pageTitle, 'HTML');
+  addFact(facts, 'registration.domain', 'Domain', [
+    { value: rdapParsed.domain, sourceId: 'rdap' },
+    { value: whoisParsed.domain, sourceId: 'whois' },
+    { value: query.registrableDomain ?? query.submitted, sourceId: 'submitted-query' },
+  ], replaySourcesById);
+  addFact(facts, 'registration.registrar', 'Registrar', [
+    { value: rdapParsed.registrar, sourceId: 'rdap' },
+    { value: whoisParsed.registrar, sourceId: 'whois' },
+  ], replaySourcesById);
+  addFact(facts, 'registration.created', 'Created', [
+    { value: lifecycleValue(rdapParsed, 'created'), sourceId: 'rdap' },
+    { value: lifecycleValue(whoisParsed, 'created'), sourceId: 'whois' },
+  ], replaySourcesById);
+  addFact(facts, 'registration.expires', 'Expires', [
+    { value: lifecycleValue(rdapParsed, 'expires'), sourceId: 'rdap' },
+    { value: lifecycleValue(whoisParsed, 'expires'), sourceId: 'whois' },
+  ], replaySourcesById);
+  addFact(facts, 'registration.nameservers', 'Nameservers', [
+    { value: rdapParsed.nameservers, sourceId: 'rdap' },
+    { value: whoisParsed.nameservers, sourceId: 'whois' },
+    { value: availability.nameservers, sourceId: 'dns' },
+  ], replaySourcesById);
+  addFact(facts, 'website.activity', 'Website activity', [{ value: availability.activityStatus, sourceId: 'http' }], replaySourcesById);
+  addFact(facts, 'website.final-url', 'Final website URL', [{ value: http.finalUrl ?? record(http.response).finalUrl, sourceId: 'http' }], replaySourcesById);
+  addFact(facts, 'tls.connected-address', 'Connected address', [{ value: tls.connectedAddress, sourceId: 'tls' }], replaySourcesById);
+  addFact(facts, 'tls.certificate-fingerprint', 'Certificate fingerprint', [{ value: record(tls.certificate).fingerprintSha256, sourceId: 'tls' }], replaySourcesById);
+  addFact(facts, 'page.title', 'Page title', [{ value: pageIdentity.title ?? availability.pageTitle, sourceId: 'page-identity' }], replaySourcesById);
   const technologyFindings = Array.isArray(technology.findings)
     ? technology.findings.slice(0, 12).map((item) => record(item).name)
     : [];
-  addFact(facts, 'Detected technology', technologyFindings, 'Derived technology profile');
+  addFact(facts, 'technology.detected', 'Detected technology', [{ value: technologyFindings, sourceId: 'technology' }], replaySourcesById);
 
   const contradictions = unique([
     ...comparisonContradictions(analysis.registryComparison, 'Registry RDAP and WHOIS'),
     ...comparisonContradictions(analysis.registrarPublicationComparison, 'Registry and registrar RDAP'),
   ], 16);
   const unknowns = unique(replaySources.flatMap((item) => (
-    item.state === 'success' && item.complete !== false
+    ['success', 'provided'].includes(item.state) && item.complete !== false
       ? []
       : [`${item.label}: ${item.state}${item.complete === false ? ' and incomplete' : ''}.`]
   )), 12);

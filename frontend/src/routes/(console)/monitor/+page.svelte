@@ -17,6 +17,7 @@
   import HostedWatchlistManager from '$lib/components/HostedWatchlistManager.svelte';
   import MonitorActivityHeatmap from '$lib/components/MonitorActivityHeatmap.svelte';
   import RetainedEvidenceTimeline from '$lib/components/RetainedEvidenceTimeline.svelte';
+  import RetainedChangeReview from '$lib/components/RetainedChangeReview.svelte';
   import WebsiteProfileClusters from '$lib/components/WebsiteProfileClusters.svelte';
   import { saveCandidateHandoff } from '$lib/candidate-handoff';
   import CampaignManager from '$lib/components/CampaignManager.svelte';
@@ -271,6 +272,7 @@
 {#if view==='timeline'}
 <div id="monitor-view-panel" role="tabpanel" aria-labelledby="tab-timeline">
   <RetainedEvidenceTimeline timeline={retainedTimeline} />
+  <RetainedChangeReview {cases} {websiteSnapshots} {watchlists} {bulkSessions} />
 </div>
 {/if}
 

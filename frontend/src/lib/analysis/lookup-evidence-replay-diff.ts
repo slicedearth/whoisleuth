@@ -16,6 +16,22 @@ function sameText(left: unknown, right: unknown): boolean {
   return String(left ?? '').trim().toLowerCase() === String(right ?? '').trim().toLowerCase();
 }
 
+function explicitlyCompleteSourceState(state: string, complete: boolean | null): boolean {
+  const canonical = state.trim().toLowerCase().replace(/[\s-]+/gu, '_');
+  return complete === true && ['complete', 'success', 'provided'].includes(canonical);
+}
+
+function factSourceExplicitlyComplete(
+  fact: LookupEvidenceReplay['facts'][number] | undefined,
+  fallbackFact: LookupEvidenceReplay['facts'][number] | undefined,
+  replay: LookupEvidenceReplay,
+): boolean {
+  if (fact) return explicitlyCompleteSourceState(fact.sourceState, fact.sourceComplete);
+  if (!fallbackFact) return false;
+  const source = replay.sources.find((item) => item.id === fallbackFact.sourceId);
+  return Boolean(source && explicitlyCompleteSourceState(source.state, source.complete));
+}
+
 export function buildLookupEvidenceReplayDiff(
   left: LookupEvidenceReplay,
   right: LookupEvidenceReplay,
@@ -40,19 +56,24 @@ export function buildLookupEvidenceReplayDiff(
         : 'Source state or completeness differs, so missing or changed facts may reflect collection conditions rather than target change.',
     });
   }
-  const factLabels = [...new Set([...left.facts.map((item) => item.label), ...right.facts.map((item) => item.label)])].sort();
-  for (const label of factLabels) {
-    const before = left.facts.find((item) => item.label === label);
-    const after = right.facts.find((item) => item.label === label);
-    const unavailableSource = [...left.sources, ...right.sources].some((item) => item.complete === false || ['error', 'partial', 'unavailable'].includes(item.state));
+  const factIds = [...new Set([...left.facts.map((item) => item.id), ...right.facts.map((item) => item.id)])].sort();
+  for (const id of factIds) {
+    const before = left.facts.find((item) => item.id === id);
+    const after = right.facts.find((item) => item.id === id);
+    const label = before?.label ?? after?.label ?? id;
+    const sourcesExplicitlyComplete = factSourceExplicitlyComplete(before, after, left)
+      && factSourceExplicitlyComplete(after, before, right);
     const unchanged = before && after && sameText(before.value, after.value);
-    const kind = unchanged
+    const sourceChanged = Boolean(before && after && before.sourceId !== after.sourceId);
+    const kind = sourceChanged
+      ? 'collection_quality_difference'
+      : unchanged
       ? 'unchanged'
-      : (!before || !after) && unavailableSource
+      : (!before || !after) && !sourcesExplicitlyComplete
         ? 'collection_quality_difference'
         : 'observed_change';
     rows.push({
-      id: `fact:${label.toLowerCase().replace(/[^a-z0-9]+/gu, '-')}`,
+      id: `fact:${id}`,
       label,
       kind,
       left: before?.value ?? 'not recorded',
@@ -60,7 +81,9 @@ export function buildLookupEvidenceReplayDiff(
       explanation: kind === 'observed_change'
         ? 'The bounded normalised value differs between two retained observations.'
         : kind === 'collection_quality_difference'
-          ? 'One observation lacks this fact while at least one source is incomplete; this is not treated as observed removal.'
+          ? sourceChanged
+            ? 'The retained source attribution changed, so the values are not represented as a target change even when they differ.'
+            : 'One observation lacks this fact without explicitly complete positive source evidence on both sides; this is a collection or provenance difference, not observed removal.'
           : 'The bounded normalised value is unchanged.',
     });
   }

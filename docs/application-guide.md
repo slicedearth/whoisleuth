@@ -1013,6 +1013,19 @@ completeness, truncation, derivation, and source state, and links back to its
 owning record. The projection does not copy raw payloads, pin values, analyst
 notes, or relationship values, and it never starts collection.
 
+The same Timeline view includes a bounded **Retained change review** for exact
+derived comparison rows. It offers adjacent snapshots from one case or website
+profile history, retained watchlist change events, and only a saved Bulk-session
+pair that the analyst selects explicitly. Publication, entity, temporal,
+expectation, membership, and reconciliation meanings remain distinct. The
+metadata-only index shows owner, mode, source state, observation or retention
+time, completeness, truncation, and limitations before deriving exact values
+for the selected owner. Missing or partial later evidence is not represented as
+removal or resolution. Detail-bound omissions, rows omitted by the retained
+source, and suppressed duplicate exact rows are disclosed separately. This
+transient review neither pairs saved sessions
+automatically nor starts collection, stores another copy, or changes an owner.
+
 The Cases view also accepts the strict WHOISleuth external-findings schema,
 fixed-column finding rows in CSV or JSON, sanitised web-capture summaries and
 artefact manifests,

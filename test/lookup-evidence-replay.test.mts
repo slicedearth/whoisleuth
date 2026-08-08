@@ -80,7 +80,14 @@ test('replay validates and summarizes a current first-party export without raw r
   assert.equal(replay.digestVerified, false);
   assert.equal(replay.generatorVersion, '1.34.1');
   assert.ok(replay.sources.some((source) => source.id === 'rdap' && source.state === 'success'));
-  assert.ok(replay.facts.some((fact) => fact.label === 'Detected technology' && fact.value === 'Example CMS'));
+  assert.ok(replay.facts.some((fact) => fact.id === 'technology.detected'
+    && fact.sourceId === 'technology'
+    && fact.sourceState === 'success'
+    && fact.label === 'Detected technology'
+    && fact.value === 'Example CMS'));
+  assert.ok(replay.facts.some((fact) => fact.id === 'registration.registrar'
+    && fact.sourceId === 'rdap'
+    && fact.sourceState === 'success'));
   assert.ok(replay.contradictions.some((value) => value.includes('Statuses')));
   assert.ok(replay.unknowns.some((value) => value.includes('WHOIS')));
   assert.ok(replay.recommendedSteps.some((value) => value.includes('historical evidence')));
