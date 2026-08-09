@@ -353,6 +353,15 @@ results initially sort by latest retained observation. **Reset view** restores
 that default for certificate-log results and restores review-cue ordering for
 local generation.
 
+For each normalised certificate-search keyword, browser-local history keeps the
+last complete baseline and a bounded ever-seen domain set. A later complete
+search can therefore distinguish a first local observation, a result continuing
+from the previous complete search, and a reappearance after absence from that
+previous baseline. Capped searches remain lower bounds: they neither replace
+the complete baseline or ever-seen set nor establish reappearance, continuity,
+absence, current activity, ownership, or control. Earlier history migrated from
+schemas 1 or 2 remains explicitly incomplete.
+
 **Nameservers** is a separate, deliberate hosted pivot. Enter one nameserver
 hostname and one registry suffix. WHOISleuth uses IANA RDAP bootstrap data to
 select that suffix's registry and requests the registry's RFC 9082
@@ -574,6 +583,14 @@ dependencies, nameserver-preflight coverage, planned changes, and retirement
 state. These fields are planning context only: they neither change DNS nor
 infer provider control. Approved windows label matching retained changes as
 expected while preserving the underlying observations and their limitations.
+
+The adjacent **Cross-domain posture matrix** projects those saved baselines and
+their latest retained compact posture observations into one domain-by-control
+review. Cells keep aligned, drift, review, unavailable, unknown, unsupported,
+suppressed, approved-window, and not-configured states separate and link back
+to the exact local baseline and retained observation used. The projection makes
+no request, changes no configuration, and is not an uptime, ownership, control,
+or continuous-monitoring claim.
 
 An official-site baseline can retain bounded page identity and fingerprint
 data without keeping page HTML, URL paths, query strings, credentials, or

@@ -5,9 +5,10 @@
   } from '$lib/analysis/brand-profile-model.ts';
   import type { BrandProfile } from '$lib/brand-profiles';
 
-  let { active, saveBaselines }: {
+  let { active, saveBaselines, requestedDomain = '' }: {
     active: BrandProfile;
     saveBaselines: (baselines: DesiredPostureBaseline[]) => void | Promise<void>;
+    requestedDomain?: string;
   } = $props();
 
   let selectedDomain = $state('');
@@ -27,6 +28,7 @@
   let suppressions = $state('');
   let note = $state('');
   let message = $state('');
+  let appliedRequestedDomain = $state('');
 
   function list(value: string): string[] {
     return [...new Set(value.split(/[\n,]/u).map((item) => item.trim()).filter(Boolean))].slice(0, 32);
@@ -143,6 +145,11 @@
   }
 
   $effect(() => {
+    if (requestedDomain && requestedDomain !== appliedRequestedDomain && active.officialDomains.includes(requestedDomain)) {
+      appliedRequestedDomain = requestedDomain;
+      load(requestedDomain);
+      return;
+    }
     const fallback = active.officialDomains.includes(selectedDomain)
       ? selectedDomain
       : active.officialDomains[0] || '';
@@ -150,7 +157,7 @@
   });
 </script>
 
-<section class="baselines card">
+<section id="desired-posture-baseline" class="baselines card" tabindex="-1">
   <header class="section-head">
     <div>
       <p class="eyebrow">Desired state</p>

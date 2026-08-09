@@ -224,7 +224,7 @@ test('defensive mail settings, retired selectors, and expiring analyst attestati
   await registrarMfa.getByLabel('Review expiry').fill('2026-10-01');
   await registrarMfa.getByLabel('Bounded note').fill('Reviewed with the domain owner.');
   await page.getByRole('button', { name: 'Save attestations' }).click();
-  await expect(page.getByRole('status')).toContainText('Saved reviewed protection attestations');
+  await expect(page.getByRole('status', { name: 'Brand Profile action status' })).toContainText('Saved reviewed protection attestations');
 
   const persisted = requiredValue(
     (await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 1 })).records[0],
@@ -323,6 +323,57 @@ test('official-site baseline controls fit a narrow mobile viewport without horiz
   expect(buttonBox).not.toBeNull();
   expect(buttonBox!.x).toBeGreaterThanOrEqual(box!.x);
   expect(buttonBox!.x + buttonBox!.width).toBeLessThanOrEqual(box!.x + box!.width);
+});
+
+test('cross-domain posture matrix links exact retained baselines and observations without collection', async ({ page }) => {
+  let postureRequests = 0;
+  await page.route('**/api/domain-posture**', (route) => {
+    postureRequests += 1;
+    return route.abort();
+  });
+  await page.goto('/brands');
+  await migrateLegacyBrowserData(page, {
+    [PROFILES_KEY]: [{
+      ...profileFixture(),
+      officialDomains: ['stored.example', 'unavailable.example', 'not-configured.example'],
+      desiredPostureBaselines: [{
+        domain: 'stored.example',
+        nameservers: ['ns1.stored.example'],
+        ds: ['12345 13 2 abcdef'],
+        observationHistory: [{
+          observedAt: '2026-07-12T00:00:00.000Z',
+          checks: [{ id: 'nameservers', status: 'pass', records: ['ns1.stored.example'] }],
+        }],
+        updatedAt: ISO,
+      }, {
+        domain: 'unavailable.example',
+        nameservers: ['ns1.unavailable.example'],
+        updatedAt: ISO,
+      }],
+    }],
+    [ACTIVE_KEY]: 'profile-1',
+  });
+
+  const matrix = page.getByRole('region', { name: 'Cross-domain posture matrix' });
+  await expect(matrix).toContainText('2/3 baselines · 1 observed');
+  const storedRow = matrix.locator('tbody tr', { hasText: 'stored.example' });
+  await expect(storedRow).toContainText('Aligned');
+  await expect(storedRow).toContainText('Unsupported');
+  const unavailableRow = matrix.locator('tbody tr', { hasText: 'unavailable.example' });
+  await expect(unavailableRow).toContainText('Unavailable');
+  const unconfiguredRow = matrix.locator('tbody tr', { hasText: 'not-configured.example' });
+  await expect(unconfiguredRow).toContainText('Not configured');
+  await expect(storedRow.getByRole('link', { name: 'Observation' }).first()).toHaveAttribute('href', '#retained-posture-observation-stored.example');
+
+  await storedRow.getByRole('link', { name: 'Baseline' }).first().click();
+  await expect(page).toHaveURL(/baseline=stored\.example#desired-posture-baseline/u);
+  await expect(page.getByLabel('Official domain')).toHaveValue('stored.example');
+  await expect(matrix.locator('[id="retained-posture-observation-stored.example"]')).toContainText('nameservers · pass');
+  expect(postureRequests).toBe(0);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(matrix.locator('.mobile-rows')).toBeVisible();
+  await expectNoHorizontalOverflow(page);
 });
 
 test('retained certificate events replay reviewed expectations without mobile overflow', async ({ page }) => {

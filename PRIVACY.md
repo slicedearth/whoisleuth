@@ -732,12 +732,14 @@ default (see the README), so many lookups return no personal data at all.
   Watchlists retain a bounded timeline of material scan changes alongside
   their latest results; older timeline events are automatically discarded.
   Structured Certificate Transparency searches retain bounded per-keyword
-  domain baselines and check summaries so Discover can identify domains that
-  are new since the previous complete search. History schema 2 also retains a
-  bounded count of check summaries discarded by local event or byte limits;
-  schema 1 migrates with earlier pruning certainty marked unknown rather than
-  assumed to be zero. Capped or legacy results never replace a complete
-  baseline. The current response can also contain a
+  domain baselines, check summaries, and a schema-3 ever-seen set of at most
+  1,000 canonical domains. Complete retained searches can distinguish first
+  local observation, continuing observation, and reappearance after absence
+  from the immediately previous complete baseline. Schemas 1 and 2 migrate
+  without inventing complete earlier history. Capped searches do not update
+  the complete baseline or ever-seen set and cannot establish continuity,
+  reappearance, disappearance, absence, current activity, ownership, or
+  control. The current response can also contain a
   separately capped projection of names observed together in individual public
   certificate records. Those certificate groups are not added to the saved CT
   history baseline, and group-cap state remains distinct from domain-result

@@ -6,6 +6,7 @@
   import BrandProfileEditor from '$lib/components/BrandProfileEditor.svelte';
   import BrandReviewInbox from '$lib/components/BrandReviewInbox.svelte';
   import BrandPostureAudit from '$lib/components/BrandPostureAudit.svelte';
+  import BrandPortfolioPostureMatrix from '$lib/components/BrandPortfolioPostureMatrix.svelte';
   import BrandDesiredPostureBaselines from '$lib/components/BrandDesiredPostureBaselines.svelte';
   import BrandDomainControlPassport from '$lib/components/BrandDomainControlPassport.svelte';
   import BrandCertificateEventReplay from '$lib/components/BrandCertificateEventReplay.svelte';
@@ -166,7 +167,7 @@
 {#if showForm}<BrandProfileEditor editing={Boolean(editing)} values={editorValues} setValue={setEditorValue} {pageBaseline} {capturingIdentity} disabledReason={siteIdentityReason} {captureSiteIdentity} {save} close={()=>showForm=false} formatDate={baselineDate} />{/if}
 <BrandReviewInbox inbox={brandReviewInbox} />
 
-{#if active}<DomainControlCentre {active} /><BrandPostureAudit {active} disabledReason={postureReason} {auditing} results={auditResults} {audit} {retainObservation} /><BrandDesiredPostureBaselines {active} {saveBaselines} /><BrandDomainControlPassport {active} saveProfile={savePassportProfile} /><BrandCertificateEventReplay {active} {cases} unavailable={certificateReplayUnavailable} /><BrandProtectionAttestations {active} {saveAttestations} /><MailReportWorkbench {active} />{/if}
+{#if active}<DomainControlCentre {active} /><BrandPortfolioPostureMatrix {active} /><BrandPostureAudit {active} disabledReason={postureReason} {auditing} results={auditResults} {audit} {retainObservation} /><BrandDesiredPostureBaselines {active} {saveBaselines} requestedDomain={page.url.searchParams.get('baseline') || ''} /><BrandDomainControlPassport {active} saveProfile={savePassportProfile} /><BrandCertificateEventReplay {active} {cases} unavailable={certificateReplayUnavailable} /><BrandProtectionAttestations {active} {saveAttestations} /><MailReportWorkbench {active} />{/if}
 
 <style>
   .message{min-width:0;color:var(--accent);font-size:var(--text-sm);overflow-wrap:anywhere}

@@ -39,6 +39,13 @@ const initialBaselineResponse = {
   domains: ['a.example.invalid', 'login.example.invalid'],
 };
 
+const otherOnlyResponse = {
+  ...structuredResponse,
+  certCount: 2,
+  matches: [structuredResponse.matches[1]],
+  domains: ['shop.other.invalid'],
+};
+
 function ctHistoryStoreFixture(checkCount: number) {
   const history = Array.from({ length: checkCount }, (_, index) => ({
     checkedAt: new Date(Date.UTC(2026, 0, index + 1, 12, index)).toISOString(),
@@ -579,9 +586,9 @@ test('an allowlisted canonical domain is excluded when a profile is active', asy
   await expect(page.locator('.candidate')).toHaveCount(1);
   await expect(page.locator('.candidate strong')).toHaveText(['other.invalid']);
   await expect(page.locator('.status')).toContainText('excluded 1 trusted profile domain');
-  await expect(page.locator('.status')).toContainText('0 new since the previous complete search');
-  await expect(page.getByRole('button', { name: 'New only · 0' })).toBeVisible();
-  await expect(page.locator('.ct-new')).toHaveCount(0);
+  await expect(page.locator('.status')).toContainText('0 first observed · 0 reappeared · 1 continuing since the previous complete search');
+  await expect(page.getByRole('button', { name: 'Not in prior complete · 0' })).toBeVisible();
+  await expect(page.locator('.ct-history-state.continuing')).toHaveCount(1);
 });
 
 test('Continue to Bulk loads canonical domains and CT provenance survives the handoff', async ({ page }) => {
@@ -634,13 +641,13 @@ test('a complete CT baseline persists across reload and labels newly observed do
 
   await runCtSearch(page);
   await expect(page.locator('.status')).toContainText('Saved as the first local baseline');
-  await expect(page.locator('.ct-new')).toHaveCount(0);
+  await expect(page.locator('.ct-history-state.first_observed')).toHaveCount(1);
 
   await page.reload();
   await runCtSearch(page);
-  await expect(page.locator('.status')).toContainText('1 new since the previous complete search');
-  await expect(page.locator('.ct-new')).toHaveCount(1);
-  await expect(page.locator('.candidate', { has: page.locator('.ct-new') }).locator('strong')).toHaveText('other.invalid');
+  await expect(page.locator('.status')).toContainText('1 first observed · 0 reappeared · 1 continuing since the previous complete search');
+  await expect(page.locator('.ct-history-state.first_observed')).toHaveCount(1);
+  await expect(page.locator('.candidate', { has: page.locator('.ct-history-state.first_observed') }).locator('strong')).toHaveText('other.invalid');
   const history = page.locator('details.ct-history');
   await history.locator(':scope > summary').click();
   await history.locator('.ct-checks > summary').click();
@@ -653,11 +660,34 @@ test('a complete CT baseline persists across reload and labels newly observed do
   await expect(plot.locator('line.trend-segment')).toHaveCount(1);
   await expect(history).toContainText('Horizontal spacing represents elapsed time');
 
-  const newOnly = page.getByRole('button', { name: 'New only · 1' });
+  const newOnly = page.getByRole('button', { name: 'Not in prior complete · 1' });
   await newOnly.click();
   await expect(newOnly).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('.candidate')).toHaveCount(1);
   await expect(page.locator('.candidate strong')).toHaveText(['other.invalid']);
+});
+
+test('complete CT history distinguishes a reappearance from first and continuing observations', async ({ page }) => {
+  let requestCount = 0;
+  await page.route('**/api/ct-search**', (route) => {
+    requestCount += 1;
+    const body = requestCount === 1
+      ? initialBaselineResponse
+      : requestCount === 2
+        ? otherOnlyResponse
+        : structuredResponse;
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+  });
+
+  await runCtSearch(page);
+  await runCtSearch(page);
+  await expect(page.locator('.status')).toContainText('1 first observed · 0 reappeared · 0 continuing since the previous complete search');
+  await runCtSearch(page);
+  await expect(page.locator('.status')).toContainText('0 first observed · 1 reappeared · 1 continuing since the previous complete search');
+  const reappeared = page.locator('.candidate', { has: page.locator('.ct-history-state.reappeared') });
+  await expect(reappeared.locator('strong')).toHaveText('example.invalid');
+  await expect(reappeared).toContainText('Reappeared after complete-baseline absence');
+  await expect(page.locator('.candidate', { has: page.locator('.ct-history-state.continuing') }).locator('strong')).toHaveText('other.invalid');
 });
 
 test('certificate history uses a compact mobile summary without horizontal scrolling', async ({ page }) => {
@@ -699,7 +729,7 @@ test('previous certificate searches can be reused and deleted', async ({ page })
   await expect(history).toContainText('example brand');
   await expect(history).toContainText('1 retained check');
   await history.locator('.ct-checks > summary', { hasText: 'View check history' }).click();
-  await expect(history.locator('.ct-checks')).toContainText('1 result · 0 new');
+  await expect(history.locator('.ct-checks')).toContainText('1 result · 1 first · 0 reappeared · 0 continuing');
 
   await page.locator('.fields input').first().fill('different');
   await history.getByRole('button', { name: 'Use example brand certificate search' }).click();
@@ -741,7 +771,7 @@ test('certificate history distinguishes exact capacity from confirmed pruning', 
     '2026-01-21T12:20:00.000Z',
   ]);
   const stored = await readBrowserLocalCollection(page, 'ct_history', { minimumRecords: 1 });
-  expect(stored.manifest.schemaVersion).toBe(2);
+  expect(stored.manifest.schemaVersion).toBe(3);
   expect(stored.records[0]?.value).toMatchObject({
     discardedCheckCount: 1,
     discardedCheckCountKnown: true,
@@ -762,7 +792,8 @@ test('a capped search does not replace the previous complete baseline', async ({
   await runCtSearch(page);
   await runCtSearch(page);
   await expect(page.locator('.status')).toContainText('Capped results did not replace that baseline');
-  await expect(page.locator('.ct-new')).toHaveCount(1);
+  await expect(page.locator('.ct-history-state.unclassified_partial')).toHaveCount(2);
+  await expect(page.locator('.ct-history-state.reappeared')).toHaveCount(0);
   const history = page.locator('details.ct-history');
   await history.locator(':scope > summary').click();
   await history.locator('.ct-checks > summary').click();
@@ -776,7 +807,7 @@ test('a capped search does not replace the previous complete baseline', async ({
   await expect(history).toContainText('1 capped check is a diamond lower-bound marker');
   await expect(history).toContainText('Segments touching a capped check are omitted, leaving visible gaps');
   const cappedHistoryRow = history.locator('.ct-checks li', { hasText: 'capped lower bound' });
-  await expect(cappedHistoryRow).toContainText('At least 2 results · At least 1 new · capped lower bound');
+  await expect(cappedHistoryRow).toContainText('At least 2 results · continuity and reappearance unclassified · capped lower bound');
 
   await page.setViewportSize({ width: 393, height: 852 });
   const summary = history.locator('.ct-trend-summary');
@@ -786,8 +817,8 @@ test('a capped search does not replace the previous complete baseline', async ({
   // The third complete response matches the original baseline. If the capped
   // response had replaced it, the original domain would be mislabelled new.
   await runCtSearch(page);
-  await expect(page.locator('.status')).toContainText('0 new since the previous complete search');
-  await expect(page.locator('.ct-new')).toHaveCount(0);
+  await expect(page.locator('.status')).toContainText('0 first observed · 0 reappeared · 1 continuing since the previous complete search');
+  await expect(page.locator('.ct-history-state.continuing')).toHaveCount(1);
 });
 
 test('corrupt local CT history is recovered without losing search results', async ({ page }) => {
@@ -798,7 +829,7 @@ test('corrupt local CT history is recovered without losing search results', asyn
   await expect(page.locator('.candidate')).toHaveCount(1);
   await expect(page.locator('.status')).toContainText('Saved as the first local baseline');
   const stored = await readBrowserLocalCollection(page, 'ct_history', { minimumRecords: 1, minimumRevision: 2 });
-  expect(stored.manifest.schemaVersion).toBe(2);
+  expect(stored.manifest.schemaVersion).toBe(3);
   expect(stored.records).toHaveLength(1);
 });
 
@@ -816,7 +847,7 @@ test('a browser storage write failure does not hide valid CT search results', as
 });
 
 test('a future CT history schema is never overwritten by an older app', async ({ page }) => {
-  const future = { version: 3, entries: [{ future: true }] };
+  const future = { version: 4, entries: [{ future: true }] };
   await migrateLegacyBrowserData(page, { 'whoisleuth:ct-search-history:v1': future });
 
   await expect(page.getByRole('heading', { name: 'Browser-local data unavailable' })).toBeVisible();

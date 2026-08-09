@@ -513,6 +513,7 @@ describe('schema compatibility inventory', () => {
     assert.deepEqual(byId(inventory, 'browser.brand-profiles').supportedVersions, [1, 2, 3, 4, 5, 6]);
     assert.deepEqual(byId(inventory, 'browser.watchlists').supportedVersions, [1, 2]);
     assert.deepEqual(byId(inventory, 'browser.shortlist').supportedVersions, [1, 2, 3]);
+    assert.deepEqual(byId(inventory, 'browser.ct-history').supportedVersions, [1, 2, 3]);
     assert.deepEqual(byId(inventory, 'export.brand-profiles').supportedVersions, [2, 3, 4, 5, 6]);
     assert.deepEqual(byId(inventory, 'export.watchlists').supportedVersions, [2]);
     assert.deepEqual(byId(inventory, 'export.shortlist').supportedVersions, [2, 3]);

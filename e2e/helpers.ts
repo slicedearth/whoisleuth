@@ -326,28 +326,54 @@ export async function failNextBrowserLocalCollectionReadAfterWrite(
 
 export async function holdBrowserLocalReads(page: Page, delayMs = 750) {
   await page.evaluate(({ databaseName, delay }) => new Promise<void>((resolve, reject) => {
-    const openRequest = indexedDB.open(databaseName);
-    openRequest.onerror = () => reject(openRequest.error);
-    openRequest.onsuccess = () => {
-      const database = openRequest.result;
-      const transaction = database.transaction('manifests', 'readwrite');
-      const store = transaction.objectStore('manifests');
-      const releaseAt = performance.now() + delay;
-      let started = false;
-      const keepAlive = () => {
-        const request = store.get('__playwright_read_hold__');
-        request.onerror = () => reject(request.error);
-        request.onsuccess = () => {
-          if (!started) {
-            started = true;
-            resolve();
-          }
-          if (performance.now() < releaseAt) keepAlive();
-          else database.close();
-        };
+    const readyDeadline = performance.now() + 5_000;
+    const openReadyDatabase = () => {
+      const openRequest = indexedDB.open(databaseName);
+      let abortedEmptyCreation = false;
+      openRequest.onupgradeneeded = () => {
+        // Production owns schema creation. Aborting here keeps this timing
+        // helper from winning the race and creating an empty test database.
+        abortedEmptyCreation = true;
+        openRequest.transaction?.abort();
       };
-      keepAlive();
+      openRequest.onerror = () => {
+        if (abortedEmptyCreation && performance.now() < readyDeadline) {
+          window.setTimeout(openReadyDatabase, 25);
+          return;
+        }
+        reject(openRequest.error);
+      };
+      openRequest.onsuccess = () => {
+        const database = openRequest.result;
+        if (!database.objectStoreNames.contains('manifests')) {
+          database.close();
+          if (performance.now() < readyDeadline) {
+            window.setTimeout(openReadyDatabase, 25);
+            return;
+          }
+          reject(new Error('Browser-local manifests store was not ready before the read hold deadline.'));
+          return;
+        }
+        const transaction = database.transaction('manifests', 'readwrite');
+        const store = transaction.objectStore('manifests');
+        const releaseAt = performance.now() + delay;
+        let started = false;
+        const keepAlive = () => {
+          const request = store.get('__playwright_read_hold__');
+          request.onerror = () => reject(request.error);
+          request.onsuccess = () => {
+            if (!started) {
+              started = true;
+              resolve();
+            }
+            if (performance.now() < releaseAt) keepAlive();
+            else database.close();
+          };
+        };
+        keepAlive();
+      };
     };
+    openReadyDatabase();
   }), { databaseName: LOCAL_DATA_DATABASE_NAME, delay: delayMs });
 }
 

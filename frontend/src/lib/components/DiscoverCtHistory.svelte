@@ -4,13 +4,26 @@
     type TrendPointInput,
   } from '$lib/analysis/visualization-models.ts';
   import { MAX_CT_HISTORY_EVENTS } from '$lib/analysis/ct-history.ts';
-  type HistoryCheck = { checkedAt: string; checkedLabel: string; resultCount: number; newCount: number; truncated: boolean };
+  type HistoryCheck = {
+    checkedAt: string;
+    checkedLabel: string;
+    resultCount: number;
+    newCount: number;
+    truncated: boolean;
+    classificationComplete: boolean;
+    firstObservedCount: number;
+    continuingCount: number;
+    reappearedCount: number;
+    historyUnknownCount: number;
+  };
   type HistoryEntry = {
     query: string;
     domainCount: number;
     checkCount: number;
     updatedLabel: string;
     latestNewCount: number;
+    everSeenCount: number;
+    everSeenComplete: boolean;
     discardedCheckCount: number;
     discardedCheckCountKnown: boolean;
     discardedCheckCountCapped: boolean;
@@ -65,9 +78,10 @@
         <div>
           <strong>{entry.query}</strong>
           <small>{entry.domainCount} baseline domain{entry.domainCount === 1 ? '' : 's'} · {entry.checkCount} retained check{entry.checkCount === 1 ? '' : 's'}</small>
-          <small>Last checked {entry.updatedLabel}{entry.latestNewCount ? ` · ${entry.latestNewCount} new` : ''}</small>
+          <small>Last checked {entry.updatedLabel}{entry.latestNewCount ? ` · ${entry.latestNewCount} not in the prior complete baseline` : ''}</small>
+          <small>{entry.everSeenComplete ? entry.everSeenCount : `At least ${entry.everSeenCount}`} domain{entry.everSeenCount === 1 ? '' : 's'} in the retained ever-seen set{entry.everSeenComplete ? '' : ' · earlier history incomplete'}</small>
           {#if entry.checks.length}
-            <details class="ct-checks"><summary>View check history</summary>{@render Trend(entry.checks)}<ol>{#each entry.checks as check}<li><time datetime={check.checkedAt}>{check.checkedLabel}</time><span>{#if check.truncated}At least {check.resultCount} result{check.resultCount === 1 ? '' : 's'} · At least {check.newCount} new · capped lower bound{:else}{check.resultCount} result{check.resultCount === 1 ? '' : 's'} · {check.newCount} new{/if}</span></li>{/each}</ol>{#if entry.discardedCheckCountKnown && entry.discardedCheckCount > 0}<p class="history-limit">Showing the {entry.checkCount} most recent retained checks. {entry.discardedCheckCountCapped ? 'At least ' : ''}{entry.discardedCheckCount} older check{entry.discardedCheckCount === 1 ? '' : 's'} {entry.discardedCheckCount === 1 ? 'was' : 'were'} discarded by local retention.</p>{:else if !entry.discardedCheckCountKnown && entry.discardedCheckCount > 0}<p class="history-limit">Showing the {entry.checkCount} most recent retained checks. At least {entry.discardedCheckCount} older check{entry.discardedCheckCount === 1 ? '' : 's'} {entry.discardedCheckCount === 1 ? 'was' : 'were'} discarded while this history was normalised or retained; any earlier schema 1 pruning remains unknown.</p>{:else if !entry.discardedCheckCountKnown}<p class="history-limit">This history was migrated from the earlier retention schema. Whether older checks were discarded before migration is unknown.</p>{:else if entry.checks.length === MAX_CT_HISTORY_EVENTS}<p class="history-limit">At capacity with {MAX_CT_HISTORY_EVENTS} retained checks. No older check has been discarded under the current retention record.</p>{/if}</details>
+            <details class="ct-checks"><summary>View check history</summary>{@render Trend(entry.checks)}<ol>{#each entry.checks as check}<li><time datetime={check.checkedAt}>{check.checkedLabel}</time><span>{#if check.truncated}At least {check.resultCount} result{check.resultCount === 1 ? '' : 's'} · continuity and reappearance unclassified · capped lower bound{:else if check.classificationComplete}{check.resultCount} result{check.resultCount === 1 ? '' : 's'} · {check.firstObservedCount} first · {check.reappearedCount} reappeared · {check.continuingCount} continuing{check.historyUnknownCount ? ` · ${check.historyUnknownCount} history unknown` : ''}{:else}{check.resultCount} result{check.resultCount === 1 ? '' : 's'} · earlier-schema classification unavailable{/if}</span></li>{/each}</ol>{#if entry.discardedCheckCountKnown && entry.discardedCheckCount > 0}<p class="history-limit">Showing the {entry.checkCount} most recent retained checks. {entry.discardedCheckCountCapped ? 'At least ' : ''}{entry.discardedCheckCount} older check{entry.discardedCheckCount === 1 ? '' : 's'} {entry.discardedCheckCount === 1 ? 'was' : 'were'} discarded by local retention.</p>{:else if !entry.discardedCheckCountKnown && entry.discardedCheckCount > 0}<p class="history-limit">Showing the {entry.checkCount} most recent retained checks. At least {entry.discardedCheckCount} older check{entry.discardedCheckCount === 1 ? '' : 's'} {entry.discardedCheckCount === 1 ? 'was' : 'were'} discarded while this history was normalised or retained; any earlier schema 1 pruning remains unknown.</p>{:else if !entry.discardedCheckCountKnown}<p class="history-limit">This history was migrated from an earlier retention schema. Whether older checks were discarded before migration is unknown.</p>{:else if entry.checks.length === MAX_CT_HISTORY_EVENTS}<p class="history-limit">At capacity with {MAX_CT_HISTORY_EVENTS} retained checks. No older check has been discarded under the current retention record.</p>{/if}</details>
           {/if}
         </div>
         <div><button class="btn small" aria-label={`Use ${entry.query} certificate search`} onclick={() => useEntry(entry.query)}>Use</button><button class="btn small danger" aria-label={`Delete ${entry.query} certificate history`} onclick={() => deleteEntry(entry.query)}>Delete</button></div>

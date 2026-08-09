@@ -41,6 +41,7 @@
     type CandidateSort,
   } from '$lib/analysis/discover-candidate-sort.ts';
   import { MAX_CT_QUERY_LENGTH, normalizeCtQuery } from '$lib/analysis/ct-query.ts';
+  import type { CtHistoryObservationState } from '$lib/analysis/ct-history.ts';
   import { analyzeDomainIdn } from '$lib/analysis/idn-confusables.ts';
   import {
     normalizeRdapNameserverSearchResponse,
@@ -88,8 +89,9 @@
   let profileSourceState = $state<ActiveBrandProfileSourceState>('loading');
   // Whether the current candidate set came from structured CT provenance.
   let ctResultKind = $state<'structured'|null>(null);
-  let ctHistory = $state<CtHistoryStore>({ version: 2, entries: [] });
+  let ctHistory = $state<CtHistoryStore>({ version: 3, entries: [] });
   let ctNewDomains = $state<Set<string>>(new Set());
+  let ctObservationStates = $state<Map<string, CtHistoryObservationState>>(new Map());
   let ctPreviousCheckedAt = $state<string|null>(null);
   let ctNewOnly = $state(false);
   let ctHistoryNotice = $state('');
@@ -243,6 +245,7 @@
 
   function resetCtComparison() {
     ctNewDomains = new Set();
+    ctObservationStates = new Map();
     ctPreviousCheckedAt = null;
     ctNewOnly = false;
     ctHistoryNotice = '';
@@ -251,7 +254,7 @@
   function historyDate(value:string|null) {
     if (!value) return 'No complete baseline';
     const parsed = new Date(value);
-    return Number.isNaN(parsed.getTime()) ? 'Unknown date' : parsed.toLocaleString();
+    return Number.isNaN(parsed.getTime()) ? 'Unknown date' : parsed.toLocaleString('en-AU');
   }
 
   function historyDisplayEntries() {
@@ -261,6 +264,8 @@
       checkCount: entry.history.length,
       updatedLabel: historyDate(entry.updatedAt),
       latestNewCount: entry.history.at(-1)?.newCount || 0,
+      everSeenCount: entry.everSeenDomains.length,
+      everSeenComplete: entry.everSeenDomainsComplete,
       discardedCheckCount: entry.discardedCheckCount,
       discardedCheckCountKnown: entry.discardedCheckCountKnown,
       discardedCheckCountCapped: entry.discardedCheckCountCapped,
@@ -270,6 +275,11 @@
         resultCount: event.resultCount,
         newCount: event.newCount,
         truncated: event.truncated,
+        classificationComplete: event.classificationComplete,
+        firstObservedCount: event.firstObservedCount,
+        continuingCount: event.continuingCount,
+        reappearedCount: event.reappearedCount,
+        historyUnknownCount: event.historyUnknownCount,
       })),
     }));
   }
@@ -476,15 +486,31 @@
         ctHistory = result.store;
         const visibleDomains = new Set(filtered.map((candidate)=>candidate.domain));
         ctNewDomains = new Set(result.comparison.newDomains.filter((domain)=>visibleDomains.has(domain)));
+        const observationStates = new Map<string, CtHistoryObservationState>();
+        if (result.comparison.classificationComplete) {
+          for (const domain of result.comparison.firstObservedDomains) observationStates.set(domain, 'first_observed');
+          for (const domain of result.comparison.continuingDomains) observationStates.set(domain, 'continuing');
+          for (const domain of result.comparison.reappearedDomains) observationStates.set(domain, 'reappeared');
+          for (const domain of result.comparison.historyUnknownDomains) observationStates.set(domain, 'history_unknown');
+        } else {
+          for (const domain of next.map((candidate) => candidate.domain)) observationStates.set(domain, 'unclassified_partial');
+        }
+        ctObservationStates = observationStates;
         ctPreviousCheckedAt = result.comparison.previousCheckedAt;
         const visibleNewCount = ctNewDomains.size;
+        const visibleFirstCount = result.comparison.firstObservedDomains.filter((domain)=>visibleDomains.has(domain)).length;
+        const visibleContinuingCount = result.comparison.continuingDomains.filter((domain)=>visibleDomains.has(domain)).length;
+        const visibleReappearedCount = result.comparison.reappearedDomains.filter((domain)=>visibleDomains.has(domain)).length;
+        const visibleUnknownCount = result.comparison.historyUnknownDomains.filter((domain)=>visibleDomains.has(domain)).length;
         if (result.comparison.hasBaseline) {
-          historySummary = ` ${visibleNewCount} new since the previous complete search on ${historyDate(result.comparison.previousCheckedAt)}.`;
-          if (!result.comparison.baselineUpdated) historySummary += ' Capped results did not replace that baseline.';
+          historySummary = result.comparison.classificationComplete
+            ? ` ${visibleFirstCount} first observed · ${visibleReappearedCount} reappeared · ${visibleContinuingCount} continuing since the previous complete search on ${historyDate(result.comparison.previousCheckedAt)}.${visibleUnknownCount ? ` ${visibleUnknownCount} cannot be classified because earlier history is incomplete.` : ''}`
+            : ` At least ${visibleNewCount} not in the previous complete search on ${historyDate(result.comparison.previousCheckedAt)}; capped results were not classified.`;
+          if (!result.comparison.baselineUpdated) historySummary += ' Capped results did not replace that baseline or the ever-seen set.';
         } else if (result.comparison.baselineUpdated) {
-          historySummary = ' Saved as the first local baseline for this search.';
+          historySummary = ` Saved as the first local baseline for this search; ${visibleFirstCount} domain${visibleFirstCount === 1 ? '' : 's'} first observed locally.`;
         } else {
-          historySummary = ' Results were capped, so no local baseline was created.';
+          historySummary = ' Results were capped, so no local baseline or reappearance classification was created.';
         }
       } catch (cause) {
         ctHistoryNotice = cause instanceof Error ? cause.message : 'Certificate search history is unavailable.';
@@ -655,7 +681,7 @@
         mutationLabel: candidate.mutationTypes.map((type) => mutationLabels[type] || type.replaceAll('_', ' ')).join(' · '),
         reviewCues: candidateReviewCues(candidate),
         selected: selected.has(candidate.domain),
-        isNew: ctNewDomains.has(candidate.domain),
+        ctObservationState: ctObservationStates.get(candidate.domain) ?? null,
         unicodeDomain: metadata?.unicodeDomain || '',
         scripts: metadata?.scripts || [],
         mixedScript: Boolean(metadata?.mixedScript),

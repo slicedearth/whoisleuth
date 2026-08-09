@@ -32,11 +32,16 @@ the aggregate exceeds the 5 MiB planning reference used by the former
 local-storage design. The model ceilings still apply in IndexedDB so changing
 the backend does not make any collection unbounded.
 
-Certificate Transparency history schema 2 records a bounded per-query count
-when older check summaries are discarded by the event or byte limit. Reaching
-the 20-check capacity is therefore distinct from confirmed pruning. Schema 1
-records remain readable and migrate non-destructively with earlier pruning
-certainty marked unknown rather than invented as zero.
+Certificate Transparency history schema 3 adds a bounded per-query ever-seen
+domain set so complete retained searches can distinguish first observation,
+continuing observation, and reappearance after absence from the immediately
+previous complete baseline. Capped searches neither update that set nor
+establish a continuity or reappearance state. The set retains at most 1,000
+canonical domains and exposes when its earlier history is incomplete. Schema 2
+records remain readable with their exact discarded-check count, while schemas
+1 and 2 migrate without inventing a complete ever-seen history. Reaching the
+20-check capacity remains distinct from confirmed pruning, and the whole
+collection stays inside its existing 1 MiB byte budget.
 
 Saved Bulk session schema 3 added an optional compact comparison envelope to
 each settled Deep row. It retains at most 12 normalised technology identifiers,
