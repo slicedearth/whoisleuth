@@ -27,7 +27,7 @@ Discover:
   discover-scan      Collect a bounded candidate review queue.
   registry-support   Explain local registry coverage without a request.
   registry-doctor    Diagnose a saved registry collection against local policy.
-  registry-cohort    Aggregate target-free registry quality cohorts.
+  registry-cohort    Build target-free registry quality timelines.
   registry-scaffold  Create a sanitised synthetic fixture scaffold.
 
 Review saved evidence:
@@ -47,7 +47,7 @@ Review saved evidence:
   sharing-review     Lint a reviewed artifact before deliberate sharing.
   workflow-plan      Plan a fixed investigation recipe without executing it.
   workflow-run       Execute resumable approved steps from a fixed recipe.
-  diff               Compare two saved domain observations.
+  diff               Compare two compatible retained artefacts.
   reconcile          Reconcile independently labelled observations.
   timeline           Compare a sequence of observations for one domain.
   export             Convert a saved lookup into an evidence report.
@@ -97,11 +97,11 @@ const COMMAND_USAGE: Readonly<Record<CliCommand, string>> = Object.freeze({
   tls: 'whoisleuth tls <hostname> [--json] [--quiet] [--no-color]',
   'registry-support': 'whoisleuth registry-support <domain|suffix> [--json] [--quiet] [--no-color]',
   'registry-doctor': 'whoisleuth registry-doctor [lookup.json] [--json] [--quiet] [--no-color]',
-  'registry-cohort': 'whoisleuth registry-cohort [lookups.json|lookups.jsonl] [--json] [--quiet] [--no-color]',
+  'registry-cohort': 'whoisleuth registry-cohort [lookups-or-reports.json|jsonl] [--json] [--quiet] [--no-color]',
   'registry-scaffold': 'whoisleuth registry-scaffold --profile <id> --suffix <suffix> --scenario <registered|not_found|inconclusive>',
   'risk-calibrate': 'whoisleuth risk-calibrate [dataset.json] [--json] [--quiet] [--no-color]',
   'lookalike-calibrate': 'whoisleuth lookalike-calibrate [dataset.json] [--json] [--quiet] [--no-color]',
-  'verify-artifact': 'whoisleuth verify-artifact [artifact.json] [--passphrase-file <file>] [--json] [--strict-exit] [--quiet] [--no-color]',
+  'verify-artifact': 'whoisleuth verify-artifact [artifact.json] [--passphrase-file <file>] [--manifest <manifest.json> --manifest-entry <artifact-N>] [--json] [--strict-exit] [--quiet] [--no-color]',
   'interchange-report': 'whoisleuth interchange-report [artifact.json] [--passphrase-file <file>] [--json] [--quiet] [--no-color]',
   'inspect-archive': 'whoisleuth inspect-archive [archive.json] [--passphrase-file <file>] [--search <value>] [--require-match] [--reveal] [--expect-content-digest <sha256:digest>] [--json]',
   'sign-artifact': 'whoisleuth sign-artifact [artifact.json] --private-key-file <file>',
@@ -120,7 +120,7 @@ const COMMAND_USAGE: Readonly<Record<CliCommand, string>> = Object.freeze({
   'sharing-review': 'whoisleuth sharing-review [artifact.json] --marking <level> --recipient-scope <scope> --purpose <text> [--human-reviewed] [--personal-data-reviewed] [--redactions-confirmed] [--json]',
   'workflow-plan': 'whoisleuth workflow-plan <recipe> <domain|brand> [--json] [--quiet] [--no-color]',
   'workflow-run': 'whoisleuth workflow-run <recipe> <domain|brand> [--approve-network] [--resume <state.json>] [--json] [--quiet] [--no-color]',
-  diff: 'whoisleuth diff <left.json> <right.json> [--json] [--quiet] [--no-color]',
+  diff: 'whoisleuth diff <left.json> <right.json> [--left-session <id> --right-session <id>] [--json] [--quiet] [--no-color]',
   reconcile: 'whoisleuth reconcile <observation.json> <observation.json> [...] [--json] [--quiet] [--no-color]',
   timeline: 'whoisleuth timeline <observation.json> <observation.json> [...] [--json] [--quiet] [--no-color]',
   export: 'whoisleuth export [lookup.json] [--markdown|--html|--compact] [--no-attribution]',
@@ -218,9 +218,9 @@ const COMMAND_DETAILS: Readonly<Record<CliCommand, CommandDetail>> = Object.free
     boundary: 'The command is offline. It distinguishes expected access constraints from collection results and does not contact a live registry.',
   },
   'registry-cohort': {
-    description: 'Aggregate saved registry observations into privacy-safe suffix and capability-profile cohorts.',
+    description: 'Build privacy-safe suffix and capability-profile timelines from saved observations or retained cohort reports.',
     example: 'whoisleuth registry-cohort saved-lookups.jsonl --json',
-    boundary: 'This command is offline and omits domains, queries, and raw evidence. Cohorts below the fixed minimum sample remain insufficient.',
+    boundary: 'This command is offline and omits domains, queries, and raw evidence. Input families cannot be mixed, and retained samples are never assumed independent.',
   },
   'registry-scaffold': {
     description: 'Create a bounded synthetic WHOIS fixture scaffold for one existing capability profile.',
@@ -239,7 +239,7 @@ const COMMAND_DETAILS: Readonly<Record<CliCommand, CommandDetail>> = Object.free
   },
   'verify-artifact': {
     description: 'Validate a supported archive, packet, manifest, or saved Lookup without printing evidence contents.',
-    example: 'whoisleuth verify-artifact workspace.json --json --strict-exit',
+    example: 'whoisleuth verify-artifact report.json --manifest manifest.json --manifest-entry artifact-2 --json --strict-exit',
     boundary: 'Verification is offline and redacted. Encrypted archives require an explicitly supplied passphrase file; --strict-exit returns 4 when only an envelope or legacy projection integrity was verified.',
   },
   'interchange-report': {
@@ -333,9 +333,9 @@ const COMMAND_DETAILS: Readonly<Record<CliCommand, CommandDetail>> = Object.free
     boundary: 'Only installed recipe commands can run. Network steps require explicit approval for each invocation, and analyst-selection placeholders always pause without interpretation.',
   },
   diff: {
-    description: 'Compare bounded evidence retained in two saved domain lookups.',
+    description: 'Compare two compatible retained Lookup, Bulk-session, or domain-portfolio artefacts.',
     example: 'whoisleuth diff first.json second.json --json',
-    boundary: 'Comparison is offline. Missing, unavailable, equal, and different evidence remain separate states.',
+    boundary: 'Comparison is offline. Multi-session Bulk exports require explicit session IDs, and missing, unavailable, equal, and different evidence remain separate states.',
   },
   reconcile: {
     description: 'Reconcile bounded values across independently labelled observations of one domain.',
@@ -373,11 +373,11 @@ const COMMAND_COLLECTION: Readonly<Record<CliCommand, CommandCollection>> = Obje
   tls: { mode: 'network', scope: 'Accepts one public hostname and opens one bounded certificate connection.' },
   'registry-support': { mode: 'offline', scope: 'Reads the embedded registry capability catalogue for one domain or suffix.' },
   'registry-doctor': { mode: 'offline', scope: 'Reads one saved Lookup and the embedded registry capability catalogue.' },
-  'registry-cohort': { mode: 'offline', scope: 'Reads at most 500 saved Lookups and emits target-free suffix/profile cohort counts.' },
+  'registry-cohort': { mode: 'offline', scope: 'Reads at most 500 saved Lookups or retained cohort reports from one unmixed family and emits bounded target-free timelines.' },
   'registry-scaffold': { mode: 'offline', scope: 'Reads the embedded registry capability catalogue and prints one synthetic fixture template.' },
   'risk-calibrate': { mode: 'offline', scope: 'Reads one bounded reviewed-label dataset and changes no model or evidence.' },
   'lookalike-calibrate': { mode: 'offline', scope: 'Reads at most 5,000 reviewed candidate labels from one dataset capped at 2 MiB.' },
-  'verify-artifact': { mode: 'offline', scope: 'Reads one selected bounded archive, packet, manifest, or saved Lookup document.' },
+  'verify-artifact': { mode: 'offline', scope: 'Reads one selected bounded artefact and, when explicitly supplied, one manifest whose selected entry is compared by exact bytes and canonical identity.' },
   'interchange-report': { mode: 'offline', scope: 'Reads one selected bounded portable artefact and emits fixed compatibility metadata only.' },
   'inspect-archive': { mode: 'offline', scope: 'Reads one selected bounded workspace archive with redacted output by default.' },
   'sign-artifact': { mode: 'offline', scope: 'Reads one selected artefact and one local private key without transmitting either.' },
@@ -396,7 +396,7 @@ const COMMAND_COLLECTION: Readonly<Record<CliCommand, CommandCollection>> = Obje
   'sharing-review': { mode: 'offline', scope: 'Reads one artefact capped at 15 MiB, emits only bounded schema/version metadata and no content values, and performs no transmission.' },
   'workflow-plan': { mode: 'offline', scope: 'Builds a fixed typed recipe and executes none of its network or file steps.' },
   'workflow-run': { mode: 'network', scope: 'Runs only concrete fixed-recipe steps; network collection requires --approve-network and analyst-selection steps always pause.' },
-  diff: { mode: 'offline', scope: 'Reads two saved Lookup documents for different domains.' },
+  diff: { mode: 'offline', scope: 'Reads two compatible retained artefacts capped at 8 MiB each and retains no source paths.' },
   reconcile: { mode: 'offline', scope: 'Reads 2 to 5 saved observations for one domain, capped at 32 MiB in total.' },
   timeline: { mode: 'offline', scope: 'Reads 2 to 20 saved observations for one domain, capped at 32 MiB in total.' },
   export: { mode: 'offline', scope: 'Reads one saved Lookup and writes one bounded report.' },

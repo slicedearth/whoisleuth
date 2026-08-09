@@ -370,11 +370,16 @@ completed final result, reports the checkpoint limitation, and exits with code
 4. The last successfully published checkpoint remains available, but it may
 not contain the final completed items.
 
-`diff <left.json> <right.json>` compares two different saved domain Lookup
-documents entirely offline. It reuses the bounded Bulk comparison model for
-registration, DNS, page identity, mail, certificate, and relationship fields,
-keeps missing and unavailable evidence distinct, and makes no ownership or
-maliciousness inference. The output records both original observation times.
+`diff <left.json> <right.json>` compares two compatible retained artefacts
+entirely offline. Saved Lookup documents keep their version-1 lookup-diff
+output. Portable Bulk-session exports and domain-portfolio reviews emit a
+`whoisleuth.cli.comparison-ledger` version-1 document with a value-free bounded
+index and at most 256 exact detail rows. Bulk exports containing more than one
+session require `--left-session <id>` or `--right-session <id>` as applicable.
+The command keeps missing, unavailable, equal, added, and different evidence
+separate, treats later portfolio omission as incomplete rather than removal,
+and retains no input path. It makes no ownership, safety, or maliciousness
+inference.
 
 `lookup --observer <label> --vantage <label>` can add two bounded analyst labels
 to a saved Lookup document. The labels identify the person or process that ran
@@ -458,12 +463,15 @@ and event consistency. A missing identifier or metadata field is a publication
 omission, not a failed lookup. The command is offline, makes no retry, and
 cannot establish current registry reachability.
 
-`registry-cohort [lookups.json|lookups.jsonl]` aggregates from 1 to 500 saved
-Lookups into suffix and capability-profile cohorts. It retains only target-free
-counts for source alignment and publication-quality states. A cohort with
-fewer than five samples is labelled insufficient rather than treated as a
-quality result, and repeated observations from one environment are not assumed
-representative.
+`registry-cohort [lookups-or-reports.json|jsonl]` accepts either 1 to 500 saved
+Lookups or an unmixed collection of retained `whoisleuth.cli.registry-cohort`
+version-1/version-2 reports. It emits version 2 with target-free suffix and
+capability-profile timelines, an explicit sample window, retained-report count,
+and at most 50 visible points per cohort. A version-1 report becomes one
+retained point. A cohort with fewer than five samples remains insufficient,
+and overlapping retained samples are never summed or promoted to independent
+consistency. Domains, queries, filenames, and raw registry evidence are not
+retained.
 
 `registry-scaffold --profile <id> --suffix <suffix> --scenario <state>` emits
 one bounded, sanitised synthetic fixture scaffold from the installed registry
@@ -616,14 +624,26 @@ accepted as a command-line value, printed, or retained. Verification detects
 changes against the artefact's declared contract; it does not authenticate the
 analyst or establish that an observation was accurate or remains current.
 
-Verification reports use `whoisleuth.offline-artifact-verification` version 2
+`--manifest <manifest.json> --manifest-entry <artifact-N>` additionally verifies
+the selected investigation manifest before comparing its declared entry with
+the supplied artefact. `identity_verified` requires the exact UTF-8 byte length
+and raw digest as well as canonical digest, schema, and version. A
+`canonical_match_only` result means semantic JSON identity survived but the
+retained bytes differ, so it is a partial result under `--strict-exit`.
+`mismatch` likewise remains separate from the artefact's own structure or
+integrity result. Manifest paths and artefact contents are not copied into the
+verification report.
+
+Verification reports use `whoisleuth.offline-artifact-verification` version 3
 and do not expose an always-true validity shortcut. The explicit state and
 checks distinguish structure, whole-file integrity, projection integrity, and
 authenticated encryption. `--strict-exit` returns exit 0 for `verified` and
-`structure_valid`, or partial-failure exit 4 for `integrity_valid` and
-`envelope_valid`; ordinary verification errors retain their existing error
-codes. Raw JSON is scanned before parsing to reject duplicate object keys and
-excessive nesting or key/value counts.
+`structure_valid` when no manifest identity is requested or exact identity is
+verified. It returns partial-failure exit 4 for `integrity_valid`,
+`envelope_valid`, canonical-only identity, or identity mismatch; ordinary
+verification errors retain their existing error codes. Raw JSON is scanned
+before parsing to reject duplicate object keys and excessive nesting or
+key/value counts.
 
 Current integrity-bearing review outputs use `sorted-json-v2`, whose object-key
 order is a locale-independent JavaScript code-unit order. Readers select the

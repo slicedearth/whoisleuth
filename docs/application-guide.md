@@ -1269,7 +1269,10 @@ checksums without displaying evidence. An encrypted archive requires a separate
 passphrase file before the command can authenticate its ciphertext and inspect
 the inner checksums; without one, only the envelope is checked. Use
 `--strict-exit` when automation must receive exit 4 for envelope-only or
-projection-only assurance. See
+projection-only assurance. Supplying `--manifest` together with an exact
+`--manifest-entry` additionally distinguishes byte-for-byte retained artefact
+identity from canonical-only or mismatched identity; this does not establish
+that the underlying observation was accurate or remains current. See
 [offline artefact verification](cli-reference.md#offline-artefact-verification).
 The separate metadata-only
 [interchange fidelity report](cli-reference.md#interchange-fidelity-report)

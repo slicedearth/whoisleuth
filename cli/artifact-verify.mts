@@ -1,4 +1,5 @@
 import { Buffer } from 'node:buffer';
+import { createHash } from 'node:crypto';
 
 import { parseBoundedJsonObject } from './bounded-json.mts';
 import {
@@ -41,6 +42,7 @@ import {
   readWorkspaceArchive,
 } from '../frontend/src/lib/analysis/workspace-archive.ts';
 import {
+  canonicalArtifactJsonFor,
   resolveArtifactCanonicalization,
   sha256ArtifactDigestFor,
   SORTED_JSON_V1,
@@ -79,7 +81,7 @@ import {
 } from './case-pack.mts';
 
 export const OFFLINE_ARTIFACT_VERIFICATION_SCHEMA = 'whoisleuth.offline-artifact-verification';
-export const OFFLINE_ARTIFACT_VERIFICATION_VERSION = 2;
+export const OFFLINE_ARTIFACT_VERIFICATION_VERSION = 3;
 export const MAX_OFFLINE_ARTIFACT_BYTES = 15 * 1024 * 1024;
 export const MAX_OFFLINE_PASSPHRASE_FILE_BYTES = 1024;
 
@@ -104,6 +106,8 @@ export type OfflineArtifactVerificationState = 'verified' | 'envelope_valid' | '
 export type OfflineArtifactVerificationCheck = 'not_applicable' | 'not_checked' | 'verified';
 export type OfflineArtifactIntegrityScope = 'embedded_projections' | 'not_applicable' | 'not_checked' | 'whole_artifact';
 export type OfflineArtifactAssuranceRequirement = 'applicable_integrity' | 'structure' | 'whole_integrity';
+export type ManifestArtifactIdentityState = 'canonical_match_only' | 'identity_verified' | 'mismatch';
+export type ManifestArtifactIdentityCheck = 'mismatch' | 'verified';
 type UnknownRecord = Record<string, unknown>;
 
 export type OfflineArtifactVerificationReport = Readonly<{
@@ -133,8 +137,29 @@ export type OfflineArtifactVerificationReport = Readonly<{
     prunedRecordCount?: number | null;
     fullyImportable?: boolean | null;
   }>;
+  manifestIdentity: Readonly<{
+    state: ManifestArtifactIdentityState;
+    manifest: Readonly<{
+      schema: typeof INVESTIGATION_MANIFEST_SCHEMA;
+      version: number;
+      entryId: string;
+    }>;
+    checks: Readonly<{
+      manifestIntegrity: 'verified';
+      byteLength: ManifestArtifactIdentityCheck;
+      rawContentDigest: ManifestArtifactIdentityCheck;
+      canonicalDigest: ManifestArtifactIdentityCheck;
+      schema: ManifestArtifactIdentityCheck;
+      version: ManifestArtifactIdentityCheck;
+    }>;
+    expectedByteLength: number;
+    actualByteLength: number;
+    limitations: readonly string[];
+  }> | null;
   limitations: readonly string[];
 }>;
+
+type OfflineArtifactVerificationCore = Omit<OfflineArtifactVerificationReport, 'manifestIdentity'>;
 
 const SIGNED_ARTIFACT_VERSIONS: Readonly<Record<string, ReadonlySet<number>>> = Object.freeze({
   [ACQUISITION_DECISION_PACKET_SCHEMA]: new Set([1, ACQUISITION_DECISION_PACKET_VERSION]),
@@ -192,7 +217,8 @@ export function offlineArtifactSatisfiesAssurance(
 }
 
 export function isCompleteOfflineArtifactVerification(report: OfflineArtifactVerificationReport): boolean {
-  return report.state === 'verified' || report.state === 'structure_valid';
+  return (report.state === 'verified' || report.state === 'structure_valid')
+    && (report.manifestIdentity === null || report.manifestIdentity.state === 'identity_verified');
 }
 
 function artifactVersion(value: UnknownRecord): number {
@@ -216,7 +242,7 @@ async function archiveReport(
   archive: Awaited<ReturnType<typeof readWorkspaceArchive>>,
   encrypted: boolean,
   ciphertextBytes: number | null,
-): Promise<OfflineArtifactVerificationReport> {
+): Promise<OfflineArtifactVerificationCore> {
   const preview = await previewWorkspaceArchive(source, {});
   const readySectionCount = preview.sections.filter((section) => section.status === 'ready').length;
   const unsupportedSectionCount = preview.sections.filter((section) => section.status === 'unsupported').length;
@@ -268,7 +294,7 @@ async function verifySignedArtifact(
   value: UnknownRecord,
   schema: string,
   version: number,
-): Promise<OfflineArtifactVerificationReport> {
+): Promise<OfflineArtifactVerificationCore> {
   const supported = SIGNED_ARTIFACT_VERSIONS[schema];
   if (!supported?.has(version)) {
     throw new UnsupportedOfflineArtifactError('This signed review-artifact schema or version is not supported.');
@@ -315,10 +341,10 @@ async function verifySignedArtifact(
   });
 }
 
-export async function verifyOfflineArtifact(
+async function verifyOfflineArtifactCore(
   raw: string,
   options: Readonly<{ passphrase?: string | null }> = {},
-): Promise<OfflineArtifactVerificationReport> {
+): Promise<OfflineArtifactVerificationCore> {
   const value = parseJson(raw);
 
   const casePackPacket = record(value.packet);
@@ -489,6 +515,98 @@ export async function verifyOfflineArtifact(
   return verifySignedArtifact(raw, value, schema, version);
 }
 
+function rawContentDigest(raw: string): string {
+  return `sha256:${createHash('sha256').update(raw, 'utf8').digest('hex')}`;
+}
+
+function artifactMetadata(value: UnknownRecord): Readonly<{ schema: string | null; version: number | null }> {
+  const declaredVersion = value.version ?? value.schemaVersion;
+  return Object.freeze({
+    schema: typeof value.schema === 'string' ? value.schema : null,
+    version: Number.isSafeInteger(declaredVersion) && Number(declaredVersion) >= 1 && Number(declaredVersion) <= 1_000
+      ? Number(declaredVersion)
+      : null,
+  });
+}
+
+async function verifyManifestIdentity(
+  artifactRaw: string,
+  manifestRaw: string,
+  entryId: string,
+): Promise<NonNullable<OfflineArtifactVerificationReport['manifestIdentity']>> {
+  const manifestReport = await verifyOfflineArtifactCore(manifestRaw);
+  if (manifestReport.artifact.schema !== INVESTIGATION_MANIFEST_SCHEMA
+    || manifestReport.artifact.kind !== 'signed_review_artifact'
+    || manifestReport.state !== 'verified'
+    || manifestReport.checks.contentIntegrity !== 'verified'
+    || manifestReport.checks.contentIntegrityScope !== 'whole_artifact') {
+    throw new TypeError('The selected manifest is not a fully integrity-verified investigation manifest.');
+  }
+  const manifest = parseJson(manifestRaw);
+  const entries = Array.isArray(manifest.artifacts) ? manifest.artifacts : [];
+  const entry = entries.find((candidate) => record(candidate)?.id === entryId);
+  const item = record(entry);
+  if (!item) throw new TypeError('The requested investigation manifest entry was not found.');
+
+  const artifactValue = parseJson(artifactRaw);
+  const metadata = artifactMetadata(artifactValue);
+  const manifestVersion = artifactVersion(manifest);
+  const canonicalization = manifestVersion === 1 ? SORTED_JSON_V1 : SORTED_JSON_V2;
+  const actualByteLength = inputBytes(artifactRaw);
+  const expectedByteLength = Number(item.byteLength);
+  const checks = Object.freeze({
+    manifestIntegrity: 'verified' as const,
+    byteLength: actualByteLength === expectedByteLength ? 'verified' as const : 'mismatch' as const,
+    rawContentDigest: rawContentDigest(artifactRaw) === item.contentDigestSha256 ? 'verified' as const : 'mismatch' as const,
+    canonicalDigest: rawContentDigest(canonicalArtifactJsonFor(artifactValue, canonicalization)) === item.canonicalDigestSha256 ? 'verified' as const : 'mismatch' as const,
+    schema: metadata.schema === item.schema ? 'verified' as const : 'mismatch' as const,
+    version: metadata.version === item.version ? 'verified' as const : 'mismatch' as const,
+  });
+  const exact = checks.byteLength === 'verified'
+    && checks.rawContentDigest === 'verified'
+    && checks.canonicalDigest === 'verified'
+    && checks.schema === 'verified'
+    && checks.version === 'verified';
+  const canonicalOnly = !exact
+    && checks.canonicalDigest === 'verified'
+    && checks.schema === 'verified'
+    && checks.version === 'verified';
+  const state: ManifestArtifactIdentityState = exact
+    ? 'identity_verified'
+    : canonicalOnly
+      ? 'canonical_match_only'
+      : 'mismatch';
+  return Object.freeze({
+    state,
+    manifest: Object.freeze({ schema: INVESTIGATION_MANIFEST_SCHEMA, version: manifestVersion, entryId }),
+    checks,
+    expectedByteLength,
+    actualByteLength,
+    limitations: Object.freeze([
+      ...(state === 'identity_verified'
+        ? ['The selected artefact matches the manifest entry byte-for-byte and by canonical JSON, schema, and version.']
+        : state === 'canonical_match_only'
+          ? ['Canonical JSON, schema, and version match, but the retained UTF-8 bytes or byte length differ from the manifest entry. This is not exact retained-file identity.']
+          : ['One or more manifest identity checks differ. This artefact is not the exact retained file identified by the selected manifest entry.']),
+      'Manifest identity does not establish that the retained observations were accurate, complete, authorised, or remain current.',
+    ]),
+  });
+}
+
+export async function verifyOfflineArtifact(
+  raw: string,
+  options: Readonly<{
+    passphrase?: string | null;
+    manifest?: Readonly<{ raw: string; entryId: string }> | null;
+  }> = {},
+): Promise<OfflineArtifactVerificationReport> {
+  const report = await verifyOfflineArtifactCore(raw, options);
+  const manifestIdentity = options.manifest
+    ? await verifyManifestIdentity(raw, options.manifest.raw, options.manifest.entryId)
+    : null;
+  return Object.freeze({ ...report, manifestIdentity });
+}
+
 export function formatOfflineArtifactVerification(
   report: OfflineArtifactVerificationReport,
 ): string {
@@ -522,6 +640,17 @@ export function formatOfflineArtifactVerification(
   }
   if (report.summary.fullyImportable !== undefined && report.summary.fullyImportable !== null) {
     lines.push(`Importability: ${report.summary.fullyImportable ? 'complete' : 'partial'}`);
+  }
+  if (report.manifestIdentity) {
+    lines.push(`Manifest identity: ${report.manifestIdentity.state}`);
+    lines.push(`Manifest entry: ${report.manifestIdentity.manifest.entryId}`);
+    lines.push(`Manifest integrity: ${report.manifestIdentity.checks.manifestIntegrity}`);
+    lines.push(`Exact bytes: ${report.manifestIdentity.checks.rawContentDigest}`);
+    lines.push(`Byte length: ${report.manifestIdentity.checks.byteLength}`);
+    lines.push(`Canonical JSON: ${report.manifestIdentity.checks.canonicalDigest}`);
+    lines.push(`Schema identity: ${report.manifestIdentity.checks.schema}`);
+    lines.push(`Version identity: ${report.manifestIdentity.checks.version}`);
+    for (const limitation of report.manifestIdentity.limitations) lines.push(`Manifest limitation: ${limitation}`);
   }
   for (const limitation of report.limitations) lines.push(`Limitation: ${limitation}`);
   return `${lines.join('\n')}\n`;

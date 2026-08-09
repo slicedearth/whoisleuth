@@ -66,10 +66,13 @@ saved result without sending it anywhere:
 whoisleuth bulk domains.txt --csv
 whoisleuth discover example.com --preset common --jsonl
 whoisleuth verify-artifact lookup.json --json --strict-exit
+whoisleuth verify-artifact report.json --manifest manifest.json --manifest-entry artifact-2 --json --strict-exit
 whoisleuth interchange-report workspace.json --json
 whoisleuth compare lookup.json --json
+whoisleuth diff earlier-bulk.json later-bulk.json --left-session session-1 --right-session session-2 --json
 whoisleuth brief lookup.json
 whoisleuth registry-doctor lookup.json --json
+whoisleuth registry-cohort retained-cohorts.jsonl --json
 ```
 
 Only one query is accepted by `lookup`; multi-input processing belongs to

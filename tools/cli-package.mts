@@ -69,9 +69,10 @@ export const CLI_PACKAGE_REPORT_SCHEMA = 'whoisleuth.cli-package-check';
 export const CLI_PACKAGE_REPORT_VERSION = 3;
 export const MAX_CLI_PACKAGE_GRAPH_BYTES = 8 * 1024 * 1024;
 // The module ceiling catches accidental graph expansion while leaving a small
-// reviewed margin above the installed command surface. Byte ceilings remain
-// the primary package-bloat boundary.
-export const MAX_CLI_PACKAGE_MODULES = 272;
+// reviewed margin above the installed command surface. The retained-artifact
+// ledger deliberately reuses four bounded analysis modules; byte ceilings
+// remain the primary package-bloat boundary.
+export const MAX_CLI_PACKAGE_MODULES = 280;
 export const MAX_CLI_PACKAGE_SOURCE_BYTES = 8 * 1024 * 1024;
 export const MAX_CLI_PACKAGE_FILE_BYTES = 2 * 1024 * 1024;
 // Keep a modest growth margin while the packed and unpacked byte ceilings remain

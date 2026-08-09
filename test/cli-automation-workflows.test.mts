@@ -99,7 +99,10 @@ describe('CLI automation arguments', () => {
       configurationDigestSha256: `sha256:${'a'.repeat(64)}`, output: 'json', quiet: false, color: true,
     });
     assert.deepEqual(parseCliArguments(['diff', 'left.json', 'right.json', '--json']), {
-      action: 'diff', leftSource: 'left.json', rightSource: 'right.json', output: 'json', quiet: false, color: true,
+      action: 'diff', leftSource: 'left.json', rightSource: 'right.json', leftSessionId: null, rightSessionId: null, output: 'json', quiet: false, color: true,
+    });
+    assert.deepEqual(parseCliArguments(['diff', 'left.json', 'right.json', '--left-session', 'earlier', '--right-session', 'later']), {
+      action: 'diff', leftSource: 'left.json', rightSource: 'right.json', leftSessionId: 'earlier', rightSessionId: 'later', output: 'terminal', quiet: false, color: true,
     });
     assert.deepEqual(parseCliArguments(['timeline', 'first.json', 'second.json', 'latest.json', '--json']), {
       action: 'timeline', sources: ['first.json', 'second.json', 'latest.json'], output: 'json', quiet: false, color: true,

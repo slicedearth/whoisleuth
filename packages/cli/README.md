@@ -127,12 +127,17 @@ non-comparable evidence separate; the labels are context, not proof of
 independence. `registry-doctor`, `assurance`, `sharing-review`, and
 `lookalike-calibrate` add offline compatibility, change/recovery, sharing, and
 review-yield workflows without contacting the hosted application.
-`registry-cohort` aggregates target-free publication-quality counts from saved
-Lookups, while `registry-scaffold` produces a sanitised synthetic contributor
-fixture. `brief` and `case-pack` create bounded local handoffs, `monitor-once`
-runs one explicit control review rather than a daemon, and `workflow-run`
-executes only installed fixed-recipe steps with per-run network approval and
-analyst-selection pauses.
+`registry-cohort` emits target-free publication-quality timelines from either
+saved Lookups or one unmixed family of retained version-1/version-2 cohort
+reports; it never sums overlapping retained samples into independent
+consistency. `registry-scaffold` produces a sanitised synthetic contributor
+fixture. `diff` preserves saved-Lookup output and also emits a bounded
+comparison ledger for explicitly paired Bulk sessions or domain portfolios.
+`verify-artifact --manifest ... --manifest-entry ...` separates exact retained
+byte identity from canonical-only or mismatched identity. `brief` and
+`case-pack` create bounded local handoffs, `monitor-once` runs one explicit
+control review rather than a daemon, and `workflow-run` executes only installed
+fixed-recipe steps with per-run network approval and analyst-selection pauses.
 
 Current `case-pack` output keeps its version-1 envelope. Trusted and internal
 audiences preserve exact analyst-selected Case-to-Brand Profile identifiers;

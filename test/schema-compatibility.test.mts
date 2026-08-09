@@ -208,7 +208,7 @@ describe('schema compatibility inventory', () => {
     assert.equal(inventory.schema, SCHEMA_COMPATIBILITY_INVENTORY_SCHEMA);
     assert.equal(inventory.version, SCHEMA_COMPATIBILITY_INVENTORY_VERSION);
     assert.equal(inventory.generatedAt, NOW);
-    assert.equal(inventory.entries.length, 147);
+    assert.equal(inventory.entries.length, 148);
     assert.deepEqual(new Set(inventory.entries.map((entry) => entry.kind)), new Set([
       'browser_store', 'tab_store', 'hosted_store', 'export', 'cli_document', 'derived',
     ]));
@@ -219,6 +219,7 @@ describe('schema compatibility inventory', () => {
     assert.equal(byId(inventory, 'cli.bulk-checkpoint').schema, 'whoisleuth.cli.bulk-checkpoint');
     assert.equal(byId(inventory, 'cli.progress-event').schema, 'whoisleuth.cli.progress');
     assert.equal(byId(inventory, 'cli.lookup-diff').schema, 'whoisleuth.cli.lookup-diff');
+    assert.equal(byId(inventory, 'cli.comparison-ledger').schema, 'whoisleuth.cli.comparison-ledger');
     for (const [id, schema, version] of [
       ['cli.doctor', DOCTOR_SCHEMA, DOCTOR_VERSION],
       ['cli.command-catalogue', CLI_COMMAND_CATALOGUE_SCHEMA, CLI_COMMAND_CATALOGUE_VERSION],
@@ -234,7 +235,8 @@ describe('schema compatibility inventory', () => {
     assert.equal(byId(inventory, 'cli.registry-doctor').schema, 'whoisleuth.cli.registry-doctor');
     assert.equal(byId(inventory, 'cli.sharing-review').schema, 'whoisleuth.cli.sharing-review');
     assert.equal(byId(inventory, 'cli.sharing-review').currentVersion, 2);
-    assert.equal(byId(inventory, 'cli.offline-artifact-verification').currentVersion, 2);
+    assert.equal(byId(inventory, 'cli.offline-artifact-verification').currentVersion, 3);
+    assert.deepEqual(byId(inventory, 'cli.offline-artifact-verification').supportedVersions, [2, 3]);
     assert.equal(byId(inventory, 'cli.evidence-signature-verification').currentVersion, 2);
     assert.equal(byId(inventory, 'cli.interchange-fidelity-report').currentVersion, 2);
     assert.equal(byId(inventory, 'cli.signed-evidence-package').currentVersion, 2);
@@ -267,6 +269,7 @@ describe('schema compatibility inventory', () => {
     assert.equal(byId(inventory, 'cli.domain-control-monitor').schema, 'whoisleuth.cli.domain-control-monitor');
     assert.deepEqual(byId(inventory, 'cli.lookup-brief').supportedVersions, [1, 2]);
     assert.equal(byId(inventory, 'cli.registry-cohort').schema, 'whoisleuth.cli.registry-cohort');
+    assert.deepEqual(byId(inventory, 'cli.registry-cohort').supportedVersions, [1, 2]);
     assert.equal(byId(inventory, 'cli.domain-control-flight-recorder-input').schema, 'whoisleuth.domain-control-flight-recorder.input');
     assert.equal(byId(inventory, 'cli.domain-control-flight-recorder').schema, 'whoisleuth.domain-control-flight-recorder');
     assert.deepEqual(byId(inventory, 'tab.candidate-handoff').supportedVersions, [2]);

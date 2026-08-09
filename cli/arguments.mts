@@ -98,7 +98,7 @@ type CliAction =
   | { action: 'registry-scaffold'; profile: string; suffix: string; scenario: 'registered' | 'not_found' | 'inconclusive' }
   | ({ action: 'risk-calibrate'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'lookalike-calibrate'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
-  | ({ action: 'verify-artifact'; source: string | null; passphraseSource: string | null; output: 'terminal' | 'json'; strictExit: boolean } & TerminalOptions)
+  | ({ action: 'verify-artifact'; source: string | null; passphraseSource: string | null; manifestSource: string | null; manifestEntryId: string | null; output: 'terminal' | 'json'; strictExit: boolean } & TerminalOptions)
   | ({ action: 'interchange-report'; source: string | null; passphraseSource: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | InspectArchiveArguments
   | SignArtifactArguments
@@ -117,7 +117,7 @@ type CliAction =
   | ({ action: 'sharing-review'; source: string | null; output: 'terminal' | 'json'; marking: 'clear' | 'green' | 'amber' | 'amber-strict' | 'red'; recipientScope: 'public' | 'community' | 'organization' | 'named-recipients'; purpose: string; humanReviewed: boolean; personalDataReviewed: boolean; redactionsConfirmed: boolean } & TerminalOptions)
   | ({ action: 'workflow-plan'; recipe: InvestigationPlanRecipe; subject: string; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'workflow-run'; recipe: InvestigationPlanRecipe; subject: string; resumeSource: string | null; approveNetwork: boolean; output: 'terminal' | 'json' } & TerminalOptions)
-  | ({ action: 'diff'; leftSource: string; rightSource: string; output: 'terminal' | 'json' } & TerminalOptions)
+  | ({ action: 'diff'; leftSource: string; rightSource: string; leftSessionId: string | null; rightSessionId: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'reconcile'; sources: readonly string[]; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'timeline'; sources: readonly string[]; output: 'terminal' | 'json' } & TerminalOptions)
   | { action: 'export'; source: string | null; format: 'json' | 'markdown' | 'html'; compact: boolean; includeAttribution: boolean };
@@ -1103,24 +1103,35 @@ function parseWorkflowRunArguments(argv: string[]): Extract<CliArguments, { acti
 function parseDiffArguments(argv: string[]): Extract<CliArguments, { action: 'diff' }> {
   let leftSource: string | null = null;
   let rightSource: string | null = null;
+  let leftSessionId: string | null = null;
+  let rightSessionId: string | null = null;
   let output: 'terminal' | 'json' = 'terminal';
   let quiet = false;
   let color = true;
-  for (const argument of argv) {
+  for (let index = 0; index < argv.length; index++) {
+    const argument = argv[index];
+    if (argument === undefined) break;
     if (argument === '--json') {
       if (output !== 'terminal') throw new CliUsageError('--json may be supplied only once.');
       output = 'json';
+    } else if (argument === '--left-session' || argument === '--right-session') {
+      const current = argument === '--left-session' ? leftSessionId : rightSessionId;
+      if (current !== null) throw new CliUsageError(`${argument} may be supplied only once.`);
+      const value = argv[++index];
+      if (!value || !/^[A-Za-z0-9_-]{1,128}$/u.test(value)) throw new CliUsageError(`${argument} requires one bounded saved-session ID.`);
+      if (argument === '--left-session') leftSessionId = value;
+      else rightSessionId = value;
     } else if (argument === '--quiet') quiet = true;
     else if (argument === '--no-color') color = false;
     else if (argument.startsWith('-')) throw new CliUsageError(`Unknown option "${argument}".`);
     else if (leftSource === null) leftSource = argument;
     else if (rightSource === null) rightSource = argument;
-    else throw new CliUsageError('diff accepts exactly two saved lookup JSON files.');
+    else throw new CliUsageError('diff accepts exactly two compatible retained JSON files.');
   }
-  if (!leftSource || !rightSource) throw new CliUsageError('diff requires exactly two saved lookup JSON files.');
+  if (!leftSource || !rightSource) throw new CliUsageError('diff requires exactly two compatible retained JSON files.');
   if (leftSource === rightSource) throw new CliUsageError('diff requires two different input files.');
   if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
-  return { action: 'diff', leftSource, rightSource, output, quiet, color };
+  return { action: 'diff', leftSource, rightSource, leftSessionId, rightSessionId, output, quiet, color };
 }
 
 function parseReconcileArguments(argv: string[]): Extract<CliArguments, { action: 'reconcile' }> {
@@ -1221,6 +1232,8 @@ function parseLookalikeCalibrateArguments(argv: string[]): Extract<CliArguments,
 function parseVerifyArtifactArguments(argv: string[]): Extract<CliArguments, { action: 'verify-artifact' }> {
   let source: string | null = null;
   let passphraseSource: string | null = null;
+  let manifestSource: string | null = null;
+  let manifestEntryId: string | null = null;
   let output: 'terminal' | 'json' = 'terminal';
   let strictExit = false;
   let quiet = false;
@@ -1238,6 +1251,18 @@ function parseVerifyArtifactArguments(argv: string[]): Extract<CliArguments, { a
         throw new CliUsageError('--passphrase-file requires one bounded UTF-8 file.');
       }
       passphraseSource = value;
+    } else if (argument === '--manifest') {
+      if (manifestSource !== null) throw new CliUsageError('--manifest may be supplied only once.');
+      const value = argv[++index];
+      if (!value || value.startsWith('-')) throw new CliUsageError('--manifest requires one bounded investigation manifest file.');
+      manifestSource = value;
+    } else if (argument === '--manifest-entry') {
+      if (manifestEntryId !== null) throw new CliUsageError('--manifest-entry may be supplied only once.');
+      const value = argv[++index];
+      if (!value || !/^artifact-(?:[1-9]|1[0-6])$/u.test(value)) {
+        throw new CliUsageError('--manifest-entry requires an ID from artifact-1 through artifact-16.');
+      }
+      manifestEntryId = value;
     } else if (argument === '--strict-exit') {
       if (strictExit) throw new CliUsageError('--strict-exit may be supplied only once.');
       strictExit = true;
@@ -1247,8 +1272,11 @@ function parseVerifyArtifactArguments(argv: string[]): Extract<CliArguments, { a
     else if (source === null) source = argument;
     else throw new CliUsageError('verify-artifact accepts one optional JSON file. Otherwise pipe one artefact on stdin.');
   }
+  if ((manifestSource === null) !== (manifestEntryId === null)) {
+    throw new CliUsageError('--manifest and --manifest-entry must be supplied together.');
+  }
   if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
-  return { action: 'verify-artifact', source, passphraseSource, output, strictExit, quiet, color };
+  return { action: 'verify-artifact', source, passphraseSource, manifestSource, manifestEntryId, output, strictExit, quiet, color };
 }
 
 function parseInterchangeReportArguments(argv: string[]): Extract<CliArguments, { action: 'interchange-report' }> {

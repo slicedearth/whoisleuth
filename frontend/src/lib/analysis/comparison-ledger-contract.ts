@@ -48,7 +48,7 @@ const CONTROL_TEST_RE = /[\u0000-\u001f\u007f]/u;
 export type ComparisonLedgerMode = typeof COMPARISON_LEDGER_MODES[number];
 export type ComparisonLedgerState = typeof COMPARISON_LEDGER_STATES[number];
 export type ComparisonLedgerCompleteness = 'complete' | 'partial' | 'unavailable' | 'not_reported';
-export type ComparisonLedgerOwnerType = 'case' | 'website_snapshot' | 'watchlist' | 'bulk_session_pair';
+export type ComparisonLedgerOwnerType = 'case' | 'website_snapshot' | 'watchlist' | 'bulk_session_pair' | 'retained_artifact_pair';
 
 export type ComparisonLedgerSide = Readonly<{
   source: string;

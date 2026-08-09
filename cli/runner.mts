@@ -41,7 +41,11 @@ import {
   formatTerminalRegistrySupport,
   formatTerminalRiskCalibration,
 } from './formatters/terminal.mts';
-import { buildCliLookupDiff, formatCliLookupDiff } from './lookup-diff.mts';
+import {
+  MAX_RETAINED_ARTIFACT_DIFF_BYTES,
+  buildCliRetainedArtifactDiff,
+  formatCliRetainedArtifactDiff,
+} from './retained-artifact-diff.mts';
 import {
   MAX_LOOKUP_RECONCILIATION_INPUT_BYTES,
   buildCliLookupReconciliation,
@@ -560,8 +564,22 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
       if (!input.trim()) throw new CliUsageError('verify-artifact requires one JSON file or an artefact on stdin.');
 
       const passphrase = args.passphraseSource ? await readPassphraseSource(args.passphraseSource) : null;
+      let manifest: Readonly<{ raw: string; entryId: string }> | null = null;
+      if (args.manifestSource && args.manifestEntryId) {
+        let raw: string;
+        try {
+          raw = dependencies.readArtifactInput
+            ? await dependencies.readArtifactInput(args.manifestSource)
+            : await readInput(args.manifestSource, MAX_OFFLINE_ARTIFACT_BYTES, 'Investigation manifest input');
+        } catch (error) {
+          if (error instanceof CliUsageError) throw error;
+          throw new CliUsageError(`Could not read investigation manifest input: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
+        }
+        if (!raw.trim()) throw new CliUsageError('The investigation manifest input is empty.');
+        manifest = Object.freeze({ raw, entryId: args.manifestEntryId });
+      }
 
-      const report = await verifyOfflineArtifact(input, { passphrase });
+      const report = await verifyOfflineArtifact(input, { passphrase, manifest });
       if (!args.quiet) {
         write(stdout, args.output === 'json'
           ? formatJsonDocument(report)
@@ -990,9 +1008,9 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
     }
 
     if (args.action === 'diff') {
-      failureLabel = 'Lookup evidence diff';
+      failureLabel = 'Retained artifact diff';
       const readDiffInput = dependencies.readDiffInput
-        || ((source: string) => readInput(source, MAX_SAVED_LOOKUP_INPUT_BYTES, 'Lookup diff input'));
+        || ((source: string) => readInput(source, MAX_RETAINED_ARTIFACT_DIFF_BYTES, 'Retained diff input'));
       let leftInput: string;
       let rightInput: string;
       try {
@@ -1002,16 +1020,17 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
         ]);
       } catch (error) {
         if (error instanceof CliUsageError) throw error;
-        throw new CliUsageError(`Could not read Lookup diff input: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
+        throw new CliUsageError(`Could not read retained diff input: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
       }
-      const document = buildCliLookupDiff(
+      const document = buildCliRetainedArtifactDiff(
         leftInput,
         rightInput,
+        { leftSessionId: args.leftSessionId, rightSessionId: args.rightSessionId },
         dependencies.now ? dependencies.now() : new Date().toISOString(),
       );
       if (!args.quiet) write(stdout, args.output === 'json'
         ? formatJsonDocument(document)
-        : terminal(formatCliLookupDiff(document), args.color));
+        : terminal(formatCliRetainedArtifactDiff(document), args.color));
       return EXIT_CODES.SUCCESS;
     }
 
