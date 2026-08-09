@@ -77,6 +77,7 @@
     "catalog:kev:status": "node tools/cisa-kev-catalog-status.mts",
     "architecture:check": "npm run sync --workspace=frontend && depcruise --config .dependency-cruiser.json --output-type err-long -- lib cli bin netlify/functions frontend/src packages tools server.mts",
     "release:check": "node tools/release-version-check.mts",
+    "dependencies:audit": "node tools/production-dependency-audit.mts",
     "licenses:check": "node tools/third-party-notices.mts --check",
     "licenses:update": "node tools/third-party-notices.mts --write",
     "providers:policy-check": "node tools/provider-policy-freshness.mts",

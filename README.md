@@ -187,7 +187,7 @@ npm run architecture:check
 npm run cli:package:check
 npm run test:e2e:built
 git diff --check
-npm audit --omit=dev
+npm run dependencies:audit
 ```
 
 Install Playwright's Chromium build once with `npm run test:e2e:install`.

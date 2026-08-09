@@ -81,7 +81,7 @@ npm run build
 npm run cli:package:check
 npm run test:e2e:built
 git diff --check
-npm audit --omit=dev
+npm run dependencies:audit
 ```
 
 The commands cover:
@@ -92,7 +92,8 @@ The commands cover:
 - Svelte diagnostics;
 - the production static build;
 - Chromium browser workflows; and
-- production dependency advisories.
+- production dependency advisories through the fail-closed reviewed-exception
+  policy documented in [Dependency maintenance](dependency-maintenance.md).
 
 Automated tests use deterministic fixtures. They must not contact live
 registries, domains, Certificate Transparency services, or optional providers.
