@@ -128,7 +128,7 @@ identity digests, source health, timestamps, completeness markers and an
 optional normalised leaf-certificate observation from the same completed Deep
 Lookup rather than raw lookup responses or certificate bytes.
 Investigation templates retain at most 20 analyst-authored variants of the
-three built-in guides. They can customise bounded guidance, omit allowlisted
+six fixed built-in investigation and response-preparation guides. They can customise bounded guidance, omit allowlisted
 steps, and add approval gates, but cannot introduce arbitrary actions, run
 code, start collection, submit evidence, or remove a mandatory request gate.
 

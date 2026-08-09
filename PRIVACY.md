@@ -288,18 +288,19 @@ default (see the README), so many lookups return no personal data at all.
   target or evidence, and is not included in workspace archives. Clearing site
   data removes it. Lookup form values and results remain subject to the
   transient rule above and are not added to this preference.
-- **Guided investigations**: an authenticated user can optionally start a standard
-  brand-sweep, infrastructure-pivot, or new-domain-triage guide for one canonical
-  domain, or a bounded analyst-authored template derived from one of those
-  guides. The versioned storage contract calls the selected guide a recipe;
-  schema version 4 keeps only that recipe identifier, an optional compact
+- **Guided investigations**: an authenticated user can optionally start one of
+  six fixed guides for one canonical domain: brand sweep, infrastructure pivot,
+  new-domain triage, credential-impersonation response, mail-abuse response, or
+  domain-control-change response. A bounded analyst-authored template must
+  derive from one of those guides. The versioned storage contract calls the
+  selected guide a recipe; schema version 5 keeps only that recipe identifier, an optional compact
   template snapshot, official or starting
   domain, an optional analyst-selected candidate domain, up to 25 canonical
   domains carried from a guided Bulk comparison, an explicit truncation marker,
   creation/update timestamps, active or paused state, and bounded stage
   approval, opened, and outcome markers. Partial and skipped stages also retain
   a required review reason of up to 500 characters in the current tab's `sessionStorage`
-  under `whoisleuth:investigation-guide:v4`. Deployed version 1, 2, and 3 records
+  under `whoisleuth:investigation-guide:v5`. Deployed versions 1 through 4 records
   can normalise without inventing a custom template when no current record
   exists; future records remain untouched. A saved template can customise
   bounded guidance, omit allowlisted steps, and add approval gates. It cannot
@@ -325,6 +326,21 @@ default (see the README), so many lookups return no personal data at all.
   current and migrated legacy tab records,
   and closing the tab session removes them with the rest of that tab's session
   storage.
+- **Response playbooks and operations reporting**: the three response recipes
+  can focus the existing Case response workspace only after the analyst opens
+  or creates the relevant Case. They do not discover a recipient, test
+  reachability, submit a packet, contact a provider, apply a defensive control,
+  or infer an action state. Recipient, source, limitation, and outcome fields
+  are retained only through an explicit Case action edit. Monitor can
+  transiently aggregate at most 500 readable Cases and 50 current actions per
+  Case into analyst, operations, or executive views over a selected action
+  `updatedAt` window. Loading or unavailable Cases suppress numeric
+  conclusions. A deliberate aggregate JSON export contains counts,
+  denominators, time bounds, source state, omissions, and limitations only; it
+  excludes Case and domain identifiers, domains, recipients, notes, references,
+  outcome text, raw evidence, and provider payloads. Current states are not a
+  reconstructed event history, and the report does not calculate delivery,
+  takedown time, service levels, trends, success rates, or causation.
 - **TLS and certificate intelligence**: a requested deep domain scan resolves
   the domain through the public-address guard and opens one direct TLS
   connection to one validated address while retaining the domain as SNI.

@@ -6,6 +6,7 @@
   import AnalystReviewInbox from '$lib/components/AnalystReviewInbox.svelte';
   import EvidenceDebtMatrix from '$lib/components/EvidenceDebtMatrix.svelte';
   import CaseLifecycleReview from '$lib/components/CaseLifecycleReview.svelte';
+  import BrandProtectionOperationsReport from '$lib/components/BrandProtectionOperationsReport.svelte';
   import CaseDecisionQuality from '$lib/components/CaseDecisionQuality.svelte';
   import MonitorViewTabs from '$lib/components/MonitorViewTabs.svelte';
   import CaseWorkspaceToolbar from '$lib/components/CaseWorkspaceToolbar.svelte';
@@ -172,6 +173,14 @@
     target?.scrollIntoView({block:'center'});
     target?.focus({preventScroll:true});
   }
+  async function focusResponsePreflight(record:CaseRecord){
+    await tick();
+    const details=document.getElementById(`case-response-preflight-${record.id}`) as HTMLDetailsElement|null;
+    if(!details)return;
+    details.open=true;
+    details.scrollIntoView({block:'center'});
+    details.querySelector<HTMLElement>('summary')?.focus({preventScroll:true});
+  }
   async function openWatchlistCase(domain:string){
     try{
       const{record,created,pruned}=await openCase({domain,source:'monitor'});
@@ -184,7 +193,7 @@
       const{record,created,pruned}=await openCase({domain,source:'monitor'});
       await refreshCases();clearCaseFilters();casePage=1;showCasePage(record);view='cases';expandedId=record.id;tagDraft=record.tags.join(', ');noteDraft='';
       caseMessage=`${created?`Opened a new case for ${record.domain}.`:`Opened the existing case for ${record.domain}.`}${prunedNote(pruned)}`;
-      await focusCase(record);
+      if(page.url.searchParams.get('response')==='1')await focusResponsePreflight(record);else await focusCase(record);
     }catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not open the guided case.';}
   }
   async function recordWebsiteClusterLead(cluster:WebsiteProfileCluster,domain:string){
@@ -313,6 +322,7 @@
 {#if view==='inbox'}
 <div id="monitor-view-panel" role="tabpanel" aria-labelledby="tab-inbox">
   <AnalystReviewInbox inbox={reviewInbox} ondismiss={dismissEvidenceGap} />
+  <BrandProtectionOperationsReport records={cases} sourceState={casesSourceState} />
   <EvidenceDebtMatrix review={evidenceDebtReview} oncase={openEvidenceDebtCase} />
   <CaseDecisionQuality report={decisionQuality} />
   {#if caseMessage}<p class="case-message" role="status" aria-live="polite">{caseMessage}</p>{/if}

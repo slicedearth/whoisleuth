@@ -118,4 +118,13 @@ test('exports and non-destructively merges only the strict versioned schema', ()
     ...exported,
     version: INVESTIGATION_TEMPLATE_VERSION + 1,
   }), /newer schema/u);
+
+  const legacy = mergeInvestigationTemplates([], { ...exported, version: 1 });
+  assert.equal(legacy.added, 1);
+  const epochSmuggle = mergeInvestigationTemplates([], {
+    ...exported,
+    version: 1,
+    templates: [{ ...candidate(), recipeId: 'mail_abuse_response' }],
+  });
+  assert.equal(epochSmuggle.added, 0);
 });

@@ -2,10 +2,10 @@ import { normalizeDomain } from './case-model.ts';
 import { parse } from 'tldts';
 
 export const INVESTIGATION_GUIDE_SCHEMA = 'whoisleuth.investigation-recipe';
-export const INVESTIGATION_GUIDE_VERSION = 4;
+export const INVESTIGATION_GUIDE_VERSION = 5;
 export const INVESTIGATION_GUIDE_LEGACY_VERSION = 1;
-export const INVESTIGATION_GUIDE_EXPORT_VERSION = 3;
-export const INVESTIGATION_GUIDE_SUPPORTED_VERSIONS = [2, 3, INVESTIGATION_GUIDE_VERSION] as const;
+export const INVESTIGATION_GUIDE_EXPORT_VERSION = 4;
+export const INVESTIGATION_GUIDE_SUPPORTED_VERSIONS = [2, 3, 4, INVESTIGATION_GUIDE_VERSION] as const;
 export const INVESTIGATION_GUIDE_EXPORT_SCHEMA = 'whoisleuth.investigation-recipe-summary';
 export const MAX_INVESTIGATION_GUIDE_DOMAIN_LENGTH = 253;
 export const MAX_INVESTIGATION_GUIDE_REVIEW_DOMAINS = 25;
@@ -14,7 +14,13 @@ export const MAX_INVESTIGATION_GUIDE_TIMESTAMP_LENGTH = 64;
 export const MAX_INVESTIGATION_GUIDE_SERIALIZED_BYTES = 12_288;
 export const MAX_INVESTIGATION_GUIDE_EXPORT_BYTES = 16_384;
 
-export type InvestigationRecipeId = 'brand_sweep' | 'infrastructure_pivot' | 'new_domain_triage';
+export type InvestigationRecipeId =
+  | 'brand_sweep'
+  | 'infrastructure_pivot'
+  | 'new_domain_triage'
+  | 'credential_impersonation_response'
+  | 'mail_abuse_response'
+  | 'domain_control_change_response';
 export type InvestigationGuideStatus = 'active' | 'paused';
 export type InvestigationGuideOutcome = 'pending' | 'complete' | 'partial' | 'skipped';
 export type InvestigationWorkspaceId = 'brands' | 'discover' | 'bulk' | 'lookup' | 'monitor';
@@ -109,6 +115,7 @@ const CONTROL_RE = /[\x00-\x1f\x7f]/u;
 const SAFE_TEMPLATE_ID_RE = /^[A-Za-z0-9_-]{1,128}$/u;
 const GUIDE_STATUSES = new Set<InvestigationGuideStatus>(['active', 'paused']);
 const GUIDE_OUTCOMES = new Set<InvestigationGuideOutcome>(['pending', 'complete', 'partial', 'skipped']);
+const PRE_RESPONSE_RECIPE_IDS = new Set<InvestigationRecipeId>(['brand_sweep', 'infrastructure_pivot', 'new_domain_triage']);
 
 function stage(
   id: string,
@@ -194,6 +201,39 @@ export const INVESTIGATION_RECIPES: readonly InvestigationRecipe[] = Object.free
       stage('lookup', 'lookup', 'Collect domain evidence', 'Start with separately attributed registry and network evidence for the domain under review.', 'Authority-aware availability plus supported registry, DNS, certificate, HTTP, page, and threat-source observations.', 'Fast and deep Lookup have different request budgets. Collection starts only from the tool action you choose.', 'Confirm the domain is in scope and select the appropriate lookup depth.', 'Available evidence and explicit source failures are reviewed without treating a miss as safety.', ['Confirm the pre-filled domain and choose Fast or Deep.', 'Run the lookup and review source states before interpreting the result.', 'Mark the step reviewed, or partial if important evidence did not settle.'], true),
       stage('bulk', 'bulk', 'Compare focused peers', 'Optionally compare the domain with a small candidate set to expose relative signals and shared infrastructure.', 'Bounded peer results and relationship evidence with explainable factors.', 'Bulk makes bounded analysis requests according to candidate count and selected depth.', 'Use only a focused, relevant peer set; this stage may be skipped when comparison adds no value.', 'Relevant differences are reviewed, or the stage is marked skipped or partial with the reason retained outside this compact record.', ['The investigated domain is pre-filled. Add only relevant comparison domains.', 'Run a bounded scan and compare registration, activity, Risk factors, and relationships.', 'Mark the step reviewed, partial, or skip it when peer comparison adds no value.'], true),
       stage('monitor', 'monitor', 'Record disposition', 'Review the bounded domain set carried from Bulk and create or update only the cases that need an analyst decision or follow-up plan.', 'A bounded review queue plus case records with dispositions, notes, evidence history, and optional monitoring intent.', 'Local case editing makes no request. Rescans and hosted-monitor changes remain separate explicit actions.', 'Review source provenance, limitations, and any scoring explanation before deciding.', 'The analyst records the required dispositions or explicitly skips retention; the recipe never decides automatically.', ['Review the domains carried from Bulk and open only the cases that need retention.', 'Record a disposition and any concise evidence-based follow-up for each retained case.', 'Mark the step reviewed when the retained cases reflect your decision.'], false),
+    ]),
+  }),
+  Object.freeze({
+    id: 'credential_impersonation_response',
+    label: 'Credential impersonation response',
+    summary: 'Review observed impersonation evidence, confirm the affected brand boundary, and prepare a local response packet from explicitly recorded routes.',
+    targetLabel: 'Domain under review',
+    stages: Object.freeze([
+      stage('lookup', 'lookup', 'Review impersonation evidence', 'Collect separately attributed deep evidence for the domain without treating visual or naming similarity as attribution.', 'Current registry, DNS, certificate, HTTP, page-identity, and source-health observations where supported.', 'Deep Lookup can contact several public services within explicit deadlines and response caps.', 'Confirm the target is in scope and do not enter a credential-bearing URL or secret.', 'Observed facts and missing sources are reviewed without making an ownership, intent, or harm conclusion.', ['Run the pre-filled Lookup in Deep mode.', 'Review exact page, redirect, certificate, and registration observations with their source states.', 'Create or update a Case only when the retained observations need reviewed follow-up.'], true),
+      stage('brands', 'brands', 'Confirm affected brand boundary', 'Review the saved Brand Profile that defines official and allowlisted references; do not infer an association from similarity.', 'An analyst-selected Brand Profile boundary, or an explicit decision to continue without one.', 'Local-only. Opening Brands makes no analysis request.', 'Know which saved profile, if any, is relevant to the affected party.', 'The relevant profile boundary is reviewed, or the stage is marked partial or skipped without creating an association.', ['Open the saved Brand Profiles list.', 'Review the official references and allowlists for the affected party.', 'Return to the guide without adding a profile association unless you deliberately selected one in Monitor.'], false),
+      stage('monitor', 'monitor', 'Prepare reviewed response', 'Open the Case response workspace, record only analyst-selected published recipient routes, and review packet preflight.', 'A Case action with recipient provenance and limitations plus an optional local draft packet that remains unsubmitted.', 'Local Case edits and packet generation make no request. WHOISleuth never sends the packet.', 'Retain supporting facts and reasoning before recording an external route; confirm the route manually.', 'The reviewed action and packet preflight are recorded, or the stage is partial or skipped without implying submission.', ['Open or create the pre-filled Case, then review its evidence and reasoning.', 'Record an analyst-selected published route with its source and limitations; do not claim it is reachable.', 'Open response preflight and prepare a local draft only if its required facts are complete.'], false),
+    ]),
+  }),
+  Object.freeze({
+    id: 'mail_abuse_response',
+    label: 'Mail abuse response',
+    summary: 'Review official mail posture and observed domain evidence before preparing a source-qualified, unsent response packet.',
+    targetLabel: 'Domain under review',
+    stages: Object.freeze([
+      stage('brands', 'brands', 'Review official mail posture', 'Review the affected Brand Profile and retained mail posture without treating a missing control as proof of abuse.', 'Analyst-selected official-domain, mail, and Brand Profile context with explicit availability states.', 'Local-only unless the analyst separately starts a Brand posture refresh.', 'Identify the affected profile and distinguish official infrastructure from the domain under review.', 'Relevant retained posture is reviewed, or unavailable context is marked partial rather than absent.', ['Open the saved Brand Profiles list.', 'Review official MX, SPF, DMARC, and approved-domain context where retained.', 'Do not refresh or change a profile unless that separate action is necessary and approved.'], false),
+      stage('lookup', 'lookup', 'Review domain and mail evidence', 'Collect current deep evidence for the domain and keep DNS, mail, registration, and page observations separately attributed.', 'Authority-aware availability plus bounded DNS, mail, TLS, HTTP, and page observations where supported.', 'Deep Lookup can contact several public services within explicit deadlines and response caps.', 'Confirm the domain is in scope; email content and mailbox data are outside this workflow.', 'Current observations and source failures are reviewed without claiming message origin, sender control, or maliciousness.', ['Run the pre-filled Lookup in Deep mode.', 'Review MX, SPF, DMARC, registration, certificate, HTTP, and page source states.', 'Retain only the evidence needed for a reviewed Case.'], true),
+      stage('monitor', 'monitor', 'Prepare mail-abuse response', 'Record a reviewed recipient route and use Case packet preflight without sending or claiming delivery.', 'A bounded Case action and optional local response draft with exact recipient provenance and limitations.', 'Local Case edits and packet generation make no request. WHOISleuth never sends the packet.', 'Confirm the intended recipient and retain the observed facts and limitations that support review.', 'The current action state and packet preflight are recorded, or the stage remains partial without a delivery conclusion.', ['Open or create the pre-filled Case and review its retained evidence.', 'Record only a deliberately selected published route, its source, and known limitations.', 'Use the response preflight to prepare a local draft; submission remains a separate manual action recorded later.'], false),
+    ]),
+  }),
+  Object.freeze({
+    id: 'domain_control_change_response',
+    label: 'Domain-control change response',
+    summary: 'Review retained control posture and current authority-aware evidence before documenting a bounded internal or provider response.',
+    targetLabel: 'Official domain',
+    stages: Object.freeze([
+      stage('brands', 'brands', 'Review retained control posture', 'Review the saved domain-control passport, posture matrix, and source limitations before interpreting a change.', 'Retained official-domain control observations with separately attributed registry, DNS, certificate, mail, and web states.', 'Local-only unless the analyst separately starts a posture refresh.', 'Confirm the domain belongs to the reviewed Brand Profile; a saved association is analyst-selected, not inferred.', 'The retained baseline and its completeness are understood, or the stage is partial when required context is unavailable.', ['Open the relevant saved Brand Profile.', 'Review the domain-control passport, portfolio matrix, and observation times.', 'Identify which source actually supports the suspected change and preserve unavailable states.'], false),
+      stage('lookup', 'lookup', 'Confirm current domain evidence', 'Collect a deliberate deep Lookup so current authority-aware evidence remains distinct from the retained baseline.', 'Current registry, registrar, DNS, certificate, HTTP, and page observations with explicit source health.', 'Deep Lookup can contact several public services within explicit deadlines and response caps.', 'Confirm a fresh collection is necessary and review its request implications.', 'The current result is reviewed against the retained baseline without converting incomplete evidence into removal or compromise.', ['Run the pre-filled Lookup in Deep mode.', 'Compare current observations with the retained control evidence source by source.', 'Record only facts and limitations that need a Case response.'], true),
+      stage('monitor', 'monitor', 'Document control-change response', 'Record an internal or provider action and review an optional response packet without automatic enforcement or submission.', 'A bounded Case action, due or follow-up dates, recipient provenance when external, and an optional unsubmitted packet.', 'Local Case edits and packet generation make no request. WHOISleuth never changes DNS, registrar, hosting, mail, or defensive systems.', 'Document supporting evidence and confirm any recipient route or internal owner manually.', 'The reviewed action state is recorded, or the stage is partial without a compromise, delivery, or remediation claim.', ['Open or create the pre-filled Case and retain the relevant comparison facts.', 'Record the internal owner or analyst-selected provider route, source, limitations, and follow-up dates.', 'Review packet preflight when a draft is useful; record submission or resolution only after it actually occurs.'], false),
     ]),
   }),
 ]);
@@ -352,8 +392,15 @@ export function investigationGuideHref(
   }
   if (stageDefinition.workspace === 'discover') return `/discover?q=${encodeURIComponent(registrableGuideDomain(normalized))}#discovery-seed`;
   if (stageDefinition.workspace === 'bulk') return `/bulk?investigation=${encodeURIComponent(normalized)}#domains`;
-  if (stageDefinition.workspace === 'monitor') return `/monitor?view=cases&investigation=1&domain=${encodeURIComponent(workingDomain)}#case-review-queue`;
-  if (stageDefinition.workspace === 'brands') return `/brands?new=1&domain=${encodeURIComponent(normalized)}#official-domains`;
+  if (stageDefinition.workspace === 'monitor') {
+    const response = typeof recipeId === 'string' && recipeId.endsWith('_response') ? '&response=1' : '';
+    return `/monitor?view=cases&investigation=1${response}&domain=${encodeURIComponent(workingDomain)}#case-review-queue`;
+  }
+  if (stageDefinition.workspace === 'brands') {
+    return typeof recipeId === 'string' && recipeId.endsWith('_response')
+      ? '/brands'
+      : `/brands?new=1&domain=${encodeURIComponent(normalized)}#official-domains`;
+  }
   return stageDefinition.path;
 }
 
@@ -435,13 +482,14 @@ export function parseInvestigationGuide(value: unknown): InvestigationGuide | nu
   const input = record(value);
   if (!input) return null;
   if (input.version === INVESTIGATION_GUIDE_LEGACY_VERSION) return parseLegacyGuide(input);
-  if (!INVESTIGATION_GUIDE_SUPPORTED_VERSIONS.includes(input.version as 2 | 3 | 4)) return null;
+  if (!INVESTIGATION_GUIDE_SUPPORTED_VERSIONS.includes(input.version as 2 | 3 | 4 | 5)) return null;
   const recipe = investigationGuideRecipe(input.recipeId);
   const domain = normalizeInvestigationGuideDomain(input.domain);
   const createdAt = timestamp(input.createdAt);
   const updatedAt = timestamp(input.updatedAt);
-  if (!recipe || !domain || !createdAt || !updatedAt) return null;
-  const supportsTemplate = input.version === 3 || input.version === INVESTIGATION_GUIDE_VERSION;
+  if (!recipe || !domain || !createdAt || !updatedAt
+    || (input.version !== INVESTIGATION_GUIDE_VERSION && !PRE_RESPONSE_RECIPE_IDS.has(recipe.id))) return null;
+  const supportsTemplate = input.version === 3 || input.version === 4 || input.version === INVESTIGATION_GUIDE_VERSION;
   const template = supportsTemplate && input.template !== null && input.template !== undefined
     ? normalizeInvestigationGuideTemplateSnapshot(input.template, recipe.id)
     : null;
@@ -476,7 +524,9 @@ export function parseInvestigationGuide(value: unknown): InvestigationGuide | nu
         outcome: guideOutcome(item?.outcome),
         approvedAt: nullableTimestamp(item?.approvedAt),
         openedAt: nullableTimestamp(item?.openedAt),
-        reviewNote: input.version === INVESTIGATION_GUIDE_VERSION ? boundedReviewNote(item?.reviewNote) : null,
+        reviewNote: input.version === 4 || input.version === INVESTIGATION_GUIDE_VERSION
+          ? boundedReviewNote(item?.reviewNote)
+          : null,
         updatedAt: timestamp(item?.updatedAt) || updatedAt,
       };
     }),

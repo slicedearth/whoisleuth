@@ -6,7 +6,8 @@ import {
 } from './investigation-guide.ts';
 
 export const INVESTIGATION_TEMPLATE_SCHEMA = 'whoisleuth.investigation-templates';
-export const INVESTIGATION_TEMPLATE_VERSION = 1;
+export const INVESTIGATION_TEMPLATE_VERSION = 2;
+export const INVESTIGATION_TEMPLATE_SUPPORTED_VERSIONS = [1, INVESTIGATION_TEMPLATE_VERSION] as const;
 export const MAX_INVESTIGATION_TEMPLATES = 20;
 export const MAX_INVESTIGATION_TEMPLATE_STORE_BYTES = 256 * 1024;
 export const MAX_INVESTIGATION_TEMPLATE_IMPORT_BYTES = 384 * 1024;
@@ -18,6 +19,7 @@ export interface InvestigationTemplate extends InvestigationGuideTemplateSnapsho
 
 type UnknownRecord = Record<string, unknown>;
 const CONTROL_RE = /[\x00-\x1f\x7f]/u;
+const LEGACY_RECIPE_IDS = new Set<InvestigationRecipeId>(['brand_sweep', 'infrastructure_pivot', 'new_domain_triage']);
 
 function record(value: unknown): UnknownRecord | null {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as UnknownRecord : null;
@@ -33,12 +35,12 @@ function byteLength(value: string): number {
   return new TextEncoder().encode(value).byteLength;
 }
 
-function template(raw: unknown): InvestigationTemplate | null {
+function template(raw: unknown, sourceVersion: number = INVESTIGATION_TEMPLATE_VERSION): InvestigationTemplate | null {
   const value = record(raw);
   const snapshot = normalizeInvestigationGuideTemplateSnapshot(value);
   const createdAt = timestamp(value?.createdAt);
   const updatedAt = timestamp(value?.updatedAt);
-  return snapshot && createdAt && updatedAt
+  return snapshot && createdAt && updatedAt && (sourceVersion !== 1 || LEGACY_RECIPE_IDS.has(snapshot.recipeId))
     ? { ...snapshot, createdAt, updatedAt }
     : null;
 }
@@ -53,11 +55,12 @@ export function normalizeInvestigationTemplateStore(raw: unknown) {
     && Number(value.version) > INVESTIGATION_TEMPLATE_VERSION) {
     throw new Error('This investigation-template collection uses a newer schema and cannot be read safely.');
   }
+  const sourceVersion = Array.isArray(raw) ? INVESTIGATION_TEMPLATE_VERSION : Number(value?.version) || INVESTIGATION_TEMPLATE_VERSION;
   const source = Array.isArray(raw) ? raw : Array.isArray(value?.templates) ? value.templates : [];
   const templates: InvestigationTemplate[] = [];
   const seen = new Set<string>();
   for (const candidate of source.slice(0, MAX_INVESTIGATION_TEMPLATES * 2)) {
-    const normalized = template(candidate);
+    const normalized = template(candidate, sourceVersion);
     if (!normalized || seen.has(normalized.id)) continue;
     seen.add(normalized.id);
     templates.push(normalized);
@@ -143,8 +146,8 @@ function strictImport(raw: unknown) {
   if (Number(value.version) > INVESTIGATION_TEMPLATE_VERSION) {
     throw new Error('This investigation-template export uses a newer schema and cannot be imported safely.');
   }
-  if (value.version !== INVESTIGATION_TEMPLATE_VERSION) {
-    throw new Error(`Expected investigation-template schema ${INVESTIGATION_TEMPLATE_VERSION}.`);
+  if (!(INVESTIGATION_TEMPLATE_SUPPORTED_VERSIONS as readonly number[]).includes(Number(value.version))) {
+    throw new Error(`Expected investigation-template schema 1 or ${INVESTIGATION_TEMPLATE_VERSION}.`);
   }
   return normalizeInvestigationTemplateStore(value).templates;
 }

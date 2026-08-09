@@ -24,6 +24,71 @@ test('Monitor views support roving keyboard navigation', async ({ page }) => {
   await expect(tabs.getByRole('tab', { name: /^Watchlists/ })).toHaveAttribute('aria-selected', 'true');
 });
 
+test('recorded operations reporting stays aggregate, source-qualified, and usable on mobile', async ({ page }) => {
+  const now = Date.now();
+  const actionUpdatedAt = new Date(now - 60_000).toISOString();
+  const actionCreatedAt = new Date(now - 9 * 86_400_000).toISOString();
+  const overdueAt = new Date(now - 86_400_000).toISOString();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/monitor');
+  await migrateLegacyBrowserData(page, {
+    'whois-rdap-cases-v1': {
+      version: 12,
+      cases: [
+        caseRecord({
+          id: 'case-operations-prepared',
+          domain: 'prepared.invalid',
+          actions: [{
+            id: 'action-prepared', type: 'registrar_report', recipient: 'Reviewed registrar route',
+            contactSource: 'Published registrar policy', contactLimitations: ['Reachability was not tested.'],
+            dueAt: overdueAt, state: 'ready_for_review', reference: null,
+            followUpAt: null, outcome: null, createdAt: actionCreatedAt, updatedAt: actionUpdatedAt,
+          }],
+        }),
+        caseRecord({
+          id: 'case-operations-resolved',
+          domain: 'resolved.invalid',
+          actions: [{
+            id: 'action-resolved', type: 'security_contact_report', recipient: 'Private response route',
+            contactSource: 'Analyst supplied', contactLimitations: [], dueAt: null, state: 'resolved',
+            reference: 'PRIVATE-CASE-7', followUpAt: null, outcome: 'Private analyst outcome text.',
+            createdAt: actionCreatedAt, updatedAt: actionUpdatedAt,
+          }],
+        }),
+        caseRecord({ id: 'case-packet-only', domain: 'packet-only.invalid', actions: [] }),
+      ],
+    },
+  });
+
+  const report = page.locator('.operations-report');
+  await expect(report).toContainText('2 current action records across 2 of 3 inspected Cases');
+  await expect(report.getByText('Prepared', { exact: true })).toBeVisible();
+  await expect(report).toContainText('State recorded as ready for review');
+  await report.getByLabel('Audience').selectOption('executive');
+  await expect(report.getByText('Cases with actions', { exact: true })).toBeVisible();
+  await expect(report).toContainText('Denominator: 3 inspected Cases');
+  await report.getByLabel('Time window').selectOption('all');
+
+  const pending = page.waitForEvent('download');
+  await report.getByRole('button', { name: 'Export aggregate JSON' }).click();
+  const download = await pending;
+  const path = await download.path();
+  expect(path).not.toBeNull();
+  const body = await readFile(path!, 'utf8');
+  const exported = JSON.parse(body);
+  expect(exported).toMatchObject({
+    schema: 'whoisleuth.brand-protection-operations-report',
+    version: 1,
+    sourceState: 'ready',
+    counts: { casesInspected: 3, casesWithActions: 2, actions: 2, prepared: 1, submitted: 0, resolved: 1 },
+  });
+  expect(body).not.toContain('prepared.invalid');
+  expect(body).not.toContain('Private response route');
+  expect(body).not.toContain('Private analyst outcome text');
+  await expect(page.getByRole('status')).toContainText('No response was submitted');
+  await expectNoHorizontalOverflow(page);
+});
+
 
 test('a case created from Monitor persists across a reload', async ({ page }) => {
   await openCasesView(page);

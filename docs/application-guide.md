@@ -36,8 +36,9 @@ Dashboard is the landing page inside the signed-in Console. It provides:
 - four task-focused starts for Lookup, Brands, Bulk, and acquisition review;
 - bounded counts from browser-local cases, watchlists, and Brand Profiles;
 - a disposable search across known case, campaign, and profile fields;
-- guided investigations for a brand sweep, infrastructure pivot, or new-domain
-  triage; and
+- guided investigations for a brand sweep, infrastructure pivot, new-domain
+  triage, credential-impersonation response, mail-abuse response, or
+  domain-control-change response; and
 - deliberate encrypted or unencrypted export and reviewed import of the
   versioned workspace archive.
 
@@ -1063,14 +1064,19 @@ model.
 
 ## Guided investigations
 
-Dashboard can coordinate three standard recipes:
+Dashboard can coordinate six fixed standard recipes:
 
 - brand sweep;
 - infrastructure pivot; and
-- new-domain triage.
+- new-domain triage;
+- credential-impersonation response;
+- mail-abuse response; and
+- domain-control-change response.
 
 The public Guide includes one deterministic offline practice scenario for each
-recipe. Each scenario uses reserved fictional domains, fixed evidence states
+of the three foundational investigation recipes. The response-preparation
+recipes use actual retained Case actions and therefore are not simulated as
+operational outcomes. Each practice scenario uses reserved fictional domains, fixed evidence states
 and limitations, and immediate decision feedback. It makes no request, writes
 no browser storage, produces no finding, and can be reset or replayed at any
 time.
@@ -1083,6 +1089,13 @@ export. It can carry one canonical target, an explicitly selected candidate,
 and a bounded set of reviewed Bulk domains between tools. Tool links focus the
 relevant input, and a return control keeps the current guide step reachable
 beside long results.
+
+The three response recipes end in the existing Case response workspace. They
+can guide an analyst to record a deliberately selected published recipient
+route with its source and limitations and then open local packet preflight.
+They never discover contacts, send a packet, submit a form, change a provider
+or defensive system, claim that a route is reachable, or convert packet
+generation into an action outcome.
 
 The guide stores only compact progress in the current tab's `sessionStorage`.
 It does not decide when evidence is sufficient, create a case automatically,
@@ -1106,7 +1119,7 @@ deletion, changes case disposition, or rewrites collected source evidence.
 Reloading the page clears the pending undo action.
 
 Dashboard also provides a browser-local template manager. A custom template
-must start from one of the three standard guides. It can rename instructions,
+must start from one of the six fixed standard guides. It can rename instructions,
 clarify expected evidence and completion criteria, omit an existing step, or
 add an approval gate. It cannot introduce a new route or operation, execute
 code, start a request, submit evidence, alter a case, or remove an approval
@@ -1348,6 +1361,16 @@ observations, or compact case history.
   hosting/network, security-contact, browser/blocklist, or internal-SOC review.
   JSON, Markdown, and email-text outputs remain local, require review, and do
   not submit anything.
+- Use Monitor's Brand-protection operations report for bounded aggregate views
+  over current recorded Case actions. “Prepared” means the action state is
+  explicitly `ready_for_review`; a generated packet is not counted. Submitted,
+  acknowledged, resolved, closed, overdue, follow-up, reference, and outcome
+  counts likewise require the corresponding retained state or field. Every
+  view states its Case/action denominator, selected `updatedAt` time window,
+  source availability, omissions, and limitations. The aggregate JSON excludes
+  domains, recipients, notes, references, outcome text, and raw evidence, and
+  does not calculate delivery, takedown time, service levels, trends, success
+  rates, or causation.
 - When Registry RDAP declares redacted fields, use the disclosure planner to
   build a minimised JSON review packet from those bounded declarations and a
   separate analyst-authored purpose, justification, requested-field selection,

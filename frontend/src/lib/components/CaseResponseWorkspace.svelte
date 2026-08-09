@@ -540,7 +540,7 @@
     {/if}
   </details>
 
-  <details>
+  <details id={`case-response-preflight-${record.id}`}>
     <summary>Prepare a reviewed abuse evidence packet</summary>
     <form class="response-form packet-form" onsubmit={(event) => event.preventDefault()}>
       <p class="notice">This prepares local JSON, Markdown, or plain-text drafts only. WHOISleuth does not send reports. JSON and Markdown include observation-age context, reviewed action history, and a canonical SHA-256 digest for later integrity checks.</p>

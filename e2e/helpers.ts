@@ -338,7 +338,7 @@ export async function holdBrowserLocalReads(page: Page, delayMs = 750) {
       };
       openRequest.onerror = () => {
         if (abortedEmptyCreation && performance.now() < readyDeadline) {
-          window.setTimeout(openReadyDatabase, 25);
+          window.requestAnimationFrame(() => openReadyDatabase());
           return;
         }
         reject(openRequest.error);
@@ -348,7 +348,7 @@ export async function holdBrowserLocalReads(page: Page, delayMs = 750) {
         if (!database.objectStoreNames.contains('manifests')) {
           database.close();
           if (performance.now() < readyDeadline) {
-            window.setTimeout(openReadyDatabase, 25);
+            window.requestAnimationFrame(() => openReadyDatabase());
             return;
           }
           reject(new Error('Browser-local manifests store was not ready before the read hold deadline.'));

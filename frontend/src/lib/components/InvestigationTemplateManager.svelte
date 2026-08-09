@@ -198,7 +198,7 @@
       {/each}
     </ul>
   {:else if !editing}
-    <p class="empty">No custom templates are saved. The three standard guides remain available.</p>
+    <p class="empty">No custom templates are saved. The six fixed standard guides remain available.</p>
   {/if}
 
   {#if editing}

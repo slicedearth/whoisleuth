@@ -169,6 +169,11 @@ import {
   MAX_INVESTIGATION_CACAO_IMPORT_BYTES,
 } from '../frontend/src/lib/analysis/investigation-playbook-interchange.ts';
 import {
+  BRAND_PROTECTION_OPERATIONS_REPORT_SCHEMA,
+  BRAND_PROTECTION_OPERATIONS_REPORT_VERSION,
+  MAX_OPERATIONS_REPORT_BYTES,
+} from '../frontend/src/lib/analysis/brand-protection-operations-report.ts';
+import {
   MAX_ENVELOPE_BYTES as MAX_OBSERVATION_ENVELOPE_BYTES,
   OBSERVATION_ENVELOPE_SCHEMA,
   OBSERVATION_ENVELOPE_VERSION,
@@ -208,7 +213,7 @@ describe('schema compatibility inventory', () => {
     assert.equal(inventory.schema, SCHEMA_COMPATIBILITY_INVENTORY_SCHEMA);
     assert.equal(inventory.version, SCHEMA_COMPATIBILITY_INVENTORY_VERSION);
     assert.equal(inventory.generatedAt, NOW);
-    assert.equal(inventory.entries.length, 149);
+    assert.equal(inventory.entries.length, 150);
     assert.deepEqual(new Set(inventory.entries.map((entry) => entry.kind)), new Set([
       'browser_store', 'tab_store', 'hosted_store', 'export', 'cli_document', 'derived',
     ]));
@@ -329,6 +334,7 @@ describe('schema compatibility inventory', () => {
     assert.equal(byId(inventory, 'export.bulk-sessions').acceptsUnversionedLegacy, false);
     assert.equal(byId(inventory, 'browser.investigation-templates').schema, INVESTIGATION_TEMPLATE_SCHEMA);
     assert.equal(byId(inventory, 'browser.investigation-templates').currentVersion, INVESTIGATION_TEMPLATE_VERSION);
+    assert.deepEqual(byId(inventory, 'browser.investigation-templates').supportedVersions, [1, 2]);
     assert.equal(byId(inventory, 'browser.investigation-templates').byteBudget, MAX_INVESTIGATION_TEMPLATE_STORE_BYTES);
     assert.equal(byId(inventory, 'browser.bulk-review').schema, BULK_REVIEW_SCHEMA);
     assert.equal(byId(inventory, 'browser.bulk-review').currentVersion, BULK_REVIEW_SCHEMA_VERSION);
@@ -359,11 +365,11 @@ describe('schema compatibility inventory', () => {
     assert.equal(byId(inventory, 'derived.observation-envelope').currentVersion, OBSERVATION_ENVELOPE_VERSION);
     assert.equal(byId(inventory, 'derived.observation-envelope').byteBudget, MAX_OBSERVATION_ENVELOPE_BYTES);
     assert.equal(byId(inventory, 'tab.investigation-guide').currentVersion, INVESTIGATION_GUIDE_VERSION);
-    assert.deepEqual(byId(inventory, 'tab.investigation-guide').supportedVersions, [1, 2, 3, 4]);
+    assert.deepEqual(byId(inventory, 'tab.investigation-guide').supportedVersions, [1, 2, 3, 4, 5]);
     assert.equal(byId(inventory, 'tab.investigation-guide').byteBudget, MAX_INVESTIGATION_GUIDE_SERIALIZED_BYTES);
     assert.equal(byId(inventory, 'export.investigation-recipe-summary').schema, INVESTIGATION_GUIDE_EXPORT_SCHEMA);
     assert.equal(byId(inventory, 'export.investigation-recipe-summary').currentVersion, INVESTIGATION_GUIDE_EXPORT_VERSION);
-    assert.deepEqual(byId(inventory, 'export.investigation-recipe-summary').supportedVersions, [1, 2, 3]);
+    assert.deepEqual(byId(inventory, 'export.investigation-recipe-summary').supportedVersions, [1, 2, 3, 4]);
     assert.equal(byId(inventory, 'export.investigation-recipe-summary').byteBudget, MAX_INVESTIGATION_GUIDE_EXPORT_BYTES);
     assert.equal(byId(inventory, 'export.investigation-templates').schema, INVESTIGATION_TEMPLATE_SCHEMA);
     assert.equal(byId(inventory, 'export.investigation-templates').currentVersion, INVESTIGATION_TEMPLATE_VERSION);
@@ -371,6 +377,10 @@ describe('schema compatibility inventory', () => {
     assert.equal(byId(inventory, 'export.investigation-cacao-profile').schema, INVESTIGATION_CACAO_SPEC_VERSION);
     assert.equal(byId(inventory, 'export.investigation-cacao-profile').currentVersion, INVESTIGATION_CACAO_PROFILE_VERSION);
     assert.equal(byId(inventory, 'export.investigation-cacao-profile').byteBudget, MAX_INVESTIGATION_CACAO_IMPORT_BYTES);
+    assert.deepEqual(byId(inventory, 'export.investigation-cacao-profile').supportedVersions, [1, 2]);
+    assert.equal(byId(inventory, 'export.brand-protection-operations-report').schema, BRAND_PROTECTION_OPERATIONS_REPORT_SCHEMA);
+    assert.equal(byId(inventory, 'export.brand-protection-operations-report').currentVersion, BRAND_PROTECTION_OPERATIONS_REPORT_VERSION);
+    assert.equal(byId(inventory, 'export.brand-protection-operations-report').byteBudget, MAX_OPERATIONS_REPORT_BYTES);
     assert.equal(byId(inventory, 'export.bulk-review').schema, BULK_REVIEW_SCHEMA);
     assert.equal(byId(inventory, 'export.bulk-review').currentVersion, BULK_REVIEW_SCHEMA_VERSION);
     assert.equal(byId(inventory, 'export.bulk-review').byteBudget, MAX_BULK_REVIEW_STORE_BYTES);
