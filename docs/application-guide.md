@@ -660,6 +660,19 @@ Monitor contains Cases, Campaigns, Relationships, and Watchlists.
   visible. Cue overlap is expected and the projection is not a score,
   ownership claim, campaign-attribution finding, or maliciousness
   determination.
+  An analyst can optionally select one exact Brand Profile identifier already
+  retained by campaign cases and build a transient cohort review. The review
+  scopes only those explicitly associated cases and explains membership with
+  four visible rationale kinds: exact retained relationships, bounded
+  similarity, pairwise registrar and creation-publication observations within
+  seven days, and qualified common infrastructure. The seven-day rule applies
+  to each linked pair, so the endpoints of a connected cohort can be farther
+  apart. Incomplete or unavailable Case, Profile, and relationship sources stay
+  explicit; missing evidence never becomes a negative finding. Case assertions
+  appear in a separate context section and cannot alter cohort membership,
+  identifiers, ordering, or counts. The projection inspects at most 50 scoped
+  cases, 25 cohorts, 100 rationales, and 100 assertions, makes no request or
+  write, and is not included in the ordinary campaign export.
   It can also arrange source-qualified evidence pins and reviewed sightings
   into a retained source sequence across registration, certificate
   publication, DNS, TLS, website, and mail families. Missing family coverage

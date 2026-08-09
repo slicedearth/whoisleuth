@@ -90,8 +90,10 @@
 
   // --- Cases ---
   let cases=$state<CaseRecord[]>([]);
+  let casesSourceState=$state<'loading'|'ready'|'unavailable'>('loading');
   let brandProfiles=$state<BrandProfile[]>([]);
   let brandProfilesUnavailable=$state(true);
+  let brandProfilesSourceState=$state<'loading'|'ready'|'unavailable'>('loading');
   let bulkSessions=$state<BulkSession[]>([]);
   let websiteSnapshots=$state<WebsiteProfileSnapshot[]>([]);
   const websiteProfileClusters=$derived(buildWebsiteProfileClusters(websiteSnapshots));
@@ -102,6 +104,7 @@
   let campaigns=$state<CampaignRecord[]>([]);
   let investigationProjection=$state<unknown>(null);
   let retainedRelationships=$state<RelationshipObservation[]>([]);
+  let relationshipsSourceState=$state<'loading'|'ready'|'unavailable'>('loading');
   const retainedTimeline=$derived(buildRetainedEvidenceTimeline({cases,bulkSessions,watchlists,relationships:retainedRelationships,websiteSnapshots}));
   let customRuleCount=$state(0);
   let detectionRules=$state<DetectionRule[]>([]);
@@ -136,7 +139,7 @@
   function setCasePage(value:number){casePage=Math.min(casePageCount,Math.max(1,Math.trunc(value)));}
   function showCasePage(record:CaseRecord){const index=filteredCases.findIndex(item=>item.id===record.id);if(index>=0)casePage=Math.floor(index/CASE_PAGE_SIZE)+1;}
   function refreshRelationships(){investigationProjection=buildInvestigationProjection({cases,campaigns,relationshipObservations:retainedRelationships});}
-  async function refreshRetainedRelationships(){retainedRelationships=await loadRelationshipObservations();}
+  async function refreshRetainedRelationships(){relationshipsSourceState='loading';try{retainedRelationships=await loadRelationshipObservations();relationshipsSourceState='ready';}catch(cause){relationshipsSourceState='unavailable';throw cause;}}
   async function removeRetainedRelationship(record:RelationshipObservation){
     if(!confirm(`Delete the retained ${record.label.toLowerCase()} observation for ${record.domains.length} domain${record.domains.length===1?'':'s'}?`))return;
     try{
@@ -145,7 +148,7 @@
       caseMessage=`Deleted the retained relationship observation. Source cases and watchlists were not changed.`;
     }catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not delete the retained relationship observation.';}
   }
-  async function refreshCases(){cases=await loadCases();calibrationCaseIds=calibrationCaseIds.filter(id=>cases.some(record=>record.id===id));await refreshRelationships();if(expandedId&&!cases.some(record=>record.id===expandedId))expandedId='';}
+  async function refreshCases(){casesSourceState='loading';try{cases=await loadCases();casesSourceState='ready';calibrationCaseIds=calibrationCaseIds.filter(id=>cases.some(record=>record.id===id));await refreshRelationships();if(expandedId&&!cases.some(record=>record.id===expandedId))expandedId='';}catch(cause){casesSourceState='unavailable';throw cause;}}
   function installCommittedCaseSnapshot(committedCases:CaseRecord[]){
     cases=committedCases;
     calibrationCaseIds=calibrationCaseIds.filter(id=>cases.some(item=>item.id===id));
@@ -153,7 +156,7 @@
     if(expandedId&&!cases.some(record=>record.id===expandedId))expandedId='';
   }
   function expand(record:CaseRecord){if(expandedId===record.id){expandedId='';return;}showCasePage(record);expandedId=record.id;tagDraft=record.tags.join(', ');noteDraft='';}
-  function openRelatedCase(record:CaseRecord){view='cases';showCasePage(record);if(expandedId!==record.id)expand(record);}
+  function openRelatedCase(record:CaseRecord){view='cases';showCasePage(record);if(expandedId!==record.id)expand(record);void focusCase(record);}
   async function focusCase(record:CaseRecord){
     await tick();
     const target=document.getElementById(`case-head-${record.id}`);
@@ -250,13 +253,13 @@
     ]);
     const [watchlistResult,caseResult,relationshipResult,bulkResult,websiteResult,campaignResult,ruleResult,profileResult]=initialLoads;
     if(watchlistResult.status==='fulfilled'){watchlists=watchlistResult.value;if(selected&&!watchlists[selected])selected='';}
-    if(caseResult.status==='fulfilled')cases=caseResult.value;
-    if(relationshipResult.status==='fulfilled')retainedRelationships=relationshipResult.value;
+    if(caseResult.status==='fulfilled'){cases=caseResult.value;casesSourceState='ready';}else casesSourceState='unavailable';
+    if(relationshipResult.status==='fulfilled'){retainedRelationships=relationshipResult.value;relationshipsSourceState='ready';}else relationshipsSourceState='unavailable';
     if(bulkResult.status==='fulfilled')bulkSessions=bulkResult.value;
     if(websiteResult.status==='fulfilled')websiteSnapshots=websiteResult.value;
     if(campaignResult.status==='fulfilled'){campaigns=campaignResult.value;campaignCount=campaigns.length;}
     if(ruleResult.status==='fulfilled'){detectionRules=ruleResult.value;customRuleCount=detectionRules.length;}
-    if(profileResult.status==='fulfilled'){brandProfiles=profileResult.value;brandProfilesUnavailable=false;}
+    if(profileResult.status==='fulfilled'){brandProfiles=profileResult.value;brandProfilesUnavailable=false;brandProfilesSourceState='ready';}else brandProfilesSourceState='unavailable';
     refreshRelationships();
     const unavailable=unavailableLocalContextLabels(initialLoads,['watchlists','cases','retained relationships','Bulk sessions','website profiles','campaigns','rules','Brand Profiles']);
     if(unavailable.length)localContextStatus=`Some browser-local context could not be loaded (${unavailable.join(', ')}). Successfully loaded collections remain available; reload to retry the missing context.`;
@@ -316,7 +319,7 @@
 
 {#if view==='campaigns'}
 <div id="monitor-view-panel" role="tabpanel" aria-labelledby="tab-campaigns">
-  <CampaignManager records={cases} initialCampaigns={campaigns} focusId={page.url.searchParams.get('campaign') || ''} onselect={openRelatedCase} oncount={(count)=>campaignCount=count} onchange={(nextCampaigns)=>{campaigns=nextCampaigns;refreshRelationships();}} />
+  <CampaignManager records={cases} profiles={brandProfiles} {relationshipSummary} cohortSourceStates={{cases:casesSourceState,profiles:brandProfilesSourceState,relationships:relationshipsSourceState}} initialCampaigns={campaigns} focusId={page.url.searchParams.get('campaign') || ''} onselect={openRelatedCase} oncount={(count)=>campaignCount=count} onchange={(nextCampaigns)=>{campaigns=nextCampaigns;refreshRelationships();}} />
 </div>
 {/if}
 

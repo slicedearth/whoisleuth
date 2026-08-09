@@ -15,6 +15,7 @@ export interface SnapshotOverrides {
   profileContextState?: 'ready' | 'loading' | 'unavailable' | null;
   profileContextLimitation?: string | null;
   registrar?: string | null;
+  createdDate?: string | null;
   activityStatus?: string | null;
   hasMx?: boolean | null;
   faviconMatch?: boolean | null;
@@ -55,7 +56,7 @@ export function snapshot(overrides: SnapshotOverrides = {}) {
     riskFactors: [],
     opportunityFactors: [],
     registrar: overrides.registrar ?? 'Example Registrar',
-    createdDate: null,
+    createdDate: overrides.createdDate ?? null,
     expiryDate: null,
     nameservers: overrides.nameservers ?? [],
     hasMx: overrides.hasMx ?? null,

@@ -64,6 +64,17 @@ no network request, and performs no writes. It is not a new collection:
 IndexedDB records and the workspace archive remain authoritative, and
 discarding the projection leaves them unchanged.
 
+Campaign cohort review is another disposable projection over those existing
+records. It starts only after an analyst selects one exact Brand Profile
+identifier already retained by a campaign Case. It reads at most 50 matching
+cases and emits at most 25 connected cohorts, 100 source-qualified rationales,
+and 100 separately displayed assertions. The only temporal rationale is a
+pairwise same-registrar creation-publication observation within seven days;
+connected endpoints may therefore be farther apart. Missing or unreadable
+Profile, Case, or relationship data remains unavailable or partial. The review
+makes no request or write, creates no collection, and is excluded from ordinary
+campaign and workspace exports.
+
 Case schema 12 adds a required bounded `brandProfileIds` field owned by the
 Case model. It retains at most eight exact opaque identifiers matching
 `[A-Za-z0-9_-]{1,128}` and never trims, case-folds, repairs, resolves, remaps,

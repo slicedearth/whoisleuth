@@ -1,7 +1,11 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import Pagination from '$lib/components/Pagination.svelte';
+  import CampaignCohortReview from '$lib/components/CampaignCohortReview.svelte';
   import CampaignTemporalReview from '$lib/components/CampaignTemporalReview.svelte';
+  import type { BrandProfile } from '$lib/analysis/brand-profile-model.ts';
+  import type { CampaignCohortSourceState } from '$lib/analysis/campaign-cohort-review.ts';
+  import type { CaseRelationshipSummary } from '$lib/analysis/case-relationships.ts';
   import type { CaseRecord } from '$lib/cases';
   import { buildCampaignReviewSummary } from '$lib/analysis/campaign-review-summary.ts';
   import { buildCampaignTemporalReview } from '$lib/analysis/campaign-temporal-review.ts';
@@ -18,7 +22,7 @@
     type CampaignRecord,
   } from '$lib/campaigns';
 
-  let { records, initialCampaigns = [], onselect, oncount, onchange, focusId = '' }:{records:CaseRecord[];initialCampaigns?:CampaignRecord[];onselect?:(record:CaseRecord)=>void;oncount?:(count:number)=>void;onchange?:(campaigns:CampaignRecord[])=>void;focusId?:string}=$props();
+  let { records, profiles, relationshipSummary, cohortSourceStates, initialCampaigns = [], onselect, oncount, onchange, focusId = '' }:{records:CaseRecord[];profiles:BrandProfile[];relationshipSummary:CaseRelationshipSummary;cohortSourceStates:{cases:CampaignCohortSourceState;profiles:CampaignCohortSourceState;relationships:CampaignCohortSourceState};initialCampaigns?:CampaignRecord[];onselect?:(record:CaseRecord)=>void;oncount?:(count:number)=>void;onchange?:(campaigns:CampaignRecord[])=>void;focusId?:string}=$props();
   let campaigns=$state<CampaignRecord[]>([]);
   let expandedId=$state('');
   let newName=$state('');
@@ -166,6 +170,8 @@
               </div>
               <details><summary>Interpretation limits</summary><ul>{#each reviewSummary.limitations as limitation}<li>{limitation}</li>{/each}</ul></details>
             </section>
+
+            <CampaignCohortReview campaign={campaign} {records} {profiles} {relationshipSummary} sourceStates={cohortSourceStates} {onselect} />
 
             <CampaignTemporalReview campaign={campaign} review={temporalReview} onmessage={(value)=>message=value} />
 

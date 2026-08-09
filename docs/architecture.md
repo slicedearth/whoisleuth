@@ -225,6 +225,19 @@ provider request or persisted write. Result links are passive pivots into the
 exact retained case, campaign, Brand Profile, or relationship observation where
 one exists.
 
+`campaign-cohort-review.ts` is a separate transient campaign projection. It
+requires an analyst-selected exact Brand Profile identifier already present in
+Case schema 12 associations, scopes at most 50 campaign cases, and reuses the
+existing source-aware relationship summary. Cohort connectivity can use only
+four typed rationales: exact retained relationships, bounded similarity,
+pairwise same-registrar creation-publication observations within seven days,
+and catalogue-qualified common infrastructure. It emits at most 25 cohorts,
+100 rationales, and 100 separately displayed assertions. Assertions never feed
+membership, identifiers, ordering, or counts. The projection creates no store,
+schema, export, request, score, ownership inference, or attribution decision.
+Unavailable source collections remain explicit rather than becoming empty or
+negative evidence.
+
 The Case model and the existing Monitor Case API are the sole mutation owners
 for Case schema 12's bounded `brandProfileIds` field. The Brands route reads
 that field only to project existing source-aware analyst review rows for the

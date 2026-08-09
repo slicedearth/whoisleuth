@@ -396,7 +396,7 @@ test('Lookup reports requested source families without implying staged completio
   await page.locator('#query').fill('collection-state.invalid');
   await page.getByRole('button', { name: 'Run lookup' }).click();
 
-  const loadingStatus = page.getByRole('status');
+  const loadingStatus = page.locator('.loading-note');
   await expect(loadingStatus).toContainText('Deep lookup is waiting for one final response');
   await expect(page.locator('.collection-trace')).toContainText('Registry RDAP');
   await expect(page.locator('.collection-trace')).toContainText('Domain evidence');

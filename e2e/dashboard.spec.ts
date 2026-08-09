@@ -625,7 +625,7 @@ test('workspace Settings preview and application preserve the active profile whe
   if (!await settings.getByRole('checkbox').isChecked()) await settings.getByRole('checkbox').check();
   await preview.getByRole('button', { name: 'Add selected data' }).click();
 
-  await expect(page.getByRole('status')).toContainText('1 skipped');
+  await expect(page.getByRole('status').filter({ hasText: '1 skipped' })).toBeVisible();
   expect(await page.evaluate(() => localStorage.getItem('whois-rdap-active-brand-profile-v1'))).toBe('local-profile');
   const storedProfiles = await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 1 });
   expect(storedProfiles.records.map((record) => record.value.name)).toEqual(['Local retained profile']);
@@ -670,7 +670,7 @@ test('workspace Settings application preserves malformed active-profile values a
   await expect(malformedPreview.settings).toContainText('1 skipped');
   await expect(malformedPreview.settings).toContainText('missing or malformed');
   await malformedPreview.preview.getByRole('button', { name: 'Add selected data' }).click();
-  await expect(page.getByRole('status')).toContainText('1 skipped');
+  await expect(page.getByRole('status').filter({ hasText: '1 skipped' })).toBeVisible();
   expect(await page.evaluate(() => localStorage.getItem('whois-rdap-active-brand-profile-v1'))).toBe('local-profile');
   expect(await page.evaluate(() => localStorage.getItem('whoisleuth:theme:v1'))).toBe('light');
 
@@ -683,7 +683,7 @@ test('workspace Settings application preserves malformed active-profile values a
   const clearPreview = await importOnlySettings(clear, 'workspace-settings-clear.json');
   await expect(clearPreview.settings).toContainText('0 skipped');
   await clearPreview.preview.getByRole('button', { name: 'Add selected data' }).click();
-  await expect(page.getByRole('status')).toContainText('Added backup data from 1 sections:');
+  await expect(page.getByRole('status').filter({ hasText: 'Added backup data from 1 sections:' })).toBeVisible();
   expect(await page.evaluate(() => localStorage.getItem('whois-rdap-active-brand-profile-v1'))).toBeNull();
   const storedProfiles = await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 1 });
   expect(storedProfiles.records.map((record) => record.value.id)).toEqual(['local-profile']);

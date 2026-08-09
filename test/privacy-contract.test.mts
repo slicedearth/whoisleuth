@@ -21,6 +21,12 @@ import {
   MAX_GENERATED_CONTEXT,
   MAX_HANDOFF_CANDIDATES,
 } from '../frontend/src/lib/candidate-handoff-core.ts';
+import {
+  MAX_CAMPAIGN_COHORT_ASSERTIONS,
+  MAX_CAMPAIGN_COHORT_MEMBERS,
+  MAX_CAMPAIGN_COHORT_RATIONALES,
+  MAX_CAMPAIGN_COHORTS,
+} from '../frontend/src/lib/analysis/campaign-cohort-review.ts';
 
 const ROOT_NOTICE_URL = new URL('../PRIVACY.md', import.meta.url);
 const PUBLIC_NOTICE_URL = new URL('../frontend/src/routes/(public)/privacy/+page.svelte', import.meta.url);
@@ -53,6 +59,11 @@ test('public privacy notices track versioned browser-local data contracts', asyn
     assert.ok(compact.includes('failed local reads remain explicit'));
     assert.ok(compact.includes('Case report v8 JSON and Markdown'));
     assert.ok(compact.includes('Public CLI case packs clear them'));
+    assert.ok(compact.includes(`at most ${MAX_CAMPAIGN_COHORT_MEMBERS} matching cases`));
+    assert.ok(compact.includes(`at most ${MAX_CAMPAIGN_COHORTS} cohorts`));
+    assert.ok(compact.includes(`at most ${MAX_CAMPAIGN_COHORT_RATIONALES} source-qualified rationales`));
+    assert.ok(compact.includes(`Up to ${MAX_CAMPAIGN_COHORT_ASSERTIONS} assertions are displayed separately`));
+    assert.ok(compact.includes('creates no stored record'));
   }
 
   assert.equal(BROWSER_LOCAL_COLLECTIONS.length, 12);

@@ -645,6 +645,17 @@ default (see the README), so many lookups return no personal data at all.
   Campaigns retain a bounded label, optional description, and normalised case
   domain membership only. They do not copy case evidence, notes, status, or
   disposition, and deriving or editing them makes no network request.
+  After an analyst selects one exact Brand Profile identifier already retained
+  by a campaign Case, Monitor can transiently group at most 50 matching cases
+  into at most 25 cohorts using at most 100 source-qualified rationales from
+  existing retained relationships, bounded similarity, qualified common
+  infrastructure, or pairwise same-registrar creation-publication observations
+  within seven days. Up to 100 assertions are displayed separately and never
+  alter membership, identifiers, ordering, or counts. Unavailable sources stay
+  explicit. The review makes no request or write, creates no stored record, and
+  is not included in ordinary campaign or workspace exports. It is a review aid,
+  not evidence of ownership, attribution, coordination, intent, safety, or
+  maliciousness.
   Cases can additionally retain bounded analyst-selected evidence pins,
   decision rationales, contact routes, reviewed response actions, follow-up
   dates, references, and outcomes. Lookup can derive a bounded local list of

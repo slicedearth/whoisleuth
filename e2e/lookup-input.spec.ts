@@ -142,7 +142,7 @@ test('deep lookup reports pending elapsed time and final source settle timing', 
   await page.getByRole('button', { name: 'Run lookup' }).click();
 
   const pending = page.locator('.loading-note');
-  await expect(page.getByRole('status')).toContainText('Deep lookup is waiting for one final response');
+  await expect(pending).toContainText('Deep lookup is waiting for one final response');
   await expect(pending.locator('.loading-meta')).toContainText(/elapsed/u);
   await expect(pending.locator('.collection-trace')).toContainText('Registry RDAP');
   await expect(pending.locator('.collection-trace')).toContainText('Domain evidence');
