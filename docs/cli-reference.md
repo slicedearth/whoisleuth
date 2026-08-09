@@ -591,7 +591,7 @@ establish that a current candidate is malicious or safe.
 `verify-artifact` validates a supported local artefact without printing its
 evidence contents. Input is capped at 15 MiB. It currently recognises ordinary
 and encrypted workspace archives, case-response packets, acquisition-decision
-exports, domain-comparison exports, Bulk mail-exposure exports, and Bulk review
+exports, Lookup claim passports, domain-comparison exports, Bulk mail-exposure exports, and Bulk review
 manifests. Reviewed CLI case packs are checked against their canonical digest,
 bounded browser-importable case collection, audience, and review marker. The
 command verifies both the embedded projections and whole-capsule digest of an
@@ -657,7 +657,8 @@ and ICU ordering to verify; it is not a portable canonicalization guarantee.
 The fixed keys emitted by the supported legacy builders are ASCII, but only
 version 2 provides the cross-locale portability contract.
 
-The current/legacy integrity pairs are: acquisition decision 2/1,
+The current/legacy integrity pairs are: acquisition decision 2/1, Lookup claim
+passport 1 (sorted-json-v2 only),
 domain-comparison export 4/3 with nested comparison 3, Bulk mail-exposure
 export 2/1 with nested report 1, Bulk review manifest 2/1, domain-control
 manifest 2/1, domain-change packet 2/1 with input 1, investigation manifest
@@ -670,7 +671,7 @@ historical contract included one.
 
 `interchange-report [artifact.json]` explains what one recognised portable
 artefact preserves, excludes, and supports in browser and CLI workflows. It
-recognises domain-control passports, Brand Profile exports from versions 2
+recognises Lookup claim passports, domain-control passports, Brand Profile exports from versions 2
 through 6, workspace archives from versions 1 through 5, encrypted workspace
 envelopes, reviewed CLI case packs, and the retired one-way desired-baseline
 export. The retired export is identified as unsupported rather than silently

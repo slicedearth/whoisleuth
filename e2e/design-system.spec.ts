@@ -1,6 +1,7 @@
 import { expect, test } from './fixtures';
 import { boundingBox, expectNoHorizontalOverflow, migrateLegacyBrowserData, useTheme } from './helpers';
 import { protectedDestinations } from '../frontend/src/lib/workspaces';
+import { readFile } from 'node:fs/promises';
 
 // Coverage for the shared design system: native-sized checkbox controls with
 // correct label alignment, the Lookup result's grouped sections and local
@@ -880,6 +881,10 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
 
 test('Lookup focus and disclosure controls change presentation without changing evidence', async ({ page }) => {
   const domain = 'presentation-options.invalid';
+  const lookupRequests: string[] = [];
+  page.on('request', (request) => {
+    if (new URL(request.url()).pathname === '/api/lookup') lookupRequests.push(request.url());
+  });
   await page.route('**/api/lookup?*', (route) => route.fulfill({
     status: 200,
     contentType: 'application/json',
@@ -901,6 +906,52 @@ test('Lookup focus and disclosure controls change presentation without changing 
   await page.getByText('Open assessment', { exact: true }).click();
   await expect(detailedAssessment).toHaveAttribute('open', '');
   await expect(page.getByRole('heading', { name: 'What the current evidence can support' })).toBeVisible();
+  await page.evaluate(() => {
+    const state = window as typeof window & { __claimPassportWrites?: number };
+    state.__claimPassportWrites = 0;
+    const count = () => { state.__claimPassportWrites = (state.__claimPassportWrites ?? 0) + 1; };
+    const originalPut = IDBObjectStore.prototype.put;
+    const originalAdd = IDBObjectStore.prototype.add;
+    const originalDelete = IDBObjectStore.prototype.delete;
+    const originalClear = IDBObjectStore.prototype.clear;
+    const originalSetItem = Storage.prototype.setItem;
+    const originalRemoveItem = Storage.prototype.removeItem;
+    const originalStorageClear = Storage.prototype.clear;
+    IDBObjectStore.prototype.put = function put(value: unknown, key?: IDBValidKey) { count(); return key === undefined ? originalPut.call(this, value) : originalPut.call(this, value, key); };
+    IDBObjectStore.prototype.add = function add(value: unknown, key?: IDBValidKey) { count(); return key === undefined ? originalAdd.call(this, value) : originalAdd.call(this, value, key); };
+    IDBObjectStore.prototype.delete = function deleteRecord(query: IDBValidKey | IDBKeyRange) { count(); return originalDelete.call(this, query); };
+    IDBObjectStore.prototype.clear = function clear() { count(); return originalClear.call(this); };
+    Storage.prototype.setItem = function setItem(key: string, value: string) { count(); return originalSetItem.call(this, key, value); };
+    Storage.prototype.removeItem = function removeItem(key: string) { count(); return originalRemoveItem.call(this, key); };
+    Storage.prototype.clear = function clear() { count(); return originalStorageClear.call(this); };
+  });
+  const requestCountBeforeExport = lookupRequests.length;
+  const passportDownload = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download portable passport for Registration-state statement' }).click();
+  const downloadedPassport = await passportDownload;
+  expect(downloadedPassport.suggestedFilename()).toMatch(/^whoisleuth-claim-presentation-options\.invalid-registration-state-\d{4}-\d{2}-\d{2}\.json$/u);
+  const passportPath = await downloadedPassport.path();
+  expect(passportPath).not.toBeNull();
+  const passport = JSON.parse(await readFile(passportPath!, 'utf8')) as Record<string, unknown>;
+  expect(passport.schema).toBe('whoisleuth.lookup-claim-passport');
+  expect(passport.version).toBe(1);
+  expect(passport.target).toEqual({ type: 'domain', value: domain });
+  expect((passport.claim as Record<string, unknown>).id).toBe('registration-state');
+  expect((passport.claim as Record<string, unknown>).requiredEvidenceIds).toEqual([
+    'authority-aware-availability',
+  ]);
+  const keys: string[] = [];
+  const inspectKeys = (value: unknown) => {
+    if (!value || typeof value !== 'object') return;
+    if (Array.isArray(value)) { for (const item of value) inspectKeys(item); return; }
+    for (const [key, item] of Object.entries(value)) { keys.push(key); inspectKeys(item); }
+  };
+  inspectKeys(passport);
+  expect(keys).not.toEqual(expect.arrayContaining(['requestUrl', 'finalUrl', 'contacts', 'rawWhois', 'credential']));
+  expect(JSON.stringify(passport)).not.toMatch(/\/home|abuse@example\.test|Fixture Registrar/iu);
+  await expect(detailedAssessment.getByRole('status')).toContainText('Downloaded a portable passport for Registration-state statement.');
+  expect(await page.evaluate(() => (window as typeof window & { __claimPassportWrites?: number }).__claimPassportWrites)).toBe(0);
+  expect(lookupRequests).toHaveLength(requestCountBeforeExport);
   await page.getByText('Close assessment', { exact: true }).click();
   await expect(detailedAssessment).not.toHaveAttribute('open', '');
   await expect(page.getByRole('button', { name: 'Expand Advanced evidence' })).toBeVisible();

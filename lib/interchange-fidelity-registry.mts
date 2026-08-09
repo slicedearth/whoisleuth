@@ -9,7 +9,7 @@ export type InterchangeFidelity =
 export type InterchangeAssuranceRequirement = 'authenticated_whole_integrity' | 'structure' | 'unsupported' | 'whole_integrity';
 
 export type InterchangeArtifactContract = Readonly<{
-  id: 'brand_profiles' | 'case_pack' | 'domain_control_passport' | 'encrypted_workspace' | 'legacy_desired_baseline' | 'workspace';
+  id: 'brand_profiles' | 'case_pack' | 'domain_control_passport' | 'encrypted_workspace' | 'legacy_desired_baseline' | 'lookup_claim_passport' | 'workspace';
   schema: string;
   versions: readonly number[];
   versionField: 'schemaVersion' | 'version';
@@ -26,6 +26,20 @@ export type InterchangeArtifactContract = Readonly<{
 const exact = Object.freeze(['domain_identity', 'dns_control_expectations', 'certificate_control_expectations', 'registrar_control_expectations', 'renewal_review']);
 
 export const INTERCHANGE_ARTIFACT_CONTRACTS: readonly InterchangeArtifactContract[] = Object.freeze([
+  Object.freeze({
+    id: 'lookup_claim_passport',
+    schema: 'whoisleuth.lookup-claim-passport',
+    versions: Object.freeze([1]),
+    versionField: 'version',
+    nestedSchemaPath: Object.freeze([]),
+    browser: Object.freeze({ import: 'unsupported', export: 'supported' }),
+    cli: Object.freeze({ read: 'supported', write: 'unsupported', verify: 'supported' }),
+    fidelity: 'semantic_exact_after_normalisation',
+    requiredAssurance: 'whole_integrity',
+    preservedFieldGroups: Object.freeze(['target_identity', 'claim_identity', 'evidence_requirement_ids', 'source_states', 'observation_times', 'model_versions', 'limitations']),
+    excludedFieldGroups: Object.freeze(['raw_registry_payloads', 'contacts', 'page_values', 'request_paths', 'credentials', 'browser_local_records', 'signer_authentication']),
+    futureVersionBehaviour: 'reject',
+  }),
   Object.freeze({
     id: 'domain_control_passport',
     schema: 'whoisleuth.domain-control-manifest',

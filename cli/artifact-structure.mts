@@ -47,6 +47,18 @@ import {
   LEGACY_INVESTIGATION_CAPSULE_VERSION,
 } from '../frontend/src/lib/analysis/investigation-capsule.ts';
 import { LOOKUP_INVESTIGATION_BRIEF_SCHEMA } from '../frontend/src/lib/analysis/lookup-investigation-brief.ts';
+import {
+  LOOKUP_CLAIM_PASSPORT_SCHEMA,
+  LOOKUP_CLAIM_PASSPORT_TARGET_TYPES,
+  LOOKUP_CLAIM_PASSPORT_VERSION,
+  MAX_LOOKUP_CLAIM_PASSPORT_LIMITATIONS,
+  MAX_LOOKUP_CLAIM_PASSPORT_REQUIREMENTS,
+} from '../frontend/src/lib/analysis/lookup-claim-passport.ts';
+import {
+  LOOKUP_CLAIM_IDS,
+  LOOKUP_CLAIM_READINESS_VERSION,
+  LOOKUP_CLAIM_REQUIREMENT_IDS,
+} from '../frontend/src/lib/analysis/lookup-claim-readiness.ts';
 import { normalizeDomainControlPassportDocument } from '../frontend/src/lib/analysis/domain-control-manifest-core.ts';
 import { DOMAIN_CHANGE_PACKET_SCHEMA, DOMAIN_CHANGE_PACKET_VERSION } from '../lib/domain-change-packet.mts';
 import { DOMAIN_CONTROL_MANIFEST_SCHEMA } from '../lib/domain-control-manifest.mts';
@@ -209,6 +221,84 @@ function validateAcquisition(value: UnknownRecord): void {
   strings(evidence.limitations, 'Acquisition evidence limitations', 12, 600);
   strings(root.limitations, 'Acquisition limitations', 8, 600);
   validateIntegrity(root.integrity, 'Acquisition integrity', root.version, 1, ACQUISITION_DECISION_PACKET_VERSION);
+}
+
+const CLAIM_PASSPORT_SOURCE_STATES = ['complete', 'not_found', 'partial', 'skipped', 'unavailable', 'unknown', 'unsupported'] as const;
+
+function validateClaimPassportTarget(type: string, value: unknown): void {
+  const candidate = text(value, 'Claim passport target', 253);
+  if (type === 'domain') {
+    domain(candidate, 'Claim passport target');
+    return;
+  }
+  if (type === 'ipv4') {
+    const parts = candidate.split('.');
+    if (parts.length !== 4 || parts.some((part) => !/^\d{1,3}$/u.test(part) || Number(part) > 255 || String(Number(part)) !== part)) fail('Claim passport target');
+    return;
+  }
+  if (type === 'ipv6') {
+    if (!candidate.includes(':') || /[\[\]%/?#@]/u.test(candidate)) fail('Claim passport target');
+    try {
+      const hostname = new URL(`http://[${candidate}]/`).hostname;
+      const normalized = hostname.startsWith('[') && hostname.endsWith(']') ? hostname.slice(1, -1) : hostname;
+      if (normalized !== candidate) fail('Claim passport target');
+    } catch { fail('Claim passport target'); }
+    return;
+  }
+  if (!/^AS(?:[1-9]\d{0,9})$/u.test(candidate) || Number(candidate.slice(2)) > 4_294_967_295) fail('Claim passport target');
+}
+
+function validateLookupClaimPassport(value: UnknownRecord): void {
+  const root = exact(value, ['schema', 'version', 'generatedAt', 'application', 'target', 'observation', 'claim', 'models', 'limitations', 'integrity'], 'Lookup claim passport');
+  if (root.version !== LOOKUP_CLAIM_PASSPORT_VERSION) fail('Lookup claim passport');
+  iso(root.generatedAt, 'Lookup claim passport generatedAt');
+  const application = exact(root.application, ['name', 'version'], 'Lookup claim passport application');
+  if (application.name !== 'WHOISleuth' || typeof application.version !== 'string'
+    || !/^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/u.test(application.version)) fail('Lookup claim passport application');
+  const target = exact(root.target, ['type', 'value'], 'Lookup claim passport target');
+  const type = enumeration(target.type, LOOKUP_CLAIM_PASSPORT_TARGET_TYPES, 'Lookup claim passport target');
+  validateClaimPassportTarget(type, target.value);
+  const observation = exact(root.observation, ['observedAt', 'lookupDepth'], 'Lookup claim passport observation');
+  iso(observation.observedAt, 'Lookup claim passport observation', true);
+  enumeration(observation.lookupDepth, ['fast', 'deep'], 'Lookup claim passport observation');
+  const claim = exact(root.claim, ['id', 'label', 'state', 'conclusion', 'requiredEvidenceIds', 'missingEvidenceIds', 'requirements', 'limitations'], 'Lookup claim passport claim');
+  enumeration(claim.id, LOOKUP_CLAIM_IDS, 'Lookup claim passport claim');
+  text(claim.label, 'Lookup claim passport claim label', 160);
+  text(claim.conclusion, 'Lookup claim passport claim conclusion', 600);
+  const requirements = array(claim.requirements, 'Lookup claim passport requirements', MAX_LOOKUP_CLAIM_PASSPORT_REQUIREMENTS, 1);
+  const requirementIds: string[] = [];
+  const missingIds: string[] = [];
+  const seen = new Set<string>();
+  let observedCount = 0;
+  let hasLimited = false;
+  for (const [index, candidate] of requirements.entries()) {
+    const item = exact(candidate, ['id', 'label', 'evidenceId', 'mode', 'state', 'observedAt', 'limitations'], `Lookup claim passport requirement ${index + 1}`);
+    const id = enumeration(item.id, LOOKUP_CLAIM_REQUIREMENT_IDS, 'Lookup claim passport requirement id');
+    if (seen.has(id)) fail('Lookup claim passport requirements');
+    seen.add(id);
+    requirementIds.push(id);
+    text(item.label, 'Lookup claim passport requirement label', 160);
+    if (item.evidenceId !== null && (typeof item.evidenceId !== 'string' || !/^[a-z][a-z0-9_-]{0,63}$/u.test(item.evidenceId))) fail('Lookup claim passport evidence id');
+    enumeration(item.mode, ['network_collection', 'local_review'], 'Lookup claim passport requirement mode');
+    const state = enumeration(item.state, CLAIM_PASSPORT_SOURCE_STATES, 'Lookup claim passport requirement state');
+    if (state !== 'complete') missingIds.push(id);
+    if (state !== 'skipped' && state !== 'unsupported' && state !== 'unknown') observedCount += 1;
+    if (state === 'partial' || state === 'unavailable' || state === 'unknown') hasLimited = true;
+    iso(item.observedAt, 'Lookup claim passport requirement observedAt', true);
+    if (item.evidenceId === null && item.observedAt !== null) fail('Lookup claim passport requirement observedAt');
+    strings(item.limitations, 'Lookup claim passport requirement limitations', 8, 400);
+  }
+  const required = strings(claim.requiredEvidenceIds, 'Lookup claim passport required evidence', MAX_LOOKUP_CLAIM_PASSPORT_REQUIREMENTS, 64);
+  const missing = strings(claim.missingEvidenceIds, 'Lookup claim passport missing evidence', MAX_LOOKUP_CLAIM_PASSPORT_REQUIREMENTS, 64);
+  if (!sameValues(required, requirementIds) || !sameValues(missing, missingIds)) fail('Lookup claim passport evidence identifiers');
+  const expectedState = missingIds.length === 0 ? 'ready' : observedCount > 0 && hasLimited ? 'limited' : 'not_ready';
+  if (claim.state !== expectedState) fail('Lookup claim passport claim state');
+  strings(claim.limitations, 'Lookup claim passport claim limitations', MAX_LOOKUP_CLAIM_PASSPORT_LIMITATIONS, 400);
+  const models = exact(root.models, ['claimReadiness', 'risk'], 'Lookup claim passport models');
+  if (models.claimReadiness !== LOOKUP_CLAIM_READINESS_VERSION) fail('Lookup claim passport models');
+  if (models.risk !== null) integer(models.risk, 'Lookup claim passport Risk model', 1, 1_000);
+  strings(root.limitations, 'Lookup claim passport limitations', MAX_LOOKUP_CLAIM_PASSPORT_LIMITATIONS, 600);
+  validateIntegrity(root.integrity, 'Lookup claim passport integrity', root.version, LOOKUP_CLAIM_PASSPORT_VERSION, LOOKUP_CLAIM_PASSPORT_VERSION);
 }
 
 const COMPARISON_STATES = ['conflicting', 'different', 'equal', 'missing', 'not_recorded', 'unavailable'] as const;
@@ -970,6 +1060,7 @@ function validateDomainChangePacket(value: UnknownRecord): void {
 export function validateSignedDigestArtifactStructure(schema: string, value: UnknownRecord): void {
   if (value.schema !== schema) fail('Signed review artefact');
   if (schema === ACQUISITION_DECISION_PACKET_SCHEMA) validateAcquisition(value);
+  else if (schema === LOOKUP_CLAIM_PASSPORT_SCHEMA) validateLookupClaimPassport(value);
   else if (schema === BULK_DOMAIN_COMPARISON_SCHEMA) validateDomainComparison(value);
   else if (schema === BULK_MAIL_EXPOSURE_SCHEMA) validateMailExposure(value);
   else if (schema === BULK_REVIEW_MANIFEST_SCHEMA) validateBulkReviewManifest(value);

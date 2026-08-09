@@ -98,7 +98,9 @@ test('registration readiness follows the authority-aware decision for WHOIS-only
     });
     assert.equal(readiness.entries.find((entry) => entry.id === 'registration-state')?.state, 'ready');
     assert.equal(readiness.entries.find((entry) => entry.id === 'controlled-change')?.state, 'ready');
-    assert.deepEqual(readiness.entries.find((entry) => entry.id === 'registration-state')?.requiredEvidence, ['Authority-aware availability decision']);
+    assert.deepEqual(readiness.entries.find((entry) => entry.id === 'registration-state')?.requiredEvidenceIds, [
+      'authority-aware-availability',
+    ]);
   }
 });
 
@@ -135,5 +137,39 @@ test('registration sources cannot bypass an incomplete or unsettled authority de
     availabilityState: 'inconclusive',
   });
   assert.equal(unsettled.entries.find((entry) => entry.id === 'registration-state')?.state, 'limited');
-  assert.ok(unsettled.entries.find((entry) => entry.id === 'registration-state')?.missingEvidence.includes('Settled authority-aware availability state'));
+  assert.ok(unsettled.entries.find((entry) => entry.id === 'registration-state')?.missingEvidence.includes('Authority-aware availability decision'));
+});
+
+test('claim readiness does not treat synthesized unknown requirements as observed evidence', () => {
+  const readiness = buildLookupClaimReadiness({
+    targetType: 'domain',
+    task: 'brand',
+    coverage: ledger({}),
+    decisionSupport,
+    availabilityState: 'unknown',
+    profileSourceState: 'ready',
+    hasActiveProfile: false,
+  });
+  assert.equal(readiness.entries.find((entry) => entry.id === 'registration-state')?.state, 'not_ready');
+  assert.equal(readiness.entries.find((entry) => entry.id === 'current-web-observation')?.state, 'not_ready');
+  assert.equal(readiness.entries.find((entry) => entry.id === 'brand-resemblance')?.state, 'not_ready');
+});
+
+test('claim readiness exposes one typed requirement contract for impact planning and export', () => {
+  const readiness = buildLookupClaimReadiness({
+    targetType: 'domain',
+    task: 'brand',
+    coverage: ledger({ availability: 'complete', http: 'complete', tls: 'complete', 'page-identity': 'partial' }),
+    decisionSupport,
+    availabilityState: 'registered',
+    profileSourceState: 'unavailable',
+  });
+  const claim = readiness.entries.find((entry) => entry.id === 'brand-resemblance');
+  assert.equal(readiness.version, 2);
+  assert.deepEqual(claim?.requiredEvidenceIds, ['page-identity-observation', 'reviewed-brand-profile']);
+  assert.deepEqual(claim?.missingEvidenceIds, ['page-identity-observation', 'reviewed-brand-profile']);
+  assert.equal(claim?.requirements[0]?.evidenceId, 'page-identity');
+  assert.equal(claim?.requirements[0]?.mode, 'network_collection');
+  assert.equal(claim?.requirements[1]?.state, 'unavailable');
+  assert.equal(claim?.requirements[1]?.mode, 'local_review');
 });

@@ -139,6 +139,13 @@ byte identity from canonical-only or mismatched identity. `brief` and
 control review rather than a daemon, and `workflow-run` executes only installed
 fixed-recipe steps with per-run network approval and analyst-selection pauses.
 
+Lookup can also export a version-1 `whoisleuth.lookup-claim-passport` for one
+selected readiness statement. `verify-artifact` checks its strict bounded
+structure and sorted-json-v2 digest; `interchange-report` describes the exact
+source-state fields it preserves and the raw payload, contact, page-value,
+request-path, credential, browser-store, and signer-authentication fields it
+excludes.
+
 Current `case-pack` output keeps its version-1 envelope. Trusted and internal
 audiences preserve exact analyst-selected Case-to-Brand Profile identifiers;
 public output clears them from cases and embedded reports and discloses the

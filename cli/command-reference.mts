@@ -238,7 +238,7 @@ const COMMAND_DETAILS: Readonly<Record<CliCommand, CommandDetail>> = Object.free
     boundary: 'Calibration is offline and diagnostic. It omits candidate identifiers, domains, notes, and evidence and never tunes generation or filtering automatically.',
   },
   'verify-artifact': {
-    description: 'Validate a supported archive, packet, manifest, or saved Lookup without printing evidence contents.',
+    description: 'Validate a supported archive, claim passport, packet, manifest, or saved Lookup without printing evidence contents.',
     example: 'whoisleuth verify-artifact report.json --manifest manifest.json --manifest-entry artifact-2 --json --strict-exit',
     boundary: 'Verification is offline and redacted. Encrypted archives require an explicitly supplied passphrase file; --strict-exit returns 4 when only an envelope or legacy projection integrity was verified.',
   },

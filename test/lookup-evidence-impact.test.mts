@@ -5,17 +5,32 @@ import type { LookupClaimReadiness } from '../frontend/src/lib/analysis/lookup-c
 import type { LookupEvidenceQualityMatrix } from '../frontend/src/lib/analysis/lookup-decision-support.ts';
 
 const readiness: LookupClaimReadiness = {
-  version: 1,
+  version: 2,
   entries: [{
     id: 'controlled-change', label: 'Controlled-change planning', state: 'limited',
     conclusion: 'Whether a reviewed change can be prepared.',
     requiredEvidence: ['Authoritative registry evidence', 'DNS observation'],
-    missingEvidence: ['DNS observation'], limitations: ['DNS observation: partial'], href: '#evidence-dns',
+    missingEvidence: ['DNS observation'],
+    requiredEvidenceIds: ['authoritative-rdap', 'dns-observation'],
+    missingEvidenceIds: ['dns-observation'],
+    requirements: [
+      { id: 'authoritative-rdap', label: 'Authoritative RDAP evidence', evidenceId: 'rdap', mode: 'network_collection', href: '#registry', state: 'complete', limitations: [] },
+      { id: 'dns-observation', label: 'DNS observation', evidenceId: 'dns', mode: 'network_collection', href: '#evidence-dns', state: 'partial', limitations: ['One authority timed out.'] },
+    ],
+    limitations: ['DNS observation: partial'], href: '#evidence-dns',
   }, {
     id: 'incident-response', label: 'Incident response handoff', state: 'not_ready',
     conclusion: 'Whether a reviewed response can be prepared.',
     requiredEvidence: ['HTTP observation', 'Page identity observation'],
-    missingEvidence: ['HTTP observation', 'Reviewed case and recipient route'], limitations: [], href: '#case-response',
+    missingEvidence: ['HTTP observation', 'Reviewed case and recipient route'],
+    requiredEvidenceIds: ['http-observation', 'page-identity-observation', 'reviewed-case-recipient'],
+    missingEvidenceIds: ['http-observation', 'reviewed-case-recipient'],
+    requirements: [
+      { id: 'http-observation', label: 'HTTP observation', evidenceId: 'http', mode: 'network_collection', href: '#evidence-http', state: 'unavailable', limitations: ['Connection failed.'] },
+      { id: 'page-identity-observation', label: 'Page identity observation', evidenceId: 'page-identity', mode: 'network_collection', href: '#evidence-page', state: 'complete', limitations: [] },
+      { id: 'reviewed-case-recipient', label: 'Reviewed case and recipient route', evidenceId: null, mode: 'local_review', href: '#case-response', state: 'unknown', limitations: ['Not supplied'] },
+    ],
+    limitations: [], href: '#case-response',
   }],
   disagreements: [], counts: { ready: 0, limited: 1, not_ready: 1 }, limitation: 'Readiness is not truth.',
 };

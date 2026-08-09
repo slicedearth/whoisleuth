@@ -1,6 +1,6 @@
 # Privacy Notice
 
-Last updated: 9 August 2026.
+Last updated: 10 August 2026.
 
 This notice describes the public WHOISleuth deployment and is also a template
 for self-hosted operators to adapt when their configuration, hosting, enabled
@@ -794,6 +794,13 @@ default (see the README), so many lookups return no personal data at all.
   assertions, actions, contacts, raw source data, provider payloads, and stored
   Risk scores. The export is not anonymous, is not uploaded, and does not train,
   tune, or change the Risk model.
+  A deliberate Lookup claim passport export contains one canonical target and
+  target type, one readiness claim, stable requirement identifiers, exact
+  retained source states and observation times, model versions, and bounded
+  limitations. It is generated without another request or a browser-local
+  write and excludes raw registry responses, contacts, page values, request
+  paths, credentials, and browser-local records. Its checksum detects file changes but does not
+  authenticate an analyst or establish truth, ownership, intent, or safety.
   Single-lookup
   evidence JSON includes the raw RDAP and WHOIS responses, so it may contain
   registry-published contact data. The separate Lookup Markdown reports are

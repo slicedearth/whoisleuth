@@ -43,7 +43,7 @@ test('public privacy notices track versioned browser-local data contracts', asyn
 
   for (const notice of [rootNotice, publicNotice]) {
     const compact = notice.replace(/\s+/gu, ' ');
-    assert.match(compact, /Last updated: 9 August 2026/u);
+    assert.match(compact, /Last updated: 10 August 2026/u);
     assert.ok(compact.includes(`up to ${MAX_HANDOFF_CANDIDATES.toLocaleString('en-AU')} selected domains`));
     assert.ok(compact.includes(`up to ${MAX_GENERATED_CONTEXT.toLocaleString('en-AU')} generated candidates`));
     assert.ok(compact.includes(`capped at ${mib(MAX_CANDIDATE_HANDOFF_SERIALIZED_BYTES)} MiB`));
@@ -67,6 +67,9 @@ test('public privacy notices track versioned browser-local data contracts', asyn
     assert.ok(compact.includes('Evidence-debt review'));
     assert.ok(compact.includes('the absence of a retained source record remains distinct from an explicit skipped collection'));
     assert.match(compact, /starts no lookup, retry, export, or write/u);
+    assert.ok(compact.includes('Lookup claim passport'));
+    assert.match(compact, /stable requirement identifiers, exact retained source states/u);
+    assert.match(compact, /without another request or a browser-local write/u);
   }
 
   assert.equal(BROWSER_LOCAL_COLLECTIONS.length, 12);

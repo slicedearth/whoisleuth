@@ -574,6 +574,7 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     availabilityState: availability.state,
     availabilitySource: availability.source,
     hasActiveProfile: hasActiveBrandProfile === true,
+    profileSourceState,
     hasCaseSection,
     responseRecipientCount: abuseRecipientResolution.recipients.length,
     registryComparison: comparison,

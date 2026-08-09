@@ -59,6 +59,13 @@ backup. Encryption protects the downloaded file while locked; the active
 IndexedDB workspace remains plaintext and browser-local. Optional hosted
 monitoring retains only encrypted compact watchlist state.
 
+Lookup can explicitly export a checksummed source-aware passport for one claim
+readiness row. The bounded file keeps stable requirement identifiers, exact
+source states, observation time, model versions, and limitations while
+excluding raw source payloads, contacts, page values, request paths,
+credentials, and signer-authentication claims; the local CLI verifies it
+offline.
+
 Case schema 12 retains up to eight exact opaque Brand Profile identifiers
 chosen by an analyst. Ordinary case exports, Case report v8 JSON and Markdown,
 and workspace archives preserve them. Public CLI case packs clear the

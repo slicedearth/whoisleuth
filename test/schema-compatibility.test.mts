@@ -208,7 +208,7 @@ describe('schema compatibility inventory', () => {
     assert.equal(inventory.schema, SCHEMA_COMPATIBILITY_INVENTORY_SCHEMA);
     assert.equal(inventory.version, SCHEMA_COMPATIBILITY_INVENTORY_VERSION);
     assert.equal(inventory.generatedAt, NOW);
-    assert.equal(inventory.entries.length, 148);
+    assert.equal(inventory.entries.length, 149);
     assert.deepEqual(new Set(inventory.entries.map((entry) => entry.kind)), new Set([
       'browser_store', 'tab_store', 'hosted_store', 'export', 'cli_document', 'derived',
     ]));
@@ -242,6 +242,8 @@ describe('schema compatibility inventory', () => {
     assert.equal(byId(inventory, 'cli.signed-evidence-package').currentVersion, 2);
     assert.deepEqual(byId(inventory, 'cli.signed-evidence-package').supportedVersions, [1, 2]);
     assert.equal(byId(inventory, 'export.acquisition-decision').schema, 'whoisleuth.acquisition-decision');
+    assert.equal(byId(inventory, 'export.lookup-claim-passport').schema, 'whoisleuth.lookup-claim-passport');
+    assert.equal(byId(inventory, 'export.lookup-claim-passport').byteBudget, 64 * 1024);
     assert.equal(byId(inventory, 'export.domain-comparison').schema, 'whoisleuth.domain-comparison');
     assert.equal(byId(inventory, 'export.bulk-mail-exposure').schema, 'whoisleuth.bulk-mail-exposure');
     assert.equal(byId(inventory, 'export.bulk-review-manifest').schema, 'whoisleuth.bulk-review-manifest');

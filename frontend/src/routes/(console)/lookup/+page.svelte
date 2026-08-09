@@ -66,6 +66,10 @@
     type JsonRecord,
   } from '$lib/analysis/lookup-display-model.ts';
   import { buildLookupRouteAnalysis } from '$lib/analysis/lookup-route-analysis.ts';
+  import {
+    buildLookupClaimPassport,
+  } from '$lib/analysis/lookup-claim-passport.ts';
+  import type { LookupClaimId } from '$lib/analysis/lookup-claim-readiness.ts';
   import type { LookupFreshnessPolicyInput, LookupFreshnessThresholds } from '$lib/analysis/lookup-source-refresh.ts';
   import {
     LOOKUP_CLIENT_TIMEOUT_MS,
@@ -237,6 +241,7 @@
     observedAt:lookupObservedAt,
   }));
   const evidenceCoverage=$derived(lookupAnalysis.evidenceCoverage);
+  const evidenceObservedAtById=$derived(lookupAnalysis.evidenceObservedAtById);
   const lookupSourceRefreshPlan=$derived(lookupAnalysis.lookupSourceRefreshPlan);
   const lookupDecisionSupport=$derived(lookupAnalysis.lookupDecisionSupport);
   const lookupClaimReadiness=$derived(lookupAnalysis.lookupClaimReadiness);
@@ -496,6 +501,23 @@
   function downloadEvidence(){if(!result||!lookupEvidenceDocument)return;const body=JSON.stringify(lookupEvidenceDocument,null,2);const url=URL.createObjectURL(new Blob([body],{type:'application/json'}));const anchor=document.createElement('a');anchor.href=url;anchor.download=evidenceFilename(result);anchor.click();URL.revokeObjectURL(url);}
   function downloadReadableReport(includeAttribution=true){if(!result)return;const body=buildLookupReadableReport(result,{risk,applicationVersion:__WHOISLEUTH_VERSION__,includeAttribution});const url=URL.createObjectURL(new Blob([body],{type:'text/markdown;charset=utf-8'}));const anchor=document.createElement('a');anchor.href=url;anchor.download=lookupReadableReportFilename(result);anchor.click();URL.revokeObjectURL(url);}
   function downloadInvestigationBrief(){if(!result)return;const body=formatLookupInvestigationBriefMarkdown(lookupInvestigationBrief);const url=URL.createObjectURL(new Blob([body],{type:'text/markdown;charset=utf-8'}));const anchor=document.createElement('a');anchor.href=url;anchor.download=lookupInvestigationBriefFilename(lookupInvestigationBrief);anchor.click();URL.revokeObjectURL(url);}
+  async function downloadClaimPassport(claimId:LookupClaimId):Promise<string>{
+    if(!result)throw new Error('Run a Lookup before exporting a claim passport.');
+    const exported=await buildLookupClaimPassport({
+      readiness:lookupClaimReadiness,
+      claimId,
+      targetType:result.type,
+      target:result.query,
+      lookupDepth:lookupEvidenceDepth,
+      observedAt:lookupObservedAt,
+      evidenceObservedAtById,
+      riskModelVersion:risk?.modelVersion,
+      applicationVersion:__WHOISLEUTH_VERSION__,
+    });
+    const url=URL.createObjectURL(new Blob([exported.content],{type:'application/json;charset=utf-8'}));
+    const anchor=document.createElement('a');anchor.href=url;anchor.download=exported.filename;anchor.click();URL.revokeObjectURL(url);
+    return `Downloaded a portable passport for ${exported.document.claim.label}.`;
+  }
   async function copyDraft(text:string,label:string){try{await navigator.clipboard.writeText(text);draftStatus=`Copied ${label} to the clipboard.`;}catch{draftStatus='Clipboard access was unavailable. Use the email draft link instead.';}}
   function resultSectionLinks(){return buildLookupResultSectionLinks({
       hasWebEvidence,
@@ -630,7 +652,7 @@
           onbriefcopy={copyInvestigationBrief}
           onbriefhandoff={caseRecord ? recordInvestigationBriefHandoff : null}
         />
-        <LookupClaimReadiness readiness={lookupClaimReadiness} impact={lookupEvidenceImpactPlan} />
+        <LookupClaimReadiness readiness={lookupClaimReadiness} impact={lookupEvidenceImpactPlan} onpassport={downloadClaimPassport} />
 
         {#if lookupEvidenceDocument}
           <LookupInvestigationCapsule

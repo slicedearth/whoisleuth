@@ -94,6 +94,17 @@ reorders the section navigation without changing collection, automatically
 opening evidence, or hiding any source. Expand a section before relying on its
 evidence, collection time, or limitations.
 
+Each claim-readiness row has an explicit **Download passport** action. The
+versioned JSON passport contains only that claim's target type and canonical
+target, observation time and Lookup depth, stable requirement identifiers,
+exact retained source states, model versions, and bounded limitations. It is
+generated in the browser without another request or a browser-local write.
+Raw registry responses, contacts, page values, request paths, credentials, and
+unsupported truth, ownership, safety, or signer-authentication claims are not
+included. The local CLI can verify its deterministic checksum with
+`verify-artifact` and describe its browser/CLI boundary with
+`interchange-report`.
+
 Dashboard's acquisition start supplies a strict in-memory `task=acquisition`
 presentation context and requests Deep mode. The task value is not sent with a
 lookup, retained in workflow state, or used to replace an existing depth choice
@@ -1298,6 +1309,10 @@ observations, or compact case history.
   array is cloned and remains independent of the saved case.
 - Use the Lookup JSON evidence package when complete captured source material
   is required, and treat it as potentially containing public contact data.
+- Use a Lookup claim passport when a recipient needs the exact source-health
+  basis for one narrow readiness statement without the full Lookup evidence
+  package. Its checksum detects file changes but does not authenticate an
+  analyst or establish the statement as true.
 - Use the portable investigation capsule when a recipient needs one manifest
   tying the current evidence-file digest to the bounded investigation brief,
   relationship graph, source schemas, and application version. The capsule

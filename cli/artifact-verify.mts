@@ -20,6 +20,10 @@ import {
   ACQUISITION_DECISION_PACKET_VERSION,
 } from '../frontend/src/lib/analysis/acquisition-decision-packet.ts';
 import {
+  LOOKUP_CLAIM_PASSPORT_SCHEMA,
+  LOOKUP_CLAIM_PASSPORT_VERSION,
+} from '../frontend/src/lib/analysis/lookup-claim-passport.ts';
+import {
   BULK_DOMAIN_COMPARISON_SCHEMA,
   BULK_DOMAIN_COMPARISON_EXPORT_VERSION,
 } from '../frontend/src/lib/analysis/bulk-domain-comparison.ts';
@@ -163,6 +167,7 @@ type OfflineArtifactVerificationCore = Omit<OfflineArtifactVerificationReport, '
 
 const SIGNED_ARTIFACT_VERSIONS: Readonly<Record<string, ReadonlySet<number>>> = Object.freeze({
   [ACQUISITION_DECISION_PACKET_SCHEMA]: new Set([1, ACQUISITION_DECISION_PACKET_VERSION]),
+  [LOOKUP_CLAIM_PASSPORT_SCHEMA]: new Set([LOOKUP_CLAIM_PASSPORT_VERSION]),
   [BULK_DOMAIN_COMPARISON_SCHEMA]: new Set([3, BULK_DOMAIN_COMPARISON_EXPORT_VERSION]),
   [BULK_MAIL_EXPOSURE_SCHEMA]: new Set([1, BULK_MAIL_EXPOSURE_EXPORT_VERSION]),
   [BULK_REVIEW_MANIFEST_SCHEMA]: new Set([1, BULK_REVIEW_MANIFEST_VERSION]),
@@ -173,6 +178,7 @@ const SIGNED_ARTIFACT_VERSIONS: Readonly<Record<string, ReadonlySet<number>>> = 
 
 const SIGNED_ARTIFACT_CANONICALIZATION: Readonly<Record<string, readonly ArtifactCanonicalizationRoute[]>> = Object.freeze({
   [ACQUISITION_DECISION_PACKET_SCHEMA]: [{ version: 1, canonicalization: SORTED_JSON_V1, explicit: false }, { version: ACQUISITION_DECISION_PACKET_VERSION, canonicalization: SORTED_JSON_V2, explicit: true }],
+  [LOOKUP_CLAIM_PASSPORT_SCHEMA]: [{ version: LOOKUP_CLAIM_PASSPORT_VERSION, canonicalization: SORTED_JSON_V2, explicit: true }],
   [BULK_DOMAIN_COMPARISON_SCHEMA]: [{ version: 3, canonicalization: SORTED_JSON_V1, explicit: false }, { version: BULK_DOMAIN_COMPARISON_EXPORT_VERSION, canonicalization: SORTED_JSON_V2, explicit: true }],
   [BULK_MAIL_EXPOSURE_SCHEMA]: [{ version: 1, canonicalization: SORTED_JSON_V1, explicit: false }, { version: BULK_MAIL_EXPOSURE_EXPORT_VERSION, canonicalization: SORTED_JSON_V2, explicit: true }],
   [BULK_REVIEW_MANIFEST_SCHEMA]: [{ version: 1, canonicalization: SORTED_JSON_V1, explicit: false }, { version: BULK_REVIEW_MANIFEST_VERSION, canonicalization: SORTED_JSON_V2, explicit: true }],
