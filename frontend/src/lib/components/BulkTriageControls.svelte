@@ -2,11 +2,11 @@
   import type { BulkSortDirection, BulkSortKey } from '$lib/analysis/bulk-sort.ts';
   import type { BulkAgeFilter, BulkGroupBy, BulkMailFilter, BulkSourceFilter } from '$lib/analysis/bulk-triage.ts';
 
-  type Filter = 'all' | 'available' | 'registered' | 'high_risk' | 'trusted' | 'errors';
+  type Filter = 'all' | 'available' | 'registered' | 'high_risk' | 'trusted' | 'profile_unevaluated' | 'errors';
   type IndicatorFormat = 'domains' | 'hosts' | 'dnsmasq' | 'rpz' | 'stix' | 'misp';
   type Counts = Record<Filter, number>;
 
-  const filterKeys: Filter[] = ['all', 'available', 'registered', 'high_risk', 'trusted', 'errors'];
+  const filterKeys: Filter[] = ['all', 'available', 'registered', 'high_risk', 'trusted', 'profile_unevaluated', 'errors'];
   const signalOptions = [['favicon', 'Favicon'], ['password', 'Password field'], ['phishing', 'Phishing language'], ['asset_reuse', 'Official assets'], ['idn', 'IDN / confusable']] as const;
 
   let {
@@ -20,6 +20,7 @@
     setIndicatorFormat,
     exportIndicators,
     indicatorCount,
+    indicatorProfileContextUnavailableCount,
     indicatorWildcards,
     setIndicatorWildcards,
     selectedIndicatorCount,
@@ -61,6 +62,8 @@
     setGroupBy,
     advancedFilterOptions,
     selectedCount,
+    monitorAllBlockedCount,
+    monitorSelectedBlockedCount,
     selectFiltered,
     clearFilteredSelection,
     exportSelectedCsv,
@@ -68,6 +71,7 @@
     createCasesSelected,
     setSelectedDisposition,
     caseOptions,
+    profileContextState,
   }: {
     counts: Counts;
     filter: Filter;
@@ -79,6 +83,7 @@
     setIndicatorFormat: (value: IndicatorFormat) => void;
     exportIndicators: () => void;
     indicatorCount: number;
+    indicatorProfileContextUnavailableCount: number;
     indicatorWildcards: boolean;
     setIndicatorWildcards: (value: boolean) => void;
     selectedIndicatorCount: number;
@@ -120,6 +125,8 @@
     setGroupBy: (value: BulkGroupBy) => void;
     advancedFilterOptions: { lifecycle: string[]; registrars: string[]; caseDispositions: string[] };
     selectedCount: number;
+    monitorAllBlockedCount: number;
+    monitorSelectedBlockedCount: number;
     selectFiltered: () => void | Promise<void>;
     clearFilteredSelection: () => void | Promise<void>;
     exportSelectedCsv: () => void | Promise<void>;
@@ -127,6 +134,7 @@
     createCasesSelected: () => void | Promise<void>;
     setSelectedDisposition: (value: string) => void | Promise<void>;
     caseOptions: ReadonlyArray<{ value: string; label: string }>;
+    profileContextState: 'loading' | 'ready' | 'unavailable';
   } = $props();
 
   let filterPanelOpen = $state(false);
@@ -150,11 +158,11 @@
 <div class="triage-head">
   <div class="filters desktop-filter-row">{#each filterKeys as key}<button class="btn" class:active={filter === key} aria-pressed={filter === key} onclick={() => setFilter(key)}>{key.replace('_', ' ')} <span>{counts[key]}</span></button>{/each}</div>
   <div id="bulk-output-tools" class:mobile-collapsed={!outputPanelOpen} class="triage-actions">
-    {#if counts.errors}<button class="btn" onclick={retryErrors} disabled={running}>Retry errors</button>{/if}
+    {#if counts.errors}<button class="btn" onclick={retryErrors} disabled={running || profileContextState === 'loading'}>Retry errors</button>{/if}
     <button class="btn" onclick={exportCsv}>Export CSV</button>
     <label class="indicator-format">Defensive format<select value={indicatorFormat} onchange={(event) => setIndicatorFormat(event.currentTarget.value as IndicatorFormat)}><option value="domains">Domains</option><option value="hosts">Hosts file</option><option value="dnsmasq">dnsmasq</option><option value="rpz">RPZ</option><option value="stix">STIX 2.1</option><option value="misp">MISP event JSON</option></select></label>
     {#if indicatorFormat === 'rpz'}<label class="wildcard-choice choice"><input type="checkbox" checked={indicatorWildcards} onchange={(event) => setIndicatorWildcards(event.currentTarget.checked)}><span>Include wildcard subdomains</span></label>{/if}
-    <button class="btn" onclick={exportIndicators} disabled={!indicatorCount}>Export {indicatorCount} reviewed indicator{indicatorCount === 1 ? '' : 's'}</button>
+    <button class="btn" onclick={exportIndicators} disabled={profileContextState !== 'ready' || !indicatorCount}>Export {indicatorCount} reviewed indicator{indicatorCount === 1 ? '' : 's'}</button>
   </div>
 </div>
 <div class="mobile-review-bar">
@@ -164,7 +172,7 @@
     <button class="btn mobile-panel-toggle" type="button" aria-controls="bulk-output-tools" aria-expanded={outputPanelOpen} onclick={() => outputPanelOpen = !outputPanelOpen}>Actions</button>
   </div>
 </div>
-<p class:mobile-collapsed={!outputPanelOpen} class="review-note">Defensive exports use only shortlisted domains with a Suspicious or Confirmed abuse case disposition. {selectedIndicatorCount} shortlisted domain{selectedIndicatorCount === 1 ? ' is' : 's are'} in the current result set. A review manifest and rollback set are downloaded with the indicator file.</p>
+<p class:mobile-collapsed={!outputPanelOpen} class="review-note">Defensive exports use only shortlisted domains with a Suspicious or Confirmed abuse case disposition. {selectedIndicatorCount} shortlisted domain{selectedIndicatorCount === 1 ? ' is' : 's are'} in the current result set.{indicatorProfileContextUnavailableCount?` ${indicatorProfileContextUnavailableCount} selected row${indicatorProfileContextUnavailableCount===1?' is':'s are'} excluded because Brand Profile context is unavailable.`:''} A review manifest and rollback set are downloaded with the indicator file.</p>
 <div id="bulk-advanced-filter-panel" class:mobile-collapsed={!filterPanelOpen} class="advanced-filter-panel">
   <div class="advanced-filters">
   <label class="field">Mutation<select value={mutationFilter} onchange={(event) => setMutationFilter(event.currentTarget.value)}><option value="">All mutations</option>{#each mutationOptions as mutation}<option value={mutation.value}>{mutation.label}</option>{/each}</select></label>
@@ -192,13 +200,13 @@
   <div id="bulk-selection-actions" class:mobile-collapsed={!selectionPanelOpen} class="action-row">
     <button class="btn" onclick={clearFilteredSelection} disabled={!selectedCount}>Clear filtered selection</button>
     <button class="btn" onclick={exportSelectedCsv} disabled={!selectedCount}>Export selected CSV</button>
-    <button class="btn" onclick={deepRescanSelected} disabled={!selectedCount || running}>Deep rescan selected</button>
+    <button class="btn" onclick={deepRescanSelected} disabled={!selectedCount || running || profileContextState === 'loading'}>Deep rescan selected</button>
     <button class="btn" onclick={createCasesSelected} disabled={!selectedCount}>Create cases</button>
     <label class="field disposition">Set case state<select onchange={(event) => { const value = event.currentTarget.value; if (value) setSelectedDisposition(value); event.currentTarget.value = ''; }} disabled={!selectedCount}><option value="">Choose state</option>{#each caseOptions as option}<option value={option.value}>{option.label}</option>{/each}</select></label>
   </div>
 </section>
 {/if}
-<div class:mobile-collapsed={!outputPanelOpen} class="save-watchlist"><input aria-label="Watchlist name" value={watchlistName} oninput={(event) => setWatchlistName(event.currentTarget.value)} placeholder="Watchlist name"><button class="btn" onclick={saveSelectedResults} disabled={!selectedCount}>Save selected</button><button class="btn" onclick={saveResults}>Save to Monitor</button><span role="status" aria-live="polite">{saveStatus}</span></div>
+<div class:mobile-collapsed={!outputPanelOpen} class="save-watchlist"><input aria-label="Watchlist name" value={watchlistName} oninput={(event) => setWatchlistName(event.currentTarget.value)} placeholder="Watchlist name"><button class="btn" onclick={saveSelectedResults} disabled={profileContextState !== 'ready' || !selectedCount || monitorSelectedBlockedCount>0}>Save selected</button><button class="btn" onclick={saveResults} disabled={profileContextState !== 'ready' || monitorAllBlockedCount>0}>Save to Monitor</button><span role="status" aria-live="polite">{saveStatus}{#if selectedCount && monitorSelectedBlockedCount} {monitorSelectedBlockedCount} selected row{monitorSelectedBlockedCount===1?' requires':'s require'} a local rescan before a selected Monitor save.{/if}{#if monitorAllBlockedCount} {monitorAllBlockedCount} result row{monitorAllBlockedCount===1?' requires':'s require'} a local rescan before an aggregate Monitor save.{/if}</span></div>
 
 <style>
   .triage-head{display:flex;min-width:0;justify-content:space-between;gap:14px}

@@ -9,11 +9,13 @@
     selectedDomains,
     selectDomains,
     exportReport,
+    exportDisabled,
   }: {
     report: BulkMailExposureReport;
     selectedDomains: Set<string>;
     selectDomains: (domains: string[]) => void | Promise<void>;
     exportReport: () => void | Promise<void>;
+    exportDisabled: boolean;
   } = $props();
 
   const groups: ReadonlyArray<{ state: BulkMailExposureState; label: string }> = [
@@ -42,15 +44,18 @@
         <h2 id="mail-review-title">Lookalike mail exposure</h2>
         <p>Compare already observed candidate mail posture with the active profile baseline. No SMTP connection, message, mailbox, or catch-all test is performed.</p>
       </div>
-      <button class="btn" type="button" onclick={exportReport}>Export review</button>
+      <button class="btn" type="button" disabled={exportDisabled} onclick={exportReport}>Export review</button>
     </header>
 
     <div class="baseline">
       <strong>{report.baseline.label}</strong>
       <span>{report.baseline.officialDomains.length
         ? report.baseline.officialDomains.join(', ')
-        : 'No official domain is configured for comparison'}</span>
+        : report.baseline.label === 'No active Brand Profile baseline'
+          ? 'No official domain is configured for comparison'
+          : report.baseline.limitations[0] ?? 'Brand Profile comparison is inconclusive'}</span>
     </div>
+    {#if report.profileContextUnevaluatedCount}<p class="profile-context-summary" role="status">{report.profileContextUnevaluatedCount} row{report.profileContextUnevaluatedCount===1?' has':'s have'} an unevaluated or non-current Brand Profile context. DNS posture remains visible, but baseline comparison is inconclusive.</p>{/if}
 
     <div class="groups" role="group" aria-label="Mail exposure groups">
       {#each groups as group}
@@ -77,7 +82,7 @@
                 <small>{row.mutationTypes.join(', ') || 'No mutation provenance recorded'}</small>
               </th>
               <td data-label="Observed posture"><strong>{row.label}</strong><small>{row.detail}</small></td>
-              <td data-label="Baseline"><span class={`relation ${row.baselineRelation}`}>{row.baselineRelation}</span><small>{row.baselineDetail}</small></td>
+              <td data-label="Baseline"><span class={`relation ${row.baselineRelation}`}>{row.baselineRelation}</span><small>{row.baselineDetail}</small><small>Profile context: {row.profileContextState}{row.profileContextLimitation ? ` — ${row.profileContextLimitation}` : ''}</small></td>
               <td data-label="Review"><span>{row.registration}</span><small>{row.limitations[0] ?? 'Review the source evidence before acting.'}</small></td>
             </tr>
           {/each}
@@ -97,6 +102,7 @@
   .baseline{display:flex;flex-wrap:wrap;gap:7px 12px;margin-top:14px;padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}
   .baseline strong{color:var(--accent);font:700 var(--text-xs) var(--mono)}
   .baseline span{color:var(--muted);font-size:var(--text-xs);overflow-wrap:anywhere}
+  .profile-context-summary{margin:10px 0 0;padding:9px 10px;border-left:3px solid var(--amber);background:rgb(var(--amber-rgb) / .05);color:var(--muted);font-size:var(--text-xs);line-height:1.5}
   .groups{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:10px}
   .groups article{display:grid;grid-template-columns:minmax(0,1fr) auto;border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;background:var(--panel)}
   .groups article.active{border-color:color-mix(in srgb,var(--accent) 55%,var(--border))}

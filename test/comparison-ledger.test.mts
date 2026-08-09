@@ -150,8 +150,16 @@ function bulkResult(domain: string, overrides: Record<string, unknown> = {}) {
     activityStatus: 'active',
     risk: 20,
     opportunity: 30,
+    trusted: null,
+    faviconMatch: false,
+    faviconNearMatch: false,
+    reusesOfficialAssets: false,
+    idnReferenceMatch: false,
+    pageBaselineMatch: false,
+    hasActiveBrandProfile: false,
     riskModelVersion: 1,
     opportunityModelVersion: 1,
+    riskFactors: [],
     sourceCoverage: [
       { source: 'rdap', state: 'complete' },
       { source: 'availability', state: 'complete' },
@@ -161,6 +169,12 @@ function bulkResult(domain: string, overrides: Record<string, unknown> = {}) {
       version: 1,
       technology: { state: 'success', ids: ['cms'], truncated: false },
       tls: { state: 'success', issuerLabel: 'Example CA', spkiSha256: 'a'.repeat(64) },
+    },
+    profileContext: {
+      sourceState: 'ready',
+      activeProfileId: null,
+      profileUpdatedAt: null,
+      limitation: '',
     },
     ...overrides,
   };
@@ -184,6 +198,12 @@ function bulkSession(
     startedAt: updatedAt,
     updatedAt,
     completedAt: updatedAt,
+    profileContext: {
+      sourceState: 'ready',
+      activeProfileId: null,
+      profileUpdatedAt: null,
+      limitation: '',
+    },
     ...overrides,
   };
 }

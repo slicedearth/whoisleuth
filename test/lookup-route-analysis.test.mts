@@ -115,6 +115,37 @@ describe('Lookup route analysis', () => {
     assert.equal(analysis.checkpointFacts.length, 0);
   });
 
+  test('keeps profile-derived evidence inconclusive when browser-local profile context is unavailable', () => {
+    const result = response();
+    const analysis = buildLookupRouteAnalysis({
+      result,
+      lookupView: createLookupViewModel(result),
+      profile: null,
+      profileSourceState: 'unavailable',
+      task: 'brand',
+      completedLookupDepth: 'deep',
+    });
+
+    assert.equal(analysis.profileSourceState, 'unavailable');
+    assert.match(analysis.profileContextLimitation ?? '', /trust, allowlist, resemblance, and official-reference conclusions remain inconclusive/u);
+    assert.equal(analysis.caseEvidence.hasActiveBrandProfile, null);
+    assert.equal(analysis.caseEvidence.idnReferenceMatch, null);
+    assert.equal(analysis.caseEvidence.pageBaselineMatch, null);
+    assert.equal(analysis.caseEvidence.profileContextState, 'unavailable');
+    assert.match(analysis.caseEvidence.profileContextLimitation ?? '', /remain inconclusive/u);
+    assert.equal(analysis.risk, null);
+    assert.equal(analysis.riskSensitivity, null);
+    assert.equal(analysis.caseEvidence.riskModelVersion, null);
+    assert.equal(analysis.caseEvidence.riskScore, null);
+    assert.deepEqual(analysis.caseEvidence.riskFactors, []);
+    assert.deepEqual(analysis.profileSignals, {
+      trusted: null,
+      faviconMatch: null,
+      faviconNearMatch: null,
+      reusesOfficialAssets: null,
+    });
+  });
+
   test('selects the newest valid observation timestamp', () => {
     assert.equal(
       latestLookupTimestamp(

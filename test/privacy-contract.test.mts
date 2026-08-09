@@ -37,7 +37,7 @@ test('public privacy notices track versioned browser-local data contracts', asyn
 
   for (const notice of [rootNotice, publicNotice]) {
     const compact = notice.replace(/\s+/gu, ' ');
-    assert.match(compact, /Last updated: 6 August 2026/u);
+    assert.match(compact, /Last updated: 9 August 2026/u);
     assert.ok(compact.includes(`up to ${MAX_HANDOFF_CANDIDATES.toLocaleString('en-AU')} selected domains`));
     assert.ok(compact.includes(`up to ${MAX_GENERATED_CONTEXT.toLocaleString('en-AU')} generated candidates`));
     assert.ok(compact.includes(`capped at ${mib(MAX_CANDIDATE_HANDOFF_SERIALIZED_BYTES)} MiB`));
@@ -45,16 +45,19 @@ test('public privacy notices track versioned browser-local data contracts', asyn
     assert.ok(compact.includes(`up to ${MAX_BULK_REVIEW_ROWS.toLocaleString('en-AU')} per-domain review states`));
     assert.ok(compact.includes(`version ${WORKSPACE_ARCHIVE_VERSION} added Bulk review state`));
     assert.ok(compact.includes(`Saved session schema ${BULK_SESSION_SCHEMA_VERSION}`));
-    assert.ok(compact.includes('Schema 1 and 2 sessions remain readable')
-      || compact.includes('Schemas 1 and 2 remain readable'));
+    assert.ok(compact.includes('Schemas 1 through 3 remain readable'));
     assert.ok(compact.includes('Versions 1 through 4 remain readable'));
     assert.ok(compact.includes('random one-use token'));
     assert.ok(compact.includes(HANDOFF_KEY));
+    assert.ok(compact.includes('up to eight exact opaque Brand Profile identifiers'));
+    assert.ok(compact.includes('failed local reads remain explicit'));
+    assert.ok(compact.includes('Case report v8 JSON and Markdown'));
+    assert.ok(compact.includes('Public CLI case packs clear them'));
   }
 
   assert.equal(BROWSER_LOCAL_COLLECTIONS.length, 12);
   assert.deepEqual([...SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS], [1, 2, 3, 4, WORKSPACE_ARCHIVE_VERSION]);
-  assert.deepEqual([...SUPPORTED_BULK_SESSION_SCHEMA_VERSIONS], [1, 2, BULK_SESSION_SCHEMA_VERSION]);
+  assert.deepEqual([...SUPPORTED_BULK_SESSION_SCHEMA_VERSIONS], [1, 2, 3, BULK_SESSION_SCHEMA_VERSION]);
   assert.match(rootNotice, /twelve browser-local collections/u);
   assert.match(publicNotice, /twelve browser-local collections/u);
 });

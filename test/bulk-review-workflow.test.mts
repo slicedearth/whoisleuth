@@ -67,6 +67,12 @@ function result(
       { source: 'rdap', state: 'complete' },
       { source: 'whois', state: 'complete' },
     ],
+    profileContext: {
+      sourceState: 'ready',
+      activeProfileId: null,
+      profileUpdatedAt: null,
+      limitation: '',
+    },
     ...overrides,
   };
 }
@@ -84,6 +90,8 @@ function cockpitRow(domain: string, reviewState: string): BulkReviewCockpitRow {
     reviewState,
     shortlisted: false,
     trusted: false,
+    profileContextReady: true,
+    profileContextLimitation: '',
     sourceCoverage: [],
     error: '',
     caseRecord: null,
@@ -150,6 +158,28 @@ describe('Bulk evidence review workflow', () => {
     assert.equal(comparison?.rows.find((row) => row.id === 'technology')?.state, 'different');
     assert.equal(comparison?.rows.find((row) => row.id === 'tls-issuer')?.state, 'equal');
     assert.equal(comparison?.rows.find((row) => row.id === 'tls-spki')?.state, 'different');
+  });
+
+  test('withholds official-asset comparison when row profile provenance is not ready and identical', () => {
+    const comparison = buildBulkDomainComparison(
+      result('left.example', { reusesOfficialAssets: false }),
+      result('right.example', {
+        reusesOfficialAssets: true,
+        profileContext: {
+          sourceState: 'unavailable',
+          activeProfileId: null,
+          profileUpdatedAt: null,
+          limitation: 'Imported profile-derived conclusions require a local rescan.',
+        },
+      }),
+      OBSERVED_AT,
+    );
+    const officialAssets = comparison?.rows.find((row) => row.id === 'official-assets');
+    assert.equal(officialAssets?.state, 'unavailable');
+    assert.equal(officialAssets?.left, 'Not observed');
+    assert.equal(officialAssets?.right, 'Not observed');
+    assert.match(officialAssets?.limitations.join(' ') ?? '', /withheld unless both rows retain the same ready Brand Profile provenance/u);
+    assert.match(comparison?.limitations.join(' ') ?? '', /Profile-derived identity comparison is unavailable/u);
   });
 
   test('keeps conflicting, unavailable, and explicitly absent evidence distinct', () => {
@@ -296,6 +326,12 @@ describe('Bulk evidence review workflow', () => {
       generatedAt: GENERATED_AT,
     });
     assert.equal(manifest.document.rows[0]?.reviewState, 'reviewing');
+    assert.deepEqual(manifest.document.rows[0]?.profileContext, {
+      sourceState: 'ready',
+      activeProfileId: null,
+      profileUpdatedAt: null,
+      limitation: '',
+    });
     assert.match(manifest.document.integrity.digestSha256, /^sha256:[a-f0-9]{64}$/u);
     assert.equal(manifest.content.includes('private@example.test'), false);
     assert.equal(manifest.content.includes('excluded raw record'), false);

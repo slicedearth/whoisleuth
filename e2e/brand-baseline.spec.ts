@@ -500,7 +500,8 @@ test('a browser quota failure reports a stable message and preserves the previou
   await page.getByRole('button', { name: 'Edit' }).click();
   await page.getByLabel('Brand name').fill('Changed name');
   await page.getByRole('button', { name: 'Save profile' }).click();
-  await expect(page.getByRole('status')).toContainText('out of storage space');
+  await expect(page.getByRole('status', { name: 'Brand Profile action status' })).toContainText('out of storage space');
+  await expect(page.locator('.local-context-status')).toContainText('Browser-local Brand Profiles could not be read.');
   const after = await readBrowserLocalCollection(page, 'brand_profiles');
   expect(after.records.map((entry) => entry.value)).toEqual(before.records.map((entry) => entry.value));
 });

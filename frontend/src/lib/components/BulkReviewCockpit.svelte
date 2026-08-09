@@ -22,6 +22,7 @@
     actionStatus,
     inspectDomain,
     executeRetry,
+    profileContextLoading,
   }: {
     rows: BulkReviewCockpitRow[];
     retryPlan: BulkRetryPlan;
@@ -37,6 +38,7 @@
     actionStatus: string;
     inspectDomain: (resultIndex: number) => void | Promise<void>;
     executeRetry: () => void | Promise<void>;
+    profileContextLoading: boolean;
   } = $props();
 
   let enabled = $state(false);
@@ -94,7 +96,7 @@
       </div>
       <dl>
         <div><dt>Registration</dt><dd>{current.availability} · {current.confidence} confidence</dd></div>
-        <div><dt>Risk</dt><dd>{current.risk ?? '—'}</dd></div>
+        <div><dt>Risk</dt><dd>{current.risk ?? '—'}{#if !current.profileContextReady}<small class="profile-limitation">Brand Profile context unevaluated. {current.profileContextLimitation}</small>{/if}</dd></div>
         <div><dt>Website</dt><dd>{current.activity}</dd></div>
         <div><dt>Registrar</dt><dd>{current.registrar}</dd></div>
         <div><dt>Source coverage</dt><dd>{current.sourceCoverage.map((item) => describeBulkSourceCoverage(current.domain, item)).join(' · ') || 'Not recorded'}</dd></div>
@@ -143,11 +145,11 @@
           >
           <small>Saves only the current settled row. No scan is started.</small>
         </label>
-        <button class="btn" type="button" disabled={!watchlistName.trim() || Boolean(current.trusted)} onclick={() => saveToWatchlist(current.resultIndex)}>
+        <button class="btn" type="button" disabled={!watchlistName.trim() || !current.profileContextReady || Boolean(current.trusted)} onclick={() => saveToWatchlist(current.resultIndex)}>
           Save current to Monitor
         </button>
       </div>
-      {#if current.trusted}<p class="action-note">Domains trusted by the active Brand Profile are excluded from watchlists.</p>{/if}
+      {#if current.trusted}<p class="action-note">Domains trusted by the active Brand Profile are excluded from watchlists.</p>{:else if !current.profileContextReady}<p class="action-note">Monitor actions remain unavailable because Brand Profile trust and allowlist context is inconclusive.</p>{/if}
       {#if actionStatus}<p class="action-status" role="status" aria-live="polite">{actionStatus}</p>{/if}
       {#if enabled}<p class="shortcut-note">Shortcuts: Alt + ←/→ moves between unresolved rows, Alt + R reviews, Alt + D defers, Alt + S toggles shortlist, and Alt + I opens Lookup. Shortcuts are ignored while editing controls.</p>{/if}
     </article>
@@ -173,7 +175,7 @@
       </dl>
       <ul>{#each retryPlan.limitations as limitation}<li>{limitation}</li>{/each}</ul>
       {#if retryPlan.capped}<p class="warning">The plan is capped at the first {retryPlan.rows.length} eligible rows.</p>{/if}
-      <button class="btn" type="button" onclick={executeRetry}>Run reviewed retry</button>
+      <button class="btn" type="button" disabled={profileContextLoading} onclick={executeRetry}>Run reviewed retry</button>
     </details>
   {/if}
   {#if retryStatus}<p class="retry-status" role="status">{retryStatus}</p>{/if}
@@ -198,6 +200,7 @@
   dl div{min-width:0;padding:8px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
   dt{color:var(--muted);font:650 var(--text-2xs) var(--mono);text-transform:uppercase}
   dd{margin:3px 0 0;font-size:var(--text-xs);line-height:1.45;overflow-wrap:anywhere}
+  .profile-limitation{display:block;margin-top:4px;color:var(--amber);font-weight:400}
   dd.error{color:var(--danger)}
   .manual-lookup{display:flex;flex-wrap:wrap;align-items:center;gap:9px;margin-top:11px;padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}.manual-lookup>span{flex:1 1 260px;color:var(--muted);font-size:var(--text-2xs);line-height:1.45}.manual-lookup .btn{flex:0 0 auto;text-decoration:none}.sr-only{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
   .navigation,.actions{display:flex;flex-wrap:wrap;gap:7px;margin-top:11px}

@@ -14,6 +14,7 @@
     exportSessions,
     status,
     canSave,
+    profileContextLoading,
   }: {
     sessions: BulkSession[];
     currentSessionId: string;
@@ -26,6 +27,7 @@
     exportSessions: () => void | Promise<void>;
     status: string;
     canSave: boolean;
+    profileContextLoading: boolean;
   } = $props();
 
   let baselineId = $state('');
@@ -76,7 +78,7 @@
         oninput={(event) => setSaveName(event.currentTarget.value)}
       />
     </label>
-    <button type="button" class="primary" disabled={!canSave || !saveName.trim()} onclick={saveCurrent}>
+    <button type="button" class="primary" disabled={profileContextLoading || !canSave || !saveName.trim()} onclick={saveCurrent}>
       {currentSessionId ? 'Update saved session' : 'Save current session'}
     </button>
   </div>
@@ -89,6 +91,7 @@
           <div>
             <h3>{session.name}</h3>
             <p>{session.mode === 'deep' ? 'Deep' : 'Fast'} · {session.results.length}/{session.domains.length} settled · {sourceSummary(session)}</p>
+            <p>Profile context: {session.profileContext.sourceState.replace('_', ' ')}{session.profileContext.limitation ? ` — ${session.profileContext.limitation}` : ''}</p>
             <dl>
               <div><dt>Complete</dt><dd>{completedCount(session)}</dd></div>
               <div><dt>Failed</dt><dd>{failedCount(session)}</dd></div>
@@ -97,9 +100,9 @@
             </dl>
           </div>
           <div class="session-actions">
-            <button type="button" onclick={() => loadSession(session)}>Load</button>
+            <button type="button" disabled={profileContextLoading} onclick={() => loadSession(session)}>Load</button>
             {#if unstartedCount(session) > 0}
-              <button type="button" class="secondary" onclick={() => resumeSession(session)}>Resume unstarted</button>
+              <button type="button" class="secondary" disabled={profileContextLoading} onclick={() => resumeSession(session)}>Resume unstarted</button>
             {/if}
             <button type="button" class="danger-text" onclick={() => deleteSession(session)}>Delete</button>
           </div>

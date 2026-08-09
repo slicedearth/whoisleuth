@@ -1,6 +1,9 @@
 import { sha256ArtifactDigest } from './artifact-integrity.ts';
 import {
+  BULK_PROFILE_CONTEXT_MISMATCH_LIMITATION,
+  normalizeBulkProfileContext,
   normalizeBulkSessionResult,
+  type BulkProfileContextProvenance,
   type BulkSessionResult,
   type BulkSessionSourceCoverage,
 } from './bulk-session-model.ts';
@@ -30,6 +33,8 @@ export type BulkMailExposureRow = Readonly<{
   mutationTypes: readonly string[];
   registration: string;
   sourceCoverage: readonly BulkSessionSourceCoverage[];
+  profileContextState: BulkProfileContextProvenance['sourceState'];
+  profileContextLimitation: string;
   limitations: readonly string[];
 }>;
 
@@ -45,6 +50,7 @@ export type BulkMailExposureReport = Readonly<{
   }>;
   rows: readonly BulkMailExposureRow[];
   counts: Readonly<Record<BulkMailExposureState, number>>;
+  profileContextUnevaluatedCount: number;
   limitations: readonly string[];
 }>;
 
@@ -62,7 +68,12 @@ function timestamp(value: unknown): string | null {
   return new Date(value).toISOString();
 }
 
-function baselineLabel(profile: BulkMailBaselineProfile): string {
+function baselineLabel(
+  profile: BulkMailBaselineProfile,
+  profileSourceState: 'loading' | 'ready' | 'unavailable',
+): string {
+  if (profileSourceState === 'loading') return 'Brand Profile context loading';
+  if (profileSourceState === 'unavailable') return 'Brand Profile context unavailable';
   if (profile === 'defensive_no_mail') return 'Configured no-mail baseline';
   if (profile === 'parked') return 'Configured parked-domain baseline';
   if (profile === 'standard') return 'Configured standard-mail baseline';
@@ -110,7 +121,24 @@ function stateDetail(state: BulkMailExposureState): string {
 function relation(
   state: BulkMailExposureState,
   profile: BulkMailBaselineProfile,
+  profileSourceState: 'loading' | 'ready' | 'unavailable',
+  profileContextComparable: boolean,
+  profileContextLimitation: string,
 ): Pick<BulkMailExposureRow, 'baselineDetail' | 'baselineRelation'> {
+  if (profileSourceState !== 'ready') {
+    return {
+      baselineRelation: 'inconclusive',
+      baselineDetail: profileSourceState === 'loading'
+        ? 'Brand Profile context is still loading, so no profile-derived mail comparison is available.'
+        : 'Brand Profile context could not be read, so no profile-derived mail comparison is available.',
+    };
+  }
+  if (!profileContextComparable) {
+    return {
+      baselineRelation: 'inconclusive',
+      baselineDetail: profileContextLimitation || BULK_PROFILE_CONTEXT_MISMATCH_LIMITATION,
+    };
+  }
   if (!profile || state === 'evidence_incomplete' || state === 'mail_auth_incomplete') {
     return {
       baselineRelation: 'inconclusive',
@@ -152,8 +180,19 @@ function relation(
 function rowLimitations(
   row: BulkSessionResult,
   state: BulkMailExposureState,
+  profileSourceState: 'loading' | 'ready' | 'unavailable',
+  profileContextComparable: boolean,
+  profileContextLimitation: string,
 ): string[] {
   const output: string[] = [];
+  if (profileSourceState !== 'ready') {
+    output.push(profileSourceState === 'loading'
+      ? 'Brand Profile context was still loading; official-domain mail posture was not evaluated.'
+      : 'Brand Profile context was unavailable; official-domain mail posture was not evaluated.');
+  }
+  if (profileSourceState === 'ready' && !profileContextComparable) {
+    output.push(profileContextLimitation || BULK_PROFILE_CONTEXT_MISMATCH_LIMITATION);
+  }
   const coverage = dnsCoverage(row);
   if (!coverage) output.push('DNS source coverage was not recorded for this compact result.');
   else if (coverage.state !== 'complete') output.push(`DNS source coverage was ${coverage.state}.`);
@@ -162,7 +201,7 @@ function rowLimitations(
     output.push('No explicit MX is not equivalent to a null MX or proof that the domain cannot receive mail.');
   }
   output.push('Mail configuration alone does not establish use, intent, control, safety, or maliciousness.');
-  return output.slice(0, 5);
+  return output.slice(0, 6);
 }
 
 export function buildBulkMailExposureReport(
@@ -172,31 +211,52 @@ export function buildBulkMailExposureReport(
     observedAt?: unknown;
     officialDomains?: readonly string[];
     profile?: BulkMailBaselineProfile;
+    profileSourceState?: 'loading' | 'ready' | 'unavailable';
+    currentProfileContext?: unknown;
   }> = {},
 ): BulkMailExposureReport {
   const generatedAt = timestamp(options.generatedAt) ?? new Date().toISOString();
+  const profileSourceState = options.profileSourceState ?? 'ready';
+  const currentProfileContext = normalizeBulkProfileContext(
+    options.currentProfileContext ?? (profileSourceState === 'ready'
+      ? { sourceState: 'ready', activeProfileId: null, profileUpdatedAt: null, limitation: '' }
+      : { sourceState: 'unavailable' }),
+  );
+  const profile = profileSourceState === 'ready' ? options.profile ?? null : null;
   const officialDomains = [...new Set(
-    (options.officialDomains ?? [])
+    (profileSourceState === 'ready' ? options.officialDomains ?? [] : [])
       .map((domain) => domain.trim().toLowerCase().replace(/\.$/u, ''))
       .filter(Boolean),
   )].slice(0, 20);
+  let profileContextUnevaluatedCount = 0;
   const rows = rowsRaw
-    .map(normalizeBulkSessionResult)
+    .map((row) => normalizeBulkSessionResult(row))
     .filter((row): row is BulkSessionResult => Boolean(row))
     .filter((row) => row.trusted === null)
     .slice(0, MAX_BULK_MAIL_EXPOSURE_ROWS)
     .map((item): BulkMailExposureRow => {
       const state = exposureState(item);
+      const profileContextComparable = profileSourceState === 'ready'
+        && currentProfileContext.sourceState === 'ready'
+        && item.profileContext.sourceState === 'ready'
+        && item.profileContext.activeProfileId === currentProfileContext.activeProfileId
+        && item.profileContext.profileUpdatedAt === currentProfileContext.profileUpdatedAt;
+      const profileContextLimitation = profileContextComparable
+        ? item.profileContext.limitation
+        : item.profileContext.limitation || BULK_PROFILE_CONTEXT_MISMATCH_LIMITATION;
+      if (!profileContextComparable) profileContextUnevaluatedCount += 1;
       return {
         domain: item.domain,
         state,
         label: STATE_LABELS[state],
         detail: stateDetail(state),
-        ...relation(state, options.profile ?? null),
+        ...relation(state, profile, profileSourceState, profileContextComparable, profileContextLimitation),
         mutationTypes: item.mutationTypes.slice(0, 40),
         registration: item.availability,
         sourceCoverage: item.sourceCoverage.slice(0, 12),
-        limitations: rowLimitations(item, state),
+        profileContextState: item.profileContext.sourceState,
+        profileContextLimitation,
+        limitations: rowLimitations(item, state, profileSourceState, profileContextComparable, profileContextLimitation),
       };
     });
   const counts: Record<BulkMailExposureState, number> = {
@@ -213,16 +273,22 @@ export function buildBulkMailExposureReport(
     generatedAt,
     observedAt: timestamp(options.observedAt),
     baseline: {
-      profile: options.profile ?? null,
+      profile,
       officialDomains,
-      label: baselineLabel(options.profile ?? null),
+      label: baselineLabel(profile, profileSourceState),
       limitations: [
+        ...(profileSourceState === 'loading'
+          ? ['Brand Profile context was loading, so profile-derived mail posture is inconclusive.']
+          : profileSourceState === 'unavailable'
+            ? ['Brand Profile context was unavailable, so profile-derived mail posture is inconclusive.']
+            : []),
         'The Brand Profile describes an analyst-configured official-domain posture; it is not a live observation.',
         'Candidate similarity and mail configuration do not establish use, control, intent, safety, or maliciousness.',
       ],
     },
     rows,
     counts,
+    profileContextUnevaluatedCount,
     limitations: [
       'This review uses compact Bulk evidence already collected and makes no additional request.',
       'Null MX, no explicit MX, receiving mail, authentication gaps, and incomplete evidence remain separate states.',

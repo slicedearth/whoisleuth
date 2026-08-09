@@ -281,6 +281,23 @@ export function buildBulkDomainComparison(
   });
   const compactTls = comparisonEvidenceContext(left, right, 'tls', tls);
   const source = context(left, right, 'Recorded source coverage', [], observedAt, options);
+  const profileContextsComparable = left.profileContext.sourceState === 'ready'
+    && right.profileContext.sourceState === 'ready'
+    && left.profileContext.activeProfileId === right.profileContext.activeProfileId
+    && left.profileContext.profileUpdatedAt === right.profileContext.profileUpdatedAt;
+  const profileContext = {
+    ...http,
+    source: 'Brand Profile comparison context',
+    leftSourceState: profileContextsComparable ? 'complete' as const : 'unavailable' as const,
+    rightSourceState: profileContextsComparable ? 'complete' as const : 'unavailable' as const,
+  };
+  const profileLimitations = profileContextsComparable
+    ? []
+    : [
+        left.profileContext.limitation,
+        right.profileContext.limitation,
+        'Official-asset comparison is withheld unless both rows retain the same ready Brand Profile provenance.',
+      ].filter(Boolean);
   const registrationConflicting = [left.availability, right.availability]
     .some((value) => ['conflict', 'conflicting'].includes(value.toLowerCase()));
   const rows = [
@@ -309,7 +326,7 @@ export function buildBulkDomainComparison(
     row('tracking', 'identity', 'Tracking identifiers', left.relationship.trackingIdentifiers, right.relationship.trackingIdentifiers, 'Normalised exact set comparison', http, ['Shared identifiers are an investigative lead, not proof of ownership.']),
     row('password-field', 'identity', 'Password field', left.hasPasswordField, right.hasPasswordField, 'Bounded static form observation', http),
     row('phishing-language', 'identity', 'Phishing-language indicator', left.phishingLanguageMatch, right.phishingLanguageMatch, 'Bounded explainable page-language signal', http, ['A wording match is a review lead, not proof of malicious intent.']),
-    row('official-assets', 'identity', 'Official asset reuse', left.reusesOfficialAssets, right.reusesOfficialAssets, 'Configured Brand Profile comparison', http),
+    row('official-assets', 'identity', 'Official asset reuse', profileContextsComparable ? left.reusesOfficialAssets : null, profileContextsComparable ? right.reusesOfficialAssets : null, 'Configured Brand Profile comparison', profileContext, profileLimitations),
     row('technology', 'technology', 'Technology identifiers', left.comparisonEvidence?.technology.ids ?? [], right.comparisonEvidence?.technology.ids ?? [], 'Normalised exact set comparison of at most 12 curated identifiers', compactTechnology, ['An unmatched identifier is not evidence that a technology is absent. Shared technologies do not establish common ownership or control.']),
     row('source-health', 'source', 'Recorded source coverage', sourceSummary(left), sourceSummary(right), 'Source-by-source compact state comparison', source, ['A source-state difference can reflect collection conditions rather than a domain change.']),
   ];
@@ -335,11 +352,13 @@ export function buildBulkDomainComparison(
         'This compares normalised evidence already present in two saved observations for the same domain and makes no new request.',
         'Missing, unavailable, and differently collected evidence remain distinct from an observed difference.',
         'An observed difference can reflect changed collection conditions and does not by itself establish current state, ownership, intent, safety, or maliciousness.',
+        ...(!profileContextsComparable ? ['Profile-derived identity comparison is unavailable because the saved Brand Profile contexts are not ready and identical.'] : []),
       ]
       : [
         'This compares compact settled evidence already present in Bulk and makes no new request.',
         'Missing, unavailable, and differently collected evidence remain distinct from an observed difference.',
         'Equality does not establish common ownership, infrastructure control, intent, safety, or maliciousness.',
+        ...(!profileContextsComparable ? ['Profile-derived identity comparison is unavailable because the saved Brand Profile contexts are not ready and identical.'] : []),
       ],
   };
 }

@@ -1,6 +1,6 @@
 # Privacy Notice
 
-Last updated: 6 August 2026.
+Last updated: 9 August 2026.
 
 This notice describes the public WHOISleuth deployment and is also a template
 for self-hosted operators to adapt when their configuration, hosting, enabled
@@ -517,6 +517,21 @@ default (see the README), so many lookups return no personal data at all.
   wrapped in passphrase-based authenticated encryption entirely in the
   browser. This protects the downloaded file while locked, not the active
   browser database or an open Console.
+  Cases can retain up to eight exact opaque Brand Profile identifiers that an
+  analyst explicitly selects. WHOISleuth does not trim, case-fold, repair,
+  resolve, remap, or infer those associations from profile names, domains,
+  tags, certificates, or other evidence. Deleting a Brand Profile does not
+  clear the Case field; any unmatched identifier remains visible as
+  unresolved. The Brands page derives a bounded, paginated review inbox locally
+  from existing source-aware analyst review rows for explicitly associated
+  cases. Loading and failed local reads remain explicit and never become an
+  empty state or an unresolved classification. The projection makes no network
+  request or stored write, creates no score or alert, and does not imply
+  ownership, attribution, intent, safety, or maliciousness. Ordinary Case
+  exports, Case report v8 JSON and Markdown, and ordinary or encrypted
+  workspace archives preserve identifiers. Public CLI case packs clear them
+  from both the case collection and embedded reports and disclose the bounded
+  omission count; trusted and internal case packs preserve them.
   Saved Bulk sessions retain only the analyst-provided name, bounded domain
   queue, scan mode, compact settled result fields, per-source completion
   states, and session timestamps needed to load, compare, or resume unstarted
@@ -524,8 +539,16 @@ default (see the README), so many lookups return no personal data at all.
   registrant and abuse contacts, and Certificate Transparency rows. Saving and
   loading make no network request; an explicit resume sends only domains that
   had no settled row through the selected Bulk mode.
-  Saved session schema 3 adds the optional compact comparison envelope.
-  Schema 1 and 2 sessions remain readable without inventing those later fields.
+  Saved session schema 3 added the optional compact comparison envelope.
+  Saved session schema 4 retains bounded Brand Profile context provenance for each row and
+  session: ready or unavailable source state, the active opaque profile
+  identifier and its `updatedAt` revision when selected, and a short
+  limitation. It does not copy Profile names, domain lists, allowlists,
+  baselines, or other Profile contents. Schemas 1 through 3 remain readable,
+  but their profile-derived trust, match, and potentially profile-influenced
+  Risk conclusions are withheld until rescan because the original Profile
+  context cannot be proven. Schema-4 rows restored under a different or
+  unreadable context are withheld in the same way.
   Bulk review state retains up to 24 named filter and sorting presets and up to
   1,900 per-domain review states, with record timestamps, in a 512 KiB store.
   It does not copy Bulk evidence rows or source payloads. Review views and queue
@@ -537,7 +560,10 @@ default (see the README), so many lookups return no personal data at all.
   mutation provenance, registration state, and the active Brand Profile's
   configured mail posture. It makes no additional request and never connects
   to SMTP, sends a message, tests a mailbox or catch-all behaviour, or retains
-  message data. Its optional JSON export is generated locally, includes an
+  message data. A loading or unavailable Profile source remains an explicit
+  inconclusive state rather than becoming “no active profile”, “no official
+  domain”, or a negative trust finding. Mail-review export waits for ready
+  Profile context. Its optional JSON export is generated locally, includes an
   integrity digest and stated limitations, and excludes raw DNS responses,
   contacts, scripts, and provider payloads.
   The Brands page can also review explicitly selected DMARC aggregate XML and

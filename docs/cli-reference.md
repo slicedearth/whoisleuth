@@ -637,6 +637,10 @@ reported as valid. “Semantic exact after normalisation” does not mean byte
 identity, current evidence, or a successful round trip through an unrelated
 format.
 
+For case packs, the fixed fidelity metadata explicitly lists public-audience
+Brand Profile references as excluded and trusted/internal references as
+preserved. The report never prints an identifier or other stored value.
+
 ## Privacy-safe source reliability report
 
 `source-report` summarises source states, durations, truncation, and rate-limit
@@ -1285,16 +1289,45 @@ canonical SHA-256 digest and redaction manifest. It refuses an invalid,
 duplicate, larger, or generated package above the browser's 2 MiB import limit
 rather than silently omitting records or evidence. Trusted output removes notes,
 recipient values, and manual-pivot targets. Public output additionally removes
-actions, analyst assertions, and named investigation branches so their labels
-and now-dangling analyst references cannot cross the public boundary. Trusted
-output retains branch references while redacting action recipients. The review flag records an explicit choice; it
-does not prove recipient authorisation or factual correctness.
+actions, analyst assertions, named investigation branches, and every exact
+Brand Profile identifier from both the top-level cases and embedded Case report
+v8 projections. Its redaction manifest records the bounded
+`brandProfileReferencesOmitted` count, which cannot exceed 200. Trusted and
+internal output preserve the exact references and record zero omissions.
+Trusted output retains branch references while redacting action recipients.
+The review flag records an explicit choice; it does not prove recipient
+authorisation, profile ownership, attribution, or factual correctness.
 
 `verify-artifact` recognises the complete case-pack envelope before browser
 import. It checks the canonical digest, supported case-export schema, bounded
 case count, report count, audience and explicit review marker without printing
-case contents. This detects a changed hand-off file but does not authenticate
-the analyst, recipient, source observations, or review decision.
+case contents. For Case schema 12 it validates the opaque-reference syntax,
+requires public cases and reports to contain no references, and requires
+trusted or internal report references to match their top-level case. The
+case-pack envelope remains version 1; a valid legacy version-1 pack carrying a
+pre-v12 Case collection remains accepted without inventing the new field or
+redaction count. Current builders reject a schema-12 raw case unless its
+complete bounded Case projection, safe canonical identity, and unique
+at-most-eight reference list survive normalisation exactly; over-bound notes,
+actions, and other fields are not silently truncated. Legacy builder input
+remains lenient for later fields. After digest validation, the verifier binds
+each report's supported schema version, canonical Case identifier, domain, and
+audience-sensitive projection to its top-level case. It rejects re-signed
+public notes, actions, assertions, branches, recipients, manual-trail targets,
+or Brand Profile references, and the corresponding trusted-field leaks,
+including copies at unexpected nested paths. It also enforces the exact
+epoch-specific audience exclusion list, source-case count, and omission-count
+rules. Current Case schema 12 requires report v8, schema 11 requires report v7,
+and schemas through 10 accept supported reports through v6 without inventing
+later branch or Brand-reference fields. For every audience and Case schema 2
+through 11, retained Case and report nodes must have the same object, array,
+null, or scalar kind as their bounded normalised projection, and every nested
+key must belong to that versioned projection. Historical omissions remain
+valid, while re-signed scalar substitutions and undeclared private fields do
+not. These checks
+also govern offline verification and interchange-fidelity classification. This
+detects a changed or internally inconsistent hand-off file but does not
+authenticate the analyst, recipient, source observations, or review decision.
 
 `monitor-once [manifest.json]` performs one bounded Deep control review for at
 most 20 manifest domains with concurrency capped at three. An optional

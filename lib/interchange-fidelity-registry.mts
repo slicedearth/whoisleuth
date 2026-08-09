@@ -85,8 +85,8 @@ export const INTERCHANGE_ARTIFACT_CONTRACTS: readonly InterchangeArtifactContrac
     browser: Object.freeze({ import: 'supported', export: 'unsupported' }),
     cli: Object.freeze({ read: 'supported', write: 'supported', verify: 'supported' }),
     fidelity: 'lossy_by_design',
-    preservedFieldGroups: Object.freeze(['redacted_case_collection', 'case_schema_version']),
-    excludedFieldGroups: Object.freeze(['package_reports', 'package_redaction_manifest', 'package_integrity_envelope', 'audience_excluded_case_fields']),
+    preservedFieldGroups: Object.freeze(['redacted_case_collection', 'case_schema_version', 'trusted_internal_case_brand_profile_references']),
+    excludedFieldGroups: Object.freeze(['package_reports', 'package_redaction_manifest', 'package_integrity_envelope', 'audience_excluded_case_fields', 'public_audience_case_brand_profile_references']),
     futureVersionBehaviour: 'reject',
   }),
   Object.freeze({

@@ -67,11 +67,12 @@ export type WorkspaceImportSummary = {
   updated: number;
   skipped: number;
   pruned: number;
+  brandProfileReferencesOmitted: number;
 };
 
 function importSummary(
   id: string,
-  result: { added: number; updated: number; skipped: number; pruned?: number },
+  result: { added: number; updated: number; skipped: number; pruned?: number; brandProfileReferencesOmitted?: number },
 ): WorkspaceImportSummary {
   return {
     id,
@@ -79,12 +80,11 @@ function importSummary(
     updated: result.updated ?? 0,
     skipped: result.skipped ?? 0,
     pruned: result.pruned ?? 0,
+    brandProfileReferencesOmitted: result.brandProfileReferencesOmitted ?? 0,
   };
 }
 
 const SETTINGS_KEYS = [ACTIVE_PROFILE_KEY, THEME_STORAGE_KEY];
-const profileId = () => crypto.randomUUID ? crypto.randomUUID() : `bp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-
 async function localInput() {
   const [cases, campaigns, brandProfiles, watchlists, shortlist, detectionRules, relationshipObservations, bulkSessions, websiteSnapshots, investigationTemplates, bulkReview] = await Promise.all([
     loadCases(),
@@ -159,8 +159,12 @@ export async function decryptLocalWorkspaceArchive(raw: unknown, passphrase: str
   return decryptWorkspaceArchive(raw, passphrase);
 }
 
-export async function previewLocalWorkspaceArchive(raw: unknown) {
-  return previewWorkspaceArchive(raw, await localInput());
+export async function previewLocalWorkspaceArchive(raw: unknown, selectedSectionIds?: readonly string[]) {
+  return previewWorkspaceArchive(
+    raw,
+    await localInput(),
+    selectedSectionIds ? { selectedSectionIds } : {},
+  );
 }
 
 function snapshotSettings() {
@@ -201,15 +205,15 @@ async function applySettings(
   if (!setThemePreference(theme)) throw new Error('Could not save the imported theme preference. Browser storage may be full or unavailable.');
   if (activeProfileAvailable) {
     setActiveProfile(requestedProfileId);
-    return { added: 0, updated: section.updated, skipped: 0, pruned: 0 };
+    return { added: 0, updated: section.updated, skipped: section.skipped, pruned: 0, brandProfileReferencesOmitted: 0 };
   }
   if (!requestedProfileId) setActiveProfile('');
-  return { added: 0, updated: section.updated, skipped: requestedProfileId ? 1 : 0, pruned: 0 };
+  return { added: 0, updated: section.updated, skipped: section.skipped, pruned: 0, brandProfileReferencesOmitted: 0 };
 }
 
 /** Revalidates the archive, then applies only selected ready sections. */
 export async function mergeLocalWorkspaceArchive(raw: unknown, selectedIds: string[]) {
-  const preview = await previewLocalWorkspaceArchive(raw);
+  const preview = await previewLocalWorkspaceArchive(raw, selectedIds);
   const selected = new Set(selectedIds);
   const sections = preview.sections.filter((section) => section.status === 'ready' && selected.has(section.id));
   if (!sections.length) throw new Error('Select at least one supported archive section to merge.');
@@ -256,7 +260,7 @@ export async function mergeLocalWorkspaceArchive(raw: unknown, selectedIds: stri
             next.set('campaigns', assertCampaignStoreBudget(result.campaigns).campaigns);
             summaries.push(importSummary(section.id, result));
           } else if (section.id === 'brandProfiles') {
-            const result = mergeBrandProfiles(documents.get('brand_profiles'), section.data, { makeId: profileId });
+            const result = mergeBrandProfiles(documents.get('brand_profiles'), section.data);
             next.set('brand_profiles', assertBrandProfileStoreBudget(result.profiles).profiles);
             summaries.push(importSummary(section.id, result));
           } else if (section.id === 'watchlists') {
@@ -301,7 +305,7 @@ export async function mergeLocalWorkspaceArchive(raw: unknown, selectedIds: stri
     const settingsSection = sections.find((section) => section.id === 'settings');
     if (settingsSection) {
       const result = await applySettings(settingsSection, (settings) => { appliedSettings = settings; });
-      results.push({ id: settingsSection.id, added: result.added ?? 0, updated: result.updated ?? 0, skipped: result.skipped ?? 0, pruned: result.pruned ?? 0 });
+      results.push({ id: settingsSection.id, added: result.added ?? 0, updated: result.updated ?? 0, skipped: result.skipped ?? 0, pruned: result.pruned ?? 0, brandProfileReferencesOmitted: 0 });
     }
   } catch (cause) {
     let fullyRestored = true;

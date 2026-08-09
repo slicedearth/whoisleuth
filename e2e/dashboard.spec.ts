@@ -3,7 +3,7 @@ import { expectNoHorizontalOverflow, failBrowserLocalManifestWrites, migrateLega
 import { spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import type { ArchiveInspectionReport } from '../cli/archive-inspect.mts';
-import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model';
+import { CASE_SCHEMA_VERSION, normalizeCaseStore } from '../frontend/src/lib/analysis/case-model';
 import { sha256ArtifactDigest } from '../frontend/src/lib/analysis/artifact-integrity';
 import type { WorkspaceArchiveDocument } from '../frontend/src/lib/analysis/workspace-archive';
 import type { EncryptedWorkspaceArchiveEnvelope } from '../frontend/src/lib/analysis/workspace-archive-crypto';
@@ -32,6 +32,7 @@ function caseRecord(id: string, domain: string, status: string) {
     domain,
     status,
     disposition: 'unreviewed',
+    brandProfileIds: [],
     tags: [],
     notes: [],
     source: 'lookup',
@@ -412,7 +413,10 @@ test('reviewed case evidence keeps the same workspace content through two CLI an
   const caseExport = {
     version: CASE_SCHEMA_VERSION,
     exportedAt: NOW,
-    cases: [caseRecord('round-trip-case', 'round-trip.invalid', 'reviewing')],
+    cases: normalizeCaseStore({
+      version: CASE_SCHEMA_VERSION,
+      cases: [caseRecord('round-trip-case', 'round-trip.invalid', 'reviewing')],
+    }).cases,
   };
 
   const firstCasePack = await runOfflineCliJson<Record<string, unknown>>([
@@ -529,7 +533,7 @@ test('workspace archive import previews conflicts before a non-destructive mobil
   await expectNoHorizontalOverflow(page);
 
   await preview.getByRole('button', { name: 'Add selected data' }).click();
-  await expect(page.getByRole('status')).toContainText('Added backup data from 12 sections');
+  await expect(page.getByRole('status').filter({ hasText: 'Added backup data from 12 sections' })).toBeVisible();
   const [cases, campaigns, profiles, relationshipObservations, websiteSnapshots, investigationTemplates, bulkReview, settings] = await Promise.all([
     readBrowserLocalCollection(page, 'cases', { minimumRevision: 2 }),
     readBrowserLocalCollection(page, 'campaigns', { minimumRevision: 2 }),
@@ -552,6 +556,177 @@ test('workspace archive import previews conflicts before a non-destructive mobil
   expect(bulkReview.records).toHaveLength(2);
   expect(settings.activeProfile).toBe('archive-profile');
   expect(settings.theme).toBe('light');
+});
+
+test('workspace application skips the same malformed Brand Profile identifiers as preview', async ({ page }) => {
+  await page.goto('/dashboard');
+  await seedArchiveWorkspace(page);
+  const { content } = await downloadWorkspaceArchive(page);
+  const archive = JSON.parse(content) as WorkspaceArchiveDocument;
+  const profile = archive.sections.brandProfiles.profiles[0] as unknown as Record<string, unknown>;
+  profile.id = ' malformed-profile';
+  const profileManifest = archive.manifest.sections.find((section) => section.id === 'brandProfiles');
+  if (!profileManifest) throw new Error('The workspace fixture is missing its Brand Profiles manifest.');
+  profileManifest.bytes = new TextEncoder().encode(JSON.stringify(archive.sections.brandProfiles)).byteLength;
+  profileManifest.checksum = await sha256ArtifactDigest(archive.sections.brandProfiles);
+
+  await migrateLegacyBrowserData(page, {}, { clearStorage: true });
+  await page.getByLabel('Review backup file').setInputFiles({
+    name: 'workspace-malformed-profile.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(archive)),
+  });
+  const preview = page.locator('.preview');
+  const profiles = preview.locator('li', { hasText: 'Brand Profiles' });
+  const settings = preview.locator('li', { hasText: 'Workspace settings' });
+  await expect(profiles).toContainText('1 skipped');
+  await expect(settings).toContainText('1 skipped');
+  for (const checkbox of await preview.getByRole('checkbox').all()) {
+    if (await checkbox.isChecked()) await checkbox.uncheck();
+  }
+  await profiles.getByRole('checkbox').check();
+  await settings.getByRole('checkbox').check();
+  await preview.getByRole('button', { name: 'Add selected data' }).click();
+
+  const storedProfiles = await readBrowserLocalCollection(page, 'brand_profiles');
+  expect(storedProfiles.records).toHaveLength(0);
+  expect(await page.evaluate(() => localStorage.getItem('whois-rdap-active-brand-profile-v1'))).toBeNull();
+});
+
+test('workspace Settings preview and application preserve the active profile when imported Profiles are deselected', async ({ page }) => {
+  await page.goto('/dashboard');
+  await seedArchiveWorkspace(page);
+  const { content } = await downloadWorkspaceArchive(page);
+  await migrateLegacyBrowserData(page, {
+    'whois-rdap-brand-profiles-v1': { version: 6, profiles: [profile('local-profile', 'Local retained profile')] },
+    'whois-rdap-active-brand-profile-v1': 'local-profile',
+  }, { clearStorage: true });
+  await page.getByLabel('Review backup file').setInputFiles({
+    name: 'workspace-settings-with-profile.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(content),
+  });
+
+  const preview = page.locator('.preview');
+  const profiles = preview.locator('li', { hasText: 'Brand Profiles' });
+  const settings = preview.locator('li', { hasText: 'Workspace settings' });
+  await expect(settings).toContainText('0 skipped');
+  await profiles.getByRole('checkbox').uncheck();
+  await expect(settings).toContainText('1 skipped');
+  await expect(settings).toContainText('not available in the selected Profile data or the current browser');
+  for (const checkbox of await preview.getByRole('checkbox').all()) {
+    const isSettings = await checkbox.evaluate((element) => (
+      element.closest('li')?.textContent?.includes('Workspace settings') === true
+    ));
+    if (await checkbox.isChecked() && !isSettings) {
+      await checkbox.uncheck();
+    }
+  }
+  if (!await settings.getByRole('checkbox').isChecked()) await settings.getByRole('checkbox').check();
+  await preview.getByRole('button', { name: 'Add selected data' }).click();
+
+  await expect(page.getByRole('status')).toContainText('1 skipped');
+  expect(await page.evaluate(() => localStorage.getItem('whois-rdap-active-brand-profile-v1'))).toBe('local-profile');
+  const storedProfiles = await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 1 });
+  expect(storedProfiles.records.map((record) => record.value.name)).toEqual(['Local retained profile']);
+});
+
+test('workspace Settings application preserves malformed active-profile values and honors an exact clear', async ({ page }) => {
+  await page.goto('/dashboard');
+  await seedArchiveWorkspace(page);
+  const { content } = await downloadWorkspaceArchive(page);
+  const sourceArchive = JSON.parse(content) as WorkspaceArchiveDocument;
+  await migrateLegacyBrowserData(page, {
+    'whois-rdap-brand-profiles-v1': { version: 6, profiles: [profile('local-profile', 'Local retained profile')] },
+    'whois-rdap-active-brand-profile-v1': 'local-profile',
+    'whoisleuth:theme:v1': 'dark',
+  }, { clearStorage: true });
+
+  const importOnlySettings = async (archive: WorkspaceArchiveDocument, filename: string) => {
+    await page.getByLabel('Review backup file').setInputFiles({
+      name: filename,
+      mimeType: 'application/json',
+      buffer: Buffer.from(JSON.stringify(archive)),
+    });
+    const preview = page.locator('.preview');
+    const settings = preview.locator('li', { hasText: 'Workspace settings' });
+    for (const checkbox of await preview.getByRole('checkbox').all()) {
+      const isSettings = await checkbox.evaluate((element) => (
+        element.closest('li')?.textContent?.includes('Workspace settings') === true
+      ));
+      if (await checkbox.isChecked() && !isSettings) await checkbox.uncheck();
+    }
+    if (!await settings.getByRole('checkbox').isChecked()) await settings.getByRole('checkbox').check();
+    return { preview, settings };
+  };
+
+  const malformed = structuredClone(sourceArchive);
+  malformed.sections.settings.activeProfileId = ' malformed-profile';
+  const malformedEntry = malformed.manifest.sections.find((section) => section.id === 'settings');
+  if (!malformedEntry) throw new Error('The workspace fixture is missing its Settings manifest.');
+  malformedEntry.bytes = new TextEncoder().encode(JSON.stringify(malformed.sections.settings)).byteLength;
+  malformedEntry.checksum = await sha256ArtifactDigest(malformed.sections.settings);
+  const malformedPreview = await importOnlySettings(malformed, 'workspace-settings-malformed.json');
+  await expect(malformedPreview.settings).toContainText('1 skipped');
+  await expect(malformedPreview.settings).toContainText('missing or malformed');
+  await malformedPreview.preview.getByRole('button', { name: 'Add selected data' }).click();
+  await expect(page.getByRole('status')).toContainText('1 skipped');
+  expect(await page.evaluate(() => localStorage.getItem('whois-rdap-active-brand-profile-v1'))).toBe('local-profile');
+  expect(await page.evaluate(() => localStorage.getItem('whoisleuth:theme:v1'))).toBe('light');
+
+  const clear = structuredClone(sourceArchive);
+  clear.sections.settings.activeProfileId = '';
+  const clearEntry = clear.manifest.sections.find((section) => section.id === 'settings');
+  if (!clearEntry) throw new Error('The workspace fixture is missing its Settings manifest.');
+  clearEntry.bytes = new TextEncoder().encode(JSON.stringify(clear.sections.settings)).byteLength;
+  clearEntry.checksum = await sha256ArtifactDigest(clear.sections.settings);
+  const clearPreview = await importOnlySettings(clear, 'workspace-settings-clear.json');
+  await expect(clearPreview.settings).toContainText('0 skipped');
+  await clearPreview.preview.getByRole('button', { name: 'Add selected data' }).click();
+  await expect(page.getByRole('status')).toContainText('Added backup data from 1 sections:');
+  expect(await page.evaluate(() => localStorage.getItem('whois-rdap-active-brand-profile-v1'))).toBeNull();
+  const storedProfiles = await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 1 });
+  expect(storedProfiles.records.map((record) => record.value.id)).toEqual(['local-profile']);
+});
+
+test('workspace identifier collisions cannot rebind Cases or the active-profile setting', async ({ page }) => {
+  await page.goto('/dashboard');
+  await seedArchiveWorkspace(page);
+  const { content } = await downloadWorkspaceArchive(page);
+  await migrateLegacyBrowserData(page, {
+    'whois-rdap-brand-profiles-v1': { version: 6, profiles: [profile('archive-profile', 'Local distinct profile')] },
+    'whois-rdap-cases-v1': { version: 12, cases: [{ ...caseRecord('local-collision-case', 'local-collision.invalid', 'new'), brandProfileIds: ['archive-profile'] }] },
+  }, { clearStorage: true });
+  await page.getByLabel('Review backup file').setInputFiles({
+    name: 'workspace-profile-collision.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(content),
+  });
+
+  const preview = page.locator('.preview');
+  const profiles = preview.locator('li', { hasText: 'Brand Profiles' });
+  const cases = preview.locator('li', { hasText: 'Cases' });
+  const settings = preview.locator('li', { hasText: 'Workspace settings' });
+  await expect(profiles).toContainText('Blocked');
+  await expect(cases).toContainText('Blocked');
+  await expect(settings).toContainText('Blocked');
+  await expect(profiles.getByRole('checkbox')).toBeDisabled();
+  await expect(cases.getByRole('checkbox')).toBeDisabled();
+  await expect(settings.getByRole('checkbox')).toBeDisabled();
+
+  for (const checkbox of await preview.getByRole('checkbox').all()) {
+    if (await checkbox.isChecked()) await checkbox.uncheck();
+  }
+  await preview.locator('li', { hasText: 'Campaigns' }).getByRole('checkbox').check();
+  await preview.getByRole('button', { name: 'Add selected data' }).click();
+  const [storedProfiles, storedCases, activeProfile] = await Promise.all([
+    readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 1 }),
+    readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 }),
+    page.evaluate(() => localStorage.getItem('whois-rdap-active-brand-profile-v1')),
+  ]);
+  expect(storedProfiles.records[0]?.value.name).toBe('Local distinct profile');
+  expect(storedCases.records[0]?.value.brandProfileIds).toEqual(['archive-profile']);
+  expect(activeProfile).toBeNull();
 });
 
 test('workspace archive import reports future sections and rolls back an interrupted merge', async ({ page }) => {

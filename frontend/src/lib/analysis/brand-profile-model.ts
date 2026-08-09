@@ -3,6 +3,7 @@
 // bounds, import merging, and exact serialized-byte accounting.
 
 import { normalizeDomain } from './case-model.ts';
+import { normalizeOpaqueReferenceId } from './opaque-reference-id.ts';
 import { normalizePageBaseline } from './page-baseline.ts';
 import type { PageBaseline } from './page-baseline.ts';
 import { isInformativeFaviconHash } from './utils.ts';
@@ -29,7 +30,6 @@ export const MAX_DESIRED_POSTURE_SUPPRESSIONS = 12;
 export const MAX_DESIRED_POSTURE_OBSERVATIONS = 12;
 export const MAX_DESIRED_POSTURE_CHANGE_WINDOWS = 8;
 
-const SAFE_ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
 const SHA256_RE = /^[a-f0-9]{64}$/i;
 const CONTROL_RE = /[\x00-\x1f\x7f]/;
 const DNS_LABEL_RE = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
@@ -166,7 +166,7 @@ function boundedText(value: unknown, maximum: number = MAX_PROFILE_TEXT_LENGTH):
 }
 
 export function normalizeBrandProfileId(value: unknown): string | null {
-  return typeof value === 'string' && SAFE_ID_RE.test(value) ? value : null;
+  return normalizeOpaqueReferenceId(value);
 }
 
 function timestamp<T extends string | null>(value: unknown, fallback: T): string | T {
@@ -532,14 +532,33 @@ export function mergeBrandProfiles(
   if (!SUPPORTED_BRAND_PROFILE_SCHEMA_VERSIONS.includes(importedVersion ?? 0)) {
     throw new Error(`Expected a WHOISleuth Brand Profile export using schema ${SUPPORTED_BRAND_PROFILE_SCHEMA_VERSIONS.join(', ').replace(/, ([^,]+)$/u, ', or $1')}.`);
   }
+  const idNames = new Map<string, string>();
+  const retainIdName = (id: string, name: string): void => {
+    const nameKey = name.toLowerCase();
+    const previous = idNames.get(id);
+    if (previous !== undefined && previous !== nameKey) {
+      throw new Error('Brand Profile import reuses one exact identifier for different normalised profile names. No profiles were imported.');
+    }
+    idNames.set(id, nameKey);
+  };
+  for (const item of profileList(localRaw).slice(0, MAX_PROFILES * 4)) {
+    const value = record(item);
+    const id = normalizeBrandProfileId(value.id);
+    const name = boundedText(value.name, MAX_PROFILE_NAME_LENGTH);
+    if (id && name) retainIdName(id, name);
+  }
   const local = normalizeBrandProfileStore(localRaw).profiles;
+  for (const profile of local) retainIdName(profile.id, profile.name);
   const byName = new Map(local.map((profile) => [profile.name.toLowerCase(), profile]));
   const input = profileList(importedRaw);
   let added = 0;
   let updated = 0;
   let skipped = Math.max(0, input.length - MAX_PROFILES * 4);
   for (const item of input.slice(0, MAX_PROFILES * 4)) {
-    const rawName = boundedText(record(item).name, MAX_PROFILE_NAME_LENGTH);
+    const value = record(item);
+    const rawName = boundedText(value.name, MAX_PROFILE_NAME_LENGTH);
+    const rawId = normalizeBrandProfileId(value.id);
+    if (rawId && rawName) retainIdName(rawId, rawName);
     const existing = rawName ? byName.get(rawName.toLowerCase()) : null;
     const profile = normalizeBrandProfile(item, {
       existing,
@@ -548,6 +567,7 @@ export function mergeBrandProfiles(
       makeId: options.makeId,
     });
     if (!profile) { skipped++; continue; }
+    retainIdName(profile.id, profile.name);
     if (existing) { byName.set(profile.name.toLowerCase(), profile); updated++; }
     else if (byName.size < MAX_PROFILES) { byName.set(profile.name.toLowerCase(), profile); added++; }
     else skipped++;

@@ -144,6 +144,166 @@ describe('case creation and updates', () => {
     assert.throws(() => model.updateCase(cases, requiredValue(cases[0]).id, { note: '   ' }), /empty/i);
     assert.throws(() => model.updateCase(cases, 'nope', { status: 'resolved' }), /no longer exists/i);
   });
+
+  test('explicit Brand Profile edits replace exact references and fail closed', () => {
+    const opened = model.openOrCreateCase([], { domain: 'association.example' }, ISO);
+    const associated = model.updateCase(opened.cases, opened.record.id, {
+      brandProfileIds: ['Profile_A', 'profile-b'],
+    }, LATER);
+    assert.deepEqual(associated.record.brandProfileIds, ['Profile_A', 'profile-b']);
+    const replaced = model.updateCase(associated.cases, opened.record.id, {
+      brandProfileIds: ['profile-c'],
+    }, LATEST);
+    assert.deepEqual(replaced.record.brandProfileIds, ['profile-c']);
+    assert.throws(() => model.updateCase(replaced.cases, opened.record.id, {
+      brandProfileIds: [' profile-c'],
+    }), /identifier is invalid/iu);
+    assert.throws(() => model.updateCase(replaced.cases, opened.record.id, {
+      brandProfileIds: ['profile-c', 'profile-c'],
+    }), /must be unique/iu);
+    assert.throws(() => model.updateCase(replaced.cases, opened.record.id, {
+      brandProfileIds: Array.from({ length: 9 }, (_, index) => `profile-${index}`),
+    }), /limited to 8 Brand Profile associations/iu);
+  });
+});
+
+describe('Case v12 Brand Profile references', () => {
+  test('forces schema 2 through 11 profile-context evidence to null before fingerprinting and merging', () => {
+    const evidence = {
+      ...deepEvidence(),
+      capturedAt: ISO,
+      profileContextState: 'ready',
+      profileContextLimitation: 'Smuggled current-only provenance.',
+    };
+    for (let version = 2; version <= 11; version += 1) {
+      const rawCase = {
+        domain: `legacy-context-${version}.example`,
+        evidenceHistory: [evidence],
+        createdAt: ISO,
+        updatedAt: ISO,
+      };
+      const withoutSmuggledContext = {
+        ...rawCase,
+        evidenceHistory: [{ ...evidence, profileContextState: undefined, profileContextLimitation: undefined }],
+      };
+      const stored = requiredValue(model.normalizeCaseStore({ version, cases: [rawCase] }).cases[0]?.evidenceHistory[0]);
+      const expected = requiredValue(model.normalizeCaseStore({ version, cases: [withoutSmuggledContext] }).cases[0]?.evidenceHistory[0]);
+      assert.equal(stored.profileContextState, null, `stored schema ${version}`);
+      assert.equal(stored.profileContextLimitation, null, `stored schema ${version}`);
+      assert.equal(stored.fingerprint, expected.fingerprint, `stored fingerprint schema ${version}`);
+
+      const imported = requiredValue(model.mergeCases([], { version, cases: [rawCase] }).cases[0]?.evidenceHistory[0]);
+      assert.equal(imported.profileContextState, null, `import schema ${version}`);
+      assert.equal(imported.profileContextLimitation, null, `import schema ${version}`);
+      assert.equal(imported.fingerprint, expected.fingerprint, `import fingerprint schema ${version}`);
+    }
+  });
+
+  test('retains bounded profile-context evidence in bare internal arrays and schema 12 only', () => {
+    const raw = {
+      domain: 'current-context.example',
+      evidenceHistory: [{
+        ...deepEvidence(),
+        capturedAt: ISO,
+        profileContextState: 'unavailable',
+        profileContextLimitation: 'Profile context could not be evaluated locally.',
+      }],
+      createdAt: ISO,
+      updatedAt: ISO,
+    };
+    for (const source of [[raw], { version: 12, cases: [raw] }]) {
+      const snapshot = requiredValue(model.normalizeCaseStore(source).cases[0]?.evidenceHistory[0]);
+      assert.equal(snapshot.profileContextState, 'unavailable');
+      assert.equal(snapshot.profileContextLimitation, 'Profile context could not be evaluated locally.');
+    }
+    const imported = requiredValue(model.mergeCases([], { version: 12, cases: [raw] }).cases[0]?.evidenceHistory[0]);
+    assert.equal(imported.profileContextState, 'unavailable');
+    assert.equal(imported.profileContextLimitation, 'Profile context could not be evaluated locally.');
+  });
+
+  test('migrates schemas 2 through 11 to an empty reference list without accepting a smuggled field', () => {
+    for (let version = 2; version <= 11; version += 1) {
+      const stored = model.normalizeCaseStore({
+        version,
+        cases: [{ domain: `legacy-${version}.example`, brandProfileIds: ['smuggled-profile'] }],
+      });
+      assert.deepEqual(stored.cases[0]?.brandProfileIds, [], `stored schema ${version}`);
+      const imported = model.mergeCases([], {
+        version,
+        cases: [{ domain: `imported-${version}.example`, brandProfileIds: ['smuggled-profile'] }],
+      });
+      assert.deepEqual(imported.cases[0]?.brandProfileIds, [], `import schema ${version}`);
+    }
+  });
+
+  test('preserves current references in bare internal arrays and schema 12 envelopes only', () => {
+    const raw = {
+      domain: 'current-reference.example',
+      brandProfileIds: ['Profile_A', ' profile-b', 'profile.with.dot', 'profile-b', 'Profile_A'],
+      futureField: 'not retained',
+    };
+    const bare = requiredValue(model.normalizeCaseStore([raw]).cases[0]);
+    const current = requiredValue(model.normalizeCaseStore({ version: 12, cases: [raw] }).cases[0]);
+    const future = requiredValue(model.normalizeCaseStore({ version: 13, cases: [raw] }).cases[0]);
+    assert.deepEqual(bare.brandProfileIds, ['Profile_A', 'profile-b']);
+    assert.deepEqual(current.brandProfileIds, ['Profile_A', 'profile-b']);
+    assert.deepEqual(future.brandProfileIds, []);
+    assert.equal(Object.hasOwn(current, 'futureField'), false);
+  });
+
+  test('round trips current opaque references without case-folding or resolution', () => {
+    const opened = model.openOrCreateCase([], {
+      domain: 'round-trip-reference.example',
+      brandProfileIds: ['Profile_A', 'profile_a'],
+    }, ISO);
+    const exported = model.buildCaseExport(opened.cases, LATER);
+    assert.equal(exported.version, 12);
+    assert.deepEqual(exported.cases[0]?.brandProfileIds, ['Profile_A', 'profile_a']);
+    const imported = model.mergeCases([], exported);
+    assert.deepEqual(imported.cases[0]?.brandProfileIds, ['Profile_A', 'profile_a']);
+    assert.equal(imported.brandProfileReferencesOmitted, 0);
+  });
+
+  test('applies bounded single-reference intents without replacing unrelated associations', () => {
+    const initial = ['profile-a', 'profile-b'];
+    assert.deepEqual(model.addCaseBrandProfileId(initial, 'Profile_C'), ['profile-a', 'profile-b', 'Profile_C']);
+    assert.deepEqual(model.addCaseBrandProfileId(initial, 'profile-a'), initial);
+    assert.deepEqual(model.removeCaseBrandProfileId([...initial, 'Profile_C'], 'profile-b'), ['profile-a', 'Profile_C']);
+    assert.throws(() => model.addCaseBrandProfileId(initial, ' profile-c'), /identifier is invalid/iu);
+    assert.throws(
+      () => model.addCaseBrandProfileId(Array.from({ length: 8 }, (_, index) => `profile-${index}`), 'profile-extra'),
+      /limited to 8 Brand Profile associations/iu,
+    );
+  });
+
+  test('unions imports existing-first, reports bounded omissions, and never clears by absence', () => {
+    const local = model.openOrCreateCase([], {
+      domain: 'union-reference.example',
+      brandProfileIds: Array.from({ length: 7 }, (_, index) => `local-${index}`),
+    }, ISO).cases;
+    const merged = model.mergeCases(local, caseExport([{
+      domain: 'union-reference.example',
+      brandProfileIds: ['imported-first', 'imported-second'],
+      updatedAt: LATER,
+    }]));
+    assert.deepEqual(merged.cases[0]?.brandProfileIds, [
+      'local-0', 'local-1', 'local-2', 'local-3', 'local-4', 'local-5', 'local-6', 'imported-first',
+    ]);
+    assert.equal(merged.brandProfileReferencesOmitted, 1);
+
+    const absent = model.mergeCases(merged.cases, caseExport([{
+      domain: 'union-reference.example',
+      updatedAt: LATEST,
+    }]));
+    assert.deepEqual(absent.cases[0]?.brandProfileIds, merged.cases[0]?.brandProfileIds);
+
+    const overBound = model.mergeCases([], caseExport([{
+      domain: 'bounded-reference.example',
+      brandProfileIds: Array.from({ length: 40 }, (_, index) => `profile-${index}`),
+    }]));
+    assert.deepEqual(overBound.cases[0]?.brandProfileIds, Array.from({ length: 8 }, (_, index) => `profile-${index}`));
+    assert.equal(overBound.brandProfileReferencesOmitted, 32);
+  });
 });
 
 describe('named investigation branches', () => {

@@ -9,8 +9,8 @@ import type {
 import { ANALYST_REVIEW_REASONS } from '../../../../lib/analyst-taxonomy.mts';
 import type { CaseInvestigationBranch } from './case-investigation-branch-model.ts';
 
-export const CASE_SCHEMA_VERSION = 11;
-export const CASE_IMPORT_VERSIONS = [2, 3, 4, 5, 6, 7, 8, 9, 10, CASE_SCHEMA_VERSION] as const;
+export const CASE_SCHEMA_VERSION = 12;
+export const CASE_IMPORT_VERSIONS = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, CASE_SCHEMA_VERSION] as const;
 export const MAX_CASES = 500;
 export const MAX_NOTES_PER_CASE = 50;
 export const MAX_NOTE_LENGTH = 2000;
@@ -27,6 +27,8 @@ export const MAX_EVIDENCE_TITLE_LENGTH = 200;
 export const MAX_EVIDENCE_DETAIL_LENGTH = 200;
 export const MAX_EVIDENCE_CHANGES = 40;
 export const MAX_CASE_STORE_BYTES = 4 * 1024 * 1024;
+export const MAX_CASE_BRAND_PROFILE_IDS = 8;
+export const MAX_CASE_BRAND_PROFILE_ID_CANDIDATES = 32;
 
 export const CASE_STATUSES: Array<{ value: string; label: string }> = [
   { value: 'new', label: 'New' },
@@ -107,6 +109,8 @@ export type CaseEvidenceSnapshot = {
   idnReferenceMatch?: boolean | null;
   pageBaselineMatch?: boolean | null;
   hasActiveBrandProfile?: boolean | null;
+  profileContextState?: 'loading' | 'ready' | 'unavailable' | null;
+  profileContextLimitation?: string | null;
   mutationTypes: string[];
 };
 
@@ -121,6 +125,7 @@ export type CaseRecord = {
   status: string;
   disposition: string;
   reviewReasonCode?: string | null;
+  brandProfileIds: string[];
   tags: string[];
   notes: CaseNote[];
   source: string;
@@ -142,6 +147,7 @@ export type CaseInput = {
   status?: unknown;
   disposition?: unknown;
   reviewReasonCode?: unknown;
+  brandProfileIds?: unknown;
   source?: unknown;
   tags?: unknown;
   evidence?: unknown;
@@ -159,7 +165,7 @@ export type CaseInput = {
   note?: unknown;
 };
 export type CasePatch = Omit<Partial<CaseInput>, 'domain'>;
-export type SnapshotOptions = { source?: string; fallback?: string | null };
+export type SnapshotOptions = { source?: string; fallback?: string | null; sourceVersion?: number | null };
 export type EvidenceChange = { field: string; label: string; before: unknown; after: unknown; tone: string };
 export type CompareFieldSpec = {
   field: keyof CaseEvidenceSnapshot;

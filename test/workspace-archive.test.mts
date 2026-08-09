@@ -13,6 +13,13 @@ import {
 } from '../frontend/src/lib/analysis/workspace-archive.ts';
 import { createRelationshipObservation } from '../frontend/src/lib/analysis/relationship-observation-model.ts';
 import { sha256ArtifactDigest } from '../frontend/src/lib/analysis/artifact-integrity.ts';
+import { mergeCases, normalizeCaseStore } from '../frontend/src/lib/analysis/case-model.ts';
+import { mergeBrandProfiles } from '../frontend/src/lib/analysis/brand-profile-model.ts';
+import {
+  BULK_PROFILE_CONTEXT_IMPORTED_LIMITATION,
+  mergeBulkSessions,
+  summarizeBulkProfileContexts,
+} from '../frontend/src/lib/analysis/bulk-session-model.ts';
 
 const NOW = '2026-07-19T02:00:00.000Z';
 
@@ -27,6 +34,7 @@ function caseRecord(domain = 'archive-one.invalid', id = 'case-one') {
     domain,
     status: 'new',
     disposition: 'unreviewed',
+    brandProfileIds: ['profile-one'],
     tags: ['review'],
     notes: [],
     source: 'lookup',
@@ -94,9 +102,91 @@ function bulkSession() {
     inputDigest: `sha256:${'a'.repeat(64)}`,
     domains: ['archive-one.invalid'],
     results: [],
+    profileContext: summarizeBulkProfileContexts([]),
     startedAt: NOW,
     updatedAt: NOW,
     completedAt: null,
+  };
+}
+
+function bulkSessionWithProfileClaims() {
+  const profileContext = {
+    sourceState: 'ready' as const,
+    activeProfileId: 'profile-one',
+    profileUpdatedAt: NOW,
+    limitation: '',
+  };
+  return {
+    id: 'bulk-profile-claims',
+    name: 'Archive profile claims',
+    mode: 'deep' as const,
+    state: 'complete' as const,
+    inputDigest: `sha256:${'b'.repeat(64)}`,
+    domains: ['profile-claims.invalid'],
+    results: [{
+      domain: 'profile-claims.invalid',
+      status: 'complete',
+      scanDepth: 'deep',
+      trusted: 'official',
+      risk: 95,
+      riskModelVersion: 7,
+      riskFactors: [{ label: 'Profile-derived match', points: 95 }],
+      faviconMatch: true,
+      faviconNearMatch: true,
+      reusesOfficialAssets: true,
+      idnReferenceMatch: true,
+      pageBaselineMatch: true,
+      hasActiveBrandProfile: true,
+      relationship: {
+        version: 2,
+        officialAssetHosts: ['assets.profile-claims.invalid'],
+      },
+      sourceCoverage: [{ source: 'rdap', state: 'complete' }],
+      profileContext,
+    }],
+    profileContext,
+    startedAt: NOW,
+    updatedAt: NOW,
+    completedAt: NOW,
+  };
+}
+
+function bulkSessionWithoutActiveProfileRisk() {
+  const profileContext = {
+    sourceState: 'ready' as const,
+    activeProfileId: null,
+    profileUpdatedAt: null,
+    limitation: '',
+  };
+  return {
+    id: 'bulk-no-active-profile-risk',
+    name: 'Archive generic Risk',
+    mode: 'deep' as const,
+    state: 'complete' as const,
+    inputDigest: `sha256:${'d'.repeat(64)}`,
+    domains: ['generic-risk.invalid'],
+    results: [{
+      domain: 'generic-risk.invalid',
+      status: 'complete',
+      scanDepth: 'deep',
+      trusted: null,
+      risk: 44,
+      riskModelVersion: 7,
+      riskFactors: [{ label: 'Generic observed context', points: 44 }],
+      faviconMatch: false,
+      faviconNearMatch: false,
+      reusesOfficialAssets: false,
+      idnReferenceMatch: false,
+      pageBaselineMatch: false,
+      hasActiveBrandProfile: false,
+      relationship: { version: 2, officialAssetHosts: [] },
+      sourceCoverage: [{ source: 'rdap', state: 'complete' }],
+      profileContext,
+    }],
+    profileContext,
+    startedAt: NOW,
+    updatedAt: NOW,
+    completedAt: NOW,
   };
 }
 
@@ -187,7 +277,7 @@ type WorkspaceFixture = {
   shortlist: Record<string, unknown>[];
   detectionRules: Record<string, unknown>[];
   relationshipObservations: ReturnType<typeof relationshipObservation>[];
-  bulkSessions: ReturnType<typeof bulkSession>[];
+  bulkSessions: unknown[];
   websiteSnapshots: ReturnType<typeof websiteSnapshot>[];
   investigationTemplates: ReturnType<typeof investigationTemplate>[];
   bulkReview: ReturnType<typeof bulkReview>;
@@ -239,6 +329,14 @@ async function retargetSectionVersion(archive: Awaited<ReturnType<typeof buildWo
   entry.checksum = await sha256ArtifactDigest(section);
 }
 
+async function refreshSectionIntegrity(archive: Awaited<ReturnType<typeof buildWorkspaceArchive>>, id: string): Promise<void> {
+  const entry = archive.manifest.sections.find((section) => section.id === id);
+  assert.ok(entry);
+  const section = recordValue(archive.sections[id as keyof typeof archive.sections]);
+  entry.bytes = new TextEncoder().encode(JSON.stringify(section)).byteLength;
+  entry.checksum = await sha256ArtifactDigest(section);
+}
+
 function removeSections(archive: Awaited<ReturnType<typeof buildWorkspaceArchive>>, ids: readonly string[]): void {
   const removed = archive.manifest.sections.filter((section) => ids.includes(section.id));
   archive.manifest.sections = archive.manifest.sections.filter((section) => !ids.includes(section.id));
@@ -281,12 +379,262 @@ describe('portable workspace archive', () => {
     assert.equal(cases.recordCount, 1);
     assert.equal(relationships.recordCount, 1);
     assert.ok(parsed.bytes > 0 && parsed.bytes < MAX_WORKSPACE_ARCHIVE_BYTES);
+    assert.deepEqual(archive.sections.cases.cases[0]?.brandProfileIds, ['profile-one']);
+  });
+
+  test('preserves and existing-first unions Case v12 Brand Profile references', async () => {
+    const archive = await buildWorkspaceArchive(input(), { generatedAt: NOW });
+    const local = emptyInput();
+    local.cases = [{ ...caseRecord('archive-one.invalid', 'local-case'), brandProfileIds: ['local-profile'] }];
+    const preview = await previewWorkspaceArchive(archive, local);
+    const cases = preview.sections.find((section) => section.id === 'cases');
+    assert.ok(cases);
+    assert.equal(cases.status, 'ready');
+    assert.equal(cases.brandProfileReferencesOmitted, 0);
+    const merged = mergeCases(normalizeCaseStore(local.cases).cases, archive.sections.cases);
+    assert.deepEqual(merged.cases[0]?.brandProfileIds, ['local-profile', 'profile-one']);
+  });
+
+  test('quarantines profile-derived Bulk claims that arrive through a workspace section', async () => {
+    const source = input();
+    source.bulkSessions = [bulkSessionWithProfileClaims()];
+    const archive = await buildWorkspaceArchive(source, { generatedAt: NOW });
+    const parsed = await readWorkspaceArchive(archive);
+    const bulkSection = parsed.sections.find((section) => section.id === 'bulkSessions');
+    const merged = mergeBulkSessions([], bulkSection?.data);
+    const imported = merged.sessions[0];
+    assert.equal(imported?.profileContext.limitation, BULK_PROFILE_CONTEXT_IMPORTED_LIMITATION);
+    assert.equal(imported?.results[0]?.trusted, null);
+    assert.equal(imported?.results[0]?.risk, null);
+    assert.equal(imported?.results[0]?.faviconMatch, null);
+    assert.deepEqual(imported?.results[0]?.relationship.officialAssetHosts, []);
+  });
+
+  test('retains legitimate no-profile Risk in an ordinary archive while quarantining it on import', async () => {
+    const source = input();
+    source.bulkSessions = [bulkSessionWithoutActiveProfileRisk()];
+    const archive = await buildWorkspaceArchive(source, { generatedAt: NOW });
+    const parsed = await readWorkspaceArchive(archive);
+    const bulkSection = parsed.sections.find((section) => section.id === 'bulkSessions');
+    const stored = recordValue(bulkSection?.data);
+    const storedSession = requiredValue((stored.sessions as Array<Record<string, unknown>>)[0]);
+    const storedRow = requiredValue((storedSession.results as Array<Record<string, unknown>>)[0]);
+    assert.equal(storedRow.risk, 44);
+    assert.equal(storedRow.riskModelVersion, 7);
+    assert.deepEqual(storedRow.riskFactors, [{ label: 'Generic observed context', points: 44 }]);
+
+    const imported = mergeBulkSessions([], bulkSection?.data).sessions[0]?.results[0];
+    assert.equal(imported?.risk, null);
+    assert.equal(imported?.riskModelVersion, null);
+    assert.deepEqual(imported?.riskFactors, []);
+  });
+
+  test('rejects every malformed v4 Bulk result set through an ordinary workspace preview', async () => {
+    const attacks: Array<{ label: string; mutate: (session: Record<string, unknown>) => void }> = [
+      {
+        label: 'missing row context',
+        mutate: (session) => Reflect.deleteProperty(requiredValue(session.results as Array<Record<string, unknown>>)[0]!, 'profileContext'),
+      },
+      {
+        label: 'malformed row context',
+        mutate: (session) => {
+          requiredValue(session.results as Array<Record<string, unknown>>)[0]!.profileContext = {
+            sourceState: 'ready', activeProfileId: null, profileUpdatedAt: NOW, limitation: '',
+          };
+        },
+      },
+      { label: 'missing session context', mutate: (session) => Reflect.deleteProperty(session, 'profileContext') },
+      {
+        label: 'duplicate result',
+        mutate: (session) => {
+          const rows = session.results as unknown[];
+          rows.push(structuredClone(requiredValue(rows[0])));
+        },
+      },
+      {
+        label: 'out-of-domain result',
+        mutate: (session) => { requiredValue(session.results as Array<Record<string, unknown>>)[0]!.domain = 'outside.invalid'; },
+      },
+      {
+        label: 'missing declared domain',
+        mutate: (session) => { (session.domains as string[]).push('missing.invalid'); },
+      },
+      {
+        label: 'fully settled partial session',
+        mutate: (session) => { session.state = 'partial'; session.completedAt = null; },
+      },
+      {
+        label: 'fully settled cancelled session',
+        mutate: (session) => { session.state = 'cancelled'; session.completedAt = null; },
+      },
+    ];
+    for (const attack of attacks) {
+      const source = input();
+      source.bulkSessions = [bulkSessionWithoutActiveProfileRisk()];
+      const archive = structuredClone(await buildWorkspaceArchive(source, { generatedAt: NOW }));
+      const section = recordValue(archive.sections.bulkSessions);
+      const storedSession = requiredValue((section.sessions as Array<Record<string, unknown>>)[0]);
+      attack.mutate(storedSession);
+      await refreshSectionIntegrity(archive, 'bulkSessions');
+
+      const preview = await previewWorkspaceArchive(archive, emptyInput(), { selectedSectionIds: ['bulkSessions'] });
+      const bulk = preview.sections.find((item) => item.id === 'bulkSessions');
+      assert.equal(bulk?.status, 'ready', attack.label);
+      assert.deepEqual(
+        { added: bulk?.added, updated: bulk?.updated, skipped: bulk?.skipped },
+        { added: 0, updated: 0, skipped: 1 },
+        attack.label,
+      );
+    }
+
+    for (const state of ['partial', 'cancelled'] as const) {
+      const source = input();
+      source.bulkSessions = [bulkSessionWithoutActiveProfileRisk()];
+      const archive = structuredClone(await buildWorkspaceArchive(source, { generatedAt: NOW }));
+      const section = recordValue(archive.sections.bulkSessions);
+      const storedSession = requiredValue((section.sessions as Array<Record<string, unknown>>)[0]);
+      storedSession.state = state;
+      storedSession.completedAt = null;
+      (storedSession.domains as string[]).push('pending.invalid');
+      await refreshSectionIntegrity(archive, 'bulkSessions');
+      const preview = await previewWorkspaceArchive(archive, emptyInput(), { selectedSectionIds: ['bulkSessions'] });
+      const bulk = preview.sections.find((item) => item.id === 'bulkSessions');
+      assert.deepEqual(
+        { added: bulk?.added, updated: bulk?.updated, skipped: bulk?.skipped },
+        { added: 1, updated: 0, skipped: 0 },
+        `valid ${state} subset`,
+      );
+    }
+  });
+
+  test('does not remap an opaque Case reference when a profile name collides', async () => {
+    const archive = await buildWorkspaceArchive(input(), { generatedAt: NOW });
+    const local = emptyInput();
+    local.brandProfiles = [{ ...profile(), id: 'local-profile' }];
+
+    const mergedProfiles = mergeBrandProfiles(local.brandProfiles, archive.sections.brandProfiles, { nowIso: NOW });
+    const mergedCases = mergeCases(normalizeCaseStore(local.cases).cases, archive.sections.cases);
+
+    assert.deepEqual(mergedProfiles.profiles.map((item) => item.id), ['local-profile']);
+    assert.deepEqual(mergedCases.cases[0]?.brandProfileIds, ['profile-one']);
+    assert.equal(mergedProfiles.profiles.some((item) => item.id === 'profile-one'), false);
+  });
+
+  test('blocks profile, Case, and Settings sections atomically when one exact profile id names a different profile', async () => {
+    const archive = await buildWorkspaceArchive(input(), { generatedAt: NOW });
+    const local = emptyInput();
+    local.brandProfiles = [{ ...profile(), id: 'profile-one', name: 'Local distinct profile' }];
+    local.cases = [{ ...caseRecord('local-associated.invalid', 'local-associated-case'), brandProfileIds: ['profile-one'] }];
+    const before = structuredClone(local);
+
+    const preview = await previewWorkspaceArchive(archive, local);
+    const profiles = preview.sections.find((section) => section.id === 'brandProfiles');
+    const cases = preview.sections.find((section) => section.id === 'cases');
+    const settings = preview.sections.find((section) => section.id === 'settings');
+
+    assert.equal(profiles?.status, 'blocked');
+    assert.match(profiles?.reason ?? '', /one exact identifier for different normalised profile names/iu);
+    assert.equal(cases?.status, 'blocked');
+    assert.match(cases?.reason ?? '', /opaque references can be imported safely/iu);
+    assert.equal(settings?.status, 'blocked');
+    assert.equal(settings?.selected, false);
+    assert.equal(settings?.normalizedSettings, null);
+    assert.match(settings?.reason ?? '', /active Brand Profile preference.*different local profile/iu);
+    assert.deepEqual(local, before);
+    assert.equal(local.brandProfiles[0]?.name, 'Local distinct profile');
+    assert.deepEqual(local.cases[0]?.brandProfileIds, ['profile-one']);
+  });
+
+  test('skips malformed workspace profile identifiers consistently in preview', async () => {
+    const archive = structuredClone(await buildWorkspaceArchive(input(), { generatedAt: NOW }));
+    const profileSection = archive.sections.brandProfiles as unknown as { profiles: Array<Record<string, unknown>> };
+    profileSection.profiles[0]!.id = ' malformed-profile';
+    const entry = archive.manifest.sections.find((section) => section.id === 'brandProfiles');
+    assert.ok(entry);
+    entry.bytes = new TextEncoder().encode(JSON.stringify(archive.sections.brandProfiles)).byteLength;
+    entry.checksum = await sha256ArtifactDigest(archive.sections.brandProfiles);
+
+    const preview = await previewWorkspaceArchive(archive, emptyInput());
+    const profiles = preview.sections.find((section) => section.id === 'brandProfiles');
+    const settings = preview.sections.find((section) => section.id === 'settings');
+    assert.equal(profiles?.status, 'ready');
+    assert.deepEqual({ added: profiles?.added, skipped: profiles?.skipped }, { added: 0, skipped: 1 });
+    assert.equal(settings?.normalizedSettings?.activeProfileId, '');
+    assert.equal(settings?.skipped, 1);
+  });
+
+  test('keeps Settings preview selection-aware when imported Profiles are deselected', async () => {
+    const archive = await buildWorkspaceArchive(input(), { generatedAt: NOW });
+    const local = emptyInput();
+    local.brandProfiles = [{ ...profile(), id: 'local-profile', name: 'Local profile' }];
+    local.settings.activeProfileId = 'local-profile';
+
+    const withoutProfiles = await previewWorkspaceArchive(archive, local, {
+      selectedSectionIds: ['settings'],
+    });
+    const settingsWithoutProfiles = withoutProfiles.sections.find((section) => section.id === 'settings');
+    assert.equal(settingsWithoutProfiles?.selected, true);
+    assert.equal(settingsWithoutProfiles?.skipped, 1);
+    assert.equal(settingsWithoutProfiles?.normalizedSettings?.activeProfileId, 'local-profile');
+    assert.match(settingsWithoutProfiles?.reason ?? '', /not available in the selected Profile data/iu);
+
+    const withProfiles = await previewWorkspaceArchive(archive, local, {
+      selectedSectionIds: ['brandProfiles', 'settings'],
+    });
+    const settingsWithProfiles = withProfiles.sections.find((section) => section.id === 'settings');
+    assert.equal(settingsWithProfiles?.skipped, 0);
+    assert.equal(settingsWithProfiles?.normalizedSettings?.activeProfileId, 'profile-one');
+  });
+
+  test('distinguishes an intentional Settings clear from missing, non-string, and invalid active-profile values', async () => {
+    const local = emptyInput();
+    local.brandProfiles = [{ ...profile(), id: 'local-profile', name: 'Local retained profile' }];
+    local.settings = { activeProfileId: 'local-profile', theme: 'light' };
+
+    for (const mutation of ['missing', 'non-string', 'invalid'] as const) {
+      const archive = structuredClone(await buildWorkspaceArchive(input(), { generatedAt: NOW }));
+      const settingsData = recordValue(archive.sections.settings);
+      if (mutation === 'missing') Reflect.deleteProperty(settingsData, 'activeProfileId');
+      else if (mutation === 'non-string') Reflect.set(settingsData, 'activeProfileId', 42);
+      else Reflect.set(settingsData, 'activeProfileId', ' malformed-profile');
+      await refreshSectionIntegrity(archive, 'settings');
+
+      const preview = await previewWorkspaceArchive(archive, local, { selectedSectionIds: ['settings'] });
+      const settings = preview.sections.find((section) => section.id === 'settings');
+      assert.equal(settings?.selected, true, mutation);
+      assert.equal(settings?.skipped, 1, mutation);
+      assert.equal(settings?.updated, 0, mutation);
+      assert.equal(settings?.normalizedSettings?.activeProfileId, 'local-profile', mutation);
+      assert.equal(settings?.normalizedSettings?.theme, 'light', mutation);
+      assert.match(settings?.reason ?? '', /missing or malformed.*preserved/iu, mutation);
+    }
+
+    const clearArchive = structuredClone(await buildWorkspaceArchive(input(), { generatedAt: NOW }));
+    clearArchive.sections.settings.activeProfileId = '';
+    await refreshSectionIntegrity(clearArchive, 'settings');
+    const clearPreview = await previewWorkspaceArchive(clearArchive, local, { selectedSectionIds: ['settings'] });
+    const clearSettings = clearPreview.sections.find((section) => section.id === 'settings');
+    assert.equal(clearSettings?.selected, true);
+    assert.equal(clearSettings?.skipped, 0);
+    assert.equal(clearSettings?.updated, 1);
+    assert.equal(clearSettings?.normalizedSettings?.activeProfileId, '');
+    assert.equal(clearSettings?.reason, '');
   });
 
   test('keeps a schema 10 case section readable after the case schema advances', async () => {
     const archive = structuredClone(await buildWorkspaceArchive(input(), { generatedAt: NOW }));
     const entry = archive.manifest.sections.find((section) => section.id === 'cases');
     assert.ok(entry);
+    const legacyCase = archive.sections.cases.cases[0] as unknown as Record<string, unknown>;
+    legacyCase.evidenceHistory = [{
+      scanDepth: 'deep',
+      availability: 'registered',
+      riskModelVersion: 1,
+      riskScore: 40,
+      profileContextState: 'ready',
+      profileContextLimitation: 'Smuggled current-only provenance.',
+      capturedAt: NOW,
+    }];
     Reflect.set(archive.sections.cases, 'version', 10);
     entry.version = 10;
     entry.bytes = new TextEncoder().encode(JSON.stringify(archive.sections.cases)).byteLength;
@@ -294,6 +642,9 @@ describe('portable workspace archive', () => {
     const parsed = await readWorkspaceArchive(archive);
     const cases = parsed.sections.find((section) => section.id === 'cases');
     assert.equal(cases?.status, 'ready');
+    const merged = mergeCases([], cases?.data);
+    assert.equal(merged.cases[0]?.evidenceHistory[0]?.profileContextState, null);
+    assert.equal(merged.cases[0]?.evidenceHistory[0]?.profileContextLimitation, null);
     const preview = await previewWorkspaceArchive(archive, emptyInput());
     assert.equal(preview.sections.find((section) => section.id === 'cases')?.status, 'ready');
   });
@@ -431,6 +782,19 @@ describe('portable workspace archive', () => {
     await assert.rejects(readWorkspaceArchive(archive), /invalid, duplicate, or missing section/);
   });
 
+  test('closes versioned workspace envelopes, manifests, and manifest entries before integrity claims', async () => {
+    const attacks: Array<{ label: string; mutate: (archive: Awaited<ReturnType<typeof buildWorkspaceArchive>>) => void }> = [
+      { label: 'version 5 envelope', mutate: (archive) => { Reflect.set(archive, 'rawWhoisPayload', { credential: 'private material' }); } },
+      { label: 'manifest', mutate: (archive) => { Reflect.set(archive.manifest, 'uncheckedPolicy', 'private material'); } },
+      { label: 'manifest section entry', mutate: (archive) => { Reflect.set(archive.manifest.sections[0]!, 'credential', 'private material'); } },
+    ];
+    for (const attack of attacks) {
+      const archive = await buildWorkspaceArchive(input(), { generatedAt: NOW });
+      attack.mutate(archive);
+      await assert.rejects(readWorkspaceArchive(archive), new RegExp(`${attack.label} contains missing or undeclared fields`, 'iu'));
+    }
+  });
+
   test('rejects a future archive envelope before inspecting sections', async () => {
     const archive = {
       ...await buildWorkspaceArchive(input(), { generatedAt: NOW }),
@@ -450,6 +814,18 @@ describe('portable workspace archive', () => {
     assert.match(section.reason, /newer schema 999/);
     assert.equal(section.selected, false);
     assert.equal(preview.unsupportedCount, 1);
+  });
+
+  test('isolates a checksummed future Case v13 section as unsupported', async () => {
+    const archive = await buildWorkspaceArchive(input(), { generatedAt: NOW });
+    await retargetSectionVersion(archive, 'cases', 13);
+    const parsed = await readWorkspaceArchive(archive);
+    assert.equal(parsed.sections.find((section) => section.id === 'cases')?.status, 'unsupported');
+    const preview = await previewWorkspaceArchive(archive, emptyInput());
+    const cases = preview.sections.find((section) => section.id === 'cases');
+    assert.equal(cases?.status, 'unsupported');
+    assert.equal(cases?.selected, false);
+    assert.match(cases?.reason ?? '', /newer schema 13/iu);
   });
 
   test('binds every checksummed section contract to its manifest declaration', async () => {

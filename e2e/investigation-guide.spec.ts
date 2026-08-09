@@ -442,7 +442,7 @@ test('a browser-local context failure does not block or misstate a guided invest
   const guide = page.locator('.guide');
   await expect(guide).toBeFocused();
   await expect(currentAction(page)).toContainText('Collect domain evidence');
-  await expect(guide.getByRole('status')).toContainText('unavailable saved data is not treated as absent');
+  await expect(guide.getByRole('status')).toContainText('unreadable saved data is not treated as absent');
   await expect(guide.getByText('Unavailable', { exact: true })).toHaveCount(3);
   await guide.getByText('Saved evidence unavailable', { exact: true }).click();
   await expect(guide).toContainText('do not interpret this state as an empty evidence history');
@@ -482,6 +482,63 @@ test('a browser-local context failure does not block or misstate a guided invest
   await expect(completedHandoff).toContainText('Handoff context unavailable');
   await expect(completedHandoff).toContainText('No completed handoff state is inferred from unavailable saved data.');
   await expect(completedHandoff).not.toContainText(/evidence pin|decision|unresolved unknown/u);
+});
+
+test('an unavailable active-profile preference does not hide a healthy retained Case', async ({ page }) => {
+  await page.goto('/dashboard');
+  await migrateLegacyBrowserData(page, {
+    'whois-rdap-cases-v1': { version: 12, cases: [{
+      id: 'healthy-guide-case',
+      domain: 'portal.example.test',
+      status: 'reviewing',
+      disposition: 'unreviewed',
+      brandProfileIds: [],
+      tags: [],
+      notes: [],
+      source: 'lookup',
+      evidenceHistory: [],
+      evidencePins: [],
+      decisions: [],
+      actions: [],
+      assertions: [],
+      manualTrail: [],
+      sightings: [],
+      createdAt: '2026-08-01T00:00:00.000Z',
+      updatedAt: '2026-08-01T00:00:00.000Z',
+    }] },
+  });
+  await page.evaluate(() => {
+    const originalGetItem = Storage.prototype.getItem;
+    Storage.prototype.getItem = function getItem(name: string) {
+      if (this === localStorage && name === 'whois-rdap-active-brand-profile-v1') {
+        throw new DOMException('Preference read denied', 'SecurityError');
+      }
+      return originalGetItem.call(this, name);
+    };
+  });
+  await page.getByRole('textbox', { name: 'Domain', exact: true }).fill('portal.example.test');
+  await page.getByRole('button', { name: 'Start guide' }).click();
+
+  const guide = page.locator('.guide');
+  await expect(guide.getByText('Unavailable', { exact: true })).toHaveCount(1);
+  await expect(guide.locator('.context-tray').getByText('reviewing · unreviewed', { exact: true })).toBeVisible();
+  await expect(guide.getByRole('status')).toContainText('active-profile preference');
+  await expect(guide.getByRole('status')).not.toContainText('Cases');
+  await page.evaluate((key) => {
+    const stored = JSON.parse(sessionStorage.getItem(key) || 'null');
+    const now = new Date().toISOString();
+    for (const stage of stored.stages.slice(0, 2)) {
+      stage.outcome = 'complete';
+      stage.updatedAt = now;
+    }
+    stored.updatedAt = now;
+    sessionStorage.setItem(key, JSON.stringify(stored));
+    window.dispatchEvent(new CustomEvent('whoisleuth:investigation-guide-change'));
+  }, GUIDE_KEY);
+  const handoff = guide.getByRole('region', { name: 'Case handoff readiness' });
+  await expect(handoff).toBeVisible();
+  await expect(handoff).not.toContainText('Handoff context unavailable');
+  await expect(handoff.getByRole('link', { name: 'Open case decision workspace' })).toBeVisible();
 });
 
 test('partial progress, pause, resume, and restart remain explicit', async ({ page }) => {

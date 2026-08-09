@@ -5,10 +5,12 @@
 // bounded, chronological history of evidence snapshots.
 import {
   buildCaseExport,
+  addCaseBrandProfileId,
   enforceStoreBudget,
   mergeCases,
   normalizeDomain,
   openOrCreateCase,
+  removeCaseBrandProfileId,
   updateCase,
 } from './analysis/case-model.ts';
 import type {
@@ -48,6 +50,7 @@ export {
   dispositionLabel,
   latestCaseEvidence,
   MAX_CASE_IMPORT_BYTES,
+  MAX_CASE_BRAND_PROFILE_IDS,
   sourceLabel,
   statusLabel,
 } from './analysis/case-model.ts';
@@ -159,6 +162,44 @@ export async function editCase(id: string, patch: CasePatch): Promise<{ record: 
   });
 }
 
+async function updateCaseBrandProfileAssociation(
+  id: string,
+  profileId: string,
+  operation: 'add' | 'remove',
+): Promise<{ record: CaseRecord; cases: CaseRecord[]; pruned: number }> {
+  return (await browserLocalDataProvider()).update(CASES_COLLECTION, (current) => {
+    const record = current.find((item) => item.id === id);
+    if (!record) throw new Error('Case not found.');
+    const brandProfileIds = operation === 'add'
+      ? addCaseBrandProfileId(record.brandProfileIds, profileId)
+      : removeCaseBrandProfileId(record.brandProfileIds, profileId);
+    const unchanged = brandProfileIds.length === record.brandProfileIds.length
+      && brandProfileIds.every((item, index) => item === record.brandProfileIds[index]);
+    const result = unchanged
+      ? { cases: current, record }
+      : updateCase(current, id, { brandProfileIds });
+    const { cases, pruned } = boundedCases(result.cases);
+    const persisted = cases.find((item) => item.id === id) ?? result.record;
+    return { document: cases, result: { record: persisted, cases, pruned } };
+  });
+}
+
+/** Retry-safe browser-local association intent; each provider retry rereads the case. */
+export function addCaseBrandProfileAssociation(
+  id: string,
+  profileId: string,
+): Promise<{ record: CaseRecord; cases: CaseRecord[]; pruned: number }> {
+  return updateCaseBrandProfileAssociation(id, profileId, 'add');
+}
+
+/** Retry-safe browser-local removal intent that preserves concurrent unrelated adds. */
+export function removeCaseBrandProfileAssociation(
+  id: string,
+  profileId: string,
+): Promise<{ record: CaseRecord; cases: CaseRecord[]; pruned: number }> {
+  return updateCaseBrandProfileAssociation(id, profileId, 'remove');
+}
+
 export async function addCaseNote(id: string, body: string): Promise<{ record: CaseRecord; pruned: number }> {
   return editCase(id, { note: body });
 }
@@ -170,13 +211,19 @@ export async function deleteCase(id: string): Promise<void> {
   }));
 }
 
-export async function importCases(value: unknown): Promise<{ added: number; updated: number; skipped: number; pruned: number }> {
+export async function importCases(value: unknown): Promise<{ added: number; updated: number; skipped: number; brandProfileReferencesOmitted: number; pruned: number }> {
   return (await browserLocalDataProvider()).update(CASES_COLLECTION, (current) => {
     const result = mergeCases(current, value);
     const { cases, pruned } = boundedCases(result.cases);
     return {
       document: cases,
-      result: { added: result.added, updated: result.updated, skipped: result.skipped, pruned },
+      result: {
+        added: result.added,
+        updated: result.updated,
+        skipped: result.skipped,
+        brandProfileReferencesOmitted: result.brandProfileReferencesOmitted,
+        pruned,
+      },
     };
   });
 }

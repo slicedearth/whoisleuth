@@ -400,9 +400,18 @@ two-domain workspace, peer-outlier review, saved-session change summary, and
 CSV export can use those fields without another request. Empty or incomplete
 fields retain their source state and are not treated as evidence of absence.
 The complete technology evidence, certificate profile, page markup, script
-references, and raw TLS material remain excluded. Saved session schema 3 adds
-this envelope; schema 1 and 2 sessions remain readable and show the new fields
-as not recorded.
+references, and raw TLS material remain excluded. Saved session schema 3 added
+this envelope. Schema 4 records whether browser-local Brand Profile context was
+ready or unavailable and, for a selected active profile, only its opaque
+identifier and `updatedAt` revision. One immutable snapshot is used for every
+worker in a scan. While the preference is loading, starting, retrying, and
+restoring are disabled. If the read settles unavailable, collection may proceed
+but trust, allowlist, IDN-reference, page-baseline, favicon, and official-asset
+conclusions remain null or explicitly inconclusive, and exported rows retain the
+bounded limitation. Schemas 1 through 3 remain readable, but their unproven
+profile-derived conclusions and potentially profile-influenced Risk assessment
+are withheld until the domain is rescanned. A schema-4 row restored under a
+different active profile or profile revision is quarantined in the same way.
 
 The peer-outlier matrix derives a per-dimension cohort baseline only from rows
 with comparable evidence. It reports baseline share, strong, moderate, or
@@ -417,7 +426,9 @@ mail with an authentication gap, incomplete authentication evidence, null MX,
 no explicit MX, and incomplete DNS evidence separate. When a Brand Profile is
 active, the review compares those observations with its configured standard,
 defensive-no-mail, or parked mail posture. That profile is analyst-configured
-context rather than a live observation. The review never opens an SMTP
+context rather than a live observation. A loading or unavailable Profile source
+is reported as inconclusive, never as “no active profile” or “no official
+domain”; export remains unavailable until the source is ready. The review never opens an SMTP
 connection, sends a message, tests a mailbox or catch-all behaviour, or treats
 mail configuration as evidence of use, control, intent, safety, or abuse.
 Selecting one classification adds only those visible domains to the existing
@@ -483,6 +494,29 @@ A Brand Profile stores official domains, product names, selected domain
 endings, approved partners, allowlists, active and retired DKIM selectors, a
 standard, defensive-no-mail, or parked mail profile, and an optional
 official-site baseline. Profiles stay in the current browser by default.
+
+The **Brand review inbox**, shown after the saved-profile list, is a disposable
+browser-local view of the existing source-aware analyst review inbox. It shows
+review rows only for cases that an analyst explicitly associated with the
+active profile in Monitor. Profile names, domains, tags, certificates, and
+evidence values never create or remap an association. Loading and failed local
+reads remain explicit; a failed profile read is not presented as an empty inbox
+or as unresolved references. The projection inspects at most 500 cases, 100
+profiles, 500 review rows, and 100 unresolved references, renders review rows
+in pages of 25, and makes no request, write, score, or alert. It preserves each
+row's source state, completeness, limitations, and owning-case link and does
+not imply ownership, attribution, intent, safety, or maliciousness.
+
+Deleting a Brand Profile does not cascade into cases. An exact retained
+identifier with no currently readable matching profile remains an unresolved
+reference, with a link back to its owning case. Recreating a same-named profile
+under a different identifier does not resolve or rewrite that reference. A
+profile import that reuses one exact identifier for a different normalised
+profile name is rejected atomically instead of rebinding an associated case.
+Immediately before deletion, Brands rereads Cases and includes the retained
+linked-case count in the confirmation. If that read fails, the confirmation
+states that impact cannot be checked and the Case source remains unavailable;
+it never reports a stale zero.
 
 The official-domain posture audit checks configured DNS and mail controls such
 as registry transfer restrictions, nameserver delegation, SPF, DMARC, MX,
@@ -610,6 +644,14 @@ Monitor contains Cases, Campaigns, Relationships, and Watchlists.
   pins, checkpoints, assertions, and actions without copying or changing the
   referenced material. Branches are analyst organisation aids, remain active
   or resolved independently, and do not establish that a hypothesis is true.
+  A case can also retain up to eight exact opaque Brand Profile identifiers,
+  added or removed explicitly through its expanded Monitor detail. These
+  associations are never derived from a domain, profile name, tag,
+  certificate, or evidence value. Monitor sends bounded add or remove intents;
+  each browser-local retry rereads the current Case, so a disjoint change from
+  another tab is preserved. Full-list replacement remains a Case-model
+  primitive for an explicit record edit. An over-limit or invalid identifier
+  is rejected rather than repaired.
 - **Campaigns** group existing case domains without duplicating their evidence
   or implying attribution. An expanded campaign projects bounded counts for
   password fields, official-identity relationships, redirect or transport
@@ -1146,7 +1188,7 @@ Dashboard can create one deliberate workspace archive for the supported
 collections and preferences, including retained relationship observations and
 compact saved Bulk sessions. Version 2 added Bulk sessions, version 3 added
 website profile snapshots, version 4 added investigation templates, and version
-5 adds the current website-profile snapshot section contract. Versions 1
+5 added Bulk review state. Versions 1
 through 4 remain readable and do not invent missing later sections.
 The recommended download wraps the ordinary checksummed archive in
 passphrase-based browser-local authenticated encryption. The passphrase is
@@ -1156,6 +1198,32 @@ detects either format, unlocks encrypted files locally, previews changes, and
 uses the existing non-destructive merge rules. Both formats exclude login sessions,
 passwords, API credentials, hosted-monitor keys, raw upstream payloads, tab
 state, and unrelated browser storage.
+
+Before any section integrity or importability claim, the reader enforces the
+exact versioned fields for the archive root, manifest, and every manifest
+entry. Additional policy, credential, or raw-payload fields at those envelope
+layers therefore invalidate both ordinary and authenticated encrypted imports
+even if every declared section checksum still matches. Each section's own
+bounded normalizer separately governs unknown fields inside its records.
+
+Workspace envelope version 5 accepts Case sections from schemas 2 through 12.
+Cases from schemas 2 through 11 migrate with no Brand Profile references;
+schema 12 preserves the exact field. A case import merges references
+existing-first and retains at most eight after inspecting at most 32 imported
+candidates, reporting any bounded omission. Omission cannot clear an existing
+reference. Profile imports still merge under their own identity rules: if a
+same-named local profile has a different opaque identifier, the Case reference
+is not remapped and may remain unresolved. If the same exact profile identifier
+would represent a different normalised name, the profile merge and dependent
+Case and Settings sections are rejected rather than rebinding an association or
+active-profile preference. Malformed workspace profile identifiers are skipped
+consistently in preview and application without generating replacements.
+Settings preview is recomputed against the analyst's current section selection.
+If imported Settings name an active Profile that is not already local and the
+Brand Profiles section is deselected, that preference is skipped and the
+current local preference is preserved; application reports the same outcome. A checksummed
+Case schema 13 section is isolated as unsupported. The workspace envelope
+remains version 5 and the Brand Profile envelope remains version 6.
 
 The active IndexedDB codec remains plaintext JSON. Archive encryption protects
 the downloaded file while locked, not an open Console or the active browser
@@ -1183,6 +1251,11 @@ observations, or compact case history.
   generator footer is included by default and can be omitted from the readable
   presentation; structured JSON evidence always retains bounded generator
   metadata for provenance.
+- Use Case report v8 JSON or Markdown when the recipient should receive the
+  ordinary case projection. Both forms deliberately expose the exact opaque
+  Brand Profile identifiers selected on that case and state that an
+  association does not establish ownership or attribution. The structured
+  array is cloned and remains independent of the saved case.
 - Use the Lookup JSON evidence package when complete captured source material
   is required, and treat it as potentially containing public contact data.
 - Use the portable investigation capsule when a recipient needs one manifest

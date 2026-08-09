@@ -54,6 +54,8 @@ const FIELD_LABELS = {
   hasPasswordField: 'Password form',
   hasExternalFormAction: 'External form action',
   phishingLanguageMatch: 'Phishing language',
+  profileContextState: 'Brand Profile context',
+  profileContextLimitation: 'Profile-context limitation',
   mutationTypes: 'Mutation types',
 };
 
@@ -82,6 +84,10 @@ const FIELD_GROUPS: Array<{ name: string; fields: SnapshotField[] }> = [
   {
     name: 'Scoring',
     fields: ['riskModelVersion', 'riskScore', 'riskFactors', 'opportunityModelVersion', 'opportunityScore', 'opportunityFactors'],
+  },
+  {
+    name: 'Profile provenance and limitations',
+    fields: ['profileContextState', 'profileContextLimitation'],
   },
   {
     name: 'Mail and web',
@@ -342,6 +348,8 @@ export function currentEvidenceSummary(evidenceHistory: CaseEvidenceSnapshot[] |
     riskScore: latest.riskScore,
     registrar: latest.registrar,
     activityStatus: latest.activityStatus,
+    profileContextState: latest.profileContextState ?? null,
+    profileContextLimitation: latest.profileContextLimitation ?? null,
     capturedAt: latest.capturedAt,
   };
 }

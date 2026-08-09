@@ -134,6 +134,19 @@ runs one explicit control review rather than a daemon, and `workflow-run`
 executes only installed fixed-recipe steps with per-run network approval and
 analyst-selection pauses.
 
+Current `case-pack` output keeps its version-1 envelope. Trusted and internal
+audiences preserve exact analyst-selected Case-to-Brand Profile identifiers;
+public output clears them from cases and embedded reports and discloses the
+bounded `brandProfileReferencesOmitted` count. Verification also enforces the
+actual audience projection after digest validation, rejects re-signed
+sensitive-field leaks at expected or unexpected nested paths, and binds each
+report to its canonical top-level Case and exact manifest counts. Current
+schema-12 input must survive bounded normalisation exactly, provide safe unique
+Case identities and a valid unique at-most-eight identifier list, and use
+report v8. Schema 11 uses report v7; valid collections through schema 10 remain
+compatible with supported reports through v6 and without later branch,
+reference, or omission-count fields.
+
 Bulk also supports fixed-column CSV, domain-only or exact-query output,
 registered, inconclusive, and hard-failure output filters, and bounded A, AAAA,
 NS, and MX summaries. Discover

@@ -42,7 +42,7 @@ export async function buildBulkReviewManifest(input: Readonly<{
   const observedAt = timestamp(input.observedAt, generatedAt);
   const states = reviewStateMap(input.reviewStates);
   const rows = input.rows
-    .map(normalizeBulkSessionResult)
+    .map((row) => normalizeBulkSessionResult(row))
     .filter((item): item is BulkSessionResult => Boolean(item))
     .slice(0, MAX_MANIFEST_ROWS)
     .map((item) => ({
@@ -51,6 +51,7 @@ export async function buildBulkReviewManifest(input: Readonly<{
       resultState: item.status,
       scanDepth: item.scanDepth,
       sourceCoverage: item.sourceCoverage,
+      profileContext: { ...item.profileContext },
     }));
   const unsigned = {
     schema: BULK_REVIEW_MANIFEST_SCHEMA,
@@ -66,7 +67,7 @@ export async function buildBulkReviewManifest(input: Readonly<{
     rows,
     limitations: [
       'This manifest records the explicit review selection and view context for a separate CSV export.',
-      'It contains compact source states only and excludes raw payloads, contact records, notes, and transient request state.',
+      'It contains compact source states and bounded row-level Brand Profile provenance only, and excludes raw payloads, Profile contents, contact records, notes, and transient request state.',
       'Reproducing the filters does not reproduce upstream responses or imply that evidence remains current.',
     ],
   };

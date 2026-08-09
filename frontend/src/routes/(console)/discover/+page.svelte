@@ -26,7 +26,7 @@
     MUTATION_LABELS,
     normalizeCustomDictionaryTerms,
   } from '$lib/analysis/typosquat-generator.ts';
-  import { activeProfile, isDomainAllowlisted, type BrandProfile } from '$lib/brand-profiles';
+  import { activeProfile, isDomainAllowlisted, type ActiveBrandProfileSourceState, type BrandProfile } from '$lib/brand-profiles';
   import { saveCandidateHandoff, type Candidate } from '$lib/candidate-handoff';
   import {
     LARGE_JSON_RESPONSE_BYTES,
@@ -85,6 +85,7 @@
   let candidateSort = $state<CandidateSort>('review-signals');
   let candidateMetadata = $state<Map<string, CandidateMetadata>>(new Map());
   let profile = $state<BrandProfile|null>(null);
+  let profileSourceState = $state<ActiveBrandProfileSourceState>('loading');
   // Whether the current candidate set came from structured CT provenance.
   let ctResultKind = $state<'structured'|null>(null);
   let ctHistory = $state<CtHistoryStore>({ version: 2, entries: [] });
@@ -192,7 +193,8 @@
 
   onMount(() => {void (async()=>{
     const [profileResult,historyResult]=await Promise.allSettled([activeProfile(),loadCtHistory()]);
-    if(profileResult.status==='fulfilled')profile=profileResult.value;
+    if(profileResult.status==='fulfilled'){profile=profileResult.value;profileSourceState='ready';}
+    else{profile=null;profileSourceState='unavailable';}
     if(historyResult.status==='fulfilled')ctHistory=historyResult.value;
     const unavailable=unavailableLocalContextLabels([profileResult,historyResult],['profile','certificate history']);
     if(unavailable.length)localContextStatus=`Some browser-local context could not be loaded (${unavailable.join(', ')}). Candidate generation remains available; reload to retry the missing context.`;
@@ -369,8 +371,15 @@
   }
 
   function withoutAllowlisted(next: Candidate[]) {
+    if(profileSourceState!=='ready')return{
+      filtered:next,
+      excluded:0,
+      limitation:profileSourceState==='loading'
+        ?' Brand Profile context is still loading; no profile-derived trust or allowlist exclusion was applied.'
+        :' Profile-derived trust and allowlist exclusions remain unavailable; no candidate was classified as outside those lists.',
+    };
     const filtered = next.filter((candidate) => !isDomainAllowlisted(candidate.domain, profile));
-    return { filtered, excluded: next.length - filtered.length };
+    return { filtered, excluded: next.length - filtered.length, limitation:'' };
   }
 
   function useProfile() {
@@ -396,9 +405,9 @@
         candidates = []; generatedContext = []; selected = new Set(); status = '';
         return;
       }
-      const { filtered, excluded } = withoutAllowlisted(generated);
+      const { filtered, excluded, limitation } = withoutAllowlisted(generated);
       const capNote = selection.truncated ? ' Generation limits were reached; narrow the TLD list for complete coverage.' : '';
-      setResults(filtered, `Generated ${filtered.length} naming candidates${excluded ? `; excluded ${excluded} trusted profile domain${excluded===1?'':'s'}` : ''}.${capNote}`, generated);
+      setResults(filtered, `Generated ${filtered.length} naming candidates${excluded ? `; excluded ${excluded} trusted profile domain${excluded===1?'':'s'}` : ''}.${limitation}${capNote}`, generated);
       return;
     }
     if (generationPreset === 'custom' && customMutationFamilies.length === 0) {
@@ -417,7 +426,7 @@
       return;
     }
     const generated = result.candidates as Array<{domain:string;source:string;mutationTypes:string[]}>;
-    const { filtered, excluded } = withoutAllowlisted(generated);
+    const { filtered, excluded, limitation } = withoutAllowlisted(generated);
     const capped = result.truncated || (!seed.includes('.') && selection.truncated);
     const capNote = capped ? ' Generation limits were reached; narrow the seed, dictionary, or TLD list for complete coverage.' : '';
     const dictionaryNote = dictionaryRelevant && customDictionary.rejectedCount
@@ -426,7 +435,7 @@
     const advancedNote = result.advancedConfusable
       ? ` Advanced two-character confusables generated ${result.advancedConfusable.generated} label variant${result.advancedConfusable.generated===1?'':'s'}; excluded ${result.advancedConfusable.omittedByPolicy} cross-script or invalid combination${result.advancedConfusable.omittedByPolicy===1?'':'s'} by policy${result.advancedConfusable.omittedByBudget ? ` and omitted ${result.advancedConfusable.omittedByBudget} lower-ranked label variant${result.advancedConfusable.omittedByBudget===1?'':'s'} at the active budgets` : ''}.`
       : '';
-    setResults(filtered, `Generated ${filtered.length} explainable lookalike variants${excluded ? `; excluded ${excluded} trusted profile domain${excluded===1?'':'s'}` : ''}.${dictionaryNote}${advancedNote}${capNote}`, generated);
+    setResults(filtered, `Generated ${filtered.length} explainable lookalike variants${excluded ? `; excluded ${excluded} trusted profile domain${excluded===1?'':'s'}` : ''}.${limitation}${dictionaryNote}${advancedNote}${capNote}`, generated);
   }
 
   async function searchCt() {
@@ -458,7 +467,7 @@
       const { candidates: next, certificateGroups, certificateGroupsTruncated, certCount, truncated } = normalizeCtResponse(body, query);
       ctCertificateGroups = certificateGroups;
       ctCertificateGroupsTruncated = certificateGroupsTruncated;
-      const { filtered, excluded } = withoutAllowlisted(next);
+      const { filtered, excluded, limitation } = withoutAllowlisted(next);
       ctResultKind = 'structured';
       const noun = 'registrable domain';
       let historySummary = '';
@@ -480,7 +489,7 @@
       } catch (cause) {
         ctHistoryNotice = cause instanceof Error ? cause.message : 'Certificate search history is unavailable.';
       }
-      setResults(filtered, `Found ${filtered.length} ${noun}${filtered.length===1?'':'s'} from ${certCount} certificate${certCount===1?'':'s'}${excluded ? `; excluded ${excluded} trusted profile domain${excluded===1?'':'s'}` : ''}${truncated ? ' (result cap reached)' : ''}.${historySummary}`, next, 'certificate-newest');
+      setResults(filtered, `Found ${filtered.length} ${noun}${filtered.length===1?'':'s'} from ${certCount} certificate${certCount===1?'':'s'}${excluded ? `; excluded ${excluded} trusted profile domain${excluded===1?'':'s'}` : ''}${truncated ? ' (result cap reached)' : ''}.${limitation}${historySummary}`, next, 'certificate-newest');
     } catch (cause) {
       // A superseding search / mode switch (which aborts this fetch) owns the UI
       // state now; do nothing so we neither clear its results nor its loading flag.
@@ -541,9 +550,9 @@
         source: summary.nameserver,
         mutationTypes: ['rdap_nameserver_search'],
       }));
-      const { filtered, excluded } = withoutAllowlisted(next);
+      const { filtered, excluded, limitation } = withoutAllowlisted(next);
       const excludedNote = excluded ? ` Excluded ${excluded} trusted profile domain${excluded===1?'':'s'}.` : '';
-      setResults(filtered, `${rdapSearchStatusMessage(summary)}${excludedNote}`, next, 'generated');
+      setResults(filtered, `${rdapSearchStatusMessage(summary)}${excludedNote}${limitation}`, next, 'generated');
     } catch (cause) {
       if (token !== searchToken) return;
       rdapSearchSummary = null;

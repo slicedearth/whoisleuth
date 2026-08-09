@@ -42,7 +42,7 @@
   import LookupCaseResponse from '$lib/components/LookupCaseResponse.svelte';
   import LookupEvidenceCheckpoint from '$lib/components/LookupEvidenceCheckpoint.svelte';
   import PageHeading from '$lib/components/PageHeading.svelte';
-  import { activeProfile, type BrandProfile } from '$lib/brand-profiles';
+  import { activeProfile, type ActiveBrandProfileSourceState, type BrandProfile } from '$lib/brand-profiles';
   import { dispositionLabel as caseDispositionLabel, statusLabel as caseStatusLabel, type CaseRecord, type CaseTransitionExpectation } from '$lib/cases';
   import { saveCandidateHandoff } from '$lib/candidate-handoff';
   import { buildLookupEvidence, evidenceFilename } from '$lib/analysis/evidence-export.ts';
@@ -111,6 +111,7 @@
   let completedLookupTarget=$state('');
   let completedLookupDepth=$state<LookupMode|null>(null);
   let profile=$state<BrandProfile|null>(null);
+  let profileSourceState=$state<ActiveBrandProfileSourceState>('loading');
   let draftStatus=$state('');
   let caseRecord=$state<CaseRecord|null>(null);let caseNote=$state('');let caseStatus=$state('');
   let expandedResultSections=$state<string[]>([]);
@@ -187,6 +188,7 @@
     result,
     lookupView,
     profile,
+    profileSourceState,
     task:taskView,
     completedLookupDepth,
     ...(freshnessPolicyInput?{freshnessPolicy:freshnessPolicyInput}:{}),
@@ -247,10 +249,12 @@
   const evidenceTopologyProjection=$derived(projectEvidenceTopology(evidenceTopologyTarget,evidenceTopologyNodes));
   const caseEvidence=$derived(lookupAnalysis.caseEvidence);
   const checkpointFacts=$derived(lookupAnalysis.checkpointFacts);
+  const profileContextLimitation=$derived(lookupAnalysis.profileContextLimitation);
 
   async function refreshProfileContext(){
-    try{profile=await activeProfile();}
-    catch{profile=null;}
+    profileSourceState='loading';profile=null;
+    try{profile=await activeProfile();profileSourceState='ready';}
+    catch{profile=null;profileSourceState='unavailable';}
   }
   async function refreshCase(expectedRevision:number|null=null){
     const requestedDomain=caseDomain;
@@ -581,6 +585,8 @@
 />
 
 <LookupSavedContextPreview {query} />
+
+{#if profileContextLimitation}<p class="local-context-status" role="status">{profileContextLimitation}</p>{/if}
 
 <LookupEvidenceReplay />
 

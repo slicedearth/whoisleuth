@@ -12,6 +12,8 @@ export interface SnapshotOverrides {
   availability?: string | null;
   riskModelVersion?: number | null;
   riskScore?: number | null;
+  profileContextState?: 'ready' | 'loading' | 'unavailable' | null;
+  profileContextLimitation?: string | null;
   registrar?: string | null;
   activityStatus?: string | null;
   hasMx?: boolean | null;
@@ -47,6 +49,8 @@ export function snapshot(overrides: SnapshotOverrides = {}) {
       ? overrides.riskModelVersion
       : 1,
     riskScore: overrides.riskScore ?? 40,
+    profileContextState: overrides.profileContextState ?? null,
+    profileContextLimitation: overrides.profileContextLimitation ?? null,
     opportunityScore: null,
     riskFactors: [],
     opportunityFactors: [],
@@ -84,9 +88,14 @@ export interface CaseOverrides {
   domain?: string;
   status?: string;
   disposition?: string;
+  brandProfileIds?: string[];
   source?: string;
   evidenceHistory?: ReturnType<typeof snapshot>[];
   evidencePins?: unknown[];
+  actions?: unknown[];
+  assertions?: unknown[];
+  manualTrail?: unknown[];
+  branches?: unknown[];
   sightings?: unknown[];
   createdAt?: string;
   updatedAt?: string;
@@ -99,11 +108,16 @@ export function caseRecord(overrides: CaseOverrides = {}) {
     domain: overrides.domain ?? 'test.invalid',
     status: overrides.status ?? 'new',
     disposition: overrides.disposition ?? 'unreviewed',
+    brandProfileIds: overrides.brandProfileIds ?? [],
     tags: [],
     notes: overrides.notes ?? [],
     source: overrides.source ?? 'lookup',
     evidenceHistory: overrides.evidenceHistory ?? [],
     evidencePins: overrides.evidencePins ?? [],
+    actions: overrides.actions ?? [],
+    assertions: overrides.assertions ?? [],
+    manualTrail: overrides.manualTrail ?? [],
+    branches: overrides.branches ?? [],
     sightings: overrides.sightings ?? [],
     createdAt: overrides.createdAt ?? '2026-06-01T00:00:00.000Z',
     updatedAt: overrides.updatedAt ?? '2026-06-01T00:00:00.000Z',
@@ -114,9 +128,10 @@ export async function openSeededTimelineCase(
   page: Page,
   domain: string,
   records: ReturnType<typeof caseRecord>[],
+  schemaVersion = 2,
 ) {
   await migrateLegacyBrowserData(page, {
-    'whois-rdap-cases-v1': { version: 2, cases: records },
+    'whois-rdap-cases-v1': { version: schemaVersion, cases: records },
   }, { destination: '/monitor' });
   await page.getByRole('tab', { name: /Cases/ }).click();
   await page.locator('.case-head', { hasText: domain }).click();

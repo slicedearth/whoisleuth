@@ -13,12 +13,13 @@ import { buildWorkspaceArchive, SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS } from '../
 import { encryptWorkspaceArchive, ENCRYPTED_WORKSPACE_ARCHIVE_VERSION } from '../frontend/src/lib/analysis/workspace-archive-crypto.ts';
 import { DOMAIN_CONTROL_PASSPORT_VERSION } from '../frontend/src/lib/analysis/domain-control-manifest-core.ts';
 import { sha256ArtifactDigest } from '../frontend/src/lib/analysis/artifact-integrity.ts';
-import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model.ts';
+import { CASE_SCHEMA_VERSION, normalizeCaseStore } from '../frontend/src/lib/analysis/case-model.ts';
 import {
   buildDomainControlManifest,
   DOMAIN_CONTROL_MANIFEST_INPUT_SCHEMA,
 } from '../lib/domain-control-manifest.mts';
 import { interchangeContractFor } from '../lib/interchange-fidelity-registry.mts';
+import { historicalCasePackFixture } from './historical-case-pack-fixtures.mts';
 
 const NOW = '2026-08-07T00:00:00.000Z';
 const PASSPHRASE = 'fixture archive passphrase';
@@ -43,22 +44,53 @@ function passport() {
   }, NOW);
 }
 
-function casePack() {
-  return buildCliCasePack(JSON.stringify({
+function casePack(audience: 'internal' | 'public' | 'trusted' = 'public') {
+  return buildCliCasePack(JSON.stringify(normalizeCaseStore({
     version: CASE_SCHEMA_VERSION,
     cases: [{
       id: 'portable-case',
       domain: 'private-case.example',
       status: 'new',
       disposition: 'unreviewed',
+      brandProfileIds: ['Profile_A'],
       tags: [],
-      notes: ['private note'],
+      notes: [{ id: 'private-note', body: 'private note', createdAt: NOW }],
       source: 'lookup',
       evidenceHistory: [],
       createdAt: NOW,
       updatedAt: NOW,
     }],
-  }), { audience: 'public', reviewed: true }, NOW);
+  })), { audience, reviewed: true }, NOW);
+}
+
+async function casePackWithNestedReference() {
+  const pack = structuredClone(casePack()) as unknown as Record<string, unknown>;
+  (pack.packet as Record<string, unknown>).unexpected = { brandProfileIds: ['hidden-reference'] };
+  const { integrity: _integrity, ...unsigned } = pack;
+  return {
+    ...unsigned,
+    integrity: {
+      algorithm: 'SHA-256',
+      canonicalization: 'sorted-json-v1',
+      digestSha256: await sha256ArtifactDigest(unsigned),
+    },
+  };
+}
+
+async function historicalInternalCasePackWithScalarProjection() {
+  const pack = structuredClone(historicalCasePackFixture(11, 'internal'));
+  const packet = pack.packet as Record<string, unknown>;
+  const report = (packet.reports as Array<Record<string, unknown>>)[0]!;
+  report.currentAssessment = 'private material';
+  const { integrity: _integrity, ...unsigned } = pack;
+  return {
+    ...unsigned,
+    integrity: {
+      algorithm: 'SHA-256',
+      canonicalization: 'sorted-json-v1',
+      digestSha256: await sha256ArtifactDigest(unsigned),
+    },
+  };
 }
 
 describe('interchange fidelity report', () => {
@@ -103,7 +135,56 @@ describe('interchange fidelity report', () => {
     assert.equal(packReport.artifact.id, 'case_pack');
     assert.equal(packReport.compatibility.fidelity, 'lossy_by_design');
     assert.ok(packReport.compatibility.excludedFieldGroups.includes('audience_excluded_case_fields'));
-    assert.doesNotMatch(JSON.stringify(packReport), /private-case|private note/iu);
+    assert.ok(packReport.compatibility.excludedFieldGroups.includes('public_audience_case_brand_profile_references'));
+    assert.ok(packReport.compatibility.preservedFieldGroups.includes('trusted_internal_case_brand_profile_references'));
+    assert.doesNotMatch(JSON.stringify(packReport), /private-case|private note|Profile_A/iu);
+  });
+
+  test('inherits strict case-pack verification for recomputed nested reference leaks', async () => {
+    const report = await buildInterchangeFidelityReport(JSON.stringify(await casePackWithNestedReference()), { generatedAt: NOW });
+    assert.equal(report.artifact.id, 'case_pack');
+    assert.equal(report.verification.valid, false);
+    assert.equal(report.verification.state, 'not_verified');
+    assert.equal(report.compatibility.fidelity, 'not_verified');
+    assert.doesNotMatch(JSON.stringify(report), /hidden-reference/iu);
+  });
+
+  test('inherits historical internal Case-pack scalar projection closure', async () => {
+    const report = await buildInterchangeFidelityReport(
+      JSON.stringify(await historicalInternalCasePackWithScalarProjection()),
+      { generatedAt: NOW },
+    );
+    assert.equal(report.artifact.id, 'case_pack');
+    assert.equal(report.verification.valid, false);
+    assert.equal(report.compatibility.fidelity, 'not_verified');
+    assert.doesNotMatch(JSON.stringify(report), /private material/iu);
+  });
+
+  test('reports authentic historical Case packs as verified and rejects changed evidence identities without echoing them', async () => {
+    for (const audience of ['public', 'trusted', 'internal'] as const) {
+      const authentic = historicalCasePackFixture(11, audience);
+      const verified = await buildInterchangeFidelityReport(JSON.stringify(authentic), { generatedAt: NOW });
+      assert.equal(verified.artifact.id, 'case_pack', audience);
+      assert.equal(verified.verification.state, 'verified', audience);
+      assert.equal(verified.compatibility.fidelity, 'lossy_by_design', audience);
+
+      for (const field of ['id', 'fingerprint'] as const) {
+        const changed = structuredClone(authentic);
+        const item = (changed.cases as Array<Record<string, unknown>>)[0]!;
+        const snapshot = (item.evidenceHistory as Array<Record<string, unknown>>)[0]!;
+        snapshot[field] = field === 'id' ? 'ev-forged-private' : 'forged-private';
+        const { integrity: _integrity, ...unsigned } = changed;
+        changed.integrity = {
+          algorithm: 'SHA-256',
+          canonicalization: 'sorted-json-v1',
+          digestSha256: await sha256ArtifactDigest(unsigned),
+        };
+        const rejected = await buildInterchangeFidelityReport(JSON.stringify(changed), { generatedAt: NOW });
+        assert.equal(rejected.verification.valid, false, `${audience} ${field}`);
+        assert.equal(rejected.compatibility.fidelity, 'not_verified', `${audience} ${field}`);
+        assert.doesNotMatch(JSON.stringify(rejected), /forged-private/iu);
+      }
+    }
   });
 
   test('uses the Brand Profile importer to reject malformed or partially skipped rows', async () => {
@@ -145,6 +226,15 @@ describe('interchange fidelity report', () => {
     assert.equal(report.compatibility.fullyImportable, false);
     assert.equal(report.summary.unsupportedSectionCount, 1);
     assert.equal(report.compatibility.fidelity, 'not_verified');
+  });
+
+  test('withholds workspace fidelity for undeclared envelope data', async () => {
+    const workspace = await buildWorkspaceArchive({}, { generatedAt: NOW });
+    Reflect.set(workspace, 'uncheckedPolicy', { credential: 'private workspace material' });
+    const report = await buildInterchangeFidelityReport(JSON.stringify(workspace), { generatedAt: NOW });
+    assert.equal(report.verification.valid, false);
+    assert.equal(report.compatibility.fidelity, 'not_verified');
+    assert.doesNotMatch(JSON.stringify(report), /private workspace material/iu);
   });
 
   test('withholds workspace fidelity when a supported section would skip malformed records', async () => {

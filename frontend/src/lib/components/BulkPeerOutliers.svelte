@@ -58,6 +58,7 @@
       <span><strong>{matrix.cohortSize}</strong> compared</span>
       <span><strong>{matrix.dimensions.length}</strong> dimensions</span>
       <span><strong>{matrix.rows.length}</strong> uncommon rows</span>
+      {#if matrix.profileContextExcludedRows}<span><strong>{matrix.profileContextExcludedRows}</strong> profile-context exclusions</span>{/if}
     </div>
 
     {#if matrix.rows.length}

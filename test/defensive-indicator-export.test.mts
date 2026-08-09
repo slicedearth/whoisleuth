@@ -10,7 +10,20 @@ import {
 const NOW = '2026-07-14T08:00:00.000Z';
 
 function result(domain: string, overrides: Record<string, unknown> = {}) {
-  return { domain, availability: 'registered', risk: 80, trusted: null, status: 'complete', ...overrides };
+  return {
+    domain,
+    availability: 'registered',
+    risk: 80,
+    trusted: null,
+    status: 'complete',
+    profileContext: {
+      sourceState: 'ready',
+      activeProfileId: null,
+      profileUpdatedAt: null,
+      limitation: '',
+    },
+    ...overrides,
+  };
 }
 
 test('candidate eligibility requires a high-risk, registered, untrusted domain', () => {
@@ -66,8 +79,25 @@ test('RPZ wildcard coverage requires an explicit opt-in and is recorded in the m
 });
 
 test('riskScore is accepted as the stored-score field when risk is absent', () => {
-  const exported = buildDefensiveIndicatorExport([{ domain: 'stored.invalid', availability: 'registered', riskScore: 70 }], { generatedAt: NOW });
+  const exported = buildDefensiveIndicatorExport([result('stored.invalid', { risk: undefined, riskScore: 70 })], { generatedAt: NOW });
   assert.deepEqual(exported.domains, ['stored.invalid']);
+});
+
+test('profile-context-unavailable rows are explicitly excluded before indicator eligibility', () => {
+  const exported = buildDefensiveIndicatorExport([
+    result('unavailable.invalid', {
+      profileContext: {
+        sourceState: 'unavailable',
+        activeProfileId: null,
+        profileUpdatedAt: null,
+        limitation: 'Local profile context is unavailable.',
+      },
+    }),
+  ], { generatedAt: NOW, selectedDomains: ['unavailable.invalid'] });
+  assert.deepEqual(exported.domains, []);
+  assert.deepEqual(exported.exclusions, [
+    { domain: 'unavailable.invalid', reason: 'profile_context_unavailable' },
+  ]);
 });
 
 test('invalid format and timestamp inputs fall back without entering output text', () => {

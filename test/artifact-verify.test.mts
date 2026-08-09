@@ -13,13 +13,55 @@ import {
 } from '../frontend/src/lib/analysis/workspace-archive.ts';
 import {
   encryptWorkspaceArchive,
+  WORKSPACE_ARCHIVE_PBKDF2_ITERATIONS,
+  type EncryptedWorkspaceArchiveEnvelope,
 } from '../frontend/src/lib/analysis/workspace-archive-crypto.ts';
 import { sha256ArtifactDigest } from '../frontend/src/lib/analysis/artifact-integrity.ts';
 import { buildInvestigationCapsule } from '../frontend/src/lib/analysis/investigation-capsule.ts';
 import { buildCliCasePack } from '../cli/case-pack.mts';
-import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model.ts';
+import { CASE_SCHEMA_VERSION, normalizeCaseStore } from '../frontend/src/lib/analysis/case-model.ts';
+import { historicalCasePackFixture } from './historical-case-pack-fixtures.mts';
 
 const PASSPHRASE = 'fixture archive passphrase';
+
+function decodeBase64url(value: string): Uint8Array<ArrayBuffer> {
+  return Uint8Array.from(Buffer.from(value, 'base64url'));
+}
+
+async function replaceAuthenticatedWorkspacePlaintext(
+  envelope: EncryptedWorkspaceArchiveEnvelope,
+  value: unknown,
+): Promise<EncryptedWorkspaceArchiveEnvelope> {
+  const encoder = new TextEncoder();
+  const material = await crypto.subtle.importKey('raw', encoder.encode(PASSPHRASE), 'PBKDF2', false, ['deriveKey']);
+  const key = await crypto.subtle.deriveKey({
+    name: 'PBKDF2', hash: 'SHA-256', salt: decodeBase64url(envelope.kdf.salt), iterations: WORKSPACE_ARCHIVE_PBKDF2_ITERATIONS,
+  }, material, { name: 'AES-GCM', length: 256 }, false, ['encrypt']);
+  const metadata = {
+    schema: envelope.schema,
+    version: envelope.version,
+    createdAt: envelope.createdAt,
+    content: envelope.content,
+    kdf: envelope.kdf,
+    cipher: envelope.cipher,
+  };
+  const ciphertext = await crypto.subtle.encrypt({
+    name: 'AES-GCM', iv: decodeBase64url(envelope.cipher.iv), additionalData: encoder.encode(JSON.stringify(metadata)), tagLength: 128,
+  }, key, encoder.encode(JSON.stringify(value)));
+  return { ...envelope, ciphertext: Buffer.from(ciphertext).toString('base64url') };
+}
+
+async function resignArtifact<T extends Record<string, unknown>>(value: T): Promise<T> {
+  const { integrity: _integrity, ...unsigned } = value;
+  return {
+    ...unsigned,
+    integrity: {
+      algorithm: 'SHA-256',
+      canonicalization: 'sorted-json-v1',
+      digestSha256: await sha256ArtifactDigest(unsigned),
+    },
+  } as unknown as T;
+}
 
 describe('offline artifact verifier', () => {
   test('validates workspace manifests and section checksums without printing contents', async () => {
@@ -86,6 +128,23 @@ describe('offline artifact verifier', () => {
     assert.doesNotMatch(JSON.stringify(decrypted), /must-not-appear|fixture archive passphrase/iu);
   });
 
+  test('withholds workspace integrity and importability claims for undeclared ordinary or authenticated data', async () => {
+    const archive = await buildWorkspaceArchive({}, { generatedAt: '2026-07-15T00:00:00.000Z' });
+    Reflect.set(archive, 'uncheckedPolicy', { rawWhoisPayload: 'private material', credential: 'private material' });
+    await assert.rejects(
+      verifyOfflineArtifact(JSON.stringify(archive)),
+      /envelope contains missing or undeclared fields/iu,
+    );
+
+    const valid = await buildWorkspaceArchive({}, { generatedAt: '2026-07-15T00:00:00.000Z' });
+    const envelope = await encryptWorkspaceArchive(valid, PASSPHRASE);
+    const encryptedAttack = await replaceAuthenticatedWorkspacePlaintext(envelope, archive);
+    await assert.rejects(
+      verifyOfflineArtifact(JSON.stringify(encryptedAttack), { passphrase: PASSPHRASE }),
+      /envelope contains missing or undeclared fields/iu,
+    );
+  });
+
   test('distinguishes structural envelope inspection from authenticated decryption', async () => {
     const archive = await buildWorkspaceArchive({}, {
       generatedAt: '2026-07-15T00:00:00.000Z',
@@ -133,14 +192,15 @@ describe('offline artifact verifier', () => {
   });
 
   test('verifies a reviewed CLI case pack before browser import', async () => {
-    const cases = {
+    const cases = normalizeCaseStore({
       version: CASE_SCHEMA_VERSION,
       cases: [{
         id: 'portable-case', domain: 'portable.invalid', status: 'new', disposition: 'unreviewed',
+        brandProfileIds: [],
         tags: [], notes: [], source: 'lookup', evidenceHistory: [],
         createdAt: '2026-07-15T00:00:00.000Z', updatedAt: '2026-07-15T00:00:00.000Z',
       }],
-    };
+    });
     const pack = buildCliCasePack(JSON.stringify(cases), {
       audience: 'trusted',
       reviewed: true,
@@ -154,6 +214,55 @@ describe('offline artifact verifier', () => {
     const changed = structuredClone(pack);
     changed.cases[0]!.status = 'closed';
     await assert.rejects(verifyOfflineArtifact(JSON.stringify(changed)), /failed its SHA-256/iu);
+  });
+
+  test('inherits strict nested Brand Profile reference checks for recomputed CLI case packs', async () => {
+    const source = normalizeCaseStore({
+      version: CASE_SCHEMA_VERSION,
+      cases: [{
+        id: 'strict-portable-case', domain: 'strict-portable.invalid', status: 'new', disposition: 'unreviewed',
+        brandProfileIds: [], tags: [], notes: [], source: 'lookup', evidenceHistory: [],
+        createdAt: '2026-07-15T00:00:00.000Z', updatedAt: '2026-07-15T00:00:00.000Z',
+      }],
+    });
+    const pack = structuredClone(buildCliCasePack(JSON.stringify(source), {
+      audience: 'public',
+      reviewed: true,
+    }, '2026-07-15T01:00:00.000Z')) as unknown as Record<string, unknown>;
+    (pack.packet as Record<string, unknown>).unexpected = { brandProfileIds: ['hidden-reference'] };
+    const recomputed = await resignArtifact(pack);
+    await assert.rejects(
+      verifyOfflineArtifact(JSON.stringify(recomputed)),
+      /unexpected packet envelope field/iu,
+    );
+  });
+
+  test('inherits authentic historical Case identities and strict report projection across every audience', async () => {
+    for (const audience of ['public', 'trusted', 'internal'] as const) {
+      const authentic = historicalCasePackFixture(11, audience);
+      const verified = await verifyOfflineArtifact(JSON.stringify(authentic));
+      assert.equal(verified.state, 'verified', audience);
+      assert.equal(verified.summary.recordCount, 1, audience);
+
+      for (const field of ['id', 'fingerprint'] as const) {
+        const changed = structuredClone(authentic);
+        const item = (changed.cases as Array<Record<string, unknown>>)[0]!;
+        const snapshot = (item.evidenceHistory as Array<Record<string, unknown>>)[0]!;
+        snapshot[field] = field === 'id' ? 'ev-forged' : 'forged';
+        await assert.rejects(
+          verifyOfflineArtifact(JSON.stringify(await resignArtifact(changed))),
+          /invalid historical evidence identity|changed or unbounded historical evidenceHistory/iu,
+        );
+      }
+
+      const scalar = structuredClone(authentic);
+      const report = (((scalar.packet as Record<string, unknown>).reports as Array<Record<string, unknown>>)[0]!);
+      report.application = 'private material';
+      await assert.rejects(
+        verifyOfflineArtifact(JSON.stringify(await resignArtifact(scalar))),
+        /invalid or mismatched historical Case report projection/iu,
+      );
+    }
   });
 
   test('validates saved Lookup structure without claiming content integrity', async () => {

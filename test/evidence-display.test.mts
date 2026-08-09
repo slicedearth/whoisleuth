@@ -185,6 +185,19 @@ describe('snapshotFieldGroups', () => {
     assert.equal(requiredValue(group.rows.find((row) => row.field === 'httpRedirectCount')).value, 0);
   });
 
+  test('shows profile provenance and limitations in a dedicated evidence group', () => {
+    const snap = deepSnapshot({
+      profileContextState: 'unavailable',
+      profileContextLimitation: 'The profile context was not evaluated.',
+    });
+    const group = display.snapshotFieldGroups(snap).find((item) => item.name === 'Profile provenance and limitations');
+    assert.ok(group);
+    assert.deepEqual(group.rows.map((row) => ({ field: row.field, label: row.label, value: row.value })), [
+      { field: 'profileContextState', label: 'Brand Profile context', value: 'unavailable' },
+      { field: 'profileContextLimitation', label: 'Profile-context limitation', value: 'The profile context was not evaluated.' },
+    ]);
+  });
+
   test('excludes null, undefined, and empty strings', () => {
     const snap = deepSnapshot({
       availability: 'registered',
@@ -425,5 +438,14 @@ describe('currentEvidenceSummary', () => {
     assert.equal(summary.registrar, 'NewReg');
     assert.equal(summary.activityStatus, 'active');
     assert.equal(summary.capturedAt, LATER);
+  });
+
+  test('retains profile provenance in the current evidence summary', () => {
+    const summary = requiredValue(display.currentEvidenceSummary([deepSnapshot({
+      profileContextState: 'unavailable',
+      profileContextLimitation: 'Profile context remains unevaluated.',
+    })]));
+    assert.equal(summary.profileContextState, 'unavailable');
+    assert.equal(summary.profileContextLimitation, 'Profile context remains unevaluated.');
   });
 });

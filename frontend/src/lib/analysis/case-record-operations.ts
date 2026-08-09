@@ -44,6 +44,10 @@ import {
   safeId,
 } from './case-record-core.ts';
 import {
+  assertCaseBrandProfileIds,
+  normalizeCaseBrandProfileIds,
+} from './case-brand-profile-references.ts';
+import {
   normalizeEvidenceHistory,
 } from './case-evidence-model.ts';
 import {
@@ -72,10 +76,15 @@ function normalizeCaseEvidence(
   createdAt: string,
   updatedAt: string,
   now: string,
+  sourceVersion?: number | null,
 ): CaseEvidenceSnapshot[] {
   const localFallback = updatedAt || createdAt || now;
   if (Array.isArray(record.evidenceHistory)) {
-    return normalizeEvidenceHistory(record.evidenceHistory, { source: DEFAULT_EVIDENCE_SOURCE, fallback: localFallback });
+    return normalizeEvidenceHistory(record.evidenceHistory, {
+      source: DEFAULT_EVIDENCE_SOURCE,
+      fallback: localFallback,
+      ...(sourceVersion === undefined ? {} : { sourceVersion }),
+    });
   }
   return [];
 }
@@ -95,6 +104,7 @@ export function normalizeCase(
   raw: unknown,
   existing?: CaseRecord,
   nowIso?: string,
+  sourceVersion?: number | null,
 ): CaseRecord | null {
   const now = nowIso || new Date().toISOString();
   const record = objectRecord(raw);
@@ -113,10 +123,11 @@ export function normalizeCase(
     status: normalizeStatus(record.status),
     disposition: normalizeDisposition(record.disposition),
     reviewReasonCode: normalizeReviewReasonCode(record.reviewReasonCode),
+    brandProfileIds: normalizeCaseBrandProfileIds(record.brandProfileIds),
     tags: normalizeTags(record.tags),
     notes: normalizeNotes(record.notes, now),
     source: normalizeSource(record.source),
-    evidenceHistory: normalizeCaseEvidence(record, createdAt, updatedAt, now),
+    evidenceHistory: normalizeCaseEvidence(record, createdAt, updatedAt, now, sourceVersion),
     evidencePins,
     decisions: normalizeCaseDecisions(record.decisions, updatedAt, pinIds),
     actions,
@@ -159,6 +170,7 @@ export function createCase(input: CaseInput, nowIso?: string): CaseRecord {
     status: normalizeStatus(input.status),
     disposition: normalizeDisposition(input.disposition),
     reviewReasonCode: normalizeReviewReasonCode(input.reviewReasonCode),
+    brandProfileIds: input.brandProfileIds === undefined ? [] : assertCaseBrandProfileIds(input.brandProfileIds),
     tags: normalizeTags(input.tags),
     notes: noteBody ? [{ id: makeId(), body: noteBody, createdAt: now }] : [],
     source,
@@ -297,6 +309,9 @@ export function updateCase(
     reviewReasonCode: patch.reviewReasonCode !== undefined
       ? normalizeReviewReasonCode(patch.reviewReasonCode)
       : current.reviewReasonCode ?? null,
+    brandProfileIds: patch.brandProfileIds !== undefined
+      ? assertCaseBrandProfileIds(patch.brandProfileIds)
+      : current.brandProfileIds,
     tags: patch.tags !== undefined ? normalizeTags(patch.tags) : current.tags,
     source,
     evidenceHistory,

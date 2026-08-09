@@ -9,8 +9,20 @@ import {
   compactSourceCoverage,
   createBulkSessionId,
   fromBulkSessionResult,
+  reconcileBulkResultProfileContext,
 } from '../frontend/src/lib/analysis/bulk-result-model.ts';
-import type { BulkSessionResult } from '../frontend/src/lib/analysis/bulk-session-model.ts';
+import {
+  BULK_PROFILE_CONTEXT_MISMATCH_LIMITATION,
+  type BulkProfileContextProvenance,
+  type BulkSessionResult,
+} from '../frontend/src/lib/analysis/bulk-session-model.ts';
+
+const READY_PROFILE_CONTEXT: BulkProfileContextProvenance = {
+  sourceState: 'ready',
+  activeProfileId: 'profile-one',
+  profileUpdatedAt: '2026-08-01T00:00:00.000Z',
+  limitation: '',
+};
 
 function sessionResult(overrides: Partial<BulkSessionResult> = {}): BulkSessionResult {
   return {
@@ -68,6 +80,7 @@ function sessionResult(overrides: Partial<BulkSessionResult> = {}): BulkSessionR
       truncated: false,
     },
     sourceCoverage: [{ source: 'rdap', state: 'complete' }],
+    profileContext: READY_PROFILE_CONTEXT,
     ...overrides,
   };
 }
@@ -156,6 +169,46 @@ describe('Bulk result model', () => {
     assert.equal(restored.abuseEvidence, null);
     assert.equal(restored.ct, null);
     assert.deepEqual(restored.comparisonEvidence?.technology.ids, ['shop-platform']);
+  });
+
+  it('retains only profile-derived evidence proven against the current profile revision', () => {
+    const restored = fromBulkSessionResult(sessionResult({
+      trusted: 'official',
+      faviconMatch: true,
+      faviconNearMatch: true,
+      reusesOfficialAssets: true,
+      idnReferenceMatch: true,
+      pageBaselineMatch: true,
+      hasActiveBrandProfile: true,
+      relationship: {
+        ...sessionResult().relationship,
+        officialAssetHosts: ['assets.example.test'],
+      },
+    }), ['example.test']);
+
+    const matched = reconcileBulkResultProfileContext(restored, READY_PROFILE_CONTEXT);
+    assert.equal(matched.risk, 20);
+    assert.equal(matched.trusted, 'official');
+    assert.equal(matched.saved.idnReferenceMatch, true);
+    assert.deepEqual(matched.relationship.officialAssetHosts, ['assets.example.test']);
+
+    const mismatched = reconcileBulkResultProfileContext(restored, {
+      ...READY_PROFILE_CONTEXT,
+      activeProfileId: 'profile-two',
+    });
+    assert.equal(mismatched.risk, null);
+    assert.equal(mismatched.trusted, null);
+    assert.equal(mismatched.faviconMatch, null);
+    assert.equal(mismatched.faviconNearMatch, null);
+    assert.equal(mismatched.reusesOfficialAssets, null);
+    assert.equal(mismatched.saved.idnReferenceMatch, null);
+    assert.equal(mismatched.saved.pageBaselineMatch, null);
+    assert.equal(mismatched.saved.hasActiveBrandProfile, null);
+    assert.equal(mismatched.saved.riskModelVersion, null);
+    assert.deepEqual(mismatched.saved.riskFactors, []);
+    assert.deepEqual(mismatched.relationship.officialAssetHosts, []);
+    assert.equal(mismatched.saved.profileContext.sourceState, 'unavailable');
+    assert.equal(mismatched.saved.profileContext.limitation, BULK_PROFILE_CONTEXT_MISMATCH_LIMITATION);
   });
 
   it('produces stable mode-sensitive digests and injectable identifiers', async () => {

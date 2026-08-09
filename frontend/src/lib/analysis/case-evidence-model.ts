@@ -143,6 +143,7 @@ const MATERIAL_FIELD_ORDER: Array<keyof CaseEvidenceMaterial> = [
   'httpCrossOriginRedirect', 'httpHttpsDowngrade', 'httpContentType', 'httpSecurityHeaders',
   'faviconMatch', 'faviconNearMatch', 'reusesOfficialAssets', 'hasPasswordField', 'hasExternalFormAction', 'phishingLanguageMatch',
   'privacyProtected', 'idnReferenceMatch', 'pageBaselineMatch', 'hasActiveBrandProfile',
+  'profileContextState', 'profileContextLimitation',
   'mutationTypes',
 ];
 
@@ -231,6 +232,7 @@ function buildSnapshot(
   const record = objectRecord(raw);
   const scanDepth = normalizeScanDepth(record.scanDepth);
   const httpSummary = normalizeHttpSummary(record);
+  const acceptsProfileContext = options.sourceVersion === undefined || Number(options.sourceVersion) >= 12;
   const fields: CaseEvidenceMaterial = {
     scanDepth,
     availability: evidenceString(record.availability),
@@ -271,6 +273,12 @@ function buildSnapshot(
     idnReferenceMatch: boolOrNull(record.idnReferenceMatch),
     pageBaselineMatch: boolOrNull(record.pageBaselineMatch),
     hasActiveBrandProfile: boolOrNull(record.hasActiveBrandProfile),
+    profileContextState: acceptsProfileContext && ['loading', 'ready', 'unavailable'].includes(String(record.profileContextState))
+      ? record.profileContextState as 'loading' | 'ready' | 'unavailable'
+      : null,
+    profileContextLimitation: acceptsProfileContext
+      ? evidenceString(record.profileContextLimitation, MAX_EVIDENCE_DETAIL_LENGTH)
+      : null,
     mutationTypes: normalizeMutationList(record.mutationTypes),
   };
   // A version without an actual risk assessment is orphaned metadata. Drop it

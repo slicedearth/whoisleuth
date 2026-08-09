@@ -50,14 +50,20 @@ navigation without shortening the policy.
 | **Lookup** | Inspect one domain, IP address, or ASN through separately attributed registration, DNS, website, certificate, network, and derived evidence. Deep domain results can compare bounded SOA publication across selected authorities and compare the observed leaf certificate with a generated local SSLBL snapshot. | Deep is the default; Fast is registration-first. Supporting sources never override authoritative availability evidence, direct DNS failures remain inconclusive, and no warning-list miss establishes safety. |
 | **Discover** | Generate bounded local lookalikes, review names and issuance groups observed in public certificate logs, or deliberately pivot through one registry's RDAP nameserver-search results. | Registry pivots are suffix-scoped lower bounds. Certificate co-issuance is a review lead, not attribution. Sorting does not change evidence or score. |
 | **Bulk** | Compare bounded domain sets with explicit request pacing, source-aware filters, compact Deep evidence, relationships, review actions, and resumable sessions. | One job accepts up to 500 Fast or 50 Deep targets. Each domain is a separate request, and incomplete coverage remains distinct from failure or absence. |
-| **Brands** | Define official domains, trusted infrastructure, defensive mail expectations, optional page-identity baselines, reviewed desired posture, portable domain-control passports, control-planning context, and transient DMARC/TLS aggregate-report review. | Public observations, imported reports, desired state, approved change windows, retained comparison points, and analyst attestations remain separate. Passport imports are verified and field-selective; mail report files stay in the current browser tab unless deliberately exported. |
-| **Monitor** | Retain cases, evidence pins, decisions, response actions, campaigns, watchlists, relationships, and review history. | Ordinary workspace state stays in IndexedDB. Response packets and defensive exports require human review and are never submitted automatically. |
+| **Brands** | Define official domains, trusted infrastructure, defensive mail expectations, optional page-identity baselines, reviewed desired posture, portable domain-control passports, control-planning context, transient DMARC/TLS aggregate-report review, and a local inbox for explicitly associated cases. | Public observations, imported reports, desired state, approved change windows, retained comparison points, analyst attestations, and case associations remain separate. The inbox preserves source states and never infers ownership or attribution from profile or evidence values. |
+| **Monitor** | Retain cases, explicit Brand Profile associations, evidence pins, decisions, response actions, campaigns, watchlists, relationships, and review history. | Ordinary workspace state stays in IndexedDB. Deleting a profile does not rewrite a case, so an unmatched opaque association remains visible. Response packets and defensive exports require human review and are never submitted automatically. |
 | **Registry support** | Inspect fixture-backed parser coverage, access constraints, and the fields attempted by each lookup profile. | Coverage describes support and limitations; it does not decide availability or promise that a source will publish a value. |
 
 The Console can export a versioned workspace archive or an encrypted portable
 backup. Encryption protects the downloaded file while locked; the active
 IndexedDB workspace remains plaintext and browser-local. Optional hosted
 monitoring retains only encrypted compact watchlist state.
+
+Case schema 12 retains up to eight exact opaque Brand Profile identifiers
+chosen by an analyst. Ordinary case exports, Case report v8 JSON and Markdown,
+and workspace archives preserve them. Public CLI case packs clear the
+identifiers from both cases and embedded reports and disclose the omission
+count; trusted and internal packs preserve them.
 
 Deep Lookup keeps source health and provenance visible while organising long
 supporting evidence into a scannable result. Reports, retained facts, website

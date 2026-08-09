@@ -15,11 +15,37 @@ import type {
 } from './analysis/brand-profile-model.ts';
 import { normalizePageBaseline } from './analysis/page-baseline.ts';
 import { browserLocalDataProvider } from './browser-local-data-service.ts';
+import { BrowserLocalDataError } from './browser-local-data.ts';
 import { LEGACY_PROFILES_KEY, PROFILES_COLLECTION } from './browser-local-data-definitions.ts';
 
 export const PROFILES_KEY = LEGACY_PROFILES_KEY;
 export const ACTIVE_PROFILE_KEY = 'whois-rdap-active-brand-profile-v1';
 export const MAX_PROFILE_IMPORT_BYTES = 2 * 1024 * 1024;
+export type ActiveBrandProfileSourceState = 'loading' | 'ready' | 'unavailable';
+
+export class BrandProfileMutationCommittedError extends BrowserLocalDataError {
+  readonly operation: 'delete' | 'save';
+  readonly profile: BrandProfile | null;
+  readonly profiles: readonly BrandProfile[];
+
+  constructor(operation: 'delete' | 'save', profile: BrandProfile | null, profiles: readonly BrandProfile[], cause: unknown) {
+    super(
+      'LOCAL_DATA_POST_COMMIT_FAILED',
+      operation === 'save'
+        ? 'The Brand Profile was saved, but its active-profile preference could not be updated.'
+        : 'The Brand Profile was deleted, but its active-profile preference could not be checked or cleared.',
+      { cause },
+    );
+    this.name = 'BrandProfileMutationCommittedError';
+    this.operation = operation;
+    this.profile = profile;
+    this.profiles = profiles;
+  }
+}
+
+export function isBrandProfileMutationCommittedError(cause: unknown): cause is BrandProfileMutationCommittedError {
+  return cause instanceof BrandProfileMutationCommittedError;
+}
 
 export type PageBaseline = ReturnType<typeof normalizePageBaseline>;
 export interface BrandProfile {
@@ -68,8 +94,8 @@ export async function writeProfiles(profiles: BrandProfile[]): Promise<void> {
 export function activeProfileId() {
   try {
     return normalizeBrandProfileId(localStorage.getItem(ACTIVE_PROFILE_KEY)) || '';
-  } catch {
-    return '';
+  } catch (cause) {
+    throw new BrowserLocalDataError('LOCAL_DATA_READ_FAILED', 'Could not read the active-profile preference. Browser storage may be unavailable.', { cause });
   }
 }
 
@@ -81,7 +107,7 @@ export function setActiveProfile(profileId: string) {
     else localStorage.removeItem(ACTIVE_PROFILE_KEY);
   } catch (cause) {
     if (cause instanceof Error && cause.message === 'Active profile identifier is invalid.') throw cause;
-    throw new Error('Could not set the active profile. Browser storage may be full or unavailable.');
+    throw new BrowserLocalDataError('LOCAL_DATA_WRITE_FAILED', 'Could not set the active profile. Browser storage may be full or unavailable.', { cause });
   }
 }
 
@@ -117,7 +143,7 @@ export function profileSignals(domain: string, evidence: Record<string, unknown>
 }
 
 export async function upsertProfile(raw: unknown, editingId = ''): Promise<BrandProfile> {
-  const profile = await (await browserLocalDataProvider()).update(PROFILES_COLLECTION, (current) => {
+  const committed = await (await browserLocalDataProvider()).update(PROFILES_COLLECTION, (current) => {
     const profiles = [...current] as BrandProfile[];
     const index = editingId ? profiles.findIndex((item) => item.id === editingId) : -1;
     const existing = index >= 0 ? profiles[index] : undefined;
@@ -128,18 +154,25 @@ export async function upsertProfile(raw: unknown, editingId = ''): Promise<Brand
       if (profiles.length >= MAX_PROFILES) throw new Error(`Profiles are limited to ${MAX_PROFILES}.`);
       profiles.push(normalized);
     }
-    return { document: boundedProfiles(profiles), result: normalized };
+    const document = boundedProfiles(profiles);
+    const profile = document.find((item) => item.id === normalized.id) ?? normalized;
+    return { document, result: { profile, profiles: document } };
   });
-  setActiveProfile(profile.id);
-  return profile;
+  try { setActiveProfile(committed.profile.id); }
+  catch (cause) { throw new BrandProfileMutationCommittedError('save', committed.profile, committed.profiles, cause); }
+  return committed.profile;
 }
 
 export async function deleteProfile(profileId: string): Promise<void> {
-  await (await browserLocalDataProvider()).update(PROFILES_COLLECTION, (current) => ({
-    document: boundedProfiles((current as BrandProfile[]).filter((profile) => profile.id !== profileId)),
-    result: undefined,
-  }));
-  if (activeProfileId() === profileId) setActiveProfile('');
+  const committed = await (await browserLocalDataProvider()).update(PROFILES_COLLECTION, (current) => {
+    const document = boundedProfiles((current as BrandProfile[]).filter((profile) => profile.id !== profileId));
+    return { document, result: document };
+  });
+  try {
+    if (activeProfileId() === profileId) setActiveProfile('');
+  } catch (cause) {
+    throw new BrandProfileMutationCommittedError('delete', null, committed, cause);
+  }
 }
 
 export async function importProfiles(value: unknown) {

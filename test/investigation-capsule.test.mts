@@ -36,7 +36,7 @@ test('investigation capsule links evidence and verifies embedded projections', a
 
 test('investigation capsule includes analyst records only when deliberately selected', async () => {
   const caseRecord = {
-    id: 'case-1', domain: 'example.test', status: 'reviewing', disposition: 'unreviewed', tags: [], notes: [{ id: 'note', body: 'excluded note', createdAt: '2026-08-04T00:00:00Z' }], source: 'lookup', evidenceHistory: [], evidencePins: [], actions: [], manualTrail: [], sightings: [], createdAt: '2026-08-04T00:00:00Z', updatedAt: '2026-08-04T00:00:00Z',
+    id: 'case-1', domain: 'example.test', status: 'reviewing', disposition: 'unreviewed', brandProfileIds: [], tags: [], notes: [{ id: 'note', body: 'excluded note', createdAt: '2026-08-04T00:00:00Z' }], source: 'lookup', evidenceHistory: [], evidencePins: [], actions: [], manualTrail: [], sightings: [], createdAt: '2026-08-04T00:00:00Z', updatedAt: '2026-08-04T00:00:00Z',
     decisions: [{ id: 'decision-1', summary: 'Review registration conflict', rationale: 'Two publications differ.', evidencePinIds: [], createdAt: '2026-08-04T00:00:00Z' }],
     assertions: [{ id: 'assertion-1', kind: 'hypothesis' as const, statement: 'Publication lag may explain the difference.', rationale: null, evidencePinIds: [], state: 'open' as const, createdAt: '2026-08-04T00:00:00Z', updatedAt: '2026-08-04T00:00:00Z' }],
   };

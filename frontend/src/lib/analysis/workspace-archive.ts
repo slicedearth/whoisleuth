@@ -121,6 +121,7 @@ type UnknownRecord = Record<string, unknown>;
 
 export interface WorkspaceArchiveOptions {
   generatedAt?: unknown;
+  selectedSectionIds?: readonly string[];
   cryptoProvider?: {
     subtle?: {
       digest?: (algorithm: AlgorithmIdentifier, data: BufferSource) => Promise<ArrayBuffer>;
@@ -192,6 +193,7 @@ export interface WorkspaceArchivePreviewSection extends Omit<WorkspaceArchiveSec
   updated: number;
   skipped: number;
   pruned?: number;
+  brandProfileReferencesOmitted?: number;
   selected: boolean;
   normalizedSettings?: WorkspaceSettings | null;
 }
@@ -216,8 +218,10 @@ interface WorkspaceMergeResult {
   updated: number;
   skipped: number;
   pruned?: number;
+  brandProfileReferencesOmitted?: number;
   profiles?: BrandProfile[];
   settings?: WorkspaceSettings;
+  reason?: string;
 }
 
 interface WorkspaceSectionDefinition {
@@ -232,9 +236,25 @@ interface WorkspaceSectionDefinition {
 
 const CONTROL_RE = /[\x00-\x1f\x7f]/;
 const CHECKSUM_RE = /^sha256:[a-f0-9]{64}$/;
+const WORKSPACE_ARCHIVE_ROOT_KEYS: Readonly<Record<number, readonly string[]>> = Object.freeze({
+  1: Object.freeze(['schema', 'version', 'generatedAt', 'manifest', 'sections', 'limitations']),
+  2: Object.freeze(['schema', 'version', 'generatedAt', 'manifest', 'sections', 'limitations']),
+  3: Object.freeze(['schema', 'version', 'generatedAt', 'manifest', 'sections', 'limitations']),
+  4: Object.freeze(['schema', 'version', 'generatedAt', 'manifest', 'sections', 'limitations']),
+  5: Object.freeze(['schema', 'version', 'generatedAt', 'manifest', 'sections', 'limitations']),
+});
+const WORKSPACE_ARCHIVE_MANIFEST_KEYS = Object.freeze(['sectionCount', 'totalRecords', 'sections']);
+const WORKSPACE_ARCHIVE_MANIFEST_ENTRY_KEYS = Object.freeze(['id', 'schema', 'version', 'recordCount', 'bytes', 'checksum']);
 
 function record(value: unknown): UnknownRecord | null {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as UnknownRecord : null;
+}
+
+function assertExactKeys(value: UnknownRecord, expected: readonly string[], label: string): void {
+  const keys = Object.keys(value);
+  if (keys.length !== expected.length || keys.some((key) => !expected.includes(key))) {
+    throw new Error(`The workspace archive ${label} contains missing or undeclared fields.`);
+  }
 }
 
 function byteLength(value: string): number {
@@ -558,11 +578,13 @@ export async function readWorkspaceArchive(raw: unknown, options: WorkspaceArchi
   }
   const sourceVersion = value.version;
   const { bytes } = ensureArchiveBudget(value);
+  assertExactKeys(value, WORKSPACE_ARCHIVE_ROOT_KEYS[sourceVersion] ?? [], `version ${sourceVersion} envelope`);
   const manifest = record(value.manifest);
   const sectionValues = record(value.sections);
   if (!manifest || !sectionValues || !Array.isArray(manifest.sections)) {
     throw new Error('The workspace archive manifest is missing or malformed.');
   }
+  assertExactKeys(manifest, WORKSPACE_ARCHIVE_MANIFEST_KEYS, 'manifest');
   if (manifest.sections.length > MAX_WORKSPACE_ARCHIVE_SECTIONS) {
     throw new Error(`Workspace archives are limited to ${MAX_WORKSPACE_ARCHIVE_SECTIONS} sections.`);
   }
@@ -571,6 +593,9 @@ export async function readWorkspaceArchive(raw: unknown, options: WorkspaceArchi
   const sections: WorkspaceArchiveSection[] = [];
   let totalRecords = 0;
   for (const rawEntry of manifest.sections) {
+    const rawEntryRecord = record(rawEntry);
+    if (!rawEntryRecord) throw new Error('The workspace archive manifest contains a malformed section entry.');
+    assertExactKeys(rawEntryRecord, WORKSPACE_ARCHIVE_MANIFEST_ENTRY_KEYS, 'manifest section entry');
     const entry = manifestEntry(rawEntry);
     if (!entry || seen.has(entry.id) || !Object.prototype.hasOwnProperty.call(sectionValues, entry.id)) {
       throw new Error('The workspace archive manifest contains an invalid, duplicate, or missing section.');
@@ -642,15 +667,31 @@ function settingsPreview(
   mergedProfiles: BrandProfile[],
 ): WorkspaceMergeResult {
   const value = record(data) || {};
-  const activeProfileId = normalizeBrandProfileId(value.activeProfileId) || '';
+  const rawActiveProfileId = value.activeProfileId;
+  const intentionalClear = rawActiveProfileId === '';
+  const normalizedActiveProfileId = normalizeBrandProfileId(rawActiveProfileId);
+  const validActiveProfileId = typeof rawActiveProfileId === 'string'
+    && rawActiveProfileId.length > 0
+    && normalizedActiveProfileId === rawActiveProfileId;
   const theme = normalizeTheme(value.theme);
+  const retainedActiveProfileId = normalizeBrandProfileId(local.settings?.activeProfileId) || '';
+  let activeProfileId = retainedActiveProfileId;
   let skipped = 0;
-  if (activeProfileId && !mergedProfiles.some((profile) => profile?.id === activeProfileId)) skipped++;
+  let reason = '';
+  if (!intentionalClear && !validActiveProfileId) {
+    skipped = 1;
+    reason = 'The imported active Brand Profile preference is missing or malformed. Existing active-profile context is preserved.';
+  } else if (validActiveProfileId && !mergedProfiles.some((profile) => profile?.id === normalizedActiveProfileId)) {
+    skipped = 1;
+    reason = 'The imported active Brand Profile preference will be skipped because its identifier is not available in the selected Profile data or the current browser. Existing active-profile context is preserved.';
+  } else {
+    activeProfileId = intentionalClear ? '' : normalizedActiveProfileId ?? retainedActiveProfileId;
+  }
   const updated = Number(
     theme !== normalizeTheme(local.settings?.theme)
-    || (Boolean(activeProfileId) && activeProfileId !== local.settings?.activeProfileId && skipped === 0),
+    || (skipped === 0 && activeProfileId !== retainedActiveProfileId),
   );
-  return { added: 0, updated, skipped, settings: { activeProfileId: skipped ? '' : activeProfileId, theme } };
+  return { added: 0, updated, skipped, reason, settings: { activeProfileId, theme } };
 }
 
 /** Preview section-specific non-destructive merge outcomes without writing. */
@@ -659,6 +700,9 @@ export async function previewWorkspaceArchive(raw: unknown, localInput: unknown,
   const local = normalizedInput(localInput);
   const results: WorkspaceArchivePreviewSection[] = [];
   let mergedProfiles = local.brandProfiles;
+  const selectedIds = options.selectedSectionIds
+    ? new Set(options.selectedSectionIds.slice(0, MAX_WORKSPACE_ARCHIVE_SECTIONS))
+    : null;
 
   for (const section of archive.sections) {
     if (section.status !== 'ready') {
@@ -673,16 +717,20 @@ export async function previewWorkspaceArchive(raw: unknown, localInput: unknown,
         : definition.merge
           ? definition.merge(local, section.data, archive.generatedAt)
           : { added: 0, updated: 0, skipped: section.recordCount };
-      if (definition.id === 'brandProfiles' && result.profiles) mergedProfiles = result.profiles;
+      const selected = selectedIds ? selectedIds.has(section.id) : true;
+      if (definition.id === 'brandProfiles' && selected && result.profiles) mergedProfiles = result.profiles;
       results.push({
         ...section,
         status: 'ready',
-        reason: '',
+        reason: definition.id === 'settings' && selected && (result.skipped ?? 0) > 0
+          ? result.reason ?? 'The imported workspace preference was skipped. Existing browser-local context is preserved.'
+          : '',
         added: result.added ?? 0,
         updated: result.updated ?? 0,
         skipped: result.skipped ?? 0,
         pruned: result.pruned ?? 0,
-        selected: true,
+        brandProfileReferencesOmitted: result.brandProfileReferencesOmitted ?? 0,
+        selected,
         normalizedSettings: result.settings || null,
       });
     } catch (cause) {
@@ -698,6 +746,33 @@ export async function previewWorkspaceArchive(raw: unknown, localInput: unknown,
         pruned: 0,
         selected: false,
       });
+    }
+  }
+
+  const profileCollision = results.find((section) =>
+    section.id === 'brandProfiles'
+    && section.status === 'blocked'
+    && /reuses one exact identifier for different normalised profile names/iu.test(section.reason)
+  );
+  if (profileCollision) {
+    for (const dependentId of ['cases', 'settings'] as const) {
+      const dependentIndex = results.findIndex((section) => section.id === dependentId && section.status === 'ready');
+      const dependentSection = results[dependentIndex];
+      if (dependentIndex < 0 || !dependentSection) continue;
+      results[dependentIndex] = {
+        ...dependentSection,
+        status: 'blocked',
+        reason: dependentId === 'cases'
+          ? 'Cases were not selected because a Brand Profile identifier collision must be resolved before their opaque references can be imported safely.'
+          : 'Workspace settings were not selected because an active Brand Profile preference could otherwise bind to a different local profile that reuses the same identifier.',
+        added: 0,
+        updated: 0,
+        skipped: dependentSection.recordCount,
+        pruned: 0,
+        brandProfileReferencesOmitted: 0,
+        selected: false,
+        normalizedSettings: dependentId === 'settings' ? null : dependentSection.normalizedSettings ?? null,
+      };
     }
   }
 

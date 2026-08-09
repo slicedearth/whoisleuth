@@ -473,6 +473,10 @@ describe('direct reports and saved Lookup diff', () => {
     const direct = buildCliLookupDiff(left, right, NOW);
     assert.equal(direct.schema, 'whoisleuth.cli.lookup-diff');
     assert.ok(direct.comparison.counts.different + direct.comparison.counts.conflicting > 0);
+    assert.equal(direct.comparison.rows.find((row) => row.id === 'official-assets')?.state, 'equal');
+    assert.equal(direct.comparison.rows.find((row) => row.id === 'official-assets')?.left, 'Not observed');
+    assert.equal(direct.comparison.rows.find((row) => row.id === 'official-assets')?.right, 'Not observed');
+    assert.equal(direct.comparison.rows.find((row) => row.id === 'ip-addresses')?.state, 'different');
 
     const stdout = capture();
     let lookupCalled = false;

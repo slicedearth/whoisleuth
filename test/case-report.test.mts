@@ -52,6 +52,7 @@ function caseRecord(overrides: Record<string, unknown> = {}) {
     domain: 'test.invalid',
     status: 'new',
     disposition: 'unreviewed',
+    brandProfileIds: [],
     tags: [],
     notes: [],
     source: 'lookup',
@@ -75,7 +76,7 @@ function caseRecord(overrides: Record<string, unknown> = {}) {
 describe('schema identity', () => {
   test('exports correct schema and version', () => {
     assert.equal(caseReport.CASE_REPORT_SCHEMA, 'whoisleuth.case-report');
-    assert.equal(caseReport.CASE_REPORT_SCHEMA_VERSION, 7);
+    assert.equal(caseReport.CASE_REPORT_SCHEMA_VERSION, 8);
   });
 });
 
@@ -89,7 +90,7 @@ describe('buildCaseReport JSON', () => {
     const { json } = caseReport.buildCaseReport(rec, { generatedAt: ISO });
 
     assert.equal(json.schema, 'whoisleuth.case-report');
-    assert.equal(json.schemaVersion, 7);
+    assert.equal(json.schemaVersion, 8);
     assert.equal(json.generatedAt, ISO);
     assert.equal(json.application.name, 'WHOISleuth');
     assert.equal(json.application.version, null);
@@ -104,6 +105,21 @@ describe('buildCaseReport JSON', () => {
     assert.ok(json.limitations.length > 0);
     // Notes not present when excluded.
     assert.equal('notes' in json.case, false);
+  });
+
+  test('case report v8 preserves exact opaque Brand Profile references', () => {
+    const record = caseRecord({
+      brandProfileIds: ['Profile_A', 'profile_a'],
+    });
+    const { json, markdown } = caseReport.buildCaseReport(record, { generatedAt: ISO });
+    assert.equal(json.schemaVersion, 8);
+    assert.deepEqual(json.case.brandProfileIds, ['Profile_A', 'profile_a']);
+    (record.brandProfileIds as string[])[0] = 'changed-source';
+    assert.deepEqual(json.case.brandProfileIds, ['Profile_A', 'profile_a']);
+    json.case.brandProfileIds[1] = 'changed-report';
+    assert.deepEqual(record.brandProfileIds, ['changed-source', 'profile_a']);
+    assert.match(markdown, /Brand Profile references \| Profile\\_A, profile\\_a/u);
+    assert.match(json.limitations, /explicit analyst-selected association only/iu);
   });
 
   test('derives conservative interoperability tags from reviewed analyst state', () => {
@@ -166,6 +182,26 @@ describe('buildCaseReport JSON', () => {
     assert.equal(entry.snapshot.id, 'ev-1');
     // Current assessment matches the snapshot.
     assert.equal(requiredValue(json.currentAssessment).id, 'ev-1');
+  });
+
+  test('report v8 preserves nullable profile provenance in JSON, timeline, and Markdown beside Risk', () => {
+    const limitation = 'The active Brand Profile was unavailable for this observation.';
+    const rec = caseRecord({
+      evidenceHistory: [snapshot({
+        id: 'ev-profile-context',
+        fingerprint: 'profile-context',
+        profileContextState: 'unavailable',
+        profileContextLimitation: limitation,
+      })],
+    });
+    const { json, markdown } = caseReport.buildCaseReport(rec, { generatedAt: ISO });
+    assert.equal(json.schemaVersion, 8);
+    assert.equal(requiredValue(json.currentAssessment).profileContextState, 'unavailable');
+    assert.equal(requiredValue(json.currentAssessment).profileContextLimitation, limitation);
+    assert.equal(requiredValue(json.evidenceTimeline[0]).snapshot.profileContextState, 'unavailable');
+    assert.equal(requiredValue(json.evidenceTimeline[0]).snapshot.profileContextLimitation, limitation);
+    assert.match(markdown, /Risk model: v1[\s\S]*Brand Profile context: unavailable/u);
+    assert.match(markdown, /Profile-context limitation: The active Brand Profile was unavailable for this observation\./u);
   });
 
   test('multiple snapshots, chronological order', () => {

@@ -84,6 +84,12 @@ test('retained evidence timeline keeps observation, storage, source, and owner c
     startedAt: OBSERVED_AT,
     updatedAt: STORED_AT,
     completedAt: OBSERVED_AT,
+    profileContext: {
+      sourceState: 'ready',
+      activeProfileId: null,
+      profileUpdatedAt: null,
+      limitation: '',
+    },
   };
 
   const timeline = buildRetainedEvidenceTimeline({
@@ -157,6 +163,12 @@ test('retained evidence timeline exposes bounded area and freshness review acros
       startedAt: '2026-07-01T00:00:00.000Z',
       updatedAt: '2026-07-02T00:00:00.000Z',
       completedAt: null,
+      profileContext: {
+        sourceState: 'ready',
+        activeProfileId: null,
+        profileUpdatedAt: null,
+        limitation: '',
+      },
     }],
     websiteSnapshots: [normalizeWebsiteProfileSnapshot({
       id: 'current-lookup',

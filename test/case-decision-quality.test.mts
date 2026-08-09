@@ -5,7 +5,7 @@ import type { CaseRecord } from '../frontend/src/lib/analysis/case-record-contra
 
 function caseRecord(id: string, domain: string, disposition: string): CaseRecord {
   return {
-    id, domain, disposition, status: 'reviewing', reviewReasonCode: null, tags: [], notes: [], source: 'lookup',
+    id, domain, disposition, status: 'reviewing', reviewReasonCode: null, brandProfileIds: [], tags: [], notes: [], source: 'lookup',
     evidenceHistory: [{
       id: `e-${id}`, fingerprint: 'same-evidence', firstCapturedAt: '2026-08-01T00:00:00.000Z', capturedAt: '2026-08-05T00:00:00.000Z',
       source: 'lookup', scanDepth: 'deep', availability: 'registered', confidence: 'high', riskModelVersion: 1, riskScore: 50,

@@ -225,6 +225,19 @@ provider request or persisted write. Result links are passive pivots into the
 exact retained case, campaign, Brand Profile, or relationship observation where
 one exists.
 
+The Case model and the existing Monitor Case API are the sole mutation owners
+for Case schema 12's bounded `brandProfileIds` field. The Brands route reads
+that field only to project existing source-aware analyst review rows for the
+active profile; it cannot add, remove, resolve, or rewrite an association.
+Monitor expresses UI changes as retry-safe add or remove intents so every
+browser-local conflict retry derives from the latest Case and preserves an
+unrelated tab's change. Exact profile-identifier reuse for a different
+normalised name rejects the Brand Profile merge and any dependent workspace
+Case section atomically.
+Profile deletion therefore never cascades. Unmatched identifiers remain
+source-qualified local state rather than new relationship, graph, packet,
+capsule, calibration, or reverse-reference edges.
+
 The 12 independent browser-store ceilings total 15.75 MiB, which is greater than
 the 5 MiB local-storage planning reference used by the former design. The
 maintainer-run `npm run platform:local-data` command derives that total from the

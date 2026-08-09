@@ -285,6 +285,48 @@ test('structured imports merge by case-insensitive profile name', () => {
   assert.deepEqual(requiredValue(result.profiles[0]).productNames, ['Updated']);
 });
 
+test('rejects exact identifier reuse across different normalised profile names atomically', () => {
+  const local = profile({ id: 'stable-profile', name: 'Stable Profile' });
+  const conflicting = {
+    schema: 'whoisleuth.brand-profiles',
+    version: BRAND_PROFILE_SCHEMA_VERSION,
+    profiles: [profile({ id: 'stable-profile', name: 'Different Profile' })],
+  };
+  assert.throws(
+    () => mergeBrandProfiles([local], conflicting, { nowIso: NOW }),
+    /one exact identifier for different normalised profile names.*No profiles were imported/iu,
+  );
+  assert.equal(local.name, 'Stable Profile');
+
+  assert.throws(
+    () => mergeBrandProfiles([], {
+      schema: 'whoisleuth.brand-profiles',
+      version: BRAND_PROFILE_SCHEMA_VERSION,
+      profiles: [profile({ id: 'shared-id', name: 'First Profile' }), profile({ id: 'shared-id', name: 'Second Profile' })],
+    }, { nowIso: NOW }),
+    /one exact identifier for different normalised profile names/iu,
+  );
+});
+
+test('allows the same exact identifier for the same normalised name and checks generated ids', () => {
+  const same = mergeBrandProfiles([], {
+    schema: 'whoisleuth.brand-profiles',
+    version: BRAND_PROFILE_SCHEMA_VERSION,
+    profiles: [profile({ id: 'same-id', name: 'Same   Profile' }), profile({ id: 'same-id', name: 'same profile' })],
+  }, { nowIso: NOW });
+  assert.equal(same.profiles.length, 1);
+  assert.equal(requiredValue(same.profiles[0]).id, 'same-id');
+
+  assert.throws(
+    () => mergeBrandProfiles([], {
+      schema: 'whoisleuth.brand-profiles',
+      version: BRAND_PROFILE_SCHEMA_VERSION,
+      profiles: [{ ...profile({ name: 'Generated One' }), id: undefined }, { ...profile({ name: 'Generated Two' }), id: undefined }],
+    }, { nowIso: NOW, makeId: () => 'generated-collision' }),
+    /one exact identifier for different normalised profile names/iu,
+  );
+});
+
 test('imports report malformed records as skipped', () => {
   const result = mergeBrandProfiles([], {
     schema: 'whoisleuth.brand-profiles',

@@ -110,6 +110,9 @@ function lookupComparisonInput(document: SavedLookupDocument): UnknownRecord {
     faviconMatch: false,
     faviconNearMatch: false,
     reusesOfficialAssets: false,
+    idnReferenceMatch: false,
+    pageBaselineMatch: false,
+    hasActiveBrandProfile: false,
     hasPasswordField: recordOrEmpty(recordOrEmpty(availability.credentialSurfaceProfile).inputs).categories
       ? Number(recordOrEmpty(recordOrEmpty(recordOrEmpty(availability.credentialSurfaceProfile).inputs).categories).password) > 0
       : false,
@@ -130,6 +133,12 @@ function lookupComparisonInput(document: SavedLookupDocument): UnknownRecord {
     comparisonEvidence,
     relationship,
     sourceCoverage: sourceCoverage(document, availability),
+    profileContext: {
+      sourceState: 'ready',
+      activeProfileId: null,
+      profileUpdatedAt: null,
+      limitation: '',
+    },
   };
 }
 

@@ -19,13 +19,14 @@ import {
   type PortableGeneratorMetadata,
 } from '../../../../lib/portable-generator.mts';
 import { CASE_EVIDENCE_RELATION_STANCES } from './case-response-model.ts';
+import { normalizeCaseBrandProfileIds } from './case-brand-profile-references.ts';
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
 export const CASE_REPORT_SCHEMA = 'whoisleuth.case-report';
-export const CASE_REPORT_SCHEMA_VERSION = 7;
+export const CASE_REPORT_SCHEMA_VERSION = 8;
 
 const LIMITATIONS_TEXT = [
   'This report contains normalised browser-local observations from WHOISleuth analyst cases.',
@@ -33,6 +34,7 @@ const LIMITATIONS_TEXT = [
   'Absence of a signal (e.g. no MX record observed) does not prove nonexistence. It may not have been evaluated.',
   'Snapshot fingerprints are deduplication identifiers, not cryptographic evidence hashes.',
   'Scan-depth and scoring-model gates prevent misleading comparisons; "incomparable" means observations differ materially but one or more fields cannot be compared reliably.',
+  'Brand Profile references record an explicit analyst-selected association only; they do not establish ownership, attribution, intent, safety, or maliciousness.',
   'Generated locally in the browser. Review the package before sharing it.',
 ].join(' ');
 
@@ -75,6 +77,7 @@ type CaseReportJson = {
     status: string;
     disposition: string;
     reviewReasonCode: string | null;
+    brandProfileIds: string[];
     interoperabilityTags: string[];
     tags: string[];
     source: string;
@@ -210,6 +213,8 @@ function pickKnownSnapshotFields(snapshot: CaseEvidenceSnapshot): CaseEvidenceSn
     idnReferenceMatch: snapshot.idnReferenceMatch ?? null,
     pageBaselineMatch: snapshot.pageBaselineMatch ?? null,
     hasActiveBrandProfile: snapshot.hasActiveBrandProfile ?? null,
+    profileContextState: snapshot.profileContextState ?? null,
+    profileContextLimitation: snapshot.profileContextLimitation ?? null,
     mutationTypes: Array.isArray(snapshot.mutationTypes) ? [...snapshot.mutationTypes] : [],
   };
 }
@@ -296,6 +301,7 @@ export function buildCaseReport(
       status: caseRecord.status,
       disposition: caseRecord.disposition,
       reviewReasonCode: caseRecord.reviewReasonCode ?? null,
+      brandProfileIds: normalizeCaseBrandProfileIds(caseRecord.brandProfileIds),
       interoperabilityTags: analystInteroperabilityTags(caseRecord.disposition, caseRecord.reviewReasonCode),
       tags: Array.isArray(caseRecord.tags) ? [...caseRecord.tags] : [],
       source: caseRecord.source,
@@ -372,6 +378,7 @@ function buildMarkdown(report: CaseReportJson, includeAttribution: boolean): str
   lines.push(`| Status | ${escapeMarkdownInline(report.case.status)} |`);
   lines.push(`| Disposition | ${escapeMarkdownInline(report.case.disposition)} |`);
   if (report.case.reviewReasonCode) lines.push(`| Review reason | ${escapeMarkdownInline(report.case.reviewReasonCode.replaceAll('_', ' '))} |`);
+  lines.push(`| Brand Profile references | ${report.case.brandProfileIds.length ? escapeMarkdownInline(report.case.brandProfileIds.join(', ')) : 'None'} |`);
   lines.push(`| Source | ${escapeMarkdownInline(report.case.source)} |`);
   lines.push(`| Opened | ${escapeMarkdownInline(report.case.openedAt)} |`);
   lines.push(`| Updated | ${escapeMarkdownInline(report.case.updatedAt)} |`);
@@ -389,6 +396,8 @@ function buildMarkdown(report: CaseReportJson, includeAttribution: boolean): str
     lines.push(`- **Availability:** ${escapeMarkdownInline(formatReportValue(a.availability))}`);
     lines.push(`- **Risk score:** ${escapeMarkdownInline(formatReportValue(a.riskScore))}`);
     lines.push(`- **Risk model:** ${a.riskModelVersion === null ? 'Unversioned' : `v${escapeMarkdownInline(formatReportValue(a.riskModelVersion))}`}`);
+    lines.push(`- **Brand Profile context:** ${escapeMarkdownInline(formatReportValue(a.profileContextState))}`);
+    if (a.profileContextLimitation) lines.push(`- **Profile-context limitation:** ${escapeMarkdownInline(a.profileContextLimitation)}`);
     lines.push(`- **Opportunity model:** ${a.opportunityModelVersion == null ? 'Unversioned' : `v${escapeMarkdownInline(formatReportValue(a.opportunityModelVersion))}`}`);
     lines.push(`- **Registrar:** ${escapeMarkdownInline(formatReportValue(a.registrar))}`);
     lines.push(`- **Website activity:** ${escapeMarkdownInline(formatReportValue(a.activityStatus))}`);
@@ -440,6 +449,8 @@ function buildMarkdown(report: CaseReportJson, includeAttribution: boolean): str
       lines.push(`- Availability: ${escapeMarkdownInline(formatReportValue(snap.availability))}`);
       lines.push(`- Risk score: ${escapeMarkdownInline(formatReportValue(snap.riskScore))}`);
       lines.push(`- Risk model: ${snap.riskModelVersion === null ? 'Unversioned' : `v${escapeMarkdownInline(formatReportValue(snap.riskModelVersion))}`}`);
+      lines.push(`- Brand Profile context: ${escapeMarkdownInline(formatReportValue(snap.profileContextState))}`);
+      if (snap.profileContextLimitation) lines.push(`- Profile-context limitation: ${escapeMarkdownInline(snap.profileContextLimitation)}`);
       lines.push(`- Registrar: ${escapeMarkdownInline(formatReportValue(snap.registrar))}`);
       lines.push(`- Website activity: ${escapeMarkdownInline(formatReportValue(snap.activityStatus))}`);
       if (snap.httpResponseStatus != null) lines.push(`- HTTP response: ${escapeMarkdownInline(formatReportValue(snap.httpResponseStatus))}`);

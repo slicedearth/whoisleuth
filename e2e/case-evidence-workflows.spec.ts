@@ -112,6 +112,40 @@ test.describe('evidence timeline', () => {
     await expectNoHorizontalOverflow(page);
   });
 
+  test('current Case evidence presents profile provenance and its limitation beside Risk', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await openSeededTimelineCase(page, 'profile-provenance.invalid', [
+      caseRecord({
+        id: 'profile-provenance',
+        domain: 'profile-provenance.invalid',
+        evidenceHistory: [snapshot({
+          id: 'ev-profile-provenance',
+          fingerprint: 'profile-provenance',
+          riskScore: 73,
+          profileContextState: 'unavailable',
+          profileContextLimitation: 'Brand Profile context was unavailable; profile-derived evidence remains unevaluated.',
+        })],
+      }),
+    ], CASE_SCHEMA_VERSION);
+
+    const summary = page.locator('.evidence');
+    await expect(summary).toContainText('Risk');
+    await expect(summary).toContainText(/73\s*· model v1/u);
+    await expect(summary).toContainText('Profile context');
+    await expect(summary).toContainText('unavailable');
+    await expect(summary.locator('.profile-context-limitation')).toHaveText(
+      'Brand Profile context was unavailable; profile-derived evidence remains unevaluated.',
+    );
+
+    await page.locator('.timeline-toggle').click();
+    const provenance = page.locator('.timeline-group', { hasText: 'Profile provenance and limitations' });
+    await expect(provenance.getByRole('heading', { name: 'Profile provenance and limitations' })).toBeVisible();
+    await expect(provenance).toContainText('Brand Profile context');
+    await expect(provenance).toContainText('Profile-context limitation');
+    await expect(provenance).toContainText('unavailable');
+    await expectNoHorizontalOverflow(page);
+  });
+
   test('repeated identical evidence shows first/last observed', async ({ page }) => {
     await openSeededTimelineCase(page, 'repeat.invalid', [
       caseRecord({

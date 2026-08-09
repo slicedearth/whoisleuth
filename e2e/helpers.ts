@@ -282,6 +282,48 @@ export async function failBrowserLocalCollectionReads(
   await page.evaluate(installFailure, collection);
 }
 
+export async function failNextBrowserLocalCollectionRead(
+  page: Page,
+  collection: BrowserLocalCollectionId,
+) {
+  await page.evaluate((collectionId) => {
+    const originalGet = IDBObjectStore.prototype.get;
+    let pending = true;
+    IDBObjectStore.prototype.get = function get(query: IDBValidKey | IDBKeyRange) {
+      if (pending && this.name === 'manifests' && query === collectionId) {
+        pending = false;
+        throw new DOMException(`Browser-local ${collectionId} read is unavailable once`, 'InvalidStateError');
+      }
+      return originalGet.call(this, query);
+    };
+  }, collection);
+}
+
+export async function failNextBrowserLocalCollectionReadAfterWrite(
+  page: Page,
+  collection: BrowserLocalCollectionId,
+) {
+  await page.evaluate((collectionId) => {
+    const originalGet = IDBObjectStore.prototype.get;
+    const originalPut = IDBObjectStore.prototype.put;
+    let failNextRead = false;
+    IDBObjectStore.prototype.put = function put(value: unknown, key?: IDBValidKey) {
+      if (this.name === 'manifests'
+        && value
+        && typeof value === 'object'
+        && Reflect.get(value, 'collection') === collectionId) failNextRead = true;
+      return key === undefined ? originalPut.call(this, value) : originalPut.call(this, value, key);
+    };
+    IDBObjectStore.prototype.get = function get(query: IDBValidKey | IDBKeyRange) {
+      if (failNextRead && this.name === 'manifests' && query === collectionId) {
+        failNextRead = false;
+        throw new DOMException(`Browser-local ${collectionId} post-write read is unavailable`, 'InvalidStateError');
+      }
+      return originalGet.call(this, query);
+    };
+  }, collection);
+}
+
 export async function holdBrowserLocalReads(page: Page, delayMs = 750) {
   await page.evaluate(({ databaseName, delay }) => new Promise<void>((resolve, reject) => {
     const openRequest = indexedDB.open(databaseName);

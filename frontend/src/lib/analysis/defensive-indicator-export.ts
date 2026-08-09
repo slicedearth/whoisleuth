@@ -31,6 +31,7 @@ type DefensiveIndicatorExportOptions = {
 
 export type DefensiveIndicatorExclusionReason =
   | 'not_selected'
+  | 'profile_context_unavailable'
   | 'not_eligible'
   | 'unreviewed_disposition'
   | 'official_domain'
@@ -71,10 +72,17 @@ function analystDisposition(record: Record<string, unknown>): string {
       : '';
 }
 
+function hasReadyProfileContext(record: Record<string, unknown>): boolean {
+  const saved = plainRecord(record.saved);
+  const profileContext = plainRecord(saved?.profileContext ?? record.profileContext);
+  return profileContext?.sourceState === 'ready';
+}
+
 export function isDefensiveIndicatorCandidate(value: unknown): boolean {
   const record = plainRecord(value);
   if (
     !record
+    || !hasReadyProfileContext(record)
     || record.trusted
     || record.status === 'error'
     || typeof record.availability !== 'string'
@@ -145,6 +153,10 @@ export function prepareDefensiveIndicatorExport(
     if (!source || !domain) continue;
     if (explicitSelection && !selected.has(domain)) {
       exclude(domain, 'not_selected');
+      continue;
+    }
+    if (!hasReadyProfileContext(source)) {
+      exclude(domain, 'profile_context_unavailable');
       continue;
     }
     if (official.has(domain)) {

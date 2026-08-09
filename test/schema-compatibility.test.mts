@@ -303,10 +303,12 @@ describe('schema compatibility inventory', () => {
     assert.equal(byId(inventory, 'browser.website-snapshots').currentVersion, WEBSITE_SNAPSHOT_SCHEMA_VERSION);
     assert.deepEqual(byId(inventory, 'browser.website-snapshots').supportedVersions, [1, 2, 3, 4]);
     assert.equal(byId(inventory, 'browser.website-snapshots').byteBudget, MAX_WEBSITE_SNAPSHOT_STORE_BYTES);
-    assert.deepEqual(byId(inventory, 'browser.bulk-sessions').supportedVersions, [1, 2, 3]);
+    assert.deepEqual(byId(inventory, 'browser.bulk-sessions').supportedVersions, [1, 2, 3, 4]);
     assert.equal(byId(inventory, 'browser.bulk-sessions').migration, 'normalize_to_current');
-    assert.deepEqual(byId(inventory, 'export.bulk-sessions').supportedVersions, [1, 2, 3]);
+    assert.equal(byId(inventory, 'browser.bulk-sessions').acceptsUnversionedLegacy, true);
+    assert.deepEqual(byId(inventory, 'export.bulk-sessions').supportedVersions, [1, 2, 3, 4]);
     assert.equal(byId(inventory, 'export.bulk-sessions').migration, 'normalize_to_current');
+    assert.equal(byId(inventory, 'export.bulk-sessions').acceptsUnversionedLegacy, false);
     assert.equal(byId(inventory, 'browser.investigation-templates').schema, INVESTIGATION_TEMPLATE_SCHEMA);
     assert.equal(byId(inventory, 'browser.investigation-templates').currentVersion, INVESTIGATION_TEMPLATE_VERSION);
     assert.equal(byId(inventory, 'browser.investigation-templates').byteBudget, MAX_INVESTIGATION_TEMPLATE_STORE_BYTES);
@@ -448,7 +450,7 @@ describe('schema compatibility inventory', () => {
     }
 
     const caseReport = buildCaseReport({
-      id: 'case-fixture', domain: 'schema.invalid', status: 'new', disposition: 'unreviewed',
+      id: 'case-fixture', domain: 'schema.invalid', status: 'new', disposition: 'unreviewed', brandProfileIds: [],
       tags: [], notes: [], source: 'manual', evidenceHistory: [], evidencePins: [], decisions: [], actions: [], assertions: [], manualTrail: [], sightings: [],
       createdAt: NOW, updatedAt: NOW,
     }, { generatedAt: NOW });
@@ -489,6 +491,7 @@ describe('schema compatibility inventory', () => {
     assert.equal(brandProfileStoreVersion([]), 1);
     assert.equal(watchlistStoreVersion({ Legacy: { results: [] } }), 1);
     assert.equal(shortlistStoreVersion([]), 1);
+    assert.deepEqual(byId(inventory, 'browser.cases').supportedVersions, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
     assert.deepEqual(byId(inventory, 'browser.brand-profiles').supportedVersions, [1, 2, 3, 4, 5, 6]);
     assert.deepEqual(byId(inventory, 'browser.watchlists').supportedVersions, [1, 2]);
     assert.deepEqual(byId(inventory, 'browser.shortlist').supportedVersions, [1, 2, 3]);

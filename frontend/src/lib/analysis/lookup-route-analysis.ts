@@ -1,4 +1,4 @@
-import { profileSignals as matchProfileSignals, type BrandProfile } from '../brand-profiles.ts';
+import { profileSignals as matchProfileSignals, type ActiveBrandProfileSourceState, type BrandProfile } from '../brand-profiles.ts';
 import { outreachAction, type Contact } from '../drafts.ts';
 import { buildActivationContext } from './activation-context.ts';
 import { buildAcquisitionDueDiligence } from './acquisition-due-diligence.ts';
@@ -51,6 +51,7 @@ export interface LookupRouteAnalysisInput {
   result: LookupHttpResponse | null;
   lookupView: LookupViewModel;
   profile: BrandProfile | null;
+  profileSourceState?: ActiveBrandProfileSourceState;
   task: LookupTaskView;
   completedLookupDepth: LookupDepth | null;
   freshnessPolicy?: LookupFreshnessPolicyInput;
@@ -93,6 +94,14 @@ export function latestLookupTimestamp(...values: unknown[]): string | null {
 
 export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
   const { result, lookupView, profile, task } = input;
+  const profileSourceState = input.profileSourceState ?? 'ready';
+  const profileContextReady = profileSourceState === 'ready';
+  const hasActiveBrandProfile = profileContextReady ? Boolean(profile) : null;
+  const profileContextLimitation = profileSourceState === 'ready'
+    ? null
+    : profileSourceState === 'loading'
+      ? 'Browser-local Brand Profile context is still loading. Profile-derived trust, allowlist, resemblance, and official-reference conclusions remain unevaluated.'
+      : 'Browser-local Brand Profile context was unavailable. Profile-derived trust, allowlist, resemblance, and official-reference conclusions remain inconclusive.';
   const {
     availability,
     rdap,
@@ -295,13 +304,14 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     registrarPublicationComparison,
   });
   const idnAnalysis = result?.type === 'domain'
-    ? analyzeDomainIdn(String(result.registrableDomain || availability.domain || ''), profile?.officialDomains || [])
+    ? analyzeDomainIdn(
+        String(result.registrableDomain || availability.domain || ''),
+        profileContextReady ? profile?.officialDomains || [] : [],
+      )
     : null;
-  const profileSignals = matchProfileSignals(
-    String(availability.domain || result?.registrableDomain || ''),
-    availability,
-    profile,
-  );
+  const profileSignals = profileContextReady
+    ? matchProfileSignals(String(availability.domain || result?.registrableDomain || ''), availability, profile)
+    : { trusted: null, faviconMatch: null, faviconNearMatch: null, reusesOfficialAssets: null };
   const externalRiskContext = calibrateExternalIntelligenceRisk(threatIntelligence);
   const outreach = outreachAction(
     String(availability.domain || result?.registrableDomain || ''),
@@ -321,7 +331,7 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     + comparison.counts.whois_incomplete;
   const caseDomain = String(availability.domain || result?.registrableDomain || '').trim().toLowerCase();
   const observedPageBaseline = createPageBaseline(caseDomain, availability);
-  const pageComparison = comparePageBaselines(profile?.pageBaseline, observedPageBaseline);
+  const pageComparison = comparePageBaselines(profileContextReady ? profile?.pageBaseline : null, observedPageBaseline);
   const pageDisplay = buildLookupPageDisplay({
     pageIdentity,
     pageCanonical,
@@ -347,7 +357,7 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     pageComparison,
   });
   const brandMimicryReview = buildBrandMimicryReview({
-    hasActiveProfile: Boolean(profile),
+    hasActiveProfile: hasActiveBrandProfile,
     trustedDomainKind: profileSignals.trusted,
     profileSignals,
     pageComparison,
@@ -509,8 +519,8 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     .filter((entry) => ['rdap', 'whois', 'availability', 'registrar-rdap', 'dns', 'http', 'page-identity'].includes(entry.id)
       || entry.id.startsWith('external-'))
     .map((entry) => ({ source: entry.id, state: entry.state }));
-  const pageBaselineMatch = pageBaselineRiskMatch(pageComparison);
-  const idnReferenceMatch = Boolean(idnAnalysis?.referenceMatches.length);
+  const pageBaselineMatch = profileContextReady ? pageBaselineRiskMatch(pageComparison) : null;
+  const idnReferenceMatch = profileContextReady ? Boolean(idnAnalysis?.referenceMatches.length) : null;
   const scoredAvailability = {
     ...availability,
     ...profileSignals,
@@ -518,15 +528,17 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     mutationTypes: [],
     idnReferenceMatch,
     pageBaselineMatch,
-    hasActiveBrandProfile: Boolean(profile),
+    hasActiveBrandProfile,
     hasPublicRegistrantContact: hasPublicRegistrantContact(availability.registrant),
     scanDepth: lookupEvidenceDepth,
     observedAt: lookupObservedAt,
     sourceCoverage: scoreCoverage,
   };
   const opportunity: OpportunityExplanation | null = explainOpportunityScore(scoredAvailability);
-  const risk: RiskExplanation | null = explainRiskScore(scoredAvailability);
-  const riskSensitivity: RiskScoreSensitivity | null = buildRiskScoreSensitivity(scoredAvailability);
+  const risk: RiskExplanation | null = profileContextReady ? explainRiskScore(scoredAvailability) : null;
+  const riskSensitivity: RiskScoreSensitivity | null = profileContextReady
+    ? buildRiskScoreSensitivity(scoredAvailability)
+    : null;
   const lookupSourceRefreshPlan = buildLookupSourceRefreshPlan(
     evidenceCoverage,
     lookupObservedAt,
@@ -561,7 +573,7 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     decisionSupport: lookupDecisionSupport,
     availabilityState: availability.state,
     availabilitySource: availability.source,
-    hasActiveProfile: Boolean(profile),
+    hasActiveProfile: hasActiveBrandProfile === true,
     hasCaseSection,
     responseRecipientCount: abuseRecipientResolution.recipients.length,
     registryComparison: comparison,
@@ -642,7 +654,9 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     privacyProtected: availability.privacyProtected ?? null,
     idnReferenceMatch,
     pageBaselineMatch,
-    hasActiveBrandProfile: Boolean(profile),
+    hasActiveBrandProfile,
+    profileContextState: profileSourceState,
+    profileContextLimitation,
     ...compactHttpSummary,
     mutationTypes: [],
   };
@@ -663,6 +677,8 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     registryDisplay,
     idnAnalysis,
     profileSignals,
+    profileSourceState,
+    profileContextLimitation,
     externalRiskContext,
     opportunity,
     risk,
