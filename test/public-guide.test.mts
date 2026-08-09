@@ -53,6 +53,9 @@ test('tool guide covers every public-facing investigation tool once', () => {
     'Bulk',
     'Monitor',
   ]);
+  const monitor = toolGuides.find((tool) => tool.id === 'monitor');
+  assert.match(monitor?.result || '', /evidence-debt matrix.*exact saved Bulk source states.*pinned case gaps/iu);
+  assert.match(`${monitor?.result || ''} ${monitor?.next || ''}`, /without starting a request|does not.*start collection/iu);
 });
 
 test('navigation, tool guide, and reference guide use one canonical product vocabulary', () => {

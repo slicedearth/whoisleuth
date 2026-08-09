@@ -915,6 +915,13 @@ default (see the README), so many lookups return no personal data at all.
   record, and keeps observation time separate from storage time. It does not
   duplicate raw payloads, pin values, relationship values, analyst notes, or
   page content, and does not start collection.
+- **Evidence-debt review**: Monitor can transiently group exact source states
+  already retained in saved Bulk rows and separately pinned case evidence into
+  a bounded source matrix and manual next-evidence queue. Empty compact fields
+  create no debt, and the absence of a retained source record remains distinct
+  from an explicit skipped collection. The projection stores no new record,
+  copies no evidence value or raw payload, and starts no lookup, retry, export,
+  or write.
 - **External intelligence import**: a selected local STIX 2.1 or MISP JSON file
   is decoded, hashed with SHA-256, normalised, previewed, and merged entirely in
   the browser. Only the bounded supported entity claim and provenance metadata

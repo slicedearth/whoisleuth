@@ -741,6 +741,26 @@ dismissal is recorded in the case investigation trail; it does not resolve or
 delete a pin or assertion. A changed gap receives a new fingerprint and returns
 to the queue.
 
+The **Evidence-debt matrix** below the inbox is a separate bounded drill-down.
+It projects only exact per-source states retained in saved Bulk rows and
+separately pinned case evidence. It does not infer debt from empty compact
+fields, unpinned case history, or an absent source row. A Bulk row with no
+retained source coverage is counted separately from a source explicitly saved
+as skipped; neither means that the source reported absence. Expected
+unsupported registry services are excluded using the authority-aware registry
+capability catalogue.
+
+The matrix counts actionable partial, stale, conflicting, rate-limited,
+unexpected unsupported, and unavailable states by retained source. Its
+deterministic next-evidence queue ranks conflicts and source failures before
+partial, stale, or unsupported evidence. Saved Bulk rows link to the saved
+session control for a deliberate retry; case pins link to a prefilled Deep
+Lookup or the owning case. Opening those links does not start collection. A
+refresh can remain partial or expose a new disagreement, so the queue describes
+counterfactual review effects rather than promising a complete or favourable
+result. Bulk age uses the existing seven-day review threshold, while case pins
+use the existing 30-day stale threshold.
+
 The Dashboard **privacy-safe browser handoff** accepts a pasted domain or
 HTTP(S) URL and reduces it to either the normalised hostname or sanitised
 HTTP(S) origin. Credentials, port, path, query, fragment, and browser-local

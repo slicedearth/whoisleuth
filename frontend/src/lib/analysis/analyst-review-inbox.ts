@@ -67,8 +67,10 @@ const LIMITED_SOURCE_STATES = new Set([
 ]);
 const PRIORITY_RANK: Record<AnalystReviewPriority, number> = { urgent: 0, high: 1, normal: 2 };
 const DISMISSAL_PREFIX = 'evidence-gap-review:';
-const AGING_AFTER_MS = 7 * 24 * 60 * 60 * 1_000;
-const STALE_AFTER_MS = 30 * 24 * 60 * 60 * 1_000;
+export const ANALYST_REVIEW_AGING_AFTER_DAYS = 7;
+export const ANALYST_REVIEW_STALE_AFTER_DAYS = 30;
+const AGING_AFTER_MS = ANALYST_REVIEW_AGING_AFTER_DAYS * 24 * 60 * 60 * 1_000;
+const STALE_AFTER_MS = ANALYST_REVIEW_STALE_AFTER_DAYS * 24 * 60 * 60 * 1_000;
 
 function timestamp(value: unknown): string | null {
   if (typeof value !== 'string' || value.length > 64) return null;
@@ -138,6 +140,42 @@ export function analystReviewDismissalReasonLabel(value: unknown): string | null
   return ANALYST_REVIEW_DISMISSAL_REASONS.find((item) => item.value === value)?.label ?? null;
 }
 
+function currentCaseEvidenceGap(record: CaseRecord, nowIso: string) {
+  const openUnknownRecords = record.assertions.filter((item) => item.state === 'open' && item.kind === 'unknown');
+  const openContradictionRecords = record.assertions.filter((item) => item.state === 'open' && item.kind === 'contradiction');
+  const stalePinRecords = record.evidencePins.filter((item) => ageAt(item.observedAt, nowIso) === 'stale');
+  const stalePinIds = new Set(stalePinRecords.map((item) => item.id));
+  const limitedPinRecords = record.evidencePins.filter((item) =>
+    item.completeness !== 'complete'
+    || item.truncated === true
+    || LIMITED_SOURCE_STATES.has(item.sourceState?.toLowerCase() ?? '')
+    || stalePinIds.has(item.id)
+  );
+  const gapIds = [
+    ...openUnknownRecords.map((item) => `unknown:${item.id}`),
+    ...openContradictionRecords.map((item) => `contradiction:${item.id}`),
+    ...limitedPinRecords.map((item) => `pin:${item.id}:${item.completeness}:${String(item.truncated)}`),
+  ];
+  const dismissalTarget = gapIds.length ? gapDismissalTarget(record, gapIds) : null;
+  return {
+    openUnknownRecords,
+    openContradictionRecords,
+    stalePinRecords,
+    limitedPinRecords,
+    dismissalTarget,
+    dismissed: dismissalTarget !== null && record.manualTrail.some((event) =>
+      event.kind === 'review' && event.target === dismissalTarget
+    ),
+  };
+}
+
+export function currentCaseEvidenceGapDismissedPinIds(record: CaseRecord, nowRaw: unknown): ReadonlySet<string> {
+  if (record.status === 'resolved') return new Set();
+  const nowIso = timestamp(nowRaw) || new Date().toISOString();
+  const gap = currentCaseEvidenceGap(record, nowIso);
+  return gap.dismissed ? new Set(gap.limitedPinRecords.map((item) => item.id)) : new Set();
+}
+
 function caseItems(records: readonly CaseRecord[], nowIso: string): AnalystReviewItem[] {
   const items: AnalystReviewItem[] = [];
   for (const record of records.slice(0, 500)) {
@@ -162,30 +200,19 @@ function caseItems(records: readonly CaseRecord[], nowIso: string): AnalystRevie
         dismissalTarget: null,
       }, nowIso));
     }
-    const openUnknownRecords = record.assertions.filter((item) => item.state === 'open' && item.kind === 'unknown');
-    const openContradictionRecords = record.assertions.filter((item) => item.state === 'open' && item.kind === 'contradiction');
-    const stalePinRecords = record.evidencePins.filter((item) =>
-      ageAt(item.observedAt, nowIso) === 'stale'
-    );
-    const limitedPinRecords = record.evidencePins.filter((item) =>
-      item.completeness !== 'complete'
-      || item.truncated === true
-      || LIMITED_SOURCE_STATES.has(item.sourceState?.toLowerCase() ?? '')
-      || stalePinRecords.some((stale) => stale.id === item.id)
-    );
+    const {
+      openUnknownRecords,
+      openContradictionRecords,
+      stalePinRecords,
+      limitedPinRecords,
+      dismissalTarget,
+      dismissed,
+    } = currentCaseEvidenceGap(record, nowIso);
     const openUnknowns = openUnknownRecords.length;
     const openContradictions = openContradictionRecords.length;
     const limitedPins = limitedPinRecords.length;
     const gapCount = openUnknowns + openContradictions + limitedPins;
     if (record.status !== 'resolved' && gapCount > 0) {
-      const dismissalTarget = gapDismissalTarget(record, [
-        ...openUnknownRecords.map((item) => `unknown:${item.id}`),
-        ...openContradictionRecords.map((item) => `contradiction:${item.id}`),
-        ...limitedPinRecords.map((item) => `pin:${item.id}:${item.completeness}:${String(item.truncated)}`),
-      ]);
-      const dismissed = record.manualTrail.some((event) =>
-        event.kind === 'review' && event.target === dismissalTarget
-      );
       if (!dismissed) {
         const parts = [
           openUnknowns ? `${openUnknowns} open unknown${openUnknowns === 1 ? '' : 's'}` : '',
@@ -216,7 +243,7 @@ function caseItems(records: readonly CaseRecord[], nowIso: string): AnalystRevie
           href: `/monitor?view=cases&case=${encodeURIComponent(record.id)}#case-response-${encodeURIComponent(record.id)}`,
           retryHref: `/lookup?q=${encodeURIComponent(record.domain)}&depth=deep`,
           caseId: record.id,
-          dismissalTarget,
+          dismissalTarget: dismissalTarget!,
         }, nowIso));
       }
     }

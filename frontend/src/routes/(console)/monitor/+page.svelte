@@ -4,6 +4,7 @@
   import { goto } from '$app/navigation';
   import PageHeading from '$lib/components/PageHeading.svelte';
   import AnalystReviewInbox from '$lib/components/AnalystReviewInbox.svelte';
+  import EvidenceDebtMatrix from '$lib/components/EvidenceDebtMatrix.svelte';
   import CaseLifecycleReview from '$lib/components/CaseLifecycleReview.svelte';
   import CaseDecisionQuality from '$lib/components/CaseDecisionQuality.svelte';
   import MonitorViewTabs from '$lib/components/MonitorViewTabs.svelte';
@@ -50,6 +51,7 @@
   import { loadInvestigationGuide } from '$lib/investigation-guide';
   import { loadBulkSessions } from '$lib/bulk-sessions';
   import type { BulkSession } from '$lib/analysis/bulk-session-model.ts';
+  import { buildEvidenceDebtReview } from '$lib/analysis/evidence-debt-review.ts';
   import {
     analystReviewDismissalReasonLabel,
     buildAnalystReviewInbox,
@@ -95,9 +97,15 @@
   let brandProfilesUnavailable=$state(true);
   let brandProfilesSourceState=$state<'loading'|'ready'|'unavailable'>('loading');
   let bulkSessions=$state<BulkSession[]>([]);
+  let bulkSessionsSourceState=$state<'loading'|'ready'|'unavailable'>('loading');
   let websiteSnapshots=$state<WebsiteProfileSnapshot[]>([]);
   const websiteProfileClusters=$derived(buildWebsiteProfileClusters(websiteSnapshots));
   const reviewInbox=$derived(buildAnalystReviewInbox({cases,watchlists,bulkSessions}));
+  const evidenceDebtReview=$derived(buildEvidenceDebtReview({
+    cases,
+    bulkSessions,
+    sourceStates:{cases:casesSourceState,bulk:bulkSessionsSourceState},
+  }));
   const decisionQuality=$derived(buildCaseDecisionQualityReport(cases));
   let casePage=$state(1);
   let campaignCount=$state(0);
@@ -157,6 +165,7 @@
   }
   function expand(record:CaseRecord){if(expandedId===record.id){expandedId='';return;}showCasePage(record);expandedId=record.id;tagDraft=record.tags.join(', ');noteDraft='';}
   function openRelatedCase(record:CaseRecord){view='cases';showCasePage(record);if(expandedId!==record.id)expand(record);void focusCase(record);}
+  function openEvidenceDebtCase(caseId:string){const record=cases.find((item)=>item.id===caseId);if(record)openRelatedCase(record);else caseMessage='That retained case is no longer available.';}
   async function focusCase(record:CaseRecord){
     await tick();
     const target=document.getElementById(`case-head-${record.id}`);
@@ -255,7 +264,7 @@
     if(watchlistResult.status==='fulfilled'){watchlists=watchlistResult.value;if(selected&&!watchlists[selected])selected='';}
     if(caseResult.status==='fulfilled'){cases=caseResult.value;casesSourceState='ready';}else casesSourceState='unavailable';
     if(relationshipResult.status==='fulfilled'){retainedRelationships=relationshipResult.value;relationshipsSourceState='ready';}else relationshipsSourceState='unavailable';
-    if(bulkResult.status==='fulfilled')bulkSessions=bulkResult.value;
+    if(bulkResult.status==='fulfilled'){bulkSessions=bulkResult.value;bulkSessionsSourceState='ready';}else bulkSessionsSourceState='unavailable';
     if(websiteResult.status==='fulfilled')websiteSnapshots=websiteResult.value;
     if(campaignResult.status==='fulfilled'){campaigns=campaignResult.value;campaignCount=campaigns.length;}
     if(ruleResult.status==='fulfilled'){detectionRules=ruleResult.value;customRuleCount=detectionRules.length;}
@@ -304,6 +313,7 @@
 {#if view==='inbox'}
 <div id="monitor-view-panel" role="tabpanel" aria-labelledby="tab-inbox">
   <AnalystReviewInbox inbox={reviewInbox} ondismiss={dismissEvidenceGap} />
+  <EvidenceDebtMatrix review={evidenceDebtReview} oncase={openEvidenceDebtCase} />
   <CaseDecisionQuality report={decisionQuality} />
   {#if caseMessage}<p class="case-message" role="status" aria-live="polite">{caseMessage}</p>{/if}
   <CaseLifecycleReview records={cases} />

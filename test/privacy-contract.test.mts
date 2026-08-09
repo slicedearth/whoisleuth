@@ -64,6 +64,9 @@ test('public privacy notices track versioned browser-local data contracts', asyn
     assert.ok(compact.includes(`at most ${MAX_CAMPAIGN_COHORT_RATIONALES} source-qualified rationales`));
     assert.ok(compact.includes(`Up to ${MAX_CAMPAIGN_COHORT_ASSERTIONS} assertions are displayed separately`));
     assert.ok(compact.includes('creates no stored record'));
+    assert.ok(compact.includes('Evidence-debt review'));
+    assert.ok(compact.includes('the absence of a retained source record remains distinct from an explicit skipped collection'));
+    assert.match(compact, /starts no lookup, retry, export, or write/u);
   }
 
   assert.equal(BROWSER_LOCAL_COLLECTIONS.length, 12);
