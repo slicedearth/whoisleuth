@@ -102,6 +102,7 @@ import {
 import { buildCliManual } from './manual.mts';
 import {
   MAX_INVESTIGATION_MANIFEST_ARTIFACT_BYTES,
+  MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES,
   buildInvestigationManifest,
   formatInvestigationManifest,
 } from './investigation-manifest.mts';
@@ -334,11 +335,16 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
     if (args.action === 'manifest') {
       failureLabel = 'Investigation manifest';
       const artifacts: { content: string }[] = [];
+      let totalBytes = 0;
       try {
         for (const source of args.sources) {
           const content = dependencies.readDiffInput
             ? await dependencies.readDiffInput(source)
             : await readInput(source, MAX_INVESTIGATION_MANIFEST_ARTIFACT_BYTES, 'Manifest artefact input');
+          totalBytes += Buffer.byteLength(content, 'utf8');
+          if (totalBytes > MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES) {
+            throw new CliUsageError(`Manifest artefacts exceed the ${MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES}-byte combined limit.`);
+          }
           artifacts.push({ content });
         }
       } catch (error) {

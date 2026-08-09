@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
 import { verifyOfflineArtifact } from '../cli/artifact-verify.mts';
-import { sha256ArtifactDigest } from '../frontend/src/lib/analysis/artifact-integrity.ts';
+import { sha256ArtifactDigestV2 } from '../frontend/src/lib/analysis/artifact-integrity.ts';
 import {
   DOMAIN_CHANGE_PACKET_INPUT_SCHEMA,
   DOMAIN_CHANGE_PACKET_SCHEMA,
@@ -15,7 +15,7 @@ async function redigest<T extends Record<string, unknown>>(value: T): Promise<T>
   const { integrity, ...unsigned } = value;
   return {
     ...unsigned,
-    integrity: { ...(integrity as Record<string, unknown>), digestSha256: await sha256ArtifactDigest(unsigned) },
+    integrity: { ...(integrity as Record<string, unknown>), digestSha256: await sha256ArtifactDigestV2(unsigned) },
   } as unknown as T;
 }
 

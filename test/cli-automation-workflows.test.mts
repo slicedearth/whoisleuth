@@ -13,6 +13,7 @@ import { buildCliLookupDocument } from '../cli/formatters/json.mts';
 import { buildCliLookupDiff } from '../cli/lookup-diff.mts';
 import { buildCliLookupReconciliation } from '../cli/lookup-reconcile.mts';
 import { buildCliLookupTimeline } from '../cli/lookup-timeline.mts';
+import { MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES } from '../cli/investigation-manifest.mts';
 import { CLI_PROGRESS_EVENT_SCHEMA, CLI_PROGRESS_EVENT_VERSION } from '../cli/progress-events.mts';
 import { runCli } from '../cli/runner.mts';
 import { lookupStrictExitFindings } from '../cli/strict-exit.mts';
@@ -293,6 +294,23 @@ describe('reproducible investigation manifest', () => {
     const document = JSON.parse(stdout.value());
     assert.equal(document.schema, 'whoisleuth.investigation-manifest');
     assert.doesNotMatch(stdout.value(), /private|lookup\.json|brief\.json/iu);
+  });
+
+  test('stops reading manifest sources when their cumulative bytes exceed the bound', async () => {
+    const stderr = capture();
+    const large = JSON.stringify({ data: 'x'.repeat(Math.floor(MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES / 3) + 1) });
+    let reads = 0;
+    const code = await runCli([
+      'manifest', 'one.json', 'two.json', 'three.json', 'four.json', '--workflow', 'domain review', '--json',
+    ], {
+      stdout: capture().stream,
+      stderr: stderr.stream,
+      now: () => NOW,
+      readDiffInput: async () => { reads += 1; return large; },
+    });
+    assert.equal(code, EXIT_CODES.USAGE);
+    assert.equal(reads, 3);
+    assert.match(stderr.value(), /combined limit/iu);
   });
 });
 

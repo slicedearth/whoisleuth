@@ -7,10 +7,10 @@ import {
   type BulkReviewPresetView,
   type BulkReviewState,
 } from './bulk-review-model.ts';
-import { sha256ArtifactDigest } from './artifact-integrity.ts';
+import { SORTED_JSON_V2, sha256ArtifactDigestV2 } from './artifact-integrity.ts';
 
 export const BULK_REVIEW_MANIFEST_SCHEMA = 'whoisleuth.bulk-review-manifest';
-export const BULK_REVIEW_MANIFEST_VERSION = 1;
+export const BULK_REVIEW_MANIFEST_VERSION = 2;
 const MAX_MANIFEST_ROWS = 2_000;
 const REVIEW_STATE_SET = new Set<string>(BULK_REVIEW_STATES);
 
@@ -71,10 +71,10 @@ export async function buildBulkReviewManifest(input: Readonly<{
       'Reproducing the filters does not reproduce upstream responses or imply that evidence remains current.',
     ],
   };
-  const digestSha256 = await sha256ArtifactDigest(unsigned);
+  const digestSha256 = await sha256ArtifactDigestV2(unsigned);
   const document = {
     ...unsigned,
-    integrity: { algorithm: 'SHA-256' as const, digestSha256 },
+    integrity: { algorithm: 'SHA-256' as const, canonicalization: SORTED_JSON_V2, digestSha256 },
   };
   return {
     document,

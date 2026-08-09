@@ -1,4 +1,8 @@
-import { sha256ArtifactDigest } from './artifact-integrity.ts';
+import {
+  sha256ArtifactDigestFor,
+  sha256ArtifactDigestV2,
+  SORTED_JSON_V2,
+} from './artifact-integrity.ts';
 import {
   buildUnsignedDomainControlPassport,
   DOMAIN_CONTROL_PASSPORT_INPUT_SCHEMA,
@@ -86,8 +90,8 @@ export async function buildDomainControlPassport(
     ...unsigned,
     integrity: Object.freeze({
       algorithm: 'SHA-256',
-      canonicalization: 'sorted-json-v1',
-      digestSha256: await sha256ArtifactDigest(unsigned),
+      canonicalization: SORTED_JSON_V2,
+      digestSha256: await sha256ArtifactDigestV2(unsigned),
     }),
   });
 }
@@ -97,7 +101,7 @@ export async function verifyDomainControlPassport(
   now = new Date().toISOString(),
 ): Promise<DomainControlPassport> {
   const normalized = normalizeDomainControlPassportDocument(value);
-  if (await sha256ArtifactDigest(normalized.unsigned) !== normalized.manifest.integrity.digestSha256) {
+  if (await sha256ArtifactDigestFor(normalized.unsigned, normalized.canonicalization) !== normalized.manifest.integrity.digestSha256) {
     throw new TypeError('Domain control manifest failed its SHA-256 integrity check.');
   }
   const checkedAt = Date.parse(now);

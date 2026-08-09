@@ -1,12 +1,15 @@
 import { createHash } from 'node:crypto';
 import { domainToASCII } from 'node:url';
 
-import { canonicalArtifactJson } from '../frontend/src/lib/analysis/artifact-integrity.ts';
+import {
+  canonicalArtifactJsonV2,
+  SORTED_JSON_V2,
+} from '../frontend/src/lib/analysis/artifact-integrity.ts';
 import {
   buildUnsignedDomainControlPassport,
   DOMAIN_CONTROL_PASSPORT_INPUT_SCHEMA,
+  DOMAIN_CONTROL_MANIFEST_VERSION,
   DOMAIN_CONTROL_PASSPORT_SCHEMA,
-  DOMAIN_CONTROL_PASSPORT_VERSION,
   MAX_DOMAIN_CONTROL_PASSPORT_ENTRIES,
   normalizeDomainControlPassportDocument,
   type DomainControlPassport,
@@ -17,7 +20,7 @@ import { exactKeys } from './bounded-contract-normalizers.mts';
 
 export const DOMAIN_CONTROL_MANIFEST_INPUT_SCHEMA = DOMAIN_CONTROL_PASSPORT_INPUT_SCHEMA;
 export const DOMAIN_CONTROL_MANIFEST_SCHEMA = DOMAIN_CONTROL_PASSPORT_SCHEMA;
-export const DOMAIN_CONTROL_MANIFEST_VERSION = DOMAIN_CONTROL_PASSPORT_VERSION;
+export { DOMAIN_CONTROL_MANIFEST_VERSION };
 export const DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA = 'whoisleuth.domain-control-review-input';
 export const DOMAIN_CONTROL_REVIEW_SCHEMA = 'whoisleuth.domain-control-review';
 export const DOMAIN_CONTROL_REVIEW_VERSION = 1;
@@ -35,6 +38,7 @@ type ComparisonState = 'aligned' | 'drift' | 'partial' | 'unavailable' | 'unsupp
 
 export type DomainControlEntry = DomainControlPassportEntry;
 export type DomainControlManifest = DomainControlPassport;
+type CurrentDomainControlManifest = DomainControlManifest & Readonly<{ version: typeof DOMAIN_CONTROL_MANIFEST_VERSION }>;
 
 type NormalizedObservationField = Readonly<{
   state: ObservationState;
@@ -110,16 +114,16 @@ function spkiFingerprint(value: unknown): string | null {
 export function buildDomainControlManifest(
   input: unknown,
   generatedAtValue = new Date().toISOString(),
-): DomainControlManifest {
-  const base = buildUnsignedDomainControlPassport(input, generatedAtValue);
+): CurrentDomainControlManifest {
+  const unsigned = buildUnsignedDomainControlPassport(input, generatedAtValue);
   return Object.freeze({
-    ...base,
+    ...unsigned,
     integrity: Object.freeze({
       algorithm: 'SHA-256',
-      canonicalization: 'sorted-json-v1',
-      digestSha256: `sha256:${createHash('sha256').update(canonicalArtifactJson(base)).digest('hex')}`,
+      canonicalization: SORTED_JSON_V2,
+      digestSha256: `sha256:${createHash('sha256').update(canonicalArtifactJsonV2(unsigned)).digest('hex')}`,
     }),
-  });
+  }) as CurrentDomainControlManifest;
 }
 
 export function verifyDomainControlManifest(value: unknown): DomainControlManifest {

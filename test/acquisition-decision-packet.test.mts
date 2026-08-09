@@ -6,7 +6,7 @@ import {
   buildAcquisitionDecisionPacket,
 } from '../frontend/src/lib/analysis/acquisition-decision-packet.ts';
 import { buildAcquisitionDueDiligence } from '../frontend/src/lib/analysis/acquisition-due-diligence.ts';
-import { sha256ArtifactDigest } from '../frontend/src/lib/analysis/artifact-integrity.ts';
+import { sha256ArtifactDigestV2 } from '../frontend/src/lib/analysis/artifact-integrity.ts';
 import { verifyOfflineArtifact } from '../cli/artifact-verify.mts';
 
 const NOW = '2026-07-29T00:00:00.000Z';
@@ -30,7 +30,7 @@ async function redigest<T extends Record<string, unknown>>(value: T): Promise<T>
   const { integrity, ...unsigned } = value;
   return {
     ...unsigned,
-    integrity: { ...(integrity as Record<string, unknown>), digestSha256: await sha256ArtifactDigest(unsigned) },
+    integrity: { ...(integrity as Record<string, unknown>), digestSha256: await sha256ArtifactDigestV2(unsigned) },
   } as unknown as T;
 }
 

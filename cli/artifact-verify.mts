@@ -10,6 +10,7 @@ import {
 import {
   CASE_RESPONSE_PACKET_SCHEMA,
   CASE_RESPONSE_PACKET_VERSION,
+  LEGACY_CASE_RESPONSE_PACKET_VERSION,
   verifyCaseResponsePacketIntegrity,
   type CaseResponsePacket,
 } from '../frontend/src/lib/analysis/case-response-packet.ts';
@@ -19,11 +20,11 @@ import {
 } from '../frontend/src/lib/analysis/acquisition-decision-packet.ts';
 import {
   BULK_DOMAIN_COMPARISON_SCHEMA,
-  BULK_DOMAIN_COMPARISON_VERSION,
+  BULK_DOMAIN_COMPARISON_EXPORT_VERSION,
 } from '../frontend/src/lib/analysis/bulk-domain-comparison.ts';
 import {
   BULK_MAIL_EXPOSURE_SCHEMA,
-  BULK_MAIL_EXPOSURE_VERSION,
+  BULK_MAIL_EXPOSURE_EXPORT_VERSION,
 } from '../frontend/src/lib/analysis/bulk-mail-exposure.ts';
 import {
   BULK_REVIEW_MANIFEST_SCHEMA,
@@ -39,7 +40,13 @@ import {
   previewWorkspaceArchive,
   readWorkspaceArchive,
 } from '../frontend/src/lib/analysis/workspace-archive.ts';
-import { sha256ArtifactDigest } from '../frontend/src/lib/analysis/artifact-integrity.ts';
+import {
+  resolveArtifactCanonicalization,
+  sha256ArtifactDigestFor,
+  SORTED_JSON_V1,
+  SORTED_JSON_V2,
+  type ArtifactCanonicalizationRoute,
+} from '../frontend/src/lib/analysis/artifact-integrity.ts';
 import {
   SAVED_LOOKUP_SCHEMA,
   SAVED_LOOKUP_SCHEMA_VERSION,
@@ -50,6 +57,7 @@ import {
   DOMAIN_CONTROL_MANIFEST_VERSION,
   verifyDomainControlManifest,
 } from '../lib/domain-control-manifest.mts';
+import { DOMAIN_CONTROL_PASSPORT_VERSION } from '../frontend/src/lib/analysis/domain-control-manifest-core.ts';
 import {
   DOMAIN_CHANGE_PACKET_SCHEMA,
   DOMAIN_CHANGE_PACKET_VERSION,
@@ -57,6 +65,7 @@ import {
 import {
   INVESTIGATION_CAPSULE_SCHEMA,
   INVESTIGATION_CAPSULE_VERSION,
+  LEGACY_INVESTIGATION_CAPSULE_VERSION,
   verifyInvestigationCapsule,
   type InvestigationCapsule,
 } from '../frontend/src/lib/analysis/investigation-capsule.ts';
@@ -66,7 +75,6 @@ import {
 } from './investigation-manifest.mts';
 import {
   CLI_CASE_PACK_SCHEMA,
-  CLI_CASE_PACK_VERSION,
   verifyCliCasePack,
 } from './case-pack.mts';
 
@@ -129,13 +137,23 @@ export type OfflineArtifactVerificationReport = Readonly<{
 }>;
 
 const SIGNED_ARTIFACT_VERSIONS: Readonly<Record<string, ReadonlySet<number>>> = Object.freeze({
-  [ACQUISITION_DECISION_PACKET_SCHEMA]: new Set([ACQUISITION_DECISION_PACKET_VERSION]),
-  [BULK_DOMAIN_COMPARISON_SCHEMA]: new Set([BULK_DOMAIN_COMPARISON_VERSION]),
-  [BULK_MAIL_EXPOSURE_SCHEMA]: new Set([BULK_MAIL_EXPOSURE_VERSION]),
-  [BULK_REVIEW_MANIFEST_SCHEMA]: new Set([BULK_REVIEW_MANIFEST_VERSION]),
-  [DOMAIN_CONTROL_MANIFEST_SCHEMA]: new Set([DOMAIN_CONTROL_MANIFEST_VERSION]),
-  [DOMAIN_CHANGE_PACKET_SCHEMA]: new Set([DOMAIN_CHANGE_PACKET_VERSION]),
-  [INVESTIGATION_MANIFEST_SCHEMA]: new Set([INVESTIGATION_MANIFEST_VERSION]),
+  [ACQUISITION_DECISION_PACKET_SCHEMA]: new Set([1, ACQUISITION_DECISION_PACKET_VERSION]),
+  [BULK_DOMAIN_COMPARISON_SCHEMA]: new Set([3, BULK_DOMAIN_COMPARISON_EXPORT_VERSION]),
+  [BULK_MAIL_EXPOSURE_SCHEMA]: new Set([1, BULK_MAIL_EXPOSURE_EXPORT_VERSION]),
+  [BULK_REVIEW_MANIFEST_SCHEMA]: new Set([1, BULK_REVIEW_MANIFEST_VERSION]),
+  [DOMAIN_CONTROL_MANIFEST_SCHEMA]: new Set([DOMAIN_CONTROL_PASSPORT_VERSION, DOMAIN_CONTROL_MANIFEST_VERSION]),
+  [DOMAIN_CHANGE_PACKET_SCHEMA]: new Set([1, DOMAIN_CHANGE_PACKET_VERSION]),
+  [INVESTIGATION_MANIFEST_SCHEMA]: new Set([1, INVESTIGATION_MANIFEST_VERSION]),
+});
+
+const SIGNED_ARTIFACT_CANONICALIZATION: Readonly<Record<string, readonly ArtifactCanonicalizationRoute[]>> = Object.freeze({
+  [ACQUISITION_DECISION_PACKET_SCHEMA]: [{ version: 1, canonicalization: SORTED_JSON_V1, explicit: false }, { version: ACQUISITION_DECISION_PACKET_VERSION, canonicalization: SORTED_JSON_V2, explicit: true }],
+  [BULK_DOMAIN_COMPARISON_SCHEMA]: [{ version: 3, canonicalization: SORTED_JSON_V1, explicit: false }, { version: BULK_DOMAIN_COMPARISON_EXPORT_VERSION, canonicalization: SORTED_JSON_V2, explicit: true }],
+  [BULK_MAIL_EXPOSURE_SCHEMA]: [{ version: 1, canonicalization: SORTED_JSON_V1, explicit: false }, { version: BULK_MAIL_EXPOSURE_EXPORT_VERSION, canonicalization: SORTED_JSON_V2, explicit: true }],
+  [BULK_REVIEW_MANIFEST_SCHEMA]: [{ version: 1, canonicalization: SORTED_JSON_V1, explicit: false }, { version: BULK_REVIEW_MANIFEST_VERSION, canonicalization: SORTED_JSON_V2, explicit: true }],
+  [DOMAIN_CONTROL_MANIFEST_SCHEMA]: [{ version: DOMAIN_CONTROL_PASSPORT_VERSION, canonicalization: SORTED_JSON_V1, explicit: true }, { version: DOMAIN_CONTROL_MANIFEST_VERSION, canonicalization: SORTED_JSON_V2, explicit: true }],
+  [DOMAIN_CHANGE_PACKET_SCHEMA]: [{ version: 1, canonicalization: SORTED_JSON_V1, explicit: false }, { version: DOMAIN_CHANGE_PACKET_VERSION, canonicalization: SORTED_JSON_V2, explicit: true }],
+  [INVESTIGATION_MANIFEST_SCHEMA]: [{ version: 1, canonicalization: SORTED_JSON_V1, explicit: false }, { version: INVESTIGATION_MANIFEST_VERSION, canonicalization: SORTED_JSON_V2, explicit: true }],
 });
 
 function record(value: unknown): UnknownRecord | null {
@@ -263,8 +281,14 @@ async function verifySignedArtifact(
     || !/^sha256:[a-f0-9]{64}$/u.test(integrity.digestSha256)) {
     throw new TypeError('The signed review artefact has a missing or malformed integrity envelope.');
   }
+  const canonicalization = resolveArtifactCanonicalization(
+    version,
+    integrity.canonicalization,
+    SIGNED_ARTIFACT_CANONICALIZATION[schema] ?? [],
+    'Signed review artefact',
+  );
   const { integrity: _integrity, ...unsigned } = value;
-  if (await sha256ArtifactDigest(unsigned) !== integrity.digestSha256) {
+  if (await sha256ArtifactDigestFor(unsigned, canonicalization) !== integrity.digestSha256) {
     throw new TypeError('The signed review artefact failed its SHA-256 integrity check.');
   }
   if (schema === DOMAIN_CONTROL_MANIFEST_SCHEMA) verifyDomainControlManifest(value);
@@ -306,7 +330,7 @@ export async function verifyOfflineArtifact(
       artifact: Object.freeze({
         kind: 'cli_case_pack',
         schema: CLI_CASE_PACK_SCHEMA,
-        version: CLI_CASE_PACK_VERSION,
+        version: Number(casePackPacket.version),
       }),
       state: 'verified',
       checks: Object.freeze({
@@ -369,7 +393,7 @@ export async function verifyOfflineArtifact(
   }
 
   if (schema === CASE_RESPONSE_PACKET_SCHEMA) {
-    if (version !== CASE_RESPONSE_PACKET_VERSION) {
+    if (version !== LEGACY_CASE_RESPONSE_PACKET_VERSION && version !== CASE_RESPONSE_PACKET_VERSION) {
       throw new UnsupportedOfflineArtifactError('This case-response packet version is not supported.');
     }
     validateOfflineArtifactStructure(schema, value);
@@ -401,21 +425,22 @@ export async function verifyOfflineArtifact(
   }
 
   if (schema === INVESTIGATION_CAPSULE_SCHEMA) {
-    if (version !== INVESTIGATION_CAPSULE_VERSION) {
+    if (version !== LEGACY_INVESTIGATION_CAPSULE_VERSION && version !== INVESTIGATION_CAPSULE_VERSION) {
       throw new UnsupportedOfflineArtifactError('This investigation-capsule version is not supported.');
     }
     validateInvestigationCapsuleStructure(value);
     const verification = await verifyInvestigationCapsule(value as InvestigationCapsule);
     if (!verification.valid) throw new TypeError('The investigation capsule failed its embedded projection integrity checks.');
+    const current = version === INVESTIGATION_CAPSULE_VERSION;
     return Object.freeze({
       schema: OFFLINE_ARTIFACT_VERIFICATION_SCHEMA,
       version: OFFLINE_ARTIFACT_VERIFICATION_VERSION,
       artifact: Object.freeze({ kind: 'investigation_capsule', schema, version }),
-      state: 'integrity_valid',
+      state: current ? 'verified' : 'integrity_valid',
       checks: Object.freeze({
         structure: 'verified',
         contentIntegrity: 'verified',
-        contentIntegrityScope: 'embedded_projections',
+        contentIntegrityScope: current ? 'whole_artifact' : 'embedded_projections',
         authenticatedEncryption: 'not_applicable',
       }),
       summary: Object.freeze({
@@ -425,7 +450,9 @@ export async function verifyOfflineArtifact(
         ciphertextBytes: null,
       }),
       limitations: Object.freeze([
-        'The embedded brief, graph, and optional analyst-record projections match their declared digests. Capsule metadata and the linked Lookup evidence are outside those projection digests and must not be treated as whole-file integrity verified.',
+        ...(current
+          ? ['The whole capsule matches its declared digest, including metadata and the linked source-contract projection digests. The non-embedded Lookup evidence remains linked by digest and must be retained separately.']
+          : ['The embedded brief, graph, and optional analyst-record projections match their declared digests. Capsule metadata and the linked Lookup evidence are outside those projection digests and must not be treated as whole-file integrity verified.']),
         'Digest verification detects changed content but does not authenticate the analyst, signer, collection source, or truth of retained observations and assertions.',
       ]),
     });

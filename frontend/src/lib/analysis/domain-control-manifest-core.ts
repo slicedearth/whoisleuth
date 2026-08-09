@@ -1,10 +1,17 @@
-import { canonicalArtifactJson } from './artifact-integrity.ts';
+import {
+  canonicalArtifactJsonFor,
+  resolveArtifactCanonicalization,
+  SORTED_JSON_V1,
+  SORTED_JSON_V2,
+  type ArtifactCanonicalization,
+} from './artifact-integrity.ts';
 import { normalizeDomain } from './case-record-core.ts';
 import { canonicalDomainControlRecordList } from './domain-control-records.ts';
 
 export const DOMAIN_CONTROL_PASSPORT_INPUT_SCHEMA = 'whoisleuth.domain-control-manifest-input';
 export const DOMAIN_CONTROL_PASSPORT_SCHEMA = 'whoisleuth.domain-control-manifest';
 export const DOMAIN_CONTROL_PASSPORT_VERSION = 1;
+export const DOMAIN_CONTROL_MANIFEST_VERSION = 2;
 export const MAX_DOMAIN_CONTROL_PASSPORT_ENTRIES = 100;
 export const DOMAIN_CONTROL_PASSPORT_LIMITATIONS = Object.freeze([
   'This analyst-authored manifest records intended domain-control state. It does not collect evidence or change registrar, DNS, mail, or certificate configuration.',
@@ -32,7 +39,7 @@ export type DomainControlPassportEntry = Readonly<{
 
 export type UnsignedDomainControlPassport = Readonly<{
   schema: typeof DOMAIN_CONTROL_PASSPORT_SCHEMA;
-  version: typeof DOMAIN_CONTROL_PASSPORT_VERSION;
+  version: typeof DOMAIN_CONTROL_PASSPORT_VERSION | typeof DOMAIN_CONTROL_MANIFEST_VERSION;
   generatedAt: string;
   expiresAt: string;
   entries: readonly DomainControlPassportEntry[];
@@ -42,7 +49,7 @@ export type UnsignedDomainControlPassport = Readonly<{
 export type DomainControlPassport = UnsignedDomainControlPassport & Readonly<{
   integrity: Readonly<{
     algorithm: 'SHA-256';
-    canonicalization: 'sorted-json-v1';
+    canonicalization: typeof SORTED_JSON_V1 | typeof SORTED_JSON_V2;
     digestSha256: string;
   }>;
 }>;
@@ -130,7 +137,7 @@ export function buildUnsignedDomainControlPassport(
   }
   return Object.freeze({
     schema: DOMAIN_CONTROL_PASSPORT_SCHEMA,
-    version: DOMAIN_CONTROL_PASSPORT_VERSION,
+    version: DOMAIN_CONTROL_MANIFEST_VERSION,
     generatedAt,
     expiresAt,
     entries: Object.freeze([...normalizedEntries].sort((left, right) => left.domain.localeCompare(right.domain))),
@@ -142,40 +149,50 @@ export function normalizeDomainControlPassportDocument(value: unknown): Readonly
   manifest: DomainControlPassport;
   unsigned: UnsignedDomainControlPassport;
   canonicalUnsigned: string;
+  canonicalization: ArtifactCanonicalization;
 }> {
   const source = record(value);
   const integrity = record(source?.integrity);
   if (!source
     || source.schema !== DOMAIN_CONTROL_PASSPORT_SCHEMA
-    || source.version !== DOMAIN_CONTROL_PASSPORT_VERSION
     || !integrity
     || integrity.algorithm !== 'SHA-256'
-    || integrity.canonicalization !== 'sorted-json-v1'
     || typeof integrity.digestSha256 !== 'string'
     || !/^sha256:[a-f0-9]{64}$/u.test(integrity.digestSha256)) {
     throw new TypeError('Domain control manifest has an unsupported or malformed structure.');
   }
   exactKeys(source, MANIFEST_KEYS, 'Domain control manifest');
   exactKeys(integrity, INTEGRITY_KEYS, 'Domain control manifest integrity');
+  const canonicalization = resolveArtifactCanonicalization(
+    source.version,
+    integrity.canonicalization,
+    [
+      { version: DOMAIN_CONTROL_PASSPORT_VERSION, canonicalization: SORTED_JSON_V1, explicit: true },
+      { version: DOMAIN_CONTROL_MANIFEST_VERSION, canonicalization: SORTED_JSON_V2, explicit: true },
+    ],
+    'Domain control manifest',
+  );
   if (!Array.isArray(source.limitations)
     || source.limitations.length !== DOMAIN_CONTROL_PASSPORT_LIMITATIONS.length
     || source.limitations.some((item, index) => item !== DOMAIN_CONTROL_PASSPORT_LIMITATIONS[index])) {
     throw new TypeError('Domain control manifest has an unsupported or malformed structure.');
   }
-  const unsigned = buildUnsignedDomainControlPassport({
+  const baseUnsigned = buildUnsignedDomainControlPassport({
     schema: DOMAIN_CONTROL_PASSPORT_INPUT_SCHEMA,
     version: DOMAIN_CONTROL_PASSPORT_VERSION,
     expiresAt: source.expiresAt,
     entries: source.entries,
   }, source.generatedAt);
+  const unsigned = Object.freeze({ ...baseUnsigned, version: source.version }) as UnsignedDomainControlPassport;
   const { integrity: _integrity, ...suppliedUnsigned } = source;
-  const canonicalUnsigned = canonicalArtifactJson(unsigned);
-  if (canonicalArtifactJson(suppliedUnsigned) !== canonicalUnsigned) {
+  const canonicalUnsigned = canonicalArtifactJsonFor(unsigned, canonicalization);
+  if (canonicalArtifactJsonFor(suppliedUnsigned, canonicalization) !== canonicalUnsigned) {
     throw new TypeError('Domain control manifest must use its canonical normalised content.');
   }
   return {
     manifest: source as unknown as DomainControlPassport,
     unsigned,
     canonicalUnsigned,
+    canonicalization,
   };
 }

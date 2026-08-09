@@ -16,7 +16,10 @@ import {
   WORKSPACE_ARCHIVE_PBKDF2_ITERATIONS,
   type EncryptedWorkspaceArchiveEnvelope,
 } from '../frontend/src/lib/analysis/workspace-archive-crypto.ts';
-import { sha256ArtifactDigest } from '../frontend/src/lib/analysis/artifact-integrity.ts';
+import {
+  sha256ArtifactDigest,
+  sha256ArtifactDigestV2,
+} from '../frontend/src/lib/analysis/artifact-integrity.ts';
 import { buildInvestigationCapsule } from '../frontend/src/lib/analysis/investigation-capsule.ts';
 import { buildBulkReviewManifest } from '../frontend/src/lib/analysis/bulk-review-export.ts';
 import { buildCaseResponsePacket } from '../frontend/src/lib/analysis/case-response-packet.ts';
@@ -62,25 +65,30 @@ async function replaceAuthenticatedWorkspacePlaintext(
 
 async function resignArtifact<T extends Record<string, unknown>>(value: T): Promise<T> {
   const { integrity: _integrity, ...unsigned } = value;
+  const packetVersion = (value.packet as Record<string, unknown> | undefined)?.version;
+  const casePack = packetVersion !== undefined;
+  const current = packetVersion === undefined ? Number(value.version) > 1 : packetVersion === 2;
+  const canonicalization = current ? 'sorted-json-v2' : casePack ? 'sorted-json-v1' : undefined;
   return {
     ...unsigned,
     integrity: {
       algorithm: 'SHA-256',
-      canonicalization: 'sorted-json-v1',
-      digestSha256: await sha256ArtifactDigest(unsigned),
+      ...(canonicalization === undefined ? {} : { canonicalization }),
+      digestSha256: await (current ? sha256ArtifactDigestV2(unsigned) : sha256ArtifactDigest(unsigned)),
     },
   } as unknown as T;
 }
 
 async function resignCaseResponsePacket<T extends Record<string, unknown>>(value: T): Promise<T> {
   const { integrity: _integrity, ...unsigned } = value;
+  const current = value.schemaVersion === 6;
   return {
     ...unsigned,
     integrity: {
       algorithm: 'SHA-256',
-      canonicalization: 'sorted-json-v1',
+      canonicalization: current ? 'sorted-json-v2' : 'sorted-json-v1',
       scope: 'packet excluding integrity',
-      digestSha256: (await sha256ArtifactDigest(unsigned)).slice('sha256:'.length),
+      digestSha256: (await (current ? sha256ArtifactDigestV2(unsigned) : sha256ArtifactDigest(unsigned))).slice('sha256:'.length),
     },
   } as unknown as T;
 }
@@ -249,7 +257,7 @@ describe('offline artifact verifier', () => {
 
     const changed = structuredClone(pack);
     changed.cases[0]!.status = 'closed';
-    await assert.rejects(verifyOfflineArtifact(JSON.stringify(changed)), /failed its SHA-256/iu);
+    await assert.rejects(verifyOfflineArtifact(JSON.stringify(changed)), /would be repaired|failed its SHA-256/iu);
   });
 
   test('inherits strict nested Brand Profile reference checks for recomputed CLI case packs', async () => {
@@ -335,7 +343,7 @@ describe('offline artifact verifier', () => {
     );
   });
 
-  test('reports projection-scoped capsule assurance and detects changed embedded projections', async () => {
+  test('reports whole-capsule assurance and detects changed metadata or embedded projections', async () => {
     const graph = {
       version: 2 as const,
       targetId: 'target-example',
@@ -356,16 +364,14 @@ describe('offline artifact verifier', () => {
     });
     const report = await verifyOfflineArtifact(JSON.stringify(capsule));
     assert.equal(report.artifact.kind, 'investigation_capsule');
-    assert.equal(report.state, 'integrity_valid');
+    assert.equal(report.state, 'verified');
     assert.equal(report.checks.contentIntegrity, 'verified');
-    assert.equal(report.checks.contentIntegrityScope, 'embedded_projections');
-    assert.match(report.limitations.join(' '), /outside those projection digests/iu);
-    const metadataChanged = await verifyOfflineArtifact(JSON.stringify({
+    assert.equal(report.checks.contentIntegrityScope, 'whole_artifact');
+    assert.match(report.limitations.join(' '), /whole capsule/iu);
+    await assert.rejects(verifyOfflineArtifact(JSON.stringify({
       ...capsule,
       generatedAt: '2026-08-04T02:00:00.000Z',
-    }));
-    assert.equal(metadataChanged.state, 'integrity_valid');
-    assert.notEqual(metadataChanged.checks.contentIntegrityScope, 'whole_artifact');
+    })), /integrity checks/iu);
     await assert.rejects(verifyOfflineArtifact(JSON.stringify({
       ...capsule,
       graphSnapshot: { ...capsule.graphSnapshot, nodes: [{ ...capsule.graphSnapshot.nodes[0]!, label: 'changed.test' }] },
@@ -375,7 +381,7 @@ describe('offline artifact verifier', () => {
       stdout: { write() {} }, stderr: { write() {} },
       readArtifactInput: async () => JSON.stringify(capsule),
     });
-    assert.equal(strictCode, EXIT_CODES.PARTIAL_FAILURE);
+    assert.equal(strictCode, EXIT_CODES.SUCCESS);
   });
 
   test('rejects unsupported, malformed, and oversized input', async () => {
@@ -400,19 +406,25 @@ describe('offline artifact verifier', () => {
 
   test('rejects recomputed content-free digest envelopes for every supported review schema', async () => {
     const schemas = [
-      ['whoisleuth.acquisition-decision', 1],
-      ['whoisleuth.domain-comparison', 3],
-      ['whoisleuth.bulk-mail-exposure', 1],
-      ['whoisleuth.bulk-review-manifest', 1],
-      ['whoisleuth.domain-control-manifest', 1],
-      ['whoisleuth.domain-change-packet', 1],
-      ['whoisleuth.investigation-manifest', 1],
+      ['whoisleuth.acquisition-decision', 1, null], ['whoisleuth.acquisition-decision', 2, 'sorted-json-v2'],
+      ['whoisleuth.domain-comparison', 3, null], ['whoisleuth.domain-comparison', 4, 'sorted-json-v2'],
+      ['whoisleuth.bulk-mail-exposure', 1, null], ['whoisleuth.bulk-mail-exposure', 2, 'sorted-json-v2'],
+      ['whoisleuth.bulk-review-manifest', 1, null], ['whoisleuth.bulk-review-manifest', 2, 'sorted-json-v2'],
+      ['whoisleuth.domain-control-manifest', 1, 'sorted-json-v1'], ['whoisleuth.domain-control-manifest', 2, 'sorted-json-v2'],
+      ['whoisleuth.domain-change-packet', 1, null], ['whoisleuth.domain-change-packet', 2, 'sorted-json-v2'],
+      ['whoisleuth.investigation-manifest', 1, null], ['whoisleuth.investigation-manifest', 2, 'sorted-json-v2'],
     ] as const;
-    for (const [schema, version] of schemas) {
+    for (const [schema, version, canonicalization] of schemas) {
       const unsigned = { schema, version };
       const contentFree = {
         ...unsigned,
-        integrity: { algorithm: 'SHA-256', digestSha256: await sha256ArtifactDigest(unsigned) },
+        integrity: {
+          algorithm: 'SHA-256',
+          ...(canonicalization ? { canonicalization } : {}),
+          digestSha256: await (canonicalization === 'sorted-json-v2'
+            ? sha256ArtifactDigestV2(unsigned)
+            : sha256ArtifactDigest(unsigned)),
+        },
       };
       await assert.rejects(
         verifyOfflineArtifact(JSON.stringify(contentFree)),
@@ -421,18 +433,24 @@ describe('offline artifact verifier', () => {
       );
     }
 
-    const packetUnsigned = { schema: 'whoisleuth.case-response-packet', schemaVersion: 5 };
-    await assert.rejects(verifyOfflineArtifact(JSON.stringify({
-      ...packetUnsigned,
-      integrity: {
-        algorithm: 'SHA-256', canonicalization: 'sorted-json-v1', scope: 'packet excluding integrity',
-        digestSha256: (await sha256ArtifactDigest(packetUnsigned)).slice('sha256:'.length),
-      },
-    })), /unsupported or malformed structure/iu);
-    await assert.rejects(verifyOfflineArtifact(JSON.stringify({
-      schema: 'whoisleuth.investigation-capsule', schemaVersion: 1,
-      integrity: { algorithm: 'SHA-256', briefDigest: `sha256:${'0'.repeat(64)}`, graphDigest: `sha256:${'0'.repeat(64)}`, analystRecordsDigest: null },
-    })), /unsupported or malformed structure/iu);
+    for (const schemaVersion of [5, 6] as const) {
+      const packetUnsigned = { schema: 'whoisleuth.case-response-packet', schemaVersion };
+      await assert.rejects(verifyOfflineArtifact(JSON.stringify({
+        ...packetUnsigned,
+        integrity: {
+          algorithm: 'SHA-256', canonicalization: schemaVersion === 6 ? 'sorted-json-v2' : 'sorted-json-v1', scope: 'packet excluding integrity',
+          digestSha256: (await (schemaVersion === 6 ? sha256ArtifactDigestV2(packetUnsigned) : sha256ArtifactDigest(packetUnsigned))).slice('sha256:'.length),
+        },
+      })), /unsupported or malformed structure/iu);
+    }
+    for (const schemaVersion of [1, 2] as const) {
+      await assert.rejects(verifyOfflineArtifact(JSON.stringify({
+        schema: 'whoisleuth.investigation-capsule', schemaVersion,
+        integrity: schemaVersion === 1
+          ? { algorithm: 'SHA-256', briefDigest: `sha256:${'0'.repeat(64)}`, graphDigest: `sha256:${'0'.repeat(64)}`, analystRecordsDigest: null }
+          : { algorithm: 'SHA-256', canonicalization: 'sorted-json-v2', scope: 'capsule excluding integrity', briefDigest: `sha256:${'0'.repeat(64)}`, graphDigest: `sha256:${'0'.repeat(64)}`, analystRecordsDigest: null, digestSha256: `sha256:${'0'.repeat(64)}` },
+      })), /unsupported or malformed structure/iu);
+    }
   });
 
   test('enforces the real Case v5 collection maxima before accepting a recomputed packet digest', async () => {

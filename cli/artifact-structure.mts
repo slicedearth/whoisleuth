@@ -2,15 +2,25 @@ import {
   ACQUISITION_DECISIONS,
   ACQUISITION_MANUAL_CHECKS,
   ACQUISITION_DECISION_PACKET_SCHEMA,
+  ACQUISITION_DECISION_PACKET_VERSION,
 } from '../frontend/src/lib/analysis/acquisition-decision-packet.ts';
-import { BULK_DOMAIN_COMPARISON_SCHEMA } from '../frontend/src/lib/analysis/bulk-domain-comparison.ts';
 import {
+  BULK_DOMAIN_COMPARISON_EXPORT_VERSION,
+  BULK_DOMAIN_COMPARISON_SCHEMA,
+} from '../frontend/src/lib/analysis/bulk-domain-comparison.ts';
+import {
+  BULK_MAIL_EXPOSURE_EXPORT_VERSION,
   BULK_MAIL_EXPOSURE_SCHEMA,
   MAX_BULK_MAIL_EXPOSURE_ROWS,
 } from '../frontend/src/lib/analysis/bulk-mail-exposure.ts';
-import { BULK_REVIEW_MANIFEST_SCHEMA } from '../frontend/src/lib/analysis/bulk-review-export.ts';
+import {
+  BULK_REVIEW_MANIFEST_SCHEMA,
+  BULK_REVIEW_MANIFEST_VERSION,
+} from '../frontend/src/lib/analysis/bulk-review-export.ts';
 import {
   CASE_RESPONSE_PACKET_SCHEMA,
+  CASE_RESPONSE_PACKET_VERSION,
+  LEGACY_CASE_RESPONSE_PACKET_VERSION,
   MAX_ABUSIVE_URLS,
   MAX_RESPONSE_ACTION_HISTORY,
   MAX_RESPONSE_CONTACTS,
@@ -33,14 +43,16 @@ import {
 } from '../frontend/src/lib/analysis/case-response-model.ts';
 import {
   INVESTIGATION_CAPSULE_SCHEMA,
-  type InvestigationCapsule,
+  INVESTIGATION_CAPSULE_VERSION,
+  LEGACY_INVESTIGATION_CAPSULE_VERSION,
 } from '../frontend/src/lib/analysis/investigation-capsule.ts';
 import { LOOKUP_INVESTIGATION_BRIEF_SCHEMA } from '../frontend/src/lib/analysis/lookup-investigation-brief.ts';
 import { normalizeDomainControlPassportDocument } from '../frontend/src/lib/analysis/domain-control-manifest-core.ts';
-import { DOMAIN_CHANGE_PACKET_SCHEMA } from '../lib/domain-change-packet.mts';
+import { DOMAIN_CHANGE_PACKET_SCHEMA, DOMAIN_CHANGE_PACKET_VERSION } from '../lib/domain-change-packet.mts';
 import { DOMAIN_CONTROL_MANIFEST_SCHEMA } from '../lib/domain-control-manifest.mts';
 import {
   INVESTIGATION_MANIFEST_SCHEMA,
+  INVESTIGATION_MANIFEST_VERSION,
   MAX_INVESTIGATION_MANIFEST_ARTIFACTS,
   MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES,
 } from './investigation-manifest.mts';
@@ -134,12 +146,21 @@ function domain(value: unknown, label: string): void {
   if (typeof value !== 'string' || !DOMAIN_RE.test(value)) fail(label);
 }
 
-function validateIntegrity(value: unknown, label: string, canonicalization = false): void {
-  const integrity = exact(value, canonicalization
+function validateIntegrity(
+  value: unknown,
+  label: string,
+  version: unknown,
+  legacyVersion: number,
+  currentVersion: number,
+  legacyExplicit = false,
+): void {
+  const explicit = version === currentVersion || (version === legacyVersion && legacyExplicit);
+  if (version !== legacyVersion && version !== currentVersion) fail(label);
+  const integrity = exact(value, explicit
     ? ['algorithm', 'canonicalization', 'digestSha256']
     : ['algorithm', 'digestSha256'], label);
   if (integrity.algorithm !== 'SHA-256') fail(label);
-  if (canonicalization && integrity.canonicalization !== 'sorted-json-v1') fail(label);
+  if (explicit && integrity.canonicalization !== (version === currentVersion ? 'sorted-json-v2' : 'sorted-json-v1')) fail(label);
   digest(integrity.digestSha256, label);
 }
 
@@ -187,7 +208,7 @@ function validateAcquisition(value: UnknownRecord): void {
   strings(evidence.nextSteps, 'Acquisition next steps', 6, 600);
   strings(evidence.limitations, 'Acquisition evidence limitations', 12, 600);
   strings(root.limitations, 'Acquisition limitations', 8, 600);
-  validateIntegrity(root.integrity, 'Acquisition integrity');
+  validateIntegrity(root.integrity, 'Acquisition integrity', root.version, 1, ACQUISITION_DECISION_PACKET_VERSION);
 }
 
 const COMPARISON_STATES = ['conflicting', 'different', 'equal', 'missing', 'not_recorded', 'unavailable'] as const;
@@ -237,7 +258,7 @@ function validateDomainComparison(value: UnknownRecord): void {
     if (integer(counts[state], `Domain comparison ${state} count`, 0, rows.length) !== actual.get(state)) fail('Domain comparison counts');
   }
   strings(comparison.limitations, 'Domain comparison limitations', 12, 600);
-  validateIntegrity(root.integrity, 'Domain comparison integrity');
+  validateIntegrity(root.integrity, 'Domain comparison integrity', root.version, 3, BULK_DOMAIN_COMPARISON_EXPORT_VERSION);
 }
 
 const MAIL_STATES = ['authenticated_mail', 'evidence_incomplete', 'mail_auth_gap', 'mail_auth_incomplete', 'no_explicit_mx', 'null_mx'] as const;
@@ -295,7 +316,7 @@ function validateMailExposure(value: UnknownRecord): void {
   const declaredUnevaluated = integer(report.profileContextUnevaluatedCount, 'Bulk mail exposure unevaluated count', 0, rows.length);
   if (declaredUnevaluated < unevaluated) fail('Bulk mail exposure unevaluated count');
   strings(report.limitations, 'Bulk mail exposure limitations', 12, 600);
-  validateIntegrity(root.integrity, 'Bulk mail exposure integrity');
+  validateIntegrity(root.integrity, 'Bulk mail exposure integrity', root.version, 1, BULK_MAIL_EXPOSURE_EXPORT_VERSION);
 }
 
 function validateBulkView(value: unknown, label: string): void {
@@ -338,7 +359,7 @@ function validateBulkReviewManifest(value: UnknownRecord): void {
   }
   if (rows.length !== domains.length) fail('Bulk review manifest selection');
   strings(root.limitations, 'Bulk review manifest limitations', 8, 600);
-  validateIntegrity(root.integrity, 'Bulk review manifest integrity');
+  validateIntegrity(root.integrity, 'Bulk review manifest integrity', root.version, 1, BULK_REVIEW_MANIFEST_VERSION);
 }
 
 function validateInvestigationManifest(value: UnknownRecord): void {
@@ -369,7 +390,7 @@ function validateInvestigationManifest(value: UnknownRecord): void {
   if (integer(summary.artifactCount, 'Investigation manifest artifact count', 1, MAX_INVESTIGATION_MANIFEST_ARTIFACTS) !== artifacts.length
     || integer(summary.totalBytes, 'Investigation manifest total bytes', 1, MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES) !== totalBytes) fail('Investigation manifest summary');
   strings(root.limitations, 'Investigation manifest limitations', 8, 600);
-  validateIntegrity(root.integrity, 'Investigation manifest integrity');
+  validateIntegrity(root.integrity, 'Investigation manifest integrity', root.version, 1, INVESTIGATION_MANIFEST_VERSION);
 }
 
 function validateActionSummary(value: unknown, label: string): void {
@@ -414,6 +435,7 @@ function expectedObservationAge(observedAt: string, generatedAt: string): Readon
 
 function validateCaseResponsePacket(value: UnknownRecord): void {
   const root = exact(value, ['schema', 'schemaVersion', 'generatedAt', 'reviewRequired', 'submissionPerformed', 'profile', 'case', 'incident', 'contacts', 'preflight', 'escalationHistory', 'provenance', 'integrity'], 'Case-response packet');
+  if (root.schemaVersion !== LEGACY_CASE_RESPONSE_PACKET_VERSION && root.schemaVersion !== CASE_RESPONSE_PACKET_VERSION) fail('Case-response packet');
   iso(root.generatedAt, 'Case-response packet generatedAt');
   if (root.reviewRequired !== true || root.submissionPerformed !== false) fail('Case-response packet review state');
   const profile = exact(root.profile, ['id', 'label', 'audience', 'subject', 'checklist', 'evidenceOrder', 'includedEvidence', 'excludedEvidence', 'redactions', 'attachments', 'followUpFields'], 'Case-response profile');
@@ -515,7 +537,9 @@ function validateCaseResponsePacket(value: UnknownRecord): void {
     || age.refreshRecommended !== expectedAge.refreshRecommended) fail('Case-response observation age');
   strings(provenance.limitations, 'Case-response limitations', 8, 600);
   const integrity = exact(root.integrity, ['algorithm', 'canonicalization', 'scope', 'digestSha256'], 'Case-response integrity');
-  if (integrity.algorithm !== 'SHA-256' || integrity.canonicalization !== 'sorted-json-v1' || integrity.scope !== 'packet excluding integrity') fail('Case-response integrity');
+  if (integrity.algorithm !== 'SHA-256'
+    || integrity.canonicalization !== (root.schemaVersion === CASE_RESPONSE_PACKET_VERSION ? 'sorted-json-v2' : 'sorted-json-v1')
+    || integrity.scope !== 'packet excluding integrity') fail('Case-response integrity');
   if (typeof integrity.digestSha256 !== 'string' || !HEX_DIGEST_RE.test(integrity.digestSha256)) fail('Case-response integrity');
 }
 
@@ -666,8 +690,9 @@ function validateAnalystRecords(value: unknown): void {
   }
 }
 
-export function validateInvestigationCapsuleStructure(value: UnknownRecord): asserts value is UnknownRecord & InvestigationCapsule {
+export function validateInvestigationCapsuleStructure(value: UnknownRecord): void {
   const root = exact(value, ['schema', 'schemaVersion', 'generatedAt', 'application', 'target', 'sourceContracts', 'investigationBrief', 'graphSnapshot', 'analystRecords', 'integrity', 'limitations'], 'Investigation capsule');
+  if (root.schemaVersion !== LEGACY_INVESTIGATION_CAPSULE_VERSION && root.schemaVersion !== INVESTIGATION_CAPSULE_VERSION) fail('Investigation capsule');
   iso(root.generatedAt, 'Investigation capsule generatedAt');
   const application = exact(root.application, ['name', 'version'], 'Investigation capsule application');
   if (application.name !== 'WHOISleuth' || typeof application.version !== 'string'
@@ -711,8 +736,15 @@ export function validateInvestigationCapsuleStructure(value: UnknownRecord): ass
     || graph.targetId === undefined
     || (brief.relationships as UnknownRecord).nodes !== (graph.nodes as unknown[]).length
     || (brief.relationships as UnknownRecord).edges !== (graph.edges as unknown[]).length) fail('Investigation capsule projection linkage');
-  const integrity = exact(root.integrity, ['algorithm', 'briefDigest', 'graphDigest', 'analystRecordsDigest'], 'Investigation capsule integrity');
+  const current = root.schemaVersion === INVESTIGATION_CAPSULE_VERSION;
+  const integrity = exact(root.integrity, current
+    ? ['algorithm', 'canonicalization', 'scope', 'briefDigest', 'graphDigest', 'analystRecordsDigest', 'digestSha256']
+    : ['algorithm', 'briefDigest', 'graphDigest', 'analystRecordsDigest'], 'Investigation capsule integrity');
   if (integrity.algorithm !== 'SHA-256') fail('Investigation capsule integrity');
+  if (current) {
+    if (integrity.canonicalization !== 'sorted-json-v2' || integrity.scope !== 'capsule excluding integrity') fail('Investigation capsule integrity');
+    digest(integrity.digestSha256, 'Investigation capsule digest');
+  }
   digest(integrity.briefDigest, 'Investigation capsule brief digest');
   digest(integrity.graphDigest, 'Investigation capsule graph digest');
   if (integrity.analystRecordsDigest !== null) digest(integrity.analystRecordsDigest, 'Investigation capsule analyst digest');
@@ -932,7 +964,7 @@ function validateDomainChangePacket(value: UnknownRecord): void {
       || !sameValues(item.afterValues as unknown[], expected.afterValues);
   })) fail('Domain change packet summary');
   strings(root.limitations, 'Domain change packet limitations', 8, 600);
-  validateIntegrity(root.integrity, 'Domain change packet integrity');
+  validateIntegrity(root.integrity, 'Domain change packet integrity', root.version, 1, DOMAIN_CHANGE_PACKET_VERSION);
 }
 
 export function validateSignedDigestArtifactStructure(schema: string, value: UnknownRecord): void {

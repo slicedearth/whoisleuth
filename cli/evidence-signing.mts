@@ -8,7 +8,13 @@ import {
   type KeyObject,
 } from 'node:crypto';
 
-import { canonicalArtifactJson } from '../frontend/src/lib/analysis/artifact-integrity.ts';
+import {
+  canonicalArtifactJsonFor,
+  resolveArtifactCanonicalization,
+  SORTED_JSON_V1,
+  SORTED_JSON_V2,
+  type ArtifactCanonicalization,
+} from '../frontend/src/lib/analysis/artifact-integrity.ts';
 import {
   hasVerifiedApplicableIntegrity,
   hasVerifiedArtifactStructure,
@@ -21,21 +27,26 @@ import {
 import { parseBoundedJsonObject } from './bounded-json.mts';
 
 export const SIGNED_EVIDENCE_PACKAGE_SCHEMA = 'whoisleuth.signed-evidence-package';
-export const SIGNED_EVIDENCE_PACKAGE_VERSION = 1;
+export const SIGNED_EVIDENCE_PACKAGE_VERSION = 2;
+export const LEGACY_SIGNED_EVIDENCE_PACKAGE_VERSION = 1;
 export const EVIDENCE_SIGNATURE_VERIFICATION_SCHEMA = 'whoisleuth.evidence-signature-verification';
 export const EVIDENCE_SIGNATURE_VERIFICATION_VERSION = 2;
 export const EVIDENCE_SIGNATURE_ALGORITHM = 'Ed25519';
-export const EVIDENCE_SIGNATURE_CANONICALIZATION = 'sorted-json-v1';
+export const EVIDENCE_SIGNATURE_CANONICALIZATION = SORTED_JSON_V2;
 export const MAX_SIGNING_KEY_FILE_BYTES = 16 * 1024;
 
 type UnknownRecord = Record<string, unknown>;
 type SignedPayload = Readonly<{
   schema: typeof SIGNED_EVIDENCE_PACKAGE_SCHEMA;
-  version: typeof SIGNED_EVIDENCE_PACKAGE_VERSION;
+  version: typeof LEGACY_SIGNED_EVIDENCE_PACKAGE_VERSION | typeof SIGNED_EVIDENCE_PACKAGE_VERSION;
   signedAt: string;
   artifact: UnknownRecord;
 }>;
-export type SignedEvidencePackage = SignedPayload & Readonly<{
+type CurrentSignedPayload = Omit<SignedPayload, 'version'> & Readonly<{
+  version: typeof SIGNED_EVIDENCE_PACKAGE_VERSION;
+}>;
+export type SignedEvidencePackage = Omit<SignedPayload, 'version'> & Readonly<{
+  version: typeof SIGNED_EVIDENCE_PACKAGE_VERSION;
   signature: Readonly<{
     algorithm: typeof EVIDENCE_SIGNATURE_ALGORITHM;
     canonicalization: typeof EVIDENCE_SIGNATURE_CANONICALIZATION;
@@ -153,8 +164,8 @@ function keyId(publicDer: Buffer): string {
   return createHash('sha256').update(publicDer).digest('hex');
 }
 
-function payloadBytes(payload: SignedPayload): Buffer {
-  return Buffer.from(canonicalArtifactJson(payload), 'utf8');
+function payloadBytes(payload: SignedPayload, canonicalization: ArtifactCanonicalization): Buffer {
+  return Buffer.from(canonicalArtifactJsonFor(payload, canonicalization), 'utf8');
 }
 
 async function signableArtifact(raw: string): Promise<{
@@ -180,7 +191,7 @@ export async function signEvidencePackage(
   const { artifact } = await signableArtifact(raw);
   const privateKey = importPrivateKey(privateKeyPem);
   const publicDer = spkiDer(privateKey);
-  const payload: SignedPayload = Object.freeze({
+  const payload: CurrentSignedPayload = Object.freeze({
     schema: SIGNED_EVIDENCE_PACKAGE_SCHEMA,
     version: SIGNED_EVIDENCE_PACKAGE_VERSION,
     signedAt: timestamp(signedAt),
@@ -193,7 +204,7 @@ export async function signEvidencePackage(
       canonicalization: EVIDENCE_SIGNATURE_CANONICALIZATION,
       publicKeySpkiDerBase64: publicDer.toString('base64'),
       keyIdSha256: keyId(publicDer),
-      valueBase64: sign(null, payloadBytes(payload), privateKey).toString('base64'),
+      valueBase64: sign(null, payloadBytes(payload, SORTED_JSON_V2), privateKey).toString('base64'),
     }),
   });
 }
@@ -207,12 +218,11 @@ export async function verifyEvidencePackageSignature(
   const artifact = record(value.artifact);
   if (!hasExactKeys(value, PACKAGE_KEYS)
     || value.schema !== SIGNED_EVIDENCE_PACKAGE_SCHEMA
-    || value.version !== SIGNED_EVIDENCE_PACKAGE_VERSION
+    || (value.version !== LEGACY_SIGNED_EVIDENCE_PACKAGE_VERSION && value.version !== SIGNED_EVIDENCE_PACKAGE_VERSION)
     || !artifact
     || !signature
     || !hasExactKeys(signature, SIGNATURE_KEYS)
     || signature.algorithm !== EVIDENCE_SIGNATURE_ALGORITHM
-    || signature.canonicalization !== EVIDENCE_SIGNATURE_CANONICALIZATION
     || typeof signature.publicKeySpkiDerBase64 !== 'string'
     || signature.publicKeySpkiDerBase64.length > 4096
     || !BASE64_RE.test(signature.publicKeySpkiDerBase64)
@@ -221,6 +231,20 @@ export async function verifyEvidencePackageSignature(
     || !BASE64_RE.test(signature.valueBase64)
     || typeof signature.keyIdSha256 !== 'string'
     || !SHA256_RE.test(signature.keyIdSha256)) {
+    throw new TypeError('Signed evidence package has an unsupported or malformed envelope.');
+  }
+  let canonicalization: ArtifactCanonicalization;
+  try {
+    canonicalization = resolveArtifactCanonicalization(
+      value.version,
+      signature.canonicalization,
+      [
+        { version: LEGACY_SIGNED_EVIDENCE_PACKAGE_VERSION, canonicalization: SORTED_JSON_V1, explicit: true },
+        { version: SIGNED_EVIDENCE_PACKAGE_VERSION, canonicalization: SORTED_JSON_V2, explicit: true },
+      ],
+      'Signed evidence package',
+    );
+  } catch {
     throw new TypeError('Signed evidence package has an unsupported or malformed envelope.');
   }
   const signedAt = canonicalTimestamp(value.signedAt);
@@ -234,13 +258,13 @@ export async function verifyEvidencePackageSignature(
   );
   const payload: SignedPayload = {
     schema: SIGNED_EVIDENCE_PACKAGE_SCHEMA,
-    version: SIGNED_EVIDENCE_PACKAGE_VERSION,
+    version: value.version as SignedPayload['version'],
     signedAt,
     artifact,
   };
   const signatureBytes = Buffer.from(signature.valueBase64, 'base64');
   if (signatureBytes.length !== 64
-    || !verify(null, payloadBytes(payload), embeddedPublicKey, signatureBytes)) {
+    || !verify(null, payloadBytes(payload, canonicalization), embeddedPublicKey, signatureBytes)) {
     throw new TypeError('Signed evidence package failed Ed25519 verification.');
   }
   let artifactVerification: Awaited<ReturnType<typeof verifyOfflineArtifact>> | null = null;

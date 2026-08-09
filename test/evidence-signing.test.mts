@@ -13,7 +13,11 @@ import {
 import EXIT_CODES from '../cli/exit-codes.mts';
 import { runCli } from '../cli/runner.mts';
 import { buildBulkReviewManifest } from '../frontend/src/lib/analysis/bulk-review-export.ts';
-import { canonicalArtifactJson, sha256ArtifactDigest } from '../frontend/src/lib/analysis/artifact-integrity.ts';
+import {
+  canonicalArtifactJsonV2,
+  sha256ArtifactDigest,
+  sha256ArtifactDigestV2,
+} from '../frontend/src/lib/analysis/artifact-integrity.ts';
 
 const NOW = '2026-07-29T10:00:00.000Z';
 
@@ -44,7 +48,7 @@ function resignPackage<T extends Record<string, unknown>>(value: T, privatePem: 
       ...(signature as Record<string, unknown>),
       valueBase64: cryptoSign(
         null,
-        Buffer.from(canonicalArtifactJson(payload), 'utf8'),
+        Buffer.from(canonicalArtifactJsonV2(payload), 'utf8'),
         createPrivateKey(privatePem),
       ).toString('base64'),
     },
@@ -60,9 +64,9 @@ describe('optional local Ed25519 evidence-package signing', () => {
       NOW,
     );
     assert.equal(signed.schema, 'whoisleuth.signed-evidence-package');
-    assert.equal(signed.version, 1);
+    assert.equal(signed.version, 2);
     assert.equal(signed.signature.algorithm, 'Ed25519');
-    assert.equal(signed.signature.canonicalization, 'sorted-json-v1');
+    assert.equal(signed.signature.canonicalization, 'sorted-json-v2');
     const report = await verifyEvidencePackageSignature(
       JSON.stringify(signed),
       pair.publicPem,
@@ -92,6 +96,21 @@ describe('optional local Ed25519 evidence-package signing', () => {
         ...signed,
         signature: { ...signed.signature, unsignedComment: 'not covered' },
       })),
+      /malformed envelope/iu,
+    );
+    await assert.rejects(
+      verifyEvidencePackageSignature(JSON.stringify({
+        ...signed,
+        signature: { ...signed.signature, canonicalization: 'sorted-json-v1' },
+      })),
+      /malformed envelope/iu,
+    );
+    const missingCanonicalization = structuredClone(signed) as unknown as {
+      signature: Record<string, unknown>;
+    };
+    delete missingCanonicalization.signature.canonicalization;
+    await assert.rejects(
+      verifyEvidencePackageSignature(JSON.stringify(missingCanonicalization)),
       /malformed envelope/iu,
     );
     const rawSigned = JSON.stringify(signed);
@@ -138,7 +157,8 @@ describe('optional local Ed25519 evidence-package signing', () => {
     const { integrity: _integrity, ...unsignedArtifact } = artifact;
     artifact.integrity = {
       algorithm: 'SHA-256',
-      digestSha256: await sha256ArtifactDigest(unsignedArtifact),
+      canonicalization: 'sorted-json-v2',
+      digestSha256: await sha256ArtifactDigestV2(unsignedArtifact),
     };
     const independentlySigned = resignPackage(signed, pair.privatePem);
     const report = await verifyEvidencePackageSignature(JSON.stringify(independentlySigned), pair.publicPem);

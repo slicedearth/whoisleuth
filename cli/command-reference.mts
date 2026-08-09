@@ -240,7 +240,7 @@ const COMMAND_DETAILS: Readonly<Record<CliCommand, CommandDetail>> = Object.free
   'verify-artifact': {
     description: 'Validate a supported archive, packet, manifest, or saved Lookup without printing evidence contents.',
     example: 'whoisleuth verify-artifact workspace.json --json --strict-exit',
-    boundary: 'Verification is offline and redacted. Encrypted archives require an explicitly supplied passphrase file; --strict-exit returns 4 when only an envelope or projection integrity was verified.',
+    boundary: 'Verification is offline and redacted. Encrypted archives require an explicitly supplied passphrase file; --strict-exit returns 4 when only an envelope or legacy projection integrity was verified.',
   },
   'interchange-report': {
     description: 'Report what one recognised portable artefact preserves, excludes, and supports across browser and CLI workflows.',

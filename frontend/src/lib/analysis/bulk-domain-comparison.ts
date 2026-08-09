@@ -4,11 +4,12 @@ import {
   type BulkSessionResult,
   type BulkSessionSourceState,
 } from './bulk-session-model.ts';
-import { sha256ArtifactDigest } from './artifact-integrity.ts';
+import { SORTED_JSON_V2, sha256ArtifactDigestV2 } from './artifact-integrity.ts';
 import { BULK_REVIEW_STALE_AFTER_DAYS } from './bulk-retry-plan.ts';
 
 export const BULK_DOMAIN_COMPARISON_SCHEMA = 'whoisleuth.domain-comparison';
 export const BULK_DOMAIN_COMPARISON_VERSION = 3;
+export const BULK_DOMAIN_COMPARISON_EXPORT_VERSION = 4;
 
 export type BulkDomainComparisonState =
   | 'conflicting'
@@ -374,14 +375,14 @@ export async function buildBulkDomainComparisonExport(
   const generatedAt = timestamp(generatedAtRaw) || new Date().toISOString();
   const unsigned = {
     schema: BULK_DOMAIN_COMPARISON_SCHEMA,
-    version: BULK_DOMAIN_COMPARISON_VERSION,
+    version: BULK_DOMAIN_COMPARISON_EXPORT_VERSION,
     generatedAt,
     comparison,
   };
-  const digestSha256 = await sha256ArtifactDigest(unsigned);
+  const digestSha256 = await sha256ArtifactDigestV2(unsigned);
   const document = {
     ...unsigned,
-    integrity: { algorithm: 'SHA-256' as const, digestSha256 },
+    integrity: { algorithm: 'SHA-256' as const, canonicalization: SORTED_JSON_V2, digestSha256 },
   };
   return {
     document,

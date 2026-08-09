@@ -6,7 +6,7 @@ import {
   serializeInvestigationCapsule,
   verifyInvestigationCapsule,
 } from '../frontend/src/lib/analysis/investigation-capsule.ts';
-import { sha256ArtifactDigest } from '../frontend/src/lib/analysis/artifact-integrity.ts';
+import { sha256ArtifactDigestV2 } from '../frontend/src/lib/analysis/artifact-integrity.ts';
 import {
   MAX_CASE_ASSERTIONS,
   MAX_CASE_DECISIONS,
@@ -27,15 +27,19 @@ const brief = {
 const graph = { version: 2 as const, targetId: 'target-example', nodes: [{ id: 'target-example', label: 'example.test', kind: 'target' as const, detail: 'Lookup target' }], edges: [], sources: [], truncated: false, limitations: [] };
 
 async function redigestCapsule<T extends Record<string, unknown>>(value: T): Promise<T> {
-  const briefDigest = await sha256ArtifactDigest(value.investigationBrief);
-  const graphDigest = await sha256ArtifactDigest(value.graphSnapshot);
-  const analystRecordsDigest = value.analystRecords === null ? null : await sha256ArtifactDigest(value.analystRecords);
-  Reflect.set(value, 'integrity', { algorithm: 'SHA-256', briefDigest, graphDigest, analystRecordsDigest });
+  const briefDigest = await sha256ArtifactDigestV2(value.investigationBrief);
+  const graphDigest = await sha256ArtifactDigestV2(value.graphSnapshot);
+  const analystRecordsDigest = value.analystRecords === null ? null : await sha256ArtifactDigestV2(value.analystRecords);
   for (const contract of value.sourceContracts as Array<Record<string, unknown>>) {
     if (contract.id === 'investigation-brief') contract.digest = briefDigest;
     else if (contract.id === 'asset-graph') contract.digest = graphDigest;
     else if (contract.id === 'analyst-records') contract.digest = analystRecordsDigest;
   }
+  const { integrity: _integrity, ...unsigned } = value;
+  Reflect.set(value, 'integrity', {
+    algorithm: 'SHA-256', canonicalization: 'sorted-json-v2', scope: 'capsule excluding integrity',
+    briefDigest, graphDigest, analystRecordsDigest, digestSha256: await sha256ArtifactDigestV2(unsigned),
+  });
   return value;
 }
 
@@ -49,7 +53,7 @@ test('investigation capsule links evidence and verifies embedded projections', a
   });
   assert.equal(capsule.sourceContracts[0]?.embedded, false);
   assert.match(capsule.sourceContracts[0]?.digest ?? '', /^sha256:[a-f0-9]{64}$/u);
-  assert.deepEqual(await verifyInvestigationCapsule(capsule), { valid: true, brief: true, graph: true, analystRecords: null });
+  assert.deepEqual(await verifyInvestigationCapsule(capsule), { valid: true, brief: true, graph: true, analystRecords: null, whole: true });
   assert.equal(investigationCapsuleFilename(capsule), 'whoisleuth-investigation-capsule-example.test-2026-08-04.json');
   assert.ok(serializeInvestigationCapsule(capsule).endsWith('\n'));
 });
@@ -75,7 +79,7 @@ test('offline verification rejects re-digested capsule contract and graph-linkag
     graph: linkedGraph,
     generatedAt: '2026-08-04T01:00:00Z',
   });
-  assert.equal((await verifyOfflineArtifact(JSON.stringify(capsule))).state, 'integrity_valid');
+  assert.equal((await verifyOfflineArtifact(JSON.stringify(capsule))).state, 'verified');
 
   const mutations: Array<(value: Record<string, unknown>) => void> = [
     (value) => { (value.sourceContracts as unknown[]).reverse(); },
@@ -128,7 +132,7 @@ test('investigation capsule includes analyst records only when deliberately sele
   assert.equal(capsule.analystRecords?.assertions.length, 1);
   assert.equal(serialized.includes('excluded note'), false);
   assert.equal((await verifyInvestigationCapsule(capsule)).valid, true);
-  assert.equal((await verifyOfflineArtifact(JSON.stringify(capsule))).state, 'integrity_valid');
+  assert.equal((await verifyOfflineArtifact(JSON.stringify(capsule))).state, 'verified');
 
   for (const collection of ['decisions', 'assertions'] as const) {
     const changed = structuredClone(capsule) as unknown as Record<string, unknown>;
@@ -169,5 +173,5 @@ test('investigation capsule includes analyst records only when deliberately sele
       nodes: capsule.graphSnapshot.nodes.map((node, index) => index === 0 ? { ...node, label: 'changed.test' } : node),
     },
   };
-  assert.deepEqual(await verifyInvestigationCapsule(changed), { valid: false, brief: true, graph: false, analystRecords: true });
+  assert.deepEqual(await verifyInvestigationCapsule(changed), { valid: false, brief: true, graph: false, analystRecords: true, whole: false });
 });

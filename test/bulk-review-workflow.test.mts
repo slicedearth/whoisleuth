@@ -6,7 +6,7 @@ import {
 } from '../frontend/src/lib/analysis/bulk-domain-comparison.ts';
 import { nextBulkReviewIndex, type BulkReviewCockpitRow } from '../frontend/src/lib/analysis/bulk-review-cockpit.ts';
 import { buildBulkReviewManifest } from '../frontend/src/lib/analysis/bulk-review-export.ts';
-import { sha256ArtifactDigest } from '../frontend/src/lib/analysis/artifact-integrity.ts';
+import { sha256ArtifactDigestV2 } from '../frontend/src/lib/analysis/artifact-integrity.ts';
 import { buildBulkRetryPlan, preservePriorBulkResult } from '../frontend/src/lib/analysis/bulk-retry-plan.ts';
 import type { BulkSessionResult } from '../frontend/src/lib/analysis/bulk-session-model.ts';
 import { verifyOfflineArtifact } from '../cli/artifact-verify.mts';
@@ -18,7 +18,7 @@ async function redigest<T extends Record<string, unknown>>(value: T): Promise<T>
   const { integrity, ...unsigned } = value;
   return {
     ...unsigned,
-    integrity: { ...(integrity as Record<string, unknown>), digestSha256: await sha256ArtifactDigest(unsigned) },
+    integrity: { ...(integrity as Record<string, unknown>), digestSha256: await sha256ArtifactDigestV2(unsigned) },
   } as unknown as T;
 }
 

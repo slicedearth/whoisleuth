@@ -10,7 +10,10 @@ import {
 import { runCli } from '../cli/runner.mts';
 import EXIT_CODES from '../cli/exit-codes.mts';
 import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model.ts';
-import { canonicalArtifactJson } from '../frontend/src/lib/analysis/artifact-integrity.ts';
+import {
+  canonicalArtifactJson,
+  canonicalArtifactJsonV2,
+} from '../frontend/src/lib/analysis/artifact-integrity.ts';
 import { historicalCasePackFixture } from './historical-case-pack-fixtures.mts';
 
 const NOW = '2026-08-05T03:00:00.000Z';
@@ -33,12 +36,13 @@ function exportedCases() {
 
 function resign<T extends Record<string, unknown>>(value: T): T {
   const { integrity: _integrity, ...unsigned } = value;
+  const current = (value.packet as Record<string, unknown> | undefined)?.version === 2;
   return {
     ...unsigned,
     integrity: {
       algorithm: 'SHA-256',
-      canonicalization: 'sorted-json-v1',
-      digestSha256: `sha256:${createHash('sha256').update(canonicalArtifactJson(unsigned)).digest('hex')}`,
+      canonicalization: current ? 'sorted-json-v2' : 'sorted-json-v1',
+      digestSha256: `sha256:${createHash('sha256').update(current ? canonicalArtifactJsonV2(unsigned) : canonicalArtifactJson(unsigned)).digest('hex')}`,
     },
   } as unknown as T;
 }
@@ -137,7 +141,7 @@ describe('CLI case pack', () => {
     assert.deepEqual(verifyCliCasePack(pack), { caseCount: 1 });
     const changed = structuredClone(pack);
     changed.cases[0]!.status = 'escalated';
-    assert.throws(() => verifyCliCasePack(changed), /failed its SHA-256/iu);
+    assert.throws(() => verifyCliCasePack(changed), /mismatched Case report projection|failed its SHA-256/iu);
   });
 
   test('preserves references for internal and trusted audiences only', () => {

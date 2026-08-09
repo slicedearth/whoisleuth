@@ -597,7 +597,7 @@ test('reviewed response records persist and produce a local non-submitted packet
     schema: 'whoisleuth.case-response-packet',
     reviewRequired: true,
     submissionPerformed: false,
-    schemaVersion: 5,
+    schemaVersion: 6,
     profile: {
       id: 'registrar',
       audience: 'Domain registrar abuse or compliance team',
@@ -623,7 +623,7 @@ test('reviewed response records persist and produce a local non-submitted packet
     },
     integrity: {
       algorithm: 'SHA-256',
-      canonicalization: 'sorted-json-v1',
+      canonicalization: 'sorted-json-v2',
       scope: 'packet excluding integrity',
     },
   });

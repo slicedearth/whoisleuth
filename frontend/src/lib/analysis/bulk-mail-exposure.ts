@@ -1,4 +1,4 @@
-import { sha256ArtifactDigest } from './artifact-integrity.ts';
+import { SORTED_JSON_V2, sha256ArtifactDigestV2 } from './artifact-integrity.ts';
 import {
   BULK_PROFILE_CONTEXT_MISMATCH_LIMITATION,
   normalizeBulkProfileContext,
@@ -10,6 +10,7 @@ import {
 
 export const BULK_MAIL_EXPOSURE_SCHEMA = 'whoisleuth.bulk-mail-exposure';
 export const BULK_MAIL_EXPOSURE_VERSION = 1;
+export const BULK_MAIL_EXPOSURE_EXPORT_VERSION = 2;
 export const MAX_BULK_MAIL_EXPOSURE_ROWS = 2_000;
 
 export type BulkMailExposureState =
@@ -300,13 +301,13 @@ export function buildBulkMailExposureReport(
 export async function buildBulkMailExposureExport(report: BulkMailExposureReport) {
   const unsigned = {
     schema: BULK_MAIL_EXPOSURE_SCHEMA,
-    version: BULK_MAIL_EXPOSURE_VERSION,
+    version: BULK_MAIL_EXPOSURE_EXPORT_VERSION,
     report,
   };
-  const digestSha256 = await sha256ArtifactDigest(unsigned);
+  const digestSha256 = await sha256ArtifactDigestV2(unsigned);
   const document = {
     ...unsigned,
-    integrity: { algorithm: 'SHA-256' as const, digestSha256 },
+    integrity: { algorithm: 'SHA-256' as const, canonicalization: SORTED_JSON_V2, digestSha256 },
   };
   return {
     document,

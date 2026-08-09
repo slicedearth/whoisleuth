@@ -1,7 +1,14 @@
 import { createHash } from 'node:crypto';
 import { Buffer } from 'node:buffer';
 
-import { canonicalArtifactJson } from '../frontend/src/lib/analysis/artifact-integrity.ts';
+import {
+  canonicalArtifactJson,
+  canonicalArtifactJsonFor,
+  canonicalArtifactJsonV2,
+  resolveArtifactCanonicalization,
+  SORTED_JSON_V1,
+  SORTED_JSON_V2,
+} from '../frontend/src/lib/analysis/artifact-integrity.ts';
 import {
   buildCaseReport,
   CASE_REPORT_SCHEMA,
@@ -30,7 +37,8 @@ import { analystInteroperabilityTags } from '../lib/analyst-taxonomy.mts';
 import { CliUsageError } from './errors.mts';
 
 export const CLI_CASE_PACK_SCHEMA = 'whoisleuth.cli.case-pack';
-export const CLI_CASE_PACK_VERSION = 1;
+export const CLI_CASE_PACK_VERSION = 2;
+export const LEGACY_CLI_CASE_PACK_VERSION = 1;
 export const MAX_CASE_PACK_INPUT_BYTES = 4 * 1024 * 1024;
 export const MAX_CASE_PACK_CASES = 25;
 export type CasePackAudience = 'internal' | 'public' | 'trusted';
@@ -810,8 +818,8 @@ export function buildCliCasePack(
     ...unsigned,
     integrity: Object.freeze({
       algorithm: 'SHA-256',
-      canonicalization: 'sorted-json-v1',
-      digestSha256: `sha256:${createHash('sha256').update(canonicalArtifactJson(unsigned)).digest('hex')}`,
+      canonicalization: SORTED_JSON_V2,
+      digestSha256: `sha256:${createHash('sha256').update(canonicalArtifactJsonV2(unsigned)).digest('hex')}`,
     }),
   });
   if (Buffer.byteLength(JSON.stringify(document), 'utf8') > MAX_CASE_IMPORT_BYTES) {
@@ -834,7 +842,7 @@ export function verifyCliCasePack(input: unknown): Readonly<{ caseCount: number 
   if (!root
     || !packet
     || packet.schema !== CLI_CASE_PACK_SCHEMA
-    || packet.version !== CLI_CASE_PACK_VERSION
+    || (packet.version !== LEGACY_CLI_CASE_PACK_VERSION && packet.version !== CLI_CASE_PACK_VERSION)
     || packet.reviewed !== true
     || !['internal', 'public', 'trusted'].includes(String(packet.audience))
     || !Array.isArray(packet.reports)
@@ -848,21 +856,25 @@ export function verifyCliCasePack(input: unknown): Readonly<{ caseCount: number 
     || !CASE_IMPORT_VERSIONS.includes(root.version as typeof CASE_IMPORT_VERSIONS[number])
     || !integrity
     || integrity.algorithm !== 'SHA-256'
-    || integrity.canonicalization !== 'sorted-json-v1'
     || typeof integrity.digestSha256 !== 'string'
     || !/^sha256:[a-f0-9]{64}$/u.test(integrity.digestSha256)) {
     throw new TypeError('The CLI case pack structure or integrity envelope is invalid.');
   }
-  const { integrity: _integrity, ...unsigned } = root;
-  let calculated: string;
+  let canonicalization;
   try {
-    calculated = `sha256:${createHash('sha256').update(canonicalArtifactJson(unsigned)).digest('hex')}`;
+    canonicalization = resolveArtifactCanonicalization(
+      packet.version,
+      integrity.canonicalization,
+      [
+        { version: LEGACY_CLI_CASE_PACK_VERSION, canonicalization: SORTED_JSON_V1, explicit: true },
+        { version: CLI_CASE_PACK_VERSION, canonicalization: SORTED_JSON_V2, explicit: true },
+      ],
+      'CLI case pack',
+    );
   } catch {
-    throw new TypeError('The CLI case pack structure is not serializable.');
+    throw new TypeError('The CLI case pack structure or integrity envelope is invalid.');
   }
-  if (calculated !== integrity.digestSha256) {
-    throw new TypeError('The CLI case pack failed its SHA-256 integrity check.');
-  }
+  const { integrity: _integrity, ...unsigned } = root;
   const audience = packet.audience as CasePackAudience;
   const current = root.version === CASE_SCHEMA_VERSION;
   assertClosedEnvelopes(root, packet, integrity, redactionManifest, packet.reports, current);
@@ -953,6 +965,15 @@ export function verifyCliCasePack(input: unknown): Readonly<{ caseCount: number 
     }
   } else if (Object.hasOwn(redactionManifest, 'brandProfileReferencesOmitted')) {
     throw new TypeError('The legacy CLI case pack has an invalid Brand Profile redaction manifest.');
+  }
+  let calculated: string;
+  try {
+    calculated = `sha256:${createHash('sha256').update(canonicalArtifactJsonFor(unsigned, canonicalization)).digest('hex')}`;
+  } catch {
+    throw new TypeError('The CLI case pack structure is not serializable.');
+  }
+  if (calculated !== integrity.digestSha256) {
+    throw new TypeError('The CLI case pack failed its SHA-256 integrity check.');
   }
   return Object.freeze({ caseCount: normalised.length });
 }

@@ -586,12 +586,13 @@ and encrypted workspace archives, case-response packets, acquisition-decision
 exports, domain-comparison exports, Bulk mail-exposure exports, and Bulk review
 manifests. Reviewed CLI case packs are checked against their canonical digest,
 bounded browser-importable case collection, audience, and review marker. The
-command also verifies the embedded brief, graph, and optional analyst-record
-projection digests of an investigation capsule. Capsule metadata and the linked,
-non-embedded Lookup evidence are outside those projection digests, so the result
-is `integrity_valid` rather than whole-file `verified`; the structurally
-verified capsule can still be passed to `sign-artifact`. It also validates the
-bounded versioned structure of saved CLI
+command verifies both the embedded projections and whole-capsule digest of an
+investigation capsule version 2, including its metadata and linked
+source-contract digests, and reports `verified`. The non-embedded Lookup
+evidence must still be retained separately. Legacy capsule version 1 covers
+only the embedded brief, graph, and optional analyst-record projections, so it
+remains `integrity_valid` rather than whole-file `verified`. It also validates
+the bounded versioned structure of saved CLI
 Lookup JSON. Because saved Lookup documents do not embed a checksum or
 signature, that result is reported as `structure_valid` with content integrity
 explicitly unchecked. Saved Lookup validation retains its stricter 8 MiB
@@ -623,6 +624,27 @@ authenticated encryption. `--strict-exit` returns exit 0 for `verified` and
 `envelope_valid`; ordinary verification errors retain their existing error
 codes. Raw JSON is scanned before parsing to reject duplicate object keys and
 excessive nesting or key/value counts.
+
+Current integrity-bearing review outputs use `sorted-json-v2`, whose object-key
+order is a locale-independent JavaScript code-unit order. Readers select the
+canonical bytes from an exact artifact-version and canonicalization pair,
+reject mixed or missing current declarations, and validate bounded structure
+before any legacy hashing. Historical outputs keep their original
+`sorted-json-v1` bytes and are accepted only through their legacy version.
+Version 1 used the runtime's ambient `localeCompare` ordering, so historical
+files containing non-ASCII object-key extensions require a compatible locale
+and ICU ordering to verify; it is not a portable canonicalization guarantee.
+The fixed keys emitted by the supported legacy builders are ASCII, but only
+version 2 provides the cross-locale portability contract.
+
+The current/legacy integrity pairs are: acquisition decision 2/1,
+domain-comparison export 4/3 with nested comparison 3, Bulk mail-exposure
+export 2/1 with nested report 1, Bulk review manifest 2/1, domain-control
+manifest 2/1, domain-change packet 2/1 with input 1, investigation manifest
+2/1, case-response packet 6/5, investigation capsule 2/1, CLI case-pack packet
+2/1 with Case schema 12, and signed evidence package 2/1. Current outputs
+declare `sorted-json-v2`; legacy declarations remain explicit only where their
+historical contract included one.
 
 ## Interchange fidelity report
 
@@ -717,8 +739,8 @@ node bin/whoisleuth.mts sign-artifact packet.json --private-key-file analyst-pri
 node bin/whoisleuth.mts verify-signature packet.signed.json --public-key-file analyst-public.pem
 ```
 
-The signed package remains version 1 with `sorted-json-v1` canonicalisation and
-embeds the public key, key identifier, canonical UTC signature time, and
+New signed packages use version 2 with `sorted-json-v2` canonicalisation and
+embed the public key, key identifier, canonical UTC signature time, and
 original artefact. Signing requires verified structure plus a verified
 applicable integrity contract; a recomputed digest around an empty or malformed
 document is rejected. Signature verification reports cryptographic status and
@@ -729,16 +751,20 @@ the signature authenticates those exact bytes without upgrading their
 structure or inner integrity. Signer trust is separately reported as
 `trusted_key` or `embedded_key_only`. Without a separately supplied trusted public key,
 verification establishes only that the package is internally self-consistent.
+Historical version-1 packages remain verifiable with their explicit
+`sorted-json-v1` signature declaration when their original locale-dependent
+ordering is reproduced; version 2 is the portable signature contract.
 WHOISleuth does not generate, store, recover, rotate, publish, or establish
 trust in signing keys.
 
 ## Reproducible investigation manifest
 
 `manifest <artefact.json> [...] --workflow <label>` reads from 1 to 16 ordered
-JSON artefacts and emits `whoisleuth.investigation-manifest` version 1. Each
+JSON artefacts and emits `whoisleuth.investigation-manifest` version 2. Each
 entry records its sequence, bounded schema and version metadata, exact UTF-8
-content digest, canonical JSON digest, and byte count. The manifest also records
-the installed CLI version and can include an externally calculated
+content digest, `sorted-json-v2` canonical JSON digest, and byte count. Version
+1 manifests remain verifiable with their historical digest bytes. The manifest
+also records the installed CLI version and can include an externally calculated
 `--configuration-digest sha256:...` without copying configuration values.
 
 Source paths, filenames, command-line arguments, and artefact contents are not
@@ -1200,8 +1226,9 @@ fingerprint, registrar-lock preference, and a renewal-review date for up to 100
 domains. Empty fields mean unconfigured; they do not require a record to be
 absent.
 
-The emitted `whoisleuth.domain-control-manifest` version 1 is normalised and
-protected by a canonical SHA-256 digest. It can also be passed to
+The emitted `whoisleuth.domain-control-manifest` version 2 is normalised and
+protected by a `sorted-json-v2` SHA-256 digest. Version 1 remains readable with
+its historical canonicalization contract. Either version can also be passed to
 `sign-artifact` for an optional local Ed25519 signature. Integrity and
 signature verification detect changes and authenticate possession of the
 selected key; neither establishes that the desired state is correct. Manifest
@@ -1209,8 +1236,9 @@ input and verification reject unknown fields, and verification rejects
 non-canonical content rather than returning a shape that differs from the
 normalised contract covered by the digest.
 
-The same version-one manifest is the browser Console's domain-control passport
-format. A deliberately selected passport can move the supported desired-state
+The same version-two manifest is the browser Console's domain-control passport
+format; its browser and CLI input envelope remains version 1. A deliberately
+selected passport can move the supported desired-state
 subset between Brand Profiles and the CLI without copying profile identity,
 notes, observations, change windows, suppressions, or other browser-only
 planning. Browser import verifies the digest and presents a field-level,
@@ -1253,10 +1281,11 @@ no registrar, DNS, mail, certificate, or recovery configuration.
 
 `change-packet [input.json]` combines one pre-change domain review, one
 post-change domain review, and one planned-change assurance input for the same
-domain. The input uses `whoisleuth.domain-change-packet.input` version 1. The
+domain. The input remains `whoisleuth.domain-change-packet.input` version 1. The
 command revalidates each nested contract, summarises changed authoritative
-record sets, and emits `whoisleuth.domain-change-packet` version 1 with a
-canonical SHA-256 integrity digest.
+record sets, and emits `whoisleuth.domain-change-packet` version 2 with a
+`sorted-json-v2` SHA-256 integrity digest. Historical packet version 1 remains
+verifiable with its original digest bytes.
 
 The packet is ready only when both supplied observation reviews and the change
 plan pass their own bounded gates. Partial or unavailable evidence remains a
@@ -1326,13 +1355,14 @@ case count, report count, audience and explicit review marker without printing
 case contents. For Case schema 12 it validates the opaque-reference syntax,
 requires public cases and reports to contain no references, and requires
 trusted or internal report references to match their top-level case. The
-case-pack envelope remains version 1; a valid legacy version-1 pack carrying a
+case-pack envelope is version 2 with `sorted-json-v2` integrity; a valid legacy
+version-1 pack carrying a
 pre-v12 Case collection remains accepted without inventing the new field or
 redaction count. Current builders reject a schema-12 raw case unless its
 complete bounded Case projection, safe canonical identity, and unique
 at-most-eight reference list survive normalisation exactly; over-bound notes,
 actions, and other fields are not silently truncated. Legacy builder input
-remains lenient for later fields. After digest validation, the verifier binds
+remains lenient for later fields. Before digest calculation, the verifier binds
 each report's supported schema version, canonical Case identifier, domain, and
 audience-sensitive projection to its top-level case. It rejects re-signed
 public notes, actions, assertions, branches, recipients, manual-trail targets,

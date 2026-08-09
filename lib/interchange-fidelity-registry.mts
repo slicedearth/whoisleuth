@@ -29,7 +29,7 @@ export const INTERCHANGE_ARTIFACT_CONTRACTS: readonly InterchangeArtifactContrac
   Object.freeze({
     id: 'domain_control_passport',
     schema: 'whoisleuth.domain-control-manifest',
-    versions: Object.freeze([1]),
+    versions: Object.freeze([1, 2]),
     versionField: 'version',
     nestedSchemaPath: Object.freeze([]),
     browser: Object.freeze({ import: 'supported', export: 'supported' }),
@@ -85,7 +85,7 @@ export const INTERCHANGE_ARTIFACT_CONTRACTS: readonly InterchangeArtifactContrac
   Object.freeze({
     id: 'case_pack',
     schema: 'whoisleuth.cli.case-pack',
-    versions: Object.freeze([1]),
+    versions: Object.freeze([1, 2]),
     versionField: 'version',
     nestedSchemaPath: Object.freeze(['packet']),
     browser: Object.freeze({ import: 'supported', export: 'unsupported' }),

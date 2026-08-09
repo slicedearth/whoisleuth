@@ -10,6 +10,7 @@ import {
   verifyOfflineArtifact,
 } from './artifact-verify.mts';
 import { mergeBrandProfiles } from '../frontend/src/lib/analysis/brand-profile-model.ts';
+import { parseBoundedJsonObject } from './bounded-json.mts';
 
 export const INTERCHANGE_FIDELITY_REPORT_SCHEMA = 'whoisleuth.interchange-fidelity-report';
 export const INTERCHANGE_FIDELITY_REPORT_VERSION = 2;
@@ -69,11 +70,10 @@ function parseInput(raw: string): UnknownRecord {
   if (bytes < 1 || bytes > MAX_INTERCHANGE_REPORT_BYTES) {
     throw new TypeError(`Interchange input must be between 1 byte and ${MAX_INTERCHANGE_REPORT_BYTES} bytes.`);
   }
-  let parsed: unknown;
-  try { parsed = JSON.parse(raw.replace(/^\uFEFF/u, '')); } catch { throw new TypeError('Interchange input is not valid JSON.'); }
-  const source = record(parsed);
-  if (!source) throw new TypeError('Interchange input must contain one JSON object.');
-  return source;
+  return parseBoundedJsonObject(raw.replace(/^\uFEFF/u, ''), {
+    label: 'Interchange input',
+    maximumBytes: MAX_INTERCHANGE_REPORT_BYTES,
+  });
 }
 
 function nestedRecord(value: UnknownRecord, path: readonly string[]): UnknownRecord | null {

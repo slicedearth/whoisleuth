@@ -1172,7 +1172,9 @@ browser-only planning. The browser verifies its canonical SHA-256 digest
 before showing a field-level import preview. Imports require explicit domain
 and field selection, never delete a destination value by omission, and require
 separate confirmation before adding a new official domain. The same
-version-one manifest can be verified and reviewed by the CLI.
+version-two manifest can be verified and reviewed by the CLI, while historical
+version-one manifests remain readable through their exact legacy integrity
+contract.
 
 ## Browser-local storage and archives
 
@@ -1278,8 +1280,11 @@ observations, or compact case history.
   relationship graph, source schemas, and application version. The capsule
   does not embed the Lookup evidence file. A deliberate option can include
   bounded analyst decisions and assertions from the linked case; notes,
-  contacts, actions, and raw payloads remain excluded. Checksums detect changed
-  content but do not authenticate a signer.
+  contacts, actions, and raw payloads remain excluded. Version 2 binds the
+  complete capsule, including metadata and source-contract digests, while the
+  linked Lookup file remains external. Checksums detect changed content but do
+  not authenticate a signer. Legacy version 1 verifies only its embedded
+  projections.
 - Build a case response packet only after recording the category, affected
   party, exact HTTP(S) URLs, observed harm, UTC observation time, and separately
   sourced contact routes. Select the intended audience first: the local preview

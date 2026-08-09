@@ -12,7 +12,7 @@ import { buildBrandProfileExport, SUPPORTED_BRAND_PROFILE_SCHEMA_VERSIONS } from
 import { buildWorkspaceArchive, SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS } from '../frontend/src/lib/analysis/workspace-archive.ts';
 import { encryptWorkspaceArchive, ENCRYPTED_WORKSPACE_ARCHIVE_VERSION } from '../frontend/src/lib/analysis/workspace-archive-crypto.ts';
 import { DOMAIN_CONTROL_PASSPORT_VERSION } from '../frontend/src/lib/analysis/domain-control-manifest-core.ts';
-import { sha256ArtifactDigest } from '../frontend/src/lib/analysis/artifact-integrity.ts';
+import { sha256ArtifactDigest, sha256ArtifactDigestV2 } from '../frontend/src/lib/analysis/artifact-integrity.ts';
 import { CASE_SCHEMA_VERSION, normalizeCaseStore } from '../frontend/src/lib/analysis/case-model.ts';
 import {
   buildDomainControlManifest,
@@ -20,6 +20,11 @@ import {
 } from '../lib/domain-control-manifest.mts';
 import { interchangeContractFor } from '../lib/interchange-fidelity-registry.mts';
 import { historicalCasePackFixture } from './historical-case-pack-fixtures.mts';
+import {
+  MAX_BOUNDED_JSON_DEPTH,
+  MAX_BOUNDED_JSON_KEYS,
+  MAX_BOUNDED_JSON_VALUES,
+} from '../cli/bounded-json.mts';
 
 const NOW = '2026-08-07T00:00:00.000Z';
 const PASSPHRASE = 'fixture archive passphrase';
@@ -71,8 +76,8 @@ async function casePackWithNestedReference() {
     ...unsigned,
     integrity: {
       algorithm: 'SHA-256',
-      canonicalization: 'sorted-json-v1',
-      digestSha256: await sha256ArtifactDigest(unsigned),
+      canonicalization: 'sorted-json-v2',
+      digestSha256: await sha256ArtifactDigestV2(unsigned),
     },
   };
 }
@@ -94,12 +99,43 @@ async function historicalInternalCasePackWithScalarProjection() {
 }
 
 describe('interchange fidelity report', () => {
+  test('rejects duplicate keys and bounded traversal before assigning interchange assurance', async () => {
+    const inputs = [
+      '{"schema":"whoisleuth.brand-profiles","version":2,"version":6,"exportedAt":"2026-08-07T00:00:00.000Z","profiles":[]}',
+      '{"schema":"whoisleuth.brand-profiles","version":6,"exportedAt":"2026-08-07T00:00:00.000Z","profiles":[{"id":"first","id":"second"}]}',
+    ];
+    for (const input of inputs) {
+      await assert.rejects(
+        () => buildInterchangeFidelityReport(input, { generatedAt: NOW }),
+        /duplicate object key/iu,
+      );
+    }
+
+    const deep = `${'{"nested":'.repeat(MAX_BOUNDED_JSON_DEPTH + 1)}null${'}'.repeat(MAX_BOUNDED_JSON_DEPTH + 1)}`;
+    await assert.rejects(
+      () => buildInterchangeFidelityReport(deep, { generatedAt: NOW }),
+      /nesting limit/iu,
+    );
+
+    const manyKeys = `{${Array.from({ length: MAX_BOUNDED_JSON_KEYS + 1 }, (_, index) => `"k${index}":null`).join(',')}}`;
+    await assert.rejects(
+      () => buildInterchangeFidelityReport(manyKeys, { generatedAt: NOW }),
+      /key limit/iu,
+    );
+
+    const manyValues = `{"items":[${Array.from({ length: MAX_BOUNDED_JSON_VALUES }, () => 'null').join(',')}]}`;
+    await assert.rejects(
+      () => buildInterchangeFidelityReport(manyValues, { generatedAt: NOW }),
+      /value limit/iu,
+    );
+  });
+
   test('keeps portable contract versions bound to their authoritative owners', () => {
-    assert.deepEqual(interchangeContractFor('domain_control_passport').versions, [DOMAIN_CONTROL_PASSPORT_VERSION]);
+    assert.deepEqual(interchangeContractFor('domain_control_passport').versions, [DOMAIN_CONTROL_PASSPORT_VERSION, 2]);
     assert.deepEqual(interchangeContractFor('brand_profiles').versions, [...SUPPORTED_BRAND_PROFILE_SCHEMA_VERSIONS]);
     assert.deepEqual(interchangeContractFor('workspace').versions, [...SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS]);
     assert.deepEqual(interchangeContractFor('encrypted_workspace').versions, [ENCRYPTED_WORKSPACE_ARCHIVE_VERSION]);
-    assert.deepEqual(interchangeContractFor('case_pack').versions, [CLI_CASE_PACK_VERSION]);
+    assert.deepEqual(interchangeContractFor('case_pack').versions, [1, CLI_CASE_PACK_VERSION]);
     assert.equal(interchangeContractFor('domain_control_passport').requiredAssurance, 'whole_integrity');
     assert.equal(interchangeContractFor('brand_profiles').requiredAssurance, 'structure');
     assert.equal(interchangeContractFor('workspace').requiredAssurance, 'whole_integrity');
