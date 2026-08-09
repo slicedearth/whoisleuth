@@ -193,7 +193,8 @@
       || ctNewOnly,
   );
 
-  onMount(() => {void (async()=>{
+  onMount(() => {
+    void (async()=>{
     const [profileResult,historyResult]=await Promise.allSettled([activeProfile(),loadCtHistory()]);
     if(profileResult.status==='fulfilled'){profile=profileResult.value;profileSourceState='ready';}
     else{profile=null;profileSourceState='unavailable';}
@@ -203,7 +204,9 @@
     if (candidates.length) candidateMetadata = buildCandidateMetadata(candidates);
     const guidedDomain = normalizeInvestigationGuideDomain(new URL(window.location.href).searchParams.get('q'));
     if (guidedDomain) seed = guidedDomain;
-  })();});
+    })();
+    return cancelHostedSearch;
+  });
 
   function referenceDomainsForCandidate(candidate: Candidate): string[] {
     const references: string[] = [];
@@ -483,6 +486,7 @@
       let historySummary = '';
       try {
         const result = await saveCtHistorySearch(query, next.map((candidate)=>candidate.domain), { certificateCount: certCount, truncated });
+        if (token !== searchToken) return;
         ctHistory = result.store;
         const visibleDomains = new Set(filtered.map((candidate)=>candidate.domain));
         ctNewDomains = new Set(result.comparison.newDomains.filter((domain)=>visibleDomains.has(domain)));
@@ -513,8 +517,10 @@
           historySummary = ' Results were capped, so no local baseline or reappearance classification was created.';
         }
       } catch (cause) {
+        if (token !== searchToken) return;
         ctHistoryNotice = cause instanceof Error ? cause.message : 'Certificate search history is unavailable.';
       }
+      if (token !== searchToken) return;
       setResults(filtered, `Found ${filtered.length} ${noun}${filtered.length===1?'':'s'} from ${certCount} certificate${certCount===1?'':'s'}${excluded ? `; excluded ${excluded} trusted profile domain${excluded===1?'':'s'}` : ''}${truncated ? ' (result cap reached)' : ''}.${limitation}${historySummary}`, next, 'certificate-newest');
     } catch (cause) {
       // A superseding search / mode switch (which aborts this fetch) owns the UI

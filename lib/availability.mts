@@ -207,16 +207,15 @@ const PRIVACY_MARKERS = [
   /withheld for privacy/i,
 ];
 
-// Only ever called after a lookup has already succeeded (this runs inside
-// checkDomainAvailability once RDAP or WHOIS has returned real data), so a
-// missing/empty registrant here isn't "we don't know" - it means the
-// registry gave us a response with no usable contact in it, which for
-// sourcing purposes (can I reach this owner from this data alone?) is the
-// same practical answer as an explicit privacy-proxy service: no.
-function isPrivacyProtected(registrant: CompactContact | null): boolean {
-  if (!registrant) return true;
+// Explicit privacy/redaction markers establish a positive privacy signal.
+// Usable public contact data establishes a negative one. A missing or blank
+// contact can instead reflect registry policy, access tier, parser coverage,
+// or ordinary omission, so it remains inconclusive rather than being promoted
+// to an affirmative privacy claim.
+function isPrivacyProtected(registrant: CompactContact | null): boolean | null {
+  if (!registrant) return null;
   const blob = [registrant.name, registrant.org, registrant.email].filter(Boolean).join(' ');
-  if (!blob) return true; // record exists but every contact field is blank - that's redaction
+  if (!blob) return null;
   return PRIVACY_MARKERS.some((re) => re.test(blob));
 }
 
@@ -287,7 +286,13 @@ async function checkDnsDelegation(domain: string, { resolver = dns.resolveNs }: 
 // domain has "no site": transient DNS/TLS/network failures, a slow origin, or
 // an HTTP error can all produce the same null body. Keeping that distinction
 // avoids turning an inconclusive probe into a false inactivity claim.
-async function fetchHomepage(domain: string, { fetcher = safeFetchDetailed as HomepageFetcher }: { fetcher?: HomepageFetcher } = {}): Promise<HomepageResult> {
+async function fetchHomepage(
+  domain: string,
+  { fetcher = safeFetchDetailed as HomepageFetcher, timeoutMs = HOMEPAGE_FETCH_TIMEOUT_MS }: { fetcher?: HomepageFetcher; timeoutMs?: number } = {},
+): Promise<HomepageResult> {
+  const requestTimeoutMs = Number.isInteger(timeoutMs) && timeoutMs >= 10 && timeoutMs <= HOMEPAGE_FETCH_TIMEOUT_MS
+    ? timeoutMs
+    : HOMEPAGE_FETCH_TIMEOUT_MS;
   const headers = whoisleuthRequestHeaders();
   const failures: HomepageFailure[] = [];
   const probeStartedAt = Date.now();
@@ -295,7 +300,7 @@ async function fetchHomepage(domain: string, { fetcher = safeFetchDetailed as Ho
     const requestUrl = `${scheme}://${domain}`;
     const attemptStartedAt = Date.now();
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), HOMEPAGE_FETCH_TIMEOUT_MS);
+    const timeout = setTimeout(() => controller.abort(), requestTimeoutMs);
     try {
       const fetched = await fetcher(requestUrl, { signal: controller.signal, headers });
       const fetchedResponse = fetched instanceof Response ? fetched : fetched.response;
@@ -363,7 +368,7 @@ async function fetchHomepage(domain: string, { fetcher = safeFetchDetailed as Ho
     } catch (err) {
       const error = errorRecord(err);
       const reason = error.name === 'AbortError'
-        ? 'timed out after 6 seconds'
+        ? `timed out after ${requestTimeoutMs} milliseconds`
         : nonEmptyErrorMessage(err, 'request failed')
           .replace(/[\u0000-\u001f\u007f]+/g, ' ')
           .slice(0, 180);
@@ -842,6 +847,7 @@ export {
   checkDomainAvailability,
   checkDnsDelegation,
   fetchHomepage,
+  isPrivacyProtected,
   deriveWebsiteActivity,
   forSaleRedirectSignal,
   parseRegistryDate as parseWhoisDate,

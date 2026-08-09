@@ -326,13 +326,13 @@ default (see the README), so many lookups return no personal data at all.
   current and migrated legacy tab records,
   and closing the tab session removes them with the rest of that tab's session
   storage.
-- **Response playbooks and operations reporting**: the three response recipes
+- **Brand-protection operations report and response playbooks**: the three response recipes
   can focus the existing Case response workspace only after the analyst opens
   or creates the relevant Case. They do not discover a recipient, test
   reachability, submit a packet, contact a provider, apply a defensive control,
   or infer an action state. Recipient, source, limitation, and outcome fields
   are retained only through an explicit Case action edit. Monitor can
-  transiently aggregate at most 500 readable Cases and 50 current actions per
+  transiently aggregate at most 500 readable Cases and 50 current action records per
   Case into analyst, operations, or executive views over a selected action
   `updatedAt` window. Loading or unavailable Cases suppress numeric
   conclusions. A deliberate aggregate JSON export contains counts,

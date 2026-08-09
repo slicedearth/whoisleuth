@@ -141,11 +141,11 @@
     }
   }
 
-  function buildMailto(route: string): string {
+  function buildMailto(route: string, submittedCategory: ContactCategory): string {
     const boundedSubject = subject.trim().slice(0, 120);
     const boundedMessage = message.trim().slice(0, 3_000);
     const body = [
-      `Contact category: ${CATEGORY_LABELS[category]}`,
+      `Contact category: ${CATEGORY_LABELS[submittedCategory]}`,
       '',
       boundedMessage,
     ].join('\n');
@@ -160,6 +160,7 @@
       return;
     }
     submitting = true;
+    const submittedCategory = category;
     error = '';
     resolvedRoute = '';
     mailtoHref = '';
@@ -167,7 +168,7 @@
       const { response, body: payload } = await requestJsonCapped('/api/contact-route', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ category, token: challengeToken }),
+        body: JSON.stringify({ category: submittedCategory, token: challengeToken }),
       }, {
         maximumBytes: SMALL_JSON_RESPONSE_BYTES,
         timeoutMs: 20_000,
@@ -180,7 +181,7 @@
         throw new Error('Contact verification failed');
       }
       resolvedRoute = route;
-      mailtoHref = buildMailto(route);
+      mailtoHref = buildMailto(route, submittedCategory);
     } catch {
       error = 'The contact route could not be prepared. Complete a fresh challenge and try again.';
     } finally {
@@ -222,7 +223,7 @@
 
     <label>
       Contact category
-      <select bind:value={category} onchange={resetResolvedContact} disabled={loading || !categories.length}>
+      <select bind:value={category} onchange={resetResolvedContact} disabled={loading || submitting || !categories.length}>
         {#each categories as option}
           <option value={option}>{CATEGORY_LABELS[option]}</option>
         {/each}

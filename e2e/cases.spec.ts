@@ -82,9 +82,16 @@ test('recorded operations reporting stays aggregate, source-qualified, and usabl
     sourceState: 'ready',
     counts: { casesInspected: 3, casesWithActions: 2, actions: 2, prepared: 1, submitted: 0, resolved: 1 },
   });
-  expect(body).not.toContain('prepared.invalid');
-  expect(body).not.toContain('Private response route');
-  expect(body).not.toContain('Private analyst outcome text');
+  expect(Object.keys(exported).sort()).toEqual([
+    'actionTypes', 'counts', 'generatedAt', 'limitations', 'omissions', 'schema', 'sourceState', 'states', 'version', 'window',
+  ]);
+  expect(Object.keys(exported.window).sort()).toEqual(['basis', 'endAt', 'id', 'startAt']);
+  expect(Object.keys(exported.omissions).sort()).toEqual(['actionsBeyondLimit', 'actionsOutsideWindow', 'actionsWithInvalidTime', 'casesBeyondLimit']);
+  for (const sentinel of [
+    'case-operations-prepared', 'case-operations-resolved', 'prepared.invalid', 'resolved.invalid',
+    'Reviewed registrar route', 'Published registrar policy', 'Reachability was not tested.',
+    'Private response route', 'Analyst supplied', 'PRIVATE-CASE-7', 'Private analyst outcome text.',
+  ]) expect(body).not.toContain(sentinel);
   await expect(page.getByRole('status')).toContainText('No response was submitted');
   await expectNoHorizontalOverflow(page);
 });
@@ -523,12 +530,13 @@ test('shows saved custom rules when the tab opens before browser-local loading f
       }],
     },
   });
-  await holdBrowserLocalReads(page);
-  await page.getByRole('link', { name: /Monitor/ }).first().click();
+  await expect(page.locator('a[href="/monitor"]').first()).toBeVisible();
+  await holdBrowserLocalReads(page, 4_000, 'a[href="/monitor"]');
+  await page.waitForURL(/\/monitor(?:\?|$)/u);
   await page.getByRole('tab', { name: /Custom rules/ }).click();
 
   await expect(page.getByRole('region', { name: 'Custom detection rules' })
-    .getByRole('article').filter({ hasText: 'Delayed custom rule' })).toBeVisible();
+    .getByRole('article').filter({ hasText: 'Delayed custom rule' })).toBeVisible({ timeout: 10_000 });
 });
 
 test('custom rules persist, can be disabled, and export a versioned safe schema', async ({ page }) => {
@@ -741,6 +749,58 @@ test('external findings require a validated preview before creating local eviden
   await externalImport.getByRole('button', { name: 'Import into cases' }).click();
   await expect(page.getByRole('status')).toContainText('skipped 1 duplicate');
   await expect(page.locator('.response-workspace')).toContainText('1 pin · 1 sighting · 0 decisions');
+});
+
+test('external findings serialize file parsing before exposing import actions', async ({ page }) => {
+  await openCasesView(page);
+  const externalImport = page.locator('details', { hasText: 'Import bounded external findings' });
+  await externalImport.getByText('Import bounded external findings', { exact: true }).click();
+  await page.evaluate(() => {
+    const originalArrayBuffer = File.prototype.arrayBuffer;
+    let holdNextRead = true;
+    File.prototype.arrayBuffer = function arrayBuffer() {
+      if (!holdNextRead) return originalArrayBuffer.call(this);
+      holdNextRead = false;
+      return new Promise<ArrayBuffer>((resolve, reject) => {
+        Reflect.set(window, '__releaseExternalFileRead', () => {
+          void originalArrayBuffer.call(this).then(resolve, reject);
+        });
+      });
+    };
+  });
+  const payload = JSON.stringify({
+    schema: 'whoisleuth.external-findings',
+    schemaVersion: 2,
+    source: { name: 'Serialized local review', reference: 'offline fixture' },
+    findings: [{
+      domain: 'serialized-review.invalid',
+      category: 'page',
+      evidenceClass: 'provider_report',
+      summary: 'A bounded retained observation.',
+      observedAt: '2026-07-28T01:00:00.000Z',
+      completeness: 'partial',
+      limitations: ['Rendered behavior was not retained.'],
+      reference: 'serialized-17',
+    }],
+  });
+
+  await externalImport.locator('input[type="file"]').setInputFiles({
+    name: 'serialized-findings.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(payload),
+  });
+  await expect(externalImport).toHaveAttribute('aria-busy', 'true');
+  await expect(externalImport.locator('input[type="file"]')).toBeDisabled();
+  await expect(externalImport.getByText('Reading selected file…', { exact: true })).toBeVisible();
+  await page.evaluate(() => {
+    const release = Reflect.get(window, '__releaseExternalFileRead');
+    if (typeof release !== 'function') throw new Error('The external-file read gate was not installed.');
+    release();
+  });
+
+  await expect(externalImport).toHaveAttribute('aria-busy', 'false');
+  await expect(externalImport.getByRole('heading', { name: 'Serialized local review' })).toBeVisible();
+  await expect(externalImport.getByRole('button', { name: 'Import into cases' })).toBeEnabled();
 });
 
 test('portable WARC evidence is normalized locally before deliberate case import', async ({ page }) => {

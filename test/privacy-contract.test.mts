@@ -27,6 +27,10 @@ import {
   MAX_CAMPAIGN_COHORT_RATIONALES,
   MAX_CAMPAIGN_COHORTS,
 } from '../frontend/src/lib/analysis/campaign-cohort-review.ts';
+import {
+  MAX_OPERATIONS_REPORT_ACTIONS_PER_CASE,
+  MAX_OPERATIONS_REPORT_CASES,
+} from '../frontend/src/lib/analysis/brand-protection-operations-report.ts';
 
 const ROOT_NOTICE_URL = new URL('../PRIVACY.md', import.meta.url);
 const PUBLIC_NOTICE_URL = new URL('../frontend/src/routes/(public)/privacy/+page.svelte', import.meta.url);
@@ -70,6 +74,10 @@ test('public privacy notices track versioned browser-local data contracts', asyn
     assert.ok(compact.includes('Lookup claim passport'));
     assert.match(compact, /stable requirement identifiers, exact retained source states/u);
     assert.match(compact, /without another request or a browser-local write/u);
+    assert.ok(compact.includes('Brand-protection operations report'));
+    assert.ok(compact.includes(`at most ${MAX_OPERATIONS_REPORT_CASES} readable Cases`));
+    assert.ok(compact.includes(`${MAX_OPERATIONS_REPORT_ACTIONS_PER_CASE} current action records per Case`));
+    assert.match(compact, /excludes Case and domain identifiers, domains, recipients, notes, references, outcome text, raw evidence, and provider payloads/u);
   }
 
   assert.equal(BROWSER_LOCAL_COLLECTIONS.length, 12);

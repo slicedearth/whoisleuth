@@ -45,7 +45,7 @@ unlisted advisory at any severity blocks the command, so every new high or
 critical production advisory remains blocking even when npm reports it through
 another affected package node.
 
-The exception reviewed on 2026-08-09 covers exactly these high-severity
+The exception reviewed on 2026-08-10 covers exactly these high-severity
 advisory IDs:
 
 - `GHSA-w3rx-r6r6-pgpr`
@@ -53,14 +53,14 @@ advisory IDs:
 
 Both advisories affect `image-size` 2.0.2 through the locked chain
 `@netlify/blobs` 10.7.9 → `@netlify/dev-utils` 4.4.6 → `image-size` 2.0.2. npm
-therefore reports three vulnerable package entries but two advisory IDs. No fix
-was available in the production dependency graph at review time. WHOISleuth's
+therefore reports three vulnerable package entries but two advisory IDs. npm
+currently reports no fix in the production dependency graph. WHOISleuth's
 production sources import `getStore` from the `@netlify/blobs` package root;
 they do not import its `./server` export that exposes the image-parser path.
 That reachability distinction reduces current exposure but does not remove the
 dependency advisory or justify suppressing npm's raw report.
 
-The exception expires at `2026-09-09T00:00:00.000Z`. While an affected advisory
+The exception expires at `2026-09-10T00:00:00.000Z`. While an affected advisory
 is present, the gate fails closed after that instant. It also fails closed for
 malformed, oversized, unsupported, or internally inconsistent audit JSON; an
 unlisted, missing, or duplicated advisory record; changed advisory URL, source,
@@ -83,9 +83,10 @@ reviewed match; policy mismatches exit 1, and audit execution or lockfile-read
 failures exit 2.
 
 Published CLI releases have a separate exact-version check documented in the
-[release guide](releasing.md). It verifies registry integrity, signature and
-provenance metadata after publication rather than treating a clean source
-lockfile as proof that the public artefact is identical.
+[release guide](releasing.md). It verifies registry integrity and exact byte
+identity against the explicitly selected reviewed candidate after publication.
+Registry signature and provenance records are surfaced as metadata, not
+reported as cryptographically verified by this check.
 
 ## SPDX export
 

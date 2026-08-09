@@ -25,6 +25,7 @@ import {
   COOKIE_NAME,
   checkPassword,
   createSessionToken,
+  isPermittedAuthenticatedNetworkRequest,
   isValidSessionToken,
   sessionFingerprintFromCookieHeader,
   isTrustedOrigin,
@@ -182,6 +183,13 @@ function requireAuth(req: RequestLike, res: ResponseLike, next: Next) {
   next();
 }
 
+function requireNetworkRequestAdmission(req: RequestLike, res: ResponseLike, next: Next) {
+  if (!isPermittedAuthenticatedNetworkRequest(req.headers)) {
+    return res.status(403).json({ error: 'Cross-site network request blocked', errorCode: 'CROSS_SITE_REQUEST_BLOCKED' });
+  }
+  next();
+}
+
 function rateLimit(check: RateLimitChecker) {
   return (req: RequestLike, res: ResponseLike, next: Next) => {
     const identity = getClientIp(req.headers, req.socket && req.socket.remoteAddress);
@@ -283,7 +291,7 @@ app.get('/api/capabilities', requireAuth, (_req: RequestLike, res: ResponseLike)
   res.json(capabilityReport('express'));
 });
 
-app.get('/api/lookup', apiRateLimit, requireAuth, requireFeature('lookup'), async (req: RequestLike, res: ResponseLike) => {
+app.get('/api/lookup', apiRateLimit, requireAuth, requireNetworkRequestAdmission, requireFeature('lookup'), async (req: RequestLike, res: ResponseLike) => {
   const q = queryText(req.query.q);
   if (!q) return res.status(400).json({ error: 'Missing query parameter "q"', errorCode: LOOKUP_ERROR_CODES.MISSING_QUERY });
 
@@ -318,7 +326,7 @@ app.get('/api/lookup', apiRateLimit, requireAuth, requireFeature('lookup'), asyn
   });
 });
 
-app.get('/api/rdap', apiRateLimit, requireAuth, requireFeature('rdap'), async (req: RequestLike, res: ResponseLike) => {
+app.get('/api/rdap', apiRateLimit, requireAuth, requireNetworkRequestAdmission, requireFeature('rdap'), async (req: RequestLike, res: ResponseLike) => {
   const q = queryText(req.query.q);
   if (!q) return res.status(400).json({ error: 'Missing query parameter "q"' });
 
@@ -349,7 +357,7 @@ app.get('/api/rdap', apiRateLimit, requireAuth, requireFeature('rdap'), async (r
   });
 });
 
-app.get('/api/rdap-nameserver-search', apiRateLimit, requireAuth, requireFeature('rdap_nameserver_search'), async (req: RequestLike, res: ResponseLike) => {
+app.get('/api/rdap-nameserver-search', apiRateLimit, requireAuth, requireNetworkRequestAdmission, requireFeature('rdap_nameserver_search'), async (req: RequestLike, res: ResponseLike) => {
   return withExpressOperationBudget(req, res, operationBudgetTargetFor('rdap_nameserver_search'), async () => {
     try {
       const result = await searchRdapNameserver(
@@ -366,7 +374,7 @@ app.get('/api/rdap-nameserver-search', apiRateLimit, requireAuth, requireFeature
   });
 });
 
-app.get('/api/whois', apiRateLimit, requireAuth, requireFeature('whois'), async (req: RequestLike, res: ResponseLike) => {
+app.get('/api/whois', apiRateLimit, requireAuth, requireNetworkRequestAdmission, requireFeature('whois'), async (req: RequestLike, res: ResponseLike) => {
   const q = queryText(req.query.q);
   if (!q) return res.status(400).json({ error: 'Missing query parameter "q"' });
 
@@ -394,7 +402,7 @@ app.get('/api/whois', apiRateLimit, requireAuth, requireFeature('whois'), async 
   });
 });
 
-app.get('/api/availability', apiRateLimit, requireAuth, requireFeature('availability'), async (req: RequestLike, res: ResponseLike) => {
+app.get('/api/availability', apiRateLimit, requireAuth, requireNetworkRequestAdmission, requireFeature('availability'), async (req: RequestLike, res: ResponseLike) => {
   const q = queryText(req.query.q);
   if (!q) return res.status(400).json({ error: 'Missing query parameter "q"' });
 
@@ -433,7 +441,7 @@ app.get('/api/availability', apiRateLimit, requireAuth, requireFeature('availabi
   });
 });
 
-app.get('/api/ct-search', apiRateLimit, requireAuth, requireFeature('certificate_transparency'), async (req: RequestLike, res: ResponseLike) => {
+app.get('/api/ct-search', apiRateLimit, requireAuth, requireNetworkRequestAdmission, requireFeature('certificate_transparency'), async (req: RequestLike, res: ResponseLike) => {
   let q: string;
   try {
     q = normalizeCtQuery(req.query.q);
@@ -453,7 +461,7 @@ app.get('/api/ct-search', apiRateLimit, requireAuth, requireFeature('certificate
   });
 });
 
-app.get('/api/domain-posture', apiRateLimit, requireAuth, requireFeature('domain_posture'), async (req: RequestLike, res: ResponseLike) => {
+app.get('/api/domain-posture', apiRateLimit, requireAuth, requireNetworkRequestAdmission, requireFeature('domain_posture'), async (req: RequestLike, res: ResponseLike) => {
   const q = queryText(req.query.q);
   if (!q) return res.status(400).json({ error: 'Missing query parameter "q"' });
 
@@ -507,4 +515,4 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   startServer();
 }
 
-export { app, isHttps, usesSecureCookies, requireAuth, rateLimit, requireFeature, apiErrorHandler, sendUnexpectedApiError, startServer };
+export { app, isHttps, usesSecureCookies, requireAuth, requireNetworkRequestAdmission, rateLimit, requireFeature, apiErrorHandler, sendUnexpectedApiError, startServer };

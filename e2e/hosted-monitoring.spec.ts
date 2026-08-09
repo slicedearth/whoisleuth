@@ -115,11 +115,22 @@ async function mockCapability(page: Page, status: 'supported' | 'disabled' | 'un
   }));
 }
 
-async function installManagementMock(page: Page, initial: HostedItem[] = []) {
+async function installManagementMock(
+  page: Page,
+  initial: HostedItem[] = [],
+  mutationGate: Promise<void> | null = null,
+  refreshGate: { wait: Promise<void>; started: () => void } | null = null,
+) {
   let watchlists = structuredClone(initial);
   const commands: Array<Record<string, unknown>> = [];
+  let readCount = 0;
   await page.route('**/api/scheduled-monitor', async (route: Route) => {
     if (route.request().method() === 'GET') {
+      readCount += 1;
+      if (refreshGate && readCount > 1) {
+        refreshGate.started();
+        await refreshGate.wait;
+      }
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(managementResponse(watchlists)) });
       return;
     }
@@ -157,6 +168,7 @@ async function installManagementMock(page: Page, initial: HostedItem[] = []) {
       action = 'deleted';
       watchlists = watchlists.filter((item) => item.id !== command.id);
     }
+    if (mutationGate) await mutationGate;
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -240,4 +252,61 @@ test('hosted controls stay usable without horizontal overflow on a narrow mobile
   await expect(hosted.getByRole('button', { name: 'Restore to browser' })).toBeVisible();
   await expect(hosted.getByRole('button', { name: 'Delete hosted copy' })).toBeVisible();
   await expectNoHorizontalOverflow(page);
+});
+
+test('serializes hosted refresh and mutation controls while a command is pending', async ({ page }) => {
+  let releaseMutation = () => {};
+  const mutationGate = new Promise<void>((resolve) => { releaseMutation = resolve; });
+  await seedLocalWatchlist(page);
+  await mockCapability(page, 'supported');
+  const mock = await installManagementMock(page, [hostedWatchlist()], mutationGate);
+  await page.goto('/monitor?view=watchlists');
+
+  const hosted = page.getByRole('region', { name: 'Scheduled watchlists' });
+  const item = hosted.getByRole('article').filter({ hasText: 'Priority domains' });
+  await item.getByRole('button', { name: 'Pause' }).click();
+  await expect(item.getByRole('button', { name: 'Pause' })).toBeDisabled();
+  await expect(item.getByRole('button', { name: 'Replace from browser' })).toBeDisabled();
+  await expect(item.getByRole('button', { name: 'Restore to browser' })).toBeDisabled();
+  await expect(item.getByRole('button', { name: 'Delete hosted copy' })).toBeDisabled();
+  await expect(hosted.getByRole('button', { name: 'Schedule watchlist' })).toBeDisabled();
+  expect(mock.commands).toHaveLength(1);
+
+  releaseMutation();
+  await expect(item).toContainText('Paused');
+  await expect(item.getByRole('button', { name: 'Resume' })).toBeEnabled();
+  expect(mock.commands).toHaveLength(1);
+});
+
+test('disables every mutation while a hosted refresh is pending', async ({ page }) => {
+  let releaseRefresh = () => {};
+  let markRefreshStarted = () => {};
+  const refreshWait = new Promise<void>((resolve) => { releaseRefresh = resolve; });
+  const refreshStarted = new Promise<void>((resolve) => { markRefreshStarted = resolve; });
+  await seedLocalWatchlist(page);
+  await mockCapability(page, 'supported');
+  const mock = await installManagementMock(page, [hostedWatchlist()], null, {
+    wait: refreshWait,
+    started: markRefreshStarted,
+  });
+  await page.goto('/monitor?view=watchlists');
+
+  const hosted = page.getByRole('region', { name: 'Scheduled watchlists' });
+  const item = hosted.getByRole('article').filter({ hasText: 'Priority domains' });
+  await expect(item).toBeVisible();
+  await hosted.getByRole('button', { name: 'Refresh' }).click();
+  await refreshStarted;
+  await expect(hosted.getByRole('button', { name: 'Refreshing…' })).toBeDisabled();
+  await expect(hosted.getByLabel('Browser-local watchlist')).toBeDisabled();
+  await expect(item.getByRole('button', { name: 'Pause' })).toBeDisabled();
+  await expect(item.getByRole('button', { name: 'Replace from browser' })).toBeDisabled();
+  await expect(item.getByRole('button', { name: 'Restore to browser' })).toBeDisabled();
+  await expect(item.getByRole('button', { name: 'Delete hosted copy' })).toBeDisabled();
+  expect(mock.commands).toEqual([]);
+
+  releaseRefresh();
+  await expect(hosted.getByRole('button', { name: 'Refresh' })).toBeEnabled();
+  await item.getByRole('button', { name: 'Pause' }).click();
+  await expect(item).toContainText('Paused');
+  expect(mock.commands).toHaveLength(1);
 });

@@ -15,6 +15,7 @@
     status,
     canSave,
     profileContextLoading,
+    running,
   }: {
     sessions: BulkSession[];
     currentSessionId: string;
@@ -28,6 +29,7 @@
     status: string;
     canSave: boolean;
     profileContextLoading: boolean;
+    running: boolean;
   } = $props();
 
   let baselineId = $state('');
@@ -65,7 +67,7 @@
       <h2 id="bulk-sessions-title" tabindex="-1">Saved Bulk sessions</h2>
       <p>Save compact results and source states so an incomplete investigation can be resumed or compared later. Raw source payloads and contact records are excluded.</p>
     </div>
-    {#if sessions.length}<button type="button" class="secondary" onclick={exportSessions}>Export sessions</button>{/if}
+    {#if sessions.length}<button type="button" class="secondary" onclick={exportSessions} disabled={running}>Export sessions</button>{/if}
   </div>
 
   <div class="save-row">
@@ -100,11 +102,11 @@
             </dl>
           </div>
           <div class="session-actions">
-            <button type="button" disabled={profileContextLoading} onclick={() => loadSession(session)}>Load</button>
+            <button type="button" disabled={profileContextLoading || running} onclick={() => loadSession(session)}>Load</button>
             {#if unstartedCount(session) > 0}
-              <button type="button" class="secondary" disabled={profileContextLoading} onclick={() => resumeSession(session)}>Resume unstarted</button>
+              <button type="button" class="secondary" disabled={profileContextLoading || running} onclick={() => resumeSession(session)}>Resume unstarted</button>
             {/if}
-            <button type="button" class="danger-text" onclick={() => deleteSession(session)}>Delete</button>
+            <button type="button" class="danger-text" disabled={running} onclick={() => deleteSession(session)}>Delete</button>
           </div>
         </article>
       {/each}

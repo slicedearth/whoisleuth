@@ -115,7 +115,7 @@ describe('optional local Ed25519 evidence-package signing', () => {
     );
     const rawSigned = JSON.stringify(signed);
     const nestedSelection = '"selection":{"count":0';
-    assert.match(rawSigned, new RegExp(nestedSelection.replace(/[{}]/gu, '\\$&'), 'u'));
+    assert.ok(rawSigned.includes(nestedSelection));
     await assert.rejects(
       verifyEvidencePackageSignature(rawSigned.replace(nestedSelection, '"selection":{"count":0,"count":0')),
       /duplicate object key/iu,

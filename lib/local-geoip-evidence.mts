@@ -86,8 +86,9 @@ function lookupLocalGeoIp(database: LocalGeoIpDatabase, address: unknown) {
     return Object.freeze({ state: 'invalid' as const, address: null, match: null, source: null, limitations: Object.freeze([]) });
   }
   const match = database.records.find((item) => prefixContains(item.parsedNetwork, target)) ?? null;
+  const incomplete = database.truncated || database.rejectedCount > 0;
   return Object.freeze({
-    state: match ? database.truncated || database.rejectedCount > 0 ? 'partial' as const : 'matched' as const : 'not_found' as const,
+    state: match ? incomplete ? 'partial' as const : 'matched' as const : incomplete ? 'partial' as const : 'not_found' as const,
     address: normalized,
     match: match ? Object.freeze({
       network: match.network,

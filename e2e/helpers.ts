@@ -324,8 +324,13 @@ export async function failNextBrowserLocalCollectionReadAfterWrite(
   }, collection);
 }
 
-export async function holdBrowserLocalReads(page: Page, delayMs = 750) {
-  await page.evaluate(({ databaseName, delay }) => new Promise<void>((resolve, reject) => {
+export async function holdBrowserLocalReads(page: Page, delayMs = 750, triggerSelector?: string) {
+  await page.evaluate(({ databaseName, delay, selector }) => new Promise<void>((resolve, reject) => {
+    const trigger = selector ? document.querySelector<HTMLElement>(selector) : null;
+    if (selector && !trigger) {
+      reject(new Error(`Could not find the browser-local read hold trigger: ${selector}`));
+      return;
+    }
     const readyDeadline = performance.now() + 5_000;
     const openReadyDatabase = () => {
       const openRequest = indexedDB.open(databaseName);
@@ -364,6 +369,10 @@ export async function holdBrowserLocalReads(page: Page, delayMs = 750) {
           request.onsuccess = () => {
             if (!started) {
               started = true;
+              // Trigger inside the page task that observes the active hold so
+              // constrained full-suite workers cannot let a timed hold expire
+              // between separate host-side Playwright commands.
+              trigger?.click();
               resolve();
             }
             if (performance.now() < releaseAt) keepAlive();
@@ -374,7 +383,7 @@ export async function holdBrowserLocalReads(page: Page, delayMs = 750) {
       };
     };
     openReadyDatabase();
-  }), { databaseName: LOCAL_DATA_DATABASE_NAME, delay: delayMs });
+  }), { databaseName: LOCAL_DATA_DATABASE_NAME, delay: delayMs, selector: triggerSelector });
 }
 
 // Computed content of a pseudo-element - used to check the CSS-only

@@ -100,7 +100,7 @@ function lockfile() {
 function assess(
   audit: ReturnType<typeof auditReport>,
   locked = lockfile(),
-  now = new Date('2026-08-09T00:00:00.000Z'),
+  now = new Date('2026-08-10T00:00:00.000Z'),
 ) {
   return assessProductionDependencyAudit({
     auditJson: JSON.stringify(audit),
@@ -205,6 +205,17 @@ describe('production dependency audit policy', () => {
       assert.equal(report.status, 'blocked');
       assert.ok(report.findings.some((item) => item.code === 'package_chain_changed'));
     });
+    await context.test('advertised forced downgrade', () => {
+      const audit = auditReport();
+      audit.vulnerabilities['image-size'].fixAvailable = {
+        name: '@netlify/blobs',
+        version: '9.1.5',
+        isSemVerMajor: true,
+      } as never;
+      const report = assess(audit);
+      assert.equal(report.status, 'blocked');
+      assert.ok(report.findings.some((item) => item.code === 'package_chain_changed'));
+    });
     await context.test('locked versions', () => {
       const locked = lockfile();
       locked.packages['node_modules/image-size'].version = '2.0.3';
@@ -239,7 +250,7 @@ describe('production dependency audit policy', () => {
     const code = main({
       stdout,
       stderr,
-      now: () => new Date('2026-08-09T00:00:00.000Z'),
+      now: () => new Date('2026-08-10T00:00:00.000Z'),
       runAudit: () => ({ status: 1, signal: null, stdout: rawAudit, stderr: '' }),
       readLockfile: () => JSON.stringify(lockfile()),
     });

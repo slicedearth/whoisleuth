@@ -188,6 +188,24 @@ function isTrustedLoginOrigin(headers: HeaderInput | null | undefined): boolean 
   });
 }
 
+// Authenticated GET endpoints can initiate bounded third-party collection.
+// SameSite=Lax still attaches a session cookie to some top-level GETs, and a
+// sibling site can send same-site requests without an Origin header. Accept
+// only same-origin browser requests or deliberate user/browser navigations.
+// Non-browser clients commonly omit Fetch Metadata and Origin; that absence is
+// retained for CLI compatibility, while any present Origin must be same-host.
+function isPermittedAuthenticatedNetworkRequest(headers: HeaderInput | null | undefined): boolean {
+  if (!headers) return true;
+  const fetchSite = headers['sec-fetch-site'] || headers['Sec-Fetch-Site'];
+  if (fetchSite !== undefined) {
+    if (typeof fetchSite !== 'string') return false;
+    const normalized = fetchSite.trim().toLowerCase();
+    if (!['same-origin', 'none'].includes(normalized)) return false;
+  }
+  const origin = headers.origin || headers.Origin;
+  return !origin || isTrustedOrigin(headers);
+}
+
 export {
   COOKIE_NAME,
   checkPassword,
@@ -197,6 +215,7 @@ export {
   sessionFingerprintFromCookieHeader,
   isTrustedOrigin,
   isTrustedLoginOrigin,
+  isPermittedAuthenticatedNetworkRequest,
   parseCookies,
   buildSessionCookie,
   buildClearCookie,

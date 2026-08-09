@@ -3,6 +3,10 @@ import { expectNoHorizontalOverflow } from './helpers';
 
 test('contact handoff keeps the draft local and reveals only the selected role route', async ({ page }) => {
   const submissions: unknown[] = [];
+  let releaseSubmission = () => {};
+  let markSubmissionStarted = () => {};
+  const submissionGate = new Promise<void>((resolve) => { releaseSubmission = resolve; });
+  const submissionStarted = new Promise<void>((resolve) => { markSubmissionStarted = resolve; });
 
   await page.route('**/api/contact-route', async (route) => {
     const request = route.request();
@@ -20,6 +24,8 @@ test('contact handoff keeps the draft local and reveals only the selected role r
     }
 
     submissions.push(request.postDataJSON());
+    markSubmissionStarted();
+    await submissionGate;
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -53,6 +59,15 @@ test('contact handoff keeps the draft local and reveals only the selected role r
   await page.getByLabel('Subject').fill('A bounded privacy request');
   await page.getByLabel('Message').fill('This private draft must not cross the application boundary.');
   await page.getByRole('button', { name: 'Verify and prepare email' }).click();
+  await submissionStarted;
+  await expect(page.getByLabel('Contact category')).toBeDisabled();
+  await page.getByLabel('Contact category').evaluate((element) => {
+    const select = element as HTMLSelectElement;
+    select.value = 'security';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  await expect(page.getByLabel('Contact category')).toHaveValue('security');
+  releaseSubmission();
 
   await expect.poll(() => submissions).toEqual([
     { category: 'privacy', token: 'browser-test-token' },

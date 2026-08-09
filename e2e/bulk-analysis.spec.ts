@@ -708,6 +708,48 @@ test('saves compact Bulk sessions, restores them after reload, and compares late
   await expect(page.getByRole('status').filter({ hasText: /Loaded Baseline review/ })).toBeVisible();
 });
 
+test('isolates saved-session controls while an active scan owns the result state', async ({ page }) => {
+  let releaseLookup = () => {};
+  const lookupGate = new Promise<void>((resolve) => { releaseLookup = resolve; });
+  await page.route('**/api/lookup?*', async (route) => {
+    const domain = new URL(route.request().url()).searchParams.get('q') || '';
+    if (domain === 'active-review.invalid') await lookupGate;
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        availability: { applicable: true, domain, state: 'registered', confidence: 'high' },
+        diagnostics: {
+          version: 7,
+          rdap: { status: 'complete' },
+          whois: { status: 'skipped' },
+          availability: { status: 'complete' },
+        },
+      }),
+    });
+  });
+
+  await runBulkScan(page, ['saved-review.invalid']);
+  await page.getByLabel('Session name').fill('Saved review');
+  await page.getByRole('button', { name: 'Save current session' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Saved Saved review.' })).toBeVisible();
+  const savedSessions = page.getByRole('region', { name: 'Saved Bulk sessions' });
+  const saved = savedSessions.getByRole('article').filter({ hasText: 'Saved review' });
+
+  await page.locator('#domains').fill('active-review.invalid');
+  await page.getByRole('button', { name: 'Scan 1 domain' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Scanning 1 domain…' })).toBeVisible();
+  await expect(saved.getByRole('button', { name: 'Load' })).toBeDisabled();
+  await expect(saved.getByRole('button', { name: 'Delete' })).toBeDisabled();
+  await expect(savedSessions.getByRole('button', { name: 'Export sessions' })).toBeDisabled();
+
+  releaseLookup();
+  await expect(page.getByRole('status').filter({ hasText: 'Completed 1 of 1 lookups.' })).toBeVisible();
+  await expect(saved.getByRole('button', { name: 'Load' })).toBeEnabled();
+  await expect(page.locator('.results-table tbody tr', { hasText: 'active-review.invalid' })).toHaveCount(1);
+  await expect(page.locator('.results-table tbody tr', { hasText: 'saved-review.invalid' })).toHaveCount(0);
+});
+
 test('resumes only unstarted rows from an explicitly saved partial session', async ({ page }) => {
   const savedAt = '2026-07-28T03:00:00.000Z';
   await migrateLegacyBrowserData(page, {

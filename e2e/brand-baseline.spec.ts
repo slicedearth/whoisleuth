@@ -76,6 +76,40 @@ function availabilityFixture() {
   };
 }
 
+function postureFixture(domain: string, checkedAt = ISO) {
+  return {
+    domain,
+    checkedAt,
+    dkimSelectors: [],
+    retiredDkimSelectors: [],
+    mailProtectionProfile: 'standard',
+    summary: { pass: 1, warning: 0, danger: 0, info: 0 },
+    checks: [{
+      id: 'nameservers',
+      label: 'Nameservers',
+      status: 'pass',
+      summary: 'Observed configured delegation',
+      detail: '',
+      records: [`ns1.${domain}`],
+      remediation: '',
+    }],
+    spfExpansion: {
+      version: 1,
+      state: 'complete',
+      lookupLimit: 10,
+      lookupsUsed: 0,
+      voidLookupLimit: 2,
+      voidLookups: 0,
+      maxDepth: 5,
+      dnsLookupTerms: 0,
+      branches: [],
+      issues: [],
+    },
+    dmarcAuthorizations: [],
+    externalDependencies: [],
+  };
+}
+
 async function cleanBrandStorage(page: import('@playwright/test').Page) {
   await page.goto('/brands');
   await migrateLegacyBrowserData(page, {
@@ -211,6 +245,132 @@ test('a malformed successful posture report renders as an explicit audit error',
   await expect(page.getByText('Official-domain audit returned an invalid response.', { exact: true })).toBeVisible();
 });
 
+test('a profile switch invalidates an in-flight posture audit before it can publish stale results', async ({ page }) => {
+  let releaseAudit = () => {};
+  let markAuditStarted = () => {};
+  let requestSettled = false;
+  const auditGate = new Promise<void>((resolve) => { releaseAudit = resolve; });
+  const auditStarted = new Promise<void>((resolve) => { markAuditStarted = resolve; });
+  await page.route('**/api/domain-posture?*', async (route) => {
+    markAuditStarted();
+    await auditGate;
+    try {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ summary: 'complete', checks: [] }),
+      });
+    } catch {
+      // Switching profiles aborts the browser request; the stale route may
+      // therefore already be closed when the fixture releases it.
+    } finally {
+      requestSettled = true;
+    }
+  });
+  const secondProfile = {
+    ...profileFixture(),
+    id: 'profile-2',
+    name: 'Second stored brand',
+    officialDomains: ['second.example'],
+  };
+  await page.goto('/brands');
+  await migrateLegacyBrowserData(page, {
+    [PROFILES_KEY]: {
+      schema: 'whoisleuth.brand-profiles',
+      version: 6,
+      exportedAt: ISO,
+      profiles: [profileFixture(), secondProfile],
+    },
+    [ACTIVE_KEY]: 'profile-1',
+  }, { destination: '/brands' });
+
+  await page.getByRole('button', { name: 'Audit official domains' }).click();
+  await auditStarted;
+  await expect(page.getByRole('button', { name: 'Auditing…' })).toBeDisabled();
+  await page.getByRole('radio', { name: 'Set Second stored brand active' }).check();
+  await expect(page.getByRole('radio', { name: 'Set Second stored brand active' })).toBeChecked();
+  await expect(page.getByRole('status').filter({ hasText: 'Set "Second stored brand" active.' })).toBeVisible();
+
+  releaseAudit();
+  await expect.poll(() => requestSettled).toBe(true);
+  await expect(page.getByText('Official-domain audit returned an invalid response.', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('status').filter({ hasText: 'Audited 0/1 official domain.' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Audit official domains' })).toBeEnabled();
+});
+
+test('editing the active profile invalidates its in-flight posture audit before stale publication', async ({ page }) => {
+  let releaseAudit = () => {};
+  let markAuditStarted = () => {};
+  let requestSettled = false;
+  const auditGate = new Promise<void>((resolve) => { releaseAudit = resolve; });
+  const auditStarted = new Promise<void>((resolve) => { markAuditStarted = resolve; });
+  await page.route('**/api/domain-posture?*', async (route) => {
+    markAuditStarted();
+    await auditGate;
+    try {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ summary: 'complete', checks: [] }) });
+    } catch {
+      // Saving the edited profile aborts the obsolete request.
+    } finally {
+      requestSettled = true;
+    }
+  });
+  await page.goto('/brands');
+  await migrateLegacyBrowserData(page, {
+    [PROFILES_KEY]: { schema: 'whoisleuth.brand-profiles', version: 6, exportedAt: ISO, profiles: [profileFixture()] },
+    [ACTIVE_KEY]: 'profile-1',
+  }, { destination: '/brands' });
+
+  await page.getByRole('button', { name: 'Audit official domains' }).click();
+  await auditStarted;
+  await page.getByRole('button', { name: 'Edit Stored Brand (profile-1)' }).click();
+  await page.getByLabel('Official domains').fill('changed.example');
+  await page.getByRole('button', { name: 'Save profile' }).click();
+  await expect(page.getByRole('status', { name: 'Brand Profile action status' })).toContainText('Saved "Stored Brand"');
+
+  releaseAudit();
+  await expect.poll(() => requestSettled).toBe(true);
+  await expect(page.getByText('Official-domain audit returned an invalid response.', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Audit official domains' })).toBeEnabled();
+});
+
+test('creating a new active profile clears ownership of an older in-flight posture audit', async ({ page }) => {
+  let releaseAudit = () => {};
+  let markAuditStarted = () => {};
+  let requestSettled = false;
+  const auditGate = new Promise<void>((resolve) => { releaseAudit = resolve; });
+  const auditStarted = new Promise<void>((resolve) => { markAuditStarted = resolve; });
+  await page.route('**/api/domain-posture?*', async (route) => {
+    markAuditStarted();
+    await auditGate;
+    try {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ summary: 'complete', checks: [] }) });
+    } catch {
+      // Creating the replacement profile aborts the obsolete request.
+    } finally {
+      requestSettled = true;
+    }
+  });
+  await page.goto('/brands');
+  await migrateLegacyBrowserData(page, {
+    [PROFILES_KEY]: { schema: 'whoisleuth.brand-profiles', version: 6, exportedAt: ISO, profiles: [profileFixture()] },
+    [ACTIVE_KEY]: 'profile-1',
+  }, { destination: '/brands' });
+
+  await page.getByRole('button', { name: 'Audit official domains' }).click();
+  await auditStarted;
+  await page.getByRole('button', { name: 'New profile' }).click();
+  await page.getByLabel('Brand name').fill('Replacement Brand');
+  await page.getByLabel('Official domains').fill('replacement.example');
+  await page.getByRole('button', { name: 'Save profile' }).click();
+  await expect(page.getByRole('status', { name: 'Brand Profile action status' })).toContainText('Saved "Replacement Brand"');
+
+  releaseAudit();
+  await expect.poll(() => requestSettled).toBe(true);
+  await expect(page.getByText('Official-domain audit returned an invalid response.', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Audit official domains' })).toBeEnabled();
+});
+
 test('defensive mail settings, retired selectors, and expiring analyst attestations persist locally', async ({ page }) => {
   await cleanBrandStorage(page);
   await openProfileForm(page);
@@ -302,6 +462,74 @@ test('valid posture results disclose bounded SPF and external-dependency evidenc
   await expect(page.getByText('SPF expansion', { exact: true })).toBeVisible();
   await page.getByText('External dependency review', { exact: true }).click();
   await expect(page.getByText('ns1.example.net', { exact: true })).toBeVisible();
+});
+
+test('retains two completed posture observations sequentially without discarding either audit result', async ({ page }) => {
+  await page.route('**/api/domain-posture?*', async (route) => {
+    const domain = new URL(route.request().url()).searchParams.get('q') || 'first.example';
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(postureFixture(domain)) });
+  });
+  await page.goto('/brands');
+  await migrateLegacyBrowserData(page, {
+    [PROFILES_KEY]: [{
+      ...profileFixture(),
+      officialDomains: ['first.example', 'second.example'],
+      desiredPostureBaselines: [
+        { domain: 'first.example', nameservers: ['ns1.first.example'], updatedAt: ISO },
+        { domain: 'second.example', nameservers: ['ns1.second.example'], updatedAt: ISO },
+      ],
+    }],
+    [ACTIVE_KEY]: 'profile-1',
+  }, { destination: '/brands' });
+
+  await page.getByRole('button', { name: 'Audit official domains' }).click();
+  await expect(page.getByRole('status', { name: 'Brand Profile action status' })).toHaveText('Audited 2/2 official domains.');
+  const results = page.locator('.audit-results > article');
+  await expect(results).toHaveCount(2);
+  await results.filter({ hasText: 'first.example' }).getByRole('button', { name: 'Retain this observation' }).click();
+  await expect(page.getByRole('status', { name: 'Brand Profile action status' })).toContainText('first.example');
+  await expect(results).toHaveCount(2);
+  await results.filter({ hasText: 'second.example' }).getByRole('button', { name: 'Retain this observation' }).click();
+  await expect(page.getByRole('status', { name: 'Brand Profile action status' })).toContainText('second.example');
+  await expect(results).toHaveCount(2);
+
+  const persisted = requiredValue(
+    (await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 1 })).records[0],
+    'The saved brand-profile fixture is missing.',
+  ).value;
+  expect(persisted.desiredPostureBaselines).toEqual(expect.arrayContaining([
+    expect.objectContaining({ domain: 'first.example', observationHistory: [expect.objectContaining({ observedAt: ISO })] }),
+    expect.objectContaining({ domain: 'second.example', observationHistory: [expect.objectContaining({ observedAt: ISO })] }),
+  ]));
+});
+
+test('keeps completed posture results visible when retaining an observation cannot be written', async ({ page }) => {
+  await page.route('**/api/domain-posture?*', async (route) => {
+    const domain = new URL(route.request().url()).searchParams.get('q') || 'first.example';
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(postureFixture(domain)) });
+  });
+  await page.goto('/brands');
+  await migrateLegacyBrowserData(page, {
+    [PROFILES_KEY]: [{
+      ...profileFixture(),
+      officialDomains: ['first.example', 'second.example'],
+      desiredPostureBaselines: [
+        { domain: 'first.example', nameservers: ['ns1.first.example'], updatedAt: ISO },
+        { domain: 'second.example', nameservers: ['ns1.second.example'], updatedAt: ISO },
+      ],
+    }],
+    [ACTIVE_KEY]: 'profile-1',
+  }, { destination: '/brands' });
+
+  await page.getByRole('button', { name: 'Audit official domains' }).click();
+  await expect(page.getByRole('status', { name: 'Brand Profile action status' })).toHaveText('Audited 2/2 official domains.');
+  const results = page.locator('.audit-results > article');
+  await expect(results).toHaveCount(2);
+  await failBrowserLocalManifestWrites(page, 'brand_profiles');
+  await results.filter({ hasText: 'first.example' }).getByRole('button', { name: 'Retain this observation' }).click();
+  await expect(page.getByRole('status', { name: 'Brand Profile action status' })).toContainText('out of storage space');
+  await expect(results).toHaveCount(2);
+  await expect(page.getByText(/Brand Profiles could not be read/u)).toHaveCount(0);
 });
 
 test('official-site baseline controls fit a narrow mobile viewport without horizontal overflow', async ({ page }) => {

@@ -5,9 +5,9 @@ import { CliUsageError } from './errors.mts';
 import { parseSavedLookupDocument, type SavedLookupDocument, type UnknownRecord } from './saved-lookup.mts';
 
 export const CLI_PAGE_COMPARE_SCHEMA = 'whoisleuth.cli.page-compare';
-export const CLI_PAGE_COMPARE_VERSION = 2;
+export const CLI_PAGE_COMPARE_VERSION = 3;
 
-type ComparisonState = 'different' | 'equal' | 'overlap' | 'unavailable';
+type ComparisonState = 'different' | 'equal' | 'overlap' | 'partial' | 'unavailable';
 
 function record(value: unknown): UnknownRecord {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as UnknownRecord : {};
@@ -64,6 +64,8 @@ function buildCliPageComparison(
     && ['success', 'partial'].includes(right.compact.technology.state);
   const tlsUsable = ['success', 'partial'].includes(left.compact.tls.state)
     && ['success', 'partial'].includes(right.compact.tls.state);
+  const technologyPartial = left.compact.technology.truncated || right.compact.technology.truncated
+    || left.compact.technology.state === 'partial' || right.compact.technology.state === 'partial';
   return {
     schema: CLI_PAGE_COMPARE_SCHEMA,
     version: CLI_PAGE_COMPARE_VERSION,
@@ -80,14 +82,15 @@ function buildCliPageComparison(
     },
     page,
     technology: {
-      state: technologyUsable ? setComparison(leftTechnology, rightTechnology) : 'unavailable' as ComparisonState,
+      state: technologyUsable
+        ? technologyPartial ? 'partial' as const : setComparison(leftTechnology, rightTechnology)
+        : 'unavailable' as ComparisonState,
       leftSourceState: left.compact.technology.state,
       rightSourceState: right.compact.technology.state,
       leftIds: leftTechnology,
       rightIds: rightTechnology,
       sharedIds: sharedTechnology,
-      partial: left.compact.technology.truncated || right.compact.technology.truncated
-        || left.compact.technology.state === 'partial' || right.compact.technology.state === 'partial',
+      partial: technologyPartial,
     },
     tls: {
       leftSourceState: left.compact.tls.state,
@@ -128,6 +131,7 @@ function formatCliPageComparison(document: ReturnType<typeof buildCliPageCompari
     '',
     'Technology',
     `Relationship     ${document.technology.state}`,
+    `Evidence         ${document.technology.partial ? 'Partial; equality and disjointness withheld' : 'Complete retained sets'}`,
     `Shared           ${document.technology.sharedIds.join(', ') || 'None observed'}`,
     `Left             ${document.technology.leftIds.join(', ') || 'Unavailable'}`,
     `Right            ${document.technology.rightIds.join(', ') || 'Unavailable'}`,

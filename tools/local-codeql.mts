@@ -95,6 +95,18 @@ const KNOWN_CODEQL_FINDINGS: readonly KnownCodeqlFinding[] = Object.freeze([
   // limiter. CodeQL models the token verification as authorization but does
   // not follow the project-local Express middleware factory.
   Object.freeze({ ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: 'e98683a11c64bf47:1', primaryLocationStartColumnFingerprint: '26', reason: 'false_positive' as const }),
+  // Every authenticated network GET below places apiRateLimit before both
+  // authentication and cross-site request admission. CodeQL models the new
+  // admission middleware as authorization but does not recognize the earlier
+  // project-local limiter. Exact fingerprints plus a source-order regression
+  // keep this review narrow and make any route edit require re-review.
+  Object.freeze({ ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: '87a6b826a4cdaa1c:1', primaryLocationStartColumnFingerprint: '50', reason: 'false_positive' as const }),
+  Object.freeze({ ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: 'd96bfd33ae3ed6bf:1', primaryLocationStartColumnFingerprint: '48', reason: 'false_positive' as const }),
+  Object.freeze({ ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: '29ddfb546d6fe5a7:1', primaryLocationStartColumnFingerprint: '66', reason: 'false_positive' as const }),
+  Object.freeze({ ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: 'b9283329ce021080:1', primaryLocationStartColumnFingerprint: '49', reason: 'false_positive' as const }),
+  Object.freeze({ ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: '8acce5086fcbbcb3:1', primaryLocationStartColumnFingerprint: '56', reason: 'false_positive' as const }),
+  Object.freeze({ ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: 'c9a8676b6ac23924:1', primaryLocationStartColumnFingerprint: '53', reason: 'false_positive' as const }),
+  Object.freeze({ ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: '7ab74220fd086828:1', primaryLocationStartColumnFingerprint: '58', reason: 'false_positive' as const }),
 ]);
 
 function boundedText(value: unknown, maximum: number, fallback: string): string {

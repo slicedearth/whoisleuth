@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures';
-import { expectNoHorizontalOverflow, failBrowserLocalManifestWrites, migrateLegacyBrowserData, readBrowserLocalCollection } from './helpers';
+import { expectNoHorizontalOverflow, failBrowserLocalManifestWrites, holdBrowserLocalReads, migrateLegacyBrowserData, readBrowserLocalCollection } from './helpers';
 import type { Page } from '@playwright/test';
 
 // Every CT search below is fulfilled locally with fixture JSON, so no test
@@ -128,6 +128,28 @@ test('certificate search exposes and enforces the shared bounded query contract'
   const invalidResponse = await request.get(`/api/ct-search?q=${encodeURIComponent('x'.repeat(201))}`);
   expect(invalidResponse.status()).toBe(400);
   expect(await invalidResponse.json()).toMatchObject({ errorCode: 'INVALID_CT_QUERY' });
+});
+
+test('does not publish a superseded certificate result after delayed history persistence', async ({ page }) => {
+  await mockCtSearch(page, structuredResponse);
+  await page.getByRole('tab', { name: 'Certificates' }).click();
+  await page.locator('.fields input').first().fill('example');
+  // Trigger the search from the browser task that observes the active hold so
+  // the persistence race remains deterministic under full-suite worker load.
+  await holdBrowserLocalReads(page, 4_000, '#discovery-method-panel button.primary');
+  await expect(page.getByRole('button', { name: 'Searching…' })).toBeDisabled();
+
+  await page.getByRole('tab', { name: 'Lookalikes' }).click();
+  await page.getByLabel('Brand or domain').fill('superseding');
+  await page.getByRole('textbox', { name: 'TLDs' }).fill('example');
+  await page.getByRole('button', { name: 'Generate candidates' }).click();
+  const generationStatus = page.locator('p.status[role="status"]').filter({ hasText: /^Generated /u });
+  await expect(generationStatus).toBeVisible();
+
+  await readBrowserLocalCollection(page, 'ct_history', { minimumRecords: 1, timeout: 10_000 });
+  await expect(page.getByRole('tab', { name: 'Lookalikes' })).toHaveAttribute('aria-selected', 'true');
+  await expect(generationStatus).toBeVisible();
+  await expect(page.getByText('a.example.invalid', { exact: true })).toHaveCount(0);
 });
 
 test('registry-scoped nameserver results disclose their lower-bound scope and continue to Bulk', async ({ page }) => {

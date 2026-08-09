@@ -1114,6 +1114,9 @@ complete supported static page-identity observations on both sides.
 
 Each page component remains independent. Exact, similar, overlapping,
 different, unavailable, and partial evidence are not collapsed into a score.
+Version 3 also withholds technology-set equality and disjointness whenever
+either saved technology observation is partial or truncated; the retained
+identifiers remain visible only as incomplete evidence.
 Matching components are investigative relationships rather than proof of
 copying, common ownership, control, intent, safety, or maliciousness. Static
 comparison does not execute JavaScript; use the optional local rendered

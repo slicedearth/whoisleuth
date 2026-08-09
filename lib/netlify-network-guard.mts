@@ -6,6 +6,7 @@
 
 import {
   isAuthenticatedFromCookieHeader,
+  isPermittedAuthenticatedNetworkRequest,
   sessionFingerprintFromCookieHeader,
 } from './auth.mts';
 import { checkApiRateLimit, getClientIp } from './rate-limit.mts';
@@ -54,6 +55,14 @@ function guardNetlifyNetworkRequest(
   if (!isAuthenticatedFromCookieHeader(cookieHeader)) {
     return {
       response: json(401, { error: 'Authentication required', errorCode: 'AUTH_REQUIRED' }),
+    };
+  }
+  if (!isPermittedAuthenticatedNetworkRequest(headers)) {
+    return {
+      response: json(403, {
+        error: 'Cross-site network request blocked',
+        errorCode: 'CROSS_SITE_REQUEST_BLOCKED',
+      }),
     };
   }
 

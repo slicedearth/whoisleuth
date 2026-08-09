@@ -203,7 +203,8 @@ function validateDnssecEvidence(input: DnssecEvidenceInput): DnssecEvidenceRepor
     });
   }
 
-  if (input.delegationSigned === false && dsRecords.length === 0) {
+  const incompleteInput = rejectedCount > 0 || truncated;
+  if (input.delegationSigned === false && dsRecords.length === 0 && !incompleteInput) {
     findings.push('The supplied delegation state was unsigned and no DS records were supplied.');
     return Object.freeze({
       schema: DNSSEC_EVIDENCE_SCHEMA,
@@ -234,21 +235,26 @@ function validateDnssecEvidence(input: DnssecEvidenceInput): DnssecEvidenceRepor
     if (matched) matchedDsCount += 1;
   }
 
-  const definiteConflict = input.delegationSigned === false && dsRecords.length > 0
+  const observedConflict = input.delegationSigned === false && dsRecords.length > 0
     || input.delegationSigned === true && dsRecords.length === 0 && !truncated
     || signatureState === 'outside_window'
     || (dsRecords.length > 0 && dnskeys.length > 0 && matchedDsCount === 0 && unsupportedDigestCount < dsRecords.length);
+  const definiteConflict = observedConflict && !incompleteInput;
   if (definiteConflict) findings.push('The supplied delegation, signature-time, DS, or DNSKEY evidence conflicts.');
+  else if (observedConflict) findings.push('The retained subset contains conflicting evidence, but omitted or rejected records prevent a definitive conflict conclusion.');
   if (matchedDsCount > 0) findings.push(`${matchedDsCount} supplied DS record(s) matched a supplied DNSKEY.`);
   if (unsupportedDigestCount > 0) findings.push(`${unsupportedDigestCount} DS digest type(s) were retained as unsupported.`);
   if (signatureState === 'mixed') findings.push('The supplied RRSIG validity windows were mixed at the observation time.');
+  if (input.delegationSigned === false && dsRecords.length === 0 && incompleteInput) {
+    findings.push('The retained subset contains no usable DS record, but omitted or rejected records prevent a definitive unsigned conclusion.');
+  }
   if (rejectedCount > 0) findings.push(`${rejectedCount} malformed record(s) were rejected.`);
   if (truncated) findings.push('The supplied record set exceeded the review bound and was truncated.');
 
   const completeLocalRelationship = dsRecords.length > 0
     && dnskeys.length > 0
     && matchedDsCount > 0
-    && !definiteConflict
+    && !observedConflict
     && rejectedCount === 0
     && !truncated
     && unsupportedDigestCount === 0

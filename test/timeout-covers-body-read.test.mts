@@ -1,70 +1,50 @@
-// Covers the fix applied to lib/availability.mts's fetchHomepage() and
-// lib/favicon.mts's fetchFaviconHash(): both used to clear their abort
-// timeout as soon as response headers arrived, before reading the body,
-// which left an unbounded (no-timeout) read for the rest of the response -
-// a domain that sends headers immediately and then stalls or trickles the
-// body could hang a deep-check worker indefinitely. The fix moves
-// clearTimeout() into a `finally` block so the deadline covers the whole
-// read.
-//
-// The actual functions can't be pointed at a local test server here - they
-// go through lib/safe-fetch.mts's SSRF guard, which correctly refuses to
-// connect to 127.0.0.1 (that guard has its own test coverage in
-// safe-fetch.test.mts). This tests the timeout-covers-the-read pattern
-// itself, in isolation, against a real local server that sends headers and
-// then never finishes the body - the same failure mode a malicious domain
-// could produce.
-
-import test from 'node:test';
 import assert from 'node:assert/strict';
-import * as http from 'node:http';
+import { describe, test } from 'node:test';
 
-function startStallingServer(): Promise<http.Server> {
-  return new Promise((resolve) => {
-    const server = http.createServer((req, res) => {
-      res.writeHead(200, { 'Content-Type': 'text/plain' });
-      res.write('partial-data');
-      // deliberately never calls res.end() - simulates a stalled/trickling
-      // malicious response
-    });
-    server.listen(0, '127.0.0.1', () => resolve(server));
+import { fetchHomepage } from '../lib/availability.mts';
+import { fetchFaviconHash } from '../lib/favicon.mts';
+
+function stallingResponse(signal: AbortSignal | null | undefined, contentType: string): Response {
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(new Uint8Array([1, 2, 3, 4]));
+      signal?.addEventListener('abort', () => {
+        controller.error(new DOMException('fixture response aborted', 'AbortError'));
+      }, { once: true });
+    },
   });
+  return new Response(body, { status: 200, headers: { 'content-type': contentType } });
 }
 
-async function fetchWithDeadlineCoveringTheRead(url: string, timeoutMs: number) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const res = await fetch(url, { signal: controller.signal });
-    assert.ok(res.body);
-    const reader = res.body.getReader();
-    await reader.read(); // consumes the initial chunk the server did send
-    return await reader.read(); // this is the read the old code left unguarded
-  } finally {
-    clearTimeout(timeout);
-  }
-}
+describe('production body-read deadlines', () => {
+  test('fetchHomepage keeps its deadline active through the real capped body reader', async () => {
+    let calls = 0;
+    const startedAt = Date.now();
+    const result = await fetchHomepage('stall.example', {
+      timeoutMs: 20,
+      fetcher: async (_url, options) => {
+        calls += 1;
+        return stallingResponse(options.signal, 'text/html');
+      },
+    });
+    assert.equal(result.status, 'inconclusive');
+    assert.equal(calls, 2);
+    assert.match(result.detail, /timed out after 20 milliseconds/u);
+    assert.ok(Date.now() - startedAt < 1_000, 'production homepage deadline was not retained through body reading');
+  });
 
-test('a timeout held through the body read aborts a stalled response instead of hanging', async () => {
-  const server = await startStallingServer();
-  const address = server.address();
-  assert.ok(address && typeof address !== 'string');
-  const port = address.port;
-  const deadlineMs = 300;
-  const start = Date.now();
-
-  try {
-    await assert.rejects(
-      () => fetchWithDeadlineCoveringTheRead(`http://127.0.0.1:${port}/`, deadlineMs),
-      /aborted/i
-    );
-    const elapsed = Date.now() - start;
-    // Generous upper bound so this isn't flaky under CI scheduling jitter,
-    // while still failing if the deadline were silently ignored (which
-    // would leave this hanging until the test runner's own timeout, many
-    // seconds later).
-    assert.ok(elapsed < deadlineMs + 2000, `expected the abort within ~${deadlineMs}ms, took ${elapsed}ms`);
-  } finally {
-    server.close();
-  }
+  test('fetchFaviconHash keeps a per-candidate deadline active through the real capped body reader', async () => {
+    let calls = 0;
+    const startedAt = Date.now();
+    const result = await fetchFaviconHash('stall.example', {
+      timeoutMs: 20,
+      fetcher: async (_url, options) => {
+        calls += 1;
+        return stallingResponse(options?.signal, 'image/png');
+      },
+    });
+    assert.equal(result, null);
+    assert.equal(calls, 4);
+    assert.ok(Date.now() - startedAt < 1_000, 'production favicon deadline was not retained through body reading');
+  });
 });

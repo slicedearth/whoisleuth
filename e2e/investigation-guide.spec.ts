@@ -1,5 +1,6 @@
 import { expect, test } from './fixtures';
 import { expectNoHorizontalOverflow, failBrowserLocalReads, migrateLegacyBrowserData } from './helpers';
+import { BASE_URL } from './constants';
 
 const GUIDE_KEY = 'whoisleuth:investigation-guide:v5';
 const PREVIOUS_GUIDE_KEY = 'whoisleuth:investigation-guide:v4';
@@ -228,10 +229,25 @@ test('the dashboard starts a selected tab-scoped recipe without navigation or an
 });
 
 test('a response playbook reaches focused local packet preflight without a request or submission', async ({ page }) => {
-  const featureRequests: string[] = [];
+  const observedRequests: Array<{ method: string; origin: string; path: string; resourceType: string }> = [];
+  const sockets: string[] = [];
+  const expectedOrigin = new URL(BASE_URL).origin;
   page.on('request', (request) => {
-    if (/\/api\/(?:lookup|rdap|whois|availability|ct-search)(?:\?|$)/u.test(request.url())) featureRequests.push(request.url());
+    const url = new URL(request.url());
+    const resourceType = request.resourceType();
+    if (['fetch', 'xhr', 'ping'].includes(resourceType)
+      || url.origin !== expectedOrigin
+      || url.pathname.startsWith('/api/')
+      || !['GET', 'HEAD', 'OPTIONS'].includes(request.method())) {
+      observedRequests.push({
+        method: request.method(),
+        origin: url.origin,
+        path: `${url.pathname}${url.search}`,
+        resourceType,
+      });
+    }
   });
+  page.on('websocket', (socket) => sockets.push(socket.url()));
   await startRecipe(page, 'Credential impersonation response');
   await expect(page.locator('.guide')).toContainText('0 of 3 steps reviewed');
   await expect(currentAction(page)).toContainText('Review impersonation evidence');
@@ -253,7 +269,15 @@ test('a response playbook reaches focused local packet preflight without a reque
   await expect(preflight).toHaveAttribute('open', '');
   await expect(preflight.getByText('Prepare a reviewed abuse evidence packet', { exact: true })).toBeFocused();
   await expect(preflight).toContainText('WHOISleuth does not send reports');
-  expect(featureRequests).toEqual([]);
+  const allowedStartupReads = new Set(['/api/session', '/api/capabilities']);
+  for (const request of observedRequests) {
+    expect(request.origin).toBe(expectedOrigin);
+    expect(request.method).toBe('GET');
+    expect(allowedStartupReads.has(request.path)).toBe(true);
+    expect(['fetch', 'xhr'].includes(request.resourceType)).toBe(true);
+  }
+  expect(new Set(observedRequests.map((request) => request.path))).toEqual(allowedStartupReads);
+  expect(sockets).toEqual([]);
 });
 
 test('active context can change its target only through an explicit guide restart', async ({ page }) => {

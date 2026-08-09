@@ -52,6 +52,31 @@ describe('brand-protection operations report', () => {
     assert.equal(report.states?.ready_for_review, 1);
     assert.equal(report.actionTypes?.registrar_report, 1);
     assert.match(serializeBrandProtectionOperationsReport(report), /"prepared": 1/u);
+    assert.deepEqual(Object.keys(report).sort(), [
+      'actionTypes', 'counts', 'generatedAt', 'limitations', 'omissions', 'schema', 'sourceState', 'states', 'version', 'window',
+    ]);
+    assert.deepEqual(Object.keys(report.window).sort(), ['basis', 'endAt', 'id', 'startAt']);
+    assert.deepEqual(Object.keys(report.omissions).sort(), ['actionsBeyondLimit', 'actionsOutsideWindow', 'actionsWithInvalidTime', 'casesBeyondLimit']);
+    assert.deepEqual(Object.keys(report.counts || {}).sort(), [
+      'acknowledged', 'actions', 'casesInspected', 'casesWithActions', 'closed', 'followUpDue', 'overdue', 'planned',
+      'prepared', 'resolved', 'reviewedRecipientRoute', 'submitted', 'unqualifiedRecipientRoute', 'withOutcome', 'withReference',
+    ]);
+  });
+
+  test('excludes every case, domain, recipient, note, reference, and outcome sentinel recursively', () => {
+    const sentinels = [
+      'CASE-ID-SENTINEL', 'domain-sentinel.example', 'RECIPIENT-SENTINEL', 'NOTE-SENTINEL',
+      'REFERENCE-SENTINEL', 'OUTCOME-SENTINEL', 'SOURCE-SENTINEL', 'LIMITATION-SENTINEL',
+    ];
+    const record = caseWithActions('domain-sentinel.example', [{
+      id: 'ACTION-ID-SENTINEL',
+      type: 'registrar_report', recipient: 'RECIPIENT-SENTINEL', contactSource: 'SOURCE-SENTINEL',
+      contactLimitations: ['LIMITATION-SENTINEL'], state: 'resolved', reference: 'REFERENCE-SENTINEL',
+      outcome: 'OUTCOME-SENTINEL', updatedAt: NOW,
+    }]);
+    const report = buildBrandProtectionOperationsReport([{ ...record, id: 'CASE-ID-SENTINEL', notes: [{ id: 'NOTE-ID-SENTINEL', body: 'NOTE-SENTINEL', createdAt: NOW }] }], { now: NOW, window: 'all' });
+    const serialized = serializeBrandProtectionOperationsReport(report);
+    for (const sentinel of sentinels) assert.equal(serialized.includes(sentinel), false, sentinel);
   });
 
   test('does not treat a packet-like Case without an action as prepared or submitted', () => {

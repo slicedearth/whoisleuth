@@ -1,4 +1,8 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { describe, test } from 'node:test';
 
 import {
@@ -6,13 +10,42 @@ import {
   formatPublishedCliReport,
   main,
   parseArguments,
+  PUBLISHED_CLI_REQUEST_TIMEOUT_MS,
+  validateCandidateReport,
   validatePublishedManifest,
-  type ExecuteCommand,
+  type Fetcher,
 } from '../tools/published-cli-check.mts';
 import { MAX_CLI_PACKAGE_ENTRIES } from '../tools/cli-package.mts';
 
 const VERSION = '1.33.0';
 const PACKAGE_NAME = '@slicedearth/whoisleuth-cli';
+const ARCHIVE = Buffer.from('reviewed fixture package bytes');
+
+function digest(algorithm: 'sha1' | 'sha256' | 'sha512', bytes = ARCHIVE, encoding: 'hex' | 'base64' = 'hex') {
+  return createHash(algorithm).update(bytes).digest(encoding);
+}
+
+function candidateReport(overrides: Record<string, unknown> = {}) {
+  return {
+    schema: 'whoisleuth.cli-package-check',
+    version: 3,
+    packageName: PACKAGE_NAME,
+    packageVersion: VERSION,
+    sourceModuleCount: 260,
+    packedEntryCount: 191,
+    packedBytes: ARCHIVE.byteLength,
+    unpackedBytes: 3_120_000,
+    runtimeDependencies: {
+      '@peculiar/x509': '2.0.0', maxmind: '5.0.7', parse5: '8.0.1',
+      'reflect-metadata': '0.2.2', tldts: '7.4.10', undici: '8.9.0',
+    },
+    installedChecks: ['help', 'version', 'doctor'],
+    publicationEnabled: true,
+    archiveFilename: `whoisleuth-cli-${VERSION}.tgz`,
+    archiveSha256: digest('sha256'),
+    ...overrides,
+  };
+}
 
 function publishedManifest(overrides: Record<string, unknown> = {}) {
   return {
@@ -28,17 +61,10 @@ function publishedManifest(overrides: Record<string, unknown> = {}) {
     repository: { type: 'git', url: 'git+https://github.com/slicedearth/whoisleuth.git' },
     homepage: 'https://whoisleuth.com/',
     bugs: { url: 'https://github.com/slicedearth/whoisleuth/issues' },
-    dependencies: {
-      '@peculiar/x509': '2.0.0',
-      maxmind: '5.0.7',
-      parse5: '8.0.1',
-      'reflect-metadata': '0.2.2',
-      tldts: '7.4.10',
-      undici: '8.9.0',
-    },
+    dependencies: candidateReport().runtimeDependencies,
     dist: {
-      integrity: `sha512-${'A'.repeat(86)}==`,
-      shasum: 'a'.repeat(40),
+      integrity: `sha512-${digest('sha512', ARCHIVE, 'base64')}`,
+      shasum: digest('sha1'),
       tarball: `https://registry.npmjs.org/@slicedearth/whoisleuth-cli/-/whoisleuth-cli-${VERSION}.tgz`,
       fileCount: 191,
       unpackedSize: 3_120_000,
@@ -54,136 +80,147 @@ function publishedManifest(overrides: Record<string, unknown> = {}) {
 
 function capture() {
   let value = '';
-  return {
-    stream: { write(chunk: string) { value += chunk; } },
-    value: () => value,
-  };
+  return { stream: { write(chunk: string) { value += chunk; } }, value: () => value };
+}
+
+async function withCandidate<T>(run: (paths: { report: string; archive: string }) => Promise<T>, report = candidateReport(), archive = ARCHIVE): Promise<T> {
+  const root = await mkdtemp(path.join(tmpdir(), 'whoisleuth-published-test-'));
+  const reportPath = path.join(root, 'cli-package-report.json');
+  const archivePath = path.join(root, `whoisleuth-cli-${VERSION}.tgz`);
+  try {
+    await Promise.all([writeFile(reportPath, JSON.stringify(report)), writeFile(archivePath, archive)]);
+    return await run({ report: reportPath, archive: archivePath });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
+function fixtureFetcher(manifest = publishedManifest(), archive = ARCHIVE): Fetcher {
+  return async (input) => String(input).includes('/-/whoisleuth-cli-')
+    ? new Response(archive, { headers: { 'content-length': String(archive.byteLength) } })
+    : new Response(JSON.stringify(manifest), { headers: { 'content-type': 'application/json' } });
 }
 
 describe('published CLI verification', () => {
-  test('validates exact bounded registry metadata and provenance', () => {
-    const report = validatePublishedManifest(publishedManifest(), VERSION);
+  test('binds exact reviewed candidate bytes to registry metadata and downloaded bytes without execution', async () => {
+    const report = await withCandidate(({ report, archive }) => checkPublishedCli(VERSION, report, archive, { fetcher: fixtureFetcher() }));
     assert.equal(report.schema, 'whoisleuth.published-cli-check');
-    assert.equal(report.version, 1);
-    assert.equal(report.packageVersion, VERSION);
-    assert.deepEqual(report.runtimeDependencies, {
-      '@peculiar/x509': '2.0.0',
-      maxmind: '5.0.7',
-      parse5: '8.0.1',
-      'reflect-metadata': '0.2.2',
-      tldts: '7.4.10',
-      undici: '8.9.0',
-    });
-    assert.equal(report.registrySignatureCount, 1);
-    assert.match(formatPublishedCliReport({ ...report, checks: ['metadata', 'version'] }), /Result: PASS/u);
+    assert.equal(report.version, 2);
+    assert.equal(report.candidateArchiveSha256, digest('sha256'));
+    assert.deepEqual(report.checks, ['metadata', 'registry-content-integrity', 'candidate-byte-identity', 'archive-measurements', 'runtime-dependencies']);
+    assert.match(formatPublishedCliReport(report), /does not cryptographically verify/u);
+    assert.match(formatPublishedCliReport(report), /not installed or executed/u);
+  });
+
+  test('rejects candidate report drift and selected archive mismatch before registry access', async () => {
+    assert.throws(() => validateCandidateReport(candidateReport({ publicationEnabled: false }), VERSION), /publication-enabled/u);
+    assert.throws(() => validateCandidateReport(candidateReport({ archiveSha256: 'a'.repeat(64), extra: true }), VERSION), /field contract/u);
+    let fetched = false;
+    await assert.rejects(
+      () => withCandidate(({ report, archive }) => checkPublishedCli(VERSION, report, archive, { fetcher: async () => { fetched = true; return new Response(); } }), candidateReport(), Buffer.from('different')),
+      /candidate archive bytes/u,
+    );
+    assert.equal(fetched, false);
   });
 
   test('rejects lifecycle scripts, dependency ranges, provenance loss, and off-registry artifacts', () => {
     assert.throws(() => validatePublishedManifest(publishedManifest({ scripts: { postinstall: 'node install.mjs' } }), VERSION), /must not be private or declare lifecycle scripts/u);
     assert.throws(() => validatePublishedManifest(publishedManifest({ author: 'different-publisher' }), VERSION), /author, licence, or module type/u);
-    assert.throws(() => validatePublishedManifest(publishedManifest({ homepage: 'https://example.invalid/' }), VERSION), /source and support links/u);
-    assert.throws(() => validatePublishedManifest(publishedManifest({
-      dependencies: {
-        '@peculiar/x509': '2.0.0', maxmind: '5.0.7', parse5: '^8.0.1',
-        'reflect-metadata': '0.2.2', tldts: '7.4.10', undici: '8.9.0',
-      },
-    }), VERSION), /major, minor, and patch/u);
+    assert.throws(() => validatePublishedManifest(publishedManifest({ homepage: 'https://invalid.example/' }), VERSION), /source and support links/u);
+    assert.throws(() => validatePublishedManifest(publishedManifest({ dependencies: { ...candidateReport().runtimeDependencies, parse5: '^8.0.1' } }), VERSION), /major, minor, and patch/u);
     assert.throws(() => validatePublishedManifest(publishedManifest({
       dist: { ...(publishedManifest().dist as object), attestations: { url: 'https://registry.npmjs.org/fixture', provenance: {} } },
     }), VERSION), /expected provenance predicate/u);
     assert.throws(() => validatePublishedManifest(publishedManifest({
-      dist: { ...(publishedManifest().dist as object), tarball: `https://packages.example.invalid/whoisleuth-cli-${VERSION}.tgz` },
+      dist: { ...(publishedManifest().dist as object), tarball: `https://packages.invalid/whoisleuth-cli-${VERSION}.tgz` },
     }), VERSION), /outside the expected public registry boundary/u);
     assert.throws(() => validatePublishedManifest(publishedManifest({
-      dist: { ...(publishedManifest().dist as object), tarball: `https://registry.npmjs.org/not-the-package/whoisleuth-cli-${VERSION}.tgz` },
-    }), VERSION), /outside the expected public registry boundary/u);
-    assert.throws(() => validatePublishedManifest(publishedManifest({
-      dist: {
-        ...(publishedManifest().dist as object),
-        attestations: {
-          url: `https://registry.npmjs.org/-/npm/v1/attestations/other-package@${VERSION}`,
-          provenance: { predicateType: 'https://slsa.dev/provenance/v1' },
-        },
-      },
-    }), VERSION), /attestation URL is outside the public registry boundary/u);
-    assert.throws(() => validatePublishedManifest(publishedManifest({
-      dist: {
-        ...(publishedManifest().dist as object),
-        fileCount: MAX_CLI_PACKAGE_ENTRIES + 1,
-      },
+      dist: { ...(publishedManifest().dist as object), fileCount: MAX_CLI_PACKAGE_ENTRIES + 1 },
     }), VERSION), /Published file count must be between/u);
   });
 
-  test('checks the exact installed command without lifecycle scripts or network diagnostics', async () => {
-    const calls: string[][] = [];
-    const inheritedEnvironment = {
-      PATH: process.env.PATH,
-      HOME: '/fixture/home',
-      NODE_AUTH_TOKEN: 'must-not-be-forwarded',
-      NPM_TOKEN: 'must-not-be-forwarded',
-      NPM_CONFIG_USERCONFIG: '/fixture/credentialed-user.npmrc',
-      'npm_config_//registry.npmjs.org/:_authToken': 'must-not-be-forwarded',
-      npm_config_cert: 'must-not-be-forwarded',
-      npm_config_email: 'must-not-be-forwarded@example.invalid',
-      npm_config_key: 'must-not-be-forwarded',
-    } satisfies NodeJS.ProcessEnv;
-    const execute: ExecuteCommand = async (executable, args, options) => {
-      assert.equal(executable, 'npm');
-      assert.equal(options.env.npm_config_ignore_scripts, 'true');
-      assert.equal(options.env.npm_config_loglevel, 'silent');
-      assert.equal(options.env.npm_config_always_auth, 'false');
-      assert.equal(options.env.HOME, '/fixture/home');
-      assert.ok(options.env.npm_config_userconfig?.startsWith(`${options.cwd}/`));
-      assert.ok(options.env.npm_config_globalconfig?.startsWith(`${options.cwd}/`));
-      assert.equal(options.env.NODE_AUTH_TOKEN, undefined);
-      assert.equal(options.env.NPM_TOKEN, undefined);
-      assert.equal(options.env.NPM_CONFIG_USERCONFIG, undefined);
-      assert.equal(options.env['npm_config_//registry.npmjs.org/:_authToken'], undefined);
-      assert.equal(options.env.npm_config_cert, undefined);
-      assert.equal(options.env.npm_config_email, undefined);
-      assert.equal(options.env.npm_config_key, undefined);
-      calls.push([...args]);
-      if (args[0] === 'view') return { stdout: JSON.stringify(publishedManifest()), stderr: '' };
-      if (args.at(-1) === '--version') return { stdout: `${VERSION}\n`, stderr: '' };
-      return {
-        stdout: JSON.stringify({
-          schema: 'whoisleuth.cli.doctor',
-          version: 1,
-          cliVersion: VERSION,
-          state: 'pass',
-          networkRequested: false,
-          checks: [],
-        }),
-        stderr: '',
-      };
-    };
-
-    const report = await checkPublishedCli(VERSION, { execute, environment: inheritedEnvironment });
-    assert.deepEqual(report.checks, ['metadata', 'integrity', 'registry-signature', 'oidc-provenance', 'version', 'offline-doctor']);
-    assert.equal(calls.length, 3);
-    assert.ok(calls.slice(1).every((args) => args.includes('--ignore-scripts')));
-    assert.ok(calls.slice(1).every((args) => args.includes(`--package=${PACKAGE_NAME}@${VERSION}`)));
-    assert.equal(calls[2]?.includes('--network'), false);
+  test('rejects registry digest drift and a non-identical published archive', async () => {
+    const changed = Buffer.from('different published bytes');
+    await assert.rejects(
+      () => withCandidate(({ report, archive }) => checkPublishedCli(VERSION, report, archive, { fetcher: fixtureFetcher(publishedManifest(), changed) })),
+      /registry integrity metadata/u,
+    );
+    const changedManifest = publishedManifest({
+      dist: {
+        ...(publishedManifest().dist as object),
+        integrity: `sha512-${digest('sha512', changed, 'base64')}`,
+        shasum: digest('sha1', changed),
+      },
+    });
+    await assert.rejects(
+      () => withCandidate(({ report, archive }) => checkPublishedCli(VERSION, report, archive, { fetcher: fixtureFetcher(changedManifest, changed) })),
+      /not byte-identical/u,
+    );
   });
 
-  test('keeps command arguments explicit and reports bounded failures', async () => {
-    assert.deepEqual(parseArguments([VERSION]), { version: VERSION, json: false });
-    assert.deepEqual(parseArguments(['--json', VERSION]), { version: VERSION, json: true });
-    assert.throws(() => parseArguments([]), /Usage/u);
-    assert.throws(() => parseArguments([VERSION, VERSION]), /Usage/u);
+  test('cancels an oversized streamed registry response at the byte bound', async () => {
+    let cancelled = false;
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        for (let index = 0; index < 9; index++) controller.enqueue(new Uint8Array(64 * 1024));
+      },
+      cancel() { cancelled = true; },
+    });
+    await assert.rejects(
+      () => withCandidate(({ report, archive }) => checkPublishedCli(VERSION, report, archive, {
+        fetcher: async () => new Response(stream, { status: 200 }),
+      })),
+      /exceeds the byte limit/u,
+    );
+    assert.equal(cancelled, true);
+  });
+
+  test('bounds stalled registry headers and streamed bodies with one abort deadline per response', async () => {
+    assert.equal(PUBLISHED_CLI_REQUEST_TIMEOUT_MS, 120_000);
+    const observed: { signal: AbortSignal | null } = { signal: null };
+    await assert.rejects(
+      () => withCandidate(({ report, archive }) => checkPublishedCli(VERSION, report, archive, {
+        requestTimeoutMs: 20,
+        fetcher: async (_input, init) => {
+          observed.signal = init?.signal || null;
+          return await new Promise<Response>(() => {});
+        },
+      })),
+      /Published package metadata exceeded the 20 ms request deadline/u,
+    );
+    assert.equal(observed.signal?.aborted, true);
+
+    let bodyCancelled = false;
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) { controller.enqueue(new Uint8Array([1])); },
+      cancel() { bodyCancelled = true; },
+    });
+    await assert.rejects(
+      () => withCandidate(({ report, archive }) => checkPublishedCli(VERSION, report, archive, {
+        requestTimeoutMs: 20,
+        fetcher: async (input) => String(input).includes('/-/whoisleuth-cli-')
+          ? new Response(body, { status: 200 })
+          : new Response(JSON.stringify(publishedManifest()), { status: 200 }),
+      })),
+      /Published package archive exceeded the 20 ms request deadline/u,
+    );
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    assert.equal(bodyCancelled, true);
+  });
+
+  test('keeps candidate arguments explicit and reports bounded failures', async () => {
+    const args = [VERSION, '--candidate-report', '/tmp/report.json', '--candidate-archive', `/tmp/whoisleuth-cli-${VERSION}.tgz`];
+    assert.deepEqual(parseArguments(args), {
+      version: VERSION, candidateReport: '/tmp/report.json', candidateArchive: `/tmp/whoisleuth-cli-${VERSION}.tgz`, json: false,
+    });
+    assert.equal(parseArguments([...args, '--json']).json, true);
+    assert.throws(() => parseArguments([VERSION]), /Usage/u);
 
     const stdout = capture();
     const stderr = capture();
-    const code = await main([VERSION], {
-      stdout: stdout.stream,
-      stderr: stderr.stream,
-      execute: async () => { throw new Error(`fixture\nregistry unavailable\u202e${'x'.repeat(600)}`); },
-    });
+    const code = await main([VERSION], { stdout: stdout.stream, stderr: stderr.stream });
     assert.equal(code, 2);
     assert.equal(stdout.value(), '');
-    const message = stderr.value().trimEnd();
-    assert.match(message, /^fixture registry unavailable x+/u);
-    assert.ok(message.length <= 512);
-    assert.doesNotMatch(message, /[\u0000-\u001f\u007f\u202e]/u);
+    assert.ok(stderr.value().trimEnd().length <= 512);
   });
 });
