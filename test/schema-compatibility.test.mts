@@ -208,7 +208,7 @@ describe('schema compatibility inventory', () => {
     assert.equal(inventory.schema, SCHEMA_COMPATIBILITY_INVENTORY_SCHEMA);
     assert.equal(inventory.version, SCHEMA_COMPATIBILITY_INVENTORY_VERSION);
     assert.equal(inventory.generatedAt, NOW);
-    assert.equal(inventory.entries.length, 140);
+    assert.equal(inventory.entries.length, 147);
     assert.deepEqual(new Set(inventory.entries.map((entry) => entry.kind)), new Set([
       'browser_store', 'tab_store', 'hosted_store', 'export', 'cli_document', 'derived',
     ]));
@@ -233,6 +233,18 @@ describe('schema compatibility inventory', () => {
     assert.equal(byId(inventory, 'cli.lookup-reconciliation').schema, 'whoisleuth.cli.lookup-reconciliation');
     assert.equal(byId(inventory, 'cli.registry-doctor').schema, 'whoisleuth.cli.registry-doctor');
     assert.equal(byId(inventory, 'cli.sharing-review').schema, 'whoisleuth.cli.sharing-review');
+    assert.equal(byId(inventory, 'cli.sharing-review').currentVersion, 2);
+    assert.equal(byId(inventory, 'cli.offline-artifact-verification').currentVersion, 2);
+    assert.equal(byId(inventory, 'cli.evidence-signature-verification').currentVersion, 2);
+    assert.equal(byId(inventory, 'cli.interchange-fidelity-report').currentVersion, 2);
+    assert.equal(byId(inventory, 'cli.signed-evidence-package').currentVersion, 1);
+    assert.equal(byId(inventory, 'export.acquisition-decision').schema, 'whoisleuth.acquisition-decision');
+    assert.equal(byId(inventory, 'export.domain-comparison').schema, 'whoisleuth.domain-comparison');
+    assert.equal(byId(inventory, 'export.bulk-mail-exposure').schema, 'whoisleuth.bulk-mail-exposure');
+    assert.equal(byId(inventory, 'export.bulk-review-manifest').schema, 'whoisleuth.bulk-review-manifest');
+    assert.equal(byId(inventory, 'export.investigation-capsule').schema, 'whoisleuth.investigation-capsule');
+    assert.equal(byId(inventory, 'derived.lookup-asset-graph').currentVersion, 2);
+    assert.equal(byId(inventory, 'derived.case-analyst-records').currentVersion, 1);
     assert.equal(byId(inventory, 'cli.lookalike-calibration-input').schema, 'whoisleuth.lookalike-calibration-input');
     assert.equal(byId(inventory, 'cli.lookalike-calibration').schema, 'whoisleuth.lookalike-calibration');
     assert.equal(byId(inventory, 'cli.domain-assurance-input').schema, 'whoisleuth.domain-assurance.input');

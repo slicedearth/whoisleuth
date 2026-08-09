@@ -139,6 +139,7 @@ import {
   MAX_OFFLINE_ARTIFACT_BYTES,
   MAX_OFFLINE_PASSPHRASE_FILE_BYTES,
   formatOfflineArtifactVerification,
+  isCompleteOfflineArtifactVerification,
   verifyOfflineArtifact,
 } from './artifact-verify.mts';
 import {
@@ -560,7 +561,9 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
           ? formatJsonDocument(report)
           : terminal(formatOfflineArtifactVerification(report), args.color));
       }
-      return EXIT_CODES.SUCCESS;
+      return args.strictExit && !isCompleteOfflineArtifactVerification(report)
+        ? EXIT_CODES.PARTIAL_FAILURE
+        : EXIT_CODES.SUCCESS;
     }
 
     if (args.action === 'interchange-report') {

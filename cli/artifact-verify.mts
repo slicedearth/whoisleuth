@@ -1,5 +1,12 @@
 import { Buffer } from 'node:buffer';
 
+import { parseBoundedJsonObject } from './bounded-json.mts';
+import {
+  validateInvestigationCapsuleStructure,
+  validateOfflineArtifactStructure,
+  validateSignedDigestArtifactStructure,
+} from './artifact-structure.mts';
+
 import {
   CASE_RESPONSE_PACKET_SCHEMA,
   CASE_RESPONSE_PACKET_VERSION,
@@ -64,7 +71,7 @@ import {
 } from './case-pack.mts';
 
 export const OFFLINE_ARTIFACT_VERIFICATION_SCHEMA = 'whoisleuth.offline-artifact-verification';
-export const OFFLINE_ARTIFACT_VERIFICATION_VERSION = 1;
+export const OFFLINE_ARTIFACT_VERIFICATION_VERSION = 2;
 export const MAX_OFFLINE_ARTIFACT_BYTES = 15 * 1024 * 1024;
 export const MAX_OFFLINE_PASSPHRASE_FILE_BYTES = 1024;
 
@@ -85,7 +92,10 @@ type ArtifactKind =
   | 'saved_lookup'
   | 'cli_case_pack'
   | 'signed_review_artifact';
-type VerificationState = 'verified' | 'envelope_valid' | 'structure_valid';
+export type OfflineArtifactVerificationState = 'verified' | 'envelope_valid' | 'integrity_valid' | 'structure_valid';
+export type OfflineArtifactVerificationCheck = 'not_applicable' | 'not_checked' | 'verified';
+export type OfflineArtifactIntegrityScope = 'embedded_projections' | 'not_applicable' | 'not_checked' | 'whole_artifact';
+export type OfflineArtifactAssuranceRequirement = 'applicable_integrity' | 'structure' | 'whole_integrity';
 type UnknownRecord = Record<string, unknown>;
 
 export type OfflineArtifactVerificationReport = Readonly<{
@@ -96,12 +106,12 @@ export type OfflineArtifactVerificationReport = Readonly<{
     schema: string;
     version: number;
   }>;
-  state: VerificationState;
-  valid: true;
+  state: OfflineArtifactVerificationState;
   checks: Readonly<{
-    structure: 'verified';
-    contentIntegrity: 'verified' | 'not_checked';
-    authenticatedEncryption: 'verified' | 'not_applicable' | 'not_checked';
+    structure: OfflineArtifactVerificationCheck;
+    contentIntegrity: OfflineArtifactVerificationCheck;
+    contentIntegrityScope: OfflineArtifactIntegrityScope;
+    authenticatedEncryption: OfflineArtifactVerificationCheck;
   }>;
   summary: Readonly<{
     inputBytes: number;
@@ -135,20 +145,36 @@ function record(value: unknown): UnknownRecord | null {
 }
 
 function parseJson(raw: string): UnknownRecord {
-  if (typeof raw !== 'string') throw new TypeError('Artefact input must be UTF-8 JSON text.');
-  const bytes = Buffer.byteLength(raw, 'utf8');
-  if (bytes === 0 || bytes > MAX_OFFLINE_ARTIFACT_BYTES) {
-    throw new TypeError(`Artifact input must be between 1 byte and ${MAX_OFFLINE_ARTIFACT_BYTES} bytes.`);
-  }
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    throw new TypeError('Artefact input is not valid JSON.');
-  }
-  const value = record(parsed);
-  if (!value) throw new TypeError('Artefact input must contain one JSON object.');
-  return value;
+  return parseBoundedJsonObject(raw, { maximumBytes: MAX_OFFLINE_ARTIFACT_BYTES });
+}
+
+export function hasVerifiedArtifactStructure(report: OfflineArtifactVerificationReport): boolean {
+  return report.checks.structure === 'verified';
+}
+
+export function hasVerifiedApplicableIntegrity(report: OfflineArtifactVerificationReport): boolean {
+  return report.checks.contentIntegrity === 'verified'
+    && (report.checks.contentIntegrityScope === 'whole_artifact'
+      || report.checks.contentIntegrityScope === 'embedded_projections');
+}
+
+export function hasVerifiedWholeArtifactIntegrity(report: OfflineArtifactVerificationReport): boolean {
+  return report.checks.contentIntegrity === 'verified'
+    && report.checks.contentIntegrityScope === 'whole_artifact';
+}
+
+export function offlineArtifactSatisfiesAssurance(
+  report: OfflineArtifactVerificationReport,
+  requirement: OfflineArtifactAssuranceRequirement,
+): boolean {
+  if (!hasVerifiedArtifactStructure(report)) return false;
+  if (requirement === 'structure') return true;
+  if (requirement === 'applicable_integrity') return hasVerifiedApplicableIntegrity(report);
+  return hasVerifiedWholeArtifactIntegrity(report);
+}
+
+export function isCompleteOfflineArtifactVerification(report: OfflineArtifactVerificationReport): boolean {
+  return report.state === 'verified' || report.state === 'structure_valid';
 }
 
 function artifactVersion(value: UnknownRecord): number {
@@ -192,10 +218,10 @@ async function archiveReport(
       version: archive.sourceVersion,
     }),
     state: 'verified',
-    valid: true,
     checks: Object.freeze({
       structure: 'verified',
       contentIntegrity: 'verified',
+      contentIntegrityScope: 'whole_artifact',
       authenticatedEncryption: encrypted ? 'verified' : 'not_applicable',
     }),
     summary: Object.freeze({
@@ -229,6 +255,7 @@ async function verifySignedArtifact(
   if (!supported?.has(version)) {
     throw new UnsupportedOfflineArtifactError('This signed review-artifact schema or version is not supported.');
   }
+  validateSignedDigestArtifactStructure(schema, value);
   const integrity = record(value.integrity);
   if (!integrity
     || integrity.algorithm !== 'SHA-256'
@@ -246,10 +273,10 @@ async function verifySignedArtifact(
     version: OFFLINE_ARTIFACT_VERIFICATION_VERSION,
     artifact: Object.freeze({ kind: 'signed_review_artifact', schema, version }),
     state: 'verified',
-    valid: true,
     checks: Object.freeze({
       structure: 'verified',
       contentIntegrity: 'verified',
+      contentIntegrityScope: 'whole_artifact',
       authenticatedEncryption: 'not_applicable',
     }),
     summary: Object.freeze({
@@ -282,10 +309,10 @@ export async function verifyOfflineArtifact(
         version: CLI_CASE_PACK_VERSION,
       }),
       state: 'verified',
-      valid: true,
       checks: Object.freeze({
         structure: 'verified',
         contentIntegrity: 'verified',
+        contentIntegrityScope: 'whole_artifact',
         authenticatedEncryption: 'not_applicable',
       }),
       summary: Object.freeze({
@@ -312,10 +339,10 @@ export async function verifyOfflineArtifact(
           version: artifactVersion(value),
         }),
         state: 'envelope_valid',
-        valid: true,
         checks: Object.freeze({
           structure: 'verified',
           contentIntegrity: 'not_checked',
+          contentIntegrityScope: 'not_checked',
           authenticatedEncryption: 'not_checked',
         }),
         summary: Object.freeze({
@@ -345,6 +372,7 @@ export async function verifyOfflineArtifact(
     if (version !== CASE_RESPONSE_PACKET_VERSION) {
       throw new UnsupportedOfflineArtifactError('This case-response packet version is not supported.');
     }
+    validateOfflineArtifactStructure(schema, value);
     const integrity = record(value.integrity);
     if (!integrity || !await verifyCaseResponsePacketIntegrity(value as CaseResponsePacket)) {
       throw new TypeError('The case-response packet failed its manifest integrity check.');
@@ -354,10 +382,10 @@ export async function verifyOfflineArtifact(
       version: OFFLINE_ARTIFACT_VERIFICATION_VERSION,
       artifact: Object.freeze({ kind: 'case_response_packet', schema, version }),
       state: 'verified',
-      valid: true,
       checks: Object.freeze({
         structure: 'verified',
         contentIntegrity: 'verified',
+        contentIntegrityScope: 'whole_artifact',
         authenticatedEncryption: 'not_applicable',
       }),
       summary: Object.freeze({
@@ -376,17 +404,18 @@ export async function verifyOfflineArtifact(
     if (version !== INVESTIGATION_CAPSULE_VERSION) {
       throw new UnsupportedOfflineArtifactError('This investigation-capsule version is not supported.');
     }
+    validateInvestigationCapsuleStructure(value);
     const verification = await verifyInvestigationCapsule(value as InvestigationCapsule);
     if (!verification.valid) throw new TypeError('The investigation capsule failed its embedded projection integrity checks.');
     return Object.freeze({
       schema: OFFLINE_ARTIFACT_VERIFICATION_SCHEMA,
       version: OFFLINE_ARTIFACT_VERIFICATION_VERSION,
       artifact: Object.freeze({ kind: 'investigation_capsule', schema, version }),
-      state: 'verified',
-      valid: true,
+      state: 'integrity_valid',
       checks: Object.freeze({
         structure: 'verified',
         contentIntegrity: 'verified',
+        contentIntegrityScope: 'embedded_projections',
         authenticatedEncryption: 'not_applicable',
       }),
       summary: Object.freeze({
@@ -396,7 +425,7 @@ export async function verifyOfflineArtifact(
         ciphertextBytes: null,
       }),
       limitations: Object.freeze([
-        'The embedded brief, graph, and optional analyst-record projections match their declared digests; the linked Lookup evidence is not embedded and must be verified separately.',
+        'The embedded brief, graph, and optional analyst-record projections match their declared digests. Capsule metadata and the linked Lookup evidence are outside those projection digests and must not be treated as whole-file integrity verified.',
         'Digest verification detects changed content but does not authenticate the analyst, signer, collection source, or truth of retained observations and assertions.',
       ]),
     });
@@ -412,10 +441,10 @@ export async function verifyOfflineArtifact(
       version: OFFLINE_ARTIFACT_VERIFICATION_VERSION,
       artifact: Object.freeze({ kind: 'saved_lookup', schema, version }),
       state: 'structure_valid',
-      valid: true,
       checks: Object.freeze({
         structure: 'verified',
         contentIntegrity: 'not_checked',
+        contentIntegrityScope: 'not_applicable',
         authenticatedEncryption: 'not_applicable',
       }),
       summary: Object.freeze({
@@ -442,6 +471,7 @@ export function formatOfflineArtifactVerification(
     `State: ${report.state}`,
     `Structure: ${report.checks.structure}`,
     `Content integrity: ${report.checks.contentIntegrity}`,
+    `Content integrity scope: ${report.checks.contentIntegrityScope}`,
     `Authenticated encryption: ${report.checks.authenticatedEncryption}`,
     `Input bytes: ${report.summary.inputBytes}`,
   ];

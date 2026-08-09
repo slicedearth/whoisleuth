@@ -98,7 +98,7 @@ type CliAction =
   | { action: 'registry-scaffold'; profile: string; suffix: string; scenario: 'registered' | 'not_found' | 'inconclusive' }
   | ({ action: 'risk-calibrate'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'lookalike-calibrate'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
-  | ({ action: 'verify-artifact'; source: string | null; passphraseSource: string | null; output: 'terminal' | 'json' } & TerminalOptions)
+  | ({ action: 'verify-artifact'; source: string | null; passphraseSource: string | null; output: 'terminal' | 'json'; strictExit: boolean } & TerminalOptions)
   | ({ action: 'interchange-report'; source: string | null; passphraseSource: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | InspectArchiveArguments
   | SignArtifactArguments
@@ -1222,6 +1222,7 @@ function parseVerifyArtifactArguments(argv: string[]): Extract<CliArguments, { a
   let source: string | null = null;
   let passphraseSource: string | null = null;
   let output: 'terminal' | 'json' = 'terminal';
+  let strictExit = false;
   let quiet = false;
   let color = true;
   for (let index = 0; index < argv.length; index++) {
@@ -1237,6 +1238,9 @@ function parseVerifyArtifactArguments(argv: string[]): Extract<CliArguments, { a
         throw new CliUsageError('--passphrase-file requires one bounded UTF-8 file.');
       }
       passphraseSource = value;
+    } else if (argument === '--strict-exit') {
+      if (strictExit) throw new CliUsageError('--strict-exit may be supplied only once.');
+      strictExit = true;
     } else if (argument === '--quiet') quiet = true;
     else if (argument === '--no-color') color = false;
     else if (argument.startsWith('-')) throw new CliUsageError(`Unknown option "${argument}".`);
@@ -1244,7 +1248,7 @@ function parseVerifyArtifactArguments(argv: string[]): Extract<CliArguments, { a
     else throw new CliUsageError('verify-artifact accepts one optional JSON file. Otherwise pipe one artefact on stdin.');
   }
   if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
-  return { action: 'verify-artifact', source, passphraseSource, output, quiet, color };
+  return { action: 'verify-artifact', source, passphraseSource, output, strictExit, quiet, color };
 }
 
 function parseInterchangeReportArguments(argv: string[]): Extract<CliArguments, { action: 'interchange-report' }> {

@@ -5,15 +5,18 @@ import {
   type InterchangeArtifactContract,
   type InterchangeFidelity,
 } from '../lib/interchange-fidelity-registry.mts';
-import { verifyOfflineArtifact } from './artifact-verify.mts';
+import {
+  offlineArtifactSatisfiesAssurance,
+  verifyOfflineArtifact,
+} from './artifact-verify.mts';
 import { mergeBrandProfiles } from '../frontend/src/lib/analysis/brand-profile-model.ts';
 
 export const INTERCHANGE_FIDELITY_REPORT_SCHEMA = 'whoisleuth.interchange-fidelity-report';
-export const INTERCHANGE_FIDELITY_REPORT_VERSION = 1;
+export const INTERCHANGE_FIDELITY_REPORT_VERSION = 2;
 export const MAX_INTERCHANGE_REPORT_BYTES = 15 * 1024 * 1024;
 
 type UnknownRecord = Record<string, unknown>;
-type VerificationState = 'envelope_valid' | 'not_verified' | 'structure_valid' | 'unsupported_version' | 'verified';
+type VerificationState = 'envelope_valid' | 'integrity_valid' | 'not_verified' | 'structure_valid' | 'unsupported_version' | 'verified';
 
 export type InterchangeFidelityReport = Readonly<{
   schema: typeof INTERCHANGE_FIDELITY_REPORT_SCHEMA;
@@ -28,7 +31,8 @@ export type InterchangeFidelityReport = Readonly<{
   }>;
   verification: Readonly<{
     state: VerificationState;
-    valid: boolean;
+    requiredAssurance: InterchangeArtifactContract['requiredAssurance'] | null;
+    assuranceSatisfied: boolean;
   }>;
   compatibility: Readonly<{
     browser: InterchangeArtifactContract['browser'] | null;
@@ -132,7 +136,7 @@ export async function buildInterchangeFidelityReport(
     generatedAt,
     recognised: false,
     artifact: Object.freeze({ id: null, schema: null, version: null, versionSupported: false }),
-    verification: Object.freeze({ state: 'not_verified', valid: false }),
+    verification: Object.freeze({ state: 'not_verified', requiredAssurance: null, assuranceSatisfied: false }),
     compatibility: Object.freeze({
       browser: null,
       cli: null,
@@ -156,7 +160,7 @@ export async function buildInterchangeFidelityReport(
   const { contract, version } = identified;
   const supported = version !== null && contract.versions.includes(version);
   let verificationState: VerificationState = supported ? 'not_verified' : 'unsupported_version';
-  let valid = false;
+  let assuranceSatisfied = false;
   let recordCount: number | null = null;
   let sectionCount: number | null = null;
   let encryptedContentVerified: boolean | null = contract.id === 'encrypted_workspace' ? false : null;
@@ -175,11 +179,18 @@ export async function buildInterchangeFidelityReport(
         acceptedRecordCount = validation.accepted;
         skippedRecordCount = validation.skipped;
         verificationState = validation.skipped === 0 ? 'structure_valid' : 'not_verified';
-        valid = validation.skipped === 0;
+        assuranceSatisfied = validation.skipped === 0 && contract.requiredAssurance === 'structure';
       } else {
         const verification = await verifyOfflineArtifact(raw, { passphrase: options.passphrase ?? null });
         verificationState = verification.state;
-        valid = verification.valid;
+        assuranceSatisfied = contract.requiredAssurance === 'whole_integrity'
+          ? offlineArtifactSatisfiesAssurance(verification, 'whole_integrity')
+          : contract.requiredAssurance === 'structure'
+            ? offlineArtifactSatisfiesAssurance(verification, 'structure')
+            : contract.requiredAssurance === 'authenticated_whole_integrity'
+              ? offlineArtifactSatisfiesAssurance(verification, 'whole_integrity')
+                && verification.checks.authenticatedEncryption === 'verified'
+              : false;
         recordCount = verification.summary.recordCount;
         sectionCount = verification.summary.sectionCount;
         const unsupportedSections = verification.summary.unsupportedSectionCount ?? 0;
@@ -189,17 +200,18 @@ export async function buildInterchangeFidelityReport(
         prunedRecordCount = verification.summary.prunedRecordCount ?? null;
         if (verification.summary.fullyImportable !== undefined
           && verification.summary.fullyImportable !== null) {
-          fullyImportable = verification.valid && verification.summary.fullyImportable;
+          fullyImportable = assuranceSatisfied && verification.summary.fullyImportable;
         }
-        if (contract.id === 'encrypted_workspace') encryptedContentVerified = verification.state === 'verified';
+        if (contract.id === 'encrypted_workspace') encryptedContentVerified = verification.state === 'verified'
+          && verification.checks.authenticatedEncryption === 'verified';
       }
     } catch {
       verificationState = 'not_verified';
-      valid = false;
+      assuranceSatisfied = false;
     }
   }
 
-  const fidelityEligible = valid && fullyImportable !== false;
+  const fidelityEligible = assuranceSatisfied && fullyImportable !== false;
   const fidelity: InterchangeFidelity = !supported
     ? 'unsupported'
     : fidelityEligible
@@ -213,7 +225,11 @@ export async function buildInterchangeFidelityReport(
     generatedAt,
     recognised: true,
     artifact: Object.freeze({ id: contract.id, schema: contract.schema, version, versionSupported: supported }),
-    verification: Object.freeze({ state: verificationState, valid }),
+    verification: Object.freeze({
+      state: verificationState,
+      requiredAssurance: contract.requiredAssurance,
+      assuranceSatisfied,
+    }),
     compatibility: Object.freeze({
       browser: contract.browser,
       cli: contract.cli,
@@ -245,6 +261,7 @@ export function formatInterchangeFidelityReport(report: InterchangeFidelityRepor
     `Artifact       ${report.artifact.id ?? 'unrecognised'}`,
     `Version        ${report.artifact.version ?? 'unavailable'}${report.artifact.versionSupported ? '' : ' (unsupported)'}`,
     `Verification   ${report.verification.state}`,
+    `Assurance      ${report.verification.requiredAssurance ?? 'unregistered'} · ${report.verification.assuranceSatisfied ? 'satisfied' : 'withheld'}`,
     `Fidelity       ${report.compatibility.fidelity}`,
     ...(report.compatibility.fullyImportable === null ? [] : [`Importability  ${report.compatibility.fullyImportable ? 'complete' : 'partial'}`]),
     `Browser        import ${browser?.import ?? 'unknown'} · export ${browser?.export ?? 'unknown'}`,

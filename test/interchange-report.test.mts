@@ -100,6 +100,11 @@ describe('interchange fidelity report', () => {
     assert.deepEqual(interchangeContractFor('workspace').versions, [...SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS]);
     assert.deepEqual(interchangeContractFor('encrypted_workspace').versions, [ENCRYPTED_WORKSPACE_ARCHIVE_VERSION]);
     assert.deepEqual(interchangeContractFor('case_pack').versions, [CLI_CASE_PACK_VERSION]);
+    assert.equal(interchangeContractFor('domain_control_passport').requiredAssurance, 'whole_integrity');
+    assert.equal(interchangeContractFor('brand_profiles').requiredAssurance, 'structure');
+    assert.equal(interchangeContractFor('workspace').requiredAssurance, 'whole_integrity');
+    assert.equal(interchangeContractFor('encrypted_workspace').requiredAssurance, 'authenticated_whole_integrity');
+    assert.equal(interchangeContractFor('case_pack').requiredAssurance, 'whole_integrity');
   });
 
   test('reports exact browser and CLI passport compatibility without values', async () => {
@@ -143,7 +148,7 @@ describe('interchange fidelity report', () => {
   test('inherits strict case-pack verification for recomputed nested reference leaks', async () => {
     const report = await buildInterchangeFidelityReport(JSON.stringify(await casePackWithNestedReference()), { generatedAt: NOW });
     assert.equal(report.artifact.id, 'case_pack');
-    assert.equal(report.verification.valid, false);
+    assert.equal(report.verification.assuranceSatisfied, false);
     assert.equal(report.verification.state, 'not_verified');
     assert.equal(report.compatibility.fidelity, 'not_verified');
     assert.doesNotMatch(JSON.stringify(report), /hidden-reference/iu);
@@ -155,7 +160,7 @@ describe('interchange fidelity report', () => {
       { generatedAt: NOW },
     );
     assert.equal(report.artifact.id, 'case_pack');
-    assert.equal(report.verification.valid, false);
+    assert.equal(report.verification.assuranceSatisfied, false);
     assert.equal(report.compatibility.fidelity, 'not_verified');
     assert.doesNotMatch(JSON.stringify(report), /private material/iu);
   });
@@ -180,7 +185,7 @@ describe('interchange fidelity report', () => {
           digestSha256: await sha256ArtifactDigest(unsigned),
         };
         const rejected = await buildInterchangeFidelityReport(JSON.stringify(changed), { generatedAt: NOW });
-        assert.equal(rejected.verification.valid, false, `${audience} ${field}`);
+        assert.equal(rejected.verification.assuranceSatisfied, false, `${audience} ${field}`);
         assert.equal(rejected.compatibility.fidelity, 'not_verified', `${audience} ${field}`);
         assert.doesNotMatch(JSON.stringify(rejected), /forged-private/iu);
       }
@@ -192,7 +197,7 @@ describe('interchange fidelity report', () => {
       schema: 'whoisleuth.brand-profiles', version: 6, exportedAt: NOW,
       profiles: [{ secret: 'private-value' }],
     }), { generatedAt: NOW });
-    assert.equal(malformed.verification.valid, false);
+    assert.equal(malformed.verification.assuranceSatisfied, false);
     assert.equal(malformed.compatibility.fidelity, 'not_verified');
     assert.equal(malformed.summary.acceptedRecordCount, 0);
     assert.equal(malformed.summary.skippedRecordCount, 1);
@@ -209,7 +214,7 @@ describe('interchange fidelity report', () => {
     }), { generatedAt: NOW });
     assert.equal(mixed.summary.acceptedRecordCount, 1);
     assert.equal(mixed.summary.skippedRecordCount, 1);
-    assert.equal(mixed.verification.valid, false);
+    assert.equal(mixed.verification.assuranceSatisfied, false);
   });
 
   test('separates archive checksum validity from section importability', async () => {
@@ -222,7 +227,7 @@ describe('interchange fidelity report', () => {
     cases.checksum = await sha256ArtifactDigest(workspace.sections.cases);
     const report = await buildInterchangeFidelityReport(JSON.stringify(workspace), { generatedAt: NOW });
     assert.equal(report.verification.state, 'verified');
-    assert.equal(report.verification.valid, true);
+    assert.equal(report.verification.assuranceSatisfied, true);
     assert.equal(report.compatibility.fullyImportable, false);
     assert.equal(report.summary.unsupportedSectionCount, 1);
     assert.equal(report.compatibility.fidelity, 'not_verified');
@@ -232,7 +237,7 @@ describe('interchange fidelity report', () => {
     const workspace = await buildWorkspaceArchive({}, { generatedAt: NOW });
     Reflect.set(workspace, 'uncheckedPolicy', { credential: 'private workspace material' });
     const report = await buildInterchangeFidelityReport(JSON.stringify(workspace), { generatedAt: NOW });
-    assert.equal(report.verification.valid, false);
+    assert.equal(report.verification.assuranceSatisfied, false);
     assert.equal(report.compatibility.fidelity, 'not_verified');
     assert.doesNotMatch(JSON.stringify(report), /private workspace material/iu);
   });
@@ -248,7 +253,7 @@ describe('interchange fidelity report', () => {
     profiles.checksum = await sha256ArtifactDigest(workspace.sections.brandProfiles);
 
     const report = await buildInterchangeFidelityReport(JSON.stringify(workspace), { generatedAt: NOW });
-    assert.equal(report.verification.valid, true);
+    assert.equal(report.verification.assuranceSatisfied, true);
     assert.equal(report.compatibility.fullyImportable, false);
     assert.equal(report.compatibility.fidelity, 'not_verified');
     assert.equal(report.summary.skippedRecordCount, 1);
@@ -260,7 +265,7 @@ describe('interchange fidelity report', () => {
       generatedAt: NOW,
       passphrase: PASSPHRASE,
     });
-    assert.equal(encryptedReport.verification.valid, true);
+    assert.equal(encryptedReport.verification.assuranceSatisfied, true);
     assert.equal(encryptedReport.compatibility.fullyImportable, false);
     assert.equal(encryptedReport.summary.skippedRecordCount, 1);
     assert.equal(encryptedReport.compatibility.fidelity, 'not_verified');
@@ -272,6 +277,9 @@ describe('interchange fidelity report', () => {
     const raw = JSON.stringify(encrypted);
     const envelope = await buildInterchangeFidelityReport(raw, { generatedAt: NOW });
     assert.equal(envelope.verification.state, 'envelope_valid');
+    assert.equal(envelope.verification.requiredAssurance, 'authenticated_whole_integrity');
+    assert.equal(envelope.verification.assuranceSatisfied, false);
+    assert.equal(envelope.compatibility.fidelity, 'not_verified');
     assert.equal(envelope.summary.encryptedContentVerified, false);
     const verified = await buildInterchangeFidelityReport(raw, { generatedAt: NOW, passphrase: PASSPHRASE });
     assert.equal(verified.verification.state, 'verified');

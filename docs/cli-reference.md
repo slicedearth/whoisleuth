@@ -74,7 +74,7 @@ node bin/whoisleuth.mts registry-scaffold --profile example-profile --suffix tes
 node bin/whoisleuth.mts risk-calibrate calibration.json --json
 node bin/whoisleuth.mts lookalike-calibrate reviewed-candidates.json --json
 node bin/whoisleuth.mts verify-artifact workspace.json --json
-node bin/whoisleuth.mts verify-artifact lookup.json --json
+node bin/whoisleuth.mts verify-artifact lookup.json --json --strict-exit
 node bin/whoisleuth.mts verify-artifact workspace-encrypted.json --passphrase-file passphrase.txt --json
 node bin/whoisleuth.mts source-report lookup.json --json
 node bin/whoisleuth.mts inspect-archive workspace.json --json
@@ -586,9 +586,12 @@ and encrypted workspace archives, case-response packets, acquisition-decision
 exports, domain-comparison exports, Bulk mail-exposure exports, and Bulk review
 manifests. Reviewed CLI case packs are checked against their canonical digest,
 bounded browser-importable case collection, audience, and review marker. The
-command also verifies the internal digests of a complete investigation
-capsule, including its evidence, brief, graph, and optional analyst-record
-projections, and that capsule can be passed to `sign-artifact`. It also validates the bounded versioned structure of saved CLI
+command also verifies the embedded brief, graph, and optional analyst-record
+projection digests of an investigation capsule. Capsule metadata and the linked,
+non-embedded Lookup evidence are outside those projection digests, so the result
+is `integrity_valid` rather than whole-file `verified`; the structurally
+verified capsule can still be passed to `sign-artifact`. It also validates the
+bounded versioned structure of saved CLI
 Lookup JSON. Because saved Lookup documents do not embed a checksum or
 signature, that result is reported as `structure_valid` with content integrity
 explicitly unchecked. Saved Lookup validation retains its stricter 8 MiB
@@ -612,6 +615,15 @@ accepted as a command-line value, printed, or retained. Verification detects
 changes against the artefact's declared contract; it does not authenticate the
 analyst or establish that an observation was accurate or remains current.
 
+Verification reports use `whoisleuth.offline-artifact-verification` version 2
+and do not expose an always-true validity shortcut. The explicit state and
+checks distinguish structure, whole-file integrity, projection integrity, and
+authenticated encryption. `--strict-exit` returns exit 0 for `verified` and
+`structure_valid`, or partial-failure exit 4 for `integrity_valid` and
+`envelope_valid`; ordinary verification errors retain their existing error
+codes. Raw JSON is scanned before parsing to reject duplicate object keys and
+excessive nesting or key/value counts.
+
 ## Interchange fidelity report
 
 `interchange-report [artifact.json]` explains what one recognised portable
@@ -633,7 +645,11 @@ block a section, skip a malformed record, or prune data to a collection bound.
 It never echoes a target, contact, note, evidence value, passphrase, arbitrary
 unknown schema string, or encrypted content. A separate `--passphrase-file`
 can authenticate an encrypted workspace; without it, only the envelope is
-reported as valid. “Semantic exact after normalisation” does not mean byte
+reported as valid and fidelity is withheld. Each registered interchange family
+declares its exact assurance requirement: browser-importable structure is
+sufficient only for Brand Profile normalisation, while checksummed formats
+require whole-file integrity and encrypted workspaces additionally require
+authenticated decryption. “Semantic exact after normalisation” does not mean byte
 identity, current evidence, or a successful round trip through an unrelated
 format.
 
@@ -701,11 +717,17 @@ node bin/whoisleuth.mts sign-artifact packet.json --private-key-file analyst-pri
 node bin/whoisleuth.mts verify-signature packet.signed.json --public-key-file analyst-public.pem
 ```
 
-The signed package embeds the public key, key identifier, signature time, and
-original artefact. Verification first checks the exact package field set and
-signature, then the artefact's own checksums or manifest. A result is reported
-as `signature_valid`; signer trust is separately reported as `trusted_key` or
-`embedded_key_only`. Without a separately supplied trusted public key,
+The signed package remains version 1 with `sorted-json-v1` canonicalisation and
+embeds the public key, key identifier, canonical UTC signature time, and
+original artefact. Signing requires verified structure plus a verified
+applicable integrity contract; a recomputed digest around an empty or malformed
+document is rejected. Signature verification reports cryptographic status and
+embedded-artifact assurance separately in
+`whoisleuth.evidence-signature-verification` version 2. A result can therefore
+remain `signature_valid` while embedded-artifact assurance is `not_verified`;
+the signature authenticates those exact bytes without upgrading their
+structure or inner integrity. Signer trust is separately reported as
+`trusted_key` or `embedded_key_only`. Without a separately supplied trusted public key,
 verification establishes only that the package is internally self-consistent.
 WHOISleuth does not generate, store, recover, rotate, publish, or establish
 trust in signing keys.

@@ -6,6 +6,7 @@ export type InterchangeFidelity =
   | 'verification_only'
   | 'unsupported'
   | 'not_verified';
+export type InterchangeAssuranceRequirement = 'authenticated_whole_integrity' | 'structure' | 'unsupported' | 'whole_integrity';
 
 export type InterchangeArtifactContract = Readonly<{
   id: 'brand_profiles' | 'case_pack' | 'domain_control_passport' | 'encrypted_workspace' | 'legacy_desired_baseline' | 'workspace';
@@ -16,6 +17,7 @@ export type InterchangeArtifactContract = Readonly<{
   browser: Readonly<{ import: InterchangeSupport; export: InterchangeSupport }>;
   cli: Readonly<{ read: InterchangeSupport; write: InterchangeSupport; verify: InterchangeSupport }>;
   fidelity: Exclude<InterchangeFidelity, 'not_verified'>;
+  requiredAssurance: InterchangeAssuranceRequirement;
   preservedFieldGroups: readonly string[];
   excludedFieldGroups: readonly string[];
   futureVersionBehaviour: 'reject';
@@ -33,6 +35,7 @@ export const INTERCHANGE_ARTIFACT_CONTRACTS: readonly InterchangeArtifactContrac
     browser: Object.freeze({ import: 'supported', export: 'supported' }),
     cli: Object.freeze({ read: 'supported', write: 'supported', verify: 'supported' }),
     fidelity: 'semantic_exact_after_normalisation',
+    requiredAssurance: 'whole_integrity',
     preservedFieldGroups: exact,
     excludedFieldGroups: Object.freeze(['profile_identity', 'brand_context', 'contacts', 'notes', 'observations', 'planning_context', 'suppression_context']),
     futureVersionBehaviour: 'reject',
@@ -46,6 +49,7 @@ export const INTERCHANGE_ARTIFACT_CONTRACTS: readonly InterchangeArtifactContrac
     browser: Object.freeze({ import: 'supported', export: 'supported' }),
     cli: Object.freeze({ read: 'supported', write: 'unsupported', verify: 'verification_only' }),
     fidelity: 'normalised_merge',
+    requiredAssurance: 'structure',
     preservedFieldGroups: Object.freeze(['profile_identity', 'brand_context', 'domain_scope', 'mail_posture', 'desired_posture', 'reviewed_planning', 'retained_observations']),
     excludedFieldGroups: Object.freeze(['login_sessions', 'credentials', 'raw_upstream_payloads']),
     futureVersionBehaviour: 'reject',
@@ -59,6 +63,7 @@ export const INTERCHANGE_ARTIFACT_CONTRACTS: readonly InterchangeArtifactContrac
     browser: Object.freeze({ import: 'supported', export: 'supported' }),
     cli: Object.freeze({ read: 'verification_only', write: 'unsupported', verify: 'supported' }),
     fidelity: 'normalised_merge',
+    requiredAssurance: 'whole_integrity',
     preservedFieldGroups: Object.freeze(['supported_workspace_sections', 'section_versions', 'section_checksums', 'merge_metadata']),
     excludedFieldGroups: Object.freeze(['login_sessions', 'credentials', 'hosted_monitor_keys', 'raw_upstream_payloads', 'tab_state']),
     futureVersionBehaviour: 'reject',
@@ -72,6 +77,7 @@ export const INTERCHANGE_ARTIFACT_CONTRACTS: readonly InterchangeArtifactContrac
     browser: Object.freeze({ import: 'supported', export: 'supported' }),
     cli: Object.freeze({ read: 'verification_only', write: 'unsupported', verify: 'supported' }),
     fidelity: 'verification_only',
+    requiredAssurance: 'authenticated_whole_integrity',
     preservedFieldGroups: Object.freeze(['encrypted_workspace_envelope', 'authenticated_ciphertext', 'inner_workspace_after_decryption']),
     excludedFieldGroups: Object.freeze(['passphrase', 'derived_key']),
     futureVersionBehaviour: 'reject',
@@ -85,6 +91,7 @@ export const INTERCHANGE_ARTIFACT_CONTRACTS: readonly InterchangeArtifactContrac
     browser: Object.freeze({ import: 'supported', export: 'unsupported' }),
     cli: Object.freeze({ read: 'supported', write: 'supported', verify: 'supported' }),
     fidelity: 'lossy_by_design',
+    requiredAssurance: 'whole_integrity',
     preservedFieldGroups: Object.freeze(['redacted_case_collection', 'case_schema_version', 'trusted_internal_case_brand_profile_references']),
     excludedFieldGroups: Object.freeze(['package_reports', 'package_redaction_manifest', 'package_integrity_envelope', 'audience_excluded_case_fields', 'public_audience_case_brand_profile_references']),
     futureVersionBehaviour: 'reject',
@@ -98,6 +105,7 @@ export const INTERCHANGE_ARTIFACT_CONTRACTS: readonly InterchangeArtifactContrac
     browser: Object.freeze({ import: 'unsupported', export: 'unsupported' }),
     cli: Object.freeze({ read: 'unsupported', write: 'unsupported', verify: 'unsupported' }),
     fidelity: 'unsupported',
+    requiredAssurance: 'unsupported',
     preservedFieldGroups: Object.freeze([]),
     excludedFieldGroups: Object.freeze(['entire_legacy_document']),
     futureVersionBehaviour: 'reject',

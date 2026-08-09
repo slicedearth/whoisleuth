@@ -101,7 +101,7 @@ const COMMAND_USAGE: Readonly<Record<CliCommand, string>> = Object.freeze({
   'registry-scaffold': 'whoisleuth registry-scaffold --profile <id> --suffix <suffix> --scenario <registered|not_found|inconclusive>',
   'risk-calibrate': 'whoisleuth risk-calibrate [dataset.json] [--json] [--quiet] [--no-color]',
   'lookalike-calibrate': 'whoisleuth lookalike-calibrate [dataset.json] [--json] [--quiet] [--no-color]',
-  'verify-artifact': 'whoisleuth verify-artifact [artifact.json] [--passphrase-file <file>] [--json] [--quiet] [--no-color]',
+  'verify-artifact': 'whoisleuth verify-artifact [artifact.json] [--passphrase-file <file>] [--json] [--strict-exit] [--quiet] [--no-color]',
   'interchange-report': 'whoisleuth interchange-report [artifact.json] [--passphrase-file <file>] [--json] [--quiet] [--no-color]',
   'inspect-archive': 'whoisleuth inspect-archive [archive.json] [--passphrase-file <file>] [--search <value>] [--require-match] [--reveal] [--expect-content-digest <sha256:digest>] [--json]',
   'sign-artifact': 'whoisleuth sign-artifact [artifact.json] --private-key-file <file>',
@@ -239,8 +239,8 @@ const COMMAND_DETAILS: Readonly<Record<CliCommand, CommandDetail>> = Object.free
   },
   'verify-artifact': {
     description: 'Validate a supported archive, packet, manifest, or saved Lookup without printing evidence contents.',
-    example: 'whoisleuth verify-artifact workspace.json --json',
-    boundary: 'Verification is offline and redacted. Encrypted archives require an explicitly supplied passphrase file.',
+    example: 'whoisleuth verify-artifact workspace.json --json --strict-exit',
+    boundary: 'Verification is offline and redacted. Encrypted archives require an explicitly supplied passphrase file; --strict-exit returns 4 when only an envelope or projection integrity was verified.',
   },
   'interchange-report': {
     description: 'Report what one recognised portable artefact preserves, excludes, and supports across browser and CLI workflows.',
@@ -258,9 +258,9 @@ const COMMAND_DETAILS: Readonly<Record<CliCommand, CommandDetail>> = Object.free
     boundary: 'The command never creates, stores, or transmits keys. Key custody and signer identity remain the operator\'s responsibility.',
   },
   'verify-signature': {
-    description: 'Verify the integrity and signature of one signed evidence package.',
+    description: 'Verify the cryptographic signature of one signed evidence package and report embedded-artifact assurance separately.',
     example: 'whoisleuth verify-signature packet.signed.json --json',
-    boundary: 'A valid signature proves package consistency for the embedded key, not the real-world identity or authority of its holder.',
+    boundary: 'A valid signature proves package consistency for the embedded key. It does not upgrade failed or unsupported embedded-artifact assurance or establish the holder\'s real-world identity or authority.',
   },
   'source-report': {
     description: 'Create a target-free reliability summary from a saved lookup.',

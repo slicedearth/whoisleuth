@@ -21,7 +21,7 @@ const OPTIONS_BY_COMMAND: Readonly<Record<CliCommand, readonly string[]>> = Obje
   'registry-scaffold': ['--profile', '--suffix', '--scenario'],
   'risk-calibrate': ['--json', '--quiet', '--no-color'],
   'lookalike-calibrate': ['--json', '--quiet', '--no-color'],
-  'verify-artifact': ['--passphrase-file', '--json', '--quiet', '--no-color'],
+  'verify-artifact': ['--passphrase-file', '--json', '--strict-exit', '--quiet', '--no-color'],
   'interchange-report': ['--passphrase-file', '--json', '--quiet', '--no-color'],
   'inspect-archive': ['--passphrase-file', '--search', '--require-match', '--reveal', '--expect-content-digest', '--json', '--quiet', '--no-color'],
   'sign-artifact': ['--private-key-file'],

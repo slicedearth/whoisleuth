@@ -1245,7 +1245,9 @@ full threat model, migration, rollback, capacity, and encryption boundaries.
 The local CLI's `verify-artifact` command can check archive structure and
 checksums without displaying evidence. An encrypted archive requires a separate
 passphrase file before the command can authenticate its ciphertext and inspect
-the inner checksums; without one, only the envelope is checked. See
+the inner checksums; without one, only the envelope is checked. Use
+`--strict-exit` when automation must receive exit 4 for envelope-only or
+projection-only assurance. See
 [offline artefact verification](cli-reference.md#offline-artefact-verification).
 The separate metadata-only
 [interchange fidelity report](cli-reference.md#interchange-fidelity-report)

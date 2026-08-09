@@ -6,6 +6,7 @@ import {
   DOMAIN_CONTROL_MANIFEST_INPUT_SCHEMA,
   buildDomainControlManifest,
 } from '../lib/domain-control-manifest.mts';
+import { buildInvestigationCapsule } from '../frontend/src/lib/analysis/investigation-capsule.ts';
 
 const NOW = '2026-08-04T00:00:00.000Z';
 
@@ -42,6 +43,37 @@ describe('CLI sharing review', () => {
     assert.equal(report.privacy.artifactMetadataFieldsEmitted, 2);
     assert.equal(report.privacy.contentValuesEmitted, 0);
     assert.equal(JSON.stringify(report).includes('Reviewed incident handoff'), false);
+  });
+
+  test('withholds ready status when only embedded capsule projections have integrity', async () => {
+    const capsule = await buildInvestigationCapsule({
+      applicationVersion: '1.47.1',
+      lookupEvidence: { schema: 'whoisleuth.lookup-evidence', schemaVersion: 25 },
+      generatedAt: NOW,
+      brief: {
+        schema: 'whoisleuth.investigation-brief', schemaVersion: 1, generatedAt: NOW,
+        target: 'review.example', targetType: 'domain', task: 'general', taskLabel: 'General review',
+        question: 'What is known?', summary: 'Review retained evidence.',
+        observation: {
+          observedAt: NOW, evidenceAgeDays: 0, completeSources: 1, limitedSources: 0,
+          freshnessPolicy: { version: 1, id: 'task-default', task: 'general', thresholdsDays: { registration: 30, network: 7, web: 3 } },
+        },
+        verifiedFacts: [], contradictions: [], unknowns: [], nextActions: [],
+        relationships: { nodes: 1, edges: 0, truncated: false, kinds: [] }, limitations: [],
+      },
+      graph: {
+        version: 2, targetId: 'target-review',
+        nodes: [{ id: 'target-review', label: 'review.example', kind: 'target', detail: 'Lookup target' }],
+        edges: [], sources: [], truncated: false, limitations: [],
+      },
+    });
+    const report = await buildSharingReview(JSON.stringify(capsule), {
+      marking: 'amber', recipientScope: 'organization', purpose: 'Reviewed handoff',
+      humanReviewed: true, personalDataReviewed: true, redactionsConfirmed: true,
+    }, NOW);
+    assert.equal(report.artifact.integrity, 'projection_integrity');
+    assert.equal(report.summary.status, 'review_cautions');
+    assert.equal(report.findings.find((finding) => finding.id === 'integrity')?.state, 'caution');
   });
 
   test('blocks a requested downgrade from imported TLP and unreviewed sensitive fields', async () => {

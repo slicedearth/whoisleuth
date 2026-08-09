@@ -65,7 +65,7 @@ saved result without sending it anywhere:
 ```bash
 whoisleuth bulk domains.txt --csv
 whoisleuth discover example.com --preset common --jsonl
-whoisleuth verify-artifact lookup.json --json
+whoisleuth verify-artifact lookup.json --json --strict-exit
 whoisleuth interchange-report workspace.json --json
 whoisleuth compare lookup.json --json
 whoisleuth brief lookup.json

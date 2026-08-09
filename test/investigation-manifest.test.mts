@@ -25,7 +25,7 @@ describe('investigation manifest', () => {
     assert.equal(document.artifacts[1]?.version, 2);
     assert.notEqual(document.artifacts[0]?.contentDigestSha256, document.artifacts[0]?.canonicalDigestSha256);
     assert.doesNotMatch(JSON.stringify(document), /secretValue|omitted from manifest|\.json/iu);
-    assert.equal((await verifyOfflineArtifact(JSON.stringify(document))).valid, true);
+    assert.equal((await verifyOfflineArtifact(JSON.stringify(document))).state, 'verified');
   });
 
   test('rejects invalid JSON, duplicate-free limits, and malformed configuration digests', async () => {

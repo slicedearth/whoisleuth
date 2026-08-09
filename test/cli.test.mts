@@ -161,12 +161,14 @@ describe('CLI argument parsing', () => {
       '--passphrase-file',
       'passphrase.txt',
       '--json',
+      '--strict-exit',
       '--no-color',
     ]), {
       action: 'verify-artifact',
       source: 'workspace.json',
       passphraseSource: 'passphrase.txt',
       output: 'json',
+      strictExit: true,
       quiet: false,
       color: false,
     });
@@ -177,6 +179,10 @@ describe('CLI argument parsing', () => {
     assert.throws(
       () => parseCliArguments(['verify-artifact', 'one.json', 'two.json']),
       /accepts one optional JSON file/u,
+    );
+    assert.throws(
+      () => parseCliArguments(['verify-artifact', '--strict-exit', '--strict-exit']),
+      /only once/u,
     );
   });
 
