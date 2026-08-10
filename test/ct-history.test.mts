@@ -5,6 +5,7 @@ import { requiredValue } from './value-assertions.mts';
 
 const FIRST = '2026-07-01T00:00:00.000Z';
 const SECOND = '2026-07-02T00:00:00.000Z';
+const THIRD = '2026-07-03T00:00:00.000Z';
 
 type NonEmptyStore = Omit<history.CtHistoryStore, 'entries'> & {
   entries: [history.CtHistoryEntry, ...history.CtHistoryEntry[]];
@@ -34,8 +35,12 @@ function record(
 describe('CT search baselines', () => {
   test('the first complete search creates a baseline without marking everything new', () => {
     const result = record(null, 'Example Brand', ['b.example', 'a.example'], FIRST);
+    assert.equal(result.store.version, history.CT_HISTORY_SCHEMA_VERSION);
     assert.equal(result.comparison.hasBaseline, false);
     assert.equal(result.comparison.newCount, 0);
+    assert.equal(result.comparison.firstObservedCount, 2);
+    assert.equal(result.comparison.continuingCount, 0);
+    assert.equal(result.comparison.classificationComplete, true);
     assert.equal(result.comparison.baselineUpdated, true);
     assert.deepStrictEqual(result.store.entries[0].domains, ['a.example', 'b.example']);
     assert.equal(result.store.entries[0].baselineAt, FIRST);
@@ -47,6 +52,8 @@ describe('CT search baselines', () => {
     assert.equal(second.comparison.hasBaseline, true);
     assert.equal(second.comparison.previousCheckedAt, FIRST);
     assert.deepStrictEqual(second.comparison.newDomains, ['c.example']);
+    assert.deepStrictEqual(second.comparison.firstObservedDomains, ['c.example']);
+    assert.deepStrictEqual(second.comparison.continuingDomains, ['b.example']);
     assert.deepStrictEqual(second.store.entries[0].domains, ['b.example', 'c.example']);
     assert.equal(requiredValue(second.store.entries[0].history.at(-1)).newCount, 1);
   });
@@ -64,6 +71,8 @@ describe('CT search baselines', () => {
     const capped = record(first.store, 'example', ['b.example', 'c.example'], SECOND, { truncated: true });
     assert.deepStrictEqual(capped.comparison.newDomains, ['c.example']);
     assert.equal(capped.comparison.baselineUpdated, false);
+    assert.equal(capped.comparison.classificationComplete, false);
+    assert.deepStrictEqual(capped.comparison.reappearedDomains, []);
     assert.equal(capped.store.entries[0].baselineAt, FIRST);
     assert.deepStrictEqual(capped.store.entries[0].domains, ['a.example', 'b.example']);
     assert.equal(requiredValue(capped.store.entries[0].history.at(-1)).truncated, true);
@@ -87,17 +96,56 @@ describe('CT search baselines', () => {
     assert.ok(result.store.entries[0].domains.includes('a.example'));
     assert.ok(!result.store.entries[0].domains.includes('bad host'));
   });
+
+  test('distinguishes first, continuing, and reappeared domains using complete retained searches only', () => {
+    const first = record(null, 'example', ['a.example', 'b.example'], FIRST);
+    const second = record(first.store, 'example', ['b.example'], SECOND);
+    const third = record(second.store, 'example', ['a.example', 'b.example', 'c.example'], THIRD);
+
+    assert.deepStrictEqual(second.comparison.continuingDomains, ['b.example']);
+    assert.deepStrictEqual(third.comparison.reappearedDomains, ['a.example']);
+    assert.deepStrictEqual(third.comparison.continuingDomains, ['b.example']);
+    assert.deepStrictEqual(third.comparison.firstObservedDomains, ['c.example']);
+    assert.equal(third.store.entries[0].everSeenDomainsComplete, true);
+    assert.deepStrictEqual(third.store.entries[0].everSeenDomains, ['a.example', 'b.example', 'c.example']);
+  });
+
+  test('does not classify or update the ever-seen set from a capped search', () => {
+    const first = record(null, 'example', ['a.example', 'b.example'], FIRST);
+    const second = record(first.store, 'example', ['b.example'], SECOND);
+    const capped = record(second.store, 'example', ['a.example', 'b.example', 'c.example'], THIRD, { truncated: true });
+
+    assert.equal(capped.comparison.classificationComplete, false);
+    assert.equal(capped.comparison.firstObservedCount, 0);
+    assert.equal(capped.comparison.reappearedCount, 0);
+    assert.equal(capped.comparison.continuingCount, 0);
+    assert.deepStrictEqual(capped.store.entries[0].domains, ['b.example']);
+    assert.deepStrictEqual(capped.store.entries[0].everSeenDomains, ['a.example', 'b.example']);
+  });
 });
 
 describe('CT history retention and recovery', () => {
   test('per-query check history keeps only the newest bounded events', () => {
     let store: NonEmptyStore | null = null;
-    for (let index = 0; index < history.MAX_CT_HISTORY_EVENTS + 3; index++) {
+    for (let index = 0; index < history.MAX_CT_HISTORY_EVENTS; index++) {
       store = record(store, 'example', [`d${index}.example`], new Date(Date.UTC(2026, 0, index + 1)).toISOString()).store;
     }
-    const events = requiredValue(store).entries[0].history;
+    const atCapacity = requiredValue(store).entries[0];
+    assert.equal(atCapacity.history.length, history.MAX_CT_HISTORY_EVENTS);
+    assert.equal(atCapacity.discardedCheckCount, 0);
+    assert.equal(atCapacity.discardedCheckCountKnown, true);
+    assert.equal(atCapacity.discardedCheckCountCapped, false);
+
+    for (let index = history.MAX_CT_HISTORY_EVENTS; index < history.MAX_CT_HISTORY_EVENTS + 3; index++) {
+      store = record(store, 'example', [`d${index}.example`], new Date(Date.UTC(2026, 0, index + 1)).toISOString()).store;
+    }
+    const entry = requiredValue(store).entries[0];
+    const events = entry.history;
     assert.equal(events.length, history.MAX_CT_HISTORY_EVENTS);
     assert.equal(requiredValue(events.at(-1)).checkedAt, new Date(Date.UTC(2026, 0, history.MAX_CT_HISTORY_EVENTS + 3)).toISOString());
+    assert.equal(entry.discardedCheckCount, 3);
+    assert.equal(entry.discardedCheckCountKnown, true);
+    assert.equal(entry.discardedCheckCountCapped, false);
   });
 
   test('the store keeps only the most recently updated search queries', () => {
@@ -123,8 +171,23 @@ describe('CT history retention and recovery', () => {
     }));
     assert.equal(store.entries.length, 1);
     assert.deepStrictEqual(store.entries[0].domains, ['a.example']);
-    assert.deepStrictEqual(Object.keys(store.entries[0]).sort(), ['baselineAt', 'domains', 'history', 'query', 'updatedAt']);
-    assert.deepStrictEqual(Object.keys(requiredValue(requiredValue(store.entries[0]).history[0])).sort(), ['certificateCount', 'checkedAt', 'newCount', 'newDomains', 'resultCount', 'truncated']);
+    assert.deepStrictEqual(Object.keys(store.entries[0]).sort(), [
+      'baselineAt',
+      'discardedCheckCount',
+      'discardedCheckCountCapped',
+      'discardedCheckCountKnown',
+      'domains',
+      'everSeenDomains',
+      'everSeenDomainsComplete',
+      'history',
+      'query',
+      'updatedAt',
+    ]);
+    assert.deepStrictEqual(Object.keys(requiredValue(requiredValue(store.entries[0]).history[0])).sort(), [
+      'certificateCount', 'checkedAt', 'classificationComplete', 'continuingCount', 'firstObservedCount',
+      'firstObservedDomains', 'historyUnknownCount', 'newCount', 'newDomains', 'reappearedCount',
+      'reappearedDomains', 'resultCount', 'truncated',
+    ]);
   });
 
   test('duplicate query entries resolve to the most recently updated record', () => {
@@ -143,10 +206,69 @@ describe('CT history retention and recovery', () => {
     assert.deepStrictEqual(remaining.entries.map((entry) => entry.query), ['two']);
   });
 
-  test('future schema versions can be detected by the storage wrapper', () => {
-    assert.equal(history.ctHistoryStoreVersion({ version: 2 }), 2);
-    assert.equal(history.ctHistoryStoreVersion({ version: '2' }), null);
+  test('schema 1 migrates without inventing pruning certainty', () => {
+    const migrated = nonEmptyStore(history.normalizeCtHistoryStore({
+      version: 1,
+      entries: [{
+        query: 'example',
+        baselineAt: FIRST,
+        updatedAt: FIRST,
+        domains: ['a.example'],
+        history: [{ checkedAt: FIRST, resultCount: 1 }],
+      }],
+    }));
+    assert.equal(migrated.version, 3);
+    assert.equal(migrated.entries[0].discardedCheckCount, 0);
+    assert.equal(migrated.entries[0].discardedCheckCountKnown, false);
+    assert.equal(migrated.entries[0].discardedCheckCountCapped, false);
+    assert.deepStrictEqual(migrated.entries[0].everSeenDomains, ['a.example']);
+    assert.equal(migrated.entries[0].everSeenDomainsComplete, false);
+  });
+
+  test('migrated retained evidence can prove reappearance but cannot prove first observation', () => {
+    const migrated = history.normalizeCtHistoryStore({
+      version: 2,
+      entries: [{
+        query: 'example',
+        baselineAt: SECOND,
+        updatedAt: SECOND,
+        domains: ['b.example'],
+        history: [
+          { checkedAt: FIRST, resultCount: 1, certificateCount: 1, newCount: 1, newDomains: ['a.example'], truncated: false },
+          { checkedAt: SECOND, resultCount: 1, certificateCount: 1, newCount: 0, newDomains: [], truncated: false },
+        ],
+        discardedCheckCount: 0,
+        discardedCheckCountKnown: true,
+      }],
+    });
+    const next = record(migrated, 'example', ['a.example', 'b.example', 'c.example'], THIRD);
+    assert.deepStrictEqual(next.comparison.reappearedDomains, ['a.example']);
+    assert.deepStrictEqual(next.comparison.historyUnknownDomains, ['c.example']);
+    assert.deepStrictEqual(next.comparison.firstObservedDomains, []);
+  });
+
+  test('future schema versions and bounded discarded counts remain explicit', () => {
+    assert.equal(history.ctHistoryStoreVersion({ version: 4 }), 4);
+    assert.equal(history.ctHistoryStoreVersion({ version: '4' }), null);
     assert.equal(history.ctHistoryStoreVersion(null), null);
+
+    const normalized = nonEmptyStore(history.normalizeCtHistoryStore({
+      version: 3,
+      entries: [{
+        query: 'example',
+        baselineAt: FIRST,
+        updatedAt: FIRST,
+        domains: ['a.example'],
+        history: [{ checkedAt: FIRST, resultCount: 1 }],
+        everSeenDomains: ['a.example'],
+        everSeenDomainsComplete: true,
+        discardedCheckCount: history.MAX_CT_HISTORY_DISCARDED_CHECKS + 10,
+        discardedCheckCountKnown: true,
+      }],
+    }));
+    assert.equal(normalized.entries[0].discardedCheckCount, history.MAX_CT_HISTORY_DISCARDED_CHECKS);
+    assert.equal(normalized.entries[0].discardedCheckCountKnown, true);
+    assert.equal(normalized.entries[0].discardedCheckCountCapped, true);
   });
 
   test('new-domain details are bounded while the full count is retained', () => {
@@ -157,6 +279,22 @@ describe('CT history retention and recovery', () => {
     assert.equal(next.comparison.newCount, domains.length);
     assert.equal(event.newCount, domains.length);
     assert.equal(event.newDomains.length, history.MAX_CT_HISTORY_NEW_DOMAINS);
+  });
+
+  test('caps the ever-seen set deterministically and exposes classification uncertainty afterward', () => {
+    const firstDomains = Array.from({ length: history.MAX_CT_HISTORY_DOMAINS }, (_, index) => `a-${index}.example`);
+    const secondDomains = Array.from({ length: history.MAX_CT_HISTORY_DOMAINS }, (_, index) => `b-${index}.example`);
+    const thirdDomains = Array.from({ length: history.MAX_CT_HISTORY_DOMAINS }, (_, index) => `c-${index}.example`);
+    const first = record(null, 'example', firstDomains, FIRST);
+    const second = record(first.store, 'example', secondDomains, SECOND);
+    const third = record(second.store, 'example', thirdDomains, THIRD);
+    const entry = third.store.entries[0];
+    assert.equal(entry.everSeenDomains.length, history.MAX_CT_HISTORY_EVER_SEEN_DOMAINS);
+    assert.equal(entry.everSeenDomainsComplete, false);
+    assert.ok(thirdDomains.every((domain) => entry.everSeenDomains.includes(domain)));
+
+    const unknown = record(third.store, 'example', ['never-retained.example'], '2026-07-04T00:00:00.000Z');
+    assert.deepStrictEqual(unknown.comparison.historyUnknownDomains, ['never-retained.example']);
   });
 
   test('the serialized store stays within its dedicated byte budget', () => {

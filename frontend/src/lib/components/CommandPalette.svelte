@@ -171,7 +171,10 @@
                 <span class="command-glyph" aria-hidden="true"><IntelligenceIcon name={command.icon} size={18} /></span>
                 <span class="command-copy"><strong>{command.label}</strong><small>{command.detail}</small></span>
               </span>
-              <em class:current={command.href === page.url.pathname}>{command.href === page.url.pathname ? 'Current' : command.group}</em>
+              <span class="command-meta">
+                <em data-command-group>{command.group}</em>
+                {#if command.href === page.url.pathname}<span class="command-current">Current</span>{/if}
+              </span>
             </button>
           </li>
         {/each}
@@ -204,8 +207,9 @@
   .command-glyph{display:grid;width:24px;height:24px;place-items:center;border:1px solid var(--border);border-radius:6px;color:var(--muted);background:rgb(var(--overlay-rgb) / .025)}
   li.selected .command-glyph{border-color:rgb(var(--accent2-rgb) / .42);color:var(--accent2);background:rgb(var(--accent2-rgb) / .07)}
   .command-copy{min-width:0}strong,small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}strong{font:700 var(--text-sm) var(--mono)}small{margin-top:3px;color:var(--muted);font-size:var(--text-2xs)}
-  em{flex:0 0 auto;color:var(--accent);font:650 .55rem var(--mono);font-style:normal;letter-spacing:.07em;text-transform:uppercase}
-  em.current{color:var(--accent2)}
+  .command-meta{display:grid;flex:0 0 auto;justify-items:end;gap:3px}
+  em,.command-current{color:var(--accent);font:650 .55rem var(--mono);font-style:normal;letter-spacing:.07em;text-transform:uppercase}
+  .command-current{color:var(--accent2)}
   .no-results{margin:0;padding:28px;color:var(--muted);text-align:center}
   footer{display:flex;flex-wrap:wrap;gap:12px;padding:9px 14px;border-top:1px solid var(--border);color:var(--muted);font:var(--text-2xs) var(--mono)}
   kbd{margin-right:3px;padding:2px 4px;border:1px solid var(--border);border-radius:4px;background:var(--panel-raised);font:inherit}
@@ -217,8 +221,8 @@
     .command-search{margin:10px}
     ul{grid-template-columns:repeat(2,minmax(0,1fr));gap:3px;max-height:none;padding:0 8px 9px;overflow-y:auto}
     li button{min-height:38px;padding:7px 9px}
-    small,em:not(.current),footer{display:none}
-    em.current{font-size:.5rem}
+    small,em[data-command-group],footer{display:none}
+    .command-current{font-size:.5rem}
     strong{text-overflow:ellipsis}
   }
   @media(max-width:399px){ul{grid-template-columns:minmax(0,1fr)}}

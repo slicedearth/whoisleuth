@@ -27,6 +27,7 @@ import {
 import {
   TECHNOLOGY_REVIEWED_SOURCES,
 } from '../fixtures/technology-reviewed-sources.mts';
+import { fixedRatio as ratio } from './maintainer-tool-helpers.mts';
 
 type WritableLike = { write(value: string): unknown };
 type BenchmarkOptions = Readonly<{ now?: () => Date }>;
@@ -105,10 +106,6 @@ function timestamp(value: unknown): string {
   const parsed = value instanceof Date ? value.getTime() : Date.parse(String(value));
   if (!Number.isFinite(parsed)) throw new TypeError('Technology benchmark generation time must be valid.');
   return new Date(parsed).toISOString();
-}
-
-function ratio(numerator: number, denominator: number): number | null {
-  return denominator > 0 ? Number((numerator / denominator).toFixed(4)) : null;
 }
 
 function reviewedSourceOriginByFixtureId(): ReadonlyMap<string, string> {

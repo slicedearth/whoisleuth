@@ -58,6 +58,25 @@ export function registryAccessLabel(value: unknown): string {
     : 'Unknown';
 }
 
+export function safeOfficialRegistryLookupUrl(value: unknown): string | null {
+  if (
+    typeof value !== 'string'
+    || value.length > 300
+    || /[\u0000-\u001f\u007f]/.test(value)
+  ) return null;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'https:' || url.username || url.password || !url.hostname) return null;
+    return url.href;
+  } catch {
+    return null;
+  }
+}
+
+export function officialRegistryLookupFor(value: unknown): string | null {
+  return safeOfficialRegistryLookupUrl(registryCapabilityFor(value)?.officialLookupUrl);
+}
+
 export function registryCoverageLabel(value: unknown): string {
   return typeof value === 'string' && Object.hasOwn(COVERAGE_LABELS, value)
     ? COVERAGE_LABELS[value] ?? 'Unknown'
@@ -155,6 +174,8 @@ export function filterRegistrySupportRows(
       row.suffixes[0], row.id, row.registryClass, row.coverageState,
       row.whoisQueryProfile, row.whoisParserProfile,
       row.whoisAccessProfile, row.rdapAccessProfile, row.limitation,
+      row.officialLookupUrl ? 'official manual lookup' : '',
+      row.officialLookupUrl,
       ...row.fixtureScenarios,
     ].filter(Boolean).some((value) => String(value).toLowerCase()
       .replace(/[_-]+/g, ' ')

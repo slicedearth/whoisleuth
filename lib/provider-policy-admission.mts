@@ -1,6 +1,7 @@
 import type { ThreatIntelligenceProviderTerms } from './threat-intelligence-types.mts';
 
 export const PROVIDER_POLICY_MAX_REVIEW_AGE_DAYS = 180;
+export const PROVIDER_POLICY_MAX_FUTURE_SKEW_MS = 5 * 60 * 1000;
 export const DEPLOYMENT_PURPOSES = ['personal', 'internal', 'commercial'] as const;
 export type DeploymentPurpose = typeof DEPLOYMENT_PURPOSES[number];
 
@@ -20,6 +21,14 @@ function deploymentPurpose(value: unknown): DeploymentPurpose | null {
     : null;
 }
 
+export function providerPolicyReviewAgeDays(reviewedAtValue: unknown, now: number): number | null {
+  const reviewedAt = typeof reviewedAtValue === 'string' ? Date.parse(reviewedAtValue) : Number.NaN;
+  if (!Number.isFinite(reviewedAt) || !Number.isFinite(now) || reviewedAt > now + PROVIDER_POLICY_MAX_FUTURE_SKEW_MS) {
+    return null;
+  }
+  return Math.max(0, Math.floor((now - reviewedAt) / 86_400_000));
+}
+
 export function providerPolicyAdmission(
   terms: ThreatIntelligenceProviderTerms,
   env: EnvironmentInput | null | undefined = process.env,
@@ -27,10 +36,7 @@ export function providerPolicyAdmission(
 ): ProviderPolicyAdmission {
   const source = env && typeof env === 'object' ? env : {};
   const purpose = deploymentPurpose(source.WHOISLEUTH_DEPLOYMENT_PURPOSE);
-  const reviewedAt = Date.parse(terms.reviewedAt);
-  const reviewAgeDays = Number.isFinite(reviewedAt)
-    ? Math.max(0, Math.floor((now - reviewedAt) / 86_400_000))
-    : null;
+  const reviewAgeDays = providerPolicyReviewAgeDays(terms.reviewedAt, now);
   if (!purpose) {
     return {
       allowed: false,

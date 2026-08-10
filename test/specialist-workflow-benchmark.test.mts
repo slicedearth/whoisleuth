@@ -34,7 +34,7 @@ describe('offline specialist workflow benchmark', () => {
     assert.equal(report.version, SPECIALIST_WORKFLOW_BENCHMARK_VERSION);
     assert.equal(report.generatedAt, NOW.toISOString());
     assert.equal(report.mode, 'offline_synthetic');
-    assert.deepEqual(report.summary, { total: 8, passed: 8, failed: 0, passRate: 1 });
+    assert.deepEqual(report.summary, { total: 9, passed: 9, failed: 0, passRate: 1 });
     assert.equal(report.summary.total, MAX_SPECIALIST_WORKFLOW_SCENARIOS);
     assert.equal(report.bounds.networkRequests, 0);
     assert.equal(report.bounds.registryFixtureLimit, MAX_SPECIALIST_WORKFLOW_REGISTRY_FIXTURES);
@@ -73,6 +73,9 @@ describe('offline specialist workflow benchmark', () => {
     assert.equal(byId(report, 'partial-source-states').status, 'pass');
     assert.equal(byId(report, 'benign-shared-infrastructure').status, 'pass');
     assert.equal(report.metrics.benignSharedInfrastructure.automaticRuleMatches, 0);
+    assert.equal(report.metrics.decisionQuality.findingKindsExercised, 5);
+    assert.equal(report.metrics.decisionQuality.cleanControlFindings, 0);
+    assert.equal(report.metrics.decisionQuality.truncated, false);
     assert.ok(report.limitations.some((value) => /do not prove ownership, intent, safety, or maliciousness/i.test(value)));
   });
 
@@ -96,7 +99,7 @@ describe('offline specialist workflow benchmark', () => {
   test('formats a bounded maintainer summary and exposes complete versioned JSON through main', async () => {
     const report = await buildSpecialistWorkflowBenchmark({ now: () => NOW });
     const terminal = formatSpecialistWorkflowBenchmark(report);
-    assert.match(terminal, /8\/8 scenarios passed/);
+    assert.match(terminal, /9\/9 scenarios passed/);
     assert.match(terminal, /network requests: 0/i);
     assert.match(terminal, /Use --json/);
 

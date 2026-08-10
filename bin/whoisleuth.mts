@@ -28,11 +28,13 @@ if (argv.length === 1 && (argv[0] === '--version' || argv[0] === '-V')) {
     import('../cli/runner.mts'),
   ]);
   let resolvedArgv: string[];
+  let profileResolutionFailed = false;
   try {
     resolvedArgv = await configModule.resolveCliProfileArguments(argv);
   } catch (error) {
     process.stderr.write(`Usage error: ${errorsModule.boundedCliErrorMessage(error, 'Invalid CLI profile')}\n`);
     process.exitCode = EXIT_CODES.USAGE;
+    profileResolutionFailed = true;
     resolvedArgv = [];
   }
   const cancellation = new AbortController();
@@ -54,9 +56,9 @@ if (argv.length === 1 && (argv[0] === '--version' || argv[0] === '-V')) {
   process.on('SIGINT', onSigint);
   process.on('SIGTERM', onSigterm);
 
-  const execution = resolvedArgv.length
-    ? runnerModule.runCli(resolvedArgv, { signal: cancellation.signal })
-    : Promise.resolve(process.exitCode || EXIT_CODES.USAGE);
+  const execution = profileResolutionFailed
+    ? Promise.resolve(process.exitCode || EXIT_CODES.USAGE)
+    : runnerModule.runCli(resolvedArgv, { signal: cancellation.signal });
   execution.then((code) => {
     if (code === 130) {
       process.removeListener('SIGINT', onSigint);

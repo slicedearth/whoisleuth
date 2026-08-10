@@ -15,6 +15,7 @@ import { runUnifiedLookup, LOOKUP_ERROR_CODES } from './lib/lookup.mts';
 import { createLookupHttpResponse } from './lib/lookup-response-contract.mts';
 import {
   CANONICAL_TRAILING_SLASH_REDIRECTS,
+  PERMANENT_ROUTE_REDIRECTS,
   PRERENDERED_HTML_FILE_OVERRIDES,
 } from './lib/prerendered-routes.mts';
 import { searchCertificateTransparency } from './lib/ct-search.mts';
@@ -25,6 +26,7 @@ import {
   COOKIE_NAME,
   checkPassword,
   createSessionToken,
+  isPermittedAuthenticatedNetworkRequest,
   isValidSessionToken,
   sessionFingerprintFromCookieHeader,
   isTrustedOrigin,
@@ -79,12 +81,22 @@ type ResponseLike = {
 };
 
 type StaticResponseLike = ResponseLike & {
-  sendFile: (path: string) => unknown;
+  sendFile: (path: string, callback: (error?: unknown) => void) => unknown;
 };
 
 type Next = () => void;
 type ErrorNext = (error?: unknown) => void;
 type OperationTarget = ReturnType<typeof operationBudgetTargetFor>;
+
+function sendPrerenderedHtmlFile(
+  filename: string,
+  res: StaticResponseLike,
+  next: Next,
+) {
+  return res.sendFile(filename, (error) => {
+    if (error) next();
+  });
+}
 
 function recordValue(value: unknown, key: string): unknown {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
@@ -138,6 +150,15 @@ app.use('/_app/immutable', express.static(path.join(svelteBuildDir, '_app', 'imm
   immutable: true,
   maxAge: '1y',
 }));
+for (const [sourcePath, canonicalPath] of PERMANENT_ROUTE_REDIRECTS) {
+  app.get(sourcePath, (req: RequestLike, res: ResponseLike, next: Next) => {
+    if (req.path !== sourcePath) {
+      next();
+      return;
+    }
+    res.redirect(308, canonicalPath);
+  });
+}
 for (const [sourcePath, canonicalPath] of CANONICAL_TRAILING_SLASH_REDIRECTS) {
   app.get(sourcePath, (req: RequestLike, res: ResponseLike, next: Next) => {
     if (req.path !== sourcePath) {
@@ -151,8 +172,8 @@ for (const [sourcePath, canonicalPath] of CANONICAL_TRAILING_SLASH_REDIRECTS) {
 // Serve its exact HTML file before express.static sees the directory and
 // redirects to a non-existent index file.
 for (const [routePath, htmlFile] of PRERENDERED_HTML_FILE_OVERRIDES) {
-  app.get(routePath, prerenderedHtmlRateLimit, (_req: RequestLike, res: StaticResponseLike) => {
-    res.sendFile(path.join(svelteBuildDir, htmlFile));
+  app.get(routePath, prerenderedHtmlRateLimit, (_req: RequestLike, res: StaticResponseLike, next: Next) => {
+    sendPrerenderedHtmlFile(path.join(svelteBuildDir, htmlFile), res, next);
   });
 }
 app.use(express.static(svelteBuildDir, { extensions: ['html'] }));
@@ -178,6 +199,13 @@ function requireAuth(req: RequestLike, res: ResponseLike, next: Next) {
   const cookies = parseCookies(req.headers.cookie);
   if (!isValidSessionToken(cookies[COOKIE_NAME])) {
     return res.status(401).json({ error: 'Authentication required', errorCode: LOOKUP_ERROR_CODES.AUTH_REQUIRED });
+  }
+  next();
+}
+
+function requireNetworkRequestAdmission(req: RequestLike, res: ResponseLike, next: Next) {
+  if (!isPermittedAuthenticatedNetworkRequest(req.headers)) {
+    return res.status(403).json({ error: 'Cross-site network request blocked', errorCode: 'CROSS_SITE_REQUEST_BLOCKED' });
   }
   next();
 }
@@ -283,7 +311,7 @@ app.get('/api/capabilities', requireAuth, (_req: RequestLike, res: ResponseLike)
   res.json(capabilityReport('express'));
 });
 
-app.get('/api/lookup', apiRateLimit, requireAuth, requireFeature('lookup'), async (req: RequestLike, res: ResponseLike) => {
+app.get('/api/lookup', apiRateLimit, requireAuth, requireNetworkRequestAdmission, requireFeature('lookup'), async (req: RequestLike, res: ResponseLike) => {
   const q = queryText(req.query.q);
   if (!q) return res.status(400).json({ error: 'Missing query parameter "q"', errorCode: LOOKUP_ERROR_CODES.MISSING_QUERY });
 
@@ -318,7 +346,7 @@ app.get('/api/lookup', apiRateLimit, requireAuth, requireFeature('lookup'), asyn
   });
 });
 
-app.get('/api/rdap', apiRateLimit, requireAuth, requireFeature('rdap'), async (req: RequestLike, res: ResponseLike) => {
+app.get('/api/rdap', apiRateLimit, requireAuth, requireNetworkRequestAdmission, requireFeature('rdap'), async (req: RequestLike, res: ResponseLike) => {
   const q = queryText(req.query.q);
   if (!q) return res.status(400).json({ error: 'Missing query parameter "q"' });
 
@@ -349,7 +377,7 @@ app.get('/api/rdap', apiRateLimit, requireAuth, requireFeature('rdap'), async (r
   });
 });
 
-app.get('/api/rdap-nameserver-search', apiRateLimit, requireAuth, requireFeature('rdap_nameserver_search'), async (req: RequestLike, res: ResponseLike) => {
+app.get('/api/rdap-nameserver-search', apiRateLimit, requireAuth, requireNetworkRequestAdmission, requireFeature('rdap_nameserver_search'), async (req: RequestLike, res: ResponseLike) => {
   return withExpressOperationBudget(req, res, operationBudgetTargetFor('rdap_nameserver_search'), async () => {
     try {
       const result = await searchRdapNameserver(
@@ -366,7 +394,7 @@ app.get('/api/rdap-nameserver-search', apiRateLimit, requireAuth, requireFeature
   });
 });
 
-app.get('/api/whois', apiRateLimit, requireAuth, requireFeature('whois'), async (req: RequestLike, res: ResponseLike) => {
+app.get('/api/whois', apiRateLimit, requireAuth, requireNetworkRequestAdmission, requireFeature('whois'), async (req: RequestLike, res: ResponseLike) => {
   const q = queryText(req.query.q);
   if (!q) return res.status(400).json({ error: 'Missing query parameter "q"' });
 
@@ -394,7 +422,7 @@ app.get('/api/whois', apiRateLimit, requireAuth, requireFeature('whois'), async 
   });
 });
 
-app.get('/api/availability', apiRateLimit, requireAuth, requireFeature('availability'), async (req: RequestLike, res: ResponseLike) => {
+app.get('/api/availability', apiRateLimit, requireAuth, requireNetworkRequestAdmission, requireFeature('availability'), async (req: RequestLike, res: ResponseLike) => {
   const q = queryText(req.query.q);
   if (!q) return res.status(400).json({ error: 'Missing query parameter "q"' });
 
@@ -433,7 +461,7 @@ app.get('/api/availability', apiRateLimit, requireAuth, requireFeature('availabi
   });
 });
 
-app.get('/api/ct-search', apiRateLimit, requireAuth, requireFeature('certificate_transparency'), async (req: RequestLike, res: ResponseLike) => {
+app.get('/api/ct-search', apiRateLimit, requireAuth, requireNetworkRequestAdmission, requireFeature('certificate_transparency'), async (req: RequestLike, res: ResponseLike) => {
   let q: string;
   try {
     q = normalizeCtQuery(req.query.q);
@@ -453,7 +481,7 @@ app.get('/api/ct-search', apiRateLimit, requireAuth, requireFeature('certificate
   });
 });
 
-app.get('/api/domain-posture', apiRateLimit, requireAuth, requireFeature('domain_posture'), async (req: RequestLike, res: ResponseLike) => {
+app.get('/api/domain-posture', apiRateLimit, requireAuth, requireNetworkRequestAdmission, requireFeature('domain_posture'), async (req: RequestLike, res: ResponseLike) => {
   const q = queryText(req.query.q);
   if (!q) return res.status(400).json({ error: 'Missing query parameter "q"' });
 
@@ -507,4 +535,4 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   startServer();
 }
 
-export { app, isHttps, usesSecureCookies, requireAuth, rateLimit, requireFeature, apiErrorHandler, sendUnexpectedApiError, startServer };
+export { app, isHttps, usesSecureCookies, requireAuth, requireNetworkRequestAdmission, rateLimit, requireFeature, apiErrorHandler, sendPrerenderedHtmlFile, sendUnexpectedApiError, startServer };

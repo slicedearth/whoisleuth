@@ -34,6 +34,18 @@
     Strict-Transport-Security = "max-age=31536000"
 
 [[redirects]]
+  from = "/guide"
+  to = "/resources"
+  status = 308
+  force = true
+
+[[redirects]]
+  from = "/guide/"
+  to = "/resources"
+  status = 308
+  force = true
+
+[[redirects]]
   from = "/api/lookup"
   to = "/.netlify/functions/lookup"
   status = 200

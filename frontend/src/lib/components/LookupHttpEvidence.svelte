@@ -80,4 +80,7 @@
     .disclosure dl{grid-template-columns:1fr;gap:4px}
     .disclosure dt{margin-top:6px}
   }
+  @media(max-width:720px){
+    .disclosure>ol{display:none}
+  }
 </style>

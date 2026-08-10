@@ -60,6 +60,12 @@ function result(
       truncated: false,
     },
     sourceCoverage: [{ source: 'dns', state: 'complete' }],
+    profileContext: {
+      sourceState: 'ready',
+      activeProfileId: null,
+      profileUpdatedAt: null,
+      limitation: '',
+    },
     ...overrides,
   };
 }
@@ -110,7 +116,15 @@ describe('Bulk lookalike mail exposure', () => {
     const report = buildBulkMailExposureReport([
       result('null-mx.example', { hasMx: false, hasNullMx: true }),
       result('receiving.example'),
-      result('official.example', { trusted: 'official' }),
+      result('official.example', {
+        trusted: 'official',
+        profileContext: {
+          sourceState: 'ready',
+          activeProfileId: 'profile-one',
+          profileUpdatedAt: OBSERVED_AT,
+          limitation: '',
+        },
+      }),
     ], {
       generatedAt: OBSERVED_AT,
       officialDomains: ['OFFICIAL.EXAMPLE.'],
@@ -136,6 +150,61 @@ describe('Bulk lookalike mail exposure', () => {
     ], { generatedAt: OBSERVED_AT });
     assert.equal(report.rows[0]?.state, 'evidence_incomplete');
     assert.match(report.rows[0]?.limitations.join(' ') ?? '', /Fast mode/u);
+  });
+
+  test('keeps loading and unavailable Brand Profile mail context inconclusive', () => {
+    for (const profileSourceState of ['loading', 'unavailable'] as const) {
+      const report = buildBulkMailExposureReport([result('candidate.example')], {
+        generatedAt: OBSERVED_AT,
+        officialDomains: ['official.example'],
+        profile: 'standard',
+        profileSourceState,
+      });
+      assert.equal(report.baseline.profile, null);
+      assert.deepEqual(report.baseline.officialDomains, []);
+      assert.match(report.baseline.label, new RegExp(profileSourceState, 'iu'));
+      assert.equal(report.rows[0]?.baselineRelation, 'inconclusive');
+      assert.match(report.rows[0]?.baselineDetail ?? '', /context/u);
+      assert.match(report.rows[0]?.limitations.join(' ') ?? '', /not evaluated/u);
+    }
+  });
+
+  test('retains DNS posture but makes mismatched row baselines inconclusive and export-visible', async () => {
+    const report = buildBulkMailExposureReport([
+      result('mismatched.example', {
+        hasMx: true,
+        hasNullMx: false,
+        hasSpf: false,
+        hasDmarc: false,
+        profileContext: {
+          sourceState: 'unavailable',
+          activeProfileId: null,
+          profileUpdatedAt: null,
+          limitation: 'Imported profile-derived conclusions require a local rescan.',
+        },
+      }),
+    ], {
+      generatedAt: OBSERVED_AT,
+      officialDomains: ['official.example'],
+      profile: 'standard',
+      profileSourceState: 'ready',
+      currentProfileContext: {
+        sourceState: 'ready',
+        activeProfileId: 'profile-one',
+        profileUpdatedAt: OBSERVED_AT,
+        limitation: '',
+      },
+    });
+    const row = report.rows[0];
+    assert.equal(row?.state, 'mail_auth_gap');
+    assert.equal(row?.baselineRelation, 'inconclusive');
+    assert.equal(row?.profileContextState, 'unavailable');
+    assert.match(row?.profileContextLimitation ?? '', /local rescan/u);
+    assert.equal(report.profileContextUnevaluatedCount, 1);
+    const exported = await buildBulkMailExposureExport(report);
+    assert.equal(exported.document.report.rows[0]?.profileContextState, 'unavailable');
+    assert.match(exported.document.report.rows[0]?.profileContextLimitation ?? '', /local rescan/u);
+    assert.equal(exported.document.report.profileContextUnevaluatedCount, 1);
   });
 
   test('exports a deterministic bounded review without raw records', async () => {

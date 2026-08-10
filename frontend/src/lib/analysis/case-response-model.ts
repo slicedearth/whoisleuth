@@ -143,6 +143,7 @@ export type CaseEvidencePin = {
     schema: string;
     version: number;
   } | null;
+  certificateObservation?: CaseCertificateObservation | null;
   observedAt: string;
   collectionDepth: 'deep' | 'fast' | 'unknown';
   completeness: CasePinCompleteness;
@@ -150,6 +151,16 @@ export type CaseEvidencePin = {
   transitionExpectation: CaseTransitionExpectation | null;
   limitations: string[];
   createdAt: string;
+};
+
+export type CaseCertificateObservation = {
+  eventId: string;
+  logId: string;
+  certificateSha256: string;
+  issuer: string | null;
+  notAfter: string | null;
+  dnsNameCount: number;
+  namesComplete: boolean;
 };
 
 export type CaseDecisionRecord = {
@@ -241,6 +252,7 @@ const ASSERTION_EXTERNAL_ENTITY_TYPES = new Set<string>(CASE_ASSERTION_EXTERNAL_
 const TRAIL_KINDS = new Set<string>(CASE_MANUAL_TRAIL_KINDS);
 const SIGHTING_STATES = new Set<string>(CASE_SIGHTING_STATES);
 const SIGHTING_CATEGORIES = new Set<string>(CASE_SIGHTING_CATEGORIES);
+const SHA256_RE = /^[a-f0-9]{64}$/u;
 
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -315,6 +327,58 @@ function sourceSchema(value: unknown): CaseEvidencePin['sourceSchema'] {
   return collection && schema && version !== null ? { collection, schema, version } : null;
 }
 
+function certificateObservation(
+  value: unknown,
+  pin: Readonly<{ field: string | null; value: string; sourceSchema: CaseEvidencePin['sourceSchema'] }>,
+): CaseCertificateObservation | null {
+  const item = record(value);
+  if (!Object.keys(item).length) return null;
+  const keys = new Set([
+    'eventId',
+    'logId',
+    'certificateSha256',
+    'issuer',
+    'notAfter',
+    'dnsNameCount',
+    'namesComplete',
+  ]);
+  if (Object.keys(item).some((key) => !keys.has(key))) return null;
+  if (
+    pin.sourceSchema?.collection !== 'external_observations'
+    || pin.sourceSchema.schema !== 'whoisleuth.certificate-observation-rows'
+    || (pin.field !== 'certificateSha256' && pin.field !== 'fingerprintSha256')
+  ) return null;
+  const eventId = text(item.eventId, 64);
+  const logId = text(item.logId, 200);
+  const certificateSha256 = text(item.certificateSha256, 64).toLowerCase();
+  const issuer = item.issuer === null ? null : text(item.issuer, 160) || null;
+  const notAfter = item.notAfter === null ? null : optionalIso(item.notAfter);
+  const dnsNameCount = typeof item.dnsNameCount === 'number'
+    && Number.isSafeInteger(item.dnsNameCount)
+    && item.dnsNameCount >= 1
+    && item.dnsNameCount <= 100
+    ? item.dnsNameCount
+    : null;
+  if (
+    !SAFE_ID_RE.test(eventId)
+    || !logId
+    || !SHA256_RE.test(certificateSha256)
+    || certificateSha256 !== pin.value.toLowerCase()
+    || dnsNameCount === null
+    || typeof item.namesComplete !== 'boolean'
+    || (item.notAfter !== null && notAfter === null)
+  ) return null;
+  return {
+    eventId,
+    logId,
+    certificateSha256,
+    issuer,
+    notAfter,
+    dnsNameCount,
+    namesComplete: item.namesComplete,
+  };
+}
+
 function uniqueIds(value: unknown, validIds?: ReadonlySet<string>): string[] {
   if (!Array.isArray(value)) return [];
   const unique = new Set<string>();
@@ -350,24 +414,30 @@ function normalizeEvidenceRelations(
   return [...output].map(([evidencePinId, stance]) => ({ evidencePinId, stance }));
 }
 
-function normalizePin(raw: unknown, fallback: string): CaseEvidencePin | null {
+function normalizePin(
+  raw: unknown,
+  fallback: string,
+  options: Readonly<{ allowCertificateObservation?: boolean }> = {},
+): CaseEvidencePin | null {
   const item = record(raw);
   const label = text(item.label, MAX_RESPONSE_LABEL_LENGTH);
   const value = text(item.value, MAX_RESPONSE_VALUE_LENGTH);
   if (!label || !value) return null;
   const createdAt = iso(item.createdAt, fallback);
-  return {
+  const normalizedSourceSchema = sourceSchema(item.sourceSchema);
+  const normalizedField = text(item.field, 120) || null;
+  const normalized: CaseEvidencePin = {
     id: safeId(item.id, 'pin', { label, value, createdAt }),
     checkpointId: typeof item.checkpointId === 'string' && SAFE_ID_RE.test(item.checkpointId)
       ? item.checkpointId
       : null,
-    field: text(item.field, 120) || null,
+    field: normalizedField,
     category: text(item.category, 80) || null,
     label,
     value,
     source: text(item.source, MAX_RESPONSE_LABEL_LENGTH) || 'analyst_selected',
     sourceState: text(item.sourceState, 40) || null,
-    sourceSchema: sourceSchema(item.sourceSchema),
+    sourceSchema: normalizedSourceSchema,
     observedAt: iso(item.observedAt, createdAt),
     collectionDepth: item.collectionDepth === 'deep' || item.collectionDepth === 'fast'
       ? item.collectionDepth
@@ -383,13 +453,25 @@ function normalizePin(raw: unknown, fallback: string): CaseEvidencePin | null {
     limitations: limitations(item.limitations),
     createdAt,
   };
+  normalized.certificateObservation = options.allowCertificateObservation === false
+    ? null
+    : certificateObservation(item.certificateObservation, {
+        field: normalizedField,
+        value,
+        sourceSchema: normalizedSourceSchema,
+      });
+  return normalized;
 }
 
-export function normalizeCaseEvidencePins(raw: unknown, fallback: string): CaseEvidencePin[] {
+export function normalizeCaseEvidencePins(
+  raw: unknown,
+  fallback: string,
+  options: Readonly<{ allowCertificateObservation?: boolean }> = {},
+): CaseEvidencePin[] {
   if (!Array.isArray(raw)) return [];
   const byId = new Map<string, CaseEvidencePin>();
   for (const item of raw.slice(0, MAX_CASE_EVIDENCE_PINS * 2)) {
-    const normalized = normalizePin(item, fallback);
+    const normalized = normalizePin(item, fallback, options);
     if (normalized && !byId.has(normalized.id)) byId.set(normalized.id, normalized);
   }
   return [...byId.values()]

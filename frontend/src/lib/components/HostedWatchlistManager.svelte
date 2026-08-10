@@ -20,7 +20,7 @@
     capability: Capability | null;
     localWatchlists: Watchlists;
     localNames: string[];
-    restoreHosted: (name: string, entry: WatchlistEntry) => void;
+    restoreHosted: (name: string, entry: WatchlistEntry) => Promise<void>;
     formatDate: (value: string) => string;
   } = $props();
 
@@ -32,6 +32,7 @@
   let loaded = $state(false);
   let mounted = $state(false);
   let autoRequested = $state(false);
+  let requestGeneration = 0;
   let message = $state('');
   let error = $state('');
   const hosted = $derived(response?.state.watchlists || []);
@@ -40,7 +41,10 @@
     ? hosted.find((item) => item.name.toLowerCase() === selectedLocal.toLowerCase()) || null
     : null);
 
-  onMount(() => { mounted = true; });
+  onMount(() => {
+    mounted = true;
+    return () => { requestGeneration += 1; mounted = false; };
+  });
   $effect(() => {
     if (mounted && capability?.status === 'supported' && !autoRequested) {
       autoRequested = true;
@@ -61,32 +65,40 @@
   }
 
   async function refresh() {
-    if (capability?.status !== 'supported' || loading) return;
+    if (capability?.status !== 'supported' || loading || busy) return;
+    const generation = ++requestGeneration;
     loading = true;
     error = '';
     try {
-      response = await fetchScheduledMonitoring();
+      const next = await fetchScheduledMonitoring();
+      if (generation !== requestGeneration) return;
+      response = next;
       loaded = true;
     } catch (cause) {
+      if (generation !== requestGeneration) return;
       error = cause instanceof Error ? cause.message : 'Could not load hosted monitoring.';
     } finally {
-      loading = false;
+      if (generation === requestGeneration) loading = false;
     }
   }
 
   async function execute(command: ScheduledMonitoringCommand, success: string) {
-    if (busy) return;
+    if (busy || loading) return;
+    const generation = ++requestGeneration;
     busy = true;
     error = '';
     message = '';
     try {
-      response = await mutateScheduledMonitoring(command);
+      const next = await mutateScheduledMonitoring(command);
+      if (generation !== requestGeneration) return;
+      response = next;
       loaded = true;
       message = success;
     } catch (cause) {
+      if (generation !== requestGeneration) return;
       error = cause instanceof Error ? cause.message : 'Could not update hosted monitoring.';
     } finally {
-      busy = false;
+      if (generation === requestGeneration) busy = false;
     }
   }
 
@@ -126,18 +138,26 @@
       `Updated the hosted snapshot for "${item.name}".`);
   }
 
-  function restore(item: ScheduledWatchlist) {
+  async function restore(item: ScheduledWatchlist) {
+    if (busy || loading) return;
     const existing = Boolean(localEntryFor(item.name));
     const prompt = existing
       ? `Replace the browser-local watchlist "${item.name}" with the hosted snapshot?`
       : `Restore the hosted snapshot "${item.name}" into this browser?`;
     if (!confirm(prompt)) return;
+    const generation = ++requestGeneration;
+    busy = true;
+    message = '';
+    error = '';
     try {
-      restoreHosted(item.name, item.entry);
+      await restoreHosted(item.name, item.entry);
+      if (generation !== requestGeneration) return;
       message = `${existing ? 'Replaced' : 'Restored'} the browser-local watchlist "${item.name}".`;
-      error = '';
     } catch (cause) {
+      if (generation !== requestGeneration) return;
       error = cause instanceof Error ? cause.message : 'Could not restore the hosted snapshot.';
+    } finally {
+      if (generation === requestGeneration) busy = false;
     }
   }
 
@@ -180,20 +200,20 @@
 
     <div class="schedule-form">
       <label>Browser-local watchlist
-        <select bind:value={selectedLocal} disabled={busy || !localNames.length}>
+        <select bind:value={selectedLocal} disabled={loading || busy || !localNames.length}>
           <option value="">Choose a watchlist</option>
           {#each localNames as name}<option value={name}>{name} ({localWatchlists[name]?.results.length ?? 0})</option>{/each}
         </select>
       </label>
       <label>Interval
-        <select bind:value={intervalHours} disabled={busy}>
+        <select bind:value={intervalHours} disabled={loading || busy}>
           <option value={6}>Every 6 hours</option>
           <option value={12}>Every 12 hours</option>
           <option value={24}>Daily</option>
           <option value={168}>Weekly</option>
         </select>
       </label>
-      <button class="primary" onclick={scheduleSelected} disabled={busy || !selectedEntry}>
+      <button class="primary" onclick={scheduleSelected} disabled={loading || busy || !selectedEntry}>
         {selectedHosted ? 'Replace hosted snapshot' : 'Schedule watchlist'}
       </button>
     </div>
@@ -218,10 +238,10 @@
             {#if item.lastError}<p class="item-error">{item.lastError}</p>{/if}
             {#if item.prunedHistoryEvents}<p class="hint">{item.prunedHistoryEvents} older hosted history event{item.prunedHistoryEvents === 1 ? '' : 's'} pruned.</p>{/if}
             <div class="toolbar actions">
-              <button class="btn small" onclick={() => toggle(item)} disabled={busy}>{item.enabled ? 'Pause' : 'Resume'}</button>
-              <button class="btn small" onclick={() => replace(item)} disabled={busy || !localEntryFor(item.name)}>Replace from browser</button>
-              <button class="btn small" onclick={() => restore(item)} disabled={busy}>Restore to browser</button>
-              <button class="btn small danger" onclick={() => remove(item)} disabled={busy}>Delete hosted copy</button>
+              <button class="btn small" onclick={() => toggle(item)} disabled={loading || busy}>{item.enabled ? 'Pause' : 'Resume'}</button>
+              <button class="btn small" onclick={() => replace(item)} disabled={loading || busy || !localEntryFor(item.name)}>Replace from browser</button>
+              <button class="btn small" onclick={() => restore(item)} disabled={loading || busy}>Restore to browser</button>
+              <button class="btn small danger" onclick={() => remove(item)} disabled={loading || busy}>Delete hosted copy</button>
             </div>
           </article>
         {/each}

@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures';
-import { expandLookupFamilies, expectNoHorizontalOverflow, migrateLegacyBrowserData, readBrowserLocalCollection } from './helpers';
+import { expandLookupFamilies, expectNoHorizontalOverflow, failNextBrowserLocalManifestWrite, holdBrowserLocalReads, migrateLegacyBrowserData, readBrowserLocalCollection } from './helpers';
 
 // Every value here is deliberately dotless (no TLD), so classifyQuery on the
 // server rejects it with a 400 before any RDAP/WHOIS/DNS call - these tests
@@ -345,7 +345,11 @@ test('HTTP intelligence presents bounded redirect provenance and response metada
 
   await page.locator('#query').fill('http-evidence.test');
   await page.getByRole('button', { name: 'Run lookup' }).click();
-  await expandLookupFamilies(page);
+  await expect(page.getByRole('heading', { name: 'http-evidence.test' })).toBeVisible();
+  await holdBrowserLocalReads(page, 8_000, '.family-web button.family-summary');
+  const snapshots = page.locator('.snapshot-manager');
+  await expect(snapshots.getByRole('button', { name: 'Save current snapshot' })).toBeDisabled();
+  await expect(snapshots.getByRole('button', { name: 'Save current snapshot' })).toBeEnabled({ timeout: 12_000 });
   const sslblReviewLead = page.getByRole('complementary', { name: 'The observed leaf certificate matched the local SSLBL snapshot' });
   await expect(sslblReviewLead).toBeVisible();
   await expect(sslblReviewLead).toContainText('does not change Risk scoring');
@@ -476,7 +480,6 @@ test('HTTP intelligence presents bounded redirect provenance and response metada
   await expect(pageComparison.getByText(/there is no overall page-similarity score/i)).toBeVisible();
   await expect(pageComparison.getByText(/related matches cannot corroborate one another/i)).toBeVisible();
 
-  const snapshots = page.locator('.snapshot-manager');
   await expect(snapshots.getByRole('heading', { name: 'Website profile snapshots' })).toBeVisible();
   await expect(snapshots.getByText(/A change is a review lead, not evidence of compromise/)).toBeVisible();
   await snapshots.getByRole('button', { name: 'Save current snapshot' }).click();
@@ -504,6 +507,11 @@ test('HTTP intelligence presents bounded redirect provenance and response metada
   await expect(certificateInventory.getByText('7'.repeat(64), { exact: true })).toBeVisible();
   await expect(certificateInventory.getByText('8'.repeat(64), { exact: true })).toBeVisible();
   await snapshots.getByText(/Manage 1 saved snapshot/).click();
+  await failNextBrowserLocalManifestWrite(page, 'website_snapshots');
+  page.once('dialog', (dialog) => dialog.accept());
+  await snapshots.getByRole('button', { name: 'Delete' }).click();
+  await expect(snapshots.getByRole('status')).toContainText(/storage|quota|delete/iu);
+  await expect(snapshots.getByText(/Manage 1 saved snapshot/)).toBeVisible();
   page.once('dialog', (dialog) => dialog.accept());
   await snapshots.getByRole('button', { name: 'Delete' }).click();
   await expect(snapshots.getByRole('status')).toContainText('Deleted the selected website-profile snapshot');

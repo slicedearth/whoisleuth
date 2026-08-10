@@ -22,8 +22,9 @@
     approvalRequired: boolean;
   };
 
-  let { templates, onchange }: {
+  let { templates, loadState, onchange }: {
     templates: InvestigationTemplate[];
+    loadState: 'loading' | 'ready' | 'unavailable';
     onchange: (templates: InvestigationTemplate[]) => void;
   } = $props();
   let editing = $state(false);
@@ -165,7 +166,7 @@
   }
 </script>
 
-<section class="template-manager card" aria-labelledby="template-manager-title">
+<section class="template-manager card" aria-labelledby="template-manager-title" aria-busy={loadState === 'loading'}>
   <header>
     <div>
       <p class="eyebrow">Reusable local workflow</p>
@@ -173,13 +174,17 @@
       <p>Adapt an existing bounded guide. Templates can change guidance, omit steps, or add approval gates, but cannot run code, start requests, submit evidence, or remove a required gate. A restricted CACAO export contains manual steps only.</p>
     </div>
     <div class="toolbar">
-      <button class="btn" type="button" onclick={beginNew}>New template</button>
-      <button class="btn" type="button" onclick={download} disabled={!templates.length}>Export</button>
-      <label class="btn file-btn">Import<input type="file" accept="application/json,.json" onchange={importFile}></label>
+      <button class="btn" type="button" onclick={beginNew} disabled={loadState !== 'ready'}>New template</button>
+      <button class="btn" type="button" onclick={download} disabled={loadState !== 'ready' || !templates.length}>Export</button>
+      <label class="btn file-btn" class:disabled={loadState !== 'ready'} aria-disabled={loadState !== 'ready'}>Import<input type="file" accept="application/json,.json" onchange={importFile} disabled={loadState !== 'ready'}></label>
     </div>
   </header>
 
-  {#if templates.length}
+  {#if loadState === 'unavailable'}
+    <p class="empty warn" role="status">Saved investigation templates are unavailable. The standard guides remain available; reload the Dashboard to retry browser-local storage.</p>
+  {:else if loadState === 'loading'}
+    <p class="empty" role="status">Loading saved investigation templates.</p>
+  {:else if templates.length}
     <ul class="template-list">
       {#each templates as template}
         <li>
@@ -193,7 +198,7 @@
       {/each}
     </ul>
   {:else if !editing}
-    <p class="empty">No custom templates are saved. The three standard guides remain available.</p>
+    <p class="empty">No custom templates are saved. The six fixed standard guides remain available.</p>
   {/if}
 
   {#if editing}
@@ -253,6 +258,8 @@
   .stage-editor fieldset:disabled{opacity:.58}
   .approval{color:var(--muted);font-size:var(--text-2xs)}
   textarea{resize:vertical}
+  .file-btn.disabled{cursor:not-allowed;opacity:.48}
+  .file-btn.disabled input[type='file']{cursor:not-allowed}
   .message:empty{display:none}
   @media(max-width:700px){header,.template-list li{align-items:stretch;flex-direction:column}.toolbar,.row-actions{width:100%}.toolbar>*,.row-actions>*{flex:1}.template-fields{grid-template-columns:1fr}.template-fields .wide{grid-column:auto}}
 </style>

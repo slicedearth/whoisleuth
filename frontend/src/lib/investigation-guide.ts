@@ -33,6 +33,7 @@ import {
 import {
   INVESTIGATION_GUIDE_EVENT,
   INVESTIGATION_GUIDE_KEY,
+  EARLIEST_INVESTIGATION_GUIDE_KEY,
   LEGACY_INVESTIGATION_GUIDE_KEY,
   ORIGINAL_INVESTIGATION_GUIDE_KEY,
   PREVIOUS_INVESTIGATION_GUIDE_KEY,
@@ -41,6 +42,7 @@ import {
 export {
   INVESTIGATION_GUIDE_EVENT,
   INVESTIGATION_GUIDE_KEY,
+  EARLIEST_INVESTIGATION_GUIDE_KEY,
   LEGACY_INVESTIGATION_GUIDE_KEY,
   ORIGINAL_INVESTIGATION_GUIDE_KEY,
   PREVIOUS_INVESTIGATION_GUIDE_KEY,
@@ -116,13 +118,14 @@ export function loadInvestigationGuide(): InvestigationGuide | null {
   const previous = readStoredGuide(PREVIOUS_INVESTIGATION_GUIDE_KEY);
   const legacy = previous.guide ? previous : readStoredGuide(LEGACY_INVESTIGATION_GUIDE_KEY);
   const original = legacy.guide ? legacy : readStoredGuide(ORIGINAL_INVESTIGATION_GUIDE_KEY);
-  if (!original.guide) return null;
+  const earliest = original.guide ? original : readStoredGuide(EARLIEST_INVESTIGATION_GUIDE_KEY);
+  if (!earliest.guide) return null;
   try {
-    storeGuide(original.guide);
+    storeGuide(earliest.guide);
   } catch {
     // The normalized legacy record remains usable in memory when storage is unavailable.
   }
-  return original.guide;
+  return earliest.guide;
 }
 
 export function startInvestigationGuide(
@@ -200,6 +203,7 @@ export function clearInvestigationGuide() {
     sessionStorage.removeItem(PREVIOUS_INVESTIGATION_GUIDE_KEY);
     sessionStorage.removeItem(LEGACY_INVESTIGATION_GUIDE_KEY);
     sessionStorage.removeItem(ORIGINAL_INVESTIGATION_GUIDE_KEY);
+    sessionStorage.removeItem(EARLIEST_INVESTIGATION_GUIDE_KEY);
   } catch {
     // Unavailable storage is already effectively clear.
   }

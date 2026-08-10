@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures';
-import { expectNoHorizontalOverflow, migrateLegacyBrowserData, readBrowserLocalCollection } from './helpers';
+import { expectNoHorizontalOverflow, failBrowserLocalCollectionReads, holdBrowserLocalReads, migrateLegacyBrowserData, readBrowserLocalCollection } from './helpers';
 
 // Every domain here is a local/invalid value (RFC 2606 .invalid, or dotless
 // bad-domain-* that classifyQuery rejects with a 400). Case features are
@@ -7,6 +7,107 @@ import { expectNoHorizontalOverflow, migrateLegacyBrowserData, readBrowserLocalC
 // upstream service, and the shared fixture's network guard enforces that.
 
 import { caseRecord, snapshot } from './case-test-fixtures';
+import { COMMON_INFRASTRUCTURE_SNAPSHOT } from '../frontend/src/lib/analysis/common-infrastructure.ts';
+
+const COHORT_PROFILE_ID = 'cohort_profile_exact';
+const COHORT_OTHER_PROFILE_ID = 'cohort_profile_other';
+const COHORT_NOW = '2026-08-09T00:00:00.000Z';
+const ACTIVE_PROFILE_KEY = 'whois-rdap-active-brand-profile-v1';
+
+function cohortProfile(id: string, name: string) {
+  return {
+    id,
+    name,
+    officialDomains: [],
+    productNames: [],
+    tlds: [],
+    approvedPartnerDomains: [],
+    allowlistedDomains: [],
+    allowlistedRegistrars: [],
+    dkimSelectors: [],
+    retiredDkimSelectors: [],
+    mailProtectionProfile: 'standard',
+    protectionAttestations: [],
+    desiredPostureBaselines: [],
+    trademarkOwner: '',
+    trademarkRegistration: '',
+    officialFaviconHash: '',
+    officialFaviconPHash: '',
+    pageBaseline: null,
+    createdAt: COHORT_NOW,
+    updatedAt: COHORT_NOW,
+  };
+}
+
+function retainedRelationship(type: 'certificate' | 'favicon' | 'ip_address', value: string, domains: string[]) {
+  return {
+    id: `relationship-${type}-fixture`,
+    type,
+    label: type === 'certificate' ? 'Shared TLS certificate' : type === 'favicon' ? 'Similar favicon' : 'Shared IP address',
+    method: type === 'certificate' ? 'Exact leaf-certificate SHA-256' : type === 'favicon' ? 'Bounded perceptual comparison' : 'Exact normalised address',
+    normalizedValue: value,
+    displayValue: value,
+    domains,
+    description: 'Bounded retained cohort fixture.',
+    classification: 'derived',
+    source: 'bulk_relationship_analysis',
+    sourceVersion: 1,
+    observedAt: COHORT_NOW,
+    retainedAt: COHORT_NOW,
+    complete: true,
+    truncated: false,
+    limitations: [type === 'favicon' ? 'L'.repeat(240) : 'Retained relationship evidence is a review pivot, not an attribution conclusion.'],
+  };
+}
+
+function cohortStorage(profileName = 'P'.repeat(100)) {
+  const cases = [
+    caseRecord({
+      id: 'cohort-alpha', domain: 'cohort-alpha.invalid', brandProfileIds: [COHORT_PROFILE_ID],
+      evidenceHistory: [snapshot({ id: 'cohort-alpha-evidence', registrar: 'Example Registrar, Inc.', createdDate: '2026-08-01T00:00:00Z' })],
+      assertions: [{ id: 'cohort-assertion', kind: 'hypothesis', statement: 'S'.repeat(400), rationale: null, evidencePinIds: [], evidenceRelations: [], state: 'open', createdAt: COHORT_NOW, updatedAt: COHORT_NOW }],
+    }),
+    caseRecord({
+      id: 'cohort-beta', domain: 'cohort-beta.invalid', brandProfileIds: [COHORT_PROFILE_ID],
+      evidenceHistory: [snapshot({ id: 'cohort-beta-evidence', registrar: 'example registrar inc', createdDate: '2026-08-08T00:00:00Z' })],
+    }),
+    caseRecord({
+      id: 'cohort-gamma', domain: 'cohort-gamma.invalid', brandProfileIds: [COHORT_PROFILE_ID],
+      evidenceHistory: [snapshot({ id: 'cohort-gamma-evidence', registrar: 'Other Registrar', createdDate: '2026-08-20T00:00:00Z' })],
+    }),
+    caseRecord({ id: 'cohort-ungrouped', domain: 'cohort-ungrouped.invalid', brandProfileIds: [COHORT_PROFILE_ID] }),
+    caseRecord({ id: 'cohort-outside', domain: 'cohort-outside.invalid', brandProfileIds: [COHORT_OTHER_PROFILE_ID] }),
+  ];
+  const commonAddress = COMMON_INFRASTRUCTURE_SNAPSHOT.sources
+    .flatMap((source) => source.values)
+    .find((value) => /^\d/u.test(value))
+    ?.split('/')[0];
+  expect(commonAddress).toBeTruthy();
+  const faviconValue = [
+    'cohort-beta.invalid=dhash:0000000000000000',
+    'cohort-gamma.invalid=dhash:0000000000000001',
+  ].join('|');
+  return {
+    [ACTIVE_PROFILE_KEY]: COHORT_PROFILE_ID,
+    'whois-rdap-cases-v1': { version: 12, cases },
+    'whois-rdap-brand-profiles-v1': {
+      schema: 'whoisleuth.brand-profiles', version: 6, exportedAt: COHORT_NOW,
+      profiles: [cohortProfile(COHORT_PROFILE_ID, profileName), cohortProfile(COHORT_OTHER_PROFILE_ID, 'Other exact scope')],
+    },
+    'whoisleuth-campaigns-v1': { version: 1, campaigns: [{
+      id: 'cohort-campaign', name: 'Retained cohort review', description: '',
+      domains: cases.map((record) => record.domain), createdAt: COHORT_NOW, updatedAt: COHORT_NOW,
+    }] },
+    'whoisleuth-relationship-observations-v1': {
+      schema: 'whoisleuth.relationship-observations', version: 1,
+      observations: [
+        retainedRelationship('certificate', 'a'.repeat(64), ['cohort-alpha.invalid', 'cohort-beta.invalid', 'cohort-outside.invalid']),
+        retainedRelationship('favicon', faviconValue, ['cohort-beta.invalid', 'cohort-gamma.invalid']),
+        retainedRelationship('ip_address', commonAddress!, ['cohort-alpha.invalid', 'cohort-gamma.invalid']),
+      ],
+    },
+  };
+}
 
 
 test.describe('browser-local campaigns', () => {
@@ -26,6 +127,18 @@ test.describe('browser-local campaigns', () => {
       caseRecord({
         id: 'member-one',
         domain: 'member-one.invalid',
+        evidencePins: [{
+          id: 'pin-mail-route',
+          field: 'dns.mx',
+          category: 'dns',
+          label: 'Mail route',
+          value: 'mail.member-one.invalid',
+          source: 'Lookup checkpoint',
+          sourceSchema: { collection: 'lookup_result', schema: 'whoisleuth.lookup-evidence', version: 3 },
+          observedAt: '2026-06-01T00:00:00.000Z',
+          completeness: 'complete',
+          createdAt: '2026-06-01T00:00:00.000Z',
+        }],
         evidenceHistory: [snapshot({
           hasPasswordField: true,
           hasMx: true,
@@ -55,6 +168,28 @@ test.describe('browser-local campaigns', () => {
     await expect(reviewSummary.locator('article', { hasText: 'Official identity relationship' })).toContainText('1');
     await expect(reviewSummary.locator('article', { hasText: 'Redirect or transport review' })).toContainText('1');
     await expect(reviewSummary.locator('article', { hasText: 'Mail exchanger observed' })).toContainText('1');
+    const sourceSequence = page.getByRole('region', { name: 'Retained source sequence' });
+    await expect(sourceSequence).toContainText('Mail');
+    await expect(sourceSequence).toContainText('member-one.invalid');
+    await expect(sourceSequence).toContainText('1/1 observed');
+    const mailCoverage = sourceSequence.locator('.coverage article[data-layer="mail"]');
+    const mailEvent = sourceSequence.locator('.sequence li[data-layer="mail"]');
+    await expect(mailCoverage).toBeVisible();
+    await expect(mailEvent).toBeVisible();
+    const mailColours = await mailCoverage.evaluate((coverageCard) => {
+      const event = coverageCard.closest('.temporal-review')?.querySelector('.sequence li[data-layer="mail"]');
+      const marker = event?.querySelector('.marker');
+      return {
+        coverage: getComputedStyle(coverageCard).borderLeftColor,
+        marker: marker ? getComputedStyle(marker).backgroundColor : '',
+      };
+    });
+    expect(mailColours.coverage).toBe(mailColours.marker);
+    expect(mailColours.coverage).not.toBe('');
+
+    await page.getByRole('tab', { name: /Cases/ }).click();
+    await page.getByRole('tab', { name: /Campaigns/ }).click();
+    await expect(page.locator('.campaign-head', { hasText: 'Credential cluster' })).toBeVisible();
 
     await page.reload();
     await page.getByRole('tab', { name: /Campaigns/ }).click();
@@ -63,6 +198,173 @@ test.describe('browser-local campaigns', () => {
     await page.getByRole('button', { name: 'Open case' }).click();
     await expect(page.getByRole('tab', { name: /Cases/ })).toHaveAttribute('aria-selected', 'true');
     await expect(page.locator('.case-head', { hasText: 'member-one.invalid' })).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  test('reviews exact Brand-scoped cohorts without a request, write, or assertion-derived link', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/dashboard');
+    await migrateLegacyBrowserData(page, cohortStorage(), {
+      destination: '/monitor?view=campaigns&campaign=cohort-campaign',
+    });
+    const region = page.getByRole('region', { name: 'Brand campaign cohorts' });
+    await expect(region).toBeVisible();
+    await expect(region.locator('.metrics')).toHaveCount(0);
+    await expect(region).toContainText('No selection is inferred from the active profile');
+
+    const scope = region.getByLabel('Brand Profile scope');
+    await expect(scope).toHaveValue('');
+    const dataRequests: string[] = [];
+    page.on('request', (request) => {
+      if (request.resourceType() === 'fetch' || request.resourceType() === 'xhr') {
+        const url = new URL(request.url());
+        dataRequests.push(`${request.method()} ${url.pathname}`);
+      }
+    });
+    await page.evaluate(() => {
+      const state = window as unknown as { __cohortWrites?: number; __cohortLocalStorageWrites?: number };
+      state.__cohortWrites = 0;
+      state.__cohortLocalStorageWrites = 0;
+      const originalPut = IDBObjectStore.prototype.put;
+      const originalAdd = IDBObjectStore.prototype.add;
+      const originalDelete = IDBObjectStore.prototype.delete;
+      const originalClear = IDBObjectStore.prototype.clear;
+      const originalSetItem = Storage.prototype.setItem;
+      const originalRemoveItem = Storage.prototype.removeItem;
+      const originalStorageClear = Storage.prototype.clear;
+      const countWrite = (storeName: string) => {
+        if (storeName === 'manifests' || storeName === 'records') state.__cohortWrites = (state.__cohortWrites ?? 0) + 1;
+      };
+      IDBObjectStore.prototype.put = function put(value: unknown, key?: IDBValidKey) {
+        countWrite(this.name);
+        return key === undefined ? originalPut.call(this, value) : originalPut.call(this, value, key);
+      };
+      IDBObjectStore.prototype.add = function add(value: unknown, key?: IDBValidKey) {
+        countWrite(this.name);
+        return key === undefined ? originalAdd.call(this, value) : originalAdd.call(this, value, key);
+      };
+      IDBObjectStore.prototype.delete = function deleteRecord(query: IDBValidKey | IDBKeyRange) {
+        countWrite(this.name);
+        return originalDelete.call(this, query);
+      };
+      IDBObjectStore.prototype.clear = function clear() {
+        countWrite(this.name);
+        return originalClear.call(this);
+      };
+      Storage.prototype.setItem = function setItem(key: string, value: string) {
+        if (this === window.localStorage) state.__cohortLocalStorageWrites = (state.__cohortLocalStorageWrites ?? 0) + 1;
+        return originalSetItem.call(this, key, value);
+      };
+      Storage.prototype.removeItem = function removeItem(key: string) {
+        if (this === window.localStorage) state.__cohortLocalStorageWrites = (state.__cohortLocalStorageWrites ?? 0) + 1;
+        return originalRemoveItem.call(this, key);
+      };
+      Storage.prototype.clear = function clear() {
+        if (this === window.localStorage) state.__cohortLocalStorageWrites = (state.__cohortLocalStorageWrites ?? 0) + 1;
+        return originalStorageClear.call(this);
+      };
+    });
+
+    await scope.selectOption(COHORT_PROFILE_ID);
+    await expect(region.locator('.metrics')).toContainText('4explicitly scoped cases');
+    await expect(region.locator('.metrics')).toContainText('1connected cohorts');
+    await expect(region.locator('.metrics')).toContainText('1without visible retained cohort rationale');
+    await expect(region.locator('.legend')).toContainText('Exact link');
+    await expect(region.locator('.legend')).toContainText('Bounded similarity');
+    await expect(region.locator('.legend')).toContainText('Temporal co-occurrence');
+    await expect(region.locator('.legend')).toContainText('Common infrastructure');
+
+    const cohort = region.locator('details.cohort').first();
+    await cohort.locator('summary').click();
+    await expect(cohort).toContainText('cohort-alpha.invalid');
+    await expect(cohort).toContainText('cohort-beta.invalid');
+    await expect(cohort).toContainText('cohort-gamma.invalid');
+    await expect(cohort).not.toContainText('cohort-outside.invalid');
+    await expect(cohort).toContainText('Same registrar with creation publications linked within 7 days');
+    await expect(cohort).toContainText('unknown');
+    await expect(region).toContainText('1 scoped case without retained cohort rationale');
+
+    const assertionPanel = region.getByText(/Analyst assertions · not used for cohort membership/u);
+    await assertionPanel.click();
+    await expect(region).toContainText('S'.repeat(400));
+    expect(dataRequests).toEqual([]);
+    expect(await page.evaluate(() => (window as unknown as { __cohortWrites?: number }).__cohortWrites)).toBe(0);
+    expect(await page.evaluate(() => (window as unknown as { __cohortLocalStorageWrites?: number }).__cohortLocalStorageWrites)).toBe(0);
+    expect(await page.evaluate((key) => localStorage.getItem(key), ACTIVE_PROFILE_KEY)).toBe(COHORT_PROFILE_ID);
+
+    await page.setViewportSize({ width: 320, height: 720 });
+    await expectNoHorizontalOverflow(page);
+    const openCase = cohort.getByRole('button', { name: /Open case cohort-alpha\.invalid/u });
+    await openCase.focus();
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('tab', { name: /Cases/ })).toHaveAttribute('aria-selected', 'true');
+    const openedCase = page.locator('.case-head', { hasText: 'cohort-alpha.invalid' });
+    await expect(openedCase).toHaveAttribute('aria-expanded', 'true');
+    await expect(openedCase).toBeFocused();
+  });
+
+  test('keeps unreadable Brand Profile details explicit while exact Case identifiers remain usable', async ({ page }) => {
+    await page.setViewportSize({ width: 1024, height: 800 });
+    await page.goto('/dashboard');
+    await migrateLegacyBrowserData(page, cohortStorage('Unavailable profile fixture'), { destination: '/bulk' });
+    await expect(page.locator('#console-navigation')).toBeVisible();
+    await failBrowserLocalCollectionReads(page, 'brand_profiles');
+    const monitor = page.locator('#console-navigation').getByRole('link', { name: /^Monitor/u });
+    await monitor.evaluate((link) => link.setAttribute('href', '/monitor?view=campaigns&campaign=cohort-campaign'));
+    await monitor.click();
+    const region = page.getByRole('region', { name: 'Brand campaign cohorts' });
+    await expect(region.getByRole('alert')).toContainText('Brand Profile details could not be read');
+    await expect(region.locator('.metrics')).toHaveCount(0);
+    const scope = region.getByLabel('Brand Profile scope');
+    await expect(scope).toContainText(`Profile details unavailable ${COHORT_PROFILE_ID}`);
+    await scope.selectOption(COHORT_PROFILE_ID);
+    await expect(region).toContainText('partial');
+    await expect(region.locator('.metrics')).toContainText('4explicitly scoped cases');
+    await page.setViewportSize({ width: 320, height: 720 });
+    await expectNoHorizontalOverflow(page);
+  });
+
+  test('does not present relationship-dependent zeroes when retained relationships are unreadable', async ({ page }) => {
+    await page.setViewportSize({ width: 1024, height: 800 });
+    await page.goto('/dashboard');
+    await migrateLegacyBrowserData(page, cohortStorage(), { destination: '/bulk' });
+    await expect(page.locator('#console-navigation')).toBeVisible();
+    await failBrowserLocalCollectionReads(page, 'relationship_observations');
+    const monitor = page.locator('#console-navigation').getByRole('link', { name: /^Monitor/u });
+    await monitor.evaluate((link) => link.setAttribute('href', '/monitor?view=campaigns&campaign=cohort-campaign'));
+    await monitor.click();
+    const region = page.getByRole('region', { name: 'Brand campaign cohorts' });
+    await region.getByLabel('Brand Profile scope').selectOption(COHORT_PROFILE_ID);
+    await expect(region.getByRole('alert')).toContainText('Retained relationship observations could not be read');
+    await expect(region.locator('.metrics')).toContainText('connected cohort count incomplete');
+    await expect(region.locator('.metrics')).toContainText('ungrouped count incomplete');
+    await expect(region.locator('.metrics')).not.toContainText('0connected cohorts');
+    await expect(region.locator('details.cohort')).toHaveCount(1);
+    await expect(region).toContainText('without a visible rationale in currently readable evidence · count incomplete');
+  });
+
+  test('shows and focuses a saved campaign when the tab opens before browser-local loading finishes', async ({ page }) => {
+    await page.goto('/dashboard');
+    await migrateLegacyBrowserData(page, {
+      'whoisleuth-campaigns-v1': { version: 1, campaigns: [{
+        id: 'delayed-campaign',
+        name: 'Delayed campaign',
+        description: '',
+        domains: [],
+        createdAt: '2026-08-07T00:00:00.000Z',
+        updatedAt: '2026-08-07T00:00:00.000Z',
+      }] },
+    });
+    await holdBrowserLocalReads(page, 3_000);
+    const monitorLink = page.getByRole('link', { name: /Monitor/ }).first();
+    await monitorLink.evaluate((link) => {
+      link.setAttribute('href', '/monitor?view=campaigns&campaign=delayed-campaign');
+    });
+    await monitorLink.click();
+    await page.getByRole('tab', { name: /Campaigns/ }).click();
+
+    const campaign = page.locator('.campaign-head', { hasText: 'Delayed campaign' });
+    await expect(campaign).toBeVisible();
+    await expect(campaign).toHaveAttribute('aria-expanded', 'true');
   });
 
   test('campaign export contains membership metadata but no case evidence or notes', async ({ page }) => {
@@ -122,6 +424,7 @@ test.describe('browser-local campaigns', () => {
     await page.getByRole('button', { name: 'Create campaign' }).click();
     await page.locator('.add-case select').selectOption('long-mobile-campaign-member.invalid');
     await page.getByRole('button', { name: 'Add case' }).click();
+    await expect(page.getByRole('region', { name: 'Retained source sequence' })).toContainText('No source-qualified pins or sightings');
     await expectNoHorizontalOverflow(page);
   });
 });
@@ -162,18 +465,50 @@ test.describe('accessible cross-case relationship table', () => {
     await expect(table).toBeVisible();
     await expect(table.getByRole('columnheader')).toHaveCount(4);
     await expect(table.getByRole('row')).toHaveCount(3);
+    await expect(page.getByRole('group', { name: 'Relationship workspace filters' })).toHaveCount(1);
+    await expect(page.getByRole('group', { name: 'Relationship table view controls' }).getByRole('combobox')).toHaveCount(1);
+    await expect(page.locator('.matching-count')).toHaveCount(1);
 
-    await page.locator('.relationship-filters .search input').fill('bravo-table.invalid');
+    const tableControls = page.getByRole('group', { name: 'Relationship table view controls' });
+    await tableControls.getByLabel('Search').fill('bravo-table.invalid');
+    await expect(page.locator('.result-count')).toHaveAttribute('role', 'status');
+    await expect(page.locator('.result-count')).toHaveAttribute('aria-live', 'polite');
     await expect(table.getByRole('row')).toHaveCount(2);
     await expect(table).toContainText('Shared nameserver set');
-    await page.getByRole('group', { name: 'Relationship table controls' }).getByRole('button', { name: 'Clear filters' }).click();
-    await page.locator('.relationship-filters select').first().selectOption('http_final_origin');
+    await tableControls.getByRole('button', { name: 'Clear table view' }).click();
+    await page.getByRole('group', { name: 'Relationship workspace filters' }).getByLabel('Relationship').selectOption('http_final_origin');
     await expect(table.getByRole('row')).toHaveCount(2);
     await expect(table).toContainText('Shared final website origin');
 
     await page.getByRole('button', { name: 'Open charlie-table.invalid' }).click();
     await expect(page.getByRole('tab', { name: /Cases/ })).toHaveAttribute('aria-selected', 'true');
     await expect(page.locator('.case-head', { hasText: 'charlie-table.invalid' })).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  test('keeps successful relationship context visible when campaigns cannot load', async ({ page }) => {
+    await page.goto('/monitor');
+    await migrateLegacyBrowserData(page, {
+      'whois-rdap-cases-v1': {
+        version: 2,
+        cases: [
+          caseRecord({ id: 'partial-a', domain: 'partial-a.invalid', evidenceHistory: [snapshot({ nameservers: ['ns.partial.invalid'] })] }),
+          caseRecord({ id: 'partial-b', domain: 'partial-b.invalid', evidenceHistory: [snapshot({ nameservers: ['ns.partial.invalid'] })] }),
+        ],
+      },
+    });
+    await expect(page.getByRole('tab', { name: /Cases 2/ })).toBeVisible();
+    await failBrowserLocalCollectionReads(page, 'campaigns');
+    const navigation = page.locator('#console-navigation');
+    await navigation.getByRole('link', { name: /^Dashboard/u }).click();
+    await navigation.getByRole('link', { name: /^Monitor/u }).click();
+    await page.getByRole('tab', { name: /Relationships/ }).click();
+
+    await expect(page.locator('.local-context-status')).toContainText('campaigns');
+    await expect(page.locator('.local-context-status')).toContainText('Successfully loaded collections remain available');
+    const table = page.getByRole('table', { name: 'Cross-case relationships from retained browser-local investigation evidence' });
+    await expect(table).toContainText('Shared nameserver set');
+    await expect(table).toContainText('partial-a.invalid');
+    await expect(table).toContainText('partial-b.invalid');
   });
 
   test('paginates every retained relationship and resets the page when filtering', async ({ page }) => {
@@ -204,11 +539,129 @@ test.describe('accessible cross-case relationship table', () => {
     await expect(page.locator('.relationship-workspace')).not.toContainText('Partial result');
     await expectNoHorizontalOverflow(page);
 
-    await page.locator('.relationship-filters .search input').fill('ns-00.pagination.invalid');
+    await page.getByRole('group', { name: 'Relationship workspace filters' }).getByLabel('Relationship').selectOption('nameserver_set');
+    await expect(pagination).toContainText('Page 1 of 2');
+    await expect(page.locator('.result-count')).toContainText('Showing 1–50 of 52 matching relationships');
+
+    const tableControls = page.getByRole('group', { name: 'Relationship table view controls' });
+    const search = tableControls.getByLabel('Search');
+    await search.fill('ns-00.pagination.invalid');
     await expect(table.getByRole('row')).toHaveCount(2);
     await expect(table).toContainText('ns-00.pagination.invalid');
     await expect(page.getByRole('navigation', { name: 'Case relationship pages' })).toHaveCount(0);
     await expect(page.locator('.result-count')).toContainText('Showing 1–1 of 1 matching relationship');
+
+    const graphRegion = page.getByRole('region', { name: 'Relationship graph' });
+    const graph = graphRegion.locator('.graph-scroll > svg');
+    const privateSelection = graph.getByRole('button', { name: 'Shared nameserver set: ns-01.pagination.invalid', exact: true });
+    await privateSelection.focus();
+    await page.keyboard.press('Space');
+    await expect(privateSelection).toHaveAttribute('aria-pressed', 'true');
+    await expect(search).toHaveValue('ns-00.pagination.invalid');
+    await expect(table).toContainText('ns-00.pagination.invalid');
+    await expect(table).not.toContainText('ns-01.pagination.invalid');
+
+    await tableControls.getByRole('button', { name: 'Clear table view' }).click();
+    await tableControls.getByLabel('Sort').selectOption('value');
+    await tableControls.getByRole('button', { name: 'Ascending, switch to descending' }).click();
+    await expect(pagination).toContainText('Page 2 of 2');
+    const selectedRow = table.getByRole('row', { name: /ns-01\.pagination\.invalid/u });
+    const inspectSelected = selectedRow.getByRole('button', { name: /Inspect relationship Shared nameserver set: ns-01\.pagination\.invalid/u });
+    await expect(inspectSelected).toHaveAttribute('aria-pressed', 'true');
+    await expect(selectedRow).toContainText('Selected in relationship workspace');
+
+    const selectedCase = graph.getByRole('button', { name: 'Case page-a-01.invalid', exact: true });
+    await selectedCase.focus();
+    await page.keyboard.press('Enter');
+    await expect(inspectSelected).toHaveAttribute('aria-pressed', 'false');
+    await expect(selectedRow).not.toContainText('Selected in relationship workspace');
+
+    await inspectSelected.click();
+    await expect(privateSelection).toHaveAttribute('aria-pressed', 'true');
+    await graphRegion.getByRole('group', { name: 'Relationship graph view controls' }).getByRole('button', { name: 'Hide selected' }).click();
+    await expect(graph.getByRole('button', { name: 'Shared nameserver set: ns-01.pagination.invalid', exact: true })).toHaveCount(0);
+    await expect(inspectSelected).toHaveAttribute('aria-pressed', 'false');
+    await inspectSelected.click();
+    await expect(graph.getByRole('button', { name: 'Shared nameserver set: ns-01.pagination.invalid', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await expectNoHorizontalOverflow(page);
+  });
+
+  test('reserves one bounded graph slot for a relationship inspected from the table', async ({ page }) => {
+    const records = Array.from({ length: 13 }, (_, index) => {
+      const suffix = String(index).padStart(2, '0');
+      const nameserver = `ns-${suffix}.reservation.invalid`;
+      return [
+        caseRecord({ id: `reserve-a-${suffix}`, domain: `reserve-a-${suffix}.invalid`, evidenceHistory: [snapshot({ nameservers: [nameserver] })] }),
+        caseRecord({ id: `reserve-b-${suffix}`, domain: `reserve-b-${suffix}.invalid`, evidenceHistory: [snapshot({ nameservers: [nameserver] })] }),
+      ];
+    }).flat();
+    await openRelationshipTable(page, records);
+
+    const graphRegion = page.getByRole('region', { name: 'Relationship graph' });
+    const graph = graphRegion.locator('.graph-scroll > svg');
+    await expect(graph.getByRole('button', { name: 'Shared nameserver set: ns-12.reservation.invalid', exact: true })).toHaveCount(0);
+    await expect(graphRegion).toContainText('Partial overview');
+    await expect(page.locator('.matching-count')).toHaveCount(1);
+    await expect(page.locator('.matching-count')).toContainText('13 of 13 matching relationships');
+
+    const row = page.getByRole('table', { name: 'Cross-case relationships from retained browser-local investigation evidence' }).getByRole('row', { name: /ns-12\.reservation\.invalid/u });
+    await row.getByRole('button', { name: /Inspect relationship Shared nameserver set: ns-12\.reservation\.invalid/u }).click();
+    await expect(graph.getByRole('button', { name: 'Shared nameserver set: ns-12.reservation.invalid', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await expect(graph.locator('.relationship-node')).toHaveCount(12);
+    await expect(graphRegion).toContainText('Partial overview');
+  });
+
+  test('releases graph action capacity when retained relationships are deleted', async ({ page }) => {
+    const observations = Array.from({ length: 9 }, (_, index) => ({
+      id: `relationship-stale-${index}`,
+      type: 'ip_address',
+      label: 'Shared IP address',
+      method: 'Exact normalised address',
+      normalizedValue: `192.0.2.${index + 1}`,
+      displayValue: `192.0.2.${index + 1}`,
+      domains: ['stale-a.invalid', 'stale-b.invalid'],
+      description: 'Bounded relationship fixture.',
+      classification: 'derived',
+      source: 'bulk_relationship_analysis',
+      sourceVersion: 1,
+      observedAt: '2026-07-14T00:00:00.000Z',
+      retainedAt: '2026-07-14T00:00:00.000Z',
+      complete: true,
+      truncated: false,
+      limitations: ['Shared infrastructure is not proof of common control.'],
+    }));
+    await page.goto('/monitor');
+    await migrateLegacyBrowserData(page, {
+      'whois-rdap-cases-v1': { version: 2, cases: [
+        caseRecord({ id: 'stale-a', domain: 'stale-a.invalid' }),
+        caseRecord({ id: 'stale-b', domain: 'stale-b.invalid' }),
+      ] },
+      'whoisleuth-relationship-observations-v1': {
+        schema: 'whoisleuth.relationship-observations',
+        version: 1,
+        observations,
+      },
+    });
+    await page.getByRole('tab', { name: /Relationships/ }).click();
+
+    const graphRegion = page.getByRole('region', { name: 'Relationship graph' });
+    const graph = graphRegion.locator('.graph-scroll > svg');
+    const viewControls = graphRegion.getByRole('group', { name: 'Relationship graph view controls' });
+    for (let index = 1; index <= 8; index += 1) {
+      await graph.getByRole('button', { name: `Shared IP address: 192.0.2.${index}`, exact: true }).click();
+      await viewControls.getByRole('button', { name: 'Pin selected' }).click();
+    }
+    await expect(viewControls).toContainText('8 pinned');
+
+    const retained = page.locator('.retained-observations li', { hasText: '192.0.2.1' });
+    page.once('dialog', (dialog) => dialog.accept());
+    await retained.getByRole('button', { name: 'Delete retained observation' }).click();
+    await expect(viewControls).toContainText('7 pinned');
+
+    await graph.getByRole('button', { name: 'Shared IP address: 192.0.2.9', exact: true }).click();
+    await expect(viewControls.getByRole('button', { name: 'Pin selected' })).toBeEnabled();
+    await viewControls.getByRole('button', { name: 'Pin selected' }).click();
+    await expect(viewControls).toContainText('8 pinned');
   });
 
   test('inspects evidence-backed graph nodes with keyboard case pivots', async ({ page }) => {
@@ -254,7 +707,7 @@ test.describe('accessible cross-case relationship table', () => {
     await expect(inspector).toContainText('alpha-graph.invalid');
     await expect(inspector).toContainText('Shared nameserver set: ns.shared-graph.invalid');
 
-    await page.locator('.graph-controls select').first().selectOption('http_final_origin');
+    await page.getByRole('group', { name: 'Relationship workspace filters' }).getByLabel('Relationship').selectOption('http_final_origin');
     const originNode = graph.getByRole('button', { name: 'Shared final website origin: https://shared-graph.invalid' });
     await expect(originNode).toBeVisible();
     await expect(originNode.locator('.graph-node-icon')).toHaveAttribute('data-icon', 'origin');
@@ -294,6 +747,11 @@ test.describe('accessible cross-case relationship table', () => {
     await graph.getByRole('button', { name: 'Shared nameserver set: ns.shared-view.invalid', exact: true }).click();
     await controls.getByRole('button', { name: 'Pin selected' }).click();
     await expect(controls).toContainText('1 pinned');
+    const workspaceFilters = page.getByRole('group', { name: 'Relationship workspace filters' });
+    await workspaceFilters.getByLabel('Relationship').selectOption('http_final_origin');
+    await expect(controls).toContainText('0 pinned');
+    await workspaceFilters.getByLabel('Relationship').selectOption('all');
+    await expect(controls).toContainText('0 pinned');
     await graph.getByRole('button', { name: 'Shared final website origin: https://shared-view.invalid', exact: true }).click();
     await controls.getByRole('button', { name: 'Hide selected' }).click();
     await expect(graph.getByRole('button', { name: /Shared final website origin/ })).toHaveCount(0);
@@ -407,20 +865,19 @@ test.describe('accessible cross-case relationship table', () => {
     });
     await page.getByRole('tab', { name: /Relationships/ }).click();
 
-    const graphControls = page.getByRole('group', { name: 'Relationship graph filters' });
-    await graphControls.getByLabel('Source').selectOption('import');
-    await graphControls.getByLabel('Completeness').selectOption('unknown');
-    await graphControls.getByLabel('Case or campaign').selectOption('campaign:provenance-campaign');
-    await expect(graphControls.getByRole('status')).toContainText('1 matching relationship');
+    const workspaceControls = page.getByRole('group', { name: 'Relationship workspace filters' });
+    await workspaceControls.getByLabel('Source').selectOption('import');
+    await workspaceControls.getByLabel('Completeness').selectOption('unknown');
+    await workspaceControls.getByLabel('Case or campaign').selectOption('campaign:provenance-campaign');
+    await expect(page.locator('.matching-count')).toContainText('1 of 1 matching relationship');
+    await page.getByRole('region', { name: 'Relationship graph' }).locator('.graph-scroll > svg').getByRole('button', { name: 'Shared nameserver set: ns.provenance.invalid' }).click();
     const inspector = page.locator('.relationship-graph .inspector');
     await expect(inspector).toContainText('Import, Lookup, Monitor');
     await expect(inspector).toContainText('Provenance review');
     await inspector.getByText(/Source observations/).click();
     await expect(inspector).toContainText('Cases · Deep');
 
-    const tableControls = page.getByRole('group', { name: 'Relationship table controls' });
-    await tableControls.getByLabel('Source').selectOption('monitor');
-    await tableControls.getByLabel('Case or campaign').selectOption('campaign:provenance-campaign');
+    await workspaceControls.getByLabel('Source').selectOption('monitor');
     const table = page.getByRole('table', { name: 'Cross-case relationships from retained browser-local investigation evidence' });
     await expect(table).toContainText('Provenance review');
     await expect(table).toContainText('Import, Lookup, Monitor');
@@ -434,7 +891,7 @@ test.describe('accessible cross-case relationship table', () => {
       caseRecord({ id: 'small-a', domain: 'small-a.invalid', evidenceHistory: [snapshot({ nameservers: ['ns.small.invalid'] })] }),
       caseRecord({ id: 'small-b', domain: 'small-b.invalid', evidenceHistory: [snapshot({ nameservers: ['ns.small.invalid'] })] }),
     ]);
-    await page.locator('.relationship-filters select').nth(1).selectOption('member_count');
+    await page.getByRole('group', { name: 'Relationship table view controls' }).getByLabel('Sort').selectOption('member_count');
     const rows = page.getByRole('table').getByRole('row');
     const direction = page.getByRole('button', { name: 'Ascending, switch to descending' });
     await expect(direction).toHaveText('Ascending');
@@ -487,7 +944,7 @@ test.describe('accessible cross-case relationship table', () => {
   });
 
   test('relationship filters and rows remain usable without mobile overflow', async ({ page }) => {
-    await page.setViewportSize({ width: 360, height: 640 });
+    await page.setViewportSize({ width: 360, height: 700 });
     await openRelationshipTable(page, [
       caseRecord({ id: 'mobile-rel-a', domain: 'long-mobile-relationship-member-a.invalid', evidenceHistory: [snapshot({ nameservers: ['an-extremely-long-shared-nameserver-value.invalid'] })] }),
       caseRecord({ id: 'mobile-rel-b', domain: 'long-mobile-relationship-member-b.invalid', evidenceHistory: [snapshot({ nameservers: ['an-extremely-long-shared-nameserver-value.invalid'] })] }),
@@ -497,6 +954,8 @@ test.describe('accessible cross-case relationship table', () => {
     await graph.locator('.graph-scroll > svg').getByRole('button', { name: 'Case long-mobile-relationship-member-a.invalid', exact: true }).click();
     await graph.getByRole('button', { name: 'Add to comparison group' }).click();
     await expect(graph.getByRole('region', { name: 'Comparison group' })).toBeVisible();
+    await expectNoHorizontalOverflow(page);
+    await page.setViewportSize({ width: 320, height: 700 });
     await expectNoHorizontalOverflow(page);
   });
 });

@@ -75,6 +75,26 @@ describe('Bulk review model', () => {
     assert.equal(normalized.rows[0]?.state, 'unreviewed');
   });
 
+  test('remaps a legacy Opportunity preset to Risk while preserving its direction through export and merge', () => {
+    const legacy = normalizeBulkReviewStore({
+      presets: [{
+        kind: 'preset', id: 'legacy-opportunity', name: 'Legacy review',
+        view: { ...view(), sortKey: 'opportunity', sortDirection: 1 },
+        createdAt: EARLIER, updatedAt: LATER,
+      }],
+    });
+    assert.equal(legacy.presets[0]?.view.sortKey, 'risk');
+    assert.equal(legacy.presets[0]?.view.sortDirection, 1);
+    const exported = buildBulkReviewExport(legacy);
+    assert.equal(exported.schema, BULK_REVIEW_SCHEMA);
+    assert.equal(exported.version, BULK_REVIEW_SCHEMA_VERSION);
+    assert.equal(exported.presets[0]?.view.sortKey, 'risk');
+    assert.equal(exported.presets[0]?.view.sortDirection, 1);
+    const merged = mergeBulkReviewStores(null, exported).store;
+    assert.equal(merged.presets[0]?.view.sortKey, 'risk');
+    assert.equal(merged.presets[0]?.view.sortDirection, 1);
+  });
+
   test('merges portable review records by identity and newer observation time', () => {
     const local = {
       schema: BULK_REVIEW_SCHEMA,

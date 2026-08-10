@@ -5,15 +5,24 @@
 
 import { normalizeDomain } from './case-model.ts';
 
-export const CT_HISTORY_SCHEMA_VERSION = 1;
+export const CT_HISTORY_SCHEMA_VERSION = 3;
 export const MAX_CT_HISTORY_SEARCHES = 30;
 export const MAX_CT_HISTORY_EVENTS = 20;
+export const MAX_CT_HISTORY_DISCARDED_CHECKS = 1_000_000;
 export const MAX_CT_HISTORY_DOMAINS = 500;
 export const MAX_CT_HISTORY_NEW_DOMAINS = 100;
+export const MAX_CT_HISTORY_EVER_SEEN_DOMAINS = 1_000;
 export const MAX_CT_HISTORY_QUERY_LENGTH = 200;
 export const MAX_CT_HISTORY_STORE_BYTES = 1024 * 1024;
 
 const CONTROL_RE = /[\x00-\x1f\x7f]/;
+
+export type CtHistoryObservationState =
+  | 'continuing'
+  | 'first_observed'
+  | 'history_unknown'
+  | 'reappeared'
+  | 'unclassified_partial';
 
 export type CtHistoryEvent = {
   checkedAt: string;
@@ -22,6 +31,13 @@ export type CtHistoryEvent = {
   newCount: number;
   newDomains: string[];
   truncated: boolean;
+  classificationComplete: boolean;
+  firstObservedCount: number;
+  firstObservedDomains: string[];
+  continuingCount: number;
+  reappearedCount: number;
+  reappearedDomains: string[];
+  historyUnknownCount: number;
 };
 
 export type CtHistoryEntry = {
@@ -29,7 +45,12 @@ export type CtHistoryEntry = {
   baselineAt: string | null;
   updatedAt: string;
   domains: string[];
+  everSeenDomains: string[];
+  everSeenDomainsComplete: boolean;
   history: CtHistoryEvent[];
+  discardedCheckCount: number;
+  discardedCheckCountKnown: boolean;
+  discardedCheckCountCapped: boolean;
 };
 
 export type CtHistoryStore = {
@@ -77,35 +98,129 @@ function normalizeDomains(values: unknown, limit: number): string[] {
   return [...domains].sort();
 }
 
-function normalizeEvent(raw: unknown): CtHistoryEvent | null {
+function normalizeEvent(raw: unknown, sourceVersion: number | null): CtHistoryEvent | null {
   const event = plainRecord(raw);
   if (!event) return null;
   const checkedAt = normalizeTimestamp(event.checkedAt);
   if (!checkedAt) return null;
   const newDomains = normalizeDomains(event.newDomains, MAX_CT_HISTORY_NEW_DOMAINS);
+  const resultCount = normalizeCount(event.resultCount, MAX_CT_HISTORY_DOMAINS);
+  const truncated = event.truncated === true;
+  const firstObservedDomains = normalizeDomains(event.firstObservedDomains, MAX_CT_HISTORY_NEW_DOMAINS);
+  const reappearedDomains = normalizeDomains(event.reappearedDomains, MAX_CT_HISTORY_NEW_DOMAINS);
+  const firstObservedCount = Math.max(normalizeCount(event.firstObservedCount, MAX_CT_HISTORY_DOMAINS), firstObservedDomains.length);
+  const continuingCount = normalizeCount(event.continuingCount, MAX_CT_HISTORY_DOMAINS);
+  const reappearedCount = Math.max(normalizeCount(event.reappearedCount, MAX_CT_HISTORY_DOMAINS), reappearedDomains.length);
+  const historyUnknownCount = normalizeCount(event.historyUnknownCount, MAX_CT_HISTORY_DOMAINS);
+  const classifiedCount = firstObservedCount + continuingCount + reappearedCount + historyUnknownCount;
+  const classificationComplete = sourceVersion === CT_HISTORY_SCHEMA_VERSION
+    && !truncated
+    && event.classificationComplete === true
+    && classifiedCount === resultCount;
   return {
     checkedAt,
-    resultCount: normalizeCount(event.resultCount, MAX_CT_HISTORY_DOMAINS),
+    resultCount,
     certificateCount: normalizeCount(event.certificateCount, 1_000_000),
     newCount: Math.max(normalizeCount(event.newCount, MAX_CT_HISTORY_DOMAINS), newDomains.length),
     newDomains,
-    truncated: event.truncated === true,
+    truncated,
+    classificationComplete,
+    firstObservedCount: classificationComplete ? firstObservedCount : 0,
+    firstObservedDomains: classificationComplete ? firstObservedDomains : [],
+    continuingCount: classificationComplete ? continuingCount : 0,
+    reappearedCount: classificationComplete ? reappearedCount : 0,
+    reappearedDomains: classificationComplete ? reappearedDomains : [],
+    historyUnknownCount: classificationComplete ? historyUnknownCount : 0,
   };
 }
 
-function normalizeEntry(raw: unknown): CtHistoryEntry | null {
+type CtHistoryRetention = Pick<
+  CtHistoryEntry,
+  'discardedCheckCount' | 'discardedCheckCountKnown' | 'discardedCheckCountCapped'
+>;
+
+function normalizedRetention(entry: Record<string, unknown>, sourceVersion: number | null): CtHistoryRetention {
+  const rawCount = entry.discardedCheckCount;
+  const validCount = typeof rawCount === 'number' && Number.isFinite(rawCount) && rawCount >= 0
+    ? Math.floor(rawCount)
+    : 0;
+  return {
+    discardedCheckCount: Math.min(validCount, MAX_CT_HISTORY_DISCARDED_CHECKS),
+    // Schema 1 had no pruning provenance. Preserve that uncertainty instead
+    // of silently treating a full legacy array as proof that nothing was lost.
+    discardedCheckCountKnown: (sourceVersion === 2 || sourceVersion === CT_HISTORY_SCHEMA_VERSION)
+      && entry.discardedCheckCountKnown === true,
+    discardedCheckCountCapped: entry.discardedCheckCountCapped === true
+      || validCount > MAX_CT_HISTORY_DISCARDED_CHECKS,
+  };
+}
+
+function addDiscardedChecks(retention: CtHistoryRetention, count: number): CtHistoryRetention {
+  const increment = Math.max(0, Math.floor(count));
+  const next = retention.discardedCheckCount + increment;
+  return {
+    discardedCheckCount: Math.min(next, MAX_CT_HISTORY_DISCARDED_CHECKS),
+    discardedCheckCountKnown: retention.discardedCheckCountKnown,
+    discardedCheckCountCapped: retention.discardedCheckCountCapped
+      || next > MAX_CT_HISTORY_DISCARDED_CHECKS,
+  };
+}
+
+function normalizeEntry(raw: unknown, sourceVersion: number | null): CtHistoryEntry | null {
   const entry = plainRecord(raw);
   if (!entry) return null;
   const query = normalizeCtHistoryQuery(entry.query);
   if (!query) return null;
   const baselineAt = normalizeTimestamp(entry.baselineAt);
   const domains = baselineAt ? normalizeDomains(entry.domains, MAX_CT_HISTORY_DOMAINS) : [];
-  const history = Array.isArray(entry.history)
-    ? entry.history.map(normalizeEvent).filter((event) => event !== null).sort((a, b) => a.checkedAt.localeCompare(b.checkedAt)).slice(-MAX_CT_HISTORY_EVENTS)
-    : [];
+  const rawEverSeen = Array.isArray(entry.everSeenDomains) ? entry.everSeenDomains : [];
+  const normalizedEverSeen = normalizeDomains(rawEverSeen, MAX_CT_HISTORY_EVER_SEEN_DOMAINS);
+  const normalizedEverSeenSet = new Set(normalizedEverSeen);
+  const baselineMissingFromEverSeen = domains.some((domain) => !normalizedEverSeenSet.has(domain));
+  let combinedEverSeen = [
+    ...domains,
+    ...normalizedEverSeen.filter((domain) => !domains.includes(domain)),
+  ].slice(0, MAX_CT_HISTORY_EVER_SEEN_DOMAINS).sort();
+  const scannedEverSeen = rawEverSeen.slice(0, MAX_CT_HISTORY_EVER_SEEN_DOMAINS * 4);
+  const malformedEverSeen = scannedEverSeen.some((value) => !normalizeDomain(value));
+  const everSeenDomainsComplete = sourceVersion === CT_HISTORY_SCHEMA_VERSION
+    && entry.everSeenDomainsComplete === true
+    && rawEverSeen.length <= MAX_CT_HISTORY_EVER_SEEN_DOMAINS * 4
+    && !malformedEverSeen
+    && !baselineMissingFromEverSeen
+    && new Set([...domains, ...normalizedEverSeen]).size <= MAX_CT_HISTORY_EVER_SEEN_DOMAINS;
+  const rawHistory = Array.isArray(entry.history) ? entry.history : [];
+  const historyInputs = rawHistory.slice(-MAX_CT_HISTORY_EVENTS * 4);
+  const normalizedHistory = historyInputs
+    .map((event) => normalizeEvent(event, sourceVersion))
+    .filter((event) => event !== null)
+    .sort((a, b) => a.checkedAt.localeCompare(b.checkedAt));
+  const history = normalizedHistory.slice(-MAX_CT_HISTORY_EVENTS);
+  if (sourceVersion !== CT_HISTORY_SCHEMA_VERSION) {
+    const retainedLegacyEvidence = history.flatMap((event) => event.newDomains);
+    combinedEverSeen = [
+      ...domains,
+      ...[...new Set(retainedLegacyEvidence)].sort().filter((domain) => !domains.includes(domain)),
+    ].slice(0, MAX_CT_HISTORY_EVER_SEEN_DOMAINS).sort();
+  }
+  const discardedDuringNormalization = Math.max(0, rawHistory.length - historyInputs.length)
+    + Math.max(0, normalizedHistory.length - history.length);
+  const retention = addDiscardedChecks(
+    normalizedRetention(entry, sourceVersion),
+    discardedDuringNormalization,
+  );
   const updatedAt = normalizeTimestamp(entry.updatedAt) || history.at(-1)?.checkedAt || baselineAt;
   if (!updatedAt) return null;
-  return { query, baselineAt, updatedAt, domains, history };
+  return {
+    query,
+    baselineAt,
+    updatedAt,
+    domains,
+    everSeenDomains: combinedEverSeen,
+    everSeenDomainsComplete,
+    history,
+    ...retention,
+  };
 }
 
 /**
@@ -116,10 +231,11 @@ function normalizeEntry(raw: unknown): CtHistoryEntry | null {
  */
 export function normalizeCtHistoryStore(raw: unknown): CtHistoryStore {
   const value = plainRecord(raw) || {};
+  const sourceVersion = ctHistoryStoreVersion(value);
   const entries = Array.isArray(value.entries) ? value.entries.slice(0, MAX_CT_HISTORY_SEARCHES * 4) : [];
   const byQuery = new Map<string, CtHistoryEntry>();
   for (const candidate of entries) {
-    const entry = normalizeEntry(candidate);
+    const entry = normalizeEntry(candidate, sourceVersion);
     if (!entry) continue;
     const existing = byQuery.get(entry.query);
     if (!existing || entry.updatedAt > existing.updatedAt) byQuery.set(entry.query, entry);
@@ -140,7 +256,7 @@ function serializedBytes(value: unknown): number {
  * Keeps the CT history under a dedicated 1 MB budget so it leaves headroom for
  * cases, watchlists, profiles, and shortlists on the same origin. It first
  * removes verbose per-event domain samples from the oldest searches (retaining
- * their newCount), then old check events, then entire least-recently-used
+ * their counts), then old check events, then entire least-recently-used
  * searches. Current baselines are the last data discarded.
  * @param {unknown} rawStore
  */
@@ -152,12 +268,15 @@ function enforceNormalizedCtHistoryBudget(store: CtHistoryStore): CtHistoryStore
       const entry = store.entries[entryIndex];
       if (!entry) continue;
       for (const event of entry.history) {
-        if (event.newDomains.length) {
-          storeBytes -= serializedBytes(event.newDomains) - serializedBytes([]);
-          event.newDomains = [];
-          changed = true;
-          break;
+        for (const field of ['newDomains', 'firstObservedDomains', 'reappearedDomains'] as const) {
+          if (event[field].length) {
+            storeBytes -= serializedBytes(event[field]) - serializedBytes([]);
+            event[field] = [];
+            changed = true;
+            break;
+          }
         }
+        if (changed) break;
       }
     }
     if (changed) continue;
@@ -166,11 +285,12 @@ function enforceNormalizedCtHistoryBudget(store: CtHistoryStore): CtHistoryStore
       if (entry && entry.history.length > 1) {
         const removed = entry.history[0];
         if (!removed) continue;
-        // Removing one member from a multi-member JSON array also removes one
-        // comma, so the byte accounting remains exact without reserializing
-        // the complete bounded store on every iteration.
-        storeBytes -= serializedBytes(removed) + 1;
         entry.history.shift();
+        Object.assign(entry, addDiscardedChecks(entry, 1));
+        // The persisted discard counter can grow by a digit as the event is
+        // removed, so remeasure this already-bounded store instead of relying
+        // on subtraction that would omit the provenance metadata change.
+        storeBytes = serializedBytes(store);
         changed = true;
       }
     }
@@ -238,6 +358,28 @@ export function recordCtHistorySearch(
   const previousDomains = new Set(existing?.baselineAt ? existing.domains : []);
   const allNewDomains = hasBaseline ? currentDomains.filter((domain) => !previousDomains.has(domain)) : [];
   const truncated = options.truncated === true;
+  const retainedEverSeen = new Set(existing?.everSeenDomains ?? []);
+  const continuingDomains = !truncated && hasBaseline
+    ? currentDomains.filter((domain) => previousDomains.has(domain))
+    : [];
+  const reappearedDomains = !truncated && hasBaseline
+    ? allNewDomains.filter((domain) => retainedEverSeen.has(domain))
+    : [];
+  const firstObservedDomains = !truncated
+    ? currentDomains.filter((domain) => (
+      !previousDomains.has(domain)
+      && !retainedEverSeen.has(domain)
+      && (existing?.everSeenDomainsComplete ?? true)
+    ))
+    : [];
+  const historyUnknownDomains = !truncated
+    ? currentDomains.filter((domain) => (
+      !previousDomains.has(domain)
+      && !retainedEverSeen.has(domain)
+      && !(existing?.everSeenDomainsComplete ?? true)
+    ))
+    : [];
+  const classificationComplete = !truncated;
   const event = {
     checkedAt,
     resultCount: currentDomains.length,
@@ -245,13 +387,39 @@ export function recordCtHistorySearch(
     newCount: allNewDomains.length,
     newDomains: allNewDomains.slice(0, MAX_CT_HISTORY_NEW_DOMAINS),
     truncated,
+    classificationComplete,
+    firstObservedCount: firstObservedDomains.length,
+    firstObservedDomains: firstObservedDomains.slice(0, MAX_CT_HISTORY_NEW_DOMAINS),
+    continuingCount: continuingDomains.length,
+    reappearedCount: reappearedDomains.length,
+    reappearedDomains: reappearedDomains.slice(0, MAX_CT_HISTORY_NEW_DOMAINS),
+    historyUnknownCount: historyUnknownDomains.length,
   };
+  const combinedHistory = [...(existing?.history || []), event];
+  const discardedByEventLimit = Math.max(0, combinedHistory.length - MAX_CT_HISTORY_EVENTS);
+  const retention = addDiscardedChecks(existing ?? {
+    discardedCheckCount: 0,
+    discardedCheckCountKnown: true,
+    discardedCheckCountCapped: false,
+  }, discardedByEventLimit);
+  const priorEverSeen = existing?.everSeenDomains ?? [];
+  const historicalEverSeen = priorEverSeen.filter((domain) => !currentDomains.includes(domain));
+  const nextEverSeen = truncated
+    ? priorEverSeen
+    : [...currentDomains, ...historicalEverSeen.slice(0, MAX_CT_HISTORY_EVER_SEEN_DOMAINS - currentDomains.length)].sort();
+  const everSeenDomainsComplete = truncated
+    ? existing?.everSeenDomainsComplete ?? false
+    : (existing?.everSeenDomainsComplete ?? true)
+      && currentDomains.length + historicalEverSeen.length <= MAX_CT_HISTORY_EVER_SEEN_DOMAINS;
   const entry = {
     query,
     baselineAt: truncated ? existing?.baselineAt || null : checkedAt,
     updatedAt: checkedAt,
     domains: truncated ? existing?.domains || [] : currentDomains,
-    history: [...(existing?.history || []), event].slice(-MAX_CT_HISTORY_EVENTS),
+    everSeenDomains: nextEverSeen,
+    everSeenDomainsComplete,
+    history: combinedHistory.slice(-MAX_CT_HISTORY_EVENTS),
+    ...retention,
   };
   const nextStore = enforceNormalizedCtHistoryBudget({
     version: CT_HISTORY_SCHEMA_VERSION,
@@ -268,6 +436,16 @@ export function recordCtHistorySearch(
       previousCheckedAt: existing?.baselineAt || null,
       newDomains: allNewDomains,
       newCount: allNewDomains.length,
+      firstObservedDomains,
+      firstObservedCount: firstObservedDomains.length,
+      continuingDomains,
+      continuingCount: continuingDomains.length,
+      reappearedDomains,
+      reappearedCount: reappearedDomains.length,
+      historyUnknownDomains,
+      historyUnknownCount: historyUnknownDomains.length,
+      classificationComplete,
+      everSeenDomainsComplete,
       baselineUpdated: !truncated,
       truncated,
     },

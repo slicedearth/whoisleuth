@@ -44,17 +44,20 @@ export type OwnedDomainPostureReview = Readonly<{
 }>;
 
 export type DesiredPostureComparison = Readonly<{
-  field: keyof Pick<
-    DesiredPostureBaseline,
-    'nameservers' | 'ds' | 'mx' | 'caa' | 'tlsIssuer' | 'tlsSpkiSha256' | 'registrarLock' | 'renewalReviewAt'
-  >;
+  field: DesiredPostureComparisonField;
   label: string;
-  state: 'aligned' | 'drift' | 'not_configured' | 'suppressed' | 'unknown' | 'unsupported';
+  state: 'aligned' | 'approved_window' | 'drift' | 'not_configured' | 'review' | 'suppressed' | 'unavailable' | 'unknown' | 'unsupported';
   desired: readonly string[];
   observed: readonly string[];
   explanation: string;
   suppressionReason: string;
+  approvedWindowSummary: string;
 }>;
+
+export type DesiredPostureComparisonField = keyof Pick<
+  DesiredPostureBaseline,
+  'nameservers' | 'ds' | 'mx' | 'caa' | 'tlsIssuer' | 'tlsSpkiSha256' | 'registrarLock' | 'renewalReviewAt'
+>;
 
 export type DesiredPosturePreviousChange = Readonly<{
   checkId: string;
@@ -118,7 +121,18 @@ function groupState(checks: readonly DomainPostureCheck[]): DesiredPostureGroup[
   return 'aligned';
 }
 
-const FIELD_LABELS: Record<DesiredPostureComparison['field'], string> = {
+export const DESIRED_POSTURE_COMPARISON_FIELDS: readonly DesiredPostureComparisonField[] = Object.freeze([
+  'nameservers',
+  'ds',
+  'mx',
+  'caa',
+  'tlsIssuer',
+  'tlsSpkiSha256',
+  'registrarLock',
+  'renewalReviewAt',
+]);
+
+export const DESIRED_POSTURE_FIELD_LABELS: Readonly<Record<DesiredPostureComparisonField, string>> = Object.freeze({
   nameservers: 'Nameservers',
   ds: 'DS records',
   mx: 'Mail exchangers',
@@ -127,7 +141,7 @@ const FIELD_LABELS: Record<DesiredPostureComparison['field'], string> = {
   tlsSpkiSha256: 'TLS public key',
   registrarLock: 'Registrar transfer lock',
   renewalReviewAt: 'Renewal review',
-};
+});
 
 function comparableRecords(check: DomainPostureCheck | undefined): string[] | null {
   if (!check || check.status === 'info') return null;
@@ -160,15 +174,28 @@ function activeSuppression(
 }
 
 function withSuppression(
-  comparison: Omit<DesiredPostureComparison, 'suppressionReason'>,
+  comparison: Omit<DesiredPostureComparison, 'suppressionReason' | 'approvedWindowSummary'>,
   baseline: DesiredPostureBaseline,
   nowMs: number,
+  observationAt: string | null = null,
 ): DesiredPostureComparison {
   const suppressionReason = activeSuppression(baseline, comparison.field, nowMs);
+  const observationMs = observationAt ? Date.parse(observationAt) : Number.NaN;
+  const approvedWindow = Number.isFinite(observationMs)
+    ? baseline.approvedChangeWindows.find((window) => (
+      Date.parse(window.startsAt) <= observationMs && observationMs <= Date.parse(window.endsAt)
+    ))
+    : undefined;
+  const state = comparison.state === 'drift' && suppressionReason
+    ? 'suppressed'
+    : comparison.state === 'drift' && approvedWindow
+      ? 'approved_window'
+      : comparison.state;
   return {
     ...comparison,
-    state: suppressionReason && comparison.state === 'drift' ? 'suppressed' : comparison.state,
+    state,
     suppressionReason,
+    approvedWindowSummary: approvedWindow?.summary ?? '',
   };
 }
 
@@ -177,40 +204,47 @@ function recordComparison(
   field: 'nameservers' | 'mx' | 'caa',
   check: DomainPostureCheck | undefined,
   nowMs: number,
+  observationAt: string | null,
+  observationAvailable: boolean,
 ): DesiredPostureComparison {
   const desired = baseline[field].map((value) => value.toLowerCase()).sort();
   if (!desired.length) {
     return withSuppression({
       field,
-      label: FIELD_LABELS[field],
+      label: DESIRED_POSTURE_FIELD_LABELS[field],
       state: 'not_configured',
       desired,
       observed: [],
       explanation: 'No analyst-authored desired value is configured.',
-    }, baseline, nowMs);
+    }, baseline, nowMs, observationAt);
   }
   const observed = comparableRecords(check);
   if (observed === null) {
     return withSuppression({
       field,
-      label: FIELD_LABELS[field],
-      state: 'unknown',
+      label: DESIRED_POSTURE_FIELD_LABELS[field],
+      state: observationAvailable ? 'unknown' : 'unavailable',
       desired,
       observed: [],
-      explanation: 'The current audit did not return complete comparable evidence.',
-    }, baseline, nowMs);
+      explanation: observationAvailable
+        ? 'The retained observation did not return complete comparable evidence.'
+        : 'No retained posture observation is available for this desired value.',
+    }, baseline, nowMs, observationAt);
   }
   const aligned = sameRecords(desired, observed);
+  const needsReview = aligned && (check?.status === 'warning' || check?.status === 'danger');
   return withSuppression({
     field,
-    label: FIELD_LABELS[field],
-    state: aligned ? 'aligned' : 'drift',
+    label: DESIRED_POSTURE_FIELD_LABELS[field],
+    state: needsReview ? 'review' : aligned ? 'aligned' : 'drift',
     desired,
     observed,
-    explanation: aligned
-      ? 'The current observed records match the analyst-authored desired set.'
+    explanation: needsReview
+      ? 'The retained values match the desired set, but the source-qualified posture check still needs review.'
+      : aligned
+        ? 'The current observed records match the analyst-authored desired set.'
       : 'The current observed records differ from the analyst-authored desired set.',
-  }, baseline, nowMs);
+  }, baseline, nowMs, observationAt);
 }
 
 function unsupportedComparison(
@@ -221,7 +255,7 @@ function unsupportedComparison(
 ): DesiredPostureComparison {
   return withSuppression({
     field,
-    label: FIELD_LABELS[field],
+    label: DESIRED_POSTURE_FIELD_LABELS[field],
     state: desired.length ? 'unsupported' : 'not_configured',
     desired,
     observed: [],
@@ -235,40 +269,47 @@ function lockComparison(
   baseline: DesiredPostureBaseline,
   check: DomainPostureCheck | undefined,
   nowMs: number,
+  observationAt: string | null,
+  observationAvailable: boolean,
 ): DesiredPostureComparison {
   const desired = baseline.registrarLock === 'unconfigured' ? [] : [baseline.registrarLock];
   if (!desired.length) {
     return withSuppression({
       field: 'registrarLock',
-      label: FIELD_LABELS.registrarLock,
+      label: DESIRED_POSTURE_FIELD_LABELS.registrarLock,
       state: 'not_configured',
       desired,
       observed: [],
       explanation: 'No analyst-authored transfer-lock expectation is configured.',
-    }, baseline, nowMs);
+    }, baseline, nowMs, observationAt);
   }
   if (!check || check.status === 'info') {
     return withSuppression({
       field: 'registrarLock',
-      label: FIELD_LABELS.registrarLock,
-      state: 'unknown',
+      label: DESIRED_POSTURE_FIELD_LABELS.registrarLock,
+      state: observationAvailable ? 'unknown' : 'unavailable',
       desired,
       observed: [],
-      explanation: 'Registry transfer-lock evidence is unavailable or inconclusive.',
-    }, baseline, nowMs);
+      explanation: observationAvailable
+        ? 'Registry transfer-lock evidence is unavailable or inconclusive in the retained observation.'
+        : 'No retained posture observation is available for the transfer-lock expectation.',
+    }, baseline, nowMs, observationAt);
   }
   const observedLock = check.status === 'pass' ? 'required' : 'not_required';
   const aligned = observedLock === baseline.registrarLock;
+  const needsReview = aligned && (check.status === 'warning' || check.status === 'danger');
   return withSuppression({
     field: 'registrarLock',
-    label: FIELD_LABELS.registrarLock,
-    state: aligned ? 'aligned' : 'drift',
+    label: DESIRED_POSTURE_FIELD_LABELS.registrarLock,
+    state: needsReview ? 'review' : aligned ? 'aligned' : 'drift',
     desired,
     observed: [observedLock],
-    explanation: aligned
-      ? 'The current registry status matches the analyst-authored transfer-lock expectation.'
+    explanation: needsReview
+      ? 'The retained transfer-lock value matches the expectation, but the source-qualified check still needs review.'
+      : aligned
+        ? 'The current registry status matches the analyst-authored transfer-lock expectation.'
       : 'The current registry status differs from the analyst-authored transfer-lock expectation.',
-  }, baseline, nowMs);
+  }, baseline, nowMs, observationAt);
 }
 
 function renewalComparison(
@@ -279,7 +320,7 @@ function renewalComparison(
   if (!baseline.renewalReviewAt) {
     return withSuppression({
       field: 'renewalReviewAt',
-      label: FIELD_LABELS.renewalReviewAt,
+      label: DESIRED_POSTURE_FIELD_LABELS.renewalReviewAt,
       state: 'not_configured',
       desired,
       observed: [],
@@ -289,7 +330,7 @@ function renewalComparison(
   const due = Date.parse(baseline.renewalReviewAt) <= nowMs;
   return withSuppression({
     field: 'renewalReviewAt',
-    label: FIELD_LABELS.renewalReviewAt,
+    label: DESIRED_POSTURE_FIELD_LABELS.renewalReviewAt,
     state: due ? 'drift' : 'aligned',
     desired,
     observed: [],
@@ -369,13 +410,35 @@ function baselineComparisons(
   if (!baseline) return [];
   const checks = new Map(report.checks.map((check) => [check.id, check]));
   return [
-    recordComparison(baseline, 'nameservers', checks.get('nameservers'), nowMs),
+    recordComparison(baseline, 'nameservers', checks.get('nameservers'), nowMs, report.checkedAt, true),
     unsupportedComparison(baseline, 'ds', baseline.ds, nowMs),
-    recordComparison(baseline, 'mx', checks.get('mx'), nowMs),
-    recordComparison(baseline, 'caa', checks.get('caa'), nowMs),
+    recordComparison(baseline, 'mx', checks.get('mx'), nowMs, report.checkedAt, true),
+    recordComparison(baseline, 'caa', checks.get('caa'), nowMs, report.checkedAt, true),
     unsupportedComparison(baseline, 'tlsIssuer', baseline.tlsIssuer ? [baseline.tlsIssuer] : [], nowMs),
     unsupportedComparison(baseline, 'tlsSpkiSha256', baseline.tlsSpkiSha256 ? [baseline.tlsSpkiSha256] : [], nowMs),
-    lockComparison(baseline, checks.get('registration_lock'), nowMs),
+    lockComparison(baseline, checks.get('registration_lock'), nowMs, report.checkedAt, true),
+    renewalComparison(baseline, nowMs),
+  ];
+}
+
+export function buildDesiredPostureComparisonsFromObservation(
+  baseline: DesiredPostureBaseline,
+  observation: DesiredPostureObservation | null,
+  now: unknown = new Date().toISOString(),
+): DesiredPostureComparison[] {
+  const parsedNow = Date.parse(String(now));
+  const nowMs = Number.isFinite(parsedNow) ? parsedNow : Date.parse(baseline.updatedAt);
+  const checks = new Map((observation?.checks ?? []).map((check) => [check.id, check as DomainPostureCheck]));
+  const observationAt = observation?.observedAt ?? null;
+  const observationAvailable = Boolean(observation);
+  return [
+    recordComparison(baseline, 'nameservers', checks.get('nameservers'), nowMs, observationAt, observationAvailable),
+    unsupportedComparison(baseline, 'ds', baseline.ds, nowMs),
+    recordComparison(baseline, 'mx', checks.get('mx'), nowMs, observationAt, observationAvailable),
+    recordComparison(baseline, 'caa', checks.get('caa'), nowMs, observationAt, observationAvailable),
+    unsupportedComparison(baseline, 'tlsIssuer', baseline.tlsIssuer ? [baseline.tlsIssuer] : [], nowMs),
+    unsupportedComparison(baseline, 'tlsSpkiSha256', baseline.tlsSpkiSha256 ? [baseline.tlsSpkiSha256] : [], nowMs),
+    lockComparison(baseline, checks.get('registration_lock'), nowMs, observationAt, observationAvailable),
     renewalComparison(baseline, nowMs),
   ];
 }

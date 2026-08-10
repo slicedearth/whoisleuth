@@ -7,6 +7,7 @@ import {
   MAX_SEMANTIC_VERSION_LENGTH,
   normalizeBoundedSemanticVersion,
 } from '../lib/semantic-version.mts';
+import { requireJsonRecord as record } from './maintainer-tool-helpers.mts';
 
 type JsonRecord = Record<string, unknown>;
 type WritableLike = { write(value: string): unknown };
@@ -20,13 +21,6 @@ export const RELEASE_VERSION_CHECK_SCHEMA = 'whoisleuth.release-version-check';
 export const RELEASE_VERSION_CHECK_VERSION = 1;
 export const MAX_RELEASE_VERSION_LENGTH = MAX_SEMANTIC_VERSION_LENGTH;
 export const MAX_RELEASE_MANIFEST_BYTES = 2 * 1024 * 1024;
-
-function record(value: unknown, label: string): JsonRecord {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    throw new TypeError(`${label} must be a JSON object.`);
-  }
-  return value as JsonRecord;
-}
 
 export function normalizeSemanticVersion(value: unknown): string {
   return normalizeBoundedSemanticVersion(value, 'Release');

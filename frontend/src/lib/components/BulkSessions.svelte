@@ -14,6 +14,8 @@
     exportSessions,
     status,
     canSave,
+    profileContextLoading,
+    running,
   }: {
     sessions: BulkSession[];
     currentSessionId: string;
@@ -26,6 +28,8 @@
     exportSessions: () => void | Promise<void>;
     status: string;
     canSave: boolean;
+    profileContextLoading: boolean;
+    running: boolean;
   } = $props();
 
   let baselineId = $state('');
@@ -60,10 +64,10 @@
   <div class="section-heading">
     <div>
       <p class="eyebrow">Browser-local workspace</p>
-      <h2 id="bulk-sessions-title">Saved Bulk sessions</h2>
+      <h2 id="bulk-sessions-title" tabindex="-1">Saved Bulk sessions</h2>
       <p>Save compact results and source states so an incomplete investigation can be resumed or compared later. Raw source payloads and contact records are excluded.</p>
     </div>
-    {#if sessions.length}<button type="button" class="secondary" onclick={exportSessions}>Export sessions</button>{/if}
+    {#if sessions.length}<button type="button" class="secondary" onclick={exportSessions} disabled={running}>Export sessions</button>{/if}
   </div>
 
   <div class="save-row">
@@ -76,7 +80,7 @@
         oninput={(event) => setSaveName(event.currentTarget.value)}
       />
     </label>
-    <button type="button" class="primary" disabled={!canSave || !saveName.trim()} onclick={saveCurrent}>
+    <button type="button" class="primary" disabled={profileContextLoading || !canSave || !saveName.trim()} onclick={saveCurrent}>
       {currentSessionId ? 'Update saved session' : 'Save current session'}
     </button>
   </div>
@@ -89,6 +93,7 @@
           <div>
             <h3>{session.name}</h3>
             <p>{session.mode === 'deep' ? 'Deep' : 'Fast'} · {session.results.length}/{session.domains.length} settled · {sourceSummary(session)}</p>
+            <p>Profile context: {session.profileContext.sourceState.replace('_', ' ')}{session.profileContext.limitation ? ` — ${session.profileContext.limitation}` : ''}</p>
             <dl>
               <div><dt>Complete</dt><dd>{completedCount(session)}</dd></div>
               <div><dt>Failed</dt><dd>{failedCount(session)}</dd></div>
@@ -97,11 +102,11 @@
             </dl>
           </div>
           <div class="session-actions">
-            <button type="button" onclick={() => loadSession(session)}>Load</button>
+            <button type="button" disabled={profileContextLoading || running} onclick={() => loadSession(session)}>Load</button>
             {#if unstartedCount(session) > 0}
-              <button type="button" class="secondary" onclick={() => resumeSession(session)}>Resume unstarted</button>
+              <button type="button" class="secondary" disabled={profileContextLoading || running} onclick={() => resumeSession(session)}>Resume unstarted</button>
             {/if}
-            <button type="button" class="danger-text" onclick={() => deleteSession(session)}>Delete</button>
+            <button type="button" class="danger-text" disabled={running} onclick={() => deleteSession(session)}>Delete</button>
           </div>
         </article>
       {/each}

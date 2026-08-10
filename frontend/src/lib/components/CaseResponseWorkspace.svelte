@@ -30,6 +30,7 @@
     type ResponseContactKind,
     type ResponsePacketProfileId,
   } from '$lib/analysis/case-response-packet.ts';
+  import CaseInvestigationBranches from '$lib/components/CaseInvestigationBranches.svelte';
 
   let {
     record,
@@ -386,7 +387,7 @@
 <section id={`case-response-${record.id}`} class="response-workspace" aria-labelledby={`response-title-${record.id}`} tabindex="-1">
   <header>
     <div><p class="eyebrow">Reviewed response</p><h3 id={`response-title-${record.id}`}>Evidence, reasoning, and actions</h3></div>
-    <span>{countLabel(record.evidencePins.length, 'pin')} · {countLabel(record.sightings.length, 'sighting')} · {countLabel(record.decisions.length, 'decision')} · {countLabel(record.assertions.length, 'assertion')} · {countLabel(record.actions.length, 'action')}</span>
+    <span>{countLabel(record.evidencePins.length, 'pin')} · {countLabel(record.sightings.length, 'sighting')} · {countLabel(record.decisions.length, 'decision')} · {countLabel(record.assertions.length, 'assertion')} · {countLabel(record.actions.length, 'action')} · {countLabel(record.branches?.length ?? 0, 'branch')}</span>
   </header>
   {#if actionSummary.total}
     <div class="action-summary" role="group" aria-label="Case action outcome summary">
@@ -498,6 +499,8 @@
     {/if}
   </details>
 
+  <CaseInvestigationBranches {record} {onsaved} {onmessage} />
+
   <details>
     <summary>Record and review the investigation trail</summary>
     <form class="stack" onsubmit={(event) => { event.preventDefault(); void addTrailEvent(); }}>
@@ -537,7 +540,7 @@
     {/if}
   </details>
 
-  <details>
+  <details id={`case-response-preflight-${record.id}`}>
     <summary>Prepare a reviewed abuse evidence packet</summary>
     <form class="response-form packet-form" onsubmit={(event) => event.preventDefault()}>
       <p class="notice">This prepares local JSON, Markdown, or plain-text drafts only. WHOISleuth does not send reports. JSON and Markdown include observation-age context, reviewed action history, and a canonical SHA-256 digest for later integrity checks.</p>

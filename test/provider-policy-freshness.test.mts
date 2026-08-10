@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import { buildProviderPolicyFreshnessReport } from '../tools/provider-policy-freshness.mts';
 import type { ThreatIntelligenceProviderDefinition } from '../lib/threat-intelligence-types.mts';
+import { PROVIDER_POLICY_MAX_FUTURE_SKEW_MS } from '../lib/provider-policy-admission.mts';
 
 function provider(reviewedAt: string): ThreatIntelligenceProviderDefinition {
   return {
@@ -34,4 +35,18 @@ test('provider policy freshness report passes only within the review-age bound',
   const stale = buildProviderPolicyFreshnessReport([provider('2025-01-01T00:00:00Z')], new Date('2026-08-04T00:00:00Z'));
   assert.equal(stale.state, 'fail');
   assert.equal(stale.entries[0]?.state, 'stale');
+
+  const now = new Date('2026-08-04T00:00:00Z');
+  const atSkewBoundary = buildProviderPolicyFreshnessReport([
+    provider(new Date(now.getTime() + PROVIDER_POLICY_MAX_FUTURE_SKEW_MS).toISOString()),
+  ], now);
+  assert.equal(atSkewBoundary.state, 'pass');
+  assert.equal(atSkewBoundary.entries[0]?.reviewAgeDays, 0);
+
+  const beyondSkew = buildProviderPolicyFreshnessReport([
+    provider(new Date(now.getTime() + PROVIDER_POLICY_MAX_FUTURE_SKEW_MS + 1).toISOString()),
+  ], now);
+  assert.equal(beyondSkew.state, 'fail');
+  assert.equal(beyondSkew.entries[0]?.state, 'stale');
+  assert.equal(beyondSkew.entries[0]?.reviewAgeDays, null);
 });

@@ -3,7 +3,8 @@ import { expectNoHorizontalOverflow, failBrowserLocalManifestWrites, migrateLega
 import { spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import type { ArchiveInspectionReport } from '../cli/archive-inspect.mts';
-import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model';
+import { CASE_SCHEMA_VERSION, normalizeCaseStore } from '../frontend/src/lib/analysis/case-model';
+import { sha256ArtifactDigest } from '../frontend/src/lib/analysis/artifact-integrity';
 import type { WorkspaceArchiveDocument } from '../frontend/src/lib/analysis/workspace-archive';
 import type { EncryptedWorkspaceArchiveEnvelope } from '../frontend/src/lib/analysis/workspace-archive-crypto';
 
@@ -31,6 +32,7 @@ function caseRecord(id: string, domain: string, status: string) {
     domain,
     status,
     disposition: 'unreviewed',
+    brandProfileIds: [],
     tags: [],
     notes: [],
     source: 'lookup',
@@ -242,37 +244,59 @@ test('the Dashboard presents task lanes without duplicating the sidebar labels',
   await expect(page.getByRole('heading', { name: 'Continue saved work' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Follow a guided investigation' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Back up or move saved work' })).toBeVisible();
-  await expect(page.locator('.quick-card')).toHaveCount(5);
-  await expect(page.locator('.quick-card .quick-icon svg')).toHaveCount(5);
+  await expect(page.locator('.quick-card')).toHaveCount(4);
+  await expect(page.locator('.quick-card .quick-icon svg')).toHaveCount(4);
   await expect(page.locator('.quick-card', { hasText: 'Investigate a target' }).locator('.quick-icon svg')).toHaveAttribute('data-icon', 'lookup');
   await expect(page.locator('.quick-card', { hasText: 'Protect owned domains' }).locator('.quick-icon svg')).toHaveAttribute('data-icon', 'brand');
   await expect(page.locator('.quick-card', { hasText: 'Review candidates' }).locator('.quick-icon svg')).toHaveAttribute('data-icon', 'bulk');
   await expect(page.locator('.quick-card', { hasText: 'Assess acquisition' }).locator('.quick-icon svg')).toHaveAttribute('data-icon', 'registry');
-  await expect(page.locator('.quick-card', { hasText: 'Continue case work' }).locator('.quick-icon svg')).toHaveAttribute('data-icon', 'case');
+  await expect(page.locator('.quick-card', { hasText: 'Protect owned domains' })).toHaveAttribute('href', '/brands');
+  await expect(page.locator('.quick-card', { hasText: 'Review candidates' })).toHaveAttribute('href', '/bulk');
+  await expect(page.locator('.quick-card', { hasText: 'Assess acquisition' })).toHaveAttribute('href', '/lookup?depth=deep&task=acquisition#query');
+  await expect(page.locator('.quick-card', { hasText: 'Continue case work' })).toHaveCount(0);
   await expect(page.locator('.workspace-card')).toHaveCount(0);
   await expect(page.locator('.summary-card .summary-icon svg')).toHaveCount(3);
   await expect(page.locator('.summary-card', { hasText: 'Open cases' })).toHaveAttribute('href', '/monitor?view=cases');
   await expect(page.locator('.summary-card', { hasText: 'Watchlists' })).toHaveAttribute('href', '/monitor?view=watchlists');
   await expect(page.getByRole('link', { name: /Check domain-ending support/ })).toHaveAttribute('href', '/registry-support');
-  await expect(page.getByRole('link', { name: /Read the guide/ })).toHaveAttribute('href', '/guide');
+  await expect(page.getByRole('link', { name: /Open resources/ })).toHaveAttribute('href', '/resources#start');
   await expect(page.getByRole('combobox', { name: 'Guide' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Start guide' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Compare two domains' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Compare two domains' })).toHaveCount(0);
+  await expect(page.getByLabel('First domain')).toHaveCount(0);
   await expect(page.getByText('Start recipe', { exact: true })).toHaveCount(0);
   await expect(page.getByText('indexed entities', { exact: false })).toHaveCount(0);
   await expect(page.getByText('Investigation tools', { exact: true })).toHaveCount(0);
 });
 
-test('the focused comparison handoff requires exactly two domains and opens Bulk without running it', async ({ page }) => {
+test('the Console navigation exposes semantic groups without changing link order or mobile keyboard access', async ({ page }) => {
   await page.goto('/dashboard');
-  await page.getByLabel('First domain').fill('first.example');
-  await page.getByLabel('Second domain').fill('second.example');
-  await page.getByRole('button', { name: 'Load comparison' }).click();
-  await expect(page).toHaveURL(/\/bulk\?source=manual&handoff=[0-9a-f]{32}#domains$/u);
-  await expect(page.locator('#domains')).toHaveValue('first.example\nsecond.example');
-  await expect(page.getByText('Loaded 2 candidates from manual.')).toBeVisible();
-  await expect(page.getByRole('button', { name: /^Scan 2 domains/ })).toBeEnabled();
-  await expect(page.locator('.results-table')).toHaveCount(0);
+  const consoleNavigation = page.getByRole('navigation', { name: 'Console' });
+  const start = consoleNavigation.getByRole('group', { name: 'Start' });
+  const investigate = consoleNavigation.getByRole('group', { name: 'Investigate' });
+  const protect = consoleNavigation.getByRole('group', { name: 'Protect & review' });
+  await expect(start.getByRole('link')).toHaveCount(1);
+  await expect(investigate.getByRole('link')).toHaveCount(3);
+  await expect(protect.getByRole('link')).toHaveCount(2);
+  await expect(consoleNavigation.getByRole('link').evaluateAll((links) => links.map((link) => link.getAttribute('href')))).resolves.toEqual([
+    '/dashboard', '/lookup', '/discover', '/bulk', '/monitor', '/brands',
+  ]);
+
+  await investigate.getByRole('link', { name: /^Lookup/ }).focus();
+  await page.keyboard.press('Tab');
+  await expect(investigate.getByRole('link', { name: /^Discover/ })).toBeFocused();
+
+  await page.setViewportSize({ width: 320, height: 700 });
+  await page.getByRole('button', { name: 'Toggle navigation' }).click();
+  await expect(start).toBeVisible();
+  await expect(investigate).toBeVisible();
+  await expect(protect).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('button', { name: 'Toggle navigation' })).toHaveAttribute('aria-expanded', 'false');
+  for (const width of [320, 360, 390]) {
+    await page.setViewportSize({ width, height: 700 });
+    await expectNoHorizontalOverflow(page);
+  }
 });
 
 test('the privacy-safe browser handoff previews exact third-party disclosure before opening', async ({ page }) => {
@@ -385,10 +409,14 @@ test('the dashboard exports one checksummed workspace archive without unrelated 
 test('reviewed case evidence keeps the same workspace content through two CLI and browser hand-offs', {
   tag: ['@analyst-journey', '@journey-workspace-portability-review'],
 }, async ({ page }) => {
+  test.slow();
   const caseExport = {
     version: CASE_SCHEMA_VERSION,
     exportedAt: NOW,
-    cases: [caseRecord('round-trip-case', 'round-trip.invalid', 'reviewing')],
+    cases: normalizeCaseStore({
+      version: CASE_SCHEMA_VERSION,
+      cases: [caseRecord('round-trip-case', 'round-trip.invalid', 'reviewing')],
+    }).cases,
   };
 
   const firstCasePack = await runOfflineCliJson<Record<string, unknown>>([
@@ -505,7 +533,7 @@ test('workspace archive import previews conflicts before a non-destructive mobil
   await expectNoHorizontalOverflow(page);
 
   await preview.getByRole('button', { name: 'Add selected data' }).click();
-  await expect(page.getByRole('status')).toContainText('Added backup data from 12 sections');
+  await expect(page.getByRole('status').filter({ hasText: 'Added backup data from 12 sections' })).toBeVisible();
   const [cases, campaigns, profiles, relationshipObservations, websiteSnapshots, investigationTemplates, bulkReview, settings] = await Promise.all([
     readBrowserLocalCollection(page, 'cases', { minimumRevision: 2 }),
     readBrowserLocalCollection(page, 'campaigns', { minimumRevision: 2 }),
@@ -530,6 +558,178 @@ test('workspace archive import previews conflicts before a non-destructive mobil
   expect(settings.theme).toBe('light');
 });
 
+test('workspace application skips the same malformed Brand Profile identifiers as preview', async ({ page }) => {
+  await page.goto('/dashboard');
+  await seedArchiveWorkspace(page);
+  const { content } = await downloadWorkspaceArchive(page);
+  const archive = JSON.parse(content) as WorkspaceArchiveDocument;
+  const profile = archive.sections.brandProfiles.profiles[0] as unknown as Record<string, unknown>;
+  profile.id = ' malformed-profile';
+  const profileManifest = archive.manifest.sections.find((section) => section.id === 'brandProfiles');
+  if (!profileManifest) throw new Error('The workspace fixture is missing its Brand Profiles manifest.');
+  profileManifest.bytes = new TextEncoder().encode(JSON.stringify(archive.sections.brandProfiles)).byteLength;
+  profileManifest.checksum = await sha256ArtifactDigest(archive.sections.brandProfiles);
+
+  await migrateLegacyBrowserData(page, {}, { clearStorage: true });
+  await page.getByLabel('Review backup file').setInputFiles({
+    name: 'workspace-malformed-profile.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(archive)),
+  });
+  const preview = page.locator('.preview');
+  const profiles = preview.locator('li', { hasText: 'Brand Profiles' });
+  const settings = preview.locator('li', { hasText: 'Workspace settings' });
+  await expect(profiles).toContainText('1 skipped');
+  await expect(settings).toContainText('1 skipped');
+  for (const checkbox of await preview.getByRole('checkbox').all()) {
+    if (await checkbox.isChecked()) await checkbox.uncheck();
+  }
+  await profiles.getByRole('checkbox').check();
+  await settings.getByRole('checkbox').check();
+  await preview.getByRole('button', { name: 'Add selected data' }).click();
+
+  const storedProfiles = await readBrowserLocalCollection(page, 'brand_profiles');
+  expect(storedProfiles.records).toHaveLength(0);
+  expect(await page.evaluate(() => localStorage.getItem('whois-rdap-active-brand-profile-v1'))).toBeNull();
+});
+
+test('workspace Settings preview and application preserve the active profile when imported Profiles are deselected', async ({ page }) => {
+  await page.goto('/dashboard');
+  await seedArchiveWorkspace(page);
+  const { content } = await downloadWorkspaceArchive(page);
+  await migrateLegacyBrowserData(page, {
+    'whois-rdap-brand-profiles-v1': { version: 6, profiles: [profile('local-profile', 'Local retained profile')] },
+    'whois-rdap-active-brand-profile-v1': 'local-profile',
+  }, { clearStorage: true });
+  await page.getByLabel('Review backup file').setInputFiles({
+    name: 'workspace-settings-with-profile.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(content),
+  });
+
+  const preview = page.locator('.preview');
+  const profiles = preview.locator('li', { hasText: 'Brand Profiles' });
+  const settings = preview.locator('li', { hasText: 'Workspace settings' });
+  await expect(settings).toContainText('0 skipped');
+  await profiles.getByRole('checkbox').uncheck();
+  await expect(settings).toContainText('1 skipped');
+  await expect(settings).toContainText('not available in the selected Profile data or the current browser');
+  for (const checkbox of await preview.getByRole('checkbox').all()) {
+    const isSettings = await checkbox.evaluate((element) => (
+      element.closest('li')?.textContent?.includes('Workspace settings') === true
+    ));
+    if (await checkbox.isChecked() && !isSettings) {
+      await checkbox.uncheck();
+    }
+  }
+  if (!await settings.getByRole('checkbox').isChecked()) await settings.getByRole('checkbox').check();
+  await preview.getByRole('button', { name: 'Add selected data' }).click();
+
+  await expect(page.getByRole('status').filter({ hasText: '1 skipped' })).toBeVisible();
+  expect(await page.evaluate(() => localStorage.getItem('whois-rdap-active-brand-profile-v1'))).toBe('local-profile');
+  const storedProfiles = await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 1 });
+  expect(storedProfiles.records.map((record) => record.value.name)).toEqual(['Local retained profile']);
+});
+
+test('workspace Settings application preserves malformed active-profile values and honors an exact clear', async ({ page }) => {
+  await page.goto('/dashboard');
+  await seedArchiveWorkspace(page);
+  const { content } = await downloadWorkspaceArchive(page);
+  const sourceArchive = JSON.parse(content) as WorkspaceArchiveDocument;
+  await migrateLegacyBrowserData(page, {
+    'whois-rdap-brand-profiles-v1': { version: 6, profiles: [profile('local-profile', 'Local retained profile')] },
+    'whois-rdap-active-brand-profile-v1': 'local-profile',
+    'whoisleuth:theme:v1': 'dark',
+  }, { clearStorage: true });
+
+  const importOnlySettings = async (archive: WorkspaceArchiveDocument, filename: string) => {
+    await page.getByLabel('Review backup file').setInputFiles({
+      name: filename,
+      mimeType: 'application/json',
+      buffer: Buffer.from(JSON.stringify(archive)),
+    });
+    const preview = page.locator('.preview');
+    const settings = preview.locator('li', { hasText: 'Workspace settings' });
+    await expect(settings.getByRole('checkbox')).toBeVisible();
+    for (const checkbox of await preview.getByRole('checkbox').all()) {
+      const isSettings = await checkbox.evaluate((element) => (
+        element.closest('li')?.textContent?.includes('Workspace settings') === true
+      ));
+      if (await checkbox.isChecked() && !isSettings) await checkbox.uncheck();
+    }
+    if (!await settings.getByRole('checkbox').isChecked()) await settings.getByRole('checkbox').check();
+    return { preview, settings };
+  };
+
+  const malformed = structuredClone(sourceArchive);
+  malformed.sections.settings.activeProfileId = ' malformed-profile';
+  const malformedEntry = malformed.manifest.sections.find((section) => section.id === 'settings');
+  if (!malformedEntry) throw new Error('The workspace fixture is missing its Settings manifest.');
+  malformedEntry.bytes = new TextEncoder().encode(JSON.stringify(malformed.sections.settings)).byteLength;
+  malformedEntry.checksum = await sha256ArtifactDigest(malformed.sections.settings);
+  const malformedPreview = await importOnlySettings(malformed, 'workspace-settings-malformed.json');
+  await expect(malformedPreview.settings).toContainText('1 skipped');
+  await expect(malformedPreview.settings).toContainText('missing or malformed');
+  await malformedPreview.preview.getByRole('button', { name: 'Add selected data' }).click();
+  await expect(page.getByRole('status').filter({ hasText: '1 skipped' })).toBeVisible();
+  expect(await page.evaluate(() => localStorage.getItem('whois-rdap-active-brand-profile-v1'))).toBe('local-profile');
+  expect(await page.evaluate(() => localStorage.getItem('whoisleuth:theme:v1'))).toBe('light');
+
+  const clear = structuredClone(sourceArchive);
+  clear.sections.settings.activeProfileId = '';
+  const clearEntry = clear.manifest.sections.find((section) => section.id === 'settings');
+  if (!clearEntry) throw new Error('The workspace fixture is missing its Settings manifest.');
+  clearEntry.bytes = new TextEncoder().encode(JSON.stringify(clear.sections.settings)).byteLength;
+  clearEntry.checksum = await sha256ArtifactDigest(clear.sections.settings);
+  const clearPreview = await importOnlySettings(clear, 'workspace-settings-clear.json');
+  await expect(clearPreview.settings).toContainText('0 skipped');
+  await clearPreview.preview.getByRole('button', { name: 'Add selected data' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Added backup data from 1 sections:' })).toBeVisible();
+  expect(await page.evaluate(() => localStorage.getItem('whois-rdap-active-brand-profile-v1'))).toBeNull();
+  const storedProfiles = await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 1 });
+  expect(storedProfiles.records.map((record) => record.value.id)).toEqual(['local-profile']);
+});
+
+test('workspace identifier collisions cannot rebind Cases or the active-profile setting', async ({ page }) => {
+  await page.goto('/dashboard');
+  await seedArchiveWorkspace(page);
+  const { content } = await downloadWorkspaceArchive(page);
+  await migrateLegacyBrowserData(page, {
+    'whois-rdap-brand-profiles-v1': { version: 6, profiles: [profile('archive-profile', 'Local distinct profile')] },
+    'whois-rdap-cases-v1': { version: 12, cases: [{ ...caseRecord('local-collision-case', 'local-collision.invalid', 'new'), brandProfileIds: ['archive-profile'] }] },
+  }, { clearStorage: true });
+  await page.getByLabel('Review backup file').setInputFiles({
+    name: 'workspace-profile-collision.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(content),
+  });
+
+  const preview = page.locator('.preview');
+  const profiles = preview.locator('li', { hasText: 'Brand Profiles' });
+  const cases = preview.locator('li', { hasText: 'Cases' });
+  const settings = preview.locator('li', { hasText: 'Workspace settings' });
+  await expect(profiles).toContainText('Blocked');
+  await expect(cases).toContainText('Blocked');
+  await expect(settings).toContainText('Blocked');
+  await expect(profiles.getByRole('checkbox')).toBeDisabled();
+  await expect(cases.getByRole('checkbox')).toBeDisabled();
+  await expect(settings.getByRole('checkbox')).toBeDisabled();
+
+  for (const checkbox of await preview.getByRole('checkbox').all()) {
+    if (await checkbox.isChecked()) await checkbox.uncheck();
+  }
+  await preview.locator('li', { hasText: 'Campaigns' }).getByRole('checkbox').check();
+  await preview.getByRole('button', { name: 'Add selected data' }).click();
+  const [storedProfiles, storedCases, activeProfile] = await Promise.all([
+    readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 1 }),
+    readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 }),
+    page.evaluate(() => localStorage.getItem('whois-rdap-active-brand-profile-v1')),
+  ]);
+  expect(storedProfiles.records[0]?.value.name).toBe('Local distinct profile');
+  expect(storedCases.records[0]?.value.brandProfileIds).toEqual(['archive-profile']);
+  expect(activeProfile).toBeNull();
+});
+
 test('workspace archive import reports future sections and rolls back an interrupted merge', async ({ page }) => {
   await page.goto('/dashboard');
   await seedArchiveWorkspace(page);
@@ -537,7 +737,10 @@ test('workspace archive import reports future sections and rolls back an interru
   const future = JSON.parse(content) as WorkspaceArchiveDocument;
   const futureWatchlistManifest = future.manifest.sections.find((section) => section.id === 'watchlists');
   if (!futureWatchlistManifest) throw new Error('The workspace fixture is missing its watchlists manifest.');
+  Reflect.set(future.sections.watchlists, 'version', 999);
   futureWatchlistManifest.version = 999;
+  futureWatchlistManifest.bytes = new TextEncoder().encode(JSON.stringify(future.sections.watchlists)).byteLength;
+  futureWatchlistManifest.checksum = await sha256ArtifactDigest(future.sections.watchlists);
   await page.getByLabel('Review backup file').setInputFiles({ name: 'future.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(future)) });
   const futureWatchlists = page.locator('.preview li', { hasText: 'Watchlists' });
   await expect(futureWatchlists).toContainText('Unsupported');
@@ -562,4 +765,40 @@ test('workspace archive import reports future sections and rolls back an interru
   await expect(page.getByRole('status')).toContainText('No archive changes were kept');
   const domains = (await readBrowserLocalCollection(page, 'cases')).records.map((record) => record.value.domain);
   expect(domains).toEqual(['rollback.invalid']);
+});
+
+test('workspace rollback preserves a settings value changed after the import begins', async ({ page }) => {
+  await page.goto('/dashboard');
+  await seedArchiveWorkspace(page);
+  const { content } = await downloadWorkspaceArchive(page);
+  await migrateLegacyBrowserData(page, {
+    'whois-rdap-cases-v1': { version: 2, cases: [{
+      id: 'settings-rollback-case', domain: 'settings-rollback.invalid', status: 'new', disposition: 'unreviewed', tags: [], notes: [],
+      source: 'manual', evidenceHistory: [], createdAt: NOW, updatedAt: NOW,
+    }] },
+    'whoisleuth:theme:v1': 'dark',
+  }, { clearStorage: true });
+  await page.getByLabel('Review backup file').setInputFiles({ name: 'workspace.json', mimeType: 'application/json', buffer: Buffer.from(content) });
+  const preview = page.locator('.preview');
+  for (const checkbox of await preview.getByRole('checkbox').all()) {
+    if (await checkbox.isChecked()) await checkbox.uncheck();
+  }
+  await preview.locator('li', { hasText: 'Cases' }).getByRole('checkbox').check();
+  await preview.locator('li', { hasText: 'Workspace settings' }).getByRole('checkbox').check();
+  await page.evaluate(() => {
+    const originalSetItem = Storage.prototype.setItem;
+    Storage.prototype.setItem = function setItem(key: string, value: string) {
+      if (key === 'whoisleuth:theme:v1' && value === 'light') {
+        originalSetItem.call(this, key, 'system');
+        throw new DOMException('A concurrent settings update won the import race.', 'QuotaExceededError');
+      }
+      originalSetItem.call(this, key, value);
+    };
+  });
+  await preview.getByRole('button', { name: 'Add selected data' }).click();
+
+  await expect(page.getByRole('status')).toContainText('could not be fully restored');
+  expect(await page.evaluate(() => localStorage.getItem('whoisleuth:theme:v1'))).toBe('system');
+  const domains = (await readBrowserLocalCollection(page, 'cases')).records.map((record) => record.value.domain);
+  expect(domains).toEqual(['settings-rollback.invalid']);
 });

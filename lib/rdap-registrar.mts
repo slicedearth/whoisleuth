@@ -112,6 +112,13 @@ type DomainParser = (
   data: unknown,
 ) => NormalizedRdapDomainRecord | null;
 
+function registrarRdapTransport(
+  override: RdapFetch | undefined,
+  safeDefault: RdapFetch = fetchRdapDetailedWithTimeout,
+): RdapFetch {
+  return override ?? safeDefault;
+}
+
 export async function fetchRegistrarRdapRecordWithParser(
   domain: string,
   registryRecord: RegistryRdapLinkSource | null | undefined,
@@ -120,7 +127,7 @@ export async function fetchRegistrarRdapRecordWithParser(
 ) {
   const canonical = canonicalRdapDomain(domain);
   if (!canonical) throw new Error('A valid domain is required for registrar RDAP.');
-  const fetchUpstream = options.fetchUpstream || fetchRdapDetailedWithTimeout;
+  const fetchUpstream = registrarRdapTransport(options.fetchUpstream);
 
   return cached(`rdap-registrar:domain:${canonical}`, async () => {
     const registryParsed = recordOrNull(registryRecord?.parsed);
@@ -251,3 +258,5 @@ export async function fetchRegistrarRdapRecordWithParser(
     };
   });
 }
+
+export { registrarRdapTransport };

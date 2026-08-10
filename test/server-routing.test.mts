@@ -3,15 +3,17 @@ import type { Server } from 'node:http';
 import { join, relative, sep } from 'node:path';
 import { after, before, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
+import express from 'express';
 
 import { HTTP_BASELINE_CONTENT_SECURITY_POLICY } from '../lib/security-headers.mts';
 
 process.env.SITE_PASSWORD = process.env.SITE_PASSWORD || 'test-only-secret';
 process.env.SESSION_SECRET = process.env.SESSION_SECRET || 'test-only-session-signing-secret';
 
-const { app } = await import('../server.mts');
+const { app, sendPrerenderedHtmlFile } = await import('../server.mts');
 const {
   CANONICAL_TRAILING_SLASH_REDIRECTS,
+  PERMANENT_ROUTE_REDIRECTS,
   PRERENDERED_HTML_FILE_OVERRIDES,
   PRERENDERED_ROUTES,
 } = await import('../lib/prerendered-routes.mts');
@@ -72,6 +74,19 @@ describe('canonical route redirects', () => {
     assert.deepEqual(PRERENDERED_HTML_FILE_OVERRIDES, [['/resources', 'resources.html']]);
   });
 
+  test('redirects the legacy Guide route to the consolidated Resources hub', async () => {
+    assert.deepEqual(PERMANENT_ROUTE_REDIRECTS, [
+      ['/guide', '/resources'],
+      ['/guide/', '/resources'],
+    ]);
+
+    for (const sourcePath of ['/guide', '/guide/']) {
+      const response = await fetch(`${origin}${sourcePath}?ignored=1`, { redirect: 'manual' });
+      assert.equal(response.status, 308, sourcePath);
+      assert.equal(response.headers.get('location'), '/resources', sourcePath);
+    }
+  });
+
   test('redirect each allowlisted trailing-slash route to its fixed local path', async () => {
     for (const [sourcePath, canonicalPath] of CANONICAL_TRAILING_SLASH_REDIRECTS) {
       const response = await fetch(`${origin}${sourcePath}?next=https%3A%2F%2Foutside.example`, {
@@ -89,6 +104,34 @@ describe('canonical route redirects', () => {
     assert.equal(response.status, 404);
     assert.equal(response.headers.get('location'), null);
     assert.match(response.headers.get('content-security-policy') || '', /default-src 'none'/u);
+  });
+
+  test('falls through without exposing a missing prerendered file path', async () => {
+    const missingFile = '/definitely-missing/whoisleuth/resources.html';
+    const isolatedApp = express();
+    isolatedApp.get('/resources', (_request, response, next) => {
+      sendPrerenderedHtmlFile(missingFile, response, next);
+    });
+
+    const isolatedServer = await new Promise<Server>((resolve, reject) => {
+      const listener = isolatedApp.listen(0, '127.0.0.1', () => resolve(listener));
+      listener.once('error', reject);
+    });
+
+    try {
+      const address = isolatedServer.address();
+      assert.ok(address && typeof address !== 'string');
+      const response = await fetch(`http://127.0.0.1:${address.port}/resources`);
+      const body = await response.text();
+
+      assert.equal(response.status, 404);
+      assert.doesNotMatch(body, /ENOENT/u);
+      assert.equal(body.includes(missingFile), false);
+    } finally {
+      await new Promise<void>((resolve, reject) => {
+        isolatedServer.close((error) => error ? reject(error) : resolve());
+      });
+    }
   });
 
   test('applies the shared response policy at an application boundary', async () => {

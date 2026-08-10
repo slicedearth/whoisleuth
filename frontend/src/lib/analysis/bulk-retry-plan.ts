@@ -62,7 +62,7 @@ export function buildBulkRetryPlan(
 ): BulkRetryPlan {
   const observationFreshness = freshness(observedAtRaw, now);
   const candidates = values
-    .map(normalizeBulkSessionResult)
+    .map((row) => normalizeBulkSessionResult(row))
     .filter((value): value is BulkSessionResult => Boolean(value))
     .map((value) => retryRow(value, observationFreshness.state === 'stale'))
     .filter((value): value is BulkRetryPlanRow => Boolean(value));

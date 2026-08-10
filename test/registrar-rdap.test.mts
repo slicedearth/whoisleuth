@@ -1,11 +1,11 @@
 import { requiredValue } from './value-assertions.mts';
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
 import { describe, test } from 'node:test';
 import {
   fetchRegistrarRdapRecord,
   selectRegistrarRdapLink,
 } from '../lib/rdap.mts';
+import { registrarRdapTransport } from '../lib/rdap-registrar.mts';
 
 type RegistrarFetch = NonNullable<
   NonNullable<Parameters<typeof fetchRegistrarRdapRecord>[2]>['fetchUpstream']
@@ -115,15 +115,11 @@ describe('registrar RDAP link selection', () => {
 });
 
 describe('registrar RDAP fetching', () => {
-  test('uses the redirect-aware transport for the production fetch path', async () => {
-    const source = await readFile(
-      new URL('../lib/rdap-registrar.mts', import.meta.url),
-      'utf8',
-    );
-    assert.match(
-      source,
-      /options\.fetchUpstream \|\| fetchRdapDetailedWithTimeout/u,
-    );
+  test('uses an explicit override or the injected safe redirect-aware default', () => {
+    const override = (async () => ({ status: 200, ok: true, text: '{}', url: 'https://override.test' })) as RegistrarFetch;
+    const safeDefault = (async () => ({ status: 200, ok: true, text: '{}', url: 'https://default.test' })) as RegistrarFetch;
+    assert.equal(registrarRdapTransport(override, safeDefault), override);
+    assert.equal(registrarRdapTransport(undefined, safeDefault), safeDefault);
   });
 
   test('returns separately attributed parsed data without mutating the registry record', async () => {

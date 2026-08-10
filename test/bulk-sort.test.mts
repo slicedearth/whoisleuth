@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
   defaultBulkSortDirection,
+  normalizeBulkPresentationSortKey,
   sortBulkResults,
 } from '../frontend/src/lib/analysis/bulk-sort.ts';
 import type { BulkSortKey } from '../frontend/src/lib/analysis/bulk-sort.ts';
@@ -30,6 +31,15 @@ test('defines intuitive initial directions for every Bulk sort key', () => {
   for (const key of ascendingKeys) {
     assert.equal(defaultBulkSortDirection(key), 1);
   }
+});
+
+test('remaps the retired Opportunity presentation sort without changing direction state', () => {
+  const legacy = { sortKey: 'opportunity' as const, sortDirection: 1 as const };
+  assert.deepEqual({
+    sortKey: normalizeBulkPresentationSortKey(legacy.sortKey),
+    sortDirection: legacy.sortDirection,
+  }, { sortKey: 'risk', sortDirection: 1 });
+  assert.equal(normalizeBulkPresentationSortKey('activity'), 'activity');
 });
 
 test('sorts numeric and ranked values while keeping missing evidence last', () => {

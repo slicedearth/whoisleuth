@@ -1,4 +1,5 @@
 import { normalizeDomain } from './case-model.ts';
+import { normalizeBulkPresentationSortKey } from './bulk-sort.ts';
 import type { BulkSortDirection, BulkSortKey } from './bulk-sort.ts';
 
 export const BULK_REVIEW_SCHEMA = 'whoisleuth.bulk-review';
@@ -55,7 +56,7 @@ export type BulkReviewStore = {
 
 const CONTROL_RE = /[\u0000-\u001f\u007f]/u;
 const SAFE_ID_RE = /^[A-Za-z0-9_-]{1,128}$/u;
-const PRIMARY_FILTERS = new Set(['all', 'available', 'registered', 'high_risk', 'trusted', 'errors']);
+const PRIMARY_FILTERS = new Set(['all', 'available', 'registered', 'high_risk', 'trusted', 'profile_unevaluated', 'errors']);
 const SOURCE_FILTERS = new Set(['', 'complete', 'limited', 'failed']);
 const LIFECYCLE_FILTERS = new Set(['', 'new', 'expiring', 'aged', 'unknown']);
 const AGE_FILTERS = new Set(['', '7d', '30d', '90d', '365d', 'older', 'unknown']);
@@ -102,7 +103,7 @@ function normalizeView(raw: unknown): BulkReviewPresetView {
     ? [...new Set(value.signalFilters.filter((item): item is string => typeof item === 'string' && SIGNAL_FILTERS.has(item)))].slice(0, SIGNAL_FILTERS.size)
     : [];
   const sortKey = typeof value.sortKey === 'string' && SORT_KEYS.has(value.sortKey as BulkSortKey)
-    ? value.sortKey as BulkSortKey
+    ? normalizeBulkPresentationSortKey(value.sortKey as BulkSortKey)
     : 'risk';
   return {
     primaryFilter: setValue(value.primaryFilter, PRIMARY_FILTERS, 'all'),

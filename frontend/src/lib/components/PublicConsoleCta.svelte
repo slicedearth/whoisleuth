@@ -7,7 +7,7 @@
 
   const getSession = getContext<PublicSessionGetter | undefined>(PUBLIC_SESSION_CONTEXT);
   const session = $derived(getSession?.() ?? 'anonymous');
-  const destination = $derived(session === 'authenticated' ? '/dashboard' : '/login');
+  const destination = $derived(session === 'anonymous' ? '/login' : '/dashboard');
   const label = $derived(
     session === 'anonymous' ? 'Sign in to investigate' : 'Open console',
   );

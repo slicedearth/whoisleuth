@@ -13,11 +13,17 @@
   let expectedSha256 = $state('');
   let comparison = $state<ReturnType<typeof buildLookupEvidenceReplayDiff> | null>(null);
   let comparisonStatus = $state('');
+  let comparisonLoading = $state(false);
+  let replayGeneration = 0;
+  let comparisonGeneration = 0;
 
   async function load(event: Event) {
     const control = event.currentTarget as HTMLInputElement;
     const file = control.files?.[0];
     if (!file) return;
+    const generation = ++replayGeneration;
+    comparisonGeneration += 1;
+    comparisonLoading = false;
     loading = true;
     status = '';
     replay = null;
@@ -27,15 +33,18 @@
         throw new Error('Lookup evidence replay files are limited to 5 MB.');
       }
       const checksum = expectedSha256.trim();
-      replay = await parseLookupEvidenceReplay(
+      const next = await parseLookupEvidenceReplay(
         await file.text(),
         checksum ? { expectedSha256: checksum } : {},
       );
-      status = `Loaded ${file.name} locally${replay.digestVerified ? ' and verified its checksum' : ''}. No source was contacted.`;
+      if (generation !== replayGeneration) return;
+      replay = next;
+      status = `Loaded ${file.name} locally${next.digestVerified ? ' and verified its checksum' : ''}. No source was contacted.`;
     } catch (cause) {
+      if (generation !== replayGeneration) return;
       status = cause instanceof Error ? cause.message : 'The evidence file could not be replayed.';
     } finally {
-      loading = false;
+      if (generation === replayGeneration) loading = false;
       control.value = '';
     }
   }
@@ -43,17 +52,24 @@
   async function loadComparison(event: Event) {
     const control = event.currentTarget as HTMLInputElement;
     const file = control.files?.[0];
-    if (!file || !replay) return;
+    if (!file || !replay || loading || comparisonLoading) return;
+    const primary = replay;
+    const primaryGeneration = replayGeneration;
+    const generation = ++comparisonGeneration;
+    comparisonLoading = true;
     comparisonStatus = '';
     try {
       if (file.size > LOOKUP_EVIDENCE_REPLAY_MAX_BYTES) throw new Error('Lookup evidence replay files are limited to 5 MB.');
       const second = await parseLookupEvidenceReplay(await file.text());
-      comparison = buildLookupEvidenceReplayDiff(replay, second);
+      if (generation !== comparisonGeneration || primaryGeneration !== replayGeneration || replay !== primary) return;
+      comparison = buildLookupEvidenceReplayDiff(primary, second);
       comparisonStatus = `Compared ${file.name} locally. No source was contacted.`;
     } catch (cause) {
+      if (generation !== comparisonGeneration || primaryGeneration !== replayGeneration || replay !== primary) return;
       comparison = null;
       comparisonStatus = cause instanceof Error ? cause.message : 'The second evidence file could not be compared.';
     } finally {
+      if (generation === comparisonGeneration) comparisonLoading = false;
       control.value = '';
     }
   }
@@ -63,7 +79,7 @@
   <summary>
     <span>
       <strong>Replay exported evidence</strong>
-      <small>Review a current WHOISleuth Lookup evidence JSON file without contacting a source.</small>
+      <small>Review a supported WHOISleuth Lookup evidence schema 25 or 26 JSON file without contacting a source.</small>
     </span>
   </summary>
   <div class="body">
@@ -108,7 +124,7 @@
           <h3>Normalised facts</h3>
           <dl>
             {#each replay.facts as fact}
-              <div><dt>{fact.label}</dt><dd>{fact.value}<small>{fact.source}</small></dd></div>
+              <div><dt>{fact.label}</dt><dd>{fact.value}<small>{fact.source} · {fact.sourceState}{fact.sourceComplete === false ? ' · incomplete' : ''}</small></dd></div>
             {/each}
           </dl>
         {/if}
@@ -124,7 +140,7 @@
           <h3 id="replay-brief-title">Historical review brief</h3>
           <div>
             <article>
-              <strong>Verified export facts</strong>
+              <strong>Retained normalised facts</strong>
               <p>{replay.facts.length} normalised fact{replay.facts.length === 1 ? '' : 's'} retained with source labels.</p>
             </article>
             <article>
@@ -143,7 +159,7 @@
         <section class="comparison" aria-labelledby="replay-comparison-title">
           <h3 id="replay-comparison-title">Compare another capture</h3>
           <p class="note">Choose a second export for the same target. The comparison separates observed value changes from source-quality and application-interpretation differences.</p>
-          <label class="picker"><span>Choose second evidence JSON</span><input type="file" accept="application/json,.json" onchange={loadComparison} /></label>
+          <label class="picker"><span>{comparisonLoading ? 'Reading second evidence…' : 'Choose second evidence JSON'}</span><input type="file" accept="application/json,.json" disabled={loading || comparisonLoading} onchange={loadComparison} /></label>
           <p class="comparison-status" role="status" aria-live="polite" aria-atomic="true">{comparisonStatus}</p>
           {#if comparison}
             <div class="comparison-counts"><span><strong>{comparison.counts.observedChanges}</strong> observed</span><span><strong>{comparison.counts.collectionDifferences}</strong> collection</span><span><strong>{comparison.counts.interpretationDifferences}</strong> interpretation</span></div>
@@ -186,7 +202,7 @@
   .source-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
   .source-grid article{display:grid;gap:3px;min-width:0;padding:9px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
   .source-grid strong{font-size:var(--text-xs)}
-  .source-grid span{color:var(--source-network);font:650 var(--text-2xs) var(--mono);text-transform:capitalize}
+  .source-grid span{color:var(--source-network-text);font:650 var(--text-2xs) var(--mono);text-transform:capitalize}
   .source-grid small{color:var(--muted);font-size:var(--text-2xs);overflow-wrap:anywhere}
   h3{margin:2px 0 -3px;font-size:var(--text-sm)}
   dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin:0}
@@ -203,7 +219,7 @@
   .brief p,.brief ul,.brief ol{margin:5px 0 0;color:var(--muted);font-size:var(--text-2xs);line-height:1.5}
   .brief ul,.brief ol{padding-left:17px}
   .limits{border-top:1px solid var(--border)}
-  .comparison{display:grid;gap:8px;padding:11px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}.comparison .picker{width:max-content;margin:0}.comparison-counts{display:flex;flex-wrap:wrap;gap:6px}.comparison-counts span{padding:6px 8px;border:1px solid var(--border);border-radius:999px;color:var(--muted);font-size:var(--text-2xs)}.comparison ol{display:grid;gap:6px;margin:0;padding:0;list-style:none}.comparison li{min-width:0;padding:8px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}.comparison li div{display:flex;justify-content:space-between;gap:8px}.comparison li span{color:var(--source-network);font:650 var(--text-2xs) var(--mono)}.comparison li p,.comparison li small{overflow-wrap:anywhere}.comparison li p{margin:5px 0;font-size:var(--text-xs)}.comparison li small{color:var(--muted)}
+  .comparison{display:grid;gap:8px;padding:11px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}.comparison .picker{width:max-content;margin:0}.comparison-counts{display:flex;flex-wrap:wrap;gap:6px}.comparison-counts span{padding:6px 8px;border:1px solid var(--border);border-radius:999px;color:var(--muted);font-size:var(--text-2xs)}.comparison ol{display:grid;gap:6px;margin:0;padding:0;list-style:none}.comparison li{min-width:0;padding:8px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}.comparison li div{display:flex;justify-content:space-between;gap:8px}.comparison li span{color:var(--source-network-text);font:650 var(--text-2xs) var(--mono)}.comparison li p,.comparison li small{overflow-wrap:anywhere}.comparison li p{margin:5px 0;font-size:var(--text-xs)}.comparison li small{color:var(--muted)}
   .limits>summary{padding:10px 0;font:680 var(--text-xs) var(--mono);cursor:pointer}
   @media(max-width:760px){
     .source-grid,dl,.brief>div{grid-template-columns:minmax(0,1fr)}

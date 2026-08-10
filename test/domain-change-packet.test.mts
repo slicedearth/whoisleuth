@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
 import { verifyOfflineArtifact } from '../cli/artifact-verify.mts';
+import { sha256ArtifactDigestV2 } from '../frontend/src/lib/analysis/artifact-integrity.ts';
 import {
   DOMAIN_CHANGE_PACKET_INPUT_SCHEMA,
   DOMAIN_CHANGE_PACKET_SCHEMA,
@@ -9,6 +10,14 @@ import {
 } from '../lib/domain-change-packet.mts';
 
 const NOW = '2026-08-05T06:00:00.000Z';
+
+async function redigest<T extends Record<string, unknown>>(value: T): Promise<T> {
+  const { integrity, ...unsigned } = value;
+  return {
+    ...unsigned,
+    integrity: { ...(integrity as Record<string, unknown>), digestSha256: await sha256ArtifactDigestV2(unsigned) },
+  } as unknown as T;
+}
 
 function changeInput(address: string) {
   return {
@@ -67,7 +76,7 @@ describe('domain change packet', () => {
     assert.match(packet.integrity.digestSha256, /^sha256:[a-f0-9]{64}$/u);
     const verified = await verifyOfflineArtifact(JSON.stringify(packet));
     assert.equal(verified.artifact.kind, 'signed_review_artifact');
-    assert.equal(verified.valid, true);
+    assert.equal(verified.state, 'verified');
   });
 
   test('rejects mixed-domain evidence and reports incomplete inputs as review', async () => {
@@ -80,5 +89,35 @@ describe('domain change packet', () => {
     const packet = await buildDomainChangePacket(incomplete, NOW);
     assert.equal(packet.state, 'review');
     assert.match(packet.gate.reasons.join(' '), /Post-change evidence/iu);
+  });
+
+  test('rejects re-digested outer state, evidence linkage, and change-summary divergence', async () => {
+    const incomplete = packetInput();
+    incomplete.postChange.authoritySnapshots = incomplete.postChange.authoritySnapshots.slice(0, 1);
+    const reviewPacket = await buildDomainChangePacket(incomplete, NOW);
+    const forcedReady = structuredClone(reviewPacket) as unknown as Record<string, unknown>;
+    forcedReady.state = 'ready';
+    forcedReady.gate = { pass: true, reasons: [] };
+    await assert.rejects(
+      verifyOfflineArtifact(JSON.stringify(await redigest(forcedReady))),
+      /domain change packet gate.*unsupported or malformed structure/iu,
+    );
+
+    const readyPacket = await buildDomainChangePacket(packetInput(), NOW);
+    const mismatchedTime = structuredClone(readyPacket) as unknown as Record<string, unknown>;
+    const evidence = mismatchedTime.evidence as Record<string, unknown>;
+    (evidence.preChange as Record<string, unknown>).generatedAt = '2026-08-05T06:00:01.000Z';
+    await assert.rejects(
+      verifyOfflineArtifact(JSON.stringify(await redigest(mismatchedTime))),
+      /domain change packet evidence linkage.*unsupported or malformed structure/iu,
+    );
+
+    const missingChange = structuredClone(readyPacket) as unknown as Record<string, unknown>;
+    const summary = missingChange.summary as Record<string, unknown>;
+    summary.changedAuthoritativeRecordSets = [];
+    await assert.rejects(
+      verifyOfflineArtifact(JSON.stringify(await redigest(missingChange))),
+      /domain change packet summary.*unsupported or malformed structure/iu,
+    );
   });
 });

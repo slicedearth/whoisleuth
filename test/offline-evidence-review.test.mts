@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { describe, test } from 'node:test';
 
 import { parseCliArguments } from '../cli/arguments.mts';
@@ -9,6 +10,7 @@ import {
 } from '../cli/offline-evidence-review.mts';
 import { runCli } from '../cli/runner.mts';
 import EXIT_CODES from '../cli/exit-codes.mts';
+import { readBoundedRegularFile, readBoundedRegularTextFile } from '../lib/bounded-file.mts';
 
 const ISO = '2026-08-03T01:02:03.000Z';
 
@@ -174,6 +176,20 @@ describe('offline evidence review command', () => {
   });
 
   test('reads an explicitly supplied local MMDB without transmitting the address', async () => {
+    const mmdbPath = 'fixtures/mmdb/maxmind-db-test-data/GeoIP2-City-Test.mmdb';
+    const fixtureBytes = await readBoundedRegularFile(mmdbPath, {
+      maximumBytes: 64 * 1024,
+      minimumBytes: 1,
+      label: 'Pinned MMDB fixture',
+    });
+    const expectedDigest = 'ed972738e4e03a3e56e12041a6af4d91592249d110f7e4a647e5f2fa0e639c09';
+    assert.equal(createHash('sha256').update(fixtureBytes).digest('hex'), expectedDigest);
+    const provenance = await readBoundedRegularTextFile('fixtures/mmdb/maxmind-db-test-data/README.md', {
+      maximumBytes: 4096,
+      minimumBytes: 1,
+      label: 'Pinned MMDB fixture provenance',
+    });
+    assert.match(provenance, new RegExp(expectedDigest, 'u'));
     const input = JSON.stringify({
       schema: 'whoisleuth.local-mmdb-query',
       version: 1,
@@ -183,7 +199,7 @@ describe('offline evidence review command', () => {
       license: 'MIT',
     });
     const document = await buildOfflineEvidenceReviewWithLocalResources(input, ISO, {
-      mmdbPath: 'fixtures/mmdb/maxmind-db-test-data/GeoIP2-City-Test.mmdb',
+      mmdbPath,
     });
     const result = document.result as { state: string; match: { network: string; countryCode: string; city: string } };
     assert.equal(result.state, 'matched');

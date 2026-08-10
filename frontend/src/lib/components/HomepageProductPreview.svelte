@@ -4,6 +4,7 @@
     SYNTHETIC_DEMO_CANDIDATES,
     syntheticDemoTimeline,
   } from '$lib/analysis/demo-model.ts';
+  import { projectEvidenceTopology } from '$lib/analysis/evidence-topology.ts';
 
   const initialCandidate = SYNTHETIC_DEMO_CANDIDATES[0];
   if (!initialCandidate) throw new Error('The synthetic homepage preview requires one candidate.');
@@ -14,7 +15,7 @@
   let previewView = $state<PreviewView>('sources');
   const previewTabs: ReadonlyArray<{ id: PreviewView; label: string }> = [
     { id: 'overview', label: 'At a glance' },
-    { id: 'sources', label: 'Sources' },
+    { id: 'sources', label: 'Evidence' },
     { id: 'timeline', label: 'Timeline' },
   ];
   const topologyNodes = $derived([
@@ -24,6 +25,10 @@
     { id: 'certificate', label: 'Certificate', detail: selected.evidence.certificate.status, status: sourceState(selected.evidence.certificate.status), side: 'right' as const, glyph: 'T', family: 'web' as const },
     { id: 'analysis', label: 'Risk signals', detail: `${selected.signals.length} explainable cue${selected.signals.length === 1 ? '' : 's'}`, status: selected.risk >= 50 ? 'warning' : 'success', side: 'right' as const, provenance: 'derived' as const, glyph: 'A', family: 'derived' as const },
   ]);
+  const topologyGraph = $derived(projectEvidenceTopology(
+    { label: selected.domain, detail: 'Domain lookup', status: selected.availability },
+    topologyNodes,
+  ));
   const materialChange = $derived(timeline.find((entry) => entry.changes.length > 0) ?? null);
   const monitorAction = $derived(selected.risk >= 70
     ? 'Review this candidate now'
@@ -117,7 +122,7 @@
         <div class="assessment">
           <div><small>Registration</small><strong>{selected.availability}</strong></div>
           <div><small>Priority</small><strong>{selected.risk}<span>/100</span></strong></div>
-          <div><small>Mapped evidence</small><strong>{topologyNodes.length}{' '}<span>sources</span></strong></div>
+          <div><small>Mapped evidence</small><strong>{topologyGraph.provenanceCounts.direct} <span>sources + {topologyGraph.provenanceCounts.derived} derived</span></strong></div>
         </div>
         <div class="preview-findings" aria-label="Synthetic lookup summary">
           {#each selected.signals.slice(0, 2) as signal, index}
@@ -134,7 +139,7 @@
           compact
           headingLevel={2}
         />
-        <ul class="mobile-source-summary" aria-label="Synthetic evidence source status">
+        <ul class="mobile-source-summary" aria-label="Synthetic evidence item status">
           {#each topologyNodes as node}
             <li class={`state-${node.status}`}><span>{node.label}</span><strong>{node.status}</strong></li>
           {/each}
@@ -214,6 +219,7 @@
     .mobile-source-summary strong{color:var(--muted);font:700 .5rem var(--mono);text-transform:uppercase}
     .mobile-source-summary .state-success strong{color:var(--accent2)}
     .mobile-source-summary .state-warning strong,.mobile-source-summary .state-partial strong,.mobile-source-summary .state-inconclusive strong{color:var(--amber)}
-    .mobile-source-summary .state-error strong,.mobile-source-summary .state-unavailable strong{color:var(--danger)}
+    .mobile-source-summary .state-error strong{color:var(--danger)}
+    .mobile-source-summary .state-unavailable strong{color:var(--muted)}
   }
 </style>

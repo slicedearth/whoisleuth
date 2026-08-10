@@ -44,8 +44,18 @@ import {
   safeId,
 } from './case-record-core.ts';
 import {
+  assertCaseBrandProfileIds,
+  normalizeCaseBrandProfileIds,
+} from './case-brand-profile-references.ts';
+import {
   normalizeEvidenceHistory,
 } from './case-evidence-model.ts';
+import {
+  appendCaseInvestigationBranch,
+  caseInvestigationBranchReferences,
+  normalizeCaseInvestigationBranches,
+  updateCaseInvestigationBranch,
+} from './case-investigation-branch-model.ts';
 
 // ---------------------------------------------------------------------------
 // Case normalization
@@ -66,10 +76,15 @@ function normalizeCaseEvidence(
   createdAt: string,
   updatedAt: string,
   now: string,
+  sourceVersion?: number | null,
 ): CaseEvidenceSnapshot[] {
   const localFallback = updatedAt || createdAt || now;
   if (Array.isArray(record.evidenceHistory)) {
-    return normalizeEvidenceHistory(record.evidenceHistory, { source: DEFAULT_EVIDENCE_SOURCE, fallback: localFallback });
+    return normalizeEvidenceHistory(record.evidenceHistory, {
+      source: DEFAULT_EVIDENCE_SOURCE,
+      fallback: localFallback,
+      ...(sourceVersion === undefined ? {} : { sourceVersion }),
+    });
   }
   return [];
 }
@@ -89,6 +104,7 @@ export function normalizeCase(
   raw: unknown,
   existing?: CaseRecord,
   nowIso?: string,
+  sourceVersion?: number | null,
 ): CaseRecord | null {
   const now = nowIso || new Date().toISOString();
   const record = objectRecord(raw);
@@ -98,22 +114,27 @@ export function normalizeCase(
   const updatedAt = isoOrNow(record.updatedAt, now);
   const evidencePins = normalizeCaseEvidencePins(record.evidencePins, updatedAt);
   const pinIds = new Set(evidencePins.map((item) => item.id));
+  const actions = normalizeCaseActions(record.actions, updatedAt);
+  const assertions = normalizeCaseAssertions(record.assertions, updatedAt, pinIds);
+  const branchReferences = caseInvestigationBranchReferences({ evidencePins, actions, assertions });
   return {
     id: existing ? existing.id : safeId(record.id) || deterministicId(domain),
     domain,
     status: normalizeStatus(record.status),
     disposition: normalizeDisposition(record.disposition),
     reviewReasonCode: normalizeReviewReasonCode(record.reviewReasonCode),
+    brandProfileIds: normalizeCaseBrandProfileIds(record.brandProfileIds),
     tags: normalizeTags(record.tags),
     notes: normalizeNotes(record.notes, now),
     source: normalizeSource(record.source),
-    evidenceHistory: normalizeCaseEvidence(record, createdAt, updatedAt, now),
+    evidenceHistory: normalizeCaseEvidence(record, createdAt, updatedAt, now, sourceVersion),
     evidencePins,
     decisions: normalizeCaseDecisions(record.decisions, updatedAt, pinIds),
-    actions: normalizeCaseActions(record.actions, updatedAt),
-    assertions: normalizeCaseAssertions(record.assertions, updatedAt, pinIds),
+    actions,
+    assertions,
     manualTrail: normalizeCaseManualTrail(record.manualTrail, updatedAt),
     sightings: normalizeCaseSightings(record.sightings, updatedAt, pinIds),
+    branches: normalizeCaseInvestigationBranches(record.branches, updatedAt, branchReferences),
     createdAt,
     updatedAt,
   };
@@ -136,12 +157,20 @@ export function createCase(input: CaseInput, nowIso?: string): CaseRecord {
       ? appendCaseEvidencePin([], input.evidencePin, now)
       : [];
   const pinIds = new Set(evidencePins.map((item) => item.id));
+  const actions = input.action !== undefined
+    ? appendCaseAction([], input.action, now)
+    : [];
+  const assertions = input.assertion !== undefined
+    ? appendCaseAssertion([], input.assertion, now)
+    : [];
+  const branchReferences = caseInvestigationBranchReferences({ evidencePins, actions, assertions });
   return {
     id: makeId(),
     domain,
     status: normalizeStatus(input.status),
     disposition: normalizeDisposition(input.disposition),
     reviewReasonCode: normalizeReviewReasonCode(input.reviewReasonCode),
+    brandProfileIds: input.brandProfileIds === undefined ? [] : assertCaseBrandProfileIds(input.brandProfileIds),
     tags: normalizeTags(input.tags),
     notes: noteBody ? [{ id: makeId(), body: noteBody, createdAt: now }] : [],
     source,
@@ -153,17 +182,16 @@ export function createCase(input: CaseInput, nowIso?: string): CaseRecord {
     decisions: input.decision !== undefined
       ? appendCaseDecision([], input.decision, now)
       : [],
-    actions: input.action !== undefined
-      ? appendCaseAction([], input.action, now)
-      : [],
-    assertions: input.assertion !== undefined
-      ? appendCaseAssertion([], input.assertion, now)
-      : [],
+    actions,
+    assertions,
     manualTrail: input.trailEvent !== undefined
       ? appendCaseManualTrailEvent([], input.trailEvent, now)
       : [],
     sightings: input.sighting !== undefined
       ? appendCaseSighting([], input.sighting, now, pinIds)
+      : [],
+    branches: input.branch !== undefined
+      ? appendCaseInvestigationBranch([], input.branch, now, branchReferences)
       : [],
     createdAt: now,
     updatedAt: now,
@@ -258,6 +286,14 @@ export function updateCase(
   if (patch.assertionUpdate !== undefined) {
     assertions = updateCaseAssertion(assertions, patch.assertionUpdate, now, pinIds);
   }
+  const branchReferences = caseInvestigationBranchReferences({ evidencePins, actions, assertions });
+  let branches = normalizeCaseInvestigationBranches(current.branches ?? [], current.updatedAt, branchReferences);
+  if (patch.branch !== undefined) {
+    branches = appendCaseInvestigationBranch(branches, patch.branch, now, branchReferences);
+  }
+  if (patch.branchUpdate !== undefined) {
+    branches = updateCaseInvestigationBranch(branches, patch.branchUpdate, now, branchReferences);
+  }
   let manualTrail = current.manualTrail;
   if (patch.trailEvent !== undefined) {
     manualTrail = appendCaseManualTrailEvent(current.manualTrail, patch.trailEvent, now);
@@ -273,6 +309,9 @@ export function updateCase(
     reviewReasonCode: patch.reviewReasonCode !== undefined
       ? normalizeReviewReasonCode(patch.reviewReasonCode)
       : current.reviewReasonCode ?? null,
+    brandProfileIds: patch.brandProfileIds !== undefined
+      ? assertCaseBrandProfileIds(patch.brandProfileIds)
+      : current.brandProfileIds,
     tags: patch.tags !== undefined ? normalizeTags(patch.tags) : current.tags,
     source,
     evidenceHistory,
@@ -282,6 +321,7 @@ export function updateCase(
     assertions,
     manualTrail,
     sightings,
+    branches,
     notes,
     updatedAt: now,
   };

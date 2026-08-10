@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { checkDnsDelegation, checkDomainAvailability } from '../lib/availability.mts';
+import { checkDnsDelegation, checkDomainAvailability, isPrivacyProtected } from '../lib/availability.mts';
 import { recordValue, requiredValue, stringValue } from './value-assertions.mts';
 
 async function availability(domain: string, options: unknown): Promise<Record<string, unknown>> {
@@ -105,6 +105,13 @@ test('fast availability never treats a missing DNS delegation as available', asy
   assert.equal(result.state, 'unknown');
   assert.equal(result.confidence, 'low');
   assert.notEqual(result.state, 'available');
+});
+
+test('privacy is tri-state and requires an explicit marker or usable contact evidence', () => {
+  assert.equal(isPrivacyProtected(null), null);
+  assert.equal(isPrivacyProtected({ handle: null, name: null, org: null, email: null, phone: null }), null);
+  assert.equal(isPrivacyProtected({ handle: null, name: 'Redacted for privacy', org: null, email: null, phone: null }), true);
+  assert.equal(isPrivacyProtected({ handle: null, name: 'Fixture Registrant', org: null, email: null, phone: null }), false);
 });
 
 test('unknown availability names a registry capability refusal', async () => {

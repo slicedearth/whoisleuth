@@ -79,16 +79,24 @@ After the approved version becomes public, verify the exact registry artefact:
 
 ```bash
 VERSION="$(node -p "require('./package.json').version")"
-npm run cli:package:verify-published -- "$VERSION"
+npm run cli:package:verify-published -- "$VERSION" \
+  --candidate-report /tmp/whoisleuth-cli-release/cli-package-report.json \
+  --candidate-archive "/tmp/whoisleuth-cli-release/whoisleuth-cli-${VERSION}.tgz"
 ```
 
-The post-publication check reads bounded metadata from the public registry,
-requires the exact dependency pins, archive integrity, registry signature,
-SLSA provenance attestation, executable identity, and package-size boundaries,
-then runs `--version` and the offline doctor through an exact-version
-`npm exec --ignore-scripts` installation. It does not use npm credentials or
-run network diagnostics inside WHOISleuth. Run it only after registry
-publication; an unavailable or still-staged version fails explicitly.
+The post-publication check reads bounded metadata and archive bytes from the
+public registry under a 120-second deadline for each complete response,
+including streamed body reads. It verifies the registry SHA-512 and SHA-1
+metadata, and requires
+the published archive to be byte-identical to the explicitly selected reviewed
+candidate and its SHA-256 report. It also binds package measurements, exact
+dependency pins, and source metadata. Registry signature and SLSA provenance
+records are reported as observed metadata; this check does not independently
+verify their cryptography. It never installs or executes the published package
+and does not inherit npm credentials. The manual workflow requires both the
+version and the release-workflow run ID so it downloads the reviewed candidate
+artifact rather than reconstructing one. Run it only after registry
+publication; an unavailable, still-staged, or non-identical version fails.
 
 Review schema compatibility whenever a release changes persisted or exported
 evidence:

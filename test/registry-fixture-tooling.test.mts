@@ -52,6 +52,7 @@ describe('registry fixture freshness tooling', () => {
         fixtureScenarios: ['registered'],
         verificationFiles: ['fixtures/example.mts'],
         documentationUrls: ['https://www.iana.org/'],
+        officialLookupUrl: null,
         limitation: 'Synthetic fixture only.',
         explicitSuffixProfile: true,
       }],

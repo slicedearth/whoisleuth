@@ -59,6 +59,7 @@ export type BulkPeerOutlierMatrix = Readonly<{
   dimensions: readonly BulkPeerDimension[];
   rows: readonly BulkPeerOutlierRow[];
   excludedRows: number;
+  profileContextExcludedRows: number;
   limitations: readonly string[];
 }>;
 
@@ -144,6 +145,7 @@ function dimensionValue(row: ScanResult, dimension: BulkPeerDimensionId): string
     return text(row.relationship.certificateFingerprint, 128).toLowerCase() || null;
   }
   if (dimension === 'official_asset_host_set') {
+    if (row.saved.profileContext?.sourceState !== 'ready') return null;
     return normalizedSet(row.relationship.officialAssetHosts);
   }
   if (dimension === 'tracking_identifier_set') {
@@ -170,6 +172,7 @@ function frequencyMap(values: readonly string[]): Map<string, number> {
 export function buildBulkPeerOutlierMatrix(rows: readonly ScanResult[]): BulkPeerOutlierMatrix {
   const cohort = rows.slice(0, MAX_ROWS);
   const truncated = rows.length > cohort.length;
+  const profileContextExcludedRows = cohort.filter((row) => row.saved.profileContext?.sourceState !== 'ready').length;
   const dimensions = (Object.keys(DIMENSION_LABELS) as BulkPeerDimensionId[]);
   const dimensionSummaries: BulkPeerDimension[] = [];
   const rowFindings = new Map<string, BulkPeerOutlier[]>();
@@ -246,10 +249,14 @@ export function buildBulkPeerOutlierMatrix(rows: readonly ScanResult[]): BulkPee
     dimensions: dimensionSummaries,
     rows: outputRows,
     excludedRows: rows.length - cohort.length,
+    profileContextExcludedRows,
     limitations: [
       'Outliers are low-frequency values relative only to the current analyst-selected and filtered cohort.',
       'An uncommon value does not establish maliciousness, ownership, control, or misconfiguration.',
       'Unavailable and unrecorded values are excluded rather than treated as differences.',
+      ...(profileContextExcludedRows
+        ? [`Official-asset outlier analysis excluded ${profileContextExcludedRows} row${profileContextExcludedRows === 1 ? '' : 's'} whose Brand Profile context was not ready.`]
+        : []),
       'Expected unpublished registry protocols remain in the retained result but do not create a source-coverage outlier.',
       'The matrix uses existing compact Bulk evidence and does not start additional requests.',
       ...(truncated ? [`The comparison was capped at ${MAX_ROWS} rows.`] : []),

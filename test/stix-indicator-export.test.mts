@@ -10,6 +10,9 @@ type StixBundle = { type: string; id: string; objects: StixObject[] };
 function result(domain: string, overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     domain, availability: 'registered', risk: 80, trusted: null, status: 'complete',
+    profileContext: {
+      sourceState: 'ready', activeProfileId: null, profileUpdatedAt: null, limitation: '',
+    },
     saved: { scanDepth: 'deep', riskModelVersion: 4, observedAt: '2026-07-14T07:59:00.000Z' },
     ...overrides,
   };

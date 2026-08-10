@@ -6,7 +6,6 @@
 // without making a network request.
 
 import { createHash } from 'node:crypto';
-import { open } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -25,7 +24,12 @@ import {
   type TechnologyReviewedSource,
 } from '../fixtures/technology-reviewed-sources.mts';
 import { extractHtmlSignals } from '../lib/html-signals.mts';
+import { readBoundedRegularFile } from '../lib/bounded-file.mts';
 import { normalizeBoundedSemanticVersion } from '../lib/semantic-version.mts';
+import {
+  boundedControlFreeText as boundedText,
+  canonicalControlFreeTimestamp as timestamp,
+} from './maintainer-tool-helpers.mts';
 import {
   PASSIVE_TECHNOLOGY_HEADER_NAMES,
   TECHNOLOGY_SIGNATURE_CATALOGUE,
@@ -83,7 +87,6 @@ const RUNTIME_RE = /^([a-z][a-z0-9._-]*)@(.+)$/u;
 const OCI_BUILD_ENVIRONMENT_RE = /^oci:(?:[a-z0-9.-]+\/)*[a-z0-9._-]+:[a-z0-9._-]+@sha256:[a-f0-9]{64}$/u;
 const MAX_SUPPORTING_ENVIRONMENTS = 4;
 const PASSIVE_HEADERS = new Set<string>(PASSIVE_TECHNOLOGY_HEADER_NAMES);
-const CONTROL_RE = /[\u0000-\u001f\u007f]/u;
 const REFERENCE_LICENCE_BASES = new Set<TechnologyReviewLicenceBasis>([
   'minimized-with-permission',
   'public-domain',
@@ -100,19 +103,6 @@ const BUILD_RECIPES = new Set<BuildRecipe>([
   'official-public-demonstration',
 ]);
 const CATALOGUE_IDS = new Set(TECHNOLOGY_SIGNATURE_CATALOGUE.map((entry) => entry.id));
-
-function boundedText(value: unknown, label: string, maximum: number): string {
-  if (typeof value !== 'string' || !value.trim() || value.length > maximum || CONTROL_RE.test(value)) {
-    throw new TypeError(`${label} must be control-free text no longer than ${maximum} characters.`);
-  }
-  return value.trim();
-}
-
-function timestamp(value: unknown, label: string): string {
-  const parsed = Date.parse(boundedText(value, label, 64));
-  if (!Number.isFinite(parsed)) throw new TypeError(`${label} must be a valid timestamp.`);
-  return new Date(parsed).toISOString();
-}
 
 function technologyIds(values: readonly string[], label: string): string[] {
   if (values.length > MAX_TECHNOLOGY_REVIEW_IDS) {
@@ -500,20 +490,23 @@ export function parseArguments(args: readonly string[]): ExampleReviewArguments 
 }
 
 async function readBoundedHtml(inputPath: string): Promise<string> {
-  const handle = await open(inputPath, 'r');
   try {
-    const buffer = Buffer.alloc(MAX_TECHNOLOGY_EXAMPLE_HTML_BYTES + 1);
-    const { bytesRead } = await handle.read(buffer, 0, buffer.byteLength, 0);
-    if (!bytesRead || bytesRead > MAX_TECHNOLOGY_EXAMPLE_HTML_BYTES) {
-      throw new TypeError(`Reference HTML must be between 1 byte and ${MAX_TECHNOLOGY_EXAMPLE_HTML_BYTES} bytes.`);
-    }
+    const buffer = await readBoundedRegularFile(inputPath, {
+      minimumBytes: 1,
+      maximumBytes: MAX_TECHNOLOGY_EXAMPLE_HTML_BYTES,
+      label: 'Reference HTML',
+      allowSymbolicLink: true,
+    });
     try {
-      return new TextDecoder('utf-8', { fatal: true }).decode(buffer.subarray(0, bytesRead));
+      return new TextDecoder('utf-8', { fatal: true }).decode(buffer);
     } catch {
       throw new TypeError('Reference HTML must use valid UTF-8 encoding.');
     }
-  } finally {
-    await handle.close();
+  } catch (error) {
+    if (error instanceof TypeError && /smaller than|exceeds/iu.test(error.message)) {
+      throw new TypeError(`Reference HTML must be between 1 byte and ${MAX_TECHNOLOGY_EXAMPLE_HTML_BYTES} bytes.`);
+    }
+    throw error;
   }
 }
 

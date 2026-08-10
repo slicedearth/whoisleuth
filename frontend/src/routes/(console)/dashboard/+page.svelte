@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { goto } from '$app/navigation';
   import { onMount } from 'svelte';
   import IntelligenceIcon, { type IntelligenceIconName } from '$lib/components/IntelligenceIcon.svelte';
   import PageHeading from '$lib/components/PageHeading.svelte';
@@ -8,8 +7,10 @@
   import InvestigationTemplateManager from '$lib/components/InvestigationTemplateManager.svelte';
   import BrowserLookupHandoff from '$lib/components/BrowserLookupHandoff.svelte';
   import { loadProfiles } from '$lib/brand-profiles';
+  import { loadCampaigns } from '$lib/campaigns';
   import { loadCases } from '$lib/cases';
-  import { loadLocalInvestigationSearchIndex } from '$lib/investigation-search';
+  import { buildLocalInvestigationSearchIndex } from '$lib/investigation-search';
+  import { loadRelationshipObservations } from '$lib/relationship-observations';
   import { loadWatchlists } from '$lib/watchlists';
   import {
     investigationRecipes,
@@ -17,59 +18,99 @@
     type InvestigationRecipeId,
   } from '$lib/investigation-guide';
   import {
+    markInvestigationSearchSourcesUnavailable,
     unavailableInvestigationSearchIndex,
     type InvestigationSearchIndex,
   } from '$lib/analysis/investigation-search.ts';
+  import type { InvestigationStoreName } from '$lib/analysis/investigation-projection.ts';
   import { isExpectedBrowserLocalDataFailure } from '$lib/browser-local-data.ts';
-  import { saveCandidateHandoff } from '$lib/candidate-handoff';
-  import { parseDomainInput } from '$lib/analysis/utils.ts';
   import { loadInvestigationTemplates, type InvestigationTemplate } from '$lib/investigation-templates';
 
   const quickActions: Array<{ href: string; label: string; detail: string; icon: IntelligenceIconName }> = [
     { href: '/lookup', label: 'Investigate a target', detail: 'Review a domain, IP address, or ASN across separately identified sources.', icon: 'lookup' },
     { href: '/brands', label: 'Protect owned domains', detail: 'Review externally visible controls, dependencies, mail posture, and expiring attestations.', icon: 'brand' },
     { href: '/bulk', label: 'Review candidates', detail: 'Check a focused list and prioritise which domains need closer review.', icon: 'bulk' },
-    { href: '/lookup?depth=deep#query', label: 'Assess acquisition', detail: 'Separate registration confidence, lifecycle, contactability, and apparent use before deciding what to verify manually.', icon: 'registry' },
-    { href: '/monitor?view=cases', label: 'Continue case work', detail: 'Return to retained evidence, decisions, response actions, and follow-up dates.', icon: 'case' },
+    { href: '/lookup?depth=deep&task=acquisition#query', label: 'Assess acquisition', detail: 'Separate registration confidence, lifecycle, contactability, and apparent use before deciding what to verify manually.', icon: 'registry' },
   ];
 
-  let counts = $state({ cases: 0, openCases: 0, watchlists: 0, profiles: 0 });
+  type LocalCounts = { cases: number | null; openCases: number | null; watchlists: number | null; profiles: number | null };
+
+  let counts = $state<LocalCounts>({ cases: null, openCases: null, watchlists: null, profiles: null });
   let investigationIndex = $state<InvestigationSearchIndex | null>(null);
+  let summaryPending = $state(true);
   let summaryError = $state('');
   let guideDomain = $state('');
   let guideRecipeId = $state<InvestigationRecipeId>('new_domain_triage');
   let guideTemplateId = $state('');
   let templates = $state<InvestigationTemplate[]>([]);
+  let templateLoadState = $state<'loading' | 'ready' | 'unavailable'>('loading');
   let guideError = $state('');
-  let compareLeft = $state('');
-  let compareRight = $state('');
-  let compareError = $state('');
   const selectedRecipe = $derived(investigationRecipes.find((recipe) => recipe.id === guideRecipeId) || investigationRecipes[0]);
   const compatibleTemplates = $derived(templates.filter((template) => template.recipeId === guideRecipeId));
 
   async function refreshLocalSummary() {
+    summaryPending = true;
+    templateLoadState = 'loading';
     summaryError = '';
-    try {
-      const [cases, watchlists, profiles, searchIndex, savedTemplates] = await Promise.all([
+    const results = await Promise.allSettled([
         loadCases(),
         loadWatchlists(),
         loadProfiles(),
-        loadLocalInvestigationSearchIndex(),
+        loadCampaigns(),
+        loadRelationshipObservations(),
         loadInvestigationTemplates(),
       ]);
-      counts = {
-        cases: cases.length,
-        openCases: cases.filter((record) => record.status !== 'resolved').length,
-        watchlists: Object.keys(watchlists).length,
-        profiles: profiles.length,
-      };
-      investigationIndex = searchIndex;
-      templates = savedTemplates;
-    } catch (cause) {
-      summaryError = 'Saved-work counts and local search could not be refreshed. Reload the Dashboard to try again.';
-      investigationIndex ??= unavailableInvestigationSearchIndex(summaryError);
-      if (!isExpectedBrowserLocalDataFailure(cause)) throw cause;
+    summaryPending = false;
+    const [caseResult, watchlistResult, profileResult, campaignResult, relationshipResult, templateResult] = results;
+    const expectedFailures = results
+      .filter((result): result is PromiseRejectedResult => result.status === 'rejected')
+      .filter((result) => isExpectedBrowserLocalDataFailure(result.reason));
+    const unexpectedFailure = results.find((result): result is PromiseRejectedResult =>
+      result.status === 'rejected' && !isExpectedBrowserLocalDataFailure(result.reason));
+
+    counts = {
+      cases: caseResult?.status === 'fulfilled' ? caseResult.value.length : null,
+      openCases: caseResult?.status === 'fulfilled' ? caseResult.value.filter((record) => record.status !== 'resolved').length : null,
+      watchlists: watchlistResult?.status === 'fulfilled' ? Object.keys(watchlistResult.value).length : null,
+      profiles: profileResult?.status === 'fulfilled' ? profileResult.value.length : null,
+    };
+    if (templateResult?.status === 'fulfilled') {
+      templates = templateResult.value;
+      templateLoadState = 'ready';
+    } else {
+      templateLoadState = 'unavailable';
+      guideTemplateId = '';
     }
+
+    const searchResults = [caseResult, campaignResult, profileResult, relationshipResult];
+    if (searchResults.some((result) => result?.status === 'fulfilled')) {
+      const unavailableStores: InvestigationStoreName[] = [];
+      if (caseResult?.status === 'rejected') unavailableStores.push('cases');
+      if (campaignResult?.status === 'rejected') unavailableStores.push('campaigns');
+      if (profileResult?.status === 'rejected') unavailableStores.push('brandProfiles');
+      if (relationshipResult?.status === 'rejected') unavailableStores.push('relationshipObservations');
+      investigationIndex = markInvestigationSearchSourcesUnavailable(buildLocalInvestigationSearchIndex({
+        cases: caseResult?.status === 'fulfilled' ? caseResult.value : undefined,
+        campaigns: campaignResult?.status === 'fulfilled' ? campaignResult.value : undefined,
+        brandProfiles: profileResult?.status === 'fulfilled' ? profileResult.value : undefined,
+        relationshipObservations: relationshipResult?.status === 'fulfilled' ? relationshipResult.value : undefined,
+      }), unavailableStores);
+    } else {
+      investigationIndex = unavailableInvestigationSearchIndex('Saved-work search is unavailable because one or more required browser-local collections could not be read.');
+    }
+    if (expectedFailures.length > 0) {
+      summaryError = 'Some browser-local collections are unavailable. Available saved work is still shown below.';
+    }
+    if (unexpectedFailure) throw unexpectedFailure.reason;
+  }
+
+  function countText(value: number | null): string {
+    return value === null ? (summaryPending ? 'Loading' : 'Unavailable') : String(value);
+  }
+
+  function countDetail(value: number | null, ready: string, unavailable: string): string {
+    if (value !== null) return ready;
+    return summaryPending ? 'Loading browser-local count' : unavailable;
   }
 
   onMount(()=>{
@@ -87,25 +128,6 @@
     }
   }
 
-  async function compareDomains(event: SubmitEvent) {
-    event.preventDefault();
-    compareError = '';
-    const parsed = parseDomainInput(`${compareLeft}\n${compareRight}`);
-    if (parsed.entries.length !== 2) {
-      compareError = 'Enter two different valid domains without URLs, paths, or ports.';
-      return;
-    }
-    const handoffResult = saveCandidateHandoff('manual', parsed.entries.map((domain) => ({
-      domain,
-      source: 'analyst comparison',
-      mutationTypes: [],
-    })));
-    if (!handoffResult.saved) {
-      compareError = 'This browser could not retain the comparison targets for Bulk. Check site-storage access and try again.';
-      return;
-    }
-    await goto(`/bulk?source=manual&handoff=${handoffResult.token}#domains`);
-  }
 </script>
 
 <svelte:head>
@@ -135,7 +157,7 @@
   </div>
 </section>
 
-<section class="dashboard-section" aria-labelledby="local-summary-title">
+<section class="dashboard-section" aria-labelledby="local-summary-title" aria-busy={summaryPending}>
   <div class="section-intro">
     <p class="eyebrow">Saved in this browser</p>
     <h2 id="local-summary-title">Continue saved work</h2>
@@ -143,32 +165,16 @@
   </div>
   <div class="local-grid">
     <a class="summary-card card" href="/monitor?view=cases">
-      <span class="summary-icon" aria-hidden="true"><IntelligenceIcon name="case" size={19} /></span><span class="summary-label">Open cases</span><strong>{counts.openCases}</strong><p>{counts.cases} total saved case{counts.cases === 1 ? '' : 's'}</p>
+      <span class="summary-icon" aria-hidden="true"><IntelligenceIcon name="case" size={19} /></span><span class="summary-label">Open cases</span><strong>{countText(counts.openCases)}</strong><p>{countDetail(counts.cases, `${counts.cases} total saved case${counts.cases === 1 ? '' : 's'}`, 'Case count unavailable')}</p>
     </a>
     <a class="summary-card card" href="/monitor?view=watchlists">
-      <span class="summary-icon" aria-hidden="true"><IntelligenceIcon name="watchlist" size={19} /></span><span class="summary-label">Watchlists</span><strong>{counts.watchlists}</strong><p>Saved change-tracking list{counts.watchlists === 1 ? '' : 's'}</p>
+      <span class="summary-icon" aria-hidden="true"><IntelligenceIcon name="watchlist" size={19} /></span><span class="summary-label">Watchlists</span><strong>{countText(counts.watchlists)}</strong><p>{countDetail(counts.watchlists, `Saved change-tracking list${counts.watchlists === 1 ? '' : 's'}`, 'Watchlist count unavailable')}</p>
     </a>
     <a class="summary-card card" href="/brands">
-      <span class="summary-icon" aria-hidden="true"><IntelligenceIcon name="brand" size={19} /></span><span class="summary-label">Brand profiles</span><strong>{counts.profiles}</strong><p>Saved analysis profile{counts.profiles === 1 ? '' : 's'}</p>
+      <span class="summary-icon" aria-hidden="true"><IntelligenceIcon name="brand" size={19} /></span><span class="summary-label">Brand profiles</span><strong>{countText(counts.profiles)}</strong><p>{countDetail(counts.profiles, `Saved analysis profile${counts.profiles === 1 ? '' : 's'}`, 'Profile count unavailable')}</p>
     </a>
   </div>
   <p class="summary-error" role="status">{summaryError}</p>
-</section>
-
-<section class="domain-compare card" aria-labelledby="domain-compare-title">
-  <div>
-    <p class="eyebrow">Focused comparison</p>
-    <h2 id="domain-compare-title">Compare two domains</h2>
-    <p>Load exactly two analyst-selected domains into Bulk. The comparison keeps registration, DNS, TLS, page, source-health, and infrastructure rows separate and does not imply common control.</p>
-  </div>
-  <form onsubmit={compareDomains}>
-    <label for="compare-left">First domain</label>
-    <input id="compare-left" bind:value={compareLeft} maxlength="253" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="first.example">
-    <label for="compare-right">Second domain</label>
-    <input id="compare-right" bind:value={compareRight} maxlength="253" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="second.example">
-    <button class="primary" type="submit">Load comparison</button>
-    {#if compareError}<p class="error" role="alert">{compareError}</p>{/if}
-  </form>
 </section>
 
 <BrowserLookupHandoff />
@@ -181,7 +187,7 @@
     <h2 id="guide-launcher-title">Follow a guided investigation</h2>
     <p>Choose a guide and a domain. WHOISleuth saves progress in this tab so you can work through one clearly explained step at a time.</p>
     <nav class="help-links" aria-label="Investigation help">
-      <a href="/guide"><strong>Read the guide</strong><span>Learn the tools, result states, and common mistakes.</span></a>
+      <a href="/resources#start"><strong>Open resources</strong><span>Learn the tools, result states, common mistakes, and source boundaries.</span></a>
       <a href="/registry-support"><strong>Check domain-ending support</strong><span>See which domain endings have tested lookup support and known limits.</span></a>
     </nav>
   </div>
@@ -194,13 +200,13 @@
     </select>
     <p class="recipe-detail">{selectedRecipe?.summary ?? ''}</p>
     <label for="guide-template">Template</label>
-    <select id="guide-template" bind:value={guideTemplateId}>
+    <select id="guide-template" bind:value={guideTemplateId} disabled={templateLoadState !== 'ready'}>
       <option value="">Standard guide</option>
       {#each compatibleTemplates as template}
         <option value={template.id}>{template.label}</option>
       {/each}
     </select>
-    <p class="recipe-detail">{guideTemplateId ? 'Uses your saved local labels, guidance, included steps, and additional approval gates.' : 'Uses the reviewed standard steps.'}</p>
+    <p class="recipe-detail">{templateLoadState === 'unavailable' ? 'Saved templates are unavailable; the reviewed standard steps remain available.' : guideTemplateId ? 'Uses your saved local labels, guidance, included steps, and additional approval gates.' : 'Uses the reviewed standard steps.'}</p>
     <label for="guide-domain">{selectedRecipe?.targetLabel ?? 'Domain'}</label>
     <div class="guide-input">
       <input id="guide-domain" bind:value={guideDomain} maxlength="253" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="example.test">
@@ -211,7 +217,7 @@
   </form>
 </section>
 
-<InvestigationTemplateManager {templates} onchange={(value) => { templates = value; if (!value.some((item) => item.id === guideTemplateId)) guideTemplateId = ''; }} />
+<InvestigationTemplateManager {templates} loadState={templateLoadState} onchange={(value) => { templates = value; if (!value.some((item) => item.id === guideTemplateId)) guideTemplateId = ''; }} />
 
 <WorkspaceArchive onimport={refreshLocalSummary} />
 
@@ -239,7 +245,7 @@
   .section-intro{max-width:760px;margin-bottom:14px}
   .section-intro h2{margin:3px 0 0;font:700 1.15rem var(--mono)}
   .section-intro>p:not(.eyebrow){margin:7px 0 0;color:var(--muted);font-size:var(--text-sm);line-height:1.55}
-  .quick-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:9px}
+  .quick-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px}
   .quick-card{display:flex;min-height:210px;flex-direction:column;padding:20px}
   .quick-meta{display:flex;align-items:center;justify-content:space-between;color:var(--accent2);font:700 var(--text-2xs) var(--mono)}
   .quick-icon{display:grid;width:38px;height:38px;place-items:center;border:1px solid color-mix(in srgb,var(--accent) 48%,var(--border));border-radius:50%;background:rgb(var(--accent-rgb) / .07);color:var(--accent);transition:border-color .16s,background .16s,box-shadow .16s,transform .16s}
@@ -253,15 +259,8 @@
   .summary-label{color:var(--muted);font:700 var(--text-2xs) var(--mono);letter-spacing:.06em;text-transform:uppercase}
   .summary-card>strong{grid-row:1 / span 2;grid-column:3;color:var(--accent2);font:750 1.7rem var(--mono)}
   .summary-card>p{grid-column:2;margin:0;color:var(--text);font-size:var(--text-xs);line-height:1.45}
-  .domain-compare{display:grid;grid-template-columns:minmax(0,1fr) minmax(280px,.72fr);gap:24px;margin-top:28px;padding:21px}
-  .domain-compare h2{margin:4px 0 7px;font:700 var(--text-lg) var(--mono)}
-  .domain-compare>div>p:not(.eyebrow){margin:0;color:var(--muted);font-size:var(--text-sm);line-height:1.55}
-  .domain-compare form{display:grid;grid-template-columns:1fr 1fr;gap:7px;align-self:center}
-  .domain-compare form label{font:700 var(--text-xs) var(--mono)}
-  .domain-compare form button,.domain-compare form .error{grid-column:1/-1}
   @media(prefers-reduced-motion:reduce){.quick-icon{transition:none}.quick-card:hover .quick-icon,.quick-card:focus-visible .quick-icon{transform:none}}
   @media(max-width:1120px){.quick-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
-  @media(max-width:760px){.guide-launcher,.quick-grid,.local-grid,.domain-compare{grid-template-columns:1fr}.quick-card{min-height:180px}}
-  @media(max-width:520px){.domain-compare form{grid-template-columns:1fr}}
+  @media(max-width:760px){.guide-launcher,.quick-grid,.local-grid{grid-template-columns:1fr}.quick-card{min-height:180px}}
   @media(max-width:460px){.guide-input{align-items:stretch;flex-direction:column}.guide-input button{width:100%}}
 </style>

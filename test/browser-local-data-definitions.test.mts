@@ -220,6 +220,89 @@ describe('browser-local collection definitions', () => {
     assert.deepEqual(BULK_SESSIONS_COLLECTION.split(result.joined).map((record) => record.id), ['bulk-session']);
   });
 
+  test('directly normalizes legacy, current, mixed, and partially forged bare Bulk arrays per candidate', () => {
+    const profileContext = {
+      sourceState: 'ready',
+      activeProfileId: 'profile-one',
+      profileUpdatedAt: NOW,
+      limitation: '',
+    };
+    const row = (domain: string) => ({
+      domain,
+      status: 'complete',
+      availability: 'registered',
+      confidence: 'high',
+      registrar: 'Example Registrar',
+      activity: 'Active',
+      risk: 80,
+      opportunity: 20,
+      mutationTypes: [],
+      trusted: null,
+      error: '',
+      scanDepth: 'deep',
+      nameservers: [],
+      faviconMatch: false,
+      faviconNearMatch: false,
+      reusesOfficialAssets: false,
+      hasPasswordField: false,
+      idnReferenceMatch: false,
+      pageBaselineMatch: false,
+      hasActiveBrandProfile: true,
+      riskModelVersion: 6,
+      riskFactors: [],
+      relationship: {
+        version: 2,
+        nameservers: [],
+        ipAddresses: [],
+        trackingIdentifiers: [],
+        officialAssetHosts: [],
+        faviconHash: null,
+        faviconPHash: null,
+        certificateFingerprint: null,
+        truncated: false,
+      },
+      sourceCoverage: [{ source: 'rdap', state: 'complete' }],
+      profileContext,
+    });
+    const current = (id: string, domain: string) => ({
+      id,
+      name: id,
+      mode: 'deep',
+      state: 'complete',
+      inputDigest: `sha256:${'b'.repeat(64)}`,
+      domains: [domain],
+      results: [row(domain)],
+      startedAt: NOW,
+      updatedAt: NOW,
+      completedAt: NOW,
+      profileContext,
+    });
+    const legacy = structuredClone(current('legacy', 'legacy.invalid'));
+    Reflect.deleteProperty(legacy, 'profileContext');
+    Reflect.deleteProperty(legacy.results[0]!, 'profileContext');
+    Reflect.set(legacy.results[0]!, 'trusted', 'official');
+    Reflect.set(legacy.results[0]!, 'faviconMatch', true);
+    const currentRecord = current('current', 'current.invalid');
+    const partial = structuredClone(current('partial', 'partial.invalid'));
+    Reflect.deleteProperty(partial.results[0]!, 'profileContext');
+
+    const legacyOnly = BULK_SESSIONS_COLLECTION.normalize([legacy]);
+    assert.equal(legacyOnly[0]?.profileContext.sourceState, 'unavailable');
+    assert.equal(legacyOnly[0]?.results[0]?.trusted, null);
+    assert.equal(legacyOnly[0]?.results[0]?.risk, null);
+
+    const currentOnly = BULK_SESSIONS_COLLECTION.normalize([currentRecord]);
+    assert.equal(currentOnly[0]?.profileContext.sourceState, 'ready');
+    assert.equal(currentOnly[0]?.profileContext.activeProfileId, 'profile-one');
+    assert.equal(currentOnly[0]?.results[0]?.risk, 80);
+
+    const mixed = BULK_SESSIONS_COLLECTION.normalize([legacy, currentRecord, partial]);
+    assert.deepEqual(mixed.map((item) => item.id), ['current', 'legacy']);
+    assert.equal(mixed.find((item) => item.id === 'legacy')?.profileContext.sourceState, 'unavailable');
+    assert.equal(mixed.find((item) => item.id === 'current')?.profileContext.sourceState, 'ready');
+    assert.equal(mixed.some((item) => item.id === 'partial'), false);
+  });
+
   test('stored record decoding uses the codec and owning collection normalizer before typing values', async () => {
     const record = await shortlistStoredRecord({
       domain: 'priority.invalid',

@@ -263,7 +263,7 @@
   .focus-status button{flex:0 0 auto;padding:3px 7px;border:1px solid var(--border);border-radius:999px;background:var(--panel-raised);color:var(--muted);font:600 var(--text-2xs) var(--mono);cursor:pointer}
   .focus-status button:hover{border-color:var(--border-strong);color:var(--text)}
   .focus-status button:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
-  .map-frame{max-width:100%;margin-top:11px;overflow:hidden;border:1px solid var(--border);border-radius:var(--radius-sm);background-color:var(--panel-raised);background-image:radial-gradient(circle,color-mix(in srgb,var(--border) 70%,transparent) 1px,transparent 1px);background-size:24px 24px;overscroll-behavior:contain}
+  .map-frame{max-width:100%;margin-top:11px;overflow:hidden;border:1px solid var(--border);border-radius:var(--radius-sm);background-color:var(--panel-raised);background-image:radial-gradient(circle,color-mix(in srgb,var(--border) 70%,transparent) 1px,transparent 1px);background-size:24px 24px;overscroll-behavior:auto;touch-action:pan-y pinch-zoom}
   .map-mobile{display:none}
   svg{display:block;width:100%;height:auto}
   .background{fill:transparent}

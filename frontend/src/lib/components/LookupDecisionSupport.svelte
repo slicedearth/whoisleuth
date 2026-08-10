@@ -5,10 +5,12 @@
     support,
     onbriefcopy = null,
     onbriefhandoff = null,
+    actionBusy = false,
   }: {
     support: LookupDecisionSupport;
     onbriefcopy?: (() => void | Promise<void>) | null;
     onbriefhandoff?: (() => void | Promise<void>) | null;
+    actionBusy?: boolean;
   } = $props();
 
   function stateLabel(value: 'conflict' | 'uncertain'): string {
@@ -29,35 +31,16 @@
     </div>
   </header>
 
-  <div class="decision-grid">
-    <section aria-labelledby="task-questions-title">
-      <h5 id="task-questions-title">Questions to answer</h5>
-      <ol class="questions">
-        {#each support.guidance.questions as question}<li>{question}</li>{/each}
-      </ol>
-    </section>
-
-    <section aria-labelledby="next-actions-title">
-      <h5 id="next-actions-title">Useful next actions</h5>
-      {#if support.actions.length}
-        <ul class="actions">
-          {#each support.actions as action}
-            <li>
-              <a href={action.href}>{action.label}</a>
-              <span>{action.reason}</span>
-              <small><strong>Expected outcome:</strong> {action.expectedOutcome}</small>
-            </li>
-          {/each}
-        </ul>
-      {:else}
-        <p class="empty">No contextual action is available from the settled evidence. Review the source-quality matrix before drawing a conclusion.</p>
-      {/if}
-    </section>
-  </div>
+  <section class="task-questions" aria-labelledby="task-questions-title">
+    <h5 id="task-questions-title">Questions to answer</h5>
+    <ol class="questions">
+      {#each support.guidance.questions as question}<li>{question}</li>{/each}
+    </ol>
+  </section>
   {#if onbriefcopy || onbriefhandoff}
     <div class="brief-actions" role="group" aria-label="Investigation brief actions">
       {#if onbriefcopy}<button class="btn small" type="button" onclick={onbriefcopy}>Copy current brief</button>{/if}
-      {#if onbriefhandoff}<button class="btn small" type="button" onclick={onbriefhandoff}>Record brief handoff</button>{/if}
+      {#if onbriefhandoff}<button class="btn small" type="button" onclick={onbriefhandoff} disabled={actionBusy}>Record brief handoff</button>{/if}
     </div>
   {/if}
 
@@ -94,17 +77,11 @@
   .counts span{padding:7px 9px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised);color:var(--muted);font:var(--text-2xs) var(--mono)}
   .counts strong{color:var(--text);font-size:var(--text-sm)}
   .counts .attention strong{color:var(--amber)}
-  .decision-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:14px}
-  .decision-grid>section{min-width:0;padding:12px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel-raised)}
+  .task-questions{max-width:820px;margin-top:14px;padding:12px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel-raised)}
   .brief-actions{display:flex;flex-wrap:wrap;gap:7px;margin-top:10px}
   h5{margin:0 0 8px;font:700 var(--text-xs) var(--mono)}
-  .questions,.actions{margin:0;padding-left:20px}
+  .questions{margin:0;padding-left:20px}
   .questions li{margin:5px 0;color:var(--muted);font-size:var(--text-xs);line-height:1.45}
-  .actions{display:grid;gap:8px;list-style:none;padding:0}
-  .actions li{display:grid;gap:2px}
-  .actions a{font:700 var(--text-xs) var(--mono)}
-  .actions span,.empty{color:var(--muted);font-size:var(--text-2xs);line-height:1.45}
-  .actions small{color:var(--text);font-size:var(--text-2xs);line-height:1.45}
   details{margin-top:12px;border-top:1px solid var(--border)}
   summary{padding:12px 0;color:var(--text);font:680 var(--text-xs) var(--mono);cursor:pointer}
   summary:focus-visible{outline:2px solid var(--focus);outline-offset:3px}
@@ -126,6 +103,6 @@
     header{display:grid}
     .counts{width:100%}
     .counts span{flex:1}
-    .decision-grid,.decision-list{grid-template-columns:minmax(0,1fr)}
+    .decision-list{grid-template-columns:minmax(0,1fr)}
   }
 </style>

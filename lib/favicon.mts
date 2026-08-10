@@ -30,7 +30,11 @@ import {
 
 type IconLink = { href: string; priority: number };
 type FaviconHash = { hash: string; phash: string | null };
-type FaviconOptions = { html?: string };
+type FaviconOptions = {
+  html?: string;
+  fetcher?: typeof safeFetch;
+  timeoutMs?: number;
+};
 
 // Extracts favicon URLs declared in the page's own <link rel="...icon..."> tags
 // (resolved to absolute URLs against the page origin), in preference order:
@@ -85,13 +89,18 @@ function decodeDataUri(uri: string): Buffer | null {
 
 // Returns the favicon bytes for one candidate URL (a real fetch, or an inline
 // data: decode), or null if it can't be retrieved/used.
-async function fetchFaviconBytes(url: string, headers: Record<string, string>): Promise<Buffer | null> {
+async function fetchFaviconBytes(
+  url: string,
+  headers: Record<string, string>,
+  fetcher: typeof safeFetch,
+  timeoutMs: number,
+): Promise<Buffer | null> {
   if (/^data:/i.test(url)) return decodeDataUri(url);
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), FAVICON_FETCH_TIMEOUT_MS);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const res = await safeFetch(url, { signal: controller.signal, headers });
+    const res = await fetcher(url, { signal: controller.signal, headers });
     if (!res.ok) {
       // Not reading this body - release it explicitly instead of leaving an
       // unconsumed stream (and the connection it's tied to) open until
@@ -131,13 +140,19 @@ function buildFaviconCandidates(domain: string, html = ''): string[] {
   return candidates.slice(0, MAX_FAVICON_CANDIDATES);
 }
 
-async function fetchFaviconHash(domain: string, { html = '' }: FaviconOptions = {}): Promise<FaviconHash | null> {
+async function fetchFaviconHash(
+  domain: string,
+  { html = '', fetcher = safeFetch, timeoutMs = FAVICON_FETCH_TIMEOUT_MS }: FaviconOptions = {},
+): Promise<FaviconHash | null> {
   const headers = whoisleuthRequestHeaders();
   const candidates = buildFaviconCandidates(domain, html);
+  const requestTimeoutMs = Number.isInteger(timeoutMs) && timeoutMs >= 10 && timeoutMs <= FAVICON_FETCH_TIMEOUT_MS
+    ? timeoutMs
+    : FAVICON_FETCH_TIMEOUT_MS;
 
   for (const url of candidates) {
     // eslint-disable-next-line no-await-in-loop
-    const bytes = await fetchFaviconBytes(url, headers);
+    const bytes = await fetchFaviconBytes(url, headers, fetcher, requestTimeoutMs);
     if (bytes) {
       return {
         hash: crypto.createHash('sha256').update(bytes).digest('hex'),

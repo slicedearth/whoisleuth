@@ -17,6 +17,11 @@ import {
   type SyntheticEvidenceState,
 } from '../fixtures/synthetic-analyst-journeys.mts';
 import { readBoundedRegularFile } from '../lib/bounded-file.mts';
+import {
+  boundedNonNegativeInteger as boundedInteger,
+  medianOneDecimal as median,
+  optionalJsonRecord as record,
+} from './maintainer-tool-helpers.mts';
 
 export const SYNTHETIC_ANALYST_RESULT_SCHEMA = 'whoisleuth.synthetic-analyst-result';
 export const SYNTHETIC_ANALYST_REPORT_SCHEMA = 'whoisleuth.synthetic-analyst-report';
@@ -70,33 +75,11 @@ export const SYNTHETIC_ANALYST_JOURNEY_DIGEST_SHA256 = createHash('sha256')
   }), 'utf8')
   .digest('hex');
 
-function record(value: unknown): UnknownRecord | null {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? value as UnknownRecord
-    : null;
-}
-
 function exactKeys(value: UnknownRecord, expected: ReadonlySet<string>, label: string): void {
   if (Object.keys(value).some((key) => !expected.has(key))
     || [...expected].some((key) => !Object.hasOwn(value, key))) {
     throw new TypeError(`${label} must use only the documented fields.`);
   }
-}
-
-function boundedInteger(value: unknown, label: string, maximum: number): number {
-  if (!Number.isSafeInteger(value) || (value as number) < 0 || (value as number) > maximum) {
-    throw new TypeError(`${label} must be an integer from 0 to ${maximum}.`);
-  }
-  return value as number;
-}
-
-function median(values: readonly number[]): number | null {
-  if (!values.length) return null;
-  const sorted = [...values].sort((left, right) => left - right);
-  const middle = Math.floor(sorted.length / 2);
-  return sorted.length % 2 === 0
-    ? Number((((sorted[middle - 1] as number) + (sorted[middle] as number)) / 2).toFixed(1))
-    : sorted[middle] as number;
 }
 
 export function buildSyntheticAnalystCoverageReport() {

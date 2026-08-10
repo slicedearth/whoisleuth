@@ -27,6 +27,7 @@ describe('evidence topology projection', () => {
     assert.equal(first.edges.length, 3);
     assert.equal(first.counts.success, 2);
     assert.equal(first.counts.partial, 1);
+    assert.deepEqual(first.provenanceCounts, { direct: 2, derived: 1 });
     assert.equal(first.nodes.find((node) => node.id === 'technology')?.provenance, 'derived');
     assert.equal(first.nodes.find((node) => node.id === 'technology')?.family, 'derived');
     assert.equal(first.nodes.find((node) => node.id === 'dns')?.family, 'network');
@@ -50,6 +51,35 @@ describe('evidence topology projection', () => {
     assert.equal(graph.nodes.find((node) => node.id === 'source-0')?.href, '');
     assert.equal(graph.nodes.find((node) => node.id === 'source-2')?.href, '#valid-anchor');
     assert.ok(graph.nodes.every((node) => node.family === 'registry'));
+  });
+
+  test('does not describe wholly invalid bounded candidates as hidden evidence', () => {
+    const graph = projectEvidenceTopology(
+      { label: 'example.test' },
+      Array.from({ length: MAX_EVIDENCE_TOPOLOGY_NODES * 4 + 1 }, () => ({ id: '', label: '' })),
+    );
+
+    assert.equal(graph.nodes.length, 0);
+    assert.equal(graph.truncated, false);
+  });
+
+  test('reserves bounded map space for every represented evidence family', () => {
+    const direct = Array.from({ length: MAX_EVIDENCE_TOPOLOGY_NODES + 1 }, (_, index): EvidenceTopologyInput => ({
+      id: `direct-${index}`,
+      label: `Direct ${index}`,
+      status: 'success',
+      side: index % 2 ? 'left' : 'right',
+      family: index === 0 ? 'registry' : index === 1 ? 'network' : 'web',
+    }));
+    const graph = projectEvidenceTopology({ label: 'example.test' }, [
+      ...direct,
+      { id: 'technology', label: 'Technology', status: 'success', side: 'right', provenance: 'derived' },
+    ]);
+
+    assert.equal(graph.nodes.length, MAX_EVIDENCE_TOPOLOGY_NODES);
+    assert.equal(graph.truncated, true);
+    assert.ok(graph.nodes.some((node) => node.id === 'technology'));
+    assert.deepEqual(graph.provenanceCounts, { direct: MAX_EVIDENCE_TOPOLOGY_NODES - 1, derived: 1 });
   });
 
   test('preserves explicit incomplete and failure states instead of implying absence', () => {

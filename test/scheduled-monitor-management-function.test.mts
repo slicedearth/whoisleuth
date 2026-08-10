@@ -245,6 +245,36 @@ test('the web boundary caps declared and streamed request bodies before Blob con
   assert.equal(streamed.status, 'too_large');
 });
 
+test('the published web boundary maps a pre-aborted body before Blob construction', async () => {
+  let constructions = 0;
+  const controller = new AbortController();
+  const responsePromise = runScheduledMonitorManagementRequest(new Request(
+    'https://console.example/api/scheduled-monitor',
+    {
+      method: 'POST',
+      headers: authenticatedHeaders(),
+      body: new ReadableStream<Uint8Array>({
+        pull: () => new Promise<void>(() => {}),
+      }),
+      signal: controller.signal,
+      // @ts-expect-error Node's streamed Request body requires its runtime-specific duplex option.
+      duplex: 'half',
+    },
+  ), { deploy: { context: 'production', published: true } }, {
+    env: readyEnv(),
+    blobStoreFactory: () => { constructions += 1; return new FakeBlobStore(); },
+  });
+  controller.abort();
+
+  const response = await responsePromise;
+  assert.equal(response.status, 408);
+  assert.deepEqual(await response.json(), {
+    error: 'Request body read timed out',
+    errorCode: 'REQUEST_TIMEOUT',
+  });
+  assert.equal(constructions, 0);
+});
+
 test('invalid and oversized bodies fail before Blob construction', async () => {
   let constructions = 0;
   const options = {

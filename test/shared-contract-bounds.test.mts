@@ -103,7 +103,7 @@ test('public project URLs derive from one canonical origin', () => {
 
   const consumers = [
     'lib/outbound-identity.mts',
-    'lib/evidence-export.mts',
+    'lib/portable-generator.mts',
     'lib/lookup-readable-report.mts',
     'cli/command-reference.mts',
     'tools/published-cli-check.mts',
@@ -130,11 +130,25 @@ test('release, runtime, and frontend versions share strict semantic-version pars
   assert.throws(() => normalizeBoundedStableSemanticVersion('1.2.3+build.4'), /prerelease or build/u);
   for (const filename of [
     '.github/workflows/cli-release.yml',
-    'lib/evidence-export.mts',
-    'lib/outbound-identity.mts',
+    'lib/application-version.mts',
+    'lib/portable-generator.mts',
     'tools/release-version-check.mts',
     'frontend/vite.config.ts',
   ]) {
     assert.match(repositorySource(filename), /semantic-version\.mts/u, filename);
+  }
+  for (const filename of [
+    'lib/outbound-identity.mts',
+    'cli/export-evidence.mts',
+    'cli/case-pack.mts',
+  ]) {
+    assert.match(repositorySource(filename), /application-version\.mts/u, filename);
+  }
+  for (const filename of [
+    'lib/evidence-export.mts',
+    'lib/evidence-report.mts',
+    'lib/lookup-readable-report.mts',
+  ]) {
+    assert.match(repositorySource(filename), /portable-generator\.mts/u, filename);
   }
 });

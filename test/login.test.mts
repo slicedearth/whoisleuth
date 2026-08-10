@@ -147,4 +147,38 @@ describe('login handler origin enforcement', () => {
     assert.equal(response.status, 400);
     assert.equal(recordValue(await response.json()).errorCode, 'INVALID_REQUEST_BODY');
   });
+
+  test('maps a pre-aborted streamed body to a bounded timeout response without issuing a session', async () => {
+    const previousNetlify = process.env.NETLIFY;
+    process.env.NETLIFY = 'true';
+    const controller = new AbortController();
+    try {
+      const responsePromise = loginHandler(new Request('https://example.com/api/login', {
+        method: 'POST',
+        headers: {
+          host: 'example.com',
+          origin: 'https://example.com',
+          'x-nf-client-connection-ip': '192.0.2.208',
+        },
+        body: new ReadableStream<Uint8Array>({
+          pull: () => new Promise<void>(() => {}),
+        }),
+        signal: controller.signal,
+        // @ts-expect-error Node's streamed Request body requires its runtime-specific duplex option.
+        duplex: 'half',
+      }));
+      controller.abort();
+
+      const response = await responsePromise;
+      assert.equal(response.status, 408);
+      assert.deepEqual(await response.json(), {
+        error: 'Request body read timed out',
+        errorCode: 'REQUEST_TIMEOUT',
+      });
+      assert.equal(response.headers.get('Set-Cookie'), null);
+    } finally {
+      if (previousNetlify === undefined) delete process.env.NETLIFY;
+      else process.env.NETLIFY = previousNetlify;
+    }
+  });
 });

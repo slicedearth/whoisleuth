@@ -5,11 +5,16 @@ import { describe, test } from 'node:test';
 import {
   buildInvestigationCaseRelationships,
   buildCaseRelationships,
+  CASE_RELATIONSHIP_QUERY_DEFAULTS,
   CASE_RELATIONSHIP_VERSION,
+  caseRelationshipGroupId,
+  MAX_CASE_RELATIONSHIP_GROUP_ID_LENGTH,
   MAX_CASE_RELATIONSHIP_GROUPS,
   MAX_CASES_PER_RELATIONSHIP,
   MAX_RELATIONSHIP_CASES,
   filterInvestigationCaseRelationships,
+  normalizeCaseRelationshipGroupId,
+  normalizeCaseRelationshipQuery,
 } from '../frontend/src/lib/analysis/case-relationships.ts';
 import {
   buildInvestigationProjection,
@@ -222,6 +227,24 @@ describe('cross-case relationships', () => {
     ]);
   });
 
+  test('keeps distinct valid long nameserver sets uniquely selectable', () => {
+    const shared = Array.from({ length: 11 }, (_, index) => (
+      `shared-${String(index).padStart(2, '0')}.${'a'.repeat(63)}.${'b'.repeat(63)}.invalid`
+    ));
+    const firstSet = [...shared, `zz-a.${'c'.repeat(63)}.${'d'.repeat(63)}.invalid`];
+    const secondSet = [...shared, `zz-b.${'c'.repeat(63)}.${'d'.repeat(63)}.invalid`];
+    const result = buildCaseRelationships([
+      caseRecord('long-a-1', 'long-a-1.invalid', [snapshot({ nameservers: firstSet })]),
+      caseRecord('long-a-2', 'long-a-2.invalid', [snapshot({ nameservers: firstSet })]),
+      caseRecord('long-b-1', 'long-b-1.invalid', [snapshot({ nameservers: secondSet })]),
+      caseRecord('long-b-2', 'long-b-2.invalid', [snapshot({ nameservers: secondSet })]),
+    ]);
+
+    assert.equal(result.groups.length, 2);
+    assert.ok(result.groups.every((group) => group.value.length > 1_200));
+    assert.equal(new Set(result.groups.map(caseRelationshipGroupId)).size, 2);
+  });
+
   test('caps input cases and discloses truncation', () => {
     const cases = Array.from({ length: MAX_RELATIONSHIP_CASES + 1 }, (_, index) => (
       caseRecord(`case-${index}`, `d${index}.invalid`, [snapshot({ nameservers: ['ns.shared.invalid'] })])
@@ -298,6 +321,58 @@ describe('projection-backed cross-case relationships', () => {
     });
     assert.equal(filterInvestigationCaseRelationships(summary, { source: 'not-retained' }).filters.source, 'all');
     assert.equal(filterInvestigationCaseRelationships(summary, { period: 'bad' }).filters.period, 'all');
+  });
+
+  test('normalizes one complete shared query against bounded dynamic options', () => {
+    const summary = buildInvestigationCaseRelationships(investigationFixture());
+    assert.deepEqual(normalizeCaseRelationshipQuery(summary), CASE_RELATIONSHIP_QUERY_DEFAULTS);
+    assert.equal(Object.isFrozen(CASE_RELATIONSHIP_QUERY_DEFAULTS), true);
+    assert.deepEqual(normalizeCaseRelationshipQuery(summary, {
+      type: 'nameserver_set',
+      source: 'monitor',
+      period: '7d',
+      completeness: 'unknown',
+      scope: 'case:case-a',
+    }), {
+      type: 'nameserver_set',
+      source: 'monitor',
+      period: '7d',
+      completeness: 'unknown',
+      scope: 'case:case-a',
+    });
+    assert.deepEqual(normalizeCaseRelationshipQuery({ ...summary, sources: [], scopeOptions: [] }, {
+      type: 'not-a-type',
+      source: 'monitor',
+      period: 'future',
+      completeness: 'certain',
+      scope: 'case:case-a',
+    }), CASE_RELATIONSHIP_QUERY_DEFAULTS);
+  });
+
+  test('builds stable bounded relationship ids and rejects non-contract selections', () => {
+    const group = requiredValue(buildInvestigationCaseRelationships(investigationFixture()).groups[0]);
+    const first = caseRelationshipGroupId(group);
+    const second = caseRelationshipGroupId(structuredClone(group));
+    assert.equal(first, second);
+    assert.ok(first.length <= MAX_CASE_RELATIONSHIP_GROUP_ID_LENGTH);
+    assert.match(first, /^relationship:[a-z0-9]+-[a-z0-9]+$/u);
+    assert.equal(normalizeCaseRelationshipGroupId(first), first);
+    assert.equal(normalizeCaseRelationshipGroupId(`${first}:extra`), '');
+    assert.equal(normalizeCaseRelationshipGroupId('relationship:unsafe value'), '');
+    assert.notEqual(first, caseRelationshipGroupId({ ...group, value: `${group.value}-different` }));
+  });
+
+  test('fails closed when malformed groups cannot receive unique view identities', () => {
+    const group = requiredValue(buildInvestigationCaseRelationships(investigationFixture()).groups[0]);
+    const duplicateSummary = {
+      ...buildInvestigationCaseRelationships(investigationFixture()),
+      groups: [group, structuredClone(group)],
+    };
+    const filtered = filterInvestigationCaseRelationships(duplicateSummary);
+    assert.deepEqual(filtered.groups, []);
+    assert.equal(filtered.totalRelationships, 2);
+    assert.equal(filtered.matchingRelationships, 0);
+    assert.equal(filtered.discardedRelationshipCount, 2);
   });
 
   test('reports absent, malformed, and future projection contracts without interpreting them', () => {

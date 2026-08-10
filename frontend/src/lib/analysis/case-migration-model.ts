@@ -25,6 +25,16 @@ import {
   type CaseStore,
 } from './case-record-model.ts';
 import {
+  inspectCaseBrandProfileIds,
+  unionCaseBrandProfileIds,
+} from './case-brand-profile-references.ts';
+import {
+  caseInvestigationBranchReferences,
+  mergeCaseInvestigationBranches,
+  normalizeCaseInvestigationBranches,
+  type CaseInvestigationBranch,
+} from './case-investigation-branch-model.ts';
+import {
   mergeCaseActions,
   mergeCaseAssertions,
   mergeCaseDecisions,
@@ -57,6 +67,8 @@ type ImportPatch = {
   status: string | undefined;
   disposition: string | undefined;
   reviewReasonCode: string | null | undefined;
+  brandProfileIds: string[];
+  brandProfileReferencesOmitted: number;
   source: string | undefined;
   evidenceHistory: CaseEvidenceSnapshot[];
   evidencePins: CaseEvidencePin[];
@@ -65,6 +77,7 @@ type ImportPatch = {
   assertions: CaseAssertionRecord[];
   manualTrail: CaseManualTrailEvent[];
   sightings: CaseSightingRecord[];
+  branches: CaseInvestigationBranch[];
   tags: string[];
   notes: CaseNote[];
   createdAt: string | null;
@@ -96,10 +109,19 @@ function assignUniqueIds(cases: CaseRecord[]): void {
  */
 export function normalizeCaseStore(raw: unknown): CaseStore {
   const now = new Date().toISOString();
+  const sourceVersion = parseStoreVersion(raw);
+  const acceptsBrandProfileIds = Array.isArray(raw)
+    || sourceVersion === CASE_SCHEMA_VERSION;
   const byDomain = new Map<string, CaseRecord>();
   for (const item of asCaseList(raw)) {
-    const normalized = normalizeCase(item, undefined, now);
+    const normalized = normalizeCase(
+      item,
+      undefined,
+      now,
+      Array.isArray(raw) ? CASE_SCHEMA_VERSION : sourceVersion,
+    );
     if (!normalized) continue;
+    if (!acceptsBrandProfileIds) normalized.brandProfileIds = [];
     const existing = byDomain.get(normalized.domain);
     if (!existing || Date.parse(normalized.updatedAt) >= Date.parse(existing.updatedAt)) {
       byDomain.set(normalized.domain, normalized);
@@ -152,15 +174,23 @@ function importScalar(value: unknown, valid: Set<string>): string | undefined {
  * @param {unknown} raw
  * @returns {ImportPatch | null}
  */
-function extractImportPatch(raw: unknown): ImportPatch | null {
+function extractImportPatch(raw: unknown, importedVersion: number): ImportPatch | null {
   const record = objectRecord(raw);
   const domain = normalizeDomain(record.domain);
   if (!domain) return null;
   const importFallback = isoOrNull(record.updatedAt) || isoOrNull(record.createdAt) || null;
   const normalizedFallback = importFallback || '1970-01-01T00:00:00.000Z';
   const rawEvidence = Array.isArray(record.evidenceHistory) ? record.evidenceHistory : [];
-  const evidencePins = normalizeCaseEvidencePins(record.evidencePins, normalizedFallback);
+  const evidencePins = normalizeCaseEvidencePins(record.evidencePins, normalizedFallback, {
+    allowCertificateObservation: importedVersion >= 11,
+  });
   const pinIds = new Set(evidencePins.map((item) => item.id));
+  const actions = normalizeCaseActions(record.actions, normalizedFallback);
+  const assertions = normalizeCaseAssertions(record.assertions, normalizedFallback, pinIds);
+  const branchReferences = caseInvestigationBranchReferences({ evidencePins, actions, assertions });
+  const brandProfileReferences = importedVersion >= 12
+    ? inspectCaseBrandProfileIds(record.brandProfileIds)
+    : { ids: [], omitted: 0 };
   return {
     domain,
     rawId: typeof record.id === 'string' ? record.id : null,
@@ -169,14 +199,23 @@ function extractImportPatch(raw: unknown): ImportPatch | null {
     reviewReasonCode: Object.hasOwn(record, 'reviewReasonCode')
       ? normalizeReviewReasonCode(record.reviewReasonCode)
       : undefined,
+    brandProfileIds: brandProfileReferences.ids,
+    brandProfileReferencesOmitted: brandProfileReferences.omitted,
     source: importScalar(record.source, SOURCE_VALUES),
-    evidenceHistory: normalizeEvidenceHistory(rawEvidence, { source: 'import', fallback: importFallback }),
+    evidenceHistory: normalizeEvidenceHistory(rawEvidence, {
+      source: 'import',
+      fallback: importFallback,
+      sourceVersion: importedVersion,
+    }),
     evidencePins,
     decisions: normalizeCaseDecisions(record.decisions, normalizedFallback, pinIds),
-    actions: normalizeCaseActions(record.actions, normalizedFallback),
-    assertions: normalizeCaseAssertions(record.assertions, normalizedFallback, pinIds),
+    actions,
+    assertions,
     manualTrail: normalizeCaseManualTrail(record.manualTrail, normalizedFallback),
     sightings: normalizeCaseSightings(record.sightings, normalizedFallback, pinIds),
+    branches: importedVersion >= 11
+      ? normalizeCaseInvestigationBranches(record.branches, normalizedFallback, branchReferences)
+      : [],
     tags: normalizeTags(record.tags),
     // Imported notes fall back only to the imported record's own timestamps
     // (never "now"), so a timestamp-less note gets a stable, deterministic time
@@ -217,6 +256,7 @@ function caseFromPatch(patch: ImportPatch, now: string): CaseRecord {
     status: patch.status ?? DEFAULT_STATUS,
     disposition: patch.disposition ?? DEFAULT_DISPOSITION,
     reviewReasonCode: patch.reviewReasonCode ?? null,
+    brandProfileIds: patch.brandProfileIds,
     tags: patch.tags,
     notes: patch.notes,
     source: patch.source ?? DEFAULT_SOURCE,
@@ -227,6 +267,7 @@ function caseFromPatch(patch: ImportPatch, now: string): CaseRecord {
     assertions: patch.assertions,
     manualTrail: patch.manualTrail,
     sightings: patch.sightings,
+    branches: patch.branches,
     createdAt: patch.createdAt || patch.updatedAt || now,
     updatedAt: patch.updatedAt || patch.createdAt || now,
   };
@@ -241,29 +282,38 @@ function caseFromPatch(patch: ImportPatch, now: string): CaseRecord {
  * @param {ImportPatch} patch
  * @returns {CaseRecord}
  */
-function applyImportPatch(local: CaseRecord, patch: ImportPatch): CaseRecord {
+function applyImportPatch(
+  local: CaseRecord,
+  patch: ImportPatch,
+): { record: CaseRecord; brandProfileReferencesOmitted: number } {
   const importNewer = patch.updatedAt !== null && Date.parse(patch.updatedAt) > Date.parse(local.updatedAt);
   const fallback = patch.updatedAt || local.updatedAt;
   const evidencePins = mergeCaseEvidencePins(local.evidencePins, patch.evidencePins, fallback);
   const pinIds = new Set(evidencePins.map((item) => item.id));
-  return {
+  const actions = mergeCaseActions(local.actions, patch.actions, fallback);
+  const assertions = mergeCaseAssertions(local.assertions, patch.assertions, fallback, pinIds);
+  const branchReferences = caseInvestigationBranchReferences({ evidencePins, actions, assertions });
+  const brandProfileReferences = unionCaseBrandProfileIds(local.brandProfileIds, patch.brandProfileIds);
+  return { record: {
     ...local,
     status: patch.status !== undefined && importNewer ? patch.status : local.status,
     disposition: patch.disposition !== undefined && importNewer ? patch.disposition : local.disposition,
     reviewReasonCode: patch.reviewReasonCode !== undefined && importNewer ? patch.reviewReasonCode : local.reviewReasonCode ?? null,
+    brandProfileIds: brandProfileReferences.ids,
     source: patch.source !== undefined && importNewer ? patch.source : local.source,
     evidenceHistory: mergeEvidenceHistories(local.evidenceHistory, patch.evidenceHistory),
     evidencePins,
     decisions: mergeCaseDecisions(local.decisions, patch.decisions, fallback, pinIds),
-    actions: mergeCaseActions(local.actions, patch.actions, fallback),
-    assertions: mergeCaseAssertions(local.assertions, patch.assertions, fallback, pinIds),
+    actions,
+    assertions,
     manualTrail: mergeCaseManualTrail(local.manualTrail, patch.manualTrail, fallback),
     sightings: mergeCaseSightings(local.sightings, patch.sightings, fallback, pinIds),
+    branches: mergeCaseInvestigationBranches(local.branches ?? [], patch.branches, fallback, branchReferences),
     tags: normalizeTags([...local.tags, ...patch.tags]),
     notes: unionNotes(local.notes, patch.notes),
     createdAt: patch.createdAt && Date.parse(patch.createdAt) < Date.parse(local.createdAt) ? patch.createdAt : local.createdAt,
     updatedAt: importNewer ? (patch.updatedAt ?? local.updatedAt) : local.updatedAt,
-  };
+  }, brandProfileReferencesOmitted: brandProfileReferences.omitted };
 }
 
 function pickFreeId(preferred: unknown, domain: string, used: Set<string>): string {
@@ -284,47 +334,58 @@ function pickFreeId(preferred: unknown, domain: string, used: Set<string>): stri
  * reinterpreted.
  * @param {CaseRecord[]} localCases
  * @param {unknown} importedRaw
- * @returns {{ cases: CaseRecord[], added: number, updated: number, skipped: number }}
+ * @returns {{ cases: CaseRecord[], added: number, updated: number, skipped: number, brandProfileReferencesOmitted: number }}
  */
 export function mergeCases(
   localCases: CaseRecord[],
   importedRaw: unknown,
-): { cases: CaseRecord[]; added: number; updated: number; skipped: number } {
+): { cases: CaseRecord[]; added: number; updated: number; skipped: number; brandProfileReferencesOmitted: number } {
   const importedVersion = parseStoreVersion(importedRaw);
   if (importedVersion !== null && Number.isInteger(importedVersion) && importedVersion > CASE_SCHEMA_VERSION) {
     throw new Error(`This case file was exported by a newer version of WHOISleuth (schema ${importedVersion}). Update the app before importing it.`);
   }
-  if (!CASE_IMPORT_VERSIONS.includes(importedVersion as 3 | 4 | 5 | 6 | 7 | 8 | 9 | typeof CASE_SCHEMA_VERSION)
+  if (!CASE_IMPORT_VERSIONS.includes(importedVersion as typeof CASE_IMPORT_VERSIONS[number])
     || !importedRaw || typeof importedRaw !== 'object'
     || !Array.isArray(objectRecord(importedRaw).cases)) {
     throw new Error(`Expected a WHOISleuth case export using schema ${CASE_IMPORT_VERSIONS.join(' or ')}.`);
   }
   const local = normalizeCaseStore(localCases).cases;
+  const supportedImportedVersion = importedVersion ?? 0;
   const byDomain = new Map(local.map((item) => [item.domain, item]));
   const usedIds = new Set(local.map((item) => item.id));
   let added = 0;
   let updated = 0;
   let skipped = 0;
+  let brandProfileReferencesOmitted = 0;
   const now = new Date().toISOString();
   for (const item of asCaseList(importedRaw)) {
-    const patch = extractImportPatch(item);
+    const patch = extractImportPatch(item, supportedImportedVersion);
     if (!patch) {
       skipped += 1;
       continue;
     }
     const existing = byDomain.get(patch.domain);
     if (existing) {
-      byDomain.set(patch.domain, applyImportPatch(existing, patch));
+      const merged = applyImportPatch(existing, patch);
+      byDomain.set(patch.domain, merged.record);
+      brandProfileReferencesOmitted += patch.brandProfileReferencesOmitted + merged.brandProfileReferencesOmitted;
       updated += 1;
     } else if (byDomain.size < MAX_CASES) {
       const record = caseFromPatch(patch, now);
       record.id = pickFreeId(patch.rawId, patch.domain, usedIds);
       usedIds.add(record.id);
       byDomain.set(patch.domain, record);
+      brandProfileReferencesOmitted += patch.brandProfileReferencesOmitted;
       added += 1;
     } else {
       skipped += 1;
     }
   }
-  return { cases: normalizeCaseStore([...byDomain.values()]).cases, added, updated, skipped };
+  return {
+    cases: normalizeCaseStore([...byDomain.values()]).cases,
+    added,
+    updated,
+    skipped,
+    brandProfileReferencesOmitted,
+  };
 }

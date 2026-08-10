@@ -2,18 +2,19 @@ import { Buffer } from 'node:buffer';
 import { createHash } from 'node:crypto';
 
 import {
-  canonicalArtifactJson,
-  sha256ArtifactDigest,
+  canonicalArtifactJsonV2,
+  SORTED_JSON_V2,
+  sha256ArtifactDigestV2,
 } from '../frontend/src/lib/analysis/artifact-integrity.ts';
 import {
-  recordOrNull,
   requireBoundedString,
   requireIsoTimestamp,
 } from '../lib/bounded-contract-normalizers.mts';
 import { normalizeBoundedSemanticVersion } from '../lib/semantic-version.mts';
+import { parseBoundedJsonObject } from './bounded-json.mts';
 
 export const INVESTIGATION_MANIFEST_SCHEMA = 'whoisleuth.investigation-manifest';
-export const INVESTIGATION_MANIFEST_VERSION = 1;
+export const INVESTIGATION_MANIFEST_VERSION = 2;
 export const MAX_INVESTIGATION_MANIFEST_ARTIFACTS = 16;
 export const MAX_INVESTIGATION_MANIFEST_ARTIFACT_BYTES = 15 * 1024 * 1024;
 export const MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES = 32 * 1024 * 1024;
@@ -63,18 +64,17 @@ export async function buildInvestigationManifest(
     if (byteLength < 1 || byteLength > MAX_INVESTIGATION_MANIFEST_ARTIFACT_BYTES) {
       throw new TypeError(`Artifact ${index + 1} must be between 1 byte and ${MAX_INVESTIGATION_MANIFEST_ARTIFACT_BYTES} bytes.`);
     }
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(artifact.content);
-    } catch {
-      throw new TypeError(`Artifact ${index + 1} must be valid JSON.`);
+    if (totalBytes > MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES) {
+      throw new TypeError(`Manifest artefacts exceed the ${MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES}-byte combined limit.`);
     }
-    const value = recordOrNull(parsed);
-    if (!value) throw new TypeError(`Artifact ${index + 1} must contain one JSON object.`);
+    const value = parseBoundedJsonObject(artifact.content, {
+      label: `Artifact ${index + 1}`,
+      maximumBytes: MAX_INVESTIGATION_MANIFEST_ARTIFACT_BYTES,
+    });
     const schema = value.schema === undefined
       ? null
       : requireBoundedString(value.schema, `Artifact ${index + 1} schema`, 160);
-    const canonical = canonicalArtifactJson(value);
+    const canonical = canonicalArtifactJsonV2(value);
     const contentDigestSha256 = digest(artifact.content);
     return Object.freeze({
       sequence: index + 1,
@@ -86,9 +86,6 @@ export async function buildInvestigationManifest(
       canonicalDigestSha256: digest(canonical),
     });
   });
-  if (totalBytes > MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES) {
-    throw new TypeError(`Manifest artefacts exceed the ${MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES}-byte combined limit.`);
-  }
   const unsigned = Object.freeze({
     schema: INVESTIGATION_MANIFEST_SCHEMA,
     version: INVESTIGATION_MANIFEST_VERSION,
@@ -111,7 +108,11 @@ export async function buildInvestigationManifest(
   });
   return Object.freeze({
     ...unsigned,
-    integrity: Object.freeze({ algorithm: 'SHA-256' as const, digestSha256: await sha256ArtifactDigest(unsigned) }),
+    integrity: Object.freeze({
+      algorithm: 'SHA-256' as const,
+      canonicalization: SORTED_JSON_V2,
+      digestSha256: await sha256ArtifactDigestV2(unsigned),
+    }),
   });
 }
 

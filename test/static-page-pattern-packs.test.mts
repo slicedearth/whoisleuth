@@ -20,6 +20,7 @@ function fixtureCase(overrides: Record<string, unknown> = {}): CaseRecord {
     domain: 'fixture.invalid',
     status: 'reviewing',
     disposition: 'unreviewed',
+    brandProfileIds: [],
     tags: [],
     notes: [],
     source: 'lookup',

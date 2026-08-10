@@ -18,6 +18,7 @@
   import LookupDnsEvidence from '$lib/components/LookupDnsEvidence.svelte';
   import LookupExternalIntelligence from '$lib/components/LookupExternalIntelligence.svelte';
   import LookupForm from '$lib/components/LookupForm.svelte';
+  import LookupSavedContextPreview from '$lib/components/LookupSavedContextPreview.svelte';
   import LookupHttpEvidence from '$lib/components/LookupHttpEvidence.svelte';
   import LookupInvestigationCapsule from '$lib/components/LookupInvestigationCapsule.svelte';
   import LookupNetworkContext from '$lib/components/LookupNetworkContext.svelte';
@@ -41,10 +42,10 @@
   import LookupCaseResponse from '$lib/components/LookupCaseResponse.svelte';
   import LookupEvidenceCheckpoint from '$lib/components/LookupEvidenceCheckpoint.svelte';
   import PageHeading from '$lib/components/PageHeading.svelte';
-  import { activeProfile, type BrandProfile } from '$lib/brand-profiles';
+  import { activeProfile, type ActiveBrandProfileSourceState, type BrandProfile } from '$lib/brand-profiles';
   import { dispositionLabel as caseDispositionLabel, statusLabel as caseStatusLabel, type CaseRecord, type CaseTransitionExpectation } from '$lib/cases';
   import { saveCandidateHandoff } from '$lib/candidate-handoff';
-  import { buildLookupEvidence, evidenceFilename } from '$lib/analysis/evidence-export.ts';
+  import { buildLookupEvidence, evidenceFilename, serializeLookupEvidence } from '$lib/analysis/evidence-export.ts';
   import {
     formatLookupInvestigationBriefMarkdown,
     lookupInvestigationBriefFilename,
@@ -65,6 +66,10 @@
     type JsonRecord,
   } from '$lib/analysis/lookup-display-model.ts';
   import { buildLookupRouteAnalysis } from '$lib/analysis/lookup-route-analysis.ts';
+  import {
+    buildLookupClaimPassport,
+  } from '$lib/analysis/lookup-claim-passport.ts';
+  import type { LookupClaimId } from '$lib/analysis/lookup-claim-readiness.ts';
   import type { LookupFreshnessPolicyInput, LookupFreshnessThresholds } from '$lib/analysis/lookup-source-refresh.ts';
   import {
     LOOKUP_CLIENT_TIMEOUT_MS,
@@ -78,7 +83,9 @@
   import { projectEvidenceTopology } from '$lib/analysis/evidence-topology.ts';
   import {
     normalizeLookupTaskView,
+    lookupResultDepth,
     readLookupPresentation,
+    reconcileLookupUrlState,
     writeLookupPresentation,
     type LookupTaskView,
   } from '$lib/analysis/lookup-presentation.ts';
@@ -92,7 +99,7 @@
   import { CAPABILITY_CONTEXT, disabledCapabilities, disabledCapability, featureCapability, type CapabilityGetter } from '$lib/capabilities';
   import { readLookupWorkflowState, writeLookupWorkflowState } from '$lib/console-workflow-state.ts';
   import { LookupRequestController } from '$lib/controllers/lookup-request-controller';
-  import { LookupCaseController } from '$lib/controllers/lookup-case-controller';
+  import { LookupCaseController, type LookupCaseActionResult } from '$lib/controllers/lookup-case-controller';
   type LookupMode = 'fast' | 'deep';
 
   let query=$state('');
@@ -105,12 +112,19 @@
   let includeSecurityTxt=$state(false);
   let error=$state('');
   let result=$state<LookupHttpResponse|null>(null);
+  let completedLookupTarget=$state('');
+  let completedLookupDepth=$state<LookupMode|null>(null);
   let profile=$state<BrandProfile|null>(null);
+  let profileSourceState=$state<ActiveBrandProfileSourceState>('loading');
   let draftStatus=$state('');
+  let evidenceExportStatus=$state('');
   let caseRecord=$state<CaseRecord|null>(null);let caseNote=$state('');let caseStatus=$state('');
+  let caseActionBusy=$state(false);
+  let caseActionGeneration=0;
   let expandedResultSections=$state<string[]>([]);
   let detailedAssessmentOpen=$state(false);
   let taskView=$state<LookupTaskView>('general');
+  let preferredTaskView=$state<LookupTaskView>('general');
   let visualView=$state<LookupVisualView>('sources');
   let freshnessPolicyMode=$state<'task-default'|'analyst-custom'>('task-default');
   let customFreshnessThresholds=$state<LookupFreshnessThresholds>({registration:30,network:7,web:3});
@@ -118,6 +132,9 @@
   let serviceDependencyScope=$state('');
   let serviceDependencyFalsePositives=$state('');
   let pageActive=false;
+  let urlReconciliationReady=$state(false);
+  let lastReconciledUrl=$state('');
+  let lookupRevision=0;
   const lookupRequestController=new LookupRequestController();
   const lookupCaseController=new LookupCaseController();
   const capabilityReport=getContext<CapabilityGetter>(CAPABILITY_CONTEXT);
@@ -178,7 +195,9 @@
     result,
     lookupView,
     profile,
+    profileSourceState,
     task:taskView,
+    completedLookupDepth,
     ...(freshnessPolicyInput?{freshnessPolicy:freshnessPolicyInput}:{}),
   }));
   const lookupEvidenceDepth=$derived(lookupAnalysis.lookupEvidenceDepth);
@@ -225,6 +244,7 @@
     observedAt:lookupObservedAt,
   }));
   const evidenceCoverage=$derived(lookupAnalysis.evidenceCoverage);
+  const evidenceObservedAtById=$derived(lookupAnalysis.evidenceObservedAtById);
   const lookupSourceRefreshPlan=$derived(lookupAnalysis.lookupSourceRefreshPlan);
   const lookupDecisionSupport=$derived(lookupAnalysis.lookupDecisionSupport);
   const lookupClaimReadiness=$derived(lookupAnalysis.lookupClaimReadiness);
@@ -234,53 +254,63 @@
   const lookupInvestigationBrief=$derived(lookupAnalysis.lookupInvestigationBrief);
   const lookupEvidenceDocument=$derived(result?buildLookupEvidence(result,{idnAnalysis,applicationVersion:__WHOISLEUTH_VERSION__}):null);
   const evidenceTopologyTarget=$derived(lookupAnalysis.evidenceTopologyTarget);
-  const mappedEvidenceSourceCount=$derived(projectEvidenceTopology(evidenceTopologyTarget,evidenceTopologyNodes).nodes.length);
+  const evidenceTopologyProjection=$derived(projectEvidenceTopology(evidenceTopologyTarget,evidenceTopologyNodes));
   const caseEvidence=$derived(lookupAnalysis.caseEvidence);
   const checkpointFacts=$derived(lookupAnalysis.checkpointFacts);
+  const profileContextLimitation=$derived(lookupAnalysis.profileContextLimitation);
 
   async function refreshProfileContext(){
-    try{profile=await activeProfile();}
-    catch{profile=null;}
+    profileSourceState='loading';profile=null;
+    try{profile=await activeProfile();profileSourceState='ready';}
+    catch{profile=null;profileSourceState='unavailable';}
   }
-  async function refreshCase(){
-    const next=await lookupCaseController.refresh(caseDomain);
+  async function refreshCase(expectedRevision:number|null=null){
+    const requestedDomain=caseDomain;
+    const actionGeneration=caseActionGeneration;
+    const next=await lookupCaseController.refresh(requestedDomain);
+    if(actionGeneration!==caseActionGeneration||(expectedRevision!==null&&(expectedRevision!==lookupRevision||caseDomain!==requestedDomain)))return;
     caseRecord=next.record;
     caseStatus=next.status;
   }
-  async function openLookupCase(){
-    const next=await lookupCaseController.open(caseDomain,caseEvidence,lookupEvidenceDepth);
-    caseRecord=next.record;
-    caseStatus=next.status;
+  function invalidateCaseActions(){caseActionGeneration+=1;caseActionBusy=false;}
+  async function performCaseAction(
+    action:()=>Promise<LookupCaseActionResult>,
+    afterPublish:(next:LookupCaseActionResult)=>void=()=>{},
+  ):Promise<boolean>{
+    if(caseActionBusy)return false;
+    const generation=++caseActionGeneration;
+    const revision=lookupRevision;
+    const domain=caseDomain;
+    const recordId=caseRecord?.id||'';
+    caseActionBusy=true;
+    try{
+      const next=await action();
+      if(generation!==caseActionGeneration||revision!==lookupRevision||domain!==caseDomain||(caseRecord?.id||'')!==recordId)return false;
+      caseRecord=next.record;
+      caseStatus=next.status;
+      afterPublish(next);
+      return true;
+    }finally{
+      if(generation===caseActionGeneration)caseActionBusy=false;
+    }
   }
-  async function addLookupNote(){
-    const next=await lookupCaseController.appendNote(caseRecord,caseNote);
-    caseRecord=next.record;
-    caseStatus=next.status;
-    if(next.clearNote)caseNote='';
-  }
-  async function recordAbuseRecipient(route:Parameters<LookupCaseController['recordRecipient']>[1]){
-    const next=await lookupCaseController.recordRecipient(caseRecord,route);
-    caseRecord=next.record;
-    caseStatus=next.status;
-  }
-  async function saveEvidenceCheckpoint(selectedFields:string[],transitionExpectations:Readonly<Record<string,CaseTransitionExpectation>>={}){
-    const next=await lookupCaseController.recordCheckpoint(caseRecord,checkpointFacts,selectedFields,transitionExpectations);
-    caseRecord=next.record;
-    caseStatus=next.status;
-  }
+  async function openLookupCase(){const domain=caseDomain;const evidence=caseEvidence;const depth=lookupEvidenceDepth;await performCaseAction(()=>lookupCaseController.open(domain,evidence,depth));}
+  async function addLookupNote(){const record=caseRecord;const note=caseNote;await performCaseAction(()=>lookupCaseController.appendNote(record,note),(next)=>{if(next.clearNote)caseNote='';});}
+  async function recordAbuseRecipient(route:Parameters<LookupCaseController['recordRecipient']>[1]){const record=caseRecord;await performCaseAction(()=>lookupCaseController.recordRecipient(record,route));}
+  async function saveEvidenceCheckpoint(selectedFields:string[],transitionExpectations:Readonly<Record<string,CaseTransitionExpectation>>={}){const record=caseRecord;const facts=checkpointFacts;await performCaseAction(()=>lookupCaseController.recordCheckpoint(record,facts,[...selectedFields],{...transitionExpectations}));}
   async function copyInvestigationBrief(){
     await copyDraft(formatLookupInvestigationBriefMarkdown(lookupInvestigationBrief),'investigation brief');
   }
   async function recordInvestigationBriefHandoff(){
-    const next=await lookupCaseController.recordBriefHandoff(caseRecord,{
+    const record=caseRecord;
+    const brief={
       target:lookupInvestigationBrief.target,
       taskLabel:lookupInvestigationBrief.taskLabel,
       generatedAt:lookupInvestigationBrief.generatedAt,
       contradictionCount:lookupInvestigationBrief.contradictions.length,
       unknownCount:lookupInvestigationBrief.unknowns.length,
-    });
-    caseRecord=next.record;
-    caseStatus=next.status;
+    };
+    await performCaseAction(()=>lookupCaseController.recordBriefHandoff(record,brief));
   }
   function cancelLookup(){lookupRequestController.cancel();}
   function visualViewForTask(value:LookupTaskView):LookupVisualView{
@@ -290,9 +320,63 @@
   }
   function setTaskView(value:LookupTaskView){
     taskView=normalizeLookupTaskView(value);
+    preferredTaskView=taskView;
     visualView=visualViewForTask(taskView);
     writeLookupPresentation(localStorage,{task:taskView});
   }
+  function lookupUrlSignature(url:URL):string{return `${url.pathname}${url.search}`;}
+  function invalidateLookupForInputChange(){
+    lookupRevision+=1;
+    lookupRequestController.invalidate();
+    loading=false;
+    loadingElapsedMs=0;
+  }
+  function clearCompletedLookupContext(){
+    invalidateCaseActions();
+    result=null;
+    completedLookupTarget='';
+    completedLookupDepth=null;
+    caseRecord=null;
+    caseNote='';
+    caseStatus='';
+    expandedResultSections=[];
+    detailedAssessmentOpen=false;
+  }
+  function handleLookupQueryChange(value:string){
+    query=value;
+    if(!loading)return;
+    invalidateLookupForInputChange();
+    clearCompletedLookupContext();
+    error='';
+  }
+  function applyLookupUrl(url:URL){
+    const next=reconcileLookupUrlState({
+      query,
+      depth:lookupMode,
+      task:taskView,
+      result,
+      completedTarget:completedLookupTarget,
+      error,
+      retainedResultDepth:result?completedLookupDepth??lookupResultDepth(result):null,
+    },url.searchParams,preferredTaskView);
+    const lookupInputChanged=next.query!==query||next.depth!==lookupMode;
+    const clearedResult=Boolean(result&&!next.result);
+    if(lookupInputChanged||clearedResult)invalidateLookupForInputChange();
+    query=next.query;
+    lookupMode=next.depth;
+    taskView=next.task;
+    visualView=visualViewForTask(taskView);
+    result=next.result;
+    completedLookupTarget=next.completedTarget;
+    error=next.error;
+    if(clearedResult)clearCompletedLookupContext();
+    lastReconciledUrl=lookupUrlSignature(url);
+  }
+  $effect(()=>{
+    const signature=lookupUrlSignature(page.url);
+    if(!urlReconciliationReady||signature===lastReconciledUrl)return;
+    applyLookupUrl(page.url);
+  });
   async function showSectionDetail(sectionId:string){
     expandedResultSections=expandedResultSections.includes(sectionId)
       ? expandedResultSections
@@ -378,25 +462,31 @@
   onMount(()=>{
     pageActive=true;
     const presentation=readLookupPresentation(localStorage);
-    taskView=presentation.task;
-    visualView=visualViewForTask(taskView);
+    preferredTaskView=presentation.task;
     const restored=readLookupWorkflowState();
-    if(restored){query=restored.query;lookupMode=restored.lookupMode;includeExternalIntelligence=restored.includeExternalIntelligence;includeMalwareHostIntelligence=restored.includeMalwareHostIntelligence;includeMalwareIocIntelligence=restored.includeMalwareIocIntelligence;includeSecurityTxt=restored.includeSecurityTxt;error=restored.error;result=restored.result;}
-    const q=page.url.searchParams.get('q');
-    const requestedDepth=page.url.searchParams.get('depth');
-    const targetChanged=Boolean(q&&q!==query);
-    const depthChanged=Boolean(requestedDepth&&(requestedDepth==='fast'||requestedDepth==='deep')&&requestedDepth!==lookupMode);
-    if(q&&(targetChanged||depthChanged)){query=q;result=null;error='';}
-    else if(q)query=q;
-    if(requestedDepth==='fast'||requestedDepth==='deep')lookupMode=requestedDepth;
+    if(restored){
+      query=restored.query;lookupMode=restored.lookupMode;includeExternalIntelligence=restored.includeExternalIntelligence;includeMalwareHostIntelligence=restored.includeMalwareHostIntelligence;includeMalwareIocIntelligence=restored.includeMalwareIocIntelligence;includeSecurityTxt=restored.includeSecurityTxt;
+      const restoredDepth=restored.result
+        ? (restored.completedLookupDepth==='fast'||restored.completedLookupDepth==='deep'
+            ? restored.completedLookupDepth
+            : lookupResultDepth(restored.result))
+        : null;
+      result=restored.result&&restoredDepth?restored.result:null;
+      completedLookupTarget=result?restored.completedTarget:'';
+      completedLookupDepth=result?restoredDepth:null;
+      error=restored.result&&!restoredDepth?'':restored.error;
+    }
+    applyLookupUrl(page.url);
+    urlReconciliationReady=true;
     window.addEventListener('hashchange',navigateToCurrentLookupHash);
     if(result)requestAnimationFrame(navigateToCurrentLookupHash);
-    void (async()=>{await refreshProfileContext();if(result)await refreshCase();})();
+    void (async()=>{await refreshProfileContext();if(result)await refreshCase(lookupRevision);})();
     return()=>{
       pageActive=false;
+      invalidateCaseActions();
       window.removeEventListener('hashchange',navigateToCurrentLookupHash);
       lookupRequestController.dispose();
-      writeLookupWorkflowState({query,lookupMode,includeExternalIntelligence,includeMalwareHostIntelligence,includeMalwareIocIntelligence,includeSecurityTxt,error,result});
+      writeLookupWorkflowState({query,completedTarget:completedLookupTarget,completedLookupDepth,lookupMode,includeExternalIntelligence,includeMalwareHostIntelligence,includeMalwareIocIntelligence,includeSecurityTxt,error,result});
     };
   });
 
@@ -419,9 +509,36 @@
       dependencies:serviceDependencyReview?.dependencies??[],
     });
   }
-  function downloadEvidence(){if(!result||!lookupEvidenceDocument)return;const body=JSON.stringify(lookupEvidenceDocument,null,2);const url=URL.createObjectURL(new Blob([body],{type:'application/json'}));const anchor=document.createElement('a');anchor.href=url;anchor.download=evidenceFilename(result);anchor.click();URL.revokeObjectURL(url);}
-  function downloadReadableReport(){if(!result)return;const body=buildLookupReadableReport(result,{risk,applicationVersion:__WHOISLEUTH_VERSION__});const url=URL.createObjectURL(new Blob([body],{type:'text/markdown;charset=utf-8'}));const anchor=document.createElement('a');anchor.href=url;anchor.download=lookupReadableReportFilename(result);anchor.click();URL.revokeObjectURL(url);}
+  function downloadEvidence(){
+    if(!result||!lookupEvidenceDocument)return;
+    evidenceExportStatus='';
+    try{
+      const body=serializeLookupEvidence(lookupEvidenceDocument,true);
+      const url=URL.createObjectURL(new Blob([body],{type:'application/json'}));
+      const anchor=document.createElement('a');anchor.href=url;anchor.download=evidenceFilename(result);anchor.click();URL.revokeObjectURL(url);
+    }catch{
+      evidenceExportStatus='Evidence export was not created because the retained result exceeds the portable evidence bounds.';
+    }
+  }
+  function downloadReadableReport(includeAttribution=true){if(!result)return;const body=buildLookupReadableReport(result,{risk,applicationVersion:__WHOISLEUTH_VERSION__,includeAttribution});const url=URL.createObjectURL(new Blob([body],{type:'text/markdown;charset=utf-8'}));const anchor=document.createElement('a');anchor.href=url;anchor.download=lookupReadableReportFilename(result);anchor.click();URL.revokeObjectURL(url);}
   function downloadInvestigationBrief(){if(!result)return;const body=formatLookupInvestigationBriefMarkdown(lookupInvestigationBrief);const url=URL.createObjectURL(new Blob([body],{type:'text/markdown;charset=utf-8'}));const anchor=document.createElement('a');anchor.href=url;anchor.download=lookupInvestigationBriefFilename(lookupInvestigationBrief);anchor.click();URL.revokeObjectURL(url);}
+  async function downloadClaimPassport(claimId:LookupClaimId):Promise<string>{
+    if(!result)throw new Error('Run a Lookup before exporting a claim passport.');
+    const exported=await buildLookupClaimPassport({
+      readiness:lookupClaimReadiness,
+      claimId,
+      targetType:result.type,
+      target:result.query,
+      lookupDepth:lookupEvidenceDepth,
+      observedAt:lookupObservedAt,
+      evidenceObservedAtById,
+      riskModelVersion:risk?.modelVersion,
+      applicationVersion:__WHOISLEUTH_VERSION__,
+    });
+    const url=URL.createObjectURL(new Blob([exported.content],{type:'application/json;charset=utf-8'}));
+    const anchor=document.createElement('a');anchor.href=url;anchor.download=exported.filename;anchor.click();URL.revokeObjectURL(url);
+    return `Downloaded a portable passport for ${exported.document.claim.label}.`;
+  }
   async function copyDraft(text:string,label:string){try{await navigator.clipboard.writeText(text);draftStatus=`Copied ${label} to the clipboard.`;}catch{draftStatus='Clipboard access was unavailable. Use the email draft link instead.';}}
   function resultSectionLinks(){return buildLookupResultSectionLinks({
       hasWebEvidence,
@@ -442,8 +559,11 @@
       return;
     }
 
-    loading=true;loadingElapsedMs=0;error='';result=null;caseRecord=null;caseNote='';caseStatus='';serviceDependencyScope='';serviceDependencyFalsePositives='';expandedResultSections=[];detailedAssessmentOpen=false;
+    invalidateCaseActions();
+    loading=true;loadingElapsedMs=0;error='';result=null;completedLookupTarget='';completedLookupDepth=null;caseRecord=null;caseNote='';caseStatus='';serviceDependencyScope='';serviceDependencyFalsePositives='';expandedResultSections=[];detailedAssessmentOpen=false;
     const target=entries[0];if(!target)return;
+    const requestedLookupMode=lookupMode;
+    const requestRevision=++lookupRevision;
     const lookupUrl=buildLookupRequestUrl(target,{
       mode:lookupMode,
       includeExternalIntelligence,
@@ -463,19 +583,20 @@
         (elapsedMs)=>{loadingElapsedMs=elapsedMs;},
         refreshProfileContext,
       );
-      if(completed.state==='stale'||!pageActive)return;
+      if(completed.state==='stale'||!pageActive||requestRevision!==lookupRevision||entries[0]!==target||lookupMode!==requestedLookupMode)return;
       const outcome=completed.outcome;
       if(!outcome.ok){error=outcome.message;return;}
-      result=outcome.value;
-      await refreshCase();
+      result=outcome.value;completedLookupTarget=target;completedLookupDepth=requestedLookupMode;
+      await refreshCase(requestRevision);
+      if(!pageActive||requestRevision!==lookupRevision||entries[0]!==target||lookupMode!==requestedLookupMode)return;
       requestAnimationFrame(()=>{
         if(window.location.hash&&lookupEvidenceFamilyForHref(window.location.hash))navigateToCurrentLookupHash();
         else document.querySelector('#result')?.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'});
       });
     }catch{
-      if(pageActive)error='Lookup request could not be prepared.';
+      if(pageActive&&requestRevision===lookupRevision)error='Lookup request could not be prepared.';
     }finally{
-      if(pageActive)loading=false;
+      if(pageActive&&requestRevision===lookupRevision)loading=false;
     }
   }
 </script>
@@ -504,13 +625,19 @@
   {error}
   onsubmit={submit}
   oncancel={cancelLookup}
+  onquerychange={handleLookupQueryChange}
 />
+
+<LookupSavedContextPreview {query} />
+
+{#if profileContextLimitation}<p class="local-context-status" role="status">{profileContextLimitation}</p>{/if}
 
 <LookupEvidenceReplay />
 
 {#if result}
   <section class="result-root" id="result" use:evidenceLinkNavigation>
     <LookupResultHeader title={show(result.registrableDomain||result.query)} state={show(availability.state)} isSubdomain={Boolean(result.isSubdomain)} registrableDomain={show(result.registrableDomain)} inputHostname={show(result.inputHostname)} onExport={downloadEvidence} onReportExport={downloadReadableReport} onBriefExport={downloadInvestigationBrief} />
+    {#if evidenceExportStatus}<p class="local-context-status" role="status">{evidenceExportStatus}</p>{/if}
 
     <LookupPresentationControls
       task={taskView}
@@ -534,7 +661,7 @@
       />
 
       {#if availability.applicable!==false}
-        <LookupAssessment detail={show(availability.detail||availability.state)} confidence={show(availability.confidence)} {risk} {riskSensitivity} {opportunity} signals={[...lookupSummary.signals]} trusted={String(profileSignals.trusted||'')} />
+        <LookupAssessment detail={show(availability.detail||availability.state)} confidence={show(availability.confidence)} {risk} {riskSensitivity} {opportunity} signals={[...lookupSummary.signals]} trusted={String(profileSignals.trusted||'')} task={taskView} />
       {/if}
 
       <details class="detailed-assessment card" bind:open={detailedAssessmentOpen}>
@@ -547,8 +674,9 @@
           support={lookupDecisionSupport}
           onbriefcopy={copyInvestigationBrief}
           onbriefhandoff={caseRecord ? recordInvestigationBriefHandoff : null}
+          actionBusy={caseActionBusy}
         />
-        <LookupClaimReadiness readiness={lookupClaimReadiness} impact={lookupEvidenceImpactPlan} />
+        <LookupClaimReadiness readiness={lookupClaimReadiness} impact={lookupEvidenceImpactPlan} onpassport={downloadClaimPassport} />
 
         {#if lookupEvidenceDocument}
           <LookupInvestigationCapsule
@@ -791,7 +919,7 @@
       />
       {#if sectionDetailVisible('registry')}
       {#if registryAccess.suffix}
-        <RegistryAccessNotice access={registryAccess} />
+        <RegistryAccessNotice access={registryAccess} lookupTarget={completedLookupTarget} />
       {/if}
 
       {#if idnAnalysis && (idnAnalysis.hasIdn || idnAnalysis.referenceMatches.length)}
@@ -854,7 +982,7 @@
       <LookupFamilySummary
         label="Relationships and history"
         description="Inspect source coverage, exact observed relationships, optional passive pivots, and dated lifecycle events in one workspace."
-        metrics={[`${mappedEvidenceSourceCount} mapped sources`, `${lookupAssetGraph.edges.length} relationships`, `${activationContext.events.filter((event)=>Boolean(event.date)).length} dated events`]}
+        metrics={[`${evidenceTopologyProjection.provenanceCounts.direct} mapped direct sources`, `${evidenceTopologyProjection.provenanceCounts.derived} mapped derived analyses`, `${lookupAssetGraph.edges.length} relationships`, `${activationContext.events.filter((event)=>Boolean(event.date)).length} dated events`]}
         expanded={sectionDetailVisible('relationships-history')}
         onshow={()=>void showSectionDetail('relationships-history')}
         onhide={()=>void hideSectionDetail('relationships-history')}
@@ -913,9 +1041,9 @@
           onhide={()=>void hideSectionDetail('case-response')}
         />
         {#if sectionDetailVisible('case-response')}
-        <LookupCaseResponse domain={caseDomain} record={caseRecord} note={caseNote} {caseStatus} {draftStatus} {outreach} recipientResolution={abuseRecipientResolution} setNote={(value) => caseNote = value} createCase={openLookupCase} addNote={addLookupNote} recordRecipient={recordAbuseRecipient} {copyDraft} statusLabel={caseStatusLabel} dispositionLabel={caseDispositionLabel} />
+        <LookupCaseResponse domain={caseDomain} record={caseRecord} note={caseNote} {caseStatus} {draftStatus} {outreach} recipientResolution={abuseRecipientResolution} setNote={(value) => caseNote = value} createCase={openLookupCase} addNote={addLookupNote} recordRecipient={recordAbuseRecipient} {copyDraft} statusLabel={caseStatusLabel} dispositionLabel={caseDispositionLabel} actionBusy={caseActionBusy} />
         {#if caseRecord && checkpointFacts.length}
-          <LookupEvidenceCheckpoint facts={checkpointFacts} pins={caseRecord.evidencePins} onsave={saveEvidenceCheckpoint} />
+          <LookupEvidenceCheckpoint facts={checkpointFacts} pins={caseRecord.evidencePins} onsave={saveEvidenceCheckpoint} actionBusy={caseActionBusy} />
         {/if}
         {/if}
       </section>

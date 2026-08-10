@@ -12,7 +12,10 @@ import {
 import {
   dashboard,
   consoleNavigation,
+  consoleNavigationGroups,
   protectedDestinations,
+  publicResources,
+  referenceNavigation,
   referenceResources,
   toolNavigation,
 } from '../frontend/src/lib/workspaces.ts';
@@ -52,6 +55,9 @@ test('tool guide covers every public-facing investigation tool once', () => {
     'Bulk',
     'Monitor',
   ]);
+  const monitor = toolGuides.find((tool) => tool.id === 'monitor');
+  assert.match(monitor?.result || '', /evidence-debt matrix.*exact saved Bulk source states.*pinned case gaps/iu);
+  assert.match(`${monitor?.result || ''} ${monitor?.next || ''}`, /without starting a request|does not.*start collection/iu);
 });
 
 test('navigation, tool guide, and reference guide use one canonical product vocabulary', () => {
@@ -64,8 +70,21 @@ test('navigation, tool guide, and reference guide use one canonical product voca
   assert.deepEqual(sortById(toolNavigation.map(routeLabel)), sortById(toolGuides.map(guideLabel)));
   assert.deepEqual(sortById(referenceResources.map(routeLabel)), sortById(referenceGuides.map(guideLabel)));
   assert.deepEqual(consoleNavigation, [dashboard, ...toolNavigation]);
+  assert.deepEqual(consoleNavigationGroups.map((group) => ({
+    label: group.label,
+    items: group.items.map((item) => item.label),
+  })), [
+    { label: 'Start', items: ['Dashboard'] },
+    { label: 'Investigate', items: ['Lookup', 'Discover', 'Bulk'] },
+    { label: 'Protect & review', items: ['Monitor', 'Brands'] },
+  ]);
+  assert.deepEqual(consoleNavigationGroups.flatMap((group) => group.items), consoleNavigation);
   assert.deepEqual(protectedDestinations, [dashboard, ...toolNavigation, ...referenceResources]);
-  assert.equal(allStrings({ dashboard, toolNavigation, referenceResources }).some((value) => /\b(?:portal|workspace)\b/iu.test(value)), false);
+  assert.deepEqual(publicResources.map(({ href, label }) => ({ href, label })), [
+    { href: '/resources', label: 'Resources' },
+  ]);
+  assert.deepEqual(referenceNavigation, [...referenceResources, ...publicResources]);
+  assert.equal(allStrings({ dashboard, toolNavigation, referenceResources, publicResources }).some((value) => /\b(?:portal|workspace)\b/iu.test(value)), false);
 });
 
 test('glossary, FAQ, state, and mistake content is bounded and deterministic', () => {

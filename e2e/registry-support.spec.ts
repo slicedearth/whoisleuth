@@ -1,5 +1,22 @@
 import { expect, test } from './fixtures';
 import { expectNoHorizontalOverflow } from './helpers';
+import { buildSourceReliabilityReport } from '../cli/source-reliability.mts';
+
+const SOURCE_REPORT_TIME = '2026-08-05T10:00:00.000Z';
+
+function sourceReportLookup(state: 'success' | 'error', durationMs: number) {
+  return {
+    schema: 'whoisleuth.cli.lookup', version: 1, generatedAt: SOURCE_REPORT_TIME, mode: 'deep',
+    diagnostics: {
+      rdap: { status: state },
+      timing: { version: 1, sources: [{ source: 'rdap', durationMs }] },
+    },
+    availability: {
+      version: 1, status: state, source: 'rdap', observedAt: SOURCE_REPORT_TIME,
+      complete: state === 'success', truncated: false, limitations: [], durationMs,
+    },
+  };
+}
 
 test('the Dashboard and console navigation expose the registry-support reference', async ({ page }) => {
   await page.goto('/dashboard');
@@ -25,7 +42,7 @@ test('the registry-support catalogue filters locally and retains explicit interp
 
   await page.goto('/registry-support');
 
-  await expect(page.getByText('Catalogue v28')).toBeVisible();
+  await expect(page.getByText('Catalogue v29')).toBeVisible();
   await expect(page.locator('.summary-grid article').filter({ hasText: 'Explicit suffixes' }).locator('strong')).toHaveText('335');
   await expect(page.locator('.catalogue-section tbody tr')).toHaveCount(50);
   await expect(page.locator('.result-count')).toContainText('Showing 1–50 of 335 matching profiles (335 total)');
@@ -105,6 +122,32 @@ test('the registry-support catalogue filters locally and retains explicit interp
   expect(unexpectedApiRequests).toEqual([]);
 });
 
+test('the source review keeps exact rates without a decorative rate strip', async ({ page }) => {
+  const report = buildSourceReliabilityReport(JSON.stringify([
+    sourceReportLookup('error', 900),
+    sourceReportLookup('success', 200),
+    sourceReportLookup('success', 220),
+    sourceReportLookup('success', 240),
+    sourceReportLookup('success', 260),
+    sourceReportLookup('success', 280),
+  ]), SOURCE_REPORT_TIME);
+  await page.goto('/registry-support');
+  await page.locator('.report-picker input[type="file"]').setInputFiles({
+    name: 'source-report.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(report)),
+  });
+
+  const rdap = page.locator('.source-card').filter({ has: page.getByRole('heading', { name: 'Rdap' }) });
+  await expect(rdap.locator('dl > div').filter({ hasText: 'Failure' })).toContainText('17%');
+  await expect(rdap.locator('dl > div').filter({ hasText: 'p95 duration' })).toContainText('900 ms');
+  await expect(page.locator('.rate-strip')).toHaveCount(0);
+
+  await page.setViewportSize({ width: 320, height: 700 });
+  await expect(rdap).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+});
+
 test('profile details preserve provenance and safe external-link behavior', async ({ page }) => {
   await page.goto('/registry-support');
   await page.getByLabel('Suffix or capability').fill('uk');
@@ -145,6 +188,14 @@ test('the local inspector explains explicit and generic suffix support without a
   await expect(result).toContainText('Explicit suffix profile');
   await expect(result).toContainText('Sponsored');
   await expect(result).toContainText('No service published by IANA');
+
+  await input.fill('.gt');
+  await inspectButton.click();
+  const officialLookup = result.getByRole('link', { name: /Open official registry lookup/ });
+  await expect(officialLookup).toHaveAttribute('href', 'https://www.gt/sitio/');
+  await expect(officialLookup).toHaveAttribute('target', '_blank');
+  await expect(officialLookup).toHaveAttribute('rel', /\bnoreferrer\b/);
+  await expect(result).toContainText('The inspected domain is not appended to the link');
 
   await input.fill('portal.example.uk');
   await inspectButton.click();

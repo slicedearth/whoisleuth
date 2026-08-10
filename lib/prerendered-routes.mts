@@ -12,7 +12,6 @@ const PRERENDERED_ROUTES = Object.freeze([
   '/dashboard',
   '/demo',
   '/discover',
-  '/guide',
   '/login',
   '/lookup',
   '/monitor',
@@ -28,6 +27,11 @@ const PRERENDERED_HTML_FILE_OVERRIDES = Object.freeze([
   ['/resources', 'resources.html'],
 ] as const);
 
+const PERMANENT_ROUTE_REDIRECTS = Object.freeze([
+  ['/guide', '/resources'],
+  ['/guide/', '/resources'],
+] as const);
+
 const CANONICAL_TRAILING_SLASH_REDIRECTS = Object.freeze(
   PRERENDERED_ROUTES
     .filter((route) => route !== '/')
@@ -36,6 +40,7 @@ const CANONICAL_TRAILING_SLASH_REDIRECTS = Object.freeze(
 
 export {
   CANONICAL_TRAILING_SLASH_REDIRECTS,
+  PERMANENT_ROUTE_REDIRECTS,
   PRERENDERED_HTML_FILE_OVERRIDES,
   PRERENDERED_ROUTES,
 };

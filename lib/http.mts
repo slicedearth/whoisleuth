@@ -5,10 +5,12 @@
 import { HTTP_BASELINE_CONTENT_SECURITY_POLICY } from './security-headers.mts';
 
 const MAX_API_JSON_BODY_BYTES = 1024 * 1024;
+const MAX_API_REQUEST_BODY_READ_MS = 10_000;
 
 const API_REQUEST_ERROR_CODES = Object.freeze({
   INVALID_REQUEST_BODY: 'INVALID_REQUEST_BODY',
   REQUEST_TOO_LARGE: 'REQUEST_TOO_LARGE',
+  REQUEST_TIMEOUT: 'REQUEST_TIMEOUT',
   INTERNAL_ERROR: 'INTERNAL_ERROR',
 });
 
@@ -37,6 +39,10 @@ type BoundedRequestText = {
   status: 'invalid_encoding';
 } | {
   status: 'too_large';
+} | {
+  status: 'timed_out';
+} | {
+  status: 'aborted';
 };
 
 function apiRequestErrorResponse(errorCode: ApiRequestErrorCode): ApiRequestErrorResponse {
@@ -50,6 +56,12 @@ function apiRequestErrorResponse(errorCode: ApiRequestErrorCode): ApiRequestErro
     return {
       statusCode: 413,
       body: { error: 'Request bodies are limited to 1 MiB.', errorCode },
+    };
+  }
+  if (errorCode === API_REQUEST_ERROR_CODES.REQUEST_TIMEOUT) {
+    return {
+      statusCode: 408,
+      body: { error: 'Request body read timed out', errorCode },
     };
   }
   return {
@@ -140,7 +152,11 @@ function withNetlifyFetchApiErrorBoundary<TArguments extends unknown[]>(
 async function readRequestTextCapped(
   request: Request,
   maxBytes = MAX_API_JSON_BODY_BYTES,
+  timeoutMs = MAX_API_REQUEST_BODY_READ_MS,
 ): Promise<BoundedRequestText> {
+  if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > MAX_API_REQUEST_BODY_READ_MS) {
+    throw new TypeError('Request body read deadline is outside the supported boundary.');
+  }
   const declaredLength = request.headers.get('content-length');
   if (declaredLength && /^\d+$/u.test(declaredLength)) {
     const parsedLength = Number(declaredLength);
@@ -153,15 +169,50 @@ async function readRequestTextCapped(
   const reader = request.body.getReader();
   const chunks: Uint8Array[] = [];
   let totalBytes = 0;
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    totalBytes += value.byteLength;
-    if (totalBytes > maxBytes) {
-      await reader.cancel().catch(() => {});
-      return { status: 'too_large' };
+  let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
+  let abortListener: (() => void) | null = null;
+  const timeout = new Promise<{ kind: 'timed_out' }>((resolve) => {
+    timeoutHandle = setTimeout(() => resolve({ kind: 'timed_out' }), timeoutMs);
+  });
+  const aborted = new Promise<{ kind: 'aborted' }>((resolve) => {
+    if (request.signal.aborted) {
+      resolve({ kind: 'aborted' });
+      return;
     }
-    chunks.push(value);
+    abortListener = () => resolve({ kind: 'aborted' });
+    request.signal.addEventListener('abort', abortListener, { once: true });
+  });
+  try {
+    while (true) {
+      const read = reader.read().then(
+        (value) => ({ kind: 'read' as const, value }),
+        (error: unknown) => ({ kind: 'error' as const, error }),
+      );
+      const outcome = await Promise.race([read, timeout, aborted]);
+      if (outcome.kind === 'timed_out' || outcome.kind === 'aborted') {
+        void reader.cancel(outcome.kind).catch(() => {});
+        return { status: outcome.kind };
+      }
+      if (outcome.kind === 'error') {
+        if (request.signal.aborted) {
+          void reader.cancel('aborted').catch(() => {});
+          return { status: 'aborted' };
+        }
+        throw outcome.error;
+      }
+      const { done, value } = outcome.value;
+      if (done) break;
+      totalBytes += value.byteLength;
+      if (totalBytes > maxBytes) {
+        void reader.cancel('too_large').catch(() => {});
+        return { status: 'too_large' };
+      }
+      chunks.push(value);
+    }
+  } finally {
+    if (timeoutHandle !== null) clearTimeout(timeoutHandle);
+    if (abortListener) request.signal.removeEventListener('abort', abortListener);
+    reader.releaseLock();
   }
 
   const bytes = new Uint8Array(totalBytes);
@@ -187,6 +238,7 @@ function netlifyJsonToResponse(response: NetlifyJsonResponse): Response {
 export {
   API_REQUEST_ERROR_CODES,
   MAX_API_JSON_BODY_BYTES,
+  MAX_API_REQUEST_BODY_READ_MS,
   apiErrorResponseFor,
   apiRequestErrorResponse,
   apiUnexpectedErrorResponse,

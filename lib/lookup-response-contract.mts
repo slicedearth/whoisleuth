@@ -7,6 +7,12 @@
 // stay separately attributed and additive; their own normalizers remain the
 // authority for source-specific fields.
 
+import {
+  THREAT_INTELLIGENCE_CATEGORIES,
+  THREAT_INTELLIGENCE_RESULT_STATES,
+  type ThreatIntelligenceResultState,
+} from './threat-intelligence-types.mts';
+
 type JsonPrimitive = boolean | number | string | null;
 type JsonValue = JsonPrimitive | JsonObject | JsonValue[];
 type JsonObject = { readonly [key: string]: JsonValue };
@@ -182,6 +188,9 @@ const MAX_COMPACT_LOOKUP_AVAILABILITY_KEYS = 128;
 const MAX_COMPACT_LOOKUP_DIAGNOSTIC_KEYS = 16;
 const MAX_COMPACT_BULK_TECHNOLOGY_IDS = 12;
 const MAX_THREAT_INTELLIGENCE_PROVIDERS = 10;
+const MAX_THREAT_INTELLIGENCE_FINDINGS = 100;
+const MAX_THREAT_INTELLIGENCE_LIMITATIONS = 10;
+const MAX_THREAT_INTELLIGENCE_TEXT_LENGTH = 500;
 const MAX_LOOKUP_TIMING_MS = 120_000;
 const MAX_LOOKUP_TIMING_SOURCES = 10;
 const CONTROL_CHAR_RE = /[\u0000-\u001f\u007f]/u;
@@ -204,6 +213,13 @@ const COMPACT_BULK_COMPARISON_STATES = new Set<CompactBulkComparisonState>([
 ]);
 const COMPACT_BULK_TECHNOLOGY_ID_RE = /^[a-z0-9][a-z0-9_-]{0,79}$/u;
 const SHA256_RE = /^[a-f0-9]{64}$/u;
+const THREAT_INTELLIGENCE_PROVIDERS: Readonly<Record<string, Readonly<{ label: string; host: string }>>> = Object.freeze({
+  urlscan_search: Object.freeze({ label: 'URLscan archived verdicts', host: 'urlscan.io' }),
+  urlhaus_host: Object.freeze({ label: 'URLhaus malware-host records', host: 'urlhaus.abuse.ch' }),
+  threatfox_domain_ioc: Object.freeze({ label: 'ThreatFox malware IOCs', host: 'threatfox.abuse.ch' }),
+});
+const THREAT_INTELLIGENCE_STATES = new Set<ThreatIntelligenceResultState>(THREAT_INTELLIGENCE_RESULT_STATES);
+const THREAT_INTELLIGENCE_CATEGORY_SET = new Set<string>(THREAT_INTELLIGENCE_CATEGORIES);
 const LOOKUP_TIMING_SOURCES = new Set<LookupTimingSource>([
   'rdap',
   'whois',
@@ -225,6 +241,92 @@ function isJsonObject(value: unknown): value is JsonObject {
 
 function record(value: unknown): JsonObject {
   return isJsonObject(value) ? value : EMPTY_RECORD;
+}
+
+function boundedThreatText(value: unknown, maximum = MAX_THREAT_INTELLIGENCE_TEXT_LENGTH): string | null {
+  if (typeof value !== 'string' || CONTROL_CHAR_RE.test(value)) return null;
+  const text = value.slice(0, maximum * 2).trim();
+  return text ? text.slice(0, maximum) : null;
+}
+
+function threatTimestamp(value: unknown): string | null {
+  const text = boundedThreatText(value, 40);
+  if (!text) return null;
+  const epoch = Date.parse(text);
+  return Number.isFinite(epoch) ? new Date(epoch).toISOString() : null;
+}
+
+function attributedThreatUrl(value: unknown, providerId: string): string | null {
+  const expectedHost = THREAT_INTELLIGENCE_PROVIDERS[providerId]?.host;
+  if (!expectedHost || typeof value !== 'string' || value.length > 1_024 || CONTROL_CHAR_RE.test(value)) return null;
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' && !url.username && !url.password && url.hostname === expectedHost
+      ? url.href
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function normalizeThreatFinding(value: unknown, providerId: string): JsonObject | null {
+  const input = record(value);
+  const category = boundedThreatText(input.category, 32);
+  if (!category || !THREAT_INTELLIGENCE_CATEGORY_SET.has(category)) return null;
+  const referenceUrl = attributedThreatUrl(input.referenceUrl, providerId);
+  const tags = Array.isArray(input.tags)
+    ? [...new Set(input.tags.slice(0, 40).map((tag) => boundedThreatText(tag, 80)).filter((tag): tag is string => tag !== null))].slice(0, 20)
+    : [];
+  return {
+    id: boundedThreatText(input.id, 160),
+    category,
+    providerVerdict: boundedThreatText(input.providerVerdict, 120),
+    detail: boundedThreatText(input.detail),
+    firstObservedAt: threatTimestamp(input.firstObservedAt),
+    lastObservedAt: threatTimestamp(input.lastObservedAt),
+    referenceUrl,
+    tags,
+  };
+}
+
+function normalizeThreatProvider(value: unknown): JsonObject | null {
+  const input = record(value);
+  const identity = record(input.provider);
+  const providerId = boundedThreatText(identity.id, 80);
+  const providerDefinition = providerId ? THREAT_INTELLIGENCE_PROVIDERS[providerId] : null;
+  if (!providerId || !providerDefinition) return null;
+  const state = boundedThreatText(input.state, 32);
+  if (!state || !THREAT_INTELLIGENCE_STATES.has(state as ThreatIntelligenceResultState)) return null;
+  const observationInput = record(input.observation);
+  const limitations = Array.isArray(observationInput.limitations)
+    ? observationInput.limitations
+        .slice(0, MAX_THREAT_INTELLIGENCE_LIMITATIONS * 2)
+        .map((limitation) => boundedThreatText(limitation))
+        .filter((limitation): limitation is string => limitation !== null)
+        .slice(0, MAX_THREAT_INTELLIGENCE_LIMITATIONS)
+    : [];
+  const findings = Array.isArray(input.findings)
+    ? input.findings
+        .slice(0, MAX_THREAT_INTELLIGENCE_FINDINGS * 2)
+        .map((finding) => normalizeThreatFinding(finding, providerId))
+        .filter((finding): finding is JsonObject => finding !== null)
+        .slice(0, MAX_THREAT_INTELLIGENCE_FINDINGS)
+    : [];
+  return {
+    provider: {
+      id: providerId,
+      label: providerDefinition.label,
+    },
+    state,
+    detail: boundedThreatText(input.detail),
+    findings,
+    observation: {
+      observedAt: threatTimestamp(observationInput.observedAt),
+      limitations,
+      complete: typeof observationInput.complete === 'boolean' ? observationInput.complete : null,
+      truncated: typeof observationInput.truncated === 'boolean' ? observationInput.truncated : null,
+    },
+  };
 }
 
 function optionalBoundedText(value: unknown, maxLength: number): boolean {
@@ -474,9 +576,18 @@ function createLookupViewModel(response: LookupHttpResponse | null): LookupViewM
   const securityTxt = record(response?.securityTxt);
   const sslbl = record(response?.sslbl);
   const threatIntelligence = record(response?.threatIntelligence);
+  const seenThreatIntelligenceProviders = new Set<string>();
   const providers = Array.isArray(threatIntelligence.providers)
     ? threatIntelligence.providers
-        .filter(isJsonObject)
+        .slice(0, MAX_THREAT_INTELLIGENCE_PROVIDERS * 2)
+        .map(normalizeThreatProvider)
+        .filter((provider): provider is JsonObject => provider !== null)
+        .filter((provider) => {
+          const providerId = String(record(provider.provider).id || '');
+          if (!providerId || seenThreatIntelligenceProviders.has(providerId)) return false;
+          seenThreatIntelligenceProviders.add(providerId);
+          return true;
+        })
         .slice(0, MAX_THREAT_INTELLIGENCE_PROVIDERS)
     : [];
   const dnsEvidence = record(availability.dns);
@@ -562,6 +673,8 @@ export {
   MAX_LOOKUP_TIMING_MS,
   MAX_LOOKUP_TIMING_SOURCES,
   MAX_THREAT_INTELLIGENCE_PROVIDERS,
+  MAX_THREAT_INTELLIGENCE_FINDINGS,
+  MAX_THREAT_INTELLIGENCE_LIMITATIONS,
   createLookupHttpResponse,
   createLookupViewModel,
   isJsonObject,

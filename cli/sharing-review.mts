@@ -1,10 +1,11 @@
 import {
+  hasVerifiedWholeArtifactIntegrity,
   UnsupportedOfflineArtifactError,
   verifyOfflineArtifact,
 } from './artifact-verify.mts';
 
 const SHARING_REVIEW_SCHEMA = 'whoisleuth.cli.sharing-review';
-const SHARING_REVIEW_VERSION = 1;
+const SHARING_REVIEW_VERSION = 2;
 const MAX_SHARING_REVIEW_BYTES = 15 * 1024 * 1024;
 const TLP_MARKINGS = ['clear', 'green', 'amber', 'amber-strict', 'red'] as const;
 const RECIPIENT_SCOPES = ['public', 'community', 'organization', 'named-recipients'] as const;
@@ -31,7 +32,7 @@ type SharingReviewDocument = Readonly<{
   artifact: Readonly<{
     schema: string | null;
     version: number | null;
-    integrity: 'failed' | 'structure_only' | 'unsupported' | 'verified';
+    integrity: 'failed' | 'projection_integrity' | 'structure_only' | 'unsupported' | 'verified';
   }>;
   sharing: Readonly<{
     requestedMarking: `TLP:${string}`;
@@ -157,7 +158,11 @@ async function buildSharingReview(
   let integrity: SharingReviewDocument['artifact']['integrity'] = 'unsupported';
   try {
     const verification = await verifyOfflineArtifact(raw);
-    integrity = verification.checks.contentIntegrity === 'verified' ? 'verified' : 'structure_only';
+    integrity = verification.state === 'verified' && hasVerifiedWholeArtifactIntegrity(verification)
+      ? 'verified'
+      : verification.state === 'integrity_valid'
+        ? 'projection_integrity'
+        : 'structure_only';
   } catch (error) {
     integrity = error instanceof UnsupportedOfflineArtifactError ? 'unsupported' : 'failed';
   }
@@ -169,6 +174,8 @@ async function buildSharingReview(
       ? 'The artefact passed its supported local integrity contract.'
       : integrity === 'structure_only'
         ? 'The artefact passed its structural contract but has no verified content digest.'
+        : integrity === 'projection_integrity'
+          ? 'The artefact passed its structural contract and projection digests, but those digests do not cover the whole file.'
         : integrity === 'unsupported'
           ? 'This artefact schema has no supported local integrity verifier; review its producer and digest contract manually.'
           : 'The artefact failed its supported structure or integrity contract.');

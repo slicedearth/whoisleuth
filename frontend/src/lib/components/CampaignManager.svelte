@@ -1,8 +1,14 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { untrack } from 'svelte';
   import Pagination from '$lib/components/Pagination.svelte';
+  import CampaignCohortReview from '$lib/components/CampaignCohortReview.svelte';
+  import CampaignTemporalReview from '$lib/components/CampaignTemporalReview.svelte';
+  import type { BrandProfile } from '$lib/analysis/brand-profile-model.ts';
+  import type { CampaignCohortSourceState } from '$lib/analysis/campaign-cohort-review.ts';
+  import type { CaseRelationshipSummary } from '$lib/analysis/case-relationships.ts';
   import type { CaseRecord } from '$lib/cases';
   import { buildCampaignReviewSummary } from '$lib/analysis/campaign-review-summary.ts';
+  import { buildCampaignTemporalReview } from '$lib/analysis/campaign-temporal-review.ts';
   import {
     addCampaignDomain,
     createCampaign,
@@ -16,7 +22,7 @@
     type CampaignRecord,
   } from '$lib/campaigns';
 
-  let { records, onselect, oncount, focusId = '' }:{records:CaseRecord[];onselect?:(record:CaseRecord)=>void;oncount?:(count:number)=>void;focusId?:string}=$props();
+  let { records, profiles, relationshipSummary, cohortSourceStates, initialCampaigns = [], onselect, oncount, onchange, focusId = '' }:{records:CaseRecord[];profiles:BrandProfile[];relationshipSummary:CaseRelationshipSummary;cohortSourceStates:{cases:CampaignCohortSourceState;profiles:CampaignCohortSourceState;relationships:CampaignCohortSourceState};initialCampaigns?:CampaignRecord[];onselect?:(record:CaseRecord)=>void;oncount?:(count:number)=>void;onchange?:(campaigns:CampaignRecord[])=>void;focusId?:string}=$props();
   let campaigns=$state<CampaignRecord[]>([]);
   let expandedId=$state('');
   let newName=$state('');
@@ -26,6 +32,7 @@
   let message=$state('');
   let page=$state(1);
   let memberPage=$state(1);
+  let appliedFocusId=$state('');
 
   const PAGE_SIZE=10;
   const MEMBER_PAGE_SIZE=25;
@@ -40,17 +47,34 @@
   const currentMemberPage=$derived(Math.min(memberPage,memberPageCount));
   const pagedMembers=$derived((expanded?.domains??[]).slice((currentMemberPage-1)*MEMBER_PAGE_SIZE,currentMemberPage*MEMBER_PAGE_SIZE));
   const reviewSummary=$derived(buildCampaignReviewSummary(expanded?.domains??[],records));
+  const temporalReview=$derived(buildCampaignTemporalReview(expanded?.domains??[],records));
 
   function setPage(value:number){page=Math.min(pageCount,Math.max(1,Math.trunc(value)));}
   function setMemberPage(value:number){memberPage=Math.min(memberPageCount,Math.max(1,Math.trunc(value)));}
   function showCampaign(id:string){const index=campaigns.findIndex((campaign)=>campaign.id===id);if(index>=0)page=Math.floor(index/PAGE_SIZE)+1;}
   $effect(()=>{if(page>pageCount)page=pageCount;});
   $effect(()=>{if(memberPage>memberPageCount)memberPage=memberPageCount;});
+  $effect(()=>{
+    const next=initialCampaigns;
+    const requestedFocusId=focusId;
+    const reportCount=oncount;
+    untrack(()=>{
+      campaigns=next;
+      reportCount?.(next.length);
+      if(!requestedFocusId){appliedFocusId='';return;}
+      if(requestedFocusId===appliedFocusId)return;
+      const focused=next.find((campaign)=>campaign.id===requestedFocusId);
+      if(!focused)return;
+      open(focused);
+      appliedFocusId=requestedFocusId;
+    });
+  });
 
   async function refresh(next?:CampaignRecord[]){
     campaigns=next??await loadCampaigns();
     if(expandedId&&!campaigns.some((campaign)=>campaign.id===expandedId))expandedId='';
     oncount?.(campaigns.length);
+    onchange?.(campaigns);
   }
   function open(campaign:CampaignRecord){
     if(expandedId===campaign.id){expandedId='';return;}
@@ -86,11 +110,6 @@
   }
   function openCase(domain:string){const record=caseByDomain.get(domain);if(record)onselect?.(record);}
 
-  onMount(()=>{void (async()=>{
-    await refresh();
-    const focused=focusId?campaigns.find((campaign)=>campaign.id===focusId):null;
-    if(focused)open(focused);
-  })();});
 </script>
 
 <section class="campaign-toolbar card">
@@ -151,6 +170,10 @@
               </div>
               <details><summary>Interpretation limits</summary><ul>{#each reviewSummary.limitations as limitation}<li>{limitation}</li>{/each}</ul></details>
             </section>
+
+            <CampaignCohortReview campaign={campaign} {records} {profiles} {relationshipSummary} sourceStates={cohortSourceStates} {onselect} />
+
+            <CampaignTemporalReview campaign={campaign} review={temporalReview} onmessage={(value)=>message=value} />
 
             <form class="add-case" onsubmit={(event)=>{event.preventDefault();add(campaign);}}>
               <label for={`campaign-case-${campaign.id}`}>Add an existing case</label>

@@ -4,7 +4,9 @@
 
 import {
   buildCaseRelationships,
+  caseRelationshipGroupId,
   filterInvestigationCaseRelationships,
+  normalizeCaseRelationshipGroupId,
   type CaseRelationshipCampaign,
   type CaseRelationshipFilterOptions,
   type CaseRelationshipGroup,
@@ -30,16 +32,6 @@ const CASE_X = 30;
 const RELATIONSHIP_X = 570;
 const NODE_WIDTH = 300;
 const NODE_HEIGHT = 32;
-const RELATIONSHIP_TYPES = new Set([
-  'all',
-  'nameserver_set',
-  'http_final_origin',
-  'ip_address',
-  'certificate',
-  'tracking_identifier',
-  'favicon',
-  'official_asset',
-]);
 
 export interface CaseRelationshipGraphOptions extends CaseRelationshipFilterOptions {
   hiddenIds?: unknown;
@@ -47,6 +39,7 @@ export interface CaseRelationshipGraphOptions extends CaseRelationshipFilterOpti
   groupCaseIds?: unknown;
   focusId?: unknown;
   oneHop?: unknown;
+  selectedRelationshipId?: unknown;
 }
 
 export interface CaseRelationshipGraphCaseNode {
@@ -159,10 +152,6 @@ function yPosition(index: number, count: number): number {
   const top = 24;
   const available = VIEWBOX_HEIGHT - (top * 2) - NODE_HEIGHT;
   return top + (available * index / (count - 1));
-}
-
-function relationshipNodeId(group: CaseRelationshipGroup): string {
-  return `relationship:${group.type}:${group.value}`;
 }
 
 function boundedNodeIds(
@@ -294,16 +283,22 @@ export function projectCaseRelationshipGraph(
   rawOptions: unknown = {},
 ): CaseRelationshipGraph {
   const options = (plainRecord(rawOptions) || {}) as CaseRelationshipGraphOptions;
-  const allGroups = Array.isArray(summary?.groups) ? summary.groups : [];
-  const projectionBacked = summary?.state === 'ready';
-  const filtered = projectionBacked
-    ? filterInvestigationCaseRelationships(summary, options)
-    : null;
-  const type = filtered?.filters.type || (typeof options.type === 'string' && RELATIONSHIP_TYPES.has(options.type)
-    ? options.type
-    : 'all');
-  const sourceGroups = filtered?.groups || (type === 'all' ? allGroups : allGroups.filter((group) => group.type === type));
-  const groups = sourceGroups.slice(0, MAX_RELATIONSHIP_GRAPH_RELATIONSHIPS);
+  const filtered = filterInvestigationCaseRelationships(summary, options);
+  const sourceGroups = filtered.groups;
+  const selectedRelationshipId = normalizeCaseRelationshipGroupId(options.selectedRelationshipId);
+  const ordinaryGroups = sourceGroups.slice(0, MAX_RELATIONSHIP_GRAPH_RELATIONSHIPS);
+  const selectedGroupIndex = selectedRelationshipId
+    ? sourceGroups.findIndex((group) => caseRelationshipGroupId(group) === selectedRelationshipId)
+    : -1;
+  // A matching table selection outside the ordinary overview reserves the
+  // final relationship slot. The 12/24/48 caps and truncation disclosure stay
+  // unchanged; no extra node or edge budget is created for the selection.
+  const groups = selectedGroupIndex >= MAX_RELATIONSHIP_GRAPH_RELATIONSHIPS
+    ? [
+        ...ordinaryGroups.slice(0, MAX_RELATIONSHIP_GRAPH_RELATIONSHIPS - 1),
+        sourceGroups[selectedGroupIndex] as CaseRelationshipGroup,
+      ]
+    : ordinaryGroups;
   const cases = new Map<string, CaseRelationshipMember>();
 
   for (const group of groups) {
@@ -322,23 +317,31 @@ export function projectCaseRelationshipGraph(
   const caseItems = [...cases.values()].sort((left, right) => left.domain.localeCompare(right.domain));
   const caseIds = new Set(caseItems.map((item) => item.id));
   const candidateEdges: CaseRelationshipGraphEdge[] = [];
-  for (let groupIndex = 0; groupIndex < groups.length; groupIndex += 1) {
-    const group = groups[groupIndex];
-    if (!group) continue;
-    const relationshipId = relationshipNodeId(group);
-    for (const member of group.cases) {
-      if (caseIds.has(member.id)) candidateEdges.push({
-        id: `edge:${relationshipId}:${member.id}`,
-        caseId: `case:${member.id}`,
-        relationshipId,
-      });
+  const candidateEdgeIds = new Set<string>();
+  const appendCandidateEdges = (group: CaseRelationshipGroup, members: CaseRelationshipMember[]) => {
+    const relationshipId = caseRelationshipGroupId(group);
+    for (const member of members) {
+      const id = `edge:${relationshipId}:${member.id}`;
+      if (caseIds.has(member.id) && !candidateEdgeIds.has(id)) {
+        candidateEdgeIds.add(id);
+        candidateEdges.push({
+          id,
+          caseId: `case:${member.id}`,
+          relationshipId,
+        });
+      }
     }
-  }
+  };
+  // Give every retained relationship its first two evidence-backed edges
+  // before filling the remaining 48-edge budget. This keeps the selected
+  // reserved relationship visible even when preceding groups are dense.
+  for (const group of groups) appendCandidateEdges(group, group.cases.slice(0, 2));
+  for (const group of groups) appendCandidateEdges(group, group.cases);
   const edges = candidateEdges.slice(0, MAX_RELATIONSHIP_GRAPH_EDGES);
   const connectedRelationships = new Set(edges.map((edge) => edge.relationshipId));
   const connectedCases = new Set(edges.map((edge) => edge.caseId));
   const retainedGroups = groups.map((group, index) => ({ group, index }))
-    .filter(({ group }) => connectedRelationships.has(relationshipNodeId(group)));
+    .filter(({ group }) => connectedRelationships.has(caseRelationshipGroupId(group)));
   const retainedCases = caseItems.filter((item) => connectedCases.has(`case:${item.id}`));
 
   const caseNodes: CaseRelationshipGraphCaseNode[] = retainedCases.map((item) => ({
@@ -353,7 +356,7 @@ export function projectCaseRelationshipGraph(
     height: NODE_HEIGHT,
   }));
   const relationshipNodes: CaseRelationshipGraphRelationshipNode[] = retainedGroups.map(({ group, index }) => ({
-    id: relationshipNodeId(group),
+    id: caseRelationshipGroupId(group),
     kind: 'relationship' as const,
     relationshipIndex: index,
     type: group.type,
@@ -390,6 +393,7 @@ export function projectCaseRelationshipGraph(
   const viewed = applyGraphView(caseNodes, relationshipNodes, edges, options);
 
   const truncated = Boolean(summary?.truncated)
+    || filtered.discardedRelationshipCount > 0
     || sourceGroups.length > groups.length
     || caseItems.length < new Set(groups.flatMap((group) => group.cases.map((item) => item.id))).size
     || candidateEdges.length > edges.length;
@@ -406,14 +410,19 @@ export function projectCaseRelationshipGraph(
     sharedRelationshipNodes: viewed.sharedRelationshipNodes,
     view: viewed.view,
     allNodeCount: viewed.allNodeCount,
-    totalRelationships: filtered?.totalRelationships ?? allGroups.length,
-    matchingRelationships: filtered?.matchingRelationships ?? sourceGroups.length,
-    filters: filtered?.filters || { type },
+    totalRelationships: filtered.totalRelationships,
+    matchingRelationships: filtered.matchingRelationships,
+    filters: filtered.filters,
     state: summary?.state || 'legacy',
     sources: Array.isArray(summary?.sources) ? summary.sources : [],
     scopeOptions: Array.isArray(summary?.scopeOptions) ? summary.scopeOptions : [],
     filterOptionsTruncated: summary?.filterOptionsTruncated === true,
     truncated,
-    limitations: Array.isArray(summary?.limitations) ? summary.limitations : [],
+    limitations: [
+      ...(Array.isArray(summary?.limitations) ? summary.limitations : []),
+      ...(filtered.discardedRelationshipCount
+        ? [`${filtered.discardedRelationshipCount} relationship group${filtered.discardedRelationshipCount === 1 ? ' was' : 's were'} omitted because a stable unique view identifier could not be established.`]
+        : []),
+    ],
   };
 }

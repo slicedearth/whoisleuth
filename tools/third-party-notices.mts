@@ -1,8 +1,17 @@
 #!/usr/bin/env node
 
-import { readFile, readdir, stat, writeFile } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
+import { opendir, realpath, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+  boundedSafeRelativePath,
+  compareCodeUnits,
+  pathIsWithin,
+  requireJsonRecord as record,
+} from './maintainer-tool-helpers.mts';
+import { readBoundedRegularTextFile } from '../lib/bounded-file.mts';
+import { parseBoundedJsonObject } from '../lib/bounded-json.mts';
 
 type JsonRecord = Record<string, unknown>;
 type WritableLike = { write(value: string): unknown };
@@ -24,8 +33,11 @@ export type ProductionPackage = Readonly<{
 export const THIRD_PARTY_NOTICE_PATH = 'frontend/static/third-party-notices.txt';
 export const MAX_NOTICE_LOCKFILE_BYTES = 5 * 1024 * 1024;
 export const MAX_NOTICE_PACKAGES = 500;
+export const MAX_NOTICE_LOCKFILE_PACKAGE_ENTRIES = 20_000;
+export const MAX_NOTICE_DIRECT_DEPENDENCIES = 2_000;
 export const MAX_NOTICE_DOCUMENT_BYTES = 128 * 1024;
 export const MAX_NOTICE_OUTPUT_BYTES = 4 * 1024 * 1024;
+export const MAX_NOTICE_DIRECTORY_ENTRIES = 2048;
 
 const LICENSE_OVERRIDES = new Map([
   ['callsite@1.0.0', 'MIT'],
@@ -33,13 +45,7 @@ const LICENSE_OVERRIDES = new Map([
 const NOTICE_FILENAME_RE = /^(?:licen[cs]e|copying|notice)(?:[._-].*|)$/iu;
 const README_FILENAME_RE = /^readme(?:[._-].*|)$/iu;
 const CONTROL_CHAR_RE = /[\u0000-\u001f\u007f]/u;
-
-function record(value: unknown, label: string): JsonRecord {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    throw new TypeError(`${label} must be a JSON object.`);
-  }
-  return value as JsonRecord;
-}
+const PACKAGE_SEGMENT_RE = /^(?:@?[a-z0-9][a-z0-9._-]{0,213})$/iu;
 
 function boundedToken(value: unknown, label: string, maxLength: number): string {
   if (typeof value !== 'string' || !value || value.length > maxLength || CONTROL_CHAR_RE.test(value)) {
@@ -48,28 +54,60 @@ function boundedToken(value: unknown, label: string, maxLength: number): string 
   return value;
 }
 
-function dependencyNames(value: unknown): string[] {
+function dependencyNames(value: unknown, label: string): string[] {
   if (value === undefined) return [];
-  return Object.keys(record(value, 'dependency map'));
+  const names = Object.keys(record(value, label));
+  if (names.length > MAX_NOTICE_DIRECT_DEPENDENCIES) {
+    throw new TypeError(`${label} exceeds its dependency limit.`);
+  }
+  return names;
 }
 
 function packageNameFromInstallPath(installPath: string): string {
-  const name = installPath.split('/node_modules/').at(-1)?.replace(/^node_modules\//u, '') || '';
-  return boundedToken(name, 'Package name', 214);
+  boundedSafeRelativePath(installPath, 'Package install path', 1024);
+  const segments = installPath.split('/');
+  let packageName = '';
+  for (let index = 0; index < segments.length;) {
+    if (segments[index] !== 'node_modules') {
+      throw new TypeError('Package install path must remain inside node_modules.');
+    }
+    const first = segments[index + 1] ?? '';
+    if (!PACKAGE_SEGMENT_RE.test(first) || first === '.' || first === '..') {
+      throw new TypeError('Package install path contains an invalid package segment.');
+    }
+    if (first.startsWith('@')) {
+      const second = segments[index + 2] ?? '';
+      if (!PACKAGE_SEGMENT_RE.test(second) || second.startsWith('@') || second === '.' || second === '..') {
+        throw new TypeError('Scoped package install path is incomplete or invalid.');
+      }
+      packageName = `${first}/${second}`;
+      index += 3;
+    } else {
+      packageName = first;
+      index += 2;
+    }
+  }
+  return boundedToken(packageName, 'Package name', 214);
 }
 
 export function collectProductionPackages(lockfileValue: unknown): ProductionPackage[] {
   const lockfile = record(lockfileValue, 'package-lock.json');
+  if (lockfile.lockfileVersion !== 3) {
+    throw new TypeError('package-lock.json must use lockfileVersion 3.');
+  }
   const packages = record(lockfile.packages, 'package-lock.json packages');
+  if (Object.keys(packages).length > MAX_NOTICE_LOCKFILE_PACKAGE_ENTRIES) {
+    throw new TypeError('package-lock.json exceeds its package-entry limit.');
+  }
   const root = record(packages[''], 'package-lock.json root package');
   const frontend = packages.frontend === undefined
     ? {}
     : record(packages.frontend, 'package-lock.json frontend workspace');
   const directNames = new Set([
-    ...dependencyNames(root.dependencies),
-    ...dependencyNames(root.optionalDependencies),
-    ...dependencyNames(frontend.dependencies),
-    ...dependencyNames(frontend.optionalDependencies),
+    ...dependencyNames(root.dependencies, 'root dependencies'),
+    ...dependencyNames(root.optionalDependencies, 'root optional dependencies'),
+    ...dependencyNames(frontend.dependencies, 'frontend dependencies'),
+    ...dependencyNames(frontend.optionalDependencies, 'frontend optional dependencies'),
   ]);
   const collected = new Map<string, ProductionPackage>();
 
@@ -90,7 +128,7 @@ export function collectProductionPackages(lockfileValue: unknown): ProductionPac
       direct: directNames.has(name),
       installPath,
     });
-    if (!existing || (!existing.direct && candidate.direct) || installPath.localeCompare(existing.installPath) < 0) {
+    if (!existing || (!existing.direct && candidate.direct) || compareCodeUnits(installPath, existing.installPath) < 0) {
       collected.set(identifier, candidate);
     }
   }
@@ -99,21 +137,24 @@ export function collectProductionPackages(lockfileValue: unknown): ProductionPac
     throw new TypeError('Production dependency inventory is empty or exceeds its package limit.');
   }
   return [...collected.values()]
-    .sort((left, right) => left.name.localeCompare(right.name) || left.version.localeCompare(right.version));
+    .sort((left, right) => compareCodeUnits(left.name, right.name) || compareCodeUnits(left.version, right.version));
 }
 
 async function readBoundedText(filename: string, maxBytes: number): Promise<string> {
-  const metadata = await stat(filename);
-  if (!metadata.isFile() || metadata.size > maxBytes) {
-    throw new TypeError(`${path.basename(filename)} is missing or exceeds its byte limit.`);
-  }
-  return readFile(filename, 'utf8');
+  return readBoundedRegularTextFile(filename, {
+    maximumBytes: maxBytes,
+    minimumBytes: 1,
+    label: path.basename(filename),
+  });
 }
 
 async function readBoundedJson(filename: string): Promise<unknown> {
   const source = await readBoundedText(filename, MAX_NOTICE_LOCKFILE_BYTES);
   try {
-    return JSON.parse(source);
+    return parseBoundedJsonObject(source, {
+      label: path.basename(filename),
+      maximumBytes: MAX_NOTICE_LOCKFILE_BYTES,
+    });
   } catch {
     throw new TypeError(`${path.basename(filename)} is not valid JSON.`);
   }
@@ -129,11 +170,32 @@ function extractReadmeLicense(source: string): string {
   return lines.slice(start, end).join('\n').trim().slice(0, MAX_NOTICE_DOCUMENT_BYTES);
 }
 
-async function packageNoticeDocuments(repositoryRoot: string, packageEntry: ProductionPackage) {
-  const directory = path.join(repositoryRoot, packageEntry.installPath);
-  const filenames = (await readdir(directory))
+async function directoryNames(directory: string): Promise<string[]> {
+  const names: string[] = [];
+  const handle = await opendir(directory);
+  for await (const entry of handle) {
+    names.push(entry.name);
+    if (names.length > MAX_NOTICE_DIRECTORY_ENTRIES) {
+      throw new TypeError('Package directory exceeds its entry limit.');
+    }
+  }
+  return names;
+}
+
+async function packageNoticeDocuments(
+  repositoryRoot: string,
+  nodeModulesRoot: string,
+  packageEntry: ProductionPackage,
+) {
+  const requestedDirectory = path.resolve(repositoryRoot, packageEntry.installPath);
+  const directory = await realpath(requestedDirectory);
+  if (!pathIsWithin(nodeModulesRoot, directory)) {
+    throw new TypeError(`${packageEntry.name} resolves outside the repository node_modules directory.`);
+  }
+  const directoryEntries = await directoryNames(directory);
+  const filenames = directoryEntries
     .filter((filename) => NOTICE_FILENAME_RE.test(filename))
-    .sort((left, right) => left.localeCompare(right))
+    .sort(compareCodeUnits)
     .slice(0, 8);
   const documents: Array<{ source: string; text: string }> = [];
   for (const filename of filenames) {
@@ -145,9 +207,9 @@ async function packageNoticeDocuments(repositoryRoot: string, packageEntry: Prod
   }
   if (documents.length) return documents;
 
-  const readme = (await readdir(directory))
+  const readme = directoryEntries
     .filter((filename) => README_FILENAME_RE.test(filename))
-    .sort((left, right) => left.localeCompare(right))[0];
+    .sort(compareCodeUnits)[0];
   if (readme) {
     const source = await readBoundedText(path.join(directory, readme), MAX_NOTICE_DOCUMENT_BYTES);
     const text = extractReadmeLicense(source);
@@ -160,12 +222,29 @@ async function packageNoticeDocuments(repositoryRoot: string, packageEntry: Prod
 }
 
 export async function buildThirdPartyNotices(repositoryRoot: string): Promise<string> {
-  const lockfile = await readBoundedJson(path.join(repositoryRoot, 'package-lock.json'));
+  const realRepositoryRoot = await realpath(repositoryRoot);
+  const lockfile = await readBoundedJson(path.join(realRepositoryRoot, 'package-lock.json'));
   const packages = collectProductionPackages(lockfile);
+  const nodeModulesRoot = await realpath(path.join(realRepositoryRoot, 'node_modules'));
+  if (!pathIsWithin(realRepositoryRoot, nodeModulesRoot)) {
+    throw new TypeError('node_modules resolves outside the repository root.');
+  }
+  const prefix = [
+    'WHOISleuth third-party production dependency notices',
+    '',
+    'Generated deterministically from package-lock.json and the installed production',
+    'dependency packages. Do not edit this file directly; run npm run licenses:update.',
+    'The inventory includes exact locked versions and excludes development-only packages.',
+    '',
+    `Package count: ${packages.length}`,
+    '',
+    '',
+  ].join('\n');
   const blocks: string[] = [];
+  let retainedBytes = Buffer.byteLength(prefix, 'utf8');
   for (const packageEntry of packages) {
-    const documents = await packageNoticeDocuments(repositoryRoot, packageEntry);
-    blocks.push([
+    const documents = await packageNoticeDocuments(realRepositoryRoot, nodeModulesRoot, packageEntry);
+    const block = [
       '='.repeat(80),
       `${packageEntry.name}@${packageEntry.version}`,
       `Relationship: ${packageEntry.direct ? 'direct production dependency' : 'transitive production dependency'}`,
@@ -175,20 +254,16 @@ export async function buildThirdPartyNotices(repositoryRoot: string): Promise<st
         '',
         document.text,
       ]),
-    ].join('\n'));
+    ].join('\n');
+    const separatorBytes = blocks.length ? 1 : 0;
+    const prospectiveBytes = retainedBytes + separatorBytes + Buffer.byteLength(block, 'utf8') + 1;
+    if (prospectiveBytes > MAX_NOTICE_OUTPUT_BYTES) {
+      throw new TypeError('Third-party notice output exceeds its byte limit.');
+    }
+    blocks.push(block);
+    retainedBytes = prospectiveBytes - 1;
   }
-  const output = [
-    'WHOISleuth third-party production dependency notices',
-    '',
-    'Generated deterministically from package-lock.json and the installed production',
-    'dependency packages. Do not edit this file directly; run npm run licenses:update.',
-    'The inventory includes exact locked versions and excludes development-only packages.',
-    '',
-    `Package count: ${packages.length}`,
-    '',
-    ...blocks,
-    '',
-  ].join('\n');
+  const output = `${prefix}${blocks.join('\n')}\n`;
   if (Buffer.byteLength(output, 'utf8') > MAX_NOTICE_OUTPUT_BYTES) {
     throw new TypeError('Third-party notice output exceeds its byte limit.');
   }
@@ -207,11 +282,21 @@ export async function main(args = process.argv.slice(2), options: MainOptions = 
   const stderr = options.stderr || process.stderr;
   try {
     const mode = parseArguments(args);
-    const repositoryRoot = path.resolve(options.repositoryRoot || process.cwd());
+    const repositoryRoot = await realpath(path.resolve(options.repositoryRoot || process.cwd()));
     const output = await buildThirdPartyNotices(repositoryRoot);
-    const outputPath = path.join(repositoryRoot, THIRD_PARTY_NOTICE_PATH);
+    const outputParent = await realpath(path.dirname(path.join(repositoryRoot, THIRD_PARTY_NOTICE_PATH)));
+    if (!pathIsWithin(repositoryRoot, outputParent)) {
+      throw new TypeError('Third-party notice output directory resolves outside the repository root.');
+    }
+    const outputPath = path.join(outputParent, path.basename(THIRD_PARTY_NOTICE_PATH));
     if (mode === 'write') {
-      await writeFile(outputPath, output, 'utf8');
+      const temporaryPath = `${outputPath}.${process.pid}.${randomUUID()}.tmp`;
+      try {
+        await writeFile(temporaryPath, output, { encoding: 'utf8', flag: 'wx' });
+        await rename(temporaryPath, outputPath);
+      } finally {
+        await rm(temporaryPath, { force: true });
+      }
       stdout.write(`Updated ${THIRD_PARTY_NOTICE_PATH} with the production dependency notices.\n`);
       return 0;
     }

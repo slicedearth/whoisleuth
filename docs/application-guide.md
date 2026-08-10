@@ -1,8 +1,8 @@
 # Application guide
 
 WHOISleuth supports a domain-intelligence workflow from initial discovery to a
-documented case. The public `/guide` page provides the shortest introduction.
-Its task cards link directly to the relevant tool and interpretation sections,
+documented case. The public `/resources` hub provides the shortest introduction
+and focused topic library. Its task cards link directly to the relevant tool and interpretation sections,
 and the public synthetic demo identifies the current, completed, available, and
 upcoming stage of its six-step workflow. Its Lookup and Monitor stages also use
 the production source-topology, lifecycle, retained-activity, and evidence-card
@@ -33,11 +33,12 @@ start a lookup or submit a target to another service.
 
 Dashboard is the landing page inside the signed-in Console. It provides:
 
-- starting points for the five investigation tools;
+- four task-focused starts for Lookup, Brands, Bulk, and acquisition review;
 - bounded counts from browser-local cases, watchlists, and Brand Profiles;
 - a disposable search across known case, campaign, and profile fields;
-- guided investigations for a brand sweep, infrastructure pivot, or new-domain
-  triage; and
+- guided investigations for a brand sweep, infrastructure pivot, new-domain
+  triage, credential-impersonation response, mail-abuse response, or
+  domain-control-change response; and
 - deliberate encrypted or unencrypted export and reviewed import of the
   versioned workspace archive.
 
@@ -45,6 +46,11 @@ While the Console opens, it distinguishes session confirmation, browser-local
 workspace preparation, and destination loading. Those phases describe the
 current boundary only; they do not imply that an evidence source has been
 queried or completed.
+
+Console navigation keeps the existing destinations and URLs while grouping
+them as **Start**, **Investigate**, and **Protect & review**. Dashboard no
+longer repeats case management or the two-domain Bulk form; saved cases remain
+available through the local summary and Monitor.
 
 Search does not contact a provider or create a persistent index. An empty
 result means only that the bounded local projection had no match.
@@ -75,8 +81,9 @@ describes planned source families rather than promising an exact request count:
 redirects, referrals, source eligibility, and bounded retries can change the
 number of requests that actually run.
 
-The Overview and At a glance assessment remain visible. Open **Detailed
-assessment** when you need decision support, claim readiness, a portable
+The Overview and At a glance assessment remain visible. At a glance shows at
+most three task-aware next actions. Open **Detailed assessment** when you need
+the task questions, claim readiness, a portable
 hand-off, or acquisition review. Every top-level evidence family starts
 collapsed; its bounded summary, source count, and limitation count remain
 visible. Open a family directly, follow a section or source-map link to reveal
@@ -88,6 +95,31 @@ reorders the section navigation without changing collection, automatically
 opening evidence, or hiding any source. Expand a section before relying on its
 evidence, collection time, or limitations.
 
+Each claim-readiness row has an explicit **Download passport** action. The
+versioned JSON passport contains only that claim's target type and canonical
+target, observation time and Lookup depth, stable requirement identifiers,
+exact retained source states, model versions, and bounded limitations. It is
+generated in the browser without another request or a browser-local write.
+Raw registry responses, contacts, page values, request paths, credentials, and
+unsupported truth, ownership, safety, or signer-authentication claims are not
+included. The local CLI can verify its deterministic checksum with
+`verify-artifact` and describe its browser/CLI boundary with
+`interchange-report`.
+
+Dashboard's acquisition start supplies a strict in-memory `task=acquisition`
+presentation context and requests Deep mode. The task value is not sent with a
+lookup, retained in workflow state, or used to replace an existing depth choice
+when no valid depth is supplied. Other or malformed task values are ignored.
+
+Before starting a check, **Preview saved context for this target** can be opened
+deliberately to search a disposable bounded projection of cases, campaigns,
+Brand Profiles, and retained relationship observations already in this
+browser. The preview's disposable search projection and its additional store
+reads start only after it is opened,
+shows at most three matches, and reports partial or unavailable local coverage.
+It makes no provider request, writes nothing, and an empty local match is not
+evidence of absence elsewhere.
+
 The Registry interpretation panel classifies bounded `rdapConformance`
 declarations already returned by registry and registrar RDAP. Recognised,
 obsolete, and unclassified identifiers remain distinct. When `reverse_search`
@@ -97,6 +129,13 @@ The preview makes no request, is not saved, does not fetch the server help
 document, and cannot establish that the operator supports or authorises the
 query. An individual response that omits the declaration is not treated as
 proof that the server does not support it.
+
+When the reviewed registry catalogue documents that ordinary WHOIS or RDAP
+collection is unavailable or restricted, the Registry access notice can offer
+the official registry's manual lookup page. Opening it is a deliberate external
+navigation: WHOISleuth does not append the current domain, fetch the page, or
+treat anything displayed there as collected evidence. Enter and submit the
+domain on the registry site only when that registry's conditions permit it.
 
 During collection, Lookup identifies the requested source families and shows
 elapsed time plus a 40-second browser deadline. Every core Express and Netlify
@@ -150,10 +189,14 @@ limitations. This supports traceability without copying raw responses into the
 graph.
 
 Risk and Opportunity cards show signed factor bars beside their exact factor
-lists. Domain results can also show a connected registration-source agreement
-plot, certificate validity and chain summary, and a bounded service and
-technology map. The agreement plot joins each compared field across
-publications and uses shape, glyph, and state colour together. Observed
+lists. Acquisition review presents Opportunity first; every other task presents
+Risk first. The values, factors, and model versions do not change. Domain
+results can also show pairwise registration-source agreement
+lanes, certificate validity and chain summary, and a bounded service and
+technology map. Each agreement lane represents one actual comparison, so a
+field compared in two source pairs is never merged or overwritten. The exact
+source state and value remain in the adjacent table while shape, glyph, and
+state colour provide secondary visual styling. Observed
 lifecycle events use individual colours while their shapes retain the event
 family. These visuals use only evidence already present in the response.
 Source tables, status labels, collection times, provenance, and limitations
@@ -191,6 +234,9 @@ registration evidence. Each report preserves source health, collection time,
 partial states, and limitations while deliberately excluding raw RDAP and
 WHOIS responses, expanded contacts, provider payloads, scripts, and remote
 assets.
+Readable Lookup reports include a quiet WHOISleuth version and source footer by
+default. The browser export control can omit that presentation footer without
+changing the evidence, source-health states, or limitations in the report.
 
 **Download brief** creates a shorter deterministic decision packet from the
 current task view. It keeps verified normalised facts, explicit
@@ -212,8 +258,8 @@ public-key digest, issuer and any reviewed Brand Profile certificate baseline.
 Each edge retains its own source health and limitations; a failed or incomplete
 TLS check is not shown as an absent certificate relationship.
 
-The collapsed **Replay exported evidence** control accepts only a current
-first-party Lookup evidence JSON document of up to 5 MB. The browser validates
+The collapsed **Replay exported evidence** control accepts a supported
+first-party Lookup evidence JSON document in schema 25 or 26, up to 5 MB. The browser validates
 the schema, nesting, and structured entry count, calculates a SHA-256 file
 digest, and can compare it with a trusted checksum pasted before import. It
 displays a bounded normalised source and fact summary, historical review brief,
@@ -227,11 +273,14 @@ time, collection depth, source state, completeness, truncation, schema version,
 and limitations. A later Lookup compares those fields without converting an
 unavailable or incomplete source into a change or an absent finding.
 
-**Export evidence JSON** remains the separate full-fidelity option. It can
-include normalised and raw registration sources, supporting observations,
-diagnostics, comparisons, and provenance. It can contain public contact data,
-so review and store it accordingly. Offline replay intentionally exposes only
-its bounded normalised review projection.
+**Export evidence JSON** remains the richer portable option. It can include
+normalised registration sources, a bounded privacy-projected registry RDAP
+publication, supporting observations, explicitly projected diagnostics,
+comparisons, and provenance. Request and response headers, cookies, session and
+credential fields, URL credentials, queries, fragments, and full WHOIS bodies
+are excluded. It can still contain public contact data, so review and store it
+accordingly. Offline replay intentionally exposes only its bounded normalised
+review projection.
 
 ### Discover
 
@@ -308,6 +357,15 @@ results initially sort by latest retained observation. **Reset view** restores
 that default for certificate-log results and restores review-cue ordering for
 local generation.
 
+For each normalised certificate-search keyword, browser-local history keeps the
+last complete baseline and a bounded ever-seen domain set. A later complete
+search can therefore distinguish a first local observation, a result continuing
+from the previous complete search, and a reappearance after absence from that
+previous baseline. Capped searches remain lower bounds: they neither replace
+the complete baseline or ever-seen set nor establish reappearance, continuity,
+absence, current activity, ownership, or control. Earlier history migrated from
+schemas 1 or 2 remains explicitly incomplete.
+
 **Nameservers** is a separate, deliberate hosted pivot. Enter one nameserver
 hostname and one registry suffix. WHOISleuth uses IANA RDAP bootstrap data to
 select that suffix's registry and requests the registry's RFC 9082
@@ -333,11 +391,22 @@ It supports pasted domains, text files, common delimited files, and handoffs
 from Discover. Results can be filtered and sorted without changing the saved or
 exported scan data.
 
+The Bulk review interface presents Risk and exact source evidence without an
+Opportunity column, sort choice, or cockpit value. Existing compact
+Opportunity values and model versions remain unchanged in saved-session and CSV
+compatibility contracts; hiding them is presentation-only.
+
 One browser or CLI Bulk job accepts at most 500 Fast targets or 50 Deep
 targets. The Standard pacing option runs at most eight Fast or three Deep
 lookups concurrently; Gentle and Balanced apply lower pressure. These are
 per-job safety and resource ceilings, not authorisation to scan domains. Each
 target remains subject to deployment, provider, and source limits.
+
+For reviewed suffix profiles that document an official manual registry lookup,
+the focused Bulk review shows that link for the current row. The link is derived
+locally from the catalogue, adds no compact response field or network request,
+and does not append the domain. Any lookup on the registry site remains a
+separate analyst action under that registry's conditions.
 
 Bulk sessions are saved only when the analyst names and saves the current
 investigation. Each bounded browser-local session retains the input domain
@@ -355,9 +424,18 @@ two-domain workspace, peer-outlier review, saved-session change summary, and
 CSV export can use those fields without another request. Empty or incomplete
 fields retain their source state and are not treated as evidence of absence.
 The complete technology evidence, certificate profile, page markup, script
-references, and raw TLS material remain excluded. Saved session schema 3 adds
-this envelope; schema 1 and 2 sessions remain readable and show the new fields
-as not recorded.
+references, and raw TLS material remain excluded. Saved session schema 3 added
+this envelope. Schema 4 records whether browser-local Brand Profile context was
+ready or unavailable and, for a selected active profile, only its opaque
+identifier and `updatedAt` revision. One immutable snapshot is used for every
+worker in a scan. While the preference is loading, starting, retrying, and
+restoring are disabled. If the read settles unavailable, collection may proceed
+but trust, allowlist, IDN-reference, page-baseline, favicon, and official-asset
+conclusions remain null or explicitly inconclusive, and exported rows retain the
+bounded limitation. Schemas 1 through 3 remain readable, but their unproven
+profile-derived conclusions and potentially profile-influenced Risk assessment
+are withheld until the domain is rescanned. A schema-4 row restored under a
+different active profile or profile revision is quarantined in the same way.
 
 The peer-outlier matrix derives a per-dimension cohort baseline only from rows
 with comparable evidence. It reports baseline share, strong, moderate, or
@@ -372,7 +450,9 @@ mail with an authentication gap, incomplete authentication evidence, null MX,
 no explicit MX, and incomplete DNS evidence separate. When a Brand Profile is
 active, the review compares those observations with its configured standard,
 defensive-no-mail, or parked mail posture. That profile is analyst-configured
-context rather than a live observation. The review never opens an SMTP
+context rather than a live observation. A loading or unavailable Profile source
+is reported as inconclusive, never as “no active profile” or “no official
+domain”; export remains unavailable until the source is ready. The review never opens an SMTP
 connection, sends a message, tests a mailbox or catch-all behaviour, or treats
 mail configuration as evidence of use, control, intent, safety, or abuse.
 Selecting one classification adds only those visible domains to the existing
@@ -407,14 +487,18 @@ browser workspace contain it. The resulting focused, shared, widespread, or
 limited-sample label describes only this local collection. It is not an
 internet-wide rarity estimate and does not strengthen an attribution claim.
 
-Defensive registration coverage groups a generated scan by mutation family and
-domain ending. It distinguishes protected or allowlisted domains, registered
-exposures, available gaps, and unknown results without making extra requests.
-Stacked bars summarise the same exact counts retained in the accompanying
-tables. A deterministic next-action plan places available and unresolved rows
-first, followed by registered candidates and profile-protected names. Its P1
-through P3 labels describe review order only; they are not a risk or
-maliciousness score. The CSV export includes the complete bounded plan.
+The defensive-registration profile listing groups a generated scan by mutation
+family and domain ending. Registered, available, and unknown are mutually
+exclusive retained registration outcomes. The profile-listed count is a
+separate, overlapping local classification that can accompany any outcome; it
+does not establish protection, ownership, or control. Stacked bars summarise
+only the registration outcomes, while the profile-listed count is shown beside
+them and retained in the exact table. A deterministic next-action plan places
+available and unresolved rows first, followed by registered candidates,
+regardless of profile membership. Its P1 and P2 labels describe review order
+only; they are not a risk or maliciousness score. The CSV export includes the
+complete bounded plan, each candidate's outcome and profile-listed flag, and
+the overlapping profile-listed share.
 
 Discover can optionally compare Unicode candidates with one analyst-selected
 RFC 7940 LGR XML file. The file stays in the current browser tab, is capped at
@@ -424,9 +508,9 @@ review reports whether candidate code points appear in the imported table for
 the analyst-entered suffix. It does not evaluate contextual rules, variant
 dispositions, eligibility, price, live acceptance, or availability, so
 "listed by table" is never presented as registrable.
-The two-domain workspace similarly adds a field matrix while preserving
+The two-domain workspace presents the exact delta and table while preserving
 source state, values, evidence links, conflicts, one-sided evidence, and
-limitations in its table.
+limitations.
 
 ### Brands
 
@@ -434,6 +518,29 @@ A Brand Profile stores official domains, product names, selected domain
 endings, approved partners, allowlists, active and retired DKIM selectors, a
 standard, defensive-no-mail, or parked mail profile, and an optional
 official-site baseline. Profiles stay in the current browser by default.
+
+The **Brand review inbox**, shown after the saved-profile list, is a disposable
+browser-local view of the existing source-aware analyst review inbox. It shows
+review rows only for cases that an analyst explicitly associated with the
+active profile in Monitor. Profile names, domains, tags, certificates, and
+evidence values never create or remap an association. Loading and failed local
+reads remain explicit; a failed profile read is not presented as an empty inbox
+or as unresolved references. The projection inspects at most 500 cases, 100
+profiles, 500 review rows, and 100 unresolved references, renders review rows
+in pages of 25, and makes no request, write, score, or alert. It preserves each
+row's source state, completeness, limitations, and owning-case link and does
+not imply ownership, attribution, intent, safety, or maliciousness.
+
+Deleting a Brand Profile does not cascade into cases. An exact retained
+identifier with no currently readable matching profile remains an unresolved
+reference, with a link back to its owning case. Recreating a same-named profile
+under a different identifier does not resolve or rewrite that reference. A
+profile import that reuses one exact identifier for a different normalised
+profile name is rejected atomically instead of rebinding an associated case.
+Immediately before deletion, Brands rereads Cases and includes the retained
+linked-case count in the confirmation. If that read fails, the confirmation
+states that impact cannot be checked and the Case source remains unavailable;
+it never reports a stale zero.
 
 The official-domain posture audit checks configured DNS and mail controls such
 as registry transfer restrictions, nameserver delegation, SPF, DMARC, MX,
@@ -465,6 +572,13 @@ registrar MFA, recovery-email separation, registry lock, emergency contacts,
 account audit logging, and zone backups. These statements are not inferred
 from public evidence and must be reviewed by the analyst.
 
+Imported certificate events that retain bounded event identity, issuer, expiry,
+DNS-name count, and name-completeness metadata can be replayed on the Brands
+page against the profile's reviewed issuer and certificate-name expectations.
+The replay uses browser-local cases only and makes no request. Incomplete events
+remain indeterminate, and a difference is a review lead rather than evidence of
+improper issuance, compromise, ownership, or control.
+
 The browser-local **Domain Control Centre** organises every official domain
 against the same analyst-authored operating context. A profile can record a
 zone-intent label, lifecycle state, recovery dependency, and bounded approved
@@ -473,6 +587,14 @@ dependencies, nameserver-preflight coverage, planned changes, and retirement
 state. These fields are planning context only: they neither change DNS nor
 infer provider control. Approved windows label matching retained changes as
 expected while preserving the underlying observations and their limitations.
+
+The adjacent **Cross-domain posture matrix** projects those saved baselines and
+their latest retained compact posture observations into one domain-by-control
+review. Cells keep aligned, drift, review, unavailable, unknown, unsupported,
+suppressed, approved-window, and not configured states separate and link back
+to the exact local baseline and retained observation used. The projection makes
+no request, changes no configuration, and is not an uptime, ownership, control,
+or continuous-monitoring claim.
 
 An official-site baseline can retain bounded page identity and fingerprint
 data without keeping page HTML, URL paths, query strings, credentials, or
@@ -501,8 +623,10 @@ Exact matches against three bounded passive page-title phrases can add a
 collision-prone deprovision cue, while evidence older than 30 days is labelled
 stale and incomplete DNS stays inconclusive. Analysts can optionally enter reviewed expected targets or parent
 namespaces and exact reviewed false-positive targets for the current Lookup
-view; neither input is retained. Candidate, unresolved, active, unsupported,
-and false-positive labels remain manual review states. “Active” means only
+view; neither input is retained. Candidate, unresolved, active, not-classified,
+within-domain, and false-positive labels remain manual review states. Nameserver
+and mail-server dependencies are kept as observed infrastructure but are not
+qualified by the hosted-service deprovisioning catalogue. “Active” means only
 that the target also appeared in the already-observed final HTTP navigation
 chain. WHOISleuth does not follow targets, query provider accounts, test
 claimability, or label a service dangling or vulnerable. A catalogue, scope,
@@ -548,6 +672,18 @@ Monitor contains Cases, Campaigns, Relationships, and Watchlists.
   states become separately attributed observations, while every state remains
   a note so not-reproduced or expired reviews cannot erase earlier evidence.
   The export does not publish or transmit the bundle.
+  Up to eight named investigation branches can group references to retained
+  pins, checkpoints, assertions, and actions without copying or changing the
+  referenced material. Branches are analyst organisation aids, remain active
+  or resolved independently, and do not establish that a hypothesis is true.
+  A case can also retain up to eight exact opaque Brand Profile identifiers,
+  added or removed explicitly through its expanded Monitor detail. These
+  associations are never derived from a domain, profile name, tag,
+  certificate, or evidence value. Monitor sends bounded add or remove intents;
+  each browser-local retry rereads the current Case, so a disjoint change from
+  another tab is preserved. Full-list replacement remains a Case-model
+  primitive for an explicit record edit. An over-limit or invalid identifier
+  is rejected rather than repaired.
 - **Campaigns** group existing case domains without duplicating their evidence
   or implying attribution. An expanded campaign projects bounded counts for
   password fields, official-identity relationships, redirect or transport
@@ -556,6 +692,26 @@ Monitor contains Cases, Campaigns, Relationships, and Watchlists.
   visible. Cue overlap is expected and the projection is not a score,
   ownership claim, campaign-attribution finding, or maliciousness
   determination.
+  An analyst can optionally select one exact Brand Profile identifier already
+  retained by campaign cases and build a transient cohort review. The review
+  scopes only those explicitly associated cases and explains membership with
+  four visible rationale kinds: exact retained relationships, bounded
+  similarity, pairwise registrar and creation-publication observations within
+  seven days, and qualified common infrastructure. The seven-day rule applies
+  to each linked pair, so the endpoints of a connected cohort can be farther
+  apart. Incomplete or unavailable Case, Profile, and relationship sources stay
+  explicit; missing evidence never becomes a negative finding. Case assertions
+  appear in a separate context section and cannot alter cohort membership,
+  identifiers, ordering, or counts. The projection inspects at most 50 scoped
+  cases, 25 cohorts, 100 rationales, and 100 assertions, makes no request or
+  write, and is not included in the ordinary campaign export.
+  It can also arrange source-qualified evidence pins and reviewed sightings
+  into a retained source sequence across registration, certificate
+  publication, DNS, TLS, website, and mail families. Missing family coverage
+  stays explicit. These are first and last times retained by the local cases,
+  not global first-seen or service-activation dates. A deliberate local JSON
+  export carries the bounded sequence, interpretation limits, and a SHA-256
+  integrity digest without changing campaign or case storage.
 - **Relationships** review analyst-selected Bulk observations and project
   typed, provenance-backed links across those records, stored case evidence,
   and campaign membership without another network request. The Evidence
@@ -577,6 +733,17 @@ Monitor contains Cases, Campaigns, Relationships, and Watchlists.
   selected cluster as a separately typed analyst assertion in one case.
   Common software, services, templates, placeholders, trackers, and copied
   content mean these groups are pivots rather than attribution.
+  The relationship graph and exact table share one transient relationship,
+  source, retained-period, completeness, and case-or-campaign filter set. A
+  relationship selected with the graph or an **Inspect relationship** table
+  control is reflected in both views whenever the table's private search
+  includes that relationship; inspecting a table-only relationship reserves
+  one slot in the bounded graph overview without increasing its limits. Table
+  search, sort, direction, and page remain private view controls.
+  These filters, the selected relationship, graph focus, pins, hides, and
+  comparison group are not saved to the URL or browser-local records. Graph
+  downloads continue to export the bounded evidence matching the common
+  filters, while excluding selection and private table-view state.
   Split, merge, label, and dismiss controls alter only the current review view;
   export the reviewed view if it needs to be retained.
 - **Watchlists** retain bounded material-change timelines and can be rescanned
@@ -605,6 +772,26 @@ dismiss the exact current gap only after choosing a fixed review outcome. The
 dismissal is recorded in the case investigation trail; it does not resolve or
 delete a pin or assertion. A changed gap receives a new fingerprint and returns
 to the queue.
+
+The **Evidence-debt matrix** below the inbox is a separate bounded drill-down.
+It projects only exact per-source states retained in saved Bulk rows and
+separately pinned case evidence. It does not infer debt from empty compact
+fields, unpinned case history, or an absent source row. A Bulk row with no
+retained source coverage is counted separately from a source explicitly saved
+as skipped; neither means that the source reported absence. Expected
+unsupported registry services are excluded using the authority-aware registry
+capability catalogue.
+
+The matrix counts actionable partial, stale, conflicting, rate-limited,
+unexpected unsupported, and unavailable states by retained source. Its
+deterministic next-evidence queue ranks conflicts and source failures before
+partial, stale, or unsupported evidence. Saved Bulk rows link to the saved
+session control for a deliberate retry; case pins link to a prefilled Deep
+Lookup or the owning case. Opening those links does not start collection. A
+refresh can remain partial or expose a new disagreement, so the queue describes
+counterfactual review effects rather than promising a complete or favourable
+result. Bulk age uses the existing seven-day review threshold, while case pins
+use the existing 30-day stale threshold.
 
 The Dashboard **privacy-safe browser handoff** accepts a pasted domain or
 HTTP(S) URL and reduces it to either the normalised hostname or sanitised
@@ -878,16 +1065,31 @@ The export excludes notes, tags, assertions, actions, contacts, raw source data,
 provider payloads, and stored Risk scores. It does not train or change the
 model.
 
+After running the offline CLI calibration, Monitor can open its explicit
+`--summary-json` output in the Cases view. That versioned summary contains no
+case ID, domain, record list, evidence value or factor. The strict local parser
+rechecks aggregate counts, fixed-threshold metrics, Wilson intervals, strata,
+privacy declarations and model-version compatibility before display. The file
+stays in the current tab, is not uploaded or written to browser storage, and is
+discarded when cleared or when the view closes. The explorer reports sample
+sufficiency and model compatibility but never recommends a threshold or changes
+Risk.
+
 ## Guided investigations
 
-Dashboard can coordinate three standard recipes:
+Dashboard can coordinate six fixed standard recipes:
 
 - brand sweep;
 - infrastructure pivot; and
-- new-domain triage.
+- new-domain triage;
+- credential-impersonation response;
+- mail-abuse response; and
+- domain-control-change response.
 
-The public Guide includes one deterministic offline practice scenario for each
-recipe. Each scenario uses reserved fictional domains, fixed evidence states
+The public Resources hub includes one deterministic offline practice scenario for each
+of the three foundational investigation recipes. The response-preparation
+recipes use actual retained Case actions and therefore are not simulated as
+operational outcomes. Each practice scenario uses reserved fictional domains, fixed evidence states
 and limitations, and immediate decision feedback. It makes no request, writes
 no browser storage, produces no finding, and can be reset or replayed at any
 time.
@@ -900,6 +1102,13 @@ export. It can carry one canonical target, an explicitly selected candidate,
 and a bounded set of reviewed Bulk domains between tools. Tool links focus the
 relevant input, and a return control keeps the current guide step reachable
 beside long results.
+
+The three response recipes end in the existing Case response workspace. They
+can guide an analyst to record a deliberately selected published recipient
+route with its source and limitations and then open local packet preflight.
+They never discover contacts, send a packet, submit a form, change a provider
+or defensive system, claim that a route is reachable, or convert packet
+generation into an action outcome.
 
 The guide stores only compact progress in the current tab's `sessionStorage`.
 It does not decide when evidence is sufficient, create a case automatically,
@@ -923,7 +1132,7 @@ deletion, changes case disposition, or rewrites collected source evidence.
 Reloading the page clears the pending undo action.
 
 Dashboard also provides a browser-local template manager. A custom template
-must start from one of the three standard guides. It can rename instructions,
+must start from one of the six fixed standard guides. It can rename instructions,
 clarify expected evidence and completion criteria, omit an existing step, or
 add an approval gate. It cannot introduce a new route or operation, execute
 code, start a request, submit evidence, alter a case, or remove an approval
@@ -959,6 +1168,19 @@ shows observation time separately from browser storage time, preserves
 completeness, truncation, derivation, and source state, and links back to its
 owning record. The projection does not copy raw payloads, pin values, analyst
 notes, or relationship values, and it never starts collection.
+
+The same Timeline view includes a bounded **Retained change review** for exact
+derived comparison rows. It offers adjacent snapshots from one case or website
+profile history, retained watchlist change events, and only a saved Bulk-session
+pair that the analyst selects explicitly. Publication, entity, temporal,
+expectation, membership, and reconciliation meanings remain distinct. The
+metadata-only index shows owner, mode, source state, observation or retention
+time, completeness, truncation, and limitations before deriving exact values
+for the selected owner. Missing or partial later evidence is not represented as
+removal or resolution. Detail-bound omissions, rows omitted by the retained
+source, and suppressed duplicate exact rows are disclosed separately. This
+transient review neither pairs saved sessions
+automatically nor starts collection, stores another copy, or changes an owner.
 
 The Cases view also accepts the strict WHOISleuth external-findings schema,
 fixed-column finding rows in CSV or JSON, sanitised web-capture summaries and
@@ -1013,8 +1235,20 @@ unknown, unsupported, suppressed, or not configured. The analyst must
 explicitly retain an audit before it becomes the previous comparison point.
 Suppressions require a reason and can expire. Desired state and retained
 observations are included in deliberate Brand Profile, workspace, or
-single-baseline exports; they are never applied to registrar, DNS, mail, or
-certificate-provider accounts.
+domain-control passport exports; they are never applied to registrar, DNS,
+mail, or certificate-provider accounts.
+
+A domain-control passport contains only explicitly selected official-domain
+nameserver, DS, MX, CAA, TLS issuer or public-key, transfer-lock, and
+renewal-review expectations. It omits profile identity, brands, contacts,
+notes, retained observations, change windows, suppressions, and other
+browser-only planning. The browser verifies its canonical SHA-256 digest
+before showing a field-level import preview. Imports require explicit domain
+and field selection, never delete a destination value by omission, and require
+separate confirmation before adding a new official domain. The same
+version-two manifest can be verified and reviewed by the CLI, while historical
+version-one manifests remain readable through their exact legacy integrity
+contract.
 
 ## Browser-local storage and archives
 
@@ -1043,7 +1277,7 @@ Dashboard can create one deliberate workspace archive for the supported
 collections and preferences, including retained relationship observations and
 compact saved Bulk sessions. Version 2 added Bulk sessions, version 3 added
 website profile snapshots, version 4 added investigation templates, and version
-5 adds the current website-profile snapshot section contract. Versions 1
+5 added Bulk review state. Versions 1
 through 4 remain readable and do not invent missing later sections.
 The recommended download wraps the ordinary checksummed archive in
 passphrase-based browser-local authenticated encryption. The passphrase is
@@ -1054,6 +1288,32 @@ uses the existing non-destructive merge rules. Both formats exclude login sessio
 passwords, API credentials, hosted-monitor keys, raw upstream payloads, tab
 state, and unrelated browser storage.
 
+Before any section integrity or importability claim, the reader enforces the
+exact versioned fields for the archive root, manifest, and every manifest
+entry. Additional policy, credential, or raw-payload fields at those envelope
+layers therefore invalidate both ordinary and authenticated encrypted imports
+even if every declared section checksum still matches. Each section's own
+bounded normalizer separately governs unknown fields inside its records.
+
+Workspace envelope version 5 accepts Case sections from schemas 2 through 12.
+Cases from schemas 2 through 11 migrate with no Brand Profile references;
+schema 12 preserves the exact field. A case import merges references
+existing-first and retains at most eight after inspecting at most 32 imported
+candidates, reporting any bounded omission. Omission cannot clear an existing
+reference. Profile imports still merge under their own identity rules: if a
+same-named local profile has a different opaque identifier, the Case reference
+is not remapped and may remain unresolved. If the same exact profile identifier
+would represent a different normalised name, the profile merge and dependent
+Case and Settings sections are rejected rather than rebinding an association or
+active-profile preference. Malformed workspace profile identifiers are skipped
+consistently in preview and application without generating replacements.
+Settings preview is recomputed against the analyst's current section selection.
+If imported Settings name an active Profile that is not already local and the
+Brand Profiles section is deselected, that preference is skipped and the
+current local preference is preserved; application reports the same outcome. A checksummed
+Case schema 13 section is isolated as unsupported. The workspace envelope
+remains version 5 and the Brand Profile envelope remains version 6.
+
 The active IndexedDB codec remains plaintext JSON. Archive encryption protects
 the downloaded file while locked, not an open Console or the active browser
 database. See [browser-local data architecture](browser-local-data.md) for the
@@ -1061,8 +1321,18 @@ full threat model, migration, rollback, capacity, and encryption boundaries.
 The local CLI's `verify-artifact` command can check archive structure and
 checksums without displaying evidence. An encrypted archive requires a separate
 passphrase file before the command can authenticate its ciphertext and inspect
-the inner checksums; without one, only the envelope is checked. See
+the inner checksums; without one, only the envelope is checked. Use
+`--strict-exit` when automation must receive exit 4 for envelope-only or
+projection-only assurance. Supplying `--manifest` together with an exact
+`--manifest-entry` additionally distinguishes byte-for-byte retained artefact
+identity from canonical-only or mismatched identity; this does not establish
+that the underlying observation was accurate or remains current. See
 [offline artefact verification](cli-reference.md#offline-artefact-verification).
+The separate metadata-only
+[interchange fidelity report](cli-reference.md#interchange-fidelity-report)
+states which field groups a recognised archive, passport, profile export, or
+case pack preserves or deliberately excludes. It does not print stored values
+or imply that two different formats are lossless.
 
 ## Reports and exports
 
@@ -1071,16 +1341,31 @@ workflow they can contain public registration contacts, analyst notes, source
 observations, or compact case history.
 
 - Use a Lookup Markdown report for a bounded readable domain, IP, or ASN
-  summary. It omits raw registration payloads and expanded contacts.
+  summary. It omits raw registration payloads and expanded contacts. A quiet
+  generator footer is included by default and can be omitted from the readable
+  presentation; structured JSON evidence always retains bounded generator
+  metadata for provenance.
+- Use Case report v8 JSON or Markdown when the recipient should receive the
+  ordinary case projection. Both forms deliberately expose the exact opaque
+  Brand Profile identifiers selected on that case and state that an
+  association does not establish ownership or attribution. The structured
+  array is cloned and remains independent of the saved case.
 - Use the Lookup JSON evidence package when complete captured source material
   is required, and treat it as potentially containing public contact data.
+- Use a Lookup claim passport when a recipient needs the exact source-health
+  basis for one narrow readiness statement without the full Lookup evidence
+  package. Its checksum detects file changes but does not authenticate an
+  analyst or establish the statement as true.
 - Use the portable investigation capsule when a recipient needs one manifest
   tying the current evidence-file digest to the bounded investigation brief,
   relationship graph, source schemas, and application version. The capsule
   does not embed the Lookup evidence file. A deliberate option can include
   bounded analyst decisions and assertions from the linked case; notes,
-  contacts, actions, and raw payloads remain excluded. Checksums detect changed
-  content but do not authenticate a signer.
+  contacts, actions, and raw payloads remain excluded. Version 2 binds the
+  complete capsule, including metadata and source-contract digests, while the
+  linked Lookup file remains external. Checksums detect changed content but do
+  not authenticate a signer. Legacy version 1 verifies only its embedded
+  projections.
 - Build a case response packet only after recording the category, affected
   party, exact HTTP(S) URLs, observed harm, UTC observation time, and separately
   sourced contact routes. Select the intended audience first: the local preview
@@ -1089,6 +1374,16 @@ observations, or compact case history.
   hosting/network, security-contact, browser/blocklist, or internal-SOC review.
   JSON, Markdown, and email-text outputs remain local, require review, and do
   not submit anything.
+- Use Monitor's Brand-protection operations report for bounded aggregate views
+  over current recorded Case actions. “Prepared” means the action state is
+  explicitly `ready_for_review`; a generated packet is not counted. Submitted,
+  acknowledged, resolved, closed, overdue, follow-up, reference, and outcome
+  counts likewise require the corresponding retained state or field. Every
+  view states its Case/action denominator, selected `updatedAt` time window,
+  source availability, omissions, and limitations. The aggregate JSON excludes
+  domains, recipients, notes, references, outcome text, and raw evidence, and
+  does not calculate delivery, takedown time, service levels, trends, success
+  rates, or causation.
 - When Registry RDAP declares redacted fields, use the disclosure planner to
   build a minimised JSON review packet from those bounded declarations and a
   separate analyst-authored purpose, justification, requested-field selection,

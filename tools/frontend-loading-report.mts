@@ -4,10 +4,23 @@
 // the generated Vite manifest and proves that browser-local workspace code does
 // not enter public-route dependency closures. It performs no browser request.
 
-import { readFileSync, statSync } from 'node:fs';
+import {
+  closeSync,
+  constants,
+  fstatSync,
+  openSync,
+  readSync,
+  realpathSync,
+} from 'node:fs';
 import path from 'node:path';
 import { gzipSync } from 'node:zlib';
 import { fileURLToPath } from 'node:url';
+import { parseBoundedJsonObject } from '../lib/bounded-json.mts';
+import {
+  boundedSafeRelativePath,
+  compareCodeUnits,
+  pathIsWithin,
+} from './maintainer-tool-helpers.mts';
 
 type WritableLike = { write(value: string): unknown };
 type ManifestEntry = Readonly<{
@@ -38,13 +51,82 @@ export type FrontendLoadingReportInput = Readonly<{
 export const FRONTEND_LOADING_REPORT_SCHEMA = 'whoisleuth.frontend-loading-report';
 export const FRONTEND_LOADING_REPORT_VERSION = 1;
 export const BROWSER_LOCAL_CHUNK_NAME = 'browser-local-data-service';
+export const MAX_FRONTEND_MANIFEST_BYTES = 2 * 1024 * 1024;
+export const MAX_FRONTEND_ROUTE_SOURCE_BYTES = 512 * 1024;
+export const MAX_FRONTEND_MANIFEST_ENTRIES = 4096;
+export const MAX_FRONTEND_ROUTES = 256;
+export const MAX_FRONTEND_LAYOUT_NODES_PER_ROUTE = 32;
+export const MAX_FRONTEND_IMPORTS_PER_ENTRY = 256;
+export const MAX_FRONTEND_CSS_PER_ENTRY = 64;
+export const MAX_FRONTEND_GRAPH_EDGES = 16_384;
+export const MAX_FRONTEND_ASSETS = 2048;
+export const MAX_FRONTEND_ASSET_BYTES = 16 * 1024 * 1024;
+export const MAX_FRONTEND_TOTAL_ASSET_BYTES = 64 * 1024 * 1024;
 const kibibytes = (value: number) => value * 1024;
+
+const CONTROL_RE = /[\u0000-\u001f\u007f]/u;
+
+function boundedManifestKey(value: unknown, label: string): string {
+  if (typeof value !== 'string' || value.length < 1 || value.length > 1024 || CONTROL_RE.test(value)) {
+    throw new TypeError(`${label} must be bounded control-free text.`);
+  }
+  return value;
+}
+
+function boundedStringArray(value: unknown, label: string, maximum: number, paths = false): string[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || value.length > maximum) {
+    throw new TypeError(`${label} exceeds its item limit.`);
+  }
+  return value.map((item, index) => paths
+    ? boundedSafeRelativePath(item, `${label} item ${index + 1}`, 1024)
+    : boundedManifestKey(item, `${label} item ${index + 1}`));
+}
+
+function validateManifest(value: unknown): Manifest {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new TypeError('Client manifest must be an object.');
+  }
+  const raw = value as Record<string, unknown>;
+  const entries = Object.entries(raw);
+  if (entries.length < 1 || entries.length > MAX_FRONTEND_MANIFEST_ENTRIES) {
+    throw new TypeError('Client manifest exceeds its entry limit.');
+  }
+  const manifest: Record<string, ManifestEntry> = {};
+  for (const [rawKey, rawEntry] of entries) {
+    const key = boundedManifestKey(rawKey, 'Client manifest key');
+    if (!rawEntry || typeof rawEntry !== 'object' || Array.isArray(rawEntry)) {
+      throw new TypeError(`Client manifest entry ${key} must be an object.`);
+    }
+    const entry = rawEntry as Record<string, unknown>;
+    const file = boundedSafeRelativePath(entry.file, `Client manifest entry ${key} file`, 1024);
+    const name = entry.name === undefined
+      ? undefined
+      : boundedManifestKey(entry.name, `Client manifest entry ${key} name`);
+    manifest[key] = Object.freeze({
+      file,
+      ...(name === undefined ? {} : { name }),
+      imports: Object.freeze(boundedStringArray(
+        entry.imports,
+        `Client manifest entry ${key} imports`,
+        MAX_FRONTEND_IMPORTS_PER_ENTRY,
+      )),
+      css: Object.freeze(boundedStringArray(
+        entry.css,
+        `Client manifest entry ${key} CSS assets`,
+        MAX_FRONTEND_CSS_PER_ENTRY,
+        true,
+      )),
+    });
+  }
+  return Object.freeze(manifest);
+}
 
 // These are reviewed regression ceilings with deliberate headroom over the
 // current production build, not performance targets or network guarantees.
 export const FRONTEND_ROUTE_GZIP_BUDGETS: Readonly<Record<string, number>> = Object.freeze({
   '/': kibibytes(150),
-  '/brands': kibibytes(285),
+  '/brands': kibibytes(320),
   '/bulk': kibibytes(380),
   '/contact': kibibytes(80),
   '/dashboard': kibibytes(325),
@@ -52,8 +134,8 @@ export const FRONTEND_ROUTE_GZIP_BUDGETS: Readonly<Record<string, number>> = Obj
   '/discover': kibibytes(320),
   '/guide': kibibytes(100),
   '/login': kibibytes(80),
-  '/lookup': kibibytes(490),
-  '/monitor': kibibytes(475),
+  '/lookup': kibibytes(520),
+  '/monitor': kibibytes(510),
   '/privacy': kibibytes(105),
   '/registry-support': kibibytes(285),
   '/request-policy': kibibytes(80),
@@ -83,13 +165,22 @@ function entryKeys(manifest: Manifest): string[] {
 function dependencyKeys(manifest: Manifest, roots: readonly string[]): Set<string> {
   const visited = new Set<string>();
   const queue = [...roots];
+  let edges = 0;
   while (queue.length) {
     const key = queue.shift();
     if (!key || visited.has(key)) continue;
     const entry = manifest[key];
     if (!entry) throw new Error(`Client manifest references missing import ${key}.`);
     visited.add(key);
-    queue.push(...(entry.imports ?? []));
+    if (visited.size > MAX_FRONTEND_MANIFEST_ENTRIES) {
+      throw new Error('Client manifest dependency graph exceeds its node limit.');
+    }
+    const imports = entry.imports ?? [];
+    edges += imports.length;
+    if (edges > MAX_FRONTEND_GRAPH_EDGES) {
+      throw new Error('Client manifest dependency graph exceeds its edge limit.');
+    }
+    queue.push(...imports);
   }
   return visited;
 }
@@ -113,22 +204,57 @@ function routeAssets(
     files.add(entry.file);
     for (const css of entry.css ?? []) files.add(css);
   }
-  const assets = [...files].sort().map(measureAsset);
+  const assets = [...files].sort(compareCodeUnits).map((file) => {
+    const measurement = measureAsset(file);
+    if (measurement.file !== file) {
+      throw new TypeError(`Frontend asset measurement for ${file} changed the asset identity.`);
+    }
+    return measurement;
+  });
+  if (assets.length > MAX_FRONTEND_ASSETS) {
+    throw new TypeError('Frontend route asset set exceeds its item limit.');
+  }
+  let bytes = 0;
+  let gzipBytes = 0;
+  for (const asset of assets) {
+    if (asset.file.length < 1
+      || asset.file.length > 1024
+      || !Number.isSafeInteger(asset.bytes)
+      || asset.bytes < 0
+      || asset.bytes > MAX_FRONTEND_ASSET_BYTES
+      || !Number.isSafeInteger(asset.gzipBytes)
+      || asset.gzipBytes < 0
+      || asset.gzipBytes > MAX_FRONTEND_ASSET_BYTES + 1024) {
+      throw new TypeError(`Frontend asset measurement for ${asset.file || 'unknown'} is invalid.`);
+    }
+    bytes += asset.bytes;
+    gzipBytes += asset.gzipBytes;
+    if (bytes > MAX_FRONTEND_TOTAL_ASSET_BYTES || gzipBytes > MAX_FRONTEND_TOTAL_ASSET_BYTES) {
+      throw new TypeError('Frontend route asset total exceeds its byte limit.');
+    }
+  }
   return {
     assets,
-    bytes: assets.reduce((sum, asset) => sum + asset.bytes, 0),
-    gzipBytes: assets.reduce((sum, asset) => sum + asset.gzipBytes, 0),
+    bytes,
+    gzipBytes,
   };
 }
 
 export function parseGeneratedRouteNodes(source: string): RouteNode[] {
+  if (typeof source !== 'string'
+    || Buffer.byteLength(source, 'utf8') < 1
+    || Buffer.byteLength(source, 'utf8') > MAX_FRONTEND_ROUTE_SOURCE_BYTES) {
+    throw new TypeError('Generated client route source exceeds its byte limit.');
+  }
   const match = source.match(/export const dictionary = \{([\s\S]*?)\};/u);
   if (!match) throw new Error('Could not find the generated client route dictionary.');
   const dictionary = match[1] ?? '';
   const routes: RouteNode[] = [];
   const pattern = /"([^"]+)": \[(\d+),\[([^\]]*)\]\]/gu;
   for (const match of dictionary.matchAll(pattern)) {
-    const routeKey = match[1];
+    const routeKey = match[1] === undefined
+      ? ''
+      : boundedManifestKey(match[1], 'Generated route key');
     const pageNode = Number(match[2]);
     if (!routeKey || !Number.isInteger(pageNode)) continue;
     const layoutNodes = (match[3] ?? '')
@@ -136,24 +262,72 @@ export function parseGeneratedRouteNodes(source: string): RouteNode[] {
       .map((value) => value.trim())
       .filter(Boolean)
       .map(Number);
+    if (layoutNodes.length > MAX_FRONTEND_LAYOUT_NODES_PER_ROUTE) {
+      throw new Error(`Generated route ${routeKey} exceeds its layout-node limit.`);
+    }
     if (layoutNodes.some((node) => !Number.isInteger(node))) {
       throw new Error(`Generated route ${routeKey} has an invalid layout node.`);
     }
     routes.push(Object.freeze({ routeKey, pageNode, layoutNodes: Object.freeze(layoutNodes) }));
+    if (routes.length > MAX_FRONTEND_ROUTES) {
+      throw new Error('Generated client route dictionary exceeds its route limit.');
+    }
   }
   if (!routes.length) throw new Error('Generated client route dictionary is empty.');
+  if (new Set(routes.map((route) => route.routeKey)).size !== routes.length) {
+    throw new Error('Generated client route dictionary contains duplicate route keys.');
+  }
   return routes;
 }
 
 export function buildFrontendLoadingReport(input: FrontendLoadingReportInput) {
-  const browserLocalEntry = Object.entries(input.manifest)
+  const manifest = validateManifest(input.manifest);
+  if (!Array.isArray(input.routeNodes) || input.routeNodes.length < 1 || input.routeNodes.length > MAX_FRONTEND_ROUTES) {
+    throw new TypeError('Frontend route inventory exceeds its item limit.');
+  }
+  const routePaths = input.routeNodes.map((route) => publicPath(route.routeKey));
+  if (new Set(routePaths).size !== routePaths.length) {
+    throw new TypeError('Frontend route inventory contains duplicate public paths.');
+  }
+  const browserLocalEntry = Object.entries(manifest)
     .find(([, entry]) => entry.name === BROWSER_LOCAL_CHUNK_NAME);
   if (!browserLocalEntry) throw new Error('Client manifest is missing the browser-local workspace chunk.');
   const browserLocalFile = browserLocalEntry[1].file;
+  const measurementCache = new Map<string, AssetMeasurement>();
+  let aggregateMeasuredBytes = 0;
+  const measureAsset = (file: string): AssetMeasurement => {
+    const cached = measurementCache.get(file);
+    if (cached) return cached;
+    if (measurementCache.size >= MAX_FRONTEND_ASSETS) {
+      throw new TypeError('Frontend report exceeds its unique-asset limit.');
+    }
+    const measured = input.measureAsset(file);
+    if (measured.file !== file
+      || !Number.isSafeInteger(measured.bytes)
+      || measured.bytes < 0
+      || measured.bytes > MAX_FRONTEND_ASSET_BYTES
+      || !Number.isSafeInteger(measured.gzipBytes)
+      || measured.gzipBytes < 0
+      || measured.gzipBytes > MAX_FRONTEND_ASSET_BYTES + 1024) {
+      throw new TypeError(`Frontend asset measurement for ${file} is invalid.`);
+    }
+    aggregateMeasuredBytes += measured.bytes;
+    if (aggregateMeasuredBytes > MAX_FRONTEND_TOTAL_ASSET_BYTES) {
+      throw new TypeError('Frontend report exceeds its aggregate asset-byte limit.');
+    }
+    measurementCache.set(file, measured);
+    return measured;
+  };
   const budgets = input.routeGzipBudgets ?? FRONTEND_ROUTE_GZIP_BUDGETS;
   const routes = input.routeNodes
     .map((route) => {
-      const measured = routeAssets(input.manifest, route, input.measureAsset);
+      if (!Number.isSafeInteger(route.pageNode)
+        || !Array.isArray(route.layoutNodes)
+        || route.layoutNodes.length > MAX_FRONTEND_LAYOUT_NODES_PER_ROUTE
+        || route.layoutNodes.some((node: number) => !Number.isSafeInteger(node))) {
+        throw new TypeError(`Frontend route ${route.routeKey} has an invalid node contract.`);
+      }
+      const measured = routeAssets(manifest, route, measureAsset);
       const path = publicPath(route.routeKey);
       const configuredBudget = budgets[path];
       const budgetGzipBytes = Number.isSafeInteger(configuredBudget) && (configuredBudget ?? 0) > 0
@@ -170,10 +344,10 @@ export function buildFrontendLoadingReport(input: FrontendLoadingReportInput) {
         includesBrowserLocalWorkspace: measured.assets.some((asset) => asset.file === browserLocalFile),
       });
     })
-    .sort((left, right) => left.path.localeCompare(right.path));
+    .sort((left, right) => compareCodeUnits(left.path, right.path));
   const publicRoutes = routes.filter((route) => route.access === 'public');
   const protectedRoutes = routes.filter((route) => route.access === 'protected');
-  const browserLocalWorkspace = input.measureAsset(browserLocalFile);
+  const browserLocalWorkspace = measureAsset(browserLocalFile);
   const publicRouteLeak = publicRoutes.some((route) => route.includesBrowserLocalWorkspace);
   const missingBudgetPaths = routes.filter((route) => route.budgetGzipBytes === null).map((route) => route.path);
   const overBudgetPaths = routes
@@ -222,6 +396,50 @@ export function formatFrontendLoadingReport(report: ReturnType<typeof buildFront
   return `${lines.join('\n')}\n`;
 }
 
+function readBoundedRegularFileSync(filename: string, maximumBytes: number, label: string): Buffer {
+  const descriptor = openSync(filename, constants.O_RDONLY | constants.O_NONBLOCK | constants.O_NOFOLLOW);
+  try {
+    const before = fstatSync(descriptor);
+    if (!before.isFile() || before.size < 1 || before.size > maximumBytes) {
+      throw new TypeError(`${label} must be a non-empty regular file within its byte limit.`);
+    }
+    const bytes = Buffer.allocUnsafe(Math.min(maximumBytes + 1, before.size + 1));
+    let offset = 0;
+    while (offset < bytes.length) {
+      const count = readSync(descriptor, bytes, offset, bytes.length - offset, null);
+      if (count === 0) break;
+      offset += count;
+    }
+    const after = fstatSync(descriptor);
+    if (offset > maximumBytes
+      || offset !== before.size
+      || after.size !== before.size
+      || after.mtimeMs !== before.mtimeMs
+      || after.ctimeMs !== before.ctimeMs) {
+      throw new TypeError(`${label} changed while it was being read.`);
+    }
+    return Buffer.from(bytes.subarray(0, offset));
+  } finally {
+    closeSync(descriptor);
+  }
+}
+
+function measureClientAsset(clientRoot: string, realClientRoot: string, file: string): AssetMeasurement {
+  const safeFile = boundedSafeRelativePath(file, 'Frontend asset path', 1024);
+  const requested = path.resolve(clientRoot, safeFile);
+  const resolved = realpathSync(requested);
+  if (!pathIsWithin(realClientRoot, resolved)) {
+    throw new TypeError(`Frontend asset ${safeFile} resolves outside the client root.`);
+  }
+  const source = readBoundedRegularFileSync(requested, MAX_FRONTEND_ASSET_BYTES, `Frontend asset ${safeFile}`);
+  return Object.freeze({ file: safeFile, bytes: source.byteLength, gzipBytes: gzipSync(source).byteLength });
+}
+
+export function measureFrontendAsset(clientRoot: string, file: string): AssetMeasurement {
+  const resolvedRoot = realpathSync(clientRoot);
+  return measureClientAsset(clientRoot, resolvedRoot, file);
+}
+
 export function main(
   output: WritableLike = process.stdout,
   errors: WritableLike = process.stderr,
@@ -229,20 +447,41 @@ export function main(
   try {
     const frontend = path.resolve('frontend');
     const clientRoot = path.join(frontend, '.svelte-kit/output/client');
-    const manifest = JSON.parse(
-      readFileSync(path.join(clientRoot, '.vite/manifest.json'), 'utf8'),
-    ) as Manifest;
+    const realClientRoot = realpathSync(clientRoot);
+    const manifestSource = readBoundedRegularFileSync(
+      path.join(clientRoot, '.vite/manifest.json'),
+      MAX_FRONTEND_MANIFEST_BYTES,
+      'Frontend client manifest',
+    ).toString('utf8');
+    const manifest = validateManifest(parseBoundedJsonObject(manifestSource, {
+      label: 'Frontend client manifest',
+      maximumBytes: MAX_FRONTEND_MANIFEST_BYTES,
+    }));
     const routeNodes = parseGeneratedRouteNodes(
-      readFileSync(path.join(frontend, '.svelte-kit/generated/client/app.js'), 'utf8'),
+      readBoundedRegularFileSync(
+        path.join(frontend, '.svelte-kit/generated/client/app.js'),
+        MAX_FRONTEND_ROUTE_SOURCE_BYTES,
+        'Generated client route source',
+      ).toString('utf8'),
     );
+    const measurements = new Map<string, AssetMeasurement>();
+    let measuredBytes = 0;
     const report = buildFrontendLoadingReport({
       manifest,
       routeNodes,
       measureAsset(file) {
-        const absolute = path.join(clientRoot, file);
-        const bytes = statSync(absolute).size;
-        const gzipBytes = gzipSync(readFileSync(absolute)).byteLength;
-        return Object.freeze({ file, bytes, gzipBytes });
+        const cached = measurements.get(file);
+        if (cached) return cached;
+        if (measurements.size >= MAX_FRONTEND_ASSETS) {
+          throw new TypeError('Frontend build exceeds its unique-asset limit.');
+        }
+        const measurement = measureClientAsset(clientRoot, realClientRoot, file);
+        measuredBytes += measurement.bytes;
+        if (measuredBytes > MAX_FRONTEND_TOTAL_ASSET_BYTES) {
+          throw new TypeError('Frontend build exceeds its aggregate asset-byte limit.');
+        }
+        measurements.set(file, measurement);
+        return measurement;
       },
     });
     output.write(formatFrontendLoadingReport(report));

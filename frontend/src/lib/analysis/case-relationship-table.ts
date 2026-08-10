@@ -5,7 +5,9 @@
 
 import {
   buildCaseRelationships,
+  caseRelationshipGroupId,
   filterInvestigationCaseRelationships,
+  normalizeCaseRelationshipGroupId,
   type CaseRelationshipFilterOptions,
   type CaseRelationshipGroup,
   type CaseRelationshipSummary,
@@ -16,16 +18,6 @@ export const MAX_RELATIONSHIP_TABLE_ROWS = 50;
 export const MAX_RELATIONSHIP_TABLE_MEMBERS = 20;
 export const MAX_RELATIONSHIP_TABLE_QUERY_LENGTH = 100;
 
-const TYPES = new Set([
-  'all',
-  'nameserver_set',
-  'http_final_origin',
-  'ip_address',
-  'certificate',
-  'tracking_identifier',
-  'favicon',
-  'official_asset',
-]);
 const SORTS = new Set(['type', 'value', 'member_count']);
 const DIRECTIONS = new Set(['asc', 'desc']);
 const TYPE_ORDER = new Map([
@@ -43,9 +35,11 @@ export interface CaseRelationshipTableOptions extends CaseRelationshipFilterOpti
   sort?: unknown;
   direction?: unknown;
   page?: unknown;
+  selectedRelationshipId?: unknown;
 }
 
 export interface CaseRelationshipTableRow extends CaseRelationshipGroup {
+  id: string;
   caseCount: number;
   omittedCases: number;
   omittedObservations: number;
@@ -118,21 +112,19 @@ export function projectCaseRelationshipTable(
   summary: CaseRelationshipSummary,
   rawOptions: CaseRelationshipTableOptions = {},
 ) {
-  const projectionBacked = summary?.state === 'ready';
-  const provenanceFiltered = projectionBacked
-    ? filterInvestigationCaseRelationships(summary, rawOptions)
-    : null;
-  const type = provenanceFiltered?.filters.type || normalizeOption(rawOptions.type, TYPES, 'all');
+  const provenanceFiltered = filterInvestigationCaseRelationships(summary, rawOptions);
   const query = normalizeQuery(rawOptions.query);
   const sort = normalizeOption(rawOptions.sort, SORTS, 'type');
   const direction = normalizeOption(rawOptions.direction, DIRECTIONS, 'asc');
   const requestedPage = normalizePage(rawOptions.page);
+  const selectedRelationshipId = normalizeCaseRelationshipGroupId(rawOptions.selectedRelationshipId);
 
-  const sourceGroups = provenanceFiltered?.groups || summary.groups.filter((group) => type === 'all' || group.type === type);
+  const sourceGroups = provenanceFiltered.groups;
   const filtered = sourceGroups.filter((group) => !query || searchable(group).includes(query));
 
   const sorted = [...filtered].map((group) => ({
     ...group,
+    id: caseRelationshipGroupId(group),
     caseCount: group.cases.length,
   })).sort((left, right) => {
     const compared = compareRows(left, right, sort);
@@ -142,8 +134,13 @@ export function projectCaseRelationshipTable(
   const pageCount = Math.max(1, Math.ceil(sorted.length / MAX_RELATIONSHIP_TABLE_ROWS));
   const currentPage = Math.min(requestedPage, pageCount);
   const pageStart = (currentPage - 1) * MAX_RELATIONSHIP_TABLE_ROWS;
-  const projectedFilters: CaseRelationshipFilterOptions = provenanceFiltered?.filters ?? { type };
-  let truncated = summary.truncated;
+  const selectedRelationshipIndex = selectedRelationshipId
+    ? sorted.findIndex((row) => row.id === selectedRelationshipId)
+    : -1;
+  const selectedRelationshipPage = selectedRelationshipIndex < 0
+    ? null
+    : Math.floor(selectedRelationshipIndex / MAX_RELATIONSHIP_TABLE_ROWS) + 1;
+  let truncated = summary.truncated || provenanceFiltered.discardedRelationshipCount > 0;
   const rows: CaseRelationshipTableRow[] = sorted.slice(pageStart, pageStart + MAX_RELATIONSHIP_TABLE_ROWS).map((row) => {
     const omittedCases = Math.max(0, row.cases.length - MAX_RELATIONSHIP_TABLE_MEMBERS);
     if (omittedCases) truncated = true;
@@ -158,8 +155,9 @@ export function projectCaseRelationshipTable(
   return {
     version: CASE_RELATIONSHIP_TABLE_VERSION,
     rows,
-    totalRelationships: provenanceFiltered?.totalRelationships ?? summary.groups.length,
+    totalRelationships: provenanceFiltered.totalRelationships,
     matchingRelationships: filtered.length,
+    selectedRelationshipPage,
     currentPage,
     pageCount,
     pageSize: MAX_RELATIONSHIP_TABLE_ROWS,
@@ -167,7 +165,7 @@ export function projectCaseRelationshipTable(
     rangeEnd: pageStart + rows.length,
     truncated,
     filters: {
-      ...projectedFilters,
+      ...provenanceFiltered.filters,
       query,
       sort,
       direction,
@@ -176,6 +174,11 @@ export function projectCaseRelationshipTable(
     sources: Array.isArray(summary?.sources) ? summary.sources : [],
     scopeOptions: Array.isArray(summary?.scopeOptions) ? summary.scopeOptions : [],
     filterOptionsTruncated: summary?.filterOptionsTruncated === true,
-    limitations: summary.limitations,
+    limitations: [
+      ...summary.limitations,
+      ...(provenanceFiltered.discardedRelationshipCount
+        ? [`${provenanceFiltered.discardedRelationshipCount} relationship group${provenanceFiltered.discardedRelationshipCount === 1 ? ' was' : 's were'} omitted because a stable unique view identifier could not be established.`]
+        : []),
+    ],
   };
 }

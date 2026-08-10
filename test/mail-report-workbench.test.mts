@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { describe, test } from 'node:test';
 
 import { gzipSync, zipSync } from 'fflate';
@@ -45,6 +46,18 @@ const TLS_REPORT = {
 };
 
 describe('local aggregate mail report parsing', () => {
+  test('withholds an old review while retained reports are reconciled to changed profile scope', () => {
+    const source = readFileSync(new URL('../frontend/src/lib/components/MailReportWorkbench.svelte', import.meta.url), 'utf8');
+    const reconciliation = source.slice(
+      source.indexOf('} else if (reports.length) {'),
+      source.indexOf('</script>'),
+    );
+    assert.ok(reconciliation.indexOf('review = null;') >= 0);
+    assert.ok(reconciliation.indexOf('busy = true;') > reconciliation.indexOf('review = null;'));
+    assert.ok(reconciliation.indexOf('buildMailReportReview') > reconciliation.indexOf('busy = true;'));
+    assert.match(source, /disabled=\{!review \|\| busy\}/u);
+  });
+
   test('parses bounded DMARC XML without expanding document entities', async () => {
     const [report] = await parseMailReportFiles('aggregate.xml', encoder.encode(DMARC_XML));
     assert.equal(report?.kind, 'dmarc');

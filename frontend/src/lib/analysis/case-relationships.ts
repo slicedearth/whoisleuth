@@ -18,6 +18,8 @@ import {
   buildInvestigationLineage,
   type InvestigationLineagePath,
 } from './investigation-lineage.ts';
+import { observationEnvelopeId } from './observation-envelope.ts';
+import { MAX_RELATIONSHIP_OBSERVATION_VALUE_LENGTH } from './relationship-observation-model.ts';
 
 export const CASE_RELATIONSHIP_VERSION = 1;
 export const MAX_RELATIONSHIP_CASES = MAX_CASES;
@@ -30,6 +32,40 @@ export const MAX_RELATIONSHIP_SOURCE_OPTIONS = 100;
 export const MAX_RELATIONSHIP_METHODS = 4;
 export const MAX_RELATIONSHIP_CLASSIFICATIONS = 4;
 export const MAX_RELATIONSHIP_LINEAGE_PATHS = 50;
+export const MAX_CASE_RELATIONSHIP_GROUP_ID_LENGTH = 80;
+
+export const CASE_RELATIONSHIP_TYPE_FILTER_OPTIONS = Object.freeze([
+  'all',
+  'nameserver_set',
+  'http_final_origin',
+  'ip_address',
+  'certificate',
+  'tracking_identifier',
+  'favicon',
+  'official_asset',
+] as const);
+export const CASE_RELATIONSHIP_PERIOD_FILTER_OPTIONS = Object.freeze(['all', '7d', '30d', '365d'] as const);
+export const CASE_RELATIONSHIP_COMPLETENESS_FILTER_OPTIONS = Object.freeze(['all', 'complete', 'partial', 'unknown'] as const);
+
+export type CaseRelationshipTypeFilter = typeof CASE_RELATIONSHIP_TYPE_FILTER_OPTIONS[number];
+export type CaseRelationshipPeriodFilter = typeof CASE_RELATIONSHIP_PERIOD_FILTER_OPTIONS[number];
+export type CaseRelationshipCompletenessFilter = typeof CASE_RELATIONSHIP_COMPLETENESS_FILTER_OPTIONS[number];
+
+export interface CaseRelationshipQuery {
+  type: CaseRelationshipTypeFilter;
+  source: string;
+  period: CaseRelationshipPeriodFilter;
+  completeness: CaseRelationshipCompletenessFilter;
+  scope: string;
+}
+
+export const CASE_RELATIONSHIP_QUERY_DEFAULTS: Readonly<CaseRelationshipQuery> = Object.freeze({
+  type: 'all',
+  source: 'all',
+  period: 'all',
+  completeness: 'all',
+  scope: 'all',
+});
 
 const SAFE_CASE_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
 const PROJECTION_RELATIONSHIP_TYPES = new Map([
@@ -69,9 +105,9 @@ const PROJECTION_RELATIONSHIP_TYPES = new Map([
     description: 'An analyst-retained observation records that these cases loaded an asset from the same configured official domain or subdomain.',
   }],
 ]);
-const PROJECTION_FILTER_TYPES = new Set(['all', ...[...PROJECTION_RELATIONSHIP_TYPES.values()].map((value) => value.type)]);
-const PROJECTION_FILTER_PERIODS = new Set(['all', '7d', '30d', '365d']);
-const PROJECTION_FILTER_COMPLETENESS = new Set(['all', 'complete', 'partial', 'unknown']);
+const PROJECTION_FILTER_TYPES = new Set<string>(CASE_RELATIONSHIP_TYPE_FILTER_OPTIONS);
+const PROJECTION_FILTER_PERIODS = new Set<string>(CASE_RELATIONSHIP_PERIOD_FILTER_OPTIONS);
+const PROJECTION_FILTER_COMPLETENESS = new Set<string>(CASE_RELATIONSHIP_COMPLETENESS_FILTER_OPTIONS);
 const PERIOD_MILLISECONDS = new Map([['7d', 7 * 86400000], ['30d', 30 * 86400000], ['365d', 365 * 86400000]]);
 const PROJECTION_SCHEMA_VERSION_FIELDS = ['case', 'riskModel', 'httpSummary', 'brandProfile', 'pageBaseline', 'pageIdentity', 'pageFingerprint', 'campaign', 'relationshipEvidence', 'relationshipObservation'];
 
@@ -154,7 +190,30 @@ export interface CaseRelationshipFilterOptions {
   period?: unknown;
   completeness?: unknown;
   scope?: unknown;
-  [key: string]: unknown;
+}
+
+/** Stable, bounded DOM/view identifier for one normalized relationship group. */
+export function caseRelationshipGroupId(group: Pick<CaseRelationshipGroup, 'type' | 'value'>): string {
+  const type = typeof group?.type === 'string'
+    && group.type.length <= 80
+    && !/[\x00-\x1f\x7f]/u.test(group.type)
+    ? group.type.trim()
+    : '';
+  const value = typeof group?.value === 'string'
+    && group.value.length <= MAX_RELATIONSHIP_OBSERVATION_VALUE_LENGTH
+    && !/[\x00-\x1f\x7f]/u.test(group.value)
+    ? group.value.trim()
+    : '';
+  if (!type || !value) return '';
+  return observationEnvelopeId('relationship', `${type}\u0000${value}`).slice(0, MAX_CASE_RELATIONSHIP_GROUP_ID_LENGTH);
+}
+
+export function normalizeCaseRelationshipGroupId(value: unknown): string {
+  return typeof value === 'string'
+    && value.length <= MAX_CASE_RELATIONSHIP_GROUP_ID_LENGTH
+    && /^relationship:[a-z0-9]+-[a-z0-9]+$/u.test(value)
+    ? value
+    : '';
 }
 
 interface ProjectionDefinition {
@@ -712,20 +771,59 @@ function projectionFilterOption(value: unknown, allowed: Set<string>, fallback =
   return typeof value === 'string' && allowed.has(value) ? value : fallback;
 }
 
+/**
+ * Normalizes the one shared relationship-workspace query. Source and scope
+ * values are accepted only when they are present in the current bounded
+ * summary, so stale transient options fall back without becoming stored state.
+ */
+export function normalizeCaseRelationshipQuery(
+  summary: CaseRelationshipSummary,
+  rawOptions: CaseRelationshipFilterOptions = {},
+): CaseRelationshipQuery {
+  const sourceOptions = new Set([
+    'all',
+    ...(Array.isArray(summary?.sources)
+      ? summary.sources.slice(0, MAX_RELATIONSHIP_SOURCE_OPTIONS)
+      : []),
+  ]);
+  const scopeOptions = new Set([
+    'all',
+    ...(Array.isArray(summary?.scopeOptions)
+      ? summary.scopeOptions.slice(0, MAX_RELATIONSHIP_SCOPE_OPTIONS).map((item) => item.value)
+      : []),
+  ]);
+  return {
+    type: projectionFilterOption(rawOptions.type, PROJECTION_FILTER_TYPES) as CaseRelationshipTypeFilter,
+    source: projectionFilterOption(rawOptions.source, sourceOptions),
+    period: projectionFilterOption(rawOptions.period, PROJECTION_FILTER_PERIODS) as CaseRelationshipPeriodFilter,
+    completeness: projectionFilterOption(rawOptions.completeness, PROJECTION_FILTER_COMPLETENESS) as CaseRelationshipCompletenessFilter,
+    scope: projectionFilterOption(rawOptions.scope, scopeOptions),
+  };
+}
+
 /** Applies shared bounded provenance filters to a projection-backed summary. */
 export function filterInvestigationCaseRelationships(
   summary: CaseRelationshipSummary,
   rawOptions: CaseRelationshipFilterOptions = {},
 ) {
   const groups = Array.isArray(summary?.groups) ? summary.groups : [];
-  const type = projectionFilterOption(rawOptions.type, PROJECTION_FILTER_TYPES);
-  const source = projectionFilterOption(rawOptions.source, new Set(['all', ...(Array.isArray(summary?.sources) ? summary.sources : [])]));
-  const period = projectionFilterOption(rawOptions.period, PROJECTION_FILTER_PERIODS);
-  const completeness = projectionFilterOption(rawOptions.completeness, PROJECTION_FILTER_COMPLETENESS);
-  const scope = projectionFilterOption(rawOptions.scope, new Set(['all', ...(Array.isArray(summary?.scopeOptions) ? summary.scopeOptions.map((item) => item.value) : [])]));
+  const identified = groups.map((group) => ({ group, id: caseRelationshipGroupId(group) }));
+  const identityCounts = new Map<string, number>();
+  for (const item of identified) {
+    if (item.id) identityCounts.set(item.id, (identityCounts.get(item.id) ?? 0) + 1);
+  }
+  // Invalid or colliding IDs are omitted from every interactive/export
+  // projection. A duplicate keyed node must never select or export the wrong
+  // evidence group, even if an imported summary is malformed or a hash ever
+  // collides.
+  const safeGroups = identified
+    .filter((item) => item.id && identityCounts.get(item.id) === 1)
+    .map((item) => item.group);
+  const discardedRelationshipCount = groups.length - safeGroups.length;
+  const { type, source, period, completeness, scope } = normalizeCaseRelationshipQuery(summary, rawOptions);
   const generatedAt = safeProjectionTimestamp(summary?.generatedAt);
   const cutoff = period === 'all' || !generatedAt ? null : Date.parse(generatedAt) - Number(PERIOD_MILLISECONDS.get(period));
-  const filtered = groups.filter((group) => {
+  const filtered = safeGroups.filter((group) => {
     if (type !== 'all' && group.type !== type) return false;
     if (source !== 'all' && !(group.sources || []).includes(source)) return false;
     if (cutoff !== null && Date.parse(group.lastObservedAt || '') < cutoff) return false;
@@ -740,6 +838,7 @@ export function filterInvestigationCaseRelationships(
     groups: filtered,
     totalRelationships: groups.length,
     matchingRelationships: filtered.length,
+    discardedRelationshipCount,
     filters: { type, source, period, completeness, scope },
   };
 }

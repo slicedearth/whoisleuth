@@ -90,7 +90,7 @@ test('completes the public synthetic workflow without investigation requests or 
   expect(factorChartWidth).toBeGreaterThan(assessmentWidth * 0.75);
   await page.getByText('Why the risk score is 78', { exact: true }).click();
   const demoVisualTabs = page.getByRole('tablist', { name: 'Synthetic relationship and history view' });
-  const demoSourcesTab = demoVisualTabs.getByRole('tab', { name: /^Sources/ });
+  const demoSourcesTab = demoVisualTabs.getByRole('tab', { name: /^Evidence/ });
   await demoSourcesTab.focus();
   await demoSourcesTab.press('End');
   await expect(demoVisualTabs.getByRole('tab', { name: /^Timeline/ })).toBeFocused();
@@ -104,7 +104,7 @@ test('completes the public synthetic workflow without investigation requests or 
   await expect(timingSummary).toContainText('Domain evidence');
   await expect(timingSummary).toContainText('Network context');
   await expect(timingSummary).toContainText('None observed');
-  const agreementPlot = page.getByRole('img', { name: 'Registration agreement plot with 3 fields' });
+  const agreementPlot = page.getByRole('img', { name: 'Pairwise registration agreement plot with 3 source comparison lanes' });
   await expect(agreementPlot).toBeVisible();
   await expect(agreementPlot.locator('.agreement-track')).toHaveCount(3);
   await expect(agreementPlot.locator('.agreement-marker')).toHaveCount(6);
@@ -254,10 +254,37 @@ test('keeps the public demo usable without mobile overflow', async ({ page }) =>
   await expect(page.locator('.score-details details[open] li')).not.toHaveCount(0);
   await expectNoHorizontalOverflow(page);
   await expect(page.locator('.matrix-frame')).toBeHidden();
-  const mobileAgreement = page.getByRole('group', { name: 'Registration agreement for 3 fields' });
+  const desktopComparisonTable = page.getByRole('table', {
+    name: 'Exact pairwise registration publication comparisons',
+    includeHidden: true,
+  });
+  await expect(desktopComparisonTable).toHaveCount(1);
+  await expect(desktopComparisonTable).toBeHidden();
+  const mobileAgreement = page.getByRole('region', { name: 'Exact source comparisons' });
   await expect(mobileAgreement).toBeVisible();
-  await expect(mobileAgreement.locator('article')).toHaveCount(3);
-  await expect(mobileAgreement.locator('li')).toHaveCount(6);
+  await expect(mobileAgreement.locator('.lane-card')).toHaveCount(3);
+  await expect(mobileAgreement).toContainText('Each card compares one field across one source pair.');
+  const firstComparison = mobileAgreement.locator('.lane-card').first();
+  const disclosureSummary = firstComparison.locator('summary');
+  await expect(firstComparison).not.toHaveAttribute('open', '');
+  const collapsedMarker = await disclosureSummary.evaluate((element) => getComputedStyle(element, '::after').content);
+  expect(collapsedMarker).toContain('+');
+  await disclosureSummary.focus();
+  await disclosureSummary.press('Enter');
+  await expect(firstComparison).toHaveAttribute('open', '');
+  const expandedMarker = await disclosureSummary.evaluate((element) => getComputedStyle(element, '::after').content);
+  expect(expandedMarker).not.toBe(collapsedMarker);
+  expect(expandedMarker).toContain('−');
+  const publicationSides = firstComparison.locator('.publication-side');
+  await expect(publicationSides).toHaveCount(2);
+  expect(await publicationSides.evaluateAll((elements) => elements.every((element) => (
+    !element.hasAttribute('aria-label')
+  )))).toBe(true);
+  await expect(disclosureSummary).toHaveCSS('cursor', 'pointer');
+  await expect(firstComparison.getByText('First publication', { exact: true })).toBeVisible();
+  await expect(firstComparison.getByText('Second publication', { exact: true })).toBeVisible();
+  await expect(firstComparison.getByText('Source state · value', { exact: true })).toHaveCount(2);
+  expect(await mobileAgreement.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
   await expect(page.locator('.matrix-legend')).toContainText('Source conflict');
   await expect(page.locator('.matrix-legend')).toContainText('Source-only value');
   await expect(page.locator('.matrix-legend')).toContainText('Incomplete / redacted');

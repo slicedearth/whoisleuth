@@ -41,6 +41,12 @@ function row(domain: string, overrides: Partial<ScanResult> = {}): ScanResult {
       opportunityScore: 0,
       opportunityFactors: [],
       mutationTypes: [],
+      profileContext: {
+        sourceState: 'ready',
+        activeProfileId: null,
+        profileUpdatedAt: null,
+        limitation: '',
+      },
     },
     nameservers: ['ns1.example.test', 'ns2.example.test'],
     faviconHash: 'a'.repeat(64),
@@ -179,6 +185,38 @@ test('peer outliers compare bounded relationship evidence without adding collect
   assert.ok(different?.findings.some((finding) => finding.dimension === 'tls_issuer'));
   assert.ok(different?.findings.some((finding) => finding.dimension === 'tls_spki'));
   assert.equal(matrix.dimensions.find((item) => item.id === 'certificate_fingerprint')?.excludedCount, 1);
+});
+
+test('peer outliers omit official-asset claims for rows without ready profile context', () => {
+  const unavailableSaved = {
+    ...row('temporary.example').saved,
+    profileContext: {
+      sourceState: 'unavailable' as const,
+      activeProfileId: null,
+      profileUpdatedAt: null,
+      limitation: 'Imported profile-derived conclusions require a local rescan.',
+    },
+  };
+  const matrix = buildBulkPeerOutlierMatrix([
+    row('one.example'),
+    row('two.example'),
+    row('three.example'),
+    row('unavailable.example', {
+      saved: unavailableSaved,
+      relationship: {
+        ...row('temporary.example').relationship,
+        officialAssetHosts: ['attacker-claimed-assets.invalid'],
+      },
+    }),
+  ]);
+  assert.equal(matrix.profileContextExcludedRows, 1);
+  assert.equal(
+    matrix.rows.find((item) => item.domain === 'unavailable.example')?.findings
+      .some((finding) => finding.dimension === 'official_asset_host_set') ?? false,
+    false,
+  );
+  assert.equal(matrix.dimensions.find((item) => item.id === 'official_asset_host_set')?.excludedCount, 1);
+  assert.match(matrix.limitations.join(' '), /Official-asset outlier analysis excluded 1 row/u);
 });
 
 test('source-coverage outliers ignore expected unpublished registry protocols', () => {

@@ -214,14 +214,15 @@ export async function readBrowserLocalCollection<Collection extends BrowserLocal
 export async function migrateLegacyBrowserData(
   page: Page,
   entries: Record<string, LegacyStorageValue>,
-  options: Readonly<{ clearStorage?: boolean }> = {},
+  options: Readonly<{ clearStorage?: boolean; destination?: string }> = {},
 ) {
-  const current = new URL(page.url());
-  const destination = `${current.pathname}${current.search}${current.hash}`;
-  // Use a full document navigation before deleting the database. That closes
-  // the console document and its live IndexedDB connection, so the fixture
-  // cannot trigger transient "connection is closing" errors in page code.
-  await page.goto('/');
+  const current = options.destination ? null : new URL(page.url());
+  const destination = options.destination
+    ?? `${current?.pathname ?? '/'}${current?.search ?? ''}${current?.hash ?? ''}`;
+  // Use a static same-origin document before deleting the database. That
+  // closes any live IndexedDB connection without starting another application
+  // session or storage load that the fixture would immediately abort.
+  await page.goto('/robots.txt');
   await page.evaluate(async ({ databaseName, values, clearStorage }) => {
     await new Promise<void>((resolve, reject) => {
       const request = indexedDB.deleteDatabase(databaseName);
@@ -253,6 +254,24 @@ export async function failBrowserLocalManifestWrites(page: Page, collection: str
   }, collection);
 }
 
+export async function failNextBrowserLocalManifestWrite(page: Page, collection: string) {
+  await page.evaluate((collectionId) => {
+    const originalPut = IDBObjectStore.prototype.put;
+    let pending = true;
+    IDBObjectStore.prototype.put = function put(value: unknown, key?: IDBValidKey) {
+      if (pending
+        && this.name === 'manifests'
+        && value !== null
+        && typeof value === 'object'
+        && Reflect.get(value, 'collection') === collectionId) {
+        pending = false;
+        throw new DOMException('Storage quota exceeded once', 'QuotaExceededError');
+      }
+      return key === undefined ? originalPut.call(this, value) : originalPut.call(this, value, key);
+    };
+  }, collection);
+}
+
 export async function failBrowserLocalReads(page: Page) {
   await page.evaluate(() => {
     const originalGet = IDBObjectStore.prototype.get;
@@ -263,6 +282,126 @@ export async function failBrowserLocalReads(page: Page) {
       return originalGet.call(this, query);
     };
   });
+}
+
+export async function failBrowserLocalCollectionReads(
+  page: Page,
+  collection: BrowserLocalCollectionId,
+) {
+  const installFailure = (collectionId: BrowserLocalCollectionId) => {
+    const originalGet = IDBObjectStore.prototype.get;
+    IDBObjectStore.prototype.get = function get(query: IDBValidKey | IDBKeyRange) {
+      if (this.name === 'manifests' && query === collectionId) {
+        throw new DOMException(`Browser-local ${collectionId} reads are unavailable`, 'InvalidStateError');
+      }
+      return originalGet.call(this, query);
+    };
+  };
+  await page.evaluate(installFailure, collection);
+}
+
+export async function failNextBrowserLocalCollectionRead(
+  page: Page,
+  collection: BrowserLocalCollectionId,
+) {
+  await page.evaluate((collectionId) => {
+    const originalGet = IDBObjectStore.prototype.get;
+    let pending = true;
+    IDBObjectStore.prototype.get = function get(query: IDBValidKey | IDBKeyRange) {
+      if (pending && this.name === 'manifests' && query === collectionId) {
+        pending = false;
+        throw new DOMException(`Browser-local ${collectionId} read is unavailable once`, 'InvalidStateError');
+      }
+      return originalGet.call(this, query);
+    };
+  }, collection);
+}
+
+export async function failNextBrowserLocalCollectionReadAfterWrite(
+  page: Page,
+  collection: BrowserLocalCollectionId,
+) {
+  await page.evaluate((collectionId) => {
+    const originalGet = IDBObjectStore.prototype.get;
+    const originalPut = IDBObjectStore.prototype.put;
+    let failNextRead = false;
+    IDBObjectStore.prototype.put = function put(value: unknown, key?: IDBValidKey) {
+      if (this.name === 'manifests'
+        && value
+        && typeof value === 'object'
+        && Reflect.get(value, 'collection') === collectionId) failNextRead = true;
+      return key === undefined ? originalPut.call(this, value) : originalPut.call(this, value, key);
+    };
+    IDBObjectStore.prototype.get = function get(query: IDBValidKey | IDBKeyRange) {
+      if (failNextRead && this.name === 'manifests' && query === collectionId) {
+        failNextRead = false;
+        throw new DOMException(`Browser-local ${collectionId} post-write read is unavailable`, 'InvalidStateError');
+      }
+      return originalGet.call(this, query);
+    };
+  }, collection);
+}
+
+export async function holdBrowserLocalReads(page: Page, delayMs = 750, triggerSelector?: string) {
+  await page.evaluate(({ databaseName, delay, selector }) => new Promise<void>((resolve, reject) => {
+    const trigger = selector ? document.querySelector<HTMLElement>(selector) : null;
+    if (selector && !trigger) {
+      reject(new Error(`Could not find the browser-local read hold trigger: ${selector}`));
+      return;
+    }
+    const readyDeadline = performance.now() + 5_000;
+    const openReadyDatabase = () => {
+      const openRequest = indexedDB.open(databaseName);
+      let abortedEmptyCreation = false;
+      openRequest.onupgradeneeded = () => {
+        // Production owns schema creation. Aborting here keeps this timing
+        // helper from winning the race and creating an empty test database.
+        abortedEmptyCreation = true;
+        openRequest.transaction?.abort();
+      };
+      openRequest.onerror = () => {
+        if (abortedEmptyCreation && performance.now() < readyDeadline) {
+          window.requestAnimationFrame(() => openReadyDatabase());
+          return;
+        }
+        reject(openRequest.error);
+      };
+      openRequest.onsuccess = () => {
+        const database = openRequest.result;
+        if (!database.objectStoreNames.contains('manifests')) {
+          database.close();
+          if (performance.now() < readyDeadline) {
+            window.requestAnimationFrame(() => openReadyDatabase());
+            return;
+          }
+          reject(new Error('Browser-local manifests store was not ready before the read hold deadline.'));
+          return;
+        }
+        const transaction = database.transaction('manifests', 'readwrite');
+        const store = transaction.objectStore('manifests');
+        const releaseAt = performance.now() + delay;
+        let started = false;
+        const keepAlive = () => {
+          const request = store.get('__playwright_read_hold__');
+          request.onerror = () => reject(request.error);
+          request.onsuccess = () => {
+            if (!started) {
+              started = true;
+              // Trigger inside the page task that observes the active hold so
+              // constrained full-suite workers cannot let a timed hold expire
+              // between separate host-side Playwright commands.
+              trigger?.click();
+              resolve();
+            }
+            if (performance.now() < releaseAt) keepAlive();
+            else database.close();
+          };
+        };
+        keepAlive();
+      };
+    };
+    openReadyDatabase();
+  }), { databaseName: LOCAL_DATA_DATABASE_NAME, delay: delayMs, selector: triggerSelector });
 }
 
 // Computed content of a pseudo-element - used to check the CSS-only

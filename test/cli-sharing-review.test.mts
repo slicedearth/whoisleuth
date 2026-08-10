@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
+import { readFileSync } from 'node:fs';
 
 import { buildSharingReview } from '../cli/sharing-review.mts';
 import {
@@ -42,6 +43,20 @@ describe('CLI sharing review', () => {
     assert.equal(report.privacy.artifactMetadataFieldsEmitted, 2);
     assert.equal(report.privacy.contentValuesEmitted, 0);
     assert.equal(JSON.stringify(report).includes('Reviewed incident handoff'), false);
+  });
+
+  test('withholds ready status for a legacy capsule with projection-only integrity', async () => {
+    const fixture = JSON.parse(readFileSync(new URL('./fixtures/artifact-integrity-v1.json', import.meta.url), 'utf8')) as {
+      artifacts: { capsule: Record<string, unknown> };
+    };
+    const capsule = fixture.artifacts.capsule;
+    const report = await buildSharingReview(JSON.stringify(capsule), {
+      marking: 'amber', recipientScope: 'organization', purpose: 'Reviewed handoff',
+      humanReviewed: true, personalDataReviewed: true, redactionsConfirmed: true,
+    }, NOW);
+    assert.equal(report.artifact.integrity, 'projection_integrity');
+    assert.equal(report.summary.status, 'review_cautions');
+    assert.equal(report.findings.find((finding) => finding.id === 'integrity')?.state, 'caution');
   });
 
   test('blocks a requested downgrade from imported TLP and unreviewed sensitive fields', async () => {

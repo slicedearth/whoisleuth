@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import {
   buildSessionCookie,
   createSessionToken,
+  isPermittedAuthenticatedNetworkRequest,
   isTrustedLoginOrigin,
   isTrustedOrigin,
   isValidSessionToken,
@@ -85,6 +86,29 @@ describe('isTrustedLoginOrigin', () => {
     assert.equal(isTrustedLoginOrigin({ origin: 'https://example.com', host: 'example.com' }), true);
     assert.equal(isTrustedLoginOrigin({ host: 'example.com' }), true);
     assert.equal(isTrustedLoginOrigin(undefined), true);
+  });
+});
+
+describe('authenticated network request admission', () => {
+  test('permits same-origin browser requests, deliberate navigation, and clients that omit browser metadata', () => {
+    assert.equal(isPermittedAuthenticatedNetworkRequest({
+      host: 'example.com',
+      origin: 'https://example.com',
+      'sec-fetch-site': 'same-origin',
+    }), true);
+    assert.equal(isPermittedAuthenticatedNetworkRequest({ host: 'example.com', 'sec-fetch-site': 'none' }), true);
+    assert.equal(isPermittedAuthenticatedNetworkRequest({ host: 'example.com' }), true);
+    assert.equal(isPermittedAuthenticatedNetworkRequest(undefined), true);
+  });
+
+  test('rejects cross-site, malformed, repeated, and mismatched browser metadata', () => {
+    assert.equal(isPermittedAuthenticatedNetworkRequest({ host: 'example.com', 'sec-fetch-site': 'cross-site' }), false);
+    assert.equal(isPermittedAuthenticatedNetworkRequest({ host: 'app.example.com', 'sec-fetch-site': 'same-site' }), false);
+    assert.equal(isPermittedAuthenticatedNetworkRequest({ host: 'app.example.com', origin: 'https://sibling.example.com', 'sec-fetch-site': 'same-site' }), false);
+    assert.equal(isPermittedAuthenticatedNetworkRequest({ host: 'example.com', 'sec-fetch-site': 'future-state' }), false);
+    assert.equal(isPermittedAuthenticatedNetworkRequest({ host: 'example.com', 'sec-fetch-site': ['same-origin'] }), false);
+    assert.equal(isPermittedAuthenticatedNetworkRequest({ host: 'example.com', origin: 'https://attacker.example' }), false);
+    assert.equal(isPermittedAuthenticatedNetworkRequest({ host: 'example.com', origin: ['https://example.com'] }), false);
   });
 });
 

@@ -5,8 +5,8 @@ type ResolvePublicAddresses = typeof import('../lib/safe-fetch.mts').resolvePubl
 type SafeFetch = typeof import('../lib/safe-fetch.mts').safeFetch;
 type WhoisQuery = typeof import('../lib/whois-transport.mts').whoisQuery;
 
-const DOCTOR_SCHEMA = 'whoisleuth.cli.doctor';
-const DOCTOR_VERSION = 1;
+export const DOCTOR_SCHEMA = 'whoisleuth.cli.doctor';
+export const DOCTOR_VERSION = 1;
 const MINIMUM_NODE_MAJOR = 24;
 const NETWORK_HOST = 'whois.iana.org';
 const NETWORK_QUERY = 'example.com';

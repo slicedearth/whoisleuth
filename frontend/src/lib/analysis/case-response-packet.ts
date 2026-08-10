@@ -3,9 +3,11 @@
 
 import type { CaseRecord } from './case-model.ts';
 import { buildCaseActionOutcomeSummary } from './case-response-model.ts';
+import { canonicalArtifactJsonV2, SORTED_JSON_V2 } from './artifact-integrity.ts';
 
 export const CASE_RESPONSE_PACKET_SCHEMA = 'whoisleuth.case-response-packet';
-export const CASE_RESPONSE_PACKET_VERSION = 5;
+export const CASE_RESPONSE_PACKET_VERSION = 6;
+export const LEGACY_CASE_RESPONSE_PACKET_VERSION = 5;
 export const MAX_ABUSIVE_URLS = 20;
 export const MAX_RESPONSE_CONTACTS = 12;
 export const MAX_RESPONSE_ACTION_HISTORY = 20;
@@ -231,7 +233,7 @@ export type CaseResponsePacket = {
   };
   integrity: {
     algorithm: 'SHA-256';
-    canonicalization: 'sorted-json-v1';
+    canonicalization: typeof SORTED_JSON_V2;
     scope: 'packet excluding integrity';
     digestSha256: string;
   };
@@ -519,17 +521,34 @@ async function sha256(value: string): Promise<string> {
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
-export async function verifyCaseResponsePacketIntegrity(packet: CaseResponsePacket): Promise<boolean> {
+export async function verifyCaseResponsePacketIntegrity(packet: Readonly<{
+  schemaVersion: number;
+  integrity: Readonly<{
+    algorithm: unknown;
+    canonicalization: unknown;
+    scope: unknown;
+    digestSha256: unknown;
+  }>;
+  [key: string]: unknown;
+}>): Promise<boolean> {
   const { integrity, ...unsigned } = packet;
+  const canonicalization = packet.schemaVersion === LEGACY_CASE_RESPONSE_PACKET_VERSION
+    && integrity.canonicalization === 'sorted-json-v1'
+    ? canonicalJson
+    : packet.schemaVersion === CASE_RESPONSE_PACKET_VERSION
+      && integrity.canonicalization === SORTED_JSON_V2
+      ? canonicalArtifactJsonV2
+      : null;
   if (
     integrity.algorithm !== 'SHA-256'
-    || integrity.canonicalization !== 'sorted-json-v1'
+    || !canonicalization
     || integrity.scope !== 'packet excluding integrity'
+    || typeof integrity.digestSha256 !== 'string'
     || !/^[a-f0-9]{64}$/u.test(integrity.digestSha256)
   ) {
     return false;
   }
-  return integrity.digestSha256 === await sha256(canonicalJson(unsigned));
+  return integrity.digestSha256 === await sha256(canonicalization(unsigned));
 }
 
 function escapeMarkdown(value: string): string {
@@ -613,12 +632,12 @@ export async function buildCaseResponsePacket(
       limitations,
     },
   };
-  const digestSha256 = await sha256(canonicalJson(unsigned));
+  const digestSha256 = await sha256(canonicalArtifactJsonV2(unsigned));
   const json: CaseResponsePacket = {
     ...unsigned,
     integrity: {
       algorithm: 'SHA-256',
-      canonicalization: 'sorted-json-v1',
+      canonicalization: SORTED_JSON_V2,
       scope: 'packet excluding integrity',
       digestSha256,
     },

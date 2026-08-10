@@ -12,42 +12,70 @@
     CaseRelationshipGraphEdge,
     CaseRelationshipGraphRelationshipNode,
   } from '$lib/analysis/case-relationship-graph.ts';
-  import type { CaseRelationshipSummary } from '$lib/analysis/case-relationships.ts';
+  import type { CaseRelationshipQuery, CaseRelationshipSummary } from '$lib/analysis/case-relationships.ts';
   import { buildRelationshipGraphExport } from '$lib/analysis/case-relationship-graph-export.ts';
   import { horizontalConnectionPath } from '$lib/analysis/evidence-topology.ts';
 
-  let { records, summary, onselect }:{records:CaseRecord[];summary:CaseRelationshipSummary;onselect?:(record:CaseRecord)=>void}=$props();
-  let selectedId=$state('');
-  let type=$state('all');
-  let source=$state('all');
-  let period=$state('all');
-  let completeness=$state('all');
-  let scope=$state('all');
+  let {
+    records,
+    summary,
+    query,
+    selectedRelationshipId,
+    setSelectedRelationshipId,
+    onselect,
+  }:{
+    records:CaseRecord[];
+    summary:CaseRelationshipSummary;
+    query:CaseRelationshipQuery;
+    selectedRelationshipId:string;
+    setSelectedRelationshipId:(id:string)=>void;
+    onselect?:(record:CaseRecord)=>void;
+  }=$props();
+  let selectedCaseNodeId=$state('');
   let oneHop=$state(false);
   let pinnedIds=$state<string[]>([]);
   let hiddenIds=$state<string[]>([]);
   let groupCaseIds=$state<string[]>([]);
   let exportFormat=$state<'json'|'graphml'|'gexf'>('json');
   let exportMessage=$state('');
-  const graph=$derived(projectCaseRelationshipGraph(summary,{type,source,period,completeness,scope,focusId:selectedId,oneHop,pinnedIds,hiddenIds,groupCaseIds}));
-  const selectedNode=$derived(graph.nodes.find((node)=>node.id===selectedId)||graph.relationshipNodes[0]||graph.caseNodes[0]||null);
-  const actionableSelection=$derived(Boolean(selectedId&&graph.nodes.some((node)=>node.id===selectedId)));
+  const focusId=$derived(selectedRelationshipId||selectedCaseNodeId);
+  const graph=$derived(projectCaseRelationshipGraph(summary,{...query,selectedRelationshipId,focusId,oneHop,pinnedIds,hiddenIds,groupCaseIds}));
+  const selectedNode=$derived(graph.nodes.find((node)=>node.id===focusId)||null);
+  const actionableSelection=$derived(Boolean(focusId&&graph.nodes.some((node)=>node.id===focusId)));
   const selectedPinned=$derived(Boolean(actionableSelection&&selectedNode&&graph.view.pinnedIds.includes(selectedNode.id)));
-  const selectedPinAtCapacity=$derived(Boolean(selectedNode&&pinnedIds.length>=MAX_RELATIONSHIP_GRAPH_PINS&&!pinnedIds.includes(selectedNode.id)));
-  const viewChanged=$derived(graph.view.oneHop||pinnedIds.length>0||hiddenIds.length>0||groupCaseIds.length>0);
+  const selectedPinAtCapacity=$derived(Boolean(selectedNode&&graph.view.pinnedIds.length>=MAX_RELATIONSHIP_GRAPH_PINS&&!graph.view.pinnedIds.includes(selectedNode.id)));
+  const viewChanged=$derived(graph.view.oneHop||graph.view.pinnedIds.length>0||graph.view.hiddenIds.length>0||graph.view.groupCaseIds.length>0);
 
-  function select(id:string){selectedId=id;}
-  function keyboardSelect(event:KeyboardEvent,id:string){if(event.key==='Enter'||event.key===' '){event.preventDefault();select(id);}}
+  $effect(()=>{
+    const sameIds=(left:string[],right:string[])=>left.length===right.length&&left.every((id,index)=>id===right[index]);
+    if(!sameIds(pinnedIds,graph.view.pinnedIds))pinnedIds=graph.view.pinnedIds;
+    if(!sameIds(hiddenIds,graph.view.hiddenIds))hiddenIds=graph.view.hiddenIds;
+    if(!sameIds(groupCaseIds,graph.view.groupCaseIds))groupCaseIds=graph.view.groupCaseIds;
+    if(selectedCaseNodeId&&graph.view.focusId!==selectedCaseNodeId)selectedCaseNodeId='';
+  });
+
+  $effect(()=>{
+    if(!selectedRelationshipId)return;
+    selectedCaseNodeId='';
+    if(hiddenIds.includes(selectedRelationshipId))hiddenIds=hiddenIds.filter((id)=>id!==selectedRelationshipId);
+  });
+
+  function selectRelationship(id:string){selectedCaseNodeId='';setSelectedRelationshipId(id);}
+  function selectCase(id:string){selectedCaseNodeId=id;setSelectedRelationshipId('');}
+  function keyboardSelect(event:KeyboardEvent,id:string,kind:'case'|'relationship'){
+    if(event.key!=='Enter'&&event.key!==' ')return;
+    event.preventDefault();
+    if(kind==='relationship')selectRelationship(id);else selectCase(id);
+  }
   function openCase(id:string){const target=records.find((record)=>record.id===id);if(target)onselect?.(target);}
-  function clearFilters(){type='all';source='all';period='all';completeness='all';scope='all';selectedId='';oneHop=false;}
   function toggleOneHop(){if(!actionableSelection)return;oneHop=!graph.view.oneHop;}
-  function togglePin(){if(!actionableSelection||!selectedNode)return;const id=selectedNode.id;if(pinnedIds.includes(id)){pinnedIds=pinnedIds.filter((item)=>item!==id);return;}if(pinnedIds.length<MAX_RELATIONSHIP_GRAPH_PINS)pinnedIds=[...pinnedIds,id];}
-  function hideSelected(){if(!actionableSelection||!selectedNode||hiddenIds.length>=MAX_RELATIONSHIP_GRAPH_HIDDEN)return;const id=selectedNode.id;hiddenIds=[...hiddenIds,id];pinnedIds=pinnedIds.filter((item)=>item!==id);groupCaseIds=groupCaseIds.filter((item)=>item!==id);selectedId='';oneHop=false;}
+  function togglePin(){if(!actionableSelection||!selectedNode)return;const id=selectedNode.id;const current=graph.view.pinnedIds;if(current.includes(id)){pinnedIds=current.filter((item)=>item!==id);return;}if(current.length<MAX_RELATIONSHIP_GRAPH_PINS)pinnedIds=[...current,id];}
+  function hideSelected(){if(!actionableSelection||!selectedNode||graph.view.hiddenIds.length>=MAX_RELATIONSHIP_GRAPH_HIDDEN)return;const{id,kind}=selectedNode;hiddenIds=[...graph.view.hiddenIds,id];pinnedIds=graph.view.pinnedIds.filter((item)=>item!==id);groupCaseIds=graph.view.groupCaseIds.filter((item)=>item!==id);if(kind==='relationship')setSelectedRelationshipId('');else selectedCaseNodeId='';oneHop=false;}
   function resetView(){oneHop=false;pinnedIds=[];hiddenIds=[];groupCaseIds=[];}
-  function toggleGroupCase(id:string){if(groupCaseIds.includes(id)){groupCaseIds=groupCaseIds.filter((item)=>item!==id);return;}if(groupCaseIds.length<MAX_RELATIONSHIP_GRAPH_GROUP_CASES)groupCaseIds=[...groupCaseIds,id];}
+  function toggleGroupCase(id:string){const current=graph.view.groupCaseIds;if(current.includes(id)){groupCaseIds=current.filter((item)=>item!==id);return;}if(current.length<MAX_RELATIONSHIP_GRAPH_GROUP_CASES)groupCaseIds=[...current,id];}
   function connectedCaseIds(node:CaseRelationshipGraphRelationshipNode):string[]{const visible=new Set<string>(graph.caseNodes.map((item)=>String(item.id)));const ids:string[]=node.cases.map((item)=>`case:${item.id}`);return [...new Set<string>(ids.filter((id)=>visible.has(id)))];}
-  function canGroupConnectedCases(node:CaseRelationshipGraphRelationshipNode){const ungrouped=connectedCaseIds(node).filter((id)=>!groupCaseIds.includes(id));return ungrouped.length>0&&ungrouped.length<=MAX_RELATIONSHIP_GRAPH_GROUP_CASES-groupCaseIds.length;}
-  function groupConnectedCases(node:CaseRelationshipGraphRelationshipNode){if(!canGroupConnectedCases(node))return;groupCaseIds=[...new Set([...groupCaseIds,...connectedCaseIds(node)])];}
+  function canGroupConnectedCases(node:CaseRelationshipGraphRelationshipNode){const current=graph.view.groupCaseIds;const ungrouped=connectedCaseIds(node).filter((id)=>!current.includes(id));return ungrouped.length>0&&ungrouped.length<=MAX_RELATIONSHIP_GRAPH_GROUP_CASES-current.length;}
+  function groupConnectedCases(node:CaseRelationshipGraphRelationshipNode){if(!canGroupConnectedCases(node))return;groupCaseIds=[...new Set([...graph.view.groupCaseIds,...connectedCaseIds(node)])];}
   function date(value:string){const parsed=new Date(value);return Number.isNaN(parsed.getTime())?value:parsed.toLocaleString();}
   function sourceLabel(value:string){return value.split('_').filter(Boolean).map((part)=>part.charAt(0).toUpperCase()+part.slice(1)).join(' ')||'Unknown';}
   function completenessLabel(node:CaseRelationshipGraphRelationshipNode){if(node.truncated)return 'Partial or truncated';if(node.complete===true)return 'Complete';if(node.complete===false)return 'Partial';return 'Unknown';}
@@ -61,7 +89,7 @@
   }
   function downloadGraph(){
     try{
-      const output=buildRelationshipGraphExport(summary,{format:exportFormat,type,source,period,completeness,scope});
+      const output=buildRelationshipGraphExport(summary,{format:exportFormat,...query});
       const blob=new Blob([output.content],{type:output.mimeType});
       const url=URL.createObjectURL(blob);
       const anchor=document.createElement('a');
@@ -78,21 +106,10 @@
   </header>
 
   {#if graph.totalRelationships}
-    <fieldset class="graph-controls">
-      <legend>Relationship graph filters</legend>
-      <label class="field">Relationship<select bind:value={type}><option value="all">All relationships</option><option value="nameserver_set">Nameserver sets</option><option value="http_final_origin">Final website origins</option><option value="ip_address">IP addresses</option><option value="certificate">TLS certificates</option><option value="tracking_identifier">Tracking identifiers</option><option value="favicon">Favicons</option><option value="official_asset">Official assets</option></select></label>
-      <label class="field">Source<select bind:value={source}><option value="all">All sources</option>{#each graph.sources as item}<option value={item}>{sourceLabel(item)}</option>{/each}</select></label>
-      <label class="field">Observed within<select bind:value={period}><option value="all">All retained time</option><option value="7d">Last 7 days</option><option value="30d">Last 30 days</option><option value="365d">Last 365 days</option></select></label>
-      <label class="field">Completeness<select bind:value={completeness}><option value="all">All states</option><option value="complete">Complete</option><option value="partial">Partial or truncated</option><option value="unknown">Unknown</option></select></label>
-      <label class="field">Case or campaign<select bind:value={scope}><option value="all">All cases and campaigns</option>{#each graph.scopeOptions as item}<option value={item.value}>{item.kind==='case'?'Case':'Campaign'}: {item.label}</option>{/each}</select></label>
-      <button type="button" class="btn" onclick={clearFilters} disabled={type==='all'&&source==='all'&&period==='all'&&completeness==='all'&&scope==='all'}>Clear filters</button>
-      <span role="status" aria-live="polite">{graph.matchingRelationships} matching relationship{graph.matchingRelationships===1?'':'s'}</span>
-      {#if graph.filterOptionsTruncated}<small>Filter options are bounded; use the table search for omitted cases.</small>{/if}
-    </fieldset>
     <div class="export-controls" role="group" aria-label="Relationship graph export controls">
       <label class="field">Graph export format<select bind:value={exportFormat}><option value="json">WHOISleuth JSON</option><option value="graphml">GraphML</option><option value="gexf">GEXF</option></select></label>
       <button type="button" class="btn" disabled={!graph.matchingRelationships} onclick={downloadGraph}>Export filtered graph</button>
-      <small>The local download includes the bounded filtered graph and provenance. Transient focus, pin, hide, and comparison-group state is excluded.</small>
+      <small>The local download includes the bounded filtered graph and provenance. Transient focus, pin, hide, comparison-group, selected-relationship, and private table-view state are excluded.</small>
       {#if exportMessage}<span role="status" aria-live="polite">{exportMessage}</span>{/if}
     </div>
   {/if}
@@ -101,7 +118,7 @@
     <div class="view-controls" role="group" aria-label="Relationship graph view controls">
       <button type="button" class="btn small" aria-pressed={graph.view.oneHop} disabled={!actionableSelection} onclick={toggleOneHop}>{graph.view.oneHop?'Show overview':'Focus one hop'}</button>
       <button type="button" class="btn small" aria-pressed={selectedPinned} disabled={!actionableSelection||selectedPinAtCapacity} onclick={togglePin}>{selectedPinned?'Unpin selected':'Pin selected'}</button>
-      <button type="button" class="btn small" disabled={!actionableSelection||hiddenIds.length>=MAX_RELATIONSHIP_GRAPH_HIDDEN} onclick={hideSelected}>Hide selected</button>
+      <button type="button" class="btn small" disabled={!actionableSelection||graph.view.hiddenIds.length>=MAX_RELATIONSHIP_GRAPH_HIDDEN} onclick={hideSelected}>Hide selected</button>
       <button type="button" class="btn small" disabled={!viewChanged} onclick={resetView}>Reset view</button>
       <span role="status" aria-live="polite">{graph.nodes.length} of {graph.allNodeCount} nodes visible · {graph.view.pinnedIds.length} pinned · {graph.view.hiddenIds.length} hidden</span>
     </div>
@@ -124,12 +141,12 @@
         </g>
         <g class="nodes">
           {#each graph.caseNodes as node (node.id)}
-            <g class="node case-node" class:selected={selectedNode?.id===node.id} class:pinned={graph.view.pinnedIds.includes(node.id)} role="button" tabindex="0" aria-label={`Case ${node.label}${graph.view.pinnedIds.includes(node.id)?', pinned':''}`} onclick={()=>select(node.id)} onkeydown={(event)=>keyboardSelect(event,node.id)}>
+            <g class="node case-node" class:selected={selectedCaseNodeId===node.id} class:pinned={graph.view.pinnedIds.includes(node.id)} role="button" tabindex="0" aria-pressed={selectedCaseNodeId===node.id} aria-label={`Case ${node.label}${graph.view.pinnedIds.includes(node.id)?', pinned':''}`} onclick={()=>selectCase(node.id)} onkeydown={(event)=>keyboardSelect(event,node.id,'case')}>
               <title>Case: {node.label}</title><rect x={node.x} y={node.y} width={node.width} height={node.height} rx="8"/><circle cx={node.x+17} cy={node.y+16} r="9" class="node-icon-disc"/><IntelligenceIcon name="case" size={12} x={node.x+11} y={node.y+10} className="graph-node-icon"/><text x={node.x+32} y={node.y+21}>{node.displayLabel}</text>
             </g>
           {/each}
           {#each graph.relationshipNodes as node (node.id)}
-            <g class="node relationship-node" class:selected={selectedNode?.id===node.id} class:pinned={graph.view.pinnedIds.includes(node.id)} role="button" tabindex="0" aria-label={`${node.label}: ${node.value}${graph.view.pinnedIds.includes(node.id)?', pinned':''}`} onclick={()=>select(node.id)} onkeydown={(event)=>keyboardSelect(event,node.id)}>
+            <g class="node relationship-node" class:selected={selectedRelationshipId===node.id} class:pinned={graph.view.pinnedIds.includes(node.id)} role="button" tabindex="0" aria-pressed={selectedRelationshipId===node.id} aria-label={`${node.label}: ${node.value}${graph.view.pinnedIds.includes(node.id)?', pinned':''}`} onclick={()=>selectRelationship(node.id)} onkeydown={(event)=>keyboardSelect(event,node.id,'relationship')}>
               <title>{node.label}: {node.value}</title><rect x={node.x} y={node.y} width={node.width} height={node.height} rx="8"/><circle cx={node.x+18} cy={node.y+16} r="10" class="node-icon-disc"/><IntelligenceIcon name={relationshipIcon(node)} size={14} x={node.x+11} y={node.y+9} className="graph-node-icon"/><text x={node.x+34} y={node.y+21}>{node.displayLabel}</text>
             </g>
           {/each}
@@ -166,7 +183,7 @@
         {:else}
           <p class="eyebrow">Selected case</p><h3>{selectedNode.label}</h3>
           <div class="case-actions"><button type="button" class="btn small open-case" onclick={()=>openCase(selectedNode.caseId)}>Open case</button><button type="button" class="btn small" aria-pressed={graph.view.groupCaseIds.includes(selectedNode.id)} disabled={!graph.view.groupCaseIds.includes(selectedNode.id)&&groupCaseIds.length>=MAX_RELATIONSHIP_GRAPH_GROUP_CASES} onclick={()=>toggleGroupCase(selectedNode.id)}>{graph.view.groupCaseIds.includes(selectedNode.id)?'Remove from comparison group':'Add to comparison group'}</button></div>
-          <ul>{#each connectedRelationships(selectedNode) as relationship}<li><button type="button" class="btn small" onclick={()=>select(relationship.id)}>{relationship.label}: {relationship.value}</button></li>{/each}</ul>
+          <ul>{#each connectedRelationships(selectedNode) as relationship}<li><button type="button" class="btn small" onclick={()=>selectRelationship(relationship.id)}>{relationship.label}: {relationship.value}</button></li>{/each}</ul>
         {/if}
       </section>
     {/if}
@@ -176,7 +193,7 @@
         <p>{graph.comparisonCaseNodes.length} of {MAX_RELATIONSHIP_GRAPH_GROUP_CASES} bounded case slots selected. This transient group is not saved or exported.</p>
         <ul class="comparison-cases">{#each graph.comparisonCaseNodes as node}<li><span>{node.label}</span><button type="button" class="btn small" aria-label={`Remove ${node.label} from comparison group`} onclick={()=>toggleGroupCase(node.id)}>Remove</button></li>{/each}</ul>
         {#if graph.comparisonCaseNodes.length<2}<p>Add another case to review relationships shared by every selected case.</p>
-        {:else if graph.sharedRelationshipNodes.length}<ul class="shared-neighbours">{#each graph.sharedRelationshipNodes as node}<li><button type="button" class="btn small" onclick={()=>select(node.id)}>{node.label}: {node.value}</button></li>{/each}</ul>
+        {:else if graph.sharedRelationshipNodes.length}<ul class="shared-neighbours">{#each graph.sharedRelationshipNodes as node}<li><button type="button" class="btn small" onclick={()=>selectRelationship(node.id)}>{node.label}: {node.value}</button></li>{/each}</ul>
         {:else}<p>No retained relationship in this bounded graph connects every selected case. This does not establish that no relationship exists elsewhere.</p>{/if}
       </section>
     {/if}
@@ -188,7 +205,6 @@
 </section>
 
 <style>
-  .relationship-graph{min-width:0;padding:18px;margin-bottom:18px}.relationship-graph h2,.inspector h3,.comparison h3,.empty h3{margin:0}.relationship-graph>header p:not(.eyebrow),.help,.inspector p:not(.eyebrow),.inspector small,.comparison p,.empty p,details p{color:var(--muted);font-size:var(--text-xs);line-height:1.5}.relationship-graph>header p:not(.eyebrow){margin:6px 0 0}.partial{color:var(--amber);font:600 var(--text-2xs) var(--mono);text-transform:uppercase;letter-spacing:.05em}.graph-controls{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;align-items:end;margin:14px 0 8px;padding:0;border:0}.graph-controls legend{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}.graph-controls span,.graph-controls small{align-self:center;color:var(--muted);font-size:var(--text-xs)}.export-controls{display:grid;grid-template-columns:minmax(180px,260px) auto minmax(0,1fr);gap:10px;align-items:end;margin:10px 0 14px;padding:12px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel)}.export-controls small,.export-controls span{align-self:center;color:var(--muted);font-size:var(--text-xs);line-height:1.45;overflow-wrap:anywhere}.export-controls span{grid-column:1/-1}.view-controls{display:flex;flex-wrap:wrap;gap:7px;align-items:center;margin:10px 0}.view-controls span{color:var(--muted);font-size:var(--text-xs)}.help{margin:14px 0 8px}.graph-scroll{max-width:100%;overflow:auto;border:1px solid var(--border);border-radius:var(--radius-md);background:linear-gradient(180deg,var(--panel),var(--panel-raised))}.graph-scroll>svg{display:block;width:100%;min-width:680px;height:auto;max-height:620px}.graph-background{fill:var(--panel-raised)}.grid-line{fill:none;stroke:color-mix(in srgb,var(--border) 62%,transparent);stroke-width:1}.edges path{fill:none;stroke:color-mix(in srgb,var(--muted) 36%,transparent);stroke-width:1.5}.edges path.active{stroke:var(--accent);stroke-width:3;filter:url(#relationship-node-glow)}.node{cursor:pointer;outline:none}.node rect{fill:var(--panel-raised);stroke:var(--border);stroke-width:1.5}.relationship-node{color:var(--accent)}.case-node{color:var(--accent2)}.relationship-node rect{fill:color-mix(in srgb,var(--accent) 8%,var(--panel-raised));stroke:color-mix(in srgb,var(--accent) 50%,var(--border))}.node-icon-disc{fill:rgb(var(--accent-rgb) / .08);stroke:color-mix(in srgb,var(--accent) 45%,var(--border));stroke-width:1}.case-node .node-icon-disc{fill:rgb(var(--accent2-rgb) / .08);stroke:color-mix(in srgb,var(--accent2) 45%,var(--border))}.node :global(.graph-node-icon){overflow:visible;color:inherit;pointer-events:none}.node.pinned rect{stroke:var(--amber);stroke-dasharray:5 3}.node text{fill:var(--text);font-family:var(--mono);font-size:13px;pointer-events:none}.node:hover rect,.node:focus-visible rect,.node.selected rect{stroke:var(--accent);stroke-width:3;filter:url(#relationship-node-glow)}.inspector,.comparison{min-width:0;padding:14px;margin-top:12px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel)}.inspector h3,.comparison h3{font-size:var(--text-md);overflow-wrap:anywhere}.inspector code,.inspector small{display:block;margin-top:6px;overflow-wrap:anywhere}.inspector code{color:var(--accent);font-size:var(--text-xs);font-family:var(--mono)}.provenance{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:12px 0}.provenance div{min-width:0;padding:9px;border:1px solid var(--border);border-radius:var(--radius-sm)}.provenance dt{color:var(--muted);font:600 var(--text-2xs) var(--mono);text-transform:uppercase}.provenance dd{margin:4px 0 0;font-size:var(--text-xs);overflow-wrap:anywhere}.observations ul,.lineage ol{display:grid;gap:7px;padding:0;margin:9px 0;list-style:none}.observations li,.lineage li{padding:8px;border-left:2px solid var(--border);font-size:var(--text-xs)}.observations li small,.lineage li span,.lineage li small{display:block;margin-top:3px}.lineage li span,.lineage li small{color:var(--muted);overflow-wrap:anywhere}.pivots,.case-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}.pivots .btn,.inspector li .btn{overflow-wrap:anywhere}.group-action{margin-top:10px}.inspector>ul,.comparison ul{display:grid;gap:6px;padding:0;margin:10px 0 0;list-style:none}.inspector>ul li .btn,.shared-neighbours .btn{width:100%;justify-content:flex-start;text-align:left}.comparison header,.comparison-cases li{display:flex;align-items:center;justify-content:space-between;gap:10px}.comparison-cases li{min-width:0;padding:8px;border:1px solid var(--border);border-radius:var(--radius-sm)}.comparison-cases span{min-width:0;overflow-wrap:anywhere;font-size:var(--text-xs)}.empty{display:grid;min-height:220px;place-content:center;text-align:center}details{margin-top:13px}details summary{color:var(--muted);cursor:pointer;font-size:var(--text-xs)}
-  @media(max-width:850px){.graph-controls{grid-template-columns:repeat(2,minmax(0,1fr))}}
-  @media(max-width:700px){.relationship-graph{padding:14px}.relationship-graph>header{align-items:stretch;flex-direction:column}.graph-controls,.export-controls{grid-template-columns:minmax(0,1fr)}.graph-controls select,.graph-controls .btn,.export-controls select,.export-controls .btn,.view-controls .btn,.pivots .btn,.case-actions .btn{width:100%}.export-controls span{grid-column:auto}.view-controls,.pivots,.case-actions{display:grid}.graph-scroll{overscroll-behavior-x:contain}.provenance{grid-template-columns:minmax(0,1fr)}.comparison header{align-items:stretch;flex-direction:column}.comparison header .btn{width:100%}}
+  .relationship-graph{min-width:0;padding:18px;margin-bottom:18px}.relationship-graph h2,.inspector h3,.comparison h3,.empty h3{margin:0}.relationship-graph>header p:not(.eyebrow),.help,.inspector p:not(.eyebrow),.inspector small,.comparison p,.empty p,details p{color:var(--muted);font-size:var(--text-xs);line-height:1.5}.relationship-graph>header p:not(.eyebrow){margin:6px 0 0}.partial{color:var(--amber);font:600 var(--text-2xs) var(--mono);text-transform:uppercase;letter-spacing:.05em}.export-controls{display:grid;grid-template-columns:minmax(180px,260px) auto minmax(0,1fr);gap:10px;align-items:end;margin:10px 0 14px;padding:12px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel)}.export-controls small,.export-controls span{align-self:center;color:var(--muted);font-size:var(--text-xs);line-height:1.45;overflow-wrap:anywhere}.export-controls span{grid-column:1/-1}.view-controls{display:flex;flex-wrap:wrap;gap:7px;align-items:center;margin:10px 0}.view-controls span{color:var(--muted);font-size:var(--text-xs)}.help{margin:14px 0 8px}.graph-scroll{max-width:100%;overflow:auto;border:1px solid var(--border);border-radius:var(--radius-md);background:linear-gradient(180deg,var(--panel),var(--panel-raised))}.graph-scroll>svg{display:block;width:100%;min-width:680px;height:auto;max-height:620px}.graph-background{fill:var(--panel-raised)}.grid-line{fill:none;stroke:color-mix(in srgb,var(--border) 62%,transparent);stroke-width:1}.edges path{fill:none;stroke:color-mix(in srgb,var(--muted) 36%,transparent);stroke-width:1.5}.edges path.active{stroke:var(--accent);stroke-width:3;filter:url(#relationship-node-glow)}.node{cursor:pointer;outline:none}.node rect{fill:var(--panel-raised);stroke:var(--border);stroke-width:1.5}.relationship-node{color:var(--accent)}.case-node{color:var(--accent2)}.relationship-node rect{fill:color-mix(in srgb,var(--accent) 8%,var(--panel-raised));stroke:color-mix(in srgb,var(--accent) 50%,var(--border))}.node-icon-disc{fill:rgb(var(--accent-rgb) / .08);stroke:color-mix(in srgb,var(--accent) 45%,var(--border));stroke-width:1}.case-node .node-icon-disc{fill:rgb(var(--accent2-rgb) / .08);stroke:color-mix(in srgb,var(--accent2) 45%,var(--border))}.node :global(.graph-node-icon){overflow:visible;color:inherit;pointer-events:none}.node.pinned rect{stroke:var(--amber);stroke-dasharray:5 3}.node text{fill:var(--text);font-family:var(--mono);font-size:13px;pointer-events:none}.node:hover rect,.node:focus-visible rect,.node.selected rect{stroke:var(--accent);stroke-width:3;filter:url(#relationship-node-glow)}.inspector,.comparison{min-width:0;padding:14px;margin-top:12px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel)}.inspector h3,.comparison h3{font-size:var(--text-md);overflow-wrap:anywhere}.inspector code,.inspector small{display:block;margin-top:6px;overflow-wrap:anywhere}.inspector code{color:var(--accent);font-size:var(--text-xs);font-family:var(--mono)}.provenance{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:12px 0}.provenance div{min-width:0;padding:9px;border:1px solid var(--border);border-radius:var(--radius-sm)}.provenance dt{color:var(--muted);font:600 var(--text-2xs) var(--mono);text-transform:uppercase}.provenance dd{margin:4px 0 0;font-size:var(--text-xs);overflow-wrap:anywhere}.observations ul,.lineage ol{display:grid;gap:7px;padding:0;margin:9px 0;list-style:none}.observations li,.lineage li{padding:8px;border-left:2px solid var(--border);font-size:var(--text-xs)}.observations li small,.lineage li span,.lineage li small{display:block;margin-top:3px}.lineage li span,.lineage li small{color:var(--muted);overflow-wrap:anywhere}.pivots,.case-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}.pivots .btn,.inspector li .btn{overflow-wrap:anywhere}.group-action{margin-top:10px}.inspector>ul,.comparison ul{display:grid;gap:6px;padding:0;margin:10px 0 0;list-style:none}.inspector>ul li .btn,.shared-neighbours .btn{width:100%;justify-content:flex-start;text-align:left}.comparison header,.comparison-cases li{display:flex;align-items:center;justify-content:space-between;gap:10px}.comparison-cases li{min-width:0;padding:8px;border:1px solid var(--border);border-radius:var(--radius-sm)}.comparison-cases span{min-width:0;overflow-wrap:anywhere;font-size:var(--text-xs)}.empty{display:grid;min-height:220px;place-content:center;text-align:center}details{margin-top:13px}details summary{color:var(--muted);cursor:pointer;font-size:var(--text-xs)}
+  @media(max-width:700px){.relationship-graph{padding:14px}.relationship-graph>header{align-items:stretch;flex-direction:column}.export-controls{grid-template-columns:minmax(0,1fr)}.export-controls select,.export-controls .btn,.view-controls .btn,.pivots .btn,.case-actions .btn{width:100%}.export-controls span{grid-column:auto}.view-controls,.pivots,.case-actions{display:grid}.graph-scroll{overscroll-behavior-x:contain}.provenance{grid-template-columns:minmax(0,1fr)}.comparison header{align-items:stretch;flex-direction:column}.comparison header .btn{width:100%}}
 </style>

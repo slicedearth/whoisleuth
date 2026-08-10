@@ -64,7 +64,7 @@ This is useful for frontend work. Complete flows that require authenticated
 API requests, raw WHOIS sockets, or other backend collection should be checked
 against the Express deployment or the Playwright production-style server.
 
-The public overview, guide, privacy notice, sign-in page, and synthetic demo do
+The public overview, Resources hub, privacy notice, sign-in page, and synthetic demo do
 not start live investigations. Dashboard, Lookup, Discover, Bulk, Brands,
 Monitor, and Registry support are part of the protected Console.
 
@@ -81,7 +81,7 @@ npm run build
 npm run cli:package:check
 npm run test:e2e:built
 git diff --check
-npm audit --omit=dev
+npm run dependencies:audit
 ```
 
 The commands cover:
@@ -92,7 +92,8 @@ The commands cover:
 - Svelte diagnostics;
 - the production static build;
 - Chromium browser workflows; and
-- production dependency advisories.
+- production dependency advisories through the fail-closed reviewed-exception
+  policy documented in [Dependency maintenance](dependency-maintenance.md).
 
 Automated tests use deterministic fixtures. They must not contact live
 registries, domains, Certificate Transparency services, or optional providers.
@@ -156,6 +157,20 @@ screen-reader coverage.
 
 ## Maintainer checks
 
+### Maintainer-tool duplication
+
+```bash
+npm run maintenance:duplication
+```
+
+Builds a deterministic, repository-relative static call graph for `tools/*.mts`
+and reports exact comment-free token clones without retaining source text,
+literals, absolute paths, environment values, or runtime data. The report is a
+review aid: it never removes, merges, or rewrites a tool. Shared internals are
+extracted only after an exact repeated implementation and all callers have been
+reviewed; existing tool filenames, command options, and output contracts remain
+stable.
+
 ### Release version
 
 ```bash
@@ -174,9 +189,11 @@ npm run schema:inventory
 ```
 
 Generates a report from the actual browser-store, hosted-state, export,
-interchange, CLI, and derived-model version constants. It records compatibility,
-migration direction, write behaviour, and bounds without reading browser or
-hosted data.
+interchange, CLI, maintainer-tool, and derived-model version constants. The
+coverage test scans both `cli/` and `tools/` for schema literals so a newly
+introduced tool contract cannot silently bypass the inventory. It records
+compatibility, migration direction, write behaviour, and bounds without reading
+browser or hosted data.
 
 ### Specialist workflow benchmark
 
@@ -187,8 +204,10 @@ npm run benchmark:workflow -- --json
 
 Runs a deterministic offline regression benchmark across checked-in registry
 fixtures, candidate generation, partial-source handling, relationships,
-detection rules, graph limits, and workspace archive round trips. It is not a
-live coverage or production-performance benchmark.
+detection rules, decision-to-evidence linkage, graph limits, and workspace
+archive round trips. The decision-quality corpus exercises every current
+consistency warning alongside a fully linked control case. It is not a live
+coverage, substantive analyst judgement, or production-performance benchmark.
 
 ### Technology-signature benchmark
 

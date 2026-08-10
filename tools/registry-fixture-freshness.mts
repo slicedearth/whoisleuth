@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 
-import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -15,6 +14,7 @@ import {
   type RegistryCompatibilityRow,
 } from '../lib/registry-capabilities.mts';
 import { readBoundedRegularFile } from '../lib/bounded-file.mts';
+import { sha256Bytes as digest } from './maintainer-tool-helpers.mts';
 
 type FreshnessState = 'current' | 'stale' | 'changed' | 'inconclusive';
 type ReadFixture = (absolutePath: string) => Promise<Uint8Array>;
@@ -115,10 +115,6 @@ function validatedProvenance(
 
 function ageInDays(verifiedAt: string, now: Date): number {
   return Math.floor((now.getTime() - Date.parse(`${verifiedAt}T00:00:00.000Z`)) / DAY_MS);
-}
-
-function digest(value: Uint8Array): string {
-  return createHash('sha256').update(value).digest('hex');
 }
 
 function stateRank(value: FreshnessState): number {

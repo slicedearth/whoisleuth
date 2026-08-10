@@ -19,6 +19,8 @@
   let busy = $state(false);
   let message = $state('');
   let profileId = $state('');
+  let profileSignature = $state('');
+  let reviewGeneration = 0;
 
   const dmarcReports = $derived(reports.filter((report): report is DmarcAggregateReport => report.kind === 'dmarc'));
   const tlsReports = $derived(reports.filter((report): report is TlsAggregateReport => report.kind === 'tls-rpt'));
@@ -40,11 +42,17 @@
     return value.toLowerCase().replace(/[^a-z0-9.-]+/gu, '-').replace(/^-+|-+$/gu, '').slice(0, 80) || 'mail-reports';
   }
 
-  async function rebuild(next: readonly ParsedMailReport[]): Promise<void> {
+  async function rebuild(
+    next: readonly ParsedMailReport[],
+    generation: number,
+    expectedProfileId: string,
+    officialDomains: readonly string[],
+  ): Promise<boolean> {
+    const nextReview = next.length ? await buildMailReportReview(next, officialDomains) : null;
+    if (generation !== reviewGeneration || active.id !== expectedProfileId) return false;
     reports = [...next];
-    review = next.length
-      ? await buildMailReportReview(next, active.officialDomains)
-      : null;
+    review = nextReview;
+    return true;
   }
 
   async function importReports(event: Event): Promise<void> {
@@ -52,6 +60,10 @@
     const selected = [...(input.files || [])];
     input.value = '';
     if (!selected.length || busy) return;
+    const expectedProfileId = active.id;
+    const officialDomains = [...active.officialDomains];
+    const retainedReports = [...reports];
+    const generation = ++reviewGeneration;
     busy = true;
     message = '';
     try {
@@ -65,29 +77,32 @@
       const parsed: ParsedMailReport[] = [];
       for (const file of selected) {
         parsed.push(...await parseMailReportFiles(file.name, new Uint8Array(await file.arrayBuffer())));
-        if (reports.length + parsed.length > MAX_MAIL_REPORT_ARCHIVE_ENTRIES) {
+        if (retainedReports.length + parsed.length > MAX_MAIL_REPORT_ARCHIVE_ENTRIES) {
           throw new Error(`The review is limited to ${MAX_MAIL_REPORT_ARCHIVE_ENTRIES} aggregate reports.`);
         }
       }
       const seen = new Set<string>();
-      const next = [...reports, ...parsed].filter((report) => {
+      const next = [...retainedReports, ...parsed].filter((report) => {
         const key = `${report.kind}:${report.source.digestSha256}`;
         if (seen.has(key)) return false;
         seen.add(key);
         return true;
       });
-      await rebuild(next);
+      if (!await rebuild(next, generation, expectedProfileId, officialDomains)) return;
       message = `Loaded ${parsed.length} report${parsed.length === 1 ? '' : 's'} locally; ${next.length} unique report${next.length === 1 ? '' : 's'} in this review.`;
     } catch (cause) {
+      if (generation !== reviewGeneration || active.id !== expectedProfileId) return;
       message = cause instanceof Error ? cause.message : 'The selected mail reports could not be reviewed.';
     } finally {
-      busy = false;
+      if (generation === reviewGeneration) busy = false;
     }
   }
 
   function clear(): void {
+    reviewGeneration += 1;
     reports = [];
     review = null;
+    busy = false;
     message = 'Cleared imported mail reports from this tab.';
   }
 
@@ -102,13 +117,37 @@
   }
 
   $effect(() => {
+    const nextSignature = `${active.id}\u0000${active.officialDomains.join('\u0000')}`;
+    if (nextSignature === profileSignature) return;
+    profileSignature = nextSignature;
+    const generation = ++reviewGeneration;
+    busy = false;
     if (active.id !== profileId) {
       profileId = active.id;
       reports = [];
       review = null;
       message = '';
+      busy = false;
     } else if (reports.length) {
-      void buildMailReportReview(reports, active.officialDomains).then((next) => { review = next; });
+      const expectedProfileId = active.id;
+      const retainedReports = [...reports];
+      const officialDomains = [...active.officialDomains];
+      review = null;
+      busy = true;
+      message = 'Reconciling the retained reports with the updated active profile…';
+      void buildMailReportReview(retainedReports, officialDomains).then((next) => {
+        if (generation === reviewGeneration && active.id === expectedProfileId) {
+          review = next;
+          message = 'Reconciled the retained reports with the updated active profile.';
+        }
+      }).catch(() => {
+        if (generation === reviewGeneration && active.id === expectedProfileId) {
+          review = null;
+          message = 'The imported mail reports could not be reconciled with the active profile.';
+        }
+      }).finally(() => {
+        if (generation === reviewGeneration && active.id === expectedProfileId) busy = false;
+      });
     }
   });
 </script>

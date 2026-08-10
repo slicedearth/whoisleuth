@@ -1,5 +1,7 @@
 import {
+  createPrivateKey,
   generateKeyPairSync,
+  sign as cryptoSign,
 } from 'node:crypto';
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
@@ -10,24 +12,24 @@ import {
 } from '../cli/evidence-signing.mts';
 import EXIT_CODES from '../cli/exit-codes.mts';
 import { runCli } from '../cli/runner.mts';
-import { sha256ArtifactDigest } from '../frontend/src/lib/analysis/artifact-integrity.ts';
+import { buildBulkReviewManifest } from '../frontend/src/lib/analysis/bulk-review-export.ts';
+import {
+  canonicalArtifactJsonV2,
+  sha256ArtifactDigest,
+  sha256ArtifactDigestV2,
+} from '../frontend/src/lib/analysis/artifact-integrity.ts';
 
 const NOW = '2026-07-29T10:00:00.000Z';
 
 async function manifest() {
-  const unsigned = {
-    schema: 'whoisleuth.bulk-review-manifest',
-    version: 1,
-    generatedAt: NOW,
-    selection: { count: 0, domains: [] },
-  };
-  return {
-    ...unsigned,
-    integrity: {
-      algorithm: 'SHA-256',
-      digestSha256: await sha256ArtifactDigest(unsigned),
+  return (await buildBulkReviewManifest({
+    rows: [], reviewStates: [], lookupProfile: 'fast', generatedAt: NOW, observedAt: NOW,
+    view: {
+      primaryFilter: 'all', mutationFilter: '', signalFilters: [], sourceFilter: '', lifecycleFilter: '',
+      ageFilter: '', mailFilter: '', registrarFilter: '', caseDispositionFilter: '', reviewStateFilter: '',
+      groupBy: '', sortKey: 'risk', sortDirection: -1,
     },
-  };
+  })).document;
 }
 
 function keys() {
@@ -36,6 +38,21 @@ function keys() {
     privatePem: pair.privateKey.export({ type: 'pkcs8', format: 'pem' }).toString(),
     publicPem: pair.publicKey.export({ type: 'spki', format: 'pem' }).toString(),
   };
+}
+
+function resignPackage<T extends Record<string, unknown>>(value: T, privatePem: string): T {
+  const { signature, ...payload } = value;
+  return {
+    ...payload,
+    signature: {
+      ...(signature as Record<string, unknown>),
+      valueBase64: cryptoSign(
+        null,
+        Buffer.from(canonicalArtifactJsonV2(payload), 'utf8'),
+        createPrivateKey(privatePem),
+      ).toString('base64'),
+    },
+  } as unknown as T;
 }
 
 describe('optional local Ed25519 evidence-package signing', () => {
@@ -47,15 +64,17 @@ describe('optional local Ed25519 evidence-package signing', () => {
       NOW,
     );
     assert.equal(signed.schema, 'whoisleuth.signed-evidence-package');
+    assert.equal(signed.version, 2);
     assert.equal(signed.signature.algorithm, 'Ed25519');
+    assert.equal(signed.signature.canonicalization, 'sorted-json-v2');
     const report = await verifyEvidencePackageSignature(
       JSON.stringify(signed),
       pair.publicPem,
     );
-    assert.equal(report.valid, true);
+    assert.equal(report.version, 2);
     assert.equal(report.state, 'signature_valid');
-    assert.equal(report.signerTrust, 'trusted_key');
-    assert.equal(report.publicKeyMatched, true);
+    assert.equal(report.signature.signerTrust, 'trusted_key');
+    assert.equal(report.signature.publicKeyMatched, true);
     assert.equal(report.artifact.kind, 'signed_review_artifact');
   });
 
@@ -79,6 +98,28 @@ describe('optional local Ed25519 evidence-package signing', () => {
       })),
       /malformed envelope/iu,
     );
+    await assert.rejects(
+      verifyEvidencePackageSignature(JSON.stringify({
+        ...signed,
+        signature: { ...signed.signature, canonicalization: 'sorted-json-v1' },
+      })),
+      /malformed envelope/iu,
+    );
+    const missingCanonicalization = structuredClone(signed) as unknown as {
+      signature: Record<string, unknown>;
+    };
+    delete missingCanonicalization.signature.canonicalization;
+    await assert.rejects(
+      verifyEvidencePackageSignature(JSON.stringify(missingCanonicalization)),
+      /malformed envelope/iu,
+    );
+    const rawSigned = JSON.stringify(signed);
+    const nestedSelection = '"selection":{"count":0';
+    assert.ok(rawSigned.includes(nestedSelection));
+    await assert.rejects(
+      verifyEvidencePackageSignature(rawSigned.replace(nestedSelection, '"selection":{"count":0,"count":0')),
+      /duplicate object key/iu,
+    );
     const other = keys();
     await assert.rejects(
       verifyEvidencePackageSignature(JSON.stringify(signed), other.publicPem),
@@ -88,6 +129,14 @@ describe('optional local Ed25519 evidence-package signing', () => {
       signEvidencePackage(JSON.stringify({ schema: 'whoisleuth.unknown', version: 1 }), pair.privatePem, NOW),
       /not supported/iu,
     );
+    const contentFreeUnsigned = { schema: 'whoisleuth.bulk-review-manifest', version: 1 };
+    await assert.rejects(
+      signEvidencePackage(JSON.stringify({
+        ...contentFreeUnsigned,
+        integrity: { algorithm: 'SHA-256', digestSha256: await sha256ArtifactDigest(contentFreeUnsigned) },
+      }), pair.privatePem, NOW),
+      /malformed structure/iu,
+    );
     const rsa = generateKeyPairSync('rsa', { modulusLength: 2048 }).privateKey
       .export({ type: 'pkcs8', format: 'pem' })
       .toString();
@@ -96,8 +145,33 @@ describe('optional local Ed25519 evidence-package signing', () => {
       /requires an Ed25519/iu,
     );
     const embeddedOnly = await verifyEvidencePackageSignature(JSON.stringify(signed));
-    assert.equal(embeddedOnly.signerTrust, 'embedded_key_only');
-    assert.equal(embeddedOnly.publicKeyMatched, null);
+    assert.equal(embeddedOnly.signature.signerTrust, 'embedded_key_only');
+    assert.equal(embeddedOnly.signature.publicKeyMatched, null);
+  });
+
+  test('separates a valid signature from embedded-artifact assurance and requires canonical signedAt text', async () => {
+    const pair = keys();
+    const signed = structuredClone(await signEvidencePackage(JSON.stringify(await manifest()), pair.privatePem, NOW)) as unknown as Record<string, unknown>;
+    const artifact = signed.artifact as Record<string, unknown>;
+    (artifact.selection as Record<string, unknown>).count = 1;
+    const { integrity: _integrity, ...unsignedArtifact } = artifact;
+    artifact.integrity = {
+      algorithm: 'SHA-256',
+      canonicalization: 'sorted-json-v2',
+      digestSha256: await sha256ArtifactDigestV2(unsignedArtifact),
+    };
+    const independentlySigned = resignPackage(signed, pair.privatePem);
+    const report = await verifyEvidencePackageSignature(JSON.stringify(independentlySigned), pair.publicPem);
+    assert.equal(report.state, 'signature_valid');
+    assert.equal(report.signature.state, 'valid');
+    assert.equal(report.artifact.assurance.state, 'not_verified');
+    assert.equal(report.artifact.assurance.structure, 'not_checked');
+
+    const nonCanonical = resignPackage({ ...signed, signedAt: '2026-07-29T10:00:00Z' }, pair.privatePem);
+    await assert.rejects(
+      verifyEvidencePackageSignature(JSON.stringify(nonCanonical), pair.publicPem),
+      /canonical UTC timestamp text/iu,
+    );
   });
 
   test('runs signing and verification through the CLI without printing private-key material', async () => {
@@ -134,7 +208,7 @@ describe('optional local Ed25519 evidence-package signing', () => {
       readPublicKeyFile: async () => pair.publicPem,
     });
     assert.equal(verifyCode, EXIT_CODES.SUCCESS);
-    assert.equal(JSON.parse(verificationOutput).publicKeyMatched, true);
+    assert.equal(JSON.parse(verificationOutput).signature.publicKeyMatched, true);
     assert.equal(stderr, '');
   });
 });

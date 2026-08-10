@@ -3,7 +3,10 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { PROVIDER_POLICY_MAX_REVIEW_AGE_DAYS } from '../lib/provider-policy-admission.mts';
+import {
+  PROVIDER_POLICY_MAX_REVIEW_AGE_DAYS,
+  providerPolicyReviewAgeDays,
+} from '../lib/provider-policy-admission.mts';
 import { THREATFOX_PROVIDER } from '../lib/threatfox-intelligence.mts';
 import type { ThreatIntelligenceProviderDefinition } from '../lib/threat-intelligence-types.mts';
 import { URLHAUS_PROVIDER } from '../lib/urlhaus-intelligence.mts';
@@ -21,10 +24,7 @@ export function buildProviderPolicyFreshnessReport(
   const generatedAt = new Date(now).toISOString();
   const generatedTime = Date.parse(generatedAt);
   const entries = providers.map((provider) => {
-    const reviewedTime = Date.parse(provider.terms.reviewedAt);
-    const reviewAgeDays = Number.isFinite(reviewedTime)
-      ? Math.max(0, Math.floor((generatedTime - reviewedTime) / 86_400_000))
-      : null;
+    const reviewAgeDays = providerPolicyReviewAgeDays(provider.terms.reviewedAt, generatedTime);
     return {
       id: provider.id,
       reviewedAt: provider.terms.reviewedAt,

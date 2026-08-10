@@ -25,6 +25,7 @@
     error,
     onsubmit,
     oncancel,
+    onquerychange,
   }: {
     query: string;
     lookupMode: 'fast' | 'deep';
@@ -47,6 +48,7 @@
     error: string;
     onsubmit: (event: SubmitEvent) => void | Promise<void>;
     oncancel: () => void;
+    onquerychange?: (value: string) => void;
   } = $props();
 
   const intelligenceOptionCount = $derived(
@@ -113,8 +115,8 @@
   <label class="search-label" for="query">Domain, IP address, ASN, or domain list</label>
   <div class="input-row">
     <div class="query-field">
-      <textarea id="query" bind:value={query} placeholder="example.com" autocomplete="off" spellcheck="false" rows="2" onkeydown={handleQueryKeydown}></textarea>
-      {#if query}<button type="button" class="clear" aria-label="Clear query" onclick={() => query = ''}>×</button>{/if}
+      <textarea id="query" bind:value={query} placeholder="example.com" autocomplete="off" spellcheck="false" rows="2" onkeydown={handleQueryKeydown} oninput={(event) => onquerychange?.(event.currentTarget.value)}></textarea>
+      {#if query}<button type="button" class="clear" aria-label="Clear query" onclick={() => { query = ''; onquerychange?.(''); }}>×</button>{/if}
     </div>
     <button class="primary" aria-keyshortcuts="Control+Enter Meta+Enter" disabled={loading || !entryCount || Boolean(lookupDisabled)}>
       {loading ? 'Looking up…' : entryCount > 1 ? `Open ${Math.min(entryCount, entryLimit)} in Bulk` : 'Run lookup'}

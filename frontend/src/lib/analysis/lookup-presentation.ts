@@ -1,4 +1,5 @@
 export type LookupTaskView = 'general' | 'acquisition' | 'brand' | 'incident' | 'owned';
+export type LookupDepth = 'fast' | 'deep';
 export type LookupSectionLink = Readonly<{ href: `#${string}`; label: string }>;
 export type LookupPresentationState = Readonly<{
   task: LookupTaskView;
@@ -8,6 +9,7 @@ export type LookupPresentationStorage = Pick<Storage, 'getItem' | 'setItem'>;
 
 export const LOOKUP_PRESENTATION_STORAGE_KEY = 'whoisleuth:lookup-presentation:v1';
 export const MAX_LOOKUP_PRESENTATION_SERIALIZED_BYTES = 1_024;
+export const MAX_LOOKUP_URL_QUERY_LENGTH = 4_096;
 
 export const LOOKUP_TASK_VIEWS = Object.freeze([
   Object.freeze({ id: 'general' as const, label: 'General investigation' }),
@@ -18,11 +20,88 @@ export const LOOKUP_TASK_VIEWS = Object.freeze([
 ]);
 
 const TASKS = new Set<LookupTaskView>(LOOKUP_TASK_VIEWS.map((option) => option.id));
+const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/u;
+
+export function parseLookupTaskContext(value: unknown): LookupTaskView | null {
+  if (typeof value !== 'string' || value.length > 16) return null;
+  return TASKS.has(value as LookupTaskView) ? value as LookupTaskView : null;
+}
 
 export function normalizeLookupTaskView(value: unknown): LookupTaskView {
   return typeof value === 'string' && TASKS.has(value as LookupTaskView)
     ? value as LookupTaskView
     : 'general';
+}
+
+export type LookupUrlState<Result> = Readonly<{
+  query: string;
+  depth: LookupDepth;
+  task: LookupTaskView;
+  result: Result | null;
+  completedTarget: string;
+  error: string;
+  retainedResultDepth: LookupDepth | null;
+}>;
+
+export type ReconciledLookupUrlState<Result> = Readonly<Omit<LookupUrlState<Result>, 'retainedResultDepth'>>;
+
+function lookupUrlQuery(value: string | null): string | null {
+  if (value === null || value.length > MAX_LOOKUP_URL_QUERY_LENGTH || CONTROL_CHARACTERS.test(value)) return null;
+  const normalized = value.trim();
+  return normalized ? normalized : null;
+}
+
+function lookupUrlDepth(value: string | null): LookupDepth | null {
+  return value === 'fast' || value === 'deep' ? value : null;
+}
+
+function record(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+export function lookupResultDepth(value: unknown, fallback: LookupDepth | null = null): LookupDepth | null {
+  const result = record(value);
+  if (!result) return fallback;
+  const availability = record(result.availability);
+  if (availability?.deepScanComplete === false) return 'fast';
+  if (availability?.deepScanComplete === true) return 'deep';
+  const whois = record(result.whois);
+  if (whois?.skipped === true
+    && typeof whois.detail === 'string'
+    && /fast rdap-only mode/iu.test(whois.detail)) return 'fast';
+  const scanModes = [
+    record(result.reverseDns)?.scanMode,
+    record(availability?.dns)?.scanMode,
+    record(availability?.http)?.scanMode,
+  ];
+  if (scanModes.includes('deep')) return 'deep';
+  if (scanModes.includes('fast')) return 'fast';
+  return fallback;
+}
+
+export function reconcileLookupUrlState<Result>(
+  current: LookupUrlState<Result>,
+  searchParams: Pick<URLSearchParams, 'get'>,
+  preferredTask: unknown,
+): ReconciledLookupUrlState<Result> {
+  const explicitQuery = lookupUrlQuery(searchParams.get('q'));
+  const explicitDepth = lookupUrlDepth(searchParams.get('depth'));
+  const queryChanged = explicitQuery !== null && explicitQuery !== current.query;
+  const depthChanged = explicitDepth !== null && explicitDepth !== current.depth;
+  const conflictsWithResult = current.result !== null && (
+    (explicitQuery !== null && explicitQuery !== current.completedTarget)
+    || (explicitDepth !== null && explicitDepth !== current.retainedResultDepth)
+  );
+  return {
+    query: explicitQuery ?? current.query,
+    depth: explicitDepth ?? current.depth,
+    task: parseLookupTaskContext(searchParams.get('task')) ?? normalizeLookupTaskView(preferredTask),
+    result: conflictsWithResult ? null : current.result,
+    completedTarget: conflictsWithResult ? '' : current.completedTarget,
+    error: conflictsWithResult || queryChanged || depthChanged ? '' : current.error,
+  };
 }
 
 export function readLookupPresentation(

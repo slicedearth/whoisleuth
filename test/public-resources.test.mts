@@ -29,7 +29,7 @@ test('public resources expose a bounded unique set of useful investigation topic
     assert.equal(resource.evidence.length, 3);
     assert.equal(resource.questions.length, 3);
     assert.equal(resource.demoHref, '/demo');
-    assert.match(resource.guideHref, /^\/guide(?:#[a-z0-9-]+)?$/u);
+    assert.match(resource.guideHref, /^\/resources#[a-z0-9-]+$/u);
     assert.match(resource.repositoryDoc, /^docs\/[a-z0-9-]+\.md$/u);
   }
 });

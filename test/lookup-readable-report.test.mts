@@ -179,6 +179,7 @@ describe('browser-local readable Lookup report', () => {
     assert.match(report, /SOA primary server:\*\* ns1\\\.example\\\.test/u);
     assert.match(report, /SOA serial:\*\* 2026072601/u);
     assert.match(report, /heuristic review priority/u);
+    assert.match(report, /Generated with WHOISleuth 1\.35\.0/u);
     assert.doesNotMatch(report, /must-not-enter-readable-report/u);
     assert.doesNotMatch(report, /contact@example\.test/u);
     assert.doesNotMatch(report, /REGISTRAR-1/u);
@@ -194,6 +195,18 @@ describe('browser-local readable Lookup report', () => {
       ),
       'whoisleuth-lookup-report-unsafe-name.example.test-2026-07-26T03-04-05-006Z.md',
     );
+  });
+
+  test('can omit only the readable generator footer', () => {
+    const report = buildLookupReadableReport(lookupResponse(), {
+      applicationVersion: '1.35.0',
+      generatedAt: '2026-07-26T02:00:00.000Z',
+      includeAttribution: false,
+    });
+
+    assert.match(report, /# Lookup evidence report/u);
+    assert.match(report, /Generator:\*\* WHOISleuth 1\\\.35\\\.0/u);
+    assert.doesNotMatch(report, /Generated with WHOISleuth/u);
   });
 
   test('renders a bounded IP report with registration, reverse-DNS, and source health', () => {
@@ -259,6 +272,7 @@ describe('browser-local readable Lookup report', () => {
     assert.match(report, /WHOIS:\*\* unsupported/u);
     assert.match(report, /Generator:\*\* WHOISleuth 1\\\.35\\\.0/u);
     assert.match(report, /One PTR answer was omitted/u);
+    assert.match(report, /Generated with WHOISleuth 1\.35\.0/u);
     assert.equal(JSON.stringify(projected).includes('private@example.test'), false);
     assert.equal(JSON.stringify(projected).includes('"raw"'), false);
     assert.doesNotMatch(report, /private@example\.test|discard=this/u);
@@ -308,5 +322,29 @@ describe('browser-local readable Lookup report', () => {
     assert.match(report, /WHOIS:\*\* unavailable/u);
     assert.match(report, /Generator:\*\* WHOISleuth 1\\\.35\\\.0/u);
     assert.doesNotMatch(report, /Reverse DNS context|private@example\.test/u);
+  });
+
+  test('can omit the readable generator footer from network identifier reports', () => {
+    const report = buildLookupReadableReport(lookupResponse({
+      query: 'AS64496',
+      type: 'asn',
+      inputHostname: '',
+      registrableDomain: '',
+      isSubdomain: false,
+      diagnostics: {
+        version: 8,
+        rdap: { status: 'unavailable' },
+        whois: { status: 'unsupported' },
+        availability: { status: 'not_applicable' },
+      },
+    }), {
+      applicationVersion: '1.35.0',
+      generatedAt: '2026-07-29T02:00:00.000Z',
+      includeAttribution: false,
+    });
+
+    assert.match(report, /# ASN evidence report/u);
+    assert.match(report, /Generator:\*\* WHOISleuth 1\\\.35\\\.0/u);
+    assert.doesNotMatch(report, /Generated with WHOISleuth/u);
   });
 });

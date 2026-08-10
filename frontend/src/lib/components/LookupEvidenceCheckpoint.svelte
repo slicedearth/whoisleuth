@@ -14,6 +14,7 @@
     facts,
     pins,
     onsave,
+    actionBusy = false,
   }: {
     facts: readonly CheckpointFact[];
     pins: readonly CaseEvidencePin[];
@@ -21,6 +22,7 @@
       selectedFields: string[],
       transitionExpectations?: Readonly<Record<string, CaseTransitionExpectation>>,
     ) => void | Promise<void>;
+    actionBusy?: boolean;
   } = $props();
 
   let selectedFields = $state<string[]>([]);
@@ -61,6 +63,7 @@
   }
 
   async function save() {
+    if (actionBusy) return;
     await onsave(selectedFields, transitionMode ? transitionExpectations : {});
     selectedFields = [];
     transitionExpectations = {};
@@ -75,7 +78,7 @@
       <h4 id="lookup-checkpoint-title">Retain selected normalised facts</h4>
       <p>Choose only the facts needed for later review. Raw registry payloads, contacts, scripts, and unselected fields are not stored by this action.</p>
     </div>
-    <button class="btn" type="button" disabled={!selectedFields.length} onclick={() => void save()}>Save {selectedFields.length || ''} checkpoint fact{selectedFields.length === 1 ? '' : 's'}</button>
+    <button class="btn" type="button" disabled={actionBusy || !selectedFields.length} onclick={() => void save()}>Save {selectedFields.length || ''} checkpoint fact{selectedFields.length === 1 ? '' : 's'}</button>
   </header>
 
   {#if selectable.length}

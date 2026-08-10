@@ -91,6 +91,28 @@ describe('direct serverless network paths', () => {
     });
   }
 
+  for (const [name, handler] of networkHandlers) {
+    test(`${name} rejects an authenticated cross-site browser request before network work`, async () => {
+      const response = await handler({
+        headers: { cookie, host: 'example.com', 'sec-fetch-site': 'cross-site' },
+        queryStringParameters: { q: 'example.com' },
+      });
+      assert.equal(response.statusCode, 403);
+      assert.equal(JSON.parse(requiredValue(response.body)).errorCode, 'CROSS_SITE_REQUEST_BLOCKED');
+    });
+  }
+
+  for (const [name, handler] of networkHandlers) {
+    test(`${name} rejects an originless same-site sibling request before network work`, async () => {
+      const response = await handler({
+        headers: { cookie, host: 'app.example.test', 'sec-fetch-site': 'same-site' },
+        queryStringParameters: { q: 'example.test' },
+      });
+      assert.equal(response.statusCode, 403);
+      assert.equal(JSON.parse(requiredValue(response.body)).errorCode, 'CROSS_SITE_REQUEST_BLOCKED');
+    });
+  }
+
   test('returns a retryable stable error when the session concurrency budget is exhausted', async () => {
     const sessionKey = sessionFingerprintFromCookieHeader(cookie);
     const leases: Array<Extract<Awaited<ReturnType<typeof defaultOperationBudget.acquire>>, { allowed: true }>> = [];

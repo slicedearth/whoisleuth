@@ -264,7 +264,7 @@ function exactBaselineFinding(input: Readonly<{
   };
 }
 
-function sanPatternMatches(pattern: string, observed: string): boolean {
+export function certificateSanPatternMatches(pattern: string, observed: string): boolean {
   if (!pattern.startsWith('*.')) return pattern === observed;
   const suffix = pattern.slice(1);
   return observed.endsWith(suffix)
@@ -301,7 +301,7 @@ function sanBaselineFinding(
     };
   }
   const missing = expectedPatterns.filter((pattern) =>
-    !observedNames.some((observed) => sanPatternMatches(pattern, observed)));
+    !observedNames.some((observed) => certificateSanPatternMatches(pattern, observed)));
   return {
     id: 'expected_san',
     label: 'Reviewed expected certificate names',

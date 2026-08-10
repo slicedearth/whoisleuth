@@ -123,6 +123,24 @@ describe('structured RDAP metadata', () => {
     assert.equal(parsed.dsDataTruncated, true);
   });
 
+  test('bounds nameserver address candidates before normalization', () => {
+    const candidates = Array.from({ length: 201 }, () => 'not-an-address');
+    Object.defineProperty(candidates, 200, {
+      get() {
+        throw new Error('Address candidates beyond the processing cap must not be read.');
+      },
+    });
+    const parsed = parseFixture('domain', {
+      ldhName: 'EXAMPLE.COM',
+      nameservers: [{
+        ldhName: 'NS1.EXAMPLE.COM',
+        ipAddresses: { v4: candidates },
+      }],
+    });
+    assert.deepEqual(arrayValue(parsed.nameserverDetails, 0).addresses, []);
+    assert.equal(parsed.nameserverAddressesTruncated, true);
+  });
+
   test('normalizes and deterministically summarizes shuffled lifecycle events', () => {
     const parsed = parseFixture('domain', {
       ldhName: 'EXAMPLE.COM',

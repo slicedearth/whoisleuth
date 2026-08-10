@@ -68,6 +68,11 @@ describe('external findings converters', () => {
       value: 'registered',
       issuer: null,
       notAfter: null,
+      eventId: null,
+      logId: null,
+      certificateSha256: null,
+      dnsNameCount: null,
+      namesComplete: null,
     });
     assert.equal(report.accepted, 1);
     assert.equal(report.duplicates, 1);

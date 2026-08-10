@@ -42,7 +42,7 @@ jobs:
       - name: Verify architectural dependency boundaries
         run: npm run architecture:check
       - name: Audit production dependencies
-        run: npm audit --omit=dev
+        run: npm run dependencies:audit
       - name: Run type checks
         run: npm run typecheck
       - name: Check Svelte frontend

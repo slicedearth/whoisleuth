@@ -299,6 +299,9 @@ function formatTerminalRegistrySupport(document: TerminalRecord): string {
     `WHOIS scope    ${supportLabel(whois.queryScope)}`,
     `WHOIS encoding ${supportLabel(whois.encodingProfile)}`,
     `WHOIS parser   ${supportLabel(whois.parserProfile)}`,
+    ...(typeof profile.officialLookupUrl === 'string' && profile.officialLookupUrl
+      ? [`Official lookup ${safeTerminalValue(profile.officialLookupUrl)}`]
+      : []),
     `Fixture states ${fixtures.length ? fixtures.map((value: unknown) => supportLabel(value)).join(', ') : 'None documented'}`,
   ];
   for (const file of files) lines.push(`Verified by    ${safeTerminalValue(file)}`);

@@ -14,8 +14,10 @@
     rdapValue: string;
     whoisValue: string;
     status: string;
-    rdapMatrixState: string;
-    whoisMatrixState: string;
+    rdapState: string;
+    whoisState: string;
+    rdapMatrixTone: string;
+    whoisMatrixTone: string;
     assessment: string;
     tone: string;
   };
@@ -24,8 +26,10 @@
     registryValue: string;
     registrarValue: string;
     status: string;
-    registryMatrixState: string;
-    registrarMatrixState: string;
+    registryState: string;
+    registrarState: string;
+    registryMatrixTone: string;
+    registrarMatrixTone: string;
     assessment: string;
     tone: string;
   };
@@ -117,45 +121,51 @@
     : whoisRows.length
       ? 'complete'
       : 'not_collected');
-  const comparisonMatrix = $derived.by(() => {
-    const columns = ['Registry RDAP', 'WHOIS'];
-    if (registrar.comparisonRows?.length) columns.splice(1, 0, 'Registrar RDAP');
-    const rows = new Map<string, MatrixInput>();
-    const rowFor = (label: string) => {
-      const id = label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || `field-${rows.size}`;
-      const current = rows.get(id) ?? { id, label, cells: [] };
-      rows.set(id, current);
-      return current;
-    };
-    for (const row of comparisonRows) {
-      const current = rowFor(row.label);
-      current.cells.push(
-        { column: 'Registry RDAP', state: row.rdapMatrixState, detail: row.rdapValue },
-        { column: 'WHOIS', state: row.whoisMatrixState, detail: row.whoisValue },
-      );
-    }
-    for (const row of registrar.comparisonRows ?? []) {
-      const current = rowFor(row.label);
-      current.cells.push(
-        { column: 'Registry RDAP', state: row.registryMatrixState, detail: row.registryValue },
-        { column: 'Registrar RDAP', state: row.registrarMatrixState, detail: row.registrarValue },
-      );
-    }
-    return projectEvidenceMatrix(columns, [...rows.values()]);
+  const comparisonLanes = $derived.by((): MatrixInput[] => {
+    return [
+      ...comparisonRows.map((row, index): MatrixInput => ({
+        id: `registry-whois-${index}-${row.label}`,
+        label: row.label,
+        context: 'Registry RDAP ↔ WHOIS',
+        status: row.status,
+        assessment: row.assessment,
+        sparse: true,
+        cells: [
+          { column: 'Registry RDAP', state: row.rdapState, tone: row.rdapMatrixTone, detail: row.rdapValue },
+          { column: 'WHOIS', state: row.whoisState, tone: row.whoisMatrixTone, detail: row.whoisValue },
+        ],
+      })),
+      ...(registrar.comparisonRows ?? []).map((row, index): MatrixInput => ({
+        id: `registry-registrar-${index}-${row.label}`,
+        label: row.label,
+        context: 'Registry RDAP ↔ Registrar RDAP',
+        status: row.status,
+        assessment: row.assessment,
+        sparse: true,
+        cells: [
+          { column: 'Registry RDAP', state: row.registryState, tone: row.registryMatrixTone, detail: row.registryValue },
+          { column: 'Registrar RDAP', state: row.registrarState, tone: row.registrarMatrixTone, detail: row.registrarValue },
+        ],
+      })),
+    ];
   });
+  const comparisonMatrix = $derived(projectEvidenceMatrix(
+    registrar.comparisonRows?.length ? ['Registry RDAP', 'Registrar RDAP', 'WHOIS'] : ['Registry RDAP', 'WHOIS'],
+    comparisonLanes,
+  ));
 
   function traceStateLabel(state: TraceState): string {
     return state === 'not_collected' ? 'Not collected' : state.replaceAll('_', ' ');
   }
   type PlotCell = { x: number; width: number };
   const PUBLICATION_COLOURS: Readonly<Record<string, string>> = Object.freeze({
-    'Registry RDAP': 'var(--source-registry)',
-    'Registrar RDAP': 'var(--source-registrar)',
-    WHOIS: 'var(--source-whois)',
+    'Registry RDAP': 'var(--source-registry-stroke)',
+    'Registrar RDAP': 'var(--source-registrar-stroke)',
+    WHOIS: 'var(--source-whois-stroke)',
   });
-  const publicationColour = (source: string): string => PUBLICATION_COLOURS[source] ?? 'var(--source-structured)';
+  const publicationColour = (source: string): string => PUBLICATION_COLOURS[source] ?? 'var(--source-structured-stroke)';
   const markerX = (cell: PlotCell): number => cell.x + cell.width / 2;
-  const trackStart = (cells: readonly PlotCell[]): number => cells[0] ? markerX(cells[0]) : 210;
+  const trackStart = (cells: readonly PlotCell[]): number => cells[0] ? markerX(cells[0]) : 250;
   const trackEnd = (cells: readonly PlotCell[]): number => {
     const cell = cells.at(-1);
     return cell ? markerX(cell) : 870;
@@ -182,15 +192,7 @@
     if (state === 'unavailable') return '×';
     return '?';
   };
-  const comparisonStateLabel = (state: string): string => ({
-    equal: 'Equivalent',
-    conflict: 'Source conflict',
-    observed: 'Source-only value',
-    partial: 'Incomplete / redacted',
-    unavailable: 'Unavailable',
-    not_collected: 'Not collected',
-    different: 'Different value',
-  } as Record<string, string>)[state] ?? 'Unknown';
+  const sourceStateLabel = (state: string): string => state.replaceAll('_', ' ');
 </script>
 
 {#if resultType === 'domain'}
@@ -228,13 +230,13 @@
     <header class="section-head">
       <div>
         <p class="eyebrow">Publication comparison</p>
-        <h4 id="registration-agreement-title">Registration source agreement</h4>
-        <p>Connected markers compare each field across separately attributed publications. A conflict means two collected sources publish materially different normalised values. A source-only value was usable in just one publication. Incomplete / redacted means a publication could not provide a complete comparable value. Exact values remain in the tables below.</p>
+        <h4 id="registration-agreement-title">Pairwise registration source agreement</h4>
+        <p>Each lane represents one actual source comparison. Repeated fields therefore remain separate across Registry RDAP ↔ WHOIS and Registry RDAP ↔ Registrar RDAP instead of being merged. Marker styling summarises the comparison; the exact source state and value remain in the table following the plot.</p>
       </div>
       {#if comparisonMatrix.truncated}<span class="partial">Partial visual</span>{/if}
     </header>
     <!-- svelte-ignore a11y_no_noninteractive_tabindex -- scrollable matrix must be keyboard reachable -->
-    <div class="matrix-frame" role="img" tabindex="0" aria-label={`Registration agreement plot with ${comparisonMatrix.rows.length} fields`}>
+    <div class="matrix-frame" role="img" tabindex="0" aria-label={`Pairwise registration agreement plot with ${comparisonMatrix.rows.length} source comparison lanes`}>
       <svg viewBox={`0 0 ${comparisonMatrix.width} ${comparisonMatrix.height}`} aria-hidden="true">
         {#each comparisonMatrix.columns as column}
           <g class="publication-header" style={`--publication-color:${publicationColour(column.label)}`}>
@@ -245,42 +247,79 @@
         {/each}
         {#each comparisonMatrix.rows as row}
           <line x1={trackStart(row.cells)} x2={trackEnd(row.cells)} y1={row.y + row.height / 2} y2={row.y + row.height / 2} class="agreement-track" />
-          <text x="8" y={row.y + row.height / 2 + 3} class="row-label">{row.label}</text>
+          <text x="8" y={row.y + row.height / 2 - 3} class="row-label">{row.label}</text>
+          <text x="8" y={row.y + row.height / 2 + 9} class="pair-label">{row.context}</text>
           {#each row.cells as cell}
-            <g class={`agreement-node state-${cell.state}`}>
-              <title>{row.label}, {cell.column}: {comparisonStateLabel(cell.state)}{cell.detail ? `: ${cell.detail}` : ''}</title>
-              {#if cell.state === 'different' || cell.state === 'partial'}
+            <g class={`agreement-node state-${cell.tone}`} data-source-state={cell.state}>
+              <title>{row.label}, {row.context}, {cell.column}: source state {sourceStateLabel(cell.state)}; {row.assessment}{cell.detail ? `; value ${cell.detail}` : ''}</title>
+              {#if cell.tone === 'different' || cell.tone === 'partial'}
                 <polygon points={diamondPoints(markerX(cell), row.y + row.height / 2)} class="agreement-marker" />
-              {:else if cell.state === 'conflict'}
+              {:else if cell.tone === 'conflict'}
                 <polygon points={hexagonPoints(markerX(cell), row.y + row.height / 2)} class="agreement-marker" />
-              {:else if cell.state === 'observed'}
+              {:else if cell.tone === 'observed'}
                 <rect x={markerX(cell) - 7} y={row.y + row.height / 2 - 7} width="14" height="14" rx="3" class="agreement-marker" />
               {:else}
                 <circle cx={markerX(cell)} cy={row.y + row.height / 2} r="7" class="agreement-marker" />
               {/if}
-              <text x={markerX(cell)} y={row.y + row.height / 2 + 3} text-anchor="middle" class="agreement-glyph">{comparisonGlyph(cell.state)}</text>
+              <text x={markerX(cell)} y={row.y + row.height / 2 + 3} text-anchor="middle" class="agreement-glyph">{comparisonGlyph(cell.tone)}</text>
             </g>
           {/each}
         {/each}
       </svg>
     </div>
-    <div class="matrix-mobile" role="group" aria-label={`Registration agreement for ${comparisonMatrix.rows.length} fields`}>
-      {#each comparisonMatrix.rows as row}
-        <article>
-          <h5>{row.label}</h5>
-          <ul>
-            {#each row.cells as cell}
-              <li class={`state-${cell.state}`} style={`--publication-color:${publicationColour(cell.column)}`}>
-                <span class="mobile-publication">{cell.column}</span>
-                <span class="mobile-agreement-marker" aria-hidden="true">{comparisonGlyph(cell.state)}</span>
-                <span class="mobile-agreement-state">{comparisonStateLabel(cell.state)}</span>
-                {#if cell.detail}<small>{cell.detail}</small>{/if}
-              </li>
-            {/each}
-          </ul>
-        </article>
-      {/each}
+    <div class="lane-table-wrap">
+      <table class="lane-table">
+        <caption>Exact pairwise registration publication comparisons</caption>
+        <thead><tr><th scope="col">Field and source pair</th><th scope="col">First publication</th><th scope="col">Second publication</th><th scope="col">Assessment</th></tr></thead>
+        <tbody>
+          {#each comparisonLanes as row (row.id)}
+            {@const first=row.cells[0]}
+            {@const second=row.cells[1]}
+            <tr>
+              <th scope="row" data-label="Field and source pair"><strong>{row.label}</strong><small>{row.context}</small></th>
+              <td data-label="First publication"><strong>{first?.column || 'Publication unavailable'}</strong><span>{first?.detail || 'No comparable value'}</span><small>Source state <code>{first?.state || 'unknown'}</code></small></td>
+              <td data-label="Second publication"><strong>{second?.column || 'Publication unavailable'}</strong><span>{second?.detail || 'No comparable value'}</span><small>Source state <code>{second?.state || 'unknown'}</code></small></td>
+              <td data-label="Assessment"><span>{row.assessment || sourceStateLabel(row.status || 'unknown')}</span><small>Comparison state <code>{row.status || 'unknown'}</code></small></td>
+            </tr>
+          {/each}
+        </tbody>
+      </table>
     </div>
+    <section class="lane-cards" aria-labelledby="mobile-registration-comparisons-title">
+      <header>
+        <h5 id="mobile-registration-comparisons-title">Exact source comparisons</h5>
+        <p>Each card compares one field across one source pair. Open a card to review both publications and the exact assessment.</p>
+      </header>
+      <ol>
+        {#each comparisonLanes as row (row.id)}
+          {@const first=row.cells[0]}
+          {@const second=row.cells[1]}
+          <li data-comparison-state={row.status || 'unknown'}>
+            <details class="lane-card" open={row.status !== 'equivalent' && row.status !== 'equal'}>
+              <summary>
+                <span><strong>{row.label}</strong><small>{row.context}</small></span>
+                <span class="lane-status">{sourceStateLabel(row.status || 'unknown')}</span>
+              </summary>
+              <div class="lane-card-body">
+                <div class="publication-side">
+                  <small>First publication</small>
+                  <strong>{first?.column || 'Publication unavailable'}</strong>
+                  <span>{first?.detail || 'No comparable value'}</span>
+                  <em>Source state · {sourceStateLabel(first?.state || 'unknown')}</em>
+                </div>
+                <div class="publication-side">
+                  <small>Second publication</small>
+                  <strong>{second?.column || 'Publication unavailable'}</strong>
+                  <span>{second?.detail || 'No comparable value'}</span>
+                  <em>Source state · {sourceStateLabel(second?.state || 'unknown')}</em>
+                </div>
+                <p class="lane-assessment"><strong>Assessment</strong><span>{row.assessment || sourceStateLabel(row.status || 'unknown')}</span></p>
+              </div>
+            </details>
+          </li>
+        {/each}
+      </ol>
+    </section>
     <ul class="matrix-legend" aria-label="Registration source comparison states">
       <li class="state-equal"><span>=</span>Equivalent</li>
       <li class="state-conflict"><span>!</span>Source conflict</li>
@@ -464,11 +503,11 @@
   .matrix-frame{max-width:100%;margin-top:13px;overflow-x:auto;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel-raised);overscroll-behavior-x:contain}
   .matrix-frame:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
   .matrix-frame svg{display:block;width:100%;min-width:680px;height:auto}
-  .matrix-mobile{display:none}
-  .column-label,.row-label{fill:var(--muted);font-family:var(--mono);font-size:9px}
+  .column-label,.row-label,.pair-label{fill:var(--muted);font-family:var(--mono);font-size:9px}
   .publication-marker{fill:var(--publication-color);stroke:color-mix(in srgb,var(--publication-color) 40%,var(--panel));stroke-width:3}
   .column-guide{stroke:color-mix(in srgb,var(--publication-color) 14%,var(--border));stroke-width:1;stroke-dasharray:2 5}
   .row-label{fill:var(--text)}
+  .pair-label{font-size:8px}
   .agreement-track{stroke:var(--border-strong);stroke-width:1.5}
   .agreement-marker{fill:var(--panel);stroke:var(--muted);stroke-width:1.7}
   .agreement-glyph{fill:var(--muted);font:750 9px var(--mono);pointer-events:none}
@@ -486,7 +525,20 @@
   .matrix-legend .state-equal span{border-color:var(--success);background:color-mix(in srgb,var(--success) 16%,var(--panel));color:var(--success)}
   .matrix-legend .state-partial span{border-color:var(--amber);border-radius:0;background:color-mix(in srgb,var(--amber) 15%,var(--panel));color:var(--amber);clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%)}
   .matrix-legend .state-conflict span{border-color:var(--danger);background:color-mix(in srgb,var(--danger) 13%,var(--panel));color:var(--danger);clip-path:polygon(25% 0,75% 0,100% 25%,100% 75%,75% 100%,25% 100%,0 75%,0 25%)}
+  .matrix-legend .state-observed span{border-color:var(--accent);border-radius:3px;background:color-mix(in srgb,var(--accent) 14%,var(--panel));color:var(--accent)}
   .matrix-legend .state-not_collected span{border-color:var(--muted);border-style:dashed}
+  .matrix-legend .state-unavailable span{border-color:var(--muted);border-style:dashed}
+  .lane-table-wrap{margin-top:12px;overflow:auto;border:1px solid var(--border);border-radius:var(--radius-md)}
+  .lane-table{width:100%;border-collapse:collapse;font-size:var(--text-xs)}
+  .lane-table caption{padding:9px 10px;border-bottom:1px solid var(--border);color:var(--muted);font:650 var(--text-2xs) var(--mono);text-align:left}
+  .lane-table th,.lane-table td{padding:9px 10px;border-top:1px solid var(--border);text-align:left;vertical-align:top}
+  .lane-table thead th{border-top:0;color:var(--muted);font:650 var(--text-2xs) var(--mono)}
+  .lane-table strong,.lane-table span,.lane-table small{display:block;min-width:0;overflow-wrap:anywhere}
+  .lane-table th strong,.lane-table td>strong{font:700 var(--text-xs) var(--mono)}
+  .lane-table th small,.lane-table td small{margin-top:4px;color:var(--muted);font-size:var(--text-2xs)}
+  .lane-table td span{margin-top:4px}
+  .lane-table code{color:var(--text);font-size:inherit}
+  .lane-cards{display:none}
   .authority-trace>header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
   .authority-trace h4{margin:2px 0 0;font:700 var(--text-md) var(--mono)}
   .authority-trace>header>span{max-width:230px;color:var(--accent);font:700 var(--text-2xs) var(--mono);text-align:right;text-transform:uppercase}
@@ -558,21 +610,37 @@
     .insight-grid,.publication-list,.capability-sources{grid-template-columns:1fr}
     .capability-sources li{grid-template-columns:1fr}.capability-sources li small{grid-column:1}
     .matrix-frame{display:none}
-    .matrix-mobile{display:grid;gap:8px;margin-top:13px}
-    .matrix-mobile article{min-width:0;overflow:hidden;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
-    .matrix-mobile h5{margin:0;padding:9px 10px;border-bottom:1px solid var(--border);font:700 var(--text-xs) var(--mono)}
-    .matrix-mobile ul{display:grid;gap:1px;margin:0;padding:0;background:var(--border);list-style:none}
-    .matrix-mobile li{display:grid;grid-template-columns:minmax(0,1fr) 20px auto;gap:6px;align-items:center;min-width:0;padding:8px 9px;background:var(--panel)}
-    .mobile-publication{display:flex;align-items:center;gap:7px;min-width:0;overflow-wrap:anywhere;font:650 var(--text-2xs) var(--mono)}
-    .mobile-publication::before{content:"";flex:0 0 auto;width:7px;height:7px;border:2px solid var(--publication-color);border-radius:50%;background:var(--panel)}
-    .mobile-agreement-marker{display:grid;width:17px;height:17px;place-items:center;border:1.5px solid var(--muted);border-radius:50%;color:var(--muted);background:var(--panel);font:750 9px var(--mono)}
-    .mobile-agreement-state{color:var(--muted);font:650 var(--text-2xs) var(--mono);text-transform:capitalize}
-    .matrix-mobile small{grid-column:1/-1;min-width:0;color:var(--muted);font-size:var(--text-2xs);line-height:1.4;overflow-wrap:anywhere}
-    .matrix-mobile .state-equal .mobile-agreement-marker{border-color:var(--success);color:var(--success);background:color-mix(in srgb,var(--success) 16%,var(--panel))}
-    .matrix-mobile .state-different .mobile-agreement-marker,.matrix-mobile .state-partial .mobile-agreement-marker{border-color:var(--amber);border-radius:0;color:var(--amber);background:color-mix(in srgb,var(--amber) 15%,var(--panel));clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%);line-height:1}
-    .matrix-mobile .state-conflict .mobile-agreement-marker{border-color:var(--danger);color:var(--danger);background:color-mix(in srgb,var(--danger) 13%,var(--panel));clip-path:polygon(25% 0,75% 0,100% 25%,100% 75%,75% 100%,25% 100%,0 75%,0 25%)}
-    .matrix-mobile .state-observed .mobile-agreement-marker{border-color:var(--accent);border-radius:3px;color:var(--accent);background:color-mix(in srgb,var(--accent) 14%,var(--panel))}
-    .matrix-mobile .state-not_collected .mobile-agreement-marker,.matrix-mobile .state-unavailable .mobile-agreement-marker,.matrix-mobile .state-unknown .mobile-agreement-marker{border-style:dashed}
+    .lane-table-wrap{display:none}
+    .lane-cards{display:grid;gap:8px;margin-top:12px}
+    .lane-cards>header{display:grid;gap:5px;padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
+    .lane-cards h5{margin:0;font:700 var(--text-xs) var(--mono)}
+    .lane-cards>header p{margin:0;color:var(--muted);font-size:var(--text-2xs);line-height:1.5}
+    .lane-cards ol{display:grid;gap:8px;margin:0;padding:0;list-style:none}
+    .lane-cards li{min-width:0}
+    .lane-card{overflow:hidden;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}
+    .lane-card>summary{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:start;gap:9px;min-width:0;padding:10px;cursor:pointer;list-style:none}
+    .lane-card>summary::-webkit-details-marker{display:none}
+    .lane-card>summary::after{content:'+';align-self:center;color:var(--muted);font:800 var(--text-sm) var(--mono);line-height:1}
+    .lane-card[open]>summary::after{content:'\2212'}
+    .lane-card>summary:focus-visible{outline:2px solid var(--focus);outline-offset:-3px}
+    .lane-card>summary>span:first-child{display:grid;gap:3px;min-width:0}
+    .lane-card>summary strong,.lane-card>summary small{display:block;min-width:0;overflow-wrap:anywhere}
+    .lane-card>summary strong{font:700 var(--text-xs) var(--mono)}
+    .lane-card>summary small{color:var(--muted);font-size:var(--text-2xs)}
+    .lane-status{align-self:start;max-width:108px;padding:3px 6px;border:1px solid var(--border-strong);border-radius:999px;color:var(--text);font:700 var(--text-2xs) var(--mono);line-height:1.25;text-align:center;text-transform:capitalize;overflow-wrap:anywhere}
+    [data-comparison-state='conflict'] .lane-status,[data-comparison-state='different'] .lane-status{border-color:var(--danger);color:var(--danger)}
+    [data-comparison-state='partial'] .lane-status,[data-comparison-state='incomplete'] .lane-status{border-color:var(--amber);color:var(--amber)}
+    .lane-card-body{display:grid;gap:8px;padding:0 10px 10px;border-top:1px solid var(--border)}
+    .publication-side{display:grid;gap:4px;min-width:0;margin-top:10px;padding:9px;border-left:3px solid var(--accent);background:var(--panel-raised)}
+    .publication-side:nth-child(2){margin-top:0;border-left-color:var(--accent2)}
+    .publication-side small{color:var(--muted);font:650 var(--text-2xs) var(--mono);text-transform:uppercase}
+    .publication-side strong,.publication-side span,.publication-side em{min-width:0;overflow-wrap:anywhere}
+    .publication-side strong{font:700 var(--text-xs) var(--mono)}
+    .publication-side span{font-size:var(--text-xs);line-height:1.45}
+    .publication-side em{color:var(--muted);font:normal var(--text-2xs) var(--mono)}
+    .lane-assessment{display:grid;gap:4px;margin:0;padding:9px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:var(--text-xs)}
+    .lane-assessment strong{font:700 var(--text-2xs) var(--mono);text-transform:uppercase}
+    .lane-assessment span{color:var(--muted);line-height:1.45;overflow-wrap:anywhere}
     .comparison .table-wrap,.publication-comparison .table-wrap{overflow:visible;border-top:0}
     .comparison table,.comparison tbody,.comparison tr,.comparison th[scope='row'],.comparison td,.publication-comparison table,.publication-comparison tbody,.publication-comparison tr,.publication-comparison th[scope='row'],.publication-comparison td{display:block;width:100%}
     .comparison thead,.publication-comparison thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}

@@ -4,8 +4,9 @@ import {
 } from './investigation-template-model.ts';
 
 export const INVESTIGATION_CACAO_SPEC_VERSION = 'cacao-2.0';
-export const INVESTIGATION_CACAO_PROFILE_VERSION = 1;
-export const INVESTIGATION_CACAO_PROFILE_SEMVER = '1.0.0';
+export const INVESTIGATION_CACAO_PROFILE_VERSION = 2;
+export const INVESTIGATION_CACAO_PROFILE_SEMVER = '2.0.0';
+export const INVESTIGATION_CACAO_SUPPORTED_PROFILE_VERSIONS = [1, INVESTIGATION_CACAO_PROFILE_VERSION] as const;
 export const MAX_INVESTIGATION_CACAO_IMPORT_BYTES = 384 * 1024;
 
 const PROFILE_EXTENSION_ID = 'extension-definition--efb7c8c8-6baf-53f5-91d8-0985992f23d4';
@@ -102,13 +103,16 @@ function timestamp(value: string): string {
 
 function profileExtension(value: unknown): ProfileMetadata | null {
   const item = record(value);
-  if (item?.profile_version !== INVESTIGATION_CACAO_PROFILE_VERSION
+  if (!item) return null;
+  if (!(INVESTIGATION_CACAO_SUPPORTED_PROFILE_VERSIONS as readonly unknown[]).includes(item.profile_version)
     || item.execution_mode !== 'manual_only'
     || typeof item.template_id !== 'string'
     || typeof item.recipe_id !== 'string'
     || !Array.isArray(item.limitations)) return null;
+  const profileVersion = Number(item.profile_version);
+  if (profileVersion === 1 && !['brand_sweep', 'infrastructure_pivot', 'new_domain_triage'].includes(item.recipe_id)) return null;
   return {
-    profile_version: INVESTIGATION_CACAO_PROFILE_VERSION,
+    profile_version: profileVersion,
     template_id: item.template_id,
     recipe_id: item.recipe_id as InvestigationTemplate['recipeId'],
     execution_mode: 'manual_only',
@@ -248,13 +252,14 @@ export function parseCacaoInvestigationPlaybook(raw: unknown): InvestigationTemp
   for (const key of Object.keys(playbook)) {
     if (!SAFE_KEYS.has(key)) throw new Error(`Unsupported CACAO property: ${key}.`);
   }
-  const definition = record(record(playbook.extension_definitions)?.[PROFILE_EXTENSION_ID]);
-  if (definition?.type !== 'extension-definition'
-    || definition.version !== INVESTIGATION_CACAO_PROFILE_SEMVER) {
-    throw new Error('The playbook does not declare the supported restricted investigation profile.');
-  }
   const profile = profileExtension(record(playbook.playbook_extensions)?.[PROFILE_EXTENSION_ID]);
   if (!profile) throw new Error('The restricted investigation profile metadata is missing or invalid.');
+  const definition = record(record(playbook.extension_definitions)?.[PROFILE_EXTENSION_ID]);
+  const expectedProfileSemver = profile.profile_version === 1 ? '1.0.0' : INVESTIGATION_CACAO_PROFILE_SEMVER;
+  if (definition?.type !== 'extension-definition'
+    || definition.version !== expectedProfileSemver) {
+    throw new Error('The playbook does not declare the supported restricted investigation profile.');
+  }
   const agents = record(playbook.agent_definitions);
   const agent = record(agents?.[ANALYST_AGENT_ID]);
   if (!agents || Object.keys(agents).length !== 1 || agent?.type !== 'individual') {

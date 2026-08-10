@@ -46,7 +46,7 @@ describe('registry doctor', () => {
   });
 
   test('flags an allowed source that was skipped without converting the result to absence', () => {
-    const report = buildRegistryDoctorReport(lookup('generic.example.com'), NOW);
+    const report = buildRegistryDoctorReport(lookup('example.com'), NOW);
     assert.equal(report.sources.find((source) => source.source === 'whois')?.alignment, 'investigate');
     assert.ok(report.summary.investigate > 0);
     assert.match(report.limitations.join(' '), /does not prove live reachability/u);

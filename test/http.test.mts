@@ -2,9 +2,12 @@ import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   MAX_API_JSON_BODY_BYTES,
+  MAX_API_REQUEST_BODY_READ_MS,
   apiErrorResponseFor,
+  apiRequestErrorResponse,
   apiUnexpectedErrorResponse,
   json,
+  readRequestTextCapped,
   withNetlifyApiErrorBoundary,
 } from '../lib/http.mts';
 import { requiredValue } from './value-assertions.mts';
@@ -40,6 +43,42 @@ describe('Netlify JSON responses', () => {
 
   test('defines a one MiB API request-body boundary', () => {
     assert.equal(MAX_API_JSON_BODY_BYTES, 1024 * 1024);
+    assert.equal(MAX_API_REQUEST_BODY_READ_MS, 10_000);
+  });
+
+  test('bounds stalled and aborted streamed request bodies and cancels the reader', async () => {
+    let timeoutCancelled = false;
+    const stalled = new Request('https://console.example/api/input', {
+      method: 'POST',
+      body: new ReadableStream<Uint8Array>({
+        pull: () => new Promise<void>(() => {}),
+        cancel: () => { timeoutCancelled = true; },
+      }),
+      // @ts-expect-error Node's streamed Request body requires its runtime-specific duplex option.
+      duplex: 'half',
+    });
+    assert.deepEqual(await readRequestTextCapped(stalled, 1024, 5), { status: 'timed_out' });
+    assert.equal(timeoutCancelled, true);
+    assert.equal(stalled.body?.locked, false);
+
+    let abortCancelled = false;
+    const controller = new AbortController();
+    const aborted = new Request('https://console.example/api/input', {
+      method: 'POST',
+      body: new ReadableStream<Uint8Array>({
+        pull: () => new Promise<void>(() => {}),
+        cancel: () => { abortCancelled = true; },
+      }),
+      signal: controller.signal,
+      // @ts-expect-error Node's streamed Request body requires its runtime-specific duplex option.
+      duplex: 'half',
+    });
+    const pending = readRequestTextCapped(aborted, 1024, 100);
+    controller.abort();
+    assert.deepEqual(await pending, { status: 'aborted' });
+    assert.equal(abortCancelled, true);
+    assert.equal(aborted.body?.locked, false);
+    await assert.rejects(readRequestTextCapped(stalled, 1024, 0), /deadline/iu);
   });
 
   test('maps request-body failures without echoing exception details', () => {
@@ -54,6 +93,10 @@ describe('Netlify JSON responses', () => {
     assert.deepEqual(apiErrorResponseFor(new Error('private failure detail')), {
       statusCode: 500,
       body: { error: 'Internal server error', errorCode: 'INTERNAL_ERROR' },
+    });
+    assert.deepEqual(apiRequestErrorResponse('REQUEST_TIMEOUT'), {
+      statusCode: 408,
+      body: { error: 'Request body read timed out', errorCode: 'REQUEST_TIMEOUT' },
     });
   });
 

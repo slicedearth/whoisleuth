@@ -53,6 +53,8 @@
   let preview = $state<Preview | null>(null);
   let conversionReport = $state<ExternalFindingConversionReport | null>(null);
   let applying = $state(false);
+  let parsing = $state(false);
+  let selectionGeneration = 0;
   let targetCaseId = $state('');
   const findingsPreview = $derived(preview?.kind === 'findings' ? preview.document : null);
   const intelligencePreview = $derived(preview?.kind === 'intelligence' ? preview.document : null);
@@ -71,9 +73,11 @@
   async function selectFile(event: Event) {
     const input = event.currentTarget as HTMLInputElement;
     const file = input.files?.[0];
+    const generation = ++selectionGeneration;
     preview = null;
     conversionReport = null;
     targetCaseId = '';
+    parsing = Boolean(file);
     if (!file) return;
     try {
       const wacz = file.name.toLowerCase().endsWith('.wacz') || file.type === 'application/wacz';
@@ -82,6 +86,7 @@
           throw new Error('Portable WACZ imports are limited to 8 MiB.');
         }
         const report = await parseWaczEvidenceArchive(await file.arrayBuffer(), file.name);
+        if (generation !== selectionGeneration) return;
         preview = { kind: 'findings', document: report.document };
         onmessage(`Validated ${report.accepted} portable WACZ finding${report.accepted === 1 ? '' : 's'} from ${report.warcResources} verified WARC resource${report.warcResources === 1 ? '' : 's'} and ${report.records} bounded record${report.records === 1 ? '' : 's'}; ${report.excluded} excluded. The package stayed local and only normalized page evidence is available for deliberate import.`);
         return;
@@ -92,6 +97,7 @@
           throw new Error('Portable WARC imports are limited to 8 MiB.');
         }
         const report = await parseWarcEvidenceArchive(await file.arrayBuffer(), file.name);
+        if (generation !== selectionGeneration) return;
         preview = { kind: 'findings', document: report.document };
         onmessage(`Validated ${report.accepted} portable WARC finding${report.accepted === 1 ? '' : 's'} from ${report.records} bounded record${report.records === 1 ? '' : 's'}; ${report.excluded} excluded. The archive stayed local and only normalized page evidence is available for deliberate import.`);
         return;
@@ -100,6 +106,7 @@
         throw new Error('External intelligence imports are limited to 512 KiB.');
       }
       const bytes = await file.arrayBuffer();
+      if (generation !== selectionGeneration) return;
       const decoded = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
       const csv = file.name.toLowerCase().endsWith('.csv') || file.type === 'text/csv';
       let value: unknown = null;
@@ -187,18 +194,23 @@
         onmessage(`Validated ${document.findings.length} sanitised web-capture finding${document.findings.length === 1 ? '' : 's'} for ${domainCount} domain${domainCount === 1 ? '' : 's'}. Review the normalized preview before importing.`);
       } else {
         const document = parseExternalIntelligenceDocument(value, await sourceDigest(bytes));
+        if (generation !== selectionGeneration) return;
         preview = { kind: 'intelligence', document };
         onmessage(`Validated ${document.items.length} ${document.format.toUpperCase()} claim${document.items.length === 1 ? '' : 's'} with ${document.duplicatesSkipped} duplicate${document.duplicatesSkipped === 1 ? '' : 's'}, ${document.conflicts.length} conflict${document.conflicts.length === 1 ? '' : 's'}, and ${document.exclusions.length} exclusion${document.exclusions.length === 1 ? '' : 's'}. Select an existing case before merging.`);
       }
     } catch (cause) {
+      if (generation !== selectionGeneration) return;
       onmessage(cause instanceof Error ? cause.message : 'External findings import could not be validated.');
     } finally {
-      input.value = '';
+      if (generation === selectionGeneration) {
+        parsing = false;
+        input.value = '';
+      }
     }
   }
 
   async function applyImport() {
-    if (!preview || applying) return;
+    if (!preview || parsing || applying) return;
     applying = true;
     try {
       if (preview.kind === 'findings') {
@@ -221,11 +233,11 @@
   }
 </script>
 
-<details class="external-import card">
+<details class="external-import card" aria-busy={parsing}>
   <summary>Import bounded external findings</summary>
   <div class="import-body">
     <p>Preview the strict <code>whoisleuth.external-findings</code>, sanitised capture summary or artefact-metadata manifest, documented domain, DNS, or certificate observation rows, fixed-column CSV/JSON rows, a bounded STIX 2.1 bundle, a bounded MISP event, or a strict WARC/WACZ response archive locally before changing a case. WARC processing rejects or discards request records, sensitive headers, downloads, unsupported response types, excessive records, and mismatched supported record digests. WACZ processing additionally bounds ZIP expansion and verifies its declared WARC resources before applying the same WARC privacy filter. Imports never fetch references, run code, alter dispositions, start collection, score claims, publish events, or submit data elsewhere.</p>
-    <label class="btn file-btn">Choose JSON, CSV, WARC, or WACZ<input type="file" accept="application/json,text/csv,application/warc,application/wacz,.json,.csv,.warc,.wacz" onchange={selectFile}></label>
+    <label class="btn file-btn">{parsing ? 'Reading selected file…' : 'Choose JSON, CSV, WARC, or WACZ'}<input type="file" accept="application/json,text/csv,application/warc,application/wacz,.json,.csv,.warc,.wacz" onchange={selectFile} disabled={parsing || applying}></label>
     {#if findingsPreview}
       <section class="preview" aria-labelledby="external-findings-preview-title">
         <header>
@@ -251,7 +263,7 @@
           {/each}
         </ul>
         {#if findingsPreview.findings.length > 8}<p class="preview-note">Showing 8 of {findingsPreview.findings.length} validated findings.</p>{/if}
-        <div class="actions"><button class="primary" type="button" onclick={() => void applyImport()} disabled={applying}>{applying ? 'Importing…' : 'Import into cases'}</button><button class="btn" type="button" onclick={() => { preview = null; conversionReport = null; }} disabled={applying}>Cancel</button></div>
+        <div class="actions"><button class="primary" type="button" onclick={() => void applyImport()} disabled={parsing || applying}>{applying ? 'Importing…' : 'Import into cases'}</button><button class="btn" type="button" onclick={() => { preview = null; conversionReport = null; }} disabled={parsing || applying}>Cancel</button></div>
       </section>
     {:else if intelligencePreview}
       <section class="preview" aria-labelledby="external-intelligence-preview-title">
@@ -281,10 +293,10 @@
             </ul>
           </details>
         {/if}
-        <label class="case-target">Merge into existing case<select bind:value={targetCaseId} disabled={applying || !intelligencePreview.items.length}><option value="">Select a case</option>{#each cases as record}<option value={record.id}>{record.domain}</option>{/each}</select></label>
+        <label class="case-target">Merge into existing case<select bind:value={targetCaseId} disabled={parsing || applying || !intelligencePreview.items.length}><option value="">Select a case</option>{#each cases as record}<option value={record.id}>{record.domain}</option>{/each}</select></label>
         {#if !cases.length}<p class="preview-warning">Open a case before importing external intelligence. This importer never creates one automatically.</p>{/if}
         <p class="preview-note">The source file SHA-256 digest, external identifier, publisher, timestamps, labels, markings, confidence, and normalised entity are retained on each imported assertion. Claims remain separate from collected evidence.</p>
-        <div class="actions"><button class="primary" type="button" onclick={() => void applyImport()} disabled={applying || !targetCaseId || !intelligencePreview.items.length}>{applying ? 'Merging…' : 'Merge assertions into case'}</button><button class="btn" type="button" onclick={() => { preview = null; targetCaseId = ''; }} disabled={applying}>Cancel</button></div>
+        <div class="actions"><button class="primary" type="button" onclick={() => void applyImport()} disabled={parsing || applying || !targetCaseId || !intelligencePreview.items.length}>{applying ? 'Merging…' : 'Merge assertions into case'}</button><button class="btn" type="button" onclick={() => { preview = null; targetCaseId = ''; }} disabled={parsing || applying}>Cancel</button></div>
       </section>
     {/if}
   </div>

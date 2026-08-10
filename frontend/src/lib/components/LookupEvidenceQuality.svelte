@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import type { LookupEvidenceQualityMatrix } from '$lib/analysis/lookup-decision-support.ts';
   import { formatCollectionDuration } from '$lib/analysis/lookup-display-shared.ts';
   import type { LookupTiming } from '$lib/analysis/lookup-response.ts';
@@ -22,10 +23,11 @@
     onpolicychange: (value: { mode: 'task-default' | 'analyst-custom'; thresholdsDays: LookupFreshnessThresholds }) => void;
   } = $props();
 
-  let policyMode = $state<'task-default' | 'analyst-custom'>('task-default');
-  let registrationDays = $state(30);
-  let networkDays = $state(7);
-  let webDays = $state(3);
+  const initialFreshnessPolicy = untrack(() => refreshPlan.freshnessPolicy);
+  let policyMode = $state<'task-default' | 'analyst-custom'>(initialFreshnessPolicy.id === 'analyst-custom' ? 'analyst-custom' : 'task-default');
+  let registrationDays = $state(initialFreshnessPolicy.thresholdsDays.registration);
+  let networkDays = $state(initialFreshnessPolicy.thresholdsDays.network);
+  let webDays = $state(initialFreshnessPolicy.thresholdsDays.web);
 
   function boundedDays(value: number, fallback: number): number {
     return Number.isFinite(value) ? Math.max(1, Math.min(365, Math.round(value))) : fallback;
@@ -73,7 +75,7 @@
 
     <details>
       <summary>Review {matrix.entries.length} source and analysis records</summary>
-      <div class="matrix" role="table" aria-label="Source quality and freshness">
+      <div class="matrix" role="table" aria-label="Source quality and freshness" aria-colcount="5">
         <div class="matrix-head" role="row">
           <span role="columnheader">Source</span>
           <span role="columnheader">State</span>
@@ -82,7 +84,8 @@
           <span role="columnheader">Supports</span>
         </div>
         {#each matrix.entries as entry (entry.id)}
-          <div class="quality-row" class:limited={entry.state === 'partial' || entry.state === 'unavailable' || entry.state === 'unknown'} role="row">
+          <div class="quality-record" class:limited={entry.state === 'partial' || entry.state === 'unavailable' || entry.state === 'unknown'} role="rowgroup">
+          <div class="quality-row" role="row">
             <div class="source" role="cell">
               <small>{entry.category}</small>
               <strong>{entry.label}</strong>
@@ -91,7 +94,10 @@
               {#if entry.refreshAvailable}<span class="refresh">Refresh available</span>{/if}
             </div>
             <div role="cell">
-              <span class="state state-{entry.state}">{entry.statusLabel}</span>
+              <span
+                class="state state-{entry.state}"
+                class:registration-source={['rdap', 'whois', 'availability', 'registrar-rdap'].includes(entry.id)}
+              >{entry.statusLabel}</span>
               {#if entry.truncated}<span class="truncated">Truncated</span>{/if}
             </div>
             <div class="observed" role="cell">
@@ -105,12 +111,15 @@
             <div class="supports" role="cell">
               {entry.supports.length ? entry.supports.join(', ') : 'Source-specific evidence'}
             </div>
-            {#if entry.limitations.length}
-              <div class="limitations" role="cell">
+          </div>
+          {#if entry.limitations.length}
+            <div class="limitations-row" role="row">
+              <div class="limitations" role="cell" aria-colspan="5" aria-label={`Limitations for ${entry.label}`}>
                 <strong>Limitations</strong>
                 <ul>{#each entry.limitations as limitation}<li>{limitation}</li>{/each}</ul>
               </div>
-            {/if}
+            </div>
+          {/if}
           </div>
         {/each}
       </div>
@@ -127,7 +136,7 @@
             <p>Registration {refreshPlan.freshnessPolicy.thresholdsDays.registration} days · network {refreshPlan.freshnessPolicy.thresholdsDays.network} days · web {refreshPlan.freshnessPolicy.thresholdsDays.web} days.</p>
           {/if}
         </div>
-        <p class="note">Thresholds organise review and source-refresh suggestions for this result only. They are not saved and do not make older evidence false or newer evidence complete.</p>
+        <p class="note">Thresholds organise source-refresh suggestions for results in this open Lookup page. They are not retained in browser-local storage. A deliberately downloaded investigation brief records the policy used. Thresholds do not make older evidence false or newer evidence complete.</p>
       </details>
       <LookupSourceRefresh plan={refreshPlan} {query} {depth} />
     </details>
@@ -135,8 +144,11 @@
     {#if timing}
       <details class="timing-detail">
         <summary>
-          <span>Request diagnostics</span>
-          <small>Inspect overlapping source branches and their settlement timing</small>
+          <span class="timing-copy">
+            <span>Request diagnostics</span>
+            <small>Inspect overlapping source branches and their settlement timing</small>
+          </span>
+          <span class="summary-arrow" aria-hidden="true">›</span>
         </summary>
         <LookupCollectionTiming {timing} embedded />
       </details>
@@ -156,13 +168,18 @@
   details{margin-top:12px;border-top:1px solid var(--border)}
   summary{padding:12px 0;color:var(--text);font:680 var(--text-xs) var(--mono);cursor:pointer}
   summary:focus-visible{outline:2px solid var(--focus);outline-offset:3px}
-  .timing-detail summary{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+  .timing-detail summary{display:flex;align-items:center;justify-content:space-between;gap:12px;list-style:none}
+  .timing-detail summary::-webkit-details-marker{display:none}
+  .timing-copy{display:flex;align-items:baseline;justify-content:space-between;gap:12px;min-width:0;width:100%}
   .timing-detail summary small{color:var(--muted);font:500 var(--text-2xs) var(--font-sans);text-align:right}
+  .summary-arrow{display:grid;width:24px;height:24px;flex:0 0 24px;place-items:center;border:1px solid var(--border);border-radius:50%;color:var(--text);font:700 1rem/1 var(--mono);transition:transform .16s ease}
+  .timing-detail[open] .summary-arrow{transform:rotate(90deg)}
   .matrix{display:grid;gap:7px}
   .matrix-head,.quality-row{display:grid;grid-template-columns:minmax(150px,1.25fr) minmax(92px,.65fr) minmax(155px,1fr) minmax(120px,.8fr) minmax(180px,1.25fr);gap:9px;align-items:start}
   .matrix-head{padding:0 10px;color:var(--muted);font:650 var(--text-2xs) var(--mono);text-transform:uppercase}
-  .quality-row{min-width:0;padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
-  .quality-row.limited{border-color:color-mix(in srgb,var(--amber) 38%,var(--border))}
+  .quality-record{min-width:0;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised);overflow:hidden}
+  .quality-row{min-width:0;padding:10px}
+  .quality-record.limited{border-color:color-mix(in srgb,var(--amber) 38%,var(--border))}
   .source,.observed,.timing{display:grid;gap:2px;min-width:0}
   .source small,.observed small,.timing small{color:var(--muted);font:var(--text-2xs) var(--mono)}
   .source small{text-transform:uppercase}
@@ -172,11 +189,12 @@
   .refresh{width:max-content;margin-top:3px;color:var(--accent);font:650 var(--text-2xs) var(--mono)}
   .state{display:inline-flex;width:max-content;max-width:100%;padding:3px 6px;border:1px solid var(--border);border-radius:999px;color:var(--muted);font:650 var(--text-2xs) var(--mono)}
   .state-complete{border-color:color-mix(in srgb,var(--accent) 42%,var(--border));color:var(--accent)}
+  .state-complete.registration-source{border-color:var(--border-strong);color:var(--text)}
   .state-partial,.state-unavailable,.state-unknown{border-color:color-mix(in srgb,var(--amber) 48%,var(--border));color:var(--amber)}
   .truncated{display:block;width:max-content;margin-top:5px;color:var(--amber);font:650 var(--text-2xs) var(--mono)}
   .observed span,.timing span,.supports{color:var(--text);font-size:var(--text-2xs);line-height:1.45;overflow-wrap:anywhere}
   .timing span.rejected{color:var(--danger)}
-  .limitations{grid-column:1/-1;padding-top:8px;border-top:1px solid var(--border);color:var(--muted);font-size:var(--text-2xs)}
+  .limitations{padding:8px 10px;border-top:1px solid var(--border);color:var(--muted);font-size:var(--text-2xs)}
   .limitations strong{font:650 var(--text-2xs) var(--mono);text-transform:uppercase}
   .limitations ul{margin:5px 0 0;padding-left:17px;line-height:1.45}
   .note{margin:9px 0 0;color:var(--muted);font-size:var(--text-2xs);line-height:1.5}
@@ -194,13 +212,14 @@
     header{display:grid}
     .metrics{width:100%;justify-content:flex-start}
     .metrics span{flex:1}
-    .timing-detail summary{display:grid;gap:3px}
+    .timing-copy{display:grid;gap:3px}
     .timing-detail summary small{text-align:left}
   }
   @media(max-width:480px){
     .quality-row{grid-template-columns:minmax(0,1fr)}
-    .supports,.limitations{grid-column:1}
+    .supports{grid-column:1}
     .policy-form{grid-template-columns:minmax(0,1fr)}
     .policy-form p{grid-column:1}
   }
+  @media(prefers-reduced-motion:reduce){.summary-arrow{transition:none}}
 </style>

@@ -213,6 +213,12 @@ async function runScheduledMonitorManagementRequest(
       errorCode: MANAGEMENT_ERROR_CODES.INVALID_REQUEST,
     }, NO_STORE_HEADERS));
   }
+  if (bodyResult.status === 'timed_out' || bodyResult.status === 'aborted') {
+    return netlifyJsonToResponse(json(408, {
+      error: 'Request body read timed out',
+      errorCode: 'REQUEST_TIMEOUT',
+    }, NO_STORE_HEADERS));
+  }
   const event: NetlifyFunctionEvent = {
     ...headerEvent,
     body: request.method === 'POST' ? bodyResult.body : null,

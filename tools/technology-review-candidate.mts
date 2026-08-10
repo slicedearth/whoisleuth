@@ -26,6 +26,11 @@ import {
   type TechnologyInput,
 } from '../lib/website-technology.mts';
 import { readBoundedRegularFile } from '../lib/bounded-file.mts';
+import {
+  boundedControlFreeText as boundedText,
+  canonicalControlFreeTimestamp as timestamp,
+  optionalJsonRecord as record,
+} from './maintainer-tool-helpers.mts';
 
 type UnknownRecord = Record<string, unknown>;
 type WritableLike = { write(value: string): unknown };
@@ -44,7 +49,6 @@ type ReconstructedTechnologyReviewProfile = Readonly<{
 }>;
 
 const ID_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
-const CONTROL_RE = /[\u0000-\u001f\u007f]/u;
 const MAX_FINDINGS = 24;
 const MAX_EVIDENCE = 4;
 const LICENCE_BASES = new Set<TechnologyReviewLicenceBasis>(TECHNOLOGY_REVIEW_LICENCE_BASES);
@@ -114,23 +118,6 @@ const RESPONSE_HEADERS: Readonly<Record<string, Readonly<{ name: string; value: 
   vercel: Object.freeze({ name: 'x-vercel-id', value: 'fixture' }),
   fastly: Object.freeze({ name: 'x-served-by', value: 'cache-fixture-FIX' }),
 });
-
-function record(value: unknown): UnknownRecord | null {
-  return value && typeof value === 'object' && !Array.isArray(value) ? value as UnknownRecord : null;
-}
-
-function boundedText(value: unknown, label: string, maximum: number): string {
-  if (typeof value !== 'string' || !value.trim() || value.length > maximum || CONTROL_RE.test(value)) {
-    throw new TypeError(`${label} must be control-free text no longer than ${maximum} characters.`);
-  }
-  return value.trim();
-}
-
-function timestamp(value: unknown, label: string): string {
-  const parsed = Date.parse(boundedText(value, label, 64));
-  if (!Number.isFinite(parsed)) throw new TypeError(`${label} must be a valid timestamp.`);
-  return new Date(parsed).toISOString();
-}
 
 function mergeSingleton(target: UnknownRecord, field: string, value: string): void {
   const current = target[field];

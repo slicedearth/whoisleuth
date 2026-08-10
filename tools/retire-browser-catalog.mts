@@ -1,10 +1,15 @@
 import { createHash } from 'node:crypto';
-import { readFile, stat, writeFile } from 'node:fs/promises';
+import { writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Worker } from 'node:worker_threads';
+import { readBoundedRegularFile } from '../lib/bounded-file.mts';
 
 import * as retire from 'retire';
+import {
+  jsonRecordOrEmpty as record,
+  sha256Text as moduleDigest,
+} from './maintainer-tool-helpers.mts';
 
 const SOURCE_VERSION = '5.4.3';
 const SOURCE_REVISION = '56ea22d889656f4fbfe47b7df58d410a06ea59b7';
@@ -31,12 +36,6 @@ type MainOptions = Readonly<{
   stdout?: WritableLike;
   stderr?: WritableLike;
 }>;
-
-function record(value: unknown): UnknownRecord {
-  return value !== null && typeof value === 'object' && !Array.isArray(value)
-    ? value as UnknownRecord
-    : {};
-}
 
 function stringArray(value: unknown, limit: number, pattern?: RegExp): string[] {
   const output: string[] = [];
@@ -231,11 +230,16 @@ function parseArguments(args: readonly string[]): { mode: CatalogMode; source: s
 }
 
 async function readBoundedText(filename: string, maxBytes: number): Promise<string> {
-  const metadata = await stat(filename);
-  if (!metadata.isFile() || metadata.size > maxBytes) {
+  try {
+    return (await readBoundedRegularFile(filename, {
+      minimumBytes: 1,
+      maximumBytes: maxBytes,
+      label: 'Pinned browser-library source',
+      allowSymbolicLink: true,
+    })).toString('utf8');
+  } catch {
     throw new TypeError(`${filename} is missing or exceeds its byte limit.`);
   }
-  return readFile(filename, 'utf8');
 }
 
 function projectSource(sourceText: string): UnknownRecord {
@@ -250,10 +254,6 @@ function projectSource(sourceText: string): UnknownRecord {
 
 function buildModule(sourceText: string): string {
   return renderModule(projectSource(sourceText));
-}
-
-function moduleDigest(moduleText: string): string {
-  return createHash('sha256').update(moduleText).digest('hex');
 }
 
 async function main(args = process.argv.slice(2), options: MainOptions = {}): Promise<number> {

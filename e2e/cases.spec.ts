@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { gzipSync, zipSync } from 'fflate';
 import { expect, test } from './fixtures';
-import { expectNoHorizontalOverflow, migrateLegacyBrowserData, readBrowserLocalCollection, requiredValue, runBulkScan } from './helpers';
+import { expectNoHorizontalOverflow, holdBrowserLocalReads, migrateLegacyBrowserData, readBrowserLocalCollection, requiredValue, runBulkScan } from './helpers';
 
 // Every domain here is a local/invalid value (RFC 2606 .invalid, or dotless
 // bad-domain-* that classifyQuery rejects with a 400). Case features are
@@ -22,6 +22,78 @@ test('Monitor views support roving keyboard navigation', async ({ page }) => {
   await tabs.getByRole('tab', { name: /^Timeline/ }).press('End');
   await expect(tabs.getByRole('tab', { name: /^Watchlists/ })).toBeFocused();
   await expect(tabs.getByRole('tab', { name: /^Watchlists/ })).toHaveAttribute('aria-selected', 'true');
+});
+
+test('recorded operations reporting stays aggregate, source-qualified, and usable on mobile', async ({ page }) => {
+  const now = Date.now();
+  const actionUpdatedAt = new Date(now - 60_000).toISOString();
+  const actionCreatedAt = new Date(now - 9 * 86_400_000).toISOString();
+  const overdueAt = new Date(now - 86_400_000).toISOString();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/monitor');
+  await migrateLegacyBrowserData(page, {
+    'whois-rdap-cases-v1': {
+      version: 12,
+      cases: [
+        caseRecord({
+          id: 'case-operations-prepared',
+          domain: 'prepared.invalid',
+          actions: [{
+            id: 'action-prepared', type: 'registrar_report', recipient: 'Reviewed registrar route',
+            contactSource: 'Published registrar policy', contactLimitations: ['Reachability was not tested.'],
+            dueAt: overdueAt, state: 'ready_for_review', reference: null,
+            followUpAt: null, outcome: null, createdAt: actionCreatedAt, updatedAt: actionUpdatedAt,
+          }],
+        }),
+        caseRecord({
+          id: 'case-operations-resolved',
+          domain: 'resolved.invalid',
+          actions: [{
+            id: 'action-resolved', type: 'security_contact_report', recipient: 'Private response route',
+            contactSource: 'Analyst supplied', contactLimitations: [], dueAt: null, state: 'resolved',
+            reference: 'PRIVATE-CASE-7', followUpAt: null, outcome: 'Private analyst outcome text.',
+            createdAt: actionCreatedAt, updatedAt: actionUpdatedAt,
+          }],
+        }),
+        caseRecord({ id: 'case-packet-only', domain: 'packet-only.invalid', actions: [] }),
+      ],
+    },
+  });
+
+  const report = page.locator('.operations-report');
+  await expect(report).toContainText('2 current action records across 2 of 3 inspected Cases');
+  await expect(report.getByText('Prepared', { exact: true })).toBeVisible();
+  await expect(report).toContainText('State recorded as ready for review');
+  await report.getByLabel('Audience').selectOption('executive');
+  await expect(report.getByText('Cases with actions', { exact: true })).toBeVisible();
+  await expect(report).toContainText('Denominator: 3 inspected Cases');
+  await report.getByLabel('Time window').selectOption('all');
+
+  const pending = page.waitForEvent('download');
+  await report.getByRole('button', { name: 'Export aggregate JSON' }).click();
+  const download = await pending;
+  const path = await download.path();
+  expect(path).not.toBeNull();
+  const body = await readFile(path!, 'utf8');
+  const exported = JSON.parse(body);
+  expect(exported).toMatchObject({
+    schema: 'whoisleuth.brand-protection-operations-report',
+    version: 1,
+    sourceState: 'ready',
+    counts: { casesInspected: 3, casesWithActions: 2, actions: 2, prepared: 1, submitted: 0, resolved: 1 },
+  });
+  expect(Object.keys(exported).sort()).toEqual([
+    'actionTypes', 'counts', 'generatedAt', 'limitations', 'omissions', 'schema', 'sourceState', 'states', 'version', 'window',
+  ]);
+  expect(Object.keys(exported.window).sort()).toEqual(['basis', 'endAt', 'id', 'startAt']);
+  expect(Object.keys(exported.omissions).sort()).toEqual(['actionsBeyondLimit', 'actionsOutsideWindow', 'actionsWithInvalidTime', 'casesBeyondLimit']);
+  for (const sentinel of [
+    'case-operations-prepared', 'case-operations-resolved', 'prepared.invalid', 'resolved.invalid',
+    'Reviewed registrar route', 'Published registrar policy', 'Reachability was not tested.',
+    'Private response route', 'Analyst supplied', 'PRIVATE-CASE-7', 'Private analyst outcome text.',
+  ]) expect(body).not.toContain(sentinel);
+  await expect(page.getByRole('status')).toContainText('No response was submitted');
+  await expectNoHorizontalOverflow(page);
 });
 
 
@@ -92,6 +164,39 @@ test('the evidence-gap inbox filters and dismisses a stale failed source on mobi
   await item.getByRole('button', { name: 'Dismiss gap' }).click();
   await expect(item).toHaveCount(0);
   await expect(page.getByRole('status')).toContainText('Recorded the reviewed evidence-gap dismissal');
+  await expectNoHorizontalOverflow(page);
+});
+
+test('the mobile review inbox reveals and focuses a saved Bulk session', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/monitor');
+  await migrateLegacyBrowserData(page, {
+    'whoisleuth-bulk-sessions-v1': {
+      schema: 'whoisleuth.bulk-sessions',
+      version: 3,
+      sessions: [{
+        id: 'inbox-partial-session',
+        name: 'Incomplete review',
+        mode: 'fast',
+        state: 'partial',
+        inputDigest: `sha256:${'a'.repeat(64)}`,
+        domains: ['pending.invalid'],
+        results: [],
+        startedAt: '2026-08-07T00:00:00.000Z',
+        updatedAt: '2026-08-07T00:00:00.000Z',
+        completedAt: null,
+      }],
+    },
+  });
+
+  const item = page.locator('.review-inbox .items li', { hasText: 'Continue Incomplete review' });
+  await item.getByRole('link', { name: 'Review' }).click();
+
+  await expect(page).toHaveURL(/\/bulk#bulk-sessions-title$/u);
+  await expect(page.getByRole('button', { name: /Workspace tools/u })).toHaveAttribute('aria-expanded', 'true');
+  const title = page.getByRole('heading', { name: 'Saved Bulk sessions' });
+  await expect(title).toBeVisible();
+  await expect(title).toBeFocused();
   await expectNoHorizontalOverflow(page);
 });
 
@@ -409,6 +514,31 @@ test('custom detection rules evaluate existing cases without rewriting built-in 
   expect(storedScore).toBe(65);
 });
 
+test('shows saved custom rules when the tab opens before browser-local loading finishes', async ({ page }) => {
+  await page.goto('/dashboard');
+  await migrateLegacyBrowserData(page, {
+    'whoisleuth-detection-rules-v1': {
+      version: 1,
+      rules: [{
+        id: 'delayed-rule',
+        name: 'Delayed custom rule',
+        enabled: true,
+        match: 'all',
+        conditions: [{ field: 'status', operator: 'equals', value: 'new' }],
+        riskDelta: 0,
+        tag: '',
+      }],
+    },
+  });
+  await expect(page.locator('a[href="/monitor"]').first()).toBeVisible();
+  await holdBrowserLocalReads(page, 4_000, 'a[href="/monitor"]');
+  await page.waitForURL(/\/monitor(?:\?|$)/u);
+  await page.getByRole('tab', { name: /Custom rules/ }).click();
+
+  await expect(page.getByRole('region', { name: 'Custom detection rules' })
+    .getByRole('article').filter({ hasText: 'Delayed custom rule' })).toBeVisible({ timeout: 10_000 });
+});
+
 test('custom rules persist, can be disabled, and export a versioned safe schema', async ({ page }) => {
   await page.goto('/monitor');
   await page.getByRole('tab', { name: /Custom rules/ }).click();
@@ -416,6 +546,10 @@ test('custom rules persist, can be disabled, and export a versioned safe schema'
   await page.getByRole('button', { name: 'Create custom rule' }).click();
   const customRules = page.getByRole('region', { name: 'Custom detection rules' });
   await expect(customRules.getByRole('article').filter({ hasText: 'Registered domains' })).toBeVisible();
+
+  await page.getByRole('tab', { name: /Cases/ }).click();
+  await page.getByRole('tab', { name: /Custom rules/ }).click();
+  await expect(page.getByRole('region', { name: 'Custom detection rules' }).getByRole('article').filter({ hasText: 'Registered domains' })).toBeVisible();
 
   await page.reload({ waitUntil: 'domcontentloaded' });
   const customRulesTab = page.getByRole('tab', { name: /Custom rules/ });
@@ -501,6 +635,15 @@ test('reviewed response records persist and produce a local non-submitted packet
   await action.getByRole('button', { name: 'Record action' }).click();
   await expect(workspace).toContainText('registrar report · planned');
 
+  const branch = workspace.locator('details', { hasText: 'Group evidence and decisions into investigation branches' });
+  await branch.getByText('Group evidence and decisions into investigation branches', { exact: true }).click();
+  await branch.getByLabel('Branch name').fill('Registrar response path');
+  await branch.getByRole('checkbox', { name: 'Observed credential form' }).check();
+  await branch.getByRole('checkbox', { name: /registrar report.*Registrar abuse desk/iu }).check();
+  await branch.getByRole('button', { name: 'Create branch' }).click();
+  await expect(branch).toContainText('Registrar response path');
+  await expect(branch).toContainText('1 pin · 0 checkpoints · 0 assertions · 1 action');
+
   const packet = workspace.locator('details', { hasText: 'Prepare a reviewed abuse evidence packet' });
   await packet.getByText('Prepare a reviewed abuse evidence packet', { exact: true }).click();
   await expect(packet.getByLabel('Audience profile')).toHaveValue('internal_soc');
@@ -527,7 +670,7 @@ test('reviewed response records persist and produce a local non-submitted packet
     schema: 'whoisleuth.case-response-packet',
     reviewRequired: true,
     submissionPerformed: false,
-    schemaVersion: 5,
+    schemaVersion: 6,
     profile: {
       id: 'registrar',
       audience: 'Domain registrar abuse or compliance team',
@@ -553,7 +696,7 @@ test('reviewed response records persist and produce a local non-submitted packet
     },
     integrity: {
       algorithm: 'SHA-256',
-      canonicalization: 'sorted-json-v1',
+      canonicalization: 'sorted-json-v2',
       scope: 'packet excluding integrity',
     },
   });
@@ -563,7 +706,8 @@ test('reviewed response records persist and produce a local non-submitted packet
   await page.reload();
   await page.getByRole('tab', { name: /Cases/ }).click();
   await page.locator('.case-head', { hasText: 'response.invalid' }).click();
-  await expect(page.locator('.response-workspace')).toContainText('1 pin · 0 sightings · 1 decision · 0 assertions · 1 action');
+  await expect(page.locator('.response-workspace')).toContainText('1 pin · 0 sightings · 1 decision · 0 assertions · 1 action · 1 branch');
+  await expect(page.locator('.response-workspace')).toContainText('Registrar response path');
 });
 
 test('external findings require a validated preview before creating local evidence pins', async ({ page }) => {
@@ -605,6 +749,58 @@ test('external findings require a validated preview before creating local eviden
   await externalImport.getByRole('button', { name: 'Import into cases' }).click();
   await expect(page.getByRole('status')).toContainText('skipped 1 duplicate');
   await expect(page.locator('.response-workspace')).toContainText('1 pin · 1 sighting · 0 decisions');
+});
+
+test('external findings serialize file parsing before exposing import actions', async ({ page }) => {
+  await openCasesView(page);
+  const externalImport = page.locator('details', { hasText: 'Import bounded external findings' });
+  await externalImport.getByText('Import bounded external findings', { exact: true }).click();
+  await page.evaluate(() => {
+    const originalArrayBuffer = File.prototype.arrayBuffer;
+    let holdNextRead = true;
+    File.prototype.arrayBuffer = function arrayBuffer() {
+      if (!holdNextRead) return originalArrayBuffer.call(this);
+      holdNextRead = false;
+      return new Promise<ArrayBuffer>((resolve, reject) => {
+        Reflect.set(window, '__releaseExternalFileRead', () => {
+          void originalArrayBuffer.call(this).then(resolve, reject);
+        });
+      });
+    };
+  });
+  const payload = JSON.stringify({
+    schema: 'whoisleuth.external-findings',
+    schemaVersion: 2,
+    source: { name: 'Serialized local review', reference: 'offline fixture' },
+    findings: [{
+      domain: 'serialized-review.invalid',
+      category: 'page',
+      evidenceClass: 'provider_report',
+      summary: 'A bounded retained observation.',
+      observedAt: '2026-07-28T01:00:00.000Z',
+      completeness: 'partial',
+      limitations: ['Rendered behavior was not retained.'],
+      reference: 'serialized-17',
+    }],
+  });
+
+  await externalImport.locator('input[type="file"]').setInputFiles({
+    name: 'serialized-findings.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(payload),
+  });
+  await expect(externalImport).toHaveAttribute('aria-busy', 'true');
+  await expect(externalImport.locator('input[type="file"]')).toBeDisabled();
+  await expect(externalImport.getByText('Reading selected file…', { exact: true })).toBeVisible();
+  await page.evaluate(() => {
+    const release = Reflect.get(window, '__releaseExternalFileRead');
+    if (typeof release !== 'function') throw new Error('The external-file read gate was not installed.');
+    release();
+  });
+
+  await expect(externalImport).toHaveAttribute('aria-busy', 'false');
+  await expect(externalImport.getByRole('heading', { name: 'Serialized local review' })).toBeVisible();
+  await expect(externalImport.getByRole('button', { name: 'Import into cases' })).toBeEnabled();
 });
 
 test('portable WARC evidence is normalized locally before deliberate case import', async ({ page }) => {

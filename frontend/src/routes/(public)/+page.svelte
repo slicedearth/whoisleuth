@@ -55,7 +55,7 @@
 <section class="learn" aria-labelledby="learn-title">
   <div class="section-intro"><h2 id="learn-title">Learn how the evidence fits together.</h2><p>Focused guides explain what each source can support, where it can fail, and what to review next.</p></div>
   <PublicResourceCards resources={PUBLIC_RESOURCES.slice(0,4)} compact />
-  <a class="all-resources" href="/resources">Browse all domain investigation resources <span aria-hidden="true">→</span></a>
+  <a class="all-resources" href="/resources">Browse the topic library <span aria-hidden="true">→</span></a>
 </section>
 
 <section class="principles card" aria-labelledby="principles-title">

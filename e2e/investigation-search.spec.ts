@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures';
-import { expectNoHorizontalOverflow, failBrowserLocalReads, migrateLegacyBrowserData } from './helpers';
+import { expectNoHorizontalOverflow, failBrowserLocalCollectionReads, failBrowserLocalReads, holdBrowserLocalReads, migrateLegacyBrowserData } from './helpers';
 
 const NOW = '2026-07-19T00:00:00.000Z';
 
@@ -118,7 +118,70 @@ test('dashboard local search reports an unavailable store without remaining in a
   await failBrowserLocalReads(page);
   await page.locator('#console-navigation').getByRole('link', { name: /^Dashboard/u }).click();
 
-  await expect(page.locator('.summary-error')).toContainText('Saved-work counts and local search could not be refreshed.');
-  await expect(page.getByRole('alert')).toContainText('Saved-work counts and local search could not be refreshed.');
+  await expect(page.locator('.summary-error')).toContainText('Some browser-local collections are unavailable.');
+  await expect(page.getByRole('alert')).toContainText('Saved-work search is unavailable');
   await expect(page.getByText('Preparing saved-work search.')).toHaveCount(0);
+});
+
+test('dashboard distinguishes pending counts from unavailable collections', async ({ page }) => {
+  await page.goto('/bulk');
+  await expect(page.locator('#domains')).toBeEditable();
+  await holdBrowserLocalReads(page, 1_000);
+  await page.locator('#console-navigation').getByRole('link', { name: /^Dashboard/u }).click();
+
+  await expect(page.locator('.summary-card strong').first()).toHaveText('Loading');
+  await expect(page.locator('.summary-card strong').filter({ hasText: 'Unavailable' })).toHaveCount(0);
+  await expect(page.locator('.summary-card strong').first()).not.toHaveText('Loading');
+});
+
+test('dashboard preserves fulfilled counts and search when one local collection is unavailable', async ({ page }) => {
+  await seedInvestigationStores(page);
+  await page.locator('#console-navigation').getByRole('link', { name: /^Bulk/u }).click();
+  await failBrowserLocalCollectionReads(page, 'watchlists');
+  await page.locator('#console-navigation').getByRole('link', { name: /^Dashboard/u }).click();
+
+  const openCases = page.locator('.summary-card').filter({ hasText: 'Open cases' });
+  const watchlists = page.locator('.summary-card').filter({ hasText: 'Watchlists' });
+  const profiles = page.locator('.summary-card').filter({ hasText: 'Brand profiles' });
+  await expect(openCases.locator('strong')).toHaveText('1');
+  await expect(openCases).toContainText('1 total saved case');
+  await expect(watchlists.locator('strong')).toHaveText('Unavailable');
+  await expect(profiles.locator('strong')).toHaveText('13');
+  await expect(page.locator('.summary-error')).toContainText('Available saved work is still shown');
+
+  await page.getByRole('searchbox', { name: 'Search saved work' }).fill('candidate.invalid');
+  await expect(page.getByRole('link', { name: 'Open case', exact: true })).toBeVisible();
+});
+
+test('dashboard search retains matches and discloses one unavailable search provider through no-match states', async ({ page }) => {
+  await seedInvestigationStores(page);
+  await page.locator('#console-navigation').getByRole('link', { name: /^Bulk/u }).click();
+  await failBrowserLocalCollectionReads(page, 'campaigns');
+  await page.locator('#console-navigation').getByRole('link', { name: /^Dashboard/u }).click();
+
+  const search = page.getByRole('searchbox', { name: 'Search saved work' });
+  await search.fill('candidate.invalid');
+  await expect(page.getByRole('link', { name: 'Open case', exact: true })).toBeVisible();
+  const warning = page.locator('.source-warning');
+  await expect(warning.locator('summary')).toContainText('1 saved-data warning');
+  await warning.locator('summary').click();
+  await expect(warning.getByText(/Campaigns: unavailable in browser-local storage and not searched/u)).toBeVisible();
+
+  await search.fill('not-retained.invalid');
+  await expect(page.getByRole('status').filter({ hasText: 'Nothing saved in this browser matched' })).toBeVisible();
+  await expect(warning.getByText(/Campaigns: unavailable in browser-local storage and not searched/u)).toBeVisible();
+});
+
+test('dashboard distinguishes unavailable templates from an empty template collection', async ({ page }) => {
+  await page.goto('/bulk');
+  await expect(page.locator('#domains')).toBeEditable();
+  await failBrowserLocalCollectionReads(page, 'investigation_templates');
+  await page.locator('#console-navigation').getByRole('link', { name: /^Dashboard/u }).click();
+
+  await expect(page.getByText('Saved investigation templates are unavailable.')).toBeVisible();
+  await expect(page.getByText(/No custom templates are saved/)).toHaveCount(0);
+  await expect(page.locator('#guide-template')).toBeDisabled();
+  await expect(page.getByText('Saved templates are unavailable; the reviewed standard steps remain available.')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Start guide' })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'New template' })).toBeDisabled();
 });

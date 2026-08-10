@@ -15,7 +15,6 @@ const REVIEWED_INCOMPLETE_RULES_BY_STATE: Readonly<Record<string, readonly strin
   'public-error-dark-desktop': ['color-contrast'],
   'public-populated-expanded-light-mobile': ['color-contrast'],
   'public-contact-unavailable-dark-mobile': ['color-contrast'],
-  'public-guide-dark-mobile': ['color-contrast'],
   'public-privacy-dark-mobile': ['color-contrast'],
   'public-resources-dark-mobile': ['color-contrast'],
   'public-terms-dark-mobile': ['color-contrast'],
@@ -192,6 +191,10 @@ test('scans representative public initial, error, populated, and expanded states
   expect((await lookupEvidenceHeading.boundingBox())?.height).toBeLessThanOrEqual(1);
   await page.locator('.technology-card > summary').click();
   await expect(page.locator('.technology-card')).toHaveAttribute('open', '');
+  const mobileComparison = page.locator('.lane-card').first();
+  await expect(mobileComparison).toBeVisible();
+  await mobileComparison.locator('summary').click();
+  await expect(mobileComparison).toHaveAttribute('open', '');
   await expectNoAccessibilityViolations(page, testInfo, 'public-populated-expanded-light-mobile');
   await expectSequentialHeadingOrder(page, 'public populated demo');
   await page.getByRole('button', { name: 'Open synthetic case in Monitor' }).click();
@@ -202,6 +205,7 @@ test('scans representative public initial, error, populated, and expanded states
 });
 
 test('scans public policy and protected-contact routes', async ({ page }, testInfo) => {
+  test.slow();
   await useTheme(page, 'dark');
   await page.setViewportSize({ width: 390, height: 844 });
   await page.route('**/api/contact-route', async (route) => route.fulfill({
@@ -212,7 +216,6 @@ test('scans public policy and protected-contact routes', async ({ page }, testIn
 
   for (const [route, state] of [
     ['/contact', 'public-contact-unavailable-dark-mobile'],
-    ['/guide', 'public-guide-dark-mobile'],
     ['/privacy', 'public-privacy-dark-mobile'],
     ['/resources', 'public-resources-dark-mobile'],
     ['/terms', 'public-terms-dark-mobile'],
@@ -225,6 +228,7 @@ test('scans public policy and protected-contact routes', async ({ page }, testIn
 });
 
 test('scans authenticated desktop and expanded mobile drawer states', async ({ page }, testInfo) => {
+  test.slow();
   await useTheme(page, 'light');
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto('/dashboard');

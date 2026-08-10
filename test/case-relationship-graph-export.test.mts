@@ -165,12 +165,21 @@ describe('relationship graph interchange export', () => {
       groupCaseIds: ['case:case-a', 'case:case-b'],
       oneHop: true,
       focusId: 'case:case-a',
+      selectedRelationshipId: 'relationship:private-selection',
+      query: 'private-table-search',
+      sort: 'member_count',
+      direction: 'desc',
+      page: 99,
     });
     const second = buildRelationshipGraphDocument(reordered, { generatedAt: NOW });
     assert.deepEqual(first, second);
     assert.equal(JSON.stringify(first).includes('hiddenIds'), false);
     assert.equal(JSON.stringify(first).includes('pinnedIds'), false);
     assert.equal(JSON.stringify(first).includes('groupCaseIds'), false);
+    assert.equal(JSON.stringify(first).includes('selectedRelationshipId'), false);
+    assert.equal(JSON.stringify(first).includes('private-selection'), false);
+    assert.equal(JSON.stringify(first).includes('private-table-search'), false);
+    assert.equal(JSON.stringify(first).includes('member_count'), false);
   });
 
   test('serializes JSON, GraphML, and GEXF from the same node and edge ids', () => {

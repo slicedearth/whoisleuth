@@ -3,7 +3,9 @@
   import EvidenceTimeline from '$lib/components/EvidenceTimeline.svelte';
   import CaseReportExport from '$lib/components/CaseReportExport.svelte';
   import CaseResponseWorkspace from '$lib/components/CaseResponseWorkspace.svelte';
+  import CaseBrandAssociations from '$lib/components/CaseBrandAssociations.svelte';
   import Pagination from '$lib/components/Pagination.svelte';
+  import type { BrandProfile } from '$lib/brand-profiles';
   import {
     CASE_DISPOSITIONS,
     CASE_REVIEW_REASONS,
@@ -28,6 +30,8 @@
     setStatus,
     setDisposition,
     setReviewReason,
+    addBrandProfileAssociation,
+    removeBrandProfileAssociation,
     saveTags,
     addNote,
     removeCase,
@@ -37,6 +41,8 @@
     currentPage,
     pageCount,
     setPage,
+    brandProfiles,
+    brandProfilesUnavailable,
   }: {
     records: CaseRecord[];
     allRecords: CaseRecord[];
@@ -51,6 +57,8 @@
     setStatus: (record: CaseRecord, value: string) => void;
     setDisposition: (record: CaseRecord, value: string) => void;
     setReviewReason: (record: CaseRecord, value: string) => void;
+    addBrandProfileAssociation: (record: CaseRecord, id: string) => boolean | Promise<boolean>;
+    removeBrandProfileAssociation: (record: CaseRecord, id: string) => boolean | Promise<boolean>;
     saveTags: (record: CaseRecord) => void;
     addNote: (record: CaseRecord) => void;
     removeCase: (record: CaseRecord) => void;
@@ -60,6 +68,8 @@
     currentPage: number;
     pageCount: number;
     setPage: (value: number) => void;
+    brandProfiles: BrandProfile[];
+    brandProfilesUnavailable: boolean;
   } = $props();
 </script>
 
@@ -88,6 +98,7 @@
             <label class="field">Disposition<select value={record.disposition} onchange={(event) => setDisposition(record, event.currentTarget.value)}>{#each CASE_DISPOSITIONS as option}<option value={option.value}>{option.label}</option>{/each}</select></label>
             <label class="field">Review reason<select value={record.reviewReasonCode ?? ''} onchange={(event) => setReviewReason(record, event.currentTarget.value)}>{#each CASE_REVIEW_REASONS as option}<option value={option.value}>{option.label}</option>{/each}</select></label>
           </div>
+          <CaseBrandAssociations {record} profiles={brandProfiles} profilesUnavailable={brandProfilesUnavailable} addAssociation={addBrandProfileAssociation} removeAssociation={removeBrandProfileAssociation} />
           <form class="tags-edit" onsubmit={(event) => { event.preventDefault(); saveTags(record); }}>
             <label class="field" for={`tags-${record.id}`}>Tags <small>comma separated</small></label>
             <div><input id={`tags-${record.id}`} value={tagDraft} oninput={(event) => setTagDraft(event.currentTarget.value)} placeholder="phishing, active-campaign" autocomplete="off"><button class="btn" type="submit">Save tags</button></div>

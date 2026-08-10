@@ -36,11 +36,14 @@ const OPENED_AT = '2026-07-20T01:05:00.000Z';
 const APPROVED_AT = '2026-07-20T01:04:00.000Z';
 const COMPLETED_AT = '2026-07-20T01:06:00.000Z';
 
-test('defines three fixed bounded recipes with complete stage guidance', () => {
+test('defines six fixed bounded investigation and response recipes with complete stage guidance', () => {
   assert.deepEqual(INVESTIGATION_RECIPES.map((recipe) => recipe.id), [
     'brand_sweep',
     'infrastructure_pivot',
     'new_domain_triage',
+    'credential_impersonation_response',
+    'mail_abuse_response',
+    'domain_control_change_response',
   ]);
   for (const recipe of INVESTIGATION_RECIPES) {
     assert.ok(recipe.stages.length >= 3 && recipe.stages.length <= 5);
@@ -152,6 +155,13 @@ test('rejects malformed and future records without treating them as an empty rec
   }]) assert.equal(parseInvestigationGuide(value), null);
 });
 
+test('does not reinterpret response recipe identifiers under pre-response guide versions', () => {
+  const current = createInvestigationGuide('review.example', 'mail_abuse_response', STARTED_AT);
+  assert.ok(current);
+  assert.equal(parseInvestigationGuide({ ...current, version: 4 }), null);
+  assert.equal(parseInvestigationGuide(current)?.recipeId, 'mail_abuse_response');
+});
+
 test('custom templates retain allowlisted stages and cannot remove mandatory request gates', () => {
   const guide = createInvestigationGuide('example.test', 'new_domain_triage', STARTED_AT, {
     id: 'focused-review',
@@ -204,9 +214,29 @@ test('maps recipe stages to existing tool routes with safe target handoff', () =
   assert.equal(investigationGuideHref('bulk', 'example.test', 'brand_sweep'), '/bulk?investigation=example.test#domains');
   assert.equal(investigationGuideHref('monitor', 'example.test', 'new_domain_triage'), '/monitor?view=cases&investigation=1&domain=example.test#case-review-queue');
   assert.equal(investigationGuideHref('brands', 'example.test', 'brand_sweep'), '/brands?new=1&domain=example.test#official-domains');
+  assert.equal(investigationGuideHref('brands', 'review.example', 'mail_abuse_response'), '/brands');
+  assert.equal(investigationGuideHref('monitor', 'review.example', 'credential_impersonation_response'), '/monitor?view=cases&investigation=1&response=1&domain=review.example#case-review-queue');
   assert.equal(investigationGuideHref('lookup', 'example.test', 'brand_sweep'), '/bulk#results');
   assert.equal(investigationGuideHref('lookup', 'example.test', 'brand_sweep', 'candidate.example'), '/lookup?q=candidate.example&depth=deep#query');
   assert.equal(investigationGuideHref('invented', 'example.test', 'brand_sweep'), '/dashboard');
+});
+
+test('response playbooks stay manual, end in Case preflight, and never claim submission', () => {
+  for (const recipeId of [
+    'credential_impersonation_response',
+    'mail_abuse_response',
+    'domain_control_change_response',
+  ] as const) {
+    const guide = createInvestigationGuide('review.example', recipeId, STARTED_AT);
+    assert.ok(guide);
+    const recipe = investigationGuideRecipe(recipeId);
+    assert.ok(recipe);
+    assert.equal(recipe.stages.at(-1)?.workspace, 'monitor');
+    assert.match(recipe.stages.at(-1)?.detail || '', /record|response|packet/iu);
+    assert.match(recipe.stages.at(-1)?.requestImpact || '', /never|no request/iu);
+    assert.doesNotMatch(JSON.stringify(recipe), /automatically sends|automatic submission|confirmed malicious/iu);
+    assert.equal(investigationGuideApprovedHref(guide, 'monitor').includes('response=1'), true);
+  }
 });
 
 test('routes an approved reviewed brand candidate set through its dedicated Bulk handoff', () => {

@@ -27,7 +27,7 @@ function input() {
       domain: 'Example.Test.',
       nameservers: ['NS2.EXAMPLE.TEST', 'ns1.example.test'],
       ds: ['12345 13 2 abcdef'],
-      mx: ['mail.example.test'],
+      mx: ['10 mail.example.test', '0 .'],
       caa: ['0 issue "ca.example"'],
       tlsIssuer: 'Example Issuer',
       tlsSpkiSha256: 'a'.repeat(64),
@@ -45,8 +45,27 @@ describe('domain control manifests', () => {
     assert.equal(left.schema, DOMAIN_CONTROL_MANIFEST_SCHEMA);
     assert.equal(left.entries[0]?.domain, 'example.test');
     assert.deepEqual(left.entries[0]?.nameservers, ['ns1.example.test', 'ns2.example.test']);
+    assert.deepEqual(left.entries[0]?.mx, ['0 .', '10 mail.example.test']);
+    assert.deepEqual(left.entries[0]?.caa, ['0 issue ca.example']);
+    assert.deepEqual(left.entries[0]?.ds, ['12345 13 2 abcdef']);
     assert.equal(left.integrity.digestSha256, right.integrity.digestSha256);
     assert.equal(verifyDomainControlManifest(left), left);
+  });
+
+  it('canonicalises structured and presentation-form MX, CAA, and DS records identically', () => {
+    const presentation = buildDomainControlManifest(input(), generatedAt);
+    const structuredInput = input();
+    structuredInput.entries[0] = {
+      ...structuredInput.entries[0]!,
+      mx: [{ priority: 10, exchange: 'MAIL.EXAMPLE.TEST.' }, { priority: 0, exchange: '.' }] as unknown as string[],
+      caa: [{ critical: 0, tag: 'ISSUE', value: 'ca.example' }] as unknown as string[],
+      ds: [{ keyTag: 12345, algorithm: 13, digestType: 2, digest: 'ABCDEF' }] as unknown as string[],
+    };
+    const structured = buildDomainControlManifest(structuredInput, generatedAt);
+    assert.deepEqual(structured.entries[0]?.mx, presentation.entries[0]?.mx);
+    assert.deepEqual(structured.entries[0]?.caa, presentation.entries[0]?.caa);
+    assert.deepEqual(structured.entries[0]?.ds, presentation.entries[0]?.ds);
+    assert.equal(structured.integrity.digestSha256, presentation.integrity.digestSha256);
   });
 
   it('rejects changed manifest content and duplicate domains', () => {

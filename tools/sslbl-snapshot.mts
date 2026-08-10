@@ -6,7 +6,6 @@
 // from the runtime snapshot; a matched fingerprint links back to SSLBL for
 // current provider context.
 
-import { createHash } from 'node:crypto';
 import { Buffer } from 'node:buffer';
 import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -14,6 +13,7 @@ import { fileURLToPath } from 'node:url';
 
 import { SSLBL_CERTIFICATE_SNAPSHOT } from '../lib/sslbl-certificates.generated.mts';
 import { readBoundedRegularTextFile } from '../lib/bounded-file.mts';
+import { sha256Text as sha256 } from './maintainer-tool-helpers.mts';
 
 export const SSLBL_SOURCE_URL = 'https://sslbl.abuse.ch/blacklist/sslblacklist.csv';
 export const SSLBL_SNAPSHOT_SCHEMA = 'whoisleuth.sslbl-certificate-snapshot';
@@ -51,10 +51,6 @@ export type SslblSnapshotUpdateAssessment = Readonly<{
 const SHA1_RE = /^[a-f0-9]{40}$/u;
 const SOURCE_UPDATED_RE = /^# Last updated:\s*(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) UTC(?:\s*#)?\s*$/mu;
 const CSV_ROW_RE = /^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}),([a-fA-F0-9]{40}),(.{1,300})$/u;
-
-function sha256(value: string): string {
-  return createHash('sha256').update(value, 'utf8').digest('hex');
-}
 
 function isoTimestamp(value: string, label: string): string {
   const parsed = Date.parse(value);

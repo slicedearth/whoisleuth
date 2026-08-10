@@ -1,8 +1,8 @@
 import type { AcquisitionDueDiligence } from './acquisition-due-diligence.ts';
-import { sha256ArtifactDigest } from './artifact-integrity.ts';
+import { SORTED_JSON_V2, sha256ArtifactDigestV2 } from './artifact-integrity.ts';
 
 export const ACQUISITION_DECISION_PACKET_SCHEMA = 'whoisleuth.acquisition-decision';
-export const ACQUISITION_DECISION_PACKET_VERSION = 1;
+export const ACQUISITION_DECISION_PACKET_VERSION = 2;
 
 export const ACQUISITION_DECISIONS = [
   'unresolved',
@@ -99,10 +99,10 @@ export async function buildAcquisitionDecisionPacket(input: Readonly<{
         : []),
     ],
   };
-  const digestSha256 = await sha256ArtifactDigest(unsigned);
+  const digestSha256 = await sha256ArtifactDigestV2(unsigned);
   const document = {
     ...unsigned,
-    integrity: { algorithm: 'SHA-256' as const, digestSha256 },
+    integrity: { algorithm: 'SHA-256' as const, canonicalization: SORTED_JSON_V2, digestSha256 },
   };
   return {
     document,

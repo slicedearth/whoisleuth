@@ -3,14 +3,54 @@ import type { LookupDecisionSupport } from './lookup-decision-support.ts';
 import type { LookupTaskView } from './lookup-presentation.ts';
 
 export type LookupClaimReadinessState = 'ready' | 'limited' | 'not_ready';
+export const LOOKUP_CLAIM_READINESS_VERSION = 2;
+
+export const LOOKUP_CLAIM_IDS = [
+  'registration-state',
+  'current-web-observation',
+  'brand-resemblance',
+  'controlled-change',
+  'incident-response',
+  'network-context',
+] as const;
+export type LookupClaimId = typeof LOOKUP_CLAIM_IDS[number];
+
+export const LOOKUP_CLAIM_REQUIREMENT_IDS = [
+  'authority-aware-availability',
+  'registry-rdap',
+  'registry-whois',
+  'registry-control-selection',
+  'dns-observation',
+  'http-observation',
+  'tls-observation',
+  'page-identity-observation',
+  'reviewed-brand-profile',
+  'reviewed-case-recipient',
+  'authoritative-rdap',
+] as const;
+export type LookupClaimRequirementId = typeof LOOKUP_CLAIM_REQUIREMENT_IDS[number];
+export type LookupClaimRequirementMode = 'network_collection' | 'local_review';
+
+export type LookupClaimRequirement = Readonly<{
+  id: LookupClaimRequirementId;
+  label: string;
+  evidenceId: string | null;
+  mode: LookupClaimRequirementMode;
+  href: `#${string}`;
+  state: EvidenceCoverageState;
+  limitations: readonly string[];
+}>;
 
 export type LookupClaimReadinessEntry = Readonly<{
-  id: string;
+  id: LookupClaimId;
   label: string;
   state: LookupClaimReadinessState;
   conclusion: string;
   requiredEvidence: readonly string[];
   missingEvidence: readonly string[];
+  requiredEvidenceIds: readonly LookupClaimRequirementId[];
+  missingEvidenceIds: readonly LookupClaimRequirementId[];
+  requirements: readonly LookupClaimRequirement[];
   limitations: readonly string[];
   href: `#${string}`;
 }>;
@@ -24,7 +64,7 @@ export type RegistrationDisagreementDiagnostic = Readonly<{
 }>;
 
 export type LookupClaimReadiness = Readonly<{
-  version: 1;
+  version: typeof LOOKUP_CLAIM_READINESS_VERSION;
   entries: readonly LookupClaimReadinessEntry[];
   disagreements: readonly RegistrationDisagreementDiagnostic[];
   counts: Readonly<Record<LookupClaimReadinessState, number>>;
@@ -32,13 +72,33 @@ export type LookupClaimReadiness = Readonly<{
 }>;
 
 type JsonRecord = Record<string, unknown>;
-type Requirement = Readonly<{ id: string; label: string }>;
+type RequirementDefinition = Readonly<{
+  id: LookupClaimRequirementId;
+  label: string;
+  evidenceId: string | null;
+  mode: LookupClaimRequirementMode;
+  href: `#${string}`;
+}>;
 
 const MAX_TEXT = 320;
 const MAX_DIAGNOSTICS = 12;
 const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/gu;
 const LIMITED_STATES = new Set<EvidenceCoverageState>(['partial', 'unavailable', 'unknown']);
 const ABSENT_STATES = new Set<EvidenceCoverageState>(['skipped', 'unsupported']);
+
+export const LOOKUP_CLAIM_REQUIREMENTS: Readonly<Record<LookupClaimRequirementId, RequirementDefinition>> = Object.freeze({
+  'authority-aware-availability': Object.freeze({ id: 'authority-aware-availability', label: 'Authority-aware availability decision', evidenceId: 'availability', mode: 'network_collection', href: '#registry' }),
+  'registry-rdap': Object.freeze({ id: 'registry-rdap', label: 'Registry RDAP evidence', evidenceId: 'rdap', mode: 'network_collection', href: '#registry' }),
+  'registry-whois': Object.freeze({ id: 'registry-whois', label: 'Registry WHOIS evidence', evidenceId: 'whois', mode: 'network_collection', href: '#registry' }),
+  'registry-control-selection': Object.freeze({ id: 'registry-control-selection', label: 'Registry control evidence selected by the availability authority', evidenceId: null, mode: 'network_collection', href: '#registry' }),
+  'dns-observation': Object.freeze({ id: 'dns-observation', label: 'DNS observation', evidenceId: 'dns', mode: 'network_collection', href: '#evidence-dns' }),
+  'http-observation': Object.freeze({ id: 'http-observation', label: 'HTTP observation', evidenceId: 'http', mode: 'network_collection', href: '#evidence-http' }),
+  'tls-observation': Object.freeze({ id: 'tls-observation', label: 'TLS observation', evidenceId: 'tls', mode: 'network_collection', href: '#evidence-tls' }),
+  'page-identity-observation': Object.freeze({ id: 'page-identity-observation', label: 'Page identity observation', evidenceId: 'page-identity', mode: 'network_collection', href: '#evidence-page' }),
+  'reviewed-brand-profile': Object.freeze({ id: 'reviewed-brand-profile', label: 'Reviewed Brand Profile', evidenceId: null, mode: 'local_review', href: '#case-response' }),
+  'reviewed-case-recipient': Object.freeze({ id: 'reviewed-case-recipient', label: 'Reviewed case and recipient route', evidenceId: null, mode: 'local_review', href: '#case-response' }),
+  'authoritative-rdap': Object.freeze({ id: 'authoritative-rdap', label: 'Authoritative RDAP evidence', evidenceId: 'rdap', mode: 'network_collection', href: '#registry' }),
+});
 
 function record(value: unknown): JsonRecord {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -61,61 +121,65 @@ function timestamp(value: unknown): number | null {
 }
 
 function evaluateRequirements(
-  requirements: readonly Requirement[],
-  coverage: ReadonlyMap<string, EvidenceCoverageLedger['entries'][number]>,
-): Pick<LookupClaimReadinessEntry, 'state' | 'requiredEvidence' | 'missingEvidence' | 'limitations'> {
-  const entries = requirements.map((requirement) => ({ requirement, evidence: coverage.get(requirement.id) }));
-  const missingEvidence = entries
-    .filter(({ evidence }) => !evidence || evidence.state !== 'complete')
-    .map(({ requirement }) => requirement.label);
-  const limitations = entries.flatMap(({ evidence, requirement }) => {
-    if (!evidence || evidence.state === 'complete') return [];
-    const detail = evidence.limitations[0] || evidence.statusLabel;
+  requirements: readonly LookupClaimRequirement[],
+): Pick<LookupClaimReadinessEntry, 'state' | 'requiredEvidence' | 'missingEvidence' | 'requiredEvidenceIds' | 'missingEvidenceIds' | 'limitations' | 'requirements'> {
+  const missing = requirements.filter((requirement) => requirement.state !== 'complete');
+  const limitations = missing.flatMap((requirement) => {
+    const detail = requirement.limitations[0] || requirement.state.replaceAll('_', ' ');
     return [`${requirement.label}: ${detail}`];
   }).slice(0, 8);
-  if (!missingEvidence.length) {
+  if (!missing.length) {
     return {
       state: 'ready',
       requiredEvidence: requirements.map((item) => item.label),
       missingEvidence: [],
+      requiredEvidenceIds: requirements.map((item) => item.id),
+      missingEvidenceIds: [],
       limitations,
+      requirements,
     };
   }
-  const observedCount = entries.filter(({ evidence }) => evidence && !ABSENT_STATES.has(evidence.state)).length;
-  const hasLimited = entries.some(({ evidence }) => evidence && LIMITED_STATES.has(evidence.state));
+  const observedCount = requirements.filter((requirement) => !ABSENT_STATES.has(requirement.state) && requirement.state !== 'unknown').length;
+  const hasLimited = requirements.some((requirement) => LIMITED_STATES.has(requirement.state));
   return {
     state: observedCount > 0 && hasLimited ? 'limited' : 'not_ready',
     requiredEvidence: requirements.map((item) => item.label),
-    missingEvidence,
+    missingEvidence: missing.map((item) => item.label),
+    requiredEvidenceIds: requirements.map((item) => item.id),
+    missingEvidenceIds: missing.map((item) => item.id),
     limitations,
+    requirements,
   };
+}
+
+function requirement(
+  id: LookupClaimRequirementId,
+  coverage: ReadonlyMap<string, EvidenceCoverageLedger['entries'][number]>,
+  override?: Readonly<{ state: EvidenceCoverageState; limitation?: string }>,
+): LookupClaimRequirement {
+  const definition = LOOKUP_CLAIM_REQUIREMENTS[id];
+  const evidence = definition.evidenceId ? coverage.get(definition.evidenceId) : undefined;
+  const state = override?.state ?? evidence?.state ?? 'unknown';
+  const limitations = override?.limitation
+    ? [override.limitation]
+    : evidence?.limitations.length
+      ? evidence.limitations.slice(0, 8)
+      : state === 'complete'
+        ? []
+        : [evidence?.statusLabel || 'Not supplied'];
+  return Object.freeze({ ...definition, state, limitations: Object.freeze(limitations) });
 }
 
 function readinessEntry(
   input: Readonly<{
-    id: string;
+    id: LookupClaimId;
     label: string;
     conclusion: string;
-    requirements: readonly Requirement[];
-    coverage: ReadonlyMap<string, EvidenceCoverageLedger['entries'][number]>;
+    requirements: readonly LookupClaimRequirement[];
     href: `#${string}`;
-    additionalReady?: boolean;
-    additionalMissing?: string;
   }>,
 ): LookupClaimReadinessEntry {
-  const evaluated = evaluateRequirements(input.requirements, input.coverage);
-  if (input.additionalReady === false) {
-    return {
-      id: input.id,
-      label: input.label,
-      state: evaluated.state === 'not_ready' ? 'not_ready' : 'limited',
-      conclusion: input.conclusion,
-      requiredEvidence: evaluated.requiredEvidence,
-      missingEvidence: [...evaluated.missingEvidence, input.additionalMissing || 'Required analyst context'],
-      limitations: evaluated.limitations,
-      href: input.href,
-    };
-  }
+  const evaluated = evaluateRequirements(input.requirements);
   return { id: input.id, label: input.label, conclusion: input.conclusion, href: input.href, ...evaluated };
 }
 
@@ -174,7 +238,9 @@ export function buildLookupClaimReadiness(input: Readonly<{
   coverage: EvidenceCoverageLedger;
   decisionSupport: LookupDecisionSupport;
   availabilityState?: unknown;
+  availabilitySource?: unknown;
   hasActiveProfile?: boolean;
+  profileSourceState?: 'loading' | 'ready' | 'unavailable';
   hasCaseSection?: boolean;
   responseRecipientCount?: number;
   registryComparison?: unknown;
@@ -187,8 +253,28 @@ export function buildLookupClaimReadiness(input: Readonly<{
 }>): LookupClaimReadiness {
   const coverage = new Map(input.coverage.entries.map((entry) => [entry.id, entry]));
   const targetType = text(input.targetType, 20);
-  const registrationRequirements = [{ id: 'rdap', label: 'Authoritative registry evidence' }] as const;
-  const webRequirements = [{ id: 'http', label: 'HTTP observation' }, { id: 'tls', label: 'TLS observation' }] as const;
+  const settledAvailability = !['', 'unknown', 'inconclusive', 'error'].includes(text(input.availabilityState, 40));
+  const observedAvailability = requirement('authority-aware-availability', coverage);
+  const registrationRequirements = [settledAvailability
+    ? observedAvailability
+    : Object.freeze({
+        ...observedAvailability,
+        state: observedAvailability.state === 'complete' ? 'partial' as const : observedAvailability.state,
+        limitations: Object.freeze([
+          ...observedAvailability.limitations,
+          'The authority-aware availability state is not settled.',
+        ].slice(0, 8)),
+      })];
+  const availabilitySource = text(input.availabilitySource, 24).toLowerCase();
+  const controlledRegistrationRequirements = availabilitySource === 'rdap'
+    ? [requirement('registry-rdap', coverage)]
+    : availabilitySource === 'whois'
+      ? [requirement('registry-whois', coverage)]
+      : [requirement('registry-control-selection', coverage, {
+          state: 'unknown',
+          limitation: 'The availability authority did not select a registry control source.',
+        })];
+  const webRequirements = [requirement('http-observation', coverage), requirement('tls-observation', coverage)];
   const entries: LookupClaimReadinessEntry[] = [];
 
   if (targetType === 'domain') {
@@ -197,17 +283,13 @@ export function buildLookupClaimReadiness(input: Readonly<{
       label: 'Registration-state statement',
       conclusion: 'Whether an authority-aware registered, available, or inconclusive statement can be made.',
       requirements: registrationRequirements,
-      coverage,
       href: '#registry',
-      additionalReady: !['', 'unknown', 'inconclusive', 'error'].includes(text(input.availabilityState, 40)),
-      additionalMissing: 'Settled authority-aware availability state',
     }));
     entries.push(readinessEntry({
       id: 'current-web-observation',
       label: 'Current website statement',
       conclusion: 'Whether the current HTTP and TLS observation is complete enough to describe what responded.',
       requirements: webRequirements,
-      coverage,
       href: '#web-evidence',
     }));
     if (input.task === 'brand' || input.hasActiveProfile) {
@@ -215,11 +297,22 @@ export function buildLookupClaimReadiness(input: Readonly<{
         id: 'brand-resemblance',
         label: 'Brand-resemblance assessment',
         conclusion: 'Whether reviewed brand context and page identity evidence support a bounded resemblance assessment.',
-        requirements: [{ id: 'page-identity', label: 'Page identity observation' }],
-        coverage,
+        requirements: [
+          requirement('page-identity-observation', coverage),
+          requirement('reviewed-brand-profile', coverage, {
+            state: input.profileSourceState === 'unavailable'
+              ? 'unavailable'
+              : input.hasActiveProfile === true
+                ? 'complete'
+                : 'unknown',
+            ...(input.profileSourceState === 'unavailable'
+              ? { limitation: 'The browser-local Brand Profile source is unavailable.' }
+              : input.hasActiveProfile === true
+                ? {}
+                : { limitation: 'No reviewed Brand Profile is active.' }),
+          }),
+        ],
         href: '#evidence-page',
-        additionalReady: input.hasActiveProfile === true,
-        additionalMissing: 'Reviewed Brand Profile',
       }));
     }
     if (input.task === 'owned' || input.task === 'acquisition') {
@@ -227,8 +320,7 @@ export function buildLookupClaimReadiness(input: Readonly<{
         id: 'controlled-change',
         label: 'Controlled-change planning',
         conclusion: 'Whether registration and DNS evidence are complete enough to prepare a reviewed change plan.',
-        requirements: [...registrationRequirements, { id: 'dns', label: 'DNS observation' }],
-        coverage,
+        requirements: [...registrationRequirements, ...controlledRegistrationRequirements, requirement('dns-observation', coverage)],
         href: '#evidence-dns',
       }));
     }
@@ -237,20 +329,25 @@ export function buildLookupClaimReadiness(input: Readonly<{
         id: 'incident-response',
         label: 'Incident response handoff',
         conclusion: 'Whether current web evidence and a reviewed recipient route are present for a response packet.',
-        requirements: [{ id: 'http', label: 'HTTP observation' }, { id: 'page-identity', label: 'Page identity observation' }],
-        coverage,
+        requirements: [
+          requirement('http-observation', coverage),
+          requirement('page-identity-observation', coverage),
+          requirement('reviewed-case-recipient', coverage, {
+            state: input.hasCaseSection === true && (input.responseRecipientCount ?? 0) > 0 ? 'complete' : 'unknown',
+            ...(input.hasCaseSection === true && (input.responseRecipientCount ?? 0) > 0
+              ? {}
+              : { limitation: 'A reviewed case and recipient route are not both available.' }),
+          }),
+        ],
         href: '#case-response',
-        additionalReady: input.hasCaseSection === true && (input.responseRecipientCount ?? 0) > 0,
-        additionalMissing: 'Reviewed case and recipient route',
       }));
     }
-  } else if (targetType === 'ip' || targetType === 'asn') {
+  } else if (targetType === 'ip' || targetType === 'ipv4' || targetType === 'ipv6' || targetType === 'asn') {
     entries.push(readinessEntry({
       id: 'network-context',
       label: 'Network registration statement',
       conclusion: 'Whether the observed network registration context is complete enough to describe the resource.',
-      requirements: [{ id: 'rdap', label: 'Authoritative RDAP evidence' }],
-      coverage,
+      requirements: [requirement('authoritative-rdap', coverage)],
       href: '#registry',
     }));
   }
@@ -272,7 +369,7 @@ export function buildLookupClaimReadiness(input: Readonly<{
   };
   for (const entry of entries) counts[entry.state] += 1;
   return {
-    version: 1,
+    version: LOOKUP_CLAIM_READINESS_VERSION,
     entries,
     disagreements,
     counts,

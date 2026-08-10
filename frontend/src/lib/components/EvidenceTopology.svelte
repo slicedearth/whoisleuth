@@ -138,13 +138,14 @@
   {#if !embedded}
     <header class="topology-heading">
       <div>
-        <p class="eyebrow">Source map</p>
+        <p class="eyebrow">Evidence map</p>
         {@render topologyHeading()}
         <p>{description}</p>
       </div>
-      <div class="topology-summary" role="group" aria-label={`${graph.nodes.length} mapped evidence sources`}>
+      <div class="topology-summary" role="group" aria-label={`${graph.nodes.length} mapped evidence items: ${graph.provenanceCounts.direct} direct sources and ${graph.provenanceCounts.derived} derived analyses`}>
         <strong>{graph.nodes.length}</strong>
-        <span>sources</span>
+        <span>mapped items</span>
+        <small>{graph.provenanceCounts.direct} direct · {graph.provenanceCounts.derived} derived</small>
       </div>
     </header>
   {:else}
@@ -153,13 +154,13 @@
 
   {#if !compact}
     <div class="visual-key" role="group" aria-label="Evidence topology visual key">
-      <span class="key-intro"><i class="source-spectrum" aria-hidden="true"></i>Colour, shape, and icon identify each source family:</span>
+      <span class="key-intro"><i class="source-spectrum" aria-hidden="true"></i>Colour, shape, and icon identify each evidence family:</span>
       <span class="key-item family-registry"><i aria-hidden="true"></i>Registry</span>
       <span class="key-item family-network"><i aria-hidden="true"></i>Network</span>
       <span class="key-item family-web"><i aria-hidden="true"></i>Web</span>
       <span class="key-item family-derived"><i aria-hidden="true"></i>Derived</span>
       <span class="key-item family-analyst"><i aria-hidden="true"></i>Analyst</span>
-      <span class="key-state"><i aria-hidden="true"></i>Dot and label show source state</span>
+      <span class="key-state"><i aria-hidden="true"></i>Dot and label show evidence state</span>
     </div>
   {/if}
 
@@ -284,7 +285,7 @@
     <small>{graph.target.detail || graph.target.status}</small>
   </div>
 
-  <ol class="source-rail" aria-label="Evidence source status">
+  <ol class="source-rail" aria-label="Evidence item status">
     {#each graph.nodes as node (node.id)}
       <li
         class={`family-${node.family} state-${node.status}`}
@@ -321,7 +322,7 @@
   </ol>
 
   {#if graph.truncated}
-    <p class="topology-note">This overview reached its {graph.nodes.length}-source display limit. Other evidence remains available below.</p>
+    <p class="topology-note">This overview reached its {graph.nodes.length}-item display limit. Other evidence remains available below.</p>
   {:else if !compact}
     <p class="topology-note"><span class="solid-sample" aria-hidden="true"></span> Solid paths are collected sources. <span class="derived-sample" aria-hidden="true"></span> Dashed paths are bounded analysis derived from collected evidence.</p>
   {/if}
@@ -336,6 +337,7 @@
   .topology-summary{display:grid;flex:0 0 auto;min-width:70px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel-raised);text-align:right}
   .topology-summary strong{color:var(--accent);font:750 var(--text-xl) var(--mono)}
   .topology-summary span{color:var(--muted);font:var(--text-2xs) var(--mono);text-transform:uppercase}
+  .topology-summary small{color:var(--muted);font:var(--text-2xs) var(--mono);white-space:nowrap}
   .visual-key{display:flex;flex-wrap:wrap;align-items:center;gap:5px 10px;margin-top:13px;color:var(--muted);font:var(--text-2xs) var(--mono)}
   .key-intro{display:inline-flex;flex:0 0 auto;align-items:center;gap:6px}
   .source-spectrum{display:inline-block;width:28px;height:7px;border-radius:999px;background:linear-gradient(90deg,var(--evidence-registry),var(--evidence-network),var(--evidence-web),var(--evidence-derived),var(--evidence-analyst))}

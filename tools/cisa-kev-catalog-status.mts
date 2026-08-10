@@ -2,8 +2,8 @@ import { fileURLToPath } from 'node:url';
 
 import { CISA_KEV_CATALOG } from '../lib/generated/cisa-kev-catalog.mts';
 
-const CISA_KEV_STATUS_SCHEMA = 'whoisleuth.cisa-kev-catalog-status';
-const CISA_KEV_STATUS_VERSION = 1;
+export const CISA_KEV_STATUS_SCHEMA = 'whoisleuth.cisa-kev-catalog-status';
+export const CISA_KEV_STATUS_VERSION = 1;
 const DEFAULT_MAX_AGE_DAYS = 30;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -94,8 +94,6 @@ const invokedAsScript = process.argv[1] && fileURLToPath(import.meta.url) === pr
 if (invokedAsScript) process.exitCode = await main();
 
 export {
-  CISA_KEV_STATUS_SCHEMA,
-  CISA_KEV_STATUS_VERSION,
   DEFAULT_MAX_AGE_DAYS,
   buildCatalogStatus,
   main,

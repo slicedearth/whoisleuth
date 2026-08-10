@@ -27,10 +27,11 @@ export const MAX_RECENT_INVESTIGATION_RESULTS = 6;
 
 export type InvestigationSearchIndexState = 'ready' | 'invalid' | 'unsupported';
 export type InvestigationSearchState = 'idle' | 'invalid' | 'no_matches' | 'results';
+export type InvestigationSearchSourceState = InvestigationSourceState | 'unavailable';
 export type InvestigationSearchField = 'canonical' | 'label' | 'domain' | 'name' | 'nameserver' | 'origin' | 'sha256' | 'ip' | 'identifier' | 'value';
 
 export interface InvestigationSearchSourceSummary {
-  state: InvestigationSourceState;
+  state: InvestigationSearchSourceState;
   version: number | null;
   records: number;
   truncated: boolean;
@@ -138,7 +139,7 @@ const OBSERVATION_KINDS = new Set<InvestigationObservationKind>([
   'retained_relationship_observation',
 ]);
 const STORES = new Set<InvestigationStoreName>(['cases', 'campaigns', 'brandProfiles', 'relationshipRows', 'relationshipObservations']);
-const SOURCE_STATES = new Set<InvestigationSourceState>(['absent', 'invalid', 'unsupported', 'supported']);
+const SOURCE_STATES = new Set<InvestigationSearchSourceState>(['absent', 'invalid', 'unavailable', 'unsupported', 'supported']);
 const FIELD_PRIORITY: Record<InvestigationSearchField, number> = {
   canonical: 0,
   domain: 1,
@@ -236,9 +237,9 @@ function storeName(value: unknown): InvestigationStoreName | null {
     : null;
 }
 
-function sourceState(value: unknown): InvestigationSourceState {
-  return typeof value === 'string' && SOURCE_STATES.has(value as InvestigationSourceState)
-    ? value as InvestigationSourceState
+function sourceState(value: unknown): InvestigationSearchSourceState {
+  return typeof value === 'string' && SOURCE_STATES.has(value as InvestigationSearchSourceState)
+    ? value as InvestigationSearchSourceState
     : 'invalid';
 }
 
@@ -429,6 +430,20 @@ export function unavailableInvestigationSearchIndex(limitation: string): Investi
     null,
     boundedText(limitation) || 'Saved-work search is unavailable.',
   );
+}
+
+export function markInvestigationSearchSourcesUnavailable(
+  index: InvestigationSearchIndex,
+  stores: readonly InvestigationStoreName[],
+): InvestigationSearchIndex {
+  const sources = { ...index.sources };
+  const seen = new Set<InvestigationStoreName>();
+  for (const store of stores.slice(0, 5)) {
+    if (!STORES.has(store) || seen.has(store)) continue;
+    seen.add(store);
+    sources[store] = { state: 'unavailable', version: null, records: 0, truncated: false };
+  }
+  return { ...index, sources };
 }
 
 /**

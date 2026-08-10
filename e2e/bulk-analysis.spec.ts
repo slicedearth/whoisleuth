@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { expect, test } from './fixtures';
-import { boundingBox, expectNoHorizontalOverflow, expectNoHorizontalScrollContainers, failBrowserLocalReads, migrateLegacyBrowserData, pseudoContent, readBrowserLocalCollection, runBulkScan } from './helpers';
+import { boundingBox, expectNoHorizontalOverflow, expectNoHorizontalScrollContainers, failBrowserLocalCollectionReads, failBrowserLocalReads, migrateLegacyBrowserData, pseudoContent, readBrowserLocalCollection, runBulkScan } from './helpers';
 
 // Default fixtures use dotless values so classifyQuery rejects them before
 // any upstream work. Tests that need completed result data install an explicit
@@ -66,7 +66,35 @@ test('keeps the Bulk queue available when browser-local context cannot be loaded
   await navigation.getByRole('link', { name: /^Dashboard/u }).click();
   await navigation.getByRole('link', { name: /^Bulk/u }).click();
 
-  await expect(page.locator('.local-context-status')).toContainText('browser-local profile, shortlist, case, relationship, or saved-session context could not be loaded');
+  await expect(page.locator('.local-context-status')).toContainText('Some browser-local context could not be loaded');
+  await expect(page.locator('.local-context-status')).toContainText('review-queue');
+  await expect(page.locator('#domains')).toBeEditable();
+});
+
+test('retains successfully loaded Bulk context when one collection is unavailable', async ({ page }) => {
+  await page.route('**/api/lookup?*', async (route) => {
+    const domain = new URL(route.request().url()).searchParams.get('q') || '';
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        availability: { applicable: true, domain, state: 'registered', confidence: 'high' },
+        diagnostics: { version: 7, rdap: { status: 'complete' }, whois: { status: 'skipped' }, availability: { status: 'complete' } },
+      }),
+    });
+  });
+  await runBulkScan(page, ['retained-context.example']);
+  await page.getByLabel('Session name').fill('Retained partial context');
+  await page.getByRole('button', { name: 'Save current session' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Saved Retained partial context.' })).toBeVisible();
+
+  await failBrowserLocalCollectionReads(page, 'brand_profiles');
+  const navigation = page.locator('#console-navigation');
+  await navigation.getByRole('link', { name: /^Dashboard/u }).click();
+  await navigation.getByRole('link', { name: /^Bulk/u }).click();
+  await expect(page.locator('.local-context-status')).toContainText('profile');
+  await expect(page.locator('.local-context-status')).toContainText('Successfully loaded collections remain available');
+  await expect(page.getByRole('heading', { name: 'Retained partial context' })).toBeVisible();
   await expect(page.locator('#domains')).toBeEditable();
 });
 
@@ -116,7 +144,7 @@ test('keeps mobile Bulk review focused while making secondary tools discoverable
   await expect(websiteCell).toBeVisible();
 
   await resultView.getByRole('button', { name: 'Analysis', exact: true }).click();
-  await expect(page.getByRole('button', { name: /Result distribution/u })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Result distribution/u })).toHaveCount(0);
   await expect(page.getByRole('region', { name: 'Lookalike mail exposure' })).toBeHidden();
   const mailExposureToggle = page.getByRole('button', { name: /Mail exposure/u });
   await mailExposureToggle.click();
@@ -196,12 +224,19 @@ test('filters, groups, and selected-only actions use compact observed evidence',
     selection: { count: 1, domains: ['limited-one.example'] },
     lookupProfile: 'fast',
   });
+  expect(manifestContent.rows[0].profileContext).toEqual({
+    sourceState: 'ready',
+    activeProfileId: null,
+    profileUpdatedAt: null,
+    limitation: '',
+  });
   expect(manifestContent.integrity.digestSha256).toMatch(/^sha256:[a-f0-9]{64}$/u);
 });
 
 test('keeps an expected missing registry protocol out of limited Bulk outcomes', async ({ page }) => {
   await page.route('**/api/lookup?*', async (route) => {
     const domain = new URL(route.request().url()).searchParams.get('q') || '';
+    const hasNoMachineRegistryService = domain.endsWith('.gt');
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -215,7 +250,7 @@ test('keeps an expected missing registry protocol out of limited Bulk outcomes',
         },
         diagnostics: {
           version: 7,
-          rdap: { status: 'complete' },
+          rdap: { status: hasNoMachineRegistryService ? 'unsupported' : 'complete' },
           whois: { status: 'unsupported' },
           availability: { status: 'complete' },
         },
@@ -223,17 +258,23 @@ test('keeps an expected missing registry protocol out of limited Bulk outcomes',
     });
   });
   await page.getByLabel('Scan mode').selectOption('deep');
-  await runBulkScan(page, ['example.dev', 'example.com']);
+  await runBulkScan(page, ['example.dev', 'example.gt', 'example.com']);
 
   const outcomes = page.locator('.outcomes');
-  await expect(outcomes.locator('div', { hasText: 'Complete' })).toContainText('1');
+  await expect(outcomes.locator('div', { hasText: 'Complete' })).toContainText('2');
   await expect(outcomes.locator('div', { hasText: 'Limited' })).toContainText('1');
-  await page.getByLabel('Source coverage').selectOption('complete');
+  const sourceCoverage = page.getByRole('combobox', { name: 'Source coverage', exact: true });
+  await sourceCoverage.selectOption('complete');
   await expect(page.getByRole('region', { name: 'Bulk review cockpit' })).toContainText(
     'whois: unsupported (no IANA-published service)',
   );
+  await page.getByRole('button', { name: 'Next unresolved' }).click();
+  const officialLookup = page.getByRole('region', { name: 'Bulk review cockpit' }).getByRole('link', { name: /Open official registry lookup/ });
+  await expect(officialLookup).toHaveAttribute('href', 'https://www.gt/sitio/');
+  await expect(officialLookup).toHaveAttribute('rel', /\bnoreferrer\b/);
+  await expect(page.getByRole('region', { name: 'Bulk review cockpit' })).toContainText('The domain is not added to this link');
 
-  await page.getByLabel('Source coverage').selectOption('limited');
+  await sourceCoverage.selectOption('limited');
   await expect(page.locator('.results-table tbody tr')).toHaveCount(1);
   await expect(page.locator('.results-table tbody tr')).toContainText('example.com');
 });
@@ -311,14 +352,18 @@ test('supports focused review and an evidence-qualified two-domain comparison', 
   expect(storedWatchlist.records[0]?.value?.results?.[0]).toMatchObject({ domain: 'right-review.example' });
 
   const comparison = page.getByRole('region', { name: 'Two-domain comparison' });
-  await expect(comparison.getByRole('img', { name: 'Two-domain evidence comparison matrix. Exact values and limitations are in the following table.' })).toBeVisible();
+  await expect(comparison.locator('svg')).toHaveCount(0);
+  await expect(comparison.getByRole('table', { name: 'Exact retained values, source states, and derived field deltas' })).toBeVisible();
   await expect(comparison).toContainText('First Registrar');
   await expect(comparison).toContainText('Second Registrar');
   await expect(comparison.getByText('different', { exact: true }).first()).toBeVisible();
-  await expect(comparison.getByText('not recorded', { exact: true }).first()).toBeVisible();
+  await expect(comparison.getByText('Not recorded in compact evidence', { exact: true }).first()).toBeVisible();
+  await expect(comparison.getByText('not_recorded', { exact: true }).first()).toBeVisible();
   const technologyRow = comparison.getByRole('row', { name: /Technology Technology identifiers/u });
   await expect(technologyRow).toContainText('fixture-cms, shared-edge');
   await expect(technologyRow).toContainText('fixture-commerce, shared-edge');
+  await expect(technologyRow).toContainText('Exact source state complete');
+  await expect(technologyRow).toContainText('Comparison state different');
   const issuerRow = comparison.getByRole('row', { name: /Certificate TLS issuer label/u });
   await expect(issuerRow).toContainText('CN=Fixture Authority One');
   await expect(issuerRow).toContainText('CN=Fixture Authority Two');
@@ -361,10 +406,31 @@ test('supports focused review and an evidence-qualified two-domain comparison', 
   });
   expect(mailExport.integrity.digestSha256).toMatch(/^sha256:[a-f0-9]{64}$/u);
 
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: 393, height: 852 });
   await page.getByRole('group', { name: 'Bulk result view' }).getByRole('button', { name: 'Analysis', exact: true }).click();
   await page.getByRole('button', { name: /Mail exposure/u }).click();
   await page.getByRole('button', { name: /Domain comparison/u }).click();
+  const exactTable = comparison.getByRole('table', { name: 'Exact retained values, source states, and derived field deltas' });
+  await expect(exactTable).toBeVisible();
+  await expect(exactTable).toHaveCSS('display', 'block');
+  await expect(technologyRow).toBeVisible();
+  await expect(technologyRow).toHaveCSS('display', 'block');
+  await expect(technologyRow).toContainText('fixture-cms, shared-edge');
+  await expect(technologyRow).toContainText('fixture-commerce, shared-edge');
+  await expect(technologyRow).toContainText('Exact source state complete');
+  await expect(technologyRow).toContainText('Comparison state different');
+  expect(await pseudoContent(technologyRow.locator('td').nth(0), '::before')).toContain('left-review.example');
+  expect(await pseudoContent(technologyRow.locator('td').nth(1), '::before')).toContain('right-review.example');
+  expect(await pseudoContent(technologyRow.locator('td').nth(2), '::before')).toContain('Delta');
+  const mobileEvidenceLink = technologyRow.getByRole('link', { name: 'View settled row' }).first();
+  await expect(mobileEvidenceLink).toBeVisible();
+  await expect(mobileEvidenceLink).toHaveAttribute('href', '#bulk-result-0');
+  expect((await boundingBox(mobileEvidenceLink)).height).toBeGreaterThanOrEqual(44);
+  await mobileEvidenceLink.focus();
+  await expect(mobileEvidenceLink).toBeFocused();
+  await mobileEvidenceLink.click();
+  await expect(page).toHaveURL(/#bulk-result-0$/u);
+  await expect(page.locator('#bulk-result-0')).toHaveCount(1);
   await expectNoHorizontalOverflow(page);
   await expectNoHorizontalScrollContainers(page.locator('#results'));
   await expectNoHorizontalScrollContainers(comparison);
@@ -450,6 +516,7 @@ test('a malformed successful response remains an explicit failure in exports and
   expect(csv).toContain('malformed-response.example');
   expect(csv).toContain('Bulk lookup returned an invalid response.');
   expect(csv).not.toContain('malformed-response.example,,,,,unknown');
+  expect(csv.split('\n')[0]).toContain('opportunity,opportunity_model_version');
 
   await page.getByLabel('Watchlist name').fill('Invalid response audit');
   await page.getByRole('button', { name: 'Save to Monitor' }).click();
@@ -507,22 +574,9 @@ test('sorts complete results by registration, confidence, website, registrar, an
 
   await runBulkScan(page, ['charlie.example', 'alpha.example', 'bravo.example']);
   const domains = () => page.locator('.results-table tbody td[data-label="Domain"] strong').allTextContents();
-  const triagePlot = page.getByRole('region', { name: 'Risk and opportunity matrix' });
-  await expect(triagePlot).toBeVisible();
-  await expect(triagePlot.getByRole('img', { name: /2 filtered domains plotted/ })).toBeVisible();
-  const quadrantSummary = triagePlot.getByLabel('Risk and opportunity quadrant counts');
-  await expect(quadrantSummary).toBeVisible();
-  await expect(quadrantSummary.locator('dt')).toHaveText([
-    'Available / review',
-    'Priority review',
-    'Lower scores',
-    'Risk-led review',
-  ]);
-  expect(
-    (await quadrantSummary.locator('dd').allTextContents())
-      .map(Number)
-      .reduce((total, count) => total + count, 0),
-  ).toBe(2);
+  await expect(page.getByRole('region', { name: 'Risk and opportunity matrix' })).toHaveCount(0);
+  await expect(page.locator('#bulk-triage-plot')).toHaveCount(0);
+  await expect(page.locator('.results-table tbody tr')).toHaveCount(3);
 
   await page.getByLabel('Desktop result sort').selectOption('registrar');
   await expect.poll(domains).toEqual(['alpha.example', 'bravo.example', 'charlie.example']);
@@ -609,6 +663,28 @@ test('saves compact Bulk sessions, restores them after reload, and compares late
   const stored = await readBrowserLocalCollection(page, 'bulk_sessions', { minimumRecords: 2 });
   expect(stored.records).toHaveLength(2);
   expect(JSON.stringify(stored.records)).not.toContain('must-not-persist@priority.invalid');
+  const baseline = stored.records.find((record) => record.value.name === 'Baseline review')?.value;
+  expect(baseline?.profileContext).toEqual({
+    sourceState: 'ready',
+    activeProfileId: null,
+    profileUpdatedAt: null,
+    limitation: '',
+  });
+  expect(baseline?.results[0]).toMatchObject({
+    risk: 6,
+    riskModelVersion: 7,
+    trusted: null,
+    faviconMatch: false,
+    faviconNearMatch: false,
+    reusesOfficialAssets: false,
+    idnReferenceMatch: false,
+    pageBaselineMatch: false,
+    hasActiveBrandProfile: false,
+  });
+  expect(baseline?.results[0]?.riskFactors).toContainEqual({
+    label: 'Base context for “registered”',
+    points: 6,
+  });
 
   await page.getByText('Compare two saved sessions', { exact: true }).click();
   await page.getByLabel('Baseline', { exact: true }).selectOption({ label: 'Baseline review' });
@@ -628,7 +704,50 @@ test('saves compact Bulk sessions, restores them after reload, and compares late
   await expect(page.getByRole('heading', { name: 'Later review' })).toBeVisible();
   await page.locator('article').filter({ hasText: 'Baseline review' }).getByRole('button', { name: 'Load' }).click();
   await expect(page.locator('.results-table tbody tr')).toHaveCount(1);
+  await expect(page.locator('.results-table tbody tr').first().locator('td[data-label="Risk"]')).toHaveText('6');
   await expect(page.getByRole('status').filter({ hasText: /Loaded Baseline review/ })).toBeVisible();
+});
+
+test('isolates saved-session controls while an active scan owns the result state', async ({ page }) => {
+  let releaseLookup = () => {};
+  const lookupGate = new Promise<void>((resolve) => { releaseLookup = resolve; });
+  await page.route('**/api/lookup?*', async (route) => {
+    const domain = new URL(route.request().url()).searchParams.get('q') || '';
+    if (domain === 'active-review.invalid') await lookupGate;
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        availability: { applicable: true, domain, state: 'registered', confidence: 'high' },
+        diagnostics: {
+          version: 7,
+          rdap: { status: 'complete' },
+          whois: { status: 'skipped' },
+          availability: { status: 'complete' },
+        },
+      }),
+    });
+  });
+
+  await runBulkScan(page, ['saved-review.invalid']);
+  await page.getByLabel('Session name').fill('Saved review');
+  await page.getByRole('button', { name: 'Save current session' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Saved Saved review.' })).toBeVisible();
+  const savedSessions = page.getByRole('region', { name: 'Saved Bulk sessions' });
+  const saved = savedSessions.getByRole('article').filter({ hasText: 'Saved review' });
+
+  await page.locator('#domains').fill('active-review.invalid');
+  await page.getByRole('button', { name: 'Scan 1 domain' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Scanning 1 domain…' })).toBeVisible();
+  await expect(saved.getByRole('button', { name: 'Load' })).toBeDisabled();
+  await expect(saved.getByRole('button', { name: 'Delete' })).toBeDisabled();
+  await expect(savedSessions.getByRole('button', { name: 'Export sessions' })).toBeDisabled();
+
+  releaseLookup();
+  await expect(page.getByRole('status').filter({ hasText: 'Completed 1 of 1 lookups.' })).toBeVisible();
+  await expect(saved.getByRole('button', { name: 'Load' })).toBeEnabled();
+  await expect(page.locator('.results-table tbody tr', { hasText: 'active-review.invalid' })).toHaveCount(1);
+  await expect(page.locator('.results-table tbody tr', { hasText: 'saved-review.invalid' })).toHaveCount(0);
 });
 
 test('resumes only unstarted rows from an explicitly saved partial session', async ({ page }) => {
@@ -708,6 +827,204 @@ test('resumes only unstarted rows from an explicitly saved partial session', asy
   expect(stored.records[0]?.value?.results).toHaveLength(2);
 });
 
+test('an unavailable Profile context stays inconclusive in Bulk rows, sessions, CSV, and Monitor actions', async ({ page }) => {
+  const requestedDomains: string[] = [];
+  await page.route('**/api/lookup?*', async (route) => {
+    const domain = new URL(route.request().url()).searchParams.get('q') || '';
+    requestedDomains.push(domain);
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        availability: {
+          applicable: true,
+          domain,
+          state: 'registered',
+          confidence: 'high',
+          registrar: { name: 'Example Registrar' },
+          faviconHash: 'a'.repeat(64),
+          pageTitle: 'Reserved fixture page',
+        },
+        diagnostics: {
+          version: 7,
+          rdap: { status: 'complete' },
+          whois: { status: 'skipped' },
+          availability: { status: 'complete' },
+        },
+      }),
+    });
+  });
+  await page.goto('/lookup');
+  await migrateLegacyBrowserData(page, {}, { destination: '/lookup' });
+  await page.evaluate(() => {
+    const originalGetItem = Storage.prototype.getItem;
+    Storage.prototype.getItem = function getItem(name: string) {
+      if (this === localStorage && name === 'whois-rdap-active-brand-profile-v1') {
+        throw new DOMException('Preference read denied', 'SecurityError');
+      }
+      return originalGetItem.call(this, name);
+    };
+  });
+  await page.locator('#console-navigation').getByRole('link', { name: /^Bulk/u }).click();
+  await expect(page.getByRole('alert').filter({ hasText: 'Brand Profile context is unavailable' })).toBeVisible();
+  await page.locator('#domains').fill('profile-context.invalid');
+  await page.getByRole('button', { name: 'Scan 1 domain' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Completed 1 of 1 lookups.' })).toContainText('profile-derived fields are retained as inconclusive');
+  expect(requestedDomains).toEqual(['profile-context.invalid']);
+
+  const row = page.locator('.results-table tbody tr', { hasText: 'profile-context.invalid' });
+  await expect(row).toContainText('Brand Profile context unevaluated');
+  await expect(row.locator('td[data-label="Risk"]')).toHaveText('—');
+  await page.getByLabel('Current row monitor list').fill('Unavailable context review');
+  await expect(page.getByRole('button', { name: 'Save current to Monitor' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Save to Monitor' })).toBeDisabled();
+
+  const csvPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Export CSV' }).click();
+  const csvPath = await (await csvPromise).path();
+  expect(csvPath).not.toBeNull();
+  const csv = await readFile(csvPath!, 'utf8');
+  expect(csv.split('\n')[0]).toContain('profile_context_state,profile_context_limitation,profile_status');
+  expect(csv).toContain('profile-context.invalid,,Latin,false,,registered,high,unavailable');
+  expect(csv).toContain('profile-dependent Risk assessment remain inconclusive');
+  expect(csv).not.toContain(',official,');
+  expect(csv).not.toContain(',allowlisted,');
+
+  await page.getByLabel('Session name').fill('Unavailable profile review');
+  await page.getByRole('button', { name: 'Save current session' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Saved Unavailable profile review.' })).toBeVisible();
+  const stored = await readBrowserLocalCollection(page, 'bulk_sessions', { minimumRecords: 1 });
+  expect(stored.manifest.schemaVersion).toBe(4);
+  expect(stored.records[0]?.value.profileContext).toMatchObject({ sourceState: 'unavailable' });
+  expect(stored.records[0]?.value.results[0]).toMatchObject({
+    risk: null,
+    riskModelVersion: null,
+    riskFactors: [],
+    trusted: null,
+    faviconMatch: null,
+    faviconNearMatch: null,
+    reusesOfficialAssets: null,
+    idnReferenceMatch: null,
+    pageBaselineMatch: null,
+    hasActiveBrandProfile: null,
+  });
+
+  const exportPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Export sessions' }).click();
+  const exportPath = await (await exportPromise).path();
+  expect(exportPath).not.toBeNull();
+  const exported = JSON.parse(await readFile(exportPath!, 'utf8'));
+  expect(exported).toMatchObject({ schema: 'whoisleuth.bulk-sessions', version: 4 });
+  expect(exported.sessions[0].profileContext.sourceState).toBe('unavailable');
+  expect(exported.sessions[0].results[0].risk).toBeNull();
+  expect(exported.sessions[0].results[0].idnReferenceMatch).toBeNull();
+});
+
+test('aggregate Monitor saves are atomic when one settled row lacks ready profile provenance', async ({ page }) => {
+  const savedAt = '2026-07-29T03:00:00.000Z';
+  const readyContext = {
+    sourceState: 'ready',
+    activeProfileId: null,
+    profileUpdatedAt: null,
+    limitation: '',
+  };
+  const unavailableContext = {
+    sourceState: 'unavailable',
+    activeProfileId: null,
+    profileUpdatedAt: null,
+    limitation: 'This row requires a local profile-context rescan.',
+  };
+  const compactRow = (domain: string, profileContext: typeof readyContext | typeof unavailableContext) => ({
+    domain,
+    status: 'error',
+    availability: 'error',
+    confidence: 'unknown',
+    registrar: '—',
+    activity: '—',
+    risk: null,
+    opportunity: null,
+    mutationTypes: [],
+    trusted: null,
+    error: 'Reserved fixture failure',
+    scanDepth: 'fast',
+    nameservers: [],
+    faviconMatch: profileContext.sourceState === 'ready' ? false : null,
+    faviconNearMatch: profileContext.sourceState === 'ready' ? false : null,
+    reusesOfficialAssets: profileContext.sourceState === 'ready' ? false : null,
+    hasPasswordField: false,
+    idnReferenceMatch: profileContext.sourceState === 'ready' ? false : null,
+    pageBaselineMatch: profileContext.sourceState === 'ready' ? false : null,
+    hasActiveBrandProfile: profileContext.sourceState === 'ready' ? false : null,
+    riskFactors: [],
+    relationship: {
+      version: 2,
+      nameservers: [],
+      ipAddresses: [],
+      trackingIdentifiers: [],
+      officialAssetHosts: [],
+      faviconHash: null,
+      faviconPHash: null,
+      certificateFingerprint: null,
+      truncated: false,
+    },
+    sourceCoverage: [{ source: 'lookup', state: 'error' }],
+    profileContext,
+  });
+  await migrateLegacyBrowserData(page, {
+    'whoisleuth-bulk-sessions-v1': {
+      schema: 'whoisleuth.bulk-sessions',
+      version: 4,
+      sessions: [{
+        id: 'mixed-profile-context',
+        name: 'Mixed profile context',
+        mode: 'fast',
+        state: 'complete',
+        inputDigest: `sha256:${'d'.repeat(64)}`,
+        domains: ['ready-row.invalid', 'unavailable-row.invalid'],
+        results: [
+          compactRow('ready-row.invalid', readyContext),
+          compactRow('unavailable-row.invalid', unavailableContext),
+        ],
+        startedAt: savedAt,
+        updatedAt: savedAt,
+        completedAt: savedAt,
+        profileContext: {
+          sourceState: 'mixed',
+          activeProfileId: null,
+          profileUpdatedAt: null,
+          limitation: 'Rows in this saved Bulk session were evaluated under more than one Brand Profile context. Review each row provenance before comparison.',
+        },
+      }],
+    },
+  });
+
+  await page.locator('article', { hasText: 'Mixed profile context' }).getByRole('button', { name: 'Load' }).click();
+  await expect(page.locator('.results-table tbody tr')).toHaveCount(2);
+  await page.getByLabel('Watchlist name').fill('Atomic review');
+  const saveAll = page.getByRole('button', { name: 'Save to Monitor', exact: true });
+  await expect(saveAll).toBeDisabled();
+  await expect(page.getByRole('status').filter({ hasText: '1 result row requires a local rescan' })).toBeVisible();
+
+  await saveAll.evaluate((element) => {
+    (element as HTMLButtonElement).disabled = false;
+    (element as HTMLButtonElement).click();
+  });
+  await expect(page.locator('.save-watchlist').getByRole('status')).toContainText('Nothing was saved. 1 target row has unevaluated Brand Profile context');
+  expect((await readBrowserLocalCollection(page, 'watchlists')).records).toHaveLength(0);
+
+  await page.getByRole('button', { name: 'Select matched' }).click();
+  await expect(page.getByText(/1 selected row is excluded because Brand Profile context is unavailable/u)).toBeVisible();
+  const saveSelected = page.getByRole('button', { name: 'Save selected', exact: true });
+  await expect(saveSelected).toBeDisabled();
+  await expect(page.getByRole('status').filter({ hasText: '1 selected row requires a local rescan' })).toBeVisible();
+  await saveSelected.evaluate((element) => {
+    (element as HTMLButtonElement).disabled = false;
+    (element as HTMLButtonElement).click();
+  });
+  await expect(page.locator('.save-watchlist').getByRole('status')).toContainText('Nothing was saved. 1 selected row has unevaluated Brand Profile context');
+  expect((await readBrowserLocalCollection(page, 'watchlists')).records).toHaveLength(0);
+});
+
 test('leaving a paused scan retains every settled result and releases paused workers', async ({ page }) => {
   const domains = Array.from({ length: 13 }, (_, index) => `paused-${index + 1}.example`);
   let releaseDelayed!: () => void;
@@ -781,13 +1098,17 @@ test('results become labelled stacked cards at mobile width, with compact and fu
   const row = page.locator('.results-table tbody tr').first();
   const rowBox = await boundingBox(row);
 
-  const compactLabels = ['Registration', 'Risk', 'Opportunity'];
+  const compactLabels = ['Registration', 'Risk'];
   for (const label of compactLabels) {
     const cell = row.locator(`td[data-label="${label}"]`);
     const cellBox = await boundingBox(cell);
     expect(cellBox.width, `${label} should be compact`).toBeLessThan(rowBox.width * 0.5);
     expect(await pseudoContent(cell, '::before')).toContain(label);
   }
+  await expect(row.locator('td[data-label="Opportunity"]')).toHaveCount(0);
+  await expect(page.getByLabel('Mobile result sort').locator('option[value="opportunity"]')).toHaveCount(0);
+  await expect(page.getByLabel('Desktop result sort').locator('option[value="opportunity"]')).toHaveCount(0);
+  await expect(page.locator('.cockpit').getByText('Opportunity', { exact: true })).toHaveCount(0);
 
   const collapsedLabels = ['Website', 'Registrar', 'Mutation', 'Actions'];
   for (const label of collapsedLabels) {
@@ -1072,7 +1393,17 @@ test('deep results present bounded relationship evidence including exact native 
   await expect(focusedRetained.getByRole('heading', { name: 'No retained relationship observations' })).toBeVisible();
 });
 
-test('candidate handoff presents defensive coverage actions and export', async ({ page }) => {
+test('candidate handoff presents profile-listed actions, limitations, and export', async ({ page }) => {
+  const profile = {
+    id: 'listing-profile', name: 'Listing profile', officialDomains: ['official.example'], productNames: [], tlds: ['example'],
+    approvedPartnerDomains: [], allowlistedDomains: ['secure-example.example'], allowlistedRegistrars: [], dkimSelectors: [],
+    trademarkOwner: '', trademarkRegistration: '', officialFaviconHash: '', officialFaviconPHash: '', pageBaseline: null,
+    createdAt: '2026-07-16T00:00:00.000Z', updatedAt: '2026-07-16T00:00:00.000Z',
+  };
+  await migrateLegacyBrowserData(page, {
+    'whois-rdap-brand-profiles-v1': [profile],
+    'whois-rdap-active-brand-profile-v1': profile.id,
+  }, { destination: '/bulk' });
   const handoffToken = 'fedcba9876543210fedcba9876543210';
   await page.evaluate((token) => {
     sessionStorage.setItem('whoisleuth:candidate-handoff:v2', JSON.stringify({
@@ -1106,28 +1437,44 @@ test('candidate handoff presents defensive coverage actions and export', async (
 
   await runBulkScan(page, ['login-example.example', 'secure-example.example']);
   const coverage = page.locator('section.coverage');
-  await expect(coverage.getByRole('heading', { name: 'Coverage · 0%' })).toBeVisible();
+  await expect(coverage.getByRole('heading', { name: 'Profile-listed share · 50%' })).toBeVisible();
+  await expect(coverage).toContainText('Profile-listed is an overlapping local profile-membership count, separate from the retained registration outcome.');
   await expect(coverage).toContainText('Generated 2');
   await expect(coverage).toContainText('Registered 1');
   await expect(coverage).toContainText('Available 1');
+  await expect(coverage).toContainText('Profile-listed 1 · overlaps outcomes');
+  await expect(coverage).toContainText('Registered, available, and unknown partition the generated candidates.');
   await expect(coverage.getByRole('cell', { name: 'Impersonation term', exact: true }).first()).toBeVisible();
-  await expect(coverage.getByRole('img', { name: 'Mutation-family coverage. Exact counts are in the following table.' })).toBeVisible();
-  await expect(coverage.getByRole('img', { name: 'TLD coverage. Exact counts are in the following table.' })).toBeVisible();
+  await expect(coverage.getByRole('img', { name: /Mutation-family profile listing.*Registration outcomes form each stacked bar/ })).toBeVisible();
+  await expect(coverage.getByRole('img', { name: /TLD profile listing.*Registration outcomes form each stacked bar/ })).toBeVisible();
+  await expect(coverage.locator('.state-profileListed')).toHaveCount(0);
+  await expect(coverage.locator('.profile-listing-marker')).toHaveCount(2);
+  const mutationRow = coverage.locator('.coverage-tables > div').first().locator('tbody tr').first();
+  await expect(mutationRow.locator('td[data-label="Group"]')).toHaveText('Impersonation term');
+  await expect(mutationRow.locator('td[data-label="Profile-listed (overlap)"]')).toHaveText('1');
+
+  const plan = coverage.locator('details.coverage-plan');
+  await plan.locator(':scope > summary').click();
+  const listedAvailable = plan.locator('article', { hasText: 'secure-example.example' });
+  await expect(listedAvailable).toContainText('P1');
+  await expect(listedAvailable).toContainText('Review defensive acquisition · Available · Profile-listed');
 
   const downloadPromise = page.waitForEvent('download');
-  await coverage.getByRole('button', { name: 'Export coverage CSV' }).click();
+  await coverage.getByRole('button', { name: 'Export profile listing CSV' }).click();
   const download = await downloadPromise;
-  expect(download.suggestedFilename()).toMatch(/^defensive-registration-coverage-\d{4}-\d{2}-\d{2}\.csv$/);
+  expect(download.suggestedFilename()).toMatch(/^defensive-registration-profile-listing-\d{4}-\d{2}-\d{2}\.csv$/);
   const path = await download.path();
   expect(path).not.toBeNull();
   const content = await readFile(path!, 'utf8');
-  expect(content).toContain('mutation,Impersonation term,2,0,1,1,0,0');
+  expect(content).toContain('dimension,group,total,registered,available,unknown,profile_listed_overlapping,profile_listed_share,domain,outcome,profile_listed,priority,action,rationale');
+  expect(content).toContain('mutation,Impersonation term,2,1,1,0,1,50');
+  expect(content).toContain('candidate,,,,,,,,secure-example.example,available,true,P1,Review defensive acquisition');
 
-  await coverage.getByRole('button', { name: 'Load gaps' }).first().click();
+  await coverage.getByRole('button', { name: 'Load group' }).first().click();
   await expect(page.locator('#domains')).toHaveValue('login-example.example\nsecure-example.example');
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole('group', { name: 'Bulk result view' }).getByRole('button', { name: 'Analysis', exact: true }).click();
-  await page.getByRole('button', { name: /Defensive coverage/u }).click();
+  await page.getByRole('button', { name: /Profile listing/u }).click();
   await expectNoHorizontalOverflow(page);
   await expectNoHorizontalScrollContainers(coverage);
 });

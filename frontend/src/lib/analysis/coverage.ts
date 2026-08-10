@@ -1,14 +1,15 @@
-// Pure defensive-registration coverage aggregation. A candidate can belong
+// Pure defensive-registration profile-listing aggregation. A candidate can belong
 // to several mutation groups, so group totals intentionally overlap; the
 // summary counts unique domains exactly once.
 
 const REGISTERED_STATES = new Set(['registered', 'for_sale', 'expiring']);
 
-type CoverageStatus = 'protected' | 'registered' | 'available' | 'unknown';
-type CoveragePriority = 'P1' | 'P2' | 'P3';
+type RegistrationOutcome = 'registered' | 'available' | 'unknown';
+type CoveragePriority = 'P1' | 'P2';
 
-type CoverageCounts = Record<CoverageStatus, number> & {
+type ProfileListingCounts = Record<RegistrationOutcome, number> & {
   total: number;
+  profileListed: number;
 };
 
 type CoverageResult = {
@@ -34,7 +35,7 @@ type CoverageCandidate = {
   availability: unknown;
 };
 
-type CoverageGroup = CoverageCounts & {
+type ProfileListingGroup = ProfileListingCounts & {
   key: string;
   label: string;
   domains: string[];
@@ -42,28 +43,29 @@ type CoverageGroup = CoverageCounts & {
 };
 
 type CoveragePlanRow = CoverageCandidate & {
-  status: CoverageStatus;
+  status: RegistrationOutcome;
+  profileListed: boolean;
   priority: CoveragePriority;
-  action: 'review_acquisition' | 'resolve_evidence' | 'investigate_registration' | 'verify_protection';
+  action: 'review_acquisition' | 'resolve_evidence' | 'investigate_registration';
   actionLabel: string;
   rationale: string;
 };
 
-function emptyCounts(): CoverageCounts {
-  return { total: 0, protected: 0, registered: 0, available: 0, unknown: 0 };
+function emptyCounts(): ProfileListingCounts {
+  return { total: 0, profileListed: 0, registered: 0, available: 0, unknown: 0 };
 }
 
-function classifyCandidate(candidate: CoverageCandidate, allowlistedDomains: ReadonlySet<string>): CoverageStatus {
-  if (allowlistedDomains.has(candidate.domain)) return 'protected';
+function classifyCandidate(candidate: CoverageCandidate): RegistrationOutcome {
   if (candidate.availability === 'available') return 'available';
   if (typeof candidate.availability === 'string' && REGISTERED_STATES.has(candidate.availability)) return 'registered';
   return 'unknown';
 }
 
-function planRow(candidate: CoverageCandidate, status: CoverageStatus): CoveragePlanRow {
+function planRow(candidate: CoverageCandidate, status: RegistrationOutcome, profileListed: boolean): CoveragePlanRow {
   if (status === 'available') return {
     ...candidate,
     status,
+    profileListed,
     priority: 'P1',
     action: 'review_acquisition',
     actionLabel: 'Review defensive acquisition',
@@ -72,50 +74,46 @@ function planRow(candidate: CoverageCandidate, status: CoverageStatus): Coverage
   if (status === 'unknown') return {
     ...candidate,
     status,
+    profileListed,
     priority: 'P1',
     action: 'resolve_evidence',
     actionLabel: 'Resolve source coverage',
     rationale: 'The retained sources did not support a registration conclusion. Missing evidence is not availability.',
   };
-  if (status === 'registered') return {
+  return {
     ...candidate,
     status,
+    profileListed,
     priority: 'P2',
     action: 'investigate_registration',
     actionLabel: 'Review registered candidate',
     rationale: 'The candidate appears registered. Review current evidence and ownership context before monitoring or escalation.',
   };
-  return {
-    ...candidate,
-    status,
-    priority: 'P3',
-    action: 'verify_protection',
-    actionLabel: 'Verify protection record',
-    rationale: 'The active profile classifies this candidate as protected. Confirm the reviewed profile remains current.',
-  };
 }
 
 function addToGroup(
-  groups: Map<string, CoverageGroup>,
+  groups: Map<string, ProfileListingGroup>,
   key: string,
   label: string,
   candidate: CoverageCandidate,
-  status: CoverageStatus,
+  status: RegistrationOutcome,
+  profileListed: boolean,
 ): void {
   if (!groups.has(key)) groups.set(key, { key, label, ...emptyCounts(), domains: [], actionableDomains: [] });
   const group = groups.get(key);
   if (!group) return;
   group.total += 1;
   group[status] += 1;
+  if (profileListed) group.profileListed += 1;
   group.domains.push(candidate.domain);
-  if (status !== 'protected') group.actionableDomains.push(candidate.domain);
+  group.actionableDomains.push(candidate.domain);
 }
 
-function finishGroups(groups: ReadonlyMap<string, CoverageGroup>) {
+function finishGroups(groups: ReadonlyMap<string, ProfileListingGroup>) {
   return [...groups.values()]
     .map((group) => ({
       ...group,
-      coveragePercent: group.total ? Math.round((group.protected / group.total) * 100) : 0,
+      profileListedShare: group.total ? Math.round((group.profileListed / group.total) * 100) : 0,
     }))
     .sort((a, b) => b.available - a.available || b.registered - a.registered || b.total - a.total || a.label.localeCompare(b.label));
 }
@@ -142,7 +140,7 @@ export function buildCoverageReport(
   }
 
   // Generated candidates that were removed from the scan because the active
-  // profile already allowlists them still count as protected coverage.
+  // profile already lists them still count in the profile-listed share.
   for (const generated of generatedCandidates) {
     const domain = String(generated.domain || '').toLowerCase();
     if (!domain || candidatesByDomain.has(domain) || !allowlistedDomains.has(domain)) continue;
@@ -157,26 +155,27 @@ export function buildCoverageReport(
   }
 
   const summary = emptyCounts();
-  const mutationGroups = new Map<string, CoverageGroup>();
-  const tldGroups = new Map<string, CoverageGroup>();
+  const mutationGroups = new Map<string, ProfileListingGroup>();
+  const tldGroups = new Map<string, ProfileListingGroup>();
   const candidates: CoveragePlanRow[] = [];
   for (const candidate of candidatesByDomain.values()) {
-    const status = classifyCandidate(candidate, allowlistedDomains);
+    const status = classifyCandidate(candidate);
+    const profileListed = allowlistedDomains.has(candidate.domain);
     summary.total += 1;
     summary[status] += 1;
-    candidates.push(planRow(candidate, status));
+    if (profileListed) summary.profileListed += 1;
+    candidates.push(planRow(candidate, status, profileListed));
     for (const mutationType of candidate.mutationTypes) {
-      addToGroup(mutationGroups, mutationType, mutationLabels[mutationType] || mutationType, candidate, status);
+      addToGroup(mutationGroups, mutationType, mutationLabels[mutationType] || mutationType, candidate, status, profileListed);
     }
-    if (candidate.tld) addToGroup(tldGroups, candidate.tld, `.${candidate.tld}`, candidate, status);
+    if (candidate.tld) addToGroup(tldGroups, candidate.tld, `.${candidate.tld}`, candidate, status, profileListed);
   }
 
-  const priorityOrder: Record<CoveragePriority, number> = { P1: 0, P2: 1, P3: 2 };
+  const priorityOrder: Record<CoveragePriority, number> = { P1: 0, P2: 1 };
   const actionOrder: Record<CoveragePlanRow['action'], number> = {
     review_acquisition: 0,
     resolve_evidence: 1,
     investigate_registration: 2,
-    verify_protection: 3,
   };
   candidates.sort((left, right) => (
     priorityOrder[left.priority] - priorityOrder[right.priority]
@@ -184,10 +183,11 @@ export function buildCoverageReport(
     || left.domain.localeCompare(right.domain)
   ));
   return {
-    summary: { ...summary, coveragePercent: summary.total ? Math.round((summary.protected / summary.total) * 100) : 0 },
+    summary: { ...summary, profileListedShare: summary.total ? Math.round((summary.profileListed / summary.total) * 100) : 0 },
     candidates,
     mutationGroups: finishGroups(mutationGroups),
     tldGroups: finishGroups(tldGroups),
     plan: candidates,
+    limitation: 'Profile-listed is an overlapping local profile-membership count, separate from the retained registration outcome. Profile inclusion does not establish protection, ownership, or control.',
   };
 }

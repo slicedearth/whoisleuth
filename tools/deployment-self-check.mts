@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 import { readTextCapped, safeFetchDetailed } from '../lib/safe-fetch.mts';
 import { HTTP_BASELINE_CONTENT_SECURITY_POLICY } from '../lib/security-headers.mts';
+import { boundedPositiveTimeout as boundedTimeout } from './maintainer-tool-helpers.mts';
 
 type CheckStatus = 'pass' | 'fail' | 'unsupported' | 'inconclusive';
 type SelfCheckId =
@@ -113,11 +114,6 @@ function normalizeDeploymentOrigin(value: unknown): string {
     throw new TypeError('The deployment origin must not contain a path, query string, or fragment.');
   }
   return parsed.origin;
-}
-
-function boundedTimeout(value: unknown, fallback: number, maximum: number): number {
-  const parsed = Number(value);
-  return Number.isInteger(parsed) && parsed > 0 ? Math.min(parsed, maximum) : fallback;
 }
 
 function headersRecord(headers: Headers): Readonly<Record<string, string>> {

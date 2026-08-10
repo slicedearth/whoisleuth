@@ -1,6 +1,6 @@
 # Privacy Notice
 
-Last updated: 6 August 2026.
+Last updated: 10 August 2026.
 
 This notice describes the public WHOISleuth deployment and is also a template
 for self-hosted operators to adapt when their configuration, hosting, enabled
@@ -64,6 +64,14 @@ default (see the README), so many lookups return no personal data at all.
   roles. Bulk, watchlist, and case data retain only the existing compact
   primary-contact fields; these expanded contact inventories are not copied
   into browser-local investigation stores.
+- **Official registry lookup links**: for individually reviewed suffixes where
+  ordinary WHOIS or RDAP collection is unavailable or restricted, the Lookup,
+  focused Bulk review, and Registry support views can show an HTTPS link to the
+  registry's official browser lookup. WHOISleuth does not fetch or scrape that
+  page and does not append the investigated domain to the link. Opening it is
+  deliberate browser navigation to the registry; entering or submitting a
+  domain there is then governed by that registry's own privacy and
+  request-handling terms.
 - **Registrar RDAP in deep Lookup**: when a registry RDAP object publishes a
   complete HTTPS link for the same domain at the sponsoring registrar, a deep
   non-compact Lookup can relay that one public registrar object as a separately
@@ -280,18 +288,19 @@ default (see the README), so many lookups return no personal data at all.
   target or evidence, and is not included in workspace archives. Clearing site
   data removes it. Lookup form values and results remain subject to the
   transient rule above and are not added to this preference.
-- **Guided investigations**: an authenticated user can optionally start a standard
-  brand-sweep, infrastructure-pivot, or new-domain-triage guide for one canonical
-  domain, or a bounded analyst-authored template derived from one of those
-  guides. The versioned storage contract calls the selected guide a recipe;
-  schema version 4 keeps only that recipe identifier, an optional compact
+- **Guided investigations**: an authenticated user can optionally start one of
+  six fixed guides for one canonical domain: brand sweep, infrastructure pivot,
+  new-domain triage, credential-impersonation response, mail-abuse response, or
+  domain-control-change response. A bounded analyst-authored template must
+  derive from one of those guides. The versioned storage contract calls the
+  selected guide a recipe; schema version 5 keeps only that recipe identifier, an optional compact
   template snapshot, official or starting
   domain, an optional analyst-selected candidate domain, up to 25 canonical
   domains carried from a guided Bulk comparison, an explicit truncation marker,
   creation/update timestamps, active or paused state, and bounded stage
   approval, opened, and outcome markers. Partial and skipped stages also retain
   a required review reason of up to 500 characters in the current tab's `sessionStorage`
-  under `whoisleuth:investigation-guide:v4`. Deployed version 1, 2, and 3 records
+  under `whoisleuth:investigation-guide:v5`. Deployed versions 1 through 4 records
   can normalise without inventing a custom template when no current record
   exists; future records remain untouched. A saved template can customise
   bounded guidance, omit allowlisted steps, and add approval gates. It cannot
@@ -317,6 +326,21 @@ default (see the README), so many lookups return no personal data at all.
   current and migrated legacy tab records,
   and closing the tab session removes them with the rest of that tab's session
   storage.
+- **Brand-protection operations report and response playbooks**: the three response recipes
+  can focus the existing Case response workspace only after the analyst opens
+  or creates the relevant Case. They do not discover a recipient, test
+  reachability, submit a packet, contact a provider, apply a defensive control,
+  or infer an action state. Recipient, source, limitation, and outcome fields
+  are retained only through an explicit Case action edit. Monitor can
+  transiently aggregate at most 500 readable Cases and 50 current action records per
+  Case into analyst, operations, or executive views over a selected action
+  `updatedAt` window. Loading or unavailable Cases suppress numeric
+  conclusions. A deliberate aggregate JSON export contains counts,
+  denominators, time bounds, source state, omissions, and limitations only; it
+  excludes Case and domain identifiers, domains, recipients, notes, references,
+  outcome text, raw evidence, and provider payloads. Current states are not a
+  reconstructed event history, and the report does not calculate delivery,
+  takedown time, service levels, trends, success rates, or causation.
 - **TLS and certificate intelligence**: a requested deep domain scan resolves
   the domain through the public-address guard and opens one direct TLS
   connection to one validated address while retaining the domain as SNI.
@@ -509,6 +533,21 @@ default (see the README), so many lookups return no personal data at all.
   wrapped in passphrase-based authenticated encryption entirely in the
   browser. This protects the downloaded file while locked, not the active
   browser database or an open Console.
+  Cases can retain up to eight exact opaque Brand Profile identifiers that an
+  analyst explicitly selects. WHOISleuth does not trim, case-fold, repair,
+  resolve, remap, or infer those associations from profile names, domains,
+  tags, certificates, or other evidence. Deleting a Brand Profile does not
+  clear the Case field; any unmatched identifier remains visible as
+  unresolved. The Brands page derives a bounded, paginated review inbox locally
+  from existing source-aware analyst review rows for explicitly associated
+  cases. Loading and failed local reads remain explicit and never become an
+  empty state or an unresolved classification. The projection makes no network
+  request or stored write, creates no score or alert, and does not imply
+  ownership, attribution, intent, safety, or maliciousness. Ordinary Case
+  exports, Case report v8 JSON and Markdown, and ordinary or encrypted
+  workspace archives preserve identifiers. Public CLI case packs clear them
+  from both the case collection and embedded reports and disclose the bounded
+  omission count; trusted and internal case packs preserve them.
   Saved Bulk sessions retain only the analyst-provided name, bounded domain
   queue, scan mode, compact settled result fields, per-source completion
   states, and session timestamps needed to load, compare, or resume unstarted
@@ -516,8 +555,16 @@ default (see the README), so many lookups return no personal data at all.
   registrant and abuse contacts, and Certificate Transparency rows. Saving and
   loading make no network request; an explicit resume sends only domains that
   had no settled row through the selected Bulk mode.
-  Saved session schema 3 adds the optional compact comparison envelope.
-  Schema 1 and 2 sessions remain readable without inventing those later fields.
+  Saved session schema 3 added the optional compact comparison envelope.
+  Saved session schema 4 retains bounded Brand Profile context provenance for each row and
+  session: ready or unavailable source state, the active opaque profile
+  identifier and its `updatedAt` revision when selected, and a short
+  limitation. It does not copy Profile names, domain lists, allowlists,
+  baselines, or other Profile contents. Schemas 1 through 3 remain readable,
+  but their profile-derived trust, match, and potentially profile-influenced
+  Risk conclusions are withheld until rescan because the original Profile
+  context cannot be proven. Schema-4 rows restored under a different or
+  unreadable context are withheld in the same way.
   Bulk review state retains up to 24 named filter and sorting presets and up to
   1,900 per-domain review states, with record timestamps, in a 512 KiB store.
   It does not copy Bulk evidence rows or source payloads. Review views and queue
@@ -529,7 +576,10 @@ default (see the README), so many lookups return no personal data at all.
   mutation provenance, registration state, and the active Brand Profile's
   configured mail posture. It makes no additional request and never connects
   to SMTP, sends a message, tests a mailbox or catch-all behaviour, or retains
-  message data. Its optional JSON export is generated locally, includes an
+  message data. A loading or unavailable Profile source remains an explicit
+  inconclusive state rather than becoming “no active profile”, “no official
+  domain”, or a negative trust finding. Mail-review export waits for ready
+  Profile context. Its optional JSON export is generated locally, includes an
   integrity digest and stated limitations, and excludes raw DNS responses,
   contacts, scripts, and provider payloads.
   The Brands page can also review explicitly selected DMARC aggregate XML and
@@ -544,6 +594,14 @@ default (see the README), so many lookups return no personal data at all.
   and an artefact digest. WHOISleuth does not authenticate the report sender,
   contact a reporting provider, perform DNS or SMTP collection, or treat an
   imported outcome as current domain safety or sender intent.
+  Imported certificate events can additionally retain a deterministic event
+  identifier, bounded source-log label, certificate digest, optional issuer and
+  expiry, supplied DNS-name count, and whether every supplied name survived the
+  existing case-import bounds. The Brands page compares that browser-local,
+  source-qualified metadata with reviewed issuer and certificate-name
+  expectations without making another request or retaining certificate bytes.
+  Partial events remain indeterminate; the comparison is not evidence of
+  improper issuance, deployment, ownership, control, compromise, or intent.
   Website profile snapshots are retained only after an analyst explicitly
   saves a completed Deep Lookup. Each bounded record contains the canonical
   domain, observation and save times, collection completeness and truncation,
@@ -603,6 +661,17 @@ default (see the README), so many lookups return no personal data at all.
   Campaigns retain a bounded label, optional description, and normalised case
   domain membership only. They do not copy case evidence, notes, status, or
   disposition, and deriving or editing them makes no network request.
+  After an analyst selects one exact Brand Profile identifier already retained
+  by a campaign Case, Monitor can transiently group at most 50 matching cases
+  into at most 25 cohorts using at most 100 source-qualified rationales from
+  existing retained relationships, bounded similarity, qualified common
+  infrastructure, or pairwise same-registrar creation-publication observations
+  within seven days. Up to 100 assertions are displayed separately and never
+  alter membership, identifiers, ordering, or counts. Unavailable sources stay
+  explicit. The review makes no request or write, creates no stored record, and
+  is not included in ordinary campaign or workspace exports. It is a review aid,
+  not evidence of ownership, attribution, coordination, intent, safety, or
+  maliciousness.
   Cases can additionally retain bounded analyst-selected evidence pins,
   decision rationales, contact routes, reviewed response actions, follow-up
   dates, references, and outcomes. Lookup can derive a bounded local list of
@@ -679,9 +748,14 @@ default (see the README), so many lookups return no personal data at all.
   Watchlists retain a bounded timeline of material scan changes alongside
   their latest results; older timeline events are automatically discarded.
   Structured Certificate Transparency searches retain bounded per-keyword
-  domain baselines and check summaries so Discover can identify domains that
-  are new since the previous complete search. Capped or legacy results never
-  replace a complete baseline. The current response can also contain a
+  domain baselines, check summaries, and a schema-3 ever-seen set of at most
+  1,000 canonical domains. Complete retained searches can distinguish first
+  local observation, continuing observation, and reappearance after absence
+  from the immediately previous complete baseline. Schemas 1 and 2 migrate
+  without inventing complete earlier history. Capped searches do not update
+  the complete baseline or ever-seen set and cannot establish continuity,
+  reappearance, disappearance, absence, current activity, ownership, or
+  control. The current response can also contain a
   separately capped projection of names observed together in individual public
   certificate records. Those certificate groups are not added to the saved CT
   history baseline, and group-cap state remains distinct from domain-result
@@ -738,16 +812,34 @@ default (see the README), so many lookups return no personal data at all.
   assertions, actions, contacts, raw source data, provider payloads, and stored
   Risk scores. The export is not anonymous, is not uploaded, and does not train,
   tune, or change the Risk model.
-  Single-lookup
-  evidence JSON includes the raw RDAP and WHOIS responses, so it may contain
-  registry-published contact data. The separate Lookup Markdown reports are
-  generated from bounded known-field projections in the browser. Domain
+  The offline CLI can separately emit a target-free Risk calibration summary
+  containing only dataset and model versions, aggregate counts, fixed-threshold
+  metrics and confidence intervals, bounded strata, model-comparison counts,
+  and an explicit zero-target privacy declaration. Monitor can parse that
+  summary in the current tab. It rejects the detailed report, makes no request,
+  writes no browser storage, displays no case identifier or domain, and discards
+  the selected file when cleared or when the view closes.
+  A deliberate Lookup claim passport export contains one canonical target and
+  target type, one readiness claim, stable requirement identifiers, exact
+  retained source states and observation times, model versions, and bounded
+  limitations. It is generated without another request or a browser-local
+  write and excludes raw registry responses, contacts, page values, request
+  paths, credentials, and browser-local records. Its checksum detects file changes but does not
+  authenticate an analyst or establish truth, ownership, intent, or safety.
+  Single-lookup evidence JSON can include a bounded privacy-projected registry
+  RDAP publication and bounded WHOIS referral-hop metadata, but excludes full
+  WHOIS response bodies. The portable projection removes request and response
+  headers, cookies, session and credential fields, and URL credentials, queries,
+  and fragments from nested retained values. The RDAP publication may still
+  contain registry-published contact data. The separate
+  Lookup Markdown reports are generated from bounded known-field projections in
+  the browser. Domain
   reports include registry, registrar, WHOIS, Risk, and limitation context; IP
   reports include normalised network registration and bounded reverse-DNS
   context when collected; ASN reports include normalised routing registration
   evidence. All preserve source states and collection time while excluding raw
   RDAP and WHOIS responses, expanded contacts, provider payloads, scripts, and
-  remote assets. A selected current-schema Lookup evidence JSON file can be
+  remote assets. A selected supported Lookup evidence schema 25 or 26 JSON file can be
   replayed locally after schema, nesting, entry-count, and byte-limit checks.
   Replay calculates SHA-256 and can compare it with an explicitly supplied
   trusted checksum. The file and checksum remain in the current browser tab,
@@ -778,8 +870,9 @@ default (see the README), so many lookups return no personal data at all.
   import. From that point on, the file is yours to manage, so store it
   appropriately and delete it once you no longer need it.
 - **Offline CLI verification and diagnostics**: `verify-artifact` reads one
-  local supported archive, packet, or signed review artefact and reports only
-  its contract, integrity state, and bounded size or count metadata by default.
+  local supported archive, packet, saved Lookup, Lookup-evidence export, or
+  signed review artefact and reports only its contract, assurance state, and
+  bounded size or count metadata by default.
   `inspect-archive` first performs the same verification, then reports bounded
   section summaries. Exact search is limited to allowlisted target fields and
   returns a digest by default; values require explicit `--reveal`. It never
@@ -859,6 +952,13 @@ default (see the README), so many lookups return no personal data at all.
   record, and keeps observation time separate from storage time. It does not
   duplicate raw payloads, pin values, relationship values, analyst notes, or
   page content, and does not start collection.
+- **Evidence-debt review**: Monitor can transiently group exact source states
+  already retained in saved Bulk rows and separately pinned case evidence into
+  a bounded source matrix and manual next-evidence queue. Empty compact fields
+  create no debt, and the absence of a retained source record remains distinct
+  from an explicit skipped collection. The projection stores no new record,
+  copies no evidence value or raw payload, and starts no lookup, retry, export,
+  or write.
 - **External intelligence import**: a selected local STIX 2.1 or MISP JSON file
   is decoded, hashed with SHA-256, normalised, previewed, and merged entirely in
   the browser. Only the bounded supported entity claim and provenance metadata

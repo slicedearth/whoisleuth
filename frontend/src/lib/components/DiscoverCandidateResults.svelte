@@ -1,5 +1,6 @@
 <script lang="ts">
   import Pagination from '$lib/components/Pagination.svelte';
+  import type { CtHistoryObservationState } from '$lib/analysis/ct-history.ts';
 
   type CertificateEvidence = {
     certificateCount: number;
@@ -12,7 +13,7 @@
     mutationLabel: string;
     reviewCues: string[];
     selected: boolean;
-    isNew: boolean;
+    ctObservationState: CtHistoryObservationState | null;
     unicodeDomain: string;
     scripts: string[];
     mixedScript: boolean;
@@ -98,6 +99,14 @@
     if (sort === 'mixed') return 'Candidates using mixed writing scripts appear first. Sorting changes presentation only.';
     return 'Sorting changes presentation only.';
   }
+
+  function ctObservationLabel(state: CtHistoryObservationState): string {
+    if (state === 'first_observed') return 'First local observation';
+    if (state === 'reappeared') return 'Reappeared after complete-baseline absence';
+    if (state === 'continuing') return 'Continuing from previous complete search';
+    if (state === 'history_unknown') return 'Earlier local history incomplete';
+    return 'Capped result · continuity unclassified';
+  }
 </script>
 
 <section class="results card">
@@ -131,7 +140,7 @@
         {#if structured}<option value="certificate-newest">Newest certificate observation</option>{/if}
       </select>
     </label>
-    {#if structured && previousCheckedAt}<button class="btn" class:active={newOnly} aria-pressed={newOnly} onclick={toggleNewOnly}>New only · {newCount}</button>{/if}
+    {#if structured && previousCheckedAt}<button class="btn" class:active={newOnly} aria-pressed={newOnly} onclick={toggleNewOnly}>Not in prior complete · {newCount}</button>{/if}
     <button class="btn" onclick={() => selectMatching(true)} disabled={!visibleCount}>Select filtered ({visibleCount})</button>
     <button class="btn" onclick={() => selectMatching(false)} disabled={!selectedVisibleCount}>Clear filtered ({selectedVisibleCount})</button>
     {#if reviewControlsActive}<button class="btn" onclick={resetReviewControls}>Reset view</button>{/if}
@@ -154,7 +163,7 @@
               {#if candidate.unicodeDomain}<span class="candidate-badge">Internationalised</span>{/if}
               {#if candidate.mixedScript}<span class="candidate-badge warning">Mixed writing scripts</span>{/if}
               {#if candidate.referenceDomains.length}<span class="candidate-badge warning">Source or profile visual match</span>{/if}
-              {#if candidate.isNew}<span class="ct-new">New since previous search</span>{/if}
+              {#if candidate.ctObservationState}<span class={`ct-history-state ${candidate.ctObservationState}`}>{ctObservationLabel(candidate.ctObservationState)}</span>{/if}
             </span>
           </label>
           {#if candidate.referenceDomains.length}
@@ -217,7 +226,7 @@
   .candidate-badge.review{background:rgb(var(--accent-rgb) / .06)}
   .candidate-badge.warning{border-color:rgb(var(--amber-rgb) / .45);color:var(--amber)}
   .reference-summary{display:block;margin-top:6px;overflow-wrap:anywhere;color:var(--muted);font-size:var(--text-2xs)}
-  .ct-new{display:inline-block;margin-top:6px;padding:3px 8px;border:1px solid rgb(var(--accent2-rgb) / .45);border-radius:99px;color:var(--accent2);font:600 var(--text-2xs) var(--mono)}
+  .ct-history-state{display:inline-block;padding:3px 8px;border:1px solid var(--border);border-radius:99px;color:var(--muted);font:600 var(--text-2xs) var(--mono)}.ct-history-state.first_observed{border-color:rgb(var(--accent2-rgb) / .45);color:var(--accent2)}.ct-history-state.reappeared{border-color:rgb(var(--amber-rgb) / .5);color:var(--amber)}.ct-history-state.history_unknown,.ct-history-state.unclassified_partial{border-style:dashed;color:var(--amber)}
   .ct-meta{display:flex;flex-wrap:wrap;gap:3px 10px;margin-top:6px}
   .ct-stat{color:var(--muted);font-size:var(--text-2xs)}
   .ct-stat time{color:var(--text)}

@@ -1,8 +1,28 @@
 <script lang="ts">
-  let { access }: { access: Record<string, unknown> } = $props();
+  import { officialRegistryLookupFor } from '$lib/analysis/registry-support.ts';
+
+  let { access, lookupTarget }: { access: Record<string, unknown>; lookupTarget: string } = $props();
 
   const text = (value: unknown) => typeof value === 'string' ? value : '';
-  const suffix = $derived(text(access.suffix).toUpperCase());
+  const normalisedSuffix = $derived((() => {
+    const value = text(access.suffix).trim().toLowerCase().replace(/^\./u, '');
+    return /^[a-z0-9-]{1,63}$/u.test(value) ? value : '';
+  })());
+  const expectedSuffix = $derived((() => {
+    const supplied = text(lookupTarget).trim();
+    if (!supplied || supplied.length > 2048) return '';
+    let hostname = supplied;
+    try {
+      hostname = new URL(/^[a-z][a-z\d+.-]*:\/\//iu.test(supplied) ? supplied : `https://${supplied}`).hostname;
+    } catch {
+      return '';
+    }
+    const labels = hostname.toLowerCase().replace(/\.+$/u, '').split('.');
+    const value = labels.at(-1) ?? '';
+    return /^[a-z0-9-]{1,63}$/u.test(value) ? value : '';
+  })());
+  const accessMatchesTarget = $derived(Boolean(expectedSuffix && expectedSuffix === normalisedSuffix));
+  const suffix = $derived(normalisedSuffix.toUpperCase());
   const whoisAccess = $derived(text(access.whoisAccessProfile));
   const rdapAccess = $derived(text(access.rdapAccessProfile));
   const whoisLabel = $derived(whoisAccess === 'source-ip-authorization-required'
@@ -18,6 +38,9 @@
   const whoisRestricted = $derived(['source-ip-authorization-required', 'registry-policy-restricted'].includes(whoisAccess));
   const hasWhoisPath = $derived(whoisAccess !== 'no-iana-service');
   const hasRdapPath = $derived(rdapAccess !== 'no-iana-service');
+  // Navigation is always derived from the locally reviewed catalogue. The
+  // response field remains evidence context and cannot choose a destination.
+  const officialLookupUrl = $derived(accessMatchesTarget ? officialRegistryLookupFor(expectedSuffix) : null);
   const expectedConstraint = $derived(!whoisRestricted);
   const stateLabel = $derived(whoisRestricted
     ? 'Restricted access'
@@ -41,11 +64,12 @@
           : 'Review the stated collection constraint before interpreting missing registry evidence.');
 </script>
 
+{#if accessMatchesTarget}
 <section class="registry-access card" class:expected={expectedConstraint} aria-labelledby="registry-access-title">
   <header>
     <div>
       <p class="eyebrow">Registry access</p>
-      <h4 id="registry-access-title">.{suffix} collection constraints</h4>
+      <h4 id="registry-access-title">{suffix ? `.${suffix} collection constraints` : 'Registry collection constraints'}</h4>
     </div>
     <span class="badge">{stateLabel}</span>
   </header>
@@ -55,22 +79,33 @@
     <div><dt>RDAP</dt><dd>{rdapLabel}</dd></div>
   </dl>
   <p class="guidance">{sourceGuidance}</p>
+  {#if officialLookupUrl}
+    <div class="manual-lookup">
+      <a class="btn" href={officialLookupUrl} target="_blank" rel="noopener noreferrer">
+        Open official .{suffix} registry lookup
+        <span class="sr-only"> (opens in a new tab)</span>
+      </a>
+      <p>The domain is not added to this link. Enter it on the registry site if you choose to continue.</p>
+    </div>
+  {/if}
   <p class="note">This is access-policy context only. It does not decide registration, availability, safety, or maliciousness.</p>
 </section>
+{/if}
 
 <style>
   .registry-access{padding:var(--card-pad);border-color:color-mix(in srgb,var(--amber) 38%,var(--border));background:color-mix(in srgb,var(--panel) 94%,var(--amber))}
-  .registry-access.expected{border-color:color-mix(in srgb,var(--source-registry) 46%,var(--border));background:color-mix(in srgb,var(--panel) 96%,var(--source-registry))}
+  .registry-access.expected{border-color:color-mix(in srgb,var(--source-registry-stroke) 46%,var(--border));background:color-mix(in srgb,var(--panel) 96%,var(--source-registry-stroke))}
   header{display:flex;align-items:flex-start;justify-content:space-between;gap:14px}
   h4{margin:2px 0 0;font-size:var(--text-sm);overflow-wrap:anywhere}
   p{margin:12px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.55}
   .badge{flex:0 0 auto;border:1px solid color-mix(in srgb,var(--amber) 45%,var(--border));border-radius:999px;padding:4px 8px;color:var(--amber);font:700 var(--text-2xs) var(--mono);letter-spacing:.04em;text-transform:uppercase}
-  .expected .badge{border-color:color-mix(in srgb,var(--source-registry) 55%,var(--border));color:var(--source-registry)}
+  .expected .badge{border-color:color-mix(in srgb,var(--source-registry-stroke) 55%,var(--border));color:var(--source-registry-text)}
   dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:14px 0 0}
   dl div{min-width:0;border:1px solid var(--border);border-radius:var(--radius-sm);padding:9px 10px;background:var(--panel-raised)}
   dt{color:var(--muted);font:700 var(--text-2xs) var(--mono);letter-spacing:.05em;text-transform:uppercase}
   dd{margin:4px 0 0;color:var(--text);font-size:var(--text-xs);line-height:1.4;overflow-wrap:anywhere}
   .guidance{color:var(--text)}
+  .manual-lookup{display:flex;flex-wrap:wrap;align-items:center;gap:9px;margin-top:14px}.manual-lookup p{flex:1 1 260px;margin:0}.manual-lookup .btn{min-height:var(--control-h);text-decoration:none}.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
   .note{color:var(--muted)}
   @media(max-width:520px){header{display:block}.badge{display:inline-block;margin-top:9px}dl{grid-template-columns:1fr}}
 </style>

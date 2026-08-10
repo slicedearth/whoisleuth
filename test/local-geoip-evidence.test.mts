@@ -45,6 +45,6 @@ describe('local GeoIP evidence', () => {
       records: [{ network: '192.0.2.0/', countryCode: 'AQ', city: 'Fixture city' }],
     });
     assert.equal(database.rejectedCount, 1);
-    assert.equal(lookupLocalGeoIp(database, '198.51.100.1').state, 'not_found');
+    assert.equal(lookupLocalGeoIp(database, '198.51.100.1').state, 'partial');
   });
 });

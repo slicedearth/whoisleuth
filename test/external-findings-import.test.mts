@@ -48,7 +48,7 @@ describe('strict external findings import', () => {
   });
 
   test('rejects future schemas, additional fields, controls, and unsupported categories', () => {
-    assert.throws(() => parseExternalFindingsDocument(document({ schemaVersion: 4 })), /schema version 1, 2, or 3/u);
+    assert.throws(() => parseExternalFindingsDocument(document({ schemaVersion: 5 })), /schema version 1, 2, 3, or 4/u);
     assert.throws(() => parseExternalFindingsDocument({ ...document(), executable: 'no' }), /additional top-level/u);
     assert.throws(() => parseExternalFindingsDocument(document({
       findings: [{ ...document().findings[0], summary: 'bad\u0000value' }],
@@ -56,6 +56,39 @@ describe('strict external findings import', () => {
     assert.throws(() => parseExternalFindingsDocument(document({
       findings: [{ ...document().findings[0], category: 'ownership' }],
     })), /category is unsupported/u);
+  });
+
+  test('requires complete, matching event metadata only on certificate observations', () => {
+    const structuredObservation = {
+      sourceSchema: 'whoisleuth.certificate-observation-rows',
+      sourceVersion: 1,
+      field: 'certificateSha256',
+      value: 'a'.repeat(64),
+      issuer: 'Fixture issuer',
+      notAfter: '2026-12-01T00:00:00.000Z',
+      eventId: 'b'.repeat(64),
+      logId: 'fixture-log',
+      certificateSha256: 'a'.repeat(64),
+      dnsNameCount: 2,
+      namesComplete: true,
+    };
+    const certificate = {
+      ...document().findings[0],
+      category: 'certificate',
+      structuredObservation,
+    };
+    const parsed = parseExternalFindingsDocument(document({ findings: [certificate] }));
+    assert.equal(parsed.findings[0]?.structuredObservation?.eventId, 'b'.repeat(64));
+    assert.throws(() => parseExternalFindingsDocument(document({
+      schemaVersion: 3,
+      findings: [certificate],
+    })), /requires external-findings schema version 4/u);
+    assert.throws(() => parseExternalFindingsDocument(document({
+      findings: [{ ...certificate, structuredObservation: { ...structuredObservation, certificateSha256: 'c'.repeat(64) } }],
+    })), /digest must match/u);
+    assert.throws(() => parseExternalFindingsDocument(document({
+      findings: [{ ...certificate, structuredObservation: { ...structuredObservation, executable: true } }],
+    })), /additional fields/u);
   });
 
   test('rejects a single-domain import beyond the evidence-pin budget boundary', () => {

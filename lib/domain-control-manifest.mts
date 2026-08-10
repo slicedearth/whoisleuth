@@ -1,62 +1,44 @@
 import { createHash } from 'node:crypto';
 import { domainToASCII } from 'node:url';
 
-import { canonicalArtifactJson } from '../frontend/src/lib/analysis/artifact-integrity.ts';
+import {
+  canonicalArtifactJsonV2,
+  SORTED_JSON_V2,
+} from '../frontend/src/lib/analysis/artifact-integrity.ts';
+import {
+  buildUnsignedDomainControlPassport,
+  DOMAIN_CONTROL_PASSPORT_INPUT_SCHEMA,
+  DOMAIN_CONTROL_MANIFEST_VERSION,
+  DOMAIN_CONTROL_PASSPORT_SCHEMA,
+  MAX_DOMAIN_CONTROL_PASSPORT_ENTRIES,
+  normalizeDomainControlPassportDocument,
+  type DomainControlPassport,
+  type DomainControlPassportEntry,
+} from '../frontend/src/lib/analysis/domain-control-manifest-core.ts';
+import { canonicalDomainControlRecordList } from '../frontend/src/lib/analysis/domain-control-records.ts';
 import { exactKeys } from './bounded-contract-normalizers.mts';
 
-export const DOMAIN_CONTROL_MANIFEST_INPUT_SCHEMA = 'whoisleuth.domain-control-manifest-input';
-export const DOMAIN_CONTROL_MANIFEST_SCHEMA = 'whoisleuth.domain-control-manifest';
-export const DOMAIN_CONTROL_MANIFEST_VERSION = 1;
+export const DOMAIN_CONTROL_MANIFEST_INPUT_SCHEMA = DOMAIN_CONTROL_PASSPORT_INPUT_SCHEMA;
+export const DOMAIN_CONTROL_MANIFEST_SCHEMA = DOMAIN_CONTROL_PASSPORT_SCHEMA;
+export { DOMAIN_CONTROL_MANIFEST_VERSION };
 export const DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA = 'whoisleuth.domain-control-review-input';
 export const DOMAIN_CONTROL_REVIEW_SCHEMA = 'whoisleuth.domain-control-review';
 export const DOMAIN_CONTROL_REVIEW_VERSION = 1;
-export const MAX_DOMAIN_CONTROL_ENTRIES = 100;
+export const MAX_DOMAIN_CONTROL_ENTRIES = MAX_DOMAIN_CONTROL_PASSPORT_ENTRIES;
 export const MAX_DOMAIN_CONTROL_RECORDS = 32;
 
-const MANIFEST_KEYS = new Set(['schema', 'version', 'generatedAt', 'expiresAt', 'entries', 'limitations', 'integrity']);
-const MANIFEST_ENTRY_KEYS = new Set(['domain', 'nameservers', 'ds', 'mx', 'caa', 'tlsIssuer', 'tlsSpkiSha256', 'registrarLock', 'renewalReviewAt', 'note']);
-const MANIFEST_INTEGRITY_KEYS = new Set(['algorithm', 'canonicalization', 'digestSha256']);
-const MANIFEST_INPUT_KEYS = new Set(['schema', 'version', 'expiresAt', 'entries']);
 const REVIEW_INPUT_KEYS = new Set(['schema', 'version', 'manifest', 'observations']);
 const OBSERVATION_KEYS = new Set(['domain', 'fields']);
 const OBSERVATION_FIELDS = new Set(['nameservers', 'ds', 'mx', 'caa', 'tlsIssuer', 'tlsSpkiSha256', 'registrarLock']);
 const OBSERVATION_FIELD_KEYS = new Set(['state', 'values', 'source', 'observedAt']);
-const DOMAIN_CONTROL_LIMITATIONS = Object.freeze([
-  'This analyst-authored manifest records intended domain-control state. It does not collect evidence or change registrar, DNS, mail, or certificate configuration.',
-  'Empty desired fields are unconfigured rather than claims that a record should be absent.',
-]);
-
 type UnknownRecord = Record<string, unknown>;
 type DomainControlField = 'nameservers' | 'ds' | 'mx' | 'caa' | 'tlsIssuer' | 'tlsSpkiSha256' | 'registrarLock';
 type ObservationState = 'observed' | 'partial' | 'unavailable' | 'unsupported';
 type ComparisonState = 'aligned' | 'drift' | 'partial' | 'unavailable' | 'unsupported' | 'not_configured';
 
-export type DomainControlEntry = Readonly<{
-  domain: string;
-  nameservers: readonly string[];
-  ds: readonly string[];
-  mx: readonly string[];
-  caa: readonly string[];
-  tlsIssuer: string | null;
-  tlsSpkiSha256: string | null;
-  registrarLock: 'required' | 'not_required' | null;
-  renewalReviewAt: string | null;
-  note: string | null;
-}>;
-
-export type DomainControlManifest = Readonly<{
-  schema: typeof DOMAIN_CONTROL_MANIFEST_SCHEMA;
-  version: typeof DOMAIN_CONTROL_MANIFEST_VERSION;
-  generatedAt: string;
-  expiresAt: string;
-  entries: readonly DomainControlEntry[];
-  limitations: readonly string[];
-  integrity: Readonly<{
-    algorithm: 'SHA-256';
-    canonicalization: 'sorted-json-v1';
-    digestSha256: string;
-  }>;
-}>;
+export type DomainControlEntry = DomainControlPassportEntry;
+export type DomainControlManifest = DomainControlPassport;
+type CurrentDomainControlManifest = DomainControlManifest & Readonly<{ version: typeof DOMAIN_CONTROL_MANIFEST_VERSION }>;
 
 type NormalizedObservationField = Readonly<{
   state: ObservationState;
@@ -129,138 +111,32 @@ function spkiFingerprint(value: unknown): string | null {
   return text && /^[a-f0-9]{64}$/u.test(text) ? text : null;
 }
 
-function normalizeEntry(value: unknown): DomainControlEntry | null {
-  const source = record(value);
-  const normalizedDomain = domain(source?.domain);
-  if (!source || !normalizedDomain) return null;
-  const registrarLock = source.registrarLock === 'required' || source.registrarLock === 'not_required'
-    ? source.registrarLock
-    : null;
-  return Object.freeze({
-    domain: normalizedDomain,
-    nameservers: Object.freeze(hostnameList(source.nameservers)),
-    ds: Object.freeze(textList(source.ds, 500)),
-    mx: Object.freeze(hostnameList(source.mx)),
-    caa: Object.freeze(textList(source.caa, 500)),
-    tlsIssuer: boundedText(source.tlsIssuer, 300)?.toLowerCase() ?? null,
-    tlsSpkiSha256: spkiFingerprint(source.tlsSpkiSha256),
-    registrarLock,
-    renewalReviewAt: timestamp(source.renewalReviewAt),
-    note: boundedText(source.note, 500),
-  });
-}
-
-function unsignedManifest(value: Omit<DomainControlManifest, 'integrity'>): UnknownRecord {
-  return value as unknown as UnknownRecord;
-}
-
-function integrityDigest(value: UnknownRecord): string {
-  return `sha256:${createHash('sha256').update(canonicalArtifactJson(value)).digest('hex')}`;
-}
-
 export function buildDomainControlManifest(
   input: unknown,
   generatedAtValue = new Date().toISOString(),
-): DomainControlManifest {
-  const source = record(input);
-  if (!source || source.schema !== DOMAIN_CONTROL_MANIFEST_INPUT_SCHEMA || source.version !== 1) {
-    throw new TypeError(`Domain control manifest input must use ${DOMAIN_CONTROL_MANIFEST_INPUT_SCHEMA} version 1.`);
-  }
-  exactKeys(source, MANIFEST_INPUT_KEYS, 'Domain control manifest input');
-  const generatedAt = timestamp(generatedAtValue);
-  const expiresAt = timestamp(source.expiresAt);
-  if (!generatedAt || !expiresAt || Date.parse(expiresAt) <= Date.parse(generatedAt)) {
-    throw new TypeError('Domain control manifest expiry must be a valid time after generation.');
-  }
-  if (!Array.isArray(source.entries) || source.entries.length < 1 || source.entries.length > MAX_DOMAIN_CONTROL_ENTRIES) {
-    throw new TypeError(`Domain control manifest input must contain between 1 and ${MAX_DOMAIN_CONTROL_ENTRIES} entries.`);
-  }
-  const entries = source.entries.map((entry, index) => {
-    exactKeys(entry, MANIFEST_ENTRY_KEYS, `Domain control manifest input entry ${index + 1}`);
-    return normalizeEntry(entry);
-  });
-  if (entries.some((entry) => entry === null)) throw new TypeError('Domain control manifest contains an invalid entry.');
-  const normalizedEntries = entries as DomainControlEntry[];
-  const domains = new Set(normalizedEntries.map((entry) => entry.domain));
-  if (domains.size !== normalizedEntries.length) throw new TypeError('Domain control manifest entries must use unique domains.');
-  const base = Object.freeze({
-    schema: DOMAIN_CONTROL_MANIFEST_SCHEMA,
-    version: DOMAIN_CONTROL_MANIFEST_VERSION,
-    generatedAt,
-    expiresAt,
-    entries: Object.freeze([...normalizedEntries].sort((left, right) => left.domain.localeCompare(right.domain))),
-    limitations: DOMAIN_CONTROL_LIMITATIONS,
-  });
+): CurrentDomainControlManifest {
+  const unsigned = buildUnsignedDomainControlPassport(input, generatedAtValue);
   return Object.freeze({
-    ...base,
+    ...unsigned,
     integrity: Object.freeze({
       algorithm: 'SHA-256',
-      canonicalization: 'sorted-json-v1',
-      digestSha256: integrityDigest(unsignedManifest(base)),
+      canonicalization: SORTED_JSON_V2,
+      digestSha256: `sha256:${createHash('sha256').update(canonicalArtifactJsonV2(unsigned)).digest('hex')}`,
     }),
-  });
+  }) as CurrentDomainControlManifest;
 }
 
 export function verifyDomainControlManifest(value: unknown): DomainControlManifest {
-  const source = record(value);
-  const integrity = record(source?.integrity);
-  if (!source
-    || source.schema !== DOMAIN_CONTROL_MANIFEST_SCHEMA
-    || source.version !== DOMAIN_CONTROL_MANIFEST_VERSION
-    || !Array.isArray(source.entries)
-    || source.entries.length < 1
-    || source.entries.length > MAX_DOMAIN_CONTROL_ENTRIES
-    || !Array.isArray(source.limitations)
-    || source.limitations.length !== DOMAIN_CONTROL_LIMITATIONS.length
-    || source.limitations.some((limitation, index) => limitation !== DOMAIN_CONTROL_LIMITATIONS[index])
-    || !integrity
-    || integrity.algorithm !== 'SHA-256'
-    || integrity.canonicalization !== 'sorted-json-v1'
-    || typeof integrity.digestSha256 !== 'string'
-    || !/^sha256:[a-f0-9]{64}$/u.test(integrity.digestSha256)) {
-    throw new TypeError('Domain control manifest has an unsupported or malformed structure.');
-  }
-  exactKeys(source, MANIFEST_KEYS, 'Domain control manifest');
-  exactKeys(integrity, MANIFEST_INTEGRITY_KEYS, 'Domain control manifest integrity');
-  for (const [index, entry] of source.entries.entries()) {
-    exactKeys(entry, MANIFEST_ENTRY_KEYS, `Domain control manifest entry ${index + 1}`);
-  }
-  const generatedAt = timestamp(source.generatedAt);
-  const expiresAt = timestamp(source.expiresAt);
-  const entries = source.entries.map(normalizeEntry);
-  if (!generatedAt || !expiresAt || Date.parse(expiresAt) <= Date.parse(generatedAt) || entries.some((entry) => entry === null)) {
-    throw new TypeError('Domain control manifest has invalid normalised content.');
-  }
-  const normalizedEntries = entries as DomainControlEntry[];
-  if (new Set(normalizedEntries.map((entry) => entry.domain)).size !== normalizedEntries.length) {
-    throw new TypeError('Domain control manifest entries must use unique domains.');
-  }
-  const { integrity: _integrity, ...unsigned } = source;
-  const canonical = Object.freeze({
-    schema: DOMAIN_CONTROL_MANIFEST_SCHEMA,
-    version: DOMAIN_CONTROL_MANIFEST_VERSION,
-    generatedAt,
-    expiresAt,
-    entries: Object.freeze([...normalizedEntries].sort((left, right) => left.domain.localeCompare(right.domain))),
-    limitations: DOMAIN_CONTROL_LIMITATIONS,
-  });
-  let suppliedCanonical: string;
-  try {
-    suppliedCanonical = canonicalArtifactJson(unsigned);
-  } catch {
-    throw new TypeError('Domain control manifest has invalid normalised content.');
-  }
-  if (suppliedCanonical !== canonicalArtifactJson(canonical)) {
-    throw new TypeError('Domain control manifest must use its canonical normalised content.');
-  }
-  if (`sha256:${createHash('sha256').update(suppliedCanonical).digest('hex')}` !== integrity.digestSha256) {
+  const normalized = normalizeDomainControlPassportDocument(value);
+  if (`sha256:${createHash('sha256').update(normalized.canonicalUnsigned).digest('hex')}` !== normalized.manifest.integrity.digestSha256) {
     throw new TypeError('Domain control manifest failed its SHA-256 integrity check.');
   }
-  return source as unknown as DomainControlManifest;
+  return normalized.manifest;
 }
 
 function fieldValues(field: DomainControlField, value: unknown): string[] {
-  if (field === 'nameservers' || field === 'mx') return hostnameList(value);
+  if (field === 'nameservers') return hostnameList(value);
+  if (field === 'mx' || field === 'caa' || field === 'ds') return canonicalDomainControlRecordList(Array.isArray(value) ? value : [value], field);
   if (field === 'tlsSpkiSha256') {
     const normalized = Array.isArray(value) ? value.map(spkiFingerprint).filter(Boolean) : [spkiFingerprint(value)].filter(Boolean);
     return [...new Set(normalized as string[])].sort().slice(0, MAX_DOMAIN_CONTROL_RECORDS);

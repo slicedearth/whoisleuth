@@ -10,12 +10,14 @@ import {
   REGISTRY_SUPPORT_SORT_KEYS,
   filterRegistrySupportRows,
   inspectRegistrySupport,
+  officialRegistryLookupFor,
   registryAccessLabel,
   registryCoverageLabel,
   registryServiceCoverage,
   registryServiceCoverageLabel,
   registrySupportCatalogue,
   registrySupportLabel,
+  safeOfficialRegistryLookupUrl,
   sortRegistrySupportRows,
 } from '../frontend/src/lib/analysis/registry-support.ts';
 import {
@@ -26,7 +28,7 @@ import {
 test('builds the bounded registry-support catalogue from the shared capability matrix', () => {
   const catalogue = registrySupportCatalogue();
 
-  assert.equal(catalogue.version, 28);
+  assert.equal(catalogue.version, 29);
   assert.equal(catalogue.rows.length, 335);
   assert.equal(catalogue.truncated, false);
   assert.deepEqual(catalogue.summary, {
@@ -143,6 +145,10 @@ test('filters registry profiles by suffix, capability text, and explicit coverag
   assert.deepEqual(filterRegistrySupportRows(rows, 'bracketed', 'all').map((row) => row.suffixes[0]), ['jp']);
   assert.deepEqual(filterRegistrySupportRows(rows, 'structured underscore', 'all').map((row) => row.suffixes[0]), ['nz']);
   assert.deepEqual(
+    filterRegistrySupportRows(rows, 'official manual lookup', 'all').map((row) => row.suffixes[0]),
+    ['ch', 'es', 'gt', 'li', 'vn'],
+  );
+  assert.deepEqual(
     filterRegistrySupportRows(rows, 'tci colon', 'all').map((row) => row.suffixes[0]),
     ['ru', 'su', 'xn--p1ai'],
   );
@@ -226,4 +232,19 @@ test('renders stable human-readable labels for known and unknown catalogue value
   assert.equal(registryServiceCoverageLabel('unexpected'), 'Unknown');
   assert.equal(registrySupportLabel('jprs-domain-english'), 'Jprs Domain English');
   assert.equal(registrySupportLabel('\u0000'), 'Unknown');
+});
+
+test('accepts only bounded credential-free HTTPS registry lookup links', () => {
+  assert.equal(safeOfficialRegistryLookupUrl('https://registry.example.test/lookup'), 'https://registry.example.test/lookup');
+  for (const value of [
+    'http://registry.example.test/lookup',
+    'javascript:alert(1)',
+    'https://user:secret@registry.example.test/lookup',
+    `https://registry.example.test/${'x'.repeat(301)}`,
+    'https://registry.example.test/lookup\nnext',
+    null,
+  ]) assert.equal(safeOfficialRegistryLookupUrl(value), null);
+  assert.equal(officialRegistryLookupFor('example.gt'), 'https://www.gt/sitio/');
+  assert.equal(officialRegistryLookupFor('example.dev'), null);
+  assert.equal(officialRegistryLookupFor('bad\n.invalid'), null);
 });

@@ -23,6 +23,10 @@ import {
   type TechnologyInput,
 } from '../lib/website-technology.mts';
 import { readBoundedRegularFile } from '../lib/bounded-file.mts';
+import {
+  exactObjectKeys as assertExactKeys,
+  optionalJsonRecord as record,
+} from './maintainer-tool-helpers.mts';
 
 export const MAX_TECHNOLOGY_REVIEW_INPUT_BYTES = 64 * 1024;
 export const MAX_REVIEWED_MARKUP_BYTES = 8 * 1024;
@@ -136,12 +140,6 @@ const PASSIVE_HEADER_RECONSTRUCTIONS: Readonly<Record<string, Readonly<Record<st
   'x-vercel-id': Object.freeze({ vercel: 'fixture' }),
 });
 
-function record(value: unknown): UnknownRecord | null {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? value as UnknownRecord
-    : null;
-}
-
 function text(value: unknown, label: string, maximum: number): string {
   if (typeof value !== 'string' || value.length > maximum || CONTROL_RE.test(value)) {
     throw new TypeError(`${label} must be control-free text no longer than ${maximum} characters.`);
@@ -156,11 +154,6 @@ function timestamp(value: unknown, label: string): string {
   const parsed = Date.parse(candidate);
   if (!Number.isFinite(parsed)) throw new TypeError(`${label} must be a valid timestamp.`);
   return new Date(parsed).toISOString();
-}
-
-function assertExactKeys(value: UnknownRecord, allowed: ReadonlySet<string>, label: string): void {
-  const unknown = Object.keys(value).filter((key) => !allowed.has(key));
-  if (unknown.length) throw new TypeError(`${label} contains unsupported fields: ${unknown.sort().join(', ')}.`);
 }
 
 function normalizeHeader(

@@ -18,6 +18,38 @@ async function clearThemePreference(page: import('@playwright/test').Page) {
   }, STORAGE_KEY);
 }
 
+async function sourceTokenContrast(page: import('@playwright/test').Page, family: 'registry' | 'network' | 'technology') {
+  return page.evaluate((sourceFamily) => {
+    const parseColour = (value: string): [number, number, number] => {
+      const channels = value.match(/[\d.]+/gu)?.slice(0, 3).map(Number);
+      if (!channels || channels.length !== 3) throw new Error(`Could not parse computed colour ${value}.`);
+      return channels as [number, number, number];
+    };
+    const luminance = (colour: string) => {
+      const channels = parseColour(colour).map((channel) => {
+        const normalised = channel / 255;
+        return normalised <= 0.04045 ? normalised / 12.92 : ((normalised + 0.055) / 1.055) ** 2.4;
+      });
+      return 0.2126 * (channels[0] ?? 0) + 0.7152 * (channels[1] ?? 0) + 0.0722 * (channels[2] ?? 0);
+    };
+    const ratio = (foreground: string, background: string) => {
+      const values = [luminance(foreground), luminance(background)].sort((left, right) => right - left);
+      return ((values[0] ?? 0) + 0.05) / ((values[1] ?? 0) + 0.05);
+    };
+    const sample = document.createElement('span');
+    document.body.append(sample);
+    const resolveColour = (token: string) => {
+      sample.style.color = `var(${token})`;
+      return getComputedStyle(sample).color;
+    };
+    const panel = resolveColour('--panel');
+    const text = resolveColour(`--source-${sourceFamily}-text`);
+    const stroke = resolveColour(`--source-${sourceFamily}-stroke`);
+    sample.remove();
+    return { text, stroke, textRatio: ratio(text, panel), strokeRatio: ratio(stroke, panel) };
+  }, family);
+}
+
 test('the default system preference follows the operating-system colour scheme', async ({ page }) => {
   await clearThemePreference(page);
   await page.emulateMedia({ colorScheme: 'light' });
@@ -29,9 +61,11 @@ test('the default system preference follows the operating-system colour scheme',
   await expect(trigger).toHaveAttribute('title', 'System theme');
   await expect(trigger.locator('.theme-trigger-label')).toHaveText('Theme');
   await expect(trigger.locator('[data-theme-symbol="system"]')).toBeVisible();
-  await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#d4dde7');
-  await expect(page.locator('.hero-preview .lookup-panel')).toHaveCSS('background-color', 'rgb(243, 246, 249)');
+  await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#f6f9ff');
+  await expect(page.locator('.hero-preview .lookup-panel')).toHaveCSS('background-color', 'rgb(255, 255, 255)');
   await expect(page.locator('.hero-preview .preview-note')).toHaveCSS('color', 'rgb(51, 75, 100)');
+  await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(246, 249, 255)');
+  await expect(page.locator('.hero-preview .lookup-panel')).toHaveCSS('border-color', 'rgb(123, 146, 170)');
 
   await page.emulateMedia({ colorScheme: 'dark' });
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
@@ -52,8 +86,8 @@ test('light preference applies before reload and persists across public pages', 
 
   await chooseTheme(page, 'Light');
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
-  await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#d4dde7');
-  await expect(page.locator('.hero-preview .lookup-panel')).toHaveCSS('background-color', 'rgb(243, 246, 249)');
+  await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#f6f9ff');
+  await expect(page.locator('.hero-preview .lookup-panel')).toHaveCSS('background-color', 'rgb(255, 255, 255)');
   await expect.poll(() => page.evaluate((key) => localStorage.getItem(key), STORAGE_KEY)).toBe('light');
 
   await page.goto('/demo');
@@ -61,6 +95,21 @@ test('light preference applies before reload and persists across public pages', 
   const trigger = page.getByRole('button', { name: 'Colour theme, Light selected' });
   await expect(trigger.locator('[data-theme-symbol="light"]')).toBeVisible();
   await expect(trigger).not.toContainText('Light');
+});
+
+test('source text and graph stroke tokens stay distinct and contrast-safe in both themes', async ({ page }) => {
+  await clearThemePreference(page);
+  await page.goto('/');
+
+  for (const theme of ['Dark', 'Light'] as const) {
+    await chooseTheme(page, theme);
+    for (const family of ['registry', 'network', 'technology'] as const) {
+      const contrast = await sourceTokenContrast(page, family);
+      expect(contrast.text).not.toBe(contrast.stroke);
+      expect(contrast.textRatio).toBeGreaterThanOrEqual(4.5);
+      expect(contrast.strokeRatio).toBeGreaterThanOrEqual(3);
+    }
+  }
 });
 
 test('system preference follows operating-system colour-scheme changes', async ({ page }) => {
@@ -125,14 +174,16 @@ test('theme controls fit beside authenticated public navigation across common ph
     const publicNavigation = page.getByRole('navigation', { name: 'Public navigation' });
     const publicBrand = page.locator('.public-brand');
     const demoLink = publicNavigation.locator('a[href="/demo"]');
+    const resourcesLink = publicNavigation.getByRole('link', { name: 'Resources', exact: true });
     const theme = publicNavigation.locator('.theme-selector');
     const trigger = publicNavigation.getByRole('button', { name: /^Colour theme,/ });
     const consoleLink = publicNavigation.getByRole('link', { name: 'Open console' });
     const signOut = publicNavigation.getByRole('button', { name: 'Sign out' });
-    const [brandBox, navigationBox, demoBox, themeBox, triggerBox, consoleBox, signOutBox] = await Promise.all([
+    const [brandBox, navigationBox, demoBox, resourcesBox, themeBox, triggerBox, consoleBox, signOutBox] = await Promise.all([
       publicBrand.boundingBox(),
       publicNavigation.boundingBox(),
       demoLink.boundingBox(),
+      resourcesLink.boundingBox(),
       theme.boundingBox(),
       trigger.boundingBox(),
       consoleLink.boundingBox(),
@@ -141,17 +192,18 @@ test('theme controls fit beside authenticated public navigation across common ph
 
     expect(brandBox).not.toBeNull();
     expect(navigationBox).not.toBeNull();
-    if (width > 330) expect(demoBox).not.toBeNull();
-    else expect(demoBox).toBeNull();
+    expect(demoBox).toBeNull();
+    expect(resourcesBox).not.toBeNull();
     expect(themeBox).not.toBeNull();
     expect(triggerBox).not.toBeNull();
     expect(consoleBox).not.toBeNull();
     expect(signOutBox).not.toBeNull();
     expect(navigationBox!.x - (brandBox!.x + brandBox!.width)).toBeGreaterThanOrEqual(2);
     if (demoBox) expect(demoBox.x - (brandBox!.x + brandBox!.width)).toBeGreaterThanOrEqual(2);
-    expect(consoleBox!.x - (triggerBox!.x + triggerBox!.width)).toBeGreaterThanOrEqual(5);
-    expect(consoleBox!.x - (themeBox!.x + themeBox!.width)).toBeGreaterThanOrEqual(5);
-    expect(signOutBox!.x - (consoleBox!.x + consoleBox!.width)).toBeGreaterThanOrEqual(5);
+    expect(consoleBox!.x - (resourcesBox!.x + resourcesBox!.width)).toBeGreaterThanOrEqual(5);
+    expect(themeBox!.x - (consoleBox!.x + consoleBox!.width)).toBeGreaterThanOrEqual(5);
+    expect(triggerBox!.x).toBeGreaterThanOrEqual(themeBox!.x);
+    expect(signOutBox!.x - (themeBox!.x + themeBox!.width)).toBeGreaterThanOrEqual(5);
     expect(signOutBox!.x + signOutBox!.width).toBeLessThanOrEqual(width);
     const [themeFontSize, consoleFontSize, signOutFontSize] = await Promise.all([
       trigger.evaluate((element) => getComputedStyle(element).fontSize),

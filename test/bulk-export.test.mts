@@ -1,7 +1,9 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  BULK_SCORE_CSV_HEADERS,
   CT_HOSTNAME_CSV_DELIMITER,
+  bulkScoreCsvFields,
   ctCsvFields,
 } from '../frontend/src/lib/analysis/bulk-export.ts';
 import { rowsToCsv, toCsvValue } from '../frontend/src/lib/analysis/utils.ts';
@@ -48,5 +50,31 @@ describe('ctCsvFields', () => {
     assert.ok(line.includes(`'=cmd.example.com${CT_HOSTNAME_CSV_DELIMITER}safe.example.com`));
     assert.ok(!line.includes('\n=cmd') && !line.startsWith('=cmd'));
     assert.equal(toCsvValue('=danger'), "'=danger");
+  });
+});
+
+describe('bulkScoreCsvFields', () => {
+  test('keeps successful Risk and retained Opportunity values aligned with their model versions', () => {
+    const fields = bulkScoreCsvFields({
+      risk: 70,
+      opportunity: 20,
+      saved: {
+        riskModelVersion: 5,
+        opportunityModelVersion: 2,
+        riskFactors: [{ label: 'Credential input observed', points: 15 }],
+      },
+    });
+    assert.deepEqual(BULK_SCORE_CSV_HEADERS, [
+      'risk', 'risk_model_version', 'risk_factors', 'opportunity', 'opportunity_model_version',
+    ]);
+    assert.deepEqual(fields, [70, 5, 'Credential input observed +15', 20, 2]);
+    assert.equal(
+      rowsToCsv([BULK_SCORE_CSV_HEADERS, fields]),
+      'risk,risk_model_version,risk_factors,opportunity,opportunity_model_version\n70,5,Credential input observed +15,20,2',
+    );
+  });
+
+  test('leaves unavailable score and model cells empty without inventing zeroes', () => {
+    assert.deepEqual(bulkScoreCsvFields({ risk: null, opportunity: null, saved: {} }), ['', '', '', '', '']);
   });
 });

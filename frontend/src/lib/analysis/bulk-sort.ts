@@ -10,6 +10,11 @@ export type BulkSortKey =
 
 export type BulkSortDirection = 1 | -1;
 
+/** Opportunity remains a retained data/export field, but is no longer a Bulk presentation sort. */
+export function normalizeBulkPresentationSortKey(key: BulkSortKey): BulkSortKey {
+  return key === 'opportunity' ? 'risk' : key;
+}
+
 type BulkSortableResult = {
   domain: string;
   availability: string;

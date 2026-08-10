@@ -12,6 +12,10 @@ import {
   type RegistryStandardsCoverageSnapshot,
 } from '../lib/registry-capabilities.mts';
 import { readTextCapped, safeFetchDetailed } from '../lib/safe-fetch.mts';
+import {
+  boundedPositiveTimeout as boundedTimeout,
+  sanitizedMaintainerText as boundedText,
+} from './maintainer-tool-helpers.mts';
 
 type AuditStatus = 'current' | 'drift' | 'inconclusive';
 type SourceId = 'root_zone' | 'rdap_bootstrap';
@@ -79,18 +83,6 @@ const SOURCE_DEFINITIONS = Object.freeze([
   Object.freeze({ id: 'root_zone' as const, url: ROOT_ZONE_URL, maxBytes: MAX_ROOT_ZONE_BYTES }),
   Object.freeze({ id: 'rdap_bootstrap' as const, url: RDAP_BOOTSTRAP_URL, maxBytes: MAX_RDAP_BOOTSTRAP_BYTES }),
 ]);
-
-function boundedText(value: unknown, fallback: string, maximum = MAX_AUDIT_DETAIL_LENGTH): string {
-  const text = typeof value === 'string'
-    ? value.replace(/[\u0000-\u001f\u007f]+/gu, ' ').replace(/\s+/gu, ' ').trim()
-    : '';
-  return (text || fallback).slice(0, maximum);
-}
-
-function boundedTimeout(value: unknown, fallback: number, maximum: number): number {
-  const parsed = Number(value);
-  return Number.isInteger(parsed) && parsed > 0 ? Math.min(parsed, maximum) : fallback;
-}
 
 function canonicalTimestamp(value: unknown, label: string): string {
   if (typeof value !== 'string' || !value || value.length > 64 || /[\u0000-\u001f\u007f]/u.test(value)) {
@@ -269,14 +261,14 @@ async function collectSource<T>(
     } catch (error) {
       return Object.freeze({
         id: definition.id, url: definition.url, status: response.status, bytesRead: captured.bytesRead,
-        error: boundedText(error instanceof Error ? error.message : error, 'The official source was malformed.'),
+        error: boundedText(error instanceof Error ? error.message : error, 'The official source was malformed.', MAX_AUDIT_DETAIL_LENGTH),
         value: null,
       });
     }
   } catch (error) {
     return Object.freeze({
       id: definition.id, url: definition.url, status: null, bytesRead: 0,
-      error: boundedText(error instanceof Error ? error.message : error, 'The official-source request failed.'),
+      error: boundedText(error instanceof Error ? error.message : error, 'The official-source request failed.', MAX_AUDIT_DETAIL_LENGTH),
       value: null,
     });
   } finally {
@@ -609,7 +601,7 @@ async function main(
     if (report.summary.inconclusive > 0) return 2;
     return report.summary.drift > 0 ? 1 : 0;
   } catch (error) {
-    (options.stderr || process.stderr).write(`${boundedText(error instanceof Error ? error.message : error, 'Registry drift audit failed.')}\n`);
+    (options.stderr || process.stderr).write(`${boundedText(error instanceof Error ? error.message : error, 'Registry drift audit failed.', MAX_AUDIT_DETAIL_LENGTH)}\n`);
     return 2;
   }
 }

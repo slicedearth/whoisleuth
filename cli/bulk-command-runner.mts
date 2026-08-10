@@ -1,5 +1,3 @@
-import { createReadStream } from 'node:fs';
-
 import { classifyQuery } from '../lib/classify.mts';
 import { runUnifiedLookup } from '../lib/lookup.mts';
 import type { CliArguments } from './arguments.mts';
@@ -7,7 +5,6 @@ import { createBulkCheckpointWriter } from './bulk-checkpoint.mts';
 import {
   MAX_BULK_INPUT_BYTES,
   parseBulkQueries,
-  readTextStreamBounded,
   runBulkLookups,
   type BulkLookupResult,
 } from './bulk.mts';
@@ -41,9 +38,7 @@ async function runBulkCommand(
   try {
     input = dependencies.readBulkInput
       ? await dependencies.readBulkInput(args.source)
-      : await readTextStreamBounded(args.source
-        ? createReadStream(args.source, { highWaterMark: 64 * 1024 })
-        : dependencies.stdin || process.stdin, MAX_BULK_INPUT_BYTES, dependencies.signal);
+      : await context.readInput(args.source, MAX_BULK_INPUT_BYTES, 'Bulk input');
   } catch (error) {
     if (error instanceof CliUsageError) throw error;
     throw new CliUsageError(`Could not read bulk input: ${boundedCliErrorMessage(error, 'Input could not be read')}`);

@@ -72,9 +72,10 @@ node bin/whoisleuth.mts registry-doctor lookup.json --json
 node bin/whoisleuth.mts registry-cohort saved-lookups.jsonl --json
 node bin/whoisleuth.mts registry-scaffold --profile example-profile --suffix test --scenario registered
 node bin/whoisleuth.mts risk-calibrate calibration.json --json
+node bin/whoisleuth.mts risk-calibrate calibration.json --summary-json
 node bin/whoisleuth.mts lookalike-calibrate reviewed-candidates.json --json
 node bin/whoisleuth.mts verify-artifact workspace.json --json
-node bin/whoisleuth.mts verify-artifact lookup.json --json
+node bin/whoisleuth.mts verify-artifact lookup.json --json --strict-exit
 node bin/whoisleuth.mts verify-artifact workspace-encrypted.json --passphrase-file passphrase.txt --json
 node bin/whoisleuth.mts source-report lookup.json --json
 node bin/whoisleuth.mts inspect-archive workspace.json --json
@@ -213,6 +214,12 @@ rate-limit the local machine's network address. Offline `discover`, `compare`,
 `commands`, `completion`, and `manual` operations make no network requests. Commands write
 to stdout unless the analyst deliberately selects a local output file.
 
+Path operands are opened through one bounded regular-file boundary. Named
+pipes, devices and directories are refused without waiting for a writer;
+symbolic links to regular analyst-selected files remain supported. Standard
+input is the only intentional streaming input and observes the same command
+byte limit and cancellation signal.
+
 ## Output
 
 Human-readable terminal output is the default. On an interactive terminal it
@@ -252,7 +259,10 @@ normal output is emitted.
 `lookup --markdown` and `lookup --html` build the existing normalised evidence
 report directly after one completed domain lookup. They do not start a second
 collection. These report formats reject IP and ASN inputs before collection;
-JSON and terminal output remain available for those query types.
+JSON and terminal output remain available for those query types. Both readable
+formats include a fixed local generator footer by default. `--no-attribution`
+removes that presentation-only footer without changing evidence-source
+attribution, generator metadata in JSON, or collection behaviour.
 
 Lookup terminal output supports three detail levels. The standard view keeps
 the normal bounded evidence summary. `--summary` keeps the source states and
@@ -361,11 +371,16 @@ completed final result, reports the checkpoint limitation, and exits with code
 4. The last successfully published checkpoint remains available, but it may
 not contain the final completed items.
 
-`diff <left.json> <right.json>` compares two different saved domain Lookup
-documents entirely offline. It reuses the bounded Bulk comparison model for
-registration, DNS, page identity, mail, certificate, and relationship fields,
-keeps missing and unavailable evidence distinct, and makes no ownership or
-maliciousness inference. The output records both original observation times.
+`diff <left.json> <right.json>` compares two compatible retained artefacts
+entirely offline. Saved Lookup documents keep their version-1 lookup-diff
+output. Portable Bulk-session exports and domain-portfolio reviews emit a
+`whoisleuth.cli.comparison-ledger` version-1 document with a value-free bounded
+index and at most 256 exact detail rows. Bulk exports containing more than one
+session require `--left-session <id>` or `--right-session <id>` as applicable.
+The command keeps missing, unavailable, equal, added, and different evidence
+separate, treats later portfolio omission as incomplete rather than removal,
+and retains no input path. It makes no ownership, safety, or maliciousness
+inference.
 
 `lookup --observer <label> --vantage <label>` can add two bounded analyst labels
 to a saved Lookup document. The labels identify the person or process that ran
@@ -425,15 +440,18 @@ catalogue for one domain or suffix. It distinguishes an explicit
 fixture-backed or access-documented suffix profile from the generic IANA
 discovery profile and reports the RDAP and WHOIS discovery/access paths,
 WHOIS query and parser profiles, fixture scenarios,
-verification references, documentation references, and the catalogue's
+verification references, documentation references, an optional reviewed
+official browser-lookup URL, and the catalogue's
 limitation. The same document includes a dated, official-source aggregate of
 generic, generic-restricted, sponsored, and infrastructure RDAP coverage. That
 snapshot is separate from the suffix profile and from live reachability.
 
-Terminal output is bounded and control-safe. `--json` emits version 3 of the
+Terminal output is bounded and control-safe. `--json` emits version 4 of the
 `whoisleuth.cli.registry-support` schema. Unknown but syntactically valid
 suffixes retain the generic `discovery_only` profile; malformed input exits
 with code 2. The command never probes a registry or tests current reachability.
+An official lookup URL is emitted only for an individually reviewed HTTPS
+destination. The CLI does not open it or append the investigated domain.
 Coverage is context only and cannot decide registration, availability,
 ownership, safety, or maliciousness.
 
@@ -446,12 +464,15 @@ and event consistency. A missing identifier or metadata field is a publication
 omission, not a failed lookup. The command is offline, makes no retry, and
 cannot establish current registry reachability.
 
-`registry-cohort [lookups.json|lookups.jsonl]` aggregates from 1 to 500 saved
-Lookups into suffix and capability-profile cohorts. It retains only target-free
-counts for source alignment and publication-quality states. A cohort with
-fewer than five samples is labelled insufficient rather than treated as a
-quality result, and repeated observations from one environment are not assumed
-representative.
+`registry-cohort [lookups-or-reports.json|jsonl]` accepts either 1 to 500 saved
+Lookups or an unmixed collection of retained `whoisleuth.cli.registry-cohort`
+version-1/version-2 reports. It emits version 2 with target-free suffix and
+capability-profile timelines, an explicit sample window, retained-report count,
+and at most 50 visible points per cohort. A version-1 report becomes one
+retained point. A cohort with fewer than five samples remains insufficient,
+and overlapping retained samples are never summed or promoted to independent
+consistency. Domains, queries, filenames, and raw registry evidence are not
+retained.
 
 `registry-scaffold --profile <id> --suffix <suffix> --scenario <state>` emits
 one bounded, sanitised synthetic fixture scaffold from the installed registry
@@ -495,7 +516,18 @@ thresholds from 40 through 90 and identifies 70 as the current review band. It
 also reports F1, balanced accuracy, Wilson 95% intervals, deliberately small
 scan-depth and review-reason strata, and a current-versus-previous model replay.
 Strata with fewer than 20 included labels are marked insufficient rather than
-presented as reliable performance estimates.
+presented as reliable performance estimates. Report version 3 distinguishes
+the ordinary `detailed` output from the aggregate `summary` projection.
+
+`--json` emits the bounded detailed report, including record identifiers,
+domains, analyst dispositions, scores and factor summaries. Use
+`--summary-json` for the target-free aggregate accepted by Monitor's local
+calibration explorer. That projection retains only dataset and model versions,
+aggregate class and score-band counts, fixed-threshold confusion metrics and
+Wilson intervals, bounded strata, model-comparison counts, and an explicit
+zero-target privacy declaration. It contains no record array, identifier,
+domain, evidence field, factor, note or provider payload. Both forms remain
+offline and are written only when the analyst deliberately selects an output.
 
 The JSON report derives a bounded `interoperabilityTags` list from the
 analyst-owned disposition and review reason. The mapping uses reviewed MISP
@@ -532,7 +564,7 @@ and bounded before scoring. The accepted dataset envelope is:
 and `expected` are negative labels. `unreviewed`, `suspicious`, and
 `closed_no_action` remain contextual and are excluded from threshold quality
 metrics, as are records for which Risk is not applicable. Terminal output caps
-its record list at 100 while `--json` retains the complete bounded report,
+its record list at 100 while `--json` retains the complete bounded detailed report,
 factor breakdowns, score bands, confidence intervals, bounded strata, model
 comparison counts, and per-threshold confusion metrics. Analyst
 dispositions and heuristic scores are review context: neither proves
@@ -571,16 +603,29 @@ establish that a current candidate is malicious or safe.
 `verify-artifact` validates a supported local artefact without printing its
 evidence contents. Input is capped at 15 MiB. It currently recognises ordinary
 and encrypted workspace archives, case-response packets, acquisition-decision
-exports, domain-comparison exports, Bulk mail-exposure exports, and Bulk review
+exports, supported Lookup-evidence exports, Lookup claim passports, domain-comparison exports, Bulk mail-exposure exports, and Bulk review
 manifests. Reviewed CLI case packs are checked against their canonical digest,
 bounded browser-importable case collection, audience, and review marker. The
-command also verifies the internal digests of a complete investigation
-capsule, including its evidence, brief, graph, and optional analyst-record
-projections, and that capsule can be passed to `sign-artifact`. It also validates the bounded versioned structure of saved CLI
-Lookup JSON. Because saved Lookup documents do not embed a checksum or
-signature, that result is reported as `structure_valid` with content integrity
-explicitly unchecked. Saved Lookup validation retains its stricter 8 MiB
-document ceiling.
+command verifies both the embedded projections and whole-capsule digest of an
+investigation capsule version 2, including its metadata and linked
+source-contract digests, and reports `verified`. The non-embedded Lookup
+evidence must still be retained separately. Legacy capsule version 1 covers
+only the embedded brief, graph, and optional analyst-record projections, so it
+remains `integrity_valid` rather than whole-file `verified`. It also validates
+the bounded versioned structure of saved CLI Lookup JSON and current
+Lookup-evidence schemas 25 and 26. Because neither saved Lookup documents nor full
+Lookup-evidence exports embed a checksum or signature, those results are
+reported as `structure_valid` with content integrity explicitly unchecked.
+Lookup-evidence verification closes the supported export envelopes and source
+wrappers, enforces the same 5 MiB, 20,000-entry, and 24-level limits as browser
+replay, and does not claim that
+an observation is accurate, current, or unchanged. Exact retained-file identity
+requires a verified investigation manifest and matching `--manifest-entry`;
+the evidence file can contain a bounded privacy-projected registry RDAP
+publication, normalised WHOIS values, and bounded contacts, so review it before
+sharing. Request and response headers, cookies, session and credential fields,
+and URL credentials, queries, and fragments are excluded. Saved Lookup validation retains its
+stricter 8 MiB document ceiling.
 
 For an ordinary workspace archive, the command validates the versioned
 structure, section byte counts, record counts, and per-section checksums. For a
@@ -588,12 +633,94 @@ supported signed review artefact, it validates the declared SHA-256 digest. An
 encrypted archive without `--passphrase-file` can establish only that the
 envelope is structurally valid; it reports `envelope_valid` and explicitly
 leaves authenticated encryption and inner checksums unchecked.
+Checksum validity is reported separately from importability. A checksum-valid
+archive can therefore list unsupported sections when it contains a section
+schema this version cannot restore, or skipped and pruned records when a
+supported section cannot be restored completely; inspect those counts before
+importing.
 
 Supplying a separate passphrase file, capped at 1 KiB, allows authenticated
 decryption followed by the ordinary workspace checks. The passphrase is never
 accepted as a command-line value, printed, or retained. Verification detects
 changes against the artefact's declared contract; it does not authenticate the
 analyst or establish that an observation was accurate or remains current.
+
+`--manifest <manifest.json> --manifest-entry <artifact-N>` additionally verifies
+the selected investigation manifest before comparing its declared entry with
+the supplied artefact. `identity_verified` requires the exact UTF-8 byte length
+and raw digest as well as canonical digest, schema, and version. A
+`canonical_match_only` result means semantic JSON identity survived but the
+retained bytes differ, so it is a partial result under `--strict-exit`.
+`mismatch` likewise remains separate from the artefact's own structure or
+integrity result. Manifest paths and artefact contents are not copied into the
+verification report.
+
+Verification reports use `whoisleuth.offline-artifact-verification` version 3
+and do not expose an always-true validity shortcut. The explicit state and
+checks distinguish structure, whole-file integrity, projection integrity, and
+authenticated encryption. `--strict-exit` returns exit 0 for `verified` and
+`structure_valid` when no manifest identity is requested or exact identity is
+verified. It returns partial-failure exit 4 for `integrity_valid`,
+`envelope_valid`, canonical-only identity, or identity mismatch; ordinary
+verification errors retain their existing error codes. Raw JSON is scanned
+before parsing to reject duplicate object keys and excessive nesting or
+key/value counts.
+
+Current integrity-bearing review outputs use `sorted-json-v2`, whose object-key
+order is a locale-independent JavaScript code-unit order. Readers select the
+canonical bytes from an exact artifact-version and canonicalization pair,
+reject mixed or missing current declarations, and validate bounded structure
+before any legacy hashing. Historical outputs keep their original
+`sorted-json-v1` bytes and are accepted only through their legacy version.
+Version 1 used the runtime's ambient `localeCompare` ordering, so historical
+files containing non-ASCII object-key extensions require a compatible locale
+and ICU ordering to verify; it is not a portable canonicalization guarantee.
+The fixed keys emitted by the supported legacy builders are ASCII, but only
+version 2 provides the cross-locale portability contract.
+
+The current/legacy integrity pairs are: acquisition decision 2/1, Lookup claim
+passport 1 (sorted-json-v2 only),
+domain-comparison export 4/3 with nested comparison 3, Bulk mail-exposure
+export 2/1 with nested report 1, Bulk review manifest 2/1, domain-control
+manifest 2/1, domain-change packet 2/1 with input 1, investigation manifest
+2/1, case-response packet 6/5, investigation capsule 2/1, CLI case-pack packet
+2/1 with Case schema 12, and signed evidence package 2/1. Current outputs
+declare `sorted-json-v2`; legacy declarations remain explicit only where their
+historical contract included one.
+
+## Interchange fidelity report
+
+`interchange-report [artifact.json]` explains what one recognised portable
+artefact preserves, excludes, and supports in browser and CLI workflows. It
+recognises supported Lookup-evidence exports, Lookup claim passports, domain-control passports, Brand Profile exports from versions 2
+through 6, workspace archives from versions 1 through 5, encrypted workspace
+envelopes, reviewed CLI case packs, and the retired one-way desired-baseline
+export. The retired export is identified as unsupported rather than silently
+treated as a current passport.
+
+Output is metadata-only: registered schema and version, verification state,
+bounded counts, browser import/export support, CLI read/write/verify support,
+semantic fidelity, and fixed preserved or excluded field-group identifiers.
+For workspace archives, checksum validity and complete browser importability are
+reported separately. A checksum-valid archive with a newer inner section stays
+verified for integrity while its fidelity is withheld and importability is
+reported as partial. The same partial state applies when browser preview would
+block a section, skip a malformed record, or prune data to a collection bound.
+It never echoes a target, contact, note, evidence value, passphrase, arbitrary
+unknown schema string, or encrypted content. A separate `--passphrase-file`
+can authenticate an encrypted workspace; without it, only the envelope is
+reported as valid and fidelity is withheld. Each registered interchange family
+declares its exact assurance requirement: browser-importable structure is
+sufficient for Brand Profile normalisation and the current bounded
+Lookup-evidence contract, while checksummed formats
+require whole-file integrity and encrypted workspaces additionally require
+authenticated decryption. “Semantic exact after normalisation” does not mean byte
+identity, current evidence, or a successful round trip through an unrelated
+format.
+
+For case packs, the fixed fidelity metadata explicitly lists public-audience
+Brand Profile references as excluded and trusted/internal references as
+preserved. The report never prints an identifier or other stored value.
 
 ## Privacy-safe source reliability report
 
@@ -655,22 +782,32 @@ node bin/whoisleuth.mts sign-artifact packet.json --private-key-file analyst-pri
 node bin/whoisleuth.mts verify-signature packet.signed.json --public-key-file analyst-public.pem
 ```
 
-The signed package embeds the public key, key identifier, signature time, and
-original artefact. Verification first checks the exact package field set and
-signature, then the artefact's own checksums or manifest. A result is reported
-as `signature_valid`; signer trust is separately reported as `trusted_key` or
-`embedded_key_only`. Without a separately supplied trusted public key,
+New signed packages use version 2 with `sorted-json-v2` canonicalisation and
+embed the public key, key identifier, canonical UTC signature time, and
+original artefact. Signing requires verified structure plus a verified
+applicable integrity contract; a recomputed digest around an empty or malformed
+document is rejected. Signature verification reports cryptographic status and
+embedded-artifact assurance separately in
+`whoisleuth.evidence-signature-verification` version 2. A result can therefore
+remain `signature_valid` while embedded-artifact assurance is `not_verified`;
+the signature authenticates those exact bytes without upgrading their
+structure or inner integrity. Signer trust is separately reported as
+`trusted_key` or `embedded_key_only`. Without a separately supplied trusted public key,
 verification establishes only that the package is internally self-consistent.
+Historical version-1 packages remain verifiable with their explicit
+`sorted-json-v1` signature declaration when their original locale-dependent
+ordering is reproduced; version 2 is the portable signature contract.
 WHOISleuth does not generate, store, recover, rotate, publish, or establish
 trust in signing keys.
 
 ## Reproducible investigation manifest
 
 `manifest <artefact.json> [...] --workflow <label>` reads from 1 to 16 ordered
-JSON artefacts and emits `whoisleuth.investigation-manifest` version 1. Each
+JSON artefacts and emits `whoisleuth.investigation-manifest` version 2. Each
 entry records its sequence, bounded schema and version metadata, exact UTF-8
-content digest, canonical JSON digest, and byte count. The manifest also records
-the installed CLI version and can include an externally calculated
+content digest, `sorted-json-v2` canonical JSON digest, and byte count. Version
+1 manifests remain verifiable with their historical digest bytes. The manifest
+also records the installed CLI version and can include an externally calculated
 `--configuration-digest sha256:...` without copying configuration values.
 
 Source paths, filenames, command-line arguments, and artefact contents are not
@@ -739,12 +876,17 @@ time, certificate SHA-256 digest, one or more DNS names, completeness, and
 optional issuer, expiry, and limitations. Unknown fields, malformed names,
 unsupported completeness values, and oversized batches are rejected.
 
-JSON output uses the existing `whoisleuth.external-findings` version 3 contract
+JSON output uses the existing `whoisleuth.external-findings` version 4 contract
 and can be deliberately imported into the browser Console. Wildcard names are
 normalised to their base DNS name, exact event/domain duplicates are removed,
 and deterministic output is capped at 100 findings, 25 domains, and 20 findings
 per domain to match the browser import boundary. Omission is stated in each
 retained finding when the supplied batch exceeds those limits. The command
+makes a deterministic event identifier and preserves the supplied log id,
+certificate digest, issuer, expiry, original DNS-name count, and whether the
+bounded import retained the complete supplied name set. This metadata lets the
+browser replay reviewed issuer and certificate-name expectations without
+mistaking an omitted name for a mismatch. The command
 makes no request and treats every certificate event as a review lead, not proof
 that the certificate was served, requested, or controlled by the named domain.
 
@@ -760,7 +902,7 @@ computed expressions, network endpoints, or executable callbacks. Prototype
 paths and unknown fields are rejected.
 
 The resulting JSON is the existing browser-compatible
-`whoisleuth.external-findings` version 3 contract. It retains source identity,
+`whoisleuth.external-findings` version 4 contract. It retains source identity,
 observation time, completeness, and limitations, while stating that field
 semantics were not independently verified. Deterministic output is capped at
 100 findings, 25 domains, and 20 findings per domain. The command makes no
@@ -994,6 +1136,9 @@ complete supported static page-identity observations on both sides.
 
 Each page component remains independent. Exact, similar, overlapping,
 different, unavailable, and partial evidence are not collapsed into a score.
+Version 3 also withholds technology-set equality and disjointness whenever
+either saved technology observation is partial or truncated; the retained
+identifiers remain visible only as incomplete evidence.
 Matching components are investigative relationships rather than proof of
 copying, common ownership, control, intent, safety, or maliciousness. Static
 comparison does not execute JavaScript; use the optional local rendered
@@ -1127,14 +1272,24 @@ fingerprint, registrar-lock preference, and a renewal-review date for up to 100
 domains. Empty fields mean unconfigured; they do not require a record to be
 absent.
 
-The emitted `whoisleuth.domain-control-manifest` version 1 is normalised and
-protected by a canonical SHA-256 digest. It can also be passed to
+The emitted `whoisleuth.domain-control-manifest` version 2 is normalised and
+protected by a `sorted-json-v2` SHA-256 digest. Version 1 remains readable with
+its historical canonicalization contract. Either version can also be passed to
 `sign-artifact` for an optional local Ed25519 signature. Integrity and
 signature verification detect changes and authenticate possession of the
 selected key; neither establishes that the desired state is correct. Manifest
 input and verification reject unknown fields, and verification rejects
 non-canonical content rather than returning a shape that differs from the
 normalised contract covered by the digest.
+
+The same version-two manifest is the browser Console's domain-control passport
+format; its browser and CLI input envelope remains version 1. A deliberately
+selected passport can move the supported desired-state
+subset between Brand Profiles and the CLI without copying profile identity,
+notes, observations, change windows, suppressions, or other browser-only
+planning. Browser import verifies the digest and presents a field-level,
+non-destructive preview. A manifest remains an analyst-authored expectation in
+either runtime; interoperability does not make it observed evidence.
 
 A review input uses `whoisleuth.domain-control-review-input` version 1 and
 contains one manifest plus separately attributed observations. Only a complete
@@ -1172,10 +1327,11 @@ no registrar, DNS, mail, certificate, or recovery configuration.
 
 `change-packet [input.json]` combines one pre-change domain review, one
 post-change domain review, and one planned-change assurance input for the same
-domain. The input uses `whoisleuth.domain-change-packet.input` version 1. The
+domain. The input remains `whoisleuth.domain-change-packet.input` version 1. The
 command revalidates each nested contract, summarises changed authoritative
-record sets, and emits `whoisleuth.domain-change-packet` version 1 with a
-canonical SHA-256 integrity digest.
+record sets, and emits `whoisleuth.domain-change-packet` version 2 with a
+`sorted-json-v2` SHA-256 integrity digest. Historical packet version 1 remains
+verifiable with its original digest bytes.
 
 The packet is ready only when both supplied observation reviews and the change
 plan pass their own bounded gates. Partial or unavailable evidence remains a
@@ -1230,14 +1386,46 @@ canonical SHA-256 digest and redaction manifest. It refuses an invalid,
 duplicate, larger, or generated package above the browser's 2 MiB import limit
 rather than silently omitting records or evidence. Trusted output removes notes,
 recipient values, and manual-pivot targets. Public output additionally removes
-actions and analyst assertions. The review flag records an explicit choice; it
-does not prove recipient authorisation or factual correctness.
+actions, analyst assertions, named investigation branches, and every exact
+Brand Profile identifier from both the top-level cases and embedded Case report
+v8 projections. Its redaction manifest records the bounded
+`brandProfileReferencesOmitted` count, which cannot exceed 200. Trusted and
+internal output preserve the exact references and record zero omissions.
+Trusted output retains branch references while redacting action recipients.
+The review flag records an explicit choice; it does not prove recipient
+authorisation, profile ownership, attribution, or factual correctness.
 
 `verify-artifact` recognises the complete case-pack envelope before browser
 import. It checks the canonical digest, supported case-export schema, bounded
 case count, report count, audience and explicit review marker without printing
-case contents. This detects a changed hand-off file but does not authenticate
-the analyst, recipient, source observations, or review decision.
+case contents. For Case schema 12 it validates the opaque-reference syntax,
+requires public cases and reports to contain no references, and requires
+trusted or internal report references to match their top-level case. The
+case-pack envelope is version 2 with `sorted-json-v2` integrity; a valid legacy
+version-1 pack carrying a
+pre-v12 Case collection remains accepted without inventing the new field or
+redaction count. Current builders reject a schema-12 raw case unless its
+complete bounded Case projection, safe canonical identity, and unique
+at-most-eight reference list survive normalisation exactly; over-bound notes,
+actions, and other fields are not silently truncated. Legacy builder input
+remains lenient for later fields. Before digest calculation, the verifier binds
+each report's supported schema version, canonical Case identifier, domain, and
+audience-sensitive projection to its top-level case. It rejects re-signed
+public notes, actions, assertions, branches, recipients, manual-trail targets,
+or Brand Profile references, and the corresponding trusted-field leaks,
+including copies at unexpected nested paths. It also enforces the exact
+epoch-specific audience exclusion list, source-case count, and omission-count
+rules. Current Case schema 12 requires report v8, schema 11 requires report v7,
+and schemas through 10 accept supported reports through v6 without inventing
+later branch or Brand-reference fields. For every audience and Case schema 2
+through 11, retained Case and report nodes must have the same object, array,
+null, or scalar kind as their bounded normalised projection, and every nested
+key must belong to that versioned projection. Historical omissions remain
+valid, while re-signed scalar substitutions and undeclared private fields do
+not. These checks
+also govern offline verification and interchange-fidelity classification. This
+detects a changed or internally inconsistent hand-off file but does not
+authenticate the analyst, recipient, source observations, or review decision.
 
 `monitor-once [manifest.json]` performs one bounded Deep control review for at
 most 20 manifest domains with concurrency capped at three. An optional
@@ -1250,7 +1438,15 @@ failure policies are supported.
 installed fixed recipes. Network steps require `--approve-network` for that
 invocation. Analyst-selection placeholders always pause. A bounded `--resume`
 state must match the exact recipe and subject, cannot add commands or shell
-syntax, and is not evidence that earlier results remain current.
+syntax, and is not evidence that earlier results remain current. Retained
+successful steps must form an exact contiguous prefix of the installed recipe,
+including command, ordered arguments, mode and output schema. A final failed
+step is retried rather than trusted as completed.
+
+The `domain-triage` plan deliberately pairs `export` with `verify-artifact`.
+A fresh current Lookup-evidence export must pass the verifier as
+`structure_valid`; this establishes bounded contract compatibility, not a
+checksum, signature, source truth, or observation currency.
 
 ## Optional local rendered capture
 
@@ -1301,13 +1497,31 @@ stdout, so use ordinary shell redirection when a file is wanted. Pretty JSON is
 the default; `--compact` emits one compact JSON line for pipeline use, while
 `--markdown` produces a readable source-attributed summary and `--html`
 produces a self-contained printable report. Compact, Markdown, and HTML output
-are mutually exclusive.
+are mutually exclusive. Markdown and HTML include the fixed generator footer
+by default; `--no-attribution` removes only that footer and is rejected for
+JSON output.
+
+The current schema-26 JSON output can be passed directly to
+`verify-artifact`. The verifier reports `structure_valid` because this format
+has no embedded checksum or signature. Use a verified investigation manifest
+and exact manifest-entry identity when byte-for-byte retention matters, and
+review the bounded privacy-projected registry RDAP publication, normalised
+WHOIS values, and bounded contacts before sharing. `interchange-report`
+recognises the current format and describes the
+browser replay as lossy by design because replay renders bounded normalised
+facts rather than raw payloads. Schema 25 remains readable when its retained
+historical wrappers differ from retained diagnostics in the ways emitted by
+the former producer. The diagnostics remain authoritative, unavailable wrapper
+data is suppressed during replay, and other contradictory legacy shapes fail
+closed rather than becoming positive observations.
 
 The saved input is capped at 8 MiB and revalidated using the same schema,
 source-status, parsed-data, scalar, list, and event boundaries as `compare`.
-The export retains query context, source diagnostics, normalised registry data,
-raw registry RDAP JSON, the raw WHOIS referral chain, availability analysis,
-and the shared registry-source comparison. Version 23 can add the exact local
+The export retains query context, explicitly projected source diagnostics,
+normalised registry data, a bounded privacy-projected registry RDAP
+publication, availability analysis, bounded WHOIS referral-hop
+metadata without response bodies, and the shared
+registry-source comparison. Version 23 can add the exact local
 SSLBL comparison already represented by a deep full Lookup. Version 21 adds the bounded registry
 lifecycle, disclosure, publication-quality, reconciliation, and abuse-routing
 interpretation derived from the already-collected sources. Registrar RDAP raw

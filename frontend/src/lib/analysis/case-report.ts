@@ -13,16 +13,20 @@ import { caseEvidenceIncomparableReasons, compareCaseEvidence, latestCaseEvidenc
 import type { CaseEvidenceSnapshot, CaseRecord, EvidenceFactor } from './case-model.ts';
 import { httpSecurityHeaderLabel } from './http-summary.ts';
 import { analystInteroperabilityTags } from '../../../../lib/analyst-taxonomy.mts';
+import {
+  buildPortableGeneratorMetadata,
+  portableGeneratorAttribution,
+  type PortableGeneratorMetadata,
+} from '../../../../lib/portable-generator.mts';
 import { CASE_EVIDENCE_RELATION_STANCES } from './case-response-model.ts';
+import { normalizeCaseBrandProfileIds } from './case-brand-profile-references.ts';
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
 export const CASE_REPORT_SCHEMA = 'whoisleuth.case-report';
-export const CASE_REPORT_SCHEMA_VERSION = 6;
-
-const APPLICATION_NAME = 'WHOISleuth';
+export const CASE_REPORT_SCHEMA_VERSION = 8;
 
 const LIMITATIONS_TEXT = [
   'This report contains normalised browser-local observations from WHOISleuth analyst cases.',
@@ -30,6 +34,7 @@ const LIMITATIONS_TEXT = [
   'Absence of a signal (e.g. no MX record observed) does not prove nonexistence. It may not have been evaluated.',
   'Snapshot fingerprints are deduplication identifiers, not cryptographic evidence hashes.',
   'Scan-depth and scoring-model gates prevent misleading comparisons; "incomparable" means observations differ materially but one or more fields cannot be compared reliably.',
+  'Brand Profile references record an explicit analyst-selected association only; they do not establish ownership, attribution, intent, safety, or maliciousness.',
   'Generated locally in the browser. Review the package before sharing it.',
 ].join(' ');
 
@@ -45,7 +50,12 @@ const LIMITATIONS_TEXT = [
  * @param {string} text
  * @returns {string}
  */
-type ReportOptions = { includeNotes?: boolean; generatedAt?: string };
+type ReportOptions = {
+  applicationVersion?: unknown;
+  generatedAt?: string;
+  includeAttribution?: boolean;
+  includeNotes?: boolean;
+};
 type ReportReason = 'opportunity-model' | 'scan-depth' | 'risk-model' | 'other';
 type ReportChange = ReturnType<typeof compareCaseEvidence>[number];
 type ReportTimelineEntry = {
@@ -60,13 +70,14 @@ type CaseReportJson = {
   schema: typeof CASE_REPORT_SCHEMA;
   schemaVersion: typeof CASE_REPORT_SCHEMA_VERSION;
   generatedAt: string;
-  application: { name: string };
+  application: PortableGeneratorMetadata;
   case: {
     id: string;
     domain: string;
     status: string;
     disposition: string;
     reviewReasonCode: string | null;
+    brandProfileIds: string[];
     interoperabilityTags: string[];
     tags: string[];
     source: string;
@@ -84,6 +95,7 @@ type CaseReportJson = {
     assertions: CaseRecord['assertions'];
     manualTrail: CaseRecord['manualTrail'];
     sightings: CaseRecord['sightings'];
+    branches: NonNullable<CaseRecord['branches']>;
   };
   limitations: string;
 };
@@ -201,6 +213,8 @@ function pickKnownSnapshotFields(snapshot: CaseEvidenceSnapshot): CaseEvidenceSn
     idnReferenceMatch: snapshot.idnReferenceMatch ?? null,
     pageBaselineMatch: snapshot.pageBaselineMatch ?? null,
     hasActiveBrandProfile: snapshot.hasActiveBrandProfile ?? null,
+    profileContextState: snapshot.profileContextState ?? null,
+    profileContextLimitation: snapshot.profileContextLimitation ?? null,
     mutationTypes: Array.isArray(snapshot.mutationTypes) ? [...snapshot.mutationTypes] : [],
   };
 }
@@ -225,6 +239,7 @@ export function buildCaseReport(
   const { generatedAt } = options;
   const includeNotes = options.includeNotes === true;
   const now = generatedAt || new Date().toISOString();
+  const generator = buildPortableGeneratorMetadata(options.applicationVersion);
 
   // --- Build JSON report ---
 
@@ -279,13 +294,14 @@ export function buildCaseReport(
     schema: CASE_REPORT_SCHEMA,
     schemaVersion: CASE_REPORT_SCHEMA_VERSION,
     generatedAt: now,
-    application: { name: APPLICATION_NAME },
+    application: generator,
     case: {
       id: caseRecord.id,
       domain: caseRecord.domain,
       status: caseRecord.status,
       disposition: caseRecord.disposition,
       reviewReasonCode: caseRecord.reviewReasonCode ?? null,
+      brandProfileIds: normalizeCaseBrandProfileIds(caseRecord.brandProfileIds),
       interoperabilityTags: analystInteroperabilityTags(caseRecord.disposition, caseRecord.reviewReasonCode),
       tags: Array.isArray(caseRecord.tags) ? [...caseRecord.tags] : [],
       source: caseRecord.source,
@@ -314,13 +330,20 @@ export function buildCaseReport(
       })),
       manualTrail: caseRecord.manualTrail.map((item) => ({ ...item })),
       sightings: caseRecord.sightings.map((item) => ({ ...item, limitations: [...item.limitations] })),
+      branches: (caseRecord.branches ?? []).map((item) => ({
+        ...item,
+        evidencePinIds: [...item.evidencePinIds],
+        checkpointIds: [...item.checkpointIds],
+        assertionIds: [...item.assertionIds],
+        actionIds: [...item.actionIds],
+      })),
     },
     limitations: LIMITATIONS_TEXT,
   };
 
   // --- Build Markdown ---
 
-  const md = buildMarkdown(json);
+  const md = buildMarkdown(json, options.includeAttribution !== false);
 
   return { json, markdown: md };
 }
@@ -334,7 +357,7 @@ export function buildCaseReport(
  * @param {object} report
  * @returns {string}
  */
-function buildMarkdown(report: CaseReportJson): string {
+function buildMarkdown(report: CaseReportJson, includeAttribution: boolean): string {
   const lines: string[] = [];
 
   // Title
@@ -355,6 +378,7 @@ function buildMarkdown(report: CaseReportJson): string {
   lines.push(`| Status | ${escapeMarkdownInline(report.case.status)} |`);
   lines.push(`| Disposition | ${escapeMarkdownInline(report.case.disposition)} |`);
   if (report.case.reviewReasonCode) lines.push(`| Review reason | ${escapeMarkdownInline(report.case.reviewReasonCode.replaceAll('_', ' '))} |`);
+  lines.push(`| Brand Profile references | ${report.case.brandProfileIds.length ? escapeMarkdownInline(report.case.brandProfileIds.join(', ')) : 'None'} |`);
   lines.push(`| Source | ${escapeMarkdownInline(report.case.source)} |`);
   lines.push(`| Opened | ${escapeMarkdownInline(report.case.openedAt)} |`);
   lines.push(`| Updated | ${escapeMarkdownInline(report.case.updatedAt)} |`);
@@ -372,6 +396,8 @@ function buildMarkdown(report: CaseReportJson): string {
     lines.push(`- **Availability:** ${escapeMarkdownInline(formatReportValue(a.availability))}`);
     lines.push(`- **Risk score:** ${escapeMarkdownInline(formatReportValue(a.riskScore))}`);
     lines.push(`- **Risk model:** ${a.riskModelVersion === null ? 'Unversioned' : `v${escapeMarkdownInline(formatReportValue(a.riskModelVersion))}`}`);
+    lines.push(`- **Brand Profile context:** ${escapeMarkdownInline(formatReportValue(a.profileContextState))}`);
+    if (a.profileContextLimitation) lines.push(`- **Profile-context limitation:** ${escapeMarkdownInline(a.profileContextLimitation)}`);
     lines.push(`- **Opportunity model:** ${a.opportunityModelVersion == null ? 'Unversioned' : `v${escapeMarkdownInline(formatReportValue(a.opportunityModelVersion))}`}`);
     lines.push(`- **Registrar:** ${escapeMarkdownInline(formatReportValue(a.registrar))}`);
     lines.push(`- **Website activity:** ${escapeMarkdownInline(formatReportValue(a.activityStatus))}`);
@@ -423,6 +449,8 @@ function buildMarkdown(report: CaseReportJson): string {
       lines.push(`- Availability: ${escapeMarkdownInline(formatReportValue(snap.availability))}`);
       lines.push(`- Risk score: ${escapeMarkdownInline(formatReportValue(snap.riskScore))}`);
       lines.push(`- Risk model: ${snap.riskModelVersion === null ? 'Unversioned' : `v${escapeMarkdownInline(formatReportValue(snap.riskModelVersion))}`}`);
+      lines.push(`- Brand Profile context: ${escapeMarkdownInline(formatReportValue(snap.profileContextState))}`);
+      if (snap.profileContextLimitation) lines.push(`- Profile-context limitation: ${escapeMarkdownInline(snap.profileContextLimitation)}`);
       lines.push(`- Registrar: ${escapeMarkdownInline(formatReportValue(snap.registrar))}`);
       lines.push(`- Website activity: ${escapeMarkdownInline(formatReportValue(snap.activityStatus))}`);
       if (snap.httpResponseStatus != null) lines.push(`- HTTP response: ${escapeMarkdownInline(formatReportValue(snap.httpResponseStatus))}`);
@@ -485,7 +513,7 @@ function buildMarkdown(report: CaseReportJson): string {
   lines.push('## Analyst Decision Packet');
   lines.push('');
   const response = report.analystResponse;
-  if (!response.evidencePins.length && !response.sightings.length && !response.decisions.length && !response.actions.length && !response.assertions.length && !response.manualTrail.length) {
+  if (!response.evidencePins.length && !response.sightings.length && !response.decisions.length && !response.actions.length && !response.assertions.length && !response.manualTrail.length && !response.branches.length) {
     lines.push('No evidence pins, source-qualified sightings, structured assertions, decision records, case actions, or manual investigation steps recorded.');
     lines.push('');
   } else {
@@ -562,6 +590,14 @@ function buildMarkdown(report: CaseReportJson): string {
       if (action.contactLimitations.length) lines.push(`  Contact limitations: ${escapeMarkdownInline(action.contactLimitations.join('; '))}`);
     }
     lines.push('');
+    lines.push('### Investigation branches');
+    lines.push('');
+    if (!response.branches.length) lines.push('No named investigation branches recorded.');
+    for (const branch of response.branches) {
+      lines.push(`- **${escapeMarkdownInline(branch.name)}** (${escapeMarkdownInline(branch.state)}; updated ${escapeMarkdownInline(branch.updatedAt)})`);
+      lines.push(`  References: ${branch.evidencePinIds.length} evidence pins; ${branch.checkpointIds.length} checkpoints; ${branch.assertionIds.length} assertions; ${branch.actionIds.length} actions.`);
+    }
+    lines.push('');
     lines.push('### Explicit investigation trail');
     lines.push('');
     if (!response.manualTrail.length) lines.push('No manual pivots, handoffs, or review steps recorded. Browser navigation is not tracked.');
@@ -593,6 +629,11 @@ function buildMarkdown(report: CaseReportJson): string {
   lines.push('');
   lines.push(LIMITATIONS_TEXT);
   lines.push('');
+
+  if (includeAttribution) {
+    lines.push(portableGeneratorAttribution(report.application));
+    lines.push('');
+  }
 
   return lines.join('\n');
 }

@@ -13,6 +13,7 @@ import { buildCliLookupDocument } from '../cli/formatters/json.mts';
 import { buildCliLookupDiff } from '../cli/lookup-diff.mts';
 import { buildCliLookupReconciliation } from '../cli/lookup-reconcile.mts';
 import { buildCliLookupTimeline } from '../cli/lookup-timeline.mts';
+import { MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES } from '../cli/investigation-manifest.mts';
 import { CLI_PROGRESS_EVENT_SCHEMA, CLI_PROGRESS_EVENT_VERSION } from '../cli/progress-events.mts';
 import { runCli } from '../cli/runner.mts';
 import { lookupStrictExitFindings } from '../cli/strict-exit.mts';
@@ -98,7 +99,10 @@ describe('CLI automation arguments', () => {
       configurationDigestSha256: `sha256:${'a'.repeat(64)}`, output: 'json', quiet: false, color: true,
     });
     assert.deepEqual(parseCliArguments(['diff', 'left.json', 'right.json', '--json']), {
-      action: 'diff', leftSource: 'left.json', rightSource: 'right.json', output: 'json', quiet: false, color: true,
+      action: 'diff', leftSource: 'left.json', rightSource: 'right.json', leftSessionId: null, rightSessionId: null, output: 'json', quiet: false, color: true,
+    });
+    assert.deepEqual(parseCliArguments(['diff', 'left.json', 'right.json', '--left-session', 'earlier', '--right-session', 'later']), {
+      action: 'diff', leftSource: 'left.json', rightSource: 'right.json', leftSessionId: 'earlier', rightSessionId: 'later', output: 'terminal', quiet: false, color: true,
     });
     assert.deepEqual(parseCliArguments(['timeline', 'first.json', 'second.json', 'latest.json', '--json']), {
       action: 'timeline', sources: ['first.json', 'second.json', 'latest.json'], output: 'json', quiet: false, color: true,
@@ -131,7 +135,7 @@ describe('CLI automation arguments', () => {
     });
     assert.deepEqual(parseCliArguments(['lookup', 'example.test', '--strict-exit', '--output', 'result.json', '--force']), {
       action: 'lookup', query: 'example.test', output: 'terminal', deep: false, detail: 'standard', strictExit: true,
-      events: false, plan: false, observerLabel: null, vantageLabel: null, quiet: false, color: true, destination: 'result.json', force: true,
+      events: false, plan: false, includeAttribution: true, observerLabel: null, vantageLabel: null, quiet: false, color: true, destination: 'result.json', force: true,
     });
     assert.deepEqual(parseCliArguments(['bulk', '--checkpoint', 'bulk.json', '--resume', '--events']), {
       action: 'bulk', source: null, output: 'terminal', deep: false, quiet: false, color: true, concurrency: 4,
@@ -294,6 +298,23 @@ describe('reproducible investigation manifest', () => {
     assert.equal(document.schema, 'whoisleuth.investigation-manifest');
     assert.doesNotMatch(stdout.value(), /private|lookup\.json|brief\.json/iu);
   });
+
+  test('stops reading manifest sources when their cumulative bytes exceed the bound', async () => {
+    const stderr = capture();
+    const large = JSON.stringify({ data: 'x'.repeat(Math.floor(MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES / 3) + 1) });
+    let reads = 0;
+    const code = await runCli([
+      'manifest', 'one.json', 'two.json', 'three.json', 'four.json', '--workflow', 'domain review', '--json',
+    ], {
+      stdout: capture().stream,
+      stderr: stderr.stream,
+      now: () => NOW,
+      readDiffInput: async () => { reads += 1; return large; },
+    });
+    assert.equal(code, EXIT_CODES.USAGE);
+    assert.equal(reads, 3);
+    assert.match(stderr.value(), /combined limit/iu);
+  });
 });
 
 describe('safe local output', () => {
@@ -433,8 +454,24 @@ describe('direct reports and saved Lookup diff', () => {
       });
       assert.equal(code, EXIT_CODES.SUCCESS);
       assert.match(stdout.value(), new RegExp(marker.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&'), 'u'));
+      assert.match(stdout.value(), /Generated with WHOISleuth/u);
       assert.doesNotMatch(stdout.value(), /raw response|authorization header/iu);
     }
+  });
+
+  test('can omit only the direct report generator footer', async () => {
+    const stdout = capture();
+    const code = await runCli(['lookup', 'example.test', '--markdown', '--no-attribution'], {
+      stdout: stdout.stream,
+      stderr: capture().stream,
+      now: () => NOW,
+      classifyQuery: () => classifiedDomain('example.test'),
+      runUnifiedLookup: async () => lookupResult('example.test'),
+    });
+
+    assert.equal(code, EXIT_CODES.SUCCESS);
+    assert.match(stdout.value(), /\*\*Generator:\*\* WHOISleuth/u);
+    assert.doesNotMatch(stdout.value(), /Generated with WHOISleuth/u);
   });
 
   test('rejects a direct report for non-domain input before collection starts', async () => {
@@ -457,6 +494,10 @@ describe('direct reports and saved Lookup diff', () => {
     const direct = buildCliLookupDiff(left, right, NOW);
     assert.equal(direct.schema, 'whoisleuth.cli.lookup-diff');
     assert.ok(direct.comparison.counts.different + direct.comparison.counts.conflicting > 0);
+    assert.equal(direct.comparison.rows.find((row) => row.id === 'official-assets')?.state, 'equal');
+    assert.equal(direct.comparison.rows.find((row) => row.id === 'official-assets')?.left, 'Not observed');
+    assert.equal(direct.comparison.rows.find((row) => row.id === 'official-assets')?.right, 'Not observed');
+    assert.equal(direct.comparison.rows.find((row) => row.id === 'ip-addresses')?.state, 'different');
 
     const stdout = capture();
     let lookupCalled = false;

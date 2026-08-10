@@ -309,8 +309,9 @@ function outputFilters(graph: CaseRelationshipGraph): Record<string, string> {
 
 /**
  * Builds the one canonical document used by all relationship graph exports.
- * Transient focus, pin, hide, and comparison-group options are deliberately
- * ignored; only the normalized evidence filters select export content.
+ * Transient focus, pin, hide, comparison-group, selection, and private table
+ * options are deliberately ignored; only the normalized evidence filters
+ * select export content.
  */
 export function buildRelationshipGraphDocument(
   summary: CaseRelationshipSummary,
@@ -392,7 +393,7 @@ export function buildRelationshipGraphDocument(
     limitations: strings([
       ...(Array.isArray(graph.limitations) ? graph.limitations : []),
       'This export contains bounded, locally derived investigation pivots and does not establish ownership, coordination, intent, or maliciousness.',
-      'Transient focus, pin, hide, and comparison-group view state is excluded from interchange exports.',
+      'Transient focus, pin, hide, comparison-group, selected-relationship, and private table-view state are excluded from interchange exports.',
     ], MAX_RELATIONSHIP_GRAPH_EXPORT_LIMITATIONS, 300),
   };
 }

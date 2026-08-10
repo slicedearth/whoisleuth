@@ -32,12 +32,31 @@ the aggregate exceeds the 5 MiB planning reference used by the former
 local-storage design. The model ceilings still apply in IndexedDB so changing
 the backend does not make any collection unbounded.
 
-Saved Bulk session schema 3 adds an optional compact comparison envelope to
+Certificate Transparency history schema 3 adds a bounded per-query ever-seen
+domain set so complete retained searches can distinguish first observation,
+continuing observation, and reappearance after absence from the immediately
+previous complete baseline. Capped searches neither update that set nor
+establish a continuity or reappearance state. The set retains at most 1,000
+canonical domains and exposes when its earlier history is incomplete. Schema 2
+records remain readable with their exact discarded-check count, while schemas
+1 and 2 migrate without inventing a complete ever-seen history. Reaching the
+20-check capacity remains distinct from confirmed pruning, and the whole
+collection stays inside its existing 1 MiB byte budget.
+
+Saved Bulk session schema 3 added an optional compact comparison envelope to
 each settled Deep row. It retains at most 12 normalised technology identifiers,
 a bounded TLS issuer label, an exact SPKI SHA-256 fingerprint, and independent
-source states. Schemas 1 and 2 remain readable and are normalised without
-inventing the fields. The envelope does not contain raw page, script,
-certificate, TLS, WHOIS, RDAP, or contact data.
+source states. Schema 4 additionally binds every row and session to a bounded
+Brand Profile context: the source state, an active opaque profile identifier
+when one was selected, that profile's `updatedAt` revision, and a short
+limitation. It does not copy official domains, allowlists, names, baseline
+content, or other sensitive Profile values. Schemas 1 through 3 remain
+readable, but their profile-derived trust, match, and potentially
+profile-influenced Risk conclusions are withheld because those rows cannot
+prove which Profile context was evaluated. A schema-4 row restored under a
+different or unreadable context is quarantined in the same way until it is
+rescanned. The envelope does not contain raw page, script, certificate, TLS,
+WHOIS, RDAP, or contact data.
 
 Investigation search still builds a disposable bounded projection from cases,
 campaigns, Brand Profiles, and analyst-selected relationship observations.
@@ -50,6 +69,57 @@ no network request, and performs no writes. It is not a new collection:
 IndexedDB records and the workspace archive remain authoritative, and
 discarding the projection leaves them unchanged.
 
+Campaign cohort review is another disposable projection over those existing
+records. It starts only after an analyst selects one exact Brand Profile
+identifier already retained by a campaign Case. It reads at most 50 matching
+cases and emits at most 25 connected cohorts, 100 source-qualified rationales,
+and 100 separately displayed assertions. The only temporal rationale is a
+pairwise same-registrar creation-publication observation within seven days;
+connected endpoints may therefore be farther apart. Missing or unreadable
+Profile, Case, or relationship data remains unavailable or partial. The review
+makes no request or write, creates no collection, and is excluded from ordinary
+campaign and workspace exports.
+
+Case schema 12 adds a required bounded `brandProfileIds` field owned by the
+Case model. It retains at most eight exact opaque identifiers matching
+`[A-Za-z0-9_-]{1,128}` and never trims, case-folds, repairs, resolves, remaps,
+or infers them. Versioned schemas 2 through 11 migrate to an empty list, while
+bare current internal records and schema 12 envelopes preserve the field.
+Imports inspect at most 32 candidate identifiers, union them existing-first,
+retain eight, and report `brandProfileReferencesOmitted`; an omitted or
+over-bound import cannot clear an existing reference. Explicit edits replace
+the whole list and reject invalid or over-bound input. Monitor's add and remove
+controls use narrower browser-local mutation intents: every conflict retry
+rereads the current Case before deriving the next list, so disjoint concurrent
+adds survive and a removal preserves an unrelated concurrent add.
+
+The Brands route builds a read-only transient inbox over the existing
+source-aware analyst review inbox for cases explicitly associated with the
+active profile. It inspects at most 500 cases, 100 profiles, 500 review rows,
+and 100 unresolved references, with 25 review rows rendered per page. Loading,
+unavailable, incomplete, and limited source states remain explicit. A failed
+profile read is never interpreted as no profiles or as unresolved references.
+Deleting a profile does not change any case, and a same-name/different-ID
+profile merge does not remap an opaque reference, so the case may honestly
+remain unresolved. This projection makes no request, write, score, or alert and
+creates no new stored collection.
+
+Brand Profile identity remains protected during merge. Reusing the same exact
+identifier with the same normalised profile name may merge, but mapping that
+identifier to a different normalised name rejects the whole profile import.
+For a workspace import, the dependent Case and Settings sections are also
+blocked, so neither an existing association nor the active-profile preference
+can be rebound. A same-name profile under a different identifier is still a
+distinct identity: its opaque Case reference is preserved without remapping
+and may remain unresolved. Malformed profile identifiers are skipped in both
+workspace preview and application; workspace import never generates a
+replacement identifier. Profile, active-preference, and Case source refreshes
+clear stale route projections and expose loading or unavailable state whenever
+a browser-local read or expected storage mutation fails. If a profile write has
+already committed before a preference or reread failure, the route reports the
+committed mutation and suppresses stale scoped projections instead of inviting
+the analyst to repeat the write as though it failed.
+
 Individual records are stored under stable collection keys, and workspace
 imports can update several collections in one IndexedDB transaction.
 Website-profile snapshots retain at most 60 explicit analyst saves and 12 per
@@ -58,7 +128,7 @@ identity digests, source health, timestamps, completeness markers and an
 optional normalised leaf-certificate observation from the same completed Deep
 Lookup rather than raw lookup responses or certificate bytes.
 Investigation templates retain at most 20 analyst-authored variants of the
-three built-in guides. They can customise bounded guidance, omit allowlisted
+six fixed built-in investigation and response-preparation guides. They can customise bounded guidance, omit allowlisted
 steps, and add approval gates, but cannot introduce arbitrary actions, run
 code, start collection, submit evidence, or remove a mandatory request gate.
 
@@ -141,6 +211,16 @@ The migration is non-destructive and resumable:
    all legacy documents from the current IndexedDB state before a deliberate
    return to an older build. That compatibility copy is bounded by
    local-storage quota and does not replace a downloaded workspace backup.
+7. Keep workspace envelope version 5 compatible with Case sections 2 through
+   12. A future Case schema 13 section remains checksummed but unsupported and
+   is never reinterpreted as current data.
+8. Close the versioned workspace root, manifest, and each manifest entry before
+   section integrity or importability is claimed. Additional raw-payload,
+   credential, or policy fields at those envelope layers invalidate ordinary
+   and authenticated encrypted archives; section records remain governed by
+   their own bounded normalizers. Settings preview is recomputed after section
+   selection so a deselected Profile cannot supply an imported active-profile
+   preference.
 
 The manifest records the schema, codec, revision, source, record count, byte
 count, retained legacy digest, and a SHA-256 digest of the ordered encoded

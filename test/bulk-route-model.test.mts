@@ -35,6 +35,12 @@ function result(overrides: Partial<ScanResult> = {}): ScanResult {
       riskScore: 75,
       riskFactors: [{ label: 'Observed review signal', points: 12 }],
       mutationTypes: ['dictionary'],
+      profileContext: {
+        sourceState: 'ready',
+        activeProfileId: null,
+        profileUpdatedAt: null,
+        limitation: '',
+      },
     },
     nameservers: ['ns1.example'],
     faviconHash: null,
@@ -84,6 +90,7 @@ test('centralizes Bulk filter counts and trusted-domain risk semantics', () => {
     registered: 2,
     high_risk: 1,
     trusted: 1,
+    profile_unevaluated: 0,
     errors: 1,
   });
   assert.equal(matchesBulkRouteFilter(rows[0]!, {
@@ -96,6 +103,29 @@ test('centralizes Bulk filter counts and trusted-domain risk semantics', () => {
     mutationFilter: '',
     signalFilters: new Set(),
   }), false);
+});
+
+test('distinguishes profile-unevaluated rows from false trust and high Risk', () => {
+  const row = result({
+    risk: 90,
+    trusted: null,
+    saved: {
+      profileContext: {
+        sourceState: 'unavailable',
+        activeProfileId: null,
+        profileUpdatedAt: null,
+        limitation: 'Profile context unavailable.',
+      },
+    } as ScanResult['saved'],
+  });
+  assert.equal(countBulkRouteFilters([row]).high_risk, 0);
+  assert.equal(countBulkRouteFilters([row]).trusted, 0);
+  assert.equal(countBulkRouteFilters([row]).profile_unevaluated, 1);
+  assert.equal(matchesBulkRouteFilter(row, {
+    filter: 'profile_unevaluated',
+    mutationFilter: '',
+    signalFilters: new Set(),
+  }), true);
 });
 
 test('builds triage and table rows without route-owned transformation logic', () => {

@@ -1,12 +1,14 @@
-import { stat } from 'node:fs/promises';
+import { constants as fsConstants } from 'node:fs';
+import { open, realpath, type FileHandle } from 'node:fs/promises';
 import { isIP } from 'node:net';
 
-import { open, type Response } from 'maxmind';
+import { Reader, type Response } from 'maxmind';
 
 import { formatIpPrefix, parseIpPrefix } from '../lib/ip-prefix.mts';
 import { CliUsageError } from './errors.mts';
 
 export const LOCAL_MMDB_QUERY_SCHEMA = 'whoisleuth.local-mmdb-query';
+export const LOCAL_MMDB_QUERY_VERSION = 1;
 export const MAX_LOCAL_MMDB_BYTES = 512 * 1024 * 1024;
 
 type UnknownRecord = Record<string, unknown>;
@@ -26,6 +28,43 @@ function names(value: unknown): string | null {
   return boundedText(source.en, 120);
 }
 
+async function readStableMmdb(databasePath: string): Promise<Buffer> {
+  let handle: FileHandle | null = null;
+  try {
+    const resolvedPath = await realpath(databasePath);
+    handle = await open(
+      resolvedPath,
+      fsConstants.O_RDONLY | fsConstants.O_NONBLOCK | fsConstants.O_NOFOLLOW,
+    );
+    const before = await handle.stat();
+    if (!before.isFile() || before.size <= 0 || before.size > MAX_LOCAL_MMDB_BYTES) {
+      throw new CliUsageError(`The supplied MMDB must be a file no larger than ${MAX_LOCAL_MMDB_BYTES} bytes.`);
+    }
+    const database = Buffer.allocUnsafe(before.size);
+    let offset = 0;
+    while (offset < database.length) {
+      const { bytesRead } = await handle.read(database, offset, database.length - offset, offset);
+      if (bytesRead === 0) break;
+      offset += bytesRead;
+    }
+    const after = await handle.stat();
+    if (offset !== database.length
+      || before.dev !== after.dev
+      || before.ino !== after.ino
+      || before.size !== after.size
+      || before.mtimeMs !== after.mtimeMs
+      || before.ctimeMs !== after.ctimeMs) {
+      throw new CliUsageError('The supplied MMDB changed while it was being read.');
+    }
+    return database;
+  } catch (cause) {
+    if (cause instanceof CliUsageError) throw cause;
+    throw new CliUsageError('The supplied MMDB file could not be read.');
+  } finally {
+    await handle?.close().catch(() => {});
+  }
+}
+
 export async function reviewLocalMmdb(
   input: UnknownRecord,
   databasePath: string,
@@ -38,13 +77,9 @@ export async function reviewLocalMmdb(
   if (!sourceLabel || !databaseVersion || !license) {
     throw new CliUsageError('Local MMDB review requires bounded sourceLabel, databaseVersion, and licence metadata.');
   }
-  let info;
-  try { info = await stat(databasePath); } catch { throw new CliUsageError('The supplied MMDB file could not be read.'); }
-  if (!info.isFile() || info.size <= 0 || info.size > MAX_LOCAL_MMDB_BYTES) {
-    throw new CliUsageError(`The supplied MMDB must be a file no larger than ${MAX_LOCAL_MMDB_BYTES} bytes.`);
-  }
   let reader;
-  try { reader = await open<Response>(databasePath, { cache: { max: 1_000 } }); } catch {
+  try { reader = new Reader<Response>(await readStableMmdb(databasePath)); } catch (cause) {
+    if (cause instanceof CliUsageError) throw cause;
     throw new CliUsageError('The supplied file is not a readable MaxMind DB database.');
   }
   const [rawMatch, prefixLength] = reader.getWithPrefixLength(address);

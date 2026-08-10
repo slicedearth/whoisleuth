@@ -1,6 +1,7 @@
 import { expect, test } from './fixtures';
 import { boundingBox, expectNoHorizontalOverflow, migrateLegacyBrowserData, useTheme } from './helpers';
 import { protectedDestinations } from '../frontend/src/lib/workspaces';
+import { readFile } from 'node:fs/promises';
 
 // Coverage for the shared design system: native-sized checkbox controls with
 // correct label alignment, the Lookup result's grouped sections and local
@@ -126,11 +127,20 @@ function sectionedLookupFixture(domain: string) {
       diagnostics: { ptr: { status: 'success', answerCount: 1 } },
       records: { ptr: [`edge.${domain}`] },
     },
-    rdap: { upstreamStatus: 200, parsed: { domain, entitiesByRole: {}, lifecycle: { updatedDateIso: '2026-06-10T00:00:00.000Z' } } },
+    rdap: {
+      upstreamStatus: 200,
+      parsed: { domain, entitiesByRole: {}, lifecycle: { updatedDateIso: '2026-06-10T00:00:00.000Z' } },
+      registrarRdap: {
+        status: 'success',
+        endpoint: 'https://registrar.example.test/domain/sectioned-result.invalid',
+        fetchedAt: '2026-07-13T00:00:00.000Z',
+        parsed: { domain, entitiesByRole: {} },
+      },
+    },
     whois: { parsed: {}, chain: [] },
     diagnostics: {
-      rdap: { status: 'success', endpoint: 'https://rdap.example.test' },
-      whois: { status: 'partial' },
+      rdap: { status: 'success', endpoint: 'https://rdap.example.test', registrar: { status: 'success' } },
+      whois: { status: 'success' },
       availability: { status: 'complete' },
       reverseDns: { status: 'success' },
     },
@@ -144,7 +154,7 @@ function sectionedLookupFixture(domain: string) {
       },
       publications: [
         { source: 'registry_rdap', state: 'complete' },
-        { source: 'whois', state: 'partial' },
+        { source: 'whois', state: 'complete' },
       ],
       contactDisclosure: {
         registryRdap: { state: 'redacted' },
@@ -270,6 +280,13 @@ test('the console command palette filters destinations and remains keyboard oper
   )).toBe(true);
   const destinationIcons = dialog.locator('[role="option"] svg[data-icon]');
   await expect(destinationIcons).toHaveCount(9);
+  await expect(dialog.locator('[data-command-group]')).toHaveText([
+    'Start',
+    'Investigate', 'Investigate', 'Investigate',
+    'Protect & review', 'Protect & review',
+    'Reference', 'Reference', 'Public',
+  ]);
+  await expect(dialog.locator('[data-command-group]', { hasText: 'Console' })).toHaveCount(0);
   await expect(dialog.getByRole('option', { name: /Lookup/ }).locator('svg')).toHaveAttribute('data-icon', 'lookup');
   await expect(dialog.getByRole('option', { name: /Registry support/ }).locator('svg')).toHaveAttribute('data-icon', 'registry');
   await search.press('End');
@@ -285,16 +302,27 @@ test('the console command palette filters destinations and remains keyboard oper
   await expect(search).toBeFocused();
   await search.fill('whois');
   await expect(dialog.getByRole('option', { name: /Lookup/ })).toBeVisible();
-  await expect(dialog.getByRole('option')).toHaveCount(1);
+  await expect(dialog.getByRole('option', { name: /Resources/ })).toBeVisible();
+  await expect(dialog.getByRole('option')).toHaveCount(2);
   await search.fill('dns whois');
   await expect(dialog.getByRole('option', { name: /Lookup/ })).toBeVisible();
-  await expect(dialog.getByRole('option')).toHaveCount(1);
+  await expect(dialog.getByRole('option', { name: /Resources/ })).toBeVisible();
+  await expect(dialog.getByRole('option')).toHaveCount(2);
   await search.fill('tld');
   await expect(dialog.getByRole('option', { name: /Registry support/ })).toBeVisible();
   await expect(dialog.getByRole('option')).toHaveCount(1);
   await search.fill('campaign');
   await expect(dialog.getByRole('option', { name: /Monitor/ })).toBeVisible();
   await expect(dialog.getByRole('option')).toHaveCount(1);
+  await search.fill('Start');
+  await expect(dialog.getByRole('option', { name: /Dashboard/ })).toBeVisible();
+  await expect(dialog.locator('[data-command-group]', { hasText: 'Start' })).toHaveCount(1);
+  await search.fill('Investigate');
+  await expect(dialog.getByRole('option')).toHaveCount(3);
+  await expect(dialog.locator('[data-command-group]')).toHaveText(['Investigate', 'Investigate', 'Investigate']);
+  await search.fill('Protect & review');
+  await expect(dialog.getByRole('option')).toHaveCount(2);
+  await expect(dialog.locator('[data-command-group]')).toHaveText(['Protect & review', 'Protect & review']);
   await search.fill('monitor');
   await expect(dialog.getByRole('option', { name: /Monitor/ })).toBeVisible();
   await expect(search).toHaveAttribute('aria-activedescendant', 'command-option-0');
@@ -371,7 +399,7 @@ test('Lookup reports requested source families without implying staged completio
   await page.locator('#query').fill('collection-state.invalid');
   await page.getByRole('button', { name: 'Run lookup' }).click();
 
-  const loadingStatus = page.getByRole('status');
+  const loadingStatus = page.locator('.loading-note');
   await expect(loadingStatus).toContainText('Deep lookup is waiting for one final response');
   await expect(page.locator('.collection-trace')).toContainText('Registry RDAP');
   await expect(page.locator('.collection-trace')).toContainText('Domain evidence');
@@ -431,8 +459,8 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   await expect(visualKey).toContainText('Web');
   await expect(visualKey).toContainText('Derived');
   await expect(visualKey).toContainText('Analyst');
-  await expect(visualKey).toContainText('Colour, shape, and icon identify each source family');
-  await expect(visualKey).toContainText('Dot and label show source state');
+  await expect(visualKey).toContainText('Colour, shape, and icon identify each evidence family');
+  await expect(visualKey).toContainText('Dot and label show evidence state');
   for (const [family, sectionTitleId] of [
     ['registry', 'registry-title'],
     ['network', 'relationships-history-title'],
@@ -469,11 +497,14 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
           && styles.whiteSpace === 'nowrap')
     );
   }))).toBe(true);
-  const sourceRail = topology.getByRole('list', { name: 'Evidence source status' });
-  const mappedSourceCount = await sourceRail.getByRole('listitem').count();
-  await expect(topology.locator('.topology-summary strong')).toHaveText(String(mappedSourceCount));
-  await expect(page.locator('#relationships-history .metric').filter({ hasText: 'mapped sources' })).toHaveText(`${mappedSourceCount} mapped sources`);
-  await expect(page.getByRole('tab', { name: /^Sources/ }).locator('span')).toHaveText(String(mappedSourceCount));
+  const sourceRail = topology.getByRole('list', { name: 'Evidence item status' });
+  const mappedEvidenceCount = await sourceRail.getByRole('listitem').count();
+  const derivedCount = await sourceRail.locator('.family-derived').count();
+  const directCount = mappedEvidenceCount - derivedCount;
+  await expect(topology.locator('.topology-summary strong')).toHaveText(String(mappedEvidenceCount));
+  await expect(page.locator('#relationships-history .metric').filter({ hasText: 'mapped direct sources' })).toHaveText(`${directCount} mapped direct sources`);
+  await expect(page.locator('#relationships-history .metric').filter({ hasText: 'mapped derived analyses' })).toHaveText(`${derivedCount} mapped derived analyses`);
+  await expect(page.getByRole('tab', { name: /^Evidence/ }).locator('span')).toHaveText(String(mappedEvidenceCount));
   await expect(sourceRail.locator('.source-icon')).toHaveCount(await sourceRail.locator('li').count());
   await expect(page.locator('[id="dns-title"]')).toHaveCount(1);
   await expect(page.locator('[id="reverse-dns-title"]')).toHaveCount(1);
@@ -523,7 +554,7 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
     );
   }))).toBe(true);
   await expect(sourceRail.getByRole('link', { name: /Registry RDAP.*success/i })).toHaveAttribute('href', '#evidence-registry');
-  await expect(sourceRail.getByRole('link', { name: /WHOIS.*partial/i })).toHaveAttribute('href', '#evidence-registry');
+  await expect(sourceRail.getByRole('link', { name: /WHOIS.*success/i })).toHaveAttribute('href', '#evidence-registry');
   const dnsSource = sourceRail.getByRole('link', { name: /DNS.*partial/i });
   await expect(dnsSource).toHaveAttribute('href', '#evidence-dns');
   await dnsSource.focus();
@@ -532,7 +563,7 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   await expect(topology.locator('.topology-edges path.active')).toHaveCount(1);
 
   const visualTabs = page.getByRole('tablist', { name: 'Relationship and history view' });
-  const sourcesTab = visualTabs.getByRole('tab', { name: /^Sources/ });
+  const sourcesTab = visualTabs.getByRole('tab', { name: /^Evidence/ });
   await sourcesTab.focus();
   await sourcesTab.press('ArrowRight');
   await expect(visualTabs.getByRole('tab', { name: /^Relationships/ })).toBeFocused();
@@ -577,14 +608,27 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   await expect(lifecycle.getByRole('img', { name: 'Chronological lookup lifecycle overview' })).toBeVisible();
   const lifecycleEventList = lifecycle.locator('ol[aria-label="Lookup lifecycle events"]');
   await expect(lifecycleEventList).toContainText('Domain created');
-  await expect(lifecycleEventList).toHaveCSS('clip-path', 'inset(50%)');
-  const lifecycleColours = await lifecycle.locator('g.event').evaluateAll((events) => (
-    events.map((event) => getComputedStyle(event).getPropertyValue('--event-color').trim())
+  await expect(lifecycle.locator('.visual-fallback')).toHaveCSS('clip-path', 'inset(50%)');
+  const lifecycleTokens = await lifecycle.locator('g.event').evaluateAll((events) => (
+    events.map((event) => ({
+      kind: event.getAttribute('data-kind'),
+      colour: getComputedStyle(event).getPropertyValue('--event-color').trim(),
+    }))
   ));
-  expect(new Set(lifecycleColours).size).toBe(lifecycleColours.length);
-  await expect(lifecycle.locator('.event-shape')).toHaveCount(lifecycleColours.length);
+  const colourByKind = new Map<string | null, string>();
+  for (const event of lifecycleTokens) {
+    expect(event.colour).not.toBe('');
+    expect(colourByKind.get(event.kind) ?? event.colour).toBe(event.colour);
+    colourByKind.set(event.kind, event.colour);
+  }
+  expect([...colourByKind.keys()].sort()).toEqual(['observation', 'registry']);
+  expect(new Set(colourByKind.values()).size).toBe(colourByKind.size);
+  await expect(lifecycle.locator('.event-shape')).toHaveCount(lifecycleTokens.length);
   await expect(lifecycle.locator('.registry-shape')).toHaveCount(3);
   await expect(lifecycle.locator('.observation-shape')).toHaveCount(1);
+  await expect(lifecycle.locator('.visual-legend .shape-circle')).toHaveCount(1);
+  await expect(lifecycle.locator('.visual-legend .shape-diamond')).toHaveCount(1);
+  await expect(lifecycle.locator('.visual-legend .shape-square')).toHaveCount(1);
 
   const activationContext = page.getByRole('region', { name: 'Observed service relationship' });
   await expect(activationContext).toBeVisible();
@@ -622,12 +666,39 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   await expect(coverage).toContainText('WHOIS');
   await expect(coverage).toContainText('DNS');
   await expect(coverage).toContainText('Missing, failed, stale, unsupported, and not-found evidence remains distinct');
+  const sourceQualityTable = coverage.getByRole('table', { name: 'Source quality and freshness' });
+  await expect(sourceQualityTable).toHaveAttribute('aria-colcount', '5');
+  await expect(sourceQualityTable.getByRole('row').first().getByRole('columnheader')).toHaveCount(5);
+  const limitationCell = sourceQualityTable.getByRole('cell', { name: 'Limitations for Reverse DNS' });
+  await expect(limitationCell).toHaveAttribute('aria-colspan', '5');
+  await expect(limitationCell).toContainText('PTR context does not prove hosting control.');
+  for (const label of ['Registry RDAP', 'WHOIS', 'Availability decision', 'Registrar RDAP']) {
+    const state = coverage.locator('.source strong')
+      .filter({ hasText: new RegExp(`^${label}$`, 'u') })
+      .locator('xpath=../..')
+      .locator('.state-complete');
+    await expect(state).toHaveClass(/registration-source/u);
+    const colours = await state.evaluate((element) => ({
+      actual: getComputedStyle(element).color,
+      expected: getComputedStyle(document.documentElement).getPropertyValue('--text').trim(),
+    }));
+    expect(colours.actual).toBe(colours.expected.startsWith('#')
+      ? `rgb(${Number.parseInt(colours.expected.slice(1, 3), 16)}, ${Number.parseInt(colours.expected.slice(3, 5), 16)}, ${Number.parseInt(colours.expected.slice(5, 7), 16)})`
+      : colours.expected);
+  }
   await coverage.getByText(/Freshness policy/u).click();
   await coverage.getByLabel('Policy').selectOption('analyst-custom');
   await coverage.getByLabel('Registration days').fill('10');
   await coverage.getByLabel('Registration days').blur();
   await expect(coverage).toContainText('Freshness policy · analyst-defined');
-  await expect(coverage).toContainText('Thresholds organise review');
+  await expect(coverage).toContainText('Thresholds organise source-refresh suggestions');
+
+  await page.getByRole('button', { name: 'Collapse Source quality evidence' }).click();
+  await page.getByRole('button', { name: 'Expand Source quality evidence' }).click();
+  await coverage.getByText(/Review \d+ source and analysis records/u).click();
+  await coverage.getByText(/Freshness policy/u).click();
+  await expect(coverage.getByLabel('Policy')).toHaveValue('analyst-custom');
+  await expect(coverage.getByLabel('Registration days')).toHaveValue('10');
 
   const registrationFact = page.locator('.summaries article').filter({ hasText: 'Registration' }).first();
   await registrationFact.getByText('Inspect evidence').click();
@@ -664,12 +735,16 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   const redirectDisclosure = httpCard.getByText('Redirect chain · 1 hop');
   await redirectDisclosure.click();
   await expect(httpCard.getByRole('img', { name: 'HTTP redirect path with 1 hop' })).toBeVisible();
+  const dependencyReview = page.locator('details.dependency-review');
+  await dependencyReview.locator(':scope > summary').click();
+  await expect(dependencyReview.getByText('within domain', { exact: true }).first()).toBeVisible();
 
   for (const size of [
     { width: 1920, height: 1080 },
     { width: 1440, height: 900 },
     { width: 1024, height: 768 },
     { width: 768, height: 1024 },
+    { width: 700, height: 900 },
     { width: 430, height: 932 },
     { width: 393, height: 852 },
     { width: 320, height: 640 },
@@ -677,7 +752,18 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
     await page.setViewportSize(size);
     await expectNoHorizontalOverflow(page);
 
-    await page.getByRole('tab', { name: /^Sources/ }).click();
+    const redirectPath = httpCard.locator('.redirect-path');
+    if (size.width <= 720) {
+      await expect(redirectPath.locator('.redirect-mobile')).toBeVisible();
+      await expect(httpCard.locator('.disclosure > ol')).toBeHidden();
+      const redirectWidth = await redirectPath.evaluate((element) => ({
+        client: element.clientWidth,
+        scroll: element.scrollWidth,
+      }));
+      expect(redirectWidth.scroll).toBeLessThanOrEqual(redirectWidth.client);
+    }
+
+    await page.getByRole('tab', { name: /^Evidence/ }).click();
     const topologyGraphic = topology.getByRole('img', { name: 'Where this result came from visual overview' });
     if (size.width > 700) {
       await expect(topologyGraphic).toBeVisible();
@@ -694,26 +780,49 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
 
     await page.getByRole('tab', { name: /^Relationships/ }).click();
     const relationshipMap = page.locator('.asset-graph .relationship-map');
-    if (await relationshipMap.count()) {
-      const mapFrame = relationshipMap.locator('.map-frame');
-      const mobileMap = relationshipMap.locator('.map-mobile');
-      if (await mapFrame.isVisible()) {
-        const graphBox = await boundingBox(mapFrame);
-        const panelBox = await boundingBox(relationshipMap);
-        expect(graphBox.width).toBeGreaterThan(Math.min(500, panelBox.width * 0.7));
-        expect(graphBox.width).toBeLessThanOrEqual(panelBox.width + 1);
-        expect(graphBox.height).toBeGreaterThan(180);
-        expect(graphBox.height).toBeLessThan(700);
-        expect(await mapFrame.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
-      } else {
-        await expect(mobileMap).toBeVisible();
-        expect(await mobileMap.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+    await expect(relationshipMap).toHaveCount(1);
+    const mapFrame = relationshipMap.locator('.map-frame');
+    const mobileMap = relationshipMap.locator('.map-mobile');
+    const mapFrameVisible = await mapFrame.isVisible();
+    const mobileMapVisible = await mobileMap.isVisible();
+    expect(Number(mapFrameVisible) + Number(mobileMapVisible)).toBe(1);
+    if (size.width === 1920 || size.width === 1440) expect(mapFrameVisible).toBe(true);
+    if (size.width === 320) expect(mobileMapVisible).toBe(true);
+    if (mapFrameVisible) {
+      const graphBox = await boundingBox(mapFrame);
+      const panelBox = await boundingBox(relationshipMap);
+      expect(graphBox.width).toBeGreaterThan(Math.min(500, panelBox.width * 0.7));
+      expect(graphBox.width).toBeLessThanOrEqual(panelBox.width + 1);
+      expect(graphBox.height).toBeGreaterThan(180);
+      expect(graphBox.height).toBeLessThan(700);
+      expect(await mapFrame.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+      expect(await mapFrame.evaluate((element) => getComputedStyle(element).touchAction)).toContain('pinch-zoom');
+      if (size.width === 1440) {
+        await mapFrame.scrollIntoViewIfNeeded();
+        const wheelTarget = await boundingBox(mapFrame);
+        const before = await page.evaluate(() => ({
+          y: window.scrollY,
+          maximum: document.documentElement.scrollHeight - window.innerHeight,
+        }));
+        const wheelDelta = before.y < before.maximum - 320 ? 320 : -320;
+        await page.mouse.move(
+          wheelTarget.x + wheelTarget.width / 2,
+          wheelTarget.y + Math.min(wheelTarget.height / 2, 180),
+        );
+        await page.mouse.wheel(0, wheelDelta);
+        if (wheelDelta > 0) {
+          await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(before.y);
+        } else {
+          await expect.poll(() => page.evaluate(() => window.scrollY)).toBeLessThan(before.y);
+        }
       }
+    } else {
+      expect(await mobileMap.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
     }
 
     await page.getByRole('tab', { name: /^Timeline/ }).click();
     const lifecycleGraphic = lifecycle.getByRole('img', { name: 'Chronological lookup lifecycle overview' });
-    if (size.width > 700) {
+    if (size.width > 620) {
       await expect(lifecycleGraphic).toBeVisible();
       const graphicBox = await boundingBox(lifecycleGraphic);
       const panelBox = await boundingBox(lifecycle);
@@ -729,7 +838,7 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
 
   // The desktop source graph becomes a connected, full-width source map on
   // narrow screens instead of shrinking every label into the wide SVG.
-  await page.getByRole('tab', { name: /^Sources/ }).click();
+  await page.getByRole('tab', { name: /^Evidence/ }).click();
   await expect(topology.getByRole('img', { name: 'Where this result came from visual overview' })).toBeHidden();
   await expect(topology.locator('.mobile-target')).toBeVisible();
   await expect(sourceRail.locator('.source-copy small').first()).toBeVisible();
@@ -797,6 +906,11 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
 
 test('Lookup focus and disclosure controls change presentation without changing evidence', async ({ page }) => {
   const domain = 'presentation-options.invalid';
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const lookupRequests: string[] = [];
+  page.on('request', (request) => {
+    if (new URL(request.url()).pathname === '/api/lookup') lookupRequests.push(request.url());
+  });
   await page.route('**/api/lookup?*', (route) => route.fulfill({
     status: 200,
     contentType: 'application/json',
@@ -812,12 +926,76 @@ test('Lookup focus and disclosure controls change presentation without changing 
   await expect(task).toHaveValue('general');
   await expect(controls.getByLabel('Detail')).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'At a glance' })).toBeVisible();
+  const atAGlance = page.locator('.at-a-glance');
+  const glanceGeometry = await atAGlance.evaluate((section) => {
+    const intro = section.querySelector('.glance-intro');
+    const note = section.querySelector('.metric-note');
+    const sectionBox = section.getBoundingClientRect();
+    const introBox = intro?.getBoundingClientRect();
+    const noteBox = note?.getBoundingClientRect();
+    return {
+      sectionClientWidth: section.clientWidth,
+      sectionScrollWidth: section.scrollWidth,
+      introWidth: introBox?.width ?? 0,
+      noteRight: noteBox?.right ?? Number.POSITIVE_INFINITY,
+      sectionRight: sectionBox.right,
+    };
+  });
+  expect(glanceGeometry.sectionScrollWidth).toBeLessThanOrEqual(glanceGeometry.sectionClientWidth + 1);
+  expect(glanceGeometry.introWidth).toBeGreaterThanOrEqual(230);
+  expect(glanceGeometry.noteRight).toBeLessThanOrEqual(glanceGeometry.sectionRight + 1);
   const detailedAssessment = page.locator('details.detailed-assessment');
   await expect(detailedAssessment).not.toHaveAttribute('open', '');
   await expect(page.getByRole('heading', { name: 'What the current evidence can support' })).toBeHidden();
   await page.getByText('Open assessment', { exact: true }).click();
   await expect(detailedAssessment).toHaveAttribute('open', '');
   await expect(page.getByRole('heading', { name: 'What the current evidence can support' })).toBeVisible();
+  await page.evaluate(() => {
+    const state = window as typeof window & { __claimPassportWrites?: number };
+    state.__claimPassportWrites = 0;
+    const count = () => { state.__claimPassportWrites = (state.__claimPassportWrites ?? 0) + 1; };
+    const originalPut = IDBObjectStore.prototype.put;
+    const originalAdd = IDBObjectStore.prototype.add;
+    const originalDelete = IDBObjectStore.prototype.delete;
+    const originalClear = IDBObjectStore.prototype.clear;
+    const originalSetItem = Storage.prototype.setItem;
+    const originalRemoveItem = Storage.prototype.removeItem;
+    const originalStorageClear = Storage.prototype.clear;
+    IDBObjectStore.prototype.put = function put(value: unknown, key?: IDBValidKey) { count(); return key === undefined ? originalPut.call(this, value) : originalPut.call(this, value, key); };
+    IDBObjectStore.prototype.add = function add(value: unknown, key?: IDBValidKey) { count(); return key === undefined ? originalAdd.call(this, value) : originalAdd.call(this, value, key); };
+    IDBObjectStore.prototype.delete = function deleteRecord(query: IDBValidKey | IDBKeyRange) { count(); return originalDelete.call(this, query); };
+    IDBObjectStore.prototype.clear = function clear() { count(); return originalClear.call(this); };
+    Storage.prototype.setItem = function setItem(key: string, value: string) { count(); return originalSetItem.call(this, key, value); };
+    Storage.prototype.removeItem = function removeItem(key: string) { count(); return originalRemoveItem.call(this, key); };
+    Storage.prototype.clear = function clear() { count(); return originalStorageClear.call(this); };
+  });
+  const requestCountBeforeExport = lookupRequests.length;
+  const passportDownload = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download portable passport for Registration-state statement' }).click();
+  const downloadedPassport = await passportDownload;
+  expect(downloadedPassport.suggestedFilename()).toMatch(/^whoisleuth-claim-presentation-options\.invalid-registration-state-\d{4}-\d{2}-\d{2}\.json$/u);
+  const passportPath = await downloadedPassport.path();
+  expect(passportPath).not.toBeNull();
+  const passport = JSON.parse(await readFile(passportPath!, 'utf8')) as Record<string, unknown>;
+  expect(passport.schema).toBe('whoisleuth.lookup-claim-passport');
+  expect(passport.version).toBe(1);
+  expect(passport.target).toEqual({ type: 'domain', value: domain });
+  expect((passport.claim as Record<string, unknown>).id).toBe('registration-state');
+  expect((passport.claim as Record<string, unknown>).requiredEvidenceIds).toEqual([
+    'authority-aware-availability',
+  ]);
+  const keys: string[] = [];
+  const inspectKeys = (value: unknown) => {
+    if (!value || typeof value !== 'object') return;
+    if (Array.isArray(value)) { for (const item of value) inspectKeys(item); return; }
+    for (const [key, item] of Object.entries(value)) { keys.push(key); inspectKeys(item); }
+  };
+  inspectKeys(passport);
+  expect(keys).not.toEqual(expect.arrayContaining(['requestUrl', 'finalUrl', 'contacts', 'rawWhois', 'credential']));
+  expect(JSON.stringify(passport)).not.toMatch(/\/home|abuse@example\.test|Fixture Registrar/iu);
+  await expect(detailedAssessment.getByRole('status')).toContainText('Downloaded a portable passport for Registration-state statement.');
+  expect(await page.evaluate(() => (window as typeof window & { __claimPassportWrites?: number }).__claimPassportWrites)).toBe(0);
+  expect(lookupRequests).toHaveLength(requestCountBeforeExport);
   await page.getByText('Close assessment', { exact: true }).click();
   await expect(detailedAssessment).not.toHaveAttribute('open', '');
   await expect(page.getByRole('button', { name: 'Expand Advanced evidence' })).toBeVisible();
@@ -874,6 +1052,210 @@ test('Lookup focus and disclosure controls change presentation without changing 
   await expect(page.getByRole('region', { name: 'Choose what to review' }).getByLabel('Detail')).toHaveCount(0);
 });
 
+test('Lookup task query context is bounded, transient, and changes only result presentation', async ({ page }) => {
+  const domain = 'task-context.invalid';
+  const lookupRequests: string[] = [];
+  await page.addInitScript(() => {
+    localStorage.setItem('whoisleuth:lookup-presentation:v1', JSON.stringify({ version: 1, task: 'brand' }));
+  });
+  await page.route('**/api/lookup?*', (route) => {
+    lookupRequests.push(route.request().url());
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(sectionedLookupFixture(domain)),
+    });
+  });
+
+  await page.goto('/lookup?depth=deep&task=acquisition#query');
+  expect(lookupRequests).toEqual([]);
+  await expect(page.getByRole('radio', { name: /Deep/u })).toBeChecked();
+  await page.locator('#query').fill(domain);
+  await page.getByRole('button', { name: 'Run lookup' }).click();
+  await expect(page.getByRole('region', { name: 'Choose what to review' }).getByLabel('Focus')).toHaveValue('acquisition');
+  expect(lookupRequests).toHaveLength(1);
+  expect(new URL(lookupRequests[0]!).searchParams.has('task')).toBe(false);
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('whoisleuth:lookup-presentation:v1') || '{}').task)).toBe('brand');
+
+  const acquisitionScores = page.locator('.availability .scores .score');
+  await expect(acquisitionScores).toHaveCount(2);
+  await expect(acquisitionScores.nth(0)).toHaveAttribute('data-score-hierarchy', 'primary');
+  await expect(acquisitionScores.nth(0)).toHaveAttribute('aria-label', /Primary assessment: Opportunity score/u);
+  await expect(acquisitionScores.nth(1)).toHaveAttribute('data-score-hierarchy', 'secondary');
+  await expect(acquisitionScores.nth(1)).toHaveAttribute('aria-label', /Secondary assessment: Risk score/u);
+  const acquisitionDetails = page.locator('.availability .score-details .score-detail');
+  await expect(acquisitionDetails.nth(0)).toHaveAttribute('data-score-hierarchy', 'primary');
+  await expect(acquisitionDetails.nth(0)).toHaveAttribute('aria-label', 'Primary Opportunity score explanation');
+  await expect(acquisitionDetails.nth(1)).toHaveAttribute('data-score-hierarchy', 'secondary');
+  await expect(acquisitionDetails.nth(1)).toHaveAttribute('aria-label', 'Secondary Risk score explanation');
+  const nextActions = page.locator('.at-a-glance .next-action');
+  expect(await nextActions.count()).toBeLessThanOrEqual(3);
+  await expect(nextActions.filter({ hasText: 'Review transfer dependencies' })).toHaveCount(1);
+  await page.locator('details.detailed-assessment > summary').click();
+  await expect(page.getByRole('heading', { name: 'Useful next actions' })).toHaveCount(0);
+  const focus = page.getByRole('region', { name: 'Choose what to review' }).getByLabel('Focus');
+  await focus.selectOption('brand');
+  await page.evaluate(() => { window.location.hash = 'registry'; });
+  await expect(page).toHaveURL(/task=acquisition#registry$/u);
+  await expect(focus).toHaveValue('brand');
+
+  await page.goto('/lookup?task=ACQUISITION');
+  await page.locator('#query').fill(domain);
+  await page.getByRole('button', { name: 'Run lookup' }).click();
+  await expect(page.getByRole('region', { name: 'Choose what to review' }).getByLabel('Focus')).toHaveValue('brand');
+  const brandScores = page.locator('.availability .scores .score');
+  await expect(brandScores.nth(0)).toHaveAttribute('data-score-hierarchy', 'primary');
+  await expect(brandScores.nth(0)).toHaveAttribute('aria-label', /Primary assessment: Risk score/u);
+  await expect(brandScores.nth(1)).toHaveAttribute('data-score-hierarchy', 'secondary');
+  await expect(brandScores.nth(1)).toHaveAttribute('aria-label', /Secondary assessment: Opportunity score/u);
+  const brandDetails = page.locator('.availability .score-details .score-detail');
+  await expect(brandDetails.nth(0)).toHaveAttribute('aria-label', 'Primary Risk score explanation');
+  await expect(brandDetails.nth(1)).toHaveAttribute('aria-label', 'Secondary Opportunity score explanation');
+  expect(lookupRequests).toHaveLength(2);
+  expect(lookupRequests.every((url) => !new URL(url).searchParams.has('task'))).toBe(true);
+
+  await page.setViewportSize({ width: 320, height: 700 });
+  await expectNoHorizontalOverflow(page);
+});
+
+test('a task-only Lookup navigation preserves the existing in-memory depth choice', async ({ page }) => {
+  await page.goto('/lookup');
+  await page.getByRole('radio', { name: /Fast/u }).check();
+  await page.locator('#console-navigation').getByRole('link', { name: /^Dashboard/ }).click();
+  await page.evaluate(() => {
+    const link = document.createElement('a');
+    link.href = '/lookup?task=acquisition';
+    link.textContent = 'Open task context';
+    document.body.append(link);
+    link.click();
+  });
+  await expect(page).toHaveURL(/\/lookup\?task=acquisition$/u);
+  await expect(page.getByRole('radio', { name: /Fast/u })).toBeChecked();
+});
+
+test('same-route Lookup URL changes reconcile retained evidence, depth, and transient task context', async ({ page }) => {
+  const retainedDomain = 'retained-fast.invalid';
+  await page.addInitScript(() => {
+    localStorage.setItem('whoisleuth:lookup-presentation:v1', JSON.stringify({ version: 1, task: 'brand' }));
+  });
+  await page.route('**/api/lookup?*', async (route) => {
+    const url = new URL(route.request().url());
+    const domain = url.searchParams.get('q') || retainedDomain;
+    if (domain === '192.0.2.20' || domain === 'AS64497') {
+      const type = domain.startsWith('AS') ? 'asn' : 'ipv4';
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          query: domain,
+          type,
+          availability: { applicable: false, type },
+          rdap: { upstreamStatus: 200, parsed: {} },
+          whois: { skipped: true, detail: 'WHOIS is omitted in fast RDAP-only mode.' },
+          diagnostics: {
+            rdap: { status: 'success' },
+            whois: { status: 'skipped' },
+            availability: { status: 'not_applicable' },
+          },
+        }),
+      });
+      return;
+    }
+    const fixture = sectionedLookupFixture(domain);
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        ...fixture,
+        availability: { ...fixture.availability, deepScanComplete: url.searchParams.get('fast') !== '1' },
+      }),
+    });
+  });
+  const navigate = async (href: string) => {
+    await page.evaluate((destination) => {
+      const link = document.createElement('a');
+      link.href = destination;
+      link.textContent = 'Lookup context link';
+      document.body.append(link);
+      link.click();
+    }, href);
+    await expect.poll(() => {
+      const current = new URL(page.url());
+      return `${current.pathname}${current.search}`;
+    }).toBe(href);
+  };
+
+  await page.goto('/lookup');
+  await page.locator('#query').fill(retainedDomain);
+  await page.getByRole('radio', { name: /Fast/u }).check();
+  await page.getByRole('button', { name: 'Run lookup' }).click();
+  await expect(page.locator('#result')).toBeVisible();
+
+  await navigate('/lookup?depth=deep&task=acquisition');
+  await expect(page.getByRole('radio', { name: /Deep/u })).toBeChecked();
+  await expect(page.locator('#query')).toHaveValue(retainedDomain);
+  await expect(page.locator('#result')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Run lookup' }).click();
+  await expect(page.locator('#result')).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Choose what to review' }).getByLabel('Focus')).toHaveValue('acquisition');
+
+  await navigate('/lookup?task=incident');
+  await expect(page.getByRole('radio', { name: /Deep/u })).toBeChecked();
+  await expect(page.getByRole('region', { name: 'Choose what to review' }).getByLabel('Focus')).toHaveValue('incident');
+  await navigate('/lookup');
+  await expect(page.getByRole('region', { name: 'Choose what to review' }).getByLabel('Focus')).toHaveValue('brand');
+
+  await page.getByRole('radio', { name: /Fast/u }).check();
+  await page.getByRole('button', { name: 'Run lookup' }).click();
+  await expect(page.locator('#result')).toBeVisible();
+  await navigate('/lookup?q=next-target.invalid&depth=fast&task=owned');
+  await expect(page.locator('#query')).toHaveValue('next-target.invalid');
+  await expect(page.getByRole('radio', { name: /Fast/u })).toBeChecked();
+  await expect(page.locator('#result')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Run lookup' }).click();
+  await expect(page.locator('#result')).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Choose what to review' }).getByLabel('Focus')).toHaveValue('owned');
+
+  await navigate('/lookup?q=%00ignored&depth=DEEP&task=OWNED');
+  await expect(page.locator('#query')).toHaveValue('next-target.invalid');
+  await expect(page.getByRole('radio', { name: /Fast/u })).toBeChecked();
+  await expect(page.getByRole('region', { name: 'Choose what to review' }).getByLabel('Focus')).toHaveValue('brand');
+  await page.goBack();
+  await expect(page.getByRole('region', { name: 'Choose what to review' }).getByLabel('Focus')).toHaveValue('owned');
+  await page.goBack();
+  await expect(page).toHaveURL(/\/lookup$/u);
+  await expect(page.getByRole('region', { name: 'Choose what to review' }).getByLabel('Focus')).toHaveValue('brand');
+  await page.goForward();
+  await expect(page.getByRole('region', { name: 'Choose what to review' }).getByLabel('Focus')).toHaveValue('owned');
+
+  for (const [genericTarget, targetType] of [['192.0.2.20', 'ipv4'], ['AS64497', 'asn']] as const) {
+    for (const completedDepth of ['fast', 'deep'] as const) {
+      await navigate('/lookup');
+      await page.locator('#query').fill(genericTarget);
+      await page.getByRole('radio', { name: new RegExp(completedDepth, 'iu') }).check();
+      await page.getByRole('button', { name: 'Run lookup' }).click();
+      await expect(page.locator('#result')).toBeVisible();
+      await page.getByRole('button', { name: 'Expand Relationships and history evidence' }).click();
+      await page.getByRole('tab', { name: /^Evidence/u }).click();
+      await expect(page.locator('.target-detail-copy')).toContainText(`${targetType} · ${completedDepth} lookup`);
+
+      const otherDepth = completedDepth === 'fast' ? 'deep' : 'fast';
+      await page.getByRole('radio', { name: new RegExp(otherDepth, 'iu') }).check();
+      await expect(page.locator('.target-detail-copy')).toContainText(`${targetType} · ${completedDepth} lookup`);
+      await page.locator('#console-navigation').getByRole('link', { name: /^Dashboard/u }).click();
+      await page.locator('#console-navigation').getByRole('link', { name: /^Lookup/u }).click();
+      await expect(page.locator('#result')).toBeVisible();
+      await expect(page.getByRole('radio', { name: new RegExp(otherDepth, 'iu') })).toBeChecked();
+      await page.getByRole('button', { name: 'Expand Relationships and history evidence' }).click();
+      await page.getByRole('tab', { name: /^Evidence/u }).click();
+      await expect(page.locator('.target-detail-copy')).toContainText(`${targetType} · ${completedDepth} lookup`);
+
+      await navigate(`/lookup?q=${encodeURIComponent(genericTarget)}&depth=${otherDepth}`);
+      await expect(page.locator('#result')).toHaveCount(0);
+    }
+  }
+});
+
 test('primary, secondary, and destructive actions are visually distinct', async ({ page }) => {
   await useTheme(page, 'dark');
   await page.goto('/brands');
@@ -921,6 +1303,7 @@ test('long untrusted values wrap inside result tiles without page overflow', asy
 });
 
 test('every public and protected page renders without page-level overflow at narrow and wide widths', async ({ page }) => {
+  test.slow();
   for (const path of ['/', ...protectedDestinations.map(({ href }) => href), '/privacy']) {
     await page.goto(path);
     for (const size of [

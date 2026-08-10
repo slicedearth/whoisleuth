@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import type { ReviewedAccuracyCorpusKey } from './reviewed-accuracy-status.mts';
+import { requiredOptionValue as requiredValue } from './maintainer-tool-helpers.mts';
 
 type WritableLike = { write(value: string): unknown };
 type MainOptions = Readonly<{ stdout?: WritableLike; stderr?: WritableLike }>;
@@ -19,13 +20,6 @@ const CATEGORIES = new Set<ReviewedAccuracyCorpusKey>([
   'certificate-grouping',
 ]);
 const SAFE_ID_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
-
-function requiredValue(args: readonly string[], name: string): string {
-  const index = args.indexOf(name);
-  if (index < 0 || !args[index + 1]) throw new TypeError(`${name} requires a value.`);
-  if (args.indexOf(name, index + 1) >= 0) throw new TypeError(`${name} may be supplied only once.`);
-  return args[index + 1] as string;
-}
 
 export function buildReviewedAccuracyScaffold(categoryInput: unknown, idInput: unknown): string {
   const category = typeof categoryInput === 'string' ? categoryInput.toLowerCase() as ReviewedAccuracyCorpusKey : '' as ReviewedAccuracyCorpusKey;

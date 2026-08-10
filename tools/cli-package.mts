@@ -15,6 +15,10 @@ import {
   WHOISLEUTH_SOURCE_REPOSITORY_GIT_URL,
 } from '../lib/project-metadata.mts';
 import { normalizeSemanticVersion } from './release-version-check.mts';
+import {
+  boundedPositiveInteger as positiveInteger,
+  requireJsonRecord as record,
+} from './maintainer-tool-helpers.mts';
 
 type JsonRecord = Record<string, unknown>;
 type WritableLike = { write(value: string): unknown };
@@ -68,7 +72,11 @@ const execFile = promisify(execFileCallback);
 export const CLI_PACKAGE_REPORT_SCHEMA = 'whoisleuth.cli-package-check';
 export const CLI_PACKAGE_REPORT_VERSION = 3;
 export const MAX_CLI_PACKAGE_GRAPH_BYTES = 8 * 1024 * 1024;
-export const MAX_CLI_PACKAGE_MODULES = 256;
+// The module ceiling catches accidental graph expansion while leaving a small
+// reviewed margin above the installed command surface. The retained-artifact
+// ledger deliberately reuses four bounded analysis modules; byte ceilings
+// remain the primary package-bloat boundary.
+export const MAX_CLI_PACKAGE_MODULES = 280;
 export const MAX_CLI_PACKAGE_SOURCE_BYTES = 8 * 1024 * 1024;
 export const MAX_CLI_PACKAGE_FILE_BYTES = 2 * 1024 * 1024;
 // Keep a modest growth margin while the packed and unpacked byte ceilings remain
@@ -76,6 +84,8 @@ export const MAX_CLI_PACKAGE_FILE_BYTES = 2 * 1024 * 1024;
 export const MAX_CLI_PACKAGE_ENTRIES = 320;
 export const MAX_CLI_PACKAGE_PACKED_BYTES = 2 * 1024 * 1024;
 export const MAX_CLI_PACKAGE_UNPACKED_BYTES = 6 * 1024 * 1024;
+export const CLI_PACKAGE_LONG_PROCESS_TIMEOUT_MS = 120_000;
+export const CLI_PACKAGE_INSTALLED_CHECK_TIMEOUT_MS = 15_000;
 
 const LOCAL_SOURCE_PATTERN = /^(?:bin|cli|lib|frontend\/src\/lib\/analysis)\/[A-Za-z0-9._/-]+\.(?:mts|ts)$/u;
 const REQUIRED_SOURCE_MODULES = Object.freeze(['bin/whoisleuth.mts', 'cli/runner.mts']);
@@ -112,6 +122,7 @@ const INSTALLED_COMMAND_HELP_CHECKS = Object.freeze([
   'export',
   'inspect-archive',
   'verify-artifact',
+  'interchange-report',
   'sign-artifact',
   'verify-signature',
   'risk-calibrate',
@@ -133,13 +144,6 @@ const SUPPORT_FILES = Object.freeze([
   ['LICENSES/Retire.js-Apache-2.0.txt', 'LICENSES/Retire.js-Apache-2.0.txt'],
   ['frontend/static/third-party-notices.txt', 'third-party-notices.txt'],
 ] as const);
-
-function record(value: unknown, label: string): JsonRecord {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    throw new TypeError(`${label} must be a JSON object.`);
-  }
-  return value as JsonRecord;
-}
 
 function boundedString(value: unknown, label: string, maxLength = 240): string {
   if (typeof value !== 'string' || value.length === 0 || value.length > maxLength || value.trim() !== value) {
@@ -308,6 +312,8 @@ async function dependencyGraph(repositoryRoot: string): Promise<unknown> {
   ], {
     cwd: repositoryRoot,
     encoding: 'utf8',
+    timeout: CLI_PACKAGE_LONG_PROCESS_TIMEOUT_MS,
+    killSignal: 'SIGTERM',
     maxBuffer: MAX_CLI_PACKAGE_GRAPH_BYTES,
   });
   try {
@@ -377,7 +383,8 @@ async function compilePackageSources(repositoryRoot: string, temporaryRoot: stri
     await execFile(process.execPath, [compiler, '--project', configurationPath], {
       cwd: repositoryRoot,
       encoding: 'utf8',
-      timeout: 120_000,
+      timeout: CLI_PACKAGE_LONG_PROCESS_TIMEOUT_MS,
+      killSignal: 'SIGTERM',
       maxBuffer: 4 * 1024 * 1024,
     });
   } catch (error) {
@@ -404,17 +411,11 @@ function packedFiles(packResult: JsonRecord): readonly string[] {
   return Object.freeze(packResult.files.map((entry, index) => safeRelativePath(record(entry, `Packed entry ${index + 1}`).path, `Packed entry ${index + 1} path`)));
 }
 
-function positiveInteger(value: unknown, label: string, maximum: number): number {
-  if (!Number.isSafeInteger(value) || Number(value) < 1 || Number(value) > maximum) {
-    throw new TypeError(`${label} must be between 1 and ${maximum}.`);
-  }
-  return Number(value);
-}
-
 async function runInstalledCheck(executable: string, args: readonly string[], label: string): Promise<string> {
   const { stdout, stderr } = await execFile(process.execPath, [executable, ...args], {
     encoding: 'utf8',
-    timeout: 15_000,
+    timeout: CLI_PACKAGE_INSTALLED_CHECK_TIMEOUT_MS,
+    killSignal: 'SIGTERM',
     maxBuffer: 2 * 1024 * 1024,
     env: { ...process.env, FORCE_COLOR: '0', NO_COLOR: '1' },
   });
@@ -461,6 +462,8 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
     const { stdout: packOutput } = await execFile('npm', ['pack', '--json', '--pack-destination', artifactsRoot], {
       cwd: stagingRoot,
       encoding: 'utf8',
+      timeout: CLI_PACKAGE_LONG_PROCESS_TIMEOUT_MS,
+      killSignal: 'SIGTERM',
       maxBuffer: 4 * 1024 * 1024,
       env: commonEnvironment,
     });
@@ -485,7 +488,8 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
     await execFile('npm', ['install', '--package-lock=false', '--ignore-scripts', '--no-audit', '--no-fund', tarball], {
       cwd: installRoot,
       encoding: 'utf8',
-      timeout: 120_000,
+      timeout: CLI_PACKAGE_LONG_PROCESS_TIMEOUT_MS,
+      killSignal: 'SIGTERM',
       maxBuffer: 4 * 1024 * 1024,
       env: commonEnvironment,
     });

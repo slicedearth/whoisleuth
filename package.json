@@ -1,6 +1,6 @@
 {
   "name": "whoisleuth",
-  "version": "1.45.0",
+  "version": "1.47.1",
   "private": true,
   "license": "AGPL-3.0-only",
   "description": "Open-source, local-first domain intelligence and brand-protection console for WHOIS, RDAP, DNS, certificate transparency, lookalike domains, and web evidence.",
@@ -77,11 +77,13 @@
     "catalog:kev:status": "node tools/cisa-kev-catalog-status.mts",
     "architecture:check": "npm run sync --workspace=frontend && depcruise --config .dependency-cruiser.json --output-type err-long -- lib cli bin netlify/functions frontend/src packages tools server.mts",
     "release:check": "node tools/release-version-check.mts",
+    "dependencies:audit": "node tools/production-dependency-audit.mts",
     "licenses:check": "node tools/third-party-notices.mts --check",
     "licenses:update": "node tools/third-party-notices.mts --write",
     "providers:policy-check": "node tools/provider-policy-freshness.mts",
     "security:codeql": "node tools/local-codeql.mts",
     "security:staged": "node tools/staged-secret-check.mts",
+    "maintenance:duplication": "node tools/maintainer-duplication-report.mts",
     "security:retire": "retire --path frontend/build --severity high --outputformat text"
   },
   "engines": {

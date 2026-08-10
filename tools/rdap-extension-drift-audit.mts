@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 
-import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -10,6 +9,7 @@ import {
   type ReviewedRdapExtensionCatalogEntry,
 } from '../lib/rdap-capabilities.mts';
 import { readTextCapped, safeFetchDetailed } from '../lib/safe-fetch.mts';
+import { sha256Text as sha256 } from './maintainer-tool-helpers.mts';
 
 export const RDAP_EXTENSION_DRIFT_AUDIT_SCHEMA = 'whoisleuth.rdap-extension-drift-audit';
 export const RDAP_EXTENSION_DRIFT_AUDIT_VERSION = 1;
@@ -65,10 +65,6 @@ type MainOptions = Readonly<{
 
 const CONTROL_RE = /[\u0000-\u001f\u007f]/u;
 const OBSOLETE_SUFFIX_RE = /\s+\(OBSOLETED\)$/iu;
-
-function sha256(value: string): string {
-  return createHash('sha256').update(value, 'utf8').digest('hex');
-}
 
 function canonicalIdentifier(value: unknown): string {
   if (typeof value !== 'string' || !value || value.length > 160 || CONTROL_RE.test(value)) return '';

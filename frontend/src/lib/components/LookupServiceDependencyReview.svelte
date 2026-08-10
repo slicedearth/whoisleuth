@@ -87,6 +87,15 @@
     }
     return { nodes: [...nodes.values()], links };
   });
+
+  function dependencyStateLabel(dependency: ServiceDependencyReview['dependencies'][number]): string {
+    if (dependency.state !== 'unsupported') return dependency.state.replaceAll('_', ' ');
+    return dependency.relation === 'in_domain' ? 'within domain' : 'not classified';
+  }
+
+  function qualificationLabel(value: string): string {
+    return value === 'unsupported_provider' ? 'no catalogue match' : value.replaceAll('_', ' ');
+  }
 </script>
 
 <details class="dependency-review card">
@@ -95,7 +104,7 @@
     <span class:attention={review.state === 'review'} class:unavailable={review.state === 'unavailable'}>{review.label}</span>
   </summary>
   <div class="body">
-    <p class="intro">Surface observed DNS aliases for a conservative manual dangling-service check. WHOISleuth does not follow targets or test whether a service can be claimed.</p>
+    <p class="intro">Surface observed DNS and HTTP service dependencies for a conservative manual review. WHOISleuth does not follow targets or test whether a service can be claimed.</p>
     <label class="scope-control">
       <span>Reviewed service scope <small>Optional, local to this Lookup view</small></span>
       <textarea
@@ -128,7 +137,7 @@
       <div class="dependency-grid">
         {#each review.dependencies as dependency}
           <article class:attention={dependency.state === 'candidate' || dependency.state === 'unresolved'}>
-            <header><span>{dependency.recordType}</span><strong>{dependency.state.replaceAll('_', ' ')}</strong></header>
+            <header><span>{dependency.recordType}</span><strong>{dependencyStateLabel(dependency)}</strong></header>
             <code>{dependency.target}</code>
             {#if dependency.serviceFamily}<p class="classification">{dependency.serviceFamily}</p>{/if}
             {#if dependency.signatureReviewedAt || dependency.signatureProvenance}
@@ -146,7 +155,7 @@
                 </dl>
               </details>
             {/if}
-            <p class="qualification">{dependency.qualification.replaceAll('_', ' ')}</p>
+            <p class="qualification">{qualificationLabel(dependency.qualification)}</p>
             {#if dependency.scope !== 'unspecified'}
               <p class:scope-match={dependency.scope === 'authorized'} class="scope-state">
                 {dependency.scope === 'authorized' ? 'Within reviewed scope' : 'Outside reviewed scope'}
@@ -196,7 +205,7 @@
   article p{margin:6px 0 0;color:var(--muted);font-size:var(--text-2xs);line-height:1.45}
   article p.classification{color:var(--accent);font-weight:700}
   article p.scope-state{color:var(--amber);font-family:var(--mono);text-transform:uppercase}
-  article p.scope-state.scope-match{color:var(--source-network)}
+  article p.scope-state.scope-match{color:var(--source-network-text)}
   article small{display:block;margin-top:7px;color:var(--muted);font:var(--text-2xs) var(--mono)}
   .signature-context{margin-top:7px;padding-top:7px;border-top:1px solid var(--border)}
   .signature-context>summary{cursor:pointer;color:var(--muted);font:650 var(--text-2xs) var(--mono)}

@@ -71,7 +71,7 @@ describe('offline static page comparison', () => {
       ISO,
     );
     assert.equal(document.schema, 'whoisleuth.cli.page-compare');
-    assert.equal(document.version, 2);
+    assert.equal(document.version, 3);
     assert.equal(document.page.components.find((component) => component.id === 'favicon')?.outcome, 'Perceptually similar');
     assert.equal(document.technology.state, 'equal');
     assert.equal(document.tls.issuer.state, 'equal');
@@ -90,6 +90,19 @@ describe('offline static page comparison', () => {
     const unsupported = JSON.parse(savedLookup('missing.example'));
     delete unsupported.availability.pageIdentity;
     assert.throws(() => buildCliPageComparison(JSON.stringify(unsupported), savedLookup('right.example')), /deep lookup/u);
+  });
+
+  test('withholds technology equality when either retained technology set is partial', () => {
+    const partial = JSON.parse(savedLookup('left.example'));
+    partial.availability.technologyProfile = {
+      status: 'partial',
+      truncated: true,
+      findings: [{ id: 'fixture-platform' }],
+    };
+    const document = buildCliPageComparison(JSON.stringify(partial), savedLookup('right.example'), ISO);
+    assert.equal(document.technology.state, 'partial');
+    assert.equal(document.technology.partial, true);
+    assert.match(formatCliPageComparison(document), /equality and disjointness withheld/u);
   });
 
   test('routes saved inputs through the CLI without making a lookup request', async () => {

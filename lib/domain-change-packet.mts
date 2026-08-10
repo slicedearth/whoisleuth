@@ -13,11 +13,12 @@ import {
   DOMAIN_CHANGE_INPUT_SCHEMA,
   reviewDomainChange,
 } from './domain-change-review.mts';
-import { sha256ArtifactDigest } from '../frontend/src/lib/analysis/artifact-integrity.ts';
+import { SORTED_JSON_V2, sha256ArtifactDigestV2 } from '../frontend/src/lib/analysis/artifact-integrity.ts';
 
 export const DOMAIN_CHANGE_PACKET_INPUT_SCHEMA = 'whoisleuth.domain-change-packet.input';
 export const DOMAIN_CHANGE_PACKET_SCHEMA = 'whoisleuth.domain-change-packet';
-export const DOMAIN_CHANGE_PACKET_VERSION = 1;
+export const DOMAIN_CHANGE_PACKET_INPUT_VERSION = 1;
+export const DOMAIN_CHANGE_PACKET_VERSION = 2;
 export const MAX_DOMAIN_CHANGE_PACKET_INPUT_BYTES = 6 * 1024 * 1024;
 
 const ROOT_KEYS = new Set([
@@ -85,8 +86,8 @@ export async function buildDomainChangePacket(
   generatedAtValue = new Date().toISOString(),
 ) {
   const input = record(inputRaw, 'Domain change packet input');
-  if (input.schema !== DOMAIN_CHANGE_PACKET_INPUT_SCHEMA || input.version !== 1) {
-    throw new TypeError(`Domain change packet input must use ${DOMAIN_CHANGE_PACKET_INPUT_SCHEMA} version 1.`);
+  if (input.schema !== DOMAIN_CHANGE_PACKET_INPUT_SCHEMA || input.version !== DOMAIN_CHANGE_PACKET_INPUT_VERSION) {
+    throw new TypeError(`Domain change packet input must use ${DOMAIN_CHANGE_PACKET_INPUT_SCHEMA} version ${DOMAIN_CHANGE_PACKET_INPUT_VERSION}.`);
   }
   exactKeys(input, ROOT_KEYS, 'Domain change packet input');
   const domain = requireDomainName(input.domain, 'domain');
@@ -133,7 +134,8 @@ export async function buildDomainChangePacket(
     ...unsigned,
     integrity: Object.freeze({
       algorithm: 'SHA-256' as const,
-      digestSha256: await sha256ArtifactDigest(unsigned),
+      canonicalization: SORTED_JSON_V2,
+      digestSha256: await sha256ArtifactDigestV2(unsigned),
     }),
   });
 }

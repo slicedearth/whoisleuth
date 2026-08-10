@@ -5,9 +5,12 @@ import type { CompactLookupHttpResponse } from './lookup-response.ts';
 import type { RelationshipObservation } from './relationship-evidence.ts';
 import { normalizeCaaCritical } from './dns-record-normalization.ts';
 import {
+  BULK_PROFILE_CONTEXT_MISMATCH_LIMITATION,
+  normalizeBulkProfileContext,
   type BulkSessionDnsEvidence,
   type BulkSessionComparisonEvidence,
   type BulkSessionMode,
+  type BulkProfileContextProvenance,
   type BulkSessionResult,
   type BulkSessionSourceCoverage,
   type BulkSessionSourceState,
@@ -45,9 +48,9 @@ export interface SavedScanRecord extends WatchlistComparableRecord {
   pageTitle?: string | null;
   faviconHash: string | null;
   faviconPHash: string | null;
-  faviconMatch?: boolean;
-  faviconNearMatch?: boolean;
-  reusesOfficialAssets?: boolean;
+  faviconMatch?: boolean | null;
+  faviconNearMatch?: boolean | null;
+  reusesOfficialAssets?: boolean | null;
   hasPasswordField?: boolean | null;
   hasExternalFormAction?: boolean | null;
   phishingLanguageMatch?: string | null;
@@ -57,6 +60,7 @@ export interface SavedScanRecord extends WatchlistComparableRecord {
   riskFactors: Array<{ label: string; points: number }>;
   opportunityModelVersion?: number | null;
   mutationTypes: string[];
+  profileContext: BulkProfileContextProvenance;
   error?: string;
 }
 
@@ -76,9 +80,9 @@ export interface ScanResult {
   nameservers: string[];
   faviconHash: string | null;
   faviconPHash: string | null;
-  faviconMatch: boolean;
-  faviconNearMatch: boolean;
-  reusesOfficialAssets: boolean;
+  faviconMatch: boolean | null;
+  faviconNearMatch: boolean | null;
+  reusesOfficialAssets: boolean | null;
   hasPasswordField: boolean;
   hasExternalFormAction: boolean | null;
   phishingLanguageMatch: string | null;
@@ -240,6 +244,7 @@ export function toBulkSessionResult(row: ScanResult): BulkSessionResult {
     comparisonEvidence: row.comparisonEvidence ?? null,
     relationship: row.relationship,
     sourceCoverage: row.sourceCoverage,
+    profileContext: row.saved.profileContext,
   };
 }
 
@@ -278,6 +283,7 @@ export function fromBulkSessionResult(
     riskScore: row.risk,
     riskFactors: row.riskFactors,
     mutationTypes: row.mutationTypes,
+    profileContext: row.profileContext,
     ...(row.error ? { error: row.error } : {}),
   };
   return {
@@ -311,6 +317,66 @@ export function fromBulkSessionResult(
     comparisonEvidence: row.comparisonEvidence ?? null,
     relationship: row.relationship,
     sourceCoverage: row.sourceCoverage,
+  };
+}
+
+export function bulkProfileContextsMatch(
+  left: BulkProfileContextProvenance,
+  right: BulkProfileContextProvenance,
+): boolean {
+  return left.sourceState === right.sourceState
+    && left.activeProfileId === right.activeProfileId
+    && left.profileUpdatedAt === right.profileUpdatedAt
+    && left.limitation === right.limitation;
+}
+
+export function quarantineBulkProfileDerivedEvidence(
+  row: ScanResult,
+  limitation = BULK_PROFILE_CONTEXT_MISMATCH_LIMITATION,
+): ScanResult {
+  const profileContext = normalizeBulkProfileContext(null, limitation);
+  return {
+    ...row,
+    risk: null,
+    trusted: null,
+    faviconMatch: null,
+    faviconNearMatch: null,
+    reusesOfficialAssets: null,
+    saved: {
+      ...row.saved,
+      faviconMatch: null,
+      faviconNearMatch: null,
+      reusesOfficialAssets: null,
+      idnReferenceMatch: null,
+      pageBaselineMatch: null,
+      hasActiveBrandProfile: null,
+      riskModelVersion: null,
+      riskScore: null,
+      riskFactors: [],
+      profileContext,
+    },
+    idn: analyzeDomainIdn(row.domain, []),
+    relationship: {
+      ...row.relationship,
+      nameservers: [...row.relationship.nameservers],
+      ipAddresses: [...row.relationship.ipAddresses],
+      trackingIdentifiers: [...row.relationship.trackingIdentifiers],
+      officialAssetHosts: [],
+    },
+  };
+}
+
+export function reconcileBulkResultProfileContext(
+  row: ScanResult,
+  current: BulkProfileContextProvenance,
+): ScanResult {
+  const retained = normalizeBulkProfileContext(row.saved?.profileContext, BULK_PROFILE_CONTEXT_MISMATCH_LIMITATION);
+  if (current.sourceState !== 'ready' || retained.sourceState !== 'ready' || !bulkProfileContextsMatch(retained, current)) {
+    return quarantineBulkProfileDerivedEvidence(row);
+  }
+  return {
+    ...row,
+    saved: { ...row.saved, profileContext: retained },
   };
 }
 

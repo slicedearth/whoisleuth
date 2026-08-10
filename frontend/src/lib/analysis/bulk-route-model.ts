@@ -9,6 +9,7 @@ export type BulkPrimaryFilter =
   | 'registered'
   | 'high_risk'
   | 'trusted'
+  | 'profile_unevaluated'
   | 'errors';
 
 export type BulkPrimaryFilterCounts = Readonly<Record<BulkPrimaryFilter, number>>;
@@ -27,6 +28,8 @@ export type BulkResultDisplayRow = Readonly<{
   mixedScript: boolean;
   referenceMatch: boolean;
   trusted: string;
+  profileContextReady: boolean;
+  profileContextLimitation: string;
   faviconMatch: boolean;
   faviconNearMatch: boolean;
   reusesOfficialAssets: boolean;
@@ -62,8 +65,9 @@ export function matchesBulkRouteFilter(
 ): boolean {
   if (selection.filter === 'available' && row.availability !== 'available') return false;
   if (selection.filter === 'registered' && !REGISTERED_STATES.has(row.availability)) return false;
-  if (selection.filter === 'high_risk' && ((row.risk ?? -1) < 70 || Boolean(row.trusted))) return false;
+  if (selection.filter === 'high_risk' && (row.saved.profileContext.sourceState !== 'ready' || (row.risk ?? -1) < 70 || Boolean(row.trusted))) return false;
   if (selection.filter === 'trusted' && !row.trusted) return false;
+  if (selection.filter === 'profile_unevaluated' && row.saved.profileContext.sourceState === 'ready') return false;
   if (selection.filter === 'errors' && row.status !== 'error') return false;
   if (selection.mutationFilter && !row.mutationTypes.includes(selection.mutationFilter)) return false;
   for (const signal of selection.signalFilters) {
@@ -83,13 +87,15 @@ export function countBulkRouteFilters(results: readonly ScanResult[]): BulkPrima
     registered: 0,
     high_risk: 0,
     trusted: 0,
+    profile_unevaluated: 0,
     errors: 0,
   };
   for (const row of results) {
     if (row.availability === 'available') counts.available += 1;
     if (REGISTERED_STATES.has(row.availability)) counts.registered += 1;
-    if ((row.risk ?? -1) >= 70 && !row.trusted) counts.high_risk += 1;
+    if (row.saved.profileContext.sourceState === 'ready' && (row.risk ?? -1) >= 70 && !row.trusted) counts.high_risk += 1;
     if (row.trusted) counts.trusted += 1;
+    if (row.saved.profileContext.sourceState !== 'ready') counts.profile_unevaluated += 1;
     if (row.status === 'error') counts.errors += 1;
   }
   return counts;
@@ -141,9 +147,11 @@ export function buildBulkResultDisplayRows(input: {
       mixedScript: Boolean(row.idn?.mixedScript),
       referenceMatch: Boolean(row.idn?.referenceMatches?.length),
       trusted: row.trusted || '',
-      faviconMatch: row.faviconMatch,
-      faviconNearMatch: row.faviconNearMatch,
-      reusesOfficialAssets: row.reusesOfficialAssets,
+      profileContextReady: row.saved.profileContext.sourceState === 'ready',
+      profileContextLimitation: row.saved.profileContext.limitation,
+      faviconMatch: row.faviconMatch === true,
+      faviconNearMatch: row.faviconNearMatch === true,
+      reusesOfficialAssets: row.reusesOfficialAssets === true,
       hasPasswordField: row.hasPasswordField,
       phishingLanguageMatch: row.phishingLanguageMatch || '',
       ct: row.ct
@@ -158,7 +166,7 @@ export function buildBulkResultDisplayRows(input: {
       availability: row.availability,
       confidence: row.confidence,
       risk: row.risk,
-      highRisk: (row.risk ?? -1) >= 70 && !row.trusted,
+      highRisk: row.saved.profileContext.sourceState === 'ready' && (row.risk ?? -1) >= 70 && !row.trusted,
       riskTitle: riskTitle(row),
       opportunity: row.opportunity,
       activity: row.activity,

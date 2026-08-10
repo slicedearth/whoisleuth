@@ -1,7 +1,8 @@
 import { expect, test } from './fixtures';
-import { boundingBox, expectNoHorizontalOverflow } from './helpers';
+import { boundingBox, expandLookupFamilies, expectNoHorizontalOverflow, holdBrowserLocalReads, readBrowserLocalCollection } from './helpers';
 import { TEST_SITE_PASSWORD } from './constants';
 import { ACTIVE_PROFILE_KEY } from '../frontend/src/lib/brand-profiles';
+import { LOOKUP_EVIDENCE_SCHEMA, LOOKUP_EVIDENCE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/evidence-export';
 
 // Every value here is deliberately dotless (no TLD), so classifyQuery on the
 // server rejects it with a 400 before any RDAP/WHOIS/DNS call - these tests
@@ -10,6 +11,29 @@ import { ACTIVE_PROFILE_KEY } from '../frontend/src/lib/brand-profiles';
 test.beforeEach(async ({ page }) => {
   await page.goto('/lookup');
 });
+
+function replayEvidence(target: string, registrar: string) {
+  return JSON.stringify({
+    schema: LOOKUP_EVIDENCE_SCHEMA,
+    schemaVersion: LOOKUP_EVIDENCE_SCHEMA_VERSION,
+    generatedAt: '2026-08-10T00:00:00.000Z',
+    application: { name: 'WHOISleuth', version: 'fixture' },
+    query: { submitted: target, registrableDomain: target, type: 'domain' },
+    diagnostics: {
+      rdap: { status: 'success', fetchedAt: '2026-08-10T00:00:00.000Z' },
+      whois: { status: 'skipped' },
+    },
+    sources: {
+      rdap: { status: 'success', parsed: { domain: target, registrar: { name: registrar } } },
+      whois: { status: 'skipped', parsed: null },
+    },
+    analysis: {
+      availability: { state: 'registered', confidence: 'high' },
+      registryComparison: null,
+      registrarPublicationComparison: null,
+    },
+  });
+}
 
 test('a single domain can be entered normally', async ({ page }) => {
   const query = page.locator('#query');
@@ -142,7 +166,7 @@ test('deep lookup reports pending elapsed time and final source settle timing', 
   await page.getByRole('button', { name: 'Run lookup' }).click();
 
   const pending = page.locator('.loading-note');
-  await expect(page.getByRole('status')).toContainText('Deep lookup is waiting for one final response');
+  await expect(pending).toContainText('Deep lookup is waiting for one final response');
   await expect(pending.locator('.loading-meta')).toContainText(/elapsed/u);
   await expect(pending.locator('.collection-trace')).toContainText('Registry RDAP');
   await expect(pending.locator('.collection-trace')).toContainText('Domain evidence');
@@ -160,9 +184,15 @@ test('deep lookup reports pending elapsed time and final source settle timing', 
   await expect(coverage).toContainText('WHOIS');
   await expect(coverage).toContainText('A bounded homepage request covering redirects, response metadata, and a capped body prefix.');
   await expect(coverage).toContainText('2.0 s');
+  const sourceQualityTable = coverage.getByRole('table', { name: 'Source quality and freshness' });
+  await expect(sourceQualityTable).toHaveAttribute('aria-colcount', '5');
+  await expect(sourceQualityTable.getByRole('row').first().getByRole('columnheader')).toHaveCount(5);
   const diagnostics = coverage.locator('details.timing-detail');
   await expect(diagnostics).not.toHaveAttribute('open', '');
-  await diagnostics.getByText('Request diagnostics', { exact: true }).click();
+  await expect(diagnostics.locator('.summary-arrow')).toHaveText('›');
+  await diagnostics.locator(':scope > summary').focus();
+  await diagnostics.locator(':scope > summary').press('Enter');
+  await expect(diagnostics).toHaveAttribute('open', '');
   await expect(diagnostics.getByRole('heading', { name: 'Collection timing' })).toBeVisible();
   await expect(diagnostics.getByRole('img', { name: 'Overlapping collection timing for 3 source branches' })).toBeVisible();
   const timingSummary = diagnostics.locator('.timing-summary');
@@ -284,6 +314,235 @@ test('navigation away aborts the browser wait without restoring a late result', 
   await expect(page.getByRole('alert')).toHaveCount(0);
 });
 
+test('effective same-route URL changes invalidate held work while task and hash changes do not', async ({ page }) => {
+  const releases = new Map<string, () => void>();
+  const gates = new Map<string, Promise<void>>();
+  const gateFor = (target: string) => {
+    const gate = new Promise<void>((resolve) => releases.set(target, resolve));
+    gates.set(target, gate);
+  };
+  gateFor('task-only.example.test');
+  gateFor('stale-route.example.test');
+  await page.route('**/api/lookup?*', async (route) => {
+    const target = new URL(route.request().url()).searchParams.get('q') || '';
+    await gates.get(target);
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        query: target,
+        type: 'domain',
+        registrableDomain: target,
+        availability: { applicable: true, state: 'registered', confidence: 'high', domain: target },
+        rdap: { parsed: {} },
+        whois: { parsed: {}, chain: [] },
+        diagnostics: { rdap: { status: 'success' }, whois: { status: 'complete' }, availability: { status: 'complete' } },
+      }),
+    }).catch(() => {});
+  });
+  const navigate = async (href: string) => {
+    await page.evaluate((destination) => {
+      const link = document.createElement('a');
+      link.href = destination;
+      link.textContent = 'Same-route fixture link';
+      document.body.append(link);
+      link.click();
+    }, href);
+    await expect.poll(() => `${new URL(page.url()).pathname}${new URL(page.url()).search}`).toBe(href);
+  };
+
+  await page.locator('#query').fill('task-only.example.test');
+  await page.getByRole('button', { name: 'Run lookup' }).click();
+  await navigate('/lookup?task=brand');
+  await page.evaluate(() => { window.location.hash = 'query'; });
+  await expect(page.getByRole('button', { name: 'Cancel lookup' })).toBeVisible();
+  releases.get('task-only.example.test')?.();
+  await expect(page.locator('#result')).toBeVisible();
+
+  await navigate('/lookup?q=stale-route.example.test&depth=deep');
+  await page.getByRole('button', { name: 'Run lookup' }).click();
+  await expect(page.getByRole('button', { name: 'Cancel lookup' })).toBeVisible();
+  await navigate('/lookup?q=replacement.example.test&depth=fast');
+  await expect(page.locator('#query')).toHaveValue('replacement.example.test');
+  await page.goBack();
+  await expect(page.locator('#query')).toHaveValue('stale-route.example.test');
+  releases.get('stale-route.example.test')?.();
+  await expect(page.locator('#result')).toHaveCount(0);
+  await expect(page.getByRole('alert')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Run lookup' })).toBeEnabled();
+});
+
+for (const action of ['edit', 'clear'] as const) {
+test(`query ${action} invalidates a response while browser-local case context is still loading`, async ({ page }) => {
+  await page.evaluate(() => {
+    const state = window as typeof window & {
+      __delayNextCaseRead?: boolean;
+      __releaseCaseRead?: () => void;
+    };
+    state.__delayNextCaseRead = false;
+    const originalGet = IDBObjectStore.prototype.get;
+    IDBObjectStore.prototype.get = function delayedCaseManifestGet(query: IDBValidKey | IDBKeyRange) {
+      const request = originalGet.call(this, query);
+      if (this.name !== 'manifests' || query !== 'cases' || !state.__delayNextCaseRead) return request;
+      state.__delayNextCaseRead = false;
+      let release = () => {};
+      const gate = new Promise<void>((resolve) => { release = resolve; });
+      state.__releaseCaseRead = release;
+      let proxy: IDBRequest;
+      proxy = new Proxy(request, {
+        get(target, property) {
+          return Reflect.get(target, property, target);
+        },
+        set(target, property, value) {
+          if (property === 'onsuccess' && typeof value === 'function') {
+            target.onsuccess = (event) => { void gate.then(() => value.call(proxy, event)); };
+            return true;
+          }
+          return Reflect.set(target, property, value, target);
+        },
+      });
+      return proxy;
+    };
+  });
+  await page.route('**/api/lookup?*', async (route) => {
+    const target = new URL(route.request().url()).searchParams.get('q') || '';
+    await page.evaluate(() => {
+      const state = window as typeof window & {
+        __delayNextCaseRead?: boolean;
+        __releaseCaseRead?: () => void;
+      };
+      state.__delayNextCaseRead = true;
+      delete state.__releaseCaseRead;
+    });
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        query: target,
+        type: 'domain',
+        registrableDomain: target,
+        availability: { applicable: true, state: 'registered', confidence: 'high', domain: target },
+        rdap: { parsed: {} },
+        whois: { parsed: {}, chain: [] },
+        diagnostics: { rdap: { status: 'success' }, whois: { status: 'complete' }, availability: { status: 'complete' } },
+      }),
+    });
+  });
+
+  const target = `${action}-during-case-read.example.test`;
+  const query = page.locator('#query');
+  const response = page.waitForResponse((candidate) => (
+    new URL(candidate.url()).pathname === '/api/lookup'
+    && new URL(candidate.url()).searchParams.get('q') === target
+  ));
+  await query.fill(target);
+  await page.getByRole('button', { name: 'Run lookup' }).click();
+  await response;
+  await expect.poll(() => page.evaluate(() => (
+    typeof (window as typeof window & { __releaseCaseRead?: () => void }).__releaseCaseRead
+  ))).toBe('function');
+
+  if (action === 'edit') await query.fill('replacement-after-response.example.test');
+  else await page.getByRole('button', { name: 'Clear query' }).click();
+  await page.evaluate(() => {
+    const state = window as typeof window & { __releaseCaseRead?: () => void };
+    state.__releaseCaseRead?.();
+    delete state.__releaseCaseRead;
+  });
+
+  await expect(page.locator('#result')).toHaveCount(0);
+  await expect(page.getByRole('alert')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Cancel lookup' })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: target })).toHaveCount(0);
+});
+}
+
+test('a completed Case action cannot publish beneath a replacement Lookup', async ({ page }) => {
+  await page.route('**/api/lookup?*', async (route) => {
+    const target = new URL(route.request().url()).searchParams.get('q') || '';
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        query: target,
+        type: 'domain',
+        registrableDomain: target,
+        availability: { applicable: true, state: 'registered', confidence: 'high', domain: target, deepScanComplete: true },
+        rdap: { parsed: {} },
+        whois: { parsed: {}, chain: [] },
+        diagnostics: { rdap: { status: 'success' }, whois: { status: 'complete' }, availability: { status: 'complete' } },
+      }),
+    });
+  });
+
+  const query = page.locator('#query');
+  await query.fill('case-action-a.example.test');
+  await page.getByRole('button', { name: 'Run lookup' }).click();
+  await expect(page.getByRole('heading', { name: 'case-action-a.example.test' })).toBeVisible();
+  await expandLookupFamilies(page);
+  await holdBrowserLocalReads(page, 2_500, '.case-body > button.primary');
+
+  await query.fill('case-action-b.example.test');
+  await page.getByRole('button', { name: 'Run lookup' }).click();
+  await expect(page.getByRole('heading', { name: 'case-action-b.example.test' })).toBeVisible({ timeout: 10_000 });
+  await expandLookupFamilies(page);
+  await expect.poll(async () => (
+    await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })
+  ).records.map((entry) => String((entry.value as { domain?: unknown }).domain ?? '')), {
+    timeout: 10_000,
+  }).toContain('case-action-a.example.test');
+  await expect(page.locator('.case-card')).toContainText('No case for case-action-b.example.test yet.');
+  await expect(page.locator('.case-card')).not.toContainText('case-action-a.example.test');
+  await expect(page.getByRole('button', { name: 'Create case' })).toBeEnabled();
+});
+
+test('a delayed replay comparison cannot rebind to a replacement primary capture', async ({ page }) => {
+  const replay = page.locator('details.replay');
+  await replay.locator('summary').click();
+  const primaryInput = replay.locator('input[type="file"]').first();
+  await primaryInput.setInputFiles({
+    name: 'primary-a.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(replayEvidence('primary-a.example.test', 'Registrar A')),
+  });
+  await expect(replay.getByRole('heading', { name: 'primary-a.example.test' })).toBeVisible();
+
+  await page.evaluate(() => {
+    const original = File.prototype.text;
+    let hold = true;
+    File.prototype.text = function text() {
+      if (!hold) return original.call(this);
+      hold = false;
+      return new Promise<string>((resolve, reject) => {
+        Reflect.set(window, '__releaseReplayComparisonRead', () => {
+          void original.call(this).then(resolve, reject);
+        });
+      });
+    };
+  });
+  await replay.locator('input[type="file"]').last().setInputFiles({
+    name: 'comparison-b.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(replayEvidence('primary-a.example.test', 'Registrar B')),
+  });
+  await expect(replay.getByText('Reading second evidence…', { exact: true })).toBeVisible();
+
+  await primaryInput.setInputFiles({
+    name: 'primary-c.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(replayEvidence('primary-c.example.test', 'Registrar C')),
+  });
+  await expect(replay.getByRole('heading', { name: 'primary-c.example.test' })).toBeVisible();
+  await page.evaluate(() => {
+    const release = Reflect.get(window, '__releaseReplayComparisonRead');
+    if (typeof release !== 'function') throw new Error('The replay comparison read gate was not installed.');
+    release();
+  });
+  await expect(replay.locator('.comparison-status')).toBeEmpty();
+  await expect(replay.locator('.comparison-counts')).toHaveCount(0);
+  await expect(replay).not.toContainText('Compared comparison-b.json locally');
+});
+
 test.describe('lookup timeout presentation', () => {
   test.use({ allowExpectedLookup504Noise: true });
 
@@ -341,6 +600,31 @@ test('keeps the current Lookup form and result during console navigation only', 
   await expect(page.locator('#result')).toHaveCount(0);
 });
 
+test('a malformed public session response does not clear the current Lookup form', async ({ page }) => {
+  await page.locator('#query').fill('retained-session-state.example');
+  let unavailableChecks = 0;
+  const unavailableSession = async (route: import('@playwright/test').Route) => {
+    unavailableChecks += 1;
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ unexpected: 'session shape' }),
+    });
+  };
+  await page.route('**/api/session', unavailableSession);
+  await page.getByRole('button', { name: 'Open command palette' }).click();
+  await page.getByLabel('Search pages').fill('Public homepage');
+  await page.getByRole('option', { name: /Public homepage/u }).click();
+  await expect(page).toHaveURL('/');
+  await expect.poll(() => unavailableChecks).toBeGreaterThan(0);
+  await page.unroute('**/api/session', unavailableSession);
+
+  await page.locator('.public-header').getByRole('link', { name: 'Open console' }).click();
+  await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
+  await page.locator('#console-navigation').getByRole('link', { name: /^Lookup/u }).click();
+  await expect(page.locator('#query')).toHaveValue('retained-session-state.example');
+});
+
 test('clears transient Lookup state when signing out through the Console', async ({ page }) => {
   await page.locator('#query').fill('transient-state.example.test');
   await page.getByRole('button', { name: 'Sign out' }).click();
@@ -351,6 +635,33 @@ test('clears transient Lookup state when signing out through the Console', async
   await expect(page).toHaveURL('/dashboard');
   await page.locator('#console-navigation').getByRole('link', { name: /^Lookup/ }).click();
 
+  await expect(page.locator('#query')).toHaveValue('');
+  await expect(page.locator('#result')).toHaveCount(0);
+});
+
+test('clears transient Lookup state without an unhandled error when Console logout is unavailable', async ({ page }) => {
+  const pageErrors: string[] = [];
+  let logoutRequests = 0;
+  page.on('pageerror', (error) => pageErrors.push(error.message));
+  await page.route('**/api/logout', async (route) => {
+    logoutRequests += 1;
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: '{',
+    });
+  });
+  await page.locator('#query').fill('failed-signout-state.example.test');
+  await page.context().clearCookies();
+  await page.getByRole('button', { name: 'Sign out' }).click();
+
+  await expect(page).toHaveURL('/login');
+  await expect.poll(() => logoutRequests).toBe(1);
+  expect(pageErrors).toEqual([]);
+  await page.getByLabel('Password').fill(TEST_SITE_PASSWORD);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page).toHaveURL('/dashboard');
+  await page.locator('#console-navigation').getByRole('link', { name: /^Lookup/ }).click();
   await expect(page.locator('#query')).toHaveValue('');
   await expect(page.locator('#result')).toHaveCount(0);
 });

@@ -148,7 +148,7 @@ const VERSION_24_PROMOTED_SUFFIXES = new Set(['xn--90ae', 'xn--l1acc', 'xn--wgbl
 
 describe('registry capability metadata', () => {
   test('has a versioned, deterministic compatibility matrix', () => {
-    assert.equal(REGISTRY_CAPABILITIES_VERSION, 28);
+    assert.equal(REGISTRY_CAPABILITIES_VERSION, 29);
     const first = registryCompatibilityMatrix();
     const second = registryCompatibilityMatrix();
     assert.deepEqual(first, second);
@@ -742,6 +742,13 @@ describe('registry capability metadata', () => {
         assert.ok(parsed.hostname.length > 0 && url.length <= 300, `${capability.id}: ${url}`);
         assert.doesNotMatch(url, /[\u0000-\u001f\u007f]/, `${capability.id}: ${url}`);
       }
+      if (capability.officialLookupUrl) {
+        const officialLookup = new URL(capability.officialLookupUrl);
+        assert.equal(officialLookup.protocol, 'https:', `${capability.id}: official lookup protocol`);
+        assert.equal(officialLookup.username, '', `${capability.id}: official lookup username`);
+        assert.equal(officialLookup.password, '', `${capability.id}: official lookup password`);
+        assert.ok(capability.documentationUrls.includes(capability.officialLookupUrl), `${capability.id}: official lookup provenance`);
+      }
     }
   });
 
@@ -752,16 +759,19 @@ describe('registry capability metadata', () => {
       coverageState: 'access_documented',
       whoisAccessProfile: 'source-ip-authorization-required',
       rdapAccessProfile: 'no-iana-service',
+      officialLookupUrl: 'https://www.dominios.es/es',
       limitation: 'The registry WHOIS service requires advance source-IP authorisation. A failed or unavailable query is not evidence that the domain is unregistered.',
       authority: 'context_only',
     });
     const vn = required(registryAccessDiagnosticFor('example.vn'));
     assert.equal(vn.whoisAccessProfile, 'no-iana-service');
     assert.equal(vn.rdapAccessProfile, 'no-iana-service');
+    assert.equal(vn.officialLookupUrl, 'https://whois.vnnic.vn/');
     assert.match(vn.limitation, /official browser lookup is not integrated/i);
     const ch = required(registryAccessDiagnosticFor('example.ch'));
     assert.equal(ch.whoisAccessProfile, 'registry-policy-restricted');
     assert.equal(ch.rdapAccessProfile, 'no-iana-service');
+    assert.equal(ch.officialLookupUrl, 'https://www.nic.ch/whois/');
     assert.match(ch.limitation, /non-standard-port.*not integrated.*no RDAP service/i);
     const gr = required(registryAccessDiagnosticFor('example.gr'));
     assert.equal(gr.whoisAccessProfile, 'no-iana-service');
@@ -769,7 +779,12 @@ describe('registry capability metadata', () => {
     assert.match(gr.limitation, /no domain WHOIS or RDAP service.*not evidence/i);
     const li = required(registryAccessDiagnosticFor('example.li'));
     assert.equal(li.whoisAccessProfile, 'registry-policy-restricted');
+    assert.equal(li.officialLookupUrl, 'https://www.nic.ch/whois/');
     assert.match(li.limitation, /official lookup.*not integrated.*no RDAP service/i);
+    const gt = required(registryAccessDiagnosticFor('example.gt'));
+    assert.equal(gt.whoisAccessProfile, 'no-iana-service');
+    assert.equal(gt.rdapAccessProfile, 'no-iana-service');
+    assert.equal(gt.officialLookupUrl, 'https://www.gt/sitio/');
     const bv = required(registryAccessDiagnosticFor('example.bv'));
     assert.equal(bv.whoisAccessProfile, 'no-iana-service');
     assert.equal(bv.rdapAccessProfile, 'no-iana-service');

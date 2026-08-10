@@ -1,10 +1,10 @@
 import { Buffer } from 'node:buffer';
-import { createReadStream } from 'node:fs';
 import { createRequire } from 'node:module';
 
 import { abortable } from '../lib/abort.mts';
 import { REGISTRY_CAPABILITIES_VERSION, registryCapabilityFor } from '../lib/registry-capabilities.mts';
 import { explainRiskScore, explainRiskScoreV6, RISK_MODEL_VERSION, RISK_REVIEW_THRESHOLD } from '../lib/risk-scoring.mts';
+import { buildRiskCalibrationSummaryReport } from '../lib/risk-calibration-summary.mts';
 import { CLI_COMMANDS, parseCliArguments } from './arguments.mts';
 import type { CliArguments } from './arguments.mts';
 import { buildCliCommandCatalogue, formatCliCommandCatalogue } from './command-catalogue.mts';
@@ -22,7 +22,6 @@ import {
   MAX_COMPARE_INPUT_BYTES,
   compareLookupDocument,
   parseCliLookupDocument,
-  readCompareInputBounded,
 } from './compare.mts';
 import { boundedCliErrorMessage, CliUsageError } from './errors.mts';
 import {
@@ -43,7 +42,11 @@ import {
   formatTerminalRegistrySupport,
   formatTerminalRiskCalibration,
 } from './formatters/terminal.mts';
-import { buildCliLookupDiff, formatCliLookupDiff } from './lookup-diff.mts';
+import {
+  MAX_RETAINED_ARTIFACT_DIFF_BYTES,
+  buildCliRetainedArtifactDiff,
+  formatCliRetainedArtifactDiff,
+} from './retained-artifact-diff.mts';
 import {
   MAX_LOOKUP_RECONCILIATION_INPUT_BYTES,
   buildCliLookupReconciliation,
@@ -104,6 +107,7 @@ import {
 import { buildCliManual } from './manual.mts';
 import {
   MAX_INVESTIGATION_MANIFEST_ARTIFACT_BYTES,
+  MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES,
   buildInvestigationManifest,
   formatInvestigationManifest,
 } from './investigation-manifest.mts';
@@ -122,7 +126,8 @@ import {
   formatCtEventFindings,
 } from './ct-event-intake.mts';
 import { buildInvestigationPlan, formatInvestigationPlan } from './investigation-plan.mts';
-import { formatInvestigationRun, runInvestigationRecipe } from './investigation-run.mts';
+import { MAX_INVESTIGATION_RUN_BYTES, formatInvestigationRun, runInvestigationRecipe } from './investigation-run.mts';
+import { readCliTextInput } from './input.mts';
 import { evaluateCliFailPolicies, formatFailPolicyNotice } from './fail-policy.mts';
 import { formatCliJunit } from './ci-report.mts';
 import { createBufferedOutput, writePrivateFile } from './output-file.mts';
@@ -140,8 +145,13 @@ import {
   MAX_OFFLINE_ARTIFACT_BYTES,
   MAX_OFFLINE_PASSPHRASE_FILE_BYTES,
   formatOfflineArtifactVerification,
+  isCompleteOfflineArtifactVerification,
   verifyOfflineArtifact,
 } from './artifact-verify.mts';
+import {
+  buildInterchangeFidelityReport,
+  formatInterchangeFidelityReport,
+} from './interchange-report.mts';
 import {
   MAX_SOURCE_RELIABILITY_INPUT_BYTES,
   buildSourceReliabilityReport,
@@ -151,14 +161,13 @@ import {
   MAX_RISK_CALIBRATION_INPUT_BYTES,
   buildRiskCalibrationReport,
   parseRiskCalibrationDataset,
-  readRiskCalibrationInputBounded,
 } from './risk-calibration.mts';
 import {
   MAX_LOOKALIKE_CALIBRATION_BYTES,
   buildLookalikeCalibration,
   formatLookalikeCalibration,
 } from './lookalike-calibration.mts';
-import { MAX_SAVED_LOOKUP_INPUT_BYTES, readSavedLookupInputBounded } from './saved-lookup.mts';
+import { MAX_SAVED_LOOKUP_INPUT_BYTES } from './saved-lookup.mts';
 import {
   presentTerminalOutput,
   terminalPresentation,
@@ -175,24 +184,11 @@ async function readStdinBounded(
   limit = MAX_STDIN_BYTES,
   signal?: AbortSignal,
 ): Promise<string> {
-  if (!stream || stream.isTTY) return '';
-  const abort = () => stream.destroy?.(new DOMException('Aborted', 'AbortError'));
-  if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
-  signal?.addEventListener('abort', abort, { once: true });
-  const chunks: Buffer[] = [];
-  let total = 0;
-  try {
-    for await (const chunk of stream as AsyncIterable<unknown>) {
-      if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
-      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as Uint8Array);
-      total += buffer.length;
-      if (total > limit) throw new CliUsageError(`Standard input is limited to ${limit} bytes.`);
-      chunks.push(buffer);
-    }
-  } finally {
-    signal?.removeEventListener('abort', abort);
-  }
-  const text = Buffer.concat(chunks).toString('utf8').trim();
+  const text = (await readCliTextInput(null, stream, {
+    maximumBytes: limit,
+    label: 'Standard input',
+    ...(signal ? { signal } : {}),
+  })).trim();
   const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
   if (lines.length > 1) throw new CliUsageError('Single-value commands accept one stdin line. Use the bulk command for multiple inputs.');
   return lines[0] || '';
@@ -266,6 +262,29 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
         ? await dependencies.readStdin()
         : await readStdinBounded(dependencies.stdin || process.stdin, MAX_STDIN_BYTES, dependencies.signal)
     );
+    const readInput = async (source: string | null | undefined, maximumBytes: number, label: string): Promise<string> => (
+      readCliTextInput(source, dependencies.stdin || process.stdin, {
+        maximumBytes,
+        label,
+        ...(dependencies.signal ? { signal: dependencies.signal } : {}),
+      })
+    );
+    const readPassphraseSource = async (source: string): Promise<string> => {
+      let passphraseText: string;
+      try {
+        passphraseText = dependencies.readPassphraseFile
+          ? await dependencies.readPassphraseFile(source)
+          : await readInput(source, MAX_OFFLINE_PASSPHRASE_FILE_BYTES, 'Passphrase file');
+      } catch (error) {
+        if (error instanceof CliUsageError) throw error;
+        throw new CliUsageError(`Could not read passphrase file: ${boundedCliErrorMessage(error, 'File could not be read')}`);
+      }
+      const passphrase = passphraseText.replace(/\r?\n$/u, '');
+      if (!passphrase || /[\r\n\u0000]/u.test(passphrase)) {
+        throw new CliUsageError('Passphrase file must contain exactly one non-empty UTF-8 line.');
+      }
+      return passphrase;
+    };
     const commandContext: CliCommandContext = Object.freeze({
       stdout,
       stderr,
@@ -273,6 +292,7 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
       writeStdout: (value: string) => write(stdout, value),
       writeStderr: (value: string) => write(stderr, value),
       readSingleInput,
+      readInput,
       now: () => dependencies.now ? dependencies.now() : new Date().toISOString(),
       beginProgress,
       endProgress,
@@ -320,14 +340,16 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
     if (args.action === 'manifest') {
       failureLabel = 'Investigation manifest';
       const artifacts: { content: string }[] = [];
+      let totalBytes = 0;
       try {
         for (const source of args.sources) {
           const content = dependencies.readDiffInput
             ? await dependencies.readDiffInput(source)
-            : await readSavedLookupInputBounded(
-              createReadStream(source, { highWaterMark: 64 * 1024 }),
-              { limit: MAX_INVESTIGATION_MANIFEST_ARTIFACT_BYTES, label: 'Manifest artefact input' },
-            );
+            : await readInput(source, MAX_INVESTIGATION_MANIFEST_ARTIFACT_BYTES, 'Manifest artefact input');
+          totalBytes += Buffer.byteLength(content, 'utf8');
+          if (totalBytes > MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES) {
+            throw new CliUsageError(`Manifest artefacts exceed the ${MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES}-byte combined limit.`);
+          }
           artifacts.push({ content });
         }
       } catch (error) {
@@ -357,12 +379,11 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
       try {
         input = dependencies.readArtifactInput
           ? await dependencies.readArtifactInput(args.source)
-          : await readSavedLookupInputBounded(args.source
-            ? createReadStream(args.source, { highWaterMark: 64 * 1024 })
-            : dependencies.stdin || process.stdin, {
-              limit: MAX_EXTERNAL_OBSERVATION_MAPPING_BYTES,
-              label: mapping ? 'External observation mapping input' : 'Open Asset Model bridge input',
-            });
+          : await readInput(
+            args.source,
+            MAX_EXTERNAL_OBSERVATION_MAPPING_BYTES,
+            mapping ? 'External observation mapping input' : 'Open Asset Model bridge input',
+          );
       } catch (error) {
         if (error instanceof CliUsageError) throw error;
         throw new CliUsageError(`Could not read ${mapping ? 'observation mapping' : 'asset bridge'} input: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
@@ -437,12 +458,7 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
       try {
         input = dependencies.readCompareInput
           ? await dependencies.readCompareInput(args.source)
-          : await readSavedLookupInputBounded(args.source
-            ? createReadStream(args.source, { highWaterMark: 64 * 1024 })
-            : dependencies.stdin || process.stdin, {
-              limit: MAX_SAVED_LOOKUP_INPUT_BYTES,
-              label: 'Registry doctor input',
-            });
+          : await readInput(args.source, MAX_SAVED_LOOKUP_INPUT_BYTES, 'Registry doctor input');
       } catch (error) {
         if (error instanceof CliUsageError) throw error;
         throw new CliUsageError(`Could not read registry doctor input: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
@@ -461,12 +477,7 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
       try {
         input = dependencies.readCompareInput
           ? await dependencies.readCompareInput(args.source)
-          : await readSavedLookupInputBounded(args.source
-            ? createReadStream(args.source, { highWaterMark: 64 * 1024 })
-            : dependencies.stdin || process.stdin, {
-              limit: MAX_REGISTRY_COHORT_INPUT_BYTES,
-              label: 'Registry cohort input',
-            });
+          : await readInput(args.source, MAX_REGISTRY_COHORT_INPUT_BYTES, 'Registry cohort input');
       } catch (error) {
         if (error instanceof CliUsageError) throw error;
         throw new CliUsageError(`Could not read registry cohort input: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
@@ -496,9 +507,7 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
       try {
         input = dependencies.readRiskCalibrationInput
           ? await dependencies.readRiskCalibrationInput(args.source)
-          : await readRiskCalibrationInputBounded(args.source
-            ? createReadStream(args.source, { highWaterMark: 64 * 1024 })
-            : dependencies.stdin || process.stdin, MAX_RISK_CALIBRATION_INPUT_BYTES);
+          : await readInput(args.source, MAX_RISK_CALIBRATION_INPUT_BYTES, 'Risk calibration input');
       } catch (error) {
         if (error instanceof CliUsageError) throw error;
         throw new CliUsageError(`Could not read Risk calibration input: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
@@ -514,7 +523,11 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
           explainPreviousRiskScore: explainRiskScoreV6,
         } : {}),
       });
-      if (!args.quiet) write(stdout, args.output === 'json' ? formatJsonDocument(report) : terminal(formatTerminalRiskCalibration(report), args.color));
+      if (!args.quiet) write(stdout, args.output === 'summary_json'
+        ? formatJsonDocument(buildRiskCalibrationSummaryReport(report))
+        : args.output === 'json'
+          ? formatJsonDocument(report)
+          : terminal(formatTerminalRiskCalibration(report), args.color));
       return EXIT_CODES.SUCCESS;
     }
 
@@ -524,12 +537,7 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
       try {
         input = dependencies.readRiskCalibrationInput
           ? await dependencies.readRiskCalibrationInput(args.source)
-          : await readSavedLookupInputBounded(args.source
-            ? createReadStream(args.source, { highWaterMark: 64 * 1024 })
-            : dependencies.stdin || process.stdin, {
-              limit: MAX_LOOKALIKE_CALIBRATION_BYTES,
-              label: 'Lookalike calibration input',
-            });
+          : await readInput(args.source, MAX_LOOKALIKE_CALIBRATION_BYTES, 'Lookalike calibration input');
       } catch (error) {
         if (error instanceof CliUsageError) throw error;
         throw new CliUsageError(`Could not read lookalike calibration input: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
@@ -553,47 +561,60 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
       try {
         input = dependencies.readArtifactInput
           ? await dependencies.readArtifactInput(args.source)
-          : await readSavedLookupInputBounded(args.source
-            ? createReadStream(args.source, { highWaterMark: 64 * 1024 })
-            : dependencies.stdin || process.stdin, {
-              limit: MAX_OFFLINE_ARTIFACT_BYTES,
-              label: 'Artefact input',
-            });
+          : await readInput(args.source, MAX_OFFLINE_ARTIFACT_BYTES, 'Artefact input');
       } catch (error) {
         if (error instanceof CliUsageError) throw error;
         throw new CliUsageError(`Could not read artifact input: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
       }
       if (!input.trim()) throw new CliUsageError('verify-artifact requires one JSON file or an artefact on stdin.');
 
-      let passphrase: string | null = null;
-      if (args.passphraseSource) {
-        let passphraseText: string;
+      const passphrase = args.passphraseSource ? await readPassphraseSource(args.passphraseSource) : null;
+      let manifest: Readonly<{ raw: string; entryId: string }> | null = null;
+      if (args.manifestSource && args.manifestEntryId) {
+        let raw: string;
         try {
-          passphraseText = dependencies.readPassphraseFile
-            ? await dependencies.readPassphraseFile(args.passphraseSource)
-            : await readSavedLookupInputBounded(
-              createReadStream(args.passphraseSource, { highWaterMark: MAX_OFFLINE_PASSPHRASE_FILE_BYTES }),
-              {
-                limit: MAX_OFFLINE_PASSPHRASE_FILE_BYTES,
-                label: 'Passphrase file',
-              },
-            );
+          raw = dependencies.readArtifactInput
+            ? await dependencies.readArtifactInput(args.manifestSource)
+            : await readInput(args.manifestSource, MAX_OFFLINE_ARTIFACT_BYTES, 'Investigation manifest input');
         } catch (error) {
           if (error instanceof CliUsageError) throw error;
-          throw new CliUsageError(`Could not read passphrase file: ${boundedCliErrorMessage(error, 'File could not be read')}`);
+          throw new CliUsageError(`Could not read investigation manifest input: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
         }
-        passphrase = passphraseText.replace(/\r?\n$/u, '');
-        if (!passphrase || /[\r\n\u0000]/u.test(passphrase)) {
-          throw new CliUsageError('Passphrase file must contain exactly one non-empty UTF-8 line.');
-        }
+        if (!raw.trim()) throw new CliUsageError('The investigation manifest input is empty.');
+        manifest = Object.freeze({ raw, entryId: args.manifestEntryId });
       }
 
-      const report = await verifyOfflineArtifact(input, { passphrase });
+      const report = await verifyOfflineArtifact(input, { passphrase, manifest });
       if (!args.quiet) {
         write(stdout, args.output === 'json'
           ? formatJsonDocument(report)
           : terminal(formatOfflineArtifactVerification(report), args.color));
       }
+      return args.strictExit && !isCompleteOfflineArtifactVerification(report)
+        ? EXIT_CODES.PARTIAL_FAILURE
+        : EXIT_CODES.SUCCESS;
+    }
+
+    if (args.action === 'interchange-report') {
+      failureLabel = 'Interchange fidelity report';
+      let input: string;
+      try {
+        input = dependencies.readArtifactInput
+          ? await dependencies.readArtifactInput(args.source)
+          : await readInput(args.source, MAX_OFFLINE_ARTIFACT_BYTES, 'Interchange input');
+      } catch (error) {
+        if (error instanceof CliUsageError) throw error;
+        throw new CliUsageError(`Could not read interchange input: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
+      }
+      if (!input.trim()) throw new CliUsageError('interchange-report requires one JSON file or an artefact on stdin.');
+      const passphrase = args.passphraseSource ? await readPassphraseSource(args.passphraseSource) : null;
+      const report = await buildInterchangeFidelityReport(input, {
+        generatedAt: commandContext.now(),
+        passphrase,
+      });
+      if (!args.quiet) write(stdout, args.output === 'json'
+        ? formatJsonDocument(report)
+        : terminal(formatInterchangeFidelityReport(report), args.color));
       return EXIT_CODES.SUCCESS;
     }
 
@@ -610,6 +631,7 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
         readPrivateKeyFile: dependencies.readPrivateKeyFile,
         readPublicKeyFile: dependencies.readPublicKeyFile,
         now: dependencies.now,
+        signal: dependencies.signal,
       });
     }
 
@@ -619,12 +641,7 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
       try {
         input = dependencies.readSourceReliabilityInput
           ? await dependencies.readSourceReliabilityInput(args.source)
-          : await readSavedLookupInputBounded(args.source
-            ? createReadStream(args.source, { highWaterMark: 64 * 1024 })
-            : dependencies.stdin || process.stdin, {
-              limit: MAX_SOURCE_RELIABILITY_INPUT_BYTES,
-              label: 'Source reliability input',
-            });
+          : await readInput(args.source, MAX_SOURCE_RELIABILITY_INPUT_BYTES, 'Source reliability input');
       } catch (error) {
         if (error instanceof CliUsageError) throw error;
         throw new CliUsageError(`Could not read source reliability input: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
@@ -648,9 +665,7 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
       try {
         input = dependencies.readCompareInput
           ? await dependencies.readCompareInput(args.source)
-          : await readCompareInputBounded(args.source
-            ? createReadStream(args.source, { highWaterMark: 64 * 1024 })
-            : dependencies.stdin || process.stdin, MAX_COMPARE_INPUT_BYTES);
+          : await readInput(args.source, MAX_COMPARE_INPUT_BYTES, 'Comparison input');
       } catch (error) {
         if (error instanceof CliUsageError) throw error;
         throw new CliUsageError(`Could not read comparison input: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
@@ -672,12 +687,8 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
 
     if (args.action === 'page-compare') {
       failureLabel = 'Static page comparison';
-      const readDiffInput = dependencies.readDiffInput || (async (source: string) => (
-        readSavedLookupInputBounded(createReadStream(source, { highWaterMark: 64 * 1024 }), {
-          limit: MAX_SAVED_LOOKUP_INPUT_BYTES,
-          label: 'Page comparison input',
-        })
-      ));
+      const readDiffInput = dependencies.readDiffInput
+        || ((source: string) => readInput(source, MAX_SAVED_LOOKUP_INPUT_BYTES, 'Page comparison input'));
       let leftInput: string;
       let rightInput: string;
       try {
@@ -702,12 +713,7 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
       try {
         input = dependencies.readMailReviewInput
           ? await dependencies.readMailReviewInput(args.source)
-          : await readSavedLookupInputBounded(args.source
-            ? createReadStream(args.source, { highWaterMark: 64 * 1024 })
-            : dependencies.stdin || process.stdin, {
-              limit: MAX_MAIL_REVIEW_INPUT_BYTES,
-              label: 'Mail review input',
-            });
+          : await readInput(args.source, MAX_MAIL_REVIEW_INPUT_BYTES, 'Mail review input');
       } catch (error) {
         if (error instanceof CliUsageError) throw error;
         throw new CliUsageError(`Could not read mail review input: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
@@ -725,12 +731,7 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
       try {
         input = dependencies.readArtifactInput
           ? await dependencies.readArtifactInput(args.source)
-          : await readSavedLookupInputBounded(args.source
-            ? createReadStream(args.source, { highWaterMark: 64 * 1024 })
-            : dependencies.stdin || process.stdin, {
-              limit: MAX_OFFLINE_EVIDENCE_INPUT_BYTES,
-              label: 'Offline evidence input',
-            });
+          : await readInput(args.source, MAX_OFFLINE_EVIDENCE_INPUT_BYTES, 'Offline evidence input');
       } catch (error) {
         if (error instanceof CliUsageError) throw error;
         throw new CliUsageError(`Could not read offline evidence input: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
@@ -766,12 +767,11 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
       try {
         input = dependencies.readArtifactInput
           ? await dependencies.readArtifactInput(args.source)
-          : await readSavedLookupInputBounded(args.source
-            ? createReadStream(args.source, { highWaterMark: 64 * 1024 })
-            : dependencies.stdin || process.stdin, {
-              limit: isBrief ? MAX_SAVED_LOOKUP_INPUT_BYTES : 4 * 1024 * 1024,
-              label: isBrief ? 'Lookup brief input' : 'Case-pack input',
-            });
+          : await readInput(
+            args.source,
+            isBrief ? MAX_SAVED_LOOKUP_INPUT_BYTES : 4 * 1024 * 1024,
+            isBrief ? 'Lookup brief input' : 'Case-pack input',
+          );
       } catch (error) {
         if (error instanceof CliUsageError) throw error;
         throw new CliUsageError(`Could not read ${isBrief ? 'Lookup brief' : 'case-pack'} input: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
@@ -797,12 +797,7 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
       try {
         input = dependencies.readArtifactInput
           ? await dependencies.readArtifactInput(args.source)
-          : await readSavedLookupInputBounded(args.source
-            ? createReadStream(args.source, { highWaterMark: 64 * 1024 })
-            : dependencies.stdin || process.stdin, {
-              limit: MAX_OFFLINE_EVIDENCE_INPUT_BYTES,
-              label: 'Domain control input',
-            });
+          : await readInput(args.source, MAX_OFFLINE_EVIDENCE_INPUT_BYTES, 'Domain control input');
       } catch (error) {
         if (error instanceof CliUsageError) throw error;
         throw new CliUsageError(`Could not read domain control input: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
@@ -847,19 +842,11 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
       try {
         manifestInput = dependencies.readArtifactInput
           ? await dependencies.readArtifactInput(args.source)
-          : await readSavedLookupInputBounded(args.source
-            ? createReadStream(args.source, { highWaterMark: 64 * 1024 })
-            : dependencies.stdin || process.stdin, {
-              limit: MAX_OFFLINE_EVIDENCE_INPUT_BYTES,
-              label: 'Domain-control manifest input',
-            });
+          : await readInput(args.source, MAX_OFFLINE_EVIDENCE_INPUT_BYTES, 'Domain-control manifest input');
         if (args.previousSource) {
           previousInput = dependencies.readDiffInput
             ? await dependencies.readDiffInput(args.previousSource)
-            : await readSavedLookupInputBounded(createReadStream(args.previousSource, { highWaterMark: 64 * 1024 }), {
-              limit: MAX_OFFLINE_EVIDENCE_INPUT_BYTES,
-              label: 'Prior monitor snapshot',
-            });
+            : await readInput(args.previousSource, MAX_OFFLINE_EVIDENCE_INPUT_BYTES, 'Prior monitor snapshot');
         }
       } catch (error) {
         if (error instanceof CliUsageError) throw error;
@@ -897,12 +884,7 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
       try {
         input = dependencies.readArtifactInput
           ? await dependencies.readArtifactInput(args.source)
-          : await readSavedLookupInputBounded(args.source
-            ? createReadStream(args.source, { highWaterMark: 64 * 1024 })
-            : dependencies.stdin || process.stdin, {
-              limit: MAX_ASSURANCE_INPUT_BYTES,
-              label: 'Domain assurance input',
-            });
+          : await readInput(args.source, MAX_ASSURANCE_INPUT_BYTES, 'Domain assurance input');
       } catch (error) {
         if (error instanceof CliUsageError) throw error;
         throw new CliUsageError(`Could not read domain assurance input: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
@@ -932,12 +914,7 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
       try {
         input = dependencies.readArtifactInput
           ? await dependencies.readArtifactInput(args.source)
-          : await readSavedLookupInputBounded(args.source
-            ? createReadStream(args.source, { highWaterMark: 64 * 1024 })
-            : dependencies.stdin || process.stdin, {
-              limit: MAX_DOMAIN_CHANGE_PACKET_INPUT_BYTES,
-              label: 'Domain change packet input',
-            });
+          : await readInput(args.source, MAX_DOMAIN_CHANGE_PACKET_INPUT_BYTES, 'Domain change packet input');
       } catch (error) {
         if (error instanceof CliUsageError) throw error;
         throw new CliUsageError(`Could not read domain change packet input: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
@@ -967,12 +944,7 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
       try {
         input = dependencies.readArtifactInput
           ? await dependencies.readArtifactInput(args.source)
-          : await readSavedLookupInputBounded(args.source
-            ? createReadStream(args.source, { highWaterMark: 64 * 1024 })
-            : dependencies.stdin || process.stdin, {
-              limit: MAX_SHARING_REVIEW_BYTES,
-              label: 'Sharing review input',
-            });
+          : await readInput(args.source, MAX_SHARING_REVIEW_BYTES, 'Sharing review input');
       } catch (error) {
         if (error instanceof CliUsageError) throw error;
         throw new CliUsageError(`Could not read sharing review input: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
@@ -1013,10 +985,7 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
         try {
           resumeInput = dependencies.readDiffInput
             ? await dependencies.readDiffInput(args.resumeSource)
-            : await readSavedLookupInputBounded(createReadStream(args.resumeSource, { highWaterMark: 64 * 1024 }), {
-              limit: 24 * 1024 * 1024,
-              label: 'Investigation resume state',
-            });
+            : await readInput(args.resumeSource, MAX_INVESTIGATION_RUN_BYTES, 'Investigation resume state');
         } catch (error) {
           if (error instanceof CliUsageError) throw error;
           throw new CliUsageError(`Could not read investigation resume state: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
@@ -1044,13 +1013,9 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
     }
 
     if (args.action === 'diff') {
-      failureLabel = 'Lookup evidence diff';
-      const readDiffInput = dependencies.readDiffInput || (async (source: string) => (
-        readSavedLookupInputBounded(createReadStream(source, { highWaterMark: 64 * 1024 }), {
-          limit: MAX_SAVED_LOOKUP_INPUT_BYTES,
-          label: 'Lookup diff input',
-        })
-      ));
+      failureLabel = 'Retained artifact diff';
+      const readDiffInput = dependencies.readDiffInput
+        || ((source: string) => readInput(source, MAX_RETAINED_ARTIFACT_DIFF_BYTES, 'Retained diff input'));
       let leftInput: string;
       let rightInput: string;
       try {
@@ -1060,27 +1025,24 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
         ]);
       } catch (error) {
         if (error instanceof CliUsageError) throw error;
-        throw new CliUsageError(`Could not read Lookup diff input: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
+        throw new CliUsageError(`Could not read retained diff input: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
       }
-      const document = buildCliLookupDiff(
+      const document = buildCliRetainedArtifactDiff(
         leftInput,
         rightInput,
+        { leftSessionId: args.leftSessionId, rightSessionId: args.rightSessionId },
         dependencies.now ? dependencies.now() : new Date().toISOString(),
       );
       if (!args.quiet) write(stdout, args.output === 'json'
         ? formatJsonDocument(document)
-        : terminal(formatCliLookupDiff(document), args.color));
+        : terminal(formatCliRetainedArtifactDiff(document), args.color));
       return EXIT_CODES.SUCCESS;
     }
 
     if (args.action === 'reconcile') {
       failureLabel = 'Lookup observation reconciliation';
-      const readReconciliationInput = dependencies.readDiffInput || (async (source: string) => (
-        readSavedLookupInputBounded(createReadStream(source, { highWaterMark: 64 * 1024 }), {
-          limit: MAX_SAVED_LOOKUP_INPUT_BYTES,
-          label: 'Lookup reconciliation input',
-        })
-      ));
+      const readReconciliationInput = dependencies.readDiffInput
+        || ((source: string) => readInput(source, MAX_SAVED_LOOKUP_INPUT_BYTES, 'Lookup reconciliation input'));
       const inputs: string[] = [];
       let totalBytes = 0;
       try {
@@ -1105,12 +1067,8 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
 
     if (args.action === 'timeline') {
       failureLabel = 'Lookup observation timeline';
-      const readTimelineInput = dependencies.readDiffInput || (async (source: string) => (
-        readSavedLookupInputBounded(createReadStream(source, { highWaterMark: 64 * 1024 }), {
-          limit: MAX_SAVED_LOOKUP_INPUT_BYTES,
-          label: 'Lookup timeline input',
-        })
-      ));
+      const readTimelineInput = dependencies.readDiffInput
+        || ((source: string) => readInput(source, MAX_SAVED_LOOKUP_INPUT_BYTES, 'Lookup timeline input'));
       const inputs: string[] = [];
       let totalBytes = 0;
       try {
@@ -1139,12 +1097,7 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
       try {
         input = dependencies.readExportInput
           ? await dependencies.readExportInput(args.source)
-          : await readSavedLookupInputBounded(args.source
-            ? createReadStream(args.source, { highWaterMark: 64 * 1024 })
-            : dependencies.stdin || process.stdin, {
-              limit: MAX_SAVED_LOOKUP_INPUT_BYTES,
-              label: 'Evidence export input',
-            });
+          : await readInput(args.source, MAX_SAVED_LOOKUP_INPUT_BYTES, 'Evidence export input');
       } catch (error) {
         if (error instanceof CliUsageError) throw error;
         throw new CliUsageError(`Could not read evidence export input: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
@@ -1155,9 +1108,9 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
       const now = dependencies.now ? dependencies.now() : new Date().toISOString();
       const document = buildCliEvidenceExport(input, evidenceModule, now);
       const output = args.format === 'markdown'
-        ? formatLookupEvidenceMarkdown(document)
+        ? formatLookupEvidenceMarkdown(document, { includeAttribution: args.includeAttribution })
         : args.format === 'html'
-          ? formatLookupEvidenceHtml(document)
+          ? formatLookupEvidenceHtml(document, { includeAttribution: args.includeAttribution })
           : formatCliEvidenceExport(document, args.compact);
       write(stdout, output);
       return EXIT_CODES.SUCCESS;
@@ -1187,12 +1140,7 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
       try {
         input = dependencies.readArtifactInput
           ? await dependencies.readArtifactInput(args.source)
-          : await readSavedLookupInputBounded(args.source
-            ? createReadStream(args.source, { highWaterMark: 64 * 1024 })
-            : dependencies.stdin || process.stdin, {
-              limit: MAX_CT_EVENT_INPUT_BYTES,
-              label: 'Certificate event input',
-            });
+          : await readInput(args.source, MAX_CT_EVENT_INPUT_BYTES, 'Certificate event input');
       } catch (error) {
         if (error instanceof CliUsageError) throw error;
         throw new CliUsageError(`Could not read certificate event input: ${boundedCliErrorMessage(error, 'Input could not be read')}`);

@@ -31,28 +31,69 @@ function boundedResult(value: string): unknown {
   }
 }
 
-function parseResumeState(input: string | null, recipe: InvestigationPlanRecipe, subject: string): CompletedStep[] {
+function resultSchema(value: unknown): string | null {
+  return value && typeof value === 'object' && !Array.isArray(value) && typeof (value as Record<string, unknown>).schema === 'string'
+    ? String((value as Record<string, unknown>).schema)
+    : null;
+}
+
+function sameArguments(left: unknown, right: readonly string[]): boolean {
+  return Array.isArray(left)
+    && left.length === right.length
+    && left.every((value, index) => typeof value === 'string' && value === right[index]);
+}
+
+function parseResumeState(
+  input: string | null,
+  plan: ReturnType<typeof buildInvestigationPlan>,
+): CompletedStep[] {
   if (!input) return [];
   if (Buffer.byteLength(input, 'utf8') > MAX_INVESTIGATION_RUN_BYTES) throw new CliUsageError('Investigation resume state exceeds the 24 MiB limit.');
   let parsed: unknown;
   try { parsed = JSON.parse(input.replace(/^\uFEFF/u, '')); } catch { throw new CliUsageError('Investigation resume state must be valid JSON.'); }
   const root = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};
-  if (root.schema !== CLI_INVESTIGATION_RUN_SCHEMA || root.version !== CLI_INVESTIGATION_RUN_VERSION || root.recipe !== recipe || root.subject !== subject || !Array.isArray(root.completedSteps)) {
+  if (root.schema !== CLI_INVESTIGATION_RUN_SCHEMA || root.version !== CLI_INVESTIGATION_RUN_VERSION || root.recipe !== plan.recipe.id || root.subject !== plan.subject || !Array.isArray(root.completedSteps)) {
     throw new CliUsageError('Investigation resume state must match this versioned recipe and subject.');
   }
-  return root.completedSteps.slice(0, 16).flatMap((value) => {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return [];
+  if (root.completedSteps.length > plan.steps.length) {
+    throw new CliUsageError('Investigation resume state contains more steps than the installed fixed recipe.');
+  }
+  const completed: CompletedStep[] = [];
+  for (const [index, value] of root.completedSteps.entries()) {
+    const planned = plan.steps[index];
+    if (!planned || !value || typeof value !== 'object' || Array.isArray(value)) {
+      throw new CliUsageError('Investigation resume state contains a malformed or out-of-order step.');
+    }
     const item = value as Record<string, unknown>;
-    if (typeof item.id !== 'string' || typeof item.command !== 'string' || !Array.isArray(item.arguments) || !['offline', 'network'].includes(String(item.mode)) || !Number.isSafeInteger(item.exitCode)) return [];
-    return [Object.freeze({
-      id: item.id,
-      command: item.command,
-      arguments: Object.freeze(item.arguments.filter((entry): entry is string => typeof entry === 'string').slice(0, 32)),
-      mode: item.mode as 'offline' | 'network',
-      exitCode: Number(item.exitCode),
+    if (
+      item.id !== planned.id
+      || item.command !== planned.command
+      || item.mode !== planned.mode
+      || !sameArguments(item.arguments, planned.arguments)
+      || !Number.isSafeInteger(item.exitCode)
+    ) {
+      throw new CliUsageError('Investigation resume state does not match the installed fixed recipe.');
+    }
+    const exitCode = Number(item.exitCode);
+    if (exitCode !== 0 && exitCode !== 2) {
+      if (index !== root.completedSteps.length - 1) {
+        throw new CliUsageError('A failed investigation step must be the final retained step.');
+      }
+      break;
+    }
+    if (resultSchema(item.result) !== planned.produces) {
+      throw new CliUsageError('Investigation resume state contains output from an unexpected command contract.');
+    }
+    completed.push(Object.freeze({
+      id: planned.id,
+      command: planned.command,
+      arguments: planned.arguments,
+      mode: planned.mode,
+      exitCode,
       result: item.result,
-    })];
-  });
+    }));
+  }
+  return completed;
 }
 
 export async function runInvestigationRecipe(
@@ -66,9 +107,7 @@ export async function runInvestigationRecipe(
   }>,
 ) {
   const plan = buildInvestigationPlan(recipe, subjectValue, options.generatedAt);
-  const prior = parseResumeState(options.resumeInput, recipe, plan.subject);
-  const allowedStepIds = new Set(plan.steps.map((step) => step.id));
-  if (prior.some((step) => !allowedStepIds.has(step.id))) throw new CliUsageError('Investigation resume state contains a step outside the fixed recipe.');
+  const prior = parseResumeState(options.resumeInput, plan);
   const completed = [...prior];
   let state: 'complete' | 'awaiting_network_approval' | 'awaiting_analyst_selection' | 'step_failed' = 'complete';
   let currentStep: typeof plan.steps[number] | null = null;
@@ -85,13 +124,17 @@ export async function runInvestigationRecipe(
       break;
     }
     const result = await options.execute(step.command, step.arguments);
+    const parsedResult = boundedResult(result.stdout);
+    if ((result.exitCode === 0 || result.exitCode === 2) && resultSchema(parsedResult) !== step.produces) {
+      throw new CliUsageError(`Investigation step ${step.id} returned an unexpected command contract.`);
+    }
     completed.push(Object.freeze({
       id: step.id,
       command: step.command,
       arguments: step.arguments,
       mode: step.mode,
       exitCode: result.exitCode,
-      result: boundedResult(result.stdout),
+      result: parsedResult,
     }));
     if (result.exitCode !== 0 && result.exitCode !== 2) {
       state = 'step_failed';

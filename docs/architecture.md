@@ -225,6 +225,32 @@ provider request or persisted write. Result links are passive pivots into the
 exact retained case, campaign, Brand Profile, or relationship observation where
 one exists.
 
+`campaign-cohort-review.ts` is a separate transient campaign projection. It
+requires an analyst-selected exact Brand Profile identifier already present in
+Case schema 12 associations, scopes at most 50 campaign cases, and reuses the
+existing source-aware relationship summary. Cohort connectivity can use only
+four typed rationales: exact retained relationships, bounded similarity,
+pairwise same-registrar creation-publication observations within seven days,
+and catalogue-qualified common infrastructure. It emits at most 25 cohorts,
+100 rationales, and 100 separately displayed assertions. Assertions never feed
+membership, identifiers, ordering, or counts. The projection creates no store,
+schema, export, request, score, ownership inference, or attribution decision.
+Unavailable source collections remain explicit rather than becoming empty or
+negative evidence.
+
+The Case model and the existing Monitor Case API are the sole mutation owners
+for Case schema 12's bounded `brandProfileIds` field. The Brands route reads
+that field only to project existing source-aware analyst review rows for the
+active profile; it cannot add, remove, resolve, or rewrite an association.
+Monitor expresses UI changes as retry-safe add or remove intents so every
+browser-local conflict retry derives from the latest Case and preserves an
+unrelated tab's change. Exact profile-identifier reuse for a different
+normalised name rejects the Brand Profile merge and any dependent workspace
+Case section atomically.
+Profile deletion therefore never cascades. Unmatched identifiers remain
+source-qualified local state rather than new relationship, graph, packet,
+capsule, calibration, or reverse-reference edges.
+
 The 12 independent browser-store ceilings total 15.75 MiB, which is greater than
 the 5 MiB local-storage planning reference used by the former design. The
 maintainer-run `npm run platform:local-data` command derives that total from the
@@ -294,10 +320,13 @@ Evidence-cluster review can qualify an exact retained IP relationship against a
 checked-in Common-infrastructure snapshot. The maintenance command
 `npm run common-infrastructure:update -- --commit <full-sha>` reads only a
 pinned MISP warning-lists commit, caps every source response at 1 MiB, accepts
-only exact CIDR lists no older than 30 days, rejects malformed or duplicate
-entries, and caps the generated snapshot at 20,000 entries and 1 MiB. The
-retained snapshot records the upstream commit, source date, SHA-256 digest,
-licence, exclusions, and limitations.
+only exact CIDR lists, rejects malformed or duplicate entries before applying
+freshness policy, and caps the generated snapshot at 20,000 entries and 1 MiB.
+A fully valid source older than 30 days is retained only as an explicit stale
+exclusion and contributes no ranges; malformed or unavailable required sources
+still fail the update. Active and excluded source IDs must form the exact
+reviewed four-source partition. The retained snapshot records the upstream
+commit, source date, SHA-256 digest, licence, exclusions, and limitations.
 
 Runtime matching is browser-local and makes no provider request. A match only
 qualifies the relationship as shared infrastructure. It does not identify an
@@ -387,11 +416,29 @@ directly. This is the only deliberate exception; it avoids duplicating lookup
 orchestration while keeping bypasses mechanically detectable.
 
 The on-demand `npm run schema:inventory` report is assembled from the owning
-contract constants and readers rather than a copied version table. Its explicit
+contract constants and readers in both `cli/` and `tools/`, rather than a copied
+version table. Its explicit
 supported-version lists make a contract bump fail tests until legacy handling,
 future-version behaviour, byte bounds, migration direction, and write semantics
 are reviewed.
 It reads no browser-local or hosted records and writes no inventory artefact.
+
+The on-demand `npm run maintenance:duplication` report scans only bounded,
+regular `tools/*.mts` source files. It records repository-relative module and
+top-level-function metadata, statically resolvable local/imported call edges,
+and exact comment-free token matches. It excludes source bodies, literals,
+absolute paths, environment values, and runtime data; method dispatch,
+callbacks, computed properties, and runtime imports remain explicit
+limitations. A repeated match is evidence for review, never an instruction to
+merge files. Shared helpers preserve every established tool entry point,
+argument contract, output schema, bound, and CI caller.
+
+The initial pre-consolidation measurement on 2026-08-10 covered 43 modules and
+41 entry points. It found 16 exact clusters containing 23 repeated
+implementations and 113 repeated lines. The reviewed extraction introduced one
+bounded helper module without removing an entry point; the same report now
+finds no exact token-clone cluster. These figures describe exact repeated
+implementations only, not an estimate of broader semantic similarity.
 
 The maintainer-run `npm run registry:drift` audit compares the embedded
 registry-standards snapshot with exactly two fixed official IANA catalogue

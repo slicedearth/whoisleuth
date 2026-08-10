@@ -8,26 +8,45 @@ import {
   type KeyObject,
 } from 'node:crypto';
 
-import { canonicalArtifactJson } from '../frontend/src/lib/analysis/artifact-integrity.ts';
 import {
+  canonicalArtifactJsonFor,
+  resolveArtifactCanonicalization,
+  SORTED_JSON_V1,
+  SORTED_JSON_V2,
+  type ArtifactCanonicalization,
+} from '../frontend/src/lib/analysis/artifact-integrity.ts';
+import {
+  hasVerifiedApplicableIntegrity,
+  hasVerifiedArtifactStructure,
   MAX_OFFLINE_ARTIFACT_BYTES,
   verifyOfflineArtifact,
+  type OfflineArtifactIntegrityScope,
+  type OfflineArtifactVerificationCheck,
+  type OfflineArtifactVerificationState,
 } from './artifact-verify.mts';
+import { parseBoundedJsonObject } from './bounded-json.mts';
 
 export const SIGNED_EVIDENCE_PACKAGE_SCHEMA = 'whoisleuth.signed-evidence-package';
-export const SIGNED_EVIDENCE_PACKAGE_VERSION = 1;
+export const SIGNED_EVIDENCE_PACKAGE_VERSION = 2;
+export const LEGACY_SIGNED_EVIDENCE_PACKAGE_VERSION = 1;
+export const EVIDENCE_SIGNATURE_VERIFICATION_SCHEMA = 'whoisleuth.evidence-signature-verification';
+export const EVIDENCE_SIGNATURE_VERIFICATION_VERSION = 2;
 export const EVIDENCE_SIGNATURE_ALGORITHM = 'Ed25519';
-export const EVIDENCE_SIGNATURE_CANONICALIZATION = 'sorted-json-v1';
+export const EVIDENCE_SIGNATURE_CANONICALIZATION = SORTED_JSON_V2;
 export const MAX_SIGNING_KEY_FILE_BYTES = 16 * 1024;
 
 type UnknownRecord = Record<string, unknown>;
 type SignedPayload = Readonly<{
   schema: typeof SIGNED_EVIDENCE_PACKAGE_SCHEMA;
-  version: typeof SIGNED_EVIDENCE_PACKAGE_VERSION;
+  version: typeof LEGACY_SIGNED_EVIDENCE_PACKAGE_VERSION | typeof SIGNED_EVIDENCE_PACKAGE_VERSION;
   signedAt: string;
   artifact: UnknownRecord;
 }>;
-export type SignedEvidencePackage = SignedPayload & Readonly<{
+type CurrentSignedPayload = Omit<SignedPayload, 'version'> & Readonly<{
+  version: typeof SIGNED_EVIDENCE_PACKAGE_VERSION;
+}>;
+export type SignedEvidencePackage = Omit<SignedPayload, 'version'> & Readonly<{
+  version: typeof SIGNED_EVIDENCE_PACKAGE_VERSION;
   signature: Readonly<{
     algorithm: typeof EVIDENCE_SIGNATURE_ALGORITHM;
     canonicalization: typeof EVIDENCE_SIGNATURE_CANONICALIZATION;
@@ -37,18 +56,26 @@ export type SignedEvidencePackage = SignedPayload & Readonly<{
   }>;
 }>;
 export type EvidenceSignatureVerification = Readonly<{
-  schema: 'whoisleuth.evidence-signature-verification';
-  version: 1;
-  valid: true;
+  schema: typeof EVIDENCE_SIGNATURE_VERIFICATION_SCHEMA;
+  version: typeof EVIDENCE_SIGNATURE_VERIFICATION_VERSION;
   state: 'signature_valid';
-  signerTrust: 'trusted_key' | 'embedded_key_only';
-  signedAt: string;
-  keyIdSha256: string;
-  publicKeyMatched: boolean | null;
+  signature: Readonly<{
+    state: 'valid';
+    signerTrust: 'trusted_key' | 'embedded_key_only';
+    signedAt: string;
+    keyIdSha256: string;
+    publicKeyMatched: boolean | null;
+  }>;
   artifact: Readonly<{
-    schema: string;
-    version: number;
+    schema: string | null;
+    version: number | null;
     kind: string;
+    assurance: Readonly<{
+      state: OfflineArtifactVerificationState | 'not_verified';
+      structure: OfflineArtifactVerificationCheck;
+      contentIntegrity: OfflineArtifactVerificationCheck;
+      contentIntegrityScope: OfflineArtifactIntegrityScope;
+    }>;
   }>;
   limitations: readonly string[];
 }>;
@@ -71,20 +98,7 @@ function record(value: unknown): UnknownRecord | null {
 }
 
 function parseObject(raw: string, label: string): UnknownRecord {
-  if (typeof raw !== 'string') throw new TypeError(`${label} must be UTF-8 JSON text.`);
-  const bytes = Buffer.byteLength(raw, 'utf8');
-  if (bytes === 0 || bytes > MAX_OFFLINE_ARTIFACT_BYTES) {
-    throw new TypeError(`${label} must be between 1 byte and ${MAX_OFFLINE_ARTIFACT_BYTES} bytes.`);
-  }
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    throw new TypeError(`${label} must be valid JSON.`);
-  }
-  const value = record(parsed);
-  if (!value) throw new TypeError(`${label} must contain one JSON object.`);
-  return value;
+  return parseBoundedJsonObject(raw, { label, maximumBytes: MAX_OFFLINE_ARTIFACT_BYTES });
 }
 
 function hasExactKeys(value: UnknownRecord, expected: ReadonlySet<string>): boolean {
@@ -99,6 +113,12 @@ function timestamp(value: unknown): string {
   const parsed = Date.parse(value);
   if (!Number.isFinite(parsed)) throw new TypeError('Signature time must be a valid timestamp.');
   return new Date(parsed).toISOString();
+}
+
+function canonicalTimestamp(value: unknown): string {
+  const normalized = timestamp(value);
+  if (value !== normalized) throw new TypeError('Signature time must use canonical UTC timestamp text.');
+  return normalized;
 }
 
 function importPrivateKey(pem: string): KeyObject {
@@ -144,8 +164,8 @@ function keyId(publicDer: Buffer): string {
   return createHash('sha256').update(publicDer).digest('hex');
 }
 
-function payloadBytes(payload: SignedPayload): Buffer {
-  return Buffer.from(canonicalArtifactJson(payload), 'utf8');
+function payloadBytes(payload: SignedPayload, canonicalization: ArtifactCanonicalization): Buffer {
+  return Buffer.from(canonicalArtifactJsonFor(payload, canonicalization), 'utf8');
 }
 
 async function signableArtifact(raw: string): Promise<{
@@ -156,6 +176,9 @@ async function signableArtifact(raw: string): Promise<{
   const verification = await verifyOfflineArtifact(raw);
   if (!['case_response_packet', 'investigation_capsule', 'signed_review_artifact'].includes(verification.artifact.kind)) {
     throw new TypeError('Only reviewed response packets, investigation capsules, and supported review manifests can be signed.');
+  }
+  if (!hasVerifiedArtifactStructure(verification) || !hasVerifiedApplicableIntegrity(verification)) {
+    throw new TypeError('Evidence signing requires verified structure and a verified applicable integrity contract.');
   }
   return { artifact, verification };
 }
@@ -168,7 +191,7 @@ export async function signEvidencePackage(
   const { artifact } = await signableArtifact(raw);
   const privateKey = importPrivateKey(privateKeyPem);
   const publicDer = spkiDer(privateKey);
-  const payload: SignedPayload = Object.freeze({
+  const payload: CurrentSignedPayload = Object.freeze({
     schema: SIGNED_EVIDENCE_PACKAGE_SCHEMA,
     version: SIGNED_EVIDENCE_PACKAGE_VERSION,
     signedAt: timestamp(signedAt),
@@ -181,7 +204,7 @@ export async function signEvidencePackage(
       canonicalization: EVIDENCE_SIGNATURE_CANONICALIZATION,
       publicKeySpkiDerBase64: publicDer.toString('base64'),
       keyIdSha256: keyId(publicDer),
-      valueBase64: sign(null, payloadBytes(payload), privateKey).toString('base64'),
+      valueBase64: sign(null, payloadBytes(payload, SORTED_JSON_V2), privateKey).toString('base64'),
     }),
   });
 }
@@ -195,12 +218,11 @@ export async function verifyEvidencePackageSignature(
   const artifact = record(value.artifact);
   if (!hasExactKeys(value, PACKAGE_KEYS)
     || value.schema !== SIGNED_EVIDENCE_PACKAGE_SCHEMA
-    || value.version !== SIGNED_EVIDENCE_PACKAGE_VERSION
+    || (value.version !== LEGACY_SIGNED_EVIDENCE_PACKAGE_VERSION && value.version !== SIGNED_EVIDENCE_PACKAGE_VERSION)
     || !artifact
     || !signature
     || !hasExactKeys(signature, SIGNATURE_KEYS)
     || signature.algorithm !== EVIDENCE_SIGNATURE_ALGORITHM
-    || signature.canonicalization !== EVIDENCE_SIGNATURE_CANONICALIZATION
     || typeof signature.publicKeySpkiDerBase64 !== 'string'
     || signature.publicKeySpkiDerBase64.length > 4096
     || !BASE64_RE.test(signature.publicKeySpkiDerBase64)
@@ -211,7 +233,21 @@ export async function verifyEvidencePackageSignature(
     || !SHA256_RE.test(signature.keyIdSha256)) {
     throw new TypeError('Signed evidence package has an unsupported or malformed envelope.');
   }
-  const signedAt = timestamp(value.signedAt);
+  let canonicalization: ArtifactCanonicalization;
+  try {
+    canonicalization = resolveArtifactCanonicalization(
+      value.version,
+      signature.canonicalization,
+      [
+        { version: LEGACY_SIGNED_EVIDENCE_PACKAGE_VERSION, canonicalization: SORTED_JSON_V1, explicit: true },
+        { version: SIGNED_EVIDENCE_PACKAGE_VERSION, canonicalization: SORTED_JSON_V2, explicit: true },
+      ],
+      'Signed evidence package',
+    );
+  } catch {
+    throw new TypeError('Signed evidence package has an unsupported or malformed envelope.');
+  }
+  const signedAt = canonicalTimestamp(value.signedAt);
   const publicDer = Buffer.from(signature.publicKeySpkiDerBase64, 'base64');
   if (keyId(publicDer) !== signature.keyIdSha256) {
     throw new TypeError('Signed evidence package public-key identifier does not match its embedded key.');
@@ -222,16 +258,17 @@ export async function verifyEvidencePackageSignature(
   );
   const payload: SignedPayload = {
     schema: SIGNED_EVIDENCE_PACKAGE_SCHEMA,
-    version: SIGNED_EVIDENCE_PACKAGE_VERSION,
+    version: value.version as SignedPayload['version'],
     signedAt,
     artifact,
   };
   const signatureBytes = Buffer.from(signature.valueBase64, 'base64');
   if (signatureBytes.length !== 64
-    || !verify(null, payloadBytes(payload), embeddedPublicKey, signatureBytes)) {
+    || !verify(null, payloadBytes(payload, canonicalization), embeddedPublicKey, signatureBytes)) {
     throw new TypeError('Signed evidence package failed Ed25519 verification.');
   }
-  const artifactVerification = await verifyOfflineArtifact(JSON.stringify(artifact));
+  let artifactVerification: Awaited<ReturnType<typeof verifyOfflineArtifact>> | null = null;
+  try { artifactVerification = await verifyOfflineArtifact(JSON.stringify(artifact)); } catch { /* Signature validity remains independently reportable. */ }
   let publicKeyMatched: boolean | null = null;
   if (trustedPublicKeyPem) {
     const trustedDer = spkiDer(importPublicKey(trustedPublicKeyPem, 'Trusted public key file'));
@@ -239,24 +276,41 @@ export async function verifyEvidencePackageSignature(
     if (!publicKeyMatched) throw new TypeError('Signed evidence package does not match the trusted public key.');
   }
   return Object.freeze({
-    schema: 'whoisleuth.evidence-signature-verification',
-    version: 1,
-    valid: true,
+    schema: EVIDENCE_SIGNATURE_VERIFICATION_SCHEMA,
+    version: EVIDENCE_SIGNATURE_VERIFICATION_VERSION,
     state: 'signature_valid',
-    signerTrust: trustedPublicKeyPem ? 'trusted_key' : 'embedded_key_only',
-    signedAt,
-    keyIdSha256: signature.keyIdSha256,
-    publicKeyMatched,
+    signature: Object.freeze({
+      state: 'valid',
+      signerTrust: trustedPublicKeyPem ? 'trusted_key' : 'embedded_key_only',
+      signedAt,
+      keyIdSha256: signature.keyIdSha256,
+      publicKeyMatched,
+    }),
     artifact: Object.freeze({
-      schema: artifactVerification.artifact.schema,
-      version: artifactVerification.artifact.version,
-      kind: artifactVerification.artifact.kind,
+      schema: artifactVerification?.artifact.schema
+        ?? (typeof artifact.schema === 'string' && /^[a-z0-9.-]{1,160}$/u.test(artifact.schema) ? artifact.schema : null),
+      version: artifactVerification?.artifact.version
+        ?? (Number.isSafeInteger(artifact.version ?? artifact.schemaVersion)
+          && Number(artifact.version ?? artifact.schemaVersion) >= 1
+          && Number(artifact.version ?? artifact.schemaVersion) <= 1_000
+          ? Number(artifact.version ?? artifact.schemaVersion)
+          : null),
+      kind: artifactVerification?.artifact.kind ?? 'unverified_artifact',
+      assurance: Object.freeze({
+        state: artifactVerification?.state ?? 'not_verified',
+        structure: artifactVerification?.checks.structure ?? 'not_checked',
+        contentIntegrity: artifactVerification?.checks.contentIntegrity ?? 'not_checked',
+        contentIntegrityScope: artifactVerification?.checks.contentIntegrityScope ?? 'not_checked',
+      }),
     }),
     limitations: Object.freeze([
       trustedPublicKeyPem
         ? 'The signature and supplied public key match; recipient trust still depends on obtaining that public key through an authenticated channel.'
         : 'The signature is internally valid for the embedded public key, but signer identity was not authenticated because no trusted public key was supplied.',
       'The signature authenticates the canonical sorted-JSON content, not the original whitespace, indentation, or object-key order of the serialised file.',
+      ...(artifactVerification
+        ? [`Embedded-artifact assurance is reported separately as ${artifactVerification.state}; it does not change the cryptographic signature result.`]
+        : ['The embedded artefact did not pass a supported local assurance contract. The cryptographic signature remains valid for its bytes, but no structure or inner-integrity claim is made.']),
       'A valid signature proves the canonical package content has not changed since signing; it does not establish that the retained observations or analyst statements are accurate.',
       'WHOISleuth does not generate, store, recover, rotate, or publish signing keys.',
     ]),
@@ -269,11 +323,12 @@ export function formatEvidenceSignatureVerification(
   const lines = [
     'WHOISleuth evidence signature verification',
     `State: ${report.state}`,
-    `Signer trust: ${report.signerTrust}`,
-    `Artifact: ${report.artifact.kind} · ${report.artifact.schema} v${report.artifact.version}`,
-    `Signed: ${report.signedAt}`,
-    `Key ID: sha256:${report.keyIdSha256}`,
-    `Trusted public key: ${report.publicKeyMatched === null ? 'not supplied' : 'matched'}`,
+    `Signer trust: ${report.signature.signerTrust}`,
+    `Artifact: ${report.artifact.kind} · ${report.artifact.schema ?? 'unrecognised'} v${report.artifact.version ?? 'unrecognised'}`,
+    `Artifact assurance: ${report.artifact.assurance.state}`,
+    `Signed: ${report.signature.signedAt}`,
+    `Key ID: sha256:${report.signature.keyIdSha256}`,
+    `Trusted public key: ${report.signature.publicKeyMatched === null ? 'not supplied' : 'matched'}`,
   ];
   for (const limitation of report.limitations) lines.push(`Limitation: ${limitation}`);
   return `${lines.join('\n')}\n`;

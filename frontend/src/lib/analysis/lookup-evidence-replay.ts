@@ -1,14 +1,19 @@
 import {
+  assertLookupEvidencePortableTree,
+  LOOKUP_EVIDENCE_PORTABLE_MAX_BYTES,
+  LOOKUP_EVIDENCE_PORTABLE_MAX_ENTRIES,
   LOOKUP_EVIDENCE_SCHEMA,
+  LEGACY_LOOKUP_EVIDENCE_SCHEMA_VERSION,
   LOOKUP_EVIDENCE_SCHEMA_VERSION,
+  SUPPORTED_LOOKUP_EVIDENCE_SCHEMA_VERSIONS,
 } from './evidence-export.ts';
 import {
   buildLookupAssetGraph,
   type LookupAssetGraph,
 } from './lookup-asset-graph.ts';
 
-export const LOOKUP_EVIDENCE_REPLAY_MAX_BYTES = 5 * 1024 * 1024;
-export const LOOKUP_EVIDENCE_REPLAY_MAX_ENTRIES = 20_000;
+export const LOOKUP_EVIDENCE_REPLAY_MAX_BYTES = LOOKUP_EVIDENCE_PORTABLE_MAX_BYTES;
+export const LOOKUP_EVIDENCE_REPLAY_MAX_ENTRIES = LOOKUP_EVIDENCE_PORTABLE_MAX_ENTRIES;
 
 export type LookupEvidenceReplaySource = Readonly<{
   id: string;
@@ -20,9 +25,13 @@ export type LookupEvidenceReplaySource = Readonly<{
 }>;
 
 export type LookupEvidenceReplayFact = Readonly<{
+  id: string;
   label: string;
   value: string;
+  sourceId: string;
   source: string;
+  sourceState: string;
+  sourceComplete: boolean | null;
 }>;
 
 export type LookupEvidenceReplay = Readonly<{
@@ -57,8 +66,11 @@ const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/gu;
 const MAX_SOURCES = 16;
 const MAX_FACTS = 20;
 const MAX_LIMITATIONS = 24;
-const MAX_DOCUMENT_DEPTH = 24;
 const SHA256_RE = /^[a-f0-9]{64}$/u;
+const RDAP_STATES = new Set(['success', 'partial', 'error', 'unsupported', 'not_found', 'skipped', 'disabled']);
+const WHOIS_STATES = new Set(['complete', 'partial', 'error', 'unsupported', 'not_found', 'skipped', 'disabled']);
+const LEGACY_RDAP_WRAPPER_STATES = new Set(['success', 'not_found', 'error']);
+const LEGACY_WHOIS_WRAPPER_STATES = new Set(['complete', 'partial', 'unknown', 'error']);
 
 function record(value: unknown): JsonRecord {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -126,26 +138,51 @@ function source(descriptor: SourceDescriptor): LookupEvidenceReplaySource {
   };
 }
 
-function addFact(
-  output: LookupEvidenceReplayFact[],
-  label: string,
-  value: unknown,
-  sourceLabel: string,
-): void {
-  if (output.length >= MAX_FACTS) return;
+function factValue(value: unknown): string {
   let normalized = '';
   if (Array.isArray(value)) normalized = stringList(value, 12, 160).join(', ');
   else if (value && typeof value === 'object') {
     const item = record(value);
     normalized = text(item.name ?? item.org ?? item.handle ?? item.value, 300);
   } else normalized = text(value, 300);
-  if (!normalized) return;
-  output.push({ label, value: normalized, source: sourceLabel });
+  return normalized;
+}
+
+function addFact(
+  output: LookupEvidenceReplayFact[],
+  id: string,
+  label: string,
+  candidates: readonly Readonly<{ value: unknown; sourceId: string }>[],
+  sources: ReadonlyMap<string, LookupEvidenceReplaySource>,
+): void {
+  if (output.length >= MAX_FACTS) return;
+  for (const candidate of candidates) {
+    const value = factValue(candidate.value);
+    const source = sources.get(candidate.sourceId);
+    if (!value || !source) continue;
+    output.push({
+      id,
+      label,
+      value,
+      sourceId: source.id,
+      source: source.label,
+      sourceState: source.state,
+      sourceComplete: source.complete,
+    });
+    return;
+  }
 }
 
 function lifecycleValue(parsed: JsonRecord, key: string): unknown {
   const lifecycle = record(parsed.lifecycle);
-  return lifecycle[`${key}Iso`] ?? lifecycle[key] ?? parsed[`${key}Iso`] ?? parsed[key];
+  const aliases = key === 'created'
+    ? ['createdIso', 'createdDateIso', 'created', 'createdDate']
+    : ['expiresIso', 'expiryDateIso', 'expires', 'expiryDate'];
+  for (const alias of aliases) {
+    if (lifecycle[alias] !== undefined && lifecycle[alias] !== null) return lifecycle[alias];
+    if (parsed[alias] !== undefined && parsed[alias] !== null) return parsed[alias];
+  }
+  return null;
 }
 
 function comparisonContradictions(value: unknown, label: string): string[] {
@@ -166,27 +203,11 @@ async function sha256(value: string): Promise<string> {
 }
 
 function validateDocumentShape(value: unknown): void {
-  const pending: Array<Readonly<{ value: unknown; depth: number }>> = [{ value, depth: 0 }];
-  let entries = 0;
-  while (pending.length) {
-    const current = pending.pop();
-    if (!current) break;
-    entries += 1;
-    if (entries > LOOKUP_EVIDENCE_REPLAY_MAX_ENTRIES) {
-      throw new Error(`Lookup evidence replay files are limited to ${LOOKUP_EVIDENCE_REPLAY_MAX_ENTRIES.toLocaleString('en')} structured entries.`);
-    }
-    if (current.depth > MAX_DOCUMENT_DEPTH) {
-      throw new Error(`Lookup evidence replay files are limited to ${MAX_DOCUMENT_DEPTH} nested levels.`);
-    }
-    if (Array.isArray(current.value)) {
-      for (const item of current.value) pending.push({ value: item, depth: current.depth + 1 });
-      continue;
-    }
-    if (current.value && typeof current.value === 'object') {
-      for (const item of Object.values(current.value)) {
-        pending.push({ value: item, depth: current.depth + 1 });
-      }
-    }
+  try {
+    assertLookupEvidencePortableTree(value);
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : 'The evidence file exceeds the portable structure limits.';
+    throw new Error(detail.replace(/^Lookup evidence/u, 'Lookup evidence replay'));
   }
 }
 
@@ -218,8 +239,8 @@ export async function parseLookupEvidenceReplay(
   if (document.schema !== LOOKUP_EVIDENCE_SCHEMA) {
     throw new Error('The selected file is not a WHOISleuth Lookup evidence export.');
   }
-  if (document.schemaVersion !== LOOKUP_EVIDENCE_SCHEMA_VERSION) {
-    throw new Error(`Only Lookup evidence schema ${LOOKUP_EVIDENCE_SCHEMA_VERSION} can be replayed by this build.`);
+  if (!SUPPORTED_LOOKUP_EVIDENCE_SCHEMA_VERSIONS.some((version) => version === document.schemaVersion)) {
+    throw new Error(`Only Lookup evidence schemas ${SUPPORTED_LOOKUP_EVIDENCE_SCHEMA_VERSIONS.join(' and ')} can be replayed by this build.`);
   }
   const exportedAt = timestamp(document.generatedAt);
   if (!exportedAt) throw new Error('The evidence export timestamp is missing or invalid.');
@@ -233,8 +254,55 @@ export async function parseLookupEvidenceReplay(
   const availability = record(analysis.availability);
   const rdap = record(sources.rdap);
   const whois = record(sources.whois);
-  const rdapParsed = record(rdap.parsed);
-  const whoisParsed = record(whois.parsed);
+  const rdapDiagnosticState = text(record(diagnostics.rdap).status, 40);
+  const whoisDiagnosticState = text(record(diagnostics.whois).status, 40);
+  const rdapSourceState = text(rdap.status, 40);
+  const whoisSourceState = text(whois.status, 40);
+  const schemaVersion = Number(document.schemaVersion);
+  const legacySourceWrappers = schemaVersion === LEGACY_LOOKUP_EVIDENCE_SCHEMA_VERSION;
+  if (!RDAP_STATES.has(rdapDiagnosticState) || !WHOIS_STATES.has(whoisDiagnosticState)) {
+    throw new Error('Lookup evidence source states contradict their retained diagnostics.');
+  }
+  if (legacySourceWrappers) {
+    if (!LEGACY_RDAP_WRAPPER_STATES.has(rdapSourceState)
+      || !LEGACY_WHOIS_WRAPPER_STATES.has(whoisSourceState)
+      || (rdapDiagnosticState === 'success' && rdapSourceState !== 'success')
+      || (rdapDiagnosticState === 'not_found' && rdapSourceState !== 'not_found')
+      || (rdapDiagnosticState === 'error' && rdapSourceState !== 'error')
+      || (whoisDiagnosticState === 'complete' && whoisSourceState !== 'complete')
+      || (whoisDiagnosticState === 'partial' && whoisSourceState !== 'partial')
+      || (whoisDiagnosticState === 'error' && whoisSourceState !== 'error')) {
+      throw new Error('Lookup evidence source states contradict their retained diagnostics.');
+    }
+  } else if (rdapSourceState !== rdapDiagnosticState || whoisSourceState !== whoisDiagnosticState) {
+    throw new Error('Lookup evidence source states contradict their retained diagnostics.');
+  }
+  const rdapPublicationAvailable = ['success', 'partial'].includes(rdapDiagnosticState);
+  const whoisPublicationAvailable = ['complete', 'partial'].includes(whoisDiagnosticState);
+  const retainedRdapParsed = record(rdap.parsed);
+  const retainedWhoisParsed = record(whois.parsed);
+  const rdapParsed = rdapPublicationAvailable ? retainedRdapParsed : {};
+  const whoisParsed = whoisPublicationAvailable ? retainedWhoisParsed : {};
+  if ((rdapDiagnosticState === 'success' && Object.keys(rdapParsed).length === 0)
+    || (!legacySourceWrappers && !rdapPublicationAvailable && Object.keys(retainedRdapParsed).length > 0)) {
+    throw new Error('Lookup evidence RDAP publication state is inconsistent with its retained data.');
+  }
+  if ((whoisDiagnosticState === 'complete' && Object.keys(whoisParsed).length === 0)
+    || (!legacySourceWrappers && !whoisPublicationAvailable && Object.keys(retainedWhoisParsed).length > 0)) {
+    throw new Error('Lookup evidence WHOIS publication state is inconsistent with its retained data.');
+  }
+  const replayRdap = {
+    ...rdap,
+    status: rdapDiagnosticState,
+    parsed: rdapPublicationAvailable ? rdap.parsed ?? null : null,
+    raw: rdapPublicationAvailable ? rdap.raw ?? null : null,
+  };
+  const replayWhois = {
+    ...whois,
+    status: whoisDiagnosticState,
+    parsed: whoisPublicationAvailable ? whois.parsed ?? null : null,
+    chain: whoisPublicationAvailable && Array.isArray(whois.chain) ? whois.chain : [],
+  };
   const dns = record(availability.dns);
   const http = record(availability.http);
   const tls = record(availability.tls);
@@ -243,8 +311,9 @@ export async function parseLookupEvidenceReplay(
   const securityPosture = record(availability.securityPosture);
   const structuredDataIdentity = record(availability.structuredDataIdentity);
   const sourceDescriptors: SourceDescriptor[] = [
-    { id: 'rdap', label: 'Registry RDAP', value: rdap, fallbackObservedAt: record(diagnostics.rdap).fetchedAt },
-    { id: 'whois', label: 'WHOIS', value: whois, fallbackObservedAt: record(diagnostics.whois).queriedAt },
+    { id: 'submitted-query', label: 'Submitted query', value: { state: 'provided', complete: true, observedAt: exportedAt } },
+    { id: 'rdap', label: 'Registry RDAP', value: replayRdap, fallbackObservedAt: record(diagnostics.rdap).fetchedAt },
+    { id: 'whois', label: 'WHOIS', value: replayWhois, fallbackObservedAt: record(diagnostics.whois).queriedAt },
     { id: 'reverse-dns', label: 'Reverse DNS', value: sources.reverseDns },
     { id: 'network-context', label: 'Observed network context', value: sources.network },
     { id: 'dns', label: 'DNS', value: dns },
@@ -259,29 +328,47 @@ export async function parseLookupEvidenceReplay(
   const replaySources = sourceDescriptors
     .map((item) => source(item))
     .slice(0, MAX_SOURCES);
+  const replaySourcesById = new Map(replaySources.map((item) => [item.id, item]));
 
   const facts: LookupEvidenceReplayFact[] = [];
-  addFact(facts, 'Domain', rdapParsed.domain ?? whoisParsed.domain ?? query.registrableDomain ?? query.submitted, 'Registration');
-  addFact(facts, 'Registrar', rdapParsed.registrar ?? whoisParsed.registrar, 'Registry RDAP / WHOIS');
-  addFact(facts, 'Created', lifecycleValue(rdapParsed, 'created') ?? lifecycleValue(whoisParsed, 'created'), 'Registry RDAP / WHOIS');
-  addFact(facts, 'Expires', lifecycleValue(rdapParsed, 'expires') ?? lifecycleValue(whoisParsed, 'expires'), 'Registry RDAP / WHOIS');
-  addFact(facts, 'Nameservers', rdapParsed.nameservers ?? whoisParsed.nameservers ?? availability.nameservers, 'Registration / DNS');
-  addFact(facts, 'Website activity', availability.activityStatus, 'HTTP');
-  addFact(facts, 'Final website URL', http.finalUrl ?? record(http.response).finalUrl, 'HTTP');
-  addFact(facts, 'Connected address', tls.connectedAddress, 'TLS');
-  addFact(facts, 'Certificate fingerprint', record(tls.certificate).fingerprintSha256, 'TLS');
-  addFact(facts, 'Page title', pageIdentity.title ?? availability.pageTitle, 'HTML');
+  addFact(facts, 'registration.domain', 'Domain', [
+    { value: rdapParsed.domain, sourceId: 'rdap' },
+    { value: whoisParsed.domain ?? whoisParsed.domainName, sourceId: 'whois' },
+    { value: query.registrableDomain ?? query.submitted, sourceId: 'submitted-query' },
+  ], replaySourcesById);
+  addFact(facts, 'registration.registrar', 'Registrar', [
+    { value: rdapParsed.registrar, sourceId: 'rdap' },
+    { value: whoisParsed.registrar, sourceId: 'whois' },
+  ], replaySourcesById);
+  addFact(facts, 'registration.created', 'Created', [
+    { value: lifecycleValue(rdapParsed, 'created'), sourceId: 'rdap' },
+    { value: lifecycleValue(whoisParsed, 'created'), sourceId: 'whois' },
+  ], replaySourcesById);
+  addFact(facts, 'registration.expires', 'Expires', [
+    { value: lifecycleValue(rdapParsed, 'expires'), sourceId: 'rdap' },
+    { value: lifecycleValue(whoisParsed, 'expires'), sourceId: 'whois' },
+  ], replaySourcesById);
+  addFact(facts, 'registration.nameservers', 'Nameservers', [
+    { value: rdapParsed.nameservers, sourceId: 'rdap' },
+    { value: whoisParsed.nameservers, sourceId: 'whois' },
+    { value: availability.nameservers, sourceId: 'dns' },
+  ], replaySourcesById);
+  addFact(facts, 'website.activity', 'Website activity', [{ value: availability.activityStatus, sourceId: 'http' }], replaySourcesById);
+  addFact(facts, 'website.final-url', 'Final website URL', [{ value: http.finalUrl ?? record(http.response).finalUrl, sourceId: 'http' }], replaySourcesById);
+  addFact(facts, 'tls.connected-address', 'Connected address', [{ value: tls.connectedAddress, sourceId: 'tls' }], replaySourcesById);
+  addFact(facts, 'tls.certificate-fingerprint', 'Certificate fingerprint', [{ value: record(tls.certificate).fingerprintSha256, sourceId: 'tls' }], replaySourcesById);
+  addFact(facts, 'page.title', 'Page title', [{ value: pageIdentity.title ?? availability.pageTitle, sourceId: 'page-identity' }], replaySourcesById);
   const technologyFindings = Array.isArray(technology.findings)
     ? technology.findings.slice(0, 12).map((item) => record(item).name)
     : [];
-  addFact(facts, 'Detected technology', technologyFindings, 'Derived technology profile');
+  addFact(facts, 'technology.detected', 'Detected technology', [{ value: technologyFindings, sourceId: 'technology' }], replaySourcesById);
 
   const contradictions = unique([
     ...comparisonContradictions(analysis.registryComparison, 'Registry RDAP and WHOIS'),
     ...comparisonContradictions(analysis.registrarPublicationComparison, 'Registry and registrar RDAP'),
   ], 16);
   const unknowns = unique(replaySources.flatMap((item) => (
-    item.state === 'success' && item.complete !== false
+    ['success', 'complete', 'provided'].includes(item.state) && item.complete !== false
       ? []
       : [`${item.label}: ${item.state}${item.complete === false ? ' and incomplete' : ''}.`]
   )), 12);
@@ -291,11 +378,13 @@ export async function parseLookupEvidenceReplay(
     'Use the retained observation time and file digest when citing this historical evidence.',
     'Record analyst assertions separately from the replayed observations.',
   ], 6);
-  const networkContext = record(sources.network);
+  const retainedNetworkContext = record(sources.network);
+  const networkState = text(retainedNetworkContext.status, 40);
+  const networkContext = ['success', 'partial'].includes(networkState) ? retainedNetworkContext : {};
   const graph = buildLookupAssetGraph({
     target: query.registrableDomain ?? query.inputHostname ?? query.submitted,
     observedAt: exportedAt,
-    rdapEvidence: rdap,
+    rdapEvidence: replayRdap,
     rdapParsed,
     dnsEvidence: dns,
     dnsRecords: dns.records,
@@ -323,11 +412,14 @@ export async function parseLookupEvidenceReplay(
     'This is a local replay of a deliberate evidence export. It does not refresh any source or establish the target state at import time.',
     'Only bounded normalised facts are shown here. Raw source payloads in the export are not rendered.',
     'Missing or unsupported evidence remains unavailable and is not evidence of absence, safety, or equivalence.',
+    ...(legacySourceWrappers && (rdapSourceState !== rdapDiagnosticState || whoisSourceState !== whoisDiagnosticState)
+      ? ['Schema 25 used legacy publication wrappers; retained diagnostics are authoritative and unavailable wrapper data was suppressed during replay.']
+      : []),
   ], MAX_LIMITATIONS);
 
   return {
     version: 1,
-    schemaVersion: LOOKUP_EVIDENCE_SCHEMA_VERSION,
+    schemaVersion,
     digestSha256,
     digestVerified: Boolean(expectedSha256),
     exportedAt,

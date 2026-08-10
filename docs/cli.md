@@ -65,10 +65,14 @@ saved result without sending it anywhere:
 ```bash
 whoisleuth bulk domains.txt --csv
 whoisleuth discover example.com --preset common --jsonl
-whoisleuth verify-artifact lookup.json --json
+whoisleuth verify-artifact lookup.json --json --strict-exit
+whoisleuth verify-artifact report.json --manifest manifest.json --manifest-entry artifact-2 --json --strict-exit
+whoisleuth interchange-report workspace.json --json
 whoisleuth compare lookup.json --json
+whoisleuth diff earlier-bulk.json later-bulk.json --left-session session-1 --right-session session-2 --json
 whoisleuth brief lookup.json
 whoisleuth registry-doctor lookup.json --json
+whoisleuth registry-cohort retained-cohorts.jsonl --json
 ```
 
 Only one query is accepted by `lookup`; multi-input processing belongs to
@@ -111,7 +115,7 @@ HTTP status, and a bounded explanation.
 | Compare saved evidence | `compare`, `page-compare`, `diff`, `reconcile`, `timeline`, `mail-review` |
 | Review supplied evidence | `brief`, `review-evidence`, `registry-doctor`, `registry-cohort`, `source-report`, `sharing-review`, `map-observations` |
 | Plan and assure changes | `domain-control`, `monitor-once`, `assurance`, `change-packet`, `workflow-plan`, `workflow-run` |
-| Verify and package evidence | `case-pack`, `manifest`, `oam-export`, `verify-artifact`, `inspect-archive`, `sign-artifact`, `verify-signature`, `export` |
+| Verify and package evidence | `case-pack`, `manifest`, `oam-export`, `verify-artifact`, `interchange-report`, `inspect-archive`, `sign-artifact`, `verify-signature`, `export` |
 | Calibrate offline | `risk-calibrate`, `lookalike-calibrate` |
 | Operate the CLI | `doctor`, `registry-scaffold`, `commands`, `completion`, `manual` |
 
@@ -189,7 +193,7 @@ full contracts into the packaged reference.
 
 ### Offline artefact verification
 
-[Read the archive, saved Lookup, and signed-artefact verification contract.](cli-reference.md#offline-artefact-verification)
+[Read the archive, saved Lookup, Lookup-evidence, and signed-artefact verification contract.](cli-reference.md#offline-artefact-verification)
 
 ### Privacy-safe source reliability report
 

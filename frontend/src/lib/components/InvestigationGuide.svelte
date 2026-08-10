@@ -71,8 +71,11 @@
   let contextError = $state('');
   let localContextError = $state('');
   let evidenceContextAvailable = $state(true);
-  let savedRecordContextAvailable = $state(true);
-  let localContextPending = $state(true);
+  let profileContextAvailable = $state(true);
+  let caseContextAvailable = $state(true);
+  let evidenceContextPending = $state(true);
+  let profileContextPending = $state(true);
+  let caseContextPending = $state(true);
   let localContextRefreshVersion = 0;
   let guideSection = $state<HTMLElement | null>(null);
   let actionPanel = $state<HTMLElement | null>(null);
@@ -83,6 +86,7 @@
   let evidence = $state({ observations: 0, relationships: 0, partial: false, truncated: false, latestObservedAt: '' });
   let contextProfile = $state<BrandProfile | null>(null);
   let contextCase = $state<CaseRecord | null>(null);
+  const localContextPending = $derived(evidenceContextPending || profileContextPending || caseContextPending);
   const recipe = $derived(guide ? investigationGuideRecipe(guide.recipeId) : null);
   const stages = $derived(guide ? investigationGuideStagesForGuide(guide) : []);
   const currentStage = $derived(guide ? investigationGuideStageForGuidePath(guide, page.url.pathname) : null);
@@ -110,7 +114,7 @@
     evidenceProjection: evidence,
   }));
   const handoffContextAvailable = $derived(
-    !localContextPending && evidenceContextAvailable && savedRecordContextAvailable,
+    !evidenceContextPending && !caseContextPending && evidenceContextAvailable && caseContextAvailable,
   );
   const caseWorkspaceHref = $derived(contextCase
     ? `/monitor?view=cases&case=${encodeURIComponent(contextCase.id)}#case-response-${encodeURIComponent(contextCase.id)}`
@@ -137,30 +141,39 @@
 
   async function refreshStoredContext() {
     const refreshVersion = ++localContextRefreshVersion;
-    localContextPending = true;
+    evidenceContextPending = true;
+    profileContextPending = true;
+    caseContextPending = true;
     localContextError = '';
-    const [evidenceResult, recordResult] = await Promise.allSettled([
+    const [evidenceResult, profileResult, caseResult] = await Promise.allSettled([
       refreshEvidence(),
-      refreshContext(),
+      refreshProfileContext(),
+      refreshCaseContext(),
     ]);
     if (refreshVersion !== localContextRefreshVersion) return;
     evidenceContextAvailable = evidenceResult.status === 'fulfilled';
-    savedRecordContextAvailable = recordResult.status === 'fulfilled';
+    profileContextAvailable = profileResult.status === 'fulfilled';
+    caseContextAvailable = caseResult.status === 'fulfilled';
     if (!evidenceContextAvailable) {
       evidence = { observations: 0, relationships: 0, partial: false, truncated: false, latestObservedAt: '' };
     }
-    if (!savedRecordContextAvailable) {
-      contextProfile = null;
-      contextCase = null;
-    }
-    localContextPending = false;
-    if (!evidenceContextAvailable || !savedRecordContextAvailable) {
-      const expectedFailure = [evidenceResult, recordResult].every((result) => (
+    if (!profileContextAvailable) contextProfile = null;
+    if (!caseContextAvailable) contextCase = null;
+    evidenceContextPending = false;
+    profileContextPending = false;
+    caseContextPending = false;
+    if (!evidenceContextAvailable || !profileContextAvailable || !caseContextAvailable) {
+      const expectedFailure = [evidenceResult, profileResult, caseResult].every((result) => (
         result.status === 'fulfilled' || isExpectedBrowserLocalDataFailure(result.reason)
       ));
+      const unavailable = [
+        !evidenceContextAvailable ? 'retained evidence' : '',
+        !profileContextAvailable ? 'active-profile preference' : '',
+        !caseContextAvailable ? 'Cases' : '',
+      ].filter(Boolean).join(', ');
       localContextError = expectedFailure
-        ? 'Some browser-local investigation context is unavailable. The guide remains usable, and unavailable saved data is not treated as absent.'
-        : 'Browser-local investigation context could not be refreshed. The guide remains usable, and unreadable saved data is not treated as absent.';
+        ? `Some browser-local investigation context is unavailable (${unavailable}). Healthy sources remain available, and unreadable saved data is not treated as absent.`
+        : `Browser-local investigation context could not be refreshed (${unavailable}). Healthy sources remain available, and unreadable saved data is not treated as absent.`;
     }
   }
 
@@ -295,14 +308,20 @@
     };
   }
 
-  async function refreshContext() {
+  async function refreshProfileContext() {
     if (!guide) {
       contextProfile = null;
+      return;
+    }
+    contextProfile = await activeProfile();
+  }
+
+  async function refreshCaseContext() {
+    if (!guide) {
       contextCase = null;
       return;
     }
-    const [profile, cases] = await Promise.all([activeProfile(), loadCases()]);
-    contextProfile = profile;
+    const cases = await loadCases();
     const targetDomain = guide.focusDomain || guide.domain;
     contextCase = cases.find((record) => record.domain === targetDomain) || null;
   }
@@ -540,9 +559,9 @@
     </div>
     <dl class="context-tray" aria-label="Active investigation context">
       <div><dt>Target</dt><dd>{guide.focusDomain || guide.domain}</dd></div>
-      <div><dt>Brand Profile</dt><dd>{localContextPending ? 'Loading…' : savedRecordContextAvailable ? contextProfile?.name || 'None active' : 'Unavailable'}</dd></div>
-      <div><dt>Case</dt><dd>{localContextPending ? 'Loading…' : savedRecordContextAvailable ? contextCase ? `${contextCase.status} · ${contextCase.disposition}` : 'Not retained' : 'Unavailable'}</dd></div>
-      <div><dt>Evidence freshness</dt><dd>{localContextPending ? 'Loading…' : evidenceContextAvailable ? evidenceFreshness : 'Unavailable'}</dd></div>
+      <div><dt>Brand Profile</dt><dd>{profileContextPending ? 'Loading…' : profileContextAvailable ? contextProfile?.name || 'None active' : 'Unavailable'}</dd></div>
+      <div><dt>Case</dt><dd>{caseContextPending ? 'Loading…' : caseContextAvailable ? contextCase ? `${contextCase.status} · ${contextCase.disposition}` : 'Not retained' : 'Unavailable'}</dd></div>
+      <div><dt>Evidence freshness</dt><dd>{evidenceContextPending ? 'Loading…' : evidenceContextAvailable ? evidenceFreshness : 'Unavailable'}</dd></div>
       <div><dt>Next action</dt><dd>{actionStage?.label || 'Review completed plan'}</dd></div>
     </dl>
     {#if localContextError}<p class="local-context-error" role="status">{localContextError}</p>{/if}

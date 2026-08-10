@@ -9,7 +9,7 @@ import {
   offlineInvestigationScenario,
 } from '../frontend/src/lib/analysis/offline-investigation-scenarios.ts';
 
-test('covers every guided investigation recipe with bounded fictional evidence', () => {
+test('covers the three foundational investigation recipes with bounded fictional evidence', () => {
   assert.deepEqual(
     OFFLINE_INVESTIGATION_SCENARIOS.map((scenario) => scenario.recipeId).sort(),
     ['brand_sweep', 'infrastructure_pivot', 'new_domain_triage'],

@@ -1,7 +1,10 @@
 import { expect, test } from './fixtures';
 import { boundingBox, expectNoHorizontalOverflow } from './helpers';
+import { readFileSync } from 'node:fs';
 import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model';
 import { CASE_REPORT_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-report';
+
+const packageVersion = (JSON.parse(readFileSync('package.json', 'utf8')) as { version: string }).version;
 
 // Every domain here is a local/invalid value (RFC 2606 .invalid, or dotless
 // bad-domain-* that classifyQuery rejects with a 400). Case features are
@@ -106,6 +109,40 @@ test.describe('evidence timeline', () => {
     await expect(group).toContainText('Content Security Policy, HSTS');
     await expect(group).not.toContainText('/private/path');
     await expect(group).not.toContainText('token=secret');
+    await expectNoHorizontalOverflow(page);
+  });
+
+  test('current Case evidence presents profile provenance and its limitation beside Risk', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await openSeededTimelineCase(page, 'profile-provenance.invalid', [
+      caseRecord({
+        id: 'profile-provenance',
+        domain: 'profile-provenance.invalid',
+        evidenceHistory: [snapshot({
+          id: 'ev-profile-provenance',
+          fingerprint: 'profile-provenance',
+          riskScore: 73,
+          profileContextState: 'unavailable',
+          profileContextLimitation: 'Brand Profile context was unavailable; profile-derived evidence remains unevaluated.',
+        })],
+      }),
+    ], CASE_SCHEMA_VERSION);
+
+    const summary = page.locator('.evidence');
+    await expect(summary).toContainText('Risk');
+    await expect(summary).toContainText(/73\s*· model v1/u);
+    await expect(summary).toContainText('Profile context');
+    await expect(summary).toContainText('unavailable');
+    await expect(summary.locator('.profile-context-limitation')).toHaveText(
+      'Brand Profile context was unavailable; profile-derived evidence remains unevaluated.',
+    );
+
+    await page.locator('.timeline-toggle').click();
+    const provenance = page.locator('.timeline-group', { hasText: 'Profile provenance and limitations' });
+    await expect(provenance.getByRole('heading', { name: 'Profile provenance and limitations' })).toBeVisible();
+    await expect(provenance).toContainText('Brand Profile context');
+    await expect(provenance).toContainText('Profile-context limitation');
+    await expect(provenance).toContainText('unavailable');
     await expectNoHorizontalOverflow(page);
   });
 
@@ -417,6 +454,11 @@ test.describe('case report export', () => {
 
     expect(parsed.schema).toBe('whoisleuth.case-report');
     expect(parsed.schemaVersion).toBe(CASE_REPORT_SCHEMA_VERSION);
+    expect(parsed.application).toEqual({
+      name: 'WHOISleuth',
+      version: packageVersion,
+      projectUrl: 'https://github.com/slicedearth/whoisleuth',
+    });
     expect(parsed.case.domain).toBe('export-json.invalid');
     expect(parsed.case.notesIncluded).toBe(false);
     expect(parsed.evidenceTimeline.length).toBe(2);
@@ -485,7 +527,7 @@ test.describe('case report export', () => {
     ]);
 
     // Check the "Include analyst notes" checkbox.
-    await page.locator('.export-notes input[type="checkbox"]').check();
+    await page.getByRole('checkbox', { name: 'Include analyst notes' }).check();
 
     const downloadPromise = page.waitForEvent('download');
     await page.locator('.export-controls').getByRole('button', { name: 'Export JSON' }).click();
@@ -505,10 +547,10 @@ test.describe('case report export', () => {
       caseRecord({ id: 'second-export', domain: 'second-export.invalid' }),
     ]);
 
-    await page.locator('.export-notes input[type="checkbox"]').check();
+    await page.getByRole('checkbox', { name: 'Include analyst notes' }).check();
     await page.locator('.case-head', { hasText: 'second-export.invalid' }).click();
 
-    await expect(page.locator('.export-notes input[type="checkbox"]')).not.toBeChecked();
+    await expect(page.getByRole('checkbox', { name: 'Include analyst notes' })).not.toBeChecked();
   });
 
   test('whole-store backup remains available and distinct', async ({ page }) => {
@@ -547,11 +589,14 @@ test.describe('case report export', () => {
     ]);
 
     const controls = page.locator('.export-controls');
-    const checkbox = controls.locator('input[type="checkbox"]');
+    const notesCheckbox = controls.getByRole('checkbox', { name: 'Include analyst notes' });
+    const attributionCheckbox = controls.getByRole('checkbox', { name: 'Include generator footer' });
     await expect(controls).toBeVisible();
-    const checkboxBox = await boundingBox(checkbox);
-    expect(checkboxBox.width).toBeLessThanOrEqual(20);
-    expect(checkboxBox.height).toBeLessThanOrEqual(20);
+    for (const checkbox of [notesCheckbox, attributionCheckbox]) {
+      const checkboxBox = await boundingBox(checkbox);
+      expect(checkboxBox.width).toBeLessThanOrEqual(20);
+      expect(checkboxBox.height).toBeLessThanOrEqual(20);
+    }
     await expect(controls.getByText('Notes may contain sensitive information.')).toBeVisible();
     await expectNoHorizontalOverflow(page);
   });

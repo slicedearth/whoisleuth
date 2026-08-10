@@ -7,7 +7,7 @@
 
   type DraftAction = { email: string; body: string; mailto: string };
 
-  let { domain, record, note, caseStatus, draftStatus, outreach, recipientResolution, setNote, createCase, addNote, recordRecipient, copyDraft, statusLabel, dispositionLabel }: {
+  let { domain, record, note, caseStatus, draftStatus, outreach, recipientResolution, setNote, createCase, addNote, recordRecipient, copyDraft, statusLabel, dispositionLabel, actionBusy = false }: {
     domain: string;
     record: CaseRecord | null;
     note: string;
@@ -22,6 +22,7 @@
     copyDraft: (text: string, label: string) => void | Promise<void>;
     statusLabel: (value: CaseRecord['status']) => string;
     dispositionLabel: (value: CaseRecord['disposition']) => string;
+    actionBusy?: boolean;
   } = $props();
 
   function caseWorkspaceHref(recordId: string, focusResponse = false): string {
@@ -38,13 +39,13 @@
       <div class="case-body">
         <form class="note-edit" onsubmit={(event) => { event.preventDefault(); addNote(); }}>
           <label class="field" for="case-note">Add note</label>
-          <textarea id="case-note" value={note} oninput={(event) => setNote(event.currentTarget.value)} rows="2" placeholder="Observed behaviour, evidence, decisions…"></textarea>
-          <div class="case-actions"><button class="btn" type="submit" disabled={!note.trim()}>Add note</button><a href={caseWorkspaceHref(record.id)}>Open in Monitor →</a></div>
+          <textarea id="case-note" value={note} oninput={(event) => setNote(event.currentTarget.value)} rows="2" placeholder="Observed behaviour, evidence, decisions…" disabled={actionBusy}></textarea>
+          <div class="case-actions"><button class="btn" type="submit" disabled={actionBusy || !note.trim()}>Add note</button><a href={caseWorkspaceHref(record.id)}>Open in Monitor →</a></div>
         </form>
         <p class="case-hint">{record.notes.length} note{record.notes.length === 1 ? '' : 's'} · manage status, disposition, and tags in Monitor. Cases are stored only in this browser.</p>
       </div>
     {:else}
-      <div class="case-body"><p class="case-hint">No case for {domain} yet.</p><button class="primary" onclick={createCase}>Create case</button></div>
+      <div class="case-body"><p class="case-hint">No case for {domain} yet.</p><button class="primary" onclick={createCase} disabled={actionBusy}>Create case</button></div>
     {/if}
     {#if caseStatus}<p class="case-status" role="status" aria-live="polite">{caseStatus}</p>{/if}
   </section>
@@ -63,7 +64,7 @@
           <p><b>{route.channel}</b> · source: {route.source}</p>
           {#if route.limitations.length}<ul>{#each route.limitations.slice(0, 3) as limitation}<li>{limitation}</li>{/each}</ul>{/if}
           <div>
-            <button class="btn small" type="button" onclick={() => void recordRecipient(route)} disabled={!record}>Record in case</button>
+            <button class="btn small" type="button" onclick={() => void recordRecipient(route)} disabled={!record || actionBusy}>Record in case</button>
             {#if record}<a class="btn small" href={caseWorkspaceHref(record.id, true)}>Review response packet</a>{/if}
           </div>
         </article>

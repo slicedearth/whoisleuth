@@ -53,7 +53,7 @@ test('active profile preference fails closed when browser storage is unavailable
     setItem: () => { throw new Error('denied'); },
     removeItem: () => { throw new Error('denied'); },
   }, () => {
-    assert.equal(activeProfileId(), '');
+    assert.throws(() => activeProfileId(), /Could not read the active-profile preference/u);
     assert.throws(() => setActiveProfile('profile_3-valid'), /storage may be full or unavailable/u);
   });
 });

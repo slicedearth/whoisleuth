@@ -1,8 +1,12 @@
-import { createRequire } from 'node:module';
-
 import { projectCliLookupComparisonInput } from './compare.mts';
 import { parseSavedLookupDocument } from './saved-lookup.mts';
+import { validateLookupEvidenceArtifactStructure } from './artifact-structure.mts';
 import type { UnknownRecord } from './saved-lookup.mts';
+import { WHOISLEUTH_APPLICATION_VERSION } from '../lib/application-version.mts';
+import {
+  LOOKUP_EVIDENCE_PORTABLE_MAX_BYTES,
+  serializeLookupEvidence,
+} from '../lib/evidence-export.mts';
 
 type EvidenceModule = {
   LOOKUP_EVIDENCE_SCHEMA: unknown;
@@ -13,8 +17,7 @@ type EvidenceModule = {
   ) => unknown;
 };
 
-const require = createRequire(import.meta.url);
-const { version: APPLICATION_VERSION } = require('../package.json') as { version: string };
+const APPLICATION_VERSION = WHOISLEUTH_APPLICATION_VERSION;
 
 function objectOrNull(value: unknown): UnknownRecord | null {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as UnknownRecord : null;
@@ -45,11 +48,17 @@ function buildCliEvidenceExport(
       || result.schemaVersion !== dependency.LOOKUP_EVIDENCE_SCHEMA_VERSION) {
     throw new TypeError('Lookup evidence builder returned an unsupported report contract.');
   }
+  validateLookupEvidenceArtifactStructure(result);
+  serializeLookupEvidence(result);
   return result;
 }
 
 function formatCliEvidenceExport(document: unknown, compact = false): string {
-  return `${JSON.stringify(document, null, compact ? 0 : 2)}\n`;
+  const output = `${serializeLookupEvidence(document, !compact)}\n`;
+  if (new TextEncoder().encode(output).byteLength > LOOKUP_EVIDENCE_PORTABLE_MAX_BYTES) {
+    throw new TypeError('Lookup evidence exceeds the 5 MiB portable file limit.');
+  }
+  return output;
 }
 
 export { APPLICATION_VERSION, buildCliEvidenceExport, formatCliEvidenceExport };

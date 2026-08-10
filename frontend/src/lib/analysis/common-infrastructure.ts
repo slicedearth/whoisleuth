@@ -42,7 +42,7 @@ type Snapshot = Readonly<{
   }>;
   entryCount: number;
   sources: readonly Source[];
-  excludedSources: readonly never[];
+  excludedSources: readonly Readonly<{ id: string; reason: string }>[];
   limitations: readonly string[];
 }>;
 
@@ -153,9 +153,10 @@ export function parseCommonInfrastructureSnapshot(value: unknown): Snapshot {
     || source.version !== 1
     || typeof source.generatedAt !== 'string'
     || !Array.isArray(source.sources)
-    || source.sources.length !== EXPECTED_SOURCES.size
+    || source.sources.length < 1
+    || source.sources.length > EXPECTED_SOURCES.size
     || !Array.isArray(source.excludedSources)
-    || source.excludedSources.length !== 0
+    || source.excludedSources.length > EXPECTED_SOURCES.size - 1
     || !Number.isSafeInteger(source.entryCount)
     || !sourceMeta
     || typeof sourceMeta.project !== 'string'
@@ -198,7 +199,23 @@ export function parseCommonInfrastructureSnapshot(value: unknown): Snapshot {
     });
     entryCount += item.values.length;
   }
+  const excludedSources: Array<{ id: string; reason: string }> = [];
+  for (const rawExcluded of source.excludedSources) {
+    const item = record(rawExcluded);
+    const id = typeof item?.id === 'string' ? item.id : '';
+    const reason = typeof item?.reason === 'string' ? item.reason : '';
+    if (!item
+      || id === 'public-dns-core'
+      || !EXPECTED_SOURCES.has(id)
+      || seenSourceIds.has(id)
+      || reason !== 'stale') {
+      throw new TypeError('Common-infrastructure excluded source has an invalid contract.');
+    }
+    seenSourceIds.add(id);
+    excludedSources.push({ id, reason });
+  }
   if (seenSourceIds.size !== EXPECTED_SOURCES.size
+    || !sources.some((item) => item.id === 'public-dns-core')
     || entryCount !== source.entryCount
     || entryCount > 20_000) {
     throw new TypeError('Common-infrastructure snapshot entry count is inconsistent.');
@@ -215,7 +232,7 @@ export function parseCommonInfrastructureSnapshot(value: unknown): Snapshot {
     },
     entryCount,
     sources,
-    excludedSources: [],
+    excludedSources,
     limitations: Array.isArray(source.limitations)
       ? source.limitations.filter((item): item is string => typeof item === 'string').slice(0, 8)
       : [],
@@ -224,11 +241,14 @@ export function parseCommonInfrastructureSnapshot(value: unknown): Snapshot {
 
 export const COMMON_INFRASTRUCTURE_SNAPSHOT = Object.freeze(parseCommonInfrastructureSnapshot(snapshotValue));
 
-export function classifyCommonInfrastructureAddress(value: unknown): CommonInfrastructureMatch[] {
+export function classifyCommonInfrastructureAddress(
+  value: unknown,
+  snapshot: Snapshot = COMMON_INFRASTRUCTURE_SNAPSHOT,
+): CommonInfrastructureMatch[] {
   const address = canonicalIpv4(value) ?? canonicalIpv6(value);
   if (!address) return [];
   const matches: CommonInfrastructureMatch[] = [];
-  for (const source of COMMON_INFRASTRUCTURE_SNAPSHOT.sources) {
+  for (const source of snapshot.sources) {
     const cidr = source.values.find((entry) => inCidr(address, entry));
     if (!cidr) continue;
     matches.push(Object.freeze({
@@ -238,8 +258,8 @@ export function classifyCommonInfrastructureAddress(value: unknown): CommonInfra
       cidr,
       sourceDate: source.sourceDate,
       sourceDigestSha256: source.sourceDigestSha256,
-      snapshotGeneratedAt: COMMON_INFRASTRUCTURE_SNAPSHOT.generatedAt,
-      provenance: `${COMMON_INFRASTRUCTURE_SNAPSHOT.source.project} at ${COMMON_INFRASTRUCTURE_SNAPSHOT.source.commit}`,
+      snapshotGeneratedAt: snapshot.generatedAt,
+      provenance: `${snapshot.source.project} at ${snapshot.source.commit}`,
       limitation: 'This exact range match identifies shared infrastructure, not an origin host, tenant, account, operator, ownership, intent, safety, or maliciousness.',
     }));
     if (matches.length >= 4) break;

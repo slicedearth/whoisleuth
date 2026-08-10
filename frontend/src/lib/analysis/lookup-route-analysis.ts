@@ -1,4 +1,4 @@
-import { profileSignals as matchProfileSignals, type BrandProfile } from '../brand-profiles.ts';
+import { profileSignals as matchProfileSignals, type ActiveBrandProfileSourceState, type BrandProfile } from '../brand-profiles.ts';
 import { outreachAction, type Contact } from '../drafts.ts';
 import { buildActivationContext } from './activation-context.ts';
 import { buildAcquisitionDueDiligence } from './acquisition-due-diligence.ts';
@@ -18,6 +18,7 @@ import { buildLookupEvidenceImpactPlan } from './lookup-evidence-impact.ts';
 import {
   buildLookupDecisionSupport,
   buildLookupEvidenceQualityMatrix,
+  type LookupTaskEvidenceKind,
 } from './lookup-decision-support.ts';
 import {
   buildLookupLifecycleDates,
@@ -29,7 +30,7 @@ import {
   show,
 } from './lookup-display-model.ts';
 import { buildLookupInvestigationBrief } from './lookup-investigation-brief.ts';
-import type { LookupTaskView } from './lookup-presentation.ts';
+import type { LookupDepth, LookupTaskView } from './lookup-presentation.ts';
 import type { LookupHttpResponse, LookupViewModel } from './lookup-response.ts';
 import { buildLookupSourceRefreshPlan, type LookupFreshnessPolicyInput } from './lookup-source-refresh.ts';
 import { buildLookupSummaryModel } from './lookup-summary-model.ts';
@@ -50,7 +51,9 @@ export interface LookupRouteAnalysisInput {
   result: LookupHttpResponse | null;
   lookupView: LookupViewModel;
   profile: BrandProfile | null;
+  profileSourceState?: ActiveBrandProfileSourceState;
   task: LookupTaskView;
+  completedLookupDepth: LookupDepth | null;
   freshnessPolicy?: LookupFreshnessPolicyInput;
 }
 
@@ -73,6 +76,14 @@ function hasPublicRegistrantContact(value: unknown): boolean {
   return ['email', 'url'].some((key) => typeof contact[key] === 'string' && String(contact[key]).trim().length > 0);
 }
 
+const OBSERVED_TASK_SOURCE_STATES = new Set(['success', 'partial']);
+
+function retainsTaskEvidence(source: unknown, expected: string, state: unknown): boolean {
+  if (source !== expected) return false;
+  const normalizedState = String(state ?? '').trim().toLowerCase().replace(/[\s-]+/gu, '_');
+  return OBSERVED_TASK_SOURCE_STATES.has(normalizedState);
+}
+
 export function latestLookupTimestamp(...values: unknown[]): string | null {
   const timestamps = values
     .flatMap((value) => Array.isArray(value) ? value : [value])
@@ -83,6 +94,14 @@ export function latestLookupTimestamp(...values: unknown[]): string | null {
 
 export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
   const { result, lookupView, profile, task } = input;
+  const profileSourceState = input.profileSourceState ?? 'ready';
+  const profileContextReady = profileSourceState === 'ready';
+  const hasActiveBrandProfile = profileContextReady ? Boolean(profile) : null;
+  const profileContextLimitation = profileSourceState === 'ready'
+    ? null
+    : profileSourceState === 'loading'
+      ? 'Browser-local Brand Profile context is still loading. Profile-derived trust, allowlist, resemblance, and official-reference conclusions remain unevaluated.'
+      : 'Browser-local Brand Profile context was unavailable. Profile-derived trust, allowlist, resemblance, and official-reference conclusions remain inconclusive.';
   const {
     availability,
     rdap,
@@ -143,7 +162,10 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
   const whoisContactsByRole = rec(whoisParsed.contactsByRole);
   const rdapDiagnostic = rec(diagnostics.rdap);
   const whoisDiagnostic = rec(diagnostics.whois);
-  const lookupEvidenceDepth: 'fast' | 'deep' = availability.deepScanComplete === false ? 'fast' : 'deep';
+  // Results are labelled and scored from the exact request that completed.
+  // Null is possible only before a result exists or for an old ambiguous
+  // in-memory workflow, where the conservative Fast contract is used.
+  const lookupEvidenceDepth: LookupDepth = input.completedLookupDepth ?? 'fast';
   const lookupObservedAt = latestLookupTimestamp(
     result?.observedAt,
     result?.fetchedAt,
@@ -163,7 +185,7 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     securityPosture.observedAt,
     securityTxt.observedAt,
     sslbl.observedAt,
-    threatIntelligenceProviders.map((provider) => rec(provider).observedAt),
+    threatIntelligenceProviders.map((provider) => rec(rec(provider).observation).observedAt),
   );
   const evidenceObservedAtById: Record<string, unknown> = {
     rdap: rdapDiagnostic.fetchedAt,
@@ -187,7 +209,7 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     const provider = rec(providerValue);
     const identity = rec(provider.provider);
     const id = String(identity.id || '').trim();
-    if (id) evidenceObservedAtById[`external-${id}`] = provider.observedAt;
+    if (id) evidenceObservedAtById[`external-${id}`] = rec(provider.observation).observedAt;
   }
   const populatedWhoisRoles = whoisRoleOrder.filter((role) => records(whoisContactsByRole[role]).length > 0);
   const comparison = result?.type === 'domain'
@@ -282,13 +304,14 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     registrarPublicationComparison,
   });
   const idnAnalysis = result?.type === 'domain'
-    ? analyzeDomainIdn(String(result.registrableDomain || availability.domain || ''), profile?.officialDomains || [])
+    ? analyzeDomainIdn(
+        String(result.registrableDomain || availability.domain || ''),
+        profileContextReady ? profile?.officialDomains || [] : [],
+      )
     : null;
-  const profileSignals = matchProfileSignals(
-    String(availability.domain || result?.registrableDomain || ''),
-    availability,
-    profile,
-  );
+  const profileSignals = profileContextReady
+    ? matchProfileSignals(String(availability.domain || result?.registrableDomain || ''), availability, profile)
+    : { trusted: null, faviconMatch: null, faviconNearMatch: null, reusesOfficialAssets: null };
   const externalRiskContext = calibrateExternalIntelligenceRisk(threatIntelligence);
   const outreach = outreachAction(
     String(availability.domain || result?.registrableDomain || ''),
@@ -308,7 +331,7 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     + comparison.counts.whois_incomplete;
   const caseDomain = String(availability.domain || result?.registrableDomain || '').trim().toLowerCase();
   const observedPageBaseline = createPageBaseline(caseDomain, availability);
-  const pageComparison = comparePageBaselines(profile?.pageBaseline, observedPageBaseline);
+  const pageComparison = comparePageBaselines(profileContextReady ? profile?.pageBaseline : null, observedPageBaseline);
   const pageDisplay = buildLookupPageDisplay({
     pageIdentity,
     pageCanonical,
@@ -334,7 +357,7 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     pageComparison,
   });
   const brandMimicryReview = buildBrandMimicryReview({
-    hasActiveProfile: Boolean(profile),
+    hasActiveProfile: hasActiveBrandProfile,
     trustedDomainKind: profileSignals.trusted,
     profileSignals,
     pageComparison,
@@ -356,6 +379,23 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     || securityTxt.securityTxtVersion === 1
     || Boolean(pageComparison)
     || Boolean(profile?.pageBaseline && result?.type === 'domain');
+  const lookupTaskEvidence: LookupTaskEvidenceKind[] = [];
+  if (retainsTaskEvidence(reverseDns.source, 'reverse_dns', reverseDns.status)) lookupTaskEvidence.push('ptr');
+  if (result?.type === 'domain') {
+    const hasDnsTaskEvidence = retainsTaskEvidence(dnsEvidence.source, 'dns', dnsEvidence.status);
+    const hasHttpTaskEvidence = retainsTaskEvidence(httpEvidence.source, 'http', httpEvidence.status);
+    const hasPageTaskEvidence = retainsTaskEvidence(pageIdentity.source, 'html', pageIdentity.status);
+    if (hasDnsTaskEvidence) lookupTaskEvidence.push('dns', 'delegation', 'mail', 'dependency');
+    if (hasHttpTaskEvidence) lookupTaskEvidence.push('http', 'dependency');
+    if (retainsTaskEvidence(tlsEvidence.source, 'tls', tlsEvidence.status)) lookupTaskEvidence.push('tls');
+    if (hasPageTaskEvidence) lookupTaskEvidence.push('page', 'identity', 'dependency');
+    if (retainsTaskEvidence(credentialSurfaceProfile.source, 'html', credentialSurfaceProfile.status)) lookupTaskEvidence.push('form');
+    if (hasHttpTaskEvidence && records(httpEvidence.redirects).length) lookupTaskEvidence.push('redirect');
+    if (hasPageTaskEvidence && (records(pageResources.externalOrigins).length || Number(pageResources.count) > 0)) {
+      lookupTaskEvidence.push('dependency');
+    }
+    if (retainsTaskEvidence(securityPosture.source, 'derived', securityPosture.status)) lookupTaskEvidence.push('posture');
+  }
   const hasCaseSection = Boolean(caseDomain) || Boolean(outreach) || abuseRecipientResolution.recipients.length > 0;
   const evidenceTopologyNodes = buildLookupEvidenceTopologyNodes({
     targetType: result?.type,
@@ -479,8 +519,8 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     .filter((entry) => ['rdap', 'whois', 'availability', 'registrar-rdap', 'dns', 'http', 'page-identity'].includes(entry.id)
       || entry.id.startsWith('external-'))
     .map((entry) => ({ source: entry.id, state: entry.state }));
-  const pageBaselineMatch = pageBaselineRiskMatch(pageComparison);
-  const idnReferenceMatch = Boolean(idnAnalysis?.referenceMatches.length);
+  const pageBaselineMatch = profileContextReady ? pageBaselineRiskMatch(pageComparison) : null;
+  const idnReferenceMatch = profileContextReady ? Boolean(idnAnalysis?.referenceMatches.length) : null;
   const scoredAvailability = {
     ...availability,
     ...profileSignals,
@@ -488,15 +528,17 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     mutationTypes: [],
     idnReferenceMatch,
     pageBaselineMatch,
-    hasActiveBrandProfile: Boolean(profile),
+    hasActiveBrandProfile,
     hasPublicRegistrantContact: hasPublicRegistrantContact(availability.registrant),
     scanDepth: lookupEvidenceDepth,
     observedAt: lookupObservedAt,
     sourceCoverage: scoreCoverage,
   };
   const opportunity: OpportunityExplanation | null = explainOpportunityScore(scoredAvailability);
-  const risk: RiskExplanation | null = explainRiskScore(scoredAvailability);
-  const riskSensitivity: RiskScoreSensitivity | null = buildRiskScoreSensitivity(scoredAvailability);
+  const risk: RiskExplanation | null = profileContextReady ? explainRiskScore(scoredAvailability) : null;
+  const riskSensitivity: RiskScoreSensitivity | null = profileContextReady
+    ? buildRiskScoreSensitivity(scoredAvailability)
+    : null;
   const lookupSourceRefreshPlan = buildLookupSourceRefreshPlan(
     evidenceCoverage,
     lookupObservedAt,
@@ -520,6 +562,8 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     openGraphUrl: pageOpenGraphUrl.url,
     tlsAuthorization,
     certificatePolicyReview,
+    targetType: result?.type,
+    availableEvidence: lookupTaskEvidence,
     hasCaseSection,
   });
   const lookupClaimReadiness = buildLookupClaimReadiness({
@@ -528,7 +572,9 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     coverage: evidenceCoverage,
     decisionSupport: lookupDecisionSupport,
     availabilityState: availability.state,
-    hasActiveProfile: Boolean(profile),
+    availabilitySource: availability.source,
+    hasActiveProfile: hasActiveBrandProfile === true,
+    profileSourceState,
     hasCaseSection,
     responseRecipientCount: abuseRecipientResolution.recipients.length,
     registryComparison: comparison,
@@ -609,7 +655,9 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     privacyProtected: availability.privacyProtected ?? null,
     idnReferenceMatch,
     pageBaselineMatch,
-    hasActiveBrandProfile: Boolean(profile),
+    hasActiveBrandProfile,
+    profileContextState: profileSourceState,
+    profileContextLimitation,
     ...compactHttpSummary,
     mutationTypes: [],
   };
@@ -630,6 +678,8 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     registryDisplay,
     idnAnalysis,
     profileSignals,
+    profileSourceState,
+    profileContextLimitation,
     externalRiskContext,
     opportunity,
     risk,

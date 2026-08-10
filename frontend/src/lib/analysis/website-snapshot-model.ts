@@ -2,6 +2,7 @@ import { normalizeDomain } from './case-model.ts';
 
 export const WEBSITE_SNAPSHOT_SCHEMA = 'whoisleuth.website-profile-snapshots';
 export const WEBSITE_SNAPSHOT_SCHEMA_VERSION = 4;
+export const SUPPORTED_WEBSITE_SNAPSHOT_SCHEMA_VERSIONS = Object.freeze([1, 2, 3, WEBSITE_SNAPSHOT_SCHEMA_VERSION]);
 export const MAX_WEBSITE_SNAPSHOTS = 60;
 export const MAX_WEBSITE_SNAPSHOTS_PER_DOMAIN = 12;
 export const MAX_WEBSITE_SNAPSHOT_STORE_BYTES = 512 * 1024;
@@ -260,6 +261,11 @@ export function normalizeWebsiteSnapshotStore(raw: unknown) {
   if (value?.schema === WEBSITE_SNAPSHOT_SCHEMA
     && Number(value?.version) > WEBSITE_SNAPSHOT_SCHEMA_VERSION) {
     throw new Error('This website-snapshot collection uses a newer schema and cannot be read safely.');
+  }
+  if (value?.schema === WEBSITE_SNAPSHOT_SCHEMA
+    && Number.isSafeInteger(value.version)
+    && !SUPPORTED_WEBSITE_SNAPSHOT_SCHEMA_VERSIONS.includes(Number(value.version))) {
+    throw new Error('This website-snapshot collection uses an unsupported schema and cannot be read safely.');
   }
   const sourceValues = Array.isArray(raw) ? raw : Array.isArray(value?.snapshots) ? value.snapshots : [];
   const snapshots = values(sourceValues, MAX_WEBSITE_SNAPSHOTS * 2, normalizeWebsiteProfileSnapshot) as WebsiteProfileSnapshot[];

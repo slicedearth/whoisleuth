@@ -16,6 +16,13 @@ export interface CtHistoryEvent {
   newCount: number;
   newDomains: string[];
   truncated: boolean;
+  classificationComplete: boolean;
+  firstObservedCount: number;
+  firstObservedDomains: string[];
+  continuingCount: number;
+  reappearedCount: number;
+  reappearedDomains: string[];
+  historyUnknownCount: number;
 }
 
 export interface CtHistoryEntry {
@@ -23,16 +30,31 @@ export interface CtHistoryEntry {
   baselineAt: string | null;
   updatedAt: string;
   domains: string[];
+  everSeenDomains: string[];
+  everSeenDomainsComplete: boolean;
   history: CtHistoryEvent[];
+  discardedCheckCount: number;
+  discardedCheckCountKnown: boolean;
+  discardedCheckCountCapped: boolean;
 }
 
-export interface CtHistoryStore { version: 1; entries: CtHistoryEntry[] }
+export interface CtHistoryStore { version: 3; entries: CtHistoryEntry[] }
 export interface CtHistoryComparison {
   query: string;
   hasBaseline: boolean;
   previousCheckedAt: string | null;
   newDomains: string[];
   newCount: number;
+  firstObservedDomains: string[];
+  firstObservedCount: number;
+  continuingDomains: string[];
+  continuingCount: number;
+  reappearedDomains: string[];
+  reappearedCount: number;
+  historyUnknownDomains: string[];
+  historyUnknownCount: number;
+  classificationComplete: boolean;
+  everSeenDomainsComplete: boolean;
   baselineUpdated: boolean;
   truncated: boolean;
 }

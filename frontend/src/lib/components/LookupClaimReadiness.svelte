@@ -1,11 +1,50 @@
 <script lang="ts">
   import type {
     LookupClaimReadiness,
+    LookupClaimId,
     LookupClaimReadinessState,
   } from '$lib/analysis/lookup-claim-readiness.ts';
   import type { LookupEvidenceImpactPlan } from '$lib/analysis/lookup-evidence-impact.ts';
 
-  let { readiness, impact }: { readiness: LookupClaimReadiness; impact: LookupEvidenceImpactPlan } = $props();
+  let {
+    readiness,
+    impact,
+    onpassport,
+  }: {
+    readiness: LookupClaimReadiness;
+    impact: LookupEvidenceImpactPlan;
+    onpassport?: (claimId: LookupClaimId) => Promise<string>;
+  } = $props();
+
+  let exportingClaim = $state<LookupClaimId | null>(null);
+  let passportStatus = $state('');
+  let readinessEpoch = 0;
+
+  $effect(() => {
+    void readiness;
+    readinessEpoch += 1;
+    exportingClaim = null;
+    passportStatus = '';
+  });
+
+  async function exportPassport(claimId: LookupClaimId): Promise<void> {
+    if (!onpassport || exportingClaim) return;
+    const epoch = readinessEpoch;
+    exportingClaim = claimId;
+    passportStatus = '';
+    try {
+      const message = await onpassport(claimId);
+      if (epoch === readinessEpoch) passportStatus = message;
+    } catch (error) {
+      if (epoch === readinessEpoch) {
+        passportStatus = error instanceof Error
+          ? error.message
+          : 'The claim passport could not be prepared.';
+      }
+    } finally {
+      if (epoch === readinessEpoch) exportingClaim = null;
+    }
+  }
 
   const labels: Readonly<Record<LookupClaimReadinessState, string>> = {
     ready: 'Evidence ready',
@@ -41,10 +80,22 @@
           {:else}
             <p class="requirements"><b>Supported by:</b> {entry.requiredEvidence.join(' · ')}</p>
           {/if}
-          <a href={entry.href}>Review evidence</a>
+          <div class="claim-actions">
+            <a href={entry.href}>Review evidence</a>
+            {#if onpassport}
+              <button
+                type="button"
+                class="btn small"
+                disabled={exportingClaim !== null}
+                aria-label={`Download portable passport for ${entry.label}`}
+                onclick={() => void exportPassport(entry.id)}
+              >{exportingClaim === entry.id ? 'Preparing…' : 'Download passport'}</button>
+            {/if}
+          </div>
         </li>
       {/each}
     </ul>
+    {#if passportStatus}<p class="passport-status" role="status">{passportStatus}</p>{/if}
 
     {#if impact.items.length}
       <details class="impact-plan">
@@ -103,7 +154,7 @@
   .state-ready{border-color:color-mix(in srgb,var(--success) 45%,var(--border));color:var(--success)}
   .state-limited,.state-not_ready{border-color:color-mix(in srgb,var(--amber) 45%,var(--border));color:var(--amber)}
   .claims p,.diagnostics p{margin:6px 0;color:var(--muted);font-size:var(--text-2xs);line-height:1.5}
-  .claims a{font:650 var(--text-2xs) var(--mono)}
+  .claim-actions{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px}.claims a{font:650 var(--text-2xs) var(--mono)}.claim-actions button{min-height:36px;padding:7px 9px;font-size:var(--text-2xs)}
   .claims .missing{color:var(--text)}
   .claims b{font-weight:700}
   details{margin-top:12px;border-top:1px solid var(--border)}
@@ -111,12 +162,13 @@
   summary:focus-visible{outline:2px solid var(--focus);outline-offset:3px}
   .diagnostics{margin-top:0}
   .diagnostics span{color:var(--muted);font:var(--text-2xs) var(--mono)}
-  .note,.limit{margin:9px 0 0;color:var(--muted);font-size:var(--text-2xs);line-height:1.5}
+  .note,.limit,.passport-status{margin:9px 0 0;color:var(--muted);font-size:var(--text-2xs);line-height:1.5}
   .impact-intro{margin:0;color:var(--muted);font-size:var(--text-2xs);line-height:1.5}.impacts{margin-top:9px}.impact-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}.impact-head strong{font-size:var(--text-xs)}.mode{flex:0 0 auto;color:var(--accent);font:650 var(--text-2xs) var(--mono)}.impacts p,.impacts small{display:block;margin:5px 0;color:var(--muted);font-size:var(--text-2xs);line-height:1.45}.impacts .effect{color:var(--text)}.impacts a{font:650 var(--text-2xs) var(--mono)}
   .limit{padding-top:10px;border-top:1px solid var(--border)}
   @media(max-width:760px){
     header{display:grid}
     .counts{width:100%}.counts span{flex:1}
     .claims,.diagnostics,.impacts{grid-template-columns:minmax(0,1fr)}
+    .claim-actions{align-items:stretch;flex-direction:column}.claim-actions button{width:100%}
   }
 </style>

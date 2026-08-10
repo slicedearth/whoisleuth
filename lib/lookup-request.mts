@@ -3,7 +3,11 @@ import {
   parseLookupHttpResponse,
   type LookupHttpResponse,
 } from './lookup-response-contract.mts';
-import { LARGE_JSON_RESPONSE_BYTES, readJsonResponseCapped } from './bounded-json-response.mts';
+import {
+  BoundedJsonResponseError,
+  LARGE_JSON_RESPONSE_BYTES,
+  readJsonResponseCapped,
+} from './bounded-json-response.mts';
 
 const LOOKUP_CLIENT_TIMEOUT_MS = 40_000;
 
@@ -35,6 +39,7 @@ type LookupRequestOptions = Readonly<{
 
 const TIMEOUT_REASON = Object.freeze({ type: 'lookup-timeout' });
 const CANCELLED_MESSAGE = 'Lookup cancelled. No partial response was retained.';
+const INVALID_RESPONSE_MESSAGE = 'Lookup returned an invalid response.';
 const NETWORK_MESSAGE = 'Lookup request could not be completed.';
 
 function timeoutMessage(timeoutMs: number): string {
@@ -59,14 +64,17 @@ async function requestLookup(
   try {
     if (controller.signal.aborted) throw new DOMException('Aborted', 'AbortError');
     const response = await fetchImpl(url, { signal: controller.signal });
-    if (controller.signal.aborted) throw new DOMException('Aborted', 'AbortError');
+    if (controller.signal.aborted) {
+      await response.body?.cancel(controller.signal.reason).catch(() => {});
+      throw new DOMException('Aborted', 'AbortError');
+    }
     let body: unknown;
     try {
-      body = await readJsonResponseCapped(response, LARGE_JSON_RESPONSE_BYTES);
+      body = await readJsonResponseCapped(response, LARGE_JSON_RESPONSE_BYTES, controller.signal);
     } catch (cause) {
       // Preserve the HTTP status when an adapter supplies a malformed bounded
-      // error page, but never turn an unreadable successful response into a
-      // merely invalid application envelope.
+      // error page. Successful malformed or over-bound responses remain typed
+      // response-contract failures in the outer catch.
       if (!response.ok) body = null;
       else throw cause;
     }
@@ -86,7 +94,7 @@ async function requestLookup(
       };
     }
     return { ok: true, value: parsed.value };
-  } catch {
+  } catch (cause) {
     if (controller.signal.aborted) {
       if (controller.signal.reason === TIMEOUT_REASON) {
         return {
@@ -99,6 +107,14 @@ async function requestLookup(
         ok: false,
         kind: 'cancelled',
         message: CANCELLED_MESSAGE,
+      };
+    }
+    if (cause instanceof BoundedJsonResponseError
+      && (cause.code === 'invalid_json' || cause.code === 'response_too_large')) {
+      return {
+        ok: false,
+        kind: 'invalid_response',
+        message: INVALID_RESPONSE_MESSAGE,
       };
     }
     return {

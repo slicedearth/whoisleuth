@@ -1,5 +1,5 @@
 import { buildLookupEvidenceReport, cleanReportText } from './evidence-report.mts';
-import type { ComparisonField, LookupEvidenceReport, PublicationComparisonField, ReportField, ReportGroup } from './evidence-report.mts';
+import type { ComparisonField, LookupEvidenceReport, LookupEvidenceReportOptions, PublicationComparisonField, ReportField, ReportGroup } from './evidence-report.mts';
 
 function escapeHtml(value: unknown, fallback = 'Not reported'): string {
   return cleanReportText(value, fallback)
@@ -32,8 +32,11 @@ function renderRegistrarComparison(comparison: { fields: PublicationComparisonFi
   return `<div class="table-scroll"><table><caption>Normalized registry and registrar RDAP publication comparison</caption><thead><tr><th scope="col">Field</th><th scope="col">Result</th><th scope="col">Registry RDAP</th><th scope="col">Registrar RDAP</th></tr></thead><tbody>${rows}</tbody></table></div>${omitted}`;
 }
 
-function formatLookupEvidenceHtml(document: unknown): string {
-  const report: LookupEvidenceReport = buildLookupEvidenceReport(document);
+function formatLookupEvidenceHtml(
+  document: unknown,
+  options: LookupEvidenceReportOptions = {},
+): string {
+  const report: LookupEvidenceReport = buildLookupEvidenceReport(document, options);
   const title = `Lookup evidence report: ${report.title}`;
   return `<!doctype html>
 <html lang="en">
@@ -66,7 +69,7 @@ function formatLookupEvidenceHtml(document: unknown): string {
   <section class="block"><h2>Network evidence</h2>${renderGroups(report.networkGroups)}</section>
   <section class="block"><h2>Collection diagnostics</h2>${renderFields(report.diagnostics)}</section>
   <section class="block"><h2>Limitations</h2><ul>${report.limitations.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul></section>
-  <footer>Offline, self-contained report. No scripts, forms, external resources, or active links are included.</footer>
+  <footer>Offline, self-contained report. No scripts, forms, external resources, or active links are included.${report.attribution ? `<br>${escapeHtml(report.attribution)}` : ''}</footer>
 </main>
 </body>
 </html>

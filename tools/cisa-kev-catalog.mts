@@ -1,7 +1,12 @@
 import { createHash } from 'node:crypto';
-import { readFile, stat, writeFile } from 'node:fs/promises';
+import { writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { readBoundedRegularFile } from '../lib/bounded-file.mts';
+import {
+  jsonRecordOrEmpty as record,
+  sha256Text as moduleDigest,
+} from './maintainer-tool-helpers.mts';
 
 const SOURCE_VERSION = '2026.08.03';
 const SOURCE_RELEASED_AT = '2026-08-03T18:55:09.067Z';
@@ -23,12 +28,6 @@ type MainOptions = Readonly<{
   stderr?: WritableLike;
 }>;
 
-function record(value: unknown): UnknownRecord {
-  return value !== null && typeof value === 'object' && !Array.isArray(value)
-    ? value as UnknownRecord
-    : {};
-}
-
 function parseArguments(args: readonly string[]): { mode: CatalogMode; source: string } {
   const sourceIndex = args.indexOf('--source');
   const modes = (['--check', '--write'] as const).filter((mode) => args.includes(mode));
@@ -42,11 +41,16 @@ function parseArguments(args: readonly string[]): { mode: CatalogMode; source: s
 }
 
 async function readBoundedText(filename: string, maxBytes: number): Promise<string> {
-  const metadata = await stat(filename);
-  if (!metadata.isFile() || metadata.size > maxBytes) {
+  try {
+    return (await readBoundedRegularFile(filename, {
+      minimumBytes: 1,
+      maximumBytes: maxBytes,
+      label: 'Pinned KEV source',
+      allowSymbolicLink: true,
+    })).toString('utf8');
+  } catch {
     throw new TypeError(`${filename} is missing or exceeds its byte limit.`);
   }
-  return readFile(filename, 'utf8');
 }
 
 function projectCatalogue(value: unknown, expectedVersion: string, expectedReleasedAt: string): string[] {
@@ -89,10 +93,6 @@ function renderModule(identifiers: readonly string[]): string {
     + `  identifiers: Object.freeze(${JSON.stringify(identifiers, null, 2)}),\n`
     + `});\n\n`
     + `export { CISA_KEV_CATALOG };\n`;
-}
-
-function moduleDigest(moduleText: string): string {
-  return createHash('sha256').update(moduleText).digest('hex');
 }
 
 async function main(args = process.argv.slice(2), options: MainOptions = {}): Promise<number> {

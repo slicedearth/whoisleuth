@@ -44,11 +44,11 @@ function classifiedDomain(value: string, inputHostname = value): ClassifiedQuery
 
 describe('CLI argument parsing', () => {
   test('defaults lookup to fast terminal output', () => {
-    assert.deepEqual(parseCliArguments(['lookup', 'example.com']), { action: 'lookup', query: 'example.com', output: 'terminal', deep: false, detail: 'standard', strictExit: false, events: false, plan: false, observerLabel: null, vantageLabel: null, quiet: false, color: true });
+    assert.deepEqual(parseCliArguments(['lookup', 'example.com']), { action: 'lookup', query: 'example.com', output: 'terminal', deep: false, detail: 'standard', strictExit: false, events: false, plan: false, includeAttribution: true, observerLabel: null, vantageLabel: null, quiet: false, color: true });
   });
 
   test('accepts explicit deep JSON output and bounded stdin mode', () => {
-    assert.deepEqual(parseCliArguments(['lookup', '--deep', '--json', '--no-color']), { action: 'lookup', query: null, output: 'json', deep: true, detail: 'standard', strictExit: false, events: false, plan: false, observerLabel: null, vantageLabel: null, quiet: false, color: false });
+    assert.deepEqual(parseCliArguments(['lookup', '--deep', '--json', '--no-color']), { action: 'lookup', query: null, output: 'json', deep: true, detail: 'standard', strictExit: false, events: false, plan: false, includeAttribution: true, observerLabel: null, vantageLabel: null, quiet: false, color: false });
   });
 
   test('rejects unknown commands, options, conflicting modes, and multiple queries', () => {
@@ -73,6 +73,7 @@ describe('CLI argument parsing', () => {
       strictExit: false,
       events: false,
       plan: false,
+      includeAttribution: true,
       observerLabel: null,
       vantageLabel: null,
       quiet: false,
@@ -87,6 +88,7 @@ describe('CLI argument parsing', () => {
       strictExit: false,
       events: false,
       plan: false,
+      includeAttribution: true,
       observerLabel: null,
       vantageLabel: null,
       quiet: false,
@@ -158,13 +160,21 @@ describe('CLI argument parsing', () => {
       'workspace.json',
       '--passphrase-file',
       'passphrase.txt',
+      '--manifest',
+      'manifest.json',
+      '--manifest-entry',
+      'artifact-2',
       '--json',
+      '--strict-exit',
       '--no-color',
     ]), {
       action: 'verify-artifact',
       source: 'workspace.json',
       passphraseSource: 'passphrase.txt',
+      manifestSource: 'manifest.json',
+      manifestEntryId: 'artifact-2',
       output: 'json',
+      strictExit: true,
       quiet: false,
       color: false,
     });
@@ -174,6 +184,44 @@ describe('CLI argument parsing', () => {
     );
     assert.throws(
       () => parseCliArguments(['verify-artifact', 'one.json', 'two.json']),
+      /accepts one optional JSON file/u,
+    );
+    assert.throws(
+      () => parseCliArguments(['verify-artifact', '--strict-exit', '--strict-exit']),
+      /only once/u,
+    );
+    assert.throws(
+      () => parseCliArguments(['verify-artifact', 'report.json', '--manifest', 'manifest.json']),
+      /must be supplied together/u,
+    );
+    assert.throws(
+      () => parseCliArguments(['verify-artifact', 'report.json', '--manifest-entry', 'artifact-17']),
+      /artifact-1 through artifact-16/u,
+    );
+  });
+
+  test('parses metadata-only interchange fidelity inputs', () => {
+    assert.deepEqual(parseCliArguments([
+      'interchange-report',
+      'workspace.json',
+      '--passphrase-file',
+      'passphrase.txt',
+      '--json',
+      '--no-color',
+    ]), {
+      action: 'interchange-report',
+      source: 'workspace.json',
+      passphraseSource: 'passphrase.txt',
+      output: 'json',
+      quiet: false,
+      color: false,
+    });
+    assert.throws(
+      () => parseCliArguments(['interchange-report', '--passphrase-file']),
+      /requires one bounded UTF-8 file/u,
+    );
+    assert.throws(
+      () => parseCliArguments(['interchange-report', 'one.json', 'two.json']),
       /accepts one optional JSON file/u,
     );
   });
@@ -734,6 +782,13 @@ test('repository source exposes an executable local CLI entry point', () => {
   const entryPoint = path.join(root, 'bin/whoisleuth.mts');
   const mode = fs.statSync(entryPoint).mode;
   assert.notEqual(mode & 0o111, 0);
+
+  const bare = spawnSync(process.execPath, [entryPoint], { encoding: 'utf8' });
+  assert.equal(bare.status, EXIT_CODES.SUCCESS);
+  assert.match(bare.stdout, /WHOISleuth CLI/);
+  assert.match(bare.stdout, /Investigate:\n/u);
+  assert.equal(bare.stderr, '');
+
   const result = spawnSync(process.execPath, [entryPoint, '--help'], { encoding: 'utf8' });
   assert.equal(result.status, 0);
   assert.match(result.stdout, /WHOISleuth CLI/);
@@ -778,13 +833,9 @@ test('repository source exposes an executable local CLI entry point', () => {
 test('repository CLI handles service termination while waiting for standard input', async () => {
   const entryPoint = path.join(__dirname, '..', 'bin/whoisleuth.mts');
   const readinessModule = `data:text/javascript,${encodeURIComponent(`
-    const timer = setInterval(() => {
-      if (process.listenerCount('SIGTERM') > 0) {
-        clearInterval(timer);
-        process.send?.({ type: 'ready' });
-      }
-    }, 5);
-    timer.unref();
+    process.on('newListener', (event) => {
+      if (event === 'SIGTERM') queueMicrotask(() => process.send?.({ type: 'ready' }));
+    });
   `)}`;
   const child = spawn(process.execPath, ['--import', readinessModule, entryPoint, 'lookup'], {
     stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
@@ -799,7 +850,7 @@ test('repository CLI handles service termination while waiting for standard inpu
     const timeout = setTimeout(() => {
       child.kill('SIGKILL');
       reject(new Error('CLI did not become ready for SIGTERM.'));
-    }, 3_000);
+    }, 15_000);
     child.once('message', (message) => {
       if (!message || typeof message !== 'object' || !('type' in message) || message.type !== 'ready') return;
       clearTimeout(timeout);

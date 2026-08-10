@@ -87,7 +87,7 @@ describe('continuous integration workflow', () => {
       'npm run release:check',
       'npm run licenses:check',
       'npm run technology:coverage-check',
-      'npm audit --omit=dev',
+      'npm run dependencies:audit',
       'npm run test:coverage',
       'npm run typecheck',
       'npm run check',
@@ -99,6 +99,10 @@ describe('continuous integration workflow', () => {
     ]) {
       assert.match(WORKFLOW, new RegExp(`^\\s+run: ${escapeRegExp(command)}$`, 'mu'));
     }
+    assert.equal(
+      PACKAGE_MANIFEST.scripts?.['dependencies:audit'],
+      'node tools/production-dependency-audit.mts',
+    );
     assert.match(WORKFLOW, /^\s{10}- shard: 1\/2\s*\n\s{12}label: 1-of-2\s*\n\s{10}- shard: 2\/2\s*\n\s{12}label: 2-of-2$/mu);
     assert.match(WORKFLOW, /^\s{10}path: playwright-results\.json$/mu);
     assert.match(WORKFLOW, /^\s{10}path: test-coverage\.lcov$/mu);

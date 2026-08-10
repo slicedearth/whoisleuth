@@ -1,4 +1,4 @@
-import { profileSignals, type BrandProfile } from '../brand-profiles.ts';
+import { profileSignals, type ActiveBrandProfileSourceState, type BrandProfile } from '../brand-profiles.ts';
 import type { Candidate } from '../candidate-handoff-core.ts';
 import { analyzeDomainIdn } from './idn-confusables.ts';
 import { compactHttpObservation } from './http-summary.ts';
@@ -8,7 +8,10 @@ import { entityDisplayName } from './utils.ts';
 import { explainOpportunityScore, explainRiskScore, formatActivityCell } from './scoring.ts';
 import { relationshipObservation } from './relationship-evidence.ts';
 import { lookupRecord, type CompactLookupHttpResponse } from './lookup-response.ts';
-import { normalizeBulkComparisonEvidence } from './bulk-session-model.ts';
+import {
+  bulkProfileContextProvenance,
+  normalizeBulkComparisonEvidence,
+} from './bulk-session-model.ts';
 import {
   boundedStrings,
   boundedText,
@@ -25,6 +28,7 @@ import {
 export type BulkScanNormalizationContext = Readonly<{
   mode: ScanMode;
   profile: BrandProfile | null;
+  profileSourceState?: ActiveBrandProfileSourceState;
   candidate: Candidate | null;
 }>;
 
@@ -51,13 +55,21 @@ export function normalizeBulkScanResult(
   const availability = lookupRecord(body.availability);
   const domain = body.availability.domain;
   const mutationTypes = context.candidate?.mutationTypes ?? [];
-  const matched = profileSignals(domain, availability, context.profile);
-  const idn = analyzeDomainIdn(domain, context.profile?.officialDomains ?? []);
+  const profileContextReady = (context.profileSourceState ?? 'ready') === 'ready';
+  const profileContext = bulkProfileContextProvenance(context.profileSourceState ?? 'ready', context.profile);
+  const officialDomains = profileContextReady ? context.profile?.officialDomains ?? [] : [];
+  const hasActiveBrandProfile = profileContextReady ? Boolean(context.profile) : null;
+  const matched = profileContextReady
+    ? profileSignals(domain, availability, context.profile)
+    : { trusted: null, faviconMatch: null, faviconNearMatch: null, reusesOfficialAssets: null };
+  const idn = analyzeDomainIdn(domain, officialDomains);
   const registrant = compactContact(availability.registrant);
   const sourceCoverage = compactSourceCoverage(body, availability);
-  const pageComparison = comparePageBaselines(context.profile?.pageBaseline, createPageBaseline(domain, availability));
-  const pageBaselineMatch = pageBaselineRiskMatch(pageComparison);
-  const idnReferenceMatch = Boolean(idn?.referenceMatches.length);
+  const pageComparison = profileContextReady
+    ? comparePageBaselines(context.profile?.pageBaseline, createPageBaseline(domain, availability))
+    : null;
+  const pageBaselineMatch = profileContextReady ? pageBaselineRiskMatch(pageComparison) : null;
+  const idnReferenceMatch = profileContextReady ? Boolean(idn?.referenceMatches.length) : null;
   const scoring = {
     ...availability,
     ...matched,
@@ -65,13 +77,13 @@ export function normalizeBulkScanResult(
     mutationTypes,
     idnReferenceMatch,
     pageBaselineMatch,
-    hasActiveBrandProfile: Boolean(context.profile),
+    hasActiveBrandProfile,
     hasPublicRegistrantContact: Boolean(registrant?.email),
     scanDepth: context.mode,
     observedAt: body.observedAt,
     sourceCoverage,
   };
-  const riskExplanation = explainRiskScore(scoring);
+  const riskExplanation = profileContextReady ? explainRiskScore(scoring) : null;
   const risk = riskExplanation?.score ?? null;
   const opportunityExplanation = explainOpportunityScore(scoring);
   const opportunity = opportunityExplanation?.score ?? null;
@@ -89,7 +101,7 @@ export function normalizeBulkScanResult(
   const comparisonEvidence = normalizeBulkComparisonEvidence(availability.bulkComparison);
   const relationship = relationshipObservation(
     availability,
-    context.profile?.officialDomains ?? [],
+    officialDomains,
   );
   const saved: SavedScanRecord = {
     domain,
@@ -117,7 +129,7 @@ export function normalizeBulkScanResult(
     phishingLanguageMatch: boundedText(availability.phishingLanguageMatch, 300),
     idnReferenceMatch,
     pageBaselineMatch,
-    hasActiveBrandProfile: Boolean(context.profile),
+    hasActiveBrandProfile,
     riskModelVersion: riskExplanation?.modelVersion ?? null,
     opportunityModelVersion: opportunityExplanation?.modelVersion ?? null,
     riskScore: risk,
@@ -126,6 +138,7 @@ export function normalizeBulkScanResult(
       points: factor.delta,
     })) ?? [],
     mutationTypes,
+    profileContext,
   };
 
   return {

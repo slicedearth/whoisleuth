@@ -377,17 +377,17 @@ export function horizontalConnectionPath(source: Point, target: Point) {
 
 export function projectEvidenceTopology(targetInput: EvidenceTopologyTarget, rawNodes: EvidenceTopologyInput[]) {
   const seen = new Set<string>();
-  const accepted: Array<Required<Omit<EvidenceTopologyInput, 'status'>> & { status: EvidenceTopologyStatus }> = [];
+  const normalized: Array<Required<Omit<EvidenceTopologyInput, 'status'>> & { status: EvidenceTopologyStatus }> = [];
   const candidates = Array.isArray(rawNodes) ? rawNodes : [];
+  const candidateLimit = MAX_EVIDENCE_TOPOLOGY_NODES * 4;
 
-  for (const candidate of candidates) {
+  for (const candidate of candidates.slice(0, candidateLimit)) {
     const id = boundedId(candidate?.id);
     const label = boundedText(candidate?.label, 40);
     if (!id || !label || seen.has(id)) continue;
     seen.add(id);
-    if (accepted.length >= MAX_EVIDENCE_TOPOLOGY_NODES) continue;
     const provenance = candidate.provenance === 'derived' ? 'derived' : 'direct';
-    accepted.push({
+    normalized.push({
       id,
       label,
       detail: boundedText(candidate.detail, 120),
@@ -398,6 +398,23 @@ export function projectEvidenceTopology(targetInput: EvidenceTopologyTarget, raw
       provenance,
       family: normalizeEvidenceTopologyFamily(candidate.family, provenance),
     });
+  }
+
+  const accepted: typeof normalized = [];
+  const selectedIds = new Set<string>();
+  const representedFamilies = new Set<EvidenceTopologyFamily>();
+  for (const node of normalized) {
+    if (representedFamilies.has(node.family)) continue;
+    representedFamilies.add(node.family);
+    accepted.push(node);
+    selectedIds.add(node.id);
+    if (accepted.length >= MAX_EVIDENCE_TOPOLOGY_NODES) break;
+  }
+  for (const node of normalized) {
+    if (accepted.length >= MAX_EVIDENCE_TOPOLOGY_NODES) break;
+    if (selectedIds.has(node.id)) continue;
+    accepted.push(node);
+    selectedIds.add(node.id);
   }
 
   const leftIds = accepted.filter((node) => node.side === 'left').map((node) => node.id);
@@ -454,6 +471,10 @@ export function projectEvidenceTopology(targetInput: EvidenceTopologyTarget, raw
     error: 0,
     unknown: 0,
   });
+  const provenanceCounts = nodes.reduce((summary, node) => {
+    summary[node.provenance] += 1;
+    return summary;
+  }, { direct: 0, derived: 0 });
 
   return {
     version: EVIDENCE_TOPOLOGY_VERSION,
@@ -463,6 +484,8 @@ export function projectEvidenceTopology(targetInput: EvidenceTopologyTarget, raw
     nodes,
     edges,
     counts,
-    truncated: seen.size > accepted.length,
+    provenanceCounts,
+    truncated: accepted.length > 0
+      && (candidates.length > candidateLimit || normalized.length > accepted.length),
   };
 }

@@ -6,6 +6,7 @@ import { access, mkdtemp, readFile, rm, stat } from 'node:fs/promises';
 import { homedir, tmpdir, totalmem } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { sanitizedMaintainerText as boundedText } from './maintainer-tool-helpers.mts';
 
 type ProcessResult = Readonly<{
   exitCode: number;
@@ -89,20 +90,24 @@ const KNOWN_CODEQL_FINDINGS: readonly KnownCodeqlFinding[] = Object.freeze([
   // The route and file are fixed build-time allowlist entries, and the handler
   // now has its own bounded request middleware. CodeQL does not recognize the
   // project-local limiter, so retain only this exact reviewed fingerprint.
-  Object.freeze({ ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: '3398efe9f888d67d:1', primaryLocationStartColumnFingerprint: '45', reason: 'false_positive' as const }),
   Object.freeze({ ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: 'c95b56b6acb3e65b:1', primaryLocationStartColumnFingerprint: '23', reason: 'false_positive' as const }),
   // Contact-route verification is preceded by its own bounded per-identity
   // limiter. CodeQL models the token verification as authorization but does
   // not follow the project-local Express middleware factory.
   Object.freeze({ ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: 'e98683a11c64bf47:1', primaryLocationStartColumnFingerprint: '26', reason: 'false_positive' as const }),
+  // Every authenticated network GET below places apiRateLimit before both
+  // authentication and cross-site request admission. CodeQL models the new
+  // admission middleware as authorization but does not recognize the earlier
+  // project-local limiter. Exact fingerprints plus a source-order regression
+  // keep this review narrow and make any route edit require re-review.
+  Object.freeze({ ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: '87a6b826a4cdaa1c:1', primaryLocationStartColumnFingerprint: '50', reason: 'false_positive' as const }),
+  Object.freeze({ ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: 'd96bfd33ae3ed6bf:1', primaryLocationStartColumnFingerprint: '48', reason: 'false_positive' as const }),
+  Object.freeze({ ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: '29ddfb546d6fe5a7:1', primaryLocationStartColumnFingerprint: '66', reason: 'false_positive' as const }),
+  Object.freeze({ ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: 'b9283329ce021080:1', primaryLocationStartColumnFingerprint: '49', reason: 'false_positive' as const }),
+  Object.freeze({ ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: '8acce5086fcbbcb3:1', primaryLocationStartColumnFingerprint: '56', reason: 'false_positive' as const }),
+  Object.freeze({ ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: 'c9a8676b6ac23924:1', primaryLocationStartColumnFingerprint: '53', reason: 'false_positive' as const }),
+  Object.freeze({ ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: '7ab74220fd086828:1', primaryLocationStartColumnFingerprint: '58', reason: 'false_positive' as const }),
 ]);
-
-function boundedText(value: unknown, maximum: number, fallback: string): string {
-  const text = typeof value === 'string'
-    ? value.replace(/[\u0000-\u001f\u007f]+/gu, ' ').replace(/\s+/gu, ' ').trim()
-    : '';
-  return (text || fallback).slice(0, maximum);
-}
 
 function resolveCodeqlCommand(value: unknown = process.env.CODEQL_PATH): string {
   if (value === undefined || value === null || value === '') return 'codeql';
@@ -207,12 +212,12 @@ function parseCodeqlVersion(stdout: string): string {
     const parsed: unknown = JSON.parse(stdout);
     if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
       const value = (parsed as Record<string, unknown>).version;
-      if (typeof value === 'string') return boundedText(value, 100, 'unknown');
+      if (typeof value === 'string') return boundedText(value, 'unknown', 100);
     }
   } catch {
     // Older bundles may not produce JSON for this command; keep the fallback bounded.
   }
-  return boundedText(stdout.split(/\r?\n/u)[0], 100, 'unknown');
+  return boundedText(stdout.split(/\r?\n/u)[0], 'unknown', 100);
 }
 
 function codeqlRamMegabytes(systemMemoryBytes = totalmem()): number {
@@ -248,7 +253,7 @@ function findingLocation(result: Record<string, unknown>): { file: string | null
     ? (region as Record<string, unknown>).startLine
     : null;
   return {
-    file: typeof uri === 'string' ? boundedText(uri.split(/[?#]/u)[0], MAX_FINDING_PATH_LENGTH, 'unknown') : null,
+    file: typeof uri === 'string' ? boundedText(uri.split(/[?#]/u)[0], 'unknown', MAX_FINDING_PATH_LENGTH) : null,
     line: Number.isSafeInteger(startLine) && Number(startLine) > 0 ? Number(startLine) : null,
   };
 }
@@ -270,15 +275,15 @@ function normalizeFinding(value: unknown): CodeqlFinding {
     ? result.partialFingerprints as Record<string, unknown>
     : {};
   return Object.freeze({
-    ruleId: boundedText(result.ruleId, 200, 'unknown-rule'),
+    ruleId: boundedText(result.ruleId, 'unknown-rule', 200),
     level,
-    message: boundedText(message, MAX_FINDING_TEXT_LENGTH, 'CodeQL reported a finding.'),
+    message: boundedText(message, 'CodeQL reported a finding.', MAX_FINDING_TEXT_LENGTH),
     ...findingLocation(result),
     primaryLocationLineHash: typeof partialFingerprints.primaryLocationLineHash === 'string'
-      ? boundedText(partialFingerprints.primaryLocationLineHash, 200, 'unknown')
+      ? boundedText(partialFingerprints.primaryLocationLineHash, 'unknown', 200)
       : null,
     primaryLocationStartColumnFingerprint: typeof partialFingerprints.primaryLocationStartColumnFingerprint === 'string'
-      ? boundedText(partialFingerprints.primaryLocationStartColumnFingerprint, 200, 'unknown')
+      ? boundedText(partialFingerprints.primaryLocationStartColumnFingerprint, 'unknown', 200)
       : null,
   });
 }
@@ -477,7 +482,7 @@ async function main(args = process.argv.slice(2)): Promise<number> {
     process.stdout.write(formatLocalCodeqlReport(report));
     return report.status === 'pass' ? 0 : 1;
   } catch (error) {
-    process.stderr.write(`${boundedText(error instanceof Error ? error.message : error, 1200, 'Local CodeQL check failed.')}\n`);
+    process.stderr.write(`${boundedText(error instanceof Error ? error.message : error, 'Local CodeQL check failed.', 1200)}\n`);
     return 2;
   }
 }

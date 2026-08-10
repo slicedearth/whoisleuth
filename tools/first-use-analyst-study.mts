@@ -14,6 +14,11 @@ import {
   FIRST_USE_STUDY_TASK_VERSION,
 } from '../fixtures/first-use-analyst-study-tasks.mts';
 import { readBoundedRegularFile } from '../lib/bounded-file.mts';
+import {
+  boundedNonNegativeInteger as boundedInteger,
+  medianOneDecimal as median,
+  optionalJsonRecord as record,
+} from './maintainer-tool-helpers.mts';
 
 export const FIRST_USE_STUDY_SESSION_SCHEMA = 'whoisleuth.first-use-study-session';
 export const FIRST_USE_STUDY_REPORT_SCHEMA = 'whoisleuth.first-use-study-report';
@@ -88,25 +93,12 @@ export const FIRST_USE_STUDY_TASK_DIGEST_SHA256 = createHash('sha256')
   }), 'utf8')
   .digest('hex');
 
-function record(value: unknown): UnknownRecord | null {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? value as UnknownRecord
-    : null;
-}
-
 function assertExactKeys(value: UnknownRecord, expected: ReadonlySet<string>, label: string): void {
   const unknown = Object.keys(value).filter((key) => !expected.has(key));
   const missing = [...expected].filter((key) => !Object.hasOwn(value, key));
   if (unknown.length || missing.length) {
     throw new TypeError(`${label} must use only the documented fields.`);
   }
-}
-
-function boundedInteger(value: unknown, label: string, maximum: number): number {
-  if (!Number.isSafeInteger(value) || (value as number) < 0 || (value as number) > maximum) {
-    throw new TypeError(`${label} must be an integer from 0 to ${maximum}.`);
-  }
-  return value as number;
 }
 
 function optionalSeconds(value: unknown, label: string): number | null {
@@ -183,15 +175,6 @@ function normalizeSession(value: unknown): StudySession {
     device,
     observations: Object.freeze(observations),
   });
-}
-
-function median(values: readonly number[]): number | null {
-  if (!values.length) return null;
-  const sorted = [...values].sort((left, right) => left - right);
-  const middle = Math.floor(sorted.length / 2);
-  return sorted.length % 2 === 0
-    ? Number((((sorted[middle - 1] as number) + (sorted[middle] as number)) / 2).toFixed(1))
-    : sorted[middle] as number;
 }
 
 export function buildFirstUseStudyReport(rawSessions: unknown) {

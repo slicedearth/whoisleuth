@@ -90,14 +90,13 @@ function reviewRpkiRoute(input: Readonly<{
     });
   }
 
-  const truncated = rows.length > MAX_RPKI_RECORDS;
+  const inputTruncated = rows.length > MAX_RPKI_RECORDS;
   const normalized = rows.slice(0, MAX_RPKI_RECORDS).map(normalizeAuthorization);
   const rejectedCount = normalized.filter((item) => item === null).length + Math.max(0, rows.length - MAX_RPKI_RECORDS);
   const authorizations = normalized.filter((item): item is RouteOriginAuthorization => item !== null);
   const covering = authorizations.filter((item) => prefixContains(item.parsedPrefix, route));
-  const matches = covering
+  const evaluated = covering
     .sort((left, right) => right.parsedPrefix.length - left.parsedPrefix.length || left.asn - right.asn)
-    .slice(0, MAX_RPKI_MATCHES)
     .map((item) => Object.freeze({
       prefix: item.prefix,
       maxLength: item.maxLength,
@@ -106,13 +105,15 @@ function reviewRpkiRoute(input: Readonly<{
         : route.length > item.maxLength ? 'max_length_exceeded' as const
           : 'valid' as const,
     }));
-  const matchingAuthorizationCount = matches.filter((item) => item.state === 'valid').length;
+  const matchingAuthorizationCount = evaluated.filter((item) => item.state === 'valid').length;
+  const matches = evaluated.slice(0, MAX_RPKI_MATCHES);
+  const incompleteInput = inputTruncated || rejectedCount > 0;
   const state = covering.length === 0
-    ? 'not_found'
+    ? incompleteInput ? 'partial' : 'not_found'
     : matchingAuthorizationCount > 0
-      ? truncated || rejectedCount > 0 || covering.length > MAX_RPKI_MATCHES ? 'partial'
+      ? incompleteInput || covering.length > MAX_RPKI_MATCHES ? 'partial'
       : 'valid'
-      : 'invalid';
+      : incompleteInput || covering.length > MAX_RPKI_MATCHES ? 'partial' : 'invalid';
   return Object.freeze({
     schema: RPKI_EVIDENCE_SCHEMA,
     version: RPKI_EVIDENCE_VERSION,
@@ -122,7 +123,7 @@ function reviewRpkiRoute(input: Readonly<{
     coveringAuthorizationCount: covering.length,
     matchingAuthorizationCount,
     rejectedCount,
-    truncated,
+    truncated: inputTruncated || covering.length > MAX_RPKI_MATCHES,
     matches: Object.freeze(matches),
     limitations: baseLimitations,
   });

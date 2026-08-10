@@ -30,7 +30,17 @@
   let importPassphrase=$state('');
 
   function selected(id:string){return selectedIds.includes(id);}
-  function toggle(id:string,checked:boolean){selectedIds=checked?[...new Set([...selectedIds,id])]:selectedIds.filter((item)=>item!==id);}
+  async function toggle(id:string,checked:boolean){
+    const nextIds=checked?[...new Set([...selectedIds,id])]:selectedIds.filter((item)=>item!==id);
+    selectedIds=nextIds;
+    if(!archiveValue)return;
+    busy=true;
+    try{
+      preview=await previewLocalWorkspaceArchive(archiveValue,nextIds);
+      selectedIds=preview.sections.filter((section)=>section.status==='ready'&&section.selected).map((section)=>section.id);
+    }catch(cause){message=cause instanceof Error?cause.message:'Could not update the workspace selection preview.';}
+    finally{busy=false;}
+  }
 
   function downloadFile(output:{content:string;mimeType:string;filename:string}){
     const url=URL.createObjectURL(new Blob([output.content],{type:output.mimeType}));
@@ -116,10 +126,11 @@
           updated:sum.updated+item.updated,
           skipped:sum.skipped+item.skipped,
           pruned:sum.pruned+item.pruned,
+          brandProfileReferencesOmitted:sum.brandProfileReferencesOmitted+item.brandProfileReferencesOmitted,
         }),
-        {added:0,updated:0,skipped:0,pruned:0},
+        {added:0,updated:0,skipped:0,pruned:0,brandProfileReferencesOmitted:0},
       );
-      message=`Added backup data from ${result.results.length} sections: ${totals.added} new, ${totals.updated} existing matches, ${totals.skipped} skipped${totals.pruned?`, ${totals.pruned} older evidence snapshot${totals.pruned===1?'':'s'} pruned to fit`:''}.`;
+      message=`Added backup data from ${result.results.length} sections: ${totals.added} new, ${totals.updated} existing matches, ${totals.skipped} skipped${totals.brandProfileReferencesOmitted?`, ${totals.brandProfileReferencesOmitted} Brand Profile reference${totals.brandProfileReferencesOmitted===1?'':'s'} omitted beyond the retained bounds`:''}${totals.pruned?`, ${totals.pruned} older evidence snapshot${totals.pruned===1?'':'s'} pruned to fit`:''}.`;
       archiveValue=null;preview=null;selectedIds=[];onimport?.();
     }catch(cause){message=cause instanceof Error?cause.message:'Workspace archive import failed.';}
     finally{busy=false;}
@@ -207,8 +218,8 @@
         {#each preview.sections as section}
           <li class:unsupported={section.status!=='ready'}>
             <label>
-              <input type="checkbox" checked={selected(section.id)} disabled={section.status!=='ready'||busy} onchange={(event)=>toggle(section.id,(event.currentTarget as HTMLInputElement).checked)}>
-              <span><strong>{section.label}</strong><small>{section.recordCount} in archive · {section.added} new · {section.updated} existing match{section.updated===1?'':'es'} · {section.skipped} skipped{section.pruned?` · ${section.pruned} older evidence snapshot${section.pruned===1?'':'s'} will be pruned`:''}</small></span>
+              <input type="checkbox" checked={selected(section.id)} disabled={section.status!=='ready'||busy} onchange={(event)=>void toggle(section.id,(event.currentTarget as HTMLInputElement).checked)}>
+              <span><strong>{section.label}</strong><small>{section.recordCount} in archive · {section.added} new · {section.updated} existing match{section.updated===1?'':'es'} · {section.skipped} skipped{section.brandProfileReferencesOmitted?` · ${section.brandProfileReferencesOmitted} Brand Profile reference${section.brandProfileReferencesOmitted===1?'':'s'} will be omitted`:''}{section.pruned?` · ${section.pruned} older evidence snapshot${section.pruned===1?'':'s'} will be pruned`:''}</small></span>
             </label>
             <span class="state">{section.status==='ready'?'Ready':section.status==='unsupported'?'Unsupported':'Blocked'}</span>
             {#if section.reason}<p>{section.reason}</p>{/if}

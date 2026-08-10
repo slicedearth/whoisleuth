@@ -11,10 +11,13 @@ import {
   projectCaseRelationshipTable,
 } from '../frontend/src/lib/analysis/case-relationship-table.ts';
 import {
+  CASE_RELATIONSHIP_QUERY_DEFAULTS,
   CASE_RELATIONSHIP_VERSION,
   buildCaseRelationships,
+  caseRelationshipGroupId,
   type CaseRelationshipGroup,
 } from '../frontend/src/lib/analysis/case-relationships.ts';
+import { projectCaseRelationshipGraph } from '../frontend/src/lib/analysis/case-relationship-graph.ts';
 
 const CAPTURED = '2026-07-14T00:00:00.000Z';
 
@@ -49,7 +52,7 @@ describe('case relationship table projection', () => {
     assert.equal(result.rangeStart, 0);
     assert.equal(result.rangeEnd, 0);
     assert.equal(result.truncated, false);
-    assert.deepEqual(result.filters, { type: 'all', query: '', sort: 'type', direction: 'asc' });
+    assert.deepEqual(result.filters, { ...CASE_RELATIONSHIP_QUERY_DEFAULTS, query: '', sort: 'type', direction: 'asc' });
   });
 
   test('projects every relationship with full counts and bounded members', () => {
@@ -57,6 +60,7 @@ describe('case relationship table projection', () => {
     assert.equal(result.rows.length, 2);
     assert.deepEqual(result.rows.map((row) => row.type), ['nameserver_set', 'http_final_origin']);
     assert.ok(result.rows.every((row) => row.caseCount === 2 && row.omittedCases === 0));
+    assert.ok(result.rows.every((row) => row.id === caseRelationshipGroupId(row)));
   });
 
   test('projecting a prebuilt summary matches the compatible raw-case wrapper', () => {
@@ -106,7 +110,7 @@ describe('case relationship table projection', () => {
 
   test('invalid option values fall back to documented defaults', () => {
     const result = buildCaseRelationshipTable(relationshipFixture(), { type: 'bad', sort: 42, direction: 'sideways' });
-    assert.deepEqual(result.filters, { type: 'all', query: '', sort: 'type', direction: 'asc' });
+    assert.deepEqual(result.filters, { ...CASE_RELATIONSHIP_QUERY_DEFAULTS, query: '', sort: 'type', direction: 'asc' });
   });
 
   test('caps case pivots per row and discloses omissions', () => {
@@ -151,6 +155,49 @@ describe('case relationship table projection', () => {
     assert.equal(buildCaseRelationshipTable(cases, { page: 1.5 }).currentPage, 1);
   });
 
+  test('reports the selected row page only when the private table query includes it', () => {
+    const cases = [];
+    for (let index = 0; index < MAX_RELATIONSHIP_TABLE_ROWS + 2; index++) {
+      cases.push(
+        caseRecord(`a-${index}`, `a-${index}.invalid`, snapshot({ nameservers: [`ns-${String(index).padStart(2, '0')}.invalid`] })),
+        caseRecord(`b-${index}`, `b-${index}.invalid`, snapshot({ nameservers: [`ns-${String(index).padStart(2, '0')}.invalid`] })),
+      );
+    }
+    const summary = buildCaseRelationships(cases);
+    const selectedRelationshipId = caseRelationshipGroupId(requiredValue(summary.groups.at(-1)));
+    const included = projectCaseRelationshipTable(summary, { query: 'ns-', selectedRelationshipId });
+    assert.equal(included.selectedRelationshipPage, 2);
+    assert.equal(included.currentPage, 1);
+    assert.equal(included.filters.query, 'ns-');
+
+    const excluded = projectCaseRelationshipTable(summary, { query: 'ns-00.invalid', selectedRelationshipId, page: 2 });
+    assert.equal(excluded.selectedRelationshipPage, null);
+    assert.equal(excluded.currentPage, 1);
+    assert.equal(excluded.filters.query, 'ns-00.invalid');
+    assert.equal(requiredValue(excluded.rows[0]).value, 'ns-00.invalid');
+  });
+
+  test('keeps graph and table common filters in parity while table search remains private', () => {
+    const summary = buildCaseRelationships(relationshipFixture());
+    const common = { type: 'http_final_origin' };
+    const graph = projectCaseRelationshipGraph(summary, common);
+    const table = projectCaseRelationshipTable(summary, { ...common, query: 'charlie.invalid' });
+    assert.equal(graph.matchingRelationships, 1);
+    assert.equal(table.matchingRelationships, 1);
+    assert.deepEqual(graph.filters, {
+      ...CASE_RELATIONSHIP_QUERY_DEFAULTS,
+      type: 'http_final_origin',
+    });
+    assert.deepEqual(
+      graph.relationshipNodes.map((node) => node.id),
+      table.rows.map((row) => row.id),
+    );
+
+    const privateMiss = projectCaseRelationshipTable(summary, { ...common, query: 'bravo.invalid' });
+    assert.equal(privateMiss.matchingRelationships, 0);
+    assert.equal(projectCaseRelationshipGraph(summary, common).matchingRelationships, 1);
+  });
+
   test('a restrictive filter can reduce an otherwise capped table cleanly', () => {
     const cases = [];
     for (let index = 0; index < MAX_RELATIONSHIP_TABLE_ROWS + 2; index++) {
@@ -171,6 +218,20 @@ describe('case relationship table projection', () => {
     ));
     const result = buildCaseRelationshipTable(cases);
     assert.equal(result.truncated, true);
+  });
+
+  test('discloses and omits duplicate relationship view identities', () => {
+    const summary = buildCaseRelationships(relationshipFixture());
+    const duplicate = requiredValue(summary.groups[0]);
+    const result = projectCaseRelationshipTable({
+      ...summary,
+      groups: [duplicate, structuredClone(duplicate)],
+    });
+    assert.deepEqual(result.rows, []);
+    assert.equal(result.totalRelationships, 2);
+    assert.equal(result.matchingRelationships, 0);
+    assert.equal(result.truncated, true);
+    assert.match(requiredValue(result.limitations.at(-1)), /stable unique view identifier/u);
   });
 
   test('does not mutate source records or option objects', () => {

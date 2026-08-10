@@ -14,6 +14,7 @@
     lookupDisabledReason,
     scanLimitations,
     profileName,
+    profileContextState,
     handoffCount,
     handoffSource,
     handoffContextTruncated,
@@ -43,6 +44,7 @@
     lookupDisabledReason: string;
     scanLimitations: string[];
     profileName: string;
+    profileContextState: 'loading' | 'ready' | 'unavailable';
     handoffCount: number;
     handoffSource: string;
     handoffContextTruncated: boolean;
@@ -81,7 +83,10 @@
 <section class="queue card">
   {#if lookupDisabledReason}<p class="feature-disabled" role="note">{lookupDisabledReason}</p>{/if}
   {#if !lookupDisabledReason && scanLimitations.length}<p class="feature-disabled" role="note">Some {mode} scan sources are disabled by deployment policy: {scanLimitations.join(', ')}. {mode === 'deep' ? 'Saved evidence will not claim a complete deep scan.' : 'Results will identify unevaluated evidence.'}</p>{/if}
-  {#if profileName}<p class="profile-context">Active profile: <strong>{profileName}</strong>. Official, partner, and allowlisted domains remain visible but are excluded from high-risk triage and Monitor saves.</p>{/if}
+  {#if profileContextState === 'loading'}<p class="profile-context" role="status" aria-live="polite">Loading browser-local Brand Profile context. Scanning and retries remain unavailable until this read settles.</p>
+  {:else if profileContextState === 'unavailable'}<p class="profile-context limitation" role="alert">Brand Profile context is unavailable. A scan may continue with trust, allowlist, profile matches, and profile-dependent conclusions retained as inconclusive.</p>
+  {:else if profileName}<p class="profile-context">Active profile: <strong>{profileName}</strong>. Official, partner, and allowlisted domains remain visible but are excluded from high-risk triage and Monitor saves.</p>
+  {:else}<p class="profile-context">No active Brand Profile is selected. Profile-derived comparisons are settled against that explicit empty context.</p>{/if}
   {#if handoffSource}<p class="handoff">Loaded {handoffCount} candidate{handoffCount === 1 ? '' : 's'} from {handoffSource}.{#if handoffContextTruncated} Generated coverage context was capped to fit browser tab storage; selected candidates were retained in full.{/if}</p>{/if}
   <div class="queue-label"><label class="queue-title" for="domains">Domains</label><label class="btn small file-btn">Import CSV or text<input type="file" accept=".csv,.txt,text/csv,text/plain" onchange={importDomainFile} disabled={running}></label></div>
   <textarea id="domains" value={input} oninput={(event) => setInput(event.currentTarget.value)} disabled={running} placeholder="example.com&#10;example.net"></textarea>
@@ -90,7 +95,7 @@
   <div class="queue-actions">
     <label class="field">Scan mode<select value={mode} onchange={(event) => setMode(event.currentTarget.value as ScanMode)} disabled={running}><option value="fast">Fast · registration</option><option value="deep">Deep · compact web and mail triage</option></select></label>
     <label class="field">Request pacing<select value={pacing} onchange={(event) => setPacing(event.currentTarget.value as BulkPacing)} disabled={running}>{#each pacingOptions as option}<option value={option.id}>{option.label}</option>{/each}</select></label>
-    <button class="primary" onclick={start} disabled={running || !input.trim() || entryCount > queryLimit || Boolean(lookupDisabledReason)}>{entryCount ? `Scan ${entryCount} domain${entryCount === 1 ? '' : 's'}` : 'Scan domains'}</button>
+    <button class="primary" onclick={start} disabled={running || profileContextState === 'loading' || !input.trim() || entryCount > queryLimit || Boolean(lookupDisabledReason)}>{entryCount ? `Scan ${entryCount} domain${entryCount === 1 ? '' : 's'}` : 'Scan domains'}</button>
     {#if running}<button class="btn" onclick={togglePause}>{paused ? 'Resume' : 'Pause'}</button><button class="btn danger" onclick={cancel}>Cancel</button>{/if}
   </div>
   <p class="mode-help">{mode === 'deep' ? 'Bulk Deep collects compact WHOIS, DNS, website, TLS, mail, and bounded technology signals for triage and comparison. Open a domain in Lookup for the complete source-level evidence and optional enrichments.' : 'Fast keeps the lower-request registration-first contract and omits WHOIS, website, TLS, and deep enrichment.'} {pacingOptions.find((option) => option.id === pacing)?.detail ?? 'Bounded request pacing'}; at most {concurrency} {concurrency === 1 ? 'lookup runs' : 'lookups run'} in parallel.</p>
@@ -112,6 +117,7 @@
   .queue{padding:var(--card-pad)}
   .profile-context{margin-top:0;padding:10px 12px;border:1px solid rgb(var(--accent2-rgb) / .3);border-radius:var(--radius-md);background:rgb(var(--accent2-rgb) / .04);color:var(--muted);font-size:var(--text-xs)}
   .profile-context strong{color:var(--text)}
+  .profile-context.limitation{border-color:rgb(var(--amber-rgb) / .35);color:var(--amber)}
   .handoff{margin-top:0;color:var(--accent);font-size:var(--text-sm)}
   .queue-label{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:7px}
   .queue-title{font:700 var(--text-sm) var(--mono)}

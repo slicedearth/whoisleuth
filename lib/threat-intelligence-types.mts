@@ -13,13 +13,15 @@ export type ThreatIntelligenceCapability =
   | 'domain_lookup'
   | 'url_lookup'
   | 'indicator_search';
-export type ThreatIntelligenceCategory =
-  | 'phishing'
-  | 'malware'
-  | 'spam'
-  | 'suspicious'
-  | 'abuse'
-  | 'unknown';
+export const THREAT_INTELLIGENCE_CATEGORIES = Object.freeze([
+  'phishing',
+  'malware',
+  'spam',
+  'suspicious',
+  'abuse',
+  'unknown',
+] as const);
+export type ThreatIntelligenceCategory = (typeof THREAT_INTELLIGENCE_CATEGORIES)[number];
 export type ThreatIntelligenceSeverity =
   | 'critical'
   | 'high'
@@ -55,15 +57,17 @@ export type ThreatIntelligenceRedistribution =
   | 'restricted'
   | 'prohibited'
   | 'unknown';
-export type ThreatIntelligenceResultState =
-  | 'success'
-  | 'partial'
-  | 'not_found'
-  | 'unsupported'
-  | 'skipped'
-  | 'rate_limited'
-  | 'unavailable'
-  | 'error';
+export const THREAT_INTELLIGENCE_RESULT_STATES = Object.freeze([
+  'success',
+  'partial',
+  'not_found',
+  'unsupported',
+  'skipped',
+  'rate_limited',
+  'unavailable',
+  'error',
+] as const);
+export type ThreatIntelligenceResultState = (typeof THREAT_INTELLIGENCE_RESULT_STATES)[number];
 
 export type ThreatIntelligenceProviderTargets = Readonly<{
   domain?: 'registrable_domain';

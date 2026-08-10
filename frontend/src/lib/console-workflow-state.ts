@@ -7,11 +7,15 @@ import type {
   BulkSourceFilter,
 } from './analysis/bulk-triage.ts';
 import type { LookupHttpResponse } from './analysis/lookup-response.ts';
+import type { BulkProfileContextProvenance } from './analysis/bulk-session-model.ts';
 
 export type LookupMode = 'fast' | 'deep';
 
 export type LookupWorkflowState = {
   query: string;
+  completedTarget: string;
+  /** Optional only for compatibility with workflow state created before exact completed depth was retained. */
+  completedLookupDepth?: LookupMode | null;
   lookupMode: LookupMode;
   includeExternalIntelligence: boolean;
   includeMalwareHostIntelligence: boolean;
@@ -29,7 +33,9 @@ export type BulkWorkflowState<Result> = {
   completed: number;
   total: number;
   results: Result[];
-  filter: 'all' | 'available' | 'registered' | 'high_risk' | 'trusted' | 'errors';
+  /** Missing only for transient workflow state created before Bulk session schema v4. */
+  profileContext?: BulkProfileContextProvenance;
+  filter: 'all' | 'available' | 'registered' | 'high_risk' | 'trusted' | 'profile_unevaluated' | 'errors';
   mutationFilter: string;
   signalFilters: string[];
   sourceFilter?: BulkSourceFilter;

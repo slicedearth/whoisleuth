@@ -154,28 +154,69 @@ export function projectTrendPoints(rawPoints: readonly TrendPointInput[]) {
     .filter((point): point is NonNullable<typeof point> => Boolean(point))
     .sort((a, b) => a.milliseconds - b.milliseconds || a.id.localeCompare(b.id));
   const points = candidates.slice(-MAX_TREND_POINTS);
-  const x = scalePoint<string>().domain(points.map((point) => point.id)).range([64, 850]).padding(0.45);
+  const firstMilliseconds = points[0]?.milliseconds ?? 0;
+  const latestMilliseconds = points.at(-1)?.milliseconds ?? firstMilliseconds;
+  const x = scaleLinear()
+    .domain(firstMilliseconds === latestMilliseconds
+      ? [firstMilliseconds - 1, latestMilliseconds + 1]
+      : [firstMilliseconds, latestMilliseconds])
+    .range([64, 850])
+    .clamp(true);
   const maximum = Math.max(1, ...points.map((point) => point.total));
   const y = scaleLinear().domain([0, maximum]).range([190, 24]).nice().clamp(true);
   const first = points[0] ?? null;
   const latest = points.at(-1) ?? null;
+  const projectedPoints = points.map((point, sequenceIndex) => ({
+    ...point,
+    sequenceIndex,
+    x: points.length > 1 ? x(point.milliseconds) : 450,
+    y: y(point.total),
+    addedY: y(point.added),
+  }));
+  // A capped point is a lower bound, so neither adjacent slope is measured.
+  // Retain only directly adjacent complete-to-complete segments and leave a
+  // visible gap around every capped point.
+  const segments = projectedPoints.slice(1).flatMap((to, index) => {
+    const from = projectedPoints[index];
+    return from && !from.partial && !to.partial ? [{
+      fromId: from.id,
+      toId: to.id,
+      x1: from.x,
+      y1: from.y,
+      x2: to.x,
+      y2: to.y,
+    }] : [];
+  });
+  const partialChecks = points.filter((point) => point.partial).length;
+  const hasPartialChecks = partialChecks > 0;
+  const summaryMetric = (value: number, lowerBound: boolean) => ({
+    value,
+    lowerBound,
+    label: lowerBound ? `At least ${value}` : String(value),
+  });
+  const peakTotal = points.reduce((peak, point) => Math.max(peak, point.total), 0);
+  const newlyObserved = points.reduce((total, point) => total + point.added, 0);
   return {
     width: 900,
     height: 225,
     maximum,
+    spacing: 'elapsed_time' as const,
+    elapsed: {
+      firstAt: points[0]?.date ?? null,
+      latestAt: points.at(-1)?.date ?? null,
+      milliseconds: Math.max(0, latestMilliseconds - firstMilliseconds),
+    },
     ticks: y.ticks(4).map((value) => ({ value, y: y(value) })),
-    points: points.map((point) => ({
-      ...point,
-      x: x(point.id) ?? 450,
-      y: y(point.total),
-      addedY: y(point.added),
-    })),
+    points: projectedPoints,
+    segments,
     summary: {
-      firstTotal: first?.total ?? 0,
-      latestTotal: latest?.total ?? 0,
-      peakTotal: points.reduce((peak, point) => Math.max(peak, point.total), 0),
-      newlyObserved: points.reduce((total, point) => total + point.added, 0),
-      partialChecks: points.filter((point) => point.partial).length,
+      first: summaryMetric(first?.total ?? 0, Boolean(first?.partial)),
+      latest: summaryMetric(latest?.total ?? 0, Boolean(latest?.partial)),
+      // Any capped total can exceed the displayed observed maximum.
+      peak: summaryMetric(peakTotal, hasPartialChecks),
+      // Every capped new-count is itself a lower bound, including observed 0.
+      newlyObserved: summaryMetric(newlyObserved, hasPartialChecks),
+      partialChecks,
     },
     truncated: candidates.length > points.length,
   };

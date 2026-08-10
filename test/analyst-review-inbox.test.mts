@@ -17,6 +17,7 @@ function caseRecord(): CaseRecord {
     domain: 'review.invalid',
     status: 'reviewing',
     disposition: 'unreviewed',
+    brandProfileIds: [],
     tags: [],
     notes: [],
     source: 'lookup',
@@ -57,6 +58,12 @@ function bulkSession(): BulkSession {
     startedAt: '2026-07-27T07:00:00.000Z',
     updatedAt: '2026-07-27T09:00:00.000Z',
     completedAt: null,
+    profileContext: {
+      sourceState: 'ready',
+      activeProfileId: null,
+      profileUpdatedAt: null,
+      limitation: '',
+    },
   };
 }
 
@@ -91,6 +98,7 @@ describe('analyst review inbox', () => {
     assert.equal(inbox.items[0]?.kind, 'case_action');
     assert.equal(inbox.items.find((item) => item.kind === 'watchlist_change')?.completeness, 'partial');
     assert.equal(inbox.items.find((item) => item.kind === 'case')?.completeness, 'inconclusive');
+    assert.equal(inbox.items.find((item) => item.kind === 'bulk_session')?.href, '/bulk#bulk-sessions-title');
   });
 
   test('projects explicit case evidence gaps without inventing missing facts', () => {

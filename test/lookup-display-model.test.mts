@@ -256,10 +256,12 @@ test('keeps registry comparison and source diagnostics separately attributed', (
   });
 
   assert.equal(registry.comparisonRows[0]?.tone, 'danger');
-  assert.equal(registry.comparisonRows[0]?.rdapMatrixState, 'conflict');
-  assert.equal(registry.comparisonRows[0]?.whoisMatrixState, 'conflict');
-  assert.equal(registry.comparisonRows[1]?.rdapMatrixState, 'observed');
-  assert.equal(registry.comparisonRows[1]?.whoisMatrixState, 'unavailable');
+  assert.equal(registry.comparisonRows[0]?.rdapState, 'value');
+  assert.equal(registry.comparisonRows[0]?.whoisState, 'value');
+  assert.equal(registry.comparisonRows[0]?.rdapMatrixTone, 'conflict');
+  assert.equal(registry.comparisonRows[0]?.whoisMatrixTone, 'conflict');
+  assert.equal(registry.comparisonRows[1]?.rdapMatrixTone, 'observed');
+  assert.equal(registry.comparisonRows[1]?.whoisMatrixTone, 'unavailable');
   assert.equal(registry.whoisContactRoles[0]?.contacts[0]?.identity, 'Abuse desk');
   assert.equal(registry.registrarRdap.label, 'partial');
   assert.match(registry.diagnosticDetail({

@@ -28,12 +28,12 @@ test('homepage presents plain-language goals, restrained branding, and synthetic
   await expect(candidateButtons).toHaveCount(3);
   await expect(page.getByRole('button', { name: 'Show northstar-login.example in the preview' })).toHaveAttribute('aria-pressed', 'true');
   const previewTabs = page.getByRole('tablist', { name: 'Lookup result layout preview' });
-  await expect(previewTabs.getByRole('tab', { name: 'Sources' })).toHaveAttribute('aria-selected', 'true');
+  await expect(previewTabs.getByRole('tab', { name: 'Evidence' })).toHaveAttribute('aria-selected', 'true');
   const topology = page.getByRole('region', { name: 'Where this result comes from' });
   await expect(topology).toBeVisible();
   await expect(topology.locator('#homepage-evidence-topology-title')).toHaveCSS('clip-path', 'inset(50%)');
   await expect(topology.getByRole('img', { name: 'Where this result comes from visual overview' })).toBeVisible();
-  await expect(topology.getByRole('list', { name: 'Evidence source status' }).getByRole('listitem')).toHaveCount(5);
+  await expect(topology.getByRole('list', { name: 'Evidence item status' }).getByRole('listitem')).toHaveCount(5);
   await page.getByRole('button', { name: 'Show northstarr.example in the preview' }).click();
   await expect(page.getByRole('button', { name: 'Show northstarr.example in the preview' })).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('.lookup-panel > header small')).toHaveText('northstarr.example');
@@ -42,7 +42,7 @@ test('homepage presents plain-language goals, restrained branding, and synthetic
   await expect(page.locator('.monitor-panel')).toContainText('Watch for material change');
   await previewTabs.getByRole('tab', { name: 'At a glance' }).click();
   const previewOverview = page.getByRole('tabpanel', { name: 'At a glance' });
-  await expect(previewOverview.getByText('5 sources', { exact: true })).toBeVisible();
+  await expect(previewOverview.getByText('4 sources + 1 derived', { exact: true })).toBeVisible();
   await expect(previewOverview.getByText('34/100', { exact: true })).toBeVisible();
   await expect(previewOverview.getByText('Character edit', { exact: true })).toBeVisible();
   await expect(previewOverview.getByText('Parked page pattern', { exact: true })).toBeVisible();
@@ -58,21 +58,21 @@ test('homepage presents plain-language goals, restrained branding, and synthetic
   await expect(lookupTimeline.getByText(/changed fields · Website activity/)).toBeVisible();
   await expect(page.locator('.monitor-panel ol')).toHaveCount(0);
   await previewTabs.getByRole('tab', { name: 'Timeline' }).press('ArrowLeft');
-  await expect(previewTabs.getByRole('tab', { name: 'Sources' })).toBeFocused();
-  await expect(previewTabs.getByRole('tab', { name: 'Sources' })).toHaveAttribute('aria-selected', 'true');
+  await expect(previewTabs.getByRole('tab', { name: 'Evidence' })).toBeFocused();
+  await expect(previewTabs.getByRole('tab', { name: 'Evidence' })).toHaveAttribute('aria-selected', 'true');
   await expect(topology).toBeVisible();
   await expect(page.getByText('Fixed fictional data from the public demo. No live target is contacted.')).toBeVisible();
   await expect(page.locator('.hero-actions').getByRole('link', { name: 'Open console' })).toHaveAttribute('href', '/dashboard');
   await expect(page.getByRole('link', { name: 'Sign in to investigate' })).toHaveCount(0);
   await expect(page.locator('.learn article')).toHaveCount(4);
-  await expect(page.getByRole('link', { name: 'Browse all domain investigation resources' })).toHaveAttribute('href', '/resources');
+  await expect(page.getByRole('link', { name: 'Browse the topic library' })).toHaveAttribute('href', '/resources');
 
   await page.setViewportSize({ width: 390, height: 844 });
   const mobileDomainPicker = page.getByLabel('Example domain');
   await expect(mobileDomainPicker).toBeVisible();
   await mobileDomainPicker.selectOption('alternate-tld');
   await expect(page.locator('.lookup-panel > header small')).toHaveText('northstar.invalid');
-  await previewTabs.getByRole('tab', { name: 'Sources' }).click();
+  await previewTabs.getByRole('tab', { name: 'Evidence' }).click();
   const sourceSummary = page.locator('.mobile-source-summary');
   await expect(sourceSummary).toBeVisible();
   await expect(sourceSummary.locator('.state-inconclusive', { hasText: 'Registry' })).toBeVisible();
@@ -80,29 +80,40 @@ test('homepage presents plain-language goals, restrained branding, and synthetic
   const sourceStateColors = await sourceSummary.evaluate((summary) => {
     const warning = summary.querySelector('.state-warning strong');
     const success = summary.querySelector('.state-success strong');
+    const unavailable = summary.querySelector('.state-unavailable strong');
     const reference = document.createElement('span');
     reference.style.color = 'var(--amber)';
+    const mutedReference = document.createElement('span');
+    mutedReference.style.color = 'var(--muted)';
     document.body.append(reference);
+    document.body.append(mutedReference);
     const colors = {
       warning: warning ? getComputedStyle(warning).color : '',
       success: success ? getComputedStyle(success).color : '',
+      unavailable: unavailable ? getComputedStyle(unavailable).color : '',
       amber: getComputedStyle(reference).color,
+      muted: getComputedStyle(mutedReference).color,
     };
     reference.remove();
+    mutedReference.remove();
     return colors;
   });
   expect(sourceStateColors.warning).toBe(sourceStateColors.amber);
   expect(sourceStateColors.warning).not.toBe(sourceStateColors.success);
+  expect(sourceStateColors.unavailable).toBe(sourceStateColors.muted);
+  expect(sourceStateColors.unavailable).not.toBe(sourceStateColors.warning);
   await expectNoHorizontalOverflow(page);
 });
 
 test('public resources offer task-specific source boundaries on desktop and mobile', async ({ page }) => {
   await page.goto('/resources');
 
-  await expect(page.getByRole('heading', { name: 'Understand the evidence before using the result.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Learn the workflow. Understand the evidence.' })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Resource sections' })).toBeVisible();
   await expect(page.locator('.resource-grid article')).toHaveCount(8);
   await page.getByRole('link', { name: 'RDAP versus WHOIS', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'RDAP versus WHOIS: why registration sources disagree' })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Public navigation' }).getByRole('link', { name: 'Resources' })).toHaveAttribute('aria-current', 'location');
   await expect(page.getByRole('table', { name: 'Evidence sources and limitations' })).toBeVisible();
   await expect(page.getByRole('row')).toHaveCount(4);
   await expect(page.getByRole('heading', { name: 'Questions worth answering.' })).toBeVisible();
@@ -136,11 +147,11 @@ test('public resources offer task-specific source boundaries on desktop and mobi
 });
 
 test('public guide explains tasks, result states, glossary terms, and common questions', async ({ page }) => {
-  await page.goto('/guide');
-  await expect(page.getByText(/Detailed assessment contains additional decision support, claim readiness, portable hand-off, and acquisition review/i)).toBeVisible();
+  await page.goto('/resources');
+  await expect(page.getByText(/Detailed assessment adds questions, claim readiness, portable hand-off, and acquisition review/i)).toBeVisible();
 
-  await expect(page.getByRole('heading', { name: 'Use WHOISleuth with confidence.' })).toBeVisible();
-  await expect(page.getByRole('navigation', { name: 'Guide sections' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Learn the workflow. Understand the evidence.' })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Resource sections' })).toBeVisible();
   const workflowMap = page.getByRole('region', { name: 'Common WHOISleuth workflow map' });
   await expect(workflowMap).toBeVisible();
   await expect(workflowMap.getByRole('heading', { name: 'Inspect one domain' })).toBeVisible();
@@ -187,7 +198,7 @@ test('public guide explains tasks, result states, glossary terms, and common que
   await question.click();
   await expect(page.getByText('No. It organises observed evidence and provides an explainable Risk score for prioritisation.')).toBeVisible();
   await expect(page.getByRole('link', { name: 'Try the synthetic demo' })).toHaveAttribute('href', '/demo');
-  await expect(page.locator('.guide-actions').getByRole('link', { name: 'Open console' })).toHaveAttribute('href', '/dashboard');
+  await expect(page.locator('.resource-actions').getByRole('link', { name: 'Open console' })).toHaveAttribute('href', '/dashboard');
   await expect(page.locator('.closing-actions').getByRole('link', { name: 'Open console' })).toHaveAttribute('href', '/dashboard');
   await expect(page.getByRole('link', { name: 'Sign in to investigate' })).toHaveCount(0);
   await expectNoHorizontalOverflow(page);
@@ -224,12 +235,13 @@ test('homepage and guide remain usable on a narrow mobile viewport', async ({ pa
   await expect(page.locator('.product-preview .preview-panel')).toHaveCount(3);
   await expectNoHorizontalOverflow(page);
 
-  await page.goto('/guide');
-  await expect(page.getByRole('navigation', { name: 'Guide sections' })).toBeVisible();
+  await page.goto('/resources');
+  await expect(page.getByRole('navigation', { name: 'Resource sections' })).toBeVisible();
   await expect(page.getByRole('region', { name: 'Common WHOISleuth workflow map' })).toBeVisible();
-  await expect(page.getByRole('navigation', { name: 'Guide sections' }).getByRole('link', { name: 'Tools' })).toHaveAttribute('href', '#tools');
-  await expect(page.getByRole('navigation', { name: 'Guide sections' }).getByRole('link', { name: 'Practice' })).toHaveAttribute('href', '#practice');
-  await expect(page.getByRole('navigation', { name: 'Guide sections' }).getByRole('link', { name: 'Reference' })).toHaveAttribute('href', '#reference');
+  await expect(page.getByRole('navigation', { name: 'Resource sections' }).getByRole('link', { name: 'Topics' })).toHaveAttribute('href', '#topics');
+  await expect(page.getByRole('navigation', { name: 'Resource sections' }).getByRole('link', { name: 'Tools' })).toHaveAttribute('href', '#tools');
+  await expect(page.getByRole('navigation', { name: 'Resource sections' }).getByRole('link', { name: 'Practice' })).toHaveAttribute('href', '#practice');
+  await expect(page.getByRole('navigation', { name: 'Resource sections' }).getByRole('link', { name: 'Reference' })).toHaveAttribute('href', '#reference');
   await expect(page.getByRole('heading', { name: 'Domain investigation terms.' })).toBeVisible();
   await expect(page.getByRole('article', { name: 'Start with the decision, then open the evidence you need.' })).toBeVisible();
   await expectNoHorizontalOverflow(page);
@@ -242,7 +254,8 @@ test('public footer keeps an even compact rhythm on mobile', async ({ page }) =>
   const footer = page.locator('footer.site-footer');
   const links = footer.locator('.footer-links a');
   await expect(footer).toBeVisible();
-  await expect(links).toHaveCount(7);
+  await expect(links).toHaveCount(6);
+  await expect(footer.getByRole('link', { name: 'Resources', exact: true })).toHaveAttribute('href', '/resources');
 
   const linkLayout = await links.evaluateAll((elements) => elements.map((element) => {
     const box = element.getBoundingClientRect();
@@ -267,12 +280,18 @@ test('public footer keeps an even compact rhythm on mobile', async ({ page }) =>
   await expectNoHorizontalOverflow(page);
 });
 
-test('authenticated console groups the guide and registry support under Reference', async ({ page }) => {
+test('authenticated console groups resources and registry support under Reference', async ({ page }) => {
   await page.goto('/lookup');
   await expect(page.getByText('Domain intelligence console', { exact: true })).toBeVisible();
   await expect(page.getByRole('navigation', { name: 'Console' })).toBeVisible();
   const reference = page.getByRole('navigation', { name: 'Reference' });
-  await expect(reference.getByRole('link', { name: /Guide/ })).toHaveAttribute('href', '/guide');
+  await expect(reference.getByRole('link', { name: /Resources/ })).toHaveAttribute('href', '/resources');
   await expect(reference.getByRole('link', { name: /Registry support/ })).toHaveAttribute('href', '/registry-support');
   await expect(page.getByRole('navigation', { name: 'Console' }).getByRole('link', { name: /Registry support/ })).toHaveCount(0);
+});
+
+test('legacy guide links redirect to the consolidated Resources hub', async ({ page }) => {
+  await page.goto('/guide');
+  await expect(page).toHaveURL('/resources');
+  await expect(page.getByRole('heading', { name: 'Learn the workflow. Understand the evidence.' })).toBeVisible();
 });

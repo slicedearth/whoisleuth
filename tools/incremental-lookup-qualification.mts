@@ -19,6 +19,9 @@ import {
 
 type WritableLike = { write(value: string): unknown };
 
+export const INCREMENTAL_LOOKUP_QUALIFICATION_SCHEMA = 'whoisleuth.incremental-lookup-qualification';
+export const INCREMENTAL_LOOKUP_QUALIFICATION_VERSION = 1;
+
 const SOURCES = ['rdap', 'whois'] as const;
 const FINAL = Object.freeze({
   schema: 'fixture.lookup',
@@ -222,8 +225,8 @@ export async function buildIncrementalLookupQualificationReport() {
     fixedLengthResponse,
   });
   return Object.freeze({
-    schema: 'whoisleuth.incremental-lookup-qualification',
-    version: 1,
+    schema: INCREMENTAL_LOOKUP_QUALIFICATION_SCHEMA,
+    version: INCREMENTAL_LOOKUP_QUALIFICATION_VERSION,
     mode: 'offline_synthetic',
     ready: Object.values(checks).every(Boolean),
     productionReady: false,

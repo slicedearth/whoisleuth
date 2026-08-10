@@ -6,6 +6,7 @@ import {
   buildAcquisitionDecisionPacket,
 } from '../frontend/src/lib/analysis/acquisition-decision-packet.ts';
 import { buildAcquisitionDueDiligence } from '../frontend/src/lib/analysis/acquisition-due-diligence.ts';
+import { sha256ArtifactDigestV2 } from '../frontend/src/lib/analysis/artifact-integrity.ts';
 import { verifyOfflineArtifact } from '../cli/artifact-verify.mts';
 
 const NOW = '2026-07-29T00:00:00.000Z';
@@ -23,6 +24,14 @@ function review() {
       lifecycle: { rawStatuses: [], locks: {} },
     },
   });
+}
+
+async function redigest<T extends Record<string, unknown>>(value: T): Promise<T> {
+  const { integrity, ...unsigned } = value;
+  return {
+    ...unsigned,
+    integrity: { ...(integrity as Record<string, unknown>), digestSha256: await sha256ArtifactDigestV2(unsigned) },
+  } as unknown as T;
 }
 
 describe('acquisition decision packet', () => {
@@ -75,6 +84,37 @@ describe('acquisition decision packet', () => {
       'continuity',
       'legal',
     ]);
+  });
+
+  test('rejects re-digested omissions and non-canonical manual-check partitions', async () => {
+    const exported = await buildAcquisitionDecisionPacket({
+      target: 'candidate.example',
+      generatedAt: NOW,
+      decision: 'continue_manual_review',
+      reviewedChecks: ['eligibility', 'counterparty', 'transfer', 'continuity', 'legal'],
+      review: review(),
+    });
+    const mutations: Array<(value: Record<string, unknown>) => void> = [
+      (value) => { ((value.evidenceReview as Record<string, unknown>).items as unknown[]) = []; },
+      (value) => { ((value.evidenceReview as Record<string, unknown>).transitionDependencies as unknown[]) = []; },
+      (value) => { ((value.evidenceReview as Record<string, unknown>).policyChecks as unknown[]) = []; },
+      (value) => {
+        const analystReview = value.analystReview as Record<string, unknown>;
+        analystReview.reviewedChecks = [...(analystReview.reviewedChecks as string[])].reverse();
+      },
+      (value) => {
+        const analystReview = value.analystReview as Record<string, unknown>;
+        analystReview.outstandingChecks = ['eligibility'];
+      },
+    ];
+    for (const mutate of mutations) {
+      const changed = structuredClone(exported.document) as unknown as Record<string, unknown>;
+      mutate(changed);
+      await assert.rejects(
+        verifyOfflineArtifact(JSON.stringify(await redigest(changed))),
+        /acquisition .*unsupported or malformed structure/iu,
+      );
+    }
   });
 
   test('rejects an empty or path-like target', async () => {

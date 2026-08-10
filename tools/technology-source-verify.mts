@@ -4,7 +4,6 @@
 // target-free technology provenance catalogue. The report never includes
 // artefact paths, page content, response values, or container output.
 
-import { open } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -17,6 +16,12 @@ import {
   technologyExampleArtifactDigest,
   technologyResponseMetadataDigest,
 } from './technology-example-review.mts';
+import { readBoundedRegularFile } from '../lib/bounded-file.mts';
+import {
+  boundedControlFreeText as boundedText,
+  exactObjectKeys as exactKeys,
+  optionalJsonRecord as record,
+} from './maintainer-tool-helpers.mts';
 
 export const TECHNOLOGY_SOURCE_VERIFICATION_SCHEMA = 'whoisleuth.technology-source-verification';
 export const TECHNOLOGY_SOURCE_VERIFICATION_VERSION = 1;
@@ -45,25 +50,8 @@ type VerificationOptions = Readonly<{
 }>;
 
 const ID_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
-const CONTROL_RE = /[\u0000-\u001f\u007f]/u;
 const MANIFEST_KEYS = new Set(['schema', 'version', 'entries']);
 const ENTRY_KEYS = new Set(['fixtureId', 'artifactPath', 'httpServer', 'responseHeaders']);
-
-function record(value: unknown): UnknownRecord | null {
-  return value && typeof value === 'object' && !Array.isArray(value) ? value as UnknownRecord : null;
-}
-
-function exactKeys(value: UnknownRecord, allowed: ReadonlySet<string>, label: string): void {
-  const unknown = Object.keys(value).filter((key) => !allowed.has(key));
-  if (unknown.length) throw new TypeError(`${label} contains unsupported fields: ${unknown.sort().join(', ')}.`);
-}
-
-function boundedText(value: unknown, label: string, maximum: number): string {
-  if (typeof value !== 'string' || !value.trim() || value.length > maximum || CONTROL_RE.test(value)) {
-    throw new TypeError(`${label} must be control-free text no longer than ${maximum} characters.`);
-  }
-  return value.trim();
-}
 
 function parseManifest(value: unknown): VerificationManifest {
   const input = record(value);
@@ -106,39 +94,45 @@ function parseManifest(value: unknown): VerificationManifest {
 }
 
 async function readBoundedArtifact(artifactPath: string): Promise<string> {
-  const handle = await open(artifactPath, 'r');
   try {
-    const buffer = Buffer.alloc(MAX_TECHNOLOGY_EXAMPLE_HTML_BYTES + 1);
-    const { bytesRead } = await handle.read(buffer, 0, buffer.byteLength, 0);
-    if (!bytesRead || bytesRead > MAX_TECHNOLOGY_EXAMPLE_HTML_BYTES) {
-      throw new TypeError(`Reference HTML must be between 1 byte and ${MAX_TECHNOLOGY_EXAMPLE_HTML_BYTES} bytes.`);
-    }
+    const buffer = await readBoundedRegularFile(artifactPath, {
+      minimumBytes: 1,
+      maximumBytes: MAX_TECHNOLOGY_EXAMPLE_HTML_BYTES,
+      label: 'Reference HTML',
+      allowSymbolicLink: true,
+    });
     try {
-      return new TextDecoder('utf-8', { fatal: true }).decode(buffer.subarray(0, bytesRead));
+      return new TextDecoder('utf-8', { fatal: true }).decode(buffer);
     } catch {
       throw new TypeError('Reference HTML must use valid UTF-8 encoding.');
     }
-  } finally {
-    await handle.close();
+  } catch (error) {
+    if (error instanceof TypeError && /smaller than|exceeds/iu.test(error.message)) {
+      throw new TypeError(`Reference HTML must be between 1 byte and ${MAX_TECHNOLOGY_EXAMPLE_HTML_BYTES} bytes.`);
+    }
+    throw error;
   }
 }
 
 async function readBoundedManifest(manifestPath: string): Promise<unknown> {
-  const handle = await open(manifestPath, 'r');
   try {
-    const buffer = Buffer.alloc(MAX_TECHNOLOGY_SOURCE_MANIFEST_BYTES + 1);
-    const { bytesRead } = await handle.read(buffer, 0, buffer.byteLength, 0);
-    if (!bytesRead || bytesRead > MAX_TECHNOLOGY_SOURCE_MANIFEST_BYTES) {
-      throw new TypeError(`Verification manifest must be between 1 byte and ${MAX_TECHNOLOGY_SOURCE_MANIFEST_BYTES} bytes.`);
-    }
+    const buffer = await readBoundedRegularFile(manifestPath, {
+      minimumBytes: 1,
+      maximumBytes: MAX_TECHNOLOGY_SOURCE_MANIFEST_BYTES,
+      label: 'Verification manifest',
+      allowSymbolicLink: true,
+    });
     try {
-      return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(buffer.subarray(0, bytesRead))) as unknown;
+      return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(buffer)) as unknown;
     } catch (error) {
       if (error instanceof SyntaxError) throw new TypeError('Verification manifest must contain valid JSON.');
       throw new TypeError('Verification manifest must use valid UTF-8 encoding.');
     }
-  } finally {
-    await handle.close();
+  } catch (error) {
+    if (error instanceof TypeError && /smaller than|exceeds/iu.test(error.message)) {
+      throw new TypeError(`Verification manifest must be between 1 byte and ${MAX_TECHNOLOGY_SOURCE_MANIFEST_BYTES} bytes.`);
+    }
+    throw error;
   }
 }
 

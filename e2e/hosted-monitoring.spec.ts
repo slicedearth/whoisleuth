@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures';
-import { expectNoHorizontalOverflow, readBrowserLocalCollection, requiredValue } from './helpers';
+import { expectNoHorizontalOverflow, failBrowserLocalManifestWrites, holdBrowserLocalReads, readBrowserLocalCollection, requiredValue } from './helpers';
 import type { Page, Route } from '@playwright/test';
 
 const NOW = '2026-07-16T12:00:00.000Z';
@@ -115,11 +115,22 @@ async function mockCapability(page: Page, status: 'supported' | 'disabled' | 'un
   }));
 }
 
-async function installManagementMock(page: Page, initial: HostedItem[] = []) {
+async function installManagementMock(
+  page: Page,
+  initial: HostedItem[] = [],
+  mutationGate: Promise<void> | null = null,
+  refreshGate: { wait: Promise<void>; started: () => void } | null = null,
+) {
   let watchlists = structuredClone(initial);
   const commands: Array<Record<string, unknown>> = [];
+  let readCount = 0;
   await page.route('**/api/scheduled-monitor', async (route: Route) => {
     if (route.request().method() === 'GET') {
+      readCount += 1;
+      if (refreshGate && readCount > 1) {
+        refreshGate.started();
+        await refreshGate.wait;
+      }
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(managementResponse(watchlists)) });
       return;
     }
@@ -157,6 +168,7 @@ async function installManagementMock(page: Page, initial: HostedItem[] = []) {
       action = 'deleted';
       watchlists = watchlists.filter((item) => item.id !== command.id);
     }
+    if (mutationGate) await mutationGate;
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -240,4 +252,86 @@ test('hosted controls stay usable without horizontal overflow on a narrow mobile
   await expect(hosted.getByRole('button', { name: 'Restore to browser' })).toBeVisible();
   await expect(hosted.getByRole('button', { name: 'Delete hosted copy' })).toBeVisible();
   await expectNoHorizontalOverflow(page);
+});
+
+test('serializes hosted refresh and mutation controls while a command is pending', async ({ page }) => {
+  let releaseMutation = () => {};
+  const mutationGate = new Promise<void>((resolve) => { releaseMutation = resolve; });
+  await seedLocalWatchlist(page);
+  await mockCapability(page, 'supported');
+  const mock = await installManagementMock(page, [hostedWatchlist()], mutationGate);
+  await page.goto('/monitor?view=watchlists');
+
+  const hosted = page.getByRole('region', { name: 'Scheduled watchlists' });
+  const item = hosted.getByRole('article').filter({ hasText: 'Priority domains' });
+  await item.getByRole('button', { name: 'Pause' }).click();
+  await expect(item.getByRole('button', { name: 'Pause' })).toBeDisabled();
+  await expect(item.getByRole('button', { name: 'Replace from browser' })).toBeDisabled();
+  await expect(item.getByRole('button', { name: 'Restore to browser' })).toBeDisabled();
+  await expect(item.getByRole('button', { name: 'Delete hosted copy' })).toBeDisabled();
+  await expect(hosted.getByRole('button', { name: 'Schedule watchlist' })).toBeDisabled();
+  expect(mock.commands).toHaveLength(1);
+
+  releaseMutation();
+  await expect(item).toContainText('Paused');
+  await expect(item.getByRole('button', { name: 'Resume' })).toBeEnabled();
+  expect(mock.commands).toHaveLength(1);
+});
+
+test('announces a hosted restore only after browser-local persistence succeeds', async ({ page }) => {
+  await seedLocalWatchlist(page);
+  await mockCapability(page, 'supported');
+  await installManagementMock(page, [hostedWatchlist()]);
+  page.on('dialog', (dialog) => dialog.accept());
+  await page.goto('/monitor?view=watchlists');
+
+  const hosted = page.getByRole('region', { name: 'Scheduled watchlists' });
+  const restore = hosted.getByRole('button', { name: 'Restore to browser' });
+  await expect(restore).toBeVisible();
+  await holdBrowserLocalReads(page, 2_000, '.hosted-list .actions button:nth-child(3)');
+  await expect(restore).toBeDisabled();
+  await expect(hosted.getByRole('status')).toHaveCount(0);
+  await expect(hosted.getByRole('status')).toContainText('browser-local watchlist', { timeout: 8_000 });
+  await expect(restore).toBeEnabled();
+
+  const localTable = page.locator('table').filter({ hasText: 'Latest changes' });
+  await localTable.getByRole('button', { name: 'Delete' }).click();
+  await expect(localTable.getByText('Priority domains', { exact: true })).toHaveCount(0);
+  await failBrowserLocalManifestWrites(page, 'watchlists');
+  await restore.click();
+  await expect(hosted.getByRole('alert')).toContainText(/storage|write|quota/iu);
+  await expect(hosted.getByRole('status')).toHaveCount(0);
+});
+
+test('disables every mutation while a hosted refresh is pending', async ({ page }) => {
+  let releaseRefresh = () => {};
+  let markRefreshStarted = () => {};
+  const refreshWait = new Promise<void>((resolve) => { releaseRefresh = resolve; });
+  const refreshStarted = new Promise<void>((resolve) => { markRefreshStarted = resolve; });
+  await seedLocalWatchlist(page);
+  await mockCapability(page, 'supported');
+  const mock = await installManagementMock(page, [hostedWatchlist()], null, {
+    wait: refreshWait,
+    started: markRefreshStarted,
+  });
+  await page.goto('/monitor?view=watchlists');
+
+  const hosted = page.getByRole('region', { name: 'Scheduled watchlists' });
+  const item = hosted.getByRole('article').filter({ hasText: 'Priority domains' });
+  await expect(item).toBeVisible();
+  await hosted.getByRole('button', { name: 'Refresh' }).click();
+  await refreshStarted;
+  await expect(hosted.getByRole('button', { name: 'Refreshing…' })).toBeDisabled();
+  await expect(hosted.getByLabel('Browser-local watchlist')).toBeDisabled();
+  await expect(item.getByRole('button', { name: 'Pause' })).toBeDisabled();
+  await expect(item.getByRole('button', { name: 'Replace from browser' })).toBeDisabled();
+  await expect(item.getByRole('button', { name: 'Restore to browser' })).toBeDisabled();
+  await expect(item.getByRole('button', { name: 'Delete hosted copy' })).toBeDisabled();
+  expect(mock.commands).toEqual([]);
+
+  releaseRefresh();
+  await expect(hosted.getByRole('button', { name: 'Refresh' })).toBeEnabled();
+  await item.getByRole('button', { name: 'Pause' }).click();
+  await expect(item).toContainText('Paused');
+  expect(mock.commands).toHaveLength(1);
 });

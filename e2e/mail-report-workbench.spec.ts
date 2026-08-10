@@ -72,3 +72,50 @@ test('reviews aggregate mail reports locally, exports them deliberately, and cle
   await page.reload();
   await expect(page.getByRole('region', { name: 'DMARC and SMTP TLS reports' }).getByText('Choose one or more aggregate report files to begin a transient review.')).toBeVisible();
 });
+
+test('does not publish an in-flight mail review under a different active profile', async ({ page }) => {
+  await page.goto('/brands');
+  await migrateLegacyBrowserData(page, { [PROFILES_KEY]: null, [ACTIVE_KEY]: null });
+  for (const [name, domain] of [['Profile A', 'a.example'], ['Profile B', 'b.example']] as const) {
+    await page.getByRole('button', { name: 'New profile' }).click();
+    await page.getByLabel('Brand name').fill(name);
+    await page.getByLabel('Official domains').fill(domain);
+    await page.getByRole('button', { name: 'Save profile' }).click();
+    await expect(page.getByRole('status', { name: 'Brand Profile action status' })).toContainText(`Saved "${name}"`);
+  }
+  await page.getByRole('radio', { name: 'Set Profile A active' }).check();
+  await expect(page.getByRole('status', { name: 'Brand Profile action status' })).toContainText('Set "Profile A" active.');
+  await expect(page.getByRole('radio', { name: 'Set Profile A active' })).toBeChecked();
+
+  await page.evaluate(() => {
+    const original = File.prototype.arrayBuffer;
+    let hold = true;
+    File.prototype.arrayBuffer = function arrayBuffer() {
+      if (!hold) return original.call(this);
+      hold = false;
+      return new Promise<ArrayBuffer>((resolve, reject) => {
+        Reflect.set(window, '__releaseMailReportRead', () => {
+          void original.call(this).then(resolve, reject);
+        });
+      });
+    };
+  });
+  let workbench = page.getByRole('region', { name: 'DMARC and SMTP TLS reports' });
+  await workbench.getByLabel('Choose reports').setInputFiles({
+    name: 'profile-a.xml',
+    mimeType: 'application/xml',
+    buffer: Buffer.from(DMARC_XML),
+  });
+  await expect(workbench.getByText('Reading…', { exact: true })).toBeVisible();
+  await page.getByRole('radio', { name: 'Set Profile B active' }).check();
+  workbench = page.getByRole('region', { name: 'DMARC and SMTP TLS reports' });
+  await expect(workbench.getByText('Choose one or more aggregate report files to begin a transient review.')).toBeVisible();
+  await page.evaluate(() => {
+    const release = Reflect.get(window, '__releaseMailReportRead');
+    if (typeof release !== 'function') throw new Error('The mail-report read gate was not installed.');
+    release();
+  });
+  await expect(workbench.getByRole('group', { name: 'Imported mail report summary' })).toHaveCount(0);
+  await expect(workbench.getByRole('status')).toHaveCount(0);
+  await expect(workbench.getByRole('button', { name: 'Export review' })).toBeDisabled();
+});

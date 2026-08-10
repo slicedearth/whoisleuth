@@ -6,12 +6,21 @@ import {
 } from '../frontend/src/lib/analysis/bulk-domain-comparison.ts';
 import { nextBulkReviewIndex, type BulkReviewCockpitRow } from '../frontend/src/lib/analysis/bulk-review-cockpit.ts';
 import { buildBulkReviewManifest } from '../frontend/src/lib/analysis/bulk-review-export.ts';
+import { sha256ArtifactDigestV2 } from '../frontend/src/lib/analysis/artifact-integrity.ts';
 import { buildBulkRetryPlan, preservePriorBulkResult } from '../frontend/src/lib/analysis/bulk-retry-plan.ts';
 import type { BulkSessionResult } from '../frontend/src/lib/analysis/bulk-session-model.ts';
 import { verifyOfflineArtifact } from '../cli/artifact-verify.mts';
 
 const OBSERVED_AT = '2026-07-20T00:00:00.000Z';
 const GENERATED_AT = '2026-07-28T00:00:00.000Z';
+
+async function redigest<T extends Record<string, unknown>>(value: T): Promise<T> {
+  const { integrity, ...unsigned } = value;
+  return {
+    ...unsigned,
+    integrity: { ...(integrity as Record<string, unknown>), digestSha256: await sha256ArtifactDigestV2(unsigned) },
+  } as unknown as T;
+}
 
 function result(
   domain: string,
@@ -67,6 +76,12 @@ function result(
       { source: 'rdap', state: 'complete' },
       { source: 'whois', state: 'complete' },
     ],
+    profileContext: {
+      sourceState: 'ready',
+      activeProfileId: null,
+      profileUpdatedAt: null,
+      limitation: '',
+    },
     ...overrides,
   };
 }
@@ -84,6 +99,8 @@ function cockpitRow(domain: string, reviewState: string): BulkReviewCockpitRow {
     reviewState,
     shortlisted: false,
     trusted: false,
+    profileContextReady: true,
+    profileContextLimitation: '',
     sourceCoverage: [],
     error: '',
     caseRecord: null,
@@ -150,6 +167,68 @@ describe('Bulk evidence review workflow', () => {
     assert.equal(comparison?.rows.find((row) => row.id === 'technology')?.state, 'different');
     assert.equal(comparison?.rows.find((row) => row.id === 'tls-issuer')?.state, 'equal');
     assert.equal(comparison?.rows.find((row) => row.id === 'tls-spki')?.state, 'different');
+  });
+
+  test('rejects re-digested comparison row omissions, reordering, and observation-time divergence', async () => {
+    const comparison = buildBulkDomainComparison(
+      result('left.example'),
+      result('right.example'),
+      OBSERVED_AT,
+      { now: Date.parse(GENERATED_AT) },
+    );
+    assert.ok(comparison);
+    const exported = await buildBulkDomainComparisonExport(comparison, GENERATED_AT);
+
+    const omitted = structuredClone(exported.document) as unknown as Record<string, unknown>;
+    const omittedComparison = omitted.comparison as Record<string, unknown>;
+    const omittedRows = omittedComparison.rows as Array<Record<string, unknown>>;
+    const [removed] = omittedRows.splice(5, 1);
+    assert.ok(removed);
+    const omittedCounts = omittedComparison.counts as Record<string, number>;
+    const removedState = String(removed.state);
+    omittedCounts[removedState] = (omittedCounts[removedState] ?? 0) - 1;
+    await assert.rejects(
+      verifyOfflineArtifact(JSON.stringify(await redigest(omitted))),
+      /domain comparison rows.*unsupported or malformed structure/iu,
+    );
+
+    const reordered = structuredClone(exported.document) as unknown as Record<string, unknown>;
+    const reorderedRows = ((reordered.comparison as Record<string, unknown>).rows as unknown[]);
+    [reorderedRows[0], reorderedRows[1]] = [reorderedRows[1], reorderedRows[0]];
+    await assert.rejects(
+      verifyOfflineArtifact(JSON.stringify(await redigest(reordered))),
+      /domain comparison row order.*unsupported or malformed structure/iu,
+    );
+
+    const divergent = structuredClone(exported.document) as unknown as Record<string, unknown>;
+    const firstRow = (((divergent.comparison as Record<string, unknown>).rows as Array<Record<string, unknown>>)[0]!);
+    firstRow.observedAt = '2026-07-20T00:00:01.000Z';
+    await assert.rejects(
+      verifyOfflineArtifact(JSON.stringify(await redigest(divergent))),
+      /domain comparison row observedAt.*unsupported or malformed structure/iu,
+    );
+  });
+
+  test('withholds official-asset comparison when row profile provenance is not ready and identical', () => {
+    const comparison = buildBulkDomainComparison(
+      result('left.example', { reusesOfficialAssets: false }),
+      result('right.example', {
+        reusesOfficialAssets: true,
+        profileContext: {
+          sourceState: 'unavailable',
+          activeProfileId: null,
+          profileUpdatedAt: null,
+          limitation: 'Imported profile-derived conclusions require a local rescan.',
+        },
+      }),
+      OBSERVED_AT,
+    );
+    const officialAssets = comparison?.rows.find((row) => row.id === 'official-assets');
+    assert.equal(officialAssets?.state, 'unavailable');
+    assert.equal(officialAssets?.left, 'Not observed');
+    assert.equal(officialAssets?.right, 'Not observed');
+    assert.match(officialAssets?.limitations.join(' ') ?? '', /withheld unless both rows retain the same ready Brand Profile provenance/u);
+    assert.match(comparison?.limitations.join(' ') ?? '', /Profile-derived identity comparison is unavailable/u);
   });
 
   test('keeps conflicting, unavailable, and explicitly absent evidence distinct', () => {
@@ -296,6 +375,12 @@ describe('Bulk evidence review workflow', () => {
       generatedAt: GENERATED_AT,
     });
     assert.equal(manifest.document.rows[0]?.reviewState, 'reviewing');
+    assert.deepEqual(manifest.document.rows[0]?.profileContext, {
+      sourceState: 'ready',
+      activeProfileId: null,
+      profileUpdatedAt: null,
+      limitation: '',
+    });
     assert.match(manifest.document.integrity.digestSha256, /^sha256:[a-f0-9]{64}$/u);
     assert.equal(manifest.content.includes('private@example.test'), false);
     assert.equal(manifest.content.includes('excluded raw record'), false);

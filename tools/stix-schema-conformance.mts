@@ -1,5 +1,6 @@
-import { readFile, readdir } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { createHash } from 'node:crypto';
+import { open, readdir } from 'node:fs/promises';
+import { relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { Ajv2020, type ValidateFunction } from 'ajv/dist/2020.js';
@@ -9,6 +10,8 @@ import { buildCaseSightingStixExport } from '../frontend/src/lib/analysis/case-s
 import { buildStixIndicatorExport } from '../frontend/src/lib/analysis/stix-indicator-export.ts';
 
 const SCHEMA_REVISION = 'c4f8d589acf2bdb3783655c89e0ffb6e150006ae';
+const SCHEMA_TREE_SHA256 = 'fe3b1997ce3ca562aa1ea60298dcc0d126448a9c295d76b8bbe0b81631d4747b';
+const VENDOR_ROOT = 'fixtures/stix/oasis-stix-2.1-json-schemas';
 const SCHEMA_ROOT = 'fixtures/stix/oasis-stix-2.1-json-schemas/schemas';
 const BUNDLE_SCHEMA_ID = 'http://raw.githubusercontent.com/oasis-open/cti-stix2-json-schemas/stix2.1/schemas/common/bundle.json';
 const OBJECT_SCHEMA_IDS = Object.freeze({
@@ -20,11 +23,33 @@ const OBJECT_SCHEMA_IDS = Object.freeze({
   relationship: 'http://raw.githubusercontent.com/oasis-open/cti-stix2-json-schemas/stix2.1/schemas/sros/relationship.json',
 });
 const MAX_SCHEMA_FILES = 100;
+const MAX_VENDOR_FILES = 110;
 const MAX_SCHEMA_BYTES = 256 * 1024;
+const MAX_VENDOR_TREE_BYTES = 2 * 1024 * 1024;
 const MAX_BUNDLE_BYTES = 2 * 1024 * 1024;
 
 type UnknownRecord = Record<string, unknown>;
 type WritableLike = { write(value: string): unknown };
+
+async function readBoundedRegularFile(filename: string, maximumBytes: number): Promise<Buffer> {
+  const handle = await open(filename, 'r');
+  try {
+    const metadata = await handle.stat();
+    if (!metadata.isFile()) throw new TypeError(`${filename} is not a regular STIX schema file.`);
+    if (metadata.size > maximumBytes) throw new RangeError(`${filename} exceeds the STIX schema byte limit.`);
+    const buffer = Buffer.allocUnsafe(maximumBytes + 1);
+    let total = 0;
+    while (total < buffer.byteLength) {
+      const { bytesRead } = await handle.read(buffer, total, buffer.byteLength - total, null);
+      if (bytesRead === 0) break;
+      total += bytesRead;
+    }
+    if (total > maximumBytes) throw new RangeError(`${filename} exceeds the STIX schema byte limit.`);
+    return Buffer.from(buffer.subarray(0, total));
+  } finally {
+    await handle.close();
+  }
+}
 
 async function jsonFiles(root: string): Promise<string[]> {
   const output: string[] = [];
@@ -40,13 +65,52 @@ async function jsonFiles(root: string): Promise<string[]> {
   return output.sort();
 }
 
+async function vendorFiles(root: string): Promise<string[]> {
+  const output: string[] = [];
+  async function visit(directory: string): Promise<void> {
+    for (const entry of await readdir(directory, { withFileTypes: true })) {
+      const filename = resolve(directory, entry.name);
+      if (entry.isDirectory()) await visit(filename);
+      else if (entry.isFile()) output.push(filename);
+      else throw new TypeError('The pinned STIX schema tree contains an unsupported filesystem entry.');
+      if (output.length > MAX_VENDOR_FILES) throw new RangeError('The pinned STIX schema tree exceeds its file limit.');
+    }
+  }
+  await visit(root);
+  return output.sort();
+}
+
+async function schemaTreeSha256(repositoryRoot = process.cwd()): Promise<string> {
+  const vendorRoot = resolve(repositoryRoot, VENDOR_ROOT);
+  const hash = createHash('sha256');
+  let aggregateBytes = 0;
+  for (const filename of await vendorFiles(vendorRoot)) {
+    const pathname = relative(vendorRoot, filename).split(sep).join('/');
+    const pathnameBytes = Buffer.from(pathname, 'utf8');
+    const content = await readBoundedRegularFile(filename, MAX_SCHEMA_BYTES);
+    aggregateBytes += content.byteLength;
+    if (aggregateBytes > MAX_VENDOR_TREE_BYTES) throw new RangeError('The pinned STIX schema tree exceeds its aggregate byte limit.');
+    const lengths = Buffer.allocUnsafe(8);
+    lengths.writeUInt32BE(pathnameBytes.byteLength, 0);
+    lengths.writeUInt32BE(content.byteLength, 4);
+    hash.update(lengths).update(pathnameBytes).update(content);
+  }
+  return hash.digest('hex');
+}
+
+async function assertPinnedSchemaTree(repositoryRoot = process.cwd()): Promise<void> {
+  if (await schemaTreeSha256(repositoryRoot) !== SCHEMA_TREE_SHA256) {
+    throw new Error(`The vendored STIX schema tree does not match reviewed revision ${SCHEMA_REVISION}.`);
+  }
+}
+
 async function buildValidators(repositoryRoot = process.cwd()): Promise<Map<string, ValidateFunction>> {
+  await assertPinnedSchemaTree(repositoryRoot);
   // The pinned schemas include a legacy escaped hyphen accepted by the
   // original validator but rejected under JavaScript's Unicode regexp mode.
   const ajv = new Ajv2020({ allErrors: true, strict: false, validateFormats: false, unicodeRegExp: false });
   for (const filename of await jsonFiles(resolve(repositoryRoot, SCHEMA_ROOT))) {
-    const text = await readFile(filename, 'utf8');
-    if (Buffer.byteLength(text, 'utf8') > MAX_SCHEMA_BYTES) throw new RangeError(`${filename} exceeds the STIX schema byte limit.`);
+    const text = (await readBoundedRegularFile(filename, MAX_SCHEMA_BYTES)).toString('utf8');
     ajv.addSchema(JSON.parse(text));
   }
   const validators = new Map<string, ValidateFunction>();
@@ -126,11 +190,15 @@ if (invokedAsScript) process.exitCode = await main();
 export {
   BUNDLE_SCHEMA_ID,
   MAX_BUNDLE_BYTES,
+  MAX_SCHEMA_BYTES,
+  MAX_VENDOR_TREE_BYTES,
   SCHEMA_REVISION,
+  SCHEMA_TREE_SHA256,
   SCHEMA_ROOT,
   buildValidators,
   conformanceBundles,
   main,
   parseBundle,
+  schemaTreeSha256,
   validateStixBundle,
 };
