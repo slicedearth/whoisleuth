@@ -19,6 +19,11 @@ type ReviewedPackage = Readonly<{
   severity: 'high';
   range: string;
   isDirect: boolean;
+  fixAvailable: false | Readonly<{
+    name: string;
+    version: string;
+    isSemVerMajor: boolean;
+  }>;
   viaPackages: readonly string[];
   effects: readonly string[];
   node: string;
@@ -44,13 +49,20 @@ export const REVIEWED_PRODUCTION_ADVISORIES: readonly ReviewedAdvisory[] = Objec
   }),
 ]);
 
+export const PRODUCTION_DEPENDENCY_AUDIT_REVIEWED_FIX = Object.freeze({
+  name: '@netlify/blobs',
+  version: '9.1.5',
+  isSemVerMajor: true,
+});
+
 const REVIEWED_PACKAGES: readonly ReviewedPackage[] = Object.freeze([
   Object.freeze({
     name: '@netlify/blobs',
     version: '10.7.9',
     severity: 'high',
-    range: '',
+    range: '>=9.1.6',
     isDirect: true,
+    fixAvailable: PRODUCTION_DEPENDENCY_AUDIT_REVIEWED_FIX,
     viaPackages: Object.freeze(['@netlify/dev-utils']),
     effects: Object.freeze([]),
     node: 'node_modules/@netlify/blobs',
@@ -60,8 +72,9 @@ const REVIEWED_PACKAGES: readonly ReviewedPackage[] = Object.freeze([
     name: '@netlify/dev-utils',
     version: '4.4.6',
     severity: 'high',
-    range: '',
+    range: '>=3.2.0',
     isDirect: false,
+    fixAvailable: PRODUCTION_DEPENDENCY_AUDIT_REVIEWED_FIX,
     viaPackages: Object.freeze(['image-size']),
     effects: Object.freeze(['@netlify/blobs']),
     node: 'node_modules/@netlify/dev-utils',
@@ -71,8 +84,9 @@ const REVIEWED_PACKAGES: readonly ReviewedPackage[] = Object.freeze([
     name: 'image-size',
     version: '2.0.2',
     severity: 'high',
-    range: '',
+    range: '*',
     isDirect: false,
+    fixAvailable: PRODUCTION_DEPENDENCY_AUDIT_REVIEWED_FIX,
     viaPackages: Object.freeze([]),
     effects: Object.freeze(['@netlify/dev-utils']),
     node: 'node_modules/image-size',
@@ -85,6 +99,7 @@ export type ProductionDependencyAuditFinding = Readonly<{
     | 'audit_output_invalid'
     | 'audit_report_unsupported'
     | 'audit_metadata_invalid'
+    | 'audit_data_unavailable'
     | 'exception_expired'
     | 'unreviewed_vulnerability'
     | 'advisory_changed'
@@ -114,6 +129,17 @@ function sortedStrings(value: unknown): string[] | null {
 
 function sameStrings(left: readonly string[], right: readonly string[]): boolean {
   return left.length === right.length && left.every((entry, index) => entry === right[index]);
+}
+
+function fixAvailableMatches(actual: unknown, reviewed: ReviewedPackage['fixAvailable']): boolean {
+  if (reviewed === false) return actual === false;
+  if (!isObject(actual)) return false;
+  const keys = Object.keys(actual);
+  return keys.length === 3
+    && keys.every((key) => ['name', 'version', 'isSemVerMajor'].includes(key))
+    && actual.name === reviewed.name
+    && actual.version === reviewed.version
+    && actual.isSemVerMajor === reviewed.isSemVerMajor;
 }
 
 function advisoryId(value: unknown): string | null {
@@ -175,9 +201,16 @@ function lockfilePackage(lockfile: JsonObject, reviewed: ReviewedPackage): JsonO
   return isObject(record) ? record : null;
 }
 
+function supportedLockfileShape(lockfile: JsonObject): lockfile is JsonObject & { packages: JsonObject } {
+  const packages = lockfile.packages;
+  return lockfile.lockfileVersion === 3
+    && isObject(packages)
+    && isObject(packages['']);
+}
+
 function validateLockfile(lockfile: JsonObject, reviewedPackages: readonly ReviewedPackage[]): ProductionDependencyAuditFinding[] {
   const findings: ProductionDependencyAuditFinding[] = [];
-  if (lockfile.lockfileVersion !== 3 || !isObject(lockfile.packages)) {
+  if (!supportedLockfileShape(lockfile)) {
     return [finding('lockfile_changed', 'package-lock.json is not a supported lockfileVersion 3 package map.')];
   }
   const root = lockfile.packages[''];
@@ -217,17 +250,17 @@ function validatePackage(
   for (const entry of via) {
     if (typeof entry === 'string') viaPackages.push(entry);
   }
-  if (
-    record.name !== reviewed.name
-    || record.severity !== reviewed.severity
-    || record.range !== reviewed.range
-    || record.isDirect !== reviewed.isDirect
-    || record.fixAvailable !== false
-    || !sameStrings(viaPackages.sort(), [...reviewed.viaPackages].sort())
-    || !sameStrings(effects, [...reviewed.effects].sort())
-    || !sameStrings(nodes, [reviewed.node])
-  ) {
-    findings.push(finding('package_chain_changed', `${name} no longer matches its reviewed severity, chain, node, or fix availability.`));
+  const mismatches: string[] = [];
+  if (record.name !== reviewed.name) mismatches.push('name');
+  if (record.severity !== reviewed.severity) mismatches.push('severity');
+  if (record.range !== reviewed.range) mismatches.push('range');
+  if (record.isDirect !== reviewed.isDirect) mismatches.push('direct-dependency state');
+  if (!fixAvailableMatches(record.fixAvailable, reviewed.fixAvailable)) mismatches.push('fix availability');
+  if (!sameStrings(viaPackages.sort(), [...reviewed.viaPackages].sort())) mismatches.push('dependency chain');
+  if (!sameStrings(effects, [...reviewed.effects].sort())) mismatches.push('affected dependants');
+  if (!sameStrings(nodes, [reviewed.node])) mismatches.push('installed node');
+  if (mismatches.length) {
+    findings.push(finding('package_chain_changed', `${name} changed reviewed attribute(s): ${mismatches.join(', ')}.`));
   }
 
   for (const entry of via) {
@@ -274,7 +307,29 @@ export function assessProductionDependencyAudit(options: Readonly<{
       packageEntries,
     });
   }
+  const parsedLockfile = parseJson(options.lockfileJson, 'package-lock.json');
+  if (!parsedLockfile.ok) {
+    return blocked(parsedLockfile.assessment.findings.map((entry) => finding('lockfile_changed', entry.message)), {
+      reportVersion,
+      packageEntries,
+    });
+  }
   if (packageEntries === 0) {
+    if (!supportedLockfileShape(parsedLockfile.value)) {
+      return blocked([finding('lockfile_changed', 'package-lock.json is not a supported lockfileVersion 3 package map.')], {
+        reportVersion,
+        packageEntries,
+      });
+    }
+    if (validateLockfile(parsedLockfile.value, REVIEWED_PACKAGES).length === 0) {
+      return blocked([finding(
+        'audit_data_unavailable',
+        'npm audit reported no vulnerabilities while package-lock.json still contains the reviewed vulnerable dependency chain.',
+      )], {
+        reportVersion,
+        packageEntries,
+      });
+    }
     return Object.freeze({
       status: 'accepted',
       auditReportVersion: reportVersion,
@@ -332,12 +387,7 @@ export function assessProductionDependencyAudit(options: Readonly<{
       `Expected exactly ${REVIEWED_PRODUCTION_ADVISORIES.length} distinct reviewed advisory records; received ${advisoryRecordCount} record(s) across ${advisoryIds.length} distinct ID(s).`,
     ));
   }
-  const parsedLockfile = parseJson(options.lockfileJson, 'package-lock.json');
-  if (!parsedLockfile.ok) {
-    findings.push(...parsedLockfile.assessment.findings.map((entry) => finding('lockfile_changed', entry.message)));
-  } else {
-    findings.push(...validateLockfile(parsedLockfile.value, REVIEWED_PACKAGES));
-  }
+  findings.push(...validateLockfile(parsedLockfile.value, REVIEWED_PACKAGES));
 
   if (findings.length) return blocked(findings, { reportVersion, packageEntries, advisoryIds });
   return Object.freeze({

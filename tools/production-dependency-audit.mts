@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -11,6 +12,7 @@ import {
 } from '../lib/production-dependency-audit-policy.mts';
 
 export const PRODUCTION_DEPENDENCY_AUDIT_TIMEOUT_MS = 60_000;
+export const PRODUCTION_DEPENDENCY_AUDIT_CACHE_PREFIX = 'whoisleuth-production-audit-';
 
 type WritableLike = Readonly<{ write(value: string): unknown }>;
 type AuditCommandResult = Readonly<{
@@ -22,24 +24,57 @@ type AuditCommandResult = Readonly<{
   error?: Error;
 }>;
 
+export function productionDependencyAuditArguments(cacheDirectory: string): readonly string[] {
+  return Object.freeze([
+    'audit',
+    '--omit=dev',
+    '--json',
+    '--offline=false',
+    `--cache=${cacheDirectory}`,
+  ]);
+}
+
+function commandError(cause: unknown): Error {
+  return cause instanceof Error ? cause : new Error('Unknown production dependency audit command error.');
+}
+
 function runNpmAudit(): AuditCommandResult {
-  const result = spawnSync('npm', ['audit', '--omit=dev', '--json'], {
-    cwd: path.resolve(fileURLToPath(new URL('..', import.meta.url))),
-    encoding: 'utf8',
-    maxBuffer: PRODUCTION_DEPENDENCY_AUDIT_MAX_BYTES,
-    timeout: PRODUCTION_DEPENDENCY_AUDIT_TIMEOUT_MS,
-    killSignal: 'SIGTERM',
-    shell: false,
-  });
-  const timedOut = (result.error as NodeJS.ErrnoException | undefined)?.code === 'ETIMEDOUT';
-  return {
-    status: result.status,
-    signal: result.signal,
-    stdout: result.stdout ?? '',
-    stderr: result.stderr ?? '',
-    timedOut,
-    ...(result.error ? { error: result.error } : {}),
-  };
+  let cacheDirectory: string;
+  try {
+    cacheDirectory = mkdtempSync(path.join(tmpdir(), PRODUCTION_DEPENDENCY_AUDIT_CACHE_PREFIX));
+  } catch (cause) {
+    return { status: null, signal: null, stdout: '', stderr: '', error: commandError(cause) };
+  }
+
+  let auditResult: AuditCommandResult;
+  try {
+    const result = spawnSync('npm', productionDependencyAuditArguments(cacheDirectory), {
+      cwd: path.resolve(fileURLToPath(new URL('..', import.meta.url))),
+      encoding: 'utf8',
+      maxBuffer: PRODUCTION_DEPENDENCY_AUDIT_MAX_BYTES,
+      timeout: PRODUCTION_DEPENDENCY_AUDIT_TIMEOUT_MS,
+      killSignal: 'SIGTERM',
+      shell: false,
+    });
+    const timedOut = (result.error as NodeJS.ErrnoException | undefined)?.code === 'ETIMEDOUT';
+    auditResult = {
+      status: result.status,
+      signal: result.signal,
+      stdout: result.stdout ?? '',
+      stderr: result.stderr ?? '',
+      timedOut,
+      ...(result.error ? { error: result.error } : {}),
+    };
+  } catch (cause) {
+    auditResult = { status: null, signal: null, stdout: '', stderr: '', error: commandError(cause) };
+  }
+  let cleanupError: Error | undefined;
+  try {
+    rmSync(cacheDirectory, { recursive: true, force: true, maxRetries: 2, retryDelay: 50 });
+  } catch (cause) {
+    cleanupError = commandError(cause);
+  }
+  return cleanupError && !auditResult.error ? { ...auditResult, error: cleanupError } : auditResult;
 }
 
 function boundedError(value: string): string {

@@ -7,9 +7,12 @@ import { fileURLToPath } from 'node:url';
 import {
   assessProductionDependencyAudit,
   PRODUCTION_DEPENDENCY_AUDIT_EXPIRES_AT,
+  PRODUCTION_DEPENDENCY_AUDIT_REVIEWED_FIX,
 } from '../lib/production-dependency-audit-policy.mts';
 import {
   main,
+  productionDependencyAuditArguments,
+  PRODUCTION_DEPENDENCY_AUDIT_CACHE_PREFIX,
   PRODUCTION_DEPENDENCY_AUDIT_TIMEOUT_MS,
 } from '../tools/production-dependency-audit.mts';
 
@@ -46,9 +49,9 @@ function auditReport() {
         isDirect: true,
         via: ['@netlify/dev-utils'],
         effects: [],
-        range: '',
+        range: '>=9.1.6',
         nodes: ['node_modules/@netlify/blobs'],
-        fixAvailable: false,
+        fixAvailable: structuredClone(PRODUCTION_DEPENDENCY_AUDIT_REVIEWED_FIX),
       },
       '@netlify/dev-utils': {
         name: '@netlify/dev-utils',
@@ -56,9 +59,9 @@ function auditReport() {
         isDirect: false,
         via: ['image-size'],
         effects: ['@netlify/blobs'],
-        range: '',
+        range: '>=3.2.0',
         nodes: ['node_modules/@netlify/dev-utils'],
-        fixAvailable: false,
+        fixAvailable: structuredClone(PRODUCTION_DEPENDENCY_AUDIT_REVIEWED_FIX),
       },
       'image-size': {
         name: 'image-size',
@@ -66,9 +69,9 @@ function auditReport() {
         isDirect: false,
         via: structuredClone(ADVISORIES),
         effects: ['@netlify/dev-utils'],
-        range: '',
+        range: '*',
         nodes: ['node_modules/image-size'],
-        fixAvailable: false,
+        fixAvailable: structuredClone(PRODUCTION_DEPENDENCY_AUDIT_REVIEWED_FIX),
       },
     },
     metadata: {
@@ -99,7 +102,7 @@ function lockfile() {
 
 function assess(
   audit: ReturnType<typeof auditReport>,
-  locked = lockfile(),
+  locked: unknown = lockfile(),
   now = new Date('2026-08-10T00:00:00.000Z'),
 ) {
   return assessProductionDependencyAudit({
@@ -126,13 +129,37 @@ describe('production dependency audit policy', () => {
     assert.deepEqual(report.findings, []);
   });
 
-  test('allows a clean production audit without relying on an exception', () => {
+  test('fails closed when an empty audit still has the reviewed vulnerable chain', () => {
     const audit = auditReport();
     audit.vulnerabilities = {} as ReturnType<typeof auditReport>['vulnerabilities'];
     audit.metadata.vulnerabilities = { info: 0, low: 0, moderate: 0, high: 0, critical: 0, total: 0 };
     const report = assess(audit, lockfile(), new Date('2027-01-01T00:00:00.000Z'));
+    assert.equal(report.status, 'blocked');
+    assert.equal(report.vulnerablePackageEntries, 0);
+    assert.equal(report.findings[0]?.code, 'audit_data_unavailable');
+  });
+
+  test('allows a clean production audit after the reviewed vulnerable chain is absent', () => {
+    const audit = auditReport();
+    audit.vulnerabilities = {} as ReturnType<typeof auditReport>['vulnerabilities'];
+    audit.metadata.vulnerabilities = { info: 0, low: 0, moderate: 0, high: 0, critical: 0, total: 0 };
+    const locked = {
+      name: 'fixture-project',
+      lockfileVersion: 3,
+      packages: { '': { dependencies: {} } },
+    };
+    const report = assess(audit, locked, new Date('2027-01-01T00:00:00.000Z'));
     assert.equal(report.status, 'accepted');
     assert.equal(report.vulnerablePackageEntries, 0);
+  });
+
+  test('rejects an empty audit paired with an unsupported lockfile document', () => {
+    const audit = auditReport();
+    audit.vulnerabilities = {} as ReturnType<typeof auditReport>['vulnerabilities'];
+    audit.metadata.vulnerabilities = { info: 0, low: 0, moderate: 0, high: 0, critical: 0, total: 0 };
+    const report = assess(audit, {});
+    assert.equal(report.status, 'blocked');
+    assert.equal(report.findings[0]?.code, 'lockfile_changed');
   });
 
   test('blocks every unreviewed advisory, including a new critical package entry', () => {
@@ -205,16 +232,35 @@ describe('production dependency audit policy', () => {
       assert.equal(report.status, 'blocked');
       assert.ok(report.findings.some((item) => item.code === 'package_chain_changed'));
     });
-    await context.test('advertised forced downgrade', () => {
+    await context.test('advertised fix descriptor', () => {
       const audit = auditReport();
-      audit.vulnerabilities['image-size'].fixAvailable = {
-        name: '@netlify/blobs',
-        version: '9.1.5',
-        isSemVerMajor: true,
-      } as never;
+      audit.vulnerabilities['image-size'].fixAvailable = false as never;
       const report = assess(audit);
       assert.equal(report.status, 'blocked');
-      assert.ok(report.findings.some((item) => item.code === 'package_chain_changed'));
+      assert.match(
+        report.findings.find((item) => item.code === 'package_chain_changed')?.message ?? '',
+        /fix availability/u,
+      );
+    });
+    await context.test('package range diagnostic', () => {
+      const audit = auditReport();
+      audit.vulnerabilities['image-size'].range = '<=2.0.2';
+      const report = assess(audit);
+      assert.equal(report.status, 'blocked');
+      assert.match(
+        report.findings.find((item) => item.code === 'package_chain_changed')?.message ?? '',
+        /range/u,
+      );
+    });
+    await context.test('direct-dependency diagnostic', () => {
+      const audit = auditReport();
+      audit.vulnerabilities['@netlify/dev-utils'].isDirect = true;
+      const report = assess(audit);
+      assert.equal(report.status, 'blocked');
+      assert.match(
+        report.findings.find((item) => item.code === 'package_chain_changed')?.message ?? '',
+        /direct-dependency state/u,
+      );
     });
     await context.test('locked versions', () => {
       const locked = lockfile();
@@ -244,6 +290,14 @@ describe('production dependency audit policy', () => {
   test('runner preserves raw audit JSON and rejects command failures', () => {
     assert.ok(PRODUCTION_DEPENDENCY_AUDIT_TIMEOUT_MS > 0);
     assert.ok(PRODUCTION_DEPENDENCY_AUDIT_TIMEOUT_MS <= 120_000);
+    assert.match(PRODUCTION_DEPENDENCY_AUDIT_CACHE_PREFIX, /^whoisleuth-[a-z-]+-$/u);
+    assert.deepEqual(productionDependencyAuditArguments('/tmp/fixture-audit-cache'), [
+      'audit',
+      '--omit=dev',
+      '--json',
+      '--offline=false',
+      '--cache=/tmp/fixture-audit-cache',
+    ]);
     const stdout = outputBuffer();
     const stderr = outputBuffer();
     const rawAudit = JSON.stringify(auditReport());
@@ -302,5 +356,13 @@ describe('production dependency audit policy', () => {
       assert.match(source, /import \{ getStore \} from '@netlify\/blobs';/u);
       assert.doesNotMatch(source, /@netlify\/blobs\//u);
     }
+  });
+
+  test('documents the exact reviewed downgrade and fresh online audit boundary', () => {
+    const guide = fs.readFileSync(path.join(REPOSITORY_ROOT, 'docs/dependency-maintenance.md'), 'utf8');
+    assert.match(guide, new RegExp(`${PRODUCTION_DEPENDENCY_AUDIT_REVIEWED_FIX.name}@${PRODUCTION_DEPENDENCY_AUDIT_REVIEWED_FIX.version}`, 'u'));
+    assert.match(guide, /isolated temporary npm cache/u);
+    assert.match(guide, /offline=false/u);
+    assert.doesNotMatch(guide, /currently reports no fix/u);
   });
 });

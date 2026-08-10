@@ -86,6 +86,24 @@ describe('sorted JSON artifact compatibility', () => {
     assert.doesNotMatch(fixtureRaw, /PRIVATE KEY/u);
   });
 
+  test('keeps every supported legacy fixture key vocabulary locale-stable', () => {
+    const moduleUrl = new URL('../frontend/src/lib/analysis/artifact-integrity.ts', import.meta.url).href;
+    const fixtureUrl = new URL('./fixtures/artifact-integrity-v1.json', import.meta.url).href;
+    const source = `
+      import { readFileSync } from 'node:fs';
+      import { canonicalArtifactJson, canonicalArtifactJsonV2 } from ${JSON.stringify(moduleUrl)};
+      const fixture = JSON.parse(readFileSync(new URL(${JSON.stringify(fixtureUrl)}), 'utf8'));
+      const values = [...Object.values(fixture.artifacts), fixture.signedPackage, fixture.malformedSignedPackage];
+      if (values.some((value) => canonicalArtifactJson(value) !== canonicalArtifactJsonV2(value))) process.exit(1);
+    `;
+    for (const locale of ['C', 'en_US.UTF-8', 'sv_SE.UTF-8', 'tr_TR.UTF-8']) {
+      const child = spawnSync(process.execPath, ['--input-type=module', '-e', source], {
+        encoding: 'utf8', env: { ...process.env, LANG: locale, LC_ALL: locale },
+      });
+      assert.equal(child.status, 0, `${locale}: ${child.stderr}`);
+    }
+  });
+
   test('orders v2 keys by a locale-independent total JavaScript code-unit order', async () => {
     const keys = ['é', '😀', '_', 'A', 'e\u0301', '-', 'a', '😃', 'Z'];
     const forward = Object.fromEntries(keys.map((key, index) => [key, index]));

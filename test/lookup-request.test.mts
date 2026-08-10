@@ -131,8 +131,19 @@ describe('Lookup browser request boundary', () => {
     });
     assert.deepEqual(oversized, {
       ok: false,
-      kind: 'network',
-      message: 'Lookup request could not be completed.',
+      kind: 'invalid_response',
+      message: 'Lookup returned an invalid response.',
+    });
+
+    const invalidJson = await requestLookup('/api/lookup?q=example.test', {
+      fetchImpl: async () => new Response('{', {
+        headers: { 'content-type': 'application/json' },
+      }),
+    });
+    assert.deepEqual(invalidJson, {
+      ok: false,
+      kind: 'invalid_response',
+      message: 'Lookup returned an invalid response.',
     });
   });
 });

@@ -38,8 +38,11 @@ reviewed production dependency audit.
 ## Production audit exception policy
 
 `npm run dependencies:audit` runs `npm audit --omit=dev --json` with a 60-second
-timeout, prints the raw audit JSON for review, and then applies the repository's
-exact advisory policy.
+timeout, explicit `offline=false`, and an isolated temporary npm cache that is
+removed after the command. This prevents offline resolution or retained npm
+metavulnerability calculations from being mistaken for current advisory
+evidence. The command prints the raw audit JSON for review and then applies the
+repository's exact advisory policy.
 It does not use `--audit-level` or a numeric vulnerability threshold. An
 unlisted advisory at any severity blocks the command, so every new high or
 critical production advisory remains blocking even when npm reports it through
@@ -54,11 +57,15 @@ advisory IDs:
 Both advisories affect `image-size` 2.0.2 through the locked chain
 `@netlify/blobs` 10.7.9 → `@netlify/dev-utils` 4.4.6 → `image-size` 2.0.2. npm
 therefore reports three vulnerable package entries but two advisory IDs. npm
-currently reports no fix in the production dependency graph. WHOISleuth's
-production sources import `getStore` from the `@netlify/blobs` package root;
-they do not import its `./server` export that exposes the image-parser path.
-That reachability distinction reduces current exposure but does not remove the
-dependency advisory or justify suppressing npm's raw report.
+currently advertises `@netlify/blobs@9.1.5` as a semver-major remediation,
+which would downgrade the locked direct dependency from major version 10 to
+major version 9. This review retains 10.7.9 rather than silently changing that
+runtime contract; adopting the downgrade requires a separate dependency review
+and the complete verification pyramid. WHOISleuth's production sources import
+`getStore` from the `@netlify/blobs` package root; they do not import its
+`./server` export that exposes the image-parser path. That reachability
+distinction reduces current exposure but does not remove the dependency
+advisory or justify suppressing npm's raw report.
 
 The exception expires at `2026-09-10T00:00:00.000Z`. While an affected advisory
 is present, the gate fails closed after that instant. It also fails closed for
@@ -66,11 +73,15 @@ malformed, oversized, unsupported, or internally inconsistent audit JSON; an
 unlisted, missing, or duplicated advisory record; changed advisory URL, source,
 severity, or affected range; changed fix availability or package-chain
 metadata; and any change to the reviewed locked versions or dependency edges.
-A clean production audit passes without relying on the expired exception.
+An empty audit result also blocks while the lockfile still contains the exact
+reviewed vulnerable chain, because missing advisory evidence is not proof of a
+clean tree. A clean production audit passes without relying on the expired
+exception only after that reviewed chain is absent.
 
 Re-review before the expiry, and immediately when any of the following occurs:
 
-- npm publishes a fix or changes either advisory's severity, range, or identity;
+- npm changes the advertised fix descriptor or either advisory's severity,
+  range, or identity;
 - the lockfile changes any package or edge in the reviewed chain;
 - production code begins importing `@netlify/blobs/server`, another server
   subpath, or otherwise reaches the affected image parsers; or
