@@ -80,12 +80,22 @@ type ResponseLike = {
 };
 
 type StaticResponseLike = ResponseLike & {
-  sendFile: (path: string) => unknown;
+  sendFile: (path: string, callback: (error?: unknown) => void) => unknown;
 };
 
 type Next = () => void;
 type ErrorNext = (error?: unknown) => void;
 type OperationTarget = ReturnType<typeof operationBudgetTargetFor>;
+
+function sendPrerenderedHtmlFile(
+  filename: string,
+  res: StaticResponseLike,
+  next: Next,
+) {
+  return res.sendFile(filename, (error) => {
+    if (error) next();
+  });
+}
 
 function recordValue(value: unknown, key: string): unknown {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
@@ -152,8 +162,8 @@ for (const [sourcePath, canonicalPath] of CANONICAL_TRAILING_SLASH_REDIRECTS) {
 // Serve its exact HTML file before express.static sees the directory and
 // redirects to a non-existent index file.
 for (const [routePath, htmlFile] of PRERENDERED_HTML_FILE_OVERRIDES) {
-  app.get(routePath, prerenderedHtmlRateLimit, (_req: RequestLike, res: StaticResponseLike) => {
-    res.sendFile(path.join(svelteBuildDir, htmlFile));
+  app.get(routePath, prerenderedHtmlRateLimit, (_req: RequestLike, res: StaticResponseLike, next: Next) => {
+    sendPrerenderedHtmlFile(path.join(svelteBuildDir, htmlFile), res, next);
   });
 }
 app.use(express.static(svelteBuildDir, { extensions: ['html'] }));
@@ -515,4 +525,4 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   startServer();
 }
 
-export { app, isHttps, usesSecureCookies, requireAuth, requireNetworkRequestAdmission, rateLimit, requireFeature, apiErrorHandler, sendUnexpectedApiError, startServer };
+export { app, isHttps, usesSecureCookies, requireAuth, requireNetworkRequestAdmission, rateLimit, requireFeature, apiErrorHandler, sendPrerenderedHtmlFile, sendUnexpectedApiError, startServer };

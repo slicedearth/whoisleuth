@@ -90,7 +90,6 @@ const KNOWN_CODEQL_FINDINGS: readonly KnownCodeqlFinding[] = Object.freeze([
   // The route and file are fixed build-time allowlist entries, and the handler
   // now has its own bounded request middleware. CodeQL does not recognize the
   // project-local limiter, so retain only this exact reviewed fingerprint.
-  Object.freeze({ ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: '3398efe9f888d67d:1', primaryLocationStartColumnFingerprint: '45', reason: 'false_positive' as const }),
   Object.freeze({ ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: 'c95b56b6acb3e65b:1', primaryLocationStartColumnFingerprint: '23', reason: 'false_positive' as const }),
   // Contact-route verification is preceded by its own bounded per-identity
   // limiter. CodeQL models the token verification as authorization but does
