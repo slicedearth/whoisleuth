@@ -740,6 +740,18 @@ describe('lookup evidence export', () => {
     assert.equal(result.sources.whois.queriedAt, undefined);
   });
 
+  test('sanitizes over-bound strings before truncation and keeps the projection idempotent', () => {
+    const raw = `prefix\u0000${'x'.repeat(evidence.LOOKUP_EVIDENCE_PORTABLE_MAX_STRING_LENGTH)}`;
+    const projected = evidence.projectLookupEvidencePrivacySafeTree({ value: raw });
+    const projectedAgain = evidence.projectLookupEvidencePrivacySafeTree(projected);
+
+    assert.equal(projected.value.length, evidence.LOOKUP_EVIDENCE_PORTABLE_MAX_STRING_LENGTH);
+    assert.doesNotMatch(projected.value, /[\u0000-\u001f\u007f]/u);
+    assert.deepEqual(projectedAgain, projected);
+    assert.doesNotThrow(() => evidence.assertLookupEvidencePrivacySafeTree(projected));
+    assert.doesNotThrow(() => evidence.serializeLookupEvidence(projected));
+  });
+
   test('creates a bounded, filesystem-safe filename', () => {
     const filename = evidence.evidenceFilename(
       { registrableDomain: 'Bücher.Example/path' },

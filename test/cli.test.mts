@@ -782,6 +782,13 @@ test('repository source exposes an executable local CLI entry point', () => {
   const entryPoint = path.join(root, 'bin/whoisleuth.mts');
   const mode = fs.statSync(entryPoint).mode;
   assert.notEqual(mode & 0o111, 0);
+
+  const bare = spawnSync(process.execPath, [entryPoint], { encoding: 'utf8' });
+  assert.equal(bare.status, EXIT_CODES.SUCCESS);
+  assert.match(bare.stdout, /WHOISleuth CLI/);
+  assert.match(bare.stdout, /Investigate:\n/u);
+  assert.equal(bare.stderr, '');
+
   const result = spawnSync(process.execPath, [entryPoint, '--help'], { encoding: 'utf8' });
   assert.equal(result.status, 0);
   assert.match(result.stdout, /WHOISleuth CLI/);

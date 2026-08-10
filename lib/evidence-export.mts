@@ -244,9 +244,10 @@ function portableOrigin(value: unknown): string | null {
 export function projectLookupEvidencePrivacySafeTree<T>(value: T): T {
   if (value === null || typeof value === 'boolean' || typeof value === 'number') return value;
   if (typeof value === 'string') {
-    return (value.length <= LOOKUP_EVIDENCE_PORTABLE_MAX_STRING_LENGTH
-      ? value.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/gu, ' ')
-      : value.slice(0, LOOKUP_EVIDENCE_PORTABLE_MAX_STRING_LENGTH)) as T;
+    const sanitized = value.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/gu, ' ');
+    return (sanitized.length <= LOOKUP_EVIDENCE_PORTABLE_MAX_STRING_LENGTH
+      ? sanitized
+      : sanitized.slice(0, LOOKUP_EVIDENCE_PORTABLE_MAX_STRING_LENGTH)) as T;
   }
   if (Array.isArray(value)) {
     return value.slice(0, LOOKUP_EVIDENCE_PORTABLE_MAX_ARRAY_ITEMS)
