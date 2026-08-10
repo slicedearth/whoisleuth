@@ -28,5 +28,5 @@
   root.dataset.themePreference = preference;
   root.style.colorScheme = resolved;
   document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')
-    ?.setAttribute('content', resolved === 'light' ? '#f6f9ff' : '#0f1115');
+    ?.setAttribute('content', resolved === 'light' ? '#e1e8ef' : '#0f1115');
 })();

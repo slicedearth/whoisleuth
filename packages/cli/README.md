@@ -59,6 +59,8 @@ node bin/whoisleuth.mts discover example.test --dictionary private-terms.txt --s
 node bin/whoisleuth.mts discover-scan example.test --scan-limit 50 --checkpoint candidate-scan.json --json
 node bin/whoisleuth.mts page-compare official.json candidate.json --json
 node bin/whoisleuth.mts mail-review bulk.json --json
+node bin/whoisleuth.mts dnssec-validate example.test --resolver "$PUBLIC_RESOLVER_IP" --trust-anchor anchor.json --owned-or-authorized --json
+node bin/whoisleuth.mts mail-transport selected-mx.json --resolver "$PUBLIC_RESOLVER_IP" --trust-anchor anchor.json --owned-or-authorized --active-probe --json
 node bin/whoisleuth.mts domain-control domain-control-input.json --json
 node bin/whoisleuth.mts assurance domain-assurance-input.json --json
 node bin/whoisleuth.mts sharing-review response-packet.json --marking amber --recipient-scope organization --purpose 'Reviewed handoff' --human-reviewed --personal-data-reviewed --redactions-confirmed --json
@@ -88,6 +90,11 @@ explicit and are never interpreted as evidence of safety or absence.
 `lookup --plan` classifies a target and explains the selected source families
 and disclosures without making a network request. `commands --json` exposes the
 installed command contracts for local wrappers without running collection.
+The isolated `dnssec-validate` and `mail-transport` actions are not part of
+Lookup, Bulk, monitoring, or recipes. Each run requires explicit
+owned-or-authorised acknowledgement; mail transport also requires a separate
+active-probe acknowledgement and never sends a message, authenticates, tests
+relay, or enumerates recipients or mailboxes.
 Focused command help and the generated manual label every operation as offline
 or networked and state its target, input, and concurrency boundaries. The
 packaged [dual-use disclosure](https://github.com/slicedearth/whoisleuth/blob/main/DISCLOSURE)

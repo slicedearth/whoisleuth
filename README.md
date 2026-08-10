@@ -136,6 +136,13 @@ Published CLI releases can run without hosting the application:
 npm exec --yes --ignore-scripts --package=@slicedearth/whoisleuth-cli -- whoisleuth --help
 ```
 
+The CLI also provides isolated, explicitly authorised DNSSEC chain validation
+and selected-MX SMTP/STARTTLS review. Those actions require a caller-selected
+public resolver, a local trust-anchor document, and per-run acknowledgement;
+they are never part of Lookup, Bulk, monitoring, or automatic recipes. See the
+[CLI reference](docs/cli-reference.md#isolated-cryptographic-and-mail-transport-review)
+for the exact network, retention, and non-inference boundaries.
+
 `SITE_PASSWORD` is the deployment-wide shared password. `SESSION_SECRET`
 should be a separate random value, such as 32 random bytes encoded as hex. The
 optional `SESSION_MAX_AGE_DAYS` setting accepts a whole number from 1 to 30 and

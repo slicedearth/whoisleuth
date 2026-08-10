@@ -711,6 +711,14 @@ test('workspace identifier collisions cannot rebind Cases or the active-profile 
   await expect(profiles).toContainText('Blocked');
   await expect(cases).toContainText('Blocked');
   await expect(settings).toContainText('Blocked');
+  expect(await profiles.locator('.state').evaluate((element) => {
+    const probe = document.createElement('span');
+    probe.style.color = 'var(--danger)';
+    document.body.append(probe);
+    const matches = getComputedStyle(element).color === getComputedStyle(probe).color;
+    probe.remove();
+    return matches;
+  })).toBe(true);
   await expect(profiles.getByRole('checkbox')).toBeDisabled();
   await expect(cases.getByRole('checkbox')).toBeDisabled();
   await expect(settings.getByRole('checkbox')).toBeDisabled();
@@ -745,6 +753,17 @@ test('workspace archive import reports future sections and rolls back an interru
   const futureWatchlists = page.locator('.preview li', { hasText: 'Watchlists' });
   await expect(futureWatchlists).toContainText('Unsupported');
   await expect(futureWatchlists.getByRole('checkbox')).toBeDisabled();
+  expect(await futureWatchlists.evaluate((element) => {
+    const probe = document.createElement('span');
+    probe.style.color = 'var(--muted)';
+    document.body.append(probe);
+    const result = {
+      borderStyle: getComputedStyle(element).borderStyle,
+      colourMatches: getComputedStyle(element.querySelector('.state')!).color === getComputedStyle(probe).color,
+    };
+    probe.remove();
+    return result;
+  })).toEqual({ borderStyle: 'dotted', colourMatches: true });
 
   await migrateLegacyBrowserData(page, {
     'whois-rdap-cases-v1': { version: 2, cases: [{

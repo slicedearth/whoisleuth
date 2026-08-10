@@ -67,7 +67,7 @@
       <h2 id="bulk-sessions-title" tabindex="-1">Saved Bulk sessions</h2>
       <p>Save compact results and source states so an incomplete investigation can be resumed or compared later. Raw source payloads and contact records are excluded.</p>
     </div>
-    {#if sessions.length}<button type="button" class="secondary" onclick={exportSessions} disabled={running}>Export sessions</button>{/if}
+    {#if sessions.length}<button type="button" class="btn" onclick={exportSessions} disabled={running}>Export sessions</button>{/if}
   </div>
 
   <div class="save-row">
@@ -102,11 +102,11 @@
             </dl>
           </div>
           <div class="session-actions">
-            <button type="button" disabled={profileContextLoading || running} onclick={() => loadSession(session)}>Load</button>
+            <button type="button" class="btn small" disabled={profileContextLoading || running} onclick={() => loadSession(session)}>Load</button>
             {#if unstartedCount(session) > 0}
-              <button type="button" class="secondary" disabled={profileContextLoading || running} onclick={() => resumeSession(session)}>Resume unstarted</button>
+              <button type="button" class="btn small" disabled={profileContextLoading || running} onclick={() => resumeSession(session)}>Resume unstarted</button>
             {/if}
-            <button type="button" class="danger-text" disabled={running} onclick={() => deleteSession(session)}>Delete</button>
+            <button type="button" class="btn small danger" disabled={running} onclick={() => deleteSession(session)}>Delete</button>
           </div>
         </article>
       {/each}
@@ -159,7 +159,6 @@
   .section-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
   .section-heading h2,.section-heading p{margin:0}
   .section-heading>div>p:last-child{margin-top:6px;color:var(--muted);max-width:75ch}
-  .eyebrow{font:650 var(--text-2xs) var(--mono);color:var(--accent);text-transform:uppercase;letter-spacing:.1em}
   .save-row{display:grid;grid-template-columns:minmax(220px,1fr) auto;align-items:end;gap:12px;margin-top:18px}
   label{display:grid;gap:6px;font-size:var(--text-sm);font-weight:650}
   input,select{width:100%}
@@ -174,7 +173,6 @@
   dt{color:var(--muted);font-size:var(--text-xs)}
   dd{margin:0;font-weight:700;font-size:var(--text-xs)}
   .session-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px}
-  .danger-text{color:var(--danger)}
   .comparison{margin-top:18px;border-top:1px solid var(--border);padding-top:14px}
   .comparison summary{cursor:pointer;font-weight:700}
   .compare-controls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:14px 0}

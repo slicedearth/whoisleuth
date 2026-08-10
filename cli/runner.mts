@@ -1167,14 +1167,20 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
     if (args.action === 'ct-search'
       || args.action === 'posture'
       || args.action === 'http'
-      || args.action === 'tls') {
+      || args.action === 'tls'
+      || args.action === 'dnssec-validate'
+      || args.action === 'mail-transport') {
       failureLabel = args.action === 'ct-search'
         ? 'Certificate Transparency search'
         : args.action === 'posture'
           ? 'Domain posture audit'
           : args.action === 'http'
             ? 'HTTP probe'
-            : 'TLS intelligence';
+            : args.action === 'tls'
+              ? 'TLS intelligence'
+              : args.action === 'dnssec-validate'
+                ? 'DNSSEC chain validation'
+                : 'Mail transport review';
       const { runNetworkCommand } = await import('./network-command-runner.mts');
       return await runNetworkCommand(args, dependencies, commandContext);
     }

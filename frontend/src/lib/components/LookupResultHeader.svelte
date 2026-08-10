@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { evidenceStatusChipClass } from '$lib/analysis/evidence-status-tone.ts';
+
   let {
     title,
     state: resultState,
@@ -36,7 +38,7 @@
     {/if}
   </div>
   <div class="result-actions">
-    <span class="chip info">{resultState}</span>
+    <span class="chip {evidenceStatusChipClass(resultState)}">{resultState}</span>
     <details class="export-menu" bind:open={exportMenuOpen}>
       <summary class="btn">Export <span aria-hidden="true">▾</span></summary>
       <div class="export-options" role="group" aria-label="Export Lookup result">

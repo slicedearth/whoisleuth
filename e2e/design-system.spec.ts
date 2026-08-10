@@ -267,7 +267,7 @@ test('the console command palette filters destinations and remains keyboard oper
   })).toBe('1px 1px rect(0px, 0px, 0px, 0px)');
   await expect.poll(() => searchFrame.evaluate((element) => {
     const probe = document.createElement('span');
-    probe.style.color = 'var(--accent2)';
+    probe.style.color = 'var(--accent)';
     document.body.append(probe);
     const matchesAccent = getComputedStyle(element).borderColor === getComputedStyle(probe).color;
     probe.remove();
@@ -279,18 +279,19 @@ test('the console command palette filters destinations and remains keyboard oper
     options.every((option) => option.getAttribute('tabindex') === '-1')
   )).toBe(true);
   const destinationIcons = dialog.locator('[role="option"] svg[data-icon]');
-  await expect(destinationIcons).toHaveCount(9);
+  await expect(destinationIcons).toHaveCount(14);
   await expect(dialog.locator('[data-command-group]')).toHaveText([
     'Start',
     'Investigate', 'Investigate', 'Investigate',
     'Protect & review', 'Protect & review',
     'Reference', 'Reference', 'Public',
+    'Public', 'Public', 'Public', 'Public', 'Public',
   ]);
   await expect(dialog.locator('[data-command-group]', { hasText: 'Console' })).toHaveCount(0);
   await expect(dialog.getByRole('option', { name: /Lookup/ }).locator('svg')).toHaveAttribute('data-icon', 'lookup');
   await expect(dialog.getByRole('option', { name: /Registry support/ }).locator('svg')).toHaveAttribute('data-icon', 'registry');
   await search.press('End');
-  await expect(search).toHaveAttribute('aria-activedescendant', 'command-option-8');
+  await expect(search).toHaveAttribute('aria-activedescendant', 'command-option-13');
   await search.press('Home');
   await expect(search).toHaveAttribute('aria-activedescendant', 'command-option-0');
   await search.press('ArrowDown');
@@ -323,6 +324,19 @@ test('the console command palette filters destinations and remains keyboard oper
   await search.fill('Protect & review');
   await expect(dialog.getByRole('option')).toHaveCount(2);
   await expect(dialog.locator('[data-command-group]')).toHaveText(['Protect & review', 'Protect & review']);
+  await search.fill('Public');
+  await expect(dialog.getByRole('option')).toHaveCount(6);
+  await expect(dialog.getByRole('option')).toHaveText([
+    /Public homepage/u,
+    /Synthetic demo/u,
+    /Privacy/u,
+    /Terms/u,
+    /Request policy/u,
+    /Contact/u,
+  ]);
+  await expect(dialog.locator('[data-command-group]')).toHaveText([
+    'Public', 'Public', 'Public', 'Public', 'Public', 'Public',
+  ]);
   await search.fill('monitor');
   await expect(dialog.getByRole('option', { name: /Monitor/ })).toBeVisible();
   await expect(search).toHaveAttribute('aria-activedescendant', 'command-option-0');
@@ -373,13 +387,33 @@ test('the console command palette filters destinations and remains keyboard oper
     const bounds = element.getBoundingClientRect();
     return {
       fitsViewport: bounds.left >= 0 && bounds.right <= document.documentElement.clientWidth,
-      listFitsWithoutScrolling: (list?.scrollHeight ?? 0) <= (list?.clientHeight ?? 0) + 1,
+      listIsKeyboardScrollable: (list?.scrollHeight ?? 0) > (list?.clientHeight ?? 0) + 1,
     };
   })).toEqual({
     fitsViewport: true,
-    listFitsWithoutScrolling: true,
+    listIsKeyboardScrollable: true,
   });
+  const mobileSearch = dialog.getByRole('combobox', { name: 'Search pages' });
+  await mobileSearch.press('End');
+  await expect(mobileSearch).toHaveAttribute('aria-activedescendant', 'command-option-13');
+  const lastMobileOption = dialog.getByRole('option').nth(13);
+  await expect(lastMobileOption).toHaveAttribute('aria-selected', 'true');
+  await expect.poll(() => lastMobileOption.evaluate((option) => {
+    const list = option.closest('#command-results');
+    if (!list) return false;
+    const optionBounds = option.getBoundingClientRect();
+    const listBounds = list.getBoundingClientRect();
+    return optionBounds.top >= listBounds.top && optionBounds.bottom <= listBounds.bottom;
+  })).toBe(true);
   await expectNoHorizontalOverflow(page);
+  await mobileSearch.fill('Public');
+  const publicPagePromise = page.waitForEvent('popup');
+  await dialog.getByRole('option', { name: /Contact.*New tab/u }).click();
+  const publicPage = await publicPagePromise;
+  await publicPage.waitForLoadState('domcontentloaded');
+  await expect(publicPage).toHaveURL(/\/contact$/u);
+  await expect(page).toHaveURL(/\/lookup$/u);
+  await publicPage.close();
 });
 
 test('Lookup reports requested source families without implying staged completion', async ({ page }) => {
@@ -677,7 +711,6 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
       .filter({ hasText: new RegExp(`^${label}$`, 'u') })
       .locator('xpath=../..')
       .locator('.state-complete');
-    await expect(state).toHaveClass(/registration-source/u);
     const colours = await state.evaluate((element) => ({
       actual: getComputedStyle(element).color,
       expected: getComputedStyle(document.documentElement).getPropertyValue('--text').trim(),
@@ -686,6 +719,12 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
       ? `rgb(${Number.parseInt(colours.expected.slice(1, 3), 16)}, ${Number.parseInt(colours.expected.slice(3, 5), 16)}, ${Number.parseInt(colours.expected.slice(5, 7), 16)})`
       : colours.expected);
   }
+  expect(await sourceQualityTable.locator('.state-complete').evaluateAll((states) => {
+    const reference = document.querySelector<HTMLElement>('.summaries article strong');
+    if (!reference) return false;
+    const referenceColour = getComputedStyle(reference).color;
+    return states.every((state) => getComputedStyle(state).color === referenceColour);
+  })).toBe(true);
   await coverage.getByText(/Freshness policy/u).click();
   await coverage.getByLabel('Policy').selectOption('analyst-custom');
   await coverage.getByLabel('Registration days').fill('10');
@@ -707,6 +746,12 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   await expect(registrationFact).toContainText('does not recalculate or override');
 
   const rdapDiagnostic = page.locator('.diagnostics article').filter({ hasText: 'rdap' }).first();
+  expect(await page.locator('.diagnostics article > strong').evaluateAll((states) => {
+    const reference = document.querySelector<HTMLElement>('.summaries article strong');
+    if (!reference) return false;
+    const referenceColour = getComputedStyle(reference).color;
+    return states.every((state) => getComputedStyle(state).color === referenceColour);
+  })).toBe(true);
   await rdapDiagnostic.getByText('Inspect source route').click();
   await expect(rdapDiagnostic).toContainText('IANA RDAP bootstrap discovery');
   await expect(rdapDiagnostic).toContainText('Selected endpoint');

@@ -204,7 +204,7 @@
   .inbox-heading>strong{color:var(--accent2);font:750 2rem var(--mono)}
   .filters{display:flex;flex-wrap:wrap;gap:6px;margin:18px 0}
   .filters button{display:flex;gap:7px;align-items:center;min-height:36px;padding:0 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised);color:var(--muted);font:650 var(--text-xs) var(--mono)}
-  .filters button.active{border-color:rgb(var(--accent2-rgb) / .55);background:rgb(var(--accent2-rgb) / .08);color:var(--accent2)}
+  .filters button.active{border-color:rgb(var(--accent-rgb) / .55);background:rgb(var(--accent-rgb) / .08);color:var(--accent)}
   .filters span{padding:1px 6px;border-radius:99px;background:var(--border);color:var(--text);font-size:var(--text-2xs)}
   .detail-filters{display:grid;grid-template-columns:repeat(5,minmax(120px,1fr)) auto;align-items:end;gap:8px;margin:-8px 0 18px}
   .detail-filters label{display:grid;gap:5px;color:var(--muted);font:650 var(--text-2xs) var(--mono);text-transform:uppercase}

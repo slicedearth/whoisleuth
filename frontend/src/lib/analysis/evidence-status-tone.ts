@@ -1,4 +1,5 @@
 export type EvidenceStatusTone = 'complete' | 'partial' | 'error' | 'neutral';
+export type EvidenceStatusChipClass = 'factual' | 'warn' | 'danger' | 'unavailable';
 
 const COMPLETE_STATES = new Set([
   'success',
@@ -7,6 +8,7 @@ const COMPLETE_STATES = new Set([
   'supported',
   'observed',
   'registered',
+  'active',
   'available',
 ]);
 const ERROR_STATES = new Set([
@@ -64,4 +66,15 @@ export function evidenceStatusTone(
   if (NEUTRAL_STATES.has(normalized) || !normalized) return 'neutral';
   if (PARTIAL_STATES.has(normalized) || options.complete === false) return 'partial';
   return COMPLETE_STATES.has(normalized) ? 'complete' : 'neutral';
+}
+
+export function evidenceStatusChipClass(
+  status: unknown,
+  options: Readonly<{ complete?: boolean; neutral?: boolean }> = {},
+): EvidenceStatusChipClass {
+  const tone = evidenceStatusTone(status, options);
+  if (tone === 'complete') return 'factual';
+  if (tone === 'partial') return 'warn';
+  if (tone === 'error') return 'danger';
+  return 'unavailable';
 }

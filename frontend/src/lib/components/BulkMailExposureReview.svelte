@@ -120,9 +120,9 @@
   .selected{display:inline;margin-right:5px;color:var(--accent)}
   .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
   .relation{display:inline-block;width:max-content;padding:3px 6px;border:1px solid var(--border);border-radius:999px;font:650 var(--text-2xs) var(--mono);text-transform:capitalize}
-  .relation.aligned{border-color:color-mix(in srgb,var(--accent) 45%,var(--border));color:var(--accent)}
+  .relation.aligned{border-color:color-mix(in srgb,var(--success) 45%,var(--border));color:var(--success)}
   .relation.review{border-color:color-mix(in srgb,var(--amber) 45%,var(--border));color:var(--amber)}
-  .relation.inconclusive{color:var(--muted)}
+  .relation.inconclusive{border-color:var(--muted);border-style:dotted;color:var(--muted)}
   .limitations{margin:12px 0 0;padding-left:18px;color:var(--muted);font-size:var(--text-2xs);line-height:1.5}
   @media(max-width:800px){.groups{grid-template-columns:repeat(2,minmax(0,1fr))}}
   @media(max-width:700px){

@@ -15,6 +15,8 @@ const OPTIONS_BY_COMMAND: Readonly<Record<CliCommand, readonly string[]>> = Obje
   posture: ['--selectors', '--retired-selectors', '--mail-profile', '--json', '--sarif', '--owned-domain', '--quiet', '--no-color'],
   http: ['--json', '--quiet', '--no-color'],
   tls: ['--json', '--quiet', '--no-color'],
+  'dnssec-validate': ['--resolver', '--trust-anchor', '--owned-or-authorized', '--json', '--quiet', '--no-color'],
+  'mail-transport': ['--resolver', '--trust-anchor', '--owned-or-authorized', '--active-probe', '--json', '--quiet', '--no-color'],
   'registry-support': ['--json', '--quiet', '--no-color'],
   'registry-doctor': ['--json', '--quiet', '--no-color'],
   'registry-cohort': ['--json', '--quiet', '--no-color'],
@@ -63,6 +65,8 @@ const COMMAND_DESCRIPTIONS: Readonly<Record<CliCommand, string>> = Object.freeze
   posture: 'Review DNS and mail posture',
   http: 'Inspect one homepage request',
   tls: 'Inspect one TLS connection',
+  'dnssec-validate': 'Validate an authorised DNSSEC chain',
+  'mail-transport': 'Review selected authorised SMTP transports',
   'registry-support': 'Explain local registry coverage',
   'registry-doctor': 'Diagnose saved registry collection',
   'registry-cohort': 'Build target-free registry quality timelines',
@@ -121,6 +125,7 @@ const FILE_OPTIONS = Object.freeze([
   '--observation-snapshot',
   '--previous',
   '--resume',
+  '--trust-anchor',
 ]);
 
 const FILE_POSITIONAL_COMMANDS = new Set<CliCommand>([
@@ -129,6 +134,7 @@ const FILE_POSITIONAL_COMMANDS = new Set<CliCommand>([
   'oam-export',
   'ct-intake',
   'change-packet',
+  'mail-transport',
 ]);
 
 const TEXT_OPTIONS = Object.freeze([
@@ -245,7 +251,7 @@ function fishCompletion(): string {
       const requiresValue = fileValue || [...Object.keys(VALUE_OPTIONS), ...TEXT_OPTIONS].includes(option);
       return `complete -c whoisleuth -n '${condition}' -l ${name}${requiresValue ? ' -r' : ''}${fileValue ? ' -F' : ''}`;
   };
-  const commonCondition = `__fish_seen_subcommand_from ${CLI_COMMANDS.join(' ')}`;
+  const commonCondition = 'not __fish_use_subcommand';
   const commonOptionLines = COMMON_OPTIONS.map((option) => optionLine(commonCondition, option));
   const optionLines = Object.entries(OPTIONS_BY_COMMAND).flatMap(([command, options]) => (
     options.map((option) => optionLine(`__fish_seen_subcommand_from ${command}`, option))

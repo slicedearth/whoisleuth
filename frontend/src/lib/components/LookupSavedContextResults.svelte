@@ -96,7 +96,8 @@
 
 <style>
   .state{margin:0;padding:9px;border-left:2px solid var(--accent);background:var(--panel-raised);color:var(--muted);font-size:var(--text-xs);line-height:1.5}
-  .state-partial,.unavailable{border-color:var(--amber)}
+  .state-partial{border-color:var(--amber)}
+  .unavailable{border-color:var(--muted);border-left-style:dotted}
   details{margin-top:10px;color:var(--muted);font-size:var(--text-xs)}
   summary{cursor:pointer;font:700 var(--text-xs) var(--mono)}
   details ul{margin:8px 0 0;padding-left:20px;line-height:1.5}

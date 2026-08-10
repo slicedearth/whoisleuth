@@ -4,6 +4,8 @@ import type { explainRiskScore } from '../lib/risk-scoring.mts';
 import type { RegistryCompatibilityRow } from '../lib/registry-capabilities.mts';
 import type { resolvePublicAddresses, safeFetch } from '../lib/safe-fetch.mts';
 import type { whoisQuery } from '../lib/whois-transport.mts';
+import type { validateDnssecChain } from '../lib/dnssec-chain-validation.mts';
+import type { collectMailTransportReview } from '../lib/smtp-transport-review.mts';
 import type { BoundedTextStream } from './bulk.mts';
 import type { createBulkCheckpointWriter } from './bulk-checkpoint.mts';
 import type { CliProgressEvents } from './progress-events.mts';
@@ -58,6 +60,8 @@ type CliDependencies = {
   readPublicKeyFile?: (source: string) => string | Promise<string>;
   readSourceReliabilityInput?: (source?: string | null) => string | Promise<string>;
   readMailReviewInput?: (source?: string | null) => string | Promise<string>;
+  readMailTransportInput?: (source?: string | null) => string | Promise<string>;
+  readTrustAnchorInput?: (source: string) => string | Promise<string>;
   now?: () => string;
   nowMs?: () => number;
   environment?: TerminalEnvironment;
@@ -75,6 +79,8 @@ type CliDependencies = {
   fetchHomepage?: (domain: string) => unknown | Promise<unknown>;
   normalizeTlsHostname?: (value: unknown) => string | null;
   collectTlsIntelligence?: (hostname: string) => unknown | Promise<unknown>;
+  validateDnssecChain?: typeof validateDnssecChain;
+  collectMailTransportReview?: typeof collectMailTransportReview;
   registryCapabilityFor?: (value: unknown) => RegistryCompatibilityRow | null;
   registryCapabilitiesVersion?: number;
   explainRiskScore?: typeof explainRiskScore;

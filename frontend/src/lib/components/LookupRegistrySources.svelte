@@ -373,13 +373,13 @@
     {/if}
     <details class="publication-quality">
       <summary>Publication quality · {publications.filter((item) => item.state === 'complete').length} complete</summary>
-      <div class="publication-list">{#each publications as publication}<article><strong>{display(publication.source)}</strong><span class={`chip ${publication.state === 'complete' ? 'ok' : publication.state === 'partial' ? 'warn' : ''}`}>{display(publication.state)}</span>{#if publication.observedAt}<small>{String(publication.observedAt)}</small>{/if}{#each asStrings(publication.issues) as issue}<p>{issue}</p>{/each}</article>{/each}</div>
+      <div class="publication-list">{#each publications as publication}<article><strong>{display(publication.source)}</strong><span class={`chip ${publication.state === 'complete' ? 'factual' : publication.state === 'partial' ? 'warn' : 'unavailable'}`}>{display(publication.state)}</span>{#if publication.observedAt}<small>{String(publication.observedAt)}</small>{/if}{#each asStrings(publication.issues) as issue}<p>{issue}</p>{/each}</article>{/each}</div>
     </details>
     <details class="rdap-capabilities">
       <summary>RDAP capability declarations · {registryDeclarations.length + registrarDeclarations.length}</summary>
       <div class="capability-sources">
         <article>
-          <header><strong>Registry RDAP</strong><span class={`chip ${registryCapabilities.state === 'complete' ? 'ok' : registryCapabilities.state === 'partial' ? 'warn' : ''}`}>{display(registryCapabilities.state)}</span></header>
+          <header><strong>Registry RDAP</strong><span class={`chip ${registryCapabilities.state === 'complete' ? 'factual' : registryCapabilities.state === 'partial' ? 'warn' : 'unavailable'}`}>{display(registryCapabilities.state)}</span></header>
           {#if registryDeclarations.length}
             <ul>{#each registryDeclarations as declaration}<li><code>{String(declaration.identifier || '')}</code><span>{String(declaration.capability || '')}</span>{#if declaration.status === 'obsolete'}<small>Registered as obsolete</small>{:else if declaration.category === 'unknown'}<small>Unclassified; retained without interpretation</small>{/if}</li>{/each}</ul>
           {:else}<p>No usable declaration was retained from this response.</p>{/if}
@@ -398,7 +398,7 @@
           {/if}
         </article>
         <article>
-          <header><strong>Registrar RDAP</strong><span class={`chip ${registrarCapabilities.state === 'complete' ? 'ok' : registrarCapabilities.state === 'partial' ? 'warn' : ''}`}>{display(registrarCapabilities.state)}</span></header>
+          <header><strong>Registrar RDAP</strong><span class={`chip ${registrarCapabilities.state === 'complete' ? 'factual' : registrarCapabilities.state === 'partial' ? 'warn' : 'unavailable'}`}>{display(registrarCapabilities.state)}</span></header>
           {#if registrarDeclarations.length}
             <ul>{#each registrarDeclarations as declaration}<li><code>{String(declaration.identifier || '')}</code><span>{String(declaration.capability || '')}</span>{#if declaration.status === 'obsolete'}<small>Registered as obsolete</small>{:else if declaration.category === 'unknown'}<small>Unclassified; retained without interpretation</small>{/if}</li>{/each}</ul>
           {:else}<p>No usable declaration was retained from this response.</p>{/if}
@@ -526,8 +526,8 @@
   .matrix-legend .state-partial span{border-color:var(--amber);border-radius:0;background:color-mix(in srgb,var(--amber) 15%,var(--panel));color:var(--amber);clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%)}
   .matrix-legend .state-conflict span{border-color:var(--danger);background:color-mix(in srgb,var(--danger) 13%,var(--panel));color:var(--danger);clip-path:polygon(25% 0,75% 0,100% 25%,100% 75%,75% 100%,25% 100%,0 75%,0 25%)}
   .matrix-legend .state-observed span{border-color:var(--accent);border-radius:3px;background:color-mix(in srgb,var(--accent) 14%,var(--panel));color:var(--accent)}
-  .matrix-legend .state-not_collected span{border-color:var(--muted);border-style:dashed}
-  .matrix-legend .state-unavailable span{border-color:var(--muted);border-style:dashed}
+  .matrix-legend .state-not_collected span{border-color:var(--muted);border-style:dotted}
+  .matrix-legend .state-unavailable span{border-color:var(--muted);border-style:dotted}
   .lane-table-wrap{margin-top:12px;overflow:auto;border:1px solid var(--border);border-radius:var(--radius-md)}
   .lane-table{width:100%;border-collapse:collapse;font-size:var(--text-xs)}
   .lane-table caption{padding:9px 10px;border-bottom:1px solid var(--border);color:var(--muted);font:650 var(--text-2xs) var(--mono);text-align:left}
@@ -545,11 +545,11 @@
   .trace-sources{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:13px}
   .trace-sources article{min-width:0;padding:11px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}
   .trace-sources article[data-state='partial']{border-color:color-mix(in srgb,var(--amber) 45%,var(--border))}
-  .trace-sources article[data-state='unavailable'],.trace-sources article[data-state='not_collected']{border-style:dashed}
+  .trace-sources article[data-state='unavailable'],.trace-sources article[data-state='not_collected']{border-style:dotted}
   .trace-sources article>div{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
   .trace-sources strong{font:700 var(--text-xs) var(--mono)}
   .trace-state{flex:none;color:var(--muted);font:700 var(--text-2xs) var(--mono);text-transform:uppercase}
-  [data-state='complete'] .trace-state{color:var(--success)}
+  [data-state='complete'] .trace-state{color:var(--text)}
   [data-state='partial'] .trace-state{color:var(--amber)}
   .trace-sources p,.trace-sources small,.trace-limit{color:var(--muted);font-size:var(--text-2xs);line-height:1.48}
   .trace-sources p{margin:8px 0 0}
@@ -628,8 +628,13 @@
     .lane-card>summary strong{font:700 var(--text-xs) var(--mono)}
     .lane-card>summary small{color:var(--muted);font-size:var(--text-2xs)}
     .lane-status{align-self:start;max-width:108px;padding:3px 6px;border:1px solid var(--border-strong);border-radius:999px;color:var(--text);font:700 var(--text-2xs) var(--mono);line-height:1.25;text-align:center;text-transform:capitalize;overflow-wrap:anywhere}
-    [data-comparison-state='conflict'] .lane-status,[data-comparison-state='different'] .lane-status{border-color:var(--danger);color:var(--danger)}
-    [data-comparison-state='partial'] .lane-status,[data-comparison-state='incomplete'] .lane-status{border-color:var(--amber);color:var(--amber)}
+    [data-comparison-state='equivalent'] .lane-status,[data-comparison-state='equal'] .lane-status{border-color:var(--success);background:color-mix(in srgb,var(--success) 8%,var(--panel));color:var(--success)}
+    [data-comparison-state='different'] .lane-status{border-color:var(--amber);color:var(--amber)}
+    [data-comparison-state='conflict'] .lane-status{border-color:var(--danger);color:var(--danger)}
+    [data-comparison-state='partial'] .lane-status,[data-comparison-state*='incomplete'] .lane-status,[data-comparison-state*='redacted'] .lane-status{border-color:var(--amber);color:var(--amber)}
+    [data-comparison-state$='_only'] .lane-status{border-color:var(--accent);color:var(--accent)}
+    [data-comparison-state*='unavailable'] .lane-status,[data-comparison-state*='not_collected'] .lane-status,[data-comparison-state='unknown'] .lane-status,[data-comparison-state='unsupported'] .lane-status{border-color:var(--muted);border-style:dotted;color:var(--muted)}
+    .matrix-legend .state-not_collected span,.matrix-legend .state-unavailable span{border-style:dotted;border-width:2px}
     .lane-card-body{display:grid;gap:8px;padding:0 10px 10px;border-top:1px solid var(--border)}
     .publication-side{display:grid;gap:4px;min-width:0;margin-top:10px;padding:9px;border-left:3px solid var(--accent);background:var(--panel-raised)}
     .publication-side:nth-child(2){margin-top:0;border-left-color:var(--accent2)}

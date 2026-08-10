@@ -194,7 +194,7 @@
   .identity small{color:var(--muted);font:var(--text-2xs) var(--mono);text-transform:uppercase}
   h3{margin:3px 0 0;font:700 var(--text-lg) var(--mono);overflow-wrap:anywhere}
   .review-state{padding:4px 7px;border:1px solid var(--border);border-radius:999px;color:var(--muted);font:650 var(--text-2xs) var(--mono);text-transform:capitalize}
-  .state-reviewed{border-color:color-mix(in srgb,var(--accent) 45%,var(--border));color:var(--accent)}
+  .state-reviewed{border-color:color-mix(in srgb,var(--success) 45%,var(--border));color:var(--success)}
   .state-reviewing{border-color:color-mix(in srgb,var(--amber) 45%,var(--border));color:var(--amber)}
   dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:13px 0 0}
   dl div{min-width:0;padding:8px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
@@ -217,7 +217,7 @@
   .shortcut-note{margin-top:10px}
   .freshness{display:flex;align-items:center;gap:8px;margin-top:12px;padding:9px;border:1px solid var(--border);border-radius:var(--radius-sm);font:var(--text-2xs) var(--mono)}
   .freshness span,.freshness small{color:var(--muted)}
-  .freshness strong{color:var(--accent);text-transform:capitalize}
+  .freshness strong{color:var(--text);text-transform:capitalize}
   .freshness[data-state="stale"] strong{color:var(--amber)}
   .freshness small{margin-left:auto;text-align:right}
   .retry-plan{margin-top:12px;border-top:1px solid var(--border)}

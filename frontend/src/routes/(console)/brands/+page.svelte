@@ -213,7 +213,7 @@
   .message{min-width:0;color:var(--accent);font-size:var(--text-sm);overflow-wrap:anywhere}
   .local-context-status{min-width:0;color:var(--amber);font-size:var(--text-sm);overflow-wrap:anywhere}
   .profile-source-state{padding:var(--card-pad);color:var(--muted);font-size:var(--text-sm)}
-  .profile-source-state.unavailable{color:var(--amber)}
+  .profile-source-state.unavailable{border-color:var(--muted);border-style:dotted;color:var(--muted)}
   @media(max-width:750px){
     .top-actions{margin-top:14px}
   }

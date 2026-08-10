@@ -50,6 +50,36 @@ async function sourceTokenContrast(page: import('@playwright/test').Page, family
   }, family);
 }
 
+async function clusterTokenContrast(page: import('@playwright/test').Page, index: number) {
+  return page.evaluate((clusterIndex) => {
+    const parseColour = (value: string): [number, number, number] => {
+      const channels = value.match(/[\d.]+/gu)?.slice(0, 3).map(Number);
+      if (!channels || channels.length !== 3) throw new Error(`Could not parse computed colour ${value}.`);
+      return channels as [number, number, number];
+    };
+    const luminance = (colour: string) => {
+      const channels = parseColour(colour).map((channel) => {
+        const normalised = channel / 255;
+        return normalised <= 0.04045 ? normalised / 12.92 : ((normalised + 0.055) / 1.055) ** 2.4;
+      });
+      return 0.2126 * (channels[0] ?? 0) + 0.7152 * (channels[1] ?? 0) + 0.0722 * (channels[2] ?? 0);
+    };
+    const ratio = (foreground: string, background: string) => {
+      const values = [luminance(foreground), luminance(background)].sort((left, right) => right - left);
+      return ((values[0] ?? 0) + 0.05) / ((values[1] ?? 0) + 0.05);
+    };
+    const sample = document.createElement('span');
+    document.body.append(sample);
+    const resolveColour = (token: string) => {
+      sample.style.color = `var(${token})`;
+      return getComputedStyle(sample).color;
+    };
+    const contrast = ratio(resolveColour(`--cluster-${clusterIndex}`), resolveColour('--panel'));
+    sample.remove();
+    return contrast;
+  }, index);
+}
+
 test('the default system preference follows the operating-system colour scheme', async ({ page }) => {
   await clearThemePreference(page);
   await page.emulateMedia({ colorScheme: 'light' });
@@ -61,11 +91,11 @@ test('the default system preference follows the operating-system colour scheme',
   await expect(trigger).toHaveAttribute('title', 'System theme');
   await expect(trigger.locator('.theme-trigger-label')).toHaveText('Theme');
   await expect(trigger.locator('[data-theme-symbol="system"]')).toBeVisible();
-  await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#f6f9ff');
-  await expect(page.locator('.hero-preview .lookup-panel')).toHaveCSS('background-color', 'rgb(255, 255, 255)');
-  await expect(page.locator('.hero-preview .preview-note')).toHaveCSS('color', 'rgb(51, 75, 100)');
-  await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(246, 249, 255)');
-  await expect(page.locator('.hero-preview .lookup-panel')).toHaveCSS('border-color', 'rgb(123, 146, 170)');
+  await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#e1e8ef');
+  await expect(page.locator('.hero-preview .lookup-panel')).toHaveCSS('background-color', 'rgb(240, 243, 245)');
+  await expect(page.locator('.hero-preview .preview-note')).toHaveCSS('color', 'rgb(41, 67, 89)');
+  await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(225, 232, 239)');
+  await expect(page.locator('.hero-preview .lookup-panel')).toHaveCSS('border-color', 'rgb(92, 118, 142)');
 
   await page.emulateMedia({ colorScheme: 'dark' });
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
@@ -86,8 +116,8 @@ test('light preference applies before reload and persists across public pages', 
 
   await chooseTheme(page, 'Light');
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
-  await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#f6f9ff');
-  await expect(page.locator('.hero-preview .lookup-panel')).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+  await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#e1e8ef');
+  await expect(page.locator('.hero-preview .lookup-panel')).toHaveCSS('background-color', 'rgb(240, 243, 245)');
   await expect.poll(() => page.evaluate((key) => localStorage.getItem(key), STORAGE_KEY)).toBe('light');
 
   await page.goto('/demo');
@@ -110,6 +140,67 @@ test('source text and graph stroke tokens stay distinct and contrast-safe in bot
       expect(contrast.strokeRatio).toBeGreaterThanOrEqual(3);
     }
   }
+});
+
+test('relationship-map cluster strokes stay contrast-safe in both themes', async ({ page }) => {
+  await clearThemePreference(page);
+  await page.goto('/');
+
+  for (const theme of ['Dark', 'Light'] as const) {
+    await chooseTheme(page, theme);
+    for (let index = 0; index < 8; index += 1) {
+      expect(await clusterTokenContrast(page, index)).toBeGreaterThanOrEqual(3);
+    }
+  }
+});
+
+test('light surfaces avoid pure white and keep semantic foregrounds and boundaries distinct', async ({ page }) => {
+  await clearThemePreference(page);
+  await page.goto('/');
+  await chooseTheme(page, 'Light');
+
+  const palette = await page.evaluate(() => {
+    const sample = document.createElement('span');
+    document.body.append(sample);
+    const resolveColour = (token: string) => {
+      sample.style.color = `var(${token})`;
+      return getComputedStyle(sample).color;
+    };
+    const parseColour = (value: string): [number, number, number] => {
+      const channels = value.match(/[\d.]+/gu)?.slice(0, 3).map(Number);
+      if (!channels || channels.length !== 3) throw new Error(`Could not parse computed colour ${value}.`);
+      return channels as [number, number, number];
+    };
+    const luminance = (colour: string) => {
+      const channels = parseColour(colour).map((channel) => {
+        const normalised = channel / 255;
+        return normalised <= 0.04045 ? normalised / 12.92 : ((normalised + 0.055) / 1.055) ** 2.4;
+      });
+      return 0.2126 * (channels[0] ?? 0) + 0.7152 * (channels[1] ?? 0) + 0.0722 * (channels[2] ?? 0);
+    };
+    const contrast = (foreground: string, background: string) => {
+      const values = [luminance(foreground), luminance(background)].sort((left, right) => right - left);
+      return ((values[0] ?? 0) + 0.05) / ((values[1] ?? 0) + 0.05);
+    };
+    const panel = resolveColour('--panel');
+    const tokens = Object.fromEntries(
+      ['--text', '--muted', '--accent', '--accent2', '--border'].map((token) => [token, resolveColour(token)]),
+    );
+    sample.remove();
+    return {
+      panel,
+      surface: resolveColour('--surface'),
+      contrast: Object.fromEntries(Object.entries(tokens).map(([token, colour]) => [token, contrast(colour, panel)])),
+    };
+  });
+
+  expect(palette.panel).not.toBe('rgb(255, 255, 255)');
+  expect(palette.surface).not.toBe('rgb(255, 255, 255)');
+  expect(palette.contrast['--text']).toBeGreaterThanOrEqual(7);
+  expect(palette.contrast['--muted']).toBeGreaterThanOrEqual(4.5);
+  expect(palette.contrast['--accent']).toBeGreaterThanOrEqual(4.5);
+  expect(palette.contrast['--accent2']).toBeGreaterThanOrEqual(4.5);
+  expect(palette.contrast['--border']).toBeGreaterThanOrEqual(3);
 });
 
 test('system preference follows operating-system colour-scheme changes', async ({ page }) => {

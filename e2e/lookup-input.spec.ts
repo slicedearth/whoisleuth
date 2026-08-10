@@ -189,9 +189,23 @@ test('deep lookup reports pending elapsed time and final source settle timing', 
   await expect(sourceQualityTable.getByRole('row').first().getByRole('columnheader')).toHaveCount(5);
   const diagnostics = coverage.locator('details.timing-detail');
   await expect(diagnostics).not.toHaveAttribute('open', '');
-  await expect(diagnostics.locator('.summary-arrow')).toHaveText('›');
-  await diagnostics.locator(':scope > summary').focus();
-  await diagnostics.locator(':scope > summary').press('Enter');
+  const recordsSummary = coverage.locator(':scope > details > summary').first();
+  const diagnosticsSummary = diagnostics.locator(':scope > summary');
+  await expect(diagnostics.locator('.summary-arrow')).toHaveCount(0);
+  const [recordsMarker, diagnosticsMarker] = await Promise.all([
+    recordsSummary.evaluate((summary) => ({
+      display: getComputedStyle(summary).display,
+      marker: getComputedStyle(summary, '::marker').content,
+    })),
+    diagnosticsSummary.evaluate((summary) => ({
+      display: getComputedStyle(summary).display,
+      marker: getComputedStyle(summary, '::marker').content,
+    })),
+  ]);
+  expect(diagnosticsMarker).toEqual(recordsMarker);
+  expect(diagnosticsMarker.display).toBe('list-item');
+  await diagnosticsSummary.focus();
+  await diagnosticsSummary.press('Enter');
   await expect(diagnostics).toHaveAttribute('open', '');
   await expect(diagnostics.getByRole('heading', { name: 'Collection timing' })).toBeVisible();
   await expect(diagnostics.getByRole('img', { name: 'Overlapping collection timing for 3 source branches' })).toBeVisible();
@@ -603,6 +617,7 @@ test('keeps the current Lookup form and result during console navigation only', 
 test('a malformed public session response does not clear the current Lookup form', async ({ page }) => {
   await page.locator('#query').fill('retained-session-state.example');
   let unavailableChecks = 0;
+  const context = page.context();
   const unavailableSession = async (route: import('@playwright/test').Route) => {
     unavailableChecks += 1;
     await route.fulfill({
@@ -611,17 +626,18 @@ test('a malformed public session response does not clear the current Lookup form
       body: JSON.stringify({ unexpected: 'session shape' }),
     });
   };
-  await page.route('**/api/session', unavailableSession);
+  await context.route('**/api/session', unavailableSession);
   await page.getByRole('button', { name: 'Open command palette' }).click();
   await page.getByLabel('Search pages').fill('Public homepage');
+  const publicPagePromise = page.waitForEvent('popup');
   await page.getByRole('option', { name: /Public homepage/u }).click();
-  await expect(page).toHaveURL('/');
+  const publicPage = await publicPagePromise;
+  await expect(publicPage).toHaveURL('/');
   await expect.poll(() => unavailableChecks).toBeGreaterThan(0);
-  await page.unroute('**/api/session', unavailableSession);
+  await context.unroute('**/api/session', unavailableSession);
+  await publicPage.close();
 
-  await page.locator('.public-header').getByRole('link', { name: 'Open console' }).click();
-  await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
-  await page.locator('#console-navigation').getByRole('link', { name: /^Lookup/u }).click();
+  await expect(page).toHaveURL('/lookup');
   await expect(page.locator('#query')).toHaveValue('retained-session-state.example');
 });
 

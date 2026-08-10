@@ -561,13 +561,20 @@ function defaultTcpExchange(
     const chunks: Buffer[] = [];
     let totalLength = 0;
     let settled = false;
+    let hardDeadline: NodeJS.Timeout | null = null;
     const finish = (error?: unknown, response?: Buffer) => {
       if (settled) return;
       settled = true;
+      if (hardDeadline) clearTimeout(hardDeadline);
       socket.destroy();
       if (error) reject(error);
       else resolve(response as Buffer);
     };
+    hardDeadline = setTimeout(
+      () => finish(new ServiceBindingDnsError('DNS TCP query timed out', 'ETIMEOUT')),
+      options.timeoutMs,
+    );
+    hardDeadline.unref();
     socket.setTimeout(options.timeoutMs, () => finish(new ServiceBindingDnsError('DNS TCP query timed out', 'ETIMEOUT')));
     socket.once('error', (error) => finish(error));
     socket.on('data', (chunk: Buffer) => {
@@ -718,10 +725,12 @@ async function resolveServiceBindingRecords(
 export {
   DNS_TIMEOUT_MS as SERVICE_BINDING_DNS_TIMEOUT_MS,
   HTTPS_TYPE,
+  MAX_DNS_MESSAGE_BYTES,
   MAX_SERVICE_BINDING_RECORDS,
   SVCB_TYPE,
   ServiceBindingDnsError,
   buildServiceBindingDnsQuery,
+  defaultTcpExchange,
   formatIpv6,
   parseResolverEndpoint,
   parseServiceBindingDnsResponse,

@@ -384,7 +384,7 @@
   .source-node.active{filter:drop-shadow(0 0 7px rgb(var(--accent-rgb) / .4));transform:translateY(-1px)}
   .source-node.dimmed{opacity:.32}
   .source-node .status-dot{fill:var(--muted)}
-  .source-node.state-success .status-dot{fill:var(--accent2)}
+  .source-node.state-success .status-dot{fill:var(--text)}
   .source-node.state-partial .status-dot,.source-node.state-warning .status-dot,.source-node.state-inconclusive .status-dot,.source-node.state-rate_limited .status-dot{fill:var(--amber)}
   .source-node.state-error .status-dot{fill:var(--danger)}
   .source-node.state-unavailable .status-dot,.source-node.state-unsupported .status-dot,.source-node.state-not_found .status-dot,.source-node.state-skipped .status-dot,.source-node.state-disabled .status-dot{fill:var(--muted)}
@@ -402,7 +402,7 @@
   .source-copy small{display:none}
   .source-family{display:block;color:var(--muted);font:650 .5rem var(--mono);letter-spacing:.06em;text-transform:uppercase}
   .source-state{grid-column:2;padding:0;border:0;color:var(--muted);font:650 .55rem var(--mono);text-transform:uppercase}
-  .state-success .source-state{color:var(--accent2)}
+  .state-success .source-state{color:var(--text)}
   .state-partial .source-state,.state-warning .source-state,.state-inconclusive .source-state,.state-rate_limited .source-state{color:var(--amber)}
   .state-error .source-state{color:var(--danger)}
   .topology-note{margin:10px 0 0;color:var(--muted);font-size:var(--text-2xs);line-height:1.5}

@@ -225,6 +225,17 @@ test('reviews retained case, website and watchlist changes without turning incom
   await selectRetainedComparison(review, 'case-change.reservation.invalid · adjacent case snapshots');
   const caseRow = review.locator('.ledger-table tbody tr', { hasText: 'Availability' });
   await expect(caseRow.locator('.state-label')).toHaveText('Incomplete comparison');
+  expect(await caseRow.locator('.state-label').evaluate((element) => {
+    const probe = document.createElement('span');
+    probe.style.color = 'var(--amber)';
+    document.body.append(probe);
+    const result = {
+      colourMatches: getComputedStyle(element).color === getComputedStyle(probe).color,
+      borderStyle: getComputedStyle(element).borderStyle,
+    };
+    probe.remove();
+    return result;
+  })).toEqual({ colourMatches: true, borderStyle: 'dashed' });
   await expect(caseRow.getByText('Removed from later complete evidence', { exact: true })).toHaveCount(0);
   const summary = caseRow.locator('summary');
   await summary.focus();
@@ -259,6 +270,14 @@ test('reviews retained case, website and watchlist changes without turning incom
   await selectRetainedComparison(review, 'Watch review · retained watchlist check');
   const watchlistRow = review.locator('.ledger-table tbody tr', { hasText: 'Availability' });
   await expect(watchlistRow.locator('.state-label')).toHaveText('Different');
+  expect(await watchlistRow.locator('.state-label').evaluate((element) => {
+    const probe = document.createElement('span');
+    probe.style.color = 'var(--amber)';
+    document.body.append(probe);
+    const matches = getComputedStyle(element).color === getComputedStyle(probe).color;
+    probe.remove();
+    return matches;
+  })).toBe(true);
   await watchlistRow.locator('summary').click();
   await expect(watchlistRow.getByText('registered', { exact: true })).toBeVisible();
   await expect(watchlistRow.getByText('available', { exact: true })).toBeVisible();
@@ -303,6 +322,17 @@ test('adds only the saved Bulk pair selected explicitly', async ({ page }) => {
   })).toBeVisible();
   const registrarRow = review.locator('.ledger-table tbody tr', { hasText: 'Registrar' });
   await expect(registrarRow.locator('.state-label')).toHaveText('Not compared');
+  expect(await registrarRow.locator('.state-label').evaluate((element) => {
+    const probe = document.createElement('span');
+    probe.style.color = 'var(--muted)';
+    document.body.append(probe);
+    const result = {
+      colourMatches: getComputedStyle(element).color === getComputedStyle(probe).color,
+      borderStyle: getComputedStyle(element).borderStyle,
+    };
+    probe.remove();
+    return result;
+  })).toEqual({ colourMatches: true, borderStyle: 'dotted' });
   await registrarRow.locator('summary').click();
   await expect(registrarRow.getByText('Earlier Registrar', { exact: true })).toBeVisible();
   await expect(registrarRow.getByText('Later Registrar', { exact: true })).toBeVisible();

@@ -157,11 +157,11 @@ export function buildLookupRegistryDisplay(input: {
         ? 'danger'
         : field.status === 'equivalent'
           ? 'good'
-          : ['rdap_unavailable', 'whois_unavailable', 'rdap_incomplete', 'whois_incomplete'].includes(
-                field.status,
-              )
-            ? 'warn'
-            : '',
+          : ['rdap_unavailable', 'whois_unavailable'].includes(field.status)
+            ? 'unavailable'
+            : ['rdap_incomplete', 'whois_incomplete'].includes(field.status)
+              ? 'warn'
+              : '',
   }));
   const publicationRows = registrarPublicationComparison.fields.map((field) => ({
     label: field.label,
@@ -178,14 +178,11 @@ export function buildLookupRegistryDisplay(input: {
         ? 'danger'
         : field.status === 'equivalent'
           ? 'good'
-          : [
-                'registry_unavailable',
-                'registrar_unavailable',
-                'registry_incomplete',
-                'registrar_incomplete',
-              ].includes(field.status)
-            ? 'warn'
-            : '',
+          : ['registry_unavailable', 'registrar_unavailable'].includes(field.status)
+            ? 'unavailable'
+            : ['registry_incomplete', 'registrar_incomplete'].includes(field.status)
+              ? 'warn'
+              : '',
   }));
   const rows: Array<{ label: string; value: string; datetime?: string }> = [];
   if (result?.type === 'ipv4' || result?.type === 'ipv6') {

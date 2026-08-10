@@ -170,12 +170,13 @@
   summary span{color:var(--muted)}
   .comparison{display:grid;gap:7px;padding:0 10px 10px}
   .comparison article{padding:9px;border-left:3px solid var(--border);background:var(--panel-raised)}
-  .comparison article[data-state="equal"]{border-color:var(--accent)}
-  .comparison article[data-state="changed"],.comparison article[data-state="conflicting"]{border-color:var(--amber)}
-  .comparison article[data-state="unavailable"],.comparison article[data-state="missing"]{border-color:var(--danger)}
-  .comparison article[data-state="verified_change"],.comparison article[data-state="verified_preserved"]{border-color:var(--accent)}
+  .comparison article[data-state="equal"]{border-color:var(--success)}
+  .comparison article[data-state="changed"]{border-color:var(--amber)}
+  .comparison article[data-state="conflicting"]{border-color:var(--danger)}
+  .comparison article[data-state="unavailable"],.comparison article[data-state="missing"]{border-color:var(--muted);border-left-style:dotted}
+  .comparison article[data-state="verified_change"],.comparison article[data-state="verified_preserved"]{border-color:var(--success)}
   .comparison article[data-state="unexpected_change"],.comparison article[data-state="change_not_observed"]{border-color:var(--amber)}
-  .comparison article[data-state="indeterminate"]{border-color:var(--danger)}
+  .comparison article[data-state="indeterminate"]{border-color:var(--amber);border-left-style:dashed}
   .comparison article>div{display:flex;justify-content:space-between;gap:8px}.comparison article>div span{color:var(--muted);font:650 var(--text-2xs) var(--mono);text-transform:capitalize}
   dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin:7px 0}
   dl div{min-width:0}dt{color:var(--muted);font-size:var(--text-2xs)}dd{margin:2px 0 0;font-size:var(--text-xs);overflow-wrap:anywhere}

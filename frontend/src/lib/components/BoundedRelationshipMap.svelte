@@ -277,8 +277,8 @@
   .links circle{fill:color-mix(in srgb,var(--muted) 64%,transparent)}
   .links circle.partial,.links circle.unknown,.links circle.derived,.links circle.summary{fill:var(--panel-raised);stroke:color-mix(in srgb,var(--muted) 64%,transparent);stroke-width:1}
   .node{--cluster-tone:var(--accent)}
-  .cluster-0{--cluster-tone:#5eb3ff}.cluster-1{--cluster-tone:#b89cff}.cluster-2{--cluster-tone:#d66fd6}.cluster-3{--cluster-tone:#2db7c5}
-  .cluster-4{--cluster-tone:#8a91ff}.cluster-5{--cluster-tone:#bb77ff}.cluster-6{--cluster-tone:#5f8fd6}.cluster-7{--cluster-tone:#d388b7}
+  .cluster-0{--cluster-tone:var(--cluster-0)}.cluster-1{--cluster-tone:var(--cluster-1)}.cluster-2{--cluster-tone:var(--cluster-2)}.cluster-3{--cluster-tone:var(--cluster-3)}
+  .cluster-4{--cluster-tone:var(--cluster-4)}.cluster-5{--cluster-tone:var(--cluster-5)}.cluster-6{--cluster-tone:var(--cluster-6)}.cluster-7{--cluster-tone:var(--cluster-7)}
   .node-shape{fill:color-mix(in srgb,var(--cluster-tone) 9%,var(--panel));stroke:var(--cluster-tone);stroke-width:1.7}
   .node.kind-target .node-shape{fill:color-mix(in srgb,var(--accent) 12%,var(--panel));stroke:var(--accent);stroke-width:2}
   .node.kind-relationship .node-shape,.node.kind-summary .node-shape{stroke-dasharray:3 3}

@@ -14,6 +14,7 @@ export type NavigationItem = {
   detail: string;
   icon: NavigationIcon;
   keywords: readonly string[];
+  opensInNewTab?: true;
 };
 
 export type NavigationGroup = Readonly<{
@@ -94,6 +95,7 @@ export const publicResources = [
     detail: 'Learn the workflows and browse source-aware topic guides',
     icon: 'page',
     keywords: ['learn', 'guide', 'help', 'documentation', 'glossary', 'faq', 'resources', 'library', 'rdap', 'whois', 'dns', 'tls', 'evidence'],
+    opensInNewTab: true,
   },
 ] satisfies NavigationItem[];
 
@@ -103,7 +105,52 @@ export const publicHomepage = {
   detail: 'Return to the public product overview',
   icon: 'page',
   keywords: ['home', 'public', 'overview'],
+  opensInNewTab: true,
 } satisfies NavigationItem;
+
+export const publicCommandNavigation = [
+  publicHomepage,
+  {
+    href: '/demo',
+    label: 'Synthetic demo',
+    detail: 'Explore fixed fictional evidence without contacting a live target',
+    icon: 'page',
+    keywords: ['public', 'sample', 'fictional', 'preview'],
+    opensInNewTab: true,
+  },
+  {
+    href: '/privacy',
+    label: 'Privacy',
+    detail: 'Review collection, storage, retention, and third-party processing',
+    icon: 'page',
+    keywords: ['public', 'policy', 'data', 'browser', 'storage'],
+    opensInNewTab: true,
+  },
+  {
+    href: '/terms',
+    label: 'Terms',
+    detail: 'Review acceptable use and service limitations',
+    icon: 'page',
+    keywords: ['public', 'policy', 'conditions', 'acceptable use'],
+    opensInNewTab: true,
+  },
+  {
+    href: '/request-policy',
+    label: 'Request policy',
+    detail: 'Review bounded request, automation, and provider rules',
+    icon: 'page',
+    keywords: ['public', 'requests', 'network', 'automation', 'providers'],
+    opensInNewTab: true,
+  },
+  {
+    href: '/contact',
+    label: 'Contact',
+    detail: 'Prepare a privacy-preserving support message',
+    icon: 'page',
+    keywords: ['public', 'support', 'message', 'feedback'],
+    opensInNewTab: true,
+  },
+] satisfies NavigationItem[];
 
 export const consoleNavigationGroups: readonly NavigationGroup[] = [
   {
@@ -121,5 +168,5 @@ export const consoleNavigationGroups: readonly NavigationGroup[] = [
 ];
 
 export const consoleNavigation = consoleNavigationGroups.flatMap((group) => group.items);
-export const referenceNavigation = [...referenceResources, ...publicResources];
+export const referenceNavigation: readonly NavigationItem[] = [...referenceResources, ...publicResources];
 export const protectedDestinations = [...consoleNavigation, ...referenceResources];

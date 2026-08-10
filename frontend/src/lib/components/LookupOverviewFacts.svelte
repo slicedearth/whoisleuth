@@ -94,7 +94,7 @@
 <style>
   .summaries.with-top,.diagnostics{margin-top:12px}
   .summaries article,.diagnostics article{min-width:0}
-  .diagnostics strong{text-transform:capitalize;color:var(--accent)}
+  .diagnostics strong{text-transform:capitalize;color:var(--text)}
   .diagnostics .error-state{color:var(--danger)}
   .diagnostics .limited-state{color:var(--amber)}
   .fact-inspector,.source-inspector{margin-top:9px;border-top:1px solid var(--border)}
@@ -111,7 +111,7 @@
   .attempts{display:grid;gap:6px;margin:9px 0 0;padding:0;list-style:none}
   .attempts li{min-width:0;padding:7px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}
   .attempts strong,.attempts span,.attempts small{display:block;overflow-wrap:anywhere}
-  .attempts strong{color:var(--accent);font:650 var(--text-2xs) var(--mono);text-transform:capitalize}
+  .attempts strong{color:var(--text);font:650 var(--text-2xs) var(--mono);text-transform:capitalize}
   .attempts span{margin-top:3px;font-size:var(--text-2xs)}
   .attempts small{margin-top:3px;color:var(--muted);font-size:var(--text-2xs);line-height:1.45}
 </style>

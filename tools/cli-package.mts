@@ -76,7 +76,7 @@ export const MAX_CLI_PACKAGE_GRAPH_BYTES = 8 * 1024 * 1024;
 // reviewed margin above the installed command surface. The retained-artifact
 // ledger deliberately reuses four bounded analysis modules; byte ceilings
 // remain the primary package-bloat boundary.
-export const MAX_CLI_PACKAGE_MODULES = 280;
+export const MAX_CLI_PACKAGE_MODULES = 288;
 export const MAX_CLI_PACKAGE_SOURCE_BYTES = 8 * 1024 * 1024;
 export const MAX_CLI_PACKAGE_FILE_BYTES = 2 * 1024 * 1024;
 // Keep a modest growth margin while the packed and unpacked byte ceilings remain
@@ -102,6 +102,8 @@ const INSTALLED_COMMAND_HELP_CHECKS = Object.freeze([
   'bulk',
   'http',
   'tls',
+  'dnssec-validate',
+  'mail-transport',
   'posture',
   'ct-search',
   'discover',

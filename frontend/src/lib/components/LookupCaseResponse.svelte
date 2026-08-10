@@ -114,7 +114,8 @@
   .coverage li>p,.coverage>p{margin:0;color:var(--muted);font-size:var(--text-2xs);line-height:1.45}
   .coverage>p{padding:0 12px 8px}
   .coverage-state{padding:3px 6px;border:1px solid var(--border);border-radius:999px;color:var(--muted);font:650 var(--text-2xs) var(--mono);white-space:nowrap}
-  .coverage-state.state-found{color:var(--accent);border-color:rgb(var(--accent-rgb) / .4)}
+  .coverage-state.state-found{color:var(--text);border-color:var(--border-strong)}
+  .coverage-state.state-not_collected,.coverage-state.state-unavailable{border-color:var(--muted);border-style:dotted;color:var(--muted)}
   .draft-status{margin:10px 0 0;font-size:var(--text-xs)}
   @media(max-width:700px){.coverage li{grid-template-columns:1fr auto}.coverage li>p{grid-column:1/-1}}
 </style>

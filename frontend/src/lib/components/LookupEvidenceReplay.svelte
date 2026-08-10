@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { evidenceStatusChipClass } from '$lib/analysis/evidence-status-tone.ts';
   import {
     LOOKUP_EVIDENCE_REPLAY_MAX_BYTES,
     parseLookupEvidenceReplay,
@@ -102,7 +103,7 @@
             <h2 id="replay-title">{replay.target}</h2>
             <p>Exported {replay.exportedAt} · {replay.targetType} · schema {replay.schemaVersion}{replay.generatorVersion ? ` · WHOISleuth ${replay.generatorVersion}` : ''}</p>
           </div>
-          <span class="chip info">{replay.availability}</span>
+          <span class="chip {evidenceStatusChipClass(replay.availability)}">{replay.availability}</span>
         </header>
 
         <div class="digest">

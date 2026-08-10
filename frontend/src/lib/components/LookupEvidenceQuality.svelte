@@ -96,7 +96,6 @@
             <div role="cell">
               <span
                 class="state state-{entry.state}"
-                class:registration-source={['rdap', 'whois', 'availability', 'registrar-rdap'].includes(entry.id)}
               >{entry.statusLabel}</span>
               {#if entry.truncated}<span class="truncated">Truncated</span>{/if}
             </div>
@@ -143,13 +142,7 @@
 
     {#if timing}
       <details class="timing-detail">
-        <summary>
-          <span class="timing-copy">
-            <span>Request diagnostics</span>
-            <small>Inspect overlapping source branches and their settlement timing</small>
-          </span>
-          <span class="summary-arrow" aria-hidden="true">›</span>
-        </summary>
+        <summary>Request diagnostics</summary>
         <LookupCollectionTiming {timing} embedded />
       </details>
     {/if}
@@ -168,12 +161,6 @@
   details{margin-top:12px;border-top:1px solid var(--border)}
   summary{padding:12px 0;color:var(--text);font:680 var(--text-xs) var(--mono);cursor:pointer}
   summary:focus-visible{outline:2px solid var(--focus);outline-offset:3px}
-  .timing-detail summary{display:flex;align-items:center;justify-content:space-between;gap:12px;list-style:none}
-  .timing-detail summary::-webkit-details-marker{display:none}
-  .timing-copy{display:flex;align-items:baseline;justify-content:space-between;gap:12px;min-width:0;width:100%}
-  .timing-detail summary small{color:var(--muted);font:500 var(--text-2xs) var(--font-sans);text-align:right}
-  .summary-arrow{display:grid;width:24px;height:24px;flex:0 0 24px;place-items:center;border:1px solid var(--border);border-radius:50%;color:var(--text);font:700 1rem/1 var(--mono);transition:transform .16s ease}
-  .timing-detail[open] .summary-arrow{transform:rotate(90deg)}
   .matrix{display:grid;gap:7px}
   .matrix-head,.quality-row{display:grid;grid-template-columns:minmax(150px,1.25fr) minmax(92px,.65fr) minmax(155px,1fr) minmax(120px,.8fr) minmax(180px,1.25fr);gap:9px;align-items:start}
   .matrix-head{padding:0 10px;color:var(--muted);font:650 var(--text-2xs) var(--mono);text-transform:uppercase}
@@ -187,10 +174,10 @@
   .endpoint{color:var(--muted);font:650 var(--text-2xs) var(--mono);line-height:1.4;overflow-wrap:anywhere}
   .description{margin-top:3px;color:var(--muted);font-size:var(--text-2xs);line-height:1.45;overflow-wrap:anywhere}
   .refresh{width:max-content;margin-top:3px;color:var(--accent);font:650 var(--text-2xs) var(--mono)}
-  .state{display:inline-flex;width:max-content;max-width:100%;padding:3px 6px;border:1px solid var(--border);border-radius:999px;color:var(--muted);font:650 var(--text-2xs) var(--mono)}
-  .state-complete{border-color:color-mix(in srgb,var(--accent) 42%,var(--border));color:var(--accent)}
-  .state-complete.registration-source{border-color:var(--border-strong);color:var(--text)}
-  .state-partial,.state-unavailable,.state-unknown{border-color:color-mix(in srgb,var(--amber) 48%,var(--border));color:var(--amber)}
+  .state{display:inline-flex;width:max-content;max-width:100%;padding:3px 6px;border:1px solid var(--border-strong);border-radius:999px;color:var(--text);font:650 var(--text-2xs) var(--mono)}
+  .state-complete{border-color:var(--border-strong);color:var(--text)}
+  .state-partial{border-color:var(--amber);border-style:dashed;color:var(--amber)}
+  .state-unavailable,.state-unknown{border-color:var(--muted);border-style:dotted;color:var(--muted)}
   .truncated{display:block;width:max-content;margin-top:5px;color:var(--amber);font:650 var(--text-2xs) var(--mono)}
   .observed span,.timing span,.supports{color:var(--text);font-size:var(--text-2xs);line-height:1.45;overflow-wrap:anywhere}
   .timing span.rejected{color:var(--danger)}
@@ -212,8 +199,6 @@
     header{display:grid}
     .metrics{width:100%;justify-content:flex-start}
     .metrics span{flex:1}
-    .timing-copy{display:grid;gap:3px}
-    .timing-detail summary small{text-align:left}
   }
   @media(max-width:480px){
     .quality-row{grid-template-columns:minmax(0,1fr)}
@@ -221,5 +206,4 @@
     .policy-form{grid-template-columns:minmax(0,1fr)}
     .policy-form p{grid-column:1}
   }
-  @media(prefers-reduced-motion:reduce){.summary-arrow{transition:none}}
 </style>

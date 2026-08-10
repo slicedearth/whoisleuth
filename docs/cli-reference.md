@@ -90,6 +90,8 @@ node bin/whoisleuth.mts lookup example.com --deep --json > lookup.json
 node bin/whoisleuth.mts compare lookup.json --json
 node bin/whoisleuth.mts page-compare official.json candidate.json --json
 node bin/whoisleuth.mts mail-review bulk.json --json
+node bin/whoisleuth.mts dnssec-validate example.test --resolver "$PUBLIC_RESOLVER_IP" --trust-anchor anchor.json --owned-or-authorized --json
+node bin/whoisleuth.mts mail-transport selected-mx.json --resolver "$PUBLIC_RESOLVER_IP" --trust-anchor anchor.json --owned-or-authorized --active-probe --json
 node bin/whoisleuth.mts review-evidence dnssec-evidence.json --json
 node bin/whoisleuth.mts review-evidence trust-store-comparison.json --json
 node bin/whoisleuth.mts domain-control domain-control-input.json --json
@@ -202,7 +204,7 @@ ordinary package-check candidate remain private. Explicitly reviewed CLI
 release candidates can be published under the scoped public package described
 in the installation section.
 
-Commands that query RDAP, WHOIS, DNS, HTTP, TLS, or Certificate Transparency do
+Commands that query RDAP, WHOIS, DNS, HTTP, TLS, SMTP, or Certificate Transparency do
 so directly from the machine running the CLI. They do not use the hosted login,
 hosted session, or deployment usage controls; upstream providers can see and
 rate-limit the local machine's network address. Offline `discover`, `compare`,
@@ -424,7 +426,7 @@ machine access is not evidence that a domain is unregistered or safe.
 | 143 | The process received SIGTERM. No partial final result was emitted. |
 
 This release supports `lookup`, `bulk`, `ct-search`, `ct-intake`, `map-observations`, `oam-export`, `discover`, `discover-scan`, `posture`,
-`http`, `tls`, `registry-support`, `registry-doctor`, `registry-cohort`, `registry-scaffold`, `risk-calibrate`,
+`http`, `tls`, `dnssec-validate`, `mail-transport`, `registry-support`, `registry-doctor`, `registry-cohort`, `registry-scaffold`, `risk-calibrate`,
 `lookalike-calibrate`, `verify-artifact`,
 `inspect-archive`, `manifest`, `sign-artifact`, `verify-signature`, `source-report`,
 `compare`, `page-compare`, `mail-review`, `review-evidence`, `brief`, `case-pack`, `domain-control`,
@@ -1168,6 +1170,85 @@ service names, missing certificate roles, unvalidated prerequisites, malformed
 material, and truncation remain invalid, partial, or untrusted rather than
 becoming a DANE match.
 
+## Isolated cryptographic and mail transport review
+
+These two network actions are disconnected from Lookup, Bulk, monitoring, and
+fixed recipes. They run only through their dedicated commands, require
+`--owned-or-authorized` on every invocation, use one caller-selected literal
+public resolver address, and require a local version-1
+`whoisleuth.dnssec-trust-anchor` JSON file. The resolver receives the DNS
+questions and can apply its own logging and retention. Resolver hostnames,
+private or reserved addresses, automatic resolver selection, and a non-default
+DNS port are refused.
+
+`dnssec-validate <domain> --resolver <public-IP> --trust-anchor <anchor.json>
+--owned-or-authorized` performs an isolated DNS-over-TCP validation from the
+supplied anchor. It validates supported DS, DNSKEY, and RRSIG relationships,
+and supported authenticated NSEC or exact NSEC3 denial evidence. NSEC3 opt-out
+spans and unknown flags remain explicitly unsupported. The action
+is capped at 32 DNS queries, eight delegations, 512 KiB of DNS
+response bytes, 2.5 seconds per query, and 15 seconds total, with no retry.
+Authenticated RRsets are capped at 32 records and 16 matching signatures, and
+denial review accepts at most 16 NSEC3 records per response.
+Supported signature algorithms are 5, 7, 8, 10, 13, 14, 15, and 16; supported
+DS digests are 1, 2, and 4; NSEC3 iteration counts above 500 remain
+unsupported. The output is `whoisleuth.dnssec-chain-validation` version 1 and
+keeps `secure`, `insecure`, `bogus`, `indeterminate`, `timed_out`,
+`unsupported`, and `invalid` separate. Resolver transport failures do not
+become cryptographic failures. The report retains the target, selected
+resolver, trust-anchor source and review time, validated zones, bounded counts,
+state, failure stage, and limitations. DNS wire responses, DNSKEY public keys,
+signatures, and transaction identifiers are not retained. `secure` describes
+the supported chain at that observation time; it is not an ownership,
+availability, safety, or maliciousness conclusion.
+
+The trust-anchor document contains exactly `schema`, `version`, `zone`,
+`source`, `reviewedAt`, and one to eight `dsRecords`. Each DS entry contains
+`keyTag`, `algorithm`, `digestType`, and a correctly sized hexadecimal
+`digest`. The file is capped at 64 KiB. WHOISleuth does not download, refresh,
+select, or vouch for an anchor; maintaining its source and review time is the
+operator's responsibility.
+
+`mail-transport [input.json] --resolver <public-IP> --trust-anchor
+<anchor.json> --owned-or-authorized --active-probe` additionally requires a
+separate active-probe acknowledgement on every run. Its version-1
+`whoisleuth.mail-transport.input` names one domain, one to three distinct
+selected MX hostnames, and optional bounded `policyContext.mtaSts` and
+`policyContext.tlsRpt` observations. Policy entries retain a supplied state,
+source, observation time, and `complete`, `partial`, or `unavailable`
+completeness; the command does not fetch either policy.
+
+Selected hosts are processed sequentially. Each host is resolved through the
+chosen resolver, every returned connection candidate is checked as a public
+IP address, at most 16 candidates and four aliases are accepted per resolution,
+and the selected address must still occur in a fresh resolution immediately
+before one direct pinned port-25 connection. The client accepts only bounded
+printable-ASCII SMTP reply framing, sends exactly `EHLO whoisleuth.invalid`, and sends
+`STARTTLS` only when advertised. It never sends `AUTH`, `MAIL FROM`, `RCPT TO`,
+`DATA`, `VRFY`, `EXPN`, a message, or a retry. Per endpoint, SMTP response data
+is capped at 16 KiB, 64 lines, 1,000 bytes per line, and 32 retained capability
+names; one leaf certificate is accepted up to 256 KiB and the fixed endpoint
+timeout is eight seconds. Expiry aborts and destroys the connection. The entire
+sequential run is capped at 30 seconds and shares a
+32-query, 512-KiB DNS budget.
+
+TLSA records for `_25._tcp.<selected-mx>` are compared only after their RRset
+or denial evidence validates through that endpoint's separately reported
+DNSSEC context. PKIX authorisation, certificate hostname identity,
+DNSSEC-chain validation, TLSA publication, DANE comparison, STARTTLS, SMTP
+transport, MTA-STS context, and TLS-RPT context retain separate states;
+missing or incomplete evidence in one family is never filled from another.
+The `whoisleuth.cli.mail-transport-review` version-1 output retains selected MX
+names and pinned addresses, greeting status and SHA-256 digest, capability
+names, certificate and SPKI SHA-256 digests, protocol and cipher labels,
+source times, counts, completeness, and limitations. Raw greeting or reply
+text, certificate bytes, TLS session material, and DNS wire responses are not
+retained. Exact shared address, greeting-digest, or certificate-digest values
+are labelled review leads only; they do not establish a rogue endpoint, common
+ownership, coordination, intent, safety, or maliciousness. Neither action
+changes Risk, Opportunity, registration availability, or any stored browser
+record.
+
 ## Offline supplied-evidence review
 
 `review-evidence [evidence.json]` accepts one version-1 JSON input and performs
@@ -1197,6 +1278,13 @@ Supported input schemas are:
   the response as authoritative or complete.
 - `whoisleuth.rpki-route-input`: compares a route prefix and origin ASN with a
   bounded analyst-supplied VRP set.
+- `whoisleuth.cryptographic-assurance.input`: accepts separately wrapped,
+  source-qualified DNSSEC, route-origin, and DANE/TLSA evidence and emits three
+  independent cards. Every card retains its own authority, source, observation
+  time, state, completeness, result, and limitations. An omitted family remains
+  `unavailable`; the version-1 `whoisleuth.cryptographic-assurance.review`
+  contains `combinedState: null` and never emits a scalar score or combined
+  verdict.
 - `whoisleuth.local-geoip-query`: queries an analyst-supplied bounded prefix
   database whose source, version, and licence metadata remain in the result.
 - `whoisleuth.local-mmdb-query`: with an explicit `--mmdb <database-file>`,

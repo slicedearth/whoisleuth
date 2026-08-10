@@ -68,6 +68,6 @@
   .query-note,.preview-results{grid-column:1/-1}
   .query-note{margin-top:-6px}
   .state{padding:9px;border-left:2px solid var(--accent);background:var(--panel-raised)}
-  .unavailable{border-color:var(--amber)}
+  .unavailable{border-color:var(--muted);border-left-style:dotted}
   @media(max-width:560px){.saved-context{grid-template-columns:minmax(0,1fr)}.saved-context>button{width:100%}.query-note,.preview-results{grid-column:1}}
 </style>

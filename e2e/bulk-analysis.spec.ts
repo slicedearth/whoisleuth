@@ -187,6 +187,18 @@ test('filters, groups, and selected-only actions use compact observed evidence',
   });
   await runBulkScan(page, ['limited-one.example', 'available-two.example']);
 
+  for (const state of ['registered', 'available']) {
+    const value = page.locator(`.results-table .state[data-registration-state='${state}']`);
+    expect(await value.evaluate((element) => {
+      const probe = document.createElement('span');
+      probe.style.color = 'var(--text)';
+      document.body.append(probe);
+      const matches = getComputedStyle(element).color === getComputedStyle(probe).color;
+      probe.remove();
+      return matches;
+    })).toBe(true);
+  }
+
   await page.getByLabel('Source coverage').selectOption('limited');
   await expect(page.locator('.results-table tbody tr')).toHaveCount(1);
   await expect(page.getByText('1 of 2 results matched')).toBeVisible();
@@ -505,6 +517,14 @@ test('a malformed successful response remains an explicit failure in exports and
   const row = page.locator('.results-table tbody tr');
   await expect(page.locator('.filters button', { hasText: 'errors' }).locator('span')).toHaveText('1');
   await expect(row.locator('td[data-label="Registration"]')).toContainText('error');
+  expect(await row.locator('.state').evaluate((element) => {
+    const probe = document.createElement('span');
+    probe.style.color = 'var(--danger)';
+    document.body.append(probe);
+    const matches = getComputedStyle(element).color === getComputedStyle(probe).color;
+    probe.remove();
+    return matches;
+  })).toBe(true);
   await expect(row.locator('td[data-label="Domain"]')).toContainText('Bulk lookup returned an invalid response.');
 
   const downloadPromise = page.waitForEvent('download');

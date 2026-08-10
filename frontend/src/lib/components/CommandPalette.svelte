@@ -22,6 +22,8 @@
   let searchInput = $state<HTMLInputElement>();
   let dialog = $state<HTMLElement>();
   let resultsList = $state<HTMLElement>();
+  let openError = $state('');
+  const MAX_CONSOLE_DESTINATIONS = 16;
   const queryTerms = $derived(query.trim().toLowerCase().split(/\s+/).filter(Boolean));
   const filteredCommands = $derived(commands
     .filter((command) => {
@@ -30,11 +32,11 @@
         .toLowerCase();
       return queryTerms.every((term) => searchableText.includes(term));
     })
-    .slice(0, 12));
+    .slice(0, MAX_CONSOLE_DESTINATIONS));
   const selectedCommand = $derived(filteredCommands[selectedIndex]);
   const activeOptionId = $derived(selectedCommand ? `command-option-${selectedIndex}` : undefined);
   const selectedAnnouncement = $derived(selectedCommand
-    ? `${selectedCommand.label}, ${selectedCommand.group}${selectedCommand.href === page.url.pathname ? ', current page' : ''}.`
+    ? `${selectedCommand.label}, ${selectedCommand.group}${selectedCommand.href === page.url.pathname ? ', current page' : ''}${selectedCommand.opensInNewTab ? ', opens in a new tab' : ''}.`
     : 'No matching destination.');
 
   onMount(() => {
@@ -48,6 +50,26 @@
 
   async function activate(command: ConsoleCommand | undefined) {
     if (!command) return;
+    openError = '';
+    if (command.opensInNewTab) {
+      const opened = window.open('', '_blank');
+      if (!opened) {
+        openError = 'The new tab was blocked. Allow pop-ups for this site, then try again.';
+        return;
+      }
+      try {
+        const destination = new URL(command.href, window.location.origin);
+        if (destination.origin !== window.location.origin) throw new TypeError('Public destination must remain same-origin.');
+        opened.opener = null;
+        opened.location.replace(destination.href);
+      } catch {
+        opened.close();
+        openError = 'The public destination could not be opened.';
+        return;
+      }
+      await onclose();
+      return;
+    }
     await onclose(false);
     await goto(command.href);
     await tick();
@@ -61,8 +83,16 @@
   }
 
   function keepSelectedVisible() {
-    if (!activeOptionId) return;
-    resultsList?.querySelector<HTMLElement>(`#${activeOptionId}`)?.scrollIntoView({ block: 'nearest' });
+    if (!activeOptionId || !resultsList) return;
+    const selected = resultsList.querySelector<HTMLElement>(`#${activeOptionId}`);
+    if (!selected) return;
+    const listBounds = resultsList.getBoundingClientRect();
+    const selectedBounds = selected.getBoundingClientRect();
+    if (selectedBounds.top < listBounds.top) {
+      resultsList.scrollTop -= listBounds.top - selectedBounds.top + 1;
+    } else if (selectedBounds.bottom > listBounds.bottom) {
+      resultsList.scrollTop += selectedBounds.bottom - listBounds.bottom + 1;
+    }
   }
 
   function selectIndex(index: number) {
@@ -71,6 +101,7 @@
   }
 
   function resetSelection() {
+    openError = '';
     selectIndex(0);
   }
 
@@ -153,6 +184,7 @@
       >
     </div>
     <span class="sr-only" role="status" aria-live="polite">{selectedAnnouncement}</span>
+    {#if openError}<p class="open-error" role="alert">{openError}</p>{/if}
     {#if filteredCommands.length}
       <ul id="command-results" role="listbox" aria-label="Console destinations" bind:this={resultsList}>
         {#each filteredCommands as command,index (command.href)}
@@ -173,6 +205,7 @@
               </span>
               <span class="command-meta">
                 <em data-command-group>{command.group}</em>
+                {#if command.opensInNewTab}<span class="command-new-tab">New tab</span>{/if}
                 {#if command.href === page.url.pathname}<span class="command-current">Current</span>{/if}
               </span>
             </button>
@@ -195,21 +228,23 @@
   .palette-close{min-height:30px;padding:4px 8px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised);color:var(--muted);font:650 var(--text-2xs) var(--mono)}
   label{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
   .command-search{display:grid;grid-template-columns:34px minmax(0,1fr);align-items:center;margin:14px;border:1px solid var(--border-strong);border-radius:var(--radius-md);overflow:hidden;background:var(--panel-raised);box-shadow:inset 0 1px rgb(var(--overlay-rgb) / .035);transition:border-color .14s ease,box-shadow .14s ease,background-color .14s ease}
-  .command-search:focus-within{border-color:var(--accent2);background:rgb(var(--panel-rgb) / .98);box-shadow:0 0 0 2px rgb(var(--accent2-rgb) / .16),inset 3px 0 var(--accent2)}
-  .command-search span{align-self:stretch;display:grid;place-items:center;border-right:1px solid var(--border);background:rgb(var(--accent2-rgb) / .045);color:var(--accent2);font:700 var(--text-sm) var(--mono)}
+  .command-search:focus-within{border-color:var(--accent);background:rgb(var(--panel-rgb) / .98);box-shadow:0 0 0 2px rgb(var(--accent-rgb) / .16),inset 3px 0 var(--accent)}
+  .command-search span{align-self:stretch;display:grid;place-items:center;border-right:1px solid var(--border);background:rgb(var(--accent-rgb) / .045);color:var(--accent);font:700 var(--text-sm) var(--mono)}
   .command-search input{width:100%;min-width:0;padding:12px;border:0;background:transparent;font:650 var(--text-sm) var(--mono);outline:0}
   .command-search input:focus{box-shadow:none}
   ul{display:grid;flex:1 1 auto;gap:4px;min-height:0;max-height:360px;margin:0;padding:0 10px 12px;overflow-y:auto;list-style:none}
   li button{display:flex;width:100%;min-width:0;align-items:center;justify-content:space-between;gap:12px;padding:10px;border:1px solid transparent;border-radius:var(--radius-sm);background:transparent;color:var(--text);text-align:left}
   li.selected button,li button:hover,li button:focus-visible{border-color:var(--border);background:rgb(var(--accent-rgb) / .08)}
-  li.selected button{box-shadow:inset 2px 0 var(--accent2)}
+  li.selected button{box-shadow:inset 2px 0 var(--accent)}
   .command-main{display:grid;grid-template-columns:28px minmax(0,1fr);min-width:0;align-items:center}
   .command-glyph{display:grid;width:24px;height:24px;place-items:center;border:1px solid var(--border);border-radius:6px;color:var(--muted);background:rgb(var(--overlay-rgb) / .025)}
-  li.selected .command-glyph{border-color:rgb(var(--accent2-rgb) / .42);color:var(--accent2);background:rgb(var(--accent2-rgb) / .07)}
+  li.selected .command-glyph{border-color:rgb(var(--accent-rgb) / .42);color:var(--accent);background:rgb(var(--accent-rgb) / .07)}
   .command-copy{min-width:0}strong,small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}strong{font:700 var(--text-sm) var(--mono)}small{margin-top:3px;color:var(--muted);font-size:var(--text-2xs)}
   .command-meta{display:grid;flex:0 0 auto;justify-items:end;gap:3px}
-  em,.command-current{color:var(--accent);font:650 .55rem var(--mono);font-style:normal;letter-spacing:.07em;text-transform:uppercase}
-  .command-current{color:var(--accent2)}
+  em,.command-current,.command-new-tab{color:var(--accent);font:650 .55rem var(--mono);font-style:normal;letter-spacing:.07em;text-transform:uppercase}
+  .command-current{color:var(--accent)}
+  .command-new-tab{color:var(--muted)}
+  .open-error{margin:0 14px 10px;color:var(--danger);font-size:var(--text-xs)}
   .no-results{margin:0;padding:28px;color:var(--muted);text-align:center}
   footer{display:flex;flex-wrap:wrap;gap:12px;padding:9px 14px;border-top:1px solid var(--border);color:var(--muted);font:var(--text-2xs) var(--mono)}
   kbd{margin-right:3px;padding:2px 4px;border:1px solid var(--border);border-radius:4px;background:var(--panel-raised);font:inherit}
@@ -219,7 +254,7 @@
     .command-palette{width:100%;max-height:calc(100dvh - 20px)}
     header{padding:12px 13px 10px}
     .command-search{margin:10px}
-    ul{grid-template-columns:repeat(2,minmax(0,1fr));gap:3px;max-height:none;padding:0 8px 9px;overflow-y:auto}
+    ul{grid-template-columns:repeat(2,minmax(0,1fr));gap:3px;max-height:none;padding:0 8px 12px;overflow-y:auto}
     li button{min-height:38px;padding:7px 9px}
     small,em[data-command-group],footer{display:none}
     .command-current{font-size:.5rem}

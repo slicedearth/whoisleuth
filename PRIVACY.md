@@ -889,6 +889,34 @@ default (see the README), so many lookups return no personal data at all.
   signature time, signature, and public key; WHOISleuth does not generate,
   store, recover, rotate, publish, or establish trust in signing keys. These
   commands make no network request and do not upload input.
+- **Isolated CLI cryptographic and mail transport actions**:
+  `dnssec-validate` and `mail-transport` run only after a dedicated command,
+  a caller-selected literal public resolver, a local bounded trust-anchor
+  document, and explicit owned-or-authorised acknowledgement for that run;
+  mail transport also requires a separate active-probe acknowledgement. They
+  are never invoked by Lookup, Bulk, monitoring, or automatic recipes. The
+  selected resolver receives the target DNS questions, and each selected MX
+  endpoint receives one pinned port-25 connection, `EHLO`, and, only when
+  advertised, `STARTTLS`; those operators can observe the source network
+  address and apply their own logging or retention. At most three MX hosts are
+  processed sequentially with fixed DNS, address, socket, response, line,
+  capability, certificate, timeout, and total-run bounds and no retry. No
+  message is sent, and no authentication, relay, recipient, mailbox, user, or
+  catch-all test is performed. Output can retain the investigated domain,
+  selected resolver and trust-anchor provenance, selected MX names and pinned
+  public addresses, observation times, DNSSEC and TLSA states, greeting status
+  and SHA-256 digest, capability names, certificate and SPKI SHA-256 digests,
+  protocol and cipher labels, PKIX and identity states, exact relationship
+  leads, supplied MTA-STS and TLS-RPT context, counts, failures, completeness,
+  and limitations. It excludes DNS wire responses, DNSKEY public keys,
+  signatures, transaction identifiers, raw SMTP greeting or reply text,
+  certificate bytes, and TLS session material. Nothing is added to browser or
+  hosted storage or uploaded to WHOISleuth; stdout and deliberately selected
+  local output files remain under the operator's retention and deletion
+  control. DNSSEC, TLSA or DANE, PKIX, STARTTLS, SMTP transport, MTA-STS,
+  TLS-RPT, and offline route-origin assurance remain separately attributed;
+  one family never fills another or changes Risk, Opportunity, registration
+  availability, ownership, activity, safety, or maliciousness.
 - **Optional local rendered-capture comparison**: the separate repo-local
   capture package can compare two explicitly selected version-2 manifests
   without contacting either target. It verifies each referenced screenshot and
