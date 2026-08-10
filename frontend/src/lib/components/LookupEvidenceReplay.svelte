@@ -79,7 +79,7 @@
   <summary>
     <span>
       <strong>Replay exported evidence</strong>
-      <small>Review a current WHOISleuth Lookup evidence JSON file without contacting a source.</small>
+      <small>Review a supported WHOISleuth Lookup evidence schema 25 or 26 JSON file without contacting a source.</small>
     </span>
   </summary>
   <div class="body">
@@ -140,7 +140,7 @@
           <h3 id="replay-brief-title">Historical review brief</h3>
           <div>
             <article>
-              <strong>Verified export facts</strong>
+              <strong>Retained normalised facts</strong>
               <p>{replay.facts.length} normalised fact{replay.facts.length === 1 ? '' : 's'} retained with source labels.</p>
             </article>
             <article>

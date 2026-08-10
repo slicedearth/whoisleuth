@@ -6,6 +6,7 @@ import {
   formatInterchangeFidelityReport,
 } from '../cli/interchange-report.mts';
 import { buildCliCasePack, CLI_CASE_PACK_VERSION } from '../cli/case-pack.mts';
+import { buildCliEvidenceExport } from '../cli/export-evidence.mts';
 import { runCli } from '../cli/runner.mts';
 import EXIT_CODES from '../cli/exit-codes.mts';
 import { buildBrandProfileExport, SUPPORTED_BRAND_PROFILE_SCHEMA_VERSIONS } from '../frontend/src/lib/analysis/brand-profile-model.ts';
@@ -19,7 +20,9 @@ import {
   DOMAIN_CONTROL_MANIFEST_INPUT_SCHEMA,
 } from '../lib/domain-control-manifest.mts';
 import { interchangeContractFor } from '../lib/interchange-fidelity-registry.mts';
+import * as lookupEvidenceModule from '../lib/evidence-export.mts';
 import { historicalCasePackFixture } from './historical-case-pack-fixtures.mts';
+import { loadLookupEvidenceV25CompatibilityFixtures } from './lookup-evidence-v25-fixtures.mts';
 import {
   MAX_BOUNDED_JSON_DEPTH,
   MAX_BOUNDED_JSON_KEYS,
@@ -66,6 +69,23 @@ function casePack(audience: 'internal' | 'public' | 'trusted' = 'public') {
       updatedAt: NOW,
     }],
   })), { audience, reviewed: true }, NOW);
+}
+
+function lookupEvidence() {
+  return buildCliEvidenceExport(JSON.stringify({
+    schema: 'whoisleuth.cli.lookup', version: 1, generatedAt: NOW, mode: 'fast',
+    query: 'private-target.example', type: 'domain', inputHostname: 'private-target.example',
+    registrableDomain: 'private-target.example', isSubdomain: false,
+    diagnostics: {
+      version: 7, rdap: { status: 'success' }, whois: { status: 'skipped' }, availability: { status: 'complete' },
+    },
+    rdap: {
+      upstreamStatus: 200, rdapServer: 'https://rdap.example.test/domain/private-target.example',
+      transportSecurity: 'https', fetchedAt: NOW, attempts: [], parsed: { domain: 'PRIVATE-TARGET.EXAMPLE' },
+      data: { objectClassName: 'domain' },
+    },
+    availability: { applicable: true, state: 'registered', confidence: 'high' },
+  }), lookupEvidenceModule, NOW);
 }
 
 async function casePackWithNestedReference() {
@@ -136,11 +156,58 @@ describe('interchange fidelity report', () => {
     assert.deepEqual(interchangeContractFor('workspace').versions, [...SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS]);
     assert.deepEqual(interchangeContractFor('encrypted_workspace').versions, [ENCRYPTED_WORKSPACE_ARCHIVE_VERSION]);
     assert.deepEqual(interchangeContractFor('case_pack').versions, [1, CLI_CASE_PACK_VERSION]);
+    assert.deepEqual(interchangeContractFor('lookup_evidence').versions, [...lookupEvidenceModule.SUPPORTED_LOOKUP_EVIDENCE_SCHEMA_VERSIONS]);
     assert.equal(interchangeContractFor('domain_control_passport').requiredAssurance, 'whole_integrity');
     assert.equal(interchangeContractFor('brand_profiles').requiredAssurance, 'structure');
     assert.equal(interchangeContractFor('workspace').requiredAssurance, 'whole_integrity');
     assert.equal(interchangeContractFor('encrypted_workspace').requiredAssurance, 'authenticated_whole_integrity');
     assert.equal(interchangeContractFor('case_pack').requiredAssurance, 'whole_integrity');
+    assert.equal(interchangeContractFor('lookup_evidence').requiredAssurance, 'structure');
+  });
+
+  test('recognises current Lookup evidence with structure-only lossy replay fidelity', async () => {
+    const current = await buildInterchangeFidelityReport(JSON.stringify(lookupEvidence()), { generatedAt: NOW });
+    assert.equal(current.artifact.id, 'lookup_evidence');
+    assert.equal(current.artifact.version, lookupEvidenceModule.LOOKUP_EVIDENCE_SCHEMA_VERSION);
+    assert.equal(current.verification.state, 'structure_valid');
+    assert.equal(current.verification.assuranceSatisfied, true);
+    assert.equal(current.compatibility.fidelity, 'lossy_by_design');
+    assert.equal(current.compatibility.browser?.import, 'supported');
+    assert.equal(current.compatibility.cli?.verify, 'supported');
+    assert.ok(current.compatibility.excludedFieldGroups.includes('raw_payload_rendering_during_replay'));
+    assert.doesNotMatch(JSON.stringify(current), /private-target/iu);
+
+    const malformed = structuredClone(lookupEvidence());
+    delete (malformed.sources as Record<string, unknown>).whois;
+    const rejected = await buildInterchangeFidelityReport(JSON.stringify(malformed), { generatedAt: NOW });
+    assert.equal(rejected.artifact.id, 'lookup_evidence');
+    assert.equal(rejected.verification.assuranceSatisfied, false);
+    assert.equal(rejected.compatibility.fidelity, 'not_verified');
+
+    const browserOversized = structuredClone(lookupEvidence());
+    (browserOversized.analysis as Record<string, Record<string, unknown>>).availability = {
+      padding: Array.from({ length: 5_500 }, () => 'x'.repeat(1_000)),
+    };
+    const browserRejected = await buildInterchangeFidelityReport(JSON.stringify(browserOversized), { generatedAt: NOW });
+    assert.equal(browserRejected.verification.assuranceSatisfied, false);
+    assert.equal(browserRejected.compatibility.fidelity, 'not_verified');
+
+    const future = { ...lookupEvidence(), schemaVersion: lookupEvidenceModule.LOOKUP_EVIDENCE_SCHEMA_VERSION + 1 };
+    const unsupported = await buildInterchangeFidelityReport(JSON.stringify(future), { generatedAt: NOW });
+    assert.equal(unsupported.artifact.id, 'lookup_evidence');
+    assert.equal(unsupported.verification.state, 'unsupported_version');
+    assert.equal(unsupported.compatibility.fidelity, 'unsupported');
+  });
+
+  test('recognises authentic frozen schema-25 Lookup wrapper variants as supported legacy evidence', async () => {
+    for (const fixture of await loadLookupEvidenceV25CompatibilityFixtures()) {
+      const report = await buildInterchangeFidelityReport(JSON.stringify(fixture.document), { generatedAt: NOW });
+      assert.equal(report.artifact.id, 'lookup_evidence', fixture.name);
+      assert.equal(report.artifact.version, lookupEvidenceModule.LEGACY_LOOKUP_EVIDENCE_SCHEMA_VERSION, fixture.name);
+      assert.equal(report.verification.state, 'structure_valid', fixture.name);
+      assert.equal(report.verification.assuranceSatisfied, true, fixture.name);
+      assert.equal(report.compatibility.browser?.import, 'supported', fixture.name);
+    }
   });
 
   test('reports exact browser and CLI passport compatibility without values', async () => {

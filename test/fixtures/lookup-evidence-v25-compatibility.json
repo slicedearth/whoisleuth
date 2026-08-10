@@ -1,0 +1,926 @@
+{
+  "cases": [
+    {
+      "name": "fast-whois-skipped",
+      "document": {
+        "schema": "whoisleuth.lookup-evidence",
+        "schemaVersion": 25,
+        "generatedAt": "2026-08-01T00:00:02.000Z",
+        "application": {
+          "name": "WHOISleuth",
+          "version": "1.47.1",
+          "projectUrl": "https://github.com/slicedearth/whoisleuth"
+        },
+        "query": {
+          "submitted": "legacy.example.test",
+          "type": "domain",
+          "inputHostname": "legacy.example.test",
+          "registrableDomain": "legacy.example.test",
+          "isSubdomain": false
+        },
+        "diagnostics": {
+          "version": 7,
+          "rdap": {
+            "status": "success"
+          },
+          "whois": {
+            "status": "skipped"
+          }
+        },
+        "sources": {
+          "rdap": {
+            "status": "success",
+            "endpoint": "https://rdap.example.test/domain/legacy.example.test",
+            "transportSecurity": "https",
+            "httpStatus": 200,
+            "fetchedAt": "2026-08-01T00:00:00.000Z",
+            "attempts": [],
+            "parsed": {
+              "domain": "LEGACY.EXAMPLE.TEST"
+            },
+            "raw": {
+              "objectClassName": "domain"
+            }
+          },
+          "whois": {
+            "status": "unknown",
+            "queriedAt": null,
+            "authoritativeHop": null,
+            "failedHop": null,
+            "conflictingHop": null,
+            "parsed": null,
+            "chain": []
+          },
+          "reverseDns": null,
+          "network": null,
+          "securityTxt": null,
+          "sslbl": null
+        },
+        "analysis": {
+          "availability": {
+            "applicable": true,
+            "state": "unknown",
+            "confidence": "low"
+          },
+          "idn": null,
+          "registryInsights": {
+            "version": 1,
+            "contactDisclosure": {
+              "registryRdap": {
+                "source": "registry_rdap",
+                "state": "absent",
+                "detail": "The source completed without a usable registrant contact or an explicit disclosure marker."
+              },
+              "whois": {
+                "source": "whois",
+                "state": "unavailable",
+                "detail": "The source did not provide a usable normalised publication."
+              },
+              "limitation": "Disclosure state describes what each point-in-time source published. It does not infer the identity, intent, reachability, or legal status of a registrant."
+            },
+            "lifecycle": {
+              "stage": "registered",
+              "label": "Registered",
+              "rawStatuses": [],
+              "redemption": false,
+              "pendingDelete": false,
+              "pendingTransfer": false,
+              "hold": {
+                "client": false,
+                "server": false
+              },
+              "locks": {
+                "client": false,
+                "server": false,
+                "clientStatuses": [],
+                "serverStatuses": []
+              },
+              "acquisitionPath": [
+                "Continue monitoring registry status and expiry."
+              ],
+              "limitation": "EPP statuses describe the current registry lifecycle. They do not guarantee deletion, release timing, transfer completion, eligibility, price, or acquisition success."
+            },
+            "reconciliation": {
+              "state": "partial",
+              "conflictCount": 0,
+              "equivalentCount": 0,
+              "sourceOnlyCount": 0,
+              "redactedCount": 0,
+              "unavailableCount": 1,
+              "summary": "The comparison is partial because at least one publication was unavailable or incomplete."
+            },
+            "publications": [
+              {
+                "source": "registry_rdap",
+                "state": "complete",
+                "observedAt": "2026-08-01T00:00:00.000Z",
+                "conformance": [],
+                "redactionCount": 0,
+                "issueCount": 0,
+                "issues": []
+              },
+              {
+                "source": "whois",
+                "state": "unavailable",
+                "observedAt": null,
+                "conformance": [],
+                "redactionCount": 0,
+                "issueCount": 1,
+                "issues": [
+                  "No usable publication was available from this source."
+                ]
+              },
+              {
+                "source": "registrar_rdap",
+                "state": "unavailable",
+                "observedAt": null,
+                "conformance": [],
+                "redactionCount": 0,
+                "issueCount": 1,
+                "issues": [
+                  "No usable publication was available from this source."
+                ]
+              }
+            ],
+            "rdapCapabilities": {
+              "registry": {
+                "version": 1,
+                "catalogReviewedAt": "2026-07-31",
+                "state": "complete",
+                "declarations": [],
+                "unknownIdentifiers": [],
+                "omittedDeclarations": 0,
+                "reverseSearch": {
+                  "state": "not_advertised",
+                  "execution": "not_attempted",
+                  "helpDiscoveryRequired": true,
+                  "actionAvailable": false,
+                  "detail": "This individual response did not advertise reverse search. A separate help response could still declare server-level support.",
+                  "limitations": [
+                    "Absence from an individual response is not proof that the server does not support reverse search.",
+                    "No help or reverse-search request was made."
+                  ]
+                },
+                "limitations": [
+                  "Declarations describe what the server claims for this response; they do not prove that an operation is authorised, implemented correctly, complete, or available anonymously.",
+                  "Unknown identifiers remain visible and neutral. Catalogue recognition never affects availability or Risk scoring."
+                ]
+              },
+              "registrar": {
+                "version": 1,
+                "catalogReviewedAt": "2026-07-31",
+                "state": "unavailable",
+                "declarations": [],
+                "unknownIdentifiers": [],
+                "omittedDeclarations": 0,
+                "reverseSearch": {
+                  "state": "unknown",
+                  "execution": "not_attempted",
+                  "helpDiscoveryRequired": true,
+                  "actionAvailable": false,
+                  "detail": "The response was unavailable or incomplete, so reverse-search support cannot be assessed.",
+                  "limitations": [
+                    "Missing or truncated conformance data is not evidence that reverse search is unsupported.",
+                    "No help or reverse-search request was made."
+                  ]
+                },
+                "limitations": [
+                  "No usable RDAP publication was available for capability inspection.",
+                  "Declarations describe what the server claims for this response; they do not prove that an operation is authorised, implemented correctly, complete, or available anonymously.",
+                  "Unknown identifiers remain visible and neutral. Catalogue recognition never affects availability or Risk scoring."
+                ]
+              }
+            },
+            "abuseRouting": []
+          },
+          "registryComparison": {
+            "fields": [
+              {
+                "label": "Domain",
+                "status": "whois_unavailable",
+                "rdapState": "value",
+                "whoisState": "unavailable",
+                "rdapDisplay": "LEGACY.EXAMPLE.TEST",
+                "whoisDisplay": "Source skipped"
+              }
+            ],
+            "counts": {
+              "equivalent": 0,
+              "conflict": 0,
+              "rdap_only": 0,
+              "whois_only": 0,
+              "rdap_redacted": 0,
+              "whois_redacted": 0,
+              "rdap_unavailable": 0,
+              "whois_unavailable": 1,
+              "rdap_incomplete": 0,
+              "whois_incomplete": 0
+            },
+            "sourceHealth": {
+              "rdap": {
+                "status": "success",
+                "condition": "complete"
+              },
+              "whois": {
+                "status": "skipped",
+                "condition": "unavailable"
+              }
+            }
+          },
+          "registrarPublicationComparison": null
+        }
+      }
+    },
+    {
+      "name": "unsupported-sources",
+      "document": {
+        "schema": "whoisleuth.lookup-evidence",
+        "schemaVersion": 25,
+        "generatedAt": "2026-08-01T00:00:02.000Z",
+        "application": {
+          "name": "WHOISleuth",
+          "version": "1.47.1",
+          "projectUrl": "https://github.com/slicedearth/whoisleuth"
+        },
+        "query": {
+          "submitted": "legacy.example.test",
+          "type": "domain",
+          "inputHostname": "legacy.example.test",
+          "registrableDomain": "legacy.example.test",
+          "isSubdomain": false
+        },
+        "diagnostics": {
+          "version": 7,
+          "rdap": {
+            "status": "unsupported"
+          },
+          "whois": {
+            "status": "unsupported"
+          }
+        },
+        "sources": {
+          "rdap": {
+            "status": "error",
+            "error": "No RDAP registry found for this query via IANA bootstrap",
+            "attempts": []
+          },
+          "whois": {
+            "status": "partial",
+            "queriedAt": "2026-08-01T00:00:01.000Z",
+            "authoritativeHop": null,
+            "failedHop": "whois.iana.org",
+            "conflictingHop": null,
+            "parsed": {
+              "domainName": "LEGACY.EXAMPLE.TEST",
+              "chainStatus": "partial",
+              "failedHop": "whois.iana.org"
+            },
+            "chain": [
+              {
+                "server": "whois.iana.org",
+                "queriedAt": "2026-08-01T00:00:01.000Z",
+                "error": "No domain WHOIS service was published."
+              }
+            ]
+          },
+          "reverseDns": null,
+          "network": null,
+          "securityTxt": null,
+          "sslbl": null
+        },
+        "analysis": {
+          "availability": {
+            "applicable": true,
+            "state": "unknown",
+            "confidence": "low"
+          },
+          "idn": null,
+          "registryInsights": {
+            "version": 1,
+            "contactDisclosure": {
+              "registryRdap": {
+                "source": "registry_rdap",
+                "state": "unavailable",
+                "detail": "The source did not provide a usable normalised publication."
+              },
+              "whois": {
+                "source": "whois",
+                "state": "unavailable",
+                "detail": "The publication was partial, so missing registrant fields are not treated as evidence of absence."
+              },
+              "limitation": "Disclosure state describes what each point-in-time source published. It does not infer the identity, intent, reachability, or legal status of a registrant."
+            },
+            "lifecycle": {
+              "stage": "registered",
+              "label": "Registered",
+              "rawStatuses": [],
+              "redemption": false,
+              "pendingDelete": false,
+              "pendingTransfer": false,
+              "hold": {
+                "client": false,
+                "server": false
+              },
+              "locks": {
+                "client": false,
+                "server": false,
+                "clientStatuses": [],
+                "serverStatuses": []
+              },
+              "acquisitionPath": [
+                "Continue monitoring registry status and expiry."
+              ],
+              "limitation": "EPP statuses describe the current registry lifecycle. They do not guarantee deletion, release timing, transfer completion, eligibility, price, or acquisition success."
+            },
+            "reconciliation": {
+              "state": "partial",
+              "conflictCount": 0,
+              "equivalentCount": 0,
+              "sourceOnlyCount": 0,
+              "redactedCount": 0,
+              "unavailableCount": 1,
+              "summary": "The comparison is partial because at least one publication was unavailable or incomplete."
+            },
+            "publications": [
+              {
+                "source": "registry_rdap",
+                "state": "unavailable",
+                "observedAt": null,
+                "conformance": [],
+                "redactionCount": 0,
+                "issueCount": 1,
+                "issues": [
+                  "No usable publication was available from this source."
+                ]
+              },
+              {
+                "source": "whois",
+                "state": "partial",
+                "observedAt": "2026-08-01T00:00:01.000Z",
+                "conformance": [],
+                "redactionCount": 0,
+                "issueCount": 1,
+                "issues": [
+                  "The WHOIS referral chain was incomplete or conflicting."
+                ]
+              },
+              {
+                "source": "registrar_rdap",
+                "state": "unavailable",
+                "observedAt": null,
+                "conformance": [],
+                "redactionCount": 0,
+                "issueCount": 1,
+                "issues": [
+                  "No usable publication was available from this source."
+                ]
+              }
+            ],
+            "rdapCapabilities": {
+              "registry": {
+                "version": 1,
+                "catalogReviewedAt": "2026-07-31",
+                "state": "unavailable",
+                "declarations": [],
+                "unknownIdentifiers": [],
+                "omittedDeclarations": 0,
+                "reverseSearch": {
+                  "state": "unknown",
+                  "execution": "not_attempted",
+                  "helpDiscoveryRequired": true,
+                  "actionAvailable": false,
+                  "detail": "The response was unavailable or incomplete, so reverse-search support cannot be assessed.",
+                  "limitations": [
+                    "Missing or truncated conformance data is not evidence that reverse search is unsupported.",
+                    "No help or reverse-search request was made."
+                  ]
+                },
+                "limitations": [
+                  "No usable RDAP publication was available for capability inspection.",
+                  "Declarations describe what the server claims for this response; they do not prove that an operation is authorised, implemented correctly, complete, or available anonymously.",
+                  "Unknown identifiers remain visible and neutral. Catalogue recognition never affects availability or Risk scoring."
+                ]
+              },
+              "registrar": {
+                "version": 1,
+                "catalogReviewedAt": "2026-07-31",
+                "state": "unavailable",
+                "declarations": [],
+                "unknownIdentifiers": [],
+                "omittedDeclarations": 0,
+                "reverseSearch": {
+                  "state": "unknown",
+                  "execution": "not_attempted",
+                  "helpDiscoveryRequired": true,
+                  "actionAvailable": false,
+                  "detail": "The response was unavailable or incomplete, so reverse-search support cannot be assessed.",
+                  "limitations": [
+                    "Missing or truncated conformance data is not evidence that reverse search is unsupported.",
+                    "No help or reverse-search request was made."
+                  ]
+                },
+                "limitations": [
+                  "No usable RDAP publication was available for capability inspection.",
+                  "Declarations describe what the server claims for this response; they do not prove that an operation is authorised, implemented correctly, complete, or available anonymously.",
+                  "Unknown identifiers remain visible and neutral. Catalogue recognition never affects availability or Risk scoring."
+                ]
+              }
+            },
+            "abuseRouting": []
+          },
+          "registryComparison": {
+            "fields": [
+              {
+                "label": "Domain",
+                "status": "rdap_unavailable",
+                "rdapState": "unavailable",
+                "whoisState": "value",
+                "rdapDisplay": "Unsupported by source",
+                "whoisDisplay": "LEGACY.EXAMPLE.TEST"
+              }
+            ],
+            "counts": {
+              "equivalent": 0,
+              "conflict": 0,
+              "rdap_only": 0,
+              "whois_only": 0,
+              "rdap_redacted": 0,
+              "whois_redacted": 0,
+              "rdap_unavailable": 1,
+              "whois_unavailable": 0,
+              "rdap_incomplete": 0,
+              "whois_incomplete": 0
+            },
+            "sourceHealth": {
+              "rdap": {
+                "status": "unsupported",
+                "condition": "unavailable"
+              },
+              "whois": {
+                "status": "unsupported",
+                "condition": "unavailable"
+              }
+            }
+          },
+          "registrarPublicationComparison": null
+        }
+      }
+    },
+    {
+      "name": "source-errors",
+      "document": {
+        "schema": "whoisleuth.lookup-evidence",
+        "schemaVersion": 25,
+        "generatedAt": "2026-08-01T00:00:02.000Z",
+        "application": {
+          "name": "WHOISleuth",
+          "version": "1.47.1",
+          "projectUrl": "https://github.com/slicedearth/whoisleuth"
+        },
+        "query": {
+          "submitted": "legacy.example.test",
+          "type": "domain",
+          "inputHostname": "legacy.example.test",
+          "registrableDomain": "legacy.example.test",
+          "isSubdomain": false
+        },
+        "diagnostics": {
+          "version": 7,
+          "rdap": {
+            "status": "error"
+          },
+          "whois": {
+            "status": "error"
+          }
+        },
+        "sources": {
+          "rdap": {
+            "status": "error",
+            "error": "RDAP lookup failed",
+            "attempts": [
+              {
+                "outcome": "timeout"
+              }
+            ]
+          },
+          "whois": {
+            "status": "error",
+            "error": "WHOIS lookup failed"
+          },
+          "reverseDns": null,
+          "network": null,
+          "securityTxt": null,
+          "sslbl": null
+        },
+        "analysis": {
+          "availability": {
+            "applicable": true,
+            "state": "unknown",
+            "confidence": "low"
+          },
+          "idn": null,
+          "registryInsights": {
+            "version": 1,
+            "contactDisclosure": {
+              "registryRdap": {
+                "source": "registry_rdap",
+                "state": "unavailable",
+                "detail": "The source did not provide a usable normalised publication."
+              },
+              "whois": {
+                "source": "whois",
+                "state": "unavailable",
+                "detail": "The source did not provide a usable normalised publication."
+              },
+              "limitation": "Disclosure state describes what each point-in-time source published. It does not infer the identity, intent, reachability, or legal status of a registrant."
+            },
+            "lifecycle": {
+              "stage": "registered",
+              "label": "Registered",
+              "rawStatuses": [],
+              "redemption": false,
+              "pendingDelete": false,
+              "pendingTransfer": false,
+              "hold": {
+                "client": false,
+                "server": false
+              },
+              "locks": {
+                "client": false,
+                "server": false,
+                "clientStatuses": [],
+                "serverStatuses": []
+              },
+              "acquisitionPath": [
+                "Continue monitoring registry status and expiry."
+              ],
+              "limitation": "EPP statuses describe the current registry lifecycle. They do not guarantee deletion, release timing, transfer completion, eligibility, price, or acquisition success."
+            },
+            "reconciliation": {
+              "state": "unavailable",
+              "conflictCount": 0,
+              "equivalentCount": 0,
+              "sourceOnlyCount": 0,
+              "redactedCount": 0,
+              "unavailableCount": 0,
+              "summary": "No comparable fields were available."
+            },
+            "publications": [
+              {
+                "source": "registry_rdap",
+                "state": "unavailable",
+                "observedAt": null,
+                "conformance": [],
+                "redactionCount": 0,
+                "issueCount": 1,
+                "issues": [
+                  "No usable publication was available from this source."
+                ]
+              },
+              {
+                "source": "whois",
+                "state": "unavailable",
+                "observedAt": null,
+                "conformance": [],
+                "redactionCount": 0,
+                "issueCount": 1,
+                "issues": [
+                  "No usable publication was available from this source."
+                ]
+              },
+              {
+                "source": "registrar_rdap",
+                "state": "unavailable",
+                "observedAt": null,
+                "conformance": [],
+                "redactionCount": 0,
+                "issueCount": 1,
+                "issues": [
+                  "No usable publication was available from this source."
+                ]
+              }
+            ],
+            "rdapCapabilities": {
+              "registry": {
+                "version": 1,
+                "catalogReviewedAt": "2026-07-31",
+                "state": "unavailable",
+                "declarations": [],
+                "unknownIdentifiers": [],
+                "omittedDeclarations": 0,
+                "reverseSearch": {
+                  "state": "unknown",
+                  "execution": "not_attempted",
+                  "helpDiscoveryRequired": true,
+                  "actionAvailable": false,
+                  "detail": "The response was unavailable or incomplete, so reverse-search support cannot be assessed.",
+                  "limitations": [
+                    "Missing or truncated conformance data is not evidence that reverse search is unsupported.",
+                    "No help or reverse-search request was made."
+                  ]
+                },
+                "limitations": [
+                  "No usable RDAP publication was available for capability inspection.",
+                  "Declarations describe what the server claims for this response; they do not prove that an operation is authorised, implemented correctly, complete, or available anonymously.",
+                  "Unknown identifiers remain visible and neutral. Catalogue recognition never affects availability or Risk scoring."
+                ]
+              },
+              "registrar": {
+                "version": 1,
+                "catalogReviewedAt": "2026-07-31",
+                "state": "unavailable",
+                "declarations": [],
+                "unknownIdentifiers": [],
+                "omittedDeclarations": 0,
+                "reverseSearch": {
+                  "state": "unknown",
+                  "execution": "not_attempted",
+                  "helpDiscoveryRequired": true,
+                  "actionAvailable": false,
+                  "detail": "The response was unavailable or incomplete, so reverse-search support cannot be assessed.",
+                  "limitations": [
+                    "Missing or truncated conformance data is not evidence that reverse search is unsupported.",
+                    "No help or reverse-search request was made."
+                  ]
+                },
+                "limitations": [
+                  "No usable RDAP publication was available for capability inspection.",
+                  "Declarations describe what the server claims for this response; they do not prove that an operation is authorised, implemented correctly, complete, or available anonymously.",
+                  "Unknown identifiers remain visible and neutral. Catalogue recognition never affects availability or Risk scoring."
+                ]
+              }
+            },
+            "abuseRouting": []
+          },
+          "registryComparison": {
+            "fields": [],
+            "counts": {
+              "equivalent": 0,
+              "conflict": 0,
+              "rdap_only": 0,
+              "whois_only": 0,
+              "rdap_redacted": 0,
+              "whois_redacted": 0,
+              "rdap_unavailable": 0,
+              "whois_unavailable": 0,
+              "rdap_incomplete": 0,
+              "whois_incomplete": 0
+            },
+            "sourceHealth": {
+              "rdap": {
+                "status": "error",
+                "condition": "unavailable"
+              },
+              "whois": {
+                "status": "error",
+                "condition": "unavailable"
+              }
+            }
+          },
+          "registrarPublicationComparison": null
+        }
+      }
+    },
+    {
+      "name": "rdap-not-found",
+      "document": {
+        "schema": "whoisleuth.lookup-evidence",
+        "schemaVersion": 25,
+        "generatedAt": "2026-08-01T00:00:02.000Z",
+        "application": {
+          "name": "WHOISleuth",
+          "version": "1.47.1",
+          "projectUrl": "https://github.com/slicedearth/whoisleuth"
+        },
+        "query": {
+          "submitted": "legacy.example.test",
+          "type": "domain",
+          "inputHostname": "legacy.example.test",
+          "registrableDomain": "legacy.example.test",
+          "isSubdomain": false
+        },
+        "diagnostics": {
+          "version": 7,
+          "rdap": {
+            "status": "not_found"
+          },
+          "whois": {
+            "status": "complete"
+          }
+        },
+        "sources": {
+          "rdap": {
+            "status": "not_found",
+            "endpoint": "https://rdap.example.test/domain/legacy.example.test",
+            "transportSecurity": "https",
+            "httpStatus": 404,
+            "fetchedAt": "2026-08-01T00:00:00.000Z",
+            "attempts": [],
+            "parsed": null,
+            "raw": {
+              "errorCode": 404
+            }
+          },
+          "whois": {
+            "status": "complete",
+            "queriedAt": "2026-08-01T00:00:01.000Z",
+            "authoritativeHop": null,
+            "failedHop": null,
+            "conflictingHop": null,
+            "parsed": {
+              "domainName": "LEGACY.EXAMPLE.TEST",
+              "registrationStatus": "not_found",
+              "notFound": true,
+              "chainStatus": "complete"
+            },
+            "chain": [
+              {
+                "server": "whois.example.test",
+                "queriedAt": "2026-08-01T00:00:01.000Z",
+                "response": "No match for domain."
+              }
+            ]
+          },
+          "reverseDns": null,
+          "network": null,
+          "securityTxt": null,
+          "sslbl": null
+        },
+        "analysis": {
+          "availability": {
+            "applicable": true,
+            "state": "unknown",
+            "confidence": "low"
+          },
+          "idn": null,
+          "registryInsights": {
+            "version": 1,
+            "contactDisclosure": {
+              "registryRdap": {
+                "source": "registry_rdap",
+                "state": "unavailable",
+                "detail": "The source did not provide a usable normalised publication."
+              },
+              "whois": {
+                "source": "whois",
+                "state": "absent",
+                "detail": "The source completed without a usable registrant contact or an explicit disclosure marker."
+              },
+              "limitation": "Disclosure state describes what each point-in-time source published. It does not infer the identity, intent, reachability, or legal status of a registrant."
+            },
+            "lifecycle": {
+              "stage": "registered",
+              "label": "Registered",
+              "rawStatuses": [],
+              "redemption": false,
+              "pendingDelete": false,
+              "pendingTransfer": false,
+              "hold": {
+                "client": false,
+                "server": false
+              },
+              "locks": {
+                "client": false,
+                "server": false,
+                "clientStatuses": [],
+                "serverStatuses": []
+              },
+              "acquisitionPath": [
+                "Continue monitoring registry status and expiry."
+              ],
+              "limitation": "EPP statuses describe the current registry lifecycle. They do not guarantee deletion, release timing, transfer completion, eligibility, price, or acquisition success."
+            },
+            "reconciliation": {
+              "state": "partial",
+              "conflictCount": 0,
+              "equivalentCount": 0,
+              "sourceOnlyCount": 0,
+              "redactedCount": 0,
+              "unavailableCount": 1,
+              "summary": "The comparison is partial because at least one publication was unavailable or incomplete."
+            },
+            "publications": [
+              {
+                "source": "registry_rdap",
+                "state": "unavailable",
+                "observedAt": "2026-08-01T00:00:00.000Z",
+                "conformance": [],
+                "redactionCount": 0,
+                "issueCount": 1,
+                "issues": [
+                  "No usable publication was available from this source."
+                ]
+              },
+              {
+                "source": "whois",
+                "state": "complete",
+                "observedAt": "2026-08-01T00:00:01.000Z",
+                "conformance": [],
+                "redactionCount": 0,
+                "issueCount": 0,
+                "issues": []
+              },
+              {
+                "source": "registrar_rdap",
+                "state": "unavailable",
+                "observedAt": null,
+                "conformance": [],
+                "redactionCount": 0,
+                "issueCount": 1,
+                "issues": [
+                  "No usable publication was available from this source."
+                ]
+              }
+            ],
+            "rdapCapabilities": {
+              "registry": {
+                "version": 1,
+                "catalogReviewedAt": "2026-07-31",
+                "state": "unavailable",
+                "declarations": [],
+                "unknownIdentifiers": [],
+                "omittedDeclarations": 0,
+                "reverseSearch": {
+                  "state": "unknown",
+                  "execution": "not_attempted",
+                  "helpDiscoveryRequired": true,
+                  "actionAvailable": false,
+                  "detail": "The response was unavailable or incomplete, so reverse-search support cannot be assessed.",
+                  "limitations": [
+                    "Missing or truncated conformance data is not evidence that reverse search is unsupported.",
+                    "No help or reverse-search request was made."
+                  ]
+                },
+                "limitations": [
+                  "No usable RDAP publication was available for capability inspection.",
+                  "Declarations describe what the server claims for this response; they do not prove that an operation is authorised, implemented correctly, complete, or available anonymously.",
+                  "Unknown identifiers remain visible and neutral. Catalogue recognition never affects availability or Risk scoring."
+                ]
+              },
+              "registrar": {
+                "version": 1,
+                "catalogReviewedAt": "2026-07-31",
+                "state": "unavailable",
+                "declarations": [],
+                "unknownIdentifiers": [],
+                "omittedDeclarations": 0,
+                "reverseSearch": {
+                  "state": "unknown",
+                  "execution": "not_attempted",
+                  "helpDiscoveryRequired": true,
+                  "actionAvailable": false,
+                  "detail": "The response was unavailable or incomplete, so reverse-search support cannot be assessed.",
+                  "limitations": [
+                    "Missing or truncated conformance data is not evidence that reverse search is unsupported.",
+                    "No help or reverse-search request was made."
+                  ]
+                },
+                "limitations": [
+                  "No usable RDAP publication was available for capability inspection.",
+                  "Declarations describe what the server claims for this response; they do not prove that an operation is authorised, implemented correctly, complete, or available anonymously.",
+                  "Unknown identifiers remain visible and neutral. Catalogue recognition never affects availability or Risk scoring."
+                ]
+              }
+            },
+            "abuseRouting": []
+          },
+          "registryComparison": {
+            "fields": [
+              {
+                "label": "Domain",
+                "status": "rdap_unavailable",
+                "rdapState": "unavailable",
+                "whoisState": "value",
+                "rdapDisplay": "No matching registry object",
+                "whoisDisplay": "LEGACY.EXAMPLE.TEST"
+              }
+            ],
+            "counts": {
+              "equivalent": 0,
+              "conflict": 0,
+              "rdap_only": 0,
+              "whois_only": 0,
+              "rdap_redacted": 0,
+              "whois_redacted": 0,
+              "rdap_unavailable": 1,
+              "whois_unavailable": 0,
+              "rdap_incomplete": 0,
+              "whois_incomplete": 0
+            },
+            "sourceHealth": {
+              "rdap": {
+                "status": "not_found",
+                "condition": "unavailable"
+              },
+              "whois": {
+                "status": "complete",
+                "condition": "complete"
+              }
+            }
+          },
+          "registrarPublicationComparison": null
+        }
+      }
+    }
+  ]
+}

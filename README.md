@@ -38,9 +38,10 @@ progress rail distinguishes the current, completed, available, and upcoming
 parts of the workflow. It does not sign in, run live analysis, or write to the
 protected Console's investigation data. Its later stages reuse the production
 source-map, lifecycle, activity, and evidence-card components with fixed
-fixtures. The public Guide maps common goals to the relevant tool and
-interpretation sections, while the Privacy page provides local section
-navigation without shortening the policy.
+fixtures. The public Resources hub maps common goals to the relevant tool and
+interpretation sections and keeps the focused topic library alongside them,
+while the Privacy page provides local section navigation without shortening
+the policy.
 
 ## What it does
 
@@ -81,7 +82,7 @@ request.
 
 For field-level behaviour, limits, result states, saved-work semantics, and
 complete workflows, use the [application guide](docs/application-guide.md).
-The public [Guide](https://whoisleuth.com/guide) is the shortest introduction.
+The public [Resources hub](https://whoisleuth.com/resources) is the shortest introduction and the topic library.
 
 ## Design principles
 
@@ -178,8 +179,10 @@ deployment parity, see the [architecture orientation](docs/architecture.md).
 | [Engineering case study](docs/engineering-case-study.md) | Constraints, representative decisions, hard problems, and review entry points. |
 | [Privacy notice](PRIVACY.md) | Collection, browser storage, optional hosted processing, retention, export, and deletion. |
 
-The public `/guide` route is the shortest user-facing introduction. These
-repository documents provide the operator and engineering detail behind it.
+The public `/resources` route combines the shortest user-facing introduction,
+practice, glossary, FAQ, and focused topic library. The legacy `/guide` route
+redirects there. These repository documents provide the operator and engineering
+detail behind it.
 
 ## Verification
 

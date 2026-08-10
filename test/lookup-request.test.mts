@@ -101,6 +101,42 @@ describe('Lookup browser request boundary', () => {
     });
   });
 
+  test('applies timeout and analyst cancellation while reading a stalled response body', async () => {
+    function stalledResponse(onCancel: () => void): Response {
+      return new Response(new ReadableStream<Uint8Array>({
+        pull: async () => new Promise(() => {}),
+        cancel: onCancel,
+      }));
+    }
+
+    let timedOutBodyCancelled = false;
+    const timedOut = await requestLookup('/api/lookup?q=example.test', {
+      timeoutMs: 5,
+      fetchImpl: async () => stalledResponse(() => { timedOutBodyCancelled = true; }),
+    });
+    assert.deepEqual(timedOut, {
+      ok: false,
+      kind: 'timeout',
+      message: 'Lookup timed out after 1 second. No partial response was retained.',
+    });
+    assert.equal(timedOutBodyCancelled, true);
+
+    let cancelledBodyCancelled = false;
+    const controller = new AbortController();
+    const cancelledRequest = requestLookup('/api/lookup?q=example.test', {
+      signal: controller.signal,
+      timeoutMs: 1_000,
+      fetchImpl: async () => stalledResponse(() => { cancelledBodyCancelled = true; }),
+    });
+    controller.abort('analyst_cancelled');
+    assert.deepEqual(await cancelledRequest, {
+      ok: false,
+      kind: 'cancelled',
+      message: 'Lookup cancelled. No partial response was retained.',
+    });
+    assert.equal(cancelledBodyCancelled, true);
+  });
+
   test('caps injected deadlines and sanitizes generic network failures', async () => {
     let fetchCalled = false;
     const controller = new AbortController();

@@ -187,7 +187,7 @@
     <h2 id="guide-launcher-title">Follow a guided investigation</h2>
     <p>Choose a guide and a domain. WHOISleuth saves progress in this tab so you can work through one clearly explained step at a time.</p>
     <nav class="help-links" aria-label="Investigation help">
-      <a href="/guide"><strong>Read the guide</strong><span>Learn the tools, result states, and common mistakes.</span></a>
+      <a href="/resources#start"><strong>Open resources</strong><span>Learn the tools, result states, common mistakes, and source boundaries.</span></a>
       <a href="/registry-support"><strong>Check domain-ending support</strong><span>See which domain endings have tested lookup support and known limits.</span></a>
     </nav>
   </div>

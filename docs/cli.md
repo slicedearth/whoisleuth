@@ -193,7 +193,7 @@ full contracts into the packaged reference.
 
 ### Offline artefact verification
 
-[Read the archive, saved Lookup, and signed-artefact verification contract.](cli-reference.md#offline-artefact-verification)
+[Read the archive, saved Lookup, Lookup-evidence, and signed-artefact verification contract.](cli-reference.md#offline-artefact-verification)
 
 ### Privacy-safe source reliability report
 

@@ -1,8 +1,8 @@
 # Application guide
 
 WHOISleuth supports a domain-intelligence workflow from initial discovery to a
-documented case. The public `/guide` page provides the shortest introduction.
-Its task cards link directly to the relevant tool and interpretation sections,
+documented case. The public `/resources` hub provides the shortest introduction
+and focused topic library. Its task cards link directly to the relevant tool and interpretation sections,
 and the public synthetic demo identifies the current, completed, available, and
 upcoming stage of its six-step workflow. Its Lookup and Monitor stages also use
 the production source-topology, lifecycle, retained-activity, and evidence-card
@@ -258,8 +258,8 @@ public-key digest, issuer and any reviewed Brand Profile certificate baseline.
 Each edge retains its own source health and limitations; a failed or incomplete
 TLS check is not shown as an absent certificate relationship.
 
-The collapsed **Replay exported evidence** control accepts only a current
-first-party Lookup evidence JSON document of up to 5 MB. The browser validates
+The collapsed **Replay exported evidence** control accepts a supported
+first-party Lookup evidence JSON document in schema 25 or 26, up to 5 MB. The browser validates
 the schema, nesting, and structured entry count, calculates a SHA-256 file
 digest, and can compare it with a trusted checksum pasted before import. It
 displays a bounded normalised source and fact summary, historical review brief,
@@ -273,11 +273,14 @@ time, collection depth, source state, completeness, truncation, schema version,
 and limitations. A later Lookup compares those fields without converting an
 unavailable or incomplete source into a change or an absent finding.
 
-**Export evidence JSON** remains the separate full-fidelity option. It can
-include normalised and raw registration sources, supporting observations,
-diagnostics, comparisons, and provenance. It can contain public contact data,
-so review and store it accordingly. Offline replay intentionally exposes only
-its bounded normalised review projection.
+**Export evidence JSON** remains the richer portable option. It can include
+normalised registration sources, a bounded privacy-projected registry RDAP
+publication, supporting observations, explicitly projected diagnostics,
+comparisons, and provenance. Request and response headers, cookies, session and
+credential fields, URL credentials, queries, fragments, and full WHOIS bodies
+are excluded. It can still contain public contact data, so review and store it
+accordingly. Offline replay intentionally exposes only its bounded normalised
+review projection.
 
 ### Discover
 
@@ -1083,7 +1086,7 @@ Dashboard can coordinate six fixed standard recipes:
 - mail-abuse response; and
 - domain-control-change response.
 
-The public Guide includes one deterministic offline practice scenario for each
+The public Resources hub includes one deterministic offline practice scenario for each
 of the three foundational investigation recipes. The response-preparation
 recipes use actual retained Case actions and therefore are not simulated as
 operational outcomes. Each practice scenario uses reserved fictional domains, fixed evidence states

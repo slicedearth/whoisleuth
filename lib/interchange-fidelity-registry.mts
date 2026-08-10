@@ -9,7 +9,7 @@ export type InterchangeFidelity =
 export type InterchangeAssuranceRequirement = 'authenticated_whole_integrity' | 'structure' | 'unsupported' | 'whole_integrity';
 
 export type InterchangeArtifactContract = Readonly<{
-  id: 'brand_profiles' | 'case_pack' | 'domain_control_passport' | 'encrypted_workspace' | 'legacy_desired_baseline' | 'lookup_claim_passport' | 'workspace';
+  id: 'brand_profiles' | 'case_pack' | 'domain_control_passport' | 'encrypted_workspace' | 'legacy_desired_baseline' | 'lookup_claim_passport' | 'lookup_evidence' | 'workspace';
   schema: string;
   versions: readonly number[];
   versionField: 'schemaVersion' | 'version';
@@ -38,6 +38,20 @@ export const INTERCHANGE_ARTIFACT_CONTRACTS: readonly InterchangeArtifactContrac
     requiredAssurance: 'whole_integrity',
     preservedFieldGroups: Object.freeze(['target_identity', 'claim_identity', 'evidence_requirement_ids', 'source_states', 'observation_times', 'model_versions', 'limitations']),
     excludedFieldGroups: Object.freeze(['raw_registry_payloads', 'contacts', 'page_values', 'request_paths', 'credentials', 'browser_local_records', 'signer_authentication']),
+    futureVersionBehaviour: 'reject',
+  }),
+  Object.freeze({
+    id: 'lookup_evidence',
+    schema: LOOKUP_EVIDENCE_SCHEMA,
+    versions: Object.freeze([...SUPPORTED_LOOKUP_EVIDENCE_SCHEMA_VERSIONS]),
+    versionField: 'schemaVersion',
+    nestedSchemaPath: Object.freeze([]),
+    browser: Object.freeze({ import: 'supported', export: 'supported' }),
+    cli: Object.freeze({ read: 'supported', write: 'supported', verify: 'supported' }),
+    fidelity: 'lossy_by_design',
+    requiredAssurance: 'structure',
+    preservedFieldGroups: Object.freeze(['query_context', 'generator_metadata', 'source_health', 'normalised_registration_evidence', 'bounded_replay_facts', 'observation_times', 'limitations']),
+    excludedFieldGroups: Object.freeze(['browser_local_records', 'case_context', 'brand_profiles', 'credentials', 'session_material', 'request_headers', 'cookies', 'signer_authentication', 'raw_payload_rendering_during_replay']),
     futureVersionBehaviour: 'reject',
   }),
   Object.freeze({
@@ -131,3 +145,7 @@ export function interchangeContractFor(id: InterchangeArtifactContract['id']): I
   if (!contract) throw new TypeError('Interchange contract is not registered.');
   return contract;
 }
+import {
+  LOOKUP_EVIDENCE_SCHEMA,
+  SUPPORTED_LOOKUP_EVIDENCE_SCHEMA_VERSIONS,
+} from './evidence-export.mts';

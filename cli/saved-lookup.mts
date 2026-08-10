@@ -1,4 +1,5 @@
 import { Buffer } from 'node:buffer';
+import { classifyQuery } from '../lib/classify.mts';
 import { CliUsageError } from './arguments.mts';
 import type { BoundedTextStream } from './bulk.mts';
 
@@ -87,8 +88,16 @@ function parseSavedLookupDocument(text: unknown, options: SavedLookupParseOption
   if (document.mode !== 'fast' && document.mode !== 'deep') {
     throw new CliUsageError(`${label} has an unsupported lookup mode.`);
   }
-  requiredBoundedString(document.query, 'query');
-  requiredBoundedString(document.registrableDomain, 'registrableDomain');
+  const query = requiredBoundedString(document.query, 'query');
+  const registrableDomain = requiredBoundedString(document.registrableDomain, 'registrableDomain');
+  try {
+    const classified = classifyQuery(query);
+    if (classified.type !== 'domain' || classified.registrableDomain !== registrableDomain.toLowerCase().replace(/\.$/u, '')) {
+      throw new Error('Saved query does not match its declared registrable domain.');
+    }
+  } catch {
+    throw new CliUsageError('query must identify the declared registrable domain.');
+  }
   requiredBoundedString(document.generatedAt, 'generatedAt');
   const diagnostics = objectOrNull(document.diagnostics);
   const rdapDiagnostics = objectOrNull(diagnostics?.rdap);

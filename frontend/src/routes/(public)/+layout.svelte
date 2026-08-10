@@ -53,12 +53,13 @@
 <div class="public-shell">
   <a class="skip-link" href="#main-content">Skip to main content</a>
   <header class="public-header">
-    <a class="public-brand" href="/"><span class="mark"><BrandMark /></span><span class="brand-copy"><strong>WHOISleuth</strong><small>Domain intelligence</small></span></a>
+    <a class="public-brand" href="/" aria-label="WHOISleuth overview"><span class="mark"><BrandMark /></span><span class="brand-copy"><strong>WHOISleuth</strong><small>Domain intelligence</small></span></a>
     <nav aria-label="Public navigation">
       <a class="overview-link" class:active={page.url.pathname==='/' } aria-current={page.url.pathname==='/'?'page':undefined} href="/">Overview</a>
-      <a class:active={page.url.pathname==='/demo'} aria-current={page.url.pathname==='/demo'?'page':undefined} href="/demo">Demo</a>
-      <ThemeSelector />
+      <a class="demo-link" class:active={page.url.pathname==='/demo'} aria-current={page.url.pathname==='/demo'?'page':undefined} href="/demo">Demo</a>
+      <a class:active={page.url.pathname.startsWith('/resources')} aria-current={page.url.pathname==='/resources'?'page':page.url.pathname.startsWith('/resources/')?'location':undefined} href="/resources">Resources</a>
       <a class="console-link" class:active={page.url.pathname==='/login'} aria-current={page.url.pathname==='/login'?'page':undefined} aria-label="Open console" href={session==='anonymous'?'/login':'/dashboard'}><span class="console-label-full" aria-hidden="true">Open console</span><span class="console-label-short" aria-hidden="true">Console</span></a>
+      <ThemeSelector />
       {#if session==='authenticated'}<button class="sign-out" type="button" disabled={signingOut} onclick={logout}>{signingOut?'Signing out…':'Sign out'}</button>{/if}
       {#if logoutError}<span class="session-error" role="status">{logoutError}</span>{/if}
     </nav>
@@ -111,15 +112,12 @@
     .public-header{gap:4px}
     .public-brand{gap:4px}
     .public-brand .mark{width:24px;height:24px}
-    .public-brand strong{font-size:.68rem}
     .public-header nav{gap:8px}
     .public-header nav a,.public-header nav button{padding-inline:3px;font-size:.625rem;line-height:1}
     .public-header nav :global(.theme-selector){font-size:.625rem;line-height:1}
+    .public-header nav .demo-link{display:none}
   }
   @media(max-width:360px){
     .public-header nav a,.public-header nav button{padding-inline:2px}
-  }
-  @media(max-width:330px){
-    .public-header nav > a[href="/demo"]{display:none}
   }
 </style>

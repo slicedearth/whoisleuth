@@ -64,10 +64,13 @@ async function requestLookup(
   try {
     if (controller.signal.aborted) throw new DOMException('Aborted', 'AbortError');
     const response = await fetchImpl(url, { signal: controller.signal });
-    if (controller.signal.aborted) throw new DOMException('Aborted', 'AbortError');
+    if (controller.signal.aborted) {
+      await response.body?.cancel(controller.signal.reason).catch(() => {});
+      throw new DOMException('Aborted', 'AbortError');
+    }
     let body: unknown;
     try {
-      body = await readJsonResponseCapped(response, LARGE_JSON_RESPONSE_BYTES);
+      body = await readJsonResponseCapped(response, LARGE_JSON_RESPONSE_BYTES, controller.signal);
     } catch (cause) {
       // Preserve the HTTP status when an adapter supplies a malformed bounded
       // error page. Successful malformed or over-bound responses remain typed

@@ -259,7 +259,7 @@ test('the Dashboard presents task lanes without duplicating the sidebar labels',
   await expect(page.locator('.summary-card', { hasText: 'Open cases' })).toHaveAttribute('href', '/monitor?view=cases');
   await expect(page.locator('.summary-card', { hasText: 'Watchlists' })).toHaveAttribute('href', '/monitor?view=watchlists');
   await expect(page.getByRole('link', { name: /Check domain-ending support/ })).toHaveAttribute('href', '/registry-support');
-  await expect(page.getByRole('link', { name: /Read the guide/ })).toHaveAttribute('href', '/guide');
+  await expect(page.getByRole('link', { name: /Open resources/ })).toHaveAttribute('href', '/resources#start');
   await expect(page.getByRole('combobox', { name: 'Guide' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Start guide' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Compare two domains' })).toHaveCount(0);

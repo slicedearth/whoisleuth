@@ -207,7 +207,7 @@ describe('lookup evidence export conversion', () => {
       '2026-07-14T09:00:00.000Z'
     );
     assert.equal(result.schema, 'whoisleuth.lookup-evidence');
-    assert.equal(result.schemaVersion, 25);
+    assert.equal(result.schemaVersion, 26);
     assert.equal(result.generatedAt, '2026-07-14T09:00:00.000Z');
     assert.deepEqual(result.application, {
       name: 'WHOISleuth',
@@ -227,7 +227,9 @@ describe('lookup evidence export conversion', () => {
     assert.equal(query.submitted, 'login.example.test');
     assert.equal(query.registrableDomain, 'example.test');
     assert.equal(recordValue(rdap.raw).publicContact, 'published@example.test');
-    assert.match(String(recordValue(arrayValue(whois.chain)[0]).response), /Registrant Email/);
+    const whoisHop = recordValue(arrayValue(whois.chain)[0]);
+    assert.equal(whoisHop.status, 'success');
+    assert.equal(Object.hasOwn(whoisHop, 'response'), false);
     assert.equal(recordValue(availability.tls).protocol, 'TLSv1.3');
     assert.equal(recordValue(recordValue(credentialSurface.inputs).categories).username, 1);
     assert.equal(recordValue(network.network).name, 'Example edge network');
@@ -264,6 +266,63 @@ describe('lookup evidence export conversion', () => {
       .find((item) => item.label === 'Registrar');
     assert.equal(registrar?.status, 'whois_incomplete');
     assert.equal(recordValue(comparison.counts).conflict, 0);
+  });
+
+  test('keeps unavailable registry source states explicit and bounds copied source detail', async () => {
+    const unavailable = savedLookup();
+    delete recordValue(unavailable).rdap;
+    delete recordValue(unavailable).whois;
+    recordValue(unavailable.diagnostics).rdap = { status: 'unsupported' };
+    recordValue(unavailable.diagnostics).whois = { status: 'skipped' };
+    const projected = buildCliEvidenceExport(JSON.stringify(unavailable), await evidenceModule());
+    assert.equal(recordValue(recordValue(projected.sources).rdap).status, 'unsupported');
+    assert.equal(recordValue(recordValue(projected.sources).whois).status, 'skipped');
+    assert.equal(recordValue(recordValue(projected.sources).rdap).parsed, null);
+    assert.equal(recordValue(recordValue(projected.sources).whois).parsed, null);
+
+    const failed = savedLookup();
+    recordValue(failed.diagnostics).rdap = { status: 'error' };
+    recordValue(failed).rdap = {
+      error: `upstream\n${'x'.repeat(10_100)}`,
+      attempts: Array.from({ length: 17 }, (_, index) => ({ outcome: 'error', index })),
+    };
+    const boundedFailure = buildCliEvidenceExport(JSON.stringify(failed), await evidenceModule());
+    const rdap = recordValue(recordValue(boundedFailure.sources).rdap);
+    assert.equal(String(rdap.error).length, 10_000);
+    assert.equal(String(rdap.error).includes('\n'), false);
+    assert.equal(arrayValue(rdap.attempts).length, 16);
+
+    const longChain = savedLookup();
+    longChain.whois.chain = Array.from({ length: 17 }, (_, index) => ({
+      server: `whois-${index}.example.test`,
+      queriedAt: '2026-07-14T07:59:51.000Z',
+      response: 'Domain Name: EXAMPLE.TEST',
+    }));
+    const boundedChain = buildCliEvidenceExport(JSON.stringify(longChain), await evidenceModule());
+    assert.equal(arrayValue(recordValue(recordValue(boundedChain.sources).whois).chain).length, 16);
+  });
+
+  test('rejects an export that cannot fit the shared browser-import profile', async () => {
+    const source = savedLookup();
+    recordValue(source.rdap).data = {
+      objectClassName: 'domain',
+      padding: Array.from({ length: 5_500 }, () => 'x'.repeat(1_000)),
+    };
+    const module = await evidenceModule();
+    assert.throws(
+      () => buildCliEvidenceExport(JSON.stringify(source), module),
+      /5 MiB portable file limit/iu,
+    );
+  });
+
+  test('rejects a saved query that does not identify its declared registrable domain', async () => {
+    const source = savedLookup();
+    source.query = 'other.test';
+    const module = await evidenceModule();
+    assert.throws(
+      () => buildCliEvidenceExport(JSON.stringify(source), module),
+      /query must identify the declared registrable domain/iu,
+    );
   });
 
   test('rejects malformed comparison fields before producing a package', async () => {
@@ -466,6 +525,82 @@ describe('lookup evidence HTML rendering', () => {
 });
 
 describe('evidence export CLI runner', () => {
+  test('feeds the domain-triage export directly into offline verification', async () => {
+    const exported = capture();
+    const exportCode = await runCli(['export', '--compact'], {
+      stdout: exported.stream,
+      stderr: capture().stream,
+      readExportInput: async () => JSON.stringify(savedLookup()),
+      loadEvidenceExport: evidenceModule,
+      now: () => '2026-07-14T09:00:00.000Z',
+    });
+    assert.equal(exportCode, EXIT_CODES.SUCCESS);
+
+    const verified = capture();
+    const verifyCode = await runCli(['verify-artifact', '--json', '--strict-exit'], {
+      stdout: verified.stream,
+      stderr: capture().stream,
+      readArtifactInput: async () => exported.value(),
+    });
+    assert.equal(verifyCode, EXIT_CODES.SUCCESS);
+    assert.deepEqual(JSON.parse(verified.value()).artifact, {
+      kind: 'lookup_evidence',
+      schema: 'whoisleuth.lookup-evidence',
+      version: 26,
+    });
+    assert.equal(JSON.parse(verified.value()).state, 'structure_valid');
+  });
+
+  test('verifies a minimal current domain export with absent optional availability diagnostics', async () => {
+    const source = {
+      schema: 'whoisleuth.cli.lookup',
+      version: 1,
+      generatedAt: '2026-07-14T08:00:00.000Z',
+      mode: 'fast',
+      query: 'example.test',
+      type: 'domain',
+      registrableDomain: 'example.test',
+      isSubdomain: false,
+      diagnostics: {
+        rdap: { status: 'success' },
+        whois: { status: 'skipped' },
+      },
+      rdap: {
+        upstreamStatus: 200,
+        rdapServer: 'https://rdap.example.test/domain/example.test',
+        transportSecurity: 'https',
+        fetchedAt: '2026-07-14T07:59:50.000Z',
+        attempts: [],
+        parsed: { domain: 'EXAMPLE.TEST' },
+        data: { objectClassName: 'domain' },
+      },
+    };
+    const exported = capture();
+    const exportCode = await runCli(['export', '--compact'], {
+      stdout: exported.stream,
+      stderr: capture().stream,
+      readExportInput: async () => JSON.stringify(source),
+      loadEvidenceExport: evidenceModule,
+      now: () => '2026-07-14T09:00:00.000Z',
+    });
+    assert.equal(exportCode, EXIT_CODES.SUCCESS);
+
+    const evidence = JSON.parse(exported.value());
+    assert.equal(recordValue(evidence.query).inputHostname, 'example.test');
+    assert.equal(recordValue(evidence.analysis).availability, null);
+    assert.equal(Object.hasOwn(recordValue(evidence.diagnostics), 'version'), false);
+
+    const verified = capture();
+    const verifyCode = await runCli(['verify-artifact', '--json', '--strict-exit'], {
+      stdout: verified.stream,
+      stderr: capture().stream,
+      readArtifactInput: async () => exported.value(),
+    });
+    assert.equal(verifyCode, EXIT_CODES.SUCCESS);
+    assert.equal(JSON.parse(verified.value()).artifact.kind, 'lookup_evidence');
+    assert.equal(JSON.parse(verified.value()).state, 'structure_valid');
+  });
+
   test('reads stdin through the default builder without making a lookup request', async () => {
     const stdout = capture();
     let lookupCalls = 0;

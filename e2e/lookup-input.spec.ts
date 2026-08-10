@@ -19,10 +19,13 @@ function replayEvidence(target: string, registrar: string) {
     generatedAt: '2026-08-10T00:00:00.000Z',
     application: { name: 'WHOISleuth', version: 'fixture' },
     query: { submitted: target, registrableDomain: target, type: 'domain' },
-    diagnostics: { rdap: { status: 'success', fetchedAt: '2026-08-10T00:00:00.000Z' } },
+    diagnostics: {
+      rdap: { status: 'success', fetchedAt: '2026-08-10T00:00:00.000Z' },
+      whois: { status: 'skipped' },
+    },
     sources: {
       rdap: { status: 'success', parsed: { domain: target, registrar: { name: registrar } } },
-      whois: { status: 'unavailable', parsed: {} },
+      whois: { status: 'skipped', parsed: null },
     },
     analysis: {
       availability: { state: 'registered', confidence: 'high' },

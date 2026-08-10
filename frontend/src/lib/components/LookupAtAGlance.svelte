@@ -24,8 +24,8 @@
 </script>
 
 <section class="at-a-glance card" aria-labelledby="lookup-at-a-glance-title">
-  <header>
-    <div>
+  <header class="glance-header">
+    <div class="glance-intro">
       <p class="eyebrow">Start here</p>
       <h4 id="lookup-at-a-glance-title">At a glance</h4>
       <p>Review the strongest observations and unresolved evidence before opening source detail.</p>
@@ -76,15 +76,16 @@
 </section>
 
 <style>
-  .at-a-glance{min-width:0;padding:var(--card-pad)}
-  header{display:flex;align-items:flex-start;justify-content:space-between;gap:18px}
+  .at-a-glance{container-type:inline-size;min-width:0;padding:var(--card-pad)}
+  .glance-header{display:grid;grid-template-columns:minmax(240px,.7fr) minmax(0,2fr);align-items:start;gap:18px}
+  .glance-intro{min-width:0}
   h4{margin:2px 0 0;font:700 var(--text-lg) var(--mono)}
-  header p:not(.eyebrow){max-width:660px;margin:6px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.5}
-  .metrics{display:flex;flex:0 0 auto;flex-wrap:wrap;justify-content:flex-end;gap:6px}
-  .metrics span{padding:6px 8px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised);color:var(--muted);font:var(--text-2xs) var(--mono)}
+  .glance-header p:not(.eyebrow){max-width:660px;margin:6px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.5}
+  .metrics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;min-width:0;width:100%}
+  .metrics span{min-width:0;padding:6px 8px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised);color:var(--muted);font:var(--text-2xs) var(--mono);overflow-wrap:anywhere}
   .metrics strong{color:var(--text);font-size:var(--text-sm)}
   .metrics .attention strong{color:var(--amber)}
-  .metric-note{flex-basis:100%;max-width:440px;color:var(--muted);font-size:var(--text-2xs);line-height:1.45;text-align:right}
+  .metric-note{grid-column:1/-1;max-width:none;color:var(--muted);font-size:var(--text-2xs);line-height:1.45;text-align:right;overflow-wrap:anywhere}
   .glance-grid{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(260px,.9fr);gap:9px;margin-top:14px}
   .glance-grid>section{min-width:0;padding:12px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel-raised)}
   h5{margin:0 0 9px;font:700 var(--text-xs) var(--mono)}
@@ -103,15 +104,17 @@
   .next-action span,.next-action small{color:var(--muted);font-size:var(--text-2xs);line-height:1.45}
   .next-action small{color:var(--text)}
   .empty{margin:0;color:var(--muted);font-size:var(--text-xs);line-height:1.5}
+  @container(min-width:1000px){
+    .metrics{grid-template-columns:repeat(4,minmax(0,1fr))}
+  }
+  @container(max-width:760px){
+    .glance-header{grid-template-columns:minmax(0,1fr)}
+    .metric-note{text-align:left}
+  }
   @media(max-width:840px){
-    header{display:grid}
-    .metrics{justify-content:flex-start}
     .glance-grid{grid-template-columns:minmax(0,1fr)}
   }
   @media(max-width:520px){
-    .metrics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));width:100%}
-    .metrics span{min-width:0}
-    .metric-note{grid-column:1/-1;max-width:none;text-align:left}
     .signals{grid-template-columns:minmax(0,1fr)}
   }
 </style>

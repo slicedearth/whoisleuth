@@ -14,6 +14,8 @@ import {
   consoleNavigation,
   consoleNavigationGroups,
   protectedDestinations,
+  publicResources,
+  referenceNavigation,
   referenceResources,
   toolNavigation,
 } from '../frontend/src/lib/workspaces.ts';
@@ -78,7 +80,11 @@ test('navigation, tool guide, and reference guide use one canonical product voca
   ]);
   assert.deepEqual(consoleNavigationGroups.flatMap((group) => group.items), consoleNavigation);
   assert.deepEqual(protectedDestinations, [dashboard, ...toolNavigation, ...referenceResources]);
-  assert.equal(allStrings({ dashboard, toolNavigation, referenceResources }).some((value) => /\b(?:portal|workspace)\b/iu.test(value)), false);
+  assert.deepEqual(publicResources.map(({ href, label }) => ({ href, label })), [
+    { href: '/resources', label: 'Resources' },
+  ]);
+  assert.deepEqual(referenceNavigation, [...referenceResources, ...publicResources]);
+  assert.equal(allStrings({ dashboard, toolNavigation, referenceResources, publicResources }).some((value) => /\b(?:portal|workspace)\b/iu.test(value)), false);
 });
 
 test('glossary, FAQ, state, and mistake content is bounded and deterministic', () => {

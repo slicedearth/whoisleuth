@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import { parseBoundedJsonObject } from './bounded-json.mts';
 import {
   validateInvestigationCapsuleStructure,
+  validateLookupEvidenceArtifactStructure,
   validateOfflineArtifactStructure,
   validateSignedDigestArtifactStructure,
 } from './artifact-structure.mts';
@@ -83,6 +84,11 @@ import {
   CLI_CASE_PACK_SCHEMA,
   verifyCliCasePack,
 } from './case-pack.mts';
+import {
+  LOOKUP_EVIDENCE_PORTABLE_MAX_BYTES,
+  LOOKUP_EVIDENCE_SCHEMA,
+  SUPPORTED_LOOKUP_EVIDENCE_SCHEMA_VERSIONS,
+} from '../lib/evidence-export.mts';
 
 export const OFFLINE_ARTIFACT_VERIFICATION_SCHEMA = 'whoisleuth.offline-artifact-verification';
 export const OFFLINE_ARTIFACT_VERIFICATION_VERSION = 3;
@@ -103,6 +109,7 @@ type ArtifactKind =
   | 'encrypted_workspace_archive'
   | 'case_response_packet'
   | 'investigation_capsule'
+  | 'lookup_evidence'
   | 'saved_lookup'
   | 'cli_case_pack'
   | 'signed_review_artifact';
@@ -486,6 +493,39 @@ async function verifyOfflineArtifactCore(
           ? ['The whole capsule matches its declared digest, including metadata and the linked source-contract projection digests. The non-embedded Lookup evidence remains linked by digest and must be retained separately.']
           : ['The embedded brief, graph, and optional analyst-record projections match their declared digests. Capsule metadata and the linked Lookup evidence are outside those projection digests and must not be treated as whole-file integrity verified.']),
         'Digest verification detects changed content but does not authenticate the analyst, signer, collection source, or truth of retained observations and assertions.',
+      ]),
+    });
+  }
+
+  if (schema === LOOKUP_EVIDENCE_SCHEMA) {
+    if (!SUPPORTED_LOOKUP_EVIDENCE_SCHEMA_VERSIONS.some((candidate) => candidate === version)) {
+      throw new UnsupportedOfflineArtifactError('This Lookup-evidence document version is not supported.');
+    }
+    if (inputBytes(raw) > LOOKUP_EVIDENCE_PORTABLE_MAX_BYTES) {
+      throw new TypeError('Lookup-evidence documents are limited to 5 MiB for browser-compatible verification.');
+    }
+    validateLookupEvidenceArtifactStructure(value);
+    return Object.freeze({
+      schema: OFFLINE_ARTIFACT_VERIFICATION_SCHEMA,
+      version: OFFLINE_ARTIFACT_VERIFICATION_VERSION,
+      artifact: Object.freeze({ kind: 'lookup_evidence', schema, version }),
+      state: 'structure_valid',
+      checks: Object.freeze({
+        structure: 'verified',
+        contentIntegrity: 'not_checked',
+        contentIntegrityScope: 'not_applicable',
+        authenticatedEncryption: 'not_applicable',
+      }),
+      summary: Object.freeze({
+        inputBytes: inputBytes(raw),
+        sectionCount: null,
+        recordCount: null,
+        ciphertextBytes: null,
+      }),
+      limitations: Object.freeze([
+        `Lookup-evidence schema ${version} matches its bounded browser-importable structural contract, but this export format has no embedded checksum or signature. Structural validity does not prove that its evidence is accurate, current, or unchanged since collection.`,
+        'Use an integrity-verified investigation manifest and an exact manifest-entry identity check when retained-file byte identity must be established.',
+        'The export may contain raw registry RDAP publication data, normalised WHOIS values, and bounded contact details; review it before sharing.',
       ]),
     });
   }

@@ -15,6 +15,7 @@ import { runUnifiedLookup, LOOKUP_ERROR_CODES } from './lib/lookup.mts';
 import { createLookupHttpResponse } from './lib/lookup-response-contract.mts';
 import {
   CANONICAL_TRAILING_SLASH_REDIRECTS,
+  PERMANENT_ROUTE_REDIRECTS,
   PRERENDERED_HTML_FILE_OVERRIDES,
 } from './lib/prerendered-routes.mts';
 import { searchCertificateTransparency } from './lib/ct-search.mts';
@@ -149,6 +150,15 @@ app.use('/_app/immutable', express.static(path.join(svelteBuildDir, '_app', 'imm
   immutable: true,
   maxAge: '1y',
 }));
+for (const [sourcePath, canonicalPath] of PERMANENT_ROUTE_REDIRECTS) {
+  app.get(sourcePath, (req: RequestLike, res: ResponseLike, next: Next) => {
+    if (req.path !== sourcePath) {
+      next();
+      return;
+    }
+    res.redirect(308, canonicalPath);
+  });
+}
 for (const [sourcePath, canonicalPath] of CANONICAL_TRAILING_SLASH_REDIRECTS) {
   app.get(sourcePath, (req: RequestLike, res: ResponseLike, next: Next) => {
     if (req.path !== sourcePath) {

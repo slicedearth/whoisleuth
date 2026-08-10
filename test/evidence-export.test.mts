@@ -16,8 +16,9 @@ function fixtureResponse(): Record<string, unknown> {
       upstreamStatus: 200,
       fetchedAt: '2026-07-11T01:02:03.000Z',
       attempts: [{
-        endpoint: 'https://rdap.example/domain/example.com', transportSecurity: 'https',
+        endpoint: 'https://rdap.example/domain/example.com?token=must-not-export#private', transportSecurity: 'https',
         status: 200, outcome: 'success', detail: 'The endpoint returned the requested RDAP object.', selected: true,
+        authorization: 'Bearer must-not-export', cookie: 'session=must-not-export',
       }],
       parsed: {
         domain: 'EXAMPLE.COM',
@@ -58,8 +59,8 @@ function fixtureResponse(): Record<string, unknown> {
         authoritativeHop: 'whois.registry.example',
       },
       chain: [
-        { server: 'whois.iana.org', queriedAt: '2026-07-11T01:02:03.000Z', response: 'refer: whois.registry.example' },
-        { server: 'whois.registry.example', queriedAt: '2026-07-11T01:02:04.000Z', response: 'Domain Name: EXAMPLE.COM' },
+        { server: 'whois.iana.org', queriedAt: '2026-07-11T01:02:03.000Z', response: 'refer: whois.registry.example', cookie: 'must-not-export' },
+        { server: 'whois.registry.example', queriedAt: '2026-07-11T01:02:04.000Z', response: 'Domain Name: EXAMPLE.COM', authorization: 'must-not-export' },
       ],
     },
     networkContext: {
@@ -321,6 +322,28 @@ function fixtureResponse(): Record<string, unknown> {
 describe('lookup evidence export', () => {
   test('packages query context, raw sources, analysis, and provenance', () => {
     const response = fixtureResponse();
+    const injectedDiagnostics = recordValue(response.diagnostics);
+    const injectedRdapDiagnostics = recordValue(injectedDiagnostics.rdap);
+    injectedRdapDiagnostics.endpoint = 'https://rdap.example/domain/example.com?token=must-not-export#private';
+    injectedRdapDiagnostics.attempts = [{
+      endpoint: 'https://rdap.example/domain/example.com?token=must-not-export',
+      outcome: 'success', status: 200, selected: true,
+      authorization: 'Bearer must-not-export', cookie: 'session=must-not-export',
+    }];
+    const injectedAvailability = recordValue(response.availability);
+    injectedAvailability.sessionToken = 'must-not-export';
+    const injectedHttpResponse = recordValue(recordValue(injectedAvailability.http).response);
+    injectedHttpResponse.authorization = 'must-not-export';
+    injectedHttpResponse.authorizationHeader = 'Bearer composite-private';
+    injectedHttpResponse.authHeader = 'Bearer private-extension';
+    injectedHttpResponse.sessionCookie = 'session=composite-private';
+    injectedHttpResponse.sessionKey = 'private-session-key';
+    injectedHttpResponse.password = 'fixture-private-marker';
+    injectedHttpResponse.passwordValue = 'private-password-value';
+    injectedHttpResponse.xApiKey = 'composite-private';
+    injectedHttpResponse.unknownExtension = 'unreviewed-extension';
+    recordValue(injectedAvailability.credentialSurfaceProfile).credentialSurfaceSecret = 'private-credential';
+    recordValue(injectedAvailability.technologyProfile).credentials = { secret: 'fixture-secret-marker' };
     response.threatIntelligence = {
       version: 1,
       providers: [{ provider: { id: 'fixture_provider' }, findings: [{ detail: 'provider-only-secret' }] }],
@@ -383,7 +406,7 @@ describe('lookup evidence export', () => {
     const registryInsights = requiredValue(result.analysis.registryInsights);
 
     assert.equal(result.schema, 'whoisleuth.lookup-evidence');
-    assert.equal(result.schemaVersion, 25);
+    assert.equal(result.schemaVersion, 26);
     assert.equal(result.query.submitted, 'login.example.com');
     assert.equal(result.query.registrableDomain, 'example.com');
     assert.equal(rdapDiagnostics.status, 'success');
@@ -394,10 +417,24 @@ describe('lookup evidence export', () => {
     assert.equal(rdapParsed.linksTruncated, true);
     assert.equal(rdapParsed.noticesTruncated, false);
     assert.equal(requiredValue(rdapAttempts[0]).outcome, 'success');
+    assert.equal(requiredValue(rdapAttempts[0]).endpoint, 'https://rdap.example/domain/example.com');
+    assert.deepEqual(Object.keys(requiredValue(rdapAttempts[0])), [
+      'endpoint', 'transportSecurity', 'status', 'outcome', 'detail', 'selected',
+    ]);
     assert.equal(Object.hasOwn(result.sources.rdap, 'registrarRdap'), false);
     assert.equal(JSON.stringify(result.sources).includes('privateTestValue'), false);
     assert.equal(JSON.stringify(result).includes('provider-only-secret'), false);
-    assert.equal(requiredValue(whoisChain[1]).response, 'Domain Name: EXAMPLE.COM');
+    assert.deepEqual(Object.keys(requiredValue(whoisChain[1])), [
+      'server', 'address', 'queriedAt', 'queryProfile', 'responseEncoding', 'status', 'detail',
+    ]);
+    assert.equal(requiredValue(whoisChain[1]).status, 'success');
+    assert.equal(Object.hasOwn(requiredValue(whoisChain[1]), 'response'), false);
+    assert.doesNotMatch(JSON.stringify(result.sources), /must-not-export|authorization|cookie/iu);
+    assert.doesNotMatch(JSON.stringify(result.diagnostics), /must-not-export|authorization|cookie|token/iu);
+    assert.doesNotMatch(
+      JSON.stringify(result.analysis),
+      /must-not-export|composite-private|fixture-private-marker|fixture-secret-marker|private-extension|private-session|private-password|private-credential|unreviewed-extension|authorization|sessionCookie|sessionToken|xApiKey|"credentials"|"password":"/iu,
+    );
     assert.equal(result.sources.whois.authoritativeHop, 'whois.registry.example');
     assert.equal(networkEndpoint.address, '93.184.216.34');
     assert.equal(networkRegistration.holder, 'Example network holder');
@@ -482,13 +519,17 @@ describe('lookup evidence export', () => {
         unicodeDomain: 'éxample.test',
         mixedScript: false,
         referenceMatches: [],
+        session: 'must-not-export',
+        unknownImportedField: 'must-not-export',
       },
     });
 
-    assert.equal(result.schemaVersion, 25);
+    assert.equal(result.schemaVersion, 26);
     const idn = recordValue(result.analysis.idn);
     assert.equal(idn.version, 1);
     assert.equal(idn.unicodeDomain, 'éxample.test');
+    assert.equal(Object.hasOwn(idn, 'session'), false);
+    assert.equal(Object.hasOwn(idn, 'unknownImportedField'), false);
   });
 
   test('retains bounded generator metadata without accepting an arbitrary version or URL', () => {
@@ -533,7 +574,12 @@ describe('lookup evidence export', () => {
     const result = evidence.buildLookupEvidence(response);
 
     assert.deepEqual(result.sources.rdap, {
-      status: 'error', error: 'RDAP timed out', attempts: [{ outcome: 'timeout' }],
+      status: 'error',
+      error: 'RDAP timed out',
+      attempts: [{
+        endpoint: null, transportSecurity: null, status: null,
+        outcome: 'timeout', detail: null, selected: false,
+      }],
     });
     assert.equal(result.sources.whois.status, 'partial');
     assert.equal(result.sources.whois.failedHop, 'whois.registrar.example');
@@ -541,6 +587,53 @@ describe('lookup evidence export', () => {
     assert.equal(result.analysis.registryComparison.counts.whois_only, 0);
     assert.equal(result.analysis.registryComparison.sourceHealth.rdap.condition, 'unavailable');
     assert.equal(result.analysis.registryComparison.sourceHealth.whois.condition, 'incomplete');
+  });
+
+  test('keeps partial registration sources explicit when no publication payload was retained', () => {
+    const response = fixtureResponse();
+    response.rdap = {};
+    response.whois = { chain: [] };
+    const diagnostics = recordValue(response.diagnostics);
+    recordValue(diagnostics.rdap).status = 'partial';
+    recordValue(diagnostics.whois).status = 'partial';
+
+    const result = evidence.buildLookupEvidence(response);
+    assert.equal(result.sources.rdap.status, 'partial');
+    assert.equal(result.sources.rdap.parsed, null);
+    assert.equal(result.sources.rdap.raw, null);
+    assert.equal(result.sources.whois.status, 'partial');
+    assert.equal(result.sources.whois.parsed, null);
+    assert.deepEqual(result.sources.whois.chain, []);
+  });
+
+  test('does not derive registry claims from publications whose diagnostics are unavailable', () => {
+    const result = evidence.buildLookupEvidence({
+      query: 'example.test',
+      type: 'domain',
+      inputHostname: 'example.test',
+      registrableDomain: 'example.test',
+      diagnostics: {
+        rdap: { status: 'unsupported' },
+        whois: { status: 'skipped' },
+      },
+      rdap: {
+        parsed: { domain: 'INJECTED.EXAMPLE', registrar: { name: 'Injected Registrar' } },
+        data: { authorization: 'must-not-export' },
+      },
+      whois: {
+        parsed: { domainName: 'INJECTED.EXAMPLE', registrar: 'Injected Registrar' },
+        chain: [{ server: 'whois.example.test', response: 'private publication' }],
+      },
+      availability: { applicable: true, state: 'unknown', confidence: 'low' },
+    });
+    assert.equal(result.sources.rdap.parsed, null);
+    assert.equal(result.sources.rdap.raw, null);
+    assert.equal(result.sources.whois.parsed, null);
+    assert.deepEqual(result.sources.whois.chain, []);
+    assert.deepEqual(result.analysis.registryComparison.fields, []);
+    assert.equal(result.analysis.registryInsights.contactDisclosure.registryRdap.state, 'unavailable');
+    assert.equal(result.analysis.registryInsights.contactDisclosure.whois.state, 'unavailable');
+    assert.doesNotMatch(JSON.stringify(result.analysis), /Injected Registrar|INJECTED\.EXAMPLE/iu);
   });
 
   test('keeps an unavailable registrar publication neutral instead of inventing a discrepancy', () => {
@@ -583,6 +676,50 @@ describe('lookup evidence export', () => {
     assert.equal(result.sources.reverseDns, null);
   });
 
+  test('suppresses unavailable network and reverse-DNS publications without erasing complete no-data observations', () => {
+    for (const status of ['not_found', 'unsupported', 'error']) {
+      const response = fixtureResponse();
+      response.networkContext = {
+        ...recordValue(response.networkContext),
+        status,
+        complete: true,
+      };
+      const source = requiredValue(evidence.buildLookupEvidence(response).sources.network);
+      assert.equal(source.status, status);
+      assert.equal(source.complete, status === 'not_found');
+      assert.equal(source.endpoint, null);
+      assert.equal(source.rdap, null);
+      assert.equal(source.network, null);
+    }
+    for (const status of ['not_found', 'unsupported', 'skipped', 'error']) {
+      const response = fixtureResponse();
+      response.reverseDns = {
+        ...recordValue(response.reverseDns),
+        status,
+        complete: true,
+      };
+      const source = requiredValue(evidence.buildLookupEvidence(response).sources.reverseDns);
+      assert.equal(source.status, status);
+      assert.equal(source.complete, status === 'not_found');
+      assert.deepEqual(source.records.ptr, []);
+    }
+  });
+
+  test('canonicalizes the submitted target instead of retaining URL paths, queries, or fragments', () => {
+    const response = fixtureResponse();
+    response.query = 'https://login.example.com/private/path?token=session-private#fragment';
+    const result = evidence.buildLookupEvidence(response);
+
+    assert.deepEqual(result.query, {
+      submitted: 'login.example.com',
+      type: 'domain',
+      inputHostname: 'login.example.com',
+      registrableDomain: 'example.com',
+      isSubdomain: true,
+    });
+    assert.doesNotMatch(JSON.stringify(result.query), /private|token|fragment/iu);
+  });
+
   test('uses null when no bounded security.txt source was represented', () => {
     const response = fixtureResponse();
     delete response.securityTxt;
@@ -599,8 +736,8 @@ describe('lookup evidence export', () => {
 
     assert.deepEqual(result.analysis.registryComparison.fields, []);
     assert.equal(result.analysis.registrarPublicationComparison, null);
-    assert.equal(result.sources.whois.status, 'unknown');
-    assert.equal(result.sources.whois.queriedAt, null);
+    assert.equal(result.sources.whois.status, 'error');
+    assert.equal(result.sources.whois.queriedAt, undefined);
   });
 
   test('creates a bounded, filesystem-safe filename', () => {

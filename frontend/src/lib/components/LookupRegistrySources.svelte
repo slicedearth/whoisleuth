@@ -285,6 +285,41 @@
         </tbody>
       </table>
     </div>
+    <section class="lane-cards" aria-labelledby="mobile-registration-comparisons-title">
+      <header>
+        <h5 id="mobile-registration-comparisons-title">Exact source comparisons</h5>
+        <p>Each card compares one field across one source pair. Open a card to review both publications and the exact assessment.</p>
+      </header>
+      <ol>
+        {#each comparisonLanes as row (row.id)}
+          {@const first=row.cells[0]}
+          {@const second=row.cells[1]}
+          <li data-comparison-state={row.status || 'unknown'}>
+            <details class="lane-card" open={row.status !== 'equivalent' && row.status !== 'equal'}>
+              <summary>
+                <span><strong>{row.label}</strong><small>{row.context}</small></span>
+                <span class="lane-status">{sourceStateLabel(row.status || 'unknown')}</span>
+              </summary>
+              <div class="lane-card-body">
+                <div class="publication-side">
+                  <small>First publication</small>
+                  <strong>{first?.column || 'Publication unavailable'}</strong>
+                  <span>{first?.detail || 'No comparable value'}</span>
+                  <em>Source state · {sourceStateLabel(first?.state || 'unknown')}</em>
+                </div>
+                <div class="publication-side">
+                  <small>Second publication</small>
+                  <strong>{second?.column || 'Publication unavailable'}</strong>
+                  <span>{second?.detail || 'No comparable value'}</span>
+                  <em>Source state · {sourceStateLabel(second?.state || 'unknown')}</em>
+                </div>
+                <p class="lane-assessment"><strong>Assessment</strong><span>{row.assessment || sourceStateLabel(row.status || 'unknown')}</span></p>
+              </div>
+            </details>
+          </li>
+        {/each}
+      </ol>
+    </section>
     <ul class="matrix-legend" aria-label="Registration source comparison states">
       <li class="state-equal"><span>=</span>Equivalent</li>
       <li class="state-conflict"><span>!</span>Source conflict</li>
@@ -503,6 +538,7 @@
   .lane-table th small,.lane-table td small{margin-top:4px;color:var(--muted);font-size:var(--text-2xs)}
   .lane-table td span{margin-top:4px}
   .lane-table code{color:var(--text);font-size:inherit}
+  .lane-cards{display:none}
   .authority-trace>header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
   .authority-trace h4{margin:2px 0 0;font:700 var(--text-md) var(--mono)}
   .authority-trace>header>span{max-width:230px;color:var(--accent);font:700 var(--text-2xs) var(--mono);text-align:right;text-transform:uppercase}
@@ -574,16 +610,37 @@
     .insight-grid,.publication-list,.capability-sources{grid-template-columns:1fr}
     .capability-sources li{grid-template-columns:1fr}.capability-sources li small{grid-column:1}
     .matrix-frame{display:none}
-    .lane-table-wrap{overflow:visible;border:0}
-    .lane-table,.lane-table tbody,.lane-table tr,.lane-table th,.lane-table td{display:block;width:100%}
-    .lane-table thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
-    .lane-table caption{border:1px solid var(--border);border-radius:var(--radius-sm)}
-    .lane-table tbody{display:grid;gap:8px;margin-top:8px}
-    .lane-table tr{overflow:hidden;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}
-    .lane-table th,.lane-table td{display:grid;grid-template-columns:minmax(92px,112px) minmax(0,1fr);gap:7px;min-width:0;border-top:1px solid var(--border)}
-    .lane-table th{border-top:0}
-    .lane-table th::before,.lane-table td::before{content:attr(data-label);color:var(--muted);font:650 var(--text-2xs) var(--mono);text-transform:uppercase}
-    .lane-table th>*,.lane-table td>*{grid-column:2}
+    .lane-table-wrap{display:none}
+    .lane-cards{display:grid;gap:8px;margin-top:12px}
+    .lane-cards>header{display:grid;gap:5px;padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
+    .lane-cards h5{margin:0;font:700 var(--text-xs) var(--mono)}
+    .lane-cards>header p{margin:0;color:var(--muted);font-size:var(--text-2xs);line-height:1.5}
+    .lane-cards ol{display:grid;gap:8px;margin:0;padding:0;list-style:none}
+    .lane-cards li{min-width:0}
+    .lane-card{overflow:hidden;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}
+    .lane-card>summary{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:start;gap:9px;min-width:0;padding:10px;cursor:pointer;list-style:none}
+    .lane-card>summary::-webkit-details-marker{display:none}
+    .lane-card>summary::after{content:'+';align-self:center;color:var(--muted);font:800 var(--text-sm) var(--mono);line-height:1}
+    .lane-card[open]>summary::after{content:'\2212'}
+    .lane-card>summary:focus-visible{outline:2px solid var(--focus);outline-offset:-3px}
+    .lane-card>summary>span:first-child{display:grid;gap:3px;min-width:0}
+    .lane-card>summary strong,.lane-card>summary small{display:block;min-width:0;overflow-wrap:anywhere}
+    .lane-card>summary strong{font:700 var(--text-xs) var(--mono)}
+    .lane-card>summary small{color:var(--muted);font-size:var(--text-2xs)}
+    .lane-status{align-self:start;max-width:108px;padding:3px 6px;border:1px solid var(--border-strong);border-radius:999px;color:var(--text);font:700 var(--text-2xs) var(--mono);line-height:1.25;text-align:center;text-transform:capitalize;overflow-wrap:anywhere}
+    [data-comparison-state='conflict'] .lane-status,[data-comparison-state='different'] .lane-status{border-color:var(--danger);color:var(--danger)}
+    [data-comparison-state='partial'] .lane-status,[data-comparison-state='incomplete'] .lane-status{border-color:var(--amber);color:var(--amber)}
+    .lane-card-body{display:grid;gap:8px;padding:0 10px 10px;border-top:1px solid var(--border)}
+    .publication-side{display:grid;gap:4px;min-width:0;margin-top:10px;padding:9px;border-left:3px solid var(--accent);background:var(--panel-raised)}
+    .publication-side:nth-child(2){margin-top:0;border-left-color:var(--accent2)}
+    .publication-side small{color:var(--muted);font:650 var(--text-2xs) var(--mono);text-transform:uppercase}
+    .publication-side strong,.publication-side span,.publication-side em{min-width:0;overflow-wrap:anywhere}
+    .publication-side strong{font:700 var(--text-xs) var(--mono)}
+    .publication-side span{font-size:var(--text-xs);line-height:1.45}
+    .publication-side em{color:var(--muted);font:normal var(--text-2xs) var(--mono)}
+    .lane-assessment{display:grid;gap:4px;margin:0;padding:9px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:var(--text-xs)}
+    .lane-assessment strong{font:700 var(--text-2xs) var(--mono);text-transform:uppercase}
+    .lane-assessment span{color:var(--muted);line-height:1.45;overflow-wrap:anywhere}
     .comparison .table-wrap,.publication-comparison .table-wrap{overflow:visible;border-top:0}
     .comparison table,.comparison tbody,.comparison tr,.comparison th[scope='row'],.comparison td,.publication-comparison table,.publication-comparison tbody,.publication-comparison tr,.publication-comparison th[scope='row'],.publication-comparison td{display:block;width:100%}
     .comparison thead,.publication-comparison thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}

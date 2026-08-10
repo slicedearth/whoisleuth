@@ -29,7 +29,7 @@
         {/each}
       </ol>
       {#if !linkSteps}
-        <a class="path-link" href={`/guide#${goal.id}`}>
+        <a class="path-link" href={`/resources#${goal.id}`}>
           Follow this path <span aria-hidden="true">→</span>
         </a>
       {/if}

@@ -826,16 +826,20 @@ default (see the README), so many lookups return no personal data at all.
   write and excludes raw registry responses, contacts, page values, request
   paths, credentials, and browser-local records. Its checksum detects file changes but does not
   authenticate an analyst or establish truth, ownership, intent, or safety.
-  Single-lookup
-  evidence JSON includes the raw RDAP and WHOIS responses, so it may contain
-  registry-published contact data. The separate Lookup Markdown reports are
-  generated from bounded known-field projections in the browser. Domain
+  Single-lookup evidence JSON can include a bounded privacy-projected registry
+  RDAP publication and bounded WHOIS referral-hop metadata, but excludes full
+  WHOIS response bodies. The portable projection removes request and response
+  headers, cookies, session and credential fields, and URL credentials, queries,
+  and fragments from nested retained values. The RDAP publication may still
+  contain registry-published contact data. The separate
+  Lookup Markdown reports are generated from bounded known-field projections in
+  the browser. Domain
   reports include registry, registrar, WHOIS, Risk, and limitation context; IP
   reports include normalised network registration and bounded reverse-DNS
   context when collected; ASN reports include normalised routing registration
   evidence. All preserve source states and collection time while excluding raw
   RDAP and WHOIS responses, expanded contacts, provider payloads, scripts, and
-  remote assets. A selected current-schema Lookup evidence JSON file can be
+  remote assets. A selected supported Lookup evidence schema 25 or 26 JSON file can be
   replayed locally after schema, nesting, entry-count, and byte-limit checks.
   Replay calculates SHA-256 and can compare it with an explicitly supplied
   trusted checksum. The file and checksum remain in the current browser tab,
@@ -866,8 +870,9 @@ default (see the README), so many lookups return no personal data at all.
   import. From that point on, the file is yours to manage, so store it
   appropriately and delete it once you no longer need it.
 - **Offline CLI verification and diagnostics**: `verify-artifact` reads one
-  local supported archive, packet, or signed review artefact and reports only
-  its contract, integrity state, and bounded size or count metadata by default.
+  local supported archive, packet, saved Lookup, Lookup-evidence export, or
+  signed review artefact and reports only its contract, assurance state, and
+  bounded size or count metadata by default.
   `inspect-archive` first performs the same verification, then reports bounded
   section summaries. Exact search is limited to allowlisted target fields and
   returns a digest by default; values require explicit `--reveal`. It never

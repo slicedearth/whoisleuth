@@ -302,10 +302,12 @@ test('the console command palette filters destinations and remains keyboard oper
   await expect(search).toBeFocused();
   await search.fill('whois');
   await expect(dialog.getByRole('option', { name: /Lookup/ })).toBeVisible();
-  await expect(dialog.getByRole('option')).toHaveCount(1);
+  await expect(dialog.getByRole('option', { name: /Resources/ })).toBeVisible();
+  await expect(dialog.getByRole('option')).toHaveCount(2);
   await search.fill('dns whois');
   await expect(dialog.getByRole('option', { name: /Lookup/ })).toBeVisible();
-  await expect(dialog.getByRole('option')).toHaveCount(1);
+  await expect(dialog.getByRole('option', { name: /Resources/ })).toBeVisible();
+  await expect(dialog.getByRole('option')).toHaveCount(2);
   await search.fill('tld');
   await expect(dialog.getByRole('option', { name: /Registry support/ })).toBeVisible();
   await expect(dialog.getByRole('option')).toHaveCount(1);
@@ -784,7 +786,7 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
     const mapFrameVisible = await mapFrame.isVisible();
     const mobileMapVisible = await mobileMap.isVisible();
     expect(Number(mapFrameVisible) + Number(mobileMapVisible)).toBe(1);
-    if (size.width === 1920) expect(mapFrameVisible).toBe(true);
+    if (size.width === 1920 || size.width === 1440) expect(mapFrameVisible).toBe(true);
     if (size.width === 320) expect(mobileMapVisible).toBe(true);
     if (mapFrameVisible) {
       const graphBox = await boundingBox(mapFrame);
@@ -794,6 +796,26 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
       expect(graphBox.height).toBeGreaterThan(180);
       expect(graphBox.height).toBeLessThan(700);
       expect(await mapFrame.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+      expect(await mapFrame.evaluate((element) => getComputedStyle(element).touchAction)).toContain('pinch-zoom');
+      if (size.width === 1440) {
+        await mapFrame.scrollIntoViewIfNeeded();
+        const wheelTarget = await boundingBox(mapFrame);
+        const before = await page.evaluate(() => ({
+          y: window.scrollY,
+          maximum: document.documentElement.scrollHeight - window.innerHeight,
+        }));
+        const wheelDelta = before.y < before.maximum - 320 ? 320 : -320;
+        await page.mouse.move(
+          wheelTarget.x + wheelTarget.width / 2,
+          wheelTarget.y + Math.min(wheelTarget.height / 2, 180),
+        );
+        await page.mouse.wheel(0, wheelDelta);
+        if (wheelDelta > 0) {
+          await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(before.y);
+        } else {
+          await expect.poll(() => page.evaluate(() => window.scrollY)).toBeLessThan(before.y);
+        }
+      }
     } else {
       expect(await mobileMap.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
     }
@@ -884,6 +906,7 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
 
 test('Lookup focus and disclosure controls change presentation without changing evidence', async ({ page }) => {
   const domain = 'presentation-options.invalid';
+  await page.setViewportSize({ width: 1440, height: 900 });
   const lookupRequests: string[] = [];
   page.on('request', (request) => {
     if (new URL(request.url()).pathname === '/api/lookup') lookupRequests.push(request.url());
@@ -903,6 +926,24 @@ test('Lookup focus and disclosure controls change presentation without changing 
   await expect(task).toHaveValue('general');
   await expect(controls.getByLabel('Detail')).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'At a glance' })).toBeVisible();
+  const atAGlance = page.locator('.at-a-glance');
+  const glanceGeometry = await atAGlance.evaluate((section) => {
+    const intro = section.querySelector('.glance-intro');
+    const note = section.querySelector('.metric-note');
+    const sectionBox = section.getBoundingClientRect();
+    const introBox = intro?.getBoundingClientRect();
+    const noteBox = note?.getBoundingClientRect();
+    return {
+      sectionClientWidth: section.clientWidth,
+      sectionScrollWidth: section.scrollWidth,
+      introWidth: introBox?.width ?? 0,
+      noteRight: noteBox?.right ?? Number.POSITIVE_INFINITY,
+      sectionRight: sectionBox.right,
+    };
+  });
+  expect(glanceGeometry.sectionScrollWidth).toBeLessThanOrEqual(glanceGeometry.sectionClientWidth + 1);
+  expect(glanceGeometry.introWidth).toBeGreaterThanOrEqual(230);
+  expect(glanceGeometry.noteRight).toBeLessThanOrEqual(glanceGeometry.sectionRight + 1);
   const detailedAssessment = page.locator('details.detailed-assessment');
   await expect(detailedAssessment).not.toHaveAttribute('open', '');
   await expect(page.getByRole('heading', { name: 'What the current evidence can support' })).toBeHidden();

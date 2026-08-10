@@ -8,6 +8,7 @@ import {
   compareCheckpointPins,
 } from '../frontend/src/lib/analysis/case-evidence-checkpoint.ts';
 import { normalizeCaseEvidencePins } from '../frontend/src/lib/analysis/case-response-model.ts';
+import { LOOKUP_EVIDENCE_SCHEMA_VERSION } from '../lib/evidence-export.mts';
 import type { LookupHttpResponse } from '../lib/lookup-response-contract.mts';
 
 const OBSERVED_AT = '2026-07-29T01:00:00.000Z';
@@ -119,7 +120,7 @@ describe('case evidence checkpoints', () => {
     assert.equal(byField.get('tls.valid_to')?.value, '2026-12-01T00:00:00.000Z');
     assert.equal(byField.get('disclosure.security_txt_expires')?.value, '2026-10-01T00:00:00.000Z');
     assert.equal(byField.get('disclosure.security_txt_contacts')?.value, 'mailto:security@checkpoint.example');
-    assert.equal(byField.get('registration.registrar')?.sourceSchema.version, 25);
+    assert.equal(byField.get('registration.registrar')?.sourceSchema.version, LOOKUP_EVIDENCE_SCHEMA_VERSION);
     assert.equal(JSON.stringify(facts).includes('secret=discard'), false);
   });
 

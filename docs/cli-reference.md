@@ -603,7 +603,7 @@ establish that a current candidate is malicious or safe.
 `verify-artifact` validates a supported local artefact without printing its
 evidence contents. Input is capped at 15 MiB. It currently recognises ordinary
 and encrypted workspace archives, case-response packets, acquisition-decision
-exports, Lookup claim passports, domain-comparison exports, Bulk mail-exposure exports, and Bulk review
+exports, supported Lookup-evidence exports, Lookup claim passports, domain-comparison exports, Bulk mail-exposure exports, and Bulk review
 manifests. Reviewed CLI case packs are checked against their canonical digest,
 bounded browser-importable case collection, audience, and review marker. The
 command verifies both the embedded projections and whole-capsule digest of an
@@ -612,11 +612,20 @@ source-contract digests, and reports `verified`. The non-embedded Lookup
 evidence must still be retained separately. Legacy capsule version 1 covers
 only the embedded brief, graph, and optional analyst-record projections, so it
 remains `integrity_valid` rather than whole-file `verified`. It also validates
-the bounded versioned structure of saved CLI
-Lookup JSON. Because saved Lookup documents do not embed a checksum or
-signature, that result is reported as `structure_valid` with content integrity
-explicitly unchecked. Saved Lookup validation retains its stricter 8 MiB
-document ceiling.
+the bounded versioned structure of saved CLI Lookup JSON and current
+Lookup-evidence schemas 25 and 26. Because neither saved Lookup documents nor full
+Lookup-evidence exports embed a checksum or signature, those results are
+reported as `structure_valid` with content integrity explicitly unchecked.
+Lookup-evidence verification closes the supported export envelopes and source
+wrappers, enforces the same 5 MiB, 20,000-entry, and 24-level limits as browser
+replay, and does not claim that
+an observation is accurate, current, or unchanged. Exact retained-file identity
+requires a verified investigation manifest and matching `--manifest-entry`;
+the evidence file can contain a bounded privacy-projected registry RDAP
+publication, normalised WHOIS values, and bounded contacts, so review it before
+sharing. Request and response headers, cookies, session and credential fields,
+and URL credentials, queries, and fragments are excluded. Saved Lookup validation retains its
+stricter 8 MiB document ceiling.
 
 For an ordinary workspace archive, the command validates the versioned
 structure, section byte counts, record counts, and per-section checksums. For a
@@ -683,7 +692,7 @@ historical contract included one.
 
 `interchange-report [artifact.json]` explains what one recognised portable
 artefact preserves, excludes, and supports in browser and CLI workflows. It
-recognises Lookup claim passports, domain-control passports, Brand Profile exports from versions 2
+recognises supported Lookup-evidence exports, Lookup claim passports, domain-control passports, Brand Profile exports from versions 2
 through 6, workspace archives from versions 1 through 5, encrypted workspace
 envelopes, reviewed CLI case packs, and the retired one-way desired-baseline
 export. The retired export is identified as unsupported rather than silently
@@ -702,7 +711,8 @@ unknown schema string, or encrypted content. A separate `--passphrase-file`
 can authenticate an encrypted workspace; without it, only the envelope is
 reported as valid and fidelity is withheld. Each registered interchange family
 declares its exact assurance requirement: browser-importable structure is
-sufficient only for Brand Profile normalisation, while checksummed formats
+sufficient for Brand Profile normalisation and the current bounded
+Lookup-evidence contract, while checksummed formats
 require whole-file integrity and encrypted workspaces additionally require
 authenticated decryption. “Semantic exact after normalisation” does not mean byte
 identity, current evidence, or a successful round trip through an unrelated
@@ -1433,6 +1443,11 @@ successful steps must form an exact contiguous prefix of the installed recipe,
 including command, ordered arguments, mode and output schema. A final failed
 step is retried rather than trusted as completed.
 
+The `domain-triage` plan deliberately pairs `export` with `verify-artifact`.
+A fresh current Lookup-evidence export must pass the verifier as
+`structure_valid`; this establishes bounded contract compatibility, not a
+checksum, signature, source truth, or observation currency.
+
 ## Optional local rendered capture
 
 `packages/web-capture` is a private repo-local Playwright package, not part of
@@ -1486,11 +1501,27 @@ are mutually exclusive. Markdown and HTML include the fixed generator footer
 by default; `--no-attribution` removes only that footer and is rejected for
 JSON output.
 
+The current schema-26 JSON output can be passed directly to
+`verify-artifact`. The verifier reports `structure_valid` because this format
+has no embedded checksum or signature. Use a verified investigation manifest
+and exact manifest-entry identity when byte-for-byte retention matters, and
+review the bounded privacy-projected registry RDAP publication, normalised
+WHOIS values, and bounded contacts before sharing. `interchange-report`
+recognises the current format and describes the
+browser replay as lossy by design because replay renders bounded normalised
+facts rather than raw payloads. Schema 25 remains readable when its retained
+historical wrappers differ from retained diagnostics in the ways emitted by
+the former producer. The diagnostics remain authoritative, unavailable wrapper
+data is suppressed during replay, and other contradictory legacy shapes fail
+closed rather than becoming positive observations.
+
 The saved input is capped at 8 MiB and revalidated using the same schema,
 source-status, parsed-data, scalar, list, and event boundaries as `compare`.
-The export retains query context, source diagnostics, normalised registry data,
-raw registry RDAP JSON, the raw WHOIS referral chain, availability analysis,
-and the shared registry-source comparison. Version 23 can add the exact local
+The export retains query context, explicitly projected source diagnostics,
+normalised registry data, a bounded privacy-projected registry RDAP
+publication, availability analysis, bounded WHOIS referral-hop
+metadata without response bodies, and the shared
+registry-source comparison. Version 23 can add the exact local
 SSLBL comparison already represented by a deep full Lookup. Version 21 adds the bounded registry
 lifecycle, disclosure, publication-quality, reconciliation, and abuse-routing
 interpretation derived from the already-collected sources. Registrar RDAP raw

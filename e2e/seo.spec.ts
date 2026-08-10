@@ -14,12 +14,6 @@ const publicPages = [
     heading: 'Use the investigation workflow without touching a live target.',
   },
   {
-    path: '/guide',
-    canonical: 'https://whoisleuth.com/guide',
-    title: 'How to use WHOISleuth | Guide and glossary',
-    heading: 'Use WHOISleuth with confidence.',
-  },
-  {
     path: '/privacy',
     canonical: 'https://whoisleuth.com/privacy',
     title: 'Privacy policy | WHOISleuth',
@@ -40,8 +34,8 @@ const publicPages = [
   {
     path: '/resources',
     canonical: 'https://whoisleuth.com/resources',
-    title: 'Domain investigation resources | WHOISleuth',
-    heading: 'Understand the evidence before using the result.',
+    title: 'Domain investigation resources and guide | WHOISleuth',
+    heading: 'Learn the workflow. Understand the evidence.',
   },
   {
     path: '/resources/open-source-domain-intelligence',
@@ -125,23 +119,25 @@ test('public pages expose prerendered search and sharing metadata', async ({ req
       });
     }
 
-    if (expected.path === '/guide') {
-      const schema = html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/u)?.[1];
-      expect(schema).toBeTruthy();
-      const parsed = JSON.parse(schema!);
-      expect(parsed).toMatchObject({ '@context': 'https://schema.org', '@type': 'FAQPage' });
-      expect(parsed.mainEntity).toHaveLength(21);
-      expect(parsed.mainEntity[0]).toMatchObject({ '@type': 'Question', acceptedAnswer: { '@type': 'Answer' } });
-    }
-
     if (expected.path === '/resources') {
       const schema = html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/u)?.[1];
       expect(schema).toBeTruthy();
       const parsed = JSON.parse(schema!);
-      expect(parsed).toMatchObject({ '@context': 'https://schema.org', '@type': 'CollectionPage' });
-      expect(parsed.hasPart).toHaveLength(8);
+      expect(parsed).toMatchObject({ '@context': 'https://schema.org' });
+      expect(parsed['@graph']).toHaveLength(2);
+      const collection = parsed['@graph'].find((item: { '@type'?: string }) => item['@type'] === 'CollectionPage');
+      const faq = parsed['@graph'].find((item: { '@type'?: string }) => item['@type'] === 'FAQPage');
+      expect(collection?.hasPart).toHaveLength(8);
+      expect(faq?.mainEntity).toHaveLength(21);
+      expect(faq?.mainEntity[0]).toMatchObject({ '@type': 'Question', acceptedAnswer: { '@type': 'Answer' } });
     }
   }
+});
+
+test('legacy Guide URLs redirect to the consolidated Resources canonical', async ({ request }) => {
+  const response = await request.get('/guide', { maxRedirects: 0 });
+  expect(response.status()).toBe(308);
+  expect(response.headers().location).toBe('/resources');
 });
 
 test('sign-in and protected console shells are excluded from search', async ({ request }) => {

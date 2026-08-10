@@ -9,10 +9,12 @@ import {
   MAX_SCHEMA_COMPATIBILITY_ENTRIES,
   SCHEMA_COMPATIBILITY_INVENTORY_SCHEMA,
   SCHEMA_COMPATIBILITY_INVENTORY_VERSION,
+  validateInterchangeSchemaCompatibility,
   validateSchemaCompatibilityEntries,
   type SchemaCompatibilityEntry,
   type SchemaCompatibilityInventory,
 } from '../tools/schema-compatibility.mts';
+import { INTERCHANGE_ARTIFACT_CONTRACTS } from '../lib/interchange-fidelity-registry.mts';
 import {
   buildBrandProfileExport,
   BRAND_PROFILE_SCHEMA,
@@ -312,7 +314,7 @@ describe('schema compatibility inventory', () => {
     assert.equal(byId(inventory, 'export.web-capture-dom-digest').byteBudget, MAX_WEB_CAPTURE_DOM_DIGEST_BYTES);
     assert.equal(byId(inventory, 'cli.web-capture-comparison').schema, WEB_CAPTURE_COMPARISON_SCHEMA);
     assert.equal(byId(inventory, 'cli.web-capture-comparison').currentVersion, WEB_CAPTURE_COMPARISON_VERSION);
-    assert.deepEqual(byId(inventory, 'export.lookup-evidence').supportedVersions, [12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25]);
+    assert.deepEqual(byId(inventory, 'export.lookup-evidence').supportedVersions, [25, 26]);
     assert.deepEqual(byId(inventory, 'export.synthetic-demo').supportedVersions, [2, 3, 4, 5]);
     assert.deepEqual(byId(inventory, 'export.external-findings').supportedVersions, [1, 2, 3, 4]);
     assert.equal(byId(inventory, 'import.external-finding-rows').schema, 'whoisleuth.external-finding-rows');
@@ -414,6 +416,19 @@ describe('schema compatibility inventory', () => {
     const second = buildSchemaCompatibilityInventory({ generatedAt: NOW });
     assert.ok(!requiredValue(second.entries[0]).supportedVersions.includes(999));
     assert.notEqual(requiredValue(second.entries[0]).note, 'changed');
+  });
+
+  test('requires interchange readers and the compatibility inventory to expose the exact same versions', () => {
+    const inventory = buildSchemaCompatibilityInventory({ generatedAt: NOW });
+    assert.doesNotThrow(() => validateInterchangeSchemaCompatibility(inventory.entries));
+    const lookup = requiredValue(INTERCHANGE_ARTIFACT_CONTRACTS.find((item) => item.id === 'lookup_evidence'));
+    const missingLegacy = INTERCHANGE_ARTIFACT_CONTRACTS.map((item) => item === lookup
+      ? { ...item, versions: [LOOKUP_EVIDENCE_SCHEMA_VERSION] }
+      : item);
+    assert.throws(
+      () => validateInterchangeSchemaCompatibility(inventory.entries, missingLegacy),
+      /must exactly match/iu,
+    );
   });
 
   test('fails closed when a version changes without a supported-version decision', () => {

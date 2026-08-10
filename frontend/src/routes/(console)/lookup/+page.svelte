@@ -45,7 +45,7 @@
   import { activeProfile, type ActiveBrandProfileSourceState, type BrandProfile } from '$lib/brand-profiles';
   import { dispositionLabel as caseDispositionLabel, statusLabel as caseStatusLabel, type CaseRecord, type CaseTransitionExpectation } from '$lib/cases';
   import { saveCandidateHandoff } from '$lib/candidate-handoff';
-  import { buildLookupEvidence, evidenceFilename } from '$lib/analysis/evidence-export.ts';
+  import { buildLookupEvidence, evidenceFilename, serializeLookupEvidence } from '$lib/analysis/evidence-export.ts';
   import {
     formatLookupInvestigationBriefMarkdown,
     lookupInvestigationBriefFilename,
@@ -117,6 +117,7 @@
   let profile=$state<BrandProfile|null>(null);
   let profileSourceState=$state<ActiveBrandProfileSourceState>('loading');
   let draftStatus=$state('');
+  let evidenceExportStatus=$state('');
   let caseRecord=$state<CaseRecord|null>(null);let caseNote=$state('');let caseStatus=$state('');
   let caseActionBusy=$state(false);
   let caseActionGeneration=0;
@@ -508,7 +509,17 @@
       dependencies:serviceDependencyReview?.dependencies??[],
     });
   }
-  function downloadEvidence(){if(!result||!lookupEvidenceDocument)return;const body=JSON.stringify(lookupEvidenceDocument,null,2);const url=URL.createObjectURL(new Blob([body],{type:'application/json'}));const anchor=document.createElement('a');anchor.href=url;anchor.download=evidenceFilename(result);anchor.click();URL.revokeObjectURL(url);}
+  function downloadEvidence(){
+    if(!result||!lookupEvidenceDocument)return;
+    evidenceExportStatus='';
+    try{
+      const body=serializeLookupEvidence(lookupEvidenceDocument,true);
+      const url=URL.createObjectURL(new Blob([body],{type:'application/json'}));
+      const anchor=document.createElement('a');anchor.href=url;anchor.download=evidenceFilename(result);anchor.click();URL.revokeObjectURL(url);
+    }catch{
+      evidenceExportStatus='Evidence export was not created because the retained result exceeds the portable evidence bounds.';
+    }
+  }
   function downloadReadableReport(includeAttribution=true){if(!result)return;const body=buildLookupReadableReport(result,{risk,applicationVersion:__WHOISLEUTH_VERSION__,includeAttribution});const url=URL.createObjectURL(new Blob([body],{type:'text/markdown;charset=utf-8'}));const anchor=document.createElement('a');anchor.href=url;anchor.download=lookupReadableReportFilename(result);anchor.click();URL.revokeObjectURL(url);}
   function downloadInvestigationBrief(){if(!result)return;const body=formatLookupInvestigationBriefMarkdown(lookupInvestigationBrief);const url=URL.createObjectURL(new Blob([body],{type:'text/markdown;charset=utf-8'}));const anchor=document.createElement('a');anchor.href=url;anchor.download=lookupInvestigationBriefFilename(lookupInvestigationBrief);anchor.click();URL.revokeObjectURL(url);}
   async function downloadClaimPassport(claimId:LookupClaimId):Promise<string>{
@@ -626,6 +637,7 @@
 {#if result}
   <section class="result-root" id="result" use:evidenceLinkNavigation>
     <LookupResultHeader title={show(result.registrableDomain||result.query)} state={show(availability.state)} isSubdomain={Boolean(result.isSubdomain)} registrableDomain={show(result.registrableDomain)} inputHostname={show(result.inputHostname)} onExport={downloadEvidence} onReportExport={downloadReadableReport} onBriefExport={downloadInvestigationBrief} />
+    {#if evidenceExportStatus}<p class="local-context-status" role="status">{evidenceExportStatus}</p>{/if}
 
     <LookupPresentationControls
       task={taskView}

@@ -712,10 +712,21 @@ inspection.
 
 ## Evidence export and privacy boundary
 
-Lookup evidence uses schema `whoisleuth.lookup-evidence`, version `25`. It
-contains query context, diagnostics, normalised sources, raw RDAP data, the raw
-WHOIS referral chain, availability analysis, and the source-health-aware
-registry comparison. Version 25 can retain the separately attributed,
+Lookup evidence uses schema `whoisleuth.lookup-evidence`, current version `26`. It
+contains query context, explicitly projected diagnostics, normalised sources,
+a bounded privacy-projected registry RDAP publication, bounded WHOIS
+referral-hop metadata without response bodies,
+availability analysis, and the source-health-aware
+registry comparison. The recursive portable projection removes request and
+response headers, cookies, session and credential fields, URL credentials,
+queries, and fragments from retained nested values. Version 26 binds RDAP,
+WHOIS, network-registration, and reverse-DNS publications to their retained
+source states and shares the browser replay limits of 5 MiB,
+20,000 structured entries, 10,000 array items, and 24 nested levels with the
+CLI exporter and verifier. Version 25 remains readable through its historical
+wrapper contract: retained diagnostics are authoritative during replay and
+publication values from unavailable sources are suppressed. Version 25 can
+retain the separately attributed,
 bounded A, AAAA, CAA and MX record-set comparison collected directly from
 selected authoritative nameservers during an eligible deep non-compact domain
 Lookup. Direct no-data, partial and failed observations remain distinct and do
@@ -794,7 +805,7 @@ network registration and bounded reverse-DNS context when collected. ASN
 reports present normalised routing registration fields without inventing
 reverse-DNS evidence. The separate JSON action retains the richer schema
 contract described above.
-When schema-version 17 through 25 JSON retains a supported version-5, version-6, or version-7
+When schema-version 17 through 26 JSON retains a supported version-5, version-6, or version-7
 `diagnostics.registryAccess` object, both readable formats include its bounded
 suffix, WHOIS and RDAP access profiles, and limitation in collection
 diagnostics. This remains collection context only and cannot decide
@@ -802,7 +813,7 @@ registration, availability, ownership, safety, or maliciousness. The readable
 formats also include the bounded observed network registration and its
 origin-host limitation when that source is present.
 
-Schema versions 17 through 25 can also retain the bounded normalised security.txt source
+Schema versions 17 through 26 can also retain the bounded normalised security.txt source
 from an explicitly requested deep Lookup. It excludes the response body and
 does not make publication an authorisation, availability, or Risk signal.
 

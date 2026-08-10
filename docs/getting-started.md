@@ -64,7 +64,7 @@ This is useful for frontend work. Complete flows that require authenticated
 API requests, raw WHOIS sockets, or other backend collection should be checked
 against the Express deployment or the Playwright production-style server.
 
-The public overview, guide, privacy notice, sign-in page, and synthetic demo do
+The public overview, Resources hub, privacy notice, sign-in page, and synthetic demo do
 not start live investigations. Dashboard, Lookup, Discover, Bulk, Brands,
 Monitor, and Registry support are part of the protected Console.
 

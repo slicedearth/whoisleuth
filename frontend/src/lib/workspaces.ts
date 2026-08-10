@@ -89,11 +89,11 @@ export const referenceResources = [
 
 export const publicResources = [
   {
-    href: '/guide',
-    label: 'Learn',
-    detail: 'Start with the guide, glossary, practice, and topic library',
+    href: '/resources',
+    label: 'Resources',
+    detail: 'Learn the workflows and browse source-aware topic guides',
     icon: 'page',
-    keywords: ['guide', 'help', 'documentation', 'glossary', 'faq', 'resources'],
+    keywords: ['learn', 'guide', 'help', 'documentation', 'glossary', 'faq', 'resources', 'library', 'rdap', 'whois', 'dns', 'tls', 'evidence'],
   },
 ] satisfies NavigationItem[];
 

@@ -138,6 +138,17 @@ byte identity from canonical-only or mismatched identity. `brief` and
 `case-pack` create bounded local handoffs, `monitor-once` runs one explicit
 control review rather than a daemon, and `workflow-run` executes only installed
 fixed-recipe steps with per-run network approval and analyst-selection pauses.
+The current schema-26 JSON produced by `export` is accepted directly by
+`verify-artifact` and reported as `structure_valid`. It has no embedded checksum
+or signature, so exact retained bytes require a verified investigation manifest
+entry. The export can contain a bounded privacy-projected registry RDAP
+publication, normalised WHOIS values, and bounded contacts and should be
+reviewed before sharing. Request and response headers, cookies, session and
+credential fields, and credential-bearing or query-bearing URLs are excluded.
+Schema 25 remains readable through its historical wrapper contract: retained
+diagnostics are authoritative, unavailable wrapper data is suppressed during
+replay, and other contradictions fail closed. Verification and browser replay share a 5 MiB,
+20,000-entry, 24-level portable boundary.
 
 Lookup can also export a version-1 `whoisleuth.lookup-claim-passport` for one
 selected readiness statement. `verify-artifact` checks its strict bounded
