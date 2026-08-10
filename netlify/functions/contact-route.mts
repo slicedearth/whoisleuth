@@ -64,6 +64,9 @@ async function runContactRouteRequest(request: Request): Promise<Response> {
   if (bodyResult.status === 'invalid_encoding') {
     return netlifyJsonToResponse(json(400, { error: 'Invalid request body' }));
   }
+  if (bodyResult.status === 'timed_out' || bodyResult.status === 'aborted') {
+    return netlifyJsonToResponse(json(408, { error: 'Request body read timed out' }));
+  }
   let body: unknown;
   try {
     body = JSON.parse(bodyResult.body || '{}');

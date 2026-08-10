@@ -213,7 +213,7 @@ describe('schema compatibility inventory', () => {
     assert.equal(inventory.schema, SCHEMA_COMPATIBILITY_INVENTORY_SCHEMA);
     assert.equal(inventory.version, SCHEMA_COMPATIBILITY_INVENTORY_VERSION);
     assert.equal(inventory.generatedAt, NOW);
-    assert.equal(inventory.entries.length, 151);
+    assert.equal(inventory.entries.length, 175);
     assert.deepEqual(new Set(inventory.entries.map((entry) => entry.kind)), new Set([
       'browser_store', 'tab_store', 'hosted_store', 'export', 'cli_document', 'derived',
     ]));
@@ -389,17 +389,19 @@ describe('schema compatibility inventory', () => {
     assert.equal(byId(inventory, 'export.bulk-review').byteBudget, MAX_BULK_REVIEW_STORE_BYTES);
   });
 
-  test('accounts for every public CLI JSON schema literal', async () => {
+  test('accounts for every public CLI and maintainer-tool JSON schema literal', async () => {
     const inventory = buildSchemaCompatibilityInventory({ generatedAt: NOW });
     const listed = new Set(inventory.entries.flatMap((entry) => entry.schema ? [entry.schema] : []));
-    const filenames = (await readdir('cli', { recursive: true }))
-      .filter((filename) => filename.endsWith('.mts'));
     const discovered = new Set<string>();
-    for (const filename of filenames) {
-      const source = await readFile(`cli/${filename}`, 'utf8');
-      for (const match of source.matchAll(/['"](whoisleuth\.[a-z0-9.-]+)['"]/gu)) {
-        const schema = match[1];
-        if (schema && !['whoisleuth.mjs', 'whoisleuth.mts'].includes(schema)) discovered.add(schema);
+    for (const root of ['cli', 'tools']) {
+      const filenames = (await readdir(root, { recursive: true }))
+        .filter((filename) => filename.endsWith('.mts'));
+      for (const filename of filenames) {
+        const source = await readFile(`${root}/${filename}`, 'utf8');
+        for (const match of source.matchAll(/['"](whoisleuth\.[a-z0-9.-]+)['"]/gu)) {
+          const schema = match[1];
+          if (schema && !['whoisleuth.mjs', 'whoisleuth.mts'].includes(schema)) discovered.add(schema);
+        }
       }
     }
     assert.deepEqual([...discovered].filter((schema) => !listed.has(schema)), []);

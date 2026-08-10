@@ -57,4 +57,27 @@ describe('contact route function', () => {
     assert.equal(method.status, 405);
     assert.equal(method.headers.get('allow'), 'GET, POST');
   });
+
+  test('maps a pre-aborted same-origin body to a bounded timeout response', async () => {
+    const controller = new AbortController();
+    const responsePromise = runContactRouteRequest(new Request('https://example.test/api/contact-route', {
+      method: 'POST',
+      headers: {
+        Host: 'example.test',
+        Origin: 'https://example.test',
+        'x-nf-client-connection-ip': '192.0.2.209',
+      },
+      body: new ReadableStream<Uint8Array>({
+        pull: () => new Promise<void>(() => {}),
+      }),
+      signal: controller.signal,
+      // @ts-expect-error Node's streamed Request body requires its runtime-specific duplex option.
+      duplex: 'half',
+    }));
+    controller.abort();
+
+    const response = await responsePromise;
+    assert.equal(response.status, 408);
+    assert.deepEqual(await response.json(), { error: 'Request body read timed out' });
+  });
 });

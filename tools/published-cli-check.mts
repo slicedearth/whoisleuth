@@ -32,8 +32,8 @@ type CheckOptions = Readonly<{ fetcher?: Fetcher; requestTimeoutMs?: number }>;
 type MainOptions = Readonly<{ stdout?: WritableLike; stderr?: WritableLike; fetcher?: Fetcher }>;
 
 type PublishedCliReport = Readonly<{
-  schema: typeof REPORT_SCHEMA;
-  version: typeof REPORT_VERSION;
+  schema: typeof PUBLISHED_CLI_CHECK_SCHEMA;
+  version: typeof PUBLISHED_CLI_CHECK_VERSION;
   packageName: typeof PACKAGE_NAME;
   packageVersion: string;
   registry: typeof PUBLIC_REGISTRY;
@@ -57,8 +57,8 @@ const SOURCE_REPOSITORY = WHOISLEUTH_SOURCE_REPOSITORY_GIT_URL;
 const PACKAGE_HOMEPAGE = WHOISLEUTH_PROJECT_URL;
 const PACKAGE_ISSUES = WHOISLEUTH_SOURCE_ISSUES_URL;
 const PROVENANCE_PREDICATE = 'https://slsa.dev/provenance/v1';
-const REPORT_SCHEMA = 'whoisleuth.published-cli-check';
-const REPORT_VERSION = 2;
+export const PUBLISHED_CLI_CHECK_SCHEMA = 'whoisleuth.published-cli-check';
+export const PUBLISHED_CLI_CHECK_VERSION = 2;
 const MAX_METADATA_BYTES = 512 * 1024;
 const MAX_CANDIDATE_REPORT_BYTES = 64 * 1024;
 const MAX_ERROR_LENGTH = 512;
@@ -342,8 +342,8 @@ export async function checkPublishedCli(
   }
 
   return Object.freeze({
-    schema: REPORT_SCHEMA,
-    version: REPORT_VERSION,
+    schema: PUBLISHED_CLI_CHECK_SCHEMA,
+    version: PUBLISHED_CLI_CHECK_VERSION,
     packageName: PACKAGE_NAME,
     packageVersion: expectedVersion,
     registry: PUBLIC_REGISTRY,

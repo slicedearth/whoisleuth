@@ -36,7 +36,7 @@
     signingOut=true;
     logoutError='';
     try{
-      const response=await fetch('/api/logout',{method:'POST'});
+      const {response}=await requestJsonCapped('/api/logout',{method:'POST'},{maximumBytes:SMALL_JSON_RESPONSE_BYTES,timeoutMs:10_000});
       if(!response.ok)throw new Error();
       session='anonymous';
       clearConsoleWorkflowState();

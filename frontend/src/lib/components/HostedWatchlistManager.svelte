@@ -20,7 +20,7 @@
     capability: Capability | null;
     localWatchlists: Watchlists;
     localNames: string[];
-    restoreHosted: (name: string, entry: WatchlistEntry) => void;
+    restoreHosted: (name: string, entry: WatchlistEntry) => Promise<void>;
     formatDate: (value: string) => string;
   } = $props();
 
@@ -138,18 +138,26 @@
       `Updated the hosted snapshot for "${item.name}".`);
   }
 
-  function restore(item: ScheduledWatchlist) {
+  async function restore(item: ScheduledWatchlist) {
+    if (busy || loading) return;
     const existing = Boolean(localEntryFor(item.name));
     const prompt = existing
       ? `Replace the browser-local watchlist "${item.name}" with the hosted snapshot?`
       : `Restore the hosted snapshot "${item.name}" into this browser?`;
     if (!confirm(prompt)) return;
+    const generation = ++requestGeneration;
+    busy = true;
+    message = '';
+    error = '';
     try {
-      restoreHosted(item.name, item.entry);
+      await restoreHosted(item.name, item.entry);
+      if (generation !== requestGeneration) return;
       message = `${existing ? 'Replaced' : 'Restored'} the browser-local watchlist "${item.name}".`;
-      error = '';
     } catch (cause) {
+      if (generation !== requestGeneration) return;
       error = cause instanceof Error ? cause.message : 'Could not restore the hosted snapshot.';
+    } finally {
+      if (generation === requestGeneration) busy = false;
     }
   }
 

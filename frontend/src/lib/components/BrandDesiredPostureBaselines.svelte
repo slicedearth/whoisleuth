@@ -5,9 +5,11 @@
   } from '$lib/analysis/brand-profile-model.ts';
   import type { BrandProfile } from '$lib/brand-profiles';
 
+  type PersistenceResult = { committed: true } | { committed: false; message: string };
+
   let { active, saveBaselines, requestedDomain = '' }: {
     active: BrandProfile;
-    saveBaselines: (baselines: DesiredPostureBaseline[]) => void | Promise<void>;
+    saveBaselines: (baselines: DesiredPostureBaseline[]) => Promise<PersistenceResult>;
     requestedDomain?: string;
   } = $props();
 
@@ -28,6 +30,7 @@
   let suppressions = $state('');
   let note = $state('');
   let message = $state('');
+  let busy = $state(false);
   let appliedRequestedDomain = $state('');
 
   function list(value: string): string[] {
@@ -104,7 +107,9 @@
   }
 
   async function save(): Promise<void> {
-    if (!selectedDomain) return;
+    if (!selectedDomain || busy) return;
+    busy = true;
+    message = '';
     const existing = active.desiredPostureBaselines.find((item) => item.domain === selectedDomain);
     const baseline: DesiredPostureBaseline = {
       version: 1,
@@ -130,18 +135,38 @@
       observationHistory: existing?.observationHistory || (existing?.previousObservation ? [existing.previousObservation] : []),
       updatedAt: new Date().toISOString(),
     };
-    await saveBaselines([
-      ...active.desiredPostureBaselines.filter((item) => item.domain !== selectedDomain),
-      baseline,
-    ]);
-    message = `Saved the analyst-authored desired posture for ${selectedDomain}.`;
+    try {
+      const result = await saveBaselines([
+        ...active.desiredPostureBaselines.filter((item) => item.domain !== selectedDomain),
+        baseline,
+      ]);
+      message = result.committed
+        ? `Saved the analyst-authored desired posture for ${selectedDomain}.`
+        : result.message;
+    } catch (cause) {
+      message = cause instanceof Error ? cause.message : 'Could not save the desired posture baseline.';
+    } finally {
+      busy = false;
+    }
   }
 
   async function remove(): Promise<void> {
-    if (!selectedDomain || !confirm(`Remove the desired posture baseline for ${selectedDomain}?`)) return;
-    await saveBaselines(active.desiredPostureBaselines.filter((item) => item.domain !== selectedDomain));
-    load(selectedDomain);
-    message = `Removed the desired posture baseline for ${selectedDomain}.`;
+    if (!selectedDomain || busy || !confirm(`Remove the desired posture baseline for ${selectedDomain}?`)) return;
+    busy = true;
+    message = '';
+    try {
+      const result = await saveBaselines(active.desiredPostureBaselines.filter((item) => item.domain !== selectedDomain));
+      if (!result.committed) {
+        message = result.message;
+        return;
+      }
+      load(selectedDomain);
+      message = `Removed the desired posture baseline for ${selectedDomain}.`;
+    } catch (cause) {
+      message = cause instanceof Error ? cause.message : 'Could not remove the desired posture baseline.';
+    } finally {
+      busy = false;
+    }
   }
 
   $effect(() => {
@@ -166,13 +191,14 @@
     </div>
     <label>
       <span>Official domain</span>
-      <select value={selectedDomain} onchange={(event) => load(event.currentTarget.value)}>
+      <select value={selectedDomain} onchange={(event) => load(event.currentTarget.value)} disabled={busy}>
         {#each active.officialDomains as domain}<option value={domain}>{domain}</option>{/each}
       </select>
     </label>
   </header>
 
   {#if selectedDomain}
+    <fieldset class="baseline-editor" disabled={busy}>
     <div class="baseline-grid">
       <label><span>Nameservers</span><textarea rows="3" maxlength="6000" bind:value={nameservers} placeholder="ns1.example.test"></textarea></label>
       <label><span>DS records</span><textarea rows="3" maxlength="6000" bind:value={ds} placeholder="key-tag algorithm digest-type digest"></textarea></label>
@@ -216,9 +242,10 @@
     <label class="wide"><span>Suppressions</span><textarea rows="3" maxlength="8000" bind:value={suppressions} placeholder="field | YYYY-MM-DD | reviewed reason"></textarea><small>One reviewed exception per line. Supported fields: nameservers, ds, mx, caa, tls_issuer, tls_san_patterns, tls_spki, registrar_lock, renewal_review.</small></label>
     <label class="wide"><span>Analyst note</span><textarea rows="3" maxlength="2000" bind:value={note}></textarea></label>
     <div class="actions">
-      <button class="primary" onclick={save}>Save baseline</button>
-      <button class="btn danger-action" onclick={remove} disabled={!active.desiredPostureBaselines.some((item) => item.domain === selectedDomain)}>Remove</button>
+      <button class="primary" onclick={save} disabled={busy}>Save baseline</button>
+      <button class="btn danger-action" onclick={remove} disabled={busy || !active.desiredPostureBaselines.some((item) => item.domain === selectedDomain)}>Remove</button>
     </div>
+    </fieldset>
     {#if message}<p class="message" role="status">{message}</p>{/if}
     <p class="limitation">DS and TLS values are retained for review, but this posture audit cannot yet compare complete DS, issuer, or public-key evidence. Those fields remain explicitly unsupported rather than appearing aligned.</p>
   {:else}
@@ -234,6 +261,7 @@
   label>span{color:var(--muted);font-size:var(--text-2xs);font-weight:700;letter-spacing:.06em;text-transform:uppercase}
   input,select,textarea{width:100%;min-width:0}
   textarea{resize:vertical}
+  .baseline-editor{min-width:0;margin:0;padding:0;border:0}
   .section-head>label{align-self:start;min-width:min(260px,100%)}
   .baseline-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:18px}
   .wide{margin-top:12px}

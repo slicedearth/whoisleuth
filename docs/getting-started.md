@@ -189,9 +189,11 @@ npm run schema:inventory
 ```
 
 Generates a report from the actual browser-store, hosted-state, export,
-interchange, CLI, and derived-model version constants. It records compatibility,
-migration direction, write behaviour, and bounds without reading browser or
-hosted data.
+interchange, CLI, maintainer-tool, and derived-model version constants. The
+coverage test scans both `cli/` and `tools/` for schema literals so a newly
+introduced tool contract cannot silently bypass the inventory. It records
+compatibility, migration direction, write behaviour, and bounds without reading
+browser or hosted data.
 
 ### Specialist workflow benchmark
 

@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures';
-import { expectNoHorizontalOverflow, readBrowserLocalCollection, requiredValue } from './helpers';
+import { expectNoHorizontalOverflow, failBrowserLocalManifestWrites, holdBrowserLocalReads, readBrowserLocalCollection, requiredValue } from './helpers';
 import type { Page, Route } from '@playwright/test';
 
 const NOW = '2026-07-16T12:00:00.000Z';
@@ -276,6 +276,31 @@ test('serializes hosted refresh and mutation controls while a command is pending
   await expect(item).toContainText('Paused');
   await expect(item.getByRole('button', { name: 'Resume' })).toBeEnabled();
   expect(mock.commands).toHaveLength(1);
+});
+
+test('announces a hosted restore only after browser-local persistence succeeds', async ({ page }) => {
+  await seedLocalWatchlist(page);
+  await mockCapability(page, 'supported');
+  await installManagementMock(page, [hostedWatchlist()]);
+  page.on('dialog', (dialog) => dialog.accept());
+  await page.goto('/monitor?view=watchlists');
+
+  const hosted = page.getByRole('region', { name: 'Scheduled watchlists' });
+  const restore = hosted.getByRole('button', { name: 'Restore to browser' });
+  await expect(restore).toBeVisible();
+  await holdBrowserLocalReads(page, 2_000, '.hosted-list .actions button:nth-child(3)');
+  await expect(restore).toBeDisabled();
+  await expect(hosted.getByRole('status')).toHaveCount(0);
+  await expect(hosted.getByRole('status')).toContainText('browser-local watchlist', { timeout: 8_000 });
+  await expect(restore).toBeEnabled();
+
+  const localTable = page.locator('table').filter({ hasText: 'Latest changes' });
+  await localTable.getByRole('button', { name: 'Delete' }).click();
+  await expect(localTable.getByText('Priority domains', { exact: true })).toHaveCount(0);
+  await failBrowserLocalManifestWrites(page, 'watchlists');
+  await restore.click();
+  await expect(hosted.getByRole('alert')).toContainText(/storage|write|quota/iu);
+  await expect(hosted.getByRole('status')).toHaveCount(0);
 });
 
 test('disables every mutation while a hosted refresh is pending', async ({ page }) => {

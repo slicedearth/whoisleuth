@@ -130,7 +130,8 @@
   async function logout(){
     if(signingOut)return;
     signingOut=true;
-    try{await fetch('/api/logout',{method:'POST'});}
+    try{await requestJsonCapped('/api/logout',{method:'POST'},{maximumBytes:SMALL_JSON_RESPONSE_BYTES,timeoutMs:10_000});}
+    catch{/* Local workflow state must still be cleared when the remote session request is unavailable. */}
     finally{
       clearConsoleWorkflowState();
       try{await goto('/login',{replaceState:true});}

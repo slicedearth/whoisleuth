@@ -254,6 +254,24 @@ export async function failBrowserLocalManifestWrites(page: Page, collection: str
   }, collection);
 }
 
+export async function failNextBrowserLocalManifestWrite(page: Page, collection: string) {
+  await page.evaluate((collectionId) => {
+    const originalPut = IDBObjectStore.prototype.put;
+    let pending = true;
+    IDBObjectStore.prototype.put = function put(value: unknown, key?: IDBValidKey) {
+      if (pending
+        && this.name === 'manifests'
+        && value !== null
+        && typeof value === 'object'
+        && Reflect.get(value, 'collection') === collectionId) {
+        pending = false;
+        throw new DOMException('Storage quota exceeded once', 'QuotaExceededError');
+      }
+      return key === undefined ? originalPut.call(this, value) : originalPut.call(this, value, key);
+    };
+  }, collection);
+}
+
 export async function failBrowserLocalReads(page: Page) {
   await page.evaluate(() => {
     const originalGet = IDBObjectStore.prototype.get;

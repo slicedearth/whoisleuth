@@ -1,7 +1,8 @@
 import { expect, test } from './fixtures';
-import { boundingBox, expectNoHorizontalOverflow } from './helpers';
+import { boundingBox, expandLookupFamilies, expectNoHorizontalOverflow, holdBrowserLocalReads, readBrowserLocalCollection } from './helpers';
 import { TEST_SITE_PASSWORD } from './constants';
 import { ACTIVE_PROFILE_KEY } from '../frontend/src/lib/brand-profiles';
+import { LOOKUP_EVIDENCE_SCHEMA, LOOKUP_EVIDENCE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/evidence-export';
 
 // Every value here is deliberately dotless (no TLD), so classifyQuery on the
 // server rejects it with a 400 before any RDAP/WHOIS/DNS call - these tests
@@ -10,6 +11,26 @@ import { ACTIVE_PROFILE_KEY } from '../frontend/src/lib/brand-profiles';
 test.beforeEach(async ({ page }) => {
   await page.goto('/lookup');
 });
+
+function replayEvidence(target: string, registrar: string) {
+  return JSON.stringify({
+    schema: LOOKUP_EVIDENCE_SCHEMA,
+    schemaVersion: LOOKUP_EVIDENCE_SCHEMA_VERSION,
+    generatedAt: '2026-08-10T00:00:00.000Z',
+    application: { name: 'WHOISleuth', version: 'fixture' },
+    query: { submitted: target, registrableDomain: target, type: 'domain' },
+    diagnostics: { rdap: { status: 'success', fetchedAt: '2026-08-10T00:00:00.000Z' } },
+    sources: {
+      rdap: { status: 'success', parsed: { domain: target, registrar: { name: registrar } } },
+      whois: { status: 'unavailable', parsed: {} },
+    },
+    analysis: {
+      availability: { state: 'registered', confidence: 'high' },
+      registryComparison: null,
+      registrarPublicationComparison: null,
+    },
+  });
+}
 
 test('a single domain can be entered normally', async ({ page }) => {
   const query = page.locator('#query');
@@ -433,6 +454,92 @@ test(`query ${action} invalidates a response while browser-local case context is
 });
 }
 
+test('a completed Case action cannot publish beneath a replacement Lookup', async ({ page }) => {
+  await page.route('**/api/lookup?*', async (route) => {
+    const target = new URL(route.request().url()).searchParams.get('q') || '';
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        query: target,
+        type: 'domain',
+        registrableDomain: target,
+        availability: { applicable: true, state: 'registered', confidence: 'high', domain: target, deepScanComplete: true },
+        rdap: { parsed: {} },
+        whois: { parsed: {}, chain: [] },
+        diagnostics: { rdap: { status: 'success' }, whois: { status: 'complete' }, availability: { status: 'complete' } },
+      }),
+    });
+  });
+
+  const query = page.locator('#query');
+  await query.fill('case-action-a.example.test');
+  await page.getByRole('button', { name: 'Run lookup' }).click();
+  await expect(page.getByRole('heading', { name: 'case-action-a.example.test' })).toBeVisible();
+  await expandLookupFamilies(page);
+  await holdBrowserLocalReads(page, 2_500, '.case-body > button.primary');
+
+  await query.fill('case-action-b.example.test');
+  await page.getByRole('button', { name: 'Run lookup' }).click();
+  await expect(page.getByRole('heading', { name: 'case-action-b.example.test' })).toBeVisible({ timeout: 10_000 });
+  await expandLookupFamilies(page);
+  await expect.poll(async () => (
+    await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })
+  ).records.map((entry) => String((entry.value as { domain?: unknown }).domain ?? '')), {
+    timeout: 10_000,
+  }).toContain('case-action-a.example.test');
+  await expect(page.locator('.case-card')).toContainText('No case for case-action-b.example.test yet.');
+  await expect(page.locator('.case-card')).not.toContainText('case-action-a.example.test');
+  await expect(page.getByRole('button', { name: 'Create case' })).toBeEnabled();
+});
+
+test('a delayed replay comparison cannot rebind to a replacement primary capture', async ({ page }) => {
+  const replay = page.locator('details.replay');
+  await replay.locator('summary').click();
+  const primaryInput = replay.locator('input[type="file"]').first();
+  await primaryInput.setInputFiles({
+    name: 'primary-a.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(replayEvidence('primary-a.example.test', 'Registrar A')),
+  });
+  await expect(replay.getByRole('heading', { name: 'primary-a.example.test' })).toBeVisible();
+
+  await page.evaluate(() => {
+    const original = File.prototype.text;
+    let hold = true;
+    File.prototype.text = function text() {
+      if (!hold) return original.call(this);
+      hold = false;
+      return new Promise<string>((resolve, reject) => {
+        Reflect.set(window, '__releaseReplayComparisonRead', () => {
+          void original.call(this).then(resolve, reject);
+        });
+      });
+    };
+  });
+  await replay.locator('input[type="file"]').last().setInputFiles({
+    name: 'comparison-b.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(replayEvidence('primary-a.example.test', 'Registrar B')),
+  });
+  await expect(replay.getByText('Reading second evidence…', { exact: true })).toBeVisible();
+
+  await primaryInput.setInputFiles({
+    name: 'primary-c.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(replayEvidence('primary-c.example.test', 'Registrar C')),
+  });
+  await expect(replay.getByRole('heading', { name: 'primary-c.example.test' })).toBeVisible();
+  await page.evaluate(() => {
+    const release = Reflect.get(window, '__releaseReplayComparisonRead');
+    if (typeof release !== 'function') throw new Error('The replay comparison read gate was not installed.');
+    release();
+  });
+  await expect(replay.locator('.comparison-status')).toBeEmpty();
+  await expect(replay.locator('.comparison-counts')).toHaveCount(0);
+  await expect(replay).not.toContainText('Compared comparison-b.json locally');
+});
+
 test.describe('lookup timeout presentation', () => {
   test.use({ allowExpectedLookup504Noise: true });
 
@@ -525,6 +632,33 @@ test('clears transient Lookup state when signing out through the Console', async
   await expect(page).toHaveURL('/dashboard');
   await page.locator('#console-navigation').getByRole('link', { name: /^Lookup/ }).click();
 
+  await expect(page.locator('#query')).toHaveValue('');
+  await expect(page.locator('#result')).toHaveCount(0);
+});
+
+test('clears transient Lookup state without an unhandled error when Console logout is unavailable', async ({ page }) => {
+  const pageErrors: string[] = [];
+  let logoutRequests = 0;
+  page.on('pageerror', (error) => pageErrors.push(error.message));
+  await page.route('**/api/logout', async (route) => {
+    logoutRequests += 1;
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: '{',
+    });
+  });
+  await page.locator('#query').fill('failed-signout-state.example.test');
+  await page.context().clearCookies();
+  await page.getByRole('button', { name: 'Sign out' }).click();
+
+  await expect(page).toHaveURL('/login');
+  await expect.poll(() => logoutRequests).toBe(1);
+  expect(pageErrors).toEqual([]);
+  await page.getByLabel('Password').fill(TEST_SITE_PASSWORD);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page).toHaveURL('/dashboard');
+  await page.locator('#console-navigation').getByRole('link', { name: /^Lookup/ }).click();
   await expect(page.locator('#query')).toHaveValue('');
   await expect(page.locator('#result')).toHaveCount(0);
 });

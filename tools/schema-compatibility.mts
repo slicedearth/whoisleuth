@@ -500,10 +500,70 @@ import {
   SERVICE_DEPENDENCY_SIGNATURE_AUDIT_SCHEMA,
   SERVICE_DEPENDENCY_SIGNATURE_AUDIT_VERSION,
 } from './service-dependency-signature-audit.mts';
+import { CISA_KEV_STATUS_SCHEMA, CISA_KEV_STATUS_VERSION } from './cisa-kev-catalog-status.mts';
+import { CLI_PACKAGE_REPORT_SCHEMA, CLI_PACKAGE_REPORT_VERSION } from './cli-package.mts';
+import { COMMON_INFRASTRUCTURE_SCHEMA, COMMON_INFRASTRUCTURE_VERSION, MAX_SNAPSHOT_BYTES } from './common-infrastructure-snapshot.mts';
+import {
+  FIRST_USE_STUDY_REPORT_SCHEMA,
+  FIRST_USE_STUDY_SESSION_SCHEMA,
+  FIRST_USE_STUDY_VERSION,
+  MAX_FIRST_USE_STUDY_INPUT_BYTES,
+} from './first-use-analyst-study.mts';
+import { FRONTEND_LOADING_REPORT_SCHEMA, FRONTEND_LOADING_REPORT_VERSION } from './frontend-loading-report.mts';
+import {
+  INCREMENTAL_LOOKUP_QUALIFICATION_SCHEMA,
+  INCREMENTAL_LOOKUP_QUALIFICATION_VERSION,
+} from './incremental-lookup-qualification.mts';
+import {
+  INCREMENTAL_LOOKUP_TRANSPORT_SPIKE_SCHEMA,
+  INCREMENTAL_LOOKUP_TRANSPORT_SPIKE_VERSION,
+} from './incremental-lookup-transport-spike.mts';
+import {
+  LOCAL_DATA_PLATFORM_EVALUATION_SCHEMA,
+  LOCAL_DATA_PLATFORM_EVALUATION_VERSION,
+} from './local-data-platform-evaluation.mts';
+import {
+  PROVIDER_POLICY_FRESHNESS_SCHEMA,
+  PROVIDER_POLICY_FRESHNESS_VERSION,
+} from './provider-policy-freshness.mts';
+import { PUBLISHED_CLI_CHECK_SCHEMA, PUBLISHED_CLI_CHECK_VERSION } from './published-cli-check.mts';
+import {
+  REGISTRY_FIXTURE_FRESHNESS_SCHEMA,
+  REGISTRY_FIXTURE_FRESHNESS_VERSION,
+} from './registry-fixture-freshness.mts';
+import { RELEASE_VERSION_CHECK_SCHEMA, RELEASE_VERSION_CHECK_VERSION } from './release-version-check.mts';
+import {
+  REVIEWED_ACCURACY_INTAKE_SCHEMA,
+  REVIEWED_ACCURACY_INTAKE_VERSION,
+} from './reviewed-accuracy-scaffold.mts';
+import {
+  REVIEWED_ACCURACY_STATUS_SCHEMA,
+  REVIEWED_ACCURACY_STATUS_VERSION,
+} from './reviewed-accuracy-status.mts';
+import { SSLBL_SNAPSHOT_SCHEMA, SSLBL_SNAPSHOT_VERSION } from './sslbl-snapshot.mts';
+import {
+  MAX_SYNTHETIC_ANALYST_INPUT_BYTES,
+  SYNTHETIC_ANALYST_REPORT_SCHEMA,
+  SYNTHETIC_ANALYST_RESULT_SCHEMA,
+  SYNTHETIC_ANALYST_RESULT_VERSION,
+} from './synthetic-analyst-journeys.mts';
+import { TECHNOLOGY_EXAMPLE_REVIEW_SCHEMA, TECHNOLOGY_EXAMPLE_REVIEW_VERSION } from './technology-example-review.mts';
+import {
+  TECHNOLOGY_SIGNATURE_BENCHMARK_SCHEMA,
+  TECHNOLOGY_SIGNATURE_BENCHMARK_VERSION,
+} from './technology-signature-benchmark.mts';
+import {
+  MAX_TECHNOLOGY_SOURCE_MANIFEST_BYTES,
+  TECHNOLOGY_SOURCE_MANIFEST_SCHEMA,
+  TECHNOLOGY_SOURCE_MANIFEST_VERSION,
+  TECHNOLOGY_SOURCE_VERIFICATION_SCHEMA,
+  TECHNOLOGY_SOURCE_VERIFICATION_VERSION,
+} from './technology-source-verify.mts';
+import { UNICODE_CONFUSABLE_AUDIT_SCHEMA, UNICODE_CONFUSABLE_AUDIT_VERSION } from './unicode-confusable-audit.mts';
 
 export const SCHEMA_COMPATIBILITY_INVENTORY_SCHEMA = 'whoisleuth.schema-compatibility-inventory';
 export const SCHEMA_COMPATIBILITY_INVENTORY_VERSION = 1;
-export const MAX_SCHEMA_COMPATIBILITY_ENTRIES = 160;
+export const MAX_SCHEMA_COMPATIBILITY_ENTRIES = 192;
 
 type ContractKind = 'browser_store' | 'tab_store' | 'hosted_store' | 'export' | 'cli_document' | 'derived';
 type FutureVersionBehavior = 'reject' | 'preserve_without_write' | 'discard' | 'not_applicable';
@@ -547,6 +607,30 @@ function entry(value: SchemaCompatibilityEntry): SchemaCompatibilityEntry {
 const standardsCoverage = registryStandardsCoverageSnapshot();
 
 const ENTRIES: SchemaCompatibilityEntry[] = [
+  entry({ id: 'maintainer.cisa-kev-status', kind: 'cli_document', schema: CISA_KEV_STATUS_SCHEMA, currentVersion: CISA_KEV_STATUS_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'tools/cisa-kev-catalog-status.mts', note: 'Target-free freshness and bounded catalogue status output for the checked-in CISA KEV projection.' }),
+  entry({ id: 'maintainer.cli-package-check', kind: 'cli_document', schema: CLI_PACKAGE_REPORT_SCHEMA, currentVersion: CLI_PACKAGE_REPORT_VERSION, supportedVersions: [3], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: null, owner: 'tools/cli-package.mts', note: 'Exact-current release-candidate evidence consumed by the published-package check; older reports are not reinterpreted.' }),
+  entry({ id: 'derived.common-infrastructure', kind: 'derived', schema: COMMON_INFRASTRUCTURE_SCHEMA, currentVersion: COMMON_INFRASTRUCTURE_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'normalized_rewrite', byteBudget: MAX_SNAPSHOT_BYTES, owner: 'tools/common-infrastructure-snapshot.mts', note: 'Checked-in exact-CIDR catalogue with an exact active-or-stale source partition; stale ranges never participate in matching.' }),
+  entry({ id: 'maintainer.first-use-study-session', kind: 'cli_document', schema: FIRST_USE_STUDY_SESSION_SCHEMA, currentVersion: FIRST_USE_STUDY_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: MAX_FIRST_USE_STUDY_INPUT_BYTES, owner: 'tools/first-use-analyst-study.mts', note: 'Bounded analyst-entered study session consumed only by the local target-free aggregation command.' }),
+  entry({ id: 'maintainer.first-use-study-report', kind: 'cli_document', schema: FIRST_USE_STUDY_REPORT_SCHEMA, currentVersion: FIRST_USE_STUDY_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'tools/first-use-analyst-study.mts', note: 'Target-free aggregate report that excludes raw analyst notes and target identifiers.' }),
+  entry({ id: 'maintainer.frontend-loading-report', kind: 'cli_document', schema: FRONTEND_LOADING_REPORT_SCHEMA, currentVersion: FRONTEND_LOADING_REPORT_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'tools/frontend-loading-report.mts', note: 'Post-build bounded static dependency and gzip-budget report; it does not execute generated application code.' }),
+  entry({ id: 'maintainer.incremental-lookup-qualification', kind: 'cli_document', schema: INCREMENTAL_LOOKUP_QUALIFICATION_SCHEMA, currentVersion: INCREMENTAL_LOOKUP_QUALIFICATION_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'tools/incremental-lookup-qualification.mts', note: 'Offline synthetic qualification report for the bounded incremental Lookup transport.' }),
+  entry({ id: 'maintainer.incremental-lookup-transport-spike', kind: 'cli_document', schema: INCREMENTAL_LOOKUP_TRANSPORT_SPIKE_SCHEMA, currentVersion: INCREMENTAL_LOOKUP_TRANSPORT_SPIKE_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'tools/incremental-lookup-transport-spike.mts', note: 'Offline architecture-spike report; no deployment adapter or target request is enabled.' }),
+  entry({ id: 'maintainer.local-data-platform-evaluation', kind: 'cli_document', schema: LOCAL_DATA_PLATFORM_EVALUATION_SCHEMA, currentVersion: LOCAL_DATA_PLATFORM_EVALUATION_VERSION, supportedVersions: [2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'tools/local-data-platform-evaluation.mts', note: 'Target-free browser-local storage evaluation report with reviewed capacity assumptions and no retained user data.' }),
+  entry({ id: 'maintainer.provider-policy-freshness', kind: 'cli_document', schema: PROVIDER_POLICY_FRESHNESS_SCHEMA, currentVersion: PROVIDER_POLICY_FRESHNESS_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'tools/provider-policy-freshness.mts', note: 'Provider-policy metadata freshness report; it does not enable an adapter or make a provider request.' }),
+  entry({ id: 'maintainer.published-cli-check', kind: 'cli_document', schema: PUBLISHED_CLI_CHECK_SCHEMA, currentVersion: PUBLISHED_CLI_CHECK_VERSION, supportedVersions: [2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'tools/published-cli-check.mts', note: 'Explicit post-publication byte, metadata, and provenance comparison report for one reviewed package candidate.' }),
+  entry({ id: 'maintainer.registry-fixture-freshness', kind: 'cli_document', schema: REGISTRY_FIXTURE_FRESHNESS_SCHEMA, currentVersion: REGISTRY_FIXTURE_FRESHNESS_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'tools/registry-fixture-freshness.mts', note: 'Target-free age and provenance status for checked-in registry fixtures.' }),
+  entry({ id: 'maintainer.release-version-check', kind: 'cli_document', schema: RELEASE_VERSION_CHECK_SCHEMA, currentVersion: RELEASE_VERSION_CHECK_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'tools/release-version-check.mts', note: 'Local version-alignment and publication-boundary report across package manifests.' }),
+  entry({ id: 'maintainer.reviewed-accuracy-intake', kind: 'cli_document', schema: REVIEWED_ACCURACY_INTAKE_SCHEMA, currentVersion: REVIEWED_ACCURACY_INTAKE_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: null, owner: 'tools/reviewed-accuracy-scaffold.mts', note: 'Bounded reviewed-accuracy intake contract; future records are rejected rather than silently normalized.' }),
+  entry({ id: 'maintainer.reviewed-accuracy-status', kind: 'cli_document', schema: REVIEWED_ACCURACY_STATUS_SCHEMA, currentVersion: REVIEWED_ACCURACY_STATUS_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'tools/reviewed-accuracy-status.mts', note: 'Target-free corpus readiness report that never promotes insufficient samples to reviewed evidence.' }),
+  entry({ id: 'maintainer.schema-compatibility-inventory', kind: 'cli_document', schema: SCHEMA_COMPATIBILITY_INVENTORY_SCHEMA, currentVersion: SCHEMA_COMPATIBILITY_INVENTORY_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'tools/schema-compatibility.mts', note: 'Bounded deterministic inventory of every reviewed serialized contract and its explicit compatibility decision.' }),
+  entry({ id: 'derived.sslbl-certificate-snapshot', kind: 'derived', schema: SSLBL_SNAPSHOT_SCHEMA, currentVersion: SSLBL_SNAPSHOT_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'normalized_rewrite', byteBudget: null, owner: 'tools/sslbl-snapshot.mts', note: 'Checked-in certificate fingerprint snapshot parsed only at its exact current contract.' }),
+  entry({ id: 'maintainer.synthetic-analyst-result', kind: 'cli_document', schema: SYNTHETIC_ANALYST_RESULT_SCHEMA, currentVersion: SYNTHETIC_ANALYST_RESULT_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: MAX_SYNTHETIC_ANALYST_INPUT_BYTES, owner: 'tools/synthetic-analyst-journeys.mts', note: 'Bounded explicitly synthetic journey result consumed without live target evidence.' }),
+  entry({ id: 'maintainer.synthetic-analyst-report', kind: 'cli_document', schema: SYNTHETIC_ANALYST_REPORT_SCHEMA, currentVersion: SYNTHETIC_ANALYST_RESULT_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'tools/synthetic-analyst-journeys.mts', note: 'Target-free aggregate of explicitly synthetic journey fixtures.' }),
+  entry({ id: 'maintainer.technology-example-review', kind: 'cli_document', schema: TECHNOLOGY_EXAMPLE_REVIEW_SCHEMA, currentVersion: TECHNOLOGY_EXAMPLE_REVIEW_VERSION, supportedVersions: [5], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'tools/technology-example-review.mts', note: 'Offline reviewed-fixture evidence report for bounded technology signatures.' }),
+  entry({ id: 'maintainer.technology-signature-benchmark', kind: 'cli_document', schema: TECHNOLOGY_SIGNATURE_BENCHMARK_SCHEMA, currentVersion: TECHNOLOGY_SIGNATURE_BENCHMARK_VERSION, supportedVersions: [4], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'tools/technology-signature-benchmark.mts', note: 'Target-free precision and collision benchmark over reviewed local fixtures.' }),
+  entry({ id: 'maintainer.technology-source-verification', kind: 'cli_document', schema: TECHNOLOGY_SOURCE_VERIFICATION_SCHEMA, currentVersion: TECHNOLOGY_SOURCE_VERIFICATION_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'tools/technology-source-verify.mts', note: 'Bounded source-document verification report; no live application target is queried.' }),
+  entry({ id: 'maintainer.technology-source-manifest', kind: 'cli_document', schema: TECHNOLOGY_SOURCE_MANIFEST_SCHEMA, currentVersion: TECHNOLOGY_SOURCE_MANIFEST_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: MAX_TECHNOLOGY_SOURCE_MANIFEST_BYTES, owner: 'tools/technology-source-verify.mts', note: 'Exact-current reviewed source manifest consumed by the verification tool.' }),
+  entry({ id: 'maintainer.unicode-confusable-audit', kind: 'cli_document', schema: UNICODE_CONFUSABLE_AUDIT_SCHEMA, currentVersion: UNICODE_CONFUSABLE_AUDIT_VERSION, supportedVersions: [2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'tools/unicode-confusable-audit.mts', note: 'Target-free Unicode confusable calibration and invariant report.' }),
   entry({ id: 'browser.cases', kind: 'browser_store', schema: null, currentVersion: CASE_SCHEMA_VERSION, supportedVersions: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], acceptsUnversionedLegacy: true, futureVersionBehavior: 'preserve_without_write', migration: 'normalize_to_current', writeSemantics: 'normalized_rewrite', byteBudget: MAX_CASE_STORE_BYTES, owner: 'frontend/src/lib/analysis/case-model.ts', note: 'Known fields can be read from newer local envelopes, but wrappers block overwrite and downgraded export; version 12 adds up to eight exact opaque analyst-selected Brand Profile references without inferred or cascading relationships.' }),
   entry({ id: 'browser.brand-profiles', kind: 'browser_store', schema: null, currentVersion: BRAND_PROFILE_SCHEMA_VERSION, supportedVersions: [1, 2, 3, 4, 5, 6], acceptsUnversionedLegacy: true, futureVersionBehavior: 'preserve_without_write', migration: 'normalize_to_current', writeSemantics: 'normalized_rewrite', byteBudget: MAX_PROFILE_STORE_BYTES, owner: 'frontend/src/lib/analysis/brand-profile-model.ts', note: 'Version 1 bare arrays and supported profiles normalise to the current bounded store; version 6 adds bounded domain-control planning context and approved change windows.' }),
   entry({ id: 'browser.campaigns', kind: 'browser_store', schema: null, currentVersion: CAMPAIGN_SCHEMA_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: true, futureVersionBehavior: 'preserve_without_write', migration: 'normalize_to_current', writeSemantics: 'normalized_rewrite', byteBudget: MAX_CAMPAIGN_STORE_BYTES, owner: 'frontend/src/lib/analysis/campaign-model.ts', note: 'Bare arrays remain recoverable; explicit future versions are not overwritten; the schema string belongs to portable exports.' }),

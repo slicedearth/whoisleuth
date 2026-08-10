@@ -13,11 +13,17 @@
   let expectedSha256 = $state('');
   let comparison = $state<ReturnType<typeof buildLookupEvidenceReplayDiff> | null>(null);
   let comparisonStatus = $state('');
+  let comparisonLoading = $state(false);
+  let replayGeneration = 0;
+  let comparisonGeneration = 0;
 
   async function load(event: Event) {
     const control = event.currentTarget as HTMLInputElement;
     const file = control.files?.[0];
     if (!file) return;
+    const generation = ++replayGeneration;
+    comparisonGeneration += 1;
+    comparisonLoading = false;
     loading = true;
     status = '';
     replay = null;
@@ -27,15 +33,18 @@
         throw new Error('Lookup evidence replay files are limited to 5 MB.');
       }
       const checksum = expectedSha256.trim();
-      replay = await parseLookupEvidenceReplay(
+      const next = await parseLookupEvidenceReplay(
         await file.text(),
         checksum ? { expectedSha256: checksum } : {},
       );
-      status = `Loaded ${file.name} locally${replay.digestVerified ? ' and verified its checksum' : ''}. No source was contacted.`;
+      if (generation !== replayGeneration) return;
+      replay = next;
+      status = `Loaded ${file.name} locally${next.digestVerified ? ' and verified its checksum' : ''}. No source was contacted.`;
     } catch (cause) {
+      if (generation !== replayGeneration) return;
       status = cause instanceof Error ? cause.message : 'The evidence file could not be replayed.';
     } finally {
-      loading = false;
+      if (generation === replayGeneration) loading = false;
       control.value = '';
     }
   }
@@ -43,17 +52,24 @@
   async function loadComparison(event: Event) {
     const control = event.currentTarget as HTMLInputElement;
     const file = control.files?.[0];
-    if (!file || !replay) return;
+    if (!file || !replay || loading || comparisonLoading) return;
+    const primary = replay;
+    const primaryGeneration = replayGeneration;
+    const generation = ++comparisonGeneration;
+    comparisonLoading = true;
     comparisonStatus = '';
     try {
       if (file.size > LOOKUP_EVIDENCE_REPLAY_MAX_BYTES) throw new Error('Lookup evidence replay files are limited to 5 MB.');
       const second = await parseLookupEvidenceReplay(await file.text());
-      comparison = buildLookupEvidenceReplayDiff(replay, second);
+      if (generation !== comparisonGeneration || primaryGeneration !== replayGeneration || replay !== primary) return;
+      comparison = buildLookupEvidenceReplayDiff(primary, second);
       comparisonStatus = `Compared ${file.name} locally. No source was contacted.`;
     } catch (cause) {
+      if (generation !== comparisonGeneration || primaryGeneration !== replayGeneration || replay !== primary) return;
       comparison = null;
       comparisonStatus = cause instanceof Error ? cause.message : 'The second evidence file could not be compared.';
     } finally {
+      if (generation === comparisonGeneration) comparisonLoading = false;
       control.value = '';
     }
   }
@@ -143,7 +159,7 @@
         <section class="comparison" aria-labelledby="replay-comparison-title">
           <h3 id="replay-comparison-title">Compare another capture</h3>
           <p class="note">Choose a second export for the same target. The comparison separates observed value changes from source-quality and application-interpretation differences.</p>
-          <label class="picker"><span>Choose second evidence JSON</span><input type="file" accept="application/json,.json" onchange={loadComparison} /></label>
+          <label class="picker"><span>{comparisonLoading ? 'Reading second evidence…' : 'Choose second evidence JSON'}</span><input type="file" accept="application/json,.json" disabled={loading || comparisonLoading} onchange={loadComparison} /></label>
           <p class="comparison-status" role="status" aria-live="polite" aria-atomic="true">{comparisonStatus}</p>
           {#if comparison}
             <div class="comparison-counts"><span><strong>{comparison.counts.observedChanges}</strong> observed</span><span><strong>{comparison.counts.collectionDifferences}</strong> collection</span><span><strong>{comparison.counts.interpretationDifferences}</strong> interpretation</span></div>

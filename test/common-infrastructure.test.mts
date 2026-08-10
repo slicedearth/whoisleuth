@@ -37,12 +37,12 @@ describe('Common-infrastructure catalogue', () => {
     assert.match(COMMON_INFRASTRUCTURE_SNAPSHOT.source.repository, /^https:\/\/github\.com\/MISP\//u);
     assert.match(COMMON_INFRASTRUCTURE_SNAPSHOT.source.commit, /^[0-9a-f]{40}$/u);
     assert.equal(COMMON_INFRASTRUCTURE_SNAPSHOT.source.licence, 'CC0-1.0 OR BSD-2-Clause');
-    assert.deepEqual(COMMON_INFRASTRUCTURE_SNAPSHOT.sources.map((source) => source.id), [
-      'amazon-aws',
-      'cloudflare',
-      'google-gcp',
-      'public-dns-core',
+    const activeIds = COMMON_INFRASTRUCTURE_SNAPSHOT.sources.map((source) => source.id);
+    const excludedIds = COMMON_INFRASTRUCTURE_SNAPSHOT.excludedSources.map((source) => source.id);
+    assert.deepEqual([...activeIds, ...excludedIds].sort(), [
+      'amazon-aws', 'cloudflare', 'google-gcp', 'public-dns-core',
     ]);
+    assert.ok(activeIds.includes('public-dns-core'));
   });
 
   test('qualifies exact IPv4 and IPv6 CIDR matches with provenance and limitations', () => {
@@ -57,13 +57,23 @@ describe('Common-infrastructure catalogue', () => {
     assert.match(ipv4Matches[0]?.limitation ?? '', /not an origin host/iu);
     assert.match(ipv4Matches[0]?.sourceDigestSha256 ?? '', /^[0-9a-f]{64}$/u);
 
-    const ipv6Source = COMMON_INFRASTRUCTURE_SNAPSHOT.sources.find((source) =>
-      source.values.some((value) => value.includes(':')));
-    assert.ok(ipv6Source);
-    const ipv6 = ipv6Source.values.find((value) => value.includes(':'))?.split('/')[0];
-    assert.ok(ipv6);
-    assert.ok(classifyCommonInfrastructureAddress(ipv6)
-      .some((match) => match.sourceId === ipv6Source.id));
+    const customSources = [
+      ...structuredClone(COMMON_INFRASTRUCTURE_SNAPSHOT.sources)
+        .filter((source) => source.id !== 'google-gcp'),
+      {
+        id: 'google-gcp', label: 'Google Cloud Platform', category: 'cloud_platform',
+        sourceDate: '2026-08-10', sourceDigestSha256: '1'.repeat(64), values: ['2001:4860::/32'],
+      },
+    ];
+    const custom = parseCommonInfrastructureSnapshot({
+      ...structuredClone(COMMON_INFRASTRUCTURE_SNAPSHOT),
+      entryCount: customSources.reduce((total, source) => total + source.values.length, 0),
+      sources: customSources,
+      excludedSources: COMMON_INFRASTRUCTURE_SNAPSHOT.excludedSources
+        .filter((source) => source.id !== 'google-gcp'),
+    });
+    assert.ok(classifyCommonInfrastructureAddress('2001:4860::1', custom)
+      .some((match) => match.sourceId === 'google-gcp'));
   });
 
   test('keeps malformed and non-matching values neutral', () => {
@@ -73,7 +83,7 @@ describe('Common-infrastructure catalogue', () => {
     assert.deepEqual(classifyCommonInfrastructureAddress('2001:db8::1'), []);
   });
 
-  test('builds only when every required exact-CIDR source is fresh and valid', async () => {
+  test('builds from fresh exact-CIDR sources and explicitly excludes fully validated stale sources', async () => {
     const bodies = [
       warningList(20260720, ['198.18.0.0/24']),
       warningList(20260720, ['198.19.0.0/24']),
@@ -92,13 +102,25 @@ describe('Common-infrastructure catalogue', () => {
     assert.deepEqual(snapshot.excludedSources, []);
     assert.equal(snapshot.entryCount, 9);
 
-    await assert.rejects(
-      buildCommonInfrastructureSnapshot('a'.repeat(40), {
-        now: () => new Date('2026-07-31T00:00:00.000Z'),
-        fetchImpl: async () => new Response(warningList(20240101, ['198.19.0.0/24'])),
-      }),
-      new RegExp(`${FRESHNESS_DAYS}-day freshness`, 'u'),
-    );
+    const stale = await buildCommonInfrastructureSnapshot('a'.repeat(40), {
+      now: () => new Date('2026-07-31T00:00:00.000Z'),
+      fetchImpl: async () => new Response(warningList(20240101, ['198.19.0.0/24'])),
+    });
+    assert.deepEqual(stale.sources.map((source) => source.id), ['public-dns-core']);
+    assert.equal(stale.excludedSources.length, 3);
+    assert.ok(stale.excludedSources.every((source) => source.reason === 'stale'));
+
+    const exactBoundary = await buildCommonInfrastructureSnapshot('a'.repeat(40), {
+      now: () => new Date('2026-07-31T00:00:00.000Z'),
+      fetchImpl: async () => new Response(warningList(20260701, ['198.19.0.0/24'])),
+    });
+    assert.equal(exactBoundary.sources.length, 4, `A source exactly ${FRESHNESS_DAYS} days old remains active.`);
+    const beyondBoundary = await buildCommonInfrastructureSnapshot('a'.repeat(40), {
+      now: () => new Date('2026-07-31T00:00:00.000Z'),
+      fetchImpl: async () => new Response(warningList(20260630, ['198.19.0.0/24'])),
+    });
+    assert.equal(beyondBoundary.sources.length, 1);
+    assert.equal(beyondBoundary.excludedSources.length, 3);
 
     await assert.rejects(
       buildCommonInfrastructureSnapshot('a'.repeat(40), {
@@ -176,6 +198,52 @@ describe('Common-infrastructure catalogue', () => {
         stdout: { write: () => true },
         stderr: { write: () => true },
       }), 1);
+
+      const changedValue = structuredClone(snapshot);
+      const changedSource = changedValue.sources[0];
+      assert.ok(changedSource);
+      Object.assign(changedSource, {
+        values: changedSource.values.map((value, index) => index === 0 ? '203.0.113.0/24' : value),
+      });
+      await writeFile(outputPath, `${JSON.stringify(changedValue, null, 2)}\n`, 'utf8');
+      assert.equal(await main(['--commit', 'c'.repeat(40), '--check-only'], {
+        repositoryRoot: directory,
+        ...buildOptions(),
+        stdout: { write: () => true },
+        stderr: { write: () => true },
+      }), 1);
+
+      const changedLabel = structuredClone(snapshot);
+      const labelledSource = changedLabel.sources[0];
+      assert.ok(labelledSource);
+      Object.assign(labelledSource, { label: 'Unreviewed replacement label' });
+      await writeFile(outputPath, `${JSON.stringify(changedLabel, null, 2)}\n`, 'utf8');
+      assert.equal(await main(['--commit', 'c'.repeat(40), '--check-only'], {
+        repositoryRoot: directory,
+        ...buildOptions(),
+        stdout: { write: () => true },
+        stderr: { write: () => true },
+      }), 1);
+
+      const changedContract = structuredClone(snapshot) as Record<string, unknown>;
+      changedContract.maximumEntries = 19_999;
+      await writeFile(outputPath, `${JSON.stringify(changedContract, null, 2)}\n`, 'utf8');
+      assert.equal(await main(['--commit', 'c'.repeat(40), '--check-only'], {
+        repositoryRoot: directory,
+        ...buildOptions(),
+        stdout: { write: () => true },
+        stderr: { write: () => true },
+      }), 1);
+
+      const changedGeneratedAt = structuredClone(snapshot) as Record<string, unknown>;
+      changedGeneratedAt.generatedAt = '2026-07-30T00:00:00.000Z';
+      await writeFile(outputPath, `${JSON.stringify(changedGeneratedAt, null, 2)}\n`, 'utf8');
+      assert.equal(await main(['--commit', 'c'.repeat(40), '--check-only'], {
+        repositoryRoot: directory,
+        ...buildOptions(),
+        stdout: { write: () => true },
+        stderr: { write: () => true },
+      }), 0);
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
@@ -193,8 +261,8 @@ describe('Common-infrastructure catalogue', () => {
       /invalid contract/iu,
     );
     assert.throws(
-      () => parseCommonInfrastructureSnapshot({ ...snapshot, excludedSources: [{ id: 'missing' }] }),
-      /unsupported contract/iu,
+      () => parseCommonInfrastructureSnapshot({ ...snapshot, excludedSources: [{ id: 'missing', reason: 'stale' }] }),
+      /excluded source|entry count/iu,
     );
     const malformed = structuredClone(snapshot) as Record<string, unknown>;
     const malformedSources = malformed.sources as Array<Record<string, unknown>>;
@@ -210,7 +278,7 @@ describe('Common-infrastructure catalogue', () => {
 
   test('parses explicit maintenance arguments without accepting moving refs', () => {
     assert.deepEqual(parseArguments([]), {
-      commit: '767e026cd872d0e7d233720c4079b01a6af0c9d3',
+      commit: '950282a018f0552d99f156412b650d31e7ff4688',
       checkOnly: false,
     });
     assert.deepEqual(parseArguments(['--commit', 'c'.repeat(40), '--check-only']), {

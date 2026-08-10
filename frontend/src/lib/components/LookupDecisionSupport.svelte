@@ -5,10 +5,12 @@
     support,
     onbriefcopy = null,
     onbriefhandoff = null,
+    actionBusy = false,
   }: {
     support: LookupDecisionSupport;
     onbriefcopy?: (() => void | Promise<void>) | null;
     onbriefhandoff?: (() => void | Promise<void>) | null;
+    actionBusy?: boolean;
   } = $props();
 
   function stateLabel(value: 'conflict' | 'uncertain'): string {
@@ -38,7 +40,7 @@
   {#if onbriefcopy || onbriefhandoff}
     <div class="brief-actions" role="group" aria-label="Investigation brief actions">
       {#if onbriefcopy}<button class="btn small" type="button" onclick={onbriefcopy}>Copy current brief</button>{/if}
-      {#if onbriefhandoff}<button class="btn small" type="button" onclick={onbriefhandoff}>Record brief handoff</button>{/if}
+      {#if onbriefhandoff}<button class="btn small" type="button" onclick={onbriefhandoff} disabled={actionBusy}>Record brief handoff</button>{/if}
     </div>
   {/if}
 

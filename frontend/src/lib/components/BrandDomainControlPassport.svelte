@@ -12,9 +12,11 @@
   import type { DomainControlPassport } from '$lib/analysis/domain-control-manifest-core.ts';
   import type { BrandProfile } from '$lib/brand-profiles';
 
+  type PersistenceResult = { committed: true } | { committed: false; message: string };
+
   let { active, saveProfile }: {
     active: BrandProfile;
-    saveProfile: (profile: BrandProfile) => void | Promise<void>;
+    saveProfile: (profile: BrandProfile) => Promise<PersistenceResult>;
   } = $props();
 
   const fieldLabels: Record<DomainControlPassportField, string> = {
@@ -135,7 +137,11 @@
       if (!choices.length || choices.every((choice) => !choice.fields.length)) {
         throw new Error('Select at least one configured field to import.');
       }
-      await saveProfile(applyDomainControlPassport(active, imported, choices));
+      const result = await saveProfile(applyDomainControlPassport(active, imported, choices));
+      if (!result.committed) {
+        message = result.message;
+        return;
+      }
       message = `Imported reviewed fields for ${choices.length} domain${choices.length === 1 ? '' : 's'}. Unselected and unconfigured fields were left unchanged.`;
       imported = null;
     } catch (cause) {

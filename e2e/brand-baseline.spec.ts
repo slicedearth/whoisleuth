@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures';
-import { expectNoHorizontalOverflow, failBrowserLocalManifestWrites, migrateLegacyBrowserData, readBrowserLocalCollection, requiredValue } from './helpers';
+import { expectNoHorizontalOverflow, failBrowserLocalManifestWrites, failNextBrowserLocalManifestWrite, holdBrowserLocalReads, migrateLegacyBrowserData, readBrowserLocalCollection, requiredValue } from './helpers';
 import {
   buildDomainControlManifest,
   DOMAIN_CONTROL_MANIFEST_INPUT_SCHEMA,
@@ -709,8 +709,48 @@ test('exports and locally verifies a selective domain-control passport on deskto
   await expect(passport.getByRole('heading', { name: 'Import preview' })).toBeVisible();
   await expect(passport.getByText('Not configured; destination remains unchanged').first()).toBeVisible();
 
+  await failNextBrowserLocalManifestWrite(page, 'brand_profiles');
+  await passport.getByRole('button', { name: 'Import selected fields' }).click();
+  await expect(passport.getByRole('status')).toContainText(/storage|quota|write/iu);
+  await expect(passport.getByRole('heading', { name: 'Import preview' })).toBeVisible();
+  await passport.getByRole('button', { name: 'Import selected fields' }).click();
+  await expect(page.getByRole('status', { name: 'Brand Profile action status' })).toContainText('Imported the selected domain-control passport fields');
+  await expect(passport.getByRole('heading', { name: 'Import preview' })).toHaveCount(0);
+
   await page.setViewportSize({ width: 390, height: 844 });
   await expectNoHorizontalOverflow(page);
+});
+
+test('owned-domain baseline feedback reflects the committed browser-local write', async ({ page }) => {
+  await page.goto('/brands');
+  await migrateLegacyBrowserData(page, {
+    [PROFILES_KEY]: [profileFixture()],
+    [ACTIVE_KEY]: 'profile-1',
+  });
+  const baseline = page.locator('#desired-posture-baseline');
+  await baseline.getByRole('textbox', { name: 'Nameservers', exact: true }).fill('ns1.stored.example');
+  await failNextBrowserLocalManifestWrite(page, 'brand_profiles');
+  await baseline.getByRole('button', { name: 'Save baseline' }).click();
+  await expect(baseline.getByRole('status')).toContainText(/storage|quota|write/iu);
+  await expect(baseline.getByRole('status')).not.toContainText('Saved the analyst-authored');
+  let stored = requiredValue(
+    (await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 1 })).records[0],
+    'The Brand Profile fixture is missing.',
+  ).value;
+  expect(stored.desiredPostureBaselines).toEqual([]);
+
+  await holdBrowserLocalReads(page, 1_200, '#desired-posture-baseline button.primary');
+  await expect(baseline.getByRole('textbox', { name: 'Nameservers', exact: true })).toBeDisabled();
+  await expect(page.getByRole('status', { name: 'Brand Profile action status' })).toContainText('Saved analyst-authored desired posture baselines');
+  await expect(baseline.getByRole('textbox', { name: 'Nameservers', exact: true })).toBeEnabled();
+  await expect(baseline.getByRole('textbox', { name: 'Nameservers', exact: true })).toHaveValue('ns1.stored.example');
+  stored = requiredValue(
+    (await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 1 })).records[0],
+    'The updated Brand Profile fixture is missing.',
+  ).value;
+  expect(stored.desiredPostureBaselines).toEqual([
+    expect.objectContaining({ domain: 'stored.example', nameservers: ['ns1.stored.example'] }),
+  ]);
 });
 
 test('requires an explicit official-domain choice before enabling new-domain passport fields', async ({ page }) => {

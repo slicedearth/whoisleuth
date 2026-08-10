@@ -778,21 +778,24 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
 
     await page.getByRole('tab', { name: /^Relationships/ }).click();
     const relationshipMap = page.locator('.asset-graph .relationship-map');
-    if (await relationshipMap.count()) {
-      const mapFrame = relationshipMap.locator('.map-frame');
-      const mobileMap = relationshipMap.locator('.map-mobile');
-      if (await mapFrame.isVisible()) {
-        const graphBox = await boundingBox(mapFrame);
-        const panelBox = await boundingBox(relationshipMap);
-        expect(graphBox.width).toBeGreaterThan(Math.min(500, panelBox.width * 0.7));
-        expect(graphBox.width).toBeLessThanOrEqual(panelBox.width + 1);
-        expect(graphBox.height).toBeGreaterThan(180);
-        expect(graphBox.height).toBeLessThan(700);
-        expect(await mapFrame.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
-      } else {
-        await expect(mobileMap).toBeVisible();
-        expect(await mobileMap.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
-      }
+    await expect(relationshipMap).toHaveCount(1);
+    const mapFrame = relationshipMap.locator('.map-frame');
+    const mobileMap = relationshipMap.locator('.map-mobile');
+    const mapFrameVisible = await mapFrame.isVisible();
+    const mobileMapVisible = await mobileMap.isVisible();
+    expect(Number(mapFrameVisible) + Number(mobileMapVisible)).toBe(1);
+    if (size.width === 1920) expect(mapFrameVisible).toBe(true);
+    if (size.width === 320) expect(mobileMapVisible).toBe(true);
+    if (mapFrameVisible) {
+      const graphBox = await boundingBox(mapFrame);
+      const panelBox = await boundingBox(relationshipMap);
+      expect(graphBox.width).toBeGreaterThan(Math.min(500, panelBox.width * 0.7));
+      expect(graphBox.width).toBeLessThanOrEqual(panelBox.width + 1);
+      expect(graphBox.height).toBeGreaterThan(180);
+      expect(graphBox.height).toBeLessThan(700);
+      expect(await mapFrame.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+    } else {
+      expect(await mobileMap.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
     }
 
     await page.getByRole('tab', { name: /^Timeline/ }).click();

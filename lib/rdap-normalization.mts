@@ -545,11 +545,22 @@ function parseRdapObject(type: string, data: LooseRecord): NormalizedRdapRecord 
             : {};
           const v4: unknown[] = Array.isArray(ipAddresses.v4) ? ipAddresses.v4 : [];
           const v6: unknown[] = Array.isArray(ipAddresses.v6) ? ipAddresses.v6 : [];
-          if (v4.length + v6.length > 20) nameserverAddressesTruncated = true;
-          const addresses = [
-            ...v4.map((address) => boundedString(address, 80)).filter((address) => address && net.isIP(address) === 4),
-            ...v6.map((address) => boundedString(address, 80)).filter((address) => address && net.isIP(address) === 6),
-          ].slice(0, 20);
+          const maximumCandidates = 200;
+          const maximumAddresses = 20;
+          const addresses: string[] = [];
+          let visited = 0;
+          for (const [candidates, family] of [[v4, 4], [v6, 6]] as const) {
+            for (let index = 0; index < candidates.length; index += 1) {
+              if (visited >= maximumCandidates || addresses.length >= maximumAddresses) break;
+              visited += 1;
+              const address = boundedString(candidates[index], 80);
+              if (address && net.isIP(address) === family) addresses.push(address);
+            }
+            if (visited >= maximumCandidates || addresses.length >= maximumAddresses) break;
+          }
+          if (v4.length + v6.length > visited || v4.length + v6.length > maximumAddresses) {
+            nameserverAddressesTruncated = true;
+          }
           return {
             name: boundedString(nameserver.ldhName || nameserver.unicodeName, 253),
             addresses,

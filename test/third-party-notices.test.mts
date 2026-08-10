@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, test } from 'node:test';
 
 import {
+  buildThirdPartyNotices,
+  MAX_NOTICE_DOCUMENT_BYTES,
   THIRD_PARTY_NOTICE_PATH,
   collectProductionPackages,
   main,
@@ -18,6 +20,7 @@ function capture() {
 
 function fixtureLockfile() {
   return {
+    lockfileVersion: 3,
     packages: {
       '': { dependencies: { alpha: '1.0.0' } },
       frontend: { dependencies: { beta: '2.0.0' } },
@@ -46,11 +49,106 @@ describe('third-party production dependency notices', () => {
   });
 
   test('rejects malformed inventories and unsupported command arguments', () => {
-    assert.throws(() => collectProductionPackages({ packages: { '': {}, 'node_modules/unknown': { version: '1.0.0' } } }), /licence/);
+    assert.throws(() => collectProductionPackages({ lockfileVersion: 3, packages: { '': {}, 'node_modules/unknown': { version: '1.0.0' } } }), /licence/);
     assert.equal(parseArguments(['--check']), 'check');
     assert.equal(parseArguments(['--write']), 'write');
     assert.throws(() => parseArguments([]), /Usage/);
     assert.throws(() => parseArguments(['--delete']), /Usage/);
+    assert.throws(() => collectProductionPackages({
+      lockfileVersion: 3,
+      packages: {
+        '': { dependencies: { outside: '1.0.0' } },
+        'node_modules/../../outside': { version: '1.0.0', license: 'MIT' },
+      },
+    }), /safe relative path|inside node_modules/iu);
+  });
+
+  test('rejects package documents that resolve through symbolic links', async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'whoisleuth-notices-link-'));
+    try {
+      await mkdir(path.join(directory, 'frontend', 'static'), { recursive: true });
+      await writeFile(path.join(directory, 'package-lock.json'), JSON.stringify(fixtureLockfile()), 'utf8');
+      await writeFixturePackage(directory, 'beta', 'Beta licence text');
+      await writeFixturePackage(directory, 'shared', 'Shared licence text');
+      const alphaDirectory = path.join(directory, 'node_modules', 'alpha');
+      await mkdir(alphaDirectory, { recursive: true });
+      const outside = path.join(directory, 'outside-license.txt');
+      await writeFile(outside, 'Outside licence text', 'utf8');
+      await symlink(outside, path.join(alphaDirectory, 'LICENSE'));
+
+      const errors = capture();
+      assert.equal(await main(['--write'], { repositoryRoot: directory, stderr: errors.stream }), 2);
+      assert.match(errors.value(), /ELOOP|symbolic link/iu);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  test('rejects node_modules and output-directory roots that resolve outside the repository', async () => {
+    const parent = await mkdtemp(path.join(tmpdir(), 'whoisleuth-notices-roots-'));
+    const repository = path.join(parent, 'repository');
+    const externalModules = path.join(parent, 'external-modules');
+    const externalStatic = path.join(parent, 'external-static');
+    try {
+      await mkdir(repository, { recursive: true });
+      await mkdir(externalModules, { recursive: true });
+      await mkdir(externalStatic, { recursive: true });
+      await writeFile(path.join(repository, 'package-lock.json'), JSON.stringify(fixtureLockfile()), 'utf8');
+      await mkdir(path.join(externalModules, 'alpha'), { recursive: true });
+      await writeFile(path.join(externalModules, 'alpha', 'LICENSE'), 'External licence', 'utf8');
+      await symlink(externalModules, path.join(repository, 'node_modules'));
+      const moduleErrors = capture();
+      assert.equal(await main(['--write'], { repositoryRoot: repository, stderr: moduleErrors.stream }), 2);
+      assert.match(moduleErrors.value(), /node_modules resolves outside/iu);
+
+      await rm(path.join(repository, 'node_modules'), { force: true });
+      await writeFixturePackage(repository, 'alpha', 'Alpha licence');
+      await writeFixturePackage(repository, 'beta', 'Beta licence');
+      await writeFixturePackage(repository, 'shared', 'Shared licence');
+      await mkdir(path.join(repository, 'frontend'), { recursive: true });
+      await symlink(externalStatic, path.join(repository, 'frontend', 'static'));
+      const outputErrors = capture();
+      assert.equal(await main(['--write'], { repositoryRoot: repository, stderr: outputErrors.stream }), 2);
+      assert.match(outputErrors.value(), /output directory resolves outside/iu);
+    } finally {
+      await rm(parent, { recursive: true, force: true });
+    }
+  });
+
+  test('rejects notice output incrementally before reading later package documents', async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'whoisleuth-notices-output-bound-'));
+    const names = ['alpha0', 'alpha1', 'alpha2', 'alpha3', 'alpha4'];
+    try {
+      const packages = Object.fromEntries(names.map((name) => [
+        `node_modules/${name}`,
+        { version: '1.0.0', license: 'MIT' },
+      ]));
+      await writeFile(path.join(directory, 'package-lock.json'), JSON.stringify({
+        lockfileVersion: 3,
+        packages: { '': { dependencies: { alpha0: '1.0.0' } }, ...packages },
+      }), 'utf8');
+      for (const name of names.slice(0, 4)) {
+        const packageDirectory = path.join(directory, 'node_modules', name);
+        await mkdir(packageDirectory, { recursive: true });
+        for (let index = 0; index < 8; index += 1) {
+          await writeFile(
+            path.join(packageDirectory, `LICENSE-${index}`),
+            `${name}-${index}-`.padEnd(MAX_NOTICE_DOCUMENT_BYTES, 'x'),
+            'utf8',
+          );
+        }
+      }
+      const unreadPackage = path.join(directory, 'node_modules', names[4] as string);
+      await mkdir(unreadPackage, { recursive: true });
+      await symlink(path.join(directory, 'missing-later-document'), path.join(unreadPackage, 'LICENSE'));
+
+      await assert.rejects(
+        buildThirdPartyNotices(directory),
+        /output exceeds its byte limit/iu,
+      );
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
   });
 
   test('writes and checks a deterministic bounded notice artifact', async () => {
@@ -61,13 +159,18 @@ describe('third-party production dependency notices', () => {
       await writeFixturePackage(directory, 'alpha', 'Alpha licence text');
       await writeFixturePackage(directory, 'beta', 'Beta licence text');
       await writeFixturePackage(directory, 'shared');
+      const outsideNotice = path.join(directory, 'outside-notices.txt');
+      await writeFile(outsideNotice, 'outside notice sentinel', 'utf8');
+      await symlink(outsideNotice, path.join(directory, THIRD_PARTY_NOTICE_PATH));
 
       const writeStdout = capture();
       const writeStderr = capture();
       assert.equal(await main(['--write'], { repositoryRoot: directory, stdout: writeStdout.stream, stderr: writeStderr.stream }), 0);
       assert.equal(writeStderr.value(), '');
       const output = await readFile(path.join(directory, THIRD_PARTY_NOTICE_PATH), 'utf8');
+      assert.equal(await readFile(outsideNotice, 'utf8'), 'outside notice sentinel');
       assert.match(output, /Package count: 3/u);
+      assert.match(output, /Package count: 3\n\n={80}/u);
       assert.match(output, /alpha@1\.0\.0[\s\S]+direct production dependency/u);
       assert.match(output, /shared@3\.0\.0[\s\S]+transitive production dependency/u);
       assert.doesNotMatch(output, /dev-only/u);

@@ -25,6 +25,9 @@ import {
 import { optionalJsonRecord as record } from './maintainer-tool-helpers.mts';
 
 type WritableLike = { write(value: string): unknown };
+
+export const INCREMENTAL_LOOKUP_TRANSPORT_SPIKE_SCHEMA = 'whoisleuth.incremental-lookup-transport-spike';
+export const INCREMENTAL_LOOKUP_TRANSPORT_SPIKE_VERSION = 1;
 type SpikeMainOptions = Readonly<{
   stdout?: WritableLike;
   stderr?: WritableLike;
@@ -73,8 +76,8 @@ export function buildIncrementalLookupTransportSpikeReport() {
   for (const event of decoded) reducer.apply(event);
   const final = reducer.finish();
   return Object.freeze({
-    schema: 'whoisleuth.incremental-lookup-transport-spike',
-    version: 1,
+    schema: INCREMENTAL_LOOKUP_TRANSPORT_SPIKE_SCHEMA,
+    version: INCREMENTAL_LOOKUP_TRANSPORT_SPIKE_VERSION,
     mode: 'offline_synthetic',
     ready: record(final)?.schema === 'fixture.lookup-result',
     events: decoded.length,

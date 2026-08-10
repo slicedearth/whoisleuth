@@ -99,7 +99,7 @@
   import { CAPABILITY_CONTEXT, disabledCapabilities, disabledCapability, featureCapability, type CapabilityGetter } from '$lib/capabilities';
   import { readLookupWorkflowState, writeLookupWorkflowState } from '$lib/console-workflow-state.ts';
   import { LookupRequestController } from '$lib/controllers/lookup-request-controller';
-  import { LookupCaseController } from '$lib/controllers/lookup-case-controller';
+  import { LookupCaseController, type LookupCaseActionResult } from '$lib/controllers/lookup-case-controller';
   type LookupMode = 'fast' | 'deep';
 
   let query=$state('');
@@ -118,6 +118,8 @@
   let profileSourceState=$state<ActiveBrandProfileSourceState>('loading');
   let draftStatus=$state('');
   let caseRecord=$state<CaseRecord|null>(null);let caseNote=$state('');let caseStatus=$state('');
+  let caseActionBusy=$state(false);
+  let caseActionGeneration=0;
   let expandedResultSections=$state<string[]>([]);
   let detailedAssessmentOpen=$state(false);
   let taskView=$state<LookupTaskView>('general');
@@ -263,45 +265,51 @@
   }
   async function refreshCase(expectedRevision:number|null=null){
     const requestedDomain=caseDomain;
+    const actionGeneration=caseActionGeneration;
     const next=await lookupCaseController.refresh(requestedDomain);
-    if(expectedRevision!==null&&(expectedRevision!==lookupRevision||caseDomain!==requestedDomain))return;
+    if(actionGeneration!==caseActionGeneration||(expectedRevision!==null&&(expectedRevision!==lookupRevision||caseDomain!==requestedDomain)))return;
     caseRecord=next.record;
     caseStatus=next.status;
   }
-  async function openLookupCase(){
-    const next=await lookupCaseController.open(caseDomain,caseEvidence,lookupEvidenceDepth);
-    caseRecord=next.record;
-    caseStatus=next.status;
+  function invalidateCaseActions(){caseActionGeneration+=1;caseActionBusy=false;}
+  async function performCaseAction(
+    action:()=>Promise<LookupCaseActionResult>,
+    afterPublish:(next:LookupCaseActionResult)=>void=()=>{},
+  ):Promise<boolean>{
+    if(caseActionBusy)return false;
+    const generation=++caseActionGeneration;
+    const revision=lookupRevision;
+    const domain=caseDomain;
+    const recordId=caseRecord?.id||'';
+    caseActionBusy=true;
+    try{
+      const next=await action();
+      if(generation!==caseActionGeneration||revision!==lookupRevision||domain!==caseDomain||(caseRecord?.id||'')!==recordId)return false;
+      caseRecord=next.record;
+      caseStatus=next.status;
+      afterPublish(next);
+      return true;
+    }finally{
+      if(generation===caseActionGeneration)caseActionBusy=false;
+    }
   }
-  async function addLookupNote(){
-    const next=await lookupCaseController.appendNote(caseRecord,caseNote);
-    caseRecord=next.record;
-    caseStatus=next.status;
-    if(next.clearNote)caseNote='';
-  }
-  async function recordAbuseRecipient(route:Parameters<LookupCaseController['recordRecipient']>[1]){
-    const next=await lookupCaseController.recordRecipient(caseRecord,route);
-    caseRecord=next.record;
-    caseStatus=next.status;
-  }
-  async function saveEvidenceCheckpoint(selectedFields:string[],transitionExpectations:Readonly<Record<string,CaseTransitionExpectation>>={}){
-    const next=await lookupCaseController.recordCheckpoint(caseRecord,checkpointFacts,selectedFields,transitionExpectations);
-    caseRecord=next.record;
-    caseStatus=next.status;
-  }
+  async function openLookupCase(){const domain=caseDomain;const evidence=caseEvidence;const depth=lookupEvidenceDepth;await performCaseAction(()=>lookupCaseController.open(domain,evidence,depth));}
+  async function addLookupNote(){const record=caseRecord;const note=caseNote;await performCaseAction(()=>lookupCaseController.appendNote(record,note),(next)=>{if(next.clearNote)caseNote='';});}
+  async function recordAbuseRecipient(route:Parameters<LookupCaseController['recordRecipient']>[1]){const record=caseRecord;await performCaseAction(()=>lookupCaseController.recordRecipient(record,route));}
+  async function saveEvidenceCheckpoint(selectedFields:string[],transitionExpectations:Readonly<Record<string,CaseTransitionExpectation>>={}){const record=caseRecord;const facts=checkpointFacts;await performCaseAction(()=>lookupCaseController.recordCheckpoint(record,facts,[...selectedFields],{...transitionExpectations}));}
   async function copyInvestigationBrief(){
     await copyDraft(formatLookupInvestigationBriefMarkdown(lookupInvestigationBrief),'investigation brief');
   }
   async function recordInvestigationBriefHandoff(){
-    const next=await lookupCaseController.recordBriefHandoff(caseRecord,{
+    const record=caseRecord;
+    const brief={
       target:lookupInvestigationBrief.target,
       taskLabel:lookupInvestigationBrief.taskLabel,
       generatedAt:lookupInvestigationBrief.generatedAt,
       contradictionCount:lookupInvestigationBrief.contradictions.length,
       unknownCount:lookupInvestigationBrief.unknowns.length,
-    });
-    caseRecord=next.record;
-    caseStatus=next.status;
+    };
+    await performCaseAction(()=>lookupCaseController.recordBriefHandoff(record,brief));
   }
   function cancelLookup(){lookupRequestController.cancel();}
   function visualViewForTask(value:LookupTaskView):LookupVisualView{
@@ -323,6 +331,7 @@
     loadingElapsedMs=0;
   }
   function clearCompletedLookupContext(){
+    invalidateCaseActions();
     result=null;
     completedLookupTarget='';
     completedLookupDepth=null;
@@ -473,6 +482,7 @@
     void (async()=>{await refreshProfileContext();if(result)await refreshCase(lookupRevision);})();
     return()=>{
       pageActive=false;
+      invalidateCaseActions();
       window.removeEventListener('hashchange',navigateToCurrentLookupHash);
       lookupRequestController.dispose();
       writeLookupWorkflowState({query,completedTarget:completedLookupTarget,completedLookupDepth,lookupMode,includeExternalIntelligence,includeMalwareHostIntelligence,includeMalwareIocIntelligence,includeSecurityTxt,error,result});
@@ -538,6 +548,7 @@
       return;
     }
 
+    invalidateCaseActions();
     loading=true;loadingElapsedMs=0;error='';result=null;completedLookupTarget='';completedLookupDepth=null;caseRecord=null;caseNote='';caseStatus='';serviceDependencyScope='';serviceDependencyFalsePositives='';expandedResultSections=[];detailedAssessmentOpen=false;
     const target=entries[0];if(!target)return;
     const requestedLookupMode=lookupMode;
@@ -651,6 +662,7 @@
           support={lookupDecisionSupport}
           onbriefcopy={copyInvestigationBrief}
           onbriefhandoff={caseRecord ? recordInvestigationBriefHandoff : null}
+          actionBusy={caseActionBusy}
         />
         <LookupClaimReadiness readiness={lookupClaimReadiness} impact={lookupEvidenceImpactPlan} onpassport={downloadClaimPassport} />
 
@@ -1017,9 +1029,9 @@
           onhide={()=>void hideSectionDetail('case-response')}
         />
         {#if sectionDetailVisible('case-response')}
-        <LookupCaseResponse domain={caseDomain} record={caseRecord} note={caseNote} {caseStatus} {draftStatus} {outreach} recipientResolution={abuseRecipientResolution} setNote={(value) => caseNote = value} createCase={openLookupCase} addNote={addLookupNote} recordRecipient={recordAbuseRecipient} {copyDraft} statusLabel={caseStatusLabel} dispositionLabel={caseDispositionLabel} />
+        <LookupCaseResponse domain={caseDomain} record={caseRecord} note={caseNote} {caseStatus} {draftStatus} {outreach} recipientResolution={abuseRecipientResolution} setNote={(value) => caseNote = value} createCase={openLookupCase} addNote={addLookupNote} recordRecipient={recordAbuseRecipient} {copyDraft} statusLabel={caseStatusLabel} dispositionLabel={caseDispositionLabel} actionBusy={caseActionBusy} />
         {#if caseRecord && checkpointFacts.length}
-          <LookupEvidenceCheckpoint facts={checkpointFacts} pins={caseRecord.evidencePins} onsave={saveEvidenceCheckpoint} />
+          <LookupEvidenceCheckpoint facts={checkpointFacts} pins={caseRecord.evidencePins} onsave={saveEvidenceCheckpoint} actionBusy={caseActionBusy} />
         {/if}
         {/if}
       </section>

@@ -84,6 +84,8 @@ export const MAX_CLI_PACKAGE_FILE_BYTES = 2 * 1024 * 1024;
 export const MAX_CLI_PACKAGE_ENTRIES = 320;
 export const MAX_CLI_PACKAGE_PACKED_BYTES = 2 * 1024 * 1024;
 export const MAX_CLI_PACKAGE_UNPACKED_BYTES = 6 * 1024 * 1024;
+export const CLI_PACKAGE_LONG_PROCESS_TIMEOUT_MS = 120_000;
+export const CLI_PACKAGE_INSTALLED_CHECK_TIMEOUT_MS = 15_000;
 
 const LOCAL_SOURCE_PATTERN = /^(?:bin|cli|lib|frontend\/src\/lib\/analysis)\/[A-Za-z0-9._/-]+\.(?:mts|ts)$/u;
 const REQUIRED_SOURCE_MODULES = Object.freeze(['bin/whoisleuth.mts', 'cli/runner.mts']);
@@ -310,6 +312,8 @@ async function dependencyGraph(repositoryRoot: string): Promise<unknown> {
   ], {
     cwd: repositoryRoot,
     encoding: 'utf8',
+    timeout: CLI_PACKAGE_LONG_PROCESS_TIMEOUT_MS,
+    killSignal: 'SIGTERM',
     maxBuffer: MAX_CLI_PACKAGE_GRAPH_BYTES,
   });
   try {
@@ -379,7 +383,8 @@ async function compilePackageSources(repositoryRoot: string, temporaryRoot: stri
     await execFile(process.execPath, [compiler, '--project', configurationPath], {
       cwd: repositoryRoot,
       encoding: 'utf8',
-      timeout: 120_000,
+      timeout: CLI_PACKAGE_LONG_PROCESS_TIMEOUT_MS,
+      killSignal: 'SIGTERM',
       maxBuffer: 4 * 1024 * 1024,
     });
   } catch (error) {
@@ -409,7 +414,8 @@ function packedFiles(packResult: JsonRecord): readonly string[] {
 async function runInstalledCheck(executable: string, args: readonly string[], label: string): Promise<string> {
   const { stdout, stderr } = await execFile(process.execPath, [executable, ...args], {
     encoding: 'utf8',
-    timeout: 15_000,
+    timeout: CLI_PACKAGE_INSTALLED_CHECK_TIMEOUT_MS,
+    killSignal: 'SIGTERM',
     maxBuffer: 2 * 1024 * 1024,
     env: { ...process.env, FORCE_COLOR: '0', NO_COLOR: '1' },
   });
@@ -456,6 +462,8 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
     const { stdout: packOutput } = await execFile('npm', ['pack', '--json', '--pack-destination', artifactsRoot], {
       cwd: stagingRoot,
       encoding: 'utf8',
+      timeout: CLI_PACKAGE_LONG_PROCESS_TIMEOUT_MS,
+      killSignal: 'SIGTERM',
       maxBuffer: 4 * 1024 * 1024,
       env: commonEnvironment,
     });
@@ -480,7 +488,8 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
     await execFile('npm', ['install', '--package-lock=false', '--ignore-scripts', '--no-audit', '--no-fund', tarball], {
       cwd: installRoot,
       encoding: 'utf8',
-      timeout: 120_000,
+      timeout: CLI_PACKAGE_LONG_PROCESS_TIMEOUT_MS,
+      killSignal: 'SIGTERM',
       maxBuffer: 4 * 1024 * 1024,
       env: commonEnvironment,
     });

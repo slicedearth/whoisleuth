@@ -305,6 +305,50 @@ test('Unicode lookalikes show both domain forms and support evidence-aware filte
   await expect(page.getByRole('status').filter({ hasText: 'No candidates match the current filters' })).toBeVisible();
 });
 
+test('serializes local IDN policy provenance while a selected file is being read', async ({ page }) => {
+  await page.getByRole('button', { name: /^Impersonation\b/u }).click();
+  await page.getByRole('textbox', { name: 'Brand or domain' }).fill('scope.invalid');
+  await page.getByRole('textbox', { name: 'TLDs' }).fill('invalid');
+  await page.getByRole('button', { name: 'Generate candidates' }).click();
+
+  const policy = page.locator('details.idn-policy');
+  await policy.locator('summary').click();
+  await page.evaluate(() => {
+    const original = File.prototype.text;
+    let hold = true;
+    File.prototype.text = function text() {
+      if (!hold) return original.call(this);
+      hold = false;
+      return new Promise<string>((resolve, reject) => {
+        Reflect.set(window, '__releaseIdnPolicyRead', () => {
+          void original.call(this).then(resolve, reject);
+        });
+      });
+    };
+  });
+  const suffix = policy.getByLabel('Registry table suffix');
+  const file = policy.locator('input[type="file"]');
+  await suffix.fill('invalid');
+  await file.setInputFiles({
+    name: 'reviewed-invalid-lgr.xml',
+    mimeType: 'application/xml',
+    buffer: Buffer.from('<?xml version="1.0"?><lgr><data><range first-cp="0061" last-cp="007A"/><char cp="0455"/><char cp="0441"/><char cp="043E"/><char cp="0440"/><char cp="0435"/></data></lgr>'),
+  });
+  await policy.getByRole('button', { name: 'Review local table' }).click();
+  await expect(policy.getByRole('button', { name: 'Reviewing…' })).toBeDisabled();
+  await expect(suffix).toBeDisabled();
+  await expect(file).toBeDisabled();
+  await page.evaluate(() => {
+    const release = Reflect.get(window, '__releaseIdnPolicyRead');
+    if (typeof release !== 'function') throw new Error('The IDN policy read gate was not installed.');
+    release();
+  });
+  await expect(policy.getByText('Source:')).toContainText('reviewed-invalid-lgr.xml');
+  await expect(policy.getByText('Outside .invalid')).toBeVisible();
+  await expect(suffix).toBeEnabled();
+  await expect(file).toBeEnabled();
+});
+
 test('candidate filters remain contained at mobile width', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole('textbox', { name: 'Brand or domain' }).fill('scope.invalid');

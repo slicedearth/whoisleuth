@@ -9,6 +9,7 @@ import ts from 'typescript';
 
 import { readBoundedRegularTextFile } from '../lib/bounded-file.mts';
 import { parseBoundedJsonObject } from '../lib/bounded-json.mts';
+import { compareCodeUnits } from './maintainer-tool-helpers.mts';
 
 type WritableLike = { write(value: string): unknown };
 type FunctionNode = ts.FunctionDeclaration | ts.ArrowFunction | ts.FunctionExpression;
@@ -44,10 +45,6 @@ export const MAX_MAINTAINER_DUPLICATION_REPORT_BYTES = 2 * 1024 * 1024;
 
 const TOOL_NAME_RE = /^[a-z0-9][a-z0-9.-]*\.mts$/u;
 const MIN_DUPLICATE_TOKENS = 12;
-
-function compareCodeUnits(left: string, right: string): number {
-  return left < right ? -1 : left > right ? 1 : 0;
-}
 
 function sourceLine(source: ts.SourceFile, position: number): number {
   return source.getLineAndCharacterOfPosition(position).line + 1;

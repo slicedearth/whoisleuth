@@ -20,6 +20,10 @@
   let beforeId = $state('');
   let afterId = $state('');
   let message = $state('');
+  let operation = $state<'loading' | 'ready' | 'busy'>('loading');
+  let operationGeneration = 0;
+  let mounted = false;
+  let loadedDomain = $state('');
   const domainSnapshots = $derived(snapshots.filter((item) => item.domain === domain));
   const certificateSnapshots = $derived(
     snapshots
@@ -39,57 +43,121 @@
   const after = $derived(domainSnapshots.find((item) => item.id === afterId) || null);
   const comparison = $derived(before && after ? compareWebsiteSnapshots(before, after) : null);
 
-  onMount(() => { void refresh(); });
-  async function refresh() {
+  onMount(() => {
+    mounted = true;
+    loadedDomain = domain;
+    void refresh(domain);
+    return () => { mounted = false; operationGeneration += 1; };
+  });
+  $effect(() => {
+    const nextDomain = domain;
+    if (!mounted || nextDomain === loadedDomain) return;
+    loadedDomain = nextDomain;
+    snapshots = [];
+    beforeId = '';
+    afterId = '';
+    message = '';
+    void refresh(nextDomain);
+  });
+  function owns(generation: number, expectedDomain: string): boolean {
+    return mounted && generation === operationGeneration && domain === expectedDomain;
+  }
+  async function refresh(expectedDomain: string) {
+    const generation = ++operationGeneration;
+    operation = 'loading';
     try {
-      snapshots = await loadWebsiteSnapshots();
-      const scoped = snapshots.filter((item) => item.domain === domain);
+      const next = await loadWebsiteSnapshots();
+      if (!owns(generation, expectedDomain)) return;
+      snapshots = next;
+      const scoped = next.filter((item) => item.domain === expectedDomain);
       if (!afterId && scoped[0]) afterId = scoped[0].id;
       if (!beforeId && scoped[1]) beforeId = scoped[1].id;
     } catch (cause) {
+      if (!owns(generation, expectedDomain)) return;
       message = cause instanceof Error ? cause.message : 'Could not load website snapshots.';
+    } finally {
+      if (owns(generation, expectedDomain)) operation = 'ready';
     }
   }
   async function save() {
+    if (operation !== 'ready') return;
+    const expectedDomain = domain;
+    const generation = ++operationGeneration;
+    operation = 'busy';
+    message = '';
     try {
-      snapshots = await retainWebsiteSnapshot(buildSnapshot());
-      afterId = snapshots.find((item) => item.domain === domain)?.id || '';
-      const prior = snapshots.filter((item) => item.domain === domain && item.id !== afterId)[0];
+      const next = await retainWebsiteSnapshot(buildSnapshot());
+      if (!owns(generation, expectedDomain)) return;
+      snapshots = next;
+      afterId = next.find((item) => item.domain === expectedDomain)?.id || '';
+      const prior = next.filter((item) => item.domain === expectedDomain && item.id !== afterId)[0];
       if (prior) beforeId = prior.id;
-      const retained = snapshots.find((item) => item.id === afterId);
-      message = `Saved a compact website-profile snapshot for ${domain}${retained?.certificate ? ' with one observed leaf-certificate record' : ''}.`;
+      const retained = next.find((item) => item.id === afterId);
+      message = `Saved a compact website-profile snapshot for ${expectedDomain}${retained?.certificate ? ' with one observed leaf-certificate record' : ''}.`;
     } catch (cause) {
+      if (!owns(generation, expectedDomain)) return;
       message = cause instanceof Error ? cause.message : 'Could not save the website snapshot.';
+    } finally {
+      if (owns(generation, expectedDomain)) operation = 'ready';
     }
   }
   async function remove(id: string) {
-    if (!confirm('Delete this compact website-profile snapshot?')) return;
-    snapshots = await deleteWebsiteSnapshot(id);
-    if (beforeId === id) beforeId = '';
-    if (afterId === id) afterId = '';
-    message = 'Deleted the selected website-profile snapshot.';
+    if (operation !== 'ready' || !confirm('Delete this compact website-profile snapshot?')) return;
+    const expectedDomain = domain;
+    const generation = ++operationGeneration;
+    operation = 'busy';
+    message = '';
+    try {
+      const next = await deleteWebsiteSnapshot(id);
+      if (!owns(generation, expectedDomain)) return;
+      snapshots = next;
+      if (beforeId === id) beforeId = '';
+      if (afterId === id) afterId = '';
+      message = 'Deleted the selected website-profile snapshot.';
+    } catch (cause) {
+      if (!owns(generation, expectedDomain)) return;
+      message = cause instanceof Error ? cause.message : 'Could not delete the website snapshot.';
+    } finally {
+      if (owns(generation, expectedDomain)) operation = 'ready';
+    }
   }
   async function download() {
+    if (operation !== 'ready') return;
+    const expectedDomain = domain;
+    const generation = ++operationGeneration;
+    operation = 'busy';
+    message = '';
     try {
       await exportWebsiteSnapshots();
+      if (!owns(generation, expectedDomain)) return;
       message = 'Exported the website-profile snapshot collection.';
     } catch (cause) {
+      if (!owns(generation, expectedDomain)) return;
       message = cause instanceof Error ? cause.message : 'Could not export website snapshots.';
+    } finally {
+      if (owns(generation, expectedDomain)) operation = 'ready';
     }
   }
   async function importFile(event: Event) {
     const input = event.currentTarget as HTMLInputElement;
     const file = input.files?.[0];
-    if (!file) return;
+    if (!file || operation !== 'ready') return;
+    const expectedDomain = domain;
+    const generation = ++operationGeneration;
+    operation = 'busy';
+    message = '';
     try {
       if (file.size > MAX_WEBSITE_SNAPSHOT_IMPORT_BYTES) throw new Error('Website-snapshot imports are limited to 768 KiB.');
       const result = await importWebsiteSnapshots(JSON.parse(await file.text()));
+      if (!owns(generation, expectedDomain)) return;
       snapshots = result.snapshots;
       message = `Imported ${result.added} new and ${result.updated} matching snapshot${result.added + result.updated === 1 ? '' : 's'}.`;
     } catch (cause) {
+      if (!owns(generation, expectedDomain)) return;
       message = cause instanceof Error ? cause.message : 'Website-snapshot import failed.';
     } finally {
       input.value = '';
+      if (owns(generation, expectedDomain)) operation = 'ready';
     }
   }
   function when(value: string) {
@@ -109,16 +177,16 @@
   <header>
     <div><p class="eyebrow">Analyst-selected history</p><h3 id="website-snapshot-title">Website profile snapshots</h3></div>
     <div class="toolbar">
-      <button class="btn" type="button" onclick={save} disabled={!canSave}>Save current snapshot</button>
-      <button class="btn" type="button" onclick={download} disabled={!snapshots.length}>Export</button>
-      <label class="btn file-btn">Import<input type="file" accept="application/json,.json" onchange={importFile}></label>
+      <button class="btn" type="button" onclick={save} disabled={!canSave || operation !== 'ready'}>Save current snapshot</button>
+      <button class="btn" type="button" onclick={download} disabled={!snapshots.length || operation !== 'ready'}>Export</button>
+      <label class="btn file-btn" class:disabled={operation !== 'ready'}>Import<input type="file" accept="application/json,.json" onchange={importFile} disabled={operation !== 'ready'}></label>
     </div>
   </header>
   <p>Save only after reviewing a completed Deep Lookup. Snapshots retain curated technology identifiers, posture states, identity digests, source health, completeness, and timestamps. A change is a review lead, not evidence of compromise, ownership, intent, or maliciousness.</p>
   {#if domainSnapshots.length}
     <div class="comparison-controls">
-      <label class="field">Earlier snapshot<select bind:value={beforeId}><option value="">Choose snapshot</option>{#each domainSnapshots as item}<option value={item.id}>{when(item.observedAt)}</option>{/each}</select></label>
-      <label class="field">Later snapshot<select bind:value={afterId}><option value="">Choose snapshot</option>{#each domainSnapshots as item}<option value={item.id}>{when(item.observedAt)}</option>{/each}</select></label>
+      <label class="field">Earlier snapshot<select bind:value={beforeId} disabled={operation !== 'ready'}><option value="">Choose snapshot</option>{#each domainSnapshots as item}<option value={item.id}>{when(item.observedAt)}</option>{/each}</select></label>
+      <label class="field">Later snapshot<select bind:value={afterId} disabled={operation !== 'ready'}><option value="">Choose snapshot</option>{#each domainSnapshots as item}<option value={item.id}>{when(item.observedAt)}</option>{/each}</select></label>
     </div>
     {#if comparison}
       <div class="comparison" class:incomparable={!comparison.compatible}>
@@ -144,7 +212,7 @@
     {/if}
     <details>
       <summary>Manage {domainSnapshots.length} saved snapshot{domainSnapshots.length === 1 ? '' : 's'}</summary>
-      <ul class="saved-list">{#each domainSnapshots as item}<li><span>{when(item.observedAt)} · {item.complete ? 'Complete' : 'Partial'}{item.truncated ? ' · Truncated' : ''}</span><button class="btn small danger" type="button" onclick={() => remove(item.id)}>Delete</button></li>{/each}</ul>
+      <ul class="saved-list">{#each domainSnapshots as item}<li><span>{when(item.observedAt)} · {item.complete ? 'Complete' : 'Partial'}{item.truncated ? ' · Truncated' : ''}</span><button class="btn small danger" type="button" onclick={() => remove(item.id)} disabled={operation !== 'ready'}>Delete</button></li>{/each}</ul>
     </details>
   {:else}
     <p>No website-profile snapshot is retained for this domain.</p>

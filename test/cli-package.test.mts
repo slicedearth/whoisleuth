@@ -2,6 +2,8 @@ import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  CLI_PACKAGE_INSTALLED_CHECK_TIMEOUT_MS,
+  CLI_PACKAGE_LONG_PROCESS_TIMEOUT_MS,
   buildCliPackageManifest,
   formatCliPackageReport,
   parseArguments,
@@ -55,6 +57,10 @@ const lockfile = {
 };
 
 describe('scoped CLI package contract', () => {
+  test('bounds both long-running package assembly and installed command processes', () => {
+    assert.equal(CLI_PACKAGE_LONG_PROCESS_TIMEOUT_MS, 120_000);
+    assert.equal(CLI_PACKAGE_INSTALLED_CHECK_TIMEOUT_MS, 15_000);
+  });
   test('selects only the bounded executable dependency closure', () => {
     const selected = selectCliPackageSources({
       modules: [

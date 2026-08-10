@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import path from 'node:path';
 
 export type MaintainerJsonRecord = Record<string, unknown>;
 
@@ -65,6 +66,33 @@ export function boundedPositiveInteger(value: unknown, label: string, maximum: n
 export function boundedPositiveTimeout(value: unknown, fallback: number, maximum: number): number {
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed > 0 ? Math.min(parsed, maximum) : fallback;
+}
+
+export function compareCodeUnits(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
+export function boundedSafeRelativePath(value: unknown, label: string, maximum = 512): string {
+  if (typeof value !== 'string'
+    || value.length < 1
+    || value.length > maximum
+    || value.trim() !== value
+    || value.includes('\\')
+    || CONTROL_RE.test(value)
+    || path.posix.isAbsolute(value)
+    || path.posix.normalize(value) !== value
+    || value.split('/').some((part) => !part || part === '.' || part === '..')) {
+    throw new TypeError(`${label} must be a bounded safe relative path.`);
+  }
+  return value;
+}
+
+export function pathIsWithin(root: string, candidate: string): boolean {
+  const relative = path.relative(root, candidate);
+  return relative.length > 0
+    && relative !== '..'
+    && !relative.startsWith(`..${path.sep}`)
+    && !path.isAbsolute(relative);
 }
 
 export function medianOneDecimal(values: readonly number[]): number | null {

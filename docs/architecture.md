@@ -320,10 +320,13 @@ Evidence-cluster review can qualify an exact retained IP relationship against a
 checked-in Common-infrastructure snapshot. The maintenance command
 `npm run common-infrastructure:update -- --commit <full-sha>` reads only a
 pinned MISP warning-lists commit, caps every source response at 1 MiB, accepts
-only exact CIDR lists no older than 30 days, rejects malformed or duplicate
-entries, and caps the generated snapshot at 20,000 entries and 1 MiB. The
-retained snapshot records the upstream commit, source date, SHA-256 digest,
-licence, exclusions, and limitations.
+only exact CIDR lists, rejects malformed or duplicate entries before applying
+freshness policy, and caps the generated snapshot at 20,000 entries and 1 MiB.
+A fully valid source older than 30 days is retained only as an explicit stale
+exclusion and contributes no ranges; malformed or unavailable required sources
+still fail the update. Active and excluded source IDs must form the exact
+reviewed four-source partition. The retained snapshot records the upstream
+commit, source date, SHA-256 digest, licence, exclusions, and limitations.
 
 Runtime matching is browser-local and makes no provider request. A match only
 qualifies the relationship as shared infrastructure. It does not identify an
@@ -413,7 +416,8 @@ directly. This is the only deliberate exception; it avoids duplicating lookup
 orchestration while keeping bypasses mechanically detectable.
 
 The on-demand `npm run schema:inventory` report is assembled from the owning
-contract constants and readers rather than a copied version table. Its explicit
+contract constants and readers in both `cli/` and `tools/`, rather than a copied
+version table. Its explicit
 supported-version lists make a contract bump fail tests until legacy handling,
 future-version behaviour, byte bounds, migration direction, and write semantics
 are reviewed.

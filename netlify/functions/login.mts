@@ -71,6 +71,9 @@ async function handleLoginRequest(
   if (bodyResult.status === 'invalid_encoding') {
     return requestError(API_REQUEST_ERROR_CODES.INVALID_REQUEST_BODY);
   }
+  if (bodyResult.status === 'timed_out' || bodyResult.status === 'aborted') {
+    return requestError(API_REQUEST_ERROR_CODES.REQUEST_TIMEOUT);
+  }
 
   let body: unknown;
   try {
