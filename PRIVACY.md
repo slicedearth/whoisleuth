@@ -812,6 +812,13 @@ default (see the README), so many lookups return no personal data at all.
   assertions, actions, contacts, raw source data, provider payloads, and stored
   Risk scores. The export is not anonymous, is not uploaded, and does not train,
   tune, or change the Risk model.
+  The offline CLI can separately emit a target-free Risk calibration summary
+  containing only dataset and model versions, aggregate counts, fixed-threshold
+  metrics and confidence intervals, bounded strata, model-comparison counts,
+  and an explicit zero-target privacy declaration. Monitor can parse that
+  summary in the current tab. It rejects the detailed report, makes no request,
+  writes no browser storage, displays no case identifier or domain, and discards
+  the selected file when cleared or when the view closes.
   A deliberate Lookup claim passport export contains one canonical target and
   target type, one readiness claim, stable requirement identifiers, exact
   retained source states and observation times, model versions, and bounded

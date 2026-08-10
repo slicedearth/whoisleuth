@@ -78,6 +78,9 @@ test('public privacy notices track versioned browser-local data contracts', asyn
     assert.ok(compact.includes(`at most ${MAX_OPERATIONS_REPORT_CASES} readable Cases`));
     assert.ok(compact.includes(`${MAX_OPERATIONS_REPORT_ACTIONS_PER_CASE} current action records per Case`));
     assert.match(compact, /excludes Case and domain identifiers, domains, recipients, notes, references, outcome text, raw evidence, and provider payloads/u);
+    assert.match(compact, /target-free Risk calibration summary/iu);
+    assert.match(compact, /rejects the detailed report/u);
+    assert.match(compact, /writes no browser storage/u);
   }
 
   assert.equal(BROWSER_LOCAL_COLLECTIONS.length, 12);

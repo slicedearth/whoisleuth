@@ -16,6 +16,11 @@ import {
   readRiskCalibrationInputBounded,
 } from '../cli/risk-calibration.mts';
 import { explainRiskScore, explainRiskScoreV6, RISK_MODEL_VERSION, RISK_REVIEW_THRESHOLD } from '../lib/risk-scoring.mts';
+import {
+  buildRiskCalibrationSummaryReport,
+  parseRiskCalibrationSummaryReport,
+  RISK_CALIBRATION_SUMMARY_SCHEMA,
+} from '../lib/risk-calibration-summary.mts';
 import { runCli } from '../cli/runner.mts';
 
 function capture() {
@@ -60,10 +65,15 @@ describe('risk-calibrate arguments and bounded input', () => {
     assert.deepEqual(parseCliArguments(['risk-calibrate', '--json', '--no-color']), {
       action: 'risk-calibrate', source: null, output: 'json', quiet: false, color: false,
     });
+    assert.deepEqual(parseCliArguments(['risk-calibrate', 'dataset.json', '--summary-json']), {
+      action: 'risk-calibrate', source: 'dataset.json', output: 'summary_json', quiet: false, color: true,
+    });
   });
 
   test('rejects duplicate output, incompatible quiet mode, unknown options, and multiple files', () => {
     assert.throws(() => parseCliArguments(['risk-calibrate', '--json', '--json']), /only once/);
+    assert.throws(() => parseCliArguments(['risk-calibrate', '--json', '--summary-json']), /mutually exclusive/);
+    assert.throws(() => parseCliArguments(['risk-calibrate', '--summary-json', '--quiet']), /cannot be combined/);
     assert.throws(() => parseCliArguments(['risk-calibrate', '--json', '--quiet']), /cannot be combined/);
     assert.throws(() => parseCliArguments(['risk-calibrate', '--threshold', '50']), /Unknown option/);
     assert.throws(() => parseCliArguments(['risk-calibrate', 'one.json', 'two.json']), /one optional dataset/);
@@ -177,7 +187,8 @@ describe('offline Risk calibration report', () => {
       reviewThreshold: RISK_REVIEW_THRESHOLD,
     });
     assert.equal(report.schema, 'whoisleuth.cli.risk-calibration');
-    assert.equal(report.version, 2);
+    assert.equal(report.version, 3);
+    assert.equal(report.mode, 'detailed');
     assert.equal(report.riskModelVersion, 7);
     assert.deepEqual(report.summary, {
       total: 4,
@@ -253,6 +264,35 @@ describe('offline Risk calibration report', () => {
     assert.equal(report.summary.negative, 1);
   });
 
+  test('projects a strict target-free summary without record identifiers or evidence', () => {
+    const parsed = parseRiskCalibrationDataset(JSON.stringify(dataset([
+      record({ id: 'private-positive', domain: 'private-positive.example.test' }),
+      record({
+        id: 'private-negative', domain: 'private-negative.example.test', analystDisposition: 'expected',
+        evidence: { availability: 'registered' },
+      }),
+    ])));
+    const full = buildRiskCalibrationReport(parsed, explainRiskScore, {
+      generatedAt: '2026-08-10T00:00:00.000Z',
+      modelVersion: RISK_MODEL_VERSION,
+      reviewThreshold: RISK_REVIEW_THRESHOLD,
+      previousModelVersion: 6,
+      explainPreviousRiskScore: explainRiskScoreV6,
+    });
+    const summary = buildRiskCalibrationSummaryReport(full);
+    const encoded = JSON.stringify(summary);
+    assert.equal(summary.schema, RISK_CALIBRATION_SUMMARY_SCHEMA);
+    assert.equal(summary.summary.total, 2);
+    assert.deepEqual(summary.privacy, { targetsRetained: 0, identifiersRetained: 0, rawEvidenceRetained: 0 });
+    assert.doesNotMatch(encoded, /private-positive|private-negative|example\.test|"records"|"factors"|"evidence"/iu);
+    assert.deepEqual(parseRiskCalibrationSummaryReport(encoded), summary);
+
+    const changed = { ...summary, summary: { ...summary.summary, positive: 2 } };
+    assert.throws(() => parseRiskCalibrationSummaryReport(JSON.stringify(changed)), /label counts are inconsistent/iu);
+    const unsafe = { ...summary, privacy: { ...summary.privacy, targetsRetained: 1 } };
+    assert.throws(() => parseRiskCalibrationSummaryReport(JSON.stringify(unsafe)), /retain zero targets/iu);
+  });
+
   test('terminal output stays bounded and points to complete JSON', () => {
     const records = Array.from({ length: 101 }, (_, index) => record({
       id: `case-${index}`,
@@ -287,6 +327,21 @@ describe('risk-calibrate runner', () => {
     assert.equal(stderr.value(), '');
     assert.equal(networkCalled, false);
     assert.equal(JSON.parse(stdout.value()).generatedAt, '2026-07-18T00:00:00.000Z');
+  });
+
+  test('emits a target-free summary for the explicit summary output', async () => {
+    const stdout = capture();
+    const code = await runCli(['risk-calibrate', '--summary-json'], {
+      stdout: stdout.stream,
+      stderr: capture().stream,
+      stdin: Readable.from([JSON.stringify(dataset())]),
+      now: () => '2026-08-10T00:00:00.000Z',
+    });
+    assert.equal(code, EXIT_CODES.SUCCESS);
+    const summary = parseRiskCalibrationSummaryReport(stdout.value());
+    assert.equal(summary.schema, RISK_CALIBRATION_SUMMARY_SCHEMA);
+    assert.equal(summary.summary.total, 1);
+    assert.doesNotMatch(stdout.value(), /case-1|login\.example\.test|"records"/iu);
   });
 
   test('missing or malformed input is a usage error and quiet suppresses output', async () => {

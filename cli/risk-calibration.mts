@@ -1,23 +1,27 @@
 import { Buffer } from 'node:buffer';
 import { isValidAsciiDomainName } from '../lib/hostname.mts';
 import { ANALYST_REVIEW_REASON_VALUES, analystInteroperabilityTags } from '../lib/analyst-taxonomy.mts';
+import {
+  RISK_CALIBRATION_SUMMARY_SCHEMA,
+  RISK_CALIBRATION_SUMMARY_VERSION,
+  RISK_CALIBRATION_SUMMARY_INTERPRETATION,
+  RISK_CALIBRATION_SUMMARY_THRESHOLDS,
+} from '../lib/risk-calibration-summary.mts';
 
 import { CliUsageError } from './arguments.mts';
 import type { BoundedTextStream } from './bulk.mts';
-import { RISK_MUTATION_TYPES, RISK_REVIEW_THRESHOLD } from '../lib/risk-scoring.mts';
+import { RISK_MUTATION_TYPES } from '../lib/risk-scoring.mts';
 import type { RiskExplanation, RiskInput } from '../lib/risk-scoring.mts';
 
 export const RISK_CALIBRATION_DATASET_SCHEMA = 'whoisleuth.risk-calibration-dataset';
 export const RISK_CALIBRATION_DATASET_VERSION = 2;
 export const SUPPORTED_RISK_CALIBRATION_DATASET_VERSIONS = Object.freeze([1, RISK_CALIBRATION_DATASET_VERSION]);
-export const RISK_CALIBRATION_REPORT_SCHEMA = 'whoisleuth.cli.risk-calibration';
-export const RISK_CALIBRATION_REPORT_VERSION = 2;
+export const RISK_CALIBRATION_REPORT_SCHEMA = RISK_CALIBRATION_SUMMARY_SCHEMA;
+export const RISK_CALIBRATION_REPORT_VERSION = RISK_CALIBRATION_SUMMARY_VERSION;
 export const MAX_RISK_CALIBRATION_INPUT_BYTES = 2 * 1024 * 1024;
 export const MAX_RISK_CALIBRATION_RECORDS = 500;
 export const MAX_RISK_CALIBRATION_STRING_LENGTH = 256;
-export const RISK_CALIBRATION_THRESHOLDS = Object.freeze(
-  [...new Set([40, 50, 60, RISK_REVIEW_THRESHOLD, 80, 90])].sort((a, b) => a - b),
-);
+export const RISK_CALIBRATION_THRESHOLDS = RISK_CALIBRATION_SUMMARY_THRESHOLDS;
 
 const MAX_MUTATIONS = 30;
 const MAX_PROVIDERS = 10;
@@ -107,6 +111,7 @@ type CalibrationReportRecord = CalibrationScoredRecord & {
 type RiskCalibrationReport = {
   schema: typeof RISK_CALIBRATION_REPORT_SCHEMA;
   version: typeof RISK_CALIBRATION_REPORT_VERSION;
+  mode: 'detailed';
   generatedAt: string;
   dataset: {
     schema: typeof RISK_CALIBRATION_DATASET_SCHEMA;
@@ -482,6 +487,7 @@ export function buildRiskCalibrationReport(
   return {
     schema: RISK_CALIBRATION_REPORT_SCHEMA,
     version: RISK_CALIBRATION_REPORT_VERSION,
+    mode: 'detailed',
     generatedAt: options.generatedAt || new Date().toISOString(),
     dataset: { schema: dataset.schema, version: dataset.version, recordCount: records.length },
     riskModelVersion: options.modelVersion,
@@ -500,7 +506,7 @@ export function buildRiskCalibrationReport(
     records,
     interpretation: {
       authority: 'analyst_context_only',
-      statement: 'This offline replay compares heuristic Risk scores with analyst dispositions. It does not prove maliciousness or safety.',
+      statement: RISK_CALIBRATION_SUMMARY_INTERPRETATION,
       automaticTuning: false,
       networkRequests: false,
       persisted: false,

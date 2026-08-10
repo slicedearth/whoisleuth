@@ -257,6 +257,8 @@ describe('schema compatibility inventory', () => {
     assert.equal(byId(inventory, 'derived.case-analyst-records').currentVersion, 1);
     assert.equal(byId(inventory, 'cli.lookalike-calibration-input').schema, 'whoisleuth.lookalike-calibration-input');
     assert.equal(byId(inventory, 'cli.lookalike-calibration').schema, 'whoisleuth.lookalike-calibration');
+    assert.equal(byId(inventory, 'cli.risk-calibration-report').currentVersion, 3);
+    assert.deepEqual(byId(inventory, 'cli.risk-calibration-report').supportedVersions, [1, 2, 3]);
     assert.equal(byId(inventory, 'cli.domain-assurance-input').schema, 'whoisleuth.domain-assurance.input');
     assert.equal(byId(inventory, 'cli.domain-assurance').schema, 'whoisleuth.domain-assurance');
     assert.equal(byId(inventory, 'cli.zone-intent-input').schema, 'whoisleuth.zone-intent.input');

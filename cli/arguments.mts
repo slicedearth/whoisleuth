@@ -96,7 +96,7 @@ type CliAction =
   | ({ action: 'registry-doctor'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'registry-cohort'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | { action: 'registry-scaffold'; profile: string; suffix: string; scenario: 'registered' | 'not_found' | 'inconclusive' }
-  | ({ action: 'risk-calibrate'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
+  | ({ action: 'risk-calibrate'; source: string | null; output: 'terminal' | 'json' | 'summary_json' } & TerminalOptions)
   | ({ action: 'lookalike-calibrate'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'verify-artifact'; source: string | null; passphraseSource: string | null; manifestSource: string | null; manifestEntryId: string | null; output: 'terminal' | 'json'; strictExit: boolean } & TerminalOptions)
   | ({ action: 'interchange-report'; source: string | null; passphraseSource: string | null; output: 'terminal' | 'json' } & TerminalOptions)
@@ -1217,11 +1217,22 @@ function parseRegistryScaffoldArguments(argv: string[]): Extract<CliArguments, {
 }
 
 function parseRiskCalibrateArguments(argv: string[]): Extract<CliArguments, { action: 'risk-calibrate' }> {
-  const parsed = parseSingleJsonInput(
-    argv,
-    'risk-calibrate accepts one optional dataset file. Otherwise pipe one dataset on stdin.',
-  );
-  return { action: 'risk-calibrate', ...parsed };
+  let source: string | null = null;
+  let output: 'terminal' | 'json' | 'summary_json' = 'terminal';
+  let quiet = false;
+  let color = true;
+  for (const argument of argv) {
+    if (argument === '--json' || argument === '--summary-json') {
+      if (output !== 'terminal') throw new CliUsageError('--json and --summary-json are mutually exclusive and may be supplied only once.');
+      output = argument === '--json' ? 'json' : 'summary_json';
+    } else if (argument === '--quiet') quiet = true;
+    else if (argument === '--no-color') color = false;
+    else if (argument.startsWith('-')) throw new CliUsageError(`Unknown option "${argument}".`);
+    else if (source === null) source = argument;
+    else throw new CliUsageError('risk-calibrate accepts one optional dataset file. Otherwise pipe one dataset on stdin.');
+  }
+  if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
+  return { action: 'risk-calibrate', source, output, quiet, color };
 }
 
 function parseLookalikeCalibrateArguments(argv: string[]): Extract<CliArguments, { action: 'lookalike-calibrate' }> {

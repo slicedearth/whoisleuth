@@ -99,7 +99,7 @@ const COMMAND_USAGE: Readonly<Record<CliCommand, string>> = Object.freeze({
   'registry-doctor': 'whoisleuth registry-doctor [lookup.json] [--json] [--quiet] [--no-color]',
   'registry-cohort': 'whoisleuth registry-cohort [lookups-or-reports.json|jsonl] [--json] [--quiet] [--no-color]',
   'registry-scaffold': 'whoisleuth registry-scaffold --profile <id> --suffix <suffix> --scenario <registered|not_found|inconclusive>',
-  'risk-calibrate': 'whoisleuth risk-calibrate [dataset.json] [--json] [--quiet] [--no-color]',
+  'risk-calibrate': 'whoisleuth risk-calibrate [dataset.json] [--json|--summary-json] [--quiet] [--no-color]',
   'lookalike-calibrate': 'whoisleuth lookalike-calibrate [dataset.json] [--json] [--quiet] [--no-color]',
   'verify-artifact': 'whoisleuth verify-artifact [artifact.json] [--passphrase-file <file>] [--manifest <manifest.json> --manifest-entry <artifact-N>] [--json] [--strict-exit] [--quiet] [--no-color]',
   'interchange-report': 'whoisleuth interchange-report [artifact.json] [--passphrase-file <file>] [--json] [--quiet] [--no-color]',
@@ -229,8 +229,8 @@ const COMMAND_DETAILS: Readonly<Record<CliCommand, CommandDetail>> = Object.free
   },
   'risk-calibrate': {
     description: 'Replay reviewed labels against the current explainable Risk model.',
-    example: 'whoisleuth risk-calibrate calibration.json --json',
-    boundary: 'Calibration is offline and diagnostic. It never trains, tunes, or changes the scoring model automatically.',
+    example: 'whoisleuth risk-calibrate calibration.json --summary-json',
+    boundary: 'Calibration is offline and diagnostic. The summary form omits record identifiers, domains, and evidence; neither form trains, tunes, or changes the scoring model automatically.',
   },
   'lookalike-calibrate': {
     description: 'Summarise reviewed candidate dispositions by mutation family without retaining domains.',

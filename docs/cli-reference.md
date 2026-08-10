@@ -72,6 +72,7 @@ node bin/whoisleuth.mts registry-doctor lookup.json --json
 node bin/whoisleuth.mts registry-cohort saved-lookups.jsonl --json
 node bin/whoisleuth.mts registry-scaffold --profile example-profile --suffix test --scenario registered
 node bin/whoisleuth.mts risk-calibrate calibration.json --json
+node bin/whoisleuth.mts risk-calibrate calibration.json --summary-json
 node bin/whoisleuth.mts lookalike-calibrate reviewed-candidates.json --json
 node bin/whoisleuth.mts verify-artifact workspace.json --json
 node bin/whoisleuth.mts verify-artifact lookup.json --json --strict-exit
@@ -515,7 +516,18 @@ thresholds from 40 through 90 and identifies 70 as the current review band. It
 also reports F1, balanced accuracy, Wilson 95% intervals, deliberately small
 scan-depth and review-reason strata, and a current-versus-previous model replay.
 Strata with fewer than 20 included labels are marked insufficient rather than
-presented as reliable performance estimates.
+presented as reliable performance estimates. Report version 3 distinguishes
+the ordinary `detailed` output from the aggregate `summary` projection.
+
+`--json` emits the bounded detailed report, including record identifiers,
+domains, analyst dispositions, scores and factor summaries. Use
+`--summary-json` for the target-free aggregate accepted by Monitor's local
+calibration explorer. That projection retains only dataset and model versions,
+aggregate class and score-band counts, fixed-threshold confusion metrics and
+Wilson intervals, bounded strata, model-comparison counts, and an explicit
+zero-target privacy declaration. It contains no record array, identifier,
+domain, evidence field, factor, note or provider payload. Both forms remain
+offline and are written only when the analyst deliberately selects an output.
 
 The JSON report derives a bounded `interoperabilityTags` list from the
 analyst-owned disposition and review reason. The mapping uses reviewed MISP
@@ -552,7 +564,7 @@ and bounded before scoring. The accepted dataset envelope is:
 and `expected` are negative labels. `unreviewed`, `suspicious`, and
 `closed_no_action` remain contextual and are excluded from threshold quality
 metrics, as are records for which Risk is not applicable. Terminal output caps
-its record list at 100 while `--json` retains the complete bounded report,
+its record list at 100 while `--json` retains the complete bounded detailed report,
 factor breakdowns, score bands, confidence intervals, bounded strata, model
 comparison counts, and per-threshold confusion metrics. Analyst
 dispositions and heuristic scores are review context: neither proves

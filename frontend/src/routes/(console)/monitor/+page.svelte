@@ -11,6 +11,7 @@
   import MonitorViewTabs from '$lib/components/MonitorViewTabs.svelte';
   import CaseWorkspaceToolbar from '$lib/components/CaseWorkspaceToolbar.svelte';
   import CalibrationExportReview from '$lib/components/CalibrationExportReview.svelte';
+  import RiskCalibrationDashboard from '$lib/components/RiskCalibrationDashboard.svelte';
   import ExternalFindingsImport from '$lib/components/ExternalFindingsImport.svelte';
   import GuidedCaseQueue from '$lib/components/GuidedCaseQueue.svelte';
   import CaseFilters from '$lib/components/CaseFilters.svelte';
@@ -374,6 +375,7 @@
       cancel={() => { if (!calibrationExportBusy) calibrationReview=null; }}
     />
   {/if}
+  <RiskCalibrationDashboard />
   <ExternalFindingsImport {cases} oncomplete={refreshCases} onmessage={(value)=>caseMessage=value} />
 
   {#if cases.length}

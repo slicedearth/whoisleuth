@@ -1062,6 +1062,16 @@ The export excludes notes, tags, assertions, actions, contacts, raw source data,
 provider payloads, and stored Risk scores. It does not train or change the
 model.
 
+After running the offline CLI calibration, Monitor can open its explicit
+`--summary-json` output in the Cases view. That versioned summary contains no
+case ID, domain, record list, evidence value or factor. The strict local parser
+rechecks aggregate counts, fixed-threshold metrics, Wilson intervals, strata,
+privacy declarations and model-version compatibility before display. The file
+stays in the current tab, is not uploaded or written to browser storage, and is
+discarded when cleared or when the view closes. The explorer reports sample
+sufficiency and model compatibility but never recommends a threshold or changes
+Risk.
+
 ## Guided investigations
 
 Dashboard can coordinate six fixed standard recipes:
