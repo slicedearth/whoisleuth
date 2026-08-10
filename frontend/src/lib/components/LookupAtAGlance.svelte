@@ -6,6 +6,23 @@
   import { projectLookupNextActions } from '$lib/analysis/lookup-decision-support.ts';
   import type { LookupSummarySignal } from '$lib/analysis/lookup-summary-model.ts';
 
+  type GlanceMetricItem = Readonly<{
+    id: string;
+    label: string;
+    detail: string;
+    href: string;
+  }>;
+
+  type GlanceMetric = Readonly<{
+    id: string;
+    count: number;
+    label: string;
+    explanation: string;
+    empty: string;
+    attention: boolean;
+    items: readonly GlanceMetricItem[];
+  }>;
+
   let {
     support,
     quality,
@@ -21,6 +38,72 @@
     return (priority.length ? priority : signals).slice(0, 4);
   });
   const nextActions = $derived(projectLookupNextActions(support.actions, support.guidance.task));
+  const metricGroups = $derived.by((): GlanceMetric[] => [
+    {
+      id: 'complete',
+      count: quality.completeCount,
+      label: `evidence check${quality.completeCount === 1 ? '' : 's'} complete`,
+      explanation: 'These collectors or derived checks returned a complete usable result. Complete describes evidence collection, not whether the domain is safe.',
+      empty: 'No evidence check returned a complete usable result.',
+      attention: false,
+      items: quality.entries
+        .filter((entry) => entry.state === 'complete')
+        .map((entry) => ({
+          id: entry.id,
+          label: entry.label,
+          detail: `${entry.statusLabel} · ${entry.endpointClass}`,
+          href: '#source-quality',
+        })),
+    },
+    {
+      id: 'limited',
+      count: quality.limitedCount,
+      label: `evidence check${quality.limitedCount === 1 ? '' : 's'} limited`,
+      explanation: 'These checks are partial, unavailable, or unknown. Their limitations may constrain a downstream conclusion.',
+      empty: 'No evidence check is currently partial, unavailable, or unknown.',
+      attention: quality.limitedCount > 0,
+      items: quality.entries
+        .filter((entry) => entry.state === 'partial' || entry.state === 'unavailable' || entry.state === 'unknown')
+        .map((entry) => ({
+          id: entry.id,
+          label: entry.label,
+          detail: `${entry.statusLabel} · ${entry.limitations[0] || entry.description}`,
+          href: '#source-quality',
+        })),
+    },
+    {
+      id: 'conflicts',
+      count: support.counts.conflicts,
+      label: `source disagreement${support.counts.conflicts === 1 ? '' : 's'}`,
+      explanation: 'These separately attributed sources report different values. Source order does not resolve a disagreement automatically.',
+      empty: 'No retained source comparison currently reports a disagreement.',
+      attention: support.counts.conflicts > 0,
+      items: support.entries
+        .filter((entry) => entry.state === 'conflict')
+        .map((entry) => ({
+          id: entry.id,
+          label: entry.title,
+          detail: `${entry.sources.join(' · ')} · ${entry.detail}`,
+          href: entry.href,
+        })),
+    },
+    {
+      id: 'uncertainties',
+      count: support.counts.uncertainties,
+      label: `unresolved item${support.counts.uncertainties === 1 ? '' : 's'}`,
+      explanation: 'These comparisons remain incomplete or indeterminate. Open an item to review the evidence that still needs interpretation.',
+      empty: 'No retained comparison is currently marked incomplete or indeterminate.',
+      attention: support.counts.uncertainties > 0,
+      items: support.entries
+        .filter((entry) => entry.state === 'uncertain')
+        .map((entry) => ({
+          id: entry.id,
+          label: entry.title,
+          detail: `${entry.sources.join(' · ')} · ${entry.detail}`,
+          href: entry.href,
+        })),
+    },
+  ]);
 </script>
 
 <section class="at-a-glance card" aria-labelledby="lookup-at-a-glance-title">
@@ -31,11 +114,32 @@
       <p>Review the strongest observations and unresolved evidence before opening source detail.</p>
     </div>
     <div class="metrics" role="group" aria-label="Evidence coverage and review cues">
-      <span title="Evidence collectors or derived checks that returned a complete usable result."><strong>{quality.completeCount}</strong> evidence check{quality.completeCount === 1 ? '' : 's'} complete</span>
-      <span class:attention={quality.limitedCount > 0} title="Evidence collectors or derived checks whose result is partial, unavailable, or unknown."><strong>{quality.limitedCount}</strong> evidence check{quality.limitedCount === 1 ? '' : 's'} limited</span>
-      <span class:attention={support.counts.conflicts > 0}><strong>{support.counts.conflicts}</strong> source disagreement{support.counts.conflicts === 1 ? '' : 's'}</span>
-      <span class:attention={support.counts.uncertainties > 0}><strong>{support.counts.uncertainties}</strong> unresolved item{support.counts.uncertainties === 1 ? '' : 's'}</span>
-      <small class="metric-note">Each evidence check is one collector or derived check. Limited means partial, unavailable, or unknown.</small>
+      {#each metricGroups as metric (metric.id)}
+        <details class:attention={metric.attention}>
+          <summary>
+            <span><strong>{metric.count}</strong> {metric.label}</span>
+            <small>Show what this count includes</small>
+          </summary>
+          <div class="metric-detail">
+            <p>{metric.explanation}</p>
+            {#if metric.items.length}
+              <ul>
+                {#each metric.items as item (item.id)}
+                  <li>
+                    <a href={item.href}>
+                      <strong>{item.label}</strong>
+                      <small>{item.detail}</small>
+                    </a>
+                  </li>
+                {/each}
+              </ul>
+            {:else}
+              <p>{metric.empty}</p>
+            {/if}
+          </div>
+        </details>
+      {/each}
+      <small class="metric-note">Limited means partial, unavailable, or unknown. Expected unsupported, skipped, and not-found checks remain in Source quality without increasing this count. A complete check can still contain a disagreement, and neither state establishes safety.</small>
     </div>
   </header>
 
@@ -82,9 +186,23 @@
   h4{margin:2px 0 0;font:700 var(--text-lg) var(--mono)}
   .glance-header p:not(.eyebrow){max-width:660px;margin:6px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.5}
   .metrics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;min-width:0;width:100%}
-  .metrics span{min-width:0;padding:6px 8px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised);color:var(--muted);font:var(--text-2xs) var(--mono);overflow-wrap:anywhere}
+  .metrics details{min-width:0;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised);color:var(--muted);font:var(--text-2xs) var(--mono)}
+  .metrics details[open]{grid-column:1/-1;border-color:var(--border-strong)}
+  .metrics summary{display:flex;min-width:0;align-items:center;justify-content:space-between;gap:8px;padding:7px 9px;cursor:pointer;list-style:none;overflow-wrap:anywhere}
+  .metrics summary::-webkit-details-marker{display:none}
+  .metrics summary::after{content:'+';flex:0 0 auto;color:var(--accent);font-size:var(--text-sm)}
+  .metrics details[open] summary::after{content:'−'}
+  .metrics summary>span{min-width:0}
+  .metrics summary>small{max-width:94px;color:var(--muted);font:var(--text-2xs) var(--font-sans);line-height:1.3;text-align:right}
   .metrics strong{color:var(--text);font-size:var(--text-sm)}
-  .metrics .attention strong{color:var(--amber)}
+  .metrics .attention summary>span strong{color:var(--amber)}
+  .metric-detail{padding:0 9px 9px;border-top:1px solid var(--border)}
+  .metric-detail p{margin:8px 0 0;color:var(--muted);font:var(--text-2xs) var(--font-sans);line-height:1.5}
+  .metric-detail ul{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin:8px 0 0;padding:0;list-style:none}
+  .metric-detail a{display:grid;gap:3px;min-width:0;padding:8px;border-left:2px solid var(--accent);background:color-mix(in srgb,var(--accent) 5%,transparent);text-decoration:none}
+  .metric-detail a strong,.metric-detail a small{overflow-wrap:anywhere}
+  .metric-detail a strong{font-size:var(--text-xs)}
+  .metric-detail a small{color:var(--muted);font:var(--text-2xs) var(--font-sans);line-height:1.4}
   .metric-note{grid-column:1/-1;max-width:none;color:var(--muted);font-size:var(--text-2xs);line-height:1.45;text-align:right;overflow-wrap:anywhere}
   .glance-grid{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(260px,.9fr);gap:9px;margin-top:14px}
   .glance-grid>section{min-width:0;padding:12px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel-raised)}
@@ -116,5 +234,6 @@
   }
   @media(max-width:520px){
     .signals{grid-template-columns:minmax(0,1fr)}
+    .metric-detail ul{grid-template-columns:minmax(0,1fr)}
   }
 </style>

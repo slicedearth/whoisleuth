@@ -65,29 +65,23 @@
   {@const chart = projectScoreFactors(score.factors)}
   {#if chart.factors.length}
     <div class="factor-chart" aria-hidden="true">
-      <svg viewBox={`0 0 ${chart.width} ${chart.height}`} aria-hidden="true">
-        <line x1={chart.zeroX} x2={chart.zeroX} y1="8" y2={chart.height - 8} class="zero-line" />
-        {#each chart.factors as factor}
-          <g class:negative={factor.delta < 0} class:zero={factor.delta === 0} class="factor">
-            <text x="8" y={factor.y + 12}>{factor.label}</text>
+      {#each chart.factors as factor}
+        <div class:negative={factor.delta < 0} class:zero={factor.delta === 0} class="factor-row">
+          <span class="factor-label">{factor.label}</span>
+          <span class="factor-track">
+            <i class="zero-line"></i>
             {#if factor.delta === 0}
-              <circle cx={chart.zeroX} cy={factor.y + 8} r="4" class="zero-marker">
-                <title>{factor.label}: 0</title>
-              </circle>
+              <i class="zero-marker"></i>
             {:else}
-              <rect x={factor.x} y={factor.y} width={factor.width} height="16" rx="3">
-                <title>{factor.label}: {factor.delta >= 0 ? '+' : ''}{Math.round(factor.delta)}</title>
-              </rect>
+              <i
+                class="factor-bar"
+                style:width={`${Math.max(1, (Math.abs(factor.delta) / chart.maximum) * 50)}%`}
+              ></i>
             {/if}
-            <text
-              x={factor.delta < 0 ? factor.x - 7 : factor.x + factor.width + 7}
-              y={factor.y + 12}
-              text-anchor={factor.delta < 0 ? 'end' : 'start'}
-              class="factor-value"
-            >{factor.delta >= 0 ? '+' : ''}{Math.round(factor.delta)}</text>
-          </g>
-        {/each}
-      </svg>
+          </span>
+          <strong class="factor-value">{factor.delta >= 0 ? '+' : ''}{Math.round(factor.delta)}</strong>
+        </div>
+      {/each}
     </div>
     {#if chart.truncated}<p class="factor-limit">The chart is capped at {chart.factors.length} factors. The exact list below remains complete.</p>{/if}
   {/if}
@@ -189,7 +183,7 @@
   .availability h4{margin:0;font-size:1.05rem}
   .scores{display:flex;gap:9px}
   .score{display:grid;grid-template-columns:1fr auto;gap:3px;width:150px;padding:9px 10px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel)}
-  .score-primary{border-color:var(--accent2);background:var(--panel-raised)}
+  .score-primary{border-color:var(--accent);background:var(--panel-raised)}
   .score span{font:600 var(--text-2xs) var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
   .score small em{color:var(--text);font-style:normal}
   .score strong{font-size:1.05rem}
@@ -202,15 +196,16 @@
   .signals .chip{white-space:normal}
   .score-details{display:grid;grid-template-columns:minmax(0,1fr);gap:8px;min-width:0;margin-top:12px}
   .score-details details{min-width:0;margin-top:0;overflow:hidden}
-  .score-detail-primary{border-inline-start:3px solid var(--accent2)}
-  .factor-chart{width:calc(100% - 24px);min-width:0;margin:10px 12px 0;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
-  .factor-chart svg{display:block;width:100%;min-width:0;height:auto}
-  .zero-line{stroke:var(--border-strong);stroke-width:1.5}
-  .factor text{fill:var(--muted);font-family:var(--mono);font-size:9px}
-  .factor rect{fill:rgb(var(--violet-rgb) / .22);stroke:var(--violet)}
-  .factor.negative rect{fill:rgb(var(--accent-rgb) / .2);stroke:var(--accent)}
-  .zero-marker{fill:var(--panel);stroke:var(--muted);stroke-width:2}
-  .factor .factor-value{fill:var(--text);font-weight:700}
+  .score-detail-primary{border-inline-start:3px solid var(--accent)}
+  .factor-chart{display:grid;width:calc(100% - 24px);min-width:0;gap:6px;margin:10px 12px 0;padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
+  .factor-row{display:grid;grid-template-columns:minmax(220px,1.15fr) minmax(180px,1fr) 34px;min-width:0;align-items:center;gap:10px}
+  .factor-label{min-width:0;color:var(--muted);font:9px/1.45 var(--mono);overflow-wrap:anywhere}
+  .factor-track{position:relative;min-width:0;height:18px;border-radius:3px;background:color-mix(in srgb,var(--border) 30%,transparent)}
+  .zero-line{position:absolute;top:-2px;bottom:-2px;left:50%;width:1px;background:var(--border-strong)}
+  .factor-bar{position:absolute;top:1px;bottom:1px;left:50%;border:1px solid var(--violet);border-radius:3px;background:rgb(var(--violet-rgb) / .22)}
+  .factor-row.negative .factor-bar{right:50%;left:auto;border-color:var(--accent);background:rgb(var(--accent-rgb) / .2)}
+  .zero-marker{position:absolute;top:5px;left:calc(50% - 4px);width:8px;height:8px;border:2px solid var(--muted);border-radius:50%;background:var(--panel)}
+  .factor-value{color:var(--text);font:700 9px var(--mono);text-align:right}
   .factor-limit{margin:7px 12px 0;color:var(--muted);font-size:var(--text-2xs)}
   .score-details ul{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;border:0;list-style:none}
   .score-details li{display:flex;justify-content:space-between;gap:10px;color:var(--muted);font-size:var(--text-xs)}
@@ -229,5 +224,8 @@
     .score{width:auto}
     .factor-chart{display:none}
     .score-details ul{position:static;display:grid;width:auto;height:auto;gap:6px;margin:10px 12px;padding:0;overflow:visible;clip:auto;clip-path:none;white-space:normal}
+  }
+  @media(min-width:651px) and (max-width:820px){
+    .factor-row{grid-template-columns:minmax(170px,1fr) minmax(140px,.9fr) 32px}
   }
 </style>

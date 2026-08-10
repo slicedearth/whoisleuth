@@ -81,9 +81,14 @@ describes planned source families rather than promising an exact request count:
 redirects, referrals, source eligibility, and bounded retries can change the
 number of requests that actually run.
 
-The Overview and At a glance assessment remain visible. At a glance shows at
-most three task-aware next actions. Open **Detailed assessment** when you need
-the task questions, claim readiness, a portable
+The Overview and At a glance assessment remain visible. At a glance keeps
+complete, limited, disagreement, and unresolved counts separate. Open any
+count to see the exact bounded checks or comparisons it includes and follow
+their source-aware evidence links; complete collection is not a safety
+conclusion, and expected unsupported, skipped, or not-found checks do not
+increase the limited count. At a glance also shows at most three task-aware
+next actions. Open **Detailed assessment** when you need the task questions,
+claim readiness, a portable
 hand-off, or acquisition review. Every top-level evidence family starts
 collapsed; its bounded summary, source count, and limitation count remain
 visible. Open a family directly, follow a section or source-map link to reveal

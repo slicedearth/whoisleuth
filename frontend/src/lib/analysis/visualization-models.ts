@@ -45,6 +45,7 @@ export type {
 export const MAX_REDIRECT_NODES = 9;
 export const WATCHLIST_ACTIVITY_DAYS = 28;
 export const MAX_SCORE_FACTORS = 16;
+export const MAX_SCORE_FACTOR_LABEL_LENGTH = 160;
 export const MAX_PROFILE_LISTING_BAR_GROUPS = 18;
 export const MAX_MONITOR_TIMELINE_EVENTS = 12;
 export const MAX_MONITOR_TIMELINE_LANES = 6;
@@ -273,7 +274,7 @@ export function projectScoreFactors(rawFactors: readonly ScoreFactorInput[]) {
   const candidates = (Array.isArray(rawFactors) ? rawFactors : [])
     .map((factor, index) => ({
       id: `${boundedId(factor?.label) || 'factor'}-${index}`,
-      label: boundedText(factor?.label, 56) || `Factor ${index + 1}`,
+      label: boundedText(factor?.label, MAX_SCORE_FACTOR_LABEL_LENGTH) || `Factor ${index + 1}`,
       delta: boundedNumber(factor?.delta, -100, 100),
     }));
   const factors = candidates.slice(0, MAX_SCORE_FACTORS);

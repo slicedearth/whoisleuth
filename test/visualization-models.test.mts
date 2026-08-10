@@ -6,6 +6,7 @@ import {
   MAX_LIFECYCLE_EVENTS,
   MAX_REDIRECT_NODES,
   MAX_COLLECTION_TIMING_SOURCES,
+  MAX_SCORE_FACTOR_LABEL_LENGTH,
   MAX_SCORE_FACTORS,
   MAX_VISUAL_MATRIX_CELLS,
   MAX_VISUAL_MATRIX_ROWS,
@@ -131,16 +132,19 @@ describe('bounded visualization models', () => {
   });
 
   test('bounds signed score factors around a shared zero axis', () => {
+    const exactBoundaryLabel = 'L'.repeat(MAX_SCORE_FACTOR_LABEL_LENGTH);
     const projected = projectScoreFactors([
       { label: 'Positive', delta: 18 },
       { label: 'Negative', delta: -7 },
       { label: 'Baseline', delta: 0 },
+      { label: `${exactBoundaryLabel}discarded`, delta: 2 },
       ...Array.from({ length: 20 }, (_, index) => ({ label: `Factor ${index}`, delta: index + 1 })),
     ]);
 
     assert.equal(projected.factors.length, MAX_SCORE_FACTORS);
     assert.equal(projected.truncated, true);
     assert.ok(projected.factors.some((factor) => factor.label === 'Baseline' && factor.delta === 0 && factor.width === 0));
+    assert.equal(projected.factors.find((factor) => factor.delta === 2)?.label, exactBoundaryLabel);
     assert.ok(projected.factors.filter((factor) => factor.delta !== 0).every((factor) => factor.width >= 2));
     const negative = projected.factors.find((factor) => factor.delta < 0);
     assert.ok(negative);
