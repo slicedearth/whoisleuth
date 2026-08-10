@@ -193,16 +193,16 @@
   .metrics summary::after{content:'+';flex:0 0 auto;color:var(--accent);font-size:var(--text-sm)}
   .metrics details[open] summary::after{content:'−'}
   .metrics summary>span{min-width:0}
-  .metrics summary>small{max-width:94px;color:var(--muted);font:var(--text-2xs) var(--sans);line-height:1.3;text-align:right}
+  .metrics summary>small{max-width:94px;color:var(--muted);font:var(--text-2xs) var(--font-sans);line-height:1.3;text-align:right}
   .metrics strong{color:var(--text);font-size:var(--text-sm)}
   .metrics .attention summary>span strong{color:var(--amber)}
   .metric-detail{padding:0 9px 9px;border-top:1px solid var(--border)}
-  .metric-detail p{margin:8px 0 0;color:var(--muted);font:var(--text-2xs) var(--sans);line-height:1.5}
+  .metric-detail p{margin:8px 0 0;color:var(--muted);font:var(--text-2xs) var(--font-sans);line-height:1.5}
   .metric-detail ul{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin:8px 0 0;padding:0;list-style:none}
   .metric-detail a{display:grid;gap:3px;min-width:0;padding:8px;border-left:2px solid var(--accent);background:color-mix(in srgb,var(--accent) 5%,transparent);text-decoration:none}
   .metric-detail a strong,.metric-detail a small{overflow-wrap:anywhere}
   .metric-detail a strong{font-size:var(--text-xs)}
-  .metric-detail a small{color:var(--muted);font:var(--text-2xs) var(--sans);line-height:1.4}
+  .metric-detail a small{color:var(--muted);font:var(--text-2xs) var(--font-sans);line-height:1.4}
   .metric-note{grid-column:1/-1;max-width:none;color:var(--muted);font-size:var(--text-2xs);line-height:1.45;text-align:right;overflow-wrap:anywhere}
   .glance-grid{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(260px,.9fr);gap:9px;margin-top:14px}
   .glance-grid>section{min-width:0;padding:12px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel-raised)}
