@@ -419,6 +419,23 @@ future-version behaviour, byte bounds, migration direction, and write semantics
 are reviewed.
 It reads no browser-local or hosted records and writes no inventory artefact.
 
+The on-demand `npm run maintenance:duplication` report scans only bounded,
+regular `tools/*.mts` source files. It records repository-relative module and
+top-level-function metadata, statically resolvable local/imported call edges,
+and exact comment-free token matches. It excludes source bodies, literals,
+absolute paths, environment values, and runtime data; method dispatch,
+callbacks, computed properties, and runtime imports remain explicit
+limitations. A repeated match is evidence for review, never an instruction to
+merge files. Shared helpers preserve every established tool entry point,
+argument contract, output schema, bound, and CI caller.
+
+The initial pre-consolidation measurement on 2026-08-10 covered 43 modules and
+41 entry points. It found 16 exact clusters containing 23 repeated
+implementations and 113 repeated lines. The reviewed extraction introduced one
+bounded helper module without removing an entry point; the same report now
+finds no exact token-clone cluster. These figures describe exact repeated
+implementations only, not an estimate of broader semantic similarity.
+
 The maintainer-run `npm run registry:drift` audit compares the embedded
 registry-standards snapshot with exactly two fixed official IANA catalogue
 files: the root-zone TLD list and the domain RDAP bootstrap. Its versioned

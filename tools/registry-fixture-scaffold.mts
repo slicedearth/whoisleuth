@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { buildRegistryFixtureScaffold } from '../cli/registry-fixture-scaffold.mts';
+import { requiredOptionValue as requiredValue } from './maintainer-tool-helpers.mts';
 
 export { buildRegistryFixtureScaffold };
 
@@ -12,13 +13,6 @@ type MainOptions = Readonly<{
   stdout?: WritableLike;
   stderr?: WritableLike;
 }>;
-
-function requiredValue(args: readonly string[], name: string): string {
-  const index = args.indexOf(name);
-  if (index < 0 || !args[index + 1]) throw new TypeError(`${name} requires a value.`);
-  if (args.indexOf(name, index + 1) >= 0) throw new TypeError(`${name} may be supplied only once.`);
-  return args[index + 1] as string;
-}
 
 function parseArguments(args: readonly string[]) {
   const allowed = new Set(['--profile', '--suffix', '--scenario']);

@@ -17,6 +17,11 @@ import {
   technologyResponseMetadataDigest,
 } from './technology-example-review.mts';
 import { readBoundedRegularFile } from '../lib/bounded-file.mts';
+import {
+  boundedControlFreeText as boundedText,
+  exactObjectKeys as exactKeys,
+  optionalJsonRecord as record,
+} from './maintainer-tool-helpers.mts';
 
 export const TECHNOLOGY_SOURCE_VERIFICATION_SCHEMA = 'whoisleuth.technology-source-verification';
 export const TECHNOLOGY_SOURCE_VERIFICATION_VERSION = 1;
@@ -45,25 +50,8 @@ type VerificationOptions = Readonly<{
 }>;
 
 const ID_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
-const CONTROL_RE = /[\u0000-\u001f\u007f]/u;
 const MANIFEST_KEYS = new Set(['schema', 'version', 'entries']);
 const ENTRY_KEYS = new Set(['fixtureId', 'artifactPath', 'httpServer', 'responseHeaders']);
-
-function record(value: unknown): UnknownRecord | null {
-  return value && typeof value === 'object' && !Array.isArray(value) ? value as UnknownRecord : null;
-}
-
-function exactKeys(value: UnknownRecord, allowed: ReadonlySet<string>, label: string): void {
-  const unknown = Object.keys(value).filter((key) => !allowed.has(key));
-  if (unknown.length) throw new TypeError(`${label} contains unsupported fields: ${unknown.sort().join(', ')}.`);
-}
-
-function boundedText(value: unknown, label: string, maximum: number): string {
-  if (typeof value !== 'string' || !value.trim() || value.length > maximum || CONTROL_RE.test(value)) {
-    throw new TypeError(`${label} must be control-free text no longer than ${maximum} characters.`);
-  }
-  return value.trim();
-}
 
 function parseManifest(value: unknown): VerificationManifest {
   const input = record(value);

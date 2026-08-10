@@ -27,6 +27,10 @@ import {
   buildInvestigationProjection,
 } from '../frontend/src/lib/analysis/investigation-projection.ts';
 import {
+  fixedRatio as ratio,
+  sanitizedMaintainerText as boundedText,
+} from './maintainer-tool-helpers.mts';
+import {
   buildCaseRelationships,
   buildInvestigationCaseRelationships,
 } from '../frontend/src/lib/analysis/case-relationships.ts';
@@ -87,17 +91,6 @@ const RULES = Object.freeze([Object.freeze({
   tag: 'review',
 })]);
 
-function boundedText(value: unknown, fallback: string, maximum = MAX_SPECIALIST_WORKFLOW_DETAIL_LENGTH): string {
-  const text = typeof value === 'string'
-    ? value.replace(/[\u0000-\u001f\u007f]+/gu, ' ').replace(/\s+/gu, ' ').trim()
-    : '';
-  return (text || fallback).slice(0, maximum);
-}
-
-function ratio(numerator: number, denominator: number): number | null {
-  return denominator > 0 ? Number((numerator / denominator).toFixed(4)) : null;
-}
-
 function timestamp(value: unknown): string {
   const parsed = value instanceof Date ? value.getTime() : Date.parse(String(value));
   if (!Number.isFinite(parsed)) throw new TypeError('Benchmark generation time must be valid.');
@@ -157,7 +150,7 @@ function scenario<T>(
   failedAssertionCount = assertions.filter((item) => !item.pass).length,
 ): ScenarioResult<T> {
   const failures = assertions.filter((item) => !item.pass)
-    .map((item) => boundedText(item.failure, 'An assertion failed.'))
+    .map((item) => boundedText(item.failure, 'An assertion failed.', MAX_SPECIALIST_WORKFLOW_DETAIL_LENGTH))
     .slice(0, MAX_SPECIALIST_WORKFLOW_FAILURES);
   return Object.freeze({
     scenario: Object.freeze({
@@ -166,8 +159,8 @@ function scenario<T>(
       label,
       status: failures.length ? 'fail' : 'pass',
       detail: failedAssertionCount
-        ? boundedText(`${failedAssertionCount} assertion${failedAssertionCount === 1 ? '' : 's'} failed.`, 'Scenario failed.')
-        : boundedText(passingDetail, 'Scenario passed.'),
+        ? boundedText(`${failedAssertionCount} assertion${failedAssertionCount === 1 ? '' : 's'} failed.`, 'Scenario failed.', MAX_SPECIALIST_WORKFLOW_DETAIL_LENGTH)
+        : boundedText(passingDetail, 'Scenario passed.', MAX_SPECIALIST_WORKFLOW_DETAIL_LENGTH),
       assertions: assertionCount,
       failedAssertions: failedAssertionCount,
       failures: Object.freeze(failures),
@@ -178,7 +171,7 @@ function scenario<T>(
 }
 
 function failedScenario<T>(id: string, area: string, label: string, error: unknown, metrics: T): ScenarioResult<T> {
-  const message = boundedText(error instanceof Error ? error.message : error, 'The scenario could not run.');
+  const message = boundedText(error instanceof Error ? error.message : error, 'The scenario could not run.', MAX_SPECIALIST_WORKFLOW_DETAIL_LENGTH);
   return scenario(id, area, label, [{ pass: false, failure: message }], metrics, '');
 }
 
@@ -659,7 +652,7 @@ export async function main(args = process.argv.slice(2), options: BenchmarkMainO
     (options.stdout || process.stdout).write(json ? `${JSON.stringify(report, null, 2)}\n` : formatSpecialistWorkflowBenchmark(report));
     return report.summary.failed > 0 ? 1 : 0;
   } catch (error) {
-    (options.stderr || process.stderr).write(`${boundedText(error instanceof Error ? error.message : error, 'Specialist workflow benchmark failed.')}\n`);
+    (options.stderr || process.stderr).write(`${boundedText(error instanceof Error ? error.message : error, 'Specialist workflow benchmark failed.', MAX_SPECIALIST_WORKFLOW_DETAIL_LENGTH)}\n`);
     return 2;
   }
 }

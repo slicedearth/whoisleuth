@@ -3,6 +3,7 @@
 import { readFile, readdir, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { requireJsonRecord as record } from './maintainer-tool-helpers.mts';
 
 type JsonRecord = Record<string, unknown>;
 type WritableLike = { write(value: string): unknown };
@@ -33,13 +34,6 @@ const LICENSE_OVERRIDES = new Map([
 const NOTICE_FILENAME_RE = /^(?:licen[cs]e|copying|notice)(?:[._-].*|)$/iu;
 const README_FILENAME_RE = /^readme(?:[._-].*|)$/iu;
 const CONTROL_CHAR_RE = /[\u0000-\u001f\u007f]/u;
-
-function record(value: unknown, label: string): JsonRecord {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    throw new TypeError(`${label} must be a JSON object.`);
-  }
-  return value as JsonRecord;
-}
 
 function boundedToken(value: unknown, label: string, maxLength: number): string {
   if (typeof value !== 'string' || !value || value.length > maxLength || CONTROL_CHAR_RE.test(value)) {

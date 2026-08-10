@@ -202,6 +202,7 @@ Additional offline or bounded maintainer checks include:
 
 ```bash
 npm run schema:inventory
+npm run maintenance:duplication
 npm run test:coverage
 npm run test:properties
 npm run test:profile

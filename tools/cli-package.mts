@@ -15,6 +15,10 @@ import {
   WHOISLEUTH_SOURCE_REPOSITORY_GIT_URL,
 } from '../lib/project-metadata.mts';
 import { normalizeSemanticVersion } from './release-version-check.mts';
+import {
+  boundedPositiveInteger as positiveInteger,
+  requireJsonRecord as record,
+} from './maintainer-tool-helpers.mts';
 
 type JsonRecord = Record<string, unknown>;
 type WritableLike = { write(value: string): unknown };
@@ -138,13 +142,6 @@ const SUPPORT_FILES = Object.freeze([
   ['LICENSES/Retire.js-Apache-2.0.txt', 'LICENSES/Retire.js-Apache-2.0.txt'],
   ['frontend/static/third-party-notices.txt', 'third-party-notices.txt'],
 ] as const);
-
-function record(value: unknown, label: string): JsonRecord {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    throw new TypeError(`${label} must be a JSON object.`);
-  }
-  return value as JsonRecord;
-}
 
 function boundedString(value: unknown, label: string, maxLength = 240): string {
   if (typeof value !== 'string' || value.length === 0 || value.length > maxLength || value.trim() !== value) {
@@ -407,13 +404,6 @@ function packedFiles(packResult: JsonRecord): readonly string[] {
     throw new TypeError(`Packed CLI contains ${observed} entries; expected between 1 and ${MAX_CLI_PACKAGE_ENTRIES}.`);
   }
   return Object.freeze(packResult.files.map((entry, index) => safeRelativePath(record(entry, `Packed entry ${index + 1}`).path, `Packed entry ${index + 1} path`)));
-}
-
-function positiveInteger(value: unknown, label: string, maximum: number): number {
-  if (!Number.isSafeInteger(value) || Number(value) < 1 || Number(value) > maximum) {
-    throw new TypeError(`${label} must be between 1 and ${maximum}.`);
-  }
-  return Number(value);
 }
 
 async function runInstalledCheck(executable: string, args: readonly string[], label: string): Promise<string> {

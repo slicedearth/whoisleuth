@@ -22,6 +22,7 @@ import {
   type LookupProgressEvent,
   type LookupProgressSource,
 } from '../lib/lookup-progress.mts';
+import { optionalJsonRecord as record } from './maintainer-tool-helpers.mts';
 
 type WritableLike = { write(value: string): unknown };
 type SpikeMainOptions = Readonly<{
@@ -29,12 +30,6 @@ type SpikeMainOptions = Readonly<{
   stderr?: WritableLike;
 }>;
 type UnknownRecord = Record<string, unknown>;
-
-function record(value: unknown): UnknownRecord | null {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? value as UnknownRecord
-    : null;
-}
 
 export function buildIncrementalLookupTransportSpikeReport() {
   const planned: LookupProgressSource[] = ['rdap', 'whois'];

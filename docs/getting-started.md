@@ -157,6 +157,20 @@ screen-reader coverage.
 
 ## Maintainer checks
 
+### Maintainer-tool duplication
+
+```bash
+npm run maintenance:duplication
+```
+
+Builds a deterministic, repository-relative static call graph for `tools/*.mts`
+and reports exact comment-free token clones without retaining source text,
+literals, absolute paths, environment values, or runtime data. The report is a
+review aid: it never removes, merges, or rewrites a tool. Shared internals are
+extracted only after an exact repeated implementation and all callers have been
+reviewed; existing tool filenames, command options, and output contracts remain
+stable.
+
 ### Release version
 
 ```bash

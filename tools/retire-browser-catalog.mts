@@ -6,6 +6,10 @@ import { Worker } from 'node:worker_threads';
 import { readBoundedRegularFile } from '../lib/bounded-file.mts';
 
 import * as retire from 'retire';
+import {
+  jsonRecordOrEmpty as record,
+  sha256Text as moduleDigest,
+} from './maintainer-tool-helpers.mts';
 
 const SOURCE_VERSION = '5.4.3';
 const SOURCE_REVISION = '56ea22d889656f4fbfe47b7df58d410a06ea59b7';
@@ -32,12 +36,6 @@ type MainOptions = Readonly<{
   stdout?: WritableLike;
   stderr?: WritableLike;
 }>;
-
-function record(value: unknown): UnknownRecord {
-  return value !== null && typeof value === 'object' && !Array.isArray(value)
-    ? value as UnknownRecord
-    : {};
-}
 
 function stringArray(value: unknown, limit: number, pattern?: RegExp): string[] {
   const output: string[] = [];
@@ -256,10 +254,6 @@ function projectSource(sourceText: string): UnknownRecord {
 
 function buildModule(sourceText: string): string {
   return renderModule(projectSource(sourceText));
-}
-
-function moduleDigest(moduleText: string): string {
-  return createHash('sha256').update(moduleText).digest('hex');
 }
 
 async function main(args = process.argv.slice(2), options: MainOptions = {}): Promise<number> {

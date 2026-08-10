@@ -83,6 +83,7 @@
     "providers:policy-check": "node tools/provider-policy-freshness.mts",
     "security:codeql": "node tools/local-codeql.mts",
     "security:staged": "node tools/staged-secret-check.mts",
+    "maintenance:duplication": "node tools/maintainer-duplication-report.mts",
     "security:retire": "retire --path frontend/build --severity high --outputformat text"
   },
   "engines": {

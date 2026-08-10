@@ -20,6 +20,10 @@ import {
   MAX_CLI_PACKAGE_UNPACKED_BYTES,
   type CliPackageReport,
 } from './cli-package.mts';
+import {
+  boundedPositiveInteger as boundedInteger,
+  sha256Bytes as sha256,
+} from './maintainer-tool-helpers.mts';
 
 type JsonRecord = Record<string, unknown>;
 type WritableLike = { write(value: string): unknown };
@@ -86,17 +90,6 @@ function boundedString(value: unknown, label: string, maximum = 512): string {
     throw new TypeError(`${label} must be a non-empty bounded string.`);
   }
   return value;
-}
-
-function boundedInteger(value: unknown, label: string, maximum: number): number {
-  if (!Number.isSafeInteger(value) || Number(value) < 1 || Number(value) > maximum) {
-    throw new TypeError(`${label} must be between 1 and ${maximum}.`);
-  }
-  return Number(value);
-}
-
-function sha256(value: Uint8Array): string {
-  return createHash('sha256').update(value).digest('hex');
 }
 
 function boundedError(value: unknown): string {

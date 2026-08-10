@@ -27,6 +27,10 @@ import { extractHtmlSignals } from '../lib/html-signals.mts';
 import { readBoundedRegularFile } from '../lib/bounded-file.mts';
 import { normalizeBoundedSemanticVersion } from '../lib/semantic-version.mts';
 import {
+  boundedControlFreeText as boundedText,
+  canonicalControlFreeTimestamp as timestamp,
+} from './maintainer-tool-helpers.mts';
+import {
   PASSIVE_TECHNOLOGY_HEADER_NAMES,
   TECHNOLOGY_SIGNATURE_CATALOGUE,
 } from '../lib/website-technology.mts';
@@ -83,7 +87,6 @@ const RUNTIME_RE = /^([a-z][a-z0-9._-]*)@(.+)$/u;
 const OCI_BUILD_ENVIRONMENT_RE = /^oci:(?:[a-z0-9.-]+\/)*[a-z0-9._-]+:[a-z0-9._-]+@sha256:[a-f0-9]{64}$/u;
 const MAX_SUPPORTING_ENVIRONMENTS = 4;
 const PASSIVE_HEADERS = new Set<string>(PASSIVE_TECHNOLOGY_HEADER_NAMES);
-const CONTROL_RE = /[\u0000-\u001f\u007f]/u;
 const REFERENCE_LICENCE_BASES = new Set<TechnologyReviewLicenceBasis>([
   'minimized-with-permission',
   'public-domain',
@@ -100,19 +103,6 @@ const BUILD_RECIPES = new Set<BuildRecipe>([
   'official-public-demonstration',
 ]);
 const CATALOGUE_IDS = new Set(TECHNOLOGY_SIGNATURE_CATALOGUE.map((entry) => entry.id));
-
-function boundedText(value: unknown, label: string, maximum: number): string {
-  if (typeof value !== 'string' || !value.trim() || value.length > maximum || CONTROL_RE.test(value)) {
-    throw new TypeError(`${label} must be control-free text no longer than ${maximum} characters.`);
-  }
-  return value.trim();
-}
-
-function timestamp(value: unknown, label: string): string {
-  const parsed = Date.parse(boundedText(value, label, 64));
-  if (!Number.isFinite(parsed)) throw new TypeError(`${label} must be a valid timestamp.`);
-  return new Date(parsed).toISOString();
-}
 
 function technologyIds(values: readonly string[], label: string): string[] {
   if (values.length > MAX_TECHNOLOGY_REVIEW_IDS) {
