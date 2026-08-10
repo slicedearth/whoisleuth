@@ -196,7 +196,6 @@
   .signals .chip{white-space:normal}
   .score-details{display:grid;grid-template-columns:minmax(0,1fr);gap:8px;min-width:0;margin-top:12px}
   .score-details details{min-width:0;margin-top:0;overflow:hidden}
-  .score-detail-primary{border-inline-start:3px solid var(--accent)}
   .factor-chart{display:grid;width:calc(100% - 24px);min-width:0;gap:6px;margin:10px 12px 0;padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
   .factor-row{display:grid;grid-template-columns:minmax(220px,1.15fr) minmax(180px,1fr) 34px;min-width:0;align-items:center;gap:10px}
   .factor-label{min-width:0;color:var(--muted);font:9px/1.45 var(--mono);overflow-wrap:anywhere}

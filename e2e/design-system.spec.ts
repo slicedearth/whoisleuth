@@ -1162,6 +1162,7 @@ test('Lookup task query context is bounded, transient, and changes only result p
       background: getComputedStyle(score).backgroundColor,
       secondaryBackground: getComputedStyle(score.nextElementSibling!).backgroundColor,
       detailActual: getComputedStyle(document.querySelector('.score-detail-primary')!).borderLeftColor,
+      secondaryDetail: getComputedStyle(document.querySelector('.score-detail-secondary')!).borderLeftColor,
       primaryBorder,
       successBorder,
     };
@@ -1169,7 +1170,8 @@ test('Lookup task query context is bounded, transient, and changes only result p
   expect(primaryScoreColours.actual).toBe(primaryScoreColours.secondary);
   expect(primaryScoreColours.actual).not.toBe(primaryScoreColours.primaryBorder);
   expect(primaryScoreColours.background).not.toBe(primaryScoreColours.secondaryBackground);
-  expect(primaryScoreColours.detailActual).toBe(primaryScoreColours.primaryBorder);
+  expect(primaryScoreColours.detailActual).toBe(primaryScoreColours.secondaryDetail);
+  expect(primaryScoreColours.detailActual).not.toBe(primaryScoreColours.primaryBorder);
   expect(primaryScoreColours.actual).not.toBe(primaryScoreColours.successBorder);
 
   await brandDetails.nth(0).locator('summary').click();
