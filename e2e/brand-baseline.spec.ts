@@ -563,7 +563,7 @@ test('cross-domain posture matrix links exact retained baselines and observation
   await migrateLegacyBrowserData(page, {
     [PROFILES_KEY]: [{
       ...profileFixture(),
-      officialDomains: ['stored.example', 'unavailable.example', 'not-configured.example'],
+      officialDomains: ['stored.example', 'unavailable.example', 'unset.example'],
       desiredPostureBaselines: [{
         domain: 'stored.example',
         nameservers: ['ns1.stored.example'],
@@ -589,7 +589,7 @@ test('cross-domain posture matrix links exact retained baselines and observation
   await expect(storedRow).toContainText('Unsupported');
   const unavailableRow = matrix.locator('tbody tr', { hasText: 'unavailable.example' });
   await expect(unavailableRow).toContainText('Unavailable');
-  const unconfiguredRow = matrix.locator('tbody tr', { hasText: 'not-configured.example' });
+  const unconfiguredRow = matrix.locator('tbody tr', { hasText: 'unset.example' });
   await expect(unconfiguredRow).toContainText('Not configured');
   await expect(storedRow.getByRole('link', { name: 'Observation' }).first()).toHaveAttribute('href', '#retained-posture-observation-stored.example');
 

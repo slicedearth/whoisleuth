@@ -591,7 +591,7 @@ expected while preserving the underlying observations and their limitations.
 The adjacent **Cross-domain posture matrix** projects those saved baselines and
 their latest retained compact posture observations into one domain-by-control
 review. Cells keep aligned, drift, review, unavailable, unknown, unsupported,
-suppressed, approved-window, and not-configured states separate and link back
+suppressed, approved-window, and not configured states separate and link back
 to the exact local baseline and retained observation used. The projection makes
 no request, changes no configuration, and is not an uptime, ownership, control,
 or continuous-monitoring claim.
