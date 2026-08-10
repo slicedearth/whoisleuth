@@ -235,23 +235,28 @@ test('scans authenticated desktop and expanded mobile drawer states', async ({ p
   await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
   await expectNoAccessibilityViolations(page, testInfo, 'console-initial-light-desktop');
 
-  for (const [route, state] of [
-    ['/brands', 'console-brands-initial-light-desktop'],
-    ['/discover', 'console-discover-initial-light-desktop'],
-    ['/monitor', 'console-monitor-initial-light-desktop'],
+  for (const [route, state, heading] of [
+    ['/brands', 'console-brands-initial-light-desktop', 'Brands'],
+    ['/discover', 'console-discover-initial-light-desktop', 'Discover'],
+    ['/monitor', 'console-monitor-initial-light-desktop', 'Monitor'],
   ] as const) {
     await page.goto(route);
+    await expect(page.getByRole('heading', { name: heading, exact: true })).toBeVisible();
+    await expect(page.locator('main')).toBeVisible();
+    await expect(page).toHaveTitle(/WHOISleuth/u);
     await expectNoAccessibilityViolations(page, testInfo, state);
   }
 
   await useTheme(page, 'dark');
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/lookup');
+  await expect(page.getByRole('heading', { name: 'Lookup', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Toggle navigation' }).click();
   await expect(page.getByRole('button', { name: 'Close navigation' })).toBeFocused();
   await expectNoAccessibilityViolations(page, testInfo, 'console-drawer-dark-mobile');
 
   await page.goto('/registry-support');
+  await expect(page.getByRole('heading', { name: 'Registry support', exact: true })).toBeVisible();
   await page.getByLabel('Suffix or capability').fill('bv');
   await page.getByText('Review BV profile', { exact: true }).click();
   await expectNoAccessibilityViolations(page, testInfo, 'console-registry-support-expanded-dark-mobile');

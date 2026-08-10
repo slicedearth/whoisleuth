@@ -660,7 +660,7 @@ test('optional external intelligence searches are explicit, attributed, and mobi
   await riskExplanation.focus();
   await expect(riskExplanation).toBeFocused();
   await riskExplanation.press('Enter');
-  await expect(page.locator('.factor-chart text').getByText('Corroborated recent external phishing/malware records')).toBeVisible();
+  await expect(page.locator('.factor-chart .factor-label').getByText('Corroborated recent external phishing/malware records')).toBeVisible();
   const exactRiskFactors = page.locator('.score-details details').first().locator('.factor-list');
   await expect(exactRiskFactors).toHaveCSS('clip-path', 'inset(50%)');
   await expect(section.getByText('phishing', { exact: true })).toBeVisible();

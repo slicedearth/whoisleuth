@@ -906,6 +906,8 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
 
 test('Lookup focus and disclosure controls change presentation without changing evidence', async ({ page }) => {
   const domain = 'presentation-options.invalid';
+  const presentationFixture = sectionedLookupFixture(domain);
+  presentationFixture.diagnostics.whois.status = 'unsupported';
   await page.setViewportSize({ width: 1440, height: 900 });
   const lookupRequests: string[] = [];
   page.on('request', (request) => {
@@ -914,7 +916,7 @@ test('Lookup focus and disclosure controls change presentation without changing 
   await page.route('**/api/lookup?*', (route) => route.fulfill({
     status: 200,
     contentType: 'application/json',
-    body: JSON.stringify(sectionedLookupFixture(domain)),
+    body: JSON.stringify(presentationFixture),
   }));
   await page.goto('/lookup');
   await page.locator('#query').fill(domain);
@@ -944,6 +946,17 @@ test('Lookup focus and disclosure controls change presentation without changing 
   expect(glanceGeometry.sectionScrollWidth).toBeLessThanOrEqual(glanceGeometry.sectionClientWidth + 1);
   expect(glanceGeometry.introWidth).toBeGreaterThanOrEqual(230);
   expect(glanceGeometry.noteRight).toBeLessThanOrEqual(glanceGeometry.sectionRight + 1);
+  const glanceMetrics = atAGlance.locator('.metrics > details');
+  await expect(glanceMetrics).toHaveCount(4);
+  for (const metric of await glanceMetrics.all()) {
+    const count = Number(await metric.locator('summary strong').textContent());
+    await metric.locator('summary').click();
+    await expect(metric.locator('.metric-detail > p').first()).toBeVisible();
+    const listedItems = await metric.locator('.metric-detail li').count();
+    if (count > 0) expect(listedItems).toBe(count);
+    else expect(listedItems).toBe(0);
+  }
+  await expect(atAGlance.locator('.metric-note')).toContainText('neither state establishes safety');
   const detailedAssessment = page.locator('details.detailed-assessment');
   await expect(detailedAssessment).not.toHaveAttribute('open', '');
   await expect(page.getByRole('heading', { name: 'What the current evidence can support' })).toBeHidden();
@@ -1111,6 +1124,41 @@ test('Lookup task query context is bounded, transient, and changes only result p
   const brandDetails = page.locator('.availability .score-details .score-detail');
   await expect(brandDetails.nth(0)).toHaveAttribute('aria-label', 'Primary Risk score explanation');
   await expect(brandDetails.nth(1)).toHaveAttribute('aria-label', 'Secondary Opportunity score explanation');
+  const primaryScoreColours = await brandScores.nth(0).evaluate((score) => {
+    const probe = document.createElement('span');
+    probe.style.cssText = 'position:absolute;border:1px solid var(--accent2)';
+    document.body.append(probe);
+    const successBorder = getComputedStyle(probe).borderTopColor;
+    probe.style.borderColor = 'var(--accent)';
+    const primaryBorder = getComputedStyle(probe).borderTopColor;
+    probe.remove();
+    return {
+      actual: getComputedStyle(score).borderTopColor,
+      detailActual: getComputedStyle(document.querySelector('.score-detail-primary')!).borderLeftColor,
+      primaryBorder,
+      successBorder,
+    };
+  });
+  expect(primaryScoreColours.actual).toBe(primaryScoreColours.primaryBorder);
+  expect(primaryScoreColours.detailActual).toBe(primaryScoreColours.primaryBorder);
+  expect(primaryScoreColours.actual).not.toBe(primaryScoreColours.successBorder);
+
+  await brandDetails.nth(0).locator('summary').click();
+  await brandDetails.nth(1).locator('summary').click();
+  const scoreCharts = brandDetails.locator('.factor-chart');
+  await expect(scoreCharts).toHaveCount(2);
+  expect(await scoreCharts.evaluateAll((charts) => charts.every((chart) => {
+    const chartRect = chart.getBoundingClientRect();
+    const labels = [...chart.querySelectorAll<HTMLElement>('.factor-label')];
+    return chart.scrollWidth <= chart.clientWidth + 1
+      && labels.length > 0
+      && labels.every((label) => {
+        const rect = label.getBoundingClientRect();
+        return rect.left >= chartRect.left - 1
+          && rect.right <= chartRect.right + 1
+          && label.scrollWidth <= label.clientWidth + 1;
+      });
+  }))).toBe(true);
   expect(lookupRequests).toHaveLength(2);
   expect(lookupRequests.every((url) => !new URL(url).searchParams.has('task'))).toBe(true);
 
