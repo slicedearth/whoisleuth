@@ -650,6 +650,7 @@ test('workspace Settings application preserves malformed active-profile values a
     });
     const preview = page.locator('.preview');
     const settings = preview.locator('li', { hasText: 'Workspace settings' });
+    await expect(settings.getByRole('checkbox')).toBeVisible();
     for (const checkbox of await preview.getByRole('checkbox').all()) {
       const isSettings = await checkbox.evaluate((element) => (
         element.closest('li')?.textContent?.includes('Workspace settings') === true
