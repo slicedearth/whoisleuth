@@ -183,7 +183,6 @@
   .availability h4{margin:0;font-size:1.05rem}
   .scores{display:flex;gap:9px}
   .score{display:grid;grid-template-columns:1fr auto;gap:3px;width:150px;padding:9px 10px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel)}
-  .score-primary{background:var(--panel-raised)}
   .score span{font:600 var(--text-2xs) var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
   .score small em{color:var(--text);font-style:normal}
   .score strong{font-size:1.05rem}

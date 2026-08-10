@@ -1169,7 +1169,7 @@ test('Lookup task query context is bounded, transient, and changes only result p
   });
   expect(primaryScoreColours.actual).toBe(primaryScoreColours.secondary);
   expect(primaryScoreColours.actual).not.toBe(primaryScoreColours.primaryBorder);
-  expect(primaryScoreColours.background).not.toBe(primaryScoreColours.secondaryBackground);
+  expect(primaryScoreColours.background).toBe(primaryScoreColours.secondaryBackground);
   expect(primaryScoreColours.detailActual).toBe(primaryScoreColours.secondaryDetail);
   expect(primaryScoreColours.detailActual).not.toBe(primaryScoreColours.primaryBorder);
   expect(primaryScoreColours.actual).not.toBe(primaryScoreColours.successBorder);
