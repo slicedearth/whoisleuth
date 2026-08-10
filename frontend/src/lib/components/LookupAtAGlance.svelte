@@ -42,7 +42,7 @@
     {
       id: 'complete',
       count: quality.completeCount,
-      label: `evidence check${quality.completeCount === 1 ? '' : 's'} complete`,
+      label: `complete check${quality.completeCount === 1 ? '' : 's'}`,
       explanation: 'These collectors or derived checks returned a complete usable result. Complete describes evidence collection, not whether the domain is safe.',
       empty: 'No evidence check returned a complete usable result.',
       attention: false,
@@ -58,8 +58,8 @@
     {
       id: 'limited',
       count: quality.limitedCount,
-      label: `evidence check${quality.limitedCount === 1 ? '' : 's'} limited`,
-      explanation: 'These checks are partial, unavailable, or unknown. Their limitations may constrain a downstream conclusion.',
+      label: `limited check${quality.limitedCount === 1 ? '' : 's'}`,
+      explanation: 'These checks are partial, unavailable, or unknown. Unsupported, skipped, and not-found checks remain in Source quality but are not included in this count.',
       empty: 'No evidence check is currently partial, unavailable, or unknown.',
       attention: quality.limitedCount > 0,
       items: quality.entries
@@ -74,8 +74,8 @@
     {
       id: 'conflicts',
       count: support.counts.conflicts,
-      label: `source disagreement${support.counts.conflicts === 1 ? '' : 's'}`,
-      explanation: 'These separately attributed sources report different values. Source order does not resolve a disagreement automatically.',
+      label: `disagreement${support.counts.conflicts === 1 ? '' : 's'}`,
+      explanation: 'These separately attributed sources report different values. Source order does not resolve a disagreement automatically, and a complete collection can still contain one.',
       empty: 'No retained source comparison currently reports a disagreement.',
       attention: support.counts.conflicts > 0,
       items: support.entries
@@ -117,8 +117,8 @@
       {#each metricGroups as metric (metric.id)}
         <details class:attention={metric.attention}>
           <summary>
-            <span><strong>{metric.count}</strong> {metric.label}</span>
-            <small>Show what this count includes</small>
+            <strong>{metric.count}</strong>
+            <span>{metric.label}</span>
           </summary>
           <div class="metric-detail">
             <p>{metric.explanation}</p>
@@ -139,7 +139,7 @@
           </div>
         </details>
       {/each}
-      <small class="metric-note">Limited means partial, unavailable, or unknown. Expected unsupported, skipped, and not-found checks remain in Source quality without increasing this count. A complete check can still contain a disagreement, and neither state establishes safety.</small>
+      <p class="metric-note">Complete and limited describe evidence coverage; neither state establishes safety.</p>
     </div>
   </header>
 
@@ -188,14 +188,13 @@
   .metrics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;min-width:0;width:100%}
   .metrics details{min-width:0;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised);color:var(--muted);font:var(--text-2xs) var(--mono)}
   .metrics details[open]{grid-column:1/-1;border-color:var(--border-strong)}
-  .metrics summary{display:flex;min-width:0;align-items:center;justify-content:space-between;gap:8px;padding:7px 9px;cursor:pointer;list-style:none;overflow-wrap:anywhere}
+  .metrics summary{display:grid;grid-template-columns:auto minmax(0,1fr) auto;min-width:0;min-height:44px;align-items:center;gap:7px;padding:7px 9px;cursor:pointer;list-style:none}
   .metrics summary::-webkit-details-marker{display:none}
-  .metrics summary::after{content:'+';flex:0 0 auto;color:var(--accent);font-size:var(--text-sm)}
+  .metrics summary::after{content:'+';color:var(--accent);font-size:var(--text-sm)}
   .metrics details[open] summary::after{content:'−'}
-  .metrics summary>span{min-width:0}
-  .metrics summary>small{max-width:94px;color:var(--muted);font:var(--text-2xs) var(--font-sans);line-height:1.3;text-align:right}
-  .metrics strong{color:var(--text);font-size:var(--text-sm)}
-  .metrics .attention summary>span strong{color:var(--amber)}
+  .metrics summary>span{min-width:0;overflow-wrap:anywhere}
+  .metrics summary>strong{color:var(--text);font-size:var(--text-sm)}
+  .metrics .attention summary>strong{color:var(--amber)}
   .metric-detail{padding:0 9px 9px;border-top:1px solid var(--border)}
   .metric-detail p{margin:8px 0 0;color:var(--muted);font:var(--text-2xs) var(--font-sans);line-height:1.5}
   .metric-detail ul{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin:8px 0 0;padding:0;list-style:none}
@@ -203,7 +202,7 @@
   .metric-detail a strong,.metric-detail a small{overflow-wrap:anywhere}
   .metric-detail a strong{font-size:var(--text-xs)}
   .metric-detail a small{color:var(--muted);font:var(--text-2xs) var(--font-sans);line-height:1.4}
-  .metric-note{grid-column:1/-1;max-width:none;color:var(--muted);font-size:var(--text-2xs);line-height:1.45;text-align:right;overflow-wrap:anywhere}
+  .metric-note{grid-column:1/-1;max-width:none;margin:0;color:var(--muted);font-size:var(--text-2xs);line-height:1.45;text-align:right;overflow-wrap:anywhere}
   .glance-grid{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(260px,.9fr);gap:9px;margin-top:14px}
   .glance-grid>section{min-width:0;padding:12px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel-raised)}
   h5{margin:0 0 9px;font:700 var(--text-xs) var(--mono)}
@@ -228,6 +227,9 @@
   @container(max-width:760px){
     .glance-header{grid-template-columns:minmax(0,1fr)}
     .metric-note{text-align:left}
+  }
+  @container(max-width:420px){
+    .metrics{grid-template-columns:minmax(0,1fr)}
   }
   @media(max-width:840px){
     .glance-grid{grid-template-columns:minmax(0,1fr)}

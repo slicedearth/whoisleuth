@@ -948,6 +948,18 @@ test('Lookup focus and disclosure controls change presentation without changing 
   expect(glanceGeometry.noteRight).toBeLessThanOrEqual(glanceGeometry.sectionRight + 1);
   const glanceMetrics = atAGlance.locator('.metrics > details');
   await expect(glanceMetrics).toHaveCount(4);
+  const metricSummaries = glanceMetrics.locator('summary');
+  await expect(metricSummaries).toHaveText([
+    /^\d+ complete checks?$/u,
+    /^\d+ limited checks?$/u,
+    /^\d+ disagreements?$/u,
+    /^\d+ unresolved items?$/u,
+  ]);
+  await expect(atAGlance.getByText('Show what this count includes')).toHaveCount(0);
+  expect(await metricSummaries.evaluateAll((summaries) => summaries.every((summary) => {
+    const box = summary.getBoundingClientRect();
+    return summary.scrollWidth <= summary.clientWidth + 1 && box.height <= 48;
+  }))).toBe(true);
   for (const metric of await glanceMetrics.all()) {
     const count = Number(await metric.locator('summary strong').textContent());
     await metric.locator('summary').click();
@@ -955,6 +967,7 @@ test('Lookup focus and disclosure controls change presentation without changing 
     const listedItems = await metric.locator('.metric-detail li').count();
     if (count > 0) expect(listedItems).toBe(count);
     else expect(listedItems).toBe(0);
+    await metric.locator('summary').click();
   }
   await expect(atAGlance.locator('.metric-note')).toContainText('neither state establishes safety');
   const detailedAssessment = page.locator('details.detailed-assessment');
@@ -1057,6 +1070,17 @@ test('Lookup focus and disclosure controls change presentation without changing 
   await expect(page.getByRole('button', { name: 'Expand Source quality evidence' })).toBeVisible();
   await page.setViewportSize({ width: 320, height: 700 });
   await expectNoHorizontalOverflow(page);
+  const mobileMetricGeometry = await glanceMetrics.evaluateAll((metrics) => metrics.map((metric) => {
+    const summary = metric.querySelector('summary')!;
+    const box = metric.getBoundingClientRect();
+    return {
+      top: Math.round(box.top),
+      summaryContained: summary.scrollWidth <= summary.clientWidth + 1,
+      summaryHeight: summary.getBoundingClientRect().height,
+    };
+  }));
+  expect(new Set(mobileMetricGeometry.map((metric) => metric.top)).size).toBe(4);
+  expect(mobileMetricGeometry.every((metric) => metric.summaryContained && metric.summaryHeight <= 48)).toBe(true);
 
   await page.reload();
   await page.locator('#query').fill(domain);
@@ -1134,13 +1158,20 @@ test('Lookup task query context is bounded, transient, and changes only result p
     probe.remove();
     return {
       actual: getComputedStyle(score).borderTopColor,
+      secondary: getComputedStyle(score.nextElementSibling!).borderTopColor,
+      background: getComputedStyle(score).backgroundColor,
+      secondaryBackground: getComputedStyle(score.nextElementSibling!).backgroundColor,
       detailActual: getComputedStyle(document.querySelector('.score-detail-primary')!).borderLeftColor,
+      secondaryDetail: getComputedStyle(document.querySelector('.score-detail-secondary')!).borderLeftColor,
       primaryBorder,
       successBorder,
     };
   });
-  expect(primaryScoreColours.actual).toBe(primaryScoreColours.primaryBorder);
-  expect(primaryScoreColours.detailActual).toBe(primaryScoreColours.primaryBorder);
+  expect(primaryScoreColours.actual).toBe(primaryScoreColours.secondary);
+  expect(primaryScoreColours.actual).not.toBe(primaryScoreColours.primaryBorder);
+  expect(primaryScoreColours.background).toBe(primaryScoreColours.secondaryBackground);
+  expect(primaryScoreColours.detailActual).toBe(primaryScoreColours.secondaryDetail);
+  expect(primaryScoreColours.detailActual).not.toBe(primaryScoreColours.primaryBorder);
   expect(primaryScoreColours.actual).not.toBe(primaryScoreColours.successBorder);
 
   await brandDetails.nth(0).locator('summary').click();
