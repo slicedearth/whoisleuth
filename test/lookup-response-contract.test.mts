@@ -3,6 +3,16 @@ import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { THREAT_INTELLIGENCE_RESULT_STATES } from '../lib/threat-intelligence-types.mts';
+import {
+  MAX_HTTP_ATTEMPTS,
+  MAX_HTTP_ERROR_LENGTH,
+  MAX_HTTP_EVIDENCE_REDIRECTS,
+  MAX_HTTP_PROVENANCE_URL,
+} from '../lib/http-evidence-bounds.mts';
+import {
+  MAX_OBSERVATION_LIMITATIONS,
+  MAX_OBSERVATION_LIMITATION_LENGTH,
+} from '../lib/observation.mts';
 
 import {
   INVALID_COMPACT_LOOKUP_RESPONSE,
@@ -65,6 +75,33 @@ function compactResponse(overrides = {}) {
   };
 }
 
+function boundedHttpEvidence(overrides: Record<string, unknown> = {}) {
+  const redirects = Array.from({ length: MAX_HTTP_EVIDENCE_REDIRECTS }, (_, index) => ({
+    from: `https://redirect-${index}.example.test/`,
+    to: `https://redirect-${index + 1}.example.test/`,
+    status: 301,
+    queryOmitted: false,
+  }));
+  return {
+    status: 'success',
+    complete: true,
+    requestUrl: 'https://example.test/',
+    finalUrl: 'https://redirect-5.example.test/',
+    redirectCount: redirects.length,
+    redirects,
+    attempts: Array.from({ length: MAX_HTTP_ATTEMPTS }, (_, index) => ({
+      url: `https://attempt-${index}.example.test/`,
+      queryOmitted: false,
+      outcome: 'response',
+      httpStatus: 200,
+      error: null,
+    })),
+    limitations: Array.from({ length: MAX_OBSERVATION_LIMITATIONS }, (_, index) => `Bounded limitation ${index}`),
+    response: { status: 200 },
+    ...overrides,
+  };
+}
+
 describe('Lookup HTTP response contract', () => {
   test('accepts the full response without copying, pruning, or mutating additive evidence', () => {
     const raw = response({ additiveSection: { version: 1, value: 'retained' } });
@@ -87,6 +124,58 @@ describe('Lookup HTTP response contract', () => {
         threatIntelligence: { version: 1, providers: [] },
       }));
       assert.equal(parsed.ok, true, type);
+    }
+  });
+
+  test('accepts exact HTTP evidence bounds without copying or pruning additive fields', () => {
+    const http = boundedHttpEvidence({ additiveField: { retained: true } });
+    const raw = response({ availability: { applicable: true, state: 'registered', http } });
+    const before = structuredClone(raw);
+    const parsed = parseLookupHttpResponse(raw);
+
+    assert.equal(parsed.ok, true);
+    assert.equal(parsed.value, raw);
+    assert.deepEqual(raw, before);
+    assert.deepEqual((http as typeof http & { additiveField: { retained: boolean } }).additiveField.retained, true);
+  });
+
+  test('rejects over-bound or malformed nested HTTP evidence with the stable response error', () => {
+    const baseRedirect = {
+      from: 'https://from.example.test/',
+      to: 'https://to.example.test/',
+      status: 302,
+      queryOmitted: false,
+    };
+    const baseAttempt = {
+      url: 'https://attempt.example.test/',
+      outcome: 'error',
+      httpStatus: null,
+      error: 'Fixture connection failed.',
+    };
+    const invalidHttp = [
+      boundedHttpEvidence({ redirects: Array.from({ length: MAX_HTTP_EVIDENCE_REDIRECTS + 1 }, () => baseRedirect), redirectCount: MAX_HTTP_EVIDENCE_REDIRECTS }),
+      boundedHttpEvidence({ attempts: Array.from({ length: MAX_HTTP_ATTEMPTS + 1 }, () => baseAttempt) }),
+      boundedHttpEvidence({ redirects: [null], redirectCount: 1 }),
+      boundedHttpEvidence({ redirects: [{ ...baseRedirect, from: 'https://user:secret@from.example.test/' }], redirectCount: 1 }),
+      boundedHttpEvidence({ redirects: [{ ...baseRedirect, to: 'file:///tmp/evidence' }], redirectCount: 1 }),
+      boundedHttpEvidence({ redirects: [{ ...baseRedirect, to: `https://to.example.test/${'x'.repeat(MAX_HTTP_PROVENANCE_URL)}` }], redirectCount: 1 }),
+      boundedHttpEvidence({ redirects: [{ ...baseRedirect, status: 99 }], redirectCount: 1 }),
+      boundedHttpEvidence({ redirects: [{ ...baseRedirect, status: 600 }], redirectCount: 1 }),
+      boundedHttpEvidence({ attempts: [{ ...baseAttempt, error: 'x'.repeat(MAX_HTTP_ERROR_LENGTH + 1) }] }),
+      boundedHttpEvidence({ attempts: [{ ...baseAttempt, error: 'bad\nerror' }] }),
+      boundedHttpEvidence({ limitations: Array.from({ length: MAX_OBSERVATION_LIMITATIONS + 1 }, () => 'Limit') }),
+      boundedHttpEvidence({ limitations: ['x'.repeat(MAX_OBSERVATION_LIMITATION_LENGTH + 1)] }),
+      boundedHttpEvidence({ limitations: ['bad\nlimitation'] }),
+    ];
+
+    for (const http of invalidHttp) {
+      assert.deepEqual(parseLookupHttpResponse(response({
+        availability: { applicable: true, state: 'registered', http },
+      })), {
+        ok: false,
+        errorCode: INVALID_LOOKUP_RESPONSE,
+        error: INVALID_LOOKUP_RESPONSE_MESSAGE,
+      });
     }
   });
 

@@ -144,7 +144,7 @@
 <style>
   .theme-selector{--theme-trigger-width:104px;display:flex;flex:0 0 var(--theme-trigger-width);width:var(--theme-trigger-width);min-width:0;align-items:center;color:var(--muted);font:700 var(--text-2xs) var(--mono);white-space:nowrap}
   .theme-control{position:relative;width:100%;min-width:0}
-  .theme-selector .theme-trigger{display:inline-flex;width:100%;min-width:0;height:30px;align-items:center;justify-content:space-between;gap:8px;padding:0 9px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel);color:var(--text);font-family:var(--mono);font-size:inherit;font-weight:700;line-height:1}
+  .theme-selector .theme-trigger{display:inline-flex;width:100%;min-width:0;height:30px;align-items:center;justify-content:space-between;gap:8px;padding:0 9px;border:1px solid var(--quiet-control-border);border-radius:var(--radius-sm);background:var(--panel);color:var(--text);font-family:var(--mono);font-size:inherit;font-weight:700;line-height:1}
   .theme-trigger:hover,.theme-trigger:focus-visible{border-color:var(--accent);background:var(--panel)}
   .theme-trigger-label{color:var(--muted)}
   .theme-symbol{width:18px;height:18px;flex:0 0 auto;overflow:visible;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}

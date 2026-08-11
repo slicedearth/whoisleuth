@@ -19,12 +19,25 @@ test('the shared WHOISleuth mark preserves the approved vector source', async ()
 
 test('the website, browser favicons, and README use the same approved mark', async () => {
   const component = await readFile(new URL('../frontend/src/lib/components/BrandMark.svelte', import.meta.url), 'utf8');
+  const approvedSvg = await readFile(new URL('../frontend/static/favicon.svg', import.meta.url), 'utf8');
   const appHtml = await readFile(new URL('../frontend/src/app.html', import.meta.url), 'utf8');
   const readme = await readFile(new URL('../README.md', import.meta.url), 'utf8');
   const ico = await readFile(new URL('../frontend/static/favicon.ico', import.meta.url));
 
-  assert.match(component, /src="\/favicon\.svg"/);
-  assert.match(component, /alt=""/);
+  const pathGeometry = (source: string) => [...source.matchAll(/<path\b[^>]*\bd="([^"]+)"/gsu)].map((match) => {
+    const path = match[1] ?? '';
+    return {
+      commands: (path.match(/[a-z]/giu) ?? []).join(''),
+      numbers: (path.match(/-?(?:\d+(?:\.\d+)?|\.\d+)/gu) ?? []).map(Number),
+    };
+  });
+  assert.match(component, /<svg[^>]+viewBox="34 38 448 448"/s);
+  assert.match(component, /aria-hidden="true"/);
+  assert.match(component, /focusable="false"/);
+  assert.match(component, /fill:var\(--brand-mark-primary\)/);
+  assert.match(component, /fill:var\(--brand-mark-secondary\)/);
+  assert.deepEqual(pathGeometry(component), pathGeometry(approvedSvg));
+  assert.doesNotMatch(component, /<(?:image|script|foreignObject)\b|\{@html\}|(?:xlink:)?href=/i);
   assert.match(appHtml, /<link rel="icon" href="\/favicon\.ico" sizes="64x64">/);
   assert.match(appHtml, /<link rel="icon" type="image\/svg\+xml" href="\/favicon\.svg">/);
   assert.deepEqual([...ico.subarray(0, 8)], [0, 0, 1, 0, 1, 0, 64, 64]);

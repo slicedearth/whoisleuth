@@ -11,7 +11,7 @@ const publicPages = [
     path: '/demo',
     canonical: 'https://whoisleuth.com/demo',
     title: 'Domain investigation demo | WHOISleuth',
-    heading: 'Use the investigation workflow without touching a live target.',
+    heading: 'Explore a synthetic domain investigation.',
   },
   {
     path: '/privacy',

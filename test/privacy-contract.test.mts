@@ -31,6 +31,8 @@ import {
   MAX_OPERATIONS_REPORT_ACTIONS_PER_CASE,
   MAX_OPERATIONS_REPORT_CASES,
 } from '../frontend/src/lib/analysis/brand-protection-operations-report.ts';
+import { MAX_CASE_INPUT_RECORDS, MAX_CASES } from '../frontend/src/lib/analysis/case-model.ts';
+import { MAX_SAFE_FETCH_ADDRESS_CANDIDATES } from '../lib/safe-fetch.mts';
 
 const ROOT_NOTICE_URL = new URL('../PRIVACY.md', import.meta.url);
 const PUBLIC_NOTICE_URL = new URL('../frontend/src/routes/(public)/privacy/+page.svelte', import.meta.url);
@@ -47,7 +49,9 @@ test('public privacy notices track versioned browser-local data contracts', asyn
 
   for (const notice of [rootNotice, publicNotice]) {
     const compact = notice.replace(/\s+/gu, ' ');
-    assert.match(compact, /Last updated: 11 August 2026/u);
+    assert.match(compact, /Last updated: 12 August 2026/u);
+    assert.ok(compact.includes(`more than ${MAX_SAFE_FETCH_ADDRESS_CANDIDATES} address candidates`));
+    assert.ok(compact.includes(`at most ${MAX_CASE_INPUT_RECORDS.toLocaleString('en-AU')} parsed records before the ${MAX_CASES}-case store cap`));
     assert.ok(compact.includes(`up to ${MAX_HANDOFF_CANDIDATES.toLocaleString('en-AU')} selected domains`));
     assert.ok(compact.includes(`up to ${MAX_GENERATED_CONTEXT.toLocaleString('en-AU')} generated candidates`));
     assert.ok(compact.includes(`capped at ${mib(MAX_CANDIDATE_HANDOFF_SERIALIZED_BYTES)} MiB`));

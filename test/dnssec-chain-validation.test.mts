@@ -56,14 +56,20 @@ function keyFixture(owner: string) {
 }
 
 function dsRecord(owner: string, key: DnsWireRecord): DnsWireRecord {
-  const digest = crypto.createHash('sha256').update(wireName(owner)).update(key.canonicalRdata).digest();
+  return dsRecordWithDigest(owner, key, 2);
+}
+
+function dsRecordWithDigest(owner: string, key: DnsWireRecord, digestType: 1 | 2 | 4, corrupt = false): DnsWireRecord {
+  const hash = digestType === 1 ? 'sha1' : digestType === 2 ? 'sha256' : 'sha384';
+  const digest = crypto.createHash(hash).update(wireName(owner)).update(key.canonicalRdata).digest();
+  if (corrupt) digest[0] = (digest[0] as number) ^ 0xff;
   const rdata = Buffer.alloc(4 + digest.length);
   rdata.writeUInt16BE(dnskeyTag(key.canonicalRdata), 0);
   rdata[2] = 13;
-  rdata[3] = 2;
+  rdata[3] = digestType;
   digest.copy(rdata, 4);
   return record(owner, DNS_TYPE_DS, rdata, {
-    kind: 'DS', keyTag: dnskeyTag(key.canonicalRdata), algorithm: 13, digestType: 2, digest,
+    kind: 'DS', keyTag: dnskeyTag(key.canonicalRdata), algorithm: 13, digestType, digest,
   });
 }
 
@@ -170,7 +176,10 @@ function unsignedSignatureRecord(owner: string, type: number, signer: string, ke
   });
 }
 
-function secureFixture(corruptExampleSignature = false) {
+function secureFixture(
+  corruptExampleSignature = false,
+  childDsFactory?: (owner: string, key: DnsWireRecord) => DnsWireRecord[],
+) {
   const root = keyFixture('.');
   const tld = keyFixture('test');
   const child = keyFixture('example.test');
@@ -178,14 +187,14 @@ function secureFixture(corruptExampleSignature = false) {
   const tldDs = dsRecord('test', tld.record);
   const tldDsSignature = signatureRecord('test', DNS_TYPE_DS, '.', root.record, root.privateKey, [tldDs]);
   const tldKeySignature = signatureRecord('test', DNS_TYPE_DNSKEY, 'test', tld.record, tld.privateKey, [tld.record]);
-  const childDs = dsRecord('example.test', child.record);
-  const childDsSignature = signatureRecord('example.test', DNS_TYPE_DS, 'test', tld.record, tld.privateKey, [childDs]);
+  const childDs = childDsFactory?.('example.test', child.record) ?? [dsRecord('example.test', child.record)];
+  const childDsSignature = signatureRecord('example.test', DNS_TYPE_DS, 'test', tld.record, tld.privateKey, childDs);
   const childKeySignature = signatureRecord('example.test', DNS_TYPE_DNSKEY, 'example.test', child.record, child.privateKey, [child.record], corruptExampleSignature, 'answer', { wireSigner: 'ExAmPlE.TeSt' });
   const steps = [
     { name: '.', type: DNS_TYPE_DNSKEY, answer: [root.record, rootSignature] },
     { name: 'test', type: DNS_TYPE_DS, answer: [tldDs, tldDsSignature] },
     { name: 'test', type: DNS_TYPE_DNSKEY, answer: [tld.record, tldKeySignature] },
-    { name: 'example.test', type: DNS_TYPE_DS, answer: [childDs, childDsSignature] },
+    { name: 'example.test', type: DNS_TYPE_DS, answer: [...childDs, childDsSignature] },
     { name: 'example.test', type: DNS_TYPE_DNSKEY, answer: [child.record, childKeySignature] },
   ];
   let index = 0;
@@ -318,6 +327,31 @@ describe('isolated cryptographic DNSSEC validation', () => {
     assert.equal(report.completeness, 'complete');
     assert.equal(report.failure, null);
     assert.doesNotMatch(JSON.stringify(report), /"(?:publicKey|signature|transactionId)"/u);
+  });
+
+  test('ignores SHA-1 DS when an authenticated SHA-256 DS is also present', async () => {
+    const validate = async (fixture: ReturnType<typeof secureFixture>) => validateDnssecChain({
+      ownedOrAuthorized: true,
+      target: 'example.test',
+      resolver: RESOLVER,
+      trustAnchor: fixture.anchor,
+      observedAt: OBSERVED_AT,
+      sessionOptions: { exchange: fixture.exchange, now: () => 0 },
+    });
+
+    const mixed = secureFixture(false, (owner, key) => [
+      dsRecordWithDigest(owner, key, 1),
+      dsRecordWithDigest(owner, key, 2, true),
+    ]);
+    const mixedReport = await validate(mixed);
+    assert.equal(mixedReport.state, 'bogus');
+    assert.equal(mixedReport.failure?.stage, 'dnskey:example.test');
+
+    const sha1Only = secureFixture(false, (owner, key) => [dsRecordWithDigest(owner, key, 1)]);
+    assert.equal((await validate(sha1Only)).state, 'secure');
+
+    const sha256 = secureFixture(false, (owner, key) => [dsRecordWithDigest(owner, key, 2)]);
+    assert.equal((await validate(sha256)).state, 'secure');
   });
 
   test('distinguishes a cryptographic validation failure from transport and timeout states', async () => {

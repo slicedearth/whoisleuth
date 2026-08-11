@@ -53,6 +53,7 @@ type CappedTextOptions = { includeSha256?: boolean };
 
 const MAX_REDIRECTS = MAX_OUTBOUND_REDIRECTS;
 const MAX_SAFE_FETCH_URL_LENGTH = 4096;
+const MAX_SAFE_FETCH_ADDRESS_CANDIDATES = 64;
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 
 async function defaultSafeFetchRequest(
@@ -211,6 +212,33 @@ function isPrivateAddress(ip: string): boolean {
   return true; // not a recognizable IP literal - fail closed
 }
 
+function normalizePublicAddressCandidates(value: unknown, hostname: string): PublicAddressRecord[] {
+  if (!Array.isArray(value) || value.length === 0) throw new Error(`No DNS records for ${hostname}`);
+  if (value.length > MAX_SAFE_FETCH_ADDRESS_CANDIDATES) {
+    throw new Error(`Refusing to fetch ${hostname}: DNS returned too many address candidates`);
+  }
+  const normalized: PublicAddressRecord[] = [];
+  const seen = new Set<string>();
+  for (const item of value) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+      throw new Error(`Refusing to fetch ${hostname}: DNS returned an invalid address record`);
+    }
+    const { address, family } = item as Partial<PublicAddressRecord>;
+    if (typeof address !== 'string' || (family !== 4 && family !== 6) || net.isIP(address) !== family) {
+      throw new Error(`Refusing to fetch ${hostname}: DNS returned an invalid address record`);
+    }
+    if (isPrivateAddress(address)) {
+      throw new Error(`Refusing to fetch ${hostname}: resolves to a private/reserved address (${address})`);
+    }
+    const key = `${family}:${address}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      normalized.push({ address, family });
+    }
+  }
+  return normalized;
+}
+
 // Resolves the hostname and returns every address it maps to, having
 // verified all of them are public. Throws (fails closed) if any address is
 // private/reserved, or if there are no records at all.
@@ -221,13 +249,7 @@ async function resolvePublicAddresses(hostname: string): Promise<PublicAddressRe
   } catch (err) {
     throw new Error(`DNS resolution failed for ${hostname}: ${err instanceof Error ? err.message : String(err)}`);
   }
-  if (records.length === 0) throw new Error(`No DNS records for ${hostname}`);
-  for (const { address } of records) {
-    if (isPrivateAddress(address)) {
-      throw new Error(`Refusing to fetch ${hostname}: resolves to a private/reserved address (${address})`);
-    }
-  }
-  return records;
+  return normalizePublicAddressCandidates(records, hostname);
 }
 
 // A per-request undici Agent whose connections are pinned to the given,
@@ -315,7 +337,7 @@ async function safeFetchDetailed(
 
   while (true) {
     const parsed = new URL(currentUrl);
-    const records = await resolveAddresses(parsed.hostname);
+    const records = normalizePublicAddressCandidates(await resolveAddresses(parsed.hostname), parsed.hostname);
     const dispatcher = makeDispatcher(records);
     const hopStartedAt = now();
 
@@ -469,6 +491,7 @@ async function readBytesCapped(res: Response, maxBytes: number) {
 export {
   MAX_REDIRECTS,
   MAX_SAFE_FETCH_URL_LENGTH,
+  MAX_SAFE_FETCH_ADDRESS_CANDIDATES,
   safeFetch,
   safeFetchDetailed,
   readTextCapped,

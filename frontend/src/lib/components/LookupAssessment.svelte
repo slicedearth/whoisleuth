@@ -186,11 +186,12 @@
   .score span{font:600 var(--text-2xs) var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
   .score small em{color:var(--text);font-style:normal}
   .score strong{font-size:1.05rem}
-  .score i{grid-column:1/-1;height:5px;overflow:hidden;border-radius:99px;background:var(--border)}
-  .score b{display:block;height:100%;background:var(--accent)}
+  .score i{grid-column:1/-1;height:var(--score-track-height);overflow:hidden;border:var(--score-track-border-width) solid var(--border);border-radius:99px;background:var(--score-track-background);box-shadow:var(--score-track-shadow)}
+  .score b{display:block;height:100%;background:var(--accent);box-shadow:var(--score-fill-shadow)}
   .score small{grid-column:1/-1;color:var(--muted);font:600 var(--text-2xs) var(--mono);text-transform:capitalize}
   .score.danger b{background:var(--danger)}
   .score.warn b{background:var(--amber)}
+  .score.good b{background:var(--accent2)}
   .signals{display:flex;flex-wrap:wrap;gap:6px;margin-top:14px}
   .signals .chip{white-space:normal}
   .score-details{display:grid;grid-template-columns:minmax(0,1fr);gap:8px;min-width:0;margin-top:12px}
@@ -200,8 +201,8 @@
   .factor-label{min-width:0;color:var(--muted);font:9px/1.45 var(--mono);overflow-wrap:anywhere}
   .factor-track{position:relative;min-width:0;height:18px;border-radius:3px;background:color-mix(in srgb,var(--border) 30%,transparent)}
   .zero-line{position:absolute;top:-2px;bottom:-2px;left:50%;width:1px;background:var(--border-strong)}
-  .factor-bar{position:absolute;top:1px;bottom:1px;left:50%;border:1px solid var(--violet);border-radius:3px;background:rgb(var(--violet-rgb) / .22)}
-  .factor-row.negative .factor-bar{right:50%;left:auto;border-color:var(--accent);background:rgb(var(--accent-rgb) / .2)}
+  .factor-bar{position:absolute;top:1px;bottom:1px;left:50%;border:1px solid var(--violet);border-radius:3px;background:rgb(var(--violet-rgb) / var(--factor-fill-alpha))}
+  .factor-row.negative .factor-bar{right:50%;left:auto;border-color:var(--accent);background:rgb(var(--accent-rgb) / var(--factor-negative-fill-alpha))}
   .zero-marker{position:absolute;top:5px;left:calc(50% - 4px);width:8px;height:8px;border:2px solid var(--muted);border-radius:50%;background:var(--panel)}
   .factor-value{color:var(--text);font:700 9px var(--mono);text-align:right}
   .factor-limit{margin:7px 12px 0;color:var(--muted);font-size:var(--text-2xs)}

@@ -5,6 +5,10 @@ import type {
   BrowserLocalCollectionManifest,
   BrowserLocalStoredRecord,
 } from '../frontend/src/lib/browser-local-data';
+import {
+  CAMPAIGNS_COLLECTION,
+  CASES_COLLECTION,
+} from '../frontend/src/lib/browser-local-data-definitions';
 
 const SHORTLIST_KEY = 'whois-rdap-shortlist-v1';
 
@@ -23,6 +27,39 @@ function legacyShortlist() {
       savedAt: '2026-07-22T01:00:00.000Z',
     }],
   };
+}
+
+async function rawLocalDataSnapshot(page: import('@playwright/test').Page): Promise<string> {
+  return page.evaluate(async () => {
+    const request = indexedDB.open('whoisleuth-browser-data-v1');
+    const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    try {
+      const transaction = database.transaction(['manifests', 'records'], 'readonly');
+      const manifestRequest = transaction.objectStore('manifests').getAll() as IDBRequest<BrowserLocalCollectionManifest[]>;
+      const recordRequest = transaction.objectStore('records').getAll() as IDBRequest<BrowserLocalStoredRecord[]>;
+      const [manifests, records] = await Promise.all([
+        new Promise<BrowserLocalCollectionManifest[]>((resolve, reject) => {
+          manifestRequest.onsuccess = () => resolve(manifestRequest.result);
+          manifestRequest.onerror = () => reject(manifestRequest.error);
+        }),
+        new Promise<BrowserLocalStoredRecord[]>((resolve, reject) => {
+          recordRequest.onsuccess = () => resolve(recordRequest.result);
+          recordRequest.onerror = () => reject(recordRequest.error);
+        }),
+      ]);
+      await new Promise<void>((resolve, reject) => {
+        transaction.oncomplete = () => resolve();
+        transaction.onabort = () => reject(transaction.error);
+        transaction.onerror = () => undefined;
+      });
+      return JSON.stringify({ manifests, records });
+    } finally {
+      database.close();
+    }
+  });
 }
 
 test('native IndexedDB satisfies the bounded local data feasibility probe', async ({ page }) => {
@@ -181,4 +218,106 @@ test('an older IndexedDB collection schema is normalized and recommitted at the 
   const collection = await readBrowserLocalCollection(page, 'shortlist', { minimumRecords: 1, minimumRevision: 2 });
   expect(collection.manifest).toMatchObject({ schemaVersion: 3, revision: 2, source: 'application' });
   expect(collection.records.map((entry) => entry.value.domain)).toEqual(['priority.invalid']);
+});
+
+test('initialization validates every existing collection before writing a missing collection', async ({ page }) => {
+  await page.goto('/dashboard');
+  await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
+  await page.evaluate(async ({ casesId, campaignsId, futureVersion }) => {
+    const request = indexedDB.open('whoisleuth-browser-data-v1');
+    const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    const transaction = database.transaction(['manifests', 'records'], 'readwrite');
+    const manifests = transaction.objectStore('manifests');
+    const records = transaction.objectStore('records');
+    const campaignRequest = manifests.get(campaignsId) as IDBRequest<BrowserLocalCollectionManifest | undefined>;
+    const campaignManifest = await new Promise<BrowserLocalCollectionManifest | undefined>((resolve, reject) => {
+      campaignRequest.onsuccess = () => resolve(campaignRequest.result);
+      campaignRequest.onerror = () => reject(campaignRequest.error);
+    });
+    if (!campaignManifest) throw new Error('The fixture campaign manifest is missing.');
+    records.delete(IDBKeyRange.bound([casesId], [casesId, []]));
+    manifests.delete(casesId);
+    manifests.put({ ...campaignManifest, schemaVersion: futureVersion });
+    await new Promise<void>((resolve, reject) => {
+      transaction.oncomplete = () => resolve();
+      transaction.onabort = () => reject(transaction.error);
+      transaction.onerror = () => undefined;
+    });
+    database.close();
+  }, {
+    casesId: CASES_COLLECTION.id,
+    campaignsId: CAMPAIGNS_COLLECTION.id,
+    futureVersion: CAMPAIGNS_COLLECTION.schemaVersion + 1,
+  });
+  const beforeReload = await rawLocalDataSnapshot(page);
+
+  await page.reload();
+
+  await expect(page.getByRole('heading', { name: 'Browser-local data unavailable' })).toBeVisible();
+  await expect(page.getByText('Campaigns was created by a newer app version. Update the app before reading it.')).toBeVisible();
+  expect(await rawLocalDataSnapshot(page)).toBe(beforeReload);
+});
+
+test('collection reads request only one record beyond the configured maximum', async ({ page }) => {
+  await page.addInitScript(() => {
+    const originalGetAll = IDBIndex.prototype.getAll;
+    const calls: Array<{ query: string | null; count: number | null }> = [];
+    Object.defineProperty(window, '__whoisleuthGetAllCalls', { value: calls, configurable: true });
+    IDBIndex.prototype.getAll = function getAll(query?: IDBValidKey | IDBKeyRange | null, count?: number) {
+      calls.push({ query: typeof query === 'string' ? query : null, count: count ?? null });
+      return originalGetAll.call(this, query, count);
+    };
+  });
+  await page.goto('/dashboard');
+  await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
+  await page.evaluate(async ({ collection, maximumRecords }) => {
+    const request = indexedDB.open('whoisleuth-browser-data-v1');
+    const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    const transaction = database.transaction(['manifests', 'records'], 'readwrite');
+    const manifests = transaction.objectStore('manifests');
+    const records = transaction.objectStore('records');
+    const manifestRequest = manifests.get(collection) as IDBRequest<BrowserLocalCollectionManifest | undefined>;
+    const manifest = await new Promise<BrowserLocalCollectionManifest | undefined>((resolve, reject) => {
+      manifestRequest.onsuccess = () => resolve(manifestRequest.result);
+      manifestRequest.onerror = () => reject(manifestRequest.error);
+    });
+    if (!manifest) throw new Error('The fixture cases manifest is missing.');
+    records.delete(IDBKeyRange.bound([collection], [collection, []]));
+    for (let ordinal = 0; ordinal <= maximumRecords; ordinal++) {
+      const lookupKey = `overflow-${ordinal}`;
+      records.put({
+        key: [collection, lookupKey],
+        collection,
+        lookupKey,
+        ordinal,
+        codec: 'json-v1',
+        payload: '{}',
+        payloadBytes: 2,
+      } satisfies BrowserLocalStoredRecord);
+    }
+    manifests.put({ ...manifest, recordCount: maximumRecords });
+    await new Promise<void>((resolve, reject) => {
+      transaction.oncomplete = () => resolve();
+      transaction.onabort = () => reject(transaction.error);
+      transaction.onerror = () => undefined;
+    });
+    database.close();
+  }, { collection: CASES_COLLECTION.id, maximumRecords: CASES_COLLECTION.maximumRecords });
+
+  await page.reload();
+
+  await expect(page.getByRole('heading', { name: 'Browser-local data unavailable' })).toBeVisible();
+  await expect(page.getByText('Cases exceeds its bounded record count.')).toBeVisible();
+  const calls = await page.evaluate(() => (
+    window as typeof window & { __whoisleuthGetAllCalls?: Array<{ query: string | null; count: number | null }> }
+  ).__whoisleuthGetAllCalls ?? []);
+  expect(calls.some((call) => call.query === CASES_COLLECTION.id
+    && call.count === CASES_COLLECTION.maximumRecords + 1)).toBe(true);
+  expect(calls.some((call) => call.query === CASES_COLLECTION.id && call.count === null)).toBe(false);
 });

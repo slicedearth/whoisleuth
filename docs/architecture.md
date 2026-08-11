@@ -145,11 +145,12 @@ version 7 and their existing payload shape.
   and source-aware authority analysis. Positive registry evidence is not
   overturned by a contradictory or failed later referral.
 - **HTTP** resolves a hostname once, rejects private and special-purpose
-  addresses, pins the actual connection to validated public addresses, validates
-  every redirect, caps redirects and retained body bytes, and closes its
-  per-request dispatcher. The homepage, favicon, optional security.txt file,
-  and owned-domain policy requests reuse these trust controls with their own
-  bounded contracts. Deep full Lookup can transiently reduce selected CSP,
+  addresses, rejects a resolution with more than 64 address candidates, pins
+  the actual connection to validated public addresses, validates every
+  redirect, reapplies the address bound at each hop, caps redirects and retained
+  body bytes, and closes its per-request dispatcher. The homepage, favicon,
+  optional security.txt file, and owned-domain policy requests reuse these trust
+  controls with their own bounded contracts. Deep full Lookup can transiently reduce selected CSP,
   HSTS, referrer-policy, and response-cookie attributes from the chosen
   homepage response to fixed posture signals and bounded counts. Complete
   values and cookie identifiers are discarded, and the signals do not affect

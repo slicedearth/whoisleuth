@@ -132,7 +132,17 @@ test('the source review keeps exact rates without a decorative rate strip', asyn
     sourceReportLookup('success', 280),
   ]), SOURCE_REPORT_TIME);
   await page.goto('/registry-support');
-  await page.locator('.report-picker input[type="file"]').setInputFiles({
+  const reportPicker = page.locator('.report-picker');
+  const reportInput = reportPicker.locator('input[type="file"]');
+  for (const width of [1280, 320]) {
+    await page.setViewportSize({ width, height: 700 });
+    await reportInput.focus();
+    await expect(reportInput).toBeFocused();
+    await expect(reportPicker).toHaveCSS('outline-style', 'solid');
+    await expect(reportPicker).toHaveCSS('outline-width', '2px');
+  }
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await reportInput.setInputFiles({
     name: 'source-report.json',
     mimeType: 'application/json',
     buffer: Buffer.from(JSON.stringify(report)),

@@ -115,7 +115,7 @@
 
 <style>
   .queue{padding:var(--card-pad)}
-  .profile-context{margin-top:0;padding:10px 12px;border:1px solid rgb(var(--accent2-rgb) / .3);border-radius:var(--radius-md);background:rgb(var(--accent2-rgb) / .04);color:var(--muted);font-size:var(--text-xs)}
+  .profile-context{margin-top:0;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel-raised);color:var(--muted);font-size:var(--text-xs)}
   .profile-context strong{color:var(--text)}
   .profile-context.limitation{border-color:rgb(var(--amber-rgb) / .35);color:var(--amber)}
   .handoff{margin-top:0;color:var(--accent);font-size:var(--text-sm)}

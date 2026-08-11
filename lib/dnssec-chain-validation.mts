@@ -683,6 +683,13 @@ function dsMatchesKey(owner: string, ds: DsData | DnssecTrustAnchorDs, key: DnsW
   return Boolean(digest && digest.length === expected.length && crypto.timingSafeEqual(digest, expected));
 }
 
+function preferredSupportedDs<T extends { data: DsData }>(records: readonly T[]): T[] {
+  const supported = records.filter((record) => [1, 2, 4].includes(record.data.digestType));
+  return supported.some((record) => record.data.digestType === 2)
+    ? supported.filter((record) => record.data.digestType !== 1)
+    : supported;
+}
+
 function base64url(bytes: Buffer): string { return bytes.toString('base64url'); }
 
 function dnskeyPublicKey(key: DnskeyData): crypto.KeyObject | null {
@@ -1120,7 +1127,7 @@ async function validateDnssecChainWithContext(input: Readonly<{
 
       const keyResponse = await session.query(zone, DNS_TYPE_DNSKEY);
       const zoneKeys = recordsFor(keyResponse, zone, DNS_TYPE_DNSKEY);
-      const supportedDs = dsRecords.filter((record) => [1, 2, 4].includes(record.data.digestType));
+      const supportedDs = preferredSupportedDs(dsRecords);
       const matchedKeys = zoneKeys.filter((key) => supportedDs.some((ds) => dsMatchesKey(zone, ds.data, key)));
       if (!supportedDs.length) {
         const detail = 'The authenticated DS RRset used only digest algorithms unsupported by this validator.';

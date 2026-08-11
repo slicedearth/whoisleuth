@@ -635,7 +635,13 @@ function buildTlsObservation(handshake: TlsHandshake = {}, options: TlsBuildOpti
   const authorized = typeof handshake.authorized === 'boolean' ? handshake.authorized : null;
   const hostnameMatches = typeof handshake.hostnameMatches === 'boolean' ? handshake.hostnameMatches : null;
   const authorizationError = authorized === false
-    ? boundedString(handshake.authorizationError, MAX_ERROR_LENGTH, state)
+    ? boundedString(
+        handshake.authorizationError instanceof Error
+          ? handshake.authorizationError.message
+          : handshake.authorizationError,
+        MAX_ERROR_LENGTH,
+        state,
+      )
     : null;
   const hostnameError = hostnameMatches === false
     ? boundedString(handshake.hostnameError, MAX_ERROR_LENGTH, state)
@@ -825,6 +831,9 @@ async function collectTlsIntelligence(hostname: string, options: TlsCollectOptio
         port: TLS_PORT,
         servername: normalizedHostname,
         rejectUnauthorized: false,
+        // Keep runtime CA-path authorization independent from the separately
+        // recorded endpoint-identity comparison below.
+        checkServerIdentity: () => undefined,
         ALPNProtocols: ['h2', 'http/1.1'],
       }, () => {
         try {

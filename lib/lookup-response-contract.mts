@@ -12,6 +12,16 @@ import {
   THREAT_INTELLIGENCE_RESULT_STATES,
   type ThreatIntelligenceResultState,
 } from './threat-intelligence-types.mts';
+import {
+  MAX_HTTP_ATTEMPTS,
+  MAX_HTTP_ERROR_LENGTH,
+  MAX_HTTP_EVIDENCE_REDIRECTS,
+  MAX_HTTP_PROVENANCE_URL,
+} from './http-evidence-bounds.mts';
+import {
+  MAX_OBSERVATION_LIMITATIONS,
+  MAX_OBSERVATION_LIMITATION_LENGTH,
+} from './observation.mts';
 
 type JsonPrimitive = boolean | number | string | null;
 type JsonValue = JsonPrimitive | JsonObject | JsonValue[];
@@ -411,6 +421,82 @@ function invalidCompactLookupResponse(): CompactLookupResponseParseResult {
   };
 }
 
+function validHttpProvenanceUrl(value: unknown): boolean {
+  if (typeof value !== 'string'
+    || !value
+    || value.length > MAX_HTTP_PROVENANCE_URL
+    || CONTROL_CHAR_RE.test(value)) return false;
+  try {
+    const parsed = new URL(value);
+    return ['http:', 'https:'].includes(parsed.protocol)
+      && Boolean(parsed.hostname)
+      && !parsed.username
+      && !parsed.password
+      && !parsed.search
+      && !parsed.hash
+      && parsed.href === value;
+  } catch {
+    return false;
+  }
+}
+
+function validOptionalHttpUrl(value: unknown): boolean {
+  return value === undefined || value === null || validHttpProvenanceUrl(value);
+}
+
+function validOptionalHttpStatus(value: unknown): boolean {
+  return value === undefined || value === null
+    || Number.isInteger(value) && Number(value) >= 100 && Number(value) <= 599;
+}
+
+function validHttpLimitations(value: unknown): boolean {
+  return value === undefined || Array.isArray(value)
+    && value.length <= MAX_OBSERVATION_LIMITATIONS
+    && value.every((item) => typeof item === 'string'
+      && Boolean(item)
+      && item.length <= MAX_OBSERVATION_LIMITATION_LENGTH
+      && !CONTROL_CHAR_RE.test(item));
+}
+
+function validNormalizedHttpEvidence(value: unknown): boolean {
+  if (!isJsonObject(value)
+    || !validOptionalHttpUrl(value.requestUrl)
+    || !validOptionalHttpUrl(value.finalUrl)
+    || !validHttpLimitations(value.limitations)) return false;
+
+  const redirects = value.redirects;
+  if (redirects !== undefined && (!Array.isArray(redirects)
+    || redirects.length > MAX_HTTP_EVIDENCE_REDIRECTS
+    || !redirects.every((item) => isJsonObject(item)
+      && validHttpProvenanceUrl(item.from)
+      && validHttpProvenanceUrl(item.to)
+      && validOptionalHttpStatus(item.status)
+      && (item.queryOmitted === undefined || typeof item.queryOmitted === 'boolean')))) return false;
+
+  const attempts = value.attempts;
+  if (attempts !== undefined && (!Array.isArray(attempts)
+    || attempts.length > MAX_HTTP_ATTEMPTS
+    || !attempts.every((item) => isJsonObject(item)
+      && validOptionalHttpUrl(item.url)
+      && validOptionalHttpStatus(item.httpStatus)
+      && (item.queryOmitted === undefined || typeof item.queryOmitted === 'boolean')
+      && (item.outcome === undefined || typeof item.outcome === 'string'
+        && ['error', 'response', 'unknown'].includes(item.outcome))
+      && (item.error === undefined || item.error === null || typeof item.error === 'string'
+        && item.error.length <= MAX_HTTP_ERROR_LENGTH && !CONTROL_CHAR_RE.test(item.error))))) return false;
+
+  if (value.redirectCount !== undefined
+    && (!Number.isInteger(value.redirectCount)
+      || Number(value.redirectCount) < 0
+      || Number(value.redirectCount) > MAX_HTTP_EVIDENCE_REDIRECTS)) return false;
+  if (Array.isArray(redirects) && value.redirectCount !== undefined
+    && value.redirectCount !== redirects.length) return false;
+  if (value.response !== undefined && value.response !== null) {
+    if (!isJsonObject(value.response) || !validOptionalHttpStatus(value.response.status)) return false;
+  }
+  return true;
+}
+
 function parseLookupHttpResponse(value: unknown): LookupResponseParseResult {
   if (!isJsonObject(value) || Object.keys(value).length > MAX_LOOKUP_RESPONSE_TOP_LEVEL_KEYS) {
     return invalidLookupResponse();
@@ -437,6 +523,9 @@ function parseLookupHttpResponse(value: unknown): LookupResponseParseResult {
   for (const key of ['reverseDns', 'networkContext', 'securityTxt', 'sslbl', 'threatIntelligence', 'registryInsights']) {
     const section = value[key];
     if (section !== undefined && !isJsonObject(section)) return invalidLookupResponse();
+  }
+  if (value.availability.http !== undefined && !validNormalizedHttpEvidence(value.availability.http)) {
+    return invalidLookupResponse();
   }
 
   return { ok: true, value: value as LookupHttpResponse };
@@ -675,6 +764,7 @@ export {
   MAX_THREAT_INTELLIGENCE_PROVIDERS,
   MAX_THREAT_INTELLIGENCE_FINDINGS,
   MAX_THREAT_INTELLIGENCE_LIMITATIONS,
+  validNormalizedHttpEvidence,
   createLookupHttpResponse,
   createLookupViewModel,
   isJsonObject,

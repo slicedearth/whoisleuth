@@ -91,7 +91,13 @@ function rpkiCompleteness(report: RpkiEvidenceReport): AssuranceCompleteness {
 }
 
 function tlsaCompleteness(report: TlsaEvidenceReport): AssuranceCompleteness {
-  return report.state === 'matched' || report.state === 'different' || report.state === 'untrusted'
+  const comparisonMaterialComplete = !report.truncated
+    && report.rejectedCount === 0
+    && !report.authorityMaterialTruncated
+    && report.authorityMaterialRejectedCount === 0
+    && report.records.every((record) => record.state !== 'unavailable');
+  return comparisonMaterialComplete
+    && (report.state === 'matched' || report.state === 'different' || report.state === 'untrusted')
     ? 'complete'
     : report.state === 'invalid' || report.state === 'unavailable' ? 'unavailable' : 'partial';
 }

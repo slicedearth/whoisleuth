@@ -8,6 +8,10 @@ import {
 import type { LookupRequestOptions } from '../lib/lookup-request.mts';
 import type { LookupHttpResponse } from '../lib/lookup-response-contract.mts';
 import { LARGE_JSON_RESPONSE_BYTES } from '../lib/bounded-json-response.mts';
+import {
+  MAX_HTTP_ATTEMPTS,
+  MAX_HTTP_EVIDENCE_REDIRECTS,
+} from '../lib/http-evidence-bounds.mts';
 
 type FetchImplementation = NonNullable<LookupRequestOptions['fetchImpl']>;
 
@@ -26,6 +30,30 @@ function response(overrides: Partial<LookupHttpResponse> = {}): LookupHttpRespon
       availability: { status: 'complete' },
     },
     ...overrides,
+  };
+}
+
+function boundedHttpEvidence(redirectCount = MAX_HTTP_EVIDENCE_REDIRECTS) {
+  return {
+    status: 'success',
+    complete: true,
+    requestUrl: 'https://example.test/',
+    finalUrl: 'https://final.example.test/',
+    redirectCount,
+    redirects: Array.from({ length: redirectCount }, (_, index) => ({
+      from: `https://hop-${index}.example.test/`,
+      to: `https://hop-${index + 1}.example.test/`,
+      status: 302,
+      queryOmitted: false,
+    })),
+    attempts: Array.from({ length: MAX_HTTP_ATTEMPTS }, (_, index) => ({
+      url: `https://attempt-${index}.example.test/`,
+      outcome: 'response',
+      httpStatus: 200,
+      error: null,
+    })),
+    limitations: [],
+    response: { status: 200 },
   };
 }
 
@@ -66,6 +94,33 @@ describe('Lookup browser request boundary', () => {
       fetchImpl: async () => Response.json({ query: 'example.test' }),
     });
     assert.deepEqual(malformed, {
+      ok: false,
+      kind: 'invalid_response',
+      message: 'Lookup returned an invalid response.',
+    });
+  });
+
+  test('accepts exact nested HTTP bounds and rejects a bounded over-limit success response', async () => {
+    const exact = response({
+      availability: { applicable: true, state: 'registered', http: boundedHttpEvidence() },
+    });
+    const accepted = await requestLookup('/api/lookup?q=example.test', {
+      fetchImpl: async () => Response.json(exact),
+    });
+    assert.equal(accepted.ok, true);
+    assert.deepEqual(accepted.value, exact);
+
+    const overBound = response({
+      availability: {
+        applicable: true,
+        state: 'registered',
+        http: boundedHttpEvidence(MAX_HTTP_EVIDENCE_REDIRECTS + 1),
+      },
+    });
+    assert.ok(JSON.stringify(overBound).length < LARGE_JSON_RESPONSE_BYTES);
+    assert.deepEqual(await requestLookup('/api/lookup?q=example.test', {
+      fetchImpl: async () => Response.json(overBound),
+    }), {
       ok: false,
       kind: 'invalid_response',
       message: 'Lookup returned an invalid response.',

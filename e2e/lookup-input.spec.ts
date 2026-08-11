@@ -655,31 +655,43 @@ test('clears transient Lookup state when signing out through the Console', async
   await expect(page.locator('#result')).toHaveCount(0);
 });
 
+test.describe('failed Console logout', () => {
+  test.use({ allowExpectedLogout500Noise: true });
+
 test('clears transient Lookup state without an unhandled error when Console logout is unavailable', async ({ page }) => {
   const pageErrors: string[] = [];
   let logoutRequests = 0;
   page.on('pageerror', (error) => pageErrors.push(error.message));
   await page.route('**/api/logout', async (route) => {
     logoutRequests += 1;
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: '{',
-    });
+    if (logoutRequests === 1) {
+      await route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: 'fixture-only outage' }),
+      });
+      return;
+    }
+    await route.fallback();
   });
   await page.locator('#query').fill('failed-signout-state.example.test');
-  await page.context().clearCookies();
   await page.getByRole('button', { name: 'Sign out' }).click();
 
-  await expect(page).toHaveURL('/login');
+  await expect(page).toHaveURL('/lookup');
+  await expect(page.getByRole('alert')).toHaveText('Sign out failed. Your session remains active; try again.');
+  await expect(page.getByRole('button', { name: 'Sign out' })).toBeEnabled();
   await expect.poll(() => logoutRequests).toBe(1);
   expect(pageErrors).toEqual([]);
+  await page.getByRole('button', { name: 'Sign out' }).click();
+  await expect(page).toHaveURL('/login');
+  await expect.poll(() => logoutRequests).toBe(2);
   await page.getByLabel('Password').fill(TEST_SITE_PASSWORD);
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page).toHaveURL('/dashboard');
   await page.locator('#console-navigation').getByRole('link', { name: /^Lookup/ }).click();
   await expect(page.locator('#query')).toHaveValue('');
   await expect(page.locator('#result')).toHaveCount(0);
+});
 });
 
 test('does not show a saved Fast result after a same-domain Deep handoff', async ({ page }) => {

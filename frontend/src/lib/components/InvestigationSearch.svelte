@@ -114,7 +114,7 @@
     autocomplete="off"
     autocapitalize="none"
     spellcheck="false"
-    placeholder="Domain, case, campaign, nameserver, or hash"
+    placeholder="Domain, case, brand, or IP"
   >
   <p class="search-note">This searches only data already retained in this browser. It does not contact a provider or start a new check.</p>
 

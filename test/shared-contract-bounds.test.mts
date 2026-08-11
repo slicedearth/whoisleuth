@@ -17,7 +17,12 @@ import {
   isInformativePerceptualHash,
   isPerceptualHash,
 } from '../lib/perceptual-hash-comparison.mts';
-import { MAX_HTTP_EVIDENCE_REDIRECTS } from '../lib/http-evidence-bounds.mts';
+import {
+  MAX_HTTP_ATTEMPTS as MAX_SHARED_HTTP_ATTEMPTS,
+  MAX_HTTP_ERROR_LENGTH as MAX_SHARED_HTTP_ERROR_LENGTH,
+  MAX_HTTP_EVIDENCE_REDIRECTS,
+  MAX_HTTP_PROVENANCE_URL as MAX_SHARED_HTTP_PROVENANCE_URL,
+} from '../lib/http-evidence-bounds.mts';
 import { MAX_CANDIDATE_SOURCE_LENGTH } from '../lib/candidate-provenance-bounds.mts';
 import {
   recordOrEmpty,
@@ -46,7 +51,12 @@ import {
 } from '../frontend/src/lib/analysis/ct-results.ts';
 import { MAX_SOURCE_LENGTH } from '../frontend/src/lib/candidate-handoff-core.ts';
 import { MAX_HTTP_SUMMARY_REDIRECTS } from '../frontend/src/lib/analysis/http-summary.ts';
-import { MAX_HTTP_REDIRECTS } from '../lib/http-intelligence.mts';
+import {
+  MAX_HTTP_ATTEMPTS,
+  MAX_HTTP_ERROR_LENGTH,
+  MAX_HTTP_PROVENANCE_URL,
+  MAX_HTTP_REDIRECTS,
+} from '../lib/http-intelligence.mts';
 
 const root = process.cwd();
 
@@ -76,6 +86,9 @@ test('rich and compact HTTP evidence share the retained redirect bound', () => {
   assert.equal(MAX_HTTP_EVIDENCE_REDIRECTS, 5);
   assert.equal(MAX_HTTP_REDIRECTS, MAX_HTTP_EVIDENCE_REDIRECTS);
   assert.equal(MAX_HTTP_SUMMARY_REDIRECTS, MAX_HTTP_EVIDENCE_REDIRECTS);
+  assert.equal(MAX_HTTP_ATTEMPTS, MAX_SHARED_HTTP_ATTEMPTS);
+  assert.equal(MAX_HTTP_PROVENANCE_URL, MAX_SHARED_HTTP_PROVENANCE_URL);
+  assert.equal(MAX_HTTP_ERROR_LENGTH, MAX_SHARED_HTTP_ERROR_LENGTH);
 });
 
 test('candidate collectors and handoffs share the provenance-label bound', () => {

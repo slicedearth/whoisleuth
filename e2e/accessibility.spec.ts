@@ -151,9 +151,15 @@ test('public and dashboard support content exposes semantic labels and link cues
     page.getByRole('region', { name: 'Synthetic WHOISleuth console preview' }),
   ).toBeVisible();
   const attribution = page.getByRole('link', { name: 'slicedearth' });
-  expect(
-    await attribution.evaluate((element) => getComputedStyle(element).textDecorationLine),
-  ).toContain('underline');
+  const attributionCue = await attribution.evaluate((element) => {
+    const style = getComputedStyle(element);
+    const footerStyle = getComputedStyle(element.closest('footer') as HTMLElement);
+    return { color: style.color, footerColor: footerStyle.color, fontWeight: style.fontWeight, decoration: style.textDecorationLine };
+  });
+  expect(attributionCue.color).not.toBe(attributionCue.footerColor);
+  expect(Number(attributionCue.fontWeight)).toBeGreaterThanOrEqual(700);
+  expect(attributionCue.decoration).toBe('none');
+  await expect(attribution).toHaveAccessibleName(/opens in a new tab/);
 
   await page.goto('/dashboard');
   await expect(
@@ -184,13 +190,10 @@ test('scans representative public initial, error, populated, and expanded states
   await page.goto('/demo');
   await page.getByRole('button', { name: 'Begin with Brands' }).click();
   await page.getByRole('button', { name: 'Use synthetic profile' }).click();
-  await page.getByRole('button', { name: 'Load synthetic candidates' }).click();
+  await page.getByRole('button', { name: 'Generate fixed candidates' }).click();
+  await page.getByRole('button', { name: 'Review 3 candidates in Bulk' }).click();
   await page.getByRole('button', { name: 'Inspect northstar-login.example' }).click();
-  const lookupEvidenceHeading = page.getByRole('heading', { name: 'Synthetic lookup evidence' });
-  await expect(lookupEvidenceHeading).toHaveCSS('position', 'absolute');
-  expect((await lookupEvidenceHeading.boundingBox())?.height).toBeLessThanOrEqual(1);
-  await page.locator('.technology-card > summary').click();
-  await expect(page.locator('.technology-card')).toHaveAttribute('open', '');
+  await page.getByRole('button', { name: 'Expand Registration evidence' }).click();
   const mobileComparison = page.locator('.lane-card').first();
   await expect(mobileComparison).toBeVisible();
   await mobileComparison.locator('summary').click();
@@ -198,9 +201,7 @@ test('scans representative public initial, error, populated, and expanded states
   await expectNoAccessibilityViolations(page, testInfo, 'public-populated-expanded-light-mobile');
   await expectSequentialHeadingOrder(page, 'public populated demo');
   await page.getByRole('button', { name: 'Open synthetic case in Monitor' }).click();
-  const caseEvidenceHeading = page.getByRole('heading', { name: 'Synthetic case evidence' });
-  await expect(caseEvidenceHeading).toHaveCSS('position', 'absolute');
-  expect((await caseEvidenceHeading.boundingBox())?.height).toBeLessThanOrEqual(1);
+  await expect(page.getByRole('heading', { name: 'Case evidence, not a live watchlist' })).toBeVisible();
   await expectSequentialHeadingOrder(page, 'public monitor demo');
 });
 

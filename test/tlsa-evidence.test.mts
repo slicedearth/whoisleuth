@@ -55,6 +55,58 @@ describe('offline TLSA evidence review', () => {
     assert.equal(partial.rejectedCount, 1);
   });
 
+  test('never reports a definitive difference while comparison material is missing or unauthenticated', () => {
+    const certificate = Buffer.from('fixture certificate');
+    const records = [
+      { usage: 3, selector: 0, matchingType: 1, associationData: '00'.repeat(32) },
+      { usage: 3, selector: 1, matchingType: 1, associationData: '11'.repeat(32) },
+    ];
+    const incomplete = analyzeTlsaEvidence({
+      serviceName: '_25._tcp.mx.example.test',
+      dnssecState: 'validated',
+      records,
+      certificateDerBase64: certificate.toString('base64'),
+    });
+    assert.equal(incomplete.records[0]?.state, 'different');
+    assert.equal(incomplete.records[1]?.state, 'unavailable');
+    assert.equal(incomplete.state, 'partial');
+
+    const unauthenticated = analyzeTlsaEvidence({
+      serviceName: '_25._tcp.mx.example.test',
+      dnssecState: 'insecure',
+      records: [records[0]],
+      certificateDerBase64: certificate.toString('base64'),
+    });
+    assert.equal(unauthenticated.records[0]?.state, 'different');
+    assert.equal(unauthenticated.state, 'partial');
+  });
+
+  test('retains an untrusted result while marking unavailable, rejected, and truncated inputs incomplete', () => {
+    const certificate = Buffer.from('fixture certificate');
+    const associationData = createHash('sha256').update(certificate).digest('hex');
+    const base = {
+      serviceName: '_25._tcp.mx.example.test',
+      dnssecState: 'validated',
+      pkixValidationState: 'failed',
+      certificateDerBase64: certificate.toString('base64'),
+    };
+    const matched = { usage: 1, selector: 0, matchingType: 1, associationData };
+    const unavailable = analyzeTlsaEvidence({
+      ...base,
+      records: [matched, { usage: 1, selector: 1, matchingType: 1, associationData }],
+    });
+    assert.equal(unavailable.state, 'untrusted');
+    assert.equal(unavailable.records[1]?.state, 'unavailable');
+
+    const rejected = analyzeTlsaEvidence({ ...base, records: [matched, { usage: 9 }] });
+    assert.equal(rejected.state, 'untrusted');
+    assert.equal(rejected.rejectedCount, 1);
+
+    const truncated = analyzeTlsaEvidence({ ...base, records: Array.from({ length: 51 }, () => matched) });
+    assert.equal(truncated.state, 'untrusted');
+    assert.equal(truncated.truncated, true);
+  });
+
   test('requires the right certificate role and PKIX prerequisite for each usage', () => {
     const authority = Buffer.from('fixture authority certificate');
     const associationData = createHash('sha256').update(authority).digest('hex');

@@ -10,6 +10,20 @@ import type { EncryptedWorkspaceArchiveEnvelope } from '../frontend/src/lib/anal
 
 const NOW = '2026-07-14T08:00:00.000Z';
 
+async function expectSelectedOptionFits(select: import('@playwright/test').Locator) {
+  const fit = await select.evaluate((element: HTMLSelectElement) => {
+    const style = getComputedStyle(element);
+    const context = document.createElement('canvas').getContext('2d');
+    if (!context) return { availableWidth: 0, textWidth: Number.POSITIVE_INFINITY };
+    context.font = style.font;
+    return {
+      availableWidth: element.clientWidth - Number.parseFloat(style.paddingLeft) - Number.parseFloat(style.paddingRight),
+      textWidth: context.measureText(element.selectedOptions[0]?.textContent?.trim() ?? '').width,
+    };
+  });
+  expect(fit.availableWidth).toBeGreaterThanOrEqual(fit.textWidth);
+}
+
 async function runOfflineCliJson<T>(argv: string[], input: unknown): Promise<T> {
   const { FORCE_COLOR: _forceColor, NO_COLOR: _noColor, ...environment } = process.env;
   const execution = spawnSync(process.execPath, [
@@ -239,7 +253,9 @@ test('the Dashboard presents task lanes without duplicating the sidebar labels',
   await page.goto('/dashboard');
 
   await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'View public homepage' })).toHaveAttribute('href', '/');
+  await expect(page.getByRole('link', { name: /View public homepage/u })).toHaveAttribute('href', '/');
+  await expect(page.getByRole('link', { name: /View public homepage/u })).toHaveAttribute('target', '_blank');
+  await expect(page.getByRole('link', { name: /View public homepage/u })).toHaveAttribute('rel', 'noopener noreferrer');
   await expect(page.getByRole('heading', { name: 'Start an investigation' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Continue saved work' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Follow a guided investigation' })).toBeVisible();
@@ -260,6 +276,8 @@ test('the Dashboard presents task lanes without duplicating the sidebar labels',
   await expect(page.locator('.summary-card', { hasText: 'Watchlists' })).toHaveAttribute('href', '/monitor?view=watchlists');
   await expect(page.getByRole('link', { name: /Check domain-ending support/ })).toHaveAttribute('href', '/registry-support');
   await expect(page.getByRole('link', { name: /Open resources/ })).toHaveAttribute('href', '/resources#start');
+  await expect(page.getByRole('link', { name: /Open resources/ })).toHaveAttribute('target', '_blank');
+  await expect(page.getByRole('link', { name: /Open resources/ })).toHaveAttribute('rel', 'noopener noreferrer');
   await expect(page.getByRole('combobox', { name: 'Guide' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Start guide' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Compare two domains' })).toHaveCount(0);
@@ -303,7 +321,9 @@ test('the privacy-safe browser handoff previews exact third-party disclosure bef
   await page.goto('/dashboard');
   await page.getByLabel('Domain or URL').fill('https://user:secret@Sub.Example.Invalid:8443/private?token=secret#fragment');
   await page.getByLabel('Destination').selectOption('external_https');
-  await page.getByLabel('Disclose').selectOption('sanitized_url');
+  await page.getByLabel('Disclose', { exact: true }).selectOption('sanitized_url');
+  await expectSelectedOptionFits(page.getByLabel('Destination'));
+  await expectSelectedOptionFits(page.getByLabel('Disclose', { exact: true }));
   await page.getByLabel('Exact endpoint').fill('https://analyst-service.invalid/review');
   await page.getByRole('button', { name: 'Prepare exact preview' }).click();
 
@@ -320,6 +340,8 @@ test('the privacy-safe browser handoff previews exact third-party disclosure bef
   await expect(page.getByRole('button', { name: 'Open reviewed destination' })).toBeEnabled();
 
   await page.setViewportSize({ width: 320, height: 700 });
+  await expectSelectedOptionFits(page.getByLabel('Destination'));
+  await expectSelectedOptionFits(page.getByLabel('Disclose', { exact: true }));
   await expectNoHorizontalOverflow(page);
 });
 

@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures';
-import { boundingBox, expectNoHorizontalOverflow, migrateLegacyBrowserData, useTheme } from './helpers';
+import { boundingBox, expandLookupFamilies, expectNoHorizontalOverflow, migrateLegacyBrowserData, useTheme } from './helpers';
 import { protectedDestinations } from '../frontend/src/lib/workspaces';
 import { readFile } from 'node:fs/promises';
 
@@ -53,21 +53,24 @@ test('the wordmark stays clean without a cursor-like status treatment across lay
   }
 });
 
-test('the approved WHOISleuth mark stays consistent and contained across themes and layouts', async ({ page }) => {
+test('the theme-aware WHOISleuth mark stays consistent and contained across themes and layouts', async ({ page }) => {
   await useTheme(page, 'dark');
   await page.goto('/');
 
   const publicMark = page.locator('.public-brand .brand-mark');
   await expect(publicMark).toBeVisible();
-  await expect(publicMark).toHaveAttribute('src', '/favicon.svg');
-  expect(await publicMark.evaluate((element) => element.tagName)).toBe('IMG');
-  expect(await publicMark.evaluate((element) => (element as HTMLImageElement).naturalWidth)).toBe(512);
+  await expect(publicMark).toHaveAttribute('viewBox', '34 38 448 448');
+  await expect(publicMark).toHaveAttribute('aria-hidden', 'true');
+  expect(await publicMark.evaluate((element) => element.tagName)).toBe('svg');
+  await expect(publicMark.locator('[data-brand-tone="primary"]')).toHaveCount(1);
+  await expect(publicMark.locator('[data-brand-tone="secondary"]')).toHaveCount(1);
 
   await page.getByRole('button', { name: /Colour theme/ }).click();
   await page.getByRole('option', { name: 'Light theme' }).click();
   const lightMark = page.locator('.public-brand .brand-mark');
   await expect(lightMark).toBeVisible();
-  await expect(lightMark).toHaveAttribute('src', '/favicon.svg');
+  await expect(lightMark.locator('[data-brand-tone="primary"]')).toHaveCSS('fill', 'rgb(0, 91, 145)');
+  await expect(lightMark.locator('[data-brand-tone="secondary"]')).toHaveCSS('fill', 'rgb(0, 107, 73)');
 
   await page.setViewportSize({ width: 320, height: 640 });
   await page.reload();
@@ -111,7 +114,7 @@ function sectionedLookupFixture(domain: string) {
         durationMs: 100, complete: true, truncated: false, limitations: [], diagnostics: {},
         requestUrl: `https://${domain}/`, finalUrl: `https://www.${domain}/home`, transportSecurity: 'https',
         redirectCount: 1, redirectLimitReached: false, crossOriginRedirect: false, httpsDowngrade: false,
-        redirects: [{ status: 301, from: `https://${domain}/`, to: `https://www.${domain}/home`, queryOmitted: false }], attempts: [],
+        redirects: [{ status: 301, from: `https://${domain}/`, to: `https://www.${domain}/home`, queryOmitted: true }], attempts: [],
         response: {
           status: 200, contentType: 'text/html', contentLanguage: null, server: null,
           declaredContentLength: null, capturedBodyBytes: 1024, bodyInspected: true, bodyTruncated: false,
@@ -421,7 +424,8 @@ test('console footer opens public guidance separately while the public footer st
   const consoleResources = page.locator('footer.site-footer').getByRole('link', { name: /Resources/ });
   await expect(consoleResources).toHaveAttribute('target', '_blank');
   await expect(consoleResources).toHaveAttribute('rel', /noopener/u);
-  await expect(consoleResources).toContainText('↗');
+  await expect(consoleResources).not.toContainText('↗');
+  await expect(consoleResources).toHaveAccessibleName(/Resources.*opens in a new tab/u);
   const [publicPage] = await Promise.all([
     context.waitForEvent('page'),
     consoleResources.click(),
@@ -821,7 +825,13 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
 
     const redirectPath = httpCard.locator('.redirect-path');
     if (size.width <= 720) {
-      await expect(redirectPath.locator('.redirect-mobile')).toBeVisible();
+      const mobileRedirects = redirectPath.getByRole('list', { name: 'HTTP redirect steps' });
+      await expect(mobileRedirects).toBeVisible();
+      await expect(mobileRedirects.getByRole('listitem')).toHaveCount(1);
+      await expect(mobileRedirects).toContainText('HTTP 301');
+      await expect(mobileRedirects).toContainText('https://sectioned-result.invalid/');
+      await expect(mobileRedirects).toContainText('https://www.sectioned-result.invalid/home');
+      await expect(mobileRedirects).toContainText('Query omitted from retained provenance');
       await expect(httpCard.locator('.disclosure > ol')).toBeHidden();
       const redirectWidth = await redirectPath.evaluate((element) => ({
         client: element.clientWidth,
@@ -969,6 +979,52 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   await page.getByRole('button', { name: 'Export evidence JSON' }).click();
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toMatch(/^whoisleuth-evidence-sectioned-result\.invalid-.+\.json$/);
+});
+
+test('Lookup accepts exact HTTP evidence bounds and rejects an over-bound success response', async ({ page }) => {
+  await page.route('**/api/lookup?*', async (route) => {
+    const domain = new URL(route.request().url()).searchParams.get('q') || 'bounded-http.invalid';
+    const fixture = sectionedLookupFixture(domain);
+    const redirectCount = domain === 'overbound-http.invalid' ? 6 : 5;
+    Object.assign(fixture.availability.http, {
+      redirectCount,
+      finalUrl: `https://hop-${redirectCount}.${domain}/`,
+      redirects: Array.from({ length: redirectCount }, (_, index) => ({
+        status: 302,
+        from: `https://hop-${index}.${domain}/`,
+        to: `https://hop-${index + 1}.${domain}/`,
+        queryOmitted: false,
+      })),
+      attempts: [
+        { url: `https://${domain}/`, outcome: 'error', httpStatus: null, error: 'Fixture connection failed.' },
+        { url: `https://www.${domain}/`, outcome: 'response', httpStatus: 200, error: null },
+      ],
+    });
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(fixture),
+    });
+  });
+  await page.setViewportSize({ width: 320, height: 700 });
+  await page.goto('/lookup');
+  await page.locator('#query').fill('bounded-http.invalid');
+  await page.getByRole('button', { name: 'Run lookup' }).click();
+  await expect(page.locator('#result')).toBeVisible();
+  await expandLookupFamilies(page);
+  const httpCard = page.locator('.http-card');
+  await httpCard.locator(':scope > summary').click();
+  await httpCard.getByText('Redirect chain · 5 hops').click();
+  const mobileRedirects = httpCard.getByRole('list', { name: 'HTTP redirect steps' });
+  await expect(mobileRedirects.getByRole('listitem')).toHaveCount(5);
+  await expect(mobileRedirects).toContainText('https://hop-0.bounded-http.invalid/');
+  await expect(mobileRedirects).toContainText('https://hop-5.bounded-http.invalid/');
+  await expectNoHorizontalOverflow(page);
+
+  await page.locator('#query').fill('overbound-http.invalid');
+  await page.getByRole('button', { name: 'Run lookup' }).click();
+  await expect(page.getByRole('alert')).toHaveText('Lookup returned an invalid response.');
+  await expect(page.locator('#result')).toHaveCount(0);
 });
 
 test('Lookup focus and disclosure controls change presentation without changing evidence', async ({ page }) => {
@@ -1159,6 +1215,7 @@ test('Lookup focus and disclosure controls change presentation without changing 
 test('Lookup task query context is bounded, transient, and changes only result presentation', async ({ page }) => {
   const domain = 'task-context.invalid';
   const lookupRequests: string[] = [];
+  await useTheme(page, 'light');
   await page.addInitScript(() => {
     localStorage.setItem('whoisleuth:lookup-presentation:v1', JSON.stringify({ version: 1, task: 'brand' }));
   });
@@ -1240,6 +1297,35 @@ test('Lookup task query context is bounded, transient, and changes only result p
   expect(primaryScoreColours.detailActual).toBe(primaryScoreColours.secondaryDetail);
   expect(primaryScoreColours.detailActual).not.toBe(primaryScoreColours.primaryBorder);
   expect(primaryScoreColours.actual).not.toBe(primaryScoreColours.successBorder);
+
+  const scoreBarVisuals = await brandScores.evaluateAll((scores) => {
+    const probe = document.createElement('span');
+    document.body.append(probe);
+    const resolveFill = (token: string) => {
+      probe.style.backgroundColor = `var(${token})`;
+      return getComputedStyle(probe).backgroundColor;
+    };
+    const fills = {
+      neutral: resolveFill('--accent'),
+      good: resolveFill('--accent2'),
+      warn: resolveFill('--amber'),
+      danger: resolveFill('--danger'),
+    };
+    probe.remove();
+    return scores.map((score) => {
+      const track = score.querySelector<HTMLElement>('i')!;
+      const fill = track.querySelector<HTMLElement>('b')!;
+      const tone = ([...score.classList].find((name) => ['good', 'warn', 'danger'].includes(name)) || 'neutral') as keyof typeof fills;
+      return {
+        height: Number.parseFloat(getComputedStyle(track).height),
+        track: getComputedStyle(track).backgroundColor,
+        fill: getComputedStyle(fill).backgroundColor,
+        expectedFill: fills[tone],
+      };
+    });
+  });
+  expect(scoreBarVisuals.every((bar) => bar.height >= 10 && bar.track !== bar.fill)).toBe(true);
+  expect(scoreBarVisuals.every((bar) => bar.fill === bar.expectedFill)).toBe(true);
 
   await brandDetails.nth(0).locator('summary').click();
   await brandDetails.nth(1).locator('summary').click();

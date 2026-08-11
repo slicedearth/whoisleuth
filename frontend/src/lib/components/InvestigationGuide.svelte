@@ -878,7 +878,7 @@
   .target-edit .request-actions{grid-column:1 / -1}
   .context-error{margin:0 10px 10px;color:var(--amber);font-size:var(--text-2xs);line-height:1.4}
   .boundary{margin:9px 0 0;color:var(--muted);font-size:var(--text-2xs);line-height:1.45}
-  .guide-return{position:fixed;right:18px;bottom:18px;z-index:35;display:grid;visibility:hidden;max-width:min(320px,calc(100vw - 36px));padding:10px 13px;border:1px solid rgb(var(--accent-rgb) / .7);border-radius:var(--radius-md);background:var(--surface);box-shadow:0 10px 34px rgb(var(--shadow-rgb) / .28);color:var(--text);font-family:var(--mono);text-align:left;opacity:0;pointer-events:none}
+  .guide-return{position:fixed;right:18px;bottom:18px;z-index:35;display:grid;visibility:hidden;max-width:min(320px,calc(100vw - 36px));padding:10px 13px;border:1px solid rgb(var(--accent-rgb) / .7);border-radius:var(--radius-md);background:var(--panel);box-shadow:0 10px 34px rgb(var(--shadow-rgb) / .28);color:var(--text);font-family:var(--mono);text-align:left;opacity:0;pointer-events:none}
   .guide-return.available{visibility:visible;opacity:1;pointer-events:auto}
   .guide-return span,.guide-return small{color:var(--muted);font-size:var(--text-2xs)}
   .guide-return strong{margin:2px 0;font-size:var(--text-xs);overflow-wrap:anywhere}

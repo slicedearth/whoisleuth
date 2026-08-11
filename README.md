@@ -72,6 +72,9 @@ chosen by an analyst. Ordinary case exports, Case report v8 JSON and Markdown,
 and workspace archives preserve them. Public CLI case packs clear the
 identifiers from both cases and embedded reports and disclose the omission
 count; trusted and internal packs preserve them.
+Case parsing and import inspect at most 2,000 parsed records before the
+500-case store cap is applied; records beyond the inspection bound are
+reported as skipped rather than traversed.
 
 Deep Lookup keeps source health and provenance visible while organising long
 supporting evidence into a scannable result. Reports, retained facts, website
@@ -94,8 +97,9 @@ The public [Resources hub](https://whoisleuth.com/resources) is the shortest int
 - **Bounded collection.** Requests, responses, redirects, arrays, strings,
   concurrency, caches, browser stores, and exports have explicit limits.
 - **Safe outbound networking.** HTTP and TLS collection validate public
-  addresses, revalidate redirects, resist DNS rebinding, and avoid private
-  network targets.
+  addresses, reject HTTP resolutions with more than 64 address candidates per
+  hop, revalidate redirects, resist DNS rebinding, and avoid private network
+  targets.
 - **Local-first investigation state.** Cases, evidence pins, analyst decisions,
   response actions, profiles, watchlists, campaigns, shortlist entries, saved
   Bulk sessions, explicit website-profile snapshots, investigation templates,

@@ -187,7 +187,7 @@
   .row-limitations p{padding-left:0}
   .value-grid code{display:block;max-height:12rem;overflow:auto}
   .ledger-cards{display:none}
-  .ledger-cards article{min-width:0;padding:12px;border:1px solid var(--border);border-left:4px solid var(--border-strong);border-radius:var(--radius-md);background:var(--surface)}
+  .ledger-cards article{min-width:0;padding:12px;border:1px solid var(--border);border-left:4px solid var(--border-strong);border-radius:var(--radius-md);background:var(--panel)}
   .ledger-cards article[data-ledger-state="equivalent"]{border-left-color:var(--success)}
   .ledger-cards article[data-ledger-state="conflict"]{border-left-color:var(--danger)}
   .ledger-cards article[data-ledger-state="added"],.ledger-cards article[data-ledger-state="removed"],.ledger-cards article[data-ledger-state="different"],.ledger-cards article[data-ledger-state="incomplete"],.ledger-cards article[data-ledger-state="collection_changed"],.ledger-cards article[data-ledger-state="model_changed"]{border-left-color:var(--amber)}

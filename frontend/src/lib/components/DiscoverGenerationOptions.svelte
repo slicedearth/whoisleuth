@@ -186,6 +186,7 @@
   .custom-dictionary textarea{min-height:96px}
   .dictionary-file{display:flex;align-items:center;gap:10px;margin-top:8px}
   .dictionary-file label{position:relative;overflow:hidden;cursor:pointer}
+  .dictionary-file label:focus-within{outline:2px solid var(--focus);outline-offset:3px}
   .dictionary-file label.disabled{cursor:not-allowed;opacity:.55}
   .dictionary-file input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
   .dictionary-note{margin:8px 0 0;color:var(--amber)!important}

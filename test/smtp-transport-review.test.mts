@@ -133,6 +133,7 @@ describe('authorised SMTP transport review', () => {
     };
     const socket = new Socket();
     const connectionOptions = smtpStartTlsOptions(socket, 'mx.unrelated.invalid');
+    assert.equal(connectionOptions.socket, socket);
     assert.equal(connectionOptions.rejectUnauthorized, false);
     assert.equal(connectionOptions.servername, 'mx.unrelated.invalid');
     assert.equal(connectionOptions.checkServerIdentity?.(
@@ -152,6 +153,19 @@ describe('authorised SMTP transport review', () => {
     assert.equal(certificate.observation.pkixState, 'validated');
     assert.equal(certificate.observation.identityState, 'misaligned');
     assert.match(certificate.observation.identityError ?? '', /not in the cert|does not match/u);
+
+    const invalidPath = certificateObservation('login.example.test', {
+      peerCertificate,
+      authorized: false,
+      authorizationError: 'UNABLE_TO_VERIFY_LEAF_SIGNATURE',
+      protocol: 'TLSv1.3',
+      cipherName: 'FIXTURE-CIPHER',
+      remoteAddress: PUBLIC_ADDRESS,
+    });
+    assert.equal(invalidPath.observation.state, 'observed');
+    assert.equal(invalidPath.observation.pkixState, 'failed');
+    assert.equal(invalidPath.observation.identityState, 'aligned');
+    assert.equal(invalidPath.observation.authorizationError, 'UNABLE_TO_VERIFY_LEAF_SIGNATURE');
   });
 
   test('normalizes bounded SMTP framing and retains capability names only', () => {

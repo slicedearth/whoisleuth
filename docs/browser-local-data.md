@@ -93,6 +93,10 @@ controls use narrower browser-local mutation intents: every conflict retry
 rereads the current Case before deriving the next list, so disjoint concurrent
 adds survive and a removal preserves an unrelated concurrent add.
 
+Case parsing and import inspect at most 2,000 parsed records before the
+500-case store cap is applied. Records beyond that inspection boundary are not
+traversed and contribute to the reported skipped count.
+
 The Brands route builds a read-only transient inbox over the existing
 source-aware analyst review inbox for cases explicitly associated with the
 active profile. It inspects at most 500 cases, 100 profiles, 500 review rows,

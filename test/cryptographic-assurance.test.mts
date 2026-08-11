@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { Buffer } from 'node:buffer';
+import { createHash } from 'node:crypto';
 import { describe, test } from 'node:test';
 
 import {
@@ -59,6 +61,29 @@ describe('separate cryptographic assurance review', () => {
     assert.equal(review.cards[1]?.state, 'not_found');
     assert.equal(review.cards[2]?.state, 'unavailable');
     assert.match(review.cards[2]?.limitations[0] ?? '', /No state was inferred/u);
+  });
+
+  test('marks a substantive TLSA result partial when any comparison material was unavailable', () => {
+    const certificateBytes = Buffer.from('fixture certificate');
+    const certificate = certificateBytes.toString('base64');
+    const associationData = createHash('sha256').update(certificateBytes).digest('hex');
+    const review = buildCryptographicAssuranceReview({
+      schema: CRYPTOGRAPHIC_ASSURANCE_INPUT_SCHEMA,
+      version: 1,
+      tlsa: wrapper({
+        serviceName: '_25._tcp.mx.example.test',
+        dnssecState: 'validated',
+        pkixValidationState: 'failed',
+        certificateDerBase64: certificate,
+        records: [
+          { usage: 1, selector: 0, matchingType: 1, associationData },
+          { usage: 1, selector: 1, matchingType: 1, associationData: '00'.repeat(32) },
+        ],
+      }, 'Fixture TLSA snapshot'),
+    }, OBSERVED_AT);
+    const card = review.cards[2];
+    assert.equal(card?.state, 'untrusted');
+    assert.equal(card?.completeness, 'partial');
   });
 
   test('rejects empty or unbounded wrapper shapes', () => {

@@ -208,16 +208,23 @@ function analyzeTlsaEvidence(input: Readonly<{
   if (authorityMaterialRejectedCount > 0 || authorityMaterialTruncated) {
     limitations.push('Authority certificate material was malformed or exceeded the review bound, so an unmatched trust-anchor association remains partial.');
   }
+  if (hasUnavailable || rejectedCount > 0 || truncated) {
+    limitations.push('Some TLSA associations or required certificate material were unavailable, malformed, or beyond the review bound, so the comparison remains incomplete.');
+  }
+  const comparisonMaterialComplete = !hasUnavailable
+    && rejectedCount === 0
+    && !truncated
+    && authorityMaterialRejectedCount === 0
+    && !authorityMaterialTruncated;
   const trustedMatch = dnssecState === 'validated'
     && (matchedDaneOnly || matchedPkixDependent && pkixValidationState === 'validated');
   const state = results.length === 0
     ? 'unavailable'
-    : hasDifferent && !hasMatch && rejectedCount === 0 && !truncated
-      && authorityMaterialRejectedCount === 0 && !authorityMaterialTruncated
+    : dnssecState === 'validated' && hasDifferent && !hasMatch && comparisonMaterialComplete
       ? 'different'
       : hasMatch && (dnssecState === 'bogus' || matchedPkixDependent && pkixValidationState === 'failed' && !matchedDaneOnly)
         ? 'untrusted'
-      : trustedMatch && !hasUnavailable && rejectedCount === 0 && !truncated
+      : trustedMatch && comparisonMaterialComplete
         ? 'matched'
         : 'partial';
   return Object.freeze({

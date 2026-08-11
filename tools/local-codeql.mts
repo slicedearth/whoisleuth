@@ -86,7 +86,16 @@ const PROJECT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), 
 // location, changed fingerprint, duplicate occurrence, or removed result causes
 // review instead of suppressing an entire rule or file.
 const KNOWN_CODEQL_FINDINGS: readonly KnownCodeqlFinding[] = Object.freeze([
-  Object.freeze({ ruleId: 'js/disabling-certificate-validation', file: 'lib/tls-intelligence.mts', primaryLocationLineHash: 'bb6b221105506c3:1', primaryLocationStartColumnFingerprint: '0', reason: 'accepted_behavior' as const }),
+  // Deep Lookup must finish one bounded handshake even when the peer chain is
+  // invalid so it can retain the failure as evidence. Node still exposes the
+  // CA-path result through TLSSocket.authorized/authorizationError; endpoint
+  // identity is evaluated separately with tls.checkServerIdentity.
+  Object.freeze({ ruleId: 'js/disabling-certificate-validation', file: 'lib/tls-intelligence.mts', primaryLocationLineHash: '11f7ddb4d3c0cb28:1', primaryLocationStartColumnFingerprint: '0', reason: 'accepted_behavior' as const }),
+  // The authorised SMTP probe must finish a handshake even when the peer chain
+  // is invalid so it can retain a bounded certificate observation. Node still
+  // exposes CA-path failure through TLSSocket.authorized/authorizationError;
+  // endpoint identity is compared separately with tls.checkServerIdentity.
+  Object.freeze({ ruleId: 'js/disabling-certificate-validation', file: 'lib/smtp-transport-review.mts', primaryLocationLineHash: '5cfcbf6f51b434cf:1', primaryLocationStartColumnFingerprint: '0', reason: 'accepted_behavior' as const }),
   // The route and file are fixed build-time allowlist entries, and the handler
   // now has its own bounded request middleware. CodeQL does not recognize the
   // project-local limiter, so retain only this exact reviewed fingerprint.

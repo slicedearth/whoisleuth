@@ -1,6 +1,6 @@
 # Privacy Notice
 
-Last updated: 11 August 2026.
+Last updated: 12 August 2026.
 
 This notice describes the public WHOISleuth deployment and is also a template
 for self-hosted operators to adapt when their configuration, hosting, enabled
@@ -223,7 +223,10 @@ default (see the README), so many lookups return no personal data at all.
   collected by a requested deep check. Bulk results, watchlists, and analyst
   cases retain only the final origin (never its path or query), response status,
   transport, redirect count/flags, MIME type, and presence-only security-header
-  tokens. Monitor can derive a capped relationship graph and table from the
+  tokens. Before any protected outbound HTTP hop begins, the resolver rejects
+  an answer with more than 64 address candidates and requires every retained
+  candidate to be a valid public address; redirects repeat that validation.
+  Monitor can derive a capped relationship graph and table from the
   typed projection of bounded final-origin and nameserver-set observations
   already retained in browser-local case histories. That automatic projection
   makes no request and saves no separate relationship record. A bounded
@@ -538,7 +541,9 @@ default (see the README), so many lookups return no personal data at all.
   resolve, remap, or infer those associations from profile names, domains,
   tags, certificates, or other evidence. Deleting a Brand Profile does not
   clear the Case field; any unmatched identifier remains visible as
-  unresolved. The Brands page derives a bounded, paginated review inbox locally
+  unresolved. Case parsing and import inspect at most 2,000 parsed records
+  before the 500-case store cap is applied; records beyond that inspection
+  bound are reported as skipped rather than traversed. The Brands page derives a bounded, paginated review inbox locally
   from existing source-aware analyst review rows for explicitly associated
   cases. Loading and failed local reads remain explicit and never become an
   empty state or an unresolved classification. The projection makes no network

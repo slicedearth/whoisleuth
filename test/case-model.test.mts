@@ -1260,6 +1260,18 @@ describe('imported note normalization is deterministic', () => {
 });
 
 describe('store loading and corruption recovery', () => {
+  test('normalization never traverses records beyond the bounded input window', () => {
+    const records = Array.from({ length: model.MAX_CASE_INPUT_RECORDS + 1 }, (_, index) => ({
+      domain: `bounded-${index}.example`,
+      updatedAt: ISO,
+    }));
+    Object.defineProperty(records, model.MAX_CASE_INPUT_RECORDS, {
+      get() { throw new Error('the out-of-bound record was inspected'); },
+    });
+
+    assert.doesNotThrow(() => model.normalizeCaseStore(records));
+  });
+
   test('recovers from arrays, envelopes, and junk without throwing', () => {
     assert.deepEqual(model.normalizeCaseStore(null).cases, []);
     assert.deepEqual(model.normalizeCaseStore('nonsense').cases, []);
@@ -1303,6 +1315,20 @@ describe('store loading and corruption recovery', () => {
 });
 
 describe('import merge', () => {
+  test('caps traversal before normalization and reports omitted import records', () => {
+    const records = Array.from({ length: model.MAX_CASE_INPUT_RECORDS + 1 }, (_, index) => ({
+      domain: `import-bound-${index}.example`,
+      updatedAt: ISO,
+    }));
+    Object.defineProperty(records, model.MAX_CASE_INPUT_RECORDS, {
+      get() { throw new Error('the out-of-bound imported record was inspected'); },
+    });
+
+    const result = model.mergeCases([], caseExport(records));
+    assert.equal(result.cases.length, model.MAX_CASES);
+    assert.equal(result.skipped, model.MAX_CASE_INPUT_RECORDS - model.MAX_CASES + 1);
+  });
+
   test('adds new cases and merges existing ones by domain', () => {
     const local = model.normalizeCaseStore([{ domain: 'shared.example', status: 'new', updatedAt: ISO }]).cases;
     const imported = caseExport([

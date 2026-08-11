@@ -8,6 +8,10 @@ import {
   stringList,
   type JsonRecord,
 } from './lookup-display-shared.ts';
+import {
+  MAX_HTTP_ATTEMPTS,
+  MAX_HTTP_EVIDENCE_REDIRECTS,
+} from '../../../../lib/http-evidence-bounds.mts';
 
 function httpsServiceBindingValue(value: unknown): string {
   const record = rec(value);
@@ -472,14 +476,14 @@ export function buildLookupNetworkDisplay(input: {
         }`,
       },
     ],
-    httpRedirects: records(httpEvidence.redirects).map((redirect) => ({
+    httpRedirects: records(httpEvidence.redirects).slice(0, MAX_HTTP_EVIDENCE_REDIRECTS).map((redirect) => ({
       status: show(redirect.status),
       from: show(redirect.from),
       to: show(redirect.to),
       queryOmitted: Boolean(redirect.queryOmitted),
     })),
     httpAttempts: (() => {
-      const attempts = records(httpEvidence.attempts);
+      const attempts = records(httpEvidence.attempts).slice(0, MAX_HTTP_ATTEMPTS);
       return attempts.some((attempt) => attempt.error)
         ? attempts.map((attempt) => ({
             url: show(attempt.url),

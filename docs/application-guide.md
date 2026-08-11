@@ -1302,10 +1302,12 @@ bounded normalizer separately governs unknown fields inside its records.
 
 Workspace envelope version 5 accepts Case sections from schemas 2 through 12.
 Cases from schemas 2 through 11 migrate with no Brand Profile references;
-schema 12 preserves the exact field. A case import merges references
-existing-first and retains at most eight after inspecting at most 32 imported
-candidates, reporting any bounded omission. Omission cannot clear an existing
-reference. Profile imports still merge under their own identity rules: if a
+schema 12 preserves the exact field. Case parsing and import inspect at most
+2,000 parsed records before the 500-case store cap is applied; records beyond
+that inspection bound are reported as skipped rather than traversed. A case
+import merges references existing-first and retains at most eight after
+inspecting at most 32 imported candidates, reporting any bounded omission.
+Omission cannot clear an existing reference. Profile imports still merge under their own identity rules: if a
 same-named local profile has a different opaque identifier, the Case reference
 is not remapped and may remain unresolved. If the same exact profile identifier
 would represent a different normalised name, the profile merge and dependent

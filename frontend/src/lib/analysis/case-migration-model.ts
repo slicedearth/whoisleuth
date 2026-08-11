@@ -60,6 +60,7 @@ const DISPOSITION_VALUES = new Set(
   CASE_DISPOSITIONS.map((item) => item.value),
 );
 const SOURCE_VALUES = new Set(CASE_SOURCES.map((item) => item.value));
+export const MAX_CASE_INPUT_RECORDS = 2_000;
 
 type ImportPatch = {
   domain: string;
@@ -113,7 +114,7 @@ export function normalizeCaseStore(raw: unknown): CaseStore {
   const acceptsBrandProfileIds = Array.isArray(raw)
     || sourceVersion === CASE_SCHEMA_VERSION;
   const byDomain = new Map<string, CaseRecord>();
-  for (const item of asCaseList(raw)) {
+  for (const item of boundedCaseList(raw).items) {
     const normalized = normalizeCase(
       item,
       undefined,
@@ -152,6 +153,14 @@ function asCaseList(raw: unknown): unknown[] {
   const cases = objectRecord(raw).cases;
   if (Array.isArray(cases)) return cases;
   return [];
+}
+
+function boundedCaseList(raw: unknown): { items: unknown[]; omitted: number } {
+  const source = asCaseList(raw);
+  return {
+    items: source.slice(0, MAX_CASE_INPUT_RECORDS),
+    omitted: Math.max(0, source.length - MAX_CASE_INPUT_RECORDS),
+  };
 }
 
 /**
@@ -355,10 +364,11 @@ export function mergeCases(
   const usedIds = new Set(local.map((item) => item.id));
   let added = 0;
   let updated = 0;
-  let skipped = 0;
+  const imported = boundedCaseList(importedRaw);
+  let skipped = imported.omitted;
   let brandProfileReferencesOmitted = 0;
   const now = new Date().toISOString();
-  for (const item of asCaseList(importedRaw)) {
+  for (const item of imported.items) {
     const patch = extractImportPatch(item, supportedImportedVersion);
     if (!patch) {
       skipped += 1;

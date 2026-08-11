@@ -91,11 +91,11 @@ test('the default system preference follows the operating-system colour scheme',
   await expect(trigger).toHaveAttribute('title', 'System theme');
   await expect(trigger.locator('.theme-trigger-label')).toHaveText('Theme');
   await expect(trigger.locator('[data-theme-symbol="system"]')).toBeVisible();
-  await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#e1e8ef');
-  await expect(page.locator('.hero-preview .lookup-panel')).toHaveCSS('background-color', 'rgb(240, 243, 245)');
-  await expect(page.locator('.hero-preview .preview-note')).toHaveCSS('color', 'rgb(41, 67, 89)');
-  await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(225, 232, 239)');
-  await expect(page.locator('.hero-preview .lookup-panel')).toHaveCSS('border-color', 'rgb(92, 118, 142)');
+  await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#e7e2d8');
+  await expect(page.locator('.hero-preview .lookup-panel')).toHaveCSS('background-color', 'rgb(250, 247, 241)');
+  await expect(page.locator('.hero-preview .preview-note')).toHaveCSS('color', 'rgb(88, 80, 69)');
+  await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(231, 226, 216)');
+  await expect(page.locator('.hero-preview .lookup-panel')).toHaveCSS('border-color', 'rgb(214, 207, 194)');
 
   await page.emulateMedia({ colorScheme: 'dark' });
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
@@ -116,8 +116,8 @@ test('light preference applies before reload and persists across public pages', 
 
   await chooseTheme(page, 'Light');
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
-  await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#e1e8ef');
-  await expect(page.locator('.hero-preview .lookup-panel')).toHaveCSS('background-color', 'rgb(240, 243, 245)');
+  await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#e7e2d8');
+  await expect(page.locator('.hero-preview .lookup-panel')).toHaveCSS('background-color', 'rgb(250, 247, 241)');
   await expect.poll(() => page.evaluate((key) => localStorage.getItem(key), STORAGE_KEY)).toBe('light');
 
   await page.goto('/demo');
@@ -154,7 +154,7 @@ test('relationship-map cluster strokes stay contrast-safe in both themes', async
   }
 });
 
-test('light surfaces avoid pure white and keep semantic foregrounds and boundaries distinct', async ({ page }) => {
+test('light surfaces avoid pure white and separate layers, structural borders, and controls by role', async ({ page }) => {
   await clearThemePreference(page);
   await page.goto('/');
   await chooseTheme(page, 'Light');
@@ -183,27 +183,72 @@ test('light surfaces avoid pure white and keep semantic foregrounds and boundari
       return ((values[0] ?? 0) + 0.05) / ((values[1] ?? 0) + 0.05);
     };
     const panel = resolveColour('--panel');
+    const background = resolveColour('--bg');
+    const raised = resolveColour('--panel-raised');
     const tokens = Object.fromEntries(
-      ['--text', '--muted', '--accent', '--accent2', '--border'].map((token) => [token, resolveColour(token)]),
+      ['--text', '--muted', '--muted-subtle', '--accent', '--accent2', '--border', '--border-strong', '--control-border']
+        .map((token) => [token, resolveColour(token)]),
     );
+    const semanticFillAlpha = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--semantic-fill-alpha'));
+    const semanticBorderAlpha = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--semantic-border-alpha'));
     sample.remove();
     return {
+      background,
       panel,
-      surface: resolveColour('--surface'),
+      raised,
+      luminance: { panel: luminance(panel) },
+      layerContrast: {
+        panelToCanvas: contrast(panel, background),
+        raisedToCanvas: contrast(raised, background),
+        panelToRaised: contrast(panel, raised),
+      },
+      semanticFillAlpha,
+      semanticBorderAlpha,
       contrast: Object.fromEntries(Object.entries(tokens).map(([token, colour]) => [token, contrast(colour, panel)])),
     };
   });
 
   expect(palette.panel).not.toBe('rgb(255, 255, 255)');
-  expect(palette.surface).not.toBe('rgb(255, 255, 255)');
+  expect(palette.luminance.panel).toBeLessThanOrEqual(0.94);
+  expect(palette.layerContrast.panelToCanvas).toBeGreaterThanOrEqual(1.18);
+  expect(palette.layerContrast.raisedToCanvas).toBeGreaterThanOrEqual(1.04);
+  expect(palette.layerContrast.panelToRaised).toBeGreaterThanOrEqual(1.12);
+  expect(palette.semanticFillAlpha).toBeGreaterThanOrEqual(0.1);
+  expect(palette.semanticBorderAlpha).toBeGreaterThanOrEqual(0.4);
+  expect(palette.semanticBorderAlpha).toBeLessThanOrEqual(0.5);
   expect(palette.contrast['--text']).toBeGreaterThanOrEqual(7);
   expect(palette.contrast['--muted']).toBeGreaterThanOrEqual(4.5);
+  expect(palette.contrast['--muted-subtle']).toBeGreaterThanOrEqual(4.5);
   expect(palette.contrast['--accent']).toBeGreaterThanOrEqual(4.5);
   expect(palette.contrast['--accent2']).toBeGreaterThanOrEqual(4.5);
-  expect(palette.contrast['--border']).toBeGreaterThanOrEqual(3);
+  expect(palette.contrast['--border']).toBeGreaterThanOrEqual(1.3);
+  expect(palette.contrast['--border']).toBeLessThan(2);
+  expect(palette.contrast['--border-strong']).toBeGreaterThanOrEqual(2);
+  expect(palette.contrast['--border-strong']).toBeLessThan(3);
+  expect(palette.contrast['--control-border']).toBeGreaterThanOrEqual(3);
 });
 
-test('secondary controls and form hints keep accessible contrast in both themes', async ({ page }) => {
+test('light chrome uses a theme-aware mark without a bright boxed plate', async ({ page }) => {
+  await clearThemePreference(page);
+  await page.goto('/dashboard');
+  await chooseTheme(page, 'Light');
+
+  const rail = page.locator('.shell > aside');
+  await expect(rail).toHaveCSS('background-color', 'rgba(250, 247, 241, 0.97)');
+  await expect(rail.locator('.brand strong')).toHaveCSS('color', 'rgb(28, 25, 21)');
+  await expect(rail.locator('nav a').first()).toHaveCSS('color', 'rgb(28, 25, 21)');
+  await expect(rail.locator('nav a small').first()).toHaveCSS('color', 'rgb(88, 80, 69)');
+  await expect(rail.locator('.brand .mark')).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+  await expect(rail.locator('[data-brand-tone="primary"]')).toHaveCSS('fill', 'rgb(0, 91, 145)');
+  await expect(rail.locator('[data-brand-tone="secondary"]')).toHaveCSS('fill', 'rgb(0, 107, 73)');
+
+  await page.goto('/');
+  await expect(page.locator('.public-brand .mark')).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+  await expect(page.locator('.public-brand [data-brand-tone="primary"]')).toHaveCSS('fill', 'rgb(0, 91, 145)');
+  await expect(page.locator('.public-brand [data-brand-tone="secondary"]')).toHaveCSS('fill', 'rgb(0, 107, 73)');
+});
+
+test('theme-specific controls, nested surfaces, score visibility, and form hints retain their roles', async ({ page }) => {
   await clearThemePreference(page);
   await page.goto('/lookup');
 
@@ -230,13 +275,57 @@ test('secondary controls and form hints keep accessible contrast in both themes'
       };
       const value = {
         controlBoundary: ratio(colour('--control-border'), colour('--panel-raised')),
+        quietControlBoundary: ratio(colour('--quiet-control-border'), colour('--panel')),
+        structuralBoundary: ratio(colour('--border'), colour('--panel')),
         hintText: ratio(colour('--muted'), colour('--panel')),
+        surface: colour('--surface'),
+        panel: colour('--panel'),
+        raised: colour('--panel-raised'),
+        scoreTrackHeight: Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--score-track-height')),
+        factorFillAlpha: Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--factor-fill-alpha')),
       };
       sample.remove();
       return value;
     });
     expect(contrast.controlBoundary).toBeGreaterThanOrEqual(3);
+    if (theme === 'Dark') {
+      expect(contrast.quietControlBoundary).toBeCloseTo(contrast.structuralBoundary, 5);
+      expect(contrast.quietControlBoundary).toBeLessThan(2);
+      expect(contrast.surface).toBe(contrast.panel);
+      expect(contrast.scoreTrackHeight).toBe(5);
+      expect(contrast.factorFillAlpha).toBeCloseTo(0.22, 5);
+    } else {
+      expect(contrast.quietControlBoundary).toBeGreaterThanOrEqual(3);
+      expect(contrast.surface).toBe(contrast.raised);
+      expect(contrast.scoreTrackHeight).toBe(10);
+      expect(contrast.factorFillAlpha).toBeCloseTo(0.45, 5);
+    }
     expect(contrast.hintText).toBeGreaterThanOrEqual(4.5);
+  }
+});
+
+test('dashboard fields and quiet buttons use the theme-specific boundary', async ({ page }) => {
+  await clearThemePreference(page);
+  await page.goto('/dashboard');
+
+  for (const theme of ['Dark', 'Light'] as const) {
+    await chooseTheme(page, theme);
+    const expectedBorder = await page.evaluate((token) => {
+      const probe = document.createElement('span');
+      probe.style.border = `1px solid var(${token})`;
+      document.body.append(probe);
+      const value = getComputedStyle(probe).borderTopColor;
+      probe.remove();
+      return value;
+    }, theme === 'Dark' ? '--border' : '--control-border');
+    const controls = [
+      page.locator('#browser-target'),
+      page.locator('#handoff-destination'),
+      page.getByRole('button', { name: 'Prepare exact preview' }),
+      page.getByRole('button', { name: /^Colour theme,/u }),
+      page.getByRole('button', { name: 'Sign out' }),
+    ];
+    for (const control of controls) await expect(control).toHaveCSS('border-top-color', expectedBorder);
   }
 });
 

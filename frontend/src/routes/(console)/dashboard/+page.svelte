@@ -25,6 +25,9 @@
   import type { InvestigationStoreName } from '$lib/analysis/investigation-projection.ts';
   import { isExpectedBrowserLocalDataFailure } from '$lib/browser-local-data.ts';
   import { loadInvestigationTemplates, type InvestigationTemplate } from '$lib/investigation-templates';
+  import { publicHomepage, publicResources } from '$lib/workspaces';
+
+  const publicResource = publicResources[0];
 
   const quickActions: Array<{ href: string; label: string; detail: string; icon: IntelligenceIconName }> = [
     { href: '/lookup', label: 'Investigate a target', detail: 'Review a domain, IP address, or ASN across separately identified sources.', icon: 'lookup' },
@@ -136,7 +139,7 @@
 </svelte:head>
 
 <PageHeading eyebrow="Console" title="Dashboard" description="Start new work, continue something saved in this browser, or follow a step-by-step guide.">
-  <a class="btn" href="/">View public homepage</a>
+  <a class="btn" href={publicHomepage.href} target="_blank" rel="noopener noreferrer" aria-label="View public homepage. Opens in a new tab.">View public homepage</a>
 </PageHeading>
 
 <section class="dashboard-section" aria-labelledby="quick-actions-title">
@@ -187,7 +190,7 @@
     <h2 id="guide-launcher-title">Follow a guided investigation</h2>
     <p>Choose a guide and a domain. WHOISleuth saves progress in this tab so you can work through one clearly explained step at a time.</p>
     <nav class="help-links" aria-label="Investigation help">
-      <a href="/resources#start"><strong>Open resources</strong><span>Learn the tools, result states, common mistakes, and source boundaries.</span></a>
+      {#if publicResource}<a href={`${publicResource.href}#start`} target="_blank" rel="noopener noreferrer" aria-label="Open resources. Learn the tools, result states, common mistakes, and source boundaries. Opens in a new tab."><strong>Open resources</strong><span>Learn the tools, result states, common mistakes, and source boundaries.</span></a>{/if}
       <a href="/registry-support"><strong>Check domain-ending support</strong><span>See which domain endings have tested lookup support and known limits.</span></a>
     </nav>
   </div>
@@ -247,7 +250,7 @@
   .section-intro>p:not(.eyebrow){margin:7px 0 0;color:var(--muted);font-size:var(--text-sm);line-height:1.55}
   .quick-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px}
   .quick-card{display:flex;min-height:210px;flex-direction:column;padding:20px}
-  .quick-meta{display:flex;align-items:center;justify-content:space-between;color:var(--accent2);font:700 var(--text-2xs) var(--mono)}
+  .quick-meta{display:flex;align-items:center;justify-content:space-between;color:var(--accent);font:700 var(--text-2xs) var(--mono)}
   .quick-icon{display:grid;width:38px;height:38px;place-items:center;border:1px solid color-mix(in srgb,var(--accent) 48%,var(--border));border-radius:50%;background:rgb(var(--accent-rgb) / .07);color:var(--accent);transition:border-color .16s,background .16s,box-shadow .16s,transform .16s}
   .quick-card:hover .quick-icon,.quick-card:focus-visible .quick-icon{border-color:var(--accent);background:rgb(var(--accent-rgb) / .12);box-shadow:0 0 18px rgb(var(--accent-rgb) / .12);transform:translateY(-1px)}
   .quick-card h3{margin:16px 0 8px;font:700 var(--text-lg) var(--mono)}
@@ -255,9 +258,9 @@
   .quick-card strong{margin-top:auto;padding-top:24px;color:var(--accent);font:700 var(--text-xs) var(--mono)}
   .local-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
   .summary-card{display:grid;grid-template-columns:34px minmax(0,1fr) auto;gap:5px 10px;align-items:center;padding:17px 18px}
-  .summary-icon{display:grid;width:32px;height:32px;grid-row:1 / span 2;place-items:center;border:1px solid color-mix(in srgb,var(--accent2) 42%,var(--border));border-radius:50%;background:rgb(var(--accent2-rgb) / .06);color:var(--accent2)}
+  .summary-icon{display:grid;width:32px;height:32px;grid-row:1 / span 2;place-items:center;border:1px solid color-mix(in srgb,var(--accent) 42%,var(--border));border-radius:50%;background:rgb(var(--accent-rgb) / .06);color:var(--accent)}
   .summary-label{color:var(--muted);font:700 var(--text-2xs) var(--mono);letter-spacing:.06em;text-transform:uppercase}
-  .summary-card>strong{grid-row:1 / span 2;grid-column:3;color:var(--accent2);font:750 1.7rem var(--mono)}
+  .summary-card>strong{grid-row:1 / span 2;grid-column:3;color:var(--accent);font:750 1.7rem var(--mono)}
   .summary-card>p{grid-column:2;margin:0;color:var(--text);font-size:var(--text-xs);line-height:1.45}
   @media(prefers-reduced-motion:reduce){.quick-icon{transition:none}.quick-card:hover .quick-icon,.quick-card:focus-visible .quick-icon{transform:none}}
   @media(max-width:1120px){.quick-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
