@@ -1,6 +1,6 @@
 # Privacy Notice
 
-Last updated: 10 August 2026.
+Last updated: 11 August 2026.
 
 This notice describes the public WHOISleuth deployment and is also a template
 for self-hosted operators to adapt when their configuration, hosting, enabled
@@ -896,22 +896,31 @@ default (see the README), so many lookups return no personal data at all.
   mail transport also requires a separate active-probe acknowledgement. They
   are never invoked by Lookup, Bulk, monitoring, or automatic recipes. The
   selected resolver receives the target DNS questions, and each selected MX
-  endpoint receives one pinned port-25 connection, `EHLO`, and, only when
+  endpoint that reaches transport receives one pinned port-25 connection,
+  `EHLO`, and, only when
   advertised, `STARTTLS`; those operators can observe the source network
   address and apply their own logging or retention. At most three MX hosts are
   processed sequentially with fixed DNS, address, socket, response, line,
   capability, certificate, timeout, and total-run bounds and no retry. No
   message is sent, and no authentication, relay, recipient, mailbox, user, or
   catch-all test is performed. Output can retain the investigated domain,
-  selected resolver and trust-anchor provenance, selected MX names and pinned
-  public addresses, observation times, DNSSEC and TLSA states, greeting status
+  selected resolver and trust-anchor provenance, selected MX names, a bounded
+  public address and its highest proven selected, public-revalidated, or
+  connected stage, a separate address-authentication state that is
+  not-evaluated after a candidate is retained or unavailable when none exists,
+  observation times, DNSSEC and TLSA states, greeting status
   and SHA-256 digest, capability names, certificate and SPKI SHA-256 digests,
-  protocol and cipher labels, PKIX and identity states, exact relationship
-  leads, supplied MTA-STS and TLS-RPT context, counts, failures, completeness,
-  and limitations. It excludes DNS wire responses, DNSKEY public keys,
+  protocol and cipher labels, PKIX and identity states, bounded certificate
+  authorization and identity error text, exact relationship leads, supplied
+  MTA-STS and TLS-RPT context, counts, failures, completeness, and limitations.
+  Only confirmed connected addresses can form address relationship leads. It
+  excludes DNS wire responses, DNSKEY public keys,
   signatures, transaction identifiers, raw SMTP greeting or reply text,
   certificate bytes, and TLS session material. Nothing is added to browser or
-  hosted storage or uploaded to WHOISleuth; stdout and deliberately selected
+  hosted storage or uploaded to WHOISleuth. Public-address validation and fresh
+  revalidation do not cryptographically authenticate the A or AAAA RRset or any
+  CNAME chain, and DNSSEC chain state never fills that separate evidence gap;
+  stdout and deliberately selected
   local output files remain under the operator's retention and deletion
   control. DNSSEC, TLSA or DANE, PKIX, STARTTLS, SMTP transport, MTA-STS,
   TLS-RPT, and offline route-origin assurance remain separately attributed;

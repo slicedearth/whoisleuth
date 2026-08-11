@@ -344,6 +344,7 @@ export {
 };
 export type {
   AvailabilityCaptureResponse,
+  CaptureAvailabilityState,
   ClientResponseParseResult,
   DomainPostureCheck,
   DomainPostureExternalDependency,

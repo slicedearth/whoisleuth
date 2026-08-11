@@ -4,15 +4,28 @@ import {
   evidenceStatusChipClass,
   evidenceStatusTone,
 } from '../frontend/src/lib/analysis/evidence-status-tone.ts';
+import { availabilityStatusDisplay } from '../frontend/src/lib/analysis/availability-status-display.ts';
 
 test('maps successful evidence states without turning incomplete collection green', () => {
-  for (const state of ['success', 'complete', 'completed', 'supported', 'observed', 'registered', 'active', 'available']) {
+  for (const state of ['success', 'complete', 'completed', 'supported', 'observed', 'provided', 'registered', 'active', 'available']) {
     assert.equal(evidenceStatusTone(state, { complete: true }), 'complete', state);
   }
   assert.equal(evidenceStatusTone('success', { complete: false }), 'partial');
   for (const state of ['partial', 'warning', 'review', 'inconclusive', 'incomplete', 'limited', 'stale', 'truncated', 'rate_limited']) {
     assert.equal(evidenceStatusTone(state, { complete: true }), 'partial', state);
   }
+});
+
+test('maps every capture availability state without treating factual states as success', () => {
+  assert.deepEqual(availabilityStatusDisplay('available'), { className: 'factual', label: 'Available' });
+  assert.deepEqual(availabilityStatusDisplay('registered'), { className: 'factual', label: 'Registered' });
+  assert.deepEqual(availabilityStatusDisplay('for_sale'), { className: 'factual', label: 'For sale' });
+  assert.deepEqual(availabilityStatusDisplay('for-sale'), { className: 'factual', label: 'For sale' });
+  assert.deepEqual(availabilityStatusDisplay('for sale'), { className: 'factual', label: 'For sale' });
+  assert.deepEqual(availabilityStatusDisplay('expiring'), { className: 'warn', label: 'Expiring' });
+  assert.deepEqual(availabilityStatusDisplay('unknown'), { className: 'unavailable', label: 'Unknown' });
+  assert.deepEqual(availabilityStatusDisplay('failed'), { className: 'danger', label: 'Failed' });
+  assert.deepEqual(availabilityStatusDisplay('future_state'), { className: 'unavailable', label: 'Future state' });
 });
 
 test('keeps unavailable and unmatched states visually neutral', () => {

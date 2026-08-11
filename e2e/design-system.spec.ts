@@ -416,6 +416,28 @@ test('the console command palette filters destinations and remains keyboard oper
   await publicPage.close();
 });
 
+test('console footer opens public guidance separately while the public footer stays in-tab', async ({ page, context }) => {
+  await page.goto('/lookup');
+  const consoleResources = page.locator('footer.site-footer').getByRole('link', { name: /Resources/ });
+  await expect(consoleResources).toHaveAttribute('target', '_blank');
+  await expect(consoleResources).toHaveAttribute('rel', /noopener/u);
+  await expect(consoleResources).toContainText('↗');
+  const [publicPage] = await Promise.all([
+    context.waitForEvent('page'),
+    consoleResources.click(),
+  ]);
+  await publicPage.waitForLoadState('domcontentloaded');
+  await expect(publicPage).toHaveURL(/\/resources$/u);
+  await expect(page).toHaveURL(/\/lookup$/u);
+  await publicPage.close();
+
+  await page.goto('/');
+  const publicResources = page.locator('footer.site-footer').getByRole('link', { name: 'Resources', exact: true });
+  await expect(publicResources).not.toHaveAttribute('target', '_blank');
+  await publicResources.click();
+  await expect(page).toHaveURL(/\/resources$/u);
+});
+
 test('Lookup reports requested source families without implying staged completion', async ({ page }) => {
   let releaseLookup: (() => void) | undefined;
   const lookupGate = new Promise<void>((resolve) => {

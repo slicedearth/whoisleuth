@@ -247,7 +247,7 @@ function normalizeDnsName(value: unknown, options: Readonly<{ allowServiceLabels
   if (typeof value !== 'string' || value.length > 1024 || /[\u0000-\u0020\u007f]/u.test(value)) return null;
   const trimmed = value.trim().replace(/\.+$/u, '');
   if (!trimmed && options.allowRoot) return '.';
-  const ascii = domainToASCII(trimmed).toLowerCase();
+  const ascii = (/^[\x21-\x7e]+$/u.test(trimmed) ? trimmed : domainToASCII(trimmed)).toLowerCase();
   if (!ascii || ascii.length > 253) return null;
   const labelPattern = options.allowServiceLabels
     ? /^_?[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/u
@@ -336,8 +336,9 @@ function encodeDnsName(value: string): Buffer {
   }), Buffer.from([0])]);
 }
 
-function readDnsName(message: Buffer, startOffset: number, boundary = message.length): { name: string; nextOffset: number } {
+function readDnsName(message: Buffer, startOffset: number, boundary = message.length): { name: string; nextOffset: number; wireName: Buffer } {
   const labels: string[] = [];
+  const wireLabels: Buffer[] = [];
   const pointers = new Set<number>();
   let offset = startOffset;
   let nextOffset: number | null = null;
@@ -366,9 +367,14 @@ function readDnsName(message: Buffer, startOffset: number, boundary = message.le
     const bytes = message.subarray(offset, offset + length);
     if ([...bytes].some((byte) => byte < 0x21 || byte > 0x7e)) throw new DnssecWireError('DNS name contains an unsafe label byte.');
     labels.push(bytes.toString('ascii').toLowerCase());
+    wireLabels.push(Buffer.concat([Buffer.from([length]), Buffer.from(bytes)]));
     offset += length;
   }
-  return { name: labels.length ? labels.join('.') : '.', nextOffset: nextOffset as number };
+  return {
+    name: labels.length ? labels.join('.') : '.',
+    nextOffset: nextOffset as number,
+    wireName: Buffer.concat([...wireLabels, Buffer.from([0])]),
+  };
 }
 
 function buildDnssecQuery(nameValue: string, type: number, transactionId = randomInt(0x1_0000)): Buffer {
@@ -380,7 +386,7 @@ function buildDnssecQuery(nameValue: string, type: number, transactionId = rando
   const qname = encodeDnsName(name);
   const message = Buffer.alloc(12 + qname.length + 4 + 11);
   message.writeUInt16BE(transactionId, 0);
-  message.writeUInt16BE(0x0100, 2);
+  message.writeUInt16BE(0x0110, 2);
   message.writeUInt16BE(1, 4);
   message.writeUInt16BE(0, 6);
   message.writeUInt16BE(0, 8);
@@ -497,7 +503,7 @@ function parseRecordData(message: Buffer, type: number, start: number, end: numb
     const bitmap = Buffer.from(message.subarray(next.nextOffset, end));
     return {
       data: { kind: 'NSEC', nextName: next.name, types: parseTypeBitmap(bitmap) },
-      canonicalRdata: Buffer.concat([encodeDnsName(next.name), bitmap]),
+      canonicalRdata: Buffer.concat([next.wireName, bitmap]),
     };
   }
   if (type === DNS_TYPE_NSEC3) {
@@ -728,15 +734,17 @@ function signedRrsetData(owner: string, type: number, rrset: readonly DnsWireRec
   const canonicalOwner = signatureOwner(owner, signature.labels);
   if (!canonicalOwner || signature.typeCovered !== type || !rrset.length) return null;
   const ownerWire = encodeSignatureOwner(canonicalOwner);
-  const records = rrset.map((record) => {
+  const uniqueRdata = [...new Map(rrset.map((record) => [record.canonicalRdata.toString('hex'), record.canonicalRdata])).values()]
+    .sort(Buffer.compare);
+  const records = uniqueRdata.map((canonicalRdata) => {
     const header = Buffer.alloc(ownerWire.length + 10);
     ownerWire.copy(header, 0);
     header.writeUInt16BE(type, ownerWire.length);
     header.writeUInt16BE(DNS_CLASS_IN, ownerWire.length + 2);
     header.writeUInt32BE(signature.originalTtl, ownerWire.length + 4);
-    header.writeUInt16BE(record.canonicalRdata.length, ownerWire.length + 8);
-    return Buffer.concat([header, record.canonicalRdata]);
-  }).sort(Buffer.compare);
+    header.writeUInt16BE(canonicalRdata.length, ownerWire.length + 8);
+    return Buffer.concat([header, canonicalRdata]);
+  });
   return Buffer.concat([signature.signedPrefix, ...records]);
 }
 
@@ -748,8 +756,9 @@ function signatureWithinWindow(signature: RrsigData, nowSeconds: number): boolea
 }
 
 function verifyDnssecSignature(key: DnskeyData, signature: RrsigData, data: Buffer): boolean | null {
+  if (![5, 7, 8, 10, 13, 14, 15, 16].includes(key.algorithm)) return null;
   const publicKey = dnskeyPublicKey(key);
-  if (!publicKey) return null;
+  if (!publicKey) return false;
   try {
     if (key.algorithm === 5 || key.algorithm === 7) return crypto.verify('sha1', data, publicKey, signature.signature);
     if (key.algorithm === 8) return crypto.verify('sha256', data, publicKey, signature.signature);
@@ -783,11 +792,21 @@ function verifyRrset(
   let attempted = false;
   let unsupported = false;
   let outsideWindow = false;
+  let invalidLabelCount = false;
   const nowSeconds = Math.floor(now.getTime() / 1000);
+  const ownerLabelCount = owner === '.' ? 0 : owner.split('.').length;
   for (const signatureRecord of signatures) {
     const signature = signatureRecord.data;
     if (!signatureWithinWindow(signature, nowSeconds)) {
       outsideWindow = true;
+      continue;
+    }
+    if (signature.labels > ownerLabelCount) {
+      invalidLabelCount = true;
+      continue;
+    }
+    if (signature.labels < ownerLabelCount) {
+      unsupported = true;
       continue;
     }
     const candidates = keys.filter((record): record is DnsWireRecord & { data: DnskeyData } => (
@@ -811,8 +830,9 @@ function verifyRrset(
       if (valid) return { state: 'valid', algorithm: signature.algorithm, keyTag: signature.keyTag, detail: 'The RRset signature validated against an authenticated zone key.' };
     }
   }
+  if (invalidLabelCount) return { state: 'bogus', algorithm: null, keyTag: null, detail: 'The RRset signature label count exceeded the owner name.' };
   if (attempted || outsideWindow) return { state: 'bogus', algorithm: null, keyTag: null, detail: outsideWindow ? 'No usable RRset signature was within its validity window.' : 'The RRset signature did not validate.' };
-  if (unsupported) return { state: 'unsupported', algorithm: null, keyTag: null, detail: 'The RRset used a DNSSEC algorithm unsupported by this isolated validator.' };
+  if (unsupported) return { state: 'unsupported', algorithm: null, keyTag: null, detail: 'The RRset used an unsupported DNSSEC algorithm or a wildcard-expanded signature that requires authenticated denial proof.' };
   return { state: 'indeterminate', algorithm: null, keyTag: null, detail: 'No authenticated key matched the supplied RRset signature.' };
 }
 
@@ -905,6 +925,7 @@ function chainLimitations(): readonly string[] {
     'This isolated action validates retained DNSSEC wire evidence from one analyst-selected recursive resolver against one supplied trust anchor; another resolver or observation time may differ.',
     'Secure means that the supported chain and signatures validated at observation time. It is standards-posture evidence, not a complete security, ownership, availability, safety, or maliciousness guarantee.',
     'Insecure, bogus, indeterminate, timed-out, and unsupported are distinct states. Missing or incomplete evidence is never converted into an unsigned or secure conclusion.',
+    'Wildcard-expanded positive RRsets remain unsupported unless authenticated denial evidence proves the wildcard expansion; this validator does not infer that proof from the signature alone.',
     'No raw DNS response, DNSKEY public key, signature, or resolver transaction identifier is retained in the report.',
   ]);
 }

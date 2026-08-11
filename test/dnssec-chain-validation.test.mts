@@ -6,16 +6,22 @@ import { describe, test } from 'node:test';
 
 import {
   DNSSEC_TRUST_ANCHOR_SCHEMA,
+  DNS_TYPE_A,
   DNS_TYPE_DNSKEY,
   DNS_TYPE_DS,
   DNS_TYPE_NS,
   DNS_TYPE_NSEC,
   DNS_TYPE_NSEC3,
   DNS_TYPE_RRSIG,
+  DNS_TYPE_TLSA,
+  buildDnssecQuery,
   dnskeyTag,
+  parseDnssecResponse,
   signedRrsetData,
   validateDnssecChain,
+  verifyRrset,
   type DnsWireRecord,
+  type DnsWireResponse,
   type DnskeyData,
   type RrsigData,
 } from '../lib/dnssec-chain-validation.mts';
@@ -61,6 +67,29 @@ function dsRecord(owner: string, key: DnsWireRecord): DnsWireRecord {
   });
 }
 
+function independentSignedRrsetData(owner: string, type: number, rrset: readonly DnsWireRecord[], signature: RrsigData): Buffer {
+  const ownerLabels = owner === '.' ? [] : owner.split('.');
+  assert.ok(signature.labels <= ownerLabels.length);
+  const signedOwner = signature.labels === ownerLabels.length
+    ? owner
+    : signature.labels
+      ? `*.${ownerLabels.slice(ownerLabels.length - signature.labels).join('.')}`
+      : '*';
+  const ownerWire = wireName(signedOwner);
+  const canonicalRdata = [...new Map(rrset.map((item) => [item.canonicalRdata.toString('hex'), item.canonicalRdata])).values()]
+    .sort(Buffer.compare);
+  const records = canonicalRdata.map((rdata) => {
+    const header = Buffer.alloc(ownerWire.length + 10);
+    ownerWire.copy(header);
+    header.writeUInt16BE(type, ownerWire.length);
+    header.writeUInt16BE(1, ownerWire.length + 2);
+    header.writeUInt32BE(signature.originalTtl, ownerWire.length + 4);
+    header.writeUInt16BE(rdata.length, ownerWire.length + 8);
+    return Buffer.concat([header, rdata]);
+  });
+  return Buffer.concat([signature.signedPrefix, ...records]);
+}
+
 function signatureRecord(
   owner: string,
   type: number,
@@ -70,28 +99,32 @@ function signatureRecord(
   rrset: DnsWireRecord[],
   corrupt = false,
   section: DnsWireRecord['section'] = 'answer',
+  options: Readonly<{ labels?: number; wireSigner?: string }> = {},
 ): DnsWireRecord {
+  const labels = options.labels ?? (owner === '.' ? 0 : owner.split('.').length);
+  const canonicalSigner = signer.toLowerCase();
   const prefix = Buffer.alloc(18);
   prefix.writeUInt16BE(type, 0);
   prefix[2] = 13;
-  prefix[3] = owner === '.' ? 0 : owner.split('.').length;
+  prefix[3] = labels;
   prefix.writeUInt32BE(300, 4);
   prefix.writeUInt32BE(NOW_SECONDS + 3_600, 8);
   prefix.writeUInt32BE(NOW_SECONDS - 60, 12);
   prefix.writeUInt16BE(dnskeyTag(key.canonicalRdata), 16);
-  const signedPrefix = Buffer.concat([prefix, wireName(signer)]);
+  const signedPrefix = Buffer.concat([prefix, wireName(canonicalSigner)]);
   const unsigned: RrsigData = {
     kind: 'RRSIG', typeCovered: type, algorithm: 13,
-    labels: owner === '.' ? 0 : owner.split('.').length,
+    labels,
     originalTtl: 300, expiration: NOW_SECONDS + 3_600, inception: NOW_SECONDS - 60,
-    keyTag: dnskeyTag(key.canonicalRdata), signerName: signer,
+    keyTag: dnskeyTag(key.canonicalRdata), signerName: canonicalSigner,
     signature: Buffer.alloc(0), signedPrefix,
   };
-  const dataToSign = signedRrsetData(owner, type, rrset, unsigned);
-  assert.ok(dataToSign);
+  const dataToSign = independentSignedRrsetData(owner, type, rrset, unsigned);
+  assert.deepEqual(signedRrsetData(owner, type, rrset, unsigned), dataToSign);
   const signature = crypto.sign('sha256', dataToSign, { key: privateKey, dsaEncoding: 'ieee-p1363' });
   if (corrupt) signature[0] = (signature[0] as number) ^ 0xff;
-  return record(owner, DNS_TYPE_RRSIG, Buffer.concat([signedPrefix, signature]), { ...unsigned, signature }, section);
+  const wirePrefix = Buffer.concat([prefix, wireName(options.wireSigner ?? signer)]);
+  return record(owner, DNS_TYPE_RRSIG, Buffer.concat([wirePrefix, signature]), { ...unsigned, signature }, section);
 }
 
 function rrWire(value: DnsWireRecord): Buffer {
@@ -115,6 +148,28 @@ function response(query: Buffer, name: string, type: number, answer: DnsWireReco
   return Buffer.concat([header, question, ...answer.map(rrWire), ...authority.map(rrWire)]);
 }
 
+function responseObject(name: string, type: number, records: readonly DnsWireRecord[]): DnsWireResponse {
+  return { name, type, rcode: 0, authenticatedData: false, records, byteLength: 0 };
+}
+
+function unsignedSignatureRecord(owner: string, type: number, signer: string, key: DnsWireRecord, algorithm: number): DnsWireRecord {
+  const prefix = Buffer.alloc(18);
+  prefix.writeUInt16BE(type, 0);
+  prefix[2] = algorithm;
+  prefix[3] = owner === '.' ? 0 : owner.split('.').length;
+  prefix.writeUInt32BE(300, 4);
+  prefix.writeUInt32BE(NOW_SECONDS + 3_600, 8);
+  prefix.writeUInt32BE(NOW_SECONDS - 60, 12);
+  prefix.writeUInt16BE(dnskeyTag(key.canonicalRdata), 16);
+  const signedPrefix = Buffer.concat([prefix, wireName(signer.toLowerCase())]);
+  const signature = Buffer.alloc(64, 0xa5);
+  return record(owner, DNS_TYPE_RRSIG, Buffer.concat([signedPrefix, signature]), {
+    kind: 'RRSIG', typeCovered: type, algorithm, labels: prefix[3] as number,
+    originalTtl: 300, expiration: NOW_SECONDS + 3_600, inception: NOW_SECONDS - 60,
+    keyTag: dnskeyTag(key.canonicalRdata), signerName: signer.toLowerCase(), signature, signedPrefix,
+  });
+}
+
 function secureFixture(corruptExampleSignature = false) {
   const root = keyFixture('.');
   const tld = keyFixture('test');
@@ -125,7 +180,7 @@ function secureFixture(corruptExampleSignature = false) {
   const tldKeySignature = signatureRecord('test', DNS_TYPE_DNSKEY, 'test', tld.record, tld.privateKey, [tld.record]);
   const childDs = dsRecord('example.test', child.record);
   const childDsSignature = signatureRecord('example.test', DNS_TYPE_DS, 'test', tld.record, tld.privateKey, [childDs]);
-  const childKeySignature = signatureRecord('example.test', DNS_TYPE_DNSKEY, 'example.test', child.record, child.privateKey, [child.record], corruptExampleSignature);
+  const childKeySignature = signatureRecord('example.test', DNS_TYPE_DNSKEY, 'example.test', child.record, child.privateKey, [child.record], corruptExampleSignature, 'answer', { wireSigner: 'ExAmPlE.TeSt' });
   const steps = [
     { name: '.', type: DNS_TYPE_DNSKEY, answer: [root.record, rootSignature] },
     { name: 'test', type: DNS_TYPE_DS, answer: [tldDs, tldDsSignature] },
@@ -155,6 +210,64 @@ function secureFixture(corruptExampleSignature = false) {
 }
 
 describe('isolated cryptographic DNSSEC validation', () => {
+  test('sets RD, CD, and EDNS DO without requesting resolver AD trust, and rejects TCP truncation', () => {
+    const query = buildDnssecQuery('example.test', DNS_TYPE_A, 0x1234);
+    const flags = query.readUInt16BE(2);
+    assert.notEqual(flags & 0x0100, 0, 'RD must be set for the selected recursive resolver.');
+    assert.notEqual(flags & 0x0010, 0, 'CD must be set so local validation receives unfiltered DNSSEC evidence.');
+    assert.equal(flags & 0x0020, 0, 'AD is a response signal and must not be requested or trusted as validation.');
+    assert.notEqual(query.readUInt32BE(query.length - 6) & 0x0000_8000, 0, 'EDNS DO must request DNSSEC records.');
+
+    const truncated = response(query, 'example.test', DNS_TYPE_A, []);
+    truncated.writeUInt16BE(truncated.readUInt16BE(2) | 0x0200, 2);
+    assert.throws(
+      () => parseDnssecResponse(truncated, { transactionId: 0x1234, name: 'example.test', type: DNS_TYPE_A }),
+      /remained truncated over TCP/u,
+    );
+  });
+
+  test('orders unique canonical RDATA independently of RDLENGTH for supported RRset types', () => {
+    const owner = 'example.test';
+    const key = keyFixture(owner);
+    for (const [type, minimumLength] of [[DNS_TYPE_DNSKEY, 5], [DNS_TYPE_DS, 5], [DNS_TYPE_TLSA, 4]] as const) {
+      const shortHigh = Buffer.concat([Buffer.from([0xff]), Buffer.alloc(minimumLength - 1)]);
+      const longLow = Buffer.alloc(minimumLength + 1);
+      const first = record(owner, type, shortHigh, { kind: 'opaque' });
+      const second = record(owner, type, longLow, { kind: 'opaque' });
+      const duplicate = record(owner, type, Buffer.from(shortHigh), { kind: 'opaque' });
+      const signature = signatureRecord(owner, type, owner, key.record, key.privateKey, [first, second, duplicate]);
+      assert.equal(signature.data.kind, 'RRSIG');
+      const expected = independentSignedRrsetData(owner, type, [first, second, duplicate], signature.data);
+      assert.deepEqual(signedRrsetData(owner, type, [first, second, duplicate], signature.data), expected);
+      assert.equal(verifyRrset(responseObject(owner, type, [first, second, duplicate, signature]), owner, type, [key.record], owner, new Date(OBSERVED_AT)).state, 'valid');
+    }
+  });
+
+  test('keeps malformed supported keys bogus, unsupported algorithms separate, and wildcard expansion fail closed', () => {
+    const owner = 'mail.example.test';
+    const rrset = [record(owner, DNS_TYPE_A, Buffer.from([192, 0, 2, 1]), { kind: 'A', address: '192.0.2.1' })];
+
+    const unsupportedRdata = Buffer.concat([Buffer.from([0x01, 0x01, 0x03, 0xfd]), Buffer.alloc(32, 1)]);
+    const unsupportedKey = record('example.test', DNS_TYPE_DNSKEY, unsupportedRdata, {
+      kind: 'DNSKEY', flags: 257, protocol: 3, algorithm: 253, publicKey: Buffer.alloc(32, 1),
+    });
+    const unsupportedSignature = unsignedSignatureRecord(owner, DNS_TYPE_A, 'example.test', unsupportedKey, 253);
+    assert.equal(verifyRrset(responseObject(owner, DNS_TYPE_A, [...rrset, unsupportedSignature]), owner, DNS_TYPE_A, [unsupportedKey], 'example.test', new Date(OBSERVED_AT)).state, 'unsupported');
+
+    const malformedRdata = Buffer.from([0x01, 0x01, 0x03, 0x0d, 0x01]);
+    const malformedKey = record('example.test', DNS_TYPE_DNSKEY, malformedRdata, {
+      kind: 'DNSKEY', flags: 257, protocol: 3, algorithm: 13, publicKey: Buffer.from([1]),
+    });
+    const malformedSignature = unsignedSignatureRecord(owner, DNS_TYPE_A, 'example.test', malformedKey, 13);
+    assert.equal(verifyRrset(responseObject(owner, DNS_TYPE_A, [...rrset, malformedSignature]), owner, DNS_TYPE_A, [malformedKey], 'example.test', new Date(OBSERVED_AT)).state, 'bogus');
+
+    const validKey = keyFixture('example.test');
+    const wildcardSignature = signatureRecord(owner, DNS_TYPE_A, 'example.test', validKey.record, validKey.privateKey, rrset, false, 'answer', { labels: 2 });
+    const wildcard = verifyRrset(responseObject(owner, DNS_TYPE_A, [...rrset, wildcardSignature]), owner, DNS_TYPE_A, [validKey.record], 'example.test', new Date(OBSERVED_AT));
+    assert.equal(wildcard.state, 'unsupported');
+    assert.match(wildcard.detail, /wildcard-expanded/u);
+  });
+
   test('enforces the DNS-over-TCP wall-clock deadline against a slow-drip response', async (context) => {
     const serverSockets = new Set<Socket>();
     const server = createServer((socket) => {
@@ -236,7 +349,7 @@ describe('isolated cryptographic DNSSEC validation', () => {
   test('accepts a signed denial of DS only as an insecure delegation', async () => {
     const root = keyFixture('.');
     const rootSignature = signatureRecord('.', DNS_TYPE_DNSKEY, '.', root.record, root.privateKey, [root.record]);
-    const nsecRdata = Buffer.concat([wireName('next.test'), Buffer.from([0, 1, 0x20])]);
+    const nsecRdata = Buffer.concat([wireName('NeXt.TeSt'), Buffer.from([0, 1, 0x20])]);
     const nsec = record('test', DNS_TYPE_NSEC, nsecRdata, { kind: 'NSEC', nextName: 'next.test', types: new Set([DNS_TYPE_NS]) }, 'authority');
     const nsecSignature = signatureRecord('test', DNS_TYPE_NSEC, '.', root.record, root.privateKey, [nsec], false, 'authority');
     const steps = [

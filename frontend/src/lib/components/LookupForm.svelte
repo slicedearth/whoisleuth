@@ -199,7 +199,7 @@
   .query-field textarea{display:block;width:100%;min-height:54px;padding:14px 48px 10px 12px;background:rgb(var(--bg-rgb) / .78);font-family:var(--mono);font-size:var(--text-sm)}
   .clear{position:absolute;right:7px;top:9px;width:34px;height:34px;border:0;background:none;font-size:1.25rem}
   .input-help{margin:8px 0 0;color:var(--muted);font-size:var(--text-xs)}
-  .input-help span{display:inline-block;margin-left:6px;color:var(--muted-subtle);font-family:var(--mono)}
+  .input-help span{display:inline-block;margin-left:6px;color:var(--muted);font-family:var(--mono)}
   .lookup-mode{margin:14px 0 0;padding:0;border:0}
   .lookup-mode legend{margin-bottom:8px;color:var(--text);font:700 var(--text-xs) var(--mono)}
   .mode-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;max-width:520px}

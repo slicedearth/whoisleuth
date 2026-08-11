@@ -86,7 +86,10 @@ describe('continuous integration workflow', () => {
     for (const command of [
       'npm run release:check',
       'npm run licenses:check',
+      'npm run providers:policy-check',
       'npm run technology:coverage-check',
+      'npm run cli:package:check',
+      'npm run architecture:check',
       'npm run dependencies:audit',
       'npm run test:coverage',
       'npm run typecheck',
@@ -94,6 +97,7 @@ describe('continuous integration workflow', () => {
       'npm run build',
       'npm run frontend:loading-report',
       'npm run security:retire',
+      'npm run test:e2e:install',
       'npm run test:e2e -- --shard=${{ matrix.shard }}',
       'npm run test:e2e:summary',
     ]) {

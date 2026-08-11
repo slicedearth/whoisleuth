@@ -34,7 +34,8 @@ test('signs in through the login form and back out again', async ({ page }) => {
   await expect(page.getByRole('link', { name: 'Open console' })).toHaveAttribute('href', '/login');
   await expect(page.getByRole('link', { name: 'Sign in to investigate' })).toHaveAttribute('href', '/login');
   await expect(page.getByRole('button', { name: 'Sign out' })).toHaveCount(0);
-  const publicFooterText = await page.locator('footer.site-footer').innerText();
+  const publicFooterStatement = await page.locator('footer.site-footer > p').innerText();
+  const publicFooterBuild = await page.locator('footer.site-footer .footer-meta > p').innerText();
   const publicNavigation = page.getByRole('navigation', { name: 'Public navigation' });
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(publicNavigation).toHaveCSS('display', 'flex');
@@ -81,7 +82,9 @@ test('signs in through the login form and back out again', async ({ page }) => {
   await expect(signOutButton).toBeVisible();
   await expect(signOutButton).toHaveCSS('white-space', 'nowrap');
   await expect(page.getByRole('link', { name: 'Privacy' })).toHaveCount(1);
-  await expect(page.locator('footer.site-footer')).toHaveText(publicFooterText);
+  await expect(page.locator('footer.site-footer > p')).toHaveText(publicFooterStatement);
+  await expect(page.locator('footer.site-footer .footer-meta > p')).toHaveText(publicFooterBuild);
+  await expect(page.locator('footer.site-footer').getByRole('link', { name: /Resources/ })).toHaveAttribute('target', '_blank');
 
   const dashboardLink = page.locator('#console-navigation').getByRole('link', { name: /^WHOISleuth\s+Domain intelligence console$/u });
   await expect(dashboardLink).toBeVisible();

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { evidenceStatusChipClass } from '$lib/analysis/evidence-status-tone.ts';
+  import { availabilityStatusDisplay } from '$lib/analysis/availability-status-display.ts';
 
   let {
     title,
@@ -23,6 +23,7 @@
 
   let exportMenuOpen = $state(false);
   let includeAttribution = $state(true);
+  const availability = $derived(availabilityStatusDisplay(resultState));
   function runExport(action: () => void) {
     action();
     exportMenuOpen = false;
@@ -38,7 +39,7 @@
     {/if}
   </div>
   <div class="result-actions">
-    <span class="chip {evidenceStatusChipClass(resultState)}">{resultState}</span>
+    <span class="chip {availability.className}">{availability.label}</span>
     <details class="export-menu" bind:open={exportMenuOpen}>
       <summary class="btn">Export <span aria-hidden="true">▾</span></summary>
       <div class="export-options" role="group" aria-label="Export Lookup result">

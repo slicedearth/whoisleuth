@@ -8,6 +8,10 @@ import { describe, test } from 'node:test';
 import {
   DNSSEC_CHAIN_SCHEMA,
   DNSSEC_TRUST_ANCHOR_SCHEMA,
+  DNS_TYPE_A,
+  DNS_TYPE_AAAA,
+  DNS_TYPE_CNAME,
+  DnssecQuerySession,
   type DnssecChainReport,
 } from '../lib/dnssec-chain-validation.mts';
 import {
@@ -17,6 +21,7 @@ import {
   certificateObservation,
   collectMailTransportReview,
   normalizeSmtpReply,
+  resolveSelectedHost,
   runSmtpConversation,
   smtpStartTlsOptions,
   smtpCapabilities,
@@ -27,6 +32,7 @@ import { analyzeTlsaEvidence } from '../lib/tlsa-evidence.mts';
 
 const OBSERVED_AT = '2026-08-11T00:00:00.000Z';
 const PUBLIC_ADDRESS = '93.184.216.34';
+const ALTERNATE_PUBLIC_ADDRESS = '93.184.216.35';
 const X509_FIXTURE_BASE64 = [
   'MIIETTCCAzWgAwIBAgIUUjf2vcj1u3aTkQma3003KAP6I9AwDQYJKoZIhvcNAQELBQAwSTEbMBkGA1UEAwwS',
   'bG9naW4uZXhhbXBsZS50ZXN0MR0wGwYDVQQKDBRFeGFtcGxlIG9yZ2FuaXNhdGlvbjELMAkGA1UEBhMCQVUw',
@@ -91,6 +97,31 @@ function probeResult(address: string): SmtpConversationResult {
     bytesRead: 55,
     lineCount: 3,
   };
+}
+
+function wireName(name: string): Buffer {
+  return Buffer.concat([...name.split('.').flatMap((label) => {
+    const bytes = Buffer.from(label, 'ascii');
+    return [Buffer.from([bytes.length]), bytes];
+  }), Buffer.from([0])]);
+}
+
+function dnsResponse(query: Buffer, name: string, type: number, answers: readonly Readonly<{ owner: string; type: number; rdata: Buffer }>[]): Buffer {
+  const header = Buffer.alloc(12);
+  header.writeUInt16BE(query.readUInt16BE(0), 0);
+  header.writeUInt16BE(0x8180, 2);
+  header.writeUInt16BE(1, 4);
+  header.writeUInt16BE(answers.length, 6);
+  const question = Buffer.concat([wireName(name), Buffer.from([type >> 8, type & 0xff, 0, 1])]);
+  const records = answers.map((answer) => {
+    const recordHeader = Buffer.alloc(10);
+    recordHeader.writeUInt16BE(answer.type, 0);
+    recordHeader.writeUInt16BE(1, 2);
+    recordHeader.writeUInt32BE(60, 4);
+    recordHeader.writeUInt16BE(answer.rdata.length, 8);
+    return Buffer.concat([wireName(answer.owner), recordHeader, answer.rdata]);
+  });
+  return Buffer.concat([header, question, ...records]);
 }
 
 describe('authorised SMTP transport review', () => {
@@ -214,6 +245,9 @@ describe('authorised SMTP transport review', () => {
     assert.deepEqual(review.relationships.map((item) => item.basis), ['connected_address', 'greeting_sha256']);
     assert.ok(review.relationships.every((item) => item.interpretation === 'review_lead'));
     assert.equal(review.endpoints[0]?.dnssec?.state, 'secure');
+    assert.deepEqual(review.endpoints[0]?.address, { value: PUBLIC_ADDRESS, family: 4, state: 'connected' });
+    assert.equal(review.endpoints[0]?.addressAuthentication.state, 'not_evaluated');
+    assert.equal(review.endpoints[0]?.resolution.state, 'public_revalidated');
     assert.equal(review.endpoints[0]?.tlsa.state, 'not_published');
     assert.equal(review.endpoints[0]?.starttls.state, 'not_advertised');
     const serialized = JSON.stringify(review);
@@ -254,6 +288,8 @@ describe('authorised SMTP transport review', () => {
     assert.equal(probed, false);
     assert.equal(review.endpoints[0]?.state, 'unavailable');
     assert.equal(review.endpoints[0]?.failure?.stage, 'resolution');
+    assert.deepEqual(review.endpoints[0]?.address, { value: null, family: null, state: 'unavailable' });
+    assert.equal(review.endpoints[0]?.addressAuthentication.state, 'unavailable');
     assert.match(review.endpoints[0]?.failure?.detail ?? '', /private|reserved/u);
   });
 
@@ -288,6 +324,8 @@ describe('authorised SMTP transport review', () => {
     assert.equal(aborted, true);
     assert.equal(review.endpoints[0]?.state, 'timed_out');
     assert.equal(review.endpoints[0]?.failure?.stage, 'smtp');
+    assert.equal(review.endpoints[0]?.address.state, 'revalidated');
+    assert.equal(review.endpoints[0]?.resolution.state, 'public_revalidated');
   });
 
   test('keeps an incomplete DANE comparison partial after TLSA validation', async () => {
@@ -358,5 +396,115 @@ describe('authorised SMTP transport review', () => {
     assert.equal(review.endpoints[0]?.state, 'timed_out');
     assert.equal(review.endpoints[0]?.failure?.stage, 'smtp');
     assert.match(review.endpoints[0]?.failure?.detail ?? '', /total run timed out/u);
+    assert.equal(review.endpoints[0]?.address.state, 'revalidated');
+  });
+
+  test('does not promote selected DNS candidates when DNSSEC or fresh revalidation fails', async () => {
+    const input = {
+      schema: MAIL_TRANSPORT_INPUT_SCHEMA, version: 1, domain: 'example.test',
+      mxHosts: ['mx1.example.test', 'mx2.example.test'], policyContext: {},
+    };
+    let calls = 0;
+    let probed = false;
+    const review = await collectMailTransportReview(input, {
+      resolver: PUBLIC_ADDRESS, trustAnchor: ANCHOR, ownedOrAuthorized: true, activeProbeAcknowledged: true,
+    }, {
+      now: () => 0,
+      observedAt: () => OBSERVED_AT,
+      resolveHost: async () => {
+        calls += 1;
+        return { addresses: [{ address: calls === 3 ? PUBLIC_ADDRESS : ALTERNATE_PUBLIC_ADDRESS, family: 4 }], aliases: [] };
+      },
+      validateDnssec: async ({ target }) => {
+        if (String(target).startsWith('mx1')) throw new Error('Fixture DNSSEC validation failed.');
+        return { report: secureReport(String(target)), zone: String(target), keys: [] };
+      },
+      probe: async ({ address }) => { probed = true; return probeResult(address); },
+    });
+
+    assert.equal(probed, false);
+    assert.deepEqual(review.endpoints.map((endpoint) => endpoint.address.state), ['selected', 'selected']);
+    assert.deepEqual(review.endpoints.map((endpoint) => endpoint.resolution.state), ['failed', 'failed']);
+    assert.deepEqual(review.endpoints.map((endpoint) => endpoint.failure?.stage), ['dnssec', 'revalidation']);
+    assert.equal(review.relationships.length, 0, 'Unconnected selected addresses must never create connection relationships.');
+  });
+
+  test('requires the probe and STARTTLS socket to remain pinned before retaining endpoint evidence', async () => {
+    const input = {
+      schema: MAIL_TRANSPORT_INPUT_SCHEMA, version: 1, domain: 'example.test',
+      mxHosts: ['mx1.example.test', 'mx2.example.test'], policyContext: {},
+    };
+    const review = await collectMailTransportReview(input, {
+      resolver: PUBLIC_ADDRESS, trustAnchor: ANCHOR, ownedOrAuthorized: true, activeProbeAcknowledged: true,
+    }, {
+      now: () => 0,
+      observedAt: () => OBSERVED_AT,
+      resolveHost: async () => ({ addresses: [{ address: PUBLIC_ADDRESS, family: 4 }], aliases: [] }),
+      validateDnssec: async ({ target }) => ({ report: secureReport(String(target)), zone: String(target), keys: [] }),
+      probe: async ({ hostname, address }) => hostname.startsWith('mx1')
+        ? probeResult(ALTERNATE_PUBLIC_ADDRESS)
+        : { ...probeResult(address), starttlsState: 'negotiated', tls: { peerCertificate: null, authorized: null, authorizationError: null, protocol: 'TLSv1.3', cipherName: 'FIXTURE-CIPHER', remoteAddress: ALTERNATE_PUBLIC_ADDRESS } },
+    });
+
+    assert.equal(review.endpoints[0]?.address.state, 'revalidated');
+    assert.equal(review.endpoints[0]?.smtp.state, 'unavailable');
+    assert.equal(review.endpoints[1]?.address.state, 'connected');
+    assert.equal(review.endpoints[1]?.smtp.state, 'observed');
+    assert.match(review.endpoints[1]?.failure?.detail ?? '', /STARTTLS connection did not remain pinned/u);
+  });
+
+  test('retains confirmed SMTP provenance when later TLSA collection is unavailable', async () => {
+    const review = await collectMailTransportReview({
+      schema: MAIL_TRANSPORT_INPUT_SCHEMA, version: 1, domain: 'example.test', mxHosts: ['mx.example.test'], policyContext: {},
+    }, {
+      resolver: PUBLIC_ADDRESS, trustAnchor: ANCHOR, ownedOrAuthorized: true, activeProbeAcknowledged: true,
+    }, {
+      now: () => 0,
+      observedAt: () => OBSERVED_AT,
+      resolveHost: async () => ({ addresses: [{ address: PUBLIC_ADDRESS, family: 4 }], aliases: [] }),
+      validateDnssec: async ({ target }) => ({ report: secureReport(String(target)), zone: String(target), keys: [] }),
+      probe: async ({ address }) => probeResult(address),
+      collectTlsaEvidence: async () => { throw new Error('Fixture TLSA collection failed.'); },
+    });
+
+    assert.equal(review.endpoints[0]?.state, 'partial');
+    assert.equal(review.endpoints[0]?.address.state, 'connected');
+    assert.equal(review.endpoints[0]?.smtp.state, 'observed');
+    assert.equal(review.endpoints[0]?.failure?.stage, 'tlsa');
+  });
+
+  test('resolves bounded fixture-only CNAME chains and rejects reserved results', async () => {
+    const steps = [
+      { name: 'mx.example.test', type: DNS_TYPE_A, answers: [{ owner: 'mx.example.test', type: DNS_TYPE_CNAME, rdata: wireName('edge.example.test') }] },
+      { name: 'mx.example.test', type: DNS_TYPE_AAAA, answers: [] },
+      { name: 'edge.example.test', type: DNS_TYPE_A, answers: [{ owner: 'edge.example.test', type: DNS_TYPE_A, rdata: Buffer.from(PUBLIC_ADDRESS.split('.').map(Number)) }] },
+      { name: 'edge.example.test', type: DNS_TYPE_AAAA, answers: [] },
+    ];
+    let index = 0;
+    const session = new DnssecQuerySession({
+      resolver: { address: PUBLIC_ADDRESS, port: 53, family: 4 },
+      transactionId: () => 7,
+      now: () => 0,
+      exchange: async (query) => {
+        const step = steps[index++];
+        assert.ok(step);
+        return dnsResponse(query, step.name, step.type, step.answers);
+      },
+    });
+    assert.deepEqual(await resolveSelectedHost(session, 'mx.example.test'), {
+      addresses: [{ address: PUBLIC_ADDRESS, family: 4 }], aliases: ['edge.example.test'],
+    });
+
+    let reservedQuery = 0;
+    const reservedSession = new DnssecQuerySession({
+      resolver: { address: PUBLIC_ADDRESS, port: 53, family: 4 }, transactionId: () => 8, now: () => 0,
+      exchange: async (query) => {
+        reservedQuery += 1;
+        return reservedQuery === 1
+          ? dnsResponse(query, 'mx.example.test', DNS_TYPE_A, [{ owner: 'mx.example.test', type: DNS_TYPE_A, rdata: Buffer.from([192, 0, 2, 1]) }])
+          : dnsResponse(query, 'mx.example.test', DNS_TYPE_AAAA, []);
+      },
+    });
+    await assert.rejects(() => resolveSelectedHost(reservedSession, 'mx.example.test'), /private or reserved/u);
   });
 });

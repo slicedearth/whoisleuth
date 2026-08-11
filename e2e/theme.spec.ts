@@ -203,6 +203,56 @@ test('light surfaces avoid pure white and keep semantic foregrounds and boundari
   expect(palette.contrast['--border']).toBeGreaterThanOrEqual(3);
 });
 
+test('secondary controls and form hints keep accessible contrast in both themes', async ({ page }) => {
+  await clearThemePreference(page);
+  await page.goto('/lookup');
+
+  for (const theme of ['Dark', 'Light'] as const) {
+    await chooseTheme(page, theme);
+    const contrast = await page.evaluate(() => {
+      const sample = document.createElement('span');
+      document.body.append(sample);
+      const colour = (token: string) => {
+        sample.style.color = `var(${token})`;
+        return getComputedStyle(sample).color;
+      };
+      const channels = (value: string) => value.match(/[\d.]+/gu)!.slice(0, 3).map(Number);
+      const luminance = (value: string) => {
+        const [red, green, blue] = channels(value).map((channel) => {
+          const normalized = channel / 255;
+          return normalized <= 0.04045 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4;
+        });
+        return 0.2126 * red! + 0.7152 * green! + 0.0722 * blue!;
+      };
+      const ratio = (left: string, right: string) => {
+        const [lighter, darker] = [luminance(left), luminance(right)].sort((a, b) => b - a);
+        return (lighter! + 0.05) / (darker! + 0.05);
+      };
+      const value = {
+        controlBoundary: ratio(colour('--control-border'), colour('--panel-raised')),
+        hintText: ratio(colour('--muted'), colour('--panel')),
+      };
+      sample.remove();
+      return value;
+    });
+    expect(contrast.controlBoundary).toBeGreaterThanOrEqual(3);
+    expect(contrast.hintText).toBeGreaterThanOrEqual(4.5);
+  }
+});
+
+test('text fields retain a visible focus outline in forced-colours mode', async ({ page }) => {
+  await page.emulateMedia({ forcedColors: 'active' });
+  await page.goto('/lookup');
+  const query = page.locator('#query');
+  await query.focus();
+  const outline = await query.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return { style: style.outlineStyle, width: Number.parseFloat(style.outlineWidth) };
+  });
+  expect(outline.style).not.toBe('none');
+  expect(outline.width).toBeGreaterThanOrEqual(2);
+});
+
 test('system preference follows operating-system colour-scheme changes', async ({ page }) => {
   await clearThemePreference(page);
   await page.emulateMedia({ colorScheme: 'light' });

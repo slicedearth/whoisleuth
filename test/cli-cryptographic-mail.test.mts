@@ -53,10 +53,24 @@ function mailReview(): MailTransportReview {
       mtaSts: { state: 'unavailable', source: null, observedAt: null, completeness: 'unavailable' },
       tlsRpt: { state: 'unavailable', source: null, observedAt: null, completeness: 'unavailable' },
     },
-    endpoints: [],
+    endpoints: [{
+      host: 'mx.example.test',
+      observedAt: OBSERVED_AT,
+      state: 'complete',
+      address: { value: PUBLIC_ADDRESS, family: 4, state: 'connected' },
+      addressAuthentication: { state: 'not_evaluated', detail: 'Fixture address authentication was not evaluated.' },
+      resolution: { state: 'public_revalidated', initialAddressCount: 1, revalidatedAddressCount: 1, aliasCount: 0 },
+      smtp: { state: 'observed', greetingCode: 220, greetingSha256: 'ab'.repeat(32), capabilities: ['PIPELINING'], starttlsAdvertised: false, responseBytes: 42, responseLines: 2 },
+      starttls: { state: 'not_advertised' },
+      certificate: { state: 'unavailable', sha256: null, spkiSha256: null, protocol: null, cipherName: null, pkixState: 'unavailable', identityState: 'unavailable', authorizationError: null, identityError: null },
+      dnssec: dnssecReport(),
+      tlsa: { state: 'not_published', recordCount: 0, signatureState: 'validated', dane: null, limitations: ['Fixture limitation.'] },
+      failure: null,
+      limitations: ['Fixture limitation.'],
+    }],
     relationships: [],
     bounds: {
-      targets: 0, targetLimit: 3, concurrency: 1, dnsQueries: 0, dnsQueryLimit: 32, dnsResponseBytes: 0, dnsResponseByteLimit: 524288,
+      targets: 1, targetLimit: 3, concurrency: 1, dnsQueries: 0, dnsQueryLimit: 32, dnsResponseBytes: 0, dnsResponseByteLimit: 524288,
       smtpResponseByteLimitPerTarget: 16384, smtpReplyLineLimitPerTarget: 64, smtpLineByteLimit: 1000,
       smtpCapabilityLimitPerTarget: 32, addressCandidateLimitPerResolution: 16, dnsAliasLimitPerResolution: 4,
       certificateByteLimitPerTarget: 262144, connectionsPerTarget: 1,
@@ -144,6 +158,25 @@ describe('isolated cryptographic and mail CLI actions', () => {
     assert.equal(code, EXIT_CODES.SUCCESS);
     assert.equal(receivedOptions[0]?.ownedOrAuthorized, true);
     assert.equal(receivedOptions[0]?.activeProbeAcknowledged, true);
-    assert.equal(JSON.parse(stdout.value()).schema, MAIL_TRANSPORT_REVIEW_SCHEMA);
+    const parsed = JSON.parse(stdout.value());
+    assert.equal(parsed.schema, MAIL_TRANSPORT_REVIEW_SCHEMA);
+    assert.deepEqual(parsed.endpoints[0].address, { value: PUBLIC_ADDRESS, family: 4, state: 'connected' });
+    assert.equal(parsed.endpoints[0].addressAuthentication.state, 'not_evaluated');
+
+    const terminal = capture();
+    const terminalCode = await runCli([
+      'mail-transport', 'mail.json', '--resolver', PUBLIC_ADDRESS,
+      '--trust-anchor', 'anchor.json', '--owned-or-authorized', '--active-probe',
+    ], {
+      stdout: terminal.stream,
+      stderr: capture().stream,
+      now: () => OBSERVED_AT,
+      readMailTransportInput: async () => '{"fixture":true}',
+      readTrustAnchorInput: async () => '{"anchor":true}',
+      collectMailTransportReview: async () => mailReview(),
+    });
+    assert.equal(terminalCode, EXIT_CODES.SUCCESS);
+    assert.match(terminal.value(), /address=93\.184\.216\.34 address_state=connected address_authentication=not_evaluated/u);
+    assert.match(terminal.value(), /dnssec_chain=secure/u);
   });
 });

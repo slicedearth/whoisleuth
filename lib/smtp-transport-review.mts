@@ -33,6 +33,7 @@ import { isPrivateAddress } from './safe-fetch.mts';
 import { analyzeTlsaEvidence, type TlsaEvidenceReport } from './tlsa-evidence.mts';
 
 const MAIL_TRANSPORT_INPUT_SCHEMA = 'whoisleuth.mail-transport.input';
+const MAIL_TRANSPORT_INPUT_VERSION = 1;
 const MAIL_TRANSPORT_REVIEW_SCHEMA = 'whoisleuth.cli.mail-transport-review';
 const MAIL_TRANSPORT_REVIEW_VERSION = 1;
 const MAX_MAIL_TRANSPORT_INPUT_BYTES = 256 * 1024;
@@ -61,7 +62,7 @@ type PolicyContext = Readonly<{
 
 type MailTransportInput = Readonly<{
   schema: typeof MAIL_TRANSPORT_INPUT_SCHEMA;
-  version: typeof MAIL_TRANSPORT_REVIEW_VERSION;
+  version: typeof MAIL_TRANSPORT_INPUT_VERSION;
   domain: string;
   mxHosts: readonly string[];
   policyContext: PolicyContext;
@@ -154,9 +155,17 @@ type MailTransportEndpoint = Readonly<{
   host: string;
   observedAt: string;
   state: 'complete' | 'partial' | 'timed_out' | 'unavailable';
-  connectedAddress: string | null;
+  address: Readonly<{
+    value: string | null;
+    family: 4 | 6 | null;
+    state: 'unavailable' | 'selected' | 'revalidated' | 'connected';
+  }>;
+  addressAuthentication: Readonly<{
+    state: 'not_evaluated' | 'unavailable';
+    detail: string;
+  }>;
   resolution: Readonly<{
-    state: 'validated' | 'failed' | 'timed_out';
+    state: 'public_revalidated' | 'failed' | 'timed_out';
     initialAddressCount: number;
     revalidatedAddressCount: number;
     aliasCount: number;
@@ -270,8 +279,8 @@ function parseMailTransportInput(value: unknown): MailTransportInput {
     try { return JSON.parse(value); } catch { throw new TypeError('Mail transport input is not valid JSON.'); }
   })() : value;
   const input = exactRecord(source, new Set(['schema', 'version', 'domain', 'mxHosts', 'policyContext']), 'Mail transport input');
-  if (input.schema !== MAIL_TRANSPORT_INPUT_SCHEMA || input.version !== MAIL_TRANSPORT_REVIEW_VERSION) {
-    throw new TypeError(`Mail transport input must use ${MAIL_TRANSPORT_INPUT_SCHEMA} version ${MAIL_TRANSPORT_REVIEW_VERSION}.`);
+  if (input.schema !== MAIL_TRANSPORT_INPUT_SCHEMA || input.version !== MAIL_TRANSPORT_INPUT_VERSION) {
+    throw new TypeError(`Mail transport input must use ${MAIL_TRANSPORT_INPUT_SCHEMA} version ${MAIL_TRANSPORT_INPUT_VERSION}.`);
   }
   const domain = normalizeDnsName(input.domain);
   if (!domain || !Array.isArray(input.mxHosts) || input.mxHosts.length < 1 || input.mxHosts.length > MAX_MAIL_TRANSPORT_TARGETS) {
@@ -284,7 +293,7 @@ function parseMailTransportInput(value: unknown): MailTransportInput {
     : exactRecord(input.policyContext, new Set(['mtaSts', 'tlsRpt']), 'policyContext');
   return Object.freeze({
     schema: MAIL_TRANSPORT_INPUT_SCHEMA,
-    version: MAIL_TRANSPORT_REVIEW_VERSION,
+    version: MAIL_TRANSPORT_INPUT_VERSION,
     domain,
     mxHosts: Object.freeze(mxHosts as string[]),
     policyContext: Object.freeze({ mtaSts: policyEvidence(policy.mtaSts, 'mtaSts'), tlsRpt: policyEvidence(policy.tlsRpt, 'tlsRpt') }),
@@ -625,9 +634,29 @@ async function collectTlsa(
   }
 }
 
-function endpointLimitations(): readonly string[] {
+function addressObservation(
+  selected: Readonly<{ address: string; family: 4 | 6 }> | null,
+  state: MailTransportEndpoint['address']['state'],
+): MailTransportEndpoint['address'] {
+  return Object.freeze({ value: selected?.address ?? null, family: selected?.family ?? null, state });
+}
+
+function addressAuthentication(selected: Readonly<{ address: string; family: 4 | 6 }> | null): MailTransportEndpoint['addressAuthentication'] {
+  return selected
+    ? Object.freeze({
+      state: 'not_evaluated' as const,
+      detail: 'The selected A or AAAA RRset and any CNAME chain were not cryptographically validated; public-address revalidation is a separate transport control.',
+    })
+    : Object.freeze({ state: 'unavailable' as const, detail: 'No address candidate was retained for cryptographic authentication review.' });
+}
+
+function endpointLimitations(addressState: MailTransportEndpoint['address']['state']): readonly string[] {
+  const addressLimitation = addressState === 'connected'
+    ? 'The endpoint observation is one point-in-time connection to one revalidated and pinned public address. Other addresses or later observations may differ.'
+    : 'The endpoint did not produce confirmed connection evidence. Its address field retains only the highest completed public selection or revalidation stage, if any.';
   return Object.freeze([
-    'The endpoint observation is one point-in-time connection to one revalidated and pinned public address. Other addresses or later observations may differ.',
+    addressLimitation,
+    'Public-address validation, fresh revalidation, and connection pinning do not cryptographically authenticate the selected A or AAAA RRset or any CNAME chain.',
     'Only the SMTP greeting, EHLO capability names, and optional STARTTLS negotiation were observed. No authentication, recipient, mailbox, catch-all, relay, or message command was attempted.',
     'The raw SMTP greeting, reply text, certificate bytes, TLS session material, and DNS wire responses are not retained.',
     'Shared addresses, greeting digests, or certificate digests are exact relationship leads only; they do not establish a rogue server, common ownership, coordination, safety, or maliciousness.',
@@ -699,6 +728,9 @@ async function collectEndpoint(options: Readonly<{
   let dnssec: Awaited<ReturnType<typeof validateDnssecChainWithContext>> | null = null;
   let smtp: SmtpConversationResult | null = null;
   let selected: { address: string; family: 4 | 6 } | null = null;
+  let addressState: MailTransportEndpoint['address']['state'] = 'unavailable';
+  let revalidationMatched = false;
+  let certificate: ReturnType<typeof certificateObservation> = { observation: emptyCertificate(), certificateDer: null, spkiDer: null };
   let stage = 'resolution';
   try {
     initial = validatedResolution(await options.resolveHost(options.session, options.host));
@@ -706,6 +738,7 @@ async function collectEndpoint(options: Readonly<{
     if (!selected || net.isIP(selected.address) !== selected.family || isPrivateAddress(selected.address)) {
       throw new Error('Selected MX host returned no validated public address.');
     }
+    addressState = 'selected';
     stage = 'dnssec';
     dnssec = await options.validateDnssec({ target: options.host, resolver: options.resolver, trustAnchor: options.anchor, observedAt: options.observedAt, ownedOrAuthorized: true, session: options.session });
     stage = 'revalidation';
@@ -713,6 +746,8 @@ async function collectEndpoint(options: Readonly<{
     if (!revalidated.addresses.some((entry) => entry.address === selected?.address && entry.family === selected?.family)) {
       throw new Error('Selected MX address changed during mandatory pre-connection revalidation.');
     }
+    revalidationMatched = true;
+    addressState = 'revalidated';
     stage = 'smtp';
     const remainingMs = options.remainingMs();
     if (remainingMs <= 0) throw new Error('Mail transport total run timed out before the SMTP connection.');
@@ -724,9 +759,10 @@ async function collectEndpoint(options: Readonly<{
       controller.abort();
     }
     if (smtp.connectedAddress !== selected.address) throw new Error('SMTP connection did not use the selected pinned address.');
+    addressState = 'connected';
     if (smtp.tls?.remoteAddress && smtp.tls.remoteAddress !== selected.address) throw new Error('SMTP STARTTLS connection did not remain pinned to the selected address.');
     stage = 'tlsa';
-    const certificate = certificateObservation(options.host, smtp.tls);
+    certificate = certificateObservation(options.host, smtp.tls);
     const tlsa = await options.collectTlsaEvidence(options.session, options.host, dnssec, certificate, options.observedAt);
     const smtpState = smtp.greeting.code === 220 && smtp.ehlo?.code === 250 ? 'observed' : 'rejected';
     const tlsaComplete = !['indeterminate', 'timed_out', 'unavailable'].includes(tlsa.state)
@@ -740,39 +776,45 @@ async function collectEndpoint(options: Readonly<{
       host: options.host,
       observedAt: options.observedAt,
       state: complete ? 'complete' : 'partial',
-      connectedAddress: selected.address,
-      resolution: Object.freeze({ state: 'validated', initialAddressCount: initial.addresses.length, revalidatedAddressCount: revalidated.addresses.length, aliasCount: Math.max(initial.aliases.length, revalidated.aliases.length) }),
+      address: addressObservation(selected, addressState),
+      addressAuthentication: addressAuthentication(selected),
+      resolution: Object.freeze({ state: 'public_revalidated', initialAddressCount: initial.addresses.length, revalidatedAddressCount: revalidated.addresses.length, aliasCount: Math.max(initial.aliases.length, revalidated.aliases.length) }),
       smtp: Object.freeze({ state: smtpState, greetingCode: smtp.greeting.code, greetingSha256: smtp.greeting.sha256, capabilities: smtp.capabilities, starttlsAdvertised: smtp.starttlsAdvertised, responseBytes: smtp.bytesRead, responseLines: smtp.lineCount }),
       starttls: Object.freeze({ state: smtp.starttlsState }),
       certificate: certificate.observation,
       dnssec: dnssec.report,
       tlsa,
       failure: null,
-      limitations: endpointLimitations(),
+      limitations: endpointLimitations(addressState),
     });
   } catch (error) {
     const detail = boundedError(error);
     const timedOut = /timed out/iu.test(detail);
+    const connectedSmtp = addressState === 'connected' ? smtp : null;
+    const connected = connectedSmtp !== null;
+    const smtpState = connectedSmtp ? connectedSmtp.greeting.code === 220 && connectedSmtp.ehlo?.code === 250 ? 'observed' : 'rejected'
+      : timedOut && stage === 'smtp' ? 'timed_out' : 'unavailable';
     return Object.freeze({
       host: options.host,
       observedAt: options.observedAt,
-      state: timedOut ? 'timed_out' : 'unavailable',
-      connectedAddress: selected?.address ?? null,
-      resolution: Object.freeze({ state: timedOut && !initial ? 'timed_out' : initial && revalidated ? 'validated' : 'failed', initialAddressCount: initial?.addresses.length ?? 0, revalidatedAddressCount: revalidated?.addresses.length ?? 0, aliasCount: Math.max(initial?.aliases.length ?? 0, revalidated?.aliases.length ?? 0) }),
-      smtp: Object.freeze({ state: timedOut && initial && revalidated ? 'timed_out' : 'unavailable', greetingCode: null, greetingSha256: null, capabilities: Object.freeze([]), starttlsAdvertised: null, responseBytes: smtp?.bytesRead ?? 0, responseLines: smtp?.lineCount ?? 0 }),
-      starttls: Object.freeze({ state: timedOut && initial && revalidated ? 'timed_out' : 'unavailable' }),
-      certificate: emptyCertificate(),
+      state: connected ? 'partial' : timedOut ? 'timed_out' : 'unavailable',
+      address: addressObservation(selected, addressState),
+      addressAuthentication: addressAuthentication(selected),
+      resolution: Object.freeze({ state: revalidationMatched ? 'public_revalidated' : timedOut && !initial ? 'timed_out' : 'failed', initialAddressCount: initial?.addresses.length ?? 0, revalidatedAddressCount: revalidated?.addresses.length ?? 0, aliasCount: Math.max(initial?.aliases.length ?? 0, revalidated?.aliases.length ?? 0) }),
+      smtp: Object.freeze({ state: smtpState, greetingCode: connectedSmtp?.greeting.code ?? null, greetingSha256: connectedSmtp?.greeting.sha256 ?? null, capabilities: connectedSmtp?.capabilities ?? Object.freeze([]), starttlsAdvertised: connectedSmtp?.starttlsAdvertised ?? null, responseBytes: connectedSmtp?.bytesRead ?? 0, responseLines: connectedSmtp?.lineCount ?? 0 }),
+      starttls: Object.freeze({ state: connectedSmtp?.starttlsState ?? (timedOut && stage === 'smtp' ? 'timed_out' : 'unavailable') }),
+      certificate: connected ? certificate.observation : emptyCertificate(),
       dnssec: dnssec?.report ?? null,
       tlsa: unavailableTlsa('unavailable', 'TLSA and DANE comparison was unavailable because endpoint collection did not complete.'),
       failure: Object.freeze({ stage, detail }),
-      limitations: endpointLimitations(),
+      limitations: endpointLimitations(addressState),
     });
   }
 }
 
 function buildRelationships(endpoints: readonly MailTransportEndpoint[]): readonly MailTransportRelationship[] {
   const definitions = [
-    ['connected_address', (endpoint: MailTransportEndpoint) => endpoint.connectedAddress],
+    ['connected_address', (endpoint: MailTransportEndpoint) => endpoint.address.state === 'connected' ? endpoint.address.value : null],
     ['greeting_sha256', (endpoint: MailTransportEndpoint) => endpoint.smtp.greetingSha256],
     ['certificate_sha256', (endpoint: MailTransportEndpoint) => endpoint.certificate.sha256],
   ] as const;
@@ -830,12 +872,13 @@ async function collectMailTransportReview(inputValue: unknown, options: Readonly
     const remainingMs = MAIL_TRANSPORT_TOTAL_TIMEOUT_MS - Math.max(0, now() - started);
     if (remainingMs <= 0) {
       endpoints.push(Object.freeze({
-        host, observedAt: timestamp(observedAt(), 'observedAt'), state: 'timed_out', connectedAddress: null,
+        host, observedAt: timestamp(observedAt(), 'observedAt'), state: 'timed_out',
+        address: addressObservation(null, 'unavailable'), addressAuthentication: addressAuthentication(null),
         resolution: Object.freeze({ state: 'timed_out', initialAddressCount: 0, revalidatedAddressCount: 0, aliasCount: 0 }),
         smtp: Object.freeze({ state: 'timed_out', greetingCode: null, greetingSha256: null, capabilities: Object.freeze([]), starttlsAdvertised: null, responseBytes: 0, responseLines: 0 }),
         starttls: Object.freeze({ state: 'timed_out' }), certificate: emptyCertificate(), dnssec: null,
         tlsa: unavailableTlsa('timed_out', 'The total mail-transport run limit expired before this endpoint was queried.'),
-        failure: Object.freeze({ stage: 'total_run', detail: 'Mail transport total run timed out.' }), limitations: endpointLimitations(),
+        failure: Object.freeze({ stage: 'total_run', detail: 'Mail transport total run timed out.' }), limitations: endpointLimitations('unavailable'),
       }));
       continue;
     }
@@ -891,6 +934,7 @@ async function collectMailTransportReview(inputValue: unknown, options: Readonly
     limitations: Object.freeze([
       'This command performs active network collection only for the selected MX hosts in this explicitly authorised run. It is not invoked by Lookup, Bulk, monitoring, or automatic recipes.',
       'DNSSEC, TLSA or DANE, PKIX, certificate identity, STARTTLS, SMTP transport, MTA-STS context, and TLS-RPT context retain separate states and provenance. One family never supplies or upgrades another family.',
+      'Public-address validation, fresh resolution, and connection pinning are reported separately from DNSSEC. They do not cryptographically authenticate the selected A or AAAA RRset or any CNAME chain.',
       'No message is sent; no authentication, relay, recipient, mailbox, user, or catch-all test is performed; and no retry is attempted.',
       'MTA-STS and TLS-RPT fields are bounded supplied context only. This action does not fetch an MTA-STS policy or a reporting-provider record.',
       'The review does not affect Risk, Opportunity, registration availability, ownership, activity, safety, or maliciousness.',
@@ -911,7 +955,7 @@ function formatMailTransportReview(review: MailTransportReview): string {
   for (const endpoint of review.endpoints) {
     lines.push(
       `  - ${endpoint.host}: ${endpoint.state}`,
-      `    address=${endpoint.connectedAddress ?? 'unavailable'} smtp=${endpoint.smtp.state} starttls=${endpoint.starttls.state} dnssec=${endpoint.dnssec?.state ?? 'unavailable'} tlsa=${endpoint.tlsa.state} pkix=${endpoint.certificate.pkixState}`,
+      `    address=${endpoint.address.value ?? 'unavailable'} address_state=${endpoint.address.state} address_authentication=${endpoint.addressAuthentication.state} smtp=${endpoint.smtp.state} starttls=${endpoint.starttls.state} dnssec_chain=${endpoint.dnssec?.state ?? 'unavailable'} tlsa=${endpoint.tlsa.state} pkix=${endpoint.certificate.pkixState}`,
     );
     if (endpoint.failure) lines.push(`    failure=${endpoint.failure.stage}: ${endpoint.failure.detail}`);
   }
@@ -929,6 +973,7 @@ function formatMailTransportReview(review: MailTransportReview): string {
 export {
   EHLO_COMMAND,
   MAIL_TRANSPORT_INPUT_SCHEMA,
+  MAIL_TRANSPORT_INPUT_VERSION,
   MAIL_TRANSPORT_REVIEW_SCHEMA,
   MAIL_TRANSPORT_REVIEW_VERSION,
   MAIL_TRANSPORT_TOTAL_TIMEOUT_MS,
@@ -948,6 +993,7 @@ export {
   formatMailTransportReview,
   normalizeSmtpReply,
   parseMailTransportInput,
+  resolveSelectedHost,
   runSmtpConversation,
   smtpStartTlsOptions,
   smtpCapabilities,

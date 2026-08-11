@@ -7,6 +7,7 @@ const COMPLETE_STATES = new Set([
   'completed',
   'supported',
   'observed',
+  'provided',
   'registered',
   'active',
   'available',

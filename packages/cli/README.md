@@ -94,7 +94,11 @@ The isolated `dnssec-validate` and `mail-transport` actions are not part of
 Lookup, Bulk, monitoring, or recipes. Each run requires explicit
 owned-or-authorised acknowledgement; mail transport also requires a separate
 active-probe acknowledgement and never sends a message, authenticates, tests
-relay, or enumerates recipients or mailboxes.
+relay, or enumerates recipients or mailboxes. Its output distinguishes selected,
+public-revalidated, and connected addresses and explicitly reports that A, AAAA,
+and CNAME authentication was not evaluated after a candidate is retained, or
+that address authentication is unavailable when no candidate exists; only
+confirmed connections can form address relationship leads.
 Focused command help and the generated manual label every operation as offline
 or networked and state its target, input, and concurrency boundaries. The
 packaged [dual-use disclosure](https://github.com/slicedearth/whoisleuth/blob/main/DISCLOSURE)

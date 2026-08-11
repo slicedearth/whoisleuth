@@ -1181,6 +1181,10 @@ questions and can apply its own logging and retention. Resolver hostnames,
 private or reserved addresses, automatic resolver selection, and a non-default
 DNS port are refused.
 
+Queries set RD, CD, and EDNS DO so the selected recursive resolver returns
+DNSSEC material for local validation; the resolver's AD bit is recorded only
+as response metadata and never substitutes for local cryptographic checks.
+
 `dnssec-validate <domain> --resolver <public-IP> --trust-anchor <anchor.json>
 --owned-or-authorized` performs an isolated DNS-over-TCP validation from the
 supplied anchor. It validates supported DS, DNSKEY, and RRSIG relationships,
@@ -1190,6 +1194,13 @@ is capped at 32 DNS queries, eight delegations, 512 KiB of DNS
 response bytes, 2.5 seconds per query, and 15 seconds total, with no retry.
 Authenticated RRsets are capped at 32 records and 16 matching signatures, and
 denial review accepts at most 16 NSEC3 records per response.
+Canonical RRsets are deduplicated and ordered by canonical RDATA before the
+fixed owner, type, class, TTL, and length fields are constructed. NSEC Next
+Domain Name case is preserved as required for its canonical RDATA, while the
+RRSIG Signer's Name in signed data is canonical lowercase. A positive RRset
+whose RRSIG label count indicates wildcard expansion remains `unsupported`
+unless authenticated denial evidence proves the expansion; this version does
+not infer that proof from the signature alone.
 Supported signature algorithms are 5, 7, 8, 10, 13, 14, 15, and 16; supported
 DS digests are 1, 2, and 4; NSEC3 iteration counts above 500 remain
 unsupported. The output is `whoisleuth.dnssec-chain-validation` version 1 and
@@ -1232,6 +1243,15 @@ timeout is eight seconds. Expiry aborts and destroys the connection. The entire
 sequential run is capped at 30 seconds and shares a
 32-query, 512-KiB DNS budget.
 
+Address provenance advances only through `selected`, `revalidated`, and
+`connected`; failures retain the strongest completed stage and never describe a
+DNS candidate as connection evidence. Successful fresh public-address checking
+uses `resolution.state=public_revalidated`. The separate
+`addressAuthentication.state` is `not_evaluated` after an address candidate is
+retained because the A or AAAA RRset and any CNAME chain are not
+cryptographically validated by this action; it is `unavailable` when no
+candidate was retained.
+
 TLSA records for `_25._tcp.<selected-mx>` are compared only after their RRset
 or denial evidence validates through that endpoint's separately reported
 DNSSEC context. PKIX authorisation, certificate hostname identity,
@@ -1239,11 +1259,14 @@ DNSSEC-chain validation, TLSA publication, DANE comparison, STARTTLS, SMTP
 transport, MTA-STS context, and TLS-RPT context retain separate states;
 missing or incomplete evidence in one family is never filled from another.
 The `whoisleuth.cli.mail-transport-review` version-1 output retains selected MX
-names and pinned addresses, greeting status and SHA-256 digest, capability
+names, the bounded address value, family, highest proven address stage, and
+separate address-authentication state, greeting status and SHA-256 digest, capability
 names, certificate and SPKI SHA-256 digests, protocol and cipher labels,
-source times, counts, completeness, and limitations. Raw greeting or reply
+bounded certificate authorization or identity error text, source times, counts,
+completeness, and limitations. Raw greeting or reply
 text, certificate bytes, TLS session material, and DNS wire responses are not
-retained. Exact shared address, greeting-digest, or certificate-digest values
+retained. Only address values whose stage is `connected` can form an exact
+shared-address lead. Address, greeting-digest, and certificate-digest matches
 are labelled review leads only; they do not establish a rogue endpoint, common
 ownership, coordination, intent, safety, or maliciousness. Neither action
 changes Risk, Opportunity, registration availability, or any stored browser

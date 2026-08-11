@@ -38,6 +38,7 @@
   --cursor-glow-alpha: .5;
   --selection-text: var(--bg);
   --control-hover: #232837;
+  --control-border: #697386;
   --primary-border: #78bdff;
   --primary-text: #07101c;
   --primary-start: #75c2ff;
@@ -155,6 +156,7 @@
   --cursor-glow-alpha: .24;
   --selection-text: #ffffff;
   --control-hover: #d2dee8;
+  --control-border: var(--border);
   --primary-border: #004b78;
   --primary-text: #ffffff;
   --primary-start: #006ba6;
@@ -273,7 +275,7 @@ input[type="checkbox"], input[type="radio"] {
   padding: 0;
   accent-color: var(--accent2);
 }
-input:focus, select:focus, textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgb(var(--accent-rgb) / .28); outline: none; }
+input:focus, select:focus, textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgb(var(--accent-rgb) / .28); outline: 2px solid transparent; outline-offset: 2px; }
 input[type="checkbox"]:focus-visible, input[type="radio"]:focus-visible { box-shadow: none; outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* A selectable checkbox/radio row: native control aligned to the first line
@@ -304,7 +306,7 @@ input[type="checkbox"]:focus-visible, input[type="radio"]:focus-visible { box-sh
   gap: 7px;
   min-height: var(--control-h);
   padding: 0 13px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--control-border);
   border-radius: var(--radius-sm);
   background: var(--panel-raised);
   color: var(--text);
@@ -312,7 +314,7 @@ input[type="checkbox"]:focus-visible, input[type="radio"]:focus-visible { box-sh
   cursor: pointer;
   text-align: center;
 }
-.btn:hover:not(:disabled), .btn:focus-visible:not(:disabled) { border-color: var(--border-strong); background: var(--control-hover); }
+.btn:hover:not(:disabled), .btn:focus-visible:not(:disabled) { border-color: var(--control-border); background: var(--control-hover); }
 .btn.small { min-height: 32px; padding: 0 10px; font-size: var(--text-2xs); }
 .btn[aria-pressed="true"], .btn.active { color: var(--accent); border-color: rgb(var(--accent-rgb) / .55); background: rgb(var(--accent-rgb) / .07); }
 .primary {

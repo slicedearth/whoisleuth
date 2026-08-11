@@ -219,7 +219,7 @@ const COMMAND_DETAILS: Readonly<Record<CliCommand, CommandDetail>> = Object.free
   'mail-transport': {
     description: 'Review selected authorised MX endpoints, DNSSEC-qualified TLSA evidence, SMTP capabilities, and optional STARTTLS certificates.',
     example: 'whoisleuth mail-transport selected-mx.json --resolver "$PUBLIC_RESOLVER_IP" --trust-anchor anchor.json --owned-or-authorized --active-probe --json',
-    boundary: 'This isolated action probes at most three selected MX hosts sequentially, pins one revalidated public address, sends only EHLO and optional STARTTLS, never retries, and performs no authentication, relay, recipient, mailbox, catch-all, or message test.',
+    boundary: 'This isolated action probes at most three selected MX hosts sequentially, reports selection, public revalidation, connection, and address authentication separately, sends only EHLO and optional STARTTLS, never retries, and performs no authentication, relay, recipient, mailbox, catch-all, or message test.',
   },
   'registry-support': {
     description: 'Explain the local registry capability profile for one domain or suffix.',

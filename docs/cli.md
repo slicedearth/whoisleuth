@@ -252,6 +252,9 @@ search contract.](cli-reference.md#workspace-archive-inspection)
 ### Isolated cryptographic and mail transport review
 
 [Read the explicitly authorised DNSSEC, TLSA/DANE, STARTTLS, and SMTP transport contract.](cli-reference.md#isolated-cryptographic-and-mail-transport-review)
+The mail report keeps address selection, public revalidation, confirmed
+connection, and cryptographic address authentication as separate provenance;
+address authentication is unavailable when no address candidate was retained.
 
 ### Registry-source comparison
 

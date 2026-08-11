@@ -47,7 +47,7 @@ test('public privacy notices track versioned browser-local data contracts', asyn
 
   for (const notice of [rootNotice, publicNotice]) {
     const compact = notice.replace(/\s+/gu, ' ');
-    assert.match(compact, /Last updated: 10 August 2026/u);
+    assert.match(compact, /Last updated: 11 August 2026/u);
     assert.ok(compact.includes(`up to ${MAX_HANDOFF_CANDIDATES.toLocaleString('en-AU')} selected domains`));
     assert.ok(compact.includes(`up to ${MAX_GENERATED_CONTEXT.toLocaleString('en-AU')} generated candidates`));
     assert.ok(compact.includes(`capped at ${mib(MAX_CANDIDATE_HANDOFF_SERIALIZED_BYTES)} MiB`));
@@ -81,6 +81,11 @@ test('public privacy notices track versioned browser-local data contracts', asyn
     assert.match(compact, /target-free Risk calibration summary/iu);
     assert.match(compact, /rejects the detailed report/u);
     assert.match(compact, /writes no browser storage/u);
+    assert.match(compact, /highest proven selected, public-revalidated, or connected stage/u);
+    assert.match(compact, /not-evaluated after a candidate is retained or unavailable when none exists/u);
+    assert.match(compact, /Only confirmed connected addresses can form address relationship leads/u);
+    assert.match(compact, /do not cryptographically authenticate the A or AAAA RRset or any CNAME chain/u);
+    assert.match(compact, /bounded certificate authorization and identity error text/u);
   }
 
   assert.equal(BROWSER_LOCAL_COLLECTIONS.length, 12);

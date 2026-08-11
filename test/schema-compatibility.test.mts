@@ -117,6 +117,7 @@ import {
 } from '../lib/dnssec-chain-validation.mts';
 import {
   MAIL_TRANSPORT_INPUT_SCHEMA,
+  MAIL_TRANSPORT_INPUT_VERSION,
   MAIL_TRANSPORT_REVIEW_SCHEMA,
   MAIL_TRANSPORT_REVIEW_VERSION,
   MAX_MAIL_TRANSPORT_INPUT_BYTES,
@@ -327,7 +328,7 @@ describe('schema compatibility inventory', () => {
       ['cli.cryptographic-assurance-review', CRYPTOGRAPHIC_ASSURANCE_SCHEMA, CRYPTOGRAPHIC_ASSURANCE_VERSION],
       ['cli.dnssec-trust-anchor-input', DNSSEC_TRUST_ANCHOR_SCHEMA, DNSSEC_TRUST_ANCHOR_VERSION],
       ['cli.dnssec-chain-validation', DNSSEC_CHAIN_SCHEMA, DNSSEC_CHAIN_VERSION],
-      ['cli.mail-transport-input', MAIL_TRANSPORT_INPUT_SCHEMA, MAIL_TRANSPORT_REVIEW_VERSION],
+      ['cli.mail-transport-input', MAIL_TRANSPORT_INPUT_SCHEMA, MAIL_TRANSPORT_INPUT_VERSION],
       ['cli.mail-transport-review', MAIL_TRANSPORT_REVIEW_SCHEMA, MAIL_TRANSPORT_REVIEW_VERSION],
     ] as const) {
       assert.equal(byId(inventory, id).schema, schema);

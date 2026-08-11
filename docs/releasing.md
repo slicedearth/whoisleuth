@@ -97,6 +97,10 @@ and does not inherit npm credentials. The manual workflow requires both the
 version and the release-workflow run ID so it downloads the reviewed candidate
 artifact rather than reconstructing one. Run it only after registry
 publication; an unavailable, still-staged, or non-identical version fails.
+The reviewed candidate is retained for 90 days. Protected approval, npm
+promotion, and post-publication verification must finish while that exact
+artifact remains available; after expiry, assemble and review a fresh
+candidate instead of reconstructing the prior archive.
 
 Review schema compatibility whenever a release changes persisted or exported
 evidence:
