@@ -14,6 +14,7 @@ import {
   consoleNavigation,
   consoleNavigationGroups,
   protectedDestinations,
+  publicCommandNavigation,
   publicResources,
   referenceNavigation,
   referenceResources,
@@ -84,7 +85,16 @@ test('navigation, tool guide, and reference guide use one canonical product voca
     { href: '/resources', label: 'Resources' },
   ]);
   assert.deepEqual(referenceNavigation, [...referenceResources, ...publicResources]);
-  assert.equal(allStrings({ dashboard, toolNavigation, referenceResources, publicResources }).some((value) => /\b(?:portal|workspace)\b/iu.test(value)), false);
+  assert.deepEqual(publicCommandNavigation.map(({ href, label }) => ({ href, label })), [
+    { href: '/', label: 'Public homepage' },
+    { href: '/demo', label: 'Synthetic demo' },
+    { href: '/privacy', label: 'Privacy' },
+    { href: '/terms', label: 'Terms' },
+    { href: '/request-policy', label: 'Request policy' },
+    { href: '/contact', label: 'Contact' },
+  ]);
+  assert.equal(unique(publicCommandNavigation.map((item) => item.href)), true);
+  assert.equal(allStrings({ dashboard, toolNavigation, referenceResources, publicResources, publicCommandNavigation }).some((value) => /\b(?:portal|workspace)\b/iu.test(value)), false);
 });
 
 test('glossary, FAQ, state, and mistake content is bounded and deterministic', () => {

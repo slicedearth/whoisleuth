@@ -16,6 +16,7 @@
     canSave,
     profileContextLoading,
     running,
+    sourceState = 'ready',
   }: {
     sessions: BulkSession[];
     currentSessionId: string;
@@ -30,6 +31,7 @@
     canSave: boolean;
     profileContextLoading: boolean;
     running: boolean;
+    sourceState?: 'loading' | 'ready' | 'unavailable';
   } = $props();
 
   let baselineId = $state('');
@@ -67,9 +69,12 @@
       <h2 id="bulk-sessions-title" tabindex="-1">Saved Bulk sessions</h2>
       <p>Save compact results and source states so an incomplete investigation can be resumed or compared later. Raw source payloads and contact records are excluded.</p>
     </div>
-    {#if sessions.length}<button type="button" class="secondary" onclick={exportSessions} disabled={running}>Export sessions</button>{/if}
+    {#if sessions.length}<button type="button" class="btn" onclick={exportSessions} disabled={running}>Export sessions</button>{/if}
   </div>
 
+  {#if sourceState !== 'ready'}
+    <p class="source-state {sourceState}" role={sourceState === 'unavailable' ? 'alert' : 'status'}>Saved Bulk sessions {sourceState === 'loading' ? 'are still loading' : 'could not be read'}. Counts, empty states, exports, and mutations remain unavailable; reload to retry without overwriting unknown saved work.</p>
+  {:else}
   <div class="save-row">
     <label>
       Session name
@@ -102,11 +107,11 @@
             </dl>
           </div>
           <div class="session-actions">
-            <button type="button" disabled={profileContextLoading || running} onclick={() => loadSession(session)}>Load</button>
+            <button type="button" class="btn small" disabled={profileContextLoading || running} onclick={() => loadSession(session)}>Load</button>
             {#if unstartedCount(session) > 0}
-              <button type="button" class="secondary" disabled={profileContextLoading || running} onclick={() => resumeSession(session)}>Resume unstarted</button>
+              <button type="button" class="btn small" disabled={profileContextLoading || running} onclick={() => resumeSession(session)}>Resume unstarted</button>
             {/if}
-            <button type="button" class="danger-text" disabled={running} onclick={() => deleteSession(session)}>Delete</button>
+            <button type="button" class="btn small danger" disabled={running} onclick={() => deleteSession(session)}>Delete</button>
           </div>
         </article>
       {/each}
@@ -152,6 +157,7 @@
   {:else}
     <p class="empty">No Bulk sessions have been saved in this browser.</p>
   {/if}
+  {/if}
 </section>
 
 <style>
@@ -159,11 +165,10 @@
   .section-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
   .section-heading h2,.section-heading p{margin:0}
   .section-heading>div>p:last-child{margin-top:6px;color:var(--muted);max-width:75ch}
-  .eyebrow{font:650 var(--text-2xs) var(--mono);color:var(--accent);text-transform:uppercase;letter-spacing:.1em}
   .save-row{display:grid;grid-template-columns:minmax(220px,1fr) auto;align-items:end;gap:12px;margin-top:18px}
   label{display:grid;gap:6px;font-size:var(--text-sm);font-weight:650}
   input,select{width:100%}
-  .session-status{color:var(--amber);margin:10px 0 0}
+  .session-status{color:var(--amber);margin:10px 0 0}.source-state{margin:16px 0 0;padding:10px 12px;border:1px dotted var(--muted);border-radius:var(--radius-sm);color:var(--muted);line-height:1.5}.source-state.loading{border-style:solid}
   .session-list{display:grid;gap:10px;margin-top:18px}
   article{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;background:var(--panel-raised)}
   article.current{border-color:var(--accent)}
@@ -174,7 +179,6 @@
   dt{color:var(--muted);font-size:var(--text-xs)}
   dd{margin:0;font-weight:700;font-size:var(--text-xs)}
   .session-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px}
-  .danger-text{color:var(--danger)}
   .comparison{margin-top:18px;border-top:1px solid var(--border);padding-top:14px}
   .comparison summary{cursor:pointer;font-weight:700}
   .compare-controls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:14px 0}

@@ -103,6 +103,25 @@ import {
   buildCliPostureDocument,
   buildCliTlsDocument,
 } from '../cli/formatters/json.mts';
+import {
+  CRYPTOGRAPHIC_ASSURANCE_INPUT_SCHEMA,
+  CRYPTOGRAPHIC_ASSURANCE_SCHEMA,
+  CRYPTOGRAPHIC_ASSURANCE_VERSION,
+} from '../lib/cryptographic-assurance.mts';
+import {
+  DNSSEC_CHAIN_SCHEMA,
+  DNSSEC_CHAIN_VERSION,
+  DNSSEC_TRUST_ANCHOR_SCHEMA,
+  DNSSEC_TRUST_ANCHOR_VERSION,
+  MAX_DNSSEC_TRUST_ANCHOR_BYTES,
+} from '../lib/dnssec-chain-validation.mts';
+import {
+  MAIL_TRANSPORT_INPUT_SCHEMA,
+  MAIL_TRANSPORT_INPUT_VERSION,
+  MAIL_TRANSPORT_REVIEW_SCHEMA,
+  MAIL_TRANSPORT_REVIEW_VERSION,
+  MAX_MAIL_TRANSPORT_INPUT_BYTES,
+} from '../lib/smtp-transport-review.mts';
 import { DOCTOR_SCHEMA, DOCTOR_VERSION } from '../cli/doctor.mts';
 import { CLI_COMMAND_CATALOGUE_SCHEMA, CLI_COMMAND_CATALOGUE_VERSION } from '../cli/command-catalogue.mts';
 import { CLI_LOOKUP_PLAN_SCHEMA, CLI_LOOKUP_PLAN_VERSION } from '../cli/lookup-plan.mts';
@@ -215,7 +234,7 @@ describe('schema compatibility inventory', () => {
     assert.equal(inventory.schema, SCHEMA_COMPATIBILITY_INVENTORY_SCHEMA);
     assert.equal(inventory.version, SCHEMA_COMPATIBILITY_INVENTORY_VERSION);
     assert.equal(inventory.generatedAt, NOW);
-    assert.equal(inventory.entries.length, 175);
+    assert.equal(inventory.entries.length, 182);
     assert.deepEqual(new Set(inventory.entries.map((entry) => entry.kind)), new Set([
       'browser_store', 'tab_store', 'hosted_store', 'export', 'cli_document', 'derived',
     ]));
@@ -262,6 +281,8 @@ describe('schema compatibility inventory', () => {
     assert.equal(byId(inventory, 'cli.risk-calibration-report').currentVersion, 3);
     assert.deepEqual(byId(inventory, 'cli.risk-calibration-report').supportedVersions, [1, 2, 3]);
     assert.equal(byId(inventory, 'cli.maintainer-duplication-report').schema, 'whoisleuth.maintainer-duplication-report');
+    assert.equal(byId(inventory, 'maintainer.local-codeql-temporary-reservation').schema, 'whoisleuth.local-codeql-temporary-reservation');
+    assert.equal(byId(inventory, 'maintainer.local-codeql-temporary-reservation').byteBudget, 512);
     assert.equal(byId(inventory, 'cli.domain-assurance-input').schema, 'whoisleuth.domain-assurance.input');
     assert.equal(byId(inventory, 'cli.domain-assurance').schema, 'whoisleuth.domain-assurance');
     assert.equal(byId(inventory, 'cli.zone-intent-input').schema, 'whoisleuth.zone-intent.input');
@@ -304,6 +325,19 @@ describe('schema compatibility inventory', () => {
     assert.equal(byId(inventory, 'cli.open-asset-model-bridge').schema, 'whoisleuth.open-asset-model-bridge');
     assert.equal(byId(inventory, 'cli.source-reliability-report').schema, 'whoisleuth.source-reliability-report');
     assert.equal(byId(inventory, 'cli.offline-evidence-review').schema, 'whoisleuth.cli.offline-evidence-review');
+    for (const [id, schema, version] of [
+      ['cli.cryptographic-assurance-input', CRYPTOGRAPHIC_ASSURANCE_INPUT_SCHEMA, CRYPTOGRAPHIC_ASSURANCE_VERSION],
+      ['cli.cryptographic-assurance-review', CRYPTOGRAPHIC_ASSURANCE_SCHEMA, CRYPTOGRAPHIC_ASSURANCE_VERSION],
+      ['cli.dnssec-trust-anchor-input', DNSSEC_TRUST_ANCHOR_SCHEMA, DNSSEC_TRUST_ANCHOR_VERSION],
+      ['cli.dnssec-chain-validation', DNSSEC_CHAIN_SCHEMA, DNSSEC_CHAIN_VERSION],
+      ['cli.mail-transport-input', MAIL_TRANSPORT_INPUT_SCHEMA, MAIL_TRANSPORT_INPUT_VERSION],
+      ['cli.mail-transport-review', MAIL_TRANSPORT_REVIEW_SCHEMA, MAIL_TRANSPORT_REVIEW_VERSION],
+    ] as const) {
+      assert.equal(byId(inventory, id).schema, schema);
+      assert.equal(byId(inventory, id).currentVersion, version);
+    }
+    assert.equal(byId(inventory, 'cli.dnssec-trust-anchor-input').byteBudget, MAX_DNSSEC_TRUST_ANCHOR_BYTES);
+    assert.equal(byId(inventory, 'cli.mail-transport-input').byteBudget, MAX_MAIL_TRANSPORT_INPUT_BYTES);
     assert.equal(byId(inventory, 'export.web-capture-summary').schema, WEB_CAPTURE_SUMMARY_SCHEMA);
     assert.equal(byId(inventory, 'export.web-capture-summary').currentVersion, WEB_CAPTURE_SUMMARY_VERSION);
     assert.equal(byId(inventory, 'export.web-capture-manifest').schema, WEB_CAPTURE_MANIFEST_SCHEMA);
@@ -314,6 +348,7 @@ describe('schema compatibility inventory', () => {
     assert.equal(byId(inventory, 'export.web-capture-dom-digest').byteBudget, MAX_WEB_CAPTURE_DOM_DIGEST_BYTES);
     assert.equal(byId(inventory, 'cli.web-capture-comparison').schema, WEB_CAPTURE_COMPARISON_SCHEMA);
     assert.equal(byId(inventory, 'cli.web-capture-comparison').currentVersion, WEB_CAPTURE_COMPARISON_VERSION);
+    assert.deepEqual(byId(inventory, 'cli.web-capture-comparison').supportedVersions, [2]);
     assert.deepEqual(byId(inventory, 'export.lookup-evidence').supportedVersions, [25, 26]);
     assert.deepEqual(byId(inventory, 'export.synthetic-demo').supportedVersions, [2, 3, 4, 5]);
     assert.deepEqual(byId(inventory, 'export.external-findings').supportedVersions, [1, 2, 3, 4]);

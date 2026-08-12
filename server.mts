@@ -87,6 +87,18 @@ type StaticResponseLike = ResponseLike & {
 type Next = () => void;
 type ErrorNext = (error?: unknown) => void;
 type OperationTarget = ReturnType<typeof operationBudgetTargetFor>;
+type ExpressApplication = ReturnType<typeof express>;
+type NetworkRouteServices = Readonly<{
+  runUnifiedLookup: typeof runUnifiedLookup;
+  createLookupHttpResponse: typeof createLookupHttpResponse;
+  fetchRdapRecord: typeof fetchRdapRecord;
+  searchRdapNameserver: typeof searchRdapNameserver;
+  buildWhoisChain: typeof buildWhoisChain;
+  parseWhoisChain: typeof parseWhoisChain;
+  checkDomainAvailability: typeof checkDomainAvailability;
+  searchCertificateTransparency: typeof searchCertificateTransparency;
+  checkDomainPosture: typeof checkDomainPosture;
+}>;
 
 function sendPrerenderedHtmlFile(
   filename: string,
@@ -311,207 +323,226 @@ app.get('/api/capabilities', requireAuth, (_req: RequestLike, res: ResponseLike)
   res.json(capabilityReport('express'));
 });
 
-app.get('/api/lookup', apiRateLimit, requireAuth, requireNetworkRequestAdmission, requireFeature('lookup'), async (req: RequestLike, res: ResponseLike) => {
-  const q = queryText(req.query.q);
-  if (!q) return res.status(400).json({ error: 'Missing query parameter "q"', errorCode: LOOKUP_ERROR_CODES.MISSING_QUERY });
-
-  let classified;
-  try {
-    classified = classifyQuery(q);
-  } catch (err) {
-    return res.status(400).json({ error: errorMessage(err), errorCode: LOOKUP_ERROR_CODES.INVALID_QUERY });
-  }
-
-  const fast = req.query.fast === '1' || req.query.fast === 'true';
-  const compact = req.query.compact === '1' || req.query.compact === 'true';
-  const externalIntelligence = req.query.intelligence === '1' || req.query.intelligence === 'true';
-  const malwareHostIntelligence = req.query.malware === '1' || req.query.malware === 'true';
-  const malwareIocIntelligence = req.query.ioc === '1' || req.query.ioc === 'true';
-  const securityTxt = req.query.security_txt === '1' || req.query.security_txt === 'true';
-  return withExpressOperationBudget(req, res, operationBudgetTargetFor('lookup', { fast, compact }), async () => {
-    try {
-      const result = await runUnifiedLookup(classified, {
-        fast,
-        compact,
-        externalIntelligence,
-        malwareHostIntelligence,
-        malwareIocIntelligence,
-        securityTxt,
-        ...(req.networkFeaturePolicy ? { featurePolicy: req.networkFeaturePolicy } : {}),
-      });
-      res.json(createLookupHttpResponse(q, classified, result));
-    } catch (err) {
-      sendUnexpectedApiError(res, LOOKUP_ERROR_CODES.LOOKUP_FAILED);
-    }
-  });
+const DEFAULT_NETWORK_ROUTE_SERVICES: NetworkRouteServices = Object.freeze({
+  runUnifiedLookup,
+  createLookupHttpResponse,
+  fetchRdapRecord,
+  searchRdapNameserver,
+  buildWhoisChain,
+  parseWhoisChain,
+  checkDomainAvailability,
+  searchCertificateTransparency,
+  checkDomainPosture,
 });
 
-app.get('/api/rdap', apiRateLimit, requireAuth, requireNetworkRequestAdmission, requireFeature('rdap'), async (req: RequestLike, res: ResponseLike) => {
-  const q = queryText(req.query.q);
-  if (!q) return res.status(400).json({ error: 'Missing query parameter "q"' });
+function registerNetworkApiRoutes(
+  target: ExpressApplication,
+  services: NetworkRouteServices = DEFAULT_NETWORK_ROUTE_SERVICES,
+): void {
+  target.get('/api/lookup', apiRateLimit, requireAuth, requireNetworkRequestAdmission, requireFeature('lookup'), async (req: RequestLike, res: ResponseLike) => {
+    const q = queryText(req.query.q);
+    if (!q) return res.status(400).json({ error: 'Missing query parameter "q"', errorCode: LOOKUP_ERROR_CODES.MISSING_QUERY });
 
-  let classified;
-  try {
-    classified = classifyQuery(q);
-  } catch (err) {
-    return res.status(400).json({ error: errorMessage(err) });
-  }
-
-  return withExpressOperationBudget(req, res, operationBudgetTargetFor('rdap'), async () => {
+    let classified;
     try {
-      const record = await fetchRdapRecord(classified.type, classified.value);
-      if (!record) {
-        return res.status(404).json({ error: `No RDAP registry found for "${q}" via IANA bootstrap` });
+      classified = classifyQuery(q);
+    } catch {
+      return res.status(400).json({ error: 'Invalid query', errorCode: LOOKUP_ERROR_CODES.INVALID_QUERY });
+    }
+
+    const fast = req.query.fast === '1' || req.query.fast === 'true';
+    const compact = req.query.compact === '1' || req.query.compact === 'true';
+    const externalIntelligence = req.query.intelligence === '1' || req.query.intelligence === 'true';
+    const malwareHostIntelligence = req.query.malware === '1' || req.query.malware === 'true';
+    const malwareIocIntelligence = req.query.ioc === '1' || req.query.ioc === 'true';
+    const securityTxt = req.query.security_txt === '1' || req.query.security_txt === 'true';
+    return withExpressOperationBudget(req, res, operationBudgetTargetFor('lookup', { fast, compact }), async () => {
+      try {
+        const result = await services.runUnifiedLookup(classified, {
+          fast,
+          compact,
+          externalIntelligence,
+          malwareHostIntelligence,
+          malwareIocIntelligence,
+          securityTxt,
+          ...(req.networkFeaturePolicy ? { featurePolicy: req.networkFeaturePolicy } : {}),
+        });
+        res.json(services.createLookupHttpResponse(q, classified, result));
+      } catch (err) {
+        sendUnexpectedApiError(res, LOOKUP_ERROR_CODES.LOOKUP_FAILED);
       }
-
-      res.status(200).json({
-        query: q,
-        type: classified.type,
-        inputHostname: classified.inputHostname,
-        registrableDomain: classified.registrableDomain,
-        ...record,
-      });
-    } catch (err) {
-      sendUnexpectedApiError(res);
-    }
+    });
   });
-});
 
-app.get('/api/rdap-nameserver-search', apiRateLimit, requireAuth, requireNetworkRequestAdmission, requireFeature('rdap_nameserver_search'), async (req: RequestLike, res: ResponseLike) => {
-  return withExpressOperationBudget(req, res, operationBudgetTargetFor('rdap_nameserver_search'), async () => {
+  target.get('/api/rdap', apiRateLimit, requireAuth, requireNetworkRequestAdmission, requireFeature('rdap'), async (req: RequestLike, res: ResponseLike) => {
+    const q = queryText(req.query.q);
+    if (!q) return res.status(400).json({ error: 'Missing query parameter "q"' });
+
+    let classified;
     try {
-      const result = await searchRdapNameserver(
-        queryText(req.query.nameserver),
-        queryText(req.query.scope),
-      );
-      return res.status(200).json(result);
+      classified = classifyQuery(q);
+    } catch {
+      return res.status(400).json({ error: 'Invalid query' });
+    }
+
+    return withExpressOperationBudget(req, res, operationBudgetTargetFor('rdap'), async () => {
+      try {
+        const record = await services.fetchRdapRecord(classified.type, classified.value);
+        if (!record) {
+          return res.status(404).json({ error: `No RDAP registry found for "${q}" via IANA bootstrap` });
+        }
+
+        res.status(200).json({
+          query: q,
+          type: classified.type,
+          inputHostname: classified.inputHostname,
+          registrableDomain: classified.registrableDomain,
+          ...record,
+        });
+      } catch (err) {
+        sendUnexpectedApiError(res);
+      }
+    });
+  });
+
+  target.get('/api/rdap-nameserver-search', apiRateLimit, requireAuth, requireNetworkRequestAdmission, requireFeature('rdap_nameserver_search'), async (req: RequestLike, res: ResponseLike) => {
+    return withExpressOperationBudget(req, res, operationBudgetTargetFor('rdap_nameserver_search'), async () => {
+      try {
+        const result = await services.searchRdapNameserver(
+          queryText(req.query.nameserver),
+          queryText(req.query.scope),
+        );
+        return res.status(200).json(result);
+      } catch (error) {
+        if (error instanceof RdapNameserverSearchInputError) {
+          return res.status(400).json({ error: error.message, errorCode: error.code });
+        }
+        return sendUnexpectedApiError(res);
+      }
+    });
+  });
+
+  target.get('/api/whois', apiRateLimit, requireAuth, requireNetworkRequestAdmission, requireFeature('whois'), async (req: RequestLike, res: ResponseLike) => {
+    const q = queryText(req.query.q);
+    if (!q) return res.status(400).json({ error: 'Missing query parameter "q"' });
+
+    let classified;
+    try {
+      classified = classifyQuery(q);
+    } catch {
+      return res.status(400).json({ error: 'Invalid query' });
+    }
+
+    return withExpressOperationBudget(req, res, operationBudgetTargetFor('whois'), async () => {
+      try {
+        const chain = await services.buildWhoisChain(classified.value);
+        res.json({
+          query: q,
+          type: classified.type,
+          inputHostname: classified.inputHostname,
+          registrableDomain: classified.registrableDomain,
+          chain,
+          parsed: services.parseWhoisChain(chain),
+        });
+      } catch (err) {
+        sendUnexpectedApiError(res);
+      }
+    });
+  });
+
+  target.get('/api/availability', apiRateLimit, requireAuth, requireNetworkRequestAdmission, requireFeature('availability'), async (req: RequestLike, res: ResponseLike) => {
+    const q = queryText(req.query.q);
+    if (!q) return res.status(400).json({ error: 'Missing query parameter "q"' });
+
+    let classified;
+    try {
+      classified = classifyQuery(q);
+    } catch {
+      return res.status(400).json({ error: 'Invalid query' });
+    }
+    if (classified.type !== 'domain') {
+      return res.json({ applicable: false, type: classified.type });
+    }
+
+    const fast = req.query.fast === '1' || req.query.fast === 'true';
+    return withExpressOperationBudget(req, res, operationBudgetTargetFor('availability', { fast }), async () => {
+      try {
+        const result = await services.checkDomainAvailability(classified.value, {
+          fast,
+          ...(req.networkFeaturePolicy ? { featurePolicy: req.networkFeaturePolicy } : {}),
+        });
+        // domain is the registrable domain actually looked up; inputHostname
+        // preserves what the user typed so the UI can note when a subdomain query
+        // was resolved to its registrable domain (and never call the subdomain
+        // itself "available").
+        res.json({
+          applicable: true,
+          domain: classified.value,
+          inputHostname: classified.inputHostname,
+          registrableDomain: classified.registrableDomain,
+          isSubdomain: classified.isSubdomain,
+          ...result,
+        });
+      } catch (err) {
+        sendUnexpectedApiError(res);
+      }
+    });
+  });
+
+  target.get('/api/ct-search', apiRateLimit, requireAuth, requireNetworkRequestAdmission, requireFeature('certificate_transparency'), async (req: RequestLike, res: ResponseLike) => {
+    let q: string;
+    try {
+      q = normalizeCtQuery(req.query.q);
     } catch (error) {
-      if (error instanceof RdapNameserverSearchInputError) {
-        return res.status(400).json({ error: error.message, errorCode: error.code });
+      if (isCtQueryError(error)) return res.status(400).json({ error: error.message, errorCode: error.code });
+      throw error;
+    }
+    if (!q) return res.status(400).json({ error: 'Missing query parameter "q"', errorCode: 'MISSING_QUERY' });
+
+    return withExpressOperationBudget(req, res, operationBudgetTargetFor('certificate_transparency'), async () => {
+      try {
+        const result = await services.searchCertificateTransparency(q);
+        res.json({ keyword: q, ...result });
+      } catch (err) {
+        sendUnexpectedApiError(res);
       }
-      return sendUnexpectedApiError(res);
-    }
+    });
   });
-});
 
-app.get('/api/whois', apiRateLimit, requireAuth, requireNetworkRequestAdmission, requireFeature('whois'), async (req: RequestLike, res: ResponseLike) => {
-  const q = queryText(req.query.q);
-  if (!q) return res.status(400).json({ error: 'Missing query parameter "q"' });
+  target.get('/api/domain-posture', apiRateLimit, requireAuth, requireNetworkRequestAdmission, requireFeature('domain_posture'), async (req: RequestLike, res: ResponseLike) => {
+    const q = queryText(req.query.q);
+    if (!q) return res.status(400).json({ error: 'Missing query parameter "q"' });
 
-  let classified;
-  try {
-    classified = classifyQuery(q);
-  } catch (err) {
-    return res.status(400).json({ error: errorMessage(err) });
-  }
-
-  return withExpressOperationBudget(req, res, operationBudgetTargetFor('whois'), async () => {
+    let classified: ReturnType<typeof classifyQuery>;
     try {
-      const chain = await buildWhoisChain(classified.value);
-      res.json({
-        query: q,
-        type: classified.type,
-        inputHostname: classified.inputHostname,
-        registrableDomain: classified.registrableDomain,
-        chain,
-        parsed: parseWhoisChain(chain),
-      });
-    } catch (err) {
-      sendUnexpectedApiError(res);
+      classified = classifyQuery(q);
+    } catch {
+      return res.status(400).json({ error: 'Invalid query' });
     }
+    if (classified.type !== 'domain') return res.status(400).json({ error: 'Domain posture audits only support domain names.' });
+    const domain = normalizeAuditDomain(classified.value);
+    if (!domain) return res.status(400).json({ error: 'Invalid domain name for posture audit.' });
+
+    const selectors = normalizeDkimSelectors(queryText(req.query.selectors).split(','));
+    const retiredSelectors = normalizeDkimSelectors(queryText(req.query.retiredSelectors).split(','))
+      .filter((selector) => !selectors.includes(selector))
+      .slice(0, Math.max(0, 10 - selectors.length));
+    const mailProtectionProfile = normalizeMailProtectionProfile(queryText(req.query.mailProfile));
+    return withExpressOperationBudget(req, res, operationBudgetTargetFor('domain_posture'), async () => {
+      try {
+        res.json(await services.checkDomainPosture(domain, {
+          dkimSelectors: selectors,
+          retiredDkimSelectors: retiredSelectors,
+          mailProtectionProfile,
+        }));
+      } catch (err) {
+        sendUnexpectedApiError(res);
+      }
+    });
   });
-});
+}
 
-app.get('/api/availability', apiRateLimit, requireAuth, requireNetworkRequestAdmission, requireFeature('availability'), async (req: RequestLike, res: ResponseLike) => {
-  const q = queryText(req.query.q);
-  if (!q) return res.status(400).json({ error: 'Missing query parameter "q"' });
-
-  let classified;
-  try {
-    classified = classifyQuery(q);
-  } catch (err) {
-    return res.status(400).json({ error: errorMessage(err) });
-  }
-  if (classified.type !== 'domain') {
-    return res.json({ applicable: false, type: classified.type });
-  }
-
-  const fast = req.query.fast === '1' || req.query.fast === 'true';
-  return withExpressOperationBudget(req, res, operationBudgetTargetFor('availability', { fast }), async () => {
-    try {
-      const result = await checkDomainAvailability(classified.value, {
-        fast,
-        ...(req.networkFeaturePolicy ? { featurePolicy: req.networkFeaturePolicy } : {}),
-      });
-      // domain is the registrable domain actually looked up; inputHostname
-      // preserves what the user typed so the UI can note when a subdomain query
-      // was resolved to its registrable domain (and never call the subdomain
-      // itself "available").
-      res.json({
-        applicable: true,
-        domain: classified.value,
-        inputHostname: classified.inputHostname,
-        registrableDomain: classified.registrableDomain,
-        isSubdomain: classified.isSubdomain,
-        ...result,
-      });
-    } catch (err) {
-      sendUnexpectedApiError(res);
-    }
-  });
-});
-
-app.get('/api/ct-search', apiRateLimit, requireAuth, requireNetworkRequestAdmission, requireFeature('certificate_transparency'), async (req: RequestLike, res: ResponseLike) => {
-  let q: string;
-  try {
-    q = normalizeCtQuery(req.query.q);
-  } catch (error) {
-    if (isCtQueryError(error)) return res.status(400).json({ error: error.message, errorCode: error.code });
-    throw error;
-  }
-  if (!q) return res.status(400).json({ error: 'Missing query parameter "q"', errorCode: 'MISSING_QUERY' });
-
-  return withExpressOperationBudget(req, res, operationBudgetTargetFor('certificate_transparency'), async () => {
-    try {
-      const result = await searchCertificateTransparency(q);
-      res.json({ keyword: q, ...result });
-    } catch (err) {
-      sendUnexpectedApiError(res);
-    }
-  });
-});
-
-app.get('/api/domain-posture', apiRateLimit, requireAuth, requireNetworkRequestAdmission, requireFeature('domain_posture'), async (req: RequestLike, res: ResponseLike) => {
-  const q = queryText(req.query.q);
-  if (!q) return res.status(400).json({ error: 'Missing query parameter "q"' });
-
-  let classified: ReturnType<typeof classifyQuery>;
-  try {
-    classified = classifyQuery(q);
-  } catch (err) {
-    return res.status(400).json({ error: errorMessage(err) });
-  }
-  if (classified.type !== 'domain') return res.status(400).json({ error: 'Domain posture audits only support domain names.' });
-  const domain = normalizeAuditDomain(classified.value);
-  if (!domain) return res.status(400).json({ error: 'Invalid domain name for posture audit.' });
-
-  const selectors = normalizeDkimSelectors(queryText(req.query.selectors).split(','));
-  const retiredSelectors = normalizeDkimSelectors(queryText(req.query.retiredSelectors).split(','))
-    .filter((selector) => !selectors.includes(selector))
-    .slice(0, Math.max(0, 10 - selectors.length));
-  const mailProtectionProfile = normalizeMailProtectionProfile(queryText(req.query.mailProfile));
-  return withExpressOperationBudget(req, res, operationBudgetTargetFor('domain_posture'), async () => {
-    try {
-      res.json(await checkDomainPosture(domain, {
-        dkimSelectors: selectors,
-        retiredDkimSelectors: retiredSelectors,
-        mailProtectionProfile,
-      }));
-    } catch (err) {
-      sendUnexpectedApiError(res);
-    }
-  });
-});
+registerNetworkApiRoutes(app);
 
 // Keep API failures inside the same bounded JSON contract as ordinary route
 // responses. Body-parser errors otherwise reach Express's HTML error page and
@@ -535,4 +566,5 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   startServer();
 }
 
-export { app, isHttps, usesSecureCookies, requireAuth, requireNetworkRequestAdmission, rateLimit, requireFeature, apiErrorHandler, sendPrerenderedHtmlFile, sendUnexpectedApiError, startServer };
+export { app, isHttps, usesSecureCookies, requireAuth, requireNetworkRequestAdmission, rateLimit, requireFeature, apiErrorHandler, registerNetworkApiRoutes, sendPrerenderedHtmlFile, sendUnexpectedApiError, startServer };
+export type { NetworkRouteServices };

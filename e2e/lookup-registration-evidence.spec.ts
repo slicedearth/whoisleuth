@@ -366,6 +366,13 @@ test('deep Lookup presents registrar and observed network RDAP as separate sourc
   expect(report).not.toContain('stat.ripe.net');
 
   await page.setViewportSize({ width: 360, height: 780 });
+  const equivalentBadge = agreementMatrix.locator(".lane-cards li[data-comparison-state='equivalent'] .lane-status").first();
+  const registrarEquivalentBadge = comparison.locator('.chip.good').first();
+  await expect(equivalentBadge).toBeVisible();
+  await expect(registrarEquivalentBadge).toBeVisible();
+  expect(await equivalentBadge.evaluate((element) => getComputedStyle(element).color)).toBe(
+    await registrarEquivalentBadge.evaluate((element) => getComputedStyle(element).color),
+  );
   await expectNoHorizontalOverflow(page);
 
   await page.getByRole('button', { name: 'Create case' }).click();
@@ -394,6 +401,7 @@ test('registrar RDAP unsupported and error states remain neutral source rows', a
     { status: 'unsupported', detail: 'The registry did not publish a registrar RDAP link for this domain.' },
     { status: 'error', detail: 'The registrar RDAP request failed.' },
   ]) {
+    await page.setViewportSize({ width: 1280, height: 800 });
     await page.route('**/api/lookup?*', async (route) => route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -425,7 +433,24 @@ test('registrar RDAP unsupported and error states remain neutral source rows', a
     expect(await unavailablePlotMarker.evaluate((element) => getComputedStyle(element).strokeDasharray)).not.toBe('none');
     const unavailableLegendMarker = agreementMatrix.locator('.matrix-legend .state-unavailable span');
     await expect(unavailableLegendMarker).toBeVisible();
-    expect(await unavailableLegendMarker.evaluate((element) => getComputedStyle(element).borderStyle)).toBe('dashed');
+    expect(await unavailableLegendMarker.evaluate((element) => getComputedStyle(element).borderStyle)).toBe('dotted');
+    if (state.status === 'unsupported') {
+      const sourceDiagnostics = page.getByRole('group', { name: 'Source diagnostics' });
+      const unsupportedStatus = sourceDiagnostics.locator('article').filter({ hasText: 'registrar RDAP' }).locator(':scope > strong');
+      const registrationValue = page.locator('.summaries article').filter({ hasText: 'Registration' }).first().locator(':scope > strong');
+      await expect(unsupportedStatus).toHaveText('unsupported');
+      expect(await unsupportedStatus.evaluate((element) => getComputedStyle(element).color)).toBe(
+        await registrationValue.evaluate((element) => getComputedStyle(element).color),
+      );
+    }
+    await page.setViewportSize({ width: 360, height: 780 });
+    const unavailableBadge = agreementMatrix.locator(".lane-cards li[data-comparison-state*='unavailable'] .lane-status").first();
+    await expect(unavailableBadge).toBeVisible();
+    expect(await unavailableBadge.evaluate((element) => getComputedStyle(element).borderStyle)).toBe('dotted');
+    expect(await unavailableLegendMarker.evaluate((element) => getComputedStyle(element).borderStyle)).toBe('dotted');
+    const notCollectedLegendMarker = agreementMatrix.locator('.matrix-legend .state-not_collected span');
+    await expect(notCollectedLegendMarker).toBeVisible();
+    expect(await notCollectedLegendMarker.evaluate((element) => getComputedStyle(element).borderStyle)).toBe('dotted');
     await page.unroute('**/api/lookup?*');
   }
 });
@@ -651,9 +676,9 @@ test('optional external intelligence searches are explicit, attributed, and mobi
   await expect(section.getByText('URLscan archived verdicts', { exact: true })).toBeVisible();
   await expect(section.getByText('URLhaus malware-host records', { exact: true })).toBeVisible();
   await expect(section.getByText('ThreatFox malware IOCs', { exact: true })).toBeVisible();
-  await expect(section.locator('article').filter({ hasText: 'URLscan archived verdicts' }).locator('.chip')).toHaveClass(/\binfo\b/);
+  await expect(section.locator('article').filter({ hasText: 'URLscan archived verdicts' }).locator('.chip')).toHaveClass(/\bgood\b/);
   await expect(section.locator('article').filter({ hasText: 'URLhaus malware-host records' }).locator('.chip')).toHaveClass(/\bwarn\b/);
-  await expect(section.locator('article').filter({ hasText: 'ThreatFox malware IOCs' }).locator('.chip')).not.toHaveClass(/\b(?:info|warn|danger)\b/u);
+  await expect(section.locator('article').filter({ hasText: 'ThreatFox malware IOCs' }).locator('.chip')).toHaveClass(/\bunavailable\b/);
   await expect(section.getByText(/never affect availability/i)).toBeVisible();
   await expect(section.getByText(/2 independent publisher families contributed \+18 under model v7/i)).toBeVisible();
   const riskExplanation = page.getByText('Why the risk score is 24', { exact: true });

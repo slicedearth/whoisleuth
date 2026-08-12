@@ -10,6 +10,7 @@ import {
 import { runCli } from '../cli/runner.mts';
 import EXIT_CODES from '../cli/exit-codes.mts';
 import { parseSavedLookupDocument } from '../cli/saved-lookup.mts';
+import { MAX_BOUNDED_JSON_DEPTH } from '../lib/bounded-json.mts';
 import {
   DOMAIN_CONTROL_MANIFEST_INPUT_SCHEMA,
   buildDomainControlManifest,
@@ -62,6 +63,18 @@ describe('CLI domain-control observations', () => {
     assert.doesNotMatch(JSON.stringify(observation), /raw|query/iu);
   });
 
+  test('rejects non-finite saved evidence numbers before parsing', () => {
+    for (const value of ['1e400', '-1e400']) {
+      const raw = JSON.stringify(lookup()).replace('"registrar":', `"numericExtension":${value},"registrar":`);
+      assert.throws(() => parseSavedLookupDocument(raw), /contains a non-finite number/u, value);
+    }
+    const finite = JSON.stringify(lookup()).replace(
+      '"registrar":',
+      '"numericExtension":1.7976931348623157e308,"registrar":',
+    );
+    assert.doesNotThrow(() => parseSavedLookupDocument(finite));
+  });
+
   test('uses only the newest supplied lookup per domain for desired-state review', () => {
     const first = lookup('example.test', '2026-08-04T01:02:03.000Z');
     const latest = lookup();
@@ -91,6 +104,51 @@ describe('CLI domain-control observations', () => {
       lookups: [lookup()],
       rawEvidence: 'not accepted',
     }), observedAt), /unsupported field/iu);
+  });
+
+  test('rejects duplicate keys inside an embedded saved Lookup before parsing can collapse them', () => {
+    const input = JSON.stringify({
+      schema: CLI_DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA,
+      version: 1,
+      manifest: manifest(),
+      lookups: [lookup()],
+    }).replace('"mode":"deep"', '"mode":"deep","mode":"fast"');
+
+    assert.throws(
+      () => buildCliDomainControlReview(input, observedAt),
+      /Domain-control review input contains a duplicate object key/u,
+    );
+  });
+
+  test('rejects over-nested embedded evidence with a stable bounded-input error', () => {
+    const source = lookup();
+    let nested: unknown = 'leaf';
+    for (let index = 0; index < MAX_BOUNDED_JSON_DEPTH - 1; index += 1) nested = { value: nested };
+    source.rdap = { ...source.rdap, data: nested } as typeof source.rdap & { data: unknown };
+
+    assert.throws(
+      () => buildCliDomainControlReview(JSON.stringify({
+        schema: CLI_DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA,
+        version: 1,
+        manifest: manifest(),
+        lookups: [source],
+      }), observedAt),
+      /Domain-control review input exceeds the 50-level nesting limit/u,
+    );
+  });
+
+  test('accepts an embedded Lookup at its exact standalone nesting boundary', () => {
+    const source = lookup();
+    let nested: unknown = 'leaf';
+    for (let index = 0; index < MAX_BOUNDED_JSON_DEPTH - 2; index += 1) nested = { value: nested };
+    source.rdap = { ...source.rdap, data: nested } as typeof source.rdap & { data: unknown };
+
+    assert.doesNotThrow(() => buildCliDomainControlReview(JSON.stringify({
+      schema: CLI_DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA,
+      version: 1,
+      manifest: manifest(),
+      lookups: [source],
+    }), observedAt));
   });
 
   test('routes the saved-Lookup review through the existing offline command', async () => {

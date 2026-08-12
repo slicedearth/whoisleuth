@@ -8,6 +8,7 @@
     truncated,
     overlapping,
     selectedDomains,
+    selectionAvailable,
     selectDomains,
   }: {
     groupBy: BulkGroupBy;
@@ -16,6 +17,7 @@
     truncated: boolean;
     overlapping: boolean;
     selectedDomains: ReadonlySet<string>;
+    selectionAvailable: boolean;
     selectDomains: (domains: string[]) => void | Promise<void>;
   } = $props();
 
@@ -40,8 +42,8 @@
       <div class="group-grid">
         {#each groups as group}
           <article>
-            <div><strong>{group.label}</strong><span>{group.domains.length} domain{group.domains.length === 1 ? '' : 's'} · {selectedCount(group)} selected</span></div>
-            <button type="button" class="btn small" onclick={() => selectDomains(group.domains)}>Select group</button>
+            <div><strong>{group.label}</strong><span>{group.domains.length} domain{group.domains.length === 1 ? '' : 's'} · {selectionAvailable ? `${selectedCount(group)} selected` : 'selection unavailable'}</span></div>
+            <button type="button" class="btn small" disabled={!selectionAvailable} onclick={() => selectDomains(group.domains)}>Select group</button>
           </article>
         {/each}
       </div>
@@ -55,7 +57,6 @@
   .bulk-groups{margin:16px 0;padding:14px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel)}
   .group-heading{display:flex;align-items:start;justify-content:space-between;gap:12px}
   .group-heading h3,.group-heading p{margin:0}
-  .eyebrow{color:var(--accent);font:650 var(--text-2xs) var(--mono);letter-spacing:.1em;text-transform:uppercase}
   .bulk-groups>p{margin:7px 0 0;color:var(--muted);font-size:var(--text-xs)}
   .group-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px}
   article{display:flex;min-width:0;align-items:center;justify-content:space-between;gap:10px;padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}

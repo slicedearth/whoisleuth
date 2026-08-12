@@ -3,7 +3,9 @@ import { describe, test } from 'node:test';
 
 import {
   auditRdapExtensionRegistry,
+  fetchOfficialRdapExtensionRegistry,
   main,
+  MAX_RDAP_EXTENSION_SOURCE_BYTES,
   parseRdapExtensionRegistryCsv,
   RDAP_EXTENSION_DRIFT_AUDIT_SCHEMA,
 } from '../tools/rdap-extension-drift-audit.mts';
@@ -68,5 +70,38 @@ beta,Any,[RFC0001],[IETF],COMMON\r
     });
     assert.equal(exitCode, 2);
     assert.match(stderr, /fixture failure/u);
+  });
+
+  test('keeps the manual official-source request bounded through its body read', async () => {
+    let forwardedSignal: AbortSignal | null = null;
+    const startedAt = Date.now();
+    await assert.rejects(fetchOfficialRdapExtensionRegistry({
+      timeoutMs: 20,
+      fetchDetailed: async (_url, options) => {
+        forwardedSignal = options.signal as AbortSignal;
+        return new Promise(() => {});
+      },
+    }), /20 ms request deadline/u);
+    assert.ok(Date.now() - startedAt < 1_000);
+    assert.ok(forwardedSignal);
+    assert.equal((forwardedSignal as AbortSignal).aborted, true);
+
+    await assert.rejects(fetchOfficialRdapExtensionRegistry({
+      timeoutMs: 20,
+      fetchDetailed: async () => ({
+        response: new Response(new ReadableStream({ pull: () => new Promise(() => {}) }), { status: 200 }),
+      }),
+    }), /20 ms request deadline/u);
+  });
+
+  test('rejects a truncated official source and accepts an exact-cap complete body', async () => {
+    await assert.rejects(fetchOfficialRdapExtensionRegistry({
+      fetchDetailed: async () => ({ response: new Response('x'.repeat(MAX_RDAP_EXTENSION_SOURCE_BYTES + 1)) }),
+    }), new RegExp(`exceeded ${MAX_RDAP_EXTENSION_SOURCE_BYTES} bytes`, 'u'));
+
+    const exact = 'x'.repeat(MAX_RDAP_EXTENSION_SOURCE_BYTES);
+    assert.equal(await fetchOfficialRdapExtensionRegistry({
+      fetchDetailed: async () => ({ response: new Response(exact) }),
+    }), exact);
   });
 });

@@ -2,13 +2,15 @@ import { createHash } from 'node:crypto';
 import { isIP } from 'node:net';
 import path from 'node:path';
 
-import { hammingDistanceHex, imagePerceptualHash } from '../../lib/perceptual-hash.mts';
+import { hammingDistanceHex, inspectDecodedImage } from '../../lib/perceptual-hash.mts';
 import { isValidAsciiHostname } from '../../lib/hostname.mts';
 import { readBoundedRegularFile } from '../../lib/bounded-file.mts';
 import {
   MAX_WEB_CAPTURE_MANIFEST_BYTES,
   MAX_WEB_CAPTURE_DOM_DIGEST_BYTES,
+  MAX_WEB_CAPTURE_DOM_ELEMENTS,
   MAX_WEB_CAPTURE_SCREENSHOT_BYTES,
+  MAX_WEB_CAPTURE_VISIBLE_TEXT_BYTES,
   WEB_CAPTURE_COMPARISON_SCHEMA,
   WEB_CAPTURE_COMPARISON_VERSION,
   WEB_CAPTURE_DOM_DIGEST_SCHEMA,
@@ -50,7 +52,6 @@ type Artifact = Readonly<{
   height: number | null;
 }>;
 type CaptureManifest = Readonly<{
-  manifestPath: string;
   domain: string;
   capturedAt: string;
   completeness: 'complete' | 'partial';
@@ -116,6 +117,11 @@ function nonNegativeInteger(value: unknown, maximum: number, label: string): num
     throw new Error(`${label} is outside the supported bound.`);
   }
   return Number(value);
+}
+
+function requiredBoolean(value: unknown, label: string): boolean {
+  if (typeof value !== 'boolean') throw new Error(`${label} must be a boolean.`);
+  return value;
 }
 
 function digest(value: unknown, label: string): string {
@@ -210,7 +216,7 @@ function parseArtifact(value: unknown, label: string): Artifact {
   };
 }
 
-function parseManifest(value: unknown, manifestPath: string): CaptureManifest {
+function parseManifest(value: unknown): CaptureManifest {
   const root = record(value);
   if (!root || !onlyKeys(root, ROOT_KEYS) || root.schema !== WEB_CAPTURE_MANIFEST_SCHEMA
     || root.schemaVersion !== WEB_CAPTURE_MANIFEST_VERSION || !Array.isArray(root.captures) || root.captures.length !== 1) {
@@ -239,7 +245,6 @@ function parseManifest(value: unknown, manifestPath: string): CaptureManifest {
   const capturedAt = timestamp(capture.capturedAt, 'Rendered capture time');
   if (sourceCollectedAt !== capturedAt) throw new Error('Rendered capture source time does not match its capture time.');
   return {
-    manifestPath,
     domain: captureDomain(capture.domain, 'Rendered capture domain'),
     capturedAt,
     completeness,
@@ -275,28 +280,36 @@ function parseDomDigest(value: unknown, expectedDomain: string, expectedCaptured
   return {
     domain,
     counts: {
-      elements: nonNegativeInteger(counts.elements, 20_000, 'Rendered element count'),
-      forms: nonNegativeInteger(counts.forms, 20_000, 'Rendered form count'),
-      controls: nonNegativeInteger(counts.controls, 20_000, 'Rendered control count'),
-      scripts: nonNegativeInteger(counts.scripts, 20_000, 'Rendered script count'),
-      images: nonNegativeInteger(counts.images, 20_000, 'Rendered image count'),
+      elements: nonNegativeInteger(counts.elements, MAX_WEB_CAPTURE_DOM_ELEMENTS, 'Rendered element count'),
+      forms: nonNegativeInteger(counts.forms, MAX_WEB_CAPTURE_DOM_ELEMENTS, 'Rendered form count'),
+      controls: nonNegativeInteger(counts.controls, MAX_WEB_CAPTURE_DOM_ELEMENTS, 'Rendered control count'),
+      scripts: nonNegativeInteger(counts.scripts, MAX_WEB_CAPTURE_DOM_ELEMENTS, 'Rendered script count'),
+      images: nonNegativeInteger(counts.images, MAX_WEB_CAPTURE_DOM_ELEMENTS, 'Rendered image count'),
     },
-    structure: { value: digest(structure.value, 'Rendered structure digest'), truncated: structure.truncated === true },
+    structure: {
+      value: digest(structure.value, 'Rendered structure digest'),
+      truncated: requiredBoolean(structure.truncated, 'Rendered structure truncation state'),
+    },
     visibleText: {
       value: digest(visibleText.value, 'Rendered visible-text digest'),
-      bytes: nonNegativeInteger(visibleText.bytes, 256 * 1024, 'Rendered visible-text byte count'),
-      truncated: visibleText.truncated === true,
+      bytes: nonNegativeInteger(visibleText.bytes, MAX_WEB_CAPTURE_VISIBLE_TEXT_BYTES, 'Rendered visible-text byte count'),
+      truncated: requiredBoolean(visibleText.truncated, 'Rendered visible-text truncation state'),
     },
   };
 }
 
 async function boundedFile(filePath: string, maximumBytes: number, expectedBytes: number | null, label: string): Promise<Buffer> {
-  return readBoundedRegularFile(filePath, {
-    maximumBytes,
-    minimumBytes: 1,
-    expectedBytes,
-    label,
-  });
+  try {
+    return await readBoundedRegularFile(filePath, {
+      maximumBytes,
+      minimumBytes: 1,
+      expectedBytes,
+      label,
+    });
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith(`${label} `)) throw error;
+    throw new Error(`${label} could not be read.`);
+  }
 }
 
 function sha256(value: Buffer): string {
@@ -311,12 +324,16 @@ async function loadCapture(manifestPath: string): Promise<LoadedCapture> {
   } catch {
     throw new Error('Rendered capture manifest is not valid JSON.');
   }
-  const manifest = parseManifest(parsed, manifestPath);
+  const manifest = parseManifest(parsed);
   const directory = path.dirname(manifestPath);
   const screenshotBytes = await boundedFile(path.join(directory, manifest.screenshot.fileName), MAX_SCREENSHOT_BYTES, manifest.screenshot.bytes, 'Rendered screenshot');
   const domBytes = await boundedFile(path.join(directory, manifest.domDigest.fileName), MAX_DOM_DIGEST_BYTES, manifest.domDigest.bytes, 'Rendered DOM digest');
   const screenshotHashVerified = sha256(screenshotBytes) === manifest.screenshot.sha256;
-  const screenshotPerceptualHashVerified = imagePerceptualHash(screenshotBytes) === manifest.screenshot.perceptualHash;
+  const screenshotInspection = inspectDecodedImage(screenshotBytes);
+  const screenshotPerceptualHashVerified = screenshotInspection.decodable
+    && screenshotInspection.width === manifest.screenshot.width
+    && screenshotInspection.height === manifest.screenshot.height
+    && screenshotInspection.perceptualHash === manifest.screenshot.perceptualHash;
   const domHashVerified = sha256(domBytes) === manifest.domDigest.sha256;
   if (!screenshotHashVerified || !screenshotPerceptualHashVerified || !domHashVerified) {
     throw new Error('Rendered capture artefact integrity verification failed.');
@@ -347,6 +364,10 @@ function scalarComparison(left: string | null, right: string | null) {
   if (!left && !right) return { state: 'not_observed' as const, left, right };
   if (!left || !right) return { state: 'unavailable' as const, left, right };
   return { state: left === right ? 'same' as const : 'different' as const, left, right };
+}
+
+function scalarStateComparison(left: string | null, right: string | null) {
+  return { state: scalarComparison(left, right).state };
 }
 
 export async function compareRenderedCaptures(
@@ -407,7 +428,7 @@ export async function compareRenderedCaptures(
       },
     },
     page: {
-      title: scalarComparison(left.manifest.title, right.manifest.title),
+      title: scalarStateComparison(left.manifest.title, right.manifest.title),
       finalOrigin: scalarComparison(left.manifest.finalOrigin, right.manifest.finalOrigin),
       requestDomains: setComparison(left.manifest.requestDomains, right.manifest.requestDomains),
       technologies: setComparison(left.manifest.technologies, right.manifest.technologies),
@@ -415,7 +436,7 @@ export async function compareRenderedCaptures(
     limitations: [
       'This offline comparison verifies and reads only two selected local capture packages; it makes no network request.',
       'Screenshot perceptual proximity is a review lead and does not establish copying, ownership, control, intent, safety, or maliciousness.',
-      'Rendered DOM and visible-text digests report exact equality only; a difference does not quantify how much content changed.',
+      'The structure digest compares only a bounded preorder element-tag sequence, so equal digests do not establish identical nesting, attributes, or DOM. The legacy visibleText field compares the bounded body text-node sequence, including text that may not be visually rendered. A difference does not quantify how much content changed.',
       'Blocked or truncated capture activity remains partial and is never interpreted as observed absence.',
     ],
   };
@@ -442,8 +463,8 @@ export function formatRenderedCaptureComparison(document: Awaited<ReturnType<typ
     `Evidence          ${document.partial ? 'Partial' : 'Complete'}`,
     '',
     `Screenshot        ${document.screenshot.state}${document.screenshot.agreementPercent === null ? '' : ` · ${document.screenshot.agreementPercent}% bit agreement`}`,
-    `DOM structure     ${document.renderedDom.structure.state}`,
-    `Visible text      ${document.renderedDom.visibleText.state}`,
+    `Element tags      ${document.renderedDom.structure.state}`,
+    `Body text nodes   ${document.renderedDom.visibleText.state}`,
     `Page title        ${document.page.title.state}`,
     `Final origin      ${document.page.finalOrigin.state}`,
     `Request domains   ${requestDomains.state} · ${requestDomains.sharedCount} shared`,

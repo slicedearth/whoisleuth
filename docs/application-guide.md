@@ -558,6 +558,10 @@ selectors remain published, and inventories bounded external nameserver,
 mail, SPF, and reporting dependencies. Resolver failures and exhausted bounds
 remain incomplete. External infrastructure is a review lead, not an ownership,
 insecurity, or exploitability claim.
+The MTA-STS policy request is confined to the official domain's fixed HTTPS
+policy host and well-known path. Redirects are not followed; a redirected
+response remains unavailable rather than being treated as an authenticated
+policy for the official domain.
 
 The **DMARC and SMTP TLS reports** workbench accepts deliberately selected
 aggregate XML or JSON reports, including bounded gzip and ZIP containers. It
@@ -1302,10 +1306,12 @@ bounded normalizer separately governs unknown fields inside its records.
 
 Workspace envelope version 5 accepts Case sections from schemas 2 through 12.
 Cases from schemas 2 through 11 migrate with no Brand Profile references;
-schema 12 preserves the exact field. A case import merges references
-existing-first and retains at most eight after inspecting at most 32 imported
-candidates, reporting any bounded omission. Omission cannot clear an existing
-reference. Profile imports still merge under their own identity rules: if a
+schema 12 preserves the exact field. Case parsing and import inspect at most
+2,000 parsed records before the 500-case store cap is applied; records beyond
+that inspection bound are reported as skipped rather than traversed. A case
+import merges references existing-first and retains at most eight after
+inspecting at most 32 imported candidates, reporting any bounded omission.
+Omission cannot clear an existing reference. Profile imports still merge under their own identity rules: if a
 same-named local profile has a different opaque identifier, the Case reference
 is not remapped and may remain unresolved. If the same exact profile identifier
 would represent a different normalised name, the profile merge and dependent

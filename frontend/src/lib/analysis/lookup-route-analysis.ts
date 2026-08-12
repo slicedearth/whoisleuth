@@ -25,9 +25,11 @@ import {
   buildLookupNetworkDisplay,
   buildLookupPageDisplay,
   buildLookupRegistryDisplay,
+  boundedTechnologyText,
   rec,
   records,
   show,
+  stringList,
 } from './lookup-display-model.ts';
 import { buildLookupInvestigationBrief } from './lookup-investigation-brief.ts';
 import type { LookupDepth, LookupTaskView } from './lookup-presentation.ts';
@@ -80,13 +82,14 @@ const OBSERVED_TASK_SOURCE_STATES = new Set(['success', 'partial']);
 
 function retainsTaskEvidence(source: unknown, expected: string, state: unknown): boolean {
   if (source !== expected) return false;
-  const normalizedState = String(state ?? '').trim().toLowerCase().replace(/[\s-]+/gu, '_');
+  const normalizedState = boundedTechnologyText(state, 40)
+    .toLowerCase()
+    .replace(/[\s-]+/gu, '_');
   return OBSERVED_TASK_SOURCE_STATES.has(normalizedState);
 }
 
 export function latestLookupTimestamp(...values: unknown[]): string | null {
   const timestamps = values
-    .flatMap((value) => Array.isArray(value) ? value : [value])
     .map((value) => typeof value === 'string' ? Date.parse(value) : Number.NaN)
     .filter(Number.isFinite);
   return timestamps.length ? new Date(Math.max(...timestamps)).toISOString() : null;
@@ -185,7 +188,9 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     securityPosture.observedAt,
     securityTxt.observedAt,
     sslbl.observedAt,
-    threatIntelligenceProviders.map((provider) => rec(rec(provider).observation).observedAt),
+    ...threatIntelligenceProviders
+      .slice(0, 10)
+      .map((provider) => rec(rec(provider).observation).observedAt),
   );
   const evidenceObservedAtById: Record<string, unknown> = {
     rdap: rdapDiagnostic.fetchedAt,
@@ -282,13 +287,13 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     currentCriticalAddresses: [{
       hostname: String(availability.domain || result?.registrableDomain || '').trim().toLowerCase(),
       addresses: [
-        ...(Array.isArray(dnsRecords.a) ? dnsRecords.a.map(String) : []),
-        ...(Array.isArray(dnsRecords.aaaa) ? dnsRecords.aaaa.map(String) : []),
+        ...stringList(dnsRecords.a, 16, 64),
+        ...stringList(dnsRecords.aaaa, 16, 64),
       ],
     }],
     currentRegistrationStatuses: [
-      ...(Array.isArray(rdapParsed.statuses) ? rdapParsed.statuses : []),
-      ...(Array.isArray(whoisParsed.statuses) ? whoisParsed.statuses : []),
+      ...stringList(rdapParsed.statuses, 100, 160),
+      ...stringList(whoisParsed.statuses, 100, 160),
     ],
     currentTlsSpkiSha256: tlsPublicKey.fingerprintSha256,
   };
@@ -626,8 +631,8 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     status: show(availability.state),
   };
   const caseEvidence = {
-    availability: String(availability.state || ''),
-    confidence: availability.confidence ? String(availability.confidence) : null,
+    availability: boundedTechnologyText(availability.state, 40),
+    confidence: boundedTechnologyText(availability.confidence, 40) || null,
     riskModelVersion: risk?.modelVersion ?? null,
     riskScore: risk?.score ?? null,
     opportunityModelVersion: opportunity?.modelVersion ?? null,
@@ -643,8 +648,8 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     hasMx: availability.hasMx ?? null,
     hasSpf: availability.hasSpf ?? null,
     hasDmarc: availability.hasDmarc ?? null,
-    activityStatus: availability.activityStatus ? String(availability.activityStatus) : null,
-    websiteProbeDetail: availability.websiteProbeDetail ? String(availability.websiteProbeDetail) : null,
+    activityStatus: boundedTechnologyText(availability.activityStatus, 40) || null,
+    websiteProbeDetail: boundedTechnologyText(availability.websiteProbeDetail, 500) || null,
     pageTitle: availability.pageTitle ?? null,
     faviconMatch: profileSignals.faviconMatch ?? null,
     faviconNearMatch: profileSignals.faviconNearMatch ?? null,

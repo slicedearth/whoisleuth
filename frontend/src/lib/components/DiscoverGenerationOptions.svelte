@@ -162,11 +162,11 @@
 <style>
   .generation-presets{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px}
   .generation-presets button{min-width:0;padding:11px 12px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel);color:var(--muted);text-align:left}
-  .generation-presets button:hover{border-color:rgb(var(--accent2-rgb) / .55)}
-  .generation-presets button.active{border-color:var(--accent2);background:rgb(var(--accent2-rgb) / .08);box-shadow:inset 3px 0 0 var(--accent2)}
+  .generation-presets button:hover{border-color:rgb(var(--interface-accent-rgb) / .55)}
+  .generation-presets button.active{border-color:var(--interface-accent);background:rgb(var(--interface-accent-rgb) / .08);box-shadow:inset 3px 0 0 var(--interface-accent)}
   .generation-presets strong,.generation-presets small{display:block}
   .generation-presets strong{color:var(--text);font:700 var(--text-xs) var(--mono)}
-  .generation-presets button.active strong{color:var(--accent2)}
+  .generation-presets button.active strong{color:var(--interface-accent)}
   .generation-presets small{margin-top:4px;font-size:var(--text-2xs);line-height:1.5}
   .generation-options{display:flex;align-items:end;gap:12px;margin-top:10px}
   .generation-options label{min-width:170px}
@@ -186,6 +186,7 @@
   .custom-dictionary textarea{min-height:96px}
   .dictionary-file{display:flex;align-items:center;gap:10px;margin-top:8px}
   .dictionary-file label{position:relative;overflow:hidden;cursor:pointer}
+  .dictionary-file label:focus-within{outline:2px solid var(--focus);outline-offset:3px}
   .dictionary-file label.disabled{cursor:not-allowed;opacity:.55}
   .dictionary-file input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
   .dictionary-note{margin:8px 0 0;color:var(--amber)!important}

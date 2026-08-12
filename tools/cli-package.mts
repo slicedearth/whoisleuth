@@ -15,6 +15,7 @@ import {
   WHOISLEUTH_SOURCE_REPOSITORY_GIT_URL,
 } from '../lib/project-metadata.mts';
 import { normalizeSemanticVersion } from './release-version-check.mts';
+import { buildThirdPartyNotices } from './third-party-notices.mts';
 import {
   boundedPositiveInteger as positiveInteger,
   requireJsonRecord as record,
@@ -76,7 +77,7 @@ export const MAX_CLI_PACKAGE_GRAPH_BYTES = 8 * 1024 * 1024;
 // reviewed margin above the installed command surface. The retained-artifact
 // ledger deliberately reuses four bounded analysis modules; byte ceilings
 // remain the primary package-bloat boundary.
-export const MAX_CLI_PACKAGE_MODULES = 280;
+export const MAX_CLI_PACKAGE_MODULES = 288;
 export const MAX_CLI_PACKAGE_SOURCE_BYTES = 8 * 1024 * 1024;
 export const MAX_CLI_PACKAGE_FILE_BYTES = 2 * 1024 * 1024;
 // Keep a modest growth margin while the packed and unpacked byte ceilings remain
@@ -89,48 +90,13 @@ export const CLI_PACKAGE_INSTALLED_CHECK_TIMEOUT_MS = 15_000;
 
 const LOCAL_SOURCE_PATTERN = /^(?:bin|cli|lib|frontend\/src\/lib\/analysis)\/[A-Za-z0-9._/-]+\.(?:mts|ts)$/u;
 const REQUIRED_SOURCE_MODULES = Object.freeze(['bin/whoisleuth.mts', 'cli/runner.mts']);
-const RUNTIME_DEPENDENCIES = Object.freeze([
+export const CLI_RUNTIME_DEPENDENCIES = Object.freeze([
   '@peculiar/x509',
   'maxmind',
   'parse5',
   'reflect-metadata',
   'tldts',
   'undici',
-]);
-const INSTALLED_COMMAND_HELP_CHECKS = Object.freeze([
-  'lookup',
-  'bulk',
-  'http',
-  'tls',
-  'posture',
-  'ct-search',
-  'discover',
-  'registry-support',
-  'registry-doctor',
-  'source-report',
-  'compare',
-  'page-compare',
-  'mail-review',
-  'review-evidence',
-  'domain-control',
-  'assurance',
-  'sharing-review',
-  'workflow-plan',
-  'diff',
-  'reconcile',
-  'timeline',
-  'export',
-  'inspect-archive',
-  'verify-artifact',
-  'interchange-report',
-  'sign-artifact',
-  'verify-signature',
-  'risk-calibrate',
-  'lookalike-calibrate',
-  'doctor',
-  'commands',
-  'completion',
-  'manual',
 ]);
 const SUPPORT_FILES = Object.freeze([
   ['packages/cli/README.md', 'README.md'],
@@ -142,7 +108,6 @@ const SUPPORT_FILES = Object.freeze([
   ['SECURITY.md', 'SECURITY.md'],
   ['TRADEMARKS.md', 'TRADEMARKS.md'],
   ['LICENSES/Retire.js-Apache-2.0.txt', 'LICENSES/Retire.js-Apache-2.0.txt'],
-  ['frontend/static/third-party-notices.txt', 'third-party-notices.txt'],
 ] as const);
 
 function boundedString(value: unknown, label: string, maxLength = 240): string {
@@ -247,7 +212,7 @@ export function buildCliPackageManifest(
   }
 
   const selectedDependencies: Record<string, string> = {};
-  for (const dependency of RUNTIME_DEPENDENCIES) {
+  for (const dependency of CLI_RUNTIME_DEPENDENCIES) {
     const requested = boundedString(rootDependencies[dependency], `Root dependency ${dependency}`, 128);
     if (lockRootDependencies[dependency] !== requested) {
       throw new TypeError(`Root dependency ${dependency} must match the lockfile request.`);
@@ -449,6 +414,16 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
     await validatePackageSources(repositoryRoot, sources, copyState);
     await compilePackageSources(repositoryRoot, temporaryRoot, stagingRoot, sources);
     for (const [source, destination] of SUPPORT_FILES) await copyPackageFile(repositoryRoot, stagingRoot, source, destination, copyState);
+    const cliNotices = await buildThirdPartyNotices(repositoryRoot, {
+      directDependencyNames: CLI_RUNTIME_DEPENDENCIES,
+      scopeLabel: 'CLI',
+    });
+    const cliNoticeBytes = Buffer.byteLength(cliNotices, 'utf8');
+    if (cliNoticeBytes > MAX_CLI_PACKAGE_FILE_BYTES || copyState.totalBytes + cliNoticeBytes > MAX_CLI_PACKAGE_SOURCE_BYTES) {
+      throw new TypeError('Generated CLI third-party notices exceed the package source boundary.');
+    }
+    copyState.totalBytes += cliNoticeBytes;
+    await writeFile(path.join(stagingRoot, 'third-party-notices.txt'), cliNotices, { encoding: 'utf8', mode: 0o644 });
     await writeFile(path.join(stagingRoot, 'package.json'), `${JSON.stringify(manifest, null, 2)}\n`, { encoding: 'utf8', mode: 0o644 });
 
     const npmCache = path.join(temporaryRoot, 'npm-cache');
@@ -473,7 +448,13 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
     const unpackedBytes = positiveInteger(packResult.unpackedSize, 'Unpacked CLI bytes', MAX_CLI_PACKAGE_UNPACKED_BYTES);
     const filename = safeRelativePath(packResult.filename, 'Packed CLI filename');
     const tarball = path.join(artifactsRoot, filename);
-    const requiredEntries = ['bin/whoisleuth.mjs', 'cli/runner.mjs', 'package.json', 'README.md', 'DISCLOSURE', 'LICENSE', 'SECURITY.md', 'docs/cli.md', 'docs/cli-reference.md'];
+    const requiredEntries = [
+      'bin/whoisleuth.mjs',
+      'cli/runner.mjs',
+      'package.json',
+      'third-party-notices.txt',
+      ...SUPPORT_FILES.map(([, destination]) => destination),
+    ];
     for (const required of requiredEntries) {
       if (!entries.includes(required)) throw new TypeError(`Packed CLI is missing ${required}.`);
     }
@@ -522,16 +503,16 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
     }
     const installedDependencies = record(installedManifest.dependencies, 'Installed CLI dependencies');
     const generatedDependencies = record(manifest.dependencies, 'Generated CLI dependencies');
-    if (Object.keys(installedDependencies).length !== RUNTIME_DEPENDENCIES.length) {
+    if (Object.keys(installedDependencies).length !== CLI_RUNTIME_DEPENDENCIES.length) {
       throw new TypeError('Installed CLI must retain only the bounded runtime dependencies.');
     }
-    for (const dependency of RUNTIME_DEPENDENCIES) {
+    for (const dependency of CLI_RUNTIME_DEPENDENCIES) {
       if (installedDependencies[dependency] !== generatedDependencies[dependency]) {
         throw new TypeError(`Installed CLI dependency ${dependency} does not match the generated exact version.`);
       }
     }
     const runtimeDependencies = Object.freeze(Object.fromEntries(
-      RUNTIME_DEPENDENCIES.map((dependency) => [
+      CLI_RUNTIME_DEPENDENCIES.map((dependency) => [
         dependency,
         boundedString(generatedDependencies[dependency], `Generated CLI dependency ${dependency}`, 128),
       ]),
@@ -595,7 +576,15 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
     }
 
     const commandHelpChecks: string[] = [];
-    for (const command of INSTALLED_COMMAND_HELP_CHECKS) {
+    const catalogueCommands = commandCatalogue.commands.map((entry, index) => boundedString(
+      record(entry, `Installed command catalogue entry ${index + 1}`).command,
+      `Installed command catalogue entry ${index + 1} command`,
+      80,
+    ));
+    if (!catalogueCommands.length || catalogueCommands.length > 100 || new Set(catalogueCommands).size !== catalogueCommands.length) {
+      throw new TypeError('Installed command catalogue must contain a bounded unique command list.');
+    }
+    for (const command of catalogueCommands) {
       const commandHelp = await runInstalledCheck(executable, [command, '--help'], `${command} help`);
       if (!commandHelp.includes(`whoisleuth ${command}`)) {
         throw new TypeError(`Installed ${command} help did not preserve its command contract.`);

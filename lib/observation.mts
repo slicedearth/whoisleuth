@@ -59,9 +59,10 @@ const STATUSES = new Set<ObservationStatus>([
   'not_applicable',
 ]);
 const SCAN_MODES = new Set<ScanMode>(['fast', 'deep']);
-const MAX_LIMITATIONS = 10;
-const MAX_LIMITATION_LENGTH = 300;
-const MAX_DIAGNOSTICS = 20;
+const MAX_OBSERVATION_LIMITATIONS = 10;
+const MAX_OBSERVATION_LIMITATION_LENGTH = 300;
+const MAX_OBSERVATION_DIAGNOSTICS = 20;
+const MAX_DIAGNOSTICS = MAX_OBSERVATION_DIAGNOSTICS;
 const MAX_DIAGNOSTIC_KEY = 40;
 const MAX_DIAGNOSTIC_STRING = 240;
 const MAX_DURATION_MS = 120_000;
@@ -121,9 +122,9 @@ function createObservation(input: ObservationInput = {}): Observation {
   const observedAt = isoTimestamp(input.observedAt) || new Date().toISOString();
   const duration = Number(input.durationMs);
   const limitations = [...new Set((Array.isArray(input.limitations) ? input.limitations : [])
-    .map((item) => safeString(item, MAX_LIMITATION_LENGTH))
+    .map((item) => safeString(item, MAX_OBSERVATION_LIMITATION_LENGTH))
     .filter((item): item is string => item !== null))]
-    .slice(0, MAX_LIMITATIONS);
+    .slice(0, MAX_OBSERVATION_LIMITATIONS);
   return {
     version: OBSERVATION_VERSION,
     status,
@@ -158,6 +159,9 @@ function readObservationEnvelope(value: unknown): ObservationReadResult {
 }
 
 export {
+  MAX_OBSERVATION_DIAGNOSTICS,
+  MAX_OBSERVATION_LIMITATIONS,
+  MAX_OBSERVATION_LIMITATION_LENGTH,
   OBSERVATION_VERSION,
   createObservation,
   readObservationEnvelope,

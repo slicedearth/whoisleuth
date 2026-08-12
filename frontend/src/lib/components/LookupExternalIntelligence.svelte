@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { evidenceStatusTone } from '$lib/analysis/evidence-status-tone.ts';
+  import { evidenceStatusChipClass } from '$lib/analysis/evidence-status-tone.ts';
 
   type JsonRecord = Record<string, unknown>;
   type RiskContext = {
@@ -23,11 +23,7 @@
     : {};
 
   function providerChipClass(state: unknown): string {
-    const tone = evidenceStatusTone(state);
-    if (tone === 'complete') return 'info';
-    if (tone === 'partial') return 'warn';
-    if (tone === 'error') return 'danger';
-    return '';
+    return evidenceStatusChipClass(state);
   }
 </script>
 
@@ -52,7 +48,7 @@
     <article>
       <div class="threat-source"><strong>{showValue(providerIdentity.label)}</strong><span class="chip {providerChipClass(provider.state)}">{showValue(provider.state)}</span></div>
       {#if provider.detail}<p>{showValue(provider.detail)}</p>{/if}
-      {#if findings.length}<ul>{#each findings as finding}<li class="callout warn"><div><strong>{showValue(finding.category)}</strong><span>{[finding.providerVerdict, finding.lastObservedAt ? formatDate(finding.lastObservedAt) : null].filter(Boolean).join(' · ')}</span></div>{#if finding.detail}<p>{showValue(finding.detail)}</p>{/if}{#if typeof finding.referenceUrl === 'string'}<a href={finding.referenceUrl} target="_blank" rel="noopener noreferrer">View attributed provider record</a>{/if}</li>{/each}</ul>{/if}
+      {#if findings.length}<ul>{#each findings as finding}<li class="callout warn"><div><strong>{showValue(finding.category)}</strong><span>{[finding.providerVerdict, finding.lastObservedAt ? formatDate(finding.lastObservedAt) : null].filter(Boolean).join(' · ')}</span></div>{#if finding.detail}<p>{showValue(finding.detail)}</p>{/if}{#if typeof finding.referenceUrl === 'string'}<a href={finding.referenceUrl} target="_blank" rel="noopener noreferrer">View attributed provider record<span class="sr-only"> (opens in a new tab)</span></a>{/if}</li>{/each}</ul>{/if}
       {#if Array.isArray(providerObservation.limitations) && providerObservation.limitations.length}<details class="disclosure"><summary>Limitations</summary><ul class="limitation-list">{#each providerObservation.limitations as limitation}<li>{showValue(limitation)}</li>{/each}</ul></details>{/if}
     </article>
   {/each}

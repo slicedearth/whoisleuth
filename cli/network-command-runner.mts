@@ -2,6 +2,16 @@ import { fetchHomepage } from '../lib/availability.mts';
 import { searchCertificateTransparency } from '../lib/ct-search.mts';
 import { checkDomainPosture, normalizeAuditDomain, normalizeDkimSelectors } from '../lib/domain-posture.mts';
 import { collectTlsIntelligence, normalizeTlsHostname } from '../lib/tls-intelligence.mts';
+import {
+  MAX_DNSSEC_TRUST_ANCHOR_BYTES,
+  formatDnssecChainReport,
+  validateDnssecChain,
+} from '../lib/dnssec-chain-validation.mts';
+import {
+  MAX_MAIL_TRANSPORT_INPUT_BYTES,
+  collectMailTransportReview,
+  formatMailTransportReview,
+} from '../lib/smtp-transport-review.mts';
 import type { CliArguments } from './arguments.mts';
 import { CliUsageError } from './errors.mts';
 import {
@@ -25,7 +35,7 @@ import EXIT_CODES from './exit-codes.mts';
 import { buildPostureSarif } from './ci-report.mts';
 
 type NetworkCommandArguments = Extract<CliArguments, {
-  action: 'ct-search' | 'posture' | 'http' | 'tls';
+  action: 'ct-search' | 'posture' | 'http' | 'tls' | 'dnssec-validate' | 'mail-transport';
 }>;
 
 async function runNetworkCommand(
@@ -93,6 +103,75 @@ async function runNetworkCommand(
         : context.terminal(formatTerminalHttp(document), args.color));
     }
     return EXIT_CODES.SUCCESS;
+  }
+
+  if (args.action === 'dnssec-validate') {
+    let anchorInput: string;
+    try {
+      anchorInput = dependencies.readTrustAnchorInput
+        ? await dependencies.readTrustAnchorInput(args.trustAnchorSource)
+        : await context.readInput(args.trustAnchorSource, MAX_DNSSEC_TRUST_ANCHOR_BYTES, 'DNSSEC trust anchor');
+    } catch (error) {
+      if (error instanceof CliUsageError) throw error;
+      throw new CliUsageError(`Could not read DNSSEC trust anchor: ${String(error instanceof Error ? error.message : error).slice(0, 240)}`);
+    }
+    const validate = dependencies.validateDnssecChain ?? validateDnssecChain;
+    const report = await context.withProgress('Validating the isolated DNSSEC chain', () => validate({
+      target: args.target,
+      resolver: args.resolver,
+      trustAnchor: anchorInput,
+      observedAt: context.now(),
+      ownedOrAuthorized: args.ownedOrAuthorized,
+    }));
+    if (!args.quiet) {
+      context.writeStdout(args.output === 'json'
+        ? formatJsonDocument(report)
+        : context.terminal(formatDnssecChainReport(report), args.color));
+    }
+    return report.state === 'secure' || report.state === 'insecure'
+      ? EXIT_CODES.SUCCESS
+      : EXIT_CODES.PARTIAL_FAILURE;
+  }
+
+  if (args.action === 'mail-transport') {
+    let input: string;
+    let anchorInput: string;
+    try {
+      input = await (dependencies.readMailTransportInput
+        ? dependencies.readMailTransportInput(args.source)
+        : context.readInput(args.source, MAX_MAIL_TRANSPORT_INPUT_BYTES, 'Mail transport input'));
+    } catch (error) {
+      if (error instanceof CliUsageError) throw error;
+      throw new CliUsageError(`Could not read mail transport input: ${String(error instanceof Error ? error.message : error).slice(0, 240)}`);
+    }
+    try {
+      anchorInput = await (dependencies.readTrustAnchorInput
+        ? dependencies.readTrustAnchorInput(args.trustAnchorSource)
+        : context.readInput(args.trustAnchorSource, MAX_DNSSEC_TRUST_ANCHOR_BYTES, 'DNSSEC trust anchor'));
+    } catch (error) {
+      if (error instanceof CliUsageError) throw error;
+      throw new CliUsageError(`Could not read DNSSEC trust anchor: ${String(error instanceof Error ? error.message : error).slice(0, 240)}`);
+    }
+    if (!input.trim()) throw new CliUsageError('mail-transport requires one versioned JSON file or a document on stdin.');
+    const collect = dependencies.collectMailTransportReview ?? collectMailTransportReview;
+    let review;
+    try {
+      review = await context.withProgress('Reviewing selected authorised mail transports', () => collect(input, {
+        resolver: args.resolver,
+        trustAnchor: anchorInput,
+        ownedOrAuthorized: args.ownedOrAuthorized,
+        activeProbeAcknowledged: args.activeProbeAcknowledged,
+      }));
+    } catch (error) {
+      if (error instanceof TypeError) throw new CliUsageError(error.message);
+      throw error;
+    }
+    if (!args.quiet) {
+      context.writeStdout(args.output === 'json'
+        ? formatJsonDocument(review)
+        : context.terminal(formatMailTransportReview(review), args.color));
+    }
+    return review.runState === 'complete' ? EXIT_CODES.SUCCESS : EXIT_CODES.PARTIAL_FAILURE;
   }
 
   const requestedHostname = args.hostname || await context.readSingleInput();

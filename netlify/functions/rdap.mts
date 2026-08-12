@@ -5,7 +5,14 @@ import { guardNetlifyNetworkRequest, withNetlifyOperationBudget } from '../../li
 import { json, withNetlifyApiErrorBoundary } from '../../lib/http.mts';
 import type { NetlifyFunctionHandler } from '../../lib/netlify-function-types.mts';
 
-const handleRdap: NetlifyFunctionHandler = async (event) => {
+type RdapHandlerDependencies = Readonly<{
+  fetchRdapRecord: typeof fetchRdapRecord;
+}>;
+
+async function handleRdap(
+  event: Parameters<NetlifyFunctionHandler>[0],
+  dependencies: RdapHandlerDependencies = { fetchRdapRecord },
+): ReturnType<NetlifyFunctionHandler> {
   const guard = guardNetlifyNetworkRequest(event, 'rdap');
   if (guard.response) return guard.response;
 
@@ -15,12 +22,12 @@ const handleRdap: NetlifyFunctionHandler = async (event) => {
   let classified;
   try {
     classified = classifyQuery(q);
-  } catch (err) {
-    return json(400, { error: err instanceof Error ? err.message : 'Invalid query' });
+  } catch {
+    return json(400, { error: 'Invalid query' });
   }
 
   return withNetlifyOperationBudget(guard.sessionKey, operationBudgetTargetFor('rdap'), async () => {
-    const record = await fetchRdapRecord(classified.type, classified.value);
+    const record = await dependencies.fetchRdapRecord(classified.type, classified.value);
     if (!record) {
       return json(404, { error: `No RDAP registry found for "${q}" via IANA bootstrap` });
     }
@@ -33,8 +40,17 @@ const handleRdap: NetlifyFunctionHandler = async (event) => {
       ...record,
     });
   });
-};
+}
 
-const handler = withNetlifyApiErrorBoundary(handleRdap);
+function createRdapHandler(
+  dependencies: RdapHandlerDependencies = { fetchRdapRecord },
+): NetlifyFunctionHandler {
+  return withNetlifyApiErrorBoundary(
+    (request) => handleRdap(request, dependencies),
+  );
+}
 
-export { handler };
+const handler = createRdapHandler();
+
+export { createRdapHandler, handler };
+export type { RdapHandlerDependencies };

@@ -98,10 +98,10 @@
   .refresh-results li{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 8px}
   .refresh-results p{margin:0}
   .refresh-results small{grid-column:2}
-  .state{align-self:start;padding:3px 6px;border:1px solid var(--border);border-radius:99px;font:650 var(--text-2xs) var(--mono);text-transform:capitalize}
-  .state-complete{color:var(--accent)}
-  .state-limited{color:var(--amber)}
-  .state-unavailable{color:var(--danger)}
+  .state{align-self:start;padding:3px 6px;border:1px solid var(--border-strong);border-radius:999px;color:var(--text);font:650 var(--text-2xs) var(--mono);text-transform:capitalize}
+  .state-complete{color:var(--text)}
+  .state-limited{border-color:var(--amber);border-style:dashed;color:var(--amber)}
+  .state-unavailable{border-color:var(--muted);border-style:dotted;color:var(--muted)}
   .limitations{margin:0;padding-left:18px}
   .refresh-status:empty{min-height:0;margin:0}
   @media(max-width:760px){.refresh-actions{grid-template-columns:1fr}}

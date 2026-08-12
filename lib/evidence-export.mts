@@ -1,6 +1,7 @@
 import { compareRdapPublications, compareRegistrySources } from './registry-comparison.mts';
 import { buildRegistryInsights } from './registry-insights.mts';
 import { buildPortableGeneratorMetadata } from './portable-generator.mts';
+import { assertBoundedJsonStructure, isSafeJsonObjectKey } from './bounded-json.mts';
 
 export const LOOKUP_EVIDENCE_SCHEMA = 'whoisleuth.lookup-evidence';
 export const LEGACY_LOOKUP_EVIDENCE_SCHEMA_VERSION = 25;
@@ -241,44 +242,75 @@ function portableOrigin(value: unknown): string | null {
  * This is deliberately recursive because imported browser-local records are
  * untrusted even when their top-level source envelope is recognised.
  */
-export function projectLookupEvidencePrivacySafeTree<T>(value: T): T {
-  if (value === null || typeof value === 'boolean' || typeof value === 'number') return value;
-  if (typeof value === 'string') {
-    const sanitized = value.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/gu, ' ');
-    return (sanitized.length <= LOOKUP_EVIDENCE_PORTABLE_MAX_STRING_LENGTH
-      ? sanitized
-      : sanitized.slice(0, LOOKUP_EVIDENCE_PORTABLE_MAX_STRING_LENGTH)) as T;
+type PortableProjectionState = { entries: number };
+
+function consumePortableProjectionEntry(state: PortableProjectionState, depth: number): void {
+  state.entries += 1;
+  if (state.entries > LOOKUP_EVIDENCE_PORTABLE_MAX_ENTRIES) {
+    throw new TypeError(`Lookup evidence projection exceeds the ${LOOKUP_EVIDENCE_PORTABLE_MAX_ENTRIES.toLocaleString('en')}-entry portable limit.`);
   }
+  if (depth > LOOKUP_EVIDENCE_PORTABLE_MAX_DEPTH) {
+    throw new TypeError(`Lookup evidence projection exceeds the ${LOOKUP_EVIDENCE_PORTABLE_MAX_DEPTH}-level portable nesting limit.`);
+  }
+}
+
+function projectPortableString(value: string): string {
+  const sanitized = value.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/gu, ' ');
+  return sanitized.length <= LOOKUP_EVIDENCE_PORTABLE_MAX_STRING_LENGTH
+    ? sanitized
+    : sanitized.slice(0, LOOKUP_EVIDENCE_PORTABLE_MAX_STRING_LENGTH);
+}
+
+function projectLookupEvidencePrivacySafeTreeValue<T>(
+  value: T,
+  state: PortableProjectionState,
+  depth: number,
+): T {
+  consumePortableProjectionEntry(state, depth);
+  if (value === null || typeof value === 'boolean' || typeof value === 'number') return value;
+  if (typeof value === 'string') return projectPortableString(value) as T;
   if (Array.isArray(value)) {
     return value.slice(0, LOOKUP_EVIDENCE_PORTABLE_MAX_ARRAY_ITEMS)
-      .map((item) => projectLookupEvidencePrivacySafeTree(item)) as T;
+      .map((item) => projectLookupEvidencePrivacySafeTreeValue(item, state, depth + 1)) as T;
   }
   const source = recordOrNull(value);
   if (!source) return null as T;
   const output: UnknownRecord = {};
   for (const [key, item] of Object.entries(source).slice(0, LOOKUP_EVIDENCE_PORTABLE_MAX_ARRAY_ITEMS)) {
+    if (!isSafeJsonObjectKey(key)) throw new TypeError('Lookup evidence projection contains an unsafe object key.');
     const normalized = normalizedEvidenceKey(key);
     if (privateEvidenceKey(normalized, item)) continue;
     if (typeof item === 'string' && PORTABLE_URL_KEYS.has(normalized)) {
+      consumePortableProjectionEntry(state, depth + 1);
       output[key] = portableUri(item);
       continue;
     }
-    output[key] = projectLookupEvidencePrivacySafeTree(item);
+    output[key] = projectLookupEvidencePrivacySafeTreeValue(item, state, depth + 1);
   }
   return output as T;
 }
 
-function projectLookupEvidenceAvailabilityValue(value: unknown, parentKey: string | null): unknown {
+export function projectLookupEvidencePrivacySafeTree<T>(value: T): T {
+  return projectLookupEvidencePrivacySafeTreeValue(value, { entries: 0 }, 0);
+}
+
+function projectLookupEvidenceAvailabilityValue(
+  value: unknown,
+  parentKey: string | null,
+  state: PortableProjectionState,
+  depth: number,
+): unknown {
+  consumePortableProjectionEntry(state, depth);
   if (value === null || typeof value === 'boolean' || typeof value === 'number') return value;
   if (typeof value === 'string') {
     const normalizedParent = normalizedEvidenceKey(parentKey || '');
     if (PORTABLE_URL_KEYS.has(normalizedParent)) return portableUri(value);
     if (PORTABLE_ORIGIN_COLLECTION_KEYS.has(normalizedParent)) return portableOrigin(value);
-    return projectLookupEvidencePrivacySafeTree(value);
+    return projectPortableString(value);
   }
   if (Array.isArray(value)) {
     return value.slice(0, LOOKUP_EVIDENCE_PORTABLE_MAX_ARRAY_ITEMS)
-      .map((item) => projectLookupEvidenceAvailabilityValue(item, parentKey));
+      .map((item) => projectLookupEvidenceAvailabilityValue(item, parentKey, state, depth + 1));
   }
   const source = recordOrNull(value);
   if (!source) return null;
@@ -286,7 +318,7 @@ function projectLookupEvidenceAvailabilityValue(value: unknown, parentKey: strin
   for (const [key, item] of Object.entries(source).slice(0, LOOKUP_EVIDENCE_PORTABLE_MAX_ARRAY_ITEMS)) {
     if (!LOOKUP_AVAILABILITY_PORTABLE_NESTED_KEYS.has(key)
       || privateEvidenceKey(key, item)) continue;
-    output[key] = projectLookupEvidenceAvailabilityValue(item, key);
+    output[key] = projectLookupEvidenceAvailabilityValue(item, key, state, depth + 1);
   }
   return output;
 }
@@ -300,20 +332,24 @@ function projectLookupEvidenceAvailabilityValue(value: unknown, parentKey: strin
 export function projectLookupEvidenceAvailability(value: unknown): UnknownRecord | null {
   const source = recordOrNull(value);
   if (!source) return null;
+  const state: PortableProjectionState = { entries: 0 };
+  consumePortableProjectionEntry(state, 0);
   const output: UnknownRecord = {};
   for (const key of LOOKUP_AVAILABILITY_ANALYSIS_KEYS) {
     if (!Object.hasOwn(source, key)) continue;
     const item = source[key];
     if (privateEvidenceKey(key, item)) continue;
-    output[key] = projectLookupEvidenceAvailabilityValue(item, key);
+    output[key] = projectLookupEvidenceAvailabilityValue(item, key, state, 1);
   }
   return output;
 }
 
 export function assertLookupEvidencePrivacySafeTree(value: unknown): void {
+  assertLookupEvidencePortableTree(value);
   const pending: unknown[] = [value];
   while (pending.length) {
     const current = pending.pop();
+    if (current === null || typeof current === 'boolean' || typeof current === 'number') continue;
     if (typeof current === 'string') {
       if (projectLookupEvidencePrivacySafeTree(current) !== current) {
         throw new TypeError('Lookup evidence contains a non-portable string value.');
@@ -321,11 +357,11 @@ export function assertLookupEvidencePrivacySafeTree(value: unknown): void {
       continue;
     }
     if (Array.isArray(current)) {
-      pending.push(...current);
+      for (const item of current) pending.push(item);
       continue;
     }
     const source = recordOrNull(current);
-    if (!source) continue;
+    if (!source) throw new TypeError('Lookup evidence contains a non-JSON value.');
     for (const [key, item] of Object.entries(source)) {
       const normalized = normalizedEvidenceKey(key);
       if (privateEvidenceKey(normalized, item)) {
@@ -368,6 +404,13 @@ export function assertLookupEvidencePortableTree(value: unknown): void {
       }
       continue;
     }
+    if (current.value === null || typeof current.value === 'boolean') continue;
+    if (typeof current.value === 'number') {
+      if (!Number.isFinite(current.value)) {
+        throw new TypeError('Lookup evidence contains a non-finite number.');
+      }
+      continue;
+    }
     if (Array.isArray(current.value)) {
       if (current.value.length > LOOKUP_EVIDENCE_PORTABLE_MAX_ARRAY_ITEMS) {
         throw new TypeError('Lookup evidence contains an over-bound array.');
@@ -377,14 +420,21 @@ export function assertLookupEvidencePortableTree(value: unknown): void {
     }
     if (current.value && typeof current.value === 'object') {
       const source = current.value as UnknownRecord;
+      const prototype = Object.getPrototypeOf(source);
+      if (prototype !== Object.prototype && prototype !== null) {
+        throw new TypeError('Lookup evidence contains a non-JSON object.');
+      }
       const keys = Object.keys(source);
       if (keys.length > LOOKUP_EVIDENCE_PORTABLE_MAX_ARRAY_ITEMS
         || keys.some((key) => key.length > LOOKUP_EVIDENCE_PORTABLE_MAX_KEY_LENGTH
-          || /[\u0000-\u001f\u007f]/u.test(key))) {
+          || /[\u0000-\u001f\u007f]/u.test(key)
+          || !isSafeJsonObjectKey(key))) {
         throw new TypeError('Lookup evidence contains an over-bound object.');
       }
       for (const item of Object.values(source)) pending.push({ value: item, depth: current.depth + 1 });
+      continue;
     }
+    throw new TypeError('Lookup evidence contains a non-JSON value.');
   }
 }
 
@@ -1024,6 +1074,7 @@ function registrarPublicationComparison(body: UnknownRecord, registryParsed: Unk
 }
 
 export function buildLookupEvidence(response: unknown, options: LookupEvidenceOptions = {}) {
+  assertBoundedJsonStructure(response, 'Lookup response');
   const { generatedAt = new Date().toISOString(), idnAnalysis = null, applicationVersion = null } = options;
   const body = recordOrNull(response) || {};
   const rdap = recordOrNull(body.rdap);
@@ -1057,7 +1108,7 @@ export function buildLookupEvidence(response: unknown, options: LookupEvidenceOp
   const query = projectLookupEvidenceQuery(body);
   const availabilityAnalysis = projectLookupEvidenceAvailability(body.availability);
   const idn = projectedKnownRecord(idnAnalysis, LOOKUP_IDN_ANALYSIS_KEYS);
-  return {
+  const evidence = {
     schema: LOOKUP_EVIDENCE_SCHEMA,
     schemaVersion: LOOKUP_EVIDENCE_SCHEMA_VERSION,
     generatedAt,
@@ -1085,6 +1136,8 @@ export function buildLookupEvidence(response: unknown, options: LookupEvidenceOp
       ),
     },
   };
+  assertLookupEvidencePortableTree(evidence);
+  return evidence;
 }
 
 export function evidenceFilename(response: unknown, now = Date.now()) {

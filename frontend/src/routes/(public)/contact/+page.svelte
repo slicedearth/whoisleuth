@@ -268,7 +268,7 @@
       <div><dt>Security report</dt><dd>A vulnerability or security concern involving WHOISleuth itself.</dd></div>
     </dl>
     <p>This form does not submit an abuse report about a third-party domain, host, registrar, or registry. Use the evidence and response workflow in the Console to identify and review an appropriate recipient.</p>
-    <p>The verification widget is provided by Cloudflare and receives ordinary browser request data under its <a href="https://www.cloudflare.com/privacypolicy/" target="_blank" rel="noopener">privacy policy</a>.</p>
+    <p>The verification widget is provided by Cloudflare and receives ordinary browser request data under its <a href="https://www.cloudflare.com/privacypolicy/" target="_blank" rel="noopener">privacy policy<span class="sr-only"> (opens in a new tab)</span></a>.</p>
   </aside>
 </div>
 

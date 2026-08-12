@@ -6,6 +6,12 @@ export const EVIDENCE_TOPOLOGY_VERSION = 1;
 
 export type EvidenceTopologyStatus =
   | 'success'
+  | 'complete'
+  | 'supported'
+  | 'observed'
+  | 'registered'
+  | 'active'
+  | 'available'
   | 'partial'
   | 'warning'
   | 'inconclusive'
@@ -158,11 +164,14 @@ export function buildLookupEvidenceTopologyNodes(input: LookupEvidenceTopologyIn
     family: 'registry',
   }];
   if (targetType === 'domain' || whoisDiagnostic.status) {
+    const whoisStatus = normalizeEvidenceTopologyStatus(whoisDiagnostic.status);
     nodes.push({
       id: 'whois',
       label: 'WHOIS',
-      detail: diagnosticDetail(whoisDiagnostic),
-      status: normalizeEvidenceTopologyStatus(whoisDiagnostic.status),
+      detail: whoisStatus === 'complete'
+        ? boundedText(whoisDiagnostic.authoritativeHop, 160) || 'Authoritative WHOIS hop collected'
+        : diagnosticDetail(whoisDiagnostic),
+      status: whoisStatus === 'complete' ? 'success' : whoisStatus,
       href: '#evidence-registry',
       side: 'left',
       glyph: 'W',
@@ -349,7 +358,11 @@ export function normalizeEvidenceTopologyStatus(
 ): EvidenceTopologyStatus {
   if (options.complete === false || options.truncated === true) return 'partial';
   const status = boundedText(value, 40).toLowerCase().replaceAll(' ', '_');
-  if (['success', 'complete', 'completed', 'supported', 'observed', 'registered', 'available'].includes(status)) return 'success';
+  if (status === 'success') return 'success';
+  if (status === 'completed') return 'complete';
+  if (['complete', 'supported', 'observed', 'registered', 'active', 'available'].includes(status)) {
+    return status as EvidenceTopologyStatus;
+  }
   if (['partial', 'incomplete', 'truncated', 'limited'].includes(status)) return 'partial';
   if (['warning', 'conflict', 'mismatch'].includes(status)) return 'warning';
   if (status === 'inconclusive') return 'inconclusive';
@@ -459,6 +472,12 @@ export function projectEvidenceTopology(targetInput: EvidenceTopologyTarget, raw
     return summary;
   }, {
     success: 0,
+    complete: 0,
+    supported: 0,
+    observed: 0,
+    registered: 0,
+    active: 0,
+    available: 0,
     partial: 0,
     warning: 0,
     inconclusive: 0,

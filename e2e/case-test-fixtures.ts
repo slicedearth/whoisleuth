@@ -146,5 +146,7 @@ export async function openCasesView(page: Page) {
 export async function createCase(page: Page, domain: string) {
   await page.locator('#new-case').fill(domain);
   await page.getByRole('button', { name: 'Open or create case' }).click();
-  await expect(page.locator('.case-head', { hasText: domain })).toBeVisible();
+  const heading = page.locator('.case-head', { hasText: domain });
+  await expect(heading).toBeVisible();
+  await expect(heading).toHaveAttribute('aria-expanded', 'true');
 }

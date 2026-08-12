@@ -162,7 +162,7 @@
         {#each sourceOptions as [id, label]}<option value={id}>{label}</option>{/each}
       </select>
     </label>
-    <button type="button" class="secondary" onclick={resetFilters}>Reset filters</button>
+    <button type="button" class="btn" onclick={resetFilters}>Reset filters</button>
   </div>
 
   {#if visible.length}
@@ -230,7 +230,6 @@
   .review-heading h2{margin-top:3px;font:700 var(--text-lg) var(--mono)}
   .review-heading>div>p:last-child,.queue-heading p{margin-top:6px;color:var(--muted);font-size:var(--text-sm);line-height:1.5}
   .review-heading>strong{max-width:220px;color:var(--accent2);font:750 var(--text-xl) var(--mono);text-align:right;overflow-wrap:anywhere}
-  .eyebrow{color:var(--accent);font:650 var(--text-2xs) var(--mono);letter-spacing:.1em;text-transform:uppercase}
   .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);clip-path:inset(50%);white-space:nowrap;border:0}
   .source-warning,.source-loading,.bound-warning{margin:14px 0 0;padding:10px 12px;border-left:3px solid var(--amber);border-radius:var(--radius-sm);background:rgb(var(--amber-rgb) / .08);color:var(--text);font-size:var(--text-sm);line-height:1.5;overflow-wrap:anywhere}
   .superseded-note{margin:12px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.5}

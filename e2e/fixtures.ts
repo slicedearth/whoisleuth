@@ -27,6 +27,15 @@ function isLookupEndpointUrl(url: string, allowedOrigin: string = ALLOWED_ORIGIN
   }
 }
 
+function isLogoutEndpointUrl(url: string, allowedOrigin: string = ALLOWED_ORIGIN): boolean {
+  try {
+    const parsed = new URL(url);
+    return parsed.origin === allowedOrigin && parsed.pathname === '/api/logout';
+  } catch {
+    return false;
+  }
+}
+
 // Chromium logs a synthetic "Failed to load resource: the server responded
 // with a status of 400" console.error for every 400 response, at the
 // network-stack/DevTools level, regardless of whether application code
@@ -38,6 +47,7 @@ function isLookupEndpointUrl(url: string, allowedOrigin: string = ALLOWED_ORIGIN
 const CHROME_HTTP_400_NOISE_RE = /^Failed to load resource: the server responded with a status of 400\b/;
 const CHROME_HTTP_429_NOISE_RE = /^Failed to load resource: the server responded with a status of 429\b/;
 const CHROME_HTTP_504_NOISE_RE = /^Failed to load resource: the server responded with a status of 504\b/;
+const CHROME_HTTP_500_NOISE_RE = /^Failed to load resource: the server responded with a status of 500\b/;
 
 // Installs an active request interceptor on a BrowserContext: every request
 // is either passed through (allowed origin) or aborted client-side before it
@@ -83,6 +93,9 @@ type Options = {
   // Opt-in for the one timeout-presentation test that deliberately fulfills
   // an exact local /api/lookup request with 504.
   allowExpectedLookup504Noise: boolean;
+  // Opt-in for the exact failed-sign-out test. Chromium reports the handled
+  // fixture 500 at the network layer even though the UI retains the session.
+  allowExpectedLogout500Noise: boolean;
 };
 
 type Fixtures = {
@@ -100,6 +113,7 @@ export const test = base.extend<Options & Fixtures>({
   allowExpectedBulkLookup400Noise: [false, { option: true }],
   allowExpectedLookup429Noise: [false, { option: true }],
   allowExpectedLookup504Noise: [false, { option: true }],
+  allowExpectedLogout500Noise: [false, { option: true }],
 
   networkAndConsoleGuard: [
     async ({
@@ -108,6 +122,7 @@ export const test = base.extend<Options & Fixtures>({
       allowExpectedBulkLookup400Noise,
       allowExpectedLookup429Noise,
       allowExpectedLookup504Noise,
+      allowExpectedLogout500Noise,
     }, use) => {
       const guard = await installNetworkGuard(context);
       const consoleIssues: string[] = [];
@@ -118,10 +133,13 @@ export const test = base.extend<Options & Fixtures>({
         const text = message.text();
         if (
           type === 'error' &&
-          isLookupEndpointUrl(message.location().url) &&
-          ((allowExpectedBulkLookup400Noise && CHROME_HTTP_400_NOISE_RE.test(text))
-            || (allowExpectedLookup429Noise && CHROME_HTTP_429_NOISE_RE.test(text))
-            || (allowExpectedLookup504Noise && CHROME_HTTP_504_NOISE_RE.test(text)))
+          ((isLookupEndpointUrl(message.location().url)
+            && ((allowExpectedBulkLookup400Noise && CHROME_HTTP_400_NOISE_RE.test(text))
+              || (allowExpectedLookup429Noise && CHROME_HTTP_429_NOISE_RE.test(text))
+              || (allowExpectedLookup504Noise && CHROME_HTTP_504_NOISE_RE.test(text))))
+            || (allowExpectedLogout500Noise
+              && isLogoutEndpointUrl(message.location().url)
+              && CHROME_HTTP_500_NOISE_RE.test(text)))
         ) {
           return;
         }

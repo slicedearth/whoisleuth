@@ -32,10 +32,11 @@ warning-lists are available under CC0 1.0 Universal or the BSD 2-Clause
 "Simplified" License. Source:
 https://github.com/MISP/misp-warninglists
 
-The exact locked production-dependency inventory and the licence documents
-distributed by those packages are retained in
-frontend/static/third-party-notices.txt. The same file is served by the static
-website at /third-party-notices.txt and is checked for lockfile drift in CI.
+The exact locked production-dependency inventories and licence documents are
+distributed as third-party-notices.txt. The website inventory is served at
+/third-party-notices.txt; the installed CLI contains its own notice file for
+only the CLI runtime dependency closure. Both are generated from the reviewed
+lockfile, and the website inventory is checked for lockfile drift in CI.
 
 The generated Unicode confusable projection is derived from Unicode UTS #39
 data file confusables.txt, Unicode version 17.0.0.

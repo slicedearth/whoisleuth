@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events';
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
+import type { ConnectionOptions } from 'node:tls';
 import {
   TLS_PROFILE_VERSION,
   MAX_AIA_LOCATIONS,
@@ -99,7 +100,7 @@ class FakeTlsSocket extends EventEmitter {
   remoteAddress: string;
   alpnProtocol: string;
   authorized: boolean;
-  authorizationError: null;
+  authorizationError: Error | string | null;
   destroyedByCollector: boolean;
 
   constructor(peer: TestCertificate = certificate()) {
@@ -372,7 +373,7 @@ describe('one-connection TLS collection', () => {
   test('pins one TLS connection to the first validated address while retaining SNI', async () => {
     const socket = new FakeTlsSocket();
     let calls = 0;
-    let connectionOptions;
+    let connectionOptions: ConnectionOptions | undefined;
     const scheduledDeadlines: Array<{ callback: () => void; ms: number }> = [];
     const clearedDeadlines: unknown[] = [];
     const resultPromise = collectTlsIntelligence('LOGIN.EXAMPLE.TEST', {
@@ -396,11 +397,14 @@ describe('one-connection TLS collection', () => {
     const diagnostics = recordValue(result.diagnostics);
 
     assert.equal(calls, 1);
+    assert.equal(typeof connectionOptions?.checkServerIdentity, 'function');
+    assert.equal(connectionOptions?.checkServerIdentity?.('unrelated.invalid', certificate() as never), undefined);
     assert.deepEqual(connectionOptions, {
       host: '93.184.216.34',
       port: 443,
       servername: 'login.example.test',
       rejectUnauthorized: false,
+      checkServerIdentity: connectionOptions?.checkServerIdentity,
       ALPNProtocols: ['h2', 'http/1.1'],
     });
     assert.equal(result.status, 'success');
@@ -424,11 +428,36 @@ describe('one-connection TLS collection', () => {
       now: () => NOW.getTime(),
     }));
     const hostname = recordValue(result.hostname);
+    const authorization = recordValue(result.authorization);
     const findings = arrayValue(result.findings).map(recordValue);
     assert.equal(result.status, 'success');
+    assert.equal(authorization.authorized, true);
     assert.equal(hostname.matches, false);
     assert.match(String(hostname.error), /Hostname mismatch/);
     assert.ok(findings.some((finding) => finding.id === 'hostname_mismatch'));
+    assert.equal(findings.some((finding) => finding.id === 'certificate_unauthorized'), false);
+  });
+
+  test('keeps a CA-path failure separate from an aligned endpoint identity', async () => {
+    const socket = new FakeTlsSocket();
+    socket.authorized = false;
+    socket.authorizationError = new Error('Unable to verify the leaf signature');
+    const result = recordValue(await collectTlsIntelligence('login.example.test', {
+      resolveAddresses: async () => [{ address: '93.184.216.34', family: 4 }],
+      connect: (_options, callback) => { queueMicrotask(callback); return socket; },
+      checkServerIdentity: () => undefined,
+      observedAt: () => OBSERVED_AT,
+      now: () => NOW.getTime(),
+    }));
+    const hostname = recordValue(result.hostname);
+    const authorization = recordValue(result.authorization);
+    const findings = arrayValue(result.findings).map(recordValue);
+    assert.equal(result.status, 'success');
+    assert.equal(authorization.authorized, false);
+    assert.match(String(authorization.error), /Unable to verify/);
+    assert.equal(hostname.matches, true);
+    assert.equal(findings.some((finding) => finding.id === 'certificate_unauthorized'), true);
+    assert.equal(findings.some((finding) => finding.id === 'hostname_mismatch'), false);
   });
 
   test('fails closed before connecting when resolution is private, malformed, or fails', async () => {

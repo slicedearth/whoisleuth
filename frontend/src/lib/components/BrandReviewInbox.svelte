@@ -113,11 +113,11 @@
   .review-heading h2,.review-heading p{margin:0;overflow-wrap:anywhere}
   .review-heading h2{margin-top:3px;font:700 var(--text-lg) var(--mono)}
   .review-heading>div>p:last-child{margin-top:7px;color:var(--muted);font-size:var(--text-sm);line-height:1.5}
-  .review-heading>strong{max-width:45%;color:var(--accent2);font:700 var(--text-xs) var(--mono);overflow-wrap:anywhere;text-align:right}
-  .review-heading>strong.numeric{font-size:2rem;font-weight:750}
+  .review-heading>strong{max-width:45%;color:var(--muted);font:700 var(--text-xs) var(--mono);overflow-wrap:anywhere;text-align:right}
+  .review-heading>strong.numeric{color:var(--accent2);font-size:2rem;font-weight:750}
   .association-count,.display-bound,.empty,.warning,.source-state,.unresolved>p,details{color:var(--muted);font-size:var(--text-sm)}
   .display-bound{margin:10px 0 0}
-  .source-state.unavailable{color:var(--amber)}
+  .source-state.unavailable{padding:9px;border:1px dotted var(--muted);border-radius:var(--radius-sm);background:var(--panel-raised);color:var(--muted)}
   code{overflow-wrap:anywhere}
   .review-items{display:grid;gap:8px;margin:16px 0 0;padding:0;list-style:none}
   .review-items li{display:flex;min-width:0;align-items:center;justify-content:space-between;gap:18px;padding:14px;border-left:3px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
@@ -142,5 +142,5 @@
   details li{overflow-wrap:anywhere}
   .warning{color:var(--amber)}
   .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
-  @media(max-width:640px){.review-items li{display:grid}.actions{width:100%}.unresolved li{grid-template-columns:1fr}.review-heading>strong{font-size:1.6rem}}
+  @media(max-width:640px){.review-items li{display:grid}.actions{width:100%}.unresolved li{grid-template-columns:1fr}.review-heading>strong.numeric{font-size:1.6rem}}
 </style>

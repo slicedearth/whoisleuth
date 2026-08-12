@@ -19,12 +19,12 @@ function replayEvidence(): Record<string, unknown> {
       type: 'domain',
     },
     diagnostics: {
-      rdap: { status: 'success', fetchedAt: '2026-08-06T00:00:00.000Z' },
+      rdap: { status: 'success', complete: true, fetchedAt: '2026-08-06T00:00:00.000Z' },
       whois: { status: 'unsupported' },
     },
     sources: {
       rdap: {
-        status: 'success',
+        status: 'success', complete: true,
         parsed: {
           domain: target,
           registrar: { name: 'Example Registrar' },
@@ -42,10 +42,10 @@ function replayEvidence(): Record<string, unknown> {
         state: 'registered',
         confidence: 'high',
         dns: { status: 'success', records: {} },
-        http: { status: 'success', finalUrl: `https://${target}/` },
+        http: { status: 'success', complete: true, finalUrl: `https://${target}/` },
         tls: { status: 'unavailable' },
       },
-      registryComparison: null,
+      registryComparison: { fields: [{ label: 'Registrar', status: 'conflict' }] },
       registrarPublicationComparison: null,
     },
   };
@@ -71,6 +71,14 @@ test('offline replay uses isolated graph identifiers and has no live evidence li
 
   await expect(replay.getByText(/Loaded lookup-evidence-current\.json locally/u)).toBeVisible();
   await expect(replay.getByText('Retained normalised facts', { exact: true })).toBeVisible();
+  await expect(replay.locator('.replay-result > header .chip')).toHaveClass(/factual/u);
+  await expect(replay.locator('.replay-result > header .chip')).toHaveText('Registered');
+  await expect(replay.locator('.source-grid article', { hasText: 'Registry RDAP' }).locator('.chip')).toHaveClass(/good/u);
+  await expect(replay.locator('.source-grid article', { hasText: 'Submitted query' }).locator('.chip')).toHaveClass(/factual/u);
+  const unsupported = replay.locator('.source-grid article', { hasText: 'WHOIS' }).locator('.chip');
+  await expect(unsupported).toHaveClass(/unavailable/u);
+  await expect(unsupported).toHaveCSS('border-style', 'dotted');
+  await expect(replay.locator('.contradictions[data-tone="danger"]')).toBeVisible();
   await expect(replay.locator('#replay-asset-graph-title')).toBeVisible();
   await expect(replay.locator('#asset-graph-title')).toHaveCount(0);
   await expect(replay.locator('a[href^="#evidence-"]')).toHaveCount(0);
@@ -93,12 +101,42 @@ test('offline replay uses isolated graph identifiers and has no live evidence li
   await expect(replay).toContainText('retained diagnostics are authoritative');
   expect(lookupRequests).toBe(requestBaseline);
 
+  const comparisonEvidence = replayEvidence();
+  (comparisonEvidence.application as Record<string, unknown>).version = '1.35.0';
   await replay.locator('input[type="file"]').last().setInputFiles({
-    name: 'lookup-evidence-current.json',
+    name: 'lookup-evidence-comparison.json',
     mimeType: 'application/json',
-    buffer: Buffer.from(JSON.stringify(replayEvidence())),
+    buffer: Buffer.from(JSON.stringify(comparisonEvidence)),
   });
-  await expect(replay.getByText(/Compared lookup-evidence-current\.json locally/u)).toBeVisible();
+  await expect(replay.getByText(/Compared lookup-evidence-comparison\.json locally/u)).toBeVisible();
+  await expect(replay.locator('[data-comparison-kind="interpretation_difference"]')).toBeVisible();
+  await expect(replay.locator('[data-comparison-kind="interpretation_difference"]')).toHaveCSS('border-style', 'solid');
+  await expect(replay.locator('.comparison-status.status-success')).toHaveAttribute('role', 'status');
   expect(lookupRequests).toBe(requestBaseline);
   await expect(page).toHaveURL(/\/lookup$/u);
+});
+
+test('offline replay announces malformed files as errors and incomplete success as partial', async ({ page }) => {
+  await page.goto('/lookup');
+  const replay = page.locator('details.replay');
+  await replay.locator(':scope > summary').click();
+
+  const incomplete = replayEvidence();
+  (incomplete.diagnostics as Record<string, Record<string, unknown>>).rdap!.complete = false;
+  (incomplete.sources as Record<string, Record<string, unknown>>).rdap!.complete = false;
+  await replay.locator('input[type="file"]').first().setInputFiles({
+    name: 'lookup-evidence-incomplete.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(incomplete)),
+  });
+  await expect(replay.locator('.source-grid article', { hasText: 'Registry RDAP' }).locator('.chip')).toHaveClass(/warn/u);
+
+  await replay.locator('input[type="file"]').first().setInputFiles({
+    name: 'not-json.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from('{not json'),
+  });
+  const alert = replay.locator('.replay-status.status-error');
+  await expect(alert).toHaveAttribute('role', 'alert');
+  await expect(alert).toContainText('not valid JSON');
 });

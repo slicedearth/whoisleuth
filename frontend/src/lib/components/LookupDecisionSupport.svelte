@@ -87,11 +87,12 @@
   summary:focus-visible{outline:2px solid var(--focus);outline-offset:3px}
   .decision-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:0;padding:0;list-style:none}
   .decision-list>li{min-width:0;padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
-  .decision-list>li.conflict{border-color:color-mix(in srgb,var(--amber) 42%,var(--border))}
+  .decision-list>li.conflict{border-color:color-mix(in srgb,var(--danger) 42%,var(--border))}
   .entry-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:7px}
   .state,.importance{font:650 var(--text-2xs) var(--mono)}
   .state{padding:3px 6px;border:1px solid var(--border);border-radius:999px;color:var(--muted)}
-  .state-conflict{border-color:color-mix(in srgb,var(--amber) 48%,var(--border));color:var(--amber)}
+  .state-conflict{border-color:color-mix(in srgb,var(--danger) 48%,var(--border));color:var(--danger)}
+  .state-uncertain{border-color:color-mix(in srgb,var(--amber) 48%,var(--border));border-style:dashed;color:var(--amber)}
   .importance{color:var(--muted);text-transform:capitalize}
   .decision-list strong{display:block;font-size:var(--text-xs);line-height:1.4}
   .decision-list p{margin:5px 0;color:var(--muted);font-size:var(--text-2xs);line-height:1.5}

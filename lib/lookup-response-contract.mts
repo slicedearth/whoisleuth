@@ -12,6 +12,28 @@ import {
   THREAT_INTELLIGENCE_RESULT_STATES,
   type ThreatIntelligenceResultState,
 } from './threat-intelligence-types.mts';
+import {
+  MAX_HTTP_ATTEMPTS,
+  MAX_HTTP_ERROR_LENGTH,
+  MAX_HTTP_EVIDENCE_REDIRECTS,
+  MAX_HTTP_PROVENANCE_URL,
+} from './http-evidence-bounds.mts';
+import {
+  MAX_OBSERVATION_DIAGNOSTICS,
+  MAX_OBSERVATION_LIMITATIONS,
+  MAX_OBSERVATION_LIMITATION_LENGTH,
+} from './observation.mts';
+import { assertBoundedJsonStructure } from './bounded-json.mts';
+import {
+  MAX_LOOKUP_DNS_RECORDS_PER_TYPE,
+  MAX_LOOKUP_REVERSE_DNS_PTR_RECORDS,
+  MAX_LOOKUP_TLS_ALT_NAMES,
+  MAX_LOOKUP_TLS_CERTIFICATE_POLICIES,
+  MAX_LOOKUP_TLS_CHAIN_CERTIFICATES,
+  MAX_LOOKUP_TLS_FINDINGS,
+  MAX_LOOKUP_TLS_NAME_VALUES,
+} from './lookup-network-evidence-bounds.mts';
+import { MAX_SECURITY_POSTURE_FINDINGS } from './website-security-posture.mts';
 
 type JsonPrimitive = boolean | number | string | null;
 type JsonValue = JsonPrimitive | JsonObject | JsonValue[];
@@ -183,6 +205,7 @@ const MAX_LOOKUP_RESPONSE_QUERY_LENGTH = 4096;
 const MAX_LOOKUP_RESPONSE_HOST_LENGTH = 253;
 const MAX_LOOKUP_RESPONSE_TOP_LEVEL_KEYS = 32;
 const MAX_LOOKUP_RESPONSE_ERROR_LENGTH = 240;
+const MAX_LOOKUP_RESPONSE_CONTAINER_ITEMS = 500;
 const MAX_COMPACT_LOOKUP_RESPONSE_TOP_LEVEL_KEYS = 8;
 const MAX_COMPACT_LOOKUP_AVAILABILITY_KEYS = 128;
 const MAX_COMPACT_LOOKUP_DIAGNOSTIC_KEYS = 16;
@@ -411,7 +434,561 @@ function invalidCompactLookupResponse(): CompactLookupResponseParseResult {
   };
 }
 
+function validHttpProvenanceUrl(value: unknown): boolean {
+  if (typeof value !== 'string'
+    || !value
+    || value.length > MAX_HTTP_PROVENANCE_URL
+    || CONTROL_CHAR_RE.test(value)) return false;
+  try {
+    const parsed = new URL(value);
+    return ['http:', 'https:'].includes(parsed.protocol)
+      && Boolean(parsed.hostname)
+      && !parsed.username
+      && !parsed.password
+      && !parsed.search
+      && !parsed.hash
+      && parsed.href === value;
+  } catch {
+    return false;
+  }
+}
+
+function validOptionalHttpUrl(value: unknown): boolean {
+  return value === undefined || value === null || validHttpProvenanceUrl(value);
+}
+
+function validOptionalHttpStatus(value: unknown): boolean {
+  return value === undefined || value === null
+    || Number.isInteger(value) && Number(value) >= 100 && Number(value) <= 599;
+}
+
+function validObservationLimitations(value: unknown): boolean {
+  return value === undefined || Array.isArray(value)
+    && value.length <= MAX_OBSERVATION_LIMITATIONS
+    && value.every((item) => typeof item === 'string'
+      && Boolean(item)
+      && item.length <= MAX_OBSERVATION_LIMITATION_LENGTH
+      && !CONTROL_CHAR_RE.test(item));
+}
+
+function validObservationDiagnosticValue(value: unknown, depth = 0): boolean {
+  if (typeof value === 'boolean') return true;
+  if (typeof value === 'number') return Number.isFinite(value);
+  if (typeof value === 'string') {
+    return value.length <= 240 && !CONTROL_CHAR_RE.test(value);
+  }
+  if (!isJsonObject(value) || depth >= 2) return false;
+  const keys = Object.keys(value);
+  return keys.length <= 6
+    && keys.every((key) => ['status', 'error', 'detail', 'truncated', 'discarded', 'count'].includes(key))
+    && keys.every((key) => validObservationDiagnosticValue(value[key], depth + 1));
+}
+
+function validObservationDiagnostics(value: unknown): boolean {
+  if (value === undefined) return true;
+  if (!isJsonObject(value)) return false;
+  const entries = Object.entries(value);
+  return entries.length <= MAX_OBSERVATION_DIAGNOSTICS
+    && entries.every(([key, item]) => (
+      Boolean(key)
+      && key.length <= 40
+      && /^[a-z0-9_-]+$/iu.test(key)
+      && validObservationDiagnosticValue(item)
+    ));
+}
+
+function validObservationFields(value: unknown): value is JsonObject {
+  if (!isJsonObject(value)) return false;
+  return optionalBoundedText(value.status, 40)
+    && optionalBoundedText(value.source, 40)
+    && optionalBoundedText(value.observedAt, 64)
+    && (value.scanMode === undefined || value.scanMode === null
+      || typeof value.scanMode === 'string' && ['fast', 'deep'].includes(value.scanMode))
+    && (value.durationMs === undefined || value.durationMs === null
+      || Number.isFinite(value.durationMs) && Number(value.durationMs) >= 0
+        && Number(value.durationMs) <= 120_000)
+    && (value.complete === undefined || typeof value.complete === 'boolean')
+    && (value.truncated === undefined || typeof value.truncated === 'boolean')
+    && validObservationLimitations(value.limitations)
+    && validObservationDiagnostics(value.diagnostics);
+}
+
+function validSourceStatus(value: unknown): value is JsonObject {
+  if (!isJsonObject(value)) return false;
+  return optionalBoundedText(value.status, 40)
+    && (value.error === undefined || value.error === null || optionalBoundedText(value.error, 240))
+    && (value.endpoint === undefined || value.endpoint === null || optionalBoundedText(value.endpoint, 2_048))
+    && (value.detail === undefined || value.detail === null || optionalBoundedText(value.detail, 500))
+    && (value.fetchedAt === undefined || value.fetchedAt === null || optionalBoundedText(value.fetchedAt, 64))
+    && (value.queriedAt === undefined || value.queriedAt === null || optionalBoundedText(value.queriedAt, 64))
+    && (value.attempts === undefined || Array.isArray(value.attempts)
+      && value.attempts.length <= 3
+      && value.attempts.every((item) => isJsonObject(item)
+        && optionalBoundedText(item.outcome, 40)));
+}
+
+function validNormalizedHttpEvidence(value: unknown): boolean {
+  if (!validObservationFields(value)
+    || !validOptionalHttpUrl(value.requestUrl)
+    || !validOptionalHttpUrl(value.finalUrl)
+    || !validObservationLimitations(value.limitations)) return false;
+
+  const redirects = value.redirects;
+  if (redirects !== undefined && (!Array.isArray(redirects)
+    || redirects.length > MAX_HTTP_EVIDENCE_REDIRECTS
+    || !redirects.every((item) => isJsonObject(item)
+      && validHttpProvenanceUrl(item.from)
+      && validHttpProvenanceUrl(item.to)
+      && validOptionalHttpStatus(item.status)
+      && (item.queryOmitted === undefined || typeof item.queryOmitted === 'boolean')))) return false;
+
+  const attempts = value.attempts;
+  if (attempts !== undefined && (!Array.isArray(attempts)
+    || attempts.length > MAX_HTTP_ATTEMPTS
+    || !attempts.every((item) => isJsonObject(item)
+      && validOptionalHttpUrl(item.url)
+      && validOptionalHttpStatus(item.httpStatus)
+      && (item.queryOmitted === undefined || typeof item.queryOmitted === 'boolean')
+      && (item.outcome === undefined || typeof item.outcome === 'string'
+        && ['error', 'response', 'unknown'].includes(item.outcome))
+      && (item.error === undefined || item.error === null || typeof item.error === 'string'
+        && item.error.length <= MAX_HTTP_ERROR_LENGTH && !CONTROL_CHAR_RE.test(item.error))))) return false;
+
+  if (value.redirectCount !== undefined
+    && (!Number.isInteger(value.redirectCount)
+      || Number(value.redirectCount) < 0
+      || Number(value.redirectCount) > MAX_HTTP_EVIDENCE_REDIRECTS)) return false;
+  if (Array.isArray(redirects) && value.redirectCount !== undefined
+    && value.redirectCount !== redirects.length) return false;
+  if (value.response !== undefined && value.response !== null) {
+    if (!isJsonObject(value.response) || !validOptionalHttpStatus(value.response.status)) return false;
+  }
+  return true;
+}
+
+function optionalStringArrayWithin(value: JsonValue | undefined, maximum: number): boolean {
+  return value === undefined || Array.isArray(value)
+    && value.length <= maximum
+    && value.every((item) => typeof item === 'string');
+}
+
+function optionalRecordArrayWithin(value: JsonValue | undefined, maximum: number): boolean {
+  return value === undefined || Array.isArray(value)
+    && value.length <= maximum
+    && value.every(isJsonObject);
+}
+
+function validBoundedString(value: unknown, maximum: number, allowEmpty = false): boolean {
+  return typeof value === 'string'
+    && (allowEmpty || Boolean(value))
+    && value.length <= maximum
+    && !CONTROL_CHAR_RE.test(value);
+}
+
+function validUint(value: unknown, maximum: number): boolean {
+  return Number.isSafeInteger(value) && Number(value) >= 0 && Number(value) <= maximum;
+}
+
+function validDnsMxRecord(value: unknown): boolean {
+  return isJsonObject(value)
+    && validUint(value.priority, 0xffff)
+    && validBoundedString(value.exchange, 253, true);
+}
+
+function validDnsCaaRecord(value: unknown): boolean {
+  return isJsonObject(value)
+    && validUint(value.critical, 0xff)
+    && typeof value.tag === 'string'
+    && /^[a-z0-9-]{1,15}$/u.test(value.tag)
+    && validBoundedString(value.value, 1_024);
+}
+
+function validDnsSoaRecord(value: unknown): boolean {
+  return isJsonObject(value)
+    && validBoundedString(value.nsname, 253)
+    && validBoundedString(value.hostmaster, 253)
+    && ['serial', 'refresh', 'retry', 'expire', 'minttl']
+      .every((key) => validUint(value[key], 0xffff_ffff));
+}
+
+function validUintArray(value: unknown, maximumItems: number): boolean {
+  return Array.isArray(value)
+    && value.length <= maximumItems
+    && value.every((item) => validUint(item, 0xffff));
+}
+
+function validStringArray(value: unknown, maximumItems: number, maximumLength: number): boolean {
+  return Array.isArray(value)
+    && value.length <= maximumItems
+    && value.every((item) => validBoundedString(item, maximumLength));
+}
+
+function validDnsHttpsRecord(value: unknown): boolean {
+  if (!isJsonObject(value)
+    || value.type !== 'HTTPS'
+    || !validBoundedString(value.owner, 253)
+    || !validUint(value.ttl, 0xffff_ffff)
+    || !validUint(value.priority, 0xffff)
+    || typeof value.mode !== 'string'
+    || !['alias', 'service'].includes(value.mode)
+    || !(value.target === null || validBoundedString(value.target, 253))
+    || typeof value.targetIsOwner !== 'boolean'
+    || typeof value.serviceUnavailable !== 'boolean'
+    || typeof value.compatible !== 'boolean'
+    || typeof value.parametersIgnored !== 'boolean'
+    || !isJsonObject(value.parameters)) return false;
+  const parameters = value.parameters;
+  if (Object.keys(parameters).length > 24
+    || !validUintArray(parameters.mandatory, 24)
+    || !validStringArray(parameters.alpn, 16, 132)
+    || typeof parameters.noDefaultAlpn !== 'boolean'
+    || !(parameters.port === null || validUint(parameters.port, 0xffff))
+    || !validStringArray(parameters.ipv4hint, 8, 64)
+    || !validStringArray(parameters.ipv6hint, 8, 64)
+    || !validUintArray(parameters.unknownKeys, 24)
+    || !validUintArray(parameters.unsupportedMandatoryKeys, 24)
+    || !Array.isArray(parameters.opaque)
+    || parameters.opaque.length > 24) return false;
+  return parameters.opaque.every((item) => isJsonObject(item)
+    && validUint(item.key, 0xffff)
+    && (item.name === null || typeof item.name === 'string' && /^[a-z0-9-]{1,63}$/u.test(item.name))
+    && validUint(item.length, 0xffff));
+}
+
+function validTlsFinding(value: unknown): boolean {
+  return isJsonObject(value)
+    && validBoundedString(value.id, 80)
+    && validBoundedString(value.tone, 32)
+    && validBoundedString(value.label, 160)
+    && validBoundedString(value.detail, 500);
+}
+
+function validTlsChainCertificate(value: unknown): boolean {
+  if (!isJsonObject(value)) return false;
+  return (value.fingerprintSha256 === undefined
+      || value.fingerprintSha256 === null
+      || validBoundedString(value.fingerprintSha256, 64))
+    && optionalTlsNameWithin(value.subject);
+}
+
+function validSecurityPostureFinding(value: unknown): boolean {
+  return isJsonObject(value)
+    && validBoundedString(value.id, 80)
+    && validBoundedString(value.category, 80)
+    && typeof value.state === 'string'
+    && ['observed', 'potential_exposure', 'observed_absence', 'unavailable'].includes(value.state)
+    && typeof value.tone === 'string'
+    && ['configured', 'review', 'neutral'].includes(value.tone)
+    && validBoundedString(value.label, 160)
+    && validBoundedString(value.detail, 300)
+    && validStringArray(value.evidence, 4, 120);
+}
+
+function validOptionalStringArray(
+  value: unknown,
+  maximumItems: number,
+  maximumLength: number,
+): boolean {
+  return value === undefined || validStringArray(value, maximumItems, maximumLength);
+}
+
+function validOptionalRecordArray(
+  value: unknown,
+  maximumItems: number,
+  validate: (item: unknown) => boolean,
+): boolean {
+  return value === undefined || Array.isArray(value)
+    && value.length <= maximumItems
+    && value.every(validate);
+}
+
+function validOptionalNullableText(value: unknown, maximumLength: number): boolean {
+  return value === undefined || value === null || validBoundedString(value, maximumLength);
+}
+
+function validRdapLink(value: unknown): boolean {
+  return isJsonObject(value)
+    && validBoundedString(value.href, 2_048)
+    && validOptionalNullableText(value.rel, 100)
+    && validOptionalNullableText(value.type, 160)
+    && validOptionalNullableText(value.title, 300);
+}
+
+function validRdapContact(value: unknown): boolean {
+  if (!isJsonObject(value)) return false;
+  return validOptionalNullableText(value.handle, 200)
+    && validOptionalNullableText(value.name, 300)
+    && validOptionalNullableText(value.org, 300)
+    && validOptionalNullableText(value.email, 320)
+    && validOptionalNullableText(value.phone, 100)
+    && validOptionalNullableText(value.address, 1_000)
+    && validOptionalStringArray(value.roles, 12, 80)
+    && validOptionalStringArray(value.names, 8, 300)
+    && validOptionalStringArray(value.organizations, 8, 300)
+    && validOptionalStringArray(value.emails, 8, 320)
+    && validOptionalStringArray(value.phones, 8, 100)
+    && validOptionalStringArray(value.addresses, 8, 1_000)
+    && validOptionalRecordArray(value.publicIds, 20, (item) => isJsonObject(item)
+      && validBoundedString(item.type, 160)
+      && validBoundedString(item.identifier, 300))
+    && validOptionalRecordArray(value.links, 10, validRdapLink);
+}
+
+function validRdapTextBlock(value: unknown): boolean {
+  return isJsonObject(value)
+    && validBoundedString(value.title, 160)
+    && validOptionalNullableText(value.type, 160)
+    && validStringArray(value.descriptions, 6, 800);
+}
+
+function validRdapParsed(value: unknown): boolean {
+  if (!isJsonObject(value)) return false;
+  if (!validOptionalStringArray(value.statuses, 100, 160)
+    || !validOptionalStringArray(value.nameservers, 200, 253)
+    || !validOptionalStringArray(value.conformance, 50, 160)
+    || !validOptionalStringArray(value.serverTruncationReasons, 8, 160)
+    || !validOptionalStringArray(value.truncatedEntityRoles, 11, 80)
+    || !validOptionalRecordArray(value.events, 100, (item) => isJsonObject(item)
+      && validOptionalNullableText(item.action, 160)
+      && validOptionalNullableText(item.date, 64))
+    || !validOptionalRecordArray(value.links, 20, validRdapLink)
+    || !validOptionalRecordArray(value.nameserverDetails, 200, (item) => isJsonObject(item)
+      && validBoundedString(item.name, 253)
+      && validStringArray(item.addresses, 20, 80))
+    || !validOptionalRecordArray(value.dsData, 50, (item) => isJsonObject(item)
+      && validUint(item.keyTag, 0xffff)
+      && validUint(item.algorithm, 0xff)
+      && validUint(item.digestType, 0xff)
+      && validBoundedString(item.digest, 512))
+    || !validOptionalRecordArray(value.notices, 12, validRdapTextBlock)
+    || !validOptionalRecordArray(value.remarks, 12, validRdapTextBlock)
+    || !validOptionalRecordArray(value.redactions, 100, (item) => isJsonObject(item)
+      && ['name', 'method', 'reason'].every((key) => validOptionalNullableText(item[key], 500))
+      && ['prePath', 'postPath', 'replacementPath']
+        .every((key) => validOptionalNullableText(item[key], 512)))
+    || !validOptionalRecordArray(value.variants, 20, (group) => isJsonObject(group)
+      && validOptionalNullableText(group.idnTable, 300)
+      && validOptionalStringArray(group.relation, 20, 100)
+      && validOptionalRecordArray(group.variantNames, 50, (name) => isJsonObject(name)
+        && validOptionalNullableText(name.ldhName, 253)
+        && validOptionalNullableText(name.unicodeName, 253)))) return false;
+  const entitiesByRole = value.entitiesByRole;
+  if (entitiesByRole !== undefined) {
+    if (!isJsonObject(entitiesByRole) || Object.keys(entitiesByRole).length > 11) return false;
+    for (const [role, contacts] of Object.entries(entitiesByRole)) {
+      if (!['registrar', 'registrant', 'administrative', 'technical', 'billing', 'abuse', 'noc', 'reseller', 'sponsor', 'proxy', 'notifications'].includes(role)
+        || !Array.isArray(contacts)
+        || contacts.length > 5
+        || !contacts.every(validRdapContact)) return false;
+    }
+  }
+  return true;
+}
+
+function validWhoisParsed(value: unknown): boolean {
+  if (!isJsonObject(value)
+    || !validOptionalStringArray(value.statuses, 100, 160)
+    || !validOptionalStringArray(value.nameservers, 200, 253)
+    || !validOptionalStringArray(value.fieldsTruncated, 64, 80)) return false;
+  const contactsByRole = value.contactsByRole;
+  if (contactsByRole !== undefined) {
+    if (!isJsonObject(contactsByRole) || Object.keys(contactsByRole).length > 5) return false;
+    for (const contacts of Object.values(contactsByRole)) {
+      if (!Array.isArray(contacts) || contacts.length > 1 || !contacts.every(validRdapContact)) return false;
+    }
+  }
+  return true;
+}
+
+function validRegistrationEvidence(value: LookupHttpResponse): boolean {
+  const rdap = value.rdap;
+  const whois = value.whois;
+  if (!validSourceStatus(rdap) || !validSourceStatus(whois)) return false;
+  if (rdap.parsed !== undefined && rdap.parsed !== null && !validRdapParsed(rdap.parsed)) return false;
+  if (whois.parsed !== undefined && whois.parsed !== null && !validWhoisParsed(whois.parsed)) return false;
+  const registrar = rdap.registrarRdap;
+  return registrar === undefined || registrar === null || validSourceStatus(registrar)
+    && (registrar.parsed === undefined || registrar.parsed === null || validRdapParsed(registrar.parsed));
+}
+
+function validPageEvidence(value: LookupHttpResponse): boolean {
+  const availability = value.availability;
+  const page = availability.pageIdentity;
+  if (page !== undefined && page !== null) {
+    if (!validObservationFields(page)
+      || !validOptionalStringArray(page.embeddedOrigins, 20, 2_048)
+      || !validOptionalStringArray(page.contactDomains, 20, 253)
+      || !validOptionalRecordArray(page.trackingIdentifiers, 30, (item) => isJsonObject(item)
+        && validBoundedString(item.type, 80)
+        && validBoundedString(item.value, 240))) return false;
+    if (page.forms !== undefined && (!isJsonObject(page.forms)
+      || !validOptionalStringArray(page.forms.externalActionOrigins, 10, 2_048))) return false;
+    if (page.resources !== undefined && (!isJsonObject(page.resources)
+      || !validOptionalStringArray(page.resources.externalOrigins, 30, 2_048))) return false;
+    if (page.downloads !== undefined && (!isJsonObject(page.downloads)
+      || !validOptionalStringArray(page.downloads.riskyFileTypes, 20, 80)
+      || !validOptionalStringArray(page.downloads.externalOrigins, 20, 2_048))) return false;
+  }
+
+  const technology = availability.technologyProfile;
+  if (technology !== undefined && technology !== null) {
+    if (!validObservationFields(technology)
+      || !validOptionalRecordArray(technology.findings, 24, (finding) => isJsonObject(finding)
+        && validOptionalRecordArray(finding.evidence, 4, (item) => isJsonObject(item)
+          && validBoundedString(item.source, 80)
+          && validBoundedString(item.description, 180)))) return false;
+    const libraries = technology.browserLibraryProfile;
+    if (libraries !== undefined && libraries !== null && (!validObservationFields(libraries)
+      || !validOptionalRecordArray(libraries.findings, 16, (item) => isJsonObject(item)))) return false;
+  }
+
+  const structured = availability.structuredDataIdentity;
+  if (structured !== undefined && structured !== null && (!validObservationFields(structured)
+    || !validOptionalRecordArray(structured.entities, 16, (entity) => isJsonObject(entity)
+      && validOptionalStringArray(entity.types, 8, 160)
+      && validOptionalStringArray(entity.sameAsHosts, 12, 253)))) return false;
+
+  const roles = availability.pageRoleProfile;
+  if (roles !== undefined && roles !== null && (!validObservationFields(roles)
+    || !validOptionalRecordArray(roles.findings, 4, (finding) => isJsonObject(finding)
+      && validOptionalStringArray(finding.evidence, 4, 300)))) return false;
+
+  const behavior = availability.clientBehaviorProfile;
+  if (behavior !== undefined && behavior !== null && (!validObservationFields(behavior)
+    || !validOptionalRecordArray(behavior.indicators, 12, (item) => isJsonObject(item)))) return false;
+
+  const credential = availability.credentialSurfaceProfile;
+  return credential === undefined || credential === null || validObservationFields(credential);
+}
+
+function validAvailabilityScalars(value: JsonObject): boolean {
+  return (value.applicable === undefined || typeof value.applicable === 'boolean')
+    && validOptionalNullableText(value.domain, MAX_LOOKUP_RESPONSE_HOST_LENGTH)
+    && validOptionalNullableText(value.state, 40)
+    && validOptionalNullableText(value.confidence, 40)
+    && validOptionalNullableText(value.activityStatus, 40)
+    && validOptionalNullableText(value.websiteProbeDetail, 500)
+    && validOptionalNullableText(value.dnssec, 40)
+    && (value.deepScanComplete === undefined || typeof value.deepScanComplete === 'boolean')
+    && (value.hasMx === undefined || value.hasMx === null || typeof value.hasMx === 'boolean')
+    && (value.hasNullMx === undefined || value.hasNullMx === null || typeof value.hasNullMx === 'boolean')
+    && (value.hasSpf === undefined || value.hasSpf === null || typeof value.hasSpf === 'boolean')
+    && (value.hasDmarc === undefined || value.hasDmarc === null || typeof value.hasDmarc === 'boolean')
+    && validOptionalStringArray(value.mxHosts, MAX_LOOKUP_DNS_RECORDS_PER_TYPE, 253);
+}
+
+function optionalTlsNameWithin(value: JsonValue | undefined): boolean {
+  if (value === undefined || value === null) return true;
+  if (!isJsonObject(value)) return false;
+  return optionalStringArrayWithin(value.commonNames, MAX_LOOKUP_TLS_NAME_VALUES)
+    && (!Array.isArray(value.commonNames)
+      || value.commonNames.every((item) => validBoundedString(item, 256)))
+    && optionalStringArrayWithin(value.organizations, MAX_LOOKUP_TLS_NAME_VALUES)
+    && (!Array.isArray(value.organizations)
+      || value.organizations.every((item) => validBoundedString(item, 256)));
+}
+
+function validNormalizedNetworkEvidence(value: LookupHttpResponse): boolean {
+  const availability = value.availability;
+  const dns = availability.dns;
+  if (dns !== undefined) {
+    if (!validObservationFields(dns)) return false;
+    if (dns.records !== undefined) {
+      if (!isJsonObject(dns.records)) return false;
+      for (const [key, maximumLength] of [
+        ['a', 64], ['aaaa', 64], ['cname', 253], ['ns', 253], ['spf', 1_024], ['dmarc', 1_024],
+      ] as const) {
+        if (!optionalStringArrayWithin(dns.records[key], MAX_LOOKUP_DNS_RECORDS_PER_TYPE)
+          || Array.isArray(dns.records[key])
+            && !(dns.records[key] as JsonValue[]).every((item) => validBoundedString(item, maximumLength))) return false;
+      }
+      if (dns.records.mx !== undefined && (!Array.isArray(dns.records.mx)
+        || dns.records.mx.length > MAX_LOOKUP_DNS_RECORDS_PER_TYPE
+        || !dns.records.mx.every(validDnsMxRecord))) return false;
+      if (dns.records.caa !== undefined && (!Array.isArray(dns.records.caa)
+        || dns.records.caa.length > MAX_LOOKUP_DNS_RECORDS_PER_TYPE
+        || !dns.records.caa.every(validDnsCaaRecord))) return false;
+      if (dns.records.soa !== undefined && (!Array.isArray(dns.records.soa)
+        || dns.records.soa.length > 1
+        || !dns.records.soa.every(validDnsSoaRecord))) return false;
+      if (dns.records.https !== undefined && (!Array.isArray(dns.records.https)
+        || dns.records.https.length > MAX_LOOKUP_DNS_RECORDS_PER_TYPE
+        || !dns.records.https.every(validDnsHttpsRecord))) return false;
+    }
+  }
+
+  const reverseDns = value.reverseDns;
+  if (reverseDns !== undefined) {
+    if (!validObservationFields(reverseDns)
+      || reverseDns.records !== undefined
+      && (!isJsonObject(reverseDns.records)
+        || !optionalStringArrayWithin(reverseDns.records.ptr, MAX_LOOKUP_REVERSE_DNS_PTR_RECORDS)
+        || Array.isArray(reverseDns.records.ptr)
+          && !reverseDns.records.ptr.every((item) => validBoundedString(item, 253)))) return false;
+  }
+
+  const tls = availability.tls;
+  if (tls !== undefined) {
+    if (!validObservationFields(tls)
+      || !optionalRecordArrayWithin(tls.findings, MAX_LOOKUP_TLS_FINDINGS)
+      || Array.isArray(tls.findings) && !tls.findings.every(validTlsFinding)
+      || !optionalRecordArrayWithin(tls.chain, MAX_LOOKUP_TLS_CHAIN_CERTIFICATES)
+      || Array.isArray(tls.chain) && !tls.chain.every(validTlsChainCertificate)) return false;
+    const certificate = tls.certificate;
+    if (certificate !== undefined && certificate !== null) {
+      if (!isJsonObject(certificate)
+        || !optionalTlsNameWithin(certificate.subject)
+        || !optionalTlsNameWithin(certificate.issuer)) return false;
+      const altNames = certificate.subjectAltNames;
+      if (altNames !== undefined && altNames !== null) {
+        if (!isJsonObject(altNames)
+          || !optionalStringArrayWithin(altNames.dnsNames, MAX_LOOKUP_TLS_ALT_NAMES)
+          || Array.isArray(altNames.dnsNames)
+            && !altNames.dnsNames.every((item) => validBoundedString(item, 253))
+          || !optionalStringArrayWithin(altNames.ipAddresses, MAX_LOOKUP_TLS_ALT_NAMES)
+          || Array.isArray(altNames.ipAddresses)
+            && !altNames.ipAddresses.every((item) => validBoundedString(item, 64))) return false;
+        const totalAltNames = (Array.isArray(altNames.dnsNames) ? altNames.dnsNames.length : 0)
+          + (Array.isArray(altNames.ipAddresses) ? altNames.ipAddresses.length : 0);
+        if (totalAltNames > MAX_LOOKUP_TLS_ALT_NAMES) return false;
+      }
+      const extensionProfile = certificate.extensionProfile;
+      if (extensionProfile !== undefined && extensionProfile !== null) {
+        if (!isJsonObject(extensionProfile)) return false;
+        const certificatePolicies = extensionProfile.certificatePolicies;
+        if (certificatePolicies !== undefined && certificatePolicies !== null
+          && (!isJsonObject(certificatePolicies)
+            || !optionalStringArrayWithin(
+              certificatePolicies.oids,
+              MAX_LOOKUP_TLS_CERTIFICATE_POLICIES,
+            )
+            || Array.isArray(certificatePolicies.oids)
+              && !certificatePolicies.oids.every((item) => validBoundedString(item, 128)))) return false;
+      }
+    }
+    for (const child of [tls.authorization, tls.hostname]) {
+      if (child !== undefined && child !== null && (!isJsonObject(child)
+        || !validOptionalNullableText(child.error, 240))) return false;
+    }
+  }
+  const securityPosture = availability.securityPosture;
+  if (securityPosture !== undefined && securityPosture !== null) {
+    if (!validObservationFields(securityPosture)
+      || !optionalRecordArrayWithin(securityPosture.findings, MAX_SECURITY_POSTURE_FINDINGS)
+      || Array.isArray(securityPosture.findings)
+        && !securityPosture.findings.every(validSecurityPostureFinding)) return false;
+  }
+  return true;
+}
+
 function parseLookupHttpResponse(value: unknown): LookupResponseParseResult {
+  try {
+    assertBoundedJsonStructure(value, 'Lookup response', {
+      maximumContainerItems: MAX_LOOKUP_RESPONSE_CONTAINER_ITEMS,
+    });
+  } catch {
+    return invalidLookupResponse();
+  }
   if (!isJsonObject(value) || Object.keys(value).length > MAX_LOOKUP_RESPONSE_TOP_LEVEL_KEYS) {
     return invalidLookupResponse();
   }
@@ -438,14 +1015,30 @@ function parseLookupHttpResponse(value: unknown): LookupResponseParseResult {
     const section = value[key];
     if (section !== undefined && !isJsonObject(section)) return invalidLookupResponse();
   }
+  const lookupResponse = value as LookupHttpResponse;
+  if (!validAvailabilityScalars(value.availability)
+    || !validRegistrationEvidence(lookupResponse)) return invalidLookupResponse();
+  if (value.availability.http !== undefined && !validNormalizedHttpEvidence(value.availability.http)) {
+    return invalidLookupResponse();
+  }
+  for (const section of [value.reverseDns, value.networkContext, value.securityTxt]) {
+    if (section !== undefined && !validObservationFields(section)) return invalidLookupResponse();
+  }
+  if (!validNormalizedNetworkEvidence(lookupResponse)
+    || !validPageEvidence(lookupResponse)) return invalidLookupResponse();
 
-  return { ok: true, value: value as LookupHttpResponse };
+  return { ok: true, value: lookupResponse };
 }
 
 function parseCompactLookupHttpResponse(
   value: unknown,
   expectedDomain: string,
 ): CompactLookupResponseParseResult {
+  try {
+    assertBoundedJsonStructure(value, 'Compact Lookup response');
+  } catch {
+    return invalidCompactLookupResponse();
+  }
   if (!isJsonObject(value) || Object.keys(value).length > MAX_COMPACT_LOOKUP_RESPONSE_TOP_LEVEL_KEYS) {
     return invalidCompactLookupResponse();
   }
@@ -667,14 +1260,23 @@ export {
   MAX_COMPACT_LOOKUP_DIAGNOSTIC_KEYS,
   MAX_COMPACT_LOOKUP_RESPONSE_TOP_LEVEL_KEYS,
   MAX_LOOKUP_RESPONSE_ERROR_LENGTH,
+  MAX_LOOKUP_RESPONSE_CONTAINER_ITEMS,
   MAX_LOOKUP_RESPONSE_HOST_LENGTH,
   MAX_LOOKUP_RESPONSE_QUERY_LENGTH,
   MAX_LOOKUP_RESPONSE_TOP_LEVEL_KEYS,
+  MAX_LOOKUP_DNS_RECORDS_PER_TYPE,
+  MAX_LOOKUP_REVERSE_DNS_PTR_RECORDS,
+  MAX_LOOKUP_TLS_ALT_NAMES,
+  MAX_LOOKUP_TLS_CERTIFICATE_POLICIES,
+  MAX_LOOKUP_TLS_CHAIN_CERTIFICATES,
+  MAX_LOOKUP_TLS_FINDINGS,
+  MAX_LOOKUP_TLS_NAME_VALUES,
   MAX_LOOKUP_TIMING_MS,
   MAX_LOOKUP_TIMING_SOURCES,
   MAX_THREAT_INTELLIGENCE_PROVIDERS,
   MAX_THREAT_INTELLIGENCE_FINDINGS,
   MAX_THREAT_INTELLIGENCE_LIMITATIONS,
+  validNormalizedHttpEvidence,
   createLookupHttpResponse,
   createLookupViewModel,
   isJsonObject,

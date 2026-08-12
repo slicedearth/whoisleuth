@@ -185,6 +185,7 @@
             class:active={activeNodeId === edge.nodeId}
             class:dimmed={Boolean(activeNodeId) && activeNodeId !== edge.nodeId}
             class:derived={edge.provenance === 'derived'}
+            class:success={edge.status === 'success'}
             class:partial={edge.status === 'partial' || edge.status === 'warning' || edge.status === 'inconclusive' || edge.status === 'rate_limited'}
             class:failed={edge.status === 'error' || edge.status === 'unavailable'}
             class:limited={edge.status === 'unsupported' || edge.status === 'skipped' || edge.status === 'disabled' || edge.status === 'not_found'}
@@ -363,6 +364,7 @@
   .topology-edges path.active{stroke-width:3;filter:drop-shadow(0 0 4px rgb(var(--accent-rgb) / .55))}
   .topology-edges path.dimmed{opacity:.18}
   .topology-edges path.derived{stroke-dasharray:6 5}
+  .topology-edges path.success{stroke:color-mix(in srgb,var(--success) 72%,var(--border))}
   .topology-edges path.partial{stroke:color-mix(in srgb,var(--amber) 72%,var(--border))}
   .topology-edges path.failed{stroke:color-mix(in srgb,var(--danger) 56%,var(--border));stroke-dasharray:3 5}
   .topology-edges path.limited{stroke:color-mix(in srgb,var(--muted) 55%,var(--border));stroke-dasharray:2 6}
@@ -384,7 +386,7 @@
   .source-node.active{filter:drop-shadow(0 0 7px rgb(var(--accent-rgb) / .4));transform:translateY(-1px)}
   .source-node.dimmed{opacity:.32}
   .source-node .status-dot{fill:var(--muted)}
-  .source-node.state-success .status-dot{fill:var(--accent2)}
+  .source-node.state-success .status-dot{fill:var(--success)}
   .source-node.state-partial .status-dot,.source-node.state-warning .status-dot,.source-node.state-inconclusive .status-dot,.source-node.state-rate_limited .status-dot{fill:var(--amber)}
   .source-node.state-error .status-dot{fill:var(--danger)}
   .source-node.state-unavailable .status-dot,.source-node.state-unsupported .status-dot,.source-node.state-not_found .status-dot,.source-node.state-skipped .status-dot,.source-node.state-disabled .status-dot{fill:var(--muted)}
@@ -402,7 +404,7 @@
   .source-copy small{display:none}
   .source-family{display:block;color:var(--muted);font:650 .5rem var(--mono);letter-spacing:.06em;text-transform:uppercase}
   .source-state{grid-column:2;padding:0;border:0;color:var(--muted);font:650 .55rem var(--mono);text-transform:uppercase}
-  .state-success .source-state{color:var(--accent2)}
+  .state-success .source-state{color:var(--success)}
   .state-partial .source-state,.state-warning .source-state,.state-inconclusive .source-state,.state-rate_limited .source-state{color:var(--amber)}
   .state-error .source-state{color:var(--danger)}
   .topology-note{margin:10px 0 0;color:var(--muted);font-size:var(--text-2xs);line-height:1.5}

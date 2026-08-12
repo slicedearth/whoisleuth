@@ -173,7 +173,15 @@ function analyzeTlsaEvidence(input: Readonly<{
   const normalized = raw.slice(0, MAX_TLSA_RECORDS).map(normalizeTlsaRecord);
   const rejectedCount = normalized.filter((item) => item === null).length + Math.max(0, raw.length - MAX_TLSA_RECORDS);
   const records = normalized.filter((item): item is TlsaRecord => item !== null);
+  const smtpRelayService = service.port === 25 && service.transport === 'tcp';
   const results = records.map((item): TlsaRecordResult => {
+    if (smtpRelayService && (item.usage === 0 || item.usage === 1)) {
+      return Object.freeze({
+        ...item,
+        state: 'unsupported',
+        reason: 'PKIX-TA and PKIX-EE certificate usages are not treated as usable TLSA records for SMTP relay on port 25.',
+      });
+    }
     const materials = item.usage === 0 || item.usage === 2
       ? authorityMaterials
       : leafMaterial ? [leafMaterial] : [];
@@ -192,6 +200,7 @@ function analyzeTlsaEvidence(input: Readonly<{
   const hasMatch = results.some((item) => item.state === 'matched');
   const hasDifferent = results.some((item) => item.state === 'different');
   const hasUnavailable = results.some((item) => item.state === 'unavailable');
+  const hasUnsupported = results.some((item) => item.state === 'unsupported');
   const limitations = [
     'This offline comparison does not connect to the target, retrieve DNS, negotiate SMTP STARTTLS, or validate a DNSSEC chain.',
     'A TLSA match is usable as DANE evidence only when the DNSSEC state was independently validated for the same observation.',
@@ -200,24 +209,45 @@ function analyzeTlsaEvidence(input: Readonly<{
   if (dnssecState !== 'validated' && hasMatch) {
     limitations.push('Certificate material matched, but DNSSEC was not validated, so the result remains partial.');
   }
-  const matchedPkixDependent = results.some((item) => item.state === 'matched' && (item.usage === 0 || item.usage === 1));
-  const matchedDaneOnly = results.some((item) => item.state === 'matched' && (item.usage === 2 || item.usage === 3));
+  if (smtpRelayService && hasUnsupported) {
+    limitations.push('RFC 7672 leaves SMTP relay treatment of PKIX-TA usage 0 and PKIX-EE usage 1 undefined; this review treats those records as unusable and they cannot complete SMTP DANE assurance.');
+  }
+  const matchedPkixTa = results.some((item) => item.state === 'matched' && item.usage === 0);
+  const matchedPkixEe = results.some((item) => item.state === 'matched' && item.usage === 1);
+  const matchedPkixDependent = matchedPkixTa || matchedPkixEe;
+  const matchedDaneEe = results.some((item) => item.state === 'matched' && item.usage === 3);
+  const hasPkixTaAssociation = results.some((item) => item.usage === 0);
+  const hasDaneTaAssociation = results.some((item) => item.usage === 2);
   if (matchedPkixDependent && pkixValidationState !== 'validated') {
     limitations.push('A PKIX-dependent association matched, but a validated PKIX path was not supplied, so the result is not complete.');
   }
   if (authorityMaterialRejectedCount > 0 || authorityMaterialTruncated) {
     limitations.push('Authority certificate material was malformed or exceeded the review bound, so an unmatched trust-anchor association remains partial.');
   }
+  if (hasPkixTaAssociation) {
+    limitations.push('PKIX-TA usage 0 association bytes were compared, but the supplied authority material was not proven to be part of the independently validated leaf path, so the usage-0 association cannot complete PKIX-TA assurance.');
+  }
+  if (hasDaneTaAssociation) {
+    limitations.push('DANE-TA usage 2 association bytes were compared, but no certificate path from the observed leaf to the supplied trust-anchor material was constructed or validated, so the usage-2 association cannot complete DANE-TA assurance.');
+  }
+  if (hasUnavailable || rejectedCount > 0 || truncated) {
+    limitations.push('Some TLSA associations or required certificate material were unavailable, malformed, or beyond the review bound, so the comparison remains incomplete.');
+  }
+  const comparisonMaterialComplete = !hasUnavailable
+    && rejectedCount === 0
+    && !truncated
+    && authorityMaterialRejectedCount === 0
+    && !authorityMaterialTruncated;
   const trustedMatch = dnssecState === 'validated'
-    && (matchedDaneOnly || matchedPkixDependent && pkixValidationState === 'validated');
+    && (matchedDaneEe || matchedPkixEe && pkixValidationState === 'validated');
   const state = results.length === 0
     ? 'unavailable'
-    : hasDifferent && !hasMatch && rejectedCount === 0 && !truncated
-      && authorityMaterialRejectedCount === 0 && !authorityMaterialTruncated
+    : dnssecState === 'validated' && hasDifferent && !hasMatch && comparisonMaterialComplete
+        && !hasPkixTaAssociation && !hasDaneTaAssociation
       ? 'different'
-      : hasMatch && (dnssecState === 'bogus' || matchedPkixDependent && pkixValidationState === 'failed' && !matchedDaneOnly)
+      : hasMatch && (dnssecState === 'bogus' || matchedPkixDependent && pkixValidationState === 'failed' && !matchedDaneEe)
         ? 'untrusted'
-      : trustedMatch && !hasUnavailable && rejectedCount === 0 && !truncated
+      : trustedMatch && comparisonMaterialComplete
         ? 'matched'
         : 'partial';
   return Object.freeze({

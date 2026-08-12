@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { gzipSync, zipSync } from 'fflate';
 import { expect, test } from './fixtures';
-import { expectNoHorizontalOverflow, holdBrowserLocalReads, migrateLegacyBrowserData, readBrowserLocalCollection, requiredValue, runBulkScan } from './helpers';
+import { expectNoHorizontalOverflow, failBrowserLocalCollectionReads, holdBrowserLocalReads, migrateLegacyBrowserData, readBrowserLocalCollection, requiredValue, runBulkScan } from './helpers';
 
 // Every domain here is a local/invalid value (RFC 2606 .invalid, or dotless
 // bad-domain-* that classifyQuery rejects with a 400). Case features are
@@ -19,9 +19,70 @@ test('Monitor views support roving keyboard navigation', async ({ page }) => {
   await inbox.press('ArrowRight');
   await expect(tabs.getByRole('tab', { name: /^Timeline/ })).toBeFocused();
   await expect(tabs.getByRole('tab', { name: /^Timeline/ })).toHaveAttribute('aria-selected', 'true');
+  await expect(page).toHaveURL('/monitor?view=timeline');
   await tabs.getByRole('tab', { name: /^Timeline/ }).press('End');
   await expect(tabs.getByRole('tab', { name: /^Watchlists/ })).toBeFocused();
   await expect(tabs.getByRole('tab', { name: /^Watchlists/ })).toHaveAttribute('aria-selected', 'true');
+  await expect(page).toHaveURL('/monitor?view=watchlists');
+  await page.reload();
+  await expect(page.getByRole('tab', { name: /^Watchlists/ })).toHaveAttribute('aria-selected', 'true');
+});
+
+test('Monitor keeps its URL, default view, and guided-route cleanup consistent', async ({ page }) => {
+  await page.goto('/monitor?view=cases');
+  await expect(page.getByRole('tab', { name: /^Cases/ })).toHaveAttribute('aria-selected', 'true');
+
+  await page.locator('#console-navigation a[href="/monitor"]').click();
+  await expect(page).toHaveURL('/monitor');
+  await expect(page.getByRole('tab', { name: /^Inbox/ })).toHaveAttribute('aria-selected', 'true');
+  await page.reload();
+  await expect(page.getByRole('tab', { name: /^Inbox/ })).toHaveAttribute('aria-selected', 'true');
+
+  await page.goto('/monitor?view=not-a-view');
+  await expect(page.getByRole('tab', { name: /^Inbox/ })).toHaveAttribute('aria-selected', 'true');
+
+  await page.goto('/monitor?view=cases&investigation=1&domain=guided.invalid&response=1#case-review-queue');
+  await expect(page.getByRole('tab', { name: /^Cases/ })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.locator('#case-review-queue')).toBeFocused();
+  await page.getByRole('tab', { name: /^Inbox/ }).click();
+  await expect(page).toHaveURL('/monitor?view=inbox');
+  await page.reload();
+  await expect(page.getByRole('tab', { name: /^Inbox/ })).toHaveAttribute('aria-selected', 'true');
+
+  const monitorLink = page.locator('#console-navigation a[href="/monitor"]');
+  await monitorLink.evaluate((link) => {
+    link.setAttribute('href', '/monitor?view=cases&investigation=1&domain=guided.invalid#case-review-queue');
+    (link as HTMLAnchorElement).click();
+  });
+  await expect(page).toHaveURL('/monitor?view=cases&investigation=1&domain=guided.invalid#case-review-queue');
+  await expect(page.getByRole('heading', { name: '1 domain carried from Bulk' })).toBeVisible();
+  await expect(page.locator('#case-review-queue')).toBeFocused();
+
+  for (const reservedName of ['__proto__', 'constructor']) {
+    await page.goto(`/monitor?view=watchlists&watchlist=${reservedName}`);
+    await expect(page.getByRole('tab', { name: /^Watchlists/u })).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('#watchlist-history')).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'No watchlists saved' })).toBeVisible();
+  }
+});
+
+test('Monitor reports unreadable browser-local collections without false empty states', async ({ page }) => {
+  await page.goto('/monitor');
+  const navigation = page.locator('#console-navigation');
+  await expect(navigation.getByRole('link', { name: /^Dashboard/u })).toBeVisible();
+  await failBrowserLocalCollectionReads(page, 'cases');
+  await failBrowserLocalCollectionReads(page, 'watchlists');
+  await navigation.getByRole('link', { name: /^Dashboard/u }).click();
+  await navigation.getByRole('link', { name: /^Monitor/u }).click();
+
+  await expect(page.locator('.local-context-status')).toContainText('Some browser-local context could not be loaded');
+  await expect(page.getByRole('tab', { name: /^Cases/ }).locator('span')).toHaveAttribute('aria-label', 'count unavailable');
+  await page.getByRole('tab', { name: /^Cases/ }).click();
+  await expect(page.getByRole('heading', { name: 'Cases unavailable' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'No cases yet' })).toHaveCount(0);
+  await page.getByRole('tab', { name: /^Watchlists/ }).click();
+  await expect(page.getByRole('heading', { name: 'Watchlists unavailable' })).toBeVisible();
+  await expect(page.getByText(/No watchlists/i)).toHaveCount(0);
 });
 
 test('recorded operations reporting stays aggregate, source-qualified, and usable on mobile', async ({ page }) => {
@@ -327,6 +388,12 @@ test('projects retained evidence into a filterable source-aware timeline', async
         domain: 'timeline-case.invalid',
         updatedAt: storedAt,
         evidenceHistory: [snapshot({ id: 'timeline-snapshot', capturedAt: observedAt })],
+        evidencePins: [{
+          id: 'timeline-pin', checkpointId: null, field: 'registration.status', category: 'registration',
+          label: 'Registration status', value: 'registered', source: 'registry evidence', sourceState: 'complete',
+          sourceSchema: null, observedAt, collectionDepth: 'deep', completeness: 'complete', truncated: false,
+          transitionExpectation: null, limitations: ['Retained fixture evidence.'], createdAt: storedAt,
+        }],
       })],
     },
     'whois-rdap-watchlist-v1': {
@@ -407,10 +474,16 @@ test('projects retained evidence into a filterable source-aware timeline', async
 
   await expect(page.getByRole('tab', { name: /Timeline/ })).toHaveAttribute('aria-selected', 'true');
   const workspace = page.getByRole('region', { name: 'Investigation timeline' });
-  await expect(workspace.locator('.timeline-list article')).toHaveCount(5);
+  await expect(workspace.locator('.timeline-list article')).toHaveCount(6);
   await expect(workspace).toContainText('Observed');
   await expect(workspace).toContainText('Stored');
   await expect(workspace).toContainText('Derived relationship');
+  const pinnedEvidence = workspace.locator('.timeline-list article', { hasText: 'Evidence pin' });
+  await pinnedEvidence.getByRole('link', { name: /Open Case · timeline-case\.invalid/u }).click();
+  await expect(page).toHaveURL('/monitor?view=cases&case=timeline-case#case-response-timeline-case');
+  await expect(page.locator('#case-response-timeline-case')).toBeFocused();
+  await page.getByRole('tab', { name: /^Timeline/u }).click();
+  await expect(page.getByRole('region', { name: 'Investigation timeline' })).toBeVisible();
   await page.getByLabel('Area').selectOption('bulk');
   await expect(workspace.locator('.timeline-list article')).toHaveCount(1);
   await expect(workspace).toContainText('Timeline Bulk review retained');
@@ -421,7 +494,11 @@ test('projects retained evidence into a filterable source-aware timeline', async
   await page.getByLabel('Type').selectOption('change');
   await expect(workspace.locator('.timeline-list article')).toHaveCount(1);
   await expect(workspace).toContainText('watchlist change');
-  await page.getByRole('button', { name: 'Clear filters' }).click();
+  await workspace.getByRole('link', { name: /Open Watchlist · Timeline watchlist/u }).click();
+  await expect(page).toHaveURL('/monitor?view=watchlists&watchlist=Timeline%20watchlist');
+  await expect(page.getByRole('heading', { name: 'Timeline watchlist' })).toBeVisible();
+  await expect(page.locator('#watchlist-history')).toBeFocused();
+  await page.getByRole('tab', { name: /^Timeline/u }).click();
   await page.getByLabel('Entity').selectOption('timeline-related.invalid');
   await expect(workspace.locator('.timeline-list article')).toHaveCount(1);
   await expect(workspace.getByRole('link', { name: /Open Retained relationship/ })).toHaveAttribute('href', /view=relationships/);
@@ -586,19 +663,23 @@ test('custom-rule controls and results avoid horizontal overflow on mobile', asy
   await expect(page.getByRole('button', { name: 'Export JSON' })).toBeVisible();
 });
 
-test('a note can be added and is shown in the record', async ({ page }) => {
+test('rapid repeated note submission persists one note and is shown in the record', async ({ page }) => {
   await openCasesView(page);
   await createCase(page, 'noted.invalid');
 
   await page.locator('.case-body .note-edit textarea').fill('This domain looks suspicious.');
-  await page.getByRole('button', { name: 'Add note' }).click();
+  await page.locator('.case-body .note-edit').evaluate((form) => {
+    (form as HTMLFormElement).requestSubmit();
+    (form as HTMLFormElement).requestSubmit();
+  });
 
   await expect(page.locator('.notes p').first()).toHaveText('This domain looks suspicious.');
+  await expect(page.locator('.notes p')).toHaveCount(1);
   await expect(page.locator('.case-domain small')).toHaveText('1 note');
 
   await page.reload();
   await page.getByRole('tab', { name: /Cases/ }).click();
-  await page.locator('.case-head', { hasText: 'noted.invalid' }).click();
+  await expect(page.locator('.case-head', { hasText: 'noted.invalid' })).toHaveAttribute('aria-expanded', 'true');
   await expect(page.locator('.notes p').first()).toHaveText('This domain looks suspicious.');
 });
 
@@ -705,7 +786,7 @@ test('reviewed response records persist and produce a local non-submitted packet
 
   await page.reload();
   await page.getByRole('tab', { name: /Cases/ }).click();
-  await page.locator('.case-head', { hasText: 'response.invalid' }).click();
+  await expect(page.locator('.case-head', { hasText: 'response.invalid' })).toHaveAttribute('aria-expanded', 'true');
   await expect(page.locator('.response-workspace')).toContainText('1 pin · 0 sightings · 1 decision · 0 assertions · 1 action · 1 branch');
   await expect(page.locator('.response-workspace')).toContainText('Registrar response path');
 });
@@ -747,7 +828,7 @@ test('external findings require a validated preview before creating local eviden
 
   await externalImport.locator('input[type="file"]').setInputFiles(file);
   await externalImport.getByRole('button', { name: 'Import into cases' }).click();
-  await expect(page.getByRole('status')).toContainText('skipped 1 duplicate');
+  await expect(page.getByRole('status').filter({ hasText: 'skipped 1 duplicate' })).toBeVisible();
   await expect(page.locator('.response-workspace')).toContainText('1 pin · 1 sighting · 0 decisions');
 });
 
@@ -933,7 +1014,8 @@ test('STIX claims require an existing selected case and remain separate from col
   await expect(externalImport.getByRole('button', { name: 'Merge assertions into case' })).toBeDisabled();
   await externalImport.getByLabel('Merge into existing case').selectOption({ label: 'intelligence-case.invalid' });
   await externalImport.getByRole('button', { name: 'Merge assertions into case' }).click();
-  await expect(page.getByRole('status')).toContainText('Merged 1 external assertion');
+  await expect(page.locator('#monitor-view-panel > p.message[role="status"]'))
+    .toContainText('Merged 1 external assertion');
 
   const caseHead = page.locator('.case-head', { hasText: 'intelligence-case.invalid' });
   if (await caseHead.getAttribute('aria-expanded') !== 'true') await caseHead.click();
@@ -988,7 +1070,7 @@ test('a case file imports and merges through the Cases toolbar', async ({ page }
     buffer: Buffer.from(JSON.stringify(importPayload)),
   });
 
-  await expect(page.getByRole('status')).toHaveText(/Imported 1 new/);
+  await expect(page.locator('#monitor-view-panel > p.message[role="status"]')).toHaveText(/Imported 1 new/);
   await expect(page.locator('.case-head', { hasText: 'local.invalid' })).toBeVisible();
   await expect(page.locator('.case-head', { hasText: 'imported.invalid' })).toBeVisible();
 });

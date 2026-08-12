@@ -201,7 +201,7 @@
   .delegation-sources strong{margin-top:5px;font:600 var(--text-xs) var(--mono);overflow-wrap:anywhere}
   .delegation-findings{display:grid;gap:7px;margin-top:8px}
   .delegation-finding{border-left:3px solid var(--border)}
-  .delegation-finding.state-healthy{border-left-color:var(--accent)}
+  .delegation-finding.state-healthy{border-left-color:var(--success)}
   .delegation-finding.state-warning{border-left-color:var(--amber)}
   .delegation-finding.state-danger{border-left-color:var(--danger)}
   .delegation-finding>div span,.authority-state{text-transform:uppercase;font:650 var(--text-2xs) var(--mono);letter-spacing:.04em}
@@ -217,16 +217,16 @@
   .record-matrix li b{font-family:var(--mono);overflow-wrap:anywhere}
   .record-matrix li span{color:var(--muted);overflow-wrap:anywhere}
   .record-matrix li small{grid-column:2;color:var(--amber);overflow-wrap:anywhere}
-  .matrix-aligned{color:var(--accent)}
+  .matrix-aligned{color:var(--success)}
   .matrix-different{color:var(--amber)}
   .matrix-partial,.matrix-insufficient{color:var(--muted)}
   .soa-detail{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px;margin:8px 0 0}
   .soa-detail div{min-width:0;padding:6px;border:1px solid var(--border);border-radius:var(--radius-sm)}
   .soa-detail dt{color:var(--muted);font:var(--text-2xs) var(--mono)}
   .soa-detail dd{margin:3px 0 0;overflow-wrap:anywhere;font:600 var(--text-2xs) var(--mono)}
-  .authority-state.state-success{color:var(--accent)}
+  .authority-state.state-success{color:var(--success)}
   .authority-state.state-partial{color:var(--amber)}
   .authority-state.state-lame{color:var(--danger)}
-  .authority-state.state-unreachable{color:var(--amber)}
+  .authority-state.state-unreachable{color:var(--muted)}
   @media(max-width:640px){.delegation-sources{grid-template-columns:1fr}.soa-detail{grid-template-columns:repeat(2,minmax(0,1fr))}.record-matrix li{grid-template-columns:1fr;gap:2px}.record-matrix li small{grid-column:1}}
 </style>

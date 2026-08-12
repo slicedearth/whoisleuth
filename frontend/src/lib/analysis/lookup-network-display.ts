@@ -8,6 +8,20 @@ import {
   stringList,
   type JsonRecord,
 } from './lookup-display-shared.ts';
+import {
+  MAX_HTTP_ATTEMPTS,
+  MAX_HTTP_EVIDENCE_REDIRECTS,
+} from '../../../../lib/http-evidence-bounds.mts';
+import {
+  MAX_LOOKUP_DNS_RECORDS_PER_TYPE,
+  MAX_LOOKUP_REVERSE_DNS_PTR_RECORDS,
+  MAX_LOOKUP_TLS_ALT_NAMES,
+  MAX_LOOKUP_TLS_CERTIFICATE_POLICIES,
+  MAX_LOOKUP_TLS_CHAIN_CERTIFICATES,
+  MAX_LOOKUP_TLS_FINDINGS,
+  MAX_LOOKUP_TLS_NAME_VALUES,
+} from '../../../../lib/lookup-network-evidence-bounds.mts';
+import { MAX_OBSERVATION_DIAGNOSTICS } from '../../../../lib/observation.mts';
 
 function httpsServiceBindingValue(value: unknown): string {
   const record = rec(value);
@@ -74,9 +88,19 @@ function formatBytes(value: unknown): string {
 }
 
 function tlsName(value: JsonRecord): string {
-  const common = Array.isArray(value.commonNames) ? value.commonNames : [];
-  const organizations = Array.isArray(value.organizations) ? value.organizations : [];
+  const common = stringList(value.commonNames, MAX_LOOKUP_TLS_NAME_VALUES, 256);
+  const organizations = stringList(value.organizations, MAX_LOOKUP_TLS_NAME_VALUES, 256);
   return [...common, ...organizations].join(' · ') || '—';
+}
+
+function boundedOwnEntries(value: JsonRecord, maximum: number): Array<[string, unknown]> {
+  const entries: Array<[string, unknown]> = [];
+  for (const key in value) {
+    if (!Object.hasOwn(value, key)) continue;
+    entries.push([key, value[key]]);
+    if (entries.length >= maximum) break;
+  }
+  return entries;
 }
 
 function tlsMetadataCount(value: unknown): number {
@@ -136,10 +160,12 @@ export function buildLookupNetworkDisplay(input: {
     tlsDiagnostics,
   } = input;
   const dnsValues = (name: string) => {
-    const values = Array.isArray(dnsRecords[name]) ? dnsRecords[name] : [];
+    const values = Array.isArray(dnsRecords[name])
+      ? dnsRecords[name].slice(0, MAX_LOOKUP_DNS_RECORDS_PER_TYPE)
+      : [];
     return values
       .map((value) => {
-        if (typeof value === 'string') return value;
+        if (typeof value === 'string') return boundedTechnologyText(value, 1024);
         const record = rec(value);
         if (name === 'mx') return `${record.priority} ${record.exchange || '.'}`;
         if (name === 'caa') return `${record.critical} ${record.tag} ${record.value}`;
@@ -347,7 +373,7 @@ export function buildLookupNetworkDisplay(input: {
       });
     }
     const purposes = rec(tlsCertificate.extendedKeyUsage);
-    if (Object.keys(purposes).length) {
+    if (Array.isArray(purposes.values) || purposes.truncated === true) {
       const values = records(purposes.values)
         .slice(0, 8)
         .map((purpose) => `${show(purpose.name)} (${show(purpose.oid)})`);
@@ -371,14 +397,14 @@ export function buildLookupNetworkDisplay(input: {
       ['otherName', 'other name'],
       ['unclassified', 'other'],
     ]);
-    if (Object.keys(rec(tlsAltNames.classes)).length) {
+    if (sanClasses || tlsAltNames.truncated === true) {
       leafCertificate.push({
         label: 'SAN classes',
         value: `${sanClasses || 'None observed'}${tlsAltNames.truncated ? ' · truncated' : ''}`,
       });
     }
     const aia = rec(tlsCertificate.authorityInformationAccess);
-    if (Object.keys(aia).length) {
+    if (aia.ocsp !== undefined || aia.caIssuers !== undefined || aia.unknownMethods !== undefined || aia.truncated === true) {
       const ocsp = rec(aia.ocsp);
       const issuers = rec(aia.caIssuers);
       const values = [
@@ -406,14 +432,14 @@ export function buildLookupNetworkDisplay(input: {
     const extensionProfile = rec(tlsCertificate.extensionProfile);
     const policies = rec(extensionProfile.certificatePolicies);
     if (Array.isArray(policies.oids)) {
-      const oids = policies.oids.filter((value): value is string => typeof value === 'string').slice(0, 16);
+      const oids = stringList(policies.oids, MAX_LOOKUP_TLS_CERTIFICATE_POLICIES, 128);
       leafCertificate.push({
         label: 'Certificate policies',
         value: `${oids.join(' · ') || 'None declared'}${policies.truncated ? ' · truncated' : ''}`,
       });
     }
     const crl = rec(extensionProfile.crlDistributionPoints);
-    if (Object.keys(crl).length) {
+    if (crl.total !== undefined || crl.https !== undefined || crl.http !== undefined || crl.ldap !== undefined || crl.other !== undefined || crl.truncated === true) {
       leafCertificate.push({
         label: 'CRL distribution presence',
         value: `${tlsMetadataCount(crl.total)} declared (${tlsMetadataCount(crl.https)} HTTPS, ${tlsMetadataCount(crl.http)} HTTP, ${tlsMetadataCount(crl.ldap)} LDAP, ${tlsMetadataCount(crl.other)} other)${crl.truncated ? ' · truncated' : ''}`,
@@ -425,9 +451,9 @@ export function buildLookupNetworkDisplay(input: {
     dnsRows,
     dnsDelegation,
     dnsQueryFailures: [
-      ...Object.entries(rec(dnsEvidence.diagnostics))
+      ...boundedOwnEntries(rec(dnsEvidence.diagnostics), MAX_OBSERVATION_DIAGNOSTICS)
         .filter(([, item]) => rec(item).status === 'error')
-        .map(([name, item]) => `${name.toUpperCase()}: ${rec(item).error || 'query failed'}`),
+        .map(([name, item]) => `${name.toUpperCase()}: ${boundedTechnologyText(rec(item).error, 240) || 'query failed'}`),
       ...(() => {
         const policyDiagnostic = rec(rec(caaPolicy.diagnostics).tree);
         return policyDiagnostic.error
@@ -439,14 +465,16 @@ export function buildLookupNetworkDisplay(input: {
       {
         label: 'PTR names',
         value:
-          (Array.isArray(reverseDnsRecords.ptr) ? reverseDnsRecords.ptr.map(String) : []).join(
+          stringList(reverseDnsRecords.ptr, MAX_LOOKUP_REVERSE_DNS_PTR_RECORDS, 253).join(
             ' · ',
           ) || 'Not observed',
       },
     ],
     reverseDnsFailure: (() => {
       const diagnostic = rec(rec(reverseDns.diagnostics).ptr);
-      return diagnostic.status === 'error' ? String(diagnostic.error || 'query failed') : '';
+      return diagnostic.status === 'error'
+        ? boundedTechnologyText(diagnostic.error, 240) || 'query failed'
+        : '';
     })(),
     httpRows: [
       { label: 'Final URL', value: show(httpEvidence.finalUrl || httpEvidence.requestUrl) },
@@ -472,14 +500,14 @@ export function buildLookupNetworkDisplay(input: {
         }`,
       },
     ],
-    httpRedirects: records(httpEvidence.redirects).map((redirect) => ({
+    httpRedirects: records(httpEvidence.redirects).slice(0, MAX_HTTP_EVIDENCE_REDIRECTS).map((redirect) => ({
       status: show(redirect.status),
       from: show(redirect.from),
       to: show(redirect.to),
       queryOmitted: Boolean(redirect.queryOmitted),
     })),
     httpAttempts: (() => {
-      const attempts = records(httpEvidence.attempts);
+      const attempts = records(httpEvidence.attempts).slice(0, MAX_HTTP_ATTEMPTS);
       return attempts.some((attempt) => attempt.error)
         ? attempts.map((attempt) => ({
             url: show(attempt.url),
@@ -528,36 +556,39 @@ export function buildLookupNetworkDisplay(input: {
           tlsValidity.status === 'expired' || tlsValidity.status === 'not_yet_valid',
       },
     ],
-    tlsFindings: records(tlsEvidence.findings).map((finding) => ({
-      label: show(finding.label),
-      detail: show(finding.detail),
-      tone: String(finding.tone || ''),
+    tlsFindings: records(tlsEvidence.findings, MAX_LOOKUP_TLS_FINDINGS).map((finding) => ({
+      label: boundedTechnologyText(finding.label, 160) || 'TLS finding',
+      detail: boundedTechnologyText(finding.detail, 500),
+      tone: boundedTechnologyText(finding.tone, 32),
     })),
     leafCertificate,
     alternativeNames: [
-      ...(Array.isArray(tlsAltNames.dnsNames)
-        ? tlsAltNames.dnsNames.map((value) => ({ type: 'DNS', value: show(value) }))
-        : []),
-      ...(Array.isArray(tlsAltNames.ipAddresses)
-        ? tlsAltNames.ipAddresses.map((value) => ({
+      ...stringList(tlsAltNames.dnsNames, MAX_LOOKUP_TLS_ALT_NAMES, 253)
+        .map((value) => ({ type: 'DNS', value: show(value) })),
+      ...stringList(
+        tlsAltNames.ipAddresses,
+        Math.max(0, MAX_LOOKUP_TLS_ALT_NAMES - stringList(tlsAltNames.dnsNames, MAX_LOOKUP_TLS_ALT_NAMES, 253).length),
+        64,
+      ).map((value) => ({
             type: 'IP address',
             value: show(value),
-          }))
-        : []),
+          })),
     ],
-    tlsChain: records(tlsEvidence.chain).map((certificate, index) => ({
+    tlsChain: records(tlsEvidence.chain, MAX_LOOKUP_TLS_CHAIN_CERTIFICATES).map((certificate, index) => ({
       label: index === 0 ? 'Leaf certificate' : `Chain certificate ${index + 1}`,
       subject: tlsName(rec(certificate.subject)),
       fingerprint: show(certificate.fingerprintSha256),
     })),
     tlsValidation: [
       ...(tlsDiagnostics.error
-        ? [{ label: 'Collection', value: String(tlsDiagnostics.error) }]
+        ? [{ label: 'Collection', value: boundedTechnologyText(tlsDiagnostics.error, 240) }]
         : []),
       ...(tlsAuthorization.error
-        ? [{ label: 'Authorisation', value: String(tlsAuthorization.error) }]
+        ? [{ label: 'Authorisation', value: boundedTechnologyText(tlsAuthorization.error, 240) }]
         : []),
-      ...(tlsHostname.error ? [{ label: 'Hostname', value: String(tlsHostname.error) }] : []),
+      ...(tlsHostname.error
+        ? [{ label: 'Hostname', value: boundedTechnologyText(tlsHostname.error, 240) }]
+        : []),
     ],
   };
 }

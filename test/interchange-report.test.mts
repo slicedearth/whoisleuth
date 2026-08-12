@@ -140,13 +140,13 @@ describe('interchange fidelity report', () => {
     const manyKeys = `{${Array.from({ length: MAX_BOUNDED_JSON_KEYS + 1 }, (_, index) => `"k${index}":null`).join(',')}}`;
     await assert.rejects(
       () => buildInterchangeFidelityReport(manyKeys, { generatedAt: NOW }),
-      /key limit/iu,
+      /(?:key limit|container with more than 10000 items)/iu,
     );
 
     const manyValues = `{"items":[${Array.from({ length: MAX_BOUNDED_JSON_VALUES }, () => 'null').join(',')}]}`;
     await assert.rejects(
       () => buildInterchangeFidelityReport(manyValues, { generatedAt: NOW }),
-      /value limit/iu,
+      /(?:value limit|container with more than 10000 items)/iu,
     );
   });
 

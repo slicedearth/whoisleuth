@@ -45,12 +45,12 @@
       <button class="btn" type="button" onclick={exportComparison}>Export comparison</button>
     </header>
     <div class="comparison-summary" role="group" aria-label="Comparison summary">
-      <span><strong>{comparison.counts.equal}</strong> equal</span>
-      <span><strong>{comparison.counts.different}</strong> different</span>
-      <span><strong>{comparison.counts.missing}</strong> one-sided</span>
-      <span><strong>{comparison.counts.conflicting}</strong> conflicting</span>
-      <span><strong>{comparison.counts.not_recorded}</strong> not recorded</span>
-      <span><strong>{comparison.counts.unavailable}</strong> unavailable</span>
+      <span class="summary-equal"><strong>{comparison.counts.equal}</strong> equal</span>
+      <span class="summary-different"><strong>{comparison.counts.different}</strong> different</span>
+      <span class="summary-unavailable"><strong>{comparison.counts.missing}</strong> one-sided</span>
+      <span class="summary-conflicting"><strong>{comparison.counts.conflicting}</strong> conflicting</span>
+      <span class="summary-unavailable"><strong>{comparison.counts.not_recorded}</strong> not recorded</span>
+      <span class="summary-unavailable"><strong>{comparison.counts.unavailable}</strong> unavailable</span>
     </div>
     <div class="table-wrap">
       <table>
@@ -92,10 +92,14 @@
   h2,p{margin:0}h2{margin-top:4px;font:700 var(--text-lg) var(--mono)}
   header p:not(.eyebrow){max-width:760px;margin-top:7px;color:var(--muted);font-size:var(--text-sm);line-height:1.5}
   header .freshness{font-size:var(--text-2xs);font-family:var(--mono)}
-  .freshness strong{color:var(--accent);text-transform:capitalize}.freshness[data-state="stale"] strong{color:var(--amber)}
+  .freshness strong{color:var(--text);text-transform:capitalize}.freshness[data-state="stale"] strong{color:var(--amber)}
   .comparison-summary{display:flex;flex-wrap:wrap;gap:7px;margin:14px 0}
   .comparison-summary span{padding:7px 9px;border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--muted);font:var(--text-2xs) var(--mono)}
-  .comparison-summary strong{color:var(--accent);font-size:var(--text-sm)}
+  .comparison-summary strong{color:var(--text);font-size:var(--text-sm)}
+  .comparison-summary .summary-equal strong{color:var(--success)}
+  .comparison-summary .summary-different strong{color:var(--amber)}
+  .comparison-summary .summary-conflicting strong{color:var(--danger)}
+  .comparison-summary .summary-unavailable{border-style:dotted}
   .table-wrap{border:1px solid var(--border);border-radius:var(--radius-sm)}
   caption{padding:9px 10px;border-bottom:1px solid var(--border);color:var(--muted);font:650 var(--text-2xs) var(--mono);text-align:left}
   tr.different{background:rgb(var(--amber-rgb) / .035)}
@@ -105,10 +109,10 @@
   th small,td small{margin-top:4px;color:var(--muted);font-size:var(--text-2xs);line-height:1.4}
   td code{color:var(--text);font-size:inherit}
   .chip{display:inline-block}
-  .state-equal{color:var(--accent)}
+  .state-equal{border-color:color-mix(in srgb,var(--success) 45%,var(--border));color:var(--success)}
   .state-different{border-color:color-mix(in srgb,var(--amber) 45%,var(--border));color:var(--amber)}
-  .state-conflicting{color:var(--danger)}
-  .state-missing,.state-not_recorded,.state-unavailable{color:var(--muted)}
+  .state-conflicting{border-color:color-mix(in srgb,var(--danger) 45%,var(--border));color:var(--danger)}
+  .state-missing,.state-not_recorded,.state-unavailable{border-color:var(--muted);border-style:dotted;color:var(--muted)}
   .evidence-link{display:inline-flex;align-items:center;margin-top:4px;color:var(--accent);font:650 var(--text-2xs) var(--mono)}
   .limitations{margin:12px 0 0;padding-left:18px;color:var(--muted);font-size:var(--text-2xs);line-height:1.5}
   @media(max-width:700px){

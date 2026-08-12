@@ -117,7 +117,7 @@ describe('discover-scan CLI arguments', () => {
   test('accepts supervised collection controls and enforces mode bounds', () => {
     const parsed = parseCliArguments([
       'discover-scan', 'brand.example', '--deep', '--scan-limit', '40', '--chunk-size', '10',
-      '--concurrency', '3', '--resolver', '192.0.2.53,2001:db8::53', '--allowlist', 'known.txt',
+      '--concurrency', '3', '--resolver', '8.8.8.8,2606:4700:4700::1111', '--allowlist', 'known.txt',
       '--checkpoint', 'state.json', '--resume', '--observation-snapshot', 'observed.json',
       '--registered-only', '--csv', '--events',
     ]);
@@ -134,11 +134,18 @@ describe('discover-scan CLI arguments', () => {
 });
 
 describe('analyst-selected DNS resolvers', () => {
-  test('accepts bounded literal addresses and rejects hostnames or excessive lists', () => {
-    assert.deepEqual(normalizeSelectedDnsResolvers('192.0.2.53, 2001:db8::53,192.0.2.53'), ['192.0.2.53', '2001:db8::53']);
+  test('accepts bounded public literal addresses and rejects non-public, hostname, or excessive selections', () => {
+    assert.deepEqual(normalizeSelectedDnsResolvers('8.8.8.8, 2606:4700:4700::1111,8.8.8.8'), ['8.8.8.8', '2606:4700:4700::1111']);
+    assert.throws(() => normalizeSelectedDnsResolvers('127.0.0.1'), /publicly routable/u);
+    assert.throws(() => normalizeSelectedDnsResolvers('10.0.0.53'), /publicly routable/u);
+    assert.throws(() => normalizeSelectedDnsResolvers('169.254.1.53'), /publicly routable/u);
+    assert.throws(() => normalizeSelectedDnsResolvers('192.0.2.53'), /publicly routable/u);
+    assert.throws(() => normalizeSelectedDnsResolvers('::1'), /publicly routable/u);
+    assert.throws(() => normalizeSelectedDnsResolvers('fc00::53'), /publicly routable/u);
     assert.throws(() => normalizeSelectedDnsResolvers('resolver.example'), /literal IPv4 or IPv6/u);
-    assert.throws(() => normalizeSelectedDnsResolvers('192.0.2.1,192.0.2.2,192.0.2.3,192.0.2.4'), /1 to 3/u);
-    assert.deepEqual(Object.keys(createSelectedDnsResolvers(['192.0.2.53'])).sort(), [
+    assert.throws(() => normalizeSelectedDnsResolvers('8.8.8.8,8.8.4.4,9.9.9.9,64.6.64.6'), /1 to 3/u);
+    assert.throws(() => createSelectedDnsResolvers(['127.0.0.1']), /publicly routable/u);
+    assert.deepEqual(Object.keys(createSelectedDnsResolvers(['8.8.8.8'])).sort(), [
       'resolve4', 'resolve6', 'resolveCaa', 'resolveCname', 'resolveMx', 'resolveNs', 'resolveSoa', 'resolveTxt',
     ]);
   });
@@ -192,7 +199,7 @@ describe('chunked discovery collection', () => {
       deep: false,
       chunkSize: 2,
       concurrency: 2,
-      dnsResolverServers: ['192.0.2.53'],
+      dnsResolverServers: ['8.8.8.8'],
       classifyQuery: classified,
       runUnifiedLookup: async (item, options) => {
         modes.push(options);
@@ -205,7 +212,7 @@ describe('chunked discovery collection', () => {
     assert.ok(modes.every((value) => {
       const options = value as Record<string, unknown>;
       return options.fast === true && options.compact === true
-        && JSON.stringify(options.dnsResolverServers) === JSON.stringify(['192.0.2.53']);
+        && JSON.stringify(options.dnsResolverServers) === JSON.stringify(['8.8.8.8']);
     }));
   });
 });
@@ -335,7 +342,7 @@ describe('discover-scan runner', () => {
     const stderr = capture();
     const received: Array<Record<string, unknown>> = [];
     const code = await runCli([
-      'discover-scan', 'brand.example', '--scan-limit', '2', '--resolver', '192.0.2.53', '--json',
+      'discover-scan', 'brand.example', '--scan-limit', '2', '--resolver', '8.8.8.8', '--json',
     ], {
       stdout: stdout.stream,
       stderr: stderr.stream,

@@ -2,6 +2,7 @@ import { Buffer } from 'node:buffer';
 import { createRequire } from 'node:module';
 
 import { abortable } from '../lib/abort.mts';
+import { scanBoundedJson } from '../lib/bounded-json.mts';
 import { REGISTRY_CAPABILITIES_VERSION, registryCapabilityFor } from '../lib/registry-capabilities.mts';
 import { explainRiskScore, explainRiskScoreV6, RISK_MODEL_VERSION, RISK_REVIEW_THRESHOLD } from '../lib/risk-scoring.mts';
 import { buildRiskCalibrationSummaryReport } from '../lib/risk-calibration-summary.mts';
@@ -88,6 +89,9 @@ import {
 } from '../lib/domain-control-flight-recorder.mts';
 import {
   CLI_DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA,
+  MAX_DOMAIN_CONTROL_REVIEW_JSON_DEPTH,
+  MAX_DOMAIN_CONTROL_REVIEW_JSON_KEYS,
+  MAX_DOMAIN_CONTROL_REVIEW_JSON_VALUES,
   buildCliDomainControlReview,
   formatCliDomainControlReview,
 } from './domain-control-observations.mts';
@@ -803,10 +807,20 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
         throw new CliUsageError(`Could not read domain control input: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
       }
       if (!input.trim()) throw new CliUsageError('domain-control requires one JSON file or a document on stdin.');
+      const normalizedDomainControlInput = input.replace(/^\uFEFF/u, '');
       let parsed: unknown;
       try {
-        parsed = JSON.parse(input);
-      } catch {
+        scanBoundedJson(normalizedDomainControlInput, {
+          maximumDepth: MAX_DOMAIN_CONTROL_REVIEW_JSON_DEPTH,
+          maximumKeys: MAX_DOMAIN_CONTROL_REVIEW_JSON_KEYS,
+          maximumValues: MAX_DOMAIN_CONTROL_REVIEW_JSON_VALUES,
+        });
+        parsed = JSON.parse(normalizedDomainControlInput);
+      } catch (cause) {
+        const detail = cause instanceof Error ? cause.message : '';
+        if (detail.startsWith('Artefact JSON ')) {
+          throw new CliUsageError(`Domain control input ${detail.slice('Artefact JSON '.length)}`);
+        }
         throw new CliUsageError('Domain control input is not valid JSON.');
       }
       const schema = parsed && typeof parsed === 'object' && !Array.isArray(parsed)
@@ -1167,14 +1181,20 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
     if (args.action === 'ct-search'
       || args.action === 'posture'
       || args.action === 'http'
-      || args.action === 'tls') {
+      || args.action === 'tls'
+      || args.action === 'dnssec-validate'
+      || args.action === 'mail-transport') {
       failureLabel = args.action === 'ct-search'
         ? 'Certificate Transparency search'
         : args.action === 'posture'
           ? 'Domain posture audit'
           : args.action === 'http'
             ? 'HTTP probe'
-            : 'TLS intelligence';
+            : args.action === 'tls'
+              ? 'TLS intelligence'
+              : args.action === 'dnssec-validate'
+                ? 'DNSSEC chain validation'
+                : 'Mail transport review';
       const { runNetworkCommand } = await import('./network-command-runner.mts');
       return await runNetworkCommand(args, dependencies, commandContext);
     }

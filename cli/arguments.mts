@@ -32,6 +32,8 @@ const CLI_COMMANDS = [
   'posture',
   'http',
   'tls',
+  'dnssec-validate',
+  'mail-transport',
   'registry-support',
   'registry-doctor',
   'registry-cohort',
@@ -92,6 +94,8 @@ type CliAction =
   | ({ action: 'posture'; domain: string | null; output: 'terminal' | 'json' | 'sarif'; selectorText: string | null; retiredSelectorText: string | null; mailProfile: 'defensive_no_mail' | 'parked' | 'standard'; ownedDomain: boolean } & TerminalOptions)
   | ({ action: 'http'; domain: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'tls'; hostname: string | null; output: 'terminal' | 'json' } & TerminalOptions)
+  | ({ action: 'dnssec-validate'; target: string; resolver: string; trustAnchorSource: string; ownedOrAuthorized: true; output: 'terminal' | 'json' } & TerminalOptions)
+  | ({ action: 'mail-transport'; source: string | null; resolver: string; trustAnchorSource: string; ownedOrAuthorized: true; activeProbeAcknowledged: true; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'registry-support'; target: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'registry-doctor'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'registry-cohort'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
@@ -214,6 +218,8 @@ function parseCliArgumentsCore(argv: string[]): CliAction {
   if (command === 'posture') return parsePostureArguments(argv.slice(1));
   if (command === 'http') return parseHttpArguments(argv.slice(1));
   if (command === 'tls') return parseTlsArguments(argv.slice(1));
+  if (command === 'dnssec-validate') return parseDnssecValidateArguments(argv.slice(1));
+  if (command === 'mail-transport') return parseMailTransportArguments(argv.slice(1));
   if (command === 'registry-support') return parseRegistrySupportArguments(argv.slice(1));
   if (command === 'registry-doctor') return parseRegistryDoctorArguments(argv.slice(1));
   if (command === 'registry-cohort') return parseRegistryCohortArguments(argv.slice(1));
@@ -821,6 +827,84 @@ function parseHttpArguments(argv: string[]): Extract<CliArguments, { action: 'ht
 function parseTlsArguments(argv: string[]): Extract<CliArguments, { action: 'tls' }> {
   const { source: hostname, ...options } = parseSingleJsonInput(argv, 'tls accepts one hostname.');
   return { action: 'tls', hostname, ...options };
+}
+
+function parseDnssecValidateArguments(argv: string[]): Extract<CliArguments, { action: 'dnssec-validate' }> {
+  let target: string | null = null;
+  let resolver: string | null = null;
+  let trustAnchorSource: string | null = null;
+  let ownedOrAuthorized = false;
+  let output: 'terminal' | 'json' = 'terminal';
+  let quiet = false;
+  let color = true;
+  for (let index = 0; index < argv.length; index += 1) {
+    const argument = argv[index];
+    if (argument === '--resolver' || argument === '--trust-anchor') {
+      const selected = argument === '--resolver' ? resolver : trustAnchorSource;
+      if (selected !== null) throw new CliUsageError(`${argument} may be supplied only once.`);
+      const value = argv[++index];
+      if (!value || value.startsWith('-')) throw new CliUsageError(`${argument} requires one bounded value.`);
+      if (argument === '--resolver') resolver = value;
+      else trustAnchorSource = value;
+    } else if (argument === '--owned-or-authorized') {
+      if (ownedOrAuthorized) throw new CliUsageError('--owned-or-authorized may be supplied only once.');
+      ownedOrAuthorized = true;
+    } else if (argument === '--json') {
+      if (output !== 'terminal') throw new CliUsageError('--json may be supplied only once.');
+      output = 'json';
+    } else if (argument === '--quiet') quiet = true;
+    else if (argument === '--no-color') color = false;
+    else if (argument?.startsWith('-')) throw new CliUsageError(`Unknown option "${argument}".`);
+    else if (argument && target === null) target = argument;
+    else throw new CliUsageError('dnssec-validate accepts one domain target.');
+  }
+  if (!target) throw new CliUsageError('dnssec-validate requires one domain target.');
+  if (!resolver) throw new CliUsageError('dnssec-validate requires --resolver <public-IP>.');
+  if (!trustAnchorSource) throw new CliUsageError('dnssec-validate requires --trust-anchor <anchor.json>.');
+  if (!ownedOrAuthorized) throw new CliUsageError('dnssec-validate requires --owned-or-authorized for every run.');
+  if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
+  return { action: 'dnssec-validate', target, resolver, trustAnchorSource, ownedOrAuthorized: true, output, quiet, color };
+}
+
+function parseMailTransportArguments(argv: string[]): Extract<CliArguments, { action: 'mail-transport' }> {
+  let source: string | null = null;
+  let resolver: string | null = null;
+  let trustAnchorSource: string | null = null;
+  let ownedOrAuthorized = false;
+  let activeProbeAcknowledged = false;
+  let output: 'terminal' | 'json' = 'terminal';
+  let quiet = false;
+  let color = true;
+  for (let index = 0; index < argv.length; index += 1) {
+    const argument = argv[index];
+    if (argument === '--resolver' || argument === '--trust-anchor') {
+      const selected = argument === '--resolver' ? resolver : trustAnchorSource;
+      if (selected !== null) throw new CliUsageError(`${argument} may be supplied only once.`);
+      const value = argv[++index];
+      if (!value || value.startsWith('-')) throw new CliUsageError(`${argument} requires one bounded value.`);
+      if (argument === '--resolver') resolver = value;
+      else trustAnchorSource = value;
+    } else if (argument === '--owned-or-authorized') {
+      if (ownedOrAuthorized) throw new CliUsageError('--owned-or-authorized may be supplied only once.');
+      ownedOrAuthorized = true;
+    } else if (argument === '--active-probe') {
+      if (activeProbeAcknowledged) throw new CliUsageError('--active-probe may be supplied only once.');
+      activeProbeAcknowledged = true;
+    } else if (argument === '--json') {
+      if (output !== 'terminal') throw new CliUsageError('--json may be supplied only once.');
+      output = 'json';
+    } else if (argument === '--quiet') quiet = true;
+    else if (argument === '--no-color') color = false;
+    else if (argument?.startsWith('-')) throw new CliUsageError(`Unknown option "${argument}".`);
+    else if (argument && source === null) source = argument;
+    else throw new CliUsageError('mail-transport accepts one optional versioned JSON input file.');
+  }
+  if (!resolver) throw new CliUsageError('mail-transport requires --resolver <public-IP>.');
+  if (!trustAnchorSource) throw new CliUsageError('mail-transport requires --trust-anchor <anchor.json>.');
+  if (!ownedOrAuthorized) throw new CliUsageError('mail-transport requires --owned-or-authorized for every run.');
+  if (!activeProbeAcknowledged) throw new CliUsageError('mail-transport requires --active-probe for every run.');
+  if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
+  return { action: 'mail-transport', source, resolver, trustAnchorSource, ownedOrAuthorized: true, activeProbeAcknowledged: true, output, quiet, color };
 }
 
 function parseCompareArguments(argv: string[]): Extract<CliArguments, { action: 'compare' }> {

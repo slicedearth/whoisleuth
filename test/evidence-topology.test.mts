@@ -25,7 +25,8 @@ describe('evidence topology projection', () => {
     assert.equal(first.version, EVIDENCE_TOPOLOGY_VERSION);
     assert.equal(first.nodes.length, 3);
     assert.equal(first.edges.length, 3);
-    assert.equal(first.counts.success, 2);
+    assert.equal(first.counts.success, 1);
+    assert.equal(first.counts.observed, 1);
     assert.equal(first.counts.partial, 1);
     assert.deepEqual(first.provenanceCounts, { direct: 2, derived: 1 });
     assert.equal(first.nodes.find((node) => node.id === 'technology')?.provenance, 'derived');
@@ -83,6 +84,11 @@ describe('evidence topology projection', () => {
   });
 
   test('preserves explicit incomplete and failure states instead of implying absence', () => {
+    assert.equal(normalizeEvidenceTopologyStatus('success'), 'success');
+    assert.equal(normalizeEvidenceTopologyStatus('complete'), 'complete');
+    assert.equal(normalizeEvidenceTopologyStatus('registered'), 'registered');
+    assert.equal(normalizeEvidenceTopologyStatus('active'), 'active');
+    assert.equal(normalizeEvidenceTopologyStatus('observed'), 'observed');
     assert.equal(normalizeEvidenceTopologyStatus('success', { complete: false }), 'partial');
     assert.equal(normalizeEvidenceTopologyStatus('success', { truncated: true }), 'partial');
     assert.equal(normalizeEvidenceTopologyStatus('not_found'), 'not_found');
@@ -102,7 +108,7 @@ describe('evidence topology projection', () => {
       targetType: 'domain',
       diagnostics: {
         rdap: { status: 'success', endpoint: 'https://rdap.example.test/domain/example.test', transportSecurity: 'https' },
-        whois: { status: 'partial' },
+        whois: { status: 'complete', authoritativeHop: 'whois.registry.example.test' },
       },
       registrarRdap: { status: 'unsupported' },
       observedNetworkContext: { contextVersion: 1, status: 'success' },
@@ -121,6 +127,19 @@ describe('evidence topology projection', () => {
     });
 
     assert.equal(nodes.find((node) => node.id === 'registry-rdap')?.family, 'registry');
+    assert.deepEqual(
+      nodes.find((node) => node.id === 'whois'),
+      {
+        id: 'whois',
+        label: 'WHOIS',
+        detail: 'whois.registry.example.test',
+        status: 'success',
+        href: '#evidence-registry',
+        side: 'left',
+        glyph: 'W',
+        family: 'registry',
+      },
+    );
     assert.equal(nodes.find((node) => node.id === 'dns')?.status, 'partial');
     assert.equal(nodes.find((node) => node.id === 'network')?.detail, '192.0.2.44');
     assert.equal(nodes.find((node) => node.id === 'structured-identity')?.detail, '1 publisher-declared entity');

@@ -105,7 +105,19 @@ test('dashboard local search exposes future-store limitations without indexing f
 test('dashboard local search remains usable without horizontal overflow on narrow mobile screens', async ({ page }) => {
   await seedInvestigationStores(page);
   await page.setViewportSize({ width: 320, height: 700 });
-  await page.getByRole('searchbox', { name: 'Search saved work' }).fill('candidate.invalid');
+  const search = page.getByRole('searchbox', { name: 'Search saved work' });
+  const placeholderFit = await search.evaluate((element: HTMLInputElement) => {
+    const style = getComputedStyle(element);
+    const context = document.createElement('canvas').getContext('2d');
+    if (!context) return { availableWidth: 0, textWidth: Number.POSITIVE_INFINITY };
+    context.font = style.font;
+    return {
+      availableWidth: element.clientWidth - Number.parseFloat(style.paddingLeft) - Number.parseFloat(style.paddingRight),
+      textWidth: context.measureText(element.placeholder).width,
+    };
+  });
+  expect(placeholderFit.availableWidth).toBeGreaterThanOrEqual(placeholderFit.textWidth);
+  await search.fill('candidate.invalid');
   await expect(page.locator('.result-card').first()).toBeVisible();
   await expectNoHorizontalOverflow(page);
   await page.getByRole('link', { name: 'Open case', exact: true }).focus();

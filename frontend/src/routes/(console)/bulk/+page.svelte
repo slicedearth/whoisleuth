@@ -146,10 +146,15 @@
   let profile = $state<BrandProfile|null>(null);
   let profileSourceState=$state<ActiveBrandProfileSourceState>('loading');
   let shortlist=$state<ShortlistRecord[]>([]);let shortlistStatus=$state('');let draftStatus=$state('');
+  let shortlistSourceState=$state<'loading'|'ready'|'unavailable'>('loading');
   let cases=$state<CaseRecord[]>([]);let caseStatus=$state('');
+  let casesSourceState=$state<'loading'|'ready'|'unavailable'>('loading');
   let retainedRelationshipIds=$state<Set<string>>(new Set());let relationshipRetentionStatus=$state('');
+  let relationshipsSourceState=$state<'loading'|'ready'|'unavailable'>('loading');
   let bulkSessions=$state<BulkSession[]>([]);let bulkSessionName=$state('');let bulkSessionStatus=$state('');let currentBulkSessionId=$state('');let scanStartedAt=$state('');
+  let bulkSessionsSourceState=$state<'loading'|'ready'|'unavailable'>('loading');
   let bulkReviewStore=$state<BulkReviewStore>({schema:BULK_REVIEW_SCHEMA,version:BULK_REVIEW_SCHEMA_VERSION,presets:[],rows:[]});let reviewStateFilter=$state<BulkReviewFilter>('');let bulkReviewStatus=$state('');
+  let bulkReviewSourceState=$state<'loading'|'ready'|'unavailable'>('loading');
   let retryStatus=$state('');
   let localContextStatus=$state('');
   let workspaceToolsOpen=$state(false);
@@ -160,8 +165,8 @@
   const caseByDomain=$derived(new Map(cases.map(record=>[record.domain,record])));
   const mutationLabels=MUTATION_LABELS as Record<string,string>;
   const mutationOptions=$derived([...new Set(results.flatMap(row=>row.mutationTypes))].sort((a,b)=>(mutationLabels[a]||a).localeCompare(mutationLabels[b]||b)));
-  const triageRows=$derived(results.map((row)=>toBulkRouteTriageRow(row,caseByDomain.get(row.domain)||null)));
-  const advancedFilters=$derived<BulkAdvancedFilters>({source:sourceFilter,lifecycle:lifecycleFilter,age:ageFilter,mail:mailFilter,registrar:registrarFilter,caseDisposition:caseDispositionFilter});
+  const triageRows=$derived(results.map((row)=>toBulkRouteTriageRow(row,caseByDomain.get(row.domain)||null,casesSourceState==='ready'?'ready':'unavailable')));
+  const advancedFilters=$derived<BulkAdvancedFilters>({source:sourceFilter,lifecycle:lifecycleFilter,age:ageFilter,mail:mailFilter,registrar:registrarFilter,caseDisposition:casesSourceState==='ready'?caseDispositionFilter:''});
   const bulkReviewStateByDomain=$derived(new Map(bulkReviewStore.rows.map((row)=>[row.domain,row.state])));
   const filtered = $derived.by(()=>sortBulkResults(results.filter((row)=>matchesBulkRouteFilter(row,{filter,mutationFilter,signalFilters})&&matchesBulkAdvancedFilters(toBulkRouteTriageRow(row,caseByDomain.get(row.domain)||null),advancedFilters)&&matchesReviewState(row.domain)),sortKey,sortDirection));
   const mailExposureReport=$derived(buildBulkMailExposureReport(filtered.map(toBulkSessionResult),{
@@ -172,19 +177,20 @@
     currentProfileContext:currentProfileContext(),
   }));
   const advancedFilterOptions=$derived(bulkAdvancedFilterOptions(triageRows));
-  const groupSummary=$derived(buildBulkTriageGroups(filtered.map((row)=>toBulkRouteTriageRow(row,caseByDomain.get(row.domain)||null)),groupBy));
+  const groupSummary=$derived(buildBulkTriageGroups(filtered.map((row)=>toBulkRouteTriageRow(row,caseByDomain.get(row.domain)||null,casesSourceState==='ready'?'ready':'unavailable')),groupBy));
   const peerOutlierMatrix=$derived(buildBulkPeerOutlierMatrix(filtered));
   const shortlistedDomains=$derived(new Set(shortlist.map(item=>item.domain)));
-  const reviewedIndicatorRows=$derived(filtered.map((row)=>({
+  const reviewedIndicatorRows=$derived(casesSourceState==='ready'?filtered.map((row)=>({
     ...row,
     analystDisposition:caseByDomain.get(row.domain)?.disposition||'unreviewed',
-  })));
+  })):[]);
   const indicatorPreflight=$derived(prepareDefensiveIndicatorExport(reviewedIndicatorRows,{
     selectedDomains:[...shortlistedDomains],
     officialDomains:profile?.officialDomains||[],
     allowlistedDomains:profile?.allowlistedDomains||[],
   }));
-  const indicatorCount=$derived(indicatorPreflight.domains.length);
+  const indicatorCount=$derived(casesSourceState==='ready'?indicatorPreflight.domains.length:0);
+  const indicatorEligibilityAvailable=$derived(casesSourceState==='ready'&&shortlistSourceState==='ready'&&profileSourceState==='ready');
   const indicatorProfileContextUnavailableCount=$derived(indicatorPreflight.exclusions.filter((item)=>item.reason==='profile_context_unavailable').length);
   const selectedIndicatorCount=$derived(filtered.filter((row)=>shortlistedDomains.has(row.domain)).length);
   const selectedRows=$derived(filtered.filter((row)=>shortlistedDomains.has(row.domain)));
@@ -203,7 +209,7 @@
   const retryCandidates=$derived(selectedRows.length?selectedRows:filtered);
   const retryPlan=$derived(buildBulkRetryPlan(retryCandidates.map(toBulkSessionResult),mode,scanStartedAt));
   const resultIndexByRow=$derived(new Map(results.map((row,index)=>[row,index])));
-  const cockpitRows=$derived<BulkReviewCockpitRow[]>(filtered.map((row)=>{const caseRecord=caseByDomain.get(row.domain)||null;const contextReady=row.saved.profileContext.sourceState==='ready';return{resultIndex:resultIndexByRow.get(row)??-1,domain:row.domain,availability:row.availability,confidence:row.confidence,risk:row.risk,opportunity:row.opportunity,activity:row.activity,registrar:row.registrar,reviewState:bulkReviewStateByDomain.get(row.domain)||'unreviewed',shortlisted:shortlistedDomains.has(row.domain),trusted:contextReady?Boolean(row.trusted):null,profileContextReady:contextReady,profileContextLimitation:row.saved.profileContext.limitation,sourceCoverage:row.sourceCoverage,error:row.error,caseRecord:caseRecord?{id:caseRecord.id,disposition:caseRecord.disposition}:null};}));
+  const cockpitRows=$derived<BulkReviewCockpitRow[]>(filtered.map((row)=>{const caseRecord=caseByDomain.get(row.domain)||null;const contextReady=row.saved.profileContext.sourceState==='ready';return{resultIndex:resultIndexByRow.get(row)??-1,domain:row.domain,availability:row.availability,confidence:row.confidence,risk:row.risk,opportunity:row.opportunity,activity:row.activity,registrar:row.registrar,reviewState:bulkReviewSourceState==='ready'?bulkReviewStateByDomain.get(row.domain)||'unreviewed':'unavailable',shortlisted:shortlistSourceState==='ready'?shortlistedDomains.has(row.domain):null,trusted:contextReady?Boolean(row.trusted):null,profileContextReady:contextReady,profileContextLimitation:row.saved.profileContext.limitation,sourceCoverage:row.sourceCoverage,error:row.error,caseRecord:casesSourceState==='ready'&&caseRecord?{id:caseRecord.id,disposition:caseRecord.disposition}:null};}));
   const counts=$derived(countBulkRouteFilters(results));
   const pageCount=$derived(Math.max(1,Math.ceil(filtered.length/PAGE_SIZE)));
   const currentPage=$derived(Math.min(page,pageCount));
@@ -272,11 +278,11 @@
     const [profileResult,shortlistResult,caseResult,relationshipResult,sessionResult,reviewResult]=loadResults;
     if(profileResult.status==='fulfilled'){profile=profileResult.value;profileSourceState='ready';}
     else{profile=null;profileSourceState='unavailable';}
-    if(shortlistResult.status==='fulfilled')shortlist=shortlistResult.value;
-    if(caseResult.status==='fulfilled')cases=caseResult.value;
-    if(relationshipResult.status==='fulfilled')retainedRelationshipIds=new Set(relationshipResult.value.map((item)=>item.id));
-    if(sessionResult.status==='fulfilled')bulkSessions=sessionResult.value;
-    if(reviewResult.status==='fulfilled')bulkReviewStore=reviewResult.value;
+    if(shortlistResult.status==='fulfilled'){shortlist=shortlistResult.value;shortlistSourceState='ready';}else shortlistSourceState='unavailable';
+    if(caseResult.status==='fulfilled'){cases=caseResult.value;casesSourceState='ready';}else{casesSourceState='unavailable';caseDispositionFilter='';}
+    if(relationshipResult.status==='fulfilled'){retainedRelationshipIds=new Set(relationshipResult.value.map((item)=>item.id));relationshipsSourceState='ready';}else relationshipsSourceState='unavailable';
+    if(sessionResult.status==='fulfilled'){bulkSessions=sessionResult.value;bulkSessionsSourceState='ready';}else bulkSessionsSourceState='unavailable';
+    if(reviewResult.status==='fulfilled'){bulkReviewStore=reviewResult.value;bulkReviewSourceState='ready';}else{bulkReviewSourceState='unavailable';reviewStateFilter='';}
     const unavailable=unavailableLocalContextLabels(loadResults,['profile','shortlist','case','relationship','saved-session','review-queue']);
     if(unavailable.length)localContextStatus=`Some browser-local context could not be loaded (${unavailable.join(', ')}). Successfully loaded collections remain available; reload to retry the missing context.`;
     restoreWorkflowResults(restored);
@@ -314,21 +320,22 @@
   async function setRowDisposition(row:ScanResult,value:string){const record=caseByDomain.get(row.domain);if(!record)return;try{const{pruned}=await editCase(record.id,{disposition:value});cases=await loadCases();caseStatus=`Marked ${row.domain} as ${dispositionLabel(value)}.${prunedNote(pruned)}`;}catch(cause){caseStatus=cause instanceof Error?cause.message:'Could not update the case.';}}
   function parseDomains(){return parsedInput.entries.map((value:string)=>value.toLowerCase());}
   function provenance(domain:string):Candidate|undefined{return provenanceByDomain.get(domain.toLowerCase());}
-  function matchesReviewState(domain:string){const state=bulkReviewStateByDomain.get(domain)||'unreviewed';return !reviewStateFilter||state===reviewStateFilter;}
+  function matchesReviewState(domain:string){if(bulkReviewSourceState!=='ready')return true;const state=bulkReviewStateByDomain.get(domain)||'unreviewed';return !reviewStateFilter||state===reviewStateFilter;}
   function setFilter(next:BulkPrimaryFilter){filter=next;page=1;}
   function toggleSignal(signal:string){const next=new Set(signalFilters);next.has(signal)?next.delete(signal):next.add(signal);signalFilters=next;page=1;}
   function clearFilters(){filter='all';mutationFilter='';signalFilters=new Set();sourceFilter='';lifecycleFilter='';ageFilter='';mailFilter='';registrarFilter='';caseDispositionFilter='';reviewStateFilter='';page=1;}
   function currentBulkReviewView():BulkReviewPresetView{return{primaryFilter:filter,mutationFilter,signalFilters:[...signalFilters],sourceFilter,lifecycleFilter,ageFilter,mailFilter,registrarFilter,caseDispositionFilter,reviewStateFilter,groupBy,sortKey,sortDirection};}
-  async function saveCurrentBulkReviewView(name:string,view:BulkReviewPresetView){try{bulkReviewStore=await saveBulkReviewPreset({name,view});bulkReviewStatus=`Saved the “${name.trim()}” view.`;}catch(cause){bulkReviewStatus=cause instanceof Error?cause.message:'Could not save the review view.';}}
+  async function saveCurrentBulkReviewView(name:string,view:BulkReviewPresetView){if(bulkReviewSourceState!=='ready'){bulkReviewStatus='Saved review state is unavailable. Reload before changing saved views.';return;}try{bulkReviewStore=await saveBulkReviewPreset({name,view});bulkReviewStatus=`Saved the “${name.trim()}” view.`;}catch(cause){bulkReviewStatus=cause instanceof Error?cause.message:'Could not save the review view.';}}
   function loadBulkReviewView(preset:BulkReviewPreset){const view=preset.view;filter=view.primaryFilter as BulkPrimaryFilter;mutationFilter=view.mutationFilter;signalFilters=new Set(view.signalFilters);sourceFilter=view.sourceFilter as BulkSourceFilter;lifecycleFilter=view.lifecycleFilter;ageFilter=view.ageFilter as BulkAgeFilter;mailFilter=view.mailFilter as BulkMailFilter;registrarFilter=view.registrarFilter;caseDispositionFilter=view.caseDispositionFilter;reviewStateFilter=view.reviewStateFilter;groupBy=view.groupBy as BulkGroupBy;sortKey=normalizeBulkPresentationSortKey(view.sortKey);sortDirection=view.sortDirection;page=1;bulkReviewStatus=`Loaded the ${preset.name} review view. No scan was started.`;}
-  async function removeBulkReviewView(preset:BulkReviewPreset){try{bulkReviewStore=await deleteBulkReviewPreset(preset.id);bulkReviewStatus=`Deleted the ${preset.name} review view.`;}catch(cause){bulkReviewStatus=cause instanceof Error?cause.message:'Could not delete the review view.';}}
-  async function setBulkReviewState(row:ScanResult,state:string){const previous=bulkReviewStateByDomain.get(row.domain)||'unreviewed';if(previous===state)return;try{bulkReviewStore=await saveBulkReviewRowState(row.domain,state as BulkReviewState);bulkReviewStatus=`Marked ${row.domain} as ${state}. Case disposition was not changed.`;registerAnalystUndo({kind:'bulk_review_state',action:`Review state changed to ${state}`,affectedRecord:row.domain,undo:async()=>{bulkReviewStore=await saveBulkReviewRowState(row.domain,previous);return `Restored ${row.domain} to ${previous}.`;}});}catch(cause){bulkReviewStatus=cause instanceof Error?cause.message:'Could not update the review state.';}}
+  async function removeBulkReviewView(preset:BulkReviewPreset){if(bulkReviewSourceState!=='ready'){bulkReviewStatus='Saved review state is unavailable. Reload before deleting saved views.';return;}try{bulkReviewStore=await deleteBulkReviewPreset(preset.id);bulkReviewStatus=`Deleted the ${preset.name} review view.`;}catch(cause){bulkReviewStatus=cause instanceof Error?cause.message:'Could not delete the review view.';}}
+  async function setBulkReviewState(row:ScanResult,state:string){if(bulkReviewSourceState!=='ready'){bulkReviewStatus='Saved review state is unavailable. Reload before changing a row review state.';return;}const previous=bulkReviewStateByDomain.get(row.domain)||'unreviewed';if(previous===state)return;try{bulkReviewStore=await saveBulkReviewRowState(row.domain,state as BulkReviewState);bulkReviewStatus=`Marked ${row.domain} as ${state}. Case disposition was not changed.`;registerAnalystUndo({kind:'bulk_review_state',action:`Review state changed to ${state}`,affectedRecord:row.domain,undo:async()=>{bulkReviewStore=await saveBulkReviewRowState(row.domain,previous);return `Restored ${row.domain} to ${previous}.`;}});}catch(cause){bulkReviewStatus=cause instanceof Error?cause.message:'Could not update the review state.';}}
   function setSort(key:BulkSortKey){const next=normalizeBulkPresentationSortKey(key);if(sortKey===next)sortDirection=sortDirection===1?-1:1;else{sortKey=next;sortDirection=defaultBulkSortDirection(next);}page=1;}
   function setSortKey(key:BulkSortKey){const next=normalizeBulkPresentationSortKey(key);if(sortKey!==next){sortKey=next;sortDirection=defaultBulkSortDirection(next);}page=1;}
   function setSortDirection(direction:BulkSortDirection){sortDirection=direction;page=1;}
   function loadDomains(domains:string[]){input=domains.join('\n');status=`Loaded ${domains.length} related domains into the scan queue.`;document.querySelector('.queue')?.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});}
   async function retainObservation(relationship:Record<string,unknown>){
     relationshipRetentionStatus='';
+    if(relationshipsSourceState!=='ready'){relationshipRetentionStatus='Retained relationship observations are unavailable. Reload before recording a relationship.';return;}
     try{
       const result=await retainRelationshipObservation(relationship,{
         observedAt:new Date().toISOString(),
@@ -343,7 +350,7 @@
     }catch(cause){relationshipRetentionStatus=cause instanceof Error?cause.message:'Could not retain that relationship observation.';}
   }
   function isShortlisted(domain:string){return shortlistedDomains.has(domain);}
-  async function toggleSaved(row:ScanResult){const previous=shortlist.find((item)=>item.domain===row.domain);try{const added=await toggleShortlist({...row.saved,riskScore:row.risk,opportunityScore:row.opportunity,savedAt:new Date().toISOString()});shortlist=await loadShortlist();shortlistStatus=added?`Added ${row.domain} to the shortlist.`:`Removed ${row.domain} from the shortlist.`;registerAnalystUndo({kind:'shortlist_membership',action:added?'Added to shortlist':'Removed from shortlist',affectedRecord:row.domain,undo:async()=>{if(previous)await setShortlistSelection([previous],true);else await setShortlistSelection([shortlistPayload(row)],false);shortlist=await loadShortlist();return `${row.domain} ${previous?'restored to':'removed from'} the shortlist.`;}});}catch(cause){shortlistStatus=cause instanceof Error?cause.message:'Could not update shortlist.';}}
+  async function toggleSaved(row:ScanResult){if(shortlistSourceState!=='ready'){shortlistStatus='The shortlist is unavailable. Reload before changing it.';return;}const previous=shortlist.find((item)=>item.domain===row.domain);try{const added=await toggleShortlist({...row.saved,riskScore:row.risk,opportunityScore:row.opportunity,savedAt:new Date().toISOString()});shortlist=await loadShortlist();shortlistStatus=added?`Added ${row.domain} to the shortlist.`:`Removed ${row.domain} from the shortlist.`;registerAnalystUndo({kind:'shortlist_membership',action:added?'Added to shortlist':'Removed from shortlist',affectedRecord:row.domain,undo:async()=>{if(previous)await setShortlistSelection([previous],true);else await setShortlistSelection([shortlistPayload(row)],false);shortlist=await loadShortlist();return `${row.domain} ${previous?'restored to':'removed from'} the shortlist.`;}});}catch(cause){shortlistStatus=cause instanceof Error?cause.message:'Could not update shortlist.';}}
   function shortlistPayload(row:ScanResult){return{...row.saved,riskScore:row.risk,opportunityScore:row.opportunity,savedAt:new Date().toISOString()};}
   function shortlistSelectionStatus(result:ShortlistSelectionResult,selected:boolean):string {
     if(!selected)return `Removed ${result.removed} domain${result.removed===1?'':'s'} from the shortlist.`;
@@ -360,6 +367,7 @@
     return `Restored the prior shortlist membership for ${affected.length} domain${affected.length===1?'':'s'}.`;
   }
   async function selectRows(rows:ScanResult[],selected=true){
+    if(shortlistSourceState!=='ready'){shortlistStatus='The shortlist is unavailable. Reload before changing the selection.';return;}
     const affected=rows.slice(0,500);
     const affectedDomains=new Set(affected.map((row)=>row.domain));
     const previous=shortlist.filter((item)=>affectedDomains.has(item.domain));
@@ -382,12 +390,12 @@
   async function selectDomains(domains:string[]){const wanted=new Set(domains);await selectRows(filtered.filter((row)=>wanted.has(row.domain)),true);}
   async function selectFiltered(){await selectRows(filtered,true);}
   async function clearFilteredSelection(){await selectRows(filtered,false);}
-  async function removeAllShortlisted(){if(!shortlist.length||!confirm('Remove every domain from the shortlist?'))return;try{await clearShortlist();shortlist=[];shortlistStatus='Shortlist cleared.';}catch(cause){shortlistStatus=cause instanceof Error?cause.message:'Could not clear the shortlist.';}}
+  async function removeAllShortlisted(){if(shortlistSourceState!=='ready'){shortlistStatus='The shortlist is unavailable. Reload before changing it.';return;}if(!shortlist.length||!confirm('Remove every domain from the shortlist?'))return;try{await clearShortlist();shortlist=[];shortlistStatus='Shortlist cleared.';}catch(cause){shortlistStatus=cause instanceof Error?cause.message:'Could not clear the shortlist.';}}
   async function downloadShortlist(){try{await exportShortlist();}catch(cause){shortlistStatus=cause instanceof Error?cause.message:'Could not export the shortlist.';}}
   function loadShortlisted(){loadDomains(shortlist.map(item=>item.domain));}
   async function copyDraft(text:string,label:string){try{await navigator.clipboard.writeText(text);draftStatus=`Copied ${label} to the clipboard.`;}catch{draftStatus='Clipboard access was unavailable. Use the email draft link instead.';}}
-  async function importShortlistFile(event:Event){const input=event.currentTarget as HTMLInputElement,file=input.files?.[0];if(!file)return;try{if(file.size>MAX_SHORTLIST_IMPORT_BYTES)throw new Error('Shortlist imports are limited to 2 MB.');const result=await importShortlist(JSON.parse(await file.text()));shortlist=await loadShortlist();const skipped=result.skipped?`; skipped ${result.skipped} invalid, duplicate, or over-limit entr${result.skipped===1?'y':'ies'}`:'';shortlistStatus=`Imported ${result.added} new and ${result.updated} updated shortlist entries${skipped}.`;}catch(cause){shortlistStatus=cause instanceof Error?cause.message:'Shortlist import failed';}finally{input.value='';}}
-  async function importDomainFile(event:Event){const control=event.currentTarget as HTMLInputElement,file=control.files?.[0];if(!file)return;try{if(file.size>MAX_DOMAIN_IMPORT_BYTES)throw new Error('Domain-list imports are limited to 2 MB.');const parsed=parseDomainInput(await file.text());if(!parsed.entries.length)throw new Error('No domain entries were found in that file.');input=parsed.entries.join('\n');status=`Loaded ${parsed.entries.length} unique entries from ${file.name}${parsed.usedHeader?' using its domain column':''}${parsed.duplicates?`; removed ${parsed.duplicates} duplicate${parsed.duplicates===1?'':'s'}`:''}.`;}catch(cause){status=cause instanceof Error?cause.message:'Could not import the domain list.';}finally{control.value='';}}
+  async function importShortlistFile(event:Event){const input=event.currentTarget as HTMLInputElement,file=input.files?.[0];if(!file)return;if(shortlistSourceState!=='ready'){shortlistStatus='The shortlist is unavailable. Reload before importing.';input.value='';return;}try{if(file.size>MAX_SHORTLIST_IMPORT_BYTES)throw new Error('Shortlist imports are limited to 2 MB.');const result=await importShortlist(JSON.parse(await file.text()));shortlist=await loadShortlist();const skipped=result.skipped?`; skipped ${result.skipped} invalid, duplicate, or over-limit entr${result.skipped===1?'y':'ies'}`:'';shortlistStatus=`Imported ${result.added} new and ${result.updated} updated shortlist entries${skipped}.`;}catch(cause){shortlistStatus=cause instanceof Error?cause.message:'Shortlist import failed';}finally{input.value='';}}
+  async function importDomainFile(event:Event){const control=event.currentTarget as HTMLInputElement,file=control.files?.[0];if(!file)return;try{if(file.size>MAX_DOMAIN_IMPORT_BYTES)throw new Error('Domain-list imports are limited to 2 MB.');const parsed=parseDomainInput(await file.text());if(parsed.tooLarge)throw new Error('The domain-list file exceeds the bounded row or cell limit.');if(!parsed.entries.length)throw new Error('No domain entries were found in that file.');input=parsed.entries.join('\n');status=`Loaded ${parsed.entries.length} unique entries from ${file.name}${parsed.usedHeader?' using its domain column':''}${parsed.duplicates?`; removed ${parsed.duplicates} duplicate${parsed.duplicates===1?'':'s'}`:''}.`;}catch(cause){status=cause instanceof Error?cause.message:'Could not import the domain list.';}finally{control.value='';}}
   function exportCoverage(){if(!coverage)return;const rows=[['dimension','group','total','registered','available','unknown','profile_listed_overlapping','profile_listed_share','domain','outcome','profile_listed','priority','action','rationale'],...coverage.mutationGroups.map((group)=>['mutation',group.label,group.total,group.registered,group.available,group.unknown,group.profileListed,group.profileListedShare,'','','','','','']),...coverage.tldGroups.map((group)=>['tld',group.label,group.total,group.registered,group.available,group.unknown,group.profileListed,group.profileListedShare,'','','','','','']),...coverage.plan.map((row)=>['candidate','','','','','','','',row.domain,row.status,row.profileListed?'true':'false',row.priority,row.actionLabel,row.rationale])];const url=URL.createObjectURL(new Blob([rowsToCsv(rows)],{type:'text/csv'}));const anchor=document.createElement('a');anchor.href=url;anchor.download=`defensive-registration-profile-listing-${new Date().toISOString().slice(0,10)}.csv`;anchor.click();URL.revokeObjectURL(url);}
   function exportPeerOutliers(){const exported=buildBulkPeerOutlierExport(peerOutlierMatrix,new Date().toISOString());downloadText(exported.content,exported.filename,'text/csv');}
   async function waitWhilePaused(){if(!paused)return;await new Promise<void>(resolve=>pauseResolvers.push(resolve));}
@@ -400,15 +408,15 @@
     return normalizeBulkScanResult(body,{mode:snapshot.mode,profile:snapshot.profile,profileSourceState:snapshot.sourceState,candidate});
   }
   function failedResult(domain:string,message:string,snapshot:BulkScanProfileSnapshot):ScanResult{const candidate=provenance(domain);const mutationTypes=candidate?.mutationTypes||[];const officialDomains=snapshot.sourceState==='ready'?(snapshot.profile?.officialDomains||[]):[];const idn=analyzeDomainIdn(domain,officialDomains);const profileValue=snapshot.sourceState==='ready'?false:null;return{domain:idn?.asciiDomain||domain,status:'error',availability:'error',confidence:'unknown',registrar:'—',activity:'—',risk:null,opportunity:null,mutationTypes,trusted:null,error:message,saved:{domain:idn?.asciiDomain||domain,scanDepth:snapshot.mode,availability:'error',registrarName:'—',nameservers:[],faviconHash:null,faviconPHash:null,faviconMatch:profileValue,faviconNearMatch:profileValue,reusesOfficialAssets:profileValue,idnReferenceMatch:snapshot.sourceState==='ready'?Boolean(idn?.referenceMatches.length):null,pageBaselineMatch:null,hasActiveBrandProfile:snapshot.sourceState==='ready'?Boolean(snapshot.profile):null,riskFactors:[],mutationTypes,profileContext:snapshot.provenance,error:message},nameservers:[],faviconHash:null,faviconPHash:null,faviconMatch:profileValue,faviconNearMatch:profileValue,reusesOfficialAssets:profileValue,hasPasswordField:false,hasExternalFormAction:null,phishingLanguageMatch:null,registrant:null,abuseEvidence:null,ct:candidate?.certificateTransparency||null,idn,dns:null,dnssec:null,comparisonEvidence:null,relationship:relationshipObservation({},officialDomains),sourceCoverage:[{source:'lookup',state:'error'}]};}
-  async function saveCurrentBulkSession(){const name=bulkSessionName.trim();const domains=parseDomains();if(!name||!domains.length||!results.length){bulkSessionStatus='Enter a session name and complete at least one result before saving.';return;}try{const settled=new Set(results.map((row)=>row.domain));const isComplete=domains.every((domain)=>settled.has(domain));const now=new Date().toISOString();const sessionResults=results.map(toBulkSessionResult);const result=await saveBulkSession({id:currentBulkSessionId||createBulkSessionId(),name,mode,state:isComplete?'complete':status.startsWith('Cancelled')?'cancelled':'partial',inputDigest:await bulkSessionInputDigest(domains,mode),domains,results:sessionResults,profileContext:summarizeBulkProfileContexts(sessionResults),startedAt:scanStartedAt||now,updatedAt:now,completedAt:isComplete?now:null});currentBulkSessionId=result.session.id;bulkSessions=await loadBulkSessions();bulkSessionStatus=`${result.added?'Saved':'Updated'} ${result.session.name}.${result.pruned?` Pruned ${result.pruned} older session${result.pruned===1?'':'s'} to stay within storage.`:''}`;}catch(cause){bulkSessionStatus=cause instanceof Error?cause.message:'Could not save the Bulk session.';}}
+  async function saveCurrentBulkSession(){if(bulkSessionsSourceState!=='ready'){bulkSessionStatus='Saved Bulk sessions are unavailable. Reload before saving.';return;}const name=bulkSessionName.trim();const domains=parseDomains();if(!name||!domains.length||!results.length){bulkSessionStatus='Enter a session name and complete at least one result before saving.';return;}try{const settled=new Set(results.map((row)=>row.domain));const isComplete=domains.every((domain)=>settled.has(domain));const now=new Date().toISOString();const sessionResults=results.map(toBulkSessionResult);const result=await saveBulkSession({id:currentBulkSessionId||createBulkSessionId(),name,mode,state:isComplete?'complete':status.startsWith('Cancelled')?'cancelled':'partial',inputDigest:await bulkSessionInputDigest(domains,mode),domains,results:sessionResults,profileContext:summarizeBulkProfileContexts(sessionResults),startedAt:scanStartedAt||now,updatedAt:now,completedAt:isComplete?now:null});currentBulkSessionId=result.session.id;bulkSessions=await loadBulkSessions();bulkSessionStatus=`${result.added?'Saved':'Updated'} ${result.session.name}.${result.pruned?` Pruned ${result.pruned} older session${result.pruned===1?'':'s'} to stay within storage.`:''}`;}catch(cause){bulkSessionStatus=cause instanceof Error?cause.message:'Could not save the Bulk session.';}}
   function loadSavedBulkSession(session:BulkSession){if(running){bulkSessionStatus='Cancel or wait for the active scan before loading a saved session.';return;}if(profileSourceState==='loading'){bulkSessionStatus='Wait for browser-local Brand Profile context to finish loading before restoring a saved session.';return;}currentBulkSessionId=session.id;bulkSessionName=session.name;mode=session.mode;input=session.domains.join('\n');const current=currentProfileContext();let quarantined=0;results=session.results.map((row)=>{const restored=fromBulkSessionResult(row,current.sourceState==='ready'?(profile?.officialDomains||[]):[]);const reconciled=reconcileBulkResultProfileContext(restored,current);if(reconciled.saved.profileContext.sourceState!=='ready')quarantined+=1;return reconciled;});completed=results.length;total=session.domains.length;page=1;scanStartedAt=session.startedAt;status=`Loaded ${session.name}: ${results.length} of ${session.domains.length} rows settled. Contact records were not retained.${quarantined?` Withheld profile-derived trust, matches, and Risk for ${quarantined} row${quarantined===1?'':'s'} whose saved provenance does not match the current settled profile context.`:''}`;requestAnimationFrame(()=>document.querySelector('#results')?.scrollIntoView({behavior:'auto'}));}
   async function resumeSavedBulkSession(session:BulkSession){if(running){bulkSessionStatus='Cancel or wait for the active scan before resuming a saved session.';return;}if(profileSourceState==='loading'){bulkSessionStatus='Wait for browser-local Brand Profile context to finish loading before resuming a saved session.';return;}loadSavedBulkSession(session);const settled=new Set(session.results.map((row)=>row.domain));const pending=session.domains.filter((domain)=>!settled.has(domain));if(!pending.length){bulkSessionStatus='Every queued domain already has a settled result. Use Retry failed to repeat error rows.';return;}await run(pending,false);await saveCurrentBulkSession();}
   async function removeSavedBulkSession(session:BulkSession){if(running){bulkSessionStatus='Cancel or wait for the active scan before deleting a saved session.';return;}if(!confirm(`Delete the saved session “${session.name}”?`))return;try{bulkSessions=await deleteBulkSession(session.id);if(currentBulkSessionId===session.id){currentBulkSessionId='';bulkSessionName='';}bulkSessionStatus=`Deleted ${session.name}.`;}catch(cause){bulkSessionStatus=cause instanceof Error?cause.message:'Could not delete the Bulk session.';}}
   async function downloadBulkSessions(){try{await exportBulkSessions();bulkSessionStatus=`Exported ${bulkSessions.length} saved session${bulkSessions.length===1?'':'s'}.`;}catch(cause){bulkSessionStatus=cause instanceof Error?cause.message:'Could not export saved Bulk sessions.';}}
   function resultAt(index:number){return index>=0&&index<results.length?results[index]:null;}
   function toggleSavedAt(index:number){const row=resultAt(index);if(row)toggleSaved(row);}
-  async function trackCaseAt(index:number){const row=resultAt(index);if(row)await trackCase(row);}
-  async function setDispositionAt(index:number,value:string){const row=resultAt(index);if(row)await setRowDisposition(row,value);}
+  async function trackCaseAt(index:number){if(casesSourceState!=='ready'){caseStatus='Cases are unavailable. Reload before creating a case.';return;}const row=resultAt(index);if(row)await trackCase(row);}
+  async function setDispositionAt(index:number,value:string){if(casesSourceState!=='ready'){caseStatus='Cases are unavailable. Reload before changing a disposition.';return;}const row=resultAt(index);if(row)await setRowDisposition(row,value);}
   function setReviewStateAt(index:number,value:string){const row=resultAt(index);if(row)void setBulkReviewState(row,value);}
   async function saveCurrentResultAt(index:number){
     const row=resultAt(index);
@@ -462,7 +470,7 @@
     status=`Completed ${completed} of ${total} lookups.${scanProfile.sourceState==='unavailable'?' Brand Profile context was unavailable; profile-derived fields are retained as inconclusive and every row records that limitation.':''}${preservedReasons.length?` Retained ${preservedReasons.length} stronger prior result${preservedReasons.length===1?'':'s'}.`:''}`;
     return preservedReasons;
   }
-  async function start(){if(lookupDisabled){status=lookupDisabled.reason||'Lookup is disabled by deployment policy.';return;}if(profileSourceState==='loading'){status='Wait for browser-local Brand Profile context to finish loading before scanning.';return;}if(currentBulkSessionId)bulkSessionName='';currentBulkSessionId='';scanStartedAt=new Date().toISOString();await run(parseDomains(),true);}
+  async function start(){if(lookupDisabled){status=lookupDisabled.reason||'Lookup is disabled by deployment policy.';return;}if(parsedInput.tooLarge){status='The pasted domain list exceeds the bounded input limit.';return;}if(profileSourceState==='loading'){status='Wait for browser-local Brand Profile context to finish loading before scanning.';return;}if(currentBulkSessionId)bulkSessionName='';currentBulkSessionId='';scanStartedAt=new Date().toISOString();await run(parseDomains(),true);}
   async function retryErrors(){if(profileSourceState==='loading'){retryStatus='Wait for browser-local Brand Profile context to finish loading before retrying.';return;}const domains=results.filter(r=>r.status==='error').map(r=>r.domain);if(!domains.length||running)return;const plan=buildBulkRetryPlan(results.filter((row)=>domains.includes(row.domain)).map(toBulkSessionResult),mode,scanStartedAt);if(!confirm(`Retry ${plan.lookupRequests} failed lookup${plan.lookupRequests===1?'':'s'} using the ${mode} profile? Destinations: ${plan.destinations.join(', ')}.`))return;retryStatus=`Running ${plan.lookupRequests} reviewed retry${plan.lookupRequests===1?'':'ies'}.`;const preserved=await run(domains,false,true);retryStatus=`Retry completed.${preserved.length?` ${preserved.length} stronger prior result${preserved.length===1?' was':'s were'} retained.`:''}`;}
   function exportRowsCsv(selected:ScanResult[],scope='bulk'){const header=['domain','unicode_domain','idn_scripts','idn_mixed_script','idn_official_skeleton_matches','availability','confidence','profile_context_state','profile_context_limitation','profile_status','registrar','activity',...BULK_SCORE_CSV_HEADERS,'mutations','error','dns_status','dnssec','dns_a','dns_aaaa','dns_cname','dns_caa','technology_ids','tls_issuer','tls_spki_sha256','ct_first_observed','ct_last_observed','ct_certificate_count','ct_hostnames'];const rows=selected.map(r=>{const contextReady=r.saved.profileContext.sourceState==='ready';return[r.domain,r.idn?.hasIdn?r.idn.unicodeDomain:'',r.idn?.scripts?.join('|')||'',r.idn?.mixedScript?'true':'false',contextReady?r.idn?.referenceMatches?.map((match)=>match.asciiDomain).join('|')||'':'',r.availability,r.confidence,r.saved.profileContext.sourceState,r.saved.profileContext.limitation,contextReady?(r.trusted||''):'',r.registrar,r.activity,...bulkScoreCsvFields(r),r.mutationTypes.join('|'),r.error,r.dns?.status||'',r.dnssec||'',r.dns?.records.a.join('|')||'',r.dns?.records.aaaa.join('|')||'',r.dns?.records.cname.join('|')||'',r.dns?.records.caa.map((item)=>`${item.critical} ${item.tag} ${item.value}`).join('|')||'',r.comparisonEvidence?.technology.ids.join('|')||'',r.comparisonEvidence?.tls.issuerLabel||'',r.comparisonEvidence?.tls.spkiSha256||'',...ctCsvFields(r.ct)]});const url=URL.createObjectURL(new Blob([rowsToCsv([header,...rows])],{type:'text/csv'}));const a=document.createElement('a');a.href=url;a.download=`whoisleuth-${scope}-${new Date().toISOString().slice(0,10)}.csv`;a.click();URL.revokeObjectURL(url);}
   function exportCsv(){exportRowsCsv(results);}
@@ -471,8 +479,8 @@
   async function executeReviewedRetry(){if(profileSourceState==='loading'){retryStatus='Wait for browser-local Brand Profile context to finish loading before retrying.';return;}if(!retryPlan.rows.length||running)return;const domains=retryPlan.rows.map((row)=>row.domain);retryStatus=`Running ${domains.length} reviewed ${retryPlan.mode} retr${domains.length===1?'y':'ies'}.`;const preserved=await run(domains,false,true);retryStatus=`Reviewed retry completed.${preserved.length?` ${preserved.length} stronger prior result${preserved.length===1?' was':'s were'} retained.`:''}`;}
   async function exportDomainComparison(){if(!domainComparison)return;const exported=await buildBulkDomainComparisonExport(domainComparison);downloadText(exported.content,exported.filename,'application/json');bulkReviewStatus='Exported the two-domain evidence comparison with an integrity digest.';}
   async function exportMailExposure(){if(profileSourceState!=='ready'){bulkReviewStatus='Brand Profile context is not ready, so the mail-exposure comparison remains inconclusive and cannot be exported yet.';return;}const exported=await buildBulkMailExposureExport(mailExposureReport);downloadText(exported.content,exported.filename,'application/json');bulkReviewStatus='Exported the filtered mail-exposure review with an integrity digest.';}
-  async function createCasesSelected(){const rows=selectedRows.slice(0,50);if(!rows.length||!confirm(`Create or refresh cases for ${rows.length} selected domain${rows.length===1?'':'s'}?`))return;for(const row of rows)await trackCase(row);caseStatus=`Reviewed ${rows.length} selected domain${rows.length===1?'':'s'} for case creation${selectedRows.length>rows.length?'; the action was capped at 50':''}.`;}
-  async function setSelectedDisposition(value:string){const records=selectedRows.map((row)=>caseByDomain.get(row.domain)).filter((record):record is CaseRecord=>Boolean(record)).slice(0,100);if(!records.length)return;for(const record of records)await editCase(record.id,{disposition:value});cases=await loadCases();caseStatus=`Marked ${records.length} selected case${records.length===1?'':'s'} as ${dispositionLabel(value)}${selectedRows.length>records.length?'; only existing cases were changed':''}.`;}
+  async function createCasesSelected(){if(casesSourceState!=='ready'){caseStatus='Cases are unavailable. Reload before creating cases.';return;}const rows=selectedRows.slice(0,50);if(!rows.length||!confirm(`Create or refresh cases for ${rows.length} selected domain${rows.length===1?'':'s'}?`))return;for(const row of rows)await trackCase(row);caseStatus=`Reviewed ${rows.length} selected domain${rows.length===1?'':'s'} for case creation${selectedRows.length>rows.length?'; the action was capped at 50':''}.`;}
+  async function setSelectedDisposition(value:string){if(casesSourceState!=='ready'){caseStatus='Cases are unavailable. Reload before changing dispositions.';return;}const records=selectedRows.map((row)=>caseByDomain.get(row.domain)).filter((record):record is CaseRecord=>Boolean(record)).slice(0,100);if(!records.length)return;for(const record of records)await editCase(record.id,{disposition:value});cases=await loadCases();caseStatus=`Marked ${records.length} selected case${records.length===1?'':'s'} as ${dispositionLabel(value)}${selectedRows.length>records.length?'; only existing cases were changed':''}.`;}
   function downloadText(content:string,filename:string,mimeType:string){const url=URL.createObjectURL(new Blob([content],{type:mimeType}));const anchor=document.createElement('a');anchor.href=url;anchor.download=filename;anchor.click();URL.revokeObjectURL(url);}
   function exportDefensiveIndicators(){
     if(profileSourceState!=='ready'){indicatorStatus='Brand Profile context is unavailable, so trusted and allowlisted exclusions are inconclusive. Reload before exporting defensive indicators.';return;}
@@ -515,6 +523,7 @@
   entryCount={parsedInput.entries.length}
   queryLimit={currentQueryLimit}
   duplicateCount={parsedInput.duplicates}
+  inputTooLarge={parsedInput.tooLarge}
   {importDomainFile}
   {start}
   {togglePause}
@@ -552,6 +561,7 @@
       canSave={!running&&results.length>0}
       profileContextLoading={profileSourceState==='loading'}
       {running}
+      sourceState={bulkSessionsSourceState}
     />
 
     <BulkReviewWorkspace
@@ -563,6 +573,7 @@
       loadView={loadBulkReviewView}
       deleteView={removeBulkReviewView}
       status={bulkReviewStatus}
+      sourceState={bulkReviewSourceState}
     />
   </div>
 </section>
@@ -580,6 +591,7 @@
       setIndicatorFormat={(value)=>indicatorFormat=value}
       exportIndicators={exportDefensiveIndicators}
       {indicatorCount}
+      {indicatorEligibilityAvailable}
       {indicatorProfileContextUnavailableCount}
       {indicatorWildcards}
       setIndicatorWildcards={(value)=>indicatorWildcards=value}
@@ -632,6 +644,9 @@
       {setSelectedDisposition}
       caseOptions={CASE_DISPOSITIONS}
       profileContextState={profileSourceState}
+      shortlistAvailable={shortlistSourceState==='ready'}
+      caseAvailable={casesSourceState==='ready'}
+      reviewAvailable={bulkReviewSourceState==='ready'}
     />
     <div class="mobile-result-switcher" role="group" aria-label="Bulk result view">
       <button type="button" aria-controls="bulk-review-panel" aria-pressed={mobileResultView==='review'} onclick={()=>mobileResultView='review'}>Review</button>
@@ -656,6 +671,9 @@
         inspectDomain={inspectAt}
         executeRetry={executeReviewedRetry}
         profileContextLoading={profileSourceState==='loading'}
+        shortlistAvailable={shortlistSourceState==='ready'}
+        caseAvailable={casesSourceState==='ready'}
+        reviewAvailable={bulkReviewSourceState==='ready'}
       />
     </div>
 
@@ -675,9 +693,12 @@
         {pageCount}
         setPage={(value)=>page=value}
         {draftStatus}
-        {caseStatus}
-        setReviewState={setReviewStateAt}
-      />
+      {caseStatus}
+      setReviewState={setReviewStateAt}
+      shortlistAvailable={shortlistSourceState==='ready'}
+      caseAvailable={casesSourceState==='ready'}
+      reviewAvailable={bulkReviewSourceState==='ready'}
+    />
     </div>
 
     <div id="bulk-analysis-panel" class:mobile-view-active={mobileResultView==='analysis'} class="mobile-result-panel analysis-result-panel">
@@ -685,6 +706,7 @@
         <BulkMailExposureReview
           report={mailExposureReport}
           selectedDomains={shortlistedDomains}
+          selectionAvailable={shortlistSourceState==='ready'}
           {selectDomains}
           exportReport={exportMailExposure}
           exportDisabled={profileSourceState!=='ready'}
@@ -704,6 +726,7 @@
             truncated={groupSummary.truncated}
             overlapping={groupSummary.overlapping}
             selectedDomains={shortlistedDomains}
+            selectionAvailable={shortlistSourceState==='ready'}
             {selectDomains}
           />
         </BulkMobileDisclosure>
@@ -726,6 +749,7 @@
           observationId={relationshipObservationId}
           retainedIds={retainedRelationshipIds}
           retainStatus={relationshipRetentionStatus}
+          retentionAvailable={relationshipsSourceState==='ready'}
         />
       </BulkMobileDisclosure>
     {/if}
@@ -737,7 +761,7 @@
   </div>
 {/if}
 
-<BulkShortlist domains={shortlist.map((item)=>item.domain)} status={shortlistStatus} {loadShortlisted} {downloadShortlist} {importShortlistFile} {removeAllShortlisted} />
+<BulkShortlist domains={shortlist.map((item)=>item.domain)} status={shortlistStatus} sourceState={shortlistSourceState} {loadShortlisted} {downloadShortlist} {importShortlistFile} {removeAllShortlisted} />
 
 <style>
   .local-context-status{margin:12px 0 0;color:var(--amber);font-size:var(--text-sm)}
@@ -756,7 +780,7 @@
     .bulk-workspace-content{display:block}
     .bulk-workspace-content.mobile-collapsed{display:none}
     .mobile-result-switcher{position:sticky;z-index:6;top:calc(var(--console-mobile-toolbar-height,0px) + 8px);display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;margin:12px 0;padding:4px;border:1px solid var(--border);border-radius:var(--radius-md);background:color-mix(in srgb,var(--panel) 94%,transparent);box-shadow:0 8px 24px rgb(var(--shadow-rgb) / .18);backdrop-filter:blur(10px)}
-    .mobile-result-switcher button{min-width:0;min-height:36px;padding:6px 8px;border:0;border-radius:var(--radius-sm);background:transparent;color:var(--muted);font:700 var(--text-xs) var(--mono)}
+    .mobile-result-switcher button{min-width:0;min-height:44px;padding:6px 8px;border:0;border-radius:var(--radius-sm);background:transparent;color:var(--muted);font:700 var(--text-xs) var(--mono)}
     .mobile-result-switcher button[aria-pressed='true']{background:rgb(var(--accent-rgb) / .12);color:var(--accent)}
     .mobile-result-panel{display:none}
     .mobile-result-panel.mobile-view-active{display:block}

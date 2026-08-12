@@ -18,6 +18,8 @@ Investigate:
   bulk               Triage newline-delimited targets with bounded concurrency.
   http               Inspect one homepage request and redirect chain.
   tls                Inspect one hostname's current certificate connection.
+  dnssec-validate    Validate one authorised DNSSEC chain in isolation.
+  mail-transport     Review selected authorised MX transports and STARTTLS.
   posture            Review DNS mail and domain-control posture.
 
 Discover:
@@ -37,7 +39,7 @@ Review saved evidence:
   compare            Compare saved registry publications.
   page-compare       Compare saved static page and TLS evidence.
   mail-review        Review saved passive mail exposure evidence.
-  review-evidence    Review supplied DNS, routing, GeoIP, RDAP, or trust-store evidence offline.
+  review-evidence    Review supplied DNS, routing, cryptographic, GeoIP, RDAP, or trust-store evidence offline.
   brief              Turn one saved Lookup into a bounded decision brief.
   case-pack          Build a reviewed browser-importable case package.
   domain-control     Build or review an integrity-protected desired-state manifest.
@@ -95,6 +97,8 @@ const COMMAND_USAGE: Readonly<Record<CliCommand, string>> = Object.freeze({
   posture: 'whoisleuth posture <domain> [--selectors <list>] [--retired-selectors <list>] [--mail-profile <profile>] [--json|--sarif --owned-domain] [--quiet] [--no-color]',
   http: 'whoisleuth http <domain> [--json] [--quiet] [--no-color]',
   tls: 'whoisleuth tls <hostname> [--json] [--quiet] [--no-color]',
+  'dnssec-validate': 'whoisleuth dnssec-validate <domain> --resolver <public-IP> --trust-anchor <anchor.json> --owned-or-authorized [--json] [--quiet] [--no-color]',
+  'mail-transport': 'whoisleuth mail-transport [input.json] --resolver <public-IP> --trust-anchor <anchor.json> --owned-or-authorized --active-probe [--json] [--quiet] [--no-color]',
   'registry-support': 'whoisleuth registry-support <domain|suffix> [--json] [--quiet] [--no-color]',
   'registry-doctor': 'whoisleuth registry-doctor [lookup.json] [--json] [--quiet] [--no-color]',
   'registry-cohort': 'whoisleuth registry-cohort [lookups-or-reports.json|jsonl] [--json] [--quiet] [--no-color]',
@@ -206,6 +210,16 @@ const COMMAND_DETAILS: Readonly<Record<CliCommand, CommandDetail>> = Object.free
     description: 'Inspect one hostname certificate through a bounded TLS connection.',
     example: 'whoisleuth tls example.test --json',
     boundary: 'One observed connection is point-in-time evidence and does not establish every address, edge, or historical certificate.',
+  },
+  'dnssec-validate': {
+    description: 'Cryptographically validate one authorised DNSSEC chain from a supplied trust anchor through one selected public resolver.',
+    example: 'whoisleuth dnssec-validate example.test --resolver "$PUBLIC_RESOLVER_IP" --trust-anchor anchor.json --owned-or-authorized --json',
+    boundary: 'This isolated action is never invoked by Lookup, Bulk, monitoring, or recipes. It caps DNS queries, aliases, delegations, bytes, and duration; transport and validation failures remain separate, and secure is not a general safety verdict.',
+  },
+  'mail-transport': {
+    description: 'Review selected authorised MX endpoints, DNSSEC-qualified TLSA evidence, SMTP capabilities, and optional STARTTLS certificates.',
+    example: 'whoisleuth mail-transport selected-mx.json --resolver "$PUBLIC_RESOLVER_IP" --trust-anchor anchor.json --owned-or-authorized --active-probe --json',
+    boundary: 'This isolated action probes at most three selected MX hosts sequentially, reports selection, public revalidation, connection, and address authentication separately, sends only EHLO and optional STARTTLS, never retries, and performs no authentication, relay, recipient, mailbox, catch-all, or message test. If a DANE-TA TLSA usage 2 association is published, active collection retains only the leaf certificate and leaves that comparison partial without certificate-path construction and trust-anchor path validation. SMTP relay PKIX-TA usage 0 and PKIX-EE usage 1 records remain unsupported and cannot complete SMTP DANE assurance; a separate usage 3 match remains eligible.',
   },
   'registry-support': {
     description: 'Explain the local registry capability profile for one domain or suffix.',
@@ -350,7 +364,7 @@ const COMMAND_DETAILS: Readonly<Record<CliCommand, CommandDetail>> = Object.free
   export: {
     description: 'Convert one saved lookup into a versioned evidence report.',
     example: 'whoisleuth export lookup.json --markdown',
-    boundary: 'Exports preserve evidence-source attribution and limitations. Markdown and HTML include a presentation-only generator footer unless --no-attribution is selected; JSON retains bounded generator provenance. Compact output intentionally omits raw registry payloads.',
+    boundary: 'The saved Lookup is capped at 8 MiB and scanned for duplicate keys, the prototype-sensitive __proto__ key, and bounded nesting, key, value, and per-container counts before parsing. Exports preserve evidence-source attribution and limitations. Markdown and HTML include a presentation-only generator footer unless --no-attribution is selected; JSON retains bounded generator provenance. Compact output intentionally omits raw registry payloads.',
   },
 });
 
@@ -371,6 +385,8 @@ const COMMAND_COLLECTION: Readonly<Record<CliCommand, CommandCollection>> = Obje
   posture: { mode: 'network', scope: 'Accepts one domain and performs bounded DNS queries only.' },
   http: { mode: 'network', scope: 'Accepts one domain and follows only the bounded SSRF-guarded homepage redirect workflow.' },
   tls: { mode: 'network', scope: 'Accepts one public hostname and opens one bounded certificate connection.' },
+  'dnssec-validate': { mode: 'network', scope: 'Accepts one authorised domain, one public resolver IP, and one local trust-anchor file; DNS-over-TCP validation is capped at 32 queries and 15 seconds.' },
+  'mail-transport': { mode: 'network', scope: 'Accepts at most three selected authorised MX hosts, uses one public resolver, and performs sequential bounded SMTP connections with no retries.' },
   'registry-support': { mode: 'offline', scope: 'Reads the embedded registry capability catalogue for one domain or suffix.' },
   'registry-doctor': { mode: 'offline', scope: 'Reads one saved Lookup and the embedded registry capability catalogue.' },
   'registry-cohort': { mode: 'offline', scope: 'Reads at most 500 saved Lookups or retained cohort reports from one unmixed family and emits bounded target-free timelines.' },

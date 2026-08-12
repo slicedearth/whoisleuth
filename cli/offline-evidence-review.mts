@@ -19,6 +19,10 @@ import {
 } from '../lib/rdap-search-workbench.mts';
 import { reviewRpkiRoute } from '../lib/rpki-evidence.mts';
 import { analyzeTlsaEvidence } from '../lib/tlsa-evidence.mts';
+import {
+  CRYPTOGRAPHIC_ASSURANCE_INPUT_SCHEMA,
+  buildCryptographicAssuranceReview,
+} from '../lib/cryptographic-assurance.mts';
 import { reviewZoneIntent } from '../lib/zone-intent-review.mts';
 import { reviewDnsConvergence } from '../lib/dns-convergence-review.mts';
 import { compareTrustStoreEvidence } from '../lib/trust-store-comparison.mts';
@@ -61,7 +65,7 @@ function parseInput(value: unknown): UnknownRecord {
 
 function buildOfflineEvidenceReview(value: unknown, generatedAt = new Date().toISOString()) {
   const input = parseInput(value);
-  let kind: 'rdap_search' | 'dnssec' | 'tlsa' | 'rpki' | 'geoip' | 'encrypted_dns' | 'zone_intent' | 'domain_portfolio' | 'domain_change' | 'dns_convergence' | 'nameserver_preflight' | 'trust_store';
+  let kind: 'rdap_search' | 'dnssec' | 'tlsa' | 'rpki' | 'cryptographic_assurance' | 'geoip' | 'encrypted_dns' | 'zone_intent' | 'domain_portfolio' | 'domain_change' | 'dns_convergence' | 'nameserver_preflight' | 'trust_store';
   let result: unknown;
   if (input.schema === RDAP_SEARCH_INPUT_SCHEMA) {
     kind = 'rdap_search';
@@ -108,6 +112,9 @@ function buildOfflineEvidenceReview(value: unknown, generatedAt = new Date().toI
       originAsn: input.originAsn,
       authorizations: input.authorizations,
     });
+  } else if (input.schema === CRYPTOGRAPHIC_ASSURANCE_INPUT_SCHEMA) {
+    kind = 'cryptographic_assurance';
+    result = buildCryptographicAssuranceReview(input, generatedAt);
   } else if (input.schema === LOCAL_GEOIP_QUERY_SCHEMA) {
     kind = 'geoip';
     result = lookupLocalGeoIp(buildLocalGeoIpDatabase(input.database), input.address);
@@ -186,7 +193,8 @@ function formatOfflineEvidenceReview(document: ReturnType<typeof buildOfflineEvi
         : 'review'
       : typeof gate.pass === 'boolean'
         ? gate.pass ? 'ready' : 'review'
-        : document.kind === 'domain_portfolio' ? 'inventory' : 'reviewed';
+        : document.kind === 'domain_portfolio' ? 'inventory'
+          : document.kind === 'cryptographic_assurance' ? 'separate' : 'reviewed';
   const lines = [
     'Offline evidence review',
     `Kind   ${document.kind.replaceAll('_', ' ')}`,
@@ -230,6 +238,12 @@ function formatOfflineEvidenceReview(document: ReturnType<typeof buildOfflineEvi
     lines.push(`Renewals ${listLength(result.renewalQueue)}`);
     lines.push(`Recovery ${listLength(result.recoveryCycles)}`);
     lines.push(`Unknown ${Object.values(unknownCounts).reduce<number>((total, value) => total + count(value), 0)}`);
+  } else if (document.kind === 'cryptographic_assurance') {
+    const cards = Array.isArray(result.cards) ? result.cards : [];
+    for (const value of cards) {
+      const card = record(value);
+      lines.push(`${String(card.label ?? card.family ?? 'Evidence')}  ${String(card.state ?? 'unavailable').replaceAll('_', ' ')} (${String(card.completeness ?? 'unavailable')})`);
+    }
   } else {
     for (const [label, key] of [
       ['Records', 'records'],

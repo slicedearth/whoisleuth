@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures';
-import { expectNoHorizontalOverflow, failBrowserLocalManifestWrites, migrateLegacyBrowserData, readBrowserLocalCollection, requiredValue } from './helpers';
+import { expectNoHorizontalOverflow, failBrowserLocalManifestWrites, migrateLegacyBrowserData, readBrowserLocalCollection, requiredValue, useTheme } from './helpers';
 import { spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import type { ArchiveInspectionReport } from '../cli/archive-inspect.mts';
@@ -9,6 +9,20 @@ import type { WorkspaceArchiveDocument } from '../frontend/src/lib/analysis/work
 import type { EncryptedWorkspaceArchiveEnvelope } from '../frontend/src/lib/analysis/workspace-archive-crypto';
 
 const NOW = '2026-07-14T08:00:00.000Z';
+
+async function expectSelectedOptionFits(select: import('@playwright/test').Locator) {
+  const fit = await select.evaluate((element: HTMLSelectElement) => {
+    const style = getComputedStyle(element);
+    const context = document.createElement('canvas').getContext('2d');
+    if (!context) return { availableWidth: 0, textWidth: Number.POSITIVE_INFINITY };
+    context.font = style.font;
+    return {
+      availableWidth: element.clientWidth - Number.parseFloat(style.paddingLeft) - Number.parseFloat(style.paddingRight),
+      textWidth: context.measureText(element.selectedOptions[0]?.textContent?.trim() ?? '').width,
+    };
+  });
+  expect(fit.availableWidth).toBeGreaterThanOrEqual(fit.textWidth);
+}
 
 async function runOfflineCliJson<T>(argv: string[], input: unknown): Promise<T> {
   const { FORCE_COLOR: _forceColor, NO_COLOR: _noColor, ...environment } = process.env;
@@ -239,7 +253,9 @@ test('the Dashboard presents task lanes without duplicating the sidebar labels',
   await page.goto('/dashboard');
 
   await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'View public homepage' })).toHaveAttribute('href', '/');
+  await expect(page.getByRole('link', { name: /View public homepage/u })).toHaveAttribute('href', '/');
+  await expect(page.getByRole('link', { name: /View public homepage/u })).toHaveAttribute('target', '_blank');
+  await expect(page.getByRole('link', { name: /View public homepage/u })).toHaveAttribute('rel', 'noopener noreferrer');
   await expect(page.getByRole('heading', { name: 'Start an investigation' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Continue saved work' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Follow a guided investigation' })).toBeVisible();
@@ -260,6 +276,8 @@ test('the Dashboard presents task lanes without duplicating the sidebar labels',
   await expect(page.locator('.summary-card', { hasText: 'Watchlists' })).toHaveAttribute('href', '/monitor?view=watchlists');
   await expect(page.getByRole('link', { name: /Check domain-ending support/ })).toHaveAttribute('href', '/registry-support');
   await expect(page.getByRole('link', { name: /Open resources/ })).toHaveAttribute('href', '/resources#start');
+  await expect(page.getByRole('link', { name: /Open resources/ })).toHaveAttribute('target', '_blank');
+  await expect(page.getByRole('link', { name: /Open resources/ })).toHaveAttribute('rel', 'noopener noreferrer');
   await expect(page.getByRole('combobox', { name: 'Guide' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Start guide' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Compare two domains' })).toHaveCount(0);
@@ -267,6 +285,17 @@ test('the Dashboard presents task lanes without duplicating the sidebar labels',
   await expect(page.getByText('Start recipe', { exact: true })).toHaveCount(0);
   await expect(page.getByText('indexed entities', { exact: false })).toHaveCount(0);
   await expect(page.getByText('Investigation tools', { exact: true })).toHaveCount(0);
+});
+
+test('the Dashboard keeps interaction blue and outcome green in the dark theme', async ({ page }) => {
+  await useTheme(page, 'dark');
+  await page.goto('/dashboard');
+
+  await expect(page.locator('.quick-icon').first()).toHaveCSS('color', 'rgb(94, 179, 255)');
+  await expect(page.locator('.quick-meta').first()).toHaveCSS('color', 'rgb(126, 224, 168)');
+  await expect(page.locator('.quick-card').first().locator(':scope > strong')).toHaveCSS('color', 'rgb(94, 179, 255)');
+  await expect(page.locator('.summary-icon').first()).toHaveCSS('color', 'rgb(126, 224, 168)');
+  await expect(page.locator('.summary-card').first().locator(':scope > strong')).toHaveCSS('color', 'rgb(126, 224, 168)');
 });
 
 test('the Console navigation exposes semantic groups without changing link order or mobile keyboard access', async ({ page }) => {
@@ -303,7 +332,9 @@ test('the privacy-safe browser handoff previews exact third-party disclosure bef
   await page.goto('/dashboard');
   await page.getByLabel('Domain or URL').fill('https://user:secret@Sub.Example.Invalid:8443/private?token=secret#fragment');
   await page.getByLabel('Destination').selectOption('external_https');
-  await page.getByLabel('Disclose').selectOption('sanitized_url');
+  await page.getByLabel('Disclose', { exact: true }).selectOption('sanitized_url');
+  await expectSelectedOptionFits(page.getByLabel('Destination'));
+  await expectSelectedOptionFits(page.getByLabel('Disclose', { exact: true }));
   await page.getByLabel('Exact endpoint').fill('https://analyst-service.invalid/review');
   await page.getByRole('button', { name: 'Prepare exact preview' }).click();
 
@@ -319,7 +350,14 @@ test('the privacy-safe browser handoff previews exact third-party disclosure bef
   await page.getByLabel(/I reviewed the exact endpoint/).check();
   await expect(page.getByRole('button', { name: 'Open reviewed destination' })).toBeEnabled();
 
+  await page.evaluate(() => { window.open = () => null; });
+  await page.getByRole('button', { name: 'Open reviewed destination' }).click();
+  await expect(page.getByRole('alert')).toContainText('The new tab was blocked');
+  await expect(preview).toBeVisible();
+
   await page.setViewportSize({ width: 320, height: 700 });
+  await expectSelectedOptionFits(page.getByLabel('Destination'));
+  await expectSelectedOptionFits(page.getByLabel('Disclose', { exact: true }));
   await expectNoHorizontalOverflow(page);
 });
 
@@ -711,6 +749,14 @@ test('workspace identifier collisions cannot rebind Cases or the active-profile 
   await expect(profiles).toContainText('Blocked');
   await expect(cases).toContainText('Blocked');
   await expect(settings).toContainText('Blocked');
+  expect(await profiles.locator('.state').evaluate((element) => {
+    const probe = document.createElement('span');
+    probe.style.color = 'var(--danger)';
+    document.body.append(probe);
+    const matches = getComputedStyle(element).color === getComputedStyle(probe).color;
+    probe.remove();
+    return matches;
+  })).toBe(true);
   await expect(profiles.getByRole('checkbox')).toBeDisabled();
   await expect(cases.getByRole('checkbox')).toBeDisabled();
   await expect(settings.getByRole('checkbox')).toBeDisabled();
@@ -745,6 +791,17 @@ test('workspace archive import reports future sections and rolls back an interru
   const futureWatchlists = page.locator('.preview li', { hasText: 'Watchlists' });
   await expect(futureWatchlists).toContainText('Unsupported');
   await expect(futureWatchlists.getByRole('checkbox')).toBeDisabled();
+  expect(await futureWatchlists.evaluate((element) => {
+    const probe = document.createElement('span');
+    probe.style.color = 'var(--muted)';
+    document.body.append(probe);
+    const result = {
+      borderStyle: getComputedStyle(element).borderStyle,
+      colourMatches: getComputedStyle(element.querySelector('.state')!).color === getComputedStyle(probe).color,
+    };
+    probe.remove();
+    return result;
+  })).toEqual({ borderStyle: 'dotted', colourMatches: true });
 
   await migrateLegacyBrowserData(page, {
     'whois-rdap-cases-v1': { version: 2, cases: [{

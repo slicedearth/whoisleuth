@@ -466,6 +466,14 @@ export class BrowserLocalDataProvider {
     await done;
 
     const missing = definitions.filter((_definition, index) => !manifests[index]);
+    const existingSnapshots = new Map<string, CollectionSnapshot<unknown>>();
+    for (let index = 0; index < definitions.length; index++) {
+      const definition = definitions[index];
+      if (!definition) throw new BrowserLocalDataError('LOCAL_DATA_INTEGRITY', 'A browser-local definition is missing.');
+      const manifest = manifests[index];
+      if (!manifest) continue;
+      existingSnapshots.set(definition.id, await this.#readSnapshot(definition));
+    }
     const migratedCollections: string[] = [];
     const retainedLegacyKeys: string[] = [];
     if (missing.length) {
@@ -486,7 +494,10 @@ export class BrowserLocalDataProvider {
         if (raw !== null) retainedLegacyKeys.push(definition.legacyKey);
       }
       try {
-        await this.#commit(prepared, new Map(missing.map((definition) => [definition.id, 0])));
+        await this.#commit(prepared, new Map(definitions.map((definition) => [
+          definition.id,
+          existingSnapshots.get(definition.id)?.manifest.revision ?? 0,
+        ])));
         migratedCollections.push(...missing.map((definition) => definition.id));
       } catch (cause) {
         if (!(cause instanceof BrowserLocalDataError) || cause.code !== 'LOCAL_DATA_CONFLICT') throw cause;
@@ -596,18 +607,29 @@ export class BrowserLocalDataProvider {
     const transaction = database.transaction([LOCAL_DATA_RECORD_STORE, LOCAL_DATA_MANIFEST_STORE], 'readonly');
     const done = transactionComplete(transaction, `Reading ${definition.label}`, this.timeoutMs);
     let manifest: BrowserLocalCollectionManifest | undefined;
-    let records: BrowserLocalStoredRecord[];
+    let records: BrowserLocalStoredRecord[] = [];
     try {
       manifest = await requestResult(
         transaction.objectStore(LOCAL_DATA_MANIFEST_STORE).get(definition.id) as IDBRequest<BrowserLocalCollectionManifest | undefined>,
         `Reading the ${definition.label} manifest`,
         this.timeoutMs,
       );
+      if (!manifest) throw new BrowserLocalDataError('LOCAL_DATA_MISSING', `${definition.label} has no migration manifest.`);
+      this.#assertManifest(definition, manifest);
+      if (manifest.codec !== this.codec.id) {
+        throw new BrowserLocalDataError('LOCAL_DATA_LOCKED', `${definition.label} uses ${manifest.codec} and cannot be opened with the active local-data codec.`);
+      }
       records = await requestResult(
-        transaction.objectStore(LOCAL_DATA_RECORD_STORE).index(RECORD_COLLECTION_INDEX).getAll(definition.id) as IDBRequest<BrowserLocalStoredRecord[]>,
+        transaction.objectStore(LOCAL_DATA_RECORD_STORE).index(RECORD_COLLECTION_INDEX).getAll(
+          definition.id,
+          definition.maximumRecords + 1,
+        ) as IDBRequest<BrowserLocalStoredRecord[]>,
         `Reading ${definition.label}`,
         this.timeoutMs,
       );
+      if (records.length > definition.maximumRecords) {
+        throw new BrowserLocalDataError('LOCAL_DATA_INTEGRITY', `${definition.label} exceeds its bounded record count.`);
+      }
       await done;
     } catch (cause) {
       try { transaction.abort(); } catch { /* the transaction may already be terminal */ }
@@ -620,11 +642,7 @@ export class BrowserLocalDataProvider {
       );
     }
     if (!manifest) throw new BrowserLocalDataError('LOCAL_DATA_MISSING', `${definition.label} has no migration manifest.`);
-    this.#assertManifest(definition, manifest);
-    if (manifest.codec !== this.codec.id) {
-      throw new BrowserLocalDataError('LOCAL_DATA_LOCKED', `${definition.label} uses ${manifest.codec} and cannot be opened with the active local-data codec.`);
-    }
-    if (records.length !== manifest.recordCount || records.length > definition.maximumRecords) {
+    if (records.length !== manifest.recordCount) {
       throw new BrowserLocalDataError('LOCAL_DATA_INTEGRITY', `${definition.label} record count does not match its manifest.`);
     }
     records.sort((left, right) => left.ordinal - right.ordinal || left.lookupKey.localeCompare(right.lookupKey));
@@ -723,25 +741,38 @@ export class BrowserLocalDataProvider {
     const updatedAt = Number.isFinite(now.getTime()) ? now.toISOString() : new Date().toISOString();
 
     try {
-      const current = await Promise.all(prepared.map((item) => requestResult(
-        manifests.get(item.definition.id) as IDBRequest<BrowserLocalCollectionManifest | undefined>,
-        `Checking the ${item.definition.label} revision`,
+      const expected = [...expectedRevisions.entries()];
+      for (const item of prepared) {
+        if (!expectedRevisions.has(item.definition.id)) {
+          throw new BrowserLocalDataError('INVALID_LOCAL_DATA_UPDATE', `The ${item.definition.label} update has no expected revision.`);
+        }
+      }
+      const current = await Promise.all(expected.map(([collection]) => requestResult(
+        manifests.get(collection) as IDBRequest<BrowserLocalCollectionManifest | undefined>,
+        `Checking the ${this.#definitions.get(collection)?.label ?? collection} revision`,
         this.timeoutMs,
       )));
-      for (let index = 0; index < prepared.length; index++) {
-        const item = prepared[index];
-        if (!item) throw new BrowserLocalDataError('LOCAL_DATA_INTEGRITY', 'A prepared browser-local collection is missing.');
+      const currentByCollection = new Map<string, BrowserLocalCollectionManifest | undefined>();
+      for (let index = 0; index < expected.length; index++) {
+        const entry = expected[index];
+        if (!entry) throw new BrowserLocalDataError('LOCAL_DATA_INTEGRITY', 'An expected browser-local revision is missing.');
+        const [collection, expectedRevision] = entry;
+        const definition = this.#definitions.get(collection);
+        if (!definition || !Number.isSafeInteger(expectedRevision) || expectedRevision < 0) {
+          throw new BrowserLocalDataError('INVALID_LOCAL_DATA_UPDATE', 'A browser-local update contains an invalid expected revision.');
+        }
+        currentByCollection.set(collection, current[index]);
         const currentRevision = current[index]?.revision || 0;
-        if (currentRevision !== expectedRevisions.get(item.definition.id)) {
+        if (currentRevision !== expectedRevision) {
           transaction.abort();
           await done.catch(() => undefined);
-          throw new BrowserLocalDataError('LOCAL_DATA_CONFLICT', `${item.definition.label} changed in another tab.`);
+          throw new BrowserLocalDataError('LOCAL_DATA_CONFLICT', `${definition.label} changed in another tab.`);
         }
       }
       for (let index = 0; index < prepared.length; index++) {
         const item = prepared[index];
         if (!item) throw new BrowserLocalDataError('LOCAL_DATA_INTEGRITY', 'A prepared browser-local collection is missing.');
-        const currentRevision = current[index]?.revision || 0;
+        const currentRevision = currentByCollection.get(item.definition.id)?.revision || 0;
         records.delete(IDBKeyRange.bound([item.definition.id], [item.definition.id, []]));
         for (const record of item.records) records.put(record);
         manifests.put(Object.freeze({

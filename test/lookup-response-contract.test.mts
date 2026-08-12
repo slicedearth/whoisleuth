@@ -3,6 +3,18 @@ import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { THREAT_INTELLIGENCE_RESULT_STATES } from '../lib/threat-intelligence-types.mts';
+import {
+  MAX_HTTP_ATTEMPTS,
+  MAX_HTTP_ERROR_LENGTH,
+  MAX_HTTP_EVIDENCE_REDIRECTS,
+  MAX_HTTP_PROVENANCE_URL,
+} from '../lib/http-evidence-bounds.mts';
+import {
+  MAX_OBSERVATION_LIMITATIONS,
+  MAX_OBSERVATION_LIMITATION_LENGTH,
+} from '../lib/observation.mts';
+import { MAX_BOUNDED_JSON_DEPTH } from '../lib/bounded-json.mts';
+import { MAX_SECURITY_POSTURE_FINDINGS } from '../lib/website-security-posture.mts';
 
 import {
   INVALID_COMPACT_LOOKUP_RESPONSE,
@@ -11,9 +23,17 @@ import {
   INVALID_LOOKUP_RESPONSE_MESSAGE,
   MAX_COMPACT_LOOKUP_AVAILABILITY_KEYS,
   MAX_LOOKUP_RESPONSE_ERROR_LENGTH,
+  MAX_LOOKUP_RESPONSE_CONTAINER_ITEMS,
   MAX_LOOKUP_RESPONSE_HOST_LENGTH,
   MAX_LOOKUP_RESPONSE_QUERY_LENGTH,
   MAX_LOOKUP_RESPONSE_TOP_LEVEL_KEYS,
+  MAX_LOOKUP_DNS_RECORDS_PER_TYPE,
+  MAX_LOOKUP_REVERSE_DNS_PTR_RECORDS,
+  MAX_LOOKUP_TLS_ALT_NAMES,
+  MAX_LOOKUP_TLS_CERTIFICATE_POLICIES,
+  MAX_LOOKUP_TLS_CHAIN_CERTIFICATES,
+  MAX_LOOKUP_TLS_FINDINGS,
+  MAX_LOOKUP_TLS_NAME_VALUES,
   MAX_LOOKUP_TIMING_MS,
   MAX_LOOKUP_TIMING_SOURCES,
   MAX_THREAT_INTELLIGENCE_FINDINGS,
@@ -65,6 +85,66 @@ function compactResponse(overrides = {}) {
   };
 }
 
+function boundedHttpEvidence(overrides: Record<string, unknown> = {}) {
+  const redirects = Array.from({ length: MAX_HTTP_EVIDENCE_REDIRECTS }, (_, index) => ({
+    from: `https://redirect-${index}.example.test/`,
+    to: `https://redirect-${index + 1}.example.test/`,
+    status: 301,
+    queryOmitted: false,
+  }));
+  return {
+    status: 'success',
+    complete: true,
+    requestUrl: 'https://example.test/',
+    finalUrl: 'https://redirect-5.example.test/',
+    redirectCount: redirects.length,
+    redirects,
+    attempts: Array.from({ length: MAX_HTTP_ATTEMPTS }, (_, index) => ({
+      url: `https://attempt-${index}.example.test/`,
+      queryOmitted: false,
+      outcome: 'response',
+      httpStatus: 200,
+      error: null,
+    })),
+    limitations: Array.from({ length: MAX_OBSERVATION_LIMITATIONS }, (_, index) => `Bounded limitation ${index}`),
+    response: { status: 200 },
+    ...overrides,
+  };
+}
+
+function validHttpsRecord(overrides: Record<string, unknown> = {}) {
+  return {
+    type: 'HTTPS',
+    owner: 'example.test',
+    ttl: 300,
+    priority: 1,
+    mode: 'service',
+    target: 'example.test',
+    targetIsOwner: true,
+    serviceUnavailable: false,
+    compatible: true,
+    parametersIgnored: false,
+    parameters: {
+      mandatory: [],
+      alpn: ['h2'],
+      noDefaultAlpn: false,
+      port: 443,
+      ipv4hint: ['192.0.2.1'],
+      ipv6hint: ['2001:db8::1'],
+      opaque: [],
+      unknownKeys: [],
+      unsupportedMandatoryKeys: [],
+    },
+    ...overrides,
+  };
+}
+
+function nestedValue(depth: number): unknown {
+  let value: unknown = 'leaf';
+  for (let index = 0; index < depth; index += 1) value = { value };
+  return value;
+}
+
 describe('Lookup HTTP response contract', () => {
   test('accepts the full response without copying, pruning, or mutating additive evidence', () => {
     const raw = response({ additiveSection: { version: 1, value: 'retained' } });
@@ -77,6 +157,26 @@ describe('Lookup HTTP response contract', () => {
     assert.deepEqual(parsed.value.additiveSection, { version: 1, value: 'retained' });
   });
 
+  test('rejects a structurally over-nested response before display models can consume it', () => {
+    const raw = response({
+      rdap: { parsed: { domain: 'EXAMPLE.TEST' }, additive: nestedValue(MAX_BOUNDED_JSON_DEPTH + 1) },
+    });
+    assert.deepEqual(parseLookupHttpResponse(raw), {
+      ok: false,
+      error: INVALID_LOOKUP_RESPONSE_MESSAGE,
+      errorCode: INVALID_LOOKUP_RESPONSE,
+    });
+  });
+
+  test('rejects prototype-sensitive nested keys before they can influence derived evidence', () => {
+    const raw = response({
+      rdap: {
+        parsed: JSON.parse('{"__proto__":{"domain":"forged.example.test","statuses":["pendingDelete"]},"handle":"REAL-1"}'),
+      },
+    });
+    assert.equal(parseLookupHttpResponse(raw).ok, false);
+  });
+
   test('accepts all supported query types and optional deep sections', () => {
     for (const type of ['domain', 'ipv4', 'ipv6', 'asn']) {
       const parsed = parseLookupHttpResponse(response({
@@ -87,6 +187,226 @@ describe('Lookup HTTP response contract', () => {
         threatIntelligence: { version: 1, providers: [] },
       }));
       assert.equal(parsed.ok, true, type);
+    }
+  });
+
+  test('accepts exact HTTP evidence bounds without copying or pruning additive fields', () => {
+    const http = boundedHttpEvidence({ additiveField: { retained: true } });
+    const raw = response({ availability: { applicable: true, state: 'registered', http } });
+    const before = structuredClone(raw);
+    const parsed = parseLookupHttpResponse(raw);
+
+    assert.equal(parsed.ok, true);
+    assert.equal(parsed.value, raw);
+    assert.deepEqual(raw, before);
+    assert.deepEqual((http as typeof http & { additiveField: { retained: boolean } }).additiveField.retained, true);
+  });
+
+  test('accepts exact producer network bounds and rejects over-bound or nested collection values', () => {
+    const exact = response({
+      reverseDns: { records: { ptr: Array.from({ length: MAX_LOOKUP_REVERSE_DNS_PTR_RECORDS }, (_, index) => `ptr-${index}.example.test`) } },
+      availability: {
+        applicable: true,
+        state: 'registered',
+        dns: {
+          diagnostics: Object.fromEntries(Array.from({ length: 20 }, (_, index) => [`source${index}`, { status: 'success' }])),
+          records: {
+            a: Array.from({ length: MAX_LOOKUP_DNS_RECORDS_PER_TYPE }, (_, index) => `192.0.2.${index + 1}`),
+            mx: Array.from({ length: MAX_LOOKUP_DNS_RECORDS_PER_TYPE }, (_, index) => ({ priority: index, exchange: `mx-${index}.example.test` })),
+            https: [validHttpsRecord()],
+          },
+        },
+        tls: {
+          limitations: Array.from({ length: MAX_OBSERVATION_LIMITATIONS }, (_, index) => `TLS limitation ${index}`),
+          findings: Array.from({ length: MAX_LOOKUP_TLS_FINDINGS }, (_, index) => ({
+            id: `finding-${index}`,
+            tone: 'neutral',
+            label: `Finding ${index}`,
+            detail: 'Bounded fixture detail.',
+          })),
+          chain: Array.from({ length: MAX_LOOKUP_TLS_CHAIN_CERTIFICATES }, (_, index) => ({ fingerprintSha256: String(index).padStart(64, '0') })),
+          certificate: {
+            subject: { commonNames: Array.from({ length: MAX_LOOKUP_TLS_NAME_VALUES }, (_, index) => `name-${index}.example.test`) },
+            subjectAltNames: { dnsNames: Array.from({ length: MAX_LOOKUP_TLS_ALT_NAMES }, (_, index) => `san-${index}.example.test`), ipAddresses: [] },
+            extensionProfile: { certificatePolicies: { oids: Array.from({ length: MAX_LOOKUP_TLS_CERTIFICATE_POLICIES }, (_, index) => `1.2.3.${index}`) } },
+          },
+        },
+      },
+    });
+    assert.equal(parseLookupHttpResponse(exact).ok, true);
+
+    const invalid = [
+      response({ availability: { applicable: true, state: 'registered', dns: { records: { a: Array(MAX_LOOKUP_DNS_RECORDS_PER_TYPE + 1).fill('192.0.2.1') } } } }),
+      response({ reverseDns: { records: { ptr: Array(MAX_LOOKUP_REVERSE_DNS_PTR_RECORDS + 1).fill('ptr.example.test') } } }),
+      response({ availability: { applicable: true, state: 'registered', tls: { chain: Array(MAX_LOOKUP_TLS_CHAIN_CERTIFICATES + 1).fill({}) } } }),
+      response({ availability: { applicable: true, state: 'registered', dns: { records: { a: [Array(500).fill('nested')] } } } }),
+      response({ availability: { applicable: true, state: 'registered', tls: { certificate: { subject: { commonNames: [Array(500).fill('nested')] } } } } }),
+      response({ reverseDns: { records: { ptr: [Array(500).fill('nested')] } } }),
+      response({ availability: { applicable: true, state: 'registered', dns: { records: { mx: [{ priority: 0, exchange: Array(500).fill('nested') }] } } } }),
+      response({ availability: { applicable: true, state: 'registered', dns: { records: { caa: [{ critical: 0, tag: 'issue', value: Array(500).fill('nested') }] } } } }),
+      response({ availability: { applicable: true, state: 'registered', dns: { records: { soa: [{ nsname: Array(500).fill('nested'), hostmaster: 'hostmaster.example.test', serial: 1, refresh: 1, retry: 1, expire: 1, minttl: 1 }] } } } }),
+      response({ availability: { applicable: true, state: 'registered', dns: { records: { https: [validHttpsRecord({ parameters: { ...validHttpsRecord().parameters, alpn: [Array(500).fill('nested')] } })] } } } }),
+      response({ availability: { applicable: true, state: 'registered', tls: { limitations: Array(MAX_OBSERVATION_LIMITATIONS + 1).fill('limit') } } }),
+      response({ availability: { applicable: true, state: 'registered', tls: { limitations: [Array(500).fill('nested')] } } }),
+      response({ availability: { applicable: true, state: 'registered', tls: { diagnostics: { collection: { error: Array(500).fill('nested') } } } } }),
+    ];
+    for (const candidate of invalid) assert.equal(parseLookupHttpResponse(candidate).ok, false);
+  });
+
+  test('enforces registration, page, observation, and live-container producer bounds', () => {
+    const postureFinding = (index: number) => ({
+      id: `posture-${index}`,
+      category: 'transport',
+      state: 'observed',
+      tone: 'configured',
+      label: `Posture ${index}`,
+      detail: 'Bounded posture detail.',
+      evidence: ['Fixture evidence'],
+    });
+    const exact = response({
+      rdap: {
+        parsed: {
+          statuses: Array.from({ length: 100 }, (_, index) => `status-${index}`),
+          nameservers: Array.from({ length: 200 }, (_, index) => `ns-${index}.example.test`),
+          events: Array.from({ length: 100 }, (_, index) => ({ action: 'last changed', date: `2026-01-${String(index % 28 + 1).padStart(2, '0')}T00:00:00.000Z` })),
+          entitiesByRole: {
+            registrant: Array.from({ length: 5 }, (_, index) => ({
+              handle: `CONTACT-${index}`,
+              roles: ['registrant'],
+              names: [`Contact ${index}`],
+              address: 'A'.repeat(1_000),
+              addresses: ['B'.repeat(1_000)],
+              publicIds: [],
+              links: [],
+            })),
+          },
+          redactions: [{ prePath: 'P'.repeat(512), postPath: 'Q'.repeat(512), replacementPath: 'R'.repeat(512) }],
+        },
+      },
+      whois: {
+        parsed: {
+          statuses: Array.from({ length: 100 }, (_, index) => `status-${index}`),
+          nameservers: Array.from({ length: 200 }, (_, index) => `ns-${index}.example.test`),
+          fieldsTruncated: Array.from({ length: 64 }, (_, index) => `field-${index}`),
+        },
+      },
+      availability: {
+        applicable: true,
+        domain: 'example.test',
+        state: 'registered',
+        pageIdentity: {
+          source: 'html',
+          status: 'success',
+          complete: true,
+          embeddedOrigins: Array.from({ length: 20 }, (_, index) => `https://embed-${index}.example.test`),
+          contactDomains: Array.from({ length: 20 }, (_, index) => `contact-${index}.example.test`),
+          forms: { externalActionOrigins: Array.from({ length: 10 }, (_, index) => `https://form-${index}.example.test`) },
+          resources: { externalOrigins: Array.from({ length: 30 }, (_, index) => `https://asset-${index}.example.test`) },
+          downloads: {
+            riskyFileTypes: Array.from({ length: 20 }, (_, index) => `.type${index}`),
+            externalOrigins: Array.from({ length: 20 }, (_, index) => `https://download-${index}.example.test`),
+          },
+        },
+        securityPosture: {
+          source: 'derived',
+          status: 'success',
+          complete: true,
+          findings: Array.from({ length: MAX_SECURITY_POSTURE_FINDINGS }, (_, index) => postureFinding(index)),
+        },
+      },
+    });
+    assert.equal(parseLookupHttpResponse(exact).ok, true);
+
+    const invalid = [
+      response({ rdap: { error: [Array(500).fill('nested')] } }),
+      response({ availability: { applicable: true, domain: [Array(500).fill('nested')], state: 'registered' } }),
+      response({ availability: { applicable: true, state: 'registered', dns: { status: [Array(500).fill('nested')] } } }),
+      response({ rdap: { parsed: { statuses: Array(101).fill('status') } } }),
+      response({ rdap: { parsed: { entitiesByRole: { registrant: [{ address: 'A'.repeat(1_001) }] } } } }),
+      response({ rdap: { parsed: { redactions: [{ prePath: 'P'.repeat(513) }] } } }),
+      response({ whois: { parsed: { nameservers: Array(201).fill('ns.example.test') } } }),
+      response({ availability: { applicable: true, state: 'registered', pageIdentity: { resources: { externalOrigins: Array(31).fill('https://asset.example.test') } } } }),
+      response({ availability: { applicable: true, state: 'registered', securityPosture: { findings: Array.from({ length: MAX_SECURITY_POSTURE_FINDINGS + 1 }, (_, index) => postureFinding(index)) } } }),
+      response({ additive: Array(MAX_LOOKUP_RESPONSE_CONTAINER_ITEMS + 1).fill(null) }),
+    ];
+    for (const candidate of invalid) assert.equal(parseLookupHttpResponse(candidate).ok, false);
+  });
+
+  test('accepts producer-shaped null page profiles and exact TLS distinguished-name bounds', () => {
+    const withNullProfiles = response({
+      availability: {
+        applicable: true,
+        domain: 'example.test',
+        state: 'registered',
+        pageIdentity: null,
+        credentialSurfaceProfile: null,
+        structuredDataIdentity: null,
+        technologyProfile: null,
+        pageRoleProfile: null,
+        clientBehaviorProfile: null,
+        securityPosture: null,
+      },
+    });
+    assert.equal(parseLookupHttpResponse(withNullProfiles).ok, true);
+
+    const exactNames = response({
+      availability: {
+        applicable: true,
+        state: 'registered',
+        tls: {
+          certificate: {
+            subject: { commonNames: ['C'.repeat(256)], organizations: ['O'.repeat(256)] },
+          },
+        },
+      },
+    });
+    assert.equal(parseLookupHttpResponse(exactNames).ok, true);
+    assert.equal(parseLookupHttpResponse(response({
+      availability: {
+        applicable: true,
+        state: 'registered',
+        tls: { certificate: { subject: { commonNames: ['C'.repeat(257)] } } },
+      },
+    })).ok, false);
+  });
+
+  test('rejects over-bound or malformed nested HTTP evidence with the stable response error', () => {
+    const baseRedirect = {
+      from: 'https://from.example.test/',
+      to: 'https://to.example.test/',
+      status: 302,
+      queryOmitted: false,
+    };
+    const baseAttempt = {
+      url: 'https://attempt.example.test/',
+      outcome: 'error',
+      httpStatus: null,
+      error: 'Fixture connection failed.',
+    };
+    const invalidHttp = [
+      boundedHttpEvidence({ redirects: Array.from({ length: MAX_HTTP_EVIDENCE_REDIRECTS + 1 }, () => baseRedirect), redirectCount: MAX_HTTP_EVIDENCE_REDIRECTS }),
+      boundedHttpEvidence({ attempts: Array.from({ length: MAX_HTTP_ATTEMPTS + 1 }, () => baseAttempt) }),
+      boundedHttpEvidence({ redirects: [null], redirectCount: 1 }),
+      boundedHttpEvidence({ redirects: [{ ...baseRedirect, from: 'https://user:secret@from.example.test/' }], redirectCount: 1 }),
+      boundedHttpEvidence({ redirects: [{ ...baseRedirect, to: 'file:///tmp/evidence' }], redirectCount: 1 }),
+      boundedHttpEvidence({ redirects: [{ ...baseRedirect, to: `https://to.example.test/${'x'.repeat(MAX_HTTP_PROVENANCE_URL)}` }], redirectCount: 1 }),
+      boundedHttpEvidence({ redirects: [{ ...baseRedirect, status: 99 }], redirectCount: 1 }),
+      boundedHttpEvidence({ redirects: [{ ...baseRedirect, status: 600 }], redirectCount: 1 }),
+      boundedHttpEvidence({ attempts: [{ ...baseAttempt, error: 'x'.repeat(MAX_HTTP_ERROR_LENGTH + 1) }] }),
+      boundedHttpEvidence({ attempts: [{ ...baseAttempt, error: 'bad\nerror' }] }),
+      boundedHttpEvidence({ limitations: Array.from({ length: MAX_OBSERVATION_LIMITATIONS + 1 }, () => 'Limit') }),
+      boundedHttpEvidence({ limitations: ['x'.repeat(MAX_OBSERVATION_LIMITATION_LENGTH + 1)] }),
+      boundedHttpEvidence({ limitations: ['bad\nlimitation'] }),
+    ];
+
+    for (const http of invalidHttp) {
+      assert.deepEqual(parseLookupHttpResponse(response({
+        availability: { applicable: true, state: 'registered', http },
+      })), {
+        ok: false,
+        errorCode: INVALID_LOOKUP_RESPONSE,
+        error: INVALID_LOOKUP_RESPONSE_MESSAGE,
+      });
     }
   });
 

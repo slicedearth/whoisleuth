@@ -8,8 +8,9 @@ import {
   CRLDistributionPointsExtension,
   X509Certificate,
 } from '@peculiar/x509';
+import { MAX_LOOKUP_TLS_CERTIFICATE_POLICIES } from './lookup-network-evidence-bounds.mts';
 
-export const MAX_CERTIFICATE_POLICIES = 16;
+export const MAX_CERTIFICATE_POLICIES = MAX_LOOKUP_TLS_CERTIFICATE_POLICIES;
 export const MAX_CRL_DISTRIBUTION_POINTS = 32;
 
 export type CertificateExtensionProfile = Readonly<{

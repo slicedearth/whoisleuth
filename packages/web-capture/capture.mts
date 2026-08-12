@@ -1,16 +1,20 @@
 import { createHash } from 'node:crypto';
-import { chmod, lstat, mkdir, mkdtemp, rename, rm, writeFile } from 'node:fs/promises';
+import { chmod, lstat, mkdir, open, rmdir, unlink } from 'node:fs/promises';
+import { isIP } from 'node:net';
 import path from 'node:path';
 
 import type { Browser, BrowserContext, Page, Route } from '@playwright/test';
 
 import { WHOISLEUTH_USER_AGENT } from '../../lib/outbound-identity.mts';
-import { imagePerceptualHash } from '../../lib/perceptual-hash.mts';
+import { inspectDecodedImage } from '../../lib/perceptual-hash.mts';
 import { readBytesCapped, resolvePublicAddresses, safeFetchDetailed } from '../../lib/safe-fetch.mts';
 import {
   MAX_WEB_CAPTURE_DOM_DIGEST_BYTES,
+  MAX_WEB_CAPTURE_DOM_ELEMENTS,
+  MAX_WEB_CAPTURE_DOM_PROJECTION_CHARACTERS,
   MAX_WEB_CAPTURE_MANIFEST_BYTES,
   MAX_WEB_CAPTURE_SCREENSHOT_BYTES,
+  MAX_WEB_CAPTURE_VISIBLE_TEXT_BYTES,
   WEB_CAPTURE_DOM_DIGEST_SCHEMA,
   WEB_CAPTURE_DOM_DIGEST_VERSION,
   WEB_CAPTURE_MANIFEST_SCHEMA,
@@ -18,8 +22,11 @@ import {
 } from '../../lib/web-capture-contract.mts';
 export {
   MAX_WEB_CAPTURE_DOM_DIGEST_BYTES,
+  MAX_WEB_CAPTURE_DOM_ELEMENTS,
+  MAX_WEB_CAPTURE_DOM_PROJECTION_CHARACTERS,
   MAX_WEB_CAPTURE_MANIFEST_BYTES,
   MAX_WEB_CAPTURE_SCREENSHOT_BYTES,
+  MAX_WEB_CAPTURE_VISIBLE_TEXT_BYTES,
   WEB_CAPTURE_DOM_DIGEST_SCHEMA,
   WEB_CAPTURE_DOM_DIGEST_VERSION,
   WEB_CAPTURE_MANIFEST_SCHEMA,
@@ -51,6 +58,7 @@ type CaptureDependencies = Readonly<{
   resolveAddresses?: typeof resolvePublicAddresses;
   fetchResource?: CaptureFetchResource;
   readResponse?: typeof readBytesCapped;
+  writeArtifact?: typeof privateWrite;
   now?: () => string;
 }>;
 
@@ -65,6 +73,89 @@ type DomProjection = Readonly<{
   scriptCount: number;
   imageCount: number;
 }>;
+type NormalizedDomProjection = DomProjection & Readonly<{ visibleTextBytes: number }>;
+type CaptureDeadline = Readonly<{
+  run<T>(operation: Promise<T>): Promise<T>;
+  signal: AbortSignal;
+  expired(): boolean;
+  clear(): void;
+}>;
+
+function createCaptureDeadline(timeoutMs: number, onTimeout: () => void | Promise<void>): CaptureDeadline {
+  let didExpire = false;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const controller = new AbortController();
+  const timeoutError = new Error(`Rendered capture exceeded its ${timeoutMs} ms total-run deadline.`);
+  const timeout = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => {
+      didExpire = true;
+      controller.abort(timeoutError);
+      void Promise.resolve(onTimeout()).catch(() => {});
+      reject(timeoutError);
+    }, timeoutMs);
+  });
+  return Object.freeze({
+    run<T>(operation: Promise<T>) { return Promise.race([operation, timeout]); },
+    signal: controller.signal,
+    expired() { return didExpire; },
+    clear() { if (timer) clearTimeout(timer); timer = null; },
+  });
+}
+
+function abortable<T>(operation: Promise<T>, signal: AbortSignal): Promise<T> {
+  if (signal.aborted) return Promise.reject(signal.reason);
+  return new Promise<T>((resolve, reject) => {
+    const abort = () => reject(signal.reason);
+    signal.addEventListener('abort', abort, { once: true });
+    operation.then(
+      (value) => { signal.removeEventListener('abort', abort); resolve(value); },
+      (error) => { signal.removeEventListener('abort', abort); reject(error); },
+    );
+  });
+}
+
+function boundedUtf8Text(value: unknown): { text: string; bytes: number; truncated: boolean } {
+  if (typeof value !== 'string') return { text: '', bytes: 0, truncated: value !== undefined && value !== null };
+  // Limit the string window before walking code points so a dependency-
+  // injected projection cannot bypass the browser-side character bound.
+  const candidate = value.slice(0, MAX_WEB_CAPTURE_VISIBLE_TEXT_BYTES);
+  let bytes = 0;
+  let end = 0;
+  for (const character of candidate) {
+    const characterBytes = Buffer.byteLength(character);
+    if (bytes + characterBytes > MAX_WEB_CAPTURE_VISIBLE_TEXT_BYTES) break;
+    bytes += characterBytes;
+    end += character.length;
+  }
+  return {
+    text: candidate.slice(0, end),
+    bytes,
+    truncated: end < value.length,
+  };
+}
+
+function normalizeDomProjection(value: DomProjection): NormalizedDomProjection {
+  const visibleText = boundedUtf8Text(value?.visibleText);
+  const count = (candidate: unknown) => Number.isSafeInteger(candidate) && Number(candidate) >= 0
+    ? Math.min(Number(candidate), MAX_WEB_CAPTURE_DOM_ELEMENTS)
+    : 0;
+  const rawStructure = typeof value?.structure === 'string' ? value.structure : '';
+  return {
+    structure: rawStructure.slice(0, MAX_WEB_CAPTURE_DOM_PROJECTION_CHARACTERS),
+    visibleText: visibleText.text,
+    structureTruncated: value?.structureTruncated === true
+      || rawStructure.length > MAX_WEB_CAPTURE_DOM_PROJECTION_CHARACTERS
+      || [value?.elementCount, value?.formCount, value?.inputCount, value?.scriptCount, value?.imageCount]
+        .some((candidate) => Number.isSafeInteger(candidate) && Number(candidate) > MAX_WEB_CAPTURE_DOM_ELEMENTS),
+    textTruncated: value?.textTruncated === true || visibleText.truncated,
+    visibleTextBytes: visibleText.bytes,
+    elementCount: count(value?.elementCount),
+    formCount: count(value?.formCount),
+    inputCount: count(value?.inputCount),
+    scriptCount: count(value?.scriptCount),
+    imageCount: count(value?.imageCount),
+  };
+}
 
 function sha256(value: Buffer | string): string {
   return createHash('sha256').update(value).digest('hex');
@@ -88,6 +179,22 @@ function captureUrl(value: unknown): URL {
   }
   if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password || parsed.port) {
     throw new Error('Capture URL must use HTTP(S) without credentials or a non-default port.');
+  }
+  return parsed;
+}
+
+function canonicalHost(value: string): string {
+  return value.toLowerCase().replace(/^\[|\]$/gu, '').replace(/\.$/u, '');
+}
+
+function canonicalUrlHost(url: URL): string {
+  return canonicalHost(url.hostname);
+}
+
+function captureTargetUrl(value: unknown): URL {
+  const parsed = captureUrl(value);
+  if (isIP(canonicalUrlHost(parsed))) {
+    throw new Error('Rendered capture targets must use a domain hostname so the resulting evidence remains compatible with domain Cases.');
   }
   return parsed;
 }
@@ -130,56 +237,40 @@ export function parseCaptureArguments(argv: readonly string[]): CaptureArguments
   if (!targetUrl || !destination || !authorised) {
     throw new Error('Usage: whoisleuth-capture <url> --output-dir <new-directory> --authorize-rendered-capture [--timeout-ms <1000-30000>]');
   }
-  return { targetUrl: captureUrl(targetUrl).toString(), outputDirectory: outputDirectory(destination), timeoutMs };
+  return { targetUrl: captureTargetUrl(targetUrl).toString(), outputDirectory: outputDirectory(destination), timeoutMs };
 }
 
-async function projectDom(page: Page): Promise<DomProjection> {
-  return page.evaluate(() => {
-    const maximumCharacters = 256 * 1024;
-    const maximumElements = 20_000;
-    const elements = document.querySelectorAll('*');
-    const tags: string[] = [];
-    for (let index = 0; index < Math.min(elements.length, maximumElements); index += 1) {
-      const element = elements.item(index);
-      if (element) tags.push(element.tagName.toLowerCase());
+async function projectDom(page: Page): Promise<NormalizedDomProjection> {
+  const projected = await page.evaluate(({ boundaryName, maximumCharacters, maximumElements }) => {
+    const boundary = (globalThis as unknown as Record<string, unknown>)[boundaryName];
+    if (typeof boundary !== 'function') {
+      throw new Error('Rendered DOM projection boundary was unavailable.');
     }
-    const structureValue = tags.join(' ');
-    const textParts: string[] = [];
-    let textLength = 0;
-    let textTruncated = false;
-    if (document.body) {
-      const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
-      while (textLength < maximumCharacters) {
-        const node = walker.nextNode();
-        if (!node) break;
-        const value = node.nodeValue ?? '';
-        const remaining = maximumCharacters - textLength;
-        textParts.push(value.slice(0, remaining));
-        textLength += Math.min(value.length, remaining);
-        if (value.length > remaining) {
-          textTruncated = true;
-          break;
-        }
-      }
-      textTruncated ||= walker.nextNode() !== null;
-    }
-    const textValue = textParts.join('');
-    return {
-      structure: structureValue.slice(0, maximumCharacters),
-      visibleText: textValue,
-      structureTruncated: structureValue.length > maximumCharacters || elements.length > maximumElements,
-      textTruncated,
-      elementCount: Math.min(elements.length, maximumElements),
-      formCount: document.forms.length,
-      inputCount: document.querySelectorAll('input, select, textarea, button').length,
-      scriptCount: document.scripts.length,
-      imageCount: document.images.length,
-    };
+    return boundary({ maximumCharacters, maximumElements });
+  }, {
+    boundaryName: DOM_PROJECTION_BOUNDARY_NAME,
+    maximumCharacters: MAX_WEB_CAPTURE_DOM_PROJECTION_CHARACTERS,
+    maximumElements: MAX_WEB_CAPTURE_DOM_ELEMENTS,
   });
+  return normalizeDomProjection(projected);
 }
 
-async function privateWrite(filePath: string, value: string | Buffer): Promise<void> {
-  await writeFile(filePath, value, { flag: 'wx', mode: 0o600 });
+type OwnedArtifactIdentity = Readonly<{ dev: number; ino: number }>;
+
+async function privateWrite(
+  filePath: string,
+  value: string | Buffer,
+  signal: AbortSignal,
+  onCreated: (identity: OwnedArtifactIdentity) => void,
+): Promise<void> {
+  const handle = await open(filePath, 'wx', 0o600);
+  try {
+    const identity = await handle.stat();
+    onCreated({ dev: identity.dev, ino: identity.ino });
+    await handle.writeFile(value, { signal });
+  } finally {
+    await handle.close();
+  }
 }
 
 const REQUEST_HEADER_ALLOWLIST = Object.freeze([
@@ -242,11 +333,11 @@ async function defaultFetchResource(
   options: RequestInit,
   addresses: readonly PublicAddressRecord[],
 ): Promise<Response> {
-  const expectedHostname = new URL(url).hostname.toLowerCase().replace(/\.$/u, '');
+  const expectedHostname = canonicalUrlHost(new URL(url));
   const result = await safeFetchDetailed(url, options, {
     maxRedirects: 0,
     resolvePublicAddresses: async (hostname) => {
-      if (hostname.toLowerCase().replace(/\.$/u, '') !== expectedHostname) {
+      if (canonicalHost(hostname) !== expectedHostname) {
         throw new Error('Rendered capture refused an unexpected redirect hostname.');
       }
       return [...addresses];
@@ -262,8 +353,10 @@ async function installRequestBoundary(
   fetchResource: CaptureFetchResource,
   readResponse: typeof readBytesCapped,
   timeoutMs: number,
+  totalSignal: AbortSignal,
 ) {
-  const requestHosts = new Set<string>();
+  const seenRequestHosts = new Set<string>();
+  const retainedPublicRequestHosts = new Set<string>();
   let requestCount = 0;
   let blockedRequestCount = 0;
   let hostLimitReached = false;
@@ -295,32 +388,38 @@ async function installRequestBoundary(
       return;
     }
     try {
+      totalSignal.throwIfAborted();
       if (!['GET', 'HEAD'].includes(route.request().method())) {
         throw new Error('non-read request blocked');
       }
       const parsed = captureUrl(route.request().url());
-      const hostname = parsed.hostname.toLowerCase().replace(/\.$/u, '');
-      if (!requestHosts.has(hostname)) {
-        if (requestHosts.size >= MAX_CAPTURE_HOSTS) {
+      const hostname = canonicalUrlHost(parsed);
+      if (!seenRequestHosts.has(hostname)) {
+        if (seenRequestHosts.size >= MAX_CAPTURE_HOSTS) {
           hostLimitReached = true;
           throw new Error('request-host limit reached');
         }
         // Admit a new browser-requested hostname synchronously. Route handlers
         // may overlap, so delaying this reservation until after DNS or response
         // work would let concurrent or refused requests bypass the host bound.
-        requestHosts.add(hostname);
+        seenRequestHosts.add(hostname);
       }
       // Resolve on every request rather than only the first request for a host.
       // The exact validated records are then injected into safeFetchDetailed,
       // so the request cannot perform a second attacker-controlled DNS lookup.
-      const addresses = await resolveAddresses(hostname);
+      const addresses = await abortable(resolveAddresses(hostname), totalSignal);
+      retainedPublicRequestHosts.add(hostname);
       const method = route.request().method();
-      const response = await fetchResource(parsed.toString(), {
+      const requestSignal = AbortSignal.any([
+        totalSignal,
+        AbortSignal.timeout(Math.min(timeoutMs, 10_000)),
+      ]);
+      const response = await abortable(fetchResource(parsed.toString(), {
         method,
         headers: requestHeaders(route),
         redirect: 'manual',
-        signal: AbortSignal.timeout(Math.min(timeoutMs, 10_000)),
-      }, addresses);
+        signal: requestSignal,
+      }, addresses), requestSignal);
       const body = method === 'HEAD'
         ? { bytes: Buffer.alloc(0), bytesRead: 0, truncated: false }
         : await (async () => {
@@ -332,7 +431,7 @@ async function installRequestBoundary(
             }
             let settled = false;
             try {
-              const value = await readResponse(response, allowance);
+              const value = await abortable(readResponse(response, allowance), requestSignal);
               const validBytesRead = Number.isSafeInteger(value.bytesRead)
                 && value.bytesRead >= 0
                 && value.bytesRead <= allowance;
@@ -345,6 +444,7 @@ async function installRequestBoundary(
               return value;
             } catch (error) {
               if (!settled) settleResponseBytes(allowance, allowance);
+              await response.body?.cancel().catch(() => {});
               throw error;
             }
           })();
@@ -396,7 +496,7 @@ async function installRequestBoundary(
         await Promise.allSettled([...pendingRequests]);
       }
       return {
-        requestHosts: [...requestHosts].sort().slice(0, MAX_CAPTURE_HOSTS),
+        requestHosts: [...retainedPublicRequestHosts].sort().slice(0, MAX_CAPTURE_HOSTS),
         stats: {
           requestCount,
           blockedRequestCount,
@@ -409,24 +509,170 @@ async function installRequestBoundary(
   };
 }
 
-async function disableBrowserOnlyNetworkApis(context: BrowserContext): Promise<void> {
-  await context.addInitScript(() => {
-    // Playwright routing covers browser HTTP(S) requests and WebSockets are
-    // blocked separately. These APIs can otherwise establish browser-managed
-    // transports that do not pass through the pinned HTTP(S) collector.
-    for (const name of ['RTCPeerConnection', 'webkitRTCPeerConnection', 'WebTransport']) {
-      try {
-        Object.defineProperty(globalThis, name, {
-          value: undefined,
-          configurable: false,
-          enumerable: false,
-          writable: false,
-        });
-      } catch {
-        // A browser that exposes a non-configurable implementation remains
-        // covered by the disposable, network-restricted execution requirement.
-      }
+export function disableBrowserNetworkIntrinsics(
+  scope: Record<string, unknown> = globalThis as unknown as Record<string, unknown>,
+): void {
+  // Playwright routing covers browser HTTP(S) requests and WebSockets are
+  // blocked separately. These APIs can otherwise establish browser-managed
+  // transports that do not pass through the pinned HTTP(S) collector.
+  for (const name of ['RTCPeerConnection', 'webkitRTCPeerConnection', 'WebTransport', 'Worker', 'SharedWorker']) {
+    try {
+      Object.defineProperty(scope, name, {
+        value: undefined,
+        configurable: false,
+        enumerable: false,
+        writable: false,
+      });
+    } catch {
+      // The explicit verification below turns a non-configurable live API
+      // into a fail-closed capture before any target navigation.
     }
+    if (scope[name] !== undefined) {
+      throw new Error(`Rendered capture could not disable the browser-managed ${name} transport.`);
+    }
+  }
+}
+
+export function browserNetworkIntrinsicsAreDisabled(
+  scopeValue?: unknown,
+): boolean {
+  const scope = scopeValue && typeof scopeValue === 'object'
+    ? scopeValue as Record<string, unknown>
+    : globalThis as unknown as Record<string, unknown>;
+  return ['RTCPeerConnection', 'webkitRTCPeerConnection', 'WebTransport', 'Worker', 'SharedWorker']
+    .every((name) => scope[name] === undefined);
+}
+
+async function disableBrowserOnlyNetworkApis(context: BrowserContext): Promise<void> {
+  await context.addInitScript(disableBrowserNetworkIntrinsics);
+}
+
+const DOM_PROJECTION_BOUNDARY_NAME = '__whoisleuthBoundedDomProjectionV1';
+
+export function installDomProjectionIntrinsics({ boundaryName, maximumCharacters: fixedMaximumCharacters, maximumElements: fixedMaximumElements }: {
+  boundaryName: string;
+  maximumCharacters: number;
+  maximumElements: number;
+}): void {
+    const apply = Reflect.apply;
+    const createTreeWalker = Document.prototype.createTreeWalker;
+    const nextNode = TreeWalker.prototype.nextNode;
+    const tagName = Object.getOwnPropertyDescriptor(Element.prototype, 'tagName')?.get;
+    const nodeValue = Object.getOwnPropertyDescriptor(Node.prototype, 'nodeValue')?.get;
+    const arrayPush = Array.prototype.push;
+    const arrayJoin = Array.prototype.join;
+    const stringSlice = String.prototype.slice;
+    const stringToLowerCase = String.prototype.toLowerCase;
+    const isSafeInteger = Number.isSafeInteger;
+    const minimum = Math.min;
+    const capturedDocument = document;
+
+    if (!tagName || !nodeValue) {
+      throw new Error('Rendered DOM projection could not capture native DOM accessors.');
+    }
+    if (!isSafeInteger(fixedMaximumCharacters) || fixedMaximumCharacters < 1
+      || !isSafeInteger(fixedMaximumElements) || fixedMaximumElements < 1) {
+      throw new Error('Rendered DOM projection received invalid fixed bounds.');
+    }
+
+    const project = ({ maximumCharacters, maximumElements }: {
+      maximumCharacters: number;
+      maximumElements: number;
+    }) => {
+      if (!isSafeInteger(maximumCharacters) || maximumCharacters < 1 || maximumCharacters > fixedMaximumCharacters
+        || !isSafeInteger(maximumElements) || maximumElements < 1 || maximumElements > fixedMaximumElements) {
+        throw new Error('Rendered DOM projection received invalid bounds.');
+      }
+
+      const structureParts: string[] = [];
+      let structureLength = 0;
+      let structureTruncated = false;
+      let elementCount = 0;
+      let formCount = 0;
+      let inputCount = 0;
+      let scriptCount = 0;
+      let imageCount = 0;
+      let body: Element | null = null;
+      const elementWalker = apply(createTreeWalker, capturedDocument, [capturedDocument, 1]);
+      let element = apply(nextNode, elementWalker, []) as Element | null;
+      while (element && elementCount < maximumElements) {
+        elementCount += 1;
+        const rawTag = apply(tagName, element, []) as string;
+        const classification = apply(stringToLowerCase, apply(stringSlice, rawTag, [0, 16]), []) as string;
+        const separatorLength = structureLength ? 1 : 0;
+        if (maximumCharacters - structureLength > separatorLength) {
+          if (structureLength) {
+            apply(arrayPush, structureParts, [' ']);
+            structureLength += 1;
+          }
+          const remaining = maximumCharacters - structureLength;
+          const retainedTag = apply(stringToLowerCase, apply(stringSlice, rawTag, [0, remaining]), []) as string;
+          if (retainedTag) {
+            apply(arrayPush, structureParts, [retainedTag]);
+            structureLength += retainedTag.length;
+          }
+          if (rawTag.length > remaining) structureTruncated = true;
+        } else {
+          structureTruncated = true;
+        }
+        if (classification === 'body') body = element;
+        if (classification === 'form') formCount += 1;
+        if (classification === 'input' || classification === 'select' || classification === 'textarea' || classification === 'button') inputCount += 1;
+        if (classification === 'script') scriptCount += 1;
+        if (classification === 'img') imageCount += 1;
+        element = apply(nextNode, elementWalker, []) as Element | null;
+      }
+      const elementTraversalTruncated = element !== null;
+      const structureValue = apply(arrayJoin, structureParts, ['']) as string;
+      const textParts: string[] = [];
+      let textLength = 0;
+      let textNodes = 0;
+      let textTruncated = false;
+      if (body) {
+        const textWalker = apply(createTreeWalker, capturedDocument, [body, 4]);
+        while (textLength < maximumCharacters && textNodes < maximumElements) {
+          const node = apply(nextNode, textWalker, []) as Node | null;
+          if (!node) break;
+          textNodes += 1;
+          const candidate = apply(nodeValue, node, []);
+          const value = typeof candidate === 'string' ? candidate : '';
+          const remaining = maximumCharacters - textLength;
+          apply(arrayPush, textParts, [apply(stringSlice, value, [0, remaining]) as string]);
+          textLength += minimum(value.length, remaining);
+          if (value.length > remaining) {
+            textTruncated = true;
+            break;
+          }
+        }
+        textTruncated ||= apply(nextNode, textWalker, []) !== null;
+      }
+      const textValue = apply(arrayJoin, textParts, ['']) as string;
+      return {
+        structure: structureValue,
+        visibleText: textValue,
+        structureTruncated: structureTruncated || elementTraversalTruncated,
+        textTruncated,
+        elementCount,
+        formCount,
+        inputCount,
+        scriptCount,
+        imageCount,
+      };
+    };
+
+    Object.defineProperty(globalThis, boundaryName, {
+      value: project,
+      configurable: false,
+      enumerable: false,
+      writable: false,
+    });
+}
+
+async function installDomProjectionBoundary(context: BrowserContext): Promise<void> {
+  await context.addInitScript(installDomProjectionIntrinsics, {
+    boundaryName: DOM_PROJECTION_BOUNDARY_NAME,
+    maximumCharacters: MAX_WEB_CAPTURE_DOM_PROJECTION_CHARACTERS,
+    maximumElements: MAX_WEB_CAPTURE_DOM_ELEMENTS,
   });
 }
 
@@ -434,65 +680,106 @@ export async function captureRenderedPage(
   argumentsValue: CaptureArguments,
   dependencies: CaptureDependencies,
 ) {
-  const target = captureUrl(argumentsValue.targetUrl);
+  if (!Number.isInteger(argumentsValue.timeoutMs) || argumentsValue.timeoutMs < 1_000 || argumentsValue.timeoutMs > MAX_CAPTURE_TIMEOUT_MS) {
+    throw new Error(`Rendered capture total-run timeout must be between 1000 and ${MAX_CAPTURE_TIMEOUT_MS} ms.`);
+  }
+  const target = captureTargetUrl(argumentsValue.targetUrl);
   const targetDirectory = outputDirectory(argumentsValue.outputDirectory);
   const parentDirectory = path.dirname(targetDirectory);
   await mkdir(parentDirectory, { recursive: true, mode: 0o700 });
   try {
-    await lstat(targetDirectory);
-    throw new Error(`Capture output directory already exists: ${targetDirectory}.`);
+    await mkdir(targetDirectory, { mode: 0o700 });
   } catch (error) {
     const code = error && typeof error === 'object' && 'code' in error ? error.code : null;
-    if (code !== 'ENOENT') throw error;
+    if (code === 'EEXIST') throw new Error('Capture output directory already exists.');
+    throw error;
   }
-  const temporaryDirectory = await mkdtemp(path.join(parentDirectory, '.whoisleuth-capture-'));
-  await chmod(temporaryDirectory, 0o700);
+  await chmod(targetDirectory, 0o700);
+  const reservation = await lstat(targetDirectory);
+  const ownedArtifacts = new Map<string, OwnedArtifactIdentity>();
+  const pendingArtifactWrites = new Set<Promise<void>>();
   let browser: Browser | null = null;
+  let context: BrowserContext | null = null;
+  let page: Page | null = null;
+  const deadline = createCaptureDeadline(argumentsValue.timeoutMs, async () => {
+    await Promise.allSettled([
+      page?.close({ runBeforeUnload: false }),
+      context?.close(),
+      browser?.close(),
+    ].filter((operation): operation is Promise<void> => Boolean(operation)));
+  });
+  async function writeArtifact(fileName: string, value: string | Buffer): Promise<void> {
+    const operation = (dependencies.writeArtifact ?? privateWrite)(
+      path.join(targetDirectory, fileName),
+      value,
+      deadline.signal,
+      (identity) => ownedArtifacts.set(fileName, identity),
+    );
+    pendingArtifactWrites.add(operation);
+    void operation.then(
+      () => pendingArtifactWrites.delete(operation),
+      () => pendingArtifactWrites.delete(operation),
+    );
+    await deadline.run(operation);
+  }
   try {
-    browser = await dependencies.launchBrowser();
-    const context = await browser.newContext({
+    browser = await deadline.run(dependencies.launchBrowser());
+    context = await deadline.run(browser.newContext({
       viewport: VIEWPORT,
       serviceWorkers: 'block',
       acceptDownloads: false,
       ignoreHTTPSErrors: false,
       javaScriptEnabled: true,
-    });
-    await disableBrowserOnlyNetworkApis(context);
-    const page = await context.newPage();
-    const requestBoundary = await installRequestBoundary(
+    }));
+    await deadline.run(installDomProjectionBoundary(context));
+    await deadline.run(disableBrowserOnlyNetworkApis(context));
+    page = await deadline.run(context.newPage());
+    if (!await deadline.run(page.evaluate(browserNetworkIntrinsicsAreDisabled))) {
+      throw new Error('Rendered capture could not verify that browser-managed transports were disabled.');
+    }
+    const requestBoundary = await deadline.run(installRequestBoundary(
       context,
       page,
       dependencies.resolveAddresses ?? resolvePublicAddresses,
       dependencies.fetchResource ?? defaultFetchResource,
       dependencies.readResponse ?? readBytesCapped,
       argumentsValue.timeoutMs,
-    );
-    await page.goto(target.toString(), { waitUntil: 'domcontentloaded', timeout: argumentsValue.timeoutMs });
-    await page.waitForTimeout(Math.min(750, Math.max(100, Math.round(argumentsValue.timeoutMs / 20))));
+      deadline.signal,
+    ));
+    await deadline.run(page.goto(target.toString(), { waitUntil: 'domcontentloaded', timeout: argumentsValue.timeoutMs }));
+    await deadline.run(page.waitForTimeout(Math.min(750, Math.max(100, Math.round(argumentsValue.timeoutMs / 20)))));
     const finalUrl = captureUrl(page.url());
-    const title = boundedPlainText(await page.title(), 300);
-    const dom = await projectDom(page);
-    const screenshot = await page.screenshot({ type: 'png', fullPage: false, animations: 'disabled' });
+    const title = boundedPlainText(await deadline.run(page.title()), 300);
+    const dom = await deadline.run(projectDom(page));
+    const screenshot = await deadline.run(page.screenshot({ type: 'png', fullPage: false, animations: 'disabled' }));
     const screenshotBuffer = Buffer.from(screenshot);
     if (!screenshotBuffer.length || screenshotBuffer.length > MAX_WEB_CAPTURE_SCREENSHOT_BYTES) {
       throw new Error('Rendered screenshot is empty or exceeds the 10 MiB artefact bound.');
+    }
+    const screenshotInspection = inspectDecodedImage(screenshotBuffer);
+    if (!screenshotInspection.decodable
+      || screenshotInspection.width !== VIEWPORT.width
+      || screenshotInspection.height !== VIEWPORT.height) {
+      throw new Error('Rendered screenshot must be a decodable PNG matching the fixed capture viewport.');
     }
     const capturedAt = dependencies.now?.() ?? new Date().toISOString();
     // Stop the page and its disposable context before sealing request
     // accounting. This prevents late browser activity from appearing after
     // the completeness snapshot while admitted routes are still settled.
     requestBoundary.beginSeal();
-    await page.close({ runBeforeUnload: false }).catch(() => {});
+    await deadline.run(page.close({ runBeforeUnload: false }).catch(() => {}));
+    page = null;
     // A failed context close invalidates the claim that no further browser
     // request can alter the final completeness state, so fail the capture.
-    await context.close();
-    const sealedBoundary = await requestBoundary.seal();
+    await deadline.run(context.close());
+    context = null;
+    const sealedBoundary = await deadline.run(requestBoundary.seal());
     const requestStats = sealedBoundary.stats;
     const domDigest = {
       schema: WEB_CAPTURE_DOM_DIGEST_SCHEMA,
       version: WEB_CAPTURE_DOM_DIGEST_VERSION,
       capturedAt,
-      domain: target.hostname.toLowerCase(),
+      domain: canonicalUrlHost(target),
       counts: {
         elements: dom.elementCount,
         forms: dom.formCount,
@@ -501,20 +788,24 @@ export async function captureRenderedPage(
         images: dom.imageCount,
       },
       structure: { algorithm: 'sha256', value: sha256(dom.structure), truncated: dom.structureTruncated },
-      visibleText: { algorithm: 'sha256', value: sha256(dom.visibleText), bytes: Buffer.byteLength(dom.visibleText), truncated: dom.textTruncated },
-      limitations: ['No DOM markup, visible text, form values, request paths, query strings, headers, bodies, cookies, or credentials are retained.'],
+      visibleText: { algorithm: 'sha256', value: sha256(dom.visibleText), bytes: dom.visibleTextBytes, truncated: dom.textTruncated },
+      limitations: [
+        'No DOM markup, body text, form values, request paths, query strings, headers, bodies, cookies, or credentials are retained.',
+      'Structure digest covers bounded preorder tag sequences, not nesting, attributes, or exact DOM equality. The legacy visibleText field hashes bounded body text nodes, including CSS-hidden or non-rendered text; it is not a visibility claim.',
+      ],
     };
     const domBytes = Buffer.from(`${JSON.stringify(domDigest, null, 2)}\n`);
     if (domBytes.length > MAX_WEB_CAPTURE_DOM_DIGEST_BYTES) throw new Error('DOM digest exceeds the 1 MiB artefact bound.');
     const screenshotName = 'screenshot.png';
     const domName = 'dom-digest.json';
-    await privateWrite(path.join(temporaryDirectory, screenshotName), screenshotBuffer);
-    await privateWrite(path.join(temporaryDirectory, domName), domBytes);
+    await writeArtifact(screenshotName, screenshotBuffer);
+    await writeArtifact(domName, domBytes);
     const limitations = [
-      'Rendered collection executed page JavaScript in a disposable browser context and may have disclosed the target to its public resource operators.',
-      'Downloads, service workers, WebSockets, WebRTC, WebTransport, non-read methods, non-HTTP(S), credentialed, non-default-port, private-address, excess-host, excess-request, excess-response, and excess-transfer traffic was blocked.',
+      'Rendered collection executed page JavaScript in a disposable browser context and disclosed each admitted exact resource URL, including path and query, to that resource operator; retained output omits those paths and queries.',
+      'Downloads, service workers, dedicated/shared workers, WebSockets, WebRTC, WebTransport, non-read methods, non-HTTP(S), credentials, non-default ports, private addresses, and traffic over declared bounds were blocked.',
       'Each request was resolved and connection-pinned by the shared safe-fetch transport before its bounded response was supplied to the disposable browser; cookies, authorisation headers, and request bodies were not forwarded.',
       `Each response body was read up to ${MAX_CAPTURE_RESPONSE_BYTES} bytes and the collector processed at most ${MAX_CAPTURE_TRANSFER_BYTES} response-body bytes across the capture; lower-level transport buffering is outside this application-level bound.`,
+      `Rendered DOM counts are capped at ${MAX_WEB_CAPTURE_DOM_ELEMENTS} and the body text-node sequence is hashed only through a valid UTF-8 boundary within ${MAX_WEB_CAPTURE_VISIBLE_TEXT_BYTES} bytes; reaching either bound leaves the capture partial.`,
       'The screenshot perceptual hash is an investigative similarity signal and does not establish copying, ownership, intent, safety, or maliciousness.',
     ];
     const manifest = {
@@ -522,7 +813,7 @@ export async function captureRenderedPage(
       schemaVersion: WEB_CAPTURE_MANIFEST_VERSION,
       source: { name: 'WHOISleuth local rendered capture', reference: null, collectedAt: capturedAt },
       captures: [{
-        domain: target.hostname.toLowerCase(),
+        domain: canonicalUrlHost(target),
         capturedAt,
         completeness: requestStats.blockedRequestCount || dom.structureTruncated || dom.textTruncated ? 'partial' : 'complete',
         limitations,
@@ -531,7 +822,7 @@ export async function captureRenderedPage(
         technologies: [],
         artifacts: [{
           kind: 'screenshot', fileName: screenshotName, mimeType: 'image/png',
-          sha256: sha256(screenshotBuffer), perceptualHash: imagePerceptualHash(screenshotBuffer),
+          sha256: sha256(screenshotBuffer), perceptualHash: screenshotInspection.perceptualHash,
           bytes: screenshotBuffer.length, width: VIEWPORT.width, height: VIEWPORT.height,
         }, {
           kind: 'dom_digest', fileName: domName, mimeType: 'application/json',
@@ -543,13 +834,39 @@ export async function captureRenderedPage(
     if (manifestBytes.length > MAX_WEB_CAPTURE_MANIFEST_BYTES) {
       throw new Error(`Rendered capture manifest exceeds the ${MAX_WEB_CAPTURE_MANIFEST_BYTES}-byte limit.`);
     }
-    await privateWrite(path.join(temporaryDirectory, 'manifest.json'), manifestBytes);
-    await rename(temporaryDirectory, targetDirectory);
+    await deadline.run(browser.close());
+    browser = null;
+    // The manifest is the final commit marker. A reserved directory without it
+    // is never a completed capture, and the destination is never replaced.
+    await writeArtifact('manifest.json', manifestBytes);
+    deadline.clear();
     return manifest;
   } catch (error) {
-    await rm(temporaryDirectory, { recursive: true, force: true });
+    await Promise.allSettled([...pendingArtifactWrites]);
+    try {
+      const current = await lstat(targetDirectory);
+      if (current.dev === reservation.dev && current.ino === reservation.ino) {
+        for (const [fileName, identity] of ownedArtifacts) {
+          const filePath = path.join(targetDirectory, fileName);
+          try {
+            const currentFile = await lstat(filePath);
+            if (currentFile.dev === identity.dev && currentFile.ino === identity.ino) await unlink(filePath);
+          } catch {
+            // An absent or replaced path is not owned cleanup work.
+          }
+        }
+        await rmdir(targetDirectory).catch(() => {});
+      }
+    } catch {
+      // The reserved directory may already be absent. Never clean a path whose
+      // directory identity no longer matches this capture's reservation.
+    }
     throw error;
   } finally {
-    await browser?.close().catch(() => {});
+    if (browser) {
+      if (deadline.expired()) void browser.close().catch(() => {});
+      else await deadline.run(browser.close()).catch(() => {});
+    }
+    deadline.clear();
   }
 }

@@ -91,6 +91,27 @@ describe('parseSecurityTxt', () => {
     assert.equal(partial.diagnostics.malformedCount, 1);
   });
 
+  test('compares Canonical retrieval queries without retaining them', () => {
+    const body = validBody.replace(
+      'Canonical: https://example.test/.well-known/security.txt',
+      'Canonical: https://example.test/.well-known/security.txt?revision=one#ignored',
+    );
+    const matched = parseSecurityTxt(body, {
+      finalUrl: 'https://example.test/.well-known/security.txt?revision=one#different',
+      now,
+    });
+    assert.equal(matched.canonicalMatches, true);
+    assert.deepEqual(matched.canonical, ['https://example.test/.well-known/security.txt']);
+
+    const mismatched = parseSecurityTxt(body, {
+      finalUrl: 'https://example.test/.well-known/security.txt?revision=two',
+      now,
+    });
+    assert.equal(mismatched.canonicalMatches, false);
+    assert.equal(mismatched.state, 'partial');
+    assert.deepEqual(mismatched.canonical, ['https://example.test/.well-known/security.txt']);
+  });
+
   test('rejects malformed UTF-8 replacement and control characters', () => {
     assert.equal(parseSecurityTxt(`${validBody}\ufffd`, { now }).state, 'malformed');
     assert.equal(parseSecurityTxt(`${validBody}\u0000`, { now }).state, 'malformed');

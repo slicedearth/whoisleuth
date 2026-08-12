@@ -187,6 +187,36 @@ describe('browser-local readable Lookup report', () => {
     assert.ok(new TextEncoder().encode(report).byteLength <= MAX_LOOKUP_READABLE_REPORT_BYTES);
   });
 
+  test('omits absent view-model fields before applying the strict portable JSON contract', () => {
+    const completeSource = lookupResponse({
+      rdap: {
+        parsed: { handle: 'REGISTRY-1' },
+        registrarRdap: {
+          status: 'success',
+          parsed: { domain: 'report.example.test' },
+        },
+      },
+      whois: { parsed: {}, chain: [] },
+      availability: {
+        state: 'registered',
+        confidence: 'high',
+      },
+    });
+    const { inputHostname: _omittedInputHostname, ...source } = completeSource;
+
+    const projected = projectLookupForReadableReport(source);
+    const pending: unknown[] = [projected];
+    while (pending.length) {
+      const current = pending.pop();
+      assert.notEqual(current, undefined);
+      if (Array.isArray(current)) pending.push(...current);
+      else if (isJsonObject(current)) pending.push(...Object.values(current));
+    }
+    assert.doesNotThrow(() => buildLookupReadableReport(source, {
+      generatedAt: '2026-07-26T02:00:00.000Z',
+    }));
+  });
+
   test('uses a deterministic safe filename', () => {
     assert.equal(
       lookupReadableReportFilename(

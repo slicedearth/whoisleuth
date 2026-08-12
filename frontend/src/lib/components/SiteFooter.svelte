@@ -12,14 +12,14 @@
 <footer class="site-footer public-footer" class:console>
   <p>WHOISleuth keeps registration and supporting evidence separate, so missing or inconclusive data is not presented as proof.</p>
   <div class="footer-meta">
-    <p>WHOISleuth {__WHOISLEUTH_VERSION__} · build {revisionLabel} · © 2026 <a href="https://github.com/slicedearth" target="_blank" rel="noopener">slicedearth</a></p>
+    <p>WHOISleuth {__WHOISLEUTH_VERSION__} · build {revisionLabel} · © 2026 <a href="https://github.com/slicedearth" target="_blank" rel="noopener noreferrer">slicedearth<span class="sr-only"> (opens in a new tab)</span></a></p>
     <nav class="footer-links" aria-label="Footer">
-      <a href={sourceHref} target="_blank" rel="noopener">Source and licence</a>
-      <a href="/resources">Resources</a>
-      <a href="/privacy">Privacy</a>
-      <a href="/terms">Terms</a>
-      <a href="/request-policy">Requests</a>
-      <a href="/contact">Contact</a>
+      <a href={sourceHref} target="_blank" rel="noopener noreferrer">Source and licence<span class="sr-only"> (opens in a new tab)</span></a>
+      <a href="/resources" target={console ? '_blank' : undefined} rel={console ? 'noopener noreferrer' : undefined}>Resources{#if console}<span class="sr-only"> (opens in a new tab)</span>{/if}</a>
+      <a href="/privacy" target={console ? '_blank' : undefined} rel={console ? 'noopener noreferrer' : undefined}>Privacy{#if console}<span class="sr-only"> (opens in a new tab)</span>{/if}</a>
+      <a href="/terms" target={console ? '_blank' : undefined} rel={console ? 'noopener noreferrer' : undefined}>Terms{#if console}<span class="sr-only"> (opens in a new tab)</span>{/if}</a>
+      <a href="/request-policy" target={console ? '_blank' : undefined} rel={console ? 'noopener noreferrer' : undefined}>Requests{#if console}<span class="sr-only"> (opens in a new tab)</span>{/if}</a>
+      <a href="/contact" target={console ? '_blank' : undefined} rel={console ? 'noopener noreferrer' : undefined}>Contact{#if console}<span class="sr-only"> (opens in a new tab)</span>{/if}</a>
     </nav>
   </div>
 </footer>
@@ -31,9 +31,9 @@
   .footer-meta{display:grid;flex:none;gap:8px;text-align:right}
   .footer-links{display:flex;justify-content:flex-end;gap:14px;margin:0}
   .footer-links a{display:inline-flex;align-items:center;min-height:32px;margin:0;padding:4px 0}
-  a{color:var(--accent)}
-  .footer-meta>p a{text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:3px}
-  a:hover{color:var(--text)}
+  .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);clip-path:inset(50%);white-space:nowrap;border:0}
+  a{color:var(--accent);font-weight:700;text-decoration:none}
+  a:hover,a:focus-visible{color:var(--text)}
   @media(max-width:720px){
     footer{align-items:flex-start;flex-direction:column;gap:16px;padding:18px 0 22px}
     .footer-meta{width:100%;gap:8px;text-align:left}

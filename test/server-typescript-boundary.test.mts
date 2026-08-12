@@ -60,8 +60,10 @@ test('every authenticated network GET is rate-limited before authentication and 
   ]) {
     assert.match(
       source,
-      new RegExp(`app\\.get\\('${route}', apiRateLimit, requireAuth, requireNetworkRequestAdmission, requireFeature\\(`, 'u'),
+      new RegExp(`target\\.get\\('${route}', apiRateLimit, requireAuth, requireNetworkRequestAdmission, requireFeature\\(`, 'u'),
       `${route} must retain rate limiting before authenticated network admission`,
     );
   }
+  assert.match(source, /app\.get\(routePath, prerenderedHtmlRateLimit,/u);
+  assert.match(source, /app\.post\('\/api\/contact-route', contactRouteRateLimit,/u);
 });

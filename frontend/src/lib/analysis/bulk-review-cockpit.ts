@@ -8,7 +8,7 @@ export type BulkReviewCockpitRow = Readonly<{
   activity: string;
   registrar: string;
   reviewState: string;
-  shortlisted: boolean;
+  shortlisted: boolean | null;
   trusted: boolean | null;
   profileContextReady: boolean;
   profileContextLimitation: string;

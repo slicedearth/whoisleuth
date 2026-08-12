@@ -5,7 +5,14 @@ import { guardNetlifyNetworkRequest, withNetlifyOperationBudget } from '../../li
 import { json, withNetlifyApiErrorBoundary } from '../../lib/http.mts';
 import type { NetlifyFunctionHandler } from '../../lib/netlify-function-types.mts';
 
-const handleCtSearch: NetlifyFunctionHandler = async (event) => {
+type CtSearchHandlerDependencies = Readonly<{
+  searchCertificateTransparency: typeof searchCertificateTransparency;
+}>;
+
+async function handleCtSearch(
+  event: Parameters<NetlifyFunctionHandler>[0],
+  dependencies: CtSearchHandlerDependencies = { searchCertificateTransparency },
+): ReturnType<NetlifyFunctionHandler> {
   const guard = guardNetlifyNetworkRequest(event, 'certificate_transparency');
   if (guard.response) return guard.response;
 
@@ -19,11 +26,20 @@ const handleCtSearch: NetlifyFunctionHandler = async (event) => {
   if (!q) return json(400, { error: 'Missing query parameter "q"', errorCode: 'MISSING_QUERY' });
 
   return withNetlifyOperationBudget(guard.sessionKey, operationBudgetTargetFor('certificate_transparency'), async () => {
-    const result = await searchCertificateTransparency(q);
+    const result = await dependencies.searchCertificateTransparency(q);
     return json(200, { keyword: q, ...result });
   });
-};
+}
 
-const handler = withNetlifyApiErrorBoundary(handleCtSearch);
+function createCtSearchHandler(
+  dependencies: CtSearchHandlerDependencies = { searchCertificateTransparency },
+): NetlifyFunctionHandler {
+  return withNetlifyApiErrorBoundary(
+    (request) => handleCtSearch(request, dependencies),
+  );
+}
 
-export { handler };
+const handler = createCtSearchHandler();
+
+export { createCtSearchHandler, handler };
+export type { CtSearchHandlerDependencies };

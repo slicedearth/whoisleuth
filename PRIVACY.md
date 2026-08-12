@@ -1,6 +1,6 @@
 # Privacy Notice
 
-Last updated: 10 August 2026.
+Last updated: 12 August 2026.
 
 This notice describes the public WHOISleuth deployment and is also a template
 for self-hosted operators to adapt when their configuration, hosting, enabled
@@ -223,7 +223,10 @@ default (see the README), so many lookups return no personal data at all.
   collected by a requested deep check. Bulk results, watchlists, and analyst
   cases retain only the final origin (never its path or query), response status,
   transport, redirect count/flags, MIME type, and presence-only security-header
-  tokens. Monitor can derive a capped relationship graph and table from the
+  tokens. Before any protected outbound HTTP hop begins, the resolver rejects
+  an answer with more than 64 address candidates and requires every retained
+  candidate to be a valid public address; redirects repeat that validation.
+  Monitor can derive a capped relationship graph and table from the
   typed projection of bounded final-origin and nameserver-set observations
   already retained in browser-local case histories. That automatic projection
   makes no request and saves no separate relationship record. A bounded
@@ -538,7 +541,9 @@ default (see the README), so many lookups return no personal data at all.
   resolve, remap, or infer those associations from profile names, domains,
   tags, certificates, or other evidence. Deleting a Brand Profile does not
   clear the Case field; any unmatched identifier remains visible as
-  unresolved. The Brands page derives a bounded, paginated review inbox locally
+  unresolved. Case parsing and import inspect at most 2,000 parsed records
+  before the 500-case store cap is applied; records beyond that inspection
+  bound are reported as skipped rather than traversed. The Brands page derives a bounded, paginated review inbox locally
   from existing source-aware analyst review rows for explicitly associated
   cases. Loading and failed local reads remain explicit and never become an
   empty state or an unresolved classification. The projection makes no network
@@ -830,7 +835,12 @@ default (see the README), so many lookups return no personal data at all.
   RDAP publication and bounded WHOIS referral-hop metadata, but excludes full
   WHOIS response bodies. The portable projection removes request and response
   headers, cookies, session and credential fields, and URL credentials, queries,
-  and fragments from nested retained values. The RDAP publication may still
+  and fragments from nested retained values. Live Lookup responses are rejected
+  before display when they exceed 48 nesting levels, 50,000 keys, 100,000
+  values, or 500 items in any single container. A result that is valid for display but exceeds the stricter 24-level,
+  20,000-entry portable evidence structure remains reviewable, while its
+  evidence JSON and readable report exports stay unavailable with an explicit
+  limitation. The RDAP publication may still
   contain registry-published contact data. The separate
   Lookup Markdown reports are generated from bounded known-field projections in
   the browser. Domain
@@ -883,24 +893,91 @@ default (see the README), so many lookups return no personal data at all.
   reports only fixed source identifiers with aggregate states, durations,
   truncation, and rate-limit counts. It does not
   retain or output targets, queries, endpoints, source limitations, raw
-  evidence, or provider payloads. Optional `sign-artifact` signs only a
+  evidence, or provider payloads. Saved CLI Lookup JSON inputs are capped at 8
+  MiB and scanned before parsing for duplicate keys, the prototype-sensitive
+  `__proto__` key, more than 48 nesting
+  levels, more than 50,000 keys, more than 100,000 values, or more than 10,000 items in
+  any single container. Optional
+  `sign-artifact` signs only a
   supported artefact that passes offline verification, using an externally
   managed Ed25519 key file. The signed package contains the original artefact,
   signature time, signature, and public key; WHOISleuth does not generate,
   store, recover, rotate, publish, or establish trust in signing keys. These
   commands make no network request and do not upload input.
-- **Optional local rendered-capture comparison**: the separate repo-local
-  capture package can compare two explicitly selected version-2 manifests
-  without contacting either target. It verifies each referenced screenshot and
+- **Isolated CLI cryptographic and mail transport actions**:
+  `dnssec-validate` and `mail-transport` run only after a dedicated command,
+  a caller-selected literal public resolver, a local bounded trust-anchor
+  document, and explicit owned-or-authorised acknowledgement for that run;
+  mail transport also requires a separate active-probe acknowledgement. They
+  are never invoked by Lookup, Bulk, monitoring, or automatic recipes. The
+  selected resolver receives the target DNS questions, and each selected MX
+  endpoint that reaches transport receives one pinned port-25 connection,
+  `EHLO`, and, only when
+  advertised, `STARTTLS`; those operators can observe the source network
+  address and apply their own logging or retention. At most three MX hosts are
+  processed sequentially with fixed DNS, address, socket, response, line,
+  capability, certificate, timeout, and total-run bounds and no retry. No
+  message is sent, and no authentication, relay, recipient, mailbox, user, or
+  catch-all test is performed. If a DANE-TA TLSA usage 2 association is
+  published, active STARTTLS review retains only the observed leaf certificate
+  and leaves that comparison partial because this action does not construct or
+  validate a certificate path to a TLSA trust anchor. SMTP relay PKIX-TA usage
+  0 and PKIX-EE usage 1 records are retained as unsupported and cannot complete
+  SMTP DANE assurance; a separately attributable usage 3 match remains
+  eligible. Output can retain the investigated domain,
+  selected resolver and trust-anchor provenance, selected MX names, a bounded
+  public address and its highest proven selected, public-revalidated, or
+  connected stage, a separate address-authentication state that is
+  not-evaluated after a candidate is retained or unavailable when none exists,
+  observation times, DNSSEC and TLSA states, greeting status
+  and SHA-256 digest, capability names, certificate and SPKI SHA-256 digests,
+  protocol and cipher labels, PKIX and identity states, bounded certificate
+  authorization and identity error text, exact relationship leads, supplied
+  MTA-STS and TLS-RPT context, counts, failures, completeness, and limitations.
+  Only confirmed connected addresses can form address relationship leads. It
+  excludes DNS wire responses, DNSKEY public keys,
+  signatures, transaction identifiers, raw SMTP greeting or reply text,
+  certificate bytes, and TLS session material. Nothing is added to browser or
+  hosted storage or uploaded to WHOISleuth. Public-address validation and fresh
+  revalidation do not cryptographically authenticate the A or AAAA RRset or any
+  CNAME chain, and DNSSEC chain state never fills that separate evidence gap;
+  stdout and deliberately selected
+  local output files remain under the operator's retention and deletion
+  control. DNSSEC, TLSA or DANE, PKIX, STARTTLS, SMTP transport, MTA-STS,
+  TLS-RPT, and offline route-origin assurance remain separately attributed;
+  one family never fills another or changes Risk, Opportunity, registration
+  availability, ownership, activity, safety, or maliciousness.
+- **Optional local rendered capture and comparison**: the separate repo-local
+  package runs only after an explicit authorised-capture action and is not part
+  of hosted or distributable collection. Collection executes remote page
+  JavaScript in a disposable, network-bounded browser. Each admitted resource
+  operator receives the exact requested URL, including its path and query, plus
+  ordinary allowlisted request headers; this is necessary to retrieve the page
+  and its resources. Structured manifest and digest fields retain only the
+  selected target hostname, the final HTTP(S) origin, one control-sanitised
+  page title of up to 300 characters, and admitted public resource hostnames, never those request
+  paths or queries. The tool writes one local fixed-size screenshot, a sanitised
+  DOM digest containing hashes and bounded counts rather than markup or page
+  text, and a versioned manifest. The screenshot necessarily preserves visible
+  rendered content and may include page text or a page-reflected path or query
+  until the operator deletes it. Those local artefacts are not uploaded to
+  WHOISleuth, remain under
+  the operator's control, and persist until the operator deletes them. The same
+  package can compare two explicitly selected version-2 manifests without
+  contacting either target. It verifies each referenced screenshot and
   DOM digest against its declared size and SHA-256, recomputes the screenshot
-  perceptual hash, and reports independent screenshot, rendered DOM,
-  visible-text, page-identity, request-domain, technology, and element-count
-  relationships. Input paths, DOM markup, page text, request paths, queries,
-  headers, bodies, cookies, and credentials are not copied into the comparison
-  output. Missing perceptual evidence remains unavailable, partial captures
+  perceptual hash, and reports independent screenshot, bounded preorder
+  element-tag-sequence, body-text-node, page-identity, request-domain, technology, and element-count
+  relationships. Version 2 comparison output reports the page-title equality
+  state without copying either bounded title. Input paths, DOM markup, body
+  text, request paths, queries, headers, bodies, cookies, and credentials are
+  not copied into the comparison output. Missing perceptual evidence remains unavailable, partial captures
   remain partial, and no combined similarity or maliciousness score is
-  produced. The local artefact files remain under the operator's retention and
-  deletion control.
+  produced. The tag sequence omits nesting and attributes, while the legacy
+  `visibleText` digest field includes bounded body text nodes that CSS or
+  non-rendered containers may hide; neither is an exact DOM or visibility
+  claim. Reaching the shared DOM-count or UTF-8 body-text-node bound marks a
+  capture partial rather than implying that omitted page content was absent.
 - **CLI output, checkpoints, and progress**: every CLI command can deliberately
   write its bounded output to a private local file. Existing files are refused
   unless replacement is explicit. Bulk checkpoints are separate private local

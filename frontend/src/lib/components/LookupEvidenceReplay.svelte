@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { evidenceStatusChipClass } from '$lib/analysis/evidence-status-tone.ts';
+  import { availabilityStatusDisplay } from '$lib/analysis/availability-status-display.ts';
   import {
     LOOKUP_EVIDENCE_REPLAY_MAX_BYTES,
     parseLookupEvidenceReplay,
@@ -10,10 +12,13 @@
   let replay = $state<LookupEvidenceReplay | null>(null);
   let status = $state('');
   let loading = $state(false);
+  let statusState = $state<'idle' | 'success' | 'error'>('idle');
   let expectedSha256 = $state('');
   let comparison = $state<ReturnType<typeof buildLookupEvidenceReplayDiff> | null>(null);
   let comparisonStatus = $state('');
   let comparisonLoading = $state(false);
+  let comparisonState = $state<'idle' | 'success' | 'error'>('idle');
+  const replayAvailability = $derived(availabilityStatusDisplay(replay?.availability));
   let replayGeneration = 0;
   let comparisonGeneration = 0;
 
@@ -26,6 +31,7 @@
     comparisonLoading = false;
     loading = true;
     status = '';
+    statusState = 'idle';
     replay = null;
     comparison = null;
     try {
@@ -39,10 +45,12 @@
       );
       if (generation !== replayGeneration) return;
       replay = next;
+      statusState = 'success';
       status = `Loaded ${file.name} locally${next.digestVerified ? ' and verified its checksum' : ''}. No source was contacted.`;
     } catch (cause) {
       if (generation !== replayGeneration) return;
       status = cause instanceof Error ? cause.message : 'The evidence file could not be replayed.';
+      statusState = 'error';
     } finally {
       if (generation === replayGeneration) loading = false;
       control.value = '';
@@ -58,16 +66,19 @@
     const generation = ++comparisonGeneration;
     comparisonLoading = true;
     comparisonStatus = '';
+    comparisonState = 'idle';
     try {
       if (file.size > LOOKUP_EVIDENCE_REPLAY_MAX_BYTES) throw new Error('Lookup evidence replay files are limited to 5 MB.');
       const second = await parseLookupEvidenceReplay(await file.text());
       if (generation !== comparisonGeneration || primaryGeneration !== replayGeneration || replay !== primary) return;
       comparison = buildLookupEvidenceReplayDiff(primary, second);
+      comparisonState = 'success';
       comparisonStatus = `Compared ${file.name} locally. No source was contacted.`;
     } catch (cause) {
       if (generation !== comparisonGeneration || primaryGeneration !== replayGeneration || replay !== primary) return;
       comparison = null;
       comparisonStatus = cause instanceof Error ? cause.message : 'The second evidence file could not be compared.';
+      comparisonState = 'error';
     } finally {
       if (generation === comparisonGeneration) comparisonLoading = false;
       control.value = '';
@@ -92,7 +103,7 @@
       <input bind:value={expectedSha256} maxlength="64" inputmode="text" autocomplete="off" spellcheck="false" placeholder="Paste a trusted 64-character checksum before choosing the file" />
     </label>
     <p class="note">The file stays in this browser tab. Replay validates schema, nesting and entry bounds, calculates the file digest, optionally verifies a trusted checksum, and renders bounded normalised facts only.</p>
-    <p class="replay-status" class:loaded={Boolean(replay)} role="status" aria-live="polite" aria-atomic="true">{status}</p>
+    <p class="replay-status" class:status-success={statusState === 'success'} class:status-error={statusState === 'error'} role={statusState === 'error' ? 'alert' : 'status'} aria-live="polite" aria-atomic="true">{status}</p>
 
     {#if replay}
       <section class="replay-result" aria-labelledby="replay-title">
@@ -102,7 +113,7 @@
             <h2 id="replay-title">{replay.target}</h2>
             <p>Exported {replay.exportedAt} · {replay.targetType} · schema {replay.schemaVersion}{replay.generatorVersion ? ` · WHOISleuth ${replay.generatorVersion}` : ''}</p>
           </div>
-          <span class="chip info">{replay.availability}</span>
+          <span class="chip {replayAvailability.className}">{replayAvailability.label}</span>
         </header>
 
         <div class="digest">
@@ -114,7 +125,7 @@
           {#each replay.sources as source (source.id)}
             <article>
               <strong>{source.label}</strong>
-              <span>{source.state}</span>
+              <span class="chip {evidenceStatusChipClass(source.state, source.complete === null ? {} : { complete: source.complete })}">{source.state}</span>
               <small>{source.observedAt ? `Observed ${source.observedAt}` : 'Observation time not reported'}</small>
             </article>
           {/each}
@@ -130,7 +141,7 @@
         {/if}
 
         {#if replay.contradictions.length}
-          <aside>
+          <aside class="contradictions" data-tone="danger">
             <strong>Contradictory registration evidence</strong>
             <ul>{#each replay.contradictions as contradiction}<li>{contradiction}</li>{/each}</ul>
           </aside>
@@ -160,10 +171,10 @@
           <h3 id="replay-comparison-title">Compare another capture</h3>
           <p class="note">Choose a second export for the same target. The comparison separates observed value changes from source-quality and application-interpretation differences.</p>
           <label class="picker"><span>{comparisonLoading ? 'Reading second evidence…' : 'Choose second evidence JSON'}</span><input type="file" accept="application/json,.json" disabled={loading || comparisonLoading} onchange={loadComparison} /></label>
-          <p class="comparison-status" role="status" aria-live="polite" aria-atomic="true">{comparisonStatus}</p>
+          <p class="comparison-status" class:status-success={comparisonState === 'success'} class:status-error={comparisonState === 'error'} role={comparisonState === 'error' ? 'alert' : 'status'} aria-live="polite" aria-atomic="true">{comparisonStatus}</p>
           {#if comparison}
             <div class="comparison-counts"><span><strong>{comparison.counts.observedChanges}</strong> observed</span><span><strong>{comparison.counts.collectionDifferences}</strong> collection</span><span><strong>{comparison.counts.interpretationDifferences}</strong> interpretation</span></div>
-            <ol>{#each comparison.rows.filter((item) => item.kind !== 'unchanged') as row}<li><div><strong>{row.label}</strong><span>{row.kind.replaceAll('_', ' ')}</span></div><p>{row.left} → {row.right}</p><small>{row.explanation}</small></li>{/each}</ol>
+            <ol>{#each comparison.rows.filter((item) => item.kind !== 'unchanged') as row}<li data-comparison-kind={row.kind}><div><strong>{row.label}</strong><span>{row.kind.replaceAll('_', ' ')}</span></div><p>{row.left} → {row.right}</p><small>{row.explanation}</small></li>{/each}</ol>
             {#if !comparison.rows.some((item) => item.kind !== 'unchanged')}<p>No bounded difference was observed in the comparable replay fields.</p>{/if}
           {/if}
         </section>
@@ -190,7 +201,8 @@
   .picker input{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
   .checksum{display:grid;gap:5px;max-width:760px;margin-top:10px}.checksum span{color:var(--muted);font:650 var(--text-2xs) var(--mono)}.checksum small{font-weight:500}.checksum input{width:100%;font-family:var(--mono)}
   .note{max-width:760px;margin:9px 0}
-  .loaded{color:var(--success)}
+  .status-success{color:var(--success)}
+  .status-error{color:var(--danger)}
   .replay-status:empty,.comparison-status:empty{min-height:0;margin:0}
   .replay-result{display:grid;gap:12px;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)}
   .replay-result>header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
@@ -202,7 +214,7 @@
   .source-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
   .source-grid article{display:grid;gap:3px;min-width:0;padding:9px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
   .source-grid strong{font-size:var(--text-xs)}
-  .source-grid span{color:var(--source-network-text);font:650 var(--text-2xs) var(--mono);text-transform:capitalize}
+  .source-grid span{width:max-content;font-size:var(--text-2xs);text-transform:capitalize}
   .source-grid small{color:var(--muted);font-size:var(--text-2xs);overflow-wrap:anywhere}
   h3{margin:2px 0 -3px;font-size:var(--text-sm)}
   dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin:0}
@@ -210,7 +222,7 @@
   dt{color:var(--muted);font-size:var(--text-2xs)}
   dd{margin:0;font-size:var(--text-xs);overflow-wrap:anywhere}
   dd small{display:block;margin-top:3px;color:var(--muted)}
-  aside{padding:10px;border:1px solid color-mix(in srgb,var(--amber) 42%,var(--border));border-radius:var(--radius-sm);background:rgb(var(--amber-rgb) / .08)}
+  aside{padding:10px;border:1px solid color-mix(in srgb,var(--danger) 52%,var(--border));border-radius:var(--radius-sm);background:rgb(var(--danger-rgb) / .08)}
   aside ul,.limits ul{margin:7px 0 0;padding-left:18px;font-size:var(--text-xs);line-height:1.5}
   .brief{display:grid;gap:8px}
   .brief>div{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
@@ -219,7 +231,7 @@
   .brief p,.brief ul,.brief ol{margin:5px 0 0;color:var(--muted);font-size:var(--text-2xs);line-height:1.5}
   .brief ul,.brief ol{padding-left:17px}
   .limits{border-top:1px solid var(--border)}
-  .comparison{display:grid;gap:8px;padding:11px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}.comparison .picker{width:max-content;margin:0}.comparison-counts{display:flex;flex-wrap:wrap;gap:6px}.comparison-counts span{padding:6px 8px;border:1px solid var(--border);border-radius:999px;color:var(--muted);font-size:var(--text-2xs)}.comparison ol{display:grid;gap:6px;margin:0;padding:0;list-style:none}.comparison li{min-width:0;padding:8px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}.comparison li div{display:flex;justify-content:space-between;gap:8px}.comparison li span{color:var(--source-network-text);font:650 var(--text-2xs) var(--mono)}.comparison li p,.comparison li small{overflow-wrap:anywhere}.comparison li p{margin:5px 0;font-size:var(--text-xs)}.comparison li small{color:var(--muted)}
+  .comparison{display:grid;gap:8px;padding:11px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}.comparison .picker{width:max-content;margin:0}.comparison-counts{display:flex;flex-wrap:wrap;gap:6px}.comparison-counts span{padding:6px 8px;border:1px solid var(--border);border-radius:999px;color:var(--muted);font-size:var(--text-2xs)}.comparison ol{display:grid;gap:6px;margin:0;padding:0;list-style:none}.comparison li{min-width:0;padding:8px;border:1px solid color-mix(in srgb,var(--amber) 48%,var(--border));border-radius:var(--radius-sm);background:rgb(var(--amber-rgb) / .06)}.comparison li div{display:flex;justify-content:space-between;gap:8px}.comparison li span{color:var(--amber);font:650 var(--text-2xs) var(--mono)}.comparison li p,.comparison li small{overflow-wrap:anywhere}.comparison li p{margin:5px 0;font-size:var(--text-xs)}.comparison li small{color:var(--muted)}
   .limits>summary{padding:10px 0;font:680 var(--text-xs) var(--mono);cursor:pointer}
   @media(max-width:760px){
     .source-grid,dl,.brief>div{grid-template-columns:minmax(0,1fr)}

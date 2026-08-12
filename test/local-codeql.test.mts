@@ -1,6 +1,6 @@
 import { requiredValue } from './value-assertions.mts';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, readFile, rm, symlink, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, test } from 'node:test';
@@ -8,7 +8,9 @@ import { describe, test } from 'node:test';
 import {
   CODEQL_LANGUAGE,
   CODEQL_QUERY_SUITE,
+  CODEQL_STALE_DIRECTORY_AGE_MS,
   CODEQL_THREADS,
+  KNOWN_CODEQL_FINDINGS,
   MAX_CODEQL_RAM_MB,
   MAX_CODEQL_FINDINGS,
   MAX_CODEQL_SARIF_BYTES,
@@ -17,10 +19,13 @@ import {
   boundedDiagnostic,
   codeqlRamMegabytes,
   findCodeqlCommand,
+  initializeCodeqlTemporaryReservation,
   parseArguments,
   parseCodeqlSarif,
   parseCodeqlVersion,
   resolveCodeqlCommand,
+  removeStaleCodeqlTemporaryDirectories,
+  removeOwnedCodeqlTemporaryReservation,
   runLocalCodeql,
   runProcessBounded,
 } from '../tools/local-codeql.mts';
@@ -171,6 +176,85 @@ describe('local CodeQL SARIF parsing', () => {
     assert.deepEqual(changed.staleBaseline, baseline);
   });
 
+  test('pins the exact CT array-membership false positive and reopens review on drift', () => {
+    const reviewed = {
+      ruleId: 'js/incomplete-url-substring-sanitization',
+      file: 'test/ct-search.test.mts',
+      primaryLocationLineHash: '396838f0aee3b68c:1',
+      primaryLocationStartColumnFingerprint: '13',
+      reason: 'false_positive',
+    } satisfies KnownCodeqlFinding;
+    assert.deepEqual(
+      KNOWN_CODEQL_FINDINGS.filter((entry) => entry.ruleId === reviewed.ruleId),
+      [reviewed],
+    );
+    const parsed = parseCodeqlSarif(sarif([finding({
+      ruleId: reviewed.ruleId,
+      locations: [{
+        physicalLocation: {
+          artifactLocation: { uri: reviewed.file },
+          region: { startLine: 153 },
+        },
+      }],
+      partialFingerprints: {
+        primaryLocationLineHash: reviewed.primaryLocationLineHash,
+        primaryLocationStartColumnFingerprint: reviewed.primaryLocationStartColumnFingerprint,
+      },
+    })]));
+    const accepted = classifyCodeqlFindings(parsed, [reviewed]);
+    assert.equal(accepted.known, 1);
+    assert.equal(accepted.new, 0);
+    assert.deepEqual(accepted.staleBaseline, []);
+
+    const drifted = classifyCodeqlFindings(parsed, [{
+      ...reviewed,
+      primaryLocationLineHash: 'changed-line-hash:1',
+    }]);
+    assert.equal(drifted.known, 0);
+    assert.equal(drifted.new, 1);
+    assert.equal(drifted.staleBaseline.length, 1);
+  });
+
+  test('pins the complete reviewed baseline and requires every exact identity once', () => {
+    const expected: KnownCodeqlFinding[] = [
+      { ruleId: 'js/disabling-certificate-validation', file: 'lib/tls-intelligence.mts', primaryLocationLineHash: '11f7ddb4d3c0cb28:1', primaryLocationStartColumnFingerprint: '0', reason: 'accepted_behavior' },
+      { ruleId: 'js/disabling-certificate-validation', file: 'lib/smtp-transport-review.mts', primaryLocationLineHash: '5cfcbf6f51b434cf:1', primaryLocationStartColumnFingerprint: '0', reason: 'accepted_behavior' },
+      { ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: 'c95b56b6acb3e65b:1', primaryLocationStartColumnFingerprint: '23', reason: 'false_positive' },
+      { ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: 'e98683a11c64bf47:1', primaryLocationStartColumnFingerprint: '26', reason: 'false_positive' },
+      { ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: 'e5df0635a7fe0562:1', primaryLocationStartColumnFingerprint: '53', reason: 'false_positive' },
+      { ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: 'f9955890d8802dc7:1', primaryLocationStartColumnFingerprint: '51', reason: 'false_positive' },
+      { ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: 'd958752a942a1329:1', primaryLocationStartColumnFingerprint: '69', reason: 'false_positive' },
+      { ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: 'bee55061202d551f:1', primaryLocationStartColumnFingerprint: '52', reason: 'false_positive' },
+      { ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: '3580829fea761be5:1', primaryLocationStartColumnFingerprint: '59', reason: 'false_positive' },
+      { ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: 'b269a7c62be7cb18:1', primaryLocationStartColumnFingerprint: '56', reason: 'false_positive' },
+      { ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: 'e8481cbf82455fde:1', primaryLocationStartColumnFingerprint: '61', reason: 'false_positive' },
+      { ruleId: 'js/incomplete-url-substring-sanitization', file: 'test/ct-search.test.mts', primaryLocationLineHash: '396838f0aee3b68c:1', primaryLocationStartColumnFingerprint: '13', reason: 'false_positive' },
+    ];
+    assert.deepEqual(KNOWN_CODEQL_FINDINGS, expected);
+
+    const parsed = parseCodeqlSarif(sarif(expected.map((entry, index) => finding({
+      ruleId: entry.ruleId,
+      locations: [{
+        physicalLocation: {
+          artifactLocation: { uri: entry.file },
+          region: { startLine: index + 1 },
+        },
+      }],
+      partialFingerprints: {
+        primaryLocationLineHash: entry.primaryLocationLineHash,
+        primaryLocationStartColumnFingerprint: entry.primaryLocationStartColumnFingerprint,
+      },
+    }))));
+    assert.deepEqual(classifyCodeqlFindings(parsed), {
+      total: expected.length,
+      known: expected.length,
+      new: 0,
+      displayed: [],
+      staleBaseline: [],
+      truncated: false,
+    });
+  });
+
   test('does not suppress a new occurrence sharing only its rule and file', () => {
     const parsed = parseCodeqlSarif(sarif([finding()]));
     const classified = classifyCodeqlFindings(parsed, [{
@@ -238,6 +322,7 @@ describe('local CodeQL orchestration', () => {
       codeqlCommand: '/opt/codeql/codeql',
       runProcess,
       makeTemporaryDirectory: async () => temporaryDirectory,
+      cleanupStaleTemporaryDirectories: async () => 0,
       removeTemporaryDirectory: async (directory) => {
         removed = true;
         await rm(directory, { recursive: true, force: true });
@@ -294,6 +379,7 @@ describe('local CodeQL orchestration', () => {
           ? { exitCode: 0, stdout: '{"version":"2.23.4"}', stderr: '' }
           : { exitCode: 3, stdout: '', stderr: `failed\n${'x'.repeat(2000)}` },
         makeTemporaryDirectory: async () => temporaryDirectory,
+        cleanupStaleTemporaryDirectories: async () => 0,
         removeTemporaryDirectory: async (directory) => {
           removed = true;
           await rm(directory, { recursive: true, force: true });
@@ -312,9 +398,146 @@ describe('local CodeQL orchestration', () => {
         codeqlCommand: '/missing/codeql',
         runProcess: async () => { throw Object.assign(new Error('spawn failed'), { code: 'ENOENT' }); },
         makeTemporaryDirectory: async () => temporaryDirectory,
+        cleanupStaleTemporaryDirectories: async () => 0,
         removeTemporaryDirectory: async (directory) => rm(directory, { recursive: true, force: true }),
       }),
       /official CodeQL bundle/,
     );
   });
+
+  test('publishes and removes only its marker-owned temporary reservation', async () => {
+    const temporaryRoot = await mkdtemp(path.join(tmpdir(), 'whoisleuth-codeql-owned-'));
+    let reservationDirectory = '';
+    try {
+      const report = await runLocalCodeql({
+        repositoryRoot: process.cwd(),
+        temporaryRoot,
+        codeqlCommand: '/opt/codeql/codeql',
+        cleanupStaleTemporaryDirectories: async () => 0,
+        reservationCleanupCurrentUid: null,
+        knownFindings: [],
+        runProcess: async (_command, args) => {
+          if (args[0] === 'version') return { exitCode: 0, stdout: '{"version":"2.23.4"}', stderr: '' };
+          if (args[0] === 'database' && args[1] === 'create') {
+            reservationDirectory = path.dirname(requiredValue(args[2]));
+            await access(path.join(reservationDirectory, '.whoisleuth-reservation.json'));
+          }
+          if (args[0] === 'database' && args[1] === 'analyze') {
+            const output = requiredValue(args.find((arg) => arg.startsWith('--output='))).slice('--output='.length);
+            await writeFile(output, sarif(), 'utf8');
+          }
+          return { exitCode: 0, stdout: '', stderr: '' };
+        },
+      });
+      assert.equal(report.status, 'pass');
+      assert.ok(reservationDirectory.startsWith(`${temporaryRoot}${path.sep}`));
+      await assert.rejects(access(reservationDirectory), (error) => isCode(error, 'ENOENT'));
+    } finally {
+      await rm(temporaryRoot, { recursive: true, force: true });
+    }
+  });
 });
+
+describe('local CodeQL stale reservation cleanup', () => {
+  test('removes only aged marker-owned dead reservations and preserves every ambiguous entry', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'whoisleuth-codeql-cleanup-'));
+    const stale = path.join(root, 'whoisleuth-codeql-Ab12Cd');
+    const fresh = path.join(root, 'whoisleuth-codeql-Ef34Gh');
+    const active = path.join(root, 'whoisleuth-codeql-Mn78Op');
+    const unmarked = path.join(root, 'whoisleuth-codeql-Qr90St');
+    const lookalike = path.join(root, 'whoisleuth-codeql-too-long');
+    const protectedDirectory = path.join(root, 'protected-directory');
+    const linked = path.join(root, 'whoisleuth-codeql-Ij56Kl');
+    const now = Date.now();
+    const staleDate = new Date(now - CODEQL_STALE_DIRECTORY_AGE_MS - 1);
+    try {
+      await Promise.all([
+        mkdir(stale),
+        mkdir(fresh),
+        mkdir(active),
+        mkdir(unmarked),
+        mkdir(lookalike),
+        mkdir(protectedDirectory),
+      ]);
+      await initializeCodeqlTemporaryReservation(stale, { now: staleDate.getTime(), pid: 101, reservationId: 'a'.repeat(32) });
+      await initializeCodeqlTemporaryReservation(fresh, { now, pid: 102, reservationId: 'b'.repeat(32) });
+      await initializeCodeqlTemporaryReservation(active, { now: staleDate.getTime(), pid: 103, reservationId: 'c'.repeat(32) });
+      await symlink(protectedDirectory, linked, 'dir');
+      await Promise.all([
+        utimes(stale, staleDate, staleDate),
+        utimes(active, staleDate, staleDate),
+        utimes(unmarked, staleDate, staleDate),
+      ]);
+
+      assert.equal(await removeStaleCodeqlTemporaryDirectories(root, {
+        now,
+        processState: (pid) => pid === 103 ? 'active' : 'dead',
+      }), 1);
+      await assert.rejects(access(stale), (error) => isCode(error, 'ENOENT'));
+      await Promise.all([
+        access(fresh),
+        access(active),
+        access(unmarked),
+        access(lookalike),
+        access(protectedDirectory),
+        access(linked),
+      ]);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test('treats a marker removed by another cleaner as an already handled candidate', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'whoisleuth-codeql-cleanup-race-'));
+    const candidate = path.join(root, 'whoisleuth-codeql-Ab12Cd');
+    const now = Date.now();
+    const staleDate = new Date(now - CODEQL_STALE_DIRECTORY_AGE_MS - 1);
+    try {
+      await mkdir(candidate);
+      await initializeCodeqlTemporaryReservation(candidate, {
+        now: staleDate.getTime(),
+        pid: 101,
+        reservationId: 'a'.repeat(32),
+      });
+      await utimes(candidate, staleDate, staleDate);
+      let removedMarker = false;
+      assert.equal(await removeStaleCodeqlTemporaryDirectories(root, {
+        now,
+        processState: () => 'dead',
+        readMarker: async (markerPath) => {
+          if (!removedMarker) {
+            removedMarker = true;
+            await rm(markerPath);
+          }
+          return readFile(markerPath);
+        },
+      }), 0);
+      await access(candidate);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test('uses recorded ownership without getuid and preserves a replaced reservation path', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'whoisleuth-codeql-owner-'));
+    const candidate = path.join(root, 'whoisleuth-codeql-Ab12Cd');
+    try {
+      await mkdir(candidate);
+      const original = await initializeCodeqlTemporaryReservation(candidate, { reservationId: 'a'.repeat(32) });
+      await rm(candidate, { recursive: true });
+      await mkdir(candidate);
+      const replacement = await initializeCodeqlTemporaryReservation(candidate, { reservationId: 'b'.repeat(32) });
+
+      assert.equal(await removeOwnedCodeqlTemporaryReservation(original, root, { currentUid: null }), false);
+      await access(candidate);
+      assert.equal(await removeOwnedCodeqlTemporaryReservation(replacement, root, { currentUid: null }), true);
+      await assert.rejects(access(candidate), (error) => isCode(error, 'ENOENT'));
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+});
+
+function isCode(error: unknown, code: string): boolean {
+  return Boolean(error && typeof error === 'object' && 'code' in error && error.code === code);
+}

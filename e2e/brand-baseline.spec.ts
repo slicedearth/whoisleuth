@@ -124,6 +124,18 @@ async function openProfileForm(page: import('@playwright/test').Page) {
   await page.getByLabel('Official domains').fill('example.com');
 }
 
+test('rapid repeated Brand Profile save persists only one record', async ({ page }) => {
+  await cleanBrandStorage(page);
+  await openProfileForm(page);
+  await page.getByRole('button', { name: 'Save profile' }).evaluate((button) => {
+    (button as HTMLButtonElement).click();
+    (button as HTMLButtonElement).click();
+  });
+  await expect(page.getByRole('status', { name: 'Brand Profile action status' })).toContainText('Saved "Example Brand"');
+  const snapshot = await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 1 });
+  expect(snapshot.records).toHaveLength(1);
+});
+
 test('captures and persists only a bounded official-site baseline after profile save', async ({ page }) => {
   await page.route('**/api/availability?*', async (route) => route.fulfill({
     status: 200,

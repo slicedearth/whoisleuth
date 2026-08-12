@@ -4,7 +4,12 @@
 // additive evidence object suitable for API responses and exports.
 
 import { createObservation } from './observation.mts';
-import { MAX_HTTP_EVIDENCE_REDIRECTS } from './http-evidence-bounds.mts';
+import {
+  MAX_HTTP_ATTEMPTS,
+  MAX_HTTP_ERROR_LENGTH,
+  MAX_HTTP_EVIDENCE_REDIRECTS,
+  MAX_HTTP_PROVENANCE_URL,
+} from './http-evidence-bounds.mts';
 
 type UnknownRecord = Record<string, unknown>;
 type HeaderReader = { get(name: string): string | null };
@@ -29,10 +34,7 @@ type HttpObservationOptions = {
   durationMs?: number;
 };
 
-const MAX_HTTP_PROVENANCE_URL = 2048;
 const MAX_HTTP_REDIRECTS = MAX_HTTP_EVIDENCE_REDIRECTS;
-const MAX_HTTP_ATTEMPTS = 2;
-const MAX_HTTP_ERROR_LENGTH = 180;
 const MAX_HTTP_HEADER_LENGTH = 1024;
 const MAX_CAPTURED_BODY_BYTES = 5 * 1024 * 1024;
 const OBSERVED_HEADER_MARKER = 'observed';
@@ -262,6 +264,7 @@ function skippedHttpObservation() {
 }
 
 export {
+  MAX_HTTP_ERROR_LENGTH,
   MAX_HTTP_PROVENANCE_URL,
   MAX_HTTP_REDIRECTS,
   MAX_HTTP_ATTEMPTS,

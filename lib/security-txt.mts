@@ -74,6 +74,21 @@ function normalizedHttpsUrl(value: string): string | null {
   return normalizedPublishedUri(value, HTTPS_PROTOCOLS);
 }
 
+function normalizedCanonicalComparisonUrl(value: string): string | null {
+  if (!value || value.length > MAX_SECURITY_TXT_URL_LENGTH || URI_CONTROL_CHARACTER_RE.test(value)) return null;
+  try {
+    const url = new URL(value.trim());
+    if (url.protocol !== 'https:' || !url.hostname || url.username || url.password) return null;
+    // A fragment is never part of the retrieval URI. Preserve the query only
+    // for the transient RFC 9116 Canonical comparison; retained values remain
+    // query-free under the existing privacy-minimised output contract.
+    url.hash = '';
+    return url.toString().slice(0, MAX_SECURITY_TXT_URL_LENGTH);
+  } catch {
+    return null;
+  }
+}
+
 function eligibleHttpsFetchUrl(value: string): string | null {
   if (!value || value.length > MAX_SECURITY_TXT_URL_LENGTH || URI_CONTROL_CHARACTER_RE.test(value)) return null;
   try {
@@ -125,6 +140,7 @@ function parseSecurityTxt(text: unknown, options: ParseOptions = {}) {
   const policies: string[] = [];
   const encryption: string[] = [];
   const canonical: string[] = [];
+  const canonicalComparison: string[] = [];
   const preferredLanguages: string[] = [];
   const expires: string[] = [];
 
@@ -157,7 +173,11 @@ function parseSecurityTxt(text: unknown, options: ParseOptions = {}) {
       if (normalized) encryption.push(normalized); else malformedCount += 1;
     } else if (field === 'canonical') {
       normalized = normalizedHttpsUrl(value);
-      if (normalized) canonical.push(normalized); else malformedCount += 1;
+      const comparisonValue = normalizedCanonicalComparisonUrl(value);
+      if (normalized && comparisonValue) {
+        canonical.push(normalized);
+        canonicalComparison.push(comparisonValue);
+      } else malformedCount += 1;
     } else if (field === 'preferred-languages') {
       const languages = value.split(',').map((item) => item.trim().toLowerCase()).filter(Boolean);
       const valid = languages.filter((item) => LANGUAGE_RE.test(item));
@@ -180,8 +200,10 @@ function parseSecurityTxt(text: unknown, options: ParseOptions = {}) {
     .some((entry) => entry.truncated);
   const expiresAt = expires.length === 1 ? expires[0] : null;
   const finalUrl = options.finalUrl ? normalizedHttpsUrl(options.finalUrl) : null;
-  const canonicalMatches = boundedCanonical.values.length && finalUrl
-    ? boundedCanonical.values.some((value) => value.toLowerCase() === finalUrl.toLowerCase())
+  const finalComparisonUrl = options.finalUrl ? normalizedCanonicalComparisonUrl(options.finalUrl) : null;
+  const canonicalMatches = boundedCanonical.values.length && finalUrl && finalComparisonUrl
+    ? canonicalComparison.slice(0, MAX_SECURITY_TXT_VALUES)
+        .some((value) => value.toLowerCase() === finalComparisonUrl.toLowerCase())
     : null;
   const stale = Boolean(expiresAt && Date.parse(expiresAt) <= (options.now ?? Date.now()));
   const requiredMalformed = boundedContacts.values.length === 0 || expires.length !== 1;

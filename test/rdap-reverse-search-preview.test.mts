@@ -53,9 +53,12 @@ test('reverse-search preview exposes bounded exact disclosures without making a 
 test('reverse-search preview honors declared properties and global result bounds', () => {
   const previews = buildRdapReverseSearchPreviews({
     entitiesByRole: Object.fromEntries(
-      Array.from({ length: 20 }, (_, index) => [
-        `role-${index}`,
-        [{ handle: `HANDLE-${index}`, name: `Name ${index}` }],
+      ['registrar', 'registrant'].map((role, roleIndex) => [
+        role,
+        Array.from({ length: 5 }, (_, index) => ({
+          handle: `HANDLE-${roleIndex}-${index}`,
+          name: `Name ${roleIndex}-${index}`,
+        })),
       ]),
     ),
   }, {

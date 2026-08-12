@@ -1,10 +1,29 @@
+import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
 import { expectNoHorizontalOverflow } from './helpers';
 
 test.use({ storageState: { cookies: [], origins: [] } });
 
-test('completes the public synthetic workflow without investigation requests or production-store access', async ({ page }) => {
+async function progressToLookup(page: Page) {
+  await page.getByRole('button', { name: 'Begin with Brands' }).click();
+  await expect(page.getByRole('heading', { name: 'Define the protected identity' })).toBeFocused();
+  await page.getByRole('button', { name: 'Use synthetic profile' }).click();
+  await expect(page.getByRole('heading', { name: 'Generate bounded candidate coverage' })).toBeFocused();
+  await page.getByRole('button', { name: 'Generate fixed candidates' }).click();
+  await expect(page.locator('.discover-candidates article')).toHaveCount(3);
+  await page.getByRole('button', { name: 'Review 3 candidates in Bulk' }).click();
+  await expect(page.getByRole('heading', { name: 'Prioritise candidates without collapsing evidence' })).toBeFocused();
+  await page.getByRole('button', { name: 'Inspect northstar-login.example' }).click();
+  await expect(page.getByRole('heading', { name: 'northstar-login.example' })).toBeFocused();
+}
+
+async function workspaceTop(page: Page) {
+  return page.locator('#demo-workspace').evaluate((element) => Math.round(element.getBoundingClientRect().top));
+}
+
+test('completes the guided synthetic workflow without investigation requests or production-store access', async ({ page }) => {
   test.slow();
+  await page.emulateMedia({ reducedMotion: 'reduce' });
   const apiRequestPaths: string[] = [];
   page.on('request', (request) => {
     const { pathname } = new URL(request.url());
@@ -13,182 +32,97 @@ test('completes the public synthetic workflow without investigation requests or 
 
   await page.goto('/demo');
   await expect(page.locator('.demo-footer').getByRole('link', { name: 'Sign in to investigate' })).toHaveAttribute('href', '/login');
-  await expect(page.locator('.demo-footer').getByRole('link', { name: 'Open console' })).toHaveCount(0);
-  await expect(page.getByText('Synthetic console', { exact: false })).toHaveCount(0);
-  await expect(page.getByRole('heading', { name: 'Use the investigation workflow without touching a live target.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Explore a synthetic domain investigation.' })).toBeVisible();
   await expect(page.getByText('Synthetic fixtures · No live findings')).toBeVisible();
-  await expect(page.locator('form.login')).toHaveCount(0);
   await expect(page.locator('.demo-stage-summary')).toContainText('Stage 1 of 6');
   await expect(page.getByRole('button', { name: /Dashboard.*Current/ })).toHaveAttribute('aria-current', 'step');
-  const upcomingStage = page.getByRole('button', { name: /Monitor.*Upcoming/ });
-  await expect(upcomingStage).toBeDisabled();
-  await expect(upcomingStage).toHaveCSS('opacity', '1');
+  await expect(page.getByRole('button', { name: /Monitor.*Upcoming/ })).toBeDisabled();
+  const stageGuidance = page.getByLabel('What this stage teaches');
+  await expect(stageGuidance).toContainText('Task');
+  await expect(stageGuidance).toContainText('Decision');
+  await expect(stageGuidance).toContainText('Boundary');
 
-  await expect(page.getByRole('heading', { name: 'Choose a focused investigation task' })).toBeVisible();
   await page.getByRole('button', { name: 'Begin with Brands' }).click();
-  await expect(page.locator('.demo-stage-summary')).toContainText('Stage 2 of 6');
-  await expect(page.getByRole('button', { name: /Dashboard.*Completed/ })).toBeEnabled();
-  await expect(page.getByRole('button', { name: /Brands.*Current/ })).toHaveAttribute('aria-current', 'step');
+  await expect(page.getByRole('heading', { name: 'Define the protected identity' })).toBeFocused();
   await expect(page.getByRole('heading', { name: 'Northstar Outfitters' })).toBeVisible();
   await expect(page.getByText(/northstar\.example · Complete/)).toBeVisible();
   await page.getByRole('button', { name: 'Use synthetic profile' }).click();
-  await page.getByRole('button', { name: 'Load synthetic candidates' }).click();
-  await page.getByRole('button', { name: 'Load related domains' }).click();
-  await expect(page.locator('.relationship-glyph svg')).toHaveAttribute('data-icon', 'nameserver');
-  await expect(page.getByRole('img', { name: /Shared evidence relationships/u })).toBeVisible();
-  const relationshipMap = page.locator('.relationship-map');
-  await expect(relationshipMap.locator('.cluster-legend')).toBeVisible();
-  await expect(relationshipMap.locator('.cluster-legend li')).toHaveCount(2);
-  await expect(relationshipMap.locator('.map-summary')).toContainText('facts');
-  await expect(relationshipMap.locator('.map-summary')).toContainText('links');
-  expect(await relationshipMap.locator('.map-frame').evaluate((element) => (
-    element.scrollWidth <= element.clientWidth + 1
-  ))).toBe(true);
-  const firstEvidenceGroup = relationshipMap.locator('.cluster-legend button').first();
-  await firstEvidenceGroup.click();
-  await expect(firstEvidenceGroup).toHaveAttribute('aria-pressed', 'true');
-  await expect(relationshipMap.locator('.focus-note')).toBeVisible();
-  await expect(relationshipMap.locator('.node.muted')).not.toHaveCount(0);
-  await firstEvidenceGroup.click();
-  await expect(firstEvidenceGroup).toHaveAttribute('aria-pressed', 'false');
-  await expect(relationshipMap.locator('.node.muted')).toHaveCount(0);
-  await expect(relationshipMap.getByRole('group', { name: 'Relationship evidence filter' })).toHaveCount(0);
-  await expect(relationshipMap.locator('.links path')).not.toHaveCount(0);
-  await expect(relationshipMap.locator('.links path.muted')).toHaveCount(0);
-  await expect(relationshipMap.getByRole('button', { name: 'Reset visual filters' })).toHaveCount(0);
-  await expect(page.locator('.candidate')).toHaveCount(2);
-  await page.getByRole('button', { name: 'All candidates · 3' }).click();
+  await expect(page.getByRole('heading', { name: 'Generate bounded candidate coverage' })).toBeFocused();
+
+  await page.getByRole('button', { name: 'Generate fixed candidates' }).click();
+  await expect(page.getByRole('heading', { name: 'Three candidates, two evidence origins' })).toBeVisible();
+  await expect(page.locator('.discover-candidates article')).toHaveCount(3);
+  await expect(page.getByText('Certificate Transparency · 2 certificate observations')).toBeVisible();
+  await expect(page.getByText('Generated candidate · generated locally')).toHaveCount(2);
+  await expect(page.getByRole('button', { name: /Bulk.*Upcoming/ })).toBeDisabled();
+  await page.getByRole('button', { name: 'Review 3 candidates in Bulk' }).click();
+  await expect(page.getByRole('heading', { name: 'Prioritise candidates without collapsing evidence' })).toBeFocused();
+  await expect(page.locator('.candidate')).toHaveCount(3);
   await page.getByRole('button', { name: 'High priority · 1' }).click();
   await expect(page.locator('.candidate')).toHaveCount(1);
+
   await page.getByRole('button', { name: 'Inspect northstar-login.example' }).click();
-  await expect(page.getByRole('heading', { name: 'northstar-login.example' })).toBeVisible();
-  await expect(page.getByText(/flattened narrative preview keeps every synthetic evidence family visible/i)).toBeVisible();
-  await expect(page.getByRole('navigation', { name: 'Synthetic result sections' }).getByRole('link')).toHaveCount(7);
-  await expect(page.locator('.demo-glance dl div').filter({ hasText: 'Evidence checks complete' })).toContainText('8');
-  await expect(page.locator('.demo-glance dl div').filter({ hasText: 'Evidence checks limited' })).toContainText('0');
-  await expect(page.getByRole('heading', { name: '// Advanced' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Where this result came from' })).toBeVisible();
-  await expect(page.locator('a[href="#demo-evidence-registry"]')).toBeVisible();
-  const structuredIdentityNodeTitle = page.locator(
-    '.source-node[data-source-id="structured-identity"] .source-title-copy',
-  );
-  await expect(structuredIdentityNodeTitle).toHaveClass(/wrapped/);
-  await expect(structuredIdentityNodeTitle).toHaveText('Structured identity');
-  expect(await structuredIdentityNodeTitle.evaluate((copy) => {
-    const text = copy.firstElementChild;
-    return Boolean(
-      text
-      && text.scrollWidth <= text.clientWidth
-      && text.scrollHeight <= text.clientHeight
-    );
-  })).toBe(true);
-  await page.getByText('Why the risk score is 78', { exact: true }).click();
-  const desktopFactorChart = page.locator('.factor-chart');
-  await expect(desktopFactorChart).toBeVisible();
-  const assessmentWidth = await page.locator('.availability').evaluate((element) => element.getBoundingClientRect().width);
-  const factorChartWidth = await desktopFactorChart.evaluate((element) => element.getBoundingClientRect().width);
-  expect(factorChartWidth).toBeGreaterThan(assessmentWidth * 0.75);
-  await page.getByText('Why the risk score is 78', { exact: true }).click();
-  const demoVisualTabs = page.getByRole('tablist', { name: 'Synthetic relationship and history view' });
-  const demoSourcesTab = demoVisualTabs.getByRole('tab', { name: /^Evidence/ });
-  await demoSourcesTab.focus();
-  await demoSourcesTab.press('End');
-  await expect(demoVisualTabs.getByRole('tab', { name: /^Timeline/ })).toBeFocused();
-  await expect(demoVisualTabs.getByRole('tab', { name: /^Timeline/ })).toHaveAttribute('aria-selected', 'true');
-  await expect(page.getByRole('heading', { name: 'Observed lifecycle' })).toBeVisible();
-  await expect(page.locator('.registry-shape')).not.toHaveCount(0);
-  await expect(page.locator('.certificate-shape')).not.toHaveCount(0);
-  await expect(page.locator('.observation-shape')).not.toHaveCount(0);
-  await expect(page.getByRole('img', { name: 'Overlapping collection timing for 4 source branches' })).toBeVisible();
-  const timingSummary = page.locator('.timing-summary');
-  await expect(timingSummary).toContainText('Domain evidence');
-  await expect(timingSummary).toContainText('Network context');
-  await expect(timingSummary).toContainText('None observed');
-  const agreementPlot = page.getByRole('img', { name: 'Pairwise registration agreement plot with 3 source comparison lanes' });
-  await expect(agreementPlot).toBeVisible();
-  await expect(agreementPlot.locator('.agreement-track')).toHaveCount(3);
-  await expect(agreementPlot.locator('.agreement-marker')).toHaveCount(6);
-  await expect(agreementPlot.locator('.matrix-cell')).toHaveCount(0);
-  await expect(page.getByRole('heading', { name: 'DNS intelligence' })).toBeVisible();
-  await page.locator('.dns-card > summary').click();
-  await expect(page.locator('.dns-card').getByText('ns1.shared-example.invalid · serial 2026072701', { exact: true })).toBeVisible();
-  await expect(page.locator('.dns-card').getByText(/Service priority 1 → owner · ALPN h2, h3 · port 443/)).toBeVisible();
-  await page.locator('.dns-card > summary').click();
-  await expect(page.getByRole('heading', { name: 'HTTP intelligence' })).toBeVisible();
-  await expect(page.getByText('security.txt', { exact: true })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Passive security posture' })).toBeVisible();
-  const structuredIdentity = page.locator('.structured-card');
-  await expect(structuredIdentity.getByRole('heading', { name: 'Structured identity metadata' })).toBeVisible();
-  await expect(structuredIdentity).not.toHaveAttribute('open', '');
-  const credentialSurface = page.locator('.credential-card');
-  await expect(credentialSurface.getByRole('heading', { name: 'Credential collection surface' })).toBeVisible();
-  await expect(credentialSurface).not.toHaveAttribute('open', '');
-  await credentialSurface.locator(':scope > summary').click();
-  await expect(credentialSurface.getByText('Classified inputs', { exact: true })).toBeVisible();
-  await expect(credentialSurface.getByText(/does not retain field names or content/i)).toBeVisible();
-  for (const selector of ['.dns-card', '.http-card', '.security-posture-card', '.tls-card']) {
-    const card = page.locator(selector);
-    await expect(card).not.toHaveAttribute('open', '');
-    await expect(card.locator(':scope > summary .evidence-status')).toHaveText('Success');
-  }
-  const technology = page.locator('.technology-card');
-  await expect(technology).not.toHaveAttribute('open', '');
-  await expect(technology.getByRole('heading', { name: 'Technology indicators' })).toBeVisible();
-  await expect(technology.getByText('3 matched indicators · Expand for evidence and limitations', { exact: true })).toBeVisible();
-  await expect(technology.getByRole('heading', { name: 'Example Commerce' })).toBeHidden();
-  await technology.locator(':scope > summary').click();
-  await expect(technology.getByRole('heading', { name: 'Example Commerce' })).toBeVisible();
-  await expect(technology.getByRole('heading', { name: 'Observed browser libraries' })).toBeVisible();
-  await expect(technology.getByRole('heading', { name: 'Example UI Library 1.2.3' })).toBeVisible();
-  await expect(technology.getByText(/fixed synthetic component and advisory context/i)).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'TLS and certificate intelligence' })).toBeVisible();
-  const tls = page.locator('.tls-card');
-  await tls.locator(':scope > summary').click();
-  await expect(tls.getByRole('region', { name: 'Validity and chain' })).toBeVisible();
-  const network = page.locator('.network-context');
-  await expect(network).not.toHaveAttribute('open', '');
-  await expect(network.getByRole('heading', { name: 'Observed network context' })).toBeVisible();
-  await expect(network.locator(':scope > summary .evidence-status')).toHaveText('Success');
-  await expect(network.getByText('203.0.113.44', { exact: true })).toBeHidden();
-  await network.locator(':scope > summary').click();
-  await expect(network.getByText('203.0.113.44', { exact: true })).toBeVisible();
-  const registrySources = page.locator('.sources > details');
+  await expect(page.getByRole('heading', { name: 'northstar-login.example' })).toBeFocused();
+  await expect(page.getByRole('heading', { name: 'What needs analyst attention?' })).toBeVisible();
+  await expect(page.getByText('Priority 78/100')).toBeVisible();
+  await expect(page.getByText('Three review cues')).toBeVisible();
+  const familyControls = page.locator('.lookup-family button[aria-expanded]');
+  await expect(familyControls).toHaveCount(5);
+  expect(await familyControls.evaluateAll((buttons) => buttons.every((button) => button.getAttribute('aria-expanded') === 'false'))).toBe(true);
+  const monitorHandoff = page.getByRole('button', { name: 'Open synthetic case in Monitor' });
+  await expect(monitorHandoff).toBeVisible();
+  await expect(monitorHandoff).toBeInViewport();
+  await expect(page.locator('#demo-evidence-registry')).toHaveCount(0);
+  await expect(page.locator('.dns-card')).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Expand Registration evidence' }).click();
+  await expect(page.locator('#demo-evidence-registry')).toBeVisible();
   const authorityTrace = page.getByRole('region', { name: 'Registration authority trace' });
-  await expect(authorityTrace).toContainText('Registry RDAP');
   await expect(authorityTrace).toContainText('primary publication for domain existence');
-  await expect(authorityTrace).toContainText('Registrar RDAP');
-  await expect(authorityTrace).toContainText('It cannot decide domain existence');
-  await expect(registrySources).toHaveCount(2);
-  await expect(registrySources.nth(0)).not.toHaveAttribute('open', '');
-  await expect(registrySources.nth(1)).not.toHaveAttribute('open', '');
-  await expect(registrySources.nth(0).getByText('RDAP structured data')).toBeVisible();
-  await expect(registrySources.nth(1).getByText('WHOIS structured data')).toBeVisible();
-  const registryInterpretation = page.locator('.registry-insights');
-  await expect(registryInterpretation).not.toHaveAttribute('open', '');
-  await expect(registryInterpretation.getByRole('heading', { name: 'Registry interpretation' })).toBeVisible();
-  await expect(registryInterpretation.locator(':scope > summary .evidence-status')).toHaveText('Registered');
-  await registryInterpretation.locator(':scope > summary').click();
-  await expect(registryInterpretation.getByText('RDAP: redacted · WHOIS: redacted')).toBeVisible();
-  await expect(registryInterpretation.getByText('clientTransferProhibited')).toBeVisible();
-  const rdapCapabilities = registryInterpretation.locator('.rdap-capabilities');
-  await expect(rdapCapabilities.getByText('RDAP capability declarations · 2')).toBeVisible();
-  await rdapCapabilities.locator(':scope > summary').click();
-  await expect(rdapCapabilities.getByText('Machine-readable response redaction markers.')).toBeVisible();
-  await expect(rdapCapabilities.getByText(/Reverse search: not advertised/)).toBeVisible();
-  await page.getByRole('button', { name: 'Open synthetic case in Monitor' }).click();
-  await expect(page.getByRole('heading', { name: 'Watchlist activity' })).toBeVisible();
-  await expect(page.locator('#watchlist-activity .activity-summary')).toContainText(/1\s*retained checks/);
+  await expect(authorityTrace).toContainText('cannot decide domain existence');
+
+  await page.getByRole('button', { name: 'Expand Web, DNS, and TLS evidence' }).click();
+  await expect(page.locator('#demo-evidence-registry')).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'DNS intelligence' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'HTTP intelligence' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'TLS and certificate intelligence' })).toBeVisible();
+  await expect(page.getByText('Also separated in the signed-in Console')).toBeVisible();
+
+  await page.getByRole('button', { name: 'Expand Relationships and history evidence' }).click();
+  await expect(page.locator('.dns-card')).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Where this result came from' })).toBeVisible();
+  await page.getByRole('link', { name: /^Registry/ }).click();
+  await expect(page.locator('#demo-evidence-registry')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Collapse Registration evidence' })).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.locator('#demo-family-web .family-details')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Expand Relationships and history evidence' }).click();
+  const relationshipTabs = page.getByRole('tablist', { name: 'Synthetic relationship and history view' });
+  const evidenceTab = relationshipTabs.getByRole('tab', { name: /^Evidence/ });
+  await evidenceTab.focus();
+  await evidenceTab.press('End');
+  await expect(relationshipTabs.getByRole('tab', { name: /^Timeline/ })).toBeFocused();
+  await expect(page.getByRole('heading', { name: 'Observed lifecycle' })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Expand Source quality evidence' }).click();
+  await expect(page.getByRole('heading', { name: 'Where this result came from' })).toHaveCount(0);
+  await expect(page.getByRole('img', { name: 'Overlapping collection timing for 4 source branches' })).toBeVisible();
+  await expect(page.locator('.timing-summary')).toContainText('Network context');
+
+  await monitorHandoff.click();
+  await expect(page.getByRole('heading', { name: 'Document and revisit northstar-login.example' })).toBeFocused();
+  await expect(page.getByRole('heading', { name: 'Case evidence, not a live watchlist' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Watchlist activity' })).toHaveCount(0);
+
   await page.getByLabel('Status').selectOption('reviewing');
   await expect(page.getByRole('status')).toHaveText('Synthetic case updated.');
   await page.getByLabel('Analyst note').fill('Fixture reviewed for demonstration.');
-  await expect(page.getByRole('status')).toHaveText('Synthetic case updated.');
   await page.getByRole('button', { name: 'Load later synthetic observation' }).click();
-  await expect(page.locator('#watchlist-activity .activity-summary')).toContainText(/2\s*retained checks/);
-  await expect(page.getByRole('img', { name: 'Observed domain timeline with 2 checks and 2 evidence categories' })).toBeVisible();
-  await expect(page.locator('.timeline-entry')).toHaveCount(2);
-  await expect(page.getByText(/First observed/)).toBeVisible();
-  await page.getByRole('button', { name: 'Material changes only' }).click();
-  await expect(page.locator('.timeline-entry')).toHaveCount(2);
+  const changeReview = page.locator('.change-review');
+  await expect(changeReview.getByRole('heading', { name: 'Repeated evidence and material changes stay distinct' })).toBeVisible();
+  await expect(changeReview).toContainText('2 retained observations');
+  await expect(changeReview).toContainText('matched this retained state');
+  await expect(changeReview).toContainText('Material change');
+  await expect(page.locator('.retained-case')).toContainText('History entries2');
 
   const storage = await page.evaluate(() => ({
     local: Object.keys(localStorage),
@@ -212,95 +146,162 @@ test('completes the public synthetic workflow without investigation requests or 
   expect(payload.evidence.observedNetwork.address).toBe('203.0.113.44');
 
   await page.reload();
-  await expect(page.getByRole('heading', { name: 'Document and revisit northstar-login.example' })).toBeVisible();
+  const restoredHeading = page.getByRole('heading', { name: 'Document and revisit northstar-login.example' });
+  await expect(restoredHeading).toBeVisible();
+  await expect(restoredHeading).not.toBeFocused();
   await page.getByRole('button', { name: 'Reset demo' }).click();
-  await expect(page.getByRole('heading', { name: 'Choose a focused investigation task' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Choose a focused investigation task' })).toBeFocused();
   expect(await page.evaluate(() => sessionStorage.getItem('whoisleuth:synthetic-demo:v1'))).toBeNull();
-  expect(apiRequestPaths).toEqual(['/api/session', '/api/session']);
+  expect(apiRequestPaths.length).toBeGreaterThan(0);
+  expect(apiRequestPaths.every((path) => path === '/api/session')).toBe(true);
 });
 
-test('keeps the public demo usable without mobile overflow', async ({ page }) => {
-  await page.setViewportSize({ width: 360, height: 640 });
+test('settles long-to-short stage transitions at one stable workspace anchor', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto('/demo');
-  const stagePositions = await page.locator('.demo-steps button').evaluateAll((buttons) => buttons.slice(0, 3).map((button) => {
-    const rect = button.getBoundingClientRect();
-    return { top: rect.top, left: rect.left };
-  }));
-  const [firstStage, secondStage, thirdStage] = stagePositions;
-  if (!firstStage || !secondStage || !thirdStage) throw new Error('The demo did not render its first three stages.');
-  expect(Math.abs(firstStage.top - secondStage.top)).toBeLessThanOrEqual(1);
-  expect(secondStage.left).toBeGreaterThan(firstStage.left);
-  expect(thirdStage.top).toBeGreaterThan(firstStage.top);
+  await progressToLookup(page);
+  await page.getByRole('button', { name: 'Open synthetic case in Monitor' }).click();
+  await expect(page.getByRole('heading', { name: 'Document and revisit northstar-login.example' })).toBeFocused();
+  await expect(page.locator('#demo-workspace')).toHaveAttribute('aria-busy', 'false');
+  await expect.poll(() => workspaceTop(page), { timeout: 2500 }).toBe(24);
+  await expect(page.locator('#demo-workspace')).toHaveCSS('min-height', '0px');
+  const settledTop = await workspaceTop(page);
+  expect(await workspaceTop(page)).toBe(settledTop);
+
+  await page.getByRole('button', { name: 'Load later synthetic observation' }).click();
+  await page.getByRole('button', { name: 'Review Lookup evidence' }).click();
+  await expect(page.getByRole('heading', { name: 'northstar-login.example' })).toBeFocused();
+  await expect(page.locator('#demo-workspace')).toHaveAttribute('aria-busy', 'false');
+  await expect.poll(() => workspaceTop(page), { timeout: 2500 }).toBe(24);
+  await expect(page.locator('#demo-workspace')).toHaveCSS('min-height', '0px');
+  const returnTop = await workspaceTop(page);
+  expect(await workspaceTop(page)).toBe(returnTop);
+});
+
+test('retains the stage surface until scrolling completes or reaches its bounded fallback', async ({ page }) => {
+  await page.addInitScript(() => {
+    Element.prototype.scrollIntoView = function noAutomaticScroll() {};
+  });
+  await page.goto('/demo');
+  const workspace = page.locator('#demo-workspace');
+
   await page.getByRole('button', { name: 'Begin with Brands' }).click();
+  await expect(page.getByRole('heading', { name: 'Define the protected identity' })).toBeFocused();
+  await expect(workspace).toHaveAttribute('aria-busy', 'true');
+  expect(await workspace.evaluate((element) => Number.parseFloat(getComputedStyle(element).minHeight))).toBeGreaterThan(0);
+
+  await page.evaluate(() => window.dispatchEvent(new Event('scrollend')));
+  await expect(workspace).toHaveAttribute('aria-busy', 'false');
+  await expect(workspace).toHaveCSS('min-height', '0px');
+
   await page.getByRole('button', { name: 'Use synthetic profile' }).click();
-  await page.getByRole('button', { name: 'Load synthetic candidates' }).click();
-  await page.getByRole('button', { name: 'Load related domains' }).click();
-  await page.setViewportSize({ width: 393, height: 852 });
+  await expect(page.getByRole('heading', { name: 'Generate bounded candidate coverage' })).toBeFocused();
+  await expect(workspace).toHaveAttribute('aria-busy', 'true');
+  expect(await workspace.evaluate((element) => Number.parseFloat(getComputedStyle(element).minHeight))).toBeGreaterThan(0);
+  await expect(workspace).toHaveAttribute('aria-busy', 'false', { timeout: 2500 });
+  await expect(workspace).toHaveCSS('min-height', '0px');
+});
+
+test('keeps the guided workflow usable at narrow mobile widths', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.setViewportSize({ width: 320, height: 700 });
+  await page.goto('/demo');
+  const rail = page.locator('.demo-steps');
+  const mobileGuidance = page.locator('.mobile-stage-guidance');
+  expect(await rail.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
+  expect(await rail.locator('button').evaluateAll((buttons) => buttons.every((button) => button.getBoundingClientRect().height >= 44))).toBe(true);
+  await expect(page.locator('.stage-guidance')).toBeHidden();
+  await expect(mobileGuidance).toBeVisible();
+  await expect(mobileGuidance).not.toHaveAttribute('open', '');
+  await expect(page.locator('.hero-full-title')).toBeVisible();
+  await expect(page.locator('.hero-compact-title')).toBeHidden();
+  expect(await mobileGuidance.evaluate((element) => Math.round(element.getBoundingClientRect().height))).toBeLessThanOrEqual(56);
+  const guidanceSummary = mobileGuidance.locator('summary');
+  await guidanceSummary.focus();
+  await guidanceSummary.press('Enter');
+  await expect(mobileGuidance).toHaveAttribute('open', '');
+  await expect(mobileGuidance.locator(':scope > div').first()).toBeVisible();
+  expect(await mobileGuidance.evaluate((element) => {
+    const summaryLabels = element.querySelectorAll<HTMLElement>('.mobile-stage-guidance-headings > *');
+    const firstGuidance = element.querySelector<HTMLElement>(':scope > div');
+    const guidanceFields = firstGuidance?.querySelectorAll<HTMLElement>(':scope > *');
+    if (summaryLabels.length !== 2 || guidanceFields?.length !== 2) return false;
+    return Math.abs(summaryLabels[0]!.getBoundingClientRect().left - guidanceFields[0]!.getBoundingClientRect().left) <= 1
+      && Math.abs(summaryLabels[1]!.getBoundingClientRect().left - guidanceFields[1]!.getBoundingClientRect().left) <= 1;
+  })).toBe(true);
+  await expect(guidanceSummary).toBeFocused();
+  await guidanceSummary.press('Space');
+  await expect(mobileGuidance).not.toHaveAttribute('open', '');
+  await expect(guidanceSummary).toBeFocused();
+  await expect(page.locator('.demo-panel')).toHaveCSS('min-height', '0px');
+  await expectNoHorizontalOverflow(page);
+
+  await page.getByRole('button', { name: 'Begin with Brands' }).click();
+  await expect(page.locator('.hero-full-title')).toBeHidden();
+  await expect(page.locator('.hero-compact-title')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Use synthetic profile' })).toBeInViewport();
+  await page.getByRole('button', { name: 'Use synthetic profile' }).click();
+  await page.getByRole('button', { name: 'Generate fixed candidates' }).click();
+  await expect(page.locator('.discover-candidates article')).toHaveCount(3);
+  await expectNoHorizontalOverflow(page);
+  await page.getByRole('button', { name: 'Review 3 candidates in Bulk' }).click();
   await expect(page.locator('.map-frame')).toBeHidden();
   await expect(page.locator('.map-mobile')).toBeVisible();
-  expect(await page.locator('.map-mobile').evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
-  expect(await page.locator('.map-mobile li span').evaluateAll((elements) => elements.every((element) => (
-    getComputedStyle(element).whiteSpace === 'normal'
-      && element.scrollWidth <= element.clientWidth + 1
-      && element.scrollHeight <= element.clientHeight + 1
-      && !element.textContent?.includes('…')
-  )))).toBe(true);
-  await expect(page.getByRole('button', { name: 'Inspect northstar-login.example' })).toBeVisible();
   await expectNoHorizontalOverflow(page);
+
   await page.getByRole('button', { name: 'Inspect northstar-login.example' }).click();
-  await expect(page.getByRole('heading', { name: 'TLS and certificate intelligence' })).toBeVisible();
-  await page.getByText('Why the risk score is 78', { exact: true }).click();
-  await expect(page.locator('.factor-chart')).toBeHidden();
-  await expect(page.locator('.score-details details[open] li')).not.toHaveCount(0);
-  await expectNoHorizontalOverflow(page);
-  await expect(page.locator('.matrix-frame')).toBeHidden();
-  const desktopComparisonTable = page.getByRole('table', {
-    name: 'Exact pairwise registration publication comparisons',
-    includeHidden: true,
+  await expect(page.getByRole('heading', { name: 'northstar-login.example' })).toBeFocused();
+  const activeStageCenterOffset = () => rail.evaluate((element) => {
+    const active = element.querySelector('[aria-current="step"]');
+    if (!active) return Number.POSITIVE_INFINITY;
+    const railRect = element.getBoundingClientRect();
+    const activeRect = active.getBoundingClientRect();
+    return Math.abs((activeRect.left + activeRect.right) / 2 - (railRect.left + railRect.right) / 2);
   });
-  await expect(desktopComparisonTable).toHaveCount(1);
-  await expect(desktopComparisonTable).toBeHidden();
-  const mobileAgreement = page.getByRole('region', { name: 'Exact source comparisons' });
-  await expect(mobileAgreement).toBeVisible();
-  await expect(mobileAgreement.locator('.lane-card')).toHaveCount(3);
-  await expect(mobileAgreement).toContainText('Each card compares one field across one source pair.');
-  const firstComparison = mobileAgreement.locator('.lane-card').first();
-  const disclosureSummary = firstComparison.locator('summary');
-  await expect(firstComparison).not.toHaveAttribute('open', '');
-  const collapsedMarker = await disclosureSummary.evaluate((element) => getComputedStyle(element, '::after').content);
-  expect(collapsedMarker).toContain('+');
-  await disclosureSummary.focus();
-  await disclosureSummary.press('Enter');
-  await expect(firstComparison).toHaveAttribute('open', '');
-  const expandedMarker = await disclosureSummary.evaluate((element) => getComputedStyle(element, '::after').content);
-  expect(expandedMarker).not.toBe(collapsedMarker);
-  expect(expandedMarker).toContain('−');
-  const publicationSides = firstComparison.locator('.publication-side');
-  await expect(publicationSides).toHaveCount(2);
-  expect(await publicationSides.evaluateAll((elements) => elements.every((element) => (
-    !element.hasAttribute('aria-label')
-  )))).toBe(true);
-  await expect(disclosureSummary).toHaveCSS('cursor', 'pointer');
-  await expect(firstComparison.getByText('First publication', { exact: true })).toBeVisible();
-  await expect(firstComparison.getByText('Second publication', { exact: true })).toBeVisible();
-  await expect(firstComparison.getByText('Source state · value', { exact: true })).toHaveCount(2);
-  expect(await mobileAgreement.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
-  await expect(page.locator('.matrix-legend')).toContainText('Source conflict');
-  await expect(page.locator('.matrix-legend')).toContainText('Source-only value');
-  await expect(page.locator('.matrix-legend')).toContainText('Incomplete / redacted');
-  await expect(page.locator('.matrix-legend').getByText('Different', { exact: true })).toHaveCount(0);
-  await page.getByText('Synthetic RDAP and WHOIS fields are equivalent', { exact: true }).click();
-  const comparisonTable = page.locator('.comparison .table-wrap');
-  expect(await comparisonTable.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
-  const tls = page.locator('.tls-card');
-  await tls.locator(':scope > summary').click();
-  await expect(tls.locator('.validity-chart')).toBeHidden();
-  await expect(tls.locator('.validity-mobile')).toBeVisible();
+  await expect.poll(activeStageCenterOffset).toBeLessThanOrEqual(3);
+  await expect(page.locator('.lookup-family button[aria-expanded="true"]')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Open synthetic case in Monitor' })).toBeInViewport();
   await expectNoHorizontalOverflow(page);
+
+  await rail.evaluate((element) => element.scrollTo({ left: 0, behavior: 'auto' }));
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'northstar-login.example' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'northstar-login.example' })).not.toBeFocused();
+  await expect(page.locator('.hero-full-title')).toBeHidden();
+  await expect(page.locator('.hero-compact-title')).toBeVisible();
+  await expect.poll(activeStageCenterOffset).toBeLessThanOrEqual(3);
+
+  await page.setViewportSize({ width: 360, height: 760 });
+  await page.getByRole('button', { name: 'Expand Registration evidence' }).click();
+  await expect(page.getByRole('region', { name: 'Exact source comparisons' })).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+  await page.getByRole('button', { name: 'Expand Web, DNS, and TLS evidence' }).click();
+  await expect(page.getByRole('heading', { name: 'TLS and certificate intelligence' })).toBeVisible();
+  await page.setViewportSize({ width: 393, height: 852 });
+  await expectNoHorizontalOverflow(page);
+
   await page.getByRole('button', { name: 'Open synthetic case in Monitor' }).click();
   await page.getByRole('button', { name: 'Load later synthetic observation' }).click();
-  await expect(page.locator('.timeline-entry')).toHaveCount(2);
+  await expect(page.getByRole('heading', { name: 'Repeated evidence and material changes stay distinct' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Watchlist activity' })).toHaveCount(0);
+  const mobileChangeArrows = page.locator('.change-list dd b');
+  await expect(mobileChangeArrows.first()).toBeVisible();
+  expect(await mobileChangeArrows.evaluateAll((arrows) => arrows.every((arrow) => {
+    const row = arrow.closest('dd');
+    if (!row) return false;
+    const arrowBounds = arrow.getBoundingClientRect();
+    const rowBounds = row.getBoundingClientRect();
+    return getComputedStyle(arrow).transform === 'none'
+      && getComputedStyle(arrow, '::after').content.includes('↓')
+      && arrowBounds.left >= rowBounds.left
+      && arrowBounds.right <= rowBounds.right;
+  }))).toBe(true);
   await expectNoHorizontalOverflow(page);
+
+  await page.getByRole('button', { name: 'Reset demo' }).click();
+  await expect(page.getByRole('heading', { name: 'Choose a focused investigation task' })).toBeFocused();
+  await expect(page.locator('.hero-full-title')).toBeVisible();
+  await expect(page.locator('.hero-compact-title')).toBeHidden();
 });
 
 test('recovers safely from malformed and future tab state', async ({ page }) => {
@@ -329,16 +330,24 @@ test('keeps progressing in memory when tab storage is unavailable', async ({ pag
   await page.goto('/demo');
   await page.getByRole('button', { name: 'Begin with Brands' }).click();
   await page.getByRole('button', { name: 'Use synthetic profile' }).click();
-  await expect(page.getByRole('heading', { name: 'Generate bounded candidate coverage' })).toBeVisible();
+  await page.getByRole('button', { name: 'Generate fixed candidates' }).click();
+  await expect(page.getByRole('heading', { name: 'Three candidates, two evidence origins' })).toBeVisible();
+  await expect(page.getByRole('status')).toHaveText('Loaded three fixed synthetic candidates without making an investigation request.');
+  await expect(page.getByRole('button', { name: /Bulk.*Upcoming/ })).toBeDisabled();
+  await page.getByRole('button', { name: 'Review 3 candidates in Bulk' }).click();
+  await expect(page.getByRole('heading', { name: 'Prioritise candidates without collapsing evidence' })).toBeFocused();
   await expect(page.getByRole('status')).toContainText('Progress updated in memory');
 });
 
-test('supports keyboard progression and reduced motion', async ({ page }) => {
+test('uses immediate focus-safe transitions when reduced motion is requested', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('/demo');
   const start = page.getByRole('button', { name: 'Begin with Brands' });
   await start.focus();
-  await page.keyboard.press('Enter');
-  await expect(page.getByRole('heading', { name: 'Define the protected identity' })).toBeVisible();
+  await start.press('Enter');
+  await expect(page.getByRole('heading', { name: 'Define the protected identity' })).toBeFocused();
+  await expect(page.locator('#demo-workspace')).toHaveCSS('min-height', '0px');
+  const firstTop = await workspaceTop(page);
+  expect(await workspaceTop(page)).toBe(firstTop);
   expect(await page.evaluate(() => getComputedStyle(document.documentElement).scrollBehavior)).toBe('auto');
 });

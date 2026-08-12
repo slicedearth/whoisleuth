@@ -441,7 +441,7 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
     ? { ...rdapRecord, ...(registrarRdap ? { registrarRdap } : {}) }
     : {
         error: rdapResult.status === 'rejected'
-          ? errorMessage(rdapResult.reason, 'RDAP lookup failed')
+          ? boundedSourceDetail(rdapResult.reason, 'RDAP lookup failed')
           : 'No RDAP registry found for this query via IANA bootstrap',
         attempts: rdapAttempts,
       };
@@ -456,7 +456,7 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
   } else {
     whois = {
       error: whoisResult.status === 'rejected'
-        ? errorMessage(whoisResult.reason, 'WHOIS lookup failed')
+        ? boundedSourceDetail(whoisResult.reason, 'WHOIS lookup failed')
         : 'WHOIS returned no referral chain',
     };
   }

@@ -168,8 +168,11 @@
   summary{width:max-content;max-width:100%;cursor:pointer;color:var(--accent);font-weight:700;outline-offset:3px}
   summary:focus-visible{outline:2px solid var(--accent)}
   .state-label{display:inline-block;padding:3px 7px;border:1px solid currentColor;border-radius:999px;font-size:var(--text-xs);font-weight:800;line-height:1.25;color:var(--text)}
-  [data-ledger-state="conflict"] .state-label,[data-ledger-state="unavailable"] .state-label{border-style:double}
-  [data-ledger-state="incomplete"] .state-label,[data-ledger-state="collection_changed"] .state-label,[data-ledger-state="model_changed"] .state-label,[data-ledger-state="not_compared"] .state-label{border-style:dashed}
+  [data-ledger-state="equivalent"] .state-label{color:var(--success)}
+  [data-ledger-state="added"] .state-label,[data-ledger-state="removed"] .state-label,[data-ledger-state="different"] .state-label{color:var(--amber)}
+  [data-ledger-state="conflict"] .state-label{border-style:double;color:var(--danger)}
+  [data-ledger-state="incomplete"] .state-label,[data-ledger-state="collection_changed"] .state-label,[data-ledger-state="model_changed"] .state-label{border-style:dashed;color:var(--amber)}
+  [data-ledger-state="unavailable"] .state-label,[data-ledger-state="unsupported"] .state-label,[data-ledger-state="not_compared"] .state-label{border-style:dotted;color:var(--muted)}
   .exact-details{margin-top:10px;padding:12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised);min-width:min(620px,75vw)}
   .row-contract,.side-metadata dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px 12px;margin:0}
   dl div{min-width:0}
@@ -184,7 +187,11 @@
   .row-limitations p{padding-left:0}
   .value-grid code{display:block;max-height:12rem;overflow:auto}
   .ledger-cards{display:none}
-  .ledger-cards article{min-width:0;padding:12px;border:1px solid var(--border);border-left:4px solid var(--border-strong);border-radius:var(--radius-md);background:var(--surface)}
+  .ledger-cards article{min-width:0;padding:12px;border:1px solid var(--border);border-left:4px solid var(--border-strong);border-radius:var(--radius-md);background:var(--panel)}
+  .ledger-cards article[data-ledger-state="equivalent"]{border-left-color:var(--success)}
+  .ledger-cards article[data-ledger-state="conflict"]{border-left-color:var(--danger)}
+  .ledger-cards article[data-ledger-state="added"],.ledger-cards article[data-ledger-state="removed"],.ledger-cards article[data-ledger-state="different"],.ledger-cards article[data-ledger-state="incomplete"],.ledger-cards article[data-ledger-state="collection_changed"],.ledger-cards article[data-ledger-state="model_changed"]{border-left-color:var(--amber)}
+  .ledger-cards article[data-ledger-state="unavailable"],.ledger-cards article[data-ledger-state="unsupported"],.ledger-cards article[data-ledger-state="not_compared"]{border-left-style:dotted;border-left-color:var(--muted)}
   .ledger-cards header{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
   .ledger-cards h3{margin:7px 0 0;font-size:var(--text-md);overflow-wrap:anywhere}
   .ledger-cards header small,.ledger-cards>article>p{color:var(--muted);overflow-wrap:anywhere}

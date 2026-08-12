@@ -3,14 +3,16 @@
     projectRedirectPath,
     type RedirectInput,
   } from '$lib/analysis/visualization-models.ts';
+  import { MAX_HTTP_EVIDENCE_REDIRECTS } from '../../../../lib/http-evidence-bounds.mts';
 
   let { redirects }: { redirects: RedirectInput[] } = $props();
-  const path = $derived(projectRedirectPath(redirects));
+  const boundedRedirects = $derived(redirects.slice(0, MAX_HTTP_EVIDENCE_REDIRECTS));
+  const path = $derived(projectRedirectPath(boundedRedirects));
 </script>
 
 {#if path.nodes.length}
-  <div class="redirect-path" role="img" aria-label={`HTTP redirect path with ${redirects.length} hop${redirects.length === 1 ? '' : 's'}`}>
-    <svg viewBox={`0 0 ${path.width} ${path.height}`} aria-hidden="true">
+  <div class="redirect-path">
+    <svg viewBox={`0 0 ${path.width} ${path.height}`} role="img" aria-label={`HTTP redirect path with ${boundedRedirects.length} hop${boundedRedirects.length === 1 ? '' : 's'}`}>
       <defs>
         <marker id="redirect-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
           <path d="M 0 0 L 10 5 L 0 10 z" />
@@ -29,18 +31,20 @@
         </g>
       {/each}
     </svg>
-    <ol class="redirect-mobile" aria-hidden="true">
-      {#each path.nodes as node, index (node.id)}
+    <ol class="redirect-mobile" aria-label="HTTP redirect steps">
+      {#each boundedRedirects as redirect, index (`${index}:${redirect.from}:${redirect.to}`)}
         <li>
           <span class="mobile-node" aria-hidden="true"></span>
           <div>
-            <small>{index === 0 ? 'Start' : `HTTP ${node.status}`}</small>
-            <strong>{node.label}</strong>
-            {#if node.queryOmitted}<span>Query omitted from retained provenance</span>{/if}
+            <small>Hop {index + 1} · HTTP {redirect.status}</small>
+            <strong><span>From</span>{redirect.from}</strong>
+            <b><span>To</span>{redirect.to}</b>
+            {#if redirect.queryOmitted}<em>Query omitted from retained provenance</em>{/if}
           </div>
         </li>
       {/each}
     </ol>
+    {#if redirects.length > boundedRedirects.length}<p>Additional redirect records were omitted at the display bound.</p>{/if}
     {#if path.truncated}<p>The path visual reached its {path.nodes.length}-node display limit.</p>{/if}
   </div>
 {/if}
@@ -67,7 +71,8 @@
     .mobile-node{z-index:1;width:12px;height:12px;margin-top:2px;border:2px solid var(--accent2);border-radius:50%;background:var(--panel)}
     .redirect-mobile div{display:grid;gap:3px;min-width:0}
     .redirect-mobile small{color:var(--accent2);font:700 var(--text-2xs) var(--mono);text-transform:uppercase}
-    .redirect-mobile strong{color:var(--text);font:650 var(--text-xs) var(--mono);overflow-wrap:anywhere;word-break:break-word}
-    .redirect-mobile div span{color:var(--muted);font-size:var(--text-2xs)}
+    .redirect-mobile strong,.redirect-mobile b{display:grid;grid-template-columns:34px minmax(0,1fr);gap:6px;color:var(--text);font:650 var(--text-xs) var(--mono);overflow-wrap:anywhere;word-break:break-word}
+    .redirect-mobile b{font-weight:500}.redirect-mobile strong span,.redirect-mobile b span{color:var(--muted);font:600 var(--text-2xs) var(--mono);text-transform:uppercase}
+    .redirect-mobile em{color:var(--muted);font-size:var(--text-2xs);font-style:normal}
   }
 </style>

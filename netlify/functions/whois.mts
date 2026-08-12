@@ -5,7 +5,15 @@ import { guardNetlifyNetworkRequest, withNetlifyOperationBudget } from '../../li
 import { json, withNetlifyApiErrorBoundary } from '../../lib/http.mts';
 import type { NetlifyFunctionHandler } from '../../lib/netlify-function-types.mts';
 
-const handleWhois: NetlifyFunctionHandler = async (event) => {
+type WhoisHandlerDependencies = Readonly<{
+  buildWhoisChain: typeof buildWhoisChain;
+  parseWhoisChain: typeof parseWhoisChain;
+}>;
+
+async function handleWhois(
+  event: Parameters<NetlifyFunctionHandler>[0],
+  dependencies: WhoisHandlerDependencies = { buildWhoisChain, parseWhoisChain },
+): ReturnType<NetlifyFunctionHandler> {
   const guard = guardNetlifyNetworkRequest(event, 'whois');
   if (guard.response) return guard.response;
 
@@ -15,23 +23,32 @@ const handleWhois: NetlifyFunctionHandler = async (event) => {
   let classified;
   try {
     classified = classifyQuery(q);
-  } catch (err) {
-    return json(400, { error: err instanceof Error ? err.message : 'Invalid query' });
+  } catch {
+    return json(400, { error: 'Invalid query' });
   }
 
   return withNetlifyOperationBudget(guard.sessionKey, operationBudgetTargetFor('whois'), async () => {
-    const chain = await buildWhoisChain(classified.value);
+    const chain = await dependencies.buildWhoisChain(classified.value);
     return json(200, {
       query: q,
       type: classified.type,
       inputHostname: classified.inputHostname,
       registrableDomain: classified.registrableDomain,
       chain,
-      parsed: parseWhoisChain(chain),
+      parsed: dependencies.parseWhoisChain(chain),
     });
   });
-};
+}
 
-const handler = withNetlifyApiErrorBoundary(handleWhois);
+function createWhoisHandler(
+  dependencies: WhoisHandlerDependencies = { buildWhoisChain, parseWhoisChain },
+): NetlifyFunctionHandler {
+  return withNetlifyApiErrorBoundary(
+    (request) => handleWhois(request, dependencies),
+  );
+}
 
-export { handler };
+const handler = createWhoisHandler();
+
+export { createWhoisHandler, handler };
+export type { WhoisHandlerDependencies };

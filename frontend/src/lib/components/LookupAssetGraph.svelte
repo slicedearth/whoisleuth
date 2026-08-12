@@ -146,7 +146,7 @@
   .source-ledger>ul{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin:0;padding:0;list-style:none}
   .source-ledger li{display:grid;gap:4px;min-width:0;padding:9px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
   .source-ledger li>div{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
-  .source-ledger span{color:var(--success);font:650 var(--text-2xs) var(--mono);text-transform:capitalize}
+  .source-ledger span{color:var(--text);font:650 var(--text-2xs) var(--mono);text-transform:capitalize}
   .source-ledger span.partial-source{color:var(--amber)}
   .source-ledger p,.source-ledger small{margin:0;color:var(--muted);font-size:var(--text-2xs);line-height:1.4;overflow-wrap:anywhere}
   .source-ledger a{width:max-content;font:650 var(--text-2xs) var(--mono)}

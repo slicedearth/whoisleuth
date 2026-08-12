@@ -55,6 +55,7 @@
     type LookupHttpResponse,
   } from '$lib/analysis/lookup-response.ts';
   import {
+    boundedJsonPreview,
     boundedTechnologyText,
     dateTimeAttribute,
     formatDate,
@@ -100,6 +101,10 @@
   import { readLookupWorkflowState, writeLookupWorkflowState } from '$lib/console-workflow-state.ts';
   import { LookupRequestController } from '$lib/controllers/lookup-request-controller';
   import { LookupCaseController, type LookupCaseActionResult } from '$lib/controllers/lookup-case-controller';
+  import {
+    MAX_OBSERVATION_LIMITATIONS,
+    MAX_OBSERVATION_LIMITATION_LENGTH,
+  } from '../../../../../lib/observation.mts';
   type LookupMode = 'fast' | 'deep';
 
   let query=$state('');
@@ -112,6 +117,7 @@
   let includeSecurityTxt=$state(false);
   let error=$state('');
   let result=$state<LookupHttpResponse|null>(null);
+  let rawEvidenceOpen=$state(false);
   let completedLookupTarget=$state('');
   let completedLookupDepth=$state<LookupMode|null>(null);
   let profile=$state<BrandProfile|null>(null);
@@ -156,6 +162,9 @@
     try{const value=entries[0];if(!value)return false;const url=new URL(/^[a-z][a-z\d+.-]*:\/\//i.test(value)?value:`https://${value}`);const host=url.hostname;return host.includes('.')&&!host.includes(':')&&!/^\d{1,3}(?:\.\d{1,3}){3}$/u.test(host);}catch{return false;}
   });
   const lookupView=$derived(createLookupViewModel(result));
+  const rawEvidencePreview=$derived.by(()=>rawEvidenceOpen&&result
+    ? boundedJsonPreview(result)
+    : {text:'',truncated:false});
   const availability=$derived(lookupView.availability);
   const rdap=$derived(lookupView.rdap);
   const registrarRdap=$derived(lookupView.registrarRdap);
@@ -252,7 +261,16 @@
   const evidenceQualityMatrix=$derived(lookupAnalysis.evidenceQualityMatrix);
   const lookupSummary=$derived(lookupAnalysis.lookupSummary);
   const lookupInvestigationBrief=$derived(lookupAnalysis.lookupInvestigationBrief);
-  const lookupEvidenceDocument=$derived(result?buildLookupEvidence(result,{idnAnalysis,applicationVersion:__WHOISLEUTH_VERSION__}):null);
+  function portableOutputBoundFailure(cause:unknown):boolean{
+    return (cause instanceof TypeError||cause instanceof RangeError)
+      &&/(?:Lookup response|Lookup evidence|Readable Lookup report).*(?:bound|exceed|limit)/iu.test(cause.message);
+  }
+  const lookupEvidenceProjection=$derived.by(()=>{
+    if(!result)return {document:null,error:null};
+    try{return {document:buildLookupEvidence(result,{idnAnalysis,applicationVersion:__WHOISLEUTH_VERSION__}),error:null};}
+    catch(cause){if(!portableOutputBoundFailure(cause))throw cause;return {document:null,error:'Portable evidence and readable report exports are unavailable because this response exceeds the bounded evidence structure. The separately attributed Lookup result remains available.'};}
+  });
+  const lookupEvidenceDocument=$derived(lookupEvidenceProjection.document);
   const evidenceTopologyTarget=$derived(lookupAnalysis.evidenceTopologyTarget);
   const evidenceTopologyProjection=$derived(projectEvidenceTopology(evidenceTopologyTarget,evidenceTopologyNodes));
   const caseEvidence=$derived(lookupAnalysis.caseEvidence);
@@ -333,6 +351,7 @@
   }
   function clearCompletedLookupContext(){
     invalidateCaseActions();
+    rawEvidenceOpen=false;
     result=null;
     completedLookupTarget='';
     completedLookupDepth=null;
@@ -341,6 +360,7 @@
     caseStatus='';
     expandedResultSections=[];
     detailedAssessmentOpen=false;
+    evidenceExportStatus='';
   }
   function handleLookupQueryChange(value:string){
     query=value;
@@ -510,17 +530,24 @@
     });
   }
   function downloadEvidence(){
-    if(!result||!lookupEvidenceDocument)return;
+    if(!result)return;
+    if(!lookupEvidenceDocument){evidenceExportStatus=`Evidence JSON was not created. ${lookupEvidenceProjection.error||'Evidence export is unavailable for this result.'}`;return;}
     evidenceExportStatus='';
     try{
       const body=serializeLookupEvidence(lookupEvidenceDocument,true);
       const url=URL.createObjectURL(new Blob([body],{type:'application/json'}));
       const anchor=document.createElement('a');anchor.href=url;anchor.download=evidenceFilename(result);anchor.click();URL.revokeObjectURL(url);
-    }catch{
+    }catch(cause){
+      if(!portableOutputBoundFailure(cause))throw cause;
       evidenceExportStatus='Evidence export was not created because the retained result exceeds the portable evidence bounds.';
     }
   }
-  function downloadReadableReport(includeAttribution=true){if(!result)return;const body=buildLookupReadableReport(result,{risk,applicationVersion:__WHOISLEUTH_VERSION__,includeAttribution});const url=URL.createObjectURL(new Blob([body],{type:'text/markdown;charset=utf-8'}));const anchor=document.createElement('a');anchor.href=url;anchor.download=lookupReadableReportFilename(result);anchor.click();URL.revokeObjectURL(url);}
+  function downloadReadableReport(includeAttribution=true){
+    if(!result)return;
+    if(lookupEvidenceProjection.error){evidenceExportStatus=`Readable report was not created. ${lookupEvidenceProjection.error}`;return;}
+    try{const body=buildLookupReadableReport(result,{risk,applicationVersion:__WHOISLEUTH_VERSION__,includeAttribution});const url=URL.createObjectURL(new Blob([body],{type:'text/markdown;charset=utf-8'}));const anchor=document.createElement('a');anchor.href=url;anchor.download=lookupReadableReportFilename(result);anchor.click();URL.revokeObjectURL(url);}
+    catch(cause){if(!portableOutputBoundFailure(cause))throw cause;evidenceExportStatus='Readable report export was not created because the retained result exceeds its bounded report structure.';}
+  }
   function downloadInvestigationBrief(){if(!result)return;const body=formatLookupInvestigationBriefMarkdown(lookupInvestigationBrief);const url=URL.createObjectURL(new Blob([body],{type:'text/markdown;charset=utf-8'}));const anchor=document.createElement('a');anchor.href=url;anchor.download=lookupInvestigationBriefFilename(lookupInvestigationBrief);anchor.click();URL.revokeObjectURL(url);}
   async function downloadClaimPassport(claimId:LookupClaimId):Promise<string>{
     if(!result)throw new Error('Run a Lookup before exporting a claim passport.');
@@ -550,9 +577,10 @@
   async function submit(event:SubmitEvent){
     event.preventDefault();
     if(lookupDisabled){error=lookupDisabled.reason||'Lookup is disabled by deployment policy.';return;}
+    if(parsedInput.tooLarge){error='The pasted domain list exceeds the bounded input limit.';return;}
     if(!entries.length||loading)return;
     if(entries.length>1){
-      result=null;error='';
+      rawEvidenceOpen=false;result=null;error='';
       const handoffResult=saveCandidateHandoff('manual',entries.slice(0,2000).map(domain=>({domain:domain.toLowerCase(),source:'manual input',mutationTypes:[]})));
       if(!handoffResult.saved){error='This browser could not retain the selected domains for Bulk. Check site-storage access and try again.';return;}
       await goto(`/bulk?source=manual&handoff=${handoffResult.token}`);
@@ -560,7 +588,7 @@
     }
 
     invalidateCaseActions();
-    loading=true;loadingElapsedMs=0;error='';result=null;completedLookupTarget='';completedLookupDepth=null;caseRecord=null;caseNote='';caseStatus='';serviceDependencyScope='';serviceDependencyFalsePositives='';expandedResultSections=[];detailedAssessmentOpen=false;
+    loading=true;loadingElapsedMs=0;error='';rawEvidenceOpen=false;result=null;completedLookupTarget='';completedLookupDepth=null;caseRecord=null;caseNote='';caseStatus='';serviceDependencyScope='';serviceDependencyFalsePositives='';expandedResultSections=[];detailedAssessmentOpen=false;evidenceExportStatus='';
     const target=entries[0];if(!target)return;
     const requestedLookupMode=lookupMode;
     const requestRevision=++lookupRevision;
@@ -611,6 +639,7 @@
   loadingDeadlineMs={LOOKUP_CLIENT_TIMEOUT_MS}
   entryCount={entries.length}
   duplicateCount={parsedInput.duplicates}
+  inputTooLarge={parsedInput.tooLarge}
   {lookupDisabled}
   {lookupLimitations}
   {externalIntelligenceSupported}
@@ -637,7 +666,7 @@
 {#if result}
   <section class="result-root" id="result" use:evidenceLinkNavigation>
     <LookupResultHeader title={show(result.registrableDomain||result.query)} state={show(availability.state)} isSubdomain={Boolean(result.isSubdomain)} registrableDomain={show(result.registrableDomain)} inputHostname={show(result.inputHostname)} onExport={downloadEvidence} onReportExport={downloadReadableReport} onBriefExport={downloadInvestigationBrief} />
-    {#if evidenceExportStatus}<p class="local-context-status" role="status">{evidenceExportStatus}</p>{/if}
+    {#if evidenceExportStatus||lookupEvidenceProjection.error}<p class:portable-evidence-status={Boolean(lookupEvidenceProjection.error)} class="local-context-status" role="status" aria-atomic="true">{evidenceExportStatus||lookupEvidenceProjection.error}</p>{/if}
 
     <LookupPresentationControls
       task={taskView}
@@ -772,11 +801,11 @@
       {/if}
 
       {#if httpEvidence.source==='http'}
-        <div class="evidence-component" id="evidence-http"><LookupHttpEvidence status={statusLabel(show(httpEvidence.status))} complete={httpEvidence.complete!==false} rows={networkDisplay.httpRows} crossOriginRedirect={Boolean(httpEvidence.crossOriginRedirect)} httpsDowngrade={Boolean(httpEvidence.httpsDowngrade)} redirects={networkDisplay.httpRedirects} attempts={networkDisplay.httpAttempts} metadata={networkDisplay.httpMetadata} limitations={Array.isArray(httpEvidence.limitations)?httpEvidence.limitations.map(String):[]} /></div>
+        <div class="evidence-component" id="evidence-http"><LookupHttpEvidence status={statusLabel(show(httpEvidence.status))} complete={httpEvidence.complete!==false} rows={networkDisplay.httpRows} crossOriginRedirect={Boolean(httpEvidence.crossOriginRedirect)} httpsDowngrade={Boolean(httpEvidence.httpsDowngrade)} redirects={networkDisplay.httpRedirects} attempts={networkDisplay.httpAttempts} metadata={networkDisplay.httpMetadata} limitations={stringList(httpEvidence.limitations,MAX_OBSERVATION_LIMITATIONS,MAX_OBSERVATION_LIMITATION_LENGTH)} /></div>
       {/if}
 
       {#if tlsEvidence.source==='tls'}
-        <div class="evidence-component" id="evidence-tls"><LookupTlsEvidence status={statusLabel(show(tlsEvidence.status))} complete={tlsEvidence.complete!==false} rows={networkDisplay.tlsRows} findings={networkDisplay.tlsFindings} leafCertificate={networkDisplay.leafCertificate} alternativeNames={networkDisplay.alternativeNames} alternativeNamesTruncated={Boolean(tlsAltNames.truncated)} chain={networkDisplay.tlsChain} chainTruncated={Boolean(tlsEvidence.chainTruncated)} validationDetails={networkDisplay.tlsValidation} limitations={Array.isArray(tlsEvidence.limitations)?tlsEvidence.limitations.map(String):[]} validFrom={typeof tlsCertificate.validFrom==='string'?tlsCertificate.validFrom:null} validTo={typeof tlsCertificate.validTo==='string'?tlsCertificate.validTo:null} observedAt={lookupObservedAt} /></div>
+        <div class="evidence-component" id="evidence-tls"><LookupTlsEvidence status={statusLabel(show(tlsEvidence.status))} complete={tlsEvidence.complete!==false} rows={networkDisplay.tlsRows} findings={networkDisplay.tlsFindings} leafCertificate={networkDisplay.leafCertificate} alternativeNames={networkDisplay.alternativeNames} alternativeNamesTruncated={Boolean(tlsAltNames.truncated)} chain={networkDisplay.tlsChain} chainTruncated={Boolean(tlsEvidence.chainTruncated)} validationDetails={networkDisplay.tlsValidation} limitations={stringList(tlsEvidence.limitations,MAX_OBSERVATION_LIMITATIONS,MAX_OBSERVATION_LIMITATION_LENGTH)} validFrom={typeof tlsCertificate.validFrom==='string'?tlsCertificate.validFrom:null} validTo={typeof tlsCertificate.validTo==='string'?tlsCertificate.validTo:null} observedAt={lookupObservedAt} /></div>
         <div class="evidence-component"><LookupCertificatePolicyReview review={certificatePolicyReview} /></div>
       {/if}
 
@@ -817,16 +846,16 @@
           status={statusLabel(show(pageIdentity.status))}
           complete={Boolean(pageIdentity.complete)}
           facts={pageDisplay.pageIdentityFacts}
-          externalFormOrigins={stringList(pageForms.externalActionOrigins)}
+          externalFormOrigins={stringList(pageForms.externalActionOrigins,10,2048)}
           resourceCount={Number(pageResources.count)||0}
           resourceSummary={pageDisplay.resourceSummary}
-          embeddedOrigins={stringList(pageIdentity.embeddedOrigins)}
-          contactDomains={stringList(pageIdentity.contactDomains)}
+          embeddedOrigins={stringList(pageIdentity.embeddedOrigins,20,2048)}
+          contactDomains={stringList(pageIdentity.contactDomains,20,253)}
           downloadCount={Number(pageDownloads.count)||0}
           downloadSummary={pageDisplay.downloadSummary}
           trackingIdentifiers={pageDisplay.trackingIdentifiers}
           fingerprints={pageDisplay.fingerprints}
-          limitations={stringList(pageIdentity.limitations)}
+          limitations={stringList(pageIdentity.limitations,MAX_OBSERVATION_LIMITATIONS,MAX_OBSERVATION_LIMITATION_LENGTH)}
         /></div>
       {/if}
 
@@ -935,15 +964,15 @@
         comparisonSummary={`RDAP / WHOIS comparison · ${comparison.counts.conflict} conflicts · ${sourceOnlyCount} source-only · ${redactedComparisonCount} redacted · ${limitedComparisonCount} unavailable/incomplete · ${comparison.counts.equivalent} equivalent`}
         comparisonRows={registryDisplay.comparisonRows}
         comparisonHasConflicts={comparison.counts.conflict>0}
-        rdapError={rdap.error?String(rdap.error):''}
+        rdapError={boundedTechnologyText(rdap.error,240)}
         resultType={String(result?.type||'')}
         {rdapParsed}
         rdapPartialDetail={registryDisplay.rdapPartialDetail}
         rdapRows={registryDisplay.rdapRows}
-        whoisError={whois.error?String(whois.error):''}
+        whoisError={boundedTechnologyText(whois.error,240)}
         whoisRows={registryDisplay.whoisRows}
         whoisContactRoles={registryDisplay.whoisContactRoles}
-        whoisTruncatedFields={stringList(whoisParsed.fieldsTruncated)}
+        whoisTruncatedFields={stringList(whoisParsed.fieldsTruncated,64,80)}
         insights={registryInsights}
         registrar={registryDisplay.registrarRdap}
       /></div>
@@ -1070,7 +1099,13 @@
         {/if}
         <section class="advanced-block" id="raw-data" aria-labelledby="raw-data-title">
           <h4 id="raw-data-title">Raw evidence</h4>
-          <details class="raw card"><summary>Raw unified response</summary><pre>{JSON.stringify(result,null,2)}</pre></details>
+          <details class="raw card" ontoggle={(event)=>rawEvidenceOpen=(event.currentTarget as HTMLDetailsElement).open}>
+            <summary>Bounded raw-response preview</summary>
+            {#if rawEvidenceOpen}
+              <pre>{rawEvidencePreview.text}</pre>
+              {#if rawEvidencePreview.truncated}<p class="card-note">Preview capped for browser responsiveness. Use the deliberate bounded evidence export for the complete portable projection.</p>{/if}
+            {/if}
+          </details>
         </section>
       {/if}
     </section>
@@ -1112,6 +1147,7 @@
   .detailed-assessment[open]>summary{border-bottom:1px solid var(--border);background:var(--panel-raised)}
   .detailed-assessment[open]>summary span:last-child::before{content:'−'}
   .detailed-assessment-body{padding:0 14px 14px}
+  .portable-evidence-status{margin:12px 0 0;padding:10px 12px;border:1px dotted var(--amber);border-radius:var(--radius-sm);color:var(--text);background:color-mix(in srgb,var(--amber) 7%,var(--surface));font-size:var(--text-xs);line-height:1.55}
   .result-section{--section-accent:var(--accent2);margin-top:26px}
   .result-section.family-web{--section-accent:var(--evidence-web)}
   .result-section.family-registry{--section-accent:var(--evidence-registry)}

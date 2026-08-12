@@ -5,6 +5,7 @@ import {
   type InvestigationPlanRecipe,
 } from './investigation-plan.mts';
 import { CliUsageError } from './errors.mts';
+import { scanBoundedJson } from '../lib/bounded-json.mts';
 
 export const CLI_INVESTIGATION_RUN_SCHEMA = 'whoisleuth.cli.investigation-run';
 export const CLI_INVESTIGATION_RUN_VERSION = 1;
@@ -25,8 +26,12 @@ function boundedResult(value: string): unknown {
     throw new CliUsageError(`Investigation step output is limited to ${MAX_INVESTIGATION_RUN_BYTES} bytes.`);
   }
   try {
+    scanBoundedJson(value);
     return JSON.parse(value);
-  } catch {
+  } catch (cause) {
+    if (cause instanceof TypeError && cause.message !== 'Artefact input is not valid JSON.') {
+      throw new CliUsageError(`Investigation step output ${cause.message.replace(/^Artefact JSON /u, '')}`);
+    }
     return value.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/gu, '').slice(0, MAX_INVESTIGATION_RUN_BYTES);
   }
 }
@@ -49,8 +54,16 @@ function parseResumeState(
 ): CompletedStep[] {
   if (!input) return [];
   if (Buffer.byteLength(input, 'utf8') > MAX_INVESTIGATION_RUN_BYTES) throw new CliUsageError('Investigation resume state exceeds the 24 MiB limit.');
+  const normalizedInput = input.replace(/^\uFEFF/u, '');
+  try {
+    scanBoundedJson(normalizedInput);
+  } catch (cause) {
+    const detail = cause instanceof Error ? cause.message : '';
+    if (detail === 'Artefact input is not valid JSON.') throw new CliUsageError('Investigation resume state must be valid JSON.');
+    throw new CliUsageError(detail ? `Investigation resume state ${detail.replace(/^Artefact JSON /u, '')}` : 'Investigation resume state must be valid JSON.');
+  }
   let parsed: unknown;
-  try { parsed = JSON.parse(input.replace(/^\uFEFF/u, '')); } catch { throw new CliUsageError('Investigation resume state must be valid JSON.'); }
+  try { parsed = JSON.parse(normalizedInput); } catch { throw new CliUsageError('Investigation resume state must be valid JSON.'); }
   const root = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};
   if (root.schema !== CLI_INVESTIGATION_RUN_SCHEMA || root.version !== CLI_INVESTIGATION_RUN_VERSION || root.recipe !== plan.recipe.id || root.subject !== plan.subject || !Array.isArray(root.completedSteps)) {
     throw new CliUsageError('Investigation resume state must match this versioned recipe and subject.');

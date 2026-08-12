@@ -104,6 +104,7 @@ export function countBulkRouteFilters(results: readonly ScanResult[]): BulkPrima
 export function toBulkRouteTriageRow(
   row: ScanResult,
   caseRecord: CaseRecord | null,
+  caseSourceState: 'ready' | 'unavailable' = 'ready',
 ): BulkTriageRow {
   return {
     domain: row.domain,
@@ -116,7 +117,7 @@ export function toBulkRouteTriageRow(
     hasMx: row.saved.hasMx ?? null,
     hasSpf: row.saved.hasSpf ?? null,
     hasDmarc: row.saved.hasDmarc ?? null,
-    caseDisposition: caseRecord?.disposition || 'untracked',
+    caseDisposition: caseSourceState === 'ready' ? caseRecord?.disposition || 'untracked' : 'unavailable',
   };
 }
 

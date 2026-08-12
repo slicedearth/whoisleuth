@@ -189,9 +189,23 @@ test('deep lookup reports pending elapsed time and final source settle timing', 
   await expect(sourceQualityTable.getByRole('row').first().getByRole('columnheader')).toHaveCount(5);
   const diagnostics = coverage.locator('details.timing-detail');
   await expect(diagnostics).not.toHaveAttribute('open', '');
-  await expect(diagnostics.locator('.summary-arrow')).toHaveText('›');
-  await diagnostics.locator(':scope > summary').focus();
-  await diagnostics.locator(':scope > summary').press('Enter');
+  const recordsSummary = coverage.locator(':scope > details > summary').first();
+  const diagnosticsSummary = diagnostics.locator(':scope > summary');
+  await expect(diagnostics.locator('.summary-arrow')).toHaveCount(0);
+  const [recordsMarker, diagnosticsMarker] = await Promise.all([
+    recordsSummary.evaluate((summary) => ({
+      display: getComputedStyle(summary).display,
+      marker: getComputedStyle(summary, '::marker').content,
+    })),
+    diagnosticsSummary.evaluate((summary) => ({
+      display: getComputedStyle(summary).display,
+      marker: getComputedStyle(summary, '::marker').content,
+    })),
+  ]);
+  expect(diagnosticsMarker).toEqual(recordsMarker);
+  expect(diagnosticsMarker.display).toBe('list-item');
+  await diagnosticsSummary.focus();
+  await diagnosticsSummary.press('Enter');
   await expect(diagnostics).toHaveAttribute('open', '');
   await expect(diagnostics.getByRole('heading', { name: 'Collection timing' })).toBeVisible();
   await expect(diagnostics.getByRole('img', { name: 'Overlapping collection timing for 3 source branches' })).toBeVisible();
@@ -246,6 +260,87 @@ test('browser-local profile failure does not block collected lookup evidence', a
 
   await expect(page.getByRole('heading', { name: 'registered' })).toBeVisible();
   await expect(page.getByRole('alert')).toHaveCount(0);
+});
+
+test('a result beyond portable evidence depth remains reviewable with explicit export limits', async ({ page }) => {
+  let downloadCount = 0;
+  page.on('download', () => { downloadCount += 1; });
+  let nested: unknown = 'leaf';
+  for (let index = 0; index <= 24; index += 1) nested = { value: nested };
+  await page.route('**/api/lookup?*', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      query: 'portable-limit.example.test',
+      type: 'domain',
+      registrableDomain: 'example.test',
+      availability: {
+        applicable: true,
+        state: 'registered',
+        confidence: 'medium',
+        domain: 'example.test',
+        deepScanComplete: true,
+      },
+      rdap: { parsed: { domain: 'EXAMPLE.TEST' }, data: nested },
+      whois: { parsed: {}, chain: [] },
+      diagnostics: {
+        version: 8,
+        rdap: { status: 'success' },
+        whois: { status: 'partial' },
+        availability: { status: 'complete' },
+      },
+    }),
+  }));
+
+  await page.locator('#query').fill('portable-limit.example.test');
+  await page.getByRole('button', { name: 'Run lookup' }).click();
+
+  await expect(page.getByRole('heading', { name: 'registered' })).toBeVisible();
+  await expect(page.locator('#result')).toBeVisible();
+  const limitation = page.getByText(/Portable evidence and readable report exports are unavailable/u);
+  await expect(limitation).toBeVisible();
+  await expect(limitation).toContainText('The separately attributed Lookup result remains available.');
+  await page.locator('.export-menu > summary').click();
+  await page.getByRole('button', { name: 'Export evidence JSON' }).click();
+  await expect(page.locator('.portable-evidence-status')).toContainText('Evidence JSON was not created.');
+  await page.locator('.export-menu > summary').click();
+  await page.getByRole('button', { name: 'Download report' }).click();
+  await expect(page.locator('.portable-evidence-status')).toContainText('Readable report was not created.');
+  await expect.poll(() => downloadCount).toBe(0);
+  await expect(page.locator('#result')).toBeVisible();
+  await expect(page.getByRole('alert')).toHaveCount(0);
+  await expectNoHorizontalOverflow(page);
+});
+
+test('an over-structured response fails visibly beside the mobile lookup action', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 720 });
+  let nested: unknown = 'leaf';
+  for (let index = 0; index <= 48; index += 1) nested = { value: nested };
+  await page.route('**/api/lookup?*', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      query: 'response-limit.example.test',
+      type: 'domain',
+      registrableDomain: 'example.test',
+      availability: { applicable: true, state: 'registered' },
+      rdap: { nested },
+      whois: {},
+      diagnostics: { version: 8 },
+    }),
+  }));
+
+  await page.locator('#query').fill('response-limit.example.test');
+  await page.getByRole('button', { name: 'Run lookup' }).click();
+
+  const alert = page.getByRole('alert');
+  await expect(alert).toHaveText('Lookup returned an invalid response.');
+  await expect(page.locator('#result')).toHaveCount(0);
+  await expect.poll(async () => {
+    const box = await alert.boundingBox();
+    return Boolean(box && box.y >= 0 && box.y + box.height <= 720);
+  }).toBe(true);
+  await expectNoHorizontalOverflow(page);
 });
 
 test('an analyst can cancel a pending lookup without retaining a partial result', async ({ page }) => {
@@ -603,6 +698,7 @@ test('keeps the current Lookup form and result during console navigation only', 
 test('a malformed public session response does not clear the current Lookup form', async ({ page }) => {
   await page.locator('#query').fill('retained-session-state.example');
   let unavailableChecks = 0;
+  const context = page.context();
   const unavailableSession = async (route: import('@playwright/test').Route) => {
     unavailableChecks += 1;
     await route.fulfill({
@@ -611,17 +707,18 @@ test('a malformed public session response does not clear the current Lookup form
       body: JSON.stringify({ unexpected: 'session shape' }),
     });
   };
-  await page.route('**/api/session', unavailableSession);
+  await context.route('**/api/session', unavailableSession);
   await page.getByRole('button', { name: 'Open command palette' }).click();
   await page.getByLabel('Search pages').fill('Public homepage');
+  const publicPagePromise = page.waitForEvent('popup');
   await page.getByRole('option', { name: /Public homepage/u }).click();
-  await expect(page).toHaveURL('/');
+  const publicPage = await publicPagePromise;
+  await expect(publicPage).toHaveURL('/');
   await expect.poll(() => unavailableChecks).toBeGreaterThan(0);
-  await page.unroute('**/api/session', unavailableSession);
+  await context.unroute('**/api/session', unavailableSession);
+  await publicPage.close();
 
-  await page.locator('.public-header').getByRole('link', { name: 'Open console' }).click();
-  await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
-  await page.locator('#console-navigation').getByRole('link', { name: /^Lookup/u }).click();
+  await expect(page).toHaveURL('/lookup');
   await expect(page.locator('#query')).toHaveValue('retained-session-state.example');
 });
 
@@ -639,31 +736,43 @@ test('clears transient Lookup state when signing out through the Console', async
   await expect(page.locator('#result')).toHaveCount(0);
 });
 
+test.describe('failed Console logout', () => {
+  test.use({ allowExpectedLogout500Noise: true });
+
 test('clears transient Lookup state without an unhandled error when Console logout is unavailable', async ({ page }) => {
   const pageErrors: string[] = [];
   let logoutRequests = 0;
   page.on('pageerror', (error) => pageErrors.push(error.message));
   await page.route('**/api/logout', async (route) => {
     logoutRequests += 1;
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: '{',
-    });
+    if (logoutRequests === 1) {
+      await route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: 'fixture-only outage' }),
+      });
+      return;
+    }
+    await route.fallback();
   });
   await page.locator('#query').fill('failed-signout-state.example.test');
-  await page.context().clearCookies();
   await page.getByRole('button', { name: 'Sign out' }).click();
 
-  await expect(page).toHaveURL('/login');
+  await expect(page).toHaveURL('/lookup');
+  await expect(page.getByRole('alert')).toHaveText('Sign out failed. Your session remains active; try again.');
+  await expect(page.getByRole('button', { name: 'Sign out' })).toBeEnabled();
   await expect.poll(() => logoutRequests).toBe(1);
   expect(pageErrors).toEqual([]);
+  await page.getByRole('button', { name: 'Sign out' }).click();
+  await expect(page).toHaveURL('/login');
+  await expect.poll(() => logoutRequests).toBe(2);
   await page.getByLabel('Password').fill(TEST_SITE_PASSWORD);
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page).toHaveURL('/dashboard');
   await page.locator('#console-navigation').getByRole('link', { name: /^Lookup/ }).click();
   await expect(page.locator('#query')).toHaveValue('');
   await expect(page.locator('#result')).toHaveCount(0);
+});
 });
 
 test('does not show a saved Fast result after a same-domain Deep handoff', async ({ page }) => {

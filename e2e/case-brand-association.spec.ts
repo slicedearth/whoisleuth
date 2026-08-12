@@ -461,6 +461,8 @@ test('closes Brand Profile source truth after a post-ready storage failure', asy
   const metric = inbox.locator('.review-heading > strong');
   await expect(inbox).toHaveAttribute('aria-busy', 'false');
   await expect(metric).toHaveText('No active profile');
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await metric.evaluate((element) => Number.parseFloat(getComputedStyle(element).fontSize))).toBeLessThan(14);
   await page.getByRole('radio', { name: 'Set Fixture profile active' }).check();
   await expect(metric).toHaveText('1 review items');
 
@@ -469,8 +471,12 @@ test('closes Brand Profile source truth after a post-ready storage failure', asy
   await failNextBrowserLocalCollectionReadAfterWrite(page, 'brand_profiles');
   await page.getByRole('button', { name: 'Save profile' }).click();
 
-  await expect(page.locator('.profile-source-state[role="alert"]')).toContainText('No empty-profile conclusion has been drawn');
-  await expect(inbox.getByRole('alert')).toContainText('Brand Profiles could not be read');
+  const profileSourceAlert = page.locator('.profile-source-state[role="alert"]');
+  const inboxSourceAlert = inbox.getByRole('alert');
+  await expect(profileSourceAlert).toContainText('No empty-profile conclusion has been drawn');
+  await expect(inboxSourceAlert).toContainText('Brand Profiles could not be read');
+  expect(await profileSourceAlert.evaluate((element) => getComputedStyle(element).borderStyle)).toBe('dotted');
+  expect(await inboxSourceAlert.evaluate((element) => getComputedStyle(element).borderStyle)).toBe('dotted');
   await expect(metric).toHaveText('Unavailable');
   await expect(page.locator('article.profile')).toHaveCount(0);
   await expect(page.getByText('No brand profiles saved')).toHaveCount(0);

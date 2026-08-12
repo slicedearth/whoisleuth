@@ -173,6 +173,10 @@ function splitDelimitedLine(line: string, delimiter: string = ','): string[] {
 }
 
 const DOMAIN_HEADER_NAMES = ['domain', 'domain_name', 'domain name', 'hostname', 'name'];
+export const MAX_DOMAIN_INPUT_CHARACTERS = 2 * 1024 * 1024;
+export const MAX_DOMAIN_INPUT_BYTES = 2 * 1024 * 1024;
+export const MAX_DOMAIN_INPUT_LINES = 10_000;
+export const MAX_DOMAIN_INPUT_SEPARATORS = 20_000;
 
 function detectDelimiter(line: string): string | null {
   const candidates = [',', ';', '\t'];
@@ -207,10 +211,28 @@ export function parseDomainInput(text: unknown): {
   entries: string[];
   duplicates: number;
   usedHeader: boolean;
+  tooLarge: boolean;
 } {
-  const normalized = String(text || '').replace(/^\uFEFF/, '');
+  const source = String(text || '');
+  if (source.length > MAX_DOMAIN_INPUT_CHARACTERS) {
+    return { entries: [], duplicates: 0, usedHeader: false, tooLarge: true };
+  }
+  if (new TextEncoder().encode(source).byteLength > MAX_DOMAIN_INPUT_BYTES) {
+    return { entries: [], duplicates: 0, usedHeader: false, tooLarge: true };
+  }
+  let lineCount = 1;
+  let separatorCount = 0;
+  for (let index = 0; index < source.length; index += 1) {
+    const character = source[index];
+    if (character === '\n') lineCount += 1;
+    if (character === ',' || character === ';' || character === '\t') separatorCount += 1;
+    if (lineCount > MAX_DOMAIN_INPUT_LINES || separatorCount > MAX_DOMAIN_INPUT_SEPARATORS) {
+      return { entries: [], duplicates: 0, usedHeader: false, tooLarge: true };
+    }
+  }
+  const normalized = source.replace(/^\uFEFF/, '');
   const lines = normalized.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
-  if (lines.length === 0) return { entries: [], duplicates: 0, usedHeader: false };
+  if (lines.length === 0) return { entries: [], duplicates: 0, usedHeader: false, tooLarge: false };
 
   const firstLine = lines[0] ?? '';
   const delimiter = detectDelimiter(firstLine);
@@ -255,5 +277,5 @@ export function parseDomainInput(text: unknown): {
     entries.push(value);
   }
 
-  return { entries, duplicates, usedHeader };
+  return { entries, duplicates, usedHeader, tooLarge: false };
 }

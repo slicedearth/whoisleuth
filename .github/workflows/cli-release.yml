@@ -10,6 +10,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: cli-release-${{ inputs.version }}
@@ -47,6 +48,34 @@ jobs:
             }
           '
           git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+      - name: Verify exact tagged SHA passed CI
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          node --input-type=module -e '
+            const repository = process.env.GITHUB_REPOSITORY || "";
+            const sha = process.env.GITHUB_SHA || "";
+            const githubCredential = process.env.GITHUB_TOKEN || "";
+            if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u.test(repository) || !/^[a-f0-9]{40}$/u.test(sha) || !githubCredential) {
+              throw new Error("Release CI provenance inputs are unavailable.");
+            }
+            const endpoint = new URL(`https://api.github.com/repos/${repository}/actions/workflows/ci.yml/runs`);
+            endpoint.searchParams.set("head_sha", sha);
+            endpoint.searchParams.set("status", "completed");
+            endpoint.searchParams.set("per_page", "100");
+            const response = await fetch(endpoint, {
+              headers: {
+                accept: "application/vnd.github+json",
+                authorization: `Bearer ${githubCredential}`,
+                "x-github-api-version": "2022-11-28",
+              },
+            });
+            if (!response.ok) throw new Error(`Could not verify release CI provenance (${response.status}).`);
+            const payload = await response.json();
+            const runs = Array.isArray(payload.workflow_runs) ? payload.workflow_runs : [];
+            const verified = runs.some((run) => run?.head_sha === sha && run?.event === "push" && run?.conclusion === "success");
+            if (!verified) throw new Error("The exact tagged commit must have a successful completed push run of ci.yml.");
+          '
       - name: Install locked dependencies
         run: npm ci --include=optional --ignore-scripts
       - name: Verify release and notices

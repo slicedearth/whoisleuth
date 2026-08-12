@@ -135,4 +135,26 @@ describe('fixed investigation execution', () => {
       execute: async () => ({ exitCode: 0, stdout: JSON.stringify({ schema: 'whoisleuth.unexpected' }) }),
     }), /unexpected command contract/iu);
   });
+
+  test('rejects structurally over-bound resume and step JSON before retaining it', async () => {
+    let deeplyNested = '{"schema":"whoisleuth.cli.lookup","nested":';
+    deeplyNested += '['.repeat(49);
+    deeplyNested += 'null';
+    deeplyNested += ']'.repeat(49);
+    deeplyNested += '}';
+
+    await assert.rejects(() => runInvestigationRecipe('domain-triage', 'example.test', {
+      approveNetwork: false,
+      resumeInput: `{"schema":"whoisleuth.cli.investigation-run","version":1,"recipe":"domain-triage","subject":"example.test","completedSteps":${'['.repeat(49)}null${']'.repeat(49)}}`,
+      generatedAt: NOW,
+      execute: async () => ({ exitCode: 0, stdout: '{}' }),
+    }), /nesting limit/iu);
+
+    await assert.rejects(() => runInvestigationRecipe('domain-triage', 'example.test', {
+      approveNetwork: true,
+      resumeInput: null,
+      generatedAt: NOW,
+      execute: async () => ({ exitCode: 0, stdout: deeplyNested }),
+    }), /step output .*nesting limit/iu);
+  });
 });

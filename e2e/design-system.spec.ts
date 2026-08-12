@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures';
-import { boundingBox, expectNoHorizontalOverflow, migrateLegacyBrowserData, useTheme } from './helpers';
+import { boundingBox, expandLookupFamilies, expectNoHorizontalOverflow, migrateLegacyBrowserData, useTheme } from './helpers';
 import { protectedDestinations } from '../frontend/src/lib/workspaces';
 import { readFile } from 'node:fs/promises';
 
@@ -25,10 +25,10 @@ const INTELLIGENCE_CAPABILITIES = {
 
 test('the wordmark stays clean without a cursor-like status treatment across layouts', async ({ page }) => {
   const variants = [
-    { path: '/', selector: '.public-brand strong', width: 1280, height: 800 },
-    { path: '/', selector: '.public-brand strong', width: 390, height: 844 },
-    { path: '/lookup', selector: '.brand strong', width: 1280, height: 800 },
-    { path: '/lookup', selector: '.shell > header > a > strong', width: 390, height: 844 },
+    { path: '/', selector: '.public-brand strong', width: 1280, height: 800, visible: true },
+    { path: '/', selector: '.public-brand strong', width: 320, height: 700, visible: true },
+    { path: '/lookup', selector: '.brand strong', width: 1280, height: 800, visible: true },
+    { path: '/lookup', selector: '.shell > header > a > strong', width: 390, height: 844, visible: true },
   ];
 
   for (const variant of variants) {
@@ -36,7 +36,8 @@ test('the wordmark stays clean without a cursor-like status treatment across lay
     await page.goto(variant.path);
 
     const wordmark = page.locator(variant.selector);
-    await expect(wordmark).toBeVisible();
+    if (variant.visible) await expect(wordmark).toBeVisible();
+    else await expect(wordmark).toBeHidden();
     const marker = await wordmark.evaluate((element) => {
       const markerStyle = getComputedStyle(element, '::after');
       return {
@@ -53,21 +54,24 @@ test('the wordmark stays clean without a cursor-like status treatment across lay
   }
 });
 
-test('the approved WHOISleuth mark stays consistent and contained across themes and layouts', async ({ page }) => {
+test('the theme-aware WHOISleuth mark stays consistent and contained across themes and layouts', async ({ page }) => {
   await useTheme(page, 'dark');
   await page.goto('/');
 
   const publicMark = page.locator('.public-brand .brand-mark');
   await expect(publicMark).toBeVisible();
-  await expect(publicMark).toHaveAttribute('src', '/favicon.svg');
-  expect(await publicMark.evaluate((element) => element.tagName)).toBe('IMG');
-  expect(await publicMark.evaluate((element) => (element as HTMLImageElement).naturalWidth)).toBe(512);
+  await expect(publicMark).toHaveAttribute('viewBox', '34 38 448 448');
+  await expect(publicMark).toHaveAttribute('aria-hidden', 'true');
+  expect(await publicMark.evaluate((element) => element.tagName)).toBe('svg');
+  await expect(publicMark.locator('[data-brand-tone="primary"]')).toHaveCount(1);
+  await expect(publicMark.locator('[data-brand-tone="secondary"]')).toHaveCount(1);
 
   await page.getByRole('button', { name: /Colour theme/ }).click();
   await page.getByRole('option', { name: 'Light theme' }).click();
   const lightMark = page.locator('.public-brand .brand-mark');
   await expect(lightMark).toBeVisible();
-  await expect(lightMark).toHaveAttribute('src', '/favicon.svg');
+  await expect(lightMark.locator('[data-brand-tone="primary"]')).toHaveCSS('fill', 'rgb(0, 91, 145)');
+  await expect(lightMark.locator('[data-brand-tone="secondary"]')).toHaveCSS('fill', 'rgb(0, 107, 73)');
 
   await page.setViewportSize({ width: 320, height: 640 });
   await page.reload();
@@ -111,7 +115,7 @@ function sectionedLookupFixture(domain: string) {
         durationMs: 100, complete: true, truncated: false, limitations: [], diagnostics: {},
         requestUrl: `https://${domain}/`, finalUrl: `https://www.${domain}/home`, transportSecurity: 'https',
         redirectCount: 1, redirectLimitReached: false, crossOriginRedirect: false, httpsDowngrade: false,
-        redirects: [{ status: 301, from: `https://${domain}/`, to: `https://www.${domain}/home`, queryOmitted: false }], attempts: [],
+        redirects: [{ status: 301, from: `https://${domain}/`, to: `https://www.${domain}/home`, queryOmitted: true }], attempts: [],
         response: {
           status: 200, contentType: 'text/html', contentLanguage: null, server: null,
           declaredContentLength: null, capturedBodyBytes: 1024, bodyInspected: true, bodyTruncated: false,
@@ -124,7 +128,7 @@ function sectionedLookupFixture(domain: string) {
       observedAt: '2026-07-13T00:00:00.000Z', scanMode: 'deep',
       durationMs: 8, complete: true, truncated: false,
       limitations: ['PTR context does not prove hosting control.'],
-      diagnostics: { ptr: { status: 'success', answerCount: 1 } },
+      diagnostics: { ptr: { status: 'success', count: 1 } },
       records: { ptr: [`edge.${domain}`] },
     },
     rdap: {
@@ -140,7 +144,7 @@ function sectionedLookupFixture(domain: string) {
     whois: { parsed: {}, chain: [] },
     diagnostics: {
       rdap: { status: 'success', endpoint: 'https://rdap.example.test', registrar: { status: 'success' } },
-      whois: { status: 'success' },
+      whois: { status: 'complete', authoritativeHop: 'whois.registry.example.test' },
       availability: { status: 'complete' },
       reverseDns: { status: 'success' },
     },
@@ -267,7 +271,7 @@ test('the console command palette filters destinations and remains keyboard oper
   })).toBe('1px 1px rect(0px, 0px, 0px, 0px)');
   await expect.poll(() => searchFrame.evaluate((element) => {
     const probe = document.createElement('span');
-    probe.style.color = 'var(--accent2)';
+    probe.style.color = 'var(--accent)';
     document.body.append(probe);
     const matchesAccent = getComputedStyle(element).borderColor === getComputedStyle(probe).color;
     probe.remove();
@@ -279,18 +283,19 @@ test('the console command palette filters destinations and remains keyboard oper
     options.every((option) => option.getAttribute('tabindex') === '-1')
   )).toBe(true);
   const destinationIcons = dialog.locator('[role="option"] svg[data-icon]');
-  await expect(destinationIcons).toHaveCount(9);
+  await expect(destinationIcons).toHaveCount(14);
   await expect(dialog.locator('[data-command-group]')).toHaveText([
     'Start',
     'Investigate', 'Investigate', 'Investigate',
     'Protect & review', 'Protect & review',
     'Reference', 'Reference', 'Public',
+    'Public', 'Public', 'Public', 'Public', 'Public',
   ]);
   await expect(dialog.locator('[data-command-group]', { hasText: 'Console' })).toHaveCount(0);
   await expect(dialog.getByRole('option', { name: /Lookup/ }).locator('svg')).toHaveAttribute('data-icon', 'lookup');
   await expect(dialog.getByRole('option', { name: /Registry support/ }).locator('svg')).toHaveAttribute('data-icon', 'registry');
   await search.press('End');
-  await expect(search).toHaveAttribute('aria-activedescendant', 'command-option-8');
+  await expect(search).toHaveAttribute('aria-activedescendant', 'command-option-13');
   await search.press('Home');
   await expect(search).toHaveAttribute('aria-activedescendant', 'command-option-0');
   await search.press('ArrowDown');
@@ -323,6 +328,19 @@ test('the console command palette filters destinations and remains keyboard oper
   await search.fill('Protect & review');
   await expect(dialog.getByRole('option')).toHaveCount(2);
   await expect(dialog.locator('[data-command-group]')).toHaveText(['Protect & review', 'Protect & review']);
+  await search.fill('Public');
+  await expect(dialog.getByRole('option')).toHaveCount(6);
+  await expect(dialog.getByRole('option')).toHaveText([
+    /Public homepage/u,
+    /Synthetic demo/u,
+    /Privacy/u,
+    /Terms/u,
+    /Request policy/u,
+    /Contact/u,
+  ]);
+  await expect(dialog.locator('[data-command-group]')).toHaveText([
+    'Public', 'Public', 'Public', 'Public', 'Public', 'Public',
+  ]);
   await search.fill('monitor');
   await expect(dialog.getByRole('option', { name: /Monitor/ })).toBeVisible();
   await expect(search).toHaveAttribute('aria-activedescendant', 'command-option-0');
@@ -373,13 +391,83 @@ test('the console command palette filters destinations and remains keyboard oper
     const bounds = element.getBoundingClientRect();
     return {
       fitsViewport: bounds.left >= 0 && bounds.right <= document.documentElement.clientWidth,
-      listFitsWithoutScrolling: (list?.scrollHeight ?? 0) <= (list?.clientHeight ?? 0) + 1,
+      listIsKeyboardScrollable: (list?.scrollHeight ?? 0) > (list?.clientHeight ?? 0) + 1,
     };
   })).toEqual({
     fitsViewport: true,
-    listFitsWithoutScrolling: true,
+    listIsKeyboardScrollable: true,
   });
+  const mobileSearch = dialog.getByRole('combobox', { name: 'Search pages' });
+  await mobileSearch.press('End');
+  await expect(mobileSearch).toHaveAttribute('aria-activedescendant', 'command-option-13');
+  const lastMobileOption = dialog.getByRole('option').nth(13);
+  await expect(lastMobileOption).toHaveAttribute('aria-selected', 'true');
+  await expect.poll(() => lastMobileOption.evaluate((option) => {
+    const list = option.closest('#command-results');
+    const palette = option.closest('[role="dialog"]');
+    if (!list || !palette) return false;
+    const optionBounds = option.getBoundingClientRect();
+    const listBounds = list.getBoundingClientRect();
+    const paletteBounds = palette.getBoundingClientRect();
+    const visibleTop = Math.max(listBounds.top, paletteBounds.top) + 1;
+    const visibleBottom = Math.min(listBounds.bottom, paletteBounds.bottom) - 1;
+    return optionBounds.top >= visibleTop && optionBounds.bottom <= visibleBottom;
+  })).toBe(true);
   await expectNoHorizontalOverflow(page);
+  await mobileSearch.fill('Public');
+  const publicPagePromise = page.waitForEvent('popup');
+  await dialog.getByRole('option', { name: /Contact.*New tab/u }).click();
+  const publicPage = await publicPagePromise;
+  await publicPage.waitForLoadState('domcontentloaded');
+  await expect(publicPage).toHaveURL(/\/contact$/u);
+  await expect(page).toHaveURL(/\/lookup$/u);
+  await publicPage.close();
+});
+
+test('the console command palette keeps every destination heading readable on mobile', async ({ page }) => {
+  for (const width of [400, 430, 489, 500]) {
+    await page.setViewportSize({ width, height: 700 });
+    await page.goto('/dashboard');
+    await page.getByRole('button', { name: 'Open command palette' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Go to' });
+    await expect(dialog).toBeVisible();
+    expect(await dialog.locator('.command-copy strong').evaluateAll((headings) => headings.every((heading) =>
+      heading.scrollWidth <= heading.clientWidth + 1
+    ))).toBe(true);
+    await page.keyboard.press('Escape');
+  }
+});
+
+test('console footer opens public guidance separately while the public footer stays in-tab', async ({ page, context }) => {
+  await page.goto('/lookup');
+  const consoleResources = page.locator('footer.site-footer').getByRole('link', { name: /Resources/ });
+  await expect(consoleResources).toHaveAttribute('target', '_blank');
+  await expect(consoleResources).toHaveAttribute('rel', /noopener/u);
+  await expect(consoleResources).not.toContainText('↗');
+  await expect(consoleResources).toHaveAccessibleName(/Resources.*opens in a new tab/u);
+  const [publicPage] = await Promise.all([
+    context.waitForEvent('page'),
+    consoleResources.click(),
+  ]);
+  await publicPage.waitForLoadState('domcontentloaded');
+  await expect(publicPage).toHaveURL(/\/resources$/u);
+  await expect(page).toHaveURL(/\/lookup$/u);
+  await publicPage.close();
+
+  await page.goto('/');
+  const publicResources = page.locator('footer.site-footer').getByRole('link', { name: 'Resources', exact: true });
+  await expect(publicResources).not.toHaveAttribute('target', '_blank');
+  await publicResources.click();
+  await expect(page).toHaveURL(/\/resources$/u);
+});
+
+test('console reference navigation keeps new-tab behavior without decorative arrows', async ({ page }) => {
+  await page.goto('/dashboard');
+  const resources = page.getByRole('navigation', { name: 'Reference' }).getByRole('link', { name: /Resources/ });
+  await expect(resources).toHaveAttribute('target', '_blank');
+  await expect(resources).toHaveAttribute('rel', 'noopener noreferrer');
+  await expect(resources).not.toContainText('↗');
+  await expect(resources).toHaveAccessibleName(/Resources.*opens in a new tab/iu);
 });
 
 test('Lookup reports requested source families without implying staged completion', async ({ page }) => {
@@ -526,6 +614,8 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
       keyColours: [...region.querySelectorAll<HTMLElement>('.key-item')]
         .map((element) => getComputedStyle(element.querySelector<HTMLElement>('i')!).borderColor),
       successFill: styleValue('.source-node.state-success .status-dot', 'fill'),
+      successLabel: getComputedStyle(region.querySelector<HTMLElement>('.state-success .source-state')!).color,
+      successEdge: styleValue('.topology-edges path.success', 'stroke'),
       partialFill: styleValue('.source-node.state-partial .status-dot', 'fill'),
     };
   });
@@ -538,6 +628,8 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   expect(new Set([...familyColours.values()].map((value) => value.icon)).size).toBe(familyColours.size);
   expect(new Set(topologyPalette.keyColours).size).toBe(topologyPalette.keyColours.length);
   expect(topologyPalette.successFill).not.toBe(topologyPalette.partialFill);
+  expect(topologyPalette.successFill).toBe(topologyPalette.successLabel);
+  expect(topologyPalette.successEdge).not.toBe(topologyPalette.partialFill);
   expect(await desktopSourceIcons.evaluateAll((icons) => icons.every((icon) => {
     const iconRect = icon.getBoundingClientRect();
     const discRect = icon.closest('.source-node')?.querySelector('.glyph-disc')?.getBoundingClientRect();
@@ -677,7 +769,6 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
       .filter({ hasText: new RegExp(`^${label}$`, 'u') })
       .locator('xpath=../..')
       .locator('.state-complete');
-    await expect(state).toHaveClass(/registration-source/u);
     const colours = await state.evaluate((element) => ({
       actual: getComputedStyle(element).color,
       expected: getComputedStyle(document.documentElement).getPropertyValue('--text').trim(),
@@ -686,6 +777,12 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
       ? `rgb(${Number.parseInt(colours.expected.slice(1, 3), 16)}, ${Number.parseInt(colours.expected.slice(3, 5), 16)}, ${Number.parseInt(colours.expected.slice(5, 7), 16)})`
       : colours.expected);
   }
+  expect(await sourceQualityTable.locator('.state-complete').evaluateAll((states) => {
+    const reference = document.querySelector<HTMLElement>('.summaries article strong');
+    if (!reference) return false;
+    const referenceColour = getComputedStyle(reference).color;
+    return states.every((state) => getComputedStyle(state).color === referenceColour);
+  })).toBe(true);
   await coverage.getByText(/Freshness policy/u).click();
   await coverage.getByLabel('Policy').selectOption('analyst-custom');
   await coverage.getByLabel('Registration days').fill('10');
@@ -707,6 +804,12 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   await expect(registrationFact).toContainText('does not recalculate or override');
 
   const rdapDiagnostic = page.locator('.diagnostics article').filter({ hasText: 'rdap' }).first();
+  expect(await page.locator('.diagnostics article > strong').evaluateAll((states) => {
+    const reference = document.querySelector<HTMLElement>('.summaries article strong');
+    if (!reference) return false;
+    const referenceColour = getComputedStyle(reference).color;
+    return states.every((state) => getComputedStyle(state).color === referenceColour);
+  })).toBe(true);
   await rdapDiagnostic.getByText('Inspect source route').click();
   await expect(rdapDiagnostic).toContainText('IANA RDAP bootstrap discovery');
   await expect(rdapDiagnostic).toContainText('Selected endpoint');
@@ -754,7 +857,13 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
 
     const redirectPath = httpCard.locator('.redirect-path');
     if (size.width <= 720) {
-      await expect(redirectPath.locator('.redirect-mobile')).toBeVisible();
+      const mobileRedirects = redirectPath.getByRole('list', { name: 'HTTP redirect steps' });
+      await expect(mobileRedirects).toBeVisible();
+      await expect(mobileRedirects.getByRole('listitem')).toHaveCount(1);
+      await expect(mobileRedirects).toContainText('HTTP 301');
+      await expect(mobileRedirects).toContainText('https://sectioned-result.invalid/');
+      await expect(mobileRedirects).toContainText('https://www.sectioned-result.invalid/home');
+      await expect(mobileRedirects).toContainText('Query omitted from retained provenance');
       await expect(httpCard.locator('.disclosure > ol')).toBeHidden();
       const redirectWidth = await redirectPath.evaluate((element) => ({
         client: element.clientWidth,
@@ -902,6 +1011,52 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   await page.getByRole('button', { name: 'Export evidence JSON' }).click();
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toMatch(/^whoisleuth-evidence-sectioned-result\.invalid-.+\.json$/);
+});
+
+test('Lookup accepts exact HTTP evidence bounds and rejects an over-bound success response', async ({ page }) => {
+  await page.route('**/api/lookup?*', async (route) => {
+    const domain = new URL(route.request().url()).searchParams.get('q') || 'bounded-http.invalid';
+    const fixture = sectionedLookupFixture(domain);
+    const redirectCount = domain === 'overbound-http.invalid' ? 6 : 5;
+    Object.assign(fixture.availability.http, {
+      redirectCount,
+      finalUrl: `https://hop-${redirectCount}.${domain}/`,
+      redirects: Array.from({ length: redirectCount }, (_, index) => ({
+        status: 302,
+        from: `https://hop-${index}.${domain}/`,
+        to: `https://hop-${index + 1}.${domain}/`,
+        queryOmitted: false,
+      })),
+      attempts: [
+        { url: `https://${domain}/`, outcome: 'error', httpStatus: null, error: 'Fixture connection failed.' },
+        { url: `https://www.${domain}/`, outcome: 'response', httpStatus: 200, error: null },
+      ],
+    });
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(fixture),
+    });
+  });
+  await page.setViewportSize({ width: 320, height: 700 });
+  await page.goto('/lookup');
+  await page.locator('#query').fill('bounded-http.invalid');
+  await page.getByRole('button', { name: 'Run lookup' }).click();
+  await expect(page.locator('#result')).toBeVisible();
+  await expandLookupFamilies(page);
+  const httpCard = page.locator('.http-card');
+  await httpCard.locator(':scope > summary').click();
+  await httpCard.getByText('Redirect chain · 5 hops').click();
+  const mobileRedirects = httpCard.getByRole('list', { name: 'HTTP redirect steps' });
+  await expect(mobileRedirects.getByRole('listitem')).toHaveCount(5);
+  await expect(mobileRedirects).toContainText('https://hop-0.bounded-http.invalid/');
+  await expect(mobileRedirects).toContainText('https://hop-5.bounded-http.invalid/');
+  await expectNoHorizontalOverflow(page);
+
+  await page.locator('#query').fill('overbound-http.invalid');
+  await page.getByRole('button', { name: 'Run lookup' }).click();
+  await expect(page.getByRole('alert')).toHaveText('Lookup returned an invalid response.');
+  await expect(page.locator('#result')).toHaveCount(0);
 });
 
 test('Lookup focus and disclosure controls change presentation without changing evidence', async ({ page }) => {
@@ -1092,6 +1247,7 @@ test('Lookup focus and disclosure controls change presentation without changing 
 test('Lookup task query context is bounded, transient, and changes only result presentation', async ({ page }) => {
   const domain = 'task-context.invalid';
   const lookupRequests: string[] = [];
+  await useTheme(page, 'light');
   await page.addInitScript(() => {
     localStorage.setItem('whoisleuth:lookup-presentation:v1', JSON.stringify({ version: 1, task: 'brand' }));
   });
@@ -1173,6 +1329,35 @@ test('Lookup task query context is bounded, transient, and changes only result p
   expect(primaryScoreColours.detailActual).toBe(primaryScoreColours.secondaryDetail);
   expect(primaryScoreColours.detailActual).not.toBe(primaryScoreColours.primaryBorder);
   expect(primaryScoreColours.actual).not.toBe(primaryScoreColours.successBorder);
+
+  const scoreBarVisuals = await brandScores.evaluateAll((scores) => {
+    const probe = document.createElement('span');
+    document.body.append(probe);
+    const resolveFill = (token: string) => {
+      probe.style.backgroundColor = `var(${token})`;
+      return getComputedStyle(probe).backgroundColor;
+    };
+    const fills = {
+      neutral: resolveFill('--accent'),
+      good: resolveFill('--accent2'),
+      warn: resolveFill('--amber'),
+      danger: resolveFill('--danger'),
+    };
+    probe.remove();
+    return scores.map((score) => {
+      const track = score.querySelector<HTMLElement>('i')!;
+      const fill = track.querySelector<HTMLElement>('b')!;
+      const tone = ([...score.classList].find((name) => ['good', 'warn', 'danger'].includes(name)) || 'neutral') as keyof typeof fills;
+      return {
+        height: Number.parseFloat(getComputedStyle(track).height),
+        track: getComputedStyle(track).backgroundColor,
+        fill: getComputedStyle(fill).backgroundColor,
+        expectedFill: fills[tone],
+      };
+    });
+  });
+  expect(scoreBarVisuals.every((bar) => bar.height >= 10 && bar.track !== bar.fill)).toBe(true);
+  expect(scoreBarVisuals.every((bar) => bar.fill === bar.expectedFill)).toBe(true);
 
   await brandDetails.nth(0).locator('summary').click();
   await brandDetails.nth(1).locator('summary').click();

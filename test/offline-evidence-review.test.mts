@@ -33,6 +33,15 @@ describe('offline evidence review command', () => {
       { schema: 'whoisleuth.tlsa-evidence-input', version: 1, serviceName: '_25._tcp.mx.example.test', dnssecState: 'unavailable', records: [] },
       { schema: 'whoisleuth.rpki-route-input', version: 1, routePrefix: '192.0.2.0/24', originAsn: 64496, authorizations: [] },
       {
+        schema: 'whoisleuth.cryptographic-assurance.input', version: 1,
+        dnssec: null,
+        routeOrigin: {
+          source: 'Fixture route snapshot', observedAt: ISO,
+          evidence: { routePrefix: '192.0.2.0/24', originAsn: 64496, authorizations: [] },
+        },
+        tlsa: null,
+      },
+      {
         schema: 'whoisleuth.local-geoip-query',
         version: 1,
         address: '192.0.2.1',
@@ -101,7 +110,7 @@ describe('offline evidence review command', () => {
       },
     ];
     assert.deepEqual(inputs.map((input) => buildOfflineEvidenceReview(JSON.stringify(input), ISO).kind), [
-      'rdap_search', 'dnssec', 'tlsa', 'rpki', 'geoip', 'encrypted_dns', 'zone_intent', 'domain_portfolio', 'domain_change', 'dns_convergence', 'nameserver_preflight', 'trust_store',
+      'rdap_search', 'dnssec', 'tlsa', 'rpki', 'cryptographic_assurance', 'geoip', 'encrypted_dns', 'zone_intent', 'domain_portfolio', 'domain_change', 'dns_convergence', 'nameserver_preflight', 'trust_store',
     ]);
     const rdap = buildOfflineEvidenceReview(JSON.stringify(inputs[0]), ISO).result as {
       responseInspection: { state: string; mappings: Array<{ state: string }> };

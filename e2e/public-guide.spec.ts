@@ -285,8 +285,21 @@ test('authenticated console groups resources and registry support under Referenc
   await expect(page.getByText('Domain intelligence console', { exact: true })).toBeVisible();
   await expect(page.getByRole('navigation', { name: 'Console' })).toBeVisible();
   const reference = page.getByRole('navigation', { name: 'Reference' });
-  await expect(reference.getByRole('link', { name: /Resources/ })).toHaveAttribute('href', '/resources');
+  const resources = reference.getByRole('link', { name: /Resources/ });
+  await expect(resources).toHaveAttribute('href', '/resources');
+  await expect(resources).toHaveAttribute('target', '_blank');
+  await expect(resources).toHaveAttribute('rel', 'noopener noreferrer');
+  await page.locator('#query').fill('preserved-console-state.example');
+  const resourcesPagePromise = page.waitForEvent('popup');
+  await resources.click();
+  const resourcesPage = await resourcesPagePromise;
+  await resourcesPage.waitForLoadState('domcontentloaded');
+  await expect(resourcesPage).toHaveURL(/\/resources$/u);
+  await expect(page).toHaveURL(/\/lookup$/u);
+  await expect(page.locator('#query')).toHaveValue('preserved-console-state.example');
+  await resourcesPage.close();
   await expect(reference.getByRole('link', { name: /Registry support/ })).toHaveAttribute('href', '/registry-support');
+  await expect(reference.getByRole('link', { name: /Registry support/ })).not.toHaveAttribute('target', '_blank');
   await expect(page.getByRole('navigation', { name: 'Console' }).getByRole('link', { name: /Registry support/ })).toHaveCount(0);
 });
 

@@ -90,6 +90,7 @@ generated manual, and `commands --json`.
 | Deep Lookup | Explicitly requested bounded RDAP, WHOIS, DNS, website, TLS, registrar-RDAP, and observed-network work where applicable. |
 | Compact deep Bulk | Uses the shared Lookup orchestration but omits full-only response fields and collectors. |
 | Offline review | Reads only the named bounded artefact or analyst-authored input and makes no network request. |
+| Isolated authorised action | Runs only when its dedicated command and per-run acknowledgement flags are supplied; it is never added to Lookup, Bulk, monitoring, or recipes. |
 
 Networked commands run from the local machine and contact the sources declared
 by their profile. They do not use the hosted login or hosted usage controls;
@@ -110,7 +111,7 @@ HTTP status, and a bounded explanation.
 
 | Goal | Commands |
 | --- | --- |
-| Investigate a target | `lookup`, `http`, `tls`, `posture`, `registry-support` |
+| Investigate a target | `lookup`, `http`, `tls`, `dnssec-validate`, `mail-transport`, `posture`, `registry-support` |
 | Review many targets | `bulk`, `discover`, `discover-scan`, `ct-search`, `ct-intake` |
 | Compare saved evidence | `compare`, `page-compare`, `diff`, `reconcile`, `timeline`, `mail-review` |
 | Review supplied evidence | `brief`, `review-evidence`, `registry-doctor`, `registry-cohort`, `source-report`, `sharing-review`, `map-observations` |
@@ -248,6 +249,18 @@ search contract.](cli-reference.md#workspace-archive-inspection)
 
 [Read the bounded TLS collection contract.](cli-reference.md#tls-intelligence)
 
+### Isolated cryptographic and mail transport review
+
+[Read the explicitly authorised DNSSEC, TLSA/DANE, STARTTLS, and SMTP transport contract.](cli-reference.md#isolated-cryptographic-and-mail-transport-review)
+The mail report keeps address selection, public revalidation, confirmed
+connection, and cryptographic address authentication as separate provenance;
+address authentication is unavailable when no address candidate was retained.
+If a DANE-TA TLSA usage 2 association is published, active collection retains
+only the observed leaf certificate and leaves that comparison partial without
+certificate-path construction and trust-anchor path validation. SMTP relay
+PKIX-TA usage 0 and PKIX-EE usage 1 records are retained as unsupported and
+cannot complete SMTP DANE assurance; a separate usage 3 match remains eligible.
+
 ### Registry-source comparison
 
 [Read the normalised RDAP and WHOIS comparison contract.](cli-reference.md#registry-source-comparison)
@@ -262,7 +275,7 @@ search contract.](cli-reference.md#workspace-archive-inspection)
 
 ### Offline supplied-evidence review
 
-[Read the DNSSEC, DANE, zone-intent, portfolio, domain-change, and supplied-observation review contract.](cli-reference.md#offline-supplied-evidence-review)
+[Read the separate DNSSEC, route-origin, DANE/TLSA, zone-intent, portfolio, domain-change, and supplied-observation review contract.](cli-reference.md#offline-supplied-evidence-review)
 
 ### Domain control manifests
 
@@ -295,6 +308,8 @@ search contract.](cli-reference.md#workspace-archive-inspection)
 ### Lookup evidence export
 
 [Read normalised JSON, Markdown, and HTML export behaviour.](cli-reference.md#lookup-evidence-export)
+Saved Lookup JSON is byte-, nesting-, entry-, and per-container-bounded before parsing, and the
+completed evidence package must satisfy the stricter portable-tree contract.
 
 ## Safety and limitations
 

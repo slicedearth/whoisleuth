@@ -16,6 +16,7 @@
     loadView,
     deleteView,
     status,
+    sourceState = 'ready',
   }: {
     store: BulkReviewStore;
     currentView: BulkReviewPresetView;
@@ -25,6 +26,7 @@
     loadView: (preset: BulkReviewPreset) => void;
     deleteView: (preset: BulkReviewPreset) => void | Promise<void>;
     status: string;
+    sourceState?: 'loading' | 'ready' | 'unavailable';
   } = $props();
 
   let name = $state('');
@@ -41,6 +43,7 @@
     <h2 id="bulk-review-views-title">Saved views and review queue</h2>
     <p>Save the current filters, grouping, and sort order. Per-domain review state stays separate from case disposition and does not start or resume a scan.</p>
   </div>
+  {#if sourceState === 'ready'}
   <div class="controls">
     <label for="bulk-review-state-filter">Review state
       <select id="bulk-review-state-filter" aria-label="Filter by review state" value={reviewFilter} onchange={(event) => setReviewFilter(event.currentTarget.value as BulkReviewFilter)}>
@@ -64,6 +67,9 @@
     </form>
   </div>
   <p class="review-status" role="status">{status}</p>
+  {:else}
+    <p class="source-state {sourceState}" role={sourceState === 'unavailable' ? 'alert' : 'status'}>Saved views and review state {sourceState === 'loading' ? 'are still loading' : 'could not be read'}. Review filtering, counts, and mutations remain unavailable; reload to retry without overwriting unknown saved work.</p>
+  {/if}
 </section>
 
 <style>
@@ -75,7 +81,7 @@
   .view-actions{display:flex;align-items:end;gap:7px}
   .controls form{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-column:1/-1;gap:7px;align-items:end}
   .danger-text{color:var(--danger)}
-  .review-status{grid-column:1/-1;color:var(--accent);font-size:var(--text-xs)}
+  .review-status{grid-column:1/-1;color:var(--accent);font-size:var(--text-xs)}.source-state{margin:0;padding:10px 12px;border:1px dotted var(--muted);border-radius:var(--radius-sm);color:var(--muted);font-size:var(--text-xs);line-height:1.5}.source-state.loading{border-style:solid}
   .review-status:empty{display:none}
   @media(max-width:760px){.review-views,.controls{grid-template-columns:1fr}.controls form{grid-template-columns:1fr}.view-actions .btn{flex:1}}
 </style>

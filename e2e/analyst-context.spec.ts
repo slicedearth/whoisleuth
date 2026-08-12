@@ -135,7 +135,9 @@ test('saved context reports unavailable browser-local reads only after it is ope
   await failBrowserLocalReads(page);
   await expect(page.getByText(/Saved context is unavailable because/u)).toHaveCount(0);
   await openButton.click();
-  await expect(page.getByRole('alert')).toContainText('Saved context is unavailable because one or more browser-local collections could not be read.');
+  const unavailable = page.getByRole('alert');
+  await expect(unavailable).toContainText('Saved context is unavailable because one or more browser-local collections could not be read.');
+  expect(await unavailable.evaluate((element) => getComputedStyle(element).borderLeftStyle)).toBe('dotted');
   await page.setViewportSize({ width: 390, height: 700 });
   await expectNoHorizontalOverflow(page);
 });

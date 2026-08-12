@@ -85,7 +85,7 @@
   article{min-width:0;padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
   article header{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
   .finding-state{flex:0 0 auto;padding:3px 7px;border:1px solid var(--border-strong);border-radius:999px;color:var(--muted);font:650 var(--text-2xs) var(--mono);text-transform:capitalize}
-  .finding-state.complete{border-color:color-mix(in srgb,var(--success) 40%,var(--border));color:var(--success)}
+  .finding-state.complete{border-color:var(--border-strong);color:var(--text)}
   .finding-state.partial{border-color:color-mix(in srgb,var(--amber) 45%,var(--border));color:var(--amber)}
   .authorization-parameters{margin-top:10px;border-top:1px solid var(--border)}
   .authorization-parameters summary{padding:10px 0;color:var(--text);font:650 var(--text-xs) var(--mono);cursor:pointer}

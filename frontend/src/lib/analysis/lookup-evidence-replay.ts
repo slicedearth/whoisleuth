@@ -1,12 +1,15 @@
 import {
   assertLookupEvidencePortableTree,
   LOOKUP_EVIDENCE_PORTABLE_MAX_BYTES,
+  LOOKUP_EVIDENCE_PORTABLE_MAX_ARRAY_ITEMS,
+  LOOKUP_EVIDENCE_PORTABLE_MAX_DEPTH,
   LOOKUP_EVIDENCE_PORTABLE_MAX_ENTRIES,
   LOOKUP_EVIDENCE_SCHEMA,
   LEGACY_LOOKUP_EVIDENCE_SCHEMA_VERSION,
   LOOKUP_EVIDENCE_SCHEMA_VERSION,
   SUPPORTED_LOOKUP_EVIDENCE_SCHEMA_VERSIONS,
 } from './evidence-export.ts';
+import { scanBoundedJson } from '../../../../lib/bounded-json.mts';
 import {
   buildLookupAssetGraph,
   type LookupAssetGraph,
@@ -222,8 +225,18 @@ export async function parseLookupEvidenceReplay(
   }
   let parsed: unknown;
   try {
+    scanBoundedJson(input, {
+      maximumDepth: LOOKUP_EVIDENCE_PORTABLE_MAX_DEPTH,
+      maximumKeys: LOOKUP_EVIDENCE_PORTABLE_MAX_ENTRIES,
+      maximumValues: LOOKUP_EVIDENCE_PORTABLE_MAX_ENTRIES,
+      maximumContainerItems: LOOKUP_EVIDENCE_PORTABLE_MAX_ARRAY_ITEMS,
+    });
     parsed = JSON.parse(input);
-  } catch {
+  } catch (cause) {
+    const detail = cause instanceof Error ? cause.message : '';
+    if (detail.startsWith('Artefact JSON ')) {
+      throw new Error(detail.replace(/^Artefact JSON/u, 'Lookup evidence replay'));
+    }
     throw new Error('The selected file is not valid JSON.');
   }
   validateDocumentShape(parsed);

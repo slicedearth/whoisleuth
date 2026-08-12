@@ -5,7 +5,7 @@
   import {
     consoleNavigationGroups,
     protectedDestinations,
-    publicHomepage,
+    publicCommandNavigation,
     referenceNavigation,
     type NavigationItem,
   } from '$lib/workspaces';
@@ -30,6 +30,7 @@
   let navOpen = $state(false);
   let commandOpen = $state(false);
   let signingOut = $state(false);
+  let logoutError = $state('');
   let capabilities = $state<CapabilityReport|null>(null);
   let capabilitiesChecked = $state(false);
   let localData = $state<BrowserLocalDataServiceState>({ state: 'idle' });
@@ -49,7 +50,7 @@
       navigationGroup.items.map((item) => ({ ...item, group: navigationGroup.label }))
     )),
     ...referenceNavigation.map((item) => ({ ...item, group: 'Reference' })),
-    { ...publicHomepage, group: 'Public' },
+    ...publicCommandNavigation.map((item) => ({ ...item, group: 'Public' })),
   ];
 
   setContext(CAPABILITY_CONTEXT, () => capabilities);
@@ -130,13 +131,19 @@
   async function logout(){
     if(signingOut)return;
     signingOut=true;
-    try{await requestJsonCapped('/api/logout',{method:'POST'},{maximumBytes:SMALL_JSON_RESPONSE_BYTES,timeoutMs:10_000});}
-    catch{/* Local workflow state must still be cleared when the remote session request is unavailable. */}
-    finally{
+    logoutError='';
+    try{
+      const {response}=await requestJsonCapped('/api/logout',{method:'POST'},{maximumBytes:SMALL_JSON_RESPONSE_BYTES,timeoutMs:10_000});
+      if(!response.ok)throw new Error('The protected session could not be ended.');
       clearConsoleWorkflowState();
       try{await goto('/login',{replaceState:true});}
       finally{clearConsoleWorkflowState();}
     }
+    catch{
+      clearConsoleWorkflowState();
+      logoutError='Sign out failed. Your session remains active; try again.';
+    }
+    finally{signingOut=false;}
   }
 
   function navigationFocusables(){
@@ -246,7 +253,10 @@
       <a href="/dashboard" aria-label="WHOISleuth Dashboard"><span class="mark small"><BrandMark /></span><strong>WHOISleuth</strong></a>
       <div class="console-header-actions">
         <button class="command-trigger" type="button" aria-label="Open command palette" bind:this={commandTrigger} onclick={()=>void openCommandPalette()}><span class="shortcut-wide" aria-hidden="true">Ctrl/⌘ K</span><span class="command-icon" aria-hidden="true"><IntelligenceIcon name="command" size={18} /></span><strong>Commands</strong></button>
-        <button class="console-sign-out" type="button" disabled={signingOut} onclick={logout}>{signingOut?'Signing out…':'Sign out'}</button>
+        <span class="sign-out-control">
+          <button class="console-sign-out" type="button" disabled={signingOut} onclick={logout}>{signingOut?'Signing out…':'Sign out'}</button>
+          {#if logoutError}<span class="sign-out-error" role="alert">{logoutError}</span>{/if}
+        </span>
         <button class="navigation-toggle" type="button" aria-label="Toggle navigation" aria-expanded={navOpen} aria-controls="console-navigation" bind:this={navigationToggle} onclick={toggleNavigation}>☰</button>
       </div>
     </header>
@@ -262,7 +272,7 @@
           </div>
         {/each}
       </nav>
-      <nav class="reference-nav" aria-label="Reference"><p class="eyebrow">Reference</p>{#each referenceNavigation as item}<a class:active={page.url.pathname===item.href} aria-current={page.url.pathname===item.href?'page':undefined} href={item.href} onclick={()=>navOpen=false}><strong>{item.label}</strong><small>{item.detail}</small></a>{/each}</nav>
+      <nav class="reference-nav" aria-label="Reference"><p class="eyebrow">Reference</p>{#each referenceNavigation as item}<a class:active={page.url.pathname===item.href} aria-current={page.url.pathname===item.href?'page':undefined} href={item.href} target={item.opensInNewTab?'_blank':undefined} rel={item.opensInNewTab?'noopener noreferrer':undefined} aria-label={item.opensInNewTab?`${item.label}. ${item.detail}. Opens in a new tab.`:undefined} onclick={()=>navOpen=false}><strong>{item.label}</strong><small>{item.detail}</small></a>{/each}</nav>
       <div class="session"><ThemeSelector /><div class="session-row"><span role="note" title={capabilityStatusDetail()} aria-label={capabilityStatusDetail()}>{capabilityStatus()}</span></div></div>
     </aside>
     {#if navOpen}<button class="scrim" tabindex="-1" aria-hidden="true" onclick={()=>void closeNavigation()}></button>{/if}
@@ -276,6 +286,8 @@
   .login-links{display:flex;justify-content:center;gap:8px;margin:18px 0 0;color:var(--muted);font-size:var(--text-xs)}
   .login-links a{color:var(--accent)}
   .reference-nav{margin-top:18px;padding-top:14px;border-top:1px solid var(--border)}
+  .sign-out-control{position:relative;display:inline-flex}
+  .sign-out-error{position:absolute;z-index:20;top:calc(100% + 8px);right:0;width:min(300px,calc(100vw - 32px));padding:9px 11px;border:1px solid var(--danger);border-radius:var(--radius-sm);background:var(--panel);box-shadow:0 8px 24px rgb(var(--shadow-rgb) / .28);color:var(--danger);font-size:var(--text-2xs);line-height:1.4}
   .console-nav-group+.console-nav-group{margin-top:18px;padding-top:14px;border-top:1px solid var(--border)}
   .command-trigger{display:flex;min-height:34px;align-items:center;gap:7px;padding:0 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel);color:var(--muted);font:650 var(--text-2xs) var(--mono);white-space:nowrap}
   .command-trigger:hover,.command-trigger:focus-visible{border-color:var(--accent);color:var(--accent);background:rgb(var(--accent-rgb) / .07)}

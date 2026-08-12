@@ -406,7 +406,16 @@ test('all-layout mode and a local custom dictionary add bounded reviewable candi
 
   await page.getByRole('button', { name: /^Impersonation\b/u }).click();
   await page.getByText(/^Custom dictionary/u).click();
-  await page.locator('input[type="file"]').setInputFiles({
+  const dictionaryInput = page.locator('.dictionary-file input[type="file"]');
+  const dictionaryPicker = page.locator('.dictionary-file label');
+  for (const width of [1280, 390]) {
+    await page.setViewportSize({ width, height: 844 });
+    await dictionaryInput.focus();
+    await expect(dictionaryInput).toBeFocused();
+    await expect(dictionaryPicker).toHaveCSS('outline-style', 'solid');
+    await expect(dictionaryPicker).toHaveCSS('outline-width', '2px');
+  }
+  await dictionaryInput.setInputFiles({
     name: 'review-terms.txt',
     mimeType: 'text/plain',
     buffer: Buffer.from('invoice\ncustomer-care\nbad!\n'),

@@ -13,6 +13,12 @@ import * as tls from 'node:tls';
 import { domainToASCII } from 'node:url';
 
 import { createObservation } from './observation.mts';
+import {
+  MAX_LOOKUP_TLS_ALT_NAMES,
+  MAX_LOOKUP_TLS_CHAIN_CERTIFICATES,
+  MAX_LOOKUP_TLS_FINDINGS,
+  MAX_LOOKUP_TLS_NAME_VALUES,
+} from './lookup-network-evidence-bounds.mts';
 import { isPrivateAddress, resolvePublicAddresses } from './safe-fetch.mts';
 import {
   parseCertificateExtensionProfile,
@@ -122,12 +128,12 @@ const TLS_PROFILE_VERSION = 3;
 const TLS_PORT = 443;
 const TLS_TIMEOUT_MS = 5000;
 const MAX_RESOLVED_ADDRESSES = 64;
-const MAX_CHAIN_CERTIFICATES = 8;
-const MAX_ALT_NAMES = 50;
+const MAX_CHAIN_CERTIFICATES = MAX_LOOKUP_TLS_CHAIN_CERTIFICATES;
+const MAX_ALT_NAMES = MAX_LOOKUP_TLS_ALT_NAMES;
 const MAX_SAN_ENTRIES = 100;
 const MAX_EXTENDED_KEY_USAGES = 16;
 const MAX_AIA_LOCATIONS = 32;
-const MAX_NAME_VALUES = 4;
+const MAX_NAME_VALUES = MAX_LOOKUP_TLS_NAME_VALUES;
 const MAX_TEXT_LENGTH = 256;
 const MAX_ERROR_LENGTH = 240;
 const MAX_SERIAL_LENGTH = 128;
@@ -621,7 +627,7 @@ function tlsFindings(profile: TlsProfile): TlsFinding[] {
   if (profile.authorization.authorized === false) findings.push({ id: 'certificate_unauthorized', tone: 'warning', label: 'Certificate not authorised', detail: 'The runtime trust store did not authorise the observed certificate chain. This can reflect an incomplete chain, private CA, self-signed certificate, expiry, or another validation failure.' });
   if (profile.hostname.matches === false) findings.push({ id: 'hostname_mismatch', tone: 'warning', label: 'Hostname mismatch', detail: 'The observed leaf certificate did not match the SNI hostname.' });
   if (profile.certificate?.subjectAltNames?.dnsNames.some((name) => name.startsWith('*.'))) findings.push({ id: 'wildcard_certificate', tone: 'neutral', label: 'Wildcard certificate', detail: 'The leaf certificate includes at least one wildcard DNS name. Wildcard use is common and is not inherently suspicious.' });
-  return findings;
+  return findings.slice(0, MAX_LOOKUP_TLS_FINDINGS);
 }
 
 function buildTlsObservation(handshake: TlsHandshake = {}, options: TlsBuildOptions = {}) {
@@ -635,7 +641,13 @@ function buildTlsObservation(handshake: TlsHandshake = {}, options: TlsBuildOpti
   const authorized = typeof handshake.authorized === 'boolean' ? handshake.authorized : null;
   const hostnameMatches = typeof handshake.hostnameMatches === 'boolean' ? handshake.hostnameMatches : null;
   const authorizationError = authorized === false
-    ? boundedString(handshake.authorizationError, MAX_ERROR_LENGTH, state)
+    ? boundedString(
+        handshake.authorizationError instanceof Error
+          ? handshake.authorizationError.message
+          : handshake.authorizationError,
+        MAX_ERROR_LENGTH,
+        state,
+      )
     : null;
   const hostnameError = hostnameMatches === false
     ? boundedString(handshake.hostnameError, MAX_ERROR_LENGTH, state)
@@ -825,6 +837,9 @@ async function collectTlsIntelligence(hostname: string, options: TlsCollectOptio
         port: TLS_PORT,
         servername: normalizedHostname,
         rejectUnauthorized: false,
+        // Keep runtime CA-path authorization independent from the separately
+        // recorded endpoint-identity comparison below.
+        checkServerIdentity: () => undefined,
         ALPNProtocols: ['h2', 'http/1.1'],
       }, () => {
         try {

@@ -1,4 +1,5 @@
 import { classifyQuery } from '../lib/classify.mts';
+import { scanBoundedJson } from '../lib/bounded-json.mts';
 import {
   buildDomainControlFlightRecorder,
   type DomainControlFlightRecorderObservation,
@@ -18,10 +19,26 @@ export const MAX_DOMAIN_CONTROL_MONITOR_DOMAINS = 20;
 
 type PreviousSnapshot = Readonly<{ observations: readonly DomainControlFlightRecorderObservation[] }>;
 
+function parseMonitorJson(input: string, label: string): unknown {
+  const normalized = input.replace(/^\uFEFF/u, '');
+  try {
+    scanBoundedJson(normalized);
+    return JSON.parse(normalized);
+  } catch (cause) {
+    const detail = cause instanceof Error ? cause.message : '';
+    if (detail === 'Artefact input is not valid JSON.') {
+      throw new CliUsageError(`${label} must be valid JSON.`);
+    }
+    if (detail.startsWith('Artefact JSON ')) {
+      throw new CliUsageError(`${label} ${detail.slice('Artefact JSON '.length)}`);
+    }
+    throw new CliUsageError(`${label} must satisfy the bounded JSON structure contract.`);
+  }
+}
+
 function previousSnapshot(input: string | null): PreviousSnapshot {
   if (!input) return { observations: [] };
-  let parsed: unknown;
-  try { parsed = JSON.parse(input.replace(/^\uFEFF/u, '')); } catch { throw new CliUsageError('Previous monitor snapshot must be valid JSON.'); }
+  const parsed = parseMonitorJson(input, 'Previous monitor snapshot');
   const root = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};
   if (root.schema !== CLI_DOMAIN_CONTROL_MONITOR_SCHEMA || root.version !== CLI_DOMAIN_CONTROL_MONITOR_VERSION || !Array.isArray(root.observations)) {
     throw new CliUsageError(`Previous monitor snapshot must use ${CLI_DOMAIN_CONTROL_MONITOR_SCHEMA} version ${CLI_DOMAIN_CONTROL_MONITOR_VERSION}.`);
@@ -46,9 +63,9 @@ export async function runDomainControlMonitor(
   }>,
 ) {
   const generatedAt = options.now();
-  let rawManifest: unknown;
-  try { rawManifest = JSON.parse(manifestInput.replace(/^\uFEFF/u, '')); } catch { throw new CliUsageError('Domain-control manifest must be valid JSON.'); }
+  const rawManifest = parseMonitorJson(manifestInput, 'Domain-control manifest');
   const manifest = verifyDomainControlManifest(rawManifest);
+  const previous = previousSnapshot(previousInput);
   const entries = manifest.entries.slice(0, Math.min(options.limit, MAX_DOMAIN_CONTROL_MONITOR_DOMAINS));
   const lookups: unknown[] = new Array(entries.length);
   const failures: Array<{ domain: string; error: string }> = [];
@@ -77,7 +94,6 @@ export async function runDomainControlMonitor(
   const review = buildCliDomainControlReview(JSON.stringify({
     schema: 'whoisleuth.cli.domain-control-review-input', version: 1, manifest, lookups: successful,
   }), generatedAt);
-  const previous = previousSnapshot(previousInput);
   const observations = review.observations;
   const flightRecorder = buildDomainControlFlightRecorder({
     schema: 'whoisleuth.domain-control-flight-recorder.input', version: 1,

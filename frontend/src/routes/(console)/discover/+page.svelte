@@ -837,7 +837,7 @@
   .modes{display:flex;gap:6px;margin-bottom:18px;padding:5px;border:1px solid var(--border);border-radius:var(--radius-md);background:rgb(var(--bg-rgb) / .5)}
   .modes button{flex:1 1 auto;min-height:38px;padding:8px 12px;border:1px solid transparent;border-radius:var(--radius-sm);color:var(--muted);background:transparent;font:600 var(--text-xs) var(--mono)}
   .modes button:hover{color:var(--text)}
-  .modes button.active{color:var(--accent2);border-color:rgb(var(--accent2-rgb) / .45);background:rgb(var(--accent2-rgb) / .08)}
+  .modes button.active{color:var(--interface-accent);border-color:rgb(var(--interface-accent-rgb) / .45);background:rgb(var(--interface-accent-rgb) / .08)}
   .fields{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(160px,.7fr) auto;gap:10px;align-items:end}
   .generation-limits{margin:10px 0 0;color:var(--muted);font-size:var(--text-xs)}
   .ct-history-notice{color:var(--amber);font-size:var(--text-xs)}
@@ -849,7 +849,7 @@
   @media(max-width:700px){
     .fields{grid-template-columns:1fr}
     .modes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));overflow:visible}
-    .modes button{min-width:0;padding-inline:2px;font-size:.62rem;line-height:1.2;white-space:normal}
+    .modes button{min-width:0;min-height:44px;padding-inline:4px;font-size:var(--text-2xs);line-height:1.2;white-space:normal}
     .profile-context{align-items:flex-start;flex-direction:column}
   }
 </style>

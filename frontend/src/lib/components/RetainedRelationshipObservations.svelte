@@ -108,7 +108,7 @@
   .record-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
   .record-heading .type{color:var(--accent2);font:700 var(--text-2xs) var(--mono);text-transform:uppercase}
   .record-heading h3{margin-top:4px;font-size:var(--text-md)}
-  .record-heading>span{flex:none;color:var(--success);font:700 var(--text-2xs) var(--mono)}
+  .record-heading>span{flex:none;color:var(--text);font:700 var(--text-2xs) var(--mono)}
   .record-heading>span.partial{color:var(--amber)}
   dl{display:grid;gap:5px;margin:12px 0 0}
   dl>div{display:grid;grid-template-columns:88px minmax(0,1fr);gap:7px}

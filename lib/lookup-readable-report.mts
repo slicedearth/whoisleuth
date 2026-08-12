@@ -25,7 +25,7 @@ type LookupReadableReportOptions = {
 
 function selectedObjectValues(value: JsonObject, keys: readonly string[]): Record<string, unknown> {
   return Object.fromEntries(keys
-    .filter((key) => Object.hasOwn(value, key))
+    .filter((key) => Object.hasOwn(value, key) && value[key] !== undefined)
     .map((key) => [key, value[key]]));
 }
 
@@ -340,10 +340,12 @@ function projectedLookup(response: LookupHttpResponse): Record<string, unknown> 
       ? projectedAutnumRegistration(view.rdapParsed)
       : projectedNetworkRegistration(view.rdapParsed);
   return {
-    query: response.query,
-    type: response.type,
-    inputHostname: response.inputHostname,
-    registrableDomain: response.registrableDomain,
+    ...selectedObjectValues(response, [
+      'query',
+      'type',
+      'inputHostname',
+      'registrableDomain',
+    ]),
     isSubdomain: response.isSubdomain === true,
     availability: projectedAvailability(view.availability),
     registryInsights,

@@ -69,7 +69,9 @@ Registry publication is deliberately separate from candidate assembly. The
 CLI package is declared as [dual-use security
 software](https://docs.npmjs.com/policies/dual-use/). The tagged release workflow
 may submit only the exact reviewed archive through trusted publishing to npm
-staging. The workflow must not use either token-based direct publication or a
+staging. Before assembly it requires a successful completed push run of the
+full `ci.yml` workflow for the exact tagged commit; an ancestor commit's result
+does not satisfy that release-provenance gate. The workflow must not use either token-based direct publication or a
 direct OIDC publish path. A maintainer must inspect and approve the staged
 version with interactive two-factor authentication before it becomes
 available. Local assembly commands do not publish, configure credentials, or
@@ -97,6 +99,10 @@ and does not inherit npm credentials. The manual workflow requires both the
 version and the release-workflow run ID so it downloads the reviewed candidate
 artifact rather than reconstructing one. Run it only after registry
 publication; an unavailable, still-staged, or non-identical version fails.
+The reviewed candidate is retained for 7 days. Protected approval, npm
+promotion, and post-publication verification must finish while that exact
+artifact remains available; after expiry, assemble and review a fresh
+candidate instead of reconstructing the prior archive.
 
 Review schema compatibility whenever a release changes persisted or exported
 evidence:
