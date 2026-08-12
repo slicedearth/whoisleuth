@@ -329,10 +329,10 @@ function smtpCapabilities(reply: SmtpReply | null): readonly string[] {
   if (!reply || reply.code !== 250) return Object.freeze([]);
   const output: string[] = [];
   for (const line of reply.lines.slice(1)) {
-    const token = line.slice(4).trim().split(/\s+/u)[0]?.toUpperCase() || '';
-    if (!/^[A-Z0-9][A-Z0-9-]{0,31}$/u.test(token) || output.includes(token)) continue;
+    const capability = line.slice(4).trim().split(/\s+/u)[0]?.toUpperCase() || '';
+    if (!/^[A-Z0-9][A-Z0-9-]{0,31}$/u.test(capability) || output.includes(capability)) continue;
     if (output.length >= MAX_SMTP_CAPABILITIES) break;
-    output.push(token);
+    output.push(capability);
   }
   return Object.freeze(output.sort());
 }

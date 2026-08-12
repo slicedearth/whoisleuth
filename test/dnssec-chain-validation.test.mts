@@ -52,7 +52,7 @@ function keyFixture(owner: string) {
   ]);
   const rdata = Buffer.concat([Buffer.from([0x01, 0x01, 0x03, 0x0d]), publicKey]);
   const data: DnskeyData = { kind: 'DNSKEY', flags: 257, protocol: 3, algorithm: 13, publicKey };
-  return { owner, privateKey: pair.privateKey, record: record(owner, DNS_TYPE_DNSKEY, rdata, data) };
+  return { owner, signingKey: pair.privateKey, record: record(owner, DNS_TYPE_DNSKEY, rdata, data) };
 }
 
 function dsRecord(owner: string, key: DnsWireRecord): DnsWireRecord {
@@ -101,7 +101,7 @@ function signatureRecord(
   type: number,
   signer: string,
   key: DnsWireRecord,
-  privateKey: crypto.KeyObject,
+  signingKey: crypto.KeyObject,
   rrset: DnsWireRecord[],
   corrupt = false,
   section: DnsWireRecord['section'] = 'answer',
@@ -127,7 +127,7 @@ function signatureRecord(
   };
   const dataToSign = independentSignedRrsetData(owner, type, rrset, unsigned);
   assert.deepEqual(signedRrsetData(owner, type, rrset, unsigned), dataToSign);
-  const signature = crypto.sign('sha256', dataToSign, { key: privateKey, dsaEncoding: 'ieee-p1363' });
+  const signature = crypto.sign('sha256', dataToSign, { key: signingKey, dsaEncoding: 'ieee-p1363' });
   if (corrupt) signature[0] = (signature[0] as number) ^ 0xff;
   const wirePrefix = Buffer.concat([prefix, wireName(options.wireSigner ?? signer)]);
   return record(owner, DNS_TYPE_RRSIG, Buffer.concat([wirePrefix, signature]), { ...unsigned, signature }, section);
@@ -183,13 +183,13 @@ function secureFixture(
   const root = keyFixture('.');
   const tld = keyFixture('test');
   const child = keyFixture('example.test');
-  const rootSignature = signatureRecord('.', DNS_TYPE_DNSKEY, '.', root.record, root.privateKey, [root.record]);
+  const rootSignature = signatureRecord('.', DNS_TYPE_DNSKEY, '.', root.record, root.signingKey, [root.record]);
   const tldDs = dsRecord('test', tld.record);
-  const tldDsSignature = signatureRecord('test', DNS_TYPE_DS, '.', root.record, root.privateKey, [tldDs]);
-  const tldKeySignature = signatureRecord('test', DNS_TYPE_DNSKEY, 'test', tld.record, tld.privateKey, [tld.record]);
+  const tldDsSignature = signatureRecord('test', DNS_TYPE_DS, '.', root.record, root.signingKey, [tldDs]);
+  const tldKeySignature = signatureRecord('test', DNS_TYPE_DNSKEY, 'test', tld.record, tld.signingKey, [tld.record]);
   const childDs = childDsFactory?.('example.test', child.record) ?? [dsRecord('example.test', child.record)];
-  const childDsSignature = signatureRecord('example.test', DNS_TYPE_DS, 'test', tld.record, tld.privateKey, childDs);
-  const childKeySignature = signatureRecord('example.test', DNS_TYPE_DNSKEY, 'example.test', child.record, child.privateKey, [child.record], corruptExampleSignature, 'answer', { wireSigner: 'ExAmPlE.TeSt' });
+  const childDsSignature = signatureRecord('example.test', DNS_TYPE_DS, 'test', tld.record, tld.signingKey, childDs);
+  const childKeySignature = signatureRecord('example.test', DNS_TYPE_DNSKEY, 'example.test', child.record, child.signingKey, [child.record], corruptExampleSignature, 'answer', { wireSigner: 'ExAmPlE.TeSt' });
   const steps = [
     { name: '.', type: DNS_TYPE_DNSKEY, answer: [root.record, rootSignature] },
     { name: 'test', type: DNS_TYPE_DS, answer: [tldDs, tldDsSignature] },
@@ -244,7 +244,7 @@ describe('isolated cryptographic DNSSEC validation', () => {
       const first = record(owner, type, shortHigh, { kind: 'opaque' });
       const second = record(owner, type, longLow, { kind: 'opaque' });
       const duplicate = record(owner, type, Buffer.from(shortHigh), { kind: 'opaque' });
-      const signature = signatureRecord(owner, type, owner, key.record, key.privateKey, [first, second, duplicate]);
+      const signature = signatureRecord(owner, type, owner, key.record, key.signingKey, [first, second, duplicate]);
       assert.equal(signature.data.kind, 'RRSIG');
       const expected = independentSignedRrsetData(owner, type, [first, second, duplicate], signature.data);
       assert.deepEqual(signedRrsetData(owner, type, [first, second, duplicate], signature.data), expected);
@@ -271,7 +271,7 @@ describe('isolated cryptographic DNSSEC validation', () => {
     assert.equal(verifyRrset(responseObject(owner, DNS_TYPE_A, [...rrset, malformedSignature]), owner, DNS_TYPE_A, [malformedKey], 'example.test', new Date(OBSERVED_AT)).state, 'bogus');
 
     const validKey = keyFixture('example.test');
-    const wildcardSignature = signatureRecord(owner, DNS_TYPE_A, 'example.test', validKey.record, validKey.privateKey, rrset, false, 'answer', { labels: 2 });
+    const wildcardSignature = signatureRecord(owner, DNS_TYPE_A, 'example.test', validKey.record, validKey.signingKey, rrset, false, 'answer', { labels: 2 });
     const wildcard = verifyRrset(responseObject(owner, DNS_TYPE_A, [...rrset, wildcardSignature]), owner, DNS_TYPE_A, [validKey.record], 'example.test', new Date(OBSERVED_AT));
     assert.equal(wildcard.state, 'unsupported');
     assert.match(wildcard.detail, /wildcard-expanded/u);
@@ -382,10 +382,10 @@ describe('isolated cryptographic DNSSEC validation', () => {
 
   test('accepts a signed denial of DS only as an insecure delegation', async () => {
     const root = keyFixture('.');
-    const rootSignature = signatureRecord('.', DNS_TYPE_DNSKEY, '.', root.record, root.privateKey, [root.record]);
+    const rootSignature = signatureRecord('.', DNS_TYPE_DNSKEY, '.', root.record, root.signingKey, [root.record]);
     const nsecRdata = Buffer.concat([wireName('NeXt.TeSt'), Buffer.from([0, 1, 0x20])]);
     const nsec = record('test', DNS_TYPE_NSEC, nsecRdata, { kind: 'NSEC', nextName: 'next.test', types: new Set([DNS_TYPE_NS]) }, 'authority');
-    const nsecSignature = signatureRecord('test', DNS_TYPE_NSEC, '.', root.record, root.privateKey, [nsec], false, 'authority');
+    const nsecSignature = signatureRecord('test', DNS_TYPE_NSEC, '.', root.record, root.signingKey, [nsec], false, 'authority');
     const steps = [
       { name: '.', type: DNS_TYPE_DNSKEY, answer: [root.record, rootSignature], authority: [] },
       { name: 'test', type: DNS_TYPE_DS, answer: [], authority: [nsec, nsecSignature] },
@@ -416,13 +416,13 @@ describe('isolated cryptographic DNSSEC validation', () => {
   test('continues past an authenticated non-delegation without trusting a separate NS answer', async () => {
     const root = keyFixture('.');
     const child = keyFixture('example.test');
-    const rootSignature = signatureRecord('.', DNS_TYPE_DNSKEY, '.', root.record, root.privateKey, [root.record]);
+    const rootSignature = signatureRecord('.', DNS_TYPE_DNSKEY, '.', root.record, root.signingKey, [root.record]);
     const noDelegationRdata = Buffer.concat([wireName('next.test'), Buffer.from([0, 1, 0x22])]);
     const noDelegation = record('test', DNS_TYPE_NSEC, noDelegationRdata, { kind: 'NSEC', nextName: 'next.test', types: new Set([DNS_TYPE_NS, 6]) }, 'authority');
-    const noDelegationSignature = signatureRecord('test', DNS_TYPE_NSEC, '.', root.record, root.privateKey, [noDelegation], false, 'authority');
+    const noDelegationSignature = signatureRecord('test', DNS_TYPE_NSEC, '.', root.record, root.signingKey, [noDelegation], false, 'authority');
     const childDs = dsRecord('example.test', child.record);
-    const childDsSignature = signatureRecord('example.test', DNS_TYPE_DS, '.', root.record, root.privateKey, [childDs]);
-    const childKeySignature = signatureRecord('example.test', DNS_TYPE_DNSKEY, 'example.test', child.record, child.privateKey, [child.record]);
+    const childDsSignature = signatureRecord('example.test', DNS_TYPE_DS, '.', root.record, root.signingKey, [childDs]);
+    const childKeySignature = signatureRecord('example.test', DNS_TYPE_DNSKEY, 'example.test', child.record, child.signingKey, [child.record]);
     const steps = [
       { name: '.', type: DNS_TYPE_DNSKEY, answer: [root.record, rootSignature], authority: [] },
       { name: 'test', type: DNS_TYPE_DS, answer: [], authority: [noDelegation, noDelegationSignature] },
@@ -453,7 +453,7 @@ describe('isolated cryptographic DNSSEC validation', () => {
 
   test('does not skip missing authenticated denial evidence or accept NSEC3 opt-out spans', async () => {
     const root = keyFixture('.');
-    const rootSignature = signatureRecord('.', DNS_TYPE_DNSKEY, '.', root.record, root.privateKey, [root.record]);
+    const rootSignature = signatureRecord('.', DNS_TYPE_DNSKEY, '.', root.record, root.signingKey, [root.record]);
     const anchor = {
       schema: DNSSEC_TRUST_ANCHOR_SCHEMA, version: 1, zone: '.', source: 'Fixture root anchor', reviewedAt: OBSERVED_AT,
       dsRecords: [{ keyTag: dnskeyTag(root.record.canonicalRdata), algorithm: 13, digestType: 2, digest: crypto.createHash('sha256').update(wireName('.')).update(root.record.canonicalRdata).digest('hex') }],
@@ -484,7 +484,7 @@ describe('isolated cryptographic DNSSEC validation', () => {
     const nsec3 = record(nsec3Owner, DNS_TYPE_NSEC3, nsec3Rdata, {
       kind: 'NSEC3', hashAlgorithm: 1, flags: 1, iterations: 0, salt: Buffer.alloc(0), nextHash: 'V'.repeat(32), types: new Set([DNS_TYPE_NS]),
     }, 'authority');
-    const nsec3Signature = signatureRecord(nsec3Owner, DNS_TYPE_NSEC3, '.', root.record, root.privateKey, [nsec3], false, 'authority');
+    const nsec3Signature = signatureRecord(nsec3Owner, DNS_TYPE_NSEC3, '.', root.record, root.signingKey, [nsec3], false, 'authority');
     const optOutSteps = [
       { name: '.', type: DNS_TYPE_DNSKEY, answer: [root.record, rootSignature], authority: [] },
       { name: 'test', type: DNS_TYPE_DS, answer: [], authority: [nsec3, nsec3Signature] },
