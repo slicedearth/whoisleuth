@@ -628,7 +628,7 @@ describe('offline artifact verifier', () => {
     (oversizedArray.analysis as Record<string, unknown>).privateValues = Array.from({ length: 10_001 }, () => null);
     await assert.rejects(
       verifyOfflineArtifact(JSON.stringify(oversizedArray)),
-      /Lookup evidence portable bounds.*malformed structure/iu,
+      /(?:Lookup evidence portable bounds.*malformed structure|container with more than 10000 items)/iu,
     );
 
     const overDepth = structuredClone(lookupEvidenceArtifact());

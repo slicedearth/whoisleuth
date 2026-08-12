@@ -33,18 +33,32 @@ import {
 } from '../frontend/src/lib/analysis/brand-protection-operations-report.ts';
 import { MAX_CASE_INPUT_RECORDS, MAX_CASES } from '../frontend/src/lib/analysis/case-model.ts';
 import { MAX_SAFE_FETCH_ADDRESS_CANDIDATES } from '../lib/safe-fetch.mts';
+import {
+  MAX_BOUNDED_JSON_CONTAINER_ITEMS,
+  MAX_BOUNDED_JSON_DEPTH,
+  MAX_BOUNDED_JSON_KEYS,
+  MAX_BOUNDED_JSON_VALUES,
+} from '../lib/bounded-json.mts';
+import { MAX_LOOKUP_RESPONSE_CONTAINER_ITEMS } from '../lib/lookup-response-contract.mts';
+import {
+  LOOKUP_EVIDENCE_PORTABLE_MAX_DEPTH,
+  LOOKUP_EVIDENCE_PORTABLE_MAX_ENTRIES,
+} from '../lib/evidence-export.mts';
+import { MAX_SAVED_LOOKUP_INPUT_BYTES } from '../cli/saved-lookup.mts';
 
 const ROOT_NOTICE_URL = new URL('../PRIVACY.md', import.meta.url);
 const PUBLIC_NOTICE_URL = new URL('../frontend/src/routes/(public)/privacy/+page.svelte', import.meta.url);
+const DISCLOSURE_URL = new URL('../DISCLOSURE', import.meta.url);
 
 function mib(bytes: number): number {
   return bytes / (1024 * 1024);
 }
 
 test('public privacy notices track versioned browser-local data contracts', async () => {
-  const [rootNotice, publicNotice] = await Promise.all([
+  const [rootNotice, publicNotice, disclosure] = await Promise.all([
     readFile(ROOT_NOTICE_URL, 'utf8'),
     readFile(PUBLIC_NOTICE_URL, 'utf8'),
+    readFile(DISCLOSURE_URL, 'utf8'),
   ]);
 
   for (const notice of [rootNotice, publicNotice]) {
@@ -90,7 +104,31 @@ test('public privacy notices track versioned browser-local data contracts', asyn
     assert.match(compact, /Only confirmed connected addresses can form address relationship leads/u);
     assert.match(compact, /do not cryptographically authenticate the A or AAAA RRset or any CNAME chain/u);
     assert.match(compact, /bounded certificate authorization and identity error text/u);
+    assert.ok(compact.includes(`Live Lookup responses are rejected before display when they exceed ${MAX_BOUNDED_JSON_DEPTH} nesting levels, ${MAX_BOUNDED_JSON_KEYS.toLocaleString('en-AU')} keys, ${MAX_BOUNDED_JSON_VALUES.toLocaleString('en-AU')} values, or ${MAX_LOOKUP_RESPONSE_CONTAINER_ITEMS.toLocaleString('en-AU')} items in any single container`));
+    assert.ok(compact.includes(`stricter ${LOOKUP_EVIDENCE_PORTABLE_MAX_DEPTH}-level, ${LOOKUP_EVIDENCE_PORTABLE_MAX_ENTRIES.toLocaleString('en-AU')}-entry portable evidence structure remains reviewable`));
+    assert.ok(compact.includes(`Saved CLI Lookup JSON inputs are capped at ${mib(MAX_SAVED_LOOKUP_INPUT_BYTES)} MiB and scanned before parsing for duplicate keys, the prototype-sensitive`));
+    assert.match(compact, /__proto__.*more than 48 nesting levels/u);
+    assert.ok(compact.includes(`more than ${MAX_BOUNDED_JSON_CONTAINER_ITEMS.toLocaleString('en-AU')} items in any single container`));
+    assert.match(compact, /If a DANE-TA TLSA usage 2 association is published, active STARTTLS review retains only the observed leaf certificate and leaves that comparison partial because this action does not construct or validate a certificate path to a TLSA trust anchor/u);
+    assert.match(compact, /SMTP relay PKIX-TA usage 0 and PKIX-EE usage 1 records are retained as unsupported and cannot complete SMTP DANE assurance; a separately attributable usage 3 match remains eligible/u);
+    assert.match(compact, /explicit authorised-capture action/u);
+    assert.match(compact, /executes remote page JavaScript/u);
+    assert.match(compact, /Each admitted resource operator receives the exact requested URL, including its path and query/u);
+    assert.match(compact, /Structured manifest and digest fields retain only the selected target hostname, the final HTTP\(S\) origin, one control-sanitised page title of up to 300 characters, and admitted public resource hostnames, never those request paths or queries/u);
+    assert.match(compact, /local fixed-size screenshot/u);
+    assert.match(compact, /screenshot necessarily preserves visible rendered content and may include page text or a page-reflected path or query until the operator deletes it/u);
+    assert.match(compact, /not uploaded to WHOISleuth/u);
+    assert.match(compact, /persist until the operator deletes them/u);
+    assert.match(compact, /UTF-8 body-text-node bound marks a capture partial/u);
+    assert.match(compact, /tag sequence omits nesting and attributes/u);
+    assert.match(compact, /neither is an exact DOM or visibility claim/u);
+    assert.match(compact, /Version 2 comparison output reports the page-title equality state without copying either bounded title/u);
   }
+
+  const compactDisclosure = disclosure.replace(/\s+/gu, ' ');
+  assert.match(compactDisclosure, /Hosted and distributable collection does not .*execute remote page scripts/u);
+  assert.match(compactDisclosure, /separate repo-local rendered-capture package is an explicit authorised exception/u);
+  assert.match(compactDisclosure, /executes page JavaScript in a disposable, network-bounded browser/u);
 
   assert.equal(BROWSER_LOCAL_COLLECTIONS.length, 12);
   assert.deepEqual([...SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS], [1, 2, 3, 4, WORKSPACE_ARCHIVE_VERSION]);

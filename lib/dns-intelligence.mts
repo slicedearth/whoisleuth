@@ -13,6 +13,10 @@ import {
   type AuthorityQuery,
 } from './dns-delegation-health.mts';
 import { createObservation } from './observation.mts';
+import {
+  MAX_LOOKUP_DNS_RECORDS_PER_TYPE,
+  MAX_LOOKUP_REVERSE_DNS_PTR_RECORDS,
+} from './lookup-network-evidence-bounds.mts';
 import { isPrivateAddress } from './safe-fetch.mts';
 import { resolveServiceBindingRecords } from './service-binding-dns.mts';
 
@@ -72,8 +76,8 @@ type ServiceBindingRecord = {
 };
 
 const DNS_TIMEOUT_MS = 5000;
-const MAX_RECORDS_PER_TYPE = 16;
-const MAX_PTR_RECORDS = 8;
+const MAX_RECORDS_PER_TYPE = MAX_LOOKUP_DNS_RECORDS_PER_TYPE;
+const MAX_PTR_RECORDS = MAX_LOOKUP_REVERSE_DNS_PTR_RECORDS;
 const MAX_HOSTNAME_LENGTH = 253;
 const MAX_POLICY_LENGTH = 1024;
 const MAX_ERROR_LENGTH = 180;

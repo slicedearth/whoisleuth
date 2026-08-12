@@ -69,6 +69,18 @@ test('keeps the Bulk queue available when browser-local context cannot be loaded
   await expect(page.locator('.local-context-status')).toContainText('Some browser-local context could not be loaded');
   await expect(page.locator('.local-context-status')).toContainText('review-queue');
   await expect(page.locator('#domains')).toBeEditable();
+  await expect(page.getByText(/Saved Bulk sessions could not be read/u)).toBeVisible();
+  await expect(page.getByText(/Saved views and review state could not be read/u)).toBeVisible();
+  await expect(page.getByText(/The shortlist could not be read/u)).toBeVisible();
+  await expect(page.getByText(/No saved Bulk sessions yet/u)).toHaveCount(0);
+  await expect(page.getByText(/No shortlisted domains/u)).toHaveCount(0);
+});
+
+test('rejects an over-bound directly pasted Bulk list before scanning', async ({ page }) => {
+  const input = `${'one.example,'.repeat(20_001)}one.example`;
+  await page.locator('#domains').fill(input);
+  await expect(page.getByRole('alert')).toContainText('exceeds the 2 MiB or bounded row and cell limit');
+  await expect(page.getByRole('button', { name: 'Scan domains' })).toBeDisabled();
 });
 
 test('retains successfully loaded Bulk context when one collection is unavailable', async ({ page }) => {
@@ -96,6 +108,85 @@ test('retains successfully loaded Bulk context when one collection is unavailabl
   await expect(page.locator('.local-context-status')).toContainText('Successfully loaded collections remain available');
   await expect(page.getByRole('heading', { name: 'Retained partial context' })).toBeVisible();
   await expect(page.locator('#domains')).toBeEditable();
+  await expect(page.getByRole('button', { name: 'Indicator eligibility unavailable' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: /Export \d+ reviewed indicators/u })).toHaveCount(0);
+});
+
+test('keeps shortlist-derived analysis unavailable instead of inferring no selection', async ({ page }) => {
+  await page.route('**/api/lookup?*', async (route) => {
+    const domain = new URL(route.request().url()).searchParams.get('q') || '';
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        availability: {
+          applicable: true,
+          domain,
+          state: 'registered',
+          confidence: 'high',
+          nameservers: ['ns1.group.example'],
+          hasMx: true,
+          hasSpf: true,
+          hasDmarc: false,
+        },
+        diagnostics: {
+          version: 7,
+          rdap: { status: 'complete' },
+          whois: { status: 'skipped' },
+          availability: { status: 'complete' },
+        },
+      }),
+    });
+  });
+  await runBulkScan(page, ['selection-state.example']);
+  await page.getByLabel('Session name').fill('Unavailable shortlist review');
+  await page.getByRole('button', { name: 'Save current session' }).click();
+  await failBrowserLocalCollectionReads(page, 'shortlist');
+  await page.locator('#console-navigation').getByRole('link', { name: /^Dashboard/u }).click();
+  await page.locator('#console-navigation').getByRole('link', { name: /^Bulk/u }).click();
+  await page.locator('.bulk-sessions article', { hasText: 'Unavailable shortlist review' }).getByRole('button', { name: 'Load' }).click();
+
+  const mailReview = page.getByRole('region', { name: 'Lookalike mail exposure' });
+  await expect(mailReview).toContainText('Selection unavailable');
+  await expect(mailReview.getByRole('button', { name: 'Select group' }).first()).toBeDisabled();
+  await page.getByLabel('Group summary').selectOption('nameserver');
+  const groupSummary = page.locator('.bulk-groups');
+  await expect(groupSummary).toContainText('selection unavailable');
+  await expect(groupSummary.getByRole('button', { name: 'Select group' })).toBeDisabled();
+});
+
+test('keeps case-derived indicator eligibility unavailable when Cases cannot be read', async ({ page }) => {
+  await page.route('**/api/lookup?*', async (route) => {
+    const domain = new URL(route.request().url()).searchParams.get('q') || '';
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        availability: { applicable: true, domain, state: 'registered', confidence: 'high' },
+        diagnostics: {
+          version: 7,
+          rdap: { status: 'complete' },
+          whois: { status: 'skipped' },
+          availability: { status: 'complete' },
+        },
+      }),
+    });
+  });
+  await runBulkScan(page, ['case-state.example']);
+  await page.getByRole('button', { name: /Add case-state\.example to shortlist/u }).click();
+  await page.getByLabel('Session name').fill('Unavailable case review');
+  await page.getByRole('button', { name: 'Save current session' }).click();
+  await failBrowserLocalCollectionReads(page, 'cases');
+  await page.locator('#console-navigation').getByRole('link', { name: /^Dashboard/u }).click();
+  await page.locator('#console-navigation').getByRole('link', { name: /^Bulk/u }).click();
+  await page.locator('.bulk-sessions article', { hasText: 'Unavailable case review' }).getByRole('button', { name: 'Load' }).click();
+
+  await expect(page.getByText(/Case dispositions could not be read, so indicator eligibility is unavailable/u)).toBeVisible();
+  const caseFilter = page.locator('.advanced-filters label.field').filter({ hasText: /^Case state/u }).locator('select');
+  await expect(caseFilter).toBeDisabled();
+  await expect(caseFilter).toContainText('Case evidence unavailable');
+  await expect(page.getByRole('button', { name: 'Indicator eligibility unavailable' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: /Export 0 reviewed indicators/u })).toHaveCount(0);
 });
 
 test('a small scan completes and reports the correct error count', async ({ page }) => {

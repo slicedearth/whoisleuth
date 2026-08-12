@@ -107,6 +107,22 @@ describe('Bulk lookup request controller', () => {
     );
   });
 
+  it('rejects duplicate compact-response keys before parsing can collapse them', async () => {
+    const raw = JSON.stringify(compactResponse()).replace(
+      '"type":"domain"',
+      '"type":"domain","type":"domain"',
+    );
+    await assert.rejects(
+      fetchCompactBulkLookup(
+        'example.test',
+        'fast',
+        new AbortController().signal,
+        { fetch: async () => new Response(raw, { headers: { 'content-type': 'application/json' } }) },
+      ),
+      /bounded JSON structure contract/u,
+    );
+  });
+
   it('normalizes numeric, date, absent, and excessive retry hints', () => {
     const now = Date.parse('2026-01-01T00:00:00.000Z');
     assert.equal(bulkLookupRetryDelayMs('1.25', now), 1_250);

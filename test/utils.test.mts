@@ -86,6 +86,17 @@ describe('parseDomainInput', () => {
     assert.deepEqual(parsed.entries, ['One.Example', 'two.example']);
     assert.equal(parsed.duplicates, 1);
   });
+
+  test('fails closed at the shared pasted-input traversal boundaries', () => {
+    assert.equal(utils.parseDomainInput('x'.repeat(utils.MAX_DOMAIN_INPUT_CHARACTERS)).tooLarge, false);
+    assert.equal(utils.parseDomainInput('x'.repeat(utils.MAX_DOMAIN_INPUT_CHARACTERS + 1)).tooLarge, true);
+    assert.equal(utils.parseDomainInput('é'.repeat(utils.MAX_DOMAIN_INPUT_BYTES / 2)).tooLarge, false);
+    assert.equal(utils.parseDomainInput(`é${'x'.repeat(utils.MAX_DOMAIN_INPUT_BYTES - 1)}`).tooLarge, true);
+    assert.equal(utils.parseDomainInput(Array.from({ length: utils.MAX_DOMAIN_INPUT_LINES }, () => 'one.example').join('\n')).tooLarge, false);
+    assert.equal(utils.parseDomainInput(Array.from({ length: utils.MAX_DOMAIN_INPUT_LINES + 1 }, () => 'one.example').join('\n')).tooLarge, true);
+    assert.equal(utils.parseDomainInput(`${'one.example,'.repeat(utils.MAX_DOMAIN_INPUT_SEPARATORS)}one.example`).tooLarge, false);
+    assert.equal(utils.parseDomainInput(`${'one.example,'.repeat(utils.MAX_DOMAIN_INPUT_SEPARATORS + 1)}one.example`).tooLarge, true);
+  });
 });
 
 describe('rowsToCsv', () => {

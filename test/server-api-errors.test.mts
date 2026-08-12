@@ -105,13 +105,17 @@ describe('Express API response parity', () => {
     assert.equal(success.status, 200);
     assert.deepEqual(await success.json(), { authenticated: true });
 
-    const expectedError = await fetch(`${origin}/api/lookup?q=${encodeURIComponent('not a valid domain')}`, {
-      headers: { Cookie: session },
-    });
-    assert.equal(expectedError.status, 400);
-    const expectedBody = recordValue(await expectedError.json());
-    assert.equal(expectedBody.errorCode, 'INVALID_QUERY');
-    assert.match(stringValue(expectedBody.error), /not a valid domain, IP, or ASN/i);
+    const privateQuery = 'private analyst note not a valid domain';
+    for (const route of ['lookup', 'rdap', 'whois', 'availability', 'domain-posture']) {
+      const expectedError = await fetch(`${origin}/api/${route}?q=${encodeURIComponent(privateQuery)}`, {
+        headers: { Cookie: session },
+      });
+      assert.equal(expectedError.status, 400, route);
+      const expectedBody = recordValue(await expectedError.json());
+      assert.equal(stringValue(expectedBody.error), 'Invalid query', route);
+      assert.equal(JSON.stringify(expectedBody).includes(privateQuery), false, route);
+      if (route === 'lookup') assert.equal(expectedBody.errorCode, 'INVALID_QUERY');
+    }
   });
 
   test('sanitizes unexpected errors without exposing internal details', () => {

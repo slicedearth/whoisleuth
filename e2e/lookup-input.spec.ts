@@ -262,6 +262,87 @@ test('browser-local profile failure does not block collected lookup evidence', a
   await expect(page.getByRole('alert')).toHaveCount(0);
 });
 
+test('a result beyond portable evidence depth remains reviewable with explicit export limits', async ({ page }) => {
+  let downloadCount = 0;
+  page.on('download', () => { downloadCount += 1; });
+  let nested: unknown = 'leaf';
+  for (let index = 0; index <= 24; index += 1) nested = { value: nested };
+  await page.route('**/api/lookup?*', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      query: 'portable-limit.example.test',
+      type: 'domain',
+      registrableDomain: 'example.test',
+      availability: {
+        applicable: true,
+        state: 'registered',
+        confidence: 'medium',
+        domain: 'example.test',
+        deepScanComplete: true,
+      },
+      rdap: { parsed: { domain: 'EXAMPLE.TEST' }, data: nested },
+      whois: { parsed: {}, chain: [] },
+      diagnostics: {
+        version: 8,
+        rdap: { status: 'success' },
+        whois: { status: 'partial' },
+        availability: { status: 'complete' },
+      },
+    }),
+  }));
+
+  await page.locator('#query').fill('portable-limit.example.test');
+  await page.getByRole('button', { name: 'Run lookup' }).click();
+
+  await expect(page.getByRole('heading', { name: 'registered' })).toBeVisible();
+  await expect(page.locator('#result')).toBeVisible();
+  const limitation = page.getByText(/Portable evidence and readable report exports are unavailable/u);
+  await expect(limitation).toBeVisible();
+  await expect(limitation).toContainText('The separately attributed Lookup result remains available.');
+  await page.locator('.export-menu > summary').click();
+  await page.getByRole('button', { name: 'Export evidence JSON' }).click();
+  await expect(page.locator('.portable-evidence-status')).toContainText('Evidence JSON was not created.');
+  await page.locator('.export-menu > summary').click();
+  await page.getByRole('button', { name: 'Download report' }).click();
+  await expect(page.locator('.portable-evidence-status')).toContainText('Readable report was not created.');
+  await expect.poll(() => downloadCount).toBe(0);
+  await expect(page.locator('#result')).toBeVisible();
+  await expect(page.getByRole('alert')).toHaveCount(0);
+  await expectNoHorizontalOverflow(page);
+});
+
+test('an over-structured response fails visibly beside the mobile lookup action', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 720 });
+  let nested: unknown = 'leaf';
+  for (let index = 0; index <= 48; index += 1) nested = { value: nested };
+  await page.route('**/api/lookup?*', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      query: 'response-limit.example.test',
+      type: 'domain',
+      registrableDomain: 'example.test',
+      availability: { applicable: true, state: 'registered' },
+      rdap: { nested },
+      whois: {},
+      diagnostics: { version: 8 },
+    }),
+  }));
+
+  await page.locator('#query').fill('response-limit.example.test');
+  await page.getByRole('button', { name: 'Run lookup' }).click();
+
+  const alert = page.getByRole('alert');
+  await expect(alert).toHaveText('Lookup returned an invalid response.');
+  await expect(page.locator('#result')).toHaveCount(0);
+  await expect.poll(async () => {
+    const box = await alert.boundingBox();
+    return Boolean(box && box.y >= 0 && box.y + box.height <= 720);
+  }).toBe(true);
+  await expectNoHorizontalOverflow(page);
+});
+
 test('an analyst can cancel a pending lookup without retaining a partial result', async ({ page }) => {
   let releaseLookup: (() => void) | undefined;
   const lookupGate = new Promise<void>((resolve) => {

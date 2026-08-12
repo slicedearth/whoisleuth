@@ -77,12 +77,12 @@ describe('separate cryptographic assurance review', () => {
         certificateDerBase64: certificate,
         records: [
           { usage: 1, selector: 0, matchingType: 1, associationData },
-          { usage: 1, selector: 1, matchingType: 1, associationData: '00'.repeat(32) },
+          { usage: 3, selector: 1, matchingType: 1, associationData: '00'.repeat(32) },
         ],
       }, 'Fixture TLSA snapshot'),
     }, OBSERVED_AT);
     const card = review.cards[2];
-    assert.equal(card?.state, 'untrusted');
+    assert.equal(card?.state, 'partial');
     assert.equal(card?.completeness, 'partial');
   });
 

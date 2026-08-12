@@ -1,6 +1,6 @@
 <script lang="ts">
   type View = 'inbox' | 'timeline' | 'watchlists' | 'cases' | 'campaigns' | 'relationships' | 'rules';
-  type Counts = Record<View, number>;
+  type Counts = Record<View, number | null>;
   const tabs: Array<{ view: View; label: string }> = [
     { view: 'inbox', label: 'Inbox' },
     { view: 'timeline', label: 'Timeline' },
@@ -39,7 +39,7 @@
 
 <div class="views" role="tablist" aria-label="Monitor views">
   {#each tabs as tab}
-    <button role="tab" id={`tab-${tab.view}`} aria-selected={view === tab.view} aria-controls="monitor-view-panel" tabindex={view === tab.view ? 0 : -1} class:active={view === tab.view} onclick={() => setView(tab.view)} onkeydown={tabKeydown}>{tab.label} <span>{counts[tab.view]}</span></button>
+    <button role="tab" id={`tab-${tab.view}`} aria-selected={view === tab.view} aria-controls="monitor-view-panel" tabindex={view === tab.view ? 0 : -1} class:active={view === tab.view} onclick={() => setView(tab.view)} onkeydown={tabKeydown}>{tab.label} <span aria-label={counts[tab.view] === null ? 'count unavailable' : `${counts[tab.view]} saved`}>{counts[tab.view] ?? '—'}</span></button>
   {/each}
 </div>
 

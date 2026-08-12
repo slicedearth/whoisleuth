@@ -1,5 +1,6 @@
 import { Buffer } from 'node:buffer';
 import { classifyQuery } from '../lib/classify.mts';
+import { scanBoundedJson } from '../lib/bounded-json.mts';
 import { CliUsageError } from './arguments.mts';
 import type { BoundedTextStream } from './bulk.mts';
 
@@ -73,9 +74,20 @@ function parseSavedLookupDocument(text: unknown, options: SavedLookupParseOption
   if (Buffer.byteLength(text, 'utf8') > MAX_SAVED_LOOKUP_INPUT_BYTES) {
     throw new CliUsageError(`${label} is limited to ${MAX_SAVED_LOOKUP_INPUT_BYTES} bytes.`);
   }
+  const normalized = text.replace(/^\uFEFF/, '');
+  try {
+    scanBoundedJson(normalized);
+  } catch (cause) {
+    const detail = cause instanceof Error ? cause.message : '';
+    if (detail === 'Artefact input is not valid JSON.') {
+      throw new CliUsageError(`${label} must be valid JSON.`);
+    }
+    const boundedDetail = detail.replace(/^Artefact JSON /u, '');
+    throw new CliUsageError(boundedDetail ? `${label} ${boundedDetail}` : `${label} must be valid JSON.`);
+  }
   let parsed: unknown;
   try {
-    parsed = JSON.parse(text.replace(/^\uFEFF/, ''));
+    parsed = JSON.parse(normalized);
   } catch {
     throw new CliUsageError(`${label} must be valid JSON.`);
   }

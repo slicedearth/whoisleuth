@@ -21,6 +21,10 @@ const ALLOWED_PROPERTIES = new Set<RdapReverseSearchProperty>([
   'handle',
   'role',
 ]);
+const RDAP_ENTITY_ROLE_ORDER = [
+  'registrar', 'registrant', 'administrative', 'technical', 'billing', 'abuse',
+  'noc', 'reseller', 'sponsor', 'proxy', 'notifications',
+] as const;
 
 function record(value: unknown): JsonRecord {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -66,6 +70,7 @@ function advertisedReverseProperties(capability: unknown): Set<RdapReverseSearch
     : [...ALLOWED_PROPERTIES];
   return new Set(
     declared
+      .slice(0, ALLOWED_PROPERTIES.size * 2)
       .map((value) => boundedText(value, 32).toLowerCase())
       .filter((value): value is RdapReverseSearchProperty => ALLOWED_PROPERTIES.has(value as RdapReverseSearchProperty)),
   );
@@ -113,10 +118,12 @@ export function buildRdapReverseSearchPreviews(
     });
   };
 
-  for (const [rawRole, rawEntities] of Object.entries(entitiesByRole).slice(0, 16)) {
-    const role = boundedText(rawRole, 80) || 'entity';
+  for (const rawRole of RDAP_ENTITY_ROLE_ORDER) {
+    const rawEntities = entitiesByRole[rawRole];
+    const role = boundedText(rawRole, 80);
+    if (!Array.isArray(rawEntities) || rawEntities.length === 0) continue;
     if (properties.has('role')) add('role', role, role);
-    for (const entity of records(rawEntities, 8)) {
+    for (const entity of records(rawEntities, 5)) {
       add('handle', entity.handle, role);
       add('fn', entity.name, role);
       for (const name of textList(entity.names, 4)) add('fn', name, role);

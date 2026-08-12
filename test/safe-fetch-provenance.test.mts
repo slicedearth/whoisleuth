@@ -148,6 +148,30 @@ describe('safe fetch redirect provenance', () => {
     assert.equal(unsafe.requests.length, 0);
   });
 
+  test('returns promptly when the request signal expires during DNS resolution', async () => {
+    const controller = new AbortController();
+    let dispatcherCalls = 0;
+    let requestCalls = 0;
+    const resolution = new Promise<Array<{ address: string; family: number }>>(() => {});
+    const startedAt = Date.now();
+    const pending = safeFetchDetailed('https://example.com/', { signal: controller.signal }, {
+      resolvePublicAddresses: async () => resolution,
+      pinnedDispatcher: () => {
+        dispatcherCalls += 1;
+        return { close: async () => undefined };
+      },
+      fetch: async () => {
+        requestCalls += 1;
+        return new Response('unused');
+      },
+    });
+    controller.abort(new DOMException('Fixture deadline expired', 'AbortError'));
+    await assert.rejects(() => pending, (error: unknown) => error instanceof Error && error.name === 'AbortError');
+    assert.ok(Date.now() - startedAt < 500);
+    assert.equal(dispatcherCalls, 0);
+    assert.equal(requestCalls, 0);
+  });
+
   test('reapplies the DNS candidate bound at every redirect hop', async () => {
     let resolutions = 0;
     const fixture = fixtureDependencies([
@@ -216,6 +240,30 @@ describe('safe fetch redirect provenance', () => {
     const httpResult = await safeFetchDetailed('http://example.com:80/', {}, httpFixture.dependencies);
     assert.equal(httpResult.requestedUrl, 'http://example.com/');
     assert.equal(requiredValue(httpFixture.requests[0]).url, 'http://example.com/');
+  });
+
+  test('resolves public IPv6 literals without URL brackets and keeps the request URL intact', async () => {
+    const fixture = fixtureDependencies([new Response('ok', { status: 200 })], {
+      resolvePublicAddresses: async (hostname) => {
+        assert.equal(hostname, '2606:4700:4700::1111');
+        return [{ address: '2606:4700:4700::1111', family: 6 }];
+      },
+    });
+    const result = await safeFetchDetailed('https://[2606:4700:4700::1111]/', {}, fixture.dependencies);
+    assert.equal(result.requestedUrl, 'https://[2606:4700:4700::1111]/');
+    assert.equal(requiredValue(fixture.requests[0]).url, 'https://[2606:4700:4700::1111]/');
+
+    const privateFixture = fixtureDependencies([], {
+      resolvePublicAddresses: async (hostname) => {
+        assert.equal(hostname, '::1');
+        return [{ address: '::1', family: 6 }];
+      },
+    });
+    await assert.rejects(
+      () => safeFetchDetailed('https://[::1]/', {}, privateFixture.dependencies),
+      /private\/reserved address/u,
+    );
+    assert.equal(privateFixture.requests.length, 0);
   });
 
   test('rejects an unsafe redirect target and does not request it', async () => {

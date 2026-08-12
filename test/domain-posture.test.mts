@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import { buildPostureReport, matchesMtaPattern, normalizeAuditDomain, normalizeDkimSelectors } from '../lib/domain-posture.mts';
+import { buildPostureReport, fetchMtaStsPolicy, matchesMtaPattern, normalizeAuditDomain, normalizeDkimSelectors } from '../lib/domain-posture.mts';
 import { requiredValue } from './value-assertions.mts';
 
 const RSA_2048_PUBLIC_KEY = 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAoUwDmvRvwyuGHZ0vZBD3z+Zyusi3f+ccPP7s6IGnw5talY8ZpxC8SAB29A4zsGU8azxzEkhiiPeNlal0nBrVu5mfVeCJ8vUMIxiVZf3sSEpPRO9JM0KtF9FjujN2lR2c6pAFIUurSHR5zHsopgZUqzDIfy54PQ2UUMDgzy9avfmCqbStL+t7EHDPaydIw9PrKihG8pdhtiVEX0gbkmVnBSl3BLt5zmN/I7p6MnAJddRXZBQIljpGU4bQh2JpISKaewTpjicPVhmlYM09ssUWUkmIfI55Tf26HwO5N6z9hmEUpWbyVMe0hXTydNUgxJK+460H0f0QQdVHc8sDsgPEcwIDAQAB';
@@ -56,6 +56,35 @@ describe('selector and MTA-STS hostname normalization', () => {
     assert.equal(matchesMtaPattern('mail.example.com.', 'mail.example.com'), true);
     assert.equal(matchesMtaPattern('mx1.mail.example.com', '*.mail.example.com'), true);
     assert.equal(matchesMtaPattern('mail.example.com', '*.mail.example.com'), false);
+  });
+});
+
+describe('MTA-STS policy transport', () => {
+  test('requests only the fixed HTTPS policy URL and does not follow redirects', async () => {
+    const calls: Array<{ url: string; redirectsLeft: number | undefined }> = [];
+    const result = await fetchMtaStsPolicy('example.test', async (url, _options, redirectsLeft) => {
+      calls.push({ url, redirectsLeft });
+      return new Response('', {
+        status: 302,
+        headers: { location: 'http://policy.example.test/mta-sts.txt' },
+      });
+    });
+    assert.deepEqual(calls, [{
+      url: 'https://mta-sts.example.test/.well-known/mta-sts.txt',
+      redirectsLeft: 0,
+    }]);
+    assert.equal(result.text, '');
+    assert.match(requiredValue(result.error), /HTTP 302/u);
+  });
+
+  test('retains a bounded direct HTTPS 200 policy response', async () => {
+    const result = await fetchMtaStsPolicy('example.test', async () => new Response(
+      'version: STSv1\nmode: testing\nmx: mx.example.test\nmax_age: 86400\n',
+      { status: 200, headers: { 'content-type': 'text/plain; charset=utf-8' } },
+    ));
+    assert.equal(result.error, null);
+    assert.equal(result.contentType, 'text/plain; charset=utf-8');
+    assert.match(result.text, /mode: testing/u);
   });
 });
 

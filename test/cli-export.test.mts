@@ -15,6 +15,7 @@ import {
 import { formatLookupEvidenceHtml } from '../cli/formatters/html.mts';
 import EXIT_CODES from '../cli/exit-codes.mts';
 import { runCli } from '../cli/runner.mts';
+import { MAX_BOUNDED_JSON_DEPTH } from '../lib/bounded-json.mts';
 import { arrayValue, recordValue } from './value-assertions.mts';
 
 function capture() {
@@ -312,6 +313,39 @@ describe('lookup evidence export conversion', () => {
     assert.throws(
       () => buildCliEvidenceExport(JSON.stringify(source), module),
       /5 MiB portable file limit/iu,
+    );
+  });
+
+  test('rejects over-nested saved Lookup JSON before the unrestricted parser or evidence builder runs', () => {
+    const source = savedLookup();
+    let nested: unknown = 'leaf';
+    for (let index = 0; index <= MAX_BOUNDED_JSON_DEPTH; index += 1) nested = { value: nested };
+    recordValue(source.rdap).data = nested;
+    assert.throws(
+      () => buildCliEvidenceExport(JSON.stringify(source), { buildLookupEvidence() {} }),
+      /Evidence export input exceeds the 48-level nesting limit/u,
+    );
+  });
+
+  test('rejects duplicate saved Lookup object keys before JSON parsing can collapse them', () => {
+    const raw = JSON.stringify(savedLookup()).replace(
+      '"mode":"deep"',
+      '"mode":"deep","mode":"fast"',
+    );
+    assert.throws(
+      () => buildCliEvidenceExport(raw, { buildLookupEvidence() {} }),
+      /Evidence export input contains a duplicate object key/u,
+    );
+  });
+
+  test('rejects prototype-sensitive saved Lookup keys before evidence derivation', () => {
+    const raw = JSON.stringify(savedLookup()).replace(
+      '"handle":"TEST-1"',
+      '"__proto__":{"domain":"forged.example.test"},"handle":"TEST-1"',
+    );
+    assert.throws(
+      () => buildCliEvidenceExport(raw, { buildLookupEvidence() {} }),
+      /Evidence export input contains an unsafe object key/u,
     );
   });
 

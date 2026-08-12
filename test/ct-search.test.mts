@@ -82,6 +82,18 @@ describe('legacy domains', () => {
     assert.deepStrictEqual(result.domains, ['example.com']);
   });
 
+  test('rejects overlong certificate hostnames before public-suffix work', () => {
+    const sixtyThree = 'a'.repeat(63);
+    const nearLimit = `${sixtyThree}.${sixtyThree}.${sixtyThree}.${'b'.repeat(61)}`;
+    const result = summarizeCtResults([
+      row({ id: 1, name_value: `${'a'.repeat(64)}.example.test`, common_name: '' }),
+      row({ id: 2, name_value: `${'a'.repeat(248)}.test`, common_name: '' }),
+      row({ id: 3, name_value: nearLimit, common_name: '' }),
+    ]);
+    assert.deepStrictEqual(result.domains, [nearLimit]);
+    assert.equal(result.truncated, false);
+  });
+
   test('legacy domains preserve IP-like dotted values while structured matches reject them', () => {
     // 192.168.0.1 matches HOSTNAME_RE (dotted labels with alphanumeric chars)
     // so it appears in legacy domains. It is excluded from structured matches
@@ -126,6 +138,29 @@ describe('empty and invalid input', () => {
     // Should not throw.
     const result = summarizeCtResults(rows);
     assert.ok(Array.isArray(result.domains));
+  });
+
+  test('caps newline-dense hostname work per row before parsing the retained suffix', () => {
+    const names = Array.from({ length: 1_001 }, (_, index) => `host${index}.example.com`);
+    const result = summarizeCtResults([
+      row({ name_value: names.join('\n'), common_name: '' }),
+      row({ id: 2, name_value: 'later.example.net', common_name: '' }),
+    ]);
+    assert.equal(result.namesExamined, 1_002);
+    assert.equal(result.workTruncated, true);
+    assert.equal(result.truncated, true);
+    assert.equal(result.matches.some((match) => match.domain === 'example.net'), true);
+    assert.equal(result.domains.includes('host1000.example.com'), false);
+  });
+
+  test('does not implicitly stringify nested hostname values', () => {
+    const nested = Array.from({ length: 10_000 }, (_, index) => `host${index}.example.com`);
+    const result = summarizeCtResults([
+      row({ name_value: nested, common_name: { value: 'forged.example.net' } }),
+      row({ id: 2, name_value: 'retained.example.org', common_name: '' }),
+    ]);
+    assert.deepEqual(result.domains, ['retained.example.org']);
+    assert.equal(result.workTruncated, false);
   });
 
   test('malformed row beside valid rows', () => {
@@ -207,9 +242,9 @@ describe('searchCertificateTransparency', () => {
   });
 
   test('uses the injected safe request boundary and propagates its redirect rejection', async () => {
-    const calls: Array<{ url: string; options: RequestInit | undefined }> = [];
-    const fetcher = async (url: string, options?: RequestInit) => {
-      calls.push({ url, options });
+    const calls: Array<{ url: string; options: RequestInit | undefined; redirectsLeft: number | undefined }> = [];
+    const fetcher = async (url: string, options?: RequestInit, redirectsLeft?: number) => {
+      calls.push({ url, options, redirectsLeft });
       throw new Error('Refusing to fetch redirect target: resolves to a private/reserved address');
     };
 
@@ -222,6 +257,7 @@ describe('searchCertificateTransparency', () => {
     assert.equal(call.url, 'https://crt.sh/?q=example&output=json');
     assert.equal(new Headers(call.options?.headers).get('accept'), 'application/json');
     assert.ok(call.options?.signal instanceof AbortSignal);
+    assert.equal(call.redirectsLeft, 0);
   });
 
   test('preserves bounded status retry behavior through the safe request boundary', async () => {

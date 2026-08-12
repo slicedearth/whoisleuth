@@ -193,6 +193,7 @@ describe('authorised SMTP transport review', () => {
         assert.ok(value);
         return value;
       },
+      assertIdle: () => {},
       write: async (command) => { commands.push(command); },
       startTls: async () => ({
         peerCertificate: null,
@@ -212,6 +213,32 @@ describe('authorised SMTP transport review', () => {
     assert.equal(result.connectedAddress, PUBLIC_ADDRESS);
     assert.equal(destroyed, true);
     assert.doesNotMatch(commands.join(''), /(?:AUTH|MAIL FROM|RCPT TO|DATA|VRFY|EXPN)/iu);
+  });
+
+  test('fails closed before EHLO when the server prefetched an unsolicited reply', async () => {
+    const commands: string[] = [];
+    let destroyed = false;
+    let reads = 0;
+    const connection: SmtpConversationConnection = {
+      remoteAddress: PUBLIC_ADDRESS,
+      readReply: async () => {
+        reads += 1;
+        return reply('220 fixture-mx ESMTP');
+      },
+      assertIdle: () => { throw new Error('SMTP connection contained an unsolicited buffered reply before the next command.'); },
+      write: async (command) => { commands.push(command); },
+      startTls: async () => { throw new Error('STARTTLS must not run'); },
+      diagnostics: () => ({ bytesRead: 60, lineCount: 1 }),
+      destroy: () => { destroyed = true; },
+    };
+
+    await assert.rejects(
+      () => runSmtpConversation('mx1.example.test', connection),
+      /unsolicited buffered reply/u,
+    );
+    assert.equal(reads, 1);
+    assert.deepEqual(commands, []);
+    assert.equal(destroyed, true);
   });
 
   test('revalidates selected public addresses and emits relationship leads without raw transport material', async () => {
@@ -264,6 +291,7 @@ describe('authorised SMTP transport review', () => {
     assert.equal(review.endpoints[0]?.resolution.state, 'public_revalidated');
     assert.equal(review.endpoints[0]?.tlsa.state, 'not_published');
     assert.equal(review.endpoints[0]?.starttls.state, 'not_advertised');
+    assert.ok(review.limitations.some((limitation) => /If a DANE-TA TLSA usage 2 association is published/u.test(limitation)));
     const serialized = JSON.stringify(review);
     assert.doesNotMatch(serialized, /fixture-mx/u);
     assert.doesNotMatch(serialized, /"(?:peerCertificate|certificateDer|lines)"/u);
@@ -342,14 +370,21 @@ describe('authorised SMTP transport review', () => {
     assert.equal(review.endpoints[0]?.resolution.state, 'public_revalidated');
   });
 
-  test('keeps an incomplete DANE comparison partial after TLSA validation', async () => {
+  test('keeps leaf-only DANE-TA evidence partial after active TLSA validation', async () => {
+    const leaf = Buffer.from('fixture leaf certificate');
     const dane = analyzeTlsaEvidence({
       serviceName: '_25._tcp.mx.example.test',
       dnssecState: 'validated',
-      pkixValidationState: 'unavailable',
-      records: [{ usage: 3, selector: 0, matchingType: 1, associationData: '00'.repeat(32) }],
+      records: [{
+        usage: 2,
+        selector: 0,
+        matchingType: 1,
+        associationData: createHash('sha256').update(leaf).digest('hex'),
+      }],
+      certificateDerBase64: leaf.toString('base64'),
     });
     assert.equal(dane.state, 'partial');
+    assert.equal(dane.records[0]?.state, 'unavailable');
     const review = await collectMailTransportReview({
       schema: MAIL_TRANSPORT_INPUT_SCHEMA,
       version: 1,
@@ -374,6 +409,7 @@ describe('authorised SMTP transport review', () => {
     assert.equal(review.endpoints[0]?.tlsa.dane?.state, 'partial');
     assert.equal(review.endpoints[0]?.state, 'partial');
     assert.equal(review.runState, 'partial');
+    assert.ok(review.limitations.some((limitation) => /If a DANE-TA TLSA usage 2 association is published/u.test(limitation)));
   });
 
   test('does not begin an SMTP connection after the total-run budget expires', async () => {

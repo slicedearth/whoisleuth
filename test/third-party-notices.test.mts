@@ -24,7 +24,7 @@ function fixtureLockfile() {
     packages: {
       '': { dependencies: { alpha: '1.0.0' } },
       frontend: { dependencies: { beta: '2.0.0' } },
-      'node_modules/alpha': { version: '1.0.0', license: 'MIT' },
+      'node_modules/alpha': { version: '1.0.0', license: 'MIT', dependencies: { shared: '3.0.0' } },
       'node_modules/beta': { version: '2.0.0', license: 'ISC' },
       'node_modules/shared': { version: '3.0.0', license: 'BSD-3-Clause' },
       'node_modules/dev-only': { version: '4.0.0', license: 'MIT', dev: true },
@@ -48,6 +48,15 @@ describe('third-party production dependency notices', () => {
     ]);
   });
 
+  test('scopes a distributable inventory to the exact runtime dependency closure', () => {
+    assert.deepEqual(collectProductionPackages(fixtureLockfile(), {
+      directDependencyNames: ['alpha'],
+    }), [
+      { name: 'alpha', version: '1.0.0', license: 'MIT', direct: true, installPath: 'node_modules/alpha' },
+      { name: 'shared', version: '3.0.0', license: 'BSD-3-Clause', direct: false, installPath: 'node_modules/shared' },
+    ]);
+  });
+
   test('rejects malformed inventories and unsupported command arguments', () => {
     assert.throws(() => collectProductionPackages({ lockfileVersion: 3, packages: { '': {}, 'node_modules/unknown': { version: '1.0.0' } } }), /licence/);
     assert.equal(parseArguments(['--check']), 'check');
@@ -61,6 +70,13 @@ describe('third-party production dependency notices', () => {
         'node_modules/../../outside': { version: '1.0.0', license: 'MIT' },
       },
     }), /safe relative path|inside node_modules/iu);
+    assert.throws(() => collectProductionPackages({
+      lockfileVersion: 3,
+      packages: {
+        '': { dependencies: { proprietary: '1.0.0' } },
+        'node_modules/proprietary': { version: '1.0.0', license: 'UNLICENSED' },
+      },
+    }), /unreviewed licence expression/u);
   });
 
   test('rejects package documents that resolve through symbolic links', async () => {

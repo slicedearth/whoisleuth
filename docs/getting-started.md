@@ -78,6 +78,9 @@ npm test
 npm run typecheck
 npm run check
 npm run build
+npm run architecture:check
+npm run schema:inventory
+npm run licenses:check
 npm run cli:package:check
 npm run test:e2e:built
 git diff --check
@@ -91,6 +94,8 @@ The commands cover:
   analysis modules, E2E tests, and the pre-render theme bootstrap;
 - Svelte diagnostics;
 - the production static build;
+- the application dependency graph and versioned schema inventory;
+- production dependency licence metadata and generated notices;
 - Chromium browser workflows; and
 - production dependency advisories through the fail-closed reviewed-exception
   policy documented in [Dependency maintenance](dependency-maintenance.md).

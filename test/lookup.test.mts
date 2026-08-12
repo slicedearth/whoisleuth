@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import { networkFeaturePolicy } from '../lib/feature-policy.mts';
 import { runUnifiedLookup } from '../lib/lookup.mts';
+import { createLookupHttpResponse, parseLookupHttpResponse } from '../lib/lookup-response-contract.mts';
 import type { ClassifiedQuery, IpQuery } from '../lib/classify.mts';
 import { recordValue, requiredValue } from './value-assertions.mts';
 
@@ -76,7 +77,7 @@ describe('runUnifiedLookup', () => {
     const result = await runCompactLookup(classifiedDomain, {
       fast: true,
       compact: true,
-      dnsResolverServers: ['192.0.2.53'],
+      dnsResolverServers: ['8.8.8.8'],
       fetchRdapRecord: async () => null,
       buildWhoisChain: async () => [],
       checkDomainAvailability: async (_domain: string, options: AvailabilityFixtureOptions & {
@@ -228,6 +229,29 @@ describe('runUnifiedLookup', () => {
     assert.equal(result.diagnostics.rdap.status, 'error');
     assert.equal(result.diagnostics.rdap.errorCode, 'RDAP_UPSTREAM_FAILED');
     assert.equal(result.diagnostics.whois.status, 'complete');
+  });
+
+  test('bounds source failure detail before returning a browser-valid response', async () => {
+    const noisyReason = `upstream\n\terror ${'x'.repeat(400)}`;
+    const result = await runFullLookup(classifiedDomain, {
+      fetchRdapRecord: async () => { throw new Error(noisyReason); },
+      buildWhoisChain: async () => { throw new Error(noisyReason); },
+      checkDomainAvailability: async () => ({
+        applicable: true,
+        domain: 'example.com',
+        state: 'unknown',
+        confidence: 'low',
+      }),
+    });
+    const rdapError = failedRdap(result).error;
+    assert.ok(typeof result.whois.error === 'string');
+    assert.equal(rdapError.length, 240);
+    assert.equal(result.whois.error.length, 240);
+    assert.doesNotMatch(rdapError, /[\u0000-\u001f\u007f]/u);
+    assert.doesNotMatch(result.whois.error, /[\u0000-\u001f\u007f]/u);
+
+    const response = createLookupHttpResponse('example.com', classifiedDomain, result);
+    assert.equal(parseLookupHttpResponse(response).ok, true);
   });
 
   test('reports a root-only IANA WHOIS response as unsupported domain WHOIS', async () => {

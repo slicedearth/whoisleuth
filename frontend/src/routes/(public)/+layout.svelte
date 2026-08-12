@@ -61,8 +61,8 @@
       <a class="console-link" class:active={page.url.pathname==='/login'} aria-current={page.url.pathname==='/login'?'page':undefined} aria-label="Open console" href={session==='anonymous'?'/login':'/dashboard'}><span class="console-label-full" aria-hidden="true">Open console</span><span class="console-label-short" aria-hidden="true">Console</span></a>
       <ThemeSelector />
       {#if session==='authenticated'}<button class="sign-out" type="button" disabled={signingOut} onclick={logout}>{signingOut?'Signing out…':'Sign out'}</button>{/if}
-      {#if logoutError}<span class="session-error" role="status">{logoutError}</span>{/if}
     </nav>
+    {#if logoutError}<p class="session-error" role="alert">{logoutError}</p>{/if}
   </header>
 
   <main class="public-content" id="main-content" tabindex="-1">{@render children()}</main>
@@ -72,7 +72,7 @@
 
 <style>
   .public-shell{width:min(1180px,100%);min-height:100vh;margin:auto;padding:0 clamp(20px,4vw,48px)}
-  .public-header{display:flex;position:static;inset:auto;z-index:auto;height:auto;align-items:center;justify-content:space-between;gap:24px;padding:18px 0;border-bottom:1px solid var(--border);background:transparent}
+  .public-header{display:flex;position:static;inset:auto;z-index:auto;height:auto;align-items:center;justify-content:space-between;gap:12px 24px;padding:18px 0;border-bottom:1px solid var(--border);background:transparent;flex-wrap:wrap}
   .public-brand{display:flex;align-items:center;gap:10px;font-family:var(--mono)}
   .public-brand .mark{width:38px;height:38px}
   .public-brand strong,.public-brand small{display:block}
@@ -88,7 +88,7 @@
   .public-header nav a.console-link{border-color:color-mix(in srgb,var(--accent) 45%,var(--border));color:var(--accent)}
   .console-label-short{display:none}
   .public-header nav button.sign-out{color:var(--muted)}
-  .public-header nav .session-error{color:var(--danger);font:700 var(--text-2xs) var(--mono);white-space:nowrap}
+  .session-error{flex:1 0 100%;max-width:100%;margin:0;padding:8px 10px;border:1px dotted var(--danger);border-radius:var(--radius-sm);color:var(--danger);font:700 var(--text-2xs) var(--mono);line-height:1.45;overflow-wrap:anywhere}
   .public-content{width:100%;margin:0;padding:clamp(44px,7vw,82px) 0 72px}
   @media(max-width:720px){
     .public-shell{padding-inline:12px}
@@ -112,6 +112,7 @@
     .public-header{gap:4px}
     .public-brand{gap:4px}
     .public-brand .mark{width:24px;height:24px}
+    .public-brand .brand-copy{display:none}
     .public-header nav{gap:8px}
     .public-header nav a,.public-header nav button{padding-inline:3px;font-size:.625rem;line-height:1}
     .public-header nav :global(.theme-selector){font-size:.625rem;line-height:1}

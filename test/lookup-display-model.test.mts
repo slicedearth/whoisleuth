@@ -6,6 +6,36 @@ import {
   buildLookupPageDisplay,
   buildLookupRegistryDisplay,
 } from '../frontend/src/lib/analysis/lookup-display-model.ts';
+import {
+  MAX_LOOKUP_DISPLAY_ARRAY_ITEMS,
+  MAX_LOOKUP_DISPLAY_RECORDS,
+  MAX_LOOKUP_DISPLAY_STRING_ITEMS,
+  MAX_LOOKUP_DISPLAY_TEXT_LENGTH,
+  records,
+  show,
+  stringList,
+} from '../frontend/src/lib/analysis/lookup-display-shared.ts';
+
+test('keeps generic Lookup display fallbacks bounded and makes joined-value omission visible', () => {
+  const recordValues = Array.from({ length: MAX_LOOKUP_DISPLAY_RECORDS + 25 }, (_, index) => ({ index }));
+  assert.equal(records(recordValues).length, MAX_LOOKUP_DISPLAY_RECORDS);
+
+  const strings = Array.from({ length: MAX_LOOKUP_DISPLAY_STRING_ITEMS + 25 }, (_, index) => `value-${index}\u0000`);
+  const projected = stringList(strings);
+  assert.equal(projected.length, MAX_LOOKUP_DISPLAY_STRING_ITEMS);
+  assert.ok(projected.every((value) => value.length <= 1_024 && !/[\u0000-\u001f\u007f]/u.test(value)));
+
+  const displayed = show(Array.from({ length: MAX_LOOKUP_DISPLAY_ARRAY_ITEMS + 6 }, (_, index) => `value-${index}`));
+  assert.match(displayed, /… \(\+6 more\)$/u);
+  assert.ok(displayed.length <= MAX_LOOKUP_DISPLAY_TEXT_LENGTH);
+  assert.equal(show('x'.repeat(MAX_LOOKUP_DISPLAY_TEXT_LENGTH + 20)).length, MAX_LOOKUP_DISPLAY_TEXT_LENGTH);
+  assert.deepEqual(stringList([Array.from({ length: 500 }, () => 'nested')]), []);
+  assert.match(show(Array.from({ length: 500 }, () => 'nested')), /… \(\+436 more\)$/u);
+
+  const cyclic: Record<string, unknown> = {};
+  cyclic.name = cyclic;
+  assert.equal(show(cyclic), '…');
+});
 
 test('selects separately sourced lifecycle dates without treating missing values as dates', () => {
   const dates = buildLookupLifecycleDates({
@@ -97,7 +127,11 @@ test('bounds page, technology, and posture presentation models', () => {
     observedNetworkEndpoint: { selectedFrom: 'dns_a' },
     observedNetwork: { name: 'Example network' },
     securityPosture: {
-      findings: [{ id: 'header', state: 'unexpected', tone: 'unexpected' }],
+      findings: Array.from({ length: 32 }, (_, index) => ({
+        id: `header-${index}`,
+        state: index === 0 ? 'unexpected' : 'observed',
+        tone: index === 0 ? 'unexpected' : 'configured',
+      })),
     },
     securityPostureSummary: { observed: 999, unavailable: 2 },
     pageComparison: null,
@@ -109,7 +143,8 @@ test('bounds page, technology, and posture presentation models', () => {
   assert.equal(page.clientScriptSummary.moduleScripts, 1);
   assert.equal(page.credentialSurface.formCount, 50);
   assert.equal(page.credentialSurface.inputCount, 500);
-  assert.equal(page.securityPostureSummary.observed, 20);
+  assert.equal(page.securityPostureSummary.observed, 32);
+  assert.equal(page.securityPostureFindings.length, 32);
   assert.equal(page.securityPostureFindings[0]?.state, 'unavailable');
   assert.equal(page.securityPostureFindings[0]?.tone, 'neutral');
   assert.equal(page.observedNetworkSourceLabel, 'DNS A fallback');

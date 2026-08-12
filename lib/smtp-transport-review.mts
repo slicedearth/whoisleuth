@@ -52,6 +52,7 @@ const SMTP_PORT = 25;
 const EHLO_COMMAND = 'EHLO whoisleuth.invalid\r\n';
 const STARTTLS_COMMAND = 'STARTTLS\r\n';
 const MAX_ERROR_LENGTH = 240;
+const ACTIVE_DANE_TA_LIMITATION = 'If a DANE-TA TLSA usage 2 association is published, active STARTTLS review retains only the observed leaf certificate and cannot complete that comparison because it does not construct or validate a certificate path to a TLSA trust anchor.';
 
 type UnknownRecord = Record<string, unknown>;
 type PolicyCompleteness = 'complete' | 'partial' | 'unavailable';
@@ -87,6 +88,7 @@ type RawTlsEvidence = Readonly<{
 type SmtpConversationConnection = {
   remoteAddress: string | null;
   readReply(): Promise<SmtpReply>;
+  assertIdle(): void;
   write(command: typeof EHLO_COMMAND | typeof STARTTLS_COMMAND): Promise<void> | void;
   startTls(hostname: string): Promise<RawTlsEvidence>;
   diagnostics(): { bytesRead: number; lineCount: number };
@@ -342,6 +344,7 @@ async function runSmtpConversation(hostname: string, connection: SmtpConversatio
       const diagnostics = connection.diagnostics();
       return Object.freeze({ connectedAddress: connection.remoteAddress, greeting, ehlo: null, capabilities: Object.freeze([]), starttlsAdvertised: false, starttlsReply: null, starttlsState: 'rejected', tls: null, ...diagnostics });
     }
+    connection.assertIdle();
     await connection.write(EHLO_COMMAND);
     const ehlo = await connection.readReply();
     const capabilities = smtpCapabilities(ehlo);
@@ -350,6 +353,7 @@ async function runSmtpConversation(hostname: string, connection: SmtpConversatio
       const diagnostics = connection.diagnostics();
       return Object.freeze({ connectedAddress: connection.remoteAddress, greeting, ehlo, capabilities, starttlsAdvertised, starttlsReply: null, starttlsState: 'not_advertised', tls: null, ...diagnostics });
     }
+    connection.assertIdle();
     await connection.write(STARTTLS_COMMAND);
     const starttlsReply = await connection.readReply();
     if (starttlsReply.code !== 220) {
@@ -437,8 +441,15 @@ class SocketReplyReader {
     throw new Error('SMTP reply exceeds the line-count limit.');
   }
 
+  assertIdle(): void {
+    if (this.#endedError) throw this.#endedError;
+    if (this.#waiters.length || this.#buffer.length) {
+      throw new Error('SMTP connection contained an unsolicited buffered reply before the next command.');
+    }
+  }
+
   release(): void {
-    if (this.#waiters.length || this.#buffer.length) throw new Error('SMTP connection contained unexpected buffered bytes before STARTTLS.');
+    this.assertIdle();
     this.#socket.removeAllListeners('data');
     this.#socket.removeAllListeners('error');
     this.#socket.removeAllListeners('end');
@@ -481,6 +492,7 @@ async function defaultSmtpProbe(options: Parameters<SmtpProbe>[0]): Promise<Smtp
     const connection: SmtpConversationConnection = {
       remoteAddress: socket.remoteAddress || null,
       readReply: () => reader.readReply(),
+      assertIdle: () => reader.assertIdle(),
       write: (command) => new Promise<void>((resolve, reject) => socket.write(command, (error) => error ? reject(error) : resolve())),
       startTls: async (hostname) => {
         reader.release();
@@ -625,6 +637,7 @@ async function collectTlsa(
       dane,
       limitations: Object.freeze([
         'TLSA records were validated through the separately reported DNSSEC chain before certificate comparison.',
+        ...(records.some((record) => record.data.usage === 2) ? [ACTIVE_DANE_TA_LIMITATION] : []),
         'A TLSA association match is endpoint evidence only and does not establish successful message delivery, ownership, safety, or maliciousness.',
       ]),
     });
@@ -934,6 +947,7 @@ async function collectMailTransportReview(inputValue: unknown, options: Readonly
     limitations: Object.freeze([
       'This command performs active network collection only for the selected MX hosts in this explicitly authorised run. It is not invoked by Lookup, Bulk, monitoring, or automatic recipes.',
       'DNSSEC, TLSA or DANE, PKIX, certificate identity, STARTTLS, SMTP transport, MTA-STS context, and TLS-RPT context retain separate states and provenance. One family never supplies or upgrades another family.',
+      ACTIVE_DANE_TA_LIMITATION,
       'Public-address validation, fresh resolution, and connection pinning are reported separately from DNSSEC. They do not cryptographically authenticate the selected A or AAAA RRset or any CNAME chain.',
       'No message is sent; no authentication, relay, recipient, mailbox, user, or catch-all test is performed; and no retry is attempted.',
       'MTA-STS and TLS-RPT fields are bounded supplied context only. This action does not fetch an MTA-STS policy or a reporting-provider record.',

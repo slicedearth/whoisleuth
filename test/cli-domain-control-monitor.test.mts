@@ -55,4 +55,30 @@ describe('CLI one-shot domain control monitor', () => {
     assert.equal(calls, 1);
     assert.equal(JSON.parse(stdout).schema, 'whoisleuth.cli.domain-control-monitor');
   });
+
+  test('rejects structurally unsafe manifest and previous JSON before collection', async () => {
+    let calls = 0;
+    const executeLookup = async () => {
+      calls += 1;
+      return result('example.test');
+    };
+    const deep = `${'{"nested":'.repeat(49)}null${'}'.repeat(49)}`;
+    await assert.rejects(
+      () => runDomainControlMonitor(deep, null, { executeLookup, now: () => NOW, limit: 1, concurrency: 1 }),
+      /Domain-control manifest.*nesting limit/u,
+    );
+    await assert.rejects(
+      () => runDomainControlMonitor(JSON.stringify(manifest()), deep, { executeLookup, now: () => NOW, limit: 1, concurrency: 1 }),
+      /Previous monitor snapshot.*nesting limit/u,
+    );
+    await assert.rejects(
+      () => runDomainControlMonitor('{"schema":"first","schema":"second"}', null, { executeLookup, now: () => NOW, limit: 1, concurrency: 1 }),
+      /Domain-control manifest.*duplicate object key/u,
+    );
+    await assert.rejects(
+      () => runDomainControlMonitor('{"__proto__":{"state":"forged"}}', null, { executeLookup, now: () => NOW, limit: 1, concurrency: 1 }),
+      /Domain-control manifest.*unsafe object key/u,
+    );
+    assert.equal(calls, 0);
+  });
 });

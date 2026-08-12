@@ -55,12 +55,19 @@ test('signs in through the login form and back out again', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(publicNavigation).toHaveCSS('display', 'flex');
   await expect(publicNavigation).toHaveCSS('flex-wrap', 'nowrap');
-  await expect(page.locator('.public-brand .brand-copy')).toBeVisible();
+  const publicBrand = page.getByRole('link', { name: 'WHOISleuth overview' });
+  await expect(publicBrand).toBeVisible();
+  await expect(page.locator('.public-brand .brand-copy')).toBeHidden();
+  const compactBrandBox = await publicBrand.boundingBox();
+  expect(compactBrandBox).not.toBeNull();
+  expect(compactBrandBox!.width).toBeGreaterThanOrEqual(24);
+  expect(compactBrandBox!.height).toBeGreaterThanOrEqual(24);
   await expect(publicNavigation.getByRole('link', { name: 'Overview' })).not.toBeVisible();
   const anonymousConsoleLinkBox = await publicNavigation.getByRole('link', { name: 'Open console' }).boundingBox();
   expect(anonymousConsoleLinkBox).not.toBeNull();
   expect(anonymousConsoleLinkBox!.x + anonymousConsoleLinkBox!.width).toBeLessThanOrEqual(390);
   await page.setViewportSize({ width: 1280, height: 800 });
+  await expect(page.locator('.public-brand .brand-copy')).toBeVisible();
 
   await page.goto('/lookup');
   await expect(page).toHaveURL(/\/login\?next=%2Flookup$/u);

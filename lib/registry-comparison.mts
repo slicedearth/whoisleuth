@@ -129,9 +129,14 @@ function normalizeNameserver(value: unknown): string | null {
   return normalizeDomain(value);
 }
 
-function normalizeSet(values: unknown, normalizeItem: (value: unknown) => string | null): string[] {
+function normalizeSet(
+  values: unknown,
+  normalizeItem: (value: unknown) => string | null,
+  maximum = 200,
+): string[] {
   if (!Array.isArray(values)) return [];
-  return [...new Set(values.map(normalizeItem).filter((value): value is string => Boolean(value)))].sort();
+  return [...new Set(values.slice(0, maximum).map(normalizeItem)
+    .filter((value): value is string => Boolean(value)))].sort();
 }
 
 function sameNormalizedValue(left: unknown, right: unknown): boolean {
@@ -153,13 +158,20 @@ function displayValue(value: unknown, state: FieldState, status: unknown): strin
     if (status === 'disabled') return 'Disabled by deployment policy';
     return 'Source unavailable';
   }
-  if (Array.isArray(value)) return value.join(', ');
-  return String(value);
+  if (Array.isArray(value)) {
+    return value.slice(0, 200)
+      .filter((item): item is string => typeof item === 'string')
+      .map((item) => item.slice(0, 253))
+      .join(', ');
+  }
+  return typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'
+    ? String(value).slice(0, 1_024)
+    : 'Not published';
 }
 
 function findRdapEvent(rdap: UnknownRecord, action: string): unknown {
   if (!Array.isArray(rdap.events)) return null;
-  const event = rdap.events.map(record).find((item) => item.action === action);
+  const event = rdap.events.slice(0, 100).map(record).find((item) => item.action === action);
   return event?.date || null;
 }
 
@@ -257,8 +269,8 @@ export function compareRegistrySources(
     dateField('Expires', 'expiryDate', 'expiration'),
     dateField('Last updated', 'updatedDate', 'last changed'),
     compareField('DNSSEC', rdap.dnssec, whois.dnssec, normalizeDnssec, sourceHealth),
-    compareField('Statuses', rdap.statuses, whois.statuses, (values) => normalizeSet(values, statusNormalizer), sourceHealth),
-    compareField('Name servers', rdap.nameservers, whois.nameservers, (values) => normalizeSet(values, normalizeNameserver), sourceHealth),
+    compareField('Statuses', rdap.statuses, whois.statuses, (values) => normalizeSet(values, statusNormalizer, 100), sourceHealth),
+    compareField('Name servers', rdap.nameservers, whois.nameservers, (values) => normalizeSet(values, normalizeNameserver, 200), sourceHealth),
   ].filter((field) => field !== null);
 
   const counts: Record<FieldStatus, number> = {
@@ -308,7 +320,17 @@ export function compareRdapPublications(
   const registrar = record(registrarParsed);
   const registrarLifecycle = record(registrar.lifecycle);
   const comparison = compareRegistrySources(
-    { ...registry, handle: null },
+    {
+      domain: registry.domain,
+      registrar: registry.registrar,
+      registrarIanaId: registry.registrarIanaId,
+      lifecycle: registry.lifecycle,
+      events: Array.isArray(registry.events) ? registry.events.slice(0, 100) : [],
+      dnssec: registry.dnssec,
+      statuses: Array.isArray(registry.statuses) ? registry.statuses.slice(0, 100) : [],
+      nameservers: Array.isArray(registry.nameservers) ? registry.nameservers.slice(0, 200) : [],
+      handle: null,
+    },
     {
       domainName: registrar.domain,
       registrar: registrarValue(registrar.registrar),
@@ -320,8 +342,8 @@ export function compareRdapPublications(
       updatedDate: registrarLifecycle.updatedDate,
       updatedDateIso: registrarLifecycle.updatedDateIso,
       dnssec: registrar.dnssec,
-      statuses: registrar.statuses,
-      nameservers: registrar.nameservers,
+      statuses: Array.isArray(registrar.statuses) ? registrar.statuses.slice(0, 100) : [],
+      nameservers: Array.isArray(registrar.nameservers) ? registrar.nameservers.slice(0, 200) : [],
     },
     {
       rdapStatus: options.registryStatus,

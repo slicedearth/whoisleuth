@@ -25,6 +25,7 @@
     observationId = undefined,
     retainedIds = new Set<string>(),
     retainStatus = '',
+    retentionAvailable = true,
   }: {
     groups: RelationshipGroup[];
     truncated: boolean;
@@ -34,6 +35,7 @@
     observationId?: (relationship: RelationshipGroup) => string;
     retainedIds?: ReadonlySet<string>;
     retainStatus?: string;
+    retentionAvailable?: boolean;
   } = $props();
 
   function relationshipIcon(type: string): IntelligenceIconName {
@@ -104,9 +106,9 @@
             {#if retainObservation && observationId}
               <button
                 class="btn small"
-                disabled={retainedIds.has(observationId(relationship))}
+                disabled={!retentionAvailable || retainedIds.has(observationId(relationship))}
                 onclick={() => retainObservation?.(relationship)}
-              >{retainedIds.has(observationId(relationship)) ? 'Retained in Monitor' : 'Retain observation'}</button>
+              >{!retentionAvailable ? 'Retention unavailable' : retainedIds.has(observationId(relationship)) ? 'Retained in Monitor' : 'Retain observation'}</button>
             {/if}
           </div>
         </article>

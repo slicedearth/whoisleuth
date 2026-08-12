@@ -227,6 +227,13 @@ test('replay never builds positive network relationships from an unavailable net
 test('replay fails closed for foreign, future, malformed, and oversized documents', async () => {
   await assert.rejects(() => parseLookupEvidenceReplay('{'), /valid JSON/u);
   await assert.rejects(
+    () => parseLookupEvidenceReplay(JSON.stringify(evidence()).replace(
+      `"schemaVersion":${LOOKUP_EVIDENCE_SCHEMA_VERSION}`,
+      `"nonFinite":1e400,"schemaVersion":${LOOKUP_EVIDENCE_SCHEMA_VERSION}`,
+    )),
+    /contains a non-finite number/u,
+  );
+  await assert.rejects(
     () => parseLookupEvidenceReplay(JSON.stringify(evidence({ schema: 'other' }))),
     /not a WHOISleuth/u,
   );
@@ -242,13 +249,13 @@ test('replay fails closed for foreign, future, malformed, and oversized document
     () => parseLookupEvidenceReplay(JSON.stringify(evidence({
       extra: Array.from({ length: LOOKUP_EVIDENCE_REPLAY_MAX_ENTRIES + 1 }, () => null),
     }))),
-    /over-bound array/u,
+    /(?:over-bound array|20000-value limit|container with more than 10000 items)/u,
   );
   await assert.rejects(
     () => parseLookupEvidenceReplay(JSON.stringify(evidence({
       extra: Array.from({ length: LOOKUP_EVIDENCE_PORTABLE_MAX_ARRAY_ITEMS + 1 }, () => null),
     }))),
-    /over-bound array/u,
+    /(?:over-bound array|container with more than 10000 items)/u,
   );
   await assert.rejects(
     () => parseLookupEvidenceReplay(JSON.stringify(evidence({
@@ -260,7 +267,7 @@ test('replay fails closed for foreign, future, malformed, and oversized document
     () => parseLookupEvidenceReplay(JSON.stringify(evidence({
       extra: { ['x'.repeat(LOOKUP_EVIDENCE_PORTABLE_MAX_KEY_LENGTH + 1)]: true },
     }))),
-    /over-bound object/u,
+    /(?:over-bound object|container with more than 10000 items)/u,
   );
   await assert.rejects(
     () => parseLookupEvidenceReplay(JSON.stringify(evidence({
@@ -269,7 +276,7 @@ test('replay fails closed for foreign, future, malformed, and oversized document
         (_, index) => [`key-${index}`, null],
       )),
     }))),
-    /over-bound object/u,
+    /(?:over-bound object|container with more than 10000 items)/u,
   );
   await assert.rejects(
     () => parseLookupEvidenceReplay(JSON.stringify(evidence({ extra: { 'unsafe\u0000key': true } }))),

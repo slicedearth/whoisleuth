@@ -8,6 +8,7 @@ import {
   readJsonResponseCapped,
   requestJsonCapped,
 } from '../lib/bounded-json-response.mts';
+import { scanBoundedJson } from '../lib/bounded-json.mts';
 
 describe('bounded JSON response reader', () => {
   test('parses a response within the declared and streamed byte ceiling', async () => {
@@ -110,6 +111,22 @@ describe('bounded JSON response reader', () => {
     await assert.rejects(
       readJsonResponseCapped(new Response(invalidUtf8), 64),
       (cause) => cause instanceof BoundedJsonResponseError && cause.code === 'invalid_json',
+    );
+  });
+
+  test('runs an optional structural scan before parsing response JSON', async () => {
+    await assert.rejects(
+      readJsonResponseCapped(
+        new Response('{"nested":{"value":1,"value":2}}'),
+        128,
+        undefined,
+        scanBoundedJson,
+      ),
+      (cause) => cause instanceof BoundedJsonResponseError && cause.code === 'invalid_json',
+    );
+    assert.deepEqual(
+      await readJsonResponseCapped(new Response('{"nested":{"value":1}}'), 128, undefined, scanBoundedJson),
+      { nested: { value: 1 } },
     );
   });
 

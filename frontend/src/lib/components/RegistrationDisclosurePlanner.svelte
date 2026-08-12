@@ -179,8 +179,8 @@
 
     <div class="actions">
       <button class="btn" type="button" onclick={downloadPlan} disabled={preview.readiness === 'needs_input'}>Export review packet</button>
-      <a class="btn" href={preview.serviceHandoff.informationUrl} target="_blank" rel="noopener noreferrer">Review current service information</a>
-      {#if preview.readiness !== 'needs_input'}<a class="btn" href={preview.serviceHandoff.portalUrl} target="_blank" rel="noopener noreferrer">Open the reviewed request portal</a>{/if}
+      <a class="btn" href={preview.serviceHandoff.informationUrl} target="_blank" rel="noopener noreferrer">Review current service information<span class="sr-only"> (opens in a new tab)</span></a>
+      {#if preview.readiness !== 'needs_input'}<a class="btn" href={preview.serviceHandoff.portalUrl} target="_blank" rel="noopener noreferrer">Open the reviewed request portal<span class="sr-only"> (opens in a new tab)</span></a>{/if}
     </div>
     {#if message}<p class="success" role="status">{message}</p>{/if}
     <p class="fine-print">The exported file excludes raw RDAP, raw WHOIS, and discovered personal contact data. Review current requirements and the packet before any manual submission.</p>

@@ -1,5 +1,6 @@
 import {
   lookupHttpErrorMessage,
+  MAX_LOOKUP_RESPONSE_CONTAINER_ITEMS,
   parseLookupHttpResponse,
   type LookupHttpResponse,
 } from './lookup-response-contract.mts';
@@ -8,6 +9,7 @@ import {
   LARGE_JSON_RESPONSE_BYTES,
   readJsonResponseCapped,
 } from './bounded-json-response.mts';
+import { scanBoundedJson } from './bounded-json.mts';
 
 const LOOKUP_CLIENT_TIMEOUT_MS = 40_000;
 
@@ -70,7 +72,14 @@ async function requestLookup(
     }
     let body: unknown;
     try {
-      body = await readJsonResponseCapped(response, LARGE_JSON_RESPONSE_BYTES, controller.signal);
+      body = await readJsonResponseCapped(
+        response,
+        LARGE_JSON_RESPONSE_BYTES,
+        controller.signal,
+        (raw) => scanBoundedJson(raw, {
+          maximumContainerItems: MAX_LOOKUP_RESPONSE_CONTAINER_ITEMS,
+        }),
+      );
     } catch (cause) {
       // Preserve the HTTP status when an adapter supplies a malformed bounded
       // error page. Successful malformed or over-bound responses remain typed

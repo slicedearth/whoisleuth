@@ -63,7 +63,7 @@ node bin/whoisleuth.mts ct-search 'example brand' --json
 node bin/whoisleuth.mts discover example.com --preset common --jsonl
 node bin/whoisleuth.mts discover example.test --dictionary private-terms.txt --snapshot discovery-state.json --json
 node bin/whoisleuth.mts discover-scan example.test --scan-limit 50 --checkpoint candidate-scan.json --json
-node bin/whoisleuth.mts discover-scan example.test --deep --scan-limit 20 --resolver 192.0.2.53 --observation-snapshot observed-candidates.json --csv
+node bin/whoisleuth.mts discover-scan example.test --deep --scan-limit 20 --resolver <public-resolver-ip> --observation-snapshot observed-candidates.json --csv
 node bin/whoisleuth.mts posture example.com --selectors selector1 --retired-selectors selector0 --mail-profile defensive-no-mail --json
 node bin/whoisleuth.mts http example.com --json
 node bin/whoisleuth.mts tls example.com --json
@@ -496,7 +496,9 @@ pinned official RDAP extension fixture with the reviewed local interpretation
 catalogue entirely offline. `--live` performs one bounded manual fetch from the
 fixed official CSV URL and reports added, removed, renamed, status-changed,
 unrecognized, and local-only identifiers. `--json` emits
-`whoisleuth.rdap-extension-drift-audit` version 1. Drift exits with status 1 and
+`whoisleuth.rdap-extension-drift-audit` version 1. The manual live fetch keeps one
+10-second deadline armed through the capped 128 KiB body read and fails closed if
+the official CSV is truncated. Drift exits with status 1 and
 requires specification and fixture review; the command never enables an
 extension, changes authority or availability logic, or issues reverse search.
 
@@ -1041,6 +1043,9 @@ and BIMI directly from the local machine. Literal SPF include and redirect
 branches are expanded within fixed depth, policy-query, DNS-term, void-answer,
 cycle, and time bounds. External DMARC reporting authorisation and external
 nameserver, mail, SPF, and reporting dependencies are separately reported.
+The MTA-STS policy request uses the fixed HTTPS policy host and well-known path;
+HTTP redirects are not followed, as required by RFC 8461, and a redirect leaves
+that evidence unavailable rather than borrowing a policy body from another URL.
 Supply up to ten known active and retired DKIM selectors in total with
 `--selectors selector1,selector2` and `--retired-selectors selector0`;
 selectors cannot be reliably discovered from DNS, so no-selector output
@@ -1162,10 +1167,16 @@ behaviour, SMTP banners, or whether a mail server is rogue, safe, or malicious.
 An analyst may add a bounded `tlsaEvidence` object to a version-2 Bulk item for
 offline DANE review. It must name the exact `_25._tcp.<mx-host>` service, and
 that host must occur in the same item's retained MX evidence. A certificate
-association match is complete only when `dnssecState` is `validated`. TLSA
-usages 0 and 1 additionally require `pkixValidationState: "validated"`.
-Usages 0 and 2 compare against the bounded `authorityMaterials` array; usages
-1 and 3 compare against the supplied leaf certificate or SPKI. Mismatched
+association match is complete only when `dnssecState` is `validated`. For an
+SMTP relay service on `_25._tcp`, PKIX-TA usage 0 and PKIX-EE usage 1 are
+reported as unsupported and cannot complete SMTP DANE assurance because RFC
+7672 leaves their SMTP treatment undefined. Usage 2 likewise
+cannot complete DANE-TA assurance because this offline action does not construct
+or validate a path from the observed leaf to the supplied trust-anchor material.
+For other service ports, usage 0 compares against the bounded
+`authorityMaterials` array and remains path-binding limited, while usage 1
+compares against the leaf and still requires independently validated PKIX.
+Usage 3 compares against the supplied leaf certificate or SPKI. Mismatched
 service names, missing certificate roles, unvalidated prerequisites, malformed
 material, and truncation remain invalid, partial, or untrusted rather than
 becoming a DANE match.
@@ -1258,6 +1269,10 @@ DNSSEC context. PKIX authorisation, certificate hostname identity,
 DNSSEC-chain validation, TLSA publication, DANE comparison, STARTTLS, SMTP
 transport, MTA-STS context, and TLS-RPT context retain separate states;
 missing or incomplete evidence in one family is never filled from another.
+If a DANE-TA TLSA usage 2 association is published, active STARTTLS review
+retains only the observed leaf certificate and leaves that comparison partial
+because this action does not construct or validate a certificate path to a
+TLSA trust anchor.
 The `whoisleuth.cli.mail-transport-review` version-1 output retains selected MX
 names, the bounded address value, family, highest proven address stage, and
 separate address-authentication state, greeting status and SHA-256 digest, capability
@@ -1292,7 +1307,12 @@ Supported input schemas are:
   `_port._transport.hostname` service and compares supplied leaf or authority
   certificate/SPKI bytes. `matched` requires independently validated DNSSEC;
   PKIX-TA and PKIX-EE usages also require an independently validated PKIX path.
-  The command does not retrieve the certificate or negotiate STARTTLS.
+  PKIX-TA usage 0 retains per-record authority comparisons but cannot complete
+  PKIX-TA assurance because supplied authority material is not proven to belong
+  to that validated path. DANE-TA usage 2 likewise cannot complete DANE-TA
+  assurance because this offline action does not construct or validate a
+  leaf-to-anchor certificate path. The command does not retrieve the certificate
+  or negotiate STARTTLS.
 - `whoisleuth.rdap-search-input`: normalises a supplied RDAP search-help
   response and prepares an exact supported reverse-search request without
   sending it. If the document also contains a previously obtained `response`,
@@ -1408,6 +1428,17 @@ contains one manifest plus separately attributed observations. Only a complete
 missing observations remain inconclusive, and unrelated observations are
 counted but ignored. The review performs no DNS, RDAP, HTTP, TLS, SMTP, or
 registrar request.
+
+The saved-Lookup review envelope uses
+`whoisleuth.cli.domain-control-review-input` version 1 and accepts from 1 to
+100 saved Lookup documents. The raw envelope is scanned before parsing for
+duplicate keys, the prototype-sensitive `__proto__` key, and a 50-level
+envelope depth that preserves each saved Lookup's standalone 48-level limit.
+Its aggregate scanner permits up to 5,050,000 keys and 10,100,000 values so
+the envelope does not silently narrow the per-document version-1 contract;
+no individual object or array may contain more than 10,000 items, and the
+command's byte ceiling remains authoritative. Each embedded Lookup is
+then independently revalidated against its ordinary saved-document bounds.
 
 ## Domain assurance review
 
@@ -1563,7 +1594,9 @@ checksum, signature, source truth, or observation currency.
 
 `packages/web-capture` is a private repo-local Playwright package, not part of
 the distributable core CLI or hosted application. It requires an explicit
-authorisation flag and one new output directory:
+authorisation flag, one domain-hosted HTTP(S) target, and one new output
+directory. IP-literal targets are rejected so successful manifests remain
+compatible with the domain-only Cases importer:
 
 ```bash
 npm run capture:local -- https://example.test --output-dir ./capture-example --authorize-rendered-capture
@@ -1575,12 +1608,18 @@ digest containing hashes and bounded element counts rather than markup or page
 text, and a version-2 `whoisleuth.web-capture-manifest` compatible with the
 Cases importer. Version-1 manifests remain importable.
 
-Rendered capture executes page JavaScript. It caps HTTP(S) requests and request
-hostnames, blocks downloads, service workers, WebSockets, WebRTC, WebTransport,
+Rendered capture executes page JavaScript. Each admitted resource operator
+receives the exact requested URL, including path and query, and ordinary
+allowlisted request headers; structured manifest and digest fields retain only
+the target hostname, final HTTP(S) origin, admitted public resource hostnames,
+and one control-sanitised page title of up to 300 characters, not those paths or queries. The screenshot necessarily
+preserves visible rendered content and may include page text or a page-reflected
+path or query until the operator deletes it. It caps HTTP(S) requests and request
+hostnames, blocks downloads, service workers, dedicated and shared workers, WebSockets, WebRTC, WebTransport,
 non-read methods, credentials, non-default ports, and private or reserved
-addresses, and retains
-no request path, query, headers, bodies, cookies, credentials, DOM markup, or
-page text. Every browser request is intercepted, its hostname is resolved again,
+addresses, and retains no request path, query, headers, bodies, cookies,
+credentials, DOM markup, or body text in the structured manifest or digest
+beyond that bounded title. Every browser request is intercepted, its hostname is resolved again,
 and the bounded response is fetched through WHOISleuth's public-address-pinned
 transport. Individual responses are capped at 4 MiB and all fetched response
 bodies together are capped at 24 MiB. Redirect destinations pass through the
@@ -1593,9 +1632,14 @@ capture manifests. It first verifies each referenced screenshot and DOM digest
 against its declared size, SHA-256, screenshot dimensions, and perceptual hash;
 it also validates bounded source and limitation metadata and requires the DOM,
 manifest, and source collection times to agree. It then
-compares screenshot distance, exact rendered DOM and visible-text digests,
-bounded element counts, page identity, technologies, and request-domain sets.
-It does not recrawl either target, reveal the input paths, or collapse the
+compares screenshot distance, exact equality of the bounded preorder
+element-tag sequence and body text-node sequence, bounded element counts, page
+identity, technologies, and request-domain sets. The tag sequence omits nesting
+and attributes. The version-1 DOM-digest schema retains the `visibleText` field
+name for compatibility, but it includes bounded body text nodes that CSS or
+non-rendered containers may hide and is not a visibility claim.
+Version-2 comparison output reports only whether the two bounded page titles
+match; it does not copy either title. It does not recrawl either target, reveal the input paths, or collapse the
 independent components into a similarity or maliciousness score. A missing
 perceptual hash remains unavailable rather than becoming a visual difference.
 
@@ -1626,8 +1670,13 @@ the former producer. The diagnostics remain authoritative, unavailable wrapper
 data is suppressed during replay, and other contradictory legacy shapes fail
 closed rather than becoming positive observations.
 
-The saved input is capped at 8 MiB and revalidated using the same schema,
-source-status, parsed-data, scalar, list, and event boundaries as `compare`.
+The saved input is capped at 8 MiB and scanned before parsing for duplicate
+object keys, the prototype-sensitive `__proto__` key, more than 48 nesting levels, more than 50,000
+keys, more than 100,000 values, or more than 10,000 items in one container. It is then revalidated using the same schema, source-status,
+parsed-data, scalar, list, and event boundaries as `compare`. Portable
+projection stops at 24 levels and 20,000 entries before recursive copying, and
+the completed package must pass the same portable-tree assertion used by the
+browser replay and serializer.
 The export retains query context, explicitly projected source diagnostics,
 normalised registry data, a bounded privacy-projected registry RDAP
 publication, availability analysis, bounded WHOIS referral-hop

@@ -65,8 +65,8 @@
     {/if}
     <p class:list-warning={listed} class="callout">{detail}</p>
     <p class="source-note">
-      Source: <a href="https://sslbl.abuse.ch/blacklist/" target="_blank" rel="noopener noreferrer">SSLBL certificate blacklist</a>.
-      {#if safeReferenceUrl}<a href={safeReferenceUrl} target="_blank" rel="noopener noreferrer">Review the matching provider record</a>.{/if}
+      Source: <a href="https://sslbl.abuse.ch/blacklist/" target="_blank" rel="noopener noreferrer">SSLBL certificate blacklist<span class="sr-only"> (opens in a new tab)</span></a>.
+      {#if safeReferenceUrl}<a href={safeReferenceUrl} target="_blank" rel="noopener noreferrer">Review the matching provider record<span class="sr-only"> (opens in a new tab)</span></a>.{/if}
     </p>
     {#if limitations.length}<p class="callout warn">{limitations.join(' ')}</p>{/if}
     <p class="card-note">This exact local comparison makes no provider request and does not change availability or Risk scoring.</p>

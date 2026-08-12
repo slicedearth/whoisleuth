@@ -69,6 +69,7 @@ export async function readJsonResponseCapped(
   response: Response,
   maximumBytes = STANDARD_JSON_RESPONSE_BYTES,
   signal?: AbortSignal,
+  validateRawJson?: (raw: string) => void,
 ): Promise<unknown> {
   const maxBytes = boundedPositiveInteger(maximumBytes, STANDARD_JSON_RESPONSE_BYTES, LARGE_JSON_RESPONSE_BYTES);
   const declared = response.headers.get('content-length');
@@ -110,10 +111,24 @@ export async function readJsonResponseCapped(
     bytes.set(chunk, offset);
     offset += chunk.byteLength;
   }
+  let raw: string;
   try {
-    return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
+    raw = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
   } catch {
-    throw new BoundedJsonResponseError('invalid_json', 'Response body was not valid UTF-8 JSON.');
+    throw new BoundedJsonResponseError('invalid_json', 'Response body was not valid UTF-8.');
+  }
+  try {
+    validateRawJson?.(raw);
+  } catch {
+    throw new BoundedJsonResponseError(
+      'invalid_json',
+      'Response body did not satisfy the bounded JSON structure contract.',
+    );
+  }
+  try {
+    return JSON.parse(raw);
+  } catch {
+    throw new BoundedJsonResponseError('invalid_json', 'Response body was not valid JSON.');
   }
 }
 
@@ -125,6 +140,7 @@ export async function requestJsonCapped(
     maximumBytes?: number;
     timeoutMs?: number;
     allowNonJsonErrorResponse?: boolean;
+    validateRawJson?: (raw: string) => void;
   }> = {},
 ): Promise<Readonly<{ response: Response; body: unknown }>> {
   const timeoutMs = boundedPositiveInteger(
@@ -163,7 +179,12 @@ export async function requestJsonCapped(
     }
     let body: unknown;
     try {
-      body = await readJsonResponseCapped(response, options.maximumBytes, controller.signal);
+      body = await readJsonResponseCapped(
+        response,
+        options.maximumBytes,
+        controller.signal,
+        options.validateRawJson,
+      );
     } catch (cause) {
       // Reverse proxies and hosting adapters can replace an upstream JSON
       // error with a bounded HTML or plain-text response. Preserve the HTTP

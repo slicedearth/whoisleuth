@@ -98,7 +98,13 @@ relay, or enumerates recipients or mailboxes. Its output distinguishes selected,
 public-revalidated, and connected addresses and explicitly reports that A, AAAA,
 and CNAME authentication was not evaluated after a candidate is retained, or
 that address authentication is unavailable when no candidate exists; only
-confirmed connections can form address relationship leads.
+confirmed connections can form address relationship leads. If a DANE-TA TLSA
+usage 2 association is published, active collection retains only the observed
+leaf certificate and leaves that comparison partial without certificate-path
+construction and trust-anchor path validation. SMTP relay PKIX-TA usage 0 and
+PKIX-EE usage 1 records are retained as unsupported and cannot complete SMTP
+DANE assurance; a separate usage 3 match remains eligible. Saved
+Lookup JSON is byte-, nesting-, entry-, and per-container-bounded before parsing and portable export.
 Focused command help and the generated manual label every operation as offline
 or networked and state its target, input, and concurrency boundaries. The
 packaged [dual-use disclosure](https://github.com/slicedearth/whoisleuth/blob/main/DISCLOSURE)

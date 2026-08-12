@@ -16,8 +16,8 @@ const handleDomainPosture: NetlifyFunctionHandler = async (event) => {
   let type, value;
   try {
     ({ type, value } = classifyQuery(q));
-  } catch (err) {
-    return json(400, { error: err instanceof Error ? err.message : 'Invalid query' });
+  } catch {
+    return json(400, { error: 'Invalid query' });
   }
   if (type !== 'domain') return json(400, { error: 'Domain posture audits only support domain names.' });
   const domain = normalizeAuditDomain(value);

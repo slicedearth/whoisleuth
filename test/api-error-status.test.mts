@@ -30,7 +30,7 @@ const [
   import('../netlify/functions/ct-search.mts'),
 ]);
 
-const INVALID_QUERY = 'not a valid domain'; // embedded spaces - fails classifyQuery's URL-hostname check
+const INVALID_QUERY = 'private analyst note not a valid domain'; // embedded spaces fail before network work
 
 let cookieHeader = '';
 before(() => {
@@ -45,36 +45,49 @@ function authedEvent(query: string) {
 }
 
 describe('invalid query returns 400, not 500', () => {
+  function assertPrivateQueryOmitted(body: unknown): void {
+    assert.equal(JSON.stringify(body).includes(INVALID_QUERY), false);
+  }
+
   test('unified lookup', async () => {
     const res = await lookupHandler(authedEvent(INVALID_QUERY));
     assert.equal(res.statusCode, 400);
     const body = JSON.parse(requiredValue(res.body));
-    assert.match(body.error, /not a valid domain, IP, or ASN/);
+    assert.equal(body.error, 'Invalid query');
     assert.equal(body.errorCode, 'INVALID_QUERY');
+    assertPrivateQueryOmitted(body);
   });
 
   test('rdap', async () => {
     const res = await rdapHandler(authedEvent(INVALID_QUERY));
     assert.equal(res.statusCode, 400);
-    assert.match(JSON.parse(requiredValue(res.body)).error, /not a valid domain, IP, or ASN/);
+    const body = JSON.parse(requiredValue(res.body));
+    assert.equal(body.error, 'Invalid query');
+    assertPrivateQueryOmitted(body);
   });
 
   test('whois', async () => {
     const res = await whoisHandler(authedEvent(INVALID_QUERY));
     assert.equal(res.statusCode, 400);
-    assert.match(JSON.parse(requiredValue(res.body)).error, /not a valid domain, IP, or ASN/);
+    const body = JSON.parse(requiredValue(res.body));
+    assert.equal(body.error, 'Invalid query');
+    assertPrivateQueryOmitted(body);
   });
 
   test('availability', async () => {
     const res = await availabilityHandler(authedEvent(INVALID_QUERY));
     assert.equal(res.statusCode, 400);
-    assert.match(JSON.parse(requiredValue(res.body)).error, /not a valid domain, IP, or ASN/);
+    const body = JSON.parse(requiredValue(res.body));
+    assert.equal(body.error, 'Invalid query');
+    assertPrivateQueryOmitted(body);
   });
 
   test('domain-posture', async () => {
     const res = await domainPostureHandler(authedEvent(INVALID_QUERY));
     assert.equal(res.statusCode, 400);
-    assert.match(JSON.parse(requiredValue(res.body)).error, /not a valid domain, IP, or ASN/);
+    const body = JSON.parse(requiredValue(res.body));
+    assert.equal(body.error, 'Invalid query');
+    assertPrivateQueryOmitted(body);
   });
 });
 

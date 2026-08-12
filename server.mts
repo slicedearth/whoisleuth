@@ -318,8 +318,8 @@ app.get('/api/lookup', apiRateLimit, requireAuth, requireNetworkRequestAdmission
   let classified;
   try {
     classified = classifyQuery(q);
-  } catch (err) {
-    return res.status(400).json({ error: errorMessage(err), errorCode: LOOKUP_ERROR_CODES.INVALID_QUERY });
+  } catch {
+    return res.status(400).json({ error: 'Invalid query', errorCode: LOOKUP_ERROR_CODES.INVALID_QUERY });
   }
 
   const fast = req.query.fast === '1' || req.query.fast === 'true';
@@ -353,8 +353,8 @@ app.get('/api/rdap', apiRateLimit, requireAuth, requireNetworkRequestAdmission, 
   let classified;
   try {
     classified = classifyQuery(q);
-  } catch (err) {
-    return res.status(400).json({ error: errorMessage(err) });
+  } catch {
+    return res.status(400).json({ error: 'Invalid query' });
   }
 
   return withExpressOperationBudget(req, res, operationBudgetTargetFor('rdap'), async () => {
@@ -401,8 +401,8 @@ app.get('/api/whois', apiRateLimit, requireAuth, requireNetworkRequestAdmission,
   let classified;
   try {
     classified = classifyQuery(q);
-  } catch (err) {
-    return res.status(400).json({ error: errorMessage(err) });
+  } catch {
+    return res.status(400).json({ error: 'Invalid query' });
   }
 
   return withExpressOperationBudget(req, res, operationBudgetTargetFor('whois'), async () => {
@@ -429,8 +429,8 @@ app.get('/api/availability', apiRateLimit, requireAuth, requireNetworkRequestAdm
   let classified;
   try {
     classified = classifyQuery(q);
-  } catch (err) {
-    return res.status(400).json({ error: errorMessage(err) });
+  } catch {
+    return res.status(400).json({ error: 'Invalid query' });
   }
   if (classified.type !== 'domain') {
     return res.json({ applicable: false, type: classified.type });
@@ -488,8 +488,8 @@ app.get('/api/domain-posture', apiRateLimit, requireAuth, requireNetworkRequestA
   let classified: ReturnType<typeof classifyQuery>;
   try {
     classified = classifyQuery(q);
-  } catch (err) {
-    return res.status(400).json({ error: errorMessage(err) });
+  } catch {
+    return res.status(400).json({ error: 'Invalid query' });
   }
   if (classified.type !== 'domain') return res.status(400).json({ error: 'Domain posture audits only support domain names.' });
   const domain = normalizeAuditDomain(classified.value);

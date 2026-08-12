@@ -293,6 +293,13 @@ function normalizedFetchUrl(value: unknown): string {
   return normalized;
 }
 
+function resolutionHostname(parsed: URL): string {
+  const hostname = parsed.hostname;
+  return hostname.startsWith('[') && hostname.endsWith(']')
+    ? hostname.slice(1, -1)
+    : hostname;
+}
+
 function boundedDuration(value: unknown): number {
   return Math.max(0, Math.min(120_000, Math.round(Number(value) || 0)));
 }
@@ -304,6 +311,26 @@ async function closeDispatcher(dispatcher: SafeFetchDispatcher | null | undefine
   } catch {
     // Cleanup must never replace the request result or its more useful error.
   }
+}
+
+function abortError(signal: AbortSignal): Error {
+  if (signal.reason instanceof Error) return signal.reason;
+  const error = new Error('The outbound request was aborted.');
+  error.name = 'AbortError';
+  return error;
+}
+
+async function raceWithSignal<T>(promise: Promise<T>, signal: AbortSignal | null): Promise<T> {
+  if (!signal) return promise;
+  if (signal.aborted) throw abortError(signal);
+  return new Promise<T>((resolve, reject) => {
+    const abort = () => reject(abortError(signal));
+    signal.addEventListener('abort', abort, { once: true });
+    void promise.then(
+      (value) => { signal.removeEventListener('abort', abort); resolve(value); },
+      (error) => { signal.removeEventListener('abort', abort); reject(error); },
+    );
+  });
 }
 
 // Detailed form of the shared safe request engine. It follows redirects
@@ -337,7 +364,13 @@ async function safeFetchDetailed(
 
   while (true) {
     const parsed = new URL(currentUrl);
-    const records = normalizePublicAddressCandidates(await resolveAddresses(parsed.hostname), parsed.hostname);
+    const hostname = resolutionHostname(parsed);
+    const signal = options.signal ?? null;
+    const records = normalizePublicAddressCandidates(
+      await raceWithSignal(resolveAddresses(hostname), signal),
+      hostname,
+    );
+    if (signal?.aborted) throw abortError(signal);
     const dispatcher = makeDispatcher(records);
     const hopStartedAt = now();
 

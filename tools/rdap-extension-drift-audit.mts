@@ -15,6 +15,7 @@ export const RDAP_EXTENSION_DRIFT_AUDIT_SCHEMA = 'whoisleuth.rdap-extension-drif
 export const RDAP_EXTENSION_DRIFT_AUDIT_VERSION = 1;
 export const MAX_RDAP_EXTENSION_SOURCE_BYTES = 128 * 1024;
 export const MAX_RDAP_EXTENSION_ROWS = 128;
+export const RDAP_EXTENSION_FETCH_TIMEOUT_MS = 10_000;
 export const RDAP_EXTENSION_SOURCE_URL = RDAP_EXTENSION_REGISTRY_FIXTURE.source;
 
 type RegistryEntry = Readonly<{
@@ -56,6 +57,12 @@ type AuditOptions = Readonly<{
 }>;
 
 type WritableLike = { write(value: string): unknown };
+type SourceFetchResult = Readonly<{ response: Response }>;
+type SourceFetchDependencies = Readonly<{
+  fetchDetailed?: (url: string, options: RequestInit, dependencies: { maxRedirects: number }) => Promise<SourceFetchResult>;
+  readResponse?: typeof readTextCapped;
+  timeoutMs?: number;
+}>;
 type MainOptions = Readonly<{
   fetchSource?: () => Promise<string>;
   now?: () => Date;
@@ -245,17 +252,57 @@ function format(report: RdapExtensionDriftAudit): string {
   return `${lines.join('\n')}\n`;
 }
 
-async function defaultFetchSource(): Promise<string> {
-  const result = await safeFetchDetailed(RDAP_EXTENSION_SOURCE_URL, {
-    headers: { Accept: 'text/csv' },
-    redirect: 'manual',
-  }, { maxRedirects: 2 });
-  if (!result.response.ok) {
-    await result.response.body?.cancel().catch(() => {});
-    throw new Error(`The official RDAP extension registry returned HTTP ${result.response.status}.`);
+export async function fetchOfficialRdapExtensionRegistry(dependencies: SourceFetchDependencies = {}): Promise<string> {
+  const fetchDetailed = dependencies.fetchDetailed ?? safeFetchDetailed;
+  const readResponse = dependencies.readResponse ?? readTextCapped;
+  const timeoutMs = Math.max(1, Math.min(
+    RDAP_EXTENSION_FETCH_TIMEOUT_MS,
+    Math.trunc(dependencies.timeoutMs ?? RDAP_EXTENSION_FETCH_TIMEOUT_MS),
+  ));
+  const controller = new AbortController();
+  let response: Response | null = null;
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_resolve, reject) => {
+    timeout = setTimeout(() => {
+      controller.abort();
+      reject(new Error(`The official RDAP extension registry exceeded its ${timeoutMs} ms request deadline.`));
+    }, timeoutMs);
+  });
+  try {
+    const result = await Promise.race([
+      fetchDetailed(RDAP_EXTENSION_SOURCE_URL, {
+        headers: { Accept: 'text/csv' },
+        redirect: 'manual',
+        signal: controller.signal,
+      }, { maxRedirects: 2 }),
+      deadline,
+    ]);
+    response = result.response;
+    if (!response.ok) {
+      await response.body?.cancel().catch(() => {});
+      throw new Error(`The official RDAP extension registry returned HTTP ${response.status}.`);
+    }
+    const captured = await Promise.race([
+      readResponse(response, MAX_RDAP_EXTENSION_SOURCE_BYTES),
+      deadline,
+    ]);
+    if (captured.truncated) {
+      await response.body?.cancel().catch(() => {});
+      throw new RangeError(`The official RDAP extension registry exceeded ${MAX_RDAP_EXTENSION_SOURCE_BYTES} bytes.`);
+    }
+    return captured.text;
+  } catch (cause) {
+    if (controller.signal.aborted) {
+      throw new Error(`The official RDAP extension registry exceeded its ${timeoutMs} ms request deadline.`);
+    }
+    throw cause;
+  } finally {
+    if (timeout !== undefined) clearTimeout(timeout);
+    if (controller.signal.aborted) void response?.body?.cancel().catch(() => {});
   }
-  return (await readTextCapped(result.response, MAX_RDAP_EXTENSION_SOURCE_BYTES)).text;
 }
+
+async function defaultFetchSource(): Promise<string> { return fetchOfficialRdapExtensionRegistry(); }
 
 function parseArgs(args: readonly string[]): { json: boolean; live: boolean } {
   let json = false;

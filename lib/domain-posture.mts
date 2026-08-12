@@ -700,15 +700,21 @@ function buildPostureReport(domain: string, input: PostureInput) {
   return { domain, summary, checks };
 }
 
-async function fetchMtaStsPolicy(domain: string): Promise<MtaStsPolicyFetch> {
+async function fetchMtaStsPolicy(
+  domain: string,
+  fetcher: typeof safeFetch = safeFetch,
+): Promise<MtaStsPolicyFetch> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), POLICY_TIMEOUT_MS);
   try {
     const url = `https://mta-sts.${domain}/.well-known/mta-sts.txt`;
-    const res = await safeFetch(url, {
+    // RFC 8461 section 3.3 requires a direct HTTPS 200 response and forbids
+    // following HTTP redirects for policy discovery. A zero-hop safe fetch
+    // also keeps the returned body bound to the required policy host/path.
+    const res = await fetcher(url, {
       signal: controller.signal,
       headers: whoisleuthRequestHeaders({ Accept: 'text/plain' }),
-    });
+    }, 0);
     if (!res.ok) {
       // Not reading this body - release it explicitly instead of leaving an
       // unconsumed stream (and the connection it's tied to) open until
@@ -855,6 +861,7 @@ export {
   normalizeDkimSelectors,
   normalizeMailProtectionProfile,
   matchesMtaPattern,
+  fetchMtaStsPolicy,
   buildPostureReport,
   checkDomainPosture,
 };

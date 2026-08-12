@@ -79,7 +79,7 @@
 
   <aside class="repository card">
     <div><p class="eyebrow">Inspect the implementation</p><h2>Review the contract behind this workflow.</h2></div>
-    <div><p>The repository documentation records collection bounds, provenance, privacy decisions and deliberate limitations.</p><a href={`${WHOISLEUTH_SOURCE_REPOSITORY_URL}/blob/main/${resource.repositoryDoc}`} target="_blank" rel="noopener">Open {resource.repositoryDoc}</a></div>
+    <div><p>The repository documentation records collection bounds, provenance, privacy decisions and deliberate limitations.</p><a href={`${WHOISLEUTH_SOURCE_REPOSITORY_URL}/blob/main/${resource.repositoryDoc}`} target="_blank" rel="noopener">Open {resource.repositoryDoc}<span class="sr-only"> (opens in a new tab)</span></a></div>
   </aside>
 </article>
 

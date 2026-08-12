@@ -88,7 +88,7 @@ function fixtureResponse(): Record<string, unknown> {
       observedAt: '2026-07-11T01:02:06.000Z', scanMode: 'deep',
       durationMs: 8, complete: true, truncated: false,
       limitations: ['PTR names are operator-published routing context and do not prove hosting control.'],
-      diagnostics: { ptr: { status: 'success', answerCount: 1 } },
+      diagnostics: { ptr: { status: 'success', count: 1 } },
       records: { ptr: ['edge.example.test'], privateField: 'must-not-export' },
       unknownImportedField: 'must-not-export',
     },
@@ -750,6 +750,106 @@ describe('lookup evidence export', () => {
     assert.deepEqual(projectedAgain, projected);
     assert.doesNotThrow(() => evidence.assertLookupEvidencePrivacySafeTree(projected));
     assert.doesNotThrow(() => evidence.serializeLookupEvidence(projected));
+  });
+
+  test('fails portable projection at controlled depth before JavaScript recursion can overflow', () => {
+    let nested: unknown = 'leaf';
+    for (let index = 0; index <= evidence.LOOKUP_EVIDENCE_PORTABLE_MAX_DEPTH; index += 1) {
+      nested = { value: nested };
+    }
+    for (const project of [
+      () => evidence.projectLookupEvidencePrivacySafeTree(nested),
+      () => evidence.projectLookupEvidenceAvailability({ dns: { records: nested } }),
+    ]) {
+      assert.throws(project, (cause) => cause instanceof TypeError
+        && !(cause instanceof RangeError)
+        && /portable nesting limit/u.test(cause.message));
+    }
+  });
+
+  test('applies the portable entry budget while projecting privacy and availability trees', () => {
+    const records = Array.from(
+      { length: evidence.LOOKUP_EVIDENCE_PORTABLE_MAX_ARRAY_ITEMS },
+      (_, index) => ({ name: `record-${index}`, value: index }),
+    );
+    for (const project of [
+      () => evidence.projectLookupEvidencePrivacySafeTree(records),
+      () => evidence.projectLookupEvidenceAvailability({ dns: { records } }),
+    ]) {
+      assert.throws(project, (cause) => cause instanceof TypeError
+        && !(cause instanceof RangeError)
+        && /entry portable limit/u.test(cause.message));
+    }
+  });
+
+  test('rejects prototype-sensitive source keys before they can become inherited derived evidence', () => {
+    for (const key of ['__proto__']) {
+      const response = fixtureResponse();
+      recordValue(response.rdap).parsed = JSON.parse(
+        `{"${key}":{"domain":"forged.example.test","statuses":["pendingDelete"]},"handle":"REAL-1"}`,
+      );
+      assert.throws(
+        () => evidence.buildLookupEvidence(response),
+        /Lookup response contains an unsafe object key/u,
+        key,
+      );
+      assert.throws(
+        () => evidence.projectLookupEvidencePrivacySafeTree(recordValue(response.rdap).parsed),
+        /Lookup evidence projection contains an unsafe object key/u,
+        key,
+      );
+    }
+    const projected = evidence.projectLookupEvidencePrivacySafeTree(JSON.parse(
+      '{"constructor":"ordinary additive value","prototype":"ordinary additive value"}',
+    ));
+    assert.deepEqual({ ...projected }, {
+      constructor: 'ordinary additive value',
+      prototype: 'ordinary additive value',
+    });
+    assert.equal(Object.getPrototypeOf(projected), Object.prototype);
+  });
+
+  test('requires every built evidence document to satisfy the portable tree contract', () => {
+    const response = fixtureResponse();
+    let nested: unknown = 'leaf';
+    for (let index = 0; index <= evidence.LOOKUP_EVIDENCE_PORTABLE_MAX_DEPTH; index += 1) {
+      nested = { value: nested };
+    }
+    recordValue(response.rdap).data = nested;
+    assert.throws(
+      () => evidence.buildLookupEvidence(response),
+      (cause) => cause instanceof TypeError
+        && !(cause instanceof RangeError)
+        && /portable nesting limit/u.test(cause.message),
+    );
+  });
+
+  test('rejects values that cannot round-trip through portable JSON', () => {
+    for (const value of [
+      Number.POSITIVE_INFINITY,
+      Number.NaN,
+      undefined,
+      () => 'fixture',
+      Symbol('fixture'),
+      BigInt(1),
+      new Date('2026-08-12T00:00:00.000Z'),
+    ]) {
+      assert.throws(
+        () => evidence.serializeLookupEvidence({ value }),
+        /non-(?:finite number|JSON value|JSON object)/u,
+        String(value),
+      );
+    }
+    const accepted = {
+      minimum: -Number.MAX_VALUE,
+      maximum: Number.MAX_VALUE,
+      zero: 0,
+      enabled: true,
+      absent: null,
+    };
+    const serialized = evidence.serializeLookupEvidence(accepted);
+    assert.equal(typeof serialized, 'string');
+    assert.deepEqual(JSON.parse(serialized), accepted);
   });
 
   test('creates a bounded, filesystem-safe filename', () => {

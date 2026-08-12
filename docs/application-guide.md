@@ -558,6 +558,10 @@ selectors remain published, and inventories bounded external nameserver,
 mail, SPF, and reporting dependencies. Resolver failures and exhausted bounds
 remain incomplete. External infrastructure is a review lead, not an ownership,
 insecurity, or exploitability claim.
+The MTA-STS policy request is confined to the official domain's fixed HTTPS
+policy host and well-known path. Redirects are not followed; a redirected
+response remains unavailable rather than being treated as an authenticated
+policy for the official domain.
 
 The **DMARC and SMTP TLS reports** workbench accepts deliberately selected
 aggregate XML or JSON reports, including bounded gzip and ZIP containers. It

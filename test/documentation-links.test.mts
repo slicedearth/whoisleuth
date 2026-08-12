@@ -32,6 +32,19 @@ const REQUIRED_GUIDES = [
   'docs/getting-started.md',
   'docs/operations.md',
 ];
+const REQUIRED_DELIVERY_COMMANDS = [
+  'npm test',
+  'npm run typecheck',
+  'npm run check',
+  'npm run build',
+  'npm run architecture:check',
+  'npm run schema:inventory',
+  'npm run licenses:check',
+  'npm run cli:package:check',
+  'npm run test:e2e:built',
+  'git diff --check',
+  'npm run dependencies:audit',
+];
 
 function sourceLinesOutsideFences(markdown: string): Array<{ line: string; lineNumber: number }> {
   const lines = markdown.split(/\r?\n/);
@@ -106,6 +119,16 @@ describe('documentation links', () => {
     for (const guide of REQUIRED_GUIDES) assert.equal(documented.has(guide), true, `${guide} is not covered`);
     for (const document of PUBLIC_ROOT_DOCUMENTS) assert.equal(documented.has(document), true, `${document} is not covered`);
     assert.equal([...documented].some((file) => /^packages\/[^/]+\/README\.md$/u.test(file)), true);
+  });
+
+  test('keeps the authoritative delivery sequences aligned with required gates', () => {
+    for (const file of [join(ROOT, 'README.md'), join(ROOT, 'docs/getting-started.md')]) {
+      const source = readFileSync(file, 'utf8');
+      const verification = source.match(/## Verification[\s\S]*?```bash\n([\s\S]*?)\n```/u)?.[1] ?? '';
+      for (const command of REQUIRED_DELIVERY_COMMANDS) {
+        assert.equal(verification.split('\n').includes(command), true, `${relative(ROOT, file)} omits ${command}`);
+      }
+    }
   });
 
   test('resolves local paths and Markdown heading fragments', () => {

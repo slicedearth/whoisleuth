@@ -2,6 +2,7 @@
   import type { Capability } from '$lib/capabilities';
   import { buildLookupCollectionPreflight } from '$lib/analysis/collection-preflight.ts';
   import CollectionPreflight from '$lib/components/CollectionPreflight.svelte';
+  import { MAX_DOMAIN_INPUT_CHARACTERS } from '$lib/analysis/utils.ts';
 
   let {
     query = $bindable(),
@@ -11,6 +12,7 @@
     loadingDeadlineMs,
     entryCount,
     duplicateCount,
+    inputTooLarge,
     lookupDisabled,
     lookupLimitations,
     externalIntelligenceSupported,
@@ -34,6 +36,7 @@
     loadingDeadlineMs: number;
     entryCount: number;
     duplicateCount: number;
+    inputTooLarge: boolean;
     lookupDisabled: Capability | null;
     lookupLimitations: Capability[];
     externalIntelligenceSupported: boolean;
@@ -97,6 +100,7 @@
       || event.repeat
       || loading
       || !entryCount
+      || inputTooLarge
       || lookupDisabled
     ) return;
     event.preventDefault();
@@ -115,10 +119,10 @@
   <label class="search-label" for="query">Domain, IP address, ASN, or domain list</label>
   <div class="input-row">
     <div class="query-field">
-      <textarea id="query" bind:value={query} placeholder="example.com" autocomplete="off" spellcheck="false" rows="2" onkeydown={handleQueryKeydown} oninput={(event) => onquerychange?.(event.currentTarget.value)}></textarea>
+      <textarea id="query" bind:value={query} maxlength={MAX_DOMAIN_INPUT_CHARACTERS} placeholder="example.com" autocomplete="off" spellcheck="false" rows="2" onkeydown={handleQueryKeydown} oninput={(event) => onquerychange?.(event.currentTarget.value)}></textarea>
       {#if query}<button type="button" class="clear" aria-label="Clear query" onclick={() => { query = ''; onquerychange?.(''); }}>×</button>{/if}
     </div>
-    <button class="primary" aria-keyshortcuts="Control+Enter Meta+Enter" disabled={loading || !entryCount || Boolean(lookupDisabled)}>
+    <button class="primary" aria-keyshortcuts="Control+Enter Meta+Enter" disabled={loading || !entryCount || inputTooLarge || Boolean(lookupDisabled)}>
       {loading ? 'Looking up…' : entryCount > 1 ? `Open ${Math.min(entryCount, entryLimit)} in Bulk` : 'Run lookup'}
     </button>
   </div>
@@ -128,6 +132,8 @@
       : 'Separate multiple domains with commas, semicolons, tabs, or new lines.'}
     <span>Press Ctrl+Enter or ⌘+Enter to run.</span>
   </p>
+  {#if inputTooLarge}<p class="error" role="alert">The pasted domain list exceeds the 2 MiB or bounded row and cell limit. Reduce it before continuing.</p>{/if}
+  {#if error}<p class="error" role="alert">{error}</p>{/if}
 
   <fieldset class="lookup-mode" disabled={loading}>
     <legend>Lookup depth</legend>
@@ -188,7 +194,6 @@
 
   <CollectionPreflight {preflight} />
 
-  {#if error}<p class="error" role="alert">{error}</p>{/if}
 </form>
 
 <style>

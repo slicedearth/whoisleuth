@@ -11,11 +11,14 @@ describe('scoped CLI release workflow', () => {
     assert.doesNotMatch(WORKFLOW, /^\s{2}(?:push|pull_request|release|repository_dispatch):/mu);
     assert.match(WORKFLOW, /process\.env\.GITHUB_REF !== `refs\/tags\/v\$\{expected\}`/u);
     assert.match(WORKFLOW, /git merge-base --is-ancestor "\$GITHUB_SHA" origin\/main/u);
+    assert.match(WORKFLOW, /actions\/workflows\/ci\.yml\/runs/u);
+    assert.match(WORKFLOW, /endpoint\.searchParams\.set\("head_sha", sha\)/u);
+    assert.match(WORKFLOW, /run\?\.head_sha === sha && run\?\.event === "push" && run\?\.conclusion === "success"/u);
     assert.doesNotMatch(WORKFLOW, /publication_mode|initial-publish/u);
   });
 
   test('keeps preparation read-only and grants OIDC only to protected publication', () => {
-    assert.match(WORKFLOW, /^permissions:\s*\n\s{2}contents: read$/mu);
+    assert.match(WORKFLOW, /^permissions:\s*\n\s{2}contents: read\s*\n\s{2}actions: read$/mu);
     assert.match(WORKFLOW, /^\s{4}environment: npm-release$/mu);
     assert.match(WORKFLOW, /^\s{6}id-token: write$/mu);
     assert.equal((WORKFLOW.match(/id-token: write/gu) ?? []).length, 1);
@@ -47,7 +50,7 @@ describe('scoped CLI release workflow', () => {
     assert.match(WORKFLOW, /npm stage publish[^\n]+--access public --provenance/u);
     assert.doesNotMatch(WORKFLOW.slice(0, environmentIndex), /\bnpm (?:publish|stage publish)\b/u);
     const candidateUpload = WORKFLOW.slice(uploadIndex, environmentIndex);
-    assert.match(candidateUpload, /retention-days: 90/u);
-    assert.doesNotMatch(candidateUpload, /retention-days: (?:[0-8]?\d|[1-9]\d{2,})\b/u);
+    assert.match(candidateUpload, /retention-days: 7/u);
+    assert.equal((candidateUpload.match(/retention-days:/gu) ?? []).length, 1);
   });
 });

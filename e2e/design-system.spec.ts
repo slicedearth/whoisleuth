@@ -25,10 +25,10 @@ const INTELLIGENCE_CAPABILITIES = {
 
 test('the wordmark stays clean without a cursor-like status treatment across layouts', async ({ page }) => {
   const variants = [
-    { path: '/', selector: '.public-brand strong', width: 1280, height: 800 },
-    { path: '/', selector: '.public-brand strong', width: 390, height: 844 },
-    { path: '/lookup', selector: '.brand strong', width: 1280, height: 800 },
-    { path: '/lookup', selector: '.shell > header > a > strong', width: 390, height: 844 },
+    { path: '/', selector: '.public-brand strong', width: 1280, height: 800, visible: true },
+    { path: '/', selector: '.public-brand strong', width: 390, height: 844, visible: false },
+    { path: '/lookup', selector: '.brand strong', width: 1280, height: 800, visible: true },
+    { path: '/lookup', selector: '.shell > header > a > strong', width: 390, height: 844, visible: true },
   ];
 
   for (const variant of variants) {
@@ -36,7 +36,11 @@ test('the wordmark stays clean without a cursor-like status treatment across lay
     await page.goto(variant.path);
 
     const wordmark = page.locator(variant.selector);
-    await expect(wordmark).toBeVisible();
+    if (variant.visible) await expect(wordmark).toBeVisible();
+    else {
+      await expect(wordmark).toBeHidden();
+      await expect(page.getByRole('link', { name: 'WHOISleuth overview' })).toBeVisible();
+    }
     const marker = await wordmark.evaluate((element) => {
       const markerStyle = getComputedStyle(element, '::after');
       return {
@@ -127,7 +131,7 @@ function sectionedLookupFixture(domain: string) {
       observedAt: '2026-07-13T00:00:00.000Z', scanMode: 'deep',
       durationMs: 8, complete: true, truncated: false,
       limitations: ['PTR context does not prove hosting control.'],
-      diagnostics: { ptr: { status: 'success', answerCount: 1 } },
+      diagnostics: { ptr: { status: 'success', count: 1 } },
       records: { ptr: [`edge.${domain}`] },
     },
     rdap: {

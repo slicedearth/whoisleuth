@@ -12,6 +12,7 @@ import {
   trackingIdentifierLabel,
   type JsonRecord,
 } from './lookup-display-shared.ts';
+import { MAX_SECURITY_POSTURE_FINDINGS } from '../../../../lib/website-security-posture.mts';
 
 export function buildLookupPageDisplay(input: {
   pageIdentity: JsonRecord;
@@ -134,8 +135,10 @@ export function buildLookupPageDisplay(input: {
           ),
         })),
     }));
-  const securityPostureFindings = records(securityPosture.findings)
-    .slice(0, 20)
+  const securityPostureFindings = records(
+    securityPosture.findings,
+    MAX_SECURITY_POSTURE_FINDINGS,
+  )
     .map((finding) => {
       const states = new Set([
         'observed',
@@ -147,8 +150,12 @@ export function buildLookupPageDisplay(input: {
       return {
         id: boundedTechnologyText(finding.id, 80),
         category: statusLabel(boundedTechnologyText(finding.category || 'posture', 80)),
-        state: states.has(String(finding.state)) ? String(finding.state) : 'unavailable',
-        tone: tones.has(String(finding.tone)) ? String(finding.tone) : 'neutral',
+        state: states.has(boundedTechnologyText(finding.state, 40))
+          ? boundedTechnologyText(finding.state, 40)
+          : 'unavailable',
+        tone: tones.has(boundedTechnologyText(finding.tone, 40))
+          ? boundedTechnologyText(finding.tone, 40)
+          : 'neutral',
         label: boundedTechnologyText(finding.label || 'Posture finding', 160),
         detail: boundedTechnologyText(
           finding.detail || 'No additional detail is available.',
@@ -243,20 +250,20 @@ export function buildLookupPageDisplay(input: {
       .map(([label, value]) => ({ label: String(label), value: show(value) }))
       .concat({
         label: 'External origins',
-        value: stringList(pageResources.externalOrigins).join(', ') || 'None observed',
+        value: stringList(pageResources.externalOrigins, 30, 2_048).join(', ') || 'None observed',
       }),
     downloadSummary: [
       { label: 'Explicit links', value: show(pageDownloads.explicitCount) },
       {
         label: 'Review file types',
-        value: stringList(pageDownloads.riskyFileTypes).join(', ') || 'None observed',
+        value: stringList(pageDownloads.riskyFileTypes, 20, 80).join(', ') || 'None observed',
       },
       {
         label: 'External origins',
-        value: stringList(pageDownloads.externalOrigins).join(', ') || 'None observed',
+        value: stringList(pageDownloads.externalOrigins, 20, 2_048).join(', ') || 'None observed',
       },
     ],
-    trackingIdentifiers: records(pageIdentity.trackingIdentifiers).map((identifier) => ({
+    trackingIdentifiers: records(pageIdentity.trackingIdentifiers, 30).map((identifier) => ({
       label: trackingIdentifierLabel(identifier.type),
       value: show(identifier.value),
     })),

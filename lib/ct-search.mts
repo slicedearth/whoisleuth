@@ -13,6 +13,7 @@ import { normalizeCtQuery } from './ct-query.mts';
 import { safeFetch, readTextCapped } from './safe-fetch.mts';
 import { whoisleuthRequestHeaders } from './outbound-identity.mts';
 import { createObservation } from './observation.mts';
+import { isValidAsciiHostname } from './hostname.mts';
 import {
   MAX_CT_RESPONSE_CERTIFICATE_GROUPS,
   MAX_CT_RESPONSE_DOMAINS_PER_GROUP,
@@ -78,6 +79,12 @@ const MAX_TIMEOUT_RETRIES = 1;
 // iteration/set overhead after parsing. Legitimate responses under the byte
 // cap stay well within this limit.
 const MAX_CT_ROWS = 50_000;
+// crt.sh joins SAN values with newlines. Bound the amount of per-row and
+// whole-response hostname work independently of the JSON byte and row caps so
+// a small number of newline-dense strings cannot drive unbounded PSL parsing,
+// Set growth, or sorting before the result projection is truncated.
+const MAX_CT_NAMES_PER_ROW = 1_000;
+const MAX_CT_NAMES_EXAMINED = 100_000;
 
 // Structured-match bounds.
 const MAX_MATCHES = MAX_RESULTS; // 500
@@ -100,9 +107,10 @@ const MAX_SERIAL_LENGTH = 128;
 const MAX_TIMESTAMP_LENGTH = MAX_CT_RESPONSE_TIMESTAMP_LENGTH;
 
 function normalizeHostname(raw: string): string | null {
+  if (raw.length > 255) return null;
   let h = raw.trim().toLowerCase();
   if (h.startsWith('*.')) h = h.slice(2);
-  return HOSTNAME_RE.test(h) ? h : null;
+  return HOSTNAME_RE.test(h) && isValidAsciiHostname(h, { requireLowercase: true }) ? h : null;
 }
 
 function delay(ms: number): Promise<void> {
@@ -120,7 +128,7 @@ async function fetchCrtSh(keyword: string, attempt = 0, dependencies: CtDependen
       res = await fetcher(`https://crt.sh/?q=${encodeURIComponent(keyword)}&output=json`, {
         headers: whoisleuthRequestHeaders({ Accept: 'application/json' }),
         signal: controller.signal,
-      });
+      }, 0);
     } catch (err) {
       if (!(err instanceof Error) || err.name !== 'AbortError') throw err;
       if (attempt < MAX_TIMEOUT_RETRIES) return fetchCrtSh(keyword, attempt + 1, dependencies);
@@ -301,10 +309,12 @@ function validateEntryTimestamp(value: unknown): string | null {
  *     certificateCount: number
  *   }>,
  *   certificateGroups: CtCertificateGroup[],
+ *   namesExamined: number,
+ *   workTruncated: boolean,
  *   truncated: boolean
  * }}
  */
-function summarizeCtResults(rows: unknown): { domains: string[]; matches: CtMatch[]; certificateGroups: CtCertificateGroup[]; certificateGroupsTruncated: boolean; truncated: boolean } {
+function summarizeCtResults(rows: unknown): { domains: string[]; matches: CtMatch[]; certificateGroups: CtCertificateGroup[]; certificateGroupsTruncated: boolean; namesExamined: number; workTruncated: boolean; truncated: boolean } {
   if (!Array.isArray(rows)) {
     throw new Error('crt.sh returned an unexpected response format (expected a JSON array).');
   }
@@ -329,16 +339,22 @@ function summarizeCtResults(rows: unknown): { domains: string[]; matches: CtMatc
     observedAt: string | null;
     wildcardObserved: boolean;
   }>();
+  let namesExamined = 0;
+  let workTruncated = false;
 
-  for (let i = 0; i < rows.length; i++) {
+  rowLoop: for (let i = 0; i < rows.length; i++) {
     const row = rows[i] as CtRow;
     if (!row || typeof row !== 'object') continue;
 
     const certId = resolveCertId(row, i);
 
-    // Collect hostnames from name_value and common_name.
-    const rawBlob = `${row.name_value || ''}\n${row.common_name || ''}`;
-    const blob = rawBlob;
+    // Collect only direct string fields. Implicitly stringifying a nested
+    // array or object would traverse attacker-controlled structure before any
+    // hostname bound could take effect.
+    const nameFields = [
+      typeof row.name_value === 'string' ? row.name_value : '',
+      typeof row.common_name === 'string' ? row.common_name : '',
+    ];
     const ts = validateEntryTimestamp(row.entry_timestamp);
     let certificate = certificateMap.get(certId);
     if (!certificate) {
@@ -352,46 +368,65 @@ function summarizeCtResults(rows: unknown): { domains: string[]; matches: CtMatc
     } else if (ts !== null && (certificate.observedAt === null || ts > certificate.observedAt)) {
       certificate.observedAt = ts;
     }
-    if (rawBlob.split('\n').some((line) => line.trim().startsWith('*.'))) certificate.wildcardObserved = true;
-
-    for (const line of blob.split('\n')) {
-      const host = normalizeHostname(line);
-      if (!host) continue;
-
-      // Legacy: always add if valid hostname.
-      legacyDomains.add(host);
-
-      // Structured: resolve registrable domain.
-      let regDomain: string | null | undefined;
-      if (registrableDomainByHostname.has(host)) {
-        regDomain = registrableDomainByHostname.get(host);
-      } else {
-        regDomain = parse(host).domain || null;
-        registrableDomainByHostname.set(host, regDomain);
-      }
-      if (!regDomain) continue;
-      certificate.hostnames.add(host);
-      certificate.domains.add(regDomain);
-
-      let group = groupMap.get(regDomain);
-      if (!group) {
-        group = {
-          hostnames: new Set<string>(),
-          certIds: new Set<string>(),
-          firstObservedAt: null,
-          lastObservedAt: null,
-        };
-        groupMap.set(regDomain, group);
-      }
-      group.hostnames.add(host);
-      group.certIds.add(certId);
-      if (ts !== null) {
-        if (group.firstObservedAt === null || ts < group.firstObservedAt) {
-          group.firstObservedAt = ts;
+    let rowNamesExamined = 0;
+    for (const field of nameFields) {
+      let offset = 0;
+      while (offset <= field.length) {
+        if (namesExamined >= MAX_CT_NAMES_EXAMINED) {
+          workTruncated = true;
+          break rowLoop;
         }
-        if (group.lastObservedAt === null || ts > group.lastObservedAt) {
-          group.lastObservedAt = ts;
+        if (rowNamesExamined >= MAX_CT_NAMES_PER_ROW) {
+          workTruncated = true;
+          continue rowLoop;
         }
+        const newline = field.indexOf('\n', offset);
+        const line = newline === -1 ? field.slice(offset) : field.slice(offset, newline);
+        namesExamined += 1;
+        rowNamesExamined += 1;
+        if (line.trim().startsWith('*.')) certificate.wildcardObserved = true;
+        const host = normalizeHostname(line);
+        if (host) {
+
+          // Legacy: always add if valid hostname.
+          legacyDomains.add(host);
+
+          // Structured: resolve registrable domain.
+          let regDomain: string | null | undefined;
+          if (registrableDomainByHostname.has(host)) {
+            regDomain = registrableDomainByHostname.get(host);
+          } else {
+            regDomain = parse(host).domain || null;
+            registrableDomainByHostname.set(host, regDomain);
+          }
+          if (regDomain) {
+            certificate.hostnames.add(host);
+            certificate.domains.add(regDomain);
+
+            let group = groupMap.get(regDomain);
+            if (!group) {
+              group = {
+                hostnames: new Set<string>(),
+                certIds: new Set<string>(),
+                firstObservedAt: null,
+                lastObservedAt: null,
+              };
+              groupMap.set(regDomain, group);
+            }
+            group.hostnames.add(host);
+            group.certIds.add(certId);
+            if (ts !== null) {
+              if (group.firstObservedAt === null || ts < group.firstObservedAt) {
+                group.firstObservedAt = ts;
+              }
+              if (group.lastObservedAt === null || ts > group.lastObservedAt) {
+                group.lastObservedAt = ts;
+              }
+            }
+          }
+        }
+        if (newline === -1) break;
+        offset = newline + 1;
       }
     }
   }
@@ -470,7 +505,9 @@ function summarizeCtResults(rows: unknown): { domains: string[]; matches: CtMatc
       wildcardObserved: group.wildcardObserved,
     })),
     certificateGroupsTruncated,
-    truncated: legacyTruncated || matchTruncated || perMatchTruncated,
+    namesExamined,
+    workTruncated,
+    truncated: workTruncated || legacyTruncated || matchTruncated || perMatchTruncated,
   };
 }
 
@@ -484,11 +521,12 @@ async function searchCertificateTransparency(keyword: unknown, dependencies: CtD
   if (!trimmed) {
     return {
       domains: [], certCount: 0, truncated: false, matches: [], certificateGroups: [], certificateGroupsTruncated: false,
+      namesExamined: 0, workTruncated: false,
       observation: createObservation({
         status: 'success', observedAt: new Date().toISOString(), source: 'certificate_transparency',
         durationMs: Date.now() - startedAt, complete: true, truncated: false,
         limitations: ['Certificate Transparency observations indicate public certificate logging, not current site activity or maliciousness.'],
-        diagnostics: { certificateRows: 0, matches: 0, certificateGroups: 0 },
+        diagnostics: { certificateRows: 0, namesExamined: 0, workTruncated: false, matches: 0, certificateGroups: 0 },
       }),
     };
   }
@@ -507,9 +545,10 @@ async function searchCertificateTransparency(keyword: unknown, dependencies: CtD
       truncated: summary.truncated || summary.certificateGroupsTruncated,
       limitations: [
         'Certificate Transparency observations indicate public certificate logging, not current site activity or maliciousness.',
+        ...(summary.workTruncated ? ['The response contained more hostname entries than the bounded local analysis could examine; retained results are partial.'] : []),
         ...(summary.certificateGroupsTruncated ? ['The optional certificate-group projection was capped independently of the registrable-domain result set.'] : []),
       ],
-      diagnostics: { certificateRows: data.length, matches: summary.matches.length, certificateGroups: summary.certificateGroups.length, certificateGroupsTruncated: summary.certificateGroupsTruncated },
+      diagnostics: { certificateRows: data.length, namesExamined: summary.namesExamined, workTruncated: summary.workTruncated, matches: summary.matches.length, certificateGroups: summary.certificateGroups.length, certificateGroupsTruncated: summary.certificateGroupsTruncated },
     }),
   };
 }

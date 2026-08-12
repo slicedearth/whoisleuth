@@ -69,11 +69,11 @@
 {/if}
 
 {#if entry}
-  <section class="history card">
+  <section id="watchlist-history" class="history card" aria-labelledby="watchlist-history-title" tabindex="-1">
     <header class="section-head">
       <div>
         <p class="eyebrow">History</p>
-        <h2>{selected}</h2>
+        <h2 id="watchlist-history-title">{selected}</h2>
         <p>{entry.history.length} retained watchlist check{entry.history.length === 1 ? '' : 's'} · {entry.results.length} current domain{entry.results.length === 1 ? '' : 's'}</p>
       </div>
       <div class="toolbar">
@@ -142,7 +142,7 @@
   .wl-toolbar{padding:16px}
   .watchlists,.history{padding:var(--card-pad)}
   .changed{color:var(--danger);font-weight:700}
-  .history{margin-top:16px}
+  .history{margin-top:16px;scroll-margin-top:76px}
   .history h2{margin:0}
   .history h3,.history h4{margin:0}
   .history .section-head p:not(.eyebrow){margin:5px 0 0;color:var(--muted);font-size:var(--text-xs)}

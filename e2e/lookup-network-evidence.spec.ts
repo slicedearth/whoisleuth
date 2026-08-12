@@ -688,7 +688,7 @@ test('IP results use network-specific RDAP labels instead of domain fields', asy
         observedAt: '2026-07-27T00:00:00.000Z', scanMode: 'deep',
         durationMs: 8, complete: true, truncated: false,
         limitations: ['PTR names are operator-published routing context and do not prove hosting control.'],
-        diagnostics: { ptr: { status: 'success', answerCount: 1 } },
+        diagnostics: { ptr: { status: 'success', count: 1 } },
         records: { ptr: ['edge.example.test'] },
       },
       whois: { parsed: {}, chain: [] },

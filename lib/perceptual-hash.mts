@@ -387,12 +387,28 @@ function dHash(image: DecodedImage): string | null {
  * back to the exact hash.
  */
 function faviconPerceptualHash(buf: Buffer): string | null {
+  return inspectDecodedImage(buf).perceptualHash;
+}
+
+type DecodedImageInspection = Readonly<{
+  decodable: boolean;
+  width: number | null;
+  height: number | null;
+  perceptualHash: string | null;
+}>;
+
+function inspectDecodedImage(buf: Buffer): DecodedImageInspection {
   try {
     const image = decodeImage(buf);
-    if (!image) return null;
-    return dHash(image);
+    if (!image) return Object.freeze({ decodable: false, width: null, height: null, perceptualHash: null });
+    return Object.freeze({
+      decodable: true,
+      width: image.width,
+      height: image.height,
+      perceptualHash: dHash(image),
+    });
   } catch {
-    return null;
+    return Object.freeze({ decodable: false, width: null, height: null, perceptualHash: null });
   }
 }
 
@@ -401,4 +417,5 @@ function faviconPerceptualHash(buf: Buffer): string | null {
 // alias so the evidence contract does not imply that a screenshot is a favicon.
 const imagePerceptualHash = faviconPerceptualHash;
 
-export { faviconPerceptualHash, hammingDistanceHex, imagePerceptualHash };
+export { faviconPerceptualHash, hammingDistanceHex, imagePerceptualHash, inspectDecodedImage };
+export type { DecodedImageInspection };

@@ -1,4 +1,13 @@
 <script lang="ts">
+  import {
+    boundedTechnologyText,
+    dateTimeAttribute,
+    formatDate,
+    records as boundedRecords,
+    show,
+    stringList,
+  } from '$lib/analysis/lookup-display-shared.ts';
+
   type JsonRecord = Record<string, unknown>;
 
   let {
@@ -11,23 +20,13 @@
 
   const isRecord = (value: unknown): value is JsonRecord => value !== null && typeof value === 'object' && !Array.isArray(value);
   const record = (value: unknown): JsonRecord => isRecord(value) ? value : {};
-  const records = (value: unknown): JsonRecord[] => Array.isArray(value) ? value.filter(isRecord) : [];
+  const records = (value: unknown, maximum = 500): JsonRecord[] => boundedRecords(value, maximum);
   const roleOrder = ['registrar','registrant','administrative','technical','billing','abuse','noc','reseller','sponsor','proxy','notifications'];
   const entitiesByRole = $derived(record(parsed.entitiesByRole));
   const lifecycle = $derived(record(parsed.lifecycle));
-  const truncatedEntityRoles = $derived(Array.isArray(parsed.truncatedEntityRoles) ? parsed.truncatedEntityRoles : []);
-  const contactsForRole = (role:string):JsonRecord[] => records(entitiesByRole[role]);
+  const truncatedEntityRoles = $derived(stringList(parsed.truncatedEntityRoles, 11, 80));
+  const contactsForRole = (role:string):JsonRecord[] => records(entitiesByRole[role], 5);
   const populatedRoles = $derived(roleOrder.filter((role) => contactsForRole(role).length));
-
-  function show(value: unknown): string {
-    if (value == null || value === '') return '—';
-    if (Array.isArray(value)) return value.join(', ') || '—';
-    if (typeof value === 'object') {
-      const item = record(value);
-      return show(item.name || item.org || item.handle || item.domain);
-    }
-    return String(value);
-  }
 
   function contactIdentity(contact: JsonRecord) {
     return show(contact.name || contact.org || contact.handle);
@@ -35,58 +34,59 @@
 
   function contactDetails(contact: JsonRecord) {
     return [
-      Array.isArray(contact.organizations) && contact.organizations.length ? `Organisations: ${contact.organizations.join(', ')}` : null,
-      Array.isArray(contact.emails) && contact.emails.length ? `Email: ${contact.emails.join(', ')}` : null,
-      Array.isArray(contact.phones) && contact.phones.length ? `Phone: ${contact.phones.join(', ')}` : null,
-      Array.isArray(contact.addresses) && contact.addresses.length ? `Address: ${contact.addresses.join(' · ')}` : null,
-      records(contact.publicIds).length ? `IDs: ${records(contact.publicIds).map((item) => `${item.type}: ${item.identifier}`).join(', ')}` : null,
-      records(contact.links).length ? `Links: ${records(contact.links).map((item) => String(item.href || '')).filter(Boolean).join(', ')}` : null,
+      stringList(contact.organizations, 8, 300).length ? `Organisations: ${stringList(contact.organizations, 8, 300).join(', ')}` : null,
+      stringList(contact.emails, 8, 320).length ? `Email: ${stringList(contact.emails, 8, 320).join(', ')}` : null,
+      stringList(contact.phones, 8, 100).length ? `Phone: ${stringList(contact.phones, 8, 100).join(', ')}` : null,
+      stringList(contact.addresses, 8, 1_000).length ? `Address: ${stringList(contact.addresses, 8, 1_000).join(' · ')}` : null,
+      records(contact.publicIds, 20).length ? `IDs: ${records(contact.publicIds, 20).map((item) => `${boundedTechnologyText(item.type, 160)}: ${boundedTechnologyText(item.identifier, 300)}`).join(', ')}` : null,
+      records(contact.links, 10).length ? `Links: ${records(contact.links, 10).map((item) => boundedTechnologyText(item.href, 2_048)).filter(Boolean).join(', ')}` : null,
     ].filter(Boolean) as string[];
   }
 
   function linkText() {
     return Array.isArray(parsed.links)
-      ? records(parsed.links).map((item) => [item.rel, item.href].filter(Boolean).join(': ')).join(' · ')
+      ? records(parsed.links, 20).map((item) => [boundedTechnologyText(item.rel, 100), boundedTechnologyText(item.href, 2_048)].filter(Boolean).join(': ')).join(' · ')
       : '';
   }
 
   function glueText() {
     return Array.isArray(parsed.nameserverDetails)
-      ? records(parsed.nameserverDetails)
+      ? records(parsed.nameserverDetails, 200)
           .filter((item) => Array.isArray(item.addresses) && item.addresses.length)
-          .map((item) => `${item.name}: ${(item.addresses as unknown[]).join(', ')}`)
+          .map((item) => `${boundedTechnologyText(item.name, 253)}: ${stringList(item.addresses, 20, 80).join(', ')}`)
           .join(' · ')
       : '';
   }
 
   function dsText() {
     return Array.isArray(parsed.dsData)
-      ? records(parsed.dsData).map((item) => [item.keyTag,item.algorithm,item.digestType,item.digest]
-          .filter((value) => value !== null && value !== undefined && value !== '').join(' ')).join(' · ')
+      ? records(parsed.dsData, 50).map((item) => [item.keyTag,item.algorithm,item.digestType,item.digest]
+          .map((value) => boundedTechnologyText(value, 512))
+          .filter(Boolean).join(' ')).join(' · ')
       : '';
   }
 
   function textBlocks(value: unknown) {
     return Array.isArray(value)
-      ? records(value).map((item) => `${item.title}: ${Array.isArray(item.descriptions) ? item.descriptions.join(' ') : ''}`).join(' · ')
+      ? records(value, 12).map((item) => `${boundedTechnologyText(item.title, 160)}: ${stringList(item.descriptions, 6, 800).join(' ')}`).join(' · ')
       : '';
   }
 
   function redactionText() {
     return Array.isArray(parsed.redactions)
-      ? records(parsed.redactions).map((item) => [
+      ? records(parsed.redactions, 100).map((item) => [
           item.name,item.method,item.reason,item.prePath||item.postPath||item.replacementPath,
-        ].filter(Boolean).join(' · ')).join(' | ')
+        ].map((value) => boundedTechnologyText(value, 500)).filter(Boolean).join(' · ')).join(' | ')
       : '';
   }
 
   function variantText() {
     return Array.isArray(parsed.variants)
-      ? records(parsed.variants).map((group) => {
+      ? records(parsed.variants, 20).map((group) => {
           const names = Array.isArray(group.variantNames)
-            ? records(group.variantNames).map((name) => name.unicodeName || name.ldhName).filter(Boolean)
+            ? records(group.variantNames, 50).map((name) => boundedTechnologyText(name.unicodeName || name.ldhName, 253)).filter(Boolean)
             : [];
-          return [[...(Array.isArray(group.relation) ? group.relation : []),group.idnTable].filter(Boolean).join(', '),names.join(', ')]
+          return [[...stringList(group.relation, 20, 100),boundedTechnologyText(group.idnTable, 300)].filter(Boolean).join(', '),names.join(', ')]
             .filter(Boolean).join(': ');
         }).filter(Boolean).join(' · ')
       : '';
@@ -94,20 +94,8 @@
 
   function serverTruncationText() {
     return Array.isArray(parsed.serverTruncationReasons)
-      ? parsed.serverTruncationReasons.join(' · ')
+      ? stringList(parsed.serverTruncationReasons, 8, 160).join(' · ')
       : '';
-  }
-
-  function formatDate(value: unknown) {
-    if (!value) return '—';
-    const date = new Date(String(value));
-    return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString();
-  }
-
-  function dateTimeAttribute(value: unknown) {
-    if (!value) return undefined;
-    const date = new Date(String(value));
-    return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
   }
 </script>
 

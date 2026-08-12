@@ -7,12 +7,14 @@
   let {
     report,
     selectedDomains,
+    selectionAvailable,
     selectDomains,
     exportReport,
     exportDisabled,
   }: {
     report: BulkMailExposureReport;
     selectedDomains: Set<string>;
+    selectionAvailable: boolean;
     selectDomains: (domains: string[]) => void | Promise<void>;
     exportReport: () => void | Promise<void>;
     exportDisabled: boolean;
@@ -64,7 +66,7 @@
             <strong>{report.counts[group.state]}</strong>
             <span>{group.label}</span>
           </button>
-          <button class="select" type="button" disabled={!report.counts[group.state]} onclick={() => selectDomains(domainsFor(group.state))}>Select group</button>
+          <button class="select" type="button" disabled={!selectionAvailable || !report.counts[group.state]} onclick={() => selectDomains(domainsFor(group.state))}>Select group</button>
         </article>
       {/each}
     </div>
@@ -76,8 +78,8 @@
           {#each visibleRows as row (row.domain)}
             <tr>
               <th scope="row" data-label="Domain">
-                <span class="selected" aria-hidden="true">{selectedDomains.has(row.domain) ? '●' : '○'}</span>
-                <span class="sr-only">{selectedDomains.has(row.domain) ? 'Selected' : 'Not selected'}</span>
+                <span class="selected" aria-hidden="true">{selectionAvailable ? selectedDomains.has(row.domain) ? '●' : '○' : '—'}</span>
+                <span class="sr-only">{selectionAvailable ? selectedDomains.has(row.domain) ? 'Selected' : 'Not selected' : 'Selection unavailable'}</span>
                 <a href={`/lookup?q=${encodeURIComponent(row.domain)}&depth=deep#query`}>{row.domain}</a>
                 <small>{row.mutationTypes.join(', ') || 'No mutation provenance recorded'}</small>
               </th>

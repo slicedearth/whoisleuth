@@ -6,12 +6,17 @@ import {
   requestLookup,
 } from '../frontend/src/lib/analysis/lookup-request.ts';
 import type { LookupRequestOptions } from '../lib/lookup-request.mts';
-import type { LookupHttpResponse } from '../lib/lookup-response-contract.mts';
+import {
+  MAX_LOOKUP_RESPONSE_CONTAINER_ITEMS,
+  type JsonValue,
+  type LookupHttpResponse,
+} from '../lib/lookup-response-contract.mts';
 import { LARGE_JSON_RESPONSE_BYTES } from '../lib/bounded-json-response.mts';
 import {
   MAX_HTTP_ATTEMPTS,
   MAX_HTTP_EVIDENCE_REDIRECTS,
 } from '../lib/http-evidence-bounds.mts';
+import { MAX_BOUNDED_JSON_DEPTH } from '../lib/bounded-json.mts';
 
 type FetchImplementation = NonNullable<LookupRequestOptions['fetchImpl']>;
 
@@ -120,6 +125,48 @@ describe('Lookup browser request boundary', () => {
     assert.ok(JSON.stringify(overBound).length < LARGE_JSON_RESPONSE_BYTES);
     assert.deepEqual(await requestLookup('/api/lookup?q=example.test', {
       fetchImpl: async () => Response.json(overBound),
+    }), {
+      ok: false,
+      kind: 'invalid_response',
+      message: 'Lookup returned an invalid response.',
+    });
+  });
+
+  test('rejects a byte-bounded but structurally over-nested success response', async () => {
+    let nested: JsonValue = 'leaf';
+    for (let index = 0; index <= MAX_BOUNDED_JSON_DEPTH; index += 1) nested = { value: nested };
+    const overBound = response({ rdap: { nested } });
+    assert.ok(JSON.stringify(overBound).length < LARGE_JSON_RESPONSE_BYTES);
+    assert.deepEqual(await requestLookup('/api/lookup?q=example.test', {
+      fetchImpl: async () => Response.json(overBound),
+    }), {
+      ok: false,
+      kind: 'invalid_response',
+      message: 'Lookup returned an invalid response.',
+    });
+  });
+
+  test('rejects a byte-bounded oversized container before retaining a result', async () => {
+    const overBound = response({
+      additive: Array(MAX_LOOKUP_RESPONSE_CONTAINER_ITEMS + 1).fill(null),
+    } as Partial<LookupHttpResponse>);
+    assert.ok(JSON.stringify(overBound).length < LARGE_JSON_RESPONSE_BYTES);
+    assert.deepEqual(await requestLookup('/api/lookup?q=example.test', {
+      fetchImpl: async () => Response.json(overBound),
+    }), {
+      ok: false,
+      kind: 'invalid_response',
+      message: 'Lookup returned an invalid response.',
+    });
+  });
+
+  test('rejects duplicate response keys before JSON parsing can collapse them', async () => {
+    const raw = JSON.stringify(response()).replace(
+      '"type":"domain"',
+      '"type":"domain","type":"domain"',
+    );
+    assert.deepEqual(await requestLookup('/api/lookup?q=example.test', {
+      fetchImpl: async () => new Response(raw, { headers: { 'content-type': 'application/json' } }),
     }), {
       ok: false,
       kind: 'invalid_response',

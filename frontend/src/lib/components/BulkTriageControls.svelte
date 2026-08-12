@@ -20,6 +20,7 @@
     setIndicatorFormat,
     exportIndicators,
     indicatorCount,
+    indicatorEligibilityAvailable,
     indicatorProfileContextUnavailableCount,
     indicatorWildcards,
     setIndicatorWildcards,
@@ -72,6 +73,9 @@
     setSelectedDisposition,
     caseOptions,
     profileContextState,
+    shortlistAvailable = true,
+    caseAvailable = true,
+    reviewAvailable = true,
   }: {
     counts: Counts;
     filter: Filter;
@@ -83,6 +87,7 @@
     setIndicatorFormat: (value: IndicatorFormat) => void;
     exportIndicators: () => void;
     indicatorCount: number;
+    indicatorEligibilityAvailable: boolean;
     indicatorProfileContextUnavailableCount: number;
     indicatorWildcards: boolean;
     setIndicatorWildcards: (value: boolean) => void;
@@ -135,6 +140,9 @@
     setSelectedDisposition: (value: string) => void | Promise<void>;
     caseOptions: ReadonlyArray<{ value: string; label: string }>;
     profileContextState: 'loading' | 'ready' | 'unavailable';
+    shortlistAvailable?: boolean;
+    caseAvailable?: boolean;
+    reviewAvailable?: boolean;
   } = $props();
 
   let filterPanelOpen = $state(false);
@@ -149,8 +157,8 @@
     + (ageFilter ? 1 : 0)
     + (mailFilter ? 1 : 0)
     + (registrarFilter ? 1 : 0)
-    + (caseDispositionFilter ? 1 : 0)
-    + (reviewFilter ? 1 : 0),
+    + (caseAvailable && caseDispositionFilter ? 1 : 0)
+    + (reviewAvailable && reviewFilter ? 1 : 0),
   );
 
 </script>
@@ -162,7 +170,7 @@
     <button class="btn" onclick={exportCsv}>Export CSV</button>
     <label class="indicator-format">Defensive format<select value={indicatorFormat} onchange={(event) => setIndicatorFormat(event.currentTarget.value as IndicatorFormat)}><option value="domains">Domains</option><option value="hosts">Hosts file</option><option value="dnsmasq">dnsmasq</option><option value="rpz">RPZ</option><option value="stix">STIX 2.1</option><option value="misp">MISP event JSON</option></select></label>
     {#if indicatorFormat === 'rpz'}<label class="wildcard-choice choice"><input type="checkbox" checked={indicatorWildcards} onchange={(event) => setIndicatorWildcards(event.currentTarget.checked)}><span>Include wildcard subdomains</span></label>{/if}
-    <button class="btn" onclick={exportIndicators} disabled={profileContextState !== 'ready' || !indicatorCount}>Export {indicatorCount} reviewed indicator{indicatorCount === 1 ? '' : 's'}</button>
+    <button class="btn" onclick={exportIndicators} disabled={profileContextState !== 'ready' || !indicatorEligibilityAvailable || !indicatorCount}>{indicatorEligibilityAvailable?`Export ${indicatorCount} reviewed indicator${indicatorCount===1?'':'s'}`:'Indicator eligibility unavailable'}</button>
   </div>
 </div>
 <div class="mobile-review-bar">
@@ -172,7 +180,7 @@
     <button class="btn mobile-panel-toggle" type="button" aria-controls="bulk-output-tools" aria-expanded={outputPanelOpen} onclick={() => outputPanelOpen = !outputPanelOpen}>Actions</button>
   </div>
 </div>
-<p class:mobile-collapsed={!outputPanelOpen} class="review-note">Defensive exports use only shortlisted domains with a Suspicious or Confirmed abuse case disposition. {selectedIndicatorCount} shortlisted domain{selectedIndicatorCount === 1 ? ' is' : 's are'} in the current result set.{indicatorProfileContextUnavailableCount?` ${indicatorProfileContextUnavailableCount} selected row${indicatorProfileContextUnavailableCount===1?' is':'s are'} excluded because Brand Profile context is unavailable.`:''} A review manifest and rollback set are downloaded with the indicator file.</p>
+<p class:mobile-collapsed={!outputPanelOpen} class="review-note">Defensive exports use only shortlisted domains with a Suspicious or Confirmed abuse case disposition. {#if !caseAvailable}Case dispositions could not be read, so indicator eligibility is unavailable.{:else if shortlistAvailable}{selectedIndicatorCount} shortlisted domain{selectedIndicatorCount === 1 ? ' is' : 's are'} in the current result set.{indicatorProfileContextUnavailableCount?` ${indicatorProfileContextUnavailableCount} selected row${indicatorProfileContextUnavailableCount===1?' is':'s are'} excluded because Brand Profile context is unavailable.`:''}{:else} Shortlist membership could not be read, so its count and selection state are unavailable.{/if} A review manifest and rollback set are downloaded with the indicator file.</p>
 <div id="bulk-advanced-filter-panel" class:mobile-collapsed={!filterPanelOpen} class="advanced-filter-panel">
   <div class="advanced-filters">
   <label class="field">Mutation<select value={mutationFilter} onchange={(event) => setMutationFilter(event.currentTarget.value)}><option value="">All mutations</option>{#each mutationOptions as mutation}<option value={mutation.value}>{mutation.label}</option>{/each}</select></label>
@@ -181,7 +189,7 @@
   <label class="field">Registration age<select value={ageFilter} onchange={(event) => setAgeFilter(event.currentTarget.value as BulkAgeFilter)}><option value="">Any observed age</option><option value="new_30">30 days or newer</option><option value="new_365">31 to 365 days</option><option value="older_365">Older than 365 days</option><option value="unknown">Not observed</option></select></label>
   <label class="field">Mail posture<select value={mailFilter} onchange={(event) => setMailFilter(event.currentTarget.value as BulkMailFilter)}><option value="">Any mail state</option><option value="mail">MX observed</option><option value="no_mail">No MX observed</option><option value="authenticated">SPF and DMARC observed</option><option value="auth_gap">SPF or DMARC gap</option><option value="unknown">Incomplete evidence</option></select></label>
   <label class="field">Registrar<select value={registrarFilter} onchange={(event) => setRegistrarFilter(event.currentTarget.value)}><option value="">Any registrar</option>{#each advancedFilterOptions.registrars as value}<option value={value}>{value}</option>{/each}</select></label>
-  <label class="field">Case state<select value={caseDispositionFilter} onchange={(event) => setCaseDispositionFilter(event.currentTarget.value)}><option value="">Any case state</option>{#each advancedFilterOptions.caseDispositions as value}<option value={value}>{value === 'untracked' ? 'No case' : value.replaceAll('_', ' ')}</option>{/each}</select></label>
+  <label class="field">Case state<select value={caseAvailable?caseDispositionFilter:''} onchange={(event) => setCaseDispositionFilter(event.currentTarget.value)} disabled={!caseAvailable}><option value="">{caseAvailable?'Any case state':'Case evidence unavailable'}</option>{#if caseAvailable}{#each advancedFilterOptions.caseDispositions as value}<option value={value}>{value === 'untracked' ? 'No case' : value.replaceAll('_', ' ')}</option>{/each}{/if}</select></label>
   <label class="field">Group summary<select value={groupBy} onchange={(event) => setGroupBy(event.currentTarget.value as BulkGroupBy)}><option value="">No grouping</option><option value="mutation">Mutation family</option><option value="tld">TLD</option><option value="registrar">Registrar</option><option value="nameserver">Nameserver set</option></select></label>
   <label class="field desktop-sort-control">Sort<select aria-label="Desktop result sort" value={sortKey} onchange={(event) => setSortKey(event.currentTarget.value as BulkSortKey)}><option value="risk">Risk</option><option value="domain">Domain</option><option value="availability">Registration</option><option value="confidence">Confidence</option><option value="activity">Website</option><option value="registrar">Registrar</option><option value="mutation">Mutation</option></select></label>
   <label class="field">Order<select value={String(sortDirection)} onchange={(event) => setSortDirection(Number(event.currentTarget.value) === 1 ? 1 : -1)}><option value="-1">Descending</option><option value="1">Ascending</option></select></label>
@@ -192,17 +200,17 @@
 {#if indicatorStatus}<p class="indicator-status" role="status" aria-live="polite">{indicatorStatus}</p>{/if}
 <div class="results-status">
   <p>{matchedCount} of {resultCount} result{resultCount === 1 ? '' : 's'} matched · showing {visibleCount} on page {currentPage} of {pageCount}</p>
-  <button class="btn" onclick={selectFiltered} disabled={!matchedCount}>Select matched</button>
+  <button class="btn" onclick={selectFiltered} disabled={!matchedCount || !shortlistAvailable}>Select matched</button>
 </div>
-{#if selectedCount}
+{#if shortlistAvailable&&selectedCount}
 <section class="selection-actions" aria-labelledby="selection-actions-title">
   <div class="selection-summary"><div><strong id="selection-actions-title">{selectedCount} selected in the filtered set</strong><span>Only selected rows are included in these actions.</span></div><button class="btn mobile-selection-toggle" type="button" aria-controls="bulk-selection-actions" aria-expanded={selectionPanelOpen} onclick={() => selectionPanelOpen = !selectionPanelOpen}>Actions</button></div>
   <div id="bulk-selection-actions" class:mobile-collapsed={!selectionPanelOpen} class="action-row">
-    <button class="btn" onclick={clearFilteredSelection} disabled={!selectedCount}>Clear filtered selection</button>
+    <button class="btn" onclick={clearFilteredSelection} disabled={!selectedCount || !shortlistAvailable}>Clear filtered selection</button>
     <button class="btn" onclick={exportSelectedCsv} disabled={!selectedCount}>Export selected CSV</button>
     <button class="btn" onclick={deepRescanSelected} disabled={!selectedCount || running || profileContextState === 'loading'}>Deep rescan selected</button>
-    <button class="btn" onclick={createCasesSelected} disabled={!selectedCount}>Create cases</button>
-    <label class="field disposition">Set case state<select onchange={(event) => { const value = event.currentTarget.value; if (value) setSelectedDisposition(value); event.currentTarget.value = ''; }} disabled={!selectedCount}><option value="">Choose state</option>{#each caseOptions as option}<option value={option.value}>{option.label}</option>{/each}</select></label>
+    <button class="btn" onclick={createCasesSelected} disabled={!selectedCount || !caseAvailable}>Create cases</button>
+    <label class="field disposition">Set case state<select onchange={(event) => { const value = event.currentTarget.value; if (value) setSelectedDisposition(value); event.currentTarget.value = ''; }} disabled={!selectedCount || !caseAvailable}><option value="">Choose state</option>{#each caseOptions as option}<option value={option.value}>{option.label}</option>{/each}</select></label>
   </div>
 </section>
 {/if}

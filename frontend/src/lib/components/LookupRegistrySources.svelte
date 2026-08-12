@@ -6,6 +6,7 @@
     type MatrixInput,
   } from '$lib/analysis/visualization-models.ts';
   import { buildRdapReverseSearchPreviews } from '$lib/analysis/rdap-reverse-search-preview.ts';
+  import { boundedTechnologyText } from '$lib/analysis/lookup-display-shared.ts';
 
   type JsonRecord = Record<string, unknown>;
   type DisplayRow = { label: string; value: string; datetime?: string };
@@ -36,8 +37,13 @@
   type ContactRole = { role: string; contacts: Array<{ identity: string; details: string[] }> };
   type TraceState = 'complete' | 'partial' | 'unavailable' | 'not_collected';
   const asRecord = (value: unknown): JsonRecord => value && typeof value === 'object' && !Array.isArray(value) ? value as JsonRecord : {};
-  const asRecords = (value: unknown): JsonRecord[] => Array.isArray(value) ? value.filter((item): item is JsonRecord => Boolean(item) && typeof item === 'object' && !Array.isArray(item)) : [];
-  const asStrings = (value: unknown): string[] => Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+  const asRecords = (value: unknown, maximum = 500): JsonRecord[] => Array.isArray(value)
+    ? value.slice(0, maximum).filter((item): item is JsonRecord => Boolean(item) && typeof item === 'object' && !Array.isArray(item))
+    : [];
+  const asStrings = (value: unknown, maximum = 500, maximumLength = 500): string[] => Array.isArray(value)
+    ? value.slice(0, maximum).filter((item): item is string => typeof item === 'string')
+      .map((item) => boundedTechnologyText(item, maximumLength)).filter(Boolean)
+    : [];
   const display = (value: unknown): string => typeof value === 'string' && value ? value.replaceAll('_', ' ') : 'unavailable';
 
   let {
@@ -89,24 +95,31 @@
   const lifecycle = $derived(asRecord(insights.lifecycle));
   const lifecycleLocks = $derived(asRecord(lifecycle.locks));
   const reconciliation = $derived(asRecord(insights.reconciliation));
-  const publications = $derived(asRecords(insights.publications));
+  const publications = $derived(asRecords(insights.publications, 3));
   const rdapCapabilities = $derived(asRecord(insights.rdapCapabilities));
   const registryCapabilities = $derived(asRecord(rdapCapabilities.registry));
   const registrarCapabilities = $derived(asRecord(rdapCapabilities.registrar));
-  const registryDeclarations = $derived(asRecords(registryCapabilities.declarations));
-  const registrarDeclarations = $derived(asRecords(registrarCapabilities.declarations));
+  const registryDeclarations = $derived(asRecords(registryCapabilities.declarations, 50));
+  const registrarDeclarations = $derived(asRecords(registrarCapabilities.declarations, 50));
   const registryReverseSearch = $derived(asRecord(registryCapabilities.reverseSearch));
   const registrarReverseSearch = $derived(asRecord(registrarCapabilities.reverseSearch));
   const registryReversePreviews = $derived(buildRdapReverseSearchPreviews(rdapParsed, registryCapabilities));
   const registrarReversePreviews = $derived(buildRdapReverseSearchPreviews(registrar.parsed, registrarCapabilities));
   let showRegistryReversePreview = $state(false);
   let showRegistrarReversePreview = $state(false);
-  const abuseRouting = $derived(asRecords(insights.abuseRouting));
+  const abuseRouting = $derived(asRecords(insights.abuseRouting, 8));
+  const hasRdapPublication = $derived(Boolean(
+    rdapParsed.domain
+    || rdapParsed.handle
+    || rdapParsed.objectClassName
+    || rdapParsed.statuses
+    || rdapParsed.nameservers,
+  ));
   const registryTraceState = $derived<TraceState>(rdapError
     ? 'unavailable'
     : rdapPartialDetail
       ? 'partial'
-      : rdapRows.length || Object.keys(rdapParsed).length
+      : rdapRows.length || hasRdapPublication
         ? 'complete'
         : 'unavailable');
   const registrarTraceState = $derived<TraceState>(!registrar.visible
@@ -362,18 +375,18 @@
       <article>
         <span>Reconciliation</span>
         <strong>{display(reconciliation.state)}</strong>
-        <small>{String(reconciliation.summary || 'No comparable publication summary was available.')}</small>
+        <small>{boundedTechnologyText(reconciliation.summary, 500) || 'No comparable publication summary was available.'}</small>
       </article>
     </div>
-    {#if asStrings(lifecycle.rawStatuses).length}
-      <div class="raw-statuses"><strong>Raw source statuses</strong><div>{#each asStrings(lifecycle.rawStatuses) as status}<code>{status}</code>{/each}</div></div>
+    {#if asStrings(lifecycle.rawStatuses,40,160).length}
+      <div class="raw-statuses"><strong>Raw source statuses</strong><div>{#each asStrings(lifecycle.rawStatuses,40,160) as status}<code>{status}</code>{/each}</div></div>
     {/if}
-    {#if asStrings(lifecycle.acquisitionPath).length}
-      <section class="acquisition-path"><strong>Lifecycle-aware next steps</strong><ol>{#each asStrings(lifecycle.acquisitionPath) as step}<li>{step}</li>{/each}</ol><p>{String(lifecycle.limitation || '')}</p></section>
+    {#if asStrings(lifecycle.acquisitionPath,3,500).length}
+      <section class="acquisition-path"><strong>Lifecycle-aware next steps</strong><ol>{#each asStrings(lifecycle.acquisitionPath,3,500) as step}<li>{step}</li>{/each}</ol><p>{boundedTechnologyText(lifecycle.limitation,500)}</p></section>
     {/if}
     <details class="publication-quality">
       <summary>Publication quality · {publications.filter((item) => item.state === 'complete').length} complete</summary>
-      <div class="publication-list">{#each publications as publication}<article><strong>{display(publication.source)}</strong><span class={`chip ${publication.state === 'complete' ? 'factual' : publication.state === 'partial' ? 'warn' : 'unavailable'}`}>{display(publication.state)}</span>{#if publication.observedAt}<small>{String(publication.observedAt)}</small>{/if}{#each asStrings(publication.issues) as issue}<p>{issue}</p>{/each}</article>{/each}</div>
+      <div class="publication-list">{#each publications as publication}<article><strong>{display(publication.source)}</strong><span class={`chip ${publication.state === 'complete' ? 'factual' : publication.state === 'partial' ? 'warn' : 'unavailable'}`}>{display(publication.state)}</span>{#if publication.observedAt}<small>{boundedTechnologyText(publication.observedAt,64)}</small>{/if}{#each asStrings(publication.issues,12,500) as issue}<p>{issue}</p>{/each}</article>{/each}</div>
     </details>
     <details class="rdap-capabilities">
       <summary>RDAP capability declarations · {registryDeclarations.length + registrarDeclarations.length}</summary>
@@ -381,9 +394,9 @@
         <article>
           <header><strong>Registry RDAP</strong><span class={`chip ${registryCapabilities.state === 'complete' ? 'factual' : registryCapabilities.state === 'partial' ? 'warn' : 'unavailable'}`}>{display(registryCapabilities.state)}</span></header>
           {#if registryDeclarations.length}
-            <ul>{#each registryDeclarations as declaration}<li><code>{String(declaration.identifier || '')}</code><span>{String(declaration.capability || '')}</span>{#if declaration.status === 'obsolete'}<small>Registered as obsolete</small>{:else if declaration.category === 'unknown'}<small>Unclassified; retained without interpretation</small>{/if}</li>{/each}</ul>
+            <ul>{#each registryDeclarations as declaration}<li><code>{boundedTechnologyText(declaration.identifier,160)}</code><span>{boundedTechnologyText(declaration.capability,240)}</span>{#if declaration.status === 'obsolete'}<small>Registered as obsolete</small>{:else if declaration.category === 'unknown'}<small>Unclassified; retained without interpretation</small>{/if}</li>{/each}</ul>
           {:else}<p>No usable declaration was retained from this response.</p>{/if}
-          <p><strong>Reverse search:</strong> {display(registryReverseSearch.state)}. {String(registryReverseSearch.detail || '')}</p>
+          <p><strong>Reverse search:</strong> {display(registryReverseSearch.state)}. {boundedTechnologyText(registryReverseSearch.detail,500)}</p>
           {#if registryReversePreviews.length}
             <button class="preview-control" type="button" aria-expanded={showRegistryReversePreview} onclick={() => showRegistryReversePreview = !showRegistryReversePreview}>
               {showRegistryReversePreview ? 'Hide' : 'Prepare'} disclosure preview
@@ -400,9 +413,9 @@
         <article>
           <header><strong>Registrar RDAP</strong><span class={`chip ${registrarCapabilities.state === 'complete' ? 'factual' : registrarCapabilities.state === 'partial' ? 'warn' : 'unavailable'}`}>{display(registrarCapabilities.state)}</span></header>
           {#if registrarDeclarations.length}
-            <ul>{#each registrarDeclarations as declaration}<li><code>{String(declaration.identifier || '')}</code><span>{String(declaration.capability || '')}</span>{#if declaration.status === 'obsolete'}<small>Registered as obsolete</small>{:else if declaration.category === 'unknown'}<small>Unclassified; retained without interpretation</small>{/if}</li>{/each}</ul>
+            <ul>{#each registrarDeclarations as declaration}<li><code>{boundedTechnologyText(declaration.identifier,160)}</code><span>{boundedTechnologyText(declaration.capability,240)}</span>{#if declaration.status === 'obsolete'}<small>Registered as obsolete</small>{:else if declaration.category === 'unknown'}<small>Unclassified; retained without interpretation</small>{/if}</li>{/each}</ul>
           {:else}<p>No usable declaration was retained from this response.</p>{/if}
-          <p><strong>Reverse search:</strong> {display(registrarReverseSearch.state)}. {String(registrarReverseSearch.detail || '')}</p>
+          <p><strong>Reverse search:</strong> {display(registrarReverseSearch.state)}. {boundedTechnologyText(registrarReverseSearch.detail,500)}</p>
           {#if registrarReversePreviews.length}
             <button class="preview-control" type="button" aria-expanded={showRegistrarReversePreview} onclick={() => showRegistrarReversePreview = !showRegistrarReversePreview}>
               {showRegistrarReversePreview ? 'Hide' : 'Prepare'} disclosure preview
@@ -422,10 +435,10 @@
     {#if abuseRouting.length}
       <details class="routing">
         <summary>Published escalation routes · {abuseRouting.length}</summary>
-        <ul>{#each abuseRouting as route}<li><strong>{display(route.kind)} {display(route.channel)}</strong><span>{String(route.contact || '')}</span><small>{String(route.source || '')}</small>{#each asStrings(route.limitations) as limitation}<small>{limitation}</small>{/each}</li>{/each}</ul>
+        <ul>{#each abuseRouting as route}<li><strong>{display(route.kind)} {display(route.channel)}</strong><span>{boundedTechnologyText(route.contact,320)}</span><small>{boundedTechnologyText(route.source,80)}</small>{#each asStrings(route.limitations,10,300) as limitation}<small>{limitation}</small>{/each}</li>{/each}</ul>
       </details>
     {/if}
-    <p class="interpretation-limit">{String(disclosure.limitation || '')}</p>
+    <p class="interpretation-limit">{boundedTechnologyText(disclosure.limitation,500)}</p>
   </details>
 {/if}
 

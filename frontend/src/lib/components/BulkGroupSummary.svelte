@@ -8,6 +8,7 @@
     truncated,
     overlapping,
     selectedDomains,
+    selectionAvailable,
     selectDomains,
   }: {
     groupBy: BulkGroupBy;
@@ -16,6 +17,7 @@
     truncated: boolean;
     overlapping: boolean;
     selectedDomains: ReadonlySet<string>;
+    selectionAvailable: boolean;
     selectDomains: (domains: string[]) => void | Promise<void>;
   } = $props();
 
@@ -40,8 +42,8 @@
       <div class="group-grid">
         {#each groups as group}
           <article>
-            <div><strong>{group.label}</strong><span>{group.domains.length} domain{group.domains.length === 1 ? '' : 's'} · {selectedCount(group)} selected</span></div>
-            <button type="button" class="btn small" onclick={() => selectDomains(group.domains)}>Select group</button>
+            <div><strong>{group.label}</strong><span>{group.domains.length} domain{group.domains.length === 1 ? '' : 's'} · {selectionAvailable ? `${selectedCount(group)} selected` : 'selection unavailable'}</span></div>
+            <button type="button" class="btn small" disabled={!selectionAvailable} onclick={() => selectDomains(group.domains)}>Select group</button>
           </article>
         {/each}
       </div>

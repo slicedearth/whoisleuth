@@ -387,6 +387,8 @@ button.danger:hover:not(:disabled), .btn.danger:hover:not(:disabled) { border-co
 .file-btn { position: relative; cursor: pointer; }
 .file-btn input[type="file"] { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
 .file-btn:focus-within { outline: 2px solid var(--accent); outline-offset: 3px; }
+.file-btn:has(input[type="file"]:disabled) { opacity: .55; cursor: not-allowed; }
+.file-btn input[type="file"]:disabled { cursor: not-allowed; }
 
 /* ---------- Chips and badges ---------- */
 .chip, .badge {

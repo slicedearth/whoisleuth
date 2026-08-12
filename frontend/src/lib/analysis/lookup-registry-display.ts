@@ -1,5 +1,6 @@
 import type { LookupHttpResponse } from './lookup-response.ts';
 import {
+  boundedTechnologyText,
   datedRow,
   formatDate,
   rec,
@@ -53,8 +54,8 @@ function diagnosticLabel(source: SourceStatus): string {
 
 function attemptSummary(source: SourceStatus): string | null {
   return Array.isArray(source.attempts) && source.attempts.length
-    ? `attempts: ${source.attempts
-        .map((item) => statusLabel(String(item.outcome || 'unknown')))
+    ? `attempts: ${source.attempts.slice(0, 3)
+        .map((item) => statusLabel(boundedTechnologyText(item.outcome || 'unknown', 40)))
         .join(' → ')}`
     : null;
 }
@@ -84,26 +85,27 @@ function contactIdentity(contact: JsonRecord): string {
 
 function contactDetails(contact: JsonRecord): string[] {
   return [
-    Array.isArray(contact.organizations) && contact.organizations.length
-      ? `Organisations: ${contact.organizations.join(', ')}`
+    stringList(contact.organizations, 8, 300).length
+      ? `Organisations: ${stringList(contact.organizations, 8, 300).join(', ')}`
       : null,
-    Array.isArray(contact.emails) && contact.emails.length
-      ? `Email: ${contact.emails.join(', ')}`
+    stringList(contact.emails, 8, 320).length
+      ? `Email: ${stringList(contact.emails, 8, 320).join(', ')}`
       : null,
-    Array.isArray(contact.phones) && contact.phones.length
-      ? `Phone: ${contact.phones.join(', ')}`
+    stringList(contact.phones, 8, 100).length
+      ? `Phone: ${stringList(contact.phones, 8, 100).join(', ')}`
       : null,
-    Array.isArray(contact.addresses) && contact.addresses.length
-      ? `Address: ${contact.addresses.join(' · ')}`
+    stringList(contact.addresses, 8, 1_000).length
+      ? `Address: ${stringList(contact.addresses, 8, 1_000).join(' · ')}`
       : null,
-    records(contact.publicIds).length
-      ? `IDs: ${records(contact.publicIds)
-          .map((item) => `${item.type}: ${item.identifier}`)
+    records(contact.publicIds, 20).length
+      ? `IDs: ${records(contact.publicIds, 20)
+          .map((item) => `${boundedTechnologyText(item.type, 160)}: ${boundedTechnologyText(item.identifier, 300)}`)
           .join(', ')}`
       : null,
-    records(contact.links).length
-      ? `Links: ${records(contact.links)
-          .map((item) => item.href)
+    records(contact.links, 10).length
+      ? `Links: ${records(contact.links, 10)
+          .map((item) => boundedTechnologyText(item.href, 2_048))
+          .filter(Boolean)
           .join(', ')}`
       : null,
   ].filter(Boolean) as string[];
@@ -272,7 +274,7 @@ export function buildLookupRegistryDisplay(input: {
     ],
     whoisContactRoles: populatedWhoisRoles.map((role) => ({
       role,
-      contacts: records(whoisContactsByRole[role]).map((contact) => ({
+      contacts: records(whoisContactsByRole[role], 1).map((contact) => ({
         identity: contactIdentity(contact),
         details: contactDetails(contact),
       })),
@@ -280,7 +282,7 @@ export function buildLookupRegistryDisplay(input: {
     registrarRdap: {
       visible: Boolean(registrarRdap.status),
       label: diagnosticLabel(registrarRdap),
-      endpoint: registrarRdap.endpoint ? String(registrarRdap.endpoint) : '',
+      endpoint: boundedTechnologyText(registrarRdap.endpoint, 2_048),
       detail: [
         registrarRdap.upstreamStatus ? `HTTP ${registrarRdap.upstreamStatus}` : null,
         registrarRdap.fetchedAt ? `Fetched ${formatDate(registrarRdap.fetchedAt)}` : null,

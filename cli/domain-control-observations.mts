@@ -1,6 +1,12 @@
 import { Buffer } from 'node:buffer';
 
 import {
+  MAX_BOUNDED_JSON_DEPTH,
+  MAX_BOUNDED_JSON_KEYS,
+  MAX_BOUNDED_JSON_VALUES,
+  scanBoundedJson,
+} from '../lib/bounded-json.mts';
+import {
   DOMAIN_CONTROL_FLIGHT_RECORDER_FIELDS,
   type DomainControlFlightRecorderField,
   type DomainControlFlightRecorderObservation,
@@ -19,6 +25,10 @@ export const CLI_DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA = 'whoisleuth.cli.domain-con
 export const CLI_DOMAIN_CONTROL_REVIEW_SCHEMA = 'whoisleuth.cli.domain-control-review';
 export const CLI_DOMAIN_CONTROL_REVIEW_VERSION = 1;
 export const MAX_DOMAIN_CONTROL_REVIEW_INPUT_BYTES = 32 * 1024 * 1024;
+export const MAX_DOMAIN_CONTROL_REVIEW_LOOKUPS = 100;
+export const MAX_DOMAIN_CONTROL_REVIEW_JSON_DEPTH = MAX_BOUNDED_JSON_DEPTH + 2;
+export const MAX_DOMAIN_CONTROL_REVIEW_JSON_KEYS = MAX_BOUNDED_JSON_KEYS * (MAX_DOMAIN_CONTROL_REVIEW_LOOKUPS + 1);
+export const MAX_DOMAIN_CONTROL_REVIEW_JSON_VALUES = MAX_BOUNDED_JSON_VALUES * (MAX_DOMAIN_CONTROL_REVIEW_LOOKUPS + 1);
 
 type Field = DomainControlFlightRecorderObservation['fields'][number];
 
@@ -160,9 +170,26 @@ export function buildCliDomainControlReview(inputText: string, generatedAt = new
   if (Buffer.byteLength(inputText, 'utf8') > MAX_DOMAIN_CONTROL_REVIEW_INPUT_BYTES) {
     throw new CliUsageError(`Domain-control review input is limited to ${MAX_DOMAIN_CONTROL_REVIEW_INPUT_BYTES} bytes.`);
   }
+  const normalizedInput = inputText.replace(/^\uFEFF/u, '');
+  try {
+    scanBoundedJson(normalizedInput, {
+      maximumDepth: MAX_DOMAIN_CONTROL_REVIEW_JSON_DEPTH,
+      maximumKeys: MAX_DOMAIN_CONTROL_REVIEW_JSON_KEYS,
+      maximumValues: MAX_DOMAIN_CONTROL_REVIEW_JSON_VALUES,
+    });
+  } catch (cause) {
+    const detail = cause instanceof Error ? cause.message : '';
+    if (detail === 'Artefact input is not valid JSON.') {
+      throw new CliUsageError('Domain-control review input must be valid JSON.');
+    }
+    const boundedDetail = detail.replace(/^Artefact JSON /u, '');
+    throw new CliUsageError(boundedDetail
+      ? `Domain-control review input ${boundedDetail}`
+      : 'Domain-control review input must be valid JSON.');
+  }
   let parsed: unknown;
   try {
-    parsed = JSON.parse(inputText.replace(/^\uFEFF/u, ''));
+    parsed = JSON.parse(normalizedInput);
   } catch {
     throw new CliUsageError('Domain-control review input must be valid JSON.');
   }
@@ -173,7 +200,7 @@ export function buildCliDomainControlReview(inputText: string, generatedAt = new
   if (Object.keys(input).some((key) => !new Set(['schema', 'version', 'manifest', 'lookups']).has(key))) {
     throw new CliUsageError('Domain-control review input contains an unsupported field.');
   }
-  if (input.lookups.length < 1 || input.lookups.length > 100) {
+  if (input.lookups.length < 1 || input.lookups.length > MAX_DOMAIN_CONTROL_REVIEW_LOOKUPS) {
     throw new CliUsageError('Domain-control review requires from 1 to 100 saved Lookup documents.');
   }
   const manifest = verifyDomainControlManifest(input.manifest);

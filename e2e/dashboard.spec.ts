@@ -339,6 +339,11 @@ test('the privacy-safe browser handoff previews exact third-party disclosure bef
   await page.getByLabel(/I reviewed the exact endpoint/).check();
   await expect(page.getByRole('button', { name: 'Open reviewed destination' })).toBeEnabled();
 
+  await page.evaluate(() => { window.open = () => null; });
+  await page.getByRole('button', { name: 'Open reviewed destination' }).click();
+  await expect(page.getByRole('alert')).toContainText('The new tab was blocked');
+  await expect(preview).toBeVisible();
+
   await page.setViewportSize({ width: 320, height: 700 });
   await expectSelectedOptionFits(page.getByLabel('Destination'));
   await expectSelectedOptionFits(page.getByLabel('Disclose', { exact: true }));

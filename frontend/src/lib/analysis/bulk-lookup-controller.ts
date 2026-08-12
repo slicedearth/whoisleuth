@@ -7,6 +7,7 @@ import {
   requestJsonCapped,
   STANDARD_JSON_RESPONSE_BYTES,
 } from '../bounded-json-response.ts';
+import { scanBoundedJson } from '../../../../lib/bounded-json.mts';
 
 export type BulkLookupMode = 'deep' | 'fast';
 
@@ -78,6 +79,7 @@ export async function fetchCompactBulkLookup(
   const request = () => requestJsonCapped(url, { signal }, {
     maximumBytes: STANDARD_JSON_RESPONSE_BYTES,
     timeoutMs: BULK_LOOKUP_REQUEST_TIMEOUT_MS,
+    validateRawJson: scanBoundedJson,
     fetchImpl: (input, init) => fetcher(String(input), { signal: init?.signal ?? signal }),
   });
   let result = await request();

@@ -24,6 +24,7 @@
     setTagDraft,
     noteDraft,
     setNoteDraft,
+    pendingNoteCaseIds,
     calibrationCaseIds,
     toggleCalibrationCase,
     expand,
@@ -51,6 +52,7 @@
     setTagDraft: (value: string) => void;
     noteDraft: string;
     setNoteDraft: (value: string) => void;
+    pendingNoteCaseIds: string[];
     calibrationCaseIds: string[];
     toggleCalibrationCase: (record: CaseRecord, selected: boolean) => void;
     expand: (record: CaseRecord) => void;
@@ -105,8 +107,8 @@
           </form>
           <form class="note-edit" onsubmit={(event) => { event.preventDefault(); addNote(record); }}>
             <label class="field" for={`note-${record.id}`}>Add note</label>
-            <textarea id={`note-${record.id}`} value={noteDraft} oninput={(event) => setNoteDraft(event.currentTarget.value)} rows="2" placeholder="Observed behaviour, evidence, decisions…"></textarea>
-            <button class="btn" type="submit" disabled={!noteDraft.trim()}>Add note</button>
+            <textarea id={`note-${record.id}`} value={noteDraft} disabled={pendingNoteCaseIds.includes(record.id)} oninput={(event) => setNoteDraft(event.currentTarget.value)} rows="2" placeholder="Observed behaviour, evidence, decisions…"></textarea>
+            <button class="btn" type="submit" disabled={!noteDraft.trim() || pendingNoteCaseIds.includes(record.id)}>{pendingNoteCaseIds.includes(record.id) ? 'Adding…' : 'Add note'}</button>
           </form>
           {#if record.notes.length}<ol class="notes">{#each [...record.notes].reverse() as note}<li><time datetime={note.createdAt}>{formatDate(note.createdAt)}</time><p>{note.body}</p></li>{/each}</ol>{/if}
           <CaseRelationships {record} records={allRecords} onselect={expand} />

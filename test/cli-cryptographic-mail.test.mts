@@ -81,6 +81,41 @@ function mailReview(): MailTransportReview {
 }
 
 describe('isolated cryptographic and mail CLI actions', () => {
+  test('pins the leaf-only DANE-TA limitation in help, catalogue, and manual output', async () => {
+    const help = capture();
+    assert.equal(await runCli(['mail-transport', '--help'], {
+      stdout: help.stream,
+      stderr: capture().stream,
+    }), EXIT_CODES.SUCCESS);
+    assert.match(help.value().replace(/\s+/gu, ' '), /If a DANE-TA TLSA usage 2 association is published/u);
+    assert.match(help.value().replace(/\s+/gu, ' '), /SMTP relay PKIX-TA usage 0 and PKIX-EE usage 1 records remain unsupported/u);
+
+    const catalogue = capture();
+    assert.equal(await runCli(['commands', '--json'], {
+      stdout: catalogue.stream,
+      stderr: capture().stream,
+    }), EXIT_CODES.SUCCESS);
+    const mailCommand = JSON.parse(catalogue.value()).commands.find(
+      (entry: { command: string }) => entry.command === 'mail-transport',
+    );
+    assert.match(mailCommand.boundary, /If a DANE-TA TLSA usage 2 association is published/u);
+    assert.match(mailCommand.boundary, /SMTP relay PKIX-TA usage 0 and PKIX-EE usage 1 records remain unsupported/u);
+
+    const manual = capture();
+    assert.equal(await runCli(['manual'], {
+      stdout: manual.stream,
+      stderr: capture().stream,
+    }), EXIT_CODES.SUCCESS);
+    assert.match(
+      manual.value().replaceAll('\\-', '-').replace(/\s+/gu, ' '),
+      /If a DANE-TA TLSA usage 2 association is published/u,
+    );
+    assert.match(
+      manual.value().replaceAll('\\-', '-').replace(/\s+/gu, ' '),
+      /SMTP relay PKIX-TA usage 0 and PKIX-EE usage 1 records remain unsupported/u,
+    );
+  });
+
   test('parses mandatory resolver, trust-anchor, and authorization acknowledgements', () => {
     assert.deepEqual(parseCliArguments([
       'dnssec-validate', 'example.test', '--resolver', PUBLIC_ADDRESS,

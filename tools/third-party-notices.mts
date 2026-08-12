@@ -16,6 +16,10 @@ import { parseBoundedJsonObject } from '../lib/bounded-json.mts';
 type JsonRecord = Record<string, unknown>;
 type WritableLike = { write(value: string): unknown };
 type NoticeMode = 'check' | 'write';
+type InventoryOptions = Readonly<{
+  directDependencyNames?: readonly string[];
+  scopeLabel?: string;
+}>;
 type MainOptions = Readonly<{
   repositoryRoot?: string;
   stdout?: WritableLike;
@@ -46,6 +50,15 @@ const NOTICE_FILENAME_RE = /^(?:licen[cs]e|copying|notice)(?:[._-].*|)$/iu;
 const README_FILENAME_RE = /^readme(?:[._-].*|)$/iu;
 const CONTROL_CHAR_RE = /[\u0000-\u001f\u007f]/u;
 const PACKAGE_SEGMENT_RE = /^(?:@?[a-z0-9][a-z0-9._-]{0,213})$/iu;
+const REVIEWED_LICENSE_EXPRESSIONS = new Set([
+  '(MIT OR CC0-1.0)',
+  '0BSD',
+  'Apache-2.0',
+  'BSD-2-Clause',
+  'BSD-3-Clause',
+  'ISC',
+  'MIT',
+]);
 
 function boundedToken(value: unknown, label: string, maxLength: number): string {
   if (typeof value !== 'string' || !value || value.length > maxLength || CONTROL_CHAR_RE.test(value)) {
@@ -61,6 +74,14 @@ function dependencyNames(value: unknown, label: string): string[] {
     throw new TypeError(`${label} exceeds its dependency limit.`);
   }
   return names;
+}
+
+function reviewedLicense(value: unknown, identifier: string): string {
+  const license = boundedToken(value, `${identifier} licence`, 128);
+  if (!REVIEWED_LICENSE_EXPRESSIONS.has(license)) {
+    throw new TypeError(`${identifier} declares unreviewed licence expression ${license}.`);
+  }
+  return license;
 }
 
 function packageNameFromInstallPath(installPath: string): string {
@@ -90,7 +111,58 @@ function packageNameFromInstallPath(installPath: string): string {
   return boundedToken(packageName, 'Package name', 214);
 }
 
-export function collectProductionPackages(lockfileValue: unknown): ProductionPackage[] {
+function resolveInstalledDependency(
+  packages: JsonRecord,
+  fromInstallPath: string,
+  dependencyName: string,
+): string | null {
+  boundedToken(dependencyName, 'Dependency name', 214);
+  const validUnscoped = /^[a-z0-9][a-z0-9._-]{0,213}$/iu.test(dependencyName);
+  const validScoped = /^@[a-z0-9][a-z0-9._-]{0,100}\/[a-z0-9][a-z0-9._-]{0,100}$/iu.test(dependencyName);
+  if (!validUnscoped && !validScoped) throw new TypeError(`Dependency name ${dependencyName} is invalid.`);
+  let cursor = fromInstallPath;
+  while (cursor && cursor !== '.') {
+    const nested = `${cursor}/node_modules/${dependencyName}`;
+    if (Object.hasOwn(packages, nested)) return nested;
+    cursor = path.posix.dirname(cursor);
+  }
+  const rootCandidate = `node_modules/${dependencyName}`;
+  return Object.hasOwn(packages, rootCandidate) ? rootCandidate : null;
+}
+
+function dependencyClosure(packages: JsonRecord, directDependencyNames: readonly string[]): Set<string> {
+  if (!directDependencyNames.length || directDependencyNames.length > MAX_NOTICE_DIRECT_DEPENDENCIES) {
+    throw new TypeError('Scoped production inventory must name a bounded non-empty direct dependency set.');
+  }
+  const selected = new Set<string>();
+  const queue: string[] = [];
+  for (const dependencyName of directDependencyNames) {
+    const installPath = resolveInstalledDependency(packages, '', dependencyName);
+    if (!installPath) throw new TypeError(`Scoped production dependency ${dependencyName} is not installed.`);
+    queue.push(installPath);
+  }
+  while (queue.length) {
+    const installPath = queue.shift();
+    if (!installPath || selected.has(installPath)) continue;
+    if (selected.size >= MAX_NOTICE_PACKAGES) throw new TypeError('Scoped production dependency closure exceeds its package limit.');
+    selected.add(installPath);
+    const packageEntry = record(packages[installPath], `package-lock.json package ${installPath}`);
+    for (const dependencyName of [
+      ...dependencyNames(packageEntry.dependencies, `${installPath} dependencies`),
+      ...dependencyNames(packageEntry.optionalDependencies, `${installPath} optional dependencies`),
+      ...dependencyNames(packageEntry.peerDependencies, `${installPath} peer dependencies`),
+    ]) {
+      const dependencyPath = resolveInstalledDependency(packages, installPath, dependencyName);
+      if (dependencyPath && !selected.has(dependencyPath)) queue.push(dependencyPath);
+    }
+  }
+  return selected;
+}
+
+export function collectProductionPackages(
+  lockfileValue: unknown,
+  options: InventoryOptions = {},
+): ProductionPackage[] {
   const lockfile = record(lockfileValue, 'package-lock.json');
   if (lockfile.lockfileVersion !== 3) {
     throw new TypeError('package-lock.json must use lockfileVersion 3.');
@@ -103,23 +175,25 @@ export function collectProductionPackages(lockfileValue: unknown): ProductionPac
   const frontend = packages.frontend === undefined
     ? {}
     : record(packages.frontend, 'package-lock.json frontend workspace');
-  const directNames = new Set([
-    ...dependencyNames(root.dependencies, 'root dependencies'),
-    ...dependencyNames(root.optionalDependencies, 'root optional dependencies'),
-    ...dependencyNames(frontend.dependencies, 'frontend dependencies'),
-    ...dependencyNames(frontend.optionalDependencies, 'frontend optional dependencies'),
-  ]);
+  const requestedDirectNames = options.directDependencyNames;
+  const directNames = new Set(requestedDirectNames ?? [
+      ...dependencyNames(root.dependencies, 'root dependencies'),
+      ...dependencyNames(root.optionalDependencies, 'root optional dependencies'),
+      ...dependencyNames(frontend.dependencies, 'frontend dependencies'),
+      ...dependencyNames(frontend.optionalDependencies, 'frontend optional dependencies'),
+    ]);
+  const selectedPaths = requestedDirectNames ? dependencyClosure(packages, requestedDirectNames) : null;
   const collected = new Map<string, ProductionPackage>();
 
   for (const [installPath, rawPackage] of Object.entries(packages)) {
-    if (!installPath.startsWith('node_modules/')) continue;
+    if (!installPath.startsWith('node_modules/') || (selectedPaths && !selectedPaths.has(installPath))) continue;
     const packageEntry = record(rawPackage, `package-lock.json package ${installPath}`);
     if (packageEntry.dev === true || packageEntry.link === true) continue;
     const name = packageNameFromInstallPath(installPath);
     const version = boundedToken(packageEntry.version, `${name} version`, 128);
     const identifier = `${name}@${version}`;
     const declaredLicense = packageEntry.license ?? LICENSE_OVERRIDES.get(identifier);
-    const license = boundedToken(declaredLicense, `${identifier} licence`, 128);
+    const license = reviewedLicense(declaredLicense, identifier);
     const existing = collected.get(identifier);
     const candidate = Object.freeze({
       name,
@@ -221,20 +295,25 @@ async function packageNoticeDocuments(
   }];
 }
 
-export async function buildThirdPartyNotices(repositoryRoot: string): Promise<string> {
+export async function buildThirdPartyNotices(
+  repositoryRoot: string,
+  options: InventoryOptions = {},
+): Promise<string> {
   const realRepositoryRoot = await realpath(repositoryRoot);
   const lockfile = await readBoundedJson(path.join(realRepositoryRoot, 'package-lock.json'));
-  const packages = collectProductionPackages(lockfile);
+  const packages = collectProductionPackages(lockfile, options);
   const nodeModulesRoot = await realpath(path.join(realRepositoryRoot, 'node_modules'));
   if (!pathIsWithin(realRepositoryRoot, nodeModulesRoot)) {
     throw new TypeError('node_modules resolves outside the repository root.');
   }
   const prefix = [
-    'WHOISleuth third-party production dependency notices',
+    `WHOISleuth ${options.scopeLabel ?? 'website'} third-party production dependency notices`,
     '',
     'Generated deterministically from package-lock.json and the installed production',
     'dependency packages. Do not edit this file directly; run npm run licenses:update.',
-    'The inventory includes exact locked versions and excludes development-only packages.',
+    options.directDependencyNames
+      ? 'The inventory is the exact transitive closure of the packaged CLI runtime dependencies.'
+      : 'The inventory includes exact locked versions and excludes development-only packages.',
     '',
     `Package count: ${packages.length}`,
     '',

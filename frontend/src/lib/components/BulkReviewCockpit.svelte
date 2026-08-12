@@ -23,6 +23,9 @@
     inspectDomain,
     executeRetry,
     profileContextLoading,
+    shortlistAvailable = true,
+    caseAvailable = true,
+    reviewAvailable = true,
   }: {
     rows: BulkReviewCockpitRow[];
     retryPlan: BulkRetryPlan;
@@ -39,13 +42,16 @@
     inspectDomain: (resultIndex: number) => void | Promise<void>;
     executeRetry: () => void | Promise<void>;
     profileContextLoading: boolean;
+    shortlistAvailable?: boolean;
+    caseAvailable?: boolean;
+    reviewAvailable?: boolean;
   } = $props();
 
   let enabled = $state(false);
   let cursor = $state(0);
   const current = $derived(rows[cursor] ?? null);
   const officialLookupUrl = $derived(current ? officialRegistryLookupFor(current.domain) : null);
-  const unresolved = $derived(rows.filter((row) => row.reviewState !== 'reviewed' && row.reviewState !== 'deferred').length);
+  const unresolved = $derived(reviewAvailable?rows.filter((row) => row.reviewState !== 'reviewed' && row.reviewState !== 'deferred').length:0);
 
   $effect(() => {
     if (!rows.length) cursor = 0;
@@ -66,9 +72,9 @@
     if (!enabled || !event.altKey || editableTarget(event.target) || !current) return;
     if (event.key === 'ArrowRight') move(1);
     else if (event.key === 'ArrowLeft') move(-1);
-    else if (event.key.toLowerCase() === 'r') setReviewState(current.resultIndex, 'reviewed');
-    else if (event.key.toLowerCase() === 'd') setReviewState(current.resultIndex, 'deferred');
-    else if (event.key.toLowerCase() === 's') toggleSaved(current.resultIndex);
+    else if (event.key.toLowerCase() === 'r' && reviewAvailable) setReviewState(current.resultIndex, 'reviewed');
+    else if (event.key.toLowerCase() === 'd' && reviewAvailable) setReviewState(current.resultIndex, 'deferred');
+    else if (event.key.toLowerCase() === 's' && shortlistAvailable) toggleSaved(current.resultIndex);
     else if (event.key.toLowerCase() === 'i') void inspectDomain(current.resultIndex);
     else return;
     event.preventDefault();
@@ -88,11 +94,12 @@
   </header>
 
   {#if current}
-    <div class="review-progress"><strong>{cursor + 1} of {rows.length}</strong><span>{unresolved} unresolved</span></div>
+    <div class="review-progress"><strong>{cursor + 1} of {rows.length}</strong><span>{reviewAvailable ? `${unresolved} unresolved` : 'Review state unavailable'}</span></div>
+    {#if !shortlistAvailable || !caseAvailable || !reviewAvailable}<p class="source-warning">Some browser-local actions are unavailable. Review, shortlist, and Case controls are disabled independently while result inspection remains available.</p>{/if}
     <article class="current">
       <div class="identity">
         <div><small>Current domain</small><h3>{current.domain}</h3></div>
-        <span class={`review-state state-${current.reviewState}`}>{current.reviewState}</span>
+        {#if reviewAvailable}<span class={`review-state state-${current.reviewState}`}>{current.reviewState}</span>{:else}<span class="review-state state-unavailable">Review unavailable</span>{/if}
       </div>
       <dl>
         <div><dt>Registration</dt><dd>{current.availability} · {current.confidence} confidence</dd></div>
@@ -113,11 +120,11 @@
         <button class="btn" type="button" aria-keyshortcuts="Alt+ArrowRight" onclick={() => move(1)}>Next unresolved</button>
       </div>
       <div class="actions">
-        <button class="btn" type="button" onclick={() => setReviewState(current.resultIndex, 'reviewing')}>Mark reviewing</button>
-        <button class="btn" type="button" aria-keyshortcuts="Alt+R" onclick={() => setReviewState(current.resultIndex, 'reviewed')}>Mark reviewed</button>
-        <button class="btn" type="button" aria-keyshortcuts="Alt+D" onclick={() => setReviewState(current.resultIndex, 'deferred')}>Defer</button>
-        <button class="btn" type="button" aria-keyshortcuts="Alt+S" aria-pressed={current.shortlisted} onclick={() => toggleSaved(current.resultIndex)}>{current.shortlisted ? 'Remove shortlist' : 'Shortlist'}</button>
-        {#if current.caseRecord}<a class="btn" href={`/monitor?case=${encodeURIComponent(current.caseRecord.id)}`}>Open case</a>{:else}<button class="btn" type="button" onclick={() => trackCase(current.resultIndex)}>Create case</button>{/if}
+        <button class="btn" type="button" disabled={!reviewAvailable} onclick={() => setReviewState(current.resultIndex, 'reviewing')}>Mark reviewing</button>
+        <button class="btn" type="button" disabled={!reviewAvailable} aria-keyshortcuts="Alt+R" onclick={() => setReviewState(current.resultIndex, 'reviewed')}>Mark reviewed</button>
+        <button class="btn" type="button" disabled={!reviewAvailable} aria-keyshortcuts="Alt+D" onclick={() => setReviewState(current.resultIndex, 'deferred')}>Defer</button>
+        <button class="btn" type="button" disabled={!shortlistAvailable} aria-keyshortcuts="Alt+S" aria-pressed={shortlistAvailable?current.shortlisted:undefined} onclick={() => toggleSaved(current.resultIndex)}>{shortlistAvailable?(current.shortlisted?'Remove shortlist':'Shortlist'):'Shortlist unavailable'}</button>
+        {#if !caseAvailable}<span class="unavailable-action">Case unavailable</span>{:else if current.caseRecord}<a class="btn" href={`/monitor?case=${encodeURIComponent(current.caseRecord.id)}`}>Open case</a>{:else}<button class="btn" type="button" onclick={() => trackCase(current.resultIndex)}>Create case</button>{/if}
         <button class="btn accent" type="button" aria-keyshortcuts="Alt+I" onclick={() => inspectDomain(current.resultIndex)}>Inspect in Lookup</button>
       </div>
       <div class="handoffs">
@@ -125,14 +132,14 @@
           <span>Case disposition</span>
           <select
             aria-label="Case disposition"
-            disabled={!current.caseRecord}
+            disabled={!current.caseRecord || !caseAvailable}
             value={current.caseRecord?.disposition ?? ''}
             onchange={(event) => setDisposition(current.resultIndex, event.currentTarget.value)}
           >
-            {#if !current.caseRecord}<option value="">Create a case first</option>{/if}
+            {#if !caseAvailable}<option value="">Case evidence unavailable</option>{:else if !current.caseRecord}<option value="">Create a case first</option>{/if}
             {#each caseOptions as option}<option value={option.value}>{option.label}</option>{/each}
           </select>
-          <small>{current.caseRecord ? 'Updates this existing case only.' : 'Create a case before recording a disposition.'}</small>
+          <small>{!caseAvailable?'No absent Case state is inferred while the collection is unreadable.':current.caseRecord?'Updates this existing case only.':'Create a case before recording a disposition.'}</small>
         </label>
         <label>
           <span>Monitor list</span>
@@ -205,13 +212,15 @@
   .manual-lookup{display:flex;flex-wrap:wrap;align-items:center;gap:9px;margin-top:11px;padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}.manual-lookup>span{flex:1 1 260px;color:var(--muted);font-size:var(--text-2xs);line-height:1.45}.manual-lookup .btn{flex:0 0 auto;text-decoration:none}.sr-only{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
   .navigation,.actions{display:flex;flex-wrap:wrap;gap:7px;margin-top:11px}
   .actions .accent{border-color:color-mix(in srgb,var(--accent) 50%,var(--border));color:var(--accent)}
+  .unavailable-action{display:inline-flex;align-items:center;min-height:38px;padding:6px 10px;border:1px dotted var(--muted);border-radius:var(--radius-sm);color:var(--muted);font:600 var(--text-2xs) var(--mono)}
   .handoffs{display:grid;grid-template-columns:minmax(180px,.75fr) minmax(220px,1fr) auto;gap:8px;align-items:end;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)}
   .handoffs label{display:grid;gap:5px;min-width:0}
   .handoffs label>span{color:var(--muted);font:650 var(--text-2xs) var(--mono);text-transform:uppercase}
   .handoffs input,.handoffs select{width:100%;min-height:38px}
   .handoffs small{color:var(--muted);font-size:var(--text-2xs);line-height:1.35}
   .handoffs>.btn{min-height:38px}
-  .shortcut-note,.action-note,.action-status,.empty,.retry-plan p,.retry-plan li,.retry-status{color:var(--muted);font-size:var(--text-2xs);line-height:1.5}
+  .shortcut-note,.action-note,.action-status,.source-warning,.empty,.retry-plan p,.retry-plan li,.retry-status{color:var(--muted);font-size:var(--text-2xs);line-height:1.5}
+  .source-warning{padding:9px 11px;border:1px dotted var(--muted);border-radius:var(--radius-sm)}
   .action-note,.action-status{margin-top:8px}
   .action-status{color:var(--accent)}
   .shortcut-note{margin-top:10px}

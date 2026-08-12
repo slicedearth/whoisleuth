@@ -114,7 +114,13 @@ async function installLookupFixture(page: Page) {
       deepScanComplete: url.searchParams.get('fast') !== '1',
       registrar: { name: 'Example Registrar' },
       nameservers: ['ns1.example.net', 'ns2.example.net'],
-      dns: { status: 'complete', records: { a: ['192.0.2.10'], mx: ['10 mail.example.net'] } },
+      dns: {
+        status: 'complete',
+        records: {
+          a: ['192.0.2.10'],
+          mx: [{ priority: 10, exchange: 'mail.example.net' }],
+        },
+      },
     };
     const body = url.searchParams.get('compact') === '1'
       ? { availability, diagnostics }

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, open, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, test } from 'node:test';
@@ -13,7 +13,10 @@ import {
   MAX_CAPTURE_RESPONSE_BYTES,
   MAX_CAPTURE_TRANSFER_BYTES,
   WEB_CAPTURE_MANIFEST_VERSION,
+  browserNetworkIntrinsicsAreDisabled,
   captureRenderedPage,
+  disableBrowserNetworkIntrinsics,
+  installDomProjectionIntrinsics,
   parseCaptureArguments,
 } from '../packages/web-capture/capture.mts';
 import {
@@ -87,6 +90,10 @@ function fakeBrowser(options: {
   structure?: string;
   visibleText?: string;
   elementCount?: number;
+  formCount?: number;
+  inputCount?: number;
+  scriptCount?: number;
+  imageCount?: number;
   flatScreenshot?: boolean;
   onInitScript?: () => void;
   subresourceUrls?: string[];
@@ -94,6 +101,8 @@ function fakeBrowser(options: {
   detachedSubresources?: boolean;
   closeSubresourceUrl?: string;
   rejectCloseSubresourceAbort?: boolean;
+  stallDomProjection?: boolean;
+  networkApisDisabled?: boolean;
 } = {}) {
   let routeHandler: ((route: Route) => Promise<void>) | null = null;
   const page = {
@@ -123,13 +132,21 @@ function fakeBrowser(options: {
     waitForTimeout: async () => {},
     url: () => options.finalUrl ?? `https://${options.hostname ?? 'example.test'}/final?private=value`,
     title: async () => options.title ?? ' Example sign in ',
-    evaluate: async () => ({
-      structure: options.structure ?? 'html body main form input button',
-      visibleText: options.visibleText ?? 'private rendered page text',
-      structureTruncated: false, textTruncated: false,
-      elementCount: options.elementCount ?? 6, formCount: 1, inputCount: 2, scriptCount: 0, imageCount: 0,
-    }),
-    screenshot: async () => patternedPng(64, 64, options.flatScreenshot === true),
+    evaluate: async (_callback: unknown, argument?: unknown) => {
+      if (argument === undefined) return options.networkApisDisabled !== false;
+      if (options.stallDomProjection) await new Promise<never>(() => {});
+      return {
+        structure: options.structure ?? 'html body main form input button',
+        visibleText: options.visibleText ?? 'private rendered page text',
+        structureTruncated: false, textTruncated: false,
+        elementCount: options.elementCount ?? 6,
+        formCount: options.formCount ?? 1,
+        inputCount: options.inputCount ?? 2,
+        scriptCount: options.scriptCount ?? 0,
+        imageCount: options.imageCount ?? 0,
+      };
+    },
+    screenshot: async () => patternedPng(1024, 768, options.flatScreenshot === true),
     close: async () => {},
   };
   const context = {
@@ -167,6 +184,219 @@ describe('optional local rendered capture package', () => {
     });
   });
 
+  test('captures native DOM traversal before target scripts can monkeypatch it', () => {
+    const boundaryName = '__whoisleuthFixtureProjection';
+    class FixtureNode {
+      readonly value: string | null;
+      constructor(value: string | null = null) { this.value = value; }
+      get nodeValue() { return this.value; }
+    }
+    class FixtureElement extends FixtureNode {
+      readonly name: string;
+      constructor(name: string) { super(null); this.name = name; }
+      get tagName() { return this.name; }
+    }
+    class FixtureTreeWalker {
+      index = 0;
+      readonly nodes: Array<FixtureNode | FixtureElement>;
+      constructor(nodes: Array<FixtureNode | FixtureElement>) { this.nodes = nodes; }
+      nextNode() { return this.nodes[this.index++] ?? null; }
+    }
+    const elements = [new FixtureElement('HTML'), new FixtureElement('BODY'), new FixtureElement('FORM'), new FixtureElement('INPUT')];
+    const bodyText = [new FixtureNode('retained fixture text')];
+    class FixtureDocument {
+      createTreeWalker(_root: unknown, type: number) {
+        return new FixtureTreeWalker(type === 1 ? elements : bodyText);
+      }
+    }
+    const globals = globalThis as typeof globalThis & Record<string, unknown>;
+    const previous = new Map<string, unknown>();
+    const previousMinimum = Math.min;
+    const previousIsSafeInteger = Number.isSafeInteger;
+    for (const [name, value] of Object.entries({
+      Document: FixtureDocument,
+      TreeWalker: FixtureTreeWalker,
+      Element: FixtureElement,
+      Node: FixtureNode,
+      document: new FixtureDocument(),
+    })) {
+      previous.set(name, globals[name]);
+      globals[name] = value;
+    }
+    try {
+      installDomProjectionIntrinsics({ boundaryName, maximumCharacters: 100, maximumElements: 10 });
+      FixtureDocument.prototype.createTreeWalker = () => new FixtureTreeWalker([]);
+      FixtureTreeWalker.prototype.nextNode = () => null;
+      Object.defineProperty(FixtureElement.prototype, 'tagName', { get: () => 'FORGED', configurable: true });
+      Object.defineProperty(FixtureNode.prototype, 'nodeValue', { get: () => 'forged text', configurable: true });
+      Math.min = () => 0;
+      Number.isSafeInteger = () => true;
+      const project = globals[boundaryName] as (bounds: { maximumCharacters: number; maximumElements: number }) => Record<string, unknown>;
+      assert.deepEqual(project({ maximumCharacters: 100, maximumElements: 10 }), {
+        structure: 'html body form input',
+        visibleText: 'retained fixture text',
+        structureTruncated: false,
+        textTruncated: false,
+        elementCount: 4,
+        formCount: 1,
+        inputCount: 1,
+        scriptCount: 0,
+        imageCount: 0,
+      });
+      const bounded = project({ maximumCharacters: 10, maximumElements: 10 });
+      assert.equal(bounded.structure, 'html body');
+      assert.equal(bounded.structureTruncated, true);
+      assert.equal(bounded.visibleText, 'retained f');
+      assert.equal(bounded.textTruncated, true);
+      assert.throws(() => project({ maximumCharacters: 0, maximumElements: 10 }), /invalid bounds/u);
+      assert.throws(() => project({ maximumCharacters: 101, maximumElements: 10 }), /invalid bounds/u);
+      assert.throws(() => project({ maximumCharacters: 100, maximumElements: 11 }), /invalid bounds/u);
+    } finally {
+      Math.min = previousMinimum;
+      Number.isSafeInteger = previousIsSafeInteger;
+      for (const [name, value] of previous) {
+        if (value === undefined) delete globals[name];
+        else globals[name] = value;
+      }
+    }
+  });
+
+  test('removes worker and browser-managed network APIs before target scripts run', () => {
+    const scope: Record<string, unknown> = {
+      RTCPeerConnection: class {},
+      webkitRTCPeerConnection: class {},
+      WebTransport: class {},
+      Worker: class {},
+      SharedWorker: class {},
+    };
+    disableBrowserNetworkIntrinsics(scope);
+    assert.equal(browserNetworkIntrinsicsAreDisabled(scope), true);
+    for (const name of Object.keys(scope)) {
+      assert.equal(scope[name], undefined);
+      assert.deepEqual(Object.getOwnPropertyDescriptor(scope, name), {
+        value: undefined,
+        writable: false,
+        enumerable: false,
+        configurable: false,
+      });
+    }
+    const blockedScope: Record<string, unknown> = {};
+    Object.defineProperty(blockedScope, 'Worker', { value: class {}, configurable: false });
+    assert.throws(() => disableBrowserNetworkIntrinsics(blockedScope), /could not disable.*Worker/u);
+  });
+
+  test('fails before navigation when browser-managed transports remain available', async () => {
+    const parent = await mkdtemp(path.join(tmpdir(), 'whoisleuth-capture-network-boundary-test-'));
+    try {
+      await assert.rejects(() => captureRenderedPage({
+        targetUrl: 'https://example.test/', outputDirectory: path.join(parent, 'capture'), timeoutMs: 5000,
+      }, {
+        launchBrowser: async () => fakeBrowser({ networkApisDisabled: false }),
+      }), /could not verify.*transports/u);
+    } finally {
+      await rm(parent, { recursive: true, force: true });
+    }
+  });
+
+  test('atomically reserves one output directory without replacing a concurrent capture', async () => {
+    const parent = await mkdtemp(path.join(tmpdir(), 'whoisleuth-capture-reservation-test-'));
+    const destination = path.join(parent, 'capture');
+    try {
+      const capture = () => captureRenderedPage({
+        targetUrl: 'https://example.test/', outputDirectory: destination, timeoutMs: 5000,
+      }, {
+        launchBrowser: async () => fakeBrowser(),
+        fetchResource: fakeFetchResource,
+        resolveAddresses: async () => [{ address: '192.0.2.1', family: 4 }],
+      });
+      const settled = await Promise.allSettled([capture(), capture()]);
+      assert.equal(settled.filter((item) => item.status === 'fulfilled').length, 1);
+      const rejected = settled.find((item): item is PromiseRejectedResult => item.status === 'rejected');
+      assert.match(String(rejected?.reason), /already exists/u);
+      assert.equal((await stat(path.join(destination, 'manifest.json'))).isFile(), true);
+      await assert.rejects(() => mkdir(destination), /EEXIST/u);
+    } finally {
+      await rm(parent, { recursive: true, force: true });
+    }
+  });
+
+  test('preserves unrelated files added to a failed reserved capture directory', async () => {
+    const parent = await mkdtemp(path.join(tmpdir(), 'whoisleuth-capture-cleanup-test-'));
+    const destination = path.join(parent, 'capture');
+    const unrelated = path.join(destination, 'unrelated.txt');
+    try {
+      await assert.rejects(() => captureRenderedPage({
+        targetUrl: 'https://example.test/', outputDirectory: destination, timeoutMs: 5000,
+      }, {
+        launchBrowser: async () => {
+          await writeFile(unrelated, 'belongs to another local process');
+          throw new Error('fixture launch failure');
+        },
+      }), /fixture launch failure/u);
+      assert.equal(await readFile(unrelated, 'utf8'), 'belongs to another local process');
+      assert.equal((await stat(destination)).isDirectory(), true);
+    } finally {
+      await rm(parent, { recursive: true, force: true });
+    }
+  });
+
+  test('removes an owned private artefact whose write crosses the total deadline', async () => {
+    const parent = await mkdtemp(path.join(tmpdir(), 'whoisleuth-capture-write-deadline-test-'));
+    const destination = path.join(parent, 'capture');
+    try {
+      await assert.rejects(() => captureRenderedPage({
+        targetUrl: 'https://example.test/', outputDirectory: destination, timeoutMs: 1000,
+      }, {
+        launchBrowser: async () => fakeBrowser(),
+        fetchResource: fakeFetchResource,
+        resolveAddresses: async () => [{ address: '192.0.2.1', family: 4 }],
+        writeArtifact: async (filePath, _value, signal, onCreated) => {
+          const handle = await open(filePath, 'wx', 0o600);
+          try {
+            const identity = await handle.stat();
+            onCreated({ dev: identity.dev, ino: identity.ino });
+            await new Promise<void>((_resolve, reject) => {
+              const abort = () => reject(signal.reason);
+              if (signal.aborted) abort();
+              else signal.addEventListener('abort', abort, { once: true });
+            });
+          } finally {
+            await handle.close();
+          }
+        },
+      }), /total-run deadline/u);
+      await assert.rejects(() => stat(destination), /ENOENT/u);
+    } finally {
+      await rm(parent, { recursive: true, force: true });
+    }
+  });
+
+  test('rejects IP-literal targets before browser or network work', async () => {
+    assert.throws(() => parseCaptureArguments([
+      'https://[2606:4700:4700::1111]/', '--output-dir', './capture', '--authorize-rendered-capture',
+    ]), /domain hostname/u);
+    let launched = false;
+    await assert.rejects(() => captureRenderedPage({
+      targetUrl: 'https://192.0.2.1/', outputDirectory: path.join(tmpdir(), 'unused-capture'), timeoutMs: 5000,
+    }, {
+      launchBrowser: async () => { launched = true; return fakeBrowser(); },
+    }), /domain hostname/u);
+    assert.equal(launched, false);
+  });
+
+  test('sanitizes comparator file errors without disclosing selected input paths', async () => {
+    const left = path.join(tmpdir(), 'private-left-capture-name', 'manifest.json');
+    const right = path.join(tmpdir(), 'private-right-capture-name', 'manifest.json');
+    await assert.rejects(
+      () => compareRenderedCaptures(left, right),
+      (error: unknown) => {
+        assert.match(String(error), /Rendered capture manifest could not be read/u);
+        assert.doesNotMatch(String(error), /private-left|private-right|manifest\.json|\/tmp/u);
+        return true;
+      },
+    );
+  });
+
   test('writes import-compatible private metadata without retaining DOM text or request paths', async () => {
     const parent = await mkdtemp(path.join(tmpdir(), 'whoisleuth-capture-test-'));
     const destination = path.join(parent, 'capture');
@@ -191,7 +421,7 @@ describe('optional local rendered capture package', () => {
         now: () => '2026-08-01T00:00:00.000Z',
       });
       assert.equal(manifest.schemaVersion, WEB_CAPTURE_MANIFEST_VERSION);
-      assert.equal(initScriptCalls, 1);
+      assert.equal(initScriptCalls, 2);
       assert.deepEqual(resolved, ['example.test', 'example.test', 'static.example.test']);
       const capture = manifest.captures[0]!;
       assert.equal(capture.completeness, 'complete');
@@ -227,7 +457,7 @@ describe('optional local rendered capture package', () => {
         targetUrl: 'https://right.example.test/', outputDirectory: rightDirectory, timeoutMs: 5000,
       }, {
         launchBrowser: async () => fakeBrowser({
-          hostname: 'right.example.test', title: 'Account', visibleText: 'right private text',
+          hostname: 'right.example.test', title: 'Review', visibleText: 'right private text',
           structure: 'html body main section form input button', elementCount: 7,
         }),
         fetchResource: fakeFetchResource,
@@ -244,13 +474,13 @@ describe('optional local rendered capture package', () => {
       assert.equal(comparison.screenshot.state, 'same');
       assert.equal(comparison.renderedDom.structure.state, 'different');
       assert.equal(comparison.renderedDom.visibleText.state, 'different');
-      assert.equal(comparison.page.title.state, 'same');
+      assert.deepEqual(comparison.page.title, { state: 'different' });
       assert.equal(comparison.page.requestDomains.state, 'overlap');
       assert.deepEqual(comparison.page.requestDomains.shared, ['static.example.test']);
       assert.equal(comparison.renderedDom.counts.elements.delta, 1);
       assert.deepEqual(comparison.integrity.left, { screenshot: true, perceptualHash: true, domDigest: true });
       assert.match(formatRenderedCaptureComparison(comparison), /Rendered capture comparison/u);
-      assert.doesNotMatch(JSON.stringify(comparison), /private text|capture-compare-test|manifest\.json/u);
+      assert.doesNotMatch(JSON.stringify(comparison), /private text|capture-compare-test|manifest\.json|Account|Review/u);
 
       const originalRightManifest = await readFile(rightManifest, 'utf8');
       const rightDomPath = path.join(rightDirectory, 'dom-digest.json');
@@ -264,6 +494,22 @@ describe('optional local rendered capture package', () => {
       invalidDimensions.captures[0].artifacts[0].width = 0;
       await writeFile(rightManifest, `${JSON.stringify(invalidDimensions)}\n`);
       await assert.rejects(() => compareRenderedCaptures(leftManifest, rightManifest), /width is outside/u);
+      const mismatchedDimensions = JSON.parse(originalRightManifest);
+      mismatchedDimensions.captures[0].artifacts[0].width = 1023;
+      await writeFile(rightManifest, `${JSON.stringify(mismatchedDimensions)}\n`);
+      await assert.rejects(() => compareRenderedCaptures(leftManifest, rightManifest), /integrity verification/u);
+      const rightScreenshotPath = path.join(rightDirectory, 'screenshot.png');
+      const originalRightScreenshot = await readFile(rightScreenshotPath);
+      const malformedScreenshot = Buffer.from('not a decodable PNG fixture', 'utf8');
+      const malformedScreenshotManifest = JSON.parse(originalRightManifest);
+      const malformedScreenshotArtifact = malformedScreenshotManifest.captures[0].artifacts[0];
+      malformedScreenshotArtifact.bytes = malformedScreenshot.length;
+      malformedScreenshotArtifact.sha256 = createHash('sha256').update(malformedScreenshot).digest('hex');
+      malformedScreenshotArtifact.perceptualHash = null;
+      await writeFile(rightScreenshotPath, malformedScreenshot);
+      await writeFile(rightManifest, `${JSON.stringify(malformedScreenshotManifest)}\n`);
+      await assert.rejects(() => compareRenderedCaptures(leftManifest, rightManifest), /integrity verification/u);
+      await writeFile(rightScreenshotPath, originalRightScreenshot);
       const invalidDomImageField = JSON.parse(originalRightManifest);
       invalidDomImageField.captures[0].artifacts[1].perceptualHash = 'not-a-hash';
       await writeFile(rightManifest, `${JSON.stringify(invalidDomImageField)}\n`);
@@ -282,10 +528,111 @@ describe('optional local rendered capture package', () => {
       await writeFile(rightDomPath, mismatchedDomText);
       await writeFile(rightManifest, `${JSON.stringify(mismatchedManifest)}\n`);
       await assert.rejects(() => compareRenderedCaptures(leftManifest, rightManifest), /time does not match/u);
+      for (const mutate of [
+        (value: Record<string, any>) => { delete value.structure.truncated; },
+        (value: Record<string, any>) => { value.visibleText.truncated = 'false'; },
+      ]) {
+        const invalidDom = JSON.parse(originalRightDom) as Record<string, any>;
+        mutate(invalidDom);
+        const invalidDomText = `${JSON.stringify(invalidDom, null, 2)}\n`;
+        const invalidManifest = JSON.parse(originalRightManifest);
+        const invalidDomArtifact = invalidManifest.captures[0].artifacts[1];
+        invalidDomArtifact.bytes = Buffer.byteLength(invalidDomText);
+        invalidDomArtifact.sha256 = createHash('sha256').update(invalidDomText).digest('hex');
+        await writeFile(rightDomPath, invalidDomText);
+        await writeFile(rightManifest, `${JSON.stringify(invalidManifest)}\n`);
+        await assert.rejects(() => compareRenderedCaptures(leftManifest, rightManifest), /truncation state must be a boolean/u);
+      }
       await writeFile(rightManifest, originalRightManifest);
       await writeFile(rightDomPath, '{}\n');
       await assert.rejects(() => compareRenderedCaptures(leftManifest, rightManifest), /size does not match|integrity verification/u);
       await writeFile(rightDomPath, originalRightDom);
+    } finally {
+      await rm(parent, { recursive: true, force: true });
+    }
+  });
+
+  test('produces comparator-compatible partial artefacts at shared DOM and UTF-8 bounds', async () => {
+    const parent = await mkdtemp(path.join(tmpdir(), 'whoisleuth-capture-bounds-test-'));
+    const destination = path.join(parent, 'capture');
+    const secondDestination = path.join(parent, 'capture-second');
+    try {
+      const captureAt = async (outputDirectory: string) => captureRenderedPage({
+        targetUrl: 'https://example.test/', outputDirectory, timeoutMs: 5000,
+      }, {
+        launchBrowser: async () => fakeBrowser({
+          visibleText: '😀'.repeat(100_000),
+          elementCount: 20_001,
+          formCount: 20_001,
+          inputCount: 20_001,
+          scriptCount: 20_001,
+          imageCount: 20_001,
+        }),
+        fetchResource: fakeFetchResource,
+        resolveAddresses: async () => [{ address: '192.0.2.1', family: 4 }],
+        now: () => '2026-08-01T00:00:00.000Z',
+      });
+      const manifest = await captureAt(destination);
+      await captureAt(secondDestination);
+      assert.equal(manifest.captures[0]?.completeness, 'partial');
+      const digest = JSON.parse(await readFile(path.join(destination, 'dom-digest.json'), 'utf8'));
+      assert.deepEqual(digest.counts, {
+        elements: 20_000, forms: 20_000, controls: 20_000, scripts: 20_000, images: 20_000,
+      });
+      assert.equal(digest.visibleText.bytes, 256 * 1024);
+      assert.equal(digest.visibleText.truncated, true);
+      assert.equal(digest.structure.truncated, true);
+      const comparison = await compareRenderedCaptures(
+        path.join(destination, 'manifest.json'),
+        path.join(secondDestination, 'manifest.json'),
+      );
+      assert.equal(comparison.partial, true);
+      assert.equal(comparison.renderedDom.visibleText.state, 'same');
+    } finally {
+      await rm(parent, { recursive: true, force: true });
+    }
+  });
+
+  test('enforces one total-run deadline across renderer lifecycle work', async () => {
+    const parent = await mkdtemp(path.join(tmpdir(), 'whoisleuth-capture-deadline-test-'));
+    const destination = path.join(parent, 'capture');
+    try {
+      const startedAt = Date.now();
+      await assert.rejects(() => captureRenderedPage({
+        targetUrl: 'https://example.test/', outputDirectory: destination, timeoutMs: 1_000,
+      }, {
+        launchBrowser: async () => fakeBrowser({ stallDomProjection: true }),
+        fetchResource: fakeFetchResource,
+        resolveAddresses: async () => [{ address: '192.0.2.1', family: 4 }],
+      }), /total-run deadline/u);
+      assert.ok(Date.now() - startedAt < 2_000);
+      await assert.rejects(() => stat(destination), /ENOENT/u);
+    } finally {
+      await rm(parent, { recursive: true, force: true });
+    }
+  });
+
+  test('aborts an admitted direct resource fetch at the shared total deadline', async () => {
+    const parent = await mkdtemp(path.join(tmpdir(), 'whoisleuth-capture-fetch-deadline-test-'));
+    const destination = path.join(parent, 'capture');
+    let requestAborted = false;
+    try {
+      await assert.rejects(() => captureRenderedPage({
+        targetUrl: 'https://example.test/', outputDirectory: destination, timeoutMs: 1_000,
+      }, {
+        launchBrowser: async () => fakeBrowser(),
+        fetchResource: async (_url, options) => new Promise<Response>((_resolve, reject) => {
+          const signal = options.signal;
+          if (!signal) throw new Error('Capture request did not receive its total-run signal.');
+          signal.addEventListener('abort', () => {
+            requestAborted = true;
+            reject(signal.reason);
+          }, { once: true });
+        }),
+        resolveAddresses: async () => [{ address: '192.0.2.1', family: 4 }],
+      }), /total-run deadline/u);
+      assert.equal(requestAborted, true);
+      await assert.rejects(() => stat(destination), /ENOENT/u);
     } finally {
       await rm(parent, { recursive: true, force: true });
     }
@@ -425,6 +772,27 @@ describe('optional local rendered capture package', () => {
 
       assert.equal(manifest.captures[0]?.completeness, 'partial');
       assert.equal(manifest.captures[0]?.requestDomains.includes('late.example.test'), false);
+    } finally {
+      await rm(parent, { recursive: true, force: true });
+    }
+  });
+
+  test('does not retain a browser-requested host that fails public-address validation', async () => {
+    const parent = await mkdtemp(path.join(tmpdir(), 'whoisleuth-capture-rejected-host-test-'));
+    const destination = path.join(parent, 'capture');
+    try {
+      const manifest = await captureRenderedPage({
+        targetUrl: 'https://example.test/', outputDirectory: destination, timeoutMs: 5000,
+      }, {
+        launchBrowser: async () => fakeBrowser({ subresourceUrls: ['https://blocked.internal.test/script.js'] }),
+        fetchResource: fakeFetchResource,
+        resolveAddresses: async (hostname) => {
+          if (hostname === 'blocked.internal.test') throw new Error('private address rejected');
+          return [{ address: '192.0.2.1', family: 4 }];
+        },
+      });
+      assert.equal(manifest.captures[0]?.completeness, 'partial');
+      assert.deepEqual(manifest.captures[0]?.requestDomains, ['example.test']);
     } finally {
       await rm(parent, { recursive: true, force: true });
     }

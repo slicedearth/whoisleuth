@@ -7,6 +7,7 @@
     BulkProgressEstimate,
     BulkProgressOutcomes,
   } from '$lib/analysis/bulk-pacing.ts';
+  import { MAX_DOMAIN_INPUT_CHARACTERS } from '$lib/analysis/utils.ts';
 
   type ScanMode = 'fast' | 'deep';
 
@@ -33,6 +34,7 @@
     entryCount,
     queryLimit,
     duplicateCount,
+    inputTooLarge,
     importDomainFile,
     start,
     togglePause,
@@ -63,6 +65,7 @@
     entryCount: number;
     queryLimit: number;
     duplicateCount: number;
+    inputTooLarge: boolean;
     importDomainFile: (event: Event) => void | Promise<void>;
     start: () => void | Promise<void>;
     togglePause: () => void;
@@ -89,13 +92,14 @@
   {:else}<p class="profile-context">No active Brand Profile is selected. Profile-derived comparisons are settled against that explicit empty context.</p>{/if}
   {#if handoffSource}<p class="handoff">Loaded {handoffCount} candidate{handoffCount === 1 ? '' : 's'} from {handoffSource}.{#if handoffContextTruncated} Generated coverage context was capped to fit browser tab storage; selected candidates were retained in full.{/if}</p>{/if}
   <div class="queue-label"><label class="queue-title" for="domains">Domains</label><label class="btn small file-btn">Import CSV or text<input type="file" accept=".csv,.txt,text/csv,text/plain" onchange={importDomainFile} disabled={running}></label></div>
-  <textarea id="domains" value={input} oninput={(event) => setInput(event.currentTarget.value)} disabled={running} placeholder="example.com&#10;example.net"></textarea>
+  <textarea id="domains" value={input} maxlength={MAX_DOMAIN_INPUT_CHARACTERS} oninput={(event) => setInput(event.currentTarget.value)} disabled={running} placeholder="example.com&#10;example.net"></textarea>
   <p class="input-help">Paste newline, comma, semicolon, or tab-separated entries. CSV files may include a named domain column. One {mode === 'deep' ? 'Deep' : 'Fast'} job is limited to {queryLimit} unique domains.{#if duplicateCount} {duplicateCount} duplicate{duplicateCount === 1 ? '' : 's'} removed.{/if}</p>
   {#if entryCount > queryLimit}<p class="input-limit" role="alert">Remove {entryCount - queryLimit} domain{entryCount - queryLimit === 1 ? '' : 's'} before starting this {mode === 'deep' ? 'Deep' : 'Fast'} job.</p>{/if}
+  {#if inputTooLarge}<p class="input-limit" role="alert">The pasted domain list exceeds the 2 MiB or bounded row and cell limit. Reduce it before scanning.</p>{/if}
   <div class="queue-actions">
     <label class="field">Scan mode<select value={mode} onchange={(event) => setMode(event.currentTarget.value as ScanMode)} disabled={running}><option value="fast">Fast · registration</option><option value="deep">Deep · compact web and mail triage</option></select></label>
     <label class="field">Request pacing<select value={pacing} onchange={(event) => setPacing(event.currentTarget.value as BulkPacing)} disabled={running}>{#each pacingOptions as option}<option value={option.id}>{option.label}</option>{/each}</select></label>
-    <button class="primary" onclick={start} disabled={running || profileContextState === 'loading' || !input.trim() || entryCount > queryLimit || Boolean(lookupDisabledReason)}>{entryCount ? `Scan ${entryCount} domain${entryCount === 1 ? '' : 's'}` : 'Scan domains'}</button>
+    <button class="primary" onclick={start} disabled={running || profileContextState === 'loading' || !input.trim() || !entryCount || inputTooLarge || entryCount > queryLimit || Boolean(lookupDisabledReason)}>{entryCount ? `Scan ${entryCount} domain${entryCount === 1 ? '' : 's'}` : 'Scan domains'}</button>
     {#if running}<button class="btn" onclick={togglePause}>{paused ? 'Resume' : 'Pause'}</button><button class="btn danger" onclick={cancel}>Cancel</button>{/if}
   </div>
   <p class="mode-help">{mode === 'deep' ? 'Bulk Deep collects compact WHOIS, DNS, website, TLS, mail, and bounded technology signals for triage and comparison. Open a domain in Lookup for the complete source-level evidence and optional enrichments.' : 'Fast keeps the lower-request registration-first contract and omits WHOIS, website, TLS, and deep enrichment.'} {pacingOptions.find((option) => option.id === pacing)?.detail ?? 'Bounded request pacing'}; at most {concurrency} {concurrency === 1 ? 'lookup runs' : 'lookups run'} in parallel.</p>

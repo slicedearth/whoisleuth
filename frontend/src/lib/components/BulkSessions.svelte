@@ -16,6 +16,7 @@
     canSave,
     profileContextLoading,
     running,
+    sourceState = 'ready',
   }: {
     sessions: BulkSession[];
     currentSessionId: string;
@@ -30,6 +31,7 @@
     canSave: boolean;
     profileContextLoading: boolean;
     running: boolean;
+    sourceState?: 'loading' | 'ready' | 'unavailable';
   } = $props();
 
   let baselineId = $state('');
@@ -70,6 +72,9 @@
     {#if sessions.length}<button type="button" class="btn" onclick={exportSessions} disabled={running}>Export sessions</button>{/if}
   </div>
 
+  {#if sourceState !== 'ready'}
+    <p class="source-state {sourceState}" role={sourceState === 'unavailable' ? 'alert' : 'status'}>Saved Bulk sessions {sourceState === 'loading' ? 'are still loading' : 'could not be read'}. Counts, empty states, exports, and mutations remain unavailable; reload to retry without overwriting unknown saved work.</p>
+  {:else}
   <div class="save-row">
     <label>
       Session name
@@ -152,6 +157,7 @@
   {:else}
     <p class="empty">No Bulk sessions have been saved in this browser.</p>
   {/if}
+  {/if}
 </section>
 
 <style>
@@ -162,7 +168,7 @@
   .save-row{display:grid;grid-template-columns:minmax(220px,1fr) auto;align-items:end;gap:12px;margin-top:18px}
   label{display:grid;gap:6px;font-size:var(--text-sm);font-weight:650}
   input,select{width:100%}
-  .session-status{color:var(--amber);margin:10px 0 0}
+  .session-status{color:var(--amber);margin:10px 0 0}.source-state{margin:16px 0 0;padding:10px 12px;border:1px dotted var(--muted);border-radius:var(--radius-sm);color:var(--muted);line-height:1.5}.source-state.loading{border-style:solid}
   .session-list{display:grid;gap:10px;margin-top:18px}
   article{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;background:var(--panel-raised)}
   article.current{border-color:var(--accent)}

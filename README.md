@@ -43,6 +43,16 @@ interpretation sections and keeps the focused topic library alongside them,
 while the Privacy page provides local section navigation without shortening
 the policy.
 
+The optional repo-local rendered-capture package is a separate, explicitly
+authorised workflow. It executes remote page JavaScript and necessarily sends
+each admitted resource's exact path and query to that resource operator, while
+structured manifest and digest fields retain only origins, hostnames, one
+control-sanitised page title of up to 300 characters, and bounded artefact
+metadata. The screenshot necessarily preserves visible rendered content and
+may include page text or a page-reflected path or query until the operator
+deletes it. It is not part of hosted or distributable collection; see the
+[CLI reference](docs/cli-reference.md#optional-local-rendered-capture).
+
 ## What it does
 
 | Area | Purpose | Important boundary |
@@ -150,7 +160,15 @@ selection, public revalidation, confirmed connection, and cryptographic address
 authentication remain distinct; DNSSEC chain state never upgrades an
 unvalidated A, AAAA, or CNAME observation. Address authentication is
 `not_evaluated` only after a candidate is retained and `unavailable` when no
-candidate exists.
+candidate exists. If a DANE-TA TLSA usage 2 association is published, active
+STARTTLS review retains only the observed leaf certificate and leaves that
+comparison partial because it does not construct or validate a certificate
+path to a TLSA trust anchor. For SMTP relay on port 25, PKIX-TA usage 0 and
+PKIX-EE usage 1 records are retained as unsupported and cannot complete SMTP
+DANE assurance; a separately attributable usage 3 match remains eligible.
+Saved Lookup JSON is scanned
+for bounded depth, aggregate entries, per-container size, and duplicate keys before CLI parsing and portable
+evidence projection.
 
 `SITE_PASSWORD` is the deployment-wide shared password. `SESSION_SECRET`
 should be a separate random value, such as 32 random bytes encoded as hex. The
@@ -210,6 +228,8 @@ npm run typecheck
 npm run check
 npm run build
 npm run architecture:check
+npm run schema:inventory
+npm run licenses:check
 npm run cli:package:check
 npm run test:e2e:built
 git diff --check
@@ -220,7 +240,6 @@ Install Playwright's Chromium build once with `npm run test:e2e:install`.
 Additional offline or bounded maintainer checks include:
 
 ```bash
-npm run schema:inventory
 npm run maintenance:duplication
 npm run test:coverage
 npm run test:properties

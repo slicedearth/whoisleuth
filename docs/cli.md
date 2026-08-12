@@ -255,6 +255,11 @@ search contract.](cli-reference.md#workspace-archive-inspection)
 The mail report keeps address selection, public revalidation, confirmed
 connection, and cryptographic address authentication as separate provenance;
 address authentication is unavailable when no address candidate was retained.
+If a DANE-TA TLSA usage 2 association is published, active collection retains
+only the observed leaf certificate and leaves that comparison partial without
+certificate-path construction and trust-anchor path validation. SMTP relay
+PKIX-TA usage 0 and PKIX-EE usage 1 records are retained as unsupported and
+cannot complete SMTP DANE assurance; a separate usage 3 match remains eligible.
 
 ### Registry-source comparison
 
@@ -303,6 +308,8 @@ address authentication is unavailable when no address candidate was retained.
 ### Lookup evidence export
 
 [Read normalised JSON, Markdown, and HTML export behaviour.](cli-reference.md#lookup-evidence-export)
+Saved Lookup JSON is byte-, nesting-, entry-, and per-container-bounded before parsing, and the
+completed evidence package must satisfy the stricter portable-tree contract.
 
 ## Safety and limitations
 
