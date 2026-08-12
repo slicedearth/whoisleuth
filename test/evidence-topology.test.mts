@@ -108,7 +108,7 @@ describe('evidence topology projection', () => {
       targetType: 'domain',
       diagnostics: {
         rdap: { status: 'success', endpoint: 'https://rdap.example.test/domain/example.test', transportSecurity: 'https' },
-        whois: { status: 'partial' },
+        whois: { status: 'complete', authoritativeHop: 'whois.registry.example.test' },
       },
       registrarRdap: { status: 'unsupported' },
       observedNetworkContext: { contextVersion: 1, status: 'success' },
@@ -127,6 +127,19 @@ describe('evidence topology projection', () => {
     });
 
     assert.equal(nodes.find((node) => node.id === 'registry-rdap')?.family, 'registry');
+    assert.deepEqual(
+      nodes.find((node) => node.id === 'whois'),
+      {
+        id: 'whois',
+        label: 'WHOIS',
+        detail: 'whois.registry.example.test',
+        status: 'success',
+        href: '#evidence-registry',
+        side: 'left',
+        glyph: 'W',
+        family: 'registry',
+      },
+    );
     assert.equal(nodes.find((node) => node.id === 'dns')?.status, 'partial');
     assert.equal(nodes.find((node) => node.id === 'network')?.detail, '192.0.2.44');
     assert.equal(nodes.find((node) => node.id === 'structured-identity')?.detail, '1 publisher-declared entity');

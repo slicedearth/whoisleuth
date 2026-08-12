@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures';
-import { expectNoHorizontalOverflow, failBrowserLocalManifestWrites, migrateLegacyBrowserData, readBrowserLocalCollection, requiredValue } from './helpers';
+import { expectNoHorizontalOverflow, failBrowserLocalManifestWrites, migrateLegacyBrowserData, readBrowserLocalCollection, requiredValue, useTheme } from './helpers';
 import { spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import type { ArchiveInspectionReport } from '../cli/archive-inspect.mts';
@@ -285,6 +285,17 @@ test('the Dashboard presents task lanes without duplicating the sidebar labels',
   await expect(page.getByText('Start recipe', { exact: true })).toHaveCount(0);
   await expect(page.getByText('indexed entities', { exact: false })).toHaveCount(0);
   await expect(page.getByText('Investigation tools', { exact: true })).toHaveCount(0);
+});
+
+test('the Dashboard keeps interaction blue and outcome green in the dark theme', async ({ page }) => {
+  await useTheme(page, 'dark');
+  await page.goto('/dashboard');
+
+  await expect(page.locator('.quick-icon').first()).toHaveCSS('color', 'rgb(94, 179, 255)');
+  await expect(page.locator('.quick-meta').first()).toHaveCSS('color', 'rgb(126, 224, 168)');
+  await expect(page.locator('.quick-card').first().locator(':scope > strong')).toHaveCSS('color', 'rgb(94, 179, 255)');
+  await expect(page.locator('.summary-icon').first()).toHaveCSS('color', 'rgb(126, 224, 168)');
+  await expect(page.locator('.summary-card').first().locator(':scope > strong')).toHaveCSS('color', 'rgb(126, 224, 168)');
 });
 
 test('the Console navigation exposes semantic groups without changing link order or mobile keyboard access', async ({ page }) => {

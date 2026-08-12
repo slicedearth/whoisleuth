@@ -82,22 +82,31 @@
       .filter((element) => element.getClientRects().length > 0);
   }
 
-  function keepSelectedVisible() {
-    if (!activeOptionId || !resultsList) return;
-    const selected = resultsList.querySelector<HTMLElement>(`#${activeOptionId}`);
+  function keepSelectedVisible(optionId: string, list: HTMLElement, palette: HTMLElement) {
+    const selected = list.querySelector<HTMLElement>(`#${optionId}`);
     if (!selected) return;
-    const listBounds = resultsList.getBoundingClientRect();
+    const listBounds = list.getBoundingClientRect();
+    const dialogBounds = palette.getBoundingClientRect();
     const selectedBounds = selected.getBoundingClientRect();
-    if (selectedBounds.top < listBounds.top) {
-      resultsList.scrollTop -= listBounds.top - selectedBounds.top + 1;
-    } else if (selectedBounds.bottom > listBounds.bottom) {
-      resultsList.scrollTop += selectedBounds.bottom - listBounds.bottom + 1;
+    const visibleTop = Math.max(listBounds.top, dialogBounds.top) + 2;
+    const visibleBottom = Math.min(listBounds.bottom, dialogBounds.bottom) - 2;
+    if (selectedBounds.top < visibleTop) {
+      list.scrollTop -= visibleTop - selectedBounds.top;
+    } else if (selectedBounds.bottom > visibleBottom) {
+      list.scrollTop += selectedBounds.bottom - visibleBottom;
     }
   }
 
   function selectIndex(index: number) {
     selectedIndex = index;
-    void tick().then(keepSelectedVisible);
+    void tick().then(() => {
+      if (!resultsList || !dialog) return;
+      const optionId = `command-option-${index}`;
+      const list = resultsList;
+      const palette = dialog;
+      keepSelectedVisible(optionId, list, palette);
+      requestAnimationFrame(() => keepSelectedVisible(optionId, list, palette));
+    });
   }
 
   function resetSelection() {
@@ -260,6 +269,6 @@
     .command-current{font-size:.5rem}
     strong{text-overflow:ellipsis}
   }
-  @media(max-width:399px){ul{grid-template-columns:minmax(0,1fr)}}
+  @media(max-width:489px){ul{grid-template-columns:minmax(0,1fr)}}
   @media(prefers-reduced-motion:no-preference){.command-palette{animation:palette-enter .16s ease-out both}@keyframes palette-enter{from{opacity:0;transform:translateY(-7px) scale(.99)}to{opacity:1;transform:none}}}
 </style>

@@ -112,7 +112,8 @@
     .public-header{gap:4px}
     .public-brand{gap:4px}
     .public-brand .mark{width:24px;height:24px}
-    .public-brand .brand-copy{display:none}
+    .public-brand .brand-copy{display:block}
+    .public-brand strong{font-size:.68rem}
     .public-header nav{gap:8px}
     .public-header nav a,.public-header nav button{padding-inline:3px;font-size:.625rem;line-height:1}
     .public-header nav :global(.theme-selector){font-size:.625rem;line-height:1}

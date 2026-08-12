@@ -57,7 +57,7 @@ test('signs in through the login form and back out again', async ({ page }) => {
   await expect(publicNavigation).toHaveCSS('flex-wrap', 'nowrap');
   const publicBrand = page.getByRole('link', { name: 'WHOISleuth overview' });
   await expect(publicBrand).toBeVisible();
-  await expect(page.locator('.public-brand .brand-copy')).toBeHidden();
+  await expect(page.locator('.public-brand .brand-copy')).toBeVisible();
   const compactBrandBox = await publicBrand.boundingBox();
   expect(compactBrandBox).not.toBeNull();
   expect(compactBrandBox!.width).toBeGreaterThanOrEqual(24);

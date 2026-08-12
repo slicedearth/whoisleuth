@@ -221,6 +221,14 @@ test('keeps the guided workflow usable at narrow mobile widths', async ({ page }
   await guidanceSummary.press('Enter');
   await expect(mobileGuidance).toHaveAttribute('open', '');
   await expect(mobileGuidance.locator(':scope > div').first()).toBeVisible();
+  expect(await mobileGuidance.evaluate((element) => {
+    const summaryLabels = element.querySelectorAll<HTMLElement>('.mobile-stage-guidance-headings > *');
+    const firstGuidance = element.querySelector<HTMLElement>(':scope > div');
+    const guidanceFields = firstGuidance?.querySelectorAll<HTMLElement>(':scope > *');
+    if (summaryLabels.length !== 2 || guidanceFields?.length !== 2) return false;
+    return Math.abs(summaryLabels[0]!.getBoundingClientRect().left - guidanceFields[0]!.getBoundingClientRect().left) <= 1
+      && Math.abs(summaryLabels[1]!.getBoundingClientRect().left - guidanceFields[1]!.getBoundingClientRect().left) <= 1;
+  })).toBe(true);
   await expect(guidanceSummary).toBeFocused();
   await guidanceSummary.press('Space');
   await expect(mobileGuidance).not.toHaveAttribute('open', '');
@@ -276,6 +284,18 @@ test('keeps the guided workflow usable at narrow mobile widths', async ({ page }
   await page.getByRole('button', { name: 'Load later synthetic observation' }).click();
   await expect(page.getByRole('heading', { name: 'Repeated evidence and material changes stay distinct' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Watchlist activity' })).toHaveCount(0);
+  const mobileChangeArrows = page.locator('.change-list dd b');
+  await expect(mobileChangeArrows.first()).toBeVisible();
+  expect(await mobileChangeArrows.evaluateAll((arrows) => arrows.every((arrow) => {
+    const row = arrow.closest('dd');
+    if (!row) return false;
+    const arrowBounds = arrow.getBoundingClientRect();
+    const rowBounds = row.getBoundingClientRect();
+    return getComputedStyle(arrow).transform === 'none'
+      && getComputedStyle(arrow, '::after').content.includes('↓')
+      && arrowBounds.left >= rowBounds.left
+      && arrowBounds.right <= rowBounds.right;
+  }))).toBe(true);
   await expectNoHorizontalOverflow(page);
 
   await page.getByRole('button', { name: 'Reset demo' }).click();

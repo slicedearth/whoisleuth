@@ -495,8 +495,18 @@ test('theme controls fit beside authenticated public navigation across common ph
     expect(triggerBox).not.toBeNull();
     expect(consoleBox).not.toBeNull();
     expect(signOutBox).not.toBeNull();
-    expect(navigationBox!.x - (brandBox!.x + brandBox!.width)).toBeGreaterThanOrEqual(2);
-    if (demoBox) expect(demoBox.x - (brandBox!.x + brandBox!.width)).toBeGreaterThanOrEqual(2);
+    const brandRight = brandBox!.x + brandBox!.width;
+    const brandBottom = brandBox!.y + brandBox!.height;
+    const navigationRight = navigationBox!.x + navigationBox!.width;
+    const navigationBottom = navigationBox!.y + navigationBox!.height;
+    const overlapsBrand = Math.min(brandRight, navigationRight) - Math.max(brandBox!.x, navigationBox!.x) > 0
+      && Math.min(brandBottom, navigationBottom) - Math.max(brandBox!.y, navigationBox!.y) > 0;
+    expect(overlapsBrand).toBe(false);
+    if (navigationBox!.y >= brandBottom) {
+      expect(navigationBox!.y - brandBottom).toBeGreaterThanOrEqual(2);
+    } else {
+      expect(navigationBox!.x - brandRight).toBeGreaterThanOrEqual(2);
+    }
     expect(consoleBox!.x - (resourcesBox!.x + resourcesBox!.width)).toBeGreaterThanOrEqual(5);
     expect(themeBox!.x - (consoleBox!.x + consoleBox!.width)).toBeGreaterThanOrEqual(5);
     expect(triggerBox!.x).toBeGreaterThanOrEqual(themeBox!.x);

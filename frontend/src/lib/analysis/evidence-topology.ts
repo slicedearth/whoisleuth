@@ -164,11 +164,14 @@ export function buildLookupEvidenceTopologyNodes(input: LookupEvidenceTopologyIn
     family: 'registry',
   }];
   if (targetType === 'domain' || whoisDiagnostic.status) {
+    const whoisStatus = normalizeEvidenceTopologyStatus(whoisDiagnostic.status);
     nodes.push({
       id: 'whois',
       label: 'WHOIS',
-      detail: diagnosticDetail(whoisDiagnostic),
-      status: normalizeEvidenceTopologyStatus(whoisDiagnostic.status),
+      detail: whoisStatus === 'complete'
+        ? boundedText(whoisDiagnostic.authoritativeHop, 160) || 'Authoritative WHOIS hop collected'
+        : diagnosticDetail(whoisDiagnostic),
+      status: whoisStatus === 'complete' ? 'success' : whoisStatus,
       href: '#evidence-registry',
       side: 'left',
       glyph: 'W',

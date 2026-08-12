@@ -26,7 +26,7 @@ const INTELLIGENCE_CAPABILITIES = {
 test('the wordmark stays clean without a cursor-like status treatment across layouts', async ({ page }) => {
   const variants = [
     { path: '/', selector: '.public-brand strong', width: 1280, height: 800, visible: true },
-    { path: '/', selector: '.public-brand strong', width: 390, height: 844, visible: false },
+    { path: '/', selector: '.public-brand strong', width: 320, height: 700, visible: true },
     { path: '/lookup', selector: '.brand strong', width: 1280, height: 800, visible: true },
     { path: '/lookup', selector: '.shell > header > a > strong', width: 390, height: 844, visible: true },
   ];
@@ -37,10 +37,7 @@ test('the wordmark stays clean without a cursor-like status treatment across lay
 
     const wordmark = page.locator(variant.selector);
     if (variant.visible) await expect(wordmark).toBeVisible();
-    else {
-      await expect(wordmark).toBeHidden();
-      await expect(page.getByRole('link', { name: 'WHOISleuth overview' })).toBeVisible();
-    }
+    else await expect(wordmark).toBeHidden();
     const marker = await wordmark.evaluate((element) => {
       const markerStyle = getComputedStyle(element, '::after');
       return {
@@ -147,7 +144,7 @@ function sectionedLookupFixture(domain: string) {
     whois: { parsed: {}, chain: [] },
     diagnostics: {
       rdap: { status: 'success', endpoint: 'https://rdap.example.test', registrar: { status: 'success' } },
-      whois: { status: 'success' },
+      whois: { status: 'complete', authoritativeHop: 'whois.registry.example.test' },
       availability: { status: 'complete' },
       reverseDns: { status: 'success' },
     },
@@ -407,10 +404,14 @@ test('the console command palette filters destinations and remains keyboard oper
   await expect(lastMobileOption).toHaveAttribute('aria-selected', 'true');
   await expect.poll(() => lastMobileOption.evaluate((option) => {
     const list = option.closest('#command-results');
-    if (!list) return false;
+    const palette = option.closest('[role="dialog"]');
+    if (!list || !palette) return false;
     const optionBounds = option.getBoundingClientRect();
     const listBounds = list.getBoundingClientRect();
-    return optionBounds.top >= listBounds.top && optionBounds.bottom <= listBounds.bottom;
+    const paletteBounds = palette.getBoundingClientRect();
+    const visibleTop = Math.max(listBounds.top, paletteBounds.top) + 1;
+    const visibleBottom = Math.min(listBounds.bottom, paletteBounds.bottom) - 1;
+    return optionBounds.top >= visibleTop && optionBounds.bottom <= visibleBottom;
   })).toBe(true);
   await expectNoHorizontalOverflow(page);
   await mobileSearch.fill('Public');
@@ -421,6 +422,20 @@ test('the console command palette filters destinations and remains keyboard oper
   await expect(publicPage).toHaveURL(/\/contact$/u);
   await expect(page).toHaveURL(/\/lookup$/u);
   await publicPage.close();
+});
+
+test('the console command palette keeps every destination heading readable on mobile', async ({ page }) => {
+  for (const width of [400, 430, 489, 500]) {
+    await page.setViewportSize({ width, height: 700 });
+    await page.goto('/dashboard');
+    await page.getByRole('button', { name: 'Open command palette' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Go to' });
+    await expect(dialog).toBeVisible();
+    expect(await dialog.locator('.command-copy strong').evaluateAll((headings) => headings.every((heading) =>
+      heading.scrollWidth <= heading.clientWidth + 1
+    ))).toBe(true);
+    await page.keyboard.press('Escape');
+  }
 });
 
 test('console footer opens public guidance separately while the public footer stays in-tab', async ({ page, context }) => {
@@ -444,6 +459,15 @@ test('console footer opens public guidance separately while the public footer st
   await expect(publicResources).not.toHaveAttribute('target', '_blank');
   await publicResources.click();
   await expect(page).toHaveURL(/\/resources$/u);
+});
+
+test('console reference navigation keeps new-tab behavior without decorative arrows', async ({ page }) => {
+  await page.goto('/dashboard');
+  const resources = page.getByRole('navigation', { name: 'Reference' }).getByRole('link', { name: /Resources/ });
+  await expect(resources).toHaveAttribute('target', '_blank');
+  await expect(resources).toHaveAttribute('rel', 'noopener noreferrer');
+  await expect(resources).not.toContainText('↗');
+  await expect(resources).toHaveAccessibleName(/Resources.*opens in a new tab/iu);
 });
 
 test('Lookup reports requested source families without implying staged completion', async ({ page }) => {

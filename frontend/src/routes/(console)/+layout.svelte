@@ -272,7 +272,7 @@
           </div>
         {/each}
       </nav>
-      <nav class="reference-nav" aria-label="Reference"><p class="eyebrow">Reference</p>{#each referenceNavigation as item}<a class:active={page.url.pathname===item.href} aria-current={page.url.pathname===item.href?'page':undefined} href={item.href} target={item.opensInNewTab?'_blank':undefined} rel={item.opensInNewTab?'noopener noreferrer':undefined} aria-label={item.opensInNewTab?`${item.label}. ${item.detail}. Opens in a new tab.`:undefined} onclick={()=>navOpen=false}><strong>{item.label}{#if item.opensInNewTab}<span class="new-tab-mark" aria-hidden="true">↗</span>{/if}</strong><small>{item.detail}</small></a>{/each}</nav>
+      <nav class="reference-nav" aria-label="Reference"><p class="eyebrow">Reference</p>{#each referenceNavigation as item}<a class:active={page.url.pathname===item.href} aria-current={page.url.pathname===item.href?'page':undefined} href={item.href} target={item.opensInNewTab?'_blank':undefined} rel={item.opensInNewTab?'noopener noreferrer':undefined} aria-label={item.opensInNewTab?`${item.label}. ${item.detail}. Opens in a new tab.`:undefined} onclick={()=>navOpen=false}><strong>{item.label}</strong><small>{item.detail}</small></a>{/each}</nav>
       <div class="session"><ThemeSelector /><div class="session-row"><span role="note" title={capabilityStatusDetail()} aria-label={capabilityStatusDetail()}>{capabilityStatus()}</span></div></div>
     </aside>
     {#if navOpen}<button class="scrim" tabindex="-1" aria-hidden="true" onclick={()=>void closeNavigation()}></button>{/if}
@@ -286,7 +286,6 @@
   .login-links{display:flex;justify-content:center;gap:8px;margin:18px 0 0;color:var(--muted);font-size:var(--text-xs)}
   .login-links a{color:var(--accent)}
   .reference-nav{margin-top:18px;padding-top:14px;border-top:1px solid var(--border)}
-  .new-tab-mark{margin-left:6px;color:var(--accent);font-size:.7em}
   .sign-out-control{position:relative;display:inline-flex}
   .sign-out-error{position:absolute;z-index:20;top:calc(100% + 8px);right:0;width:min(300px,calc(100vw - 32px));padding:9px 11px;border:1px solid var(--danger);border-radius:var(--radius-sm);background:var(--panel);box-shadow:0 8px 24px rgb(var(--shadow-rgb) / .28);color:var(--danger);font-size:var(--text-2xs);line-height:1.4}
   .console-nav-group+.console-nav-group{margin-top:18px;padding-top:14px;border-top:1px solid var(--border)}
