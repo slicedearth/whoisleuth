@@ -73,7 +73,7 @@ test('offline replay uses isolated graph identifiers and has no live evidence li
   await expect(replay.getByText('Retained normalised facts', { exact: true })).toBeVisible();
   await expect(replay.locator('.replay-result > header .chip')).toHaveClass(/factual/u);
   await expect(replay.locator('.replay-result > header .chip')).toHaveText('Registered');
-  await expect(replay.locator('.source-grid article', { hasText: 'Registry RDAP' }).locator('.chip')).toHaveClass(/factual/u);
+  await expect(replay.locator('.source-grid article', { hasText: 'Registry RDAP' }).locator('.chip')).toHaveClass(/good/u);
   await expect(replay.locator('.source-grid article', { hasText: 'Submitted query' }).locator('.chip')).toHaveClass(/factual/u);
   const unsupported = replay.locator('.source-grid article', { hasText: 'WHOIS' }).locator('.chip');
   await expect(unsupported).toHaveClass(/unavailable/u);

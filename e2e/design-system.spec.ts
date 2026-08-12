@@ -590,6 +590,8 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
       keyColours: [...region.querySelectorAll<HTMLElement>('.key-item')]
         .map((element) => getComputedStyle(element.querySelector<HTMLElement>('i')!).borderColor),
       successFill: styleValue('.source-node.state-success .status-dot', 'fill'),
+      successLabel: getComputedStyle(region.querySelector<HTMLElement>('.state-success .source-state')!).color,
+      successEdge: styleValue('.topology-edges path.success', 'stroke'),
       partialFill: styleValue('.source-node.state-partial .status-dot', 'fill'),
     };
   });
@@ -602,6 +604,8 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   expect(new Set([...familyColours.values()].map((value) => value.icon)).size).toBe(familyColours.size);
   expect(new Set(topologyPalette.keyColours).size).toBe(topologyPalette.keyColours.length);
   expect(topologyPalette.successFill).not.toBe(topologyPalette.partialFill);
+  expect(topologyPalette.successFill).toBe(topologyPalette.successLabel);
+  expect(topologyPalette.successEdge).not.toBe(topologyPalette.partialFill);
   expect(await desktopSourceIcons.evaluateAll((icons) => icons.every((icon) => {
     const iconRect = icon.getBoundingClientRect();
     const discRect = icon.closest('.source-node')?.querySelector('.glyph-disc')?.getBoundingClientRect();

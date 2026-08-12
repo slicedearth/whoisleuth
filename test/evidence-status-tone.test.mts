@@ -6,8 +6,9 @@ import {
 } from '../frontend/src/lib/analysis/evidence-status-tone.ts';
 import { availabilityStatusDisplay } from '../frontend/src/lib/analysis/availability-status-display.ts';
 
-test('maps successful evidence states without turning incomplete collection green', () => {
-  for (const state of ['success', 'complete', 'completed', 'supported', 'observed', 'provided', 'registered', 'active', 'available']) {
+test('separates successful outcomes from factual completion states', () => {
+  assert.equal(evidenceStatusTone('success', { complete: true }), 'success');
+  for (const state of ['complete', 'completed', 'supported', 'observed', 'provided', 'registered', 'active', 'available']) {
     assert.equal(evidenceStatusTone(state, { complete: true }), 'complete', state);
   }
   assert.equal(evidenceStatusTone('success', { complete: false }), 'partial');
@@ -44,6 +45,7 @@ test('reserves the error tone for explicit collection failures', () => {
 });
 
 test('maps evidence tones to explicit chip classes', () => {
+  assert.equal(evidenceStatusChipClass('success'), 'good');
   assert.equal(evidenceStatusChipClass('complete'), 'factual');
   assert.equal(evidenceStatusChipClass('active'), 'factual');
   assert.equal(evidenceStatusChipClass('partial'), 'warn');

@@ -357,7 +357,18 @@ test('HTTP intelligence presents bounded redirect provenance and response metada
   const card = page.locator('.http-card');
   await expect(card).not.toHaveAttribute('open', '');
   await expect(card.getByRole('heading', { name: 'HTTP intelligence' })).toBeVisible();
-  await expect(card.locator(':scope > summary .evidence-status')).toHaveText('success');
+  const httpStatus = card.locator(':scope > summary .evidence-status');
+  await expect(httpStatus).toHaveText('success');
+  await expect(httpStatus).toHaveClass(/\bsuccess\b/u);
+  const successColour = await page.evaluate(() => {
+    const probe = document.createElement('span');
+    probe.style.color = 'var(--success)';
+    document.body.append(probe);
+    const colour = getComputedStyle(probe).color;
+    probe.remove();
+    return colour;
+  });
+  await expect(httpStatus).toHaveCSS('color', successColour);
   await expect(card.getByText('https://login.example.test/final', { exact: true })).toBeHidden();
   await card.locator(':scope > summary').click();
   await expect(card.getByText('https://login.example.test/final', { exact: true })).toBeVisible();

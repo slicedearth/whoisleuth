@@ -164,7 +164,7 @@
   .policy-index a:hover,.policy-index a:focus-visible{background:rgb(var(--accent-rgb) / .07);color:var(--accent)}
   .policy{min-width:0;padding:clamp(22px,4vw,42px)}
   .policy>p:first-child{margin-top:0;color:var(--muted)}
-  .policy h2{margin:2rem 0 .65rem;font:700 1.05rem var(--mono);color:var(--accent);scroll-margin-top:24px}
+  .policy h2{margin:2rem 0 .65rem;font:700 1.05rem var(--mono);color:var(--interface-accent);scroll-margin-top:24px}
   .policy p,.policy li{color:var(--muted);line-height:1.7}
   .policy strong{color:var(--text)}
   .policy a{color:var(--accent);text-decoration:underline;text-underline-offset:3px}

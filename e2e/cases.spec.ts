@@ -1069,7 +1069,7 @@ test('a case file imports and merges through the Cases toolbar', async ({ page }
     buffer: Buffer.from(JSON.stringify(importPayload)),
   });
 
-  await expect(page.getByRole('status')).toHaveText(/Imported 1 new/);
+  await expect(page.locator('#monitor-view-panel > p.message[role="status"]')).toHaveText(/Imported 1 new/);
   await expect(page.locator('.case-head', { hasText: 'local.invalid' })).toBeVisible();
   await expect(page.locator('.case-head', { hasText: 'imported.invalid' })).toBeVisible();
 });

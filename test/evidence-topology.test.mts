@@ -25,7 +25,8 @@ describe('evidence topology projection', () => {
     assert.equal(first.version, EVIDENCE_TOPOLOGY_VERSION);
     assert.equal(first.nodes.length, 3);
     assert.equal(first.edges.length, 3);
-    assert.equal(first.counts.success, 2);
+    assert.equal(first.counts.success, 1);
+    assert.equal(first.counts.observed, 1);
     assert.equal(first.counts.partial, 1);
     assert.deepEqual(first.provenanceCounts, { direct: 2, derived: 1 });
     assert.equal(first.nodes.find((node) => node.id === 'technology')?.provenance, 'derived');
@@ -83,6 +84,11 @@ describe('evidence topology projection', () => {
   });
 
   test('preserves explicit incomplete and failure states instead of implying absence', () => {
+    assert.equal(normalizeEvidenceTopologyStatus('success'), 'success');
+    assert.equal(normalizeEvidenceTopologyStatus('complete'), 'complete');
+    assert.equal(normalizeEvidenceTopologyStatus('registered'), 'registered');
+    assert.equal(normalizeEvidenceTopologyStatus('active'), 'active');
+    assert.equal(normalizeEvidenceTopologyStatus('observed'), 'observed');
     assert.equal(normalizeEvidenceTopologyStatus('success', { complete: false }), 'partial');
     assert.equal(normalizeEvidenceTopologyStatus('success', { truncated: true }), 'partial');
     assert.equal(normalizeEvidenceTopologyStatus('not_found'), 'not_found');

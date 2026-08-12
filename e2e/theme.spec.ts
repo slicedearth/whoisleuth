@@ -228,6 +228,71 @@ test('light surfaces avoid pure white and separate layers, structural borders, a
   expect(palette.contrast['--control-border']).toBeGreaterThanOrEqual(3);
 });
 
+test('dark chrome restores the deployed secondary accent while light chrome stays blue', async ({ page }) => {
+  await clearThemePreference(page);
+  await page.goto('/dashboard');
+
+  for (const theme of ['Dark', 'Light'] as const) {
+    await chooseTheme(page, theme);
+    const roles = await page.evaluate(() => {
+      const probe = document.createElement('button');
+      probe.className = 'btn active';
+      probe.textContent = 'Selected';
+      document.body.append(probe);
+      const colour = (token: string) => {
+        probe.style.color = `var(${token})`;
+        return getComputedStyle(probe).color;
+      };
+      const interfaceAccent = colour('--interface-accent');
+      const accent = colour('--accent');
+      const accent2 = colour('--accent2');
+      const borderStrong = colour('--border-strong');
+      const controlBorder = colour('--control-border');
+      probe.style.color = '';
+      const selected = getComputedStyle(probe);
+      const heading = document.querySelector<HTMLElement>('.heading')!;
+      const navigation = document.querySelector<HTMLElement>('nav a.active')!;
+      const prompt = document.querySelector<HTMLElement>('.terminal-strip .prompt-sigil')!;
+      const eyebrow = document.querySelector<HTMLElement>('.heading .eyebrow')!;
+      const field = document.querySelector<HTMLElement>('#browser-target')!;
+      const result = {
+        interfaceAccent,
+        accent,
+        accent2,
+        borderStrong,
+        controlBorder,
+        selectedColour: selected.color,
+        selectedBorder: selected.borderTopColor,
+        eyebrow: getComputedStyle(eyebrow).color,
+        prompt: getComputedStyle(prompt).color,
+        navArrow: getComputedStyle(navigation, '::before').color,
+        navBorder: getComputedStyle(navigation).borderLeftColor,
+        headingRule: getComputedStyle(heading, '::after').backgroundImage,
+        caret: getComputedStyle(field).caretColor,
+      };
+      probe.remove();
+      return result;
+    });
+
+    expect(roles.selectedColour).toBe(roles.interfaceAccent);
+    expect(roles.eyebrow).toBe(roles.interfaceAccent);
+    expect(roles.prompt).toBe(roles.interfaceAccent);
+    expect(roles.navArrow).toBe(roles.interfaceAccent);
+    expect(roles.navBorder).toBe(roles.interfaceAccent);
+    expect(roles.caret).toBe(roles.interfaceAccent);
+    expect(roles.headingRule).toContain(roles.interfaceAccent);
+    expect(roles.headingRule).toContain(roles.accent);
+
+    if (theme === 'Dark') {
+      expect(roles.interfaceAccent).toBe(roles.accent2);
+      expect(roles.controlBorder).toBe(roles.borderStrong);
+    } else {
+      expect(roles.interfaceAccent).toBe(roles.accent);
+      expect(roles.controlBorder).not.toBe(roles.borderStrong);
+    }
+  }
+});
+
 test('light chrome uses a theme-aware mark without a bright boxed plate', async ({ page }) => {
   await clearThemePreference(page);
   await page.goto('/dashboard');
@@ -287,14 +352,16 @@ test('theme-specific controls, nested surfaces, score visibility, and form hints
       sample.remove();
       return value;
     });
-    expect(contrast.controlBoundary).toBeGreaterThanOrEqual(3);
     if (theme === 'Dark') {
+      expect(contrast.controlBoundary).toBeLessThan(3);
+      expect(contrast.controlBoundary).toBeGreaterThan(contrast.quietControlBoundary);
       expect(contrast.quietControlBoundary).toBeCloseTo(contrast.structuralBoundary, 5);
       expect(contrast.quietControlBoundary).toBeLessThan(2);
       expect(contrast.surface).toBe(contrast.panel);
       expect(contrast.scoreTrackHeight).toBe(5);
       expect(contrast.factorFillAlpha).toBeCloseTo(0.22, 5);
     } else {
+      expect(contrast.controlBoundary).toBeGreaterThanOrEqual(3);
       expect(contrast.quietControlBoundary).toBeGreaterThanOrEqual(3);
       expect(contrast.surface).toBe(contrast.raised);
       expect(contrast.scoreTrackHeight).toBe(10);

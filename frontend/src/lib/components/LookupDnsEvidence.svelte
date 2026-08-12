@@ -224,7 +224,7 @@
   .soa-detail div{min-width:0;padding:6px;border:1px solid var(--border);border-radius:var(--radius-sm)}
   .soa-detail dt{color:var(--muted);font:var(--text-2xs) var(--mono)}
   .soa-detail dd{margin:3px 0 0;overflow-wrap:anywhere;font:600 var(--text-2xs) var(--mono)}
-  .authority-state.state-success{color:var(--text)}
+  .authority-state.state-success{color:var(--success)}
   .authority-state.state-partial{color:var(--amber)}
   .authority-state.state-lame{color:var(--danger)}
   .authority-state.state-unreachable{color:var(--muted)}

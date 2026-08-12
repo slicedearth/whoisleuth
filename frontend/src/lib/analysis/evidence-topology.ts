@@ -6,6 +6,12 @@ export const EVIDENCE_TOPOLOGY_VERSION = 1;
 
 export type EvidenceTopologyStatus =
   | 'success'
+  | 'complete'
+  | 'supported'
+  | 'observed'
+  | 'registered'
+  | 'active'
+  | 'available'
   | 'partial'
   | 'warning'
   | 'inconclusive'
@@ -349,7 +355,11 @@ export function normalizeEvidenceTopologyStatus(
 ): EvidenceTopologyStatus {
   if (options.complete === false || options.truncated === true) return 'partial';
   const status = boundedText(value, 40).toLowerCase().replaceAll(' ', '_');
-  if (['success', 'complete', 'completed', 'supported', 'observed', 'registered', 'available'].includes(status)) return 'success';
+  if (status === 'success') return 'success';
+  if (status === 'completed') return 'complete';
+  if (['complete', 'supported', 'observed', 'registered', 'active', 'available'].includes(status)) {
+    return status as EvidenceTopologyStatus;
+  }
   if (['partial', 'incomplete', 'truncated', 'limited'].includes(status)) return 'partial';
   if (['warning', 'conflict', 'mismatch'].includes(status)) return 'warning';
   if (status === 'inconclusive') return 'inconclusive';
@@ -459,6 +469,12 @@ export function projectEvidenceTopology(targetInput: EvidenceTopologyTarget, raw
     return summary;
   }, {
     success: 0,
+    complete: 0,
+    supported: 0,
+    observed: 0,
+    registered: 0,
+    active: 0,
+    available: 0,
     partial: 0,
     warning: 0,
     inconclusive: 0,

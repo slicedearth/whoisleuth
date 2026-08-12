@@ -676,7 +676,7 @@ test('optional external intelligence searches are explicit, attributed, and mobi
   await expect(section.getByText('URLscan archived verdicts', { exact: true })).toBeVisible();
   await expect(section.getByText('URLhaus malware-host records', { exact: true })).toBeVisible();
   await expect(section.getByText('ThreatFox malware IOCs', { exact: true })).toBeVisible();
-  await expect(section.locator('article').filter({ hasText: 'URLscan archived verdicts' }).locator('.chip')).toHaveClass(/\bfactual\b/);
+  await expect(section.locator('article').filter({ hasText: 'URLscan archived verdicts' }).locator('.chip')).toHaveClass(/\bgood\b/);
   await expect(section.locator('article').filter({ hasText: 'URLhaus malware-host records' }).locator('.chip')).toHaveClass(/\bwarn\b/);
   await expect(section.locator('article').filter({ hasText: 'ThreatFox malware IOCs' }).locator('.chip')).toHaveClass(/\bunavailable\b/);
   await expect(section.getByText(/never affect availability/i)).toBeVisible();
