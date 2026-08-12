@@ -181,6 +181,7 @@ describe('authorised SMTP transport review', () => {
   test('issues only EHLO and STARTTLS during the bounded active conversation', async () => {
     const commands: string[] = [];
     let destroyed = false;
+    let idleChecks = 0;
     const replies = [
       reply('220 fixture-mx ESMTP'),
       reply('250-fixture-mx', '250-STARTTLS', '250 SIZE 1024'),
@@ -193,7 +194,7 @@ describe('authorised SMTP transport review', () => {
         assert.ok(value);
         return value;
       },
-      assertIdle: () => {},
+      assertIdle: () => { idleChecks += 1; },
       write: async (command) => { commands.push(command); },
       startTls: async () => ({
         peerCertificate: null,
@@ -211,8 +212,40 @@ describe('authorised SMTP transport review', () => {
     assert.deepEqual(commands, [EHLO_COMMAND, STARTTLS_COMMAND]);
     assert.equal(result.starttlsState, 'negotiated');
     assert.equal(result.connectedAddress, PUBLIC_ADDRESS);
+    assert.equal(idleChecks, 3);
     assert.equal(destroyed, true);
     assert.doesNotMatch(commands.join(''), /(?:AUTH|MAIL FROM|RCPT TO|DATA|VRFY|EXPN)/iu);
+  });
+
+  test('does not run a third idle checkpoint or handshake after a rejected STARTTLS reply', async () => {
+    let idleChecks = 0;
+    let tlsStarted = false;
+    const replies = [
+      reply('220 fixture-mx ESMTP'),
+      reply('250-fixture-mx', '250 STARTTLS'),
+      reply('454 TLS temporarily unavailable'),
+    ];
+    const connection: SmtpConversationConnection = {
+      remoteAddress: PUBLIC_ADDRESS,
+      readReply: async () => {
+        const value = replies.shift();
+        assert.ok(value);
+        return value;
+      },
+      assertIdle: () => { idleChecks += 1; },
+      write: async () => {},
+      startTls: async () => {
+        tlsStarted = true;
+        throw new Error('STARTTLS must not run');
+      },
+      diagnostics: () => ({ bytesRead: 91, lineCount: 4 }),
+      destroy: () => {},
+    };
+
+    const result = await runSmtpConversation('mx1.example.test', connection);
+    assert.equal(result.starttlsState, 'rejected');
+    assert.equal(idleChecks, 2);
+    assert.equal(tlsStarted, false);
   });
 
   test('fails closed before EHLO when the server prefetched an unsolicited reply', async () => {
@@ -238,6 +271,48 @@ describe('authorised SMTP transport review', () => {
     );
     assert.equal(reads, 1);
     assert.deepEqual(commands, []);
+    assert.equal(destroyed, true);
+  });
+
+  test('fails closed before the TLS upgrade when plaintext follows the STARTTLS acknowledgement', async () => {
+    const commands: string[] = [];
+    let destroyed = false;
+    let idleChecks = 0;
+    let tlsStarted = false;
+    const replies = [
+      reply('220 fixture-mx ESMTP'),
+      reply('250-fixture-mx', '250 STARTTLS'),
+      reply('220 Begin TLS'),
+    ];
+    const connection: SmtpConversationConnection = {
+      remoteAddress: PUBLIC_ADDRESS,
+      readReply: async () => {
+        const value = replies.shift();
+        assert.ok(value);
+        return value;
+      },
+      assertIdle: () => {
+        idleChecks += 1;
+        if (idleChecks === 3) {
+          throw new Error('SMTP connection contained an unsolicited buffered reply before the TLS upgrade.');
+        }
+      },
+      write: async (command) => { commands.push(command); },
+      startTls: async () => {
+        tlsStarted = true;
+        throw new Error('STARTTLS must not run');
+      },
+      diagnostics: () => ({ bytesRead: 92, lineCount: 4 }),
+      destroy: () => { destroyed = true; },
+    };
+
+    await assert.rejects(
+      () => runSmtpConversation('mx1.example.test', connection),
+      /unsolicited buffered reply/u,
+    );
+    assert.equal(idleChecks, 3);
+    assert.equal(tlsStarted, false);
+    assert.deepEqual(commands, [EHLO_COMMAND, STARTTLS_COMMAND]);
     assert.equal(destroyed, true);
   });
 
@@ -447,6 +522,40 @@ describe('authorised SMTP transport review', () => {
     assert.equal(review.endpoints[0]?.failure?.stage, 'smtp');
     assert.match(review.endpoints[0]?.failure?.detail ?? '', /total run timed out/u);
     assert.equal(review.endpoints[0]?.address.state, 'revalidated');
+  });
+
+  test('attributes a pre-upgrade unsolicited reply to SMTP without connection evidence', async () => {
+    const review = await collectMailTransportReview({
+      schema: MAIL_TRANSPORT_INPUT_SCHEMA,
+      version: 1,
+      domain: 'example.test',
+      mxHosts: ['mx.example.test'],
+      policyContext: {},
+    }, {
+      resolver: PUBLIC_ADDRESS,
+      trustAnchor: ANCHOR,
+      ownedOrAuthorized: true,
+      activeProbeAcknowledged: true,
+    }, {
+      now: () => 0,
+      observedAt: () => OBSERVED_AT,
+      resolveHost: async () => ({ addresses: [{ address: PUBLIC_ADDRESS, family: 4 }], aliases: [] }),
+      validateDnssec: async ({ target }) => ({ report: secureReport(String(target)), zone: String(target), keys: [] }),
+      probe: async () => {
+        throw new Error('SMTP connection contained an unsolicited buffered reply before the TLS upgrade.');
+      },
+    });
+
+    const endpoint = review.endpoints[0];
+    assert.equal(endpoint?.state, 'unavailable');
+    assert.equal(endpoint?.address.state, 'revalidated');
+    assert.equal(endpoint?.smtp.state, 'unavailable');
+    assert.equal(endpoint?.starttls.state, 'unavailable');
+    assert.equal(endpoint?.certificate.state, 'unavailable');
+    assert.equal(endpoint?.tlsa.state, 'unavailable');
+    assert.equal(endpoint?.failure?.stage, 'smtp');
+    assert.match(endpoint?.failure?.detail ?? '', /unsolicited buffered reply/u);
+    assert.deepEqual(review.relationships, []);
   });
 
   test('does not promote selected DNS candidates when DNSSEC or fresh revalidation fails', async () => {

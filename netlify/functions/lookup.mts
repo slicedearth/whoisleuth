@@ -6,7 +6,15 @@ import { guardNetlifyNetworkRequest, withNetlifyOperationBudget } from '../../li
 import { json, withNetlifyApiErrorBoundary } from '../../lib/http.mts';
 import type { NetlifyFunctionHandler } from '../../lib/netlify-function-types.mts';
 
-const handleLookup: NetlifyFunctionHandler = async (event) => {
+type LookupHandlerDependencies = Readonly<{
+  runUnifiedLookup: typeof runUnifiedLookup;
+  createLookupHttpResponse: typeof createLookupHttpResponse;
+}>;
+
+async function handleLookup(
+  event: Parameters<NetlifyFunctionHandler>[0],
+  dependencies: LookupHandlerDependencies = { runUnifiedLookup, createLookupHttpResponse },
+): ReturnType<NetlifyFunctionHandler> {
   const guard = guardNetlifyNetworkRequest(event, 'lookup');
   if (guard.response) return guard.response;
 
@@ -31,7 +39,7 @@ const handleLookup: NetlifyFunctionHandler = async (event) => {
   const malwareIocIntelligence = params.ioc === '1' || params.ioc === 'true';
   const securityTxt = params.security_txt === '1' || params.security_txt === 'true';
   return withNetlifyOperationBudget(guard.sessionKey, operationBudgetTargetFor('lookup', { fast, compact }), async () => {
-    const result = await runUnifiedLookup(classified, {
+    const result = await dependencies.runUnifiedLookup(classified, {
       fast,
       compact,
       externalIntelligence,
@@ -40,10 +48,20 @@ const handleLookup: NetlifyFunctionHandler = async (event) => {
       securityTxt,
       featurePolicy: guard.featurePolicy,
     });
-    return json(200, createLookupHttpResponse(q, classified, result));
+    return json(200, dependencies.createLookupHttpResponse(q, classified, result));
   });
-};
+}
 
-const handler = withNetlifyApiErrorBoundary(handleLookup, LOOKUP_ERROR_CODES.LOOKUP_FAILED);
+function createLookupHandler(
+  dependencies: LookupHandlerDependencies = { runUnifiedLookup, createLookupHttpResponse },
+): NetlifyFunctionHandler {
+  return withNetlifyApiErrorBoundary(
+    (request) => handleLookup(request, dependencies),
+    LOOKUP_ERROR_CODES.LOOKUP_FAILED,
+  );
+}
 
-export { handler };
+const handler = createLookupHandler();
+
+export { createLookupHandler, handler };
+export type { LookupHandlerDependencies };

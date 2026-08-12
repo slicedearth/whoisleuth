@@ -5,7 +5,14 @@ import { guardNetlifyNetworkRequest, withNetlifyOperationBudget } from '../../li
 import { json, withNetlifyApiErrorBoundary } from '../../lib/http.mts';
 import type { NetlifyFunctionHandler } from '../../lib/netlify-function-types.mts';
 
-const handleDomainPosture: NetlifyFunctionHandler = async (event) => {
+type DomainPostureHandlerDependencies = Readonly<{
+  checkDomainPosture: typeof checkDomainPosture;
+}>;
+
+async function handleDomainPosture(
+  event: Parameters<NetlifyFunctionHandler>[0],
+  dependencies: DomainPostureHandlerDependencies = { checkDomainPosture },
+): ReturnType<NetlifyFunctionHandler> {
   const guard = guardNetlifyNetworkRequest(event, 'domain_posture');
   if (guard.response) return guard.response;
 
@@ -29,14 +36,23 @@ const handleDomainPosture: NetlifyFunctionHandler = async (event) => {
     .slice(0, Math.max(0, 10 - selectors.length));
   const mailProtectionProfile = normalizeMailProtectionProfile(params.mailProfile);
   return withNetlifyOperationBudget(guard.sessionKey, operationBudgetTargetFor('domain_posture'), async () => {
-    return json(200, await checkDomainPosture(domain, {
+    return json(200, await dependencies.checkDomainPosture(domain, {
       dkimSelectors: selectors,
       retiredDkimSelectors: retiredSelectors,
       mailProtectionProfile,
     }));
   });
-};
+}
 
-const handler = withNetlifyApiErrorBoundary(handleDomainPosture);
+function createDomainPostureHandler(
+  dependencies: DomainPostureHandlerDependencies = { checkDomainPosture },
+): NetlifyFunctionHandler {
+  return withNetlifyApiErrorBoundary(
+    (request) => handleDomainPosture(request, dependencies),
+  );
+}
 
-export { handler };
+const handler = createDomainPostureHandler();
+
+export { createDomainPostureHandler, handler };
+export type { DomainPostureHandlerDependencies };

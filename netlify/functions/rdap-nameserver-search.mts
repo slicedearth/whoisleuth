@@ -10,7 +10,14 @@ import {
 import { json, withNetlifyApiErrorBoundary } from '../../lib/http.mts';
 import type { NetlifyFunctionHandler } from '../../lib/netlify-function-types.mts';
 
-const handleRdapNameserverSearch: NetlifyFunctionHandler = async (event) => {
+type RdapNameserverSearchHandlerDependencies = Readonly<{
+  searchRdapNameserver: typeof searchRdapNameserver;
+}>;
+
+async function handleRdapNameserverSearch(
+  event: Parameters<NetlifyFunctionHandler>[0],
+  dependencies: RdapNameserverSearchHandlerDependencies = { searchRdapNameserver },
+): ReturnType<NetlifyFunctionHandler> {
   const guard = guardNetlifyNetworkRequest(event, 'rdap_nameserver_search');
   if (guard.response) return guard.response;
 
@@ -19,7 +26,7 @@ const handleRdapNameserverSearch: NetlifyFunctionHandler = async (event) => {
     operationBudgetTargetFor('rdap_nameserver_search'),
     async () => {
       try {
-        const result = await searchRdapNameserver(
+        const result = await dependencies.searchRdapNameserver(
           event.queryStringParameters?.nameserver,
           event.queryStringParameters?.scope,
         );
@@ -32,8 +39,17 @@ const handleRdapNameserverSearch: NetlifyFunctionHandler = async (event) => {
       }
     },
   );
-};
+}
 
-const handler = withNetlifyApiErrorBoundary(handleRdapNameserverSearch);
+function createRdapNameserverSearchHandler(
+  dependencies: RdapNameserverSearchHandlerDependencies = { searchRdapNameserver },
+): NetlifyFunctionHandler {
+  return withNetlifyApiErrorBoundary(
+    (request) => handleRdapNameserverSearch(request, dependencies),
+  );
+}
 
-export { handler };
+const handler = createRdapNameserverSearchHandler();
+
+export { createRdapNameserverSearchHandler, handler };
+export type { RdapNameserverSearchHandlerDependencies };

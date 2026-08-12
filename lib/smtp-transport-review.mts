@@ -360,6 +360,7 @@ async function runSmtpConversation(hostname: string, connection: SmtpConversatio
       const diagnostics = connection.diagnostics();
       return Object.freeze({ connectedAddress: connection.remoteAddress, greeting, ehlo, capabilities, starttlsAdvertised, starttlsReply, starttlsState: 'rejected', tls: null, ...diagnostics });
     }
+    connection.assertIdle();
     try {
       const tlsEvidence = await connection.startTls(hostname);
       const diagnostics = connection.diagnostics();

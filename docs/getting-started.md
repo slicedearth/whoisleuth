@@ -669,7 +669,11 @@ Scans the current checkout, including uncommitted changes, with the standard
 JavaScript and TypeScript suite. It requires the official CodeQL CLI on `PATH`,
 at `~/.local/bin/codeql`, or through an absolute `CODEQL_PATH`. The wrapper
 keeps its bounded database and SARIF output in the operating system's temporary
-directory and removes them when complete.
+directory and removes them when complete. Before creating a database, it also
+removes at most 16 strict-name reservations older than 24 hours only when a
+private ownership marker matches the directory and its recorded process is no
+longer running. Fresh, live, unmarked, malformed, lookalike, file, and
+symbolic-link entries are left untouched for manual review.
 
 Exit status 0 means no unreviewed findings or baseline drift. Status 1 means
 review is required. Status 2 means setup or analysis was inconclusive. Hosted

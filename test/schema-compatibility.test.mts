@@ -234,7 +234,7 @@ describe('schema compatibility inventory', () => {
     assert.equal(inventory.schema, SCHEMA_COMPATIBILITY_INVENTORY_SCHEMA);
     assert.equal(inventory.version, SCHEMA_COMPATIBILITY_INVENTORY_VERSION);
     assert.equal(inventory.generatedAt, NOW);
-    assert.equal(inventory.entries.length, 181);
+    assert.equal(inventory.entries.length, 182);
     assert.deepEqual(new Set(inventory.entries.map((entry) => entry.kind)), new Set([
       'browser_store', 'tab_store', 'hosted_store', 'export', 'cli_document', 'derived',
     ]));
@@ -281,6 +281,8 @@ describe('schema compatibility inventory', () => {
     assert.equal(byId(inventory, 'cli.risk-calibration-report').currentVersion, 3);
     assert.deepEqual(byId(inventory, 'cli.risk-calibration-report').supportedVersions, [1, 2, 3]);
     assert.equal(byId(inventory, 'cli.maintainer-duplication-report').schema, 'whoisleuth.maintainer-duplication-report');
+    assert.equal(byId(inventory, 'maintainer.local-codeql-temporary-reservation').schema, 'whoisleuth.local-codeql-temporary-reservation');
+    assert.equal(byId(inventory, 'maintainer.local-codeql-temporary-reservation').byteBudget, 512);
     assert.equal(byId(inventory, 'cli.domain-assurance-input').schema, 'whoisleuth.domain-assurance.input');
     assert.equal(byId(inventory, 'cli.domain-assurance').schema, 'whoisleuth.domain-assurance');
     assert.equal(byId(inventory, 'cli.zone-intent-input').schema, 'whoisleuth.zone-intent.input');

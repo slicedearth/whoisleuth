@@ -5,7 +5,14 @@ import { guardNetlifyNetworkRequest, withNetlifyOperationBudget } from '../../li
 import { json, withNetlifyApiErrorBoundary } from '../../lib/http.mts';
 import type { NetlifyFunctionHandler } from '../../lib/netlify-function-types.mts';
 
-const handleAvailability: NetlifyFunctionHandler = async (event) => {
+type AvailabilityHandlerDependencies = Readonly<{
+  checkDomainAvailability: typeof checkDomainAvailability;
+}>;
+
+async function handleAvailability(
+  event: Parameters<NetlifyFunctionHandler>[0],
+  dependencies: AvailabilityHandlerDependencies = { checkDomainAvailability },
+): ReturnType<NetlifyFunctionHandler> {
   const guard = guardNetlifyNetworkRequest(event, 'availability');
   if (guard.response) return guard.response;
 
@@ -25,7 +32,7 @@ const handleAvailability: NetlifyFunctionHandler = async (event) => {
   const params = event.queryStringParameters || {};
   const fast = params.fast === '1' || params.fast === 'true';
   return withNetlifyOperationBudget(guard.sessionKey, operationBudgetTargetFor('availability', { fast }), async () => {
-    const result = await checkDomainAvailability(classified.value, { fast, featurePolicy: guard.featurePolicy });
+    const result = await dependencies.checkDomainAvailability(classified.value, { fast, featurePolicy: guard.featurePolicy });
     return json(200, {
       applicable: true,
       domain: classified.value,
@@ -35,8 +42,17 @@ const handleAvailability: NetlifyFunctionHandler = async (event) => {
       ...result,
     });
   });
-};
+}
 
-const handler = withNetlifyApiErrorBoundary(handleAvailability);
+function createAvailabilityHandler(
+  dependencies: AvailabilityHandlerDependencies = { checkDomainAvailability },
+): NetlifyFunctionHandler {
+  return withNetlifyApiErrorBoundary(
+    (request) => handleAvailability(request, dependencies),
+  );
+}
 
-export { handler };
+const handler = createAvailabilityHandler();
+
+export { createAvailabilityHandler, handler };
+export type { AvailabilityHandlerDependencies };

@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 
 import { spawn } from 'node:child_process';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { constants as fsConstants } from 'node:fs';
-import { access, mkdtemp, readFile, rm, stat } from 'node:fs/promises';
+import { access, chmod, lstat, mkdtemp, open, opendir, readFile, rename, rm, rmdir, stat, unlink } from 'node:fs/promises';
 import { homedir, tmpdir, totalmem } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -63,9 +64,26 @@ type LocalCodeqlOptions = Readonly<{
   repositoryRoot?: string;
   codeqlCommand?: string;
   runProcess?: ProcessRunner;
+  temporaryRoot?: string;
   makeTemporaryDirectory?: (prefix: string) => Promise<string>;
   removeTemporaryDirectory?: (directory: string) => Promise<void>;
+  cleanupStaleTemporaryDirectories?: (temporaryRoot: string) => Promise<number>;
+  reservationCleanupCurrentUid?: number | null;
   knownFindings?: readonly KnownCodeqlFinding[];
+}>;
+type CodeqlTemporaryReservation = Readonly<{
+  directory: string;
+  dev: string;
+  ino: string;
+  reservationId: string;
+  uid: number;
+}>;
+type CodeqlMarkerReader = (markerPath: string) => Promise<Buffer>;
+type StaleCodeqlCleanupOptions = Readonly<{
+  now?: number;
+  currentUid?: number | null;
+  processState?: (pid: number) => 'active' | 'dead' | 'unknown';
+  readMarker?: CodeqlMarkerReader;
 }>;
 
 const CODEQL_QUERY_SUITE = 'javascript-code-scanning.qls';
@@ -81,6 +99,16 @@ const MAX_CODEQL_COMMAND_LENGTH = 4096;
 const MIN_CODEQL_RAM_MB = 1024;
 const MAX_CODEQL_RAM_MB = 4096;
 const CODEQL_THREADS = 2;
+const CODEQL_TEMP_DIRECTORY_PREFIX = 'whoisleuth-codeql-';
+const CODEQL_STALE_DIRECTORY_AGE_MS = 24 * 60 * 60 * 1000;
+const MAX_CODEQL_TEMP_ROOT_ENTRIES = 4096;
+const MAX_STALE_CODEQL_DIRECTORY_REMOVALS = 16;
+const CODEQL_TEMP_DIRECTORY_NAME_RE = /^whoisleuth-codeql-[A-Za-z0-9]{6}$/u;
+const CODEQL_TEMP_MARKER_NAME = '.whoisleuth-reservation.json';
+const CODEQL_TEMP_MARKER_SCHEMA = 'whoisleuth.local-codeql-temporary-reservation';
+const CODEQL_TEMP_MARKER_VERSION = 1;
+const MAX_CODEQL_TEMP_MARKER_BYTES = 512;
+const CODEQL_TEMP_RESERVATION_ID_RE = /^[a-f0-9]{32}$/u;
 const PROJECT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 // These exact SARIF identities correspond to reviewed hosted dismissals. A new
 // location, changed fingerprint, duplicate occurrence, or removed result causes
@@ -109,14 +137,245 @@ const KNOWN_CODEQL_FINDINGS: readonly KnownCodeqlFinding[] = Object.freeze([
   // admission middleware as authorization but does not recognize the earlier
   // project-local limiter. Exact fingerprints plus a source-order regression
   // keep this review narrow and make any route edit require re-review.
-  Object.freeze({ ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: '87a6b826a4cdaa1c:1', primaryLocationStartColumnFingerprint: '50', reason: 'false_positive' as const }),
-  Object.freeze({ ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: 'd96bfd33ae3ed6bf:1', primaryLocationStartColumnFingerprint: '48', reason: 'false_positive' as const }),
-  Object.freeze({ ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: '29ddfb546d6fe5a7:1', primaryLocationStartColumnFingerprint: '66', reason: 'false_positive' as const }),
-  Object.freeze({ ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: 'b9283329ce021080:1', primaryLocationStartColumnFingerprint: '49', reason: 'false_positive' as const }),
-  Object.freeze({ ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: '8acce5086fcbbcb3:1', primaryLocationStartColumnFingerprint: '56', reason: 'false_positive' as const }),
-  Object.freeze({ ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: 'c9a8676b6ac23924:1', primaryLocationStartColumnFingerprint: '53', reason: 'false_positive' as const }),
-  Object.freeze({ ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: '7ab74220fd086828:1', primaryLocationStartColumnFingerprint: '58', reason: 'false_positive' as const }),
+  Object.freeze({ ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: 'e5df0635a7fe0562:1', primaryLocationStartColumnFingerprint: '53', reason: 'false_positive' as const }),
+  Object.freeze({ ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: 'f9955890d8802dc7:1', primaryLocationStartColumnFingerprint: '51', reason: 'false_positive' as const }),
+  Object.freeze({ ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: 'd958752a942a1329:1', primaryLocationStartColumnFingerprint: '69', reason: 'false_positive' as const }),
+  Object.freeze({ ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: 'bee55061202d551f:1', primaryLocationStartColumnFingerprint: '52', reason: 'false_positive' as const }),
+  Object.freeze({ ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: '3580829fea761be5:1', primaryLocationStartColumnFingerprint: '59', reason: 'false_positive' as const }),
+  Object.freeze({ ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: 'b269a7c62be7cb18:1', primaryLocationStartColumnFingerprint: '56', reason: 'false_positive' as const }),
+  Object.freeze({ ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: 'e8481cbf82455fde:1', primaryLocationStartColumnFingerprint: '61', reason: 'false_positive' as const }),
+  // CT result domains is a string array. Array.prototype.includes performs
+  // exact element membership rather than URL substring sanitization.
+  Object.freeze({ ruleId: 'js/incomplete-url-substring-sanitization', file: 'test/ct-search.test.mts', primaryLocationLineHash: '396838f0aee3b68c:1', primaryLocationStartColumnFingerprint: '13', reason: 'false_positive' as const }),
 ]);
+
+function isMissingPathError(error: unknown): boolean {
+  return Boolean(error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT');
+}
+
+function currentProcessState(pid: number): 'active' | 'dead' | 'unknown' {
+  try {
+    process.kill(pid, 0);
+    return 'active';
+  } catch (error) {
+    return error && typeof error === 'object' && 'code' in error && error.code === 'ESRCH'
+      ? 'dead'
+      : 'unknown';
+  }
+}
+
+function parseCodeqlReservationMarker(value: Buffer): Readonly<{
+  createdAt: number;
+  dev: string;
+  ino: string;
+  pid: number;
+  reservationId: string;
+  uid: number;
+}> | null {
+  if (value.byteLength < 2 || value.byteLength > MAX_CODEQL_TEMP_MARKER_BYTES) return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(value.toString('utf8'));
+  } catch {
+    return null;
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+  const marker = parsed as Record<string, unknown>;
+  if (marker.schema !== CODEQL_TEMP_MARKER_SCHEMA || marker.version !== CODEQL_TEMP_MARKER_VERSION) return null;
+  if (!Number.isSafeInteger(marker.createdAt) || Number(marker.createdAt) < 0) return null;
+  if (!Number.isSafeInteger(marker.pid) || Number(marker.pid) < 1) return null;
+  if (!Number.isSafeInteger(marker.uid) || Number(marker.uid) < 0) return null;
+  if (typeof marker.dev !== 'string' || !/^\d{1,30}$/u.test(marker.dev)) return null;
+  if (typeof marker.ino !== 'string' || !/^\d{1,30}$/u.test(marker.ino)) return null;
+  if (typeof marker.reservationId !== 'string'
+    || !CODEQL_TEMP_RESERVATION_ID_RE.test(marker.reservationId)) return null;
+  return Object.freeze({
+    createdAt: Number(marker.createdAt),
+    dev: marker.dev,
+    ino: marker.ino,
+    pid: Number(marker.pid),
+    reservationId: marker.reservationId,
+    uid: Number(marker.uid),
+  });
+}
+
+async function readCodeqlReservation(
+  directory: string,
+  currentUid: number,
+  readMarker: CodeqlMarkerReader = (markerPath) => readFile(markerPath),
+): Promise<(CodeqlTemporaryReservation & Readonly<{ createdAt: number; mtimeMs: number; pid: number; uid: number }>) | null> {
+  let metadata;
+  try {
+    metadata = await lstat(directory);
+  } catch (error) {
+    if (isMissingPathError(error)) return null;
+    throw error;
+  }
+  if (!metadata.isDirectory() || metadata.isSymbolicLink() || metadata.uid !== currentUid) return null;
+  const markerPath = path.join(directory, CODEQL_TEMP_MARKER_NAME);
+  let markerMetadata;
+  try {
+    markerMetadata = await lstat(markerPath);
+  } catch (error) {
+    if (isMissingPathError(error)) return null;
+    throw error;
+  }
+  if (!markerMetadata.isFile() || markerMetadata.isSymbolicLink() || markerMetadata.uid !== currentUid
+    || markerMetadata.size > MAX_CODEQL_TEMP_MARKER_BYTES) return null;
+  let markerBytes: Buffer;
+  try {
+    markerBytes = await readMarker(markerPath);
+  } catch (error) {
+    if (isMissingPathError(error)) return null;
+    throw error;
+  }
+  const marker = parseCodeqlReservationMarker(markerBytes);
+  if (!marker || marker.uid !== currentUid
+    || marker.dev !== String(metadata.dev) || marker.ino !== String(metadata.ino)) return null;
+  return Object.freeze({
+    directory,
+    dev: marker.dev,
+    ino: marker.ino,
+    reservationId: marker.reservationId,
+    createdAt: marker.createdAt,
+    mtimeMs: metadata.mtimeMs,
+    pid: marker.pid,
+    uid: marker.uid,
+  });
+}
+
+async function initializeCodeqlTemporaryReservation(
+  directory: string,
+  options: Readonly<{ now?: number; pid?: number; reservationId?: string }> = {},
+): Promise<CodeqlTemporaryReservation> {
+  const createdAt = options.now ?? Date.now();
+  const pid = options.pid ?? process.pid;
+  const reservationId = options.reservationId ?? randomBytes(16).toString('hex');
+  if (!Number.isSafeInteger(createdAt) || createdAt < 0
+    || !Number.isSafeInteger(pid) || pid < 1
+    || !CODEQL_TEMP_RESERVATION_ID_RE.test(reservationId)) {
+    throw new TypeError('CodeQL temporary reservation metadata is invalid.');
+  }
+  await chmod(directory, 0o700);
+  const metadata = await lstat(directory);
+  if (!metadata.isDirectory() || metadata.isSymbolicLink()) {
+    throw new TypeError('CodeQL temporary reservation must be a real directory.');
+  }
+  const marker = {
+    schema: CODEQL_TEMP_MARKER_SCHEMA,
+    version: CODEQL_TEMP_MARKER_VERSION,
+    createdAt,
+    pid,
+    uid: metadata.uid,
+    dev: String(metadata.dev),
+    ino: String(metadata.ino),
+    reservationId,
+  } as const;
+  const markerPath = path.join(directory, CODEQL_TEMP_MARKER_NAME);
+  let markerIdentity: Readonly<{ dev: bigint | number; ino: bigint | number }> | null = null;
+  let markerHandle = null;
+  try {
+    markerHandle = await open(markerPath, 'wx', 0o600);
+    const markerMetadata = await markerHandle.stat();
+    markerIdentity = { dev: markerMetadata.dev, ino: markerMetadata.ino };
+    await markerHandle.writeFile(`${JSON.stringify(marker)}\n`, 'utf8');
+    await markerHandle.sync();
+    await markerHandle.close();
+    markerHandle = null;
+  } catch (error) {
+    try {
+      await markerHandle?.close();
+    } catch {
+      // Cleanup below remains identity-bound and preserves every ambiguity.
+    }
+    try {
+      const currentDirectory = await lstat(directory);
+      if (String(currentDirectory.dev) === marker.dev && String(currentDirectory.ino) === marker.ino) {
+        if (markerIdentity) {
+          const currentMarker = await lstat(markerPath);
+          if (currentMarker.isFile() && !currentMarker.isSymbolicLink()
+            && currentMarker.dev === markerIdentity.dev && currentMarker.ino === markerIdentity.ino) {
+            await unlink(markerPath);
+          }
+        }
+        await rmdir(directory);
+      }
+    } catch {
+      // A changed or non-empty reservation is preserved for manual review.
+    }
+    throw error;
+  }
+  return Object.freeze({ directory, dev: marker.dev, ino: marker.ino, reservationId, uid: marker.uid });
+}
+
+async function removeOwnedCodeqlTemporaryReservation(
+  reservation: CodeqlTemporaryReservation,
+  temporaryRoot: string,
+  options: Readonly<{ currentUid?: number | null }> = {},
+): Promise<boolean> {
+  const root = path.resolve(temporaryRoot);
+  if (path.dirname(path.resolve(reservation.directory)) !== root) {
+    throw new TypeError('CodeQL temporary reservation is outside the configured temporary root.');
+  }
+  const currentUid = options.currentUid === undefined ? (process.getuid?.() ?? null) : options.currentUid;
+  if (currentUid !== null && currentUid !== reservation.uid) return false;
+  const current = await readCodeqlReservation(reservation.directory, reservation.uid);
+  if (!current || current.dev !== reservation.dev || current.ino !== reservation.ino
+    || current.reservationId !== reservation.reservationId) {
+    return false;
+  }
+  const quarantine = path.join(root, `.whoisleuth-codeql-cleanup-${randomUUID()}`);
+  try {
+    await rename(reservation.directory, quarantine);
+  } catch (error) {
+    if (isMissingPathError(error)) return false;
+    throw error;
+  }
+  const quarantined = await readCodeqlReservation(quarantine, reservation.uid);
+  if (!quarantined || quarantined.dev !== reservation.dev || quarantined.ino !== reservation.ino
+    || quarantined.reservationId !== reservation.reservationId) {
+    throw new Error('CodeQL temporary reservation changed during cleanup and was preserved for manual review.');
+  }
+  await rm(quarantine, { recursive: true, force: false });
+  return true;
+}
+
+async function removeStaleCodeqlTemporaryDirectories(
+  temporaryRoot: string,
+  options: StaleCodeqlCleanupOptions = {},
+): Promise<number> {
+  const now = options.now ?? Date.now();
+  if (!Number.isFinite(now) || now < 0) throw new TypeError('CodeQL cleanup time must be a finite timestamp.');
+  const currentUid = options.currentUid ?? process.getuid?.() ?? null;
+  if (currentUid === null) return 0;
+  const processState = options.processState ?? currentProcessState;
+  const readMarker = options.readMarker ?? ((markerPath: string) => readFile(markerPath));
+  const root = path.resolve(temporaryRoot);
+  const directory = await opendir(root);
+  let inspected = 0;
+  let removed = 0;
+  try {
+    while (inspected < MAX_CODEQL_TEMP_ROOT_ENTRIES && removed < MAX_STALE_CODEQL_DIRECTORY_REMOVALS) {
+      const entry = await directory.read();
+      if (!entry) break;
+      inspected += 1;
+      if (!CODEQL_TEMP_DIRECTORY_NAME_RE.test(entry.name)) continue;
+      const candidate = path.join(root, entry.name);
+      const reservation = await readCodeqlReservation(candidate, currentUid, readMarker);
+      if (!reservation || now - reservation.createdAt < CODEQL_STALE_DIRECTORY_AGE_MS) continue;
+      if (now - reservation.mtimeMs < CODEQL_STALE_DIRECTORY_AGE_MS) continue;
+      if (processState(reservation.pid) !== 'dead') continue;
+      if (await removeOwnedCodeqlTemporaryReservation(reservation, root)) removed += 1;
+    }
+  } finally {
+    try {
+      await directory.close();
+    } catch (error) {
+      if (!error || typeof error !== 'object' || !('code' in error) || error.code !== 'ERR_DIR_CLOSED') throw error;
+    }
+  }
+  return removed;
+}
 
 function resolveCodeqlCommand(value: unknown = process.env.CODEQL_PATH): string {
   if (value === undefined || value === null || value === '') return 'codeql';
@@ -389,12 +648,17 @@ async function runLocalCodeql(options: LocalCodeqlOptions = {}): Promise<LocalCo
   const repositoryRoot = path.resolve(options.repositoryRoot ?? PROJECT_ROOT);
   const codeqlCommand = await findCodeqlCommand(options.codeqlCommand);
   const runProcess = options.runProcess ?? runProcessBounded;
+  const temporaryRoot = path.resolve(options.temporaryRoot ?? tmpdir());
   const makeTemporaryDirectory = options.makeTemporaryDirectory ?? mkdtemp;
   const removeTemporaryDirectory = options.removeTemporaryDirectory
-    ?? ((directory: string) => rm(directory, { recursive: true, force: true }));
+    ?? null;
+  const cleanupStaleTemporaryDirectories = options.cleanupStaleTemporaryDirectories
+    ?? removeStaleCodeqlTemporaryDirectories;
   await access(repositoryRoot);
+  await cleanupStaleTemporaryDirectories(temporaryRoot);
 
-  const temporaryDirectory = await makeTemporaryDirectory(path.join(tmpdir(), 'whoisleuth-codeql-'));
+  const temporaryDirectory = await makeTemporaryDirectory(path.join(temporaryRoot, CODEQL_TEMP_DIRECTORY_PREFIX));
+  const temporaryReservation = await initializeCodeqlTemporaryReservation(temporaryDirectory);
   const databasePath = path.join(temporaryDirectory, 'database');
   const sarifPath = path.join(temporaryDirectory, 'results.sarif');
   const processOptions = {
@@ -452,7 +716,14 @@ async function runLocalCodeql(options: LocalCodeqlOptions = {}): Promise<LocalCo
     }
     throw error;
   } finally {
-    await removeTemporaryDirectory(temporaryDirectory);
+    if (removeTemporaryDirectory) await removeTemporaryDirectory(temporaryDirectory);
+    else if (!await removeOwnedCodeqlTemporaryReservation(temporaryReservation, temporaryRoot, {
+      ...(options.reservationCleanupCurrentUid !== undefined
+        ? { currentUid: options.reservationCleanupCurrentUid }
+        : {}),
+    })) {
+      throw new Error('CodeQL temporary reservation changed during the run and was preserved for manual review.');
+    }
   }
 }
 
@@ -504,7 +775,14 @@ export {
   CODEQL_LANGUAGE,
   CODEQL_PROCESS_TIMEOUT_MS,
   CODEQL_QUERY_SUITE,
+  CODEQL_STALE_DIRECTORY_AGE_MS,
+  CODEQL_TEMP_DIRECTORY_PREFIX,
+  CODEQL_TEMP_MARKER_SCHEMA,
+  CODEQL_TEMP_MARKER_VERSION,
   CODEQL_THREADS,
+  MAX_CODEQL_TEMP_ROOT_ENTRIES,
+  MAX_CODEQL_TEMP_MARKER_BYTES,
+  MAX_STALE_CODEQL_DIRECTORY_REMOVALS,
   MAX_CODEQL_RAM_MB,
   MAX_CODEQL_FINDINGS,
   MAX_CODEQL_OUTPUT_BYTES,
@@ -521,8 +799,11 @@ export {
   parseArguments,
   parseCodeqlSarif,
   parseCodeqlVersion,
+  initializeCodeqlTemporaryReservation,
+  removeOwnedCodeqlTemporaryReservation,
+  removeStaleCodeqlTemporaryDirectories,
   resolveCodeqlCommand,
   runLocalCodeql,
   runProcessBounded,
 };
-export type { CodeqlFinding, CodeqlFindings, KnownCodeqlFinding, LocalCodeqlOptions, LocalCodeqlReport, ParsedCodeqlFindings, ProcessResult };
+export type { CodeqlFinding, CodeqlFindings, CodeqlTemporaryReservation, KnownCodeqlFinding, LocalCodeqlOptions, LocalCodeqlReport, ParsedCodeqlFindings, ProcessResult, StaleCodeqlCleanupOptions };
