@@ -100,6 +100,24 @@ function lockfile() {
   };
 }
 
+function remediatedLockfile() {
+  return {
+    name: 'fixture-project',
+    lockfileVersion: 3,
+    packages: {
+      '': { dependencies: { '@netlify/blobs': '10.7.13' } },
+      'node_modules/@netlify/blobs': {
+        version: '10.7.13',
+        dependencies: { '@netlify/dev-utils': '5.0.0' },
+      },
+      'node_modules/@netlify/dev-utils': {
+        version: '5.0.0',
+        dependencies: {},
+      },
+    },
+  };
+}
+
 function assess(
   audit: ReturnType<typeof auditReport>,
   locked: unknown = lockfile(),
@@ -139,16 +157,11 @@ describe('production dependency audit policy', () => {
     assert.equal(report.findings[0]?.code, 'audit_data_unavailable');
   });
 
-  test('allows a clean production audit after the reviewed vulnerable chain is absent', () => {
+  test('allows a clean production audit for the remediated package chain', () => {
     const audit = auditReport();
     audit.vulnerabilities = {} as ReturnType<typeof auditReport>['vulnerabilities'];
     audit.metadata.vulnerabilities = { info: 0, low: 0, moderate: 0, high: 0, critical: 0, total: 0 };
-    const locked = {
-      name: 'fixture-project',
-      lockfileVersion: 3,
-      packages: { '': { dependencies: {} } },
-    };
-    const report = assess(audit, locked, new Date('2027-01-01T00:00:00.000Z'));
+    const report = assess(audit, remediatedLockfile(), new Date('2027-01-01T00:00:00.000Z'));
     assert.equal(report.status, 'accepted');
     assert.equal(report.vulnerablePackageEntries, 0);
   });
@@ -311,6 +324,7 @@ describe('production dependency audit policy', () => {
     assert.equal(code, 0);
     assert.match(stdout.value(), new RegExp(`^${rawAudit.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')}\\n`, 'u'));
     assert.match(stdout.value(), /Status: accepted/u);
+    assert.match(stdout.value(), /Historical exception guard: reviewed 2026-08-10/u);
     assert.equal(stderr.value(), '');
 
     const failedStderr = outputBuffer();
@@ -358,8 +372,10 @@ describe('production dependency audit policy', () => {
     }
   });
 
-  test('documents the exact reviewed downgrade and fresh online audit boundary', () => {
+  test('documents the remediated chain, retired exception, and fresh online audit boundary', () => {
     const guide = fs.readFileSync(path.join(REPOSITORY_ROOT, 'docs/dependency-maintenance.md'), 'utf8');
+    assert.match(guide, /currently relies on no production-audit exception/u);
+    assert.match(guide, /`@netlify\/blobs` 10\.7\.13/u);
     assert.match(guide, new RegExp(`${PRODUCTION_DEPENDENCY_AUDIT_REVIEWED_FIX.name}@${PRODUCTION_DEPENDENCY_AUDIT_REVIEWED_FIX.version}`, 'u'));
     assert.match(guide, /isolated temporary npm cache/u);
     assert.match(guide, /offline=false/u);

@@ -93,7 +93,7 @@ export function formatProductionDependencyAuditAssessment(
     `Status: ${assessment.status}`,
     `Vulnerable package entries: ${assessment.vulnerablePackageEntries}`,
     `Reviewed advisory IDs present: ${advisorySummary}`,
-    `Exception review: ${assessment.reviewedAt}; expires: ${assessment.expiresAt}`,
+    `Historical exception guard: reviewed ${assessment.reviewedAt}; expires ${assessment.expiresAt}`,
   ];
   for (const item of assessment.findings) lines.push(`BLOCKED ${item.code}: ${item.message}`);
   return `${lines.join('\n')}\n`;
