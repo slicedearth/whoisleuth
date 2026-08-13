@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { gunzipSync } from 'node:zlib';
 
 import { normalizeSemanticVersion } from './release-version-check.mts';
 import {
@@ -38,9 +39,13 @@ type PublishedCliReport = Readonly<{
   packageVersion: string;
   registry: typeof PUBLIC_REGISTRY;
   candidateArchiveSha256: string;
+  registryArchiveSha256: string;
+  tarPayloadSha256: string;
   registryIntegrity: string;
   registryShasum: string;
   packedBytes: number;
+  registryPackedBytes: number;
+  tarPayloadBytes: number;
   fileCount: number;
   unpackedBytes: number;
   runtimeDependencies: Readonly<Record<string, string>>;
@@ -58,10 +63,11 @@ const PACKAGE_HOMEPAGE = WHOISLEUTH_PROJECT_URL;
 const PACKAGE_ISSUES = WHOISLEUTH_SOURCE_ISSUES_URL;
 const PROVENANCE_PREDICATE = 'https://slsa.dev/provenance/v1';
 export const PUBLISHED_CLI_CHECK_SCHEMA = 'whoisleuth.published-cli-check';
-export const PUBLISHED_CLI_CHECK_VERSION = 2;
+export const PUBLISHED_CLI_CHECK_VERSION = 3;
 const MAX_METADATA_BYTES = 512 * 1024;
 const MAX_CANDIDATE_REPORT_BYTES = 64 * 1024;
 const MAX_ERROR_LENGTH = 512;
+const MAX_CLI_PACKAGE_TAR_BYTES = MAX_CLI_PACKAGE_UNPACKED_BYTES + (MAX_CLI_PACKAGE_ENTRIES * 2 * 512) + 1_024;
 export const PUBLISHED_CLI_REQUEST_TIMEOUT_MS = 120_000;
 const RUNTIME_DEPENDENCIES = Object.freeze([
   '@peculiar/x509',
@@ -99,6 +105,21 @@ function boundedError(value: unknown): string {
     .replace(/\s+/gu, ' ')
     .trim()
     .slice(0, MAX_ERROR_LENGTH) || 'Published CLI check failed.';
+}
+
+function reviewedAuthor(value: unknown): boolean {
+  if (value === PACKAGE_AUTHOR) return true;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const author = value as JsonRecord;
+  return Object.keys(author).length === 1 && author.name === PACKAGE_AUTHOR;
+}
+
+function boundedTarPayload(value: Uint8Array, label: string): Buffer {
+  try {
+    return gunzipSync(value, { maxOutputLength: MAX_CLI_PACKAGE_TAR_BYTES });
+  } catch {
+    throw new TypeError(`${label} is not a bounded gzip archive.`);
+  }
 }
 
 function parseJson(value: Uint8Array | string, label: string, maximumBytes: number): unknown {
@@ -251,7 +272,7 @@ export function validatePublishedManifest(value: unknown, expectedVersionValue: 
   if (manifest.name !== PACKAGE_NAME || normalizeSemanticVersion(manifest.version) !== expectedVersion) {
     throw new TypeError('Published package identity does not match the selected version.');
   }
-  if (manifest.license !== 'AGPL-3.0-only' || manifest.type !== 'module' || manifest.author !== PACKAGE_AUTHOR) {
+  if (manifest.license !== 'AGPL-3.0-only' || manifest.type !== 'module' || !reviewedAuthor(manifest.author)) {
     throw new TypeError('Published package author, licence, or module type does not match the reviewed contract.');
   }
   if (Object.hasOwn(manifest, 'private') || Object.hasOwn(manifest, 'scripts')) throw new TypeError('Published package must not be private or declare lifecycle scripts.');
@@ -309,6 +330,7 @@ export async function checkPublishedCli(
   if (archiveBytes.byteLength !== candidate.packedBytes || sha256(archiveBytes) !== candidate.archiveSha256) {
     throw new TypeError('Selected candidate archive bytes do not match the reviewed report.');
   }
+  const candidateTarPayload = boundedTarPayload(archiveBytes, 'Reviewed candidate archive');
 
   const fetcher = options.fetcher || fetch;
   const timeoutMs = requestTimeout(options.requestTimeoutMs);
@@ -333,8 +355,9 @@ export async function checkPublishedCli(
   const publishedIntegrity = `sha512-${createHash('sha512').update(publishedArchive).digest('base64')}`;
   const publishedShasum = createHash('sha1').update(publishedArchive).digest('hex');
   if (publishedIntegrity !== published.integrity || publishedShasum !== published.shasum) throw new TypeError('Published archive bytes do not match registry integrity metadata.');
-  if (publishedArchive.byteLength !== candidate.packedBytes || sha256(publishedArchive) !== candidate.archiveSha256 || !Buffer.from(publishedArchive).equals(archiveBytes)) {
-    throw new TypeError('Published archive is not byte-identical to the reviewed candidate.');
+  const publishedTarPayload = boundedTarPayload(publishedArchive, 'Published package archive');
+  if (!publishedTarPayload.equals(candidateTarPayload)) {
+    throw new TypeError('Published tar payload is not byte-identical to the reviewed candidate.');
   }
   if (published.fileCount !== candidate.packedEntryCount || published.unpackedBytes !== candidate.unpackedBytes) throw new TypeError('Published archive measurements do not match the reviewed candidate.');
   if (RUNTIME_DEPENDENCIES.some((name) => published.runtimeDependencies[name] !== candidate.runtimeDependencies[name])) {
@@ -348,16 +371,21 @@ export async function checkPublishedCli(
     packageVersion: expectedVersion,
     registry: PUBLIC_REGISTRY,
     candidateArchiveSha256: candidate.archiveSha256,
+    registryArchiveSha256: sha256(publishedArchive),
+    tarPayloadSha256: sha256(candidateTarPayload),
     registryIntegrity: published.integrity,
     registryShasum: published.shasum,
     packedBytes: candidate.packedBytes,
+    registryPackedBytes: publishedArchive.byteLength,
+    tarPayloadBytes: candidateTarPayload.byteLength,
     fileCount: published.fileCount,
     unpackedBytes: published.unpackedBytes,
     runtimeDependencies: published.runtimeDependencies,
     provenancePredicate: PROVENANCE_PREDICATE,
     registrySignatureMetadataCount: published.registrySignatureCount,
-    checks: Object.freeze(['metadata', 'registry-content-integrity', 'candidate-byte-identity', 'archive-measurements', 'runtime-dependencies']),
+    checks: Object.freeze(['metadata', 'registry-content-integrity', 'candidate-tar-payload-identity', 'archive-measurements', 'runtime-dependencies']),
     limitations: Object.freeze([
+      'The registry may recompress the gzip envelope; the decompressed tar payload must remain byte-identical to the reviewed candidate.',
       'Registry signature and OIDC provenance records are observed metadata; this check does not cryptographically verify those attestations.',
       'The published package is not installed or executed by this verification workflow.',
     ]),
@@ -370,7 +398,9 @@ export function formatPublishedCliReport(report: PublishedCliReport): string {
     `Package: ${report.packageName}@${report.packageVersion}`,
     `Registry: ${report.registry}`,
     `Candidate SHA-256: ${report.candidateArchiveSha256}`,
-    `Archive: ${report.fileCount} files / ${report.packedBytes} packed bytes / ${report.unpackedBytes} unpacked bytes`,
+    `Registry archive SHA-256: ${report.registryArchiveSha256}`,
+    `Shared tar payload SHA-256: ${report.tarPayloadSha256}`,
+    `Archive: ${report.fileCount} files / ${report.packedBytes} candidate gzip bytes / ${report.registryPackedBytes} registry gzip bytes / ${report.tarPayloadBytes} tar payload bytes / ${report.unpackedBytes} unpacked file bytes`,
     `Runtime dependencies: ${Object.entries(report.runtimeDependencies).map(([name, version]) => `${name}@${version}`).join(', ')}`,
     `Provenance metadata: ${report.provenancePredicate}`,
     `Registry signature metadata records: ${report.registrySignatureMetadataCount}`,
