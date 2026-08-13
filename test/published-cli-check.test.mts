@@ -4,6 +4,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, test } from 'node:test';
+import { gzipSync } from 'node:zlib';
 
 import {
   checkPublishedCli,
@@ -19,7 +20,9 @@ import { MAX_CLI_PACKAGE_ENTRIES } from '../tools/cli-package.mts';
 
 const VERSION = '1.33.0';
 const PACKAGE_NAME = '@slicedearth/whoisleuth-cli';
-const ARCHIVE = Buffer.from('reviewed fixture package bytes');
+const TAR_PAYLOAD = Buffer.from('reviewed fixture tar payload bytes');
+const ARCHIVE = gzipSync(TAR_PAYLOAD, { level: 9 });
+const RECOMPRESSED_ARCHIVE = gzipSync(TAR_PAYLOAD, { level: 0 });
 
 function digest(algorithm: 'sha1' | 'sha256' | 'sha512', bytes = ARCHIVE, encoding: 'hex' | 'base64' = 'hex') {
   return createHash(algorithm).update(bytes).digest(encoding);
@@ -47,7 +50,7 @@ function candidateReport(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function publishedManifest(overrides: Record<string, unknown> = {}) {
+function publishedManifest(overrides: Record<string, unknown> = {}, archive = ARCHIVE) {
   return {
     name: PACKAGE_NAME,
     version: VERSION,
@@ -63,8 +66,8 @@ function publishedManifest(overrides: Record<string, unknown> = {}) {
     bugs: { url: 'https://github.com/slicedearth/whoisleuth/issues' },
     dependencies: candidateReport().runtimeDependencies,
     dist: {
-      integrity: `sha512-${digest('sha512', ARCHIVE, 'base64')}`,
-      shasum: digest('sha1'),
+      integrity: `sha512-${digest('sha512', archive, 'base64')}`,
+      shasum: digest('sha1', archive),
       tarball: `https://registry.npmjs.org/@slicedearth/whoisleuth-cli/-/whoisleuth-cli-${VERSION}.tgz`,
       fileCount: 191,
       unpackedSize: 3_120_000,
@@ -102,12 +105,21 @@ function fixtureFetcher(manifest = publishedManifest(), archive = ARCHIVE): Fetc
 }
 
 describe('published CLI verification', () => {
-  test('binds exact reviewed candidate bytes to registry metadata and downloaded bytes without execution', async () => {
-    const report = await withCandidate(({ report, archive }) => checkPublishedCli(VERSION, report, archive, { fetcher: fixtureFetcher() }));
+  test('binds an npm-normalized manifest and recompressed registry archive to the exact reviewed tar payload without execution', async () => {
+    assert.notDeepEqual(RECOMPRESSED_ARCHIVE, ARCHIVE);
+    const manifest = publishedManifest({ author: { name: 'slicedearth' } }, RECOMPRESSED_ARCHIVE);
+    const report = await withCandidate(({ report, archive }) => checkPublishedCli(VERSION, report, archive, {
+      fetcher: fixtureFetcher(manifest, RECOMPRESSED_ARCHIVE),
+    }));
     assert.equal(report.schema, 'whoisleuth.published-cli-check');
-    assert.equal(report.version, 2);
+    assert.equal(report.version, 3);
     assert.equal(report.candidateArchiveSha256, digest('sha256'));
-    assert.deepEqual(report.checks, ['metadata', 'registry-content-integrity', 'candidate-byte-identity', 'archive-measurements', 'runtime-dependencies']);
+    assert.equal(report.registryArchiveSha256, digest('sha256', RECOMPRESSED_ARCHIVE));
+    assert.equal(report.tarPayloadSha256, digest('sha256', TAR_PAYLOAD));
+    assert.equal(report.registryPackedBytes, RECOMPRESSED_ARCHIVE.byteLength);
+    assert.equal(report.tarPayloadBytes, TAR_PAYLOAD.byteLength);
+    assert.deepEqual(report.checks, ['metadata', 'registry-content-integrity', 'candidate-tar-payload-identity', 'archive-measurements', 'runtime-dependencies']);
+    assert.match(formatPublishedCliReport(report), /recompress the gzip envelope/u);
     assert.match(formatPublishedCliReport(report), /does not cryptographically verify/u);
     assert.match(formatPublishedCliReport(report), /not installed or executed/u);
   });
@@ -124,8 +136,10 @@ describe('published CLI verification', () => {
   });
 
   test('rejects lifecycle scripts, dependency ranges, provenance loss, and off-registry artifacts', () => {
+    assert.doesNotThrow(() => validatePublishedManifest(publishedManifest({ author: { name: 'slicedearth' } }), VERSION));
     assert.throws(() => validatePublishedManifest(publishedManifest({ scripts: { postinstall: 'node install.mjs' } }), VERSION), /must not be private or declare lifecycle scripts/u);
     assert.throws(() => validatePublishedManifest(publishedManifest({ author: 'different-publisher' }), VERSION), /author, licence, or module type/u);
+    assert.throws(() => validatePublishedManifest(publishedManifest({ author: { name: 'slicedearth', email: 'unexpected@example.test' } }), VERSION), /author, licence, or module type/u);
     assert.throws(() => validatePublishedManifest(publishedManifest({ homepage: 'https://invalid.example/' }), VERSION), /source and support links/u);
     assert.throws(() => validatePublishedManifest(publishedManifest({ dependencies: { ...candidateReport().runtimeDependencies, parse5: '^8.0.1' } }), VERSION), /major, minor, and patch/u);
     assert.throws(() => validatePublishedManifest(publishedManifest({
@@ -139,22 +153,23 @@ describe('published CLI verification', () => {
     }), VERSION), /Published file count must be between/u);
   });
 
-  test('rejects registry digest drift and a non-identical published archive', async () => {
+  test('rejects registry digest drift, malformed gzip, and a non-identical published tar payload', async () => {
     const changed = Buffer.from('different published bytes');
     await assert.rejects(
       () => withCandidate(({ report, archive }) => checkPublishedCli(VERSION, report, archive, { fetcher: fixtureFetcher(publishedManifest(), changed) })),
       /registry integrity metadata/u,
     );
-    const changedManifest = publishedManifest({
-      dist: {
-        ...(publishedManifest().dist as object),
-        integrity: `sha512-${digest('sha512', changed, 'base64')}`,
-        shasum: digest('sha1', changed),
-      },
-    });
+    const malformedManifest = publishedManifest({}, changed);
     await assert.rejects(
-      () => withCandidate(({ report, archive }) => checkPublishedCli(VERSION, report, archive, { fetcher: fixtureFetcher(changedManifest, changed) })),
-      /not byte-identical/u,
+      () => withCandidate(({ report, archive }) => checkPublishedCli(VERSION, report, archive, { fetcher: fixtureFetcher(malformedManifest, changed) })),
+      /not a bounded gzip archive/u,
+    );
+
+    const changedTarArchive = gzipSync(Buffer.from('different published tar payload'));
+    const changedManifest = publishedManifest({}, changedTarArchive);
+    await assert.rejects(
+      () => withCandidate(({ report, archive }) => checkPublishedCli(VERSION, report, archive, { fetcher: fixtureFetcher(changedManifest, changedTarArchive) })),
+      /tar payload is not byte-identical/u,
     );
   });
 

@@ -89,16 +89,18 @@ npm run cli:package:verify-published -- "$VERSION" \
 The post-publication check reads bounded metadata and archive bytes from the
 public registry under a 120-second deadline for each complete response,
 including streamed body reads. It verifies the registry SHA-512 and SHA-1
-metadata, and requires
-the published archive to be byte-identical to the explicitly selected reviewed
-candidate and its SHA-256 report. It also binds package measurements, exact
-dependency pins, and source metadata. Registry signature and SLSA provenance
-records are reported as observed metadata; this check does not independently
-verify their cryptography. It never installs or executes the published package
-and does not inherit npm credentials. The manual workflow requires both the
-version and the release-workflow run ID so it downloads the reviewed candidate
-artifact rather than reconstructing one. Run it only after registry
-publication; an unavailable, still-staged, or non-identical version fails.
+metadata, retains the raw candidate and registry gzip digests separately, and
+requires the decompressed tar payload to be byte-identical to the explicitly
+selected reviewed candidate. npm staging may recompress the gzip envelope
+without changing that tar payload. The check also binds package measurements,
+exact dependency pins, and source metadata. Registry signature and SLSA
+provenance records are reported as observed metadata; this check does not
+independently verify their cryptography. It never installs or executes the
+published package and does not inherit npm credentials. The manual workflow
+requires both the version and the release-workflow run ID so it downloads the
+reviewed candidate artifact rather than reconstructing one. Run it only after
+registry publication; an unavailable, still-staged, or non-identical tar
+payload fails.
 The reviewed candidate is retained for 7 days. Protected approval, npm
 promotion, and post-publication verification must finish while that exact
 artifact remains available; after expiry, assemble and review a fresh
