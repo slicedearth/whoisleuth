@@ -12,6 +12,9 @@ import type { CliProgressEvents } from './progress-events.mts';
 import type { TerminalProgress } from './progress.mts';
 import type { UnknownRecord } from './saved-lookup.mts';
 import type { TerminalEnvironment, WritableTerminal } from './terminal-presentation.mts';
+import type { browseLookupDocument, browseLookupOperation, canBrowseLookup } from './lookup-browser.mts';
+import type { canLaunchInteractiveCli, launchInteractiveCli } from './interactive-launcher.mts';
+import type { writePrivateFile } from './output-file.mts';
 
 type WritableLike = WritableTerminal;
 
@@ -88,6 +91,12 @@ type CliDependencies = {
   riskReviewThreshold?: number;
   loadRegistryComparison?: () => Promise<typeof import('../lib/registry-comparison.mts')>;
   loadEvidenceExport?: () => Promise<typeof import('../lib/evidence-export.mts')>;
+  browseLookupDocument?: typeof browseLookupDocument;
+  browseLookupOperation?: typeof browseLookupOperation;
+  canBrowseLookup?: typeof canBrowseLookup;
+  canLaunchInteractiveCli?: typeof canLaunchInteractiveCli;
+  launchInteractiveCli?: typeof launchInteractiveCli;
+  writePrivateFile?: typeof writePrivateFile;
   resolvePublicAddresses?: typeof resolvePublicAddresses;
   safeFetch?: typeof safeFetch;
   whoisQuery?: typeof whoisQuery;

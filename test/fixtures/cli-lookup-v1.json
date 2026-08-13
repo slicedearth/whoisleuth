@@ -1,0 +1,38 @@
+{
+  "schema": "whoisleuth.cli.lookup",
+  "version": 1,
+  "generatedAt": "2026-08-01T00:00:00.000Z",
+  "mode": "deep",
+  "query": "example.test",
+  "type": "domain",
+  "inputHostname": "example.test",
+  "registrableDomain": "example.test",
+  "isSubdomain": false,
+  "rdap": {
+    "parsed": {
+      "domain": "EXAMPLE.TEST",
+      "registrar": { "name": "Example Registrar" },
+      "nameservers": ["ns1.example.test"],
+      "statuses": ["active"]
+    }
+  },
+  "whois": {
+    "parsed": {
+      "domainName": "EXAMPLE.TEST",
+      "registrar": "Example Registrar",
+      "nameservers": ["ns1.example.test"],
+      "statuses": ["active"]
+    }
+  },
+  "availability": {
+    "applicable": true,
+    "domain": "example.test",
+    "state": "registered",
+    "confidence": "high"
+  },
+  "diagnostics": {
+    "rdap": { "status": "success" },
+    "whois": { "status": "complete" },
+    "availability": { "status": "complete", "resultState": "registered" }
+  }
+}

@@ -1,6 +1,7 @@
 import { abortable } from '../lib/abort.mts';
 import { classifyQuery } from '../lib/classify.mts';
 import { runUnifiedLookup } from '../lib/lookup.mts';
+import { plannedLookupProgressSources } from '../lib/lookup-source-progress.mts';
 import type { CliArguments } from './arguments.mts';
 import { CliUsageError, boundedCliErrorMessage } from './errors.mts';
 import EXIT_CODES from './exit-codes.mts';
@@ -16,6 +17,8 @@ import type { UnknownRecord } from './saved-lookup.mts';
 import { lookupStrictExitFindings } from './strict-exit.mts';
 import { evaluateCliFailPolicies, formatFailPolicyNotice } from './fail-policy.mts';
 import { formatCliJunit } from './ci-report.mts';
+import { browseLookupOperation, canBrowseLookup } from './lookup-browser.mts';
+import { writePrivateFile } from './output-file.mts';
 
 type LookupCommandArguments = Extract<CliArguments, { action: 'lookup' }>;
 
@@ -24,6 +27,15 @@ async function runLookupCommand(
   dependencies: CliDependencies,
   context: CliCommandContext,
 ): Promise<number> {
+  const browserInput = dependencies.stdin || process.stdin;
+  const browserEnvironment = dependencies.environment || process.env;
+  if (args.browse === true) {
+    if (!args.query) throw new CliUsageError('--browse requires a positional target because interactive stdin is reserved for navigation.');
+    const supportsBrowser = dependencies.canBrowseLookup || canBrowseLookup;
+    if (!supportsBrowser(browserInput, context.stdout, browserEnvironment)) {
+      throw new CliUsageError('--browse requires interactive terminal input and output. Use ordinary terminal output or --json when redirecting.');
+    }
+  }
   const eventProgress = createCliProgressEvents(context.stderr, {
     command: 'lookup',
     enabled: args.events,
@@ -53,57 +65,104 @@ async function runLookupCommand(
     return EXIT_CODES.SUCCESS;
   }
 
-  const indicator = context.beginProgress(args.deep
-    ? 'Collecting deep Lookup evidence'
-    : 'Collecting registration evidence');
-  let settledSources = 0;
-  let result: unknown;
-  try {
-    result = await abortable(() => executeLookup(classified, args.deep
-      ? {
-          fast: false,
-          compact: false,
-          ...(dependencies.signal ? { signal: dependencies.signal } : {}),
-          onSourceSettled: (settlement) => {
-            settledSources += 1;
-            indicator.update(
-              `Collected ${settledSources} source${settledSources === 1 ? '' : 's'} · ${settlement.source.replaceAll('_', ' ')} ${settlement.state}`,
-            );
-            eventProgress.emit({ event: 'source_settled', source: settlement.source, state: settlement.state });
-          },
-        }
-      : {
-          fast: true,
-          compact: false,
-          ...(dependencies.signal ? { signal: dependencies.signal } : {}),
-        }), dependencies.signal);
-  } finally {
-    context.endProgress();
+  let documentGeneratedAt = '';
+  const buildDocument = (result: unknown) => {
+    documentGeneratedAt = context.now();
+    return buildCliLookupDocument(
+      query,
+      classified,
+      result as UnknownRecord,
+      documentGeneratedAt,
+      args.deep ? 'deep' : 'fast',
+      {
+        ...(args.observerLabel ? { observerLabel: args.observerLabel } : {}),
+        ...(args.vantageLabel ? { vantageLabel: args.vantageLabel } : {}),
+      },
+    );
+  };
+  let document: UnknownRecord;
+  if (args.browse === true) {
+    const browse = dependencies.browseLookupOperation || browseLookupOperation;
+    document = await browse({
+      input: browserInput,
+      output: context.stdout,
+      environment: browserEnvironment,
+      color: args.color,
+      ...(args.palette ? { palette: args.palette } : {}),
+      query,
+      mode: args.deep ? 'deep' : 'fast',
+      plannedSources: args.deep ? plannedLookupProgressSources(classified) : [],
+      ...(dependencies.signal ? { signal: dependencies.signal } : {}),
+      collect: async ({ signal, onSourceSettled }) => {
+        const result = await abortable(() => executeLookup(classified, args.deep
+          ? {
+              fast: false,
+              compact: false,
+              signal,
+              onSourceSettled: (settlement) => {
+                onSourceSettled(settlement);
+                eventProgress.emit({ event: 'source_settled', source: settlement.source, state: settlement.state });
+              },
+            }
+          : {
+              fast: true,
+              compact: false,
+              signal,
+            }), signal);
+        return buildDocument(result);
+      },
+    });
+    if (args.saveLookup) {
+      if (dependencies.signal?.aborted) {
+        throw dependencies.signal.reason || new DOMException('Aborted', 'AbortError');
+      }
+      const save = dependencies.writePrivateFile || writePrivateFile;
+      await save(args.saveLookup, formatJsonDocument(document), {
+        existingFileMessage: 'Saved Lookup file already exists. Choose a new --save-lookup path or remove the existing file explicitly.',
+      });
+      context.writeStderr('Saved the completed private Lookup JSON. It can contain normalized evidence not shown in browser panels.\n');
+    }
+  } else {
+    const indicator = context.beginProgress(args.deep
+      ? 'Collecting deep Lookup evidence'
+      : 'Collecting registration evidence');
+    let settledSources = 0;
+    let result: unknown;
+    try {
+      result = await abortable(() => executeLookup(classified, args.deep
+        ? {
+            fast: false,
+            compact: false,
+            ...(dependencies.signal ? { signal: dependencies.signal } : {}),
+            onSourceSettled: (settlement) => {
+              settledSources += 1;
+              indicator.update(
+                `Collected ${settledSources} source${settledSources === 1 ? '' : 's'} · ${settlement.source.replaceAll('_', ' ')} ${settlement.state}`,
+              );
+              eventProgress.emit({ event: 'source_settled', source: settlement.source, state: settlement.state });
+            },
+          }
+        : {
+            fast: true,
+            compact: false,
+            ...(dependencies.signal ? { signal: dependencies.signal } : {}),
+          }), dependencies.signal);
+    } finally {
+      context.endProgress();
+    }
+    document = buildDocument(result);
   }
-
-  const now = context.now();
-  const document = buildCliLookupDocument(
-    query,
-    classified,
-    result as UnknownRecord,
-    now,
-    args.deep ? 'deep' : 'fast',
-    {
-      ...(args.observerLabel ? { observerLabel: args.observerLabel } : {}),
-      ...(args.vantageLabel ? { vantageLabel: args.vantageLabel } : {}),
-    },
-  );
   if (!args.quiet) {
     if (args.output === 'json') context.writeStdout(formatJsonDocument(document));
     else if (args.output === 'junit') context.writeStdout(formatCliJunit(document));
     else if (args.output === 'markdown' || args.output === 'html') {
       const loadEvidence = dependencies.loadEvidenceExport || (() => import('../lib/evidence-export.mts'));
       const evidenceModule = await loadEvidence();
-      const report = buildCliEvidenceExport(JSON.stringify(document), evidenceModule, now);
+      const report = buildCliEvidenceExport(JSON.stringify(document), evidenceModule, documentGeneratedAt);
       context.writeStdout(args.output === 'markdown'
         ? formatLookupEvidenceMarkdown(report, { includeAttribution: args.includeAttribution })
         : formatLookupEvidenceHtml(report, { includeAttribution: args.includeAttribution }));
-    } else {
+    } else if (args.browse !== true) {
       context.writeStdout(context.terminal(formatTerminalLookup(document, { detail: args.detail }), args.color));
     }
   }

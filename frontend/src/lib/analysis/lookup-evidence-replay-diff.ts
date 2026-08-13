@@ -32,6 +32,63 @@ function factSourceExplicitlyComplete(
   return Boolean(source && explicitlyCompleteSourceState(source.state, source.complete));
 }
 
+type ReplayMetadataKey = 'pagePublicationMetadata' | 'httpDeliveryMetadata';
+
+function appendMetadataRows(
+  rows: LookupEvidenceReplayDiffRow[],
+  left: LookupEvidenceReplay,
+  right: LookupEvidenceReplay,
+  key: ReplayMetadataKey,
+  label: string,
+): void {
+  const before = left[key];
+  const after = right[key];
+  if (!before && !after) return;
+  const id = key === 'pagePublicationMetadata' ? 'publication' : 'delivery';
+  if (left.schemaVersion !== right.schemaVersion && (!before || !after)) {
+    rows.push({
+      id: `metadata:${id}`,
+      label,
+      kind: 'interpretation_difference',
+      left: before ? 'represented' : `not represented by schema ${left.schemaVersion}`,
+      right: after ? 'represented' : `not represented by schema ${right.schemaVersion}`,
+      explanation: 'The evidence schemas represent different bounded metadata contracts, so this is not reported as target change.',
+    });
+    return;
+  }
+  if (!before || !after) {
+    rows.push({
+      id: `metadata:${id}`,
+      label,
+      kind: 'collection_quality_difference',
+      left: before ? `${before.status} metadata` : 'not recorded',
+      right: after ? `${after.status} metadata` : 'not recorded',
+      explanation: 'One capture does not contain this optional metadata, so no target change is inferred.',
+    });
+    return;
+  }
+  const rowIds = [...new Set([...before.rows.map((item) => item.id), ...after.rows.map((item) => item.id)])].sort();
+  for (const rowId of rowIds) {
+    const beforeRow = before.rows.find((item) => item.id === rowId);
+    const afterRow = after.rows.find((item) => item.id === rowId);
+    const unchanged = Boolean(beforeRow && afterRow && sameText(beforeRow.value, afterRow.value));
+    const complete = before.complete && after.complete;
+    const kind = unchanged ? 'unchanged' : complete ? 'observed_change' : 'collection_quality_difference';
+    rows.push({
+      id: `metadata:${rowId}`,
+      label: beforeRow?.label ?? afterRow?.label ?? label,
+      kind,
+      left: beforeRow?.value ?? 'not recorded',
+      right: afterRow?.value ?? 'not recorded',
+      explanation: kind === 'observed_change'
+        ? 'The bounded metadata value differs between two complete retained observations.'
+        : kind === 'collection_quality_difference'
+          ? 'At least one metadata observation is partial or missing, so the difference is not represented as target change.'
+          : 'The bounded metadata value is unchanged.',
+    });
+  }
+}
+
 export function buildLookupEvidenceReplayDiff(
   left: LookupEvidenceReplay,
   right: LookupEvidenceReplay,
@@ -87,6 +144,8 @@ export function buildLookupEvidenceReplayDiff(
           : 'The bounded normalised value is unchanged.',
     });
   }
+  appendMetadataRows(rows, left, right, 'pagePublicationMetadata', 'Homepage publication metadata');
+  appendMetadataRows(rows, left, right, 'httpDeliveryMetadata', 'HTTP delivery metadata');
   if (left.generatorVersion !== right.generatorVersion) {
     rows.push({
       id: 'interpretation:generator-version',

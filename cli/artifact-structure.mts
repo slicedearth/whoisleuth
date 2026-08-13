@@ -81,6 +81,10 @@ import {
 import { compareRegistrySources } from '../lib/registry-comparison.mts';
 import { buildRegistryInsights } from '../lib/registry-insights.mts';
 import { WHOISLEUTH_SOURCE_REPOSITORY_URL } from '../lib/project-metadata.mts';
+import {
+  validHttpDeliveryMetadata,
+  validPagePublicationMetadata,
+} from '../lib/homepage-metadata-contract.mts';
 import { isDeepStrictEqual } from 'node:util';
 
 type UnknownRecord = Record<string, unknown>;
@@ -214,6 +218,38 @@ const LOOKUP_IDN_ANALYSIS_KEYS = [
   'scripts', 'labels', 'mixedScript', 'skeleton', 'referenceMatches', 'findings',
   'truncated', 'limitations',
 ] as const;
+
+function validateLookupEvidenceHomepageMetadata(
+  availability: UnknownRecord,
+  version: number,
+): void {
+  const pageIdentity = availability.pageIdentity === null || availability.pageIdentity === undefined
+    ? null
+    : record(availability.pageIdentity, 'Lookup evidence page identity');
+  const http = availability.http === null || availability.http === undefined
+    ? null
+    : record(availability.http, 'Lookup evidence HTTP analysis');
+  const response = http?.response === null || http?.response === undefined
+    ? null
+    : record(http.response, 'Lookup evidence HTTP response');
+  const publicationPresent = Boolean(pageIdentity && Object.hasOwn(pageIdentity, 'publicationMetadata'));
+  const deliveryPresent = Boolean(response && Object.hasOwn(response, 'deliveryMetadata'));
+  if (version !== LOOKUP_EVIDENCE_SCHEMA_VERSION && (publicationPresent || deliveryPresent)) {
+    fail('Lookup evidence homepage metadata epoch');
+  }
+  if (publicationPresent && !validPagePublicationMetadata(pageIdentity?.publicationMetadata)) {
+    fail('Lookup evidence page publication metadata');
+  }
+  if (publicationPresent && !['success', 'partial'].includes(String(pageIdentity?.status))) {
+    fail('Lookup evidence page publication metadata source state');
+  }
+  if (deliveryPresent && !validHttpDeliveryMetadata(response?.deliveryMetadata)) {
+    fail('Lookup evidence HTTP delivery metadata');
+  }
+  if (deliveryPresent && !['success', 'partial'].includes(String(http?.status))) {
+    fail('Lookup evidence HTTP delivery metadata source state');
+  }
+}
 
 function validateLookupEvidenceRdapAttempt(value: unknown, label: string): void {
   const attempt = exact(value, ['endpoint', 'transportSecurity', 'status', 'outcome', 'detail', 'selected'], label);
@@ -749,7 +785,8 @@ export function validateLookupEvidenceArtifactStructure(value: UnknownRecord): v
 
   const analysis = exact(root.analysis, ['availability', 'idn', 'registryInsights', 'registryComparison', 'registrarPublicationComparison'], 'Lookup evidence analysis');
   if (analysis.availability !== null) {
-    exactOptional(analysis.availability, [], LOOKUP_AVAILABILITY_ANALYSIS_KEYS, 'Lookup evidence availability analysis');
+    const availability = exactOptional(analysis.availability, [], LOOKUP_AVAILABILITY_ANALYSIS_KEYS, 'Lookup evidence availability analysis');
+    validateLookupEvidenceHomepageMetadata(availability, version);
     if (version !== LEGACY_LOOKUP_EVIDENCE_SCHEMA_VERSION
       && !isDeepStrictEqual(
         analysis.availability,

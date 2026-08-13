@@ -80,7 +80,7 @@
   .public-brand small{margin-top:2px;color:var(--muted);font-size:var(--text-2xs)}
   .public-header nav{--public-nav-control-h:38px;display:flex;align-items:center;gap:5px;margin:0}
   .public-header nav a,.public-header nav button{display:inline-flex;position:static;width:auto;height:var(--public-nav-control-h);min-height:var(--public-nav-control-h);align-items:center;justify-content:center;margin:0;padding:0 11px;border:1px solid transparent;border-radius:var(--radius-sm);color:var(--muted);background:transparent;font:700 var(--text-xs) var(--mono);white-space:nowrap}
-  .public-header nav :global(.theme-selector){height:var(--public-nav-control-h);margin:0 5px;font-size:var(--text-xs)}
+  .public-header nav :global(.theme-selector){--theme-selector-surface:var(--bg);height:var(--public-nav-control-h);margin:0 5px;font-size:var(--text-xs)}
   .public-header nav :global(.theme-control),.public-header nav :global(.theme-trigger){height:100%}
   .public-header nav :global(.theme-trigger){min-height:100%;font-size:inherit}
   .public-header nav a::before{content:none}

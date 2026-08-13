@@ -1,12 +1,13 @@
 import { CLI_COMMANDS, type CliCommand, type CompletionShell } from './arguments.mts';
 import { INVESTIGATION_PLAN_RECIPES } from './investigation-plan.mts';
 
-const COMMON_OPTIONS = Object.freeze(['--help', '--output', '--force', '--config', '--profile']);
+const MAX_CLI_COMPLETION_BYTES = 32 * 1024;
+const COMMON_OPTIONS = Object.freeze(['--help', '--output', '--force', '--config', '--profile', '--palette']);
 const OPTIONS_BY_COMMAND: Readonly<Record<CliCommand, readonly string[]>> = Object.freeze({
   manifest: ['--workflow', '--configuration-digest', '--json', '--quiet', '--no-color'],
   'map-observations': ['--json', '--quiet', '--no-color'],
   'oam-export': ['--json', '--quiet', '--no-color'],
-  lookup: ['--json', '--junit', '--markdown', '--html', '--no-attribution', '--fast', '--deep', '--observer', '--vantage', '--plan', '--summary', '--verbose', '--strict-exit', '--fail-on', '--events', '--quiet', '--no-color'],
+  lookup: ['--json', '--junit', '--markdown', '--html', '--no-attribution', '--fast', '--deep', '--observer', '--vantage', '--plan', '--summary', '--verbose', '--browse', '--save-lookup', '--strict-exit', '--fail-on', '--events', '--quiet', '--no-color'],
   bulk: ['--json', '--jsonl', '--junit', '--csv', '--domains', '--queries', '--registered-only', '--inconclusive-only', '--errors-only', '--fast', '--deep', '--concurrency', '--checkpoint', '--resume', '--events', '--plan', '--fail-on', '--quiet', '--no-color'],
   'ct-search': ['--json', '--quiet', '--no-color'],
   'ct-intake': ['--json', '--quiet', '--no-color'],
@@ -110,6 +111,7 @@ const VALUE_OPTIONS: Readonly<Record<string, readonly string[]>> = Object.freeze
   '--recipient-scope': ['public', 'community', 'organization', 'named-recipients'],
   '--audience': ['internal', 'trusted', 'public'],
   '--concurrency': ['1', '2', '3', '4', '5', '6', '7', '8'],
+  '--palette': ['auto', 'light', 'dark'],
 });
 
 const FILE_OPTIONS = Object.freeze([
@@ -125,6 +127,7 @@ const FILE_OPTIONS = Object.freeze([
   '--observation-snapshot',
   '--previous',
   '--resume',
+  '--save-lookup',
   '--trust-anchor',
 ]);
 
@@ -160,6 +163,12 @@ function bashCompletion(): string {
   const cases = CLI_COMMANDS.map((command) => `    ${command}) options="${commandOptions(command)}" ;;`).join('\n');
   const valueCases = Object.entries(VALUE_OPTIONS).map(([option, values]) => `    ${option}) COMPREPLY=( $(compgen -W "${values.join(' ')}" -- "\${current}") ); return ;;`).join('\n');
   return `# WHOISleuth bash completion
+_whoisleuth_direct_lookup_target() {
+  local candidate="\${1}"
+  [[ "\${candidate}" != -* ]] || return 1
+  case " ${CLI_COMMANDS.join(' ')} " in *" \${candidate} "*) return 1 ;; esac
+  "\${COMP_WORDS[0]}" "\${candidate}" --plan --json >/dev/null 2>&1
+}
 _whoisleuth_completion() {
   local current previous command options
   current="\${COMP_WORDS[COMP_CWORD]}"
@@ -168,6 +177,9 @@ _whoisleuth_completion() {
   if [[ \${COMP_CWORD} -eq 1 ]]; then
     COMPREPLY=( $(compgen -W "${CLI_COMMANDS.join(' ')} --help --version" -- "\${current}") )
     return
+  fi
+  if _whoisleuth_direct_lookup_target "\${command}"; then
+    command="lookup"
   fi
   if [[ "\${command}" == "completion" && \${COMP_CWORD} -eq 2 ]]; then
     COMPREPLY=( $(compgen -W "bash zsh fish powershell" -- "\${current}") )
@@ -200,6 +212,12 @@ function zshCompletion(): string {
   const cases = CLI_COMMANDS.map((command) => `    ${command}) options=(${commandOptions(command)}) ;;`).join('\n');
   const valueCases = Object.entries(VALUE_OPTIONS).map(([option, values]) => `    ${option}) compadd -- ${values.join(' ')}; return ;;`).join('\n');
   return `#compdef whoisleuth
+_whoisleuth_direct_lookup_target() {
+  local candidate="\${1}"
+  [[ "\${candidate}" != -* ]] || return 1
+  [[ " ${CLI_COMMANDS.join(' ')} " == *" \${candidate} "* ]] && return 1
+  "\${words[1]}" "\${candidate}" --plan --json >/dev/null 2>&1
+}
 _whoisleuth() {
   local command previous
   local -a options commands
@@ -210,6 +228,9 @@ _whoisleuth() {
   fi
   command="\${words[2]}"
   previous="\${words[CURRENT-1]}"
+  if _whoisleuth_direct_lookup_target "\${command}"; then
+    command="lookup"
+  fi
   if [[ "\${command}" == "completion" && CURRENT -eq 3 ]]; then
     compadd -- bash zsh fish powershell
     return
@@ -251,15 +272,42 @@ function fishCompletion(): string {
       const requiresValue = fileValue || [...Object.keys(VALUE_OPTIONS), ...TEXT_OPTIONS].includes(option);
       return `complete -c whoisleuth -n '${condition}' -l ${name}${requiresValue ? ' -r' : ''}${fileValue ? ' -F' : ''}`;
   };
-  const commonCondition = 'not __fish_use_subcommand';
+  const commonCondition = 'not __fish_use_subcommand; or __whoisleuth_direct_lookup_target';
   const commonOptionLines = COMMON_OPTIONS.map((option) => optionLine(commonCondition, option));
   const optionLines = Object.entries(OPTIONS_BY_COMMAND).flatMap(([command, options]) => (
-    options.map((option) => optionLine(`__fish_seen_subcommand_from ${command}`, option))
+    options.map((option) => optionLine(
+      command === 'lookup'
+        ? '__fish_seen_subcommand_from lookup; or __whoisleuth_direct_lookup_target'
+        : `__fish_seen_subcommand_from ${command}`,
+      option,
+    ))
   ));
   const valueLines = Object.entries(VALUE_OPTIONS).flatMap(([option, values]) => (
     values.map((value) => `complete -c whoisleuth -n '__fish_prev_arg_in ${option}' -a '${value}'`)
   ));
   return `# WHOISleuth fish completion
+function __whoisleuth_clear_direct_lookup_cache --on-event fish_prompt
+    set -e __whoisleuth_direct_lookup_cache_key
+    set -e __whoisleuth_direct_lookup_cache_status
+end
+function __whoisleuth_direct_lookup_target
+    set -l words (commandline -opc)
+    if test (count \$words) -lt 2
+        return 1
+    end
+    set -l first \$words[2]
+    string match -q -- '-*' \$first; and return 1
+    contains -- \$first ${CLI_COMMANDS.join(' ')}; and return 1
+    set -l cache_key "\$words[1]:\$first"
+    if test "\$__whoisleuth_direct_lookup_cache_key" = "\$cache_key"
+        return \$__whoisleuth_direct_lookup_cache_status
+    end
+    \$words[1] \$first --plan --json >/dev/null 2>/dev/null
+    set -l result \$status
+    set -g __whoisleuth_direct_lookup_cache_key \$cache_key
+    set -g __whoisleuth_direct_lookup_cache_status \$result
+    return \$result
+end
 complete -c whoisleuth -f
 complete -c whoisleuth -n '__fish_use_subcommand' -l help
 complete -c whoisleuth -n '__fish_use_subcommand' -l version
@@ -290,16 +338,29 @@ ${Object.entries(VALUE_OPTIONS).map(([option, values]) => `    '${option}' = @($
     'workflow-plan' = @(${INVESTIGATION_PLAN_RECIPES.map((value) => `'${value}'`).join(', ')})
   }
   $fileCommands = @(${[...FILE_POSITIONAL_COMMANDS].map((command) => `'${command}'`).join(', ')})
+  $fileOptions = @(${FILE_OPTIONS.map((option) => `'${option}'`).join(', ')})
   $elements = @($commandAst.CommandElements | ForEach-Object { $_.Extent.Text })
   $command = if ($elements.Count -gt 1) { $elements[1] } else { '' }
   $previous = if ($elements.Count -gt 1) { $elements[$elements.Count - 1] } else { '' }
+  $directLookup = $false
+  if ($command -notmatch '^-' -and $elements.Count -gt 1 -and $commands -notcontains $command) {
+    & $elements[0] $command '--plan' '--json' *> $null
+    $directLookup = $LASTEXITCODE -eq 0
+  }
+  if ($directLookup) { $command = 'lookup' }
+  if ($fileOptions -contains $previous) {
+    Get-ChildItem -Path "${'$'}wordToComplete*" -File -ErrorAction SilentlyContinue | ForEach-Object {
+      [System.Management.Automation.CompletionResult]::new($_.FullName, $_.Name, 'ProviderItem', $_.FullName)
+    }
+    return
+  }
   if ($fileCommands -contains $command -and -not $wordToComplete.StartsWith('-')) {
     Get-ChildItem -Path "${'$'}wordToComplete*" -File -ErrorAction SilentlyContinue | ForEach-Object {
       [System.Management.Automation.CompletionResult]::new($_.FullName, $_.Name, 'ProviderItem', $_.FullName)
     }
     return
   }
-  $candidates = if ($elements.Count -le 2) {
+  $candidates = if ($elements.Count -le 2 -and -not $directLookup) {
     @($commands) + @('--help', '--version')
   } elseif ($command -eq 'completion' -and $elements.Count -le 3) {
     $values['completion']
@@ -322,12 +383,20 @@ ${Object.entries(VALUE_OPTIONS).map(([option, values]) => `    '${option}' = @($
 }
 
 function buildShellCompletion(shell: CompletionShell): string {
-  if (shell === 'bash') return bashCompletion();
-  if (shell === 'zsh') return zshCompletion();
-  if (shell === 'fish') return fishCompletion();
-  return powershellCompletion();
+  const script = shell === 'bash'
+    ? bashCompletion()
+    : shell === 'zsh'
+      ? zshCompletion()
+      : shell === 'fish'
+        ? fishCompletion()
+        : powershellCompletion();
+  if (Buffer.byteLength(script, 'utf8') > MAX_CLI_COMPLETION_BYTES) {
+    throw new RangeError(`Generated completion is limited to ${MAX_CLI_COMPLETION_BYTES} UTF-8 bytes.`);
+  }
+  return script;
 }
 
 export {
+  MAX_CLI_COMPLETION_BYTES,
   buildShellCompletion,
 };

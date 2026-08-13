@@ -34,6 +34,7 @@ function pageIdentity(overrides = {}) {
     },
     rawHtml: '<p>must not persist</p>',
     diagnostics: { private: true },
+    publicationMetadata: { version: 1, marker: 'publication metadata must not persist' },
     ...overrides,
   };
 }
@@ -77,7 +78,7 @@ describe('official-site page baseline', () => {
 
   test('never retains raw HTML, exact response hashes, URLs, limitations, or diagnostics', () => {
     const serialized = JSON.stringify(baseline.createPageBaseline('example.com', availability()));
-    assert.doesNotMatch(serialized, /rawHtml|must not persist|private\?|token=|exact|limitations|diagnostics|<p>/);
+    assert.doesNotMatch(serialized, /rawHtml|must not persist|publication metadata|private\?|token=|exact|limitations|diagnostics|<p>/);
   });
 
   test('does not mutate the source response', () => {

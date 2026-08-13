@@ -785,7 +785,9 @@ The [CLI guide](cli.md) gives the installation and first-use path, while the
 Bulk, Certificate Transparency, discovery, posture, HTTP and TLS intelligence, registry-source
 comparison, compatibility inspection, Risk calibration, artefact verification,
 privacy-safe source diagnostics, and evidence export. It also defines output
-formats, exit codes, terminal detail levels, TTY-only progress and colour,
+formats, exit codes, the confirmed zero-argument terminal launcher, terminal
+detail levels, progressive browser navigation and search, fixed palettes,
+private post-browser Lookup saving, TTY-only progress and colour,
 offline-first diagnostics, atomic private file output, strict automation exits,
 resumable Bulk checkpoints, cancellation, saved-Lookup diff, direct readable
 reports, machine progress events, a generated manual, and bash, zsh, and fish

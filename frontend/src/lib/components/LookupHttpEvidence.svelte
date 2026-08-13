@@ -1,6 +1,8 @@
 <script lang="ts">
   import { evidenceStatusTone } from '$lib/analysis/evidence-status-tone.ts';
   import HttpRedirectPath from '$lib/components/HttpRedirectPath.svelte';
+  import LookupMetadataDisclosure from '$lib/components/LookupMetadataDisclosure.svelte';
+  import type { HomepageMetadataDisplay } from '$lib/analysis/lookup-homepage-metadata-display.ts';
 
   type Row = { label: string; value: string; hash?: boolean };
   type Redirect = { status: string; from: string; to: string; queryOmitted: boolean };
@@ -15,6 +17,7 @@
     redirects,
     attempts,
     metadata,
+    deliveryMetadata = null,
     limitations,
     initiallyExpanded = false,
   }: {
@@ -26,6 +29,7 @@
     redirects: Redirect[];
     attempts: Attempt[];
     metadata: Row[];
+    deliveryMetadata?: HomepageMetadataDisplay | null;
     limitations: string[];
     initiallyExpanded?: boolean;
   } = $props();
@@ -61,6 +65,7 @@
     {#if metadata.length}
       <details class="http-detail disclosure"><summary>Selected response metadata</summary><dl>{#each metadata as row}<dt>{row.label}</dt><dd class:http-hash={row.hash}>{row.value}</dd>{/each}</dl></details>
     {/if}
+    {#if deliveryMetadata}<LookupMetadataDisclosure label="Observed HTTP delivery metadata" metadata={deliveryMetadata} />{/if}
     {#if limitations.length}<p class="callout warn">{limitations.join(' ')}</p>{/if}
     <p class="card-note">Point-in-time response metadata from the homepage request already used for deep analysis. Redirects and headers provide context; missing security headers do not establish maliciousness.</p>
   </div>

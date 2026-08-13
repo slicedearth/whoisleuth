@@ -2,6 +2,7 @@ import {
   terminalPresentation,
   tone,
   type TerminalEnvironment,
+  type TerminalPalette,
   type WritableTerminal,
 } from './terminal-presentation.mts';
 
@@ -9,6 +10,7 @@ type ProgressOptions = Readonly<{
   enabled: boolean;
   color: boolean;
   environment?: TerminalEnvironment;
+  palette?: TerminalPalette;
   now?: () => number;
 }>;
 
@@ -35,7 +37,7 @@ function createTerminalProgress(
   options: ProgressOptions,
 ): TerminalProgress {
   const environment = options.environment || process.env;
-  const presentation = terminalPresentation(stream, options.color, environment);
+  const presentation = terminalPresentation(stream, options.color, environment, options.palette);
   const enabled = options.enabled
     && presentation.interactive
     && environment.WHOISLEUTH_NO_PROGRESS !== '1';
@@ -48,8 +50,8 @@ function createTerminalProgress(
   function render(): void {
     if (!enabled || !stream) return;
     const elapsedSeconds = Math.max(0, Math.floor((now() - startedAt) / 1000));
-    const marker = tone(PROGRESS_FRAMES[frame % PROGRESS_FRAMES.length] || '·', 'accent', presentation.color);
-    const elapsed = tone(`${elapsedSeconds}s`, 'dim', presentation.color);
+    const marker = tone(PROGRESS_FRAMES[frame % PROGRESS_FRAMES.length] || '·', 'accent', presentation.color ? presentation.palette : false);
+    const elapsed = tone(`${elapsedSeconds}s`, 'dim', presentation.color ? presentation.palette : false);
     stream.write(`\r\u001b[2K${marker} ${message} · ${elapsed}`);
     frame += 1;
   }

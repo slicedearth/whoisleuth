@@ -12,6 +12,7 @@ import {
   type InvestigationPlanRecipe,
 } from './investigation-plan.mts';
 import { parseCliFailPolicies, type CliFailPolicy } from './fail-policy.mts';
+import { isDirectLookupTarget } from '../lib/classify.mts';
 
 const MAX_CLI_ARGUMENTS = 32;
 const MAX_CLI_ARGUMENT_LENGTH = 1024;
@@ -73,7 +74,8 @@ type TerminalOptions = {
 
 type LookupDetail = 'summary' | 'standard' | 'verbose';
 type CompletionShell = 'bash' | 'zsh' | 'fish' | 'powershell';
-type FileOutputOptions = { destination?: string; force?: true };
+type CliPalette = 'auto' | 'light' | 'dark';
+type FileOutputOptions = { destination?: string; force?: true; palette?: CliPalette };
 
 type CliAction =
   | { action: 'help'; command?: CliCommand }
@@ -85,7 +87,7 @@ type CliAction =
   | ({ action: 'map-observations'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'oam-export'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'doctor'; network: boolean; output: 'terminal' | 'json' } & TerminalOptions)
-  | ({ action: 'lookup'; query: string | null; output: 'terminal' | 'json' | 'markdown' | 'html' | 'junit'; deep: boolean; detail: LookupDetail; strictExit: boolean; events: boolean; plan: boolean; includeAttribution: boolean; observerLabel: string | null; vantageLabel: string | null; failOn?: readonly CliFailPolicy[] } & TerminalOptions)
+  | ({ action: 'lookup'; query: string | null; output: 'terminal' | 'json' | 'markdown' | 'html' | 'junit'; deep: boolean; detail: LookupDetail; strictExit: boolean; events: boolean; plan: boolean; includeAttribution: boolean; observerLabel: string | null; vantageLabel: string | null; browse?: true; saveLookup?: string; failOn?: readonly CliFailPolicy[] } & TerminalOptions)
   | ({ action: 'bulk'; source: string | null; output: 'terminal' | 'json' | 'jsonl' | 'csv' | 'domains' | 'queries' | 'junit'; deep: boolean; concurrency: number; checkpoint: string | null; resume: boolean; events: boolean; plan: boolean; filter: 'all' | 'registered' | 'inconclusive' | 'errors'; failOn?: readonly CliFailPolicy[] } & TerminalOptions)
   | ({ action: 'ct-search'; keyword: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'ct-intake'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
@@ -131,6 +133,7 @@ type ExtractedFileOutput = {
   argv: string[];
   destination: string | null;
   force: boolean;
+  palette: CliPalette | null;
 };
 
 function boundedArgument(value: unknown): string {
@@ -148,6 +151,7 @@ function extractFileOutputArguments(argv: string[]): ExtractedFileOutput {
   const retained: string[] = [];
   let destination: string | null = null;
   let force = false;
+  let palette: CliPalette | null = null;
   for (let index = 0; index < argv.length; index++) {
     const argument = argv[index];
     if (argument === undefined) break;
@@ -159,12 +163,19 @@ function extractFileOutputArguments(argv: string[]): ExtractedFileOutput {
     } else if (index > 0 && argument === '--force') {
       if (force) throw new CliUsageError('--force may be supplied only once.');
       force = true;
+    } else if (index > 0 && argument === '--palette') {
+      if (palette !== null) throw new CliUsageError('--palette may be supplied only once.');
+      const value = argv[++index];
+      if (value !== 'auto' && value !== 'light' && value !== 'dark') {
+        throw new CliUsageError('--palette requires auto, light, or dark.');
+      }
+      palette = value;
     } else {
       retained.push(argument);
     }
   }
   if (force && destination === null) throw new CliUsageError('--force requires --output.');
-  return { argv: retained, destination, force };
+  return { argv: retained, destination, force, palette };
 }
 
 function parseCliArguments(rawArgv: unknown): CliArguments {
@@ -179,9 +190,15 @@ function parseCliArguments(rawArgv: unknown): CliArguments {
   if ('events' in parsed && parsed.events && extracted.destination !== null) {
     throw new CliUsageError('--events cannot be combined with --output because completion must describe the final output delivery.');
   }
-  return extracted.destination === null
-    ? parsed
-    : { ...parsed, destination: extracted.destination, ...(extracted.force ? { force: true as const } : {}) };
+  if ('browse' in parsed && parsed.browse === true && extracted.destination !== null) {
+    throw new CliUsageError('--browse cannot be combined with --output because it requires an interactive terminal.');
+  }
+  return {
+    ...parsed,
+    ...(extracted.destination !== null ? { destination: extracted.destination } : {}),
+    ...(extracted.force ? { force: true as const } : {}),
+    ...(extracted.palette ? { palette: extracted.palette } : {}),
+  };
 }
 
 function parseCliArgumentsCore(argv: string[]): CliAction {
@@ -198,9 +215,14 @@ function parseCliArgumentsCore(argv: string[]): CliAction {
     return { action: 'version' };
   }
 
-  const command = firstArgument;
-  if (!isCliCommand(command)) {
-    const displayedCommand = command.length > 80 ? `${command.slice(0, 79)}…` : command;
+  let command: CliCommand;
+  let directLookup = false;
+  if (isCliCommand(firstArgument)) command = firstArgument;
+  else if (isDirectLookupTarget(firstArgument)) {
+    command = 'lookup';
+    directLookup = true;
+  } else {
+    const displayedCommand = firstArgument.length > 80 ? `${firstArgument.slice(0, 79)}…` : firstArgument;
     throw new CliUsageError(`Unknown command "${displayedCommand}". Run "whoisleuth commands" to list supported commands.`);
   }
   if (command === 'bulk') return parseBulkArguments(argv.slice(1));
@@ -260,11 +282,13 @@ function parseCliArgumentsCore(argv: string[]): CliAction {
   let strictExit = false;
   let events = false;
   let plan = false;
+  let browse = false;
   let includeAttribution = true;
   let failOn: CliFailPolicy[] | null = null;
   let observerLabel: string | null = null;
   let vantageLabel: string | null = null;
-  const lookupArguments = argv.slice(1);
+  let saveLookup: string | null = null;
+  const lookupArguments = directLookup ? argv : argv.slice(1);
   for (let index = 0; index < lookupArguments.length; index++) {
     const argument = lookupArguments[index];
     if (argument === undefined) break;
@@ -298,6 +322,14 @@ function parseCliArgumentsCore(argv: string[]): CliAction {
     } else if (argument === '--plan') {
       if (plan) throw new CliUsageError('--plan may be supplied only once.');
       plan = true;
+    } else if (argument === '--browse') {
+      if (browse) throw new CliUsageError('--browse may be supplied only once.');
+      browse = true;
+    } else if (argument === '--save-lookup') {
+      if (saveLookup !== null) throw new CliUsageError('--save-lookup may be supplied only once.');
+      const value = lookupArguments[++index];
+      if (!value || value.startsWith('-')) throw new CliUsageError('--save-lookup requires one bounded file path.');
+      saveLookup = value;
     } else if (argument === '--no-attribution') {
       if (!includeAttribution) throw new CliUsageError('--no-attribution may be supplied only once.');
       includeAttribution = false;
@@ -323,6 +355,13 @@ function parseCliArgumentsCore(argv: string[]): CliAction {
   }
   if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
   if (detailSet && output !== 'terminal') throw new CliUsageError('--summary and --verbose apply only to terminal output.');
+  if (browse && output !== 'terminal') throw new CliUsageError('--browse applies only to terminal output.');
+  if (browse && (detailSet || events || plan || quiet)) {
+    throw new CliUsageError('--browse cannot be combined with detail, event, plan, or quiet options.');
+  }
+  if (saveLookup !== null && !browse) {
+    throw new CliUsageError('--save-lookup requires --browse so the exact completed Lookup document is saved after the browser closes.');
+  }
   if (!includeAttribution && output !== 'markdown' && output !== 'html') {
     throw new CliUsageError('--no-attribution applies only to Markdown or HTML reports.');
   }
@@ -330,7 +369,7 @@ function parseCliArgumentsCore(argv: string[]): CliAction {
   if (plan && (detailSet || strictExit || events || quiet || failOn !== null)) {
     throw new CliUsageError('--plan cannot be combined with detail, strict-exit, event, or quiet options.');
   }
-  return { action: 'lookup', query, output, deep, detail, strictExit, events, plan, includeAttribution, observerLabel, vantageLabel, quiet, color, ...(failOn ? { failOn } : {}) };
+  return { action: 'lookup', query, output, deep, detail, strictExit, events, plan, includeAttribution, observerLabel, vantageLabel, quiet, color, ...(browse ? { browse: true as const } : {}), ...(saveLookup ? { saveLookup } : {}), ...(failOn ? { failOn } : {}) };
 }
 
 function parseCompletionArguments(argv: string[]): Extract<CliArguments, { action: 'completion' }> {
@@ -1434,4 +1473,4 @@ function parseExportArguments(argv: string[]): Extract<CliArguments, { action: '
 }
 
 export { CLI_COMMANDS, CliUsageError, MAX_CLI_ARGUMENTS, MAX_CLI_ARGUMENT_LENGTH, parseCliArguments };
-export type { CliArguments, CliCommand, CompletionShell, LookupDetail };
+export type { CliArguments, CliCommand, CliPalette, CompletionShell, LookupDetail };

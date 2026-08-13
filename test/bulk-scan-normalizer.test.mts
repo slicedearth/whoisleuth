@@ -29,6 +29,8 @@ describe('Bulk scan normalizer', () => {
           status: 'success',
           records: { a: ['192.0.2.10'], aaaa: [], cname: [], caa: [] },
         },
+        pageIdentity: { publicationMetadata: { version: 1, marker: 'publication metadata must not persist' } },
+        http: { response: { deliveryMetadata: { version: 1, marker: 'delivery metadata must not persist' } } },
       },
       diagnostics: {
         version: 7,
@@ -36,7 +38,7 @@ describe('Bulk scan normalizer', () => {
         whois: { status: 'skipped' },
         availability: { status: 'complete' },
       },
-    } as const satisfies CompactLookupHttpResponse;
+    } as unknown as CompactLookupHttpResponse;
 
     const result = normalizeBulkScanResult(body, {
       mode: 'deep',
@@ -65,7 +67,7 @@ describe('Bulk scan normalizer', () => {
       { source: 'availability', state: 'complete' },
       { source: 'dns', state: 'complete' },
     ]);
-    assert.doesNotMatch(JSON.stringify(result), /must not persist/u);
+    assert.doesNotMatch(JSON.stringify(result), /must not persist|publication metadata|delivery metadata/u);
 
     assert.equal(result.saved.profileContext.sourceState, 'ready');
     assert.equal(result.saved.profileContext.activeProfileId, null);

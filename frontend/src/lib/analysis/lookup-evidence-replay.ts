@@ -14,6 +14,15 @@ import {
   buildLookupAssetGraph,
   type LookupAssetGraph,
 } from './lookup-asset-graph.ts';
+import {
+  deliveryMetadataDisplay,
+  publicationMetadataDisplay,
+  type HomepageMetadataDisplay,
+} from './lookup-homepage-metadata-display.ts';
+import {
+  validHttpDeliveryMetadata,
+  validPagePublicationMetadata,
+} from '../../../../lib/homepage-metadata-contract.mts';
 
 export const LOOKUP_EVIDENCE_REPLAY_MAX_BYTES = LOOKUP_EVIDENCE_PORTABLE_MAX_BYTES;
 export const LOOKUP_EVIDENCE_REPLAY_MAX_ENTRIES = LOOKUP_EVIDENCE_PORTABLE_MAX_ENTRIES;
@@ -53,6 +62,8 @@ export type LookupEvidenceReplay = Readonly<{
   contradictions: readonly string[];
   unknowns: readonly string[];
   recommendedSteps: readonly string[];
+  pagePublicationMetadata: HomepageMetadataDisplay | null;
+  httpDeliveryMetadata: HomepageMetadataDisplay | null;
   graph: LookupAssetGraph;
   limitations: readonly string[];
 }>;
@@ -111,6 +122,11 @@ function stringList(value: unknown, count = 8, maximum = 300): string[] {
 
 function unique(values: readonly string[], maximum: number): string[] {
   return [...new Set(values.filter(Boolean))].slice(0, maximum);
+}
+
+function humanList(values: readonly number[]): string {
+  if (values.length <= 1) return String(values[0] ?? '');
+  return `${values.slice(0, -1).join(', ')} or ${values.at(-1)}`;
 }
 
 function sourceState(value: JsonRecord): string {
@@ -253,7 +269,7 @@ export async function parseLookupEvidenceReplay(
     throw new Error('The selected file is not a WHOISleuth Lookup evidence export.');
   }
   if (!SUPPORTED_LOOKUP_EVIDENCE_SCHEMA_VERSIONS.some((version) => version === document.schemaVersion)) {
-    throw new Error(`Only Lookup evidence schemas ${SUPPORTED_LOOKUP_EVIDENCE_SCHEMA_VERSIONS.join(' and ')} can be replayed by this build.`);
+    throw new Error(`Only Lookup evidence schemas ${humanList(SUPPORTED_LOOKUP_EVIDENCE_SCHEMA_VERSIONS)} can be replayed by this build.`);
   }
   const exportedAt = timestamp(document.generatedAt);
   if (!exportedAt) throw new Error('The evidence export timestamp is missing or invalid.');
@@ -320,6 +336,27 @@ export async function parseLookupEvidenceReplay(
   const http = record(availability.http);
   const tls = record(availability.tls);
   const pageIdentity = record(availability.pageIdentity);
+  const httpResponse = record(http.response);
+  const pagePublicationValue = pageIdentity.publicationMetadata;
+  const httpDeliveryValue = httpResponse.deliveryMetadata;
+  if (schemaVersion < LOOKUP_EVIDENCE_SCHEMA_VERSION
+    && (pagePublicationValue !== undefined || httpDeliveryValue !== undefined)) {
+    throw new Error('Legacy Lookup evidence cannot contain homepage metadata introduced by a newer schema.');
+  }
+  if (pagePublicationValue !== undefined && !validPagePublicationMetadata(pagePublicationValue)) {
+    throw new Error('Lookup evidence publication metadata is malformed or unsupported.');
+  }
+  if (pagePublicationValue !== undefined && !['success', 'partial'].includes(String(pageIdentity.status))) {
+    throw new Error('Lookup evidence publication metadata contradicts its parent source state.');
+  }
+  if (httpDeliveryValue !== undefined && !validHttpDeliveryMetadata(httpDeliveryValue)) {
+    throw new Error('Lookup evidence delivery metadata is malformed or unsupported.');
+  }
+  if (httpDeliveryValue !== undefined && !['success', 'partial'].includes(String(http.status))) {
+    throw new Error('Lookup evidence delivery metadata contradicts its parent source state.');
+  }
+  const pagePublicationMetadata = publicationMetadataDisplay(pagePublicationValue);
+  const httpDeliveryMetadata = deliveryMetadataDisplay(httpDeliveryValue);
   const technology = record(availability.technologyProfile);
   const securityPosture = record(availability.securityPosture);
   const structuredDataIdentity = record(availability.structuredDataIdentity);
@@ -446,6 +483,8 @@ export async function parseLookupEvidenceReplay(
     contradictions,
     unknowns,
     recommendedSteps,
+    pagePublicationMetadata,
+    httpDeliveryMetadata,
     graph,
     limitations,
   };

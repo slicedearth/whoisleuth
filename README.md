@@ -61,7 +61,7 @@ deletes it. It is not part of hosted or distributable collection; see the
 | **Lookup** | Inspect one domain, IP address, or ASN through separately attributed registration, DNS, website, certificate, network, and derived evidence. Deep domain results can compare bounded SOA publication across selected authorities and compare the observed leaf certificate with a generated local SSLBL snapshot. | Deep is the default; Fast is registration-first. Supporting sources never override authoritative availability evidence, direct DNS failures remain inconclusive, and no warning-list miss establishes safety. |
 | **Discover** | Generate bounded local lookalikes, review names and issuance groups observed in public certificate logs, or deliberately pivot through one registry's RDAP nameserver-search results. | Registry pivots are suffix-scoped lower bounds. Certificate co-issuance is a review lead, not attribution. Sorting does not change evidence or score. |
 | **Bulk** | Compare bounded domain sets with explicit request pacing, source-aware filters, compact Deep evidence, relationships, review actions, and resumable sessions. | One job accepts up to 500 Fast or 50 Deep targets. Each domain is a separate request, and incomplete coverage remains distinct from failure or absence. |
-| **Brands** | Define official domains, trusted infrastructure, defensive mail expectations, optional page-identity baselines, reviewed desired posture, a cross-domain posture matrix, portable domain-control passports, control-planning context, transient DMARC/TLS aggregate-report review, and a local inbox for explicitly associated cases. | Public observations, imported reports, desired state, approved change windows, retained comparison points, analyst attestations, and case associations remain separate. The matrix and inbox preserve source states and never infer ownership, control, uptime, or attribution from profile or evidence values. |
+| **Brands** | Define official domains, trusted infrastructure, defensive mail expectations, optional page-identity baselines, reviewed desired posture, a cross-domain posture matrix, portable domain-control passports, control-planning context, transient DMARC/TLS aggregate-report review, a local inbox for explicitly associated cases, and a transient Brand Asset Register. | Public observations, imported reports, desired state, retained comparison points, analyst attestations, and case associations remain separate. The register joins direct profile and Case scope with one-hop retained leads without making a request or write; candidates never become authored roles or further anchors, and unavailable or incomplete sources remain explicit. |
 | **Monitor** | Retain cases, explicit Brand Profile associations, evidence pins, decisions, response actions, campaigns, watchlists, relationships, and review history. Review a campaign through an explicitly selected Brand Profile scope using bounded rationales derived from retained evidence. | Ordinary workspace state stays in IndexedDB. Deleting a profile does not rewrite a case, so an unmatched opaque association remains visible. Cohort review is transient, keeps incomplete sources explicit, and never establishes ownership or attribution. Response packets and defensive exports require human review and are never submitted automatically. |
 | **Registry support** | Inspect fixture-backed parser coverage, access constraints, and the fields attempted by each lookup profile. | Coverage describes support and limitations; it does not decide availability or promise that a source will publish a value. |
 
@@ -93,6 +93,13 @@ analyst-controlled views over already collected evidence. They do not make an
 enforcement decision, prove ownership or safety, or silently start another
 request.
 
+For a full Deep domain Lookup, the same bounded homepage response can also
+yield fixed publication-declaration counts and selected-response delivery and
+cache metadata. These summaries retain only allowlisted tokens, booleans, and
+counts. They do not fetch another resource, execute page code, enter compact
+Bulk or ordinary browser-local stores, or establish indexing, accessibility,
+cache effectiveness, performance, identity, safety, or maliciousness.
+
 For field-level behaviour, limits, result states, saved-work semantics, and
 complete workflows, use the [application guide](docs/application-guide.md).
 The public [Resources hub](https://whoisleuth.com/resources) is the shortest introduction and the topic library.
@@ -111,9 +118,10 @@ The public [Resources hub](https://whoisleuth.com/resources) is the shortest int
   hop, revalidate redirects, resist DNS rebinding, and avoid private network
   targets.
 - **Local-first investigation state.** Cases, evidence pins, analyst decisions,
-  response actions, profiles, watchlists, campaigns, shortlist entries, saved
-  Bulk sessions, explicit website-profile snapshots, investigation templates,
-  and rules use bounded IndexedDB stores in the current browser.
+  response actions, profiles, watchlists, campaigns, shortlist entries, retained
+  relationship observations, saved Bulk sessions, explicit website-profile
+  snapshots, investigation templates, and rules use bounded IndexedDB stores in
+  the current browser.
 - **Explainable analysis.** Risk, Opportunity, page similarity, relationship,
   technology, and posture findings expose their evidence and limitations.
 - **Supplementary visuals.** Charts summarise bounded data already present in
@@ -148,7 +156,21 @@ Published CLI releases can run without hosting the application:
 
 ```bash
 npm exec --yes --ignore-scripts --package=@slicedearth/whoisleuth-cli -- whoisleuth --help
+npm exec --yes --ignore-scripts --package=@slicedearth/whoisleuth-cli -- whoisleuth example.test --plan --json
 ```
+
+Running `whoisleuth` with no arguments in a capable interactive terminal opens
+a bounded launcher for Fast or Deep Lookup, offline workflow planning, and the
+command catalogue. Unsupported or redirected terminals continue to print help,
+and no request begins until a Lookup plan is displayed and confirmed. Deep
+Lookup can use `--browse` for progressive source-state navigation, bounded
+rendered-panel search, and an optional private `--save-lookup <file>` written
+only after the browser closes normally.
+
+An ICANN-recognised public domain, reserved `.test` or `.example` documentation
+domain, IP address, or ASN can be entered directly as conservative Lookup
+shorthand. The explicit `lookup` command remains available for its convenient
+query normalisation and the same bounded options.
 
 The CLI also provides isolated, explicitly authorised DNSSEC chain validation
 and selected-MX SMTP/STARTTLS review. Those actions require a caller-selected

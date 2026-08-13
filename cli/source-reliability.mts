@@ -262,8 +262,12 @@ function parseValues(raw: string): UnknownRecord[] {
 
 function parseLookupDocuments(values: readonly UnknownRecord[]): UnknownRecord[] {
   return values.map((document) => {
-    if (!LOOKUP_SCHEMAS.has(String(document.schema)) || document.version !== 1) {
-      throw new TypeError('Source reliability input requires only version 1 CLI lookup, Bulk, or Bulk-item documents, or only source reliability reports.');
+    const schema = String(document.schema);
+    const supported = schema === 'whoisleuth.cli.lookup'
+      ? document.version === 1 || document.version === 2
+      : document.version === 1;
+    if (!LOOKUP_SCHEMAS.has(schema) || !supported) {
+      throw new TypeError('Source reliability input requires CLI Lookup version 1 or 2, version 1 Bulk or Bulk-item documents, or only source reliability reports.');
     }
     return document;
   });

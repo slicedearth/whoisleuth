@@ -1,6 +1,6 @@
 # Privacy Notice
 
-Last updated: 12 August 2026.
+Last updated: 14 August 2026.
 
 This notice describes the public WHOISleuth deployment and is also a template
 for self-hosted operators to adapt when their configuration, hosting, enabled
@@ -226,6 +226,14 @@ default (see the README), so many lookups return no personal data at all.
   tokens. Before any protected outbound HTTP hop begins, the resolver rejects
   an answer with more than 64 address candidates and requires every retained
   candidate to be a valid public address; redirects repeat that validation.
+  Full Deep Lookup can additionally reduce Content-Encoding, Cache-Control,
+  Age, ETag, Last-Modified, and Expires from that selected response to fixed
+  states, allowlisted tokens, bounded seconds, and presence/validity markers.
+  Raw header and validator values are discarded, and no compression ratio is
+  calculated. These declarations do not prove cache storage, transfer savings,
+  provider identity, performance, privacy, or safety. They remain outside
+  compact Bulk and ordinary browser-local stores, but can appear in a
+  deliberate full saved Lookup or evidence file.
   Monitor can derive a capped relationship graph and table from the
   typed projection of bounded final-origin and nameserver-set observations
   already retained in browser-local case histories. That automatic projection
@@ -375,6 +383,17 @@ default (see the README), so many lookups return no personal data at all.
   domains, download context, and recognised public tracking identifiers. URL
   credentials, queries, fragments, resource/download paths, form-action paths,
   and complete email addresses are not retained.
+  The same bounded tokenizer pass can retain fixed robots and Twitter Card
+  declaration classes, heading counts, image alternative-text categories, and
+  conservative explicit-head static blocking candidates. Raw declarations,
+  titles, handles, URLs, image text, scripts, stylesheets, and resource paths
+  are not retained by this summary. It makes no additional request or
+  rendered-page measurement and does not establish indexing, accessibility,
+  performance, identity, ownership, safety, or maliciousness. The summary
+  remains outside compact Bulk and ordinary browser-local stores, but can
+  appear in a deliberate full saved Lookup or evidence file.
+  Both summaries come from the same bounded homepage request. Raw declaration
+  and header values are not retained, and no compression ratio is calculated.
   Page identity can also include versioned SHA-256 fingerprints for the exact
   captured body, noise-reduced normalised HTML, static tag structure, and form
   structure; fuzzy visible-text and parse5-tokenized structure SimHashes; and
@@ -553,6 +572,25 @@ default (see the README), so many lookups return no personal data at all.
   workspace archives preserve identifiers. Public CLI case packs clear them
   from both the case collection and embedded reports and disclose the bounded
   omission count; trusted and internal case packs preserve them.
+  The Brands page can also build a website-only, transient Brand Asset Register
+  for the active profile. It joins authored official, approved-partner, and
+  allowlisted domains with canonical domains from Cases carrying that exact
+  profile identifier, then uses that frozen direct set to admit one-hop leads
+  from already retained relationship observations. Observed candidates never
+  become further anchors and observation overlap never creates or upgrades an
+  authored role. Shortlist and watchlist records are excluded because they do
+  not carry an active Brand Profile association. The register is capped at
+  2,000 rows and 12 Case and 12 relationship references per row, reports exact
+  row and reference omissions, and keeps unavailable, incomplete, and
+  truncated sources explicit. It copies only canonical domains, non-ownership
+  roles, opaque local references, bounded source labels, timestamps,
+  completeness, and fixed reasons. Raw evidence and relationship values,
+  contacts, notes, tags,
+  decisions, actions, assertions, scores, complete URLs, paths, queries,
+  fragments, account labels, and credentials are excluded. The projection
+  makes no discovery, request, write, migration, export, monitoring action,
+  score, or automatic Case, and does not establish ownership, control,
+  coordination, intent, safety, or maliciousness.
   Saved Bulk sessions retain only the analyst-provided name, bounded domain
   queue, scan mode, compact settled result fields, per-source completion
   states, and session timestamps needed to load, compare, or resume unstarted
@@ -849,7 +887,7 @@ default (see the README), so many lookups return no personal data at all.
   context when collected; ASN reports include normalised routing registration
   evidence. All preserve source states and collection time while excluding raw
   RDAP and WHOIS responses, expanded contacts, provider payloads, scripts, and
-  remote assets. A selected supported Lookup evidence schema 25 or 26 JSON file can be
+  remote assets. A selected supported Lookup evidence schema 25, 26, or 27 JSON file can be
   replayed locally after schema, nesting, entry-count, and byte-limit checks.
   Replay calculates SHA-256 and can compare it with an explicitly supplied
   trusted checksum. The file and checksum remain in the current browser tab,
@@ -980,7 +1018,16 @@ default (see the README), so many lookups return no personal data at all.
   capture partial rather than implying that omitted page content was absent.
 - **CLI output, checkpoints, and progress**: every CLI command can deliberately
   write its bounded output to a private local file. Existing files are refused
-  unless replacement is explicit. Bulk checkpoints are separate private local
+  unless replacement is explicit. With no arguments, an eligible terminal can
+  open a bounded launcher, but it makes no request until it displays a Lookup
+  plan and the analyst confirms collection. The Lookup evidence browser shows
+  transient bounded progress and searches only rendered allowlisted panel text;
+  neither the progress nor search term is retained. A deliberate
+  `--save-lookup` action is available only with that browser and writes the exact
+  completed versioned Lookup JSON after a normal close with private permissions.
+  It refuses an existing path, is never uploaded, and can contain normalized
+  evidence not shown in panels. Cancellation, collection failure, browser
+  failure, or save failure does not publish a partial file. Bulk checkpoints are separate private local
   files capped at 16 MiB and contain the ordered input digest, scan mode, times,
   queries, classifications, bounded errors, and compact per-query results. They
   do not contain full Lookup responses, but they can still identify the targets

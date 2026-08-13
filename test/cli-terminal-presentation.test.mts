@@ -29,7 +29,7 @@ describe('CLI terminal presentation', () => {
   test('enables semantic colour and bounded wrapping only for an interactive terminal', () => {
     const output = captureTerminal({ columns: 48 });
     const presentation = terminalPresentation(output.stream, true, { TERM: 'xterm-256color' });
-    assert.deepEqual(presentation, { color: true, interactive: true, width: 48 });
+    assert.deepEqual(presentation, { color: true, interactive: true, palette: 'auto', width: 48 });
 
     const rendered = presentTerminalOutput(
       'Target:\nAvailability   Success\nAccess note    This deliberately long source limitation wraps at a word boundary.\n',
@@ -46,7 +46,7 @@ describe('CLI terminal presentation', () => {
     const output = captureTerminal({ isTTY: false, columns: 20 });
     const presentation = terminalPresentation(output.stream, true, { TERM: 'xterm-256color' });
     const source = 'Detail         This line remains unchanged when output is redirected.\n';
-    assert.deepEqual(presentation, { color: false, interactive: false, width: null });
+    assert.deepEqual(presentation, { color: false, interactive: false, palette: 'auto', width: null });
     assert.equal(presentTerminalOutput(source, presentation), source);
   });
 
@@ -56,6 +56,22 @@ describe('CLI terminal presentation', () => {
     assert.equal(terminalPresentation(output.stream, true, { TERM: 'xterm', NO_COLOR: '1' }).color, false);
     assert.equal(terminalPresentation(output.stream, true, { TERM: 'xterm', NO_COLOR: '' }).color, true);
     assert.equal(terminalPresentation(output.stream, true, { TERM: 'dumb' }).interactive, false);
+  });
+
+  test('uses explicit light and dark palettes without changing colour eligibility', () => {
+    const output = captureTerminal();
+    const light = terminalPresentation(output.stream, true, { TERM: 'xterm' }, 'light');
+    const dark = terminalPresentation(output.stream, true, { TERM: 'xterm' }, 'dark');
+    assert.equal(light.palette, 'light');
+    assert.equal(dark.palette, 'dark');
+    assert.match(presentTerminalOutput('Target:\n', light), /\u001b\[1;34m/u);
+    assert.match(presentTerminalOutput('Target:\n', dark), /\u001b\[1;96m/u);
+
+    const redirected = captureTerminal({ isTTY: false });
+    const plain = terminalPresentation(redirected.stream, true, { TERM: 'xterm' }, 'dark');
+    assert.equal(plain.palette, 'dark');
+    assert.equal(plain.color, false);
+    assert.equal(presentTerminalOutput('Target:\n', plain), 'Target:\n');
   });
 
   test('preserves long unbroken evidence values instead of silently truncating them', () => {

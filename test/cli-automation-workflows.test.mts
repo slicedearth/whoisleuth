@@ -358,6 +358,105 @@ describe('safe local output', () => {
       await rm(directory, { recursive: true, force: true });
     }
   });
+
+  test('saves one exact completed browser document privately and never overwrites it', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'whoisleuth-cli-browser-save-'));
+    const destination = join(directory, 'lookup.json');
+    try {
+      const code = await runCli(['lookup', 'example.test', '--browse', '--save-lookup', destination], {
+        stdout: capture().stream,
+        stderr: capture().stream,
+        canBrowseLookup: () => true,
+        classifyQuery: () => classifiedDomain('example.test'),
+        runUnifiedLookup: async () => lookupResult('example.test'),
+        browseLookupOperation: async (options) => options.collect!({
+          signal: new AbortController().signal,
+          onSourceSettled: () => undefined,
+        }),
+      });
+      assert.equal(code, EXIT_CODES.SUCCESS);
+      const saved = JSON.parse(await readFile(destination, 'utf8'));
+      assert.equal(saved.schema, 'whoisleuth.cli.lookup');
+      assert.equal(saved.query, 'example.test');
+      assert.equal((await stat(destination)).mode & 0o777, 0o600);
+
+      const refused = capture();
+      assert.equal(await runCli(['lookup', 'example.test', '--browse', '--save-lookup', destination], {
+        stdout: capture().stream,
+        stderr: refused.stream,
+        canBrowseLookup: () => true,
+        classifyQuery: () => classifiedDomain('example.test'),
+        runUnifiedLookup: async () => lookupResult('example.test'),
+        browseLookupOperation: async (options) => options.collect!({
+          signal: new AbortController().signal,
+          onSourceSettled: () => undefined,
+        }),
+      }), EXIT_CODES.USAGE);
+      assert.match(refused.value(), /already exists/u);
+      assert.equal(JSON.parse(await readFile(destination, 'utf8')).generatedAt, saved.generatedAt);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  test('does not save a partial document when collection or browser review fails', async () => {
+    for (const failure of ['collection', 'browser'] as const) {
+      const directory = await mkdtemp(join(tmpdir(), `whoisleuth-cli-browser-${failure}-`));
+      const destination = join(directory, 'lookup.json');
+      try {
+        const code = await runCli(['lookup', 'example.test', '--browse', '--save-lookup', destination], {
+          stdout: capture().stream,
+          stderr: capture().stream,
+          canBrowseLookup: () => true,
+          classifyQuery: () => classifiedDomain('example.test'),
+          runUnifiedLookup: async () => {
+            if (failure === 'collection') throw new Error('fixture collection failure');
+            return lookupResult('example.test');
+          },
+          browseLookupOperation: async (options) => {
+            await options.collect!({
+              signal: new AbortController().signal,
+              onSourceSettled: () => undefined,
+            });
+            throw new Error('fixture browser failure');
+          },
+        });
+        assert.equal(code, EXIT_CODES.LOOKUP_FAILED);
+        await assert.rejects(readFile(destination, 'utf8'), (error: unknown) => (
+          Boolean(error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT')
+        ));
+      } finally {
+        await rm(directory, { recursive: true, force: true });
+      }
+    }
+  });
+
+  test('does not begin a local save after cancellation wins the post-browser boundary', async () => {
+    const controller = new AbortController();
+    let saveCalls = 0;
+    const code = await runCli(['lookup', 'example.test', '--browse', '--save-lookup', 'fixture-review.json'], {
+      stdout: capture().stream,
+      stderr: capture().stream,
+      signal: controller.signal,
+      canBrowseLookup: () => true,
+      classifyQuery: () => classifiedDomain('example.test'),
+      runUnifiedLookup: async () => lookupResult('example.test'),
+      browseLookupOperation: async (options) => {
+        const document = await options.collect!({
+          signal: controller.signal,
+          onSourceSettled: () => undefined,
+        });
+        controller.abort(new DOMException('Aborted', 'AbortError'));
+        return document;
+      },
+      writePrivateFile: async () => {
+        saveCalls += 1;
+        return 'fixture-review.json';
+      },
+    });
+    assert.equal(code, EXIT_CODES.CANCELLED);
+    assert.equal(saveCalls, 0);
+  });
 });
 
 describe('strict exit and machine progress events', () => {

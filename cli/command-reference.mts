@@ -9,7 +9,8 @@ const HELP = `WHOISleuth CLI
 Source-aware domain investigation from your terminal.
 
 Quick start:
-  whoisleuth lookup example.test
+  whoisleuth
+  whoisleuth example.test
   whoisleuth lookup example.test --deep
   cat domains.txt | whoisleuth bulk --jsonl
 
@@ -71,9 +72,17 @@ Terminal:
   manual             Print the generated manual page.
 
 Run "whoisleuth <command> --help" for focused usage and an example.
+With no arguments, an eligible interactive terminal opens a bounded launcher;
+redirected or unsupported terminals continue to print this help. No request
+starts until a Lookup plan is shown and the analyst confirms collection.
 Use --json or --jsonl where supported for machine-readable stdout.
 Use --output <file> for atomic private file output and --force to replace it.
+Place --palette auto|light|dark after the command to select a fixed terminal
+colour palette; --no-color, NO_COLOR, and redirected output still suppress ANSI.
 Use --config <file> and --profile <name> for explicit versioned safe defaults.
+An ICANN-recognised public domain, reserved documentation domain, IP, or ASN
+may replace "lookup"; URL-like or ambiguous input requires the explicit
+command. Both forms use the same Lookup options.
 Diagnostics are written to stderr. Fast lookup is the default; deep collection
 must be requested explicitly and can disclose a target to additional sources.
 
@@ -88,7 +97,7 @@ const COMMAND_USAGE: Readonly<Record<CliCommand, string>> = Object.freeze({
   manifest: 'whoisleuth manifest <artefact.json> [...] --workflow <label> [--configuration-digest <sha256:digest>] [--json] [--quiet] [--no-color]',
   'map-observations': 'whoisleuth map-observations [mapping.json] [--json] [--quiet] [--no-color]',
   'oam-export': 'whoisleuth oam-export [external-findings.json] [--json] [--quiet] [--no-color]',
-  lookup: 'whoisleuth lookup <domain|IP|ASN> [--json|--junit|--markdown|--html] [--no-attribution] [--fast|--deep] [--observer <label>] [--vantage <label>] [--plan] [--summary|--verbose] [--strict-exit] [--fail-on <policies>] [--events] [--quiet] [--no-color]',
+  lookup: 'whoisleuth lookup <domain|IP|ASN> [--json|--junit|--markdown|--html] [--no-attribution] [--fast|--deep] [--observer <label>] [--vantage <label>] [--plan] [--summary|--verbose|--browse [--save-lookup <file>]] [--palette <auto|light|dark>] [--strict-exit] [--fail-on <policies>] [--events] [--quiet] [--no-color]',
   bulk: 'whoisleuth bulk [file] [--json|--jsonl|--junit|--csv|--domains|--queries] [--registered-only|--inconclusive-only|--errors-only] [--fast|--deep] [--concurrency <1-8>] [--checkpoint <file> [--resume]] [--events] [--plan] [--fail-on <policies>]',
   'ct-search': 'whoisleuth ct-search <keyword> [--json] [--quiet] [--no-color]',
   'ct-intake': 'whoisleuth ct-intake [events.json] [--json] [--quiet] [--no-color]',
@@ -168,8 +177,8 @@ const COMMAND_DETAILS: Readonly<Record<CliCommand, CommandDetail>> = Object.free
   },
   lookup: {
     description: 'Collect registration evidence for one domain, IP, or ASN.',
-    example: 'whoisleuth lookup example.test --deep',
-    boundary: 'Fast is the default. Deep mode adds bounded WHOIS, DNS, HTTP, TLS, technology, posture, and network context where applicable.',
+    example: 'whoisleuth lookup example.test --deep --browse',
+    boundary: 'Fast is the default. An ICANN-recognised public domain, reserved documentation domain, IP, or ASN may occupy command position as shorthand; it delegates to this same parser and URL-like input requires the explicit lookup command. Deep mode adds bounded WHOIS, DNS, HTTP, TLS, technology, posture, and network context where applicable. A full Deep homepage observation can derive fixed publication and delivery/cache summaries from the same response without retaining raw metadata values or making another request. --browse opens before collection, shows aggregate Fast progress or independently settled planned Deep sources, and then navigates allowlisted retained fields in the completed document. Press ? for help and / to search rendered panel text only. Closing during collection cancels without a partial document. --save-lookup writes the exact completed private JSON only after a normal browser close; it can contain normalized evidence omitted from panels and refuses an existing path.',
   },
   bulk: {
     description: 'Triage newline-delimited domains, IPs, or ASNs with bounded concurrency.',
@@ -204,7 +213,7 @@ const COMMAND_DETAILS: Readonly<Record<CliCommand, CommandDetail>> = Object.free
   http: {
     description: 'Inspect one homepage request, redirects, and bounded response metadata.',
     example: 'whoisleuth http example.test --json',
-    boundary: 'Requests use the shared public-address and redirect guards. This is not a rendered browser or vulnerability scan.',
+    boundary: 'Requests use the shared public-address and redirect guards. Fixed content-coding and cache-policy metadata describes only the selected response, excludes raw header values, and does not prove caching, transfer savings, performance, privacy, or safety. This is not a rendered browser or vulnerability scan.',
   },
   tls: {
     description: 'Inspect one hostname certificate through a bounded TLS connection.',
@@ -364,7 +373,7 @@ const COMMAND_DETAILS: Readonly<Record<CliCommand, CommandDetail>> = Object.free
   export: {
     description: 'Convert one saved lookup into a versioned evidence report.',
     example: 'whoisleuth export lookup.json --markdown',
-    boundary: 'The saved Lookup is capped at 8 MiB and scanned for duplicate keys, the prototype-sensitive __proto__ key, and bounded nesting, key, value, and per-container counts before parsing. Exports preserve evidence-source attribution and limitations. Markdown and HTML include a presentation-only generator footer unless --no-attribution is selected; JSON retains bounded generator provenance. Compact output intentionally omits raw registry payloads.',
+    boundary: 'Saved Lookup versions 1 and 2 are capped at 8 MiB and scanned for duplicate keys, the prototype-sensitive __proto__ key, and bounded nesting, key, value, and per-container counts before parsing. Current schema-27 exports preserve evidence-source attribution and limitations; schema 26 remains strict and schema 25 retains its documented historical wrapper semantics. Markdown and HTML include a presentation-only generator footer unless --no-attribution is selected; JSON retains bounded generator provenance. Compact output intentionally omits raw registry payloads.',
   },
 });
 

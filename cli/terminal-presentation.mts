@@ -9,30 +9,52 @@ type TerminalEnvironment = Readonly<Record<string, string | undefined>>;
 type TerminalPresentation = Readonly<{
   color: boolean;
   interactive: boolean;
+  palette: TerminalPalette;
   width: number | null;
 }>;
 
 type TerminalTone = 'accent' | 'danger' | 'dim' | 'info' | 'success' | 'warning';
+type TerminalPalette = 'auto' | 'light' | 'dark';
 
 const MIN_TERMINAL_WIDTH = 40;
 const MAX_TERMINAL_WIDTH = 160;
 const DEFAULT_TERMINAL_WIDTH = 100;
 const ANSI_RESET = '\u001b[0m';
-const ANSI_BY_TONE: Readonly<Record<TerminalTone, string>> = Object.freeze({
-  accent: '\u001b[1;36m',
-  danger: '\u001b[31m',
-  dim: '\u001b[2m',
-  info: '\u001b[36m',
-  success: '\u001b[32m',
-  warning: '\u001b[33m',
+const ANSI_BY_PALETTE: Readonly<Record<TerminalPalette, Readonly<Record<TerminalTone, string>>>> = Object.freeze({
+  auto: Object.freeze({
+    accent: '\u001b[1;36m',
+    danger: '\u001b[31m',
+    dim: '\u001b[2m',
+    info: '\u001b[36m',
+    success: '\u001b[32m',
+    warning: '\u001b[33m',
+  }),
+  light: Object.freeze({
+    accent: '\u001b[1;34m',
+    danger: '\u001b[31m',
+    dim: '\u001b[2;30m',
+    info: '\u001b[34m',
+    success: '\u001b[32m',
+    warning: '\u001b[33m',
+  }),
+  dark: Object.freeze({
+    accent: '\u001b[1;96m',
+    danger: '\u001b[91m',
+    dim: '\u001b[2m',
+    info: '\u001b[96m',
+    success: '\u001b[92m',
+    warning: '\u001b[93m',
+  }),
 });
 
 const SECTION_LABELS = new Set([
   'Collection',
+  'DNS',
   'Discover',
   'Integrity and calibration',
   'Investigate',
   'Network',
+  'Mail',
   'Quick start',
   'Registration',
   'Result',
@@ -41,6 +63,7 @@ const SECTION_LABELS = new Set([
   'Source health',
   'Target',
   'Terminal',
+  'TLS and certificate',
   'Website and security',
 ]);
 
@@ -54,6 +77,7 @@ function terminalPresentation(
   stream: WritableTerminal | null | undefined,
   requestedColor = true,
   environment: TerminalEnvironment = process.env,
+  palette: TerminalPalette = 'auto',
 ): TerminalPresentation {
   const interactive = stream?.isTTY === true
     && environment.TERM !== 'dumb'
@@ -64,12 +88,19 @@ function terminalPresentation(
   return Object.freeze({
     color,
     interactive,
+    palette,
     width: interactive ? boundedTerminalWidth(stream?.columns) : null,
   });
 }
 
-function tone(value: string, selectedTone: TerminalTone, enabled: boolean): string {
-  return enabled ? `${ANSI_BY_TONE[selectedTone]}${value}${ANSI_RESET}` : value;
+function tone(
+  value: string,
+  selectedTone: TerminalTone,
+  presentation: boolean | TerminalPalette,
+): string {
+  if (presentation === false) return value;
+  const palette = presentation === true ? 'auto' : presentation;
+  return `${ANSI_BY_PALETTE[palette][selectedTone]}${value}${ANSI_RESET}`;
 }
 
 function statusTone(value: string): TerminalTone | null {
@@ -132,29 +163,29 @@ function wrapTerminalOutput(value: string, width: number | null): string {
   return `${lines.join('\n')}${trailingNewline ? '\n' : ''}`;
 }
 
-function colorizeLine(line: string): string {
+function colorizeLine(line: string, palette: TerminalPalette): string {
   const trimmed = line.trim();
   if (!trimmed) return line;
   const section = trimmed.endsWith(':') ? trimmed.slice(0, -1) : trimmed;
   if (SECTION_LABELS.has(section)) {
     const prefixLength = line.indexOf(trimmed);
-    return `${line.slice(0, prefixLength)}${tone(trimmed, 'accent', true)}${line.slice(prefixLength + trimmed.length)}`;
+    return `${line.slice(0, prefixLength)}${tone(trimmed, 'accent', palette)}${line.slice(prefixLength + trimmed.length)}`;
   }
-  if (trimmed.startsWith('✓')) return line.replace('✓', tone('✓', 'success', true));
-  if (trimmed.startsWith('!')) return line.replace('!', tone('!', 'danger', true));
+  if (trimmed.startsWith('✓')) return line.replace('✓', tone('✓', 'success', palette));
+  if (trimmed.startsWith('!')) return line.replace('!', tone('!', 'danger', palette));
   if (/^(?:Limitation|Access note|Boundary)\s{2,}/u.test(trimmed)) {
-    return tone(line, 'dim', true);
+    return tone(line, 'dim', palette);
   }
   const bracket = line.match(/^(\s*)\[([^\]]+)\](.*)$/u);
   if (bracket) {
     const selectedTone = statusTone(bracket[2] || '') || 'info';
-    return `${bracket[1]}${tone(`[${bracket[2]}]`, selectedTone, true)}${bracket[3]}`;
+    return `${bracket[1]}${tone(`[${bracket[2]}]`, selectedTone, palette)}${bracket[3]}`;
   }
   const keyValue = line.match(/^(\s*)(\S(?:.*?\S)?)(\s{2,})(\S.*)$/u);
   if (keyValue) {
     const value = keyValue[4] || '';
     const selectedTone = statusTone(value);
-    return `${keyValue[1]}${tone(keyValue[2] || '', 'info', true)}${keyValue[3]}${selectedTone ? tone(value, selectedTone, true) : value}`;
+    return `${keyValue[1]}${tone(keyValue[2] || '', 'info', palette)}${keyValue[3]}${selectedTone ? tone(value, selectedTone, palette) : value}`;
   }
   return line;
 }
@@ -163,7 +194,7 @@ function presentTerminalOutput(value: string, presentation: TerminalPresentation
   const wrapped = wrapTerminalOutput(value, presentation.width);
   if (!presentation.color) return wrapped;
   const trailingNewline = wrapped.endsWith('\n');
-  const lines = wrapped.replace(/\n$/u, '').split('\n').map(colorizeLine);
+  const lines = wrapped.replace(/\n$/u, '').split('\n').map((line) => colorizeLine(line, presentation.palette));
   return `${lines.join('\n')}${trailingNewline ? '\n' : ''}`;
 }
 
@@ -175,6 +206,7 @@ export {
 };
 export type {
   TerminalEnvironment,
+  TerminalPalette,
   TerminalPresentation,
   TerminalTone,
   WritableTerminal,

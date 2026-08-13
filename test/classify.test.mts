@@ -4,7 +4,7 @@
 
 import test, { describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { classifyQuery } from '../lib/classify.mts';
+import { classifyQuery, isDirectLookupTarget } from '../lib/classify.mts';
 
 describe('control characters', () => {
   test('rejects an embedded CRLF (WHOIS protocol injection)', () => {
@@ -134,5 +134,60 @@ describe('registrable-domain safety (eliminating false availability)', () => {
     assert.throws(() => classifyQuery('example.com..'), /more than one terminal dot/);
     assert.throws(() => classifyQuery('example.com...'), /more than one terminal dot/);
     assert.throws(() => classifyQuery(`example.com${'.'.repeat(100_000)}`), /more than one terminal dot/);
+  });
+});
+
+describe('direct Lookup shorthand recognition', () => {
+  test('accepts only complete unambiguous target operands', () => {
+    for (const target of [
+      'example.com',
+      'login.example.com',
+      'example.com.',
+      'münchen.example',
+      'münchen.de',
+      '192.0.2.10',
+      '2001:db8::10',
+      'AS64496',
+      '64496',
+      'AS0',
+      'AS4294967295',
+    ]) {
+      assert.equal(isDirectLookupTarget(target), true, target);
+    }
+  });
+
+  test('rejects commands, convenient query forms, and malformed targets', () => {
+    for (const target of [
+      'lookup',
+      'not-a-command',
+      'https://example.com',
+      'example.com/path',
+      'example.com?query=1',
+      'example.com#fragment',
+      'user@example.com',
+      'example.com:443',
+      '[2001:db8::10]',
+      'fe80::1%en0',
+      ' example.com',
+      'example.com ',
+      'exa mple.com',
+      'example.com..',
+      'bad_label.example',
+      'report.json',
+      'not.a.command',
+      'typo.internal',
+      'example.invalid',
+      'service.onion',
+      'router.home.arpa',
+      '1.0.0.127.in-addr.arpa',
+      'b.a.9.8.7.6.5.0.4.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.8.e.f.ip6.arpa',
+      'AS4294967296',
+      '4294967296',
+      '--version',
+      'a'.repeat(1025),
+      '',
+    ]) {
+      assert.equal(isDirectLookupTarget(target), false, target);
+    }
   });
 });

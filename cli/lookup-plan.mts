@@ -116,6 +116,7 @@ function formatCliLookupPlan(plan: CliLookupPlan): string {
     `Type: ${plan.target.type}`,
     `Mode: ${plan.mode}`,
     'Network requests made: no',
+    'Collection requires network: yes',
     '',
     'Planned collection:',
   ];

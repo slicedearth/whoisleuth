@@ -2,12 +2,18 @@ import { compareRdapPublications, compareRegistrySources } from './registry-comp
 import { buildRegistryInsights } from './registry-insights.mts';
 import { buildPortableGeneratorMetadata } from './portable-generator.mts';
 import { assertBoundedJsonStructure, isSafeJsonObjectKey } from './bounded-json.mts';
+import {
+  validHttpDeliveryMetadata,
+  validPagePublicationMetadata,
+} from './homepage-metadata-contract.mts';
 
 export const LOOKUP_EVIDENCE_SCHEMA = 'whoisleuth.lookup-evidence';
 export const LEGACY_LOOKUP_EVIDENCE_SCHEMA_VERSION = 25;
-export const LOOKUP_EVIDENCE_SCHEMA_VERSION = 26;
+export const PREVIOUS_LOOKUP_EVIDENCE_SCHEMA_VERSION = 26;
+export const LOOKUP_EVIDENCE_SCHEMA_VERSION = 27;
 export const SUPPORTED_LOOKUP_EVIDENCE_SCHEMA_VERSIONS = Object.freeze([
   LEGACY_LOOKUP_EVIDENCE_SCHEMA_VERSION,
+  PREVIOUS_LOOKUP_EVIDENCE_SCHEMA_VERSION,
   LOOKUP_EVIDENCE_SCHEMA_VERSION,
 ]);
 export const LOOKUP_EVIDENCE_PORTABLE_MAX_BYTES = 5 * 1024 * 1024;
@@ -340,6 +346,32 @@ export function projectLookupEvidenceAvailability(value: unknown): UnknownRecord
     const item = source[key];
     if (privateEvidenceKey(key, item)) continue;
     output[key] = projectLookupEvidenceAvailabilityValue(item, key, state, 1);
+  }
+  const pageIdentity = recordOrNull(source.pageIdentity);
+  const publicationMetadata = pageIdentity?.publicationMetadata;
+  if (publicationMetadata !== undefined) {
+    if (!['success', 'partial'].includes(String(pageIdentity?.status))
+      || !validPagePublicationMetadata(publicationMetadata)) {
+      throw new TypeError('Lookup evidence contains invalid page publication metadata.');
+    }
+    const projectedPageIdentity = recordOrNull(output.pageIdentity);
+    if (projectedPageIdentity) {
+      projectedPageIdentity.publicationMetadata = projectLookupEvidencePrivacySafeTree(publicationMetadata);
+    }
+  }
+  const httpResponse = recordOrNull(recordOrNull(source.http)?.response);
+  const sourceHttp = recordOrNull(source.http);
+  const deliveryMetadata = httpResponse?.deliveryMetadata;
+  if (deliveryMetadata !== undefined) {
+    if (!['success', 'partial'].includes(String(sourceHttp?.status))
+      || !validHttpDeliveryMetadata(deliveryMetadata)) {
+      throw new TypeError('Lookup evidence contains invalid HTTP delivery metadata.');
+    }
+    const projectedHttp = recordOrNull(output.http);
+    const projectedResponse = recordOrNull(projectedHttp?.response);
+    if (projectedResponse) {
+      projectedResponse.deliveryMetadata = projectLookupEvidencePrivacySafeTree(deliveryMetadata);
+    }
   }
   return output;
 }

@@ -63,7 +63,14 @@ test('public privacy notices track versioned browser-local data contracts', asyn
 
   for (const notice of [rootNotice, publicNotice]) {
     const compact = notice.replace(/\s+/gu, ' ');
-    assert.match(compact, /Last updated: 12 August 2026/u);
+    assert.match(compact, /Last updated: 14 August 2026/u);
+    assert.match(compact, /same bounded homepage (?:request|response)/u);
+    assert.match(compact, /fixed robots and Twitter Card declaration classes/u);
+    assert.match(compact, /(?:Content-Encoding, Cache-Control|selected-response content-coding and cache-policy metadata)/u);
+    assert.match(compact, /Raw (?:declaration and header values|header and validator values).*?(?:not retained|discarded)/u);
+    assert.match(compact, /no compression ratio/u);
+    assert.match(compact, /remain(?:s)? outside compact Bulk and ordinary browser-local stores/u);
+    assert.match(compact, /deliberate full saved Lookup or evidence file/u);
     assert.ok(compact.includes(`more than ${MAX_SAFE_FETCH_ADDRESS_CANDIDATES} address candidates`));
     assert.ok(compact.includes(`at most ${MAX_CASE_INPUT_RECORDS.toLocaleString('en-AU')} parsed records before the ${MAX_CASES}-case store cap`));
     assert.ok(compact.includes(`up to ${MAX_HANDOFF_CANDIDATES.toLocaleString('en-AU')} selected domains`));

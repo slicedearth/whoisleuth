@@ -3,18 +3,27 @@ import { classifyQuery } from '../lib/classify.mts';
 import { scanBoundedJson } from '../lib/bounded-json.mts';
 import { CliUsageError } from './arguments.mts';
 import type { BoundedTextStream } from './bulk.mts';
+import {
+  validHttpDeliveryMetadata,
+  validPagePublicationMetadata,
+} from '../lib/homepage-metadata-contract.mts';
 
 const MAX_SAVED_LOOKUP_INPUT_BYTES = 8 * 1024 * 1024;
 const MAX_SAVED_LOOKUP_STRING_LENGTH = 1024;
 const SAVED_LOOKUP_SCHEMA = 'whoisleuth.cli.lookup';
-const SAVED_LOOKUP_SCHEMA_VERSION = 1;
+const LEGACY_SAVED_LOOKUP_SCHEMA_VERSION = 1;
+const SAVED_LOOKUP_SCHEMA_VERSION = 2;
+const SUPPORTED_SAVED_LOOKUP_SCHEMA_VERSIONS = Object.freeze([
+  LEGACY_SAVED_LOOKUP_SCHEMA_VERSION,
+  SAVED_LOOKUP_SCHEMA_VERSION,
+]);
 const RDAP_STATUSES = new Set(['success', 'partial', 'error', 'unsupported', 'not_found', 'skipped', 'disabled']);
 const WHOIS_STATUSES = new Set(['complete', 'partial', 'error', 'unsupported', 'not_found', 'skipped', 'disabled']);
 
 type UnknownRecord = Record<string, unknown>;
 type SavedLookupDocument = UnknownRecord & {
   schema: typeof SAVED_LOOKUP_SCHEMA;
-  version: typeof SAVED_LOOKUP_SCHEMA_VERSION;
+  version: typeof LEGACY_SAVED_LOOKUP_SCHEMA_VERSION | typeof SAVED_LOOKUP_SCHEMA_VERSION;
   type: 'domain';
   mode: 'fast' | 'deep';
   query: string;
@@ -93,8 +102,11 @@ function parseSavedLookupDocument(text: unknown, options: SavedLookupParseOption
   }
   const document = objectOrNull(parsed);
   if (!document) throw new CliUsageError(`${label} must be one JSON object.`);
-  if (document.schema !== SAVED_LOOKUP_SCHEMA || document.version !== SAVED_LOOKUP_SCHEMA_VERSION) {
-    throw new CliUsageError(`${label} must use ${SAVED_LOOKUP_SCHEMA} version ${SAVED_LOOKUP_SCHEMA_VERSION}.`);
+  if (document.schema !== SAVED_LOOKUP_SCHEMA
+    || typeof document.version !== 'number'
+    || !Number.isSafeInteger(document.version)
+    || !SUPPORTED_SAVED_LOOKUP_SCHEMA_VERSIONS.includes(document.version)) {
+    throw new CliUsageError(`${label} must use ${SAVED_LOOKUP_SCHEMA} version ${SUPPORTED_SAVED_LOOKUP_SCHEMA_VERSIONS.join(' or ')}.`);
   }
   if (document.type !== 'domain') throw new CliUsageError(`${label} supports domain lookup documents only.`);
   if (document.mode !== 'fast' && document.mode !== 'deep') {
@@ -118,6 +130,27 @@ function parseSavedLookupDocument(text: unknown, options: SavedLookupParseOption
   const whoisStatus = requiredStatus(whoisDiagnostics?.status, WHOIS_STATUSES, 'diagnostics.whois.status');
   const rdap = objectOrNull(document.rdap);
   const whois = objectOrNull(document.whois);
+  const availability = objectOrNull(document.availability);
+  const pageIdentity = objectOrNull(availability?.pageIdentity);
+  const http = objectOrNull(availability?.http);
+  const httpResponse = objectOrNull(http?.response);
+  const publicationMetadata = pageIdentity?.publicationMetadata;
+  const deliveryMetadata = httpResponse?.deliveryMetadata;
+  if (document.version === LEGACY_SAVED_LOOKUP_SCHEMA_VERSION
+    && (publicationMetadata !== undefined || deliveryMetadata !== undefined)) {
+    throw new CliUsageError(`${label} version ${LEGACY_SAVED_LOOKUP_SCHEMA_VERSION} cannot contain version ${SAVED_LOOKUP_SCHEMA_VERSION} homepage metadata.`);
+  }
+  if (document.version === SAVED_LOOKUP_SCHEMA_VERSION
+    && (publicationMetadata !== undefined && (
+      !['success', 'partial'].includes(String(pageIdentity?.status))
+      || !validPagePublicationMetadata(publicationMetadata)
+    )
+      || deliveryMetadata !== undefined && (
+        !['success', 'partial'].includes(String(http?.status))
+        || !validHttpDeliveryMetadata(deliveryMetadata)
+      ))) {
+    throw new CliUsageError(`${label} contains invalid homepage metadata.`);
+  }
   const rdapParsed = objectOrNull(rdap?.parsed);
   const whoisParsed = objectOrNull(whois?.parsed);
   if (rdapStatus === 'success' && !rdapParsed) {
@@ -133,7 +166,9 @@ export {
   MAX_SAVED_LOOKUP_INPUT_BYTES,
   MAX_SAVED_LOOKUP_STRING_LENGTH,
   SAVED_LOOKUP_SCHEMA,
+  LEGACY_SAVED_LOOKUP_SCHEMA_VERSION,
   SAVED_LOOKUP_SCHEMA_VERSION,
+  SUPPORTED_SAVED_LOOKUP_SCHEMA_VERSIONS,
   parseSavedLookupDocument,
   readSavedLookupInputBounded,
 };

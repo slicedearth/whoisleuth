@@ -801,7 +801,7 @@
       {/if}
 
       {#if httpEvidence.source==='http'}
-        <div class="evidence-component" id="evidence-http"><LookupHttpEvidence status={statusLabel(show(httpEvidence.status))} complete={httpEvidence.complete!==false} rows={networkDisplay.httpRows} crossOriginRedirect={Boolean(httpEvidence.crossOriginRedirect)} httpsDowngrade={Boolean(httpEvidence.httpsDowngrade)} redirects={networkDisplay.httpRedirects} attempts={networkDisplay.httpAttempts} metadata={networkDisplay.httpMetadata} limitations={stringList(httpEvidence.limitations,MAX_OBSERVATION_LIMITATIONS,MAX_OBSERVATION_LIMITATION_LENGTH)} /></div>
+        <div class="evidence-component" id="evidence-http"><LookupHttpEvidence status={statusLabel(show(httpEvidence.status))} complete={httpEvidence.complete!==false} rows={networkDisplay.httpRows} crossOriginRedirect={Boolean(httpEvidence.crossOriginRedirect)} httpsDowngrade={Boolean(httpEvidence.httpsDowngrade)} redirects={networkDisplay.httpRedirects} attempts={networkDisplay.httpAttempts} metadata={networkDisplay.httpMetadata} deliveryMetadata={networkDisplay.httpDeliveryMetadata} limitations={stringList(httpEvidence.limitations,MAX_OBSERVATION_LIMITATIONS,MAX_OBSERVATION_LIMITATION_LENGTH)} /></div>
       {/if}
 
       {#if tlsEvidence.source==='tls'}
@@ -855,6 +855,7 @@
           downloadSummary={pageDisplay.downloadSummary}
           trackingIdentifiers={pageDisplay.trackingIdentifiers}
           fingerprints={pageDisplay.fingerprints}
+          publicationMetadata={pageDisplay.pagePublicationMetadata}
           limitations={stringList(pageIdentity.limitations,MAX_OBSERVATION_LIMITATIONS,MAX_OBSERVATION_LIMITATION_LENGTH)}
         /></div>
       {/if}

@@ -171,13 +171,13 @@ describe('scoped CLI package contract', () => {
         tldts: '7.4.10',
         undici: '8.9.0',
       },
-      installedChecks: ['help', 'version', 'doctor', 'completion', 'manual', 'registry-support', 'discover'],
+      installedChecks: ['help', 'zero-argument-help', 'version', 'doctor', 'lookup-plan', 'direct-lookup-plan', 'completion', 'manual', 'registry-support', 'discover'],
       publicationEnabled: false,
       archiveFilename: null,
       archiveSha256: null,
     });
     assert.match(output, /Publication: disabled/u);
     assert.match(output, /Runtime dependencies: @peculiar\/x509@2\.0\.0, maxmind@5\.0\.7, parse5@8\.0\.1, reflect-metadata@0\.2\.2, tldts@7\.4\.10, undici@8\.9\.0/u);
-    assert.match(output, /Installed checks: help, version, doctor, completion, manual, registry-support, discover/u);
+    assert.match(output, /Installed checks: help, zero-argument-help, version, doctor, lookup-plan, direct-lookup-plan, completion, manual, registry-support, discover/u);
   });
 });

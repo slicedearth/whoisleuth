@@ -526,7 +526,13 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
       throw new TypeError('Installed package check does not retain its private publication boundary.');
     }
     const help = await runInstalledCheck(executable, ['--help'], 'help');
-    if (!help.startsWith('WHOISleuth CLI\n') || !help.includes('Fast lookup is the default; deep collection')) throw new TypeError('Installed CLI help contract failed.');
+    if (!help.startsWith('WHOISleuth CLI\n')
+      || !help.includes('Fast lookup is the default; deep collection')
+      || !help.includes('eligible interactive terminal opens a bounded launcher')) {
+      throw new TypeError('Installed CLI help contract failed.');
+    }
+    const zeroArgumentHelp = await runInstalledCheck(executable, [], 'zero-argument redirected help');
+    if (zeroArgumentHelp !== help) throw new TypeError('Installed CLI zero-argument redirected invocation did not preserve static help.');
     const version = await runInstalledCheck(executable, ['--version'], 'version');
     if (version !== `${packageVersion}\n`) throw new TypeError('Installed CLI version does not match the generated package manifest.');
     const doctor = await runInstalledCheck(executable, ['doctor', '--json'], 'doctor');
@@ -545,12 +551,25 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
       || record(lookupPlanDocument.planning, 'Installed Lookup plan collection').networkRequestsMade !== false) {
       throw new TypeError('Installed offline Lookup plan returned the wrong contract.');
     }
+    const directLookupPlan = await runInstalledCheck(executable, ['example.test', '--deep', '--plan', '--json'], 'direct Lookup plan');
+    const directLookupPlanDocument = record(JSON.parse(directLookupPlan), 'Installed direct Lookup plan');
+    if (directLookupPlanDocument.schema !== 'whoisleuth.cli.lookup-plan'
+      || record(directLookupPlanDocument.planning, 'Installed direct Lookup plan collection').networkRequestsMade !== false
+      || directLookupPlanDocument.query !== lookupPlanDocument.query
+      || directLookupPlanDocument.mode !== lookupPlanDocument.mode) {
+      throw new TypeError('Installed direct target did not preserve the offline Lookup plan contract.');
+    }
     const completion = await runInstalledCheck(executable, ['completion', 'bash'], 'completion');
-    if (!completion.includes('complete -F _whoisleuth_completion whoisleuth')) {
+    if (!completion.includes('complete -F _whoisleuth_completion whoisleuth')
+      || !completion.includes('--palette')
+      || !completion.includes('--save-lookup')) {
       throw new TypeError('Installed bash completion command returned the wrong script.');
     }
     const manual = await runInstalledCheck(executable, ['manual'], 'manual');
-    if (!manual.startsWith('.TH WHOISLEUTH 1') || !manual.includes('.SS diff')) {
+    if (!manual.startsWith('.TH WHOISLEUTH 1')
+      || !manual.includes('.SS diff')
+      || !manual.includes('--save-lookup')
+      || !manual.includes('--palette')) {
       throw new TypeError('Installed CLI manual command returned the wrong document.');
     }
     const registrySupport = await runInstalledCheck(executable, ['registry-support', 'example.test', '--json'], 'registry-support');
@@ -616,10 +635,12 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
       runtimeDependencies,
       installedChecks: Object.freeze([
         'help',
+        'zero-argument-help',
         'version',
         'doctor',
         'commands',
         'lookup-plan',
+        'direct-lookup-plan',
         'completion',
         'manual',
         'registry-support',

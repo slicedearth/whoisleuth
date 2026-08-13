@@ -438,6 +438,34 @@ test('the theme trigger controls only a rendered option list', async ({ page }) 
   await expect(page.locator('#colour-theme-options')).toHaveCount(0);
 });
 
+test('the public theme menu uses the surrounding canvas surface', async ({ page }) => {
+  await clearThemePreference(page);
+  await page.goto('/resources');
+  await chooseTheme(page, 'Light');
+
+  for (const viewport of [
+    { width: 1280, height: 800 },
+    { width: 390, height: 844 },
+  ]) {
+    await page.setViewportSize(viewport);
+    const trigger = page.getByRole('button', { name: 'Colour theme, Light selected' });
+    await trigger.click();
+    const options = page.getByRole('listbox', { name: 'Colour theme options' });
+    await expect(options).toBeVisible();
+
+    const colours = await page.evaluate(() => ({
+      canvas: getComputedStyle(document.body).backgroundColor,
+      trigger: getComputedStyle(document.querySelector('.theme-trigger')!).backgroundColor,
+      options: getComputedStyle(document.querySelector('.theme-options')!).backgroundColor,
+    }));
+    expect(colours.trigger).toBe(colours.canvas);
+    expect(colours.options).toBe(colours.canvas);
+
+    await trigger.click();
+    await expect(options).toHaveCount(0);
+  }
+});
+
 test('a theme still applies to the current tab when persistent storage is unavailable', async ({ page }) => {
   await page.addInitScript(() => {
     Object.defineProperty(Storage.prototype, 'getItem', { configurable: true, value: () => { throw new Error('blocked'); } });

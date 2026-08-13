@@ -10,7 +10,7 @@ export const CLI_CONFIG_VERSION = 1;
 export const MAX_CLI_CONFIG_BYTES = 64 * 1024;
 
 const SAFE_BOOLEAN_DEFAULTS = new Set(['--no-color', '--summary', '--verbose', '--fast']);
-const SAFE_VALUE_DEFAULTS = new Set(['--concurrency', '--observer', '--vantage']);
+const SAFE_VALUE_DEFAULTS = new Set(['--concurrency', '--observer', '--palette', '--vantage']);
 const OPTION_GROUPS = Object.freeze({
   '--no-color': 'colour',
   '--summary': 'detail',
@@ -18,6 +18,7 @@ const OPTION_GROUPS = Object.freeze({
   '--fast': 'scan',
   '--concurrency': 'concurrency',
   '--observer': 'observer',
+  '--palette': 'colour',
   '--vantage': 'vantage',
 } as const);
 
@@ -62,6 +63,9 @@ function validateProfileArguments(value: unknown): string[] {
     if (groups.has(group)) throw new CliUsageError(`CLI profile contains duplicate ${group} defaults.`);
     if (argument === '--concurrency' && (!/^\d+$/u.test(next) || Number(next) < 1 || Number(next) > 8)) {
       throw new CliUsageError('CLI profile concurrency must be an integer from 1 to 8.');
+    }
+    if (argument === '--palette' && !['auto', 'light', 'dark'].includes(next)) {
+      throw new CliUsageError('CLI profile palette must be auto, light, or dark.');
     }
     groups.add(group);
     validated.push(argument, next);

@@ -108,6 +108,36 @@ profile merge does not remap an opaque reference, so the case may honestly
 remain unresolved. This projection makes no request, write, score, or alert and
 creates no new stored collection.
 
+The Brands route also builds a website-only, read-only Brand Asset Register in
+memory for the active profile. Its direct anchors are the profile's authored
+official, approved-partner, and allowlisted domains plus canonical domains from
+Cases carrying that exact profile identifier. The direct set is frozen before
+retained relationship observations are considered: a qualifying observation
+can add or corroborate one-hop review leads, but those candidates never become
+anchors and observation overlap never creates or upgrades an authored role. An
+`official_asset` observation qualifies only when its configured asset host is
+the exact active official domain or a label-boundary subdomain of it.
+
+The projection preserves every direct row, admits at most 2,000 rows in total,
+and keeps at most 12 Case references and 12 relationship references per row.
+Candidate and reference caps use deterministic timestamp and canonical-key
+ordering, and exact omission counts remain visible. Profile or active-preference
+failure suppresses rows; no active profile and an unresolved active identifier
+remain separate states. Unavailable Case or relationship reads leave readable
+rows partial and report their affected counts as unavailable rather than zero.
+Source truncation, incomplete relationship evidence, and projection or
+provenance caps likewise remain explicit.
+
+The register copies only canonical domains, non-ownership roles, opaque local
+references, bounded source labels, timestamps, completeness, and fixed reasons.
+It excludes evidence values and raw payloads, contacts, notes, tags, decisions,
+actions, assertions, scores, complete URLs, paths, queries, fragments, account
+labels, and credentials. Shortlist and watchlist records are not inputs because
+they do not carry an active Brand Profile association. The projection performs
+no discovery, network request, migration, storage write, export, score,
+monitoring, or automatic Case creation and does not alter future-schema refusal
+or legacy-source preservation.
+
 Brand Profile identity remains protected during merge. Reusing the same exact
 identifier with the same normalised profile name may merge, but mapping that
 identifier to a different normalised name rejects the whole profile import.
@@ -131,6 +161,9 @@ canonical domain. They contain curated technology identifiers, posture states,
 identity digests, source health, timestamps, completeness markers and an
 optional normalised leaf-certificate observation from the same completed Deep
 Lookup rather than raw lookup responses or certificate bytes.
+The fixed publication-declaration and selected-response delivery/cache
+summaries remain outside this compact store; they are retained only when an
+analyst deliberately saves the full Lookup JSON or a full evidence export.
 Investigation templates retain at most 20 analyst-authored variants of the
 six fixed built-in investigation and response-preparation guides. They can customise bounded guidance, omit allowlisted
 steps, and add approval gates, but cannot introduce arbitrary actions, run

@@ -50,14 +50,33 @@ whoisleuth doctor
 whoisleuth lookup example.com --plan --json
 ```
 
+With no arguments, a capable interactive terminal opens a bounded launcher for
+Fast or Deep Lookup, offline workflow planning, or the command catalogue.
+Redirected, CI, dumb, small, or otherwise unsupported terminals keep printing
+help and never wait for input. The launcher displays the ordinary Lookup plan
+and requires an explicit confirmation before collection.
+
 Run a fast lookup or deliberately request the deeper profile:
 
 ```bash
+whoisleuth example.test
 whoisleuth lookup example.com
 whoisleuth lookup example.com --deep
 whoisleuth lookup example.com --deep --summary
+whoisleuth lookup example.com --deep --browse
 whoisleuth lookup example.com --deep --markdown --output lookup.md
 ```
+
+A strict domain, IP address, or ASN can occupy command position as shorthand
+for `lookup`; it uses the same parser, fast default, options, configuration
+profile, and output contracts. The shorthand does not repair ambiguous input:
+schemes, paths, credentials, ports, scoped addresses, and other URL-like forms
+require the explicit `lookup` command. Domain shorthand is limited to
+ICANN-recognised public suffixes and the reserved `.test` and `.example`
+documentation suffixes, so filenames and internal-looking names remain unknown
+commands. The `.onion` namespace, the `.arpa` infrastructure tree, and every
+other non-ICANN suffix except `.test` and `.example` remain excluded from
+shorthand. Unknown command names remain errors.
 
 Process an explicit bounded list, generate lookalike candidates, or inspect a
 saved result without sending it anywhere:
@@ -138,7 +157,39 @@ explicit in text, so colour is never the only distinction.
 
 - `--json` and `--jsonl` provide bounded machine-readable documents.
 - `--summary` and `--verbose` change human detail without changing collection.
-- `--no-color` or `NO_COLOR` disables colour.
+- `lookup --browse` opens before the one collection, shows transient aggregate
+  Fast progress or independently settled planned Deep sources, and then
+  navigates the same bounded terminal panels.
+  Left/Right, `h`/`l`, Tab/Shift-Tab, or a numbered key selects a panel;
+  Up/Down, `j`/`k`, Page Up/Down, and Home/End scroll long panel content.
+  `?` opens bounded key help, `/` searches only rendered panel text, and `n` or
+  `N` moves between retained matches. Search makes no request and cannot inspect
+  omitted fields or raw payloads. Closing during collection cancels the run and
+  emits no partial document.
+  It requires input and output of at least 40 columns by 12 rows, reserves
+  stdin for navigation, closes with `q`, Enter, or Escape, and
+  cannot be combined with redirected, detail, event, plan, or quiet output.
+- `lookup --browse --save-lookup <file>` atomically writes the exact completed
+  versioned Lookup JSON with private permissions after a normal close. It
+  refuses an existing path and can contain normalized evidence omitted from
+  panels. Cancellation or browser failure produces no saved file.
+- Standard and verbose Lookup panels project only allowlisted retained fields:
+  bounded IP/ASN and endpoint-network registration, static page summaries, and
+  separate TLS trust, hostname, validity, key, SAN, purpose, and chain context.
+  Raw responses, contacts, page paths and queries, script contents, certificate
+  bytes, and published route values remain omitted.
+- Full Deep domain Lookup can derive fixed publication declarations and
+  selected-response delivery/cache metadata from the same homepage request.
+  Raw meta/header values are omitted, and these summaries do not establish
+  indexing, accessibility, cache effectiveness, performance, identity,
+  privacy, safety, or maliciousness. Saved Lookup version 1 remains readable;
+  current output is version 2, current HTTP output is version 3, and current
+  portable Lookup evidence is schema 27 with schemas 25 and 26 retained for
+  their documented compatibility semantics.
+- Place `--palette auto|light|dark` after the command to select a fixed semantic
+  ANSI palette. `auto` is stable and does not inspect the terminal background.
+- `--no-color`, `NO_COLOR`, redirected output, CI, and dumb terminals suppress
+  colour regardless of the palette.
 - `WHOISLEUTH_NO_PROGRESS=1` disables the transient progress indicator.
 - `--events` keeps the final document on stdout and writes versioned JSONL
   lifecycle events to stderr.
@@ -152,8 +203,8 @@ explicit in text, so colour is never the only distinction.
 
 `--config <file> --profile <name>` applies a strict version-1 local profile.
 The default path is `$XDG_CONFIG_HOME/whoisleuth/config.json`. Profiles can set
-only presentation mode, Fast collection, bounded concurrency, and observer or
-vantage labels. They cannot add targets, enable Deep collection, select output
+only presentation mode or palette, Fast collection, bounded concurrency, and
+observer or vantage labels. They cannot add targets, enable Deep collection, select output
 paths, approve network work, or set failure policy. Explicit command options
 override defaults from the same option group.
 

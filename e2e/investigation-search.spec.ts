@@ -138,8 +138,7 @@ test('dashboard local search reports an unavailable store without remaining in a
 test('dashboard distinguishes pending counts from unavailable collections', async ({ page }) => {
   await page.goto('/bulk');
   await expect(page.locator('#domains')).toBeEditable();
-  await holdBrowserLocalReads(page, 1_000);
-  await page.locator('#console-navigation').getByRole('link', { name: /^Dashboard/u }).click();
+  await holdBrowserLocalReads(page, 4_000, '#console-navigation a[href="/dashboard"]');
 
   await expect(page.locator('.summary-card strong').first()).toHaveText('Loading');
   await expect(page.locator('.summary-card strong').filter({ hasText: 'Unavailable' })).toHaveCount(0);

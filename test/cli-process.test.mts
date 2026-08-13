@@ -94,6 +94,24 @@ describe('installed CLI process boundary', () => {
     assert.equal(invalid.stdout, '');
     assert.match(invalid.stderr, /^Usage error: Unknown command/);
     assert.equal(invalid.stderr.trim().split('\n').length, 1);
+
+    for (const ambiguous of ['report.json', 'not.a.command', 'typo.internal', 'service.onion', 'router.home.arpa', '1.0.0.127.in-addr.arpa']) {
+      const result = runBinary([ambiguous, '--plan', '--json']);
+      assert.equal(result.status, 2, ambiguous);
+      assert.equal(result.stdout, '');
+      assert.match(result.stderr, /^Usage error: Unknown command/u);
+    }
+  });
+
+  test('direct targets preserve the explicit offline Lookup planning contract', () => {
+    const direct = runBinary(['example.test', '--deep', '--plan', '--json']);
+    const explicit = runBinary(['lookup', 'example.test', '--deep', '--plan', '--json']);
+    assert.equal(direct.status, 0, direct.stderr);
+    assert.equal(direct.stderr, '');
+    assert.equal(direct.stdout, explicit.stdout);
+    const document = JSON.parse(direct.stdout);
+    assert.equal(document.schema, 'whoisleuth.cli.lookup-plan');
+    assert.equal(document.planning.networkRequestsMade, false);
   });
 
   test('saved lookup comparison is a real-process offline transformation', () => {

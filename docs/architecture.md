@@ -86,12 +86,14 @@ Fast and deep modes are execution profiles, not confidence labels:
 | Profile | Intended use | Hosted work |
 | --- | --- | --- |
 | **Fast** | High-volume candidate triage. | RDAP-led registration analysis, with bounded authoritative DNS delegation fallback where needed. WHOIS and deep website/TLS evidence are skipped explicitly. |
-| **Deep, full** | Single-target Lookup and full CLI investigation. | RDAP plus bounded registrar RDAP follow-up, WHOIS, availability, DNS with domain SOA or public-IP PTR context, HTTP, favicon, page identity, privacy-minimised credential-surface counts, publisher-declared structured identity, one-connection TLS, derived technology and passive-posture findings, and one observed-address IP RDAP context. Optional security.txt and external provider actions run only when explicitly selected. |
+| **Deep, full** | Single-target Lookup and full CLI investigation. | RDAP plus bounded registrar RDAP follow-up, WHOIS, availability, DNS with domain SOA or public-IP PTR context, HTTP, favicon, page identity, fixed homepage publication and selected-response delivery/cache summaries from the same request, privacy-minimised credential-surface counts, publisher-declared structured identity, one-connection TLS, derived technology and passive-posture findings, and one observed-address IP RDAP context. Optional security.txt and external provider actions run only when explicitly selected. |
 | **Deep, compact** | Analyst-selected richer Bulk triage. | RDAP, WHOIS, availability, DNS, bounded website evidence, TLS evidence, up to 12 normalised technology identifiers, a bounded TLS issuer label, and an SPKI SHA-256 fingerprint needed by the compact result. Registrar RDAP follow-up, raw registry payloads, structured-identity, rich technology and passive-posture detail, the full certificate profile, observed-address IP RDAP, security.txt, and external providers remain omitted. |
 
 Bulk uses the same `/api/lookup` orchestration one domain at a time and requests
 a compact response. The compact profile does not collect omitted full-lookup
 sources and excludes raw RDAP JSON and multi-hop WHOIS bodies from its response.
+It also excludes the publication and delivery/cache summaries rather than
+retaining them in Bulk rows, sessions, watchlists, cases, or page baselines.
 This keeps each serverless invocation bounded and avoids work and payloads that
 Bulk does not display or retain.
 

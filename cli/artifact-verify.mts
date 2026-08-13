@@ -56,7 +56,7 @@ import {
 } from '../frontend/src/lib/analysis/artifact-integrity.ts';
 import {
   SAVED_LOOKUP_SCHEMA,
-  SAVED_LOOKUP_SCHEMA_VERSION,
+  SUPPORTED_SAVED_LOOKUP_SCHEMA_VERSIONS,
   parseSavedLookupDocument,
 } from './saved-lookup.mts';
 import {
@@ -531,7 +531,7 @@ async function verifyOfflineArtifactCore(
   }
 
   if (schema === SAVED_LOOKUP_SCHEMA) {
-    if (version !== SAVED_LOOKUP_SCHEMA_VERSION) {
+    if (!SUPPORTED_SAVED_LOOKUP_SCHEMA_VERSIONS.includes(version)) {
       throw new UnsupportedOfflineArtifactError('This saved Lookup document version is not supported.');
     }
     const document = parseSavedLookupDocument(raw, { label: 'Saved Lookup artefact' });

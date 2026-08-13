@@ -15,6 +15,10 @@ import {
 } from '../lib/observation.mts';
 import { MAX_BOUNDED_JSON_DEPTH } from '../lib/bounded-json.mts';
 import { MAX_SECURITY_POSTURE_FINDINGS } from '../lib/website-security-posture.mts';
+import {
+  httpDeliveryMetadataFixture,
+  pagePublicationMetadataFixture,
+} from './homepage-metadata-fixtures.mts';
 
 import {
   INVALID_COMPACT_LOOKUP_RESPONSE,
@@ -155,6 +159,85 @@ describe('Lookup HTTP response contract', () => {
     assert.equal(parsed.value, raw);
     assert.deepEqual(raw, before);
     assert.deepEqual(parsed.value.additiveSection, { version: 1, value: 'retained' });
+  });
+
+  test('accepts exact homepage metadata, projects it for display, and rejects malformed children', () => {
+    const publicationMetadata = pagePublicationMetadataFixture();
+    const deliveryMetadata = httpDeliveryMetadataFixture();
+    const raw = response({
+      availability: {
+        applicable: true,
+        domain: 'example.test',
+        state: 'registered',
+        pageIdentity: { source: 'html', status: 'success', complete: true, publicationMetadata },
+        http: { status: 'success', response: { status: 200, deliveryMetadata } },
+      },
+    });
+    const parsed = parseLookupHttpResponse(raw);
+    assert.equal(parsed.ok, true);
+    const view = createLookupViewModel(parsed.value);
+    assert.equal(view.pagePublicationMetadata, publicationMetadata);
+    assert.equal(view.httpDeliveryMetadata, deliveryMetadata);
+
+    for (const child of [
+      { ...pagePublicationMetadataFixture(), version: 2 },
+      { ...pagePublicationMetadataFixture(), privateValue: 'not allowed' },
+    ]) {
+      assert.equal(parseLookupHttpResponse(response({
+        availability: {
+          applicable: true, state: 'registered',
+          pageIdentity: { source: 'html', status: 'success', complete: true, publicationMetadata: child },
+        },
+      })).ok, false);
+    }
+    for (const child of [
+      { ...httpDeliveryMetadataFixture(), version: 2 },
+      { ...httpDeliveryMetadataFixture(), rawHeaders: 'not allowed' },
+    ]) {
+      assert.equal(parseLookupHttpResponse(response({
+        availability: {
+          applicable: true, state: 'registered',
+          http: { status: 'success', response: { status: 200, deliveryMetadata: child } },
+        },
+      })).ok, false);
+    }
+
+    for (const parentState of ['error', 'skipped', 'unavailable']) {
+      assert.equal(parseLookupHttpResponse(response({
+        availability: {
+          applicable: true, state: 'registered',
+          pageIdentity: { source: 'html', status: parentState },
+        },
+      })).ok, true);
+      assert.equal(parseLookupHttpResponse(response({
+        availability: {
+          applicable: true, state: 'registered',
+          pageIdentity: { source: 'html', status: parentState, publicationMetadata },
+        },
+      })).ok, false);
+      assert.equal(parseLookupHttpResponse(response({
+        availability: {
+          applicable: true, state: 'registered',
+          http: { status: parentState, response: { status: 200 } },
+        },
+      })).ok, true);
+      assert.equal(parseLookupHttpResponse(response({
+        availability: {
+          applicable: true, state: 'registered',
+          http: { status: parentState, response: { status: 200, deliveryMetadata } },
+        },
+      })).ok, false);
+    }
+
+    const impossiblePartial = structuredClone(publicationMetadata);
+    impossiblePartial.status = 'partial';
+    impossiblePartial.complete = false;
+    assert.equal(parseLookupHttpResponse(response({
+      availability: {
+        applicable: true, state: 'registered',
+        pageIdentity: { source: 'html', status: 'partial', complete: false, publicationMetadata: impossiblePartial },
+      },
+    })).ok, false);
   });
 
   test('rejects a structurally over-nested response before display models can consume it', () => {
@@ -903,5 +986,20 @@ describe('compact Bulk Lookup HTTP response contract', () => {
       'portal.example.test',
     );
     assert.equal(parsed.ok, true);
+  });
+
+  test('rejects rich homepage metadata at the compact boundary', () => {
+    for (const availabilityValue of [
+      {
+        ...compactResponse().availability,
+        pageIdentity: { publicationMetadata: pagePublicationMetadataFixture() },
+      },
+      {
+        ...compactResponse().availability,
+        http: { response: { deliveryMetadata: httpDeliveryMetadataFixture() } },
+      },
+    ]) {
+      assert.equal(parseCompactLookupHttpResponse(compactResponse({ availability: availabilityValue }), 'example.test').ok, false);
+    }
   });
 });

@@ -102,6 +102,8 @@ type AvailabilityOptions = {
   includeExtendedDnsContext?: boolean;
   includeInheritedCaa?: boolean;
   includeCredentialSurfaceProfile?: boolean;
+  includePublicationMetadata?: boolean;
+  includeDeliveryMetadata?: boolean;
   includeStructuredDataIdentity?: boolean;
   includeTechnologyProfile?: boolean;
   includeSecurityPosture?: boolean;
@@ -122,6 +124,17 @@ type WebsiteActivity = 'parked' | 'active' | 'unreachable';
 type RegistrationSource = 'rdap' | 'whois' | 'dns' | null;
 type RegistrationConfidence = 'high' | 'medium';
 type HtmlSignals = ReturnType<typeof extractHtmlSignals>;
+
+function withoutHttpDeliveryMetadata(value: unknown): unknown {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+  const output = { ...(value as Record<string, unknown>) };
+  if (output.response && typeof output.response === 'object' && !Array.isArray(output.response)) {
+    const response = { ...(output.response as Record<string, unknown>) };
+    delete response.deliveryMetadata;
+    output.response = response;
+  }
+  return output;
+}
 
 // No marketplace (Afternic/Sedo/Dan.com/GoDaddy Auctions/etc.) offers a
 // free, no-auth API to check "is this specific domain listed for sale" -
@@ -750,6 +763,7 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
         responseHeaders: homepage.technologyHeaders,
         activityStatus,
         includePageIdentity: pageIdentityEligible,
+        includePublicationMetadata: options.includePublicationMetadata !== false,
         ...(options.includeCredentialSurfaceProfile !== undefined
           ? { includeCredentialSurfaceProfile: options.includeCredentialSurfaceProfile }
           : {}),
@@ -764,6 +778,9 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
   }
 
   const responsePolicy = qualifyResponsePolicyWithCspMeta(homepage.responsePolicy, htmlSignals.cspMetaPolicy);
+  const retainedHttp = options.includeDeliveryMetadata === false
+    ? withoutHttpDeliveryMetadata(homepage.http)
+    : homepage.http;
   const { cspMetaPolicy: _cspMetaPolicy, ...retainedHtmlSignals } = htmlSignals;
   const securityPosture = options.includeSecurityPosture === false ? null : analyzeWebsiteSecurityPosture({
     http: homepage.http,
@@ -800,7 +817,7 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
       activityStatus,
       websiteProbeStatus,
       websiteProbeDetail,
-      http: homepage.http,
+      http: retainedHttp,
       deepScanComplete,
       faviconHash,
       faviconPHash,
@@ -825,7 +842,7 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
     activityStatus,
     websiteProbeStatus,
     websiteProbeDetail,
-    http: homepage.http,
+    http: retainedHttp,
     deepScanComplete,
     faviconHash,
     faviconPHash,

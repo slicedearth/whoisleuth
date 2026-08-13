@@ -145,6 +145,24 @@ function boundedSourceDetail(err: unknown, fallback: string): string {
     .slice(0, 240) || fallback;
 }
 
+function withoutNestedPublicationMetadata(value: unknown): unknown {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+  const output = { ...(value as Record<string, unknown>) };
+  delete output.publicationMetadata;
+  return output;
+}
+
+function withoutNestedDeliveryMetadata(value: unknown): unknown {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+  const output = { ...(value as Record<string, unknown>) };
+  if (output.response && typeof output.response === 'object' && !Array.isArray(output.response)) {
+    const response = { ...(output.response as Record<string, unknown>) };
+    delete response.deliveryMetadata;
+    output.response = response;
+  }
+  return output;
+}
+
 function boundedTimingMs(value: number): number {
   if (!Number.isFinite(value)) return 0;
   return Math.min(MAX_LOOKUP_TIMING_MS, Math.max(0, Math.round(value)));
@@ -256,6 +274,8 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
         includeExtendedDnsContext: !compact,
         includeInheritedCaa: !fast && !compact,
         includeCredentialSurfaceProfile: !fast && !compact,
+        includePublicationMetadata: !fast && !compact,
+        includeDeliveryMetadata: !fast && !compact,
         includeStructuredDataIdentity: !fast && !compact,
         includeTechnologyProfile: !fast,
         includeSecurityPosture: !compact,
@@ -357,7 +377,8 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
       ['external_intelligence', urlscanIntelligencePromise],
       ['malware_host_intelligence', urlhausIntelligencePromise],
       ['malware_ioc_intelligence', threatfoxIntelligencePromise],
-    ]);
+]);
+
     const notify = (
       source: Parameters<typeof normalizeLookupSourceSettlement>[0],
       outcome: 'fulfilled' | 'rejected',
@@ -661,11 +682,15 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
       pageRoleProfile: _pageRoleProfile,
       clientBehaviorProfile: _clientBehaviorProfile,
       securityPosture: _securityPosture,
+      pageIdentity: richPageIdentity,
+      http: richHttp,
       ...compactAvailability
     } = availability;
     return {
       availability: {
         ...compactAvailability,
+        ...(richPageIdentity !== undefined ? { pageIdentity: withoutNestedPublicationMetadata(richPageIdentity) } : {}),
+        ...(richHttp !== undefined ? { http: withoutNestedDeliveryMetadata(richHttp) } : {}),
         ...(bulkComparison ? { bulkComparison } : {}),
       },
       diagnostics,

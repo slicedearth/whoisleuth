@@ -309,7 +309,9 @@ describe('schema compatibility inventory', () => {
     assert.deepEqual(byId(inventory, 'cli.bulk').supportedVersions, [1, 2, 3]);
     assert.deepEqual(byId(inventory, 'cli.bulk-item').supportedVersions, [1, 2, 3]);
     assert.deepEqual(byId(inventory, 'cli.bulk-checkpoint').supportedVersions, [1, 2]);
-    assert.deepEqual(byId(inventory, 'cli.http').supportedVersions, [1, 2]);
+    assert.deepEqual(byId(inventory, 'cli.lookup').supportedVersions, [1, 2]);
+    assert.equal(byId(inventory, 'cli.lookup').migration, 'read_only');
+    assert.deepEqual(byId(inventory, 'cli.http').supportedVersions, [1, 2, 3]);
     assert.equal(byId(inventory, 'cli.discovery-scan').schema, CLI_DISCOVERY_SCAN_SCHEMA);
     assert.equal(byId(inventory, 'cli.discovery-scan-item').schema, CLI_DISCOVERY_SCAN_ITEM_SCHEMA);
     assert.equal(byId(inventory, 'cli.discovery-scan').currentVersion, CLI_DISCOVERY_SCAN_VERSION);
@@ -349,7 +351,7 @@ describe('schema compatibility inventory', () => {
     assert.equal(byId(inventory, 'cli.web-capture-comparison').schema, WEB_CAPTURE_COMPARISON_SCHEMA);
     assert.equal(byId(inventory, 'cli.web-capture-comparison').currentVersion, WEB_CAPTURE_COMPARISON_VERSION);
     assert.deepEqual(byId(inventory, 'cli.web-capture-comparison').supportedVersions, [2]);
-    assert.deepEqual(byId(inventory, 'export.lookup-evidence').supportedVersions, [25, 26]);
+    assert.deepEqual(byId(inventory, 'export.lookup-evidence').supportedVersions, [25, 26, 27]);
     assert.deepEqual(byId(inventory, 'export.synthetic-demo').supportedVersions, [2, 3, 4, 5]);
     assert.deepEqual(byId(inventory, 'export.external-findings').supportedVersions, [1, 2, 3, 4]);
     assert.equal(byId(inventory, 'import.external-finding-rows').schema, 'whoisleuth.external-finding-rows');

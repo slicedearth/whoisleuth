@@ -23,6 +23,7 @@ import { interchangeContractFor } from '../lib/interchange-fidelity-registry.mts
 import * as lookupEvidenceModule from '../lib/evidence-export.mts';
 import { historicalCasePackFixture } from './historical-case-pack-fixtures.mts';
 import { loadLookupEvidenceV25CompatibilityFixtures } from './lookup-evidence-v25-fixtures.mts';
+import { loadLookupEvidenceV26Fixture } from './lookup-evidence-v26-fixture.mts';
 import {
   MAX_BOUNDED_JSON_DEPTH,
   MAX_BOUNDED_JSON_KEYS,
@@ -208,6 +209,15 @@ describe('interchange fidelity report', () => {
       assert.equal(report.verification.assuranceSatisfied, true, fixture.name);
       assert.equal(report.compatibility.browser?.import, 'supported', fixture.name);
     }
+  });
+
+  test('recognises the frozen strict schema-26 Lookup evidence contract after schema 27 becomes current', async () => {
+    const report = await buildInterchangeFidelityReport(await loadLookupEvidenceV26Fixture(), { generatedAt: NOW });
+    assert.equal(report.artifact.id, 'lookup_evidence');
+    assert.equal(report.artifact.version, lookupEvidenceModule.PREVIOUS_LOOKUP_EVIDENCE_SCHEMA_VERSION);
+    assert.equal(report.verification.state, 'structure_valid');
+    assert.equal(report.verification.assuranceSatisfied, true);
+    assert.equal(report.compatibility.browser?.import, 'supported');
   });
 
   test('reports exact browser and CLI passport compatibility without values', async () => {

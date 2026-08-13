@@ -264,7 +264,7 @@ Each edge retains its own source health and limitations; a failed or incomplete
 TLS check is not shown as an absent certificate relationship.
 
 The collapsed **Replay exported evidence** control accepts a supported
-first-party Lookup evidence JSON document in schema 25 or 26, up to 5 MB. The browser validates
+first-party Lookup evidence JSON document in schema 25, 26, or 27, up to 5 MB. The browser validates
 the schema, nesting, and structured entry count, calculates a SHA-256 file
 digest, and can compare it with a trusted checksum pasted before import. It
 displays a bounded normalised source and fact summary, historical review brief,
@@ -947,6 +947,12 @@ Deep single Lookup can derive several views from one bounded homepage response:
   presence, and a captured-body digest;
 - static page identity, forms, external origins, public tracking identifiers,
   and bounded fingerprints;
+- fixed robots and Twitter Card declaration presence, heading and image-alt
+  counts, and conservative static render-blocking candidates derived from the
+  same captured homepage without retaining declaration values or page text;
+- selected-response content-coding and cache-policy declarations reduced to
+  fixed tokens, booleans, bounded seconds, and validator presence without
+  retaining raw header values or calculating a compression ratio;
 - curated publisher-declared JSON-LD identity fields, reduced to schema types,
   labels, declared origins, and `sameAs` hostnames;
 - fixed semantic input-purpose, form-method, and action-relationship counts
@@ -992,6 +998,9 @@ keeps curated technology identifiers, posture states, page-identity digests,
 bounded resource hosts, tracking identifiers, external form-action origins,
 source health, collection completeness, and timestamps. It excludes form
 paths and queries, raw RDAP, WHOIS, HTTP, HTML, contact, and provider payloads.
+It also excludes the publication and delivery/cache summaries, which remain
+transient unless the analyst deliberately saves the full Lookup JSON or
+evidence export.
 Select an earlier and later snapshot of the same domain to review added,
 removed, changed, unavailable, or incomparable fields. Monitor can search
 exact historical relationships and explainable weighted latest-snapshot

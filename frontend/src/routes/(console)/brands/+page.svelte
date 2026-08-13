@@ -1,10 +1,13 @@
 <script lang="ts">
+  import { goto } from '$app/navigation';
   import { page } from '$app/state';
   import { getContext, onMount, tick } from 'svelte';
   import PageHeading from '$lib/components/PageHeading.svelte';
   import BrandProfileList from '$lib/components/BrandProfileList.svelte';
   import BrandProfileEditor from '$lib/components/BrandProfileEditor.svelte';
   import BrandReviewInbox from '$lib/components/BrandReviewInbox.svelte';
+  import BrandAssetRegisterSummary from '$lib/components/BrandAssetRegisterSummary.svelte';
+  import BrandAssetRegister from '$lib/components/BrandAssetRegister.svelte';
   import BrandPostureAudit from '$lib/components/BrandPostureAudit.svelte';
   import BrandPortfolioPostureMatrix from '$lib/components/BrandPortfolioPostureMatrix.svelte';
   import BrandDesiredPostureBaselines from '$lib/components/BrandDesiredPostureBaselines.svelte';
@@ -16,10 +19,12 @@
   import { activeProfileId, deleteProfile, exportProfiles, importProfiles, isBrandProfileMutationCommittedError, loadProfiles, MAX_PROFILE_IMPORT_BYTES, normalizeProfile, parseList, setActiveProfile, upsertProfile, type BrandProfile } from '$lib/brand-profiles';
   import { createPageBaseline, normalizePageBaseline } from '$lib/analysis/page-baseline.ts';
   import { loadCases, type CaseRecord } from '$lib/cases';
+  import { loadRelationshipObservations, type RelationshipObservation } from '$lib/relationship-observations';
   import { BrowserLocalDataError } from '$lib/browser-local-data.ts';
   import type { DesiredPostureBaseline, ProtectionAttestation } from '$lib/analysis/brand-profile-model.ts';
   import { buildDesiredPostureObservation } from '$lib/analysis/owned-domain-posture-review.ts';
   import { brandProfileDeletionImpact, buildBrandReviewInbox, type BrandReviewSourceState } from '$lib/analysis/brand-review-inbox.ts';
+  import { buildBrandAssetRegister } from '$lib/analysis/brand-asset-register.ts';
   import {
     clientHttpErrorMessage,
     parseAvailabilityCaptureResponse,
@@ -29,13 +34,16 @@
   import { CAPABILITY_CONTEXT, disabledCapability, type CapabilityGetter } from '$lib/capabilities';
   import { LARGE_JSON_RESPONSE_BYTES, requestJsonCapped, STANDARD_JSON_RESPONSE_BYTES } from '$lib/bounded-json-response';
   type AuditResult={domain:string;report:DomainPostureHttpResponse|null;error:string};
+  type BrandsView='overview'|'assets';
   type ProfilePersistenceResult={committed:true}|{committed:false;message:string};
   type EditorField='name'|'official'|'products'|'tlds'|'partners'|'allowDomains'|'allowRegistrars'|'selectors'|'retiredSelectors'|'mailProtectionProfile'|'trademarkOwner'|'trademarkRegistration'|'faviconHash';
   let profiles=$state<BrandProfile[]>([]);let activeId=$state('');let editing=$state('');let showForm=$state(false);let message=$state('');let savingProfile=$state(false);let auditing=$state(false);let auditResults=$state<AuditResult[]>([]);
   let auditGeneration=0;let auditController:AbortController|null=null;
   let cases=$state<CaseRecord[]>([]);
+  let relationships=$state<RelationshipObservation[]>([]);
   let profileSourceState=$state<BrandReviewSourceState>('loading');
   let caseSourceState=$state<BrandReviewSourceState>('loading');
+  let relationshipSourceState=$state<BrandReviewSourceState>('loading');
   let activePreferenceSourceState=$state<BrandReviewSourceState>('loading');
   let certificateReplayUnavailable=$state(false);
   let name=$state(''),official=$state(''),products=$state(''),tlds=$state('com, net, org'),partners=$state(''),allowDomains=$state(''),allowRegistrars=$state(''),selectors=$state(''),retiredSelectors=$state(''),mailProtectionProfile=$state('standard'),trademarkOwner=$state(''),trademarkRegistration=$state(''),faviconHash=$state(''),faviconPHash=$state('');
@@ -44,11 +52,14 @@
   const siteIdentityDisabled=$derived(disabledCapability(capabilityReport?.()||null,'availability')||disabledCapability(capabilityReport?.()||null,'website_probe'));
   const postureDisabled=$derived(disabledCapability(capabilityReport?.()||null,'domain_posture'));
   const active=$derived(profileSourceState==='ready'&&activePreferenceSourceState==='ready'?profiles.find(p=>p.id===activeId)||null:null);
+  const brandsView=$derived<BrandsView>(page.url.searchParams.get('view')==='assets'?'assets':'overview');
   const brandReviewInbox=$derived(buildBrandReviewInbox({cases,profiles,activeProfileId:activeId,sourceStates:{cases:caseSourceState,profiles:profileSourceState,activePreference:activePreferenceSourceState}}));
+  const brandAssetRegister=$derived(buildBrandAssetRegister({profiles,activeProfileId:activeId,cases,relationships,sourceStates:{profiles:profileSourceState,activePreference:activePreferenceSourceState,cases:caseSourceState,relationships:relationshipSourceState}}));
   const localContextStatus=$derived([
     profileSourceState==='unavailable'?'Browser-local Brand Profiles could not be read.':null,
     activePreferenceSourceState==='unavailable'?'The active-profile preference could not be read; profile-scoped tools are suppressed.':null,
     caseSourceState==='unavailable'?'Cases could not be read, so linked-case context cannot be checked or displayed.':null,
+    relationshipSourceState==='unavailable'?'Retained relationship observations could not be read, so Brand asset relationship coverage is partial.':null,
   ].filter(Boolean).join(' '));
   const editorValues=$derived({name,official,products,tlds,partners,allowDomains,allowRegistrars,selectors,retiredSelectors,mailProtectionProfile,trademarkOwner,trademarkRegistration,faviconHash});
   const siteIdentityReason=$derived(siteIdentityDisabled?siteIdentityDisabled.reason||'Website checks are disabled by deployment policy.':'');
@@ -56,6 +67,7 @@
   function closeActivePreferenceSource(){cancelAudit();activeId='';auditResults=[];activePreferenceSourceState='unavailable';}
   function closeProfileSource(){cancelAudit();profiles=[];editing='';showForm=false;pageBaseline=null;capturingIdentity=false;profileSourceState='unavailable';}
   function closeCaseSource(){cases=[];caseSourceState='unavailable';certificateReplayUnavailable=true;}
+  function closeRelationshipSource(){relationships=[];relationshipSourceState='unavailable';}
   function profileFailureMessage(cause:unknown,fallback:string){if(cause instanceof BrowserLocalDataError){closeProfileSource();return `${fallback} ${cause.message} Browser-local Brand Profiles are unavailable; reload to retry.`;}return cause instanceof Error?cause.message:fallback;}
   async function refreshProfiles(){
     cancelAudit();
@@ -67,18 +79,17 @@
     if(profileResult.status==='fulfilled'){profiles=profileResult.value;profileSourceState='ready';}
     else closeProfileSource();
     if(preferenceResult.status==='fulfilled'){
-      const nextActiveId=preferenceResult.value;
-      try{
-        if(profileResult.status==='fulfilled'&&nextActiveId&&!profileResult.value.some(p=>p.id===nextActiveId))setActiveProfile('');
-        activeId=profileResult.status==='fulfilled'&&nextActiveId&&profileResult.value.some(p=>p.id===nextActiveId)?nextActiveId:'';
-        activePreferenceSourceState='ready';
-      }catch(cause){closeActivePreferenceSource();if(profileResult.status==='fulfilled')throw cause;}
+      activeId=preferenceResult.value;
+      activePreferenceSourceState='ready';
     }else closeActivePreferenceSource();
     if(profileResult.status==='rejected')throw profileResult.reason;
     if(preferenceResult.status==='rejected')throw preferenceResult.reason;
     return profileResult.value;
   }
   async function refreshCasesForBrands(){caseSourceState='loading';cases=[];certificateReplayUnavailable=true;try{const loaded=await loadCases();cases=loaded;caseSourceState='ready';certificateReplayUnavailable=false;return loaded;}catch(cause){closeCaseSource();throw cause;}}
+  async function refreshRelationshipsForBrands(){relationshipSourceState='loading';relationships=[];try{const loaded=await loadRelationshipObservations();relationships=loaded;relationshipSourceState='ready';return loaded;}catch(cause){closeRelationshipSource();throw cause;}}
+  async function selectBrandsView(next:BrandsView){if(next===brandsView)return;const url=new URL(page.url);if(next==='overview')url.searchParams.delete('view');else url.searchParams.set('view','assets');if(next==='overview')for(const parameter of ['assetClass','assetSource','assetEvidence','assetPage'])url.searchParams.delete(parameter);url.hash='';await goto(`${url.pathname}${url.search}`,{noScroll:true,keepFocus:true});}
+  function brandsViewKeydown(event:KeyboardEvent){const views:BrandsView[]=['overview','assets'];const current=views.indexOf(brandsView);let index=-1;if(event.key==='ArrowRight')index=(current+1)%views.length;else if(event.key==='ArrowLeft')index=(current+views.length-1)%views.length;else if(event.key==='Home')index=0;else if(event.key==='End')index=views.length-1;if(index<0)return;const next=views[index];if(!next)return;event.preventDefault();void selectBrandsView(next);const tablist=(event.currentTarget as HTMLButtonElement).closest('[role="tablist"]');requestAnimationFrame(()=>tablist?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[index]?.focus());}
   async function focusEditor(){await tick();document.getElementById('brand-profile-name')?.focus();}
   function clearForm(prefillDomain=''){editing='';name='';official=prefillDomain;products='';tlds='com, net, org';partners='';allowDomains='';allowRegistrars='';selectors='';retiredSelectors='';mailProtectionProfile='standard';trademarkOwner='';trademarkRegistration='';faviconHash='';faviconPHash='';pageBaseline=null;capturingIdentity=false;showForm=true;void focusEditor();}
   function setEditorValue(field:EditorField,value:string){if(field==='name')name=value;else if(field==='official')official=value;else if(field==='products')products=value;else if(field==='tlds')tlds=value;else if(field==='partners')partners=value;else if(field==='allowDomains')allowDomains=value;else if(field==='allowRegistrars')allowRegistrars=value;else if(field==='selectors')selectors=value;else if(field==='retiredSelectors')retiredSelectors=value;else if(field==='mailProtectionProfile')mailProtectionProfile=value;else if(field==='trademarkOwner')trademarkOwner=value;else if(field==='trademarkRegistration')trademarkRegistration=value;else faviconHash=value;}
@@ -183,7 +194,7 @@
   async function importFile(event:Event){const input=event.currentTarget as HTMLInputElement,file=input.files?.[0];if(!file)return;cancelAudit();let result:Awaited<ReturnType<typeof importProfiles>>|null=null;try{if(file.size>MAX_PROFILE_IMPORT_BYTES)throw new Error('Profile imports are limited to 2 MB.');result=await importProfiles(JSON.parse(await file.text()));}catch(cause){message=profileFailureMessage(cause,'Import failed.');input.value='';return;}const skipped=result.skipped?`; skipped ${result.skipped} invalid or over-limit profile${result.skipped===1?'':'s'}`:'';try{await refreshProfiles();message=`Imported ${result.added} new and ${result.updated} updated profiles${skipped}.`;}catch{const issue:Exclude<ProfileCommitIssue,null>=profileSourceState==='unavailable'?'reread':'active-preference';message=`Imported ${result.added} new and ${result.updated} updated profiles${skipped}. ${committedIssueText(issue,'profile import')}`;}finally{input.value='';}}
   async function download(){try{await exportProfiles();message='Exported the Brand Profile collection.';}catch(cause){message=profileFailureMessage(cause,'Could not export profiles.');}}
   onMount(()=>{void (async()=>{
-    await Promise.allSettled([refreshProfiles(),refreshCasesForBrands()]);
+    await Promise.allSettled([refreshProfiles(),refreshCasesForBrands(),refreshRelationshipsForBrands()]);
     const guideDomain=parseList(page.url.searchParams.get('domain')||'',true)[0]||'';
     if(page.url.searchParams.get('new')==='1'&&guideDomain){
       clearForm(guideDomain);
@@ -209,16 +220,36 @@
   <BrandProfileList {profiles} {activeId} focusId={page.url.searchParams.get('profile') || ''} {activate} {edit} {remove} formatDate={baselineDate} />
 {/if}
 {#if showForm}<BrandProfileEditor editing={Boolean(editing)} values={editorValues} setValue={setEditorValue} {pageBaseline} {capturingIdentity} busy={savingProfile} disabledReason={siteIdentityReason} {captureSiteIdentity} {save} close={()=>{if(!savingProfile)showForm=false;}} formatDate={baselineDate} />{/if}
-<BrandReviewInbox inbox={brandReviewInbox} />
+<div class="brand-views" role="tablist" aria-label="Brands views">
+  <button id="brands-tab-overview" role="tab" aria-selected={brandsView==='overview'} aria-controls="brands-view-panel" tabindex={brandsView==='overview'?0:-1} class:active={brandsView==='overview'} onclick={()=>void selectBrandsView('overview')} onkeydown={brandsViewKeydown}>Overview</button>
+  <button id="brands-tab-assets" role="tab" aria-selected={brandsView==='assets'} aria-controls="brands-view-panel" tabindex={brandsView==='assets'?0:-1} class:active={brandsView==='assets'} onclick={()=>void selectBrandsView('assets')} onkeydown={brandsViewKeydown}>Assets <span aria-label={brandAssetRegister.state==='unavailable'?'count unavailable':`${brandAssetRegister.rows.length} rows`}>{brandAssetRegister.state==='unavailable'?'—':brandAssetRegister.rows.length}</span></button>
+</div>
 
-{#if active}<DomainControlCentre {active} /><BrandPortfolioPostureMatrix {active} /><BrandPostureAudit {active} disabledReason={postureReason} {auditing} results={auditResults} {audit} {retainObservation} /><BrandDesiredPostureBaselines {active} {saveBaselines} requestedDomain={page.url.searchParams.get('baseline') || ''} /><BrandDomainControlPassport {active} saveProfile={savePassportProfile} /><BrandCertificateEventReplay {active} {cases} unavailable={certificateReplayUnavailable} /><BrandProtectionAttestations {active} {saveAttestations} /><MailReportWorkbench {active} />{/if}
+{#if brandsView==='overview'}
+  <div id="brands-view-panel" role="tabpanel" aria-labelledby="brands-tab-overview">
+    <BrandAssetRegisterSummary projection={brandAssetRegister} />
+    <BrandReviewInbox inbox={brandReviewInbox} />
+    {#if active}<DomainControlCentre {active} /><BrandPortfolioPostureMatrix {active} /><BrandPostureAudit {active} disabledReason={postureReason} {auditing} results={auditResults} {audit} {retainObservation} /><BrandDesiredPostureBaselines {active} {saveBaselines} requestedDomain={page.url.searchParams.get('baseline') || ''} /><BrandDomainControlPassport {active} saveProfile={savePassportProfile} /><BrandCertificateEventReplay {active} {cases} unavailable={certificateReplayUnavailable} /><BrandProtectionAttestations {active} {saveAttestations} /><MailReportWorkbench {active} />{/if}
+  </div>
+{:else}
+  <div id="brands-view-panel" role="tabpanel" aria-labelledby="brands-tab-assets">
+    <BrandAssetRegister projection={brandAssetRegister} />
+  </div>
+{/if}
 
 <style>
   .message{min-width:0;color:var(--accent);font-size:var(--text-sm);overflow-wrap:anywhere}
   .local-context-status{min-width:0;color:var(--amber);font-size:var(--text-sm);overflow-wrap:anywhere}
   .profile-source-state{padding:var(--card-pad);color:var(--muted);font-size:var(--text-sm)}
   .profile-source-state.unavailable{border-color:var(--muted);border-style:dotted;color:var(--muted)}
+  .brand-views{display:flex;flex-wrap:wrap;gap:6px;margin:16px 0;padding:5px;border:1px solid var(--border);border-radius:var(--radius-md);background:rgb(var(--bg-rgb) / .5)}
+  .brand-views button{display:flex;align-items:center;gap:7px;min-height:38px;padding:0 14px;border:1px solid transparent;border-radius:var(--radius-sm);background:transparent;color:var(--muted);font:600 var(--text-xs) var(--mono)}
+  .brand-views button:hover{color:var(--text)}
+  .brand-views button.active{border-color:rgb(var(--interface-accent-rgb) / .45);background:rgb(var(--interface-accent-rgb) / .08);color:var(--interface-accent)}
+  .brand-views button span{padding:1px 7px;border-radius:99px;background:var(--border);color:var(--text);font-size:var(--text-2xs)}
+  #brands-view-panel{min-width:0}
   @media(max-width:750px){
     .top-actions{margin-top:14px}
+    .brand-views button{min-height:44px}
   }
 </style>

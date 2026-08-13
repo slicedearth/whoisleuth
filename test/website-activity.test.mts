@@ -10,14 +10,19 @@ import {
 import { networkFeaturePolicy } from '../lib/feature-policy.mts';
 import { analyzeResponsePolicyHeaders } from '../lib/response-policy.mts';
 import { arrayValue, recordValue, requiredValue } from './value-assertions.mts';
+import { httpDeliveryMetadataFixture } from './homepage-metadata-fixtures.mts';
 
 describe('website activity classification', () => {
   test('any HTTP response proves that a web service is active', async () => {
     for (const status of [401, 403, 404, 503]) {
       const result = await fetchHomepage('example.com', {
-        fetcher: async () => new Response('not inspected', { status }),
+        fetcher: async () => new Response('not inspected', {
+          status,
+          headers: { 'content-encoding': 'br', 'cache-control': 'public, max-age=60' },
+        }),
       });
       assert.equal(result.status, 'responded');
+      assert.equal(recordValue(recordValue(result.http).response).deliveryMetadata !== undefined, true);
       assert.match(result.detail, new RegExp(`HTTP ${status}`));
       assert.equal(deriveWebsiteActivity(result.status, false), 'active');
       assert.equal(result.http.status, 'success');
@@ -218,6 +223,7 @@ describe('website activity classification', () => {
               bodyTruncated: true,
               bodyHash: { algorithm: 'sha256', value: 'a'.repeat(64), scope: 'captured-prefix', bytes: 162 },
               server: 'Caddy',
+              deliveryMetadata: httpDeliveryMetadataFixture(),
             },
           },
         };
@@ -227,6 +233,8 @@ describe('website activity classification', () => {
 
     const availability = recordValue(result);
     const pageIdentity = recordValue(availability.pageIdentity);
+    const publicationMetadata = recordValue(pageIdentity.publicationMetadata);
+    const deliveryMetadata = recordValue(recordValue(recordValue(availability.http).response).deliveryMetadata);
     const fingerprints = recordValue(pageIdentity.fingerprints);
     const exactFingerprint = recordValue(fingerprints.exact);
     const canonical = recordValue(pageIdentity.canonical);
@@ -238,6 +246,10 @@ describe('website activity classification', () => {
     const securityPosture = recordValue(availability.securityPosture);
     const securityFindings = arrayValue(securityPosture.findings).map(recordValue);
     assert.equal(homepageCalls, 1);
+    assert.equal(publicationMetadata.version, 1);
+    assert.equal(publicationMetadata.status, 'partial');
+    assert.equal(deliveryMetadata.version, 1);
+    assert.equal(deliveryMetadata.status, 'success');
     assert.equal(pageIdentity.identityVersion, 3);
     assert.equal(pageIdentity.observedAt, '2026-07-13T04:05:06.000Z');
     assert.equal(pageIdentity.status, 'partial');

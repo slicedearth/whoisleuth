@@ -14,9 +14,13 @@ import { createPageFingerprints } from './page-fingerprints.mts';
 import { detectPageLanguageSignal } from './page-language-signals.mts';
 import { analyzePageRole } from './page-role-profile.mts';
 import { analyzeCspMetaPolicies } from './response-policy.mts';
-import { analyzeStaticHtml } from './static-html-analysis.mts';
+import { analyzeStaticHtml, type StaticPublicationMetadata } from './static-html-analysis.mts';
 import { analyzeStructuredDataIdentity } from './structured-data-identity.mts';
 import { analyzeWebsiteTechnology } from './website-technology.mts';
+import {
+  PAGE_PUBLICATION_LIMITATIONS,
+  PAGE_PUBLICATION_METADATA_VERSION,
+} from './homepage-metadata-contract.mts';
 
 type NormalizedIdentityUrl = { url: string; queryOmitted: boolean; pathTruncated: boolean };
 type HtmlSignalOptions = {
@@ -28,6 +32,7 @@ type HtmlSignalOptions = {
   responseHeaders?: unknown;
   observedAt?: string;
   includePageIdentity?: boolean;
+  includePublicationMetadata?: boolean;
   includeCredentialSurfaceProfile?: boolean;
   includeStructuredDataIdentity?: boolean;
   includeTechnologyProfile?: boolean;
@@ -602,6 +607,95 @@ function extractPageIdentity(html: string, domain: string, options: HtmlSignalOp
   };
 }
 
+function publicationSourceStatus(
+  observed: boolean,
+  malformed: boolean,
+  truncated: boolean,
+): 'observed' | 'not_observed' | 'partial' | 'malformed' {
+  if (truncated) return 'partial';
+  if (malformed) return 'malformed';
+  return observed ? 'observed' : 'not_observed';
+}
+
+function buildPagePublicationMetadata(
+  analysis: StaticPublicationMetadata,
+  sourceTruncated: boolean,
+) {
+  const truncated = sourceTruncated || analysis.truncated;
+  const malformed = analysis.robots.malformed || analysis.twitterCard.malformed;
+  const incomplete = truncated || malformed;
+  const limitations: string[] = [
+    PAGE_PUBLICATION_LIMITATIONS.scope,
+  ];
+  if (sourceTruncated) limitations.push(PAGE_PUBLICATION_LIMITATIONS.body);
+  if (analysis.truncated) limitations.push(PAGE_PUBLICATION_LIMITATIONS.bounds);
+  if (malformed) limitations.push(PAGE_PUBLICATION_LIMITATIONS.malformed);
+  const cardTypes = analysis.twitterCard.cardTypes;
+  const suppliedCardType = cardTypes.length === 1 ? cardTypes[0] : null;
+  const cardType = suppliedCardType && ['summary', 'summary_large_image', 'player', 'app', 'other'].includes(suppliedCardType)
+    ? suppliedCardType
+    : cardTypes.length > 1 ? 'other' : null;
+  const documentTruncated = sourceTruncated || analysis.documentTruncated;
+  const robotsStatus = publicationSourceStatus(
+    analysis.robots.observed,
+    analysis.robots.malformed,
+    documentTruncated || analysis.robots.truncated,
+  );
+  const twitterStatus = publicationSourceStatus(
+    analysis.twitterCard.observed,
+    analysis.twitterCard.malformed,
+    documentTruncated || analysis.twitterCard.truncated,
+  );
+  return {
+    version: PAGE_PUBLICATION_METADATA_VERSION,
+    status: incomplete ? 'partial' : 'success',
+    complete: !incomplete,
+    truncated,
+    limitations,
+    robots: {
+      status: robotsStatus,
+      complete: robotsStatus === 'observed' || robotsStatus === 'not_observed',
+      truncated: robotsStatus === 'partial',
+      directives: analysis.robots.directives,
+      recognizedDirectiveCount: analysis.robots.recognizedDirectiveCount,
+      unknownDirectiveCount: analysis.robots.unknownDirectiveCount,
+      conflicting: analysis.robots.conflicting,
+    },
+    twitterCard: {
+      status: twitterStatus,
+      complete: twitterStatus === 'observed' || twitterStatus === 'not_observed',
+      truncated: twitterStatus === 'partial',
+      cardType,
+      declarationCount: analysis.twitterCard.declarationCount,
+      titlePresent: analysis.twitterCard.titlePresent,
+      descriptionPresent: analysis.twitterCard.descriptionPresent,
+      imagePresent: analysis.twitterCard.imagePresent,
+      imageAltPresent: analysis.twitterCard.imageAltPresent,
+      sitePresent: analysis.twitterCard.sitePresent,
+      creatorPresent: analysis.twitterCard.creatorPresent,
+      playerPresent: analysis.twitterCard.playerPresent,
+      appPresent: analysis.twitterCard.appPresent,
+    },
+    headings: {
+      ...analysis.headings,
+      complete: !documentTruncated && !analysis.headings.truncated,
+      truncated: documentTruncated || analysis.headings.truncated,
+    },
+    images: {
+      ...analysis.images,
+      totalComplete: !documentTruncated && analysis.images.totalComplete,
+      classificationComplete: !documentTruncated && analysis.images.classificationComplete,
+      truncated: documentTruncated || analysis.images.truncated,
+    },
+    renderBlockingCandidates: {
+      ...analysis.renderBlockingCandidates,
+      complete: !documentTruncated && !analysis.renderBlockingCandidates.truncated,
+      truncated: documentTruncated || analysis.renderBlockingCandidates.truncated,
+      scope: 'explicit-head-static-v1',
+    },
+  };
+}
+
 function extractHtmlSignals(html: string, domain: string, options: HtmlSignalOptions = {}) {
   const pageIdentity = options.includePageIdentity === false ? null : extractPageIdentity(html, domain, options);
   const includeCredentialSurfaceProfile = pageIdentity && options.includeCredentialSurfaceProfile === true;
@@ -612,6 +706,17 @@ function extractHtmlSignals(html: string, domain: string, options: HtmlSignalOpt
   const htmlAnalysis = includeCredentialSurfaceProfile || includeStructuredDataIdentity || includeTechnologyProfile || includeDerivedPageProfiles
     ? analyzeStaticHtml(html, { baseUrl, includeVisibleText: true })
     : null;
+  const pageIdentityOutput: (NonNullable<typeof pageIdentity> & {
+    publicationMetadata?: ReturnType<typeof buildPagePublicationMetadata>;
+  }) | null = pageIdentity && htmlAnalysis && options.includePublicationMetadata !== false
+    ? {
+        ...pageIdentity,
+        publicationMetadata: buildPagePublicationMetadata(
+          htmlAnalysis.publicationMetadata,
+          options.sourceTruncated === true,
+        ),
+      }
+    : pageIdentity;
   const pageLanguageSignal = detectPageLanguageSignal(html, pageIdentity?.documentLanguage, htmlAnalysis ?? undefined);
   return {
     pageTitle: extractPageTitle(html),
@@ -624,7 +729,7 @@ function extractHtmlSignals(html: string, domain: string, options: HtmlSignalOpt
     cspMetaPolicy: htmlAnalysis
       ? analyzeCspMetaPolicies(htmlAnalysis.cspMetaPolicies, htmlAnalysis.cspMetaLimitReached)
       : null,
-    pageIdentity,
+    pageIdentity: pageIdentityOutput,
     credentialSurfaceProfile: includeCredentialSurfaceProfile && htmlAnalysis ? analyzeCredentialSurfaceProfile({
       htmlAnalysis,
       observedAt: options.observedAt,
@@ -662,6 +767,7 @@ function extractHtmlSignals(html: string, domain: string, options: HtmlSignalOpt
 
 export {
   PAGE_IDENTITY_VERSION,
+  PAGE_PUBLICATION_METADATA_VERSION,
   MAX_IDENTITY_TAGS,
   MAX_FORMS,
   MAX_FORM_ACTION_ORIGINS,

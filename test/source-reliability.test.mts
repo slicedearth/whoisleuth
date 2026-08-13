@@ -69,6 +69,18 @@ function lookupDocument(overrides: Record<string, unknown> = {}) {
 }
 
 describe('privacy-safe source reliability report', () => {
+  test('accepts saved Lookup versions 1 and 2 without widening the Bulk contract', () => {
+    const report = buildSourceReliabilityReport(JSON.stringify([
+      lookupDocument({ version: 1 }),
+      lookupDocument({ version: 2 }),
+    ]));
+    assert.equal(report.documentsReviewed, 2);
+    assert.throws(
+      () => buildSourceReliabilityReport(JSON.stringify({ schema: 'whoisleuth.cli.bulk', version: 2 })),
+      /version 1 Bulk or Bulk-item/iu,
+    );
+  });
+
   test('aggregates states, independent timing distributions, truncation, and rate limits', () => {
     const first = lookupDocument();
     const second = lookupDocument({
@@ -179,7 +191,7 @@ describe('privacy-safe source reliability report', () => {
   test('rejects unknown schemas and unbounded document collections', () => {
     assert.throws(
       () => buildSourceReliabilityReport(JSON.stringify({ schema: 'unknown', version: 1 })),
-      /requires only version 1 CLI lookup/iu,
+      /requires CLI Lookup version 1 or 2/iu,
     );
     assert.throws(
       () => buildSourceReliabilityReport(JSON.stringify(

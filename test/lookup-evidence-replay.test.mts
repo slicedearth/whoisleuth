@@ -15,6 +15,11 @@ import {
   LOOKUP_EVIDENCE_SCHEMA_VERSION,
 } from '../frontend/src/lib/analysis/evidence-export.ts';
 import { loadLookupEvidenceV25CompatibilityFixtures } from './lookup-evidence-v25-fixtures.mts';
+import { loadLookupEvidenceV26Fixture } from './lookup-evidence-v26-fixture.mts';
+import {
+  httpDeliveryMetadataFixture,
+  pagePublicationMetadataFixture,
+} from './homepage-metadata-fixtures.mts';
 
 function evidence(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
@@ -110,6 +115,73 @@ test('replay keeps the frozen schema-25 compatibility fixture readable', async (
   assert.equal(replay.target, 'legacy.example.test');
   assert.ok(replay.sources.some((source) => source.id === 'rdap' && source.state === 'success'));
   assert.ok(replay.sources.some((source) => source.id === 'whois' && source.state === 'complete'));
+});
+
+test('replay keeps the frozen strict schema-26 compatibility fixture readable without inventing current metadata', async () => {
+  const replay = await parseLookupEvidenceReplay(await loadLookupEvidenceV26Fixture());
+  assert.equal(replay.schemaVersion, 26);
+  assert.equal(replay.target, 'example.test');
+  assert.equal(replay.pagePublicationMetadata, null);
+  assert.equal(replay.httpDeliveryMetadata, null);
+});
+
+test('replay projects only exact current homepage metadata and rejects it from legacy schemas', async () => {
+  const current = evidence();
+  const availability = (current.analysis as Record<string, Record<string, unknown>>).availability!;
+  (availability.pageIdentity as Record<string, unknown>).publicationMetadata = pagePublicationMetadataFixture();
+  (availability.http as Record<string, unknown>).response = {
+    deliveryMetadata: httpDeliveryMetadataFixture(),
+  };
+  const replay = await parseLookupEvidenceReplay(JSON.stringify(current));
+  assert.equal(replay.pagePublicationMetadata?.rows.find((item) => item.id === 'publication.headings')?.value.includes('H1 1'), true);
+  assert.equal(replay.httpDeliveryMetadata?.rows.find((item) => item.id === 'delivery.cache.max_age')?.value, '3600 seconds');
+  assert.doesNotMatch(JSON.stringify(replay), /must-not-retain|private-header/iu);
+
+  for (const fixture of [
+    JSON.parse(await loadLookupEvidenceV26Fixture()) as Record<string, unknown>,
+    JSON.parse(await readFile(new URL('./fixtures/lookup-evidence-v25.json', import.meta.url), 'utf8')) as Record<string, unknown>,
+  ]) {
+    const legacyAvailability = (fixture.analysis as Record<string, Record<string, unknown>>).availability!;
+    legacyAvailability.pageIdentity = {
+      ...((legacyAvailability.pageIdentity as Record<string, unknown> | undefined) ?? {}),
+      publicationMetadata: pagePublicationMetadataFixture(),
+    };
+    await assert.rejects(
+      () => parseLookupEvidenceReplay(JSON.stringify(fixture)),
+      /Legacy Lookup evidence cannot contain homepage metadata/iu,
+    );
+  }
+
+  ((availability.pageIdentity as Record<string, unknown>).publicationMetadata as Record<string, unknown>).version = 2;
+  await assert.rejects(
+    () => parseLookupEvidenceReplay(JSON.stringify(current)),
+    /publication metadata is malformed or unsupported/iu,
+  );
+});
+
+test('replay rejects current homepage metadata beneath unavailable parent sources', async () => {
+  for (const family of ['page', 'http'] as const) {
+    const withoutChild = evidence();
+    const withoutAvailability = (withoutChild.analysis as Record<string, Record<string, unknown>>).availability!;
+    (withoutAvailability[family === 'page' ? 'pageIdentity' : 'http'] as Record<string, unknown>).status = 'error';
+    await assert.doesNotReject(() => parseLookupEvidenceReplay(JSON.stringify(withoutChild)));
+
+    const withChild = evidence();
+    const availability = (withChild.analysis as Record<string, Record<string, unknown>>).availability!;
+    if (family === 'page') {
+      const page = availability.pageIdentity as Record<string, unknown>;
+      page.status = 'error';
+      page.publicationMetadata = pagePublicationMetadataFixture();
+    } else {
+      const http = availability.http as Record<string, unknown>;
+      http.status = 'error';
+      http.response = { deliveryMetadata: httpDeliveryMetadataFixture() };
+    }
+    await assert.rejects(
+      () => parseLookupEvidenceReplay(JSON.stringify(withChild)),
+      /metadata contradicts its parent source state/iu,
+    );
+  }
 });
 
 test('replay treats schema-25 diagnostics as authoritative across historical wrapper mismatches', async () => {

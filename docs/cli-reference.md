@@ -16,6 +16,12 @@ contracts as a stable local catalogue for wrappers and terminal tooling.
 Packaged copies include `LICENSE`, `NOTICE`, and
 `TRADEMARKS.md` alongside the CLI documentation.
 
+With no arguments, a capable interactive terminal opens a bounded launcher for
+Fast or Deep Lookup, an offline investigation workflow plan, or the command
+catalogue. Redirected, CI, dumb, undersized, or otherwise unsupported terminals
+print the ordinary help and do not read standard input. No request begins until
+the ordinary Lookup plan is displayed and the analyst confirms collection.
+
 ## Installation
 
 Public releases require Node.js 24 or later and install the `whoisleuth`
@@ -49,6 +55,7 @@ node bin/whoisleuth.mts lookup example.com --deep
 node bin/whoisleuth.mts lookup example.com --deep --plan --json
 node bin/whoisleuth.mts lookup example.com --deep --summary
 node bin/whoisleuth.mts lookup example.com --deep --verbose
+node bin/whoisleuth.mts lookup example.com --deep --browse
 node bin/whoisleuth.mts lookup example.com --deep --markdown --output lookup.md
 node bin/whoisleuth.mts lookup example.com --deep --json --strict-exit --events
 node bin/whoisleuth.mts lookup example.test --deep --observer workstation-a --vantage office-egress --json > office.json
@@ -143,6 +150,20 @@ observed-network IP RDAP work for a domain. The browser Console's optional
 security.txt and external intelligence selections are not CLI flags; the CLI
 does not run those actions implicitly.
 
+An ICANN-recognised public domain, reserved documentation domain, literal IP
+address, or bounded ASN can be entered directly as shorthand for `lookup`, for
+example `whoisleuth example.test --plan --json`.
+The direct form delegates to the same Lookup parser, configuration profile,
+mode, and output contracts. It deliberately rejects schemes, paths, query
+strings, credentials, ports, scoped or bracketed addresses, malformed names,
+and ambiguous text at command position. Public-domain shorthand requires an
+ICANN-recognised suffix; `.test` and `.example` are additionally accepted for
+reserved documentation and deterministic fixtures. Special-use and
+infrastructure shorthand remains excluded for `.onion`, `.arpa`, and every
+other non-ICANN suffix except `.test` and `.example`. Use the explicit command
+when relying on Lookup's convenient query normalisation. Unknown command names
+remain errors rather than being reinterpreted as targets.
+
 For a directly entered public IP address, `lookup --deep` can also run one
 bounded reverse-DNS query. Terminal output shows the explicit source state and
 up to five normalised PTR names; JSON retains up to eight. PTR names are
@@ -179,6 +200,9 @@ collection is unavailable.
 powershell` print static shell completion scripts to stdout. The command does
 not edit a shell profile or make a network request. Review the generated script
 before sourcing it or placing it in the relevant shell completion directory.
+When completing options after a possible direct target, the script asks the
+installed CLI to validate that target with its request-free `--plan` path; it
+does not start collection.
 `manual` prints a generated roff manual page and likewise changes no local
 configuration.
 
@@ -234,6 +258,11 @@ sequences or progress text. `--no-color` and a non-empty conventional
 disables the transient indicator. Command examples remain one copyable line
 even when prose is wrapped for a narrow terminal.
 
+Place `--palette auto|light|dark` after the command to select a fixed semantic
+ANSI palette. `auto` is a stable neutral mapping; the CLI does not inspect or
+infer the terminal background. `--no-color`, `NO_COLOR`, redirected output,
+CI, and dumb terminals continue to suppress ANSI regardless of that selection.
+
 Every command accepts `--output <file>` as a safer alternative to shell
 redirection. WHOISleuth buffers bounded output, creates a private temporary file
 beside the destination, syncs it, and publishes it atomically with mode `0600`.
@@ -244,8 +273,9 @@ not publish a partial output file. Output is capped at 32 MiB.
 `--config <file> --profile <name>` reads a strict version-1 local configuration
 document of at most 64 KiB. Without `--config`, the path is
 `$XDG_CONFIG_HOME/whoisleuth/config.json`. A profile may contain no more than
-16 safe defaults drawn from `--no-color`, `--summary`, `--verbose`, `--fast`,
-`--concurrency`, `--observer`, and `--vantage`. It cannot supply a target,
+16 safe defaults drawn from `--no-color`, `--palette`, `--summary`, `--verbose`, `--fast`,
+`--concurrency`, `--observer`, and `--vantage`. Palette values are restricted
+to `auto`, `light`, or `dark`. A profile cannot supply a target,
 Deep mode, output path, network approval, failure policy, credential, or
 arbitrary argument. Explicit command options override profile defaults from
 the same group.
@@ -273,12 +303,39 @@ the document generation time and the existing bounded per-source collection
 timings. These switches are presentation-only and cannot be combined with
 `--json`; they do not change collection or the result document.
 
+An interactive terminal may instead use `--browse` to open before collection,
+show transient bounded progress, and then move between the same
+bounded Target, Registration, DNS, Mail, Website, TLS, Network, source-health,
+and collection panels. Fast mode reports aggregate progress only; Deep mode
+reports independently settled planned sources without displaying partial
+documents. Left/Right, `h`/`l`, Tab/Shift-Tab, and numbered
+shortcuts select a panel; Up/Down, `j`/`k`, Page Up/Down, and Home/End move
+through long panels while the footer reports the visible line range. `?` opens
+bounded key help. `/` searches only text rendered in those bounded panels, and
+`n` or `N` moves between at most 256 retained matches; the search term is capped
+at 80 characters and 256 UTF-8 bytes. Search makes no request and cannot inspect
+omitted fields or raw payloads.
+The browser collects exactly once, makes no additional requests, never changes
+Fast or Deep depth, and restores the terminal when it closes. It requires both
+terminal input and output of at least 40 columns by 12 rows, reserves standard
+input for navigation, and closes with `q`, Enter, or Escape. Closing during
+collection cancels the run and produces no partial final document. It cannot
+be combined with redirected output, `--summary`, `--verbose`, `--events`,
+`--plan`, or `--quiet`.
+
+`--save-lookup <file>` is available only with `--browse`. After the browser
+closes normally, it atomically writes the exact completed versioned Lookup JSON
+with private permissions and refuses an existing destination. That file can
+contain normalized evidence omitted from the panels and remains under the
+operator's retention and deletion control. Cancellation, collection failure,
+browser failure, or save failure does not publish a partial file.
+
 `--json` writes one versioned document to standard output:
 
 ```json
 {
   "schema": "whoisleuth.cli.lookup",
-  "version": 1,
+  "version": 2,
   "generatedAt": "2026-07-14T00:00:00.000Z",
   "mode": "fast",
   "query": "example.com",
@@ -290,6 +347,8 @@ The complete document also carries the normalised `rdap`, `whois`,
 `availability`, and `diagnostics` sections returned by the shared lookup
 orchestrator. Machine output goes to stdout. Usage and lookup errors go to
 stderr, so redirected JSON is not mixed with diagnostics.
+Version 1 saved Lookup documents remain readable by the bounded offline
+consumers; fields introduced in version 2 are not invented when reading them.
 
 Human-readable domain lookup output separately shows the registrar RDAP status
 and endpoint whenever the shared lookup diagnostics represent that follow-up.
@@ -304,25 +363,42 @@ WHOIS disclosure states, reconciliation state, and complete, partial, and
 unavailable publication counts. It does not print published contact routes.
 The JSON document retains the bounded interpretation and its limitations.
 
-A deep domain lookup can also show the status, selected public address, and
-registered network name from the bounded observed network context. It uses the
-same address and IP RDAP source represented in the JSON document. This is
-point-in-time edge or network-registration context, not proof of the origin
-host, hosting control, ownership, intent, or maliciousness. Fast and compact
-commands do not run the enrichment.
+A deep domain lookup can also show the status, completeness, selected public
+address and its source, and allowlisted registration fields from the bounded
+observed network context. CIDRs are capped with an explicit omission count;
+published abuse routes are count-only and their contact values are not printed.
+It uses the same address and IP RDAP source represented in the JSON document.
+This is point-in-time edge or network-registration context, not proof of the
+origin host, hosting control, ownership, intent, or maliciousness. Fast and
+compact commands do not run the enrichment. Direct IP and ASN terminal output
+likewise projects only bounded normalised registration fields and never raw
+responses, expanded entities, or contacts.
 
 The deep terminal summary also reports the website activity state, page title,
 DNS, HTTP, and TLS source states, bounded publisher-declared structured
-identity entities, up to six bounded technology indicators, a browser-library
-profile count, and the four passive security-posture counts.
+identity entities, page-relationship counts, fixed page-role and static client
+behaviour labels, up to six bounded technology indicators, a browser-library
+profile count, and passive security-posture counts and labels. Certificate
+output keeps chain trust, hostname match, validity, public-key, SAN, purpose,
+chain, and finding states separate. Canonical declarations are reduced to a
+same-target or different-host relationship; paths, queries, external resource
+origins, tracking values, certificate bytes, and AIA locations are not printed.
 These are concise projections of the same evidence already present in the
 lookup response. The browser-library line counts apparent components and
 catalogue advisory matches without retaining script references or raw
 signatures. These summaries make no extra request, omit raw evidence
 descriptions, and do not turn a technology or advisory match, or a missing
-posture signal, into proof of exploitability, hosting control, ownership, or
-maliciousness. Use `--json` when the full bounded evidence, limitations, and
-source diagnostics are required.
+posture or static-page signal, into proof of exploitability, site purpose,
+hosting control, ownership, intent, or maliciousness. Use `--json` when the
+full bounded evidence, limitations, and source diagnostics are required.
+
+Full Deep domain output can additionally summarise fixed publisher-declared
+robots and Twitter Card classes, heading and image-alt counts, conservative
+static render-blocking candidates, and selected-response content-coding and
+cache-policy metadata. The same homepage response supplies these fields. Raw
+declaration/header values, page text, URLs, and compression ratios are omitted;
+the summaries are not indexing, accessibility, cache-effectiveness,
+performance, identity, privacy, safety, or maliciousness verdicts.
 
 `lookup --strict-exit` is an opt-in automation policy. It still emits the
 ordinary complete output document, but returns exit code 4 when a requested
@@ -362,8 +438,9 @@ results fail closed.
 Bulk JSON, JSONL, and item documents use schema version 3. Each row includes
 `observedAt` and a `collectionOrigin` of `current_run` or
 `resumed_checkpoint`; the top-level `generatedAt` remains the report creation
-time. HTTP JSON uses schema version 2 and adds the explicit `assessment` field.
-The legacy `activityStatus` field remains for compatibility, but is `null`
+time. HTTP JSON uses schema version 3 and can add bounded selected-response
+delivery metadata. Version 2 introduced the explicit `assessment` field. The
+legacy `activityStatus` field remains for compatibility, but is `null`
 when collection is inconclusive rather than labelling the target unreachable.
 Consumers should use `assessment`; older version-1 `unreachable` values remain
 historical inconclusive labels, not proof that a target cannot be reached.
@@ -617,7 +694,7 @@ evidence must still be retained separately. Legacy capsule version 1 covers
 only the embedded brief, graph, and optional analyst-record projections, so it
 remains `integrity_valid` rather than whole-file `verified`. It also validates
 the bounded versioned structure of saved CLI Lookup JSON and current
-Lookup-evidence schemas 25 and 26. Because neither saved Lookup documents nor full
+Lookup-evidence schemas 25, 26, and 27. Because neither saved Lookup documents nor full
 Lookup-evidence exports embed a checksum or signature, those results are
 reported as `structure_valid` with content integrity explicitly unchecked.
 Lookup-evidence verification closes the supported export envelopes and source
@@ -729,7 +806,8 @@ preserved. The report never prints an identifier or other stored value.
 ## Privacy-safe source reliability report
 
 `source-report` summarises source states, durations, truncation, and rate-limit
-counts from one version-1 CLI Lookup, Bulk, or Bulk-item document, a JSON array
+counts from one version-1 or version-2 CLI Lookup document, or one version-1
+Bulk or Bulk-item document, a JSON array
 of up to 100 such documents, or an array containing only previously generated
 source-reliability reports. Lookup documents and reports cannot be mixed.
 Merged reports preserve exact state and sample totals and add bounded ranges
@@ -1075,6 +1153,13 @@ is never written to terminal or JSON output. Query strings are removed by the
 shared HTTP evidence normalizer, and terminal values are additionally bounded
 and control-safe.
 
+Version-3 JSON can also include version-1 delivery metadata derived from the
+same selected response. It retains only fixed content-coding and cache-policy
+tokens, bounded seconds, and validator presence/validity. Raw header and
+validator values are discarded. The declarations do not prove that a cache
+stored the response, that transfer bytes were saved, or that a particular
+provider, performance, privacy, or safety property applies.
+
 ## TLS intelligence
 
 `tls` runs the same bounded one-connection TLS collector used by deep lookups.
@@ -1097,7 +1182,7 @@ exists.
 
 ## Registry-source comparison
 
-`compare` reads one version-1 `whoisleuth.cli.lookup` domain document from a
+`compare` reads one version-1 or version-2 `whoisleuth.cli.lookup` domain document from a
 file or stdin and emits a version-3 `whoisleuth.cli.compare` document. Its
 primary comparison reconciles normalised registry RDAP and WHOIS fields. When
 the saved deep lookup also represents the optional registrar RDAP follow-up,
@@ -1133,7 +1218,7 @@ maliciousness decision.
 
 ## Static page comparison
 
-`page-compare <left.json> <right.json>` reads two different version-1 saved
+`page-compare <left.json> <right.json>` reads two different supported saved
 Deep domain Lookup documents and compares the already-retained static page
 identity, exact and perceptual favicon evidence, technology identifiers, TLS
 issuer label, and TLS public-key fingerprint. DOM structure is compared first
@@ -1645,7 +1730,7 @@ perceptual hash remains unavailable rather than becoming a visual difference.
 
 ## Lookup evidence export
 
-`export` converts one version-1 `whoisleuth.cli.lookup` domain document from a
+`export` converts one version-1 or version-2 `whoisleuth.cli.lookup` domain document from a
 file or stdin into the same versioned `whoisleuth.lookup-evidence` JSON package
 produced by the web Lookup tool. It performs no lookup and writes only to
 stdout, so use ordinary shell redirection when a file is wanted. Pretty JSON is
@@ -1656,7 +1741,7 @@ are mutually exclusive. Markdown and HTML include the fixed generator footer
 by default; `--no-attribution` removes only that footer and is rejected for
 JSON output.
 
-The current schema-26 JSON output can be passed directly to
+The current schema-27 JSON output can be passed directly to
 `verify-artifact`. The verifier reports `structure_valid` because this format
 has no embedded checksum or signature. Use a verified investigation manifest
 and exact manifest-entry identity when byte-for-byte retention matters, and
@@ -1664,7 +1749,8 @@ review the bounded privacy-projected registry RDAP publication, normalised
 WHOIS values, and bounded contacts before sharing. `interchange-report`
 recognises the current format and describes the
 browser replay as lossy by design because replay renders bounded normalised
-facts rather than raw payloads. Schema 25 remains readable when its retained
+facts rather than raw payloads. Schema 26 remains readable with its strict
+source/publication binding and portable limits. Schema 25 remains readable when its retained
 historical wrappers differ from retained diagnostics in the ways emitted by
 the former producer. The diagnostics remain authoritative, unavailable wrapper
 data is suppressed during replay, and other contradictory legacy shapes fail
@@ -1681,7 +1767,10 @@ The export retains query context, explicitly projected source diagnostics,
 normalised registry data, a bounded privacy-projected registry RDAP
 publication, availability analysis, bounded WHOIS referral-hop
 metadata without response bodies, and the shared
-registry-source comparison. Version 23 can add the exact local
+registry-source comparison. Version 27 can retain exact bounded publication
+and delivery/cache summaries already present in a version-2 saved Deep Lookup;
+version-1 saved inputs do not acquire fields they never represented. Version
+23 can add the exact local
 SSLBL comparison already represented by a deep full Lookup. Version 21 adds the bounded registry
 lifecycle, disclosure, publication-quality, reconciliation, and abuse-routing
 interpretation derived from the already-collected sources. Registrar RDAP raw

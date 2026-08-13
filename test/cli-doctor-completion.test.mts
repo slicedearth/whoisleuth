@@ -1,12 +1,18 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 
 import { CLI_COMMANDS, parseCliArguments } from '../cli/arguments.mts';
-import { buildShellCompletion } from '../cli/completion.mts';
+import { MAX_CLI_COMPLETION_BYTES, buildShellCompletion } from '../cli/completion.mts';
 import { buildDoctorReport, formatDoctorReport } from '../cli/doctor.mts';
 import EXIT_CODES from '../cli/exit-codes.mts';
 import { runCli } from '../cli/runner.mts';
+
+const CLI_ENTRYPOINT = fileURLToPath(new URL('../bin/whoisleuth.mts', import.meta.url));
+const bashCliFunction = `whoisleuth() { ${JSON.stringify(process.execPath)} ${JSON.stringify(CLI_ENTRYPOINT)} "$@"; }`;
+const zshCliFunction = `whoisleuth() { ${JSON.stringify(process.execPath)} ${JSON.stringify(CLI_ENTRYPOINT)} "$@"; }`;
+const powershellCliFunction = `function global:whoisleuth { & ${JSON.stringify(process.execPath)} ${JSON.stringify(CLI_ENTRYPOINT)} @args }`;
 
 function capture() {
   let value = '';
@@ -20,7 +26,8 @@ describe('CLI shell completion', () => {
   test('generates bounded static scripts for each supported shell', () => {
     for (const shell of ['bash', 'zsh', 'fish', 'powershell'] as const) {
       const script = buildShellCompletion(shell);
-      assert.ok(script.length > 100 && script.length < 30_000);
+      assert.ok(script.length > 100);
+      assert.ok(Buffer.byteLength(script, 'utf8') <= MAX_CLI_COMPLETION_BYTES);
       assert.match(script, /whoisleuth/u);
       assert.match(script, /lookup/u);
       assert.match(script, /doctor/u);
@@ -32,6 +39,8 @@ describe('CLI shell completion', () => {
       assert.match(script, /(?:--checkpoint|-l checkpoint)/u);
       assert.match(script, /(?:--output|-l output)/u);
       assert.match(script, /(?:--summary|-l summary)/u);
+      assert.match(script, /(?:--palette|-l palette)/u);
+      assert.match(script, /(?:--save-lookup|-l save-lookup)/u);
       assert.match(script, /(?:--expect-content-digest|-l expect-content-digest)/u);
       assert.doesNotMatch(script, /https?:\/\//u);
     }
@@ -39,15 +48,64 @@ describe('CLI shell completion', () => {
     const syntax = spawnSync('bash', ['-n'], { input: bash, encoding: 'utf8' });
     assert.equal(syntax.status, 0, syntax.stderr);
     assert.doesNotMatch(bash, /--preset\) COMPREPLY=.*custom/u);
+    assert.match(bash, /--palette\) COMPREPLY=.*auto light dark/u);
+    assert.match(bash, /--resume\|--save-lookup\|--trust-anchor\) COMPREPLY=.*compgen -f/u);
     assert.equal((bash.match(/command.*completion.*COMP_CWORD.*-eq 2/gu) || []).length, 1);
     assert.doesNotMatch(bash, /^\s+completion\) COMPREPLY/gmu);
+    for (const target of ['example.test', '192.0.2.10', '2001:db8::10', 'AS64496']) {
+      const direct = spawnSync('bash', ['-c', `${bashCliFunction}\n${bash}\nCOMP_WORDS=(whoisleuth "$1" --de); COMP_CWORD=2; _whoisleuth_completion; printf '%s\\n' "\${COMPREPLY[@]}"`, 'bash', target], { encoding: 'utf8' });
+      assert.equal(direct.status, 0, direct.stderr);
+      assert.match(direct.stdout, /^--deep$/mu, target);
+    }
+    for (const target of [
+      'not-a-command',
+      'report.json',
+      'bad_label.example',
+      'example..test',
+      'bad-.example',
+      '999.999.999.999',
+      'AS4294967296',
+      '2001:::1',
+      'example.test/path',
+      'user@example.test',
+      'service.onion',
+      'router.home.arpa',
+      '1.0.0.127.in-addr.arpa',
+    ]) {
+      const rejected = spawnSync('bash', ['-c', `${bashCliFunction}\n${bash}\nCOMP_WORDS=(whoisleuth "$1" --de); COMP_CWORD=2; _whoisleuth_completion; printf '%s\\n' "\${COMPREPLY[@]}"`, 'bash', target], { encoding: 'utf8' });
+      assert.equal(rejected.status, 0, rejected.stderr);
+      assert.doesNotMatch(rejected.stdout, /--deep/u, target);
+    }
     const zsh = buildShellCompletion('zsh');
+    const zshSyntax = spawnSync('zsh', ['-n'], { input: zsh, encoding: 'utf8' });
+    assert.equal(zshSyntax.status, 0, zshSyntax.stderr);
     assert.match(zsh, /funcstack\[1\].*_whoisleuth/u);
+    assert.match(zsh, /command="lookup"/u);
+    assert.match(zsh, /--plan --json/u);
     assert.doesNotMatch(zsh, /--preset\) compadd -- .*custom/u);
-    assert.match(buildShellCompletion('fish'), /-l output -r -F/u);
-    assert.match(buildShellCompletion('fish'), /__fish_seen_subcommand_from completion.*bash zsh fish powershell/u);
+    assert.match(zsh, /--palette\) compadd -- auto light dark/u);
+    assert.match(zsh, /--resume\|--save-lookup\|--trust-anchor\) _files/u);
+    for (const [target, expected] of [['example.test', 'accepted'], ['report.json', 'rejected']] as const) {
+      const completed = spawnSync('zsh', ['-c', `${zshCliFunction}\ncompdef() { :; }\n${zsh}\nwords=(whoisleuth "$1" --de); if _whoisleuth_direct_lookup_target "$1"; then print accepted; else print rejected; fi`, 'zsh', target], { encoding: 'utf8' });
+      assert.equal(completed.status, 0, completed.stderr);
+      assert.equal(completed.stdout.trim(), expected, target);
+    }
+    const fish = buildShellCompletion('fish');
+    assert.match(fish, /-l output -r -F/u);
+    assert.match(fish, /-l save-lookup -r -F/u);
+    assert.match(fish, /__fish_prev_arg_in --palette.*-a 'dark'/u);
+    assert.match(fish, /__fish_seen_subcommand_from completion.*bash zsh fish powershell/u);
+    assert.match(fish, /__whoisleuth_direct_lookup_target/u);
+    assert.match(fish, /__fish_seen_subcommand_from lookup; or __whoisleuth_direct_lookup_target/u);
+    assert.match(fish, /--plan --json/u);
+    assert.match(fish, /contains -- \$first completion doctor commands manual/u);
     const powershell = buildShellCompletion('powershell');
     assert.match(powershell, /Register-ArgumentCompleter -Native -CommandName whoisleuth/u);
+    assert.match(powershell, /\$directLookup/u);
+    assert.match(powershell, /'--plan' '--json'/u);
+    assert.match(powershell, /'--palette' = @\('auto', 'light', 'dark'\)/u);
+    assert.match(powershell, /'--save-lookup'/u);
+    assert.match(powershell, /\$fileOptions -contains \$previous/u);
     const powershellSyntax = spawnSync('pwsh', [
       '-NoProfile',
       '-NonInteractive',
@@ -55,6 +113,13 @@ describe('CLI shell completion', () => {
       '$code = [Console]::In.ReadToEnd(); [void][scriptblock]::Create($code)',
     ], { input: powershell, encoding: 'utf8' });
     assert.equal(powershellSyntax.status, 0, powershellSyntax.stderr);
+    for (const [target, expected] of [['example.test', '--deep'], ['report.json', '']] as const) {
+      const line = `whoisleuth ${target} --de`;
+      const invocation = `${powershell}\n${powershellCliFunction}\n$line = ${JSON.stringify(line)}\n$result = [System.Management.Automation.CommandCompletion]::CompleteInput($line, $line.Length, $null)\n$result.CompletionMatches | ForEach-Object { $_.CompletionText }`;
+      const completed = spawnSync('pwsh', ['-NoProfile', '-NonInteractive', '-Command', invocation], { encoding: 'utf8' });
+      assert.equal(completed.status, 0, completed.stderr);
+      assert.equal(completed.stdout.trim(), expected, target);
+    }
   });
 
   test('offers only discover preset values accepted by the argument parser', () => {
@@ -115,6 +180,10 @@ describe('CLI shell completion', () => {
     assert.match(stdout.value(), /Collection: offline\./u);
     assert.match(stdout.value(), /Collection: network\./u);
     assert.match(stdout.value(), /130 analyst cancellation/u);
+    assert.match(stdout.value(), /palette auto, light, or dark/u);
+    assert.match(stdout.value(), /save-lookup/u);
+    assert.match(stdout.value(), /selected response, excludes raw header values/u);
+    assert.match(stdout.value(), /Saved Lookup versions 1 and 2/u);
     assert.equal(stderr.value(), '');
   });
 });
@@ -126,7 +195,7 @@ describe('CLI doctor', () => {
       version: '1.2.3',
       generatedAt: '2026-08-01T00:00:00.000Z',
       network: false,
-      presentation: { interactive: false, color: false, width: null },
+      presentation: { interactive: false, color: false, palette: 'auto', width: null },
       nodeVersion: '24.1.0',
       platform: 'fixture-os',
       architecture: 'fixture-arch',
@@ -156,7 +225,7 @@ describe('CLI doctor', () => {
       version: '1.2.3',
       generatedAt: '2026-08-01T00:00:00.000Z',
       network: true,
-      presentation: { interactive: true, color: false, width: 80 },
+      presentation: { interactive: true, color: false, palette: 'auto', width: 80 },
       nodeVersion: '24.1.0',
       resolveAddresses: async (hostname) => {
         calls.push(`dns:${hostname}`);
@@ -213,7 +282,7 @@ describe('CLI doctor', () => {
       generatedAt: '2026-08-01T00:00:00.000Z',
       network: true,
       networkTimeoutMs: 10,
-      presentation: { interactive: false, color: false, width: null },
+      presentation: { interactive: false, color: false, palette: 'auto', width: null },
       resolveAddresses: async () => new Promise(() => {}),
       fetchHttps: async () => new Promise(() => {}),
       queryWhois: async () => {

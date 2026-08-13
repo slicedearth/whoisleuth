@@ -14,6 +14,10 @@ import { formatTerminalLookup, safeTerminalValue } from '../cli/formatters/termi
 import { MAX_STDIN_BYTES, readStdinBounded, runCli } from '../cli/runner.mts';
 import type { ClassifiedQuery } from '../lib/classify.mts';
 import type { LookupSourceSettlement } from '../lib/lookup.mts';
+import {
+  httpDeliveryMetadataFixture,
+  pagePublicationMetadataFixture,
+} from './homepage-metadata-fixtures.mts';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 
@@ -47,12 +51,62 @@ describe('CLI argument parsing', () => {
     assert.deepEqual(parseCliArguments(['lookup', 'example.com']), { action: 'lookup', query: 'example.com', output: 'terminal', deep: false, detail: 'standard', strictExit: false, events: false, plan: false, includeAttribution: true, observerLabel: null, vantageLabel: null, quiet: false, color: true });
   });
 
+  test('delegates strict direct targets to the unchanged Lookup argument parser', () => {
+    for (const target of [
+      'example.com',
+      'login.example.com',
+      'example.com.',
+      'münchen.example',
+      '192.0.2.10',
+      '2001:db8::10',
+      'AS64496',
+      '64496',
+    ]) {
+      assert.deepEqual(parseCliArguments([target]), parseCliArguments(['lookup', target]), target);
+      assert.deepEqual(
+        parseCliArguments([target, '--deep', '--json', '--observer', 'workstation-a', '--vantage', 'office-egress']),
+        parseCliArguments(['lookup', target, '--deep', '--json', '--observer', 'workstation-a', '--vantage', 'office-egress']),
+        target,
+      );
+    }
+    assert.deepEqual(
+      parseCliArguments(['example.com', '--deep', '--plan', '--json']),
+      parseCliArguments(['lookup', 'example.com', '--deep', '--plan', '--json']),
+    );
+    assert.deepEqual(
+      parseCliArguments(['example.com', '--deep', '--browse']),
+      parseCliArguments(['lookup', 'example.com', '--deep', '--browse']),
+    );
+    assert.deepEqual(
+      parseCliArguments(['example.com', '--json', '--output', 'lookup.json', '--force']),
+      parseCliArguments(['lookup', 'example.com', '--json', '--output', 'lookup.json', '--force']),
+    );
+  });
+
   test('accepts explicit deep JSON output and bounded stdin mode', () => {
     assert.deepEqual(parseCliArguments(['lookup', '--deep', '--json', '--no-color']), { action: 'lookup', query: null, output: 'json', deep: true, detail: 'standard', strictExit: false, events: false, plan: false, includeAttribution: true, observerLabel: null, vantageLabel: null, quiet: false, color: false });
   });
 
   test('rejects unknown commands, options, conflicting modes, and multiple queries', () => {
     assert.throws(() => parseCliArguments(['unknown', 'x']), /Unknown command/);
+    for (const value of [
+      'not-a-command',
+      'https://example.com',
+      'example.com/path',
+      'user@example.com',
+      'example.com:443',
+      '[2001:db8::10]',
+      'fe80::1%en0',
+      'AS4294967296',
+      'report.json',
+      'not.a.command',
+      'typo.internal',
+      'service.onion',
+      'router.home.arpa',
+      '1.0.0.127.in-addr.arpa',
+    ]) {
+      assert.throws(() => parseCliArguments([value]), /Unknown command/, value);
+    }
     assert.throws(() => parseCliArguments(['lookup', '--wat']), /Unknown option/);
     assert.throws(() => parseCliArguments(['lookup', '--deep', '--fast']), /mutually exclusive/);
     assert.throws(() => parseCliArguments(['lookup', '--fast', '--deep']), /mutually exclusive/);
@@ -110,12 +164,94 @@ describe('CLI argument parsing', () => {
     assert.throws(() => parseCliArguments(['lookup', 'example.test', '--plan', '--events']), /cannot be combined/u);
   });
 
+  test('parses explicit terminal palettes and browser-only private Lookup saves', () => {
+    assert.deepEqual(parseCliArguments(['lookup', 'example.test', '--deep', '--browse', '--palette', 'dark', '--save-lookup', 'review.json']), {
+      action: 'lookup',
+      query: 'example.test',
+      output: 'terminal',
+      deep: true,
+      detail: 'standard',
+      strictExit: false,
+      events: false,
+      plan: false,
+      includeAttribution: true,
+      observerLabel: null,
+      vantageLabel: null,
+      quiet: false,
+      color: true,
+      browse: true,
+      saveLookup: 'review.json',
+      palette: 'dark',
+    });
+    assert.equal(parseCliArguments(['commands', '--palette', 'light']).palette, 'light');
+    assert.throws(() => parseCliArguments(['--palette', 'light', 'commands']), /Unknown command/u);
+    assert.throws(() => parseCliArguments(['commands', '--palette', 'sepia']), /auto, light, or dark/u);
+    assert.throws(() => parseCliArguments(['commands', '--palette', 'dark', '--palette', 'light']), /only once/u);
+    assert.throws(() => parseCliArguments(['lookup', 'example.test', '--save-lookup', 'review.json']), /requires --browse/u);
+    assert.throws(() => parseCliArguments(['lookup', 'example.test', '--browse', '--save-lookup']), /bounded file path/u);
+    assert.throws(() => parseCliArguments(['lookup', 'example.test', '--browse', '--save-lookup', '-']), /bounded file path/u);
+  });
+
   test('help and version actions never require a command', () => {
     assert.deepEqual(parseCliArguments([]), { action: 'help' });
     assert.deepEqual(parseCliArguments(['lookup', '--help']), { action: 'help', command: 'lookup' });
     assert.deepEqual(parseCliArguments(['registry-support', '-h']), { action: 'help', command: 'registry-support' });
     assert.throws(() => parseCliArguments(['lookup', 'example.com', '--help']), /Help accepts/);
     assert.deepEqual(parseCliArguments(['--version']), { action: 'version' });
+  });
+
+  test('launches only zero-argument capable terminals and preserves explicit help', async () => {
+    const stdout = capture();
+    const stderr = capture();
+    let launches = 0;
+    assert.equal(await runCli([], {
+      stdout: stdout.stream,
+      stderr: stderr.stream,
+      canLaunchInteractiveCli: () => true,
+      launchInteractiveCli: async () => {
+        launches += 1;
+        return ['commands', '--json'];
+      },
+    }), EXIT_CODES.SUCCESS);
+    assert.equal(launches, 1);
+    assert.equal(JSON.parse(stdout.value()).schema, 'whoisleuth.cli.command-catalogue');
+
+    const helpStdout = capture();
+    assert.equal(await runCli(['--help'], {
+      stdout: helpStdout.stream,
+      stderr: capture().stream,
+      canLaunchInteractiveCli: () => true,
+      launchInteractiveCli: async () => {
+        launches += 1;
+        return ['commands'];
+      },
+    }), EXIT_CODES.SUCCESS);
+    assert.equal(launches, 1);
+    assert.match(helpStdout.value(), /WHOISleuth CLI/u);
+  });
+
+  test('maps interactive cancellation and failures before any command execution', async () => {
+    let launchedCommands = 0;
+    const cancelledStderr = capture();
+    assert.equal(await runCli([], {
+      stdout: capture().stream,
+      stderr: cancelledStderr.stream,
+      canLaunchInteractiveCli: () => true,
+      launchInteractiveCli: async () => null,
+      runUnifiedLookup: async () => { launchedCommands += 1; return lookupResult(); },
+    }), EXIT_CODES.SUCCESS);
+    assert.equal(launchedCommands, 0);
+
+    const abortedStderr = capture();
+    assert.equal(await runCli([], {
+      stdout: capture().stream,
+      stderr: abortedStderr.stream,
+      canLaunchInteractiveCli: () => true,
+      launchInteractiveCli: async () => { throw new DOMException('Aborted', 'AbortError'); },
+      runUnifiedLookup: async () => { launchedCommands += 1; return lookupResult(); },
+    }), EXIT_CODES.CANCELLED);
+    assert.match(abortedStderr.value(), /Cancelled by analyst/u);
+    assert.equal(launchedCommands, 0);
   });
 
   test('help groups workflows and gives each command a purpose, example, and boundary', async () => {
@@ -134,7 +270,19 @@ describe('CLI argument parsing', () => {
     assert.match(commandStdout.value(), /Example:\n  whoisleuth lookup example\.test --deep/u);
     assert.match(commandStdout.value(), /Collection:\n  Network: Accepts one target\./u);
     assert.match(commandStdout.value(), /Boundary:\n  Fast is the default\./u);
+    assert.match(commandStdout.value(), /fixed publication and delivery\/cache summaries/u);
+    assert.match(commandStdout.value(), /without retaining raw metadata values or making another request/u);
     assert.doesNotMatch(commandStdout.value(), /whoisleuth bulk/u);
+
+    const httpStdout = capture();
+    assert.equal(await runCli(['http', '--help'], { stdout: httpStdout.stream, stderr: stderr.stream }), EXIT_CODES.SUCCESS);
+    assert.match(httpStdout.value(), /excludes raw header values/u);
+    assert.match(httpStdout.value(), /does not prove caching, transfer savings, performance, privacy, or safety/u);
+
+    const exportStdout = capture();
+    assert.equal(await runCli(['export', '--help'], { stdout: exportStdout.stream, stderr: stderr.stream }), EXIT_CODES.SUCCESS);
+    assert.match(exportStdout.value(), /Saved Lookup versions 1 and 2/u);
+    assert.match(exportStdout.value(), /schema-27 exports/u);
     assert.equal(stderr.value(), '');
   });
 
@@ -350,7 +498,7 @@ describe('CLI lookup runner', () => {
     assert.equal(stderr.value(), '');
     const output = JSON.parse(stdout.value());
     assert.equal(output.schema, 'whoisleuth.cli.lookup');
-    assert.equal(output.version, 1);
+    assert.equal(output.version, 2);
     assert.equal(output.mode, 'fast');
     assert.equal(output.inputHostname, 'login.example.com');
     assert.equal(output.registrableDomain, 'example.com');
@@ -396,6 +544,7 @@ describe('CLI lookup runner', () => {
     assert.equal(plan.target.normalized, 'example.test');
     assert.equal(plan.target.inputHostname, 'login.example.test');
     assert.equal(plan.planning.networkRequestsMade, false);
+    assert.equal(plan.planning.collectionRequiresNetwork, true);
     assert.deepEqual(plan.planning.sources.map((source: { source: string }) => source.source), [
       'rdap', 'whois', 'domain_evidence', 'registrar_rdap', 'network_context',
     ]);
@@ -457,7 +606,7 @@ test('machine document metadata cannot be replaced by upstream result fields', (
     '2026-07-14T00:00:00.000Z',
   );
   assert.equal(document.schema, 'whoisleuth.cli.lookup');
-  assert.equal(document.version, 1);
+  assert.equal(document.version, 2);
   assert.equal(document.generatedAt, '2026-07-14T00:00:00.000Z');
   assert.equal(document.query, 'example.test');
   assert.equal(document.type, 'domain');
@@ -575,28 +724,76 @@ test('terminal lookup presents bounded observed network registration context', (
   const result = lookupResult({
     networkContext: {
       contextVersion: 1,
+      source: 'ip_rdap',
       status: 'success',
+      complete: true,
+      truncated: false,
       endpoint: { address: '93.184.216.34', family: 4, selectedFrom: 'tls_connection' },
-      network: { name: 'Example edge network', holder: 'Example network holder' },
+      network: {
+        handle: 'NET-EXAMPLE',
+        name: 'Example edge network',
+        holder: 'Example network holder',
+        cidrs: ['93.184.216.0/24', '2001:db8::/32', '198.51.100.0/24', '203.0.113.0/24', '192.0.2.0/24', '192.0.2.128/25'],
+        startAddress: '93.184.216.0',
+        endAddress: '93.184.216.255',
+        country: 'AU',
+        networkType: 'DIRECT ALLOCATION',
+        databaseUpdatedAt: '2026-08-01T00:00:00.000Z',
+      },
+      abuseRouting: [
+        { channel: 'email', contact: 'must-not-render@example.test', rdapEndpoint: 'https://secret.invalid/rdap' },
+        { channel: 'phone', contact: '+61 3 0000 0000' },
+      ],
+      limitations: ['One observed endpoint is point-in-time context.', 'two', 'three', 'four'],
       rawContact: 'must-not-render@example.test',
     },
   });
   const document = buildCliLookupDocument('example.com', classifiedDomain('example.com'), result, '2026-07-14T00:00:00.000Z', 'deep');
   const terminal = formatTerminalLookup(document);
+  const verbose = formatTerminalLookup(document, { detail: 'verbose' });
 
   assert.match(terminal, /Network RDAP\s+Success/);
+  assert.match(terminal, /Completeness\s+Complete/);
   assert.match(terminal, /Selected IP\s+93\.184\.216\.34/);
+  assert.match(terminal, /Selected from\s+TLS connection/);
   assert.match(terminal, /Network\s+Example edge network/);
-  assert.doesNotMatch(terminal, /must-not-render/);
+  assert.match(terminal, /Network handle NET-EXAMPLE/);
+  assert.match(terminal, /CIDR prefixes\s+.*\+1 more/);
+  assert.match(terminal, /Published routes 2 retained \(email 1 · phone 1\); values omitted/);
+  assert.match(verbose, /Registry date\s+2026-08-01T00:00:00\.000Z/);
+  assert.match(verbose, /Limitation\s+\+1 more retained limitation/);
+  assert.doesNotMatch(`${terminal}${verbose}`, /must-not-render|secret\.invalid|\+61 3 0000 0000/);
+});
+
+test('terminal lookup bounds retained arrays before access and keeps omission counts truthful', () => {
+  const cidrs = new Array(10_000);
+  for (let index = 0; index < 5; index += 1) cidrs[index] = `192.0.2.${index * 32}/27`;
+  Object.defineProperty(cidrs, 5, { get() { throw new Error('formatter traversed beyond CIDR display cap'); } });
+  const routes = new Array(1_000);
+  for (let index = 0; index < 6; index += 1) routes[index] = { channel: index % 2 ? 'phone' : 'email', contact: `private-${index}` };
+  Object.defineProperty(routes, 6, { get() { throw new Error('formatter traversed beyond route display cap'); } });
+  const result = lookupResult({
+    networkContext: {
+      contextVersion: 1, source: 'ip_rdap', status: 'success', complete: true, truncated: false,
+      endpoint: { address: '192.0.2.8', family: 4, selectedFrom: 'dns_a' },
+      network: { name: 'Bounded network', cidrs }, abuseRouting: routes,
+    },
+  });
+  const output = formatTerminalLookup(buildCliLookupDocument('example.test', classifiedDomain('example.test'), result, '2026-08-13T00:00:00.000Z', 'deep'));
+  assert.match(output, /CIDR prefixes\s+.*\+9995 more retained entries/u);
+  assert.match(output, /Published routes 6 retained · \+994 more entries \(email 3 · phone 3\); values omitted/u);
+  assert.doesNotMatch(output, /private-/u);
 });
 
 test('terminal deep IP lookup presents separately attributed reverse DNS names', () => {
   const result = lookupResult({
     reverseDns: {
       version: 1,
-      status: 'success',
+      status: 'partial',
       source: 'reverse_dns',
-      records: { ptr: ['edge.example.test', 'fallback.example.test'] },
+      complete: false,
+      truncated: true,
+      records: { ptr: ['edge.example.test', 'fallback.example.test', 'three.example.test', 'four.example.test', 'five.example.test', 'six.example.test'] },
       rawAnswer: 'must-not-render',
     },
   });
@@ -609,9 +806,49 @@ test('terminal deep IP lookup presents separately attributed reverse DNS names',
   );
   const terminal = formatTerminalLookup(document);
 
-  assert.match(terminal, /Reverse DNS\s+Success/);
-  assert.match(terminal, /PTR names\s+edge\.example\.test, fallback\.example\.test/);
+  assert.match(terminal, /Reverse DNS\s+Partial/);
+  assert.match(terminal, /PTR coverage\s+Incomplete · truncated/);
+  assert.match(terminal, /PTR names\s+edge\.example\.test, fallback\.example\.test.*\+1 more/);
   assert.doesNotMatch(terminal, /must-not-render/);
+});
+
+test('terminal IP and ASN registration renders only bounded normalized public fields', () => {
+  const ipResult = lookupResult({
+    rdap: {
+      parsed: {
+        handle: 'NET-192-0-2-0-1', name: 'Example Network', startAddress: '192.0.2.0', endAddress: '192.0.2.255',
+        cidrs: ['192.0.2.0/24'], country: 'AU', networkType: 'DIRECT ALLOCATION', statuses: ['active'],
+        lifecycle: { createdDateIso: '2001-02-03T04:05:06.000Z', updatedDateIso: '2024-05-06T07:08:09.000Z' },
+        entitiesByRole: { abuse: [{ email: 'private-ip-contact@example.test' }] },
+      },
+      data: { privateRawPayload: 'must-not-render' },
+    },
+    availability: { applicable: false },
+    diagnostics: { rdap: { status: 'success' }, whois: { status: 'unsupported' }, availability: { status: 'not_applicable' } },
+  });
+  const ip = formatTerminalLookup(buildCliLookupDocument('192.0.2.8', { type: 'ipv4', value: '192.0.2.8' }, ipResult, '2026-08-13T00:00:00.000Z'), { detail: 'verbose' });
+  assert.match(ip, /RDAP handle\s+NET-192-0-2-0-1/);
+  assert.match(ip, /Address range\s+192\.0\.2\.0 to 192\.0\.2\.255/);
+  assert.match(ip, /CIDR prefixes\s+192\.0\.2\.0\/24/);
+  assert.match(ip, /Created\s+2001-02-03T04:05:06\.000Z/);
+  assert.doesNotMatch(ip, /private-ip-contact|privateRawPayload|must-not-render/);
+
+  const asnResult = lookupResult({
+    rdap: {
+      parsed: {
+        handle: 'AS64496', name: 'Example Autonomous System', startAutnum: 64496, endAutnum: 64500,
+        country: 'AU', autnumType: 'DIRECT ALLOCATION', statuses: ['active'],
+        abuse: { email: 'private-asn-contact@example.test' },
+      },
+    },
+    availability: { applicable: false },
+    diagnostics: { rdap: { status: 'partial' }, whois: { status: 'unavailable' }, availability: { status: 'not_applicable' } },
+  });
+  const asn = formatTerminalLookup(buildCliLookupDocument('AS64496', { type: 'asn', value: 'AS64496' }, asnResult, '2026-08-13T00:00:00.000Z'));
+  assert.match(asn, /RDAP name\s+Example Autonomous System/);
+  assert.match(asn, /ASN range\s+64496 to 64500/);
+  assert.match(asn, /Allocation\s+DIRECT ALLOCATION/);
+  assert.doesNotMatch(asn, /Reverse DNS|private-asn-contact/);
 });
 
 test('terminal deep lookup summarizes current website evidence without exposing raw details', () => {
@@ -628,9 +865,72 @@ test('terminal deep lookup summarizes current website evidence without exposing 
         source: 'http',
         status: 'success',
         transportSecurity: 'https',
-        response: { status: 200 },
+        response: { status: 200, deliveryMetadata: httpDeliveryMetadataFixture() },
       },
-      tls: { source: 'tls', status: 'success', protocol: 'TLSv1.3' },
+      tls: {
+        source: 'tls', status: 'success', complete: true, truncated: false,
+        connectedAddress: '192.0.2.44', protocol: 'TLSv1.3', alpnProtocol: 'h2',
+        cipher: { standardName: 'TLS_AES_256_GCM_SHA384' },
+        authorization: { authorized: true }, hostname: { matches: true }, validity: { status: 'valid' },
+        certificate: {
+          subject: { commonNames: ['example.com'] }, issuer: { commonNames: ['Fixture CA'] },
+          validFrom: '2026-01-01T00:00:00.000Z', validTo: '2027-01-01T00:00:00.000Z',
+          fingerprintSha256: 'ab'.repeat(32),
+          publicKey: { type: 'rsa', bits: 2048, curve: null, privateKeyBytes: 'must-not-render' },
+          signature: { algorithm: 'sha256WithRSAEncryption', oid: '1.2.840.113549.1.1.11' },
+          subjectAltNames: {
+            dnsNames: ['example.com', 'www.example.com'], ipAddresses: ['192.0.2.44'],
+            classes: { dns: 2, ip: 1 }, truncated: false,
+          },
+          extendedKeyUsage: { values: [{ name: 'TLS Web Server Authentication', oid: '1.3.6.1.5.5.7.3.1', secret: 'must-not-render' }], truncated: false },
+          authorityInformationAccess: {
+            ocsp: { total: 1, https: 1, http: 0, other: 0 },
+            caIssuers: { total: 1, https: 1, http: 0, other: 0 }, unknownMethods: 0, truncated: false,
+            locations: ['https://must-not-render.invalid/private'],
+          },
+        },
+        chain: [{ subject: 'private-chain-subject-must-not-render' }, { subject: 'private-chain-issuer-must-not-render' }],
+        findings: [{ label: 'Wildcard certificate', detail: 'private-tls-detail-must-not-render' }],
+        limitations: ['One retained endpoint does not represent every edge.'],
+      },
+      pageIdentity: {
+        identityVersion: 3, source: 'html', status: 'partial', complete: false, truncated: true,
+        documentLanguage: 'en-AU',
+        canonical: { url: 'https://example.com/private/path?token=must-not-render', queryOmitted: true, pathTruncated: false },
+        openGraph: {
+          title: 'Example services', siteName: 'Example publisher',
+          url: { url: 'https://social.invalid/secret-path?key=must-not-render', queryOmitted: true },
+        },
+        generator: 'Fixture CMS',
+        forms: { count: 2, postCount: 1, insecureActionCount: 1, externalActionOrigins: ['https://must-not-render.invalid'], truncated: false },
+        resources: {
+          count: 9, byType: { image: 3, script: 2, stylesheet: 1, frame: 1, media: 1, object: 1 },
+          externalOrigins: ['https://private-resource.invalid'], truncated: true,
+        },
+        embeddedOrigins: ['https://private-frame.invalid'],
+        contactDomains: ['private-contact.invalid'],
+        downloads: { count: 2, explicitCount: 1, riskyCount: 1, riskyFileTypes: ['exe'], externalOrigins: ['https://private-download.invalid'], truncated: false },
+        trackingIdentifiers: [{ type: 'tag-container', value: 'PRIVATE-TRACKING-ID-MUST-NOT-RENDER' }],
+        publicationMetadata: pagePublicationMetadataFixture(),
+        rawHtml: 'private-html-must-not-render',
+      },
+      phishingLanguageMatch: 'Account access language observed',
+      pageRoleProfile: {
+        source: 'derived', status: 'success', complete: true, truncated: false, primaryRole: 'authentication',
+        findings: [
+          { role: 'authentication', label: 'Authentication', confidence: 'high', evidence: ['private-role-evidence-must-not-render'] },
+          { role: 'content', label: 'Content or publication', confidence: 'medium' },
+        ],
+      },
+      clientBehaviorProfile: {
+        source: 'derived', status: 'partial', complete: false, truncated: true,
+        scriptSummary: { elementsObserved: 6, referencedScripts: 3, inlineScripts: 3, moduleScripts: 1 },
+        indicators: Array.from({ length: 7 }, (_, index) => ({
+          label: `Static indicator ${index + 1}${index === 0 ? '\u202e' : ''}`,
+          evidenceClass: index % 2 ? 'inline_script' : 'static_markup', occurrences: index + 1,
+          explanation: 'private-client-explanation-must-not-render',
+        })),
+      },
       credentialSurfaceProfile: {
         source: 'html',
         status: 'success',
@@ -684,7 +984,11 @@ test('terminal deep lookup summarizes current website evidence without exposing 
         source: 'derived',
         status: 'partial',
         summary: { observed: 3, potentialExposure: 1, observedAbsence: 2, unavailable: 1 },
-        findings: [{ detail: 'private-posture-detail-must-not-render' }],
+        findings: Array.from({ length: 6 }, (_, index) => ({
+          label: `Posture label ${index + 1}`,
+          state: index % 2 ? 'observed' : 'unavailable',
+          detail: 'private-posture-detail-must-not-render',
+        })),
       },
     },
   });
@@ -696,14 +1000,36 @@ test('terminal deep lookup summarizes current website evidence without exposing 
     'deep',
   );
   const terminal = formatTerminalLookup(document);
+  const summary = formatTerminalLookup(document, { detail: 'summary' });
+  const verbose = formatTerminalLookup(document, { detail: 'verbose' });
 
   assert.match(terminal, /Web activity\s+Active/);
   assert.match(terminal, /Page title\s+Example account portal/);
-  assert.match(terminal, /DNS evidence\s+Partial/);
+  assert.match(terminal, /DNS:\nEvidence\s+Partial/);
   assert.match(terminal, /HTTP evidence\s+Success/);
   assert.match(terminal, /HTTP response\s+HTTP 200 · HTTPS/);
-  assert.match(terminal, /TLS evidence\s+Success/);
-  assert.match(terminal, /TLS protocol\s+TLSv1\.3/);
+  assert.match(terminal, /TLS and certificate:\nEvidence\s+Success/);
+  assert.match(terminal, /Completeness\s+Complete/);
+  assert.match(terminal, /Protocol\s+TLSv1\.3/);
+  assert.match(terminal, /Public key\s+rsa 2048 bits/);
+  assert.match(terminal, /SAN summary\s+DNS 2, IP 1/);
+  assert.match(terminal, /AIA presence\s+OCSP 1 · CA issuers 1 · unknown methods 0/);
+  assert.match(terminal, /Chain\s+2 retained certificates/);
+  assert.match(terminal, /Page identity\s+Partial/);
+  assert.match(terminal, /Page coverage\s+Incomplete · truncated/);
+  assert.match(terminal, /Language\s+en-AU/);
+  assert.match(terminal, /Canonical\s+Same target host · query omitted/);
+  assert.match(terminal, /Open Graph\s+Example publisher · Example services/);
+  assert.match(terminal, /Page forms\s+2 total · 1 POST · 1 insecure action/);
+  assert.match(terminal, /Resources\s+9 retained · image 3, script 2, stylesheet 1, frame 1, media 1, object 1 · truncated/);
+  assert.match(terminal, /Relationships\s+1 embedded retained · 1 contact domain retained · 1 tracking identifier retained/);
+  assert.match(terminal, /Delivery\s+Complete · encoding Observed · cache Observed/);
+  assert.match(terminal, /Content coding\s+br, gzip/);
+  assert.match(terminal, /Publication\s+Complete · robots Observed · card Observed/);
+  assert.match(terminal, /Static page\s+headings 2 · images 2 · blocking candidates 2/);
+  assert.match(terminal, /Content cue\s+Account access language observed · static review label/);
+  assert.match(terminal, /Primary role\s+Authentication · High/);
+  assert.match(terminal, /Scripts\s+6 elements · 3 referenced · 3 inline · 1 modules/);
   assert.match(terminal, /Credential UI\s+Success · 3 classified inputs/);
   assert.match(terminal, /Form surface\s+2 forms · 4 inputs · 1 external action/);
   assert.match(terminal, /Input purposes\s+password 1 · email 1 · username 1/);
@@ -714,8 +1040,85 @@ test('terminal deep lookup summarizes current website evidence without exposing 
   assert.match(terminal, /JS libraries\s+Success · 2 apparent · 1 with catalogue advisory match/);
   assert.match(terminal, /Posture\s+Partial/);
   assert.match(terminal, /Posture counts 3 observed · 1 potential exposure · 2 observed absence · 1 unavailable/);
-  assert.doesNotMatch(terminal, /private-marker|private-posture-detail|credential-private-marker|must-not-render/);
-  assert.doesNotMatch(terminal, /[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/);
+  assert.match(verbose, /Alt names\s+example\.com, www\.example\.com, 192\.0\.2\.44/);
+  assert.match(verbose, /Purposes\s+TLS Web Server Authentication/);
+  assert.match(verbose, /Findings\s+Wildcard certificate/);
+  assert.match(verbose, /Posture labels\s+.*\+1 more/);
+  assert.match(verbose, /Client labels\s+.*\+2 more/);
+  assert.match(verbose, /Image alt\s+missing 1 · empty 0 · non-empty 1 · unclassified 0/);
+  assert.match(verbose, /Cache timing\s+max-age 3600s · s-maxage 120s · Age 45s/);
+  assert.doesNotMatch(summary, /Page title|Language\s+en-AU|Canonical|Primary role|Scripts\s+6|Public key|SAN summary/);
+  assert.doesNotMatch(summary, /Publication|Delivery\s+/);
+  assert.equal(formatTerminalLookup(document, { detail: 'verbose' }), verbose);
+  assert.doesNotMatch(`${terminal}${verbose}`, /private-marker|private-posture-detail|credential-private-marker|must-not-render|private-resource|private-frame|private-contact|private-download|PRIVATE-TRACKING|private-html|private-role-evidence|private-client-explanation|private-tls-detail|private-chain/);
+  assert.doesNotMatch(`${terminal}${verbose}`, /[\x00-\x08\x0b\x0c\x0e-\x1f\x7f\u061c\u200b-\u200f\u202a-\u202e\u2060-\u2069\ufeff]/);
+});
+
+test('terminal page relationships use the registrable collection target and preserve producer counts', () => {
+  const result = lookupResult({
+    availability: {
+      applicable: true, domain: 'example.test', state: 'registered', confidence: 'high',
+      pageIdentity: {
+        source: 'html', status: 'success', complete: true, truncated: false,
+        canonical: { url: 'https://example.test/review?private=omitted', queryOmitted: true, pathTruncated: false },
+        forms: { count: 1_024, postCount: 1_000, insecureActionCount: 0, truncated: true },
+        resources: { count: 1_024, byType: { image: 1_024, script: 1_000 }, truncated: true },
+        downloads: { count: 1_001, riskyCount: 1_000, truncated: true },
+      },
+    },
+  });
+  const document = buildCliLookupDocument(
+    'login.example.test',
+    classifiedDomain('example.test', 'login.example.test'),
+    result,
+    '2026-08-13T00:00:00.000Z',
+    'deep',
+  );
+  const output = formatTerminalLookup(document);
+  assert.match(output, /Canonical\s+Same target host · query omitted/u);
+  assert.match(output, /Page forms\s+1024 total · 1000 POST · 0 insecure action/u);
+  assert.match(output, /Resources\s+1024 retained · image 1024, script 1000 · truncated/u);
+  assert.match(output, /Downloads\s+1001 retained · 1000 review files · truncated/u);
+  assert.doesNotMatch(output, /login\.example\.test.*Different host|private=omitted/u);
+
+  const differentResult = lookupResult({
+    availability: {
+      applicable: true, domain: 'example.test', state: 'registered', confidence: 'high',
+      pageIdentity: {
+        source: 'html', status: 'success', complete: true, truncated: false,
+        canonical: { url: 'https://different.example/review', queryOmitted: false, pathTruncated: false },
+      },
+    },
+  });
+  const different = buildCliLookupDocument(
+    'login.example.test',
+    classifiedDomain('example.test', 'login.example.test'),
+    differentResult,
+    '2026-08-13T00:00:00.000Z',
+    'deep',
+  );
+  assert.match(formatTerminalLookup(different), /Canonical\s+Different host declared/u);
+});
+
+test('terminal TLS keeps non-positive observations explicitly inconclusive', () => {
+  for (const status of ['error', 'skipped', 'unsupported']) {
+    const result = lookupResult({
+      availability: {
+        applicable: true, domain: 'example.test', state: 'registered', confidence: 'high',
+        tls: {
+          source: 'tls', status,
+          authorization: { authorized: true }, hostname: { matches: true }, validity: { status: 'valid' },
+          certificate: { subject: { commonNames: ['must-not-render.example'] } },
+        },
+      },
+    });
+    const output = formatTerminalLookup(buildCliLookupDocument('example.test', classifiedDomain('example.test'), result, '2026-08-13T00:00:00.000Z', 'deep'));
+    assert.match(output, new RegExp(`Evidence\\s+${status.charAt(0).toUpperCase()}${status.slice(1)}`));
+    assert.match(output, /Chain trust\s+Unavailable/);
+    assert.match(output, /Hostname\s+Unavailable/);
+    assert.match(output, /Validity\s+Unavailable/);
+    assert.doesNotMatch(output, /Authorised|Matched|must-not-render/);
+  }
 });
 
 test('terminal lookup explains represented registry access constraints', () => {
@@ -772,8 +1175,8 @@ test('terminal registry access context remains bounded and absent by default', (
 });
 
 test('terminal values strip controls and stay bounded', () => {
-  const result = safeTerminalValue(`hello\nworld\u0000${'x'.repeat(500)}`);
-  assert.doesNotMatch(result, /[\x00-\x1f\x7f]/);
+  const result = safeTerminalValue(`hello\nworld\u0000\u009b${'x'.repeat(500)}`);
+  assert.doesNotMatch(result, /[\x00-\x1f\x7f-\x9f]/);
   assert.ok(result.length <= 240);
 });
 

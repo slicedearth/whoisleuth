@@ -17,6 +17,7 @@ import EXIT_CODES from '../cli/exit-codes.mts';
 import { runCli } from '../cli/runner.mts';
 import { MAX_BOUNDED_JSON_DEPTH } from '../lib/bounded-json.mts';
 import { arrayValue, recordValue } from './value-assertions.mts';
+import { httpDeliveryMetadataFixture, pagePublicationMetadataFixture } from './homepage-metadata-fixtures.mts';
 
 function capture() {
   let value = '';
@@ -200,15 +201,16 @@ describe('lookup evidence export conversion', () => {
   });
 
   test('converts a saved lookup to the established rich evidence contract', async () => {
+    const shared = await evidenceModule();
     const source = savedLookup();
     const before = structuredClone(source);
     const result = buildCliEvidenceExport(
       JSON.stringify(source),
-      await evidenceModule(),
+      shared,
       '2026-07-14T09:00:00.000Z'
     );
     assert.equal(result.schema, 'whoisleuth.lookup-evidence');
-    assert.equal(result.schemaVersion, 26);
+    assert.equal(result.schemaVersion, shared.LOOKUP_EVIDENCE_SCHEMA_VERSION);
     assert.equal(result.generatedAt, '2026-07-14T09:00:00.000Z');
     assert.deepEqual(result.application, {
       name: 'WHOISleuth',
@@ -243,6 +245,30 @@ describe('lookup evidence export conversion', () => {
     assert.equal(JSON.stringify(result).includes('privateNestedValue'), false);
     assert.equal(JSON.stringify(result).includes('ignoredTopLevelValue'), false);
     assert.deepEqual(source, before);
+  });
+
+  test('converts current saved Lookup metadata while keeping version 1 readable', async () => {
+    const shared = await evidenceModule();
+    const legacy = savedLookup();
+    const current = structuredClone(legacy);
+    current.version = 2;
+    const availability = recordValue(current.availability);
+    availability.pageIdentity = { status: 'success', publicationMetadata: pagePublicationMetadataFixture() };
+    availability.http = { status: 'success', response: { deliveryMetadata: httpDeliveryMetadataFixture() } };
+
+    const legacyExport = buildCliEvidenceExport(JSON.stringify(legacy), shared, '2026-07-14T09:00:00.000Z');
+    const currentExport = buildCliEvidenceExport(JSON.stringify(current), shared, '2026-07-14T09:00:00.000Z');
+    assert.equal(legacyExport.schemaVersion, shared.LOOKUP_EVIDENCE_SCHEMA_VERSION);
+    assert.equal(currentExport.schemaVersion, shared.LOOKUP_EVIDENCE_SCHEMA_VERSION);
+    assert.equal(recordValue(recordValue(currentExport.analysis).availability).pageIdentity !== null, true);
+    assert.deepEqual(
+      recordValue(recordValue(recordValue(currentExport.analysis).availability).pageIdentity).publicationMetadata,
+      pagePublicationMetadataFixture(),
+    );
+    assert.deepEqual(
+      recordValue(recordValue(recordValue(recordValue(currentExport.analysis).availability).http).response).deliveryMetadata,
+      httpDeliveryMetadataFixture(),
+    );
   });
 
   test('retains bounded registry-access diagnostics already present in the lookup contract', async () => {
@@ -560,12 +586,13 @@ describe('lookup evidence HTML rendering', () => {
 
 describe('evidence export CLI runner', () => {
   test('feeds the domain-triage export directly into offline verification', async () => {
+    const shared = await evidenceModule();
     const exported = capture();
     const exportCode = await runCli(['export', '--compact'], {
       stdout: exported.stream,
       stderr: capture().stream,
       readExportInput: async () => JSON.stringify(savedLookup()),
-      loadEvidenceExport: evidenceModule,
+      loadEvidenceExport: async () => shared,
       now: () => '2026-07-14T09:00:00.000Z',
     });
     assert.equal(exportCode, EXIT_CODES.SUCCESS);
@@ -580,7 +607,7 @@ describe('evidence export CLI runner', () => {
     assert.deepEqual(JSON.parse(verified.value()).artifact, {
       kind: 'lookup_evidence',
       schema: 'whoisleuth.lookup-evidence',
-      version: 26,
+      version: shared.LOOKUP_EVIDENCE_SCHEMA_VERSION,
     });
     assert.equal(JSON.parse(verified.value()).state, 'structure_valid');
   });

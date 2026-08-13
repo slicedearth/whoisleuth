@@ -7,6 +7,16 @@ import {
   buildLookupRegistryDisplay,
 } from '../frontend/src/lib/analysis/lookup-display-model.ts';
 import {
+  deliveryMetadataDisplay,
+  publicationMetadataDisplay,
+} from '../frontend/src/lib/analysis/lookup-homepage-metadata-display.ts';
+import {
+  httpDeliveryMetadataFixture,
+  pagePublicationMetadataFixture,
+} from './homepage-metadata-fixtures.mts';
+import { extractHtmlSignals } from '../lib/html-signals.mts';
+import { buildHttpObservation } from '../lib/http-intelligence.mts';
+import {
   MAX_LOOKUP_DISPLAY_ARRAY_ITEMS,
   MAX_LOOKUP_DISPLAY_RECORDS,
   MAX_LOOKUP_DISPLAY_STRING_ITEMS,
@@ -35,6 +45,55 @@ test('keeps generic Lookup display fallbacks bounded and makes joined-value omis
   const cyclic: Record<string, unknown> = {};
   cyclic.name = cyclic;
   assert.equal(show(cyclic), '…');
+});
+
+test('projects fixed homepage metadata without retaining source values or inventing absence', () => {
+  const publication = publicationMetadataDisplay(pagePublicationMetadataFixture());
+  const delivery = deliveryMetadataDisplay(httpDeliveryMetadataFixture());
+  assert.equal(publication?.complete, true);
+  assert.match(publication?.rows.find((row) => row.id === 'publication.headings')?.value || '', /2 total · H1 1/u);
+  assert.match(publication?.rows.find((row) => row.id === 'publication.twitter.fields')?.value || '', /title, image/u);
+  assert.equal(delivery?.complete, true);
+  assert.equal(delivery?.rows.find((row) => row.id === 'delivery.encoding.codings')?.value, 'br, gzip');
+  assert.match(delivery?.rows.find((row) => row.id === 'delivery.cache.validators')?.value || '', /ETag Syntactically valid/u);
+  assert.equal(publicationMetadataDisplay(null), null);
+  assert.equal(deliveryMetadataDisplay(null), null);
+  assert.equal(publicationMetadataDisplay({ ...pagePublicationMetadataFixture(), rawMeta: 'private value' }), null);
+  assert.equal(deliveryMetadataDisplay({ ...httpDeliveryMetadataFixture(), rawHeaders: 'private value' }), null);
+  assert.doesNotMatch(JSON.stringify({ publication, delivery }), /private value|W\/|Wed,|https:\/\//u);
+});
+
+test('qualifies incomplete homepage counts and malformed cache values without inventing absence', () => {
+  const localAttributeCap = extractHtmlSignals(
+    `<body><img alt="${'x'.repeat(2_049)}"></body>`,
+    'example.com',
+  ).pageIdentity?.publicationMetadata;
+  const localDisplay = publicationMetadataDisplay(localAttributeCap);
+  assert.match(localDisplay?.rows.find((row) => row.id === 'publication.images')?.value || '', /^1 images/u);
+  assert.doesNotMatch(localDisplay?.rows.find((row) => row.id === 'publication.images')?.value || '', /At least/iu);
+
+  const documentCap = extractHtmlSignals(
+    '<body><h1>Example</h1><img></body>',
+    'example.com',
+    { sourceTruncated: true },
+  ).pageIdentity?.publicationMetadata;
+  const cappedDisplay = publicationMetadataDisplay(documentCap);
+  assert.match(cappedDisplay?.rows.find((row) => row.id === 'publication.headings')?.value || '', /At least 1 total · H1 At least 1/u);
+  assert.match(cappedDisplay?.rows.find((row) => row.id === 'publication.images')?.value || '', /At least 1 images · missing At least 1/u);
+
+  const values: Record<string, string> = {
+    'cache-control': 'max-age=60, max-age=120',
+    age: 'not-a-number',
+  };
+  const delivery = buildHttpObservation({
+    response: { status: 200, headers: { get: (name: string) => values[name] ?? null } },
+    requestedUrl: 'https://example.com/',
+    finalUrl: 'https://example.com/',
+    hops: [],
+  }, { observedAt: '2026-08-14T00:00:00.000Z' }).response.deliveryMetadata;
+  const deliveryDisplay = deliveryMetadataDisplay(delivery);
+  assert.equal(deliveryDisplay?.rows.find((row) => row.id === 'delivery.cache.max_age')?.value, 'Not established');
+  assert.equal(deliveryDisplay?.rows.find((row) => row.id === 'delivery.cache.age')?.value, 'Not established');
 });
 
 test('selects separately sourced lifecycle dates without treating missing values as dates', () => {

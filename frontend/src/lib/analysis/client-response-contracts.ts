@@ -1,5 +1,6 @@
 import { normalizeDomain } from './case-model.ts';
 import { PAGE_FINGERPRINT_VERSION, PAGE_IDENTITY_VERSION } from './page-baseline.ts';
+import { validPagePublicationMetadata } from '../../../../lib/homepage-metadata-contract.mts';
 
 type JsonRecord = Record<string, unknown>;
 type CaptureAvailabilityState = 'available' | 'expiring' | 'for_sale' | 'registered' | 'unknown';
@@ -153,6 +154,8 @@ function validPageIdentity(value: unknown): boolean {
     || !isRecord(value.fingerprints)
     || Object.keys(value.fingerprints).length > MAX_PAGE_FINGERPRINT_KEYS
     || value.fingerprints.fingerprintVersion !== PAGE_FINGERPRINT_VERSION
+    || value.publicationMetadata !== undefined
+      && !validPagePublicationMetadata(value.publicationMetadata)
   ) {
     return false;
   }

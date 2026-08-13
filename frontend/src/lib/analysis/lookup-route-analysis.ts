@@ -130,6 +130,7 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     httpEvidence,
     httpResponse,
     httpSecurityHeaders,
+    httpDeliveryMetadata,
     tlsEvidence,
     tlsCertificate,
     tlsSubject,
@@ -142,6 +143,7 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     tlsValidity,
     tlsDiagnostics,
     pageIdentity,
+    pagePublicationMetadata,
     pageCanonical,
     pageMetaRefresh,
     pageOpenGraph,
@@ -267,6 +269,7 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     httpEvidence,
     httpResponse,
     httpSecurityHeaders,
+    httpDeliveryMetadata,
     tlsEvidence,
     tlsCertificate,
     tlsSubject,
@@ -339,6 +342,7 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
   const pageComparison = comparePageBaselines(profileContextReady ? profile?.pageBaseline : null, observedPageBaseline);
   const pageDisplay = buildLookupPageDisplay({
     pageIdentity,
+    pagePublicationMetadata,
     pageCanonical,
     pageMetaRefresh,
     pageOpenGraph,

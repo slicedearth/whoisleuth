@@ -6,6 +6,7 @@ import {
   parseProfileDocument,
   resolveCliProfileArguments,
 } from '../cli/config-profile.mts';
+import { parseCliArguments } from '../cli/arguments.mts';
 
 function configuration(argumentsList: string[] = ['--fast', '--no-color', '--concurrency', '2']) {
   return JSON.stringify({ schema: CLI_CONFIG_SCHEMA, version: 1, defaultProfile: 'careful', profiles: { careful: { arguments: argumentsList } } });
@@ -24,6 +25,32 @@ describe('CLI configuration profiles', () => {
     let read = false;
     assert.deepEqual(await resolveCliProfileArguments(['lookup', 'example.test'], { readConfig: async () => { read = true; return configuration(); } }), ['lookup', 'example.test']);
     assert.equal(read, false);
+  });
+
+  test('applies the same explicit profile defaults to direct Lookup targets', async () => {
+    const direct = await resolveCliProfileArguments(['example.test', '--profile', 'careful', '--deep'], {
+      readConfig: async () => configuration(['--fast', '--no-color']),
+    });
+    const explicit = await resolveCliProfileArguments(['lookup', 'example.test', '--profile', 'careful', '--deep'], {
+      readConfig: async () => configuration(['--fast', '--no-color']),
+    });
+    assert.deepEqual(direct, ['example.test', '--no-color', '--deep']);
+    assert.deepEqual(explicit, ['lookup', '--no-color', 'example.test', '--deep']);
+    assert.deepEqual(parseCliArguments(direct), parseCliArguments(explicit));
+  });
+
+  test('allows one fixed palette default and lets explicit colour choices override it', async () => {
+    assert.deepEqual(await resolveCliProfileArguments(['lookup', 'example.test', '--profile', 'careful'], {
+      readConfig: async () => configuration(['--palette', 'dark']),
+    }), ['lookup', '--palette', 'dark', 'example.test']);
+    assert.deepEqual(await resolveCliProfileArguments(['lookup', 'example.test', '--profile', 'careful', '--no-color'], {
+      readConfig: async () => configuration(['--palette', 'dark']),
+    }), ['lookup', 'example.test', '--no-color']);
+    assert.deepEqual(await resolveCliProfileArguments(['lookup', 'example.test', '--profile', 'careful', '--palette', 'light'], {
+      readConfig: async () => configuration(['--no-color']),
+    }), ['lookup', 'example.test', '--palette', 'light']);
+    assert.throws(() => parseProfileDocument(configuration(['--palette', 'sepia'])), /auto, light, or dark/iu);
+    assert.throws(() => parseProfileDocument(configuration(['--palette', 'dark', '--no-color'])), /conflicting colour defaults/iu);
   });
 
   test('accepts only low-risk bounded defaults', () => {

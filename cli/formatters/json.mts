@@ -1,6 +1,6 @@
 import type { BulkLookupResult, ClassifiedQuery } from '../bulk.mts';
 import { bulkDnsSummary } from '../bulk-output.mts';
-import type { UnknownRecord } from '../saved-lookup.mts';
+import { SAVED_LOOKUP_SCHEMA_VERSION, type UnknownRecord } from '../saved-lookup.mts';
 
 const CLI_LOOKUP_SCHEMA = 'whoisleuth.cli.lookup';
 const CLI_BULK_SCHEMA = 'whoisleuth.cli.bulk';
@@ -12,12 +12,12 @@ const CLI_POSTURE_SCHEMA = 'whoisleuth.cli.posture';
 const CLI_HTTP_SCHEMA = 'whoisleuth.cli.http';
 const CLI_TLS_SCHEMA = 'whoisleuth.cli.tls';
 const CLI_COMPARE_SCHEMA = 'whoisleuth.cli.compare';
-const CLI_LOOKUP_SCHEMA_VERSION = 1;
+const CLI_LOOKUP_SCHEMA_VERSION = SAVED_LOOKUP_SCHEMA_VERSION;
 const CLI_BULK_SCHEMA_VERSION = 3;
 const CLI_CT_SEARCH_SCHEMA_VERSION = 1;
 const CLI_DISCOVER_SCHEMA_VERSION = 2;
 const CLI_POSTURE_SCHEMA_VERSION = 1;
-const CLI_HTTP_SCHEMA_VERSION = 2;
+const CLI_HTTP_SCHEMA_VERSION = 3;
 const CLI_TLS_SCHEMA_VERSION = 1;
 const CLI_COMPARE_SCHEMA_VERSION = 3;
 

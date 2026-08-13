@@ -176,6 +176,18 @@ test('HTTP intelligence presents bounded redirect provenance and response metada
             declaredContentLength: 4096, capturedBodyBytes: 2048, bodyInspected: true, bodyTruncated: false,
             bodyHash: { algorithm: 'sha256', value: 'a'.repeat(64), scope: 'complete-body', bytes: 2048 },
             securityHeaders: { strictTransportSecurity: 'observed', contentSecurityPolicy: 'observed', xFrameOptions: 'observed', xContentTypeOptions: 'observed', referrerPolicy: 'observed' },
+            deliveryMetadata: {
+              version: 1, status: 'success', complete: true, truncated: false,
+              limitations: ['Selected-response headers are point-in-time declarations and do not prove intermediary caching, compression effectiveness, or page performance.'],
+              contentEncoding: { status: 'observed', codings: ['br', 'gzip'], encoded: true, unknownCodingCount: 0 },
+              cachePolicy: {
+                status: 'observed', noStore: false, noCache: false, mustRevalidate: true,
+                public: true, private: false, immutable: false,
+                maxAgeSeconds: 3600, sMaxAgeSeconds: null, ageSeconds: 12, unknownDirectiveCount: 0,
+                maxAgePresent: true, sMaxAgePresent: false, agePresent: true,
+                etag: { present: true, valid: true }, lastModified: { present: false, valid: null }, expires: { present: true, valid: true },
+              },
+            },
           },
         },
         tls: {
@@ -211,6 +223,22 @@ test('HTTP intelligence presents bounded redirect provenance and response metada
           contactDomains: ['support.example'],
           downloads: { count: 1, explicitCount: 0, riskyCount: 1, externalOrigins: ['https://files.example'], riskyFileTypes: ['zip'], truncated: false },
           trackingIdentifiers: [{ type: 'tag-container', value: 'GTM-AB12' }],
+          publicationMetadata: {
+            version: 1, status: 'partial', complete: false, truncated: true,
+            limitations: [
+              'Counts and declarations describe only the captured static homepage HTML; they are not a full accessibility, indexing, or performance audit.',
+              'Static HTML token or attribute bounds were reached; publication metadata is partial.',
+            ],
+            robots: { status: 'partial', complete: false, truncated: true, directives: ['index', 'nofollow'], recognizedDirectiveCount: 2, unknownDirectiveCount: 0, conflicting: false },
+            twitterCard: {
+              status: 'observed', complete: true, truncated: false, cardType: 'summary_large_image', declarationCount: 3,
+              titlePresent: true, descriptionPresent: false, imagePresent: true, imageAltPresent: true,
+              sitePresent: false, creatorPresent: false, playerPresent: false, appPresent: false,
+            },
+            headings: { complete: true, truncated: false, total: 3, h1: 1, h2: 2, h3: 0, h4: 0, h5: 0, h6: 0 },
+            images: { totalComplete: true, classificationComplete: true, truncated: false, total: 3, altMissing: 1, altEmpty: 1, altNonEmpty: 1, altUnclassified: 0 },
+            renderBlockingCandidates: { complete: true, truncated: false, script: 1, stylesheet: 1, total: 2, scope: 'explicit-head-static-v1' },
+          },
           fingerprints: {
             fingerprintVersion: 1,
             exact: { algorithm: 'sha256', value: 'a'.repeat(64), scope: 'complete-body', bytes: 2048, source: 'captured-response-bytes' },
@@ -381,6 +409,15 @@ test('HTTP intelligence presents bounded redirect provenance and response metada
   await expect(card).not.toContainText("default-src 'self'");
   await expect(card.getByText('a'.repeat(64), { exact: true })).toBeVisible();
   await expect(card.getByText('Complete captured body (2.0 KiB)', { exact: true })).toBeVisible();
+  const delivery = card.locator('details.metadata-disclosure');
+  await expect(delivery.locator(':scope > summary')).toContainText('Observed HTTP delivery metadata');
+  await expect(delivery.locator(':scope > summary')).toContainText('Complete');
+  await delivery.locator(':scope > summary').focus();
+  await delivery.locator(':scope > summary').press('Enter');
+  await expect(delivery.getByText('br, gzip', { exact: true })).toBeVisible();
+  await expect(delivery.getByText('3600 seconds', { exact: true })).toBeVisible();
+  await expect(delivery).toContainText('ETag Syntactically valid');
+  await expect(delivery).not.toContainText('fixture-private-etag');
   await expect(card).not.toContainText('secret');
   await expect(card.getByText(/missing security headers do not establish maliciousness/i)).toBeVisible();
 
@@ -415,6 +452,15 @@ test('HTTP intelligence presents bounded redirect provenance and response metada
   await expect(pageCard.getByText(/visible-text SimHash is fuzzy comparison data/i)).toBeVisible();
   await expect(pageCard).not.toContainText('secret');
   await expect(pageCard.getByText(/normalised markup, and visible text are not retained/i)).toBeVisible();
+  const publication = pageCard.locator('details.metadata-disclosure');
+  await expect(publication.locator(':scope > summary')).toContainText('Publisher-declared publication metadata');
+  await expect(publication.locator(':scope > summary')).toContainText('Partial');
+  await publication.locator(':scope > summary').focus();
+  await publication.locator(':scope > summary').press('Enter');
+  await expect(publication.getByText('index, nofollow', { exact: true })).toBeVisible();
+  await expect(publication.getByText(/3 images · missing 1 · empty 1 · non-empty 1/u)).toBeVisible();
+  await expect(publication.getByText(/Static homepage declarations and candidates do not prove indexing/u)).toBeVisible();
+  await expect(publication).not.toContainText('private-twitter-title');
 
   const roleBehaviorCard = page.locator('details').filter({ has: page.getByRole('heading', { name: 'Page role and client behaviour' }) });
   await expect(roleBehaviorCard).not.toHaveAttribute('open', '');
@@ -511,6 +557,8 @@ test('HTTP intelligence presents bounded redirect provenance and response metada
     },
   });
   expect(JSON.stringify(retainedSnapshots.records[0]?.value)).not.toContain('secret');
+  expect(JSON.stringify(retainedSnapshots.records[0]?.value)).not.toContain('publicationMetadata');
+  expect(JSON.stringify(retainedSnapshots.records[0]?.value)).not.toContain('deliveryMetadata');
   const certificateInventory = snapshots.getByRole('region', { name: 'Observed certificate inventory' });
   await expect(certificateInventory).toContainText('1 observation · 1 domain');
   await expect(certificateInventory).toContainText('http-evidence.test');
@@ -528,6 +576,8 @@ test('HTTP intelligence presents bounded redirect provenance and response metada
   await expect(snapshots.getByRole('status')).toContainText('Deleted the selected website-profile snapshot');
   await expect(snapshots.getByText('No website-profile snapshot is retained for this domain.')).toBeVisible();
 
+  await page.setViewportSize({ width: 320, height: 844 });
+  await expectNoHorizontalOverflow(page);
   await page.setViewportSize({ width: 390, height: 844 });
   await expectNoHorizontalOverflow(page);
 });

@@ -26,6 +26,7 @@ describe('compact HTTP summary', () => {
           xContentTypeOptions: 'nosniff',
           referrerPolicy: null,
         },
+        deliveryMetadata: { version: 1, marker: 'delivery metadata must not persist' },
       },
     });
 
@@ -48,6 +49,7 @@ describe('compact HTTP summary', () => {
     assert.equal(serialized.includes('max-age'), false);
     assert.equal(serialized.includes('redirects'), false);
     assert.equal(serialized.includes('attempts'), false);
+    assert.equal(serialized.includes('delivery metadata'), false);
   });
 
   test('retains partial terminal responses but rejects failed, skipped, or response-less observations', async () => {

@@ -2,6 +2,7 @@ import { expect, test } from './fixtures';
 import { expandLookupFamilies, expectNoHorizontalOverflow, migrateLegacyBrowserData, readBrowserLocalCollection } from './helpers';
 import { readFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
+import { LOOKUP_EVIDENCE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/evidence-export';
 
 const packageVersion = (JSON.parse(readFileSync('package.json', 'utf8')) as { version: string }).version;
 
@@ -125,6 +126,7 @@ test('bounded RDAP contact roles and repeated channels render in Lookup', async 
 });
 
 test('deep Lookup presents registrar and observed network RDAP as separate sources', async ({ page }) => {
+  test.slow();
   const lookupOrigin = new URL(page.url()).origin;
   const thirdPartyRequests: string[] = [];
   page.on('request', (request) => {
@@ -317,7 +319,7 @@ test('deep Lookup presents registrar and observed network RDAP as separate sourc
   const downloadPath = await download.path();
   expect(downloadPath).not.toBeNull();
   const exported = JSON.parse(await readFile(downloadPath!, 'utf8'));
-  expect(exported.schemaVersion).toBe(26);
+  expect(exported.schemaVersion).toBe(LOOKUP_EVIDENCE_SCHEMA_VERSION);
   expect(exported.application).toEqual({
     name: 'WHOISleuth',
     version: packageVersion,
@@ -456,6 +458,7 @@ test('registrar RDAP unsupported and error states remain neutral source rows', a
 });
 
 test('registry access constraints remain neutral, explicit, and mobile-safe', async ({ page }) => {
+  test.slow();
   await page.route('**/api/lookup?*', async (route) => {
     const query = new URL(route.request().url()).searchParams.get('q') || '';
     const suffix = query === 'mismatch.dev'

@@ -34,6 +34,10 @@ import {
   MAX_LOOKUP_TLS_NAME_VALUES,
 } from './lookup-network-evidence-bounds.mts';
 import { MAX_SECURITY_POSTURE_FINDINGS } from './website-security-posture.mts';
+import {
+  validHttpDeliveryMetadata,
+  validPagePublicationMetadata,
+} from './homepage-metadata-contract.mts';
 
 type JsonPrimitive = boolean | number | string | null;
 type JsonValue = JsonPrimitive | JsonObject | JsonValue[];
@@ -156,6 +160,7 @@ type LookupViewModel = {
   readonly httpEvidence: JsonObject;
   readonly httpResponse: JsonObject;
   readonly httpSecurityHeaders: JsonObject;
+  readonly httpDeliveryMetadata: JsonObject;
   readonly tlsEvidence: JsonObject;
   readonly tlsCertificate: JsonObject;
   readonly tlsSubject: JsonObject;
@@ -168,6 +173,7 @@ type LookupViewModel = {
   readonly tlsValidity: JsonObject;
   readonly tlsDiagnostics: JsonObject;
   readonly pageIdentity: JsonObject;
+  readonly pagePublicationMetadata: JsonObject;
   readonly pageCanonical: JsonObject;
   readonly pageMetaRefresh: JsonObject;
   readonly pageOpenGraph: JsonObject;
@@ -561,7 +567,11 @@ function validNormalizedHttpEvidence(value: unknown): boolean {
   if (Array.isArray(redirects) && value.redirectCount !== undefined
     && value.redirectCount !== redirects.length) return false;
   if (value.response !== undefined && value.response !== null) {
-    if (!isJsonObject(value.response) || !validOptionalHttpStatus(value.response.status)) return false;
+    if (!isJsonObject(value.response)
+      || !validOptionalHttpStatus(value.response.status)
+      || value.response.deliveryMetadata !== undefined
+        && (!['success', 'partial'].includes(String(value.status))
+          || !validHttpDeliveryMetadata(value.response.deliveryMetadata))) return false;
   }
   return true;
 }
@@ -816,6 +826,9 @@ function validPageEvidence(value: LookupHttpResponse): boolean {
   const page = availability.pageIdentity;
   if (page !== undefined && page !== null) {
     if (!validObservationFields(page)
+      || page.publicationMetadata !== undefined
+        && (!['success', 'partial'].includes(String(page.status))
+          || !validPagePublicationMetadata(page.publicationMetadata))
       || !validOptionalStringArray(page.embeddedOrigins, 20, 2_048)
       || !validOptionalStringArray(page.contactDomains, 20, 253)
       || !validOptionalRecordArray(page.trackingIdentifiers, 30, (item) => isJsonObject(item)
@@ -1045,6 +1058,13 @@ function parseCompactLookupHttpResponse(
 
   const availability = value.availability;
   const diagnostics = value.diagnostics;
+  const compactPageIdentity = isJsonObject(availability) && isJsonObject(availability.pageIdentity)
+    ? availability.pageIdentity
+    : null;
+  const compactHttpResponse = isJsonObject(availability) && isJsonObject(availability.http)
+    && isJsonObject(availability.http.response)
+    ? availability.http.response
+    : null;
   if (
     !isJsonObject(availability)
     || Object.keys(availability).length > MAX_COMPACT_LOOKUP_AVAILABILITY_KEYS
@@ -1057,6 +1077,8 @@ function parseCompactLookupHttpResponse(
     || (availability.deepScanComplete !== undefined && typeof availability.deepScanComplete !== 'boolean')
     || (availability.bulkComparison !== undefined
       && !validCompactBulkComparison(availability.bulkComparison))
+    || compactPageIdentity !== null && Object.hasOwn(compactPageIdentity, 'publicationMetadata')
+    || compactHttpResponse !== null && Object.hasOwn(compactHttpResponse, 'deliveryMetadata')
     || (value.query !== undefined && !compactDomainMatches(value.query, expectedDomain))
     || (value.type !== undefined && value.type !== 'domain')
     || (value.inputHostname !== undefined && !compactDomainMatches(value.inputHostname, expectedDomain))
@@ -1220,6 +1242,7 @@ function createLookupViewModel(response: LookupHttpResponse | null): LookupViewM
     httpEvidence,
     httpResponse,
     httpSecurityHeaders: record(httpResponse.securityHeaders),
+    httpDeliveryMetadata: record(httpResponse.deliveryMetadata),
     tlsEvidence,
     tlsCertificate,
     tlsSubject: record(tlsCertificate.subject),
@@ -1232,6 +1255,7 @@ function createLookupViewModel(response: LookupHttpResponse | null): LookupViewM
     tlsValidity: record(tlsEvidence.validity),
     tlsDiagnostics: record(tlsEvidence.diagnostics),
     pageIdentity,
+    pagePublicationMetadata: record(pageIdentity.publicationMetadata),
     pageCanonical: record(pageIdentity.canonical),
     pageMetaRefresh: record(pageIdentity.metaRefresh),
     pageOpenGraph,

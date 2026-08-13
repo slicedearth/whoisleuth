@@ -1,7 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import type { Page, TestInfo } from '@playwright/test';
 import { expect, test } from './fixtures';
-import { runBulkScan, useTheme } from './helpers';
+import { migrateLegacyBrowserData, runBulkScan, useTheme } from './helpers';
 
 const WCAG_TAGS = ['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa'];
 const REQUIRED_MANUAL_RULES = new Set([
@@ -21,6 +21,7 @@ const REVIEWED_INCOMPLETE_RULES_BY_STATE: Readonly<Record<string, readonly strin
   'public-request-policy-dark-mobile': ['color-contrast'],
   'console-initial-light-desktop': ['color-contrast'],
   'console-brands-initial-light-desktop': ['color-contrast'],
+  'console-brand-assets-dark-mobile': ['color-contrast'],
   'console-discover-initial-light-desktop': ['color-contrast'],
   'console-monitor-initial-light-desktop': ['color-contrast'],
   'console-drawer-dark-mobile': ['color-contrast', 'skip-link'],
@@ -256,6 +257,40 @@ test('scans authenticated desktop and expanded mobile drawer states', async ({ p
 
   await useTheme(page, 'dark');
   await page.setViewportSize({ width: 390, height: 844 });
+  await migrateLegacyBrowserData(page, {
+    'whois-rdap-brand-profiles-v1': {
+      schema: 'whoisleuth.brand-profiles',
+      version: 6,
+      exportedAt: '2026-08-13T00:00:00.000Z',
+      profiles: [{
+        id: 'accessibility-asset-profile',
+        name: 'Accessibility asset profile',
+        officialDomains: ['official.example'],
+        productNames: [],
+        tlds: ['example'],
+        approvedPartnerDomains: [],
+        allowlistedDomains: [],
+        allowlistedRegistrars: [],
+        dkimSelectors: [],
+        retiredDkimSelectors: [],
+        mailProtectionProfile: 'standard',
+        protectionAttestations: [],
+        desiredPostureBaselines: [],
+        trademarkOwner: '',
+        trademarkRegistration: '',
+        officialFaviconHash: '',
+        officialFaviconPHash: '',
+        pageBaseline: null,
+        createdAt: '2026-08-13T00:00:00.000Z',
+        updatedAt: '2026-08-13T00:00:00.000Z',
+      }],
+    },
+    'whois-rdap-active-brand-profile-v1': 'accessibility-asset-profile',
+  }, { destination: '/brands?view=assets' });
+  await expect(page.getByRole('region', { name: 'Brand asset register' })).toBeVisible();
+  await expectNoAccessibilityViolations(page, testInfo, 'console-brand-assets-dark-mobile');
+  await expectSequentialHeadingOrder(page, 'console brand assets');
+
   await page.goto('/lookup');
   await expect(page.getByRole('heading', { name: 'Lookup', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Toggle navigation' }).click();

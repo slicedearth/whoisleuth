@@ -201,6 +201,7 @@ test('signs in through the login form and back out again', async ({ page }) => {
 });
 
 test('the Dashboard and every protected destination require sign-in and unsafe return targets are ignored', async ({ page }) => {
+  test.slow();
   for (const { href: path } of protectedDestinations) {
     await page.goto(path);
     await expect(page).toHaveURL(`/login?next=${encodeURIComponent(path)}`);

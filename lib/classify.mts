@@ -15,6 +15,7 @@
 // callers can look up the latter while still showing the user what they typed.
 
 import { isIP } from 'node:net';
+import { domainToASCII } from 'node:url';
 import { parse } from 'tldts';
 
 type ClassifiedQueryBase = {
@@ -53,6 +54,9 @@ const CONTROL_CHAR_RE = /[\x00-\x1f\x7f]/;
 // 32-bit ASN ceiling (RFC 6793 four-octet ASNs). AS0 and AS4294967295 are
 // reserved but syntactically valid; anything above is not an ASN at all.
 const MAX_ASN = 4294967295;
+const MAX_DIRECT_LOOKUP_TARGET_LENGTH = 1024;
+const DIRECT_LOOKUP_RESERVED_SUFFIXES = new Set(['example', 'test']);
+const DIRECT_LOOKUP_EXCLUDED_PUBLIC_SUFFIXES = new Set(['onion']);
 
 // A registrable-domain label: LDH (letter/digit/hyphen), 1-63 characters, no
 // leading or trailing hyphen. tldts already rejects empty labels, over-long
@@ -62,6 +66,51 @@ const MAX_ASN = 4294967295;
 // checkable in one place.
 function isValidRegistrableLabel(label: string): boolean {
   return /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i.test(label);
+}
+
+// Direct CLI shorthand is deliberately narrower than normal query
+// classification. classifyQuery() accepts pasted URLs and other convenient
+// input forms after normalisation, while a value occupying command position
+// must be unambiguously a target before it may select the networked Lookup
+// command. This predicate therefore accepts only a complete hostname, literal
+// IP address, or bounded ASN and never attempts to repair URL-like input.
+function isDirectLookupTarget(raw: unknown): boolean {
+  if (typeof raw !== 'string'
+    || !raw
+    || raw.length > MAX_DIRECT_LOOKUP_TARGET_LENGTH
+    || raw.startsWith('-')
+    || raw.trim() !== raw
+    || /\s/u.test(raw)
+    || CONTROL_CHAR_RE.test(raw)) {
+    return false;
+  }
+
+  if (isIP(raw) !== 0) return !raw.includes('%') && !raw.startsWith('[');
+
+  const asnMatch = raw.match(/^(?:AS)?(\d+)$/i);
+  if (asnMatch) {
+    const number = Number(asnMatch[1]);
+    return Number.isInteger(number) && number >= 0 && number <= MAX_ASN;
+  }
+
+  if (/[\\/@:?#%\[\]]/u.test(raw) || raw.endsWith('..')) return false;
+  const hostname = raw.endsWith('.') ? raw.slice(0, -1) : raw;
+  if (!hostname.includes('.')) return false;
+  const ascii = domainToASCII(hostname).toLowerCase();
+  if (!ascii || ascii.length > 253 || !ascii.split('.').every(isValidRegistrableLabel)) return false;
+
+  const parsed = parse(ascii);
+  const publicSuffix = parsed.publicSuffix || '';
+  if (DIRECT_LOOKUP_EXCLUDED_PUBLIC_SUFFIXES.has(publicSuffix)
+    || publicSuffix === 'arpa'
+    || publicSuffix.endsWith('.arpa')) return false;
+  if (parsed.isIcann !== true && !DIRECT_LOOKUP_RESERVED_SUFFIXES.has(publicSuffix)) return false;
+
+  try {
+    return classifyQuery(raw).type === 'domain';
+  } catch {
+    return false;
+  }
 }
 
 function classifyQuery(raw: string): ClassifiedQuery {
@@ -125,5 +174,5 @@ function classifyQuery(raw: string): ClassifiedQuery {
   };
 }
 
-export { classifyQuery, MAX_ASN };
+export { classifyQuery, isDirectLookupTarget, MAX_ASN };
 export type { AsnQuery, ClassifiedQuery, ClassifiedQueryBase, DomainQuery, IpQuery };

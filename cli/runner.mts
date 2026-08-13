@@ -135,6 +135,12 @@ import { readCliTextInput } from './input.mts';
 import { evaluateCliFailPolicies, formatFailPolicyNotice } from './fail-policy.mts';
 import { formatCliJunit } from './ci-report.mts';
 import { createBufferedOutput, writePrivateFile } from './output-file.mts';
+import {
+  canLaunchInteractiveCli,
+  launchInteractiveCli,
+  type InteractiveLauncherInput,
+  type InteractiveLauncherOutput,
+} from './interactive-launcher.mts';
 import { createTerminalProgress, type TerminalProgress } from './progress.mts';
 import type { CliProgressEvents } from './progress-events.mts';
 import { buildRegistrySupportDocument } from './registry-support.mts';
@@ -176,6 +182,7 @@ import {
   presentTerminalOutput,
   terminalPresentation,
   type TerminalEnvironment,
+  type TerminalPalette,
 } from './terminal-presentation.mts';
 import type { CliCommandContext, CliDependencies, WritableLike } from './runner-types.mts';
 
@@ -207,11 +214,15 @@ function formatForTerminal(
   stream: WritableLike,
   color: boolean,
   environment: TerminalEnvironment,
+  palette: TerminalPalette,
 ): string {
-  return presentTerminalOutput(value, terminalPresentation(stream, color, environment));
+  return presentTerminalOutput(value, terminalPresentation(stream, color, environment, palette));
 }
 
 function isCancellation(error: unknown, signal?: AbortSignal): boolean {
+  if (error instanceof AggregateError) {
+    return error.errors.length > 0 && error.errors.every((item) => isCancellation(item));
+  }
   return signal?.aborted === true
     || Boolean(error && typeof error === 'object' && 'name' in error && error.name === 'AbortError');
 }
@@ -232,7 +243,8 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
   const eventProgress: { current: CliProgressEvents | null } = { current: null };
   let failureLabel = 'Lookup';
   try {
-    const terminal = (value: string, color = true) => formatForTerminal(value, stdout, color, environment);
+    const palette = args.palette || 'auto';
+    const terminal = (value: string, color = true) => formatForTerminal(value, stdout, color, environment, palette);
     const beginProgress = (message: string): TerminalProgress => {
       const terminalOutput = 'output' in args
         && args.output === 'terminal'
@@ -244,6 +256,7 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
         enabled,
         color: terminalOutput ? args.color : false,
         environment,
+        palette,
         ...(dependencies.nowMs ? { now: dependencies.nowMs } : {}),
       });
       progress.start(message);
@@ -421,7 +434,7 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
         version: VERSION,
         generatedAt: dependencies.now ? dependencies.now() : new Date().toISOString(),
         network: args.network,
-        presentation: terminalPresentation(stdout, args.color, environment),
+        presentation: terminalPresentation(stdout, args.color, environment, palette),
         ...(dependencies.resolvePublicAddresses ? { resolveAddresses: dependencies.resolvePublicAddresses } : {}),
         ...(dependencies.safeFetch ? { fetchHttps: dependencies.safeFetch } : {}),
         ...(dependencies.whoisQuery ? { queryWhois: dependencies.whoisQuery } : {}),
@@ -1226,7 +1239,38 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
 }
 
 async function runCli(argv: unknown, dependencies: CliDependencies = {}): Promise<number> {
+  const stdout = dependencies.stdout || process.stdout;
   const stderr = dependencies.stderr || process.stderr;
+  const environment = dependencies.environment || process.env;
+  if (Array.isArray(argv) && argv.length === 0) {
+    const input = (dependencies.stdin || process.stdin) as InteractiveLauncherInput;
+    const output = stdout as InteractiveLauncherOutput;
+    const supportsInteractiveLaunch = dependencies.canLaunchInteractiveCli || canLaunchInteractiveCli;
+    if (supportsInteractiveLaunch(input, output, environment)) {
+      const launch = dependencies.launchInteractiveCli || launchInteractiveCli;
+      try {
+        const launchedArgv = await launch({
+          input,
+          output,
+          environment,
+          ...(dependencies.signal ? { signal: dependencies.signal } : {}),
+        });
+        if (launchedArgv === null) return EXIT_CODES.SUCCESS;
+        argv = launchedArgv;
+      } catch (error) {
+        if (isCancellation(error, dependencies.signal)) {
+          write(stderr, 'Cancelled by analyst.\n');
+          return EXIT_CODES.CANCELLED;
+        }
+        if (error instanceof CliUsageError) {
+          write(stderr, `Usage error: ${boundedCliErrorMessage(error, 'Invalid interactive selection')}\n`);
+          return EXIT_CODES.USAGE;
+        }
+        write(stderr, `CLI startup failed: ${boundedCliErrorMessage(error, 'Interactive launch failed')}\n`);
+        return EXIT_CODES.INTERNAL_ERROR;
+      }
+    }
+  }
   let args: CliArguments;
   try {
     args = parseCliArguments(argv);

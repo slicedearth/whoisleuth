@@ -710,16 +710,34 @@ vulnerability verdicts and do not contribute to Risk scoring. A response can
 still establish web-service activity when its body is unavailable for HTML
 inspection.
 
+The selected response can also carry nested `deliveryMetadata` version 1.
+This reduces Content-Encoding, Cache-Control, Age, ETag, Last-Modified, and
+Expires to fixed states, allowlisted tokens, bounded seconds, and
+presence/validity markers. Raw header and validator values are discarded, and
+no compression ratio is derived. These point-in-time declarations do not prove
+cache storage, transfer savings, delivery-provider identity, performance,
+privacy, or safety.
+
+Eligible captured HTML can carry nested `pageIdentity.publicationMetadata`
+version 1. One bounded tokenizer pass retains only fixed robots and Twitter
+Card declaration classes, heading counts, image alternative-text categories,
+and conservative explicit-head static blocking candidates. Raw declarations,
+titles, handles, URLs, image text, and resource paths are discarded. Partial
+captures remain partial; these observations are not indexing, accessibility,
+performance, identity, ownership, safety, or maliciousness conclusions.
+
 ## Evidence export and privacy boundary
 
-Lookup evidence uses schema `whoisleuth.lookup-evidence`, current version `26`. It
+Lookup evidence uses schema `whoisleuth.lookup-evidence`, current version `27`. It
 contains query context, explicitly projected diagnostics, normalised sources,
 a bounded privacy-projected registry RDAP publication, bounded WHOIS
 referral-hop metadata without response bodies,
 availability analysis, and the source-health-aware
 registry comparison. The recursive portable projection removes request and
 response headers, cookies, session and credential fields, URL credentials,
-queries, and fragments from retained nested values. Version 26 binds RDAP,
+queries, and fragments from retained nested values. Version 27 can retain the
+bounded publication and delivery/cache metadata described above when it was
+present in an eligible full Deep Lookup. Version 26 binds RDAP,
 WHOIS, network-registration, and reverse-DNS publications to their retained
 source states and shares the browser replay limits of 5 MiB,
 20,000 structured entries, 10,000 array items, and 24 nested levels with the
@@ -782,7 +800,7 @@ Unicode table is not part of the runtime bundle. Mapping changes can alter
 which domains share a visual skeleton, so exported analyses must retain the
 mapping version when present.
 
-The local CLI `export` command can convert one bounded version-1
+The local CLI `export` command can convert one bounded version-1 or version-2
 `whoisleuth.cli.lookup` domain document into the same evidence schema without
 making another request. CLI conversion retains the source material already in
 that saved document but cannot add browser-only profile context, so its optional
@@ -805,7 +823,7 @@ network registration and bounded reverse-DNS context when collected. ASN
 reports present normalised routing registration fields without inventing
 reverse-DNS evidence. The separate JSON action retains the richer schema
 contract described above.
-When schema-version 17 through 26 JSON retains a supported version-5, version-6, or version-7
+When schema-version 17 through 27 JSON retains a supported version-5, version-6, or version-7
 `diagnostics.registryAccess` object, both readable formats include its bounded
 suffix, WHOIS and RDAP access profiles, and limitation in collection
 diagnostics. This remains collection context only and cannot decide
@@ -813,7 +831,7 @@ registration, availability, ownership, safety, or maliciousness. The readable
 formats also include the bounded observed network registration and its
 origin-host limitation when that source is present.
 
-Schema versions 17 through 26 can also retain the bounded normalised security.txt source
+Schema versions 17 through 27 can also retain the bounded normalised security.txt source
 from an explicitly requested deep Lookup. It excludes the response body and
 does not make publication an authorisation, availability, or Risk signal.
 

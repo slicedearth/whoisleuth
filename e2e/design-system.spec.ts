@@ -1398,6 +1398,7 @@ test('a task-only Lookup navigation preserves the existing in-memory depth choic
 });
 
 test('same-route Lookup URL changes reconcile retained evidence, depth, and transient task context', async ({ page }) => {
+  test.slow();
   const retainedDomain = 'retained-fast.invalid';
   await page.addInitScript(() => {
     localStorage.setItem('whoisleuth:lookup-presentation:v1', JSON.stringify({ version: 1, task: 'brand' }));

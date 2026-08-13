@@ -2,6 +2,10 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import * as evidence from '../frontend/src/lib/analysis/evidence-export.ts';
 import { arrayValue, recordValue, requiredValue } from './value-assertions.mts';
+import {
+  httpDeliveryMetadataFixture,
+  pagePublicationMetadataFixture,
+} from './homepage-metadata-fixtures.mts';
 
 function fixtureResponse(): Record<string, unknown> {
   return {
@@ -342,6 +346,8 @@ describe('lookup evidence export', () => {
     injectedHttpResponse.passwordValue = 'private-password-value';
     injectedHttpResponse.xApiKey = 'composite-private';
     injectedHttpResponse.unknownExtension = 'unreviewed-extension';
+    injectedHttpResponse.deliveryMetadata = httpDeliveryMetadataFixture();
+    recordValue(injectedAvailability.pageIdentity).publicationMetadata = pagePublicationMetadataFixture();
     recordValue(injectedAvailability.credentialSurfaceProfile).credentialSurfaceSecret = 'private-credential';
     recordValue(injectedAvailability.technologyProfile).credentials = { secret: 'fixture-secret-marker' };
     response.threatIntelligence = {
@@ -406,7 +412,7 @@ describe('lookup evidence export', () => {
     const registryInsights = requiredValue(result.analysis.registryInsights);
 
     assert.equal(result.schema, 'whoisleuth.lookup-evidence');
-    assert.equal(result.schemaVersion, 26);
+    assert.equal(result.schemaVersion, evidence.LOOKUP_EVIDENCE_SCHEMA_VERSION);
     assert.equal(result.query.submitted, 'login.example.com');
     assert.equal(result.query.registrableDomain, 'example.com');
     assert.equal(rdapDiagnostics.status, 'success');
@@ -507,6 +513,8 @@ describe('lookup evidence export', () => {
     assert.equal(registrarComparison.fields.some((field) => field.label === 'Registry object ID'), false);
     assert.equal(JSON.stringify(result).includes('REGISTRAR-OBJECT'), false);
     assert.equal(JSON.stringify(result).includes('private-nested@example.test'), false);
+    assert.deepEqual(recordValue(pageIdentity.publicationMetadata), pagePublicationMetadataFixture());
+    assert.deepEqual(recordValue(httpResponse.deliveryMetadata), httpDeliveryMetadataFixture());
     assert.equal(result.generatedAt, '2026-07-11T02:00:00.000Z');
   });
 
@@ -524,7 +532,7 @@ describe('lookup evidence export', () => {
       },
     });
 
-    assert.equal(result.schemaVersion, 26);
+    assert.equal(result.schemaVersion, evidence.LOOKUP_EVIDENCE_SCHEMA_VERSION);
     const idn = recordValue(result.analysis.idn);
     assert.equal(idn.version, 1);
     assert.equal(idn.unicodeDomain, 'éxample.test');
@@ -725,6 +733,35 @@ describe('lookup evidence export', () => {
     delete response.securityTxt;
     const result = evidence.buildLookupEvidence(response);
     assert.equal(result.sources.securityTxt, null);
+  });
+
+  test('rejects current homepage metadata that contradicts its parent source state', () => {
+    for (const family of ['page', 'http'] as const) {
+      const withoutChild = fixtureResponse();
+      const withoutAvailability = recordValue(withoutChild.availability);
+      if (family === 'page') {
+        recordValue(withoutAvailability.pageIdentity).status = 'error';
+      } else {
+        recordValue(withoutAvailability.http).status = 'error';
+      }
+      assert.doesNotThrow(() => evidence.buildLookupEvidence(withoutChild));
+
+      const response = fixtureResponse();
+      const availability = recordValue(response.availability);
+      if (family === 'page') {
+        const page = recordValue(availability.pageIdentity);
+        page.status = 'error';
+        page.publicationMetadata = pagePublicationMetadataFixture();
+      } else {
+        const http = recordValue(availability.http);
+        http.status = 'error';
+        recordValue(http.response).deliveryMetadata = httpDeliveryMetadataFixture();
+      }
+      assert.throws(
+        () => evidence.buildLookupEvidence(response),
+        /invalid (?:page publication|HTTP delivery) metadata/iu,
+      );
+    }
   });
 
   test('bounds malformed imported lookup structures at the export boundary', () => {

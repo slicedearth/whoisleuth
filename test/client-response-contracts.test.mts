@@ -9,6 +9,7 @@ import {
   parseAvailabilityCaptureResponse,
   parseDomainPostureHttpResponse,
 } from '../frontend/src/lib/analysis/client-response-contracts.ts';
+import { pagePublicationMetadataFixture } from './homepage-metadata-fixtures.mts';
 
 const CHECKED_AT = '2026-07-27T00:00:00.000Z';
 
@@ -85,6 +86,7 @@ describe('official-site capture response contract', () => {
         status: 'success',
         observedAt: CHECKED_AT,
         fingerprints: { fingerprintVersion: 1 },
+        publicationMetadata: pagePublicationMetadataFixture(),
       },
     });
     const parsed = parseAvailabilityCaptureResponse(raw, 'example.test');
@@ -123,6 +125,16 @@ describe('official-site capture response contract', () => {
           status: 'success',
           observedAt: CHECKED_AT,
           fingerprints: { fingerprintVersion: 2 },
+        },
+      }),
+      availability({
+        pageIdentity: {
+          identityVersion: 3,
+          source: 'html',
+          status: 'success',
+          observedAt: CHECKED_AT,
+          fingerprints: { fingerprintVersion: 1 },
+          publicationMetadata: { ...pagePublicationMetadataFixture(), version: 2 },
         },
       }),
       availability({ faviconHash: 'not-a-hash' }),

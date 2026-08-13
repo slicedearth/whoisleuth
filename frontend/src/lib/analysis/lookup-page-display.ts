@@ -13,9 +13,11 @@ import {
   type JsonRecord,
 } from './lookup-display-shared.ts';
 import { MAX_SECURITY_POSTURE_FINDINGS } from '../../../../lib/website-security-posture.mts';
+import { publicationMetadataDisplay } from './lookup-homepage-metadata-display.ts';
 
 export function buildLookupPageDisplay(input: {
   pageIdentity: JsonRecord;
+  pagePublicationMetadata?: JsonRecord;
   pageCanonical: JsonRecord;
   pageMetaRefresh: JsonRecord;
   pageOpenGraph: JsonRecord;
@@ -40,6 +42,7 @@ export function buildLookupPageDisplay(input: {
 }) {
   const {
     pageIdentity,
+    pagePublicationMetadata = {},
     pageCanonical,
     pageMetaRefresh,
     pageOpenGraph,
@@ -180,6 +183,9 @@ export function buildLookupPageDisplay(input: {
     }));
 
   return {
+    pagePublicationMetadata: publicationMetadataDisplay(
+      Object.keys(pagePublicationMetadata).length ? pagePublicationMetadata : null,
+    ),
     pageIdentityFacts: [
       { label: 'Document language', value: show(pageIdentity.documentLanguage) },
       { label: 'Canonical URL', value: show(pageCanonical.url) },

@@ -22,6 +22,7 @@ import {
   MAX_LOOKUP_TLS_NAME_VALUES,
 } from '../../../../lib/lookup-network-evidence-bounds.mts';
 import { MAX_OBSERVATION_DIAGNOSTICS } from '../../../../lib/observation.mts';
+import { deliveryMetadataDisplay } from './lookup-homepage-metadata-display.ts';
 
 function httpsServiceBindingValue(value: unknown): string {
   const record = rec(value);
@@ -126,6 +127,7 @@ export function buildLookupNetworkDisplay(input: {
   httpEvidence: JsonRecord;
   httpResponse: JsonRecord;
   httpSecurityHeaders: JsonRecord;
+  httpDeliveryMetadata?: JsonRecord;
   tlsEvidence: JsonRecord;
   tlsCertificate: JsonRecord;
   tlsSubject: JsonRecord;
@@ -147,6 +149,7 @@ export function buildLookupNetworkDisplay(input: {
     httpEvidence,
     httpResponse,
     httpSecurityHeaders,
+    httpDeliveryMetadata = {},
     tlsEvidence,
     tlsCertificate,
     tlsSubject,
@@ -516,6 +519,9 @@ export function buildLookupNetworkDisplay(input: {
         : [];
     })(),
     httpMetadata,
+    httpDeliveryMetadata: deliveryMetadataDisplay(
+      Object.keys(httpDeliveryMetadata).length ? httpDeliveryMetadata : null,
+    ),
     tlsRows: [
       { label: 'Connected address', value: show(tlsEvidence.connectedAddress) },
       { label: 'SNI hostname', value: show(tlsEvidence.sniHost) },

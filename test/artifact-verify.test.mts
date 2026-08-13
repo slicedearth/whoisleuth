@@ -38,6 +38,12 @@ import {
 import { buildDomainControlManifest, DOMAIN_CONTROL_MANIFEST_INPUT_SCHEMA } from '../lib/domain-control-manifest.mts';
 import { historicalCasePackFixture } from './historical-case-pack-fixtures.mts';
 import { loadLookupEvidenceV25CompatibilityFixtures } from './lookup-evidence-v25-fixtures.mts';
+import { loadLookupEvidenceV26Fixture } from './lookup-evidence-v26-fixture.mts';
+import { loadCliLookupV1Fixture } from './cli-lookup-v1-fixture.mts';
+import {
+  httpDeliveryMetadataFixture,
+  pagePublicationMetadataFixture,
+} from './homepage-metadata-fixtures.mts';
 
 const PASSPHRASE = 'fixture archive passphrase';
 const LOOKUP_EVIDENCE_V25_FIXTURE_SHA256 = '4ad2d13417fbfe24f9dff51d5baf77ca82a0f7c1a68c76e4c7bbdea18d055fcd';
@@ -372,6 +378,11 @@ describe('offline artifact verifier', () => {
     assert.equal(report.checks.contentIntegrity, 'not_checked');
     assert.match(report.limitations[0] || '', /no embedded checksum or signature/u);
 
+    const frozenLegacy = await verifyOfflineArtifact(await loadCliLookupV1Fixture());
+    assert.equal(frozenLegacy.artifact.version, 1);
+    const current = await verifyOfflineArtifact(JSON.stringify({ ...lookup, version: 2 }));
+    assert.equal(current.artifact.version, 2);
+
     const strictCode = await runCli(['verify-artifact', '--json', '--strict-exit'], {
       stdout: { write() {} }, stderr: { write() {} },
       readArtifactInput: async () => JSON.stringify(lookup),
@@ -416,6 +427,55 @@ describe('offline artifact verifier', () => {
       version: lookupEvidenceModule.LEGACY_LOOKUP_EVIDENCE_SCHEMA_VERSION,
     });
     assert.equal(report.state, 'structure_valid');
+  });
+
+  test('keeps one frozen strict schema-26 Lookup export readable after schema 27 becomes current', async () => {
+    const report = await verifyOfflineArtifact(await loadLookupEvidenceV26Fixture());
+    assert.deepEqual(report.artifact, {
+      kind: 'lookup_evidence',
+      schema: lookupEvidenceModule.LOOKUP_EVIDENCE_SCHEMA,
+      version: lookupEvidenceModule.PREVIOUS_LOOKUP_EVIDENCE_SCHEMA_VERSION,
+    });
+    assert.equal(report.state, 'structure_valid');
+  });
+
+  test('accepts exact schema-27 homepage metadata while rejecting malformed and legacy epoch injection', async () => {
+    const current = lookupEvidenceArtifact();
+    const availability = (current.analysis as Record<string, Record<string, unknown>>).availability!;
+    availability.pageIdentity = { status: 'success', publicationMetadata: pagePublicationMetadataFixture() };
+    availability.http = { status: 'success', response: { deliveryMetadata: httpDeliveryMetadataFixture() } };
+    const report = await verifyOfflineArtifact(JSON.stringify(current));
+    assert.equal(report.artifact.version, lookupEvidenceModule.LOOKUP_EVIDENCE_SCHEMA_VERSION);
+
+    const malformed = structuredClone(current);
+    const malformedAvailability = (malformed.analysis as Record<string, Record<string, unknown>>).availability!;
+    (((malformedAvailability.http as Record<string, unknown>).response as Record<string, unknown>).deliveryMetadata as Record<string, unknown>).version = 2;
+    await assert.rejects(
+      verifyOfflineArtifact(JSON.stringify(malformed)),
+      /Lookup evidence HTTP delivery metadata.*malformed structure/iu,
+    );
+
+    for (const family of ['page', 'http'] as const) {
+      const unavailableParent = structuredClone(current);
+      const unavailableAvailability = (unavailableParent.analysis as Record<string, Record<string, unknown>>).availability!;
+      if (family === 'page') {
+        (unavailableAvailability.pageIdentity as Record<string, unknown>).status = 'error';
+      } else {
+        (unavailableAvailability.http as Record<string, unknown>).status = 'error';
+      }
+      await assert.rejects(
+        verifyOfflineArtifact(JSON.stringify(unavailableParent)),
+        /(?:page publication|HTTP delivery) metadata source state/iu,
+      );
+    }
+
+    const legacy = JSON.parse(await loadLookupEvidenceV26Fixture()) as Record<string, unknown>;
+    const legacyAvailability = (legacy.analysis as Record<string, Record<string, unknown>>).availability!;
+    legacyAvailability.pageIdentity = { publicationMetadata: pagePublicationMetadataFixture() };
+    await assert.rejects(
+      verifyOfflineArtifact(JSON.stringify(legacy)),
+      /Lookup evidence homepage metadata epoch.*malformed structure/iu,
+    );
   });
 
   test('verifies authentic frozen schema-25 Fast, unavailable, error, and not-found wrapper states', async () => {

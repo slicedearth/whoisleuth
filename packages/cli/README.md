@@ -46,9 +46,12 @@ WHOISleuth does not require them.
 Contributors can run the same source command without installing the package:
 
 ```bash
+node bin/whoisleuth.mts
 node bin/whoisleuth.mts --help
+node bin/whoisleuth.mts example.test --plan --json
 node bin/whoisleuth.mts lookup example.test
 node bin/whoisleuth.mts lookup example.test --deep --summary
+node bin/whoisleuth.mts lookup example.test --deep --browse --palette dark --save-lookup lookup.json
 node bin/whoisleuth.mts lookup example.test --deep --plan --json
 node bin/whoisleuth.mts lookup example.test --deep --observer workstation-a --vantage office-egress --json
 node bin/whoisleuth.mts lookup example.test --deep --markdown --output lookup.md
@@ -83,10 +86,25 @@ node bin/whoisleuth.mts completion powershell
 node bin/whoisleuth.mts manual | man -l -
 ```
 
+An ICANN-recognised public domain, reserved documentation domain, IP address,
+or ASN may occupy command position as shorthand for `lookup`. It uses the same
+conservative fast default and options. URL-like
+or ambiguous inputs require the explicit command. Public-domain shorthand uses
+ICANN-recognised suffixes plus reserved `.test` and `.example` documentation
+suffixes. The `.onion` namespace, the `.arpa` infrastructure tree, and other
+non-ICANN suffixes remain excluded; unknown command names remain usage errors.
+
 Fast lookup is the default. Deep collection must be requested explicitly and
 can disclose the target to additional authoritative or first-party network
 sources. Missing, partial, rate-limited, and unsupported sources remain
 explicit and are never interpreted as evidence of safety or absence.
+Full Deep domain results can derive fixed homepage publication and
+selected-response delivery/cache summaries from the same bounded request. The
+CLI omits raw declaration and header values, makes no additional request for
+the summaries, and does not treat them as indexing, accessibility,
+performance, identity, cache-effectiveness, privacy, safety, or maliciousness
+verdicts. Current saved Lookup output is version 2; bounded version-1 documents
+remain readable without inventing the newer fields. HTTP output is version 3.
 `lookup --plan` classifies a target and explains the selected source families
 and disclosures without making a network request. `commands --json` exposes the
 installed command contracts for local wrappers without running collection.
@@ -113,7 +131,20 @@ defines the supported defensive use of those capabilities.
 Interactive output uses restrained semantic colour, width-aware wrapping, and
 stderr-only progress for slower collection. Redirected and machine-readable
 output stays free of ANSI and progress text. Lookup also provides `--summary`
-and `--verbose` terminal views without changing what is collected. `doctor` is
+and `--verbose` terminal views plus an explicit `--browse` panel navigator
+without changing what is collected or making a second request. With no
+arguments, a capable interactive terminal opens a bounded launcher; redirected
+or unsupported terminals print help, and no request begins until the displayed
+plan is confirmed. The browser opens before collection, shows aggregate Fast or
+independently settled planned Deep progress, supports `?` help and `/` search
+over rendered panel text only, and restores the terminal when it closes.
+`--palette auto|light|dark` selects a fixed semantic palette without probing the
+terminal background. `--save-lookup <file>` writes the exact completed private
+JSON only after normal browser close, refuses existing paths, and can retain
+normalized evidence not shown in panels.
+Lookup terminal views use allowlisted bounded registration, page, certificate,
+and endpoint-network summaries; they do not print raw responses, contacts,
+page paths or queries, script contents, certificate bytes, or route values. `doctor` is
 offline unless `--network` is explicitly supplied, and completion scripts are
 printed without modifying shell configuration. Commands can use atomic private
 `--output` files, Lookup can emit strict automation exits and target-free
@@ -155,14 +186,15 @@ byte identity from canonical-only or mismatched identity. `brief` and
 `case-pack` create bounded local handoffs, `monitor-once` runs one explicit
 control review rather than a daemon, and `workflow-run` executes only installed
 fixed-recipe steps with per-run network approval and analyst-selection pauses.
-The current schema-26 JSON produced by `export` is accepted directly by
+The current schema-27 JSON produced by `export` is accepted directly by
 `verify-artifact` and reported as `structure_valid`. It has no embedded checksum
 or signature, so exact retained bytes require a verified investigation manifest
 entry. The export can contain a bounded privacy-projected registry RDAP
 publication, normalised WHOIS values, and bounded contacts and should be
 reviewed before sharing. Request and response headers, cookies, session and
 credential fields, and credential-bearing or query-bearing URLs are excluded.
-Schema 25 remains readable through its historical wrapper contract: retained
+Schema 26 remains readable with its strict source/publication binding and
+portable limits. Schema 25 remains readable through its historical wrapper contract: retained
 diagnostics are authoritative, unavailable wrapper data is suppressed during
 replay, and other contradictions fail closed. Verification and browser replay share a 5 MiB,
 20,000-entry, 24-level portable boundary.
