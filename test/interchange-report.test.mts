@@ -120,6 +120,13 @@ async function historicalInternalCasePackWithScalarProjection() {
 }
 
 describe('interchange fidelity report', () => {
+  test('requires an explicit zone for current report production', async () => {
+    await assert.rejects(
+      () => buildInterchangeFidelityReport('{}', { generatedAt: '2026-08-07T00:00:00' }),
+      /time is invalid/u,
+    );
+  });
+
   test('rejects duplicate keys and bounded traversal before assigning interchange assurance', async () => {
     const inputs = [
       '{"schema":"whoisleuth.brand-profiles","version":2,"version":6,"exportedAt":"2026-08-07T00:00:00.000Z","profiles":[]}',
@@ -242,6 +249,21 @@ describe('interchange fidelity report', () => {
     }), { generatedAt: NOW });
     assert.equal(profilePrior.artifact.versionSupported, true);
     assert.equal(profilePrior.compatibility.fidelity, 'normalised_merge');
+
+    const profileLegacyZoneLess = await buildInterchangeFidelityReport(JSON.stringify({
+      schema: 'whoisleuth.brand-profiles', version: 5, exportedAt: '2026-08-07T12:00:00', profiles: [],
+    }), { generatedAt: NOW });
+    assert.equal(profileLegacyZoneLess.verification.state, 'structure_valid');
+
+    const profileCurrentZoneLess = await buildInterchangeFidelityReport(JSON.stringify({
+      schema: 'whoisleuth.brand-profiles', version: 6, exportedAt: '2026-08-07T12:00:00', profiles: [],
+    }), { generatedAt: NOW });
+    assert.equal(profileCurrentZoneLess.verification.state, 'not_verified');
+
+    const profileCurrentOffset = await buildInterchangeFidelityReport(JSON.stringify({
+      schema: 'whoisleuth.brand-profiles', version: 6, exportedAt: '2026-08-07T12:00:00+01:00', profiles: [],
+    }), { generatedAt: NOW });
+    assert.equal(profileCurrentOffset.verification.state, 'structure_valid');
 
     const workspace = await buildWorkspaceArchive({}, { generatedAt: NOW });
     const workspaceReport = await buildInterchangeFidelityReport(JSON.stringify(workspace), { generatedAt: NOW });

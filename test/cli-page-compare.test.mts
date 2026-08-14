@@ -71,7 +71,7 @@ describe('offline static page comparison', () => {
       ISO,
     );
     assert.equal(document.schema, 'whoisleuth.cli.page-compare');
-    assert.equal(document.version, 3);
+    assert.equal(document.version, 4);
     assert.equal(document.page.components.find((component) => component.id === 'favicon')?.outcome, 'Perceptually similar');
     assert.equal(document.technology.state, 'equal');
     assert.equal(document.tls.issuer.state, 'equal');
@@ -103,6 +103,20 @@ describe('offline static page comparison', () => {
     assert.equal(document.technology.state, 'partial');
     assert.equal(document.technology.partial, true);
     assert.match(formatCliPageComparison(document), /equality and disjointness withheld/u);
+  });
+
+  test('withholds TLS equality and difference when either retained TLS source is partial', () => {
+    const partial = JSON.parse(savedLookup('left.example'));
+    partial.availability.tls.status = 'partial';
+    const different = JSON.parse(savedLookup('right.example'));
+    different.availability.tls.certificate.issuer.commonNames = ['Different CA'];
+    different.availability.tls.certificate.publicKey.fingerprintSha256 = '9'.repeat(64);
+
+    const document = buildCliPageComparison(JSON.stringify(partial), JSON.stringify(different), ISO);
+    assert.equal(document.tls.issuer.state, 'partial');
+    assert.equal(document.tls.publicKey.state, 'partial');
+    assert.match(formatCliPageComparison(document), /Issuer\s+partial/u);
+    assert.match(formatCliPageComparison(document), /Public key\s+partial/u);
   });
 
   test('routes saved inputs through the CLI without making a lookup request', async () => {

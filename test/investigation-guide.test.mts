@@ -155,6 +155,27 @@ test('rejects malformed and future records without treating them as an empty rec
   }]) assert.equal(parseInvestigationGuide(value), null);
 });
 
+test('requires explicit zones for current guides and migrates legacy guide instants as UTC', () => {
+  const current = createInvestigationGuide('example.test', 'new_domain_triage', STARTED_AT);
+  assert.ok(current);
+  const zoneLess = '2026-01-15T12:00:00.000';
+  assert.equal(parseInvestigationGuide({ ...current, createdAt: zoneLess, updatedAt: zoneLess }), null);
+  const legacy = parseInvestigationGuide({
+    ...current,
+    version: 4,
+    createdAt: zoneLess,
+    updatedAt: zoneLess,
+    stages: current.stages.map((stage) => ({ ...stage, updatedAt: zoneLess })),
+  });
+  assert.equal(legacy?.createdAt, '2026-01-15T12:00:00.000Z');
+  assert.ok(legacy?.stages.every((stage) => stage.updatedAt === '2026-01-15T12:00:00.000Z'));
+  assert.equal(parseInvestigationGuide({
+    ...current,
+    createdAt: '2026-01-15T12:00:00.000+01:00',
+    updatedAt: '2026-01-15T12:00:00.000+01:00',
+  })?.createdAt, '2026-01-15T11:00:00.000Z');
+});
+
 test('does not reinterpret response recipe identifiers under pre-response guide versions', () => {
   const current = createInvestigationGuide('review.example', 'mail_abuse_response', STARTED_AT);
   assert.ok(current);

@@ -25,6 +25,7 @@ import {
   type OfflineArtifactVerificationState,
 } from './artifact-verify.mts';
 import { parseBoundedJsonObject } from './bounded-json.mts';
+import { normalizeExplicitIsoTimestamp } from '../lib/observation.mts';
 
 export const SIGNED_EVIDENCE_PACKAGE_SCHEMA = 'whoisleuth.signed-evidence-package';
 export const SIGNED_EVIDENCE_PACKAGE_VERSION = 2;
@@ -107,12 +108,9 @@ function hasExactKeys(value: UnknownRecord, expected: ReadonlySet<string>): bool
 }
 
 function timestamp(value: unknown): string {
-  if (typeof value !== 'string' || value.length > 64) {
-    throw new TypeError('Signature time must be a valid timestamp.');
-  }
-  const parsed = Date.parse(value);
-  if (!Number.isFinite(parsed)) throw new TypeError('Signature time must be a valid timestamp.');
-  return new Date(parsed).toISOString();
+  const normalized = normalizeExplicitIsoTimestamp(value);
+  if (!normalized) throw new TypeError('Signature time must be a valid timestamp with an explicit timezone.');
+  return normalized;
 }
 
 function canonicalTimestamp(value: unknown): string {

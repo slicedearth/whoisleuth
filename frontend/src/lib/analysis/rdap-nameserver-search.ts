@@ -1,3 +1,5 @@
+import { normalizeEvidenceDomain } from './case-model.ts';
+
 export const RDAP_NAMESERVER_SEARCH_SCHEMA = 'whoisleuth.rdap-nameserver-search';
 export const RDAP_NAMESERVER_SEARCH_VERSION = 1;
 export const MAX_RDAP_NAMESERVER_SEARCH_RESULTS = 200;
@@ -52,18 +54,8 @@ function bounded(value: unknown, maxLength: number): string | null {
 }
 
 function hostname(value: unknown): string | null {
-  const text = bounded(value, 1_024);
-  if (!text) return null;
-  let ascii = '';
-  try {
-    ascii = new URL(`https://${text.replace(/\.+$/u, '')}`).hostname.toLowerCase();
-  } catch {
-    return null;
-  }
-  if (!ascii || ascii.length > 253 || !ascii.includes('.')) return null;
-  return ascii.split('.').every((label) => /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/iu.test(label))
-    ? ascii
-    : null;
+  const normalized = normalizeEvidenceDomain(value);
+  return normalized || null;
 }
 
 function registryScope(value: unknown): string | null {
@@ -77,12 +69,13 @@ function domainMatch(value: unknown, scope: string): RdapNameserverSearchMatch |
   if (!item) return null;
   const domain = hostname(item.domain);
   if (!domain || !domain.endsWith(`.${scope}`)) return null;
-  const statuses = Array.isArray(item.statuses)
-    ? item.statuses
-        .map((entry) => bounded(entry, 160))
-        .filter((entry): entry is string => entry !== null)
-        .slice(0, 12)
-    : [];
+  const statusInput = Array.isArray(item.statuses) ? item.statuses : [];
+  const statuses = statusInput.slice(0, 12)
+    .map((entry) => bounded(entry, 160))
+    .filter((entry): entry is string => entry !== null);
+  const statusesPartial = !Array.isArray(item.statuses)
+    || item.statuses.length > 12
+    || statuses.length < Math.min(statusInput.length, 12);
   return {
     domain,
     unicodeDomain: bounded(item.unicodeDomain, 253),
@@ -90,7 +83,7 @@ function domainMatch(value: unknown, scope: string): RdapNameserverSearchMatch |
     nameserverObserved: typeof item.nameserverObserved === 'boolean'
       ? item.nameserverObserved
       : null,
-    partial: item.partial === true,
+    partial: typeof item.partial !== 'boolean' || item.partial || statusesPartial,
   };
 }
 
@@ -110,9 +103,17 @@ export function normalizeRdapNameserverSearchResponse(
   if (!nameserver || !scope || !observedAt || Number.isNaN(Date.parse(observedAt))) return null;
   const domains: RdapNameserverSearchMatch[] = [];
   const seen = new Set<string>();
+  let locallyOmittedInvalid = 0;
   for (const raw of source.domains.slice(0, MAX_RDAP_NAMESERVER_SEARCH_RESULTS)) {
     const match = domainMatch(raw, scope);
-    if (!match || seen.has(match.domain)) continue;
+    if (!match) {
+      locallyOmittedInvalid += 1;
+      continue;
+    }
+    if (seen.has(match.domain)) {
+      locallyOmittedInvalid += 1;
+      continue;
+    }
     seen.add(match.domain);
     domains.push(match);
   }
@@ -133,20 +134,35 @@ export function normalizeRdapNameserverSearchResponse(
         .filter((entry): entry is string => entry !== null)
         .slice(0, 6)
     : [];
+  const omittedInvalidKnown = Number.isSafeInteger(source.omittedInvalid)
+    && (source.omittedInvalid as number) >= 0
+    && (source.omittedInvalid as number) <= 10_000;
+  const upstreamOmittedInvalid = omittedInvalidKnown
+    ? source.omittedInvalid as number
+    : 0;
+  const truncatedKnown = typeof source.truncated === 'boolean';
+  const sourceState = source.state as RdapNameserverSearchState;
+  const positiveState = sourceState === 'success' || sourceState === 'partial';
+  const incomplete = sourceState === 'partial'
+    || !truncatedKnown
+    || !omittedInvalidKnown
+    || source.truncated === true
+    || source.domains.length > MAX_RDAP_NAMESERVER_SEARCH_RESULTS
+    || upstreamOmittedInvalid > 0
+    || locallyOmittedInvalid > 0
+    || domains.some((domain) => domain.partial);
+  if ((!positiveState && (source.domains.length !== 0 || incomplete))
+    || (sourceState === 'success' && domains.length === 0)) return null;
   return {
-    state: source.state as RdapNameserverSearchState,
+    state: sourceState === 'success' && incomplete ? 'partial' : sourceState,
     nameserver,
     registryScope: scope,
     observedAt,
     endpoint,
     resultCount: domains.length,
     domains,
-    truncated: source.truncated === true || source.domains.length > domains.length,
-    omittedInvalid: Number.isSafeInteger(source.omittedInvalid)
-      && (source.omittedInvalid as number) >= 0
-      && (source.omittedInvalid as number) <= 10_000
-      ? source.omittedInvalid as number
-      : 0,
+    truncated: incomplete,
+    omittedInvalid: Math.min(10_000, upstreamOmittedInvalid + locallyOmittedInvalid),
     limitations,
   };
 }

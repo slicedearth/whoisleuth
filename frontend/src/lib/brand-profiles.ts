@@ -14,9 +14,9 @@ import type {
   ProtectionAttestation,
 } from './analysis/brand-profile-model.ts';
 import { normalizePageBaseline } from './analysis/page-baseline.ts';
-import { browserLocalDataProvider } from './browser-local-data-service.ts';
+import { readBrowserLocalData, updateBrowserLocalData } from './browser-local-data-service.ts';
 import { BrowserLocalDataError } from './browser-local-data.ts';
-import { LEGACY_PROFILES_KEY, PROFILES_COLLECTION } from './browser-local-data-definitions.ts';
+import { LEGACY_PROFILES_KEY } from './browser-local-data-contract.ts';
 
 export const PROFILES_KEY = LEGACY_PROFILES_KEY;
 export const ACTIVE_PROFILE_KEY = 'whois-rdap-active-brand-profile-v1';
@@ -80,7 +80,7 @@ export function normalizeProfile(raw: unknown, existing?: BrandProfile, touch = 
 }
 
 export async function loadProfiles(): Promise<BrandProfile[]> {
-  return (await browserLocalDataProvider()).read(PROFILES_COLLECTION) as Promise<BrandProfile[]>;
+  return readBrowserLocalData('brand_profiles');
 }
 
 function boundedProfiles(profiles: BrandProfile[]): BrandProfile[] {
@@ -88,7 +88,7 @@ function boundedProfiles(profiles: BrandProfile[]): BrandProfile[] {
 }
 
 export async function writeProfiles(profiles: BrandProfile[]): Promise<void> {
-  await (await browserLocalDataProvider()).update(PROFILES_COLLECTION, () => ({ document: boundedProfiles(profiles), result: undefined }));
+  await updateBrowserLocalData('brand_profiles', () => ({ document: boundedProfiles(profiles), result: undefined }));
 }
 
 export function activeProfileId() {
@@ -143,7 +143,7 @@ export function profileSignals(domain: string, evidence: Record<string, unknown>
 }
 
 export async function upsertProfile(raw: unknown, editingId = ''): Promise<BrandProfile> {
-  const committed = await (await browserLocalDataProvider()).update(PROFILES_COLLECTION, (current) => {
+  const committed = await updateBrowserLocalData('brand_profiles', (current) => {
     const profiles = [...current] as BrandProfile[];
     const index = editingId ? profiles.findIndex((item) => item.id === editingId) : -1;
     const existing = index >= 0 ? profiles[index] : undefined;
@@ -164,7 +164,7 @@ export async function upsertProfile(raw: unknown, editingId = ''): Promise<Brand
 }
 
 export async function deleteProfile(profileId: string): Promise<void> {
-  const committed = await (await browserLocalDataProvider()).update(PROFILES_COLLECTION, (current) => {
+  const committed = await updateBrowserLocalData('brand_profiles', (current) => {
     const document = boundedProfiles((current as BrandProfile[]).filter((profile) => profile.id !== profileId));
     return { document, result: document };
   });
@@ -176,7 +176,7 @@ export async function deleteProfile(profileId: string): Promise<void> {
 }
 
 export async function importProfiles(value: unknown) {
-  return (await browserLocalDataProvider()).update(PROFILES_COLLECTION, (current) => {
+  return updateBrowserLocalData('brand_profiles', (current) => {
     const result = mergeBrandProfiles(current, value, { makeId: id });
     return {
       document: boundedProfiles(result.profiles as BrandProfile[]),

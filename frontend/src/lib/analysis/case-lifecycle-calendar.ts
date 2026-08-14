@@ -1,4 +1,5 @@
 import type { CaseRecord } from './case-model.ts';
+import { normalizeExplicitIsoTimestamp } from '../../../../lib/observation.mts';
 
 export const CASE_LIFECYCLE_CALENDAR_SCHEMA = 'whoisleuth.case-review-calendar';
 export const MAX_CASE_LIFECYCLE_EVENTS = 500;
@@ -19,9 +20,7 @@ export type CaseLifecycleCalendarEvent = Readonly<{
 }>;
 
 function timestamp(value: unknown): string | null {
-  if (typeof value !== 'string' || value.length > 64) return null;
-  const parsed = Date.parse(value);
-  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
+  return normalizeExplicitIsoTimestamp(value);
 }
 
 function addDays(value: string, days: number): string {

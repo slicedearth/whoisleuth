@@ -10,10 +10,12 @@
   let dashboard = $state<SourceReliabilityDashboard | null>(null);
   let error = $state('');
   let fileName = $state('');
+  let loadGeneration = 0;
 
   async function loadReport(event: Event) {
     const input = event.currentTarget as HTMLInputElement;
     const file = input.files?.[0];
+    const generation = ++loadGeneration;
     input.value = '';
     if (!file) return;
     dashboard = null;
@@ -24,14 +26,18 @@
       return;
     }
     try {
-      dashboard = parseSourceReliabilityDashboard(await file.text());
+      const parsed = parseSourceReliabilityDashboard(await file.text());
+      if (generation !== loadGeneration) return;
+      dashboard = parsed;
       fileName = file.name.slice(0, 120);
     } catch (reason) {
+      if (generation !== loadGeneration) return;
       error = reason instanceof Error ? reason.message : 'The source reliability report could not be read.';
     }
   }
 
   function clearReport() {
+    loadGeneration += 1;
     dashboard = null;
     error = '';
     fileName = '';

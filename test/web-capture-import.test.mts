@@ -9,6 +9,38 @@ import {
 } from '../frontend/src/lib/analysis/web-capture-import.ts';
 
 describe('sanitised web-capture import', () => {
+  test('requires explicit zones for current captures and preserves manifest v1 UTC migration', () => {
+    const zoneLess = '2026-07-01T12:00:00.000';
+    assert.throws(() => parseWebCaptureSummary({
+      schema: WEB_CAPTURE_SUMMARY_SCHEMA,
+      schemaVersion: 1,
+      source: { name: 'Current summary', reference: null, collectedAt: zoneLess },
+      captures: [{ domain: 'example.test', capturedAt: zoneLess, pageTitle: 'Fixture page' }],
+    }), /explicit timezone/u);
+
+    const manifest = (schemaVersion: number, capturedAt: string) => ({
+      schema: WEB_CAPTURE_MANIFEST_SCHEMA,
+      schemaVersion,
+      source: { name: 'Capture manifest', reference: null, collectedAt: capturedAt },
+      captures: [{
+        domain: 'example.test',
+        capturedAt,
+        artifacts: [{
+          kind: 'dom_digest', fileName: 'digest.json', mimeType: 'application/json',
+          sha256: 'a'.repeat(64), bytes: 100,
+        }],
+      }],
+    });
+    assert.throws(() => parseWebCaptureManifest(manifest(WEB_CAPTURE_MANIFEST_VERSION, zoneLess)), /explicit timezone/u);
+    const legacy = parseWebCaptureManifest(manifest(1, zoneLess));
+    assert.equal(legacy.source.collectedAt, '2026-07-01T12:00:00.000Z');
+    assert.equal(legacy.findings[0]?.observedAt, '2026-07-01T12:00:00.000Z');
+    assert.equal(
+      parseWebCaptureManifest(manifest(WEB_CAPTURE_MANIFEST_VERSION, '2026-07-01T12:00:00.000+01:00')).findings[0]?.observedAt,
+      '2026-07-01T11:00:00.000Z',
+    );
+  });
+
   test('converts bounded capture summaries into separately attributed findings', () => {
     const document = parseWebCaptureSummary({
       schema: WEB_CAPTURE_SUMMARY_SCHEMA,

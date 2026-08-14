@@ -3,6 +3,8 @@ import { lstat } from 'node:fs/promises';
 
 import { recordOrNull } from '../lib/bounded-contract-normalizers.mts';
 import { readBoundedRegularTextFile } from '../lib/bounded-file.mts';
+import { scanBoundedJson } from '../lib/bounded-json.mts';
+import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from '../lib/observation.mts';
 import type { ClassifiedQuery } from '../lib/classify.mts';
 import type { BulkLookupResult } from './bulk.mts';
 import { boundedCliInputError, CliUsageError } from './errors.mts';
@@ -44,8 +46,10 @@ function checkpointDigest(queries: readonly string[], deep: boolean): string {
     .digest('hex');
 }
 
-function validTimestamp(value: unknown): value is string {
-  return typeof value === 'string' && value.length <= 64 && Number.isFinite(Date.parse(value));
+function normalizedTimestamp(value: unknown, legacy = false): string | null {
+  const normalized = normalizeExplicitIsoTimestamp(value);
+  if (normalized) return normalized;
+  return legacy ? normalizeLegacyIsoTimestamp(value) : null;
 }
 
 function isBoundedCheckpointJson(value: unknown, depth = 0): boolean {
@@ -87,7 +91,7 @@ function normalizeCheckpointResult(
   const observedAt = version >= 2
     ? item.observedAt === null
       ? null
-      : validTimestamp(item.observedAt) ? new Date(item.observedAt).toISOString() : undefined
+      : normalizedTimestamp(item.observedAt) ?? undefined
     : null;
   if (observedAt === undefined) return null;
   if (item.ok === false) {
@@ -109,11 +113,13 @@ function parseBulkCheckpoint(
   if (typeof text !== 'string' || Buffer.byteLength(text, 'utf8') > MAX_BULK_CHECKPOINT_BYTES) {
     throw new CliUsageError(`Bulk checkpoint input is limited to ${MAX_BULK_CHECKPOINT_BYTES} bytes.`);
   }
+  const normalized = text.replace(/^\uFEFF/u, '');
   let parsed: unknown;
   try {
-    parsed = JSON.parse(text.replace(/^\uFEFF/u, ''));
+    scanBoundedJson(normalized);
+    parsed = JSON.parse(normalized);
   } catch {
-    throw new CliUsageError('Bulk checkpoint must be valid JSON.');
+    throw new CliUsageError('Bulk checkpoint must be valid bounded JSON without duplicate keys.');
   }
   const document = recordOrNull(parsed);
   const expectedDigest = checkpointDigest(options.queries, options.deep);
@@ -128,7 +134,9 @@ function parseBulkCheckpoint(
     || document.queryCount !== options.queries.length) {
     throw new CliUsageError('Bulk checkpoint does not match the current input or scan mode.');
   }
-  if (!validTimestamp(document.startedAt) || !validTimestamp(document.updatedAt) || !Array.isArray(document.results)) {
+  const startedAt = normalizedTimestamp(document.startedAt, version === 1);
+  const updatedAt = normalizedTimestamp(document.updatedAt, version === 1);
+  if (!startedAt || !updatedAt || !Array.isArray(document.results)) {
     throw new CliUsageError('Bulk checkpoint metadata is invalid.');
   }
   const results: BulkLookupResult[] = [];
@@ -145,8 +153,8 @@ function parseBulkCheckpoint(
     mode: options.deep ? 'deep' : 'fast',
     inputDigestSha256: expectedDigest,
     queryCount: options.queries.length,
-    startedAt: new Date(document.startedAt).toISOString(),
-    updatedAt: new Date(document.updatedAt).toISOString(),
+    startedAt,
+    updatedAt,
     results: results.sort((left, right) => left.index - right.index),
   };
 }
@@ -191,7 +199,12 @@ async function createBulkCheckpointWriter(options: Readonly<{
   const resumed = options.resume
     ? parseBulkCheckpoint(await readCheckpointFile(options.path), options)
     : null;
-  const startedAt = resumed?.startedAt || now();
+  const currentTimestamp = (): string => {
+    const timestamp = normalizedTimestamp(now());
+    if (!timestamp) throw new CliUsageError('Bulk checkpoint collection time is invalid.');
+    return timestamp;
+  };
+  const startedAt = resumed?.startedAt || currentTimestamp();
   const results = new Map<number, BulkLookupResult>((resumed?.results || []).map((item) => [item.index, item]));
   let activeWrite: Promise<void> | null = null;
   let dirty = false;
@@ -199,7 +212,7 @@ async function createBulkCheckpointWriter(options: Readonly<{
   let created = resumed !== null;
 
   function document(): BulkCheckpointDocument {
-    const updatedAt = now();
+    const updatedAt = currentTimestamp();
     return {
       schema: CLI_BULK_CHECKPOINT_SCHEMA,
       version: CLI_BULK_CHECKPOINT_VERSION,
@@ -254,7 +267,11 @@ async function createBulkCheckpointWriter(options: Readonly<{
   return Object.freeze({
     initialResults: Object.freeze([...results.values()].sort((left, right) => left.index - right.index)),
     record(result: BulkLookupResult): void {
-      const observedAt = validTimestamp(result.observedAt) ? new Date(result.observedAt).toISOString() : now();
+      const observedAt = normalizedTimestamp(result.observedAt) ?? normalizedTimestamp(now());
+      if (!observedAt) {
+        writeFailure ||= new CliUsageError('Bulk checkpoint collection time is invalid.');
+        return;
+      }
       const normalized = normalizeCheckpointResult(
         { ...result, observedAt },
         options.queries,

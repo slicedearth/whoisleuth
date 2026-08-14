@@ -121,6 +121,9 @@ describe('interactive CLI launcher', () => {
 
     assert.throws(() => boundedInteractiveAnswer('safe\u202eunsafe'), /bounded text/u);
     assert.throws(() => boundedInteractiveAnswer('safe\u009bunsafe'), /bounded text/u);
+    for (const character of ['\u00ad', '\u034f', '\u180e', '\u200d', '\u2060', '\ufe0f']) {
+      assert.throws(() => boundedInteractiveAnswer(`safe${character}unsafe`), /bounded text/u);
+    }
     assert.throws(
       () => boundedInteractiveAnswer('界'.repeat(Math.floor(MAX_INTERACTIVE_ANSWER_BYTES / 3) + 2)),
       /bounded text/u,
@@ -169,6 +172,12 @@ describe('interactive CLI launcher', () => {
     c1Control.input.emit('data', Buffer.from('\u009b'));
     await assert.rejects(rejected, /bounded text without control characters/u);
     assert.equal(c1Control.output.value, 'Value: ');
+
+    const defaultIgnorable = launcherFixture();
+    const defaultIgnorableReading = readBoundedInteractiveLine('Value: ', defaultIgnorable);
+    defaultIgnorable.input.emit('data', Buffer.from('\u00ad'));
+    await assert.rejects(defaultIgnorableReading, /bounded text without control characters/u);
+    assert.equal(defaultIgnorable.output.value, 'Value: ');
   });
 
   test('aborts without retaining partial input and still restores terminal state', async () => {

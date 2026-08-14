@@ -373,7 +373,7 @@ const COMMAND_DETAILS: Readonly<Record<CliCommand, CommandDetail>> = Object.free
   export: {
     description: 'Convert one saved lookup into a versioned evidence report.',
     example: 'whoisleuth export lookup.json --markdown',
-    boundary: 'Saved Lookup versions 1 and 2 are capped at 8 MiB and scanned for duplicate keys, the prototype-sensitive __proto__ key, and bounded nesting, key, value, and per-container counts before parsing. Current schema-27 exports preserve evidence-source attribution and limitations; schema 26 remains strict and schema 25 retains its documented historical wrapper semantics. Markdown and HTML include a presentation-only generator footer unless --no-attribution is selected; JSON retains bounded generator provenance. Compact output intentionally omits raw registry payloads.',
+    boundary: 'Saved Lookup versions 1 and 2 are capped at 8 MiB and scanned for duplicate keys, the prototype-sensitive __proto__ key, and bounded nesting, key, value, and per-container counts before parsing. Current schema-28 exports preserve evidence-source attribution and limitations; schemas 25-27 remain readable for compatibility, with schema 26 retaining its strict source/publication binding and schema 25 retaining its documented historical wrapper semantics. Markdown and HTML include a presentation-only generator footer unless --no-attribution is selected; JSON retains bounded generator provenance. Compact output intentionally omits raw registry payloads.',
   },
 });
 

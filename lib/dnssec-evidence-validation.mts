@@ -1,6 +1,7 @@
 import { Buffer } from 'node:buffer';
 import { createHash } from 'node:crypto';
 import { domainToASCII } from 'node:url';
+import { normalizeLegacyIsoTimestamp } from './observation.mts';
 
 const DNSSEC_EVIDENCE_SCHEMA = 'whoisleuth.dnssec-evidence-validation';
 const DNSSEC_EVIDENCE_VERSION = 1;
@@ -144,17 +145,21 @@ function dsDigest(owner: string, dnskey: DnssecDnskeyRecord, digestType: number)
 
 function normalizeRrsig(value: unknown): DnssecRrsigRecord | null {
   const source = record(value);
-  if (!source || typeof source.inception !== 'string' || typeof source.expiration !== 'string') return null;
-  const inception = Date.parse(source.inception);
-  const expiration = Date.parse(source.expiration);
-  if (!Number.isFinite(inception) || !Number.isFinite(expiration) || inception > expiration) return null;
+  if (!source) return null;
+  const normalizedInception = normalizeLegacyIsoTimestamp(source.inception);
+  const normalizedExpiration = normalizeLegacyIsoTimestamp(source.expiration);
+  if (!normalizedInception || !normalizedExpiration) return null;
+  const inception = Date.parse(normalizedInception);
+  const expiration = Date.parse(normalizedExpiration);
+  if (inception > expiration) return null;
   return Object.freeze({ inception, expiration });
 }
 
 function signatureTimeState(value: readonly DnssecRrsigRecord[], observedAt: unknown): DnssecEvidenceReport['signatureTimeState'] {
-  if (!value.length || typeof observedAt !== 'string') return 'unavailable';
-  const observed = Date.parse(observedAt);
-  if (!Number.isFinite(observed)) return 'unavailable';
+  if (!value.length) return 'unavailable';
+  const normalizedObservedAt = normalizeLegacyIsoTimestamp(observedAt);
+  if (!normalizedObservedAt) return 'unavailable';
+  const observed = Date.parse(normalizedObservedAt);
   let withinWindow = 0;
   for (const item of value) {
     if (observed >= item.inception && observed <= item.expiration) withinWindow += 1;

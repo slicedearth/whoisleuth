@@ -28,6 +28,7 @@ import { buildCaseResponsePacket } from '../frontend/src/lib/analysis/case-respo
 import { buildCliCasePack } from '../cli/case-pack.mts';
 import { buildCliEvidenceExport } from '../cli/export-evidence.mts';
 import * as lookupEvidenceModule from '../lib/evidence-export.mts';
+import { buildRegistryInsights } from '../lib/registry-insights.mts';
 import { CASE_SCHEMA_VERSION, createCase, normalizeCaseStore } from '../frontend/src/lib/analysis/case-model.ts';
 import {
   MAX_CASE_ACTIONS,
@@ -429,7 +430,7 @@ describe('offline artifact verifier', () => {
     assert.equal(report.state, 'structure_valid');
   });
 
-  test('keeps one frozen strict schema-26 Lookup export readable after schema 27 becomes current', async () => {
+  test('keeps one frozen strict schema-26 Lookup export readable after later schemas become current', async () => {
     const report = await verifyOfflineArtifact(await loadLookupEvidenceV26Fixture());
     assert.deepEqual(report.artifact, {
       kind: 'lookup_evidence',
@@ -439,7 +440,30 @@ describe('offline artifact verifier', () => {
     assert.equal(report.state, 'structure_valid');
   });
 
-  test('accepts exact schema-27 homepage metadata while rejecting malformed and legacy epoch injection', async () => {
+  test('keeps schema-27 homepage evidence readable after the privacy-minimized schema becomes current', async () => {
+    const legacy = structuredClone(lookupEvidenceArtifact());
+    legacy.schemaVersion = lookupEvidenceModule.HOMEPAGE_LOOKUP_EVIDENCE_SCHEMA_VERSION;
+    const sources = legacy.sources as Record<string, Record<string, unknown>>;
+    const diagnostics = legacy.diagnostics as Record<string, Record<string, unknown>>;
+    sources.rdap!.raw = null;
+    const analysis = legacy.analysis as Record<string, unknown>;
+    analysis.availability = lookupEvidenceModule.projectLookupEvidenceAvailabilityLegacy(
+      analysis.availability,
+    );
+    analysis.registryInsights = buildRegistryInsights({
+      rdapParsed: sources.rdap!.parsed,
+      rdapStatus: diagnostics.rdap!.status,
+      rdapFetchedAt: sources.rdap!.fetchedAt,
+      whoisParsed: sources.whois!.parsed,
+      whoisStatus: diagnostics.whois!.status,
+      whoisQueriedAt: sources.whois!.queriedAt,
+    });
+    const report = await verifyOfflineArtifact(JSON.stringify(legacy));
+    assert.equal(report.artifact.version, lookupEvidenceModule.HOMEPAGE_LOOKUP_EVIDENCE_SCHEMA_VERSION);
+    assert.equal(report.state, 'structure_valid');
+  });
+
+  test('accepts exact current homepage metadata while rejecting malformed and pre-homepage injection', async () => {
     const current = lookupEvidenceArtifact();
     const availability = (current.analysis as Record<string, Record<string, unknown>>).availability!;
     availability.pageIdentity = { status: 'success', publicationMetadata: pagePublicationMetadataFixture() };

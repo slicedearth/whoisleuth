@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { untrack } from 'svelte';
+  import { parseBoundedJson } from '$lib/bounded-json';
+  import { tick, untrack } from 'svelte';
   import Pagination from '$lib/components/Pagination.svelte';
   import CampaignCohortReview from '$lib/components/CampaignCohortReview.svelte';
   import CampaignTemporalReview from '$lib/components/CampaignTemporalReview.svelte';
@@ -33,6 +34,7 @@
   let page=$state(1);
   let memberPage=$state(1);
   let appliedFocusId=$state('');
+  let componentRoot=$state<HTMLElement>();
 
   const PAGE_SIZE=10;
   const MEMBER_PAGE_SIZE=25;
@@ -99,21 +101,35 @@
     catch(cause){message=cause instanceof Error?cause.message:'Could not remove the case.';}
   }
   async function remove(campaign:CampaignRecord){
-    if(!confirm(`Delete campaign “${campaign.name}”? Cases and their evidence are not deleted.`))return;
+    const origin=document.activeElement;
+    const owner=componentRoot;
+    const previousIndex=campaigns.findIndex((item)=>item.id===campaign.id);
+    if(!confirm(`Delete campaign “${campaign.name}”? Cases and their evidence are not deleted.`)){if(origin instanceof HTMLElement&&origin.isConnected)origin.focus();return;}
     try{await refresh(await deleteCampaign(campaign.id));message=`Deleted campaign “${campaign.name}”.`;}
     catch(cause){message=cause instanceof Error?cause.message:'Could not delete the campaign.';}
+    await tick();
+    const active=document.activeElement;
+    if(!owner?.isConnected||(active instanceof HTMLElement&&active!==origin&&active!==document.body&&active.isConnected))return;
+    if(campaigns.some((item)=>item.id===campaign.id)){if(origin instanceof HTMLElement&&origin.isConnected)origin.focus();return;}
+    const next=campaigns[Math.min(Math.max(0,previousIndex),campaigns.length-1)];
+    if(next)showCampaign(next.id);
+    await tick();
+    const activeAfterPageChange=document.activeElement;
+    if(!owner.isConnected||(activeAfterPageChange instanceof HTMLElement&&activeAfterPageChange!==origin&&activeAfterPageChange!==document.body&&activeAfterPageChange.isConnected))return;
+    const target=(next?document.getElementById(`campaign-head-${next.id}`):null)??document.getElementById('new-campaign');
+    if(target instanceof HTMLElement)target.focus();
   }
   async function download(){try{await exportCampaigns();message='Exported the campaign collection.';}catch(cause){message=cause instanceof Error?cause.message:'Could not export campaigns.';}}
   async function importFile(event:Event){
     const input=event.currentTarget as HTMLInputElement;const file=input.files?.[0];if(!file)return;
-    try{if(file.size>MAX_CAMPAIGN_IMPORT_BYTES)throw new Error('Campaign imports are limited to 2 MB.');const result=await importCampaigns(JSON.parse(await file.text()));await refresh(result.campaigns);page=1;memberPage=1;message=`Imported ${result.added} new and ${result.updated} merged campaign${result.added+result.updated===1?'':'s'}${result.skipped?`; skipped ${result.skipped} invalid or over-limit record${result.skipped===1?'':'s'}`:''}.`;}
+    try{if(file.size>MAX_CAMPAIGN_IMPORT_BYTES)throw new Error('Campaign imports are limited to 2 MB.');const result=await importCampaigns(parseBoundedJson(await file.text(),{label:'Campaign import',maximumBytes:MAX_CAMPAIGN_IMPORT_BYTES}));await refresh(result.campaigns);page=1;memberPage=1;message=`Imported ${result.added} new and ${result.updated} merged campaign${result.added+result.updated===1?'':'s'}${result.skipped?`; skipped ${result.skipped} invalid or over-limit record${result.skipped===1?'':'s'}`:''}.`;}
     catch(cause){message=cause instanceof Error?cause.message:'Campaign import failed.';}finally{input.value='';}
   }
   function openCase(domain:string){const record=caseByDomain.get(domain);if(record)onselect?.(record);}
 
 </script>
 
-<section class="campaign-toolbar card">
+<section class="campaign-toolbar card" bind:this={componentRoot}>
   <form onsubmit={(event)=>{event.preventDefault();create();}}>
     <label for="new-campaign">New campaign</label>
     <div><input id="new-campaign" bind:value={newName} maxlength="100" placeholder="Investigation name" autocomplete="off"><button class="primary" type="submit" disabled={!newName.trim()}>Create campaign</button></div>
@@ -128,7 +144,7 @@
   <section class="campaign-list">
     {#each pagedCampaigns as campaign (campaign.id)}
       <article class="campaign card" class:open={expandedId===campaign.id}>
-        <button class="campaign-head" type="button" aria-expanded={expandedId===campaign.id} aria-controls={`campaign-${campaign.id}`} onclick={()=>open(campaign)}>
+        <button id={`campaign-head-${campaign.id}`} class="campaign-head" type="button" aria-expanded={expandedId===campaign.id} aria-controls={`campaign-${campaign.id}`} onclick={()=>open(campaign)}>
           <span><strong>{campaign.name}</strong>{#if campaign.description}<small>{campaign.description}</small>{/if}</span>
           <span>{campaign.domains.length} case{campaign.domains.length===1?'':'s'}</span>
         </button>
@@ -182,7 +198,7 @@
               <div><select id={`campaign-case-${campaign.id}`} bind:value={selectedDomain} disabled={!availableCases.length}><option value="">{availableCases.length?'Choose a case':'All available cases are included'}</option>{#each availableCases as record}<option value={record.domain}>{record.domain}</option>{/each}</select><button class="btn" type="submit" disabled={!selectedDomain}>Add case</button></div>
             </form>{/if}
             <details><summary>Campaign data and interpretation limits</summary><p>Campaigns store only a label, description, and normalised domain membership in this browser. Membership is an analyst organisation aid and does not prove common ownership, coordination, intent, or maliciousness.</p></details>
-            <button class="btn danger delete" type="button" onclick={()=>remove(campaign)}>Delete campaign</button>
+            <button id={`campaign-delete-${campaign.id}`} class="btn danger delete" type="button" onclick={()=>void remove(campaign)}>Delete campaign</button>
           </div>
         {/if}
       </article>

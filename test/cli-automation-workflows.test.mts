@@ -650,6 +650,18 @@ describe('direct reports and saved Lookup diff', () => {
       /exactly one domain/u,
     );
     assert.throws(() => buildCliLookupTimeline([oldest, oldest], NOW), /observation times must be unique/u);
+
+    const legacyZoneLess = JSON.parse(savedLookup('history.example')) as Record<string, unknown>;
+    legacyZoneLess.version = 1;
+    legacyZoneLess.generatedAt = '2026-01-15T12:00:00';
+    const legacyExplicit = JSON.parse(savedLookup('history.example')) as Record<string, unknown>;
+    legacyExplicit.version = 1;
+    legacyExplicit.generatedAt = '2026-01-15T01:30:00.000Z';
+    assert.deepEqual(
+      buildCliLookupTimeline([JSON.stringify(legacyZoneLess), JSON.stringify(legacyExplicit)], NOW)
+        .observations.map((item) => item.generatedAt),
+      ['2026-01-15T01:30:00.000Z', '2026-01-15T12:00:00.000Z'],
+    );
   });
 
   test('reconciles labelled same-domain observations without retaining filenames or voting on truth', async () => {
@@ -711,6 +723,13 @@ describe('resumable Bulk checkpoints', () => {
       assert.equal(checkpoint.version, 2);
       assert.equal(checkpoint.results[0]?.observedAt, NOW);
 
+      const zoneLess = JSON.parse(checkpointText);
+      zoneLess.startedAt = '2026-08-01T00:00:00';
+      assert.throws(
+        () => parseBulkCheckpoint(JSON.stringify(zoneLess), { queries, deep: false, classifyQuery: classifiedDomain }),
+        /metadata is invalid/u,
+      );
+
       const fullResponse = JSON.parse(checkpointText);
       fullResponse.results[0].result.rdap = { raw: 'not compact evidence' };
       assert.throws(
@@ -767,8 +786,8 @@ describe('resumable Bulk checkpoints', () => {
       mode: 'fast',
       inputDigestSha256: createHash('sha256').update('fast\n').update(queries.join('\n')).digest('hex'),
       queryCount: 1,
-      startedAt: '2026-08-01T00:00:00.000Z',
-      updatedAt: '2026-08-01T00:01:00.000Z',
+      startedAt: '2026-08-01T00:00:00.000',
+      updatedAt: '2026-08-01T00:01:00.000',
       results: [{
         index: 0,
         query: queries[0],
@@ -786,6 +805,8 @@ describe('resumable Bulk checkpoints', () => {
       classifyQuery: classifiedDomain,
     });
     assert.equal(parsed.results[0]?.observedAt, null);
+    assert.equal(parsed.startedAt, '2026-08-01T00:00:00.000Z');
+    assert.equal(parsed.updatedAt, '2026-08-01T00:01:00.000Z');
     assert.equal(parsed.results[0]?.collectionOrigin, 'resumed_checkpoint');
   });
 

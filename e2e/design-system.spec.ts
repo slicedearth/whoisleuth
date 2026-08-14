@@ -431,7 +431,11 @@ test('the console command palette keeps every destination heading readable on mo
     await page.getByRole('button', { name: 'Open command palette' }).click();
     const dialog = page.getByRole('dialog', { name: 'Go to' });
     await expect(dialog).toBeVisible();
-    expect(await dialog.locator('.command-copy strong').evaluateAll((headings) => headings.every((heading) =>
+    const options = dialog.getByRole('option');
+    const headings = dialog.locator('.command-copy strong');
+    expect(await options.count()).toBeGreaterThan(0);
+    expect(await headings.count()).toBe(await options.count());
+    expect(await headings.evaluateAll((items) => items.every((heading) =>
       heading.scrollWidth <= heading.clientWidth + 1
     ))).toBe(true);
     await page.keyboard.press('Escape');
@@ -804,7 +808,11 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   await expect(registrationFact).toContainText('does not recalculate or override');
 
   const rdapDiagnostic = page.locator('.diagnostics article').filter({ hasText: 'rdap' }).first();
-  expect(await page.locator('.diagnostics article > strong').evaluateAll((states) => {
+  const diagnosticArticles = page.locator('.diagnostics article');
+  const diagnosticStates = page.locator('.diagnostics article > strong');
+  expect(await diagnosticArticles.count()).toBeGreaterThan(0);
+  expect(await diagnosticStates.count()).toBe(await diagnosticArticles.count());
+  expect(await diagnosticStates.evaluateAll((states) => {
     const reference = document.querySelector<HTMLElement>('.summaries article strong');
     if (!reference) return false;
     const referenceColour = getComputedStyle(reference).color;

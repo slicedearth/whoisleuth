@@ -68,9 +68,9 @@ test('does not promote an administrative organization to registrar', async () =>
     whoisChain: [{
       server: 'whois.iana.org',
       queriedAt: '2026-07-01T00:00:00.000Z',
-      response: 'domain: GT\norganisation: Registry',
+      response: 'domain: GT\norganisation: Registry\nrefer: registry.example\n',
     }, {
-      server: 'registry website',
+      server: 'registry.example',
       queriedAt: '2026-07-01T00:00:01.000Z',
       response: [
         'Domain Name: EXAMPLE.GT',

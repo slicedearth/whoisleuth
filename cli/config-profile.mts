@@ -4,6 +4,7 @@ import { join, resolve } from 'node:path';
 
 import { CliUsageError } from './errors.mts';
 import { readBoundedRegularTextFile } from '../lib/bounded-file.mts';
+import { scanBoundedJson } from '../lib/bounded-json.mts';
 
 export const CLI_CONFIG_SCHEMA = 'whoisleuth.cli.config';
 export const CLI_CONFIG_VERSION = 1;
@@ -75,8 +76,12 @@ function validateProfileArguments(value: unknown): string[] {
 
 function parseProfileDocument(input: string): ProfileDocument {
   if (Buffer.byteLength(input, 'utf8') > MAX_CLI_CONFIG_BYTES) throw new CliUsageError('CLI configuration is limited to 64 KiB.');
+  const normalized = input.replace(/^\uFEFF/u, '');
   let parsed: unknown;
-  try { parsed = JSON.parse(input.replace(/^\uFEFF/u, '')); } catch { throw new CliUsageError('CLI configuration must be valid JSON.'); }
+  try {
+    scanBoundedJson(normalized);
+    parsed = JSON.parse(normalized);
+  } catch { throw new CliUsageError('CLI configuration must be valid bounded JSON without duplicate keys.'); }
   const root = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};
   if (root.schema !== CLI_CONFIG_SCHEMA || root.version !== CLI_CONFIG_VERSION || !root.profiles || typeof root.profiles !== 'object' || Array.isArray(root.profiles)) {
     throw new CliUsageError(`CLI configuration must use ${CLI_CONFIG_SCHEMA} version ${CLI_CONFIG_VERSION}.`);

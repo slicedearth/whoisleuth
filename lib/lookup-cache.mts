@@ -28,10 +28,12 @@ const SWEEP_INTERVAL_MS = 5 * 60 * 1000;
 // RDAP/WHOIS response, before the next sweep has a chance to run; repeated
 // or concurrent large scans compound that. `Map` preserves insertion
 // order, so the oldest entry is always `store.keys().next().value` -
-// simple FIFO eviction, not a full LRU (re-caching an existing key doesn't
-// move it), which is a fine fit for a cache whose primary job is
-// deduplicating near-simultaneous repeat lookups within a few minutes, not
-// long-term hit-rate optimization.
+// simple FIFO eviction by expiry, not a full LRU (a cache *hit* doesn't
+// move an entry). Re-caching a key does move it, because setCached deletes
+// the key before re-inserting it, which keeps insertion order aligned with
+// the refreshed expiresAt. That is a fine fit for a cache whose primary job
+// is deduplicating near-simultaneous repeat lookups within a few minutes,
+// not long-term hit-rate optimization.
 const MAX_ENTRIES = 3000;
 
 // MAX_ENTRIES alone bounds count, not size - it doesn't stop a hostile or

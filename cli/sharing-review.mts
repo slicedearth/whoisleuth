@@ -3,6 +3,7 @@ import {
   UnsupportedOfflineArtifactError,
   verifyOfflineArtifact,
 } from './artifact-verify.mts';
+import { scanBoundedJson } from '../lib/bounded-json.mts';
 
 const SHARING_REVIEW_SCHEMA = 'whoisleuth.cli.sharing-review';
 const SHARING_REVIEW_VERSION = 2;
@@ -140,9 +141,10 @@ async function buildSharingReview(
 ): Promise<SharingReviewDocument> {
   let artifactValue: unknown;
   try {
+    scanBoundedJson(raw);
     artifactValue = JSON.parse(raw);
   } catch {
-    throw new TypeError('Sharing review input must be valid JSON.');
+    throw new TypeError('Sharing review input must be valid bounded JSON without duplicate keys.');
   }
   const artifact = record(artifactValue);
   if (!artifact) throw new TypeError('Sharing review input must contain one JSON object.');

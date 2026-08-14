@@ -4,6 +4,8 @@
 
 import { domainToASCII } from 'node:url';
 
+import { normalizeExplicitIsoTimestamp } from './observation.mts';
+
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
@@ -31,9 +33,7 @@ export function strictBoundedString(value: unknown, maxLength: number): string |
 }
 
 export function isoTimestamp(value: unknown): string | null {
-  if (typeof value !== 'string' || value.length > 64 || /[\u0000-\u001f\u007f]/u.test(value)) return null;
-  const timestamp = Date.parse(value);
-  return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : null;
+  return normalizeExplicitIsoTimestamp(value);
 }
 
 export function boundedHttpsUrl(value: unknown, maxLength: number): string | null {

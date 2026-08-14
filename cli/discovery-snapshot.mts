@@ -4,6 +4,8 @@ import { boundedCliInputError, CliUsageError } from './errors.mts';
 import { writePrivateFile } from './output-file.mts';
 import { isValidAsciiDomainName } from '../lib/hostname.mts';
 import { readBoundedRegularTextFile } from '../lib/bounded-file.mts';
+import { scanBoundedJson } from '../lib/bounded-json.mts';
+import { normalizeExplicitIsoTimestamp } from '../lib/observation.mts';
 
 export const CLI_DISCOVERY_SNAPSHOT_SCHEMA = 'whoisleuth.cli.discovery-snapshot';
 export const CLI_DISCOVERY_SNAPSHOT_VERSION = 1;
@@ -64,15 +66,23 @@ function normalizedDomains(value: unknown): string[] {
   return [...output].sort();
 }
 
+function normalizedTimestamp(value: unknown): string {
+  const normalized = normalizeExplicitIsoTimestamp(value);
+  if (!normalized) throw new CliUsageError('Discovery snapshot collection time is invalid.');
+  return normalized;
+}
+
 function parseDiscoverySnapshot(text: string, expectedConfigurationDigest: string): DiscoverySnapshotDocument {
   if (Buffer.byteLength(text, 'utf8') > MAX_DISCOVERY_SNAPSHOT_BYTES) {
     throw new CliUsageError(`Discovery snapshot input is limited to ${MAX_DISCOVERY_SNAPSHOT_BYTES} bytes.`);
   }
+  const normalized = text.replace(/^\uFEFF/u, '');
   let parsed: unknown;
   try {
-    parsed = JSON.parse(text.replace(/^\uFEFF/u, ''));
+    scanBoundedJson(normalized);
+    parsed = JSON.parse(normalized);
   } catch {
-    throw new CliUsageError('Discovery snapshot must be valid JSON.');
+    throw new CliUsageError('Discovery snapshot must be valid bounded JSON without duplicate keys.');
   }
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
     throw new CliUsageError('Discovery snapshot must be one JSON object.');
@@ -84,15 +94,13 @@ function parseDiscoverySnapshot(text: string, expectedConfigurationDigest: strin
   if (value.configurationDigestSha256 !== expectedConfigurationDigest) {
     throw new CliUsageError('Discovery snapshot configuration does not match this run. Choose another state file or restore the original discovery controls.');
   }
-  if (typeof value.generatedAt !== 'string' || !Number.isFinite(Date.parse(value.generatedAt))) {
-    throw new CliUsageError('Discovery snapshot collection time is invalid.');
-  }
+  const generatedAt = normalizedTimestamp(value.generatedAt);
   const candidates = normalizedDomains(value.candidates);
   if (value.candidateCount !== candidates.length) throw new CliUsageError('Discovery snapshot candidate count is inconsistent.');
   return {
     schema: CLI_DISCOVERY_SNAPSHOT_SCHEMA,
     version: CLI_DISCOVERY_SNAPSHOT_VERSION,
-    generatedAt: new Date(value.generatedAt).toISOString(),
+    generatedAt,
     configurationDigestSha256: expectedConfigurationDigest,
     candidateCount: candidates.length,
     candidates,
@@ -132,7 +140,7 @@ async function updateDiscoverySnapshot(
   const document: DiscoverySnapshotDocument = {
     schema: CLI_DISCOVERY_SNAPSHOT_SCHEMA,
     version: CLI_DISCOVERY_SNAPSHOT_VERSION,
-    generatedAt: new Date(generatedAt).toISOString(),
+    generatedAt: normalizedTimestamp(generatedAt),
     configurationDigestSha256: digest,
     candidateCount: candidates.length,
     candidates,

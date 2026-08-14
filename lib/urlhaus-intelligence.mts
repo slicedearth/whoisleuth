@@ -15,6 +15,7 @@ import {
   normalizeThreatIntelligenceTarget,
 } from './threat-intelligence-contract.mts';
 import type { ThreatIntelligenceResult } from './threat-intelligence-contract.mts';
+import { normalizeExplicitIsoTimestamp } from './observation.mts';
 
 type EnvironmentInput = Record<string, unknown>;
 type AdapterDependencies = {
@@ -101,8 +102,7 @@ function isoTimestamp(value: unknown): string | null {
   const normalized = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?: UTC)?$/u.test(trimmed)
     ? `${trimmed.slice(0, 10)}T${trimmed.slice(11, 19)}Z`
     : trimmed;
-  const timestamp = Date.parse(normalized);
-  return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : null;
+  return normalizeExplicitIsoTimestamp(normalized);
 }
 
 function retryAfterSeconds(response: Response): number | null {
@@ -165,6 +165,7 @@ function normalizeHostFinding(value: unknown, targetDomain: string) {
     || threat !== 'malware_download'
     || exactDomainFromUrl(value.url) !== targetDomain) return null;
   const observedAt = isoTimestamp(value.date_added);
+  if (value.date_added !== undefined && value.date_added !== null && !observedAt) return null;
   const tags = normalizedTags(value.tags);
   tags.push(`url-status:${status}`);
   return {

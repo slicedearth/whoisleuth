@@ -10,6 +10,7 @@ import type { CaseEvidenceSnapshot } from './case-model.ts';
 import { deriveTimeline } from './evidence-display.ts';
 import { RISK_MODEL_VERSION } from './scoring.ts';
 import { inspectRdapCapabilities } from '../../../../lib/rdap-capabilities.mts';
+import { parseBoundedJson } from '../bounded-json.ts';
 
 export const SYNTHETIC_DEMO_VERSION = 1;
 export const SYNTHETIC_DEMO_EXPORT_VERSION = 5;
@@ -371,7 +372,10 @@ export function parseSyntheticDemoState(serialized: unknown): SyntheticDemoState
   if (serialized.length > MAX_SYNTHETIC_DEMO_SERIALIZED_BYTES) return null;
   if (new TextEncoder().encode(serialized).byteLength > MAX_SYNTHETIC_DEMO_SERIALIZED_BYTES) return null;
   try {
-    const parsed: unknown = JSON.parse(serialized);
+    const parsed = parseBoundedJson(serialized, {
+      label: 'Synthetic demo state',
+      maximumBytes: MAX_SYNTHETIC_DEMO_SERIALIZED_BYTES,
+    });
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)
       || !('version' in parsed)
       || (parsed as { version?: unknown }).version !== SYNTHETIC_DEMO_VERSION) return null;

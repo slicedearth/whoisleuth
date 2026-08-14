@@ -84,6 +84,12 @@ describe('incremental Lookup staging evidence', () => {
   test('rejects target-bearing or otherwise unsupported fields', () => {
     assert.throws(
       () => parseLookupProgressStagingEvidence(evidence('express', {
+        capturedAt: '2026-07-31T01:00:00',
+      })),
+      /capture time/u,
+    );
+    assert.throws(
+      () => parseLookupProgressStagingEvidence(evidence('express', {
         target: 'private.example',
       })),
       /invalid field set/,

@@ -13,6 +13,7 @@ import {
 import {
   encryptWorkspaceArchive,
 } from '../frontend/src/lib/analysis/workspace-archive-crypto.ts';
+import { sha256ArtifactDigest } from '../frontend/src/lib/analysis/artifact-integrity.ts';
 
 const NOW = '2026-07-29T10:00:00.000Z';
 const DOMAIN = 'review-target.invalid';
@@ -39,6 +40,27 @@ async function archive(domain = DOMAIN) {
       updatedAt: NOW,
     }],
   }, { generatedAt: NOW });
+}
+
+async function archiveWithUnknownPayload(sectionId: string, payload: unknown) {
+  const value = await archive();
+  const index = value.manifest.sections.findIndex((section) => section.id === 'settings');
+  assert.notEqual(index, -1);
+  const original = value.manifest.sections[index];
+  assert.ok(original);
+  const section = {
+    ...value.sections.settings,
+    payload,
+  };
+  value.manifest.sections[index] = {
+    ...original,
+    id: sectionId,
+    bytes: new TextEncoder().encode(JSON.stringify(section)).byteLength,
+    checksum: await sha256ArtifactDigest(section),
+  };
+  Reflect.set(value.sections, sectionId, section);
+  Reflect.deleteProperty(value.sections, 'settings');
+  return value;
 }
 
 describe('offline workspace archive inspection', () => {
@@ -133,5 +155,78 @@ describe('offline workspace archive inspection', () => {
       }),
       /no exact canonical match/iu,
     );
+  });
+
+  test('discloses object, array, and depth traversal bounds as inconclusive', async () => {
+    const objectPayload = Object.fromEntries([
+      ...Array.from({ length: 300 }, (_, index) => [`filler-${index}`, {}]),
+      ['omitted', { domain: 'omitted.invalid' }],
+    ]);
+    const arrayPayload = [
+      ...Array.from({ length: 5_000 }, () => ({})),
+      { domain: 'omitted.invalid' },
+    ];
+    let depthPayload: Record<string, unknown> = { domain: 'omitted.invalid' };
+    for (let depth = 0; depth < 17; depth += 1) depthPayload = { nested: depthPayload };
+
+    for (const [label, payload] of [
+      ['object', objectPayload],
+      ['array', arrayPayload],
+      ['depth', depthPayload],
+    ] as const) {
+      const raw = JSON.stringify(await archiveWithUnknownPayload(`future-${label}`, payload));
+      const report = await inspectWorkspaceArchive(raw, { search: 'omitted.invalid' });
+      assert.equal(report.search.matchCount, 0, label);
+      assert.equal(report.search.truncated, true, label);
+      assert.match(report.limitations.join('\n'), /zero retained matches is inconclusive/iu, label);
+      await assert.rejects(
+        inspectWorkspaceArchive(raw, {
+          search: 'omitted.invalid',
+          requireMatch: true,
+        }),
+        /configured bound.*could be established/iu,
+        label,
+      );
+    }
+  });
+
+  test('keeps exact object, array, and depth boundary values searchable', async () => {
+    const objectPayload = Object.fromEntries([
+      ...Array.from({ length: 299 }, (_, index) => [`filler-${index}`, {}]),
+      ['retained', { domain: 'retained.invalid' }],
+    ]);
+    const arrayPayload = [
+      ...Array.from({ length: 4_999 }, () => ({})),
+      { domain: 'retained.invalid' },
+    ];
+    let depthPayload: Record<string, unknown> = { domain: 'retained.invalid' };
+    for (let depth = 0; depth < 15; depth += 1) depthPayload = { nested: depthPayload };
+
+    for (const [label, payload] of [
+      ['object', objectPayload],
+      ['array', arrayPayload],
+      ['depth', depthPayload],
+    ] as const) {
+      const report = await inspectWorkspaceArchive(
+        JSON.stringify(await archiveWithUnknownPayload(`future-${label}`, payload)),
+        { search: 'retained.invalid', requireMatch: true },
+      );
+      assert.equal(report.search.matchCount, 1, label);
+      assert.equal(report.search.truncated, false, label);
+    }
+  });
+
+  test('sanitizes archive-derived terminal identifiers and revealed values', async () => {
+    const controls = '\u009b\u00ad\u034f\u180e\u200b\u202e\ufe0f\u{e007f}';
+    const report = await inspectWorkspaceArchive(
+      JSON.stringify(await archiveWithUnknownPayload(`future${controls}`, {
+        domain: `visible${controls}.invalid`,
+      })),
+      { search: `visible${controls}.invalid`, reveal: true },
+    );
+    const terminal = formatArchiveInspection(report);
+    assert.equal(report.sections.some((section) => section.id.includes(controls)), true);
+    assert.equal(report.search.results.some((result) => result.value?.includes(controls)), true);
+    assert.doesNotMatch(terminal, /[\u0080-\u009f]|\p{Default_Ignorable_Code_Point}/u);
   });
 });

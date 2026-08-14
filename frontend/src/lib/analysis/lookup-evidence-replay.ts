@@ -5,8 +5,15 @@ import {
   LOOKUP_EVIDENCE_PORTABLE_MAX_DEPTH,
   LOOKUP_EVIDENCE_PORTABLE_MAX_ENTRIES,
   LOOKUP_EVIDENCE_SCHEMA,
+  HOMEPAGE_LOOKUP_EVIDENCE_SCHEMA_VERSION,
   LEGACY_LOOKUP_EVIDENCE_SCHEMA_VERSION,
   LOOKUP_EVIDENCE_SCHEMA_VERSION,
+  projectLookupEvidenceAvailability,
+  projectLookupEvidenceRdapPublication,
+  projectLookupEvidenceRdapSourcePublication,
+  projectLookupEvidenceRegistryInsights,
+  projectLookupEvidenceWhoisPublication,
+  projectLookupEvidenceWhoisSourcePublication,
   SUPPORTED_LOOKUP_EVIDENCE_SCHEMA_VERSIONS,
 } from './evidence-export.ts';
 import { scanBoundedJson } from '../../../../lib/bounded-json.mts';
@@ -23,6 +30,7 @@ import {
   validHttpDeliveryMetadata,
   validPagePublicationMetadata,
 } from '../../../../lib/homepage-metadata-contract.mts';
+import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from '../../../../lib/observation.mts';
 
 export const LOOKUP_EVIDENCE_REPLAY_MAX_BYTES = LOOKUP_EVIDENCE_PORTABLE_MAX_BYTES;
 export const LOOKUP_EVIDENCE_REPLAY_MAX_ENTRIES = LOOKUP_EVIDENCE_PORTABLE_MAX_ENTRIES;
@@ -92,6 +100,46 @@ function record(value: unknown): JsonRecord {
     : {};
 }
 
+function sameJsonValue(left: unknown, right: unknown): boolean {
+  if (Object.is(left, right)) return true;
+  if (Array.isArray(left) || Array.isArray(right)) {
+    return Array.isArray(left)
+      && Array.isArray(right)
+      && left.length === right.length
+      && left.every((item, index) => sameJsonValue(item, right[index]));
+  }
+  if (!left || !right || typeof left !== 'object' || typeof right !== 'object') return false;
+  const leftRecord = left as JsonRecord;
+  const rightRecord = right as JsonRecord;
+  const leftKeys = Object.keys(leftRecord).sort();
+  const rightKeys = Object.keys(rightRecord).sort();
+  return leftKeys.length === rightKeys.length
+    && leftKeys.every((key, index) => key === rightKeys[index]
+      && sameJsonValue(leftRecord[key], rightRecord[key]));
+}
+
+function validateCurrentPrivacyBoundary(
+  rdap: JsonRecord,
+  whois: JsonRecord,
+  availability: unknown,
+  registryInsights: unknown,
+): void {
+  try {
+    if (!sameJsonValue(rdap, projectLookupEvidenceRdapSourcePublication(rdap))
+      || !sameJsonValue(whois, projectLookupEvidenceWhoisSourcePublication(whois))
+      || (rdap.status !== 'error'
+        && !sameJsonValue(rdap.parsed, projectLookupEvidenceRdapPublication(rdap.parsed)))
+      || (whois.status !== 'error'
+        && !sameJsonValue(whois.parsed, projectLookupEvidenceWhoisPublication(whois.parsed)))
+      || !sameJsonValue(availability, projectLookupEvidenceAvailability(availability))
+      || !sameJsonValue(registryInsights, projectLookupEvidenceRegistryInsights(registryInsights))) {
+      throw new Error('invalid current projection');
+    }
+  } catch {
+    throw new Error('Lookup evidence schema 28 violates its privacy-minimized publication boundary.');
+  }
+}
+
 function text(value: unknown, maximum = 320): string {
   return String(value ?? '')
     .replace(CONTROL_CHARACTERS, ' ')
@@ -100,10 +148,9 @@ function text(value: unknown, maximum = 320): string {
     .slice(0, maximum);
 }
 
-function timestamp(value: unknown): string | null {
-  if (typeof value !== 'string') return null;
-  const parsed = Date.parse(value);
-  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
+function timestamp(value: unknown, legacy = false): string | null {
+  return normalizeExplicitIsoTimestamp(value)
+    ?? (legacy ? normalizeLegacyIsoTimestamp(value) : null);
 }
 
 function stringList(value: unknown, count = 8, maximum = 300): string[] {
@@ -139,20 +186,23 @@ function sourceState(value: JsonRecord): string {
   ).replaceAll('_', ' ');
 }
 
-function source(descriptor: SourceDescriptor): LookupEvidenceReplaySource {
+function source(descriptor: SourceDescriptor, legacyTimestamps = false): LookupEvidenceReplaySource {
   const value = record(descriptor.value);
   const state = sourceState(value);
+  const rawObservedAt = value.observedAt
+    ?? value.fetchedAt
+    ?? value.queriedAt
+    ?? descriptor.fallbackObservedAt;
+  const observedAt = timestamp(rawObservedAt, legacyTimestamps);
+  if (!legacyTimestamps && rawObservedAt !== undefined && rawObservedAt !== null && !observedAt) {
+    throw new Error(`Lookup evidence ${descriptor.label} timestamp is invalid or lacks an explicit timezone.`);
+  }
   return {
     id: descriptor.id,
     label: descriptor.label,
     state,
     complete: typeof value.complete === 'boolean' ? value.complete : null,
-    observedAt: timestamp(
-      value.observedAt
-        ?? value.fetchedAt
-        ?? value.queriedAt
-        ?? descriptor.fallbackObservedAt,
-    ),
+    observedAt,
     limitations: stringList(value.limitations),
   };
 }
@@ -271,7 +321,9 @@ export async function parseLookupEvidenceReplay(
   if (!SUPPORTED_LOOKUP_EVIDENCE_SCHEMA_VERSIONS.some((version) => version === document.schemaVersion)) {
     throw new Error(`Only Lookup evidence schemas ${humanList(SUPPORTED_LOOKUP_EVIDENCE_SCHEMA_VERSIONS)} can be replayed by this build.`);
   }
-  const exportedAt = timestamp(document.generatedAt);
+  const schemaVersion = Number(document.schemaVersion);
+  const legacyTimestamps = schemaVersion < LOOKUP_EVIDENCE_SCHEMA_VERSION;
+  const exportedAt = timestamp(document.generatedAt, legacyTimestamps);
   if (!exportedAt) throw new Error('The evidence export timestamp is missing or invalid.');
   const application = record(document.application);
   const generatorVersion = text(application.version, 128) || null;
@@ -287,7 +339,6 @@ export async function parseLookupEvidenceReplay(
   const whoisDiagnosticState = text(record(diagnostics.whois).status, 40);
   const rdapSourceState = text(rdap.status, 40);
   const whoisSourceState = text(whois.status, 40);
-  const schemaVersion = Number(document.schemaVersion);
   const legacySourceWrappers = schemaVersion === LEGACY_LOOKUP_EVIDENCE_SCHEMA_VERSION;
   if (!RDAP_STATES.has(rdapDiagnosticState) || !WHOIS_STATES.has(whoisDiagnosticState)) {
     throw new Error('Lookup evidence source states contradict their retained diagnostics.');
@@ -320,18 +371,42 @@ export async function parseLookupEvidenceReplay(
     || (!legacySourceWrappers && !whoisPublicationAvailable && Object.keys(retainedWhoisParsed).length > 0)) {
     throw new Error('Lookup evidence WHOIS publication state is inconsistent with its retained data.');
   }
-  const replayRdap = {
-    ...rdap,
-    status: rdapDiagnosticState,
-    parsed: rdapPublicationAvailable ? rdap.parsed ?? null : null,
-    raw: rdapPublicationAvailable ? rdap.raw ?? null : null,
-  };
-  const replayWhois = {
-    ...whois,
-    status: whoisDiagnosticState,
-    parsed: whoisPublicationAvailable ? whois.parsed ?? null : null,
-    chain: whoisPublicationAvailable && Array.isArray(whois.chain) ? whois.chain : [],
-  };
+  const replayRdap = schemaVersion >= LOOKUP_EVIDENCE_SCHEMA_VERSION
+    ? rdapSourceState === 'error'
+      ? { status: rdapDiagnosticState, error: rdap.error, attempts: rdap.attempts }
+      : {
+          status: rdapDiagnosticState,
+          endpoint: rdap.endpoint,
+          transportSecurity: rdap.transportSecurity,
+          httpStatus: rdap.httpStatus,
+          fetchedAt: rdap.fetchedAt,
+          attempts: rdap.attempts,
+          parsed: rdapPublicationAvailable ? rdap.parsed ?? null : null,
+        }
+    : {
+        ...rdap,
+        status: rdapDiagnosticState,
+        parsed: rdapPublicationAvailable ? rdap.parsed ?? null : null,
+        raw: rdapPublicationAvailable ? rdap.raw ?? null : null,
+      };
+  const replayWhois = schemaVersion >= LOOKUP_EVIDENCE_SCHEMA_VERSION
+    ? whoisSourceState === 'error'
+      ? { status: whoisDiagnosticState, error: whois.error }
+      : {
+          status: whoisDiagnosticState,
+          queriedAt: whois.queriedAt,
+          authoritativeHop: whois.authoritativeHop,
+          failedHop: whois.failedHop,
+          conflictingHop: whois.conflictingHop,
+          parsed: whoisPublicationAvailable ? whois.parsed ?? null : null,
+          chain: whoisPublicationAvailable && Array.isArray(whois.chain) ? whois.chain : [],
+        }
+    : {
+        ...whois,
+        status: whoisDiagnosticState,
+        parsed: whoisPublicationAvailable ? whois.parsed ?? null : null,
+        chain: whoisPublicationAvailable && Array.isArray(whois.chain) ? whois.chain : [],
+      };
   const dns = record(availability.dns);
   const http = record(availability.http);
   const tls = record(availability.tls);
@@ -339,7 +414,7 @@ export async function parseLookupEvidenceReplay(
   const httpResponse = record(http.response);
   const pagePublicationValue = pageIdentity.publicationMetadata;
   const httpDeliveryValue = httpResponse.deliveryMetadata;
-  if (schemaVersion < LOOKUP_EVIDENCE_SCHEMA_VERSION
+  if (schemaVersion < HOMEPAGE_LOOKUP_EVIDENCE_SCHEMA_VERSION
     && (pagePublicationValue !== undefined || httpDeliveryValue !== undefined)) {
     throw new Error('Legacy Lookup evidence cannot contain homepage metadata introduced by a newer schema.');
   }
@@ -376,8 +451,16 @@ export async function parseLookupEvidenceReplay(
     { id: 'sslbl', label: 'SSLBL snapshot comparison', value: sources.sslbl },
   ];
   const replaySources = sourceDescriptors
-    .map((item) => source(item))
+    .map((item) => source(item, legacyTimestamps))
     .slice(0, MAX_SOURCES);
+  if (schemaVersion >= LOOKUP_EVIDENCE_SCHEMA_VERSION) {
+    validateCurrentPrivacyBoundary(
+      rdap,
+      whois,
+      analysis.availability,
+      analysis.registryInsights,
+    );
+  }
   const replaySourcesById = new Map(replaySources.map((item) => [item.id, item]));
 
   const facts: LookupEvidenceReplayFact[] = [];

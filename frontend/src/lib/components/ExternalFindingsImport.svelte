@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { parseBoundedJson } from '$lib/bounded-json';
   import {
     EXTERNAL_FINDINGS_SCHEMA,
     importExternalFindings,
@@ -112,7 +113,10 @@
       let value: unknown = null;
       if (!csv) {
         try {
-          value = JSON.parse(decoded);
+          value = parseBoundedJson(decoded, {
+            label: 'External intelligence import',
+            maximumBytes: MAX_EXTERNAL_INTELLIGENCE_IMPORT_BYTES,
+          });
         } catch {
           throw new Error('The selected file is not valid UTF-8 JSON.');
         }

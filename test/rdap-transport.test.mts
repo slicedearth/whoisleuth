@@ -15,8 +15,9 @@ test('returns bounded RDAP status and text through an injected safe transport', 
       assert.equal(options.signal.aborted, false);
       return new Response('{"objectClassName":"domain"}', { status: 200 });
     },
-    readText: async (_response, maximumBytes) => {
+    readText: async (_response, maximumBytes, options) => {
       assert.equal(maximumBytes, 2_000_000);
+      assert.deepEqual(options, { fatalUtf8: true });
       return { text: '{"objectClassName":"domain"}', truncated: false, bytesRead: 28 };
     },
   });
@@ -91,4 +92,23 @@ test('uses the default capped reader when only a safe transport is injected', as
     }),
   });
   assert.equal(detailed.text, '{"state":"detailed"}');
+});
+
+test('rejects malformed UTF-8 before RDAP JSON can be interpreted', async () => {
+  const malformed = Uint8Array.from([0x7b, 0x22, 0x73, 0x74, 0x61, 0x74, 0x65, 0x22, 0x3a, 0xff, 0x7d]);
+  await assert.rejects(fetchRdapWithTimeout('https://rdap.example.test/domain/example.test', {}, 1_000, {
+    fetch: async () => new Response(malformed, { status: 200 }),
+  }), /encoded data|encoding|decode|utf-8/iu);
+  await assert.rejects(fetchRdapDetailedWithTimeout('https://rdap.example.test/domain/example.test', {}, 1_000, {
+    fetchDetailed: async () => ({
+      response: new Response(malformed, { status: 200 }),
+      requestedUrl: 'https://rdap.example.test/domain/example.test',
+      finalUrl: 'https://rdap.example.test/domain/example.test',
+      redirected: false,
+      redirectCount: 0,
+      redirectLimitReached: false,
+      hops: [],
+      durationMs: 1,
+    }),
+  }), /encoded data|encoding|decode|utf-8/iu);
 });

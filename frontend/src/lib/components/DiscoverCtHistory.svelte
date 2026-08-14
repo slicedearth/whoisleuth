@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tick } from 'svelte';
   import {
     projectTrendPoints,
     type TrendPointInput,
@@ -38,9 +39,25 @@
   }: {
     entries: HistoryEntry[];
     useEntry: (query: string) => void;
-    deleteEntry: (query: string) => void;
-    clearHistory: () => void;
+    deleteEntry: (query: string) => void | Promise<void>;
+    clearHistory: () => void | Promise<void>;
   } = $props();
+
+  function focusMovedAway(origin: Element | null): boolean {
+    const active = document.activeElement;
+    return active instanceof HTMLElement
+      && active !== origin
+      && active !== document.body
+      && active.isConnected;
+  }
+
+  function certificateViewStillOwnsFocus(owner: HTMLElement | null, origin: Element | null): boolean {
+    const tab = document.getElementById('discovery-tab-certificate-transparency');
+    return Boolean(owner?.isConnected
+      && tab?.isConnected
+      && tab.getAttribute('aria-selected') === 'true'
+      && !focusMovedAway(origin));
+  }
 
   function checkTrend(checks: HistoryCheck[]) {
     return projectTrendPoints(checks.map((check, index): TrendPointInput => ({
@@ -68,12 +85,53 @@
     const parsed = new Date(value);
     return Number.isNaN(parsed.getTime()) ? 'Unknown' : parsed.toISOString();
   }
+
+  async function deleteAndFocus(query: string) {
+    const origin = document.activeElement;
+    const owner = origin instanceof HTMLElement
+      ? origin.closest<HTMLElement>('#discovery-method-panel')
+      : null;
+    const previousIndex = entries.findIndex((entry) => entry.query === query);
+    await deleteEntry(query);
+    await tick();
+    if (!certificateViewStillOwnsFocus(owner, origin)) return;
+    if (origin instanceof HTMLElement && origin.isConnected) {
+      origin.focus();
+      return;
+    }
+    const deleteButtons = [...document.querySelectorAll<HTMLElement>('[data-ct-history-delete]')];
+    const nextDelete = deleteButtons[Math.min(Math.max(0, previousIndex), deleteButtons.length - 1)] ?? null;
+    const candidates = [
+      nextDelete,
+      document.getElementById('discovery-seed'),
+      document.getElementById('discovery-tab-certificate-transparency'),
+    ];
+    const target = candidates.find((candidate) => candidate instanceof HTMLElement);
+    if (target instanceof HTMLElement) target.focus();
+  }
+
+  async function clearAndFocus() {
+    const origin = document.activeElement;
+    const owner = origin instanceof HTMLElement
+      ? origin.closest<HTMLElement>('#discovery-method-panel')
+      : null;
+    await clearHistory();
+    await tick();
+    if (!certificateViewStillOwnsFocus(owner, origin)) return;
+    if (origin instanceof HTMLElement && origin.isConnected) {
+      origin.focus();
+      return;
+    }
+    const target = document.getElementById('discovery-seed')
+      ?? document.getElementById('discovery-tab-certificate-transparency');
+    if (target instanceof HTMLElement) target.focus();
+  }
 </script>
 
 <details class="ct-history">
   <summary>Previous certificate searches · {entries.length}</summary>
   <div class="ct-history-list">
-    {#each entries as entry (entry.query)}
+    {#each entries as entry, index (entry.query)}
       <article>
         <div>
           <strong>{entry.query}</strong>
@@ -84,11 +142,11 @@
             <details class="ct-checks"><summary>View check history</summary>{@render Trend(entry.checks)}<ol>{#each entry.checks as check}<li><time datetime={check.checkedAt}>{check.checkedLabel}</time><span>{#if check.truncated}At least {check.resultCount} result{check.resultCount === 1 ? '' : 's'} · continuity and reappearance unclassified · capped lower bound{:else if check.classificationComplete}{check.resultCount} result{check.resultCount === 1 ? '' : 's'} · {check.firstObservedCount} first · {check.reappearedCount} reappeared · {check.continuingCount} continuing{check.historyUnknownCount ? ` · ${check.historyUnknownCount} history unknown` : ''}{:else}{check.resultCount} result{check.resultCount === 1 ? '' : 's'} · earlier-schema classification unavailable{/if}</span></li>{/each}</ol>{#if entry.discardedCheckCountKnown && entry.discardedCheckCount > 0}<p class="history-limit">Showing the {entry.checkCount} most recent retained checks. {entry.discardedCheckCountCapped ? 'At least ' : ''}{entry.discardedCheckCount} older check{entry.discardedCheckCount === 1 ? '' : 's'} {entry.discardedCheckCount === 1 ? 'was' : 'were'} discarded by local retention.</p>{:else if !entry.discardedCheckCountKnown && entry.discardedCheckCount > 0}<p class="history-limit">Showing the {entry.checkCount} most recent retained checks. At least {entry.discardedCheckCount} older check{entry.discardedCheckCount === 1 ? '' : 's'} {entry.discardedCheckCount === 1 ? 'was' : 'were'} discarded while this history was normalised or retained; any earlier schema 1 pruning remains unknown.</p>{:else if !entry.discardedCheckCountKnown}<p class="history-limit">This history was migrated from an earlier retention schema. Whether older checks were discarded before migration is unknown.</p>{:else if entry.checks.length === MAX_CT_HISTORY_EVENTS}<p class="history-limit">At capacity with {MAX_CT_HISTORY_EVENTS} retained checks. No older check has been discarded under the current retention record.</p>{/if}</details>
           {/if}
         </div>
-        <div><button class="btn small" aria-label={`Use ${entry.query} certificate search`} onclick={() => useEntry(entry.query)}>Use</button><button class="btn small danger" aria-label={`Delete ${entry.query} certificate history`} onclick={() => deleteEntry(entry.query)}>Delete</button></div>
+        <div><button class="btn small" aria-label={`Use ${entry.query} certificate search`} onclick={() => useEntry(entry.query)}>Use</button><button class="btn small danger" data-ct-history-delete={index} aria-label={`Delete ${entry.query} certificate history`} onclick={() => void deleteAndFocus(entry.query)}>Delete</button></div>
       </article>
     {/each}
   </div>
-  <button class="btn small danger ct-clear-history" onclick={clearHistory}>Clear all certificate history</button>
+  <button class="btn small danger ct-clear-history" onclick={() => void clearAndFocus()}>Clear all certificate history</button>
 </details>
 
 {#snippet Trend(checks: HistoryCheck[])}

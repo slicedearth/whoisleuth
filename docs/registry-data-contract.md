@@ -728,14 +728,18 @@ performance, identity, ownership, safety, or maliciousness conclusions.
 
 ## Evidence export and privacy boundary
 
-Lookup evidence uses schema `whoisleuth.lookup-evidence`, current version `27`. It
+Lookup evidence uses schema `whoisleuth.lookup-evidence`, current version `28`. It
 contains query context, explicitly projected diagnostics, normalised sources,
 a bounded privacy-projected registry RDAP publication, bounded WHOIS
 referral-hop metadata without response bodies,
 availability analysis, and the source-health-aware
-registry comparison. The recursive portable projection removes request and
+registry comparison. Version 28 removes raw RDAP payloads, expanded RDAP and
+WHOIS contacts, vCards, entity inventories, and attributed contact routes. Its
+positive source allowlists retain only reviewed publication fields and mark
+contact omission explicitly so it cannot be read as source-published absence.
+The recursive portable projection removes request and
 response headers, cookies, session and credential fields, URL credentials,
-queries, and fragments from retained nested values. Version 27 can retain the
+queries, and fragments from retained nested values. Version 27 introduced the
 bounded publication and delivery/cache metadata described above when it was
 present in an eligible full Deep Lookup. Version 26 binds RDAP,
 WHOIS, network-registration, and reverse-DNS publications to their retained
@@ -786,9 +790,13 @@ versioned browser-side
 IDN/script/confusable analysis, additive network-observation provenance supplied
 by deep Lookup, and bounded HTTP response/redirect, page-identity, DNS, and TLS
 evidence derived from the requested collection. URL query strings are
-deliberately omitted from retained HTTP provenance. It is intentionally rich
-and may contain public registry
-contact data. The file is generated locally and is the user's responsibility
+deliberately omitted from retained HTTP provenance. It is intentionally rich,
+and legacy schemas 25 through 27 may contain public registry contact data.
+Current schema 28 does not retain those expanded contacts in either the source
+publications or availability analysis; `registryContactsExcluded: true` records
+that deliberate projection without asserting that the registry published no
+contact. The file is
+generated locally and is the user's responsibility
 after download.
 
 The IDN analysis carries its own `mappingVersion`. Mapping version
@@ -823,7 +831,7 @@ network registration and bounded reverse-DNS context when collected. ASN
 reports present normalised routing registration fields without inventing
 reverse-DNS evidence. The separate JSON action retains the richer schema
 contract described above.
-When schema-version 17 through 27 JSON retains a supported version-5, version-6, or version-7
+When schema-version 17 through 28 JSON retains a supported version-5, version-6, or version-7
 `diagnostics.registryAccess` object, both readable formats include its bounded
 suffix, WHOIS and RDAP access profiles, and limitation in collection
 diagnostics. This remains collection context only and cannot decide
@@ -831,7 +839,7 @@ registration, availability, ownership, safety, or maliciousness. The readable
 formats also include the bounded observed network registration and its
 origin-host limitation when that source is present.
 
-Schema versions 17 through 27 can also retain the bounded normalised security.txt source
+Schema versions 17 through 28 can also retain the bounded normalised security.txt source
 from an explicitly requested deep Lookup. It excludes the response body and
 does not make publication an authorisation, availability, or Risk signal.
 

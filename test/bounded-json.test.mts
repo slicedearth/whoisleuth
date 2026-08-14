@@ -7,6 +7,7 @@ import {
   MAX_BOUNDED_JSON_KEYS,
   MAX_BOUNDED_JSON_VALUES,
   assertBoundedJsonStructure,
+  parseBoundedJson,
   parseBoundedJsonObject,
   scanBoundedJson,
 } from '../lib/bounded-json.mts';
@@ -98,6 +99,18 @@ describe('bounded parsed JSON structure', () => {
     assert.throws(
       () => parseBoundedJsonObject('{"value":1e400}', { maximumBytes: 64 }),
       /contains a non-finite number/u,
+    );
+  });
+
+  test('parses any bounded JSON value without collapsing duplicate keys', () => {
+    assert.deepEqual(parseBoundedJson('[true, null]', { maximumBytes: 64 }), [true, null]);
+    assert.throws(
+      () => parseBoundedJson('{"mode":"safe","mode":"unsafe"}', { maximumBytes: 64 }),
+      /duplicate object key/u,
+    );
+    assert.throws(
+      () => parseBoundedJson('[]', { maximumBytes: 1 }),
+      /between 1 byte and 1 bytes/u,
     );
   });
 

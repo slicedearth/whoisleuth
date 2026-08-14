@@ -260,9 +260,20 @@ function analyzeHsts(header: HeaderResult, signals: ResponsePolicySignal[]): Res
   }
   const directives = header.value.split(';').map((part) => part.trim()).filter(Boolean);
   if (directives.length > MAX_RESPONSE_POLICY_DIRECTIVES) return 'partial';
-  const maxAge = directives
-    .map((part) => part.match(/^max-age\s*=\s*(\d+)$/iu)?.[1] || null)
-    .find((value): value is string => value !== null);
+  const seen = new Set<string>();
+  let maxAge: string | null = null;
+  for (const directive of directives) {
+    const match = /^([a-z][a-z0-9-]{0,63})(?:\s*=\s*(.*))?$/iu.exec(directive);
+    if (!match) return 'malformed';
+    const name = match[1]?.toLowerCase() ?? '';
+    if (seen.has(name)) return 'malformed';
+    seen.add(name);
+    if (name === 'max-age') {
+      const value = match[2];
+      if (!value || !/^\d+$/u.test(value)) return 'malformed';
+      maxAge = value;
+    }
+  }
   if (!maxAge || maxAge.length > 12) return 'malformed';
   const seconds = Number(maxAge);
   if (!Number.isSafeInteger(seconds) || seconds < 0) return 'malformed';
@@ -333,10 +344,15 @@ function analyzeCookies(
   let missingHttpOnly = 0;
   let missingSameSite = 0;
   let sameSiteNoneWithoutSecure = 0;
+  let attributesTruncated = false;
 
   for (const value of result.values) {
     const segments = value.split(';');
     if (!segments[0]?.includes('=')) return { state: 'malformed', count: result.values.length, truncated: result.truncated };
+    if (segments.length - 1 > MAX_RESPONSE_POLICY_TOKENS) {
+      attributesTruncated = true;
+      continue;
+    }
     const attributes = new Map<string, string | null>();
     for (const rawAttribute of segments.slice(1, MAX_RESPONSE_POLICY_TOKENS + 1)) {
       const [rawName = '', ...rawValue] = rawAttribute.trim().split('=');
@@ -359,7 +375,11 @@ function analyzeCookies(
   if (sameSiteNoneWithoutSecure) {
     addSignal(signals, 'cookies_same_site_none_without_secure', sameSiteNoneWithoutSecure);
   }
-  return { state: result.state, count: result.values.length, truncated: result.truncated };
+  return {
+    state: result.state === 'partial' || attributesTruncated ? 'partial' : result.state,
+    count: result.values.length,
+    truncated: result.truncated || attributesTruncated,
+  };
 }
 
 export function analyzeResponsePolicyHeaders(

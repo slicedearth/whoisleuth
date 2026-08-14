@@ -3,6 +3,7 @@
 // migration, import merging, and exact serialized-byte accounting.
 
 import { MAX_WATCHLIST_DOMAINS, normalizeWatchlistEntry } from './watchlist-history.ts';
+import { normalizeExplicitIsoTimestamp } from '../../../../lib/observation.mts';
 
 export const WATCHLIST_SCHEMA_VERSION = 2;
 export const WATCHLIST_SCHEMA = 'whoisleuth.watchlists';
@@ -64,13 +65,14 @@ function defineEntry(
 
 export function normalizeWatchlistStore(raw: unknown): WatchlistStore {
   const source = watchlistMap(raw);
+  const legacyTimestamps = watchlistStoreVersion(raw) === 1;
   const watchlists: WatchlistCollection = {};
   if (!source) return { schema: WATCHLIST_SCHEMA, version: WATCHLIST_SCHEMA_VERSION, watchlists };
   for (const [rawName, rawEntry] of Object.entries(source).slice(0, MAX_WATCHLIST_INPUTS)) {
     const name = normalizeWatchlistName(rawName);
     const entry = plainRecord(rawEntry);
     if (!name || !entry || !Array.isArray(entry.results) || entry.results.length > MAX_WATCHLIST_DOMAINS) continue;
-    defineEntry(watchlists, name, normalizeWatchlistEntry(entry));
+    defineEntry(watchlists, name, normalizeWatchlistEntry(entry, { legacyTimestamps }));
     if (Object.keys(watchlists).length >= MAX_WATCHLISTS) break;
   }
   return { schema: WATCHLIST_SCHEMA, version: WATCHLIST_SCHEMA_VERSION, watchlists };
@@ -136,11 +138,12 @@ export function buildWatchlistExport(
   watchlists: unknown,
   nowIso: unknown = new Date().toISOString(),
 ) {
-  const parsed = typeof nowIso === 'string' ? Date.parse(nowIso) : Number.NaN;
+  const exportedAt = normalizeExplicitIsoTimestamp(nowIso);
+  if (!exportedAt) throw new Error('Watchlist export time must use an explicit timezone.');
   return {
     schema: WATCHLIST_SCHEMA,
     version: WATCHLIST_SCHEMA_VERSION,
-    exportedAt: Number.isFinite(parsed) ? new Date(parsed).toISOString() : new Date().toISOString(),
+    exportedAt,
     watchlists: normalizeWatchlistStore(watchlists).watchlists,
   };
 }

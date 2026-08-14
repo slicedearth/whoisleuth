@@ -136,6 +136,11 @@ describe('official-site page baseline', () => {
     assert.equal(baseline.normalizePageBaseline({ ...current, normalizedHtml: null }), null);
     assert.equal(baseline.normalizePageBaseline({ ...current, domStructure: null }), null);
     assert.equal(baseline.normalizePageBaseline({ ...current, observedAt: 'invalid' }), null);
+    assert.equal(baseline.normalizePageBaseline({ ...current, observedAt: '2026-01-15T12:00:00.000' }), null);
+    assert.equal(
+      baseline.normalizePageBaseline({ ...current, observedAt: '2026-01-15T12:00:00.000+01:00' })?.observedAt,
+      '2026-01-15T11:00:00.000Z',
+    );
     assert.equal(baseline.normalizePageBaseline({ ...current, pageIdentityVersion: baseline.PAGE_IDENTITY_VERSION + 1 }), null);
     assert.equal(baseline.normalizePageBaseline({ ...current, fingerprintVersion: baseline.PAGE_FINGERPRINT_VERSION + 1 }), null);
   });

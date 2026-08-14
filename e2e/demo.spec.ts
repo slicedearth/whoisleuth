@@ -21,6 +21,13 @@ async function workspaceTop(page: Page) {
   return page.locator('#demo-workspace').evaluate((element) => Math.round(element.getBoundingClientRect().top));
 }
 
+async function workspaceNeedsScroll(page: Page) {
+  return page.locator('#demo-workspace').evaluate((element) => {
+    const margin = Number.parseFloat(getComputedStyle(element).scrollMarginTop) || 0;
+    return Math.abs(element.getBoundingClientRect().top - margin) > 1;
+  });
+}
+
 test('completes the guided synthetic workflow without investigation requests or production-store access', async ({ page }) => {
   test.slow();
   await page.emulateMedia({ reducedMotion: 'reduce' });
@@ -179,24 +186,29 @@ test('settles long-to-short stage transitions at one stable workspace anchor', a
 });
 
 test('retains the stage surface until scrolling completes or reaches its bounded fallback', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
   await page.addInitScript(() => {
     Element.prototype.scrollIntoView = function noAutomaticScroll() {};
   });
   await page.goto('/demo');
   const workspace = page.locator('#demo-workspace');
 
-  await page.getByRole('button', { name: 'Begin with Brands' }).click();
-  await expect(page.getByRole('heading', { name: 'Define the protected identity' })).toBeFocused();
+  await page.evaluate(() => window.scrollTo(0, 0));
+  expect(await workspaceNeedsScroll(page)).toBe(true);
+  await page.getByRole('button', { name: 'Begin with Brands' }).evaluate((button: HTMLButtonElement) => button.click());
   await expect(workspace).toHaveAttribute('aria-busy', 'true');
+  await expect(page.getByRole('heading', { name: 'Define the protected identity' })).toBeFocused();
   expect(await workspace.evaluate((element) => Number.parseFloat(getComputedStyle(element).minHeight))).toBeGreaterThan(0);
 
   await page.evaluate(() => window.dispatchEvent(new Event('scrollend')));
   await expect(workspace).toHaveAttribute('aria-busy', 'false');
   await expect(workspace).toHaveCSS('min-height', '0px');
 
-  await page.getByRole('button', { name: 'Use synthetic profile' }).click();
-  await expect(page.getByRole('heading', { name: 'Generate bounded candidate coverage' })).toBeFocused();
+  await page.evaluate(() => window.scrollTo(0, 0));
+  expect(await workspaceNeedsScroll(page)).toBe(true);
+  await page.getByRole('button', { name: 'Use synthetic profile' }).evaluate((button: HTMLButtonElement) => button.click());
   await expect(workspace).toHaveAttribute('aria-busy', 'true');
+  await expect(page.getByRole('heading', { name: 'Generate bounded candidate coverage' })).toBeFocused();
   expect(await workspace.evaluate((element) => Number.parseFloat(getComputedStyle(element).minHeight))).toBeGreaterThan(0);
   await expect(workspace).toHaveAttribute('aria-busy', 'false', { timeout: 2500 });
   await expect(workspace).toHaveCSS('min-height', '0px');
@@ -208,9 +220,11 @@ test('keeps the guided workflow usable at narrow mobile widths', async ({ page }
   await page.goto('/demo');
   const rail = page.locator('.demo-steps');
   const mobileGuidance = page.locator('.mobile-stage-guidance');
+  const desktopGuidance = page.locator('.stage-guidance');
   expect(await rail.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
   expect(await rail.locator('button').evaluateAll((buttons) => buttons.every((button) => button.getBoundingClientRect().height >= 44))).toBe(true);
-  await expect(page.locator('.stage-guidance')).toBeHidden();
+  await expect(desktopGuidance).toHaveCount(1);
+  await expect(desktopGuidance).toBeHidden();
   await expect(mobileGuidance).toBeVisible();
   await expect(mobileGuidance).not.toHaveAttribute('open', '');
   await expect(page.locator('.hero-full-title')).toBeVisible();
@@ -245,7 +259,9 @@ test('keeps the guided workflow usable at narrow mobile widths', async ({ page }
   await expect(page.locator('.discover-candidates article')).toHaveCount(3);
   await expectNoHorizontalOverflow(page);
   await page.getByRole('button', { name: 'Review 3 candidates in Bulk' }).click();
-  await expect(page.locator('.map-frame')).toBeHidden();
+  const desktopMap = page.locator('.map-frame');
+  await expect(desktopMap).toHaveCount(1);
+  await expect(desktopMap).toBeHidden();
   await expect(page.locator('.map-mobile')).toBeVisible();
   await expectNoHorizontalOverflow(page);
 

@@ -541,7 +541,10 @@ bounded normalised publication fields, and reports publication-quality context
 for object identity, base conformance, redaction metadata, required self links,
 and event consistency. A missing identifier or metadata field is a publication
 omission, not a failed lookup. The command is offline, makes no retry, and
-cannot establish current registry reachability.
+cannot establish current registry reachability. Report schema version 3 marks
+bounded conformance, redaction, link, and event families as partial and
+withholds absence or consistency conclusions when omitted values could change
+them; report versions 1 and 2 remain inventoried for compatibility.
 
 `registry-cohort [lookups-or-reports.json|jsonl]` accepts either 1 to 500 saved
 Lookups or an unmixed collection of retained `whoisleuth.cli.registry-cohort`
@@ -694,7 +697,7 @@ evidence must still be retained separately. Legacy capsule version 1 covers
 only the embedded brief, graph, and optional analyst-record projections, so it
 remains `integrity_valid` rather than whole-file `verified`. It also validates
 the bounded versioned structure of saved CLI Lookup JSON and current
-Lookup-evidence schemas 25, 26, and 27. Because neither saved Lookup documents nor full
+Lookup-evidence schemas 25, 26, 27, and 28. Because neither saved Lookup documents nor full
 Lookup-evidence exports embed a checksum or signature, those results are
 reported as `structure_valid` with content integrity explicitly unchecked.
 Lookup-evidence verification closes the supported export envelopes and source
@@ -702,9 +705,12 @@ wrappers, enforces the same 5 MiB, 20,000-entry, and 24-level limits as browser
 replay, and does not claim that
 an observation is accurate, current, or unchanged. Exact retained-file identity
 requires a verified investigation manifest and matching `--manifest-entry`;
-the evidence file can contain a bounded privacy-projected registry RDAP
-publication, normalised WHOIS values, and bounded contacts, so review it before
-sharing. Request and response headers, cookies, session and credential fields,
+legacy evidence files can contain bounded registry contacts, so review them
+before sharing. Current schema 28 excludes raw registration payloads, expanded
+contacts, vCards, entity inventories, and attributed contact routes. Its
+availability analysis retains `registryContactsExcluded: true` instead of
+registrar, registrant, or abuse contact values. Request
+and response headers, cookies, session and credential fields,
 and URL credentials, queries, and fragments are excluded. Saved Lookup validation retains its
 stricter 8 MiB document ceiling.
 
@@ -1228,9 +1234,11 @@ complete supported static page-identity observations on both sides.
 
 Each page component remains independent. Exact, similar, overlapping,
 different, unavailable, and partial evidence are not collapsed into a score.
-Version 3 also withholds technology-set equality and disjointness whenever
-either saved technology observation is partial or truncated; the retained
-identifiers remain visible only as incomplete evidence.
+Version 3 withholds technology-set equality and disjointness whenever either
+saved technology observation is partial or truncated. Version 4 also reports
+TLS issuer and public-key comparison as partial whenever either retained TLS
+source is partial; the retained values remain visible only as incomplete
+evidence.
 Matching components are investigative relationships rather than proof of
 copying, common ownership, control, intent, safety, or maliciousness. Static
 comparison does not execute JavaScript; use the optional local rendered
@@ -1238,18 +1246,25 @@ capture package only when that additional active behaviour is authorised.
 
 ## Passive mail exposure review
 
-`mail-review [bulk.json|bulk.jsonl]` reads version-2 Bulk output locally and
+`mail-review [bulk.json|bulk.jsonl]` reads supported version-2 or version-3 Bulk output locally and
 summarises MX, null MX, SPF, DMARC, and mail-provider relationships. It keeps
 authenticated mail, authentication gaps, incomplete authentication evidence,
 no explicit MX, null MX, and incomplete DNS evidence as separate states.
 Shared-provider relationships are based only on the registrable domain of an
 observed MX hostname and do not establish shared ownership or control.
+Mail-review report schema version 3 exposes per-row omitted providers,
+per-relationship omitted domains, and aggregate omitted relationship counts;
+cross-domain absence is never inferred after one of those bounds is reached.
+Schema version 2 remains a supported historical pre-disclosure output contract;
+it predates those explicit bound fields and must not be read as proving complete
+relationship or provider coverage.
 
 The command makes no DNS or SMTP request and retains no source path. It does
 not test message acceptance, relay behaviour, mailbox existence, catch-all
 behaviour, SMTP banners, or whether a mail server is rogue, safe, or malicious.
 
-An analyst may add a bounded `tlsaEvidence` object to a version-2 Bulk item for
+An analyst may add a bounded `tlsaEvidence` object to a supported version-2 or
+version-3 Bulk item for
 offline DANE review. It must name the exact `_25._tcp.<mx-host>` service, and
 that host must occur in the same item's retained MX evidence. A certificate
 association match is complete only when `dnssecState` is `validated`. For an
@@ -1724,7 +1739,11 @@ and attributes. The version-1 DOM-digest schema retains the `visibleText` field
 name for compatibility, but it includes bounded body text nodes that CSS or
 non-rendered containers may hide and is not a visibility claim.
 Version-2 comparison output reports only whether the two bounded page titles
-match; it does not copy either title. It does not recrawl either target, reveal the input paths, or collapse the
+match; it does not copy either title. Version 3 additionally reports equality
+of an equal truncated DOM or body-text prefix as unavailable, because omitted
+content may differ. Version 3 also reports request-domain and technology set
+relationships as unavailable when either capture is partial, while preserving
+their bounded counts and shared observations. It does not recrawl either target, reveal the input paths, or collapse the
 independent components into a similarity or maliciousness score. A missing
 perceptual hash remains unavailable rather than becoming a visual difference.
 
@@ -1741,16 +1760,19 @@ are mutually exclusive. Markdown and HTML include the fixed generator footer
 by default; `--no-attribution` removes only that footer and is rejected for
 JSON output.
 
-The current schema-27 JSON output can be passed directly to
+The current schema-28 JSON output can be passed directly to
 `verify-artifact`. The verifier reports `structure_valid` because this format
 has no embedded checksum or signature. Use a verified investigation manifest
 and exact manifest-entry identity when byte-for-byte retention matters, and
-review the bounded privacy-projected registry RDAP publication, normalised
-WHOIS values, and bounded contacts before sharing. `interchange-report`
+review the bounded privacy-projected registry RDAP publication and normalised
+WHOIS values before sharing. Raw RDAP payloads, expanded RDAP and WHOIS
+contacts, vCards, entity inventories, and attributed contact routes are not
+present in schema 28. `interchange-report`
 recognises the current format and describes the
 browser replay as lossy by design because replay renders bounded normalised
 facts rather than raw payloads. Schema 26 remains readable with its strict
-source/publication binding and portable limits. Schema 25 remains readable when its retained
+source/publication binding and portable limits. Schema 27 remains readable
+with its bounded homepage metadata. Schema 25 remains readable when its retained
 historical wrappers differ from retained diagnostics in the ways emitted by
 the former producer. The diagnostics remain authoritative, unavailable wrapper
 data is suppressed during replay, and other contradictory legacy shapes fail
@@ -1767,7 +1789,9 @@ The export retains query context, explicitly projected source diagnostics,
 normalised registry data, a bounded privacy-projected registry RDAP
 publication, availability analysis, bounded WHOIS referral-hop
 metadata without response bodies, and the shared
-registry-source comparison. Version 27 can retain exact bounded publication
+registry-source comparison. Version 28 uses positive source allowlists and
+marks deliberately excluded contact fields unavailable rather than absent.
+Version 27 can retain exact bounded publication
 and delivery/cache summaries already present in a version-2 saved Deep Lookup;
 version-1 saved inputs do not acquire fields they never represented. Version
 23 can add the exact local
@@ -1811,8 +1835,9 @@ links, or external resources. A restrictive embedded Content Security Policy
 provides defence in depth when the local file is opened in a browser. All
 registry values are HTML-escaped and displayed as text.
 
-This is a deliberately rich evidence package. Raw registry sources can contain
-publicly published contact data, and deep availability evidence can contain
+This is a deliberately rich evidence package. Legacy schemas 25 through 27 can
+contain publicly published contact data, while current schema 28 excludes raw
+registration payloads and expanded contacts. Deep availability evidence can contain
 bounded website, DNS, mail, page-identity, and TLS observations. Review and
 secure the output before sharing it. The CLI does not add browser-only IDN
 profile analysis, so that optional evidence field is `null`.

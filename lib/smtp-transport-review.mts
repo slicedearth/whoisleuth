@@ -31,6 +31,7 @@ import {
 } from './dnssec-chain-validation.mts';
 import { isPrivateAddress } from './safe-fetch.mts';
 import { analyzeTlsaEvidence, type TlsaEvidenceReport } from './tlsa-evidence.mts';
+import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from './observation.mts';
 
 const MAIL_TRANSPORT_INPUT_SCHEMA = 'whoisleuth.mail-transport.input';
 const MAIL_TRANSPORT_INPUT_VERSION = 1;
@@ -245,9 +246,11 @@ function exactRecord(value: unknown, keys: ReadonlySet<string>, label: string): 
   return record;
 }
 
-function timestamp(value: unknown, label: string): string {
-  if (typeof value !== 'string' || value.length > 64 || !Number.isFinite(Date.parse(value))) throw new TypeError(`${label} must be one ISO-compatible timestamp.`);
-  return new Date(value).toISOString();
+function timestamp(value: unknown, label: string, legacy = false): string {
+  const normalized = normalizeExplicitIsoTimestamp(value)
+    ?? (legacy ? normalizeLegacyIsoTimestamp(value) : null);
+  if (!normalized) throw new TypeError(`${label} must be one bounded ISO timestamp${legacy ? '' : ' with an explicit timezone'}.`);
+  return normalized;
 }
 
 function text(value: unknown, label: string, maximum = 160): string {
@@ -267,7 +270,7 @@ function policyEvidence(value: unknown, label: 'mtaSts' | 'tlsRpt') {
   const completeness = text(record.completeness, `policyContext.${label}.completeness`, 16);
   if (!allowedStates.includes(state) || !['complete', 'partial', 'unavailable'].includes(completeness)) throw new TypeError(`policyContext.${label} has an unsupported state or completeness.`);
   const source = record.source === null ? null : text(record.source, `policyContext.${label}.source`, 160);
-  const observedAt = record.observedAt === null ? null : timestamp(record.observedAt, `policyContext.${label}.observedAt`);
+  const observedAt = record.observedAt === null ? null : timestamp(record.observedAt, `policyContext.${label}.observedAt`, true);
   const unavailable = completeness === 'unavailable';
   if ((unavailable && (source !== null || observedAt !== null)) || (!unavailable && (source === null || observedAt === null))) {
     throw new TypeError(`policyContext.${label} unavailable evidence must omit source and time; retained evidence requires both.`);

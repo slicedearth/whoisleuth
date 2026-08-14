@@ -2,85 +2,70 @@ import { expect, test } from './fixtures';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
-  LOOKUP_EVIDENCE_SCHEMA,
-  LOOKUP_EVIDENCE_SCHEMA_VERSION,
+  buildLookupEvidence,
 } from '../frontend/src/lib/analysis/evidence-export';
 
 function replayEvidence(): Record<string, unknown> {
   const target = 'legacy.example.test';
-  return {
-    schema: LOOKUP_EVIDENCE_SCHEMA,
-    schemaVersion: LOOKUP_EVIDENCE_SCHEMA_VERSION,
-    generatedAt: '2026-08-06T00:00:00.000Z',
-    application: { name: 'WHOISleuth', version: '1.34.1' },
-    query: {
-      submitted: target,
-      registrableDomain: target,
-      type: 'domain',
-    },
+  return buildLookupEvidence({
+    query: target,
+    registrableDomain: target,
+    type: 'domain',
     diagnostics: {
       rdap: { status: 'success', complete: true, fetchedAt: '2026-08-06T00:00:00.000Z' },
       whois: { status: 'unsupported' },
+      availability: { status: 'complete' },
     },
-    sources: {
-      rdap: {
-        status: 'success', complete: true,
-        parsed: {
-          domain: target,
-          registrar: { name: 'Example Registrar' },
-          nameservers: [`ns1.${target}`],
-        },
+    rdap: {
+      parsed: {
+        domain: target,
+        registrar: { name: 'Example Registrar' },
+        nameservers: [`ns1.${target}`],
       },
-      whois: { status: 'unsupported' },
-      reverseDns: null,
-      network: null,
-      securityTxt: null,
-      sslbl: null,
     },
-    analysis: {
-      availability: {
-        state: 'registered',
-        confidence: 'high',
-        dns: { status: 'success', records: {} },
-        http: {
-          status: 'success', complete: true, finalUrl: `https://${target}/`,
-          response: {
-            deliveryMetadata: {
-              version: 1, status: 'success', complete: true, truncated: false,
-              limitations: ['Selected-response headers are point-in-time declarations and do not prove intermediary caching, compression effectiveness, or page performance.'],
-              contentEncoding: { status: 'observed', codings: ['br', 'gzip'], encoded: true, unknownCodingCount: 0 },
-              cachePolicy: {
-                status: 'observed', noStore: false, noCache: false, mustRevalidate: false,
-                public: true, private: false, immutable: true,
-                maxAgeSeconds: 3600, sMaxAgeSeconds: 120, ageSeconds: 45, unknownDirectiveCount: 0,
-                maxAgePresent: true, sMaxAgePresent: true, agePresent: true,
-                etag: { present: true, valid: true }, lastModified: { present: true, valid: true }, expires: { present: false, valid: null },
-              },
-            },
-          },
-        },
-        tls: { status: 'unavailable' },
-        pageIdentity: {
-          status: 'success',
-          publicationMetadata: {
+    availability: {
+      state: 'registered',
+      confidence: 'high',
+      dns: { status: 'success', records: {} },
+      http: {
+        status: 'success', complete: true, finalUrl: `https://${target}/`,
+        response: {
+          deliveryMetadata: {
             version: 1, status: 'success', complete: true, truncated: false,
-            limitations: ['Counts and declarations describe only the captured static homepage HTML; they are not a full accessibility, indexing, or performance audit.'],
-            robots: { status: 'observed', complete: true, truncated: false, directives: ['follow', 'index'], recognizedDirectiveCount: 2, unknownDirectiveCount: 0, conflicting: false },
-            twitterCard: {
-              status: 'observed', complete: true, truncated: false, cardType: 'summary_large_image', declarationCount: 3,
-              titlePresent: true, descriptionPresent: false, imagePresent: true, imageAltPresent: false,
-              sitePresent: false, creatorPresent: false, playerPresent: false, appPresent: false,
+            limitations: ['Selected-response headers are point-in-time declarations and do not prove intermediary caching, compression effectiveness, or page performance.'],
+            contentEncoding: { status: 'observed', codings: ['br', 'gzip'], encoded: true, unknownCodingCount: 0 },
+            cachePolicy: {
+              status: 'observed', noStore: false, noCache: false, mustRevalidate: false,
+              public: true, private: false, immutable: true,
+              maxAgeSeconds: 3600, sMaxAgeSeconds: 120, ageSeconds: 45, unknownDirectiveCount: 0,
+              maxAgePresent: true, sMaxAgePresent: true, agePresent: true,
+              etag: { present: true, valid: true }, lastModified: { present: true, valid: true }, expires: { present: false, valid: null },
             },
-            headings: { complete: true, truncated: false, total: 2, h1: 1, h2: 1, h3: 0, h4: 0, h5: 0, h6: 0 },
-            images: { totalComplete: true, classificationComplete: true, truncated: false, total: 2, altMissing: 1, altEmpty: 0, altNonEmpty: 1, altUnclassified: 0 },
-            renderBlockingCandidates: { complete: true, truncated: false, script: 1, stylesheet: 1, total: 2, scope: 'explicit-head-static-v1' },
           },
         },
       },
-      registryComparison: { fields: [{ label: 'Registrar', status: 'conflict' }] },
-      registrarPublicationComparison: null,
+      tls: { status: 'unavailable' },
+      pageIdentity: {
+        status: 'success',
+        publicationMetadata: {
+          version: 1, status: 'success', complete: true, truncated: false,
+          limitations: ['Counts and declarations describe only the captured static homepage HTML; they are not a full accessibility, indexing, or performance audit.'],
+          robots: { status: 'observed', complete: true, truncated: false, directives: ['follow', 'index'], recognizedDirectiveCount: 2, unknownDirectiveCount: 0, conflicting: false },
+          twitterCard: {
+            status: 'observed', complete: true, truncated: false, cardType: 'summary_large_image', declarationCount: 3,
+            titlePresent: true, descriptionPresent: false, imagePresent: true, imageAltPresent: false,
+            sitePresent: false, creatorPresent: false, playerPresent: false, appPresent: false,
+          },
+          headings: { complete: true, truncated: false, total: 2, h1: 1, h2: 1, h3: 0, h4: 0, h5: 0, h6: 0 },
+          images: { totalComplete: true, classificationComplete: true, truncated: false, total: 2, altMissing: 1, altEmpty: 0, altNonEmpty: 1, altUnclassified: 0 },
+          renderBlockingCandidates: { complete: true, truncated: false, script: 1, stylesheet: 1, total: 2, scope: 'explicit-head-static-v1' },
+        },
+      },
     },
-  };
+  }, {
+    generatedAt: '2026-08-06T00:00:00.000Z',
+    applicationVersion: '1.34.1',
+  });
 }
 
 test('offline replay uses isolated graph identifiers and has no live evidence links', async ({ page }) => {
@@ -110,7 +95,9 @@ test('offline replay uses isolated graph identifiers and has no live evidence li
   const unsupported = replay.locator('.source-grid article', { hasText: 'WHOIS' }).locator('.chip');
   await expect(unsupported).toHaveClass(/unavailable/u);
   await expect(unsupported).toHaveCSS('border-style', 'dotted');
-  await expect(replay.locator('.contradictions[data-tone="danger"]')).toBeVisible();
+  await expect(replay.locator('.contradictions[data-tone="danger"]')).toHaveCount(0);
+  await expect(replay.getByRole('region', { name: 'Historical review brief' })
+    .getByText('Unknown or incomplete', { exact: true })).toBeVisible();
   await expect(replay.locator('#replay-asset-graph-title')).toBeVisible();
   await expect(replay.locator('#asset-graph-title')).toHaveCount(0);
   await expect(replay.locator('a[href^="#evidence-"]')).toHaveCount(0);
@@ -159,7 +146,7 @@ test('offline replay uses isolated graph identifiers and has no live evidence li
   });
   await expect(replay.getByText(/Loaded lookup-evidence-v25\.json locally/u)).toBeVisible();
 
-  const comparisonEvidence = replayEvidence();
+  const comparisonEvidence = structuredClone(replayEvidence());
   (comparisonEvidence.application as Record<string, unknown>).version = '1.35.0';
   await replay.locator('input[type="file"]').last().setInputFiles({
     name: 'lookup-evidence-comparison.json',
@@ -183,8 +170,8 @@ test('offline replay announces malformed files as errors and incomplete success 
   await replay.locator(':scope > summary').click();
 
   const incomplete = replayEvidence();
-  (incomplete.diagnostics as Record<string, Record<string, unknown>>).rdap!.complete = false;
-  (incomplete.sources as Record<string, Record<string, unknown>>).rdap!.complete = false;
+  (incomplete.diagnostics as Record<string, Record<string, unknown>>).rdap!.status = 'partial';
+  (incomplete.sources as Record<string, Record<string, unknown>>).rdap!.status = 'partial';
   await replay.locator('input[type="file"]').first().setInputFiles({
     name: 'lookup-evidence-incomplete.json',
     mimeType: 'application/json',

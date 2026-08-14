@@ -7,7 +7,9 @@ import type { WhoisChain } from './whois-chain.mts';
 
 type UnknownRecord = Record<string, unknown>;
 
-const MAX_WHOIS_HOPS = 6;
+// Collection performs at most six network queries and may retain one seventh,
+// non-issued hop explaining a loop or hop-limit termination.
+const MAX_WHOIS_HOPS = 7;
 
 export function normalizeWhoisChain(value: unknown): WhoisChain {
   if (!Array.isArray(value)) return [];

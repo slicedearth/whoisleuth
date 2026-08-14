@@ -2,6 +2,8 @@
 // evidence. It validates bounded measurements and adapter coverage without
 // retaining lookup targets, responses, credentials, or partial events.
 
+import { normalizeExplicitIsoTimestamp } from './observation.mts';
+
 export const LOOKUP_PROGRESS_STAGING_EVIDENCE_SCHEMA =
   'whoisleuth.lookup-progress-staging-evidence';
 export const LOOKUP_PROGRESS_STAGING_EVIDENCE_VERSION = 1;
@@ -79,10 +81,9 @@ function boundedInteger(value: unknown, maximum: number, label: string): number 
 }
 
 function timestamp(value: unknown, label: string): string {
-  if (typeof value !== 'string' || value.length > 64) throw new TypeError(`${label} is invalid.`);
-  const parsed = Date.parse(value);
-  if (!Number.isFinite(parsed)) throw new TypeError(`${label} is invalid.`);
-  return new Date(parsed).toISOString();
+  const normalized = normalizeExplicitIsoTimestamp(value);
+  if (!normalized) throw new TypeError(`${label} is invalid.`);
+  return normalized;
 }
 
 export function parseLookupProgressStagingEvidence(raw: unknown): StagingEvidence {

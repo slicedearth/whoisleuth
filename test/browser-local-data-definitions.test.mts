@@ -4,6 +4,7 @@ import {
   BROWSER_LOCAL_COLLECTIONS,
   BULK_SESSIONS_COLLECTION,
   decodeBrowserLocalCollectionRecord,
+  PROFILES_COLLECTION,
   RELATIONSHIP_OBSERVATIONS_COLLECTION,
   SHORTLIST_COLLECTION,
   WATCHLISTS_COLLECTION,
@@ -83,9 +84,31 @@ describe('browser-local collection definitions', () => {
 
   test('every empty collection survives record splitting without changing its canonical document', () => {
     for (const definition of BROWSER_LOCAL_COLLECTIONS) {
+      assert.equal(definition.acceptLegacyRoot(definition.empty()), true, `${definition.id} empty legacy root`);
       const result = roundTrip(definition, definition.empty());
       assert.equal(result.after, result.before, definition.id);
     }
+  });
+
+  test('every collection rejects a structurally unrelated legacy root', () => {
+    for (const definition of BROWSER_LOCAL_COLLECTIONS) {
+      const unrelated = definition.id === 'watchlists'
+        ? { schema: 'unrelated.store', version: 1, watchlists: {} }
+        : {};
+      assert.equal(definition.acceptLegacyRoot(unrelated), false, definition.id);
+    }
+  });
+
+  test('Brand Profile migration accepts its supported export envelope only', () => {
+    const exported = {
+      schema: 'whoisleuth.brand-profiles',
+      version: 6,
+      exportedAt: NOW,
+      profiles: [],
+    };
+
+    assert.equal(PROFILES_COLLECTION.acceptLegacyRoot(exported), true);
+    assert.equal(PROFILES_COLLECTION.acceptLegacyRoot({ ...exported, schema: 'unrelated.store' }), false);
   });
 
   test('shortlist records retain their semantic fields and canonical envelope', () => {
@@ -131,6 +154,19 @@ describe('browser-local collection definitions', () => {
     assert.equal(result.after, result.before);
     assert.deepEqual(Object.keys(result.joined), ['Priority', 'Secondary']);
     assert.deepEqual(WATCHLISTS_COLLECTION.split(result.joined).map((record) => record.id), ['Priority', 'Secondary']);
+  });
+
+  test('legacy watchlist names that resemble envelope fields remain valid collection entries', () => {
+    const watchlist = { results: [] };
+    const input = { schema: watchlist, version: watchlist, watchlists: watchlist };
+
+    assert.equal(WATCHLISTS_COLLECTION.acceptLegacyRoot(input), true);
+    assert.deepEqual(Object.keys(WATCHLISTS_COLLECTION.normalize(input)), ['schema', 'version', 'watchlists']);
+    assert.equal(WATCHLISTS_COLLECTION.acceptLegacyRoot({
+      schema: 'unrelated.store',
+      version: 1,
+      watchlists: {},
+    }), false);
   });
 
   test('retained relationship observations keep deterministic record identities', () => {

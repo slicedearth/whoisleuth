@@ -1,4 +1,5 @@
 import { normalizeDomain } from './case-model.ts';
+import { normalizeExplicitIsoTimestamp } from '../../../../lib/observation.mts';
 
 export const RELATIONSHIP_OBSERVATION_SCHEMA = 'whoisleuth.relationship-observations';
 export const RELATIONSHIP_OBSERVATION_SCHEMA_VERSION = 1;
@@ -123,9 +124,7 @@ function text(value: unknown, maximum: number): string {
 }
 
 function timestamp(value: unknown): string {
-  if (typeof value !== 'string' || value.length > 64 || CONTROL_RE.test(value)) return '';
-  const parsed = Date.parse(value);
-  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : '';
+  return normalizeExplicitIsoTimestamp(value) ?? '';
 }
 
 function positiveInteger(value: unknown): number | null {

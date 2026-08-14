@@ -15,6 +15,8 @@ import {
   boundedNonNegativeInteger,
   boundedPositiveInteger,
   boundedPositiveTimeout,
+  boundedSafeRelativePath,
+  canonicalControlFreeTimestamp,
   exactObjectKeys,
   fixedRatio,
   jsonRecordOrEmpty,
@@ -121,6 +123,14 @@ describe('maintainer-tool duplication report', () => {
     assert.equal(boundedControlFreeText(' reviewed ', 'Fixture', 20), 'reviewed');
     assert.throws(() => boundedControlFreeText('bad\nvalue', 'Fixture', 20), /control-free/iu);
     assert.equal(sanitizedMaintainerText(' a\n b ', 'fallback', 20), 'a b');
+    for (const unsafe of ['\u0085', '\u00ad', '\u034f']) {
+      assert.throws(() => boundedControlFreeText(`bad${unsafe}value`, 'Fixture', 20), /control-free/iu);
+      assert.equal(sanitizedMaintainerText(`a${unsafe}b`, 'fallback', 20), 'a b');
+      assert.throws(() => boundedSafeRelativePath(`asset${unsafe}.js`, 'Fixture'), /safe relative path/iu);
+    }
+    assert.equal(boundedSafeRelativePath('assets/über.js', 'Fixture'), 'assets/über.js');
+    assert.equal(canonicalControlFreeTimestamp('2026-01-15T12:00:00+01:00', 'Fixture'), '2026-01-15T11:00:00.000Z');
+    assert.throws(() => canonicalControlFreeTimestamp('2026-01-15T12:00:00', 'Fixture'), /explicit timezone/iu);
     assert.equal(boundedNonNegativeInteger(0, 'Count', 1), 0);
     assert.equal(boundedPositiveInteger(1, 'Count', 1), 1);
     assert.equal(boundedPositiveTimeout(20, 10, 15), 15);

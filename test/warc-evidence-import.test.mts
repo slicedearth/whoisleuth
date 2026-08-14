@@ -63,6 +63,22 @@ function archive(...records: Uint8Array[]): ArrayBuffer {
 }
 
 describe('portable WARC evidence import', () => {
+  test('requires an explicit timezone in WARC-Date', async () => {
+    const block = responseBlock();
+    await assert.rejects(
+      () => parseWarcEvidenceArchive(archive(record('response', block, {
+        target: 'https://example.test/',
+        date: '2026-07-31T12:00:00.000',
+      })), 'capture.warc'),
+      /no importable HTML response evidence/u,
+    );
+    const offset = await parseWarcEvidenceArchive(archive(record('response', block, {
+      target: 'https://example.test/',
+      date: '2026-07-31T12:00:00.000+01:00',
+    })), 'capture.warc');
+    assert.equal(offset.document.findings[0]?.observedAt, '2026-07-31T11:00:00.000Z');
+  });
+
   test('verifies a bounded response and retains normalized page evidence only', async () => {
     const block = responseBlock({ title: 'Reviewed fixture' });
     const report = await parseWarcEvidenceArchive(

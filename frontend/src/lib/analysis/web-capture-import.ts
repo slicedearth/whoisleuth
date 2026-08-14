@@ -15,6 +15,7 @@ import {
   WEB_CAPTURE_SUMMARY_SCHEMA,
   WEB_CAPTURE_SUMMARY_VERSION,
 } from '../../../../lib/web-capture-contract.mts';
+import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from '../../../../lib/observation.mts';
 export {
   WEB_CAPTURE_MANIFEST_SCHEMA,
   WEB_CAPTURE_MANIFEST_VERSION,
@@ -73,12 +74,13 @@ function text(value: unknown, maximum: number, label: string, optional = false):
   return value.replace(/\s+/g, ' ').trim();
 }
 
-function timestamp(value: unknown, label: string, optional = false): string | null {
+function timestamp(value: unknown, label: string, optional = false, legacy = false): string | null {
   const candidate = text(value, 64, label, optional);
   if (candidate === null) return null;
-  const parsed = Date.parse(candidate);
-  if (!Number.isFinite(parsed)) throw new Error(`${label} must be a valid date and time.`);
-  return new Date(parsed).toISOString();
+  const normalized = normalizeExplicitIsoTimestamp(candidate)
+    ?? (legacy ? normalizeLegacyIsoTimestamp(candidate) : null);
+  if (!normalized) throw new Error(`${label} must be a valid date and time with an explicit timezone.`);
+  return normalized;
 }
 
 function origin(value: unknown, label: string): string | null {
@@ -218,11 +220,12 @@ export function parseWebCaptureManifest(value: unknown): ExternalFindingsDocumen
     throw new Error(`Web capture manifests must use ${WEB_CAPTURE_MANIFEST_SCHEMA} schema version 1 or ${WEB_CAPTURE_MANIFEST_VERSION}.`);
   }
   const manifestVersion = Number(root.schemaVersion);
+  const legacyTimestamps = manifestVersion < WEB_CAPTURE_MANIFEST_VERSION;
   const source = record(root.source);
   if (!source || !onlyKeys(source, SOURCE_KEYS)) throw new Error('Web capture manifests require a bounded source object.');
   const sourceName = text(source.name, 80, 'Capture source name');
   const sourceReference = text(source.reference, 500, 'Capture source reference', true);
-  const sourceCollectedAt = timestamp(source.collectedAt, 'Capture source collection time', true);
+  const sourceCollectedAt = timestamp(source.collectedAt, 'Capture source collection time', true, legacyTimestamps);
   if (!Array.isArray(root.captures) || !root.captures.length || root.captures.length > MAX_WEB_CAPTURE_SUMMARIES) {
     throw new Error(`Web capture manifests must contain between 1 and ${MAX_WEB_CAPTURE_SUMMARIES} captures.`);
   }
@@ -243,7 +246,7 @@ export function parseWebCaptureManifest(value: unknown): ExternalFindingsDocumen
     if (domainCounts.size > MAX_EXTERNAL_FINDING_DOMAINS) {
       throw new Error(`Web capture manifests exceed the ${MAX_EXTERNAL_FINDING_DOMAINS}-domain limit.`);
     }
-    const observedAt = timestamp(capture.capturedAt, `Web capture manifest ${index + 1} time`);
+    const observedAt = timestamp(capture.capturedAt, `Web capture manifest ${index + 1} time`, false, legacyTimestamps);
     const completeness = ['complete', 'inconclusive', 'partial', 'unknown'].includes(String(capture.completeness))
       ? capture.completeness
       : 'unknown';

@@ -91,6 +91,14 @@ describe('SSLBL snapshot generator', () => {
     );
     assert.throws(() => parseSslblSnapshotArguments([]), /input/iu);
     assert.throws(
+      () => parseSslblSnapshotArguments(['--input=/tmp/feed.csv', '--generated-at=2026-07-29T09:00:00']),
+      /explicit timezone/iu,
+    );
+    assert.equal(
+      parseSslblSnapshotArguments(['--input=/tmp/feed.csv', '--generated-at=2026-07-29T09:00:00+01:00']).generatedAt,
+      '2026-07-29T08:00:00.000Z',
+    );
+    assert.throws(
       () => parseSslblSnapshotArguments(['--input=/tmp/feed.csv', '--unexpected=yes']),
       /unknown option/iu,
     );

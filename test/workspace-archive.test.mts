@@ -886,6 +886,7 @@ describe('portable workspace archive', () => {
     const archive = {
       schema: WORKSPACE_ARCHIVE_SCHEMA,
       version: WORKSPACE_ARCHIVE_VERSION,
+      generatedAt: NOW,
       padding: 'x'.repeat(MAX_WORKSPACE_ARCHIVE_BYTES),
     };
     await assert.rejects(readWorkspaceArchive(archive), /limited to 10 MiB/);
@@ -899,7 +900,11 @@ describe('portable workspace archive', () => {
   });
 
   test('rejects a cyclic imported archive instead of traversing it indefinitely', async () => {
-    const archive: Record<string, unknown> = { schema: WORKSPACE_ARCHIVE_SCHEMA, version: WORKSPACE_ARCHIVE_VERSION };
+    const archive: Record<string, unknown> = {
+      schema: WORKSPACE_ARCHIVE_SCHEMA,
+      version: WORKSPACE_ARCHIVE_VERSION,
+      generatedAt: NOW,
+    };
     archive.self = archive;
     await assert.rejects(readWorkspaceArchive(archive), /cannot be serialised/);
   });

@@ -10,7 +10,7 @@ import {
   MAX_CASES,
   MAX_NOTES_PER_CASE,
   deterministicId,
-  isoOrNull,
+  caseTimestampOrNull,
   normalizeCase,
   normalizeDomain,
   normalizeEvidenceHistory,
@@ -109,7 +109,7 @@ function assignUniqueIds(cases: CaseRecord[]): void {
  * @returns {CaseStore}
  */
 export function normalizeCaseStore(raw: unknown): CaseStore {
-  const now = new Date().toISOString();
+  const fallback = new Date(0).toISOString();
   const sourceVersion = parseStoreVersion(raw);
   const acceptsBrandProfileIds = Array.isArray(raw)
     || sourceVersion === CASE_SCHEMA_VERSION;
@@ -118,7 +118,7 @@ export function normalizeCaseStore(raw: unknown): CaseStore {
     const normalized = normalizeCase(
       item,
       undefined,
-      now,
+      fallback,
       Array.isArray(raw) ? CASE_SCHEMA_VERSION : sourceVersion,
     );
     if (!normalized) continue;
@@ -187,15 +187,19 @@ function extractImportPatch(raw: unknown, importedVersion: number): ImportPatch 
   const record = objectRecord(raw);
   const domain = normalizeDomain(record.domain);
   if (!domain) return null;
-  const importFallback = isoOrNull(record.updatedAt) || isoOrNull(record.createdAt) || null;
+  const importFallback = caseTimestampOrNull(record.updatedAt, importedVersion)
+    || caseTimestampOrNull(record.createdAt, importedVersion)
+    || null;
   const normalizedFallback = importFallback || '1970-01-01T00:00:00.000Z';
+  const timestampOptions = { legacyTimestamps: importedVersion < CASE_SCHEMA_VERSION };
   const rawEvidence = Array.isArray(record.evidenceHistory) ? record.evidenceHistory : [];
   const evidencePins = normalizeCaseEvidencePins(record.evidencePins, normalizedFallback, {
     allowCertificateObservation: importedVersion >= 11,
+    ...timestampOptions,
   });
   const pinIds = new Set(evidencePins.map((item) => item.id));
-  const actions = normalizeCaseActions(record.actions, normalizedFallback);
-  const assertions = normalizeCaseAssertions(record.assertions, normalizedFallback, pinIds);
+  const actions = normalizeCaseActions(record.actions, normalizedFallback, timestampOptions);
+  const assertions = normalizeCaseAssertions(record.assertions, normalizedFallback, pinIds, timestampOptions);
   const branchReferences = caseInvestigationBranchReferences({ evidencePins, actions, assertions });
   const brandProfileReferences = importedVersion >= 12
     ? inspectCaseBrandProfileIds(record.brandProfileIds)
@@ -217,22 +221,22 @@ function extractImportPatch(raw: unknown, importedVersion: number): ImportPatch 
       sourceVersion: importedVersion,
     }),
     evidencePins,
-    decisions: normalizeCaseDecisions(record.decisions, normalizedFallback, pinIds),
+    decisions: normalizeCaseDecisions(record.decisions, normalizedFallback, pinIds, timestampOptions),
     actions,
     assertions,
-    manualTrail: normalizeCaseManualTrail(record.manualTrail, normalizedFallback),
-    sightings: normalizeCaseSightings(record.sightings, normalizedFallback, pinIds),
+    manualTrail: normalizeCaseManualTrail(record.manualTrail, normalizedFallback, timestampOptions),
+    sightings: normalizeCaseSightings(record.sightings, normalizedFallback, pinIds, timestampOptions),
     branches: importedVersion >= 11
-      ? normalizeCaseInvestigationBranches(record.branches, normalizedFallback, branchReferences)
+      ? normalizeCaseInvestigationBranches(record.branches, normalizedFallback, branchReferences, timestampOptions)
       : [],
     tags: normalizeTags(record.tags),
     // Imported notes fall back only to the imported record's own timestamps
     // (never "now"), so a timestamp-less note gets a stable, deterministic time
     // and id, and re-importing the same file cannot manufacture a duplicate or a
     // spuriously-newer note.
-    notes: normalizeNotes(record.notes, importFallback),
-    createdAt: isoOrNull(record.createdAt),
-    updatedAt: isoOrNull(record.updatedAt),
+    notes: normalizeNotes(record.notes, importFallback, importedVersion),
+    createdAt: caseTimestampOrNull(record.createdAt, importedVersion),
+    updatedAt: caseTimestampOrNull(record.updatedAt, importedVersion),
   };
 }
 
@@ -367,7 +371,7 @@ export function mergeCases(
   const imported = boundedCaseList(importedRaw);
   let skipped = imported.omitted;
   let brandProfileReferencesOmitted = 0;
-  const now = new Date().toISOString();
+  const fallback = new Date(0).toISOString();
   for (const item of imported.items) {
     const patch = extractImportPatch(item, supportedImportedVersion);
     if (!patch) {
@@ -381,7 +385,7 @@ export function mergeCases(
       brandProfileReferencesOmitted += patch.brandProfileReferencesOmitted + merged.brandProfileReferencesOmitted;
       updated += 1;
     } else if (byDomain.size < MAX_CASES) {
-      const record = caseFromPatch(patch, now);
+      const record = caseFromPatch(patch, fallback);
       record.id = pickFreeId(patch.rawId, patch.domain, usedIds);
       usedIds.add(record.id);
       byDomain.set(patch.domain, record);

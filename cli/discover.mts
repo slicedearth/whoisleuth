@@ -1,4 +1,5 @@
 import { Buffer } from 'node:buffer';
+import { decodeBoundedUtf8 } from '../lib/bounded-file.mts';
 import { CliUsageError } from './arguments.mts';
 
 const DEFAULT_DISCOVERY_TLDS = Object.freeze(['com', 'net', 'org']);
@@ -24,7 +25,11 @@ async function readDiscoveryDictionaryBounded(
     if (total > limit) throw new CliUsageError(`Discovery dictionary input is limited to ${limit} bytes.`);
     chunks.push(buffer);
   }
-  return Buffer.concat(chunks).toString('utf8');
+  try {
+    return decodeBoundedUtf8(Buffer.concat(chunks), 'Discovery dictionary input');
+  } catch (cause) {
+    throw new CliUsageError(cause instanceof Error ? cause.message : 'Discovery dictionary input must contain valid UTF-8 text.');
+  }
 }
 
 function normalizeDiscoveryTlds(raw: unknown, maximum: unknown): string[] {

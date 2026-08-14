@@ -1,5 +1,7 @@
 import { Buffer } from 'node:buffer';
 
+import { scanBoundedJson } from '../lib/bounded-json.mts';
+
 const LOOKALIKE_CALIBRATION_INPUT_SCHEMA = 'whoisleuth.lookalike-calibration-input';
 const LOOKALIKE_CALIBRATION_SCHEMA = 'whoisleuth.lookalike-calibration';
 const LOOKALIKE_CALIBRATION_VERSION = 1;
@@ -60,9 +62,10 @@ function buildLookalikeCalibration(raw: string, generatedAt = new Date().toISOSt
   }
   let parsed: unknown;
   try {
+    scanBoundedJson(raw);
     parsed = JSON.parse(raw);
   } catch {
-    throw new TypeError('Lookalike calibration input must be valid JSON.');
+    throw new TypeError('Lookalike calibration input must be valid bounded JSON without duplicate keys.');
   }
   const input = record(parsed);
   if (input.schema !== LOOKALIKE_CALIBRATION_INPUT_SCHEMA || input.version !== LOOKALIKE_CALIBRATION_VERSION) {

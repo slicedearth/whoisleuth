@@ -6,6 +6,7 @@
 import { explainRiskScore, normalizeRiskModelVersion } from './scoring.ts';
 import { HTTP_SECURITY_HEADER_TOKENS, normalizeHttpSummary } from './http-summary.ts';
 import { normalizeDomain } from './case-model.ts';
+import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from '../../../../lib/observation.mts';
 
 export const MAX_WATCHLIST_HISTORY_EVENTS = 12;
 export const MAX_WATCHLIST_CHANGES_PER_EVENT = 500;
@@ -229,10 +230,14 @@ function boundedText(
   return normalized || (allowNull ? null : '');
 }
 
-function isoTimestamp(value: unknown, fallback = new Date(0).toISOString()): string {
-  if (typeof value !== 'string' || value.length > MAX_TIMESTAMP_LENGTH || CONTROL_RE.test(value)) return fallback;
-  const parsed = Date.parse(value);
-  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : fallback;
+function isoTimestamp(
+  value: unknown,
+  fallback = new Date(0).toISOString(),
+  legacy = false,
+): string {
+  const explicit = normalizeExplicitIsoTimestamp(value);
+  if (explicit) return explicit;
+  return (legacy ? normalizeLegacyIsoTimestamp(value) : null) ?? fallback;
 }
 
 function boundedInteger(value: unknown, maximum: number, fallback = 0): number {
@@ -532,8 +537,12 @@ function initialHistoryEvent(
 }
 
 /** @param {object} entry */
-export function normalizeWatchlistEntry(entry: unknown): WatchlistEntry {
+export function normalizeWatchlistEntry(
+  entry: unknown,
+  options: Readonly<{ legacyTimestamps?: boolean }> = {},
+): WatchlistEntry {
   const input = plainRecord(entry) || {};
+  const legacyTimestamps = options.legacyTimestamps === true;
   const rawResults = Array.isArray(input.results) ? input.results : [];
   const results = compactWatchlistResults(rawResults);
   const compactResults = results;
@@ -550,7 +559,7 @@ export function normalizeWatchlistEntry(entry: unknown): WatchlistEntry {
         : [];
       const rawMode = event.mode;
       return {
-        checkedAt: isoTimestamp(event.checkedAt),
+        checkedAt: isoTimestamp(event.checkedAt, new Date(0).toISOString(), legacyTimestamps),
         mode: typeof rawMode === 'string' && ['fast', 'deep', 'saved'].includes(rawMode)
           ? rawMode as WatchlistScanMode
           : 'saved',
@@ -563,7 +572,7 @@ export function normalizeWatchlistEntry(entry: unknown): WatchlistEntry {
     }).slice(-MAX_WATCHLIST_HISTORY_EVENTS)
     : [];
   const normalized = {
-    updatedAt: isoTimestamp(input.updatedAt),
+    updatedAt: isoTimestamp(input.updatedAt, new Date(0).toISOString(), legacyTimestamps),
     results,
     baseline,
     history,

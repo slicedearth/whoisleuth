@@ -94,10 +94,76 @@ describe('local aggregate mail report parsing', () => {
 
   test('scans adversarial unmatched XML tags within a bounded main-thread cost', { timeout: 1_000 }, async () => {
     const malformed = `<feedback>${'<record>'.repeat(50_000)}</feedback>`;
-    const [report] = await parseMailReportFiles('aggregate.xml', encoder.encode(malformed));
-    assert.equal(report?.kind, 'dmarc');
-    if (!report || report.kind !== 'dmarc') throw new Error('Expected one DMARC report.');
-    assert.equal(report.records.length, 0);
+    await assert.rejects(
+      () => parseMailReportFiles('aggregate.xml', encoder.encode(malformed)),
+      /record elements must be balanced and non-nested/u,
+    );
+  });
+
+  test('requires decision evidence to remain inside one feedback root and record row', async () => {
+    await assert.rejects(
+      () => parseMailReportFiles('detached-feedback.xml', encoder.encode(
+        DMARC_XML.replace('<feedback>', '<feedback/>').replace('</feedback>', ''),
+      )),
+      /DMARC feedback root must appear once with content/u,
+    );
+    await assert.rejects(
+      () => parseMailReportFiles('missing-row.xml', encoder.encode(
+        DMARC_XML.replace('<row>', '').replace('</row>', ''),
+      )),
+      /DMARC record row must appear once with content/u,
+    );
+    await assert.rejects(
+      () => parseMailReportFiles('empty-feedback.xml', encoder.encode('<feedback><report_metadata/></feedback>')),
+      /must contain at least one record/u,
+    );
+  });
+
+  test('rejects comment, CDATA, and processing-instruction constructs instead of normalizing them into evidence', async () => {
+    const firstRecord = DMARC_XML.match(/<record>.*?<\/record>/u)?.[0];
+    assert.ok(firstRecord);
+    await assert.rejects(
+      () => parseMailReportFiles(
+        'commented-record.xml',
+        encoder.encode(DMARC_XML.replace(firstRecord, `<!--${firstRecord}-->`)),
+      ),
+      /comments, CDATA, and processing instructions are not accepted/u,
+    );
+    await assert.rejects(
+      () => parseMailReportFiles(
+        'cdata-record.xml',
+        encoder.encode(DMARC_XML.replace(firstRecord, `<![CDATA[${firstRecord}]]>`)),
+      ),
+      /comments, CDATA, and processing instructions are not accepted/u,
+    );
+    await assert.rejects(
+      () => parseMailReportFiles('unterminated-comment.xml', encoder.encode(`${DMARC_XML}<!--`)),
+      /comments, CDATA, and processing instructions are not accepted/u,
+    );
+    await assert.rejects(
+      () => parseMailReportFiles('unterminated-cdata.xml', encoder.encode(`${DMARC_XML}<![CDATA[`)),
+      /comments, CDATA, and processing instructions are not accepted/u,
+    );
+    await assert.rejects(
+      () => parseMailReportFiles('empty-pi.xml', encoder.encode(DMARC_XML.replace(/^<\?xml.*?\?>/u, '<??>'))),
+      /comments, CDATA, and processing instructions are not accepted/u,
+    );
+    await assert.rejects(
+      () => parseMailReportFiles('malformed-declaration.xml', encoder.encode(DMARC_XML.replace(/^<\?xml.*?\?>/u, '<?xml?>'))),
+      /XML declaration is malformed/u,
+    );
+    await assert.rejects(
+      () => parseMailReportFiles('encoding-mismatch.xml', encoder.encode(DMARC_XML.replace('encoding="UTF-8"', 'encoding="UTF-16"'))),
+      /XML declaration is malformed/u,
+    );
+    await assert.rejects(
+      () => parseMailReportFiles('comment-in-tag.xml', encoder.encode(DMARC_XML.replace('<feedback>', '<feedback<!--x-->>'))),
+      /comments, CDATA, and processing instructions are not accepted/u,
+    );
+    await assert.rejects(
+      () => parseMailReportFiles('trailing-hyphen-comment.xml', encoder.encode(DMARC_XML.replace('<feedback>', '<feedback><!--x--->'))),
+      /comments, CDATA, and processing instructions are not accepted/u,
+    );
   });
 
   test('parses TLS-RPT policy outcomes and aggregates repeated failure types', async () => {
@@ -108,6 +174,92 @@ describe('local aggregate mail report parsing', () => {
     assert.equal(report.failedSessions, 4);
     assert.equal(report.periodStart, '2026-08-03T00:00:00.000Z');
     assert.deepEqual(report.policies[0]?.failureTypes, [{ type: 'certificate-expired', count: 4 }]);
+  });
+
+  test('requires explicit ordered TLS-RPT timestamps and current review time', async () => {
+    await assert.rejects(() => parseMailReportFiles('tls.json', encoder.encode(JSON.stringify({
+      ...TLS_REPORT,
+      'date-range': {
+        'start-datetime': '2026-08-03T12:00:00.000',
+        'end-datetime': '2026-08-04T12:00:00.000',
+      },
+    }))), /explicit timezones/u);
+    const [offset] = await parseMailReportFiles('tls.json', encoder.encode(JSON.stringify({
+      ...TLS_REPORT,
+      'date-range': {
+        'start-datetime': '2026-08-03T12:00:00.000+01:00',
+        'end-datetime': '2026-08-04T12:00:00.000+01:00',
+      },
+    })));
+    assert.equal(offset?.periodStart, '2026-08-03T11:00:00.000Z');
+    await assert.rejects(() => buildMailReportReview(offset ? [offset] : [], [], '2026-08-04T12:00:00.000'), /explicit timezone/u);
+  });
+
+  test('rejects unavailable or malformed outcome counts instead of inventing exact totals', async () => {
+    await assert.rejects(
+      () => parseMailReportFiles('malformed-count.xml', encoder.encode(DMARC_XML.replace('<count>12</count>', '<count>many</count>'))),
+      /DMARC message count must be an integer/u,
+    );
+    await assert.rejects(
+      () => parseMailReportFiles('missing-auth.xml', encoder.encode(DMARC_XML.replace('<dkim>pass</dkim>', ''))),
+      /DMARC DKIM result must be pass or fail/u,
+    );
+    await assert.rejects(
+      () => parseMailReportFiles('negative-count.json', encoder.encode(JSON.stringify({
+        ...TLS_REPORT,
+        policies: [{
+          ...TLS_REPORT.policies[0],
+          summary: {
+            ...TLS_REPORT.policies[0]!.summary,
+            'total-failure-session-count': -1,
+          },
+        }],
+      }))),
+      /TLS-RPT failure session count must be an integer/u,
+    );
+    await assert.rejects(
+      () => parseMailReportFiles('duplicate-count.json', encoder.encode('{"policies":[],"policies":[]}')),
+      /duplicate object key/u,
+    );
+  });
+
+  test('rejects duplicate DMARC singleton evidence and attribution fields', async () => {
+    await assert.rejects(
+      () => parseMailReportFiles('duplicate-count.xml', encoder.encode(
+        DMARC_XML.replace('<count>12</count>', '<count>12</count><count>999</count>'),
+      )),
+      /DMARC message count must appear at most once/u,
+    );
+    await assert.rejects(
+      () => parseMailReportFiles('duplicate-auth.xml', encoder.encode(
+        DMARC_XML.replace('<dkim>pass</dkim>', '<dkim>pass</dkim><dkim>fail</dkim>'),
+      )),
+      /DMARC DKIM result must appear at most once/u,
+    );
+    await assert.rejects(
+      () => parseMailReportFiles('self-closing-count.xml', encoder.encode(
+        DMARC_XML.replace('<count>12</count>', '<count>12</count><count/>'),
+      )),
+      /DMARC message count must appear at most once/u,
+    );
+    await assert.rejects(
+      () => parseMailReportFiles('self-closing-auth.xml', encoder.encode(
+        DMARC_XML.replace('<dkim>pass</dkim>', '<dkim>pass</dkim><dkim/>'),
+      )),
+      /DMARC DKIM result must appear at most once/u,
+    );
+    await assert.rejects(
+      () => parseMailReportFiles('unmatched-count.xml', encoder.encode(
+        DMARC_XML.replace('</count>', '</count></count>'),
+      )),
+      /count elements must be balanced and non-nested/u,
+    );
+    await assert.rejects(
+      () => parseMailReportFiles('duplicate-id.xml', encoder.encode(
+        DMARC_XML.replace('<report_id>report-1</report_id>', '<report_id>report-1</report_id><report_id>report-2</report_id>'),
+      )),
+      /DMARC report identifier must appear at most once/u,
+    );
   });
 
   test('supports bounded gzip and ZIP containers while rejecting unsafe archive paths', async () => {

@@ -6,6 +6,7 @@ import {
   type CaseAssertionExternalProvenance,
   type CaseAssertionRecord,
 } from './case-response-model.ts';
+import { normalizeExplicitIsoTimestamp } from '../../../../lib/observation.mts';
 
 export const MAX_EXTERNAL_INTELLIGENCE_IMPORT_BYTES = 512 * 1024;
 export const MAX_EXTERNAL_INTELLIGENCE_OBJECTS = 500;
@@ -79,9 +80,14 @@ function text(value: unknown, maximum: number): string | null {
 
 function iso(value: unknown): string | null {
   const candidate = text(value, 64);
-  if (!candidate) return null;
-  const parsed = Date.parse(candidate);
-  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
+  return candidate ? normalizeExplicitIsoTimestamp(candidate) : null;
+}
+
+function optionalIso(value: unknown, label: string): string | null {
+  if (value === undefined || value === null || value === '') return null;
+  const normalized = iso(value);
+  if (!normalized) throw new TypeError(`${label} must include an explicit timezone.`);
+  return normalized;
 }
 
 function epochIso(value: unknown): string | null {
@@ -294,7 +300,8 @@ function parseStix(
       markingDefinitions.set(id, label);
     }
     if (item.type === 'observed-data' && Array.isArray(item.object_refs)) {
-      const observedAt = iso(item.last_observed) ?? iso(item.first_observed);
+      const observedAt = optionalIso(item.last_observed, 'STIX last_observed')
+        ?? optionalIso(item.first_observed, 'STIX first_observed');
       if (observedAt) {
         for (const reference of stringList(item.object_refs, 100)) observations.set(reference, observedAt);
       }
@@ -334,9 +341,9 @@ function parseStix(
       entityType: entity.entityType,
       entityValue,
       claimType: direct ? 'observable' : 'indicator',
-      observedAt: observations.get(externalId) ?? iso(item.valid_from) ?? null,
-      createdAt: iso(item.created),
-      modifiedAt: iso(item.modified),
+      observedAt: observations.get(externalId) ?? optionalIso(item.valid_from, 'STIX valid_from'),
+      createdAt: optionalIso(item.created, 'STIX created'),
+      modifiedAt: optionalIso(item.modified, 'STIX modified'),
       publisher,
       confidence: confidence(item.confidence),
       labels: stringList(item.labels),
@@ -422,7 +429,9 @@ function parseMisp(
       entityType: entity.entityType,
       entityValue,
       claimType: 'attribute',
-      observedAt: iso(item.last_seen) ?? iso(item.first_seen) ?? epochIso(item.timestamp),
+      observedAt: optionalIso(item.last_seen, 'MISP last_seen')
+        ?? optionalIso(item.first_seen, 'MISP first_seen')
+        ?? epochIso(item.timestamp),
       createdAt: epochIso(item.timestamp),
       modifiedAt: null,
       publisher,

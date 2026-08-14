@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { parseBoundedJson } from '$lib/bounded-json';
   import {
     applyDomainControlPassport,
     buildBrandProfilePassportInput,
@@ -101,7 +102,10 @@
     message = '';
     try {
       if (file.size > MAX_DOMAIN_CONTROL_PASSPORT_BYTES) throw new Error('Domain-control passports are limited to 256 KB.');
-      const verified = await verifyDomainControlPassport(JSON.parse(await file.text()));
+      const verified = await verifyDomainControlPassport(parseBoundedJson(await file.text(), {
+        label: 'Domain-control passport',
+        maximumBytes: MAX_DOMAIN_CONTROL_PASSPORT_BYTES,
+      }));
       imported = verified;
       selectedImports = verified.entries
         .filter((entry) => active.officialDomains.includes(entry.domain))

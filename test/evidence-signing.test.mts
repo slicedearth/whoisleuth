@@ -144,6 +144,10 @@ describe('optional local Ed25519 evidence-package signing', () => {
       signEvidencePackage(JSON.stringify(await manifest()), rsa, NOW),
       /requires an Ed25519/iu,
     );
+    await assert.rejects(
+      signEvidencePackage(JSON.stringify(await manifest()), pair.privatePem, '2026-07-29T10:00:00'),
+      /explicit timezone/iu,
+    );
     const embeddedOnly = await verifyEvidencePackageSignature(JSON.stringify(signed));
     assert.equal(embeddedOnly.signature.signerTrust, 'embedded_key_only');
     assert.equal(embeddedOnly.signature.publicKeyMatched, null);

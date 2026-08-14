@@ -225,11 +225,18 @@ test('retains a bounded page baseline only while its domain remains official', (
     truncated: false,
   };
   const retained = normalizeBrandProfile(profile({ pageBaseline: baseline }));
-  const discarded = normalizeBrandProfile(profile({ officialDomains: ['other.invalid'], pageBaseline: baseline }));
+  const discarded = normalizeBrandProfile(profile({
+    officialDomains: ['other.invalid'],
+    officialFaviconHash: 'a'.repeat(64),
+    officialFaviconPHash: '1234567890abcdef',
+    pageBaseline: baseline,
+  }));
   assert.ok(retained);
   assert.ok(discarded);
   assert.ok(retained.pageBaseline);
   assert.equal(discarded.pageBaseline, null);
+  assert.equal(discarded.officialFaviconHash, '');
+  assert.equal(discarded.officialFaviconPHash, '');
 });
 
 test('requires a bounded safe id and usable name', () => {

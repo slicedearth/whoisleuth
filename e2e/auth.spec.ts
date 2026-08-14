@@ -62,7 +62,9 @@ test('signs in through the login form and back out again', async ({ page }) => {
   expect(compactBrandBox).not.toBeNull();
   expect(compactBrandBox!.width).toBeGreaterThanOrEqual(24);
   expect(compactBrandBox!.height).toBeGreaterThanOrEqual(24);
-  await expect(publicNavigation.getByRole('link', { name: 'Overview' })).not.toBeVisible();
+  const publicOverviewLink = publicNavigation.locator('a.overview-link');
+  await expect(publicOverviewLink).toHaveCount(1);
+  await expect(publicOverviewLink).not.toBeVisible();
   const anonymousConsoleLinkBox = await publicNavigation.getByRole('link', { name: 'Open console' }).boundingBox();
   expect(anonymousConsoleLinkBox).not.toBeNull();
   expect(anonymousConsoleLinkBox!.x + anonymousConsoleLinkBox!.width).toBeLessThanOrEqual(390);
@@ -162,7 +164,8 @@ test('signs in through the login form and back out again', async ({ page }) => {
     await page.setViewportSize({ width: viewportWidth, height: 844 });
     await expect(publicNavigation).toHaveCSS('display', 'flex');
     await expect(publicNavigation).toHaveCSS('flex-wrap', 'nowrap');
-    const demoLink = publicNavigation.getByRole('link', { name: 'Demo' });
+    const demoLink = publicNavigation.locator('a.demo-link');
+    await expect(demoLink).toHaveCount(1);
     await expect(demoLink).not.toBeVisible();
     const themeButton = publicNavigation.getByRole('button', { name: /^Colour theme,/ });
     const themeBox = await themeButton.boundingBox();

@@ -111,6 +111,50 @@ test('legacy browser data migrates once into verified IndexedDB records without 
   expect(await page.evaluate((key) => JSON.parse(localStorage.getItem(key) || 'null'), SHORTLIST_KEY)).toEqual(legacy);
 });
 
+test('malformed legacy data remains unavailable and is never replaced with an authoritative empty collection', async ({ page }) => {
+  const malformed = '{"schema":"whoisleuth.shortlist","entries":[';
+  await page.addInitScript(({ key, value }) => localStorage.setItem(key, value), {
+    key: SHORTLIST_KEY,
+    value: malformed,
+  });
+
+  await page.goto('/bulk');
+
+  await expect(page.getByRole('heading', { name: 'Browser-local data unavailable' })).toBeVisible();
+  await expect(page.getByText('Legacy Shortlist data is malformed and was not migrated.')).toBeVisible();
+  expect(await page.evaluate((key) => localStorage.getItem(key), SHORTLIST_KEY)).toBe(malformed);
+  expect(JSON.parse(await rawLocalDataSnapshot(page))).toEqual({ manifests: [], records: [] });
+});
+
+test('wrong-shaped legacy data remains unavailable and is never normalized to an empty collection', async ({ page }) => {
+  const malformed = '{}';
+  await page.addInitScript(({ key, value }) => localStorage.setItem(key, value), {
+    key: SHORTLIST_KEY,
+    value: malformed,
+  });
+
+  await page.goto('/bulk');
+
+  await expect(page.getByRole('heading', { name: 'Browser-local data unavailable' })).toBeVisible();
+  await expect(page.getByText('Legacy Shortlist data is malformed and was not migrated.')).toBeVisible();
+  expect(await page.evaluate((key) => localStorage.getItem(key), SHORTLIST_KEY)).toBe(malformed);
+  expect(JSON.parse(await rawLocalDataSnapshot(page))).toEqual({ manifests: [], records: [] });
+});
+
+test('historical unversioned array stores remain readable during migration', async ({ page }) => {
+  await page.addInitScript((key) => localStorage.setItem(key, '[]'), CASES_COLLECTION.legacyKey);
+
+  await page.goto('/dashboard');
+
+  await expect(page.getByRole('heading', { name: 'Browser-local data unavailable' })).toHaveCount(0);
+  const collection = await readBrowserLocalCollection(page, 'cases');
+  expect(collection.manifest).toMatchObject({
+    collection: 'cases',
+    recordCount: 0,
+    source: 'legacy-localstorage',
+  });
+});
+
 test('application writes remain authoritative across reloads while the retained legacy source stays untouched', async ({ page }) => {
   const legacy = legacyShortlist();
   await page.addInitScript(({ key, value }) => localStorage.setItem(key, JSON.stringify(value)), {

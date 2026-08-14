@@ -1,7 +1,7 @@
-import net from 'node:net';
+import { isIP } from 'node:net';
 import { domainToASCII } from 'node:url';
 
-import { ipv4ToLong, ipv6ToBigInt } from './rdap-bootstrap.mts';
+import { admitRdapEndpoint, ipv4ToLong, ipv6ToBigInt } from './rdap-bootstrap.mts';
 import type { NormalizedRdapRecord } from './rdap-types.mts';
 
 export function canonicalRdapDomain(value: unknown): string | null {
@@ -10,19 +10,72 @@ export function canonicalRdapDomain(value: unknown): string | null {
   return ascii ? ascii.toLowerCase() : null;
 }
 
-function ipv6ToComparableBigInt(ip: string): bigint | null {
-  let normalized = ip;
-  if (ip.includes('.')) {
-    const lastColon = ip.lastIndexOf(':');
-    const embedded = ip.slice(lastColon + 1);
-    if (net.isIP(embedded) !== 4) return null;
-    const value = ipv4ToLong(embedded);
-    normalized = `${ip.slice(0, lastColon)}:${(value >>> 16).toString(16)}:${(
-      value & 0xffff
-    ).toString(16)}`;
-  }
+function decodedTerminalPathParts(value: string): readonly [string, string] | null {
   try {
-    return ipv6ToBigInt(normalized);
+    const parts = new URL(value).pathname.split('/').filter(Boolean);
+    if (parts.length < 2) return null;
+    const objectType = decodeURIComponent(parts.at(-2) ?? '');
+    const objectValue = decodeURIComponent(parts.at(-1) ?? '');
+    return objectType && objectValue ? [objectType, objectValue] : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Admit final RDAP provenance only when its terminal path still identifies the
+ * requested object. Safe redirect transport proves where bytes came from; this
+ * binding separately prevents a redirected response for another object from
+ * deciding a lookup, especially when a bodyless 404 is otherwise authoritative.
+ */
+export function admitRdapObjectEndpoint(
+  type: string,
+  requestedValue: string,
+  value: unknown,
+): string | null {
+  const admitted = admitRdapEndpoint(value);
+  if (!admitted) return null;
+  const terminal = decodedTerminalPathParts(admitted);
+  if (!terminal) return null;
+  const [objectType, objectValue] = terminal;
+
+  if (type === 'domain') {
+    const requested = canonicalRdapDomain(requestedValue);
+    const selected = canonicalRdapDomain(objectValue);
+    return objectType === 'domain' && requested && selected === requested ? admitted : null;
+  }
+
+  if (type === 'ipv4' || type === 'ipv6') {
+    const version = type === 'ipv4' ? 4 : 6;
+    if (objectType !== 'ip' || isIP(requestedValue) !== version || isIP(objectValue) !== version) return null;
+    try {
+      const convert = version === 4 ? ipv4ToLong : ipv6ToBigInt;
+      return convert(requestedValue) === convert(objectValue) ? admitted : null;
+    } catch {
+      return null;
+    }
+  }
+
+  if (type === 'asn') {
+    const requestedMatch = /^(?:AS)?([0-9]{1,10})$/iu.exec(requestedValue);
+    if (objectType !== 'autnum' || !requestedMatch || !/^[0-9]{1,10}$/u.test(objectValue)) return null;
+    const requested = Number(requestedMatch[1]);
+    const selected = Number(objectValue);
+    return Number.isSafeInteger(requested)
+      && requested >= 0
+      && requested <= 4_294_967_295
+      && selected === requested
+      && objectValue === String(selected)
+      ? admitted
+      : null;
+  }
+
+  return null;
+}
+
+function ipv6ToComparableBigInt(ip: string): bigint | null {
+  try {
+    return ipv6ToBigInt(ip);
   } catch {
     return null;
   }
@@ -86,11 +139,11 @@ export function validateRdapResponse(
   const startAddress = parsed.startAddress;
   const endAddress = parsed.endAddress;
   if (
-    net.isIP(requestedValue) !== version ||
+    isIP(requestedValue) !== version ||
     typeof startAddress !== 'string' ||
-    net.isIP(startAddress) !== version ||
+    isIP(startAddress) !== version ||
     typeof endAddress !== 'string' ||
-    net.isIP(endAddress) !== version
+    isIP(endAddress) !== version
   ) {
     return { valid: false, detail: 'The response did not contain a compatible IP range.' };
   }

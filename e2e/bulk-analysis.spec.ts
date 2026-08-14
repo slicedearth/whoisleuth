@@ -206,12 +206,39 @@ test('keeps mobile Bulk review focused while making secondary tools discoverable
   tag: ['@analyst-journey', '@journey-bulk-peer-triage'],
 }, async ({ page }) => {
   await page.setViewportSize({ width: 393, height: 852 });
-  const domains = invalidDomains(3);
+  await page.route('**/api/lookup?*', async (route) => {
+    const domain = new URL(route.request().url()).searchParams.get('q') || '';
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        availability: {
+          applicable: true,
+          domain,
+          state: 'registered',
+          confidence: 'high',
+          nameservers: ['ns1.mobile-review.example'],
+          hasMx: true,
+          hasSpf: true,
+          hasDmarc: false,
+        },
+        diagnostics: {
+          version: 7,
+          rdap: { status: 'complete' },
+          whois: { status: 'skipped' },
+          availability: { status: 'complete' },
+        },
+      }),
+    });
+  });
+  const domains = ['mobile-one.example', 'mobile-two.example', 'mobile-three.example'];
   await runBulkScan(page, domains);
 
   const workspaceToggle = page.getByRole('button', { name: /Workspace tools/u });
   await expect(workspaceToggle).toHaveAttribute('aria-expanded', 'false');
-  await expect(page.getByRole('heading', { name: 'Saved Bulk sessions' })).toBeHidden();
+  const savedSessionsHeading = page.locator('#bulk-sessions-title');
+  await expect(savedSessionsHeading).toHaveCount(1);
+  await expect(savedSessionsHeading).toBeHidden();
 
   const resultView = page.getByRole('group', { name: 'Bulk result view' });
   await expect(resultView.getByRole('button', { name: 'Review', exact: true })).toHaveAttribute('aria-pressed', 'true');
@@ -236,10 +263,14 @@ test('keeps mobile Bulk review focused while making secondary tools discoverable
 
   await resultView.getByRole('button', { name: 'Analysis', exact: true }).click();
   await expect(page.getByRole('button', { name: /Result distribution/u })).toHaveCount(0);
-  await expect(page.getByRole('region', { name: 'Lookalike mail exposure' })).toBeHidden();
+  const mailExposure = page.locator('section.mail-review');
+  await expect(mailExposure).toHaveCount(1);
+  await expect(mailExposure).toBeHidden();
   const mailExposureToggle = page.getByRole('button', { name: /Mail exposure/u });
   await mailExposureToggle.click();
   await expect(mailExposureToggle).toHaveAttribute('aria-expanded', 'true');
+  await expect(mailExposure).toHaveCount(1);
+  await expect(mailExposure).toBeVisible();
 
   await expectNoHorizontalOverflow(page);
   await expectNoHorizontalScrollContainers(page.locator('#results'));

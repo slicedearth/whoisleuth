@@ -58,6 +58,10 @@ describe('CLI configuration profiles', () => {
     assert.throws(() => parseProfileDocument(configuration(['--output', 'evidence.json'])), /cannot set --output/iu);
     assert.throws(() => parseProfileDocument(configuration(['--concurrency', '99'])), /from 1 to 8/iu);
     assert.throws(() => parseProfileDocument(JSON.stringify({ schema: CLI_CONFIG_SCHEMA, version: 1, profiles: { careful: { arguments: ['--fast'], token: 'secret' } } })), /unsupported field/iu);
+    assert.throws(
+      () => parseProfileDocument('{"schema":"whoisleuth.cli.config","version":1,"profiles":{"careful":{"arguments":["--fast"],"arguments":["--no-color"]}}}'),
+      /without duplicate keys/iu,
+    );
   });
 
   test('leaves registry scaffold capability profiles under command ownership', async () => {

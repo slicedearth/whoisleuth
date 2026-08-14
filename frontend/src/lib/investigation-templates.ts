@@ -11,8 +11,7 @@ import {
   buildCacaoInvestigationPlaybook,
   parseCacaoInvestigationPlaybook,
 } from './analysis/investigation-playbook-interchange.ts';
-import { browserLocalDataProvider } from './browser-local-data-service.ts';
-import { INVESTIGATION_TEMPLATES_COLLECTION } from './browser-local-data-definitions.ts';
+import { readBrowserLocalData, updateBrowserLocalData } from './browser-local-data-service.ts';
 
 export {
   INVESTIGATION_TEMPLATE_SCHEMA,
@@ -31,14 +30,14 @@ function bounded(values: InvestigationTemplate[]): InvestigationTemplate[] {
 }
 
 export async function loadInvestigationTemplates(): Promise<InvestigationTemplate[]> {
-  return (await browserLocalDataProvider()).read(INVESTIGATION_TEMPLATES_COLLECTION) as Promise<InvestigationTemplate[]>;
+  return readBrowserLocalData('investigation_templates');
 }
 
 export async function saveInvestigationTemplate(
   raw: unknown,
   makeId = () => crypto.randomUUID(),
 ): Promise<InvestigationTemplate[]> {
-  return (await browserLocalDataProvider()).update(INVESTIGATION_TEMPLATES_COLLECTION, (current) => {
+  return updateBrowserLocalData('investigation_templates', (current) => {
     const existing = raw && typeof raw === 'object' && 'id' in raw
       ? current.find((item) => item.id === String((raw as { id?: unknown }).id ?? ''))
       : null;
@@ -53,14 +52,14 @@ export async function saveInvestigationTemplate(
 }
 
 export async function deleteInvestigationTemplate(id: string): Promise<InvestigationTemplate[]> {
-  return (await browserLocalDataProvider()).update(INVESTIGATION_TEMPLATES_COLLECTION, (current) => {
+  return updateBrowserLocalData('investigation_templates', (current) => {
     const templates = bounded(removeTemplate(current, id));
     return { document: templates, result: templates };
   });
 }
 
 export async function importInvestigationTemplates(raw: unknown) {
-  return (await browserLocalDataProvider()).update(INVESTIGATION_TEMPLATES_COLLECTION, (current) => {
+  return updateBrowserLocalData('investigation_templates', (current) => {
     const value = raw && typeof raw === 'object' ? raw as Record<string, unknown> : null;
     const incoming = value?.type === 'playbook'
       ? buildInvestigationTemplateExport([parseCacaoInvestigationPlaybook(raw)])

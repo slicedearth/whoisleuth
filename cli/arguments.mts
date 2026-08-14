@@ -6,7 +6,7 @@ import {
   type SignArtifactArguments,
   type VerifySignatureArguments,
 } from './evidence-command-arguments.mts';
-import { CliUsageError } from './errors.mts';
+import { CliUsageError, hasUnsafeCliText } from './errors.mts';
 import {
   INVESTIGATION_PLAN_RECIPES,
   type InvestigationPlanRecipe,
@@ -137,7 +137,7 @@ type ExtractedFileOutput = {
 };
 
 function boundedArgument(value: unknown): string {
-  if (typeof value !== 'string' || value.length > MAX_CLI_ARGUMENT_LENGTH || /[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/.test(value)) {
+  if (typeof value !== 'string' || value.length > MAX_CLI_ARGUMENT_LENGTH || hasUnsafeCliText(value)) {
     throw new CliUsageError('Arguments must be bounded text without control characters.');
   }
   return value;

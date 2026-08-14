@@ -3,6 +3,7 @@
 
 import {
   CASE_DISPOSITIONS,
+  CASE_SCHEMA_VERSION,
   CASE_REVIEW_REASONS,
   CASE_SOURCES,
   CASE_STATUSES,
@@ -17,6 +18,7 @@ import {
   MAX_TAG_LENGTH,
   type CaseNote,
 } from './case-record-contracts.ts';
+import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from '../../../../lib/observation.mts';
 
 // Forward-version policy (two distinct guarantees):
 //   - A locally-stored envelope that declares a version greater than this is
@@ -68,6 +70,11 @@ export const REGISTERED_LIKE = new Set([
 // URL/DOM/query-string-safe id shape. UUIDs satisfy this; anything else is
 // treated as untrusted and deterministically repaired.
 const SAFE_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
+// Unicode U-labels can be substantially longer than their canonical A-label
+// representation (for example, decomposed combining sequences). Keep the raw
+// work bound finite, then enforce DNS' 253/63-byte limits on the URL parser's
+// canonical ASCII hostname below.
+export const MAX_EVIDENCE_DOMAIN_INPUT_LENGTH = 1024;
 
 export function objectRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -152,6 +159,33 @@ export function normalizeDomain(value: unknown): string {
   return hostname;
 }
 
+/**
+ * Canonicalizes a hostname supplied as source evidence without applying the
+ * analyst-input conveniences in normalizeDomain. URI syntax, credentials,
+ * ports, paths, queries, fragments, separators, whitespace, and controls make
+ * the observation invalid rather than being silently discarded.
+ */
+export function normalizeEvidenceDomain(value: unknown): string {
+  if (typeof value !== 'string' || !value || value !== value.trim()) return '';
+  if (value.length > MAX_EVIDENCE_DOMAIN_INPUT_LENGTH) return '';
+  if (/[\s\x00-\x1f\x7f%@/:?#\\]/u.test(value)) return '';
+  const withoutRootDot = value.endsWith('.') ? value.slice(0, -1) : value;
+  if (!withoutRootDot || withoutRootDot.endsWith('.')) return '';
+  let hostname = '';
+  try {
+    hostname = new URL(`http://${withoutRootDot}`).hostname.toLowerCase();
+  } catch {
+    return '';
+  }
+  if (!hostname || hostname.length > MAX_DOMAIN_LENGTH || hostname !== hostname.replace(/\.$/u, '')) return '';
+  const labels = hostname.split('.');
+  if (labels.length < 2) return '';
+  const labelPattern = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/u;
+  if (labels.some((label) => !label || label.length > 63 || !labelPattern.test(label))) return '';
+  if (/^[0-9]+$/u.test(labels.at(-1) ?? '')) return '';
+  return hostname;
+}
+
 export function normalizeStatus(value: unknown): string {
   return typeof value === 'string' && STATUS_VALUES.has(value) ? value : DEFAULT_STATUS;
 }
@@ -172,6 +206,17 @@ export function isoOrNull(value: unknown): string | null {
     if (!Number.isNaN(parsed)) return new Date(parsed).toISOString();
   }
   return null;
+}
+
+/** Canonical instant for versioned case data; current schemas require a zone. */
+export function caseTimestampOrNull(value: unknown, sourceVersion?: number | null): string | null {
+  const explicit = normalizeExplicitIsoTimestamp(value);
+  if (explicit) return explicit;
+  return sourceVersion !== undefined
+    && sourceVersion !== null
+    && sourceVersion < CASE_SCHEMA_VERSION
+    ? normalizeLegacyIsoTimestamp(value)
+    : null;
 }
 export function isoOrNow(value: unknown, fallback: string): string {
   return isoOrNull(value) || fallback;
@@ -215,11 +260,11 @@ export function normalizeNoteBody(body: unknown): string {
  * @param {string | null} fallback
  * @returns {CaseNote | null}
  */
-function normalizeNote(raw: unknown, fallback: string | null): CaseNote | null {
+function normalizeNote(raw: unknown, fallback: string | null, sourceVersion?: number | null): CaseNote | null {
   const record = objectRecord(raw);
   const body = normalizeNoteBody(record.body);
   if (!body) return null;
-  const createdAt = isoOrNull(record.createdAt) || fallback;
+  const createdAt = caseTimestampOrNull(record.createdAt, sourceVersion) || fallback;
   if (!createdAt) return null;
   return {
     id: safeId(record.id) || `n-${hashString(`${body}|${createdAt}`)}`,
@@ -235,12 +280,12 @@ function normalizeNote(raw: unknown, fallback: string | null): CaseNote | null {
  *   updatedAt for imports, never the current time)
  * @returns {CaseNote[]}
  */
-export function normalizeNotes(value: unknown, fallback: string | null): CaseNote[] {
+export function normalizeNotes(value: unknown, fallback: string | null, sourceVersion?: number | null): CaseNote[] {
   if (!Array.isArray(value)) return [];
   const seen = new Set<string>();
   const notes: CaseNote[] = [];
   for (const raw of value) {
-    const note = normalizeNote(raw, fallback);
+    const note = normalizeNote(raw, fallback, sourceVersion);
     if (!note || seen.has(note.id)) continue;
     seen.add(note.id);
     notes.push(note);

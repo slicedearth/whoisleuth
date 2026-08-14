@@ -19,6 +19,7 @@ import {
   updateCaseAssertion,
 } from './case-response-model.ts';
 import {
+  CASE_SCHEMA_VERSION,
   MAX_CASES,
   MAX_NOTES_PER_CASE,
   type CaseEvidenceSnapshot,
@@ -29,8 +30,8 @@ import {
 import {
   DEFAULT_EVIDENCE_SOURCE,
   EVIDENCE_SOURCE_SET,
+  caseTimestampOrNull,
   deterministicId,
-  isoOrNow,
   makeId,
   normalizeDisposition,
   normalizeDomain,
@@ -106,16 +107,17 @@ export function normalizeCase(
   nowIso?: string,
   sourceVersion?: number | null,
 ): CaseRecord | null {
-  const now = nowIso || new Date().toISOString();
+  const now = caseTimestampOrNull(nowIso) || new Date().toISOString();
   const record = objectRecord(raw);
   const domain = normalizeDomain(existing ? existing.domain : record.domain);
   if (!domain) return null;
-  const createdAt = existing ? existing.createdAt : isoOrNow(record.createdAt, now);
-  const updatedAt = isoOrNow(record.updatedAt, now);
-  const evidencePins = normalizeCaseEvidencePins(record.evidencePins, updatedAt);
+  const createdAt = existing ? existing.createdAt : caseTimestampOrNull(record.createdAt, sourceVersion) || now;
+  const updatedAt = caseTimestampOrNull(record.updatedAt, sourceVersion) || createdAt;
+  const timestampOptions = { legacyTimestamps: sourceVersion != null && sourceVersion < CASE_SCHEMA_VERSION };
+  const evidencePins = normalizeCaseEvidencePins(record.evidencePins, updatedAt, timestampOptions);
   const pinIds = new Set(evidencePins.map((item) => item.id));
-  const actions = normalizeCaseActions(record.actions, updatedAt);
-  const assertions = normalizeCaseAssertions(record.assertions, updatedAt, pinIds);
+  const actions = normalizeCaseActions(record.actions, updatedAt, timestampOptions);
+  const assertions = normalizeCaseAssertions(record.assertions, updatedAt, pinIds, timestampOptions);
   const branchReferences = caseInvestigationBranchReferences({ evidencePins, actions, assertions });
   return {
     id: existing ? existing.id : safeId(record.id) || deterministicId(domain),
@@ -125,16 +127,16 @@ export function normalizeCase(
     reviewReasonCode: normalizeReviewReasonCode(record.reviewReasonCode),
     brandProfileIds: normalizeCaseBrandProfileIds(record.brandProfileIds),
     tags: normalizeTags(record.tags),
-    notes: normalizeNotes(record.notes, now),
+    notes: normalizeNotes(record.notes, now, sourceVersion),
     source: normalizeSource(record.source),
     evidenceHistory: normalizeCaseEvidence(record, createdAt, updatedAt, now, sourceVersion),
     evidencePins,
-    decisions: normalizeCaseDecisions(record.decisions, updatedAt, pinIds),
+    decisions: normalizeCaseDecisions(record.decisions, updatedAt, pinIds, timestampOptions),
     actions,
     assertions,
-    manualTrail: normalizeCaseManualTrail(record.manualTrail, updatedAt),
-    sightings: normalizeCaseSightings(record.sightings, updatedAt, pinIds),
-    branches: normalizeCaseInvestigationBranches(record.branches, updatedAt, branchReferences),
+    manualTrail: normalizeCaseManualTrail(record.manualTrail, updatedAt, timestampOptions),
+    sightings: normalizeCaseSightings(record.sightings, updatedAt, pinIds, timestampOptions),
+    branches: normalizeCaseInvestigationBranches(record.branches, updatedAt, branchReferences, timestampOptions),
     createdAt,
     updatedAt,
   };
@@ -146,7 +148,7 @@ export function normalizeCase(
  * @returns {CaseRecord}
  */
 export function createCase(input: CaseInput, nowIso?: string): CaseRecord {
-  const now = nowIso || new Date().toISOString();
+  const now = caseTimestampOrNull(nowIso) || new Date().toISOString();
   const domain = normalizeDomain(input.domain);
   if (!domain) throw new Error('A valid domain is required to open a case.');
   const noteBody = normalizeNoteBody(input.note);
@@ -238,7 +240,7 @@ export function updateCase(
   patch: CasePatch,
   nowIso?: string,
 ): { cases: CaseRecord[]; record: CaseRecord } {
-  const now = nowIso || new Date().toISOString();
+  const now = caseTimestampOrNull(nowIso) || new Date().toISOString();
   const index = cases.findIndex((item) => item.id === id);
   if (index < 0) throw new Error('That case no longer exists.');
   const current = cases[index];

@@ -136,6 +136,7 @@ test('provider and finding traversal stop at their hard input caps', () => {
 test('future, invalid, and overlong timestamps cannot be treated as recent', () => {
   const findings = [
     { category: 'malware', lastObservedAt: '2026-07-17T00:00:00.000Z' },
+    { category: 'malware', lastObservedAt: '2026-07-12T00:00:00.000' },
     { category: 'malware', lastObservedAt: 'invalid' },
     { category: 'malware', lastObservedAt: 'x'.repeat(65) },
   ];
@@ -143,6 +144,14 @@ test('future, invalid, and overlong timestamps cannot be treated as recent', () 
   assert.equal(requiredValue(result.sources[0]).ageDays, null);
   assert.equal(requiredValue(result.sources[0]).recent, false);
   assert.equal(result.unknownAgeProviderCount, 1);
+});
+
+test('explicit timestamp offsets preserve the intended freshness boundary', () => {
+  const result = calibrateExternalIntelligenceRisk({ providers: [provider('urlscan_search', {
+    findings: [{ category: 'malware', lastObservedAt: '2026-07-12T01:00:00.000+01:00' }],
+  })] });
+  assert.equal(result.sources[0]?.lastObservedAt, '2026-07-12T00:00:00.000Z');
+  assert.equal(result.sources[0]?.ageDays, 3);
 });
 
 test('calibration does not mutate untrusted provider input', () => {

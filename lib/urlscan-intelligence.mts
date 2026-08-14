@@ -13,6 +13,7 @@ import {
   normalizeThreatIntelligenceTarget,
 } from './threat-intelligence-contract.mts';
 import type { ThreatIntelligenceResult } from './threat-intelligence-contract.mts';
+import { normalizeExplicitIsoTimestamp } from './observation.mts';
 
 type EnvironmentInput = Record<string, unknown>;
 type AdapterDependencies = {
@@ -100,9 +101,7 @@ function boundedText(value: unknown, maxLength: number): string | null {
 }
 
 function isoTimestamp(value: unknown): string | null {
-  if (typeof value !== 'string' || value.length > 64 || /[\u0000-\u001f\u007f]/u.test(value)) return null;
-  const timestamp = Date.parse(value);
-  return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : null;
+  return normalizeExplicitIsoTimestamp(value);
 }
 
 function retryAfterSeconds(response: Response): number | null {
@@ -159,7 +158,9 @@ function normalizeSearchFinding(value: unknown, targetDomain: string) {
   // neutral records, not malformed provider data.
   if (verdicts.malicious !== true) return undefined;
   const categories = normalizedCategories(verdicts.categories);
-  const observedAt = isoTimestamp(task.time) || isoTimestamp(value.date);
+  const rawObservedAt = task.time ?? value.date;
+  const observedAt = isoTimestamp(rawObservedAt);
+  if (rawObservedAt !== undefined && rawObservedAt !== null && !observedAt) return null;
   const title = boundedText(page.title, 180);
   return {
     id,

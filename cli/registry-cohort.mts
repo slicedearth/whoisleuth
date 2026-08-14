@@ -1,10 +1,12 @@
 import { Buffer } from 'node:buffer';
 
 import { canonicalArtifactJsonV2 } from '../frontend/src/lib/analysis/artifact-integrity.ts';
+import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from '../lib/observation.mts';
 import { scanBoundedJson } from './bounded-json.mts';
 import { CliUsageError } from './errors.mts';
 import { buildRegistryDoctorReport } from './registry-doctor.mts';
 import {
+  LEGACY_SAVED_LOOKUP_SCHEMA_VERSION,
   SAVED_LOOKUP_SCHEMA,
   parseSavedLookupDocument,
   type UnknownRecord,
@@ -124,13 +126,17 @@ function integer(value: unknown, minimum: number, maximum: number, label: string
   return Number(value);
 }
 
-function timestamp(value: unknown, label: string): string {
+function timestamp(value: unknown, label: string, legacy = false): string {
   if (typeof value !== 'string' || value.length > 64 || /[\u0000-\u001f\u007f]/u.test(value)) {
     throw new CliUsageError(`${label} is invalid.`);
   }
-  const parsed = Date.parse(value);
-  if (!Number.isFinite(parsed)) throw new CliUsageError(`${label} is invalid.`);
-  return new Date(parsed).toISOString();
+  const normalized = normalizeExplicitIsoTimestamp(value);
+  if (normalized) return normalized;
+  if (legacy) {
+    const legacyTimestamp = normalizeLegacyIsoTimestamp(value);
+    if (legacyTimestamp) return legacyTimestamp;
+  }
+  throw new CliUsageError(`${label} is invalid.`);
 }
 
 function identifier(value: unknown, label: string): string {
@@ -274,7 +280,11 @@ function sourceReportsFromLookups(documents: readonly UnknownRecord[], generated
   const reports = documents.map((item) => {
     const raw = JSON.stringify(item);
     const lookup = parseSavedLookupDocument(raw, { label: 'Registry cohort saved Lookup' });
-    return buildRegistryDoctorReport(raw, timestamp(lookup.generatedAt, 'Saved Lookup generatedAt'));
+    return buildRegistryDoctorReport(raw, timestamp(
+      lookup.generatedAt,
+      'Saved Lookup generatedAt',
+      lookup.version === LEGACY_SAVED_LOOKUP_SCHEMA_VERSION,
+    ));
   });
   const groups = new Map<string, typeof reports>();
   for (const report of reports) {
@@ -293,7 +303,7 @@ function sourceReportsFromLookups(documents: readonly UnknownRecord[], generated
 function parseLegacyReport(value: UnknownRecord): SourceReport {
   const root = exact(value, LEGACY_ROOT_KEYS, 'Registry cohort v1 report');
   if (root.schema !== REGISTRY_COHORT_SCHEMA || root.version !== LEGACY_REGISTRY_COHORT_VERSION) throw new CliUsageError('Registry cohort report version is unsupported.');
-  const generatedAt = timestamp(root.generatedAt, 'Registry cohort v1 generatedAt');
+  const generatedAt = timestamp(root.generatedAt, 'Registry cohort v1 generatedAt', true);
   const sampleCount = integer(root.sampleCount, 1, MAX_REGISTRY_COHORT_SAMPLES, 'Registry cohort v1 sample count');
   if (root.minimumCohortSample !== MIN_REGISTRY_COHORT_SAMPLE) throw new CliUsageError('Registry cohort v1 minimum sample is unsupported.');
   boundedLimitations(root.limitations, LEGACY_LIMITATIONS, 'Registry cohort v1');

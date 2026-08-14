@@ -22,6 +22,46 @@ describe('fixed-window bucket bounds', () => {
     assert.deepEqual(check('first', 1_005), { allowed: true });
   });
 
+  test('evicts by expiry order after an expired identity is renewed', () => {
+    // Renewing an expired bucket rewrites its window. If the renewal kept the
+    // original insertion index, eviction at capacity would drop the renewed
+    // identity - the one furthest from expiry, and the one actively sending -
+    // and hand it a fresh counter, while a nearer-to-expiry entry survived.
+    const evictionProbe = (probe: string) => {
+      const check = createRateLimitChecker({ limit: 1, windowMs: 100_000 }, 3);
+      check('renewed', 0); // resetAt 100_000, inserted first
+      check('older', 99_000); // resetAt 199_000, nearest to expiry once renewed
+      check('newer', 99_001); // resetAt 199_001
+      check('renewed', 100_001); // expired, renewed to resetAt 200_001
+      check('fresh', 100_002); // new identity at capacity -> one eviction
+      // limit is 1, so a surviving bucket denies the probe and an evicted key
+      // is recreated and allowed.
+      return check(probe, 100_003).allowed;
+    };
+
+    assert.equal(evictionProbe('older'), true, 'the nearest-to-expiry identity should be evicted');
+    assert.equal(evictionProbe('renewed'), false, 'a just-renewed identity must keep its counter');
+    assert.equal(evictionProbe('newer'), false, 'a non-expiring identity must keep its counter');
+  });
+
+  test('still evicts the oldest identity when no bucket was renewed', () => {
+    // Negative control for the renewal case above: without a renewal,
+    // insertion order already matches expiry order, so the first-inserted
+    // identity is both the oldest and the correct eviction victim.
+    const evictionProbe = (probe: string) => {
+      const check = createRateLimitChecker({ limit: 1, windowMs: 100_000 }, 3);
+      check('oldest', 0);
+      check('middle', 99_000);
+      check('newest', 99_001);
+      check('fresh', 100_002);
+      return check(probe, 100_003).allowed;
+    };
+
+    assert.equal(evictionProbe('oldest'), true, 'the oldest identity should be evicted');
+    assert.equal(evictionProbe('middle'), false);
+    assert.equal(evictionProbe('newest'), false);
+  });
+
   test('reclaims expired buckets before admitting a new identity', () => {
     const check = createRateLimitChecker({ limit: 1, windowMs: 60_000 }, 1);
 

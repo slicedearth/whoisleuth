@@ -9,6 +9,7 @@ import {
 } from './helpers';
 
 const OBSERVED_AT = '2026-08-08T00:00:00.000Z';
+const REVIEWED_AT = '2026-08-14T00:00:00.000Z';
 const LONG_BULK_SOURCE = `source_${'x'.repeat(32)}`;
 const LONG_CASE_SOURCE = `source ${'Y'.repeat(70)}`;
 
@@ -101,6 +102,7 @@ function casesStore() {
 }
 
 async function seedEvidenceDebt(page: Page, destination = '/monitor') {
+  await page.clock.setFixedTime(REVIEWED_AT);
   await migrateLegacyBrowserData(page, {
     'whois-rdap-cases-v1': casesStore(),
     'whoisleuth-bulk-sessions-v1': bulkSessionStore(),
@@ -194,7 +196,9 @@ test('projects exact retained debt, exposes deliberate actions, and stays read-o
 
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(returnedRegion.locator('.mobile-matrix')).toBeVisible();
-  await expect(returnedRegion.locator('.desktop-matrix')).toBeHidden();
+  const desktopMatrix = returnedRegion.locator('.desktop-matrix');
+  await expect(desktopMatrix).toHaveCount(1);
+  await expect(desktopMatrix).toBeHidden();
   await expect(returnedRegion).toContainText(LONG_BULK_SOURCE.replaceAll('_', ' '));
   await expect(returnedRegion).toContainText('Y'.repeat(70));
   await expectNoHorizontalOverflow(page);

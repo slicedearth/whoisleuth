@@ -1,4 +1,5 @@
 import { domainToASCII } from 'node:url';
+import { normalizeExplicitIsoTimestamp } from '../lib/observation.mts';
 
 export const CLI_INVESTIGATION_PLAN_SCHEMA = 'whoisleuth.cli.investigation-plan';
 export const CLI_INVESTIGATION_PLAN_VERSION = 1;
@@ -109,13 +110,13 @@ export function buildInvestigationPlan(
   const suppliedSubject = boundedSubject(subjectValue);
   const subject = recipe.requiresDomain ? normalizedDomain(suppliedSubject) : suppliedSubject.toLowerCase();
   if (!subject) throw new TypeError('This investigation-plan recipe requires one valid domain.');
-  const parsedTime = Date.parse(generatedAtValue);
-  if (!Number.isFinite(parsedTime)) throw new TypeError('Investigation-plan generation time is invalid.');
+  const generatedAt = normalizeExplicitIsoTimestamp(generatedAtValue);
+  if (!generatedAt) throw new TypeError('Investigation-plan generation time must use an explicit timezone.');
   const steps = recipe.steps(subject);
   return Object.freeze({
     schema: CLI_INVESTIGATION_PLAN_SCHEMA,
     version: CLI_INVESTIGATION_PLAN_VERSION,
-    generatedAt: new Date(parsedTime).toISOString(),
+    generatedAt,
     recipe: Object.freeze({ id: recipeId, label: recipe.label, objective: recipe.objective }),
     subject,
     execution: 'plan_only' as const,

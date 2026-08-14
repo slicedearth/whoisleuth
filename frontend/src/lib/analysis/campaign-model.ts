@@ -3,6 +3,7 @@
 // or mutable case ids. The browser wrapper owns persistence and downloads.
 
 import { normalizeDomain } from './case-model.ts';
+import { normalizeExplicitIsoTimestamp } from '../../../../lib/observation.mts';
 
 export const CAMPAIGN_SCHEMA = 'whoisleuth.campaigns';
 export const CAMPAIGN_SCHEMA_VERSION = 1;
@@ -63,9 +64,7 @@ function makeId(): string {
 }
 
 function isoOrNull(value: unknown): string | null {
-  if (typeof value !== 'string' || value.length > 64 || /[\x00-\x1f\x7f]/.test(value)) return null;
-  const parsed = Date.parse(value);
-  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
+  return normalizeExplicitIsoTimestamp(value);
 }
 
 function normalizeName(value: unknown): string {
@@ -127,10 +126,10 @@ export function campaignStoreVersion(raw: unknown): number | null {
 
 /** Recover a deterministic, bounded store from parsed browser data. */
 export function normalizeCampaignStore(raw: unknown): CampaignStore {
-  const now = new Date().toISOString();
+  const fallback = new Date(0).toISOString();
   const byId = new Map<string, CampaignRecord>();
   for (const item of asCampaignList(raw).slice(0, MAX_CAMPAIGN_INPUT_RECORDS)) {
-    const campaign = normalizeCampaign(item, now);
+    const campaign = normalizeCampaign(item, fallback);
     if (!campaign) continue;
     const existing = byId.get(campaign.id);
     const campaignKey = `${campaign.name}\u0000${campaign.description}\u0000${campaign.domains.join('\u0000')}\u0000${campaign.createdAt}`;

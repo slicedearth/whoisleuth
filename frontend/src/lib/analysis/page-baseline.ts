@@ -5,6 +5,7 @@
 
 import { normalizeDomain } from './case-model.ts';
 import { isInformativeFaviconHash } from './utils.ts';
+import { normalizeExplicitIsoTimestamp } from '../../../../lib/observation.mts';
 
 export const PAGE_BASELINE_VERSION = 1;
 export const PAGE_IDENTITY_VERSION = 3;
@@ -16,7 +17,6 @@ export const MAX_BASELINE_IDENTIFIERS = 30;
 const SHA256_RE = /^[a-f0-9]{64}$/i;
 const SIMHASH_RE = /^[a-f0-9]{16}$/i;
 const CONTROL_RE = /[\x00-\x1f\x7f]/;
-const MAX_TIMESTAMP_LENGTH = 64;
 const MAX_HTML_TOKENS = 4096;
 const MAX_TEXT_TOKENS = 8192;
 const MAX_FORMS = 50;
@@ -100,9 +100,7 @@ function record(value: unknown): Record<string, unknown> | null {
 }
 
 function timestamp(value: unknown): string | null {
-  if (typeof value !== 'string' || value.length > MAX_TIMESTAMP_LENGTH || CONTROL_RE.test(value)) return null;
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+  return normalizeExplicitIsoTimestamp(value);
 }
 
 function count(value: unknown, maximum: number): number | null {

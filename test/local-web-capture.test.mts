@@ -18,6 +18,7 @@ import {
   disableBrowserNetworkIntrinsics,
   installDomProjectionIntrinsics,
   parseCaptureArguments,
+  sanitizeCaptureText,
 } from '../packages/web-capture/capture.mts';
 import {
   WEB_CAPTURE_COMPARISON_SCHEMA,
@@ -175,6 +176,42 @@ describe('optional local rendered capture package', () => {
   test('requires explicit authorisation and a new bounded output directory', () => {
     assert.throws(() => parseCaptureArguments(['https://example.test', '--output-dir', 'capture']), /authorize-rendered-capture/u);
     assert.throws(() => parseCaptureArguments(['http://user:secret@example.test', '--output-dir', 'capture', '--authorize-rendered-capture']), /credentials/u);
+    assert.throws(
+      () => parseCaptureArguments(['https://example.test', '--output-dir', 'safe\u202etxt', '--authorize-rendered-capture']),
+      /bounded local path/u,
+    );
+    assert.throws(
+      () => parseCaptureArguments(['https://example.test', '--output-dir', 'safe\ufefftxt', '--authorize-rendered-capture']),
+      /bounded local path/u,
+    );
+    for (const invisible of ['\u00ad', '\u034f']) {
+      assert.throws(
+        () => parseCaptureArguments(['https://example.test', '--output-dir', `safe${invisible}txt`, '--authorize-rendered-capture']),
+        /bounded local path/u,
+      );
+      assert.throws(
+        () => parseCaptureCompareArguments([`left${invisible}.json`, 'right.json']),
+        /control characters/u,
+      );
+    }
+    for (const target of [
+      'ht\ntps://example.test/',
+      'https://exa\u0085mple.test/',
+      'https://exa\u00admple.test/',
+      'https://exa\u034fmple.test/',
+      'https://example.test/pri\u202evate',
+    ]) {
+      assert.throws(
+        () => parseCaptureArguments([target, '--output-dir', 'capture', '--authorize-rendered-capture']),
+        /Capture URL/u,
+      );
+    }
+    assert.doesNotThrow(() => parseCaptureArguments([
+      'https://example.test', '--output-dir', 'résumé-capture', '--authorize-rendered-capture',
+    ]));
+    assert.doesNotThrow(() => parseCaptureArguments([
+      'https://bücher.example/', '--output-dir', 'capture-unicode', '--authorize-rendered-capture',
+    ]));
     assert.deepEqual(parseCaptureArguments([
       'https://example.test', '--output-dir', './capture', '--authorize-rendered-capture', '--timeout-ms', '5000',
     ]), {
@@ -397,6 +434,13 @@ describe('optional local rendered capture package', () => {
     );
   });
 
+  test('sanitizes C1 and bidirectional controls in capture diagnostics', () => {
+    assert.equal(
+      sanitizeCaptureText('unknown\u0085 option \u061c--unsafe\ufeff', 500),
+      'unknown option --unsafe',
+    );
+  });
+
   test('writes import-compatible private metadata without retaining DOM text or request paths', async () => {
     const parent = await mkdtemp(path.join(tmpdir(), 'whoisleuth-capture-test-'));
     const destination = path.join(parent, 'capture');
@@ -440,6 +484,25 @@ describe('optional local rendered capture package', () => {
     }
   });
 
+  test('removes C1 and bidirectional controls from retained page titles', async () => {
+    const parent = await mkdtemp(path.join(tmpdir(), 'whoisleuth-capture-title-test-'));
+    const destination = path.join(parent, 'capture');
+    try {
+      const manifest = await captureRenderedPage({
+        targetUrl: 'https://example.test/', outputDirectory: destination, timeoutMs: 5000,
+      }, {
+        launchBrowser: async () => fakeBrowser({ title: 'Account\u0085 review \u202Etxt' }),
+        fetchResource: fakeFetchResource,
+        resolveAddresses: async () => [{ address: '192.0.2.1', family: 4 }],
+        now: () => '2026-08-01T00:00:00.000Z',
+      });
+      assert.equal(manifest.captures[0]?.page.title, 'Account review txt');
+      assert.doesNotMatch(JSON.stringify(manifest), /[\u0080-\u009f\u202a-\u202e]/u);
+    } finally {
+      await rm(parent, { recursive: true, force: true });
+    }
+  });
+
   test('compares two verified local captures offline without exposing paths or retained page text', async () => {
     const parent = await mkdtemp(path.join(tmpdir(), 'whoisleuth-capture-compare-test-'));
     const leftDirectory = path.join(parent, 'left');
@@ -469,8 +532,13 @@ describe('optional local rendered capture package', () => {
       assert.deepEqual(parseCaptureCompareArguments([leftManifest, rightManifest, '--json']), {
         leftManifest, rightManifest, output: 'json',
       });
+      assert.throws(
+        () => parseCaptureCompareArguments([`${leftManifest}\u061c`, rightManifest, '--json']),
+        /control characters/u,
+      );
       const comparison = await compareRenderedCaptures(leftManifest, rightManifest, '2026-08-01T00:10:00.000Z');
       assert.equal(comparison.schema, WEB_CAPTURE_COMPARISON_SCHEMA);
+      assert.equal(comparison.version, 3);
       assert.equal(comparison.screenshot.state, 'same');
       assert.equal(comparison.renderedDom.structure.state, 'different');
       assert.equal(comparison.renderedDom.visibleText.state, 'different');
@@ -482,9 +550,61 @@ describe('optional local rendered capture package', () => {
       assert.match(formatRenderedCaptureComparison(comparison), /Rendered capture comparison/u);
       assert.doesNotMatch(JSON.stringify(comparison), /private text|capture-compare-test|manifest\.json|Account|Review/u);
 
+      const originalLeftManifest = await readFile(leftManifest, 'utf8');
       const originalRightManifest = await readFile(rightManifest, 'utf8');
+      await assert.rejects(
+        () => compareRenderedCaptures(leftManifest, rightManifest, '2026-08-01T00:10:00'),
+        /explicit timezone/u,
+      );
+      const zoneLessCaptureManifest = JSON.parse(originalRightManifest);
+      zoneLessCaptureManifest.captures[0].capturedAt = '2026-08-01T00:05:00';
+      await writeFile(rightManifest, `${JSON.stringify(zoneLessCaptureManifest)}\n`);
+      await assert.rejects(
+        () => compareRenderedCaptures(leftManifest, rightManifest),
+        /explicit timezone/u,
+      );
+      await writeFile(rightManifest, originalRightManifest);
+      const invalidUtf8 = Buffer.from([0x7b, 0x22, 0x78, 0x22, 0x3a, 0xff, 0x7d]);
+      await writeFile(leftManifest, invalidUtf8);
+      await assert.rejects(() => compareRenderedCaptures(leftManifest, rightManifest), /not valid JSON/u);
+      await writeFile(leftManifest, originalLeftManifest);
+
+      const partialLeftManifest = JSON.parse(originalLeftManifest);
+      partialLeftManifest.captures[0].completeness = 'partial';
+      await writeFile(leftManifest, `${JSON.stringify(partialLeftManifest)}\n`);
+      const partialComparison = await compareRenderedCaptures(leftManifest, rightManifest, '2026-08-01T00:10:00.000Z');
+      assert.equal(partialComparison.partial, true);
+      assert.equal(partialComparison.page.requestDomains.state, 'unavailable');
+      assert.deepEqual(partialComparison.page.requestDomains.shared, ['static.example.test']);
+      assert.equal(partialComparison.page.technologies.state, 'unavailable');
+      await writeFile(leftManifest, originalLeftManifest);
+
       const rightDomPath = path.join(rightDirectory, 'dom-digest.json');
       const originalRightDom = await readFile(rightDomPath, 'utf8');
+      const zoneLessDom = JSON.parse(originalRightDom);
+      zoneLessDom.capturedAt = '2026-08-01T00:05:00';
+      const zoneLessDomText = `${JSON.stringify(zoneLessDom, null, 2)}\n`;
+      const zoneLessDomManifest = JSON.parse(originalRightManifest);
+      const zoneLessDomArtifact = zoneLessDomManifest.captures[0].artifacts[1];
+      zoneLessDomArtifact.bytes = Buffer.byteLength(zoneLessDomText);
+      zoneLessDomArtifact.sha256 = createHash('sha256').update(zoneLessDomText).digest('hex');
+      await writeFile(rightDomPath, zoneLessDomText);
+      await writeFile(rightManifest, `${JSON.stringify(zoneLessDomManifest)}\n`);
+      await assert.rejects(
+        () => compareRenderedCaptures(leftManifest, rightManifest),
+        /explicit timezone/u,
+      );
+      await writeFile(rightDomPath, originalRightDom);
+      await writeFile(rightManifest, originalRightManifest);
+      const invalidUtf8DomManifest = JSON.parse(originalRightManifest);
+      invalidUtf8DomManifest.captures[0].artifacts[1].bytes = invalidUtf8.length;
+      invalidUtf8DomManifest.captures[0].artifacts[1].sha256 = createHash('sha256').update(invalidUtf8).digest('hex');
+      await writeFile(rightDomPath, invalidUtf8);
+      await writeFile(rightManifest, `${JSON.stringify(invalidUtf8DomManifest)}\n`);
+      await assert.rejects(() => compareRenderedCaptures(leftManifest, rightManifest), /not valid JSON/u);
+      await writeFile(rightDomPath, originalRightDom);
+      await writeFile(rightManifest, originalRightManifest);
+
       const unsafeManifest = JSON.parse(originalRightManifest);
       unsafeManifest.captures[0].artifacts[1].fileName = '../dom-digest.json';
       await writeFile(rightManifest, `${JSON.stringify(unsafeManifest)}\n`);
@@ -587,7 +707,8 @@ describe('optional local rendered capture package', () => {
         path.join(secondDestination, 'manifest.json'),
       );
       assert.equal(comparison.partial, true);
-      assert.equal(comparison.renderedDom.visibleText.state, 'same');
+      assert.equal(comparison.renderedDom.visibleText.state, 'unavailable');
+      assert.equal(comparison.renderedDom.structure.state, 'unavailable');
     } finally {
       await rm(parent, { recursive: true, force: true });
     }

@@ -1,3 +1,5 @@
+import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from '../../../../lib/observation.mts';
+
 export const MAX_CASE_INVESTIGATION_BRANCHES = 8;
 export const MAX_CASE_BRANCH_NAME_LENGTH = 80;
 export const MAX_CASE_BRANCH_REFERENCES = 12;
@@ -36,12 +38,12 @@ function text(value: unknown, maximum: number): string {
     : '';
 }
 
-function iso(value: unknown, fallback: string): string {
-  if (typeof value === 'string' && value.length <= 64 && !/[\u0000-\u001f\u007f]/u.test(value)) {
-    const parsed = Date.parse(value);
-    if (Number.isFinite(parsed)) return new Date(parsed).toISOString();
-  }
-  return fallback;
+type BranchTimestampOptions = Readonly<{ legacyTimestamps?: boolean }>;
+
+function iso(value: unknown, fallback: string, options: BranchTimestampOptions = {}): string {
+  return normalizeExplicitIsoTimestamp(value)
+    ?? (options.legacyTimestamps ? normalizeLegacyIsoTimestamp(value) : null)
+    ?? fallback;
 }
 
 function hash(value: string): string {
@@ -77,11 +79,12 @@ function normalizeBranch(
   value: unknown,
   fallback: string,
   references: CaseInvestigationBranchReferences,
+  options: BranchTimestampOptions = {},
 ): CaseInvestigationBranch | null {
   const item = record(value);
   const name = text(item.name, MAX_CASE_BRANCH_NAME_LENGTH);
   if (!name) return null;
-  const createdAt = iso(item.createdAt, fallback);
+  const createdAt = iso(item.createdAt, fallback, options);
   const branch = Object.freeze({
     id: safeId(item.id, { name, createdAt }),
     name,
@@ -91,7 +94,7 @@ function normalizeBranch(
     assertionIds: Object.freeze(ids(item.assertionIds, references.assertionIds)),
     actionIds: Object.freeze(ids(item.actionIds, references.actionIds)),
     createdAt,
-    updatedAt: iso(item.updatedAt, createdAt),
+    updatedAt: iso(item.updatedAt, createdAt, options),
   });
   return branch.evidencePinIds.length || branch.checkpointIds.length || branch.assertionIds.length || branch.actionIds.length
     ? branch
@@ -115,11 +118,12 @@ export function normalizeCaseInvestigationBranches(
   value: unknown,
   fallback: string,
   references: CaseInvestigationBranchReferences,
+  options: BranchTimestampOptions = {},
 ): CaseInvestigationBranch[] {
   if (!Array.isArray(value)) return [];
   const byId = new Map<string, CaseInvestigationBranch>();
   for (const item of value.slice(0, MAX_CASE_INVESTIGATION_BRANCHES * 2)) {
-    const normalized = normalizeBranch(item, fallback, references);
+    const normalized = normalizeBranch(item, fallback, references, options);
     if (!normalized) continue;
     const current = byId.get(normalized.id);
     if (!current || normalized.updatedAt > current.updatedAt) byId.set(normalized.id, normalized);

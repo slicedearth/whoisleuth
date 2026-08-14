@@ -1,6 +1,7 @@
 import { validateDnssecEvidence, type DnssecEvidenceReport } from './dnssec-evidence-validation.mts';
 import { reviewRpkiRoute, type RpkiEvidenceReport } from './rpki-evidence.mts';
 import { analyzeTlsaEvidence, type TlsaEvidenceReport } from './tlsa-evidence.mts';
+import { normalizeExplicitIsoTimestamp } from './observation.mts';
 
 const CRYPTOGRAPHIC_ASSURANCE_INPUT_SCHEMA = 'whoisleuth.cryptographic-assurance.input';
 const CRYPTOGRAPHIC_ASSURANCE_SCHEMA = 'whoisleuth.cryptographic-assurance.review';
@@ -47,10 +48,11 @@ function sourceLabel(value: unknown, label: string): string {
 }
 
 function observationTime(value: unknown, label: string): string {
-  if (typeof value !== 'string' || value.length > 64 || !Number.isFinite(Date.parse(value))) {
+  const normalized = normalizeExplicitIsoTimestamp(value);
+  if (!normalized) {
     throw new TypeError(`${label}.observedAt must be one ISO-compatible timestamp.`);
   }
-  return new Date(value).toISOString();
+  return normalized;
 }
 
 function suppliedEvidence(value: unknown, label: string): { source: string; observedAt: string; evidence: UnknownRecord } | null {

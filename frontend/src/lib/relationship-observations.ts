@@ -6,13 +6,12 @@ import {
   type RelationshipObservation,
   type RelationshipObservationInput,
 } from './analysis/relationship-observation-model.ts';
-import { browserLocalDataProvider } from './browser-local-data-service.ts';
-import { RELATIONSHIP_OBSERVATIONS_COLLECTION } from './browser-local-data-definitions.ts';
+import { readBrowserLocalData, updateBrowserLocalData } from './browser-local-data-service.ts';
 
 export type { RelationshipObservation, RelationshipObservationInput } from './analysis/relationship-observation-model.ts';
 
 export async function loadRelationshipObservations(): Promise<RelationshipObservation[]> {
-  return await (await browserLocalDataProvider()).read(RELATIONSHIP_OBSERVATIONS_COLLECTION) as RelationshipObservation[];
+  return readBrowserLocalData('relationship_observations');
 }
 
 function boundedObservations(raw: unknown): RelationshipObservation[] {
@@ -31,7 +30,7 @@ export async function retainRelationshipObservation(
   } = {},
 ): Promise<{ record: RelationshipObservation; added: boolean; pruned: number }> {
   const observation = createRelationshipObservation(input, options);
-  return (await browserLocalDataProvider()).update(RELATIONSHIP_OBSERVATIONS_COLLECTION, (current) => {
+  return updateBrowserLocalData('relationship_observations', (current) => {
     const result = upsertRelationshipObservation(current, observation);
     const observations = boundedObservations(result.observations);
     return {
@@ -42,7 +41,7 @@ export async function retainRelationshipObservation(
 }
 
 export async function deleteRelationshipObservation(id: string): Promise<RelationshipObservation[]> {
-  return (await browserLocalDataProvider()).update(RELATIONSHIP_OBSERVATIONS_COLLECTION, (current) => {
+  return updateBrowserLocalData('relationship_observations', (current) => {
     const observations = boundedObservations(removeObservation(current, id));
     return { document: observations, result: observations };
   });

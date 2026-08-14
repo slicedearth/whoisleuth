@@ -1,6 +1,11 @@
 import { Buffer } from 'node:buffer';
 
 import { canonicalArtifactJson } from '../frontend/src/lib/analysis/artifact-integrity.ts';
+import { scanBoundedJson } from '../lib/bounded-json.mts';
+import {
+  normalizeExplicitIsoTimestamp,
+  normalizeLegacyIsoTimestamp,
+} from '../lib/observation.mts';
 
 export const SOURCE_RELIABILITY_REPORT_SCHEMA = 'whoisleuth.source-reliability-report';
 export const SOURCE_RELIABILITY_REPORT_VERSION = 1;
@@ -245,9 +250,10 @@ function parseValues(raw: string): UnknownRecord[] {
   }
   let parsed: unknown;
   try {
+    scanBoundedJson(raw);
     parsed = JSON.parse(raw);
   } catch {
-    throw new TypeError('Source reliability input must be valid JSON.');
+    throw new TypeError('Source reliability input must be valid bounded JSON without duplicate keys.');
   }
   const values = Array.isArray(parsed) ? parsed : [parsed];
   if (values.length === 0 || values.length > MAX_SOURCE_RELIABILITY_DOCUMENTS) {
@@ -273,10 +279,12 @@ function parseLookupDocuments(values: readonly UnknownRecord[]): UnknownRecord[]
   });
 }
 
-function accumulator(store: Map<string, SourceAccumulator>, source: string): SourceAccumulator | null {
+function accumulator(store: Map<string, SourceAccumulator>, source: string): SourceAccumulator {
   const existing = store.get(source);
   if (existing) return existing;
-  if (store.size >= MAX_SOURCE_RELIABILITY_SOURCES) return null;
+  if (store.size >= MAX_SOURCE_RELIABILITY_SOURCES) {
+    throw new TypeError(`Source reliability input exceeds the ${MAX_SOURCE_RELIABILITY_SOURCES}-source limit.`);
+  }
   const created: SourceAccumulator = {
     states: new Map(),
     observationDurations: [],
@@ -297,7 +305,6 @@ function accumulator(store: Map<string, SourceAccumulator>, source: string): Sou
 
 function addState(store: Map<string, SourceAccumulator>, source: string, state: SourceState): void {
   const item = accumulator(store, source);
-  if (!item) return;
   item.states.set(state, (item.states.get(state) ?? 0) + 1);
   if (state === 'rate_limited') item.rateLimited += 1;
 }
@@ -306,13 +313,15 @@ function collectTiming(document: UnknownRecord, store: Map<string, SourceAccumul
   const diagnostics = record(document.diagnostics);
   const timing = record(diagnostics?.timing);
   if (timing?.version !== 1 || !Array.isArray(timing.sources)) return;
-  for (const rawEntry of timing.sources.slice(0, 16)) {
+  if (timing.sources.length > 16) {
+    throw new TypeError('Source reliability input exceeds the 16-source timing limit.');
+  }
+  for (const rawEntry of timing.sources) {
     const entry = record(rawEntry);
     const source = safeSource(entry?.source);
     const duration = boundedDuration(entry?.durationMs);
     if (!source || !TIMING_SOURCES.has(source) || duration === null) continue;
     const item = accumulator(store, source);
-    if (!item) continue;
     item.timingDurations.push(duration);
     item.timingSamples += 1;
   }
@@ -347,7 +356,6 @@ function collectObservation(value: UnknownRecord, store: Map<string, SourceAccum
   const state = safeState(value.status);
   if (!source || !state) return;
   const item = accumulator(store, source);
-  if (!item) return;
   item.observationSamples += 1;
   addState(store, source, state);
   const duration = boundedDuration(value.durationMs);
@@ -360,7 +368,13 @@ function traverse(document: UnknownRecord, store: Map<string, SourceAccumulator>
   const stack: Array<{ value: unknown; depth: number }> = [{ value: document, depth: 0 }];
   while (stack.length) {
     const current = stack.pop();
-    if (!current || current.depth > 12 || visited >= MAX_SOURCE_RELIABILITY_TRAVERSAL_NODES) continue;
+    if (!current) continue;
+    if (current.depth > 12) {
+      throw new TypeError('Source reliability input exceeds the 12-level traversal limit.');
+    }
+    if (visited >= MAX_SOURCE_RELIABILITY_TRAVERSAL_NODES) {
+      throw new TypeError(`Source reliability input exceeds the ${MAX_SOURCE_RELIABILITY_TRAVERSAL_NODES}-node traversal limit.`);
+    }
     visited += 1;
     const object = record(current.value);
     if (object) {
@@ -371,11 +385,18 @@ function traverse(document: UnknownRecord, store: Map<string, SourceAccumulator>
         const source = safeSource(record(object.observation)?.source);
         if (source) addState(store, source, 'rate_limited');
       }
-      for (const child of Object.values(object).slice(0, 200)) {
+      const children = Object.values(object);
+      if (children.length > 200) {
+        throw new TypeError('Source reliability input contains an object with more than 200 fields.');
+      }
+      for (const child of children) {
         if (child && typeof child === 'object') stack.push({ value: child, depth: current.depth + 1 });
       }
     } else if (Array.isArray(current.value)) {
-      for (const child of current.value.slice(0, 1_000)) {
+      if (current.value.length > 1_000) {
+        throw new TypeError('Source reliability input contains an array with more than 1000 items.');
+      }
+      for (const child of current.value) {
         if (child && typeof child === 'object') stack.push({ value: child, depth: current.depth + 1 });
       }
     }
@@ -402,12 +423,19 @@ function ratio(numerator: number, denominator: number): number | null {
 }
 
 function reportTimestamp(value: unknown): string {
-  if (typeof value !== 'string' || value.length > 64) {
+  const normalized = normalizeExplicitIsoTimestamp(value);
+  if (!normalized) {
     throw new TypeError('Source reliability report has an invalid generation time.');
   }
-  const parsed = Date.parse(value);
-  if (!Number.isFinite(parsed)) throw new TypeError('Source reliability report has an invalid generation time.');
-  return new Date(parsed).toISOString();
+  return normalized;
+}
+
+function lookupDocumentTimestamp(document: UnknownRecord): string | null {
+  const explicit = normalizeExplicitIsoTimestamp(document.generatedAt);
+  if (explicit) return explicit;
+  return document.version === 1
+    ? normalizeLegacyIsoTimestamp(document.generatedAt)
+    : null;
 }
 
 function optionalReportTimestamp(value: unknown, label: string): string | null {
@@ -600,7 +628,6 @@ function collectReport(report: UnknownRecord, store: Map<string, SourceAccumulat
     assertExactKeys(durationTrend, DURATION_TREND_KEYS, `Source reliability report ${source} duration trend`);
     for (const value of Object.values(durationTrend)) reportedDurationPoint(value);
     const item = accumulator(store, source);
-    if (!item) throw new TypeError('Source reliability report exceeds the source limit.');
     const observationSamples = safeCount(samples.observations, `${source} observation sample count`);
     const timingSamples = safeCount(samples.timing, `${source} timing sample count`);
     const truncationCount = safeCount(sourceRecord.truncationCount, `${source} truncation count`);
@@ -729,8 +756,8 @@ export function buildSourceReliabilityReport(
   raw: string,
   generatedAt: string = new Date().toISOString(),
 ): SourceReliabilityReport {
-  const timestamp = Date.parse(generatedAt);
-  if (!Number.isFinite(timestamp)) throw new TypeError('Source reliability report time must be valid.');
+  const normalizedGeneratedAt = normalizeExplicitIsoTimestamp(generatedAt);
+  if (!normalizedGeneratedAt) throw new TypeError('Source reliability report time must use an explicit timezone.');
   const values = parseValues(raw);
   const store = new Map<string, SourceAccumulator>();
   const reportInputs = values.every((value) => value.schema === SOURCE_RELIABILITY_REPORT_SCHEMA);
@@ -760,13 +787,8 @@ export function buildSourceReliabilityReport(
     for (const document of documents) {
       const mode = document.mode === 'fast' || document.mode === 'deep' ? document.mode : 'unknown';
       lookupModes[mode] += 1;
-      if (typeof document.generatedAt === 'string') {
-        try {
-          sampleDates.push(reportTimestamp(document.generatedAt));
-        } catch {
-          // Invalid or missing document dates remain unmeasured.
-        }
-      }
+      const sampleDate = lookupDocumentTimestamp(document);
+      if (sampleDate) sampleDates.push(sampleDate);
       traverse(document, store);
     }
   }
@@ -814,7 +836,7 @@ export function buildSourceReliabilityReport(
   return Object.freeze({
     schema: SOURCE_RELIABILITY_REPORT_SCHEMA,
     version: SOURCE_RELIABILITY_REPORT_VERSION,
-    generatedAt: new Date(timestamp).toISOString(),
+    generatedAt: normalizedGeneratedAt,
     mode: 'offline_local',
     reportsMerged,
     documentsReviewed,

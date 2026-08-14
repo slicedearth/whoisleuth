@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { Readable, Writable } from 'node:stream';
 
 import { parseCliArguments } from '../cli/arguments.mts';
+import { verifyOfflineArtifact } from '../cli/artifact-verify.mts';
 import { APPLICATION_VERSION, buildCliEvidenceExport, formatCliEvidenceExport } from '../cli/export-evidence.mts';
 import {
   MAX_MARKDOWN_VALUE_LENGTH,
@@ -229,7 +230,10 @@ describe('lookup evidence export conversion', () => {
     const registrarComparison = recordValue(analysis.registrarPublicationComparison);
     assert.equal(query.submitted, 'login.example.test');
     assert.equal(query.registrableDomain, 'example.test');
-    assert.equal(recordValue(rdap.raw).publicContact, 'published@example.test');
+    assert.equal(Object.hasOwn(rdap, 'raw'), false);
+    assert.equal(recordValue(rdap.parsed).contactsExcluded, true);
+    assert.equal(recordValue(whois.parsed).contactsExcluded, true);
+    assert.equal(JSON.stringify(result).includes('published@example.test'), false);
     const whoisHop = recordValue(arrayValue(whois.chain)[0]);
     assert.equal(whoisHop.status, 'success');
     assert.equal(Object.hasOwn(whoisHop, 'response'), false);
@@ -245,6 +249,77 @@ describe('lookup evidence export conversion', () => {
     assert.equal(JSON.stringify(result).includes('privateNestedValue'), false);
     assert.equal(JSON.stringify(result).includes('ignoredTopLevelValue'), false);
     assert.deepEqual(source, before);
+  });
+
+  test('drops nested contact aliases and query-bearing generic values from saved lookup exports', async () => {
+    const source = savedLookup();
+    recordValue(source.availability).structuredDataIdentity = {
+      structuredDataVersion: 1,
+      version: 1,
+      status: 'success',
+      entities: [{
+        types: ['Organization'],
+        name: 'Example publisher',
+        email: 'nested-private@example.test',
+        owner: 'Private owner',
+        value: 'https://example.test/path?session=private#fragment',
+        url: 'https://example.test/path?session=private#fragment',
+      }],
+    };
+    const exported = buildCliEvidenceExport(JSON.stringify(source), await evidenceModule());
+    const availability = recordValue(recordValue(exported.analysis).availability);
+    const entity = recordValue(arrayValue(recordValue(availability.structuredDataIdentity).entities)[0]);
+
+    assert.deepEqual(entity, {
+      types: ['Organization'],
+      name: 'Example publisher',
+      url: 'https://example.test/path',
+    });
+    assert.equal(availability.registryContactsExcluded, true);
+    assert.doesNotMatch(JSON.stringify(exported), /nested-private|Private owner|session=private/iu);
+  });
+
+  test('sanitizes whitespace- and control-prefixed URL-shaped values from saved lookup exports', async () => {
+    const shared = await evidenceModule();
+    for (const prefix of [' ', '\u0001', '\u0085']) {
+      const source = savedLookup();
+      recordValue(source.availability).structuredDataIdentity = {
+        structuredDataVersion: 1,
+        version: 1,
+        status: 'success',
+        entities: [{
+          types: ['Organization'],
+          name: `${prefix}https://evidence.example.test/path?trace=private#fragment`,
+        }],
+      };
+      const exported = buildCliEvidenceExport(JSON.stringify(source), shared);
+      const availability = recordValue(recordValue(exported.analysis).availability);
+      const entity = recordValue(arrayValue(recordValue(availability.structuredDataIdentity).entities)[0]);
+      assert.equal(entity.name, null);
+      assert.doesNotMatch(JSON.stringify(exported), /trace=private|fragment|[\u0001\u0085]/iu);
+    }
+  });
+
+  test('retains producer-valid RDAP redactions without false completeness', async () => {
+    const source = savedLookup();
+    const parsed = recordValue(source.rdap.parsed);
+    parsed.redactions = Array.from({ length: 51 }, (_, index) => ({
+      name: `Field ${index}`,
+      reason: null,
+      method: 'removal',
+      pathLanguage: 'jsonpath',
+      prePath: `$.entities[${index}]`,
+      postPath: null,
+      replacementPath: null,
+    }));
+    parsed.redactionsTruncated = false;
+    const exported = buildCliEvidenceExport(JSON.stringify(source), await evidenceModule());
+    const rdap = recordValue(recordValue(exported.sources).rdap);
+    const publication = recordValue(rdap.parsed);
+    assert.equal(arrayValue(publication.redactions).length, 51);
+    assert.equal(publication.redactionsTruncated, false);
+    const verification = await verifyOfflineArtifact(JSON.stringify(exported));
+    assert.equal(verification.state, 'structure_valid');
   });
 
   test('converts current saved Lookup metadata while keeping version 1 readable', async () => {
@@ -331,10 +406,10 @@ describe('lookup evidence export conversion', () => {
 
   test('rejects an export that cannot fit the shared browser-import profile', async () => {
     const source = savedLookup();
-    recordValue(source.rdap).data = {
-      objectClassName: 'domain',
-      padding: Array.from({ length: 5_500 }, () => 'x'.repeat(1_000)),
-    };
+    recordValue(source.availability).limitations = Array.from(
+      { length: 6 },
+      (_, index) => `${index}${'x'.repeat(1_000_000)}`,
+    );
     const module = await evidenceModule();
     assert.throws(
       () => buildCliEvidenceExport(JSON.stringify(source), module),

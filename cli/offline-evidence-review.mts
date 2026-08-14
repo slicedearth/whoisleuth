@@ -1,5 +1,7 @@
 import { Buffer } from 'node:buffer';
 
+import { scanBoundedJson } from '../lib/bounded-json.mts';
+
 import {
   normalizeEncryptedDnsAdapter,
   planEncryptedDnsQuery,
@@ -50,11 +52,13 @@ function parseInput(value: unknown): UnknownRecord {
   if (typeof value !== 'string' || Buffer.byteLength(value, 'utf8') > MAX_OFFLINE_EVIDENCE_INPUT_BYTES) {
     throw new CliUsageError(`Offline evidence input is limited to ${MAX_OFFLINE_EVIDENCE_INPUT_BYTES} bytes.`);
   }
+  const normalized = value.replace(/^\uFEFF/u, '');
   let parsed: unknown;
   try {
-    parsed = JSON.parse(value.replace(/^\uFEFF/u, ''));
+    scanBoundedJson(normalized);
+    parsed = JSON.parse(normalized);
   } catch {
-    throw new CliUsageError('Offline evidence review requires one valid JSON document.');
+    throw new CliUsageError('Offline evidence review requires one valid bounded JSON document without duplicate keys.');
   }
   const document = record(parsed);
   if (document.version !== 1 || typeof document.schema !== 'string') {

@@ -184,7 +184,7 @@ explicit in text, so colour is never the only distinction.
   indexing, accessibility, cache effectiveness, performance, identity,
   privacy, safety, or maliciousness. Saved Lookup version 1 remains readable;
   current output is version 2, current HTTP output is version 3, and current
-  portable Lookup evidence is schema 27 with schemas 25 and 26 retained for
+  portable Lookup evidence is schema 28 with schemas 25, 26, and 27 retained for
   their documented compatibility semantics.
 - Place `--palette auto|light|dark` after the command to select a fixed semantic
   ANSI palette. `auto` is stable and does not inspect the terminal background.

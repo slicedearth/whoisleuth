@@ -112,6 +112,7 @@ const VALUE_OPTIONS: Readonly<Record<string, readonly string[]>> = Object.freeze
   '--audience': ['internal', 'trusted', 'public'],
   '--concurrency': ['1', '2', '3', '4', '5', '6', '7', '8'],
   '--palette': ['auto', 'light', 'dark'],
+  '--scenario': ['registered', 'not_found', 'inconclusive'],
 });
 
 const FILE_OPTIONS = Object.freeze([
@@ -119,6 +120,8 @@ const FILE_OPTIONS = Object.freeze([
   '--config',
   '--allowlist',
   '--dictionary',
+  '--manifest',
+  '--mmdb',
   '--output',
   '--passphrase-file',
   '--private-key-file',
@@ -126,26 +129,63 @@ const FILE_OPTIONS = Object.freeze([
   '--snapshot',
   '--observation-snapshot',
   '--previous',
-  '--resume',
   '--save-lookup',
   '--trust-anchor',
 ]);
+
+const FILE_OPTIONS_BY_COMMAND: Partial<Record<CliCommand, readonly string[]>> = Object.freeze({
+  'workflow-run': Object.freeze(['--resume']),
+});
 
 const FILE_POSITIONAL_COMMANDS = new Set<CliCommand>([
   'manifest',
   'map-observations',
   'oam-export',
+  'bulk',
   'ct-intake',
-  'change-packet',
   'mail-transport',
+  'registry-doctor',
+  'registry-cohort',
+  'risk-calibrate',
+  'lookalike-calibrate',
+  'verify-artifact',
+  'interchange-report',
+  'inspect-archive',
+  'sign-artifact',
+  'verify-signature',
+  'source-report',
+  'compare',
+  'page-compare',
+  'mail-review',
+  'review-evidence',
+  'brief',
+  'case-pack',
+  'domain-control',
+  'monitor-once',
+  'assurance',
+  'change-packet',
+  'sharing-review',
+  'diff',
+  'reconcile',
+  'timeline',
+  'export',
 ]);
 
 const TEXT_OPTIONS = Object.freeze([
   '--families',
+  '--workflow',
+  '--configuration-digest',
+  '--scan-limit',
+  '--chunk-size',
   '--resolver',
   '--fail-on',
   '--expect-content-digest',
   '--profile',
+  '--suffix',
+  '--manifest-entry',
+  '--limit',
+  '--left-session',
+  '--right-session',
   '--purpose',
   '--observer',
   '--retired-selectors',
@@ -187,6 +227,10 @@ _whoisleuth_completion() {
   fi
   if [[ "\${command}" == "workflow-plan" && \${COMP_CWORD} -eq 2 ]]; then
     COMPREPLY=( $(compgen -W "${INVESTIGATION_PLAN_RECIPES.join(' ')}" -- "\${current}") )
+    return
+  fi
+  if [[ "\${command}" == "workflow-run" && "\${previous}" == "--resume" ]]; then
+    COMPREPLY=( $(compgen -f -- "\${current}") )
     return
   fi
   case "\${previous}" in
@@ -239,6 +283,10 @@ _whoisleuth() {
     compadd -- ${INVESTIGATION_PLAN_RECIPES.join(' ')}
     return
   fi
+  if [[ "\${command}" == "workflow-run" && "\${previous}" == "--resume" ]]; then
+    _files
+    return
+  fi
   case "\${previous}" in
 ${valueCases}
     ${FILE_OPTIONS.join('|')}) _files; return ;;
@@ -263,12 +311,23 @@ fi
 }
 
 function fishCompletion(): string {
+  const filePositionCondition = [
+    `__fish_seen_subcommand_from ${[...FILE_POSITIONAL_COMMANDS].join(' ')}`,
+    `and not __fish_prev_arg_in ${[...new Set([
+      ...FILE_OPTIONS,
+      ...Object.keys(VALUE_OPTIONS),
+      ...TEXT_OPTIONS,
+      '--resume',
+    ])].join(' ')}`,
+    'and not string match -qr -- ^- (commandline -ct)',
+  ].join('; ');
   const commandLines = CLI_COMMANDS.map((command) => (
-    `complete -c whoisleuth -n '__fish_use_subcommand' -a '${command}' -d '${COMMAND_DESCRIPTIONS[command]}'${FILE_POSITIONAL_COMMANDS.has(command) ? ' -F' : ''}`
+    `complete -c whoisleuth -n '__fish_use_subcommand' -a '${command}' -d '${COMMAND_DESCRIPTIONS[command]}'`
   ));
-  const optionLine = (condition: string, option: string) => {
+  const optionLine = (condition: string, option: string, command?: CliCommand) => {
       const name = option.replace(/^--/u, '');
-      const fileValue = FILE_OPTIONS.includes(option);
+      const fileValue = FILE_OPTIONS.includes(option)
+        || Boolean(command && FILE_OPTIONS_BY_COMMAND[command]?.includes(option));
       const requiresValue = fileValue || [...Object.keys(VALUE_OPTIONS), ...TEXT_OPTIONS].includes(option);
       return `complete -c whoisleuth -n '${condition}' -l ${name}${requiresValue ? ' -r' : ''}${fileValue ? ' -F' : ''}`;
   };
@@ -280,6 +339,7 @@ function fishCompletion(): string {
         ? '__fish_seen_subcommand_from lookup; or __whoisleuth_direct_lookup_target'
         : `__fish_seen_subcommand_from ${command}`,
       option,
+      command as CliCommand,
     ))
   ));
   const valueLines = Object.entries(VALUE_OPTIONS).flatMap(([option, values]) => (
@@ -314,6 +374,7 @@ complete -c whoisleuth -n '__fish_use_subcommand' -l version
 ${commandLines.join('\n')}
 complete -c whoisleuth -n '__fish_seen_subcommand_from completion' -a 'bash zsh fish powershell'
 complete -c whoisleuth -n '__fish_seen_subcommand_from workflow-plan' -a '${INVESTIGATION_PLAN_RECIPES.join(' ')}'
+complete -c whoisleuth -n '${filePositionCondition}' -F
 ${commonOptionLines.join('\n')}
 ${optionLines.join('\n')}
 ${valueLines.join('\n')}
@@ -339,22 +400,28 @@ ${Object.entries(VALUE_OPTIONS).map(([option, values]) => `    '${option}' = @($
   }
   $fileCommands = @(${[...FILE_POSITIONAL_COMMANDS].map((command) => `'${command}'`).join(', ')})
   $fileOptions = @(${FILE_OPTIONS.map((option) => `'${option}'`).join(', ')})
+  $commandFileOptions = @{
+${Object.entries(FILE_OPTIONS_BY_COMMAND).map(([command, options]) => `    '${command}' = @(${(options ?? []).map((option) => `'${option}'`).join(', ')})`).join('\n')}
+  }
+  $textOptions = @(${TEXT_OPTIONS.map((option) => `'${option}'`).join(', ')})
   $elements = @($commandAst.CommandElements | ForEach-Object { $_.Extent.Text })
   $command = if ($elements.Count -gt 1) { $elements[1] } else { '' }
-  $previous = if ($elements.Count -gt 1) { $elements[$elements.Count - 1] } else { '' }
+  $previousIndex = if ($wordToComplete) { $elements.Count - 2 } else { $elements.Count - 1 }
+  $previous = if ($previousIndex -ge 0) { $elements[$previousIndex] } else { '' }
   $directLookup = $false
   if ($command -notmatch '^-' -and $elements.Count -gt 1 -and $commands -notcontains $command) {
     & $elements[0] $command '--plan' '--json' *> $null
     $directLookup = $LASTEXITCODE -eq 0
   }
   if ($directLookup) { $command = 'lookup' }
-  if ($fileOptions -contains $previous) {
+  if ($fileOptions -contains $previous -or ($commandFileOptions.ContainsKey($command) -and $commandFileOptions[$command] -contains $previous)) {
     Get-ChildItem -Path "${'$'}wordToComplete*" -File -ErrorAction SilentlyContinue | ForEach-Object {
       [System.Management.Automation.CompletionResult]::new($_.FullName, $_.Name, 'ProviderItem', $_.FullName)
     }
     return
   }
-  if ($fileCommands -contains $command -and -not $wordToComplete.StartsWith('-')) {
+  if ($textOptions -contains $previous) { return }
+  if ($fileCommands -contains $command -and -not $wordToComplete.StartsWith('-') -and -not $values.ContainsKey($previous)) {
     Get-ChildItem -Path "${'$'}wordToComplete*" -File -ErrorAction SilentlyContinue | ForEach-Object {
       [System.Management.Automation.CompletionResult]::new($_.FullName, $_.Name, 'ProviderItem', $_.FullName)
     }

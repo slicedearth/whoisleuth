@@ -12,6 +12,12 @@ type BoundedJsonLimits = Readonly<{
   maximumContainerItems?: number;
 }>;
 
+type BoundedJsonParseOptions = Readonly<{
+  label?: string;
+  maximumBytes: number;
+  limits?: BoundedJsonLimits;
+}>;
+
 function syntaxError(): never {
   throw new TypeError('Artefact input is not valid JSON.');
 }
@@ -197,21 +203,28 @@ export function scanBoundedJson(raw: string, limits: BoundedJsonLimits = {}): vo
   if (index !== raw.length) syntaxError();
 }
 
-export type { BoundedJsonLimits };
+export type { BoundedJsonLimits, BoundedJsonParseOptions };
 
-export function parseBoundedJsonObject(
+export function parseBoundedJson(
   raw: string,
-  options: Readonly<{ label?: string; maximumBytes: number }>,
-): UnknownRecord {
+  options: BoundedJsonParseOptions,
+): unknown {
   const label = options.label ?? 'Artefact input';
   if (typeof raw !== 'string') throw new TypeError(`${label} must be UTF-8 JSON text.`);
   const bytes = new TextEncoder().encode(raw).byteLength;
   if (bytes < 1 || bytes > options.maximumBytes) {
     throw new TypeError(`${label} must be between 1 byte and ${options.maximumBytes} bytes.`);
   }
-  scanBoundedJson(raw);
-  let parsed: unknown;
-  try { parsed = JSON.parse(raw); } catch { syntaxError(); }
+  scanBoundedJson(raw, options.limits);
+  try { return JSON.parse(raw) as unknown; } catch { return syntaxError(); }
+}
+
+export function parseBoundedJsonObject(
+  raw: string,
+  options: BoundedJsonParseOptions,
+): UnknownRecord {
+  const label = options.label ?? 'Artefact input';
+  const parsed = parseBoundedJson(raw, options);
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
     throw new TypeError(`${label} must contain one JSON object.`);
   }

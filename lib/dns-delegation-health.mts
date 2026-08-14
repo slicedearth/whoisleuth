@@ -683,7 +683,8 @@ async function collectDnsDelegationHealth(
         'Review propagation timing and the intended zone values before relying on a DNS change.',
       )] : []),
   ];
-  const collectionIncomplete = parentStatus === 'error'
+  const collectionIncomplete = parentStatus !== 'success'
+    || candidates.length === 0
     || parentQuery.truncated === true
     || registry.truncated
     || authorities.some((authority) => authority.state !== 'success')
@@ -711,6 +712,9 @@ async function collectDnsDelegationHealth(
         'A direct answer does not prove global reachability, and a failed query is not evidence that the record is absent.',
         'DNS health does not decide registration availability, ownership, control, intent, safety, or maliciousness.',
         'The DNSSEC check compares bounded registry publication fields; it does not validate the full cryptographic chain.',
+        ...(!candidates.length
+          ? ['No eligible authority was identified, so the delegation-health observation is incomplete.']
+          : []),
       ],
       diagnostics: {
         authorityCount: authorities.length,

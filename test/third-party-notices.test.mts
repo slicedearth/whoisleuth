@@ -57,6 +57,30 @@ describe('third-party production dependency notices', () => {
     ]);
   });
 
+  test('derives notice bytes from an admitted lockfile value and exposes later document drift', async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'whoisleuth-notices-snapshot-'));
+    try {
+      const admittedLockfile = fixtureLockfile();
+      await writeFile(path.join(directory, 'package-lock.json'), JSON.stringify({
+        lockfileVersion: 3,
+        packages: { '': {} },
+      }), 'utf8');
+      await writeFixturePackage(directory, 'alpha', 'Alpha admitted licence');
+      await writeFixturePackage(directory, 'beta', 'Beta admitted licence');
+      await writeFixturePackage(directory, 'shared', 'Shared admitted licence');
+      const admitted = await buildThirdPartyNotices(directory, { lockfileValue: admittedLockfile });
+      assert.match(admitted, /Package count: 3/u);
+      assert.match(admitted, /Alpha admitted licence/u);
+
+      await writeFile(path.join(directory, 'node_modules', 'alpha', 'LICENSE'), 'Alpha changed licence', 'utf8');
+      const changed = await buildThirdPartyNotices(directory, { lockfileValue: admittedLockfile });
+      assert.notEqual(changed, admitted);
+      assert.match(changed, /Alpha changed licence/u);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
   test('rejects malformed inventories and unsupported command arguments', () => {
     assert.throws(() => collectProductionPackages({ lockfileVersion: 3, packages: { '': {}, 'node_modules/unknown': { version: '1.0.0' } } }), /licence/);
     assert.equal(parseArguments(['--check']), 'check');

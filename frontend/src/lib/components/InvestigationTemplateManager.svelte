@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { parseBoundedJson } from '$lib/bounded-json';
   import { INVESTIGATION_RECIPES, type InvestigationRecipeId } from '$lib/analysis/investigation-guide.ts';
   import {
     deleteInvestigationTemplate,
@@ -155,7 +156,10 @@
       if (file.size > MAX_INVESTIGATION_TEMPLATE_IMPORT_BYTES) {
         throw new Error('Investigation-template imports are limited to 384 KiB.');
       }
-      const result = await importInvestigationTemplates(JSON.parse(await file.text()));
+      const result = await importInvestigationTemplates(parseBoundedJson(await file.text(), {
+        label: 'Investigation-template import',
+        maximumBytes: MAX_INVESTIGATION_TEMPLATE_IMPORT_BYTES,
+      }));
       onchange(result.templates);
       message = `Imported ${result.added} new and ${result.updated} matching template${result.added + result.updated === 1 ? '' : 's'}.`;
     } catch (cause) {

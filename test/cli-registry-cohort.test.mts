@@ -14,10 +14,35 @@ import {
 
 const NOW = '2026-08-05T00:00:00.000Z';
 
-function lookup(index: number, options: { domain?: string; selfLink?: boolean; generatedAt?: string } = {}) {
+test('requires explicit current zones while migrating saved-Lookup version 1 instants as UTC', () => {
+  const inputs = Array.from({ length: MIN_REGISTRY_COHORT_SAMPLE }, (_, index) => lookup(index, { version: 2 }));
+  assert.throws(
+    () => buildRegistryCohortReport(inputs.map((item) => JSON.stringify(item)).join('\n'), '2026-08-05T00:00:00'),
+    /invalid/u,
+  );
+  const zoneLessInputs = inputs.map((item) => ({ ...item, generatedAt: '2026-08-05T00:00:00' }));
+  assert.throws(
+    () => buildRegistryCohortReport(zoneLessInputs.map((item) => JSON.stringify(item)).join('\n'), NOW),
+    /explicit timezone/u,
+  );
+  const legacyZoneLessInputs = Array.from(
+    { length: MIN_REGISTRY_COHORT_SAMPLE },
+    (_, index) => lookup(index, { generatedAt: '2026-08-05T12:00:00' }),
+  );
+  const migrated = buildRegistryCohortReport(
+    legacyZoneLessInputs.map((item) => JSON.stringify(item)).join('\n'),
+    NOW,
+  );
+  assert.deepEqual(migrated.sampleWindow, {
+    from: '2026-08-05T12:00:00.000Z',
+    to: '2026-08-05T12:00:00.000Z',
+  });
+});
+
+function lookup(index: number, options: { domain?: string; selfLink?: boolean; generatedAt?: string; version?: 1 | 2 } = {}) {
   const domain = options.domain ?? `sample-${index}.dev`;
   return {
-    schema: 'whoisleuth.cli.lookup', version: 1, generatedAt: options.generatedAt ?? NOW, mode: 'deep', type: 'domain', query: domain, registrableDomain: domain,
+    schema: 'whoisleuth.cli.lookup', version: options.version ?? 1, generatedAt: options.generatedAt ?? NOW, mode: 'deep', type: 'domain', query: domain, registrableDomain: domain,
     diagnostics: { rdap: { status: 'success' }, whois: { status: 'skipped' } },
     rdap: { parsed: {
       domain: domain.toUpperCase(), handle: `D-${index}`, objectClassName: 'domain', conformance: ['rdap_level_0'],

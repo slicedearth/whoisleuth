@@ -1,5 +1,7 @@
 import { Gunzip, unzipSync } from 'fflate';
 import { sha256ArtifactDigest } from './artifact-integrity.ts';
+import { parseBoundedJson } from '../bounded-json.ts';
+import { normalizeExplicitIsoTimestamp } from '../../../../lib/observation.mts';
 
 export const MAIL_REPORT_SCHEMA = 'whoisleuth.mail-report-review';
 export const MAIL_REPORT_VERSION = 1;
@@ -195,42 +197,93 @@ function cleanText(value: unknown, maximum = 300): string | null {
   return normalized || null;
 }
 
+function lexicalXmlElements(xml: string): string {
+  let elements = xml.startsWith('\ufeff') ? xml.slice(1) : xml;
+  if (elements.startsWith('<?xml')) {
+    const declaration = /^<\?xml[\t\n\r ]+version[\t\n\r ]*=[\t\n\r ]*(["'])1\.[01]\1(?:[\t\n\r ]+encoding[\t\n\r ]*=[\t\n\r ]*(["'])[Uu][Tt][Ff]-8\2)?(?:[\t\n\r ]+standalone[\t\n\r ]*=[\t\n\r ]*(["'])(?:yes|no)\3)?[\t\n\r ]*\?>/u.exec(elements);
+    if (!declaration) throw new TypeError('DMARC XML declaration is malformed.');
+    elements = elements.slice(declaration[0].length);
+  }
+  if (/<!--|<!\[CDATA\[|<\?/u.test(elements)) {
+    throw new TypeError('DMARC XML comments, CDATA, and processing instructions are not accepted.');
+  }
+  if (/<!/u.test(elements)) throw new TypeError('DMARC XML declarations are not accepted.');
+  return elements;
+}
+
 function xmlBlocks(xml: string, tag: string, maximum: number): string[] {
   const escaped = tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const expression = new RegExp(`<(\\/?)(?:[A-Za-z_][\\w.-]*:)?${escaped}(?=\\s|\\/?>)([^<>]*)>`, 'gi');
   const values: string[] = [];
-  const openOffsets: number[] = [];
-  for (let match = expression.exec(xml); match && values.length < maximum; match = expression.exec(xml)) {
+  let openOffset: number | null = null;
+  for (let match = expression.exec(xml); match; match = expression.exec(xml)) {
     const closing = match[1] === '/';
     const suffix = match[2] ?? '';
     if (closing) {
-      if (!/^\s*$/u.test(suffix)) continue;
-      const start = openOffsets.pop();
-      if (start !== undefined) values.push(xml.slice(start, match.index));
+      if (!/^\s*$/u.test(suffix) || openOffset === null) {
+        throw new TypeError(`DMARC XML ${tag} elements must be balanced and non-nested.`);
+      }
+      if (values.length < maximum) values.push(xml.slice(openOffset, match.index));
+      openOffset = null;
       continue;
     }
-    if (/\/\s*$/u.test(suffix)) continue;
-    if (openOffsets.length < maximum + 1) openOffsets.push(expression.lastIndex);
+    if (openOffset !== null) {
+      throw new TypeError(`DMARC XML ${tag} elements must be balanced and non-nested.`);
+    }
+    if (/\/\s*$/u.test(suffix)) {
+      if (values.length < maximum) values.push('');
+      continue;
+    }
+    openOffset = expression.lastIndex;
   }
+  if (openOffset !== null) throw new TypeError(`DMARC XML ${tag} elements must be balanced and non-nested.`);
   return values;
 }
 
-function xmlValues(xml: string, tag: string, maximum = 10_000): string[] {
-  const values: string[] = [];
-  for (const block of xmlBlocks(xml, tag, maximum)) {
-    const value = cleanText(decodeXml(removeXmlMarkup(block)), 1_000);
-    if (value) values.push(value);
+function singletonXmlBlock(xml: string, tag: string, label: string): string {
+  const blocks = xmlBlocks(xml, tag, 2);
+  if (blocks.length > 1) throw new TypeError(`${label} must appear at most once.`);
+  return blocks[0] ?? '';
+}
+
+function requiredSingletonXmlBlock(xml: string, tag: string, label: string): string {
+  const block = singletonXmlBlock(xml, tag, label);
+  if (!block.trim()) throw new TypeError(`${label} must appear once with content.`);
+  return block;
+}
+
+function singletonXmlValue(xml: string, tag: string, label: string, maximum = 300): string | null {
+  const blocks = xmlBlocks(xml, tag, 2);
+  if (blocks.length > 1) throw new TypeError(`${label} must appear at most once.`);
+  return cleanText(decodeXml(removeXmlMarkup(blocks[0] ?? '')), maximum);
+}
+
+function boundedCount(value: unknown, label: string): number {
+  const parsed = typeof value === 'number'
+    ? value
+    : typeof value === 'string' && /^\d{1,10}$/u.test(value.trim())
+      ? Number(value.trim())
+      : Number.NaN;
+  if (!Number.isSafeInteger(parsed) || parsed < 0 || parsed > 1_000_000_000) {
+    throw new TypeError(`${label} must be an integer from 0 to 1000000000.`);
   }
-  return values;
+  return parsed;
 }
 
-function firstXmlValue(xml: string, tag: string, maximum = 300): string | null {
-  return cleanText(xmlValues(xml, tag, 1)[0], maximum);
+function authenticationResult(value: unknown, label: string): 'pass' | 'fail' {
+  const normalized = cleanText(value, 20)?.toLowerCase();
+  if (normalized !== 'pass' && normalized !== 'fail') {
+    throw new TypeError(`${label} must be pass or fail.`);
+  }
+  return normalized;
 }
 
-function boundedCount(value: unknown): number {
-  const parsed = Number(value);
-  return Number.isSafeInteger(parsed) && parsed >= 0 ? Math.min(parsed, 1_000_000_000) : 0;
+function dispositionResult(value: unknown): 'none' | 'quarantine' | 'reject' {
+  const normalized = cleanText(value, 40)?.toLowerCase();
+  if (normalized !== 'none' && normalized !== 'quarantine' && normalized !== 'reject') {
+    throw new TypeError('DMARC disposition must be none, quarantine, or reject.');
+  }
+  return normalized;
 }
 
 function epoch(value: string | null): string | null {
@@ -253,34 +306,37 @@ async function sourceFor(file: ExpandedFile): Promise<MailSource> {
 }
 
 async function parseDmarcAggregateReport(file: ExpandedFile): Promise<DmarcAggregateReport> {
-  const xml = new TextDecoder('utf-8', { fatal: true }).decode(file.bytes);
-  if (/<!DOCTYPE|<!ENTITY/i.test(xml)) throw new TypeError('DMARC XML containing document types or entities is not accepted.');
-  if (!/<(?:[A-Za-z_][\w.-]*:)?feedback\b/i.test(xml)) throw new TypeError('The XML does not contain a DMARC feedback report.');
-  const allBlocks = xmlBlocks(xml, 'record', MAX_DMARC_RECORDS + 1);
+  const rawXml = new TextDecoder('utf-8', { fatal: true }).decode(file.bytes);
+  if (/<!DOCTYPE|<!ENTITY/i.test(rawXml)) throw new TypeError('DMARC XML containing document types or entities is not accepted.');
+  const xml = lexicalXmlElements(rawXml);
+  const feedback = requiredSingletonXmlBlock(xml, 'feedback', 'DMARC feedback root');
+  const allBlocks = xmlBlocks(feedback, 'record', MAX_DMARC_RECORDS + 1);
+  if (!allBlocks.length) throw new TypeError('DMARC feedback must contain at least one record.');
   const truncated = allBlocks.length > MAX_DMARC_RECORDS;
   const records = allBlocks.slice(0, MAX_DMARC_RECORDS).map((block): DmarcAggregateRecord => {
-    const evaluated = xmlBlocks(block, 'policy_evaluated', 1)[0] ?? '';
-    const identifiers = xmlBlocks(block, 'identifiers', 1)[0] ?? '';
+    const row = requiredSingletonXmlBlock(block, 'row', 'DMARC record row');
+    const evaluated = singletonXmlBlock(row, 'policy_evaluated', 'DMARC policy evaluation');
+    const identifiers = singletonXmlBlock(block, 'identifiers', 'DMARC identifiers');
     return {
-      sourceIp: firstXmlValue(block, 'source_ip', 64),
-      count: boundedCount(firstXmlValue(block, 'count', 20)),
-      disposition: firstXmlValue(evaluated, 'disposition', 40),
-      dkim: firstXmlValue(evaluated, 'dkim', 20),
-      spf: firstXmlValue(evaluated, 'spf', 20),
-      headerFrom: firstXmlValue(identifiers, 'header_from', 253)?.toLowerCase() ?? null,
+      sourceIp: singletonXmlValue(row, 'source_ip', 'DMARC source IP', 64),
+      count: boundedCount(singletonXmlValue(row, 'count', 'DMARC message count', 20), 'DMARC message count'),
+      disposition: dispositionResult(singletonXmlValue(evaluated, 'disposition', 'DMARC disposition', 40)),
+      dkim: authenticationResult(singletonXmlValue(evaluated, 'dkim', 'DMARC DKIM result', 20), 'DMARC DKIM result'),
+      spf: authenticationResult(singletonXmlValue(evaluated, 'spf', 'DMARC SPF result', 20), 'DMARC SPF result'),
+      headerFrom: singletonXmlValue(identifiers, 'header_from', 'DMARC header-from domain', 253)?.toLowerCase() ?? null,
     };
   });
-  const metadata = xmlBlocks(xml, 'report_metadata', 1)[0] ?? '';
-  const dateRange = xmlBlocks(metadata, 'date_range', 1)[0] ?? '';
-  const policy = xmlBlocks(xml, 'policy_published', 1)[0] ?? '';
+  const metadata = singletonXmlBlock(feedback, 'report_metadata', 'DMARC report metadata');
+  const dateRange = singletonXmlBlock(metadata, 'date_range', 'DMARC report date range');
+  const policy = singletonXmlBlock(feedback, 'policy_published', 'DMARC published policy');
   return Object.freeze({
     kind: 'dmarc',
     source: await sourceFor(file),
-    organization: firstXmlValue(metadata, 'org_name', 200),
-    reportId: firstXmlValue(metadata, 'report_id', 300),
-    domain: firstXmlValue(policy, 'domain', 253)?.toLowerCase() ?? null,
-    periodStart: epoch(firstXmlValue(dateRange, 'begin', 20)),
-    periodEnd: epoch(firstXmlValue(dateRange, 'end', 20)),
+    organization: singletonXmlValue(metadata, 'org_name', 'DMARC reporting organization', 200),
+    reportId: singletonXmlValue(metadata, 'report_id', 'DMARC report identifier', 300),
+    domain: singletonXmlValue(policy, 'domain', 'DMARC policy domain', 253)?.toLowerCase() ?? null,
+    periodStart: epoch(singletonXmlValue(dateRange, 'begin', 'DMARC period start', 20)),
+    periodEnd: epoch(singletonXmlValue(dateRange, 'end', 'DMARC period end', 20)),
     totalMessages: records.reduce((total, record) => total + record.count, 0),
     records: Object.freeze(records),
     truncated,
@@ -298,13 +354,14 @@ function strings(value: unknown, maximum: number): string[] {
 
 function reportTimestamp(value: unknown): string | null {
   const normalized = cleanText(value, 64);
-  if (!normalized) return null;
-  const timestamp = Date.parse(normalized);
-  return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : null;
+  return normalized ? normalizeExplicitIsoTimestamp(normalized) : null;
 }
 
 async function parseTlsAggregateReport(file: ExpandedFile): Promise<TlsAggregateReport> {
-  const document: unknown = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(file.bytes));
+  const document = parseBoundedJson(new TextDecoder('utf-8', { fatal: true }).decode(file.bytes), {
+    label: 'TLS-RPT report',
+    maximumBytes: MAX_MAIL_REPORT_EXPANDED_BYTES,
+  });
   const root = object(document);
   const rawPolicies = Array.isArray(root.policies) ? root.policies : [];
   if (!Array.isArray(root.policies)) throw new TypeError('The JSON does not contain a TLS-RPT policies array.');
@@ -317,25 +374,30 @@ async function parseTlsAggregateReport(file: ExpandedFile): Promise<TlsAggregate
     for (const raw of rawFailures.slice(0, MAX_TLS_FAILURE_DETAILS)) {
       const failure = object(raw);
       const type = cleanText(failure['result-type'], 100) ?? 'unclassified';
-      counts.set(type, (counts.get(type) ?? 0) + boundedCount(failure['failed-session-count']));
+      counts.set(type, (counts.get(type) ?? 0) + boundedCount(failure['failed-session-count'], 'TLS-RPT failed session count'));
     }
     return {
       policyType: cleanText(published['policy-type'], 80),
       policyDomain: cleanText(published['policy-domain'], 253)?.toLowerCase() ?? null,
       mxHosts: Object.freeze(strings(published['mx-host'], 50)),
-      successfulSessions: boundedCount(summary['total-successful-session-count']),
-      failedSessions: boundedCount(summary['total-failure-session-count']),
+      successfulSessions: boundedCount(summary['total-successful-session-count'], 'TLS-RPT successful session count'),
+      failedSessions: boundedCount(summary['total-failure-session-count'], 'TLS-RPT failure session count'),
       failureTypes: Object.freeze([...counts].map(([type, count]) => Object.freeze({ type, count })).sort((left, right) => right.count - left.count || left.type.localeCompare(right.type)).slice(0, 100)),
     };
   });
   const dateRange = object(root['date-range']);
+  const periodStart = reportTimestamp(dateRange['start-datetime']);
+  const periodEnd = reportTimestamp(dateRange['end-datetime']);
+  if (!periodStart || !periodEnd || periodStart > periodEnd) {
+    throw new TypeError('TLS-RPT date range must contain ordered timestamps with explicit timezones.');
+  }
   return Object.freeze({
     kind: 'tls-rpt',
     source: await sourceFor(file),
     organization: cleanText(root['organization-name'], 200),
     reportId: cleanText(root['report-id'], 300),
-    periodStart: reportTimestamp(dateRange['start-datetime']),
-    periodEnd: reportTimestamp(dateRange['end-datetime']),
+    periodStart,
+    periodEnd,
     policies: Object.freeze(policies),
     successfulSessions: policies.reduce((total, item) => total + item.successfulSessions, 0),
     failedSessions: policies.reduce((total, item) => total + item.failedSessions, 0),
@@ -358,6 +420,8 @@ export async function buildMailReportReview(
   officialDomains: readonly string[] = [],
   generatedAt = new Date().toISOString(),
 ): Promise<MailReportReview> {
+  const normalizedGeneratedAt = normalizeExplicitIsoTimestamp(generatedAt);
+  if (!normalizedGeneratedAt) throw new TypeError('Mail report review time must include an explicit timezone.');
   const bounded = reports.slice(0, MAX_MAIL_REPORT_ARCHIVE_ENTRIES);
   const dmarc = bounded.filter((report): report is DmarcAggregateReport => report.kind === 'dmarc');
   const tls = bounded.filter((report): report is TlsAggregateReport => report.kind === 'tls-rpt');
@@ -369,7 +433,7 @@ export async function buildMailReportReview(
   const unsigned = {
     schema: MAIL_REPORT_SCHEMA,
     version: MAIL_REPORT_VERSION,
-    generatedAt,
+    generatedAt: normalizedGeneratedAt,
     reports: bounded,
     summary: {
       dmarcReports: dmarc.length,
@@ -377,7 +441,7 @@ export async function buildMailReportReview(
       dmarcMessages: dmarc.reduce((total, report) => total + report.totalMessages, 0),
       dmarcDkimPass: dmarc.flatMap((report) => report.records).reduce((total, record) => total + (record.dkim === 'pass' ? record.count : 0), 0),
       dmarcSpfPass: dmarc.flatMap((report) => report.records).reduce((total, record) => total + (record.spf === 'pass' ? record.count : 0), 0),
-      dmarcBothFailed: dmarc.flatMap((report) => report.records).reduce((total, record) => total + (record.dkim !== 'pass' && record.spf !== 'pass' ? record.count : 0), 0),
+      dmarcBothFailed: dmarc.flatMap((report) => report.records).reduce((total, record) => total + (record.dkim === 'fail' && record.spf === 'fail' ? record.count : 0), 0),
       tlsSuccessfulSessions: tls.reduce((total, report) => total + report.successfulSessions, 0),
       tlsFailedSessions: tls.reduce((total, report) => total + report.failedSessions, 0),
       truncatedReports: bounded.filter((report) => report.truncated).length,

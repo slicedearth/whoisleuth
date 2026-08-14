@@ -228,6 +228,13 @@ describe('discovery observation snapshots', () => {
         { deep: true, resolverServers: [] },
         '2026-08-01T00:00:00.000Z',
       ), /invalid domain/u);
+      await assert.rejects(() => updateDiscoveryObservationSnapshot(
+        path.join(directory, 'time.json'),
+        candidates().slice(0, 1),
+        [success(0, 'one.example')],
+        { deep: true, resolverServers: [] },
+        '2026-08-01T00:00:00',
+      ), /generation time is invalid/u);
     } finally {
       await rm(directory, { recursive: true, force: true });
     }

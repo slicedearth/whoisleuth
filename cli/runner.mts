@@ -134,7 +134,7 @@ import { MAX_INVESTIGATION_RUN_BYTES, formatInvestigationRun, runInvestigationRe
 import { readCliTextInput } from './input.mts';
 import { evaluateCliFailPolicies, formatFailPolicyNotice } from './fail-policy.mts';
 import { formatCliJunit } from './ci-report.mts';
-import { createBufferedOutput, writePrivateFile } from './output-file.mts';
+import { cleanupPendingOutputFiles, createBufferedOutput, writePrivateFile } from './output-file.mts';
 import {
   canLaunchInteractiveCli,
   launchInteractiveCli,
@@ -408,9 +408,10 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
       if (!input.trim()) throw new CliUsageError(`${args.action} requires one versioned JSON file or a document on stdin.`);
       let parsed: unknown;
       try {
+        scanBoundedJson(input);
         parsed = JSON.parse(input);
       } catch {
-        throw new CliUsageError(`${mapping ? 'External observation mapping' : 'Open Asset Model bridge'} input is not valid JSON.`);
+        throw new CliUsageError(`${mapping ? 'External observation mapping' : 'Open Asset Model bridge'} input is not valid bounded JSON without duplicate keys.`);
       }
       let document;
       try {
@@ -919,9 +920,10 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
       if (!input.trim()) throw new CliUsageError('assurance requires one versioned JSON file or a document on stdin.');
       let parsed: unknown;
       try {
+        scanBoundedJson(input);
         parsed = JSON.parse(input);
       } catch {
-        throw new CliUsageError('Domain assurance input is not valid JSON.');
+        throw new CliUsageError('Domain assurance input is not valid bounded JSON without duplicate keys.');
       }
       let document;
       try {
@@ -949,9 +951,10 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
       if (!input.trim()) throw new CliUsageError('change-packet requires one versioned JSON file or a document on stdin.');
       let parsed: unknown;
       try {
+        scanBoundedJson(input);
         parsed = JSON.parse(input);
       } catch {
-        throw new CliUsageError('Domain change packet input is not valid JSON.');
+        throw new CliUsageError('Domain change packet input is not valid bounded JSON without duplicate keys.');
       }
       let document;
       try {
@@ -1175,9 +1178,10 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
       if (!input.trim()) throw new CliUsageError('ct-intake requires one versioned JSON file or a document on stdin.');
       let parsed: unknown;
       try {
+        scanBoundedJson(input);
         parsed = JSON.parse(input);
       } catch {
-        throw new CliUsageError('Certificate event input is not valid JSON.');
+        throw new CliUsageError('Certificate event input is not valid bounded JSON without duplicate keys.');
       }
       let document;
       try {
@@ -1238,7 +1242,7 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
   }
 }
 
-async function runCli(argv: unknown, dependencies: CliDependencies = {}): Promise<number> {
+async function runCliCommand(argv: unknown, dependencies: CliDependencies = {}): Promise<number> {
   const stdout = dependencies.stdout || process.stdout;
   const stderr = dependencies.stderr || process.stderr;
   const environment = dependencies.environment || process.env;
@@ -1296,6 +1300,26 @@ async function runCli(argv: unknown, dependencies: CliDependencies = {}): Promis
     }
     write(stderr, `Output failed: ${boundedCliErrorMessage(error, 'Output file could not be written')}\n`);
     return EXIT_CODES.LOOKUP_FAILED;
+  }
+}
+
+async function runCli(argv: unknown, dependencies: CliDependencies = {}): Promise<number> {
+  const stderr = dependencies.stderr || process.stderr;
+  try {
+    return await runCliCommand(argv, dependencies);
+  } finally {
+    const cleanup = dependencies.cleanupPendingOutputFiles || cleanupPendingOutputFiles;
+    try {
+      const report = await cleanup();
+      if (report.retainedPublished > 0) {
+        write(stderr, `Output cleanup warning: Published output is intact, but ${report.retainedPublished} linked temporary output ${report.retainedPublished === 1 ? 'file remains' : 'files remain'} in the selected output directory.\n`);
+      }
+      if (report.retainedUnpublished > 0) {
+        write(stderr, `Output cleanup warning: ${report.retainedUnpublished} unpublished temporary output ${report.retainedUnpublished === 1 ? 'file remains' : 'files remain'} in the selected output directory.\n`);
+      }
+    } catch {
+      write(stderr, 'Output cleanup warning: Temporary output cleanup could not be verified.\n');
+    }
   }
 }
 

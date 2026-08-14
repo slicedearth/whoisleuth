@@ -1,6 +1,6 @@
 import { classifyQuery, isDirectLookupTarget } from '../lib/classify.mts';
 import { StringDecoder } from 'node:string_decoder';
-import { boundedCliErrorMessage, CliUsageError } from './errors.mts';
+import { boundedCliErrorMessage, CliUsageError, hasUnsafeCliText } from './errors.mts';
 import {
   INVESTIGATION_PLAN_RECIPES,
   type InvestigationPlanRecipe,
@@ -53,7 +53,7 @@ function boundedInteractiveAnswer(value: unknown): string {
   const supplied = typeof value === 'string' ? value : '';
   if (Buffer.byteLength(supplied, 'utf8') > MAX_INTERACTIVE_ANSWER_BYTES
     || Array.from(supplied).length > MAX_INTERACTIVE_ANSWER_SCALARS
-    || /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f\u061c\u200b-\u200f\u202a-\u202e\u2060-\u2069\ufeff]/u.test(supplied)) {
+    || hasUnsafeCliText(supplied)) {
     throw new CliUsageError('Interactive input must be bounded text without control characters.');
   }
   return supplied.trim();
@@ -158,7 +158,7 @@ function readBoundedInteractiveLine(
           }
           continue;
         }
-        if (/[\u0000-\u001f\u007f-\u009f\u061c\u200b-\u200f\u202a-\u202e\u2060-\u2069\ufeff]/u.test(character)) {
+        if (hasUnsafeCliText(character)) {
           rejectUsage();
           return;
         }

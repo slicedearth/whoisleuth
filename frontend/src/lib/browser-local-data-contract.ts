@@ -1,0 +1,12 @@
+export const LEGACY_CASES_KEY = 'whois-rdap-cases-v1';
+export const LEGACY_CAMPAIGNS_KEY = 'whoisleuth-campaigns-v1';
+export const LEGACY_PROFILES_KEY = 'whois-rdap-brand-profiles-v1';
+export const LEGACY_WATCHLIST_KEY = 'whois-rdap-watchlist-v1';
+export const LEGACY_SHORTLIST_KEY = 'whois-rdap-shortlist-v1';
+export const LEGACY_CT_HISTORY_KEY = 'whoisleuth:ct-search-history:v1';
+export const LEGACY_DETECTION_RULES_KEY = 'whoisleuth-detection-rules-v1';
+export const LEGACY_RELATIONSHIP_OBSERVATIONS_KEY = 'whoisleuth-relationship-observations-v1';
+export const LEGACY_BULK_SESSIONS_KEY = 'whoisleuth-bulk-sessions-v1';
+export const LEGACY_WEBSITE_SNAPSHOTS_KEY = 'whoisleuth-website-snapshots-v1';
+export const LEGACY_INVESTIGATION_TEMPLATES_KEY = 'whoisleuth-investigation-templates-v1';
+export const LEGACY_BULK_REVIEW_KEY = 'whoisleuth-bulk-review-v1';

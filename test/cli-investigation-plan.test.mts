@@ -58,5 +58,13 @@ describe('fixed investigation plans', () => {
   test('rejects unsupported recipes and non-domain subjects where required', () => {
     assert.throws(() => parseCliArguments(['workflow-plan', 'unknown', 'example.test']), /recipe must be one of/iu);
     assert.throws(() => buildInvestigationPlan('domain-triage', 'not a domain', NOW), /requires one valid domain/iu);
+    assert.throws(
+      () => buildInvestigationPlan('domain-triage', 'example.test', '2026-08-03T05:00:00'),
+      /explicit timezone/iu,
+    );
+    assert.equal(
+      buildInvestigationPlan('domain-triage', 'example.test', '2026-08-03T05:00:00+01:00').generatedAt,
+      '2026-08-03T04:00:00.000Z',
+    );
   });
 });

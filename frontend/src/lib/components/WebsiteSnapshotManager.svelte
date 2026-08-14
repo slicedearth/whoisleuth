@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { parseBoundedJson } from '$lib/bounded-json';
   import {
     compareWebsiteSnapshots,
     deleteWebsiteSnapshot,
@@ -148,7 +149,10 @@
     message = '';
     try {
       if (file.size > MAX_WEBSITE_SNAPSHOT_IMPORT_BYTES) throw new Error('Website-snapshot imports are limited to 768 KiB.');
-      const result = await importWebsiteSnapshots(JSON.parse(await file.text()));
+      const result = await importWebsiteSnapshots(parseBoundedJson(await file.text(), {
+        label: 'Website-snapshot import',
+        maximumBytes: MAX_WEBSITE_SNAPSHOT_IMPORT_BYTES,
+      }));
       if (!owns(generation, expectedDomain)) return;
       snapshots = result.snapshots;
       message = `Imported ${result.added} new and ${result.updated} matching snapshot${result.added + result.updated === 1 ? '' : 's'}.`;

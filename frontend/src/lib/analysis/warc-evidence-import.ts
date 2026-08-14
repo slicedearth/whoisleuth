@@ -5,6 +5,7 @@ import {
   type ExternalFindingsDocument,
 } from './external-findings-import.ts';
 import { normalizeDomain } from './case-model.ts';
+import { normalizeExplicitIsoTimestamp } from '../../../../lib/observation.mts';
 
 export const MAX_WARC_IMPORT_BYTES = 8 * 1024 * 1024;
 export const MAX_WARC_RECORDS = 100;
@@ -233,9 +234,7 @@ export async function parseWarcEvidenceArchive(
       continue;
     }
     const warcDate = record.headers.get('warc-date');
-    const observedAt = warcDate && Number.isFinite(Date.parse(warcDate))
-      ? new Date(warcDate).toISOString()
-      : null;
+    const observedAt = normalizeExplicitIsoTimestamp(warcDate);
     if (!observedAt) {
       addExclusion(exclusions, 'A response without a valid WARC-Date was excluded.');
       continue;

@@ -26,7 +26,16 @@ describe('Certificate Transparency query normalization', () => {
   });
 
   test('rejects overlong, control-character, and non-string input consistently', () => {
-    for (const value of ['a'.repeat(MAX_CT_QUERY_LENGTH + 1), 'brand\nname', 'brand\u007fname', ['brand']]) {
+    for (const value of [
+      'a'.repeat(MAX_CT_QUERY_LENGTH + 1),
+      'brand\nname',
+      'brand\u007fname',
+      'brand\u0085name',
+      'brand\u202ename',
+      'brand\u034fname',
+      'brand\u00adname',
+      ['brand'],
+    ]) {
       assert.throws(() => normalizeCtQuery(value), (error) => {
         assert.equal(isCtQueryError(error), true);
         const queryError = recordValue(error);

@@ -14,7 +14,7 @@ import type { UnknownRecord } from './saved-lookup.mts';
 import type { TerminalEnvironment, WritableTerminal } from './terminal-presentation.mts';
 import type { browseLookupDocument, browseLookupOperation, canBrowseLookup } from './lookup-browser.mts';
 import type { canLaunchInteractiveCli, launchInteractiveCli } from './interactive-launcher.mts';
-import type { writePrivateFile } from './output-file.mts';
+import type { cleanupPendingOutputFiles, writePrivateFile } from './output-file.mts';
 
 type WritableLike = WritableTerminal;
 
@@ -97,6 +97,7 @@ type CliDependencies = {
   canLaunchInteractiveCli?: typeof canLaunchInteractiveCli;
   launchInteractiveCli?: typeof launchInteractiveCli;
   writePrivateFile?: typeof writePrivateFile;
+  cleanupPendingOutputFiles?: typeof cleanupPendingOutputFiles;
   resolvePublicAddresses?: typeof resolvePublicAddresses;
   safeFetch?: typeof safeFetch;
   whoisQuery?: typeof whoisQuery;

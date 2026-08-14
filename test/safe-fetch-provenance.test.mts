@@ -328,19 +328,59 @@ describe('safe fetch redirect provenance', () => {
 
 describe('capped body readers', () => {
   test('text capture never retains more than the byte cap from one oversized chunk', async () => {
-    const response = new Response(Buffer.alloc(1024, 0x61));
-    const result = await readTextCapped(response, 32);
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(Buffer.alloc(1024, 0x61));
+      },
+    });
+    const result = await readTextCapped(new Response(body), 32);
     assert.equal(result.text, 'a'.repeat(32));
     assert.equal(result.bytesRead, 32);
     assert.equal(result.truncated, true);
+    assert.equal(body.locked, false);
   });
 
   test('binary capture never retains more than the byte cap from one oversized chunk', async () => {
-    const response = new Response(Buffer.alloc(1024, 0x7f));
-    const result = await readBytesCapped(response, 24);
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(Buffer.alloc(1024, 0x7f));
+      },
+    });
+    const result = await readBytesCapped(new Response(body), 24);
     assert.equal(result.bytes.length, 24);
     assert.equal(result.bytesRead, 24);
     assert.equal(result.truncated, true);
+    assert.equal(body.locked, false);
+  });
+
+  test('both capped readers unlock after the exact-cap extra read proves truncation', async () => {
+    const exactThenExtra = () => {
+      let reads = 0;
+      const body = new ReadableStream<Uint8Array>({
+        pull(controller) {
+          reads += 1;
+          controller.enqueue(reads === 1
+            ? Uint8Array.from([0x61, 0x62, 0x63, 0x64])
+            : Uint8Array.from([0x65]));
+        },
+      });
+      return { body, response: new Response(body) };
+    };
+
+    const text = exactThenExtra();
+    assert.deepEqual(await readTextCapped(text.response, 4), {
+      text: 'abcd',
+      bytesRead: 4,
+      truncated: true,
+    });
+    assert.equal(text.body.locked, false);
+
+    const binary = exactThenExtra();
+    const result = await readBytesCapped(binary.response, 4);
+    assert.deepEqual([...result.bytes], [0x61, 0x62, 0x63, 0x64]);
+    assert.equal(result.bytesRead, 4);
+    assert.equal(result.truncated, true);
+    assert.equal(binary.body.locked, false);
   });
 
   test('an exact-size body is not reported as truncated', async () => {
@@ -360,6 +400,66 @@ describe('capped body readers', () => {
   test('does not compute a body digest unless the caller opts in', async () => {
     const result = await readTextCapped(new Response('abcd'), 4);
     assert.equal(Object.hasOwn(result, 'sha256'), false);
+  });
+
+  test('offers strict UTF-8 decoding for evidence transports without changing permissive text capture', async () => {
+    const invalid = Uint8Array.from([0x7b, 0x22, 0x78, 0x22, 0x3a, 0xff, 0x7d]);
+    await assert.rejects(
+      () => readTextCapped(new Response(invalid), 32, { fatalUtf8: true }),
+      /encoded data|encoding|decode|utf-8/iu,
+    );
+    const permissive = await readTextCapped(new Response(invalid), 32);
+    assert.match(permissive.text, /\ufffd/u);
+  });
+
+  test('both capped readers unlock a real response body when a read fails mid-stream', async () => {
+    // An untrusted host can reset the connection partway through a favicon or
+    // page body. Exercise the Web Streams lock itself rather than a mock
+    // cancel callback, because cancel() and releaseLock() are separate actions.
+    const resettingResponse = () => {
+      let reads = 0;
+      const body = new ReadableStream<Uint8Array>({
+        pull(controller) {
+          reads += 1;
+          if (reads === 1) {
+            controller.enqueue(Uint8Array.from([0x61, 0x62]));
+          } else {
+            controller.error(new Error('upstream connection reset mid-body'));
+          }
+        },
+      });
+      return { body, response: new Response(body) };
+    };
+
+    const text = resettingResponse();
+    await assert.rejects(() => readTextCapped(text.response, 1024), /reset mid-body/u);
+    assert.equal(text.body.locked, false, 'text capture must release the reader lock on failure');
+
+    const binary = resettingResponse();
+    await assert.rejects(() => readBytesCapped(binary.response, 1024), /reset mid-body/u);
+    assert.equal(binary.body.locked, false, 'binary capture must release the reader lock on failure');
+  });
+
+  test('both capped readers unlock a real response body after an ordinary complete read', async () => {
+    // Positive control for the failure case above: lock release must not be
+    // specific to an errored stream.
+    const completeResponse = () => {
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(Uint8Array.from([0x61]));
+          controller.close();
+        },
+      });
+      return { body, response: new Response(body) };
+    };
+
+    const text = completeResponse();
+    assert.equal((await readTextCapped(text.response, 1024)).bytesRead, 1);
+    assert.equal(text.body.locked, false);
+
+    const binary = completeResponse();
+    assert.equal((await readBytesCapped(binary.response, 1024)).bytesRead, 1);
+    assert.equal(binary.body.locked, false);
   });
 
   test('bodyless responses are empty and non-stream response adapters fail closed', async () => {

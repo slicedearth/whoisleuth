@@ -110,6 +110,35 @@ function mispEvent() {
 }
 
 describe('bounded STIX and MISP import preview', () => {
+  test('rejects zone-less protocol timestamps while preserving explicit offsets and epochs', () => {
+    const zoneLessObjects = stixObjects().map((item) => (
+      (item as Record<string, unknown>).type === 'observed-data'
+        ? { ...item, first_observed: '2026-01-15T12:00:00.000', last_observed: '2026-01-15T12:00:00.000' }
+        : item
+    ));
+    assert.throws(
+      () => parseExternalIntelligenceDocument(stixBundle(zoneLessObjects), DIGEST),
+      /explicit timezone/u,
+    );
+
+    const offsetObjects = stixObjects().map((item) => (
+      (item as Record<string, unknown>).type === 'observed-data'
+        ? { ...item, first_observed: '2026-01-15T12:00:00.000+01:00', last_observed: '2026-01-15T12:00:00.000+01:00' }
+        : item
+    ));
+    const offset = parseExternalIntelligenceDocument(stixBundle(offsetObjects), DIGEST);
+    assert.equal(
+      offset.items.find((item) => item.entityType === 'domain' && item.claimType === 'observable')?.observedAt,
+      '2026-01-15T11:00:00.000Z',
+    );
+
+    const misp = parseExternalIntelligenceDocument(mispEvent(), DIGEST);
+    assert.equal(misp.items.find((item) => item.entityType === 'ipv4')?.createdAt, '2026-07-28T01:00:00.000Z');
+    const malformedMisp = mispEvent();
+    (malformedMisp.Event.Attribute[0] as Record<string, unknown>).first_seen = '2026-01-15T12:00:00.000';
+    assert.throws(() => parseExternalIntelligenceDocument(malformedMisp, DIGEST), /explicit timezone/u);
+  });
+
   test('normalizes supported STIX entities while preserving markings and publisher metadata', () => {
     const preview = parseExternalIntelligenceDocument(stixBundle(stixObjects()), DIGEST);
     assert.equal(preview.format, 'stix');

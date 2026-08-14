@@ -10,6 +10,7 @@ import {
   type CompactWatchlistRecord,
   type WatchlistEntry,
 } from './watchlist-history.ts';
+import { normalizeExplicitIsoTimestamp } from '../../../../lib/observation.mts';
 
 export const SCHEDULED_MONITOR_SCHEMA = 'whoisleuth.scheduled-monitor';
 export const SCHEDULED_MONITOR_SCHEMA_VERSION = 1;
@@ -102,7 +103,6 @@ const STATUSES = new Set<string>(SCHEDULED_WATCHLIST_STATUSES);
 const SAFE_ID_RE = /^[A-Za-z0-9_-]{16,64}$/u;
 const CONTROL_RE = /[\u0000-\u001f\u007f]/u;
 const BLOCKED_NAMES = new Set(['__proto__', 'prototype', 'constructor']);
-const MAX_TIMESTAMP_LENGTH = 64;
 const EPOCH = new Date(0).toISOString();
 
 function plainRecord(value: unknown): Record<string, unknown> | null {
@@ -125,9 +125,7 @@ function makeId(): string {
 }
 
 function isoOrNull(value: unknown): string | null {
-  if (typeof value !== 'string' || value.length > MAX_TIMESTAMP_LENGTH || CONTROL_RE.test(value)) return null;
-  const parsed = Date.parse(value);
-  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
+  return normalizeExplicitIsoTimestamp(value);
 }
 
 function positiveRevision(value: unknown): number {

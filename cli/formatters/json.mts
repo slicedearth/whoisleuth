@@ -1,6 +1,7 @@
 import type { BulkLookupResult, ClassifiedQuery } from '../bulk.mts';
 import { bulkDnsSummary } from '../bulk-output.mts';
 import { SAVED_LOOKUP_SCHEMA_VERSION, type UnknownRecord } from '../saved-lookup.mts';
+import { normalizeExplicitIsoTimestamp } from '../../lib/observation.mts';
 
 const CLI_LOOKUP_SCHEMA = 'whoisleuth.cli.lookup';
 const CLI_BULK_SCHEMA = 'whoisleuth.cli.bulk';
@@ -60,6 +61,10 @@ function buildCliLookupDocument(
   mode = 'fast',
   collectionContext: LookupCollectionContext = {},
 ): UnknownRecord {
+  const normalizedGeneratedAt = normalizeExplicitIsoTimestamp(generatedAt);
+  if (!normalizedGeneratedAt) {
+    throw new TypeError('Lookup document generation time must be valid and include an explicit timezone.');
+  }
   const observerLabel = typeof collectionContext.observerLabel === 'string'
     ? collectionContext.observerLabel
     : null;
@@ -70,7 +75,7 @@ function buildCliLookupDocument(
     ...result,
     schema: CLI_LOOKUP_SCHEMA,
     version: CLI_LOOKUP_SCHEMA_VERSION,
-    generatedAt,
+    generatedAt: normalizedGeneratedAt,
     mode: mode === 'deep' ? 'deep' : 'fast',
     query,
     type: classified.type,

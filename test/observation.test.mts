@@ -35,6 +35,19 @@ test('reader distinguishes absent, supported, invalid, and future envelopes', ()
   assert.equal(supported.observation.complete, true);
 });
 
+test('creator never emits an observation timestamp its reader rejects', () => {
+  for (const observedAt of [
+    '0001-01-01T00:00:00Z',
+    '2026-07-13T01:02:03+10:00',
+    '9999-12-31T23:59:59Z',
+    '0001-01-01T00:00:00+14:00',
+    '9999-12-31T23:59:59-14:00',
+  ]) {
+    const observation = createObservation({ status: 'success', observedAt, source: 'test', complete: true });
+    assert.equal(readObservationEnvelope(observation).state, 'supported');
+  }
+});
+
 test('invalid optional values fail safe without inventing scan profiles', () => {
   const result = createObservation({ status: 'made-up', observedAt: 'bad', scanMode: 'interactive', source: '', durationMs: Infinity });
   assert.equal(result.status, 'error');

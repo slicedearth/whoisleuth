@@ -161,14 +161,26 @@ function sha256(value: Buffer | string): string {
   return createHash('sha256').update(value).digest('hex');
 }
 
-function boundedPlainText(value: unknown, maximum: number): string {
+const TERMINAL_UNSAFE_RE = /[\u0000-\u001f\u007f-\u009f]|\p{Default_Ignorable_Code_Point}/u;
+const TERMINAL_UNSAFE_GLOBAL_RE = /[\u0000-\u001f\u007f-\u009f]|\p{Default_Ignorable_Code_Point}/gu;
+
+export function hasTerminalUnsafeCharacters(value: string): boolean {
+  return TERMINAL_UNSAFE_RE.test(value);
+}
+
+export function sanitizeCaptureText(value: unknown, maximum: number): string {
   return typeof value === 'string'
-    ? value.replace(/[\u0000-\u001f\u007f]+/gu, ' ').replace(/\s+/gu, ' ').trim().slice(0, maximum)
+    ? value
+      .replace(TERMINAL_UNSAFE_GLOBAL_RE, ' ')
+      .replace(/\s+/gu, ' ')
+      .trim()
+      .slice(0, maximum)
     : '';
 }
 
 function captureUrl(value: unknown): URL {
-  if (typeof value !== 'string' || !value || value.length > MAX_CAPTURE_URL_LENGTH) {
+  if (typeof value !== 'string' || !value || value.length > MAX_CAPTURE_URL_LENGTH
+    || hasTerminalUnsafeCharacters(value)) {
     throw new Error(`Capture URL must be between 1 and ${MAX_CAPTURE_URL_LENGTH} characters.`);
   }
   let parsed: URL;
@@ -200,7 +212,7 @@ function captureTargetUrl(value: unknown): URL {
 }
 
 function outputDirectory(value: unknown): string {
-  if (typeof value !== 'string' || !value || value.length > 2048 || /[\u0000-\u001f\u007f]/u.test(value)) {
+  if (typeof value !== 'string' || !value || value.length > 2048 || hasTerminalUnsafeCharacters(value)) {
     throw new Error('Output directory must be one bounded local path.');
   }
   return path.resolve(value);
@@ -749,7 +761,7 @@ export async function captureRenderedPage(
     await deadline.run(page.goto(target.toString(), { waitUntil: 'domcontentloaded', timeout: argumentsValue.timeoutMs }));
     await deadline.run(page.waitForTimeout(Math.min(750, Math.max(100, Math.round(argumentsValue.timeoutMs / 20)))));
     const finalUrl = captureUrl(page.url());
-    const title = boundedPlainText(await deadline.run(page.title()), 300);
+    const title = sanitizeCaptureText(await deadline.run(page.title()), 300);
     const dom = await deadline.run(projectDom(page));
     const screenshot = await deadline.run(page.screenshot({ type: 'png', fullPage: false, animations: 'disabled' }));
     const screenshotBuffer = Buffer.from(screenshot);

@@ -61,3 +61,18 @@ test('WHOIS decoding preserves ordinary ASCII across several TCP chunks', async 
   });
   assert.equal(response, 'Domain Name: EXAMPLE.TEST\r\nStatus: active\r\n');
 });
+
+test('WHOIS decoding rejects malformed UTF-8 instead of fabricating parsed evidence', async () => {
+  const fixture = fixtureConnection([
+    Buffer.from('Domain Name: EXAMPLE.TEST\r\nRegistrar: ', 'utf8'),
+    Buffer.from([0xc3, 0x28]),
+    Buffer.from('\r\n', 'utf8'),
+  ]);
+
+  await assert.rejects(
+    queryWhoisAddress('203.0.113.10', 'whois.example', 'example.test', {
+      createConnection: fixture.createConnection,
+    }),
+    /not valid UTF-8/u,
+  );
+});

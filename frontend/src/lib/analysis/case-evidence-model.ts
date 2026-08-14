@@ -25,6 +25,7 @@ import {
   EVIDENCE_SOURCE_RANK,
   EVIDENCE_SOURCE_SET,
   REGISTERED_LIKE,
+  caseTimestampOrNull,
   hashString,
   isoOrNull,
   objectRecord,
@@ -106,6 +107,13 @@ function registrarKey(value: unknown): string {
 function dayOf(value: unknown): string | null {
   const iso = isoOrNull(value);
   return iso ? iso.slice(0, 10) : null;
+}
+
+function lifecycleTimestamp(value: unknown, sourceVersion?: number | null): string | null {
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/u.test(value)) {
+    return caseTimestampOrNull(`${value}T00:00:00Z`);
+  }
+  return caseTimestampOrNull(value, sourceVersion);
 }
 
 // Capture completeness is recorded explicitly, never inferred from whether a
@@ -244,8 +252,8 @@ function buildSnapshot(
     riskFactors: normalizeFactors(record.riskFactors),
     opportunityFactors: normalizeFactors(record.opportunityFactors),
     registrar: evidenceString(record.registrar),
-    createdDate: isoOrNull(record.createdDate),
-    expiryDate: isoOrNull(record.expiryDate),
+    createdDate: lifecycleTimestamp(record.createdDate, options.sourceVersion),
+    expiryDate: lifecycleTimestamp(record.expiryDate, options.sourceVersion),
     nameservers: normalizeNameserverList(record.nameservers),
     hasMx: boolOrNull(record.hasMx),
     hasSpf: boolOrNull(record.hasSpf),
@@ -316,9 +324,9 @@ function buildSnapshot(
   }
   if (!hasMaterialEvidence(fields)) return null;
 
-  const capturedAt = isoOrNull(record.capturedAt) || options.fallback || null;
+  const capturedAt = caseTimestampOrNull(record.capturedAt, options.sourceVersion) || options.fallback || null;
   if (!capturedAt) return null; // an evidence entry with no placeable time is skipped
-  let firstCapturedAt = isoOrNull(record.firstCapturedAt) || capturedAt;
+  let firstCapturedAt = caseTimestampOrNull(record.firstCapturedAt, options.sourceVersion) || capturedAt;
   if (Date.parse(firstCapturedAt) > Date.parse(capturedAt)) firstCapturedAt = capturedAt;
 
   const source = typeof record.source === 'string' && EVIDENCE_SOURCE_SET.has(record.source)

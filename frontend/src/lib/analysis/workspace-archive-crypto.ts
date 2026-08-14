@@ -8,6 +8,7 @@ import {
   isSupportedWorkspaceArchiveVersion,
   readWorkspaceArchive,
 } from './workspace-archive.ts';
+import { parseBoundedJson } from '../bounded-json.ts';
 
 export const ENCRYPTED_WORKSPACE_ARCHIVE_SCHEMA = 'whoisleuth.encrypted-workspace-archive';
 export const ENCRYPTED_WORKSPACE_ARCHIVE_VERSION = 1;
@@ -363,7 +364,10 @@ export async function decryptWorkspaceArchive(
     if (plaintext.byteLength > MAX_WORKSPACE_ARCHIVE_BYTES) {
       throw new Error('The decrypted workspace archive exceeds its byte limit.');
     }
-    return JSON.parse(decoder.decode(plaintext));
+    return parseBoundedJson(decoder.decode(plaintext), {
+      label: 'Decrypted workspace archive',
+      maximumBytes: MAX_WORKSPACE_ARCHIVE_BYTES,
+    });
   } catch (cause) {
     if (cause instanceof Error && cause.message === 'The decrypted workspace archive exceeds its byte limit.') throw cause;
     throw new Error('The backup passphrase is incorrect or the encrypted file is corrupted.');

@@ -17,6 +17,7 @@ import {
 } from './analysis/campaign-model.ts';
 import type { CampaignRecord } from './analysis/campaign-model.ts';
 import {
+  BRAND_PROFILE_SCHEMA,
   BRAND_PROFILE_SCHEMA_VERSION,
   MAX_PROFILES,
   MAX_PROFILE_STORE_BYTES,
@@ -125,6 +126,20 @@ import type {
   LocalDataCollectionDefinition,
   LocalDataRecord,
 } from './browser-local-data.ts';
+import {
+  LEGACY_BULK_REVIEW_KEY,
+  LEGACY_BULK_SESSIONS_KEY,
+  LEGACY_CAMPAIGNS_KEY,
+  LEGACY_CASES_KEY,
+  LEGACY_CT_HISTORY_KEY,
+  LEGACY_DETECTION_RULES_KEY,
+  LEGACY_INVESTIGATION_TEMPLATES_KEY,
+  LEGACY_PROFILES_KEY,
+  LEGACY_RELATIONSHIP_OBSERVATIONS_KEY,
+  LEGACY_SHORTLIST_KEY,
+  LEGACY_WATCHLIST_KEY,
+  LEGACY_WEBSITE_SNAPSHOTS_KEY,
+} from './browser-local-data-contract.ts';
 
 export type BrowserLocalCollectionValueMap = Readonly<{
   cases: CaseRecord;
@@ -141,24 +156,26 @@ export type BrowserLocalCollectionValueMap = Readonly<{
   bulk_review: BulkReviewRecord;
 }>;
 
+export type BrowserLocalCollectionDocumentMap = Readonly<{
+  cases: CaseRecord[];
+  campaigns: CampaignRecord[];
+  brand_profiles: BrandProfile[];
+  watchlists: WatchlistCollection;
+  shortlist: ShortlistRecord[];
+  ct_history: CtHistoryStore;
+  detection_rules: DetectionRule[];
+  relationship_observations: RelationshipObservation[];
+  bulk_sessions: BulkSession[];
+  website_snapshots: WebsiteProfileSnapshot[];
+  investigation_templates: InvestigationTemplate[];
+  bulk_review: BulkReviewStore;
+}>;
+
 export type BrowserLocalCollectionId = keyof BrowserLocalCollectionValueMap;
 export type BrowserLocalDecodedCollectionRecord<Collection extends BrowserLocalCollectionId> = Readonly<{
   id: string;
   value: BrowserLocalCollectionValueMap[Collection];
 }>;
-
-export const LEGACY_CASES_KEY = 'whois-rdap-cases-v1';
-export const LEGACY_CAMPAIGNS_KEY = 'whoisleuth-campaigns-v1';
-export const LEGACY_PROFILES_KEY = 'whois-rdap-brand-profiles-v1';
-export const LEGACY_WATCHLIST_KEY = 'whois-rdap-watchlist-v1';
-export const LEGACY_SHORTLIST_KEY = 'whois-rdap-shortlist-v1';
-export const LEGACY_CT_HISTORY_KEY = 'whoisleuth:ct-search-history:v1';
-export const LEGACY_DETECTION_RULES_KEY = 'whoisleuth-detection-rules-v1';
-export const LEGACY_RELATIONSHIP_OBSERVATIONS_KEY = 'whoisleuth-relationship-observations-v1';
-export const LEGACY_BULK_SESSIONS_KEY = 'whoisleuth-bulk-sessions-v1';
-export const LEGACY_WEBSITE_SNAPSHOTS_KEY = 'whoisleuth-website-snapshots-v1';
-export const LEGACY_INVESTIGATION_TEMPLATES_KEY = 'whoisleuth-investigation-templates-v1';
-export const LEGACY_BULK_REVIEW_KEY = 'whoisleuth-bulk-review-v1';
 
 function recordsFromArray<T>(values: readonly T[], key: (value: T) => unknown): LocalDataRecord[] {
   return values.map((value) => ({ id: String(key(value) ?? ''), value }));
@@ -166,6 +183,41 @@ function recordsFromArray<T>(values: readonly T[], key: (value: T) => unknown): 
 
 function arrayFromRecords(records: readonly LocalDataRecord[]): unknown[] {
   return records.map((record) => record.value);
+}
+
+type UnknownRecord = Record<string, unknown>;
+
+function record(value: unknown): UnknownRecord | null {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? value as UnknownRecord
+    : null;
+}
+
+function positiveVersion(value: unknown): boolean {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0;
+}
+
+function arrayOrVersionedList(
+  raw: unknown,
+  key: string,
+  options: Readonly<{ schema?: string; allowArray?: boolean }> = {},
+): boolean {
+  if (Array.isArray(raw)) return options.allowArray === true;
+  const value = record(raw);
+  if (!value || !positiveVersion(value.version) || !Array.isArray(value[key])) return false;
+  if (options.schema !== undefined && value.schema !== options.schema) return false;
+  if (options.schema === undefined && Object.hasOwn(value, 'schema')) return false;
+  return true;
+}
+
+function watchlistLegacyRoot(raw: unknown): boolean {
+  const value = record(raw);
+  if (!value) return false;
+  if (value.schema === 'whoisleuth.watchlists' && record(value.watchlists)) {
+    const watchlists = record(value.watchlists);
+    return positiveVersion(value.version) && watchlists !== null;
+  }
+  return Object.values(value).every((item) => Array.isArray(record(item)?.results));
 }
 
 export const CASES_COLLECTION: LocalDataCollectionDefinition<CaseRecord[]> = Object.freeze({
@@ -176,6 +228,7 @@ export const CASES_COLLECTION: LocalDataCollectionDefinition<CaseRecord[]> = Obj
   maximumBytes: MAX_CASE_STORE_BYTES,
   maximumRecords: MAX_CASES,
   empty: () => [],
+  acceptLegacyRoot: (raw) => arrayOrVersionedList(raw, 'cases', { allowArray: true }),
   normalize: (raw) => normalizeCaseStore(raw).cases,
   version: parseStoreVersion,
   serialize: serializeCaseStore,
@@ -191,6 +244,7 @@ export const CAMPAIGNS_COLLECTION: LocalDataCollectionDefinition<CampaignRecord[
   maximumBytes: MAX_CAMPAIGN_STORE_BYTES,
   maximumRecords: MAX_CAMPAIGNS,
   empty: () => [],
+  acceptLegacyRoot: (raw) => arrayOrVersionedList(raw, 'campaigns', { allowArray: true }),
   normalize: (raw) => normalizeCampaignStore(raw).campaigns,
   version: campaignStoreVersion,
   serialize: serializeCampaignStore,
@@ -206,6 +260,10 @@ export const PROFILES_COLLECTION: LocalDataCollectionDefinition<BrandProfile[]> 
   maximumBytes: MAX_PROFILE_STORE_BYTES,
   maximumRecords: MAX_PROFILES,
   empty: () => [],
+  acceptLegacyRoot: (raw) => (
+    arrayOrVersionedList(raw, 'profiles', { allowArray: true })
+    || arrayOrVersionedList(raw, 'profiles', { schema: BRAND_PROFILE_SCHEMA })
+  ),
   normalize: (raw) => normalizeBrandProfileStore(raw).profiles,
   version: brandProfileStoreVersion,
   serialize: serializeBrandProfileStore,
@@ -221,6 +279,7 @@ export const WATCHLISTS_COLLECTION: LocalDataCollectionDefinition<WatchlistColle
   maximumBytes: MAX_WATCHLIST_STORE_BYTES,
   maximumRecords: MAX_WATCHLISTS,
   empty: () => ({}),
+  acceptLegacyRoot: watchlistLegacyRoot,
   normalize: (raw) => normalizeWatchlistStore(raw).watchlists,
   version: watchlistStoreVersion,
   serialize: serializeWatchlistStore,
@@ -240,6 +299,7 @@ export const SHORTLIST_COLLECTION: LocalDataCollectionDefinition<ShortlistRecord
   maximumBytes: MAX_SHORTLIST_STORE_BYTES,
   maximumRecords: MAX_SHORTLIST_ENTRIES,
   empty: () => [],
+  acceptLegacyRoot: (raw) => arrayOrVersionedList(raw, 'entries', { schema: 'whoisleuth.shortlist', allowArray: true }),
   normalize: (raw) => normalizeShortlistStore(raw).entries,
   version: shortlistStoreVersion,
   serialize: serializeShortlistStore,
@@ -255,6 +315,7 @@ export const CT_HISTORY_COLLECTION: LocalDataCollectionDefinition<CtHistoryStore
   maximumBytes: MAX_CT_HISTORY_STORE_BYTES,
   maximumRecords: MAX_CT_HISTORY_SEARCHES,
   empty: emptyCtHistoryStore,
+  acceptLegacyRoot: (raw) => arrayOrVersionedList(raw, 'entries'),
   normalize: (raw) => enforceCtHistoryBudget(normalizeCtHistoryStore(raw)),
   version: ctHistoryStoreVersion,
   serialize: (store) => JSON.stringify(enforceCtHistoryBudget(store)),
@@ -270,6 +331,7 @@ export const DETECTION_RULES_COLLECTION: LocalDataCollectionDefinition<Detection
   maximumBytes: MAX_RULE_STORE_BYTES,
   maximumRecords: MAX_DETECTION_RULES,
   empty: () => [],
+  acceptLegacyRoot: (raw) => arrayOrVersionedList(raw, 'rules', { allowArray: true }),
   normalize: (raw) => normalizeDetectionRuleStore(raw).rules,
   version: detectionRuleStoreVersion,
   serialize: serializeDetectionRuleStore,
@@ -285,6 +347,7 @@ export const RELATIONSHIP_OBSERVATIONS_COLLECTION: LocalDataCollectionDefinition
   maximumBytes: MAX_RELATIONSHIP_OBSERVATION_STORE_BYTES,
   maximumRecords: MAX_RELATIONSHIP_OBSERVATIONS,
   empty: () => [],
+  acceptLegacyRoot: (raw) => arrayOrVersionedList(raw, 'observations', { schema: RELATIONSHIP_OBSERVATION_SCHEMA, allowArray: true }),
   normalize: (raw) => normalizeRelationshipObservationStore(raw).observations,
   version: relationshipObservationStoreVersion,
   serialize: serializeRelationshipObservationStore,
@@ -304,6 +367,7 @@ export const BULK_SESSIONS_COLLECTION: LocalDataCollectionDefinition<BulkSession
   maximumBytes: MAX_BULK_SESSION_STORE_BYTES,
   maximumRecords: MAX_BULK_SESSIONS,
   empty: () => [],
+  acceptLegacyRoot: (raw) => arrayOrVersionedList(raw, 'sessions', { schema: BULK_SESSION_SCHEMA, allowArray: true }),
   normalize: (raw) => normalizeBulkSessionStore(raw).sessions,
   version: bulkSessionStoreVersion,
   serialize: serializeBulkSessionStore,
@@ -323,6 +387,7 @@ export const WEBSITE_SNAPSHOTS_COLLECTION: LocalDataCollectionDefinition<Website
   maximumBytes: MAX_WEBSITE_SNAPSHOT_STORE_BYTES,
   maximumRecords: MAX_WEBSITE_SNAPSHOTS,
   empty: () => [],
+  acceptLegacyRoot: (raw) => arrayOrVersionedList(raw, 'snapshots', { schema: WEBSITE_SNAPSHOT_SCHEMA, allowArray: true }),
   normalize: (raw) => normalizeWebsiteSnapshotStore(raw).snapshots,
   version: websiteSnapshotStoreVersion,
   serialize: serializeWebsiteSnapshotStore,
@@ -342,6 +407,7 @@ export const INVESTIGATION_TEMPLATES_COLLECTION: LocalDataCollectionDefinition<I
   maximumBytes: MAX_INVESTIGATION_TEMPLATE_STORE_BYTES,
   maximumRecords: MAX_INVESTIGATION_TEMPLATES,
   empty: () => [],
+  acceptLegacyRoot: (raw) => arrayOrVersionedList(raw, 'templates', { schema: INVESTIGATION_TEMPLATE_SCHEMA, allowArray: true }),
   normalize: (raw) => normalizeInvestigationTemplateStore(raw).templates,
   version: investigationTemplateStoreVersion,
   serialize: serializeInvestigationTemplateStore,
@@ -361,6 +427,12 @@ export const BULK_REVIEW_COLLECTION: LocalDataCollectionDefinition<BulkReviewSto
   maximumBytes: MAX_BULK_REVIEW_STORE_BYTES,
   maximumRecords: MAX_BULK_REVIEW_PRESETS + MAX_BULK_REVIEW_ROWS,
   empty: () => enforceBulkReviewBudget(null),
+  acceptLegacyRoot: (raw) => Array.isArray(raw) || (
+    record(raw)?.schema === 'whoisleuth.bulk-review'
+    && positiveVersion(record(raw)?.version)
+    && Array.isArray(record(raw)?.presets)
+    && Array.isArray(record(raw)?.rows)
+  ),
   normalize: enforceBulkReviewBudget,
   version: bulkReviewStoreVersion,
   serialize: serializeBulkReviewStore,

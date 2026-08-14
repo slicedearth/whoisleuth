@@ -21,7 +21,7 @@ import {
   selectRegistrarRdapLink,
 } from './rdap-registrar.mts';
 import {
-  fetchRdapWithTimeout,
+  fetchRdapDetailedWithTimeout,
   type RdapFetch,
 } from './rdap-transport.mts';
 import type { RegistryRdapLinkSource } from './rdap-types.mts';
@@ -31,7 +31,7 @@ async function fetchRdapFromBases<const T extends string>(
   type: T,
   value: string,
   bases: unknown,
-  fetchUpstream: RdapFetch = fetchRdapWithTimeout,
+  fetchUpstream: RdapFetch = fetchRdapDetailedWithTimeout,
 ) {
   return fetchRdapFromBasesWithParser(
     type,

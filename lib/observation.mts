@@ -66,6 +66,9 @@ const MAX_DIAGNOSTICS = MAX_OBSERVATION_DIAGNOSTICS;
 const MAX_DIAGNOSTIC_KEY = 40;
 const MAX_DIAGNOSTIC_STRING = 240;
 const MAX_DURATION_MS = 120_000;
+const ISO_DATE_TIME_RE = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(\.\d{1,43})?(Z|[+-]\d{2}:\d{2})$/iu;
+const LEGACY_ISO_DATE_TIME_RE = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(\.\d{1,43})?(Z|[+-]\d{2}:\d{2})?$/iu;
+const CT_DATE_TIME_RE = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})(\.\d{1,43})?(Z|[+-]\d{2}:\d{2})?$/iu;
 
 function isObservationStatus(value: unknown): value is ObservationStatus {
   return typeof value === 'string' && STATUSES.has(value as ObservationStatus);
@@ -81,10 +84,61 @@ function safeString(value: unknown, maxLength: number): string | null {
   return normalized ? normalized.slice(0, maxLength) : null;
 }
 
+function validCalendarParts(parts: RegExpMatchArray): boolean {
+  const year = Number(parts[1]);
+  const month = Number(parts[2]);
+  const day = Number(parts[3]);
+  const hour = Number(parts[4]);
+  const minute = Number(parts[5]);
+  const second = Number(parts[6]);
+  if (year < 1 || month < 1 || month > 12 || day < 1 || hour > 23 || minute > 59 || second > 59) return false;
+  const date = new Date(0);
+  date.setUTCFullYear(year, month - 1, day);
+  date.setUTCHours(hour, minute, second, 0);
+  return date.getUTCFullYear() === year
+    && date.getUTCMonth() === month - 1
+    && date.getUTCDate() === day
+    && date.getUTCHours() === hour
+    && date.getUTCMinutes() === minute
+    && date.getUTCSeconds() === second;
+}
+
+function canonicalTimestamp(value: unknown, expression: RegExp, assignUtcWhenMissing: boolean): string | null {
+  if (typeof value !== 'string' || value.length === 0 || value.length > 64 || /[\u0000-\u001f\u007f]/u.test(value)) return null;
+  const match = expression.exec(value);
+  if (!match || !validCalendarParts(match)) return null;
+  const zone = match[8] || (assignUtcWhenMissing ? 'Z' : '');
+  if (!zone) return null;
+  if (zone !== 'Z' && zone.toUpperCase() !== 'Z') {
+    const hours = Number(zone.slice(1, 3));
+    const minutes = Number(zone.slice(4, 6));
+    if (hours > 23 || minutes > 59) return null;
+  }
+  const normalized = `${match[1]}-${match[2]}-${match[3]}T${match[4]}:${match[5]}:${match[6]}${match[7] || ''}${zone.toUpperCase() === 'Z' ? 'Z' : zone}`;
+  const timestamp = Date.parse(normalized);
+  if (!Number.isFinite(timestamp)) return null;
+  const date = new Date(timestamp);
+  const utcYear = date.getUTCFullYear();
+  return utcYear >= 1 && utcYear <= 9_999 ? date.toISOString() : null;
+}
+
+function normalizeExplicitIsoTimestamp(value: unknown): string | null {
+  return canonicalTimestamp(value, ISO_DATE_TIME_RE, false);
+}
+
+// Frozen legacy schemas accepted zone-less ISO date-times. Preserve that
+// migration path deterministically by assigning UTC instead of consulting the
+// host timezone. Current schemas must use normalizeExplicitIsoTimestamp.
+function normalizeLegacyIsoTimestamp(value: unknown): string | null {
+  return canonicalTimestamp(value, LEGACY_ISO_DATE_TIME_RE, true);
+}
+
+function normalizeCtTimestamp(value: unknown): string | null {
+  return canonicalTimestamp(value, CT_DATE_TIME_RE, true);
+}
+
 function isoTimestamp(value: unknown): string | null {
-  if (typeof value !== 'string' || value.length > 64 || /[\u0000-\u001f\u007f]/.test(value)) return null;
-  const time = Date.parse(value);
-  return Number.isFinite(time) ? new Date(time).toISOString() : null;
+  return normalizeExplicitIsoTimestamp(value);
 }
 
 function normalizeDiagnosticValue(value: unknown): DiagnosticValue | null {
@@ -164,6 +218,9 @@ export {
   MAX_OBSERVATION_LIMITATION_LENGTH,
   OBSERVATION_VERSION,
   createObservation,
+  normalizeCtTimestamp,
+  normalizeExplicitIsoTimestamp,
+  normalizeLegacyIsoTimestamp,
   readObservationEnvelope,
 };
 

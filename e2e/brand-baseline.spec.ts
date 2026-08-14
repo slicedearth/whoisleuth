@@ -194,6 +194,50 @@ test('a baseline is discarded when it no longer belongs to an official domain', 
   ).value;
   expect(persisted.officialDomains).toEqual(['different.example']);
   expect(persisted.pageBaseline).toBeNull();
+  expect(persisted.officialFaviconHash).toBe('');
+  expect(persisted.officialFaviconPHash).toBe('');
+});
+
+test('a late capture cannot bind one official domain identity to another', async ({ page }) => {
+  let releaseCapture = () => {};
+  let completeCapture = () => {};
+  const captureGate = new Promise<void>((resolve) => { releaseCapture = resolve; });
+  const captureCompleted = new Promise<void>((resolve) => { completeCapture = resolve; });
+  await page.route('**/api/availability?*', async (route) => {
+    try {
+      await captureGate;
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(availabilityFixture()),
+      }).catch(() => {});
+    } finally {
+      completeCapture();
+    }
+  });
+  await cleanBrandStorage(page);
+  await openProfileForm(page);
+
+  await page.getByRole('button', { name: 'Capture official-site baseline' }).click();
+  await expect(page.getByRole('button', { name: 'Capturing…' })).toBeVisible();
+  await page.getByLabel('Official domains').fill('different.example');
+  await expect(page.getByRole('button', { name: 'Capture official-site baseline' })).toBeVisible();
+  await expect(page.getByRole('status', { name: 'Brand Profile action status' })).toHaveCount(0);
+  releaseCapture();
+  await captureCompleted;
+  await expect(page.getByText('Not captured', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('Official favicon hash')).toHaveValue('');
+  await expect(page.getByRole('status', { name: 'Brand Profile action status' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Save profile' }).click();
+
+  const persisted = requiredValue(
+    (await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 1 })).records[0],
+    'The saved brand-profile fixture is missing.',
+  ).value;
+  expect(persisted.officialDomains).toEqual(['different.example']);
+  expect(persisted.pageBaseline).toBeNull();
+  expect(persisted.officialFaviconHash).toBe('');
+  expect(persisted.officialFaviconPHash).toBe('');
 });
 
 test('an inconclusive recapture preserves the existing form baseline', async ({ page }) => {
@@ -208,6 +252,8 @@ test('an inconclusive recapture preserves the existing form baseline', async ({ 
         domain: 'example.com',
         state: 'registered',
         confidence: 'high',
+        faviconHash: 'f'.repeat(64),
+        faviconPHash: 'fedcba0987654321',
         pageIdentity: null,
       }),
     });
@@ -218,6 +264,7 @@ test('an inconclusive recapture preserves the existing form baseline', async ({ 
   await page.getByRole('button', { name: 'Update official-site baseline' }).click();
   await expect(page.getByRole('status')).toHaveText(/existing baseline is unchanged/i);
   await expect(page.getByText('Official account centre', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('Official favicon hash')).toHaveValue('d'.repeat(64));
 });
 
 test('a malformed successful capture cannot populate or persist identity evidence', async ({ page }) => {
@@ -715,6 +762,15 @@ test('exports and locally verifies a selective domain-control passport on deskto
   expect(content).toContain('whoisleuth.domain-control-manifest');
   expect(content).toContain('10 mail.stored.example');
   expect(content).not.toMatch(/must-not-export|Stored Brand|change_planned/iu);
+
+  const duplicateVersion = content.replace(/("version"\s*:\s*2)/u, '$1,$1');
+  expect(duplicateVersion).not.toBe(content);
+  await passport.getByLabel('Review passport').setInputFiles({
+    name: 'duplicate-key-passport.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(duplicateVersion),
+  });
+  await expect(passport.getByRole('status')).toContainText('duplicate object key');
 
   await passport.getByLabel('Review passport').setInputFiles(path!);
   await expect(passport).toContainText('Verified 1 passport entry');

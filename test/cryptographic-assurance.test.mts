@@ -99,5 +99,10 @@ describe('separate cryptographic assurance review', () => {
       version: 1,
       dnssec: { source: 'Fixture', observedAt: OBSERVED_AT, evidence: [], extra: true },
     }, OBSERVED_AT), /unsupported field/u);
+    assert.throws(() => buildCryptographicAssuranceReview({
+      schema: CRYPTOGRAPHIC_ASSURANCE_INPUT_SCHEMA,
+      version: 1,
+      dnssec: wrapper({ ownerName: 'example.test', delegationSigned: false, dsRecords: [] }, 'Fixture DNS delegation'),
+    }, '2026-08-11T00:00:00'), /timestamp/u);
   });
 });

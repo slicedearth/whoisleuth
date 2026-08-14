@@ -71,9 +71,12 @@ test('bounded RDAP contact roles and repeated channels render in Lookup', async 
   await expandLookupFamilies(page);
   const rdapSection = page.locator('.sources > details').first();
   await expect(rdapSection).not.toHaveAttribute('open', '');
-  await expect(rdapSection.getByText('Published contacts · 2 roles')).toBeHidden();
+  const publishedContacts = rdapSection.getByText('Published contacts · 2 roles', { exact: true });
+  await expect(publishedContacts).toHaveCount(1);
+  await expect(publishedContacts).toBeHidden();
   await rdapSection.locator(':scope > summary').click();
   await expect(rdapSection).toHaveAttribute('open', '');
+  await expect(publishedContacts).toBeVisible();
   const contactInventory = rdapSection.locator('details.contact-inventory');
   const contactSummary = contactInventory.locator(':scope > summary');
   await expect(contactSummary).toBeVisible();
@@ -326,7 +329,7 @@ test('deep Lookup presents registrar and observed network RDAP as separate sourc
     projectUrl: 'https://github.com/slicedearth/whoisleuth',
   });
   expect(exported.analysis.registrarPublicationComparison.counts.conflict).toBe(1);
-  expect(exported.analysis.registrarPublicationComparison.counts.equivalent).toBe(7);
+  expect(exported.analysis.registrarPublicationComparison.counts.equivalent).toBe(6);
   expect(exported.sources.network.endpoint.address).toBe('93.184.216.34');
   expect(exported.sources.network.network.holder).toBe('Example network holder');
   expect(JSON.stringify(exported)).not.toContain('registrar-object-handle');
@@ -481,7 +484,9 @@ test('registry access constraints remain neutral, explicit, and mobile-safe', as
       body: JSON.stringify({
         query: `example.${suffix}`, type: 'domain', registrableDomain: `example.${suffix}`,
         availability: { state: 'unknown', confidence: 'low', domain: `example.${suffix}`, detail: 'Registry sources were inconclusive.' },
-        rdap: { error: 'No RDAP registry found for this query via IANA bootstrap' },
+        rdap: isDev
+          ? { parsed: { domain: `example.${suffix}` } }
+          : { error: 'No RDAP registry found for this query via IANA bootstrap' },
         whois: { parsed: {}, chain: [] },
         diagnostics: {
           version: 5,
@@ -693,7 +698,9 @@ test('optional external intelligence searches are explicit, attributed, and mobi
   await expect(exactRiskFactors).toHaveCSS('clip-path', 'inset(50%)');
   await expect(section.getByText('phishing', { exact: true })).toBeVisible();
   await expect(section.getByText('malware', { exact: true })).toHaveCount(1);
-  for (const link of await section.getByRole('link', { name: 'View attributed provider record' }).all()) {
+  const attributedRecords = section.getByRole('link', { name: 'View attributed provider record' });
+  await expect(attributedRecords).toHaveCount(2);
+  for (const link of await attributedRecords.all()) {
     await expect(link).toHaveAttribute('rel', 'noopener noreferrer');
   }
 

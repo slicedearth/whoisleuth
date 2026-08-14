@@ -1,8 +1,9 @@
 import { expect, test } from './fixtures';
 import { boundingBox, expandLookupFamilies, expectNoHorizontalOverflow, holdBrowserLocalReads, readBrowserLocalCollection } from './helpers';
 import { TEST_SITE_PASSWORD } from './constants';
+import { readFile } from 'node:fs/promises';
 import { ACTIVE_PROFILE_KEY } from '../frontend/src/lib/brand-profiles';
-import { LOOKUP_EVIDENCE_SCHEMA, LOOKUP_EVIDENCE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/evidence-export';
+import { buildLookupEvidence } from '../frontend/src/lib/analysis/evidence-export';
 
 // Every value here is deliberately dotless (no TLD), so classifyQuery on the
 // server rejects it with a 400 before any RDAP/WHOIS/DNS call - these tests
@@ -13,26 +14,21 @@ test.beforeEach(async ({ page }) => {
 });
 
 function replayEvidence(target: string, registrar: string) {
-  return JSON.stringify({
-    schema: LOOKUP_EVIDENCE_SCHEMA,
-    schemaVersion: LOOKUP_EVIDENCE_SCHEMA_VERSION,
-    generatedAt: '2026-08-10T00:00:00.000Z',
-    application: { name: 'WHOISleuth', version: 'fixture' },
-    query: { submitted: target, registrableDomain: target, type: 'domain' },
+  return JSON.stringify(buildLookupEvidence({
+    query: target,
+    registrableDomain: target,
+    type: 'domain',
+    availability: { state: 'registered', confidence: 'high', domain: target },
+    rdap: { parsed: { domain: target, registrar: { name: registrar } } },
     diagnostics: {
       rdap: { status: 'success', fetchedAt: '2026-08-10T00:00:00.000Z' },
       whois: { status: 'skipped' },
+      availability: { status: 'complete' },
     },
-    sources: {
-      rdap: { status: 'success', parsed: { domain: target, registrar: { name: registrar } } },
-      whois: { status: 'skipped', parsed: null },
-    },
-    analysis: {
-      availability: { state: 'registered', confidence: 'high' },
-      registryComparison: null,
-      registrarPublicationComparison: null,
-    },
-  });
+  }, {
+    generatedAt: '2026-08-10T00:00:00.000Z',
+    applicationVersion: '1.47.4',
+  }));
 }
 
 test('a single domain can be entered normally', async ({ page }) => {
@@ -262,10 +258,8 @@ test('browser-local profile failure does not block collected lookup evidence', a
   await expect(page.getByRole('alert')).toHaveCount(0);
 });
 
-test('a result beyond portable evidence depth remains reviewable with explicit export limits', async ({ page }) => {
-  let downloadCount = 0;
-  page.on('download', () => { downloadCount += 1; });
-  let nested: unknown = 'leaf';
+test('raw RDAP depth is omitted while the projected result remains portable', async ({ page }) => {
+  let nested: unknown = 'must-not-export-depth-marker';
   for (let index = 0; index <= 24; index += 1) nested = { value: nested };
   await page.route('**/api/lookup?*', (route) => route.fulfill({
     status: 200,
@@ -297,16 +291,21 @@ test('a result beyond portable evidence depth remains reviewable with explicit e
 
   await expect(page.getByRole('heading', { name: 'registered' })).toBeVisible();
   await expect(page.locator('#result')).toBeVisible();
-  const limitation = page.getByText(/Portable evidence and readable report exports are unavailable/u);
-  await expect(limitation).toBeVisible();
-  await expect(limitation).toContainText('The separately attributed Lookup result remains available.');
+  await expect(page.getByText(/Portable evidence and readable report exports are unavailable/u)).toHaveCount(0);
+  const evidenceDownloadPromise = page.waitForEvent('download');
   await page.locator('.export-menu > summary').click();
   await page.getByRole('button', { name: 'Export evidence JSON' }).click();
-  await expect(page.locator('.portable-evidence-status')).toContainText('Evidence JSON was not created.');
+  const evidenceDownload = await evidenceDownloadPromise;
+  const evidencePath = await evidenceDownload.path();
+  expect(evidencePath).not.toBeNull();
+  expect(await readFile(evidencePath!, 'utf8')).not.toContain('must-not-export-depth-marker');
+  const reportDownloadPromise = page.waitForEvent('download');
   await page.locator('.export-menu > summary').click();
   await page.getByRole('button', { name: 'Download report' }).click();
-  await expect(page.locator('.portable-evidence-status')).toContainText('Readable report was not created.');
-  await expect.poll(() => downloadCount).toBe(0);
+  const reportDownload = await reportDownloadPromise;
+  const reportPath = await reportDownload.path();
+  expect(reportPath).not.toBeNull();
+  expect(await readFile(reportPath!, 'utf8')).not.toContain('must-not-export-depth-marker');
   await expect(page.locator('#result')).toBeVisible();
   await expect(page.getByRole('alert')).toHaveCount(0);
   await expectNoHorizontalOverflow(page);

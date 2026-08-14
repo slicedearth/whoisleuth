@@ -1,12 +1,14 @@
 import { Buffer } from 'node:buffer';
 import { classifyQuery } from '../lib/classify.mts';
 import { scanBoundedJson } from '../lib/bounded-json.mts';
+import { decodeBoundedUtf8 } from '../lib/bounded-file.mts';
 import { CliUsageError } from './arguments.mts';
 import type { BoundedTextStream } from './bulk.mts';
 import {
   validHttpDeliveryMetadata,
   validPagePublicationMetadata,
 } from '../lib/homepage-metadata-contract.mts';
+import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from '../lib/observation.mts';
 
 const MAX_SAVED_LOOKUP_INPUT_BYTES = 8 * 1024 * 1024;
 const MAX_SAVED_LOOKUP_STRING_LENGTH = 1024;
@@ -74,7 +76,11 @@ async function readSavedLookupInputBounded(
     if (total > limit) throw new CliUsageError(`${label} is limited to ${limit} bytes.`);
     chunks.push(buffer);
   }
-  return Buffer.concat(chunks).toString('utf8');
+  try {
+    return decodeBoundedUtf8(Buffer.concat(chunks), label);
+  } catch (cause) {
+    throw new CliUsageError(cause instanceof Error ? cause.message : `${label} must contain valid UTF-8 text.`);
+  }
 }
 
 function parseSavedLookupDocument(text: unknown, options: SavedLookupParseOptions = {}): SavedLookupDocument {
@@ -122,7 +128,15 @@ function parseSavedLookupDocument(text: unknown, options: SavedLookupParseOption
   } catch {
     throw new CliUsageError('query must identify the declared registrable domain.');
   }
-  requiredBoundedString(document.generatedAt, 'generatedAt');
+  const rawGeneratedAt = requiredBoundedString(document.generatedAt, 'generatedAt');
+  const generatedAt = document.version === LEGACY_SAVED_LOOKUP_SCHEMA_VERSION
+    ? normalizeLegacyIsoTimestamp(rawGeneratedAt)
+    : normalizeExplicitIsoTimestamp(rawGeneratedAt);
+  if (!generatedAt) {
+    throw new CliUsageError(document.version === LEGACY_SAVED_LOOKUP_SCHEMA_VERSION
+      ? 'generatedAt must be a valid ISO timestamp.'
+      : 'generatedAt must be a valid timestamp with an explicit timezone.');
+  }
   const diagnostics = objectOrNull(document.diagnostics);
   const rdapDiagnostics = objectOrNull(diagnostics?.rdap);
   const whoisDiagnostics = objectOrNull(diagnostics?.whois);
@@ -159,7 +173,7 @@ function parseSavedLookupDocument(text: unknown, options: SavedLookupParseOption
   if ((whoisStatus === 'complete' || whoisStatus === 'partial') && !whoisParsed) {
     throw new CliUsageError('Successful WHOIS input is missing normalised parsed data.');
   }
-  return document as SavedLookupDocument;
+  return { ...document, generatedAt } as SavedLookupDocument;
 }
 
 export {

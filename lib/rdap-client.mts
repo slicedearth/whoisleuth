@@ -5,7 +5,7 @@ import {
 } from './rdap-bootstrap.mts';
 import { rdapAttempt, rdapFailure } from './rdap-attempts.mts';
 import {
-  fetchRdapWithTimeout,
+  fetchRdapDetailedWithTimeout,
   type RdapFetch,
 } from './rdap-transport.mts';
 import type {
@@ -14,7 +14,10 @@ import type {
   RdapAttempt,
   RdapLookupRecord,
 } from './rdap-types.mts';
-import { validateRdapResponse } from './rdap-validation.mts';
+import {
+  admitRdapObjectEndpoint,
+  validateRdapResponse,
+} from './rdap-validation.mts';
 
 const UPSTREAM_TIMEOUT_MS = 7_000;
 const UPSTREAM_TOTAL_DEADLINE_MS = 12_000;
@@ -46,7 +49,7 @@ export async function fetchRdapFromBasesWithParser<const T extends string>(
   value: string,
   bases: unknown,
   parseRdap: RdapParser,
-  fetchUpstream: RdapFetch = fetchRdapWithTimeout,
+  fetchUpstream: RdapFetch = fetchRdapDetailedWithTimeout,
 ): Promise<RdapLookupRecord<NormalizedRdapRecordFor<T>> | null> {
   const candidates = uniqueRdapBases(bases).slice(0, MAX_RDAP_ENDPOINTS);
   if (candidates.length === 0) return null;
@@ -65,6 +68,14 @@ export async function fetchRdapFromBasesWithParser<const T extends string>(
         { headers: { Accept: 'application/rdap+json' } },
         Math.min(UPSTREAM_TIMEOUT_MS, remaining),
       );
+      const selectedEndpoint = admitRdapObjectEndpoint(type, value, upstream.finalUrl ?? url);
+      if (!selectedEndpoint) {
+        attempts.push(rdapAttempt(url, 'invalid_response', {
+          status: upstream.status,
+          detail: 'The endpoint returned final URL provenance for an invalid or different RDAP object.',
+        }));
+        continue;
+      }
 
       if (upstream.status !== 404 && !upstream.ok) {
         const outcome =
@@ -74,7 +85,7 @@ export async function fetchRdapFromBasesWithParser<const T extends string>(
               ? 'server_error'
               : 'client_error';
         attempts.push(
-          rdapAttempt(url, outcome, {
+          rdapAttempt(selectedEndpoint, outcome, {
             status: upstream.status,
             detail: `The endpoint returned HTTP ${upstream.status}.`,
           }),
@@ -87,7 +98,7 @@ export async function fetchRdapFromBasesWithParser<const T extends string>(
         data = JSON.parse(upstream.text);
       } catch {
         attempts.push(
-          rdapAttempt(url, 'invalid_json', {
+          rdapAttempt(selectedEndpoint, 'invalid_json', {
             status: upstream.status,
             detail: 'The endpoint returned invalid JSON.',
           }),
@@ -97,15 +108,15 @@ export async function fetchRdapFromBasesWithParser<const T extends string>(
 
       if (upstream.status === 404) {
         attempts.push(
-          rdapAttempt(url, 'not_found', {
+          rdapAttempt(selectedEndpoint, 'not_found', {
             status: upstream.status,
             detail: 'The authoritative endpoint reported no matching object.',
             selected: true,
           }),
         );
         return {
-          rdapServer: url,
-          transportSecurity: /^https:\/\//i.test(url) ? 'https' : 'http',
+          rdapServer: selectedEndpoint,
+          transportSecurity: /^https:\/\//i.test(selectedEndpoint) ? 'https' : 'http',
           upstreamStatus: upstream.status,
           fetchedAt: new Date().toISOString(),
           data,
@@ -118,7 +129,7 @@ export async function fetchRdapFromBasesWithParser<const T extends string>(
       const validation = validateRdapResponse(type, value, parsed);
       if (!validation.valid) {
         attempts.push(
-          rdapAttempt(url, 'invalid_response', {
+          rdapAttempt(selectedEndpoint, 'invalid_response', {
             status: upstream.status,
             detail: validation.detail,
           }),
@@ -127,15 +138,15 @@ export async function fetchRdapFromBasesWithParser<const T extends string>(
       }
 
       attempts.push(
-        rdapAttempt(url, 'success', {
+        rdapAttempt(selectedEndpoint, 'success', {
           status: upstream.status,
           detail: 'The endpoint returned the requested RDAP object.',
           selected: true,
         }),
       );
       return {
-        rdapServer: url,
-        transportSecurity: /^https:\/\//i.test(url) ? 'https' : 'http',
+        rdapServer: selectedEndpoint,
+        transportSecurity: /^https:\/\//i.test(selectedEndpoint) ? 'https' : 'http',
         upstreamStatus: upstream.status,
         fetchedAt: new Date().toISOString(),
         data,

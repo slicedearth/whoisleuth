@@ -9,6 +9,7 @@ import {
   SCHEDULED_WATCHLIST_STATUSES,
 } from './analysis/scheduled-monitor-model.ts';
 import { normalizeWatchlistEntry } from './analysis/watchlist-history.ts';
+import { normalizeExplicitIsoTimestamp } from '../../../lib/observation.mts';
 import type { WatchlistEntry } from './watchlists.ts';
 import {
   requestJsonCapped,
@@ -79,9 +80,7 @@ function integer(value: unknown, minimum: number, maximum: number): number | nul
 
 function timestamp(value: unknown, nullable = true): string | null {
   if (value === null && nullable) return null;
-  if (typeof value !== 'string' || value.length > 64 || CONTROL_RE.test(value)) return null;
-  const parsed = Date.parse(value);
-  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
+  return normalizeExplicitIsoTimestamp(value);
 }
 
 function boundedText(value: unknown, maximum: number): string | null {

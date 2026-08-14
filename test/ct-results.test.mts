@@ -7,8 +7,27 @@ const {
   ctCandidateMatchesFilter,
   mergeCtProvenance,
   normalizeCtProvenance,
-  normalizeCtResponse,
+  normalizeCtResponse: normalizeRawCtResponse,
 } = bounds;
+
+function normalizeCtResponse(response: Record<string, unknown>, source: string) {
+  return normalizeRawCtResponse({
+    keyword: source,
+    certCount: 100,
+    truncated: false,
+    certificateGroupsTruncated: false,
+    ...response,
+  }, source);
+}
+
+function normalizeCompleteRawCtResponse(response: Record<string, unknown>, source: string) {
+  return normalizeRawCtResponse({
+    keyword: source,
+    truncated: false,
+    certificateGroupsTruncated: false,
+    ...response,
+  }, source);
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -75,6 +94,34 @@ describe('structured response', () => {
       observedAt: '2026-06-02T00:00:00.000Z',
       wildcardObserved: true,
     }]);
+    assert.equal(result.certificateGroupsTruncated, true);
+  });
+
+  test('rejects certificate-group cardinality that exceeds the aggregate count', () => {
+    assert.throws(() => normalizeCompleteRawCtResponse({
+      certCount: 0,
+      matches: [],
+      certificateGroups: [{ certificateKey: 'id:1', domains: ['one.example'] }],
+    }, 'src'), /malformed/i);
+    assert.throws(() => normalizeCompleteRawCtResponse({
+      certCount: 1,
+      matches: [match({ certificateCount: 1 })],
+      certificateGroups: [
+        { certificateKey: 'id:1', domains: ['one.example'] },
+        { certificateKey: 'id:2', domains: ['two.example'] },
+      ],
+    }, 'src'), /malformed/i);
+
+    const empty = normalizeCompleteRawCtResponse({ certCount: 0, matches: [], certificateGroups: [] }, 'src');
+    assert.equal(empty.certCount, 0);
+    assert.deepEqual(empty.certificateGroups, []);
+    const one = normalizeCompleteRawCtResponse({
+      certCount: 1,
+      matches: [match({ certificateCount: 1 })],
+      certificateGroups: [{ certificateKey: 'id:1', domains: ['one.example'] }],
+    }, 'src');
+    assert.equal(one.certificateGroups.length, 1);
+    assert.equal(one.truncated, false);
   });
 
   test('drops malformed and duplicate certificate groups and reports bounded truncation', () => {
@@ -92,6 +139,30 @@ describe('structured response', () => {
       certificateGroups: [{ certificateKey: 'bad key', domains: ['example.com'] }],
     }, 'src');
     assert.deepStrictEqual(malformed.certificateGroups, []);
+    assert.equal(malformed.certificateGroupsTruncated, true);
+
+    const malformedContainer = normalizeCtResponse({
+      matches: [match()],
+      certificateGroups: { certificateKey: 'id:1' },
+    }, 'src');
+    assert.deepStrictEqual(malformedContainer.certificateGroups, []);
+    assert.equal(malformedContainer.certificateGroupsTruncated, true);
+
+    const duplicate = normalizeCtResponse({
+      matches: [match()],
+      certificateGroups: [
+        { certificateKey: 'id:1', domains: ['one.example'], hostnames: ['a.one.example'], observedAt: '2026-06-02T00:00:00Z', wildcardObserved: false },
+        { certificateKey: 'id:1', domains: ['two.example'], hostnames: ['b.two.example'], observedAt: '2026-06-01T00:00:00Z', wildcardObserved: true },
+      ],
+    }, 'src');
+    assert.deepStrictEqual(duplicate.certificateGroups, [{
+      certificateKey: 'id:1',
+      domains: ['one.example', 'two.example'],
+      hostnames: ['a.one.example', 'b.two.example'],
+      observedAt: '2026-06-01T00:00:00.000Z',
+      wildcardObserved: true,
+    }]);
+    assert.equal(duplicate.certificateGroupsTruncated, false);
   });
 
   test('one candidate per canonical domain (merge across duplicate matches)', () => {
@@ -114,6 +185,16 @@ describe('structured response', () => {
     assert.equal(ct.lastObservedAt, '2026-05-01T00:00:00.000Z');
     // highest count, never a sum
     assert.equal(ct.certificateCount, 5);
+  });
+
+  test('marks duplicate-domain hostname union loss partial', () => {
+    const left = Array.from({ length: bounds.MAX_CT_HOSTNAMES }, (_, index) => `a${index}.example.com`);
+    const right = Array.from({ length: bounds.MAX_CT_HOSTNAMES }, (_, index) => `b${index}.example.com`);
+    const result = normalizeCtResponse({
+      matches: [match({ hostnames: left }), match({ hostnames: right })],
+    }, 'src');
+    assert.equal(firstCt(result).hostnames.length, bounds.MAX_CT_HOSTNAMES);
+    assert.equal(result.truncated, true);
   });
 
   test('newest last-observation first, null timestamps last, alpha tiebreak', () => {
@@ -144,6 +225,7 @@ describe('structured response', () => {
     assert.equal(out.length, bounds.MAX_CT_HOSTNAMES);
     assert.deepStrictEqual([...out], [...out].sort());
     assert.equal(new Set(out).size, out.length);
+    assert.equal(result.truncated, true);
   });
 
   test('malformed match domain drops that candidate only', () => {
@@ -152,6 +234,7 @@ describe('structured response', () => {
       'src',
     );
     assert.deepStrictEqual(result.candidates.map((c) => c.domain), ['good.com']);
+    assert.equal(result.truncated, true);
   });
 
   test('malformed hostname is dropped, candidate survives', () => {
@@ -160,6 +243,64 @@ describe('structured response', () => {
       'src',
     );
     assert.deepStrictEqual(firstCt(result).hostnames, ['ok.example.com']);
+    assert.equal(result.truncated, true);
+  });
+
+  test('rejects URL-shaped source domains and hostnames without reinterpreting them', () => {
+    const malformed = [
+      'user@matched.example',
+      'matched.example/private',
+      'matched.example:443',
+      'matched.example?query=1',
+      'matched.example#fragment',
+      'matched.example\\private',
+    ];
+    for (const value of malformed) {
+      const domainResult = normalizeCtResponse({ matches: [match({ domain: value })] }, 'src');
+      assert.deepStrictEqual(domainResult.candidates, [], value);
+      assert.equal(domainResult.truncated, true, value);
+      const hostnameResult = normalizeCtResponse({ matches: [match({ hostnames: [value] })] }, 'src');
+      assert.deepStrictEqual(firstCt(hostnameResult).hostnames, [], value);
+      assert.equal(hostnameResult.truncated, true, value);
+    }
+    const valid = normalizeCtResponse({ matches: [match({
+      domain: 'BÜCHER.Example.',
+      hostnames: ['WWW.BÜCHER.Example.'],
+    })] }, 'src');
+    assert.equal(firstCandidate(valid).domain, 'xn--bcher-kva.example');
+    assert.deepStrictEqual(firstCt(valid).hostnames, ['www.xn--bcher-kva.example']);
+  });
+
+  test('rejects percent-encoded and over-bound evidence before URL parsing and marks the result partial', () => {
+    for (const value of [
+      '%65xample.com',
+      'example%2ecom',
+      `${'a'.repeat(252)}.example`,
+      `${'a'.repeat(1_025)}.example`,
+    ]) {
+      const domainResult = normalizeCtResponse({ matches: [match({ domain: value })] }, 'src');
+      assert.deepStrictEqual(domainResult.candidates, [], value);
+      assert.equal(domainResult.truncated, true, value);
+      const hostnameResult = normalizeCtResponse({ matches: [match({ hostnames: [value] })] }, 'src');
+      assert.deepStrictEqual(firstCt(hostnameResult).hostnames, [], value);
+      assert.equal(hostnameResult.truncated, true, value);
+    }
+
+    const decomposed = `${`${'e\u0301'.repeat(45)}.`.repeat(3)}example`;
+    const canonical = new URL(`http://${decomposed}`).hostname;
+    assert.ok(decomposed.length > 253);
+    for (const value of [decomposed, `${decomposed}.`]) {
+      const result = normalizeCtResponse({ matches: [match({ domain: value, hostnames: [value] })] }, 'src');
+      assert.equal(firstCandidate(result).domain, canonical);
+      assert.deepStrictEqual(firstCt(result).hostnames, [canonical]);
+      assert.equal(result.truncated, false);
+    }
+  });
+
+  test('malformed match records are omitted with explicit truncation', () => {
+    const result = normalizeCtResponse({ matches: [null, match({ domain: 'good.example' })] }, 'src');
+    assert.deepStrictEqual(result.candidates.map((candidate) => candidate.domain), ['good.example']);
+    assert.equal(result.truncated, true);
   });
 
   test('malformed and overlong timestamps become null, candidate survives', () => {
@@ -173,17 +314,37 @@ describe('structured response', () => {
     assert.equal(ct.lastObservedAt, null);
     // hostnames/count still carry the candidate
     assert.equal(firstCandidate(result).domain, 'example.com');
+    assert.equal(result.truncated, true);
   });
 
-  test('malformed, negative, non-finite, and excessive certificate counts clamp', () => {
-    assert.equal(firstCt(normalizeCtResponse({ matches: [match({ certificateCount: -5 })] }, 's')).certificateCount, 0);
-    assert.equal(firstCt(normalizeCtResponse({ matches: [match({ certificateCount: Infinity })] }, 's')).certificateCount, 0);
-    assert.equal(firstCt(normalizeCtResponse({ matches: [match({ certificateCount: NaN })] }, 's')).certificateCount, 0);
-    assert.equal(firstCt(normalizeCtResponse({ matches: [match({ certificateCount: '3' })] }, 's')).certificateCount, 0);
-    assert.equal(
-      firstCt(normalizeCtResponse({ matches: [match({ certificateCount: 9e12 })] }, 's')).certificateCount,
-      bounds.MAX_CT_CERTIFICATE_COUNT,
-    );
+  test('marks malformed certificate-group timestamps and wildcard state incomplete', () => {
+    const result = normalizeCtResponse({
+      matches: [match()],
+      certificateGroups: [{
+        certificateKey: 'id:1',
+        domains: ['example.com'],
+        observedAt: 'not-a-date',
+        wildcardObserved: 'false',
+      }],
+    }, 'src');
+    assert.equal(result.certificateGroups[0]?.observedAt, null);
+    assert.equal(result.certificateGroups[0]?.wildcardObserved, false);
+    assert.equal(result.certificateGroupsTruncated, true);
+  });
+
+  test('malformed candidate counts remain unavailable while excessive valid counts are explicitly capped', () => {
+    for (const certificateCount of [-5, 0, 0.5, Infinity, NaN, '3', undefined]) {
+      const result = normalizeCtResponse({ matches: [match({ certificateCount })] }, 's');
+      assert.equal(firstCandidate(result).certificateTransparency, null);
+      assert.equal(result.truncated, true);
+    }
+    const capped = normalizeCompleteRawCtResponse({
+      certCount: 9e12,
+      matches: [match({ certificateCount: 9e12 })],
+    }, 's');
+    assert.equal(firstCt(capped).certificateCount, bounds.MAX_CT_CERTIFICATE_COUNT);
+    assert.equal(capped.certCount, bounds.MAX_CT_CERTIFICATE_COUNT);
+    assert.equal(capped.truncated, true);
   });
 
   test('candidate list is bounded', () => {
@@ -202,7 +363,7 @@ describe('structured response', () => {
   });
 
   test('does not mutate the input response', () => {
-    const response = { certCount: 2, truncated: true, matches: [match()] };
+    const response = { certCount: 3, truncated: true, matches: [match()] };
     const copy = JSON.parse(JSON.stringify(response));
     normalizeCtResponse(response, 'src');
     assert.deepStrictEqual(response, copy);
@@ -246,11 +407,36 @@ describe('input-processing caps', () => {
 
 describe('malformed response handling', () => {
   test('missing or malformed matches fails clearly', () => {
-    assert.throws(() => normalizeCtResponse({}, 's'), /malformed/i);
-    assert.throws(() => normalizeCtResponse({ domains: ['old.example.com'] }, 's'), /malformed/i);
-    assert.throws(() => normalizeCtResponse({ matches: 'nope' }, 's'), /malformed/i);
-    assert.throws(() => normalizeCtResponse({ matches: null }, 's'), /malformed/i);
-    assert.throws(() => normalizeCtResponse({ matches: { 0: match() } }, 's'), /malformed/i);
+    assert.throws(() => normalizeCompleteRawCtResponse({}, 's'), /malformed/i);
+    assert.throws(() => normalizeCompleteRawCtResponse({ certCount: 1, domains: ['old.example.com'] }, 's'), /malformed/i);
+    assert.throws(() => normalizeCompleteRawCtResponse({ certCount: 1, matches: 'nope' }, 's'), /malformed/i);
+    assert.throws(() => normalizeCompleteRawCtResponse({ certCount: 1, matches: null }, 's'), /malformed/i);
+    assert.throws(() => normalizeCompleteRawCtResponse({ certCount: 1, matches: { 0: match() } }, 's'), /malformed/i);
+  });
+
+  test('missing or malformed aggregate counts fail rather than becoming a complete zero', () => {
+    for (const certCount of [undefined, null, -1, 0.5, Infinity, NaN, '4']) {
+      assert.throws(
+        () => normalizeCompleteRawCtResponse({ matches: [match()], ...(certCount === undefined ? {} : { certCount }) }, 's'),
+        /certificate count/iu,
+      );
+    }
+  });
+
+  test('rejects aggregate and candidate count contradictions while retaining valid zero and positive controls', () => {
+    assert.deepEqual(normalizeCompleteRawCtResponse({ certCount: 0, matches: [] }, 's').candidates, []);
+    assert.doesNotThrow(() => normalizeCompleteRawCtResponse({
+      certCount: 3,
+      matches: [match({ certificateCount: 3 })],
+    }, 's'));
+    assert.throws(() => normalizeCompleteRawCtResponse({
+      certCount: 0,
+      matches: [match({ certificateCount: 1 })],
+    }, 's'), /exceed the aggregate/iu);
+    assert.throws(() => normalizeCompleteRawCtResponse({
+      certCount: 2,
+      matches: [match({ certificateCount: 3 })],
+    }, 's'), /exceed the aggregate/iu);
   });
 
   test('structured matches ignore unrelated top-level fields', () => {
@@ -259,6 +445,25 @@ describe('malformed response handling', () => {
       's',
     );
     assert.deepStrictEqual(result.candidates.map((c) => c.domain), ['structured.com']);
+  });
+
+  test('binds the response keyword and treats omitted completeness flags as partial', () => {
+    assert.throws(() => normalizeRawCtResponse({
+      keyword: 'other', certCount: 0, matches: [], truncated: false,
+      certificateGroupsTruncated: false,
+    }, 'requested'), /requested keyword/iu);
+    assert.throws(() => normalizeRawCtResponse({
+      certCount: 0, matches: [], truncated: false, certificateGroupsTruncated: false,
+    }, 'requested'), /requested keyword/iu);
+
+    const missingTopLevel = normalizeRawCtResponse({
+      keyword: 'requested', certCount: 0, matches: [], certificateGroupsTruncated: false,
+    }, 'requested');
+    assert.equal(missingTopLevel.truncated, true);
+    const missingGroupFlag = normalizeRawCtResponse({
+      keyword: 'requested', certCount: 0, matches: [], truncated: false,
+    }, 'requested');
+    assert.equal(missingGroupFlag.certificateGroupsTruncated, true);
   });
 });
 
@@ -292,7 +497,7 @@ describe('normalizeCtProvenance (handoff revalidation)', () => {
   });
 
   test('contradictory first/last observation ordering is corrected', () => {
-    const ct = requiredValue(normalizeCtProvenance({ firstObservedAt: '2026-06-01T00:00:00Z', lastObservedAt: '2026-01-01T00:00:00Z' }));
+    const ct = requiredValue(normalizeCtProvenance({ firstObservedAt: '2026-06-01T00:00:00Z', lastObservedAt: '2026-01-01T00:00:00Z', certificateCount: 1 }));
     assert.equal(ct.firstObservedAt, '2026-01-01T00:00:00.000Z');
     assert.equal(ct.lastObservedAt, '2026-06-01T00:00:00.000Z');
   });

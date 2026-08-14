@@ -27,6 +27,7 @@ import {
   CAMPAIGN_SCHEMA_VERSION,
   mergeCampaigns,
 } from './campaign-model.ts';
+import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from '../../../../lib/observation.mts';
 import {
   assertWatchlistStoreBudget,
   buildWatchlistExport,
@@ -275,10 +276,10 @@ function clone<T>(value: T): T {
   return JSON.parse(serialize(value)) as T;
 }
 
-function timestamp(value: unknown, fallback: string | null = null): string | null {
-  if (typeof value !== 'string' || value.length > 64 || CONTROL_RE.test(value)) return fallback;
-  const parsed = Date.parse(value);
-  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : fallback;
+function timestamp(value: unknown, fallback: string | null = null, legacy = false): string | null {
+  const explicit = normalizeExplicitIsoTimestamp(value);
+  if (explicit) return explicit;
+  return (legacy ? normalizeLegacyIsoTimestamp(value) : null) ?? fallback;
 }
 
 function boundedText(value: unknown, maximum = 300): string {
@@ -504,7 +505,8 @@ function ensureArchiveBudget(value: unknown): { serialized: string; bytes: numbe
 
 /** Build one deterministic, unencrypted archive from normalized local stores. */
 export async function buildWorkspaceArchive(input: unknown, options: WorkspaceArchiveOptions = {}) {
-  const now = timestamp(options.generatedAt) || new Date().toISOString();
+  const now = timestamp(options.generatedAt ?? new Date().toISOString());
+  if (!now) throw new Error('Workspace archive generation time must use an explicit timezone.');
   const source = normalizedInput(input);
   const sections = workspaceArchiveSections(source, now);
   const manifestSections: WorkspaceArchiveManifestEntry[] = [];
@@ -577,6 +579,8 @@ export async function readWorkspaceArchive(raw: unknown, options: WorkspaceArchi
     throw new Error(`Expected workspace archive schema 1, 2, 3, 4, or ${WORKSPACE_ARCHIVE_VERSION}.`);
   }
   const sourceVersion = value.version;
+  const generatedAt = timestamp(value.generatedAt, null, sourceVersion < WORKSPACE_ARCHIVE_VERSION);
+  if (!generatedAt) throw new Error('The workspace archive generation time is invalid.');
   const { bytes } = ensureArchiveBudget(value);
   assertExactKeys(value, WORKSPACE_ARCHIVE_ROOT_KEYS[sourceVersion] ?? [], `version ${sourceVersion} envelope`);
   const manifest = record(value.manifest);
@@ -652,7 +656,7 @@ export async function readWorkspaceArchive(raw: unknown, options: WorkspaceArchi
     schema: WORKSPACE_ARCHIVE_SCHEMA,
     version: WORKSPACE_ARCHIVE_VERSION,
     sourceVersion,
-    generatedAt: timestamp(value.generatedAt),
+    generatedAt,
     bytes,
     sections,
     limitations: Array.isArray(value.limitations)

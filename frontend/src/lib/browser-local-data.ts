@@ -1,3 +1,5 @@
+import { scanBoundedJson } from './bounded-json.ts';
+
 export const LOCAL_DATA_DATABASE_NAME = 'whoisleuth-browser-data-v1';
 export const LOCAL_DATA_DATABASE_VERSION = 1;
 export const LOCAL_DATA_RECORD_STORE = 'records';
@@ -28,6 +30,7 @@ export type LocalDataCollectionDefinition<T> = Readonly<{
   maximumBytes: number;
   maximumRecords: number;
   empty: () => T;
+  acceptLegacyRoot: (raw: unknown) => boolean;
   normalize: (raw: unknown) => T;
   version: (raw: unknown) => number | null;
   serialize: (document: T) => string;
@@ -47,6 +50,7 @@ export type AnyLocalDataCollectionDefinition = Readonly<{
   maximumBytes: number;
   maximumRecords: number;
   empty(): unknown;
+  acceptLegacyRoot(raw: unknown): boolean;
   normalize(raw: unknown): unknown;
   version(raw: unknown): number | null;
   serialize(document: unknown): string;
@@ -240,6 +244,9 @@ function normalizeDefinition<T>(definition: LocalDataCollectionDefinition<T>): L
   if (!Number.isSafeInteger(definition.maximumRecords) || definition.maximumRecords < 0 || definition.maximumRecords > MAX_LOCAL_DATA_RECORDS_PER_COLLECTION) {
     throw new BrowserLocalDataError('INVALID_LOCAL_DATA_DEFINITION', `${definition.label} has an invalid record bound.`);
   }
+  if (typeof definition.acceptLegacyRoot !== 'function') {
+    throw new BrowserLocalDataError('INVALID_LOCAL_DATA_DEFINITION', `${definition.label} has no legacy-root validator.`);
+  }
   return definition;
 }
 
@@ -250,6 +257,7 @@ export const plaintextJsonCodec: BrowserLocalDataCodec = Object.freeze({
     return { lookupKey: id, payload: JSON.stringify({ id, value: input.value }) };
   },
   async decode(input: Readonly<{ collection: string; lookupKey: string; payload: string }>) {
+    scanBoundedJson(input.payload);
     const parsed = JSON.parse(input.payload) as { id?: unknown; value?: unknown };
     const id = boundedIdentifier(parsed?.id, 'Decoded record identifier', MAX_LOCAL_DATA_RECORD_ID_LENGTH);
     if (id !== input.lookupKey) {
@@ -530,14 +538,26 @@ export class BrowserLocalDataProvider {
       throw new BrowserLocalDataError('LOCAL_DATA_LEGACY_TOO_LARGE', `Legacy ${definition.label} data exceeds its application limit.`);
     }
     let parsed: unknown;
-    try { parsed = JSON.parse(raw); }
-    catch { return definition.normalize(definition.empty()); }
+    try {
+      scanBoundedJson(raw);
+      parsed = JSON.parse(raw);
+    } catch (cause) {
+      throw new BrowserLocalDataError('LOCAL_DATA_LEGACY_MALFORMED', `Legacy ${definition.label} data is malformed and was not migrated.`, { cause });
+    }
+    if (parsed === null || typeof parsed !== 'object') {
+      throw new BrowserLocalDataError('LOCAL_DATA_LEGACY_MALFORMED', `Legacy ${definition.label} data is malformed and was not migrated.`);
+    }
+    if (!definition.acceptLegacyRoot(parsed)) {
+      throw new BrowserLocalDataError('LOCAL_DATA_LEGACY_MALFORMED', `Legacy ${definition.label} data is malformed and was not migrated.`);
+    }
     const version = definition.version(parsed);
     if (version !== null && version > definition.schemaVersion) {
       throw new BrowserLocalDataError('LOCAL_DATA_FUTURE_SCHEMA', `${definition.label} was created by a newer app version. Update the app before migration.`);
     }
     try { return definition.normalize(parsed); }
-    catch { return definition.normalize(definition.empty()); }
+    catch (cause) {
+      throw new BrowserLocalDataError('LOCAL_DATA_LEGACY_MALFORMED', `Legacy ${definition.label} data is malformed and was not migrated.`, { cause });
+    }
   }
 
   async #prepare<T>(

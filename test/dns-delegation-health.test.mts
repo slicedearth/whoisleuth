@@ -36,6 +36,20 @@ describe('DNS delegation health', () => {
     ]);
   });
 
+  test('does not report an empty authority inventory as a complete collection', async () => {
+    const result = await collectDnsDelegationHealth('example.test', {
+      status: 'not_found', records: [], error: null, truncated: false, discarded: 0,
+    }, {
+      registryEvidence: {},
+      observedAt: () => OBSERVED_AT,
+    });
+
+    assert.equal(result.status, 'partial');
+    assert.equal(result.complete, false);
+    assert.deepEqual(result.authorities, []);
+    assert.match(result.limitations.join(' '), /no eligible authority/iu);
+  });
+
   test('keeps registry, parent, and direct authority evidence separately attributed', async () => {
     const calls: Array<{ nameserver: string; address: string }> = [];
     const result = await collectDnsDelegationHealth('example.test', PARENT, {

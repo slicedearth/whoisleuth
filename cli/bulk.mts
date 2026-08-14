@@ -1,6 +1,8 @@
 import { Buffer } from 'node:buffer';
 import { abortable } from '../lib/abort.mts';
+import { decodeBoundedUtf8 } from '../lib/bounded-file.mts';
 import { CliUsageError } from './arguments.mts';
+import { hasUnsafeCliText } from './errors.mts';
 import type { ClassifiedQuery } from '../lib/classify.mts';
 import {
   MAX_DEEP_BULK_QUERIES,
@@ -72,7 +74,11 @@ async function readTextStreamBounded(
   } finally {
     signal?.removeEventListener('abort', abort);
   }
-  return Buffer.concat(chunks).toString('utf8');
+  try {
+    return decodeBoundedUtf8(Buffer.concat(chunks), 'Bulk input');
+  } catch (cause) {
+    throw new CliUsageError(cause instanceof Error ? cause.message : 'Bulk input must contain valid UTF-8 text.');
+  }
 }
 
 function parseBulkQueries(text: unknown, { deep = false }: { deep?: boolean } = {}): {
@@ -92,7 +98,7 @@ function parseBulkQueries(text: unknown, { deep = false }: { deep?: boolean } = 
   for (const line of lines) {
     const query = line.trim();
     if (!query) continue;
-    if (query.length > 1024 || /[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/.test(query)) {
+    if (query.length > 1024 || hasUnsafeCliText(query)) {
       throw new CliUsageError('Bulk input contains an overlong query or unsupported control character.');
     }
     const key = query.toLowerCase();

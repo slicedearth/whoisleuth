@@ -18,8 +18,8 @@ import type {
   CasePatch,
   CaseRecord,
 } from './analysis/case-model.ts';
-import { browserLocalDataProvider } from './browser-local-data-service.ts';
-import { CASES_COLLECTION, LEGACY_CASES_KEY } from './browser-local-data-definitions.ts';
+import { readBrowserLocalData, updateBrowserLocalData } from './browser-local-data-service.ts';
+import { LEGACY_CASES_KEY } from './browser-local-data-contract.ts';
 import {
   mergeExternalFindingsIntoCases,
   parseExternalFindingsDocument,
@@ -118,7 +118,7 @@ export type {
 export const CASES_KEY = LEGACY_CASES_KEY;
 
 export async function loadCases(): Promise<CaseRecord[]> {
-  return (await browserLocalDataProvider()).read(CASES_COLLECTION);
+  return readBrowserLocalData('cases');
 }
 
 // Persists a clean, bounded, budget-checked store. Enforces the serialized-size
@@ -144,7 +144,7 @@ export async function getCaseByDomain(domain: string): Promise<CaseRecord | null
 // store (never a pre-persist copy that might still hold evidence pruned to fit),
 // plus how many snapshots were pruned so the UI can warn.
 export async function openCase(input: CaseInput): Promise<{ record: CaseRecord; created: boolean; pruned: number }> {
-  return (await browserLocalDataProvider()).update(CASES_COLLECTION, (current) => {
+  return updateBrowserLocalData('cases', (current) => {
     const result = openOrCreateCase(current, input);
     if (!result.created) return { document: current, result: { record: result.record, created: false as boolean, pruned: 0 } };
     const { cases, pruned } = boundedCases(result.cases);
@@ -154,7 +154,7 @@ export async function openCase(input: CaseInput): Promise<{ record: CaseRecord; 
 }
 
 export async function editCase(id: string, patch: CasePatch): Promise<{ record: CaseRecord; pruned: number }> {
-  return (await browserLocalDataProvider()).update(CASES_COLLECTION, (current) => {
+  return updateBrowserLocalData('cases', (current) => {
     const result = updateCase(current, id, patch);
     const { cases, pruned } = boundedCases(result.cases);
     const record = cases.find((item) => item.id === id) ?? result.record;
@@ -167,7 +167,7 @@ async function updateCaseBrandProfileAssociation(
   profileId: string,
   operation: 'add' | 'remove',
 ): Promise<{ record: CaseRecord; cases: CaseRecord[]; pruned: number }> {
-  return (await browserLocalDataProvider()).update(CASES_COLLECTION, (current) => {
+  return updateBrowserLocalData('cases', (current) => {
     const record = current.find((item) => item.id === id);
     if (!record) throw new Error('Case not found.');
     const brandProfileIds = operation === 'add'
@@ -205,14 +205,14 @@ export async function addCaseNote(id: string, body: string): Promise<{ record: C
 }
 
 export async function deleteCase(id: string): Promise<void> {
-  await (await browserLocalDataProvider()).update(CASES_COLLECTION, (current) => ({
+  await updateBrowserLocalData('cases', (current) => ({
     document: current.filter((item) => item.id !== id),
     result: undefined,
   }));
 }
 
 export async function importCases(value: unknown): Promise<{ added: number; updated: number; skipped: number; brandProfileReferencesOmitted: number; pruned: number }> {
-  return (await browserLocalDataProvider()).update(CASES_COLLECTION, (current) => {
+  return updateBrowserLocalData('cases', (current) => {
     const result = mergeCases(current, value);
     const { cases, pruned } = boundedCases(result.cases);
     return {
@@ -238,7 +238,7 @@ export async function importExternalFindings(
   pruned: number;
 }> {
   const document: ExternalFindingsDocument = parseExternalFindingsDocument(value);
-  return (await browserLocalDataProvider()).update(CASES_COLLECTION, (current) => {
+  return updateBrowserLocalData('cases', (current) => {
     const merged = mergeExternalFindingsIntoCases(current, document);
     const { cases, pruned } = boundedCases(merged.cases);
     return {
@@ -264,7 +264,7 @@ export async function importExternalIntelligence(
   capacitySkipped: number;
   pruned: number;
 }> {
-  return (await browserLocalDataProvider()).update(CASES_COLLECTION, (current) => {
+  return updateBrowserLocalData('cases', (current) => {
     const merged = mergeExternalIntelligenceIntoCase(current, caseId, preview);
     const { cases, pruned } = boundedCases(merged.cases);
     const record = cases.find((item) => item.id === merged.record.id) ?? merged.record;

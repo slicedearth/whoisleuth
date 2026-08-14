@@ -19,6 +19,7 @@ import { parseBoundedJsonObject } from '../lib/bounded-json.mts';
 import {
   boundedSafeRelativePath,
   compareCodeUnits,
+  hasMaintainerUnsafeCharacters,
   pathIsWithin,
 } from './maintainer-tool-helpers.mts';
 
@@ -50,7 +51,7 @@ export type FrontendLoadingReportInput = Readonly<{
 
 export const FRONTEND_LOADING_REPORT_SCHEMA = 'whoisleuth.frontend-loading-report';
 export const FRONTEND_LOADING_REPORT_VERSION = 1;
-export const BROWSER_LOCAL_CHUNK_NAME = 'browser-local-data-service';
+export const BROWSER_LOCAL_CHUNK_NAME = 'browser-local-data-definitions';
 export const MAX_FRONTEND_MANIFEST_BYTES = 2 * 1024 * 1024;
 export const MAX_FRONTEND_ROUTE_SOURCE_BYTES = 512 * 1024;
 export const MAX_FRONTEND_MANIFEST_ENTRIES = 4096;
@@ -64,10 +65,8 @@ export const MAX_FRONTEND_ASSET_BYTES = 16 * 1024 * 1024;
 export const MAX_FRONTEND_TOTAL_ASSET_BYTES = 64 * 1024 * 1024;
 const kibibytes = (value: number) => value * 1024;
 
-const CONTROL_RE = /[\u0000-\u001f\u007f]/u;
-
 function boundedManifestKey(value: unknown, label: string): string {
-  if (typeof value !== 'string' || value.length < 1 || value.length > 1024 || CONTROL_RE.test(value)) {
+  if (typeof value !== 'string' || value.length < 1 || value.length > 1024 || hasMaintainerUnsafeCharacters(value)) {
     throw new TypeError(`${label} must be bounded control-free text.`);
   }
   return value;
@@ -185,17 +184,11 @@ function dependencyKeys(manifest: Manifest, roots: readonly string[]): Set<strin
   return visited;
 }
 
-function routeAssets(
+function dependencyAssets(
   manifest: Manifest,
-  route: RouteNode,
+  roots: readonly string[],
   measureAsset: (file: string) => AssetMeasurement,
 ) {
-  const roots = [
-    ...entryKeys(manifest),
-    nodeKey(manifest, 0),
-    ...route.layoutNodes.map((node) => nodeKey(manifest, node)),
-    nodeKey(manifest, route.pageNode),
-  ];
   const entries = dependencyKeys(manifest, roots);
   const files = new Set<string>();
   for (const key of entries) {
@@ -238,6 +231,19 @@ function routeAssets(
     bytes,
     gzipBytes,
   };
+}
+
+function routeAssets(
+  manifest: Manifest,
+  route: RouteNode,
+  measureAsset: (file: string) => AssetMeasurement,
+) {
+  return dependencyAssets(manifest, [
+    ...entryKeys(manifest),
+    nodeKey(manifest, 0),
+    ...route.layoutNodes.map((node) => nodeKey(manifest, node)),
+    nodeKey(manifest, route.pageNode),
+  ], measureAsset);
 }
 
 export function parseGeneratedRouteNodes(source: string): RouteNode[] {
@@ -347,7 +353,13 @@ export function buildFrontendLoadingReport(input: FrontendLoadingReportInput) {
     .sort((left, right) => compareCodeUnits(left.path, right.path));
   const publicRoutes = routes.filter((route) => route.access === 'public');
   const protectedRoutes = routes.filter((route) => route.access === 'protected');
-  const browserLocalWorkspace = measureAsset(browserLocalFile);
+  const browserLocalAssets = dependencyAssets(manifest, [browserLocalEntry[0]], measureAsset);
+  const browserLocalWorkspace = Object.freeze({
+    file: browserLocalFile,
+    assetCount: browserLocalAssets.assets.length,
+    bytes: browserLocalAssets.bytes,
+    gzipBytes: browserLocalAssets.gzipBytes,
+  });
   const publicRouteLeak = publicRoutes.some((route) => route.includesBrowserLocalWorkspace);
   const missingBudgetPaths = routes.filter((route) => route.budgetGzipBytes === null).map((route) => route.path);
   const overBudgetPaths = routes

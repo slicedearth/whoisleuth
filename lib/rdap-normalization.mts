@@ -67,16 +67,24 @@ function truncatedText(value: unknown, maxLength: number): string | null {
   return value.replace(/\s+/g, ' ').trim().slice(0, maxLength).trim() || null;
 }
 
-function flattenScalarValues(value: unknown, maxValues = 32): string[] {
+function flattenScalarValuesWithCompleteness(
+  value: unknown,
+  maxValues = 32,
+): { values: string[]; truncated: boolean } {
   const output: string[] = [];
   const stack: Array<{ value: unknown; depth: number }> = [{ value, depth: 0 }];
   let visited = 0;
+  let truncated = false;
   while (stack.length && output.length < maxValues && visited < 128) {
     const current = stack.pop();
     if (!current) continue;
     visited += 1;
     if (Array.isArray(current.value)) {
-      if (current.depth >= MAX_RDAP_ENTITY_DEPTH) continue;
+      if (current.depth >= MAX_RDAP_ENTITY_DEPTH) {
+        if (current.value.length > 0) truncated = true;
+        continue;
+      }
+      if (current.value.length > maxValues) truncated = true;
       for (let i = Math.min(current.value.length, maxValues) - 1; i >= 0; i -= 1) {
         stack.push({ value: current.value[i], depth: current.depth + 1 });
       }
@@ -84,9 +92,16 @@ function flattenScalarValues(value: unknown, maxValues = 32): string[] {
       output.push(current.value);
     } else if (typeof current.value === 'number' && Number.isFinite(current.value)) {
       output.push(String(current.value));
+    } else {
+      truncated = true;
     }
   }
-  return output;
+  if (stack.length > 0) truncated = true;
+  return { values: output, truncated };
+}
+
+function flattenScalarValues(value: unknown, maxValues = 32): string[] {
+  return flattenScalarValuesWithCompleteness(value, maxValues).values;
 }
 
 function vcardRawValues(vcardArray: unknown, field: string): unknown[] {
@@ -136,54 +151,119 @@ function normalizeAddresses(vcardArray: unknown): string[] {
 }
 
 function contactValuesTruncated(vcardArray: unknown): boolean {
-  for (const field of ['fn', 'org', 'email', 'tel']) {
+  const scalarFields = [
+    { field: 'fn', maxLength: 300, lower: false },
+    { field: 'org', maxLength: 300, lower: false },
+    { field: 'email', maxLength: 320, lower: true },
+    { field: 'tel', maxLength: 100, lower: false },
+  ];
+  for (const { field, maxLength, lower } of scalarFields) {
     let count = 0;
     for (const raw of vcardRawValues(vcardArray, field)) {
-      count += flattenScalarValues(raw, MAX_CONTACT_VALUES + 1).length;
+      const flattened = flattenScalarValuesWithCompleteness(raw, MAX_CONTACT_VALUES + 1);
+      if (flattened.truncated
+        || flattened.values.some((value) => boundedString(value, maxLength, { lower }) === null)) return true;
+      count += flattened.values.length;
       if (count > MAX_CONTACT_VALUES) return true;
     }
   }
-  return vcardRawValues(vcardArray, 'adr').length > MAX_CONTACT_VALUES;
+  const addressValues = vcardRawValues(vcardArray, 'adr');
+  if (addressValues.length > MAX_CONTACT_VALUES) return true;
+  for (const raw of addressValues) {
+    const flattened = flattenScalarValuesWithCompleteness(raw, 33);
+    if (flattened.truncated || flattened.values.length > 32) return true;
+    const parts = flattened.values.map((part) => boundedString(part, 300));
+    const rejectedNonBlankPart = parts.some((part, index) => {
+      if (part !== null) return false;
+      const rawPart = flattened.values[index] ?? '';
+      return rawPart.length > 300 || /[\u0000-\u001f\u007f]/u.test(rawPart) || rawPart.trim() !== '';
+    });
+    const retainedParts = parts.filter((part): part is string => part !== null);
+    if (rejectedNonBlankPart
+      || boundedString(retainedParts.join(', '), 1000) === null) return true;
+  }
+  return false;
+}
+
+function malformedVcardEvidence(vcardArray: unknown): boolean {
+  if (vcardArray === undefined) return false;
+  if (!Array.isArray(vcardArray)
+    || String(vcardArray[0]).toLowerCase() !== 'vcard'
+    || !Array.isArray(vcardArray[1])) return true;
+  const entries = vcardArray[1];
+  if (entries.length > MAX_VCARD_ENTRIES) return true;
+  return entries.slice(0, MAX_VCARD_ENTRIES).some((entry) => (
+    !Array.isArray(entry)
+    || entry.length < 4
+    || typeof entry[0] !== 'string'
+    || !entry[0].trim()
+  ));
 }
 
 function normalizeLinks(links: unknown, maxLinks = MAX_RDAP_LINKS) {
-  if (!Array.isArray(links)) return [];
   const normalized: Array<{ rel: string | null; href: string; type: string | null; title: string | null }> = [];
+  if (links === undefined) return { items: normalized, truncated: false };
+  if (!Array.isArray(links)) return { items: normalized, truncated: true };
+  let truncated = links.length > 100 || links.length > maxLinks;
   for (const linkValue of links.slice(0, 100)) {
-    if (!linkValue || typeof linkValue !== 'object' || Array.isArray(linkValue)) continue;
-    const link = linkValue as LooseRecord;
-    const href = boundedString(link.href, 2048);
-    if (!href) continue;
-    try {
-      const parsed = new URL(href);
-      if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') continue;
-    } catch {
+    if (!linkValue || typeof linkValue !== 'object' || Array.isArray(linkValue)) {
+      truncated = true;
       continue;
     }
+    const link = linkValue as LooseRecord;
+    const href = boundedString(link.href, 2048);
+    if (!href) {
+      truncated = true;
+      continue;
+    }
+    try {
+      const parsed = new URL(href);
+      if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+        truncated = true;
+        continue;
+      }
+    } catch {
+      truncated = true;
+      continue;
+    }
+    const rel = boundedString(link.rel, 100, { lower: true });
+    const type = boundedString(link.type, 160, { lower: true });
+    const title = boundedString(link.title, 300);
+    if (link.rel !== undefined && !rel
+      || link.type !== undefined && !type
+      || link.title !== undefined && !title) truncated = true;
     normalized.push({
-      rel: boundedString(link.rel, 100, { lower: true }),
+      rel,
       href,
-      type: boundedString(link.type, 160, { lower: true }),
-      title: boundedString(link.title, 300),
+      type,
+      title,
     });
     if (normalized.length >= maxLinks) break;
   }
-  return normalized;
+  return { items: normalized, truncated };
 }
 
 function normalizePublicIds(publicIds: unknown) {
-  if (!Array.isArray(publicIds)) return [];
   const normalized: Array<{ type: string; identifier: string }> = [];
+  if (publicIds === undefined) return { items: normalized, truncated: false };
+  if (!Array.isArray(publicIds)) return { items: normalized, truncated: true };
+  let truncated = publicIds.length > 100 || publicIds.length > 20;
   for (const itemValue of publicIds.slice(0, 100)) {
-    if (!itemValue || typeof itemValue !== 'object' || Array.isArray(itemValue)) continue;
+    if (!itemValue || typeof itemValue !== 'object' || Array.isArray(itemValue)) {
+      truncated = true;
+      continue;
+    }
     const item = itemValue as LooseRecord;
     const type = boundedString(item.type, 160);
     const identifier = boundedString(item.identifier, 300);
-    if (!type || !identifier) continue;
+    if (!type || !identifier) {
+      truncated = true;
+      continue;
+    }
     normalized.push({ type, identifier });
     if (normalized.length >= 20) break;
   }
-  return normalized;
+  return { items: normalized, truncated };
 }
 
 function normalizeStringList(
@@ -191,18 +271,25 @@ function normalizeStringList(
   maxItems: number,
   maxLength: number,
   { lower = false }: { lower?: boolean } = {},
-): string[] {
-  if (!Array.isArray(value)) return [];
+): { items: string[]; truncated: boolean } {
+  if (value === undefined) return { items: [], truncated: false };
+  if (!Array.isArray(value)) return { items: [], truncated: true };
   const output: string[] = [];
   const seen = new Set<string>();
-  for (const item of value.slice(0, Math.max(maxItems * 4, maxItems))) {
+  const inspectionLimit = Math.max(maxItems * 4, maxItems);
+  let truncated = value.length > inspectionLimit;
+  for (const item of value.slice(0, inspectionLimit)) {
     const normalized = boundedString(item, maxLength, { lower });
-    if (!normalized || seen.has(normalized.toLowerCase())) continue;
+    if (!normalized) {
+      truncated = true;
+      continue;
+    }
+    if (seen.has(normalized.toLowerCase())) continue;
     seen.add(normalized.toLowerCase());
-    output.push(normalized);
-    if (output.length >= maxItems) break;
+    if (output.length < maxItems) output.push(normalized);
+    else truncated = true;
   }
-  return output;
+  return { items: output, truncated };
 }
 
 function redactionLabel(value: unknown): string | null {
@@ -212,14 +299,39 @@ function redactionLabel(value: unknown): string | null {
   return boundedString(record.type, 160) || boundedString(record.description, 300);
 }
 
+function suppliedBoundedStringRejected(
+  record: LooseRecord,
+  field: string,
+  maxLength: number,
+  options: { lower?: boolean } = {},
+): boolean {
+  return Object.hasOwn(record, field) && boundedString(record[field], maxLength, options) === null;
+}
+
+function redactionLabelHasRejectedContent(value: unknown): boolean {
+  if (typeof value === 'string') return boundedString(value, 300) === null;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return true;
+  const label = value as LooseRecord;
+  const hasType = Object.hasOwn(label, 'type');
+  const hasDescription = Object.hasOwn(label, 'description');
+  return (!hasType && !hasDescription)
+    || (hasType && boundedString(label.type, 160) === null)
+    || (hasDescription && boundedString(label.description, 300) === null);
+}
+
 function normalizeRedactions(redacted: unknown) {
-  if (!Array.isArray(redacted)) return { redactions: [], redactionsTruncated: false };
+  if (redacted === undefined) return { redactions: [], redactionsTruncated: false };
+  if (!Array.isArray(redacted)) return { redactions: [], redactionsTruncated: true };
   const redactions: NormalizedRdapRedaction[] = [];
   const candidates = redacted.slice(0, MAX_RDAP_REDACTIONS * 2);
   let stoppedAt = candidates.length;
+  let truncated = redacted.length > candidates.length;
   for (let index = 0; index < candidates.length; index += 1) {
     const itemValue = candidates[index];
-    if (!itemValue || typeof itemValue !== 'object' || Array.isArray(itemValue)) continue;
+    if (!itemValue || typeof itemValue !== 'object' || Array.isArray(itemValue)) {
+      truncated = true;
+      continue;
+    }
     const item = itemValue as LooseRecord;
     const entry = {
       name: redactionLabel(item.name),
@@ -230,7 +342,19 @@ function normalizeRedactions(redacted: unknown) {
       postPath: boundedString(item.postPath, 512),
       replacementPath: boundedString(item.replacementPath, 512),
     };
-    if (!Object.values(entry).some(Boolean)) continue;
+    if (Object.hasOwn(item, 'name') && redactionLabelHasRejectedContent(item.name)
+      || Object.hasOwn(item, 'reason') && redactionLabelHasRejectedContent(item.reason)
+      || suppliedBoundedStringRejected(item, 'method', 80, { lower: true })
+      || suppliedBoundedStringRejected(item, 'pathLang', 80, { lower: true })
+      || suppliedBoundedStringRejected(item, 'prePath', 512)
+      || suppliedBoundedStringRejected(item, 'postPath', 512)
+      || suppliedBoundedStringRejected(item, 'replacementPath', 512)) {
+      truncated = true;
+    }
+    if (!Object.values(entry).some(Boolean)) {
+      truncated = true;
+      continue;
+    }
     redactions.push(entry);
     if (redactions.length >= MAX_RDAP_REDACTIONS) {
       stoppedAt = index + 1;
@@ -239,32 +363,51 @@ function normalizeRedactions(redacted: unknown) {
   }
   return {
     redactions,
-    redactionsTruncated: stoppedAt < redacted.length,
+    redactionsTruncated: truncated || stoppedAt < redacted.length,
   };
 }
 
 function normalizeDomainVariants(value: unknown) {
-  if (!Array.isArray(value)) return { variants: [], variantsTruncated: false };
+  if (value === undefined) return { variants: [], variantsTruncated: false };
+  if (!Array.isArray(value)) return { variants: [], variantsTruncated: true };
   const variants: NormalizedRdapVariant[] = [];
   let truncated = value.length > MAX_RDAP_VARIANT_GROUPS;
   for (const groupValue of value.slice(0, MAX_RDAP_VARIANT_GROUPS)) {
-    if (!groupValue || typeof groupValue !== 'object' || Array.isArray(groupValue)) continue;
+    if (!groupValue || typeof groupValue !== 'object' || Array.isArray(groupValue)) {
+      truncated = true;
+      continue;
+    }
     const group = groupValue as LooseRecord;
     const sourceNames = Array.isArray(group.variantNames) ? group.variantNames : [];
+    if (group.variantNames !== undefined && !Array.isArray(group.variantNames)) truncated = true;
     const variantNames: Array<{ ldhName: string | null; unicodeName: string | null }> = [];
     for (const nameValue of sourceNames.slice(0, MAX_RDAP_VARIANT_NAMES * 2)) {
-      if (!nameValue || typeof nameValue !== 'object' || Array.isArray(nameValue)) continue;
+      if (!nameValue || typeof nameValue !== 'object' || Array.isArray(nameValue)) {
+        truncated = true;
+        continue;
+      }
       const name = nameValue as LooseRecord;
       const ldhName = boundedString(name.ldhName, 253);
       const unicodeName = boundedString(name.unicodeName, 253);
-      if (!ldhName && !unicodeName) continue;
+      if (suppliedBoundedStringRejected(name, 'ldhName', 253)
+        || suppliedBoundedStringRejected(name, 'unicodeName', 253)) truncated = true;
+      if (!ldhName && !unicodeName) {
+        truncated = true;
+        continue;
+      }
       variantNames.push({ ldhName, unicodeName });
       if (variantNames.length >= MAX_RDAP_VARIANT_NAMES) break;
     }
     if (sourceNames.length > MAX_RDAP_VARIANT_NAMES) truncated = true;
-    const relation = normalizeStringList(group.relation, 20, 100, { lower: true });
+    const relationInfo = normalizeStringList(group.relation, 20, 100, { lower: true });
+    if (relationInfo.truncated) truncated = true;
+    const relation = relationInfo.items;
     const idnTable = boundedString(group.idnTable, 300);
-    if (!variantNames.length && !relation.length && !idnTable) continue;
+    if (group.idnTable !== undefined && !idnTable) truncated = true;
+    if (!variantNames.length && !relation.length && !idnTable) {
+      truncated = true;
+      continue;
+    }
     variants.push({ relation, idnTable, variantNames });
   }
   return { variants, variantsTruncated: truncated };
@@ -283,27 +426,41 @@ function textWouldTruncate(value: unknown, maxLength: number): boolean {
 }
 
 function summarizeTextBlocks(blocks: unknown) {
-  if (!Array.isArray(blocks)) return { items: [], truncated: false };
   const output: NormalizedRdapTextBlock[] = [];
+  if (blocks === undefined) return { items: output, truncated: false };
+  if (!Array.isArray(blocks)) return { items: output, truncated: true };
   let truncated = blocks.length > 50;
   for (const blockValue of blocks.slice(0, 50)) {
-    if (!blockValue || typeof blockValue !== 'object' || Array.isArray(blockValue)) continue;
+    if (!blockValue || typeof blockValue !== 'object' || Array.isArray(blockValue)) {
+      truncated = true;
+      continue;
+    }
     const block = blockValue as LooseRecord;
     const descriptions: string[] = [];
     const sourceDescriptions = Array.isArray(block.description) ? block.description : [];
+    if (!Array.isArray(block.description)) truncated = true;
     if (sourceDescriptions.length > 20) truncated = true;
     for (const text of sourceDescriptions.slice(0, 20)) {
       if (textWouldTruncate(text, 800)) truncated = true;
       const description = truncatedText(text, 800);
-      if (!description) continue;
+      if (!description) {
+        truncated = true;
+        continue;
+      }
       if (descriptions.length < 6) descriptions.push(description);
       else truncated = true;
     }
-    if (!descriptions.length) continue;
+    if (!descriptions.length) {
+      truncated = true;
+      continue;
+    }
     if (textWouldTruncate(block.title, 160)) truncated = true;
+    const title = truncatedText(block.title, 160);
+    const type = boundedString(block.type, 160, { lower: true });
+    if (block.title !== undefined && !title || block.type !== undefined && !type) truncated = true;
     const item = {
-      title: truncatedText(block.title, 160) || 'Notice',
-      type: boundedString(block.type, 160, { lower: true }),
+      title: title || 'Notice',
+      type,
       descriptions,
     };
     if (output.length < 12) output.push(item);
@@ -358,8 +515,9 @@ function lifecycleDate(events: NormalizedRdapEvent[], action: string, newest: bo
   let selectedTime = newest ? -Infinity : Infinity;
   for (const event of events) {
     if (event.action !== action || !event.date) continue;
-    const time = Date.parse(event.date);
-    if (!Number.isFinite(time)) continue;
+    const normalized = registryDateIso(event.date);
+    if (!normalized) continue;
+    const time = Date.parse(normalized);
     if ((newest && time > selectedTime) || (!newest && time < selectedTime)) {
       selected = event.date;
       selectedTime = time;
@@ -396,14 +554,22 @@ function summarizeEntity(entity: unknown): EntitySummary | null {
   if (!entity || typeof entity !== 'object' || Array.isArray(entity)) return null;
   const record = entity as LooseRecord;
   const roles: string[] = [];
+  let rolesTruncated = record.roles !== undefined && !Array.isArray(record.roles);
   if (Array.isArray(record.roles)) {
+    if (record.roles.length > MAX_ENTITY_ROLES) rolesTruncated = true;
     for (const rawRole of record.roles.slice(0, 100)) {
       const role = boundedString(rawRole, 80, { lower: true });
-      if (!role || roles.includes(role)) continue;
+      if (!role) {
+        rolesTruncated = true;
+        continue;
+      }
+      if (roles.includes(role)) continue;
       roles.push(role);
       if (roles.length >= MAX_ENTITY_ROLES) break;
     }
   }
+  const handle = boundedString(record.handle, 200);
+  const handleTruncated = record.handle !== undefined && handle === null;
   const names = normalizeContactValues(record.vcardArray, 'fn', 300);
   const organizations = normalizeContactValues(record.vcardArray, 'org', 300);
   const emails = normalizeContactValues(record.vcardArray, 'email', 320, { lower: true });
@@ -412,8 +578,10 @@ function summarizeEntity(entity: unknown): EntitySummary | null {
   const vcardEntries = Array.isArray(record.vcardArray) && Array.isArray(record.vcardArray[1])
     ? record.vcardArray[1]
     : [];
+  const publicIds = normalizePublicIds(record.publicIds);
+  const links = normalizeLinks(record.links, MAX_ENTITY_LINKS);
   const summary = {
-    handle: boundedString(record.handle, 200),
+    handle,
     roles,
     name: names[0] || null,
     names,
@@ -425,14 +593,16 @@ function summarizeEntity(entity: unknown): EntitySummary | null {
     phones,
     address: addresses[0] || null,
     addresses,
-    publicIds: normalizePublicIds(record.publicIds),
-    links: normalizeLinks(record.links, MAX_ENTITY_LINKS),
+    publicIds: publicIds.items,
+    links: links.items,
     truncated: Boolean(
-      (Array.isArray(record.roles) && record.roles.length > MAX_ENTITY_ROLES)
+      rolesTruncated
+      || handleTruncated
       || vcardEntries.length > MAX_VCARD_ENTRIES
+      || malformedVcardEvidence(record.vcardArray)
       || contactValuesTruncated(record.vcardArray)
-      || (Array.isArray(record.publicIds) && record.publicIds.length > 20)
-      || (Array.isArray(record.links) && record.links.length > MAX_ENTITY_LINKS)
+      || publicIds.truncated
+      || links.truncated
     ),
   };
   const hasAny = Boolean(summary.handle || summary.name || summary.org || summary.email
@@ -443,7 +613,8 @@ function summarizeEntity(entity: unknown): EntitySummary | null {
 function summarizeEntities(entities: unknown) {
   const summaries: EntitySummary[] = [];
   const source = Array.isArray(entities) ? entities : [];
-  let truncated = source.length > MAX_RDAP_ENTITIES;
+  let truncated = entities !== undefined && !Array.isArray(entities)
+    || source.length > MAX_RDAP_ENTITIES;
   const stack = source
     .slice(0, MAX_RDAP_ENTITIES)
     .reverse()
@@ -454,13 +625,22 @@ function summarizeEntities(entities: unknown) {
     const current = stack.pop();
     if (!current) continue;
     const { entity, depth } = current as { entity: unknown; depth: number };
-    if (!entity || typeof entity !== 'object' || Array.isArray(entity) || seen.has(entity)) continue;
+    if (!entity || typeof entity !== 'object' || Array.isArray(entity) || seen.has(entity)) {
+      truncated = true;
+      continue;
+    }
     seen.add(entity);
     visited += 1;
     const summary = summarizeEntity(entity);
     if (summary) summaries.push(summary);
+    else truncated = true;
     const record = entity as LooseRecord;
-    if (depth >= MAX_RDAP_ENTITY_DEPTH || !Array.isArray(record.entities)) continue;
+    if (depth >= MAX_RDAP_ENTITY_DEPTH) {
+      if (Array.isArray(record.entities) && record.entities.length) truncated = true;
+      continue;
+    }
+    if (record.entities !== undefined && !Array.isArray(record.entities)) truncated = true;
+    if (!Array.isArray(record.entities)) continue;
     const remaining = Math.max(0, MAX_RDAP_ENTITIES - visited - stack.length);
     const nested = record.entities.slice(0, remaining);
     if (nested.length < record.entities.length) truncated = true;
@@ -500,6 +680,8 @@ function parseRdapObject(type: string, data: LooseRecord): NormalizedRdapRecord 
   const redactionInfo = normalizeRedactions(data.redacted);
   const noticesInfo = summarizeTextBlocks(data.notices);
   const remarksInfo = summarizeTextBlocks(data.remarks);
+  const linksInfo = normalizeLinks(data.links);
+  const conformanceInfo = normalizeStringList(data.rdapConformance, 50, 160, { lower: true });
   const serverTruncationReasons = summarizeServerTruncation(data.notices, data.remarks);
   // Preserve the established status-array contract while making it available
   // to every RDAP object type. Unlike set-like fields, status order and
@@ -509,16 +691,18 @@ function parseRdapObject(type: string, data: LooseRecord): NormalizedRdapRecord 
         .map((status) => boundedString(status, 160))
         .filter((status): status is string => status !== null)
     : [];
+  const inspectedStatusCount = Array.isArray(data.status) ? Math.min(data.status.length, 100) : 0;
+  const inspectedEventCount = Array.isArray(data.events) ? Math.min(data.events.length, 100) : 0;
   const common = {
     objectClassName: boundedString(data.objectClassName, 80, { lower: true }),
     language: boundedString(data.lang, 35, { lower: true }),
-    conformance: normalizeStringList(data.rdapConformance, 50, 160, { lower: true }),
-    conformanceTruncated: Array.isArray(data.rdapConformance) && data.rdapConformance.length > 50,
+    conformance: conformanceInfo.items,
+    conformanceTruncated: conformanceInfo.truncated,
     ...redactionInfo,
     port43: boundedString(data.port43, 300),
     parentHandle: boundedString(data.parentHandle, 300),
-    links: normalizeLinks(data.links),
-    linksTruncated: Array.isArray(data.links) && data.links.length > MAX_RDAP_LINKS,
+    links: linksInfo.items,
+    linksTruncated: linksInfo.truncated,
     notices: noticesInfo.items,
     noticesTruncated: noticesInfo.truncated,
     remarks: remarksInfo.items,
@@ -526,9 +710,13 @@ function parseRdapObject(type: string, data: LooseRecord): NormalizedRdapRecord 
     serverTruncated: serverTruncationReasons.length > 0,
     serverTruncationReasons,
     statuses,
-    statusesTruncated: Array.isArray(data.status) && data.status.length > 100,
+    statusesTruncated: data.status !== undefined && (!Array.isArray(data.status)
+      || data.status.length > 100
+      || statuses.length < inspectedStatusCount),
     events,
-    eventsTruncated: Array.isArray(data.events) && data.events.length > 100,
+    eventsTruncated: data.events !== undefined && (!Array.isArray(data.events)
+      || data.events.length > 100
+      || events.length < inspectedEventCount),
     lifecycle: summarizeLifecycle(events),
   };
 
@@ -536,15 +724,29 @@ function parseRdapObject(type: string, data: LooseRecord): NormalizedRdapRecord 
     const { entitiesByRole, entitiesTruncated, truncatedEntityRoles } = entityInventory(data.entities);
     const registrarEntity = entitiesByRole.registrar && entitiesByRole.registrar[0];
     let nameserverAddressesTruncated = false;
+    let invalidNameservers = 0;
     const nameserverDetails = Array.isArray(data.nameservers)
       ? data.nameservers.slice(0, 200).map((ns) => {
-          if (!ns || typeof ns !== 'object' || Array.isArray(ns)) return null;
+          if (!ns || typeof ns !== 'object' || Array.isArray(ns)) {
+            invalidNameservers += 1;
+            return null;
+          }
           const nameserver = ns as LooseRecord;
-          const ipAddresses = nameserver.ipAddresses && typeof nameserver.ipAddresses === 'object' && !Array.isArray(nameserver.ipAddresses)
+          const validIpAddresses = nameserver.ipAddresses !== null
+            && typeof nameserver.ipAddresses === 'object'
+            && !Array.isArray(nameserver.ipAddresses);
+          const ipAddresses = validIpAddresses
             ? nameserver.ipAddresses as LooseRecord
             : {};
+          if (nameserver.ipAddresses !== undefined && !validIpAddresses) {
+            nameserverAddressesTruncated = true;
+          }
           const v4: unknown[] = Array.isArray(ipAddresses.v4) ? ipAddresses.v4 : [];
           const v6: unknown[] = Array.isArray(ipAddresses.v6) ? ipAddresses.v6 : [];
+          if (ipAddresses.v4 !== undefined && !Array.isArray(ipAddresses.v4)
+            || ipAddresses.v6 !== undefined && !Array.isArray(ipAddresses.v6)) {
+            nameserverAddressesTruncated = true;
+          }
           const maximumCandidates = 200;
           const maximumAddresses = 20;
           const addresses: string[] = [];
@@ -555,14 +757,20 @@ function parseRdapObject(type: string, data: LooseRecord): NormalizedRdapRecord 
               visited += 1;
               const address = boundedString(candidates[index], 80);
               if (address && net.isIP(address) === family) addresses.push(address);
+              else nameserverAddressesTruncated = true;
             }
             if (visited >= maximumCandidates || addresses.length >= maximumAddresses) break;
           }
           if (v4.length + v6.length > visited || v4.length + v6.length > maximumAddresses) {
             nameserverAddressesTruncated = true;
           }
+          const name = boundedString(nameserver.ldhName || nameserver.unicodeName, 253);
+          if (!name) {
+            invalidNameservers += 1;
+            return null;
+          }
           return {
-            name: boundedString(nameserver.ldhName || nameserver.unicodeName, 253),
+            name,
             addresses,
           };
         }).filter((ns): ns is { name: string; addresses: string[] } => Boolean(ns?.name))
@@ -573,9 +781,13 @@ function parseRdapObject(type: string, data: LooseRecord): NormalizedRdapRecord 
       ? data.secureDNS as LooseRecord
       : null;
     const variantInfo = normalizeDomainVariants(data.variants);
+    let invalidDsData = 0;
     const dsData: NormalizedRdapDsData[] = secureDns && Array.isArray(secureDns.dsData)
       ? secureDns.dsData.slice(0, 50).map((ds) => {
-          if (!ds || typeof ds !== 'object' || Array.isArray(ds)) return null;
+          if (!ds || typeof ds !== 'object' || Array.isArray(ds)) {
+            invalidDsData += 1;
+            return null;
+          }
           const record = ds as LooseRecord;
           const digest = boundedString(record.digest, 512);
           const normalized = {
@@ -583,9 +795,11 @@ function parseRdapObject(type: string, data: LooseRecord): NormalizedRdapRecord 
             digestType: boundedInteger(record.digestType, 0, 255),
             digest: digest && digest.length % 2 === 0 && /^[0-9a-f]+$/i.test(digest) ? digest : null,
           };
-          return Object.values(normalized).every((value) => value !== null)
-            ? normalized as NormalizedRdapDsData
-            : null;
+          if (Object.values(normalized).every((value) => value !== null)) {
+            return normalized as NormalizedRdapDsData;
+          }
+          invalidDsData += 1;
+          return null;
         }).filter((value): value is NormalizedRdapDsData => value !== null)
       : [];
     return {
@@ -596,7 +810,9 @@ function parseRdapObject(type: string, data: LooseRecord): NormalizedRdapRecord 
       handle: boundedString(data.handle, 300),
       nameservers: nameserverDetails.map((ns) => ns.name),
       nameserverDetails,
-      nameserversTruncated: Array.isArray(data.nameservers) && data.nameservers.length > 200,
+      nameserversTruncated: data.nameservers !== undefined && (!Array.isArray(data.nameservers)
+        || data.nameservers.length > 200
+        || invalidNameservers > 0),
       nameserverAddressesTruncated,
       dnssec: secureDns && secureDns.delegationSigned === true
         ? 'Signed' : secureDns && secureDns.delegationSigned === false ? 'Unsigned' : 'Unknown',
@@ -604,7 +820,12 @@ function parseRdapObject(type: string, data: LooseRecord): NormalizedRdapRecord 
       delegationSigned: secureDns && typeof secureDns.delegationSigned === 'boolean'
         ? secureDns.delegationSigned : null,
       dsData,
-      dsDataTruncated: Boolean(secureDns && Array.isArray(secureDns.dsData) && secureDns.dsData.length > 50),
+      dsDataTruncated: Boolean(
+        data.secureDNS !== undefined && !secureDns
+        || secureDns && secureDns.dsData !== undefined && (!Array.isArray(secureDns.dsData)
+          || secureDns.dsData.length > 50
+          || invalidDsData > 0),
+      ),
       ...variantInfo,
       registrarIanaId: publicId(registrarEntity, /iana registrar id/i),
       entitiesByRole,
@@ -621,15 +842,26 @@ function parseRdapObject(type: string, data: LooseRecord): NormalizedRdapRecord 
 
   if (type === 'ipv4' || type === 'ipv6') {
     const { entitiesByRole, entitiesTruncated, truncatedEntityRoles } = entityInventory(data.entities);
+    let invalidCidrs = 0;
     const cidrs: string[] = Array.isArray(data.cidr0_cidrs)
       ? data.cidr0_cidrs.slice(0, 200)
           .map((c) => {
-            if (!c || typeof c !== 'object' || Array.isArray(c)) return null;
+            if (!c || typeof c !== 'object' || Array.isArray(c)) {
+              invalidCidrs += 1;
+              return null;
+            }
             const expectedFamily = type === 'ipv4' ? 4 : 6;
             const prefix = boundedString(expectedFamily === 4 ? c.v4prefix : c.v6prefix, 80);
-            if (!prefix || net.isIP(prefix) !== expectedFamily) return null;
+            if (!prefix || net.isIP(prefix) !== expectedFamily) {
+              invalidCidrs += 1;
+              return null;
+            }
             const length = boundedInteger(c.length, 0, expectedFamily === 4 ? 32 : 128);
-            return prefix && length !== null ? `${prefix}/${length}` : null;
+            if (length === null) {
+              invalidCidrs += 1;
+              return null;
+            }
+            return `${prefix}/${length}`;
           })
           .filter((value): value is string => value !== null)
       : [];
@@ -640,7 +872,9 @@ function parseRdapObject(type: string, data: LooseRecord): NormalizedRdapRecord 
       startAddress: boundedString(data.startAddress, 80),
       endAddress: boundedString(data.endAddress, 80),
       cidrs,
-      cidrsTruncated: Array.isArray(data.cidr0_cidrs) && data.cidr0_cidrs.length > 200,
+      cidrsTruncated: data.cidr0_cidrs !== undefined && (!Array.isArray(data.cidr0_cidrs)
+        || data.cidr0_cidrs.length > 200
+        || invalidCidrs > 0),
       country: boundedString(data.country, 2),
       networkType: boundedString(data.type, 160),
       entitiesByRole,

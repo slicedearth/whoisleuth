@@ -1,5 +1,6 @@
 import { normalizeDomain } from './case-model.ts';
 import { parse } from 'tldts';
+import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from '../../../../lib/observation.mts';
 
 export const INVESTIGATION_GUIDE_SCHEMA = 'whoisleuth.investigation-recipe';
 export const INVESTIGATION_GUIDE_VERSION = 5;
@@ -242,15 +243,15 @@ function record(value: unknown): UnknownRecord | null {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as UnknownRecord : null;
 }
 
-function timestamp(value: unknown): string {
-  if (typeof value !== 'string' || value.length > MAX_INVESTIGATION_GUIDE_TIMESTAMP_LENGTH || CONTROL_RE.test(value)) return '';
-  const parsed = Date.parse(value);
-  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : '';
+function timestamp(value: unknown, legacy = false): string {
+  return normalizeExplicitIsoTimestamp(value)
+    ?? (legacy ? normalizeLegacyIsoTimestamp(value) : null)
+    ?? '';
 }
 
-function nullableTimestamp(value: unknown): string | null {
+function nullableTimestamp(value: unknown, legacy = false): string | null {
   if (value === null || value === undefined || value === '') return null;
-  return timestamp(value) || null;
+  return timestamp(value, legacy) || null;
 }
 
 function boundedTemplateText(value: unknown, maximum: number, fallback = ''): string {
@@ -451,8 +452,8 @@ export function createInvestigationGuide(
 
 function parseLegacyGuide(input: UnknownRecord): InvestigationGuide | null {
   const domain = normalizeInvestigationGuideDomain(input.domain);
-  const createdAt = timestamp(input.createdAt);
-  const updatedAt = timestamp(input.updatedAt);
+  const createdAt = timestamp(input.createdAt, true);
+  const updatedAt = timestamp(input.updatedAt, true);
   const recipe = investigationGuideRecipe('new_domain_triage');
   if (!domain || !createdAt || !updatedAt || !recipe) return null;
   const opened = new Set(
@@ -483,10 +484,11 @@ export function parseInvestigationGuide(value: unknown): InvestigationGuide | nu
   if (!input) return null;
   if (input.version === INVESTIGATION_GUIDE_LEGACY_VERSION) return parseLegacyGuide(input);
   if (!INVESTIGATION_GUIDE_SUPPORTED_VERSIONS.includes(input.version as 2 | 3 | 4 | 5)) return null;
+  const legacyTimestamps = input.version !== INVESTIGATION_GUIDE_VERSION;
   const recipe = investigationGuideRecipe(input.recipeId);
   const domain = normalizeInvestigationGuideDomain(input.domain);
-  const createdAt = timestamp(input.createdAt);
-  const updatedAt = timestamp(input.updatedAt);
+  const createdAt = timestamp(input.createdAt, legacyTimestamps);
+  const updatedAt = timestamp(input.updatedAt, legacyTimestamps);
   if (!recipe || !domain || !createdAt || !updatedAt
     || (input.version !== INVESTIGATION_GUIDE_VERSION && !PRE_RESPONSE_RECIPE_IDS.has(recipe.id))) return null;
   const supportsTemplate = input.version === 3 || input.version === 4 || input.version === INVESTIGATION_GUIDE_VERSION;
@@ -522,12 +524,12 @@ export function parseInvestigationGuide(value: unknown): InvestigationGuide | nu
       return {
         id: stageDefinition.id,
         outcome: guideOutcome(item?.outcome),
-        approvedAt: nullableTimestamp(item?.approvedAt),
-        openedAt: nullableTimestamp(item?.openedAt),
+        approvedAt: nullableTimestamp(item?.approvedAt, legacyTimestamps),
+        openedAt: nullableTimestamp(item?.openedAt, legacyTimestamps),
         reviewNote: input.version === 4 || input.version === INVESTIGATION_GUIDE_VERSION
           ? boundedReviewNote(item?.reviewNote)
           : null,
-        updatedAt: timestamp(item?.updatedAt) || updatedAt,
+        updatedAt: timestamp(item?.updatedAt, legacyTimestamps) || updatedAt,
       };
     }),
   };

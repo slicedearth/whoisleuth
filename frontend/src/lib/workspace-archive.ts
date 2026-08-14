@@ -34,20 +34,10 @@ import { loadBulkReviewStore } from './bulk-review';
 import { loadShortlist } from './shortlist';
 import { THEME_CHANGE_EVENT, THEME_STORAGE_KEY, applyThemePreference, normalizeThemePreference, readThemePreference, setThemePreference } from './theme';
 import { loadWatchlists } from './watchlists';
-import { browserLocalDataProvider } from './browser-local-data-service.ts';
 import {
-  CAMPAIGNS_COLLECTION,
-  CASES_COLLECTION,
-  DETECTION_RULES_COLLECTION,
-  PROFILES_COLLECTION,
-  SHORTLIST_COLLECTION,
-  WATCHLISTS_COLLECTION,
-  RELATIONSHIP_OBSERVATIONS_COLLECTION,
-  BULK_SESSIONS_COLLECTION,
-  WEBSITE_SNAPSHOTS_COLLECTION,
-  INVESTIGATION_TEMPLATES_COLLECTION,
-  BULK_REVIEW_COLLECTION,
-} from './browser-local-data-definitions.ts';
+  browserLocalDataCollection,
+  browserLocalDataProvider,
+} from './browser-local-data-service.ts';
 import type { AnyLocalDataCollectionDefinition } from './browser-local-data.ts';
 import { guardedWorkspaceRollback, guardedWorkspaceSettingsRollback } from './analysis/workspace-rollback.ts';
 
@@ -219,19 +209,24 @@ export async function mergeLocalWorkspaceArchive(raw: unknown, selectedIds: stri
   if (!sections.length) throw new Error('Select at least one supported archive section to merge.');
   const settingsSnapshot = snapshotSettings();
   const dataSections = sections.filter((section) => section.id !== 'settings');
-  const definitionBySection = new Map<string, AnyLocalDataCollectionDefinition>([
-    ['cases', CASES_COLLECTION],
-    ['campaigns', CAMPAIGNS_COLLECTION],
-    ['brandProfiles', PROFILES_COLLECTION],
-    ['watchlists', WATCHLISTS_COLLECTION],
-    ['shortlist', SHORTLIST_COLLECTION],
-    ['detectionRules', DETECTION_RULES_COLLECTION],
-    ['relationshipObservations', RELATIONSHIP_OBSERVATIONS_COLLECTION],
-    ['bulkSessions', BULK_SESSIONS_COLLECTION],
-    ['websiteSnapshots', WEBSITE_SNAPSHOTS_COLLECTION],
-    ['investigationTemplates', INVESTIGATION_TEMPLATES_COLLECTION],
-    ['bulkReview', BULK_REVIEW_COLLECTION],
-  ]);
+  const sectionCollections = [
+    ['cases', 'cases'],
+    ['campaigns', 'campaigns'],
+    ['brandProfiles', 'brand_profiles'],
+    ['watchlists', 'watchlists'],
+    ['shortlist', 'shortlist'],
+    ['detectionRules', 'detection_rules'],
+    ['relationshipObservations', 'relationship_observations'],
+    ['bulkSessions', 'bulk_sessions'],
+    ['websiteSnapshots', 'website_snapshots'],
+    ['investigationTemplates', 'investigation_templates'],
+    ['bulkReview', 'bulk_review'],
+  ] as const;
+  const definitionEntries = await Promise.all(sectionCollections.map(async ([section, collection]) => [
+    section,
+    await browserLocalDataCollection(collection),
+  ] as const));
+  const definitionBySection = new Map<string, AnyLocalDataCollectionDefinition>(definitionEntries);
   const definitions = dataSections
     .map((section) => definitionBySection.get(section.id))
     .filter((definition): definition is AnyLocalDataCollectionDefinition => Boolean(definition));

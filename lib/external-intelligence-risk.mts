@@ -16,6 +16,8 @@ const QUALIFYING_CATEGORIES = new Set(['phishing', 'malware']);
 // Only built-in provider IDs can affect the built-in score. The two community
 // malware datasets share one publisher family and therefore cannot corroborate
 // one another by themselves.
+
+import { normalizeExplicitIsoTimestamp } from './observation.mts';
 const PUBLISHER_FAMILIES: Readonly<Record<string, string>> = Object.freeze({
   urlscan_search: 'archived-scan-publisher',
   urlhaus_host: 'community-malware-publisher',
@@ -48,9 +50,8 @@ function record(value: unknown): UnknownRecord | null {
 }
 
 function timestamp(value: unknown): number | null {
-  if (typeof value !== 'string' || value.length > 64 || /[\u0000-\u001f\u007f]/u.test(value)) return null;
-  const parsed = Date.parse(value);
-  return Number.isFinite(parsed) ? parsed : null;
+  const normalized = normalizeExplicitIsoTimestamp(value);
+  return normalized ? Date.parse(normalized) : null;
 }
 
 function providerEvidence(value: unknown): ProviderRiskEvidence | null {

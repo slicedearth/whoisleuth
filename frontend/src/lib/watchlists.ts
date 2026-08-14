@@ -7,6 +7,7 @@ import {
 import { httpSecurityHeaderLabel } from './analysis/http-summary.ts';
 import {
   buildWatchlistExport,
+  MAX_WATCHLISTS,
   mergeWatchlistStores,
   normalizeWatchlistName,
   serializeWatchlistStore,
@@ -22,8 +23,8 @@ import type {
   WatchlistHistoryEvent,
   WatchlistHistoryGroup,
 } from './analysis/watchlist-history.ts';
-import { browserLocalDataProvider } from './browser-local-data-service.ts';
-import { LEGACY_WATCHLIST_KEY, WATCHLISTS_COLLECTION } from './browser-local-data-definitions.ts';
+import { readBrowserLocalData, updateBrowserLocalData } from './browser-local-data-service.ts';
+import { LEGACY_WATCHLIST_KEY } from './browser-local-data-contract.ts';
 
 export const WATCHLIST_KEY = LEGACY_WATCHLIST_KEY;
 export const MAX_WATCHLIST_IMPORT_BYTES = 2 * 1024 * 1024;
@@ -47,7 +48,7 @@ export interface WatchlistDomainHistory {
 }
 
 export async function loadWatchlists(): Promise<Watchlists> {
-  return (await browserLocalDataProvider()).read(WATCHLISTS_COLLECTION) as Promise<Watchlists>;
+  return readBrowserLocalData('watchlists');
 }
 
 function boundedWatchlists(all: Watchlists): Watchlists {
@@ -55,14 +56,43 @@ function boundedWatchlists(all: Watchlists): Watchlists {
 }
 
 export async function writeWatchlists(all: Watchlists): Promise<void> {
-  await (await browserLocalDataProvider()).update(WATCHLISTS_COLLECTION, () => ({ document: boundedWatchlists(all), result: undefined }));
+  await updateBrowserLocalData('watchlists', () => ({ document: boundedWatchlists(all), result: undefined }));
+}
+
+export function mergeHostedWatchlist(
+  current: Watchlists,
+  name: string,
+  hostedEntry: WatchlistEntry,
+): Watchlists {
+  const normalizedName = normalizeWatchlistName(name);
+  if (!normalizedName) throw new Error('Hosted watchlist name is invalid.');
+  const all = { ...current } as Watchlists;
+  const existing = Object.keys(all).find((candidate) => candidate.toLowerCase() === normalizedName.toLowerCase());
+  if (!existing && Object.keys(all).length >= MAX_WATCHLISTS) {
+    throw new Error('Watchlist storage is full. Export and remove a watchlist before saving more.');
+  }
+  if (existing && existing !== normalizedName) delete all[existing];
+  Object.defineProperty(all, normalizedName, {
+    value: hostedEntry,
+    writable: true,
+    enumerable: true,
+    configurable: true,
+  });
+  return boundedWatchlists(all);
+}
+
+export async function restoreHostedWatchlist(name: string, hostedEntry: WatchlistEntry): Promise<void> {
+  await updateBrowserLocalData('watchlists', (current) => ({
+    document: mergeHostedWatchlist(current as Watchlists, name, hostedEntry),
+    result: undefined,
+  }));
 }
 
 export async function saveWatchlist(name:string, results:WatchlistComparableRecord[], mode:'fast'|'deep'|'saved'): Promise<WatchlistChange[]> {
   const normalizedName=normalizeWatchlistName(name);
   if(!normalizedName)throw new Error('Watchlist names must be 1–100 characters and use a safe name.');
   if(results.length>MAX_WATCHLIST_DOMAINS)throw new Error(`Watchlists are limited to ${MAX_WATCHLIST_DOMAINS} domains.`);
-  return (await browserLocalDataProvider()).update(WATCHLISTS_COLLECTION, (current) => {
+  return updateBrowserLocalData('watchlists', (current) => {
     const all = { ...current } as Watchlists;
     const {entry,changes}=appendWatchlistScan(all[normalizedName]||null,results,{mode});
     Object.defineProperty(all,normalizedName,{value:entry,writable:true,enumerable:true,configurable:true});
@@ -70,9 +100,9 @@ export async function saveWatchlist(name:string, results:WatchlistComparableReco
   });
 }
 
-export async function deleteWatchlist(name:string):Promise<void>{await(await browserLocalDataProvider()).update(WATCHLISTS_COLLECTION,(current)=>{const all={...current} as Watchlists;delete all[name];return{document:boundedWatchlists(all),result:undefined};});}
+export async function deleteWatchlist(name:string):Promise<void>{await updateBrowserLocalData('watchlists',(current)=>{const all={...current} as Watchlists;delete all[name];return{document:boundedWatchlists(all),result:undefined};});}
 
-export async function importWatchlists(value:unknown){return(await browserLocalDataProvider()).update(WATCHLISTS_COLLECTION,(current)=>{const result=mergeWatchlistStores(current,value);const watchlists=boundedWatchlists(result.watchlists as Watchlists);return{document:watchlists,result:{added:result.added,updated:result.updated,skipped:result.skipped}};});}
+export async function importWatchlists(value:unknown){return updateBrowserLocalData('watchlists',(current)=>{const result=mergeWatchlistStores(current,value);const watchlists=boundedWatchlists(result.watchlists as Watchlists);return{document:watchlists,result:{added:result.added,updated:result.updated,skipped:result.skipped}};});}
 
 export async function exportWatchlists(){const blob=new Blob([JSON.stringify(buildWatchlistExport(await loadWatchlists()),null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`whoisleuth-watchlists-${new Date().toISOString().slice(0,10)}.json`;a.click();URL.revokeObjectURL(url);}
 

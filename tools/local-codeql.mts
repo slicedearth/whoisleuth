@@ -429,27 +429,34 @@ async function runProcessBounded(
     const stderrState = { bytes: 0 };
     let settled = false;
     let exceededOutput = false;
+    let terminationReason: 'deadline' | 'output' | null = null;
+    let processError: Error | null = null;
+    let forceTimer: NodeJS.Timeout | null = null;
 
     const finish = (callback: () => void): void => {
       if (settled) return;
       settled = true;
       clearTimeout(timeout);
+      if (forceTimer) clearTimeout(forceTimer);
       callback();
     };
     const terminate = (): void => {
       child.kill('SIGTERM');
-      const forceTimer = setTimeout(() => child.kill('SIGKILL'), 2000);
-      forceTimer.unref();
+      if (!forceTimer) {
+        forceTimer = setTimeout(() => child.kill('SIGKILL'), 2000);
+        forceTimer.unref();
+      }
     };
     const timeout = setTimeout(() => {
+      if (terminationReason === null) terminationReason = 'deadline';
       terminate();
-      finish(() => reject(new Error(`CodeQL exceeded its ${options.timeoutMs} ms process deadline.`)));
     }, options.timeoutMs);
 
     child.stdout.on('data', (value: Buffer | string) => {
       const chunk = Buffer.isBuffer(value) ? value : Buffer.from(value);
       if (!appendBounded(stdout, chunk, stdoutState, options.maxOutputBytes) && !exceededOutput) {
         exceededOutput = true;
+        terminationReason = 'output';
         terminate();
       }
     });
@@ -457,13 +464,24 @@ async function runProcessBounded(
       const chunk = Buffer.isBuffer(value) ? value : Buffer.from(value);
       if (!appendBounded(stderr, chunk, stderrState, options.maxOutputBytes) && !exceededOutput) {
         exceededOutput = true;
+        terminationReason = 'output';
         terminate();
       }
     });
-    child.once('error', (error) => finish(() => reject(error)));
+    child.once('error', (error) => {
+      processError = error;
+    });
     child.once('close', (code) => finish(() => {
+      if (processError) {
+        reject(processError);
+        return;
+      }
       if (exceededOutput) {
         reject(new Error(`CodeQL process output exceeded ${options.maxOutputBytes} bytes.`));
+        return;
+      }
+      if (terminationReason === 'deadline') {
+        reject(new Error(`CodeQL exceeded its ${options.timeoutMs} ms process deadline.`));
         return;
       }
       resolve({

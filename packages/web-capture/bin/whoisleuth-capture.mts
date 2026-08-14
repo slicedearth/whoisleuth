@@ -2,7 +2,7 @@
 
 import { chromium } from '@playwright/test';
 
-import { captureRenderedPage, parseCaptureArguments } from '../capture.mts';
+import { captureRenderedPage, parseCaptureArguments, sanitizeCaptureText } from '../capture.mts';
 import {
   compareRenderedCaptures,
   formatRenderedCaptureComparison,
@@ -22,11 +22,13 @@ try {
     const manifest = await captureRenderedPage(options, { launchBrowser: () => chromium.launch({ headless: true }) });
     const capture = manifest.captures[0];
     if (!capture) throw new Error('Rendered capture completed without manifest evidence.');
-    process.stdout.write(`Captured ${capture.domain} to ${options.outputDirectory}\n`);
-    process.stdout.write(`Manifest: ${options.outputDirectory}/manifest.json\n`);
+    const safeDomain = sanitizeCaptureText(capture.domain, 253);
+    const safeOutputDirectory = sanitizeCaptureText(options.outputDirectory, 2048);
+    process.stdout.write(`Captured ${safeDomain} to ${safeOutputDirectory}\n`);
+    process.stdout.write(`Manifest: ${safeOutputDirectory}/manifest.json\n`);
   }
 } catch (error) {
   const message = error instanceof Error ? error.message : 'Rendered capture failed.';
-  process.stderr.write(`Capture error: ${message.replace(/[\u0000-\u001f\u007f]+/gu, ' ').slice(0, 500)}\n`);
+  process.stderr.write(`Capture error: ${sanitizeCaptureText(message, 500)}\n`);
   process.exitCode = 2;
 }

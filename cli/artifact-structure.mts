@@ -71,11 +71,16 @@ import {
 import {
   assertLookupEvidencePrivacySafeTree,
   assertLookupEvidencePortableTree,
+  HOMEPAGE_LOOKUP_EVIDENCE_SCHEMA_VERSION,
   LEGACY_LOOKUP_EVIDENCE_SCHEMA_VERSION,
   LOOKUP_EVIDENCE_SCHEMA,
   LOOKUP_EVIDENCE_SCHEMA_VERSION,
   projectLookupEvidenceAvailability,
+  projectLookupEvidenceAvailabilityLegacy,
   projectLookupEvidenceQuery,
+  projectLookupEvidenceRdapPublication,
+  projectLookupEvidenceRegistryInsights,
+  projectLookupEvidenceWhoisPublication,
   SUPPORTED_LOOKUP_EVIDENCE_SCHEMA_VERSIONS,
 } from '../lib/evidence-export.mts';
 import { compareRegistrySources } from '../lib/registry-comparison.mts';
@@ -200,7 +205,7 @@ const LOOKUP_TIMING_SOURCES = [
   'network_context', 'security_txt', 'external_intelligence',
   'malware_host_intelligence', 'malware_ioc_intelligence',
 ] as const;
-const LOOKUP_AVAILABILITY_ANALYSIS_KEYS = [
+const LEGACY_LOOKUP_AVAILABILITY_ANALYSIS_KEYS = [
   'applicable', 'type', 'domain', 'state', 'confidence', 'detail', 'source',
   'rdapServer', 'nameservers', 'statuses', 'registrar', 'registrant', 'abuse',
   'createdDate', 'expiryDate', 'createdDateIso', 'expiryDateIso', 'domainAgeDays',
@@ -213,6 +218,9 @@ const LOOKUP_AVAILABILITY_ANALYSIS_KEYS = [
   'securityPosture', 'dns', 'tls', 'hasMx', 'hasNullMx', 'mxHosts', 'hasSpf',
   'hasDmarc', 'bulkComparison', 'limitations',
 ] as const;
+const LOOKUP_AVAILABILITY_ANALYSIS_KEYS = LEGACY_LOOKUP_AVAILABILITY_ANALYSIS_KEYS.filter(
+  (key) => !['registrar', 'registrant', 'abuse'].includes(key),
+);
 const LOOKUP_IDN_ANALYSIS_KEYS = [
   'version', 'mappingVersion', 'asciiDomain', 'unicodeDomain', 'hasIdn',
   'scripts', 'labels', 'mixedScript', 'skeleton', 'referenceMatches', 'findings',
@@ -234,7 +242,7 @@ function validateLookupEvidenceHomepageMetadata(
     : record(http.response, 'Lookup evidence HTTP response');
   const publicationPresent = Boolean(pageIdentity && Object.hasOwn(pageIdentity, 'publicationMetadata'));
   const deliveryPresent = Boolean(response && Object.hasOwn(response, 'deliveryMetadata'));
-  if (version !== LOOKUP_EVIDENCE_SCHEMA_VERSION && (publicationPresent || deliveryPresent)) {
+  if (version < HOMEPAGE_LOOKUP_EVIDENCE_SCHEMA_VERSION && (publicationPresent || deliveryPresent)) {
     fail('Lookup evidence homepage metadata epoch');
   }
   if (publicationPresent && !validPagePublicationMetadata(pageIdentity?.publicationMetadata)) {
@@ -432,7 +440,9 @@ function validateLookupEvidenceRdap(value: unknown, version: number): string {
     });
     return 'error';
   }
-  const complete = exact(source, ['status', 'endpoint', 'transportSecurity', 'httpStatus', 'fetchedAt', 'attempts', 'parsed', 'raw'], 'Lookup evidence RDAP source');
+  const complete = exact(source, version >= LOOKUP_EVIDENCE_SCHEMA_VERSION
+    ? ['status', 'endpoint', 'transportSecurity', 'httpStatus', 'fetchedAt', 'attempts', 'parsed']
+    : ['status', 'endpoint', 'transportSecurity', 'httpStatus', 'fetchedAt', 'attempts', 'parsed', 'raw'], 'Lookup evidence RDAP source');
   const status = enumeration(complete.status, version === LEGACY_LOOKUP_EVIDENCE_SCHEMA_VERSION
     ? ['success', 'not_found']
     : ['success', 'partial', 'not_found', 'unsupported', 'skipped', 'disabled'], 'Lookup evidence RDAP status');
@@ -450,12 +460,16 @@ function validateLookupEvidenceRdap(value: unknown, version: number): string {
     else validateLookupEvidenceRdapAttempt(item, `Lookup evidence RDAP attempt ${index + 1}`);
   });
   nullableRecord(complete.parsed, 'Lookup evidence RDAP parsed data');
-  nullableRecord(complete.raw, 'Lookup evidence RDAP raw data');
+  if (version < LOOKUP_EVIDENCE_SCHEMA_VERSION) nullableRecord(complete.raw, 'Lookup evidence RDAP raw data');
+  if (version >= LOOKUP_EVIDENCE_SCHEMA_VERSION
+    && !isDeepStrictEqual(complete.parsed, projectLookupEvidenceRdapPublication(complete.parsed))) {
+    fail('Lookup evidence RDAP portable publication');
+  }
   if (version !== LEGACY_LOOKUP_EVIDENCE_SCHEMA_VERSION
     && status === 'success' && complete.parsed === null) fail('Lookup evidence RDAP publication');
   if (version !== LEGACY_LOOKUP_EVIDENCE_SCHEMA_VERSION
     && !['success', 'partial'].includes(status)
-    && (complete.parsed !== null || complete.raw !== null)) fail('Lookup evidence RDAP unavailable publication');
+    && (complete.parsed !== null || (version < LOOKUP_EVIDENCE_SCHEMA_VERSION && complete.raw !== null))) fail('Lookup evidence RDAP unavailable publication');
   return status;
 }
 
@@ -475,6 +489,10 @@ function validateLookupEvidenceWhois(value: unknown, version: number): string {
   optionalText(complete.failedHop, 'Lookup evidence WHOIS failed hop', 253);
   optionalText(complete.conflictingHop, 'Lookup evidence WHOIS conflicting hop', 253);
   nullableRecord(complete.parsed, 'Lookup evidence WHOIS parsed data');
+  if (version >= LOOKUP_EVIDENCE_SCHEMA_VERSION
+    && !isDeepStrictEqual(complete.parsed, projectLookupEvidenceWhoisPublication(complete.parsed))) {
+    fail('Lookup evidence WHOIS portable publication');
+  }
   array(complete.chain, 'Lookup evidence WHOIS chain', 16).forEach((item, index) => {
     if (version === LEGACY_LOOKUP_EVIDENCE_SCHEMA_VERSION) record(item, `Lookup evidence legacy WHOIS chain item ${index + 1}`);
     else validateLookupEvidenceWhoisHop(item, `Lookup evidence WHOIS chain item ${index + 1}`);
@@ -785,12 +803,23 @@ export function validateLookupEvidenceArtifactStructure(value: UnknownRecord): v
 
   const analysis = exact(root.analysis, ['availability', 'idn', 'registryInsights', 'registryComparison', 'registrarPublicationComparison'], 'Lookup evidence analysis');
   if (analysis.availability !== null) {
-    const availability = exactOptional(analysis.availability, [], LOOKUP_AVAILABILITY_ANALYSIS_KEYS, 'Lookup evidence availability analysis');
+    const currentAvailability = version >= LOOKUP_EVIDENCE_SCHEMA_VERSION;
+    const availability = exactOptional(
+      analysis.availability,
+      currentAvailability ? ['registryContactsExcluded'] : [],
+      currentAvailability ? LOOKUP_AVAILABILITY_ANALYSIS_KEYS : LEGACY_LOOKUP_AVAILABILITY_ANALYSIS_KEYS,
+      'Lookup evidence availability analysis',
+    );
+    if (currentAvailability && availability.registryContactsExcluded !== true) {
+      fail('Lookup evidence availability contact exclusion');
+    }
     validateLookupEvidenceHomepageMetadata(availability, version);
     if (version !== LEGACY_LOOKUP_EVIDENCE_SCHEMA_VERSION
       && !isDeepStrictEqual(
         analysis.availability,
-        projectLookupEvidenceAvailability(analysis.availability),
+        currentAvailability
+          ? projectLookupEvidenceAvailability(analysis.availability)
+          : projectLookupEvidenceAvailabilityLegacy(analysis.availability),
       )) fail('Lookup evidence availability analysis');
   }
   if (analysis.idn !== null) {
@@ -810,7 +839,7 @@ export function validateLookupEvidenceArtifactStructure(value: UnknownRecord): v
     });
     if (!isDeepStrictEqual(registryComparison, expectedComparison)) fail('Lookup evidence registry comparison derivation');
 
-    const expectedInsights = buildRegistryInsights({
+    const rebuiltInsights = buildRegistryInsights({
       rdapParsed,
       rdapStatus: rdapDiagnosticStatus,
       rdapFetchedAt: rdap.fetchedAt,
@@ -818,6 +847,9 @@ export function validateLookupEvidenceArtifactStructure(value: UnknownRecord): v
       whoisStatus: whoisDiagnosticStatus,
       whoisQueriedAt: whois.queriedAt,
     });
+    const expectedInsights = version >= LOOKUP_EVIDENCE_SCHEMA_VERSION
+      ? projectLookupEvidenceRegistryInsights(rebuiltInsights)
+      : rebuiltInsights;
     if (!isDeepStrictEqual(registryInsights, expectedInsights)) fail('Lookup evidence registry insight derivation');
     try { assertLookupEvidencePrivacySafeTree(root); } catch { fail('Lookup evidence privacy boundary'); }
   }

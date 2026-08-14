@@ -11,8 +11,12 @@
 // re-derives registrable domains in the browser - it only normalizes and
 // bounds what the server sent.
 
-import { normalizeDomain } from './case-model.ts';
+import {
+  MAX_EVIDENCE_DOMAIN_INPUT_LENGTH,
+  normalizeEvidenceDomain,
+} from './case-model.ts';
 import { MAX_CANDIDATE_SOURCE_LENGTH } from '../../../../lib/candidate-provenance-bounds.mts';
+import { normalizeCtTimestamp } from '../../../../lib/observation.mts';
 import {
   MAX_CT_RESPONSE_CERTIFICATE_GROUPS,
   MAX_CT_RESPONSE_DOMAINS_PER_GROUP,
@@ -85,12 +89,21 @@ function plainRecord(value: unknown): Record<string, unknown> | null {
 }
 
 /**
- * A canonical, bounded certificate-count. Accepts only finite non-negative
- * numbers, floors and clamps them; anything else becomes 0.
+ * A canonical, bounded certificate-count. Accepts only non-negative safe
+ * integers and clamps them; malformed or missing counts stay unknown.
  */
-function normalizeCount(value: unknown): number {
-  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) return 0;
-  return Math.min(Math.floor(value), MAX_CT_CERTIFICATE_COUNT);
+function normalizeCount(value: unknown): number | null {
+  if (!Number.isSafeInteger(value) || Number(value) < 0) return null;
+  return Math.min(Number(value), MAX_CT_CERTIFICATE_COUNT);
+}
+
+function countWasClamped(value: unknown): boolean {
+  return Number.isSafeInteger(value) && Number(value) > MAX_CT_CERTIFICATE_COUNT;
+}
+
+function normalizePositiveCount(value: unknown): number | null {
+  const count = normalizeCount(value);
+  return count !== null && count > 0 ? count : null;
 }
 
 /**
@@ -101,34 +114,48 @@ function normalizeCount(value: unknown): number {
  * not prove registration, site activation, exact issuance time, or abuse.
  */
 function normalizeTimestamp(value: unknown): string | null {
-  if (typeof value !== 'string') return null;
-  if (value.length === 0 || value.length > MAX_CT_TIMESTAMP_LENGTH) return null;
-  if (/[\x00-\x1f\x7f]/.test(value)) return null;
-  const trimmed = value.trim();
-  if (!trimmed) return null;
-  const parsed = new Date(trimmed);
-  if (Number.isNaN(parsed.getTime())) return null;
-  return parsed.toISOString();
+  return typeof value === 'string' && value.length <= MAX_CT_TIMESTAMP_LENGTH
+    ? normalizeCtTimestamp(value)
+    : null;
+}
+
+function suppliedTimestampMalformed(value: unknown): boolean {
+  return value !== null && value !== undefined && normalizeTimestamp(value) === null;
 }
 
 /**
  * Normalizes, deduplicates, sorts, and bounds a list of observed certificate
  * hostnames. Each hostname is validated with the project's canonical domain
  * normalization (rejecting control characters, whitespace, wildcards, and
- * non-LDH labels) and length-bounded before that.
+ * non-LDH labels). Raw Unicode input is work-bounded separately because a
+ * decomposed U-label can be longer than its valid canonical A-label.
  */
-function normalizeHostnames(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
+function normalizeDomainValues(
+  value: unknown,
+  maximum: number,
+): { values: string[]; partial: boolean } {
+  if (value === undefined || value === null) return { values: [], partial: false };
+  if (!Array.isArray(value)) return { values: [], partial: true };
   const seen = new Set<string>();
+  let partial = value.length > MAX_CT_INPUT_HOSTNAMES;
   // Slice first so we iterate at most MAX_CT_INPUT_HOSTNAMES elements even if
   // the untrusted array is enormous.
   const input = value.length > MAX_CT_INPUT_HOSTNAMES ? value.slice(0, MAX_CT_INPUT_HOSTNAMES) : value;
   for (const raw of input) {
-    if (typeof raw !== 'string' || raw.length > MAX_CT_HOSTNAME_LENGTH) continue;
-    const host = normalizeDomain(raw);
+    if (typeof raw !== 'string' || raw.length > MAX_EVIDENCE_DOMAIN_INPUT_LENGTH) {
+      partial = true;
+      continue;
+    }
+    const host = normalizeEvidenceDomain(raw);
     if (host) seen.add(host);
+    else partial = true;
   }
-  return [...seen].sort().slice(0, MAX_CT_HOSTNAMES);
+  if (seen.size > maximum) partial = true;
+  return { values: [...seen].sort().slice(0, maximum), partial };
+}
+
+function normalizeHostnames(value: unknown): string[] {
+  return normalizeDomainValues(value, MAX_CT_HOSTNAMES).values;
 }
 
 /** The earlier of two ISO timestamps, treating null as "unknown". */
@@ -148,19 +175,20 @@ function later(a: string | null, b: string | null): string | null {
 /**
  * Validates an arbitrary value into a bounded CT provenance object, or null.
  * Unknown nested fields are discarded and malformed optional fields fall back
- * to empty/null rather than discarding the whole object. Returns null when the
- * input is not an object, or when nothing usable survives (so a caller can drop
- * the metadata without dropping an otherwise-valid candidate). Does not mutate
+ * to empty/null. A missing or malformed certificate count discards the
+ * provenance object so it cannot be rendered as an exact zero. Does not mutate
  * the input.
  */
 export function normalizeCtProvenance(raw: unknown): CtProvenance | null {
   const record = plainRecord(raw);
   if (!record) return null;
+  const certificateCount = normalizePositiveCount(record.certificateCount);
+  if (certificateCount === null) return null;
   const provenance = {
     hostnames: normalizeHostnames(record.hostnames),
     firstObservedAt: normalizeTimestamp(record.firstObservedAt),
     lastObservedAt: normalizeTimestamp(record.lastObservedAt),
-    certificateCount: normalizeCount(record.certificateCount),
+    certificateCount,
   };
   // A first observation later than the last one is contradictory; order them.
   if (
@@ -216,39 +244,54 @@ function normalizeCertificateKey(value: unknown): string | null {
     : null;
 }
 
-function normalizeDomainList(value: unknown, maximum: number): string[] {
-  if (!Array.isArray(value)) return [];
-  const output = new Set<string>();
-  for (const item of value.slice(0, MAX_CT_INPUT_HOSTNAMES)) {
-    if (typeof item !== 'string' || item.length > MAX_CT_HOSTNAME_LENGTH) continue;
-    const normalized = normalizeDomain(item);
-    if (normalized) output.add(normalized);
-    if (output.size >= maximum) break;
-  }
-  return [...output].sort();
-}
-
 function normalizeCertificateGroups(value: unknown): { groups: CtCertificateGroup[]; truncated: boolean } {
-  if (!Array.isArray(value)) return { groups: [], truncated: false };
+  if (value === undefined || value === null) return { groups: [], truncated: false };
+  if (!Array.isArray(value)) return { groups: [], truncated: true };
   let truncated = value.length > MAX_CT_GROUP_INPUT_ITEMS;
   const output = new Map<string, CtCertificateGroup>();
   for (const item of value.slice(0, MAX_CT_GROUP_INPUT_ITEMS)) {
     const group = plainRecord(item);
-    if (!group) continue;
+    if (!group) {
+      truncated = true;
+      continue;
+    }
     const certificateKey = normalizeCertificateKey(group.certificateKey);
-    if (!certificateKey || output.has(certificateKey)) continue;
-    if (Array.isArray(group.domains) && group.domains.length > MAX_CT_GROUP_DOMAINS) truncated = true;
-    if (Array.isArray(group.hostnames) && group.hostnames.length > MAX_CT_GROUP_HOSTNAMES) truncated = true;
-    const domains = normalizeDomainList(group.domains, MAX_CT_GROUP_DOMAINS);
-    const hostnames = normalizeHostnames(group.hostnames).slice(0, MAX_CT_GROUP_HOSTNAMES);
-    if (!domains.length) continue;
-    output.set(certificateKey, {
+    if (!certificateKey) {
+      truncated = true;
+      continue;
+    }
+    const domains = normalizeDomainValues(group.domains, MAX_CT_GROUP_DOMAINS);
+    const hostnames = normalizeDomainValues(group.hostnames, MAX_CT_GROUP_HOSTNAMES);
+    if (domains.partial || hostnames.partial) truncated = true;
+    if (!domains.values.length) {
+      truncated = true;
+      continue;
+    }
+    const normalized: CtCertificateGroup = {
       certificateKey,
-      domains,
-      hostnames,
+      domains: domains.values,
+      hostnames: hostnames.values,
       observedAt: normalizeTimestamp(group.observedAt),
       wildcardObserved: group.wildcardObserved === true,
-    });
+    };
+    if (suppliedTimestampMalformed(group.observedAt) || typeof group.wildcardObserved !== 'boolean') truncated = true;
+    const existing = output.get(certificateKey);
+    if (existing) {
+      const mergedDomains = [...new Set([...existing.domains, ...normalized.domains])].sort();
+      const mergedHostnames = [...new Set([...existing.hostnames, ...normalized.hostnames])].sort();
+      if (mergedDomains.length > MAX_CT_GROUP_DOMAINS || mergedHostnames.length > MAX_CT_GROUP_HOSTNAMES) {
+        truncated = true;
+      }
+      output.set(certificateKey, {
+        certificateKey,
+        domains: mergedDomains.slice(0, MAX_CT_GROUP_DOMAINS),
+        hostnames: mergedHostnames.slice(0, MAX_CT_GROUP_HOSTNAMES),
+        observedAt: earlier(existing.observedAt, normalized.observedAt),
+        wildcardObserved: existing.wildcardObserved || normalized.wildcardObserved,
+      });
+      continue;
+    }
+    output.set(certificateKey, normalized);
     if (output.size >= MAX_CT_CERTIFICATE_GROUPS) {
       if (value.length > output.size) truncated = true;
       break;
@@ -289,14 +332,28 @@ function buildStructuredCandidates(
   const byDomain = new Map<string, CtCandidate>();
   for (const match of input) {
     const record = plainRecord(match);
-    if (!record) continue;
-    const domain = normalizeDomain(record.domain);
-    if (!domain) continue;
-    const rawHostnames = record.hostnames;
-    if (Array.isArray(rawHostnames) && rawHostnames.length > MAX_CT_INPUT_HOSTNAMES) truncated = true;
+    if (!record) {
+      truncated = true;
+      continue;
+    }
+    const domain = normalizeEvidenceDomain(record.domain);
+    if (!domain) {
+      truncated = true;
+      continue;
+    }
+    if (normalizeDomainValues(record.hostnames, MAX_CT_HOSTNAMES).partial) truncated = true;
+    if (normalizePositiveCount(record.certificateCount) === null || countWasClamped(record.certificateCount)) truncated = true;
+    if (suppliedTimestampMalformed(record.firstObservedAt) || suppliedTimestampMalformed(record.lastObservedAt)) truncated = true;
     const provenance = normalizeCtProvenance(match);
     const existing = byDomain.get(domain);
     if (existing) {
+      if (existing.certificateTransparency && provenance) {
+        const hostnameCount = new Set([
+          ...existing.certificateTransparency.hostnames,
+          ...provenance.hostnames,
+        ]).size;
+        if (hostnameCount > MAX_CT_HOSTNAMES) truncated = true;
+      }
       existing.certificateTransparency = mergeCtProvenance(existing.certificateTransparency, provenance);
     } else {
       byDomain.set(domain, {
@@ -336,17 +393,31 @@ export function normalizeCtResponse(response: unknown, sourceLabel: unknown): Ct
   const source = boundedSource(sourceLabel);
   const res = plainRecord(response) || {};
   const certCount = normalizeCount(res.certCount);
-  const truncated = res.truncated === true;
+  const truncated = res.truncated !== false || countWasClamped(res.certCount);
+
+  if (typeof res.keyword !== 'string' || res.keyword !== source) {
+    throw new Error('Certificate Transparency results did not match the requested keyword.');
+  }
 
   if (!Array.isArray(res.matches)) {
     throw new Error('Certificate Transparency results were malformed (expected a matches array).');
   }
+  if (certCount === null) {
+    throw new Error('Certificate Transparency results were malformed (expected a certificate count).');
+  }
   const built = buildStructuredCandidates(res.matches, source);
   const certificateGroups = normalizeCertificateGroups(res.certificateGroups);
+  if (built.candidates.length > 0 && certCount === 0
+    || built.candidates.some((candidate) => (
+      (candidate.certificateTransparency?.certificateCount ?? 0) > certCount
+    ))
+    || certificateGroups.groups.length > certCount) {
+    throw new Error('Certificate Transparency results were malformed (candidate counts exceed the aggregate count).');
+  }
   return {
     candidates: built.candidates,
     certificateGroups: certificateGroups.groups,
-    certificateGroupsTruncated: res.certificateGroupsTruncated === true || certificateGroups.truncated,
+    certificateGroupsTruncated: res.certificateGroupsTruncated !== false || certificateGroups.truncated,
     certCount,
     truncated: truncated || built.truncated,
   };

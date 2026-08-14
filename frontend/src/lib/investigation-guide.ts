@@ -38,6 +38,7 @@ import {
   ORIGINAL_INVESTIGATION_GUIDE_KEY,
   PREVIOUS_INVESTIGATION_GUIDE_KEY,
 } from './investigation-guide-storage.ts';
+import { parseBoundedJson } from './bounded-json.ts';
 
 export {
   INVESTIGATION_GUIDE_EVENT,
@@ -79,7 +80,10 @@ function readStoredGuide(key: string): { state: 'absent' | 'invalid' | 'valid'; 
       || serializedBytes(serialized) > MAX_INVESTIGATION_GUIDE_SERIALIZED_BYTES) {
       return { state: 'invalid', guide: null };
     }
-    const guide = parseInvestigationGuide(JSON.parse(serialized));
+    const guide = parseInvestigationGuide(parseBoundedJson(serialized, {
+      label: 'Guided investigation state',
+      maximumBytes: MAX_INVESTIGATION_GUIDE_SERIALIZED_BYTES,
+    }));
     return { state: guide ? 'valid' : 'invalid', guide };
   } catch {
     return { state: 'invalid', guide: null };

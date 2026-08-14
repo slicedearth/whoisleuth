@@ -1,4 +1,5 @@
 import { Gunzip, UnzipInflate, unzipSync } from 'fflate';
+import { parseBoundedJson } from '../bounded-json.ts';
 
 import {
   EXTERNAL_FINDINGS_SCHEMA,
@@ -92,7 +93,7 @@ function decodeJson(bytes: Uint8Array, label: string): unknown {
     throw new Error(`${label} is not valid UTF-8.`);
   }
   try {
-    return JSON.parse(decoded) as unknown;
+    return parseBoundedJson(decoded, { label, maximumBytes: MAX_WACZ_MANIFEST_BYTES });
   } catch {
     throw new Error(`${label} is not valid JSON.`);
   }

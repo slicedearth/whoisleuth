@@ -5,7 +5,7 @@ import { CliUsageError } from './errors.mts';
 import { parseSavedLookupDocument, type SavedLookupDocument, type UnknownRecord } from './saved-lookup.mts';
 
 export const CLI_PAGE_COMPARE_SCHEMA = 'whoisleuth.cli.page-compare';
-export const CLI_PAGE_COMPARE_VERSION = 3;
+export const CLI_PAGE_COMPARE_VERSION = 4;
 
 type ComparisonState = 'different' | 'equal' | 'overlap' | 'partial' | 'unavailable';
 
@@ -64,6 +64,7 @@ function buildCliPageComparison(
     && ['success', 'partial'].includes(right.compact.technology.state);
   const tlsUsable = ['success', 'partial'].includes(left.compact.tls.state)
     && ['success', 'partial'].includes(right.compact.tls.state);
+  const tlsPartial = left.compact.tls.state === 'partial' || right.compact.tls.state === 'partial';
   const technologyPartial = left.compact.technology.truncated || right.compact.technology.truncated
     || left.compact.technology.state === 'partial' || right.compact.technology.state === 'partial';
   return {
@@ -96,12 +97,16 @@ function buildCliPageComparison(
       leftSourceState: left.compact.tls.state,
       rightSourceState: right.compact.tls.state,
       issuer: {
-        state: tlsUsable ? scalarComparison(left.compact.tls.issuerLabel, right.compact.tls.issuerLabel) : 'unavailable' as ComparisonState,
+        state: tlsUsable
+          ? tlsPartial ? 'partial' as const : scalarComparison(left.compact.tls.issuerLabel, right.compact.tls.issuerLabel)
+          : 'unavailable' as ComparisonState,
         left: left.compact.tls.issuerLabel,
         right: right.compact.tls.issuerLabel,
       },
       publicKey: {
-        state: tlsUsable ? scalarComparison(left.compact.tls.spkiSha256, right.compact.tls.spkiSha256) : 'unavailable' as ComparisonState,
+        state: tlsUsable
+          ? tlsPartial ? 'partial' as const : scalarComparison(left.compact.tls.spkiSha256, right.compact.tls.spkiSha256)
+          : 'unavailable' as ComparisonState,
         leftSha256: left.compact.tls.spkiSha256,
         rightSha256: right.compact.tls.spkiSha256,
       },

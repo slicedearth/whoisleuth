@@ -1,6 +1,6 @@
 import { Buffer } from 'node:buffer';
 
-import { readBoundedRegularTextFile } from '../lib/bounded-file.mts';
+import { decodeBoundedUtf8, readBoundedRegularTextFile } from '../lib/bounded-file.mts';
 import type { BoundedTextStream } from './bulk.mts';
 import { CliUsageError } from './errors.mts';
 
@@ -56,7 +56,11 @@ export async function readCliTextInput(
       chunks.push(buffer);
     }
     if (options.signal?.aborted) throw abortError(options.signal);
-    return Buffer.concat(chunks, bytes).toString('utf8');
+    try {
+      return decodeBoundedUtf8(Buffer.concat(chunks, bytes), options.label);
+    } catch (cause) {
+      throw new CliUsageError(cause instanceof Error ? cause.message : `${options.label} must contain valid UTF-8 text.`);
+    }
   } finally {
     options.signal?.removeEventListener('abort', onAbort);
   }

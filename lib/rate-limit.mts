@@ -81,6 +81,13 @@ function createRateLimitChecker(
           if (typeof oldestKey === 'string') buckets.delete(oldestKey);
         }
       }
+      // Renewing an expired bucket must refresh its position as well as its
+      // window. `Map.set` on an existing key keeps the original insertion
+      // index, which would break the ordering the eviction above depends on:
+      // a just-renewed identity (now furthest from expiry) would stay first
+      // in line for eviction while a nearer-to-expiry entry survived, handing
+      // the most active identity a fresh counter.
+      if (bucket) buckets.delete(key);
       buckets.set(key, { count: 1, resetAt: now + windowMs });
       return { allowed: true };
     }

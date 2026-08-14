@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tick } from 'svelte';
   import Pagination from '$lib/components/Pagination.svelte';
   import type { RelationshipObservation } from '$lib/relationship-observations';
 
@@ -16,6 +17,7 @@
 
   let page = $state(1);
   let focusedId = $state('');
+  let componentRoot = $state<HTMLElement>();
   const pageCount = $derived(Math.max(1, Math.ceil(records.length / PAGE_SIZE)));
   const currentPage = $derived(Math.min(page, pageCount));
   const visibleRecords = $derived(records.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE));
@@ -33,6 +35,37 @@
     return value.replaceAll('_', ' ');
   }
 
+  async function deleteAndFocus(record: RelationshipObservation) {
+    const origin = document.activeElement;
+    const owner = componentRoot;
+    const previousIndex = records.findIndex((item) => item.id === record.id);
+    await ondelete(record);
+    await tick();
+    const active = document.activeElement;
+    if (!owner?.isConnected
+      || (active instanceof HTMLElement && active !== origin && active !== document.body && active.isConnected)) return;
+    if (records.some((item) => item.id === record.id)) {
+      if (origin instanceof HTMLElement && origin.isConnected) origin.focus();
+      return;
+    }
+    const next = records[Math.min(Math.max(0, previousIndex), records.length - 1)];
+    if (next) page = Math.floor(records.indexOf(next) / PAGE_SIZE) + 1;
+    await tick();
+    const activeAfterPageChange = document.activeElement;
+    if (!owner.isConnected
+      || (activeAfterPageChange instanceof HTMLElement
+        && activeAfterPageChange !== origin
+        && activeAfterPageChange !== document.body
+        && activeAfterPageChange.isConnected)) return;
+    const candidates = [
+      next ? document.getElementById(`retained-delete-${next.id}`) : null,
+      document.getElementById('retained-observation-title'),
+      document.getElementById('retained-observation-open-bulk'),
+    ];
+    const target = candidates.find((candidate) => candidate instanceof HTMLElement);
+    if (target instanceof HTMLElement) target.focus();
+  }
+
   $effect(() => {
     if (!focusId || focusedId === focusId) return;
     const index = records.findIndex((record) => record.id === focusId);
@@ -47,11 +80,11 @@
   });
 </script>
 
-<section class="retained-observations card" aria-labelledby="retained-observation-title">
+<section class="retained-observations card" aria-labelledby="retained-observation-title" bind:this={componentRoot}>
   <header class="section-head">
     <div>
       <p class="eyebrow">Analyst-selected pivots</p>
-      <h2 id="retained-observation-title">Retained relationship observations</h2>
+      <h2 id="retained-observation-title" tabindex="-1">Retained relationship observations</h2>
       <p>Only relationships deliberately retained from Bulk appear here. The complete scan and raw lookup responses remain transient.</p>
     </div>
     <span>{records.length} retained</span>
@@ -81,7 +114,7 @@
           {#if record.limitations.length}
             <details><summary>Provenance and limitations</summary><ul>{#each record.limitations as limitation}<li>{limitation}</li>{/each}</ul></details>
           {/if}
-          <button class="btn small danger" type="button" onclick={() => ondelete(record)}>Delete retained observation</button>
+          <button id={`retained-delete-${record.id}`} class="btn small danger" type="button" onclick={() => void deleteAndFocus(record)}>Delete retained observation</button>
         </li>
       {/each}
     </ol>
@@ -91,7 +124,7 @@
     <div class="empty">
       <h3>No retained relationship observations</h3>
       <p>Run a Bulk comparison, review an observed relationship, then choose <strong>Retain observation</strong>. Nothing is saved automatically.</p>
-      <a class="btn" href="/bulk">Open Bulk</a>
+      <a id="retained-observation-open-bulk" class="btn" href="/bulk">Open Bulk</a>
     </div>
   {/if}
 </section>

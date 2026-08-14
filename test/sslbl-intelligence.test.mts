@@ -40,6 +40,22 @@ function tls(fingerprint = FINGERPRINT) {
 }
 
 describe('local SSLBL certificate intelligence', () => {
+  test('requires explicit snapshot timestamps and canonicalizes offsets', () => {
+    assert.equal(sslblSnapshotHealth({
+      snapshot: snapshot([FINGERPRINT], { sourceUpdatedAt: '2026-07-20T12:00:00.000' }),
+      now: '2026-07-21T00:00:00.000Z',
+    }).state, 'invalid');
+    const offset = sslblSnapshotHealth({
+      snapshot: snapshot([FINGERPRINT], {
+        sourceUpdatedAt: '2026-07-20T12:00:00.000+01:00',
+        generatedAt: '2026-07-20T12:05:00.000+01:00',
+      }),
+      now: '2026-07-21T11:00:00.000Z',
+    });
+    assert.equal(offset.sourceUpdatedAt, '2026-07-20T11:00:00.000Z');
+    assert.equal(offset.generatedAt, '2026-07-20T11:05:00.000Z');
+  });
+
   test('reports a current exact match without making a provider request', () => {
     const result = inspectSslblCertificate(tls(), {
       snapshot: snapshot(),

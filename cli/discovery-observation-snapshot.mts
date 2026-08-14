@@ -6,6 +6,8 @@ import { boundedCliInputError, CliUsageError } from './errors.mts';
 import { writePrivateFile } from './output-file.mts';
 import { isValidAsciiDomainName } from '../lib/hostname.mts';
 import { readBoundedRegularTextFile } from '../lib/bounded-file.mts';
+import { scanBoundedJson } from '../lib/bounded-json.mts';
+import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from '../lib/observation.mts';
 
 export const CLI_DISCOVERY_OBSERVATION_SCHEMA = 'whoisleuth.cli.discovery-observation-snapshot';
 export const CLI_DISCOVERY_OBSERVATION_VERSION = 2;
@@ -48,14 +50,18 @@ function domainValue(value: unknown): string {
   return domain;
 }
 
-function normalizedTimestamp(value: unknown, label: string, optional = false): string | null {
+function normalizedTimestamp(value: unknown, label: string, optional = false, legacy = false): string | null {
   if (optional && value === null) return null;
   if (typeof value !== 'string' || value.length > 64 || /[\u0000-\u001f\u007f]/u.test(value)) {
     throw new CliUsageError(`${label} is invalid.`);
   }
-  const parsed = Date.parse(value);
-  if (!Number.isFinite(parsed)) throw new CliUsageError(`${label} is invalid.`);
-  return new Date(parsed).toISOString();
+  const normalized = normalizeExplicitIsoTimestamp(value);
+  if (normalized) return normalized;
+  if (legacy) {
+    const legacyTimestamp = normalizeLegacyIsoTimestamp(value);
+    if (legacyTimestamp) return legacyTimestamp;
+  }
+  throw new CliUsageError(`${label} is invalid.`);
 }
 
 function latestObservedAt(registrationObservedAt: string | null, dnsObservedAt: string | null): string | null {
@@ -107,7 +113,7 @@ function normalizeObservation(value: unknown, version: number): Observation | nu
       || /[\u0000-\u001f\u007f]/u.test(item.availabilityState)
       || typeof item.confidence !== 'string' || !item.confidence || item.confidence.length > 40
       || /[\u0000-\u001f\u007f]/u.test(item.confidence)) return null;
-    const legacyObservedAt = normalizedTimestamp(item.observedAt, 'Discovery observation time', version >= 2);
+    const legacyObservedAt = normalizedTimestamp(item.observedAt, 'Discovery observation time', version >= 2, version === 1);
     const registrationObservedAt = version === 1
       ? item.availabilityState === 'unknown' ? null : legacyObservedAt
       : normalizedTimestamp(item.registrationObservedAt, 'Discovery registration observation time', true);
@@ -129,7 +135,7 @@ function normalizeObservation(value: unknown, version: number): Observation | nu
       observedAt,
       registrationObservedAt,
       dnsObservedAt,
-      latestAttemptAt: normalizedTimestamp(item.latestAttemptAt, 'Discovery latest-attempt time') ?? '',
+      latestAttemptAt: normalizedTimestamp(item.latestAttemptAt, 'Discovery latest-attempt time', false, version === 1) ?? '',
       latestAttemptState: item.latestAttemptState as Observation['latestAttemptState'],
       latestRegistrationState: latestRegistrationState as Observation['latestRegistrationState'],
       latestDnsState,
@@ -146,11 +152,13 @@ function parseObservationSnapshot(text: string, expectedDigest: string): Snapsho
   if (Buffer.byteLength(text, 'utf8') > MAX_DISCOVERY_OBSERVATION_BYTES) {
     throw new CliUsageError(`Discovery observation snapshots are limited to ${MAX_DISCOVERY_OBSERVATION_BYTES} bytes.`);
   }
+  const normalizedInput = text.replace(/^\uFEFF/u, '');
   let parsed: unknown;
   try {
-    parsed = JSON.parse(text.replace(/^\uFEFF/u, ''));
+    scanBoundedJson(normalizedInput);
+    parsed = JSON.parse(normalizedInput);
   } catch {
-    throw new CliUsageError('Discovery observation snapshot must be valid JSON.');
+    throw new CliUsageError('Discovery observation snapshot must be valid bounded JSON without duplicate keys.');
   }
   const document = record(parsed);
   const version = typeof document.version === 'number' && Number.isSafeInteger(document.version)
@@ -162,10 +170,15 @@ function parseObservationSnapshot(text: string, expectedDigest: string): Snapsho
   if (document.configurationDigestSha256 !== expectedDigest) {
     throw new CliUsageError('Discovery observation snapshot does not match this candidate set, scan mode, or resolver selection.');
   }
-  if (typeof document.generatedAt !== 'string' || !Number.isFinite(Date.parse(document.generatedAt))
-    || !Array.isArray(document.observations) || document.observations.length > MAX_DISCOVERY_OBSERVATIONS) {
+  if (!Array.isArray(document.observations) || document.observations.length > MAX_DISCOVERY_OBSERVATIONS) {
     throw new CliUsageError('Discovery observation snapshot metadata is invalid.');
   }
+  const generatedAt = normalizedTimestamp(
+    document.generatedAt,
+    'Discovery snapshot generation time',
+    false,
+    version === 1,
+  ) ?? '';
   const observations = document.observations.map((item) => normalizeObservation(item, version));
   if (observations.some((item) => item === null) || document.observationCount !== observations.length) {
     throw new CliUsageError('Discovery observation snapshot contains invalid evidence.');
@@ -177,7 +190,7 @@ function parseObservationSnapshot(text: string, expectedDigest: string): Snapsho
   return {
     schema: CLI_DISCOVERY_OBSERVATION_SCHEMA,
     version: CLI_DISCOVERY_OBSERVATION_VERSION,
-    generatedAt: normalizedTimestamp(document.generatedAt, 'Discovery snapshot generation time') ?? '',
+    generatedAt,
     configurationDigestSha256: expectedDigest,
     observationCount: normalized.length,
     observations: normalized,

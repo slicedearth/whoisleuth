@@ -129,9 +129,9 @@ describe('local CodeQL SARIF parsing', () => {
 
   test('bounds and sanitizes untrusted SARIF display strings', () => {
     const parsed = parseCodeqlSarif(sarif([finding({
-      ruleId: 'bad\nrule',
+      ruleId: 'bad\nrule\u00ad',
       level: 'unexpected',
-      message: { text: `review\n${'x'.repeat(1000)}` },
+      message: { text: `review\n\u0085\u034f${'x'.repeat(1000)}` },
       locations: [{
         physicalLocation: {
           artifactLocation: { uri: 'lib/file.mts?secret=value#fragment' },
@@ -144,6 +144,7 @@ describe('local CodeQL SARIF parsing', () => {
     assert.ok(requiredValue(parsed.findings[0]).message.length <= 500);
     assert.equal(requiredValue(parsed.findings[0]).file, 'lib/file.mts');
     assert.equal(requiredValue(parsed.findings[0]).line, null);
+    assert.doesNotMatch(JSON.stringify(parsed), /[\u0085\u00ad\u034f]/u);
   });
 
   test('caps parsed findings while retaining the total count', () => {
@@ -298,6 +299,33 @@ describe('bounded CodeQL process execution', () => {
       }),
       /process deadline/,
     );
+  });
+
+  test('waits for the terminated child to close before rejecting its deadline', async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'whoisleuth-codeql-close-'));
+    const marker = path.join(directory, 'closed.txt');
+    try {
+      const startedAt = performance.now();
+      await assert.rejects(
+        runProcessBounded(process.execPath, ['-e', [
+          "const { writeFileSync } = require('node:fs');",
+          'const marker = process.argv[1];',
+          "process.on('SIGTERM', () => setTimeout(() => { writeFileSync(marker, 'closed'); process.exit(0); }, 80));",
+          'setInterval(() => {}, 1000);',
+        ].join(' ') , marker], {
+          cwd: process.cwd(),
+          // Leave enough startup margin for this child to install its signal
+          // handler even when the full test suite is running in parallel.
+          timeoutMs: 500,
+          maxOutputBytes: 1024,
+        }),
+        /process deadline/iu,
+      );
+      assert.ok(performance.now() - startedAt >= 550);
+      assert.equal(await readFile(marker, 'utf8'), 'closed');
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
   });
 });
 

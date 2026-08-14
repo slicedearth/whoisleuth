@@ -1,6 +1,7 @@
 import { domainToASCII } from 'node:url';
 
 import { exactKeys } from './bounded-contract-normalizers.mts';
+import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from './observation.mts';
 
 const DOMAIN_ASSURANCE_INPUT_SCHEMA = 'whoisleuth.domain-assurance.input';
 const DOMAIN_ASSURANCE_SCHEMA = 'whoisleuth.domain-assurance';
@@ -116,15 +117,20 @@ function optionalText(value: unknown, maximum = 160): string | null {
   return normalized;
 }
 
-function timestamp(value: unknown, field: string): string {
+function timestamp(value: unknown, field: string, legacy = false): string {
   const normalized = text(value, field, 64);
-  if (!Number.isFinite(Date.parse(normalized))) throw new Error(`${field} must be an ISO-compatible timestamp.`);
-  return new Date(normalized).toISOString();
+  const canonical = normalizeExplicitIsoTimestamp(normalized);
+  if (canonical) return canonical;
+  if (legacy) {
+    const legacyTimestamp = normalizeLegacyIsoTimestamp(normalized);
+    if (legacyTimestamp) return legacyTimestamp;
+  }
+  throw new Error(`${field} must be an ISO timestamp with an explicit timezone.`);
 }
 
-function optionalTimestamp(value: unknown, field: string): string | null {
+function optionalTimestamp(value: unknown, field: string, legacy = false): string | null {
   if (value === null || value === undefined || value === '') return null;
-  return timestamp(value, field);
+  return timestamp(value, field, legacy);
 }
 
 function domain(value: unknown, field = 'domain'): string {
@@ -166,12 +172,13 @@ function reviewState(reasons: string[], negative: boolean): AssuranceState {
   return reasons.length ? 'incomplete' : 'ready';
 }
 
-function buildPlannedChange(input: UnknownRecord): PlannedChangeResult {
+function buildPlannedChange(input: UnknownRecord, inputVersion: 1 | 2): PlannedChangeResult {
   const target = domain(input.domain);
   const change = record(input.change);
   exactKeys(change, CHANGE_KEYS, 'change');
-  const startsAt = timestamp(change.startsAt, 'change.startsAt');
-  const endsAt = timestamp(change.endsAt, 'change.endsAt');
+  const legacy = inputVersion === 1;
+  const startsAt = timestamp(change.startsAt, 'change.startsAt', legacy);
+  const endsAt = timestamp(change.endsAt, 'change.endsAt', legacy);
   if (Date.parse(endsAt) <= Date.parse(startsAt)) throw new Error('change.endsAt must be later than change.startsAt.');
   const ids = new Set<string>();
   const uniqueId = (value: unknown, field: string) => {
@@ -184,7 +191,7 @@ function buildPlannedChange(input: UnknownRecord): PlannedChangeResult {
     const item = record(raw);
     exactKeys(item, MILESTONE_KEYS, `change.milestones[${index}]`);
     const state = enumValue(item.state, `change.milestones[${index}].state`, ['missed', 'not_checked', 'observed', 'planned'] as const);
-    const observedAt = optionalTimestamp(item.observedAt, `change.milestones[${index}].observedAt`);
+    const observedAt = optionalTimestamp(item.observedAt, `change.milestones[${index}].observedAt`, legacy);
     const evidenceReference = optionalText(item.evidenceReference, 300);
     if ((state === 'observed' || state === 'missed') && (!observedAt || !evidenceReference)) {
       throw new Error('Observed or missed change milestones require observedAt and evidenceReference.');
@@ -195,7 +202,7 @@ function buildPlannedChange(input: UnknownRecord): PlannedChangeResult {
     return {
       id: uniqueId(item.id, `change.milestones[${index}].id`),
       label: text(item.label, `change.milestones[${index}].label`, 180),
-      expectedBy: timestamp(item.expectedBy, `change.milestones[${index}].expectedBy`),
+      expectedBy: timestamp(item.expectedBy, `change.milestones[${index}].expectedBy`, legacy),
       evidenceSource: text(item.evidenceSource, `change.milestones[${index}].evidenceSource`, 120),
       state,
       observedAt,
@@ -387,7 +394,7 @@ function buildDomainAssurance(inputRaw: unknown, generatedAt = new Date().toISOS
   const kind = enumValue(input.kind, 'kind', ['planned-change', 'recovery-dependencies', 'retirement'] as const satisfies readonly AssuranceKind[]);
   exactKeys(input, kind === 'retirement' && inputVersion === 2 ? RETIREMENT_ROOT_KEYS_V2 : ROOT_KEYS[kind], 'Domain assurance input');
   const result = kind === 'planned-change'
-    ? buildPlannedChange(input)
+    ? buildPlannedChange(input, inputVersion)
     : kind === 'recovery-dependencies'
       ? buildRecoveryDependencies(input)
       : buildRetirement(input, inputVersion);

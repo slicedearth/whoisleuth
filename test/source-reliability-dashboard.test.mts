@@ -25,6 +25,19 @@ function lookup(state: 'success' | 'error', durationMs: number) {
 }
 
 describe('browser-local source reliability dashboard', () => {
+  test('requires explicit zones throughout the current report', () => {
+    const report = buildSourceReliabilityReport(JSON.stringify([lookup('success', 200)]), NOW);
+    assert.throws(() => parseSourceReliabilityDashboard(JSON.stringify({
+      ...report,
+      generatedAt: '2026-08-05T12:00:00.000',
+    })), /explicit timezone/u);
+    const offset = parseSourceReliabilityDashboard(JSON.stringify({
+      ...report,
+      generatedAt: '2026-08-05T12:00:00.000+01:00',
+    }));
+    assert.equal(offset.generatedAt, '2026-08-05T11:00:00.000Z');
+  });
+
   test('accepts the CLI target-free report and derives bounded review rows', () => {
     const report = buildSourceReliabilityReport(JSON.stringify([
       lookup('error', 900), lookup('success', 200), lookup('success', 220),

@@ -11,10 +11,12 @@
   let dashboard = $state<RiskCalibrationDashboard | null>(null);
   let error = $state('');
   let fileName = $state('');
+  let loadGeneration = 0;
 
   async function loadReport(event: Event) {
     const input = event.currentTarget as HTMLInputElement;
     const file = input.files?.[0];
+    const generation = ++loadGeneration;
     input.value = '';
     if (!file) return;
     dashboard = null;
@@ -25,14 +27,18 @@
       return;
     }
     try {
-      dashboard = parseRiskCalibrationDashboard(await file.text());
+      const parsed = parseRiskCalibrationDashboard(await file.text());
+      if (generation !== loadGeneration) return;
+      dashboard = parsed;
       fileName = [...file.name].slice(0, 120).join('');
     } catch (reason) {
+      if (generation !== loadGeneration) return;
       error = reason instanceof Error ? reason.message : 'The Risk calibration summary could not be read.';
     }
   }
 
   function clearReport() {
+    loadGeneration += 1;
     dashboard = null;
     error = '';
     fileName = '';

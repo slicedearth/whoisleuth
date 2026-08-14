@@ -4,6 +4,7 @@
 
 import { normalizeDomain } from './case-model.ts';
 import { normalizeCaaCritical } from './dns-record-normalization.ts';
+import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from '../../../../lib/observation.mts';
 
 export const BULK_SESSION_SCHEMA = 'whoisleuth.bulk-sessions';
 export const BULK_SESSION_SCHEMA_VERSION = 4;
@@ -204,9 +205,10 @@ function boundedText(value: unknown, maximum = MAX_BULK_SESSION_TEXT_LENGTH): st
     : '';
 }
 
-function timestamp(value: unknown, fallback: string | null = null): string | null {
-  const text = boundedText(value, 64);
-  return text && Number.isFinite(Date.parse(text)) ? new Date(text).toISOString() : fallback;
+function timestamp(value: unknown, fallback: string | null = null, legacy = false): string | null {
+  const normalized = normalizeExplicitIsoTimestamp(value);
+  if (normalized) return normalized;
+  return (legacy ? normalizeLegacyIsoTimestamp(value) : null) ?? fallback;
 }
 
 function profileContextLimitation(value: unknown, fallback: string): string {
@@ -535,9 +537,10 @@ export function normalizeBulkSession(
   const mode = boundedText(item?.mode, 10);
   const state = boundedText(item?.state, 20);
   const inputDigest = boundedText(item?.inputDigest, 80);
-  const startedAt = timestamp(item?.startedAt);
-  const updatedAt = timestamp(item?.updatedAt);
-  const completedAt = item?.completedAt === null ? null : timestamp(item?.completedAt);
+  const legacyTimestamps = sourceVersion < BULK_SESSION_SCHEMA_VERSION;
+  const startedAt = timestamp(item?.startedAt, null, legacyTimestamps);
+  const updatedAt = timestamp(item?.updatedAt, null, legacyTimestamps);
+  const completedAt = item?.completedAt === null ? null : timestamp(item?.completedAt, null, legacyTimestamps);
   if (
     !item
     || !SAFE_ID_RE.test(id)

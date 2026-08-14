@@ -3,6 +3,8 @@
 // fact selected by an analyst, a decision records analyst reasoning, and an
 // action records a reviewed external or internal follow-up.
 
+import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from '../../../../lib/observation.mts';
+
 export const MAX_CASE_EVIDENCE_PINS = 40;
 export const MAX_CASE_CHECKPOINT_FACTS = 20;
 export const MAX_CASE_DECISIONS = 30;
@@ -238,7 +240,6 @@ export type CaseActionOutcomeSummary = Readonly<{
 }>;
 
 const SAFE_ID_RE = /^[A-Za-z0-9_-]{1,64}$/u;
-const CONTROL_RE = /[\u0000-\u001f\u007f]/u;
 const CONTROL_REPLACE_RE = /[\u0000-\u001f\u007f]+/gu;
 const COMPLETENESS = new Set<string>(CASE_PIN_COMPLETENESS);
 const TRANSITION_EXPECTATIONS = new Set<string>(CASE_TRANSITION_EXPECTATIONS);
@@ -254,6 +255,14 @@ const SIGHTING_STATES = new Set<string>(CASE_SIGHTING_STATES);
 const SIGHTING_CATEGORIES = new Set<string>(CASE_SIGHTING_CATEGORIES);
 const SHA256_RE = /^[a-f0-9]{64}$/u;
 
+export type CaseResponseTimestampOptions = Readonly<{
+  legacyTimestamps?: boolean;
+}>;
+
+type CaseEvidencePinNormalizationOptions = CaseResponseTimestampOptions & Readonly<{
+  allowCertificateObservation?: boolean;
+}>;
+
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? value as Record<string, unknown>
@@ -265,18 +274,17 @@ function text(value: unknown, maximum: number): string {
   return value.replace(CONTROL_REPLACE_RE, ' ').trim().slice(0, maximum);
 }
 
-function iso(value: unknown, fallback: string): string {
-  if (typeof value === 'string' && value.length <= 64 && !CONTROL_RE.test(value)) {
-    const parsed = Date.parse(value);
-    if (Number.isFinite(parsed)) return new Date(parsed).toISOString();
-  }
-  return fallback;
+function timestamp(value: unknown, options: CaseResponseTimestampOptions = {}): string | null {
+  return normalizeExplicitIsoTimestamp(value)
+    ?? (options.legacyTimestamps ? normalizeLegacyIsoTimestamp(value) : null);
 }
 
-function optionalIso(value: unknown): string | null {
-  if (typeof value !== 'string' || value.length > 64 || CONTROL_RE.test(value)) return null;
-  const parsed = Date.parse(value);
-  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
+function iso(value: unknown, fallback: string, options: CaseResponseTimestampOptions = {}): string {
+  return timestamp(value, options) ?? fallback;
+}
+
+function optionalIso(value: unknown, options: CaseResponseTimestampOptions = {}): string | null {
+  return timestamp(value, options);
 }
 
 function hash(value: string): string {
@@ -330,6 +338,7 @@ function sourceSchema(value: unknown): CaseEvidencePin['sourceSchema'] {
 function certificateObservation(
   value: unknown,
   pin: Readonly<{ field: string | null; value: string; sourceSchema: CaseEvidencePin['sourceSchema'] }>,
+  options: CaseResponseTimestampOptions = {},
 ): CaseCertificateObservation | null {
   const item = record(value);
   if (!Object.keys(item).length) return null;
@@ -352,7 +361,7 @@ function certificateObservation(
   const logId = text(item.logId, 200);
   const certificateSha256 = text(item.certificateSha256, 64).toLowerCase();
   const issuer = item.issuer === null ? null : text(item.issuer, 160) || null;
-  const notAfter = item.notAfter === null ? null : optionalIso(item.notAfter);
+  const notAfter = item.notAfter === null ? null : optionalIso(item.notAfter, options);
   const dnsNameCount = typeof item.dnsNameCount === 'number'
     && Number.isSafeInteger(item.dnsNameCount)
     && item.dnsNameCount >= 1
@@ -417,13 +426,13 @@ function normalizeEvidenceRelations(
 function normalizePin(
   raw: unknown,
   fallback: string,
-  options: Readonly<{ allowCertificateObservation?: boolean }> = {},
+  options: CaseEvidencePinNormalizationOptions = {},
 ): CaseEvidencePin | null {
   const item = record(raw);
   const label = text(item.label, MAX_RESPONSE_LABEL_LENGTH);
   const value = text(item.value, MAX_RESPONSE_VALUE_LENGTH);
   if (!label || !value) return null;
-  const createdAt = iso(item.createdAt, fallback);
+  const createdAt = iso(item.createdAt, fallback, options);
   const normalizedSourceSchema = sourceSchema(item.sourceSchema);
   const normalizedField = text(item.field, 120) || null;
   const normalized: CaseEvidencePin = {
@@ -438,7 +447,7 @@ function normalizePin(
     source: text(item.source, MAX_RESPONSE_LABEL_LENGTH) || 'analyst_selected',
     sourceState: text(item.sourceState, 40) || null,
     sourceSchema: normalizedSourceSchema,
-    observedAt: iso(item.observedAt, createdAt),
+    observedAt: iso(item.observedAt, createdAt, options),
     collectionDepth: item.collectionDepth === 'deep' || item.collectionDepth === 'fast'
       ? item.collectionDepth
       : 'unknown',
@@ -459,14 +468,14 @@ function normalizePin(
         field: normalizedField,
         value,
         sourceSchema: normalizedSourceSchema,
-      });
+      }, options);
   return normalized;
 }
 
 export function normalizeCaseEvidencePins(
   raw: unknown,
   fallback: string,
-  options: Readonly<{ allowCertificateObservation?: boolean }> = {},
+  options: CaseEvidencePinNormalizationOptions = {},
 ): CaseEvidencePin[] {
   if (!Array.isArray(raw)) return [];
   const byId = new Map<string, CaseEvidencePin>();
@@ -510,12 +519,13 @@ function normalizeDecision(
   raw: unknown,
   fallback: string,
   validPinIds?: ReadonlySet<string>,
+  options: CaseResponseTimestampOptions = {},
 ): CaseDecisionRecord | null {
   const item = record(raw);
   const summary = text(item.summary, MAX_RESPONSE_LABEL_LENGTH);
   const rationale = text(item.rationale, MAX_RESPONSE_RATIONALE_LENGTH);
   if (!summary || !rationale) return null;
-  const createdAt = iso(item.createdAt, fallback);
+  const createdAt = iso(item.createdAt, fallback, options);
   return {
     id: safeId(item.id, 'decision', { summary, rationale, createdAt }),
     summary,
@@ -529,11 +539,12 @@ export function normalizeCaseDecisions(
   raw: unknown,
   fallback: string,
   validPinIds?: ReadonlySet<string>,
+  options: CaseResponseTimestampOptions = {},
 ): CaseDecisionRecord[] {
   if (!Array.isArray(raw)) return [];
   const byId = new Map<string, CaseDecisionRecord>();
   for (const item of raw.slice(0, MAX_CASE_DECISIONS * 2)) {
-    const normalized = normalizeDecision(item, fallback, validPinIds);
+    const normalized = normalizeDecision(item, fallback, validPinIds, options);
     if (normalized && !byId.has(normalized.id)) byId.set(normalized.id, normalized);
   }
   return [...byId.values()]
@@ -553,12 +564,16 @@ export function appendCaseDecision(
   return normalizeCaseDecisions([...current, created], now, validPinIds);
 }
 
-function normalizeAction(raw: unknown, fallback: string): CaseActionRecord | null {
+function normalizeAction(
+  raw: unknown,
+  fallback: string,
+  options: CaseResponseTimestampOptions = {},
+): CaseActionRecord | null {
   const item = record(raw);
   const recipient = text(item.recipient, MAX_RESPONSE_RECIPIENT_LENGTH);
   if (!recipient) return null;
-  const createdAt = iso(item.createdAt, fallback);
-  const updatedAt = iso(item.updatedAt, createdAt);
+  const createdAt = iso(item.createdAt, fallback, options);
+  const updatedAt = iso(item.updatedAt, createdAt, options);
   return {
     id: safeId(item.id, 'action', { recipient, createdAt }),
     type: typeof item.type === 'string' && ACTION_TYPES.has(item.type)
@@ -567,23 +582,27 @@ function normalizeAction(raw: unknown, fallback: string): CaseActionRecord | nul
     recipient,
     contactSource: text(item.contactSource, MAX_RESPONSE_LABEL_LENGTH) || 'analyst_supplied',
     contactLimitations: limitations(item.contactLimitations),
-    dueAt: optionalIso(item.dueAt),
+    dueAt: optionalIso(item.dueAt, options),
     state: typeof item.state === 'string' && ACTION_STATES.has(item.state)
       ? item.state as CaseActionState
       : 'planned',
     reference: text(item.reference, MAX_RESPONSE_REFERENCE_LENGTH) || null,
-    followUpAt: optionalIso(item.followUpAt),
+    followUpAt: optionalIso(item.followUpAt, options),
     outcome: text(item.outcome, MAX_RESPONSE_RATIONALE_LENGTH) || null,
     createdAt,
     updatedAt,
   };
 }
 
-export function normalizeCaseActions(raw: unknown, fallback: string): CaseActionRecord[] {
+export function normalizeCaseActions(
+  raw: unknown,
+  fallback: string,
+  options: CaseResponseTimestampOptions = {},
+): CaseActionRecord[] {
   if (!Array.isArray(raw)) return [];
   const byId = new Map<string, CaseActionRecord>();
   for (const item of raw.slice(0, MAX_CASE_ACTIONS * 2)) {
-    const normalized = normalizeAction(item, fallback);
+    const normalized = normalizeAction(item, fallback, options);
     if (!normalized) continue;
     const existing = byId.get(normalized.id);
     if (!existing || Date.parse(normalized.updatedAt) >= Date.parse(existing.updatedAt)) {
@@ -689,7 +708,10 @@ function assertionProvenanceList(value: unknown, maximum: number): string[] {
   return [...output];
 }
 
-function normalizeAssertionProvenance(value: unknown): CaseAssertionExternalProvenance | null {
+function normalizeAssertionProvenance(
+  value: unknown,
+  options: CaseResponseTimestampOptions = {},
+): CaseAssertionExternalProvenance | null {
   const item = record(value);
   const sourceName = text(item.sourceName, 120);
   const sourceDigestSha256 = text(item.sourceDigestSha256, 64).toLowerCase();
@@ -721,9 +743,9 @@ function normalizeAssertionProvenance(value: unknown): CaseAssertionExternalProv
     externalId: text(item.externalId, 200) || null,
     entityType: item.entityType as CaseAssertionExternalEntityType,
     entityValue,
-    observedAt: optionalIso(item.observedAt),
-    createdAt: optionalIso(item.createdAt),
-    modifiedAt: optionalIso(item.modifiedAt),
+    observedAt: optionalIso(item.observedAt, options),
+    createdAt: optionalIso(item.createdAt, options),
+    modifiedAt: optionalIso(item.modifiedAt, options),
     confidence,
     labels: assertionProvenanceList(item.labels, MAX_ASSERTION_PROVENANCE_LABELS),
     markings: assertionProvenanceList(item.markings, MAX_ASSERTION_PROVENANCE_MARKINGS),
@@ -734,12 +756,13 @@ function normalizeAssertion(
   raw: unknown,
   fallback: string,
   validPinIds?: ReadonlySet<string>,
+  options: CaseResponseTimestampOptions = {},
 ): CaseAssertionRecord | null {
   const item = record(raw);
   const statement = text(item.statement, MAX_RESPONSE_RATIONALE_LENGTH);
   if (!statement) return null;
-  const createdAt = iso(item.createdAt, fallback);
-  const provenance = normalizeAssertionProvenance(item.provenance);
+  const createdAt = iso(item.createdAt, fallback, options);
+  const provenance = normalizeAssertionProvenance(item.provenance, options);
   const legacyIds = uniqueIds(item.evidencePinIds, validPinIds);
   const evidenceRelations = normalizeEvidenceRelations(item.evidenceRelations, legacyIds, validPinIds);
   return {
@@ -755,7 +778,7 @@ function normalizeAssertion(
       ? item.state as CaseAssertionState
       : 'open',
     createdAt,
-    updatedAt: iso(item.updatedAt, createdAt),
+    updatedAt: iso(item.updatedAt, createdAt, options),
     ...(provenance ? { provenance } : {}),
   };
 }
@@ -764,11 +787,12 @@ export function normalizeCaseAssertions(
   raw: unknown,
   fallback: string,
   validPinIds?: ReadonlySet<string>,
+  options: CaseResponseTimestampOptions = {},
 ): CaseAssertionRecord[] {
   if (!Array.isArray(raw)) return [];
   const byId = new Map<string, CaseAssertionRecord>();
   for (const item of raw.slice(0, MAX_CASE_ASSERTIONS * 2)) {
-    const normalized = normalizeAssertion(item, fallback, validPinIds);
+    const normalized = normalizeAssertion(item, fallback, validPinIds, options);
     if (!normalized) continue;
     const existing = byId.get(normalized.id);
     if (!existing || Date.parse(normalized.updatedAt) >= Date.parse(existing.updatedAt)) {
@@ -818,11 +842,15 @@ export function updateCaseAssertion(
   return normalizeCaseAssertions(current.map((item) => item.id === id ? updated : item), now, validPinIds);
 }
 
-function normalizeManualTrailEvent(raw: unknown, fallback: string): CaseManualTrailEvent | null {
+function normalizeManualTrailEvent(
+  raw: unknown,
+  fallback: string,
+  options: CaseResponseTimestampOptions = {},
+): CaseManualTrailEvent | null {
   const item = record(raw);
   const summary = text(item.summary, MAX_RESPONSE_RATIONALE_LENGTH);
   if (!summary) return null;
-  const createdAt = iso(item.createdAt, fallback);
+  const createdAt = iso(item.createdAt, fallback, options);
   return {
     id: safeId(item.id, 'trail', { summary, createdAt }),
     kind: typeof item.kind === 'string' && TRAIL_KINDS.has(item.kind)
@@ -834,11 +862,15 @@ function normalizeManualTrailEvent(raw: unknown, fallback: string): CaseManualTr
   };
 }
 
-export function normalizeCaseManualTrail(raw: unknown, fallback: string): CaseManualTrailEvent[] {
+export function normalizeCaseManualTrail(
+  raw: unknown,
+  fallback: string,
+  options: CaseResponseTimestampOptions = {},
+): CaseManualTrailEvent[] {
   if (!Array.isArray(raw)) return [];
   const byId = new Map<string, CaseManualTrailEvent>();
   for (const item of raw.slice(0, MAX_CASE_MANUAL_TRAIL_EVENTS * 2)) {
-    const normalized = normalizeManualTrailEvent(item, fallback);
+    const normalized = normalizeManualTrailEvent(item, fallback, options);
     if (normalized && !byId.has(normalized.id)) byId.set(normalized.id, normalized);
   }
   return [...byId.values()]
@@ -884,13 +916,14 @@ function normalizeCaseSighting(
   raw: unknown,
   fallback: string,
   validPinIds?: ReadonlySet<string>,
+  options: CaseResponseTimestampOptions = {},
 ): CaseSightingRecord | null {
   const item = record(raw);
   if (typeof item.state !== 'string' || !SIGHTING_STATES.has(item.state)) return null;
   const state = item.state as CaseSightingState;
   const source = text(item.source, MAX_RESPONSE_LABEL_LENGTH);
   if (!source) return null;
-  const createdAt = iso(item.createdAt, fallback);
+  const createdAt = iso(item.createdAt, fallback, options);
   const evidencePinId = typeof item.evidencePinId === 'string'
     && SAFE_ID_RE.test(item.evidencePinId)
     && (!validPinIds || validPinIds.has(item.evidencePinId))
@@ -904,7 +937,7 @@ function normalizeCaseSighting(
       ? item.category as CaseSightingCategory
       : 'other',
     source,
-    observedAt: iso(item.observedAt, createdAt),
+    observedAt: iso(item.observedAt, createdAt, options),
     completeness: typeof item.completeness === 'string' && COMPLETENESS.has(item.completeness)
       ? item.completeness as CasePinCompleteness
       : 'unknown',
@@ -918,11 +951,12 @@ export function normalizeCaseSightings(
   raw: unknown,
   fallback: string,
   validPinIds?: ReadonlySet<string>,
+  options: CaseResponseTimestampOptions = {},
 ): CaseSightingRecord[] {
   if (!Array.isArray(raw)) return [];
   const byId = new Map<string, CaseSightingRecord>();
   for (const item of raw.slice(0, MAX_CASE_SIGHTINGS * 2)) {
-    const normalized = normalizeCaseSighting(item, fallback, validPinIds);
+    const normalized = normalizeCaseSighting(item, fallback, validPinIds, options);
     if (normalized && !byId.has(normalized.id)) byId.set(normalized.id, normalized);
   }
   return [...byId.values()]

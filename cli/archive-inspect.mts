@@ -2,6 +2,8 @@ import { Buffer } from 'node:buffer';
 import { createHash } from 'node:crypto';
 import { domainToASCII } from 'node:url';
 
+import { scanBoundedJson } from '../lib/bounded-json.mts';
+
 import {
   decryptWorkspaceArchive,
   isEncryptedWorkspaceArchive,
@@ -15,6 +17,7 @@ import {
   MAX_OFFLINE_ARTIFACT_BYTES,
   verifyOfflineArtifact,
 } from './artifact-verify.mts';
+import { safeTerminalValue } from './formatters/terminal.mts';
 
 export const ARCHIVE_INSPECTION_SCHEMA = 'whoisleuth.workspace-archive-inspection';
 export const ARCHIVE_INSPECTION_VERSION = 2;
@@ -91,9 +94,10 @@ function parseJson(raw: string): UnknownRecord {
   }
   let parsed: unknown;
   try {
+    scanBoundedJson(raw);
     parsed = JSON.parse(raw);
   } catch {
-    throw new TypeError('Archive input must be valid JSON.');
+    throw new TypeError('Archive input must be valid bounded JSON without duplicate keys.');
   }
   const value = record(parsed);
   if (!value) throw new TypeError('Archive input must contain one JSON object.');
@@ -161,7 +165,11 @@ function searchSection(
   const stack: Array<{ value: unknown; depth: number }> = [{ value, depth: 0 }];
   while (stack.length && results.length < MAX_ARCHIVE_SEARCH_MATCHES) {
     const current = stack.pop();
-    if (!current || current.depth > 16) continue;
+    if (!current) continue;
+    if (current.depth > 16) {
+      state.truncated = true;
+      continue;
+    }
     if (state.visited >= MAX_ARCHIVE_SEARCH_NODES) {
       state.truncated = true;
       return;
@@ -169,7 +177,9 @@ function searchSection(
     state.visited += 1;
     const object = record(current.value);
     if (object) {
-      for (const [field, child] of Object.entries(object).slice(0, 300)) {
+      const entries = Object.entries(object);
+      if (entries.length > 300) state.truncated = true;
+      for (const [field, child] of entries.slice(0, 300)) {
         if (SEARCHABLE_FIELDS.has(field) && typeof child === 'string') {
           const normalized = canonicalSearchValue(child);
           if (normalized === search) {
@@ -180,7 +190,7 @@ function searchSection(
               ...(reveal ? { value: child.slice(0, MAX_ARCHIVE_SEARCH_LENGTH) } : {}),
             }));
             if (results.length >= MAX_ARCHIVE_SEARCH_MATCHES) {
-              state.truncated = stack.length > 0;
+              state.truncated = true;
               return;
             }
           }
@@ -188,6 +198,7 @@ function searchSection(
         if (child && typeof child === 'object') stack.push({ value: child, depth: current.depth + 1 });
       }
     } else if (Array.isArray(current.value)) {
+      if (current.value.length > 5_000) state.truncated = true;
       for (const child of current.value.slice(0, 5_000)) {
         if (child && typeof child === 'object') stack.push({ value: child, depth: current.depth + 1 });
       }
@@ -234,6 +245,9 @@ export async function inspectWorkspaceArchive(
     }
   }
   if (options.requireMatch === true && search && results.length === 0) {
+    if (searchState.truncated) {
+      throw new TypeError('Archive search reached a configured bound before an exact canonical match could be established.');
+    }
     throw new TypeError('Archive search found no exact canonical match.');
   }
   return Object.freeze({
@@ -276,6 +290,9 @@ export async function inspectWorkspaceArchive(
       ...(reveal
         ? ['Search values were revealed only because the operator supplied --reveal; handle the output as sensitive evidence.']
         : ['Search results contain field names and digests only. A digest does not authenticate or establish the accuracy of a retained value.']),
+      ...(searchState.truncated
+        ? ['Archive search reached a configured traversal or result boundary; zero retained matches is inconclusive.']
+        : []),
     ]),
   });
 }
@@ -289,16 +306,16 @@ export function formatArchiveInspection(report: ArchiveInspectionReport): string
     `Content digest: ${report.summary.contentDigestSha256}`,
   ];
   for (const section of report.sections) {
-    lines.push(`${section.label}: ${section.recordCount} records · ${section.status} · ${section.bytes} bytes`);
+    lines.push(`${safeTerminalValue(section.label)}: ${section.recordCount} records · ${safeTerminalValue(section.status)} · ${section.bytes} bytes`);
   }
   if (report.search.requested) {
     lines.push(`Search matches: ${report.search.matchCount}${report.search.truncated ? ' (truncated)' : ''}`);
     for (const match of report.search.results) {
       lines.push(
-        `${match.section}.${match.field}: ${match.value ?? `sha256:${match.valueDigestSha256}`}`,
+        `${safeTerminalValue(match.section)}.${safeTerminalValue(match.field)}: ${safeTerminalValue(match.value ?? `sha256:${match.valueDigestSha256}`)}`,
       );
     }
   }
-  for (const limitation of report.limitations) lines.push(`Limitation: ${limitation}`);
+  for (const limitation of report.limitations) lines.push(`Limitation: ${safeTerminalValue(limitation)}`);
   return `${lines.join('\n')}\n`;
 }

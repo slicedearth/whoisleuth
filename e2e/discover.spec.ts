@@ -794,7 +794,7 @@ test('certificate history uses a compact mobile summary without horizontal scrol
 });
 
 test('previous certificate searches can be reused and deleted', async ({ page }) => {
-  await mockCtSearch(page, initialBaselineResponse);
+  await mockCtSearch(page, { ...initialBaselineResponse, keyword: 'Example Brand' });
   await runCtSearch(page, 'Example Brand');
 
   const history = page.locator('details.ct-history');
@@ -896,16 +896,43 @@ test('a capped search does not replace the previous complete baseline', async ({
   await expect(page.locator('.ct-history-state.continuing')).toHaveCount(1);
 });
 
-test('corrupt local CT history is recovered without losing search results', async ({ page }) => {
-  await migrateLegacyBrowserData(page, { 'whoisleuth:ct-search-history:v1': '{broken-json' });
-  await mockCtSearch(page, initialBaselineResponse);
-  await runCtSearch(page);
+test('corrupt local CT history remains unavailable and is never replaced by a new baseline', async ({ page }) => {
+  const malformed = '{broken-json';
+  await migrateLegacyBrowserData(page, { 'whoisleuth:ct-search-history:v1': malformed });
 
-  await expect(page.locator('.candidate')).toHaveCount(1);
-  await expect(page.locator('.status')).toContainText('Saved as the first local baseline');
-  const stored = await readBrowserLocalCollection(page, 'ct_history', { minimumRecords: 1, minimumRevision: 2 });
-  expect(stored.manifest.schemaVersion).toBe(3);
-  expect(stored.records).toHaveLength(1);
+  await expect(page.getByRole('heading', { name: 'Browser-local data unavailable' })).toBeVisible();
+  await expect(page.getByText('Legacy Certificate Transparency history data is malformed and was not migrated.')).toBeVisible();
+  expect(await page.evaluate(() => localStorage.getItem('whoisleuth:ct-search-history:v1'))).toBe(malformed);
+  const retained = await page.evaluate(async (collectionId) => {
+    const databases = await indexedDB.databases();
+    if (!databases.some((database) => database.name === 'whoisleuth-browser-data-v1')) {
+      return { manifest: false, records: 0 };
+    }
+    const request = indexedDB.open('whoisleuth-browser-data-v1');
+    const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    try {
+      const transaction = database.transaction(['manifests', 'records'], 'readonly');
+      const manifestRequest = transaction.objectStore('manifests').get(collectionId);
+      const recordsRequest = transaction.objectStore('records').index('collection').count(collectionId);
+      const [manifest, records] = await Promise.all([
+        new Promise<unknown>((resolve, reject) => {
+          manifestRequest.onsuccess = () => resolve(manifestRequest.result);
+          manifestRequest.onerror = () => reject(manifestRequest.error);
+        }),
+        new Promise<number>((resolve, reject) => {
+          recordsRequest.onsuccess = () => resolve(recordsRequest.result);
+          recordsRequest.onerror = () => reject(recordsRequest.error);
+        }),
+      ]);
+      return { manifest: manifest !== undefined, records };
+    } finally {
+      database.close();
+    }
+  }, 'ct_history');
+  expect(retained).toEqual({ manifest: false, records: 0 });
 });
 
 test('a browser storage write failure does not hide valid CT search results', async ({ page }) => {

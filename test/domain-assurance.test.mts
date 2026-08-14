@@ -9,6 +9,47 @@ import {
 const NOW = '2026-08-04T00:00:00.000Z';
 
 describe('domain assurance', () => {
+  test('requires explicit zones for current inputs and deterministically migrates legacy instants', () => {
+    const fixture = (version: number) => ({
+      schema: DOMAIN_ASSURANCE_INPUT_SCHEMA,
+      version,
+      kind: 'planned-change',
+      domain: 'change.example',
+      change: {
+        reference: 'CHG-TIME',
+        startsAt: '2026-08-05T00:00:00',
+        endsAt: '2026-08-05T01:00:00',
+        milestones: [{
+          id: 'publish',
+          label: 'Publish planned change',
+          expectedBy: '2026-08-05T00:30:00',
+          evidenceSource: 'Saved change record',
+          state: 'planned',
+          observedAt: null,
+          evidenceReference: null,
+        }],
+        rollbackCriteria: [{
+          id: 'availability',
+          condition: 'Availability declines',
+          owner: 'Change owner',
+          state: 'not_checked',
+        }],
+        postChangeChecks: [{
+          id: 'dns',
+          label: 'DNS matches the planned state',
+          expectedState: 'Planned records observed',
+          evidenceSource: 'Saved DNS evidence',
+          state: 'not_checked',
+          evidenceReference: null,
+        }],
+      },
+    });
+    assert.throws(() => buildDomainAssurance(fixture(2), NOW), /explicit timezone/u);
+    const migrated = buildDomainAssurance(fixture(1), NOW);
+    assert.equal(migrated.result.kind, 'planned-change');
+    assert.equal(migrated.result.window.startsAt, '2026-08-05T00:00:00.000Z');
+  });
+
   test('keeps planned change observations and rollback decisions explicitly attributed', () => {
     const document = buildDomainAssurance({
       schema: DOMAIN_ASSURANCE_INPUT_SCHEMA,

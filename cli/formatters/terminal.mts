@@ -21,7 +21,11 @@ const MAX_POSTURE_TERMINAL_RECORDS = 5;
 const MAX_TLS_TERMINAL_ALT_NAMES = 10;
 const MAX_TLS_TERMINAL_PURPOSES = 8;
 const MAX_RISK_CALIBRATION_TERMINAL_RECORDS = 100;
-const TERMINAL_DIRECTIONAL_CONTROLS_RE = /[\u061c\u200b-\u200f\u202a-\u202e\u2060-\u2069\ufeff]/gu;
+// Archive values are attacker-controlled evidence. Remove the complete Unicode
+// default-ignorable class so visually identical identifiers cannot differ only
+// through soft hyphens, combining grapheme joiners, variation selectors, tag
+// characters, bidi controls, or other zero-width formatting code points.
+const TERMINAL_DEFAULT_IGNORABLE_RE = /\p{Default_Ignorable_Code_Point}/gu;
 
 // Terminal documents have different versioned shapes. Every scalar crosses
 // safeTerminalValue before display, while the runner supplies bounded arrays.
@@ -44,7 +48,7 @@ function safeTerminalValue(value: unknown, fallback = '—'): string {
   if (value === null || value === undefined || value === '') return fallback;
   const normalized = String(value)
     .replace(/[\x00-\x1f\x7f-\x9f]+/g, ' ')
-    .replace(TERMINAL_DIRECTIONAL_CONTROLS_RE, '')
+    .replace(TERMINAL_DEFAULT_IGNORABLE_RE, '')
     .replace(/\s+/g, ' ')
     .trim();
   if (!normalized) return fallback;

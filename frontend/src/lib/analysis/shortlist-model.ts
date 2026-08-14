@@ -4,6 +4,7 @@
 
 import { compactWatchlistResults } from './watchlist-history.ts';
 import { normalizeOpportunityModelVersion, normalizeRiskModelVersion } from './scoring.ts';
+import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from '../../../../lib/observation.mts';
 
 export const SHORTLIST_SCHEMA = 'whoisleuth.shortlist';
 export const SHORTLIST_SCHEMA_VERSION = 3;
@@ -14,7 +15,6 @@ export const MAX_SHORTLIST_STORE_BYTES = 1024 * 1024;
 export const MAX_SHORTLIST_FACTORS = 20;
 
 const MAX_FACTOR_LABEL_LENGTH = 200;
-const MAX_TIMESTAMP_LENGTH = 64;
 const CONTROL_RE = /[\x00-\x1f\x7f]/;
 const EPOCH = new Date(0).toISOString();
 
@@ -41,6 +41,7 @@ export type ShortlistStore = {
 };
 type NormalizeShortlistOptions = {
   fallbackTimestamp?: unknown;
+  legacyTimestamps?: boolean;
 };
 
 function plainRecord(value: unknown): Record<string, unknown> | null {
@@ -76,10 +77,10 @@ function score(value: unknown): number | null {
     : null;
 }
 
-function timestamp(value: unknown, fallback: string = EPOCH): string {
-  if (typeof value !== 'string' || value.length > MAX_TIMESTAMP_LENGTH || CONTROL_RE.test(value)) return fallback;
-  const parsed = Date.parse(value);
-  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : fallback;
+function timestamp(value: unknown, fallback: string = EPOCH, legacy = false): string {
+  const normalized = normalizeExplicitIsoTimestamp(value);
+  if (normalized) return normalized;
+  return (legacy ? normalizeLegacyIsoTimestamp(value) : null) ?? fallback;
 }
 
 function factors(value: unknown): ShortlistFactor[] {
@@ -119,17 +120,25 @@ export function normalizeShortlistRecord(
     opportunityModelVersion: score(value.opportunityScore) === null
       ? null
       : normalizeOpportunityModelVersion(value.opportunityModelVersion),
-    savedAt: timestamp(value.savedAt, timestamp(options.fallbackTimestamp, EPOCH)),
+    savedAt: timestamp(
+      value.savedAt,
+      timestamp(options.fallbackTimestamp, EPOCH),
+      options.legacyTimestamps === true,
+    ),
   };
 }
 
 /** Normalize an internal record collection or current stored envelope. */
 export function normalizeShortlistStore(raw: unknown): ShortlistStore {
   const source = entryList(raw);
+  const sourceVersion = shortlistStoreVersion(raw);
+  const legacyTimestamps = !Array.isArray(raw)
+    && sourceVersion !== null
+    && sourceVersion < SHORTLIST_SCHEMA_VERSION;
   const byDomain = new Map<string, ShortlistRecord>();
   if (source) {
     for (const item of source.slice(0, MAX_SHORTLIST_INPUTS)) {
-      const record = normalizeShortlistRecord(item);
+      const record = normalizeShortlistRecord(item, { legacyTimestamps });
       if (!record) continue;
       byDomain.set(record.domain, record);
       if (byDomain.size >= MAX_SHORTLIST_ENTRIES) break;
@@ -219,7 +228,9 @@ export function mergeShortlistStores(localRaw: unknown, importedRaw: unknown) {
   const imported = new Map<string, ShortlistRecord>();
   let skipped = Math.max(0, input.length - MAX_SHORTLIST_INPUTS);
   for (const item of input.slice(0, MAX_SHORTLIST_INPUTS)) {
-    const record = normalizeShortlistRecord(item);
+    const record = normalizeShortlistRecord(item, {
+      legacyTimestamps: importedVersion !== null && importedVersion < SHORTLIST_SCHEMA_VERSION,
+    });
     if (!record) { skipped++; continue; }
     if (imported.has(record.domain)) skipped++;
     imported.set(record.domain, record);

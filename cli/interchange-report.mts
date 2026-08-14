@@ -9,8 +9,12 @@ import {
   offlineArtifactSatisfiesAssurance,
   verifyOfflineArtifact,
 } from './artifact-verify.mts';
-import { mergeBrandProfiles } from '../frontend/src/lib/analysis/brand-profile-model.ts';
+import {
+  BRAND_PROFILE_SCHEMA_VERSION,
+  mergeBrandProfiles,
+} from '../frontend/src/lib/analysis/brand-profile-model.ts';
 import { parseBoundedJsonObject } from './bounded-json.mts';
+import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from '../lib/observation.mts';
 
 export const INTERCHANGE_FIDELITY_REPORT_SCHEMA = 'whoisleuth.interchange-fidelity-report';
 export const INTERCHANGE_FIDELITY_REPORT_VERSION = 2;
@@ -97,26 +101,25 @@ function identify(value: UnknownRecord): Readonly<{ contract: InterchangeArtifac
   return null;
 }
 
-function timestamp(value: unknown): string {
-  if (typeof value !== 'string' || value.length > 64 || /[\u0000-\u001f\u007f]/u.test(value)) {
-    throw new TypeError('Interchange report time is invalid.');
-  }
-  const parsed = Date.parse(value);
-  if (!Number.isFinite(parsed)) throw new TypeError('Interchange report time is invalid.');
-  return new Date(parsed).toISOString();
+function timestamp(value: unknown, legacy = false): string {
+  const normalized = normalizeExplicitIsoTimestamp(value)
+    ?? (legacy ? normalizeLegacyIsoTimestamp(value) : null);
+  if (!normalized) throw new TypeError('Interchange report time is invalid.');
+  return normalized;
 }
 
-function validateBrandProfileExport(value: UnknownRecord): Readonly<{ accepted: number; skipped: number }> {
+function validateBrandProfileExport(
+  value: UnknownRecord,
+  version: number,
+): Readonly<{ accepted: number; skipped: number }> {
   const profiles = value.profiles;
   if (!Array.isArray(profiles) || profiles.length > 100) {
     throw new TypeError('Brand Profile export does not contain a bounded profiles collection.');
   }
-  if (typeof value.exportedAt !== 'string' || value.exportedAt.length > 64 || !Number.isFinite(Date.parse(value.exportedAt))) {
-    throw new TypeError('Brand Profile export time is invalid.');
-  }
+  const exportedAt = timestamp(value.exportedAt, version < BRAND_PROFILE_SCHEMA_VERSION);
   let nextId = 0;
   const result = mergeBrandProfiles([], value, {
-    nowIso: new Date(Date.parse(value.exportedAt)).toISOString(),
+    nowIso: exportedAt,
     makeId: () => `interchange-profile-${++nextId}`,
   });
   return Object.freeze({ accepted: result.profiles.length, skipped: result.skipped });
@@ -174,7 +177,8 @@ export async function buildInterchangeFidelityReport(
   if (supported && contract.fidelity !== 'unsupported') {
     try {
       if (contract.id === 'brand_profiles') {
-        const validation = validateBrandProfileExport(value);
+        if (version === null) throw new TypeError('Brand Profile export version is invalid.');
+        const validation = validateBrandProfileExport(value, version);
         recordCount = validation.accepted;
         acceptedRecordCount = validation.accepted;
         skippedRecordCount = validation.skipped;

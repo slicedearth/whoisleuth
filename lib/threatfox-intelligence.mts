@@ -12,6 +12,7 @@ import {
   normalizeThreatIntelligenceTarget,
 } from './threat-intelligence-contract.mts';
 import type { ThreatIntelligenceResult } from './threat-intelligence-contract.mts';
+import { normalizeExplicitIsoTimestamp } from './observation.mts';
 
 type EnvironmentInput = Record<string, unknown>;
 type AdapterDependencies = {
@@ -94,8 +95,7 @@ function isoTimestamp(value: unknown): string | null {
   const normalized = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?: UTC)?$/u.test(raw)
     ? `${raw.slice(0, 10)}T${raw.slice(11, 19)}Z`
     : raw;
-  const timestamp = Date.parse(normalized);
-  return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : null;
+  return normalizeExplicitIsoTimestamp(normalized);
 }
 
 function normalizedTags(value: unknown): string[] {
@@ -130,7 +130,10 @@ function normalizeIocFinding(value: unknown, targetDomain: string) {
   const malware = boundedText(value.malware_printable, 120) || boundedText(value.malware, 120);
   if (!id || !/^\d{1,32}$/u.test(id) || ioc !== targetDomain || iocType !== 'domain' || !threatType) return null;
   const firstObservedAt = isoTimestamp(value.first_seen);
-  const lastObservedAt = isoTimestamp(value.last_seen) || firstObservedAt;
+  const parsedLastObservedAt = isoTimestamp(value.last_seen);
+  if ((value.first_seen !== undefined && value.first_seen !== null && !firstObservedAt)
+    || (value.last_seen !== undefined && value.last_seen !== null && !parsedLastObservedAt)) return null;
+  const lastObservedAt = parsedLastObservedAt || firstObservedAt;
   const tags = normalizedTags(value.tags);
   tags.push(`role:${threatType}`);
   if (malware) tags.push(`malware:${malware.toLowerCase()}`);

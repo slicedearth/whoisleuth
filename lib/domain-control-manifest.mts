@@ -17,6 +17,7 @@ import {
 } from '../frontend/src/lib/analysis/domain-control-manifest-core.ts';
 import { canonicalDomainControlRecordList } from '../frontend/src/lib/analysis/domain-control-records.ts';
 import { exactKeys } from './bounded-contract-normalizers.mts';
+import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from './observation.mts';
 
 export const DOMAIN_CONTROL_MANIFEST_INPUT_SCHEMA = DOMAIN_CONTROL_PASSPORT_INPUT_SCHEMA;
 export const DOMAIN_CONTROL_MANIFEST_SCHEMA = DOMAIN_CONTROL_PASSPORT_SCHEMA;
@@ -73,11 +74,11 @@ function boundedText(value: unknown, maximum = 300): string | null {
   return value.replace(/\s+/gu, ' ').trim().slice(0, maximum) || null;
 }
 
-function timestamp(value: unknown): string | null {
+function timestamp(value: unknown, legacy = false): string | null {
   const text = boundedText(value, 64);
-  if (!text) return null;
-  const parsed = Date.parse(text);
-  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
+  return text
+    ? normalizeExplicitIsoTimestamp(text) ?? (legacy ? normalizeLegacyIsoTimestamp(text) : null)
+    : null;
 }
 
 function domain(value: unknown): string | null {
@@ -168,7 +169,7 @@ function normalizeObservation(value: unknown): DomainControlObservation | null {
       state,
       values: Object.freeze(fieldValues(field, raw.values)),
       source: sourceLabel,
-      observedAt: timestamp(raw.observedAt),
+      observedAt: timestamp(raw.observedAt, true),
     });
   }
   return Object.freeze({ domain: normalizedDomain, fields: Object.freeze(fields) });
@@ -236,7 +237,7 @@ export function reviewDomainControlManifest(input: unknown, generatedAtValue = n
   }
   exactKeys(source, REVIEW_INPUT_KEYS, 'Domain control review input');
   const generatedAt = timestamp(generatedAtValue);
-  if (!generatedAt) throw new TypeError('Domain control review time is invalid.');
+  if (!generatedAt) throw new TypeError('Domain control review time must be valid and include an explicit timezone.');
   const manifest = verifyDomainControlManifest(source.manifest);
   if (!Array.isArray(source.observations) || source.observations.length > MAX_DOMAIN_CONTROL_ENTRIES * 2) {
     throw new TypeError('Domain control observations must be a bounded array.');

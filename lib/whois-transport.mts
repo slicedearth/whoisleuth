@@ -99,9 +99,17 @@ function queryWhoisAddress(address: string, server: string, query: string, {
       chunks.push(buffer);
     });
 
-    const responseText = () => Buffer.concat(chunks, totalBytes).toString('utf8');
-    socket.on('end', () => settle(resolve, responseText()));
-    socket.on('close', () => settle(resolve, responseText()));
+    const settleResponse = () => {
+      try {
+        const responseText = new TextDecoder('utf-8', { fatal: true })
+          .decode(Buffer.concat(chunks, totalBytes));
+        settle(resolve, responseText);
+      } catch {
+        settle(reject, new Error(`WHOIS response from ${server} was not valid UTF-8`));
+      }
+    };
+    socket.on('end', settleResponse);
+    socket.on('close', settleResponse);
     socket.on('timeout', () => {
       socket.destroy();
       settle(reject, new Error(`WHOIS request to ${server} timed out`));

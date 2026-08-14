@@ -4,6 +4,7 @@
 
 import { SSLBL_CERTIFICATE_SNAPSHOT } from './sslbl-certificates.generated.mts';
 import { createHash } from 'node:crypto';
+import { normalizeExplicitIsoTimestamp } from './observation.mts';
 
 export const SSLBL_INTELLIGENCE_VERSION = 1;
 export const SSLBL_SNAPSHOT_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000;
@@ -71,9 +72,7 @@ function record(value: unknown): UnknownRecord {
 }
 
 function timestamp(value: unknown): string | null {
-  if (typeof value !== 'string' || value.length > 64) return null;
-  const parsed = Date.parse(value);
-  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
+  return normalizeExplicitIsoTimestamp(value);
 }
 
 function normalizedFingerprint(value: unknown): string | null {
@@ -146,7 +145,7 @@ function effectiveNow(value: string | number | Date | undefined): number {
     : typeof value === 'number'
       ? value
       : typeof value === 'string'
-        ? Date.parse(value)
+        ? Date.parse(normalizeExplicitIsoTimestamp(value) ?? '')
         : Date.now();
   return Number.isFinite(candidate) ? candidate : Date.now();
 }

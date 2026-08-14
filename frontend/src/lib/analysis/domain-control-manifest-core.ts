@@ -7,6 +7,7 @@ import {
 } from './artifact-integrity.ts';
 import { normalizeDomain } from './case-record-core.ts';
 import { canonicalDomainControlRecordList } from './domain-control-records.ts';
+import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from '../../../../lib/observation.mts';
 
 export const DOMAIN_CONTROL_PASSPORT_INPUT_SCHEMA = 'whoisleuth.domain-control-manifest-input';
 export const DOMAIN_CONTROL_PASSPORT_SCHEMA = 'whoisleuth.domain-control-manifest';
@@ -70,11 +71,11 @@ function text(value: unknown, maximum = 300): string | null {
   return value.replace(/\s+/gu, ' ').trim().slice(0, maximum) || null;
 }
 
-function timestamp(value: unknown): string | null {
+function timestamp(value: unknown, legacy = false): string | null {
   const candidate = text(value, 64);
-  if (!candidate) return null;
-  const parsed = Date.parse(candidate);
-  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
+  return candidate
+    ? normalizeExplicitIsoTimestamp(candidate) ?? (legacy ? normalizeLegacyIsoTimestamp(candidate) : null)
+    : null;
 }
 
 function hostnames(value: unknown): string[] {
@@ -107,7 +108,7 @@ function normalizeEntry(value: unknown): DomainControlPassportEntry | null {
     registrarLock: source.registrarLock === 'required' || source.registrarLock === 'not_required'
       ? source.registrarLock
       : null,
-    renewalReviewAt: timestamp(source.renewalReviewAt),
+    renewalReviewAt: timestamp(source.renewalReviewAt, true),
     note: text(source.note, 500),
   });
 }
@@ -115,15 +116,19 @@ function normalizeEntry(value: unknown): DomainControlPassportEntry | null {
 export function buildUnsignedDomainControlPassport(
   input: unknown,
   generatedAtValue: unknown,
+  options: Readonly<{ legacyGeneratedAt?: boolean }> = {},
 ): UnsignedDomainControlPassport {
   const source = record(input);
   if (!source || source.schema !== DOMAIN_CONTROL_PASSPORT_INPUT_SCHEMA || source.version !== DOMAIN_CONTROL_PASSPORT_VERSION) {
     throw new TypeError(`Domain control manifest input must use ${DOMAIN_CONTROL_PASSPORT_INPUT_SCHEMA} version ${DOMAIN_CONTROL_PASSPORT_VERSION}.`);
   }
   exactKeys(source, INPUT_KEYS, 'Domain control manifest input');
-  const generatedAt = timestamp(generatedAtValue);
-  const expiresAt = timestamp(source.expiresAt);
-  if (!generatedAt || !expiresAt || Date.parse(expiresAt) <= Date.parse(generatedAt)) {
+  const generatedAt = timestamp(generatedAtValue, options.legacyGeneratedAt === true);
+  const expiresAt = timestamp(source.expiresAt, true);
+  if (!generatedAt) {
+    throw new TypeError('Domain control manifest generation time must be valid and include an explicit timezone.');
+  }
+  if (!expiresAt || Date.parse(expiresAt) <= Date.parse(generatedAt)) {
     throw new TypeError('Domain control manifest expiry must be a valid time after generation.');
   }
   if (!Array.isArray(source.entries) || source.entries.length < 1 || source.entries.length > MAX_DOMAIN_CONTROL_PASSPORT_ENTRIES) {
@@ -182,7 +187,7 @@ export function normalizeDomainControlPassportDocument(value: unknown): Readonly
     version: DOMAIN_CONTROL_PASSPORT_VERSION,
     expiresAt: source.expiresAt,
     entries: source.entries,
-  }, source.generatedAt);
+  }, source.generatedAt, { legacyGeneratedAt: source.version === DOMAIN_CONTROL_PASSPORT_VERSION });
   const unsigned = Object.freeze({ ...baseUnsigned, version: source.version }) as UnsignedDomainControlPassport;
   const { integrity: _integrity, ...suppliedUnsigned } = source;
   const canonicalUnsigned = canonicalArtifactJsonFor(unsigned, canonicalization);

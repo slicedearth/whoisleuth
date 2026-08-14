@@ -47,6 +47,28 @@ describe('strict external findings import', () => {
     assert.equal(parseExternalFindingsDocument(deployment).findings[0]?.evidenceClass, 'deployment_observation');
   });
 
+  test('requires explicit zones in schema 4 while migrating legacy timestamps as UTC', () => {
+    const zoneLess = '2026-07-27T12:00:00.000';
+    assert.throws(() => parseExternalFindingsDocument(document({
+      source: { name: 'Current import', reference: null, collectedAt: zoneLess },
+      findings: [{ ...document().findings[0], observedAt: zoneLess }],
+    })), /explicit timezone/u);
+
+    const legacy = parseExternalFindingsDocument(document({
+      schemaVersion: 3,
+      source: { name: 'Legacy import', reference: null, collectedAt: zoneLess },
+      findings: [{ ...document().findings[0], observedAt: zoneLess }],
+    }));
+    assert.equal(legacy.source.collectedAt, '2026-07-27T12:00:00.000Z');
+    assert.equal(legacy.findings[0]?.observedAt, '2026-07-27T12:00:00.000Z');
+
+    const offset = parseExternalFindingsDocument(document({
+      source: { name: 'Current import', reference: null, collectedAt: '2026-07-27T12:00:00.000+01:00' },
+      findings: [{ ...document().findings[0], observedAt: '2026-07-27T12:00:00.000+01:00' }],
+    }));
+    assert.equal(offset.findings[0]?.observedAt, '2026-07-27T11:00:00.000Z');
+  });
+
   test('rejects future schemas, additional fields, controls, and unsupported categories', () => {
     assert.throws(() => parseExternalFindingsDocument(document({ schemaVersion: 5 })), /schema version 1, 2, 3, or 4/u);
     assert.throws(() => parseExternalFindingsDocument({ ...document(), executable: 'no' }), /additional top-level/u);

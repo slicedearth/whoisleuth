@@ -161,6 +161,42 @@ describe('Lookup HTTP response contract', () => {
     assert.deepEqual(parsed.value.additiveSection, { version: 1, value: 'retained' });
   });
 
+  test('rejects complete registration diagnostics without normalized publication data', () => {
+    assert.equal(parseLookupHttpResponse(response({ rdap: {} })).ok, false);
+    assert.equal(parseLookupHttpResponse(response({ whois: { chain: [] } })).ok, false);
+    assert.equal(parseLookupHttpResponse(response({
+      rdap: {},
+      whois: { chain: [] },
+      diagnostics: {
+        rdap: { status: 'partial' },
+        whois: { status: 'partial' },
+        availability: { status: 'complete' },
+      },
+    })).ok, true);
+  });
+
+  test('accepts the producer redaction ceiling without inventing truncation', () => {
+    const redactions = Array.from({ length: 51 }, (_, index) => ({
+      name: `Field ${index}`,
+      reason: null,
+      method: 'removal',
+      pathLanguage: 'jsonpath',
+      prePath: `$.entities[${index}]`,
+      postPath: null,
+      replacementPath: null,
+    }));
+    const parsed = parseLookupHttpResponse(response({
+      rdap: {
+        parsed: {
+          domain: 'EXAMPLE.TEST',
+          redactions,
+          redactionsTruncated: false,
+        },
+      },
+    }));
+    assert.equal(parsed.ok, true);
+  });
+
   test('accepts exact homepage metadata, projects it for display, and rejects malformed children', () => {
     const publicationMetadata = pagePublicationMetadataFixture();
     const deliveryMetadata = httpDeliveryMetadataFixture();
@@ -727,6 +763,25 @@ describe('Lookup HTTP response contract', () => {
     assert.equal(recordValue(findings[2]).referenceUrl, null);
     assert.equal(arrayValue(recordValue(provider.observation).limitations).length, MAX_THREAT_INTELLIGENCE_LIMITATIONS);
     assert.equal(rawProvider.findings.length, MAX_THREAT_INTELLIGENCE_FINDINGS + 7);
+  });
+
+  test('does not host-normalize zone-less threat-intelligence wire timestamps', () => {
+    const parsed = parseLookupHttpResponse(response({
+      threatIntelligence: {
+        version: 1,
+        providers: [{
+          provider: { id: 'urlscan_search', label: 'Wire label' },
+          state: 'success',
+          findings: [{ id: 'fixture', category: 'phishing', firstObservedAt: '2026-07-01T12:00:00.000', lastObservedAt: '2026-07-01T12:00:00.000+01:00' }],
+          observation: { observedAt: '2026-07-01T12:00:00.000', limitations: [] },
+        }],
+      },
+    }));
+    assert.equal(parsed.ok, true);
+    const provider = requiredValue(createLookupViewModel(parsed.value).threatIntelligenceProviders[0]);
+    assert.equal(recordValue(provider.observation).observedAt, null);
+    assert.equal(recordValue(arrayValue(provider.findings)[0]).firstObservedAt, null);
+    assert.equal(recordValue(arrayValue(provider.findings)[0]).lastObservedAt, '2026-07-01T11:00:00.000Z');
   });
 
   test('retains every explicit provider result state without inventing disabled evidence', () => {

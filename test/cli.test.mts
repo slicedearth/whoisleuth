@@ -8,6 +8,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { Readable, Writable } from 'node:stream';
 
 import { parseCliArguments } from '../cli/arguments.mts';
+import { boundedCliErrorMessage } from '../cli/errors.mts';
 import EXIT_CODES from '../cli/exit-codes.mts';
 import { buildCliLookupDocument } from '../cli/formatters/json.mts';
 import { formatTerminalLookup, safeTerminalValue } from '../cli/formatters/terminal.mts';
@@ -115,6 +116,12 @@ describe('CLI argument parsing', () => {
     assert.throws(() => parseCliArguments(['lookup', 'x', '--json', '--quiet']), /cannot be combined/);
     assert.throws(() => parseCliArguments(['lookup', 'x', '--summary', '--verbose']), /mutually exclusive/);
     assert.throws(() => parseCliArguments(['lookup', 'x', '--summary', '--json']), /terminal output/);
+    for (const character of ['\u00ad', '\u034f', '\u180e', '\u200d', '\u2060', '\ufe0f']) {
+      assert.throws(
+        () => parseCliArguments(['lookup', `exa${character}mple.test`]),
+        /bounded text without control characters/u,
+      );
+    }
   });
 
   test('parses terminal detail, completion, and offline-first doctor options', () => {
@@ -282,7 +289,8 @@ describe('CLI argument parsing', () => {
     const exportStdout = capture();
     assert.equal(await runCli(['export', '--help'], { stdout: exportStdout.stream, stderr: stderr.stream }), EXIT_CODES.SUCCESS);
     assert.match(exportStdout.value(), /Saved Lookup versions 1 and 2/u);
-    assert.match(exportStdout.value(), /schema-27 exports/u);
+    assert.match(exportStdout.value(), /schema-28 exports/u);
+    assert.match(exportStdout.value(), /schemas 25-27 remain readable for compatibility/u);
     assert.equal(stderr.value(), '');
   });
 
@@ -475,6 +483,18 @@ describe('bounded CLI stdin', () => {
     await assert.rejects(readStdinBounded(Readable.from(['one.com\ntwo.com\n'])), /one stdin line/);
     await assert.rejects(readStdinBounded(Readable.from(['x'.repeat(MAX_STDIN_BYTES + 1)])), /limited to/);
   });
+
+  test('strictly decodes bounded stdin after joining multibyte chunks', async () => {
+    await assert.rejects(
+      readStdinBounded(Readable.from([Buffer.from('{"value":"'), Buffer.from([0x80]), Buffer.from('"}')])),
+      /valid UTF-8/iu,
+    );
+    assert.equal(
+      await readStdinBounded(Readable.from([Buffer.from('caf\xc3', 'latin1'), Buffer.from('\xa9.example\n', 'latin1')])),
+      'caf\u00e9.example',
+    );
+    assert.equal(await readStdinBounded(Readable.from([Buffer.from('\ufffd.example\n', 'utf8')])), '\ufffd.example');
+  });
 });
 
 describe('CLI lookup runner', () => {
@@ -590,6 +610,17 @@ test('machine document and terminal formatter preserve explicit source states', 
   assert.match(terminal, /RDAP\s+Success/);
   assert.match(terminal, /WHOIS\s+Skipped/);
   assert.equal(document.generatedAt, '2026-07-14T00:00:00.000Z');
+});
+
+test('machine documents require explicit generation zones and canonicalize offsets', () => {
+  assert.throws(
+    () => buildCliLookupDocument('example.com', classifiedDomain('example.com'), lookupResult(), '2026-07-14T12:00:00'),
+    /explicit timezone/u,
+  );
+  assert.equal(
+    buildCliLookupDocument('example.com', classifiedDomain('example.com'), lookupResult(), '2026-07-14T12:00:00+01:00').generatedAt,
+    '2026-07-14T11:00:00.000Z',
+  );
 });
 
 test('machine document metadata cannot be replaced by upstream result fields', () => {
@@ -1178,6 +1209,8 @@ test('terminal values strip controls and stay bounded', () => {
   const result = safeTerminalValue(`hello\nworld\u0000\u009b${'x'.repeat(500)}`);
   assert.doesNotMatch(result, /[\x00-\x1f\x7f-\x9f]/);
   assert.ok(result.length <= 240);
+  const usage = boundedCliErrorMessage(new Error('unsafe\u00ad\u034f\u180e\u200d\u2060\ufe0fmessage'));
+  assert.equal(usage, 'unsafemessage');
 });
 
 test('repository source exposes an executable local CLI entry point', () => {

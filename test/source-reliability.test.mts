@@ -69,6 +69,26 @@ function lookupDocument(overrides: Record<string, unknown> = {}) {
 }
 
 describe('privacy-safe source reliability report', () => {
+  test('requires explicit zones for current report and Lookup timestamps', () => {
+    assert.throws(
+      () => buildSourceReliabilityReport(JSON.stringify(lookupDocument()), '2026-07-16T00:00:00'),
+      /explicit timezone/u,
+    );
+    const current = buildSourceReliabilityReport(JSON.stringify(lookupDocument({
+      version: 2,
+      generatedAt: '2026-07-15T00:00:00',
+    })));
+    assert.deepEqual(current.sampleWindow, { earliestGeneratedAt: null, latestGeneratedAt: null });
+    const legacy = buildSourceReliabilityReport(JSON.stringify(lookupDocument({
+      version: 1,
+      generatedAt: '2026-07-15T00:00:00',
+    })));
+    assert.deepEqual(legacy.sampleWindow, {
+      earliestGeneratedAt: '2026-07-15T00:00:00.000Z',
+      latestGeneratedAt: '2026-07-15T00:00:00.000Z',
+    });
+  });
+
   test('accepts saved Lookup versions 1 and 2 without widening the Bulk contract', () => {
     const report = buildSourceReliabilityReport(JSON.stringify([
       lookupDocument({ version: 1 }),
@@ -251,6 +271,45 @@ describe('privacy-safe source reliability report', () => {
     assert.throws(
       () => buildSourceReliabilityReport(JSON.stringify([report, reordered])),
       /duplicate report/iu,
+    );
+  });
+
+  test('rejects traversal and source bounds instead of silently dropping evidence', () => {
+    const observations = Array.from({ length: 65 }, (_, index) => ({
+      version: 1,
+      source: `source_${index}`,
+      status: 'partial',
+      observedAt: '2026-07-15T00:00:00.000Z',
+      complete: false,
+      truncated: false,
+      limitations: [],
+    }));
+    assert.throws(
+      () => buildSourceReliabilityReport(JSON.stringify(lookupDocument({ observations }))),
+      /64-source limit/u,
+    );
+
+    let nested: Record<string, unknown> = { leaf: true };
+    for (let depth = 0; depth < 13; depth += 1) nested = { next: nested };
+    assert.throws(
+      () => buildSourceReliabilityReport(JSON.stringify(lookupDocument({ nested }))),
+      /12-level traversal limit/u,
+    );
+    assert.throws(
+      () => buildSourceReliabilityReport(JSON.stringify(lookupDocument({
+        wide: Object.fromEntries(Array.from({ length: 201 }, (_, index) => [`field${index}`, {}])),
+      }))),
+      /more than 200 fields/u,
+    );
+    assert.throws(
+      () => buildSourceReliabilityReport(JSON.stringify(lookupDocument({
+        wide: Array.from({ length: 1_001 }, () => ({})),
+      }))),
+      /more than 1000 items/u,
+    );
+    assert.throws(
+      () => buildSourceReliabilityReport('{"schema":"whoisleuth.cli.lookup","schema":"whoisleuth.cli.lookup"}'),
+      /duplicate keys/u,
     );
   });
 

@@ -4,6 +4,7 @@ import {
   type InvestigationGuideTemplateSnapshot,
   type InvestigationRecipeId,
 } from './investigation-guide.ts';
+import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from '../../../../lib/observation.mts';
 
 export const INVESTIGATION_TEMPLATE_SCHEMA = 'whoisleuth.investigation-templates';
 export const INVESTIGATION_TEMPLATE_VERSION = 2;
@@ -18,17 +19,16 @@ export interface InvestigationTemplate extends InvestigationGuideTemplateSnapsho
 }
 
 type UnknownRecord = Record<string, unknown>;
-const CONTROL_RE = /[\x00-\x1f\x7f]/u;
 const LEGACY_RECIPE_IDS = new Set<InvestigationRecipeId>(['brand_sweep', 'infrastructure_pivot', 'new_domain_triage']);
 
 function record(value: unknown): UnknownRecord | null {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as UnknownRecord : null;
 }
 
-function timestamp(value: unknown): string {
-  if (typeof value !== 'string' || value.length > 64 || CONTROL_RE.test(value)) return '';
-  const parsed = Date.parse(value);
-  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : '';
+function timestamp(value: unknown, legacy = false): string {
+  return normalizeExplicitIsoTimestamp(value)
+    ?? (legacy ? normalizeLegacyIsoTimestamp(value) : null)
+    ?? '';
 }
 
 function byteLength(value: string): number {
@@ -38,8 +38,9 @@ function byteLength(value: string): number {
 function template(raw: unknown, sourceVersion: number = INVESTIGATION_TEMPLATE_VERSION): InvestigationTemplate | null {
   const value = record(raw);
   const snapshot = normalizeInvestigationGuideTemplateSnapshot(value);
-  const createdAt = timestamp(value?.createdAt);
-  const updatedAt = timestamp(value?.updatedAt);
+  const legacyTimestamps = sourceVersion < INVESTIGATION_TEMPLATE_VERSION;
+  const createdAt = timestamp(value?.createdAt, legacyTimestamps);
+  const updatedAt = timestamp(value?.updatedAt, legacyTimestamps);
   return snapshot && createdAt && updatedAt && (sourceVersion !== 1 || LEGACY_RECIPE_IDS.has(snapshot.recipeId))
     ? { ...snapshot, createdAt, updatedAt }
     : null;

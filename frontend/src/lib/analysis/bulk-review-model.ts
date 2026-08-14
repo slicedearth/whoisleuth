@@ -1,6 +1,7 @@
 import { normalizeDomain } from './case-model.ts';
 import { normalizeBulkPresentationSortKey } from './bulk-sort.ts';
 import type { BulkSortDirection, BulkSortKey } from './bulk-sort.ts';
+import { normalizeExplicitIsoTimestamp } from '../../../../lib/observation.mts';
 
 export const BULK_REVIEW_SCHEMA = 'whoisleuth.bulk-review';
 export const BULK_REVIEW_SCHEMA_VERSION = 1;
@@ -79,9 +80,7 @@ function text(value: unknown, maximum: number): string {
 }
 
 function timestamp(value: unknown, fallback: string): string {
-  const normalized = text(value, 64);
-  const parsed = Date.parse(normalized);
-  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : fallback;
+  return normalizeExplicitIsoTimestamp(value) ?? fallback;
 }
 
 function safeId(value: unknown): string {

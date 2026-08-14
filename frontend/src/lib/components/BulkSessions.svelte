@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tick } from 'svelte';
   import { compareSavedBulkSessions, type BulkSession } from '$lib/bulk-sessions';
   import { classifyBulkSourceCoverage } from '$lib/analysis/bulk-source-coverage.ts';
 
@@ -36,6 +37,7 @@
 
   let baselineId = $state('');
   let currentId = $state('');
+  let componentRoot = $state<HTMLElement>();
   const baseline = $derived(sessions.find((session) => session.id === baselineId) || null);
   const current = $derived(sessions.find((session) => session.id === currentId) || null);
   const comparison = $derived(baseline && current ? compareSavedBulkSessions(baseline, current) : null);
@@ -60,9 +62,32 @@
       ? `${limited} result${limited === 1 ? '' : 's'} with limited source coverage`
       : 'Recorded sources complete, skipped, or not published for the registry';
   }
+
+  async function deleteAndFocus(session: BulkSession) {
+    const origin = document.activeElement;
+    const owner = componentRoot;
+    const previousIndex = sessions.findIndex((item) => item.id === session.id);
+    await deleteSession(session);
+    await tick();
+    const active = document.activeElement;
+    if (!owner?.isConnected
+      || (active instanceof HTMLElement && active !== origin && active !== document.body && active.isConnected)) return;
+    if (sessions.some((item) => item.id === session.id)) {
+      if (origin instanceof HTMLElement && origin.isConnected) origin.focus();
+      return;
+    }
+    const next = sessions[Math.min(Math.max(0, previousIndex), sessions.length - 1)];
+    const candidates = [
+      next ? document.getElementById(`bulk-session-delete-${next.id}`) : null,
+      document.getElementById('bulk-session-name'),
+      document.getElementById('bulk-sessions-title'),
+    ];
+    const target = candidates.find((candidate) => candidate instanceof HTMLElement);
+    if (target instanceof HTMLElement) target.focus();
+  }
 </script>
 
-<section class="bulk-sessions card" aria-labelledby="bulk-sessions-title">
+<section class="bulk-sessions card" aria-labelledby="bulk-sessions-title" bind:this={componentRoot}>
   <div class="section-heading">
     <div>
       <p class="eyebrow">Browser-local workspace</p>
@@ -79,6 +104,7 @@
     <label>
       Session name
       <input
+        id="bulk-session-name"
         value={saveName}
         maxlength="100"
         placeholder="July priority review"
@@ -111,7 +137,7 @@
             {#if unstartedCount(session) > 0}
               <button type="button" class="btn small" disabled={profileContextLoading || running} onclick={() => resumeSession(session)}>Resume unstarted</button>
             {/if}
-            <button type="button" class="btn small danger" disabled={running} onclick={() => deleteSession(session)}>Delete</button>
+            <button id={`bulk-session-delete-${session.id}`} type="button" class="btn small danger" disabled={running} onclick={() => void deleteAndFocus(session)}>Delete</button>
           </div>
         </article>
       {/each}

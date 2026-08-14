@@ -1,5 +1,7 @@
 import { Buffer } from 'node:buffer';
+import { decodeBoundedUtf8 } from '../lib/bounded-file.mts';
 import { isValidAsciiDomainName } from '../lib/hostname.mts';
+import { scanBoundedJson } from '../lib/bounded-json.mts';
 import { ANALYST_REVIEW_REASON_VALUES, analystInteroperabilityTags } from '../lib/analyst-taxonomy.mts';
 import {
   RISK_CALIBRATION_SUMMARY_SCHEMA,
@@ -276,7 +278,11 @@ export async function readRiskCalibrationInputBounded(
     if (total > limit) throw new CliUsageError(`Risk calibration input is limited to ${limit} bytes.`);
     chunks.push(buffer);
   }
-  return Buffer.concat(chunks).toString('utf8');
+  try {
+    return decodeBoundedUtf8(Buffer.concat(chunks), 'Risk calibration input');
+  } catch (cause) {
+    throw new CliUsageError(cause instanceof Error ? cause.message : 'Risk calibration input must contain valid UTF-8 text.');
+  }
 }
 
 export function parseRiskCalibrationDataset(text: unknown): CalibrationDataset {
@@ -284,11 +290,13 @@ export function parseRiskCalibrationDataset(text: unknown): CalibrationDataset {
   if (Buffer.byteLength(text, 'utf8') > MAX_RISK_CALIBRATION_INPUT_BYTES) {
     throw new CliUsageError(`Risk calibration input is limited to ${MAX_RISK_CALIBRATION_INPUT_BYTES} bytes.`);
   }
+  const normalized = text.replace(/^\uFEFF/u, '');
   let parsed: unknown;
   try {
-    parsed = JSON.parse(text.replace(/^\uFEFF/, ''));
+    scanBoundedJson(normalized);
+    parsed = JSON.parse(normalized);
   } catch {
-    throw new CliUsageError('Risk calibration input must be valid JSON.');
+    throw new CliUsageError('Risk calibration input must be valid bounded JSON without duplicate keys.');
   }
   const document = object(parsed, 'Risk calibration input');
   const documentVersion = typeof document.version === 'number' && Number.isInteger(document.version)

@@ -22,6 +22,7 @@ import {
   MAX_OBSERVATION_DIAGNOSTICS,
   MAX_OBSERVATION_LIMITATIONS,
   MAX_OBSERVATION_LIMITATION_LENGTH,
+  normalizeExplicitIsoTimestamp,
 } from './observation.mts';
 import { assertBoundedJsonStructure } from './bounded-json.mts';
 import {
@@ -280,9 +281,7 @@ function boundedThreatText(value: unknown, maximum = MAX_THREAT_INTELLIGENCE_TEX
 
 function threatTimestamp(value: unknown): string | null {
   const text = boundedThreatText(value, 40);
-  if (!text) return null;
-  const epoch = Date.parse(text);
-  return Number.isFinite(epoch) ? new Date(epoch).toISOString() : null;
+  return text ? normalizeExplicitIsoTimestamp(text) : null;
 }
 
 function attributedThreatUrl(value: unknown, providerId: string): string | null {
@@ -813,7 +812,14 @@ function validWhoisParsed(value: unknown): boolean {
 function validRegistrationEvidence(value: LookupHttpResponse): boolean {
   const rdap = value.rdap;
   const whois = value.whois;
-  if (!validSourceStatus(rdap) || !validSourceStatus(whois)) return false;
+  const rdapDiagnostics = isJsonObject(value.diagnostics.rdap) ? value.diagnostics.rdap : null;
+  const whoisDiagnostics = isJsonObject(value.diagnostics.whois) ? value.diagnostics.whois : null;
+  if (!validSourceStatus(rdap)
+    || !validSourceStatus(whois)
+    || rdapDiagnostics !== null && !validSourceStatus(rdapDiagnostics)
+    || whoisDiagnostics !== null && !validSourceStatus(whoisDiagnostics)
+    || rdapDiagnostics?.status === 'success' && !isJsonObject(rdap.parsed)
+    || whoisDiagnostics?.status === 'complete' && !isJsonObject(whois.parsed)) return false;
   if (rdap.parsed !== undefined && rdap.parsed !== null && !validRdapParsed(rdap.parsed)) return false;
   if (whois.parsed !== undefined && whois.parsed !== null && !validWhoisParsed(whois.parsed)) return false;
   const registrar = rdap.registrarRdap;

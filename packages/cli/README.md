@@ -186,14 +186,16 @@ byte identity from canonical-only or mismatched identity. `brief` and
 `case-pack` create bounded local handoffs, `monitor-once` runs one explicit
 control review rather than a daemon, and `workflow-run` executes only installed
 fixed-recipe steps with per-run network approval and analyst-selection pauses.
-The current schema-27 JSON produced by `export` is accepted directly by
+The current schema-28 JSON produced by `export` is accepted directly by
 `verify-artifact` and reported as `structure_valid`. It has no embedded checksum
 or signature, so exact retained bytes require a verified investigation manifest
 entry. The export can contain a bounded privacy-projected registry RDAP
-publication, normalised WHOIS values, and bounded contacts and should be
-reviewed before sharing. Request and response headers, cookies, session and
+publication and normalised WHOIS values, while explicitly marking registry
+contacts as excluded. Request and response headers, cookies, session and
 credential fields, and credential-bearing or query-bearing URLs are excluded.
-Schema 26 remains readable with its strict source/publication binding and
+Schemas 25-27 remain readable for compatibility and can contain historical
+contact projections, so legacy exports should be reviewed before sharing.
+Schema 26 retains its strict source/publication binding and
 portable limits. Schema 25 remains readable through its historical wrapper contract: retained
 diagnostics are authoritative, unavailable wrapper data is suppressed during
 replay, and other contradictions fail closed. Verification and browser replay share a 5 MiB,
@@ -206,7 +208,8 @@ source-state fields it preserves and the raw payload, contact, page-value,
 request-path, credential, browser-store, and signer-authentication fields it
 excludes.
 
-Current `case-pack` output keeps its version-1 envelope. Trusted and internal
+Current `case-pack` output uses its version-2 envelope; the verifier continues
+to read the legacy version-1 envelope. Trusted and internal
 audiences preserve exact analyst-selected Case-to-Brand Profile identifiers;
 public output clears them from cases and embedded reports and discloses the
 bounded `brandProfileReferencesOmitted` count. Verification also enforces the

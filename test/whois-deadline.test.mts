@@ -28,3 +28,30 @@ test('the WHOIS referral chain shares one total deadline across hops', async () 
   assert.ok(finalHop.error);
   assert.match(finalHop.error, /total time limit/);
 });
+
+test('hop-limit and loop terminations remain explicit partial evidence', async () => {
+  let calls = 0;
+  const bounded = await buildWhoisChainUncached('example.com', {
+    whoisQuery: async () => {
+      calls += 1;
+      return `Domain Name: EXAMPLE.COM\nRegistrar: Example Registrar\nwhois: hop${calls}.example\n`;
+    },
+  });
+  assert.equal(calls, 6);
+  assert.equal(bounded.length, 7);
+  assert.equal(bounded.at(-1)?.queryProfile, 'not-issued');
+  assert.match(bounded.at(-1)?.error ?? '', /hop limit/u);
+
+  const servers: string[] = [];
+  const loop = await buildWhoisChainUncached('example.com', {
+    whoisQuery: async (server) => {
+      servers.push(server);
+      return server === 'whois.iana.org'
+        ? 'refer: registry.example\n'
+        : 'Domain Name: EXAMPLE.COM\nwhois: whois.iana.org\n';
+    },
+  });
+  assert.deepEqual(servers, ['whois.iana.org', 'registry.example']);
+  assert.equal(loop.at(-1)?.server, 'whois.iana.org');
+  assert.match(loop.at(-1)?.error ?? '', /repeated/u);
+});

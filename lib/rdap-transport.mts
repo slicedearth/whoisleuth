@@ -35,7 +35,7 @@ async function fetchRdapWithTimeout(
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await (dependencies.fetch ?? safeFetch)(url, { ...options, signal: controller.signal });
-    const { text, truncated } = await (dependencies.readText ?? readTextCapped)(response, MAX_RDAP_BYTES);
+    const { text, truncated } = await (dependencies.readText ?? readTextCapped)(response, MAX_RDAP_BYTES, { fatalUtf8: true });
     if (truncated) throw new Error(`Response from ${url} exceeded ${MAX_RDAP_BYTES} bytes`);
     return { status: response.status, ok: response.ok, text };
   } finally {
@@ -53,7 +53,7 @@ async function fetchRdapDetailedWithTimeout(
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const result = await (dependencies.fetchDetailed ?? safeFetchDetailed)(url, { ...options, signal: controller.signal });
-    const { text, truncated } = await (dependencies.readText ?? readTextCapped)(result.response, MAX_RDAP_BYTES);
+    const { text, truncated } = await (dependencies.readText ?? readTextCapped)(result.response, MAX_RDAP_BYTES, { fatalUtf8: true });
     if (truncated) throw new Error(`Response from ${url} exceeded ${MAX_RDAP_BYTES} bytes`);
     return {
       status: result.response.status,

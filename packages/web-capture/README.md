@@ -32,14 +32,20 @@ offline comparator without implying that the omitted page content was absent.
 The offline `compare` command accepts two selected version-2 manifests. Before
 comparing them it verifies the declared artefact sizes, SHA-256 digests, and
 screenshot perceptual hashes against the local files. It then reports exact
-equality for the bounded preorder element-tag sequence and body text-node
-sequence, screenshot dHash distance, bounded count changes, page identity,
+equality for complete bounded preorder element-tag sequences and body text-node
+sequences, screenshot dHash distance, bounded count changes, page identity,
 and request-domain overlap as separate components. The tag sequence does not
 encode nesting or attributes, and the legacy `visibleText` field includes body
 text nodes that CSS or non-rendered containers may hide; neither field proves
-exact DOM or visual equality. The comparator makes no request, prints no input
-paths, reports only the page-title equality state rather than either title in
-version 2 output, and produces no combined similarity or maliciousness score.
+exact DOM or visual equality. Equal truncated prefixes are reported as
+unavailable rather than equal. If either capture is partial, request-domain and
+technology set relationships are also unavailable because omitted activity can
+change them; retained counts and shared observations remain visible for review.
+The comparator makes no request, prints no input
+paths, reports only the page-title equality state rather than either title,
+emits `whoisleuth.web-capture-comparison` version 3, and produces no combined
+similarity or maliciousness score. Version-2 comparison documents remain
+listed as historical read-only output in the schema inventory.
 
 Collection executes page JavaScript. Each admitted resource operator receives
 the exact requested URL, including path and query, and ordinary allowlisted

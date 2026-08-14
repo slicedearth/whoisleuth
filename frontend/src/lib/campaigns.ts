@@ -10,8 +10,8 @@ import {
   updateCampaign as updateCampaignRecord,
   addCampaignDomain as addDomain,
 } from './analysis/campaign-model.ts';
-import { browserLocalDataProvider } from './browser-local-data-service.ts';
-import { CAMPAIGNS_COLLECTION, LEGACY_CAMPAIGNS_KEY } from './browser-local-data-definitions.ts';
+import { readBrowserLocalData, updateBrowserLocalData } from './browser-local-data-service.ts';
+import { LEGACY_CAMPAIGNS_KEY } from './browser-local-data-contract.ts';
 
 export { MAX_CAMPAIGN_IMPORT_BYTES } from './analysis/campaign-model.ts';
 
@@ -27,7 +27,7 @@ export interface CampaignRecord {
 }
 
 export async function loadCampaigns(): Promise<CampaignRecord[]> {
-  return (await browserLocalDataProvider()).read(CAMPAIGNS_COLLECTION) as Promise<CampaignRecord[]>;
+  return readBrowserLocalData('campaigns');
 }
 
 function boundedCampaigns(campaigns: CampaignRecord[]): CampaignRecord[] {
@@ -36,7 +36,7 @@ function boundedCampaigns(campaigns: CampaignRecord[]): CampaignRecord[] {
 }
 
 export async function createCampaign(input: { name: string; description?: string }): Promise<{ campaigns: CampaignRecord[]; record: CampaignRecord }> {
-  return (await browserLocalDataProvider()).update(CAMPAIGNS_COLLECTION, (current) => {
+  return updateBrowserLocalData('campaigns', (current) => {
     const result = createCampaignRecord(current, input);
     const campaigns = boundedCampaigns(result.campaigns as CampaignRecord[]);
     return { document: campaigns, result: { campaigns, record: campaigns.find((campaign) => campaign.id === result.record.id) ?? result.record as CampaignRecord } };
@@ -44,35 +44,35 @@ export async function createCampaign(input: { name: string; description?: string
 }
 
 export async function editCampaign(id: string, patch: { name?: string; description?: string; domains?: string[] }): Promise<CampaignRecord[]> {
-  return (await browserLocalDataProvider()).update(CAMPAIGNS_COLLECTION, (current) => {
+  return updateBrowserLocalData('campaigns', (current) => {
     const campaigns = boundedCampaigns(updateCampaignRecord(current, id, patch).campaigns as CampaignRecord[]);
     return { document: campaigns, result: campaigns };
   });
 }
 
 export async function addCampaignDomain(id: string, domain: string): Promise<CampaignRecord[]> {
-  return (await browserLocalDataProvider()).update(CAMPAIGNS_COLLECTION, (current) => {
+  return updateBrowserLocalData('campaigns', (current) => {
     const campaigns = boundedCampaigns(addDomain(current, id, domain).campaigns as CampaignRecord[]);
     return { document: campaigns, result: campaigns };
   });
 }
 
 export async function removeCampaignDomain(id: string, domain: string): Promise<CampaignRecord[]> {
-  return (await browserLocalDataProvider()).update(CAMPAIGNS_COLLECTION, (current) => {
+  return updateBrowserLocalData('campaigns', (current) => {
     const campaigns = boundedCampaigns(removeDomain(current, id, domain).campaigns as CampaignRecord[]);
     return { document: campaigns, result: campaigns };
   });
 }
 
 export async function deleteCampaign(id: string): Promise<CampaignRecord[]> {
-  return (await browserLocalDataProvider()).update(CAMPAIGNS_COLLECTION, (current) => {
+  return updateBrowserLocalData('campaigns', (current) => {
     const campaigns = boundedCampaigns(current.filter((campaign) => campaign.id !== id));
     return { document: campaigns, result: campaigns };
   });
 }
 
 export async function importCampaigns(raw: unknown): Promise<{ campaigns: CampaignRecord[]; added: number; updated: number; skipped: number }> {
-  return (await browserLocalDataProvider()).update(CAMPAIGNS_COLLECTION, (current) => {
+  return updateBrowserLocalData('campaigns', (current) => {
     const result = mergeCampaigns(current, raw);
     const campaigns = boundedCampaigns(result.campaigns as CampaignRecord[]);
     return { document: campaigns, result: { campaigns, added: result.added, updated: result.updated, skipped: result.skipped } };

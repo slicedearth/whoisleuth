@@ -38,6 +38,30 @@ function input() {
 }
 
 describe('domain control manifests', () => {
+  it('assigns UTC to version-1 input timestamps but requires explicit runtime times', () => {
+    const legacyInput = input();
+    legacyInput.expiresAt = '2026-09-03T12:00:00.000';
+    legacyInput.entries[0] = { ...legacyInput.entries[0]!, renewalReviewAt: '2026-08-20T12:00:00.000' };
+    const manifest = buildDomainControlManifest(legacyInput, generatedAt);
+    assert.equal(manifest.expiresAt, '2026-09-03T12:00:00.000Z');
+    assert.equal(manifest.entries[0]?.renewalReviewAt, '2026-08-20T12:00:00.000Z');
+    assert.throws(() => buildDomainControlManifest(input(), '2026-08-03T12:00:00.000'), /explicit timezone/u);
+
+    const report = reviewDomainControlManifest({
+      schema: DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA,
+      version: 1,
+      manifest,
+      observations: [{
+        domain: 'example.test',
+        fields: { nameservers: { state: 'partial', values: [], source: 'Legacy review', observedAt: '2026-08-03T12:00:00.000' } },
+      }],
+    }, generatedAt);
+    assert.equal(report.domains[0]?.comparisons.find((item) => item.field === 'nameservers')?.observedAt, '2026-08-03T12:00:00.000Z');
+    assert.throws(() => reviewDomainControlManifest({
+      schema: DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA, version: 1, manifest, observations: [],
+    }, '2026-08-03T12:00:00.000'), /explicit timezone/u);
+  });
+
   it('normalizes desired state and produces a deterministic integrity digest', () => {
     const left = buildDomainControlManifest(input(), generatedAt);
     const right = buildDomainControlManifest(input(), generatedAt);

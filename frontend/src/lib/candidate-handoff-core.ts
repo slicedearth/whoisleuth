@@ -8,6 +8,8 @@ import { normalizeDomain } from './analysis/case-model.ts';
 import { normalizeCtProvenance } from './analysis/ct-results.ts';
 import type { CtProvenance } from './analysis/ct-results.ts';
 import { MAX_CANDIDATE_SOURCE_LENGTH } from '../../../lib/candidate-provenance-bounds.mts';
+import { normalizeExplicitIsoTimestamp } from '../../../lib/observation.mts';
+import { parseBoundedJson } from './bounded-json.ts';
 
 export const HANDOFF_KEY = 'whoisleuth:candidate-handoff:v2';
 export const HANDOFF_VERSION = 2;
@@ -82,9 +84,7 @@ export function handoffMatchesNavigationSource(
 }
 
 function handoffTimestamp(value: unknown): string | null {
-  if (typeof value !== 'string' || value.length > 64) return null;
-  const milliseconds = Date.parse(value);
-  return Number.isFinite(milliseconds) ? new Date(milliseconds).toISOString() : null;
+  return normalizeExplicitIsoTimestamp(value);
 }
 
 /**
@@ -140,7 +140,7 @@ export function buildHandoff(
   token?: string,
 ): CandidateHandoff {
   const timestamp = handoffTimestamp(createdAt ?? new Date().toISOString());
-  if (!timestamp) throw new TypeError('Candidate handoff creation time must be a valid timestamp.');
+  if (!timestamp) throw new TypeError('Candidate handoff creation time must use an explicit timezone.');
   if (typeof token !== 'string' || !HANDOFF_TOKEN_RE.test(token)) {
     throw new TypeError('Candidate handoff token must be a 128-bit lower-case hexadecimal value.');
   }
@@ -261,7 +261,10 @@ export function parseSerializedHandoff(serialized: unknown): CandidateHandoff | 
   if (serialized.length > MAX_CANDIDATE_HANDOFF_SERIALIZED_BYTES) return null;
   if (new TextEncoder().encode(serialized).byteLength > MAX_CANDIDATE_HANDOFF_SERIALIZED_BYTES) return null;
   try {
-    return parseHandoff(JSON.parse(serialized));
+    return parseHandoff(parseBoundedJson(serialized, {
+      label: 'Candidate handoff',
+      maximumBytes: MAX_CANDIDATE_HANDOFF_SERIALIZED_BYTES,
+    }));
   } catch {
     return null;
   }

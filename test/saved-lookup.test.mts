@@ -30,6 +30,28 @@ describe('saved Lookup compatibility', () => {
     assert.deepEqual(SUPPORTED_SAVED_LOOKUP_SCHEMA_VERSIONS, [1, 2]);
   });
 
+  test('canonicalizes legacy timestamps as UTC and requires explicit zones for current documents', async () => {
+    const base = JSON.parse(await loadCliLookupV1Fixture()) as Record<string, unknown>;
+    const legacy = parseSavedLookupDocument(JSON.stringify({
+      ...base,
+      generatedAt: '2026-01-15T12:00:00',
+    }));
+    assert.equal(legacy.generatedAt, '2026-01-15T12:00:00.000Z');
+    assert.throws(
+      () => parseSavedLookupDocument(JSON.stringify({
+        ...base,
+        version: SAVED_LOOKUP_SCHEMA_VERSION,
+        generatedAt: '2026-01-15T12:00:00',
+      })),
+      /explicit timezone/u,
+    );
+    assert.equal(parseSavedLookupDocument(JSON.stringify({
+      ...base,
+      version: SAVED_LOOKUP_SCHEMA_VERSION,
+      generatedAt: '2026-01-15T12:00:00+11:00',
+    })).generatedAt, '2026-01-15T01:00:00.000Z');
+  });
+
   test('rejects future versions, malformed current metadata, and new fields in a legacy envelope', async () => {
     const base = JSON.parse(await loadCliLookupV1Fixture()) as Record<string, unknown>;
     for (const version of [0, 3, 99, '1', true, [1]]) {

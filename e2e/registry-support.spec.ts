@@ -158,6 +158,45 @@ test('the source review keeps exact rates without a decorative rate strip', asyn
   await expectNoHorizontalOverflow(page);
 });
 
+test('a delayed source-report read cannot replace a newer file selection', { tag: '@timing-sensitive' }, async ({ page }) => {
+  const report = buildSourceReliabilityReport(
+    JSON.stringify([sourceReportLookup('success', 200)]),
+    SOURCE_REPORT_TIME,
+  );
+  const content = JSON.stringify(report);
+  await page.goto('/registry-support');
+  const dashboard = page.locator('.reliability-section');
+  const reportInput = dashboard.locator('input[type="file"]');
+  await page.evaluate(() => {
+    const state = window as typeof window & {
+      __resolveSlowSourceReport?: (value: string) => void;
+      __slowSourceReportReleased?: boolean;
+    };
+    const originalText = File.prototype.text;
+    File.prototype.text = function text() {
+      if (this.name !== 'slow-source-report.json') return originalText.call(this);
+      return new Promise<string>((resolve) => {
+        state.__resolveSlowSourceReport = (value) => {
+          resolve(value);
+          queueMicrotask(() => { state.__slowSourceReportReleased = true; });
+        };
+      });
+    };
+  });
+
+  await reportInput.setInputFiles({ name: 'slow-source-report.json', mimeType: 'application/json', buffer: Buffer.from(content) });
+  await reportInput.setInputFiles({ name: 'latest-source-report.json', mimeType: 'application/json', buffer: Buffer.from(content) });
+  await expect(dashboard.locator('.report-file')).toContainText('latest-source-report.json');
+  await page.evaluate((value) => {
+    const state = window as typeof window & { __resolveSlowSourceReport?: (text: string) => void };
+    state.__resolveSlowSourceReport?.(value);
+  }, content);
+  await expect.poll(() => page.evaluate(() => (
+    window as typeof window & { __slowSourceReportReleased?: boolean }
+  ).__slowSourceReportReleased)).toBe(true);
+  await expect(dashboard.locator('.report-file')).toContainText('latest-source-report.json');
+});
+
 test('profile details preserve provenance and safe external-link behavior', async ({ page }) => {
   await page.goto('/registry-support');
   await page.getByLabel('Suffix or capability').fill('uk');

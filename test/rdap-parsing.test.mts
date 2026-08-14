@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { describe, test } from 'node:test';
 import { parseRdap } from '../lib/rdap.mts';
 import type { NormalizedRdapRecordFor } from '../lib/rdap.mts';
@@ -141,6 +142,105 @@ describe('structured RDAP metadata', () => {
     assert.equal(parsed.nameserverAddressesTruncated, true);
   });
 
+  test('marks every discarded nested RDAP family partial while retaining valid neighbours', () => {
+    const parsed = parseFixture('domain', {
+      ldhName: 'EXAMPLE.COM',
+      status: ['active', null],
+      events: [{ eventAction: 'registration', eventDate: '2020-01-01T00:00:00Z' }, null],
+      nameservers: [{
+        ldhName: 'NS1.EXAMPLE.COM',
+        ipAddresses: { v4: ['192.0.2.1', 'invalid-address'] },
+      }, null],
+      secureDNS: {
+        dsData: [{ keyTag: 12345, algorithm: 13, digestType: 2, digest: 'ABCDEF' }, null],
+      },
+      entities: [{ handle: 'REG-1', roles: ['registrar'] }, null],
+    });
+
+    assert.deepEqual(parsed.statuses, ['active']);
+    assert.equal(parsed.events.length, 1);
+    assert.deepEqual(parsed.nameservers, ['NS1.EXAMPLE.COM']);
+    assert.deepEqual(arrayValue(parsed.nameserverDetails, 0).addresses, ['192.0.2.1']);
+    assert.equal(parsed.dsData.length, 1);
+    assert.equal(requiredValue(parsed.entitiesByRole.registrar).length, 1);
+    assert.equal(parsed.statusesTruncated, true);
+    assert.equal(parsed.eventsTruncated, true);
+    assert.equal(parsed.nameserversTruncated, true);
+    assert.equal(parsed.nameserverAddressesTruncated, true);
+    assert.equal(parsed.dsDataTruncated, true);
+    assert.equal(parsed.entitiesTruncated, true);
+  });
+
+  test('marks rejected children inside usable entities, notices, and remarks as partial', () => {
+    const entityCases: Array<[string, Record<string, unknown>]> = [
+      ['role', { roles: ['registrar', null] }],
+      ['vCard', { roles: ['registrar'], vcardArray: ['vcard', [['fn', {}, 'text', 'Registrar'], null]] }],
+      ['public ID', { roles: ['registrar'], publicIds: [{ type: 'Registry ID', identifier: '123' }, null] }],
+      ['entity link', { roles: ['registrar'], links: [{ href: 'https://entity.example/contact' }, null] }],
+    ];
+    for (const [label, fields] of entityCases) {
+      const parsed = parseFixture('domain', {
+        ldhName: 'EXAMPLE.COM',
+        entities: [{ handle: 'REG-1', ...fields }],
+      });
+      assert.equal(parsed.entitiesTruncated, true, label);
+    }
+
+    const malformedNotice = parseFixture('domain', {
+      ldhName: 'EXAMPLE.COM',
+      notices: [{ title: 'Terms', description: ['Retained neighbour.'] }, null],
+    });
+    assert.equal(malformedNotice.notices.length, 1);
+    assert.equal(malformedNotice.noticesTruncated, true);
+
+    const malformedRemark = parseFixture('domain', {
+      ldhName: 'EXAMPLE.COM',
+      remarks: [{ title: 'Status', description: ['Retained neighbour.'] }, { description: [null] }],
+    });
+    assert.equal(malformedRemark.remarks.length, 1);
+    assert.equal(malformedRemark.remarksTruncated, true);
+
+    const complete = parseFixture('domain', {
+      ldhName: 'EXAMPLE.COM',
+      entities: [{
+        handle: 'REG-1',
+        roles: ['registrar'],
+        vcardArray: ['vcard', [['fn', {}, 'text', 'Registrar']]],
+        publicIds: [{ type: 'Registry ID', identifier: '123' }],
+        links: [{ href: 'https://entity.example/contact' }],
+      }],
+      notices: [{ description: ['Complete notice.'] }],
+      remarks: [{ description: ['Complete remark.'] }],
+    });
+    assert.equal(complete.entitiesTruncated, false);
+    assert.equal(complete.noticesTruncated, false);
+    assert.equal(complete.remarksTruncated, false);
+  });
+
+  test('treats present non-array nested RDAP families as partial but leaves absent families complete', () => {
+    const malformed = parseFixture('domain', {
+      ldhName: 'EXAMPLE.COM',
+      status: {},
+      events: {},
+      nameservers: {},
+      secureDNS: { dsData: {} },
+      entities: {},
+    });
+    assert.equal(malformed.statusesTruncated, true);
+    assert.equal(malformed.eventsTruncated, true);
+    assert.equal(malformed.nameserversTruncated, true);
+    assert.equal(malformed.dsDataTruncated, true);
+    assert.equal(malformed.entitiesTruncated, true);
+
+    const absent = parseFixture('domain', { ldhName: 'EXAMPLE.COM' });
+    assert.equal(absent.statusesTruncated, false);
+    assert.equal(absent.eventsTruncated, false);
+    assert.equal(absent.nameserversTruncated, false);
+    assert.equal(absent.nameserverAddressesTruncated, false);
+    assert.equal(absent.dsDataTruncated, false);
+    assert.equal(absent.entitiesTruncated, false);
+  });
+
   test('normalizes and deterministically summarizes shuffled lifecycle events', () => {
     const parsed = parseFixture('domain', {
       ldhName: 'EXAMPLE.COM',
@@ -189,6 +289,25 @@ describe('structured RDAP metadata', () => {
 
     assert.equal(parsed.lifecycle.databaseUpdatedDate, '2026-02-03T04:05:06Z');
     assert.equal(parsed.lifecycle.databaseUpdatedDateIso, '2026-02-03T04:05:06.000Z');
+  });
+
+  test('selects lifecycle events identically across host timezones', () => {
+    const moduleUrl = new URL('../lib/rdap.mts', import.meta.url).href;
+    const fixture = {
+      ldhName: 'EXAMPLE.TEST',
+      events: [
+        { eventAction: 'last changed', eventDate: '2026-08-15T12:00:00' },
+        { eventAction: 'last changed', eventDate: '2026-08-15T03:00:00Z' },
+      ],
+    };
+    const source = `import { parseRdap } from ${JSON.stringify(moduleUrl)}; process.stdout.write(JSON.stringify(parseRdap('domain', ${JSON.stringify(fixture)})?.lifecycle));`;
+    const run = (timezone: string) => execFileSync(process.execPath, ['--input-type=module', '-e', source], {
+      encoding: 'utf8',
+      env: { ...process.env, TZ: timezone },
+    });
+    const utc = run('UTC');
+    assert.equal(run('Australia/Melbourne'), utc);
+    assert.equal(JSON.parse(utc).updatedDateIso, '2026-08-15T12:00:00.000Z');
   });
 
   test('does not fabricate an ISO lifecycle companion for an invalid event date', () => {
@@ -365,7 +484,60 @@ describe('structured RDAP metadata', () => {
     assert.equal(registrant.handle, null);
     assert.deepEqual(registrant.emails, ['valid@example.com']);
     assert.equal(registrant.links.length, 1);
+    assert.equal(registrant.truncated, true);
+    assert.equal(parsed.linksTruncated, true);
+    assert.equal(parsed.entitiesTruncated, true);
     assert.equal(parsed.entitiesByRole['unrecognized-role'], undefined);
+  });
+
+  test('marks rejected supplied entity scalars and known vCard values as truncated', () => {
+    const fixtures = [
+      {
+        handle: 'BAD\nHANDLE',
+        roles: ['registrant'],
+        vcardArray: ['vcard', [['fn', {}, 'text', 'Valid Name']]],
+      },
+      {
+        handle: 'CONTACT-1',
+        roles: ['registrant'],
+        vcardArray: ['vcard', [
+          ['fn', {}, 'text', 'Valid Name'],
+          ['email', {}, 'text', 'bad\n@example.com'],
+        ]],
+      },
+      {
+        handle: 'CONTACT-1',
+        roles: ['registrant'],
+        vcardArray: ['vcard', [
+          ['fn', {}, 'text', 'Valid Name'],
+          ['tel', {}, 'text', { unexpected: true }],
+        ]],
+      },
+    ];
+    for (const entity of fixtures) {
+      const parsed = parseFixture('domain', { ldhName: 'EXAMPLE.COM', entities: [entity] });
+      const registrant = requiredValue(parsed.registrant);
+      assert.equal(registrant.name, 'Valid Name');
+      assert.equal(registrant.truncated, true);
+      assert.equal(parsed.entitiesTruncated, true);
+    }
+
+    const complete = parseFixture('domain', {
+      ldhName: 'EXAMPLE.COM',
+      entities: [{
+        handle: 'CONTACT-1',
+        roles: ['registrant'],
+        vcardArray: ['vcard', [
+          ['fn', {}, 'text', 'Valid Name'],
+          ['email', {}, 'text', 'valid@example.com'],
+          ['tel', {}, 'text', '+61 1'],
+          ['adr', {}, 'text', ['', '', '1 Example St', 'Example City', 'EX', '3000', 'AU']],
+        ]],
+      }],
+    });
+    assert.equal(requiredValue(complete.registrant).address, '1 Example St, Example City, EX, 3000, AU');
+    assert.equal(requiredValue(complete.registrant).truncated, false);
+    assert.equal(complete.entitiesTruncated, false);
   });
 
   test('caps recursive entity traversal by depth and tolerates cyclic fixture objects', () => {
@@ -459,6 +631,25 @@ describe('structured RDAP metadata', () => {
     });
     assert.deepEqual(ipv4.cidrs, ['192.0.2.0/24']);
     assert.deepEqual(ipv6.cidrs, ['2001:db8::/32']);
+    assert.equal(ipv4.cidrsTruncated, true);
+    assert.equal(ipv6.cidrsTruncated, true);
+  });
+
+  test('marks malformed conformance, redaction, variant, and CIDR containers incomplete', () => {
+    const domain = parseFixture('domain', {
+      rdapConformance: ['rdap_level_0', null],
+      redacted: { name: 'Registry Domain ID' },
+      variants: [{ relation: ['registered', null], variantNames: 'not-an-array' }],
+    });
+    assert.deepEqual(domain.conformance, ['rdap_level_0']);
+    assert.equal(domain.conformanceTruncated, true);
+    assert.deepEqual(domain.redactions, []);
+    assert.equal(domain.redactionsTruncated, true);
+    assert.equal(domain.variantsTruncated, true);
+
+    const network = parseFixture('ipv4', { cidr0_cidrs: { v4prefix: '192.0.2.0', length: 24 } });
+    assert.deepEqual(network.cidrs, []);
+    assert.equal(network.cidrsTruncated, true);
   });
 
   test('normalizes conformance, language, and explicit redaction provenance', () => {
@@ -484,7 +675,35 @@ describe('structured RDAP metadata', () => {
       pathLanguage: 'jsonpath', prePath: '$.handle', postPath: null, replacementPath: null,
     });
     assert.equal(arrayValue(parsed.redactions, 1).name, 'Registrant Email');
-    assert.equal(parsed.redactionsTruncated, false);
+    assert.equal(parsed.redactionsTruncated, true);
+  });
+
+  test('reports malformed supplied redaction and variant child fields', () => {
+    const malformed = parseFixture('domain', {
+      ldhName: 'ONE.EXAMPLE',
+      redacted: [{ name: 'Registry ID', method: { bad: true } }],
+      variants: [{
+        relation: ['registered'],
+        variantNames: [{ ldhName: 'variant.example', unicodeName: { bad: true } }],
+      }],
+    });
+    assert.equal(malformed.redactions[0]?.name, 'Registry ID');
+    assert.equal(malformed.redactions[0]?.method, null);
+    assert.equal(malformed.redactionsTruncated, true);
+    assert.equal(malformed.variants[0]?.variantNames[0]?.ldhName, 'variant.example');
+    assert.equal(malformed.variants[0]?.variantNames[0]?.unicodeName, null);
+    assert.equal(malformed.variantsTruncated, true);
+
+    const complete = parseFixture('domain', {
+      ldhName: 'ONE.EXAMPLE',
+      redacted: [{ name: 'Registry ID', method: 'removal' }],
+      variants: [{
+        relation: ['registered'],
+        variantNames: [{ ldhName: 'variant.example', unicodeName: 'variant.example' }],
+      }],
+    });
+    assert.equal(complete.redactionsTruncated, false);
+    assert.equal(complete.variantsTruncated, false);
   });
 
   test('bounds redaction entries and reports truncation accurately', () => {

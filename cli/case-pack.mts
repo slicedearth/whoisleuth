@@ -15,6 +15,7 @@ import {
   CASE_REPORT_SCHEMA_VERSION,
 } from '../frontend/src/lib/analysis/case-report.ts';
 import { WHOISLEUTH_APPLICATION_VERSION } from '../lib/application-version.mts';
+import { scanBoundedJson } from '../lib/bounded-json.mts';
 import {
   CASE_IMPORT_VERSIONS,
   CONCLUSIVE_AVAILABILITY,
@@ -757,8 +758,12 @@ export function buildCliCasePack(
 ) {
   if (!options.reviewed) throw new CliUsageError('case-pack requires --reviewed after the audience-specific output has been checked.');
   if (Buffer.byteLength(input, 'utf8') > MAX_CASE_PACK_INPUT_BYTES) throw new CliUsageError('Case-pack input is limited to 4 MiB.');
+  const normalized = input.replace(/^\uFEFF/u, '');
   let parsed: unknown;
-  try { parsed = JSON.parse(input.replace(/^\uFEFF/u, '')); } catch { throw new CliUsageError('Case-pack input must be valid JSON.'); }
+  try {
+    scanBoundedJson(normalized);
+    parsed = JSON.parse(normalized);
+  } catch { throw new CliUsageError('Case-pack input must be valid bounded JSON without duplicate keys.'); }
   const root = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};
   if (typeof root.version !== 'number' || !CASE_IMPORT_VERSIONS.includes(root.version as typeof CASE_IMPORT_VERSIONS[number]) || !Array.isArray(root.cases)) {
     throw new CliUsageError(`Case-pack input must be a supported WHOISleuth case export through schema ${CASE_SCHEMA_VERSION}.`);

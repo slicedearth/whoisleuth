@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { Buffer } from 'node:buffer';
+import { decodeBoundedUtf8 } from '../lib/bounded-file.mts';
 
 import type { BulkLookupResult, BulkLookupOptions } from './bulk.mts';
 import { runBulkLookups } from './bulk.mts';
@@ -69,7 +70,11 @@ async function readDiscoveryScanListBounded(
     if (total > limit) throw new CliUsageError(`Discovery scan allowlists are limited to ${limit} bytes.`);
     chunks.push(buffer);
   }
-  return Buffer.concat(chunks).toString('utf8');
+  try {
+    return decodeBoundedUtf8(Buffer.concat(chunks), 'Discovery scan allowlist');
+  } catch (cause) {
+    throw new CliUsageError(cause instanceof Error ? cause.message : 'Discovery scan allowlist must contain valid UTF-8 text.');
+  }
 }
 
 function parseDiscoveryScanAllowlist(

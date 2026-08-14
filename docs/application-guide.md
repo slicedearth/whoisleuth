@@ -264,7 +264,7 @@ Each edge retains its own source health and limitations; a failed or incomplete
 TLS check is not shown as an absent certificate relationship.
 
 The collapsed **Replay exported evidence** control accepts a supported
-first-party Lookup evidence JSON document in schema 25, 26, or 27, up to 5 MB. The browser validates
+first-party Lookup evidence JSON document in schema 25, 26, 27, or 28, up to 5 MB. The browser validates
 the schema, nesting, and structured entry count, calculates a SHA-256 file
 digest, and can compare it with a trusted checksum pasted before import. It
 displays a bounded normalised source and fact summary, historical review brief,
@@ -283,8 +283,12 @@ normalised registration sources, a bounded privacy-projected registry RDAP
 publication, supporting observations, explicitly projected diagnostics,
 comparisons, and provenance. Request and response headers, cookies, session and
 credential fields, URL credentials, queries, fragments, and full WHOIS bodies
-are excluded. It can still contain public contact data, so review and store it
-accordingly. Offline replay intentionally exposes only its bounded normalised
+are excluded. Current schema 28 also excludes raw registration payloads,
+expanded RDAP and WHOIS contacts, vCards, entity inventories, and attributed
+contact routes. Its availability analysis carries
+`registryContactsExcluded: true` instead of registrar, registrant, or abuse
+contact values. Legacy schemas 25 through 27 can contain public contact data,
+so review and store those files accordingly. Offline replay intentionally exposes only its bounded normalised
 review projection.
 
 ### Discover
@@ -573,8 +577,11 @@ workspace. Leaving the page or selecting Clear removes the in-memory review.
 The optional JSON download includes source-file and artefact digests; it does
 not authenticate the report sender or turn an aggregate outcome into a current
 safety or intent conclusion. XML document types and entities are rejected, and
-file, decompression, entry, record, policy, and failure-detail limits are
-enforced before presentation.
+the supported DMARC subset permits only an optional strict leading XML
+declaration followed by ordinary elements. Comments, CDATA, other processing
+instructions, and declarations are rejected rather than normalized into report
+evidence. File, decompression, entry, record, policy, and failure-detail limits
+are enforced before presentation.
 
 The profile can separately retain six expiring analyst attestations for
 registrar MFA, recovery-email separation, registry lock, emergency contacts,

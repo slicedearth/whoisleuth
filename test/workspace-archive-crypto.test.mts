@@ -430,7 +430,11 @@ describe('encrypted portable workspace archives', () => {
 
   test('refuses to encrypt a document that is not a valid ordinary workspace archive', async () => {
     await assert.rejects(
-      encryptWorkspaceArchive({ schema: WORKSPACE_ARCHIVE_SCHEMA, version: WORKSPACE_ARCHIVE_VERSION }, PASSPHRASE),
+      encryptWorkspaceArchive({
+        schema: WORKSPACE_ARCHIVE_SCHEMA,
+        version: WORKSPACE_ARCHIVE_VERSION,
+        generatedAt: NOW,
+      }, PASSPHRASE),
       /envelope contains missing or undeclared fields/,
     );
   });

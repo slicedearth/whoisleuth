@@ -878,8 +878,13 @@ default (see the README), so many lookups return no personal data at all.
   values, or 500 items in any single container. A result that is valid for display but exceeds the stricter 24-level,
   20,000-entry portable evidence structure remains reviewable, while its
   evidence JSON and readable report exports stay unavailable with an explicit
-  limitation. The RDAP publication may still
-  contain registry-published contact data. The separate
+  limitation. Current schema-28 Lookup evidence uses positive RDAP and WHOIS
+  publication allowlists and excludes raw registration payloads, expanded
+  contacts, vCards, entity inventories, and attributed contact routes. Its
+  availability projection also removes registrar, registrant, and abuse
+  contact values and retains an explicit `registryContactsExcluded` marker so
+  deliberate omission cannot be read as source-published absence. Legacy
+  schemas 25 through 27 may still contain registry-published contact data. The separate
   Lookup Markdown reports are generated from bounded known-field projections in
   the browser. Domain
   reports include registry, registrar, WHOIS, Risk, and limitation context; IP
@@ -887,7 +892,7 @@ default (see the README), so many lookups return no personal data at all.
   context when collected; ASN reports include normalised routing registration
   evidence. All preserve source states and collection time while excluding raw
   RDAP and WHOIS responses, expanded contacts, provider payloads, scripts, and
-  remote assets. A selected supported Lookup evidence schema 25, 26, or 27 JSON file can be
+  remote assets. A selected supported Lookup evidence schema 25, 26, 27, or 28 JSON file can be
   replayed locally after schema, nesting, entry-count, and byte-limit checks.
   Replay calculates SHA-256 and can compare it with an explicitly supplied
   trusted checksum. The file and checksum remain in the current browser tab,
