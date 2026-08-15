@@ -18,7 +18,7 @@ import {
   MAX_TAG_LENGTH,
   type CaseNote,
 } from './case-record-contracts.ts';
-import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from '../../../../lib/observation.mts';
+import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from '../../../../packages/evidence/observation.mts';
 
 // Forward-version policy (two distinct guarantees):
 //   - A locally-stored envelope that declares a version greater than this is
@@ -124,40 +124,7 @@ export function deterministicId(domain: string): string {
   return `c-${hashString(domain)}`;
 }
 
-/**
- * Strict, canonical domain normalization. Parses through the WHATWG URL host
- * (which strips scheme/path/port/userinfo and applies IDNA/punycode so Unicode
- * and its punycode form collapse to one value), lowercases, drops a single
- * terminal root dot, and validates LDH hostname labels. Rejects IPs, ASNs,
- * whitespace/control characters, underscores, empty/overlong/hyphen-edged
- * labels, and undotted names. Returns '' for anything unusable.
- * @param {unknown} value
- * @returns {string}
- */
-export function normalizeDomain(value: unknown): string {
-  const raw = String(value == null ? '' : value).trim();
-  if (!raw || /[\s\x00-\x1f\x7f]/.test(raw)) return '';
-  let hostname;
-  try {
-    const hasScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(raw);
-    hostname = new URL(hasScheme ? raw : `http://${raw}`).hostname;
-  } catch {
-    return '';
-  }
-  hostname = hostname.toLowerCase().replace(/\.$/, '');
-  if (!hostname || hostname.length > MAX_DOMAIN_LENGTH) return '';
-  // A leftover ':' or '[' means a port/IPv6 the host parser preserved.
-  if (hostname.includes(':') || hostname.startsWith('[')) return '';
-  const labels = hostname.split('.');
-  if (labels.length < 2) return '';
-  const labelPattern = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
-  for (const label of labels) {
-    if (!label || label.length > 63 || !labelPattern.test(label)) return '';
-  }
-  // An all-numeric final label is an IPv4 address, never a hostname TLD.
-  if (/^[0-9]+$/.test(labels.at(-1) ?? '')) return '';
-  return hostname;
-}
+export { normalizeDomain } from '../../../../packages/evidence/domain-name.mts';
 
 /**
  * Canonicalizes a hostname supplied as source evidence without applying the

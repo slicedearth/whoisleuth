@@ -20,24 +20,24 @@ import type {
   NormalizedRdapTextBlock,
   RdapAttempt,
 } from './rdap-types.mts';
+import {
+  MAX_RDAP_NAMESERVER_SEARCH_RESULTS,
+  RDAP_NAMESERVER_SEARCH_SCHEMA,
+  RDAP_NAMESERVER_SEARCH_VERSION,
+  type RdapNameserverSearchState as SearchState,
+} from '../packages/contracts/rdap-nameserver-search.mts';
 
-export const RDAP_NAMESERVER_SEARCH_SCHEMA = 'whoisleuth.rdap-nameserver-search';
-export const RDAP_NAMESERVER_SEARCH_VERSION = 1;
-export const MAX_RDAP_NAMESERVER_SEARCH_RESULTS = 200;
+export {
+  MAX_RDAP_NAMESERVER_SEARCH_RESULTS,
+  RDAP_NAMESERVER_SEARCH_SCHEMA,
+  RDAP_NAMESERVER_SEARCH_VERSION,
+};
 
 const MAX_RDAP_SEARCH_ENDPOINTS = 3;
 const MAX_RDAP_SEARCH_INSPECTED_RESULTS = MAX_RDAP_NAMESERVER_SEARCH_RESULTS * 4;
 const RDAP_SEARCH_TIMEOUT_MS = 7_000;
 const RDAP_SEARCH_TOTAL_DEADLINE_MS = 12_000;
 const UNSUPPORTED_STATUSES = new Set([400, 405, 501]);
-
-type SearchState =
-  | 'success'
-  | 'partial'
-  | 'no_results'
-  | 'unsupported'
-  | 'rate_limited'
-  | 'unavailable';
 
 type NameserverSearchMatch = {
   domain: string;

@@ -3,6 +3,7 @@ import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 
 import { CliUsageError } from './errors.mts';
+import { cliMetaActionForInvocation } from './command-reference.mts';
 import { readBoundedRegularTextFile } from '../lib/bounded-file.mts';
 import { scanBoundedJson } from '../lib/bounded-json.mts';
 
@@ -125,6 +126,7 @@ export async function resolveCliProfileArguments(
     readConfig?: (path: string) => Promise<string>;
   }> = {},
 ): Promise<string[]> {
+  if (cliMetaActionForInvocation(argv)) return [...argv];
   // registry-scaffold owns --profile as the capability template to generate.
   // Do not reinterpret it as a global CLI-default profile.
   if (argv[0] === 'registry-scaffold') {

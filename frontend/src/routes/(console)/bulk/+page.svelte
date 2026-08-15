@@ -21,11 +21,11 @@
   import { activeProfile, isDomainAllowlisted, normalizeProfile, type ActiveBrandProfileSourceState, type BrandProfile } from '$lib/brand-profiles';
   import { consumeCandidateHandoff, type Candidate, type CandidateHandoff, type CertificateTransparencyProvenance } from '$lib/candidate-handoff';
   import { clearShortlist, exportShortlist, importShortlist, loadShortlist, MAX_SHORTLIST_IMPORT_BYTES, setShortlistSelection, toggleShortlist, type ShortlistRecord } from '$lib/shortlist';
-  import { CASE_DISPOSITIONS, dispositionLabel, editCase, loadCases, openCase, type CaseRecord } from '$lib/cases';
+  import { CASE_DISPOSITIONS, dispositionLabel, editCase, loadCases, openCase, setCaseDispositions, type CaseRecord } from '$lib/cases';
   import { saveWatchlist } from '$lib/watchlists';
   import { MUTATION_LABELS } from '$lib/analysis/typosquat-generator.ts';
   import { buildCoverageReport } from '$lib/analysis/coverage.ts';
-  import { normalizeBulkScanResult } from '$lib/analysis/bulk-scan-normalizer.ts';
+  import { canonicalBulkTargets, normalizeBulkScanResult } from '$lib/analysis/bulk-scan-normalizer.ts';
   import { parseDomainInput, rowsToCsv } from '$lib/analysis/utils.ts';
   import { buildScanRelationships, relationshipObservation, RELATIONSHIP_EVIDENCE_VERSION } from '$lib/analysis/relationship-evidence.ts';
   import type { RelationshipObservation } from '$lib/analysis/relationship-evidence.ts';
@@ -148,7 +148,7 @@
   let profileSourceState=$state<ActiveBrandProfileSourceState>('loading');
   let shortlist=$state<ShortlistRecord[]>([]);let shortlistStatus=$state('');let draftStatus=$state('');
   let shortlistSourceState=$state<'loading'|'ready'|'unavailable'>('loading');
-  let cases=$state<CaseRecord[]>([]);let caseStatus=$state('');
+  let cases=$state<CaseRecord[]>([]);let caseStatus=$state('');let caseMutationBusy=$state(false);
   let casesSourceState=$state<'loading'|'ready'|'unavailable'>('loading');
   let retainedRelationshipIds=$state<Set<string>>(new Set());let relationshipRetentionStatus=$state('');
   let relationshipsSourceState=$state<'loading'|'ready'|'unavailable'>('loading');
@@ -216,9 +216,14 @@
   const currentPage=$derived(Math.min(page,pageCount));
   const visibleResults=$derived(filtered.slice((currentPage-1)*PAGE_SIZE,currentPage*PAGE_SIZE));
   const resultRows=$derived(buildBulkResultDisplayRows({visibleResults,allResults:results,shortlistedDomains,caseByDomain,reviewStateByDomain:bulkReviewStateByDomain,mutationLabels}));
+  // Provenance remains exact-host only. A subdomain candidate may collapse to
+  // its registrable collection target, but its CT or mutation context must not
+  // be misattributed to that broader domain.
   const provenanceByDomain=$derived(new Map((handoff?.candidates||[]).map(candidate=>[candidate.domain.toLowerCase(),candidate])));
   const relationshipSummary=$derived(buildScanRelationships(running?[]:results));
   const parsedInput=$derived(parseDomainInput(input));
+  const scanTargets=$derived(canonicalBulkTargets(parsedInput.entries));
+  const equivalentTargetCount=$derived(Math.max(0,parsedInput.entries.length-scanTargets.length));
   const scanProgress=$derived(buildBulkProgressEstimate(completed,total,scanElapsedMs));
   const currentQueryLimit=$derived(bulkQueryLimit(mode));
   const scanOutcomes=$derived(buildBulkProgressOutcomes(results,total));
@@ -317,9 +322,23 @@
     };
   });
   function prunedNote(pruned:number){return pruned?` (pruned ${pruned} old evidence snapshot${pruned===1?'':'s'} to stay within storage)`:'';}
-  async function trackCase(row:ScanResult){try{const s=row.saved;const{record,created,pruned}=await openCase({domain:row.domain,source:'bulk',evidence:{scanDepth:s.scanDepth,availability:s.availability,confidence:row.confidence,riskModelVersion:s.riskModelVersion,riskScore:row.risk,riskFactors:s.riskFactors,opportunityModelVersion:s.opportunityModelVersion,opportunityScore:row.opportunity,registrar:row.registrar&&row.registrar!=='—'?row.registrar:null,createdDate:s.createdDate,expiryDate:s.expiryDate,nameservers:s.nameservers,hasMx:s.hasMx,hasSpf:s.hasSpf,hasDmarc:s.hasDmarc,activityStatus:s.activityStatus,pageTitle:s.pageTitle,...(normalizeHttpSummary(s)||{}),faviconMatch:s.faviconMatch,faviconNearMatch:s.faviconNearMatch,reusesOfficialAssets:s.reusesOfficialAssets,hasPasswordField:s.hasPasswordField,hasExternalFormAction:s.hasExternalFormAction,phishingLanguageMatch:s.phishingLanguageMatch,privacyProtected:s.privacyProtected,idnReferenceMatch:s.idnReferenceMatch,pageBaselineMatch:s.pageBaselineMatch,hasActiveBrandProfile:s.hasActiveBrandProfile,profileContextState:s.profileContext.sourceState==='ready'?'ready':'unavailable',profileContextLimitation:s.profileContext.limitation||null,mutationTypes:s.mutationTypes}});cases=await loadCases();caseStatus=`${created?`Opened a case for ${record.domain}.`:`${record.domain} already has a case.`}${prunedNote(pruned)}`;}catch(cause){caseStatus=cause instanceof Error?cause.message:'Could not open the case.';}}
-  async function setRowDisposition(row:ScanResult,value:string){const record=caseByDomain.get(row.domain);if(!record)return;try{const{pruned}=await editCase(record.id,{disposition:value});cases=await loadCases();caseStatus=`Marked ${row.domain} as ${dispositionLabel(value)}.${prunedNote(pruned)}`;}catch(cause){caseStatus=cause instanceof Error?cause.message:'Could not update the case.';}}
-  function parseDomains(){return parsedInput.entries.map((value:string)=>value.toLowerCase());}
+  async function reconcileBulkCaseSnapshot(committed:{cases:CaseRecord[]},success:string){
+    try{cases=await loadCases();caseStatus=success;}
+    catch{cases=committed.cases;casesSourceState='ready';caseStatus=`${success} The change was saved, but Cases could not be reread. The complete committed Case snapshot is shown locally; reload to retry the browser-local read.`;}
+  }
+  async function trackCase(row:ScanResult){
+    const s=row.saved;
+    try{
+      const committed=await openCase({domain:row.domain,source:'bulk',evidence:{scanDepth:s.scanDepth,availability:s.availability,confidence:row.confidence,riskModelVersion:s.riskModelVersion,riskScore:row.risk,riskFactors:s.riskFactors,opportunityModelVersion:s.opportunityModelVersion,opportunityScore:row.opportunity,registrar:row.registrar&&row.registrar!=='—'?row.registrar:null,createdDate:s.createdDate,expiryDate:s.expiryDate,nameservers:s.nameservers,hasMx:s.hasMx,hasSpf:s.hasSpf,hasDmarc:s.hasDmarc,activityStatus:s.activityStatus,pageTitle:s.pageTitle,...(normalizeHttpSummary(s)||{}),faviconMatch:s.faviconMatch,faviconNearMatch:s.faviconNearMatch,reusesOfficialAssets:s.reusesOfficialAssets,hasPasswordField:s.hasPasswordField,hasExternalFormAction:s.hasExternalFormAction,phishingLanguageMatch:s.phishingLanguageMatch,privacyProtected:s.privacyProtected,idnReferenceMatch:s.idnReferenceMatch,pageBaselineMatch:s.pageBaselineMatch,hasActiveBrandProfile:s.hasActiveBrandProfile,profileContextState:s.profileContext.sourceState==='ready'?'ready':'unavailable',profileContextLimitation:s.profileContext.limitation||null,mutationTypes:s.mutationTypes}});
+      await reconcileBulkCaseSnapshot(committed,`${committed.created?`Opened a case for ${committed.record.domain}.`:`${committed.record.domain} already has a case.`}${prunedNote(committed.pruned)}`);
+    }catch(cause){caseStatus=cause instanceof Error?cause.message:'Could not open the case.';}
+  }
+  async function setRowDisposition(row:ScanResult,value:string){
+    const record=caseByDomain.get(row.domain);if(!record)return;
+    try{const committed=await editCase(record.id,{disposition:value});await reconcileBulkCaseSnapshot(committed,`Marked ${row.domain} as ${dispositionLabel(value)}.${prunedNote(committed.pruned)}`);}
+    catch(cause){caseStatus=cause instanceof Error?cause.message:'Could not update the case.';}
+  }
+  function parseDomains(){return [...scanTargets];}
   function provenance(domain:string):Candidate|undefined{return provenanceByDomain.get(domain.toLowerCase());}
   function matchesReviewState(domain:string){if(bulkReviewSourceState!=='ready')return true;const state=bulkReviewStateByDomain.get(domain)||'unreviewed';return !reviewStateFilter||state===reviewStateFilter;}
   function setFilter(next:BulkPrimaryFilter){filter=next;page=1;}
@@ -406,7 +425,7 @@
   async function fetchLookup(domain:string,signal:AbortSignal):Promise<CompactLookupHttpResponse>{return fetchCompactBulkLookup(domain,mode,signal);}
   function normalize(domain:string,body:CompactLookupHttpResponse,snapshot:BulkScanProfileSnapshot):ScanResult {
     const candidate=provenance(domain)||provenance(body.availability.domain)||null;
-    return normalizeBulkScanResult(body,{mode:snapshot.mode,profile:snapshot.profile,profileSourceState:snapshot.sourceState,candidate});
+    return normalizeBulkScanResult(body,{targetDomain:domain,mode:snapshot.mode,profile:snapshot.profile,profileSourceState:snapshot.sourceState,candidate});
   }
   function failedResult(domain:string,message:string,snapshot:BulkScanProfileSnapshot):ScanResult{const candidate=provenance(domain);const mutationTypes=candidate?.mutationTypes||[];const officialDomains=snapshot.sourceState==='ready'?(snapshot.profile?.officialDomains||[]):[];const idn=analyzeDomainIdn(domain,officialDomains);const profileValue=snapshot.sourceState==='ready'?false:null;return{domain:idn?.asciiDomain||domain,status:'error',availability:'error',confidence:'unknown',registrar:'—',activity:'—',risk:null,opportunity:null,mutationTypes,trusted:null,error:message,saved:{domain:idn?.asciiDomain||domain,scanDepth:snapshot.mode,availability:'error',registrarName:'—',nameservers:[],faviconHash:null,faviconPHash:null,faviconMatch:profileValue,faviconNearMatch:profileValue,reusesOfficialAssets:profileValue,idnReferenceMatch:snapshot.sourceState==='ready'?Boolean(idn?.referenceMatches.length):null,pageBaselineMatch:null,hasActiveBrandProfile:snapshot.sourceState==='ready'?Boolean(snapshot.profile):null,riskFactors:[],mutationTypes,profileContext:snapshot.provenance,error:message},nameservers:[],faviconHash:null,faviconPHash:null,faviconMatch:profileValue,faviconNearMatch:profileValue,reusesOfficialAssets:profileValue,hasPasswordField:false,hasExternalFormAction:null,phishingLanguageMatch:null,registrant:null,abuseEvidence:null,ct:candidate?.certificateTransparency||null,idn,dns:null,dnssec:null,comparisonEvidence:null,relationship:relationshipObservation({},officialDomains),sourceCoverage:[{source:'lookup',state:'error'}]};}
   async function saveCurrentBulkSession(){if(bulkSessionsSourceState!=='ready'){bulkSessionStatus='Saved Bulk sessions are unavailable. Reload before saving.';return;}const name=bulkSessionName.trim();const domains=parseDomains();if(!name||!domains.length||!results.length){bulkSessionStatus='Enter a session name and complete at least one result before saving.';return;}try{const settled=new Set(results.map((row)=>row.domain));const isComplete=domains.every((domain)=>settled.has(domain));const now=new Date().toISOString();const sessionResults=results.map(toBulkSessionResult);const result=await saveBulkSession({id:currentBulkSessionId||createBulkSessionId(),name,mode,state:isComplete?'complete':status.startsWith('Cancelled')?'cancelled':'partial',inputDigest:await bulkSessionInputDigest(domains,mode),domains,results:sessionResults,profileContext:summarizeBulkProfileContexts(sessionResults),startedAt:scanStartedAt||now,updatedAt:now,completedAt:isComplete?now:null});currentBulkSessionId=result.session.id;bulkSessions=await loadBulkSessions();bulkSessionStatus=`${result.added?'Saved':'Updated'} ${result.session.name}.${result.pruned?` Pruned ${result.pruned} older session${result.pruned===1?'':'s'} to stay within storage.`:''}`;}catch(cause){bulkSessionStatus=cause instanceof Error?cause.message:'Could not save the Bulk session.';}}
@@ -481,7 +500,17 @@
   async function exportDomainComparison(){if(!domainComparison)return;const exported=await buildBulkDomainComparisonExport(domainComparison);downloadText(exported.content,exported.filename,'application/json');bulkReviewStatus='Exported the two-domain evidence comparison with an integrity digest.';}
   async function exportMailExposure(){if(profileSourceState!=='ready'){bulkReviewStatus='Brand Profile context is not ready, so the mail-exposure comparison remains inconclusive and cannot be exported yet.';return;}const exported=await buildBulkMailExposureExport(mailExposureReport);downloadText(exported.content,exported.filename,'application/json');bulkReviewStatus='Exported the filtered mail-exposure review with an integrity digest.';}
   async function createCasesSelected(){if(casesSourceState!=='ready'){caseStatus='Cases are unavailable. Reload before creating cases.';return;}const rows=selectedRows.slice(0,50);if(!rows.length||!confirm(`Create or refresh cases for ${rows.length} selected domain${rows.length===1?'':'s'}?`))return;for(const row of rows)await trackCase(row);caseStatus=`Reviewed ${rows.length} selected domain${rows.length===1?'':'s'} for case creation${selectedRows.length>rows.length?'; the action was capped at 50':''}.`;}
-  async function setSelectedDisposition(value:string){if(casesSourceState!=='ready'){caseStatus='Cases are unavailable. Reload before changing dispositions.';return;}const records=selectedRows.map((row)=>caseByDomain.get(row.domain)).filter((record):record is CaseRecord=>Boolean(record)).slice(0,100);if(!records.length)return;for(const record of records)await editCase(record.id,{disposition:value});cases=await loadCases();caseStatus=`Marked ${records.length} selected case${records.length===1?'':'s'} as ${dispositionLabel(value)}${selectedRows.length>records.length?'; only existing cases were changed':''}.`;}
+  async function setSelectedDisposition(value:string){
+    if(caseMutationBusy)return;
+    if(casesSourceState!=='ready'){caseStatus='Cases are unavailable. Reload before changing dispositions.';return;}
+    const records=selectedRows.map((row)=>caseByDomain.get(row.domain)).filter((record):record is CaseRecord=>Boolean(record)).slice(0,100);if(!records.length)return;
+    caseMutationBusy=true;
+    try{
+      const committed=await setCaseDispositions(records.map((record)=>record.id),value);
+      await reconcileBulkCaseSnapshot(committed,`Marked ${committed.changed} selected case${committed.changed===1?'':'s'} as ${dispositionLabel(value)}${selectedRows.length>records.length?'; only existing cases were changed':''}.${prunedNote(committed.pruned)}`);
+    }catch(cause){caseStatus=cause instanceof Error?cause.message:'Could not update the selected Cases.';}
+    finally{caseMutationBusy=false;}
+  }
   function downloadText(content:string,filename:string,mimeType:string){const url=URL.createObjectURL(new Blob([content],{type:mimeType}));const anchor=document.createElement('a');anchor.href=url;anchor.download=filename;anchor.click();URL.revokeObjectURL(url);}
   function exportDefensiveIndicators(){
     if(profileSourceState!=='ready'){indicatorStatus='Brand Profile context is unavailable, so trusted and allowlisted exclusions are inconclusive. Reload before exporting defensive indicators.';return;}
@@ -521,9 +550,10 @@
   outcomes={scanOutcomes}
   {running}
   {paused}
-  entryCount={parsedInput.entries.length}
+  entryCount={scanTargets.length}
   queryLimit={currentQueryLimit}
   duplicateCount={parsedInput.duplicates}
+  equivalentCount={equivalentTargetCount}
   inputTooLarge={parsedInput.tooLarge}
   {importDomainFile}
   {start}
@@ -643,6 +673,7 @@
       {deepRescanSelected}
       {createCasesSelected}
       {setSelectedDisposition}
+      {caseMutationBusy}
       caseOptions={CASE_DISPOSITIONS}
       profileContextState={profileSourceState}
       shortlistAvailable={shortlistSourceState==='ready'}

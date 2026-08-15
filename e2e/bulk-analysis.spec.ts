@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { expect, test } from './fixtures';
-import { boundingBox, expectNoHorizontalOverflow, expectNoHorizontalScrollContainers, failBrowserLocalCollectionReads, failBrowserLocalReads, migrateLegacyBrowserData, pseudoContent, readBrowserLocalCollection, runBulkScan } from './helpers';
+import { boundingBox, expectNoHorizontalOverflow, expectNoHorizontalScrollContainers, failBrowserLocalCollectionReads, failBrowserLocalReads, holdBrowserLocalReads, lookupDomainIdentity, migrateLegacyBrowserData, pseudoContent, readBrowserLocalCollection, runBulkScan } from './helpers';
 
 // Default fixtures use dotless values so classifyQuery rejects them before
 // any upstream work. Tests that need completed result data install an explicit
@@ -42,6 +42,46 @@ test('the scan button only takes the high-contrast primary treatment once ready'
   await page.locator('#domains').fill(invalidDomains(1).join('\n'));
   await expect(scanButton).toBeEnabled();
   expect(await scanButton.evaluate((el) => getComputedStyle(el).backgroundImage)).toContain('gradient');
+});
+
+test('canonicalises equivalent hostnames into one request per registrable target', async ({ page }) => {
+  const requests: string[] = [];
+  await page.route('**/api/lookup?*', async (route) => {
+    const domain = new URL(route.request().url()).searchParams.get('q') || '';
+    const identity = lookupDomainIdentity(domain);
+    requests.push(domain);
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        availability: {
+          applicable: true,
+          domain: identity.registrableDomain,
+          state: 'registered',
+          confidence: 'high',
+        },
+        diagnostics: {
+          version: 7,
+          rdap: { status: 'complete' },
+          whois: { status: 'skipped' },
+          availability: { status: 'complete' },
+        },
+      }),
+    });
+  });
+
+  await page.locator('#domains').fill([
+    'BÜCHER.example.',
+    'xn--bcher-kva.example',
+    'portal.example.test',
+    'example.test',
+  ].join('\n'));
+  await expect(page.locator('.input-help')).toContainText('2 equivalent hostname entries were combined by registrable target');
+  await page.getByRole('button', { name: 'Scan 2 domains' }).click();
+
+  await expect(page.locator('.status')).toHaveText('Completed 2 of 2 lookups.');
+  await expect(page.locator('.results-table tbody tr')).toHaveCount(2);
+  expect(requests).toEqual(['xn--bcher-kva.example', 'example.test']);
 });
 
 test('offers bounded request pacing and preserves the operator choice during console navigation', async ({ page }) => {
@@ -200,6 +240,52 @@ test('a small scan completes and reports the correct error count', async ({ page
   await expect(outcomes).toHaveAttribute('aria-label', 'Settled scan outcomes');
   await expect(outcomes.locator('div', { hasText: 'Failed' })).toContainText(String(domains.length));
   await expect(outcomes.locator('div', { hasText: 'Pending' })).toContainText('0');
+});
+
+test('selected Case dispositions commit atomically and ignore a rapid overlapping selection', async ({ page }) => {
+  await page.route('**/api/lookup?*', async (route) => {
+    const domain = new URL(route.request().url()).searchParams.get('q') || '';
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        availability: { applicable: true, domain, state: 'registered', confidence: 'high' },
+        diagnostics: {
+          version: 7,
+          rdap: { status: 'complete' },
+          whois: { status: 'skipped' },
+          availability: { status: 'complete' },
+        },
+      }),
+    });
+  });
+  const domains = ['batch-one.example', 'batch-two.example'];
+  await runBulkScan(page, domains);
+  for (const domain of domains) {
+    await page.getByRole('button', { name: `Add ${domain} to shortlist` }).click();
+  }
+  page.once('dialog', (dialog) => dialog.accept());
+  await page.getByRole('button', { name: 'Create cases' }).click();
+  const before = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 2 });
+
+  const disposition = page.getByLabel('Set case state');
+  await holdBrowserLocalReads(page, 750);
+  await disposition.evaluate((element) => {
+    const select = element as HTMLSelectElement;
+    for (const value of ['suspicious', 'confirmed_abuse']) {
+      select.value = value;
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+  });
+  await expect(disposition).toBeDisabled();
+  await expect(page.getByRole('status').filter({ hasText: 'Marked 2 selected cases as Suspicious' }).first()).toBeVisible();
+
+  const committed = await readBrowserLocalCollection(page, 'cases', {
+    minimumRecords: 2,
+    minimumRevision: before.manifest.revision + 1,
+  });
+  expect(committed.manifest.revision).toBe(before.manifest.revision + 1);
+  expect(committed.records.map((item) => item.value.disposition)).toEqual(['suspicious', 'suspicious']);
 });
 
 test('keeps mobile Bulk review focused while making secondary tools discoverable', {

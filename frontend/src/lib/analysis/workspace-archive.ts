@@ -27,7 +27,7 @@ import {
   CAMPAIGN_SCHEMA_VERSION,
   mergeCampaigns,
 } from './campaign-model.ts';
-import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from '../../../../lib/observation.mts';
+import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from '../../../../packages/evidence/observation.mts';
 import {
   assertWatchlistStoreBudget,
   buildWatchlistExport,

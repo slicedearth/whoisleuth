@@ -5,7 +5,7 @@ import {
   canonicalArtifactJsonV2,
   SORTED_JSON_V2,
   sha256ArtifactDigestV2,
-} from '../frontend/src/lib/analysis/artifact-integrity.ts';
+} from '../packages/evidence/artifact-integrity.mts';
 import {
   requireBoundedString,
   requireIsoTimestamp,

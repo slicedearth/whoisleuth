@@ -22,7 +22,7 @@
   "scripts": {
     "start": "npm run build && node server.mts",
     "test": "node --test",
-    "test:coverage": "node --test --experimental-test-coverage --test-coverage-lines=90 --test-coverage-branches=75 --test-coverage-functions=85 --test-coverage-include=\"lib/**/*.mts\" --test-coverage-include=\"cli/**/*.mts\" --test-coverage-include=\"frontend/src/lib/**/*.ts\" --test-coverage-include=\"netlify/functions/**/*.mts\" --test-coverage-include=\"packages/web-capture/capture.mts\" --test-coverage-include=\"packages/web-capture/compare.mts\" --test-coverage-include=\"server.mts\" --test-reporter=spec --test-reporter-destination=stdout --test-reporter=lcov --test-reporter-destination=test-coverage.lcov",
+    "test:coverage": "node --test --experimental-test-coverage --test-coverage-lines=90 --test-coverage-branches=75 --test-coverage-functions=85 --test-coverage-include=\"lib/**/*.mts\" --test-coverage-include=\"cli/**/*.mts\" --test-coverage-include=\"frontend/src/lib/**/*.ts\" --test-coverage-include=\"netlify/functions/**/*.mts\" --test-coverage-include=\"packages/evidence/**/*.mts\" --test-coverage-include=\"packages/web-capture/capture.mts\" --test-coverage-include=\"packages/web-capture/compare.mts\" --test-coverage-include=\"server.mts\" --test-reporter=spec --test-reporter-destination=stdout --test-reporter=lcov --test-reporter-destination=test-coverage.lcov",
     "test:properties": "node --test test/core-protocol-properties.test.mts test/evidence-quality-properties.test.mts test/browser-library-profile.test.mts test/service-binding-dns.test.mts test/model-contract-properties.test.mts",
     "test:profile": "node --test --test-reporter=spec --test-reporter-destination=stderr --test-reporter=./tools/test-duration-reporter.mts --test-reporter-destination=stdout",
     "typecheck": "npm run sync --workspace=frontend && tsc --noEmit -p tsconfig.json && tsc --noEmit -p frontend/analysis-tsconfig.json && tsc --noEmit -p frontend/tsconfig.json && tsc --noEmit -p e2e/tsconfig.json && tsc --noEmit -p test/tsconfig.json",
@@ -76,6 +76,7 @@
     "catalog:kev": "node tools/cisa-kev-catalog.mts",
     "catalog:kev:status": "node tools/cisa-kev-catalog-status.mts",
     "architecture:check": "npm run sync --workspace=frontend && depcruise --config .dependency-cruiser.json --output-type err-long -- lib cli bin netlify/functions frontend/src packages tools server.mts",
+    "capabilities:check": "node tools/capability-manifest.mts --check",
     "release:check": "node tools/release-version-check.mts",
     "dependencies:audit": "node tools/production-dependency-audit.mts",
     "licenses:check": "node tools/third-party-notices.mts --check",

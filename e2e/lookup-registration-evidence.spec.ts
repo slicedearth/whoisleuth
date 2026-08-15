@@ -3,6 +3,10 @@ import { expandLookupFamilies, expectNoHorizontalOverflow, migrateLegacyBrowserD
 import { readFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { LOOKUP_EVIDENCE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/evidence-export';
+import {
+  THREAT_INTELLIGENCE_CONTRACT_VERSION,
+  THREAT_INTELLIGENCE_SCHEMA,
+} from '../lib/threat-intelligence-types.mts';
 
 const packageVersion = (JSON.parse(readFileSync('package.json', 'utf8')) as { version: string }).version;
 
@@ -620,6 +624,8 @@ test('optional external intelligence searches are explicit, attributed, and mobi
         threatIntelligence: {
           version: 1,
           providers: [{
+            schema: THREAT_INTELLIGENCE_SCHEMA,
+            version: THREAT_INTELLIGENCE_CONTRACT_VERSION,
             provider: { id: 'urlscan_search', label: 'Fixture archived verdicts' },
             target: { type: 'domain', value: 'archive-review.example', exposure: 'registrable_domain' },
             state: 'success', detail: 'Found one archived malicious-verdict match.',
@@ -634,6 +640,8 @@ test('optional external intelligence searches are explicit, attributed, and mobi
               limitations: ['No matching provider record is not evidence that the target is safe.'],
             },
           }, {
+            schema: THREAT_INTELLIGENCE_SCHEMA,
+            version: THREAT_INTELLIGENCE_CONTRACT_VERSION,
             provider: { id: 'urlhaus_host', label: 'Fixture malware-host records' },
             target: { type: 'domain', value: 'archive-review.example', exposure: 'registrable_domain' },
             state: 'partial', detail: 'Found one bounded malware-distribution record before the provider result limit.',
@@ -649,6 +657,8 @@ test('optional external intelligence searches are explicit, attributed, and mobi
               limitations: ['A listed host may have been compromised or cleaned.'],
             },
           }, {
+            schema: THREAT_INTELLIGENCE_SCHEMA,
+            version: THREAT_INTELLIGENCE_CONTRACT_VERSION,
             provider: { id: 'threatfox_domain_ioc', label: 'Fixture malware-IOC records' },
             target: { type: 'domain', value: 'archive-review.example', exposure: 'registrable_domain' },
             state: 'skipped', detail: 'The optional source was not queried for this fixture.',

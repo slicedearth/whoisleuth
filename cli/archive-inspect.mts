@@ -12,7 +12,7 @@ import {
   WORKSPACE_ARCHIVE_SCHEMA,
   readWorkspaceArchive,
 } from '../frontend/src/lib/analysis/workspace-archive.ts';
-import { canonicalArtifactJson } from '../frontend/src/lib/analysis/artifact-integrity.ts';
+import { canonicalArtifactJson } from '../packages/evidence/artifact-integrity.mts';
 import {
   MAX_OFFLINE_ARTIFACT_BYTES,
   verifyOfflineArtifact,

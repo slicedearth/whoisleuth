@@ -4,13 +4,15 @@ import {
   SORTED_JSON_V2,
 } from './artifact-integrity.ts';
 import {
+  assertDomainControlPassportByteBudget,
   buildUnsignedDomainControlPassport,
   DOMAIN_CONTROL_PASSPORT_INPUT_SCHEMA,
-  DOMAIN_CONTROL_PASSPORT_VERSION,
+  MAX_DOMAIN_CONTROL_PASSPORT_BYTES,
   normalizeDomainControlPassportDocument,
   type DomainControlPassport,
   type DomainControlPassportEntry,
 } from './domain-control-manifest-core.ts';
+import { DOMAIN_CONTROL_MANIFEST_INPUT_VERSION } from '../../../../packages/contracts/domain-control-manifest.mts';
 import {
   MAX_DESIRED_POSTURE_BASELINES,
   normalizeDesiredPostureBaselines,
@@ -18,7 +20,7 @@ import {
   type DesiredPostureBaseline,
 } from './brand-profile-model.ts';
 
-export const MAX_DOMAIN_CONTROL_PASSPORT_BYTES = 256 * 1024;
+export { MAX_DOMAIN_CONTROL_PASSPORT_BYTES };
 export const DOMAIN_CONTROL_PASSPORT_FIELDS = Object.freeze([
   'nameservers',
   'ds',
@@ -58,7 +60,7 @@ export function buildBrandProfilePassportInput(
   expiresAt: string,
 ): Readonly<{
   schema: typeof DOMAIN_CONTROL_PASSPORT_INPUT_SCHEMA;
-  version: typeof DOMAIN_CONTROL_PASSPORT_VERSION;
+  version: typeof DOMAIN_CONTROL_MANIFEST_INPUT_VERSION;
   expiresAt: string;
   entries: readonly DomainControlPassportEntry[];
 }> {
@@ -75,7 +77,7 @@ export function buildBrandProfilePassportInput(
   });
   return Object.freeze({
     schema: DOMAIN_CONTROL_PASSPORT_INPUT_SCHEMA,
-    version: DOMAIN_CONTROL_PASSPORT_VERSION,
+    version: DOMAIN_CONTROL_MANIFEST_INPUT_VERSION,
     expiresAt,
     entries: Object.freeze(entries),
   });
@@ -86,7 +88,7 @@ export async function buildDomainControlPassport(
   generatedAt = new Date().toISOString(),
 ): Promise<DomainControlPassport> {
   const unsigned = buildUnsignedDomainControlPassport(input, generatedAt);
-  return Object.freeze({
+  const passport = Object.freeze({
     ...unsigned,
     integrity: Object.freeze({
       algorithm: 'SHA-256',
@@ -94,6 +96,8 @@ export async function buildDomainControlPassport(
       digestSha256: await sha256ArtifactDigestV2(unsigned),
     }),
   });
+  assertDomainControlPassportByteBudget(passport);
+  return passport;
 }
 
 export async function verifyDomainControlPassport(

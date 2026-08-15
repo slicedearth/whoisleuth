@@ -9,7 +9,7 @@ import { Worker } from 'node:worker_threads';
 
 import { RETIRE_BROWSER_CATALOG } from './generated/retire-browser-catalog.mts';
 import { CISA_KEV_CATALOG } from './generated/cisa-kev-catalog.mts';
-import { createObservation } from './observation.mts';
+import { createObservation } from '../packages/evidence/observation.mts';
 import {
   MAX_INLINE_SCRIPT_CHARS,
   MAX_INLINE_SCRIPT_TOTAL_CHARS,

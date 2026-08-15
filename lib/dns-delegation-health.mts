@@ -6,7 +6,7 @@
 import { promises as dns } from 'node:dns';
 import * as net from 'node:net';
 
-import { createObservation } from './observation.mts';
+import { createObservation } from '../packages/evidence/observation.mts';
 import { isPrivateAddress } from './safe-fetch.mts';
 
 type UnknownRecord = Record<string, unknown>;

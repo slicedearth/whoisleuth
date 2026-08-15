@@ -53,7 +53,7 @@ import {
   SORTED_JSON_V1,
   SORTED_JSON_V2,
   type ArtifactCanonicalizationRoute,
-} from '../frontend/src/lib/analysis/artifact-integrity.ts';
+} from '../packages/evidence/artifact-integrity.mts';
 import {
   SAVED_LOOKUP_SCHEMA,
   SUPPORTED_SAVED_LOOKUP_SCHEMA_VERSIONS,
@@ -64,7 +64,7 @@ import {
   DOMAIN_CONTROL_MANIFEST_VERSION,
   verifyDomainControlManifest,
 } from '../lib/domain-control-manifest.mts';
-import { DOMAIN_CONTROL_PASSPORT_VERSION } from '../frontend/src/lib/analysis/domain-control-manifest-core.ts';
+import { LEGACY_DOMAIN_CONTROL_MANIFEST_VERSION } from '../packages/contracts/domain-control-manifest.mts';
 import {
   DOMAIN_CHANGE_PACKET_SCHEMA,
   DOMAIN_CHANGE_PACKET_VERSION,
@@ -178,7 +178,7 @@ const SIGNED_ARTIFACT_VERSIONS: Readonly<Record<string, ReadonlySet<number>>> = 
   [BULK_DOMAIN_COMPARISON_SCHEMA]: new Set([3, BULK_DOMAIN_COMPARISON_EXPORT_VERSION]),
   [BULK_MAIL_EXPOSURE_SCHEMA]: new Set([1, BULK_MAIL_EXPOSURE_EXPORT_VERSION]),
   [BULK_REVIEW_MANIFEST_SCHEMA]: new Set([1, BULK_REVIEW_MANIFEST_VERSION]),
-  [DOMAIN_CONTROL_MANIFEST_SCHEMA]: new Set([DOMAIN_CONTROL_PASSPORT_VERSION, DOMAIN_CONTROL_MANIFEST_VERSION]),
+  [DOMAIN_CONTROL_MANIFEST_SCHEMA]: new Set([LEGACY_DOMAIN_CONTROL_MANIFEST_VERSION, DOMAIN_CONTROL_MANIFEST_VERSION]),
   [DOMAIN_CHANGE_PACKET_SCHEMA]: new Set([1, DOMAIN_CHANGE_PACKET_VERSION]),
   [INVESTIGATION_MANIFEST_SCHEMA]: new Set([1, INVESTIGATION_MANIFEST_VERSION]),
 });
@@ -189,7 +189,7 @@ const SIGNED_ARTIFACT_CANONICALIZATION: Readonly<Record<string, readonly Artifac
   [BULK_DOMAIN_COMPARISON_SCHEMA]: [{ version: 3, canonicalization: SORTED_JSON_V1, explicit: false }, { version: BULK_DOMAIN_COMPARISON_EXPORT_VERSION, canonicalization: SORTED_JSON_V2, explicit: true }],
   [BULK_MAIL_EXPOSURE_SCHEMA]: [{ version: 1, canonicalization: SORTED_JSON_V1, explicit: false }, { version: BULK_MAIL_EXPOSURE_EXPORT_VERSION, canonicalization: SORTED_JSON_V2, explicit: true }],
   [BULK_REVIEW_MANIFEST_SCHEMA]: [{ version: 1, canonicalization: SORTED_JSON_V1, explicit: false }, { version: BULK_REVIEW_MANIFEST_VERSION, canonicalization: SORTED_JSON_V2, explicit: true }],
-  [DOMAIN_CONTROL_MANIFEST_SCHEMA]: [{ version: DOMAIN_CONTROL_PASSPORT_VERSION, canonicalization: SORTED_JSON_V1, explicit: true }, { version: DOMAIN_CONTROL_MANIFEST_VERSION, canonicalization: SORTED_JSON_V2, explicit: true }],
+  [DOMAIN_CONTROL_MANIFEST_SCHEMA]: [{ version: LEGACY_DOMAIN_CONTROL_MANIFEST_VERSION, canonicalization: SORTED_JSON_V1, explicit: true }, { version: DOMAIN_CONTROL_MANIFEST_VERSION, canonicalization: SORTED_JSON_V2, explicit: true }],
   [DOMAIN_CHANGE_PACKET_SCHEMA]: [{ version: 1, canonicalization: SORTED_JSON_V1, explicit: false }, { version: DOMAIN_CHANGE_PACKET_VERSION, canonicalization: SORTED_JSON_V2, explicit: true }],
   [INVESTIGATION_MANIFEST_SCHEMA]: [{ version: 1, canonicalization: SORTED_JSON_V1, explicit: false }, { version: INVESTIGATION_MANIFEST_VERSION, canonicalization: SORTED_JSON_V2, explicit: true }],
 });
@@ -531,7 +531,7 @@ async function verifyOfflineArtifactCore(
   }
 
   if (schema === SAVED_LOOKUP_SCHEMA) {
-    if (!SUPPORTED_SAVED_LOOKUP_SCHEMA_VERSIONS.includes(version)) {
+    if (!SUPPORTED_SAVED_LOOKUP_SCHEMA_VERSIONS.some((supported) => supported === version)) {
       throw new UnsupportedOfflineArtifactError('This saved Lookup document version is not supported.');
     }
     const document = parseSavedLookupDocument(raw, { label: 'Saved Lookup artefact' });

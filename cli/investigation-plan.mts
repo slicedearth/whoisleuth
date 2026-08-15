@@ -1,20 +1,20 @@
 import { domainToASCII } from 'node:url';
-import { normalizeExplicitIsoTimestamp } from '../lib/observation.mts';
+import { normalizeExplicitIsoTimestamp } from '../packages/evidence/observation.mts';
+import {
+  INVESTIGATION_PLAN_RECIPES,
+  cliInvocationNetworkEffect,
+  type CliCommand,
+} from './command-reference.mts';
 
 export const CLI_INVESTIGATION_PLAN_SCHEMA = 'whoisleuth.cli.investigation-plan';
 export const CLI_INVESTIGATION_PLAN_VERSION = 1;
-export const INVESTIGATION_PLAN_RECIPES = [
-  'domain-triage',
-  'lookalike-review',
-  'owned-domain-review',
-  'historical-comparison',
-] as const;
+export { INVESTIGATION_PLAN_RECIPES };
 export type InvestigationPlanRecipe = typeof INVESTIGATION_PLAN_RECIPES[number];
 
 type Step = Readonly<{
   id: string;
   label: string;
-  command: string;
+  command: CliCommand;
   arguments: readonly string[];
   mode: 'offline' | 'network';
   approval: 'none' | 'network_disclosure' | 'analyst_selection';
@@ -72,16 +72,24 @@ const RECIPES: Readonly<Record<InvestigationPlanRecipe, Recipe>> = Object.freeze
   }),
 });
 
+export const INVESTIGATION_PLAN_RECIPE_LABELS = Object.freeze(Object.fromEntries(
+  INVESTIGATION_PLAN_RECIPES.map((recipe) => [recipe, RECIPES[recipe].label]),
+)) as Readonly<Record<InvestigationPlanRecipe, string>>;
+
 function step(
   id: string,
   label: string,
-  command: string,
+  command: CliCommand,
   args: readonly string[],
   mode: Step['mode'],
   approval: Step['approval'],
   produces: string,
   completion: string,
 ): Step {
+  const invocationEffect = cliInvocationNetworkEffect(command, args);
+  if ((mode === 'network') !== (invocationEffect === 'network')) {
+    throw new Error(`Investigation step ${id} does not match the registered network effect for ${command}.`);
+  }
   return Object.freeze({ id, label, command, arguments: Object.freeze([...args]), mode, approval, produces, completion });
 }
 

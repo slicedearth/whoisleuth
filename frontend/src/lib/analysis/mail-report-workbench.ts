@@ -1,7 +1,7 @@
 import { Gunzip, unzipSync } from 'fflate';
 import { sha256ArtifactDigest } from './artifact-integrity.ts';
 import { parseBoundedJson } from '../bounded-json.ts';
-import { normalizeExplicitIsoTimestamp } from '../../../../lib/observation.mts';
+import { normalizeExplicitIsoTimestamp } from '../../../../packages/evidence/observation.mts';
 
 export const MAIL_REPORT_SCHEMA = 'whoisleuth.mail-report-review';
 export const MAIL_REPORT_VERSION = 1;

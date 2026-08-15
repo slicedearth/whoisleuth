@@ -48,9 +48,11 @@ describe('CLI shell completion', () => {
     assert.equal(syntax.status, 0, syntax.stderr);
     assert.doesNotMatch(bash, /--preset\) COMPREPLY=.*custom/u);
     assert.match(bash, /--palette\) COMPREPLY=.*auto light dark/u);
-    assert.match(bash, /--previous\|--save-lookup\|--trust-anchor\) COMPREPLY=.*compgen -f/u);
-    assert.match(bash, /command.*workflow-run.*previous.*--resume[\s\S]*compgen -f/u);
-    assert.equal((bash.match(/command.*completion.*COMP_CWORD.*-eq 2/gu) || []).length, 1);
+    for (const pattern of ['lookup:--save-lookup', 'monitor-once:--previous', 'dnssec-validate:--trust-anchor']) {
+      assert.match(bash, new RegExp(pattern, 'u'));
+    }
+    assert.match(bash, /COMPREPLY=.*compgen -f/u);
+    assert.equal((bash.match(/completion:0\).*COMPREPLY=.*bash zsh fish powershell/gu) || []).length, 1);
     assert.doesNotMatch(bash, /^\s+completion\) COMPREPLY/gmu);
     for (const target of ['example.test', '192.0.2.10', '2001:db8::10', 'AS64496']) {
       const direct = spawnSync('bash', ['-c', `${posixCliFunction}\n${bash}\nCOMP_WORDS=(whoisleuth "$1" --de); COMP_CWORD=2; _whoisleuth_completion; printf '%s\\n' "\${COMPREPLY[@]}"`, 'bash', target], { encoding: 'utf8', cwd: REPOSITORY_ROOT });
@@ -84,8 +86,10 @@ describe('CLI shell completion', () => {
     assert.match(zsh, /--plan --json/u);
     assert.doesNotMatch(zsh, /--preset\) compadd -- .*custom/u);
     assert.match(zsh, /--palette\) compadd -- auto light dark/u);
-    assert.match(zsh, /--previous\|--save-lookup\|--trust-anchor\) _files/u);
-    assert.match(zsh, /command.*workflow-run.*previous.*--resume[\s\S]*_files/u);
+    for (const pattern of ['lookup:--save-lookup', 'monitor-once:--previous', 'dnssec-validate:--trust-anchor']) {
+      assert.match(zsh, new RegExp(pattern, 'u'));
+    }
+    assert.match(zsh, /\) _files; return/u);
     for (const [target, expected] of [['example.test', 'accepted'], ['report.json', 'rejected']] as const) {
       const completed = spawnSync('zsh', ['-c', `${posixCliFunction}\ncompdef() { :; }\n${zsh}\nwords=(whoisleuth "$1" --de); if _whoisleuth_direct_lookup_target "$1"; then print accepted; else print rejected; fi`, 'zsh', target], { encoding: 'utf8', cwd: REPOSITORY_ROOT });
       assert.equal(completed.status, 0, completed.stderr);
@@ -94,20 +98,20 @@ describe('CLI shell completion', () => {
     const fish = buildShellCompletion('fish');
     assert.match(fish, /-l output -r -F/u);
     assert.match(fish, /-l save-lookup -r -F/u);
-    assert.match(fish, /__fish_prev_arg_in --palette.*-a 'dark'/u);
-    assert.match(fish, /__fish_seen_subcommand_from completion.*bash zsh fish powershell/u);
+    assert.match(fish, /__fish_prev_arg_in --palette.*-a 'auto light dark'/u);
+    assert.match(fish, /__whoisleuth_position_is 0 completion.*bash zsh fish powershell/u);
     assert.match(fish, /__whoisleuth_direct_lookup_target/u);
-    assert.match(fish, /__fish_seen_subcommand_from lookup; or __whoisleuth_direct_lookup_target/u);
+    assert.match(fish, /__whoisleuth_command_is lookup; or __whoisleuth_direct_lookup_target/u);
     assert.match(fish, /--plan --json/u);
     assert.match(fish, /contains -- \$first completion doctor commands manual/u);
-    assert.match(fish, /__fish_seen_subcommand_from [^\n]*; and not __fish_prev_arg_in [^\n]*; and not string match -qr -- \^- \(commandline -ct\).* -F/u);
+    assert.match(fish, /function __whoisleuth_file_position[\s\S]*complete -c whoisleuth -n '__whoisleuth_file_position' -F/u);
     for (const command of ['bulk', 'discover-scan']) {
-      const line = fish.split('\n').find((candidate) => candidate.includes(`__fish_seen_subcommand_from ${command}`)
-        && candidate.includes('-l resume')) ?? '';
+      const line = fish.split('\n').find((candidate) => candidate.includes('-l resume')
+        && new RegExp(`__whoisleuth_command_is [^']*\\b${command}\\b`, 'u').test(candidate)) ?? '';
       assert.match(line, /-l resume$/u);
       assert.doesNotMatch(line, / -r| -F/u);
     }
-    const workflowResume = fish.split('\n').find((candidate) => candidate.includes('__fish_seen_subcommand_from workflow-run')
+    const workflowResume = fish.split('\n').find((candidate) => candidate.includes('__whoisleuth_command_is workflow-run')
       && candidate.includes('-l resume')) ?? '';
     assert.match(workflowResume, /-l resume -r -F$/u);
     const powershell = buildShellCompletion('powershell');
@@ -116,8 +120,8 @@ describe('CLI shell completion', () => {
     assert.match(powershell, /'--plan' '--json'/u);
     assert.match(powershell, /'--palette' = @\('auto', 'light', 'dark'\)/u);
     assert.match(powershell, /'--save-lookup'/u);
-    assert.match(powershell, /'workflow-run' = @\('--resume'\)/u);
-    assert.match(powershell, /\$commandFileOptions\[\$command\] -contains \$previous/u);
+    assert.match(powershell, /\$fileOptions\[\$command\] -contains \$previous/u);
+    assert.match(powershell, /'workflow-run' = @\([^\n]*'--resume'/u);
     const powershellSyntax = spawnSync('pwsh', [
       '-NoProfile',
       '-NonInteractive',
@@ -154,6 +158,9 @@ describe('CLI shell completion', () => {
       ['whoisleuth sharing-review package.json --recipient-scope ', ['public', 'community', 'organization', 'named-recipients']],
       ['whoisleuth case-pack package.json --palette ', ['auto', 'light', 'dark']],
       ['whoisleuth bulk package.json --concurrency ', ['1', '2', '3', '4', '5', '6', '7', '8']],
+      ['whoisleuth workflow-plan ', ['domain-triage', 'lookalike-review', 'owned-domain-review', 'historical-comparison']],
+      ['whoisleuth workflow-run ', ['domain-triage', 'lookalike-review', 'owned-domain-review', 'historical-comparison']],
+      ['whoisleuth completion ', ['bash', 'zsh', 'fish', 'powershell']],
     ] as const) {
       assert.deepEqual(completePowerShell(line), expected, line);
     }
@@ -163,6 +170,19 @@ describe('CLI shell completion', () => {
       ['whoisleuth sharing-review package.json --recipient-scope org', ['organization']],
     ] as const) {
       assert.deepEqual(completePowerShell(line), expected, line);
+    }
+    const httpOptions = completePowerShell('whoisleuth http ');
+    assert.ok(httpOptions.includes('--json'));
+    assert.equal(httpOptions.includes('lookup'), false);
+    for (const line of [
+      'whoisleuth http --scenario ',
+      'whoisleuth http --concurrency ',
+      'whoisleuth http --private-key-file ',
+    ]) {
+      const candidates = completePowerShell(line);
+      assert.equal(candidates.includes('registered'), false, line);
+      assert.equal(candidates.includes('8'), false, line);
+      assert.equal(candidates.some((candidate) => candidate.endsWith('package.json')), false, line);
     }
     for (const line of [
       'whoisleuth verify-artifact package.json --manifest ',
@@ -203,14 +223,14 @@ describe('CLI shell completion', () => {
     ]) {
       assert.match(scripts[0], new RegExp(`\\b${command}\\b`, 'u'));
       assert.match(scripts[1], new RegExp(`\\b${command}\\b`, 'u'));
-      assert.match(scripts[2], new RegExp(`__fish_seen_subcommand_from [^\\n]*\\b${command}\\b[^\\n]*-F`, 'u'));
+      assert.match(scripts[2], new RegExp(`__whoisleuth_command_is [^\\n]*\\b${command}\\b[^\\n]*-F`, 'u'));
       assert.match(scripts[3], new RegExp(`\\b${command}\\b`, 'u'));
     }
     assert.match(scripts[0], /manifest\) options="[^"]*--workflow/u);
     assert.match(scripts[1], /manifest\) options=\([^)]*--workflow/u);
-    assert.match(scripts[2], /__fish_seen_subcommand_from manifest[^\n]*-l workflow/u);
+    assert.match(scripts[2], /__whoisleuth_command_is manifest[^\n]*-l workflow/u);
     assert.match(scripts[3], /'manifest' = @\([^)]*'--workflow'/u);
-    assert.match(scripts[3], /\$fileCommands = @\([^)]*'manifest'/u);
+    assert.match(scripts[3], /\$fileLimits = @\{[\s\S]*'manifest' = 16/u);
     for (const option of [
       '--workflow', '--configuration-digest', '--scan-limit', '--chunk-size', '--suffix',
       '--manifest-entry', '--limit', '--left-session', '--right-session',
@@ -230,8 +250,8 @@ describe('CLI shell completion', () => {
     }
     assert.match(scripts[0], /verify-artifact/u);
     assert.match(scripts[1], /verify-artifact/u);
-    assert.match(scripts[2], /__fish_seen_subcommand_from [^\n]*verify-artifact[^\n]*-F/u);
-    assert.match(scripts[3], /\$fileCommands = @\([^)]*'verify-artifact'/u);
+    assert.match(scripts[2], /__whoisleuth_command_is [^\n]*verify-artifact[^\n]*-F/u);
+    assert.match(scripts[3], /\$fileLimits = @\{[\s\S]*'verify-artifact' = 1/u);
   });
 
   test('runner writes only the selected script to stdout', async () => {

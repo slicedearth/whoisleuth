@@ -1,7 +1,17 @@
 import { requiredValue } from './value-assertions.mts';
 import assert from 'node:assert/strict';
-import { readdir, readFile } from 'node:fs/promises';
 import { describe, test } from 'node:test';
+
+import {
+  CAPABILITY_MANIFEST,
+  CAPABILITY_MANIFEST_SCHEMA,
+  CAPABILITY_MANIFEST_VERSION,
+  MAX_CAPABILITY_MANIFEST_BYTES,
+} from '../packages/contracts/capability-manifest.mts';
+import {
+  RISK_CALIBRATION_DATASET_COMPATIBILITY,
+  RISK_CALIBRATION_REPORT_COMPATIBILITY,
+} from '../packages/contracts/risk-calibration.mts';
 
 import {
   buildSchemaCompatibilityInventory,
@@ -14,6 +24,10 @@ import {
   type SchemaCompatibilityEntry,
   type SchemaCompatibilityInventory,
 } from '../tools/schema-compatibility.mts';
+import {
+  discoverSchemaSources,
+  validateSchemaSourceCoverage,
+} from '../tools/schema-source-coverage.mts';
 import { INTERCHANGE_ARTIFACT_CONTRACTS } from '../lib/interchange-fidelity-registry.mts';
 import {
   buildBrandProfileExport,
@@ -75,6 +89,7 @@ import {
   buildCaseExport,
   CASE_IMPORT_VERSIONS,
   CASE_SCHEMA_VERSION,
+  MAX_CASE_IMPORT_BYTES,
 } from '../frontend/src/lib/analysis/case-model.ts';
 import {
   buildDetectionRuleExport,
@@ -234,7 +249,7 @@ describe('schema compatibility inventory', () => {
     assert.equal(inventory.schema, SCHEMA_COMPATIBILITY_INVENTORY_SCHEMA);
     assert.equal(inventory.version, SCHEMA_COMPATIBILITY_INVENTORY_VERSION);
     assert.equal(inventory.generatedAt, NOW);
-    assert.equal(inventory.entries.length, 182);
+    assert.equal(inventory.entries.length, 206);
     assert.deepEqual(new Set(inventory.entries.map((entry) => entry.kind)), new Set([
       'browser_store', 'tab_store', 'hosted_store', 'export', 'cli_document', 'derived',
     ]));
@@ -246,6 +261,30 @@ describe('schema compatibility inventory', () => {
     assert.equal(byId(inventory, 'cli.progress-event').schema, 'whoisleuth.cli.progress');
     assert.equal(byId(inventory, 'cli.lookup-diff').schema, 'whoisleuth.cli.lookup-diff');
     assert.equal(byId(inventory, 'cli.comparison-ledger').schema, 'whoisleuth.cli.comparison-ledger');
+    assert.deepEqual(
+      {
+        futureVersionBehavior: byId(inventory, 'export.mail-report-review').futureVersionBehavior,
+        migration: byId(inventory, 'export.mail-report-review').migration,
+        byteBudget: byId(inventory, 'export.mail-report-review').byteBudget,
+      },
+      { futureVersionBehavior: 'not_applicable', migration: 'read_only', byteBudget: null },
+    );
+    assert.equal(inventory.entries.some((entry) => entry.id === 'export.case-review-calendar'), false);
+    assert.deepEqual(byId(inventory, 'derived.capability-manifest'), {
+      id: 'derived.capability-manifest',
+      kind: 'derived',
+      schema: CAPABILITY_MANIFEST_SCHEMA,
+      currentVersion: CAPABILITY_MANIFEST_VERSION,
+      supportedVersions: [1],
+      acceptsUnversionedLegacy: false,
+      futureVersionBehavior: 'reject',
+      migration: 'exact_current_only',
+      writeSemantics: 'read_only',
+      byteBudget: MAX_CAPABILITY_MANIFEST_BYTES,
+      owner: 'packages/contracts/capability-manifest.mts',
+      note: 'Read-only fixed product boundary metadata; it enables no capability, request, credential, retention, score, or authorisation.',
+    });
+    assert.ok(Buffer.byteLength(JSON.stringify(CAPABILITY_MANIFEST), 'utf8') <= MAX_CAPABILITY_MANIFEST_BYTES);
     for (const [id, schema, version] of [
       ['cli.doctor', DOCTOR_SCHEMA, DOCTOR_VERSION],
       ['cli.command-catalogue', CLI_COMMAND_CATALOGUE_SCHEMA, CLI_COMMAND_CATALOGUE_VERSION],
@@ -282,6 +321,14 @@ describe('schema compatibility inventory', () => {
     assert.equal(byId(inventory, 'cli.lookalike-calibration').schema, 'whoisleuth.lookalike-calibration');
     assert.equal(byId(inventory, 'cli.risk-calibration-report').currentVersion, 3);
     assert.deepEqual(byId(inventory, 'cli.risk-calibration-report').supportedVersions, [1, 2, 3]);
+    assert.deepEqual(byId(inventory, 'cli.risk-calibration-dataset'), {
+      ...RISK_CALIBRATION_DATASET_COMPATIBILITY,
+      supportedVersions: [...RISK_CALIBRATION_DATASET_COMPATIBILITY.supportedVersions],
+    });
+    assert.deepEqual(byId(inventory, 'cli.risk-calibration-report'), {
+      ...RISK_CALIBRATION_REPORT_COMPATIBILITY,
+      supportedVersions: [...RISK_CALIBRATION_REPORT_COMPATIBILITY.supportedVersions],
+    });
     assert.equal(byId(inventory, 'cli.maintainer-duplication-report').schema, 'whoisleuth.maintainer-duplication-report');
     assert.equal(byId(inventory, 'maintainer.local-codeql-temporary-reservation').schema, 'whoisleuth.local-codeql-temporary-reservation');
     assert.equal(byId(inventory, 'maintainer.local-codeql-temporary-reservation').byteBudget, 512);
@@ -298,6 +345,8 @@ describe('schema compatibility inventory', () => {
     assert.equal(byId(inventory, 'cli.collection-preflight').schema, 'whoisleuth.cli.collection-preflight');
     assert.equal(byId(inventory, 'cli.config').schema, 'whoisleuth.cli.config');
     assert.equal(byId(inventory, 'export.cli-case-pack').schema, 'whoisleuth.cli.case-pack');
+    assert.equal(byId(inventory, 'export.cli-case-pack').futureVersionBehavior, 'reject');
+    assert.equal(byId(inventory, 'export.cli-case-pack').byteBudget, MAX_CASE_IMPORT_BYTES);
     assert.equal(byId(inventory, 'cli.interchange-fidelity-report').schema, 'whoisleuth.interchange-fidelity-report');
     assert.equal(byId(inventory, 'cli.domain-control-review-input').schema, 'whoisleuth.cli.domain-control-review-input');
     assert.equal(byId(inventory, 'cli.domain-control-observation-review').schema, 'whoisleuth.cli.domain-control-review');
@@ -430,22 +479,13 @@ describe('schema compatibility inventory', () => {
     assert.equal(byId(inventory, 'export.bulk-review').byteBudget, MAX_BULK_REVIEW_STORE_BYTES);
   });
 
-  test('accounts for every public CLI and maintainer-tool JSON schema literal', async () => {
+  test('accounts for every production schema-like identifier and canonical owner', async () => {
     const inventory = buildSchemaCompatibilityInventory({ generatedAt: NOW });
-    const listed = new Set(inventory.entries.flatMap((entry) => entry.schema ? [entry.schema] : []));
-    const discovered = new Set<string>();
-    for (const root of ['cli', 'tools']) {
-      const filenames = (await readdir(root, { recursive: true }))
-        .filter((filename) => filename.endsWith('.mts'));
-      for (const filename of filenames) {
-        const source = await readFile(`${root}/${filename}`, 'utf8');
-        for (const match of source.matchAll(/['"](whoisleuth\.[a-z0-9.-]+)['"]/gu)) {
-          const schema = match[1];
-          if (schema && !['whoisleuth.mjs', 'whoisleuth.mts'].includes(schema)) discovered.add(schema);
-        }
-      }
-    }
-    assert.deepEqual([...discovered].filter((schema) => !listed.has(schema)), []);
+    const discovery = await discoverSchemaSources();
+    const coverage = await validateSchemaSourceCoverage(inventory.entries, discovery);
+    assert.ok(coverage.files > 700);
+    assert.equal(coverage.identifiers, coverage.inventoriedIdentifiers + coverage.classifiedIdentifiers);
+    assert.match(coverage.digestSha256, /^[a-f0-9]{64}$/u);
   });
 
   test('returns a fresh non-mutating document for each report build', () => {
@@ -468,6 +508,20 @@ describe('schema compatibility inventory', () => {
       () => validateInterchangeSchemaCompatibility(inventory.entries, missingLegacy),
       /must exactly match/iu,
     );
+    const wrongEntry = INTERCHANGE_ARTIFACT_CONTRACTS.map((item) => item === lookup
+      ? { ...item, compatibilityEntryId: 'export.workspace-archive' }
+      : item);
+    assert.throws(
+      () => validateInterchangeSchemaCompatibility(inventory.entries, wrongEntry),
+      /must exactly match/iu,
+    );
+    const futureMismatch = structuredClone(inventory.entries);
+    requiredValue(futureMismatch.find((entry) => entry.id === 'export.cli-case-pack')).futureVersionBehavior = 'not_applicable';
+    assert.throws(
+      () => validateInterchangeSchemaCompatibility(futureMismatch),
+      /future-version behaviour/iu,
+    );
+    assert.doesNotThrow(() => validateInterchangeSchemaCompatibility([...inventory.entries].reverse()));
   });
 
   test('fails closed when a version changes without a supported-version decision', () => {
@@ -494,6 +548,14 @@ describe('schema compatibility inventory', () => {
     requiredValue(schema[0]).schema = 'bad schema';
     assert.throws(() => validateSchemaCompatibilityEntries(schema), /schema identifier/i);
 
+    const colonSchema = structuredClone(inventory.entries);
+    requiredValue(colonSchema[0]).schema = 'whoisleuth.valid:profile';
+    assert.throws(() => validateSchemaCompatibilityEntries(colonSchema), /schema identifier/i);
+
+    const malformedLocalSchema = structuredClone(inventory.entries);
+    requiredValue(malformedLocalSchema[0]).schema = 'whoisleuth.bad..profile';
+    assert.throws(() => validateSchemaCompatibilityEntries(malformedLocalSchema), /schema identifier/i);
+
     const owner = structuredClone(inventory.entries);
     requiredValue(owner[0]).owner = '/private/source.mts';
     assert.throws(() => validateSchemaCompatibilityEntries(owner), /owner path/i);
@@ -509,6 +571,23 @@ describe('schema compatibility inventory', () => {
     const writeSemantics = structuredClone(inventory.entries);
     Reflect.set(requiredValue(writeSemantics[0]), 'writeSemantics', 'silent_overwrite');
     assert.throws(() => validateSchemaCompatibilityEntries(writeSemantics), /compatibility metadata/i);
+
+    const undeclaredProfile = structuredClone(inventory.entries);
+    undeclaredProfile.push({
+      ...requiredValue(undeclaredProfile.find((entry) => entry.id === 'export.lookup-evidence')),
+      id: 'export.lookup-evidence-shadow',
+    });
+    assert.throws(() => validateSchemaCompatibilityEntries(undeclaredProfile), /undeclared profiles/iu);
+
+    const inheritedProfile = structuredClone(inventory.entries);
+    const inheritedSeed = requiredValue(inheritedProfile.find((entry) => entry.id === 'cli.lookup-plan'));
+    inheritedSeed.schema = 'constructor';
+    inheritedProfile.push({ ...inheritedSeed, id: 'cli.lookup-plan-shadow' });
+    assert.throws(() => validateSchemaCompatibilityEntries(inheritedProfile), /undeclared profiles/iu);
+
+    const incompleteProfile = structuredClone(inventory.entries)
+      .filter((entry) => entry.id !== 'export.watchlists');
+    assert.throws(() => validateSchemaCompatibilityEntries(incompleteProfile), /exact reviewed entry ids/iu);
   });
 
   test('binds browser export entries to the schemas emitted by their real builders', async () => {

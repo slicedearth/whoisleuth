@@ -6,7 +6,7 @@
 
 import { domainToASCII } from 'node:url';
 
-import { createObservation } from './observation.mts';
+import { createObservation } from '../packages/evidence/observation.mts';
 import { isUriShapedLabel } from './portable-generator.mts';
 import {
   analyzeStaticHtml,

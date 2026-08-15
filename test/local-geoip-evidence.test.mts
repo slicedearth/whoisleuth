@@ -3,10 +3,23 @@ import { describe, test } from 'node:test';
 
 import {
   buildLocalGeoIpDatabase,
+  LOCAL_GEOIP_SCHEMA,
+  LOCAL_GEOIP_VERSION,
   lookupLocalGeoIp,
 } from '../lib/local-geoip-evidence.mts';
 
 describe('local GeoIP evidence', () => {
+  test('preserves the stable source-facade family markers without emitting them as a document', () => {
+    assert.equal(LOCAL_GEOIP_SCHEMA, 'whoisleuth.local-geoip-evidence');
+    assert.equal(LOCAL_GEOIP_VERSION, 1);
+    assert.equal('schema' in buildLocalGeoIpDatabase({
+      sourceLabel: 'Synthetic fixture',
+      databaseVersion: '1',
+      license: 'Test data only',
+      records: [],
+    }), false);
+  });
+
   test('uses the longest matching analyst-supplied prefix with source metadata', () => {
     const database = buildLocalGeoIpDatabase({
       sourceLabel: 'Synthetic fixture',

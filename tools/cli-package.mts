@@ -6,7 +6,7 @@ import { constants as fsConstants } from 'node:fs';
 import { chmod, copyFile, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 
 import {
@@ -25,6 +25,11 @@ import {
   boundedPositiveInteger as positiveInteger,
   requireJsonRecord as record,
 } from './maintainer-tool-helpers.mts';
+import {
+  CLI_COMMAND_REGISTRY,
+  CLI_COMMANDS,
+  type CliHandlerOwner,
+} from '../cli/command-reference.mts';
 
 type JsonRecord = Record<string, unknown>;
 type WritableLike = { write(value: string): unknown };
@@ -89,15 +94,15 @@ const execFile = promisify(execFileCallback);
 export const CLI_PACKAGE_REPORT_SCHEMA = 'whoisleuth.cli-package-check';
 export const CLI_PACKAGE_REPORT_VERSION = 3;
 export const MAX_CLI_PACKAGE_GRAPH_BYTES = 8 * 1024 * 1024;
-// The module ceiling catches accidental graph expansion while leaving a small
-// reviewed margin above the installed command surface. The retained-artifact
-// ledger deliberately reuses four bounded analysis modules; byte ceilings
-// remain the primary package-bloat boundary.
-export const MAX_CLI_PACKAGE_MODULES = 288;
+// The executable dependency graph remains independently capped. Two historical
+// browser-safe domain-control paths are also retained as explicit package roots
+// because released CLI archives permitted those deep imports.
+export const MAX_CLI_RUNTIME_MODULES = 298;
+export const MAX_CLI_PACKAGE_MODULES = 300;
 // Type-only and JSON compiler inputs are captured in addition to the runtime
 // dependency graph. They may emit no runtime code, but they remain bounded
 // because TypeScript reads them while producing the candidate.
-export const MAX_CLI_PACKAGE_COMPILER_SOURCES = 292;
+export const MAX_CLI_PACKAGE_COMPILER_SOURCES = 300;
 export const MAX_CLI_PACKAGE_SOURCE_BYTES = 8 * 1024 * 1024;
 export const MAX_CLI_PACKAGE_FILE_BYTES = 2 * 1024 * 1024;
 export const MAX_CLI_PACKAGE_COMPILER_CONTEXT_BYTES = 32 * 1024 * 1024;
@@ -107,12 +112,34 @@ export const MAX_CLI_PACKAGE_COMPILER_CONTEXT_FILE_BYTES = 8 * 1024 * 1024;
 export const MAX_CLI_PACKAGE_ENTRIES = 320;
 export const MAX_CLI_PACKAGE_PACKED_BYTES = 2 * 1024 * 1024;
 export const MAX_CLI_PACKAGE_UNPACKED_BYTES = 6 * 1024 * 1024;
+export const MAX_CLI_PACKAGE_INSTALLED_CHECKS = 80;
 export const CLI_PACKAGE_LONG_PROCESS_TIMEOUT_MS = 120_000;
 export const CLI_PACKAGE_INSTALLED_CHECK_TIMEOUT_MS = 15_000;
+export const MAX_CLI_COMMAND_INVENTORY_BYTES = 4 * 1024;
 
-const LOCAL_SOURCE_PATTERN = /^(?:bin|cli|lib|frontend\/src\/lib)\/[A-Za-z0-9._/-]+\.(?:mts|ts|json)$/u;
+const LOCAL_SOURCE_PATTERN = /^(?:bin|cli|lib|frontend\/src\/lib|packages\/(?:contracts|evidence))\/[A-Za-z0-9._/-]+\.(?:mts|ts|json)$/u;
 const COMPILABLE_SOURCE_PATTERN = /\.(?:mts|ts)$/u;
-const REQUIRED_SOURCE_MODULES = Object.freeze(['bin/whoisleuth.mts', 'cli/runner.mts']);
+const CLI_RUNTIME_ENTRY_MODULES = Object.freeze(['bin/whoisleuth.mts', 'cli/runner.mts']);
+const CLI_COMPATIBILITY_ENTRY_MODULES = Object.freeze([
+  'frontend/src/lib/analysis/domain-control-manifest-core.ts',
+  'frontend/src/lib/analysis/domain-control-records.ts',
+]);
+const CLI_PACKAGE_ENTRY_MODULES = Object.freeze([
+  ...CLI_RUNTIME_ENTRY_MODULES,
+  ...CLI_COMPATIBILITY_ENTRY_MODULES,
+]);
+const CLI_COMMAND_INVENTORY_FIXTURE = 'fixtures/cli-command-inventory-v1.json';
+const INSTALLED_HANDLER_MODULES: Readonly<Record<Exclude<CliHandlerOwner, 'inline'>, Readonly<{
+  source: string;
+  exportName: string;
+}>>> = Object.freeze({
+  bulk: Object.freeze({ source: 'cli/bulk-command-runner.mjs', exportName: 'runBulkCommand' }),
+  discovery: Object.freeze({ source: 'cli/discovery-command-runner.mjs', exportName: 'runDiscoveryCommand' }),
+  discovery_scan: Object.freeze({ source: 'cli/discovery-scan-command-runner.mjs', exportName: 'runDiscoveryScanCommand' }),
+  evidence: Object.freeze({ source: 'cli/evidence-command-runner.mjs', exportName: 'runEvidenceCommand' }),
+  lookup: Object.freeze({ source: 'cli/lookup-command-runner.mjs', exportName: 'runLookupCommand' }),
+  network: Object.freeze({ source: 'cli/network-command-runner.mjs', exportName: 'runNetworkCommand' }),
+});
 const TYPESCRIPT_COMPILER_SOURCE = 'node_modules/typescript/lib/_tsc.js';
 const NODE_MODULE_COMPILER_INPUT_SEGMENT_PATTERN = /^@?[A-Za-z0-9._-]+$/u;
 const NODE_MODULE_COMPILER_INPUT_SUFFIXES = Object.freeze([
@@ -199,10 +226,45 @@ function dependencies(value: unknown): readonly DependencyEntry[] {
   return value.map((entry, index) => record(entry, `Dependency ${index + 1}`));
 }
 
-export function selectCliPackageSources(graphValue: unknown): readonly string[] {
+export function parseCliCommandInventory(value: unknown): readonly string[] {
+  if (!Array.isArray(value) || value.length !== 47) {
+    throw new TypeError('CLI command inventory must contain exactly 47 commands.');
+  }
+  const commands = value.map((item, index) => boundedString(item, `CLI command inventory entry ${index + 1}`, 80));
+  if (new Set(commands).size !== commands.length || commands.some((command) => !/^[a-z][a-z0-9-]*$/u.test(command))) {
+    throw new TypeError('CLI command inventory must contain unique canonical command names.');
+  }
+  return Object.freeze(commands);
+}
+
+export function assertCliCommandInventory(
+  sourceValue: unknown,
+  frozenValue: unknown,
+): readonly string[] {
+  const sourceCommands = parseCliCommandInventory(sourceValue);
+  const frozenCommands = parseCliCommandInventory(frozenValue);
+  if (sourceCommands.length !== frozenCommands.length
+    || sourceCommands.some((command, index) => command !== frozenCommands[index])) {
+    throw new TypeError('Source CLI registry must match the independent version-1 command inventory.');
+  }
+  return frozenCommands;
+}
+
+export function selectCliPackageSources(
+  graphValue: unknown,
+  options: Readonly<{
+    maximumModules?: number;
+    requiredSources?: readonly string[];
+  }> = {},
+): readonly string[] {
   const graph = record(graphValue, 'Dependency graph');
-  if (!Array.isArray(graph.modules) || graph.modules.length === 0 || graph.modules.length > MAX_CLI_PACKAGE_MODULES) {
-    throw new TypeError(`Dependency graph must contain between 1 and ${MAX_CLI_PACKAGE_MODULES} modules.`);
+  const maximumModules = options.maximumModules ?? MAX_CLI_RUNTIME_MODULES;
+  const requiredSources = options.requiredSources ?? CLI_RUNTIME_ENTRY_MODULES;
+  if (!Number.isSafeInteger(maximumModules) || maximumModules < 1 || maximumModules > MAX_CLI_PACKAGE_MODULES) {
+    throw new TypeError('Dependency graph module ceiling is invalid.');
+  }
+  if (!Array.isArray(graph.modules) || graph.modules.length === 0 || graph.modules.length > maximumModules) {
+    throw new TypeError(`Dependency graph must contain between 1 and ${maximumModules} modules.`);
   }
 
   const selected = new Set<string>();
@@ -218,7 +280,7 @@ export function selectCliPackageSources(graphValue: unknown): readonly string[] 
     if (LOCAL_SOURCE_PATTERN.test(source)) selected.add(source);
   }
 
-  for (const required of REQUIRED_SOURCE_MODULES) {
+  for (const required of requiredSources) {
     if (!selected.has(required)) throw new TypeError(`Dependency graph is missing required CLI source ${required}.`);
   }
   return Object.freeze([...selected].sort());
@@ -303,6 +365,8 @@ export function buildCliPackageManifest(
       'cli/**/*.mjs',
       'lib/**/*.mjs',
       'frontend/src/lib/**/*.js',
+      'packages/contracts/**/*.mjs',
+      'packages/evidence/**/*.mjs',
       'docs/cli.md',
       'docs/cli-reference.md',
       'DISCLOSURE',
@@ -347,7 +411,7 @@ async function readBoundedJson(filename: string, maxBytes = MAX_CLI_PACKAGE_GRAP
   return parseBoundedJsonBytes(bytes, path.basename(filename));
 }
 
-async function dependencyGraph(repositoryRoot: string): Promise<unknown> {
+async function dependencyGraph(repositoryRoot: string, entrySources: readonly string[]): Promise<unknown> {
   const executable = path.join(repositoryRoot, 'node_modules', 'dependency-cruiser', 'bin', 'dependency-cruise.mjs');
   const { stdout } = await execFile(process.execPath, [
     executable,
@@ -355,7 +419,7 @@ async function dependencyGraph(repositoryRoot: string): Promise<unknown> {
     path.join(repositoryRoot, '.dependency-cruiser.json'),
     '--output-type',
     'json',
-    'bin/whoisleuth.mts',
+    ...entrySources,
   ], {
     cwd: repositoryRoot,
     encoding: 'utf8',
@@ -673,8 +737,21 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
       mkdir(artifactsRoot, { recursive: true }),
       mkdir(installRoot, { recursive: true }),
     ]);
-    const graph = await dependencyGraph(repositoryRoot);
-    const runtimeSources = selectCliPackageSources(graph);
+    const [runtimeGraph, packageGraph] = await Promise.all([
+      dependencyGraph(repositoryRoot, CLI_RUNTIME_ENTRY_MODULES),
+      dependencyGraph(repositoryRoot, CLI_PACKAGE_ENTRY_MODULES),
+    ]);
+    const executableSources = selectCliPackageSources(runtimeGraph, {
+      maximumModules: MAX_CLI_RUNTIME_MODULES,
+      requiredSources: CLI_RUNTIME_ENTRY_MODULES,
+    });
+    const runtimeSources = selectCliPackageSources(packageGraph, {
+      maximumModules: MAX_CLI_PACKAGE_MODULES,
+      requiredSources: CLI_PACKAGE_ENTRY_MODULES,
+    });
+    if (executableSources.some((source) => !runtimeSources.includes(source))) {
+      throw new TypeError('CLI package roots do not preserve the complete executable dependency graph.');
+    }
     // Live graph/compiler discovery is admission-only. Every byte it names is
     // captured before a second trusted closure pass runs from the private
     // materialized tree; an ephemeral extra root can therefore only cause a
@@ -694,6 +771,7 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
         ...CLI_PACKAGE_COMPILER_CONTEXT_FILES,
         'packages/cli/package.template.json',
         'package-lock.json',
+        CLI_COMMAND_INVENTORY_FIXTURE,
       ], copyState),
       captureCliPackageSourceSnapshot(repositoryRoot, liveClosure.contextFiles, compilerState),
     ]);
@@ -703,6 +781,14 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
       'package.template.json',
     );
     const lockfile = parseBoundedJsonBytes(snapshotBytes(manifestSnapshot, 'package-lock.json'), 'package-lock.json');
+    const commandInventoryBytes = snapshotBytes(manifestSnapshot, CLI_COMMAND_INVENTORY_FIXTURE);
+    if (commandInventoryBytes.length > MAX_CLI_COMMAND_INVENTORY_BYTES) {
+      throw new TypeError(`CLI command inventory exceeds ${MAX_CLI_COMMAND_INVENTORY_BYTES} bytes.`);
+    }
+    const frozenCommands = assertCliCommandInventory(
+      CLI_COMMANDS,
+      parseBoundedJsonBytes(commandInventoryBytes, CLI_COMMAND_INVENTORY_FIXTURE),
+    );
     const manifest = buildCliPackageManifest(rootManifest, templateManifest, lockfile, { publicationEnabled });
     await materializeCliPackageSourceSnapshot(sourceRoot, sourceSnapshot);
     await materializeCliPackageSourceSnapshot(sourceRoot, manifestSnapshot);
@@ -710,7 +796,7 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
     const materializedClosure = await cliPackageCompilerSourceClosure(
       sourceRoot,
       temporaryRoot,
-      REQUIRED_SOURCE_MODULES,
+      CLI_PACKAGE_ENTRY_MODULES,
     );
     for (const source of materializedClosure.sources) {
       if (!sourceSnapshot.has(source)) {
@@ -728,7 +814,7 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
       temporaryRoot,
       stagingRoot,
       sourceRoot,
-      REQUIRED_SOURCE_MODULES,
+      CLI_PACKAGE_ENTRY_MODULES,
       { compilerRoot: sourceRoot, dependencyRoot: sourceRoot },
     );
     await Promise.all([
@@ -793,6 +879,10 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
     const requiredEntries = [
       'bin/whoisleuth.mjs',
       'cli/runner.mjs',
+      'frontend/src/lib/analysis/domain-control-manifest-core.js',
+      'frontend/src/lib/analysis/domain-control-records.js',
+      'packages/evidence/domain-control-runtime.mjs',
+      'packages/evidence/domain-name.mjs',
       'package.json',
       'third-party-notices.txt',
       ...SUPPORT_FILES.map(([, destination]) => destination),
@@ -872,6 +962,65 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
         boundedString(generatedDependencies[dependency], `Generated CLI dependency ${dependency}`, 128),
       ]),
     ));
+    const installedPackageRoot = path.dirname(path.dirname(executable));
+    const [installedDomainControlCore, installedDomainControlRecords, installedDomainControlRuntime, installedDomainName] = await Promise.all([
+      import(pathToFileURL(path.join(installedPackageRoot, 'frontend/src/lib/analysis/domain-control-manifest-core.js')).href),
+      import(pathToFileURL(path.join(installedPackageRoot, 'frontend/src/lib/analysis/domain-control-records.js')).href),
+      import(pathToFileURL(path.join(installedPackageRoot, 'packages/evidence/domain-control-runtime.mjs')).href),
+      import(pathToFileURL(path.join(installedPackageRoot, 'packages/evidence/domain-name.mjs')).href),
+    ]);
+    const expectedDomainControlCoreExports = [
+      'DOMAIN_CONTROL_MANIFEST_VERSION',
+      'DOMAIN_CONTROL_PASSPORT_INPUT_SCHEMA',
+      'DOMAIN_CONTROL_PASSPORT_LIMITATIONS',
+      'DOMAIN_CONTROL_PASSPORT_SCHEMA',
+      'DOMAIN_CONTROL_PASSPORT_VERSION',
+      'MAX_DOMAIN_CONTROL_MANIFEST_BYTES',
+      'MAX_DOMAIN_CONTROL_PASSPORT_BYTES',
+      'MAX_DOMAIN_CONTROL_PASSPORT_ENTRIES',
+      'assertDomainControlPassportByteBudget',
+      'buildUnsignedDomainControlPassport',
+      'domainControlPassportSerialisedBytes',
+      'normalizeDomainControlPassportDocument',
+    ].sort();
+    const expectedDomainControlRecordExports = [
+      'MAX_CANONICAL_DOMAIN_CONTROL_RECORDS',
+      'canonicalCaaRecord',
+      'canonicalDomainControlRecordList',
+      'canonicalDsRecord',
+      'canonicalMxRecord',
+    ].sort();
+    if (Object.keys(installedDomainControlCore).sort().join(',') !== expectedDomainControlCoreExports.join(',')) {
+      throw new TypeError('Installed domain-control manifest facade changed its released runtime exports.');
+    }
+    if (Object.keys(installedDomainControlRecords).sort().join(',') !== expectedDomainControlRecordExports.join(',')) {
+      throw new TypeError('Installed domain-control record facade changed its released runtime exports.');
+    }
+    for (const name of expectedDomainControlRecordExports) {
+      if (installedDomainControlRecords[name] !== installedDomainControlRuntime[name]) {
+        throw new TypeError(`Installed domain-control record facade export ${name} is not bound to the canonical runtime.`);
+      }
+    }
+    for (const name of expectedDomainControlCoreExports) {
+      if (installedDomainControlCore[name] !== installedDomainControlRuntime[name]) {
+        throw new TypeError(`Installed domain-control manifest facade export ${name} is not bound to the canonical runtime.`);
+      }
+    }
+    if (typeof installedDomainControlRuntime.serializeDomainControlManifest !== 'function'
+      || installedDomainName.normalizeDomain('EXAMPLE.TEST.') !== 'example.test') {
+      throw new TypeError('Installed canonical domain-control modules did not retain their reviewed runtime contract.');
+    }
+    const installedHandlerChecks: string[] = [];
+    const handlerOwners = new Set(CLI_COMMAND_REGISTRY.map((definition) => definition.execution.handlerOwner));
+    for (const owner of handlerOwners) {
+      if (owner === 'inline') continue;
+      const handler = INSTALLED_HANDLER_MODULES[owner];
+      const handlerModule = await import(pathToFileURL(path.join(installedPackageRoot, handler.source)).href);
+      if (typeof handlerModule[handler.exportName] !== 'function') {
+        throw new TypeError(`Installed CLI handler ${owner} does not export ${handler.exportName}.`);
+      }
+      installedHandlerChecks.push(`${owner}-handler`);
+    }
     if (publicationEnabled) {
       const publishConfig = record(installedManifest.publishConfig, 'Installed package publishConfig');
       if (Object.hasOwn(installedManifest, 'private') || publishConfig.access !== 'public' || publishConfig.provenance !== true) {
@@ -888,8 +1037,12 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
     }
     const zeroArgumentHelp = await runInstalledCheck(executable, [], 'zero-argument redirected help');
     if (zeroArgumentHelp !== help) throw new TypeError('Installed CLI zero-argument redirected invocation did not preserve static help.');
+    const shortHelp = await runInstalledCheck(executable, ['-h'], 'short help');
+    if (shortHelp !== help) throw new TypeError('Installed CLI short help alias did not preserve static help.');
     const version = await runInstalledCheck(executable, ['--version'], 'version');
     if (version !== `${packageVersion}\n`) throw new TypeError('Installed CLI version does not match the generated package manifest.');
+    const shortVersion = await runInstalledCheck(executable, ['-V'], 'short version');
+    if (shortVersion !== version) throw new TypeError('Installed CLI short version alias did not preserve the package version.');
     const doctor = await runInstalledCheck(executable, ['doctor', '--json'], 'doctor');
     const doctorDocument = record(JSON.parse(doctor), 'Installed doctor output');
     if (doctorDocument.schema !== 'whoisleuth.cli.doctor' || doctorDocument.networkRequested !== false) {
@@ -897,7 +1050,10 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
     }
     const commands = await runInstalledCheck(executable, ['commands', '--json'], 'commands');
     const commandCatalogue = record(JSON.parse(commands), 'Installed command catalogue');
-    if (commandCatalogue.schema !== 'whoisleuth.cli.command-catalogue' || !Array.isArray(commandCatalogue.commands)) {
+    if (commandCatalogue.schema !== 'whoisleuth.cli.command-catalogue'
+      || commandCatalogue.version !== 1
+      || !Array.isArray(commandCatalogue.commands)
+      || Object.keys(commandCatalogue).sort().join(',') !== 'commands,packageVersion,schema,version') {
       throw new TypeError('Installed command catalogue returned the wrong contract.');
     }
     const lookupPlan = await runInstalledCheck(executable, ['lookup', 'example.test', '--deep', '--plan', '--json'], 'lookup plan');
@@ -914,11 +1070,17 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
       || directLookupPlanDocument.mode !== lookupPlanDocument.mode) {
       throw new TypeError('Installed direct target did not preserve the offline Lookup plan contract.');
     }
-    const completion = await runInstalledCheck(executable, ['completion', 'bash'], 'completion');
-    if (!completion.includes('complete -F _whoisleuth_completion whoisleuth')
-      || !completion.includes('--palette')
-      || !completion.includes('--save-lookup')) {
-      throw new TypeError('Installed bash completion command returned the wrong script.');
+    const completionChecks = [
+      ['bash', 'complete -F _whoisleuth_completion whoisleuth', '--palette', '--save-lookup'],
+      ['zsh', '#compdef whoisleuth', '--palette', '--save-lookup'],
+      ['fish', 'complete -c whoisleuth', '-l palette', '-l save-lookup'],
+      ['powershell', 'Register-ArgumentCompleter -Native -CommandName whoisleuth', '--palette', '--save-lookup'],
+    ] as const;
+    for (const [shell, marker, paletteMarker, saveLookupMarker] of completionChecks) {
+      const completion = await runInstalledCheck(executable, ['completion', shell], `${shell} completion`);
+      if (!completion.includes(marker) || !completion.includes(paletteMarker) || !completion.includes(saveLookupMarker)) {
+        throw new TypeError(`Installed ${shell} completion command returned the wrong script.`);
+      }
     }
     const manual = await runInstalledCheck(executable, ['manual'], 'manual');
     if (!manual.startsWith('.TH WHOISLEUTH 1')
@@ -955,8 +1117,15 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
       `Installed command catalogue entry ${index + 1} command`,
       80,
     ));
-    if (!catalogueCommands.length || catalogueCommands.length > 100 || new Set(catalogueCommands).size !== catalogueCommands.length) {
-      throw new TypeError('Installed command catalogue must contain a bounded unique command list.');
+    if (catalogueCommands.length !== frozenCommands.length
+      || catalogueCommands.some((command, index) => command !== frozenCommands[index])) {
+      throw new TypeError('Installed command catalogue must match the exact reviewed command inventory and order.');
+    }
+    for (const [index, entry] of commandCatalogue.commands.entries()) {
+      if (Object.keys(record(entry, `Installed command catalogue entry ${index + 1}`)).sort().join(',')
+        !== 'boundary,collection,command,description,example,usage') {
+        throw new TypeError(`Installed command catalogue entry ${index + 1} has an unsupported shape.`);
+      }
     }
     for (const command of catalogueCommands) {
       const commandHelp = await runInstalledCheck(executable, [command, '--help'], `${command} help`);
@@ -978,6 +1147,29 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
       await writeFile(path.join(artifactDirectory, `${archiveFilename}.sha256`), `${archiveSha256}  ${archiveFilename}\n`, { encoding: 'utf8', flag: 'wx', mode: 0o644 });
     }
 
+    const installedChecks = Object.freeze([
+      'help',
+      'short-help',
+      'zero-argument-help',
+      'version',
+      'short-version',
+      'doctor',
+      'commands',
+      'lookup-plan',
+      'direct-lookup-plan',
+      ...completionChecks.map(([shell]) => `${shell}-completion`),
+      'manual',
+      'registry-support',
+      'discover',
+      'discover-scan-network-boundary',
+      'domain-control-deep-imports',
+      ...installedHandlerChecks,
+      ...commandHelpChecks,
+    ]);
+    if (installedChecks.length === 0 || installedChecks.length > MAX_CLI_PACKAGE_INSTALLED_CHECKS) {
+      throw new TypeError(`Installed CLI checks exceed the reviewed ${MAX_CLI_PACKAGE_INSTALLED_CHECKS}-check ceiling.`);
+    }
+
     const report = Object.freeze({
       schema: CLI_PACKAGE_REPORT_SCHEMA,
       version: CLI_PACKAGE_REPORT_VERSION,
@@ -988,21 +1180,7 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
       packedBytes,
       unpackedBytes,
       runtimeDependencies,
-      installedChecks: Object.freeze([
-        'help',
-        'zero-argument-help',
-        'version',
-        'doctor',
-        'commands',
-        'lookup-plan',
-        'direct-lookup-plan',
-        'completion',
-        'manual',
-        'registry-support',
-        'discover',
-        'discover-scan-network-boundary',
-        ...commandHelpChecks,
-      ]),
+      installedChecks,
       publicationEnabled,
       archiveFilename,
       archiveSha256,

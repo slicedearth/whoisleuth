@@ -9,6 +9,8 @@ import {
   sha256ArtifactDigest,
   sha256ArtifactDigestV2,
 } from '../frontend/src/lib/analysis/artifact-integrity.ts';
+import * as artifactIntegrityContract from '../packages/evidence/artifact-integrity.mts';
+import * as artifactIntegrityFacade from '../frontend/src/lib/analysis/artifact-integrity.ts';
 import { verifyOfflineArtifact } from '../cli/artifact-verify.mts';
 import { verifyEvidencePackageSignature } from '../cli/evidence-signing.mts';
 import { buildBulkReviewManifest } from '../frontend/src/lib/analysis/bulk-review-export.ts';
@@ -65,6 +67,16 @@ function currentManifest() {
 }
 
 describe('sorted JSON artifact compatibility', () => {
+  test('keeps the historical frontend facade bound to the pure evidence contract', () => {
+    assert.deepEqual(
+      Object.keys(artifactIntegrityFacade).sort(),
+      Object.keys(artifactIntegrityContract).sort(),
+    );
+    for (const name of Object.keys(artifactIntegrityContract) as Array<keyof typeof artifactIntegrityContract>) {
+      assert.equal(artifactIntegrityFacade[name], artifactIntegrityContract[name], name);
+    }
+  });
+
   test('keeps current envelope versions separate from unchanged nested and input contracts', () => {
     assert.equal(ACQUISITION_DECISION_PACKET_VERSION, 2);
     assert.deepEqual([BULK_DOMAIN_COMPARISON_EXPORT_VERSION, BULK_DOMAIN_COMPARISON_VERSION], [4, 3]);

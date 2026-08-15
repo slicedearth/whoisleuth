@@ -813,7 +813,7 @@ export async function captureRenderedPage(
     await writeArtifact(screenshotName, screenshotBuffer);
     await writeArtifact(domName, domBytes);
     const limitations = [
-      'Rendered collection executed page JavaScript in a disposable browser context and disclosed each admitted exact resource URL, including path and query, to that resource operator; retained output omits those paths and queries.',
+      'Each admitted exact resource URL, including path and query, is disclosed to its operator. No dedicated path or query field is retained; the page title and screenshot can reproduce page-controlled content including them.',
       'Downloads, service workers, dedicated/shared workers, WebSockets, WebRTC, WebTransport, non-read methods, non-HTTP(S), credentials, non-default ports, private addresses, and traffic over declared bounds were blocked.',
       'Each request was resolved and connection-pinned by the shared safe-fetch transport before its bounded response was supplied to the disposable browser; cookies, authorisation headers, and request bodies were not forwarded.',
       `Each response body was read up to ${MAX_CAPTURE_RESPONSE_BYTES} bytes and the collector processed at most ${MAX_CAPTURE_TRANSFER_BYTES} response-body bytes across the capture; lower-level transport buffering is outside this application-level bound.`,

@@ -2,8 +2,8 @@ import { classifyQuery, isDirectLookupTarget } from '../lib/classify.mts';
 import { StringDecoder } from 'node:string_decoder';
 import { boundedCliErrorMessage, CliUsageError, hasUnsafeCliText } from './errors.mts';
 import {
+  INVESTIGATION_PLAN_RECIPE_LABELS,
   INVESTIGATION_PLAN_RECIPES,
-  type InvestigationPlanRecipe,
 } from './investigation-plan.mts';
 import { buildCliLookupPlan, formatCliLookupPlan } from './lookup-plan.mts';
 import {
@@ -32,13 +32,6 @@ type InteractiveLauncherOptions = Readonly<{
   signal?: AbortSignal;
   question?: InteractiveQuestion;
 }>;
-
-const WORKFLOW_LABELS: Readonly<Record<InvestigationPlanRecipe, string>> = Object.freeze({
-  'domain-triage': 'New domain triage',
-  'lookalike-review': 'Lookalike candidate review',
-  'owned-domain-review': 'Owned domain posture review',
-  'historical-comparison': 'Historical observation comparison',
-});
 
 function canLaunchInteractiveCli(
   input: InteractiveLauncherInput | null | undefined,
@@ -219,7 +212,7 @@ async function launchInteractiveCli(options: InteractiveLauncherOptions): Promis
   if (selection === 'q' || selection === 'quit' || selection === 'exit' || selection === '') return null;
   if (selection === '4') return ['commands'];
   if (selection === '3') {
-    write(`\n${INVESTIGATION_PLAN_RECIPES.map((recipe, index) => `  ${index + 1}  ${WORKFLOW_LABELS[recipe]}`).join('\n')}\n\n`);
+    write(`\n${INVESTIGATION_PLAN_RECIPES.map((recipe, index) => `  ${index + 1}  ${INVESTIGATION_PLAN_RECIPE_LABELS[recipe]}`).join('\n')}\n\n`);
     const recipeSelection = await ask('Workflow: ');
     const recipe = INVESTIGATION_PLAN_RECIPES[Number(recipeSelection) - 1];
     if (!recipe) throw new CliUsageError('Choose one listed workflow number.');

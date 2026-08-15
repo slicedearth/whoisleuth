@@ -9,6 +9,7 @@ import type {
   BrowserLocalDecodedCollectionRecord,
   BrowserLocalCollectionId,
 } from '../frontend/src/lib/browser-local-data-definitions';
+import { classifyQuery } from '../lib/classify.mts';
 import { WHOISLEUTH_SOURCE_REPOSITORY_URL } from '../lib/project-metadata.mts';
 
 // A few px of tolerance for subpixel layout rounding across engines.
@@ -33,6 +34,18 @@ type BrowserLocalCollectionReadOptions = Readonly<{
   minimumRevision?: number;
   timeout?: number;
 }>;
+
+export function lookupDomainIdentity(query: string) {
+  const classified = classifyQuery(query);
+  if (classified.type !== 'domain') throw new Error(`Expected a domain fixture, received ${classified.type}.`);
+  return {
+    query,
+    type: 'domain' as const,
+    inputHostname: classified.inputHostname,
+    registrableDomain: classified.registrableDomain,
+    isSubdomain: classified.isSubdomain,
+  };
+}
 
 export async function useTheme(page: Page, preference: 'dark' | 'light' | 'system') {
   await page.addInitScript(({ key, value }) => {
@@ -324,16 +337,19 @@ export async function failNextBrowserLocalCollectionReadAfterWrite(
   await page.evaluate((collectionId) => {
     const originalGet = IDBObjectStore.prototype.get;
     const originalPut = IDBObjectStore.prototype.put;
+    let active = true;
     let failNextRead = false;
     IDBObjectStore.prototype.put = function put(value: unknown, key?: IDBValidKey) {
-      if (this.name === 'manifests'
+      if (active
+        && this.name === 'manifests'
         && value
         && typeof value === 'object'
         && Reflect.get(value, 'collection') === collectionId) failNextRead = true;
       return key === undefined ? originalPut.call(this, value) : originalPut.call(this, value, key);
     };
     IDBObjectStore.prototype.get = function get(query: IDBValidKey | IDBKeyRange) {
-      if (failNextRead && this.name === 'manifests' && query === collectionId) {
+      if (active && failNextRead && this.name === 'manifests' && query === collectionId) {
+        active = false;
         failNextRead = false;
         throw new DOMException(`Browser-local ${collectionId} post-write read is unavailable`, 'InvalidStateError');
       }

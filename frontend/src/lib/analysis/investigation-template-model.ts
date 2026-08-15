@@ -4,7 +4,7 @@ import {
   type InvestigationGuideTemplateSnapshot,
   type InvestigationRecipeId,
 } from './investigation-guide.ts';
-import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from '../../../../lib/observation.mts';
+import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from '../../../../packages/evidence/observation.mts';
 
 export const INVESTIGATION_TEMPLATE_SCHEMA = 'whoisleuth.investigation-templates';
 export const INVESTIGATION_TEMPLATE_VERSION = 2;

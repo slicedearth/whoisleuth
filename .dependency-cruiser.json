@@ -24,6 +24,76 @@
       }
     },
     {
+      "name": "shared-contracts-stay-independent-of-domain-and-adapters",
+      "severity": "error",
+      "comment": "Canonical shared contracts may depend only on other contract modules and external type declarations, never on domain, runtime, adapter, tool, or presentation code.",
+      "from": {
+        "path": "^(?:test/fixtures/architecture/)?packages/contracts/"
+      },
+      "to": {
+        "path": "^(?:test/fixtures/architecture/)?(?:(?:bin|cli|frontend/src|lib|netlify/functions|tools)(?:/|$)|packages/(?!contracts(?:/|$))|server\\.mts$)",
+        "reachable": true
+      }
+    },
+    {
+      "name": "domain-packages-stay-independent-of-runtime-adapters",
+      "severity": "error",
+      "comment": "Evidence, Case, and collector-interface packages may use shared contracts and pure package peers but must not depend on application runtimes, tools, or presentation adapters.",
+      "from": {
+        "path": "^(?:test/fixtures/architecture/)?packages/(?:evidence|cases|collectors)/"
+      },
+      "to": {
+        "path": "^(?:test/fixtures/architecture/)?(?:(?:bin|cli|frontend/src|lib|netlify/functions|tools)(?:/|$)|server\\.mts$)",
+        "reachable": true
+      }
+    },
+    {
+      "name": "non-frontend-production-stays-out-of-frontend-presentation",
+      "severity": "error",
+      "comment": "CLI, shared library, package, function, and maintainer-tool code must not import frontend routes or components.",
+      "from": {
+        "path": "^(?:test/fixtures/architecture/)?(?:(?:bin|cli|lib|netlify/functions|packages|tools)(?:/|$)|server\\.mts$)"
+      },
+      "to": {
+        "path": "^(?:test/fixtures/architecture/)?frontend/src/(?:routes|lib/components)(?:/|$)",
+        "reachable": true
+      }
+    },
+    {
+      "name": "artifact-integrity-consumers-use-domain-owner",
+      "severity": "error",
+      "comment": "Non-frontend consumers must import canonicalisation and digest rules from the pure evidence-domain owner rather than the historical frontend facade.",
+      "from": {
+        "path": "^(?:test/fixtures/architecture/)?(?:(?:bin|cli|lib|netlify/functions|packages|tools)(?:/|$)|server\\.mts$)"
+      },
+      "to": {
+        "path": "^(?:test/fixtures/architecture/)?frontend/src/lib/analysis/artifact-integrity\\.(?:mts|ts)$"
+      }
+    },
+    {
+      "name": "domain-control-consumers-use-domain-owner",
+      "severity": "error",
+      "comment": "Non-frontend consumers must import domain-control normalisation and manifest rules from the pure evidence owner rather than historical browser facades.",
+      "from": {
+        "path": "^(?:test/fixtures/architecture/)?(?:(?:bin|cli|lib|netlify/functions|packages|tools)(?:/|$)|server\\.mts$)"
+      },
+      "to": {
+        "path": "^(?:test/fixtures/architecture/)?frontend/src/lib/analysis/domain-control-(?:manifest-core|records)\\.(?:mts|ts)$"
+      }
+    },
+    {
+      "name": "observation-consumers-use-domain-owner",
+      "severity": "error",
+      "comment": "Production evidence consumers use the pure observation owner; the historical lib facade remains only for compatibility adapters and public imports.",
+      "from": {
+        "path": "^(?:test/fixtures/architecture/)?(?:(?:bin|cli|frontend/src|lib|netlify/functions|packages|tools)(?:/|$)|server\\.mts$)",
+        "pathNot": "^(?:frontend/src/lib/(?:candidate-handoff-core|scheduled-monitoring)\\.ts|frontend/src/routes/\\(console\\)/lookup/\\+page\\.svelte)$"
+      },
+      "to": {
+        "path": "^(?:test/fixtures/architecture/)?lib/observation\\.mts$"
+      }
+    },
+    {
       "name": "production-no-orphans",
       "severity": "error",
       "comment": "Shared, CLI, and browser-library modules must have an application consumer so obsolete production files cannot survive behind tests alone.",

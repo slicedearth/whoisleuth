@@ -7,7 +7,7 @@ import { writePrivateFile } from './output-file.mts';
 import { isValidAsciiDomainName } from '../lib/hostname.mts';
 import { readBoundedRegularTextFile } from '../lib/bounded-file.mts';
 import { scanBoundedJson } from '../lib/bounded-json.mts';
-import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from '../lib/observation.mts';
+import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from '../packages/evidence/observation.mts';
 
 export const CLI_DISCOVERY_OBSERVATION_SCHEMA = 'whoisleuth.cli.discovery-observation-snapshot';
 export const CLI_DISCOVERY_OBSERVATION_VERSION = 2;

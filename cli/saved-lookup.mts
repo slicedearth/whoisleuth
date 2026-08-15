@@ -8,17 +8,16 @@ import {
   validHttpDeliveryMetadata,
   validPagePublicationMetadata,
 } from '../lib/homepage-metadata-contract.mts';
-import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from '../lib/observation.mts';
+import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from '../packages/evidence/observation.mts';
+import {
+  CLI_LOOKUP_SCHEMA as SAVED_LOOKUP_SCHEMA,
+  CLI_LOOKUP_VERSION as SAVED_LOOKUP_SCHEMA_VERSION,
+  LEGACY_CLI_LOOKUP_VERSION as LEGACY_SAVED_LOOKUP_SCHEMA_VERSION,
+  MAX_CLI_LOOKUP_BYTES as MAX_SAVED_LOOKUP_INPUT_BYTES,
+  SUPPORTED_CLI_LOOKUP_VERSIONS as SUPPORTED_SAVED_LOOKUP_SCHEMA_VERSIONS,
+} from '../packages/contracts/cli-lookup.mts';
 
-const MAX_SAVED_LOOKUP_INPUT_BYTES = 8 * 1024 * 1024;
 const MAX_SAVED_LOOKUP_STRING_LENGTH = 1024;
-const SAVED_LOOKUP_SCHEMA = 'whoisleuth.cli.lookup';
-const LEGACY_SAVED_LOOKUP_SCHEMA_VERSION = 1;
-const SAVED_LOOKUP_SCHEMA_VERSION = 2;
-const SUPPORTED_SAVED_LOOKUP_SCHEMA_VERSIONS = Object.freeze([
-  LEGACY_SAVED_LOOKUP_SCHEMA_VERSION,
-  SAVED_LOOKUP_SCHEMA_VERSION,
-]);
 const RDAP_STATUSES = new Set(['success', 'partial', 'error', 'unsupported', 'not_found', 'skipped', 'disabled']);
 const WHOIS_STATUSES = new Set(['complete', 'partial', 'error', 'unsupported', 'not_found', 'skipped', 'disabled']);
 
@@ -111,7 +110,7 @@ function parseSavedLookupDocument(text: unknown, options: SavedLookupParseOption
   if (document.schema !== SAVED_LOOKUP_SCHEMA
     || typeof document.version !== 'number'
     || !Number.isSafeInteger(document.version)
-    || !SUPPORTED_SAVED_LOOKUP_SCHEMA_VERSIONS.includes(document.version)) {
+    || !SUPPORTED_SAVED_LOOKUP_SCHEMA_VERSIONS.some((version) => version === document.version)) {
     throw new CliUsageError(`${label} must use ${SAVED_LOOKUP_SCHEMA} version ${SUPPORTED_SAVED_LOOKUP_SCHEMA_VERSIONS.join(' or ')}.`);
   }
   if (document.type !== 'domain') throw new CliUsageError(`${label} supports domain lookup documents only.`);

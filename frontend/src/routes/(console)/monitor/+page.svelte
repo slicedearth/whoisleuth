@@ -3,6 +3,7 @@
   import { getContext, onMount, tick, untrack } from 'svelte';
   import { goto } from '$app/navigation';
   import { parseBoundedJson } from '$lib/bounded-json';
+  import { BrowserLocalDataError } from '$lib/browser-local-data.ts';
   import PageHeading from '$lib/components/PageHeading.svelte';
   import AnalystReviewInbox from '$lib/components/AnalystReviewInbox.svelte';
   import EvidenceDebtMatrix from '$lib/components/EvidenceDebtMatrix.svelte';
@@ -194,9 +195,31 @@
   async function refreshCases(){const hadSnapshot=casesSourceState==='ready';casesRefreshing=true;try{cases=await loadCases();casesSourceState='ready';calibrationCaseIds=calibrationCaseIds.filter(id=>cases.some(record=>record.id===id));refreshRelationships();if(expandedId&&!cases.some(record=>record.id===expandedId))expandedId='';}catch(cause){if(!hadSnapshot)casesSourceState='unavailable';throw cause;}finally{casesRefreshing=false;}}
   function installCommittedCaseSnapshot(committedCases:CaseRecord[]){
     cases=committedCases;
+    casesSourceState='ready';
     calibrationCaseIds=calibrationCaseIds.filter(id=>cases.some(item=>item.id===id));
     refreshRelationships();
     if(expandedId&&!cases.some(record=>record.id===expandedId))expandedId='';
+  }
+  async function reconcileCommittedCaseSnapshot(
+    committed:{cases:CaseRecord[];pruned:number},
+    success:string,
+    record:CaseRecord|null=null,
+  ){
+    try{
+      await refreshCases();
+      if(record)showCasePage(record);
+      caseMessage=`${success}${prunedNote(committed.pruned)}`;
+    }catch{
+      installCommittedCaseSnapshot(committed.cases);
+      if(record)showCasePage(record);
+      caseMessage=`${success} The change was saved, but Cases could not be reread. The complete committed Case snapshot is shown locally; reload to retry the browser-local read.${prunedNote(committed.pruned)}`;
+    }
+  }
+  async function reconcileCommittedCaseMutation(
+    committed:Awaited<ReturnType<typeof editCase>>,
+    success:string,
+  ){
+    await reconcileCommittedCaseSnapshot(committed,success,committed.record);
   }
   function expand(record:CaseRecord){if(expandedId===record.id){expandedId='';return;}showCasePage(record);expandedId=record.id;tagDraft=record.tags.join(', ');noteDraft='';}
   async function openRelatedCase(record:CaseRecord){clearCaseFilters();casePage=1;showCasePage(record);if(expandedId!==record.id)expand(record);await navigateMonitor('cases',{parameter:'case',value:record.id});await focusCase(record);}
@@ -216,53 +239,90 @@
     details.querySelector<HTMLElement>('summary')?.focus({preventScroll:true});
   }
   async function openWatchlistCase(domain:string){
-    try{
-      const{record,created,pruned}=await openCase({domain,source:'monitor'});
-      await refreshCases();clearCaseFilters();casePage=1;showCasePage(record);expandedId=record.id;tagDraft=record.tags.join(', ');noteDraft='';
-      await navigateMonitor('cases',{parameter:'case',value:record.id});await focusCase(record);
-      caseMessage=`${created?`Opened a new case for ${record.domain}.`:`Opened the existing case for ${record.domain}.`}${prunedNote(pruned)} Watchlist history remains separately attributed.`;
-    }catch(cause){message=cause instanceof Error?cause.message:'Could not open the case.';}
+    let committed:Awaited<ReturnType<typeof openCase>>;
+    try{committed=await openCase({domain,source:'monitor'});}
+    catch(cause){message=cause instanceof Error?cause.message:'Could not open the case.';return;}
+    const{record,created}=committed;
+    await reconcileCommittedCaseSnapshot(
+      committed,
+      `${created?`Opened a new case for ${record.domain}.`:`Opened the existing case for ${record.domain}.`} Watchlist history remains separately attributed.`,
+      record,
+    );
+    clearCaseFilters();casePage=1;showCasePage(record);expandedId=record.id;tagDraft=record.tags.join(', ');noteDraft='';
+    await navigateMonitor('cases',{parameter:'case',value:record.id});await focusCase(record);
   }
   async function openGuidedCase(domain:string){
-    try{
-      const responseRequested=page.url.searchParams.get('response')==='1';
-      const{record,created,pruned}=await openCase({domain,source:'monitor'});
-      await refreshCases();clearCaseFilters();casePage=1;showCasePage(record);expandedId=record.id;tagDraft=record.tags.join(', ');noteDraft='';
-      await navigateMonitor('cases',{parameter:'case',value:record.id});
-      caseMessage=`${created?`Opened a new case for ${record.domain}.`:`Opened the existing case for ${record.domain}.`}${prunedNote(pruned)}`;
-      if(responseRequested)await focusResponsePreflight(record);else await focusCase(record);
-    }catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not open the guided case.';}
+    const responseRequested=page.url.searchParams.get('response')==='1';
+    let committed:Awaited<ReturnType<typeof openCase>>;
+    try{committed=await openCase({domain,source:'monitor'});}
+    catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not open the guided case.';return;}
+    const{record,created}=committed;
+    await reconcileCommittedCaseSnapshot(
+      committed,
+      created?`Opened a new case for ${record.domain}.`:`Opened the existing case for ${record.domain}.`,
+      record,
+    );
+    clearCaseFilters();casePage=1;showCasePage(record);expandedId=record.id;tagDraft=record.tags.join(', ');noteDraft='';
+    await navigateMonitor('cases',{parameter:'case',value:record.id});
+    if(responseRequested)await focusResponsePreflight(record);else await focusCase(record);
   }
   async function recordWebsiteClusterLead(cluster:WebsiteProfileCluster,domain:string){
-    const{record}=await openCase({domain,source:'website-profile-cluster'});
+    const opened=await openCase({domain,source:'website-profile-cluster'});
+    const{record}=opened;
     const assertion=buildWebsiteClusterAssertion(cluster,domain);
     if(record.assertions.some((item)=>item.statement===assertion.statement&&item.state==='open')){
       throw new Error(`That website-profile review lead is already open for ${domain}.`);
     }
-    await editCase(record.id,{assertion});
-    await refreshCases();
-    caseMessage=`Recorded a separately typed website-profile review lead for ${domain}.`;
+    let committed:Awaited<ReturnType<typeof editCase>>;
+    try{committed=await editCase(record.id,{assertion});}
+    catch(cause){
+      if(cause instanceof BrowserLocalDataError&&cause.code==='LOCAL_DATA_COMMIT_UNKNOWN')throw cause;
+      installCommittedCaseSnapshot(opened.cases);
+      throw new Error(`The case for ${record.domain} was saved, but its website-profile review lead was not recorded.`,{cause});
+    }
+    await reconcileCommittedCaseMutation(committed,`Recorded a separately typed website-profile review lead for ${domain}.`);
   }
   async function dismissEvidenceGap(item:AnalystReviewItem,reason:AnalystReviewDismissalReason){
     if(item.kind!=='evidence_gap'||!item.caseId||!item.dismissalTarget)return;
     const record=cases.find((candidate)=>candidate.id===item.caseId);
     const reasonLabel=analystReviewDismissalReasonLabel(reason);
     if(!record||!reasonLabel){caseMessage='That evidence-gap review is no longer available.';return;}
+    let committed:Awaited<ReturnType<typeof editCase>>;
     try{
-      await editCase(record.id,{trailEvent:{
+      committed=await editCase(record.id,{trailEvent:{
         kind:'review',
         summary:`Dismissed the current evidence-gap review: ${reasonLabel}.`,
         target:item.dismissalTarget,
       }});
-      await refreshCases();
-      caseMessage=`Recorded the reviewed evidence-gap dismissal for ${record.domain}. The underlying evidence and assertions were not changed.`;
-    }catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not record the evidence-gap review.';}
+    }catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not record the evidence-gap review.';return;}
+    await reconcileCommittedCaseMutation(
+      committed,
+      `Recorded the reviewed evidence-gap dismissal for ${record.domain}. The underlying evidence and assertions were not changed.`,
+    );
   }
   function prunedNote(pruned:number){return pruned?` (pruned ${pruned} old evidence snapshot${pruned===1?'':'s'} to stay within storage)`:'';}
-  async function trackDomain(){const domain=newDomain.trim();if(!domain){caseMessage='Enter a domain to track.';return;}try{const{record,created,pruned}=await openCase({domain,source:'monitor'});await refreshCases();newDomain='';showCasePage(record);expandedId=record.id;tagDraft=record.tags.join(', ');noteDraft='';await navigateMonitor('cases',{parameter:'case',value:record.id});await focusCase(record);caseMessage=`${created?`Opened a new case for ${record.domain}.`:`${record.domain} already has a case.`}${prunedNote(pruned)}`;}catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not open the case.';}}
-  async function setStatus(record:CaseRecord,value:string){try{const{pruned}=await editCase(record.id,{status:value});await refreshCases();showCasePage(record);caseMessage=`Set ${record.domain} to ${statusLabel(value)}.${prunedNote(pruned)}`;}catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not update the case.';}}
-  async function setDisposition(record:CaseRecord,value:string){try{const{pruned}=await editCase(record.id,{disposition:value});await refreshCases();showCasePage(record);caseMessage=`Marked ${record.domain} as ${dispositionLabel(value)}.${prunedNote(pruned)}`;}catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not update the case.';}}
-  async function setReviewReason(record:CaseRecord,value:string){try{const{pruned}=await editCase(record.id,{reviewReasonCode:value});await refreshCases();showCasePage(record);caseMessage=`Updated the review reason for ${record.domain}.${prunedNote(pruned)}`;}catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not update the review reason.';}}
+  async function trackDomain(){
+    const domain=newDomain.trim();if(!domain){caseMessage='Enter a domain to track.';return;}
+    let committed:Awaited<ReturnType<typeof openCase>>;
+    try{committed=await openCase({domain,source:'monitor'});}
+    catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not open the case.';return;}
+    const{record,created}=committed;
+    newDomain='';
+    await reconcileCommittedCaseSnapshot(committed,created?`Opened a new case for ${record.domain}.`:`${record.domain} already has a case.`,record);
+    showCasePage(record);expandedId=record.id;tagDraft=record.tags.join(', ');noteDraft='';await navigateMonitor('cases',{parameter:'case',value:record.id});await focusCase(record);
+  }
+  async function setStatus(record:CaseRecord,value:string){
+    try{const committed=await editCase(record.id,{status:value});await reconcileCommittedCaseMutation(committed,`Set ${record.domain} to ${statusLabel(value)}.`);}
+    catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not update the case.';}
+  }
+  async function setDisposition(record:CaseRecord,value:string){
+    try{const committed=await editCase(record.id,{disposition:value});await reconcileCommittedCaseMutation(committed,`Marked ${record.domain} as ${dispositionLabel(value)}.`);}
+    catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not update the case.';}
+  }
+  async function setReviewReason(record:CaseRecord,value:string){
+    try{const committed=await editCase(record.id,{reviewReasonCode:value});await reconcileCommittedCaseMutation(committed,`Updated the review reason for ${record.domain}.`);}
+    catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not update the review reason.';}
+  }
   async function changeBrandProfileAssociation(record:CaseRecord,profileId:string,operation:'add'|'remove'){
     let persisted:CaseRecord;
     let committedCases:CaseRecord[]=[];
@@ -291,15 +351,58 @@
   }
   function addBrandProfileAssociation(record:CaseRecord,profileId:string){return changeBrandProfileAssociation(record,profileId,'add');}
   function removeBrandProfileAssociation(record:CaseRecord,profileId:string){return changeBrandProfileAssociation(record,profileId,'remove');}
-  async function saveTags(record:CaseRecord){const previous=[...record.tags];const next=tagDraft.split(/[,\n]+/).map(value=>value.trim()).filter(Boolean);if(previous.join('\\0')===next.join('\\0'))return;try{const{pruned}=await editCase(record.id,{tags:next});await refreshCases();showCasePage(record);caseMessage=`Updated tags for ${record.domain}.${prunedNote(pruned)}`;registerAnalystUndo({kind:'case_tags',action:'Case tags updated',affectedRecord:record.domain,undo:async()=>{await editCase(record.id,{tags:previous});await refreshCases();const restored=cases.find((item)=>item.id===record.id);if(restored&&expandedId===record.id)tagDraft=restored.tags.join(', ');return `Restored the previous tags for ${record.domain}.`;}});}catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not update tags.';}}
-  async function addNote(record:CaseRecord){if(pendingNoteCaseIds.includes(record.id))return;const body=noteDraft.trim();if(!body){caseMessage='A note cannot be empty.';return;}pendingNoteCaseIds=[...pendingNoteCaseIds,record.id];caseMessage=`Adding a note to ${record.domain}…`;try{const{pruned}=await addCaseNote(record.id,body);await refreshCases();showCasePage(record);noteDraft='';caseMessage=`Added a note to ${record.domain}.${prunedNote(pruned)}`;}catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not add the note.';}finally{pendingNoteCaseIds=pendingNoteCaseIds.filter((id)=>id!==record.id);}}
+  async function saveTags(record:CaseRecord){
+    const previous=[...record.tags];const next=tagDraft.split(/[,\n]+/).map(value=>value.trim()).filter(Boolean);if(previous.join('\\0')===next.join('\\0'))return;
+    try{
+      const committed=await editCase(record.id,{tags:next});
+      tagDraft=committed.record.tags.join(', ');
+      await reconcileCommittedCaseMutation(committed,`Updated tags for ${record.domain}.`);
+      registerAnalystUndo({kind:'case_tags',action:'Case tags updated',affectedRecord:record.domain,undo:async()=>{
+        const restored=await editCase(record.id,{tags:previous});
+        if(expandedId===record.id)tagDraft=restored.record.tags.join(', ');
+        await reconcileCommittedCaseMutation(restored,`Restored the previous tags for ${record.domain}.`);
+        return `Restored the previous tags for ${record.domain}.`;
+      }});
+    }catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not update tags.';}
+  }
+  async function addNote(record:CaseRecord){
+    if(pendingNoteCaseIds.includes(record.id))return;
+    const body=noteDraft.trim();
+    if(!body){caseMessage='A note cannot be empty.';return;}
+    pendingNoteCaseIds=[...pendingNoteCaseIds,record.id];
+    caseMessage=`Adding a note to ${record.domain}…`;
+    try{
+      let committed:Awaited<ReturnType<typeof addCaseNote>>;
+      try{committed=await addCaseNote(record.id,body);}
+      catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not add the note.';return;}
+      noteDraft='';
+      await reconcileCommittedCaseMutation(committed,`Added a note to ${record.domain}.`);
+    }finally{pendingNoteCaseIds=pendingNoteCaseIds.filter((id)=>id!==record.id);}
+  }
   async function downloadCases(){try{await exportCases();}catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not export cases.';}}
   function toggleCalibrationCase(record:CaseRecord,selected:boolean){calibrationReview=null;calibrationCaseIds=selected?[...new Set([...calibrationCaseIds,record.id])]:calibrationCaseIds.filter(id=>id!==record.id);}
   async function reviewCalibrationDataset(){try{calibrationReview=await previewRiskCalibrationDataset(calibrationCaseIds);}catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not review the Risk calibration dataset.';}}
   async function downloadCalibrationDataset(){calibrationExportBusy=true;try{const result=await exportRiskCalibrationDataset(calibrationCaseIds);calibrationReview=null;caseMessage=`Exported ${result.included} reviewed case${result.included===1?'':'s'} for offline Risk calibration${result.excluded?`; excluded ${result.excluded} incompatible selection${result.excluded===1?'':'s'}`:''}. No model setting was changed.`;}catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not export the Risk calibration dataset.';}finally{calibrationExportBusy=false;}}
-  async function removeCase(record:CaseRecord){if(!confirm(`Delete the case for ${record.domain}? Its notes are removed unless you exported them.`))return;try{await deleteCase(record.id);if(expandedId===record.id)expandedId='';await refreshCases();caseMessage=`Deleted the case for ${record.domain}.`;}catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not delete the case.';}}
+  async function removeCase(record:CaseRecord){
+    if(!confirm(`Delete the case for ${record.domain}? Its notes are removed unless you exported them.`))return;
+    let committed:Awaited<ReturnType<typeof deleteCase>>;
+    try{committed=await deleteCase(record.id);}
+    catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not delete the case.';return;}
+    if(expandedId===record.id)expandedId='';
+    try{await refreshCases();caseMessage=`Deleted the case for ${record.domain}.`;}
+    catch{installCommittedCaseSnapshot(committed.cases);caseMessage=`Deleted the case for ${record.domain}. The change was saved, but Cases could not be reread. The complete committed Case snapshot is shown locally; reload to retry the browser-local read.`;}
+  }
   function clearCaseFilters(){statusFilter='';dispositionFilter='';caseSearch='';}
-  async function importCaseFile(event:Event){const input=event.currentTarget as HTMLInputElement;const file=input.files?.[0];if(!file)return;try{if(file.size>MAX_CASE_IMPORT_BYTES)throw new Error('Case imports are limited to 2 MB.');const result=await importCases(parseBoundedJson(await file.text(),{label:'Case import',maximumBytes:MAX_CASE_IMPORT_BYTES}));await refreshCases();caseMessage=`Imported ${result.added} new and ${result.updated} merged cases${result.skipped?`; skipped ${result.skipped} invalid or over-limit record${result.skipped===1?'':'s'}`:''}${result.brandProfileReferencesOmitted?`; omitted ${result.brandProfileReferencesOmitted} Brand Profile reference${result.brandProfileReferencesOmitted===1?'':'s'} beyond the retained bounds`:''}${prunedNote(result.pruned)}.`;}catch(cause){caseMessage=cause instanceof Error?cause.message:'Case import failed';}finally{input.value='';}}
+  async function importCaseFile(event:Event){
+    const input=event.currentTarget as HTMLInputElement;const file=input.files?.[0];if(!file)return;
+    try{
+      if(file.size>MAX_CASE_IMPORT_BYTES)throw new Error('Case imports are limited to 2 MB.');
+      const result=await importCases(parseBoundedJson(await file.text(),{label:'Case import',maximumBytes:MAX_CASE_IMPORT_BYTES}));
+      const success=`Imported ${result.added} new and ${result.updated} merged cases${result.skipped?`; skipped ${result.skipped} invalid or over-limit record${result.skipped===1?'':'s'}`:''}${result.brandProfileReferencesOmitted?`; omitted ${result.brandProfileReferencesOmitted} Brand Profile reference${result.brandProfileReferencesOmitted===1?'':'s'} beyond the retained bounds`:''}.`;
+      await reconcileCommittedCaseSnapshot(result,success);
+    }catch(cause){caseMessage=cause instanceof Error?cause.message:'Case import failed';}
+    finally{input.value='';}
+  }
 
   let appliedMonitorRouteKey='';
   function monitorRouteKey(url:URL){return `${url.pathname}${url.search}${url.hash}`;}
@@ -503,12 +606,12 @@
     />
   {/if}
   <RiskCalibrationDashboard />
-  <ExternalFindingsImport {cases} oncomplete={refreshCases} onmessage={(value)=>caseMessage=value} />
+  <ExternalFindingsImport {cases} oncomplete={refreshCases} oncommitted={installCommittedCaseSnapshot} onmessage={(value)=>caseMessage=value} />
 
   {#if cases.length}
     <CaseFilters status={statusFilter} setStatus={(value)=>{statusFilter=value;casePage=1;}} disposition={dispositionFilter} setDisposition={(value)=>{dispositionFilter=value;casePage=1;}} search={caseSearch} setSearch={(value)=>{caseSearch=value;casePage=1;}} sort={caseSort} setSort={(value)=>{caseSort=value;casePage=1;}} statusOptions={CASE_STATUSES} dispositionOptions={CASE_DISPOSITIONS} clear={()=>{clearCaseFilters();casePage=1;}} matchedCount={filteredCases.length} totalCount={cases.length} />
 
-    <CaseList records={pagedCases} allRecords={cases} {expandedId} {tagDraft} setTagDraft={(value)=>tagDraft=value} {noteDraft} setNoteDraft={(value)=>noteDraft=value} {pendingNoteCaseIds} calibrationCaseIds={calibrationCaseIds} {toggleCalibrationCase} {expand} {setStatus} {setDisposition} {setReviewReason} {addBrandProfileAssociation} {removeBrandProfileAssociation} {saveTags} {addNote} {removeCase} {refreshCases} setMessage={(value)=>caseMessage=value} formatDate={date} currentPage={currentCasePage} pageCount={casePageCount} setPage={setCasePage} {brandProfiles} {brandProfilesUnavailable} />
+    <CaseList records={pagedCases} allRecords={cases} {expandedId} {tagDraft} setTagDraft={(value)=>tagDraft=value} {noteDraft} setNoteDraft={(value)=>noteDraft=value} {pendingNoteCaseIds} calibrationCaseIds={calibrationCaseIds} {toggleCalibrationCase} {expand} {setStatus} {setDisposition} {setReviewReason} {addBrandProfileAssociation} {removeBrandProfileAssociation} {saveTags} {addNote} {removeCase} {refreshCases} {installCommittedCaseSnapshot} setMessage={(value)=>caseMessage=value} formatDate={date} currentPage={currentCasePage} pageCount={casePageCount} setPage={setCasePage} {brandProfiles} {brandProfilesUnavailable} />
   {:else}
     <section class="empty-state card"><h2>No cases yet</h2><p>Open a case from a Lookup result, a Bulk row, or the form above to start a documented investigation record.</p><a href="/lookup">Open Lookup →</a></section>
   {/if}

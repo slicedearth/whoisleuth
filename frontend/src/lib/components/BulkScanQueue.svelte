@@ -34,6 +34,7 @@
     entryCount,
     queryLimit,
     duplicateCount,
+    equivalentCount,
     inputTooLarge,
     importDomainFile,
     start,
@@ -65,6 +66,7 @@
     entryCount: number;
     queryLimit: number;
     duplicateCount: number;
+    equivalentCount: number;
     inputTooLarge: boolean;
     importDomainFile: (event: Event) => void | Promise<void>;
     start: () => void | Promise<void>;
@@ -93,7 +95,7 @@
   {#if handoffSource}<p class="handoff">Loaded {handoffCount} candidate{handoffCount === 1 ? '' : 's'} from {handoffSource}.{#if handoffContextTruncated} Generated coverage context was capped to fit browser tab storage; selected candidates were retained in full.{/if}</p>{/if}
   <div class="queue-label"><label class="queue-title" for="domains">Domains</label><label class="btn small file-btn">Import CSV or text<input type="file" accept=".csv,.txt,text/csv,text/plain" onchange={importDomainFile} disabled={running}></label></div>
   <textarea id="domains" value={input} maxlength={MAX_DOMAIN_INPUT_CHARACTERS} oninput={(event) => setInput(event.currentTarget.value)} disabled={running} placeholder="example.com&#10;example.net"></textarea>
-  <p class="input-help">Paste newline, comma, semicolon, or tab-separated entries. CSV files may include a named domain column. One {mode === 'deep' ? 'Deep' : 'Fast'} job is limited to {queryLimit} unique domains.{#if duplicateCount} {duplicateCount} duplicate{duplicateCount === 1 ? '' : 's'} removed.{/if}</p>
+  <p class="input-help">Paste newline, comma, semicolon, or tab-separated entries. CSV files may include a named domain column. Collection is de-duplicated by registrable domain, and one {mode === 'deep' ? 'Deep' : 'Fast'} job is limited to {queryLimit} unique targets.{#if duplicateCount} {duplicateCount} duplicate{duplicateCount === 1 ? '' : 's'} removed.{/if}{#if equivalentCount} {equivalentCount} equivalent hostname entr{equivalentCount === 1 ? 'y was' : 'ies were'} combined by registrable target.{/if}</p>
   {#if entryCount > queryLimit}<p class="input-limit" role="alert">Remove {entryCount - queryLimit} domain{entryCount - queryLimit === 1 ? '' : 's'} before starting this {mode === 'deep' ? 'Deep' : 'Fast'} job.</p>{/if}
   {#if inputTooLarge}<p class="input-limit" role="alert">The pasted domain list exceeds the 2 MiB or bounded row and cell limit. Reduce it before scanning.</p>{/if}
   <div class="queue-actions">

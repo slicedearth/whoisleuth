@@ -11,13 +11,16 @@ import {
   CLI_DISCOVER_SCHEMA_VERSION,
   CLI_HTTP_SCHEMA,
   CLI_HTTP_SCHEMA_VERSION,
-  CLI_LOOKUP_SCHEMA,
-  CLI_LOOKUP_SCHEMA_VERSION,
   CLI_POSTURE_SCHEMA,
   CLI_POSTURE_SCHEMA_VERSION,
   CLI_TLS_SCHEMA,
   CLI_TLS_SCHEMA_VERSION,
 } from '../cli/formatters/json.mts';
+import {
+  CAPABILITY_MANIFEST_SCHEMA,
+  CAPABILITY_MANIFEST_VERSION,
+  MAX_CAPABILITY_MANIFEST_BYTES,
+} from '../packages/contracts/capability-manifest.mts';
 import { DOCTOR_SCHEMA, DOCTOR_VERSION } from '../cli/doctor.mts';
 import {
   CLI_COMMAND_CATALOGUE_SCHEMA,
@@ -54,12 +57,19 @@ import {
   REGISTRY_SUPPORT_SCHEMA_VERSION,
 } from '../cli/registry-support.mts';
 import {
-  MAX_RISK_CALIBRATION_INPUT_BYTES,
-  RISK_CALIBRATION_DATASET_SCHEMA,
-  RISK_CALIBRATION_DATASET_VERSION,
-  RISK_CALIBRATION_REPORT_SCHEMA,
-  RISK_CALIBRATION_REPORT_VERSION,
-} from '../cli/risk-calibration.mts';
+  RISK_CALIBRATION_DATASET_COMPATIBILITY,
+  RISK_CALIBRATION_REPORT_COMPATIBILITY,
+} from '../packages/contracts/risk-calibration.mts';
+import {
+  mutableSchemaCompatibilityEntry,
+  validateSchemaCompatibilityDescriptor,
+  type ContractKind,
+  type FutureVersionBehavior,
+  type MigrationBehavior,
+  type SchemaCompatibilityDescriptor,
+  type SchemaCompatibilityEntry,
+  type WriteSemantics,
+} from '../packages/contracts/schema-compatibility.mts';
 import {
   MAX_SAVED_LOOKUP_INPUT_BYTES,
 } from '../cli/saved-lookup.mts';
@@ -84,7 +94,6 @@ import {
 import {
   CLI_CASE_PACK_SCHEMA,
   CLI_CASE_PACK_VERSION,
-  MAX_CASE_PACK_INPUT_BYTES,
 } from '../cli/case-pack.mts';
 import {
   INTERCHANGE_FIDELITY_REPORT_SCHEMA,
@@ -317,6 +326,8 @@ import {
   MAX_CT_HISTORY_STORE_BYTES,
 } from '../frontend/src/lib/analysis/ct-history.ts';
 import {
+  DEFENSIVE_INDICATOR_MANIFEST_SCHEMA,
+  DEFENSIVE_INDICATOR_ROLLBACK_SCHEMA,
   DEFENSIVE_INDICATOR_EXPORT_VERSION,
 } from '../frontend/src/lib/analysis/defensive-indicator-export.ts';
 import {
@@ -452,8 +463,7 @@ import {
   CURATED_CONNECTOR_RESULT_SCHEMA,
 } from '../lib/threat-intelligence-contract.mts';
 import {
-  DOMAIN_CONTROL_MANIFEST_SCHEMA,
-  DOMAIN_CONTROL_MANIFEST_VERSION,
+  DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA,
   DOMAIN_CONTROL_REVIEW_SCHEMA,
   DOMAIN_CONTROL_REVIEW_VERSION,
 } from '../lib/domain-control-manifest.mts';
@@ -560,7 +570,6 @@ import {
   REVIEWED_ACCURACY_STATUS_SCHEMA,
   REVIEWED_ACCURACY_STATUS_VERSION,
 } from './reviewed-accuracy-status.mts';
-import { SSLBL_SNAPSHOT_SCHEMA, SSLBL_SNAPSHOT_VERSION } from './sslbl-snapshot.mts';
 import {
   MAX_SYNTHETIC_ANALYST_INPUT_BYTES,
   SYNTHETIC_ANALYST_REPORT_SCHEMA,
@@ -585,30 +594,95 @@ import {
   CODEQL_TEMP_MARKER_VERSION,
   MAX_CODEQL_TEMP_MARKER_BYTES,
 } from './local-codeql.mts';
+import { CLI_LOOKUP_COMPATIBILITY } from '../packages/contracts/cli-lookup.mts';
+import {
+  DOMAIN_CONTROL_MANIFEST_COMPATIBILITY,
+  DOMAIN_CONTROL_MANIFEST_INPUT_COMPATIBILITY,
+} from '../packages/contracts/domain-control-manifest.mts';
+import { RDAP_NAMESERVER_SEARCH_COMPATIBILITY } from '../packages/contracts/rdap-nameserver-search.mts';
+import { SSLBL_SNAPSHOT_COMPATIBILITY } from '../packages/contracts/sslbl-snapshot.mts';
+import {
+  CASE_RELATIONSHIP_CLUSTER_VERSION,
+  REVIEWED_RELATIONSHIP_CLUSTERS_SCHEMA,
+} from '../frontend/src/lib/analysis/case-relationship-clusters.ts';
+import {
+  DNS_CHANGE_REHEARSAL_EXPORT_SCHEMA,
+  DNS_CHANGE_REHEARSAL_VERSION,
+} from '../frontend/src/lib/analysis/dns-change-rehearsal.ts';
+import {
+  LOOKUP_INVESTIGATION_BRIEF_SCHEMA,
+  LOOKUP_INVESTIGATION_BRIEF_VERSION,
+} from '../frontend/src/lib/analysis/lookup-investigation-brief.ts';
+import {
+  LOOKUP_ASSET_GRAPH_SCHEMA,
+  LOOKUP_ASSET_GRAPH_VERSION,
+} from '../frontend/src/lib/analysis/lookup-asset-graph.ts';
+import {
+  MAIL_REPORT_SCHEMA,
+  MAIL_REPORT_VERSION,
+} from '../frontend/src/lib/analysis/mail-report-workbench.ts';
+import {
+  REGISTRATION_DISCLOSURE_PLAN_SCHEMA,
+  REGISTRATION_DISCLOSURE_PLAN_VERSION,
+} from '../frontend/src/lib/analysis/registration-disclosure-plan.ts';
+import {
+  MAX_STATIC_PAGE_PATTERN_PACK_BYTES,
+  STATIC_PAGE_PATTERN_PACK_SCHEMA,
+  STATIC_PAGE_PATTERN_PACK_VERSION,
+} from '../frontend/src/lib/analysis/static-page-pattern-packs.ts';
+import {
+  DNSSEC_EVIDENCE_SCHEMA,
+  DNSSEC_EVIDENCE_VERSION,
+} from '../lib/dnssec-evidence-validation.mts';
+import {
+  TLSA_EVIDENCE_SCHEMA,
+  TLSA_EVIDENCE_VERSION,
+} from '../lib/tlsa-evidence.mts';
+import {
+  RPKI_EVIDENCE_SCHEMA,
+  RPKI_EVIDENCE_VERSION,
+} from '../lib/rpki-evidence.mts';
+import {
+  ENCRYPTED_DNS_CONTRACT_SCHEMA,
+  ENCRYPTED_DNS_CONTRACT_VERSION,
+} from '../lib/encrypted-dns-contract.mts';
+import {
+  RDAP_SEARCH_WORKBENCH_SCHEMA,
+  RDAP_SEARCH_WORKBENCH_VERSION,
+} from '../lib/rdap-search-workbench.mts';
+import {
+  LOOKUP_PROGRESS_SCHEMA,
+  LOOKUP_PROGRESS_VERSION,
+  MAX_LOOKUP_PROGRESS_STREAM_BYTES,
+} from '../lib/lookup-progress.mts';
+import {
+  LOOKUP_PROGRESS_STAGING_EVIDENCE_SCHEMA,
+  LOOKUP_PROGRESS_STAGING_EVIDENCE_VERSION,
+  LOOKUP_PROGRESS_STAGING_QUALIFICATION_SCHEMA,
+  LOOKUP_PROGRESS_STAGING_QUALIFICATION_VERSION,
+} from '../lib/lookup-progress-staging-evidence.mts';
+import {
+  LOOKUP_READABLE_REPORT_SCHEMA,
+  LOOKUP_READABLE_REPORT_VERSION,
+  MAX_LOOKUP_READABLE_REPORT_BYTES,
+} from '../lib/lookup-readable-report.mts';
+import {
+  CONFUSABLE_PROJECTION_SCHEMA,
+  CONFUSABLE_PROJECTION_VERSION,
+} from '../lib/idn-confusable-policy.mts';
+import {
+  THREAT_INTELLIGENCE_CONTRACT_VERSION,
+  THREAT_INTELLIGENCE_SCHEMA,
+} from '../lib/threat-intelligence-types.mts';
+import {
+  SCHEDULED_MONITOR_LOG_SCHEMA,
+  SCHEDULED_MONITOR_LOG_VERSION,
+} from '../netlify/functions/scheduled-monitor.mts';
+import { MAX_LOOKUP_PROGRESS_STAGING_FILE_BYTES } from './incremental-lookup-staging-evidence.mts';
 
 export const SCHEMA_COMPATIBILITY_INVENTORY_SCHEMA = 'whoisleuth.schema-compatibility-inventory';
 export const SCHEMA_COMPATIBILITY_INVENTORY_VERSION = 1;
-export const MAX_SCHEMA_COMPATIBILITY_ENTRIES = 192;
-
-type ContractKind = 'browser_store' | 'tab_store' | 'hosted_store' | 'export' | 'cli_document' | 'derived';
-type FutureVersionBehavior = 'reject' | 'preserve_without_write' | 'discard' | 'not_applicable';
-type MigrationBehavior = 'normalize_to_current' | 'exact_current_only' | 'read_only' | 'none';
-type WriteSemantics = 'normalized_rewrite' | 'ephemeral_replace' | 'optimistic_replace' | 'non_destructive_merge' | 'read_only' | 'none';
-
-type SchemaCompatibilityEntry = {
-  id: string;
-  kind: ContractKind;
-  schema: string | null;
-  currentVersion: number;
-  supportedVersions: number[];
-  acceptsUnversionedLegacy: boolean;
-  futureVersionBehavior: FutureVersionBehavior;
-  migration: MigrationBehavior;
-  writeSemantics: WriteSemantics;
-  byteBudget: number | null;
-  owner: string;
-  note: string;
-};
+export const MAX_SCHEMA_COMPATIBILITY_ENTRIES = 224;
 
 type SchemaCompatibilityInventory = {
   schema: typeof SCHEMA_COMPATIBILITY_INVENTORY_SCHEMA;
@@ -618,15 +692,19 @@ type SchemaCompatibilityInventory = {
   limitations: string[];
 };
 
-const CONTRACT_KINDS = new Set<ContractKind>(['browser_store', 'tab_store', 'hosted_store', 'export', 'cli_document', 'derived']);
-const FUTURE_VERSION_BEHAVIORS = new Set<FutureVersionBehavior>(['reject', 'preserve_without_write', 'discard', 'not_applicable']);
-const MIGRATION_BEHAVIORS = new Set<MigrationBehavior>(['normalize_to_current', 'exact_current_only', 'read_only', 'none']);
-const WRITE_SEMANTICS = new Set<WriteSemantics>(['normalized_rewrite', 'ephemeral_replace', 'optimistic_replace', 'non_destructive_merge', 'read_only', 'none']);
 const MAX_INVENTORY_LIMITATIONS = 8;
 const MAX_INVENTORY_LIMITATION_LENGTH = 300;
+const SCHEMA_COMPATIBILITY_PROFILES = Object.freeze({
+  'whoisleuth.bulk-review': Object.freeze(['browser.bulk-review', 'export.bulk-review']),
+  'whoisleuth.bulk-sessions': Object.freeze(['browser.bulk-sessions', 'export.bulk-sessions']),
+  'whoisleuth.investigation-templates': Object.freeze(['browser.investigation-templates', 'export.investigation-templates']),
+  'whoisleuth.relationship-observations': Object.freeze(['browser.relationship-observations', 'export.relationship-observations']),
+  'whoisleuth.shortlist': Object.freeze(['browser.shortlist', 'export.shortlist']),
+  'whoisleuth.watchlists': Object.freeze(['browser.watchlists', 'export.watchlists']),
+} as const);
 
-function entry(value: SchemaCompatibilityEntry): SchemaCompatibilityEntry {
-  return value;
+function entry(value: SchemaCompatibilityDescriptor): SchemaCompatibilityEntry {
+  return mutableSchemaCompatibilityEntry(value);
 }
 
 const standardsCoverage = registryStandardsCoverageSnapshot();
@@ -649,7 +727,7 @@ const ENTRIES: SchemaCompatibilityEntry[] = [
   entry({ id: 'maintainer.reviewed-accuracy-intake', kind: 'cli_document', schema: REVIEWED_ACCURACY_INTAKE_SCHEMA, currentVersion: REVIEWED_ACCURACY_INTAKE_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: null, owner: 'tools/reviewed-accuracy-scaffold.mts', note: 'Bounded reviewed-accuracy intake contract; future records are rejected rather than silently normalized.' }),
   entry({ id: 'maintainer.reviewed-accuracy-status', kind: 'cli_document', schema: REVIEWED_ACCURACY_STATUS_SCHEMA, currentVersion: REVIEWED_ACCURACY_STATUS_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'tools/reviewed-accuracy-status.mts', note: 'Target-free corpus readiness report that never promotes insufficient samples to reviewed evidence.' }),
   entry({ id: 'maintainer.schema-compatibility-inventory', kind: 'cli_document', schema: SCHEMA_COMPATIBILITY_INVENTORY_SCHEMA, currentVersion: SCHEMA_COMPATIBILITY_INVENTORY_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'tools/schema-compatibility.mts', note: 'Bounded deterministic inventory of every reviewed serialized contract and its explicit compatibility decision.' }),
-  entry({ id: 'derived.sslbl-certificate-snapshot', kind: 'derived', schema: SSLBL_SNAPSHOT_SCHEMA, currentVersion: SSLBL_SNAPSHOT_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'normalized_rewrite', byteBudget: null, owner: 'tools/sslbl-snapshot.mts', note: 'Checked-in certificate fingerprint snapshot parsed only at its exact current contract.' }),
+  entry(SSLBL_SNAPSHOT_COMPATIBILITY),
   entry({ id: 'maintainer.synthetic-analyst-result', kind: 'cli_document', schema: SYNTHETIC_ANALYST_RESULT_SCHEMA, currentVersion: SYNTHETIC_ANALYST_RESULT_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: MAX_SYNTHETIC_ANALYST_INPUT_BYTES, owner: 'tools/synthetic-analyst-journeys.mts', note: 'Bounded explicitly synthetic journey result consumed without live target evidence.' }),
   entry({ id: 'maintainer.synthetic-analyst-report', kind: 'cli_document', schema: SYNTHETIC_ANALYST_REPORT_SCHEMA, currentVersion: SYNTHETIC_ANALYST_RESULT_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'tools/synthetic-analyst-journeys.mts', note: 'Target-free aggregate of explicitly synthetic journey fixtures.' }),
   entry({ id: 'maintainer.technology-example-review', kind: 'cli_document', schema: TECHNOLOGY_EXAMPLE_REVIEW_SCHEMA, currentVersion: TECHNOLOGY_EXAMPLE_REVIEW_VERSION, supportedVersions: [5], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'tools/technology-example-review.mts', note: 'Offline reviewed-fixture evidence report for bounded technology signatures.' }),
@@ -690,7 +768,7 @@ const ENTRIES: SchemaCompatibilityEntry[] = [
   entry({ id: 'export.bulk-mail-exposure', kind: 'export', schema: BULK_MAIL_EXPOSURE_SCHEMA, currentVersion: BULK_MAIL_EXPOSURE_EXPORT_VERSION, supportedVersions: [1, 2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'read_only', writeSemantics: 'read_only', byteBudget: MAX_OFFLINE_ARTIFACT_BYTES, owner: 'frontend/src/lib/analysis/bulk-mail-exposure.ts', note: 'Export version 2 uses deterministic sorted-json-v2 integrity while its nested report remains version 1 and incomplete DNS evidence remains inconclusive.' }),
   entry({ id: 'export.bulk-review-manifest', kind: 'export', schema: BULK_REVIEW_MANIFEST_SCHEMA, currentVersion: BULK_REVIEW_MANIFEST_VERSION, supportedVersions: [1, 2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'read_only', writeSemantics: 'read_only', byteBudget: MAX_OFFLINE_ARTIFACT_BYTES, owner: 'frontend/src/lib/analysis/bulk-review-export.ts', note: 'Version 2 uses deterministic sorted-json-v2 integrity for one bounded Bulk review selection while excluding raw payloads, contacts, notes, and transient request state.' }),
   entry({ id: 'export.investigation-capsule', kind: 'export', schema: INVESTIGATION_CAPSULE_SCHEMA, currentVersion: INVESTIGATION_CAPSULE_VERSION, supportedVersions: [1, 2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'read_only', writeSemantics: 'read_only', byteBudget: MAX_OFFLINE_ARTIFACT_BYTES, owner: 'frontend/src/lib/analysis/investigation-capsule.ts', note: 'Version 2 adds deterministic whole-capsule integrity; version 1 remains verifiable only for its embedded projections.' }),
-  entry({ id: 'derived.lookup-asset-graph', kind: 'derived', schema: 'whoisleuth.lookup-asset-graph', currentVersion: 2, supportedVersions: [2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: null, owner: 'frontend/src/lib/analysis/lookup-asset-graph.ts', note: 'Bounded relationship projection embedded in investigation capsules; source attribution and incomplete evidence remain explicit.' }),
+  entry({ id: 'derived.lookup-asset-graph', kind: 'derived', schema: LOOKUP_ASSET_GRAPH_SCHEMA, currentVersion: LOOKUP_ASSET_GRAPH_VERSION, supportedVersions: [LOOKUP_ASSET_GRAPH_VERSION], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: null, owner: 'frontend/src/lib/analysis/lookup-asset-graph.ts', note: 'Bounded relationship projection embedded in investigation capsules; source attribution and incomplete evidence remain explicit.' }),
   entry({ id: 'derived.case-analyst-records', kind: 'derived', schema: 'whoisleuth.case-analyst-records', currentVersion: 1, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: null, owner: 'frontend/src/lib/analysis/investigation-capsule.ts', note: 'Optional bounded analyst-decision and assertion projection embedded only after deliberate selection for an investigation capsule.' }),
   entry({ id: 'export.external-findings', kind: 'export', schema: EXTERNAL_FINDINGS_SCHEMA, currentVersion: EXTERNAL_FINDINGS_VERSION, supportedVersions: [1, 2, 3, 4], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'normalize_to_current', writeSemantics: 'non_destructive_merge', byteBudget: MAX_EXTERNAL_FINDINGS_IMPORT_BYTES, owner: 'frontend/src/lib/analysis/external-findings-import.ts', note: 'Strict local findings import. Version 4 can retain bounded certificate event identity and name-completeness metadata while analyst assertions remain a separate case workflow.' }),
   entry({ id: 'import.external-finding-rows', kind: 'export', schema: EXTERNAL_FINDING_ROWS_SCHEMA, currentVersion: EXTERNAL_FINDING_ROWS_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: true, futureVersionBehavior: 'reject', migration: 'normalize_to_current', writeSemantics: 'non_destructive_merge', byteBudget: MAX_EXTERNAL_FINDINGS_IMPORT_BYTES, owner: 'frontend/src/lib/analysis/external-findings-converters.ts', note: 'Bounded fixed-column JSON rows converted through the strict findings parser.' }),
@@ -709,12 +787,13 @@ const ENTRIES: SchemaCompatibilityEntry[] = [
   entry({ id: 'export.encrypted-workspace-archive', kind: 'export', schema: ENCRYPTED_WORKSPACE_ARCHIVE_SCHEMA, currentVersion: ENCRYPTED_WORKSPACE_ARCHIVE_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'non_destructive_merge', byteBudget: MAX_ENCRYPTED_WORKSPACE_ARCHIVE_BYTES, owner: 'frontend/src/lib/analysis/workspace-archive-crypto.ts', note: 'Browser-local PBKDF2 and AES-GCM wrapper around the ordinary checksummed archive; passphrases are never persisted or recoverable.' }),
   entry({ id: 'export.workspace-settings-section', kind: 'export', schema: WORKSPACE_SETTINGS_SCHEMA, currentVersion: WORKSPACE_SETTINGS_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'non_destructive_merge', byteBudget: null, owner: 'frontend/src/lib/analysis/workspace-archive.ts', note: 'Nested archive section limited to the active Brand Profile identifier and dark, light, or system theme preference.' }),
   entry({ id: 'export.lookup-evidence', kind: 'export', schema: LOOKUP_EVIDENCE_SCHEMA, currentVersion: LOOKUP_EVIDENCE_SCHEMA_VERSION, supportedVersions: [25, 26, 27, 28], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'read_only', writeSemantics: 'read_only', byteBudget: LOOKUP_EVIDENCE_PORTABLE_MAX_BYTES, owner: 'lib/evidence-export.mts', note: 'Version 28 removes raw registration payloads, expanded contacts, and attributed contact routes behind positive publication allowlists. Version 27 retains fixed homepage summaries; versions 25 and 26 preserve their documented source-wrapper compatibility.' }),
-  entry({ id: 'export.domain-control-manifest', kind: 'export', schema: DOMAIN_CONTROL_MANIFEST_SCHEMA, currentVersion: DOMAIN_CONTROL_MANIFEST_VERSION, supportedVersions: [1, 2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'lib/domain-control-manifest.mts', note: 'Version 2 uses deterministic sorted-json-v2 integrity for analyst-authored desired state; version 1 remains readable and empty fields remain unconfigured.' }),
+  entry(DOMAIN_CONTROL_MANIFEST_INPUT_COMPATIBILITY),
+  entry(DOMAIN_CONTROL_MANIFEST_COMPATIBILITY),
   entry({ id: 'export.defensive-indicators', kind: 'export', schema: null, currentVersion: DEFENSIVE_INDICATOR_EXPORT_VERSION, supportedVersions: [1, 2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'frontend/src/lib/analysis/defensive-indicator-export.ts', note: 'Review-only indicator, provenance-manifest, and rollback formats; never submitted or applied automatically.' }),
   entry({ id: 'export.stix-indicators', kind: 'export', schema: null, currentVersion: STIX_INDICATOR_EXPORT_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'frontend/src/lib/analysis/stix-indicator-export.ts', note: 'STIX 2.1 bundle with direct observations separated from heuristic indicators.' }),
   entry({ id: 'export.misp-indicators', kind: 'export', schema: null, currentVersion: MISP_INDICATOR_EXPORT_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'frontend/src/lib/analysis/misp-indicator-export.ts', note: 'Unpublished, non-IDS, non-correlating event for reviewed import.' }),
   entry({ id: 'export.synthetic-demo', kind: 'export', schema: SYNTHETIC_DEMO_EXPORT_SCHEMA, currentVersion: SYNTHETIC_DEMO_EXPORT_VERSION, supportedVersions: [2, 3, 4, 5], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'frontend/src/lib/analysis/demo-model.ts', note: 'Explicitly synthetic fixed-fixture package, never live evidence.' }),
-  entry({ id: 'cli.lookup', kind: 'cli_document', schema: CLI_LOOKUP_SCHEMA, currentVersion: CLI_LOOKUP_SCHEMA_VERSION, supportedVersions: [1, 2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'read_only', writeSemantics: 'read_only', byteBudget: MAX_SAVED_LOOKUP_INPUT_BYTES, owner: 'cli/formatters/json.mts', note: 'Saved domain lookups preserve version 1 compatibility while version 2 can retain bounded Deep homepage metadata for offline review and evidence export.' }),
+  entry(CLI_LOOKUP_COMPATIBILITY),
   entry({ id: 'cli.doctor', kind: 'cli_document', schema: DOCTOR_SCHEMA, currentVersion: DOCTOR_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'cli/doctor.mts', note: 'Bounded runtime and optional explicitly approved network-diagnostic report; normal operation remains offline.' }),
   entry({ id: 'cli.command-catalogue', kind: 'cli_document', schema: CLI_COMMAND_CATALOGUE_SCHEMA, currentVersion: CLI_COMMAND_CATALOGUE_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'cli/command-catalogue.mts', note: 'Installed command, usage, collection-mode, and boundary catalogue without target or evidence values.' }),
   entry({ id: 'cli.lookup-plan', kind: 'cli_document', schema: CLI_LOOKUP_PLAN_SCHEMA, currentVersion: CLI_LOOKUP_PLAN_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'cli/lookup-plan.mts', note: 'Request-free preview of the sources and disclosures associated with an analyst-selected lookup mode.' }),
@@ -749,6 +828,7 @@ const ENTRIES: SchemaCompatibilityEntry[] = [
   entry({ id: 'cli.domain-assurance-input', kind: 'cli_document', schema: DOMAIN_ASSURANCE_INPUT_SCHEMA, currentVersion: DOMAIN_ASSURANCE_VERSION, supportedVersions: [1, 2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'normalize_to_current', writeSemantics: 'read_only', byteBudget: MAX_ASSURANCE_INPUT_BYTES, owner: 'lib/domain-assurance.mts', note: 'Bounded analyst-authored planned-change, recovery-dependency, or retirement input; version 2 adds optional bounded custom retirement checks and performs no credentials or provider changes.' }),
   entry({ id: 'cli.domain-assurance', kind: 'cli_document', schema: DOMAIN_ASSURANCE_SCHEMA, currentVersion: DOMAIN_ASSURANCE_VERSION, supportedVersions: [1, 2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'lib/domain-assurance.mts', note: 'Offline assurance review with explicit unknown and incomplete states; version 2 can report bounded analyst-defined retirement checks and performs no collection or configuration change.' }),
   entry({ id: 'cli.domain-control-review', kind: 'cli_document', schema: DOMAIN_CONTROL_REVIEW_SCHEMA, currentVersion: DOMAIN_CONTROL_REVIEW_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: null, owner: 'lib/domain-control-manifest.mts', note: 'Offline desired-state comparison. Only complete separately attributed observations can produce drift.' }),
+  entry({ id: 'cli.domain-control-review-core-input', kind: 'cli_document', schema: DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA, currentVersion: DOMAIN_CONTROL_REVIEW_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: null, owner: 'lib/domain-control-manifest.mts', note: 'Exact-current bounded desired-state manifest and separately attributed observation input for the offline core comparison.' }),
   entry({ id: 'cli.zone-intent-input', kind: 'cli_document', schema: ZONE_INTENT_INPUT_SCHEMA, currentVersion: ZONE_INTENT_REVIEW_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: MAX_ZONE_TEXT_BYTES, owner: 'lib/zone-intent-review.mts', note: 'Bounded BIND-subset or normalized-record intent input. Unsupported syntax is rejected and TXT values are reduced to digests.' }),
   entry({ id: 'cli.zone-intent-review', kind: 'cli_document', schema: ZONE_INTENT_REVIEW_SCHEMA, currentVersion: ZONE_INTENT_REVIEW_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'lib/zone-intent-review.mts', note: 'Offline desired-versus-observed DNS comparison with explicit partial and unsupported states; never applies a DNS change.' }),
   entry({ id: 'cli.domain-portfolio-input', kind: 'cli_document', schema: DOMAIN_PORTFOLIO_INPUT_SCHEMA, currentVersion: DOMAIN_PORTFOLIO_REVIEW_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: null, owner: 'lib/domain-portfolio-review.mts', note: 'Bounded analyst-supplied portfolio assertions without credentials, contact details, or provider requests.' }),
@@ -767,7 +847,7 @@ const ENTRIES: SchemaCompatibilityEntry[] = [
   entry({ id: 'cli.investigation-run', kind: 'cli_document', schema: CLI_INVESTIGATION_RUN_SCHEMA, currentVersion: CLI_INVESTIGATION_RUN_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'normalized_rewrite', byteBudget: MAX_INVESTIGATION_RUN_BYTES, owner: 'cli/investigation-run.mts', note: 'Resumable state for installed fixed-recipe steps; network work requires per-run approval and analyst placeholders always pause.' }),
   entry({ id: 'cli.collection-preflight', kind: 'cli_document', schema: CLI_COLLECTION_PREFLIGHT_SCHEMA, currentVersion: CLI_COLLECTION_PREFLIGHT_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'cli/collection-preflight.mts', note: 'Offline bounded collection-family and disclosure preview that makes no request.' }),
   entry({ id: 'cli.config', kind: 'cli_document', schema: CLI_CONFIG_SCHEMA, currentVersion: CLI_CONFIG_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: MAX_CLI_CONFIG_BYTES, owner: 'cli/config-profile.mts', note: 'Strict local safe-default profiles; targets, deep mode, output paths, network approvals, failure policies and arbitrary arguments are refused.' }),
-  entry({ id: 'export.cli-case-pack', kind: 'export', schema: CLI_CASE_PACK_SCHEMA, currentVersion: CLI_CASE_PACK_VERSION, supportedVersions: [1, 2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: MAX_CASE_PACK_INPUT_BYTES, owner: 'cli/case-pack.mts', note: 'Packet version 2 uses deterministic sorted-json-v2 integrity while the enclosed Case schema remains version 12; packet version 1 remains verifiable.' }),
+  entry({ id: 'export.cli-case-pack', kind: 'export', schema: CLI_CASE_PACK_SCHEMA, currentVersion: CLI_CASE_PACK_VERSION, supportedVersions: [1, 2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'read_only', writeSemantics: 'read_only', byteBudget: MAX_CASE_IMPORT_BYTES, owner: 'cli/case-pack.mts', note: 'Packet versions 1 and 2 are verified within the portable Case import ceiling; future packet versions are rejected, and version 2 uses deterministic sorted-json-v2 integrity while the enclosed Case schema remains version 12.' }),
   entry({ id: 'cli.interchange-fidelity-report', kind: 'cli_document', schema: INTERCHANGE_FIDELITY_REPORT_SCHEMA, currentVersion: INTERCHANGE_FIDELITY_REPORT_VERSION, supportedVersions: [2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: MAX_INTERCHANGE_REPORT_BYTES, owner: 'cli/interchange-report.mts', note: 'Version 2 enforces the runtime registry assurance requirement before reporting fidelity; output remains metadata-only and excludes evidence values and unknown schema text.' }),
   entry({ id: 'cli.domain-control-review-input', kind: 'cli_document', schema: CLI_DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA, currentVersion: CLI_DOMAIN_CONTROL_REVIEW_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: MAX_DOMAIN_CONTROL_REVIEW_INPUT_BYTES, owner: 'cli/domain-control-observations.mts', note: 'Bounded desired-state manifest plus saved Lookups converted without new collection.' }),
   entry({ id: 'cli.domain-control-observation-review', kind: 'cli_document', schema: CLI_DOMAIN_CONTROL_REVIEW_SCHEMA, currentVersion: CLI_DOMAIN_CONTROL_REVIEW_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'cli/domain-control-observations.mts', note: 'Compact source-qualified control observations and desired-state comparison.' }),
@@ -795,11 +875,11 @@ const ENTRIES: SchemaCompatibilityEntry[] = [
   entry({ id: 'cli.posture', kind: 'cli_document', schema: CLI_POSTURE_SCHEMA, currentVersion: CLI_POSTURE_SCHEMA_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'cli/formatters/json.mts', note: 'Owned-domain posture output.' }),
   entry({ id: 'cli.http', kind: 'cli_document', schema: CLI_HTTP_SCHEMA, currentVersion: CLI_HTTP_SCHEMA_VERSION, supportedVersions: [1, 2, 3], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'cli/formatters/json.mts', note: 'Bounded HTTP evidence output; version 3 adds fixed selected-response delivery metadata, version 2 separates an inconclusive activity assessment from a negative reachability claim, and version 1 retains its historical interpretation.' }),
   entry({ id: 'cli.tls', kind: 'cli_document', schema: CLI_TLS_SCHEMA, currentVersion: CLI_TLS_SCHEMA_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'cli/formatters/json.mts', note: 'Bounded TLS evidence output.' }),
-  entry({ id: 'cli.compare', kind: 'cli_document', schema: CLI_COMPARE_SCHEMA, currentVersion: CLI_COMPARE_SCHEMA_VERSION, supportedVersions: [3], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: MAX_SAVED_LOOKUP_INPUT_BYTES, owner: 'cli/compare.mts', note: 'Comparison output reads supported saved Lookup versions 1 and 2 through the shared bounded parser.' }),
+  entry({ id: 'cli.compare', kind: 'cli_document', schema: CLI_COMPARE_SCHEMA, currentVersion: CLI_COMPARE_SCHEMA_VERSION, supportedVersions: [3], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: MAX_SAVED_LOOKUP_INPUT_BYTES, owner: 'cli/formatters/json.mts', note: 'Comparison output reads supported saved Lookup versions 1 and 2 through the shared bounded parser.' }),
   entry({ id: 'cli.registry-support', kind: 'cli_document', schema: REGISTRY_SUPPORT_SCHEMA, currentVersion: REGISTRY_SUPPORT_SCHEMA_VERSION, supportedVersions: [2, 3, 4], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'cli/registry-support.mts', note: 'Catalogue coverage report; optional official lookup links require deliberate browser navigation and do not test live reachability.' }),
-  entry({ id: 'cli.registry-standards-coverage', kind: 'cli_document', schema: REGISTRY_STANDARDS_COVERAGE_SCHEMA, currentVersion: standardsCoverage.version, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'lib/registry-capabilities.mts', note: 'Immutable official-source coverage snapshot embedded in registry-support output.' }),
-  entry({ id: 'cli.risk-calibration-dataset', kind: 'cli_document', schema: RISK_CALIBRATION_DATASET_SCHEMA, currentVersion: RISK_CALIBRATION_DATASET_VERSION, supportedVersions: [1, 2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'normalize_to_current', writeSemantics: 'read_only', byteBudget: MAX_RISK_CALIBRATION_INPUT_BYTES, owner: 'cli/risk-calibration.mts', note: 'Offline labelled fixture input; version 2 adds bounded review context without live collection.' }),
-  entry({ id: 'cli.risk-calibration-report', kind: 'cli_document', schema: RISK_CALIBRATION_REPORT_SCHEMA, currentVersion: RISK_CALIBRATION_REPORT_VERSION, supportedVersions: [1, 2, 3], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'cli/risk-calibration.mts', note: 'Offline calibration output; version 3 distinguishes the bounded detailed report from a target-free aggregate summary for tab-local review.' }),
+  entry({ id: 'cli.registry-standards-coverage', kind: 'cli_document', schema: REGISTRY_STANDARDS_COVERAGE_SCHEMA, currentVersion: standardsCoverage.version, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'cli/registry-support.mts', note: 'Immutable official-source coverage snapshot embedded in registry-support output.' }),
+  entry(RISK_CALIBRATION_DATASET_COMPATIBILITY),
+  entry(RISK_CALIBRATION_REPORT_COMPATIBILITY),
   entry({ id: 'cli.deployment-self-check', kind: 'cli_document', schema: DEPLOYMENT_SELF_CHECK_SCHEMA, currentVersion: DEPLOYMENT_SELF_CHECK_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'tools/deployment-self-check.mts', note: 'Redacted operator-run public-boundary report; response bodies and credentialed posture are excluded.' }),
   entry({ id: 'cli.maintainer-duplication-report', kind: 'cli_document', schema: MAINTAINER_DUPLICATION_REPORT_SCHEMA, currentVersion: MAINTAINER_DUPLICATION_REPORT_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: MAX_MAINTAINER_DUPLICATION_REPORT_BYTES, owner: 'tools/maintainer-duplication-report.mts', note: 'Deterministic repository-relative static call graph and exact token-clone inventory for bounded maintainer modules; source text, literals, absolute paths, runtime values, and automatic consolidation are excluded.' }),
   entry({ id: 'cli.registry-drift-audit', kind: 'cli_document', schema: REGISTRY_DRIFT_AUDIT_SCHEMA, currentVersion: REGISTRY_DRIFT_AUDIT_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'tools/registry-drift-audit.mts', note: 'Manual bounded comparison of two fixed official IANA catalogues; no registry query or automatic catalogue rewrite.' }),
@@ -810,10 +890,32 @@ const ENTRIES: SchemaCompatibilityEntry[] = [
   entry({ id: 'export.web-capture-manifest', kind: 'export', schema: WEB_CAPTURE_MANIFEST_SCHEMA, currentVersion: WEB_CAPTURE_MANIFEST_VERSION, supportedVersions: [1, 2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'read_only', writeSemantics: 'read_only', byteBudget: MAX_WEB_CAPTURE_MANIFEST_BYTES, owner: 'frontend/src/lib/analysis/web-capture-import.ts', note: 'Metadata-only capture manifest; the browser accepts versions 1 and 2 while offline artefact comparison requires current version 2.' }),
   entry({ id: 'export.web-capture-dom-digest', kind: 'export', schema: WEB_CAPTURE_DOM_DIGEST_SCHEMA, currentVersion: WEB_CAPTURE_DOM_DIGEST_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: MAX_WEB_CAPTURE_DOM_DIGEST_BYTES, owner: 'packages/web-capture/capture.mts', note: 'Local structural and visible-text digests with counts and truncation only; markup and page text are excluded.' }),
   entry({ id: 'cli.web-capture-comparison', kind: 'cli_document', schema: WEB_CAPTURE_COMPARISON_SCHEMA, currentVersion: WEB_CAPTURE_COMPARISON_VERSION, supportedVersions: [2, 3], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'packages/web-capture/compare.mts', note: 'Version 2 reports page-title equality without copying either title; version 3 withholds DOM equality for equal truncated prefixes. Both exclude input paths and DOM or body text.' }),
-  entry({ id: 'derived.curated-connector-result', kind: 'derived', schema: CURATED_CONNECTOR_RESULT_SCHEMA, currentVersion: CURATED_CONNECTOR_CONTRACT_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'none', byteBudget: null, owner: 'lib/threat-intelligence-contract.mts', note: 'Transient bounded entity and relationship projection; the contract enables no connector, request, credential, storage, score, or availability decision.' }),
+  entry({ id: 'derived.capability-manifest', kind: 'derived', schema: CAPABILITY_MANIFEST_SCHEMA, currentVersion: CAPABILITY_MANIFEST_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: MAX_CAPABILITY_MANIFEST_BYTES, owner: 'packages/contracts/capability-manifest.mts', note: 'Read-only fixed product boundary metadata; it enables no capability, request, credential, retention, score, or authorisation.' }),
+  entry({ id: 'derived.curated-connector-result', kind: 'derived', schema: CURATED_CONNECTOR_RESULT_SCHEMA, currentVersion: CURATED_CONNECTOR_CONTRACT_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'none', byteBudget: null, owner: 'lib/threat-intelligence-runtime.mts', note: 'Transient bounded entity and relationship projection; the contract enables no connector, request, credential, storage, score, or availability decision.' }),
   entry({ id: 'derived.observation-envelope', kind: 'derived', schema: OBSERVATION_ENVELOPE_SCHEMA, currentVersion: OBSERVATION_ENVELOPE_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'none', byteBudget: MAX_OBSERVATION_ENVELOPE_BYTES, owner: 'frontend/src/lib/analysis/observation-envelope.ts', note: 'Disposable typed adapter over authoritative browser-local records; it performs no writes and preserves source schema, provenance, partialness, and rollback state.' }),
   entry({ id: 'derived.investigation-projection', kind: 'derived', schema: INVESTIGATION_PROJECTION_SCHEMA, currentVersion: INVESTIGATION_PROJECTION_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'none', byteBudget: null, owner: 'frontend/src/lib/analysis/investigation-projection.ts', note: 'Read-only bounded projection over existing stores; never persisted.' }),
   entry({ id: 'derived.investigation-search', kind: 'derived', schema: INVESTIGATION_SEARCH_SCHEMA, currentVersion: INVESTIGATION_SEARCH_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'none', byteBudget: null, owner: 'frontend/src/lib/analysis/investigation-search.ts', note: 'Disposable in-memory index; never persisted or transmitted.' }),
+  entry({ id: 'export.reviewed-relationship-clusters', kind: 'export', schema: REVIEWED_RELATIONSHIP_CLUSTERS_SCHEMA, currentVersion: CASE_RELATIONSHIP_CLUSTER_VERSION, supportedVersions: [2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'frontend/src/lib/analysis/case-relationship-clusters.ts', note: 'Output-only bounded reviewed relationship clusters; version 2 is the only contract represented by the current producer.' }),
+  entry({ id: 'export.defensive-indicator-manifest', kind: 'export', schema: DEFENSIVE_INDICATOR_MANIFEST_SCHEMA, currentVersion: DEFENSIVE_INDICATOR_EXPORT_VERSION, supportedVersions: [2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'frontend/src/lib/analysis/defensive-indicator-export.ts', note: 'Output-only manifest for explicitly selected defensive indicators; historical version 1 is not claimed without a retained reader.' }),
+  entry({ id: 'export.defensive-indicator-rollback', kind: 'export', schema: DEFENSIVE_INDICATOR_ROLLBACK_SCHEMA, currentVersion: DEFENSIVE_INDICATOR_EXPORT_VERSION, supportedVersions: [2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'frontend/src/lib/analysis/defensive-indicator-export.ts', note: 'Output-only rollback companion for the same bounded defensive-indicator selection.' }),
+  entry({ id: 'export.dns-change-rehearsal', kind: 'export', schema: DNS_CHANGE_REHEARSAL_EXPORT_SCHEMA, currentVersion: DNS_CHANGE_REHEARSAL_VERSION, supportedVersions: [2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'frontend/src/lib/analysis/dns-change-rehearsal.ts', note: 'Output-only DNS change rehearsal document; version 2 is the only producer contract represented by this tree.' }),
+  entry({ id: 'derived.lookup-investigation-brief', kind: 'derived', schema: LOOKUP_INVESTIGATION_BRIEF_SCHEMA, currentVersion: LOOKUP_INVESTIGATION_BRIEF_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'none', byteBudget: null, owner: 'frontend/src/lib/analysis/lookup-investigation-brief.ts', note: 'Bounded decision brief derived from the current Lookup view without adding collection or persistence.' }),
+  entry({ id: 'export.mail-report-review', kind: 'export', schema: MAIL_REPORT_SCHEMA, currentVersion: MAIL_REPORT_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'frontend/src/lib/analysis/mail-report-workbench.ts', note: 'Output-only review derived from bounded offline aggregate-report input; the producer has field and collection limits but no separate serialised-output byte contract.' }),
+  entry({ id: 'export.registration-disclosure-plan', kind: 'export', schema: REGISTRATION_DISCLOSURE_PLAN_SCHEMA, currentVersion: REGISTRATION_DISCLOSURE_PLAN_VERSION, supportedVersions: [2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'frontend/src/lib/analysis/registration-disclosure-plan.ts', note: 'Output-only bounded registration-disclosure planning document; version 2 is the only current producer contract.' }),
+  entry({ id: 'export.static-page-pattern-pack', kind: 'export', schema: STATIC_PAGE_PATTERN_PACK_SCHEMA, currentVersion: STATIC_PAGE_PATTERN_PACK_VERSION, supportedVersions: [2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'non_destructive_merge', byteBudget: MAX_STATIC_PAGE_PATTERN_PACK_BYTES, owner: 'frontend/src/lib/analysis/static-page-pattern-packs.ts', note: 'Exact-current bounded page-pattern pack imported by explicit analyst action and merged without executing code or starting collection.' }),
+  entry({ id: 'cli.dnssec-evidence-review', kind: 'cli_document', schema: DNSSEC_EVIDENCE_SCHEMA, currentVersion: DNSSEC_EVIDENCE_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'lib/dnssec-evidence-validation.mts', note: 'Output-only offline relationship review of bounded analyst-supplied DS, DNSKEY, and RRSIG evidence.' }),
+  entry({ id: 'cli.tlsa-evidence-review', kind: 'cli_document', schema: TLSA_EVIDENCE_SCHEMA, currentVersion: TLSA_EVIDENCE_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'lib/tlsa-evidence.mts', note: 'Output-only offline comparison of bounded analyst-supplied TLSA and certificate material with independent DNSSEC and PKIX states.' }),
+  entry({ id: 'cli.rpki-route-review', kind: 'cli_document', schema: RPKI_EVIDENCE_SCHEMA, currentVersion: RPKI_EVIDENCE_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'lib/rpki-evidence.mts', note: 'Output-only offline route-origin review over bounded analyst-supplied authorisations.' }),
+  entry({ id: 'cli.encrypted-dns-plan', kind: 'cli_document', schema: ENCRYPTED_DNS_CONTRACT_SCHEMA, currentVersion: ENCRYPTED_DNS_CONTRACT_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'lib/encrypted-dns-contract.mts', note: 'Request-free bounded adapter and disclosure plan; it does not enable an encrypted DNS provider or send a query.' }),
+  entry({ id: 'cli.rdap-search-workbench', kind: 'cli_document', schema: RDAP_SEARCH_WORKBENCH_SCHEMA, currentVersion: RDAP_SEARCH_WORKBENCH_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'lib/rdap-search-workbench.mts', note: 'One versioned output family for request-free capability help, bounded reverse-search plans, and offline response inspection.' }),
+  entry({ id: 'derived.lookup-progress', kind: 'derived', schema: LOOKUP_PROGRESS_SCHEMA, currentVersion: LOOKUP_PROGRESS_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'none', byteBudget: MAX_LOOKUP_PROGRESS_STREAM_BYTES, owner: 'lib/lookup-progress.mts', note: 'Bounded incremental Lookup stream; partial fragments are presentation-only and only the validated final result is persistable.' }),
+  entry({ id: 'maintainer.lookup-progress-staging-evidence', kind: 'cli_document', schema: LOOKUP_PROGRESS_STAGING_EVIDENCE_SCHEMA, currentVersion: LOOKUP_PROGRESS_STAGING_EVIDENCE_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: MAX_LOOKUP_PROGRESS_STAGING_FILE_BYTES, owner: 'lib/lookup-progress-staging-evidence.mts', note: 'Exact-current operator-supplied staging evidence with target-free bounded measurements and authenticated build identity.' }),
+  entry({ id: 'maintainer.lookup-progress-staging-qualification', kind: 'cli_document', schema: LOOKUP_PROGRESS_STAGING_QUALIFICATION_SCHEMA, currentVersion: LOOKUP_PROGRESS_STAGING_QUALIFICATION_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'lib/lookup-progress-staging-evidence.mts', note: 'Output-only target-free qualification across the fixed Express and Netlify staging evidence pair.' }),
+  entry({ id: 'export.lookup-readable-report', kind: 'export', schema: LOOKUP_READABLE_REPORT_SCHEMA, currentVersion: LOOKUP_READABLE_REPORT_VERSION, supportedVersions: [2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: MAX_LOOKUP_READABLE_REPORT_BYTES, owner: 'lib/lookup-readable-report.mts', note: 'Output-only bounded human-readable Lookup report; this tree does not claim a reader for historical version 1.' }),
+  entry(RDAP_NAMESERVER_SEARCH_COMPATIBILITY),
+  entry({ id: 'derived.threat-intelligence-result', kind: 'derived', schema: THREAT_INTELLIGENCE_SCHEMA, currentVersion: THREAT_INTELLIGENCE_CONTRACT_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'none', byteBudget: null, owner: 'lib/threat-intelligence-types.mts', note: 'Transient provider-attributed result with bounded findings; exact markers are validated before browser projection.' }),
+  entry({ id: 'derived.unicode-confusable-projection', kind: 'derived', schema: CONFUSABLE_PROJECTION_SCHEMA, currentVersion: CONFUSABLE_PROJECTION_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'none', byteBudget: null, owner: 'lib/idn-confusable-policy.mts', note: 'Transient bounded Unicode confusable projection generated from a reviewed local data source without target collection.' }),
+  entry({ id: 'derived.scheduled-monitor-cycle', kind: 'derived', schema: SCHEDULED_MONITOR_LOG_SCHEMA, currentVersion: SCHEDULED_MONITOR_LOG_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'none', byteBudget: null, owner: 'netlify/functions/scheduled-monitor.mts', note: 'Output-only bounded operational log record retained only according to the hosting platform log policy.' }),
 ];
 
 function timestamp(value: unknown): string {
@@ -835,35 +937,22 @@ function validateSchemaCompatibilityEntries(values: readonly SchemaCompatibility
       throw new Error(`Schema compatibility entry id is invalid or duplicated: ${value.id}`);
     }
     ids.add(value.id);
-    if (!CONTRACT_KINDS.has(value.kind)
-      || !FUTURE_VERSION_BEHAVIORS.has(value.futureVersionBehavior)
-      || !MIGRATION_BEHAVIORS.has(value.migration)
-      || !WRITE_SEMANTICS.has(value.writeSemantics)
-      || typeof value.acceptsUnversionedLegacy !== 'boolean') {
-      throw new Error(`Schema compatibility entry ${value.id} has invalid compatibility metadata.`);
+    validateSchemaCompatibilityDescriptor(value);
+  }
+  const entriesBySchema = new Map<string, string[]>();
+  for (const value of values) {
+    if (value.schema) entriesBySchema.set(value.schema, [...(entriesBySchema.get(value.schema) ?? []), value.id]);
+  }
+  for (const [schema, allowedIds] of Object.entries(SCHEMA_COMPATIBILITY_PROFILES)) {
+    const actualIds = [...(entriesBySchema.get(schema) ?? [])].sort();
+    const expectedIds = [...allowedIds].sort();
+    if (actualIds.length !== expectedIds.length || actualIds.some((id, index) => id !== expectedIds[index])) {
+      throw new Error(`Schema compatibility profiles for ${schema} must use the exact reviewed entry ids.`);
     }
-    if (!Number.isSafeInteger(value.currentVersion) || value.currentVersion <= 0) {
-      throw new Error(`Schema compatibility entry ${value.id} has an invalid current version.`);
-    }
-    const versions = [...value.supportedVersions];
-    if (!versions.length
-      || versions.some((version) => !Number.isSafeInteger(version) || version <= 0)
-      || new Set(versions).size !== versions.length
-      || versions.some((version, index) => index > 0 && version <= versions[index - 1])
-      || versions.at(-1) !== value.currentVersion) {
-      throw new Error(`Schema compatibility entry ${value.id} must explicitly end its supported-version list at current version ${value.currentVersion}.`);
-    }
-    if (value.schema !== null && (value.schema.length > 120 || !/^[-a-z0-9.:]+$/u.test(value.schema))) {
-      throw new Error(`Schema compatibility entry ${value.id} has an invalid schema identifier.`);
-    }
-    if (value.byteBudget !== null && (!Number.isSafeInteger(value.byteBudget) || value.byteBudget <= 0)) {
-      throw new Error(`Schema compatibility entry ${value.id} has an invalid byte budget.`);
-    }
-    if (value.owner.length > 200 || !/^[a-z0-9_./-]+$/iu.test(value.owner) || value.owner.startsWith('/') || value.owner.includes('..')) {
-      throw new Error(`Schema compatibility entry ${value.id} has an invalid owner path.`);
-    }
-    if (!value.note || value.note.length > 300 || /[\x00-\x1f\x7f]/u.test(value.note)) {
-      throw new Error(`Schema compatibility entry ${value.id} has an invalid note.`);
+  }
+  for (const [schema, entryIds] of entriesBySchema) {
+    if (entryIds.length > 1 && !Object.hasOwn(SCHEMA_COMPATIBILITY_PROFILES, schema)) {
+      throw new Error(`Schema compatibility identifier has undeclared profiles: ${schema}.`);
     }
   }
 }
@@ -876,14 +965,22 @@ export function validateInterchangeSchemaCompatibility(
   entries: readonly SchemaCompatibilityEntry[],
   contracts = INTERCHANGE_ARTIFACT_CONTRACTS,
 ): void {
-  for (const contract of contracts.filter((item) => item.id !== 'legacy_desired_baseline')) {
-    const declared = entries.find((item) => item.schema === contract.schema);
+  for (const contract of contracts) {
+    if (contract.compatibilityEntryId === null) {
+      if (contract.id !== 'legacy_desired_baseline') {
+        throw new Error(`Interchange contract ${contract.id} must name a schema compatibility entry.`);
+      }
+      continue;
+    }
+    const declared = entries.find((item) => item.id === contract.compatibilityEntryId);
     if (
       !declared
+      || declared.schema !== contract.schema
+      || declared.futureVersionBehavior !== contract.futureVersionBehaviour
       || contract.versions.length !== declared.supportedVersions.length
       || contract.versions.some((version, index) => version !== declared.supportedVersions[index])
     ) {
-      throw new Error(`Interchange contract ${contract.id} must exactly match the schema compatibility inventory versions.`);
+      throw new Error(`Interchange contract ${contract.id} must exactly match the schema compatibility inventory versions and future-version behaviour.`);
     }
   }
 }

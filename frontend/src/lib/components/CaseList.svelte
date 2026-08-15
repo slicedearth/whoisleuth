@@ -38,6 +38,7 @@
     addNote,
     removeCase,
     refreshCases,
+    installCommittedCaseSnapshot,
     setMessage,
     formatDate,
     currentPage,
@@ -66,6 +67,7 @@
     addNote: (record: CaseRecord) => void;
     removeCase: (record: CaseRecord) => void | Promise<void>;
     refreshCases: () => void | Promise<void>;
+    installCommittedCaseSnapshot: (cases: CaseRecord[]) => void;
     setMessage: (value: string) => void;
     formatDate: (value: string) => string;
     currentPage: number;
@@ -148,7 +150,7 @@
           {#if record.notes.length}<ol class="notes">{#each [...record.notes].reverse() as note}<li><time datetime={note.createdAt}>{formatDate(note.createdAt)}</time><p>{note.body}</p></li>{/each}</ol>{/if}
           <CaseRelationships {record} records={allRecords} onselect={expand} />
           {#key record.id}<EvidenceTimeline {record} />{/key}
-          {#key `${record.id}-${record.updatedAt}`}<CaseResponseWorkspace {record} onsaved={refreshCases} onmessage={setMessage} />{/key}
+          {#key record.id}<CaseResponseWorkspace {record} onsaved={refreshCases} oncommitted={installCommittedCaseSnapshot} onmessage={setMessage} />{/key}
           {#key record.id}<CaseReportExport {record} onmessage={setMessage} />{/key}
           <div class="case-meta"><span>Source: {sourceLabel(record.source)}</span><span>Opened {formatDate(record.createdAt)}</span></div>
           <div class="case-actions"><a class="btn" href={`/lookup?q=${encodeURIComponent(record.domain)}`}>Look up domain</a><button id={`case-delete-${record.id}`} class="btn danger" onclick={() => void removeAndFocus(record)}>Delete case</button></div>

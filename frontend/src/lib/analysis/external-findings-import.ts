@@ -4,7 +4,7 @@ import {
   updateCase,
   type CaseRecord,
 } from './case-model.ts';
-import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from '../../../../lib/observation.mts';
+import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from '../../../../packages/evidence/observation.mts';
 
 export const EXTERNAL_FINDINGS_SCHEMA = 'whoisleuth.external-findings';
 export const EXTERNAL_FINDINGS_VERSION = 4;

@@ -3,7 +3,7 @@
 // Findings use fixed explanatory text and bounded counts; upstream header
 // values, certificate errors, URLs, and DNS record contents are not copied.
 
-import { createObservation } from './observation.mts';
+import { createObservation } from '../packages/evidence/observation.mts';
 
 type UnknownRecord = Record<string, unknown>;
 type PostureCategory = 'transport' | 'response headers' | 'forms and resources' | 'certificate' | 'domain controls';

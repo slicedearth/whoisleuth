@@ -4,7 +4,7 @@
 
 import { domainToASCII } from 'node:url';
 
-import { normalizeExplicitIsoTimestamp } from './observation.mts';
+import { normalizeExplicitIsoTimestamp } from '../packages/evidence/observation.mts';
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);

@@ -14,7 +14,7 @@ import {
   SORTED_JSON_V1,
   SORTED_JSON_V2,
   type ArtifactCanonicalization,
-} from '../frontend/src/lib/analysis/artifact-integrity.ts';
+} from '../packages/evidence/artifact-integrity.mts';
 import {
   hasVerifiedApplicableIntegrity,
   hasVerifiedArtifactStructure,
@@ -25,7 +25,7 @@ import {
   type OfflineArtifactVerificationState,
 } from './artifact-verify.mts';
 import { parseBoundedJsonObject } from './bounded-json.mts';
-import { normalizeExplicitIsoTimestamp } from '../lib/observation.mts';
+import { normalizeExplicitIsoTimestamp } from '../packages/evidence/observation.mts';
 
 export const SIGNED_EVIDENCE_PACKAGE_SCHEMA = 'whoisleuth.signed-evidence-package';
 export const SIGNED_EVIDENCE_PACKAGE_VERSION = 2;

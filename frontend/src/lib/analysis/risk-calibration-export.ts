@@ -6,14 +6,23 @@
 
 import { RISK_MUTATION_TYPES } from '../../../../lib/risk-scoring.mts';
 import {
+  MAX_RISK_CALIBRATION_RECORDS,
+  RISK_CALIBRATION_DATASET_SCHEMA,
+  RISK_CALIBRATION_DATASET_VERSION,
+  type RiskCalibrationEvidence,
+  type RiskCalibrationRecord,
+} from '../../../../packages/contracts/risk-calibration.mts';
+import {
   latestCaseEvidence,
   type CaseEvidenceSnapshot,
   type CaseRecord,
 } from './case-record-model.ts';
 
-export const RISK_CALIBRATION_DATASET_SCHEMA = 'whoisleuth.risk-calibration-dataset';
-export const RISK_CALIBRATION_DATASET_VERSION = 2;
-export const MAX_RISK_CALIBRATION_EXPORT_RECORDS = 500;
+export {
+  RISK_CALIBRATION_DATASET_SCHEMA,
+  RISK_CALIBRATION_DATASET_VERSION,
+} from '../../../../packages/contracts/risk-calibration.mts';
+export const MAX_RISK_CALIBRATION_EXPORT_RECORDS = MAX_RISK_CALIBRATION_RECORDS;
 
 const REVIEWED_DISPOSITIONS = new Set([
   'suspicious',
@@ -39,40 +48,10 @@ export type CalibrationExportExclusion = Readonly<{
   reason: CalibrationExportExclusionReason;
 }>;
 
-type CalibrationEvidence = Readonly<{
-  availability: string;
-  activityStatus?: string;
-  mutationTypes?: string[];
-  domainAgeDays?: number;
-  faviconMatch?: boolean;
-  faviconNearMatch?: boolean;
-  reusesOfficialAssets?: boolean;
-  hasPasswordField?: boolean;
-  hasMx?: boolean;
-  hasSpf?: boolean;
-  hasDmarc?: boolean;
-  privacyProtected?: boolean;
-  phishingLanguageMatch?: string;
-  hasExternalFormAction?: boolean;
-  idnReferenceMatch?: boolean;
-  pageBaselineMatch?: boolean;
-  hasActiveBrandProfile?: boolean;
-  scanDepth?: string;
-  observedAt?: string;
-}>;
-
-type CalibrationRecord = Readonly<{
-  id: string;
-  domain: string;
-  analystDisposition: string;
-  reviewReasonCode?: string;
-  evidence: CalibrationEvidence;
-}>;
-
 export type RiskCalibrationDatasetExport = Readonly<{
   schema: typeof RISK_CALIBRATION_DATASET_SCHEMA;
   version: typeof RISK_CALIBRATION_DATASET_VERSION;
-  records: readonly CalibrationRecord[];
+  records: readonly RiskCalibrationRecord[];
   export: Readonly<{
     selected: number;
     included: number;
@@ -95,11 +74,11 @@ function domainAgeDays(snapshot: CaseEvidenceSnapshot): number | undefined {
   return days <= 100_000 ? days : undefined;
 }
 
-function projectEvidence(snapshot: CaseEvidenceSnapshot): CalibrationEvidence | null {
+function projectEvidence(snapshot: CaseEvidenceSnapshot): RiskCalibrationEvidence | null {
   const availability = snapshot.availability || 'unknown';
   if (!AVAILABILITY_STATES.has(availability)) return null;
   const activityStatus = snapshot.activityStatus && ACTIVITY_STATES.has(snapshot.activityStatus)
-    ? snapshot.activityStatus
+    ? snapshot.activityStatus as NonNullable<RiskCalibrationEvidence['activityStatus']>
     : undefined;
   const mutationTypes = [...new Set(snapshot.mutationTypes.filter((value) => MUTATION_TYPES.has(value)))].slice(0, 30);
   const ageDays = domainAgeDays(snapshot);
@@ -116,7 +95,7 @@ function projectEvidence(snapshot: CaseEvidenceSnapshot): CalibrationEvidence | 
   const pageBaselineMatch = optionalBoolean(snapshot.pageBaselineMatch);
   const hasActiveBrandProfile = optionalBoolean(snapshot.hasActiveBrandProfile);
   return Object.freeze({
-    availability,
+    availability: availability as RiskCalibrationEvidence['availability'],
     ...(activityStatus ? { activityStatus } : {}),
     ...(mutationTypes.length ? { mutationTypes } : {}),
     ...(ageDays !== undefined ? { domainAgeDays: ageDays } : {}),
@@ -145,7 +124,7 @@ export function buildRiskCalibrationDatasetExport(
 ): RiskCalibrationDatasetExport {
   const caseById = new Map(cases.map((record) => [record.id, record]));
   const seen = new Set<string>();
-  const records: CalibrationRecord[] = [];
+  const records: RiskCalibrationRecord[] = [];
   const exclusions: CalibrationExportExclusion[] = [];
 
   for (const caseId of selectedCaseIds) {
@@ -177,7 +156,7 @@ export function buildRiskCalibrationDatasetExport(
     records.push(Object.freeze({
       id: record.id,
       domain: record.domain,
-      analystDisposition: record.disposition,
+      analystDisposition: record.disposition as RiskCalibrationRecord['analystDisposition'],
       ...(record.reviewReasonCode ? { reviewReasonCode: record.reviewReasonCode } : {}),
       evidence,
     }));

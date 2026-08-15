@@ -46,6 +46,10 @@ import {
   INVESTIGATION_CAPSULE_VERSION,
   LEGACY_INVESTIGATION_CAPSULE_VERSION,
 } from '../frontend/src/lib/analysis/investigation-capsule.ts';
+import {
+  LOOKUP_ASSET_GRAPH_SCHEMA,
+  LOOKUP_ASSET_GRAPH_VERSION,
+} from '../frontend/src/lib/analysis/lookup-asset-graph.ts';
 import { LOOKUP_INVESTIGATION_BRIEF_SCHEMA } from '../frontend/src/lib/analysis/lookup-investigation-brief.ts';
 import {
   LOOKUP_CLAIM_PASSPORT_SCHEMA,
@@ -59,7 +63,7 @@ import {
   LOOKUP_CLAIM_READINESS_VERSION,
   LOOKUP_CLAIM_REQUIREMENT_IDS,
 } from '../frontend/src/lib/analysis/lookup-claim-readiness.ts';
-import { normalizeDomainControlPassportDocument } from '../frontend/src/lib/analysis/domain-control-manifest-core.ts';
+import { normalizeDomainControlManifestDocument } from '../packages/evidence/domain-control-runtime.mts';
 import { DOMAIN_CHANGE_PACKET_SCHEMA, DOMAIN_CHANGE_PACKET_VERSION } from '../lib/domain-change-packet.mts';
 import { DOMAIN_CONTROL_MANIFEST_SCHEMA } from '../lib/domain-control-manifest.mts';
 import {
@@ -1400,7 +1404,7 @@ function validateBrief(value: unknown): void {
 
 function validateGraph(value: unknown): void {
   const graph = exact(value, ['version', 'targetId', 'nodes', 'edges', 'sources', 'truncated', 'limitations'], 'Investigation capsule graph');
-  if (graph.version !== 2) fail('Investigation capsule graph');
+  if (graph.version !== LOOKUP_ASSET_GRAPH_VERSION) fail('Investigation capsule graph');
   text(graph.targetId, 'Investigation capsule graph target', 160);
   const nodes = array(graph.nodes, 'Investigation capsule graph nodes', 72, 1);
   const nodeIds = new Set<string>();
@@ -1508,8 +1512,8 @@ export function validateInvestigationCapsuleStructure(value: UnknownRecord): voi
     || byId.get('investigation-brief')?.schema !== LOOKUP_INVESTIGATION_BRIEF_SCHEMA
     || byId.get('investigation-brief')?.version !== 1
     || byId.get('investigation-brief')?.embedded !== true
-    || byId.get('asset-graph')?.schema !== 'whoisleuth.lookup-asset-graph'
-    || byId.get('asset-graph')?.version !== 2
+    || byId.get('asset-graph')?.schema !== LOOKUP_ASSET_GRAPH_SCHEMA
+    || byId.get('asset-graph')?.version !== LOOKUP_ASSET_GRAPH_VERSION
     || byId.get('asset-graph')?.embedded !== true
     || (byId.has('analyst-records') && (byId.get('analyst-records')?.schema !== 'whoisleuth.case-analyst-records'
       || byId.get('analyst-records')?.version !== 1
@@ -1762,7 +1766,7 @@ export function validateSignedDigestArtifactStructure(schema: string, value: Unk
   else if (schema === BULK_MAIL_EXPOSURE_SCHEMA) validateMailExposure(value);
   else if (schema === BULK_REVIEW_MANIFEST_SCHEMA) validateBulkReviewManifest(value);
   else if (schema === DOMAIN_CONTROL_MANIFEST_SCHEMA) {
-    try { normalizeDomainControlPassportDocument(value); } catch { fail('Domain control manifest'); }
+    try { normalizeDomainControlManifestDocument(value); } catch { fail('Domain control manifest'); }
   }
   else if (schema === DOMAIN_CHANGE_PACKET_SCHEMA) validateDomainChangePacket(value);
   else if (schema === INVESTIGATION_MANIFEST_SCHEMA) validateInvestigationManifest(value);

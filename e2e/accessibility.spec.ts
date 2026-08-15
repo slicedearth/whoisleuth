@@ -1,7 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import type { Page, TestInfo } from '@playwright/test';
 import { expect, test } from './fixtures';
-import { migrateLegacyBrowserData, runBulkScan, useTheme } from './helpers';
+import { lookupDomainIdentity, migrateLegacyBrowserData, runBulkScan, useTheme } from './helpers';
 
 const WCAG_TAGS = ['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa'];
 const REQUIRED_MANUAL_RULES = new Set([
@@ -101,6 +101,7 @@ async function installLookupFixture(page: Page) {
   await page.route('**/api/lookup?*', async (route) => {
     const url = new URL(route.request().url());
     const domain = url.searchParams.get('q') || 'portal.example.test';
+    const identity = lookupDomainIdentity(domain);
     const diagnostics = {
       version: 7,
       rdap: { status: 'complete' },
@@ -111,7 +112,7 @@ async function installLookupFixture(page: Page) {
       applicable: true,
       state: 'registered',
       confidence: 'high',
-      domain,
+      domain: identity.registrableDomain,
       deepScanComplete: url.searchParams.get('fast') !== '1',
       registrar: { name: 'Example Registrar' },
       nameservers: ['ns1.example.net', 'ns2.example.net'],
@@ -126,11 +127,7 @@ async function installLookupFixture(page: Page) {
     const body = url.searchParams.get('compact') === '1'
       ? { availability, diagnostics }
       : {
-          query: domain,
-          type: 'domain',
-          inputHostname: domain,
-          registrableDomain: domain,
-          isSubdomain: false,
+          ...identity,
           availability,
           rdap: {
             upstreamStatus: 200,
@@ -333,7 +330,7 @@ test('scans populated Lookup, Bulk, and guided-investigation states', async ({ p
   await useTheme(page, 'light');
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/bulk');
-  await runBulkScan(page, ['portal.example.test', 'peer.example.test', 'mail.example.test']);
+  await runBulkScan(page, ['portal.test', 'peer.test', 'mail.test']);
   await expect(page.locator('.results-table tbody tr')).toHaveCount(3);
   await expectNoAccessibilityViolations(page, testInfo, 'console-bulk-populated-light-mobile');
 

@@ -40,10 +40,12 @@
   let {
     cases,
     oncomplete,
+    oncommitted,
     onmessage,
   }: {
     cases: readonly CaseRecord[];
     oncomplete: () => void | Promise<void>;
+    oncommitted: (cases: CaseRecord[]) => void;
     onmessage: (message: string) => void;
   } = $props();
 
@@ -60,6 +62,20 @@
   const findingsPreview = $derived(preview?.kind === 'findings' ? preview.document : null);
   const intelligencePreview = $derived(preview?.kind === 'intelligence' ? preview.document : null);
   const domains = $derived(findingsPreview ? [...new Set(findingsPreview.findings.map((finding) => finding.domain))] : []);
+
+  async function reconcileCommitted(cases: CaseRecord[], success: string): Promise<void> {
+    try {
+      await oncomplete();
+      onmessage(success);
+    } catch {
+      try {
+        oncommitted(cases);
+        onmessage(`${success} The import was saved, but Cases could not be reread. The complete committed Case snapshot is shown locally; reload to retry the browser-local read.`);
+      } catch {
+        onmessage(`${success} The import was saved, but Cases could not be reread or reconciled in the current view. Reload before importing another document.`);
+      }
+    }
+  }
 
   function countLabel(count: number, singular: string): string {
     return `${count} ${singular}${count === 1 ? '' : 's'}`;
@@ -219,13 +235,12 @@
     try {
       if (preview.kind === 'findings') {
         const result = await importExternalFindings(preview.document);
-        onmessage(`Imported ${result.findingsAdded} finding${result.findingsAdded === 1 ? '' : 's'} into ${result.casesCreated} new and ${result.casesUpdated} existing case${result.casesCreated + result.casesUpdated === 1 ? '' : 's'}${result.duplicatesSkipped ? `; skipped ${result.duplicatesSkipped} duplicate${result.duplicatesSkipped === 1 ? '' : 's'}` : ''}${result.pruned ? `; pruned ${result.pruned} old evidence snapshot${result.pruned === 1 ? '' : 's'} to stay within storage` : ''}.`);
+        await reconcileCommitted(result.cases, `Imported ${result.findingsAdded} finding${result.findingsAdded === 1 ? '' : 's'} into ${result.casesCreated} new and ${result.casesUpdated} existing case${result.casesCreated + result.casesUpdated === 1 ? '' : 's'}${result.duplicatesSkipped ? `; skipped ${result.duplicatesSkipped} duplicate${result.duplicatesSkipped === 1 ? '' : 's'}` : ''}${result.pruned ? `; pruned ${result.pruned} old evidence snapshot${result.pruned === 1 ? '' : 's'} to stay within storage` : ''}.`);
       } else {
         if (!targetCaseId) throw new Error('Select an existing case before merging external intelligence.');
         const result = await importExternalIntelligence(targetCaseId, preview.document);
-        onmessage(`Merged ${result.assertionsAdded} external assertion${result.assertionsAdded === 1 ? '' : 's'} into ${result.record.domain}${result.duplicatesSkipped ? `; skipped ${result.duplicatesSkipped} existing assertion${result.duplicatesSkipped === 1 ? '' : 's'}` : ''}${result.capacitySkipped ? `; skipped ${result.capacitySkipped} at the case assertion limit` : ''}. No collection, scoring, or case creation was started.`);
+        await reconcileCommitted(result.cases, `Merged ${result.assertionsAdded} external assertion${result.assertionsAdded === 1 ? '' : 's'} into ${result.record.domain}${result.duplicatesSkipped ? `; skipped ${result.duplicatesSkipped} existing assertion${result.duplicatesSkipped === 1 ? '' : 's'}` : ''}${result.capacitySkipped ? `; skipped ${result.capacitySkipped} at the case assertion limit` : ''}. No collection, scoring, or case creation was started.`);
       }
-      await oncomplete();
       preview = null;
       conversionReport = null;
       targetCaseId = '';

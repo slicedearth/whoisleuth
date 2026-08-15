@@ -1,5 +1,5 @@
 import type { ThreatIntelligenceProviderTerms } from './threat-intelligence-types.mts';
-import { normalizeLegacyIsoTimestamp } from './observation.mts';
+import { normalizeLegacyIsoTimestamp } from '../packages/evidence/observation.mts';
 
 export const PROVIDER_POLICY_MAX_REVIEW_AGE_DAYS = 180;
 export const PROVIDER_POLICY_MAX_FUTURE_SKEW_MS = 5 * 60 * 1000;

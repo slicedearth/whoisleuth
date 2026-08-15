@@ -2,7 +2,12 @@ import { arrayValue, recordValue, requiredValue } from './value-assertions.mts';
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { THREAT_INTELLIGENCE_RESULT_STATES } from '../lib/threat-intelligence-types.mts';
+import {
+  THREAT_INTELLIGENCE_CONTRACT_VERSION,
+  THREAT_INTELLIGENCE_ENVELOPE_VERSION,
+  THREAT_INTELLIGENCE_RESULT_STATES,
+  THREAT_INTELLIGENCE_SCHEMA,
+} from '../lib/threat-intelligence-types.mts';
 import {
   MAX_HTTP_ATTEMPTS,
   MAX_HTTP_ERROR_LENGTH,
@@ -51,6 +56,12 @@ import {
   parseCompactLookupHttpResponse,
   parseLookupHttpResponse,
 } from '../lib/lookup-response-contract.mts';
+
+const THREAT_TARGET = Object.freeze({
+  type: 'domain',
+  value: 'example.test',
+  exposure: 'registrable_domain',
+});
 
 function response(overrides = {}) {
   return {
@@ -684,14 +695,17 @@ describe('Lookup HTTP response contract', () => {
     const providers: unknown[] = Array.from(
       { length: MAX_THREAT_INTELLIGENCE_PROVIDERS + 4 },
       (_, index) => ({
+        schema: THREAT_INTELLIGENCE_SCHEMA,
+        version: THREAT_INTELLIGENCE_CONTRACT_VERSION,
         provider: { id: providerIds[index % providerIds.length], label: `Provider ${index}` },
+        target: THREAT_TARGET,
         state: 'success',
         findings: [],
         observation: { observedAt: '2026-07-01T00:00:00.000Z', limitations: [] },
       }),
     );
     providers.splice(2, 0, null, 'invalid');
-    const threatIntelligence = { version: 1, providers };
+    const threatIntelligence = { version: THREAT_INTELLIGENCE_ENVELOPE_VERSION, providers };
     const raw = response({ threatIntelligence });
     const parsed = parseLookupHttpResponse(raw);
     assert.equal(parsed.ok, true);
@@ -706,7 +720,10 @@ describe('Lookup HTTP response contract', () => {
 
   test('keeps only the first separately attributed record for each provider', () => {
     const provider = (detail: string) => ({
+      schema: THREAT_INTELLIGENCE_SCHEMA,
+      version: THREAT_INTELLIGENCE_CONTRACT_VERSION,
       provider: { id: 'urlhaus_host', label: 'Untrusted wire label' },
+      target: THREAT_TARGET,
       state: 'not_found',
       detail,
       findings: [],
@@ -728,7 +745,10 @@ describe('Lookup HTTP response contract', () => {
 
   test('bounds nested provider evidence and permits only attributed HTTPS record links', () => {
     const rawProvider = {
+      schema: THREAT_INTELLIGENCE_SCHEMA,
+      version: THREAT_INTELLIGENCE_CONTRACT_VERSION,
       provider: { id: 'urlscan_search', label: `Provider ${'x'.repeat(300)}` },
+      target: THREAT_TARGET,
       state: 'success',
       detail: 'd'.repeat(900),
       findings: [
@@ -770,7 +790,10 @@ describe('Lookup HTTP response contract', () => {
       threatIntelligence: {
         version: 1,
         providers: [{
+          schema: THREAT_INTELLIGENCE_SCHEMA,
+          version: THREAT_INTELLIGENCE_CONTRACT_VERSION,
           provider: { id: 'urlscan_search', label: 'Wire label' },
+          target: THREAT_TARGET,
           state: 'success',
           findings: [{ id: 'fixture', category: 'phishing', firstObservedAt: '2026-07-01T12:00:00.000', lastObservedAt: '2026-07-01T12:00:00.000+01:00' }],
           observation: { observedAt: '2026-07-01T12:00:00.000', limitations: [] },
@@ -791,7 +814,10 @@ describe('Lookup HTTP response contract', () => {
         threatIntelligence: {
           version: 1,
           providers: [{
+            schema: THREAT_INTELLIGENCE_SCHEMA,
+            version: THREAT_INTELLIGENCE_CONTRACT_VERSION,
             provider: { id: 'urlscan_search', label: `Provider ${index}` },
+            target: THREAT_TARGET,
             state,
             findings: state === 'partial'
               ? [{ id: 'bounded', category: 'suspicious', detail: 'Retained partial finding' }]
@@ -817,7 +843,10 @@ describe('Lookup HTTP response contract', () => {
       threatIntelligence: {
         version: 1,
         providers: [{
+          schema: THREAT_INTELLIGENCE_SCHEMA,
+          version: THREAT_INTELLIGENCE_CONTRACT_VERSION,
           provider: { id: 'urlscan_search', label: 'Invalid state' },
+          target: THREAT_TARGET,
           state: 'disabled',
           findings: [],
           observation: { observedAt: '2026-07-01T00:09:00.000Z', limitations: [] },
@@ -826,6 +855,137 @@ describe('Lookup HTTP response contract', () => {
     }));
     assert.equal(invalid.ok, true);
     assert.deepEqual(createLookupViewModel(invalid.value).threatIntelligenceProviders, []);
+  });
+
+  test('rejects wrong or future threat-intelligence result markers before projection', () => {
+    const provider = {
+      schema: THREAT_INTELLIGENCE_SCHEMA,
+      version: THREAT_INTELLIGENCE_CONTRACT_VERSION,
+      provider: { id: 'urlscan_search', label: 'Wire label' },
+      target: THREAT_TARGET,
+      state: 'success',
+      findings: [],
+      observation: { observedAt: '2026-07-01T00:00:00.000Z', limitations: [] },
+    };
+    for (const changed of [
+      { ...provider, schema: 'whoisleuth.unsupported-result' },
+      { ...provider, version: THREAT_INTELLIGENCE_CONTRACT_VERSION + 1 },
+      (({ schema: _schema, ...rest }) => rest)(provider),
+    ]) {
+      const parsed = parseLookupHttpResponse(response({
+        threatIntelligence: { version: 1, providers: [changed] },
+      }));
+      assert.equal(parsed.ok, true);
+      assert.deepEqual(createLookupViewModel(parsed.value).threatIntelligenceProviders, []);
+    }
+  });
+
+  test('binds projected threat intelligence to the current registrable domain and envelope version', () => {
+    const provider = {
+      schema: THREAT_INTELLIGENCE_SCHEMA,
+      version: THREAT_INTELLIGENCE_CONTRACT_VERSION,
+      provider: { id: 'urlscan_search', label: 'Wire label' },
+      target: THREAT_TARGET,
+      state: 'success',
+      findings: [],
+      observation: { observedAt: '2026-07-01T00:00:00.000Z', limitations: [] },
+    };
+    const parsedValid = parseLookupHttpResponse(response({
+      threatIntelligence: { version: THREAT_INTELLIGENCE_ENVELOPE_VERSION, providers: [provider] },
+    }));
+    assert.equal(parsedValid.ok, true);
+    const valid = createLookupViewModel(parsedValid.value);
+    assert.equal(valid.threatIntelligenceProviders.length, 1);
+    assert.deepEqual(recordValue(valid.threatIntelligenceProviders[0]?.target), THREAT_TARGET);
+    assert.equal(valid.threatIntelligence.version, THREAT_INTELLIGENCE_ENVELOPE_VERSION);
+
+    for (const threatIntelligence of [
+      { version: THREAT_INTELLIGENCE_ENVELOPE_VERSION + 1, providers: [provider] },
+      { version: THREAT_INTELLIGENCE_ENVELOPE_VERSION, providers: [(({ target: _target, ...rest }) => rest)(provider)] },
+      { version: THREAT_INTELLIGENCE_ENVELOPE_VERSION, providers: [{ ...provider, target: { ...THREAT_TARGET, value: 'other.example' } }] },
+      { version: THREAT_INTELLIGENCE_ENVELOPE_VERSION, providers: [{ ...provider, target: { ...THREAT_TARGET, value: 'portal.example.test' } }] },
+      { version: THREAT_INTELLIGENCE_ENVELOPE_VERSION, providers: [{ ...provider, target: { ...THREAT_TARGET, exposure: 'hostname' } }] },
+      { version: THREAT_INTELLIGENCE_ENVELOPE_VERSION, providers: [{ ...provider, target: { ...THREAT_TARGET, value: 'EXAMPLE.TEST' } }] },
+    ]) {
+      const parsed = parseLookupHttpResponse(response({ threatIntelligence }));
+      assert.equal(parsed.ok, true);
+      const view = createLookupViewModel(parsed.value);
+      assert.deepEqual(view.threatIntelligenceProviders, []);
+      assert.deepEqual(view.threatIntelligence, {});
+    }
+  });
+
+  test('binds the response identity to the current domain and rejects reversed threat finding timelines', () => {
+    const provider = {
+      schema: THREAT_INTELLIGENCE_SCHEMA,
+      version: THREAT_INTELLIGENCE_CONTRACT_VERSION,
+      provider: { id: 'urlscan_search', label: 'Wire label' },
+      target: THREAT_TARGET,
+      state: 'success',
+      findings: [{
+        id: 'reversed',
+        category: 'phishing',
+        firstObservedAt: '2026-07-20T00:00:00.000Z',
+        lastObservedAt: '2026-07-12T00:00:00.000Z',
+      }],
+      observation: { observedAt: '2026-07-21T00:00:00.000Z', limitations: [] },
+    };
+    const parsed = parseLookupHttpResponse(response({
+      query: 'Portal.Example.Test.',
+      threatIntelligence: { version: THREAT_INTELLIGENCE_ENVELOPE_VERSION, providers: [provider] },
+    }));
+    assert.equal(parsed.ok, true);
+    const view = createLookupViewModel(parsed.value);
+    assert.equal(view.threatIntelligenceProviders.length, 1);
+    assert.deepEqual(recordValue(view.threatIntelligenceProviders[0]?.target), THREAT_TARGET);
+    assert.deepEqual(arrayValue(view.threatIntelligenceProviders[0]?.findings), []);
+
+    for (const changed of [
+      response({ registrableDomain: 'other.test' }),
+      response({ availability: { applicable: true, domain: 'portal.example.test', state: 'registered' } }),
+      response({ inputHostname: 'portal.other.test' }),
+      response({ isSubdomain: false }),
+    ]) {
+      assert.equal(parseLookupHttpResponse(changed).ok, false);
+    }
+  });
+
+  test('uses the same ICANN registrable boundary as collection for private-suffix hosts', () => {
+    const target = { type: 'domain', value: 'github.io', exposure: 'registrable_domain' };
+    const parsed = parseLookupHttpResponse(response({
+      query: 'tenant.github.io',
+      inputHostname: 'tenant.github.io',
+      registrableDomain: 'github.io',
+      isSubdomain: true,
+      availability: { applicable: true, domain: 'github.io', state: 'registered' },
+      threatIntelligence: {
+        version: THREAT_INTELLIGENCE_ENVELOPE_VERSION,
+        providers: [{
+          schema: THREAT_INTELLIGENCE_SCHEMA,
+          version: THREAT_INTELLIGENCE_CONTRACT_VERSION,
+          provider: { id: 'urlscan_search', label: 'Wire label' },
+          target,
+          state: 'success',
+          findings: [],
+          observation: { observedAt: '2026-07-21T00:00:00.000Z', limitations: [] },
+        }],
+      },
+    }));
+    assert.equal(parsed.ok, true);
+    assert.deepEqual(recordValue(createLookupViewModel(parsed.value).threatIntelligenceProviders[0]?.target), target);
+  });
+
+  test('binds convenient URL and host-port queries to the classifier domain identity', () => {
+    for (const query of [
+      'https://Portal.Example.Test./review/path?fixture=1',
+      'Portal.Example.Test:443',
+    ]) {
+      const parsed = parseLookupHttpResponse(response({ query }));
+      assert.equal(parsed.ok, true, query);
+      const accepted = recordValue(parsed.value);
+      assert.equal(accepted.inputHostname, 'portal.example.test');
+      assert.equal(accepted.registrableDomain, 'example.test');
+    }
   });
 
   test('builds the same additive HTTP envelope for domain and non-domain results', () => {

@@ -4,29 +4,35 @@ import { domainToASCII } from 'node:url';
 import {
   canonicalArtifactJsonV2,
   SORTED_JSON_V2,
-} from '../frontend/src/lib/analysis/artifact-integrity.ts';
+} from '../packages/evidence/artifact-integrity.mts';
 import {
-  buildUnsignedDomainControlPassport,
-  DOMAIN_CONTROL_PASSPORT_INPUT_SCHEMA,
+  DOMAIN_CONTROL_MANIFEST_INPUT_SCHEMA,
   DOMAIN_CONTROL_MANIFEST_VERSION,
-  DOMAIN_CONTROL_PASSPORT_SCHEMA,
-  MAX_DOMAIN_CONTROL_PASSPORT_ENTRIES,
-  normalizeDomainControlPassportDocument,
-  type DomainControlPassport,
-  type DomainControlPassportEntry,
-} from '../frontend/src/lib/analysis/domain-control-manifest-core.ts';
-import { canonicalDomainControlRecordList } from '../frontend/src/lib/analysis/domain-control-records.ts';
+  DOMAIN_CONTROL_MANIFEST_SCHEMA,
+  MAX_CANONICAL_DOMAIN_CONTROL_RECORDS,
+  MAX_DOMAIN_CONTROL_MANIFEST_ENTRIES,
+} from '../packages/contracts/domain-control-manifest.mts';
+import {
+  assertDomainControlManifestByteBudget,
+  buildUnsignedDomainControlManifest,
+  canonicalDomainControlRecordList,
+  normalizeDomainControlManifestDocument,
+  type DomainControlManifestDocument,
+  type DomainControlManifestEntry,
+} from '../packages/evidence/domain-control-runtime.mts';
 import { exactKeys } from './bounded-contract-normalizers.mts';
-import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from './observation.mts';
+import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from '../packages/evidence/observation.mts';
 
-export const DOMAIN_CONTROL_MANIFEST_INPUT_SCHEMA = DOMAIN_CONTROL_PASSPORT_INPUT_SCHEMA;
-export const DOMAIN_CONTROL_MANIFEST_SCHEMA = DOMAIN_CONTROL_PASSPORT_SCHEMA;
-export { DOMAIN_CONTROL_MANIFEST_VERSION };
+export {
+  DOMAIN_CONTROL_MANIFEST_INPUT_SCHEMA,
+  DOMAIN_CONTROL_MANIFEST_SCHEMA,
+  DOMAIN_CONTROL_MANIFEST_VERSION,
+};
 export const DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA = 'whoisleuth.domain-control-review-input';
 export const DOMAIN_CONTROL_REVIEW_SCHEMA = 'whoisleuth.domain-control-review';
 export const DOMAIN_CONTROL_REVIEW_VERSION = 1;
-export const MAX_DOMAIN_CONTROL_ENTRIES = MAX_DOMAIN_CONTROL_PASSPORT_ENTRIES;
-export const MAX_DOMAIN_CONTROL_RECORDS = 32;
+export const MAX_DOMAIN_CONTROL_ENTRIES = MAX_DOMAIN_CONTROL_MANIFEST_ENTRIES;
+export const MAX_DOMAIN_CONTROL_RECORDS = MAX_CANONICAL_DOMAIN_CONTROL_RECORDS;
 
 const REVIEW_INPUT_KEYS = new Set(['schema', 'version', 'manifest', 'observations']);
 const OBSERVATION_KEYS = new Set(['domain', 'fields']);
@@ -37,8 +43,8 @@ type DomainControlField = 'nameservers' | 'ds' | 'mx' | 'caa' | 'tlsIssuer' | 't
 type ObservationState = 'observed' | 'partial' | 'unavailable' | 'unsupported';
 type ComparisonState = 'aligned' | 'drift' | 'partial' | 'unavailable' | 'unsupported' | 'not_configured';
 
-export type DomainControlEntry = DomainControlPassportEntry;
-export type DomainControlManifest = DomainControlPassport;
+export type DomainControlEntry = DomainControlManifestEntry;
+export type DomainControlManifest = DomainControlManifestDocument;
 type CurrentDomainControlManifest = DomainControlManifest & Readonly<{ version: typeof DOMAIN_CONTROL_MANIFEST_VERSION }>;
 
 type NormalizedObservationField = Readonly<{
@@ -116,8 +122,8 @@ export function buildDomainControlManifest(
   input: unknown,
   generatedAtValue = new Date().toISOString(),
 ): CurrentDomainControlManifest {
-  const unsigned = buildUnsignedDomainControlPassport(input, generatedAtValue);
-  return Object.freeze({
+  const unsigned = buildUnsignedDomainControlManifest(input, generatedAtValue);
+  const manifest = Object.freeze({
     ...unsigned,
     integrity: Object.freeze({
       algorithm: 'SHA-256',
@@ -125,10 +131,12 @@ export function buildDomainControlManifest(
       digestSha256: `sha256:${createHash('sha256').update(canonicalArtifactJsonV2(unsigned)).digest('hex')}`,
     }),
   }) as CurrentDomainControlManifest;
+  assertDomainControlManifestByteBudget(manifest);
+  return manifest;
 }
 
 export function verifyDomainControlManifest(value: unknown): DomainControlManifest {
-  const normalized = normalizeDomainControlPassportDocument(value);
+  const normalized = normalizeDomainControlManifestDocument(value);
   if (`sha256:${createHash('sha256').update(normalized.canonicalUnsigned).digest('hex')}` !== normalized.manifest.integrity.digestSha256) {
     throw new TypeError('Domain control manifest failed its SHA-256 integrity check.');
   }

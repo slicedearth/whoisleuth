@@ -8,7 +8,7 @@ import {
   resolveArtifactCanonicalization,
   SORTED_JSON_V1,
   SORTED_JSON_V2,
-} from '../frontend/src/lib/analysis/artifact-integrity.ts';
+} from '../packages/evidence/artifact-integrity.mts';
 import {
   buildCaseReport,
   CASE_REPORT_SCHEMA,

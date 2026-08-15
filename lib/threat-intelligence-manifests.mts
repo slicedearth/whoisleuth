@@ -34,7 +34,7 @@ import type {
   ThreatIntelligenceProviderTerms,
   ThreatIntelligenceTargetExposure,
 } from './threat-intelligence-runtime.mts';
-import { normalizeLegacyIsoTimestamp } from './observation.mts';
+import { normalizeLegacyIsoTimestamp } from '../packages/evidence/observation.mts';
 
 const MAX_PROVIDER_ID_LENGTH = 40;
 const MAX_PROVIDER_LABEL_LENGTH = 100;

@@ -12,9 +12,9 @@ import { parse } from 'tldts';
 import { normalizeCtQuery } from './ct-query.mts';
 import { safeFetch, readTextCapped } from './safe-fetch.mts';
 import { whoisleuthRequestHeaders } from './outbound-identity.mts';
-import { createObservation } from './observation.mts';
+import { createObservation } from '../packages/evidence/observation.mts';
 import { isValidAsciiHostname } from './hostname.mts';
-import { normalizeCtTimestamp } from './observation.mts';
+import { normalizeCtTimestamp } from '../packages/evidence/observation.mts';
 import {
   MAX_CT_RESPONSE_CERTIFICATE_GROUPS,
   MAX_CT_RESPONSE_DOMAINS_PER_GROUP,

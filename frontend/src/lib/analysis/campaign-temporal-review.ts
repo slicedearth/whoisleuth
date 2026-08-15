@@ -2,6 +2,8 @@ import { sha256ArtifactDigest } from './artifact-integrity.ts';
 import type { CaseEvidencePin, CasePinCompleteness } from './case-response-model.ts';
 import type { CaseRecord } from './case-record-model.ts';
 
+import { CERTIFICATE_OBSERVATION_ROWS_SCHEMA } from './external-findings-converters.ts';
+
 export const CAMPAIGN_TEMPORAL_REVIEW_SCHEMA = 'whoisleuth.campaign-temporal-review';
 export const CAMPAIGN_TEMPORAL_REVIEW_VERSION = 1;
 export const MAX_CAMPAIGN_TEMPORAL_EVENTS = 300;
@@ -54,7 +56,6 @@ type Candidate = Readonly<{
 const LAYERS = ['registration', 'ct', 'dns', 'tls', 'web', 'mail'] as const;
 const MAX_MEMBERS = 50;
 const MAX_LIMITATIONS = 6;
-const CT_OBSERVATION_SCHEMA = 'whoisleuth.certificate-observation-rows';
 const MAIL_FIELDS = new Set(['dns.mx', 'dns.spf', 'dns.dmarc']);
 const COMPLETENESS_RANK: Readonly<Record<CasePinCompleteness, number>> = Object.freeze({
   complete: 0,
@@ -86,7 +87,7 @@ function positivePin(pin: CaseEvidencePin): boolean {
 
 function pinLayer(pin: CaseEvidencePin): CampaignTemporalLayer | null {
   if (!positivePin(pin)) return null;
-  if (pin.sourceSchema?.schema === CT_OBSERVATION_SCHEMA && pin.category === 'certificate') return 'ct';
+  if (pin.sourceSchema?.schema === CERTIFICATE_OBSERVATION_ROWS_SCHEMA && pin.category === 'certificate') return 'ct';
   if (pin.category === 'registration') return 'registration';
   if (pin.category === 'tls') return 'tls';
   if (pin.category === 'http' || pin.category === 'page_identity') return 'web';
@@ -126,7 +127,7 @@ function candidatesFromSightings(record: CaseRecord): Candidate[] {
     else if (sighting.category === 'delegation') layer = 'dns';
     else if (sighting.category === 'mail') layer = 'mail';
     else if (sighting.category === 'website') layer = 'web';
-    else if (sighting.category === 'certificate' && linkedPin?.sourceSchema?.schema === CT_OBSERVATION_SCHEMA) layer = 'ct';
+    else if (sighting.category === 'certificate' && linkedPin?.sourceSchema?.schema === CERTIFICATE_OBSERVATION_ROWS_SCHEMA) layer = 'ct';
     const observedAt = timestamp(sighting.observedAt);
     if (!layer || !observedAt || ['expired', 'not_reproduced'].includes(sighting.state)) return [];
     return [Object.freeze({

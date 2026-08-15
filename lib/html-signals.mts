@@ -9,7 +9,7 @@ import { domainToASCII } from 'node:url';
 
 import { analyzeCredentialSurfaceProfile } from './credential-surface-profile.mts';
 import { analyzeClientBehavior } from './client-behavior-profile.mts';
-import { createObservation } from './observation.mts';
+import { createObservation } from '../packages/evidence/observation.mts';
 import { createPageFingerprints } from './page-fingerprints.mts';
 import { detectPageLanguageSignal } from './page-language-signals.mts';
 import { analyzePageRole } from './page-role-profile.mts';

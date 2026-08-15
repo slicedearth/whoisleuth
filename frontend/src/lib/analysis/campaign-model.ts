@@ -3,7 +3,7 @@
 // or mutable case ids. The browser wrapper owns persistence and downloads.
 
 import { normalizeDomain } from './case-model.ts';
-import { normalizeExplicitIsoTimestamp } from '../../../../lib/observation.mts';
+import { normalizeExplicitIsoTimestamp } from '../../../../packages/evidence/observation.mts';
 
 export const CAMPAIGN_SCHEMA = 'whoisleuth.campaigns';
 export const CAMPAIGN_SCHEMA_VERSION = 1;

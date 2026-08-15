@@ -1,8 +1,16 @@
 import { normalizeEvidenceDomain } from './case-model.ts';
+import {
+  MAX_RDAP_NAMESERVER_SEARCH_RESULTS,
+  RDAP_NAMESERVER_SEARCH_SCHEMA,
+  RDAP_NAMESERVER_SEARCH_VERSION,
+  type RdapNameserverSearchState,
+} from '../../../../packages/contracts/rdap-nameserver-search.mts';
 
-export const RDAP_NAMESERVER_SEARCH_SCHEMA = 'whoisleuth.rdap-nameserver-search';
-export const RDAP_NAMESERVER_SEARCH_VERSION = 1;
-export const MAX_RDAP_NAMESERVER_SEARCH_RESULTS = 200;
+export {
+  MAX_RDAP_NAMESERVER_SEARCH_RESULTS,
+  RDAP_NAMESERVER_SEARCH_SCHEMA,
+  RDAP_NAMESERVER_SEARCH_VERSION,
+};
 
 const states = new Set([
   'success',
@@ -13,13 +21,7 @@ const states = new Set([
   'unavailable',
 ] as const);
 
-export type RdapNameserverSearchState =
-  | 'success'
-  | 'partial'
-  | 'no_results'
-  | 'unsupported'
-  | 'rate_limited'
-  | 'unavailable';
+export type { RdapNameserverSearchState };
 
 export type RdapNameserverSearchMatch = {
   domain: string;

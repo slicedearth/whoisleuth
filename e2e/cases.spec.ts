@@ -1,8 +1,19 @@
 import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { gzipSync, zipSync } from 'fflate';
+import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
-import { expectNoHorizontalOverflow, failBrowserLocalCollectionReads, holdBrowserLocalReads, migrateLegacyBrowserData, readBrowserLocalCollection, requiredValue, runBulkScan } from './helpers';
+import {
+  expectNoHorizontalOverflow,
+  failBrowserLocalCollectionReads,
+  failNextBrowserLocalCollectionRead,
+  failNextBrowserLocalCollectionReadAfterWrite,
+  holdBrowserLocalReads,
+  migrateLegacyBrowserData,
+  readBrowserLocalCollection,
+  requiredValue,
+  runBulkScan,
+} from './helpers';
 
 // Every domain here is a local/invalid value (RFC 2606 .invalid, or dotless
 // bad-domain-* that classifyQuery rejects with a 400). Case features are
@@ -10,6 +21,17 @@ import { expectNoHorizontalOverflow, failBrowserLocalCollectionReads, holdBrowse
 // upstream service, and the shared fixture's network guard enforces that.
 
 import { caseRecord, createCase, openCasesView, snapshot } from './case-test-fixtures';
+
+async function addFixtureCasePin(page: Page, label: string): Promise<void> {
+  const workspace = page.locator('.response-workspace');
+  const pin = workspace.locator('details', { hasText: 'Pin an observed fact' });
+  await pin.getByText('Pin an observed fact', { exact: true }).click();
+  await pin.getByLabel('Label').fill(label);
+  await pin.getByLabel('Source').fill('Fixture evidence');
+  await pin.getByLabel('Fact').fill('A bounded fixture fact for branch recovery testing.');
+  await pin.getByRole('button', { name: 'Pin evidence' }).click();
+  await expect(workspace).toContainText(label);
+}
 
 test('Monitor views support roving keyboard navigation', async ({ page }) => {
   await page.goto('/monitor');
@@ -222,9 +244,17 @@ test('the evidence-gap inbox filters and dismisses a stale failed source on mobi
   await expect(item).toContainText('stale');
   await expect(item.getByRole('link', { name: 'Refresh evidence' })).toHaveAttribute('href', '/lookup?q=gap-mobile.invalid&depth=deep');
   await item.getByRole('combobox').selectOption('accepted_limitation');
+  const before = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
+  await failNextBrowserLocalCollectionReadAfterWrite(page, 'cases');
   await item.getByRole('button', { name: 'Dismiss gap' }).click();
   await expect(item).toHaveCount(0);
   await expect(page.getByRole('status')).toContainText('Recorded the reviewed evidence-gap dismissal');
+  await expect(page.getByRole('status')).toContainText('The change was saved, but Cases could not be reread');
+  const committed = await readBrowserLocalCollection(page, 'cases', {
+    minimumRecords: 1,
+    minimumRevision: before.manifest.revision + 1,
+  });
+  expect(requiredValue(committed.records[0], 'The dismissed evidence-gap Case is missing.').value.manualTrail).toHaveLength(1);
   await expectNoHorizontalOverflow(page);
 });
 
@@ -681,6 +711,345 @@ test('rapid repeated note submission persists one note and is shown in the recor
   await page.getByRole('tab', { name: /Cases/ }).click();
   await expect(page.locator('.case-head', { hasText: 'noted.invalid' })).toHaveAttribute('aria-expanded', 'true');
   await expect(page.locator('.notes p').first()).toHaveText('This domain looks suspicious.');
+});
+
+test('a Case response save preserves unrelated analyst drafts and keyboard focus', async ({ page }) => {
+  await openCasesView(page);
+  await createCase(page, 'draft-retention.invalid');
+
+  const workspace = page.locator('.response-workspace');
+  const packet = workspace.locator('details', { hasText: 'Prepare a reviewed abuse evidence packet' });
+  await packet.getByText('Prepare a reviewed abuse evidence packet', { exact: true }).click();
+  await packet.getByLabel('Abuse category').fill('Fixture abuse review');
+  await packet.getByLabel('Affected party').fill('Fixture affected party');
+  await packet.getByLabel('Exact abusive HTTP(S) URLs').fill('https://draft-retention.invalid/review');
+  await packet.getByLabel('Observed harm').fill('A bounded draft that must survive an unrelated Case mutation.');
+
+  const pin = workspace.locator('details', { hasText: 'Pin an observed fact' });
+  await pin.getByText('Pin an observed fact', { exact: true }).click();
+  await pin.getByLabel('Label').fill('Draft-retention pin');
+  await pin.getByLabel('Source').fill('Fixture evidence');
+  await pin.getByLabel('Fact').fill('A separately reviewed fixture fact.');
+  const submit = pin.getByRole('button', { name: 'Pin evidence' });
+  await submit.click();
+
+  await expect(workspace).toContainText('Draft-retention pin');
+  await expect(packet.getByLabel('Abuse category')).toHaveValue('Fixture abuse review');
+  await expect(packet.getByLabel('Affected party')).toHaveValue('Fixture affected party');
+  await expect(packet.getByLabel('Exact abusive HTTP(S) URLs')).toHaveValue('https://draft-retention.invalid/review');
+  await expect(packet.getByLabel('Observed harm')).toHaveValue('A bounded draft that must survive an unrelated Case mutation.');
+  await expect(submit).toBeFocused();
+});
+
+test('Case mutation focus recovery respects deliberate movement and restores a displaced branch control', async ({ page }) => {
+  await openCasesView(page);
+  await createCase(page, 'focus-recovery.invalid');
+
+  const workspace = page.locator('.response-workspace');
+  const pin = workspace.locator('details', { hasText: 'Pin an observed fact' });
+  await pin.getByText('Pin an observed fact', { exact: true }).click();
+  await pin.getByLabel('Label').fill('Focus fixture pin');
+  await pin.getByLabel('Source').fill('Fixture evidence');
+  await pin.getByLabel('Fact').fill('A bounded fact used to exercise focus recovery.');
+  const pinSubmit = pin.getByRole('button', { name: 'Pin evidence' });
+
+  await holdBrowserLocalReads(page, 750);
+  await pinSubmit.click();
+  const caseSearch = page.locator('.case-filters input[placeholder="Domain or tag"]');
+  await caseSearch.focus();
+  await expect(workspace).toContainText('Focus fixture pin');
+  await expect(caseSearch).toBeFocused();
+
+  const branch = workspace.locator('details', { hasText: 'Group evidence and decisions into investigation branches' });
+  await branch.getByText('Group evidence and decisions into investigation branches', { exact: true }).click();
+  await branch.getByLabel('Branch name').fill('Focus recovery branch');
+  await branch.getByRole('checkbox', { name: 'Focus fixture pin' }).check();
+  const branchSubmit = branch.getByRole('button', { name: 'Create branch' });
+  await holdBrowserLocalReads(page, 750);
+  await branchSubmit.click();
+  await expect(branch).toContainText('Focus recovery branch');
+  await expect(branch.getByLabel('Branch name')).toBeFocused();
+
+  const assertions = workspace.locator('details', { hasText: 'Structure facts, hypotheses, unknowns, and next steps' });
+  await assertions.getByText('Structure facts, hypotheses, unknowns, and next steps', { exact: true }).click();
+  await assertions.getByLabel('Statement').fill('Focus fallback assertion');
+  await assertions.getByRole('button', { name: 'Record assertion' }).click();
+  const assertionItem = assertions.locator('ol.records > li', { hasText: 'Focus fallback assertion' });
+  await expect(assertionItem).toBeVisible();
+  const resolveAssertion = assertionItem.getByRole('button', { name: 'Mark resolved' });
+  await holdBrowserLocalReads(page, 750);
+  await resolveAssertion.click();
+  await expect(assertionItem).toContainText('resolved');
+  await expect(resolveAssertion).toHaveCount(0);
+  await expect(assertionItem).toBeFocused();
+});
+
+test('a committed note remains singular when its immediate reread fails', async ({ page }) => {
+  await openCasesView(page);
+  await createCase(page, 'note-neighbour.invalid');
+  await createCase(page, 'note-committed.invalid');
+  const before = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 2 });
+
+  const note = page.locator('.case-body .note-edit');
+  await note.getByLabel('Add note').fill('One committed fixture note.');
+  await failNextBrowserLocalCollectionReadAfterWrite(page, 'cases');
+  await note.getByRole('button', { name: 'Add note' }).click();
+
+  await expect(page.getByRole('status')).toContainText('The change was saved, but Cases could not be reread');
+  await expect(note.getByLabel('Add note')).toHaveValue('');
+  await expect(page.locator('.case-head', { hasText: 'note-neighbour.invalid' })).toBeVisible();
+  const committed = await readBrowserLocalCollection(page, 'cases', {
+    minimumRecords: 2,
+    minimumRevision: before.manifest.revision + 1,
+  });
+  const stored = requiredValue(
+    committed.records.find((item) => item.value.domain === 'note-committed.invalid'),
+    'The post-write note Case is missing.',
+  ).value;
+  expect(stored.notes).toHaveLength(1);
+  expect(stored.notes[0]?.body).toBe('One committed fixture note.');
+
+  await page.reload();
+  await page.getByRole('tab', { name: /Cases/ }).click();
+  await expect(page.locator('.case-head', { hasText: 'note-committed.invalid' })).toBeVisible();
+  const reloaded = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 2 });
+  expect(requiredValue(
+    reloaded.records.find((item) => item.value.domain === 'note-committed.invalid'),
+    'The reloaded note Case is missing.',
+  ).value.notes).toHaveLength(1);
+});
+
+test('committed Case status, tags and deletion reconcile when immediate rereads fail', async ({ page }) => {
+  await openCasesView(page);
+  await createCase(page, 'reconcile-neighbour.invalid');
+  await createCase(page, 'reconcile-target.invalid');
+  const openCaseRecord = page.locator('article.case.open');
+  const status = openCaseRecord.getByRole('combobox', { name: 'Status', exact: true });
+
+  await failNextBrowserLocalCollectionReadAfterWrite(page, 'cases');
+  await status.selectOption('reviewing');
+  await expect(page.getByRole('status')).toContainText('Set reconcile-target.invalid to Reviewing. The change was saved, but Cases could not be reread');
+  await expect(status).toHaveValue('reviewing');
+  await expect(page.locator('.case-head', { hasText: 'reconcile-neighbour.invalid' })).toBeVisible();
+  let committed = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 2 });
+  expect(requiredValue(
+    committed.records.find((item) => item.value.domain === 'reconcile-target.invalid'),
+    'The reconciled status Case is missing.',
+  ).value.status).toBe('reviewing');
+
+  await page.getByLabel('Tags').fill('reviewed, retained');
+  await failNextBrowserLocalCollectionReadAfterWrite(page, 'cases');
+  await page.getByRole('button', { name: 'Save tags' }).click();
+  await expect(page.getByRole('status')).toContainText('Updated tags for reconcile-target.invalid. The change was saved, but Cases could not be reread');
+  await expect(page.getByLabel('Tags')).toHaveValue('reviewed, retained');
+  await expect(page.locator('.tag-row')).toContainText('reviewed');
+  committed = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 2 });
+  expect(requiredValue(
+    committed.records.find((item) => item.value.domain === 'reconcile-target.invalid'),
+    'The reconciled tag Case is missing.',
+  ).value.tags).toEqual(['reviewed', 'retained']);
+
+  await failNextBrowserLocalCollectionReadAfterWrite(page, 'cases');
+  page.once('dialog', (dialog) => dialog.accept());
+  await page.getByRole('button', { name: 'Delete case' }).click();
+  await expect(page.getByRole('status')).toContainText('Deleted the case for reconcile-target.invalid. The change was saved, but Cases could not be reread');
+  await expect(page.locator('.case-head', { hasText: 'reconcile-target.invalid' })).toHaveCount(0);
+  await expect(page.locator('.case-head', { hasText: 'reconcile-neighbour.invalid' })).toBeVisible();
+  committed = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
+  expect(committed.records.map((item) => item.value.domain)).toEqual(['reconcile-neighbour.invalid']);
+});
+
+test('rapid repeated action submission persists one reviewed action', async ({ page }) => {
+  await openCasesView(page);
+  await createCase(page, 'action-single.invalid');
+  const before = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
+  const details = page.locator('.response-workspace details', { hasText: 'Track a reviewed action or outcome' });
+  await details.getByText('Track a reviewed action or outcome', { exact: true }).click();
+  await details.getByLabel('Recipient or internal owner').fill('Fixture review owner');
+  await details.getByLabel('Contact source').fill('Fixture source');
+  await details.locator('form').evaluate((form) => {
+    (form as HTMLFormElement).requestSubmit();
+    (form as HTMLFormElement).requestSubmit();
+  });
+
+  await expect(details).toContainText('internal review · planned');
+  const committed = await readBrowserLocalCollection(page, 'cases', {
+    minimumRecords: 1,
+    minimumRevision: before.manifest.revision + 1,
+  });
+  const stored = requiredValue(committed.records[0], 'The rapid action Case is missing.').value;
+  expect(stored.actions).toHaveLength(1);
+  expect(stored.actions[0]).toMatchObject({ recipient: 'Fixture review owner', contactSource: 'Fixture source' });
+  expect(committed.manifest.revision).toBe(before.manifest.revision + 1);
+});
+
+test('rapid repeated branch submission persists one investigation branch', async ({ page }) => {
+  await openCasesView(page);
+  await createCase(page, 'branch-single.invalid');
+  await addFixtureCasePin(page, 'Single branch pin');
+  const before = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
+  const details = page.locator('.response-workspace details', { hasText: 'Group evidence and decisions into investigation branches' });
+  await details.getByText('Group evidence and decisions into investigation branches', { exact: true }).click();
+  await details.getByLabel('Branch name').fill('Single branch');
+  await details.getByRole('checkbox', { name: 'Single branch pin' }).check();
+  await details.locator('form').evaluate((form) => {
+    (form as HTMLFormElement).requestSubmit();
+    (form as HTMLFormElement).requestSubmit();
+  });
+
+  await expect(details.locator('.branches li')).toHaveCount(1);
+  const committed = await readBrowserLocalCollection(page, 'cases', {
+    minimumRecords: 1,
+    minimumRevision: before.manifest.revision + 1,
+  });
+  const stored = requiredValue(committed.records[0], 'The rapid branch Case is missing.').value;
+  expect(stored.branches ?? []).toHaveLength(1);
+  expect(stored.branches?.[0]).toMatchObject({ name: 'Single branch', state: 'active' });
+  expect(committed.manifest.revision).toBe(before.manifest.revision + 1);
+});
+
+test('keeps a reviewed action draft when the Case update fails before commit', async ({ page }) => {
+  await openCasesView(page);
+  await createCase(page, 'action-draft.invalid');
+
+  const before = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
+  const workspace = page.locator('.response-workspace');
+  const action = workspace.locator('details', { hasText: 'Track a reviewed action or outcome' });
+  await action.getByText('Track a reviewed action or outcome', { exact: true }).click();
+  await action.getByLabel('Action type').selectOption('registrar_report');
+  await action.getByLabel('State').selectOption('submitted');
+  await action.getByLabel('Recipient or internal owner').fill('Fixture review desk');
+  await action.getByLabel('Contact source').fill('Fixture registry role');
+  await action.getByLabel('Due at').fill('2026-08-18T10:00');
+  await action.getByLabel('Follow-up at').fill('2026-08-19T11:30');
+  await action.getByLabel('Reference').fill('CASE-EXAMPLE-101');
+  await action.getByLabel(/Contact limitations/).fill('Fixture contact route; no delivery attempted');
+  await action.getByLabel('Outcome').fill('Awaiting an independently reviewed response.');
+
+  await failNextBrowserLocalCollectionRead(page, 'cases');
+  await action.getByRole('button', { name: 'Record action' }).click();
+
+  await expect(page.getByRole('status').filter({ hasText: 'Cases could not be read' })).toBeVisible();
+  await expect(action.getByLabel('Action type')).toHaveValue('registrar_report');
+  await expect(action.getByLabel('State')).toHaveValue('submitted');
+  await expect(action.getByLabel('Recipient or internal owner')).toHaveValue('Fixture review desk');
+  await expect(action.getByLabel('Contact source')).toHaveValue('Fixture registry role');
+  await expect(action.getByLabel('Due at')).toHaveValue('2026-08-18T10:00');
+  await expect(action.getByLabel('Follow-up at')).toHaveValue('2026-08-19T11:30');
+  await expect(action.getByLabel('Reference')).toHaveValue('CASE-EXAMPLE-101');
+  await expect(action.getByLabel(/Contact limitations/)).toHaveValue('Fixture contact route; no delivery attempted');
+  await expect(action.getByLabel('Outcome')).toHaveValue('Awaiting an independently reviewed response.');
+
+  const unchanged = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
+  expect(unchanged.manifest.revision).toBe(before.manifest.revision);
+  expect(requiredValue(unchanged.records[0], 'The action-draft Case is missing.').value.actions).toEqual([]);
+
+  await action.getByRole('button', { name: 'Record action' }).click();
+  await expect(workspace).toContainText('registrar report · submitted');
+  const committed = await readBrowserLocalCollection(page, 'cases', {
+    minimumRecords: 1,
+    minimumRevision: before.manifest.revision + 1,
+  });
+  expect(requiredValue(committed.records[0], 'The committed action Case is missing.').value.actions).toHaveLength(1);
+});
+
+test('shows the complete committed Case snapshot when the immediate action reread fails', async ({ page }) => {
+  await openCasesView(page);
+  await createCase(page, 'action-neighbour.invalid');
+  await createCase(page, 'action-committed.invalid');
+
+  const before = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
+  const workspace = page.locator('.response-workspace');
+  const action = workspace.locator('details', { hasText: 'Track a reviewed action or outcome' });
+  await action.getByText('Track a reviewed action or outcome', { exact: true }).click();
+  await action.getByLabel('Action type').selectOption('registry_report');
+  await action.getByLabel('Recipient or internal owner').fill('Fixture registry desk');
+  await action.getByLabel('Contact source').fill('Fixture registry evidence');
+
+  await failNextBrowserLocalCollectionReadAfterWrite(page, 'cases');
+  await action.getByRole('button', { name: 'Record action' }).click();
+
+  await expect(page.getByRole('status').filter({ hasText: 'The change was saved, but Cases could not be reread' })).toContainText('complete committed Case snapshot');
+  await expect(workspace).toContainText('registry report · planned');
+  await expect(page.locator('.case-head', { hasText: 'action-neighbour.invalid' })).toBeVisible();
+  const committed = await readBrowserLocalCollection(page, 'cases', {
+    minimumRecords: 1,
+    minimumRevision: before.manifest.revision + 1,
+  });
+  expect(committed.records).toHaveLength(2);
+  const stored = requiredValue(
+    committed.records.find((item) => item.value.domain === 'action-committed.invalid'),
+    'The post-write action Case is missing.',
+  ).value;
+  expect(stored.actions).toHaveLength(1);
+  expect(stored.actions[0]).toMatchObject({
+    type: 'registry_report',
+    recipient: 'Fixture registry desk',
+    contactSource: 'Fixture registry evidence',
+  });
+});
+
+test('keeps an investigation-branch draft when the Case update fails before commit', async ({ page }) => {
+  await openCasesView(page);
+  await createCase(page, 'branch-draft.invalid');
+  await addFixtureCasePin(page, 'Branch fixture pin');
+
+  const before = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
+  const workspace = page.locator('.response-workspace');
+  const branch = workspace.locator('details', { hasText: 'Group evidence and decisions into investigation branches' });
+  await branch.getByText('Group evidence and decisions into investigation branches', { exact: true }).click();
+  await branch.getByLabel('Branch name').fill('Draft branch');
+  await branch.getByRole('checkbox', { name: 'Branch fixture pin' }).check();
+
+  await failNextBrowserLocalCollectionRead(page, 'cases');
+  await branch.getByRole('button', { name: 'Create branch' }).click();
+
+  await expect(page.getByRole('status').filter({ hasText: 'Cases could not be read' })).toBeVisible();
+  await expect(branch.getByLabel('Branch name')).toHaveValue('Draft branch');
+  await expect(branch.getByRole('checkbox', { name: 'Branch fixture pin' })).toBeChecked();
+  const unchanged = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
+  expect(unchanged.manifest.revision).toBe(before.manifest.revision);
+  expect(requiredValue(unchanged.records[0], 'The branch-draft Case is missing.').value.branches).toEqual([]);
+
+  await branch.getByRole('button', { name: 'Create branch' }).click();
+  await expect(workspace).toContainText('Draft branch');
+  const committed = await readBrowserLocalCollection(page, 'cases', {
+    minimumRecords: 1,
+    minimumRevision: before.manifest.revision + 1,
+  });
+  expect(requiredValue(committed.records[0], 'The committed branch Case is missing.').value.branches).toHaveLength(1);
+});
+
+test('shows the complete committed Case snapshot when an investigation-branch reread fails', async ({ page }) => {
+  await openCasesView(page);
+  await createCase(page, 'branch-neighbour.invalid');
+  await createCase(page, 'branch-committed.invalid');
+  await addFixtureCasePin(page, 'Committed branch pin');
+
+  const before = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 2 });
+  const workspace = page.locator('.response-workspace');
+  const branch = workspace.locator('details', { hasText: 'Group evidence and decisions into investigation branches' });
+  await branch.getByText('Group evidence and decisions into investigation branches', { exact: true }).click();
+  await branch.getByLabel('Branch name').fill('Committed branch');
+  await branch.getByRole('checkbox', { name: 'Committed branch pin' }).check();
+
+  await failNextBrowserLocalCollectionReadAfterWrite(page, 'cases');
+  await branch.getByRole('button', { name: 'Create branch' }).click();
+
+  await expect(page.getByRole('status').filter({ hasText: 'The change was saved, but Cases could not be reread' })).toContainText('complete committed Case snapshot');
+  await expect(workspace).toContainText('Committed branch');
+  await expect(page.locator('.case-head', { hasText: 'branch-neighbour.invalid' })).toBeVisible();
+  const committed = await readBrowserLocalCollection(page, 'cases', {
+    minimumRecords: 2,
+    minimumRevision: before.manifest.revision + 1,
+  });
+  expect(committed.records).toHaveLength(2);
+  const stored = requiredValue(
+    committed.records.find((item) => item.value.domain === 'branch-committed.invalid'),
+    'The post-write branch Case is missing.',
+  ).value;
+  expect(stored.branches ?? []).toHaveLength(1);
+  expect(stored.branches?.[0]).toMatchObject({ name: 'Committed branch', state: 'active' });
 });
 
 test('reviewed response records persist and produce a local non-submitted packet', {

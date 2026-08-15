@@ -12,7 +12,7 @@ import { isIP } from 'node:net';
 import { domainToASCII } from 'node:url';
 
 import { isPrivateAddress } from './safe-fetch.mts';
-import { normalizeExplicitIsoTimestamp } from './observation.mts';
+import { normalizeExplicitIsoTimestamp } from '../packages/evidence/observation.mts';
 import {
   MAX_DNS_MESSAGE_BYTES,
   defaultTcpExchange,

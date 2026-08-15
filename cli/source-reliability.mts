@@ -1,11 +1,11 @@
 import { Buffer } from 'node:buffer';
 
-import { canonicalArtifactJson } from '../frontend/src/lib/analysis/artifact-integrity.ts';
+import { canonicalArtifactJson } from '../packages/evidence/artifact-integrity.mts';
 import { scanBoundedJson } from '../lib/bounded-json.mts';
 import {
   normalizeExplicitIsoTimestamp,
   normalizeLegacyIsoTimestamp,
-} from '../lib/observation.mts';
+} from '../packages/evidence/observation.mts';
 
 export const SOURCE_RELIABILITY_REPORT_SCHEMA = 'whoisleuth.source-reliability-report';
 export const SOURCE_RELIABILITY_REPORT_VERSION = 1;

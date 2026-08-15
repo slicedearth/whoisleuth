@@ -15,7 +15,7 @@ import {
   WEB_CAPTURE_SUMMARY_SCHEMA,
   WEB_CAPTURE_SUMMARY_VERSION,
 } from '../../../../lib/web-capture-contract.mts';
-import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from '../../../../lib/observation.mts';
+import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from '../../../../packages/evidence/observation.mts';
 export {
   WEB_CAPTURE_MANIFEST_SCHEMA,
   WEB_CAPTURE_MANIFEST_VERSION,

@@ -118,6 +118,9 @@ type CollectionSnapshot<T> = Readonly<{
   manifest: BrowserLocalCollectionManifest;
 }>;
 
+type BrowserLocalCommitState = 'confirmed' | 'recovering' | 'unknown';
+type ExpectedManifest = BrowserLocalCollectionManifest | null;
+
 function collectionContentMatches(
   prepared: PreparedCollection,
   manifest: BrowserLocalCollectionManifest,
@@ -128,6 +131,24 @@ function collectionContentMatches(
     && manifest.recordCount === prepared.records.length
     && manifest.serializedBytes === prepared.serializedBytes
     && manifest.digest === prepared.digest;
+}
+
+function manifestMatchesExpected(
+  manifest: BrowserLocalCollectionManifest | undefined,
+  expected: ExpectedManifest,
+): boolean {
+  if (expected === null) return manifest === undefined;
+  return manifest?.collection === expected.collection
+    && manifest.schemaVersion === expected.schemaVersion
+    && manifest.codec === expected.codec
+    && manifest.revision === expected.revision
+    && manifest.recordCount === expected.recordCount
+    && manifest.serializedBytes === expected.serializedBytes
+    && manifest.digest === expected.digest
+    && manifest.source === expected.source
+    && manifest.updatedAt === expected.updatedAt
+    && manifest.legacyKey === expected.legacyKey
+    && manifest.legacyDigest === expected.legacyDigest;
 }
 
 export type BrowserLocalDataInitialization = Readonly<{
@@ -224,11 +245,17 @@ function requestResult<T>(request: IDBRequest<T>, label: string, timeoutMs: numb
 }
 
 function transactionComplete(transaction: IDBTransaction, label: string, timeoutMs: number): Promise<void> {
-  return withDeadline(label, new Promise<void>((resolve, reject) => {
+  const completion = withDeadline(label, new Promise<void>((resolve, reject) => {
     transaction.oncomplete = () => resolve();
     transaction.onabort = () => reject(transaction.error || new BrowserLocalDataError('LOCAL_DATA_TRANSACTION_ABORTED', `${label} was aborted.`));
     transaction.onerror = () => { /* onabort carries the stable terminal failure */ };
   }), timeoutMs);
+  // Some operations deliberately await one or more request results before
+  // awaiting the transaction. Observe an earlier transaction failure now so a
+  // stalled renderer cannot surface it as an unhandled rejection; callers
+  // still receive the original rejection when they await `completion`.
+  void completion.catch(() => undefined);
+  return completion;
 }
 
 function normalizeDefinition<T>(definition: LocalDataCollectionDefinition<T>): LocalDataCollectionDefinition<T> {
@@ -279,6 +306,7 @@ export class BrowserLocalDataProvider {
   #initializationPromise: Promise<BrowserLocalDataInitialization> | null = null;
   #definitions = new Map<string, AnyLocalDataCollectionDefinition>();
   #databaseInvalidated = false;
+  #commitState: BrowserLocalCommitState = 'confirmed';
 
   constructor(options: Readonly<{
     databaseName?: string;
@@ -334,13 +362,17 @@ export class BrowserLocalDataProvider {
     updater: (current: T) => Readonly<{ document: T; result: R }>,
   ): Promise<R> {
     await this.#requireDefinition(definition);
+    this.#requireConfirmedCommitState();
     for (let attempt = 1; attempt <= MAX_LOCAL_DATA_UPDATE_ATTEMPTS; attempt++) {
+      this.#requireConfirmedCommitState();
       const snapshot = await this.#readSnapshot(definition);
+      this.#requireConfirmedCommitState();
       const updated = updater(snapshot.document);
       const prepared = await this.#prepare(definition, updated.document, 'application', snapshot.manifest.legacyDigest);
       if (collectionContentMatches(prepared, snapshot.manifest, this.codec.id)) return updated.result;
       try {
-        await this.#commit([prepared], new Map([[definition.id, snapshot.manifest.revision]]));
+        this.#requireConfirmedCommitState();
+        await this.#commit([prepared], new Map([[definition.id, snapshot.manifest]]));
         return updated.result;
       } catch (cause) {
         if (!(cause instanceof BrowserLocalDataError) || cause.code !== 'LOCAL_DATA_CONFLICT' || attempt === MAX_LOCAL_DATA_UPDATE_ATTEMPTS) throw cause;
@@ -357,8 +389,11 @@ export class BrowserLocalDataProvider {
     }>,
   ): Promise<R> {
     for (const definition of definitions) await this.#requireDefinition(definition);
+    this.#requireConfirmedCommitState();
     for (let attempt = 1; attempt <= MAX_LOCAL_DATA_UPDATE_ATTEMPTS; attempt++) {
+      this.#requireConfirmedCommitState();
       const snapshots = await Promise.all(definitions.map((definition) => this.#readSnapshot(definition)));
+      this.#requireConfirmedCommitState();
       const current = new Map<string, unknown>();
       for (let index = 0; index < definitions.length; index++) {
         const definition = definitions[index];
@@ -381,14 +416,14 @@ export class BrowserLocalDataProvider {
         }
         prepared.push(await this.#prepare(definition, updated.documents.get(definition.id), 'application', snapshot.manifest.legacyDigest));
       }
-      const revisions = new Map<string, number>();
+      const expectedManifests = new Map<string, ExpectedManifest>();
       for (let index = 0; index < definitions.length; index++) {
         const definition = definitions[index];
         const snapshot = snapshots[index];
         if (!definition || !snapshot) {
           throw new BrowserLocalDataError('LOCAL_DATA_INTEGRITY', 'A browser-local batch snapshot is incomplete.');
         }
-        revisions.set(definition.id, snapshot.manifest.revision);
+        expectedManifests.set(definition.id, snapshot.manifest);
       }
       const changed = prepared.filter((item, index) => {
         const snapshot = snapshots[index];
@@ -396,7 +431,8 @@ export class BrowserLocalDataProvider {
       });
       if (!changed.length) return updated.result;
       try {
-        await this.#commit(changed, revisions);
+        this.#requireConfirmedCommitState();
+        await this.#commit(changed, expectedManifests);
         return updated.result;
       } catch (cause) {
         if (!(cause instanceof BrowserLocalDataError) || cause.code !== 'LOCAL_DATA_CONFLICT' || attempt === MAX_LOCAL_DATA_UPDATE_ATTEMPTS) throw cause;
@@ -411,6 +447,18 @@ export class BrowserLocalDataProvider {
       this.#databasePromise = null;
       this.#initializationPromise = null;
       this.#databaseInvalidated = false;
+      this.#commitState = 'confirmed';
+    }
+  }
+
+  #requireConfirmedCommitState(): void {
+    if (this.#commitState !== 'confirmed') {
+      throw new BrowserLocalDataError(
+        'LOCAL_DATA_COMMIT_UNKNOWN',
+        this.#commitState === 'recovering'
+          ? 'A browser-local write is still being reconciled. Wait for it to finish before retrying any browser-local change.'
+          : 'A browser-local write may have been saved, but its committed state could not be verified. Reload before retrying any browser-local change.',
+      );
     }
   }
 
@@ -504,7 +552,7 @@ export class BrowserLocalDataProvider {
       try {
         await this.#commit(prepared, new Map(definitions.map((definition) => [
           definition.id,
-          existingSnapshots.get(definition.id)?.manifest.revision ?? 0,
+          existingSnapshots.get(definition.id)?.manifest ?? null,
         ])));
         migratedCollections.push(...missing.map((definition) => definition.id));
       } catch (cause) {
@@ -516,7 +564,7 @@ export class BrowserLocalDataProvider {
       const snapshot = await this.#readSnapshot(definition);
       if (snapshot.manifest.schemaVersion < definition.schemaVersion) {
         const prepared = await this.#prepare(definition, snapshot.document, 'application', snapshot.manifest.legacyDigest);
-        try { await this.#commit([prepared], new Map([[definition.id, snapshot.manifest.revision]])); }
+        try { await this.#commit([prepared], new Map([[definition.id, snapshot.manifest]])); }
         catch (cause) {
           if (!(cause instanceof BrowserLocalDataError) || cause.code !== 'LOCAL_DATA_CONFLICT') throw cause;
           await this.#readSnapshot(definition);
@@ -751,7 +799,11 @@ export class BrowserLocalDataProvider {
     }
   }
 
-  async #commit(prepared: readonly PreparedCollection[], expectedRevisions: ReadonlyMap<string, number>): Promise<void> {
+  async #commit(
+    prepared: readonly PreparedCollection[],
+    expectedManifests: ReadonlyMap<string, ExpectedManifest>,
+  ): Promise<void> {
+    this.#requireConfirmedCommitState();
     const database = await this.#database();
     const transaction = database.transaction([LOCAL_DATA_RECORD_STORE, LOCAL_DATA_MANIFEST_STORE], 'readwrite');
     const done = transactionComplete(transaction, 'Saving browser-local data', this.timeoutMs);
@@ -759,11 +811,12 @@ export class BrowserLocalDataProvider {
     const manifests = transaction.objectStore(LOCAL_DATA_MANIFEST_STORE);
     const now = this.#now();
     const updatedAt = Number.isFinite(now.getTime()) ? now.toISOString() : new Date().toISOString();
+    const proposedManifests = new Map<string, BrowserLocalCollectionManifest>();
 
     try {
-      const expected = [...expectedRevisions.entries()];
+      const expected = [...expectedManifests.entries()];
       for (const item of prepared) {
-        if (!expectedRevisions.has(item.definition.id)) {
+        if (!expectedManifests.has(item.definition.id)) {
           throw new BrowserLocalDataError('INVALID_LOCAL_DATA_UPDATE', `The ${item.definition.label} update has no expected revision.`);
         }
       }
@@ -776,26 +829,22 @@ export class BrowserLocalDataProvider {
       for (let index = 0; index < expected.length; index++) {
         const entry = expected[index];
         if (!entry) throw new BrowserLocalDataError('LOCAL_DATA_INTEGRITY', 'An expected browser-local revision is missing.');
-        const [collection, expectedRevision] = entry;
+        const [collection, expectedManifest] = entry;
         const definition = this.#definitions.get(collection);
-        if (!definition || !Number.isSafeInteger(expectedRevision) || expectedRevision < 0) {
+        if (!definition || (expectedManifest !== null && expectedManifest.collection !== collection)) {
           throw new BrowserLocalDataError('INVALID_LOCAL_DATA_UPDATE', 'A browser-local update contains an invalid expected revision.');
         }
         currentByCollection.set(collection, current[index]);
-        const currentRevision = current[index]?.revision || 0;
-        if (currentRevision !== expectedRevision) {
+        if (!manifestMatchesExpected(current[index], expectedManifest)) {
           transaction.abort();
           await done.catch(() => undefined);
           throw new BrowserLocalDataError('LOCAL_DATA_CONFLICT', `${definition.label} changed in another tab.`);
         }
       }
-      for (let index = 0; index < prepared.length; index++) {
-        const item = prepared[index];
-        if (!item) throw new BrowserLocalDataError('LOCAL_DATA_INTEGRITY', 'A prepared browser-local collection is missing.');
+      this.#requireConfirmedCommitState();
+      for (const item of prepared) {
         const currentRevision = currentByCollection.get(item.definition.id)?.revision || 0;
-        records.delete(IDBKeyRange.bound([item.definition.id], [item.definition.id, []]));
-        for (const record of item.records) records.put(record);
-        manifests.put(Object.freeze({
+        proposedManifests.set(item.definition.id, Object.freeze({
           collection: item.definition.id,
           schemaVersion: item.definition.schemaVersion,
           codec: this.codec.id,
@@ -807,17 +856,107 @@ export class BrowserLocalDataProvider {
           updatedAt,
           legacyKey: item.definition.legacyKey,
           legacyDigest: item.legacyDigest,
-        }) satisfies BrowserLocalCollectionManifest);
+        } satisfies BrowserLocalCollectionManifest));
+      }
+      for (let index = 0; index < prepared.length; index++) {
+        const item = prepared[index];
+        if (!item) throw new BrowserLocalDataError('LOCAL_DATA_INTEGRITY', 'A prepared browser-local collection is missing.');
+        const proposedManifest = proposedManifests.get(item.definition.id);
+        if (!proposedManifest) throw new BrowserLocalDataError('LOCAL_DATA_INTEGRITY', 'A proposed browser-local manifest is missing.');
+        records.delete(IDBKeyRange.bound([item.definition.id], [item.definition.id, []]));
+        for (const record of item.records) records.put(record);
+        manifests.put(proposedManifest);
       }
       await done;
     } catch (cause) {
       try { transaction.abort(); } catch { /* the transaction may already be terminal */ }
       await done.catch(() => undefined);
+      if (cause instanceof BrowserLocalDataError && cause.code === 'LOCAL_DATA_TIMEOUT') {
+        this.#commitState = 'recovering';
+        const recovered = await this.#classifyTimedOutCommit(prepared, expectedManifests, proposedManifests);
+        if (recovered === 'committed') {
+          this.#commitState = 'confirmed';
+          return;
+        }
+        if (recovered === 'not_committed') this.#commitState = 'confirmed';
+        if (recovered === 'unknown') {
+          this.#commitState = 'unknown';
+          throw new BrowserLocalDataError(
+            'LOCAL_DATA_COMMIT_UNKNOWN',
+            'Browser-local data may have been saved, but its committed state could not be verified. Reload before retrying this change.',
+            { cause },
+          );
+        }
+      }
       if (cause instanceof BrowserLocalDataError) throw cause;
       if (cause instanceof DOMException && cause.name === 'QuotaExceededError') {
         throw new BrowserLocalDataError('LOCAL_DATA_QUOTA', 'Could not save browser-local data because this origin is out of storage space.', { cause });
       }
       throw new BrowserLocalDataError('LOCAL_DATA_WRITE_FAILED', 'Could not save browser-local data. Browser storage may be unavailable.', { cause });
+    }
+  }
+
+  async #classifyTimedOutCommit(
+    prepared: readonly PreparedCollection[],
+    expectedManifests: ReadonlyMap<string, ExpectedManifest>,
+    proposedManifests: ReadonlyMap<string, BrowserLocalCollectionManifest>,
+  ): Promise<'committed' | 'not_committed' | 'unknown'> {
+    try {
+      const snapshots = await Promise.all(prepared.map((item) => this.#readSnapshot(item.definition)));
+      const committed = snapshots.every((snapshot, index) => {
+        const item = prepared[index];
+        if (!item) return false;
+        const proposedManifest = proposedManifests.get(item.definition.id);
+        return proposedManifest !== undefined
+          && manifestMatchesExpected(snapshot.manifest, proposedManifest)
+          && collectionContentMatches(item, snapshot.manifest, this.codec.id);
+      });
+      if (committed) return 'committed';
+    } catch {
+      // A missing or temporarily unreadable snapshot can still be an exact
+      // pre-write state. Compare the bounded manifests separately below.
+    }
+    try {
+      const current = await this.#readManifestState(prepared.map((item) => item.definition));
+      const notCommitted = prepared.every((item) => {
+        const expectedManifest = expectedManifests.get(item.definition.id);
+        return expectedManifest !== undefined
+          && manifestMatchesExpected(current.get(item.definition.id), expectedManifest);
+      });
+      return notCommitted ? 'not_committed' : 'unknown';
+    } catch {
+      return 'unknown';
+    }
+  }
+
+  async #readManifestState(
+    definitions: readonly AnyLocalDataCollectionDefinition[],
+  ): Promise<Map<string, BrowserLocalCollectionManifest | undefined>> {
+    const database = await this.#database();
+    const transaction = database.transaction(LOCAL_DATA_MANIFEST_STORE, 'readonly');
+    const done = transactionComplete(transaction, 'Reconciling browser-local data', this.timeoutMs);
+    try {
+      const store = transaction.objectStore(LOCAL_DATA_MANIFEST_STORE);
+      const manifests = await Promise.all(definitions.map((definition) => requestResult(
+        store.get(definition.id) as IDBRequest<BrowserLocalCollectionManifest | undefined>,
+        `Reconciling the ${definition.label} manifest`,
+        this.timeoutMs,
+      )));
+      await done;
+      const result = new Map<string, BrowserLocalCollectionManifest | undefined>();
+      for (let index = 0; index < definitions.length; index += 1) {
+        const definition = definitions[index];
+        if (!definition) throw new BrowserLocalDataError('LOCAL_DATA_INTEGRITY', 'A browser-local reconciliation definition is missing.');
+        const manifest = manifests[index];
+        if (manifest !== undefined) this.#assertManifest(definition, manifest);
+        result.set(definition.id, manifest);
+      }
+      return result;
+    } catch (cause) {
+      try { transaction.abort(); } catch { /* the transaction may already be terminal */ }
+      await done.catch(() => undefined);
+      if (cause instanceof BrowserLocalDataError) throw cause;
+      throw new BrowserLocalDataError('LOCAL_DATA_READ_FAILED', 'Browser-local commit recovery could not read the current manifests.', { cause });
     }
   }
 

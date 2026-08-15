@@ -1,5 +1,5 @@
 import { normalizeDomain } from './case-model.ts';
-import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from '../../../../lib/observation.mts';
+import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from '../../../../packages/evidence/observation.mts';
 
 export const WEBSITE_SNAPSHOT_SCHEMA = 'whoisleuth.website-profile-snapshots';
 export const WEBSITE_SNAPSHOT_SCHEMA_VERSION = 4;

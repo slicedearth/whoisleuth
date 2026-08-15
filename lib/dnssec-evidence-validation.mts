@@ -1,7 +1,7 @@
 import { Buffer } from 'node:buffer';
 import { createHash } from 'node:crypto';
 import { domainToASCII } from 'node:url';
-import { normalizeLegacyIsoTimestamp } from './observation.mts';
+import { normalizeLegacyIsoTimestamp } from '../packages/evidence/observation.mts';
 
 const DNSSEC_EVIDENCE_SCHEMA = 'whoisleuth.dnssec-evidence-validation';
 const DNSSEC_EVIDENCE_VERSION = 1;

@@ -1,9 +1,11 @@
 <script lang="ts">
+  import { tick } from 'svelte';
   import { editCase, type CaseRecord } from '$lib/cases';
 
-  let { record, onsaved, onmessage }:{
+  let { record, onsaved, oncommitted, onmessage }:{
     record: CaseRecord;
     onsaved: () => void | Promise<void>;
+    oncommitted: (cases: CaseRecord[]) => void;
     onmessage: (message: string) => void;
   } = $props();
 
@@ -12,6 +14,8 @@
   let checkpointIds = $state<string[]>([]);
   let assertionIds = $state<string[]>([]);
   let actionIds = $state<string[]>([]);
+  let mutationBusy = $state(false);
+  let nameInput: HTMLInputElement;
   const checkpoints = $derived([...new Map(record.evidencePins.flatMap((pin) => pin.checkpointId ? [[pin.checkpointId, pin]] : [])).entries()]);
   const referenceCount = $derived(evidencePinIds.length + checkpointIds.length + assertionIds.length + actionIds.length);
 
@@ -19,28 +23,94 @@
     return checked ? [...new Set([...values, id])] : values.filter((item) => item !== id);
   }
 
-  async function create(): Promise<void> {
+  function prunedNote(pruned: number): string {
+    return pruned ? ` Pruned ${pruned} old evidence snapshot${pruned === 1 ? '' : 's'} to stay within storage.` : '';
+  }
+
+  async function reconcileCommitted(
+    committed: Awaited<ReturnType<typeof editCase>>,
+    success: string,
+  ): Promise<void> {
     try {
-      await editCase(record.id, { branch: { name, evidencePinIds, checkpointIds, assertionIds, actionIds } });
       await onsaved();
+    } catch {
+      try {
+        oncommitted(committed.cases);
+      } catch {
+        onmessage(`${success} The change was saved, but Cases could not be reread or reconciled in the current view. Reload before changing this branch again.${prunedNote(committed.pruned)}`);
+        return;
+      }
+      onmessage(`${success} The change was saved, but Cases could not be reread. The complete committed Case snapshot is shown locally; reload to retry the browser-local read.${prunedNote(committed.pruned)}`);
+      return;
+    }
+    onmessage(`${success}${prunedNote(committed.pruned)}`);
+  }
+
+  async function restoreMutationFocus(
+    focusTarget: HTMLElement | null,
+    fallbackTarget: HTMLElement | null = null,
+  ): Promise<void> {
+    await tick();
+    const activeTarget = document.activeElement;
+    const focusWasDisplaced = activeTarget === null
+      || activeTarget === document.body
+      || activeTarget === document.documentElement;
+    if (activeTarget !== focusTarget && !focusWasDisplaced) return;
+    const target = focusTarget?.isConnected && !focusTarget.matches(':disabled')
+      ? focusTarget
+      : fallbackTarget?.isConnected && !fallbackTarget.matches(':disabled')
+        ? fallbackTarget
+        : null;
+    target?.focus({ preventScroll: true });
+  }
+
+  async function create(): Promise<void> {
+    if (mutationBusy) return;
+    const focusTarget = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+    mutationBusy = true;
+    try {
+      let committed: Awaited<ReturnType<typeof editCase>>;
+      try {
+        committed = await editCase(record.id, { branch: { name, evidencePinIds, checkpointIds, assertionIds, actionIds } });
+      } catch (cause) {
+        onmessage(cause instanceof Error ? cause.message : 'Could not create the investigation branch.');
+        return;
+      }
+      await reconcileCommitted(committed, `Created an investigation branch for ${record.domain}.`);
       name = '';
       evidencePinIds = [];
       checkpointIds = [];
       assertionIds = [];
       actionIds = [];
-      onmessage(`Created an investigation branch for ${record.domain}.`);
-    } catch (cause) {
-      onmessage(cause instanceof Error ? cause.message : 'Could not create the investigation branch.');
+    } finally {
+      mutationBusy = false;
+      await restoreMutationFocus(focusTarget, nameInput);
     }
   }
 
   async function setState(id: string, state: 'active' | 'resolved'): Promise<void> {
+    if (mutationBusy) return;
+    const focusTarget = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+    mutationBusy = true;
     try {
-      await editCase(record.id, { branchUpdate: { id, state } });
-      await onsaved();
-      onmessage(`${state === 'resolved' ? 'Resolved' : 'Reopened'} the investigation branch for ${record.domain}.`);
-    } catch (cause) {
-      onmessage(cause instanceof Error ? cause.message : 'Could not update the investigation branch.');
+      let committed: Awaited<ReturnType<typeof editCase>>;
+      try {
+        committed = await editCase(record.id, { branchUpdate: { id, state } });
+      } catch (cause) {
+        onmessage(cause instanceof Error ? cause.message : 'Could not update the investigation branch.');
+        return;
+      }
+      await reconcileCommitted(
+        committed,
+        `${state === 'resolved' ? 'Resolved' : 'Reopened'} the investigation branch for ${record.domain}.`,
+      );
+    } finally {
+      mutationBusy = false;
+      await restoreMutationFocus(focusTarget);
     }
   }
 </script>
@@ -49,22 +119,22 @@
   <summary>Group evidence and decisions into investigation branches</summary>
   <form class="branch-form" onsubmit={(event) => { event.preventDefault(); void create(); }}>
     <p class="notice">A branch is a named, reference-only view of case material. It does not copy evidence, run a query, or turn a hypothesis into an observed fact.</p>
-    <label class="field">Branch name<input bind:value={name} maxlength="80" required placeholder="Alternative infrastructure explanation"></label>
+    <label class="field">Branch name<input bind:this={nameInput} bind:value={name} maxlength="80" required disabled={mutationBusy} placeholder="Alternative infrastructure explanation"></label>
     <div class="reference-groups">
       {#if record.evidencePins.length}
-        <fieldset><legend>Evidence pins</legend>{#each record.evidencePins as pin}<label><input type="checkbox" checked={evidencePinIds.includes(pin.id)} onchange={(event) => evidencePinIds = toggle(evidencePinIds, pin.id, event.currentTarget.checked)}><span>{pin.label}</span></label>{/each}</fieldset>
+        <fieldset disabled={mutationBusy}><legend>Evidence pins</legend>{#each record.evidencePins as pin}<label><input type="checkbox" checked={evidencePinIds.includes(pin.id)} onchange={(event) => evidencePinIds = toggle(evidencePinIds, pin.id, event.currentTarget.checked)}><span>{pin.label}</span></label>{/each}</fieldset>
       {/if}
       {#if checkpoints.length}
-        <fieldset><legend>Evidence checkpoints</legend>{#each checkpoints as [id, pin]}<label><input type="checkbox" checked={checkpointIds.includes(id)} onchange={(event) => checkpointIds = toggle(checkpointIds, id, event.currentTarget.checked)}><span>{pin.label}</span></label>{/each}</fieldset>
+        <fieldset disabled={mutationBusy}><legend>Evidence checkpoints</legend>{#each checkpoints as [id, pin]}<label><input type="checkbox" checked={checkpointIds.includes(id)} onchange={(event) => checkpointIds = toggle(checkpointIds, id, event.currentTarget.checked)}><span>{pin.label}</span></label>{/each}</fieldset>
       {/if}
       {#if record.assertions.length}
-        <fieldset><legend>Assertions</legend>{#each record.assertions as assertion}<label><input type="checkbox" checked={assertionIds.includes(assertion.id)} onchange={(event) => assertionIds = toggle(assertionIds, assertion.id, event.currentTarget.checked)}><span>{assertion.statement}</span></label>{/each}</fieldset>
+        <fieldset disabled={mutationBusy}><legend>Assertions</legend>{#each record.assertions as assertion}<label><input type="checkbox" checked={assertionIds.includes(assertion.id)} onchange={(event) => assertionIds = toggle(assertionIds, assertion.id, event.currentTarget.checked)}><span>{assertion.statement}</span></label>{/each}</fieldset>
       {/if}
       {#if record.actions.length}
-        <fieldset><legend>Actions</legend>{#each record.actions as action}<label><input type="checkbox" checked={actionIds.includes(action.id)} onchange={(event) => actionIds = toggle(actionIds, action.id, event.currentTarget.checked)}><span>{action.type.replaceAll('_', ' ')} · {action.recipient}</span></label>{/each}</fieldset>
+        <fieldset disabled={mutationBusy}><legend>Actions</legend>{#each record.actions as action}<label><input type="checkbox" checked={actionIds.includes(action.id)} onchange={(event) => actionIds = toggle(actionIds, action.id, event.currentTarget.checked)}><span>{action.type.replaceAll('_', ' ')} · {action.recipient}</span></label>{/each}</fieldset>
       {/if}
     </div>
-    <button class="btn" type="submit" disabled={!name.trim() || !referenceCount}>Create branch</button>
+    <button class="btn" type="submit" disabled={mutationBusy || !name.trim() || !referenceCount}>{mutationBusy ? 'Saving…' : 'Create branch'}</button>
   </form>
 
   {#if record.branches?.length}
@@ -74,7 +144,7 @@
           <div><strong>{branch.name}</strong><span class:resolved={branch.state === 'resolved'}>{branch.state}</span></div>
           <p>{branch.evidencePinIds.length} pin{branch.evidencePinIds.length === 1 ? '' : 's'} · {branch.checkpointIds.length} checkpoint{branch.checkpointIds.length === 1 ? '' : 's'} · {branch.assertionIds.length} assertion{branch.assertionIds.length === 1 ? '' : 's'} · {branch.actionIds.length} action{branch.actionIds.length === 1 ? '' : 's'}</p>
           <small>Updated {branch.updatedAt}</small>
-          <button class="btn small" type="button" onclick={() => void setState(branch.id, branch.state === 'active' ? 'resolved' : 'active')}>{branch.state === 'active' ? 'Mark resolved' : 'Reopen'}</button>
+          <button class="btn small" type="button" disabled={mutationBusy} onclick={() => void setState(branch.id, branch.state === 'active' ? 'resolved' : 'active')}>{branch.state === 'active' ? 'Mark resolved' : 'Reopen'}</button>
         </li>
       {/each}
     </ol>

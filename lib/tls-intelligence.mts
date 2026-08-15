@@ -12,7 +12,7 @@ import * as net from 'node:net';
 import * as tls from 'node:tls';
 import { domainToASCII } from 'node:url';
 
-import { createObservation } from './observation.mts';
+import { createObservation } from '../packages/evidence/observation.mts';
 import {
   MAX_LOOKUP_TLS_ALT_NAMES,
   MAX_LOOKUP_TLS_CHAIN_CERTIFICATES,

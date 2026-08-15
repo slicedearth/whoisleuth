@@ -1,5 +1,4 @@
-import type { CliCommand } from './arguments.mts';
-import type { CommandCollection, CommandDetail } from './manual.mts';
+import type { CliCommand, CommandCollection, CommandDetail } from './command-reference.mts';
 
 export const CLI_COMMAND_CATALOGUE_SCHEMA = 'whoisleuth.cli.command-catalogue';
 export const CLI_COMMAND_CATALOGUE_VERSION = 1;

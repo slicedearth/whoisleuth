@@ -14,6 +14,7 @@ import {
 import { analyzeBoundedRelationshipGraph } from '../../../../lib/bounded-relationship-graph.mts';
 
 export const CASE_RELATIONSHIP_CLUSTER_VERSION = 2;
+export const REVIEWED_RELATIONSHIP_CLUSTERS_SCHEMA = 'whoisleuth.reviewed-relationship-clusters';
 export const MAX_RELATIONSHIP_CLUSTERS = 50;
 export const MAX_CLUSTER_CASES = 100;
 export const MAX_CLUSTER_RELATIONSHIPS = 40;
@@ -341,7 +342,7 @@ export function buildCaseRelationshipClusterExport(
   generatedAt = new Date().toISOString(),
 ): Readonly<Record<string, unknown>> {
   return {
-    schema: 'whoisleuth.reviewed-relationship-clusters',
+    schema: REVIEWED_RELATIONSHIP_CLUSTERS_SCHEMA,
     version: CASE_RELATIONSHIP_CLUSTER_VERSION,
     generatedAt: validTimestamp(generatedAt) ?? new Date(0).toISOString(),
     sourceRelationshipCount: source.sourceRelationshipCount,

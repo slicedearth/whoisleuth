@@ -2,6 +2,7 @@
 
 import { createRequire } from 'node:module';
 import EXIT_CODES from '../cli/exit-codes.mts';
+import { metaActionDefinition } from '../cli/command-reference.mts';
 
 for (const stream of [process.stdout, process.stderr]) {
   stream.on('error', (error: NodeJS.ErrnoException) => {
@@ -11,7 +12,7 @@ for (const stream of [process.stdout, process.stderr]) {
 }
 
 const argv = process.argv.slice(2);
-if (argv.length === 1 && (argv[0] === '--version' || argv[0] === '-V')) {
+if (argv.length === 1 && metaActionDefinition('version').aliases.includes(argv[0] ?? '')) {
   const require = createRequire(import.meta.url);
   const metadata = require('../package.json') as { version?: unknown };
   if (typeof metadata.version !== 'string' || !metadata.version) {

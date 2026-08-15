@@ -13,6 +13,7 @@ import {
   type LookupHttpResponse,
 } from './lookup-response-contract.mts';
 
+export const LOOKUP_READABLE_REPORT_SCHEMA = 'whoisleuth.lookup-readable-report';
 export const LOOKUP_READABLE_REPORT_VERSION = 2;
 export const MAX_LOOKUP_READABLE_REPORT_BYTES = 64 * 1024;
 
@@ -479,7 +480,7 @@ function formatNetworkIdentifierReadableReport(
   appendReadableField(lines, 'Generated', generatedAt);
   appendReadableField(lines, 'Generator', typeof applicationVersion === 'string' ? `WHOISleuth ${applicationVersion}` : 'WHOISleuth');
   appendReadableField(lines, 'Project', WHOISLEUTH_SOURCE_REPOSITORY_URL);
-  appendReadableField(lines, 'Report contract', `whoisleuth.lookup-readable-report v${LOOKUP_READABLE_REPORT_VERSION}`);
+  appendReadableField(lines, 'Report contract', `${LOOKUP_READABLE_REPORT_SCHEMA} v${LOOKUP_READABLE_REPORT_VERSION}`);
   lines.push('', '## Query');
   appendReadableField(lines, 'Submitted', submitted);
   appendReadableField(lines, 'Type', type === 'asn' ? 'ASN' : type.toUpperCase());

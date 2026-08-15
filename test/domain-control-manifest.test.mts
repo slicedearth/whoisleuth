@@ -73,7 +73,7 @@ describe('domain control manifests', () => {
     assert.deepEqual(left.entries[0]?.caa, ['0 issue ca.example']);
     assert.deepEqual(left.entries[0]?.ds, ['12345 13 2 abcdef']);
     assert.equal(left.integrity.digestSha256, right.integrity.digestSha256);
-    assert.equal(verifyDomainControlManifest(left), left);
+    assert.deepEqual(verifyDomainControlManifest(left), left);
   });
 
   it('canonicalises structured and presentation-form MX, CAA, and DS records identically', () => {

@@ -17,7 +17,13 @@ const QUALIFYING_CATEGORIES = new Set(['phishing', 'malware']);
 // malware datasets share one publisher family and therefore cannot corroborate
 // one another by themselves.
 
-import { normalizeExplicitIsoTimestamp } from './observation.mts';
+import { normalizeExplicitIsoTimestamp } from '../packages/evidence/observation.mts';
+import { canonicalRegistrableDomain } from './registrable-domain.mts';
+import {
+  THREAT_INTELLIGENCE_CONTRACT_VERSION,
+  THREAT_INTELLIGENCE_ENVELOPE_VERSION,
+  THREAT_INTELLIGENCE_SCHEMA,
+} from './threat-intelligence-types.mts';
 const PUBLISHER_FAMILIES: Readonly<Record<string, string>> = Object.freeze({
   urlscan_search: 'archived-scan-publisher',
   urlhaus_host: 'community-malware-publisher',
@@ -54,15 +60,21 @@ function timestamp(value: unknown): number | null {
   return normalized ? Date.parse(normalized) : null;
 }
 
-function providerEvidence(value: unknown): ProviderRiskEvidence | null {
+function providerEvidence(value: unknown, expectedDomain: string): ProviderRiskEvidence | null {
   const provider = record(value);
   const identity = record(provider?.provider);
   const observation = record(provider?.observation);
+  const target = record(provider?.target);
   const providerId = typeof identity?.id === 'string' ? identity.id : '';
   const publisherFamily = Object.hasOwn(PUBLISHER_FAMILIES, providerId)
     ? PUBLISHER_FAMILIES[providerId]
     : null;
-  if (!publisherFamily
+  if (provider?.schema !== THREAT_INTELLIGENCE_SCHEMA
+    || provider.version !== THREAT_INTELLIGENCE_CONTRACT_VERSION
+    || target?.type !== 'domain'
+    || target.exposure !== 'registrable_domain'
+    || target.value !== expectedDomain
+    || !publisherFamily
     || typeof provider?.state !== 'string'
     || !POSITIVE_STATES.has(provider.state)
     || !Array.isArray(provider.findings)) return null;
@@ -73,8 +85,11 @@ function providerEvidence(value: unknown): ProviderRiskEvidence | null {
   for (const item of provider.findings.slice(0, MAX_FINDINGS_PER_PROVIDER)) {
     const finding = record(item);
     if (!finding || typeof finding.category !== 'string' || !QUALIFYING_CATEGORIES.has(finding.category)) continue;
+    const firstObservedAt = timestamp(finding.firstObservedAt);
+    const lastObservedAt = timestamp(finding.lastObservedAt);
+    if (firstObservedAt !== null && lastObservedAt !== null && firstObservedAt > lastObservedAt) continue;
     qualifyingFindings += 1;
-    const candidate = timestamp(finding.lastObservedAt) ?? timestamp(finding.firstObservedAt);
+    const candidate = lastObservedAt ?? firstObservedAt;
     if (candidate !== null && (latestFindingAt === null || candidate > latestFindingAt)) latestFindingAt = candidate;
   }
   if (!qualifyingFindings) return null;
@@ -93,12 +108,20 @@ function providerEvidence(value: unknown): ProviderRiskEvidence | null {
   };
 }
 
-export function calibrateExternalIntelligenceRisk(value: unknown): ExternalIntelligenceCalibration {
+export function calibrateExternalIntelligenceRisk(
+  value: unknown,
+  expectedDomainValue: unknown,
+): ExternalIntelligenceCalibration {
   const envelope = record(value);
-  const providers = Array.isArray(envelope?.providers) ? envelope.providers.slice(0, MAX_PROVIDERS) : [];
+  const expectedDomain = canonicalRegistrableDomain(expectedDomainValue);
+  const providers = expectedDomain
+    && envelope?.version === THREAT_INTELLIGENCE_ENVELOPE_VERSION
+    && Array.isArray(envelope.providers)
+    ? envelope.providers.slice(0, MAX_PROVIDERS)
+    : [];
   const byProvider = new Map<string, ProviderRiskEvidence>();
   for (const item of providers) {
-    const evidence = providerEvidence(item);
+    const evidence = providerEvidence(item, expectedDomain ?? '');
     if (!evidence || byProvider.has(evidence.providerId)) continue;
     byProvider.set(evidence.providerId, evidence);
   }

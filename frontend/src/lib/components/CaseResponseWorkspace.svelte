@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tick } from 'svelte';
   import {
     CASE_ACTION_STATES,
     CASE_ACTION_TYPES,
@@ -35,10 +36,12 @@
   let {
     record,
     onsaved,
+    oncommitted,
     onmessage,
   }: {
     record: CaseRecord;
     onsaved: () => void | Promise<void>;
+    oncommitted: (cases: CaseRecord[]) => void;
     onmessage: (message: string) => void;
   } = $props();
 
@@ -108,6 +111,7 @@
     security_txt: '',
   });
   let packetBusy = $state(false);
+  let mutationBusy = $state(false);
   const reviewNow = new Date().toISOString();
   const actionSummary = $derived(buildCaseActionOutcomeSummary(record.actions, reviewNow));
   const packetPreflight = $derived(buildCaseResponsePreflight(record, packetInput(), reviewNow));
@@ -135,18 +139,69 @@
     return `${count} ${singular}${count === 1 ? '' : 's'}`;
   }
 
-  async function persist(patch: Parameters<typeof editCase>[1], success: string) {
+  function assertionItemId(id: string): string {
+    return `case-assertion-${record.id}-${id}`;
+  }
+
+  function prunedNote(pruned: number): string {
+    return pruned ? ` Pruned ${pruned} old evidence snapshot${pruned === 1 ? '' : 's'} to stay within storage.` : '';
+  }
+
+  async function reconcileCommitted(
+    committed: Awaited<ReturnType<typeof editCase>>,
+    success: string,
+  ): Promise<void> {
     try {
-      const { pruned } = await editCase(record.id, patch);
       await onsaved();
-      onmessage(`${success}${pruned ? ` Pruned ${pruned} old evidence snapshot${pruned === 1 ? '' : 's'} to stay within storage.` : ''}`);
-    } catch (cause) {
-      onmessage(cause instanceof Error ? cause.message : 'Could not update the case response record.');
+    } catch {
+      try {
+        oncommitted(committed.cases);
+      } catch {
+        onmessage(`${success} The change was saved, but Cases could not be reread or reconciled in the current view. Reload before recording another response.${prunedNote(committed.pruned)}`);
+        return;
+      }
+      onmessage(`${success} The change was saved, but Cases could not be reread. The complete committed Case snapshot is shown locally; reload to retry the browser-local read.${prunedNote(committed.pruned)}`);
+      return;
+    }
+    onmessage(`${success}${prunedNote(committed.pruned)}`);
+  }
+
+  async function persist(
+    patch: Parameters<typeof editCase>[1],
+    success: string,
+    focusFallback: (() => HTMLElement | null) | null = null,
+  ): Promise<boolean> {
+    if (mutationBusy) return false;
+    const focusTarget = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+    mutationBusy = true;
+    try {
+      let committed: Awaited<ReturnType<typeof editCase>>;
+      try {
+        committed = await editCase(record.id, patch);
+      } catch (cause) {
+        onmessage(cause instanceof Error ? cause.message : 'Could not update the case response record.');
+        return false;
+      }
+      await reconcileCommitted(committed, success);
+      return true;
+    } finally {
+      mutationBusy = false;
+      await tick();
+      const activeTarget = document.activeElement;
+      const focusWasDisplaced = activeTarget === null
+        || activeTarget === document.body
+        || activeTarget === document.documentElement;
+      if (activeTarget === focusTarget || focusWasDisplaced) {
+        const restoreTarget = focusTarget?.isConnected ? focusTarget : focusFallback?.();
+        if (restoreTarget?.isConnected) restoreTarget.focus({ preventScroll: true });
+      }
     }
   }
 
   async function addPin() {
-    await persist({
+    if (!await persist({
       evidencePin: {
         label: pinLabel,
         value: pinValue,
@@ -155,27 +210,27 @@
         completeness: pinCompleteness,
         limitations: list(pinLimitations),
       },
-    }, `Pinned analyst-selected evidence for ${record.domain}.`);
+    }, `Pinned analyst-selected evidence for ${record.domain}.`)) return;
     pinLabel = '';
     pinValue = '';
     pinLimitations = '';
   }
 
   async function addDecision() {
-    await persist({
+    if (!await persist({
       decision: {
         summary: decisionSummary,
         rationale: decisionRationale,
         evidencePinIds: decisionPinIds,
       },
-    }, `Recorded an analyst decision for ${record.domain}.`);
+    }, `Recorded an analyst decision for ${record.domain}.`)) return;
     decisionSummary = '';
     decisionRationale = '';
     decisionPinIds = [];
   }
 
   async function addAssertion() {
-    await persist({
+    if (!await persist({
       assertion: {
         kind: assertionKind,
         statement: assertionStatement,
@@ -183,7 +238,7 @@
         evidenceRelations: assertionEvidenceRelations,
         state: assertionState,
       },
-    }, `Recorded a structured analyst assertion for ${record.domain}.`);
+    }, `Recorded a structured analyst assertion for ${record.domain}.`)) return;
     assertionKind = 'hypothesis';
     assertionStatement = '';
     assertionRationale = '';
@@ -203,24 +258,28 @@
   }
 
   async function setAssertionState(id: string, state: string) {
-    await persist({ assertionUpdate: { id, state } }, `Updated the analyst assertion for ${record.domain}.`);
+    await persist(
+      { assertionUpdate: { id, state } },
+      `Updated the analyst assertion for ${record.domain}.`,
+      () => document.getElementById(assertionItemId(id)),
+    );
   }
 
   async function addTrailEvent() {
-    await persist({
+    if (!await persist({
       trailEvent: {
         kind: trailKind,
         summary: trailSummary,
         target: trailTarget,
       },
-    }, `Recorded a manual investigation step for ${record.domain}.`);
+    }, `Recorded a manual investigation step for ${record.domain}.`)) return;
     trailKind = 'pivot';
     trailSummary = '';
     trailTarget = '';
   }
 
   async function addSighting() {
-    await persist({
+    if (!await persist({
       sighting: {
         state: sightingState,
         category: sightingCategory,
@@ -230,7 +289,7 @@
         evidencePinId: sightingEvidencePinId || null,
         limitations: list(sightingLimitations),
       },
-    }, `Recorded a source-qualified sighting for ${record.domain}.`);
+    }, `Recorded a source-qualified sighting for ${record.domain}.`)) return;
     sightingLimitations = '';
   }
 
@@ -283,7 +342,7 @@
     const patch = selectedActionId
       ? { actionUpdate: { id: selectedActionId, ...actionInput() } }
       : { action: actionInput() };
-    await persist(patch, `${selectedActionId ? 'Updated' : 'Recorded'} a case action for ${record.domain}.`);
+    if (!await persist(patch, `${selectedActionId ? 'Updated' : 'Recorded'} a case action for ${record.domain}.`)) return;
     clearAction();
   }
 
@@ -412,7 +471,7 @@
       </div>
       <label class="field">Fact<textarea bind:value={pinValue} maxlength="1000" rows="2" required></textarea></label>
       <label class="field">Limitations <small>one per line</small><textarea bind:value={pinLimitations} maxlength="2000" rows="2"></textarea></label>
-      <button class="btn" type="submit">Pin evidence</button>
+      <button class="btn" type="submit" disabled={mutationBusy}>Pin evidence</button>
     </form>
     {#if record.evidencePins.length}
       <ol class="records">{#each [...record.evidencePins].reverse() as pin}<li><strong>{pin.label}</strong><p>{pin.value}</p><small>{pin.source} · {pin.completeness} · {pin.observedAt}</small>{#if pin.limitations.length}<small>Limits: {pin.limitations.join('; ')}</small>{/if}</li>{/each}</ol>
@@ -432,7 +491,7 @@
         {#if record.evidencePins.length}<label class="field">Supporting evidence pin<select bind:value={sightingEvidencePinId}><option value="">No pin selected</option>{#each record.evidencePins as pin}<option value={pin.id}>{pin.label}</option>{/each}</select></label>{/if}
       </div>
       <label class="field">Limitations <small>one per line</small><textarea bind:value={sightingLimitations} maxlength="2000" rows="2"></textarea></label>
-      <button class="btn" type="submit">Record sighting</button>
+      <button class="btn" type="submit" disabled={mutationBusy}>Record sighting</button>
     </form>
     {#if record.sightings.length}
       <ol class="records">{#each [...record.sightings].reverse() as sighting}<li><strong>{sighting.state.replaceAll('_', ' ')} · {sighting.category}</strong><p>{sighting.source}</p><small>{sighting.sourceClass} source · {sighting.completeness} · {sighting.observedAt}</small>{#if sighting.limitations.length}<small>Limits: {sighting.limitations.join('; ')}</small>{/if}</li>{/each}</ol>
@@ -473,7 +532,7 @@
       {#if record.evidencePins.length}
         <fieldset class="pin-references"><legend>Supporting evidence pins</legend>{#each record.evidencePins as pin}<label class="choice"><input type="checkbox" checked={decisionPinIds.includes(pin.id)} onchange={(event) => decisionPinIds = event.currentTarget.checked ? [...decisionPinIds, pin.id] : decisionPinIds.filter((id) => id !== pin.id)}><span>{pin.label}</span></label>{/each}</fieldset>
       {/if}
-      <button class="btn" type="submit">Record decision</button>
+      <button class="btn" type="submit" disabled={mutationBusy}>Record decision</button>
     </form>
     {#if record.decisions.length}
       <ol class="records">{#each [...record.decisions].reverse() as decision}<li><strong>{decision.summary}</strong><p>{decision.rationale}</p><small>{decision.createdAt}{decision.evidencePinIds.length ? ` · ${decision.evidencePinIds.length} supporting pin${decision.evidencePinIds.length === 1 ? '' : 's'}` : ''}</small></li>{/each}</ol>
@@ -492,14 +551,14 @@
       {#if record.evidencePins.length}
         <fieldset class="pin-references"><legend>Evidence relationship matrix</legend><p class="notice">Classify how each selected observation relates to this assertion. Unlinked evidence remains available in the case.</p>{#each record.evidencePins as pin}<label class="field"><span>{pin.label}</span><select value={assertionEvidenceStance(pin.id)} onchange={(event) => setAssertionEvidenceStance(pin.id, event.currentTarget.value)}><option value="">Not linked</option>{#each CASE_EVIDENCE_RELATION_STANCES as value}<option {value}>{value}</option>{/each}</select></label>{/each}</fieldset>
       {/if}
-      <button class="btn" type="submit">Record assertion</button>
+      <button class="btn" type="submit" disabled={mutationBusy}>Record assertion</button>
     </form>
     {#if record.assertions.length}
-      <ol class="records">{#each [...record.assertions].reverse() as assertion}<li><strong>{assertion.provenance ? 'external import' : assertion.kind.replaceAll('_', ' ')} · {assertion.state}</strong><p>{assertion.statement}</p>{#if assertion.rationale}<p>{assertion.rationale}</p>{/if}{#if assertion.provenance}<small>{assertion.provenance.format.toUpperCase()} · {assertion.provenance.sourceName}{assertion.provenance.publisher ? ` · ${assertion.provenance.publisher}` : ''}{assertion.provenance.externalId ? ` · ${assertion.provenance.externalId}` : ''}</small><small>File SHA-256 {assertion.provenance.sourceDigestSha256}{assertion.provenance.observedAt ? ` · observed ${assertion.provenance.observedAt}` : ''}</small>{#if assertion.provenance.labels.length || assertion.provenance.markings.length}<small>{[...assertion.provenance.labels, ...assertion.provenance.markings].join(' · ')}</small>{/if}{/if}{#if assertion.evidenceRelations?.length}<small>{assertion.evidenceRelations.filter((item) => item.stance === 'supports').length} supporting · {assertion.evidenceRelations.filter((item) => item.stance === 'contradicts').length} contradicting · {assertion.evidenceRelations.filter((item) => item.stance === 'unresolved').length} unresolved evidence relationship{assertion.evidenceRelations.length === 1 ? '' : 's'}</small>{:else}<small>updated {assertion.updatedAt}{assertion.evidencePinIds.length ? ` · ${assertion.evidencePinIds.length} linked pin${assertion.evidencePinIds.length === 1 ? '' : 's'}` : ''}</small>{/if}{#if assertion.state === 'open'}<button class="btn small" type="button" onclick={() => void setAssertionState(assertion.id, 'resolved')}>Mark resolved</button>{/if}</li>{/each}</ol>
+      <ol class="records">{#each [...record.assertions].reverse() as assertion}<li id={assertionItemId(assertion.id)} tabindex="-1"><strong>{assertion.provenance ? 'external import' : assertion.kind.replaceAll('_', ' ')} · {assertion.state}</strong><p>{assertion.statement}</p>{#if assertion.rationale}<p>{assertion.rationale}</p>{/if}{#if assertion.provenance}<small>{assertion.provenance.format.toUpperCase()} · {assertion.provenance.sourceName}{assertion.provenance.publisher ? ` · ${assertion.provenance.publisher}` : ''}{assertion.provenance.externalId ? ` · ${assertion.provenance.externalId}` : ''}</small><small>File SHA-256 {assertion.provenance.sourceDigestSha256}{assertion.provenance.observedAt ? ` · observed ${assertion.provenance.observedAt}` : ''}</small>{#if assertion.provenance.labels.length || assertion.provenance.markings.length}<small>{[...assertion.provenance.labels, ...assertion.provenance.markings].join(' · ')}</small>{/if}{/if}{#if assertion.evidenceRelations?.length}<small>{assertion.evidenceRelations.filter((item) => item.stance === 'supports').length} supporting · {assertion.evidenceRelations.filter((item) => item.stance === 'contradicts').length} contradicting · {assertion.evidenceRelations.filter((item) => item.stance === 'unresolved').length} unresolved evidence relationship{assertion.evidenceRelations.length === 1 ? '' : 's'}</small>{:else}<small>updated {assertion.updatedAt}{assertion.evidencePinIds.length ? ` · ${assertion.evidencePinIds.length} linked pin${assertion.evidencePinIds.length === 1 ? '' : 's'}` : ''}</small>{/if}{#if assertion.state === 'open'}<button class="btn small" type="button" disabled={mutationBusy} onclick={() => void setAssertionState(assertion.id, 'resolved')}>Mark resolved</button>{/if}</li>{/each}</ol>
     {/if}
   </details>
 
-  <CaseInvestigationBranches {record} {onsaved} {onmessage} />
+  <CaseInvestigationBranches {record} {onsaved} {oncommitted} {onmessage} />
 
   <details>
     <summary>Record and review the investigation trail</summary>
@@ -507,7 +566,7 @@
       <label class="field">Manual step type<select bind:value={trailKind}>{#each CASE_MANUAL_TRAIL_KINDS as value}<option {value}>{value}</option>{/each}</select></label>
       <label class="field">What did you do or decide?<textarea bind:value={trailSummary} maxlength="2000" rows="2" required></textarea></label>
       <label class="field">Target or destination <small>optional; do not paste credentials or sensitive query strings</small><input bind:value={trailTarget} maxlength="500"></label>
-      <button class="btn" type="submit">Record manual step</button>
+      <button class="btn" type="submit" disabled={mutationBusy}>Record manual step</button>
     </form>
     {#if investigationTrail.length}
       <ol class="records trail">{#each investigationTrail as item}<li><strong>{item.label}</strong><p>{item.detail}</p><small>{item.createdAt}</small></li>{/each}</ol>
@@ -533,7 +592,7 @@
       <label class="field">Reference<input bind:value={actionReference} maxlength="500" placeholder="Ticket or provider reference"></label>
       <label class="field">Contact limitations <small>one per line</small><textarea bind:value={actionLimitations} maxlength="2000" rows="2"></textarea></label>
       <label class="field">Outcome<textarea bind:value={actionOutcome} maxlength="2000" rows="2"></textarea></label>
-      <div class="actions"><button class="btn" type="submit">{selectedActionId ? 'Update action' : 'Record action'}</button>{#if selectedActionId}<button class="btn" type="button" onclick={clearAction}>Cancel edit</button>{/if}</div>
+      <div class="actions"><button class="btn" type="submit" disabled={mutationBusy}>{mutationBusy ? 'Saving…' : selectedActionId ? 'Update action' : 'Record action'}</button>{#if selectedActionId}<button class="btn" type="button" disabled={mutationBusy} onclick={clearAction}>Cancel edit</button>{/if}</div>
     </form>
     {#if record.actions.length}
       <ol class="records">{#each [...record.actions].reverse() as action}<li><strong>{action.type.replaceAll('_', ' ')} · {action.state.replaceAll('_', ' ')}</strong><p>{action.recipient}</p><small>{action.contactSource} · updated {action.updatedAt}</small>{#if action.outcome}<p>Outcome: {action.outcome}</p>{/if}</li>{/each}</ol>

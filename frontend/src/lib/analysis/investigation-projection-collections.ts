@@ -1,6 +1,7 @@
 import { normalizeDomain } from './case-model.ts';
 import {
   MAX_NAMESERVERS_PER_ROW,
+  RELATIONSHIP_EVIDENCE_SCHEMA,
   RELATIONSHIP_EVIDENCE_VERSION,
 } from './relationship-evidence.ts';
 import type {
@@ -559,7 +560,7 @@ if (relationshipObservationEnvelope?.state === 'ready') {
       .map((entityId) => envelopeEntityIds.get(entityId))
       .filter((entityId): entityId is string => typeof entityId === 'string');
     const evidenceSchema = envelopeObservation.upstreamSchemas.find(
-      (source) => source.schema === 'whoisleuth.relationship-evidence',
+      (source) => source.schema === RELATIONSHIP_EVIDENCE_SCHEMA,
     );
     const projected = addObservation({
       id: stableId(

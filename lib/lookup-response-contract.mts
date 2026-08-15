@@ -8,8 +8,11 @@
 // authority for source-specific fields.
 
 import {
+  THREAT_INTELLIGENCE_CONTRACT_VERSION,
   THREAT_INTELLIGENCE_CATEGORIES,
+  THREAT_INTELLIGENCE_ENVELOPE_VERSION,
   THREAT_INTELLIGENCE_RESULT_STATES,
+  THREAT_INTELLIGENCE_SCHEMA,
   type ThreatIntelligenceResultState,
 } from './threat-intelligence-types.mts';
 import {
@@ -23,8 +26,9 @@ import {
   MAX_OBSERVATION_LIMITATIONS,
   MAX_OBSERVATION_LIMITATION_LENGTH,
   normalizeExplicitIsoTimestamp,
-} from './observation.mts';
+} from '../packages/evidence/observation.mts';
 import { assertBoundedJsonStructure } from './bounded-json.mts';
+import { canonicalRegistrableDomain } from './registrable-domain.mts';
 import {
   MAX_LOOKUP_DNS_RECORDS_PER_TYPE,
   MAX_LOOKUP_REVERSE_DNS_PTR_RECORDS,
@@ -305,20 +309,29 @@ function normalizeThreatFinding(value: unknown, providerId: string): JsonObject 
   const tags = Array.isArray(input.tags)
     ? [...new Set(input.tags.slice(0, 40).map((tag) => boundedThreatText(tag, 80)).filter((tag): tag is string => tag !== null))].slice(0, 20)
     : [];
+  const firstObservedAt = threatTimestamp(input.firstObservedAt);
+  const lastObservedAt = threatTimestamp(input.lastObservedAt);
+  if (firstObservedAt && lastObservedAt && Date.parse(firstObservedAt) > Date.parse(lastObservedAt)) return null;
   return {
     id: boundedThreatText(input.id, 160),
     category,
     providerVerdict: boundedThreatText(input.providerVerdict, 120),
     detail: boundedThreatText(input.detail),
-    firstObservedAt: threatTimestamp(input.firstObservedAt),
-    lastObservedAt: threatTimestamp(input.lastObservedAt),
+    firstObservedAt,
+    lastObservedAt,
     referenceUrl,
     tags,
   };
 }
 
-function normalizeThreatProvider(value: unknown): JsonObject | null {
+function normalizeThreatProvider(value: unknown, expectedDomain: string): JsonObject | null {
   const input = record(value);
+  if (input.schema !== THREAT_INTELLIGENCE_SCHEMA
+    || input.version !== THREAT_INTELLIGENCE_CONTRACT_VERSION) return null;
+  const target = record(input.target);
+  if (target.type !== 'domain'
+    || target.exposure !== 'registrable_domain'
+    || target.value !== expectedDomain) return null;
   const identity = record(input.provider);
   const providerId = boundedThreatText(identity.id, 80);
   const providerDefinition = providerId ? THREAT_INTELLIGENCE_PROVIDERS[providerId] : null;
@@ -341,9 +354,16 @@ function normalizeThreatProvider(value: unknown): JsonObject | null {
         .slice(0, MAX_THREAT_INTELLIGENCE_FINDINGS)
     : [];
   return {
+    schema: THREAT_INTELLIGENCE_SCHEMA,
+    version: THREAT_INTELLIGENCE_CONTRACT_VERSION,
     provider: {
       id: providerId,
       label: providerDefinition.label,
+    },
+    target: {
+      type: 'domain',
+      value: expectedDomain,
+      exposure: 'registrable_domain',
     },
     state,
     detail: boundedThreatText(input.detail),
@@ -896,6 +916,27 @@ function validAvailabilityScalars(value: JsonObject): boolean {
     && validOptionalStringArray(value.mxHosts, MAX_LOOKUP_DNS_RECORDS_PER_TYPE, 253);
 }
 
+function validLookupDomainIdentity(value: JsonObject): boolean {
+  if (value.type !== 'domain') return true;
+  const availability = record(value.availability);
+  const queryDomain = canonicalRegistrableDomain(value.query);
+  if (!queryDomain) return false;
+  if (availability.domain !== undefined && availability.domain !== null
+    && (canonicalRegistrableDomain(availability.domain) !== queryDomain
+      || normalizedDomain(availability.domain) !== queryDomain)) return false;
+
+  if (value.inputHostname !== undefined
+    && canonicalRegistrableDomain(value.inputHostname) !== queryDomain) return false;
+  if (value.registrableDomain !== undefined
+    && normalizedDomain(value.registrableDomain) !== queryDomain) return false;
+
+  if (value.isSubdomain !== undefined) {
+    const inputHostname = normalizedDomain(value.inputHostname ?? value.query);
+    if (!inputHostname || value.isSubdomain !== (inputHostname !== queryDomain)) return false;
+  }
+  return true;
+}
+
 function optionalTlsNameWithin(value: JsonValue | undefined): boolean {
   if (value === undefined || value === null) return true;
   if (!isJsonObject(value)) return false;
@@ -1036,6 +1077,7 @@ function parseLookupHttpResponse(value: unknown): LookupResponseParseResult {
   }
   const lookupResponse = value as LookupHttpResponse;
   if (!validAvailabilityScalars(value.availability)
+    || !validLookupDomainIdentity(value)
     || !validRegistrationEvidence(lookupResponse)) return invalidLookupResponse();
   if (value.availability.http !== undefined && !validNormalizedHttpEvidence(value.availability.http)) {
     return invalidLookupResponse();
@@ -1196,12 +1238,18 @@ function createLookupViewModel(response: LookupHttpResponse | null): LookupViewM
   const registryInsights = record(response?.registryInsights);
   const securityTxt = record(response?.securityTxt);
   const sslbl = record(response?.sslbl);
-  const threatIntelligence = record(response?.threatIntelligence);
+  const rawThreatIntelligence = record(response?.threatIntelligence);
+  const expectedThreatDomain = response?.type === 'domain'
+    ? canonicalRegistrableDomain(response.registrableDomain)
+      ?? canonicalRegistrableDomain(availability.domain)
+    : null;
   const seenThreatIntelligenceProviders = new Set<string>();
-  const providers = Array.isArray(threatIntelligence.providers)
-    ? threatIntelligence.providers
+  const providers = expectedThreatDomain
+    && rawThreatIntelligence.version === THREAT_INTELLIGENCE_ENVELOPE_VERSION
+    && Array.isArray(rawThreatIntelligence.providers)
+    ? rawThreatIntelligence.providers
         .slice(0, MAX_THREAT_INTELLIGENCE_PROVIDERS * 2)
-        .map(normalizeThreatProvider)
+        .map((provider) => normalizeThreatProvider(provider, expectedThreatDomain))
         .filter((provider): provider is JsonObject => provider !== null)
         .filter((provider) => {
           const providerId = String(record(provider.provider).id || '');
@@ -1211,6 +1259,9 @@ function createLookupViewModel(response: LookupHttpResponse | null): LookupViewM
         })
         .slice(0, MAX_THREAT_INTELLIGENCE_PROVIDERS)
     : [];
+  const threatIntelligence: JsonObject = providers.length
+    ? { version: THREAT_INTELLIGENCE_ENVELOPE_VERSION, providers }
+    : {};
   const dnsEvidence = record(availability.dns);
   const httpEvidence = record(availability.http);
   const httpResponse = record(httpEvidence.response);

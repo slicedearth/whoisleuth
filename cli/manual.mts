@@ -1,14 +1,4 @@
-import type { CliCommand } from './arguments.mts';
-
-type CommandDetail = Readonly<{
-  description: string;
-  example: string;
-  boundary: string;
-}>;
-type CommandCollection = Readonly<{
-  mode: 'offline' | 'network';
-  scope: string;
-}>;
+import type { CliCommand, CommandCollection, CommandDetail } from './command-reference.mts';
 
 function roffText(value: string): string {
   return value
@@ -44,7 +34,7 @@ Human-readable output is the default. Versioned JSON and JSONL are available whe
 .SH EXIT STATUS
 0 indicates command completion, 2 invalid usage, 3 a collection or comparison failure, 4 an explicitly detected partial result, 70 an internal bootstrap failure, 130 analyst cancellation, and 143 service termination.
 .SH PRIVACY
-Network commands disclose the target to the directly queried upstream services. Offline commands do not make network requests. Output files are created with private permissions and are never uploaded by the CLI. Lookup --save-lookup writes the exact completed versioned document only after the browser closes normally, refuses existing paths, and can retain normalized evidence omitted from the terminal panels.
+Network commands disclose the target to the directly queried upstream services. Offline commands do not make network requests. Output files are created with private permissions and are never uploaded by the CLI. Lookup --save-lookup writes the exact completed versioned document only after the browser closes normally, refuses existing paths, and can retain normalised evidence omitted from the terminal panels.
 .SH LICENSE
 AGPL-3.0-only. Copyright 2026 slicedearth.
 .SH SEE ALSO

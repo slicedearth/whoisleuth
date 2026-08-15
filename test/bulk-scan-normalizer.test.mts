@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
-import { normalizeBulkScanResult } from '../frontend/src/lib/analysis/bulk-scan-normalizer.ts';
+import {
+  canonicalBulkTargets,
+  normalizeBulkScanResult,
+} from '../frontend/src/lib/analysis/bulk-scan-normalizer.ts';
 import { toBulkSessionResult } from '../frontend/src/lib/analysis/bulk-result-model.ts';
 import { normalizeBulkSessionResult } from '../frontend/src/lib/analysis/bulk-session-model.ts';
 import type { CompactLookupHttpResponse } from '../frontend/src/lib/analysis/lookup-response.ts';
@@ -41,6 +44,7 @@ describe('Bulk scan normalizer', () => {
     } as unknown as CompactLookupHttpResponse;
 
     const result = normalizeBulkScanResult(body, {
+      targetDomain: 'candidate.example',
       mode: 'deep',
       profile: null,
       candidate: {
@@ -106,6 +110,7 @@ describe('Bulk scan normalizer', () => {
       },
     } as const satisfies CompactLookupHttpResponse;
     const result = normalizeBulkScanResult(body, {
+      targetDomain: 'candidate.invalid',
       mode: 'deep',
       profile: null,
       profileSourceState: 'unavailable',
@@ -138,5 +143,72 @@ describe('Bulk scan normalizer', () => {
     assert.equal(persisted.pageBaselineMatch, null);
     assert.equal(persisted.profileContext.sourceState, 'unavailable');
     assert.match(persisted.profileContext.limitation, /remain inconclusive/u);
+  });
+
+  test('canonicalises and de-duplicates registrable collection targets before requests', () => {
+    assert.deepEqual(canonicalBulkTargets([
+      'BÜCHER.example.',
+      'xn--bcher-kva.example',
+      'portal.example.test',
+      'example.test',
+      'BAD_VALUE',
+    ]), [
+      'xn--bcher-kva.example',
+      'example.test',
+      'bad_value',
+    ]);
+  });
+
+  test('uses the validated registrable evidence target as every Bulk row identity', () => {
+    const body = {
+      availability: {
+        applicable: true,
+        domain: 'example.test',
+        state: 'registered',
+        confidence: 'high',
+      },
+      diagnostics: {
+        version: 7,
+        rdap: { status: 'complete' },
+        whois: { status: 'skipped' },
+        availability: { status: 'complete' },
+      },
+    } as const satisfies CompactLookupHttpResponse;
+
+    const result = normalizeBulkScanResult(body, {
+      targetDomain: 'example.test',
+      mode: 'fast',
+      profile: null,
+      candidate: null,
+    });
+
+    assert.equal(body.availability.domain, 'example.test');
+    assert.equal(result.domain, 'example.test');
+    assert.equal(result.saved.domain, 'example.test');
+    assert.equal(toBulkSessionResult(result).domain, 'example.test');
+  });
+
+  test('rejects a result whose registrable evidence target differs from the queued target', () => {
+    const body = {
+      availability: {
+        applicable: true,
+        domain: 'example.test',
+        state: 'registered',
+        confidence: 'high',
+      },
+      diagnostics: {
+        version: 7,
+        rdap: { status: 'complete' },
+        whois: { status: 'skipped' },
+        availability: { status: 'complete' },
+      },
+    } as const satisfies CompactLookupHttpResponse;
+
+    assert.throws(() => normalizeBulkScanResult(body, {
+      targetDomain: 'other.test',
+      mode: 'fast',
+      profile: null,
+      candidate: null,
+    }), /does not match its registrable-domain evidence/u);
   });
 });

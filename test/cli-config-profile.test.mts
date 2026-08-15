@@ -75,6 +75,26 @@ describe('CLI configuration profiles', () => {
     );
   });
 
+  test('keeps help and version ahead of configuration reads and default injection', async () => {
+    const invocations = [
+      ['lookup', '--help', '--profile', 'careful'],
+      ['registry-support', '-h', '--config', '/tmp/cli-profile.json'],
+      ['--version', '--profile', 'careful'],
+      ['-V', '--config', '/tmp/cli-profile.json'],
+    ];
+    for (const invocation of invocations) {
+      let reads = 0;
+      assert.deepEqual(await resolveCliProfileArguments(invocation, {
+        readConfig: async () => {
+          reads += 1;
+          return configuration(['--no-color', '--fast', '--observer', 'workstation-a']);
+        },
+      }), invocation);
+      assert.equal(reads, 0, invocation.join(' '));
+      assert.throws(() => parseCliArguments(invocation), /Help accepts|does not accept other arguments/iu);
+    }
+  });
+
   test('requires a valid named profile and matching version', async () => {
     await assert.rejects(() => resolveCliProfileArguments(['lookup', '--profile', 'missing', 'example.test'], { readConfig: async () => configuration() }), /was not found/iu);
     assert.throws(() => parseProfileDocument(JSON.stringify({ schema: CLI_CONFIG_SCHEMA, version: 2, profiles: {} })), /version 1/iu);

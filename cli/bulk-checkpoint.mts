@@ -4,7 +4,7 @@ import { lstat } from 'node:fs/promises';
 import { recordOrNull } from '../lib/bounded-contract-normalizers.mts';
 import { readBoundedRegularTextFile } from '../lib/bounded-file.mts';
 import { scanBoundedJson } from '../lib/bounded-json.mts';
-import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from '../lib/observation.mts';
+import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from '../packages/evidence/observation.mts';
 import type { ClassifiedQuery } from '../lib/classify.mts';
 import type { BulkLookupResult } from './bulk.mts';
 import { boundedCliInputError, CliUsageError } from './errors.mts';

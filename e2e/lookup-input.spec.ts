@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures';
-import { boundingBox, expandLookupFamilies, expectNoHorizontalOverflow, holdBrowserLocalReads, readBrowserLocalCollection } from './helpers';
+import { boundingBox, expandLookupFamilies, expectNoHorizontalOverflow, holdBrowserLocalReads, lookupDomainIdentity, readBrowserLocalCollection } from './helpers';
 import { TEST_SITE_PASSWORD } from './constants';
 import { readFile } from 'node:fs/promises';
 import { ACTIVE_PROFILE_KEY } from '../frontend/src/lib/brand-profiles';
@@ -419,15 +419,14 @@ test('effective same-route URL changes invalidate held work while task and hash 
   gateFor('stale-route.example.test');
   await page.route('**/api/lookup?*', async (route) => {
     const target = new URL(route.request().url()).searchParams.get('q') || '';
+    const identity = lookupDomainIdentity(target);
     await gates.get(target);
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
-        query: target,
-        type: 'domain',
-        registrableDomain: target,
-        availability: { applicable: true, state: 'registered', confidence: 'high', domain: target },
+        ...identity,
+        availability: { applicable: true, state: 'registered', confidence: 'high', domain: identity.registrableDomain },
         rdap: { parsed: {} },
         whois: { parsed: {}, chain: [] },
         diagnostics: { rdap: { status: 'success' }, whois: { status: 'complete' }, availability: { status: 'complete' } },
@@ -500,6 +499,7 @@ test(`query ${action} invalidates a response while browser-local case context is
   });
   await page.route('**/api/lookup?*', async (route) => {
     const target = new URL(route.request().url()).searchParams.get('q') || '';
+    const identity = lookupDomainIdentity(target);
     await page.evaluate(() => {
       const state = window as typeof window & {
         __delayNextCaseRead?: boolean;
@@ -512,10 +512,8 @@ test(`query ${action} invalidates a response while browser-local case context is
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
-        query: target,
-        type: 'domain',
-        registrableDomain: target,
-        availability: { applicable: true, state: 'registered', confidence: 'high', domain: target },
+        ...identity,
+        availability: { applicable: true, state: 'registered', confidence: 'high', domain: identity.registrableDomain },
         rdap: { parsed: {} },
         whois: { parsed: {}, chain: [] },
         diagnostics: { rdap: { status: 'success' }, whois: { status: 'complete' }, availability: { status: 'complete' } },
@@ -554,14 +552,13 @@ test(`query ${action} invalidates a response while browser-local case context is
 test('a completed Case action cannot publish beneath a replacement Lookup', async ({ page }) => {
   await page.route('**/api/lookup?*', async (route) => {
     const target = new URL(route.request().url()).searchParams.get('q') || '';
+    const identity = lookupDomainIdentity(target);
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
-        query: target,
-        type: 'domain',
-        registrableDomain: target,
-        availability: { applicable: true, state: 'registered', confidence: 'high', domain: target, deepScanComplete: true },
+        ...identity,
+        availability: { applicable: true, state: 'registered', confidence: 'high', domain: identity.registrableDomain, deepScanComplete: true },
         rdap: { parsed: {} },
         whois: { parsed: {}, chain: [] },
         diagnostics: { rdap: { status: 'success' }, whois: { status: 'complete' }, availability: { status: 'complete' } },
@@ -570,23 +567,23 @@ test('a completed Case action cannot publish beneath a replacement Lookup', asyn
   });
 
   const query = page.locator('#query');
-  await query.fill('case-action-a.example.test');
+  await query.fill('case-action-a.test');
   await page.getByRole('button', { name: 'Run lookup' }).click();
-  await expect(page.getByRole('heading', { name: 'case-action-a.example.test' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'case-action-a.test' })).toBeVisible();
   await expandLookupFamilies(page);
   await holdBrowserLocalReads(page, 2_500, '.case-body > button.primary');
 
-  await query.fill('case-action-b.example.test');
+  await query.fill('case-action-b.test');
   await page.getByRole('button', { name: 'Run lookup' }).click();
-  await expect(page.getByRole('heading', { name: 'case-action-b.example.test' })).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole('heading', { name: 'case-action-b.test' })).toBeVisible({ timeout: 10_000 });
   await expandLookupFamilies(page);
   await expect.poll(async () => (
     await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })
   ).records.map((entry) => String((entry.value as { domain?: unknown }).domain ?? '')), {
     timeout: 10_000,
-  }).toContain('case-action-a.example.test');
-  await expect(page.locator('.case-card')).toContainText('No case for case-action-b.example.test yet.');
-  await expect(page.locator('.case-card')).not.toContainText('case-action-a.example.test');
+  }).toContain('case-action-a.test');
+  await expect(page.locator('.case-card')).toContainText('No case for case-action-b.test yet.');
+  await expect(page.locator('.case-card')).not.toContainText('case-action-a.test');
   await expect(page.getByRole('button', { name: 'Create case' })).toBeEnabled();
 });
 
@@ -777,19 +774,18 @@ test('clears transient Lookup state without an unhandled error when Console logo
 test('does not show a saved Fast result after a same-domain Deep handoff', async ({ page }) => {
   await page.route('**/api/lookup?*', async (route) => {
     const url = new URL(route.request().url());
-    const domain = url.searchParams.get('q') || 'same-depth.example.test';
+    const domain = url.searchParams.get('q') || 'same-depth.test';
+    const identity = lookupDomainIdentity(domain);
     const compact = url.searchParams.get('compact') === '1';
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify(compact ? {
-        availability: { applicable: true, state: 'registered', confidence: 'high', domain, deepScanComplete: true },
+        availability: { applicable: true, state: 'registered', confidence: 'high', domain: identity.registrableDomain, deepScanComplete: true },
         diagnostics: { version: 7, rdap: { status: 'complete' }, whois: { status: 'skipped' }, availability: { status: 'complete' } },
       } : {
-        query: domain,
-        type: 'domain',
-        registrableDomain: domain,
-        availability: { applicable: true, state: 'registered', confidence: 'medium', domain, deepScanComplete: false },
+        ...identity,
+        availability: { applicable: true, state: 'registered', confidence: 'medium', domain: identity.registrableDomain, deepScanComplete: false },
         rdap: { parsed: {}, data: {} },
         whois: { skipped: true, detail: 'WHOIS is omitted in fast mode.' },
         diagnostics: { version: 7, rdap: { status: 'complete' }, whois: { status: 'skipped' }, availability: { status: 'complete' } },
@@ -797,7 +793,7 @@ test('does not show a saved Fast result after a same-domain Deep handoff', async
     });
   });
 
-  const domain = 'same-depth.example.test';
+  const domain = 'same-depth.test';
   await page.locator('#query').fill(domain);
   await page.getByRole('radio', { name: /Fast/u }).check();
   await page.getByRole('button', { name: 'Run lookup' }).click();

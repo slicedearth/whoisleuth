@@ -3,7 +3,7 @@
 // bounds, import merging, and exact serialized-byte accounting.
 
 import { normalizeDomain } from './case-model.ts';
-import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from '../../../../lib/observation.mts';
+import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from '../../../../packages/evidence/observation.mts';
 import { normalizeOpaqueReferenceId } from './opaque-reference-id.ts';
 import { normalizePageBaseline } from './page-baseline.ts';
 import type { PageBaseline } from './page-baseline.ts';

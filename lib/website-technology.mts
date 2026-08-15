@@ -6,7 +6,7 @@
 // retained.
 
 import { analyzeBrowserLibraries } from './browser-library-profile.mts';
-import { createObservation } from './observation.mts';
+import { createObservation } from '../packages/evidence/observation.mts';
 import {
   MAX_STATIC_HTML_CHARS,
   MAX_TAG_LENGTH,

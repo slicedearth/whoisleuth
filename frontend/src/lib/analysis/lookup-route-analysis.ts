@@ -320,7 +320,8 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
   const profileSignals = profileContextReady
     ? matchProfileSignals(String(availability.domain || result?.registrableDomain || ''), availability, profile)
     : { trusted: null, faviconMatch: null, faviconNearMatch: null, reusesOfficialAssets: null };
-  const externalRiskContext = calibrateExternalIntelligenceRisk(threatIntelligence);
+  const caseDomain = String(availability.domain || result?.registrableDomain || '').trim().toLowerCase();
+  const externalRiskContext = calibrateExternalIntelligenceRisk(threatIntelligence, caseDomain);
   const outreach = outreachAction(
     String(availability.domain || result?.registrableDomain || ''),
     (availability.registrant || null) as Contact | null,
@@ -337,7 +338,6 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     + comparison.counts.whois_unavailable
     + comparison.counts.rdap_incomplete
     + comparison.counts.whois_incomplete;
-  const caseDomain = String(availability.domain || result?.registrableDomain || '').trim().toLowerCase();
   const observedPageBaseline = createPageBaseline(caseDomain, availability);
   const pageComparison = comparePageBaselines(profileContextReady ? profile?.pageBaseline : null, observedPageBaseline);
   const pageDisplay = buildLookupPageDisplay({
@@ -533,6 +533,7 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
   const scoredAvailability = {
     ...availability,
     ...profileSignals,
+    domain: caseDomain,
     threatIntelligence,
     mutationTypes: [],
     idnReferenceMatch,

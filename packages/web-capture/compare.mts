@@ -6,7 +6,7 @@ import { hammingDistanceHex, inspectDecodedImage } from '../../lib/perceptual-ha
 import { isValidAsciiHostname } from '../../lib/hostname.mts';
 import { decodeBoundedUtf8, readBoundedRegularFile } from '../../lib/bounded-file.mts';
 import { parseBoundedJson } from '../../lib/bounded-json.mts';
-import { normalizeExplicitIsoTimestamp } from '../../lib/observation.mts';
+import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
 import {
   MAX_WEB_CAPTURE_MANIFEST_BYTES,
   MAX_WEB_CAPTURE_DOM_DIGEST_BYTES,

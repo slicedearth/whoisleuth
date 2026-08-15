@@ -4,7 +4,7 @@
 
 import { normalizeDomain } from './case-model.ts';
 import { normalizeCaaCritical } from './dns-record-normalization.ts';
-import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from '../../../../lib/observation.mts';
+import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from '../../../../packages/evidence/observation.mts';
 
 export const BULK_SESSION_SCHEMA = 'whoisleuth.bulk-sessions';
 export const BULK_SESSION_SCHEMA_VERSION = 4;

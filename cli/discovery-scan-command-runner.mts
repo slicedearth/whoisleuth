@@ -56,6 +56,15 @@ async function runDiscoveryScanCommand(
   context.setEventProgress(eventProgress);
   eventProgress.emit({ event: 'started' });
 
+  let resolverServers: string[] = [];
+  if (args.resolverText) {
+    try {
+      resolverServers = normalizeSelectedDnsResolvers(args.resolverText);
+    } catch (error) {
+      throw new CliUsageError(boundedCliErrorMessage(error, 'Invalid DNS resolver selection'));
+    }
+  }
+
   const { metadata: generationMetadata, result } = await generateDiscoveryCandidates(args, dependencies, context);
   const candidates = result.candidates
     .filter((candidate) => typeof candidate.domain === 'string' && candidate.domain.length > 0)
@@ -72,14 +81,6 @@ async function runDiscoveryScanCommand(
     return EXIT_CODES.SUCCESS;
   }
   const classify = dependencies.classifyQuery || classifyQuery;
-  let resolverServers: string[] = [];
-  if (args.resolverText) {
-    try {
-      resolverServers = normalizeSelectedDnsResolvers(args.resolverText);
-    } catch (error) {
-      throw new CliUsageError(boundedCliErrorMessage(error, 'Invalid DNS resolver selection'));
-    }
-  }
   const allowlist = await readAllowlist(args.allowlistSource, dependencies, context, classify);
   const checkpointWriter = dependencies.createBulkCheckpointWriter || createBulkCheckpointWriter;
   const checkpoint = args.checkpoint

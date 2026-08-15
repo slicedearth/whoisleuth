@@ -1,4 +1,4 @@
-import { normalizeExplicitIsoTimestamp } from './observation.mts';
+import { normalizeExplicitIsoTimestamp } from '../packages/evidence/observation.mts';
 
 const ENCRYPTED_DNS_CONTRACT_SCHEMA = 'whoisleuth.encrypted-dns-adapter';
 const ENCRYPTED_DNS_CONTRACT_VERSION = 1;

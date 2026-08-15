@@ -4,7 +4,7 @@
 
 import { compactWatchlistResults } from './watchlist-history.ts';
 import { normalizeOpportunityModelVersion, normalizeRiskModelVersion } from './scoring.ts';
-import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from '../../../../lib/observation.mts';
+import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from '../../../../packages/evidence/observation.mts';
 
 export const SHORTLIST_SCHEMA = 'whoisleuth.shortlist';
 export const SHORTLIST_SCHEMA_VERSION = 3;

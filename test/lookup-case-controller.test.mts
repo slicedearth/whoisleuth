@@ -70,7 +70,7 @@ describe('Lookup case controller', () => {
       addNote: unused,
       edit: async (_id, value) => {
         patches.push(value);
-        return { record, pruned: 0 };
+        return { record, cases: [record], pruned: 0 };
       },
     };
     const controller = new LookupCaseController(api);
@@ -110,7 +110,7 @@ describe('Lookup case controller', () => {
       addNote: unused,
       edit: async (_id, value) => {
         patches.push(value);
-        return { record, pruned: 0 };
+        return { record, cases: [record], pruned: 0 };
       },
     };
     const controller = new LookupCaseController(api);

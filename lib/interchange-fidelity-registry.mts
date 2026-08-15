@@ -10,6 +10,7 @@ export type InterchangeAssuranceRequirement = 'authenticated_whole_integrity' | 
 
 export type InterchangeArtifactContract = Readonly<{
   id: 'brand_profiles' | 'case_pack' | 'domain_control_passport' | 'encrypted_workspace' | 'legacy_desired_baseline' | 'lookup_claim_passport' | 'lookup_evidence' | 'workspace';
+  compatibilityEntryId: string | null;
   schema: string;
   versions: readonly number[];
   versionField: 'schemaVersion' | 'version';
@@ -28,6 +29,7 @@ const exact = Object.freeze(['domain_identity', 'dns_control_expectations', 'cer
 export const INTERCHANGE_ARTIFACT_CONTRACTS: readonly InterchangeArtifactContract[] = Object.freeze([
   Object.freeze({
     id: 'lookup_claim_passport',
+    compatibilityEntryId: 'export.lookup-claim-passport',
     schema: 'whoisleuth.lookup-claim-passport',
     versions: Object.freeze([1]),
     versionField: 'version',
@@ -42,6 +44,7 @@ export const INTERCHANGE_ARTIFACT_CONTRACTS: readonly InterchangeArtifactContrac
   }),
   Object.freeze({
     id: 'lookup_evidence',
+    compatibilityEntryId: 'export.lookup-evidence',
     schema: LOOKUP_EVIDENCE_SCHEMA,
     versions: Object.freeze([...SUPPORTED_LOOKUP_EVIDENCE_SCHEMA_VERSIONS]),
     versionField: 'schemaVersion',
@@ -56,6 +59,7 @@ export const INTERCHANGE_ARTIFACT_CONTRACTS: readonly InterchangeArtifactContrac
   }),
   Object.freeze({
     id: 'domain_control_passport',
+    compatibilityEntryId: 'export.domain-control-manifest',
     schema: 'whoisleuth.domain-control-manifest',
     versions: Object.freeze([1, 2]),
     versionField: 'version',
@@ -70,6 +74,7 @@ export const INTERCHANGE_ARTIFACT_CONTRACTS: readonly InterchangeArtifactContrac
   }),
   Object.freeze({
     id: 'brand_profiles',
+    compatibilityEntryId: 'export.brand-profiles',
     schema: 'whoisleuth.brand-profiles',
     versions: Object.freeze([2, 3, 4, 5, 6]),
     versionField: 'version',
@@ -84,6 +89,7 @@ export const INTERCHANGE_ARTIFACT_CONTRACTS: readonly InterchangeArtifactContrac
   }),
   Object.freeze({
     id: 'workspace',
+    compatibilityEntryId: 'export.workspace-archive',
     schema: 'whoisleuth.workspace-archive',
     versions: Object.freeze([1, 2, 3, 4, 5]),
     versionField: 'version',
@@ -98,6 +104,7 @@ export const INTERCHANGE_ARTIFACT_CONTRACTS: readonly InterchangeArtifactContrac
   }),
   Object.freeze({
     id: 'encrypted_workspace',
+    compatibilityEntryId: 'export.encrypted-workspace-archive',
     schema: 'whoisleuth.encrypted-workspace-archive',
     versions: Object.freeze([1]),
     versionField: 'version',
@@ -112,6 +119,7 @@ export const INTERCHANGE_ARTIFACT_CONTRACTS: readonly InterchangeArtifactContrac
   }),
   Object.freeze({
     id: 'case_pack',
+    compatibilityEntryId: 'export.cli-case-pack',
     schema: 'whoisleuth.cli.case-pack',
     versions: Object.freeze([1, 2]),
     versionField: 'version',
@@ -126,6 +134,7 @@ export const INTERCHANGE_ARTIFACT_CONTRACTS: readonly InterchangeArtifactContrac
   }),
   Object.freeze({
     id: 'legacy_desired_baseline',
+    compatibilityEntryId: null,
     schema: 'whoisleuth.desired-posture-baseline',
     versions: Object.freeze([1]),
     versionField: 'schemaVersion',

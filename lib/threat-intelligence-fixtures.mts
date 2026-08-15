@@ -8,7 +8,7 @@ import type {
   CuratedConnectorResult,
   CuratedConnectorTarget,
 } from './threat-intelligence-runtime.mts';
-import { normalizeLegacyIsoTimestamp } from './observation.mts';
+import { normalizeLegacyIsoTimestamp } from '../packages/evidence/observation.mts';
 
 const MAX_CONNECTOR_KEY_LENGTH = 80;
 const MAX_CONNECTOR_FIXTURE_BYTES = 512 * 1024;

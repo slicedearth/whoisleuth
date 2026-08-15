@@ -101,7 +101,7 @@
     busy = true;
     message = '';
     try {
-      if (file.size > MAX_DOMAIN_CONTROL_PASSPORT_BYTES) throw new Error('Domain-control passports are limited to 256 KB.');
+      if (file.size > MAX_DOMAIN_CONTROL_PASSPORT_BYTES) throw new Error('Domain-control passports are limited to 16 MB.');
       const verified = await verifyDomainControlPassport(parseBoundedJson(await file.text(), {
         label: 'Domain-control passport',
         maximumBytes: MAX_DOMAIN_CONTROL_PASSPORT_BYTES,

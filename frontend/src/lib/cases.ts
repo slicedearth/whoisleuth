@@ -116,6 +116,7 @@ export type {
 } from './analysis/external-intelligence-import.ts';
 
 export const CASES_KEY = LEGACY_CASES_KEY;
+export const MAX_CASE_BATCH_MUTATIONS = 100;
 
 export async function loadCases(): Promise<CaseRecord[]> {
   return readBrowserLocalData('cases');
@@ -143,22 +144,50 @@ export async function getCaseByDomain(domain: string): Promise<CaseRecord | null
 // Mutations return the record as it exists in the persisted, budget-bounded
 // store (never a pre-persist copy that might still hold evidence pruned to fit),
 // plus how many snapshots were pruned so the UI can warn.
-export async function openCase(input: CaseInput): Promise<{ record: CaseRecord; created: boolean; pruned: number }> {
+export async function openCase(input: CaseInput): Promise<{ record: CaseRecord; cases: CaseRecord[]; created: boolean; pruned: number }> {
   return updateBrowserLocalData('cases', (current) => {
     const result = openOrCreateCase(current, input);
-    if (!result.created) return { document: current, result: { record: result.record, created: false as boolean, pruned: 0 } };
+    if (!result.created) return {
+      document: current,
+      result: { record: result.record, cases: current, created: false as boolean, pruned: 0 },
+    };
     const { cases, pruned } = boundedCases(result.cases);
     const record = cases.find((item) => item.id === result.record.id) ?? result.record;
-    return { document: cases, result: { record, created: true as boolean, pruned } };
+    return { document: cases, result: { record, cases, created: true as boolean, pruned } };
   });
 }
 
-export async function editCase(id: string, patch: CasePatch): Promise<{ record: CaseRecord; pruned: number }> {
+export async function editCase(id: string, patch: CasePatch): Promise<{ record: CaseRecord; cases: CaseRecord[]; pruned: number }> {
   return updateBrowserLocalData('cases', (current) => {
     const result = updateCase(current, id, patch);
     const { cases, pruned } = boundedCases(result.cases);
     const record = cases.find((item) => item.id === id) ?? result.record;
-    return { document: cases, result: { record, pruned } };
+    return { document: cases, result: { record, cases, pruned } };
+  });
+}
+
+export async function setCaseDispositions(
+  ids: readonly string[],
+  disposition: string,
+): Promise<{ cases: CaseRecord[]; changed: number; pruned: number }> {
+  if (!Array.isArray(ids) || ids.length < 1 || ids.length > MAX_CASE_BATCH_MUTATIONS) {
+    throw new Error(`A Case disposition batch must contain between 1 and ${MAX_CASE_BATCH_MUTATIONS} records.`);
+  }
+  if (ids.some((id) => typeof id !== 'string' || !id || id.length > 160 || /[\u0000-\u001f\u007f]/u.test(id))) {
+    throw new Error('A Case disposition batch contains an invalid record identifier.');
+  }
+  if (new Set(ids).size !== ids.length) {
+    throw new Error('A Case disposition batch must use unique record identifiers.');
+  }
+
+  return updateBrowserLocalData('cases', (current) => {
+    let next = current;
+    for (const id of ids) next = updateCase(next, id, { disposition }).cases;
+    const { cases, pruned } = boundedCases(next);
+    return {
+      document: cases,
+      result: { cases, changed: ids.length, pruned },
+    };
   });
 }
 
@@ -200,24 +229,28 @@ export function removeCaseBrandProfileAssociation(
   return updateCaseBrandProfileAssociation(id, profileId, 'remove');
 }
 
-export async function addCaseNote(id: string, body: string): Promise<{ record: CaseRecord; pruned: number }> {
+export async function addCaseNote(id: string, body: string): Promise<{ record: CaseRecord; cases: CaseRecord[]; pruned: number }> {
   return editCase(id, { note: body });
 }
 
-export async function deleteCase(id: string): Promise<void> {
-  await updateBrowserLocalData('cases', (current) => ({
-    document: current.filter((item) => item.id !== id),
-    result: undefined,
-  }));
+export async function deleteCase(id: string): Promise<{ cases: CaseRecord[]; deleted: boolean }> {
+  return updateBrowserLocalData('cases', (current) => {
+    const cases = current.filter((item) => item.id !== id);
+    return {
+      document: cases,
+      result: { cases, deleted: cases.length !== current.length },
+    };
+  });
 }
 
-export async function importCases(value: unknown): Promise<{ added: number; updated: number; skipped: number; brandProfileReferencesOmitted: number; pruned: number }> {
+export async function importCases(value: unknown): Promise<{ cases: CaseRecord[]; added: number; updated: number; skipped: number; brandProfileReferencesOmitted: number; pruned: number }> {
   return updateBrowserLocalData('cases', (current) => {
     const result = mergeCases(current, value);
     const { cases, pruned } = boundedCases(result.cases);
     return {
       document: cases,
       result: {
+        cases,
         added: result.added,
         updated: result.updated,
         skipped: result.skipped,
@@ -235,6 +268,7 @@ export async function importExternalFindings(
   casesUpdated: number;
   findingsAdded: number;
   duplicatesSkipped: number;
+  cases: CaseRecord[];
   pruned: number;
 }> {
   const document: ExternalFindingsDocument = parseExternalFindingsDocument(value);
@@ -244,6 +278,7 @@ export async function importExternalFindings(
     return {
       document: cases,
       result: {
+        cases,
         casesCreated: merged.casesCreated,
         casesUpdated: merged.casesUpdated,
         findingsAdded: merged.findingsAdded,
@@ -262,6 +297,7 @@ export async function importExternalIntelligence(
   assertionsAdded: number;
   duplicatesSkipped: number;
   capacitySkipped: number;
+  cases: CaseRecord[];
   pruned: number;
 }> {
   return updateBrowserLocalData('cases', (current) => {
@@ -272,6 +308,7 @@ export async function importExternalIntelligence(
       document: cases,
       result: {
         record,
+        cases,
         assertionsAdded: merged.assertionsAdded,
         duplicatesSkipped: merged.duplicatesSkipped,
         capacitySkipped: merged.capacitySkipped,

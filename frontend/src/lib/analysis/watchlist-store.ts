@@ -3,7 +3,7 @@
 // migration, import merging, and exact serialized-byte accounting.
 
 import { MAX_WATCHLIST_DOMAINS, normalizeWatchlistEntry } from './watchlist-history.ts';
-import { normalizeExplicitIsoTimestamp } from '../../../../lib/observation.mts';
+import { normalizeExplicitIsoTimestamp } from '../../../../packages/evidence/observation.mts';
 
 export const WATCHLIST_SCHEMA_VERSION = 2;
 export const WATCHLIST_SCHEMA = 'whoisleuth.watchlists';

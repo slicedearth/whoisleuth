@@ -1,7 +1,7 @@
 import { Buffer } from 'node:buffer';
 import { createHash } from 'node:crypto';
 
-import { canonicalArtifactJsonV2 } from '../frontend/src/lib/analysis/artifact-integrity.ts';
+import { canonicalArtifactJsonV2 } from '../packages/evidence/artifact-integrity.mts';
 import {
   BULK_SESSION_SCHEMA,
   MAX_BULK_SESSIONS,

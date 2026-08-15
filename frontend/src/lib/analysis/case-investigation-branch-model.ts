@@ -1,4 +1,4 @@
-import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from '../../../../lib/observation.mts';
+import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from '../../../../packages/evidence/observation.mts';
 
 export const MAX_CASE_INVESTIGATION_BRANCHES = 8;
 export const MAX_CASE_BRANCH_NAME_LENGTH = 80;

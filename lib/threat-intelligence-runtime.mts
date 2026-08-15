@@ -4,11 +4,14 @@
 // must declare exact input exposure, reviewed terms, and bounded request and
 // output budgets before producing separately attributed normalized evidence.
 
-import { createObservation } from './observation.mts';
-import type { ObservationStatus } from './observation.mts';
+import { createObservation } from '../packages/evidence/observation.mts';
+import type { ObservationStatus } from '../packages/evidence/observation.mts';
 import {
+  THREAT_INTELLIGENCE_CONTRACT_VERSION,
   THREAT_INTELLIGENCE_CATEGORIES,
+  THREAT_INTELLIGENCE_ENVELOPE_VERSION,
   THREAT_INTELLIGENCE_RESULT_STATES,
+  THREAT_INTELLIGENCE_SCHEMA,
 } from './threat-intelligence-types.mts';
 import {
   assertCuratedConnectorDefinition,
@@ -49,6 +52,7 @@ import type {
   ThreatIntelligenceCategory,
   ThreatIntelligenceConfidence,
   ThreatIntelligenceFinding,
+  ThreatIntelligenceEnvelope,
   ThreatIntelligenceProviderDefinition,
   ThreatIntelligenceProviderLimits,
   ThreatIntelligenceProviderMatrixEntry,
@@ -62,8 +66,6 @@ import type {
   ThreatIntelligenceTargetType,
 } from './threat-intelligence-types.mts';
 
-const THREAT_INTELLIGENCE_CONTRACT_VERSION = 1;
-const THREAT_INTELLIGENCE_SCHEMA = 'whoisleuth.threat-intelligence-result';
 const CURATED_CONNECTOR_CONTRACT_VERSION = 1;
 const CURATED_CONNECTOR_RESULT_SCHEMA = 'whoisleuth.curated-connector-result';
 const RESULT_STATES = new Set<ThreatIntelligenceResultState>(THREAT_INTELLIGENCE_RESULT_STATES);
@@ -739,6 +741,7 @@ function createCuratedConnectorResult(
 
 export {
   THREAT_INTELLIGENCE_CONTRACT_VERSION,
+  THREAT_INTELLIGENCE_ENVELOPE_VERSION,
   THREAT_INTELLIGENCE_SCHEMA,
   CURATED_CONNECTOR_CONTRACT_VERSION,
   CURATED_CONNECTOR_RESULT_SCHEMA,
@@ -762,6 +765,7 @@ export type {
   ThreatIntelligenceCategory,
   ThreatIntelligenceConfidence,
   ThreatIntelligenceFinding,
+  ThreatIntelligenceEnvelope,
   ThreatIntelligenceProviderDefinition,
   ThreatIntelligenceProviderLimits,
   ThreatIntelligenceProviderMatrixEntry,

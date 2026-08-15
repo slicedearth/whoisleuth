@@ -4,6 +4,7 @@
 // they never rewrite, delete, or silently migrate the source collection.
 
 import { normalizeDomain } from './case-model.ts';
+import { RELATIONSHIP_EVIDENCE_SCHEMA } from './relationship-evidence.ts';
 import {
   MAX_RELATIONSHIP_OBSERVATIONS,
   RELATIONSHIP_OBSERVATION_SCHEMA,
@@ -363,7 +364,7 @@ export function adaptRelationshipObservationsToEnvelope(
       },
       upstreamSchemas: [{
         collection: 'bulk_relationship_evidence',
-        schema: 'whoisleuth.relationship-evidence',
+        schema: RELATIONSHIP_EVIDENCE_SCHEMA,
         version: retained.sourceVersion,
       }],
       limitations,

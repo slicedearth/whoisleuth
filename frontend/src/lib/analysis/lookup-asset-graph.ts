@@ -3,6 +3,9 @@ import type {
   ForceGraphNodeInput,
 } from './visualization-models.ts';
 
+export const LOOKUP_ASSET_GRAPH_SCHEMA = 'whoisleuth.lookup-asset-graph';
+export const LOOKUP_ASSET_GRAPH_VERSION = 2;
+
 export type LookupAssetGraphLens = 'all' | 'identity' | 'delegation' | 'certificate';
 export type LookupAssetGraphLensCounts = Readonly<Record<LookupAssetGraphLens, number>>;
 export type LookupTrustBoundary =
@@ -59,7 +62,7 @@ export type LookupAssetSource = Readonly<{
 }>;
 
 export type LookupAssetGraph = Readonly<{
-  version: 2;
+  version: typeof LOOKUP_ASSET_GRAPH_VERSION;
   targetId: string;
   nodes: readonly LookupAssetNode[];
   edges: readonly LookupAssetEdge[];
@@ -277,7 +280,7 @@ export function buildLookupAssetGraph(input: Readonly<{
   const target = hostname(input.target);
   if (!target) {
     return {
-      version: 2,
+      version: LOOKUP_ASSET_GRAPH_VERSION,
       targetId: '',
       nodes: [],
       edges: [],
@@ -920,7 +923,7 @@ export function buildLookupAssetGraph(input: Readonly<{
   }
 
   return {
-    version: 2,
+    version: LOOKUP_ASSET_GRAPH_VERSION,
     targetId,
     nodes: [...nodes.values()],
     edges: [...edges.values()],

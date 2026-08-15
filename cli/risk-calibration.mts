@@ -2,27 +2,48 @@ import { Buffer } from 'node:buffer';
 import { decodeBoundedUtf8 } from '../lib/bounded-file.mts';
 import { isValidAsciiDomainName } from '../lib/hostname.mts';
 import { scanBoundedJson } from '../lib/bounded-json.mts';
+import { canonicalRegistrableDomain } from '../lib/registrable-domain.mts';
 import { ANALYST_REVIEW_REASON_VALUES, analystInteroperabilityTags } from '../lib/analyst-taxonomy.mts';
 import {
-  RISK_CALIBRATION_SUMMARY_SCHEMA,
-  RISK_CALIBRATION_SUMMARY_VERSION,
   RISK_CALIBRATION_SUMMARY_INTERPRETATION,
   RISK_CALIBRATION_SUMMARY_THRESHOLDS,
 } from '../lib/risk-calibration-summary.mts';
+import {
+  MAX_RISK_CALIBRATION_INPUT_BYTES,
+  MAX_RISK_CALIBRATION_RECORDS,
+  MAX_RISK_CALIBRATION_STRING_LENGTH,
+  RISK_CALIBRATION_DATASET_SCHEMA,
+  RISK_CALIBRATION_DATASET_VERSION,
+  RISK_CALIBRATION_REPORT_SCHEMA,
+  RISK_CALIBRATION_REPORT_VERSION,
+  SUPPORTED_RISK_CALIBRATION_DATASET_VERSIONS,
+  type RiskCalibrationDataset,
+  type RiskCalibrationDisposition,
+  type RiskCalibrationEvidence,
+  type RiskCalibrationRecord,
+  type RiskCalibrationThreatIntelligence,
+} from '../packages/contracts/risk-calibration.mts';
 
 import { CliUsageError } from './arguments.mts';
 import type { BoundedTextStream } from './bulk.mts';
 import { RISK_MUTATION_TYPES } from '../lib/risk-scoring.mts';
 import type { RiskExplanation, RiskInput } from '../lib/risk-scoring.mts';
+import {
+  THREAT_INTELLIGENCE_CONTRACT_VERSION,
+  THREAT_INTELLIGENCE_ENVELOPE_VERSION,
+  THREAT_INTELLIGENCE_SCHEMA,
+} from '../lib/threat-intelligence-types.mts';
 
-export const RISK_CALIBRATION_DATASET_SCHEMA = 'whoisleuth.risk-calibration-dataset';
-export const RISK_CALIBRATION_DATASET_VERSION = 2;
-export const SUPPORTED_RISK_CALIBRATION_DATASET_VERSIONS = Object.freeze([1, RISK_CALIBRATION_DATASET_VERSION]);
-export const RISK_CALIBRATION_REPORT_SCHEMA = RISK_CALIBRATION_SUMMARY_SCHEMA;
-export const RISK_CALIBRATION_REPORT_VERSION = RISK_CALIBRATION_SUMMARY_VERSION;
-export const MAX_RISK_CALIBRATION_INPUT_BYTES = 2 * 1024 * 1024;
-export const MAX_RISK_CALIBRATION_RECORDS = 500;
-export const MAX_RISK_CALIBRATION_STRING_LENGTH = 256;
+export {
+  MAX_RISK_CALIBRATION_INPUT_BYTES,
+  MAX_RISK_CALIBRATION_RECORDS,
+  MAX_RISK_CALIBRATION_STRING_LENGTH,
+  RISK_CALIBRATION_DATASET_SCHEMA,
+  RISK_CALIBRATION_DATASET_VERSION,
+  RISK_CALIBRATION_REPORT_SCHEMA,
+  RISK_CALIBRATION_REPORT_VERSION,
+  SUPPORTED_RISK_CALIBRATION_DATASET_VERSIONS,
+} from '../packages/contracts/risk-calibration.mts';
 export const RISK_CALIBRATION_THRESHOLDS = RISK_CALIBRATION_SUMMARY_THRESHOLDS;
 
 const MAX_MUTATIONS = 30;
@@ -46,34 +67,20 @@ const REVIEW_REASON_CODES = ANALYST_REVIEW_REASON_VALUES;
 const MUTATION_TYPES = new Set(RISK_MUTATION_TYPES);
 
 type UnknownRecord = Record<string, unknown>;
-type ProjectedThreatIntelligence = {
-  providers: Array<{
-    provider: { id: string };
-    state: string;
-    observation?: { observedAt?: string };
-    findings: Array<{
-      category: string;
-      firstObservedAt?: string;
-      lastObservedAt?: string;
-    }>;
-  }>;
-};
-type CalibrationEvidence = Omit<RiskInput, 'threatIntelligence'> & {
-  threatIntelligence?: ProjectedThreatIntelligence;
-};
-type CalibrationDisposition = 'unreviewed' | 'suspicious' | 'confirmed_abuse' | 'false_positive' | 'expected' | 'closed_no_action';
+type Mutable<T> = { -readonly [Key in keyof T]: T[Key] };
+type ProjectedThreatIntelligence = RiskCalibrationThreatIntelligence;
+type CalibrationEvidence = Mutable<RiskCalibrationEvidence>;
+type CalibrationDisposition = RiskCalibrationDisposition;
 type MetricClass = 'positive' | 'negative' | 'excluded';
 type CalibrationRecord = {
-  id: string;
-  domain: string;
-  analystDisposition: CalibrationDisposition;
-  reviewReasonCode?: string;
-  evidence: CalibrationEvidence;
+  -readonly [Key in keyof RiskCalibrationRecord]: Key extends 'evidence'
+    ? CalibrationEvidence
+    : RiskCalibrationRecord[Key];
 };
 type CalibrationDataset = {
-  schema: typeof RISK_CALIBRATION_DATASET_SCHEMA;
-  version: 1 | typeof RISK_CALIBRATION_DATASET_VERSION;
-  records: CalibrationRecord[];
+  -readonly [Key in keyof RiskCalibrationDataset]: Key extends 'records'
+    ? CalibrationRecord[]
+    : RiskCalibrationDataset[Key];
 };
 type ExplainRiskScore = (input: RiskInput) => RiskExplanation | null;
 type CalibrationScoredRecord = {
@@ -218,7 +225,9 @@ function projectEvidence(value: unknown, field: string): CalibrationEvidence {
   const source = object(value, field);
   const availability = boundedString(source.availability ?? source.state, `${field}.availability`, 32);
   if (!AVAILABILITY_STATES.has(availability)) throw new CliUsageError(`${field}.availability is unsupported.`);
-  const result: CalibrationEvidence = { availability };
+  const result: CalibrationEvidence = {
+    availability: availability as RiskCalibrationEvidence['availability'],
+  };
 
   for (const name of BOOLEAN_FIELDS) {
     const candidate = source[name];
@@ -230,7 +239,7 @@ function projectEvidence(value: unknown, field: string): CalibrationEvidence {
   if (source.activityStatus !== null && source.activityStatus !== undefined) {
     const activity = boundedString(source.activityStatus, `${field}.activityStatus`, 32);
     if (!ACTIVITY_STATES.has(activity)) throw new CliUsageError(`${field}.activityStatus is unsupported.`);
-    result.activityStatus = activity;
+    result.activityStatus = activity as NonNullable<RiskCalibrationEvidence['activityStatus']>;
   }
   if (source.scanDepth !== null && source.scanDepth !== undefined) {
     const depth = boundedString(source.scanDepth, `${field}.scanDepth`, 16);
@@ -304,7 +313,7 @@ export function parseRiskCalibrationDataset(text: unknown): CalibrationDataset {
     : null;
   if (document.schema !== RISK_CALIBRATION_DATASET_SCHEMA
     || documentVersion === null
-    || !SUPPORTED_RISK_CALIBRATION_DATASET_VERSIONS.includes(documentVersion)) {
+    || !SUPPORTED_RISK_CALIBRATION_DATASET_VERSIONS.includes(documentVersion as 1 | 2)) {
     throw new CliUsageError(`Risk calibration input must use ${RISK_CALIBRATION_DATASET_SCHEMA} version ${SUPPORTED_RISK_CALIBRATION_DATASET_VERSIONS.join(' or ')}.`);
   }
   if (!Array.isArray(document.records) || !document.records.length) {
@@ -410,6 +419,30 @@ function scoreBand(score: number | null): string {
   return '0_39';
 }
 
+function scoringEvidence(record: CalibrationRecord): RiskInput {
+  const threatIntelligence = record.evidence.threatIntelligence;
+  const scoringDomain = canonicalRegistrableDomain(record.domain);
+  return {
+    ...record.evidence,
+    domain: scoringDomain ?? record.domain,
+    ...(threatIntelligence && scoringDomain ? {
+      threatIntelligence: {
+        version: THREAT_INTELLIGENCE_ENVELOPE_VERSION,
+        providers: threatIntelligence.providers.map((provider) => ({
+          ...provider,
+          schema: THREAT_INTELLIGENCE_SCHEMA,
+          version: THREAT_INTELLIGENCE_CONTRACT_VERSION,
+          target: {
+            type: 'domain',
+            value: scoringDomain,
+            exposure: 'registrable_domain',
+          },
+        })),
+      },
+    } : {}),
+  };
+}
+
 export function buildRiskCalibrationReport(
   dataset: CalibrationDataset,
   explainRiskScore: ExplainRiskScore,
@@ -422,7 +455,7 @@ export function buildRiskCalibrationReport(
   },
 ): RiskCalibrationReport {
   const records: CalibrationReportRecord[] = dataset.records.map((record) => {
-    const explained = explainRiskScore(record.evidence);
+    const explained = explainRiskScore(scoringEvidence(record));
     const classification = metricClass(record.analystDisposition);
     const includedInMetrics = classification !== 'excluded' && explained !== null;
     return {
@@ -484,7 +517,7 @@ export function buildRiskCalibrationReport(
       const source = dataset.records[index];
       const current = records[index];
       if (!source || !current) continue;
-      const previous = options.explainPreviousRiskScore(source.evidence);
+      const previous = options.explainPreviousRiskScore(scoringEvidence(source));
       if (previous?.score !== current.score) scoresChanged += 1;
       if (scoreBand(previous?.score ?? null) !== current.band) bandsChanged += 1;
       if (((previous?.score ?? -1) >= options.reviewThreshold) !== ((current.score ?? -1) >= options.reviewThreshold)) {

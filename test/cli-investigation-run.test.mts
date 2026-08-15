@@ -136,6 +136,38 @@ describe('fixed investigation execution', () => {
     }), /unexpected command contract/iu);
   });
 
+  test('propagates cancellation instead of retaining it as a failed workflow step', async () => {
+    const controller = new AbortController();
+    let calls = 0;
+    const running = runInvestigationRecipe('domain-triage', 'example.test', {
+      approveNetwork: true,
+      resumeInput: null,
+      generatedAt: NOW,
+      signal: controller.signal,
+      execute: async () => {
+        calls += 1;
+        controller.abort(new DOMException('Cancelled', 'AbortError'));
+        return { exitCode: EXIT_CODES.CANCELLED, stdout: '' };
+      },
+    });
+    await assert.rejects(running, { name: 'AbortError' });
+    assert.equal(calls, 1);
+
+    const preAborted = new AbortController();
+    preAborted.abort(new DOMException('Cancelled', 'AbortError'));
+    await assert.rejects(
+      () => runInvestigationRecipe('domain-triage', 'example.test', {
+        approveNetwork: false,
+        resumeInput: null,
+        generatedAt: NOW,
+        signal: preAborted.signal,
+        execute: async () => { calls += 1; return { exitCode: 0, stdout: '{}' }; },
+      }),
+      { name: 'AbortError' },
+    );
+    assert.equal(calls, 1);
+  });
+
   test('rejects structurally over-bound resume and step JSON before retaining it', async () => {
     let deeplyNested = '{"schema":"whoisleuth.cli.lookup","nested":';
     deeplyNested += '['.repeat(49);

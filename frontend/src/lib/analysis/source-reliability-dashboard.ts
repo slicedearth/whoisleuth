@@ -1,5 +1,5 @@
 import { parseBoundedJson } from '../bounded-json.ts';
-import { normalizeExplicitIsoTimestamp } from '../../../../lib/observation.mts';
+import { normalizeExplicitIsoTimestamp } from '../../../../packages/evidence/observation.mts';
 
 export const SOURCE_RELIABILITY_DASHBOARD_MAX_BYTES = 512 * 1024;
 export const SOURCE_RELIABILITY_DASHBOARD_MAX_SOURCES = 64;

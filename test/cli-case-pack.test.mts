@@ -136,6 +136,22 @@ describe('CLI case pack', () => {
     assert.doesNotMatch(JSON.stringify(output), /private recipient/u);
   });
 
+  test('requires the review acknowledgement before reading a case artefact', async () => {
+    let reads = 0;
+    let stderr = '';
+    const code = await runCli(['case-pack', 'cases.json', '--audience', 'trusted'], {
+      stdout: { write() {} },
+      stderr: { write(value) { stderr += value; } },
+      readArtifactInput: async () => {
+        reads += 1;
+        return JSON.stringify(exportedCases());
+      },
+    });
+    assert.equal(code, EXIT_CODES.USAGE);
+    assert.equal(reads, 0);
+    assert.match(stderr, /case-pack requires --reviewed/iu);
+  });
+
   test('verifies the complete browser hand-off and rejects changed content', () => {
     const pack = buildCliCasePack(JSON.stringify(exportedCases()), { audience: 'trusted', reviewed: true }, NOW);
     assert.deepEqual(verifyCliCasePack(pack), { caseCount: 1 });

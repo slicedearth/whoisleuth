@@ -30,7 +30,7 @@ import {
   validHttpDeliveryMetadata,
   validPagePublicationMetadata,
 } from '../../../../lib/homepage-metadata-contract.mts';
-import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from '../../../../lib/observation.mts';
+import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from '../../../../packages/evidence/observation.mts';
 
 export const LOOKUP_EVIDENCE_REPLAY_MAX_BYTES = LOOKUP_EVIDENCE_PORTABLE_MAX_BYTES;
 export const LOOKUP_EVIDENCE_REPLAY_MAX_ENTRIES = LOOKUP_EVIDENCE_PORTABLE_MAX_ENTRIES;

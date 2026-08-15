@@ -2,11 +2,14 @@
 // evidence. It validates bounded measurements and adapter coverage without
 // retaining lookup targets, responses, credentials, or partial events.
 
-import { normalizeExplicitIsoTimestamp } from './observation.mts';
+import { normalizeExplicitIsoTimestamp } from '../packages/evidence/observation.mts';
 
 export const LOOKUP_PROGRESS_STAGING_EVIDENCE_SCHEMA =
   'whoisleuth.lookup-progress-staging-evidence';
 export const LOOKUP_PROGRESS_STAGING_EVIDENCE_VERSION = 1;
+export const LOOKUP_PROGRESS_STAGING_QUALIFICATION_SCHEMA =
+  'whoisleuth.lookup-progress-staging-qualification';
+export const LOOKUP_PROGRESS_STAGING_QUALIFICATION_VERSION = 1;
 export const MAX_LOOKUP_PROGRESS_STAGING_EVIDENCE_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 export const MAX_LOOKUP_PROGRESS_STAGING_FIRST_EVENT_MS = 5_000;
 export const MIN_LOOKUP_PROGRESS_STAGING_EVENT_SPAN_MS = 250;
@@ -183,8 +186,8 @@ export function qualifyLookupProgressStagingEvidence(
     }
   }
   return Object.freeze({
-    schema: 'whoisleuth.lookup-progress-staging-qualification',
-    version: 1,
+    schema: LOOKUP_PROGRESS_STAGING_QUALIFICATION_SCHEMA,
+    version: LOOKUP_PROGRESS_STAGING_QUALIFICATION_VERSION,
     stagingEvidenceComplete: true,
     productionRouteEnabled: false,
     buildRevision,

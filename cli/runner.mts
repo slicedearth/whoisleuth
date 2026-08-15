@@ -6,7 +6,7 @@ import { scanBoundedJson } from '../lib/bounded-json.mts';
 import { REGISTRY_CAPABILITIES_VERSION, registryCapabilityFor } from '../lib/registry-capabilities.mts';
 import { explainRiskScore, explainRiskScoreV6, RISK_MODEL_VERSION, RISK_REVIEW_THRESHOLD } from '../lib/risk-scoring.mts';
 import { buildRiskCalibrationSummaryReport } from '../lib/risk-calibration-summary.mts';
-import { CLI_COMMANDS, parseCliArguments } from './arguments.mts';
+import { parseCliArguments } from './arguments.mts';
 import type { CliArguments } from './arguments.mts';
 import { buildCliCommandCatalogue, formatCliCommandCatalogue } from './command-catalogue.mts';
 import {
@@ -14,7 +14,10 @@ import {
   COMMAND_DETAILS,
   COMMAND_USAGE,
   HELP,
+  CLI_COMMANDS,
+  commandDefinition,
   commandHelp,
+  type CliCommand,
 } from './command-reference.mts';
 import { buildShellCompletion } from './completion.mts';
 import { buildDoctorReport, formatDoctorReport } from './doctor.mts';
@@ -235,6 +238,17 @@ function usageEventReason(error: unknown): string {
   return 'invalid_input';
 }
 
+const INLINE_CLI_COMMANDS: readonly CliCommand[] = Object.freeze([
+  'completion', 'doctor', 'commands', 'manual', 'manifest', 'map-observations',
+  'oam-export', 'ct-intake', 'registry-support', 'registry-doctor',
+  'registry-cohort', 'registry-scaffold', 'risk-calibrate', 'lookalike-calibrate',
+  'verify-artifact', 'interchange-report', 'source-report', 'compare',
+  'page-compare', 'mail-review', 'review-evidence', 'brief', 'case-pack',
+  'domain-control', 'monitor-once', 'assurance', 'change-packet',
+  'sharing-review', 'workflow-plan', 'workflow-run', 'diff', 'reconcile',
+  'timeline', 'export',
+]);
+
 async function runParsedCli(args: CliArguments, dependencies: CliDependencies = {}): Promise<number> {
   const stdout = dependencies.stdout || process.stdout;
   const stderr = dependencies.stderr || process.stderr;
@@ -323,6 +337,74 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
       return EXIT_CODES.SUCCESS;
     }
     if (args.action === 'version') { write(stdout, `${VERSION}\n`); return EXIT_CODES.SUCCESS; }
+
+    const handlerOwner = commandDefinition(args.action).execution.handlerOwner;
+    if (handlerOwner === 'bulk') {
+      if (args.action !== 'bulk') throw new Error('Bulk command registry ownership is inconsistent.');
+      failureLabel = 'Bulk lookup';
+      const { runBulkCommand } = await import('./bulk-command-runner.mts');
+      return await runBulkCommand(args, dependencies, commandContext);
+    }
+    if (handlerOwner === 'discovery') {
+      if (args.action !== 'discover') throw new Error('Discovery command registry ownership is inconsistent.');
+      failureLabel = 'Candidate generation';
+      const { runDiscoveryCommand } = await import('./discovery-command-runner.mts');
+      return await runDiscoveryCommand(args, dependencies, commandContext);
+    }
+    if (handlerOwner === 'discovery_scan') {
+      if (args.action !== 'discover-scan') throw new Error('Discovery-scan command registry ownership is inconsistent.');
+      failureLabel = 'Candidate scan';
+      const { runDiscoveryScanCommand } = await import('./discovery-scan-command-runner.mts');
+      return await runDiscoveryScanCommand(args, dependencies, commandContext);
+    }
+    if (handlerOwner === 'evidence') {
+      if (!isEvidenceCommand(args)) throw new Error('Evidence command registry ownership is inconsistent.');
+      failureLabel = evidenceCommandFailureLabel(args.action);
+      const evidenceStdout = args.action !== 'sign-artifact' && args.output === 'terminal'
+        ? { write: (value: string) => write(stdout, terminal(value, args.color)) }
+        : stdout;
+      return await runEvidenceCommand(args, {
+        stdout: evidenceStdout,
+        stdin: dependencies.stdin || process.stdin,
+        readArtifactInput: dependencies.readArtifactInput,
+        readPassphraseFile: dependencies.readPassphraseFile,
+        readPrivateKeyFile: dependencies.readPrivateKeyFile,
+        readPublicKeyFile: dependencies.readPublicKeyFile,
+        now: dependencies.now,
+        signal: dependencies.signal,
+      });
+    }
+    if (handlerOwner === 'network') {
+      if (args.action !== 'ct-search'
+        && args.action !== 'posture'
+        && args.action !== 'http'
+        && args.action !== 'tls'
+        && args.action !== 'dnssec-validate'
+        && args.action !== 'mail-transport') {
+        throw new Error('Network command registry ownership is inconsistent.');
+      }
+      failureLabel = args.action === 'ct-search'
+        ? 'Certificate Transparency search'
+        : args.action === 'posture'
+          ? 'Domain posture audit'
+          : args.action === 'http'
+            ? 'HTTP probe'
+            : args.action === 'tls'
+              ? 'TLS intelligence'
+              : args.action === 'dnssec-validate'
+                ? 'DNSSEC chain validation'
+                : 'Mail transport review';
+      const { runNetworkCommand } = await import('./network-command-runner.mts');
+      return await runNetworkCommand(args, dependencies, commandContext);
+    }
+    if (handlerOwner === 'lookup') {
+      if (args.action !== 'lookup') throw new Error('Lookup command registry ownership is inconsistent.');
+      const { runLookupCommand } = await import('./lookup-command-runner.mts');
+      return await runLookupCommand(args, dependencies, commandContext);
+    }
+    if (handlerOwner !== 'inline' || !INLINE_CLI_COMMANDS.includes(args.action)) {
+      throw new Error('No CLI execution route is registered for the parsed command.');
+    }
 
     if (args.action === 'completion') {
       write(stdout, buildShellCompletion(args.shell));
@@ -634,23 +716,6 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
         ? formatJsonDocument(report)
         : terminal(formatInterchangeFidelityReport(report), args.color));
       return EXIT_CODES.SUCCESS;
-    }
-
-    if (isEvidenceCommand(args)) {
-      failureLabel = evidenceCommandFailureLabel(args.action);
-      const evidenceStdout = args.action !== 'sign-artifact' && args.output === 'terminal'
-        ? { write: (value: string) => write(stdout, terminal(value, args.color)) }
-        : stdout;
-      return await runEvidenceCommand(args, {
-        stdout: evidenceStdout,
-        stdin: dependencies.stdin || process.stdin,
-        readArtifactInput: dependencies.readArtifactInput,
-        readPassphraseFile: dependencies.readPassphraseFile,
-        readPrivateKeyFile: dependencies.readPrivateKeyFile,
-        readPublicKeyFile: dependencies.readPublicKeyFile,
-        now: dependencies.now,
-        signal: dependencies.signal,
-      });
     }
 
     if (args.action === 'source-report') {
@@ -1025,6 +1090,7 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
         approveNetwork: args.approveNetwork,
         resumeInput,
         generatedAt: commandContext.now(),
+        ...(dependencies.signal ? { signal: dependencies.signal } : {}),
         execute: async (command, stepArguments) => {
           const stepStdout = createBufferedOutput();
           const stepStderr = createBufferedOutput();
@@ -1146,24 +1212,6 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
       return EXIT_CODES.SUCCESS;
     }
 
-    if (args.action === 'bulk') {
-      failureLabel = 'Bulk lookup';
-      const { runBulkCommand } = await import('./bulk-command-runner.mts');
-      return await runBulkCommand(args, dependencies, commandContext);
-    }
-
-    if (args.action === 'discover') {
-      failureLabel = 'Candidate generation';
-      const { runDiscoveryCommand } = await import('./discovery-command-runner.mts');
-      return await runDiscoveryCommand(args, dependencies, commandContext);
-    }
-
-    if (args.action === 'discover-scan') {
-      failureLabel = 'Candidate scan';
-      const { runDiscoveryScanCommand } = await import('./discovery-scan-command-runner.mts');
-      return await runDiscoveryScanCommand(args, dependencies, commandContext);
-    }
-
     if (args.action === 'ct-intake') {
       failureLabel = 'Certificate event intake';
       let input: string;
@@ -1195,29 +1243,7 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
       return EXIT_CODES.SUCCESS;
     }
 
-    if (args.action === 'ct-search'
-      || args.action === 'posture'
-      || args.action === 'http'
-      || args.action === 'tls'
-      || args.action === 'dnssec-validate'
-      || args.action === 'mail-transport') {
-      failureLabel = args.action === 'ct-search'
-        ? 'Certificate Transparency search'
-        : args.action === 'posture'
-          ? 'Domain posture audit'
-          : args.action === 'http'
-            ? 'HTTP probe'
-            : args.action === 'tls'
-              ? 'TLS intelligence'
-              : args.action === 'dnssec-validate'
-                ? 'DNSSEC chain validation'
-                : 'Mail transport review';
-      const { runNetworkCommand } = await import('./network-command-runner.mts');
-      return await runNetworkCommand(args, dependencies, commandContext);
-    }
-
-    const { runLookupCommand } = await import('./lookup-command-runner.mts');
-    return await runLookupCommand(args, dependencies, commandContext);
+    throw new Error('No CLI execution route is registered for the parsed command.');
   } catch (error) {
     (progress as TerminalProgress | null)?.stop();
     progress = null;
@@ -1323,5 +1349,5 @@ async function runCli(argv: unknown, dependencies: CliDependencies = {}): Promis
   }
 }
 
-export { HELP, MAX_STDIN_BYTES, VERSION, readStdinBounded, runCli };
+export { HELP, INLINE_CLI_COMMANDS, MAX_STDIN_BYTES, VERSION, readStdinBounded, runCli };
 export type { CliDependencies, WritableLike };

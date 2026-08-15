@@ -1,7 +1,7 @@
 import { normalizeDomain } from './case-model.ts';
 import { normalizeBulkPresentationSortKey } from './bulk-sort.ts';
 import type { BulkSortDirection, BulkSortKey } from './bulk-sort.ts';
-import { normalizeExplicitIsoTimestamp } from '../../../../lib/observation.mts';
+import { normalizeExplicitIsoTimestamp } from '../../../../packages/evidence/observation.mts';
 
 export const BULK_REVIEW_SCHEMA = 'whoisleuth.bulk-review';
 export const BULK_REVIEW_SCHEMA_VERSION = 1;

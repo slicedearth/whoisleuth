@@ -71,6 +71,7 @@
     deepRescanSelected,
     createCasesSelected,
     setSelectedDisposition,
+    caseMutationBusy = false,
     caseOptions,
     profileContextState,
     shortlistAvailable = true,
@@ -138,6 +139,7 @@
     deepRescanSelected: () => void | Promise<void>;
     createCasesSelected: () => void | Promise<void>;
     setSelectedDisposition: (value: string) => void | Promise<void>;
+    caseMutationBusy?: boolean;
     caseOptions: ReadonlyArray<{ value: string; label: string }>;
     profileContextState: 'loading' | 'ready' | 'unavailable';
     shortlistAvailable?: boolean;
@@ -210,7 +212,7 @@
     <button class="btn" onclick={exportSelectedCsv} disabled={!selectedCount}>Export selected CSV</button>
     <button class="btn" onclick={deepRescanSelected} disabled={!selectedCount || running || profileContextState === 'loading'}>Deep rescan selected</button>
     <button class="btn" onclick={createCasesSelected} disabled={!selectedCount || !caseAvailable}>Create cases</button>
-    <label class="field disposition">Set case state<select onchange={(event) => { const value = event.currentTarget.value; if (value) setSelectedDisposition(value); event.currentTarget.value = ''; }} disabled={!selectedCount || !caseAvailable}><option value="">Choose state</option>{#each caseOptions as option}<option value={option.value}>{option.label}</option>{/each}</select></label>
+    <label class="field disposition">Set case state<select onchange={(event) => { const value = event.currentTarget.value; if (value) void setSelectedDisposition(value); event.currentTarget.value = ''; }} disabled={!selectedCount || !caseAvailable || caseMutationBusy}><option value="">{caseMutationBusy ? 'Updating cases…' : 'Choose state'}</option>{#each caseOptions as option}<option value={option.value}>{option.label}</option>{/each}</select></label>
   </div>
 </section>
 {/if}

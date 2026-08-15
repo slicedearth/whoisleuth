@@ -3,7 +3,7 @@
 // fact selected by an analyst, a decision records analyst reasoning, and an
 // action records a reviewed external or internal follow-up.
 
-import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from '../../../../lib/observation.mts';
+import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from '../../../../packages/evidence/observation.mts';
 
 export const MAX_CASE_EVIDENCE_PINS = 40;
 export const MAX_CASE_CHECKPOINT_FACTS = 20;

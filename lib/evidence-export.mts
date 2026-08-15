@@ -6,7 +6,7 @@ import {
   validHttpDeliveryMetadata,
   validPagePublicationMetadata,
 } from './homepage-metadata-contract.mts';
-import { normalizeExplicitIsoTimestamp } from './observation.mts';
+import { normalizeExplicitIsoTimestamp } from '../packages/evidence/observation.mts';
 
 export const LOOKUP_EVIDENCE_SCHEMA = 'whoisleuth.lookup-evidence';
 export const LEGACY_LOOKUP_EVIDENCE_SCHEMA_VERSION = 25;

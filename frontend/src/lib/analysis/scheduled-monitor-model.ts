@@ -10,7 +10,7 @@ import {
   type CompactWatchlistRecord,
   type WatchlistEntry,
 } from './watchlist-history.ts';
-import { normalizeExplicitIsoTimestamp } from '../../../../lib/observation.mts';
+import { normalizeExplicitIsoTimestamp } from '../../../../packages/evidence/observation.mts';
 
 export const SCHEDULED_MONITOR_SCHEMA = 'whoisleuth.scheduled-monitor';
 export const SCHEDULED_MONITOR_SCHEMA_VERSION = 1;

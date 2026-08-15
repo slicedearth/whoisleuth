@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures';
-import { expectNoHorizontalOverflow, failBrowserLocalReads, migrateLegacyBrowserData } from './helpers';
+import { expectNoHorizontalOverflow, failBrowserLocalReads, lookupDomainIdentity, migrateLegacyBrowserData } from './helpers';
 import { BASE_URL } from './constants';
 
 const GUIDE_KEY = 'whoisleuth:investigation-guide:v5';
@@ -16,7 +16,11 @@ type RecipeLabel =
   | 'Mail abuse response'
   | 'Domain-control change response';
 
-async function startRecipe(page: import('@playwright/test').Page, recipe: RecipeLabel = 'New-domain triage') {
+async function startRecipe(
+  page: import('@playwright/test').Page,
+  recipe: RecipeLabel = 'New-domain triage',
+  target = 'Portal.Example.Test.',
+) {
   await page.goto('/dashboard');
   await expect(page.locator('section[aria-labelledby="local-summary-title"]')).toHaveAttribute('aria-busy', 'false');
   await page.getByRole('combobox', { name: 'Guide' }).selectOption({ label: recipe });
@@ -27,7 +31,7 @@ async function startRecipe(page: import('@playwright/test').Page, recipe: Recipe
       : recipe.endsWith('response')
         ? 'Domain under review'
         : 'Domain';
-  await page.getByRole('textbox', { name: targetLabel, exact: true }).fill('Portal.Example.Test.');
+  await page.getByRole('textbox', { name: targetLabel, exact: true }).fill(target);
   await page.getByRole('button', { name: 'Start guide' }).click();
   await expect(page.locator('.guide')).toBeFocused();
   await expect(currentAction(page)).toBeVisible();
@@ -98,12 +102,13 @@ async function installLookupFixture(page: import('@playwright/test').Page) {
   await page.route('**/api/lookup?*', async (route) => {
     const url = new URL(route.request().url());
     const domain = url.searchParams.get('q') || 'portal.example.test';
+    const identity = lookupDomainIdentity(domain);
     const compact = url.searchParams.get('compact') === '1';
     const availability = {
       applicable: true,
       state: 'registered',
       confidence: 'high',
-      domain,
+      domain: identity.registrableDomain,
       deepScanComplete: url.searchParams.get('fast') !== '1',
       registrar: { name: 'Example Registrar' },
       nameservers: ['ns1.example.net'],
@@ -119,9 +124,7 @@ async function installLookupFixture(page: import('@playwright/test').Page) {
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify(compact ? { availability, diagnostics } : {
-        query: domain,
-        type: 'domain',
-        registrableDomain: domain,
+        ...identity,
         availability,
         rdap: { parsed: { status: ['active'], entities: [] } },
         whois: { parsed: {}, chain: [] },
@@ -346,14 +349,14 @@ test('new-domain triage leads from a deep lookup through comparison and a review
 }, async ({ page }) => {
   test.slow();
   await installLookupFixture(page);
-  await startRecipe(page);
+  await startRecipe(page, 'New-domain triage', 'Portal.Test.');
 
-  await runLookupStep(page, 'Collect domain evidence', 'portal.example.test');
+  await runLookupStep(page, 'Collect domain evidence', 'portal.test');
   await expect(currentAction(page)).toContainText('Compare focused peers');
-  await runBulkStep(page, 'Compare focused peers', ['portal.example.test', 'peer.example.test']);
+  await runBulkStep(page, 'Compare focused peers', ['portal.test', 'peer.test']);
   await expect(currentAction(page)).toContainText('Record disposition');
   await page.setViewportSize({ width: 320, height: 760 });
-  await retainCases(page, 'Record disposition', ['portal.example.test', 'peer.example.test']);
+  await retainCases(page, 'Record disposition', ['portal.test', 'peer.test']);
   await expectNoHorizontalOverflow(page);
   await expect(page.locator('.guide')).toContainText('3 of 3 steps reviewed');
 });
@@ -364,21 +367,21 @@ test('infrastructure pivot keeps the starting domain through lookup, peer compar
   test.slow();
   await page.setViewportSize({ width: 393, height: 852 });
   await installLookupFixture(page);
-  await startRecipe(page, 'Infrastructure pivot');
+  await startRecipe(page, 'Infrastructure pivot', 'Portal.Test.');
 
-  await runLookupStep(page, 'Collect starting evidence', 'portal.example.test');
-  await runBulkStep(page, 'Compare relationships', ['portal.example.test', 'related.example.test']);
-  await retainCases(page, 'Retain defensible pivots', ['portal.example.test', 'related.example.test']);
+  await runLookupStep(page, 'Collect starting evidence', 'portal.test');
+  await runBulkStep(page, 'Compare relationships', ['portal.test', 'related.test']);
+  await retainCases(page, 'Retain defensible pivots', ['portal.test', 'related.test']);
   await expect(page.locator('.guide')).toContainText('3 of 3 steps reviewed');
 });
 
 test('returning to the same guided Bulk step keeps its peer set and completed results', { tag: '@timing-sensitive' }, async ({ page }) => {
   await installLookupFixture(page);
-  await startRecipe(page);
+  await startRecipe(page, 'New-domain triage', 'Portal.Test.');
 
-  await runLookupStep(page, 'Collect domain evidence', 'portal.example.test');
+  await runLookupStep(page, 'Collect domain evidence', 'portal.test');
   await allowAndOpen(page, 'Bulk');
-  const peers = ['portal.example.test', 'peer.example.test'];
+  const peers = ['portal.test', 'peer.test'];
   await page.locator('#domains').fill(peers.join('\n'));
   await page.getByRole('button', { name: 'Scan 2 domains' }).click();
   await expect(page.locator('.results-table tbody tr')).toHaveCount(2);

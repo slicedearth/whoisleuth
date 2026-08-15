@@ -16,7 +16,7 @@ import {
   normalizeEvidenceDomain,
 } from './case-model.ts';
 import { MAX_CANDIDATE_SOURCE_LENGTH } from '../../../../lib/candidate-provenance-bounds.mts';
-import { normalizeCtTimestamp } from '../../../../lib/observation.mts';
+import { normalizeCtTimestamp } from '../../../../packages/evidence/observation.mts';
 import {
   MAX_CT_RESPONSE_CERTIFICATE_GROUPS,
   MAX_CT_RESPONSE_DOMAINS_PER_GROUP,

@@ -8,6 +8,7 @@ import { normalizeDomain } from './case-model.ts';
 import { groupBySimilarFavicon } from './utils.ts';
 
 export const RELATIONSHIP_EVIDENCE_VERSION = 2;
+export const RELATIONSHIP_EVIDENCE_SCHEMA = 'whoisleuth.relationship-evidence';
 export const TLS_RELATIONSHIP_PROFILE_VERSION = 2;
 export const SUPPORTED_TLS_RELATIONSHIP_PROFILE_VERSIONS = Object.freeze([1, TLS_RELATIONSHIP_PROFILE_VERSION]);
 export const MAX_RELATIONSHIP_ROWS = 2000;

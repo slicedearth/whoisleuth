@@ -1,5 +1,5 @@
 import { normalizeDomain } from './case-model.ts';
-import { normalizeExplicitIsoTimestamp } from '../../../../lib/observation.mts';
+import { normalizeExplicitIsoTimestamp } from '../../../../packages/evidence/observation.mts';
 
 export const RELATIONSHIP_OBSERVATION_SCHEMA = 'whoisleuth.relationship-observations';
 export const RELATIONSHIP_OBSERVATION_SCHEMA_VERSION = 1;

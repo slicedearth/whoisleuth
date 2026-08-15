@@ -5,7 +5,7 @@
 
 import { normalizeDomain } from './case-model.ts';
 import { isInformativeFaviconHash } from './utils.ts';
-import { normalizeExplicitIsoTimestamp } from '../../../../lib/observation.mts';
+import { normalizeExplicitIsoTimestamp } from '../../../../packages/evidence/observation.mts';
 
 export const PAGE_BASELINE_VERSION = 1;
 export const PAGE_IDENTITY_VERSION = 3;

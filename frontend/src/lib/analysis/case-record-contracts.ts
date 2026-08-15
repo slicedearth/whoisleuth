@@ -7,6 +7,7 @@ import type {
   CaseSightingRecord,
 } from './case-response-model.ts';
 import { ANALYST_REVIEW_REASONS } from '../../../../lib/analyst-taxonomy.mts';
+import { MAX_DOMAIN_NAME_LENGTH } from '../../../../packages/contracts/domain-name.mts';
 import type { CaseInvestigationBranch } from './case-investigation-branch-model.ts';
 
 export const CASE_SCHEMA_VERSION = 12;
@@ -16,7 +17,7 @@ export const MAX_NOTES_PER_CASE = 50;
 export const MAX_NOTE_LENGTH = 2000;
 export const MAX_TAGS_PER_CASE = 20;
 export const MAX_TAG_LENGTH = 40;
-export const MAX_DOMAIN_LENGTH = 253;
+export const MAX_DOMAIN_LENGTH = MAX_DOMAIN_NAME_LENGTH;
 export const MAX_CASE_IMPORT_BYTES = 2 * 1024 * 1024;
 export const MAX_EVIDENCE_SNAPSHOTS_PER_CASE = 25;
 export const MAX_EVIDENCE_FACTORS = 20;

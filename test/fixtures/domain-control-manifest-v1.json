@@ -1,0 +1,31 @@
+{
+  "schema": "whoisleuth.domain-control-manifest",
+  "version": 1,
+  "generatedAt": "2026-08-06T00:00:00.000Z",
+  "expiresAt": "2026-09-06T00:00:00.000Z",
+  "entries": [
+    {
+      "domain": "legacy-control.example",
+      "nameservers": [
+        "ns1.legacy-control.example"
+      ],
+      "ds": [],
+      "mx": [],
+      "caa": [],
+      "tlsIssuer": null,
+      "tlsSpkiSha256": null,
+      "registrarLock": null,
+      "renewalReviewAt": null,
+      "note": null
+    }
+  ],
+  "limitations": [
+    "This analyst-authored manifest records intended domain-control state. It does not collect evidence or change registrar, DNS, mail, or certificate configuration.",
+    "Empty desired fields are unconfigured rather than claims that a record should be absent."
+  ],
+  "integrity": {
+    "algorithm": "SHA-256",
+    "canonicalization": "sorted-json-v1",
+    "digestSha256": "sha256:d986bb3d4467ca4607e5b10289005d47ec712e2bc6ae6885fcfec1f41f0d1ec5"
+  }
+}

@@ -10,6 +10,7 @@ import type { Browser, Route } from '@playwright/test';
 
 import {
   MAX_CAPTURE_HOSTS,
+  MAX_CAPTURE_REQUESTS,
   MAX_CAPTURE_RESPONSE_BYTES,
   MAX_CAPTURE_TRANSFER_BYTES,
   WEB_CAPTURE_MANIFEST_VERSION,
@@ -465,6 +466,10 @@ describe('optional local rendered capture package', () => {
         now: () => '2026-08-01T00:00:00.000Z',
       });
       assert.equal(manifest.schemaVersion, WEB_CAPTURE_MANIFEST_VERSION);
+      assert.match(
+        manifest.captures[0]?.limitations.join(' ') ?? '',
+        /No dedicated path or query field.*page title and screenshot can reproduce/u,
+      );
       assert.equal(initScriptCalls, 2);
       assert.deepEqual(resolved, ['example.test', 'example.test', 'static.example.test']);
       const capture = manifest.captures[0]!;
@@ -844,6 +849,33 @@ describe('optional local rendered capture package', () => {
       assert.equal(allowances.reduce((total, value) => total + value, 0), MAX_CAPTURE_TRANSFER_BYTES);
       assert.equal(allowances.every((value) => value <= MAX_CAPTURE_RESPONSE_BYTES), true);
       assert.equal(allowances.includes(MAX_CAPTURE_RESPONSE_BYTES - 1), true);
+      assert.equal(manifest.captures[0]?.completeness, 'partial');
+    } finally {
+      await rm(parent, { recursive: true, force: true });
+    }
+  });
+
+  test('stops admitting browser requests at the exact request ceiling', async () => {
+    const parent = await mkdtemp(path.join(tmpdir(), 'whoisleuth-capture-request-limit-test-'));
+    const destination = path.join(parent, 'capture');
+    const fetched: string[] = [];
+    try {
+      const manifest = await captureRenderedPage({
+        targetUrl: 'https://example.test/', outputDirectory: destination, timeoutMs: 5000,
+      }, {
+        launchBrowser: async () => fakeBrowser({
+          subresourceUrls: Array.from(
+            { length: MAX_CAPTURE_REQUESTS + 5 },
+            (_, index) => `https://example.test/asset-${index}.js`,
+          ),
+        }),
+        fetchResource: async (url) => {
+          fetched.push(url);
+          return new Response('', { status: 200 });
+        },
+        resolveAddresses: async () => [{ address: '192.0.2.1', family: 4 }],
+      });
+      assert.equal(fetched.length, MAX_CAPTURE_REQUESTS);
       assert.equal(manifest.captures[0]?.completeness, 'partial');
     } finally {
       await rm(parent, { recursive: true, force: true });

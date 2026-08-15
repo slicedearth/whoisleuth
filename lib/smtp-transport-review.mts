@@ -31,7 +31,7 @@ import {
 } from './dnssec-chain-validation.mts';
 import { isPrivateAddress } from './safe-fetch.mts';
 import { analyzeTlsaEvidence, type TlsaEvidenceReport } from './tlsa-evidence.mts';
-import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from './observation.mts';
+import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from '../packages/evidence/observation.mts';
 
 const MAIL_TRANSPORT_INPUT_SCHEMA = 'whoisleuth.mail-transport.input';
 const MAIL_TRANSPORT_INPUT_VERSION = 1;

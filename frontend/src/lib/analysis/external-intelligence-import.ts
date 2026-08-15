@@ -6,7 +6,7 @@ import {
   type CaseAssertionExternalProvenance,
   type CaseAssertionRecord,
 } from './case-response-model.ts';
-import { normalizeExplicitIsoTimestamp } from '../../../../lib/observation.mts';
+import { normalizeExplicitIsoTimestamp } from '../../../../packages/evidence/observation.mts';
 
 export const MAX_EXTERNAL_INTELLIGENCE_IMPORT_BYTES = 512 * 1024;
 export const MAX_EXTERNAL_INTELLIGENCE_OBJECTS = 500;

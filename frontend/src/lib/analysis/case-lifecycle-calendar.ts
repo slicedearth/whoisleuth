@@ -1,5 +1,5 @@
 import type { CaseRecord } from './case-model.ts';
-import { normalizeExplicitIsoTimestamp } from '../../../../lib/observation.mts';
+import { normalizeExplicitIsoTimestamp } from '../../../../packages/evidence/observation.mts';
 
 export const CASE_LIFECYCLE_CALENDAR_SCHEMA = 'whoisleuth.case-review-calendar';
 export const MAX_CASE_LIFECYCLE_EVENTS = 500;

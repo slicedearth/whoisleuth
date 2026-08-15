@@ -3,7 +3,7 @@
 // converts the shared safe-fetch trace and selected response metadata into an
 // additive evidence object suitable for API responses and exports.
 
-import { createObservation } from './observation.mts';
+import { createObservation } from '../packages/evidence/observation.mts';
 import {
   MAX_HTTP_ATTEMPTS,
   MAX_HTTP_ERROR_LENGTH,

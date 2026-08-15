@@ -6,7 +6,10 @@ import {
   sha256ArtifactDigestV2,
   SORTED_JSON_V2,
 } from './artifact-integrity.ts';
-import type { LookupAssetGraph } from './lookup-asset-graph.ts';
+import {
+  LOOKUP_ASSET_GRAPH_SCHEMA,
+  type LookupAssetGraph,
+} from './lookup-asset-graph.ts';
 import type { LookupInvestigationBrief } from './lookup-investigation-brief.ts';
 
 export const INVESTIGATION_CAPSULE_SCHEMA = 'whoisleuth.investigation-capsule';
@@ -145,7 +148,7 @@ export async function buildInvestigationCapsule(input: BuildInvestigationCapsule
     sourceContracts: [
       { id: 'lookup-evidence', schema: evidenceSchema, version: evidenceVersion, digest: evidenceDigest, embedded: false },
       { id: 'investigation-brief', schema: input.brief.schema, version: input.brief.schemaVersion, digest: briefDigest, embedded: true },
-      { id: 'asset-graph', schema: 'whoisleuth.lookup-asset-graph', version: input.graph.version, digest: graphDigest, embedded: true },
+      { id: 'asset-graph', schema: LOOKUP_ASSET_GRAPH_SCHEMA, version: input.graph.version, digest: graphDigest, embedded: true },
       ...(analystRecords && analystRecordsDigest
         ? [{ id: 'analyst-records', schema: 'whoisleuth.case-analyst-records', version: 1, digest: analystRecordsDigest, embedded: true }]
         : []),

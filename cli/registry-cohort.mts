@@ -1,7 +1,7 @@
 import { Buffer } from 'node:buffer';
 
-import { canonicalArtifactJsonV2 } from '../frontend/src/lib/analysis/artifact-integrity.ts';
-import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from '../lib/observation.mts';
+import { canonicalArtifactJsonV2 } from '../packages/evidence/artifact-integrity.mts';
+import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from '../packages/evidence/observation.mts';
 import { scanBoundedJson } from './bounded-json.mts';
 import { CliUsageError } from './errors.mts';
 import { buildRegistryDoctorReport } from './registry-doctor.mts';

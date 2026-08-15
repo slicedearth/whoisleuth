@@ -5,7 +5,7 @@
 // bounded record; the response body itself is discarded after parsing.
 
 import { safeFetchDetailed, readTextCapped } from './safe-fetch.mts';
-import { createObservation } from './observation.mts';
+import { createObservation } from '../packages/evidence/observation.mts';
 
 type SecurityTxtState = 'present' | 'stale' | 'partial' | 'absent' | 'malformed' | 'unsupported' | 'unavailable';
 type SecurityTxtFetch = typeof safeFetchDetailed;

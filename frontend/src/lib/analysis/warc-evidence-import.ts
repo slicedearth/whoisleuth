@@ -5,7 +5,7 @@ import {
   type ExternalFindingsDocument,
 } from './external-findings-import.ts';
 import { normalizeDomain } from './case-model.ts';
-import { normalizeExplicitIsoTimestamp } from '../../../../lib/observation.mts';
+import { normalizeExplicitIsoTimestamp } from '../../../../packages/evidence/observation.mts';
 
 export const MAX_WARC_IMPORT_BYTES = 8 * 1024 * 1024;
 export const MAX_WARC_RECORDS = 100;

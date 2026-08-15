@@ -1,7 +1,7 @@
 import { validateDnssecEvidence, type DnssecEvidenceReport } from './dnssec-evidence-validation.mts';
 import { reviewRpkiRoute, type RpkiEvidenceReport } from './rpki-evidence.mts';
 import { analyzeTlsaEvidence, type TlsaEvidenceReport } from './tlsa-evidence.mts';
-import { normalizeExplicitIsoTimestamp } from './observation.mts';
+import { normalizeExplicitIsoTimestamp } from '../packages/evidence/observation.mts';
 
 const CRYPTOGRAPHIC_ASSURANCE_INPUT_SCHEMA = 'whoisleuth.cryptographic-assurance.input';
 const CRYPTOGRAPHIC_ASSURANCE_SCHEMA = 'whoisleuth.cryptographic-assurance.review';

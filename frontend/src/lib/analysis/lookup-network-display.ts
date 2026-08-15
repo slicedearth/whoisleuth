@@ -21,7 +21,7 @@ import {
   MAX_LOOKUP_TLS_FINDINGS,
   MAX_LOOKUP_TLS_NAME_VALUES,
 } from '../../../../lib/lookup-network-evidence-bounds.mts';
-import { MAX_OBSERVATION_DIAGNOSTICS } from '../../../../lib/observation.mts';
+import { MAX_OBSERVATION_DIAGNOSTICS } from '../../../../packages/evidence/observation.mts';
 import { deliveryMetadataDisplay } from './lookup-homepage-metadata-display.ts';
 
 function httpsServiceBindingValue(value: unknown): string {

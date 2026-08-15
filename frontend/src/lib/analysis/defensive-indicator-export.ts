@@ -4,6 +4,8 @@
 import { normalizeDomain } from './case-model.ts';
 
 export const DEFENSIVE_INDICATOR_EXPORT_VERSION = 2;
+export const DEFENSIVE_INDICATOR_MANIFEST_SCHEMA = 'whoisleuth.defensive-indicator-manifest';
+export const DEFENSIVE_INDICATOR_ROLLBACK_SCHEMA = 'whoisleuth.defensive-indicator-rollback';
 export const MAX_DEFENSIVE_INDICATORS = 2000;
 export const MAX_DEFENSIVE_INDICATOR_INPUTS = MAX_DEFENSIVE_INDICATORS * 4;
 export const DEFENSIVE_INDICATOR_FORMATS = Object.freeze(['domains', 'hosts', 'dnsmasq', 'rpz'] as const);
@@ -265,7 +267,7 @@ export function buildDefensiveIndicatorExport(
   const collected = prepareDefensiveIndicatorExport(records, options);
   const expiresAt = new Date(Date.parse(generatedAt) + expiryDays * 86_400_000).toISOString();
   const manifest = {
-    schema: 'whoisleuth.defensive-indicator-manifest',
+    schema: DEFENSIVE_INDICATOR_MANIFEST_SCHEMA,
     version: DEFENSIVE_INDICATOR_EXPORT_VERSION,
     generatedAt,
     expiresAt,
@@ -283,7 +285,7 @@ export function buildDefensiveIndicatorExport(
     exclusions: collected.exclusions,
   };
   const rollback = {
-    schema: 'whoisleuth.defensive-indicator-rollback',
+    schema: DEFENSIVE_INDICATOR_ROLLBACK_SCHEMA,
     version: DEFENSIVE_INDICATOR_EXPORT_VERSION,
     generatedAt,
     removes: collected.domains.map((domain) => ({

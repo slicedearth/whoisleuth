@@ -73,14 +73,19 @@ export async function runDomainControlMonitor(
   let completed = 0;
   const worker = async () => {
     while (cursor < entries.length) {
+      options.signal?.throwIfAborted();
       const index = cursor++;
       const entry = entries[index];
       if (!entry) break;
       try {
         const classified = classifyQuery(entry.domain);
         const result = await options.executeLookup(classified, { fast: false, compact: false, ...(options.signal ? { signal: options.signal } : {}) });
+        options.signal?.throwIfAborted();
         lookups[index] = buildCliLookupDocument(entry.domain, classified, result as UnknownRecord, generatedAt, 'deep');
       } catch (cause) {
+        if (options.signal?.aborted) {
+          throw options.signal.reason || new DOMException('Aborted', 'AbortError');
+        }
         failures.push({ domain: entry.domain, error: boundedCliErrorMessage(cause, 'Lookup failed') });
       } finally {
         completed += 1;
@@ -89,6 +94,7 @@ export async function runDomainControlMonitor(
     }
   };
   await Promise.all(Array.from({ length: Math.min(options.concurrency, Math.max(entries.length, 1)) }, worker));
+  options.signal?.throwIfAborted();
   const successful = lookups.filter(Boolean);
   if (!successful.length) throw new Error('No domain-control monitor lookup completed successfully.');
   const review = buildCliDomainControlReview(JSON.stringify({

@@ -63,7 +63,7 @@ test('public privacy notices track versioned browser-local data contracts', asyn
 
   for (const notice of [rootNotice, publicNotice]) {
     const compact = notice.replace(/\s+/gu, ' ');
-    assert.match(compact, /Last updated: 14 August 2026/u);
+    assert.match(compact, /Last updated: 16 August 2026/u);
     assert.match(compact, /same bounded homepage (?:request|response)/u);
     assert.match(compact, /fixed robots and Twitter Card declaration classes/u);
     assert.match(compact, /(?:Content-Encoding, Cache-Control|selected-response content-coding and cache-policy metadata)/u);
@@ -121,7 +121,7 @@ test('public privacy notices track versioned browser-local data contracts', asyn
     assert.match(compact, /explicit authorised-capture action/u);
     assert.match(compact, /executes remote page JavaScript/u);
     assert.match(compact, /Each admitted resource operator receives the exact requested URL, including its path and query/u);
-    assert.match(compact, /Structured manifest and digest fields retain only the selected target hostname, the final HTTP\(S\) origin, one control-sanitised page title of up to 300 characters, and admitted public resource hostnames, never those request paths or queries/u);
+    assert.match(compact, /They do not include dedicated request-path or query fields, but the page-controlled title may itself reproduce a path or query/u);
     assert.match(compact, /local fixed-size screenshot/u);
     assert.match(compact, /screenshot necessarily preserves visible rendered content and may include page text or a page-reflected path or query until the operator deletes it/u);
     assert.match(compact, /not uploaded to WHOISleuth/u);
@@ -130,6 +130,8 @@ test('public privacy notices track versioned browser-local data contracts', asyn
     assert.match(compact, /tag sequence omits nesting and attributes/u);
     assert.match(compact, /neither is an exact DOM or visibility claim/u);
     assert.match(compact, /Version 2 comparison output reports the page-title equality state without copying either bounded title/u);
+    assert.match(compact, /Every capability family and installed CLI operation represented by the current product contract has an explicit execution plane/u);
+    assert.match(compact, /does not contain targets, credentials, runtime secrets, or collected evidence/u);
   }
 
   const compactDisclosure = disclosure.replace(/\s+/gu, ' ');

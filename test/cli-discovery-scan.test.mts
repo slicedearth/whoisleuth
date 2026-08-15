@@ -344,6 +344,28 @@ describe('discovery observation snapshots', () => {
 });
 
 describe('discover-scan runner', () => {
+  test('rejects invalid or non-public resolver selections before planning or generation', async () => {
+    let generationCalls = 0;
+    for (const resolver of ['not-an-ip', '127.0.0.1', '192.0.2.1']) {
+      const stdout = capture();
+      const stderr = capture();
+      const code = await runCli([
+        'discover-scan', 'brand.example', '--plan', '--resolver', resolver, '--json',
+      ], {
+        stdout: stdout.stream,
+        stderr: stderr.stream,
+        loadTyposquatGenerator: async () => {
+          generationCalls += 1;
+          throw new Error('Candidate generation must not run for an invalid resolver');
+        },
+      });
+      assert.equal(code, EXIT_CODES.USAGE);
+      assert.equal(stdout.value(), '');
+      assert.match(stderr.value(), /DNS resolver selection/u);
+    }
+    assert.equal(generationCalls, 0);
+  });
+
   test('composes generation, compact collection, review, and JSON output', async () => {
     const stdout = capture();
     const stderr = capture();

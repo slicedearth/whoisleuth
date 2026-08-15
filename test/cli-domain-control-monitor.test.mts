@@ -56,6 +56,26 @@ describe('CLI one-shot domain control monitor', () => {
     assert.equal(JSON.parse(stdout).schema, 'whoisleuth.cli.domain-control-monitor');
   });
 
+  test('propagates cancellation and stops admitting monitor lookups', async () => {
+    const controller = new AbortController();
+    let calls = 0;
+    await assert.rejects(
+      () => runDomainControlMonitor(JSON.stringify(manifest()), null, {
+        executeLookup: async () => {
+          calls += 1;
+          controller.abort(new DOMException('Cancelled', 'AbortError'));
+          return result('example.test');
+        },
+        now: () => NOW,
+        limit: 3,
+        concurrency: 1,
+        signal: controller.signal,
+      }),
+      { name: 'AbortError' },
+    );
+    assert.equal(calls, 1);
+  });
+
   test('rejects structurally unsafe manifest and previous JSON before collection', async () => {
     let calls = 0;
     const executeLookup = async () => {

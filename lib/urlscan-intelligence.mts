@@ -13,7 +13,7 @@ import {
   normalizeThreatIntelligenceTarget,
 } from './threat-intelligence-contract.mts';
 import type { ThreatIntelligenceResult } from './threat-intelligence-contract.mts';
-import { normalizeExplicitIsoTimestamp } from './observation.mts';
+import { normalizeExplicitIsoTimestamp } from '../packages/evidence/observation.mts';
 
 type EnvironmentInput = Record<string, unknown>;
 type AdapterDependencies = {

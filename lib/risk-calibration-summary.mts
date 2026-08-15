@@ -1,11 +1,20 @@
 import { ANALYST_REVIEW_REASON_VALUES } from './analyst-taxonomy.mts';
 import { scanBoundedJson } from './bounded-json.mts';
 import { RISK_REVIEW_THRESHOLD } from './risk-scoring.mts';
+import {
+  MAX_RISK_CALIBRATION_RECORDS,
+  MAX_RISK_CALIBRATION_SUMMARY_BYTES,
+  RISK_CALIBRATION_DATASET_SCHEMA,
+  RISK_CALIBRATION_REPORT_SCHEMA,
+  RISK_CALIBRATION_REPORT_VERSION,
+  SUPPORTED_RISK_CALIBRATION_DATASET_VERSIONS,
+  type RiskCalibrationDatasetVersion,
+} from '../packages/contracts/risk-calibration.mts';
 
-export const RISK_CALIBRATION_SUMMARY_SCHEMA = 'whoisleuth.cli.risk-calibration';
-export const RISK_CALIBRATION_SUMMARY_VERSION = 3;
-export const RISK_CALIBRATION_SUMMARY_MAX_BYTES = 512 * 1024;
-export const RISK_CALIBRATION_SUMMARY_MAX_RECORDS = 500;
+export const RISK_CALIBRATION_SUMMARY_SCHEMA = RISK_CALIBRATION_REPORT_SCHEMA;
+export const RISK_CALIBRATION_SUMMARY_VERSION = RISK_CALIBRATION_REPORT_VERSION;
+export const RISK_CALIBRATION_SUMMARY_MAX_BYTES = MAX_RISK_CALIBRATION_SUMMARY_BYTES;
+export const RISK_CALIBRATION_SUMMARY_MAX_RECORDS = MAX_RISK_CALIBRATION_RECORDS;
 export const RISK_CALIBRATION_SUMMARY_MIN_STRATUM_SAMPLE = 20;
 export const RISK_CALIBRATION_SUMMARY_THRESHOLDS = Object.freeze(
   [...new Set([40, 50, 60, RISK_REVIEW_THRESHOLD, 80, 90])].sort((left, right) => left - right),
@@ -40,8 +49,8 @@ export type RiskCalibrationSummaryReport = Readonly<{
   mode: 'summary';
   generatedAt: string;
   dataset: Readonly<{
-    schema: 'whoisleuth.risk-calibration-dataset';
-    version: 1 | 2;
+    schema: typeof RISK_CALIBRATION_DATASET_SCHEMA;
+    version: RiskCalibrationDatasetVersion;
     recordCount: number;
   }>;
   riskModelVersion: number;
@@ -263,7 +272,9 @@ export function parseRiskCalibrationSummaryReport(raw: string): RiskCalibrationS
 
   const dataset = object(root.dataset, 'Risk calibration dataset metadata');
   exactKeys(dataset, DATASET_KEYS, 'Risk calibration dataset metadata');
-  if (dataset.schema !== 'whoisleuth.risk-calibration-dataset' || (dataset.version !== 1 && dataset.version !== 2)) {
+  if (dataset.schema !== RISK_CALIBRATION_DATASET_SCHEMA
+    || typeof dataset.version !== 'number'
+    || !SUPPORTED_RISK_CALIBRATION_DATASET_VERSIONS.includes(dataset.version as RiskCalibrationDatasetVersion)) {
     throw new Error('Risk calibration dataset metadata has an unsupported schema or version.');
   }
   const recordCount = boundedCount(dataset.recordCount, 'Risk calibration dataset record count');
@@ -389,8 +400,8 @@ export function parseRiskCalibrationSummaryReport(raw: string): RiskCalibrationS
     mode: 'summary',
     generatedAt: canonicalTimestamp(root.generatedAt, 'Risk calibration generation time'),
     dataset: Object.freeze({
-      schema: 'whoisleuth.risk-calibration-dataset',
-      version: dataset.version,
+      schema: RISK_CALIBRATION_DATASET_SCHEMA,
+      version: dataset.version as RiskCalibrationDatasetVersion,
       recordCount,
     }),
     riskModelVersion,

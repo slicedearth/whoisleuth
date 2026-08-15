@@ -4,7 +4,7 @@
 // names, values, labels, placeholders, arbitrary attributes, and action URLs
 // never enter this profile.
 
-import { createObservation } from './observation.mts';
+import { createObservation } from '../packages/evidence/observation.mts';
 import {
   MAX_STATIC_FORMS,
   MAX_STATIC_INPUTS,

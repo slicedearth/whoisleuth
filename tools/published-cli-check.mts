@@ -16,6 +16,7 @@ import {
   CLI_PACKAGE_REPORT_SCHEMA,
   CLI_PACKAGE_REPORT_VERSION,
   MAX_CLI_PACKAGE_ENTRIES,
+  MAX_CLI_PACKAGE_INSTALLED_CHECKS,
   MAX_CLI_PACKAGE_MODULES,
   MAX_CLI_PACKAGE_PACKED_BYTES,
   MAX_CLI_PACKAGE_UNPACKED_BYTES,
@@ -259,7 +260,9 @@ export function validateCandidateReport(value: unknown, expectedVersionValue: un
   const dependencies = record(report.runtimeDependencies, 'Reviewed runtime dependencies');
   exactKeys(dependencies, RUNTIME_DEPENDENCIES, 'Reviewed runtime dependencies');
   for (const name of RUNTIME_DEPENDENCIES) normalizeSemanticVersion(dependencies[name]);
-  if (!Array.isArray(report.installedChecks) || report.installedChecks.length === 0 || report.installedChecks.length > 64
+  if (!Array.isArray(report.installedChecks)
+    || report.installedChecks.length === 0
+    || report.installedChecks.length > MAX_CLI_PACKAGE_INSTALLED_CHECKS
     || report.installedChecks.some((item) => typeof item !== 'string' || !item || item.length > 80)) {
     throw new TypeError('Reviewed installed checks must be a bounded non-empty string array.');
   }

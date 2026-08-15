@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import path from 'node:path';
-import { normalizeExplicitIsoTimestamp } from '../lib/observation.mts';
+import { normalizeExplicitIsoTimestamp } from '../packages/evidence/observation.mts';
 
 export type MaintainerJsonRecord = Record<string, unknown>;
 

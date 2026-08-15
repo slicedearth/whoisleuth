@@ -1,9 +1,9 @@
 import type { BulkLookupResult, ClassifiedQuery } from '../bulk.mts';
 import { bulkDnsSummary } from '../bulk-output.mts';
 import { SAVED_LOOKUP_SCHEMA_VERSION, type UnknownRecord } from '../saved-lookup.mts';
-import { normalizeExplicitIsoTimestamp } from '../../lib/observation.mts';
+import { normalizeExplicitIsoTimestamp } from '../../packages/evidence/observation.mts';
+import { CLI_LOOKUP_SCHEMA } from '../../packages/contracts/cli-lookup.mts';
 
-const CLI_LOOKUP_SCHEMA = 'whoisleuth.cli.lookup';
 const CLI_BULK_SCHEMA = 'whoisleuth.cli.bulk';
 const CLI_BULK_ITEM_SCHEMA = 'whoisleuth.cli.bulk.item';
 const CLI_CT_SEARCH_SCHEMA = 'whoisleuth.cli.ct-search';

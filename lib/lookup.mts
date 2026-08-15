@@ -33,6 +33,7 @@ import {
 } from './lookup-threat-provider-inventory.mts';
 import { createThreatIntelligenceResult } from './threat-intelligence-contract.mts';
 import type { ThreatIntelligenceResult } from './threat-intelligence-contract.mts';
+import { THREAT_INTELLIGENCE_ENVELOPE_VERSION } from './threat-intelligence-types.mts';
 import { buildRegistryInsights } from './registry-insights.mts';
 import { inspectSslblCertificate } from './sslbl-intelligence.mts';
 import {
@@ -726,7 +727,7 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
         ));
   }
   const threatIntelligence = threatIntelligenceProviders.length
-    ? { version: 1, providers: threatIntelligenceProviders }
+    ? { version: THREAT_INTELLIGENCE_ENVELOPE_VERSION, providers: threatIntelligenceProviders }
     : null;
   const registrarRdapParsed = registrarRdap
     && typeof registrarRdap.parsed === 'object'

@@ -195,6 +195,7 @@ describe('CLI argument parsing', () => {
     assert.throws(() => parseCliArguments(['commands', '--palette', 'sepia']), /auto, light, or dark/u);
     assert.throws(() => parseCliArguments(['commands', '--palette', 'dark', '--palette', 'light']), /only once/u);
     assert.throws(() => parseCliArguments(['lookup', 'example.test', '--save-lookup', 'review.json']), /requires --browse/u);
+    assert.throws(() => parseCliArguments(['lookup', '--browse']), /requires a positional target/u);
     assert.throws(() => parseCliArguments(['lookup', 'example.test', '--browse', '--save-lookup']), /bounded file path/u);
     assert.throws(() => parseCliArguments(['lookup', 'example.test', '--browse', '--save-lookup', '-']), /bounded file path/u);
   });
@@ -303,7 +304,12 @@ describe('CLI argument parsing', () => {
     const catalogue = JSON.parse(stdout.value());
     assert.equal(catalogue.schema, 'whoisleuth.cli.command-catalogue');
     assert.equal(catalogue.version, 1);
-    assert.ok(catalogue.commands.length >= 25);
+    assert.equal(catalogue.commands.length, 47);
+    for (const entry of catalogue.commands) {
+      assert.deepEqual(Object.keys(entry).sort(), [
+        'boundary', 'collection', 'command', 'description', 'example', 'usage',
+      ]);
+    }
     const lookup = catalogue.commands.find((entry: { command: string }) => entry.command === 'lookup');
     assert.equal(lookup.collection.mode, 'network');
     assert.match(lookup.usage, /--plan/u);
@@ -1232,6 +1238,30 @@ test('repository source exposes an executable local CLI entry point', () => {
   assert.match(result.stdout, /Licensed under AGPL-3\.0-only/);
   assert.match(result.stdout, /Source and licence: https:\/\/github\.com\/slicedearth\/whoisleuth/);
   assert.equal(result.stderr, '');
+
+  const shortHelp = spawnSync(process.execPath, [entryPoint, '-h'], { encoding: 'utf8' });
+  assert.equal(shortHelp.status, EXIT_CODES.SUCCESS);
+  assert.equal(shortHelp.stdout, result.stdout);
+  assert.equal(shortHelp.stderr, '');
+
+  const packageVersion = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).version;
+  for (const alias of ['--version', '-V']) {
+    const version = spawnSync(process.execPath, [entryPoint, alias], { encoding: 'utf8' });
+    assert.equal(version.status, EXIT_CODES.SUCCESS);
+    assert.equal(version.stdout, `${packageVersion}\n`);
+    assert.equal(version.stderr, '');
+  }
+
+  const helpBeforeProfile = spawnSync(process.execPath, [
+    entryPoint,
+    'lookup',
+    '--help',
+    '--config',
+    path.join(root, 'fixtures', 'missing-cli-profile.json'),
+  ], { encoding: 'utf8' });
+  assert.equal(helpBeforeProfile.status, EXIT_CODES.USAGE);
+  assert.match(helpBeforeProfile.stderr, /Help accepts only an optional command name/u);
+  assert.doesNotMatch(helpBeforeProfile.stderr, /profile|configuration could not be read/iu);
 
   const invalidProfile = spawnSync(process.execPath, [
     entryPoint,

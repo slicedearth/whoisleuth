@@ -5,7 +5,7 @@
 
 import { normalizeDomain } from './case-model.ts';
 import { normalizeCtQuery } from '../../../../lib/ct-query.mts';
-import { normalizeExplicitIsoTimestamp } from '../../../../lib/observation.mts';
+import { normalizeExplicitIsoTimestamp } from '../../../../packages/evidence/observation.mts';
 
 export const CT_HISTORY_SCHEMA_VERSION = 3;
 export const MAX_CT_HISTORY_SEARCHES = 30;

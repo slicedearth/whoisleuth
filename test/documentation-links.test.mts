@@ -38,6 +38,7 @@ const REQUIRED_DELIVERY_COMMANDS = [
   'npm run check',
   'npm run build',
   'npm run architecture:check',
+  'npm run capabilities:check',
   'npm run schema:inventory',
   'npm run licenses:check',
   'npm run cli:package:check',

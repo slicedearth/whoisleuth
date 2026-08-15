@@ -1,6 +1,6 @@
 import { normalizeDomain } from './case-model.ts';
 import { parse } from 'tldts';
-import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from '../../../../lib/observation.mts';
+import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from '../../../../packages/evidence/observation.mts';
 
 export const INVESTIGATION_GUIDE_SCHEMA = 'whoisleuth.investigation-recipe';
 export const INVESTIGATION_GUIDE_VERSION = 5;

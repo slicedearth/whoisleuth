@@ -8,6 +8,8 @@ import { fileURLToPath } from 'node:url';
 import {
   CLI_PACKAGE_INSTALLED_CHECK_TIMEOUT_MS,
   CLI_PACKAGE_LONG_PROCESS_TIMEOUT_MS,
+  MAX_CLI_COMMAND_INVENTORY_BYTES,
+  assertCliCommandInventory,
   assertCliPackageSourceSnapshot,
   buildCliPackageManifest,
   captureCliPackageSourceSnapshot,
@@ -16,6 +18,7 @@ import {
   isCliPackageCompilerInputPath,
   materializeCliPackageSourceSnapshot,
   parseArguments,
+  parseCliCommandInventory,
   selectCliPackageSources,
   selectMaterializedCliPackageSources,
 } from '../tools/cli-package.mts';
@@ -72,6 +75,21 @@ describe('scoped CLI package contract', () => {
   test('bounds both long-running package assembly and installed command processes', () => {
     assert.equal(CLI_PACKAGE_LONG_PROCESS_TIMEOUT_MS, 120_000);
     assert.equal(CLI_PACKAGE_INSTALLED_CHECK_TIMEOUT_MS, 15_000);
+    assert.equal(MAX_CLI_COMMAND_INVENTORY_BYTES, 4 * 1024);
+  });
+
+  test('uses an independent exact command inventory rather than a live self-projection', async () => {
+    const frozen = JSON.parse(await readFile(
+      path.join(REPOSITORY_ROOT, 'fixtures', 'cli-command-inventory-v1.json'),
+      'utf8',
+    ));
+    const parsed = parseCliCommandInventory(frozen);
+    assert.equal(parsed.length, 47);
+    assert.deepEqual(assertCliCommandInventory(parsed, frozen), parsed);
+    assert.throws(() => parseCliCommandInventory(parsed.slice(1)), /exactly 47 commands/u);
+    assert.throws(() => parseCliCommandInventory([...parsed.slice(0, -1), parsed[0]]), /unique canonical/u);
+    assert.throws(() => assertCliCommandInventory([...parsed].reverse(), frozen), /independent version-1 command inventory/u);
+    assert.throws(() => assertCliCommandInventory([...parsed.slice(0, -1), 'future-command'], frozen), /independent version-1 command inventory/u);
   });
 
   test('validates compiler context paths with bounded linear segment checks', () => {
@@ -92,6 +110,10 @@ describe('scoped CLI package contract', () => {
         { source: 'lib/lookup.mts', dependencies: [] },
         { source: 'frontend/src/lib/bounded-json.ts', dependencies: [] },
         { source: 'frontend/src/lib/analysis/workspace-archive.ts', dependencies: [] },
+        { source: 'packages/contracts/risk-calibration.mts', dependencies: [] },
+        { source: 'packages/evidence/artifact-integrity.mts', dependencies: [] },
+        { source: 'packages/evidence/observation.mts', dependencies: [] },
+        { source: 'packages/web-capture/capture.mts', dependencies: [] },
         { source: 'test/cli.test.mts', dependencies: [] },
       ],
     });
@@ -101,7 +123,43 @@ describe('scoped CLI package contract', () => {
       'frontend/src/lib/analysis/workspace-archive.ts',
       'frontend/src/lib/bounded-json.ts',
       'lib/lookup.mts',
+      'packages/contracts/risk-calibration.mts',
+      'packages/evidence/artifact-integrity.mts',
+      'packages/evidence/observation.mts',
     ]);
+  });
+
+  test('retains released domain-control facade paths as explicit package roots', () => {
+    const roots = [
+      'bin/whoisleuth.mts',
+      'cli/runner.mts',
+      'frontend/src/lib/analysis/domain-control-manifest-core.ts',
+      'frontend/src/lib/analysis/domain-control-records.ts',
+    ];
+    const selected = selectCliPackageSources({
+      modules: [
+        ...roots.map((source) => ({ source, dependencies: [] })),
+        { source: 'packages/evidence/domain-control-runtime.mts', dependencies: [] },
+        { source: 'packages/evidence/domain-name.mts', dependencies: [] },
+      ],
+    }, {
+      maximumModules: 6,
+      requiredSources: roots,
+    });
+    assert.deepEqual(selected, [
+      'bin/whoisleuth.mts',
+      'cli/runner.mts',
+      'frontend/src/lib/analysis/domain-control-manifest-core.ts',
+      'frontend/src/lib/analysis/domain-control-records.ts',
+      'packages/evidence/domain-control-runtime.mts',
+      'packages/evidence/domain-name.mts',
+    ]);
+    assert.throws(() => selectCliPackageSources({
+      modules: roots.slice(0, -1).map((source) => ({ source, dependencies: [] })),
+    }, {
+      maximumModules: 4,
+      requiredSources: roots,
+    }), /missing required CLI source.*domain-control-records/iu);
   });
 
   test('rejects unresolved, traversing, and incomplete dependency graphs', () => {
@@ -200,6 +258,8 @@ describe('scoped CLI package contract', () => {
     assert.equal(Object.hasOwn(manifest.dependencies as object, 'express'), false);
     assert.equal(Object.hasOwn(manifest, 'publishConfig'), false);
     assert.ok((manifest.files as string[]).includes('frontend/src/lib/**/*.js'));
+    assert.ok((manifest.files as string[]).includes('packages/contracts/**/*.mjs'));
+    assert.ok((manifest.files as string[]).includes('packages/evidence/**/*.mjs'));
   });
 
   test('generates public metadata only for an explicit release candidate', () => {

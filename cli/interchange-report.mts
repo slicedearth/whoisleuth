@@ -14,7 +14,7 @@ import {
   mergeBrandProfiles,
 } from '../frontend/src/lib/analysis/brand-profile-model.ts';
 import { parseBoundedJsonObject } from './bounded-json.mts';
-import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from '../lib/observation.mts';
+import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from '../packages/evidence/observation.mts';
 
 export const INTERCHANGE_FIDELITY_REPORT_SCHEMA = 'whoisleuth.interchange-fidelity-report';
 export const INTERCHANGE_FIDELITY_REPORT_VERSION = 2;

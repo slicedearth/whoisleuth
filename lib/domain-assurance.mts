@@ -1,7 +1,7 @@
 import { domainToASCII } from 'node:url';
 
 import { exactKeys } from './bounded-contract-normalizers.mts';
-import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from './observation.mts';
+import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from '../packages/evidence/observation.mts';
 
 const DOMAIN_ASSURANCE_INPUT_SCHEMA = 'whoisleuth.domain-assurance.input';
 const DOMAIN_ASSURANCE_SCHEMA = 'whoisleuth.domain-assurance';

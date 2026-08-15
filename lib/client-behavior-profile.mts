@@ -3,7 +3,7 @@
 // indicator identifiers, descriptions, evidence classes, and bounded counts
 // leave this module; script references and contents are discarded.
 
-import { createObservation } from './observation.mts';
+import { createObservation } from '../packages/evidence/observation.mts';
 import {
   analyzeStaticHtml,
   type StaticHtmlAnalysis,
