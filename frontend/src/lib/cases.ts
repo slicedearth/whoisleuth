@@ -29,7 +29,10 @@ import {
   mergeExternalIntelligenceIntoCase,
   type ExternalIntelligencePreview,
 } from './analysis/external-intelligence-import.ts';
-import { buildRiskCalibrationDatasetExport } from './analysis/risk-calibration-export.ts';
+import {
+  buildRiskCalibrationDatasetExport,
+  serializeRiskCalibrationDatasetExport,
+} from './analysis/risk-calibration-export.ts';
 
 export type RiskCalibrationExportPreview = Readonly<{
   selected: number;
@@ -337,7 +340,9 @@ export async function exportRiskCalibrationDataset(
   if (!payload.records.length) {
     throw new Error('The selected cases do not contain reviewed dispositions with compatible retained evidence.');
   }
-  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const blob = new Blob([serializeRiskCalibrationDatasetExport(payload)], {
+    type: 'application/json;charset=utf-8',
+  });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
   anchor.href = url;

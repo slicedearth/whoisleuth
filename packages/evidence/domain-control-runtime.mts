@@ -1,8 +1,6 @@
 import {
   canonicalArtifactJsonFor,
   resolveArtifactCanonicalization,
-  SORTED_JSON_V1,
-  SORTED_JSON_V2,
   type ArtifactCanonicalization,
 } from './artifact-integrity.mts';
 import { normalizeDomain } from './domain-name.mts';
@@ -15,6 +13,7 @@ import {
   DOMAIN_CONTROL_MANIFEST_INPUT_SCHEMA as DOMAIN_CONTROL_PASSPORT_INPUT_SCHEMA,
   DOMAIN_CONTROL_MANIFEST_INPUT_KEYS,
   DOMAIN_CONTROL_MANIFEST_INPUT_VERSION,
+  DOMAIN_CONTROL_MANIFEST_CANONICALIZATION_ROUTES,
   DOMAIN_CONTROL_MANIFEST_INTEGRITY_KEYS,
   DOMAIN_CONTROL_MANIFEST_LIMITATIONS,
   DOMAIN_CONTROL_MANIFEST_ROOT_KEYS,
@@ -101,7 +100,7 @@ export type UnsignedDomainControlPassport = Readonly<{
 export type DomainControlPassport = UnsignedDomainControlPassport & Readonly<{
   integrity: Readonly<{
     algorithm: 'SHA-256';
-    canonicalization: typeof SORTED_JSON_V1 | typeof SORTED_JSON_V2;
+    canonicalization: ArtifactCanonicalization;
     digestSha256: string;
   }>;
 }>;
@@ -640,10 +639,7 @@ function normalizeDomainControlPassportDocumentInternal(value: unknown): Normali
   const canonicalization = resolveArtifactCanonicalization(
     source.version,
     integrity.canonicalization,
-    [
-      { version: DOMAIN_CONTROL_PASSPORT_VERSION, canonicalization: SORTED_JSON_V1, explicit: true },
-      { version: DOMAIN_CONTROL_MANIFEST_VERSION, canonicalization: SORTED_JSON_V2, explicit: true },
-    ],
+    DOMAIN_CONTROL_MANIFEST_CANONICALIZATION_ROUTES,
     'Domain control manifest',
   );
   const baseUnsigned = buildUnsignedDomainControlPassportInternal({

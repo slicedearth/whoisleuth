@@ -1,0 +1,142 @@
+{
+  "schema": "whoisleuth.cli.risk-calibration",
+  "version": 1,
+  "generatedAt": "2026-08-18T00:00:00.000Z",
+  "dataset": {
+    "schema": "whoisleuth.risk-calibration-dataset",
+    "version": 1,
+    "recordCount": 1
+  },
+  "riskModelVersion": 6,
+  "currentReviewThreshold": 70,
+  "summary": {
+    "total": 1,
+    "positive": 1,
+    "negative": 0,
+    "excluded": 0,
+    "scoreBands": {
+      "not_scored": 0,
+      "0_39": 0,
+      "40_69": 0,
+      "70_100": 1
+    }
+  },
+  "thresholds": [
+    {
+      "threshold": 40,
+      "truePositive": 1,
+      "falsePositive": 0,
+      "trueNegative": 0,
+      "falseNegative": 0,
+      "precision": 1,
+      "recall": 1,
+      "specificity": null,
+      "falsePositiveRate": null
+    },
+    {
+      "threshold": 50,
+      "truePositive": 1,
+      "falsePositive": 0,
+      "trueNegative": 0,
+      "falseNegative": 0,
+      "precision": 1,
+      "recall": 1,
+      "specificity": null,
+      "falsePositiveRate": null
+    },
+    {
+      "threshold": 60,
+      "truePositive": 1,
+      "falsePositive": 0,
+      "trueNegative": 0,
+      "falseNegative": 0,
+      "precision": 1,
+      "recall": 1,
+      "specificity": null,
+      "falsePositiveRate": null
+    },
+    {
+      "threshold": 70,
+      "truePositive": 1,
+      "falsePositive": 0,
+      "trueNegative": 0,
+      "falseNegative": 0,
+      "precision": 1,
+      "recall": 1,
+      "specificity": null,
+      "falsePositiveRate": null
+    },
+    {
+      "threshold": 80,
+      "truePositive": 1,
+      "falsePositive": 0,
+      "trueNegative": 0,
+      "falseNegative": 0,
+      "precision": 1,
+      "recall": 1,
+      "specificity": null,
+      "falsePositiveRate": null
+    },
+    {
+      "threshold": 90,
+      "truePositive": 0,
+      "falsePositive": 0,
+      "trueNegative": 0,
+      "falseNegative": 1,
+      "precision": null,
+      "recall": 0,
+      "specificity": null,
+      "falsePositiveRate": null
+    }
+  ],
+  "records": [
+    {
+      "id": "calibration-1",
+      "domain": "candidate.example.test",
+      "analystDisposition": "confirmed_abuse",
+      "metricClass": "positive",
+      "includedInMetrics": true,
+      "exclusionReason": null,
+      "modelVersion": 6,
+      "score": 87,
+      "band": "70_100",
+      "factors": [
+        {
+          "label": "Base score for \"registered\"",
+          "delta": 10
+        },
+        {
+          "label": "High-similarity or phishing-term candidate context",
+          "delta": 18
+        },
+        {
+          "label": "Favicon matches your Brand Profile official site",
+          "delta": 18
+        },
+        {
+          "label": "Login/password form present",
+          "delta": 5
+        },
+        {
+          "label": "Corroborating context across 3 distinct evidence families",
+          "delta": 20
+        },
+        {
+          "label": "Active site in use",
+          "delta": 8
+        },
+        {
+          "label": "Mail server configured",
+          "delta": 8
+        }
+      ]
+    }
+  ],
+  "interpretation": {
+    "authority": "analyst_context_only",
+    "statement": "This offline replay compares heuristic Risk scores with analyst dispositions. It does not prove maliciousness or safety.",
+    "automaticTuning": false,
+    "networkRequests": false,
+    "persisted": false
+  }
+}

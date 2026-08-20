@@ -1,0 +1,36 @@
+{
+  "schema": "whoisleuth.risk-calibration-dataset",
+  "version": 2,
+  "records": [
+    {
+      "id": "calibration-1",
+      "domain": "candidate.example.test",
+      "analystDisposition": "confirmed_abuse",
+      "reviewReasonCode": "confirmed_credential_abuse",
+      "evidence": {
+        "availability": "registered",
+        "activityStatus": "active",
+        "mutationTypes": [
+          "dictionary"
+        ],
+        "domainAgeDays": 17,
+        "faviconMatch": true,
+        "hasPasswordField": true,
+        "hasMx": true,
+        "scanDepth": "deep",
+        "observedAt": "2026-08-18T00:00:00.000Z"
+      }
+    }
+  ],
+  "export": {
+    "selected": 1,
+    "included": 1,
+    "excluded": 0,
+    "exclusions": []
+  },
+  "limitations": [
+    "This file contains analyst-selected case domains, reviewed dispositions, and a bounded subset of normalised scoring inputs.",
+    "It excludes notes, tags, assertions, actions, contacts, raw source data, provider payloads, and stored Risk scores.",
+    "The CLI revalidates every record and does not tune the Risk model automatically. Analyst dispositions do not prove maliciousness or safety."
+  ]
+}

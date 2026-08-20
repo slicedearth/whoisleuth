@@ -6,6 +6,11 @@ import {
   normalizeExplicitIsoTimestamp,
   normalizeLegacyIsoTimestamp,
 } from '../packages/evidence/observation.mts';
+import {
+  CLI_LOOKUP_SCHEMA,
+  MAX_CLI_LOOKUP_BYTES,
+} from '../packages/contracts/cli-lookup.mts';
+import { normalizeCliLookupDocument } from './saved-lookup.mts';
 
 export const SOURCE_RELIABILITY_REPORT_SCHEMA = 'whoisleuth.source-reliability-report';
 export const SOURCE_RELIABILITY_REPORT_VERSION = 1;
@@ -129,7 +134,7 @@ const STATES = new Set<SourceState>([
   'stale',
 ]);
 const LOOKUP_SCHEMAS = new Set([
-  'whoisleuth.cli.lookup',
+  CLI_LOOKUP_SCHEMA,
   'whoisleuth.cli.bulk',
   'whoisleuth.cli.bulk.item',
 ]);
@@ -266,12 +271,26 @@ function parseValues(raw: string): UnknownRecord[] {
   });
 }
 
+function hasJsonArrayEnvelope(raw: string): boolean {
+  for (let index = 0; index < raw.length; index += 1) {
+    const code = raw.charCodeAt(index);
+    if (code === 0x20 || code === 0x09 || code === 0x0a || code === 0x0d) continue;
+    return code === 0x5b;
+  }
+  return false;
+}
+
 function parseLookupDocuments(values: readonly UnknownRecord[]): UnknownRecord[] {
   return values.map((document) => {
     const schema = String(document.schema);
-    const supported = schema === 'whoisleuth.cli.lookup'
-      ? document.version === 1 || document.version === 2
-      : document.version === 1;
+    if (schema === CLI_LOOKUP_SCHEMA) {
+      try {
+        return normalizeCliLookupDocument(document, { label: 'Source reliability Lookup input' });
+      } catch {
+        throw new TypeError('Source reliability input requires a supported bounded CLI Lookup document.');
+      }
+    }
+    const supported = document.version === 1;
     if (!LOOKUP_SCHEMAS.has(schema) || !supported) {
       throw new TypeError('Source reliability input requires CLI Lookup version 1 or 2, version 1 Bulk or Bulk-item documents, or only source reliability reports.');
     }
@@ -758,6 +777,11 @@ export function buildSourceReliabilityReport(
 ): SourceReliabilityReport {
   const normalizedGeneratedAt = normalizeExplicitIsoTimestamp(generatedAt);
   if (!normalizedGeneratedAt) throw new TypeError('Source reliability report time must use an explicit timezone.');
+  if (typeof raw === 'string'
+    && !hasJsonArrayEnvelope(raw)
+    && Buffer.byteLength(raw, 'utf8') > MAX_CLI_LOOKUP_BYTES) {
+    throw new TypeError('Source reliability input requires a supported bounded CLI Lookup document.');
+  }
   const values = parseValues(raw);
   const store = new Map<string, SourceAccumulator>();
   const reportInputs = values.every((value) => value.schema === SOURCE_RELIABILITY_REPORT_SCHEMA);

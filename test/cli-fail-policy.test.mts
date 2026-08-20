@@ -27,7 +27,11 @@ describe('explicit CLI failure policies', () => {
     const code = await runCli(['lookup', 'example.test', '--json', '--fail-on', 'inconclusive'], {
       stdout: { write(value) { stdout += value; } }, stderr: { write(value) { stderr += value; } },
       now: () => '2026-08-05T06:00:00.000Z',
-      runUnifiedLookup: async () => ({ availability: { state: 'inconclusive' }, diagnostics: { rdap: { status: 'success' } } }),
+      runUnifiedLookup: async () => ({
+        availability: { state: 'inconclusive' },
+        rdap: { parsed: {} },
+        diagnostics: { rdap: { status: 'success' }, whois: { status: 'skipped' } },
+      }),
     });
     assert.equal(code, EXIT_CODES.PARTIAL_FAILURE);
     assert.equal(JSON.parse(stdout).schema, 'whoisleuth.cli.lookup');

@@ -21,9 +21,11 @@ import {
   SCHEMA_COMPATIBILITY_INVENTORY_VERSION,
   validateInterchangeSchemaCompatibility,
   validateSchemaCompatibilityEntries,
+  validateSchemaLifecycleRegistryCompatibility,
   type SchemaCompatibilityEntry,
   type SchemaCompatibilityInventory,
 } from '../tools/schema-compatibility.mts';
+import { SCHEMA_LIFECYCLE_REGISTRY } from '../packages/contracts/schema-lifecycle-registry.mts';
 import {
   discoverSchemaSources,
   validateSchemaSourceCoverage,
@@ -254,6 +256,29 @@ describe('schema compatibility inventory', () => {
       'browser_store', 'tab_store', 'hosted_store', 'export', 'cli_document', 'derived',
     ]));
     assert.ok(inventory.entries.length <= MAX_SCHEMA_COMPATIBILITY_ENTRIES);
+    const lifecycleDescriptors = SCHEMA_LIFECYCLE_REGISTRY.flatMap((family) => family.compatibility);
+    const markdown = formatSchemaCompatibilityInventory(inventory);
+    for (const descriptor of lifecycleDescriptors) {
+      assert.deepEqual(
+        inventory.entries.filter((entry) => entry.id === descriptor.id),
+        [{ ...descriptor, supportedVersions: [...descriptor.supportedVersions] }],
+      );
+      assert.equal(markdown.split(`| ${descriptor.id} |`).length - 1, 1);
+      assert.equal(markdown.split(`**${descriptor.id}:**`).length - 1, 1);
+    }
+    assert.doesNotThrow(() => validateSchemaLifecycleRegistryCompatibility(inventory.entries));
+    const missing = inventory.entries.filter((entry) => entry.id !== lifecycleDescriptors[0]?.id);
+    assert.throws(
+      () => validateSchemaLifecycleRegistryCompatibility(missing),
+      /must exactly match the generated inventory row/u,
+    );
+    const changed = inventory.entries.map((entry) => entry.id === lifecycleDescriptors[0]?.id
+      ? { ...entry, note: `${entry.note} changed` }
+      : entry);
+    assert.throws(
+      () => validateSchemaLifecycleRegistryCompatibility(changed),
+      /must exactly match the generated inventory row/u,
+    );
     assert.equal(byId(inventory, 'browser.cases').currentVersion, CASE_SCHEMA_VERSION);
     assert.equal(byId(inventory, 'export.lookup-evidence').schema, LOOKUP_EVIDENCE_SCHEMA);
     assert.equal(byId(inventory, 'export.lookup-evidence').currentVersion, LOOKUP_EVIDENCE_SCHEMA_VERSION);
@@ -590,6 +615,162 @@ describe('schema compatibility inventory', () => {
     assert.throws(() => validateSchemaCompatibilityEntries(incompleteProfile), /exact reviewed entry ids/iu);
   });
 
+  test('snapshots exact compatibility rows without invoking caller-owned accessors or collection methods', () => {
+    const inventory = buildSchemaCompatibilityInventory({ generatedAt: NOW });
+
+    const withExtraField = structuredClone(inventory.entries) as Array<Record<string, unknown>>;
+    withExtraField[0]!.unexpected = true;
+    assert.throws(
+      () => validateSchemaCompatibilityEntries(withExtraField as unknown as SchemaCompatibilityEntry[]),
+      /exact registered fields/iu,
+    );
+
+    let noteReads = 0;
+    const accessorRows = structuredClone(inventory.entries);
+    Object.defineProperty(requiredValue(accessorRows[0]), 'note', {
+      enumerable: true,
+      configurable: true,
+      get() {
+        noteReads += 1;
+        return 'must not be read';
+      },
+    });
+    assert.throws(
+      () => formatSchemaCompatibilityInventory({ ...inventory, entries: accessorRows }),
+      /ordinary enumerable data fields/iu,
+    );
+    assert.equal(noteReads, 0);
+
+    let customMethodCalls = 0;
+    const customFilter = structuredClone(inventory.entries) as typeof inventory.entries & {
+      filter: typeof inventory.entries.filter;
+    };
+    Object.defineProperty(customFilter, 'filter', {
+      enumerable: true,
+      configurable: true,
+      value() {
+        customMethodCalls += 1;
+        return [];
+      },
+    });
+    assert.throws(
+      () => validateSchemaLifecycleRegistryCompatibility(customFilter),
+      /without custom fields/iu,
+    );
+    const customIterator = structuredClone(inventory.entries);
+    Object.defineProperty(customIterator, Symbol.iterator, {
+      enumerable: false,
+      configurable: true,
+      value() {
+        customMethodCalls += 1;
+        return [][Symbol.iterator]();
+      },
+    });
+    assert.throws(
+      () => validateSchemaCompatibilityEntries(customIterator),
+      /without custom fields/iu,
+    );
+    assert.equal(customMethodCalls, 0);
+
+    let lengthDescriptorReads = 0;
+    const stableProxy = new Proxy(structuredClone(inventory.entries), {
+      get() {
+        throw new Error('Compatibility arrays must not be read through property access.');
+      },
+      getOwnPropertyDescriptor(target, property) {
+        if (property === 'length') lengthDescriptorReads += 1;
+        return Reflect.getOwnPropertyDescriptor(target, property);
+      },
+    });
+    assert.doesNotThrow(() => validateSchemaCompatibilityEntries(stableProxy));
+    assert.equal(lengthDescriptorReads, 1);
+
+    const revoked = Proxy.revocable(structuredClone(inventory.entries), {});
+    revoked.revoke();
+    assert.throws(() => validateSchemaCompatibilityEntries(revoked.proxy));
+
+    let overLimitGetterCalls = 0;
+    const overLimit = Array(MAX_SCHEMA_COMPATIBILITY_ENTRIES + 1).fill(requiredValue(inventory.entries[0]));
+    Object.defineProperty(overLimit, '0', {
+      enumerable: true,
+      configurable: true,
+      get() {
+        overLimitGetterCalls += 1;
+        return requiredValue(inventory.entries[0]);
+      },
+    });
+    assert.throws(
+      () => validateSchemaCompatibilityEntries(overLimit),
+      /must contain 1-224 entries/iu,
+    );
+    assert.equal(overLimitGetterCalls, 0);
+  });
+
+  test('snapshots the exact report wrapper and limitations without invoking caller-owned values', () => {
+    const inventory = buildSchemaCompatibilityInventory({ generatedAt: NOW });
+
+    const extraField = { ...structuredClone(inventory), unexpected: true };
+    assert.throws(
+      () => formatSchemaCompatibilityInventory(extraField as unknown as SchemaCompatibilityInventory),
+      /exact registered fields/iu,
+    );
+
+    let schemaReads = 0;
+    const schemaAccessor = structuredClone(inventory);
+    Object.defineProperty(schemaAccessor, 'schema', {
+      enumerable: true,
+      configurable: true,
+      get() {
+        schemaReads += 1;
+        return SCHEMA_COMPATIBILITY_INVENTORY_SCHEMA;
+      },
+    });
+    assert.throws(
+      () => formatSchemaCompatibilityInventory(schemaAccessor),
+      /ordinary enumerable data fields/iu,
+    );
+    assert.equal(schemaReads, 0);
+
+    let customMethodCalls = 0;
+    const customLimitations = structuredClone(inventory);
+    Object.defineProperty(customLimitations.limitations, 'some', {
+      enumerable: true,
+      configurable: true,
+      value() {
+        customMethodCalls += 1;
+        return false;
+      },
+    });
+    assert.throws(
+      () => formatSchemaCompatibilityInventory(customLimitations),
+      /without custom fields/iu,
+    );
+    assert.equal(customMethodCalls, 0);
+
+    const revoked = Proxy.revocable(structuredClone(inventory), {});
+    revoked.revoke();
+    assert.throws(
+      () => formatSchemaCompatibilityInventory(revoked.proxy),
+    );
+
+    let overLimitGetterCalls = 0;
+    const overLimit = structuredClone(inventory);
+    overLimit.limitations = Array(9).fill('bounded limitation');
+    Object.defineProperty(overLimit.limitations, '0', {
+      enumerable: true,
+      configurable: true,
+      get() {
+        overLimitGetterCalls += 1;
+        return 'must not be read';
+      },
+    });
+    assert.throws(
+      () => formatSchemaCompatibilityInventory(overLimit),
+      /must contain 0-8 entries/iu,
+    );
+    assert.equal(overLimitGetterCalls, 0);
+  });
+
   test('binds browser export entries to the schemas emitted by their real builders', async () => {
     const inventory = buildSchemaCompatibilityInventory({ generatedAt: NOW });
     const fixtures: Array<readonly [string, unknown, string | null, number]> = [
@@ -635,7 +816,7 @@ describe('schema compatibility inventory', () => {
         inputHostname: 'schema.invalid',
         registrableDomain: 'schema.invalid',
         isSubdomain: false,
-      }, {}, NOW)],
+      }, { diagnostics: { rdap: { status: 'unsupported' }, whois: { status: 'skipped' } } }, NOW)],
       ['cli.bulk', buildCliBulkDocument([], { generatedAt: NOW })],
       ['cli.ct-search', buildCliCtSearchDocument('schema', {}, NOW)],
       ['cli.discover', buildCliDiscoverDocument('schema', {}, { generatedAt: NOW, seed: 'schema', preset: 'balanced', keyboardLayout: 'qwerty', tlds: [] })],

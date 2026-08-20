@@ -12,7 +12,7 @@ import EXIT_CODES from '../cli/exit-codes.mts';
 import { buildBrandProfileExport, SUPPORTED_BRAND_PROFILE_SCHEMA_VERSIONS } from '../frontend/src/lib/analysis/brand-profile-model.ts';
 import { buildWorkspaceArchive, SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS } from '../frontend/src/lib/analysis/workspace-archive.ts';
 import { encryptWorkspaceArchive, ENCRYPTED_WORKSPACE_ARCHIVE_VERSION } from '../frontend/src/lib/analysis/workspace-archive-crypto.ts';
-import { DOMAIN_CONTROL_PASSPORT_VERSION } from '../frontend/src/lib/analysis/domain-control-manifest-core.ts';
+import { DOMAIN_CONTROL_MANIFEST_READABLE_VERSIONS } from '../packages/contracts/domain-control-manifest.mts';
 import { sha256ArtifactDigest, sha256ArtifactDigestV2 } from '../frontend/src/lib/analysis/artifact-integrity.ts';
 import { CASE_SCHEMA_VERSION, normalizeCaseStore } from '../frontend/src/lib/analysis/case-model.ts';
 import {
@@ -159,7 +159,7 @@ describe('interchange fidelity report', () => {
   });
 
   test('keeps portable contract versions bound to their authoritative owners', () => {
-    assert.deepEqual(interchangeContractFor('domain_control_passport').versions, [DOMAIN_CONTROL_PASSPORT_VERSION, 2]);
+    assert.deepEqual(interchangeContractFor('domain_control_passport').versions, DOMAIN_CONTROL_MANIFEST_READABLE_VERSIONS);
     assert.deepEqual(interchangeContractFor('brand_profiles').versions, [...SUPPORTED_BRAND_PROFILE_SCHEMA_VERSIONS]);
     assert.deepEqual(interchangeContractFor('workspace').versions, [...SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS]);
     assert.deepEqual(interchangeContractFor('encrypted_workspace').versions, [ENCRYPTED_WORKSPACE_ARCHIVE_VERSION]);
@@ -231,7 +231,7 @@ describe('interchange fidelity report', () => {
     const report = await buildInterchangeFidelityReport(JSON.stringify(passport()), { generatedAt: NOW });
     assert.equal(report.artifact.id, 'domain_control_passport');
     assert.equal(report.verification.state, 'verified');
-    assert.equal(report.compatibility.fidelity, 'semantic_exact_after_normalisation');
+    assert.equal(report.compatibility.fidelity, 'normalised_merge');
     assert.equal(report.compatibility.browser?.import, 'supported');
     assert.equal(report.compatibility.cli?.write, 'supported');
     const output = JSON.stringify(report);
@@ -464,6 +464,6 @@ describe('interchange fidelity report', () => {
     assert.equal(stderr, '');
     assert.equal(JSON.parse(stdout).artifact.id, 'domain_control_passport');
     assert.doesNotMatch(stdout, /private-target/iu);
-    assert.match(formatInterchangeFidelityReport(JSON.parse(stdout)), /semantic_exact_after_normalisation/u);
+    assert.match(formatInterchangeFidelityReport(JSON.parse(stdout)), /normalised_merge/u);
   });
 });

@@ -4,7 +4,11 @@
 
 import test, { describe } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { classifyQuery, isDirectLookupTarget } from '../lib/classify.mts';
+import { canonicalRegistrableDomain } from '../lib/registrable-domain.mts';
+
+const CLASSIFIER_SOURCE = readFileSync(new URL('../lib/classify.mts', import.meta.url), 'utf8');
 
 describe('control characters', () => {
   test('rejects an embedded CRLF (WHOIS protocol injection)', () => {
@@ -112,6 +116,30 @@ describe('registrable-domain safety (eliminating false availability)', () => {
 
   test('rejects underscores in the registration domain (foo_bar.com)', () => {
     assert.throws(() => classifyQuery('foo_bar.com'), /invalid domain label/);
+    assert.throws(() => classifyQuery('foo_bar.example.com'), /invalid domain label/);
+  });
+
+  test('uses the canonical registrable-domain identity for every accepted domain form', () => {
+    for (const [input, expected] of [
+      ['portal.example.test', 'example.test'],
+      ['https://portal.example.test:443/path', 'example.test'],
+      ['münchen.example', 'xn--mnchen-3ya.example'],
+      ['shop.example.co.uk', 'example.co.uk'],
+      ['portal.example.test.', 'example.test'],
+    ] as const) {
+      const classified = classifyQuery(input);
+      assert.equal(classified.type, 'domain', input);
+      assert.equal(classified.registrableDomain, expected, input);
+      assert.equal(canonicalRegistrableDomain(classified.inputHostname), expected, input);
+    }
+  });
+
+  test('keeps registrable identity bound to the canonical owner', () => {
+    assert.match(
+      CLASSIFIER_SOURCE,
+      /const registrableDomain = canonicalRegistrableDomain\(inputHostname\);/u,
+    );
+    assert.doesNotMatch(CLASSIFIER_SOURCE, /parse\(inputHostname\)/u);
   });
 
   test('rejects empty and hyphen-edged labels (a..com, -bad.com, bad-.com)', () => {

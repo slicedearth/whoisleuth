@@ -133,10 +133,8 @@ const MAX_SCHEMA_CLASSIFICATION_NOTE_LENGTH = 240;
 const MAX_SCHEMA_CLASSIFICATION_SOURCE_USES = 16;
 
 const SCHEMA_INLINE_EMITTER_ALLOWLIST = Object.freeze([
-  ['whoisleuth.cli.domain-control-review-input', 'cli/domain-control-monitor.mts', [101]],
   ['whoisleuth.common-infrastructure', 'frontend/src/lib/analysis/common-infrastructure-snapshot.json', [1]],
   ['whoisleuth.common-infrastructure', 'frontend/src/lib/analysis/common-infrastructure.ts', [224]],
-  ['whoisleuth.domain-control-flight-recorder.input', 'cli/domain-control-monitor.mts', [47, 105]],
   ['whoisleuth.external-findings', 'cli/ct-event-intake.mts', [174]],
   ['whoisleuth.external-findings', 'cli/external-observation-mapping.mts', [148]],
   ['whoisleuth.lookup-evidence', 'frontend/src/lib/analysis/case-evidence-checkpoint.ts', [236]],
@@ -148,26 +146,26 @@ const SCHEMA_INLINE_EMITTER_ALLOWLIST = Object.freeze([
 
 const SCHEMA_DYNAMIC_EMITTER_ALLOWLIST = Object.freeze([
   ['cli/artifact-structure.mts', 'schema', 'reader', [1762]],
-  ['cli/artifact-verify.mts', 'schema', 'writer', [337, 446, 477, 511, 541]],
-  ['cli/formatters/json.mts', 'schema', 'writer', [159]],
+  ['cli/artifact-verify.mts', 'schema', 'writer', [339, 448, 479, 513, 543]],
+  ['cli/formatters/json.mts', 'schema', 'writer', [119]],
   ['cli/investigation-manifest.mts', 'schema', 'writer', [82]],
-  ['cli/sharing-review.mts', 'artifactSchema', 'writer', [226]],
+  ['cli/sharing-review.mts', 'artifactSchema', 'writer', [229]],
   ['frontend/src/lib/analysis/investigation-capsule.ts', 'evidenceSchema', 'writer', [149]],
 ] as const);
 
 const SCHEMA_DYNAMIC_USE_ALLOWLIST = Object.freeze([
   ['cli/archive-inspect.mts', 135, 'writer', 'Copies a validated archive section marker into the content identity.'],
   ['cli/archive-inspect.mts', 272, 'writer', 'Copies a validated archive section marker into the inspection report.'],
-  ['cli/artifact-verify.mts', 401, 'writer', 'Reports the marker already validated from an encrypted workspace envelope.'],
-  ['cli/artifact-verify.mts', 571, 'writer', 'Projects a bounded marker from the verified artifact metadata.'],
-  ['cli/artifact-verify.mts', 608, 'reader', 'Compares two bounded artifact markers during manifest verification.'],
-  ['cli/artifact-verify.mts', 608, 'writer', 'Reports the result of the bounded artifact-marker comparison.'],
+  ['cli/artifact-verify.mts', 403, 'writer', 'Reports the marker already validated from an encrypted workspace envelope.'],
+  ['cli/artifact-verify.mts', 573, 'writer', 'Projects a bounded marker from the verified artifact metadata.'],
+  ['cli/artifact-verify.mts', 610, 'reader', 'Compares two bounded artifact markers during manifest verification.'],
+  ['cli/artifact-verify.mts', 610, 'writer', 'Reports the result of the bounded artifact-marker comparison.'],
   ['cli/evidence-signing.mts', 288, 'writer', 'Copies the verified source artifact marker into signature metadata.'],
   ['cli/export-evidence.mts', 47, 'reader', 'Checks a builder result against its injected canonical contract marker.'],
   ['cli/interchange-report.mts', 92, 'reader', 'Matches a bounded container marker to a reviewed interchange contract.'],
   ['cli/interchange-report.mts', 231, 'writer', 'Copies the matched interchange contract marker into the report.'],
   ['cli/retained-artifact-diff.mts', 427, 'reader', 'Requires both bounded retained documents to declare the same marker.'],
-  ['cli/risk-calibration.mts', 533, 'writer', 'Copies the validated calibration dataset marker into report metadata.'],
+  ['cli/risk-calibration.mts', 558, 'writer', 'Copies the validated calibration dataset marker into report metadata.'],
   ['frontend/src/lib/analysis/case-relationship-graph-export.ts', 454, 'writer', 'Copies the canonical graph marker into GraphML metadata.'],
   ['frontend/src/lib/analysis/case-relationship-graph-export.ts', 489, 'writer', 'Copies the canonical graph marker into GEXF metadata.'],
   ['frontend/src/lib/analysis/external-findings-import.ts', 355, 'reader', 'Compares bounded nested source-provenance markers.'],

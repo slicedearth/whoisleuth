@@ -57,10 +57,6 @@ import {
   REGISTRY_SUPPORT_SCHEMA_VERSION,
 } from '../cli/registry-support.mts';
 import {
-  RISK_CALIBRATION_DATASET_COMPATIBILITY,
-  RISK_CALIBRATION_REPORT_COMPATIBILITY,
-} from '../packages/contracts/risk-calibration.mts';
-import {
   mutableSchemaCompatibilityEntry,
   validateSchemaCompatibilityDescriptor,
   type ContractKind,
@@ -101,16 +97,6 @@ import {
   MAX_INTERCHANGE_REPORT_BYTES,
 } from '../cli/interchange-report.mts';
 import { INTERCHANGE_ARTIFACT_CONTRACTS } from '../lib/interchange-fidelity-registry.mts';
-import {
-  CLI_DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA,
-  CLI_DOMAIN_CONTROL_REVIEW_SCHEMA,
-  CLI_DOMAIN_CONTROL_REVIEW_VERSION,
-  MAX_DOMAIN_CONTROL_REVIEW_INPUT_BYTES,
-} from '../cli/domain-control-observations.mts';
-import {
-  CLI_DOMAIN_CONTROL_MONITOR_SCHEMA,
-  CLI_DOMAIN_CONTROL_MONITOR_VERSION,
-} from '../cli/domain-control-monitor.mts';
 import {
   CLI_LOOKUP_BRIEF_SCHEMA,
   CLI_LOOKUP_BRIEF_VERSION,
@@ -463,16 +449,6 @@ import {
   CURATED_CONNECTOR_RESULT_SCHEMA,
 } from '../lib/threat-intelligence-contract.mts';
 import {
-  DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA,
-  DOMAIN_CONTROL_REVIEW_SCHEMA,
-  DOMAIN_CONTROL_REVIEW_VERSION,
-} from '../lib/domain-control-manifest.mts';
-import {
-  DOMAIN_CONTROL_FLIGHT_RECORDER_INPUT_SCHEMA,
-  DOMAIN_CONTROL_FLIGHT_RECORDER_SCHEMA,
-  DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION,
-} from '../lib/domain-control-flight-recorder.mts';
-import {
   DOMAIN_CHANGE_PACKET_INPUT_SCHEMA,
   DOMAIN_CHANGE_PACKET_INPUT_VERSION,
   DOMAIN_CHANGE_PACKET_SCHEMA,
@@ -594,11 +570,7 @@ import {
   CODEQL_TEMP_MARKER_VERSION,
   MAX_CODEQL_TEMP_MARKER_BYTES,
 } from './local-codeql.mts';
-import { CLI_LOOKUP_COMPATIBILITY } from '../packages/contracts/cli-lookup.mts';
-import {
-  DOMAIN_CONTROL_MANIFEST_COMPATIBILITY,
-  DOMAIN_CONTROL_MANIFEST_INPUT_COMPATIBILITY,
-} from '../packages/contracts/domain-control-manifest.mts';
+import { SCHEMA_LIFECYCLE_REGISTRY } from '../packages/contracts/schema-lifecycle-registry.mts';
 import { RDAP_NAMESERVER_SEARCH_COMPATIBILITY } from '../packages/contracts/rdap-nameserver-search.mts';
 import { SSLBL_SNAPSHOT_COMPATIBILITY } from '../packages/contracts/sslbl-snapshot.mts';
 import {
@@ -683,6 +655,30 @@ import { MAX_LOOKUP_PROGRESS_STAGING_FILE_BYTES } from './incremental-lookup-sta
 export const SCHEMA_COMPATIBILITY_INVENTORY_SCHEMA = 'whoisleuth.schema-compatibility-inventory';
 export const SCHEMA_COMPATIBILITY_INVENTORY_VERSION = 1;
 export const MAX_SCHEMA_COMPATIBILITY_ENTRIES = 224;
+
+const MAX_SCHEMA_COMPATIBILITY_VERSIONS = 32;
+const SCHEMA_COMPATIBILITY_ENTRY_KEYS = Object.freeze([
+  'id',
+  'kind',
+  'schema',
+  'currentVersion',
+  'supportedVersions',
+  'acceptsUnversionedLegacy',
+  'futureVersionBehavior',
+  'migration',
+  'writeSemantics',
+  'byteBudget',
+  'owner',
+  'note',
+] as const satisfies readonly (keyof SchemaCompatibilityEntry)[]);
+const SCHEMA_COMPATIBILITY_ENTRY_KEY_SET = new Set<PropertyKey>(SCHEMA_COMPATIBILITY_ENTRY_KEYS);
+const SCHEMA_COMPATIBILITY_INVENTORY_KEYS = Object.freeze([
+  'schema',
+  'version',
+  'generatedAt',
+  'entries',
+  'limitations',
+] as const satisfies readonly (keyof SchemaCompatibilityInventory)[]);
 
 type SchemaCompatibilityInventory = {
   schema: typeof SCHEMA_COMPATIBILITY_INVENTORY_SCHEMA;
@@ -787,13 +783,11 @@ const ENTRIES: SchemaCompatibilityEntry[] = [
   entry({ id: 'export.encrypted-workspace-archive', kind: 'export', schema: ENCRYPTED_WORKSPACE_ARCHIVE_SCHEMA, currentVersion: ENCRYPTED_WORKSPACE_ARCHIVE_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'non_destructive_merge', byteBudget: MAX_ENCRYPTED_WORKSPACE_ARCHIVE_BYTES, owner: 'frontend/src/lib/analysis/workspace-archive-crypto.ts', note: 'Browser-local PBKDF2 and AES-GCM wrapper around the ordinary checksummed archive; passphrases are never persisted or recoverable.' }),
   entry({ id: 'export.workspace-settings-section', kind: 'export', schema: WORKSPACE_SETTINGS_SCHEMA, currentVersion: WORKSPACE_SETTINGS_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'non_destructive_merge', byteBudget: null, owner: 'frontend/src/lib/analysis/workspace-archive.ts', note: 'Nested archive section limited to the active Brand Profile identifier and dark, light, or system theme preference.' }),
   entry({ id: 'export.lookup-evidence', kind: 'export', schema: LOOKUP_EVIDENCE_SCHEMA, currentVersion: LOOKUP_EVIDENCE_SCHEMA_VERSION, supportedVersions: [25, 26, 27, 28], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'read_only', writeSemantics: 'read_only', byteBudget: LOOKUP_EVIDENCE_PORTABLE_MAX_BYTES, owner: 'lib/evidence-export.mts', note: 'Version 28 removes raw registration payloads, expanded contacts, and attributed contact routes behind positive publication allowlists. Version 27 retains fixed homepage summaries; versions 25 and 26 preserve their documented source-wrapper compatibility.' }),
-  entry(DOMAIN_CONTROL_MANIFEST_INPUT_COMPATIBILITY),
-  entry(DOMAIN_CONTROL_MANIFEST_COMPATIBILITY),
+  ...SCHEMA_LIFECYCLE_REGISTRY.flatMap((family) => family.compatibility.map(entry)),
   entry({ id: 'export.defensive-indicators', kind: 'export', schema: null, currentVersion: DEFENSIVE_INDICATOR_EXPORT_VERSION, supportedVersions: [1, 2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'frontend/src/lib/analysis/defensive-indicator-export.ts', note: 'Review-only indicator, provenance-manifest, and rollback formats; never submitted or applied automatically.' }),
   entry({ id: 'export.stix-indicators', kind: 'export', schema: null, currentVersion: STIX_INDICATOR_EXPORT_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'frontend/src/lib/analysis/stix-indicator-export.ts', note: 'STIX 2.1 bundle with direct observations separated from heuristic indicators.' }),
   entry({ id: 'export.misp-indicators', kind: 'export', schema: null, currentVersion: MISP_INDICATOR_EXPORT_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'frontend/src/lib/analysis/misp-indicator-export.ts', note: 'Unpublished, non-IDS, non-correlating event for reviewed import.' }),
   entry({ id: 'export.synthetic-demo', kind: 'export', schema: SYNTHETIC_DEMO_EXPORT_SCHEMA, currentVersion: SYNTHETIC_DEMO_EXPORT_VERSION, supportedVersions: [2, 3, 4, 5], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'frontend/src/lib/analysis/demo-model.ts', note: 'Explicitly synthetic fixed-fixture package, never live evidence.' }),
-  entry(CLI_LOOKUP_COMPATIBILITY),
   entry({ id: 'cli.doctor', kind: 'cli_document', schema: DOCTOR_SCHEMA, currentVersion: DOCTOR_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'cli/doctor.mts', note: 'Bounded runtime and optional explicitly approved network-diagnostic report; normal operation remains offline.' }),
   entry({ id: 'cli.command-catalogue', kind: 'cli_document', schema: CLI_COMMAND_CATALOGUE_SCHEMA, currentVersion: CLI_COMMAND_CATALOGUE_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'cli/command-catalogue.mts', note: 'Installed command, usage, collection-mode, and boundary catalogue without target or evidence values.' }),
   entry({ id: 'cli.lookup-plan', kind: 'cli_document', schema: CLI_LOOKUP_PLAN_SCHEMA, currentVersion: CLI_LOOKUP_PLAN_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'cli/lookup-plan.mts', note: 'Request-free preview of the sources and disclosures associated with an analyst-selected lookup mode.' }),
@@ -827,8 +821,6 @@ const ENTRIES: SchemaCompatibilityEntry[] = [
   entry({ id: 'cli.lookalike-calibration', kind: 'cli_document', schema: LOOKALIKE_CALIBRATION_SCHEMA, currentVersion: LOOKALIKE_CALIBRATION_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'cli/lookalike-calibration.mts', note: 'Target-free review-yield report that retains no candidate identifiers, domains, notes, or evidence values.' }),
   entry({ id: 'cli.domain-assurance-input', kind: 'cli_document', schema: DOMAIN_ASSURANCE_INPUT_SCHEMA, currentVersion: DOMAIN_ASSURANCE_VERSION, supportedVersions: [1, 2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'normalize_to_current', writeSemantics: 'read_only', byteBudget: MAX_ASSURANCE_INPUT_BYTES, owner: 'lib/domain-assurance.mts', note: 'Bounded analyst-authored planned-change, recovery-dependency, or retirement input; version 2 adds optional bounded custom retirement checks and performs no credentials or provider changes.' }),
   entry({ id: 'cli.domain-assurance', kind: 'cli_document', schema: DOMAIN_ASSURANCE_SCHEMA, currentVersion: DOMAIN_ASSURANCE_VERSION, supportedVersions: [1, 2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'lib/domain-assurance.mts', note: 'Offline assurance review with explicit unknown and incomplete states; version 2 can report bounded analyst-defined retirement checks and performs no collection or configuration change.' }),
-  entry({ id: 'cli.domain-control-review', kind: 'cli_document', schema: DOMAIN_CONTROL_REVIEW_SCHEMA, currentVersion: DOMAIN_CONTROL_REVIEW_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: null, owner: 'lib/domain-control-manifest.mts', note: 'Offline desired-state comparison. Only complete separately attributed observations can produce drift.' }),
-  entry({ id: 'cli.domain-control-review-core-input', kind: 'cli_document', schema: DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA, currentVersion: DOMAIN_CONTROL_REVIEW_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: null, owner: 'lib/domain-control-manifest.mts', note: 'Exact-current bounded desired-state manifest and separately attributed observation input for the offline core comparison.' }),
   entry({ id: 'cli.zone-intent-input', kind: 'cli_document', schema: ZONE_INTENT_INPUT_SCHEMA, currentVersion: ZONE_INTENT_REVIEW_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: MAX_ZONE_TEXT_BYTES, owner: 'lib/zone-intent-review.mts', note: 'Bounded BIND-subset or normalized-record intent input. Unsupported syntax is rejected and TXT values are reduced to digests.' }),
   entry({ id: 'cli.zone-intent-review', kind: 'cli_document', schema: ZONE_INTENT_REVIEW_SCHEMA, currentVersion: ZONE_INTENT_REVIEW_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'lib/zone-intent-review.mts', note: 'Offline desired-versus-observed DNS comparison with explicit partial and unsupported states; never applies a DNS change.' }),
   entry({ id: 'cli.domain-portfolio-input', kind: 'cli_document', schema: DOMAIN_PORTFOLIO_INPUT_SCHEMA, currentVersion: DOMAIN_PORTFOLIO_REVIEW_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: null, owner: 'lib/domain-portfolio-review.mts', note: 'Bounded analyst-supplied portfolio assertions without credentials, contact details, or provider requests.' }),
@@ -849,13 +841,8 @@ const ENTRIES: SchemaCompatibilityEntry[] = [
   entry({ id: 'cli.config', kind: 'cli_document', schema: CLI_CONFIG_SCHEMA, currentVersion: CLI_CONFIG_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: MAX_CLI_CONFIG_BYTES, owner: 'cli/config-profile.mts', note: 'Strict local safe-default profiles; targets, deep mode, output paths, network approvals, failure policies and arbitrary arguments are refused.' }),
   entry({ id: 'export.cli-case-pack', kind: 'export', schema: CLI_CASE_PACK_SCHEMA, currentVersion: CLI_CASE_PACK_VERSION, supportedVersions: [1, 2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'read_only', writeSemantics: 'read_only', byteBudget: MAX_CASE_IMPORT_BYTES, owner: 'cli/case-pack.mts', note: 'Packet versions 1 and 2 are verified within the portable Case import ceiling; future packet versions are rejected, and version 2 uses deterministic sorted-json-v2 integrity while the enclosed Case schema remains version 12.' }),
   entry({ id: 'cli.interchange-fidelity-report', kind: 'cli_document', schema: INTERCHANGE_FIDELITY_REPORT_SCHEMA, currentVersion: INTERCHANGE_FIDELITY_REPORT_VERSION, supportedVersions: [2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: MAX_INTERCHANGE_REPORT_BYTES, owner: 'cli/interchange-report.mts', note: 'Version 2 enforces the runtime registry assurance requirement before reporting fidelity; output remains metadata-only and excludes evidence values and unknown schema text.' }),
-  entry({ id: 'cli.domain-control-review-input', kind: 'cli_document', schema: CLI_DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA, currentVersion: CLI_DOMAIN_CONTROL_REVIEW_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: MAX_DOMAIN_CONTROL_REVIEW_INPUT_BYTES, owner: 'cli/domain-control-observations.mts', note: 'Bounded desired-state manifest plus saved Lookups converted without new collection.' }),
-  entry({ id: 'cli.domain-control-observation-review', kind: 'cli_document', schema: CLI_DOMAIN_CONTROL_REVIEW_SCHEMA, currentVersion: CLI_DOMAIN_CONTROL_REVIEW_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'cli/domain-control-observations.mts', note: 'Compact source-qualified control observations and desired-state comparison.' }),
-  entry({ id: 'cli.domain-control-monitor', kind: 'cli_document', schema: CLI_DOMAIN_CONTROL_MONITOR_SCHEMA, currentVersion: CLI_DOMAIN_CONTROL_MONITOR_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'normalized_rewrite', byteBudget: null, owner: 'cli/domain-control-monitor.mts', note: 'One-shot bounded control review and optional prior checkpoint; not a daemon or scheduler.' }),
   entry({ id: 'cli.lookup-brief', kind: 'cli_document', schema: CLI_LOOKUP_BRIEF_SCHEMA, currentVersion: CLI_LOOKUP_BRIEF_VERSION, supportedVersions: [1, 2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: MAX_SAVED_LOOKUP_INPUT_BYTES, owner: 'cli/lookup-brief.mts', note: 'Offline source-aware handoff; version 2 adds structured actions with expected outcomes.' }),
   entry({ id: 'cli.registry-cohort', kind: 'cli_document', schema: REGISTRY_COHORT_SCHEMA, currentVersion: REGISTRY_COHORT_VERSION, supportedVersions: [1, 2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'normalize_to_current', writeSemantics: 'read_only', byteBudget: MAX_REGISTRY_COHORT_INPUT_BYTES, owner: 'cli/registry-cohort.mts', note: 'Version 2 adds bounded target-free timelines and can merge one unmixed family of retained version-1 or version-2 cohort reports without treating overlapping samples as independent.' }),
-  entry({ id: 'cli.domain-control-flight-recorder-input', kind: 'cli_document', schema: DOMAIN_CONTROL_FLIGHT_RECORDER_INPUT_SCHEMA, currentVersion: DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: null, owner: 'lib/domain-control-flight-recorder.mts', note: 'Bounded source-qualified control observations and approved change windows.' }),
-  entry({ id: 'cli.domain-control-flight-recorder', kind: 'cli_document', schema: DOMAIN_CONTROL_FLIGHT_RECORDER_SCHEMA, currentVersion: DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'lib/domain-control-flight-recorder.mts', note: 'Offline first/last-observed control history that preserves expected and unexpected changes.' }),
   entry({ id: 'cli.ct-search', kind: 'cli_document', schema: CLI_CT_SEARCH_SCHEMA, currentVersion: CLI_CT_SEARCH_SCHEMA_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'cli/formatters/json.mts', note: 'Certificate log search output.' }),
   entry({ id: 'cli.discover', kind: 'cli_document', schema: CLI_DISCOVER_SCHEMA, currentVersion: CLI_DISCOVER_SCHEMA_VERSION, supportedVersions: [1, 2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'cli/formatters/json.mts', note: 'Candidate discovery document.' }),
   entry({ id: 'cli.discover-item', kind: 'cli_document', schema: CLI_DISCOVER_ITEM_SCHEMA, currentVersion: CLI_DISCOVER_SCHEMA_VERSION, supportedVersions: [1, 2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'cli/formatters/json.mts', note: 'One candidate discovery JSONL item.' }),
@@ -878,8 +865,6 @@ const ENTRIES: SchemaCompatibilityEntry[] = [
   entry({ id: 'cli.compare', kind: 'cli_document', schema: CLI_COMPARE_SCHEMA, currentVersion: CLI_COMPARE_SCHEMA_VERSION, supportedVersions: [3], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: MAX_SAVED_LOOKUP_INPUT_BYTES, owner: 'cli/formatters/json.mts', note: 'Comparison output reads supported saved Lookup versions 1 and 2 through the shared bounded parser.' }),
   entry({ id: 'cli.registry-support', kind: 'cli_document', schema: REGISTRY_SUPPORT_SCHEMA, currentVersion: REGISTRY_SUPPORT_SCHEMA_VERSION, supportedVersions: [2, 3, 4], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'cli/registry-support.mts', note: 'Catalogue coverage report; optional official lookup links require deliberate browser navigation and do not test live reachability.' }),
   entry({ id: 'cli.registry-standards-coverage', kind: 'cli_document', schema: REGISTRY_STANDARDS_COVERAGE_SCHEMA, currentVersion: standardsCoverage.version, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'cli/registry-support.mts', note: 'Immutable official-source coverage snapshot embedded in registry-support output.' }),
-  entry(RISK_CALIBRATION_DATASET_COMPATIBILITY),
-  entry(RISK_CALIBRATION_REPORT_COMPATIBILITY),
   entry({ id: 'cli.deployment-self-check', kind: 'cli_document', schema: DEPLOYMENT_SELF_CHECK_SCHEMA, currentVersion: DEPLOYMENT_SELF_CHECK_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'tools/deployment-self-check.mts', note: 'Redacted operator-run public-boundary report; response bodies and credentialed posture are excluded.' }),
   entry({ id: 'cli.maintainer-duplication-report', kind: 'cli_document', schema: MAINTAINER_DUPLICATION_REPORT_SCHEMA, currentVersion: MAINTAINER_DUPLICATION_REPORT_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: MAX_MAINTAINER_DUPLICATION_REPORT_BYTES, owner: 'tools/maintainer-duplication-report.mts', note: 'Deterministic repository-relative static call graph and exact token-clone inventory for bounded maintainer modules; source text, literals, absolute paths, runtime values, and automatic consolidation are excluded.' }),
   entry({ id: 'cli.registry-drift-audit', kind: 'cli_document', schema: REGISTRY_DRIFT_AUDIT_SCHEMA, currentVersion: REGISTRY_DRIFT_AUDIT_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'tools/registry-drift-audit.mts', note: 'Manual bounded comparison of two fixed official IANA catalogues; no registry query or automatic catalogue rewrite.' }),
@@ -927,12 +912,142 @@ function timestamp(value: unknown): string {
   return new Date(parsed).toISOString();
 }
 
-function validateSchemaCompatibilityEntries(values: readonly SchemaCompatibilityEntry[]): void {
-  if (!Array.isArray(values) || values.length === 0 || values.length > MAX_SCHEMA_COMPATIBILITY_ENTRIES) {
-    throw new Error(`Schema compatibility inventory must contain 1-${MAX_SCHEMA_COMPATIBILITY_ENTRIES} entries.`);
+function snapshotDenseArray(
+  value: unknown,
+  label: string,
+  minimum: number,
+  maximum: number,
+): unknown[] {
+  if (!Array.isArray(value) || Object.getPrototypeOf(value) !== Array.prototype) {
+    throw new TypeError(`${label} must be a bounded ordinary array.`);
   }
-  const ids = new Set<string>();
+  const lengthDescriptor = Object.getOwnPropertyDescriptor(value, 'length');
+  const length = lengthDescriptor && 'value' in lengthDescriptor ? lengthDescriptor.value : null;
+  if (!Number.isSafeInteger(length) || length < minimum || length > maximum) {
+    throw new TypeError(`${label} must contain ${minimum}-${maximum} entries.`);
+  }
+  const keys = Reflect.ownKeys(value);
+  const expectedKeys = new Set<PropertyKey>([
+    'length',
+    ...Array.from({ length }, (_, index) => String(index)),
+  ]);
+  if (keys.length !== expectedKeys.size || keys.some((key) => !expectedKeys.has(key))) {
+    throw new TypeError(`${label} must be a dense ordinary array without custom fields.`);
+  }
+  const copy: unknown[] = [];
+  for (let index = 0; index < length; index += 1) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, String(index));
+    if (!descriptor || !descriptor.enumerable || !('value' in descriptor)) {
+      throw new TypeError(`${label} must use ordinary enumerable data entries.`);
+    }
+    copy.push(descriptor.value);
+  }
+  return copy;
+}
+
+function snapshotExactRecord(
+  value: unknown,
+  keys: readonly PropertyKey[],
+  label: string,
+): Map<PropertyKey, unknown> {
+  if (value === null || typeof value !== 'object') {
+    throw new TypeError(`${label} must be an ordinary exact record.`);
+  }
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null) {
+    throw new TypeError(`${label} must be an ordinary exact record.`);
+  }
+  const actualKeys = Reflect.ownKeys(value);
+  const keySet = keys === SCHEMA_COMPATIBILITY_ENTRY_KEYS
+    ? SCHEMA_COMPATIBILITY_ENTRY_KEY_SET
+    : new Set<PropertyKey>(keys);
+  if (actualKeys.length !== keys.length || actualKeys.some((key) => !keySet.has(key))) {
+    throw new TypeError(`${label} must use its exact registered fields.`);
+  }
+  const fields = new Map<PropertyKey, unknown>();
+  for (const key of keys) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    if (!descriptor || !descriptor.enumerable || !('value' in descriptor)) {
+      throw new TypeError(`${label} must use ordinary enumerable data fields.`);
+    }
+    fields.set(key, descriptor.value);
+  }
+  return fields;
+}
+
+function snapshotSchemaCompatibilityEntry(value: unknown, index: number): SchemaCompatibilityEntry {
+  const fields = snapshotExactRecord(
+    value,
+    SCHEMA_COMPATIBILITY_ENTRY_KEYS,
+    `Schema compatibility entry ${index}`,
+  );
+  return {
+    id: fields.get('id') as string,
+    kind: fields.get('kind') as ContractKind,
+    schema: fields.get('schema') as string | null,
+    currentVersion: fields.get('currentVersion') as number,
+    supportedVersions: snapshotDenseArray(
+      fields.get('supportedVersions'),
+      `Schema compatibility entry ${index} supported versions`,
+      1,
+      MAX_SCHEMA_COMPATIBILITY_VERSIONS,
+    ) as number[],
+    acceptsUnversionedLegacy: fields.get('acceptsUnversionedLegacy') as boolean,
+    futureVersionBehavior: fields.get('futureVersionBehavior') as FutureVersionBehavior,
+    migration: fields.get('migration') as MigrationBehavior,
+    writeSemantics: fields.get('writeSemantics') as WriteSemantics,
+    byteBudget: fields.get('byteBudget') as number | null,
+    owner: fields.get('owner') as string,
+    note: fields.get('note') as string,
+  };
+}
+
+function snapshotSchemaCompatibilityEntries(values: unknown): SchemaCompatibilityEntry[] {
+  return snapshotDenseArray(
+    values,
+    'Schema compatibility inventory',
+    1,
+    MAX_SCHEMA_COMPATIBILITY_ENTRIES,
+  ).map(snapshotSchemaCompatibilityEntry);
+}
+
+function reconcileSchemaLifecycleRegistryCompatibility(
+  values: readonly SchemaCompatibilityEntry[],
+): void {
+  const entriesById = new Map<string, SchemaCompatibilityEntry[]>();
   for (const value of values) {
+    const matches = entriesById.get(value.id) ?? [];
+    matches.push(value);
+    entriesById.set(value.id, matches);
+  }
+  for (const family of SCHEMA_LIFECYCLE_REGISTRY) {
+    for (const descriptor of family.compatibility) {
+      const matches = entriesById.get(descriptor.id) ?? [];
+      const actual = matches[0];
+      if (matches.length !== 1
+        || !actual
+        || actual.kind !== descriptor.kind
+        || actual.schema !== descriptor.schema
+        || actual.currentVersion !== descriptor.currentVersion
+        || actual.supportedVersions.length !== descriptor.supportedVersions.length
+        || actual.supportedVersions.some((version, versionIndex) => version !== descriptor.supportedVersions[versionIndex])
+        || actual.acceptsUnversionedLegacy !== descriptor.acceptsUnversionedLegacy
+        || actual.futureVersionBehavior !== descriptor.futureVersionBehavior
+        || actual.migration !== descriptor.migration
+        || actual.writeSemantics !== descriptor.writeSemantics
+        || actual.byteBudget !== descriptor.byteBudget
+        || actual.owner !== descriptor.owner
+        || actual.note !== descriptor.note) {
+        throw new Error(`Schema lifecycle compatibility ${descriptor.id} must exactly match the generated inventory row.`);
+      }
+    }
+  }
+}
+
+function snapshotAndValidateSchemaCompatibilityEntries(values: unknown): SchemaCompatibilityEntry[] {
+  const entries = snapshotSchemaCompatibilityEntries(values);
+  const ids = new Set<string>();
+  for (const value of entries) {
     if (!/^[a-z0-9][a-z0-9.-]{2,79}$/u.test(value.id) || ids.has(value.id)) {
       throw new Error(`Schema compatibility entry id is invalid or duplicated: ${value.id}`);
     }
@@ -940,7 +1055,7 @@ function validateSchemaCompatibilityEntries(values: readonly SchemaCompatibility
     validateSchemaCompatibilityDescriptor(value);
   }
   const entriesBySchema = new Map<string, string[]>();
-  for (const value of values) {
+  for (const value of entries) {
     if (value.schema) entriesBySchema.set(value.schema, [...(entriesBySchema.get(value.schema) ?? []), value.id]);
   }
   for (const [schema, allowedIds] of Object.entries(SCHEMA_COMPATIBILITY_PROFILES)) {
@@ -955,6 +1070,20 @@ function validateSchemaCompatibilityEntries(values: readonly SchemaCompatibility
       throw new Error(`Schema compatibility identifier has undeclared profiles: ${schema}.`);
     }
   }
+  reconcileSchemaLifecycleRegistryCompatibility(entries);
+  return entries;
+}
+
+function validateSchemaCompatibilityEntries(values: readonly SchemaCompatibilityEntry[]): void {
+  snapshotAndValidateSchemaCompatibilityEntries(values);
+}
+
+function validateSchemaLifecycleRegistryCompatibility(
+  values: readonly SchemaCompatibilityEntry[],
+): void {
+  const entries = snapshotSchemaCompatibilityEntries(values);
+  for (const value of entries) validateSchemaCompatibilityDescriptor(value);
+  reconcileSchemaLifecycleRegistryCompatibility(entries);
 }
 
 function cloneEntry(value: SchemaCompatibilityEntry): SchemaCompatibilityEntry {
@@ -965,6 +1094,8 @@ export function validateInterchangeSchemaCompatibility(
   entries: readonly SchemaCompatibilityEntry[],
   contracts = INTERCHANGE_ARTIFACT_CONTRACTS,
 ): void {
+  const snapshot = snapshotSchemaCompatibilityEntries(entries);
+  for (const value of snapshot) validateSchemaCompatibilityDescriptor(value);
   for (const contract of contracts) {
     if (contract.compatibilityEntryId === null) {
       if (contract.id !== 'legacy_desired_baseline') {
@@ -972,7 +1103,7 @@ export function validateInterchangeSchemaCompatibility(
       }
       continue;
     }
-    const declared = entries.find((item) => item.id === contract.compatibilityEntryId);
+    const declared = snapshot.find((item) => item.id === contract.compatibilityEntryId);
     if (
       !declared
       || declared.schema !== contract.schema
@@ -988,13 +1119,13 @@ export function validateInterchangeSchemaCompatibility(
 function buildSchemaCompatibilityInventory(
   options: { generatedAt?: string } = {},
 ): SchemaCompatibilityInventory {
-  validateSchemaCompatibilityEntries(ENTRIES);
-  validateInterchangeSchemaCompatibility(ENTRIES);
+  const entries = snapshotAndValidateSchemaCompatibilityEntries(ENTRIES);
+  validateInterchangeSchemaCompatibility(entries);
   return {
     schema: SCHEMA_COMPATIBILITY_INVENTORY_SCHEMA,
     version: SCHEMA_COMPATIBILITY_INVENTORY_VERSION,
     generatedAt: timestamp(options.generatedAt || new Date().toISOString()),
-    entries: ENTRIES.map(cloneEntry),
+    entries: entries.map(cloneEntry),
     limitations: [
       'This report describes checked-in compatibility contracts; it does not inspect browser data, hosted storage, or a deployment.',
       'A listed version is supported only according to the named owner module and the migration behaviour shown here.',
@@ -1016,38 +1147,48 @@ function formatByteBudget(value: number | null): string {
 }
 
 function formatSchemaCompatibilityInventory(inventory: SchemaCompatibilityInventory): string {
-  if (!inventory || typeof inventory !== 'object'
-    || inventory.schema !== SCHEMA_COMPATIBILITY_INVENTORY_SCHEMA
-    || inventory.version !== SCHEMA_COMPATIBILITY_INVENTORY_VERSION) {
+  const source = snapshotExactRecord(
+    inventory,
+    SCHEMA_COMPATIBILITY_INVENTORY_KEYS,
+    'Schema compatibility inventory',
+  );
+  if (source.get('schema') !== SCHEMA_COMPATIBILITY_INVENTORY_SCHEMA
+    || source.get('version') !== SCHEMA_COMPATIBILITY_INVENTORY_VERSION) {
     throw new TypeError('Schema compatibility report requires the current inventory contract.');
   }
-  const generatedAt = timestamp(inventory.generatedAt);
-  if (!Array.isArray(inventory.limitations)
-    || inventory.limitations.length > MAX_INVENTORY_LIMITATIONS
-    || inventory.limitations.some((value) => typeof value !== 'string'
+  const generatedAt = timestamp(source.get('generatedAt'));
+  const limitations = snapshotDenseArray(
+    source.get('limitations'),
+    'Schema compatibility report limitations',
+    0,
+    MAX_INVENTORY_LIMITATIONS,
+  );
+  for (const value of limitations) {
+    if (typeof value !== 'string'
       || !value
       || value.length > MAX_INVENTORY_LIMITATION_LENGTH
-      || /[\x00-\x1f\x7f]/u.test(value))) {
-    throw new TypeError('Schema compatibility report limitations are invalid.');
+      || /[\x00-\x1f\x7f]/u.test(value)) {
+      throw new TypeError('Schema compatibility report limitations are invalid.');
+    }
   }
-  validateSchemaCompatibilityEntries(inventory.entries);
+  const entries = snapshotAndValidateSchemaCompatibilityEntries(source.get('entries'));
   const lines = [
     '# WHOISleuth schema compatibility inventory',
     '',
-    `Contract: \`${markdownCell(inventory.schema)}\` v${inventory.version}`,
+    `Contract: \`${markdownCell(source.get('schema'))}\` v${source.get('version')}`,
     `Generated: ${markdownCell(generatedAt)}`,
     '',
     '| Contract | Kind | Schema | Current | Supported | Future version | Migration | Write semantics | Serialised bound | Owner |',
     '| --- | --- | --- | ---: | --- | --- | --- | --- | --- | --- |',
   ];
-  for (const value of inventory.entries) {
+  for (const value of entries) {
     const supported = `${value.supportedVersions.join(', ')}${value.acceptsUnversionedLegacy ? ' plus unversioned legacy' : ''}`;
     lines.push(`| ${markdownCell(value.id)} | ${markdownCell(value.kind)} | ${value.schema ? `\`${markdownCell(value.schema)}\`` : 'No schema string'} | ${value.currentVersion} | ${markdownCell(supported)} | ${markdownCell(value.futureVersionBehavior)} | ${markdownCell(value.migration)} | ${markdownCell(value.writeSemantics)} | ${markdownCell(formatByteBudget(value.byteBudget))} | \`${markdownCell(value.owner)}\` |`);
   }
   lines.push('', '## Contract notes', '');
-  for (const value of inventory.entries) lines.push(`- **${markdownCell(value.id)}:** ${markdownCell(value.note)}`);
+  for (const value of entries) lines.push(`- **${markdownCell(value.id)}:** ${markdownCell(value.note)}`);
   lines.push('', '## Limitations', '');
-  for (const limitation of inventory.limitations) lines.push(`- ${markdownCell(limitation)}`);
+  for (const limitation of limitations) lines.push(`- ${markdownCell(limitation)}`);
   return `${lines.join('\n')}\n`;
 }
 
@@ -1055,6 +1196,7 @@ export {
   buildSchemaCompatibilityInventory,
   formatSchemaCompatibilityInventory,
   validateSchemaCompatibilityEntries,
+  validateSchemaLifecycleRegistryCompatibility,
 };
 export type {
   ContractKind,

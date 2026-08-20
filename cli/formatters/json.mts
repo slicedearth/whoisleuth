@@ -1,7 +1,10 @@
-import type { BulkLookupResult, ClassifiedQuery } from '../bulk.mts';
+import type { BulkLookupResult } from '../bulk.mts';
 import { bulkDnsSummary } from '../bulk-output.mts';
-import { SAVED_LOOKUP_SCHEMA_VERSION, type UnknownRecord } from '../saved-lookup.mts';
-import { normalizeExplicitIsoTimestamp } from '../../packages/evidence/observation.mts';
+import {
+  SAVED_LOOKUP_SCHEMA_VERSION,
+  buildCliLookupDocument,
+  type UnknownRecord,
+} from '../saved-lookup.mts';
 import { CLI_LOOKUP_SCHEMA } from '../../packages/contracts/cli-lookup.mts';
 
 const CLI_BULK_SCHEMA = 'whoisleuth.cli.bulk';
@@ -47,49 +50,6 @@ type BulkMetadata = {
   collectedTotal?: number;
   filter?: 'all' | 'errors' | 'inconclusive' | 'registered';
 };
-
-type LookupCollectionContext = Readonly<{
-  observerLabel?: string;
-  vantageLabel?: string;
-}>;
-
-function buildCliLookupDocument(
-  query: string,
-  classified: ClassifiedQuery,
-  result: UnknownRecord,
-  generatedAt = new Date().toISOString(),
-  mode = 'fast',
-  collectionContext: LookupCollectionContext = {},
-): UnknownRecord {
-  const normalizedGeneratedAt = normalizeExplicitIsoTimestamp(generatedAt);
-  if (!normalizedGeneratedAt) {
-    throw new TypeError('Lookup document generation time must be valid and include an explicit timezone.');
-  }
-  const observerLabel = typeof collectionContext.observerLabel === 'string'
-    ? collectionContext.observerLabel
-    : null;
-  const vantageLabel = typeof collectionContext.vantageLabel === 'string'
-    ? collectionContext.vantageLabel
-    : null;
-  return {
-    ...result,
-    schema: CLI_LOOKUP_SCHEMA,
-    version: CLI_LOOKUP_SCHEMA_VERSION,
-    generatedAt: normalizedGeneratedAt,
-    mode: mode === 'deep' ? 'deep' : 'fast',
-    query,
-    type: classified.type,
-    inputHostname: classified.inputHostname,
-    registrableDomain: classified.registrableDomain,
-    isSubdomain: classified.isSubdomain,
-    ...((observerLabel || vantageLabel) ? {
-      collectionContext: {
-        ...(observerLabel ? { observerLabel } : {}),
-        ...(vantageLabel ? { vantageLabel } : {}),
-      },
-    } : {}),
-  };
-}
 
 function formatJsonDocument(document: unknown): string {
   return `${JSON.stringify(document, null, 2)}\n`;

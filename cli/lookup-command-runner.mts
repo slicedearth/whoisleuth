@@ -13,7 +13,7 @@ import { formatTerminalLookup } from './formatters/terminal.mts';
 import { buildCliLookupPlan, formatCliLookupPlan } from './lookup-plan.mts';
 import { createCliProgressEvents } from './progress-events.mts';
 import type { CliCommandContext, CliDependencies } from './runner-types.mts';
-import type { UnknownRecord } from './saved-lookup.mts';
+import { serializeCliLookupDocument, type UnknownRecord } from './saved-lookup.mts';
 import { lookupStrictExitFindings } from './strict-exit.mts';
 import { evaluateCliFailPolicies, formatFailPolicyNotice } from './fail-policy.mts';
 import { formatCliJunit } from './ci-report.mts';
@@ -117,10 +117,10 @@ async function runLookupCommand(
         throw dependencies.signal.reason || new DOMException('Aborted', 'AbortError');
       }
       const save = dependencies.writePrivateFile || writePrivateFile;
-      await save(args.saveLookup, formatJsonDocument(document), {
+      await save(args.saveLookup, serializeCliLookupDocument(document), {
         existingFileMessage: 'Saved Lookup file already exists. Choose a new --save-lookup path or remove the existing file explicitly.',
       });
-      context.writeStderr('Saved the completed private Lookup JSON. It can contain normalized evidence not shown in browser panels.\n');
+      context.writeStderr('Saved the completed private Lookup JSON. It can contain raw public registry and WHOIS responses plus target and collection context; review it before sharing.\n');
     }
   } else {
     const indicator = context.beginProgress(args.deep
@@ -153,7 +153,7 @@ async function runLookupCommand(
     document = buildDocument(result);
   }
   if (!args.quiet) {
-    if (args.output === 'json') context.writeStdout(formatJsonDocument(document));
+    if (args.output === 'json') context.writeStdout(serializeCliLookupDocument(document));
     else if (args.output === 'junit') context.writeStdout(formatCliJunit(document));
     else if (args.output === 'markdown' || args.output === 'html') {
       const loadEvidence = dependencies.loadEvidenceExport || (() => import('../lib/evidence-export.mts'));

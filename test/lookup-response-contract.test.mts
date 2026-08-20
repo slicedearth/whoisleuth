@@ -56,6 +56,7 @@ import {
   parseCompactLookupHttpResponse,
   parseLookupHttpResponse,
 } from '../lib/lookup-response-contract.mts';
+import { classifyQuery } from '../lib/classify.mts';
 
 const THREAT_TARGET = Object.freeze({
   type: 'domain',
@@ -161,6 +162,26 @@ function nestedValue(depth: number): unknown {
 }
 
 describe('Lookup HTTP response contract', () => {
+  test('accepts every canonical domain identity produced by query classification', () => {
+    for (const [query, expected] of [
+      ['portal.example.test', 'example.test'],
+      ['https://portal.example.test:443/path', 'example.test'],
+      ['münchen.example', 'xn--mnchen-3ya.example'],
+      ['shop.example.co.uk', 'example.co.uk'],
+      ['portal.example.test.', 'example.test'],
+    ] as const) {
+      const classified = classifyQuery(query);
+      const raw = createLookupHttpResponse(query, classified, response({
+        rdap: { parsed: { domain: expected.toUpperCase() } },
+        whois: { parsed: { domainName: expected.toUpperCase() }, chain: [] },
+        availability: { applicable: true, domain: expected, state: 'registered' },
+      }));
+
+      assert.equal(parseLookupHttpResponse(raw).ok, true, query);
+    }
+    assert.throws(() => classifyQuery('foo_bar.example.test'), /invalid domain label/u);
+  });
+
   test('accepts the full response without copying, pruning, or mutating additive evidence', () => {
     const raw = response({ additiveSection: { version: 1, value: 'retained' } });
     const before = structuredClone(raw);

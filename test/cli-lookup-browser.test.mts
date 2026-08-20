@@ -34,6 +34,7 @@ function lookupDocument() {
     query: 'example.test',
     type: 'domain',
     mode: 'deep',
+    rdap: { parsed: { domain: 'EXAMPLE.TEST' } },
     availability: {
       applicable: true,
       state: 'registered',
@@ -108,6 +109,7 @@ function lookupDocument() {
       network: { handle: 'NET-EXAMPLE', name: 'Example edge network', cidrs: ['192.0.2.0/24'], country: 'AU', networkType: 'DIRECT ALLOCATION' },
       limitations: ['One endpoint is point-in-time context.'], abuseRouting: [],
     },
+    whois: { parsed: { domainName: 'EXAMPLE.TEST' } },
     diagnostics: {
       rdap: { status: 'success', endpoint: 'https://rdap.invalid/domain/example.test' },
       whois: { status: 'partial' },
@@ -858,6 +860,6 @@ describe('lookup browse CLI contract', () => {
     assert.equal(saved.query, 'example.test');
     assert.equal(saved.mode, 'deep');
     assert.match(stderr.value(), /Saved the completed private Lookup JSON/u);
-    assert.match(stderr.value(), /normalized evidence not shown/u);
+    assert.match(stderr.value(), /raw public registry and WHOIS responses.*review it before sharing/u);
   });
 });

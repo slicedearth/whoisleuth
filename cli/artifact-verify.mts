@@ -57,14 +57,16 @@ import {
 import {
   SAVED_LOOKUP_SCHEMA,
   SUPPORTED_SAVED_LOOKUP_SCHEMA_VERSIONS,
-  parseSavedLookupDocument,
+  parseCliLookupDocument,
 } from './saved-lookup.mts';
 import {
   DOMAIN_CONTROL_MANIFEST_SCHEMA,
-  DOMAIN_CONTROL_MANIFEST_VERSION,
   verifyDomainControlManifest,
 } from '../lib/domain-control-manifest.mts';
-import { LEGACY_DOMAIN_CONTROL_MANIFEST_VERSION } from '../packages/contracts/domain-control-manifest.mts';
+import {
+  DOMAIN_CONTROL_MANIFEST_CANONICALIZATION_ROUTES,
+  DOMAIN_CONTROL_MANIFEST_READABLE_VERSIONS,
+} from '../packages/contracts/domain-control-manifest.mts';
 import {
   DOMAIN_CHANGE_PACKET_SCHEMA,
   DOMAIN_CHANGE_PACKET_VERSION,
@@ -178,7 +180,7 @@ const SIGNED_ARTIFACT_VERSIONS: Readonly<Record<string, ReadonlySet<number>>> = 
   [BULK_DOMAIN_COMPARISON_SCHEMA]: new Set([3, BULK_DOMAIN_COMPARISON_EXPORT_VERSION]),
   [BULK_MAIL_EXPOSURE_SCHEMA]: new Set([1, BULK_MAIL_EXPOSURE_EXPORT_VERSION]),
   [BULK_REVIEW_MANIFEST_SCHEMA]: new Set([1, BULK_REVIEW_MANIFEST_VERSION]),
-  [DOMAIN_CONTROL_MANIFEST_SCHEMA]: new Set([LEGACY_DOMAIN_CONTROL_MANIFEST_VERSION, DOMAIN_CONTROL_MANIFEST_VERSION]),
+  [DOMAIN_CONTROL_MANIFEST_SCHEMA]: new Set(DOMAIN_CONTROL_MANIFEST_READABLE_VERSIONS),
   [DOMAIN_CHANGE_PACKET_SCHEMA]: new Set([1, DOMAIN_CHANGE_PACKET_VERSION]),
   [INVESTIGATION_MANIFEST_SCHEMA]: new Set([1, INVESTIGATION_MANIFEST_VERSION]),
 });
@@ -189,7 +191,7 @@ const SIGNED_ARTIFACT_CANONICALIZATION: Readonly<Record<string, readonly Artifac
   [BULK_DOMAIN_COMPARISON_SCHEMA]: [{ version: 3, canonicalization: SORTED_JSON_V1, explicit: false }, { version: BULK_DOMAIN_COMPARISON_EXPORT_VERSION, canonicalization: SORTED_JSON_V2, explicit: true }],
   [BULK_MAIL_EXPOSURE_SCHEMA]: [{ version: 1, canonicalization: SORTED_JSON_V1, explicit: false }, { version: BULK_MAIL_EXPOSURE_EXPORT_VERSION, canonicalization: SORTED_JSON_V2, explicit: true }],
   [BULK_REVIEW_MANIFEST_SCHEMA]: [{ version: 1, canonicalization: SORTED_JSON_V1, explicit: false }, { version: BULK_REVIEW_MANIFEST_VERSION, canonicalization: SORTED_JSON_V2, explicit: true }],
-  [DOMAIN_CONTROL_MANIFEST_SCHEMA]: [{ version: LEGACY_DOMAIN_CONTROL_MANIFEST_VERSION, canonicalization: SORTED_JSON_V1, explicit: true }, { version: DOMAIN_CONTROL_MANIFEST_VERSION, canonicalization: SORTED_JSON_V2, explicit: true }],
+  [DOMAIN_CONTROL_MANIFEST_SCHEMA]: DOMAIN_CONTROL_MANIFEST_CANONICALIZATION_ROUTES,
   [DOMAIN_CHANGE_PACKET_SCHEMA]: [{ version: 1, canonicalization: SORTED_JSON_V1, explicit: false }, { version: DOMAIN_CHANGE_PACKET_VERSION, canonicalization: SORTED_JSON_V2, explicit: true }],
   [INVESTIGATION_MANIFEST_SCHEMA]: [{ version: 1, canonicalization: SORTED_JSON_V1, explicit: false }, { version: INVESTIGATION_MANIFEST_VERSION, canonicalization: SORTED_JSON_V2, explicit: true }],
 });
@@ -534,7 +536,7 @@ async function verifyOfflineArtifactCore(
     if (!SUPPORTED_SAVED_LOOKUP_SCHEMA_VERSIONS.some((supported) => supported === version)) {
       throw new UnsupportedOfflineArtifactError('This saved Lookup document version is not supported.');
     }
-    const document = parseSavedLookupDocument(raw, { label: 'Saved Lookup artefact' });
+    parseCliLookupDocument(raw, { label: 'Saved Lookup artefact' });
     return Object.freeze({
       schema: OFFLINE_ARTIFACT_VERIFICATION_SCHEMA,
       version: OFFLINE_ARTIFACT_VERIFICATION_VERSION,
@@ -553,7 +555,7 @@ async function verifyOfflineArtifactCore(
         ciphertextBytes: null,
       }),
       limitations: Object.freeze([
-        `The saved ${document.mode} Lookup matches its versioned structural contract, but this document format has no embedded checksum or signature. Structural validity does not prove that its evidence is accurate, current, or unchanged since collection.`,
+        'The saved Lookup matches its versioned structural contract, but this document format has no embedded checksum or signature. Structural validity does not prove that its evidence is accurate, current, or unchanged since collection.',
       ]),
     });
   }

@@ -1,3 +1,5 @@
+import { DOMAIN_CONTROL_MANIFEST_COMPATIBILITY } from '../packages/contracts/domain-control-manifest.mts';
+
 export type InterchangeSupport = 'supported' | 'unsupported' | 'verification_only';
 export type InterchangeFidelity =
   | 'semantic_exact_after_normalisation'
@@ -59,18 +61,20 @@ export const INTERCHANGE_ARTIFACT_CONTRACTS: readonly InterchangeArtifactContrac
   }),
   Object.freeze({
     id: 'domain_control_passport',
-    compatibilityEntryId: 'export.domain-control-manifest',
-    schema: 'whoisleuth.domain-control-manifest',
-    versions: Object.freeze([1, 2]),
+    compatibilityEntryId: DOMAIN_CONTROL_MANIFEST_COMPATIBILITY.id,
+    schema: DOMAIN_CONTROL_MANIFEST_COMPATIBILITY.schema!,
+    versions: DOMAIN_CONTROL_MANIFEST_COMPATIBILITY.supportedVersions,
     versionField: 'version',
     nestedSchemaPath: Object.freeze([]),
     browser: Object.freeze({ import: 'supported', export: 'supported' }),
     cli: Object.freeze({ read: 'supported', write: 'supported', verify: 'supported' }),
-    fidelity: 'semantic_exact_after_normalisation',
+    fidelity: 'normalised_merge',
     requiredAssurance: 'whole_integrity',
     preservedFieldGroups: exact,
     excludedFieldGroups: Object.freeze(['profile_identity', 'brand_context', 'contacts', 'notes', 'observations', 'planning_context', 'suppression_context']),
-    futureVersionBehaviour: 'reject',
+    futureVersionBehaviour: DOMAIN_CONTROL_MANIFEST_COMPATIBILITY.futureVersionBehavior === 'reject'
+      ? 'reject'
+      : (() => { throw new TypeError('Domain-control interchange must reject future manifest versions.'); })(),
   }),
   Object.freeze({
     id: 'brand_profiles',

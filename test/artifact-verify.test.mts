@@ -378,11 +378,19 @@ describe('offline artifact verifier', () => {
     assert.equal(report.checks.structure, 'verified');
     assert.equal(report.checks.contentIntegrity, 'not_checked');
     assert.match(report.limitations[0] || '', /no embedded checksum or signature/u);
+    assert.doesNotMatch(JSON.stringify(report), /example\.test|\bfast\b/u);
 
     const frozenLegacy = await verifyOfflineArtifact(await loadCliLookupV1Fixture());
     assert.equal(frozenLegacy.artifact.version, 1);
     const current = await verifyOfflineArtifact(JSON.stringify({ ...lookup, version: 2 }));
     assert.equal(current.artifact.version, 2);
+    const asn = await verifyOfflineArtifact(
+      await readFile(new URL('./fixtures/cli-lookup-asn-v2.json', import.meta.url), 'utf8'),
+    );
+    assert.equal(asn.artifact.kind, 'saved_lookup');
+    assert.equal(asn.artifact.version, 2);
+    assert.equal(asn.state, 'structure_valid');
+    assert.doesNotMatch(JSON.stringify(asn), /AS64496|\bfast\b/u);
 
     const strictCode = await runCli(['verify-artifact', '--json', '--strict-exit'], {
       stdout: { write() {} }, stderr: { write() {} },

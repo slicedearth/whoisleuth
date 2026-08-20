@@ -62,7 +62,10 @@ describe('fixed investigation execution', () => {
     let calls = 0;
     const code = await runCli(['workflow-run', 'domain-triage', 'example.test', '--approve-network', '--json'], {
       stdout: { write(value) { stdout += value; } }, stderr: { write() {} }, now: () => NOW,
-      runUnifiedLookup: async () => { calls += 1; return { diagnostics: {}, availability: {} }; },
+      runUnifiedLookup: async () => {
+        calls += 1;
+        return { diagnostics: { rdap: { status: 'unsupported' }, whois: { status: 'skipped' } }, availability: {} };
+      },
     });
     assert.equal(code, EXIT_CODES.SUCCESS);
     assert.equal(calls, 1);

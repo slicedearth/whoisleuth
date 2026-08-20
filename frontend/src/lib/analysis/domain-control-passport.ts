@@ -1,7 +1,5 @@
 import {
   sha256ArtifactDigestFor,
-  sha256ArtifactDigestV2,
-  SORTED_JSON_V2,
 } from './artifact-integrity.ts';
 import {
   assertDomainControlPassportByteBudget,
@@ -12,7 +10,11 @@ import {
   type DomainControlPassport,
   type DomainControlPassportEntry,
 } from './domain-control-manifest-core.ts';
-import { DOMAIN_CONTROL_MANIFEST_INPUT_VERSION } from '../../../../packages/contracts/domain-control-manifest.mts';
+import {
+  DOMAIN_CONTROL_MANIFEST_CURRENT_CANONICALIZATION,
+  DOMAIN_CONTROL_MANIFEST_INPUT_VERSION,
+} from '../../../../packages/contracts/domain-control-manifest.mts';
+import { serializeDomainControlManifest } from '../../../../packages/evidence/domain-control-runtime.mts';
 import {
   MAX_DESIRED_POSTURE_BASELINES,
   normalizeDesiredPostureBaselines,
@@ -20,7 +22,7 @@ import {
   type DesiredPostureBaseline,
 } from './brand-profile-model.ts';
 
-export { MAX_DOMAIN_CONTROL_PASSPORT_BYTES };
+export { MAX_DOMAIN_CONTROL_PASSPORT_BYTES, serializeDomainControlManifest };
 export const DOMAIN_CONTROL_PASSPORT_FIELDS = Object.freeze([
   'nameservers',
   'ds',
@@ -92,8 +94,8 @@ export async function buildDomainControlPassport(
     ...unsigned,
     integrity: Object.freeze({
       algorithm: 'SHA-256',
-      canonicalization: SORTED_JSON_V2,
-      digestSha256: await sha256ArtifactDigestV2(unsigned),
+      canonicalization: DOMAIN_CONTROL_MANIFEST_CURRENT_CANONICALIZATION,
+      digestSha256: await sha256ArtifactDigestFor(unsigned, DOMAIN_CONTROL_MANIFEST_CURRENT_CANONICALIZATION),
     }),
   });
   assertDomainControlPassportByteBudget(passport);
@@ -185,6 +187,16 @@ export function applyDomainControlPassport(
     desiredPostureBaselines: normalizedBaselines,
     updatedAt: importedAt,
   };
+}
+
+export async function applyVerifiedDomainControlPassport(
+  profile: BrandProfile,
+  passport: DomainControlPassport,
+  choices: readonly DomainControlPassportImportChoice[],
+  importedAt = new Date().toISOString(),
+): Promise<BrandProfile> {
+  const verified = await verifyDomainControlPassport(passport, importedAt);
+  return applyDomainControlPassport(profile, verified, choices, importedAt);
 }
 
 export function passportConfiguredFields(entry: DomainControlPassportEntry): DomainControlPassportField[] {

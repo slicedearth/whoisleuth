@@ -63,7 +63,11 @@ test('public privacy notices track versioned browser-local data contracts', asyn
 
   for (const notice of [rootNotice, publicNotice]) {
     const compact = notice.replace(/\s+/gu, ' ');
-    assert.match(compact, /Last updated: 16 August 2026/u);
+    assert.match(compact, /Last updated: 20 August 2026/u);
+    assert.match(compact, /Domain-control passports?.*?selected official-domain nameserver, DS, MX, CAA, TLS issuer or public-key, transfer-lock, and renewal-review expectations/iu);
+    assert.match(compact, /Profile identity, brands, contacts, notes, retained observations, change windows, suppressions.*?excluded/iu);
+    assert.match(compact, /field-level preview.*?does not delete a destination value by omission/iu);
+    assert.match(compact, /valid digest detects file changes.*?does not prove that the expected state is correct or deployed/iu);
     assert.match(compact, /same bounded homepage (?:request|response)/u);
     assert.match(compact, /fixed robots and Twitter Card declaration classes/u);
     assert.match(compact, /(?:Content-Encoding, Cache-Control|selected-response content-coding and cache-policy metadata)/u);
@@ -114,8 +118,13 @@ test('public privacy notices track versioned browser-local data contracts', asyn
     assert.ok(compact.includes(`Live Lookup responses are rejected before display when they exceed ${MAX_BOUNDED_JSON_DEPTH} nesting levels, ${MAX_BOUNDED_JSON_KEYS.toLocaleString('en-AU')} keys, ${MAX_BOUNDED_JSON_VALUES.toLocaleString('en-AU')} values, or ${MAX_LOOKUP_RESPONSE_CONTAINER_ITEMS.toLocaleString('en-AU')} items in any single container`));
     assert.ok(compact.includes(`stricter ${LOOKUP_EVIDENCE_PORTABLE_MAX_DEPTH}-level, ${LOOKUP_EVIDENCE_PORTABLE_MAX_ENTRIES.toLocaleString('en-AU')}-entry portable evidence structure remains reviewable`));
     assert.ok(compact.includes(`Saved CLI Lookup JSON inputs are capped at ${mib(MAX_SAVED_LOOKUP_INPUT_BYTES)} MiB and scanned before parsing for duplicate keys, the prototype-sensitive`));
+    assert.match(compact, /aggregate states, durations, truncation, rate-limit counts, and Fast, Deep, or unknown mode counts/u);
     assert.match(compact, /__proto__.*more than 48 nesting levels/u);
     assert.ok(compact.includes(`more than ${MAX_BOUNDED_JSON_CONTAINER_ITEMS.toLocaleString('en-AU')} items in any single container`));
+    assert.match(compact, /full saved Lookup rather than a privacy-minimised evidence projection/u);
+    assert.match(compact, /raw RDAP publications, WHOIS response bodies, publicly published contact data, bounded source endpoints and timings/u);
+    assert.match(compact, /Saved-Lookup diff reads two local supported schema-version 1 or 2 domain documents/u);
+    assert.match(compact, /Saved Lookup documents have no applicable embedded integrity contract.*?not accepted by.*?sign-artifact/u);
     assert.match(compact, /If a DANE-TA TLSA usage 2 association is published, active STARTTLS review retains only the observed leaf certificate and leaves that comparison partial because this action does not construct or validate a certificate path to a TLSA trust anchor/u);
     assert.match(compact, /SMTP relay PKIX-TA usage 0 and PKIX-EE usage 1 records are retained as unsupported and cannot complete SMTP DANE assurance; a separately attributable usage 3 match remains eligible/u);
     assert.match(compact, /explicit authorised-capture action/u);

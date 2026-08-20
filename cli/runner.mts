@@ -85,10 +85,13 @@ import {
   formatDomainControlResult,
   reviewDomainControlManifest,
 } from '../lib/domain-control-manifest.mts';
+import { serializeDomainControlManifest } from '../packages/evidence/domain-control-runtime.mts';
+import { MAX_DOMAIN_CONTROL_REVIEW_COMMAND_BYTES } from '../packages/contracts/domain-control-review.mts';
 import {
   DOMAIN_CONTROL_FLIGHT_RECORDER_INPUT_SCHEMA,
   buildDomainControlFlightRecorder,
   formatDomainControlFlightRecorder,
+  serializeDomainControlFlightRecorder,
 } from '../lib/domain-control-flight-recorder.mts';
 import {
   CLI_DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA,
@@ -174,6 +177,7 @@ import {
   MAX_RISK_CALIBRATION_INPUT_BYTES,
   buildRiskCalibrationReport,
   parseRiskCalibrationDataset,
+  serializeRiskCalibrationReport,
 } from './risk-calibration.mts';
 import {
   MAX_LOOKALIKE_CALIBRATION_BYTES,
@@ -624,9 +628,9 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
         } : {}),
       });
       if (!args.quiet) write(stdout, args.output === 'summary_json'
-        ? formatJsonDocument(buildRiskCalibrationSummaryReport(report))
+        ? serializeRiskCalibrationReport(buildRiskCalibrationSummaryReport(report))
         : args.output === 'json'
-          ? formatJsonDocument(report)
+          ? serializeRiskCalibrationReport(report)
           : terminal(formatTerminalRiskCalibration(report), args.color));
       return EXIT_CODES.SUCCESS;
     }
@@ -880,7 +884,7 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
       try {
         input = dependencies.readArtifactInput
           ? await dependencies.readArtifactInput(args.source)
-          : await readInput(args.source, MAX_OFFLINE_EVIDENCE_INPUT_BYTES, 'Domain control input');
+          : await readInput(args.source, MAX_DOMAIN_CONTROL_REVIEW_COMMAND_BYTES, 'Domain control input');
       } catch (error) {
         if (error instanceof CliUsageError) throw error;
         throw new CliUsageError(`Could not read domain control input: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
@@ -923,7 +927,11 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
           ? formatDomainControlFlightRecorder(document as ReturnType<typeof buildDomainControlFlightRecorder>)
           : formatDomainControlResult(document as ReturnType<typeof buildDomainControlManifest> | ReturnType<typeof reviewDomainControlManifest>);
       if (!args.quiet) write(stdout, args.output === 'json'
-        ? formatJsonDocument(document)
+        ? schema === DOMAIN_CONTROL_MANIFEST_INPUT_SCHEMA
+          ? serializeDomainControlManifest(document)
+          : schema === DOMAIN_CONTROL_FLIGHT_RECORDER_INPUT_SCHEMA
+            ? serializeDomainControlFlightRecorder(document as ReturnType<typeof buildDomainControlFlightRecorder>)
+            : formatJsonDocument(document)
         : terminal(terminalDocument, args.color));
       return EXIT_CODES.SUCCESS;
     }

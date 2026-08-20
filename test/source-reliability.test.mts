@@ -8,6 +8,7 @@ import {
 } from '../cli/source-reliability.mts';
 import EXIT_CODES from '../cli/exit-codes.mts';
 import { runCli } from '../cli/runner.mts';
+import { MAX_SAVED_LOOKUP_INPUT_BYTES } from '../cli/saved-lookup.mts';
 
 function lookupDocument(overrides: Record<string, unknown> = {}) {
   return {
@@ -16,7 +17,12 @@ function lookupDocument(overrides: Record<string, unknown> = {}) {
     mode: 'deep',
     generatedAt: '2026-07-15T00:00:00.000Z',
     query: 'private-target.example',
+    type: 'domain',
+    inputHostname: 'private-target.example',
     registrableDomain: 'private-target.example',
+    isSubdomain: false,
+    rdap: { parsed: { domain: 'PRIVATE-TARGET.EXAMPLE' } },
+    whois: { parsed: { domainName: 'PRIVATE-TARGET.EXAMPLE' } },
     diagnostics: {
       version: 8,
       rdap: { status: 'success', endpoint: 'https://registry.invalid/private-target.example' },
@@ -74,11 +80,18 @@ describe('privacy-safe source reliability report', () => {
       () => buildSourceReliabilityReport(JSON.stringify(lookupDocument()), '2026-07-16T00:00:00'),
       /explicit timezone/u,
     );
-    const current = buildSourceReliabilityReport(JSON.stringify(lookupDocument({
-      version: 2,
-      generatedAt: '2026-07-15T00:00:00',
-    })));
-    assert.deepEqual(current.sampleWindow, { earliestGeneratedAt: null, latestGeneratedAt: null });
+    assert.throws(
+      () => buildSourceReliabilityReport(JSON.stringify(lookupDocument({
+        version: 2,
+        generatedAt: '2026-07-15T00:00:00',
+      }))),
+      /supported bounded CLI Lookup document/u,
+    );
+    const current = buildSourceReliabilityReport(JSON.stringify(lookupDocument({ version: 2 })));
+    assert.deepEqual(current.sampleWindow, {
+      earliestGeneratedAt: '2026-07-15T00:00:00.000Z',
+      latestGeneratedAt: '2026-07-15T00:00:00.000Z',
+    });
     const legacy = buildSourceReliabilityReport(JSON.stringify(lookupDocument({
       version: 1,
       generatedAt: '2026-07-15T00:00:00',
@@ -98,6 +111,33 @@ describe('privacy-safe source reliability report', () => {
     assert.throws(
       () => buildSourceReliabilityReport(JSON.stringify({ schema: 'whoisleuth.cli.bulk', version: 2 })),
       /version 1 Bulk or Bulk-item/iu,
+    );
+  });
+
+  test('applies the canonical saved-Lookup shape and byte boundary before source projection', () => {
+    assert.throws(
+      () => buildSourceReliabilityReport(JSON.stringify({
+        schema: 'whoisleuth.cli.lookup',
+        version: 2,
+      })),
+      /supported bounded CLI Lookup document/u,
+    );
+    assert.throws(
+      () => buildSourceReliabilityReport(JSON.stringify(lookupDocument({
+        extensionProbe: 'x'.repeat(MAX_SAVED_LOOKUP_INPUT_BYTES),
+      }))),
+      /supported bounded CLI Lookup document/u,
+    );
+    const ordinary = JSON.stringify(lookupDocument());
+    const padded = `${' '.repeat(MAX_SAVED_LOOKUP_INPUT_BYTES - Buffer.byteLength(ordinary, 'utf8') + 1)}${ordinary}`;
+    assert.throws(
+      () => buildSourceReliabilityReport(padded),
+      /supported bounded CLI Lookup document/u,
+    );
+    const malformedDirect = `{${' '.repeat(MAX_SAVED_LOOKUP_INPUT_BYTES)}}`;
+    assert.throws(
+      () => buildSourceReliabilityReport(malformedDirect),
+      /supported bounded CLI Lookup document/u,
     );
   });
 

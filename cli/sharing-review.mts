@@ -139,6 +139,9 @@ async function buildSharingReview(
   options: SharingReviewOptions,
   generatedAt = new Date().toISOString(),
 ): Promise<SharingReviewDocument> {
+  if (Buffer.byteLength(raw, 'utf8') > MAX_SHARING_REVIEW_BYTES) {
+    throw new TypeError(`Sharing review input is limited to ${MAX_SHARING_REVIEW_BYTES} bytes.`);
+  }
   let artifactValue: unknown;
   try {
     scanBoundedJson(raw);

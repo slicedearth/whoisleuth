@@ -1,0 +1,21 @@
+{
+  "schema": "whoisleuth.risk-calibration-dataset",
+  "version": 1,
+  "records": [
+    {
+      "id": "calibration-1",
+      "domain": "candidate.example.test",
+      "analystDisposition": "confirmed_abuse",
+      "evidence": {
+        "availability": "registered",
+        "mutationTypes": [
+          "dictionary"
+        ],
+        "faviconMatch": true,
+        "hasPasswordField": true,
+        "activityStatus": "active",
+        "hasMx": true
+      }
+    }
+  ]
+}

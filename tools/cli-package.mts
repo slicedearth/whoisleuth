@@ -97,12 +97,12 @@ export const MAX_CLI_PACKAGE_GRAPH_BYTES = 8 * 1024 * 1024;
 // The executable dependency graph remains independently capped. Two historical
 // browser-safe domain-control paths are also retained as explicit package roots
 // because released CLI archives permitted those deep imports.
-export const MAX_CLI_RUNTIME_MODULES = 298;
-export const MAX_CLI_PACKAGE_MODULES = 300;
+export const MAX_CLI_RUNTIME_MODULES = 301;
+export const MAX_CLI_PACKAGE_MODULES = 303;
 // Type-only and JSON compiler inputs are captured in addition to the runtime
 // dependency graph. They may emit no runtime code, but they remain bounded
 // because TypeScript reads them while producing the candidate.
-export const MAX_CLI_PACKAGE_COMPILER_SOURCES = 300;
+export const MAX_CLI_PACKAGE_COMPILER_SOURCES = 303;
 export const MAX_CLI_PACKAGE_SOURCE_BYTES = 8 * 1024 * 1024;
 export const MAX_CLI_PACKAGE_FILE_BYTES = 2 * 1024 * 1024;
 export const MAX_CLI_PACKAGE_COMPILER_CONTEXT_BYTES = 32 * 1024 * 1024;

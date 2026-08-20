@@ -1,0 +1,38 @@
+{
+  "rdap": {
+    "parsed": {
+      "handle": "AS64496",
+      "name": "Example Autonomous System",
+      "startAutnum": 64496,
+      "endAutnum": 64496,
+      "country": "AU",
+      "statuses": [
+        "active"
+      ]
+    }
+  },
+  "whois": {
+    "skipped": true,
+    "detail": "WHOIS is omitted for this saved example."
+  },
+  "availability": {
+    "applicable": false
+  },
+  "diagnostics": {
+    "rdap": {
+      "status": "success"
+    },
+    "whois": {
+      "status": "skipped"
+    },
+    "availability": {
+      "status": "not_applicable"
+    }
+  },
+  "schema": "whoisleuth.cli.lookup",
+  "version": 2,
+  "generatedAt": "2026-08-20T00:00:00.000Z",
+  "mode": "fast",
+  "query": "AS64496",
+  "type": "asn"
+}

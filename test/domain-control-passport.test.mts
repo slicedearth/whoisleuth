@@ -3,10 +3,12 @@ import { describe, it } from 'node:test';
 
 import {
   applyDomainControlPassport,
+  applyVerifiedDomainControlPassport,
   buildBrandProfilePassportInput,
   buildDomainControlPassport,
   MAX_DOMAIN_CONTROL_PASSPORT_BYTES,
   passportConfiguredFields,
+  serializeDomainControlManifest,
   verifyDomainControlPassport,
 } from '../frontend/src/lib/analysis/domain-control-passport.ts';
 import {
@@ -78,6 +80,8 @@ describe('browser domain-control passports', () => {
     const cli = buildDomainControlManifest(input, generatedAt);
 
     assert.deepEqual(browser, cli);
+    assert.equal(serializeDomainControlManifest(browser), serializeDomainControlManifest(cli));
+    assert.equal(serializeDomainControlManifest(browser).endsWith('\n'), true);
     assert.deepEqual(verifyDomainControlManifest(browser), browser);
     assert.deepEqual(await verifyDomainControlPassport(cli, generatedAt), cli);
     assert.deepEqual(browser.entries[0]?.mx, ['10 mail.example.test']);
@@ -273,6 +277,41 @@ describe('browser domain-control passports', () => {
     assert.equal(result.note, 'Private analyst note');
     assert.equal(result.recoveryDependency, 'private recovery detail');
     assert.equal(result.lifecycle, 'change_planned');
+  });
+
+  it('rechecks integrity and expiry immediately before applying selected fields', async () => {
+    const source = profile();
+    source.desiredPostureBaselines[0] = { ...baseline(), nameservers: ['ns2.example.test'] };
+    const passport = await buildDomainControlPassport(
+      buildBrandProfilePassportInput(source, ['example.test'], expiresAt),
+      generatedAt,
+    );
+    const choices = [{
+      domain: 'example.test',
+      addOfficialDomain: false,
+      fields: ['nameservers'] as const,
+    }];
+
+    const applied = await applyVerifiedDomainControlPassport(
+      profile(),
+      passport,
+      choices,
+      '2026-08-08T00:00:00.000Z',
+    );
+    assert.deepEqual(applied.desiredPostureBaselines[0]?.nameservers, ['ns2.example.test']);
+    await assert.rejects(
+      () => applyVerifiedDomainControlPassport(profile(), passport, choices, expiresAt),
+      /expired/iu,
+    );
+    await assert.rejects(
+      () => applyVerifiedDomainControlPassport(
+        profile(),
+        { ...passport, integrity: { ...passport.integrity, digestSha256: `sha256:${'0'.repeat(64)}` } },
+        choices,
+        '2026-08-08T00:00:00.000Z',
+      ),
+      /integrity/iu,
+    );
   });
 
   it('adds a new official domain only with explicit confirmation', async () => {

@@ -1,0 +1,137 @@
+{
+  "schema": "whoisleuth.cli.domain-control-review-input",
+  "version": 1,
+  "manifest": {
+    "schema": "whoisleuth.domain-control-manifest",
+    "version": 2,
+    "generatedAt": "2026-08-03T00:00:00.000Z",
+    "expiresAt": "2026-09-03T00:00:00.000Z",
+    "entries": [
+      {
+        "domain": "example.test",
+        "nameservers": [
+          "ns1.example.test",
+          "ns2.example.test"
+        ],
+        "ds": [
+          "12345 13 2 abcdef"
+        ],
+        "mx": [
+          "0 .",
+          "10 mail.example.test"
+        ],
+        "caa": [
+          "0 issue ca.example"
+        ],
+        "tlsIssuer": "example issuer",
+        "tlsSpkiSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "registrarLock": "required",
+        "renewalReviewAt": "2026-08-20T00:00:00.000Z",
+        "note": null
+      }
+    ],
+    "limitations": [
+      "This analyst-authored manifest records intended domain-control state. It does not collect evidence or change registrar, DNS, mail, or certificate configuration.",
+      "Empty desired fields are unconfigured rather than claims that a record should be absent."
+    ],
+    "integrity": {
+      "algorithm": "SHA-256",
+      "canonicalization": "sorted-json-v2",
+      "digestSha256": "sha256:6d2015c111fe05e44babfd42f9adefbfb3bee3caf9fad33c60b9ca640b0f0c8a"
+    }
+  },
+  "lookups": [
+    {
+      "schema": "whoisleuth.cli.lookup",
+      "version": 2,
+      "generatedAt": "2026-08-20T00:00:00.000Z",
+      "mode": "deep",
+      "type": "domain",
+      "query": "example.test",
+      "registrableDomain": "example.test",
+      "diagnostics": {
+        "rdap": {
+          "status": "success"
+        },
+        "whois": {
+          "status": "unsupported"
+        }
+      },
+      "rdap": {
+        "parsed": {
+          "registrar": {
+            "name": "Example Registrar"
+          },
+          "statuses": [
+            "clientTransferProhibited"
+          ],
+          "dnssec": "signed",
+          "nameservers": [
+            "ns1.example.test",
+            "ns2.example.test"
+          ]
+        }
+      },
+      "availability": {
+        "dns": {
+          "status": "success",
+          "records": {
+            "ns": [
+              "ns1.example.test",
+              "ns2.example.test"
+            ],
+            "mx": [
+              {
+                "priority": 10,
+                "exchange": "mail.example.test"
+              }
+            ],
+            "caa": [
+              {
+                "critical": 0,
+                "tag": "issue",
+                "value": "ca.example"
+              }
+            ]
+          },
+          "delegation": {
+            "status": "success",
+            "records": {
+              "ds": [
+                {
+                  "keyTag": 12345,
+                  "algorithm": 13,
+                  "digestType": 2,
+                  "digest": "ABCDEF"
+                }
+              ]
+            }
+          }
+        },
+        "tls": {
+          "status": "success",
+          "certificate": {
+            "fingerprintSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+            "issuer": {
+              "commonNames": [
+                "Example Issuer"
+              ]
+            },
+            "publicKey": {
+              "fingerprintSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            }
+          }
+        },
+        "http": {
+          "status": "success",
+          "finalOrigin": "https://example.test/"
+        },
+        "pageIdentity": {
+          "status": "success",
+          "bodySha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+          "title": "Example account centre"
+        }
+      }
+    }
+  ]
+}

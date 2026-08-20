@@ -1,0 +1,76 @@
+{
+  "schema": "whoisleuth.domain-control-flight-recorder.input",
+  "version": 1,
+  "observations": [
+    {
+      "domain": "Example.Test.",
+      "observedAt": "2026-08-01T00:00:00.000Z",
+      "collectionDepth": "deep",
+      "fields": [
+        {
+          "id": "delegated_nameservers",
+          "source": "DNS delegation evidence",
+          "state": "observed",
+          "values": [
+            "NS1.EXAMPLE.TEST."
+          ]
+        },
+        {
+          "id": "mail_exchangers",
+          "source": "DNS mail evidence",
+          "state": "observed",
+          "values": [
+            "10 MAIL.EXAMPLE.TEST"
+          ]
+        },
+        {
+          "id": "http_origin",
+          "source": "HTTP evidence",
+          "state": "partial",
+          "values": []
+        }
+      ]
+    },
+    {
+      "domain": "example.test",
+      "observedAt": "2026-08-02T00:00:00.000Z",
+      "collectionDepth": "deep",
+      "fields": [
+        {
+          "id": "delegated_nameservers",
+          "source": "DNS delegation evidence",
+          "state": "observed",
+          "values": [
+            "ns2.example.test"
+          ]
+        },
+        {
+          "id": "mail_exchangers",
+          "source": "DNS mail evidence",
+          "state": "partial",
+          "values": []
+        },
+        {
+          "id": "http_origin",
+          "source": "HTTP evidence",
+          "state": "observed",
+          "values": [
+            "https://example.test"
+          ]
+        }
+      ]
+    }
+  ],
+  "approvedWindows": [
+    {
+      "id": "dns-change-1",
+      "domain": "example.test",
+      "startsAt": "2026-08-01T23:30:00.000Z",
+      "endsAt": "2026-08-02T00:30:00.000Z",
+      "fields": [
+        "delegated_nameservers"
+      ],
+      "reason": "Reviewed nameserver migration."
+    }
+  ]
+}

@@ -9,6 +9,9 @@ import {
   CLI_PACKAGE_INSTALLED_CHECK_TIMEOUT_MS,
   CLI_PACKAGE_LONG_PROCESS_TIMEOUT_MS,
   MAX_CLI_COMMAND_INVENTORY_BYTES,
+  MAX_CLI_PACKAGE_COMPILER_SOURCES,
+  MAX_CLI_PACKAGE_MODULES,
+  MAX_CLI_RUNTIME_MODULES,
   assertCliCommandInventory,
   assertCliPackageSourceSnapshot,
   buildCliPackageManifest,
@@ -76,6 +79,9 @@ describe('scoped CLI package contract', () => {
     assert.equal(CLI_PACKAGE_LONG_PROCESS_TIMEOUT_MS, 120_000);
     assert.equal(CLI_PACKAGE_INSTALLED_CHECK_TIMEOUT_MS, 15_000);
     assert.equal(MAX_CLI_COMMAND_INVENTORY_BYTES, 4 * 1024);
+    assert.equal(MAX_CLI_RUNTIME_MODULES, 301);
+    assert.equal(MAX_CLI_PACKAGE_MODULES, 303);
+    assert.equal(MAX_CLI_PACKAGE_COMPILER_SOURCES, 303);
   });
 
   test('uses an independent exact command inventory rather than a live self-projection', async () => {

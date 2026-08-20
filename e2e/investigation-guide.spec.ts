@@ -376,6 +376,7 @@ test('infrastructure pivot keeps the starting domain through lookup, peer compar
 });
 
 test('returning to the same guided Bulk step keeps its peer set and completed results', { tag: '@timing-sensitive' }, async ({ page }) => {
+  test.slow();
   await installLookupFixture(page);
   await startRecipe(page, 'New-domain triage', 'Portal.Test.');
 

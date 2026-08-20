@@ -77,6 +77,7 @@ export async function expectNoHorizontalOverflow(page: Page) {
 }
 
 export async function expandLookupFamilies(page: Page): Promise<void> {
+  await expect(page.getByRole('button', { name: 'Run lookup', exact: true })).toBeEnabled();
   const expandAll = page
     .getByRole('group', { name: 'Evidence family visibility' })
     .getByRole('button', { name: 'Expand all' });

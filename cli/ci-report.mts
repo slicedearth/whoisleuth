@@ -1,5 +1,6 @@
 import type { UnknownRecord } from './saved-lookup.mts';
 import { WHOISLEUTH_REQUEST_POLICY_URL } from '../lib/project-metadata.mts';
+import { CLI_DOMAIN_CONTROL_MONITOR_SCHEMA } from '../packages/contracts/domain-control-monitor.mts';
 
 function record(value: unknown): UnknownRecord {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as UnknownRecord : {};
@@ -33,13 +34,17 @@ function junitCases(document: UnknownRecord): JunitCase[] {
       inconclusive ? { name: 'authority conclusions', failure: `${inconclusive} target state(s) remained inconclusive.` } : { name: 'authority conclusions' },
     ];
   }
-  if (schema === 'whoisleuth.cli.domain-control-monitor') {
+  if (schema === CLI_DOMAIN_CONTROL_MONITOR_SCHEMA) {
     const collection = record(document.collection);
     const summary = record(record(document.flightRecorder).summary);
+    const review = record(document.review);
     const failed = Number(collection.failed ?? 0);
     const drift = Number(summary.unexpectedChanges ?? 0);
+    const reviewState = String(review.state || 'partial').toLowerCase();
+    const reviewFailure = ['drift', 'partial', 'expired'].includes(reviewState);
     return [
       failed ? { name: 'domain control collection', failure: `${failed} owned-domain collection(s) failed.` } : { name: 'domain control collection' },
+      reviewFailure ? { name: 'desired domain control state', failure: `Review state: ${reviewState}` } : { name: 'desired domain control state' },
       drift ? { name: 'unexpected domain control changes', failure: `${drift} complete observation change(s) require review.` } : { name: 'unexpected domain control changes' },
     ];
   }

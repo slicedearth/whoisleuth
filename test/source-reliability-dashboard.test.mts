@@ -13,8 +13,12 @@ const NOW = '2026-08-05T10:00:00.000Z';
 function lookup(state: 'success' | 'error', durationMs: number) {
   return {
     schema: 'whoisleuth.cli.lookup', version: 1, generatedAt: NOW, mode: 'deep',
+    query: 'example.test', type: 'domain', inputHostname: 'example.test',
+    registrableDomain: 'example.test', isSubdomain: false,
+    ...(state === 'success' ? { rdap: { parsed: {} } } : {}),
     diagnostics: {
       rdap: { status: state },
+      whois: { status: 'skipped' },
       timing: { version: 1, sources: [{ source: 'rdap', durationMs }] },
     },
     availability: {

@@ -408,8 +408,8 @@ test('case tags offer bounded in-tab undo', async ({ page }) => {
 
 test('projects retained evidence into a filterable source-aware timeline', async ({ page }) => {
   await page.goto('/monitor?view=timeline');
-  const observedAt = '2026-07-20T00:00:00.000Z';
-  const storedAt = '2026-07-21T00:00:00.000Z';
+  const observedAt = new Date(Date.now() - 9 * 86_400_000).toISOString();
+  const storedAt = new Date(Date.parse(observedAt) + 86_400_000).toISOString();
   await migrateLegacyBrowserData(page, {
     'whois-rdap-cases-v1': {
       version: 2,
@@ -828,7 +828,9 @@ test('committed Case status, tags and deletion reconcile when immediate rereads 
 
   await failNextBrowserLocalCollectionReadAfterWrite(page, 'cases');
   await status.selectOption('reviewing');
-  await expect(page.getByRole('status')).toContainText('Set reconcile-target.invalid to Reviewing. The change was saved, but Cases could not be reread');
+  await expect(page.getByRole('status').filter({
+    hasText: 'Set reconcile-target.invalid to Reviewing. The change was saved, but Cases could not be reread',
+  })).toBeVisible();
   await expect(status).toHaveValue('reviewing');
   await expect(page.locator('.case-head', { hasText: 'reconcile-neighbour.invalid' })).toBeVisible();
   let committed = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 2 });
@@ -840,7 +842,9 @@ test('committed Case status, tags and deletion reconcile when immediate rereads 
   await page.getByLabel('Tags').fill('reviewed, retained');
   await failNextBrowserLocalCollectionReadAfterWrite(page, 'cases');
   await page.getByRole('button', { name: 'Save tags' }).click();
-  await expect(page.getByRole('status')).toContainText('Updated tags for reconcile-target.invalid. The change was saved, but Cases could not be reread');
+  await expect(page.getByRole('status').filter({
+    hasText: 'Updated tags for reconcile-target.invalid. The change was saved, but Cases could not be reread',
+  })).toBeVisible();
   await expect(page.getByLabel('Tags')).toHaveValue('reviewed, retained');
   await expect(page.locator('.tag-row')).toContainText('reviewed');
   committed = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 2 });
@@ -852,7 +856,9 @@ test('committed Case status, tags and deletion reconcile when immediate rereads 
   await failNextBrowserLocalCollectionReadAfterWrite(page, 'cases');
   page.once('dialog', (dialog) => dialog.accept());
   await page.getByRole('button', { name: 'Delete case' }).click();
-  await expect(page.getByRole('status')).toContainText('Deleted the case for reconcile-target.invalid. The change was saved, but Cases could not be reread');
+  await expect(page.getByRole('status').filter({
+    hasText: 'Deleted the case for reconcile-target.invalid. The change was saved, but Cases could not be reread',
+  })).toBeVisible();
   await expect(page.locator('.case-head', { hasText: 'reconcile-target.invalid' })).toHaveCount(0);
   await expect(page.locator('.case-head', { hasText: 'reconcile-neighbour.invalid' })).toBeVisible();
   committed = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });

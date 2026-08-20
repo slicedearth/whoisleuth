@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import { readFileSync } from 'node:fs';
 
-import { buildSharingReview } from '../cli/sharing-review.mts';
+import { buildSharingReview, MAX_SHARING_REVIEW_BYTES } from '../cli/sharing-review.mts';
 import {
   DOMAIN_CONTROL_MANIFEST_INPUT_SCHEMA,
   buildDomainControlManifest,
@@ -43,6 +43,24 @@ describe('CLI sharing review', () => {
     assert.equal(report.privacy.artifactMetadataFieldsEmitted, 2);
     assert.equal(report.privacy.contentValuesEmitted, 0);
     assert.equal(JSON.stringify(report).includes('Reviewed incident handoff'), false);
+  });
+
+  test('reviews a supported non-domain Lookup without emitting its query or mode', async () => {
+    const report = await buildSharingReview(
+      readFileSync(new URL('./fixtures/cli-lookup-asn-v2.json', import.meta.url), 'utf8'),
+      {
+        marking: 'amber',
+        recipientScope: 'organization',
+        purpose: 'Reviewed network handoff',
+        humanReviewed: true,
+        personalDataReviewed: true,
+        redactionsConfirmed: true,
+      },
+      NOW,
+    );
+    assert.equal(report.artifact.integrity, 'structure_only');
+    assert.notEqual(report.summary.status, 'blocked');
+    assert.doesNotMatch(JSON.stringify(report), /AS64496|\bfast\b/u);
   });
 
   test('withholds ready status for a legacy capsule with projection-only integrity', async () => {
@@ -130,5 +148,19 @@ describe('CLI sharing review', () => {
     assert.equal(report.artifact.schema, null);
     assert.equal(report.privacy.artifactMetadataFieldsEmitted, 1);
     assert.equal(report.sharing.strictestImportedMarking, 'TLP:GREEN');
+  });
+
+  test('rejects an over-limit direct input before scanning or parsing it', async () => {
+    await assert.rejects(
+      () => buildSharingReview('x'.repeat(MAX_SHARING_REVIEW_BYTES + 1), {
+        marking: 'amber',
+        recipientScope: 'organization',
+        purpose: 'Bounded review',
+        humanReviewed: true,
+        personalDataReviewed: true,
+        redactionsConfirmed: true,
+      }, NOW),
+      new RegExp(`limited to ${MAX_SHARING_REVIEW_BYTES} bytes`, 'iu'),
+    );
   });
 });

@@ -1,11 +1,18 @@
 #!/usr/bin/env node
 
+import { SCHEMA_LIFECYCLE_REGISTRY } from '../packages/contracts/schema-lifecycle-registry.mts';
 import {
   buildSchemaCompatibilityInventory,
   formatSchemaCompatibilityInventory,
 } from './schema-compatibility.mts';
-import { reconcileSchemaSourceCoverage } from './schema-source-coverage.mts';
+import { validateSchemaLifecycleRepository } from './schema-lifecycle-repository.mts';
+import {
+  discoverSchemaSources,
+  validateSchemaSourceCoverage,
+} from './schema-source-coverage.mts';
 
 const inventory = buildSchemaCompatibilityInventory();
-await reconcileSchemaSourceCoverage(inventory.entries);
+const discovery = await discoverSchemaSources();
+await validateSchemaLifecycleRepository(SCHEMA_LIFECYCLE_REGISTRY, discovery);
+await validateSchemaSourceCoverage(inventory.entries, discovery);
 process.stdout.write(formatSchemaCompatibilityInventory(inventory));

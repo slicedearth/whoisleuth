@@ -134,6 +134,8 @@ describe('CLI progress presentation', () => {
       });
       return {
         availability: { applicable: false },
+        rdap: { parsed: {} },
+        whois: { parsed: {} },
         diagnostics: { rdap: { status: 'success' }, whois: { status: 'success' } },
       };
     };

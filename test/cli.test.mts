@@ -543,7 +543,7 @@ describe('CLI lookup runner', () => {
         assert.equal(received?.fast, false);
         assert.equal(received?.compact, false);
         assert.equal(typeof received?.onSourceSettled, 'function');
-        return lookupResult({ availability: { applicable: false, type: 'asn' }, diagnostics: { rdap: { status: 'success' }, whois: { status: 'complete' } } });
+        return lookupResult({ availability: { applicable: false, type: 'asn' }, diagnostics: { rdap: { status: 'success' }, whois: { status: 'skipped' } } });
       },
     });
     assert.equal(code, EXIT_CODES.SUCCESS);
@@ -816,7 +816,18 @@ test('terminal lookup bounds retained arrays before access and keeps omission co
       network: { name: 'Bounded network', cidrs }, abuseRouting: routes,
     },
   });
-  const output = formatTerminalLookup(buildCliLookupDocument('example.test', classifiedDomain('example.test'), result, '2026-08-13T00:00:00.000Z', 'deep'));
+  const output = formatTerminalLookup({
+    ...result,
+    schema: 'whoisleuth.cli.lookup',
+    version: 2,
+    generatedAt: '2026-08-13T00:00:00.000Z',
+    mode: 'deep',
+    query: 'example.test',
+    type: 'domain',
+    inputHostname: 'example.test',
+    registrableDomain: 'example.test',
+    isSubdomain: false,
+  });
   assert.match(output, /CIDR prefixes\s+.*\+9995 more retained entries/u);
   assert.match(output, /Published routes 6 retained · \+994 more entries \(email 3 · phone 3\); values omitted/u);
   assert.doesNotMatch(output, /private-/u);

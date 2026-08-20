@@ -13,9 +13,19 @@ import {
 } from '../cli/saved-lookup.mts';
 import {
   CLI_LOOKUP_COMPATIBILITY,
+  CLI_LOOKUP_DIAGNOSTIC_REQUIRED_KEYS,
+  CLI_LOOKUP_OPTIONAL_ROOT_KEYS,
+  CLI_LOOKUP_QUERY_TYPES,
+  CLI_LOOKUP_REQUIRED_ROOT_KEYS,
   CLI_LOOKUP_SCHEMA,
+  CLI_LOOKUP_SCHEMA_LIFECYCLE,
   CLI_LOOKUP_VERSION,
   MAX_CLI_LOOKUP_BYTES,
+  MAX_CLI_LOOKUP_JSON_CONTAINER_ITEMS,
+  MAX_CLI_LOOKUP_JSON_DEPTH,
+  MAX_CLI_LOOKUP_JSON_KEYS,
+  MAX_CLI_LOOKUP_JSON_VALUES,
+  MAX_CLI_LOOKUP_STRING_LENGTH,
   SUPPORTED_CLI_LOOKUP_VERSIONS,
 } from '../packages/contracts/cli-lookup.mts';
 import {
@@ -84,6 +94,23 @@ describe('canonical schema contract ownership', () => {
     assert.deepEqual(SUPPORTED_CLI_LOOKUP_VERSIONS, [1, 2]);
     assert.deepEqual(SUPPORTED_SAVED_LOOKUP_SCHEMA_VERSIONS, [1, 2]);
     assert.ok(Object.isFrozen(CLI_LOOKUP_COMPATIBILITY));
+    assert.ok(Object.isFrozen(CLI_LOOKUP_SCHEMA_LIFECYCLE));
+    assert.deepEqual(CLI_LOOKUP_QUERY_TYPES, ['domain', 'ipv4', 'ipv6', 'asn']);
+    assert.deepEqual(CLI_LOOKUP_REQUIRED_ROOT_KEYS, [
+      'schema', 'version', 'generatedAt', 'mode', 'query', 'type', 'diagnostics',
+    ]);
+    assert.deepEqual(CLI_LOOKUP_DIAGNOSTIC_REQUIRED_KEYS, ['rdap', 'whois']);
+    assert.equal(CLI_LOOKUP_OPTIONAL_ROOT_KEYS.includes('collectionContext'), true);
+    assert.deepEqual(
+      [
+        MAX_CLI_LOOKUP_STRING_LENGTH,
+        MAX_CLI_LOOKUP_JSON_DEPTH,
+        MAX_CLI_LOOKUP_JSON_KEYS,
+        MAX_CLI_LOOKUP_JSON_VALUES,
+        MAX_CLI_LOOKUP_JSON_CONTAINER_ITEMS,
+      ],
+      [1_024, 48, 50_000, 100_000, 10_000],
+    );
   });
 
   test('keeps domain-control input and manifest identities behind stable facades', () => {

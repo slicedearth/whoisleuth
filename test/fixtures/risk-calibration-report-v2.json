@@ -1,0 +1,295 @@
+{
+  "schema": "whoisleuth.cli.risk-calibration",
+  "version": 2,
+  "generatedAt": "2026-08-18T00:00:00.000Z",
+  "dataset": {
+    "schema": "whoisleuth.risk-calibration-dataset",
+    "version": 2,
+    "recordCount": 1
+  },
+  "riskModelVersion": 7,
+  "currentReviewThreshold": 70,
+  "summary": {
+    "total": 1,
+    "positive": 1,
+    "negative": 0,
+    "excluded": 0,
+    "scoreBands": {
+      "not_scored": 0,
+      "0_39": 0,
+      "40_69": 0,
+      "70_100": 1
+    }
+  },
+  "thresholds": [
+    {
+      "threshold": 40,
+      "truePositive": 1,
+      "falsePositive": 0,
+      "trueNegative": 0,
+      "falseNegative": 0,
+      "precision": 1,
+      "recall": 1,
+      "specificity": null,
+      "falsePositiveRate": null,
+      "f1": 1,
+      "balancedAccuracy": null,
+      "confidence95": {
+        "precision": {
+          "lower": 0.2065,
+          "upper": 1
+        },
+        "recall": {
+          "lower": 0.2065,
+          "upper": 1
+        },
+        "specificity": null
+      }
+    },
+    {
+      "threshold": 50,
+      "truePositive": 1,
+      "falsePositive": 0,
+      "trueNegative": 0,
+      "falseNegative": 0,
+      "precision": 1,
+      "recall": 1,
+      "specificity": null,
+      "falsePositiveRate": null,
+      "f1": 1,
+      "balancedAccuracy": null,
+      "confidence95": {
+        "precision": {
+          "lower": 0.2065,
+          "upper": 1
+        },
+        "recall": {
+          "lower": 0.2065,
+          "upper": 1
+        },
+        "specificity": null
+      }
+    },
+    {
+      "threshold": 60,
+      "truePositive": 1,
+      "falsePositive": 0,
+      "trueNegative": 0,
+      "falseNegative": 0,
+      "precision": 1,
+      "recall": 1,
+      "specificity": null,
+      "falsePositiveRate": null,
+      "f1": 1,
+      "balancedAccuracy": null,
+      "confidence95": {
+        "precision": {
+          "lower": 0.2065,
+          "upper": 1
+        },
+        "recall": {
+          "lower": 0.2065,
+          "upper": 1
+        },
+        "specificity": null
+      }
+    },
+    {
+      "threshold": 70,
+      "truePositive": 1,
+      "falsePositive": 0,
+      "trueNegative": 0,
+      "falseNegative": 0,
+      "precision": 1,
+      "recall": 1,
+      "specificity": null,
+      "falsePositiveRate": null,
+      "f1": 1,
+      "balancedAccuracy": null,
+      "confidence95": {
+        "precision": {
+          "lower": 0.2065,
+          "upper": 1
+        },
+        "recall": {
+          "lower": 0.2065,
+          "upper": 1
+        },
+        "specificity": null
+      }
+    },
+    {
+      "threshold": 80,
+      "truePositive": 0,
+      "falsePositive": 0,
+      "trueNegative": 0,
+      "falseNegative": 1,
+      "precision": null,
+      "recall": 0,
+      "specificity": null,
+      "falsePositiveRate": null,
+      "f1": null,
+      "balancedAccuracy": null,
+      "confidence95": {
+        "precision": null,
+        "recall": {
+          "lower": 0,
+          "upper": 0.7935
+        },
+        "specificity": null
+      }
+    },
+    {
+      "threshold": 90,
+      "truePositive": 0,
+      "falsePositive": 0,
+      "trueNegative": 0,
+      "falseNegative": 1,
+      "precision": null,
+      "recall": 0,
+      "specificity": null,
+      "falsePositiveRate": null,
+      "f1": null,
+      "balancedAccuracy": null,
+      "confidence95": {
+        "precision": null,
+        "recall": {
+          "lower": 0,
+          "upper": 0.7935
+        },
+        "specificity": null
+      }
+    }
+  ],
+  "strata": [
+    {
+      "dimension": "scan_depth",
+      "value": "deep",
+      "sampleCount": 1,
+      "insufficientSample": true,
+      "metrics": {
+        "threshold": 70,
+        "truePositive": 1,
+        "falsePositive": 0,
+        "trueNegative": 0,
+        "falseNegative": 0,
+        "precision": 1,
+        "recall": 1,
+        "specificity": null,
+        "falsePositiveRate": null,
+        "f1": 1,
+        "balancedAccuracy": null,
+        "confidence95": {
+          "precision": {
+            "lower": 0.2065,
+            "upper": 1
+          },
+          "recall": {
+            "lower": 0.2065,
+            "upper": 1
+          },
+          "specificity": null
+        }
+      }
+    },
+    {
+      "dimension": "review_reason",
+      "value": "confirmed_credential_abuse",
+      "sampleCount": 1,
+      "insufficientSample": true,
+      "metrics": {
+        "threshold": 70,
+        "truePositive": 1,
+        "falsePositive": 0,
+        "trueNegative": 0,
+        "falseNegative": 0,
+        "precision": 1,
+        "recall": 1,
+        "specificity": null,
+        "falsePositiveRate": null,
+        "f1": 1,
+        "balancedAccuracy": null,
+        "confidence95": {
+          "precision": {
+            "lower": 0.2065,
+            "upper": 1
+          },
+          "recall": {
+            "lower": 0.2065,
+            "upper": 1
+          },
+          "specificity": null
+        }
+      }
+    }
+  ],
+  "modelComparison": {
+    "available": false,
+    "previousModelVersion": null,
+    "currentModelVersion": 7,
+    "scoresChanged": 0,
+    "bandsChanged": 0,
+    "thresholdClassificationsChanged": 0
+  },
+  "records": [
+    {
+      "id": "calibration-1",
+      "domain": "candidate.example.test",
+      "analystDisposition": "confirmed_abuse",
+      "reviewReasonCode": "confirmed_credential_abuse",
+      "interoperabilityTags": [
+        "phishing:techniques=\"fake-website\""
+      ],
+      "metricClass": "positive",
+      "includedInMetrics": true,
+      "exclusionReason": null,
+      "modelVersion": 7,
+      "score": 73,
+      "band": "70_100",
+      "factors": [
+        {
+          "family": "registration",
+          "label": "Base context for “registered”",
+          "delta": 6
+        },
+        {
+          "family": "domain-resemblance",
+          "label": "High-similarity or phishing-term candidate context",
+          "delta": 18
+        },
+        {
+          "family": "brand-presentation",
+          "label": "Favicon matches an official Brand Profile site",
+          "delta": 18
+        },
+        {
+          "family": "credential-lure",
+          "label": "Login/password form present",
+          "delta": 5
+        },
+        {
+          "family": "corroboration",
+          "label": "Corroborating context across 3 independent evidence families",
+          "delta": 18
+        },
+        {
+          "family": "operational-support",
+          "label": "Active website observed",
+          "delta": 4
+        },
+        {
+          "family": "operational-support",
+          "label": "Mail server configured",
+          "delta": 4
+        }
+      ]
+    }
+  ],
+  "interpretation": {
+    "authority": "analyst_context_only",
+    "statement": "This offline replay compares heuristic Risk scores with analyst dispositions. It does not prove maliciousness or safety.",
+    "automaticTuning": false,
+    "networkRequests": false,
+    "persisted": false
+  }
+}

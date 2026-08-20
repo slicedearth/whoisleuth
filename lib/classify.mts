@@ -18,6 +18,8 @@ import { isIP } from 'node:net';
 import { domainToASCII } from 'node:url';
 import { parse } from 'tldts';
 
+import { canonicalRegistrableDomain } from './registrable-domain.mts';
+
 type ClassifiedQueryBase = {
   inputHostname?: string;
   registrableDomain?: string;
@@ -157,12 +159,12 @@ function classifyQuery(raw: string): ClassifiedQuery {
     throw new Error(`"${trimmed}" is not a valid domain, IP, or ASN.`);
   }
 
-  const registrableDomain = parse(inputHostname).domain;
+  if (!inputHostname.split('.').every(isValidRegistrableLabel)) {
+    throw new Error(`"${trimmed}" contains an invalid domain label (underscores, empty, or malformed labels are not registrable).`);
+  }
+  const registrableDomain = canonicalRegistrableDomain(inputHostname);
   if (!registrableDomain) {
     throw new Error(`"${trimmed}" is not a registrable domain (no public-suffix match).`);
-  }
-  if (!registrableDomain.split('.').every(isValidRegistrableLabel)) {
-    throw new Error(`"${trimmed}" contains an invalid domain label (underscores, empty, or malformed labels are not registrable).`);
   }
 
   return {
