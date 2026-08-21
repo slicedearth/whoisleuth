@@ -794,11 +794,14 @@ describe('offline artifact verifier', () => {
       edges: [], sources: [], truncated: false, limitations: [],
     };
     const brief = {
-      schema: 'whoisleuth.investigation-brief' as const, schemaVersion: 1 as const,
+      schema: 'whoisleuth.investigation-brief' as const, schemaVersion: 2 as const,
       generatedAt: '2026-08-04T00:00:00.000Z', target: 'example.test', targetType: 'domain',
       task: 'general' as const, taskLabel: 'General review', question: 'What is known?', summary: 'Review evidence.',
       observation: { observedAt: '2026-08-04T00:00:00.000Z', evidenceAgeDays: 0, completeSources: 1, limitedSources: 0, freshnessPolicy: { version: 1 as const, id: 'task-default' as const, task: 'general' as const, thresholdsDays: { registration: 30, network: 7, web: 3 } } },
-      verifiedFacts: [], contradictions: [], unknowns: [], nextActions: [],
+      decisionFacts: {
+        version: 1 as const, total: 0, displayed: 0, omitted: 0,
+        contradictory: 0, unresolved: 0, facts: [],
+      },
       relationships: { nodes: 1, edges: 0, truncated: false, kinds: [] }, limitations: [],
     };
     const capsule = await buildInvestigationCapsule({

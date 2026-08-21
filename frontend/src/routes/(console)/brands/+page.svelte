@@ -214,7 +214,7 @@
 </script>
 
 <svelte:head><title>Brands · WHOISleuth</title></svelte:head>
-<PageHeading eyebrow="Protect" title="Brands" description="Define official domains, trusted partners, allowlists, and security posture checks."><div class="top-actions toolbar"><button id="new-brand-profile" class="primary" onclick={()=>clearForm()} disabled={profileSourceState!=='ready'}>New profile</button><button class="btn" onclick={download} disabled={profileSourceState!=='ready'||!profiles.length}>Export JSON</button><label class="btn file-btn">Import JSON<input type="file" accept="application/json,.json" onchange={importFile} disabled={profileSourceState!=='ready'}></label></div></PageHeading>
+<PageHeading eyebrow="Assure" title="Brands" description="Review owned-domain profiles, trusted dependencies, and externally visible control posture."><div class="top-actions toolbar"><button id="new-brand-profile" class="primary" onclick={()=>clearForm()} disabled={profileSourceState!=='ready'}>New profile</button><button class="btn" onclick={download} disabled={profileSourceState!=='ready'||!profiles.length}>Export JSON</button><label class="btn file-btn">Import JSON<input type="file" accept="application/json,.json" onchange={importFile} disabled={profileSourceState!=='ready'}></label></div></PageHeading>
 {#if localContextStatus}<p class="local-context-status" role="status">{localContextStatus}</p>{/if}
 {#if message}<p class="message" role="status" aria-label="Brand Profile action status" aria-live="polite" aria-atomic="true">{message}</p>{/if}
 {#if profileSourceState === 'loading'}

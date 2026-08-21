@@ -86,7 +86,7 @@ describe('sorted JSON artifact compatibility', () => {
     assert.deepEqual([DOMAIN_CHANGE_PACKET_VERSION, DOMAIN_CHANGE_PACKET_INPUT_VERSION], [2, 1]);
     assert.equal(INVESTIGATION_MANIFEST_VERSION, 2);
     assert.equal(CASE_RESPONSE_PACKET_VERSION, 6);
-    assert.equal(INVESTIGATION_CAPSULE_VERSION, 2);
+    assert.equal(INVESTIGATION_CAPSULE_VERSION, 3);
     assert.deepEqual([CLI_CASE_PACK_VERSION, CASE_SCHEMA_VERSION], [2, 12]);
     assert.equal(SIGNED_EVIDENCE_PACKAGE_VERSION, 2);
   });

@@ -148,7 +148,8 @@ test('public resources offer task-specific source boundaries on desktop and mobi
 
 test('public guide explains tasks, result states, glossary terms, and common questions', async ({ page }) => {
   await page.goto('/resources');
-  await expect(page.getByText(/Detailed assessment adds questions, claim readiness, portable hand-off, and acquisition review/i)).toBeVisible();
+  await expect(page.getByText(/Opportunity and acquisition review appear only for the acquisition task/i)).toBeVisible();
+  await expect(page.getByText(/Detailed assessment adds questions, claim readiness and portable hand-off/i)).toBeVisible();
 
   await expect(page.getByRole('heading', { name: 'Learn the workflow. Understand the evidence.' })).toBeVisible();
   await expect(page.getByRole('navigation', { name: 'Resource sections' })).toBeVisible();

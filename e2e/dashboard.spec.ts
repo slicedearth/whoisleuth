@@ -247,7 +247,7 @@ async function downloadEncryptedWorkspaceArchive(
   return { download, content: Buffer.concat(body).toString('utf-8') };
 }
 
-test('the Dashboard presents task lanes without duplicating the sidebar labels', {
+test('the Dashboard presents Investigate, Respond, and Assure without becoming a fourth job', {
   tag: ['@analyst-journey', '@journey-first-domain-assessment'],
 }, async ({ page }) => {
   await page.goto('/dashboard');
@@ -256,20 +256,24 @@ test('the Dashboard presents task lanes without duplicating the sidebar labels',
   await expect(page.getByRole('link', { name: /View public homepage/u })).toHaveAttribute('href', '/');
   await expect(page.getByRole('link', { name: /View public homepage/u })).toHaveAttribute('target', '_blank');
   await expect(page.getByRole('link', { name: /View public homepage/u })).toHaveAttribute('rel', 'noopener noreferrer');
-  await expect(page.getByRole('heading', { name: 'Start an investigation' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Choose an analyst job' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Continue saved work' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Follow a guided investigation' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Back up or move saved work' })).toBeVisible();
-  await expect(page.locator('.quick-card')).toHaveCount(4);
-  await expect(page.locator('.quick-card .quick-icon svg')).toHaveCount(4);
-  await expect(page.locator('.quick-card', { hasText: 'Investigate a target' }).locator('.quick-icon svg')).toHaveAttribute('data-icon', 'lookup');
-  await expect(page.locator('.quick-card', { hasText: 'Protect owned domains' }).locator('.quick-icon svg')).toHaveAttribute('data-icon', 'brand');
-  await expect(page.locator('.quick-card', { hasText: 'Review candidates' }).locator('.quick-icon svg')).toHaveAttribute('data-icon', 'bulk');
-  await expect(page.locator('.quick-card', { hasText: 'Assess acquisition' }).locator('.quick-icon svg')).toHaveAttribute('data-icon', 'registry');
-  await expect(page.locator('.quick-card', { hasText: 'Protect owned domains' })).toHaveAttribute('href', '/brands');
-  await expect(page.locator('.quick-card', { hasText: 'Review candidates' })).toHaveAttribute('href', '/bulk');
-  await expect(page.locator('.quick-card', { hasText: 'Assess acquisition' })).toHaveAttribute('href', '/lookup?depth=deep&task=acquisition#query');
-  await expect(page.locator('.quick-card', { hasText: 'Continue case work' })).toHaveCount(0);
+  await expect(page.locator('.workflow-lane')).toHaveCount(3);
+  await expect(page.locator('.workflow-lane .workflow-icon svg')).toHaveCount(3);
+  await expect(page.getByRole('heading', { name: 'Investigate', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Respond', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Assure', exact: true })).toBeVisible();
+  await expect(page.locator('.workflow-action')).toHaveCount(11);
+  await expect(page.getByRole('navigation', { name: 'Investigate actions' }).getByRole('link', { name: /Lookup a target/u })).toHaveAttribute('href', '/lookup');
+  await expect(page.getByRole('navigation', { name: 'Respond actions' }).getByRole('link', { name: /Cases & response/u })).toHaveAttribute('href', '/monitor?view=cases');
+  await expect(page.getByRole('navigation', { name: 'Assure actions' }).getByRole('link', { name: /Owned-domain controls/u })).toHaveAttribute('href', '/brands');
+  const acquisitionTaskPack = page.locator('[data-task-pack="acquisition"]');
+  await expect(acquisitionTaskPack).toHaveCount(1);
+  await expect(acquisitionTaskPack).toHaveAttribute('href', '/lookup?depth=deep&task=acquisition#query');
+  await expect(acquisitionTaskPack).toContainText('no request starts automatically');
+  await expect(page.locator('.quick-card')).toHaveCount(0);
   await expect(page.locator('.workspace-card')).toHaveCount(0);
   await expect(page.locator('.summary-card .summary-icon svg')).toHaveCount(3);
   await expect(page.locator('.summary-card', { hasText: 'Open cases' })).toHaveAttribute('href', '/monitor?view=cases');
@@ -291,9 +295,9 @@ test('the Dashboard keeps interaction blue and outcome green in the dark theme',
   await useTheme(page, 'dark');
   await page.goto('/dashboard');
 
-  await expect(page.locator('.quick-icon').first()).toHaveCSS('color', 'rgb(94, 179, 255)');
-  await expect(page.locator('.quick-meta').first()).toHaveCSS('color', 'rgb(126, 224, 168)');
-  await expect(page.locator('.quick-card').first().locator(':scope > strong')).toHaveCSS('color', 'rgb(94, 179, 255)');
+  await expect(page.locator('.workflow-icon').first()).toHaveCSS('color', 'rgb(94, 179, 255)');
+  await expect(page.locator('.workflow-meta').first()).toHaveCSS('color', 'rgb(126, 224, 168)');
+  await expect(page.locator('.workflow-action').first().locator('.action-arrow')).toHaveCSS('color', 'rgb(94, 179, 255)');
   await expect(page.locator('.summary-icon').first()).toHaveCSS('color', 'rgb(126, 224, 168)');
   await expect(page.locator('.summary-card').first().locator(':scope > strong')).toHaveCSS('color', 'rgb(126, 224, 168)');
 });
@@ -303,12 +307,14 @@ test('the Console navigation exposes semantic groups without changing link order
   const consoleNavigation = page.getByRole('navigation', { name: 'Console' });
   const start = consoleNavigation.getByRole('group', { name: 'Start' });
   const investigate = consoleNavigation.getByRole('group', { name: 'Investigate' });
-  const protect = consoleNavigation.getByRole('group', { name: 'Protect & review' });
+  const respond = consoleNavigation.getByRole('group', { name: 'Respond' });
+  const assure = consoleNavigation.getByRole('group', { name: 'Assure' });
   await expect(start.getByRole('link')).toHaveCount(1);
   await expect(investigate.getByRole('link')).toHaveCount(3);
-  await expect(protect.getByRole('link')).toHaveCount(2);
+  await expect(respond.getByRole('link')).toHaveCount(1);
+  await expect(assure.getByRole('link')).toHaveCount(2);
   await expect(consoleNavigation.getByRole('link').evaluateAll((links) => links.map((link) => link.getAttribute('href')))).resolves.toEqual([
-    '/dashboard', '/lookup', '/discover', '/bulk', '/monitor', '/brands',
+    '/dashboard', '/lookup', '/discover', '/bulk', '/monitor', '/monitor?view=watchlists', '/brands',
   ]);
 
   await investigate.getByRole('link', { name: /^Lookup/ }).focus();
@@ -319,7 +325,8 @@ test('the Console navigation exposes semantic groups without changing link order
   await page.getByRole('button', { name: 'Toggle navigation' }).click();
   await expect(start).toBeVisible();
   await expect(investigate).toBeVisible();
-  await expect(protect).toBeVisible();
+  await expect(respond).toBeVisible();
+  await expect(assure).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(page.getByRole('button', { name: 'Toggle navigation' })).toHaveAttribute('aria-expanded', 'false');
   for (const width of [320, 360, 390]) {

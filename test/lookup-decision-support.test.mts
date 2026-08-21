@@ -4,6 +4,7 @@ import {
   buildLookupDecisionSupport,
   buildLookupEvidenceQualityMatrix,
   projectLookupNextActions,
+  rankLookupNextActions,
 } from '../frontend/src/lib/analysis/lookup-decision-support.ts';
 import type { EvidenceCoverageLedger } from '../frontend/src/lib/analysis/evidence-coverage-ledger.ts';
 import type { LookupSourceRefreshPlan } from '../frontend/src/lib/analysis/lookup-source-refresh.ts';
@@ -71,6 +72,39 @@ const refreshPlan: LookupSourceRefreshPlan = {
   }],
   limitations: [],
 };
+
+test('action ranking is exact for every task and preserves source order as the final tie-breaker', () => {
+  const actions = [
+    { id: 'generic-medium-first', priority: 'medium' },
+    { id: 'generic-low', priority: 'low' },
+    { id: 'review-acquisition-dependencies', priority: 'medium' },
+    { id: 'generic-high', priority: 'high' },
+    { id: 'review-page-identity', priority: 'medium' },
+    { id: 'review-owned-posture', priority: 'medium' },
+  ].map(({ id, priority }) => ({
+    id,
+    label: `Review ${id}`,
+    reason: `Review the bounded ${id} context.`,
+    expectedOutcome: 'Clarify what the retained evidence supports without changing it.',
+    href: '#evidence-quality' as const,
+    priority: priority as 'high' | 'medium' | 'low',
+  }));
+  const expected = {
+    general: ['generic-high', 'generic-medium-first', 'review-acquisition-dependencies', 'review-page-identity', 'review-owned-posture', 'generic-low'],
+    acquisition: ['generic-high', 'review-acquisition-dependencies', 'generic-medium-first', 'review-page-identity', 'review-owned-posture', 'generic-low'],
+    brand: ['generic-high', 'review-page-identity', 'generic-medium-first', 'review-acquisition-dependencies', 'review-owned-posture', 'generic-low'],
+    incident: ['generic-high', 'generic-medium-first', 'review-acquisition-dependencies', 'review-page-identity', 'review-owned-posture', 'generic-low'],
+    owned: ['generic-high', 'review-owned-posture', 'generic-medium-first', 'review-acquisition-dependencies', 'review-page-identity', 'generic-low'],
+  } as const;
+  const before = structuredClone(actions);
+  for (const task of ['general', 'acquisition', 'brand', 'incident', 'owned'] as const) {
+    const ranked = rankLookupNextActions(actions, task);
+    assert.deepEqual(ranked.map((action) => action.id), expected[task], task);
+    assert.equal(Object.isFrozen(ranked), true);
+    assert.ok(ranked.every(Object.isFrozen));
+  }
+  assert.deepEqual(actions, before);
+});
 
 test('decision support keeps conflicts separate from incomplete source comparisons', () => {
   const support = buildLookupDecisionSupport({

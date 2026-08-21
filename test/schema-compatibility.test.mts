@@ -849,6 +849,12 @@ describe('schema compatibility inventory', () => {
     assert.deepEqual(byId(inventory, 'export.cases').supportedVersions, [...CASE_IMPORT_VERSIONS]);
     assert.deepEqual(byId(inventory, 'export.brand-profiles').supportedVersions, [...SUPPORTED_BRAND_PROFILE_SCHEMA_VERSIONS]);
     assert.deepEqual(byId(inventory, 'browser.website-snapshots').supportedVersions, [...SUPPORTED_WEBSITE_SNAPSHOT_SCHEMA_VERSIONS]);
+    assert.deepEqual(byId(inventory, 'export.investigation-capsule').supportedVersions, [1, 2, 3]);
+    assert.deepEqual(byId(inventory, 'derived.lookup-investigation-brief').supportedVersions, [1, 2]);
+    assert.deepEqual(byId(inventory, 'export.lookup-readable-report').supportedVersions, [2, 3]);
+    assert.equal(byId(inventory, 'export.investigation-capsule').currentVersion, 3);
+    assert.equal(byId(inventory, 'derived.lookup-investigation-brief').currentVersion, 2);
+    assert.equal(byId(inventory, 'export.lookup-readable-report').currentVersion, 3);
   });
 
   test('formats a deterministic maintainer report without absolute paths or user data', () => {

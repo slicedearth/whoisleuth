@@ -145,12 +145,12 @@ const SCHEMA_INLINE_EMITTER_ALLOWLIST = Object.freeze([
 ] as const);
 
 const SCHEMA_DYNAMIC_EMITTER_ALLOWLIST = Object.freeze([
-  ['cli/artifact-structure.mts', 'schema', 'reader', [1762]],
+  ['cli/artifact-structure.mts', 'schema', 'reader', [2051]],
   ['cli/artifact-verify.mts', 'schema', 'writer', [339, 448, 479, 513, 543]],
   ['cli/formatters/json.mts', 'schema', 'writer', [119]],
   ['cli/investigation-manifest.mts', 'schema', 'writer', [82]],
   ['cli/sharing-review.mts', 'artifactSchema', 'writer', [229]],
-  ['frontend/src/lib/analysis/investigation-capsule.ts', 'evidenceSchema', 'writer', [149]],
+  ['frontend/src/lib/analysis/investigation-capsule.ts', 'evidenceSchema', 'writer', [161]],
 ] as const);
 
 const SCHEMA_DYNAMIC_USE_ALLOWLIST = Object.freeze([
@@ -170,7 +170,6 @@ const SCHEMA_DYNAMIC_USE_ALLOWLIST = Object.freeze([
   ['frontend/src/lib/analysis/case-relationship-graph-export.ts', 489, 'writer', 'Copies the canonical graph marker into GEXF metadata.'],
   ['frontend/src/lib/analysis/external-findings-import.ts', 355, 'reader', 'Compares bounded nested source-provenance markers.'],
   ['frontend/src/lib/analysis/external-findings-import.ts', 385, 'writer', 'Copies a validated nested source-provenance marker.'],
-  ['frontend/src/lib/analysis/investigation-capsule.ts', 150, 'writer', 'Copies the validated brief marker into source-contract metadata.'],
   ['frontend/src/lib/analysis/scheduled-monitor-model.ts', 468, 'writer', 'Copies the normalised monitor-state marker into an export.'],
   ['frontend/src/lib/analysis/workspace-archive-crypto.ts', 126, 'writer', 'Copies the validated envelope marker into authenticated metadata.'],
   ['frontend/src/lib/analysis/workspace-archive.ts', 524, 'writer', 'Copies a reviewed section definition marker into the archive manifest.'],

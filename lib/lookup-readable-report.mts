@@ -12,9 +12,22 @@ import {
   type JsonObject,
   type LookupHttpResponse,
 } from './lookup-response-contract.mts';
+import {
+  DECISION_FACT_PRESENTATION_LABELS,
+  projectDecisionFacts,
+  type DecisionFact,
+  type DecisionFactProjection,
+  type DecisionFactProjectionCollection,
+  type DecisionFactProjectionSet,
+} from '../packages/evidence/decision-fact.mts';
 
 export const LOOKUP_READABLE_REPORT_SCHEMA = 'whoisleuth.lookup-readable-report';
-export const LOOKUP_READABLE_REPORT_VERSION = 2;
+export const LOOKUP_READABLE_REPORT_VERSION = 3;
+export const LEGACY_LOOKUP_READABLE_REPORT_VERSION = 2;
+export const SUPPORTED_LOOKUP_READABLE_REPORT_VERSIONS = Object.freeze([
+  LEGACY_LOOKUP_READABLE_REPORT_VERSION,
+  LOOKUP_READABLE_REPORT_VERSION,
+] as const);
 export const MAX_LOOKUP_READABLE_REPORT_BYTES = 64 * 1024;
 
 type LookupReadableReportOptions = {
@@ -22,6 +35,7 @@ type LookupReadableReportOptions = {
   generatedAt?: string;
   includeAttribution?: boolean;
   risk?: unknown;
+  decisionFacts?: readonly DecisionFact[];
 };
 
 function selectedObjectValues(value: JsonObject, keys: readonly string[]): Record<string, unknown> {
@@ -412,13 +426,21 @@ function buildLookupReadableReport(
   const registrarRdap = isJsonObject(projectedRdap.registrarRdap)
     ? projectedRdap.registrarRdap
     : null;
-  const markdown = formatLookupEvidenceMarkdown(evidence, {
-    ...(options.includeAttribution === undefined
-      ? {}
-      : { includeAttribution: options.includeAttribution }),
+  if (!Array.isArray(options.decisionFacts)) {
+    throw new TypeError('Domain readable Lookup reports require canonical Decision Facts.');
+  }
+  const decisionFacts = projectDecisionFacts(options.decisionFacts);
+  const evidenceMarkdown = formatLookupEvidenceMarkdown(evidence, {
+    includeAttribution: false,
     risk: options.risk,
     registrarRdap,
   });
+  const markdown = formatDomainReadableReport(
+    evidenceMarkdown,
+    decisionFacts,
+    options.applicationVersion,
+    options.includeAttribution !== false,
+  );
   if (new TextEncoder().encode(markdown).byteLength > MAX_LOOKUP_READABLE_REPORT_BYTES) {
     throw new RangeError('Readable Lookup report exceeded its byte limit.');
   }
@@ -452,6 +474,89 @@ function lifecycleValue(value: JsonObject, field: 'createdDate' | 'updatedDate')
 
 function appendReadableField(lines: string[], label: string, value: unknown): void {
   lines.push(`- **${label}:** ${markdownValue(value)}`);
+}
+
+function projectionList(
+  collection: DecisionFactProjectionCollection<string>,
+): string {
+  const values = collection.items.length
+    ? collection.items.map((item) => markdownValue(item)).join(', ')
+    : 'none';
+  return `${collection.displayed} of ${collection.total} displayed; ${collection.omitted} omitted. ${values}`;
+}
+
+function appendDecisionFact(lines: string[], fact: DecisionFactProjection): void {
+  lines.push(
+    '',
+    `### ${markdownValue(fact.question)}`,
+    `- **Fact ID:** ${markdownValue(fact.id)}`,
+    `- **Conclusion:** ${markdownValue(fact.conclusion)}`,
+    `- **Importance:** ${markdownValue(DECISION_FACT_PRESENTATION_LABELS.importance[fact.importance])}`,
+    `- **Evidence state:** ${markdownValue(DECISION_FACT_PRESENTATION_LABELS.evidenceState[fact.evidenceState])} (${markdownValue(fact.evidenceState)})`,
+    `- **Completeness:** ${markdownValue(DECISION_FACT_PRESENTATION_LABELS.completeness[fact.completeness])} (${markdownValue(fact.completeness)})`,
+    `- **Freshness:** ${markdownValue(DECISION_FACT_PRESENTATION_LABELS.freshness[fact.freshness])} (${markdownValue(fact.freshness)})`,
+    `- **Consistency:** ${markdownValue(DECISION_FACT_PRESENTATION_LABELS.consistency[fact.consistency])} (${markdownValue(fact.consistency)})`,
+    `- **Dependencies:** ${projectionList(fact.dependencies)}`,
+    `- **Source references:** ${projectionList(fact.sourceReferences)}`,
+    `- **Attributed sources:** ${fact.sources.displayed} of ${fact.sources.total} displayed; ${fact.sources.omitted} omitted.`,
+  );
+  if (fact.sources.items.length) {
+    for (const source of fact.sources.items) {
+      lines.push(
+        `  - **${markdownValue(source.label)}** (${markdownValue(source.id)}): ${markdownValue(DECISION_FACT_PRESENTATION_LABELS.provenance[source.provenance])}; ${markdownValue(DECISION_FACT_PRESENTATION_LABELS.evidenceState[source.evidenceState])}; observed ${markdownValue(source.observedAt, 'Not reported')}.`,
+        `    - References: ${projectionList(source.references)}`,
+        `    - Limitations: ${projectionList(source.limitations)}`,
+      );
+    }
+  } else {
+    lines.push('  - No attributed source was retained for this fact.');
+  }
+  lines.push(
+    `- **Contradictions:** ${projectionList(fact.contradictions)}`,
+    `- **Limitations:** ${projectionList(fact.limitations)}`,
+    `- **Safe next actions:** ${fact.safeNextActions.displayed} of ${fact.safeNextActions.total} displayed; ${fact.safeNextActions.omitted} omitted.`,
+  );
+  if (fact.safeNextActions.items.length) {
+    for (const action of fact.safeNextActions.items) {
+      lines.push(`  - **${markdownValue(action.label)}** (${markdownValue(action.id)}; ${markdownValue(action.importance)}): ${markdownValue(action.reason)} Expected outcome: ${markdownValue(action.expectedOutcome)} Review destination: ${markdownValue(action.href)}.`);
+    }
+  } else {
+    lines.push('  - No fact-specific action was retained. Review the attributed evidence and limitations.');
+  }
+}
+
+function formatDomainReadableReport(
+  evidenceMarkdown: string,
+  decisionFacts: DecisionFactProjectionSet,
+  applicationVersion: unknown,
+  includeAttribution: boolean,
+): string {
+  const lines = [
+    evidenceMarkdown.trimEnd(),
+    '',
+    '## Canonical Decision Facts',
+    '',
+    `- **Readable report contract:** ${markdownValue(`${LOOKUP_READABLE_REPORT_SCHEMA} v${LOOKUP_READABLE_REPORT_VERSION}`)}`,
+    `- **Decision Fact projection:** v${decisionFacts.version}`,
+    `- **Fact counts:** ${decisionFacts.displayed} of ${decisionFacts.total} included; ${decisionFacts.omitted} omitted.`,
+    `- **Decision states:** ${decisionFacts.contradictory} contradictory; ${decisionFacts.unresolved} unresolved across the complete canonical set.`,
+    '- Decision Facts are bounded projections of the same canonical transient model used by the Lookup review surfaces. They add no request, persistence, authority, availability, or scoring conclusion.',
+  ];
+  if (decisionFacts.facts.length) {
+    for (const fact of decisionFacts.facts) appendDecisionFact(lines, fact);
+  } else {
+    lines.push('', 'No canonical Decision Fact was available. Review source quality before drawing a conclusion.');
+  }
+  if (includeAttribution) {
+    lines.push(
+      '',
+      '---',
+      '',
+      portableGeneratorAttribution(buildPortableGeneratorMetadata(applicationVersion)),
+    );
+  }
+  lines.push('');
+  return lines.join('\n');
 }
 
 function formatNetworkIdentifierReadableReport(

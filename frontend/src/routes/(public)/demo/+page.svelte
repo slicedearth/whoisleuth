@@ -46,6 +46,7 @@
   let releaseWorkspaceHeightListener:(()=>void)|null=null;
   const demoVisualTabs:readonly DemoVisualView[]=['evidence','relationships','timeline'];
   const selected=$derived(syntheticDemoCandidate(demoState.selectedCandidateId));
+  const selectedRiskBand=$derived(selected?(selected.risk>=70?'Elevated review priority':selected.risk>=40?'Review priority':'Lower triage band'):'');
   const candidates=$derived(candidateFilter==='high'
     ?SYNTHETIC_DEMO_CANDIDATES.filter((candidate)=>candidate.risk>=70)
     :candidateFilter==='related'
@@ -85,7 +86,7 @@
     {id:'sslbl',label:'Certificate warning data',detail:demoSslbl.verdict,status:demoSslbl.status,href:'#demo-family-web',side:'right' as const,glyph:'C',family:'web' as const},
     {id:'structured-identity',label:'Structured identity',detail:lookupView.structuredIdentity.status,status:lookupView.structuredIdentity.status,href:'#demo-family-web',side:'right' as const,glyph:'SI',family:'web' as const},
     {id:'technology',label:'Technology',detail:lookupView.technology.status,status:lookupView.technology.status,href:'#demo-family-web',side:'right' as const,glyph:'W',provenance:'derived' as const},
-    {id:'assessment',label:'Assessment',detail:`Risk ${selected.risk}`,status:'warning',href:'#demo-assessment',side:'right' as const,glyph:'A',provenance:'derived' as const},
+    {id:'assessment',label:'Assessment',detail:selectedRiskBand,status:'warning',href:'#demo-assessment',side:'right' as const,glyph:'A',provenance:'derived' as const},
   ]:[]);
   const lookupEvidenceCheckNodes=$derived(lookupTopologyNodes.filter((node)=>node.id!=='assessment'));
   const lookupCompleteEvidenceCount=$derived(lookupEvidenceCheckNodes.filter((node)=>String(node.status).toLowerCase()==='success').length);
@@ -358,7 +359,7 @@
     <h3 class="sr-only">Synthetic lookup evidence</h3>
 
     <section class="demo-decision-brief card" aria-labelledby="demo-decision-title">
-      <header><div><p class="eyebrow">Decision brief</p><h3 id="demo-decision-title">What needs analyst attention?</h3></div><span class="priority-cue">Priority {selected.risk}/100</span></header>
+      <header><div><p class="eyebrow">Decision brief</p><h3 id="demo-decision-title">What needs analyst attention?</h3></div><span class="priority-cue">{selectedRiskBand}</span></header>
       <div class="lookup-handoff"><div><p class="eyebrow">Next workflow step</p><strong>Retain the finding only when it warrants follow-up</strong><span>The demo creates one isolated, tab-scoped case and performs no monitoring request.</span></div><button class="primary" type="button" disabled={stageTransitioning} onclick={openCase}>Open synthetic case in Monitor</button></div>
       <div class="decision-layout">
         <dl><div><dt>Registration</dt><dd>{selected.availability}</dd></div><div><dt>Candidate origin</dt><dd>{selected.mutation}</dd></div><div><dt>Evidence complete</dt><dd>{lookupCompleteEvidenceCount}</dd></div><div><dt>Evidence limited</dt><dd>{lookupLimitedEvidenceCount}</dd></div></dl>

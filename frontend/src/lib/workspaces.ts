@@ -3,6 +3,7 @@ export type NavigationIcon =
   | 'lookup'
   | 'discover'
   | 'bulk'
+  | 'case'
   | 'watchlist'
   | 'brand'
   | 'registry'
@@ -15,17 +16,22 @@ export type NavigationItem = {
   icon: NavigationIcon;
   keywords: readonly string[];
   opensInNewTab?: true;
+  activeQuery?: Readonly<{
+    name: string;
+    values: readonly string[];
+    defaultValue?: string;
+  }>;
 };
 
 export type NavigationGroup = Readonly<{
-  label: 'Start' | 'Investigate' | 'Protect & review';
+  label: 'Start' | 'Investigate' | 'Respond' | 'Assure';
   items: readonly NavigationItem[];
 }>;
 
 export const dashboard = {
   href: '/dashboard',
   label: 'Dashboard',
-  detail: 'Start new work, continue saved work, or follow a guide',
+  detail: 'Start or resume work across the three analyst jobs',
   icon: 'analysis',
   keywords: ['home', 'start', 'console', 'saved work'],
 } satisfies NavigationItem;
@@ -57,15 +63,32 @@ export const bulkNavigation = {
 export const monitorNavigation = {
     href: '/monitor',
     label: 'Monitor',
-    detail: 'Review cases, watchlists, changes, and campaigns',
+    detail: 'Review cases, prepare responses, campaigns, and follow-up',
+    icon: 'case',
+    keywords: ['respond', 'case', 'response', 'campaign', 'follow-up', 'inbox'],
+    activeQuery: {
+      name: 'view',
+      values: ['inbox', 'cases', 'campaigns', 'relationships'],
+      defaultValue: 'inbox',
+    },
+  } satisfies NavigationItem;
+
+export const monitorAssuranceNavigation = {
+    href: '/monitor?view=watchlists',
+    label: 'Watchlists & controls',
+    detail: 'Review monitoring history, watchlists, and local rules',
     icon: 'watchlist',
-    keywords: ['case', 'watchlist', 'campaign', 'history', 'change'],
+    keywords: ['assure', 'monitoring', 'watchlist', 'timeline', 'history', 'change', 'rules', 'controls'],
+    activeQuery: {
+      name: 'view',
+      values: ['timeline', 'watchlists', 'rules'],
+    },
   } satisfies NavigationItem;
 
 export const brandsNavigation = {
     href: '/brands',
     label: 'Brands',
-    detail: 'Set official domains, trusted infrastructure, and analysis preferences',
+    detail: 'Review owned-domain profiles, dependencies, and controls',
     icon: 'brand',
     keywords: ['profile', 'official', 'trusted', 'allowlist', 'baseline'],
   } satisfies NavigationItem;
@@ -162,11 +185,43 @@ export const consoleNavigationGroups: readonly NavigationGroup[] = [
     items: [lookupNavigation, discoverNavigation, bulkNavigation],
   },
   {
-    label: 'Protect & review',
-    items: [monitorNavigation, brandsNavigation],
+    label: 'Respond',
+    items: [monitorNavigation],
+  },
+  {
+    label: 'Assure',
+    items: [monitorAssuranceNavigation, brandsNavigation],
   },
 ];
 
 export const consoleNavigation = consoleNavigationGroups.flatMap((group) => group.items);
 export const referenceNavigation: readonly NavigationItem[] = [...referenceResources, ...publicResources];
 export const protectedDestinations = [...consoleNavigation, ...referenceResources];
+
+export function isNavigationItemActive(item: NavigationItem, currentUrl: URL): boolean {
+  const destination = new URL(item.href, currentUrl.origin);
+  if (destination.pathname !== currentUrl.pathname) return false;
+  if (item.activeQuery) {
+    const requestedValue = currentUrl.searchParams.get(item.activeQuery.name);
+    const knownValue = requestedValue === null || consoleNavigation.some((candidate) => {
+      const candidateDestination = new URL(candidate.href, currentUrl.origin);
+      const candidateQuery = candidate.activeQuery;
+      if (!candidateQuery) return false;
+      return candidateDestination.pathname === currentUrl.pathname
+        && candidateQuery.name === item.activeQuery?.name
+        && candidateQuery.values.includes(requestedValue);
+    });
+    const value = requestedValue === null || !knownValue
+      ? item.activeQuery.defaultValue ?? requestedValue ?? ''
+      : requestedValue;
+    return item.activeQuery.values.includes(value);
+  }
+  if (!destination.search) return true;
+  return [...destination.searchParams].every(([name, value]) => currentUrl.searchParams.get(name) === value);
+}
+
+export function isProtectedDestination(currentUrl: URL): boolean {
+  return protectedDestinations.some((item) => (
+    new URL(item.href, currentUrl.origin).pathname === currentUrl.pathname
+  ));
+}

@@ -29,11 +29,49 @@
 
   const publicResource = publicResources[0];
 
-  const quickActions: Array<{ href: string; label: string; detail: string; icon: IntelligenceIconName }> = [
-    { href: '/lookup', label: 'Investigate a target', detail: 'Review a domain, IP address, or ASN across separately identified sources.', icon: 'lookup' },
-    { href: '/brands', label: 'Protect owned domains', detail: 'Review externally visible controls, dependencies, mail posture, and expiring attestations.', icon: 'brand' },
-    { href: '/bulk', label: 'Review candidates', detail: 'Check a focused list and prioritise which domains need closer review.', icon: 'bulk' },
-    { href: '/lookup?depth=deep&task=acquisition#query', label: 'Assess acquisition', detail: 'Separate registration confidence, lifecycle, contactability, and apparent use before deciding what to verify manually.', icon: 'registry' },
+  type WorkflowAction = { href: string; label: string; detail: string; icon: IntelligenceIconName; taskPack?: true };
+  const workflowLanes: Array<{
+    id: 'investigate' | 'respond' | 'assure';
+    label: string;
+    detail: string;
+    icon: IntelligenceIconName;
+    actions: WorkflowAction[];
+  }> = [
+    {
+      id: 'investigate',
+      label: 'Investigate',
+      detail: 'Collect and compare source-attributed evidence for one target or a bounded candidate set.',
+      icon: 'lookup',
+      actions: [
+        { href: '/lookup', label: 'Lookup a target', detail: 'Review one domain, IP address, or ASN.', icon: 'lookup' },
+        { href: '/discover', label: 'Discover candidates', detail: 'Generate or search bounded domain leads.', icon: 'discover' },
+        { href: '/bulk', label: 'Triage a list', detail: 'Compare a focused set without broadening collection.', icon: 'bulk' },
+        { href: '/lookup?depth=deep&task=acquisition#query', label: 'Acquisition task pack', detail: 'Open Lookup with acquisition-readiness context; no request starts automatically.', icon: 'registry', taskPack: true },
+      ],
+    },
+    {
+      id: 'respond',
+      label: 'Respond',
+      detail: 'Continue retained review work, prepare bounded response material, and document follow-up.',
+      icon: 'case',
+      actions: [
+        { href: '/monitor', label: 'Review inbox', detail: 'Prioritise unfinished retained work.', icon: 'analysis' },
+        { href: '/monitor?view=cases', label: 'Cases & response', detail: 'Review evidence, decisions, and response preparation.', icon: 'case' },
+        { href: '/monitor?view=campaigns', label: 'Campaign review', detail: 'Review analyst-defined cohorts and hand-offs.', icon: 'discover' },
+      ],
+    },
+    {
+      id: 'assure',
+      label: 'Assure',
+      detail: 'Review retained change evidence, watchlists, owned-domain profiles, and local controls.',
+      icon: 'brand',
+      actions: [
+        { href: '/monitor?view=timeline', label: 'Monitoring history', detail: 'Compare retained observations and material changes.', icon: 'analysis' },
+        { href: '/monitor?view=watchlists', label: 'Watchlists', detail: 'Review saved change-tracking lists.', icon: 'watchlist' },
+        { href: '/monitor?view=rules', label: 'Control rules', detail: 'Review browser-local detection rules.', icon: 'registry' },
+        { href: '/brands', label: 'Owned-domain controls', detail: 'Review profiles, dependencies, and control posture.', icon: 'brand' },
+      ],
+    },
   ];
 
   type LocalCounts = { cases: number | null; openCases: number | null; watchlists: number | null; profiles: number | null };
@@ -138,24 +176,35 @@
   <meta name="description" content="Start or continue a WHOISleuth domain investigation from the protected console's Dashboard.">
 </svelte:head>
 
-<PageHeading eyebrow="Console" title="Dashboard" description="Start new work, continue something saved in this browser, or follow a step-by-step guide.">
+<PageHeading eyebrow="Console" title="Dashboard" description="Start or resume Investigate, Respond, and Assure work without beginning a request automatically.">
   <a class="btn" href={publicHomepage.href} target="_blank" rel="noopener noreferrer" aria-label="View public homepage. Opens in a new tab.">View public homepage</a>
 </PageHeading>
 
 <section class="dashboard-section" aria-labelledby="quick-actions-title">
   <div class="section-intro">
     <p class="eyebrow">Start here</p>
-    <h2 id="quick-actions-title">Start an investigation</h2>
-    <p>Choose the task that best matches what you need to learn. Nothing runs until you submit a check in the tool you open.</p>
+    <h2 id="quick-actions-title">Choose an analyst job</h2>
+    <p>Dashboard is the stable starting point. Opening any destination only navigates there; collection still requires an explicit submission.</p>
   </div>
-  <div class="quick-grid">
-    {#each quickActions as action,index}
-      <a class="quick-card card" href={action.href}>
-        <span class="quick-meta" aria-hidden="true"><span>0{index + 1}</span><span class="quick-icon"><IntelligenceIcon name={action.icon} size={22} /></span></span>
-        <h3>{action.label}</h3>
-        <p>{action.detail}</p>
-        <strong>Open <span aria-hidden="true">→</span></strong>
-      </a>
+  <div class="workflow-grid">
+    {#each workflowLanes as lane,index}
+      <article class="workflow-lane" data-workflow={lane.id}>
+        <header>
+          <span class="workflow-meta" aria-hidden="true"><span>0{index + 1}</span><span class="workflow-icon"><IntelligenceIcon name={lane.icon} size={22} /></span></span>
+          <p class="eyebrow">Analyst job</p>
+          <h3>{lane.label}</h3>
+          <p class="workflow-detail">{lane.detail}</p>
+        </header>
+        <nav aria-label={`${lane.label} actions`}>
+          {#each lane.actions as action}
+            <a class="workflow-action" data-task-pack={action.taskPack ? 'acquisition' : undefined} href={action.href}>
+              <span class="action-icon" aria-hidden="true"><IntelligenceIcon name={action.icon} size={18} /></span>
+              <span><strong>{action.label}</strong><small>{action.detail}</small></span>
+              <span class="action-arrow" aria-hidden="true">→</span>
+            </a>
+          {/each}
+        </nav>
+      </article>
     {/each}
   </div>
 </section>
@@ -248,22 +297,29 @@
   .section-intro{max-width:760px;margin-bottom:14px}
   .section-intro h2{margin:3px 0 0;font:700 1.15rem var(--mono)}
   .section-intro>p:not(.eyebrow){margin:7px 0 0;color:var(--muted);font-size:var(--text-sm);line-height:1.55}
-  .quick-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px}
-  .quick-card{display:flex;min-height:210px;flex-direction:column;padding:20px}
-  .quick-meta{display:flex;align-items:center;justify-content:space-between;color:var(--interface-accent);font:700 var(--text-2xs) var(--mono)}
-  .quick-icon{display:grid;width:38px;height:38px;place-items:center;border:1px solid color-mix(in srgb,var(--accent) 48%,var(--border));border-radius:50%;background:rgb(var(--accent-rgb) / .07);color:var(--accent);transition:border-color .16s,background .16s,box-shadow .16s,transform .16s}
-  .quick-card:hover .quick-icon,.quick-card:focus-visible .quick-icon{border-color:var(--accent);background:rgb(var(--accent-rgb) / .12);box-shadow:0 0 18px rgb(var(--accent-rgb) / .12);transform:translateY(-1px)}
-  .quick-card h3{margin:16px 0 8px;font:700 var(--text-lg) var(--mono)}
-  .quick-card p{margin:0;color:var(--muted);font-size:var(--text-sm);line-height:1.55}
-  .quick-card strong{margin-top:auto;padding-top:24px;color:var(--accent);font:700 var(--text-xs) var(--mono)}
+  .workflow-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+  .workflow-lane{display:grid;min-width:0;align-content:start;border:1px solid var(--border);border-radius:var(--radius-md);background:rgb(var(--panel-rgb) / .55);overflow:hidden}
+  .workflow-lane>header{display:grid;min-height:174px;align-content:start;padding:18px;border-bottom:1px solid var(--border)}
+  .workflow-meta{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;color:var(--interface-accent);font:700 var(--text-2xs) var(--mono)}
+  .workflow-icon{display:grid;width:38px;height:38px;place-items:center;border:1px solid color-mix(in srgb,var(--accent) 48%,var(--border));border-radius:50%;background:rgb(var(--accent-rgb) / .07);color:var(--accent)}
+  .workflow-lane h3{margin:5px 0 0;font:700 var(--text-lg) var(--mono)}
+  .workflow-detail{margin:7px 0 0;color:var(--muted);font-size:var(--text-sm);line-height:1.5}
+  .workflow-lane nav{display:grid;margin:0;padding:7px}
+  .workflow-action{display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:8px;align-items:center;min-width:0;padding:10px;border:1px solid transparent;border-radius:var(--radius-sm)}
+  .workflow-action:hover,.workflow-action:focus-visible{border-color:var(--border-strong);background:rgb(var(--accent-rgb) / .06)}
+  .action-icon{display:grid;width:28px;height:28px;place-items:center;color:var(--accent)}
+  .workflow-action>span:nth-child(2){min-width:0}
+  .workflow-action strong,.workflow-action small{display:block;overflow-wrap:anywhere}
+  .workflow-action strong{color:var(--text);font:700 var(--text-xs) var(--mono)}
+  .workflow-action small{margin-top:3px;color:var(--muted);font-size:var(--text-2xs);line-height:1.4}
+  .action-arrow{color:var(--accent);font:700 var(--text-sm) var(--mono)}
   .local-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
   .summary-card{display:grid;grid-template-columns:34px minmax(0,1fr) auto;gap:5px 10px;align-items:center;padding:17px 18px}
   .summary-icon{display:grid;width:32px;height:32px;grid-row:1 / span 2;place-items:center;border:1px solid color-mix(in srgb,var(--interface-accent) 42%,var(--border));border-radius:50%;background:rgb(var(--interface-accent-rgb) / .06);color:var(--interface-accent)}
   .summary-label{color:var(--muted);font:700 var(--text-2xs) var(--mono);letter-spacing:.06em;text-transform:uppercase}
   .summary-card>strong{grid-row:1 / span 2;grid-column:3;color:var(--interface-accent);font:750 1.7rem var(--mono)}
   .summary-card>p{grid-column:2;margin:0;color:var(--text);font-size:var(--text-xs);line-height:1.45}
-  @media(prefers-reduced-motion:reduce){.quick-icon{transition:none}.quick-card:hover .quick-icon,.quick-card:focus-visible .quick-icon{transform:none}}
-  @media(max-width:1120px){.quick-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
-  @media(max-width:760px){.guide-launcher,.quick-grid,.local-grid{grid-template-columns:1fr}.quick-card{min-height:180px}}
+  @media(max-width:980px){.workflow-grid{grid-template-columns:minmax(0,1fr)}.workflow-lane>header{min-height:0}}
+  @media(max-width:760px){.guide-launcher,.local-grid{grid-template-columns:1fr}}
   @media(max-width:460px){.guide-input{align-items:stretch;flex-direction:column}.guide-input button{width:100%}}
 </style>

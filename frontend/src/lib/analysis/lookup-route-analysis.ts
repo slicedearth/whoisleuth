@@ -14,7 +14,9 @@ import { compactHttpObservation } from './http-summary.ts';
 import { analyzeDomainIdn } from './idn-confusables.ts';
 import { buildLookupAssetGraph } from './lookup-asset-graph.ts';
 import { buildLookupClaimReadiness } from './lookup-claim-readiness.ts';
+import { buildLookupDecisionFacts } from './lookup-decision-facts.ts';
 import { buildLookupEvidenceImpactPlan } from './lookup-evidence-impact.ts';
+import { buildLookupReviewActionModel } from './lookup-review-action-model.ts';
 import {
   buildLookupDecisionSupport,
   buildLookupEvidenceQualityMatrix,
@@ -602,9 +604,20 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     observedAt: lookupObservedAt,
     observedAtByEvidence: evidenceObservedAtById,
   });
+  const lookupDecisionFacts = buildLookupDecisionFacts({
+    decisionSupport: lookupDecisionSupport,
+    coverage: evidenceCoverage,
+    quality: evidenceQualityMatrix,
+  });
   const lookupEvidenceImpactPlan = buildLookupEvidenceImpactPlan({
     readiness: lookupClaimReadiness,
     quality: evidenceQualityMatrix,
+    facts: lookupDecisionFacts,
+  });
+  const lookupReviewActionModel = buildLookupReviewActionModel({
+    support: lookupDecisionSupport,
+    facts: lookupDecisionFacts,
+    evidenceImpact: lookupEvidenceImpactPlan,
   });
   const lookupSummary = buildLookupSummaryModel({
     availability,
@@ -625,8 +638,8 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     target: result?.registrableDomain || result?.query,
     targetType: result?.type,
     task,
-    summary: lookupSummary,
     decisionSupport: lookupDecisionSupport,
+    decisionFacts: lookupDecisionFacts,
     quality: evidenceQualityMatrix,
     graph: lookupAssetGraph,
   });
@@ -715,8 +728,10 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     evidenceCoverage,
     lookupSourceRefreshPlan,
     lookupDecisionSupport,
+    lookupDecisionFacts,
     lookupClaimReadiness,
     lookupEvidenceImpactPlan,
+    lookupReviewActionModel,
     evidenceQualityMatrix,
     lookupSummary,
     lookupInvestigationBrief,

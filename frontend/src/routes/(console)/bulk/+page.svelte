@@ -69,8 +69,8 @@
     type BulkSourceFilter,
   } from '$lib/analysis/bulk-triage.ts';
   import {
-    buildBulkResultDisplayRows,
-    countBulkRouteFilters,
+    buildBulkRiskComparison, buildBulkRiskPresentation, buildBulkResultDisplayRows,
+    comparableBulkRiskScore, countBulkRouteFilters,
     matchesBulkRouteFilter,
     toBulkRouteTriageRow,
     type BulkPrimaryFilter,
@@ -169,7 +169,8 @@
   const triageRows=$derived(results.map((row)=>toBulkRouteTriageRow(row,caseByDomain.get(row.domain)||null,casesSourceState==='ready'?'ready':'unavailable')));
   const advancedFilters=$derived<BulkAdvancedFilters>({source:sourceFilter,lifecycle:lifecycleFilter,age:ageFilter,mail:mailFilter,registrar:registrarFilter,caseDisposition:casesSourceState==='ready'?caseDispositionFilter:''});
   const bulkReviewStateByDomain=$derived(new Map(bulkReviewStore.rows.map((row)=>[row.domain,row.state])));
-  const filtered = $derived.by(()=>sortBulkResults(results.filter((row)=>matchesBulkRouteFilter(row,{filter,mutationFilter,signalFilters})&&matchesBulkAdvancedFilters(toBulkRouteTriageRow(row,caseByDomain.get(row.domain)||null),advancedFilters)&&matchesReviewState(row.domain)),sortKey,sortDirection));
+  const riskComparison=$derived(buildBulkRiskComparison(results));
+  const filtered = $derived.by(()=>sortBulkResults(results.filter((row)=>matchesBulkRouteFilter(row,{filter,mutationFilter,signalFilters},riskComparison)&&matchesBulkAdvancedFilters(toBulkRouteTriageRow(row,caseByDomain.get(row.domain)||null),advancedFilters)&&matchesReviewState(row.domain)),sortKey,sortDirection,(row)=>comparableBulkRiskScore(row,riskComparison)));
   const mailExposureReport=$derived(buildBulkMailExposureReport(filtered.map(toBulkSessionResult),{
     observedAt:scanStartedAt,
     officialDomains:profileSourceState==='ready'?(profile?.officialDomains||[]):[],
@@ -210,12 +211,12 @@
   const retryCandidates=$derived(selectedRows.length?selectedRows:filtered);
   const retryPlan=$derived(buildBulkRetryPlan(retryCandidates.map(toBulkSessionResult),mode,scanStartedAt));
   const resultIndexByRow=$derived(new Map(results.map((row,index)=>[row,index])));
-  const cockpitRows=$derived<BulkReviewCockpitRow[]>(filtered.map((row)=>{const caseRecord=caseByDomain.get(row.domain)||null;const contextReady=row.saved.profileContext.sourceState==='ready';return{resultIndex:resultIndexByRow.get(row)??-1,domain:row.domain,availability:row.availability,confidence:row.confidence,risk:row.risk,opportunity:row.opportunity,activity:row.activity,registrar:row.registrar,reviewState:bulkReviewSourceState==='ready'?bulkReviewStateByDomain.get(row.domain)||'unreviewed':'unavailable',shortlisted:shortlistSourceState==='ready'?shortlistedDomains.has(row.domain):null,trusted:contextReady?Boolean(row.trusted):null,profileContextReady:contextReady,profileContextLimitation:row.saved.profileContext.limitation,sourceCoverage:row.sourceCoverage,error:row.error,caseRecord:casesSourceState==='ready'&&caseRecord?{id:caseRecord.id,disposition:caseRecord.disposition}:null};}));
-  const counts=$derived(countBulkRouteFilters(results));
+  const cockpitRows=$derived<BulkReviewCockpitRow[]>(filtered.map((row)=>{const caseRecord=caseByDomain.get(row.domain)||null;const contextReady=row.saved.profileContext.sourceState==='ready';return{resultIndex:resultIndexByRow.get(row)??-1,domain:row.domain,availability:row.availability,confidence:row.confidence,risk:row.risk,riskPresentation:buildBulkRiskPresentation(row,riskComparison),opportunity:row.opportunity,activity:row.activity,registrar:row.registrar,reviewState:bulkReviewSourceState==='ready'?bulkReviewStateByDomain.get(row.domain)||'unreviewed':'unavailable',shortlisted:shortlistSourceState==='ready'?shortlistedDomains.has(row.domain):null,trusted:contextReady?Boolean(row.trusted):null,profileContextReady:contextReady,profileContextLimitation:row.saved.profileContext.limitation,sourceCoverage:row.sourceCoverage,error:row.error,caseRecord:casesSourceState==='ready'&&caseRecord?{id:caseRecord.id,disposition:caseRecord.disposition}:null};}));
+  const counts=$derived(countBulkRouteFilters(results,riskComparison));
   const pageCount=$derived(Math.max(1,Math.ceil(filtered.length/PAGE_SIZE)));
   const currentPage=$derived(Math.min(page,pageCount));
   const visibleResults=$derived(filtered.slice((currentPage-1)*PAGE_SIZE,currentPage*PAGE_SIZE));
-  const resultRows=$derived(buildBulkResultDisplayRows({visibleResults,allResults:results,shortlistedDomains,caseByDomain,reviewStateByDomain:bulkReviewStateByDomain,mutationLabels}));
+  const resultRows=$derived(buildBulkResultDisplayRows({visibleResults,allResults:results,shortlistedDomains,caseByDomain,reviewStateByDomain:bulkReviewStateByDomain,mutationLabels,riskComparison}));
   // Provenance remains exact-host only. A subdomain candidate may collapse to
   // its registrable collection target, but its CT or mutation context must not
   // be misattributed to that broader domain.
@@ -529,7 +530,7 @@
 </script>
 
 <svelte:head><title>Bulk · WHOISleuth</title></svelte:head>
-<PageHeading eyebrow="Assess domains" title="Bulk" description="Scan multiple domains, prioritise findings, and retry inconclusive results." />
+<PageHeading eyebrow="Investigate" title="Bulk" description="Scan multiple domains, prioritise findings, and retry inconclusive results." />
 <BulkScanQueue
   lookupDisabledReason={lookupDisabled?(lookupDisabled.reason||'Lookup is disabled by deployment policy.'):''}
   scanLimitations={scanLimitations.map((item)=>item.id.replaceAll('_',' '))}
@@ -654,6 +655,7 @@
       {setSortKey}
       {setSortDirection}
       {indicatorStatus}
+      riskComparisonSummary={riskComparison.summary}
       matchedCount={filtered.length}
       resultCount={results.length}
       visibleCount={visibleResults.length}

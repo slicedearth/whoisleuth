@@ -283,11 +283,11 @@ test('the console command palette filters destinations and remains keyboard oper
     options.every((option) => option.getAttribute('tabindex') === '-1')
   )).toBe(true);
   const destinationIcons = dialog.locator('[role="option"] svg[data-icon]');
-  await expect(destinationIcons).toHaveCount(14);
+  await expect(destinationIcons).toHaveCount(15);
   await expect(dialog.locator('[data-command-group]')).toHaveText([
     'Start',
     'Investigate', 'Investigate', 'Investigate',
-    'Protect & review', 'Protect & review',
+    'Respond', 'Assure', 'Assure',
     'Reference', 'Reference', 'Public',
     'Public', 'Public', 'Public', 'Public', 'Public',
   ]);
@@ -295,7 +295,7 @@ test('the console command palette filters destinations and remains keyboard oper
   await expect(dialog.getByRole('option', { name: /Lookup/ }).locator('svg')).toHaveAttribute('data-icon', 'lookup');
   await expect(dialog.getByRole('option', { name: /Registry support/ }).locator('svg')).toHaveAttribute('data-icon', 'registry');
   await search.press('End');
-  await expect(search).toHaveAttribute('aria-activedescendant', 'command-option-13');
+  await expect(search).toHaveAttribute('aria-activedescendant', 'command-option-14');
   await search.press('Home');
   await expect(search).toHaveAttribute('aria-activedescendant', 'command-option-0');
   await search.press('ArrowDown');
@@ -325,9 +325,12 @@ test('the console command palette filters destinations and remains keyboard oper
   await search.fill('Investigate');
   await expect(dialog.getByRole('option')).toHaveCount(3);
   await expect(dialog.locator('[data-command-group]')).toHaveText(['Investigate', 'Investigate', 'Investigate']);
-  await search.fill('Protect & review');
+  await search.fill('Respond');
+  await expect(dialog.getByRole('option')).toHaveCount(1);
+  await expect(dialog.locator('[data-command-group]')).toHaveText(['Respond']);
+  await search.fill('Assure');
   await expect(dialog.getByRole('option')).toHaveCount(2);
-  await expect(dialog.locator('[data-command-group]')).toHaveText(['Protect & review', 'Protect & review']);
+  await expect(dialog.locator('[data-command-group]')).toHaveText(['Assure', 'Assure']);
   await search.fill('Public');
   await expect(dialog.getByRole('option')).toHaveCount(6);
   await expect(dialog.getByRole('option')).toHaveText([
@@ -399,8 +402,8 @@ test('the console command palette filters destinations and remains keyboard oper
   });
   const mobileSearch = dialog.getByRole('combobox', { name: 'Search pages' });
   await mobileSearch.press('End');
-  await expect(mobileSearch).toHaveAttribute('aria-activedescendant', 'command-option-13');
-  const lastMobileOption = dialog.getByRole('option').nth(13);
+  await expect(mobileSearch).toHaveAttribute('aria-activedescendant', 'command-option-14');
+  const lastMobileOption = dialog.getByRole('option').nth(14);
   await expect(lastMobileOption).toHaveAttribute('aria-selected', 'true');
   await expect.poll(() => lastMobileOption.evaluate((option) => {
     const list = option.closest('#command-results');
@@ -508,9 +511,25 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   ],
 }, async ({ page }) => {
   test.slow();
+  const reviewedAt = new Date('2026-08-21T12:00:00.000Z');
+  await page.clock.setFixedTime(reviewedAt);
   await page.emulateMedia({ reducedMotion: 'reduce' });
+  const sectionedResult = {
+    ...sectionedLookupFixture('sectioned-result.invalid'),
+    observedAt: reviewedAt.toISOString(),
+  };
+  Object.assign(sectionedResult.whois.parsed, {
+    domainName: 'different.invalid',
+  });
+  Object.assign(sectionedResult.availability.dns, {
+    limitations: ['The DNS collection is incomplete for this bounded comparison.'],
+  });
+  const lookupRequests: string[] = [];
+  page.on('request', (request) => {
+    if (new URL(request.url()).pathname === '/api/lookup') lookupRequests.push(request.url());
+  });
   await page.route('**/api/lookup?*', (route) => route.fulfill({
-    status: 200, contentType: 'application/json', body: JSON.stringify(sectionedLookupFixture('sectioned-result.invalid')),
+    status: 200, contentType: 'application/json', body: JSON.stringify(sectionedResult),
   }));
   await page.goto('/lookup');
   await page.locator('#query').fill('sectioned-result.invalid');
@@ -732,9 +751,211 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   await expect(activationContext).toContainText('Mail state inconclusive');
   await expect(activationContext).toContainText('Cross-layer timing inconclusive');
 
+  const atAGlance = page.locator('.at-a-glance');
+  const nextReviewQueue = atAGlance.locator('.next-actions');
+  await expect(nextReviewQueue).toHaveCount(1);
+  const nextReviewCounts = await nextReviewQueue.evaluate((queue) => ({
+    total: Number(queue.getAttribute('data-total')),
+    displayed: Number(queue.getAttribute('data-displayed-count')),
+    omitted: Number(queue.getAttribute('data-omitted-count')),
+    rendered: queue.querySelectorAll('.next-action').length,
+  }));
+  expect(nextReviewCounts.total).toBe(nextReviewCounts.displayed + nextReviewCounts.omitted);
+  expect(nextReviewCounts.displayed).toBe(nextReviewCounts.rendered);
+  expect(nextReviewCounts.displayed).toBeLessThanOrEqual(3);
+  const factBackedReviews = nextReviewQueue.locator('.next-action[data-basis="decision_fact"]');
+  expect(await factBackedReviews.count()).toBeGreaterThan(0);
+  for (const action of await factBackedReviews.all()) {
+    const contributingFactIds = (await action.getAttribute('data-contributing-fact-ids'))
+      ?.split(',').filter(Boolean) ?? [];
+    expect(contributingFactIds.length).toBeGreaterThan(0);
+    expect(contributingFactIds.every((id) => /^lookup-(?:decision|evidence):[a-z0-9._:-]+$/u.test(id))).toBe(true);
+    await expect(action.locator('.action-facts')).toContainText(contributingFactIds.join(' · '));
+  }
+  expect(await nextReviewQueue.locator('.next-action').evaluateAll((actions) => actions.every((action) => (
+    /^#[a-z0-9](?:[a-z0-9._:-]{0,159})$/u.test(action.getAttribute('href') ?? '')
+  )))).toBe(true);
+
+  const taskFocus = controls.getByLabel('Focus');
+  await taskFocus.selectOption('acquisition');
+  const acquisitionAction = nextReviewQueue.locator('[data-action-id="review-acquisition-dependencies"]');
+  await expect(acquisitionAction).toHaveCount(1);
+  await expect(acquisitionAction).toHaveAttribute('data-basis', 'task_context');
+  await expect(acquisitionAction).toHaveAttribute('data-contributing-fact-ids', '');
+  await expect(acquisitionAction.locator('.contextual-note')).toContainText('no evidence fact or provenance is claimed');
+  expect(lookupRequests).toHaveLength(1);
+
+  await taskFocus.selectOption('brand');
+  expect(lookupRequests).toHaveLength(1);
   const detailedAssessment = page.locator('details.detailed-assessment');
   await detailedAssessment.locator(':scope > summary').click();
   await expect(detailedAssessment).toHaveAttribute('open', '');
+  const impactPlan = detailedAssessment.locator('details.impact-plan');
+  await expect(impactPlan).toHaveCount(1);
+  const impactStateBefore = await page.evaluate(() => {
+    const state = window as typeof window & { __reviewDisclosureWrites?: number };
+    state.__reviewDisclosureWrites = 0;
+    const count = () => { state.__reviewDisclosureWrites = (state.__reviewDisclosureWrites ?? 0) + 1; };
+    const originalPut = IDBObjectStore.prototype.put;
+    const originalAdd = IDBObjectStore.prototype.add;
+    const originalDelete = IDBObjectStore.prototype.delete;
+    const originalClear = IDBObjectStore.prototype.clear;
+    const originalSetItem = Storage.prototype.setItem;
+    const originalRemoveItem = Storage.prototype.removeItem;
+    const originalStorageClear = Storage.prototype.clear;
+    IDBObjectStore.prototype.put = function put(value: unknown, key?: IDBValidKey) { count(); return key === undefined ? originalPut.call(this, value) : originalPut.call(this, value, key); };
+    IDBObjectStore.prototype.add = function add(value: unknown, key?: IDBValidKey) { count(); return key === undefined ? originalAdd.call(this, value) : originalAdd.call(this, value, key); };
+    IDBObjectStore.prototype.delete = function deleteRecord(query: IDBValidKey | IDBKeyRange) { count(); return originalDelete.call(this, query); };
+    IDBObjectStore.prototype.clear = function clear() { count(); return originalClear.call(this); };
+    Storage.prototype.setItem = function setItem(key: string, value: string) { count(); return originalSetItem.call(this, key, value); };
+    Storage.prototype.removeItem = function removeItem(key: string) { count(); return originalRemoveItem.call(this, key); };
+    Storage.prototype.clear = function clear() { count(); return originalStorageClear.call(this); };
+    return {
+      hash: window.location.hash,
+      localStorage: Object.fromEntries(Object.entries(localStorage).sort(([left], [right]) => left.localeCompare(right))),
+      sessionStorage: Object.fromEntries(Object.entries(sessionStorage).sort(([left], [right]) => left.localeCompare(right))),
+    };
+  });
+  const impactSummary = impactPlan.locator(':scope > summary');
+  await impactSummary.focus();
+  await impactSummary.press('Enter');
+  await expect(impactPlan).toHaveAttribute('open', '');
+  const impactCounts = await impactPlan.evaluate((plan) => ({
+    total: Number(plan.getAttribute('data-total')),
+    displayed: Number(plan.getAttribute('data-displayed-count')),
+    omitted: Number(plan.getAttribute('data-omitted-count')),
+    rendered: plan.querySelectorAll('.impacts > li').length,
+  }));
+  expect(impactCounts.total).toBe(impactCounts.displayed + impactCounts.omitted);
+  expect(impactCounts.displayed).toBe(impactCounts.rendered);
+  const factBackedImpacts = impactPlan.locator('.impacts > li[data-basis="decision_fact"]');
+  const localImpacts = impactPlan.locator('.impacts > li[data-mode="local_review"]');
+  const networkImpacts = impactPlan.locator('.impacts > li[data-mode="network_collection"]');
+  expect(await factBackedImpacts.count()).toBeGreaterThan(0);
+  expect(await localImpacts.count()).toBeGreaterThan(0);
+  expect(await networkImpacts.count()).toBeGreaterThan(0);
+  const tlsImpact = impactPlan.locator('[data-fact-id="lookup-evidence:tls"]');
+  const pageIdentityImpact = impactPlan.locator('[data-fact-id="lookup-evidence:page-identity"]');
+  await expect(tlsImpact).toHaveAttribute('data-evidence-state', 'unknown');
+  await expect(tlsImpact).toHaveAttribute('data-freshness', 'current');
+  await expect(tlsImpact.locator('.fact-id')).toContainText('lookup-evidence:tls');
+  await expect(tlsImpact.locator('[data-provenance="direct_observation"]')).toContainText('Direct observation');
+  await expect(tlsImpact.locator('[data-freshness="current"]')).toHaveAttribute('data-tone', 'neutral');
+  await expect(pageIdentityImpact).toHaveAttribute('data-evidence-state', 'unknown');
+  await expect(pageIdentityImpact).toHaveAttribute('data-freshness', 'stale');
+  const localImpact = localImpacts.first();
+  await expect(localImpact).toHaveAttribute('data-basis', 'task_context');
+  await expect(localImpact).toHaveAttribute('data-fact-id', '');
+  await expect(localImpact.locator('.context-note')).toContainText('No Decision Fact or collected-evidence provenance');
+  await expect(localImpact.locator('[data-provenance]')).toHaveCount(0);
+  await expect(localImpact.locator('.limitation')).toContainText('No reviewed Brand Profile is active');
+  await expect(localImpact).toContainText('does not start a network request');
+  expect(await impactPlan.locator('.impacts a').evaluateAll((links) => links.every((link) => (
+    /^#[a-z0-9](?:[a-z0-9._:-]{0,159})$/u.test(link.getAttribute('href') ?? '')
+  )))).toBe(true);
+  expect(await page.evaluate(() => ({
+    hash: window.location.hash,
+    localStorage: Object.fromEntries(Object.entries(localStorage).sort(([left], [right]) => left.localeCompare(right))),
+    sessionStorage: Object.fromEntries(Object.entries(sessionStorage).sort(([left], [right]) => left.localeCompare(right))),
+    writes: (window as typeof window & { __reviewDisclosureWrites?: number }).__reviewDisclosureWrites ?? 0,
+  }))).toEqual({ ...impactStateBefore, writes: 0 });
+  expect(lookupRequests).toHaveLength(1);
+
+  await taskFocus.selectOption('general');
+  expect(lookupRequests).toHaveLength(1);
+  const decisionSupport = detailedAssessment.locator('.decision-support');
+  await expect(decisionSupport.getByRole('heading', { name: 'General investigation' })).toBeVisible();
+  const presentationStateBefore = await page.evaluate(() => ({
+    hash: window.location.hash,
+    localStorage: Object.fromEntries(Object.entries(localStorage).sort(([left], [right]) => left.localeCompare(right))),
+    sessionStorage: Object.fromEntries(Object.entries(sessionStorage).sort(([left], [right]) => left.localeCompare(right))),
+  }));
+  await expect(decisionSupport.getByRole('button', { name: 'Copy current brief' })).toBeVisible();
+  await expect(decisionSupport.locator('[data-review-group-summary="disagreements"]')).toHaveText('1 disagreement');
+  await expect(decisionSupport.locator('[data-review-group-summary="unresolved"]')).toHaveText('1 unresolved comparison');
+  const decisionRecords = decisionSupport.locator('details.decision-records');
+  const decisionSummary = decisionRecords.locator(':scope > summary');
+  await decisionSummary.focus();
+  await decisionSummary.press('Enter');
+  await expect(decisionRecords).toHaveAttribute('open', '');
+  await decisionSummary.press('Space');
+  await expect(decisionRecords).not.toHaveAttribute('open', '');
+  await decisionSummary.press('Enter');
+  await expect(decisionRecords).toHaveAttribute('open', '');
+
+  const expectedDecisionGroups = [{
+    id: 'disagreements',
+    consistency: 'contradictory',
+    factIds: ['lookup-decision:registry-whois-domain'],
+  }, {
+    id: 'unresolved',
+    consistency: 'unknown',
+    factIds: ['lookup-decision:certificate-policy-caa'],
+  }] as const;
+  for (const expectedGroup of expectedDecisionGroups) {
+    const reviewGroup = decisionSupport.locator(`[data-review-group="${expectedGroup.id}"]`);
+    await expect(reviewGroup).toHaveCount(1);
+    await expect(reviewGroup).toHaveAttribute('data-consistency', expectedGroup.consistency);
+    await expect(reviewGroup).toHaveAttribute('data-total', String(expectedGroup.factIds.length));
+    await expect(reviewGroup).toHaveAttribute('data-displayed-count', String(expectedGroup.factIds.length));
+    await expect(reviewGroup).toHaveAttribute('data-omitted-count', '0');
+    await expect(reviewGroup).toHaveAttribute('data-contributing-fact-ids', expectedGroup.factIds.join(','));
+    expect(await reviewGroup.locator('.decision-entry').evaluateAll((entries) => (
+      entries.map((entry) => entry.getAttribute('data-fact-id'))
+    ))).toEqual(expectedGroup.factIds);
+  }
+
+  const disagreement = decisionSupport.locator('[data-review-group="disagreements"] .decision-entry');
+  const unresolved = decisionSupport.locator('[data-review-group="unresolved"] .decision-entry');
+  await expect(disagreement.locator('.consistency[data-consistency="contradictory"]')).toContainText('Contradictory');
+  await expect(disagreement.locator('.consistency')).toHaveAttribute('data-tone', 'conflict');
+  await expect(disagreement.locator('.consistency')).toHaveAttribute('aria-label', /Source ordering does not decide/iu);
+  await expect(unresolved.locator('.consistency[data-consistency="unknown"]')).toContainText('Consistency unknown');
+  await expect(unresolved.locator('.consistency')).toHaveAttribute('data-tone', 'caution');
+  await expect(disagreement.locator('.fact-state [data-evidence-state="observed"]')).toContainText('Observed');
+  await expect(disagreement.locator('.fact-state [data-freshness="current"]')).toContainText('Current');
+  await expect(unresolved.locator('.fact-state [data-evidence-state="partial"]')).toContainText('Partial');
+  await expect(unresolved.locator('.fact-state [data-freshness="current"]')).toContainText('Current');
+  const presentationIcons = decisionSupport.locator('.presentation-icon');
+  expect(await presentationIcons.count()).toBeGreaterThan(0);
+  expect(await presentationIcons.evaluateAll((icons) => (
+    icons.every((icon) => icon.getAttribute('aria-hidden') === 'true')
+  ))).toBe(true);
+
+  const registryContributor = disagreement.locator('[data-contributor-id="evidence:rdap"]');
+  const whoisContributor = disagreement.locator('[data-contributor-id="evidence:whois"]');
+  for (const contributor of [registryContributor, whoisContributor]) {
+    await expect(contributor).toHaveCount(1);
+    await expect(contributor).toHaveAttribute('data-provenance', 'provider_reported');
+  }
+  const dnsContributor = unresolved.locator('[data-contributor-id="evidence:dns"]');
+  const tlsContributor = unresolved.locator('[data-contributor-id="evidence:tls"]');
+  await expect(dnsContributor).toHaveAttribute('data-provenance', 'direct_observation');
+  await expect(tlsContributor).toHaveAttribute('data-provenance', 'direct_observation');
+  await expect(registryContributor).toContainText('Provider reported');
+  await expect(registryContributor).toContainText('Observed');
+  await expect(dnsContributor).toContainText('Direct observation');
+  await expect(dnsContributor).toContainText('Partial');
+  await expect(tlsContributor).toContainText('Direct observation');
+  await expect(tlsContributor).toContainText('Unknown');
+  await expect(disagreement.getByRole('region', { name: /Contradictions for/ })).toContainText('differs between registration sources');
+  await expect(unresolved.getByRole('region', { name: 'Limitations from DNS' })).toContainText('DNS collection is incomplete');
+
+  const reviewLinks = decisionSupport.locator('a.fact-action, a.evidence-link');
+  expect(await reviewLinks.count()).toBeGreaterThan(0);
+  expect(await reviewLinks.evaluateAll((links) => links.every((link) => (
+    /^#[a-z0-9](?:[a-z0-9._:-]{0,159})$/u.test(link.getAttribute('href') ?? '')
+  )))).toBe(true);
+  expect(lookupRequests).toHaveLength(1);
+  expect(await page.evaluate(() => ({
+    hash: window.location.hash,
+    localStorage: Object.fromEntries(Object.entries(localStorage).sort(([left], [right]) => left.localeCompare(right))),
+    sessionStorage: Object.fromEntries(Object.entries(sessionStorage).sort(([left], [right]) => left.localeCompare(right))),
+  }))).toEqual(presentationStateBefore);
+
+  const assessmentFocus = page.getByRole('region', { name: 'Choose what to review' }).getByLabel('Focus');
+  await assessmentFocus.selectOption('acquisition');
+  await expect(assessmentFocus).toHaveValue('acquisition');
   const acquisitionReview = page.locator('details.acquisition');
   await expect(acquisitionReview).toContainText('Acquisition due diligence');
   await expect(acquisitionReview).not.toHaveAttribute('open', '');
@@ -755,9 +976,10 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   const coverage = page.getByRole('region', { name: 'Evidence coverage' });
   await expect(coverage).toBeVisible();
   const coverageSummary = coverage.getByRole('group', { name: 'Evidence coverage summary' });
-  await expect(coverageSummary.getByText(/complete$/u)).toBeVisible();
-  await expect(coverageSummary.getByText(/limited$/u)).toBeVisible();
-  await coverage.getByText(/Review \d+ source and analysis records/u).click();
+  const recordsDisclosure = coverage.locator('details.records-disclosure');
+  await expect(recordsDisclosure).not.toHaveAttribute('open', '');
+  await recordsDisclosure.locator(':scope > summary').click();
+  await expect(recordsDisclosure).toHaveAttribute('open', '');
   await expect(coverage).toContainText('Registry RDAP');
   await expect(coverage).toContainText('WHOIS');
   await expect(coverage).toContainText('DNS');
@@ -765,30 +987,80 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   const sourceQualityTable = coverage.getByRole('table', { name: 'Source quality and freshness' });
   await expect(sourceQualityTable).toHaveAttribute('aria-colcount', '5');
   await expect(sourceQualityTable.getByRole('row').first().getByRole('columnheader')).toHaveCount(5);
+  const qualityRows = sourceQualityTable.locator('.quality-record');
+  const qualityRowCount = await qualityRows.count();
+  expect(qualityRowCount).toBeGreaterThan(0);
+  await expect(sourceQualityTable).toHaveAttribute('data-displayed-row-count', String(qualityRowCount));
+  await expect(sourceQualityTable).toHaveAttribute('data-canonical-fact-count', String(qualityRowCount));
+  const canonicalStateLabels = qualityRows.locator('.state[data-evidence-state]');
+  await expect(canonicalStateLabels).toHaveCount(qualityRowCount);
+  const completeRows = await sourceQualityTable.locator('.quality-record[data-counts-as-complete="true"]').count();
+  const limitedRows = await sourceQualityTable.locator('.quality-record[data-counts-as-limited="true"]').count();
+  expect(completeRows).toBeGreaterThan(0);
+  expect(limitedRows).toBeGreaterThan(0);
+  await expect(coverageSummary.locator('[data-summary="complete"] strong')).toHaveText(String(completeRows));
+  await expect(coverageSummary.locator('[data-summary="limited"] strong')).toHaveText(String(limitedRows));
+
+  const rdapQualityRow = sourceQualityTable.locator('.quality-record[data-evidence-id="rdap"]');
+  const dnsQualityRow = sourceQualityTable.locator('.quality-record[data-evidence-id="dns"]');
+  const httpQualityRow = sourceQualityTable.locator('.quality-record[data-evidence-id="http"]');
+  const availabilityQualityRow = sourceQualityTable.locator('.quality-record[data-evidence-id="availability"]');
+  for (const row of [rdapQualityRow, dnsQualityRow, httpQualityRow, availabilityQualityRow]) {
+    await expect(row).toHaveCount(1);
+  }
+  await expect(rdapQualityRow.locator('.state[data-evidence-state="observed"]')).toContainText('Observed');
+  await expect(dnsQualityRow.locator('.state[data-evidence-state="partial"]')).toContainText('Partial');
+  await expect(rdapQualityRow.locator('[data-provenance="provider_reported"]')).toContainText('Provider reported');
+  await expect(dnsQualityRow.locator('[data-provenance="direct_observation"]')).toContainText('Direct observation');
+  await expect(availabilityQualityRow.locator('[data-provenance="derived"]')).toContainText('Derived');
+  const currentFreshness = rdapQualityRow.locator('.observed > .freshness[data-freshness="current"]');
+  const staleFreshness = httpQualityRow.locator('.observed > .freshness[data-freshness="stale"]');
+  await expect(currentFreshness).toContainText('Current');
+  await expect(staleFreshness).toContainText('Stale');
+  const freshnessPlacement = await rdapQualityRow.locator('.observed').evaluate((cell) => {
+    const observed = cell.querySelector<HTMLElement>(':scope > span:first-child')!;
+    const freshness = cell.querySelector<HTMLElement>(':scope > .freshness')!;
+    return {
+      observedBottom: observed.getBoundingClientRect().bottom,
+      freshnessTop: freshness.getBoundingClientRect().top,
+    };
+  });
+  expect(freshnessPlacement.freshnessTop).toBeGreaterThanOrEqual(freshnessPlacement.observedBottom);
+  const neutralPresentation = await rdapQualityRow.evaluate((row) => {
+    const reference = row.querySelector<HTMLElement>('.source strong')!;
+    const state = row.querySelector<HTMLElement>('.state[data-evidence-state="observed"]')!;
+    const freshness = row.querySelector<HTMLElement>('.freshness[data-freshness="current"]')!;
+    return {
+      reference: getComputedStyle(reference).color,
+      state: getComputedStyle(state).color,
+      stateTone: state.dataset.tone,
+      freshness: getComputedStyle(freshness).color,
+      freshnessTone: freshness.dataset.tone,
+    };
+  });
+  expect(neutralPresentation).toEqual({
+    reference: neutralPresentation.reference,
+    state: neutralPresentation.reference,
+    stateTone: 'neutral',
+    freshness: neutralPresentation.reference,
+    freshnessTone: 'neutral',
+  });
+  await expect(rdapQualityRow.locator('.state .presentation-icon')).toHaveAttribute('aria-hidden', 'true');
+  await expect(currentFreshness.locator('.presentation-icon')).toHaveAttribute('aria-hidden', 'true');
+
   const limitationCell = sourceQualityTable.getByRole('cell', { name: 'Limitations for Reverse DNS' });
   await expect(limitationCell).toHaveAttribute('aria-colspan', '5');
   await expect(limitationCell).toContainText('PTR context does not prove hosting control.');
-  for (const label of ['Registry RDAP', 'WHOIS', 'Availability decision', 'Registrar RDAP']) {
-    const state = coverage.locator('.source strong')
-      .filter({ hasText: new RegExp(`^${label}$`, 'u') })
-      .locator('xpath=../..')
-      .locator('.state-complete');
-    const colours = await state.evaluate((element) => ({
-      actual: getComputedStyle(element).color,
-      expected: getComputedStyle(document.documentElement).getPropertyValue('--text').trim(),
-    }));
-    expect(colours.actual).toBe(colours.expected.startsWith('#')
-      ? `rgb(${Number.parseInt(colours.expected.slice(1, 3), 16)}, ${Number.parseInt(colours.expected.slice(3, 5), 16)}, ${Number.parseInt(colours.expected.slice(5, 7), 16)})`
-      : colours.expected);
-  }
-  expect(await sourceQualityTable.locator('.state-complete').evaluateAll((states) => {
-    const reference = document.querySelector<HTMLElement>('.summaries article strong');
-    if (!reference) return false;
-    const referenceColour = getComputedStyle(reference).color;
-    return states.every((state) => getComputedStyle(state).color === referenceColour);
-  })).toBe(true);
-  await coverage.getByText(/Freshness policy/u).click();
-  await coverage.getByLabel('Policy').selectOption('analyst-custom');
+  const reverseDnsLimitations = limitationCell.locator('section[aria-label="Limitations from Reverse DNS"]');
+  await expect(reverseDnsLimitations).toHaveCount(1);
+  await expect(reverseDnsLimitations).toContainText('Reverse DNS');
+  await expect(reverseDnsLimitations).toContainText('PTR context does not prove hosting control.');
+
+  const freshnessDisclosure = coverage.locator('details.freshness-policy');
+  await expect(freshnessDisclosure).not.toHaveAttribute('open', '');
+  await freshnessDisclosure.locator(':scope > summary').click();
+  await expect(freshnessDisclosure).toHaveAttribute('open', '');
+  await coverage.getByRole('combobox', { name: 'Policy', exact: true }).selectOption('analyst-custom');
   await coverage.getByLabel('Registration days').fill('10');
   await coverage.getByLabel('Registration days').blur();
   await expect(coverage).toContainText('Freshness policy · analyst-defined');
@@ -796,9 +1068,9 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
 
   await page.getByRole('button', { name: 'Collapse Source quality evidence' }).click();
   await page.getByRole('button', { name: 'Expand Source quality evidence' }).click();
-  await coverage.getByText(/Review \d+ source and analysis records/u).click();
-  await coverage.getByText(/Freshness policy/u).click();
-  await expect(coverage.getByLabel('Policy')).toHaveValue('analyst-custom');
+  await recordsDisclosure.locator(':scope > summary').click();
+  await freshnessDisclosure.locator(':scope > summary').click();
+  await expect(coverage.getByRole('combobox', { name: 'Policy', exact: true })).toHaveValue('analyst-custom');
   await expect(coverage.getByLabel('Registration days')).toHaveValue('10');
 
   const registrationFact = page.locator('.summaries article').filter({ hasText: 'Registration' }).first();
@@ -862,6 +1134,33 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   ]) {
     await page.setViewportSize(size);
     await expectNoHorizontalOverflow(page);
+    const decisionGeometry = await decisionSupport.evaluate((section) => ({
+      clientWidth: section.clientWidth,
+      scrollWidth: section.scrollWidth,
+      entriesContained: [...section.querySelectorAll<HTMLElement>('.decision-entry')].every((entry) => {
+        const entryBox = entry.getBoundingClientRect();
+        const sectionBox = section.getBoundingClientRect();
+        return entryBox.left >= sectionBox.left - 1 && entryBox.right <= sectionBox.right + 1;
+      }),
+    }));
+    expect(decisionGeometry.scrollWidth).toBeLessThanOrEqual(decisionGeometry.clientWidth + 1);
+    expect(decisionGeometry.entriesContained).toBe(true);
+    const reviewActionGeometry = await atAGlance.evaluate((section) => ({
+      clientWidth: section.clientWidth,
+      scrollWidth: section.scrollWidth,
+      actionsContained: [...section.querySelectorAll<HTMLElement>('.next-action')].every((action) => {
+        const actionBox = action.getBoundingClientRect();
+        const sectionBox = section.getBoundingClientRect();
+        return actionBox.left >= sectionBox.left - 1 && actionBox.right <= sectionBox.right + 1;
+      }),
+    }));
+    expect(reviewActionGeometry.scrollWidth).toBeLessThanOrEqual(reviewActionGeometry.clientWidth + 1);
+    expect(reviewActionGeometry.actionsContained).toBe(true);
+    const readinessGeometry = await detailedAssessment.locator('.claim-readiness').evaluate((section) => ({
+      clientWidth: section.clientWidth,
+      scrollWidth: section.scrollWidth,
+    }));
+    expect(readinessGeometry.scrollWidth).toBeLessThanOrEqual(readinessGeometry.clientWidth + 1);
 
     const redirectPath = httpCard.locator('.redirect-path');
     if (size.width <= 720) {
@@ -1073,17 +1372,22 @@ test('Lookup focus and disclosure controls change presentation without changing 
   presentationFixture.diagnostics.whois.status = 'unsupported';
   await page.setViewportSize({ width: 1440, height: 900 });
   const lookupRequests: string[] = [];
-  page.on('request', (request) => {
-    if (new URL(request.url()).pathname === '/api/lookup') lookupRequests.push(request.url());
+  let fixtureResponses = 0;
+  await page.route('**/api/lookup?*', (route) => {
+    lookupRequests.push(route.request().url());
+    fixtureResponses += 1;
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(presentationFixture),
+    });
   });
-  await page.route('**/api/lookup?*', (route) => route.fulfill({
-    status: 200,
-    contentType: 'application/json',
-    body: JSON.stringify(presentationFixture),
-  }));
   await page.goto('/lookup');
   await page.locator('#query').fill(domain);
   await page.getByRole('button', { name: 'Run lookup' }).click();
+  await expect(page.locator('#result')).toBeVisible();
+  expect(lookupRequests).toHaveLength(1);
+  expect(fixtureResponses).toBe(1);
 
   const controls = page.getByRole('region', { name: 'Choose what to review' });
   const task = controls.getByLabel('Focus');
@@ -1111,27 +1415,80 @@ test('Lookup focus and disclosure controls change presentation without changing 
   expect(glanceGeometry.noteRight).toBeLessThanOrEqual(glanceGeometry.sectionRight + 1);
   const glanceMetrics = atAGlance.locator('.metrics > details');
   await expect(glanceMetrics).toHaveCount(4);
-  const metricSummaries = glanceMetrics.locator('summary');
-  await expect(metricSummaries).toHaveText([
-    /^\d+ complete checks?$/u,
-    /^\d+ limited checks?$/u,
-    /^\d+ disagreements?$/u,
-    /^\d+ unresolved items?$/u,
+  expect(await glanceMetrics.evaluateAll((metrics) => metrics.map((metric) => metric.getAttribute('data-metric-id')))).toEqual([
+    'complete',
+    'limited',
+    'disagreements',
+    'unresolved',
   ]);
+  const metricSummaries = glanceMetrics.locator('summary');
+  await expect(glanceMetrics.locator('.metric-label')).toHaveText([
+    /complete checks?/u,
+    /limited checks?/u,
+    /disagreements?/u,
+    /unresolved items?/u,
+  ]);
+  await expect(glanceMetrics.locator('.metric-icon')).toHaveCount(4);
+  const metricPresentation = await glanceMetrics.evaluateAll((metrics) => metrics.map((metric) => {
+    const summary = metric.querySelector('summary');
+    const label = metric.querySelector('.metric-label');
+    const icon = metric.querySelector('.metric-icon');
+    return {
+      tone: metric.getAttribute('data-tone'),
+      label: label?.textContent?.trim() ?? '',
+      icon: icon?.getAttribute('data-icon') ?? '',
+      iconHidden: icon?.getAttribute('aria-hidden'),
+      accessibleExplanation: summary?.getAttribute('aria-label') ?? '',
+    };
+  }));
+  expect(metricPresentation.every((metric) => (
+    ['neutral', 'caution', 'conflict'].includes(metric.tone ?? '')
+      && metric.label.length > 0
+      && metric.icon.length > 0
+      && metric.iconHidden === 'true'
+      && metric.accessibleExplanation.length > metric.label.length
+  ))).toBe(true);
   await expect(atAGlance.getByText('Show what this count includes')).toHaveCount(0);
   expect(await metricSummaries.evaluateAll((summaries) => summaries.every((summary) => {
     const box = summary.getBoundingClientRect();
     return summary.scrollWidth <= summary.clientWidth + 1 && box.height <= 48;
   }))).toBe(true);
+  const nextActionsBeforeDisclosure = await atAGlance.locator('.next-actions .next-action').evaluateAll((actions) => (
+    actions.map((action) => ({
+      href: action.getAttribute('href'),
+      text: action.textContent?.replace(/\s+/gu, ' ').trim(),
+    }))
+  ));
+  expect(nextActionsBeforeDisclosure.length).toBeGreaterThan(0);
+  expect(nextActionsBeforeDisclosure.length).toBeLessThanOrEqual(3);
   for (const metric of await glanceMetrics.all()) {
-    const count = Number(await metric.locator('summary strong').textContent());
-    await metric.locator('summary').click();
+    const count = Number(await metric.getAttribute('data-count'));
+    const displayedCount = Number(await metric.getAttribute('data-displayed-count'));
+    const omittedCount = Number(await metric.getAttribute('data-omitted-count'));
+    expect(count).toBe(displayedCount + omittedCount);
+    expect(await metric.locator('.metric-items > .metric-item').count()).toBe(displayedCount);
+    const summary = metric.locator('summary');
+    await summary.focus();
+    await expect(summary).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(metric).toHaveAttribute('open', '');
     await expect(metric.locator('.metric-detail > p').first()).toBeVisible();
-    const listedItems = await metric.locator('.metric-detail li').count();
-    if (count > 0) expect(listedItems).toBe(count);
-    else expect(listedItems).toBe(0);
-    await metric.locator('summary').click();
+    if (omittedCount > 0) {
+      await expect(metric.locator('.metric-omitted')).toContainText(`${omittedCount} additional contributing`);
+    } else {
+      await expect(metric.locator('.metric-omitted')).toHaveCount(0);
+    }
+    await page.keyboard.press('Space');
+    await expect(metric).not.toHaveAttribute('open', '');
   }
+  expect(await atAGlance.locator('.next-actions .next-action').evaluateAll((actions) => (
+    actions.map((action) => ({
+      href: action.getAttribute('href'),
+      text: action.textContent?.replace(/\s+/gu, ' ').trim(),
+    }))
+  ))).toEqual(nextActionsBeforeDisclosure);
+  expect(lookupRequests).toHaveLength(1);
+  expect(fixtureResponses).toBe(1);
   await expect(atAGlance.locator('.metric-note')).toContainText('neither state establishes safety');
   const detailedAssessment = page.locator('details.detailed-assessment');
   await expect(detailedAssessment).not.toHaveAttribute('open', '');
@@ -1217,6 +1574,9 @@ test('Lookup focus and disclosure controls change presentation without changing 
   await expect(page.locator('#evidence-dns > details')).toHaveJSProperty('open', false);
   await task.selectOption('acquisition');
   await expect(page.locator('#evidence-dns > details')).toHaveJSProperty('open', false);
+  const acquisitionActions = await atAGlance.locator('.next-actions .next-action').allTextContents();
+  expect(acquisitionActions.length).toBeLessThanOrEqual(3);
+  expect(acquisitionActions.join(' ')).toMatch(/Review transfer dependencies/u);
   await expect(localNav.getByRole('link').evaluateAll((links) => links.map((link) => link.textContent?.trim()))).resolves.toEqual([
     'Overview',
     'Registration',
@@ -1250,6 +1610,8 @@ test('Lookup focus and disclosure controls change presentation without changing 
   await page.getByRole('button', { name: 'Run lookup' }).click();
   await expect(page.getByRole('region', { name: 'Choose what to review' }).getByLabel('Focus')).toHaveValue('acquisition');
   await expect(page.getByRole('region', { name: 'Choose what to review' }).getByLabel('Detail')).toHaveCount(0);
+  expect(lookupRequests).toHaveLength(2);
+  expect(fixtureResponses).toBe(2);
 });
 
 test('Lookup task query context is bounded, transient, and changes only result presentation', async ({ page }) => {
@@ -1278,23 +1640,47 @@ test('Lookup task query context is bounded, transient, and changes only result p
   expect(new URL(lookupRequests[0]!).searchParams.has('task')).toBe(false);
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem('whoisleuth:lookup-presentation:v1') || '{}').task)).toBe('brand');
 
-  const acquisitionScores = page.locator('.availability .scores .score');
-  await expect(acquisitionScores).toHaveCount(2);
-  await expect(acquisitionScores.nth(0)).toHaveAttribute('data-score-hierarchy', 'primary');
-  await expect(acquisitionScores.nth(0)).toHaveAttribute('aria-label', /Primary assessment: Opportunity score/u);
-  await expect(acquisitionScores.nth(1)).toHaveAttribute('data-score-hierarchy', 'secondary');
-  await expect(acquisitionScores.nth(1)).toHaveAttribute('aria-label', /Secondary assessment: Risk score/u);
-  const acquisitionDetails = page.locator('.availability .score-details .score-detail');
-  await expect(acquisitionDetails.nth(0)).toHaveAttribute('data-score-hierarchy', 'primary');
-  await expect(acquisitionDetails.nth(0)).toHaveAttribute('aria-label', 'Primary Opportunity score explanation');
-  await expect(acquisitionDetails.nth(1)).toHaveAttribute('data-score-hierarchy', 'secondary');
-  await expect(acquisitionDetails.nth(1)).toHaveAttribute('aria-label', 'Secondary Risk score explanation');
+  const acquisitionAssessment = page.locator('.availability');
+  const acquisitionRisk = acquisitionAssessment.locator('.risk-band');
+  const acquisitionOpportunity = acquisitionAssessment.locator('.opportunity-band');
+  await expect(acquisitionRisk).toHaveCount(1);
+  await expect(acquisitionRisk).toContainText('Secondary triage');
+  await expect(acquisitionRisk).toContainText(/Risk model v7/u);
+  await expect(acquisitionRisk).toContainText(/Evidence coverage:/u);
+  await expect(acquisitionOpportunity).toHaveCount(1);
+  await expect(acquisitionOpportunity).toContainText('Acquisition task only');
+  await expect(acquisitionOpportunity).toContainText(/not availability, value, eligibility, price, or likely purchase success/u);
+  await expect(acquisitionAssessment.locator('.exact-score')).toHaveCount(2);
+  await expect(acquisitionAssessment.locator('.exact-score').first()).toBeHidden();
+  await expect(acquisitionAssessment.locator('.exact-score').last()).toBeHidden();
+  expect(await page.evaluate(() => {
+    const glance = document.querySelector('.at-a-glance');
+    const assessment = document.querySelector('.availability');
+    return Boolean(glance && assessment
+      && (glance.compareDocumentPosition(assessment) & Node.DOCUMENT_POSITION_FOLLOWING));
+  })).toBe(true);
+  const acquisitionDetails = acquisitionAssessment.locator('.score-detail');
+  await expect(acquisitionDetails).toHaveCount(2);
+  await acquisitionRisk.locator('summary').click();
+  await acquisitionOpportunity.locator('summary').click();
+  await expect(acquisitionDetails.locator('.exact-score')).toHaveCount(2);
+  await expect(acquisitionDetails.locator('.factor-list')).toHaveCount(2);
+  await expect(acquisitionDetails.locator('.factor-list').first()).toBeVisible();
   const nextActions = page.locator('.at-a-glance .next-action');
   expect(await nextActions.count()).toBeLessThanOrEqual(3);
   await expect(nextActions.filter({ hasText: 'Review transfer dependencies' })).toHaveCount(1);
   await page.locator('details.detailed-assessment > summary').click();
   await expect(page.getByRole('heading', { name: 'Useful next actions' })).toHaveCount(0);
   const focus = page.getByRole('region', { name: 'Choose what to review' }).getByLabel('Focus');
+  for (const nonAcquisitionTask of ['general', 'brand', 'incident', 'owned']) {
+    await focus.selectOption(nonAcquisitionTask);
+    await expect(page.locator('.availability .opportunity-band')).toHaveCount(0);
+    await expect(page.locator('.availability .risk-band')).toHaveCount(1);
+    await expect(page.locator('.detailed-assessment details.acquisition')).toHaveCount(0);
+  }
+  await focus.selectOption('acquisition');
+  await expect(page.locator('.availability .opportunity-band')).toHaveCount(1);
+  await expect(page.locator('.detailed-assessment details.acquisition')).toBeVisible();
   await focus.selectOption('brand');
   await page.evaluate(() => { window.location.hash = 'registry'; });
   await expect(page).toHaveURL(/task=acquisition#registry$/u);
@@ -1304,73 +1690,28 @@ test('Lookup task query context is bounded, transient, and changes only result p
   await page.locator('#query').fill(domain);
   await page.getByRole('button', { name: 'Run lookup' }).click();
   await expect(page.getByRole('region', { name: 'Choose what to review' }).getByLabel('Focus')).toHaveValue('brand');
-  const brandScores = page.locator('.availability .scores .score');
-  await expect(brandScores.nth(0)).toHaveAttribute('data-score-hierarchy', 'primary');
-  await expect(brandScores.nth(0)).toHaveAttribute('aria-label', /Primary assessment: Risk score/u);
-  await expect(brandScores.nth(1)).toHaveAttribute('data-score-hierarchy', 'secondary');
-  await expect(brandScores.nth(1)).toHaveAttribute('aria-label', /Secondary assessment: Opportunity score/u);
-  const brandDetails = page.locator('.availability .score-details .score-detail');
-  await expect(brandDetails.nth(0)).toHaveAttribute('aria-label', 'Primary Risk score explanation');
-  await expect(brandDetails.nth(1)).toHaveAttribute('aria-label', 'Secondary Opportunity score explanation');
-  const primaryScoreColours = await brandScores.nth(0).evaluate((score) => {
+  const brandAssessment = page.locator('.availability');
+  const brandRisk = brandAssessment.locator('.risk-band');
+  await expect(brandRisk).toHaveCount(1);
+  await expect(brandAssessment.locator('.opportunity-band')).toHaveCount(0);
+  await expect(brandRisk).toContainText('Secondary triage');
+  await expect(brandRisk).toHaveAttribute('data-risk-band', 'lower');
+  await expect(brandRisk).toContainText(/does not establish safety, legitimacy, ownership, or absence of concern/u);
+  expect(await brandRisk.evaluate((element) => {
     const probe = document.createElement('span');
-    probe.style.cssText = 'position:absolute;border:1px solid var(--accent2)';
+    probe.style.borderColor = 'var(--accent2)';
     document.body.append(probe);
-    const successBorder = getComputedStyle(probe).borderTopColor;
-    probe.style.borderColor = 'var(--accent)';
-    const primaryBorder = getComputedStyle(probe).borderTopColor;
+    const success = getComputedStyle(probe).borderTopColor;
     probe.remove();
-    return {
-      actual: getComputedStyle(score).borderTopColor,
-      secondary: getComputedStyle(score.nextElementSibling!).borderTopColor,
-      background: getComputedStyle(score).backgroundColor,
-      secondaryBackground: getComputedStyle(score.nextElementSibling!).backgroundColor,
-      detailActual: getComputedStyle(document.querySelector('.score-detail-primary')!).borderLeftColor,
-      secondaryDetail: getComputedStyle(document.querySelector('.score-detail-secondary')!).borderLeftColor,
-      primaryBorder,
-      successBorder,
-    };
-  });
-  expect(primaryScoreColours.actual).toBe(primaryScoreColours.secondary);
-  expect(primaryScoreColours.actual).not.toBe(primaryScoreColours.primaryBorder);
-  expect(primaryScoreColours.background).toBe(primaryScoreColours.secondaryBackground);
-  expect(primaryScoreColours.detailActual).toBe(primaryScoreColours.secondaryDetail);
-  expect(primaryScoreColours.detailActual).not.toBe(primaryScoreColours.primaryBorder);
-  expect(primaryScoreColours.actual).not.toBe(primaryScoreColours.successBorder);
-
-  const scoreBarVisuals = await brandScores.evaluateAll((scores) => {
-    const probe = document.createElement('span');
-    document.body.append(probe);
-    const resolveFill = (token: string) => {
-      probe.style.backgroundColor = `var(${token})`;
-      return getComputedStyle(probe).backgroundColor;
-    };
-    const fills = {
-      neutral: resolveFill('--accent'),
-      good: resolveFill('--accent2'),
-      warn: resolveFill('--amber'),
-      danger: resolveFill('--danger'),
-    };
-    probe.remove();
-    return scores.map((score) => {
-      const track = score.querySelector<HTMLElement>('i')!;
-      const fill = track.querySelector<HTMLElement>('b')!;
-      const tone = ([...score.classList].find((name) => ['good', 'warn', 'danger'].includes(name)) || 'neutral') as keyof typeof fills;
-      return {
-        height: Number.parseFloat(getComputedStyle(track).height),
-        track: getComputedStyle(track).backgroundColor,
-        fill: getComputedStyle(fill).backgroundColor,
-        expectedFill: fills[tone],
-      };
-    });
-  });
-  expect(scoreBarVisuals.every((bar) => bar.height >= 10 && bar.track !== bar.fill)).toBe(true);
-  expect(scoreBarVisuals.every((bar) => bar.fill === bar.expectedFill)).toBe(true);
-
-  await brandDetails.nth(0).locator('summary').click();
-  await brandDetails.nth(1).locator('summary').click();
+    return getComputedStyle(element).borderLeftColor !== success;
+  })).toBe(true);
+  await brandRisk.locator('summary').click();
+  const brandDetails = brandAssessment.locator('.score-detail');
+  await expect(brandDetails).toHaveCount(1);
+  await expect(brandDetails.locator('.exact-score')).toContainText(/\/100/u);
+  await expect(brandDetails.locator('.factor-list')).toBeVisible();
   const scoreCharts = brandDetails.locator('.factor-chart');
-  await expect(scoreCharts).toHaveCount(2);
+  await expect(scoreCharts).toHaveCount(1);
   expect(await scoreCharts.evaluateAll((charts) => charts.every((chart) => {
     const chartRect = chart.getBoundingClientRect();
     const labels = [...chart.querySelectorAll<HTMLElement>('.factor-label')];
@@ -1383,6 +1724,13 @@ test('Lookup task query context is bounded, transient, and changes only result p
           && label.scrollWidth <= label.clientWidth + 1;
       });
   }))).toBe(true);
+  for (const theme of ['Dark', 'Light'] as const) {
+    await page.getByRole('button', { name: /^Colour theme,/u }).click();
+    await page.getByRole('option', { name: `${theme} theme` }).click();
+    await expect(brandRisk).toBeVisible();
+    await expect(brandDetails.locator('.factor-list')).toBeVisible();
+    await expectNoHorizontalOverflow(page);
+  }
   expect(lookupRequests).toHaveLength(2);
   expect(lookupRequests.every((url) => !new URL(url).searchParams.has('task'))).toBe(true);
 
@@ -1594,10 +1942,10 @@ test('console and policy pages expose one consistent primary heading', async ({ 
   for (const [path, title, eyebrow] of [
     ['/dashboard', 'Dashboard', 'Console'],
     ['/lookup', 'Lookup', 'Investigate'],
-    ['/discover', 'Discover', 'Find candidates'],
-    ['/bulk', 'Bulk', 'Assess domains'],
-    ['/monitor', 'Monitor', 'Track findings'],
-    ['/brands', 'Brands', 'Protect'],
+    ['/discover', 'Discover', 'Investigate'],
+    ['/bulk', 'Bulk', 'Investigate'],
+    ['/monitor', 'Monitor', 'Respond'],
+    ['/brands', 'Brands', 'Assure'],
     ['/registry-support', 'Registry support', 'Reference'],
     ['/privacy', 'Privacy policy', 'Policy'],
   ] as const) {

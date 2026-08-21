@@ -65,6 +65,7 @@ for (const viewport of VIEWPORTS) {
 
       const closeButton = drawer.getByRole('button', { name: 'Close navigation' });
       await expect(closeButton).toBeFocused();
+      await closeButton.hover();
 
       const lastDrawerControl = drawer.locator('a[href], button:not([disabled])').last();
       const headerBrand = page.locator('.shell > header > a');

@@ -73,8 +73,18 @@
 
   type View = 'inbox' | 'timeline' | 'watchlists' | 'cases' | 'campaigns' | 'relationships' | 'rules';
   const MONITOR_VIEWS = new Set<View>(['inbox','timeline','watchlists','cases','campaigns','relationships','rules']);
+  const RESPOND_VIEWS = new Set<View>(['inbox','cases','campaigns','relationships']);
   const CASE_PAGE_SIZE=25;
   let view=$state<View>('inbox');
+  const monitorWorkflow=$derived(RESPOND_VIEWS.has(view)
+    ? {
+        eyebrow:'Respond',
+        description:'Review retained evidence, organise cases, prepare responses, examine campaigns, and continue follow-up.',
+      }
+    : {
+        eyebrow:'Assure',
+        description:'Review monitoring history, watchlists, and local control rules without starting collection automatically.',
+      });
   $effect(()=>{
     const currentUrl=page.url;
     const rawView=currentUrl.searchParams.get('view');
@@ -94,7 +104,7 @@
     if(!focus)for(const parameter of ['investigation','domain','response'])url.searchParams.delete(parameter);
     if(focus)url.searchParams.set(focus.parameter,focus.value);
     url.hash='';
-    await goto(`${url.pathname}${url.search}`,{replaceState:true,noScroll:true,keepFocus:true});
+    await goto(`${url.pathname}${url.search}`,{noScroll:true,keepFocus:true});
   }
   function selectMonitorView(next:View){
     if(next===view)return;
@@ -501,7 +511,7 @@
 </script>
 
 <svelte:head><title>Monitor · WHOISleuth</title></svelte:head>
-<PageHeading eyebrow="Track findings" title="Monitor" description="Review retained work, organise cases, inspect relationships, and compare watchlist changes over time." />
+<PageHeading eyebrow={monitorWorkflow.eyebrow} title="Monitor" description={monitorWorkflow.description} />
 
 <MonitorViewTabs {view} counts={{
   inbox:casesSourceState==='ready'&&watchlistsSourceState==='ready'&&bulkSessionsSourceState==='ready'?reviewInbox.counts.all:null,

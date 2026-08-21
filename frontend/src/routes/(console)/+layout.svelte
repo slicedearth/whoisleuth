@@ -4,7 +4,8 @@
   import { onMount, setContext, tick, type Component } from 'svelte';
   import {
     consoleNavigationGroups,
-    protectedDestinations,
+    isNavigationItemActive,
+    isProtectedDestination,
     publicCommandNavigation,
     referenceNavigation,
     type NavigationItem,
@@ -91,8 +92,10 @@
   }
 
   function signInTarget(){
-    const path = protectedDestinations.some((item) => item.href === page.url.pathname) ? page.url.pathname : '/dashboard';
-    return `/login?next=${encodeURIComponent(path)}`;
+    const destination = isProtectedDestination(page.url)
+      ? `${page.url.pathname}${page.url.search}${page.url.hash}`
+      : '/dashboard';
+    return `/login?next=${encodeURIComponent(destination)}`;
   }
 
   async function loadCapabilityReport(){
@@ -268,7 +271,7 @@
         {#each consoleNavigationGroups as navigationGroup}
           <div class="console-nav-group" role="group" aria-labelledby={`console-group-${navigationGroup.label.toLowerCase().replaceAll(' ', '-').replace('&', 'and')}`}>
             <p class="eyebrow" id={`console-group-${navigationGroup.label.toLowerCase().replaceAll(' ', '-').replace('&', 'and')}`}>{navigationGroup.label}</p>
-            {#each navigationGroup.items as item}<a class:active={page.url.pathname===item.href} aria-current={page.url.pathname===item.href?'page':undefined} href={item.href} onclick={()=>navOpen=false}><strong>{item.label}</strong><small>{item.detail}</small></a>{/each}
+            {#each navigationGroup.items as item}<a class:active={isNavigationItemActive(item,page.url)} aria-current={isNavigationItemActive(item,page.url)?'page':undefined} href={item.href} onclick={()=>navOpen=false}><strong>{item.label}</strong><small>{item.detail}</small></a>{/each}
           </div>
         {/each}
       </nav>

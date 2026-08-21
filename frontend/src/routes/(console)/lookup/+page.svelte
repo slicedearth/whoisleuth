@@ -256,8 +256,9 @@
   const evidenceObservedAtById=$derived(lookupAnalysis.evidenceObservedAtById);
   const lookupSourceRefreshPlan=$derived(lookupAnalysis.lookupSourceRefreshPlan);
   const lookupDecisionSupport=$derived(lookupAnalysis.lookupDecisionSupport);
+  const lookupDecisionFacts=$derived(lookupAnalysis.lookupDecisionFacts);
   const lookupClaimReadiness=$derived(lookupAnalysis.lookupClaimReadiness);
-  const lookupEvidenceImpactPlan=$derived(lookupAnalysis.lookupEvidenceImpactPlan);
+  const lookupReviewActionModel=$derived(lookupAnalysis.lookupReviewActionModel);
   const evidenceQualityMatrix=$derived(lookupAnalysis.evidenceQualityMatrix);
   const lookupSummary=$derived(lookupAnalysis.lookupSummary);
   const lookupInvestigationBrief=$derived(lookupAnalysis.lookupInvestigationBrief);
@@ -325,8 +326,8 @@
       target:lookupInvestigationBrief.target,
       taskLabel:lookupInvestigationBrief.taskLabel,
       generatedAt:lookupInvestigationBrief.generatedAt,
-      contradictionCount:lookupInvestigationBrief.contradictions.length,
-      unknownCount:lookupInvestigationBrief.unknowns.length,
+      contradictionCount:lookupInvestigationBrief.decisionFacts.contradictory,
+      unknownCount:lookupInvestigationBrief.decisionFacts.unresolved,
     };
     await performCaseAction(()=>lookupCaseController.recordBriefHandoff(record,brief));
   }
@@ -545,7 +546,7 @@
   function downloadReadableReport(includeAttribution=true){
     if(!result)return;
     if(lookupEvidenceProjection.error){evidenceExportStatus=`Readable report was not created. ${lookupEvidenceProjection.error}`;return;}
-    try{const body=buildLookupReadableReport(result,{risk,applicationVersion:__WHOISLEUTH_VERSION__,includeAttribution});const url=URL.createObjectURL(new Blob([body],{type:'text/markdown;charset=utf-8'}));const anchor=document.createElement('a');anchor.href=url;anchor.download=lookupReadableReportFilename(result);anchor.click();URL.revokeObjectURL(url);}
+    try{const body=buildLookupReadableReport(result,{risk,decisionFacts:lookupDecisionFacts,applicationVersion:__WHOISLEUTH_VERSION__,includeAttribution});const url=URL.createObjectURL(new Blob([body],{type:'text/markdown;charset=utf-8'}));const anchor=document.createElement('a');anchor.href=url;anchor.download=lookupReadableReportFilename(result);anchor.click();URL.revokeObjectURL(url);}
     catch(cause){if(!portableOutputBoundFailure(cause))throw cause;evidenceExportStatus='Readable report export was not created because the retained result exceeds its bounded report structure.';}
   }
   function downloadInvestigationBrief(){if(!result)return;const body=formatLookupInvestigationBriefMarkdown(lookupInvestigationBrief);const url=URL.createObjectURL(new Blob([body],{type:'text/markdown;charset=utf-8'}));const anchor=document.createElement('a');anchor.href=url;anchor.download=lookupInvestigationBriefFilename(lookupInvestigationBrief);anchor.click();URL.revokeObjectURL(url);}
@@ -684,8 +685,8 @@
       <h3 id="overview-title">Overview</h3>
 
       <LookupAtAGlance
-        support={lookupDecisionSupport}
-        quality={evidenceQualityMatrix}
+        reviewActions={lookupReviewActionModel}
+        {lookupDecisionFacts}
         signals={lookupSummary.signals}
       />
 
@@ -695,17 +696,18 @@
 
       <details class="detailed-assessment card" bind:open={detailedAssessmentOpen}>
         <summary>
-          <span><strong>Detailed assessment</strong><small>Decision support, claim readiness, portable hand-off, and acquisition review</small></span>
+          <span><strong>Detailed assessment</strong><small>Decision support, claim readiness, and portable hand-off{taskView==='acquisition'?', with acquisition review':''}</small></span>
           <span>{detailedAssessmentOpen?'Close assessment':'Open assessment'}</span>
         </summary>
         <div class="detailed-assessment-body">
         <LookupDecisionSupport
           support={lookupDecisionSupport}
+          facts={lookupDecisionFacts}
           onbriefcopy={copyInvestigationBrief}
           onbriefhandoff={caseRecord ? recordInvestigationBriefHandoff : null}
           actionBusy={caseActionBusy}
         />
-        <LookupClaimReadiness readiness={lookupClaimReadiness} impact={lookupEvidenceImpactPlan} onpassport={downloadClaimPassport} />
+        <LookupClaimReadiness readiness={lookupClaimReadiness} reviewActions={lookupReviewActionModel} onpassport={downloadClaimPassport} />
 
         {#if lookupEvidenceDocument}
           <LookupInvestigationCapsule
@@ -717,7 +719,7 @@
           />
         {/if}
 
-        {#if result?.type==='domain'}
+        {#if result?.type==='domain' && taskView==='acquisition'}
           <LookupAcquisitionDueDiligence
             review={acquisitionDueDiligence}
             target={caseDomain}
@@ -1047,6 +1049,7 @@
       {#if sectionDetailVisible('source-quality')}
         <LookupEvidenceQuality
           matrix={evidenceQualityMatrix}
+          lookupDecisionFacts={lookupDecisionFacts}
           refreshPlan={lookupSourceRefreshPlan}
           query={String(result?.query || caseDomain)}
           depth={lookupEvidenceDepth}

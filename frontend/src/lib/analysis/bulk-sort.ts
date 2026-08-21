@@ -47,8 +47,15 @@ function compareText(left: unknown, right: unknown): number {
   return leftText.localeCompare(rightText, 'en', { numeric: true, sensitivity: 'base' });
 }
 
-function sortValue(row: BulkSortableResult, key: BulkSortKey): { missing: boolean; value: number | string } {
-  if (key === 'risk' || key === 'opportunity') {
+function sortValue(
+  row: BulkSortableResult,
+  key: BulkSortKey,
+  comparableRisk: number | null,
+): { missing: boolean; value: number | string } {
+  if (key === 'risk') {
+    return { missing: !Number.isFinite(comparableRisk), value: Number(comparableRisk ?? 0) };
+  }
+  if (key === 'opportunity') {
     return { missing: !Number.isFinite(row[key]), value: Number(row[key] ?? 0) };
   }
   if (key === 'confidence') {
@@ -68,10 +75,11 @@ export function sortBulkResults<T extends BulkSortableResult>(
   rows: readonly T[],
   key: BulkSortKey,
   direction: BulkSortDirection,
+  riskValue: ((row: T) => number | null) | null = null,
 ): T[] {
   return [...rows].sort((left, right) => {
-    const leftValue = sortValue(left, key);
-    const rightValue = sortValue(right, key);
+    const leftValue = sortValue(left, key, key === 'risk' && riskValue ? riskValue(left) : left.risk);
+    const rightValue = sortValue(right, key, key === 'risk' && riskValue ? riskValue(right) : right.risk);
     // Missing values always remain last instead of jumping to the top when
     // the requested direction changes.
     if (leftValue.missing !== rightValue.missing) return leftValue.missing ? 1 : -1;

@@ -10,11 +10,23 @@ import {
   LOOKUP_ASSET_GRAPH_SCHEMA,
   type LookupAssetGraph,
 } from './lookup-asset-graph.ts';
-import type { LookupInvestigationBrief } from './lookup-investigation-brief.ts';
+import {
+  LOOKUP_INVESTIGATION_BRIEF_SCHEMA,
+  LOOKUP_INVESTIGATION_BRIEF_VERSION,
+  type LookupInvestigationBrief,
+} from './lookup-investigation-brief.ts';
 
 export const INVESTIGATION_CAPSULE_SCHEMA = 'whoisleuth.investigation-capsule';
-export const INVESTIGATION_CAPSULE_VERSION = 2;
+export const INVESTIGATION_CAPSULE_VERSION = 3;
+export const PREVIOUS_INVESTIGATION_CAPSULE_VERSION = 2;
 export const LEGACY_INVESTIGATION_CAPSULE_VERSION = 1;
+export const INVESTIGATION_CAPSULE_ANALYST_RECORDS_SCHEMA = 'whoisleuth.case-analyst-records';
+export const INVESTIGATION_CAPSULE_ANALYST_RECORDS_VERSION = 1;
+export const SUPPORTED_INVESTIGATION_CAPSULE_VERSIONS = Object.freeze([
+  LEGACY_INVESTIGATION_CAPSULE_VERSION,
+  PREVIOUS_INVESTIGATION_CAPSULE_VERSION,
+  INVESTIGATION_CAPSULE_VERSION,
+] as const);
 
 export type InvestigationCapsuleAnalystRecords = Readonly<{
   caseId: string;
@@ -147,10 +159,16 @@ export async function buildInvestigationCapsule(input: BuildInvestigationCapsule
     target: { value: input.brief.target, type: input.brief.targetType },
     sourceContracts: [
       { id: 'lookup-evidence', schema: evidenceSchema, version: evidenceVersion, digest: evidenceDigest, embedded: false },
-      { id: 'investigation-brief', schema: input.brief.schema, version: input.brief.schemaVersion, digest: briefDigest, embedded: true },
+      { id: 'investigation-brief', schema: LOOKUP_INVESTIGATION_BRIEF_SCHEMA, version: LOOKUP_INVESTIGATION_BRIEF_VERSION, digest: briefDigest, embedded: true },
       { id: 'asset-graph', schema: LOOKUP_ASSET_GRAPH_SCHEMA, version: input.graph.version, digest: graphDigest, embedded: true },
       ...(analystRecords && analystRecordsDigest
-        ? [{ id: 'analyst-records', schema: 'whoisleuth.case-analyst-records', version: 1, digest: analystRecordsDigest, embedded: true }]
+        ? [{
+            id: 'analyst-records',
+            schema: INVESTIGATION_CAPSULE_ANALYST_RECORDS_SCHEMA,
+            version: INVESTIGATION_CAPSULE_ANALYST_RECORDS_VERSION,
+            digest: analystRecordsDigest,
+            embedded: true,
+          }]
         : []),
     ],
     investigationBrief: input.brief,
@@ -159,7 +177,7 @@ export async function buildInvestigationCapsule(input: BuildInvestigationCapsule
     limitations: [
       'The Lookup evidence file is linked by digest but is not embedded; keep or share that exact file separately when verification is required.',
       'Digest verification can detect changed content but does not establish who created the capsule. No digital signature is applied.',
-      'The graph and brief are bounded projections of collected and derived evidence, not attribution, ownership, safety, availability, or maliciousness conclusions.',
+      'The graph and canonical Decision Fact brief are bounded projections of collected and derived evidence, not attribution, ownership, safety, availability, or maliciousness conclusions.',
       analystRecords
         ? 'Analyst decisions and assertions were deliberately included; review them for sensitive or personal information before sharing.'
         : 'Analyst decisions, assertions, notes, contacts, actions, and raw source payloads are excluded.',
@@ -179,8 +197,14 @@ export async function buildInvestigationCapsule(input: BuildInvestigationCapsule
   };
 }
 
-type LegacyInvestigationCapsule = Omit<InvestigationCapsule, 'schemaVersion' | 'integrity'> & Readonly<{
+type PreviousInvestigationCapsule = Omit<InvestigationCapsule, 'schemaVersion' | 'investigationBrief'> & Readonly<{
+  schemaVersion: typeof PREVIOUS_INVESTIGATION_CAPSULE_VERSION;
+  investigationBrief: Readonly<Record<string, unknown>>;
+}>;
+
+type LegacyInvestigationCapsule = Omit<InvestigationCapsule, 'schemaVersion' | 'investigationBrief' | 'integrity'> & Readonly<{
   schemaVersion: typeof LEGACY_INVESTIGATION_CAPSULE_VERSION;
+  investigationBrief: Readonly<Record<string, unknown>>;
   integrity: Readonly<{
     algorithm: 'SHA-256';
     briefDigest: string;
@@ -189,7 +213,11 @@ type LegacyInvestigationCapsule = Omit<InvestigationCapsule, 'schemaVersion' | '
   }>;
 }>;
 
-export async function verifyInvestigationCapsule(capsule: InvestigationCapsule | LegacyInvestigationCapsule): Promise<Readonly<{
+export type SupportedInvestigationCapsule = InvestigationCapsule
+  | PreviousInvestigationCapsule
+  | LegacyInvestigationCapsule;
+
+export async function verifyInvestigationCapsule(capsule: SupportedInvestigationCapsule): Promise<Readonly<{
   valid: boolean;
   brief: boolean;
   graph: boolean;
@@ -197,17 +225,19 @@ export async function verifyInvestigationCapsule(capsule: InvestigationCapsule |
   whole: boolean | null;
 }>> {
   const current = capsule.schemaVersion === INVESTIGATION_CAPSULE_VERSION;
+  const previous = capsule.schemaVersion === PREVIOUS_INVESTIGATION_CAPSULE_VERSION;
   const legacy = capsule.schemaVersion === LEGACY_INVESTIGATION_CAPSULE_VERSION;
+  const wholeIntegrity = current || previous;
   const integrityRecord = capsule.integrity as unknown as Record<string, unknown>;
-  if ((!current && !legacy)
-    || (current && (integrityRecord.canonicalization !== SORTED_JSON_V2
+  if ((!current && !previous && !legacy)
+    || (wholeIntegrity && (integrityRecord.canonicalization !== SORTED_JSON_V2
       || integrityRecord.scope !== 'capsule excluding integrity'))
     || (legacy && (Object.hasOwn(integrityRecord, 'canonicalization')
       || Object.hasOwn(integrityRecord, 'scope')
       || Object.hasOwn(integrityRecord, 'digestSha256')))) {
-    return { valid: false, brief: false, graph: false, analystRecords: null, whole: current ? false : null };
+    return { valid: false, brief: false, graph: false, analystRecords: null, whole: wholeIntegrity ? false : null };
   }
-  const projectionDigest = current ? sha256ArtifactDigestV2 : sha256ArtifactDigest;
+  const projectionDigest = wholeIntegrity ? sha256ArtifactDigestV2 : sha256ArtifactDigest;
   const [briefDigest, graphDigest, analystRecordsDigest] = await Promise.all([
     projectionDigest(capsule.investigationBrief),
     projectionDigest(capsule.graphSnapshot),
@@ -221,23 +251,23 @@ export async function verifyInvestigationCapsule(capsule: InvestigationCapsule |
       ? null
       : false;
   let whole: boolean | null = null;
-  if (current) {
-    const { integrity, ...unsigned } = capsule;
-    whole = integrity.algorithm === 'SHA-256'
-      && integrity.canonicalization === SORTED_JSON_V2
-      && integrity.scope === 'capsule excluding integrity'
-      && integrity.digestSha256 === await sha256ArtifactDigestV2(unsigned);
+  if (wholeIntegrity) {
+    const { integrity: _integrity, ...unsigned } = capsule;
+    whole = integrityRecord.algorithm === 'SHA-256'
+      && integrityRecord.canonicalization === SORTED_JSON_V2
+      && integrityRecord.scope === 'capsule excluding integrity'
+      && integrityRecord.digestSha256 === await sha256ArtifactDigestV2(unsigned);
   }
   return { valid: brief && graph && analystRecords !== false && whole !== false, brief, graph, analystRecords, whole };
 }
 
-export function investigationCapsuleFilename(capsule: InvestigationCapsule | LegacyInvestigationCapsule): string {
+export function investigationCapsuleFilename(capsule: SupportedInvestigationCapsule): string {
   const target = capsule.target.value.toLowerCase().replace(/[^a-z0-9.-]+/gu, '-').replace(/^-|-$/gu, '').slice(0, 80) || 'lookup';
   return `whoisleuth-investigation-capsule-${target}-${capsule.generatedAt.slice(0, 10)}.json`;
 }
 
-export function serializeInvestigationCapsule(capsule: InvestigationCapsule | LegacyInvestigationCapsule): string {
-  return `${capsule.schemaVersion === INVESTIGATION_CAPSULE_VERSION
+export function serializeInvestigationCapsule(capsule: SupportedInvestigationCapsule): string {
+  return `${capsule.schemaVersion !== LEGACY_INVESTIGATION_CAPSULE_VERSION
     ? canonicalArtifactJsonV2(capsule)
     : canonicalArtifactJson(capsule)}\n`;
 }

@@ -24,6 +24,7 @@
     buildCaseResponsePacket,
     buildCaseResponsePreflight,
     buildResponsePacketProfilePreview,
+    CASE_RESPONSE_PREFLIGHT_EVIDENCE_SCOPE,
     caseResponsePacketFilename,
     RESPONSE_CONTACT_KINDS,
     RESPONSE_PACKET_PROFILES,
@@ -603,6 +604,7 @@
     <summary>Prepare a reviewed abuse evidence packet</summary>
     <form class="response-form packet-form" onsubmit={(event) => event.preventDefault()}>
       <p class="notice">This prepares local JSON, Markdown, or plain-text drafts only. WHOISleuth does not send reports. JSON and Markdown include observation-age context, reviewed action history, and a canonical SHA-256 digest for later integrity checks.</p>
+      <p class="notice preflight-scope">{CASE_RESPONSE_PREFLIGHT_EVIDENCE_SCOPE.limitation}</p>
       <label class="field">Audience profile<select bind:value={packetProfile}>{#each RESPONSE_PACKET_PROFILES as profile}<option value={profile.id}>{profile.label}</option>{/each}</select></label>
       <section class="profile-preview" aria-labelledby={`profile-preview-title-${record.id}`}>
         <div>

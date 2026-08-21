@@ -2,11 +2,13 @@ import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  LOOKUP_READABLE_REPORT_VERSION,
   MAX_LOOKUP_READABLE_REPORT_BYTES,
   buildLookupReadableReport,
   lookupReadableReportFilename,
   projectLookupForReadableReport,
 } from '../lib/lookup-readable-report.mts';
+import { buildDecisionFacts } from '../packages/evidence/decision-fact.mts';
 import {
   isJsonObject,
   type JsonObject,
@@ -120,6 +122,57 @@ function object(value: unknown): JsonObject {
   return value;
 }
 
+const reportFacts = buildDecisionFacts([{
+  id: 'lookup-decision:registration',
+  question: 'What do the registration publications establish?',
+  conclusion: 'The bounded publications require [review](https://untrusted.example) <script>ignored</script>.',
+  importance: 'high',
+  evidenceState: 'partial',
+  freshness: 'current',
+  consistency: 'contradictory',
+  contributors: [{
+    id: 'evidence:rdap',
+    label: 'Registry RDAP',
+    provenance: 'provider_reported',
+    evidenceState: 'observed',
+    references: ['#registry', 'lookup-evidence:rdap'],
+    observedAt: '2026-07-26T01:02:03.000Z',
+    limitations: ['Source order does not decide authority.'],
+  }],
+  references: ['#registry', 'lookup-evidence:rdap'],
+  contradictions: ['Separately attributed values differ.'],
+  limitations: ['Source order does not decide authority.'],
+  nextActions: [{
+    id: 'review-registration',
+    label: 'Review registration evidence',
+    reason: 'The attributed values differ.',
+    expectedOutcome: 'Record whether the disagreement remains unresolved.',
+    href: '#registry',
+    importance: 'high',
+  }],
+}, {
+  id: 'lookup-evidence:http',
+  question: 'What did HTTP establish?',
+  conclusion: 'HTTP was unavailable for this Lookup.',
+  importance: 'medium',
+  evidenceState: 'unavailable',
+  freshness: 'unknown',
+  consistency: 'not_applicable',
+  contributors: [{
+    id: 'evidence:http',
+    label: 'HTTP',
+    provenance: 'direct_observation',
+    evidenceState: 'unavailable',
+    references: ['#evidence-http', 'lookup-evidence:http'],
+    observedAt: null,
+    limitations: ['The source returned no retained result.'],
+  }],
+  references: ['#evidence-http', 'lookup-evidence:http'],
+  contradictions: [],
+  limitations: ['The source returned no retained result.'],
+  nextActions: [],
+}]);
+
 describe('browser-local readable Lookup report', () => {
   test('projects known normalized evidence before formatting and does not mutate the response', () => {
     const source = lookupResponse();
@@ -150,6 +203,7 @@ describe('browser-local readable Lookup report', () => {
     const report = buildLookupReadableReport(source, {
       applicationVersion: '1.35.0',
       generatedAt: '2026-07-26T02:00:00.000Z',
+      decisionFacts: reportFacts,
       risk: {
         modelVersion: 6,
         score: 42,
@@ -179,6 +233,11 @@ describe('browser-local readable Lookup report', () => {
     assert.match(report, /SOA primary server:\*\* ns1\\\.example\\\.test/u);
     assert.match(report, /SOA serial:\*\* 2026072601/u);
     assert.match(report, /heuristic review priority/u);
+    assert.match(report, /## Canonical Decision Facts/u);
+    assert.ok(report.includes(`whoisleuth\\.lookup\\-readable\\-report v${LOOKUP_READABLE_REPORT_VERSION}`));
+    assert.match(report, /2 of 2 included; 0 omitted/u);
+    assert.match(report, /lookup\\-decision\\:registration/u);
+    assert.match(report, /observed 2026\\-07\\-26T01\\:02\\:03\\.000Z/u);
     assert.match(report, /Generated with WHOISleuth 1\.35\.0/u);
     assert.doesNotMatch(report, /must-not-enter-readable-report/u);
     assert.doesNotMatch(report, /contact@example\.test/u);
@@ -214,6 +273,7 @@ describe('browser-local readable Lookup report', () => {
     }
     assert.doesNotThrow(() => buildLookupReadableReport(source, {
       generatedAt: '2026-07-26T02:00:00.000Z',
+      decisionFacts: reportFacts,
     }));
   });
 
@@ -232,11 +292,21 @@ describe('browser-local readable Lookup report', () => {
       applicationVersion: '1.35.0',
       generatedAt: '2026-07-26T02:00:00.000Z',
       includeAttribution: false,
+      decisionFacts: reportFacts,
     });
 
     assert.match(report, /# Lookup evidence report/u);
     assert.match(report, /Generator:\*\* WHOISleuth 1\\\.35\\\.0/u);
     assert.doesNotMatch(report, /Generated with WHOISleuth/u);
+  });
+
+  test('requires the already-built canonical facts for domain reports', () => {
+    assert.throws(
+      () => buildLookupReadableReport(lookupResponse(), {
+        generatedAt: '2026-07-26T02:00:00.000Z',
+      }),
+      /require canonical Decision Facts/iu,
+    );
   });
 
   test('renders a bounded IP report with registration, reverse-DNS, and source health', () => {
@@ -305,7 +375,7 @@ describe('browser-local readable Lookup report', () => {
     assert.match(report, /Generated with WHOISleuth 1\.35\.0/u);
     assert.equal(JSON.stringify(projected).includes('private@example.test'), false);
     assert.equal(JSON.stringify(projected).includes('"raw"'), false);
-    assert.doesNotMatch(report, /private@example\.test|discard=this/u);
+    assert.doesNotMatch(report, /private@example\.test|discard=this|Canonical Decision Facts/u);
   });
 
   test('renders a bounded ASN report without inventing reverse-DNS context', () => {
@@ -351,7 +421,7 @@ describe('browser-local readable Lookup report', () => {
     assert.match(report, /RDAP:\*\* partial/u);
     assert.match(report, /WHOIS:\*\* unavailable/u);
     assert.match(report, /Generator:\*\* WHOISleuth 1\\\.35\\\.0/u);
-    assert.doesNotMatch(report, /Reverse DNS context|private@example\.test/u);
+    assert.doesNotMatch(report, /Reverse DNS context|private@example\.test|Canonical Decision Facts/u);
   });
 
   test('can omit the readable generator footer from network identifier reports', () => {
@@ -375,6 +445,6 @@ describe('browser-local readable Lookup report', () => {
 
     assert.match(report, /# ASN evidence report/u);
     assert.match(report, /Generator:\*\* WHOISleuth 1\\\.35\\\.0/u);
-    assert.doesNotMatch(report, /Generated with WHOISleuth/u);
+    assert.doesNotMatch(report, /Generated with WHOISleuth|Canonical Decision Facts/u);
   });
 });

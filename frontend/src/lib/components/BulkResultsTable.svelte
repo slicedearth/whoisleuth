@@ -1,5 +1,7 @@
 <script lang="ts">
   import Pagination from '$lib/components/Pagination.svelte';
+  import BulkRiskSummary from '$lib/components/BulkRiskSummary.svelte';
+  import type { BulkRiskPresentation } from '$lib/analysis/bulk-route-model.ts';
   import type { BulkSortKey as SortKey } from '$lib/analysis/bulk-sort.ts';
 
   type CaseOption = { value: string; label: string };
@@ -25,9 +27,8 @@
     error: string;
     availability: string;
     confidence: string;
-    risk: number | null;
+    risk: BulkRiskPresentation;
     highRisk: boolean;
-    riskTitle: string | undefined;
     activity: string;
     registrar: string;
     mutationLabel: string;
@@ -106,7 +107,7 @@
         <tr id={`bulk-result-${row.resultIndex}`} class:error-row={row.errorRow} class:trusted-row={Boolean(row.trusted)} class:mobile-expanded={expandedRows.has(row.resultIndex)}>
           <td data-label="Domain"><div class="domain"><button class="star" class:unavailable={!shortlistAvailable} disabled={!shortlistAvailable} aria-label={shortlistAvailable?`${row.shortlisted ? 'Remove' : 'Add'} ${row.domain} ${row.shortlisted ? 'from' : 'to'} shortlist`:`Shortlist state unavailable for ${row.domain}`} aria-pressed={shortlistAvailable?row.shortlisted:undefined} onclick={() => toggleSaved(row.resultIndex)}>{shortlistAvailable?(row.shortlisted?'★':'☆'):'—'}</button><div class="domain-content"><strong>{row.domain}</strong>{#if !shortlistAvailable}<small class="source-unavailable">Shortlist unavailable</small>{/if}{#if row.unicodeDomain}<small class="idn-label">Unicode: {row.unicodeDomain}</small>{/if}{#if row.mixedScript}<small class="warn-label">Mixed writing scripts</small>{/if}{#if row.referenceMatch}<small class="warn-label">Official-domain skeleton match</small>{/if}{#if row.trusted}<small class="trusted-label">{row.trusted}</small>{/if}{#if !row.profileContextReady}<small class="warn-label">Brand Profile context unevaluated{row.profileContextLimitation ? ` — ${row.profileContextLimitation}` : ''}</small>{/if}{#if row.faviconMatch}<small class="danger-label">Favicon match</small>{:else if row.faviconNearMatch}<small class="warn-label">Favicon near-match</small>{/if}{#if row.reusesOfficialAssets}<small class="warn-label">Official asset relationship</small>{/if}{#if row.hasPasswordField}<small class="warn-label">Password field</small>{/if}{#if row.phishingLanguageMatch}<small class="danger-label">Phishing language</small>{/if}{#if row.ct}<details class="ct-source"><summary>Certificate Transparency</summary><div class="ct-source-detail">{#if row.ct.lastObservedAt}<span>Latest CT observation <time datetime={row.ct.lastObservedAt}>{row.ct.lastObservedAt.slice(0, 10)}</time></span>{/if}<span>{row.ct.hostnameCount} observed hostname{row.ct.hostnameCount === 1 ? '' : 's'}</span><span>{row.ct.certificateCount} distinct certificate{row.ct.certificateCount === 1 ? '' : 's'}</span></div></details>{/if}{#if row.error}<small>{row.error}</small>{/if}</div></div><button class="mobile-row-toggle" type="button" aria-expanded={expandedRows.has(row.resultIndex)} aria-label={`${expandedRows.has(row.resultIndex) ? 'Hide' : 'Show'} details for ${row.domain}`} onclick={() => toggleRowDetails(row.resultIndex)}>{expandedRows.has(row.resultIndex) ? 'Hide details' : 'Show details'}</button></td>
           <td data-label="Registration"><span class="state" data-registration-state={row.availability}>{row.availability.replace('_', ' ')}</span><small class="confidence">{row.confidence} confidence</small></td>
-          <td data-label="Risk" class:high={row.highRisk} title={row.riskTitle}>{row.risk ?? '—'}</td>
+          <td data-label="Risk" class:high={row.highRisk}><BulkRiskSummary risk={row.risk} domain={row.domain} /></td>
           <td class="mobile-secondary" data-label="Website">{row.activity}</td>
           <td class="mobile-secondary" data-label="Registrar">{row.registrar}</td>
           <td class="mobile-secondary" data-label="Mutation">{row.mutationLabel}</td>

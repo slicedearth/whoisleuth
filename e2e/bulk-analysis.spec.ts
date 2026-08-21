@@ -827,6 +827,41 @@ test('sorts complete results by registration, confidence, website, registrar, an
   await expectNoHorizontalOverflow(page);
 });
 
+test('keeps partial Bulk Risk evidence inconclusive and outside the comparable sort cohort', async ({ page }) => {
+  await page.route('**/api/lookup?*', async (route) => {
+    const domain = new URL(route.request().url()).searchParams.get('q') || '';
+    const limited = domain === 'partial-risk.example';
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        availability: { applicable: true, domain, state: 'registered', confidence: 'high' },
+        diagnostics: {
+          version: 7,
+          rdap: { status: limited ? 'partial' : 'complete' },
+          whois: { status: 'skipped' },
+          availability: { status: 'complete' },
+        },
+      }),
+    });
+  });
+
+  await runBulkScan(page, ['partial-risk.example', 'settled-risk.example']);
+  const partial = page.locator('.results-table tbody tr', { hasText: 'partial-risk.example' });
+  const settled = page.locator('.results-table tbody tr', { hasText: 'settled-risk.example' });
+  await expect(settled.locator('td[data-label="Risk"]')).toContainText('Lower');
+  await expect(partial.locator('td[data-label="Risk"]')).toContainText('Inconclusive');
+  await expect(partial.locator('td[data-label="Risk"]')).not.toContainText('Lower');
+  await expect(page.getByText(/Risk sorting compares 1 of 2 rows/u)).toBeVisible();
+  await expect(page.getByText(/1 incompatible or inconclusive row sorts last/u)).toBeVisible();
+  await expect(page.locator('.results-table tbody td[data-label="Domain"] strong')).toHaveText([
+    'settled-risk.example',
+    'partial-risk.example',
+  ]);
+  await partial.locator('td[data-label="Risk"] summary[aria-label*="Inspect Risk model and factors"]').click();
+  await expect(partial.locator('td[data-label="Risk"]')).toContainText(/source evidence is partial or unavailable/u);
+});
+
 test('keeps the current queue, results, filters, sort, and page during console navigation only', async ({ page }) => {
   const domains = invalidDomains(101);
   await runBulkScan(page, domains);
@@ -932,7 +967,11 @@ test('saves compact Bulk sessions, restores them after reload, and compares late
   await expect(page.getByRole('heading', { name: 'Later review' })).toBeVisible();
   await page.locator('article').filter({ hasText: 'Baseline review' }).getByRole('button', { name: 'Load' }).click();
   await expect(page.locator('.results-table tbody tr')).toHaveCount(1);
-  await expect(page.locator('.results-table tbody tr').first().locator('td[data-label="Risk"]')).toHaveText('6');
+  await page.getByRole('group', { name: 'Bulk result view' }).getByRole('button', { name: 'List', exact: true }).click();
+  const restoredRisk = page.locator('.results-table tbody tr').first().locator('td[data-label="Risk"]');
+  await expect(restoredRisk).toContainText('Lower');
+  await restoredRisk.locator('summary[aria-label*="Inspect Risk model and factors"]').click();
+  await expect(restoredRisk).toContainText('6/100');
   await expect(page.getByRole('status').filter({ hasText: /Loaded Baseline review/ })).toBeVisible();
 });
 
@@ -1102,7 +1141,8 @@ test('an unavailable Profile context stays inconclusive in Bulk rows, sessions, 
 
   const row = page.locator('.results-table tbody tr', { hasText: 'profile-context.invalid' });
   await expect(row).toContainText('Brand Profile context unevaluated');
-  await expect(row.locator('td[data-label="Risk"]')).toHaveText('—');
+  await expect(row.locator('td[data-label="Risk"]')).toContainText('Inconclusive');
+  await expect(row.locator('td[data-label="Risk"]')).toContainText('Excluded from Risk comparison');
   await page.getByLabel('Current row monitor list').fill('Unavailable context review');
   await expect(page.getByRole('button', { name: 'Save current to Monitor' })).toBeDisabled();
   await expect(page.getByRole('button', { name: 'Save to Monitor' })).toBeDisabled();
@@ -1413,9 +1453,11 @@ test('IDN official-domain skeleton evidence renders, filters, and contributes on
   await expect(row.getByText('Mixed writing scripts', { exact: true })).toBeVisible();
   await expect(row.getByText('Official-domain skeleton match', { exact: true })).toBeVisible();
   const riskCell = row.locator('td[data-label="Risk"]');
-  await expect(riskCell).toHaveText('26');
-  await expect(riskCell).toHaveAttribute('title', /IDN skeleton matches an official Brand Profile domain \+20/);
-  await expect(riskCell).toHaveAttribute('title', /Risk model v7/);
+  await expect(riskCell).toContainText('Lower');
+  await expect(riskCell).toContainText('Risk model v7');
+  await riskCell.locator('summary[aria-label*="Inspect Risk model and factors"]').click();
+  await expect(riskCell).toContainText('26/100');
+  await expect(riskCell).toContainText(/IDN skeleton matches an official Brand Profile domain/u);
 
   await page.getByRole('button', { name: 'IDN / confusable' }).click();
   await expect(row).toBeVisible();
@@ -1461,9 +1503,11 @@ test('risk model v7 exposes capped cross-family corroboration in Bulk triage', a
   await runBulkScan(page, ['candidate.example']);
   const row = page.locator('.results-table tbody tr');
   const riskCell = row.locator('td[data-label="Risk"]');
-  await expect(riskCell).toHaveText('79');
-  await expect(riskCell).toHaveAttribute('title', /Corroborating context across 3 independent evidence families \+18/);
-  await expect(riskCell).toHaveAttribute('title', /Risk model v7/);
+  await expect(riskCell).toContainText('Elevated');
+  await expect(riskCell).toContainText('Risk model v7');
+  await riskCell.locator('summary[aria-label*="Inspect Risk model and factors"]').click();
+  await expect(riskCell).toContainText('79/100');
+  await expect(riskCell).toContainText(/Corroborating context across 3 independent evidence families/u);
 
   await page.getByRole('button', { name: 'high risk' }).click();
   await expect(row).toBeVisible();

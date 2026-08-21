@@ -73,10 +73,10 @@ import {
 } from '../lib/domain-change-packet.mts';
 import {
   INVESTIGATION_CAPSULE_SCHEMA,
-  INVESTIGATION_CAPSULE_VERSION,
   LEGACY_INVESTIGATION_CAPSULE_VERSION,
+  SUPPORTED_INVESTIGATION_CAPSULE_VERSIONS,
   verifyInvestigationCapsule,
-  type InvestigationCapsule,
+  type SupportedInvestigationCapsule,
 } from '../frontend/src/lib/analysis/investigation-capsule.ts';
 import {
   INVESTIGATION_MANIFEST_SCHEMA,
@@ -466,22 +466,22 @@ async function verifyOfflineArtifactCore(
   }
 
   if (schema === INVESTIGATION_CAPSULE_SCHEMA) {
-    if (version !== LEGACY_INVESTIGATION_CAPSULE_VERSION && version !== INVESTIGATION_CAPSULE_VERSION) {
+    if (!SUPPORTED_INVESTIGATION_CAPSULE_VERSIONS.some((candidate) => candidate === version)) {
       throw new UnsupportedOfflineArtifactError('This investigation-capsule version is not supported.');
     }
     validateInvestigationCapsuleStructure(value);
-    const verification = await verifyInvestigationCapsule(value as InvestigationCapsule);
+    const verification = await verifyInvestigationCapsule(value as SupportedInvestigationCapsule);
     if (!verification.valid) throw new TypeError('The investigation capsule failed its embedded projection integrity checks.');
-    const current = version === INVESTIGATION_CAPSULE_VERSION;
+    const wholeIntegrity = version !== LEGACY_INVESTIGATION_CAPSULE_VERSION;
     return Object.freeze({
       schema: OFFLINE_ARTIFACT_VERIFICATION_SCHEMA,
       version: OFFLINE_ARTIFACT_VERIFICATION_VERSION,
       artifact: Object.freeze({ kind: 'investigation_capsule', schema, version }),
-      state: current ? 'verified' : 'integrity_valid',
+      state: wholeIntegrity ? 'verified' : 'integrity_valid',
       checks: Object.freeze({
         structure: 'verified',
         contentIntegrity: 'verified',
-        contentIntegrityScope: current ? 'whole_artifact' : 'embedded_projections',
+        contentIntegrityScope: wholeIntegrity ? 'whole_artifact' : 'embedded_projections',
         authenticatedEncryption: 'not_applicable',
       }),
       summary: Object.freeze({
@@ -491,7 +491,7 @@ async function verifyOfflineArtifactCore(
         ciphertextBytes: null,
       }),
       limitations: Object.freeze([
-        ...(current
+        ...(wholeIntegrity
           ? ['The whole capsule matches its declared digest, including metadata and the linked source-contract projection digests. The non-embedded Lookup evidence remains linked by digest and must be retained separately.']
           : ['The embedded brief, graph, and optional analyst-record projections match their declared digests. Capsule metadata and the linked Lookup evidence are outside those projection digests and must not be treated as whole-file integrity verified.']),
         'Digest verification detects changed content but does not authenticate the analyst, signer, collection source, or truth of retained observations and assertions.',

@@ -4,6 +4,7 @@ import {
   buildCaseResponsePacket,
   buildCaseResponsePreflight,
   buildResponsePacketProfilePreview,
+  CASE_RESPONSE_PREFLIGHT_EVIDENCE_SCOPE,
   caseResponsePacketFilename,
   CASE_RESPONSE_PACKET_SCHEMA,
   CASE_RESPONSE_PACKET_VERSION,
@@ -184,6 +185,31 @@ describe('case response packet', () => {
     assert.equal(preflight.status, 'needs_input');
     assert.equal(preflight.counts.block, 1);
     assert.equal(preflight.checks.find((item) => item.id === 'recipient_route')?.state, 'caution');
+  });
+
+  test('keeps case-response preflight case-owned when transient Lookup facts are unavailable', () => {
+    assert.deepEqual(CASE_RESPONSE_PREFLIGHT_EVIDENCE_SCOPE, {
+      version: 1,
+      owner: 'case',
+      inputs: [
+        'incident_fields', 'evidence_pins', 'analyst_decisions', 'analyst_assertions',
+        'recipient_routes', 'case_disposition', 'case_actions',
+      ],
+      lookupDecisionFacts: 'unavailable',
+      limitation: 'Lookup Decision Facts are transient and are not copied into browser-local cases. Case-response preflight evaluates only explicit case-owned records and analyst-entered incident context; it does not reconstruct Decision Facts from weaker saved fields.',
+    });
+    const input = {
+      category: '', affectedParty: '', abusiveUrls: [], observedHarm: '', observedAt: null, contacts: [],
+    };
+    const caseRecord = reviewedCase();
+    const baseline = buildCaseResponsePreflight(caseRecord, input, NOW);
+    const withUnavailableFacts = buildCaseResponsePreflight(
+      caseRecord,
+      { ...input, decisionFacts: [{ id: 'must-not-be-consumed' }] } as typeof input,
+      NOW,
+    );
+    assert.deepEqual(withUnavailableFacts, baseline);
+    assert.equal(JSON.stringify(withUnavailableFacts).includes('must-not-be-consumed'), false);
   });
 
   test('uses bounded path-safe filenames', () => {

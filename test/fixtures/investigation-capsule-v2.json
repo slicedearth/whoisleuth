@@ -1,0 +1,106 @@
+{
+  "schema": "whoisleuth.investigation-capsule",
+  "schemaVersion": 2,
+  "generatedAt": "2026-08-04T01:00:00.000Z",
+  "application": {
+    "name": "WHOISleuth",
+    "version": "1.47.4"
+  },
+  "target": {
+    "value": "example.test",
+    "type": "domain"
+  },
+  "sourceContracts": [
+    {
+      "id": "lookup-evidence",
+      "schema": "whoisleuth.lookup-evidence",
+      "version": 28,
+      "digest": "sha256:7abfcb02ed61dca7e30b90a7f9db8f7f8a90829f83103ee02fae64df63e4955d",
+      "embedded": false
+    },
+    {
+      "id": "investigation-brief",
+      "schema": "whoisleuth.investigation-brief",
+      "version": 1,
+      "digest": "sha256:b4f31d437f9f08a886b31b3a3bb7b79ebfb33874dfac91649cf5163e7fd172cb",
+      "embedded": true
+    },
+    {
+      "id": "asset-graph",
+      "schema": "whoisleuth.lookup-asset-graph",
+      "version": 2,
+      "digest": "sha256:b926643f26ebf30bf9d19e68de94aca130a524312af68de68ce5681a40fb322b",
+      "embedded": true
+    }
+  ],
+  "investigationBrief": {
+    "schema": "whoisleuth.investigation-brief",
+    "schemaVersion": 1,
+    "generatedAt": "2026-08-04T00:00:00.000Z",
+    "target": "example.test",
+    "targetType": "domain",
+    "task": "general",
+    "taskLabel": "General review",
+    "question": "What is known?",
+    "summary": "Review evidence.",
+    "observation": {
+      "observedAt": "2026-08-04T00:00:00.000Z",
+      "evidenceAgeDays": 0,
+      "completeSources": 1,
+      "limitedSources": 0,
+      "freshnessPolicy": {
+        "version": 1,
+        "id": "task-default",
+        "task": "general",
+        "thresholdsDays": {
+          "registration": 30,
+          "network": 7,
+          "web": 3
+        }
+      }
+    },
+    "verifiedFacts": [],
+    "contradictions": [],
+    "unknowns": [],
+    "nextActions": [],
+    "relationships": {
+      "nodes": 1,
+      "edges": 0,
+      "truncated": false,
+      "kinds": []
+    },
+    "limitations": []
+  },
+  "graphSnapshot": {
+    "version": 2,
+    "targetId": "target-example",
+    "nodes": [
+      {
+        "id": "target-example",
+        "label": "example.test",
+        "kind": "target",
+        "detail": "Lookup target"
+      }
+    ],
+    "edges": [],
+    "sources": [],
+    "truncated": false,
+    "limitations": []
+  },
+  "analystRecords": null,
+  "limitations": [
+    "The Lookup evidence file is linked by digest but is not embedded; keep or share that exact file separately when verification is required.",
+    "Digest verification can detect changed content but does not establish who created the capsule. No digital signature is applied.",
+    "The graph and brief are bounded projections of collected and derived evidence, not attribution, ownership, safety, availability, or maliciousness conclusions.",
+    "Analyst decisions, assertions, notes, contacts, actions, and raw source payloads are excluded."
+  ],
+  "integrity": {
+    "algorithm": "SHA-256",
+    "canonicalization": "sorted-json-v2",
+    "scope": "capsule excluding integrity",
+    "briefDigest": "sha256:b4f31d437f9f08a886b31b3a3bb7b79ebfb33874dfac91649cf5163e7fd172cb",
+    "graphDigest": "sha256:b926643f26ebf30bf9d19e68de94aca130a524312af68de68ce5681a40fb322b",
+    "analystRecordsDigest": null,
+    "digestSha256": "sha256:6d03f39d08e11d3abd5cf6667306524e7d885ee11d82aabfc19b6f5471ecbd7f"
+  }
+}

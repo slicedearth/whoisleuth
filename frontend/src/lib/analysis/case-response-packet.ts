@@ -15,6 +15,21 @@ export const MAX_RESPONSE_HARM_LENGTH = 2000;
 export const MAX_AFFECTED_PARTY_LENGTH = 200;
 export const MAX_ABUSE_CATEGORY_LENGTH = 80;
 export const MAX_EXACT_URL_LENGTH = 2048;
+export const CASE_RESPONSE_PREFLIGHT_EVIDENCE_SCOPE = Object.freeze({
+  version: 1 as const,
+  owner: 'case' as const,
+  inputs: Object.freeze([
+    'incident_fields',
+    'evidence_pins',
+    'analyst_decisions',
+    'analyst_assertions',
+    'recipient_routes',
+    'case_disposition',
+    'case_actions',
+  ] as const),
+  lookupDecisionFacts: 'unavailable' as const,
+  limitation: 'Lookup Decision Facts are transient and are not copied into browser-local cases. Case-response preflight evaluates only explicit case-owned records and analyst-entered incident context; it does not reconstruct Decision Facts from weaker saved fields.',
+});
 
 export const RESPONSE_CONTACT_KINDS = [
   'registrar',

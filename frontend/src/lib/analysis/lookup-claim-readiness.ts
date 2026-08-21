@@ -37,6 +37,7 @@ export type LookupClaimRequirement = Readonly<{
   evidenceId: string | null;
   mode: LookupClaimRequirementMode;
   href: `#${string}`;
+  coverageState: EvidenceCoverageState | null;
   state: EvidenceCoverageState;
   limitations: readonly string[];
 }>;
@@ -160,6 +161,7 @@ function requirement(
   const definition = LOOKUP_CLAIM_REQUIREMENTS[id];
   const evidence = definition.evidenceId ? coverage.get(definition.evidenceId) : undefined;
   const state = override?.state ?? evidence?.state ?? 'unknown';
+  const coverageState = definition.evidenceId ? evidence?.state ?? 'unknown' : null;
   const limitations = override?.limitation
     ? [override.limitation]
     : evidence?.limitations.length
@@ -167,7 +169,12 @@ function requirement(
       : state === 'complete'
         ? []
         : [evidence?.statusLabel || 'Not supplied'];
-  return Object.freeze({ ...definition, state, limitations: Object.freeze(limitations) });
+  return Object.freeze({
+    ...definition,
+    coverageState,
+    state,
+    limitations: Object.freeze(limitations),
+  });
 }
 
 function readinessEntry(

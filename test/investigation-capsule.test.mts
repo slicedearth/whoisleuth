@@ -1,10 +1,13 @@
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import {
   buildInvestigationCapsule,
+  INVESTIGATION_CAPSULE_VERSION,
   investigationCapsuleFilename,
   serializeInvestigationCapsule,
   verifyInvestigationCapsule,
+  type SupportedInvestigationCapsule,
 } from '../frontend/src/lib/analysis/investigation-capsule.ts';
 import { sha256ArtifactDigestV2 } from '../frontend/src/lib/analysis/artifact-integrity.ts';
 import {
@@ -13,15 +16,16 @@ import {
   MAX_DECISION_PIN_REFERENCES,
 } from '../frontend/src/lib/analysis/case-response-model.ts';
 import { verifyOfflineArtifact } from '../cli/artifact-verify.mts';
+import { projectDecisionFacts } from '../packages/evidence/decision-fact.mts';
 
 const brief = {
   schema: 'whoisleuth.investigation-brief' as const,
-  schemaVersion: 1 as const,
+  schemaVersion: 2 as const,
   generatedAt: '2026-08-04T00:00:00.000Z',
   target: 'example.test', targetType: 'domain', task: 'general' as const,
   taskLabel: 'General review', question: 'What is known?', summary: 'Review evidence.',
   observation: { observedAt: '2026-08-04T00:00:00.000Z', evidenceAgeDays: 0, completeSources: 1, limitedSources: 0, freshnessPolicy: { version: 1 as const, id: 'task-default' as const, task: 'general' as const, thresholdsDays: { registration: 30, network: 7, web: 3 } } },
-  verifiedFacts: [], contradictions: [], unknowns: [], nextActions: [],
+  decisionFacts: projectDecisionFacts([]),
   relationships: { nodes: 1, edges: 0, truncated: false, kinds: [] }, limitations: [],
 };
 const graph = { version: 2 as const, targetId: 'target-example', nodes: [{ id: 'target-example', label: 'example.test', kind: 'target' as const, detail: 'Lookup target' }], edges: [], sources: [], truncated: false, limitations: [] };
@@ -52,10 +56,31 @@ test('investigation capsule links evidence and verifies embedded projections', a
     generatedAt: '2026-08-04T01:00:00Z',
   });
   assert.equal(capsule.sourceContracts[0]?.embedded, false);
+  assert.equal(capsule.schemaVersion, INVESTIGATION_CAPSULE_VERSION);
+  assert.equal(capsule.investigationBrief.schemaVersion, 2);
   assert.match(capsule.sourceContracts[0]?.digest ?? '', /^sha256:[a-f0-9]{64}$/u);
   assert.deepEqual(await verifyInvestigationCapsule(capsule), { valid: true, brief: true, graph: true, analystRecords: null, whole: true });
   assert.equal(investigationCapsuleFilename(capsule), 'whoisleuth-investigation-capsule-example.test-2026-08-04.json');
   assert.ok(serializeInvestigationCapsule(capsule).endsWith('\n'));
+});
+
+test('investigation capsule retains frozen v2 whole-integrity compatibility', async () => {
+  const raw = await readFile(new URL('./fixtures/investigation-capsule-v2.json', import.meta.url), 'utf8');
+  const capsule = JSON.parse(raw) as SupportedInvestigationCapsule;
+  assert.equal(capsule.schemaVersion, 2);
+  assert.deepEqual(await verifyInvestigationCapsule(capsule), {
+    valid: true,
+    brief: true,
+    graph: true,
+    analystRecords: null,
+    whole: true,
+  });
+  const report = await verifyOfflineArtifact(raw);
+  assert.equal(report.state, 'verified');
+  assert.equal(report.checks.contentIntegrityScope, 'whole_artifact');
+  const serialized = serializeInvestigationCapsule(capsule);
+  assert.deepEqual(JSON.parse(serialized), capsule);
+  assert.ok(serialized.endsWith('\n'));
 });
 
 test('offline verification rejects re-digested capsule contract and graph-linkage gaps', async () => {

@@ -71,7 +71,8 @@ test('completes the guided synthetic workflow without investigation requests or 
   await page.getByRole('button', { name: 'Inspect northstar-login.example' }).click();
   await expect(page.getByRole('heading', { name: 'northstar-login.example' })).toBeFocused();
   await expect(page.getByRole('heading', { name: 'What needs analyst attention?' })).toBeVisible();
-  await expect(page.getByText('Priority 78/100')).toBeVisible();
+  await expect(page.locator('.demo-decision-brief .priority-cue')).toHaveText('Elevated review priority');
+  await expect(page.locator('.demo-decision-brief')).not.toContainText('78/100');
   await expect(page.getByText('Three review cues')).toBeVisible();
   const familyControls = page.locator('.lookup-family button[aria-expanded]');
   await expect(familyControls).toHaveCount(5);

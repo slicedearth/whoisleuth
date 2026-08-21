@@ -128,7 +128,7 @@
 <section id="results" class="resource-section" aria-labelledby="results-title">
   <div class="section-intro"><p class="eyebrow">Read the result</p><h2 id="results-title">Source health is part of the evidence.</h2><p>Registration status is authority-aware. DNS, certificates, websites and external intelligence add context, but do not override an authoritative registry answer.</p></div>
   <article class="result-layout card" aria-labelledby="result-layout-title">
-    <div><p class="eyebrow">Lookup layout</p><h3 id="result-layout-title">Start with the decision, then open the evidence you need.</h3><p>At a glance keeps complete, limited, disagreement, and unresolved counts separate; each count opens to name the checks or comparisons it includes. It also shows at most three task-aware next actions. Focus changes evidence-family order for a general, brand, acquisition, incident-response or owned-domain review; acquisition presents Opportunity first while other tasks present Risk first. A saved-context preview builds its disposable local search only after you open it. Detailed assessment adds questions, claim readiness, portable hand-off, and acquisition review without repeating the action list or changing evidence.</p></div>
+    <div><p class="eyebrow">Lookup layout</p><h3 id="result-layout-title">Start with the decision, then open the evidence you need.</h3><p>At a glance keeps complete, limited, disagreement, and unresolved counts separate; each count opens to name the checks or comparisons it includes. It also shows at most three task-aware next actions. Focus changes evidence-family order for a general, brand, acquisition, incident-response or owned-domain review. Risk remains secondary triage, with its exact result, factors and sensitivity inside an explanation. Opportunity and acquisition review appear only for the acquisition task. A saved-context preview builds its disposable local search only after you open it. Detailed assessment adds questions, claim readiness and portable hand-off without repeating the action list or changing evidence.</p></div>
     <ol>
       <li><strong>Registration</strong><span>Compare registry, registrar RDAP and WHOIS without merging their authority.</span></li>
       <li><strong>Web and DNS</strong><span>Review point-in-time DNS, HTTP, TLS, page, technology and posture evidence.</span></li>
@@ -146,7 +146,7 @@
   </div>
   <aside class="interpretation card">
     <strong>Risk is a review aid, not a verdict.</strong>
-    <p>The score lists its contributing observations. Shared infrastructure, similar pages and recent registrations can raise priority, but none of them alone proves ownership, intent, maliciousness or safety.</p>
+    <p>Open the explanation for the exact result, model, contributing observations and sensitivity. Shared infrastructure, similar pages and recent registrations can raise priority, but none of them alone proves ownership, intent, maliciousness or safety. A lower band is neutral and does not establish safety or absence of concern.</p>
   </aside>
 </section>
 

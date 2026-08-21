@@ -36,6 +36,7 @@
     setSortKey,
     setSortDirection,
     indicatorStatus,
+    riskComparisonSummary,
     matchedCount,
     resultCount,
     visibleCount,
@@ -104,6 +105,7 @@
     setSortKey: (value: BulkSortKey) => void;
     setSortDirection: (value: BulkSortDirection) => void;
     indicatorStatus: string;
+    riskComparisonSummary: string;
     matchedCount: number;
     resultCount: number;
     visibleCount: number;
@@ -200,6 +202,7 @@
   </div>
 </div>
 {#if indicatorStatus}<p class="indicator-status" role="status" aria-live="polite">{indicatorStatus}</p>{/if}
+<p class="risk-comparability-note" role="note"><strong>Risk comparability:</strong> {riskComparisonSummary} Exact retained model and factor details remain available from each row.</p>
 <div class="results-status">
   <p>{matchedCount} of {resultCount} result{resultCount === 1 ? '' : 's'} matched · showing {visibleCount} on page {currentPage} of {pageCount}</p>
   <button class="btn" onclick={selectFiltered} disabled={!matchedCount || !shortlistAvailable}>Select matched</button>
@@ -228,6 +231,8 @@
   .indicator-format{display:flex;min-width:0;align-items:center;gap:6px;padding:0 4px 0 10px;border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--muted);font:600 var(--text-2xs) var(--mono)}
   .indicator-format select{min-width:0;min-height:32px;border:0;background:var(--panel-raised);font-size:var(--text-2xs)}
   .indicator-status{color:var(--amber)!important}
+  .risk-comparability-note{margin:10px 0 0;padding:9px 10px;border-left:3px solid var(--muted);background:color-mix(in srgb,var(--muted) 5%,transparent);line-height:1.5}
+  .risk-comparability-note strong{color:var(--text)}
   .review-note{margin:10px 0 0;padding:9px 10px;border-left:3px solid var(--amber);background:rgb(var(--amber-rgb) / .05)}
   .wildcard-choice{min-height:var(--control-h);padding:0 9px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised);font-size:var(--text-2xs)}
   .advanced-filter-panel{margin-top:12px}

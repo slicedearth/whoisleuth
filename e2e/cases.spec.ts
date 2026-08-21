@@ -36,18 +36,54 @@ async function addFixtureCasePin(page: Page, label: string): Promise<void> {
 test('Monitor views support roving keyboard navigation', async ({ page }) => {
   await page.goto('/monitor');
   const tabs = page.getByRole('tablist', { name: 'Monitor views' });
+  await expect(page.locator('.view-group', { hasText: 'Respond' })).toBeVisible();
+  await expect(page.locator('.view-group', { hasText: 'Assure' })).toBeVisible();
   const inbox = tabs.getByRole('tab', { name: /^Inbox/ });
   await inbox.focus();
   await inbox.press('ArrowRight');
-  await expect(tabs.getByRole('tab', { name: /^Timeline/ })).toBeFocused();
-  await expect(tabs.getByRole('tab', { name: /^Timeline/ })).toHaveAttribute('aria-selected', 'true');
-  await expect(page).toHaveURL('/monitor?view=timeline');
-  await tabs.getByRole('tab', { name: /^Timeline/ }).press('End');
+  await expect(tabs.getByRole('tab', { name: /^Cases/ })).toBeFocused();
+  await expect(tabs.getByRole('tab', { name: /^Cases/ })).toHaveAttribute('aria-selected', 'true');
+  await expect(page).toHaveURL('/monitor?view=cases');
+  await tabs.getByRole('tab', { name: /^Cases/ }).press('End');
+  await expect(tabs.getByRole('tab', { name: /^Custom rules/ })).toBeFocused();
+  await expect(page).toHaveURL('/monitor?view=rules');
+  const timeline = tabs.getByRole('tab', { name: /^Timeline/ });
+  await timeline.focus();
+  await timeline.press('ArrowRight');
   await expect(tabs.getByRole('tab', { name: /^Watchlists/ })).toBeFocused();
   await expect(tabs.getByRole('tab', { name: /^Watchlists/ })).toHaveAttribute('aria-selected', 'true');
   await expect(page).toHaveURL('/monitor?view=watchlists');
   await page.reload();
   await expect(page.getByRole('tab', { name: /^Watchlists/ })).toHaveAttribute('aria-selected', 'true');
+});
+
+test('Monitor workflow destinations preserve active state and browser back and forward history', async ({ page }) => {
+  await page.goto('/monitor');
+  const navigation = page.getByRole('navigation', { name: 'Console' });
+  const respondLink = navigation.getByRole('link', { name: /^Monitor/u });
+  const assureLink = navigation.getByRole('link', { name: /^Watchlists & controls/u });
+  await expect(respondLink).toHaveAttribute('aria-current', 'page');
+  await expect(assureLink).not.toHaveAttribute('aria-current', 'page');
+
+  await page.getByRole('tab', { name: /^Cases/u }).click();
+  await expect(page).toHaveURL('/monitor?view=cases');
+  await expect(respondLink).toHaveAttribute('aria-current', 'page');
+  await page.getByRole('tab', { name: /^Watchlists/u }).click();
+  await expect(page).toHaveURL('/monitor?view=watchlists');
+  await expect(assureLink).toHaveAttribute('aria-current', 'page');
+  await expect(respondLink).not.toHaveAttribute('aria-current', 'page');
+
+  await page.goBack();
+  await expect(page).toHaveURL('/monitor?view=cases');
+  await expect(page.getByRole('tab', { name: /^Cases/u })).toHaveAttribute('aria-selected', 'true');
+  await page.goBack();
+  await expect(page).toHaveURL('/monitor');
+  await expect(page.getByRole('tab', { name: /^Inbox/u })).toHaveAttribute('aria-selected', 'true');
+  await page.goForward();
+  await expect(page).toHaveURL('/monitor?view=cases');
+  await page.goForward();
+  await expect(page).toHaveURL('/monitor?view=watchlists');
+  await expect(page.getByRole('tab', { name: /^Watchlists/u })).toHaveAttribute('aria-selected', 'true');
 });
 
 test('Monitor keeps its URL, default view, and guided-route cleanup consistent', async ({ page }) => {

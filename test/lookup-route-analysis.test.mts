@@ -98,6 +98,36 @@ describe('Lookup route analysis', () => {
     assert.equal(analysis.risk?.evidenceQuality.state, 'partial');
     assert.equal(analysis.caseEvidence.opportunityModelVersion, 2);
     assert.ok(analysis.evidenceCoverage.entries.length > 0);
+    assert.ok(analysis.lookupDecisionFacts.length > 0);
+    assert.equal(analysis.lookupDecisionFacts[0]?.version, 1);
+    assert.equal(
+      analysis.lookupDecisionFacts.find((fact) => fact.id === 'lookup-evidence:rdap')?.evidenceState,
+      'observed',
+    );
+    assert.equal(Object.isFrozen(analysis.lookupDecisionFacts), true);
+    assert.equal(analysis.lookupDecisionSupport.version, 1);
+    assert.equal(analysis.lookupReviewActionModel.version, 1);
+    assert.equal(
+      analysis.lookupReviewActionModel.recommendedNextReviews.total,
+      analysis.lookupDecisionSupport.actions.length,
+    );
+    assert.equal(
+      analysis.lookupReviewActionModel.recommendedNextReviews.total,
+      analysis.lookupReviewActionModel.recommendedNextReviews.displayedCount
+        + analysis.lookupReviewActionModel.recommendedNextReviews.omittedCount,
+    );
+    assert.equal(analysis.lookupClaimReadiness.version, 2);
+    assert.equal(analysis.lookupInvestigationBrief.schemaVersion, 2);
+    assert.equal(
+      analysis.lookupInvestigationBrief.decisionFacts.total,
+      analysis.lookupDecisionFacts.length,
+    );
+    assert.equal(
+      analysis.lookupInvestigationBrief.decisionFacts.total,
+      analysis.lookupInvestigationBrief.decisionFacts.displayed
+        + analysis.lookupInvestigationBrief.decisionFacts.omitted,
+    );
+    assert.equal(Object.hasOwn(analysis.lookupInvestigationBrief, 'verifiedFacts'), false);
   });
 
   test('keeps non-domain registry comparisons neutral and bounded', () => {

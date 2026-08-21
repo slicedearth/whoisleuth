@@ -3,7 +3,7 @@
   import { page } from '$app/state';
   import { onMount, tick } from 'svelte';
   import IntelligenceIcon from '$lib/components/IntelligenceIcon.svelte';
-  import type { NavigationItem } from '$lib/workspaces';
+  import { isNavigationItemActive, type NavigationItem } from '$lib/workspaces';
 
   type ConsoleCommand = NavigationItem & {
     group: string;
@@ -36,11 +36,11 @@
   const selectedCommand = $derived(filteredCommands[selectedIndex]);
   const activeOptionId = $derived(selectedCommand ? `command-option-${selectedIndex}` : undefined);
   const selectedAnnouncement = $derived(selectedCommand
-    ? `${selectedCommand.label}, ${selectedCommand.group}${selectedCommand.href === page.url.pathname ? ', current page' : ''}${selectedCommand.opensInNewTab ? ', opens in a new tab' : ''}.`
+    ? `${selectedCommand.label}, ${selectedCommand.group}${isNavigationItemActive(selectedCommand, page.url) ? ', current page' : ''}${selectedCommand.opensInNewTab ? ', opens in a new tab' : ''}.`
     : 'No matching destination.');
 
   onMount(() => {
-    selectedIndex = Math.max(0, commands.findIndex((command) => command.href === page.url.pathname));
+    selectedIndex = Math.max(0, commands.findIndex((command) => isNavigationItemActive(command, page.url)));
     void tick().then(() => searchInput?.focus());
   });
 
@@ -189,7 +189,7 @@
         oninput={resetSelection}
         autocomplete="off"
         spellcheck="false"
-        placeholder="Lookup, Monitor, Guide…"
+        placeholder="Lookup, Respond, Assure…"
       >
     </div>
     <span class="sr-only" role="status" aria-live="polite">{selectedAnnouncement}</span>
@@ -204,7 +204,7 @@
               role="option"
               tabindex="-1"
               aria-selected={index === selectedIndex}
-              aria-current={command.href === page.url.pathname ? 'page' : undefined}
+              aria-current={isNavigationItemActive(command, page.url) ? 'page' : undefined}
               onmouseenter={() => selectIndex(index)}
               onclick={() => void activate(command)}
             >
@@ -215,7 +215,7 @@
               <span class="command-meta">
                 <em data-command-group>{command.group}</em>
                 {#if command.opensInNewTab}<span class="command-new-tab">New tab</span>{/if}
-                {#if command.href === page.url.pathname}<span class="command-current">Current</span>{/if}
+                {#if isNavigationItemActive(command, page.url)}<span class="command-current">Current</span>{/if}
               </span>
             </button>
           </li>

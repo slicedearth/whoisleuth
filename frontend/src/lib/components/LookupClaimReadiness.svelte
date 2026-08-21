@@ -4,17 +4,19 @@
     LookupClaimId,
     LookupClaimReadinessState,
   } from '$lib/analysis/lookup-claim-readiness.ts';
-  import type { LookupEvidenceImpactPlan } from '$lib/analysis/lookup-evidence-impact.ts';
+  import type { LookupReviewActionModel } from '$lib/analysis/lookup-review-action-model.ts';
 
   let {
     readiness,
-    impact,
+    reviewActions,
     onpassport,
   }: {
     readiness: LookupClaimReadiness;
-    impact: LookupEvidenceImpactPlan;
+    reviewActions: LookupReviewActionModel;
     onpassport?: (claimId: LookupClaimId) => Promise<string>;
   } = $props();
+
+  const impact = $derived(reviewActions.evidenceImprovements);
 
   let exportingClaim = $state<LookupClaimId | null>(null);
   let passportStatus = $state('');
@@ -97,17 +99,59 @@
     </ul>
     {#if passportStatus}<p class="passport-status" role="status">{passportStatus}</p>{/if}
 
-    {#if impact.items.length}
-      <details class="impact-plan">
-        <summary>Plan {impact.items.length} evidence improvement{impact.items.length === 1 ? '' : 's'}</summary>
+    {#if impact.displayedItems.length}
+      <details
+        class="impact-plan"
+        data-total={impact.total}
+        data-displayed-count={impact.displayedCount}
+        data-omitted-count={impact.omittedCount}
+      >
+        <summary>Plan {impact.total} evidence improvement{impact.total === 1 ? '' : 's'}</summary>
         <p class="impact-intro">Prioritised by the statement each step could improve, rather than by the number of sources available.</p>
+        <p class="impact-counts">Showing <strong>{impact.displayedCount}</strong> of <strong>{impact.total}</strong> bounded actions. {impact.omittedCount > 0 ? `${impact.omittedCount} omitted.` : 'None omitted.'}</p>
         <ul class="impacts">
-          {#each impact.items as item (item.id)}
-            <li>
+          {#each impact.displayedItems as item (item.id)}
+            <li
+              data-impact-id={item.id}
+              data-basis={item.basis}
+              data-fact-id={item.factId ?? ''}
+              data-mode={item.mode}
+              data-evidence-state={item.evidenceState ?? ''}
+              data-freshness={item.freshness ?? ''}
+            >
               <div class="impact-head">
                 <strong>{item.evidenceLabel}</strong>
                 <span class="mode">{item.mode === 'network_collection' ? 'Network request' : 'Local review'}</span>
               </div>
+              <p class="basis"><b>Basis:</b> {item.basisLabel}</p>
+              {#if item.factId && item.evidencePresentation && item.freshnessPresentation}
+                <p class="fact-id"><b>Decision Fact:</b> {item.factId}</p>
+                <div class="canonical-state" aria-label={`Canonical evidence presentation for ${item.evidenceLabel}`}>
+                  <span data-tone={item.evidencePresentation.tone} data-evidence-state={item.evidenceState}>{item.evidencePresentation.label}</span>
+                  <span data-tone={item.freshnessPresentation.tone} data-freshness={item.freshness}>{item.freshnessPresentation.label}</span>
+                </div>
+                {#if item.contributors.length}
+                  <ul class="impact-contributors" aria-label={`Contributors for ${item.evidenceLabel}`}>
+                    {#each item.contributors as contributor (contributor.id)}
+                      <li data-contributor-id={contributor.id} data-provenance={contributor.provenance}>
+                        <strong>{contributor.label}</strong>
+                        <span>{contributor.provenancePresentation.label} · {contributor.evidencePresentation.label}</span>
+                        {#each contributor.limitations as limitation}
+                          <p class="limitation"><b>Limitation from {contributor.label}:</b> {limitation}</p>
+                        {/each}
+                      </li>
+                    {/each}
+                  </ul>
+                {/if}
+                {#each item.unattributedLimitations as limitation}
+                  <p class="limitation"><b>Adjacent fact limitation:</b> {limitation}</p>
+                {/each}
+              {:else}
+                <p class="context-note">No Decision Fact or collected-evidence provenance is attributed to this contextual requirement.</p>
+                {#each item.limitations as limitation}
+                  <p class="limitation"><b>Context limitation:</b> {limitation}</p>
+                {/each}
+              {/if}
               <p>{item.reason}</p>
               <p class="effect">{item.expectedEffect}</p>
               <small>{item.disclosure}</small>
@@ -163,7 +207,8 @@
   .diagnostics{margin-top:0}
   .diagnostics span{color:var(--muted);font:var(--text-2xs) var(--mono)}
   .note,.limit,.passport-status{margin:9px 0 0;color:var(--muted);font-size:var(--text-2xs);line-height:1.5}
-  .impact-intro{margin:0;color:var(--muted);font-size:var(--text-2xs);line-height:1.5}.impacts{margin-top:9px}.impact-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}.impact-head strong{font-size:var(--text-xs)}.mode{flex:0 0 auto;color:var(--accent);font:650 var(--text-2xs) var(--mono)}.impacts p,.impacts small{display:block;margin:5px 0;color:var(--muted);font-size:var(--text-2xs);line-height:1.45}.impacts .effect{color:var(--text)}.impacts a{font:650 var(--text-2xs) var(--mono)}
+  .impact-intro,.impact-counts{margin:0;color:var(--muted);font-size:var(--text-2xs);line-height:1.5}.impact-counts{margin-top:5px}.impact-counts strong{color:var(--text)}.impacts{margin-top:9px}.impact-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}.impact-head strong{font-size:var(--text-xs)}.mode{flex:0 0 auto;color:var(--accent);font:650 var(--text-2xs) var(--mono)}.impacts p,.impacts small{display:block;margin:5px 0;color:var(--muted);font-size:var(--text-2xs);line-height:1.45}.impacts .effect,.impacts .fact-id b,.impacts .basis b,.impacts .limitation b{color:var(--text)}.impacts a{font:650 var(--text-2xs) var(--mono)}
+  .canonical-state{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}.canonical-state span{padding:3px 6px;border:1px solid var(--border);border-radius:999px;color:var(--text);font:650 var(--text-2xs) var(--mono)}.canonical-state span[data-tone='caution']{border-color:color-mix(in srgb,var(--amber) 45%,var(--border))}.canonical-state span[data-tone='conflict']{border-color:color-mix(in srgb,var(--danger) 45%,var(--border))}.impact-contributors{display:grid;gap:5px;margin:7px 0 0;padding:7px 0 0;border-top:1px solid var(--border);list-style:none}.impact-contributors li{min-width:0}.impact-contributors strong,.impact-contributors span{display:block;overflow-wrap:anywhere}.impact-contributors strong{font-size:var(--text-2xs)}.impact-contributors span{color:var(--muted);font-size:var(--text-2xs)}.impacts .limitation{padding-left:8px;border-left:1px solid var(--amber);overflow-wrap:anywhere}.impacts .fact-id,.impacts .context-note,.impacts .basis{overflow-wrap:anywhere}
   .limit{padding-top:10px;border-top:1px solid var(--border)}
   @media(max-width:760px){
     header{display:grid}

@@ -104,6 +104,20 @@ test('bounded RDAP contact roles and repeated channels render in Lookup', async 
   await capsule.locator(':scope > summary').click();
   await expect(capsule.getByRole('button', { name: 'Download capsule' })).toBeEnabled();
   await expect(capsule.getByRole('checkbox')).toBeDisabled();
+  const capsuleDownloadPromise = page.waitForEvent('download');
+  await capsule.getByRole('button', { name: 'Download capsule' }).click();
+  const capsuleDownload = await capsuleDownloadPromise;
+  const capsulePath = await capsuleDownload.path();
+  expect(capsulePath).not.toBeNull();
+  const capsuleArtifact = JSON.parse(await readFile(capsulePath!, 'utf8'));
+  expect(capsuleArtifact.schemaVersion).toBe(3);
+  expect(capsuleArtifact.investigationBrief.schemaVersion).toBe(2);
+  expect(capsuleArtifact.sourceContracts.find((item: { id: string }) => item.id === 'investigation-brief')?.version).toBe(2);
+  const capsuleFacts = capsuleArtifact.investigationBrief.decisionFacts;
+  expect(capsuleFacts.total).toBe(capsuleFacts.displayed + capsuleFacts.omitted);
+  expect(capsuleFacts.facts).toHaveLength(capsuleFacts.displayed);
+  expect(capsuleFacts.total).toBeGreaterThan(0);
+  expect(capsuleArtifact.investigationBrief).not.toHaveProperty('verifiedFacts');
   const comparison = page.locator('.comparison');
   await expect(comparison.getByText(/0 source-only · 0 redacted · 4 unavailable\/incomplete/)).toBeVisible();
   await comparison.locator('summary').click();
@@ -357,7 +371,21 @@ test('deep Lookup presents registrar and observed network RDAP as separate sourc
   expect(report).toContain('## Registry / registrar RDAP comparison');
   expect(report).toContain('Example network holder');
   expect(report).toContain('Risk score:');
+  expect(report).toContain('## Canonical Decision Facts');
+  expect(report).toContain('whoisleuth\\.lookup\\-readable\\-report v3');
+  expect(report).toMatch(/\*\*Fact counts:\*\* \d+ of \d+ included; \d+ omitted\./u);
   expect(report).toContain(`Generated with WHOISleuth ${packageVersion}`);
+
+  const briefDownloadPromise = page.waitForEvent('download');
+  await page.locator('.export-menu > summary').click();
+  await page.getByRole('button', { name: 'Download brief' }).click();
+  const briefDownload = await briefDownloadPromise;
+  const briefPath = await briefDownload.path();
+  expect(briefPath).not.toBeNull();
+  const brief = await readFile(briefPath!, 'utf8');
+  expect(brief).toContain('## Canonical Decision Facts');
+  expect(brief).toMatch(/Displaying \d+ of \d+ canonical Decision Facts; \d+ omitted/u);
+  expect(brief).toContain('**Fact ID:**');
 
   const reportWithoutFooterPromise = page.waitForEvent('download');
   await page.locator('.export-menu > summary').click();
@@ -369,6 +397,7 @@ test('deep Lookup presents registrar and observed network RDAP as separate sourc
   const reportWithoutFooterText = await readFile(reportWithoutFooterPath!, 'utf8');
   expect(reportWithoutFooterText).toContain(`**Generator:** WHOISleuth ${packageVersion.replaceAll('.', '\\.')}`);
   expect(reportWithoutFooterText).not.toContain('Generated with WHOISleuth');
+  expect(reportWithoutFooterText).toContain('## Canonical Decision Facts');
   expect(report).toContain('heuristic review priority');
   expect(report).not.toContain('registrar-object-handle');
   expect(report).not.toContain('abuse@registrar.example');
@@ -699,13 +728,14 @@ test('optional external intelligence searches are explicit, attributed, and mobi
   await expect(section.locator('article').filter({ hasText: 'ThreatFox malware IOCs' }).locator('.chip')).toHaveClass(/\bunavailable\b/);
   await expect(section.getByText(/never affect availability/i)).toBeVisible();
   await expect(section.getByText(/2 independent publisher families contributed \+18 under model v7/i)).toBeVisible();
-  const riskExplanation = page.getByText('Why the risk score is 24', { exact: true });
+  const riskExplanation = page.locator('.risk-band details.score-detail > summary');
   await riskExplanation.focus();
   await expect(riskExplanation).toBeFocused();
   await riskExplanation.press('Enter');
+  await expect(page.locator('.risk-band .exact-score')).toContainText('24/100');
   await expect(page.locator('.factor-chart .factor-label').getByText('Corroborated recent external phishing/malware records')).toBeVisible();
-  const exactRiskFactors = page.locator('.score-details details').first().locator('.factor-list');
-  await expect(exactRiskFactors).toHaveCSS('clip-path', 'inset(50%)');
+  const exactRiskFactors = page.locator('.risk-band .factor-list');
+  await expect(exactRiskFactors).toBeVisible();
   await expect(section.getByText('phishing', { exact: true })).toBeVisible();
   await expect(section.getByText('malware', { exact: true })).toHaveCount(1);
   const attributedRecords = section.getByRole('link', { name: 'View attributed provider record' });
@@ -715,8 +745,8 @@ test('optional external intelligence searches are explicit, attributed, and mobi
   }
 
   await page.setViewportSize({ width: 360, height: 780 });
-  await expect(page.locator('.score-details details').first().locator('.factor-chart')).toBeHidden();
-  await expect(exactRiskFactors).toHaveCSS('position', 'static');
+  await expect(page.locator('.risk-band .factor-chart')).toBeHidden();
+  await expect(exactRiskFactors).toBeVisible();
   await expectNoHorizontalOverflow(page);
 });
 

@@ -11,8 +11,16 @@ import {
 } from '../frontend/src/lib/public-guide.ts';
 import {
   dashboard,
+  brandsNavigation,
   consoleNavigation,
   consoleNavigationGroups,
+  bulkNavigation,
+  discoverNavigation,
+  isNavigationItemActive,
+  isProtectedDestination,
+  lookupNavigation,
+  monitorAssuranceNavigation,
+  monitorNavigation,
   protectedDestinations,
   publicCommandNavigation,
   publicResources,
@@ -57,6 +65,7 @@ test('tool guide covers every public-facing investigation tool once', () => {
     'Monitor',
   ]);
   const monitor = toolGuides.find((tool) => tool.id === 'monitor');
+  assert.match(monitor?.result || '', /Respond views.*Assure views/iu);
   assert.match(monitor?.result || '', /evidence-debt matrix.*exact saved Bulk source states.*pinned case gaps/iu);
   assert.match(`${monitor?.result || ''} ${monitor?.next || ''}`, /without starting a request|does not.*start collection/iu);
 });
@@ -70,17 +79,26 @@ test('navigation, tool guide, and reference guide use one canonical product voca
 
   assert.deepEqual(sortById(toolNavigation.map(routeLabel)), sortById(toolGuides.map(guideLabel)));
   assert.deepEqual(sortById(referenceResources.map(routeLabel)), sortById(referenceGuides.map(guideLabel)));
-  assert.deepEqual(consoleNavigation, [dashboard, ...toolNavigation]);
+  assert.deepEqual(consoleNavigation, [
+    dashboard,
+    lookupNavigation,
+    discoverNavigation,
+    bulkNavigation,
+    monitorNavigation,
+    monitorAssuranceNavigation,
+    brandsNavigation,
+  ]);
   assert.deepEqual(consoleNavigationGroups.map((group) => ({
     label: group.label,
     items: group.items.map((item) => item.label),
   })), [
     { label: 'Start', items: ['Dashboard'] },
     { label: 'Investigate', items: ['Lookup', 'Discover', 'Bulk'] },
-    { label: 'Protect & review', items: ['Monitor', 'Brands'] },
+    { label: 'Respond', items: ['Monitor'] },
+    { label: 'Assure', items: ['Watchlists & controls', 'Brands'] },
   ]);
   assert.deepEqual(consoleNavigationGroups.flatMap((group) => group.items), consoleNavigation);
-  assert.deepEqual(protectedDestinations, [dashboard, ...toolNavigation, ...referenceResources]);
+  assert.deepEqual(protectedDestinations, [...consoleNavigation, ...referenceResources]);
   assert.deepEqual(publicResources.map(({ href, label }) => ({ href, label })), [
     { href: '/resources', label: 'Resources' },
   ]);
@@ -94,7 +112,24 @@ test('navigation, tool guide, and reference guide use one canonical product voca
     { href: '/contact', label: 'Contact' },
   ]);
   assert.equal(unique(publicCommandNavigation.map((item) => item.href)), true);
-  assert.equal(allStrings({ dashboard, toolNavigation, referenceResources, publicResources, publicCommandNavigation }).some((value) => /\b(?:portal|workspace)\b/iu.test(value)), false);
+  assert.equal(allStrings({ consoleNavigation, toolNavigation, referenceResources, publicResources, publicCommandNavigation }).some((value) => /\b(?:portal|workspace)\b/iu.test(value)), false);
+});
+
+test('shared Monitor destinations keep exactly one workflow active without changing the route', () => {
+  for (const path of ['/monitor', '/monitor?view=inbox', '/monitor?view=cases&case=case-1', '/monitor?view=campaigns', '/monitor?view=relationships', '/monitor?view=unsupported']) {
+    const url = new URL(path, 'https://console.example');
+    assert.equal(isNavigationItemActive(monitorNavigation, url), true);
+    assert.equal(isNavigationItemActive(monitorAssuranceNavigation, url), false);
+    assert.equal(isProtectedDestination(url), true);
+  }
+  for (const path of ['/monitor?view=timeline', '/monitor?view=watchlists&watchlist=review', '/monitor?view=rules']) {
+    const url = new URL(path, 'https://console.example');
+    assert.equal(isNavigationItemActive(monitorNavigation, url), false);
+    assert.equal(isNavigationItemActive(monitorAssuranceNavigation, url), true);
+    assert.equal(isProtectedDestination(url), true);
+  }
+  assert.equal(isNavigationItemActive(brandsNavigation, new URL('/brands', 'https://console.example')), true);
+  assert.equal(isProtectedDestination(new URL('/privacy', 'https://console.example')), false);
 });
 
 test('glossary, FAQ, state, and mistake content is bounded and deterministic', () => {

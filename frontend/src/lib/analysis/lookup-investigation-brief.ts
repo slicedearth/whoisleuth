@@ -1,18 +1,25 @@
 import type { LookupAssetGraph } from './lookup-asset-graph.ts';
 import type {
-  LookupDecisionEntry,
   LookupDecisionSupport,
   LookupEvidenceQualityMatrix,
-  LookupNextAction,
 } from './lookup-decision-support.ts';
-import type {
-  LookupSummaryFact,
-  LookupSummaryModel,
-} from './lookup-summary-model.ts';
 import type { LookupTaskView } from './lookup-presentation.ts';
+import {
+  DECISION_FACT_PRESENTATION_LABELS,
+  projectDecisionFacts,
+  type DecisionFact,
+  type DecisionFactProjection,
+  type DecisionFactProjectionSet,
+} from '../../../../packages/evidence/decision-fact.mts';
 
 export const LOOKUP_INVESTIGATION_BRIEF_SCHEMA = 'whoisleuth.investigation-brief';
-export const LOOKUP_INVESTIGATION_BRIEF_VERSION = 1;
+export const LOOKUP_INVESTIGATION_BRIEF_VERSION = 2;
+export const LEGACY_LOOKUP_INVESTIGATION_BRIEF_VERSION = 1;
+export const SUPPORTED_LOOKUP_INVESTIGATION_BRIEF_VERSIONS = Object.freeze([
+  LEGACY_LOOKUP_INVESTIGATION_BRIEF_VERSION,
+  LOOKUP_INVESTIGATION_BRIEF_VERSION,
+] as const);
+export const MAX_LOOKUP_INVESTIGATION_BRIEF_BYTES = 128 * 1024;
 
 export type LookupInvestigationBrief = Readonly<{
   schema: typeof LOOKUP_INVESTIGATION_BRIEF_SCHEMA;
@@ -31,10 +38,7 @@ export type LookupInvestigationBrief = Readonly<{
     limitedSources: number;
     freshnessPolicy: LookupEvidenceQualityMatrix['freshnessPolicy'];
   }>;
-  verifiedFacts: readonly LookupSummaryFact[];
-  contradictions: readonly LookupDecisionEntry[];
-  unknowns: readonly LookupDecisionEntry[];
-  nextActions: readonly LookupNextAction[];
+  decisionFacts: DecisionFactProjectionSet;
   relationships: Readonly<{
     nodes: number;
     edges: number;
@@ -49,14 +53,13 @@ type BuildLookupInvestigationBriefInput = Readonly<{
   target: unknown;
   targetType: unknown;
   task: LookupTaskView;
-  summary: LookupSummaryModel;
   decisionSupport: LookupDecisionSupport;
+  decisionFacts: readonly DecisionFact[];
   quality: LookupEvidenceQualityMatrix;
   graph: LookupAssetGraph;
 }>;
 
 const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/gu;
-const MAX_FACTS = 12;
 const MAX_LIMITATIONS = 20;
 
 function text(value: unknown, maximum = 320): string {
@@ -95,19 +98,13 @@ export function buildLookupInvestigationBrief(
   input: BuildLookupInvestigationBriefInput,
 ): LookupInvestigationBrief {
   const generatedAt = timestamp(input.generatedAt) ?? new Date().toISOString();
-  const verifiedFacts = input.summary.facts
-    .filter((fact) => fact.value !== '—')
-    .slice(0, MAX_FACTS);
-  const contradictions = input.decisionSupport.entries
-    .filter((entry) => entry.state === 'conflict');
-  const unknowns = input.decisionSupport.entries
-    .filter((entry) => entry.state === 'uncertain');
+  const decisionFacts = projectDecisionFacts(input.decisionFacts);
   const limitedSources = input.quality.entries
     .filter((entry) => entry.state !== 'complete')
     .map((entry) => `${entry.label}: ${entry.statusLabel}`);
   const graphKinds = uniqueText(input.graph.edges.map((edge) => edge.label), 12);
 
-  return {
+  const brief: LookupInvestigationBrief = Object.freeze({
     schema: LOOKUP_INVESTIGATION_BRIEF_SCHEMA,
     schemaVersion: LOOKUP_INVESTIGATION_BRIEF_VERSION,
     generatedAt,
@@ -117,30 +114,31 @@ export function buildLookupInvestigationBrief(
     taskLabel: input.decisionSupport.guidance.label,
     question: taskQuestion(input.decisionSupport),
     summary: input.decisionSupport.guidance.summary,
-    observation: {
+    observation: Object.freeze({
       observedAt: input.quality.observedAt,
       evidenceAgeDays: input.quality.ageDays,
       completeSources: input.quality.completeCount,
       limitedSources: input.quality.limitedCount,
       freshnessPolicy: input.quality.freshnessPolicy,
-    },
-    verifiedFacts,
-    contradictions,
-    unknowns,
-    nextActions: input.decisionSupport.actions,
-    relationships: {
+    }),
+    decisionFacts,
+    relationships: Object.freeze({
       nodes: input.graph.nodes.length,
       edges: input.graph.edges.length,
       truncated: input.graph.truncated,
-      kinds: graphKinds,
-    },
-    limitations: uniqueText([
+      kinds: Object.freeze(graphKinds),
+    }),
+    limitations: Object.freeze(uniqueText([
       ...limitedSources,
       ...input.graph.limitations,
       'This brief is a deterministic organisation of collected and derived evidence, not an attribution, ownership, safety, availability, or maliciousness conclusion.',
       'Analyst assertions, hypotheses, and decisions must remain separate from observed evidence.',
-    ]),
-  };
+    ])),
+  });
+  if (new TextEncoder().encode(JSON.stringify(brief)).byteLength > MAX_LOOKUP_INVESTIGATION_BRIEF_BYTES) {
+    throw new RangeError('Lookup investigation brief exceeded its byte limit.');
+  }
+  return brief;
 }
 
 function markdown(value: unknown): string {
@@ -151,15 +149,53 @@ function markdown(value: unknown): string {
     .replace(/([\\`*_{}[\]()#+\-.!|=~])/gu, '\\$1');
 }
 
-function factLine(fact: LookupSummaryFact): string {
-  const sources = fact.provenance.sources.length
-    ? ` Sources: ${fact.provenance.sources.map(markdown).join(', ')}.`
-    : '';
-  return `- **${markdown(fact.label)}:** ${markdown(fact.value)}.${sources}`;
+function countedValues(
+  collection: Readonly<{ total: number; displayed: number; omitted: number; items: readonly string[] }>,
+): string {
+  const values = collection.items.length ? collection.items.map(markdown).join(', ') : 'none';
+  return `${collection.displayed} of ${collection.total} displayed; ${collection.omitted} omitted. ${values}`;
 }
 
-function decisionLine(entry: LookupDecisionEntry): string {
-  return `- **${markdown(entry.title)}:** ${markdown(entry.detail)} Sources: ${entry.sources.map(markdown).join(', ') || 'not reported'}.`;
+function decisionFactLines(fact: DecisionFactProjection): string[] {
+  const lines = [
+    `### ${markdown(fact.question)}`,
+    '',
+    `- **Fact ID:** ${markdown(fact.id)}`,
+    `- **Conclusion:** ${markdown(fact.conclusion)}`,
+    `- **Importance:** ${markdown(DECISION_FACT_PRESENTATION_LABELS.importance[fact.importance])}`,
+    `- **Evidence state:** ${markdown(DECISION_FACT_PRESENTATION_LABELS.evidenceState[fact.evidenceState])} (${markdown(fact.evidenceState)})`,
+    `- **Completeness:** ${markdown(DECISION_FACT_PRESENTATION_LABELS.completeness[fact.completeness])} (${markdown(fact.completeness)})`,
+    `- **Freshness:** ${markdown(DECISION_FACT_PRESENTATION_LABELS.freshness[fact.freshness])} (${markdown(fact.freshness)})`,
+    `- **Consistency:** ${markdown(DECISION_FACT_PRESENTATION_LABELS.consistency[fact.consistency])} (${markdown(fact.consistency)})`,
+    `- **Dependencies:** ${countedValues(fact.dependencies)}`,
+    `- **Source references:** ${countedValues(fact.sourceReferences)}`,
+    `- **Attributed sources:** ${fact.sources.displayed} of ${fact.sources.total} displayed; ${fact.sources.omitted} omitted.`,
+  ];
+  if (fact.sources.items.length) {
+    for (const source of fact.sources.items) {
+      lines.push(
+        `  - **${markdown(source.label)}** (${markdown(source.id)}): ${markdown(DECISION_FACT_PRESENTATION_LABELS.provenance[source.provenance])}; ${markdown(DECISION_FACT_PRESENTATION_LABELS.evidenceState[source.evidenceState])}; observed ${markdown(source.observedAt ?? 'not reported')}.`,
+        `    - References: ${countedValues(source.references)}`,
+        `    - Limitations: ${countedValues(source.limitations)}`,
+      );
+    }
+  } else {
+    lines.push('  - No attributed source was retained for this fact.');
+  }
+  lines.push(
+    `- **Contradictions:** ${countedValues(fact.contradictions)}`,
+    `- **Limitations:** ${countedValues(fact.limitations)}`,
+    `- **Safe next actions:** ${fact.safeNextActions.displayed} of ${fact.safeNextActions.total} displayed; ${fact.safeNextActions.omitted} omitted.`,
+  );
+  if (fact.safeNextActions.items.length) {
+    for (const action of fact.safeNextActions.items) {
+      lines.push(`  - **${markdown(action.label)}** (${markdown(action.id)}; ${markdown(action.importance)}): ${markdown(action.reason)} Expected outcome: ${markdown(action.expectedOutcome)} Review destination: ${markdown(action.href)}.`);
+    }
+  } else {
+    lines.push('  - No fact-specific action was retained. Review the attributed evidence and limitations.');
+  }
+  lines.push('');
+  return lines;
 }
 
 export function formatLookupInvestigationBriefMarkdown(
@@ -179,23 +215,13 @@ export function formatLookupInvestigationBriefMarkdown(
     `- **Source quality:** ${brief.observation.completeSources} complete; ${brief.observation.limitedSources} limited`,
     `- **Freshness policy:** v${brief.observation.freshnessPolicy.version} ${markdown(brief.observation.freshnessPolicy.id)} for ${markdown(brief.observation.freshnessPolicy.task)}; registration ${brief.observation.freshnessPolicy.thresholdsDays.registration}d, network ${brief.observation.freshnessPolicy.thresholdsDays.network}d, web ${brief.observation.freshnessPolicy.thresholdsDays.web}d`,
     '',
-    '## Verified normalised facts',
+    '## Canonical Decision Facts',
     '',
-    ...(brief.verifiedFacts.length ? brief.verifiedFacts.map(factLine) : ['- No normalised fact was available for this brief.']),
+    `Displaying ${brief.decisionFacts.displayed} of ${brief.decisionFacts.total} canonical Decision Facts; ${brief.decisionFacts.omitted} omitted by the bounded projection. ${brief.decisionFacts.contradictory} contradictory and ${brief.decisionFacts.unresolved} unresolved across the complete canonical set.`,
     '',
-    '## Contradictory evidence',
-    '',
-    ...(brief.contradictions.length ? brief.contradictions.map(decisionLine) : ['- No explicit contradiction was derived from the supported comparisons.']),
-    '',
-    '## Unknowns and incomplete comparisons',
-    '',
-    ...(brief.unknowns.length ? brief.unknowns.map(decisionLine) : ['- No explicit uncertainty entry was derived. Review source quality before treating this as complete.']),
-    '',
-    '## Recommended next manual steps',
-    '',
-    ...(brief.nextActions.length
-      ? brief.nextActions.map((action) => `- **${markdown(action.label)}:** ${markdown(action.reason)}`)
-      : ['- Review the underlying source evidence and its limitations.']),
+    ...(brief.decisionFacts.facts.length
+      ? brief.decisionFacts.facts.flatMap(decisionFactLines)
+      : ['No canonical Decision Fact was available. Review source quality before drawing a conclusion.', '']),
     '',
     '## Observed relationship map',
     '',
@@ -207,7 +233,11 @@ export function formatLookupInvestigationBriefMarkdown(
     ...brief.limitations.map((limitation) => `- ${markdown(limitation)}`),
     '',
   ];
-  return lines.join('\n');
+  const output = lines.join('\n');
+  if (new TextEncoder().encode(output).byteLength > MAX_LOOKUP_INVESTIGATION_BRIEF_BYTES) {
+    throw new RangeError('Lookup investigation brief Markdown exceeded its byte limit.');
+  }
+  return output;
 }
 
 export function lookupInvestigationBriefFilename(
